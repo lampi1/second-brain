@@ -1,109 +1,71 @@
-// The app's Routine section in main (src/main/routines/): the package store (zip round trip, refused files, write-only
-// secret slots, a revision keeping the stored secrets) and the service (runs from the app and terminal folders, one
-// trigger loop per switched-on package, the one-time legacy conversion, missing credentials blocking starts).
+// Terminal-only routine observation: inert construction/closed views, explicit reads, live file updates and legacy
+// data preserved without recovery. Uses real temporary run files; never an engine or DevOps write from the app.
 import fs from 'node:fs';
 import path from 'node:path';
-import { describe, expect, it, vi } from 'vitest';
-import type { RoutinePackage, RoutineRuntime } from '../../../packages/routine-runtime/src/index';
-import { createDemoRoutines, demoPackages } from '../../../src/main/routines/demo';
-import { createRoutines, type LegacyRoutine } from '../../../src/main/routines/service';
-import { createRoutineStore, SECRET_PLACEHOLDER, secretSlots, withSecrets } from '../../../src/main/routines/store';
-import { readZip, writeZip } from '../../../src/main/agents/pack/zip';
-import type { FlowDefinition } from '../../../src/shared/flows';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createRoutines } from '../../../src/main/routines/service';
+import { createDemoRoutines } from '../../../src/main/routines/demo';
+import { createLegacyArchive } from '../../../src/main/routines/legacy';
+import { flowBrainContextKey } from '../../../src/main/flows/context';
 import { tempDir } from '../routine-runtime/fakes';
+import type { RoutineRunDetail } from '../../../src/shared/routines';
 
-const NOW = Date.UTC(2026, 9, 27, 10, 0);
-const [bugfix, notes] = demoPackages() as [RoutinePackage, RoutinePackage];
-const fakeRuntime = (startItem = vi.fn(() => ({ runId: 'r1', finished: new Promise<never>(() => {}) }))) =>
-  ({ startItem, start: vi.fn(), resume: vi.fn(), cancel: vi.fn(), store: { trigger: () => ({ schema: 1, cursor: {}, subjects: {}, starts: [] }) } }) as unknown as RoutineRuntime;
+afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
-describe('routine package store', () => {
-  it('round-trips a package zip with its assets and refuses files outside assets/', () => {
-    const store = createRoutineStore(tempDir('routines-store-'));
-    store.save(bugfix, new Map([['prompts/fix.md', Buffer.from('# fix')]]));
-    const { filename, bytes } = store.exportZip('air-bugfix');
-    expect(filename).toBe('air-bugfix.routine.zip');
-    expect([...readZip(bytes).keys()].sort()).toEqual(['assets/prompts/fix.md', 'routine.json']);
-    const other = createRoutineStore(tempDir('routines-store-'));
-    expect(other.importZip(bytes).pkg.credentials?.[0]?.password).toBe('demo-only');
-    expect(fs.readFileSync(path.join(other.dirOf('air-bugfix'), 'assets', 'prompts', 'fix.md'), 'utf8')).toBe('# fix');
-    const bad = writeZip(new Map([['routine.json', Buffer.from(JSON.stringify(bugfix))], ['run.ps1', Buffer.from('x')]]));
-    expect(() => other.importZip(bad)).toThrow(/run\.ps1/);
+describe('terminal-only app observer', () => {
+  it('does no routine IO, cloning or timer work at construction or during 30 idle seconds', () => {
+    const root = tempDir('routine-idle-');
+    vi.useFakeTimers();
+    const read = vi.spyOn(fs, 'readFileSync'), scan = vi.spyOn(fs, 'readdirSync'), watch = vi.spyOn(fs, 'watch'), clone = vi.spyOn(globalThis, 'structuredClone');
+    const legacy = createLegacyArchive({ userData: root, brainRoot: () => root });
+    const app = createRoutines({ userData: root, terminalRuns: path.join(root, 'terminal'), legacy });
+    vi.advanceTimersByTime(30_000);
+    expect({ reads: read.mock.calls.length, scans: scan.mock.calls.length, watches: watch.mock.calls.length, clones: clone.mock.calls.length, timers: vi.getTimerCount() }).toEqual({ reads: 0, scans: 0, watches: 0, clones: 0, timers: 0 });
+    for (const key of ['start', 'startItem', 'resume', 'cancel', 'setTrigger', 'sync', 'tick', 'settle', 'reconcile']) expect(app).not.toHaveProperty(key);
+    app.stop();
   });
 
-  it('lists the placeholder slots as unset, fills only known slots and keeps stored secrets on a revision', () => {
-    expect(secretSlots(notes)).toEqual([expect.objectContaining({ slot: 'devopsPat', set: false })]);
-    expect(() => withSecrets(notes, { 'login:0:user': 'x' })).toThrow();
-    expect(() => withSecrets(notes, { devopsPat: SECRET_PLACEHOLDER })).toThrow();
-    const store = createRoutineStore(tempDir('routines-store-'));
-    store.save(notes);
-    expect(secretSlots(store.setSecrets('release-notes', { devopsPat: 'pat-value' }).pkg)[0]!.set).toBe(true);
-    // an agent's revision carries the placeholder again: the stored value stays
-    const revised = store.save({ ...notes, routine: { ...notes.routine, title: 'Note v2' } });
-    expect(revised.pkg.secrets?.devopsPat).toBe('pat-value');
-    expect(revised.pkg.routine.title).toBe('Note v2');
-  });
-});
-
-describe('routines service', () => {
-  it('lists packages and the runs of both the app and the terminal folders, never a secret value', () => {
-    const routines = createDemoRoutines(tempDir('routines-demo-'), NOW);
-    const snap = routines.snapshot();
-    expect(snap.routines.map(r => r.id)).toEqual(['air-bugfix', 'release-notes']);
-    expect(new Set(snap.runs.map(r => r.source))).toEqual(new Set(['app', 'terminal']));
-    expect(snap.runs).toHaveLength(4);
-    const waiting = snap.runs.find(r => r.status === 'waiting-human')!;
-    expect(waiting.waiting?.url).toContain('_workitems/edit/48213');
-    expect(waiting.workItemUrl).toBe(`https://dev.azure.com/${bugfix.routine.devops!.organization}/Air/_workitems/edit/48213`);
-    expect(snap.routines[1]!.secretSlots.some(s => !s.set)).toBe(true);
-    expect(snap.routines[0]!.commands.item).toContain('workItem=ID');
-    expect(JSON.stringify(snap)).not.toContain('demo-only');
+  it('reads past app and terminal runs with their steps, reports and all screenshots', async () => {
+    const app = createDemoRoutines(tempDir('routine-history-'), Date.now());
+    const list = app.snapshot();
+    expect(list.runs).toHaveLength(4);
+    const done = await app.run(list.runs.find(r => r.status === 'done')!);
+    expect(done.archived).toBe(true);
+    expect(done.reportPath).toMatch(/report\.md$/);
+    expect(done.steps.flatMap(s => s.screenshots)).toHaveLength(1);
+    expect(done.lastShot?.path).toMatch(/01-air\.png$/);
+    await expect(app.run({ source: 'app', routineId: '..', runId: 'x' })).rejects.toThrow();
+    app.stop();
   });
 
-  it('refuses a start or a trigger while credentials are missing', () => {
-    const routines = createDemoRoutines(tempDir('routines-demo-'), NOW);
-    expect(() => routines.startItem('release-notes', 1)).toThrow(/Credenziali da inserire/);
-    const userData = tempDir('routines-'), startItem = vi.fn(() => ({ runId: 'r1', finished: new Promise<never>(() => {}) }));
-    const svc = createRoutines({ userData, terminalRuns: tempDir('routines-term-'), runtimeFor: () => fakeRuntime(startItem), convert: () => bugfix, loop: () => ({ start() {}, stop() {} }) });
-    svc.store.save({ ...bugfix, credentials: [{ ...bugfix.credentials![0]!, password: SECRET_PLACEHOLDER }] });
-    expect(() => svc.setTrigger('air-bugfix', true)).toThrow(/Credenziali da inserire/);
-    svc.setSecrets('air-bugfix', { 'login:0:password': 'typed' });
-    expect(svc.startItem('air-bugfix', 42)).toEqual({ source: 'app', routineId: 'air-bugfix', runId: 'r1' });
-    expect(startItem).toHaveBeenCalledWith(42, {});
+  it('watches only an explicitly opened run and stops reads and events when the view closes', async () => {
+    const root = tempDir('routine-watch-'), demo = createDemoRoutines(root, Date.now());
+    const snapshot = demo.snapshot(), ref = snapshot.runs.find(r => r.source === 'terminal' && r.status === 'running')!;
+    const changed = vi.fn<(change: { subscription: string; run?: RoutineRunDetail; error?: string }) => void>();
+    const app = createRoutines({ userData: path.dirname(snapshot.dirs.appRuns), terminalRuns: snapshot.dirs.terminalRuns, changed });
+    const run = await app.watch(ref, 'visible-view');
+    fs.appendFileSync(path.join(run.dir, 'events.jsonl'), JSON.stringify({ type: 'action', at: Date.now(), n: 1, text: 'Nuovo passo dal terminale' }) + '\n');
+    await vi.waitFor(() => expect(changed.mock.calls.some(([c]) => c.run?.events.some(e => e.type === 'action' && e.text === 'Nuovo passo dal terminale'))).toBe(true));
+    app.unwatch('different-view'); // a late cleanup cannot close another view
+    expect(changed).toHaveBeenCalled();
+    app.unwatch('visible-view');
+    changed.mockClear();
+    const read = vi.spyOn(app, 'run');
+    fs.appendFileSync(path.join(run.dir, 'events.jsonl'), JSON.stringify({ type: 'action', at: Date.now(), n: 1, text: 'Pagina chiusa' }) + '\n');
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(read).not.toHaveBeenCalled(); expect(changed).not.toHaveBeenCalled();
+    app.stop(); demo.stop();
   });
 
-  it('runs one trigger loop per switched-on package and stops it when switched off', () => {
-    const loops: { start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> }[] = [];
-    const svc = createRoutines({ userData: tempDir('routines-'), terminalRuns: tempDir('routines-term-'), runtimeFor: () => fakeRuntime(), convert: () => bugfix,
-      loop: () => { const l = { start: vi.fn(), stop: vi.fn() }; loops.push(l); return l; } });
-    svc.store.save(bugfix);
-    svc.setTrigger('air-bugfix', true);
-    svc.sync(); svc.snapshot();
-    expect(loops).toHaveLength(1);
-    expect(loops[0]!.start).toHaveBeenCalledTimes(1);
-    svc.setTrigger('air-bugfix', true, { everyMinutes: 10, states: ['New'], includeTags: ['ai-fixable'], excludeTags: [], workItemIds: [] });
-    expect(loops).toHaveLength(2);
-    expect(loops[0]!.stop).toHaveBeenCalled();
-    svc.setTrigger('air-bugfix', false);
-    expect(loops[1]!.stop).toHaveBeenCalled();
-    svc.stop();
-  });
-
-  it('converts an active legacy routine once, moving its enabled trigger to the package', () => {
-    const pauseLegacy = vi.fn();
-    const item: LegacyRoutine = { flowId: 'air-bugfix', title: 'Air', definition: {} as FlowDefinition, rule: { id: 'rule-1', revision: 3, enabled: true, automation: {} as NonNullable<LegacyRoutine['rule']>['automation'] } };
-    const convert = vi.fn(() => bugfix);
-    const svc = createRoutines({ userData: tempDir('routines-'), terminalRuns: tempDir('routines-term-'), runtimeFor: () => fakeRuntime(), convert, legacy: () => [item], pauseLegacy, loop: () => ({ start() {}, stop() {} }) });
-    svc.sync(); svc.sync();
-    expect(convert).toHaveBeenCalledTimes(1);
-    expect(pauseLegacy).toHaveBeenCalledWith('rule-1', 3);
-    expect(svc.store.get('air-bugfix').app.triggerEnabled).toBe(true);
-    expect(svc.packaged('air-bugfix')).toBe(true);
-  });
-
-  it('refuses run paths outside the run roots and cancels only app runs', () => {
-    const routines = createDemoRoutines(tempDir('routines-demo-'), NOW);
-    expect(() => routines.run({ source: 'app', routineId: '..', runId: 'x' })).toThrow();
-    expect(() => routines.cancel({ source: 'terminal', routineId: 'air-bugfix', runId: '20261026-163000-112233' })).toThrow(/terminale/);
+  it('archives the four stuck cancelled runs without changing unknown outcomes or the original files', () => {
+    const root = fs.realpathSync(tempDir('routine-legacy-')), key = flowBrainContextKey(root), dir = path.join(root, 'flows', key);
+    fs.mkdirSync(dir, { recursive: true });
+    const runs = Array.from({ length: 4 }, (_, i) => ({ id: `stuck-${i}`, flowId: 'air-bugfix-auto', flowVersion: 19, status: 'cancelled', steps: [], settlementError: 'A previous DevOps write has an unknown outcome', disposition: { cleanup: 'pending', error: 'unknown' }, pendingReconciliation: { requestedAt: 1 } }));
+    const original = JSON.stringify({ schema: 1, versions: [], active: {}, drafts: [], runs });
+    const file = path.join(dir, 'state.json'); fs.writeFileSync(file, original);
+    const write = vi.spyOn(fs, 'writeFileSync');
+    const archive = createLegacyArchive({ userData: root, brainRoot: () => root });
+    expect(archive.snapshot().runs).toEqual(runs);
+    expect(write).not.toHaveBeenCalled(); expect(fs.readFileSync(file, 'utf8')).toBe(original);
   });
 });

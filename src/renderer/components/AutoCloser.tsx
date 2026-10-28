@@ -41,7 +41,12 @@ export function AutoCloser() {
     const events = ['pointerdown', 'keydown', 'wheel', 'input', 'change', 'paste', 'drop', 'compositionstart', 'compositionend', 'visibilitychange'] as const;
     const options = { capture: true, passive: true } as const;
     for (const event of events) document.addEventListener(event, onTouch, options);
-    const offApp = app.subscribe(report), offUi = ui.subscribe(report);
+    let last = app.get();
+    const offApp = app.subscribe(() => {
+      const next = app.get(), changed = next.ready !== last.ready || next.chats !== last.chats || next.tabs !== last.tabs || next.queued !== last.queued;
+      last = next;
+      if (changed) report();
+    }), offUi = ui.subscribe(report);
     const timer = setInterval(report, 5_000); report();
     return () => { for (const event of events) document.removeEventListener(event, onTouch, options); offApp(); offUi(); clearInterval(timer); };
   }, []);

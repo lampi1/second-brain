@@ -17,12 +17,12 @@ Tell the **Orchestrator** what you need. It plans with you, opens the right agen
 | Idea | What it gives you |
 | --- | --- |
 | **One entrance, five specialist roles** | Strategist plans, Scout investigates, Artisan builds, Sentinel reviews and Herald communicates. Their work stays visible in a shared workspace. |
-| **Routines that run themselves** | Versioned steps, model choices, evidence, retries and review loops. The host advances from recorded agent reports; an Orchestrator turn is not needed at every handoff. |
-| **Your workstation as a job runner** | Scheduled and DevOps triggers detect work without model calls. Agent steps spend tokens when they run. Pause, cancel or restart a run, including from a selected step. |
+| **Terminal routines, live evidence** | Run packages with `routine run`, `watch` or `resume`. Open a run in the app for live steps, actions, screenshots, evidence and reports. Closing the view stops observation. |
+| **Terminal automation** | `routine watch` owns scheduled and DevOps triggers. Agent steps spend tokens when the CLI runs them; the app only displays their evidence. |
 | **Memory with provenance** | Plain-text notes, rules and skills you own; reviewable proposals with sources and undo. Task-relevant memory is selected for launch instead of loading the whole brain. |
 | **Side questions without derailing the job** | Flash handles quick read-only questions alongside the Orchestrator. Turn an answer into a task when it needs action. |
 | **Evidence you can inspect** | Independent reviews, run history, screenshots, file previews and live logs expose what happened, what failed and what is waiting. |
-| **Reusable knowledge, deliberate adoption** | Browse opt-in component sources, inspect pinned files and licenses, then adapt selected content into an approved routine version. No template installer or hidden permission changes. |
+| **Portable routine packages** | Prepare a package with the Orchestrator, enter its credentials and export it for the terminal. Package creation never starts a run. |
 | **Understand what the agents changed** | Ask for a concise explanation linked to code, tests and evidence, or explore it through optional guided questions. Inspect the memory and skills selected at launch. |
 
 ## Speak, listen, keep your hands free
@@ -35,11 +35,11 @@ On-demand voice diagnostics show observed recognition/synthesis timings, failure
 
 ## Automation with explicit boundaries
 
-Design a routine with the Orchestrator, inspect its steps in fullscreen, then approve the exact version and its automatic configuration. Package prompts, scripts and checklists with the version you approve. Export the complete definition; imports start as drafts. Workers and their browsers stay inside the current routine step, keeping the Grindhouse clear. Inspect the run dossier or ask the Orchestrator to propose improvements.
+Design a routine package with the Orchestrator, export it and execute it from a terminal. The CLI is the sole executor and owns triggers, retries, DevOps writes and escalation. The app observes only when you open a run or explicitly ask its status; there are no routine background timers, scans, notifications or approval requests. Past app runs remain read-only archives, including unfinished settlements. See [authoring](docs/routines/authoring.md) and [ADR 0179](docs/adr/0179-terminal-only-routines.md).
 
-**Verify and compare** checks prerequisites, compares recorded outcomes and evaluates explicit cases against host receipts. Repeated failures without new evidence stop for a decision. Export an offline report to inspect the observations outside the app; counts never become automatic quality claims or approvals.
+Run history preserves the terminal runtime's reports and evidence. Legacy app runs remain available as inert archives; unfinished settlements never ask for reconciliation.
 
-External capabilities are checked by the host: DevOps comments, screenshots, related links, run-owned PRs, pinned test deployments and read-only test databases require explicit grants. Downgrades to human review retain evidence and clean up owned resources. Production steps wait for the user's **Esegui** action on the exact displayed command. Routine-only production permissions can be designed as versioned intents; they do not enable execution. A chat message or another agent's approval cannot silently grant access.
+The terminal runtime checks package capabilities and credentials, including DevOps write scopes, approved browser origins and test databases. Existing CLI behavior is unchanged; the app has no routine execution or reconciliation tools.
 
 The app uses your CLI logins and keeps its own configuration separate. Agent commands run with the permissions you grant on your machine. The interface supports Italian, English and German.
 

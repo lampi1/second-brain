@@ -10,7 +10,7 @@ test('Routine section: packages, app and terminal runs, live run view, write-onl
   try {
     await page.getByTestId('nav-flussi').click();
     const list = page.getByTestId('routines-page');
-    await expect(list.getByTestId('routine-card-air-bugfix')).toContainText('Trigger attivo');
+    await expect(list.getByTestId('routine-card-air-bugfix')).toContainText('Air · bugfix ai-fixable');
     await expect(list.getByTestId('routine-card-release-notes')).toContainText('Credenziali da inserire');
     await expect(list.getByTestId('routine-run-20261026-163000-112233')).toContainText('Terminale');
     await expect(list.getByTestId('routine-run-20261027-091500-a1b2c3')).toContainText('Serve una persona');
@@ -18,9 +18,8 @@ test('Routine section: packages, app and terminal runs, live run view, write-onl
 
     await list.getByTestId('routine-card-air-bugfix').click();
     const detail = page.getByTestId('routine-detail');
-    await expect(detail.getByTestId('routine-trigger-toggle')).toBeChecked();
-    await expect(detail.getByTestId('routine-filter-states')).toHaveValue('New');
-    await expect(detail.getByTestId('routine-filter-include')).toHaveValue('ai-fixable');
+    await expect(detail.getByTestId('routine-trigger-toggle')).toHaveCount(0);
+    await expect(detail.getByTestId('routine-start')).toHaveCount(0);
     await detail.getByTestId('routine-item-input').fill('48213');
     await expect(detail.getByTestId('routine-commands')).toContainText('workItem=48213');
     await expect(detail).not.toContainText('demo-only');
@@ -38,6 +37,7 @@ test('Routine section: packages, app and terminal runs, live run view, write-onl
     await expect(done.getByTestId('run-report')).toBeVisible();
     await expect(done.getByTestId('run-not-verified')).toBeVisible();
     await expect(done.getByTestId('run-waiting')).toHaveCount(0);
+    await expect(done.locator('.rs-gallery img').first()).toBeVisible();
     await shot(page, 'routines-run-done');
 
     await page.getByRole('button', { name: '← Indietro', exact: true }).click();

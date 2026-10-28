@@ -1,6 +1,6 @@
 // Typing probe of the app page: for each key typed in a text box, the time from the keydown to the first frame after
 // its input event (the letter on screen, the same measure as scripts/bench-perf.mjs), plus the long tasks of the
-// window. Once a minute, only if the user typed, the summary goes to main ('app:inputLag' → the `perf` log, a warning
+// window. Once a minute, including idle periods, the summary goes to main ('app:inputLag' → the `perf` log, a warning
 // above 100 ms p95). Why: "Lag nell'app" (owner, 2026-10-12) had no number from real use. Started by main.tsx.
 import type { InputLagReport } from '@shared/contract';
 import { sb } from '../sb';
@@ -41,7 +41,7 @@ export function startInputLag(): void {
   }, true);
   setInterval(() => {
     const now = performance.now();
-    if (samples.length) void sb.invoke('app:inputLag', summarize(samples, long, Math.round((now - since) / 1000))).catch(() => {});
+    void sb.invoke('app:inputLag', summarize(samples, long, Math.round((now - since) / 1000))).catch(() => {});
     samples = [];
     long = 0;
     since = now;

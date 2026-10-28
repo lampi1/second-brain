@@ -12,10 +12,9 @@ import { engineStatuses } from './cli';
 import { engineReadiness } from './engines/readiness';
 import { anthropicApi, engineInfos, engineOf, enginePathsFromEnv, priceEnginesOf } from './engines/registry';
 import { withApiModels } from './engines/sessions';
-import { ownerOf, AgentCatalogService } from './agents/catalog';
+import { AgentCatalogService } from './agents/catalog';
 import { RunFeedback } from './agents/run-feedback';
 import { tierModel } from './agents/model-tier';
-import { flowRoles } from './flows/roles';
 import { roleTableModel } from './agents/role-table';
 import { qualifiedSkillsLine, runtimePluginName } from './agents/role-gate';
 import { createAgentPacks } from './agents/pack/wiring';
@@ -79,14 +78,8 @@ import { listPrice, priceTableSource, setPriceTable } from './chats/live-cost';
 import type { McpServer, McpTool, ToolOutput } from './mcp/server';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { Workflows } from './workflows/service';
-import { createFlowRuntime, type FlowRuntime } from './flows/runtime';
-import { createFlowWorker } from './flows/worker';
-import { createRoutineHost, packageOf } from './flows/routine-host';
-import { createRoutines, type LegacyRoutine, type Routines } from './routines/service';
+import { createRoutines, type Routines } from './routines/service';
 import { devopsPatFromConnectors, devopsPatFromCursorConfig } from './routines/secret-fill';
-import { flowOutputTools } from './flows/output-tools';
-import { devopsWriteTools } from './flows/devops-write-tool';
-import { testDbReadTools } from './flows/test-db-tool';
 import { testDbCredential } from './flows/test-db-env';
 import { AGENT_LABEL, appControlTools, orchestratorEndpointAuth, type ToolDef, type ToolOut } from './appctl/tools';
 import { readUi } from './appctl/guide';
@@ -139,6 +132,7 @@ import { brainQueriesTool, chatQueryAddTool } from './brain/queries-tools';
 import { AutoScripts } from './brain/auto-scripts';
 import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
 import { timersFor } from './timers';
+import { createLegacyArchive, type LegacyArchive } from './routines/legacy';
 import { createFolderPackageStore } from './flows/package-authoring';
 const { setInterval, clearInterval } = timersFor('wiring/auto-close');
 
@@ -160,7 +154,7 @@ export interface Wired {
   hybrid?: HybridSearch;
   /** the brain skills that fit a request, best first (skills/suggest.ts) */
   workflows?: Workflows;
-  flows?: FlowRuntime;
+  routineArchive?: LegacyArchive;
   /** the Routine section's packages and runs (routines:* IPC); absent in the demo */
   routines?: Routines;
   suggestSkills?: (request: string) => Promise<SkillSuggestions>;
@@ -386,14 +380,13 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
 export async function createServices(ctx: Ctx): Promise<Wired> {
   if (process.env.SB_DEMO === '1') return createDemoServices(ctx);
   let workflowsRef: Workflows | undefined;
-  let flowsRef: FlowRuntime | undefined;
   // the dev instance records the shapes real CLIs send (sanitized, a few per kind): fixtures for the contract tests (ADR 0055)
   setRecorder(!releaseId() && !process.env.SB_TEST ? path.join(ctx.userData, 'cli-records') : null);
   let cliCache: Record<Harness, CliStatus> | null = null;
 
   // the brain folder (bound below, once the brain exists) holds the credentials file of login hand-offs
   let brainRoot: () => string | null = () => null;
-  const { service: browser, mcp, addChatTools, setBrowserAccess, setChatToolFilter, setRoutineBrowserAccess, setApprovedBrowserOrigins, sitePackageLogin } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
+  const { service: browser, mcp, addChatTools, setBrowserAccess, setChatToolFilter, sitePackageLogin } = await createBrowserModule({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, port: mcpPortFromEnv(), brainRoot: () => brainRoot() });
   // the brain's chats.mjs poll leaves out the app's own chats (bound below, once the chat manager exists)
   let isOwn: (id: string) => boolean = () => false;
   // Retire the legacy global quiet flag before notifications start; postponement is request-local in the renderer.
@@ -497,7 +490,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // Claude <-> Cursor rule, so a local process may not take the Orchestrator's identity
   const orchestratorTokens = new EndpointTokens();
   // the user's MCP servers (ADR 0086): reached by every chat through the app's gateway, tokens only in main
-  const mcpServers: McpServersService = new McpServersService({ routinePolicy: role => { const p = agents.list().profiles.find(p => p.id === role); return p ? { tools: p.tools ?? null, ceiling: p.permissionCeiling ?? null } : { tools: { allow: [] }, ceiling: 'plan' }; }, userData: ctx.userData, cipher: safeStorageCipher(safeStorage), mcp, context: (id): ChatMcpContext | null => manager.mcpContext(id), emit: st => ctx.emitter.emit('mcpservers:changed', st) });
+  const mcpServers: McpServersService = new McpServersService({ userData: ctx.userData, cipher: safeStorageCipher(safeStorage), mcp, context: (id): ChatMcpContext | null => manager.mcpContext(id), emit: st => ctx.emitter.emit('mcpservers:changed', st) });
   const coldTest = process.env.SB_TEST && process.env.SB_COLD_MS ? process.env.SB_COLD_MS.split(',').map(Number) as [number, number, number] : null;
   // rules on the chats' replies, checked at every turn end so they hold with any model (ADR 0063)
   const replyRules = new ReplyRules({ send: (chatId, text) => manager.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }) });
@@ -533,7 +526,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     onRunEnded: run => loopRef.current?.ended(run),
     onRunOutcome: run => { routingVerdict(run); loopRef.current?.outcome(run); },
     roleCatalogBrief: () => roleCatalogBrief(() => agents.list()),
-    flowContext: (text, chatId) => flowsRef?.hint(text, chatId) ?? '[app flows] Catalogo non ancora pronto: consulta app_flow_list prima di scegliere un flusso.',
     // the reply language (ADR 0120): the setting, or Windows' language on «Come il sistema», the same as the UI's
     replyLang: uiLang,
     // the estimate task_estimate would give, under the user's request (one model round trip less, ADR 0087)
@@ -638,9 +630,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const routedBase = new Map<string, { usd: number; turns: number; minutes: number; ctxPeak: number }>();
   const titleOf = (chatId: string) => manager.list().find(c => c.id === chatId)?.title ?? 'Chat';
   isOwn = id => manager.isOwnSession(id);
-  setApprovedBrowserOrigins(() => { if (!brainRoot() || !flowsRef) return []; const snap = flowsRef.service().snapshot(); return snap.versions.filter(v => snap.active[v.definition.id] === v.version).flatMap(v => v.definition.steps.flatMap(s => s.writeVia === 'browser' ? s.browserTargets ?? [] : [])); });
   setBrowserAccess(id => manager.browserAccess(id));
-  setRoutineBrowserAccess(id => flowsRef?.browserPolicy(id) ?? (manager.list().find(c => c.id === id)?.routine?.browserWrite ? { targets: [], reason: 'Routine browser not ready', dispatch() { throw new Error('Routine browser not ready'); } } : null));
   setChatToolFilter((id, tool) => manager.chatToolShown(id, tool));
   // a closed chat's browser tabs go away and its per-chat MCP token stops working
   const closeChat = manager.close.bind(manager);
@@ -734,38 +724,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const autoCloseTimer = setInterval(() => { void autoCloseService.tick().catch(e => log.warn('chats', 'automatic archive suspended', { cause: errText(e) })); }, 1000);
   autoCloseTimer.unref();
   agentPacks.learning.evidenceRuns = () => manager.runs.list();
-  // every routine runs through the shared routine runtime (ADR 0175): plain Claude sessions, run folders under
-  // userData/routine-runs; the bundled MCP entry serves the read-only test DB and work item tools to its sessions
-  const routineHost = createRoutineHost({ userData: ctx.userData, mcpEntry: path.join(path.dirname(fileURLToPath(import.meta.url)), 'routine-mcp.js') });
-  let routinesRef: Routines | undefined;
-  const flows = flowsRef = createFlowRuntime({ routineHost, packaged: flowId => routinesRef?.packaged(flowId) ?? false, connectors: mcpServers.routines, browserEngineAllowed: id => engineOf(id as Harness)?.kind === 'claude', userData: ctx.userData, testDbRead: { env: testDbCredential }, brainRoot: () => brain.info().brainRoot,
-    chats: () => chats.list(), stopChat: chatId => chats.stop(chatId), changed: snapshot => ctx.emitter.emit('flows:changed', snapshot),
-    createWorker: createFlowWorker({ catalog: agents, brain, chats: () => manager.list(), create: (request, sealed, routine) => {
-      if (!sealed) return manager.create(request, 'app', undefined, {}, { routine });
-      const profile = agents.list().profiles.find(p => p.id === request.roleId);
-      if (!profile) throw new Error('Routine role unavailable');
-      const policy = profile.tools || profile.permissionCeiling ? { tools: profile.tools ?? null, ceiling: profile.permissionCeiling } : null;
-      return manager.create(request, 'app', { owner: { ...ownerOf(profile), engine: request.harness, model: request.model ?? null }, instructions: sealed.instructions, policy, skills: [], tier: request.tier, routinePackage: sealed.digest, ...(profile.maxContext ? { maxContext: profile.maxContext } : {}) }, {}, { routine });
-    } }),
-    sendWorker: (chatId, prompt, authorize, failed) => manager.send(chatId, `${AGENT_LABEL}\n\n${prompt}`, undefined, false, 'Routine', false, { kind: 'app' },
-      { beforeSubmit: authorize, submitted() {}, failed }),
-    discardWorker: chatId => manager.close(chatId),
-    // the per-step engine/model picker on the Routine page (ADR 0155): the engines and models the registry knows
-    engines: () => { const registry = brain.routingInfo().registry; return registry ? Object.keys(registry.harnesses).filter(id => agentsMayOpen(brain.settings(), id as Harness)).map(id => ({ id, name: id.charAt(0).toUpperCase() + id.slice(1), models: registry.models.filter(model => model.harness === id).map(model => model.id) })) : []; },
-    steer: (chatId, text) => manager.send(chatId, text, undefined, false, 'Routine', false, { kind: 'app' }),
-    freezeRole: step => {
-      if (!step.role) throw new Error('Packaged agent steps must declare a role');
-      const resolved = agents.resolve({ harness: brain.settings().orchestratorChats.harness, cwd: '', roleId: step.role, ...(step.tier ? { tier: step.tier } : {}) });
-      const engine = (step.engine ?? resolved.request.harness) as Harness, tier = step.tier ?? resolved.tier;
-      const model = step.model ?? (engine === resolved.request.harness ? resolved.request.model : tierModel(engine, tier!, brain.routingInfo().registry, brain.settings().modelTiers));
-      if (!model) throw new Error('No exact model is resolved for this engine/tier. Read app_flow_models and choose one explicitly.');
-      return { agentPrompt: resolved.instructions, engine, model, tier, ...(resolved.request.effort ? { effort: resolved.request.effort } : {}) };
-    },
-    roles: () => flowRoles(agents.list().profiles, (engine, tier) => tierModel(engine, tier, brain.routingInfo().registry, brain.settings().modelTiers)),
-    send: (ownerId, message) => chats.send(ownerId, message, undefined, false, 'Routine automatiche', false, { kind: 'app' }) });
-  // the Routine section (ADR 0175, 0176): packages in userData/routines, run on the same host adapters; the active
-  // legacy routines become packages once (an enabled legacy trigger moves to the package and is paused there)
-  const routines = routinesRef = createRoutines({ userData: ctx.userData, runtimeFor: pkg => routineHost.runtimeFor(pkg), convert: packageOf,
+  const routineArchive = createLegacyArchive({ userData: ctx.userData, brainRoot: () => brain.info().brainRoot });
+  const routines = createRoutines({ userData: ctx.userData, legacy: routineArchive,
+    changed: change => ctx.emitter.emit('routines:progress', change),
     // the '<set-by-user>' secrets the app already holds (owner, 2026-10-27): values go only into the package, each one
     // redacted from the logs; the export never lands in this repo or the brain
     secrets: {
@@ -787,20 +748,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       },
     },
     forbiddenRoots: () => [source.repo(), app.getAppPath(), process.cwd(), brain.info().brainRoot],
-    legacy: () => {
-      let snap, auto;
-      try { snap = flows.service().snapshot(); auto = flows.automation().snapshot(); } catch { return null; }
-      return snap.versions.filter(v => snap.active[v.definition.id] === v.version).map((v): LegacyRoutine => {
-        const rule = auto.rules.find(r => r.config.flowId === v.definition.id && r.approvedRevision === r.revision && (r.status === 'enabled' || r.status === 'paused'));
-        return { flowId: v.definition.id, title: v.definition.title, definition: v.definition,
-          ...(rule ? { rule: { id: rule.id, revision: rule.revision, enabled: rule.status === 'enabled' && !auto.paused, automation: { trigger: rule.config.trigger, ...(rule.config.devopsWrite ? { devopsWrite: rule.config.devopsWrite } : {}) } } } : {}) };
-      });
-    },
-    pauseLegacy: (id, revision) => { flows.automation().pause({ id, expectedRevision: revision, paused: true }); } });
-  routines.start();
-  addChatTools(devopsWriteTools((chatId, request, signal) => flows.devopsWrite(chatId, request, signal)));
-  addChatTools(flowOutputTools(flows));
-  addChatTools(testDbReadTools((chatId, request, signal) => flows.testDbRead(chatId, request, signal)));
+  });
   const workflows = workflowsRef = new Workflows(path.join(ctx.userData, 'work-threads.json'), rows => ctx.emitter.emit('work:changed', rows), Date.now, row => {
     const linked = chats.list().filter(c => row.chatIds.includes(c.id) && c.plan);
     const approved = linked.filter(c => ['running', 'done'].includes(c.plan!.phase) && (c.run?.plan?.approvedAt ?? 0) > 0);
@@ -809,16 +757,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // Poll without model calls; relevant events and canonical reports wake the owning Orchestrator.
   // SB_BENCH_TIMERS=1: scripts/bench-stalls.mjs measures an idle app with these production pollers on (fake engines only)
   const prodPollers = !process.env.SB_TEST || process.env.SB_BENCH_TIMERS === '1';
-  const flowDeadlineTimer = prodPollers ? setInterval(() => {
-    if (!brain.info().brainRoot) return;
-    try { void flows.tick().catch(error => log.warn('flows', 'Automatic flow tick failed', { cause: errText(error), hint: 'Inspect Flussi for blocked checks.' })); }
-    catch (error) { log.warn('flows', 'Flow deadline reconciliation unavailable', { cause: String(error), hint: 'Reconnect the selected brain and reopen Flussi.' }); }
-  }, 5_000) : null;
-  flowDeadlineTimer?.unref();
   const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_ORCHESTRATOR_EVENTS === '1'));
   manager.onUserWrote(n => wake.userMessage(n)); // the user typed in a work chat: quiet news (ADR 0083)
-  manager.onReportSaved(chatId => { flows.reportReady(chatId); });
-  manager.onCleanReport(n => flows.reportReady(n.chatId) || wake.cleanReport({ ...n, workflow: workflows.list().some(r => r.status === 'active' && r.chatIds.includes(n.chatId)) }));
+  manager.onCleanReport(n => wake.cleanReport({ ...n, workflow: workflows.list().some(r => r.status === 'active' && r.chatIds.includes(n.chatId)) }));
 
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
   const heldNews = attachHeldNews(ctx.emitter, wake, mail);
@@ -907,24 +848,15 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
   // routine packages the Orchestrator authors (ADR 0175): <userData>/routines/<id>/routine.json, the Routine section's store
   const routinePackageStore = createFolderPackageStore(path.join(ctx.userData, 'routines'));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, flows, routinePackages: () => routinePackageStore, personal, recordings, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, routinePackages: () => routinePackageStore, personal, recordings, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
       agents: { list: () => agents.list(), save: (draft, id, reason) => agentPacks.learning.save(draft, id, reason), history: id => agents.history(id), restore: (id, version) => agents.restoreVersion(id, version) },
       mcp: { state: () => mcpServers.state(), save: a => mcpServers.save(a), setAccess: a => mcpServers.setAccess(a) },
       later: { get: () => later.get(), set: on => later.set(on) },
-      // the Routine page's own calls (index.ts flows:*), on the selected brain
-      routine: {
-        snapshot: () => flows.snapshot(),
-        pauseTrigger: (id, expectedRevision, paused) => { flows.automation().pause({ id, expectedRevision, paused }); },
-        pauseAll: (expectedRevision, paused) => { flows.automation().control({ expectedRevision, paused }); },
-        clearQueue: (id, count) => flows.automation().clearQueue({ id, count }),
-        editFilters: input => { flows.automation().editFilters(input); },
-        pauseRun: (runId, expectedRevision, paused) => { flows.pauseRun(runId, expectedRevision, paused); },
-      },
     } };
-  appDeps.routines = { has: id => routines.has(id), exportForTerminal: id => routines.exportForTerminal(id) };
+  appDeps.routines = { has: id => routines.has(id), exportForTerminal: id => routines.exportForTerminal(id), snapshot: () => routines.snapshot(), archive: () => routineArchive.snapshot(), run: ref => routines.run(ref) };
   attachAppTools(mcp, appDeps, source, false, orchestratorTokens);
 
   // Task page: the brain's read-only devops-me.mjs as a Node child (no AI, no tokens); on a timer only when turned on
@@ -1033,7 +965,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
-    workflows, flows, routines, brainModel, research, memoryReview, learningReview, queries: brainQueries,
+    workflows, routineArchive, routines, brainModel, research, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
     cloud, chats, browser, personal, recordings, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,
@@ -1044,7 +976,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { flows.stop(); routines.stop(); mcpServers.stop(); brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (flowDeadlineTimer) clearInterval(flowDeadlineTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { routines.stop(); mcpServers.stop(); brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

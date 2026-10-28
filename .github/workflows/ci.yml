@@ -78,7 +78,7 @@ jobs:
   dev-visual:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -90,6 +90,10 @@ jobs:
       - run: npm run setup
       - name: Build dev app
         run: node scripts/build.mjs --dev
+      - name: Build terminal CLI and install its browser for the live view proof
+        run: |
+          node packages/routine-runtime/scripts/build.mjs
+          npx playwright install chromium
       - name: Capture frozen dev app (no E2E suite, no live providers)
         run: xvfb-run --auto-servernum -s "-screen 0 1920x1200x24" node scripts/dev-visual-smoke.mjs
       - name: Dev visual review images

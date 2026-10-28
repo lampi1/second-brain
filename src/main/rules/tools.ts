@@ -171,12 +171,18 @@ export function ensureTools(root: string): string {
 export function brainScript(root: string, rel: string): string | null {
   rel = fwd(rel);
   try {
-    if (isTemplateCode(rel) && isProduct(root) && shipped(rel)) return path.join(ensureTools(root), rel);
+    if (isTemplateCode(rel) && isProduct(root) && shipped(rel)) return path.join(copiedTools(root), rel);
   } catch { return null; } // a product brain never falls back to stale code in its folder; the caller reports it missing
   const own = path.join(root, rel);
   return fs.existsSync(own) ? own : null;
 }
 const copies = new Map<string, { key: string; dir: string }>();
+function copiedTools(root: string): string {
+  const key = read(root, 'brain.json');
+  let hit = copies.get(root);
+  if (hit?.key !== key) { hit = { key, dir: ensureTools(root) }; copies.set(root, hit); }
+  return hit.dir;
+}
 /** Where the app reads a data file the template ships (e.g. harness/models.json, the model and price table): the
  * brain's own file when the owner has one, else, for a product brain, the app-owned copy's; null when neither exists.
  * The copy is rendered once per process and brain.json revision (ensureTools hashes the whole template). */
@@ -185,10 +191,7 @@ export function brainFile(root: string, rel: string): string | null {
   if (fs.existsSync(own)) return own;
   if (!isProduct(root)) return null;
   try {
-    const key = read(root, 'brain.json');
-    let hit = copies.get(root);
-    if (hit?.key !== key) { hit = { key, dir: ensureTools(root) }; copies.set(root, hit); }
-    const file = path.join(hit.dir, rel);
+    const file = path.join(copiedTools(root), rel);
     return fs.existsSync(file) ? file : null;
   } catch { return null; }
 }

@@ -3,7 +3,7 @@
 // and a finished run offers its report.md.
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { parseEvents, progressFrom } from '../../../packages/routine-runtime/src/events';
 import { RoutineRunView } from '../../../src/renderer/components/RoutineRun';
 import { createDemoRoutines } from '../../../src/main/routines/demo';
@@ -22,8 +22,8 @@ const jsonl = [
 ].map(e => JSON.stringify(e)).join('\n') + '\n{"type":"act';
 
 const detail = (events: RoutineRunDetail['events'], extra: Partial<RoutineRunDetail> = {}): RoutineRunDetail => ({
-  source: 'app', routineId: 'air-bugfix', runId: 'r1', title: 'Air', status: 'waiting-human', createdAt: at, updatedAt: at + 6,
-  dir: '/runs/r1', events, steps: [], resume: 'routine resume --run-dir /runs/r1', cancellable: false, ...extra,
+  source: 'terminal', routineId: 'air-bugfix', runId: 'r1', title: 'Air', status: 'waiting-human', createdAt: at, updatedAt: at + 6,
+  dir: '/runs/r1', events, steps: [], resume: 'routine resume --run-dir /runs/r1', archived: false, ...extra,
 });
 const render = (run: RoutineRunDetail) => renderToStaticMarkup(createElement(RoutineRunView, { run, onOpenFile: () => {}, onCopy: () => {} }));
 const text = (html: string, testid: string) => html.match(new RegExp(`data-testid="${testid}"[^>]*>(.*?)</div>`))?.[1]?.replace(/<[^>]+>/g, '') ?? '';
@@ -41,17 +41,19 @@ describe('routine run view', () => {
     expect(html).not.toContain('data-testid="run-report"');
   });
 
-  it('renders the demo runs read from their folders: waiting in red, finished with its report', () => {
+  it('renders the demo runs read from their folders: waiting in red, finished with its report', async () => {
     const routines = createDemoRoutines(tempDir('routines-view-'), Date.UTC(2026, 9, 27, 10, 0));
     const runs = routines.snapshot().runs;
-    const waiting = routines.run(runs.find(r => r.status === 'waiting-human')!);
+    const waiting = await routines.run(runs.find(r => r.status === 'waiting-human')!);
     const html = render(waiting);
     expect(text(html, 'run-current-step')).toContain(progressFrom(waiting.events).step!.title);
     expect(html).toContain('data-testid="run-waiting"');
-    expect(waiting.lastShot?.dataUrl).toMatch(/^data:image\/png;base64,/);
-    const done = routines.run(runs.find(r => r.status === 'done')!);
+    expect(waiting.lastShot?.path).toMatch(/01-air\.png$/);
+    const done = await routines.run(runs.find(r => r.status === 'done')!);
     expect(done.reportPath).toMatch(/report\.md$/);
     expect(render(done)).toContain('data-testid="run-report"');
     expect(render(done)).not.toContain('data-testid="run-waiting"');
   });
 });
+
+vi.mock('../../../src/renderer/sb', () => ({ sb: { invoke: vi.fn() } }));

@@ -2,7 +2,6 @@
 // Pending data stays in the normal store. Opening the queue makes postponed requests visible again.
 // Used by QuestionsWindow, the global layer, and request navigation. The former persisted global quiet flag is retired.
 // A Strategist's plan to approve (lib/plan-ask.ts) is postponed the same way, by its key.
-import { flowAskKeys, flowState, reloadFlows } from '../store/flows';
 import { sb } from '../sb';
 import { app } from '../store/store';
 import { planAskKeys } from './plan-ask';
@@ -26,15 +25,15 @@ export function resumeQuestions():void {
 export function startLater():void {
   void sb.invoke('later:set',{on:false}).catch(()=>{});
   const prune = () => {
+    if (!postponed.size) return;
     const s=app.get();
-    const keys=new Set([...s.pending.map(keyOf),...planAskKeys(s),...durableAskKeys(),...flowAskKeys()]);
+    const keys=new Set([...s.pending.map(keyOf),...planAskKeys(s),...durableAskKeys()]);
     let changed=false;
     for(const key of postponed)if(!keys.has(key)){postponed.delete(key);changed=true;}
     if(changed)notify();
   };
   app.subscribe(prune);
   workflowState.subscribe(prune);
-  flowState.subscribe(prune);
 }
 
 /** Park one unresolved request, never future requests or the other cards in the queue. */
@@ -45,7 +44,7 @@ export function answerLater(key?:string):void {
   const chosen=key??shown??focused;
   const target=chosen??pending.find(r=>!postponed.has(keyOf(r)));
   const targetKey=typeof target==='string'?target:target?keyOf(target):null;
-  if(targetKey&&(pending.some(r=>keyOf(r)===targetKey)||planAskKeys(app.get()).includes(targetKey)||durableAskKeys().includes(targetKey)||flowAskKeys().includes(targetKey)))postponed.add(targetKey);
+  if(targetKey&&(pending.some(r=>keyOf(r)===targetKey)||planAskKeys(app.get()).includes(targetKey)||durableAskKeys().includes(targetKey)))postponed.add(targetKey);
   parkQuestions();
   notify();
 }
@@ -55,14 +54,14 @@ export function answerLater(key?:string):void {
  *  dialog and never raises the window: an agent's turn must not put a permission under his keystrokes. */
 export function showQueue():void {
   resumeQuestions();
-  void reloadWorkflows(); void reloadLessons(); void reloadFlows();
+  void reloadWorkflows(); void reloadLessons();
   ui.set(s=>({...s,qwin:{...s.qwin,open:true,first:null,aside:false}}));
 }
 
 /** Explicit navigation opens the actual request above any other dialog, without answering it. */
 export function openQueue(key:string|null):void {
   resumeQuestions();
-  void reloadWorkflows(); void reloadLessons(); void reloadFlows();
+  void reloadWorkflows(); void reloadLessons();
   closeModal();
   void sb.invoke('overlay:focus',{target:'app'}).catch(()=>{});
   callQuestions(key);

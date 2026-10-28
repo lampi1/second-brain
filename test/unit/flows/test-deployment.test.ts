@@ -1,11 +1,11 @@
 // Release adapter tests use fixed REST fixtures. They prove fail-closed target/commit/grant checks and durable leases,
 // not that a particular company's Azure release task is safe; no remote service is called.
-import { NoRemoteEffect } from '../../../src/main/flows/write-refusal';
+import { NoRemoteEffect } from '../../../packages/routine-runtime/src/devops-host/write-refusal';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
-import { TestDeploymentCoordinator, releaseDefinitionFingerprint, validateDeployTarget } from '../../../src/main/flows/test-deployment';
+import { TestDeploymentCoordinator, releaseDefinitionFingerprint, validateDeployTarget } from '../../../packages/routine-runtime/src/devops-host/test-deployment';
 import type { TestDeployTarget } from '../../../src/shared/flow-automation';
 const dirs: string[] = [];
 afterEach(() => { dirs.splice(0).forEach(d => fs.rmSync(d, { recursive: true, force: true })); });

@@ -1,7 +1,7 @@
 // The Orchestrator's routine package tools (ADR 0175, 0176), mounted only on its authenticated app-control endpoint:
-// app_flow_capabilities and app_flow_connectors say what a package can do, app_flow_propose validates an agent-written
+// app_routine_capabilities and app_routine_connectors say what a package can do, app_routine_save validates an agent-written
 // package with the runtime's preflight and saves it in the package store (status ready | needs-secrets | invalid),
-// app_flow_packages reads saved packages with every secret masked. Saving never runs a routine or enables a trigger.
+// app_routine_packages reads saved packages with every secret masked. Saving never runs a routine or enables a trigger.
 // Used by appctl/tools.ts; the content comes from capabilities.ts and package-authoring.ts.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -53,14 +53,14 @@ export function packageTools(deps: PackageToolsDeps): ToolDef[] {
     run: args => { guard(); keysOnly(args, Object.keys(properties)); return run(args) as object; },
   });
   return [
-    tool('app_flow_capabilities', 'Read before writing a routine package from the user\'s need: what a package is and what it can do. section: overview (default: shape, workflow, placeholders, what is never allowed), steps, devops (trigger, write grant, escalation), browser (runtime-owned signed-in browser), test-db, secrets, examples. A step is a plain Claude Code session: no app roles, no app tools, no approval steps.',
+    tool('app_routine_capabilities', 'Read before writing a routine package from the user\'s need: what a package is and what it can do. section: overview (default: shape, workflow, placeholders, what is never allowed), steps, devops (trigger, write grant, escalation), browser (runtime-owned signed-in browser), test-db, secrets, examples. A step is a plain Claude Code session: no app roles, no app tools, no approval steps.',
       { section: { type: 'string', enum: [...ROUTINE_CAPABILITY_SECTIONS] } }, true, args => flowCapabilities(args.section ?? 'overview')),
-    tool('app_flow_connectors', 'MCP servers a routine step can use: the runtime\'s own (routine-devops, routine-testdb, routine-browser: their tools and allowedTools) and how to declare a standalone stdio MCP server in the package. Calls nothing.',
+    tool('app_routine_connectors', 'MCP servers a routine step can use: the runtime\'s own (routine-devops, routine-testdb, routine-browser: their tools and allowedTools) and how to declare a standalone stdio MCP server in the package. Calls nothing.',
       {}, true, () => CONNECTORS),
-    tool('app_flow_propose', 'Validate and save a routine package (routine.json) written from the user\'s plain-language need. Supply exactly one of package (the object {format:"second-brain-routine",schemaVersion:1,routine:{...},credentials?,secrets?}) or packagePath (a JSON file inside the selected brain, at most 1 MiB). ' +
+    tool('app_routine_save', 'Validate and save a routine package (routine.json) written from the user\'s plain-language need. Supply exactly one of package (the object {format:"second-brain-routine",schemaVersion:1,routine:{...},credentials?,secrets?}) or packagePath (a JSON file inside the selected brain, at most 1 MiB). ' +
       'Runs the runtime\'s preflight: status invalid = nothing saved, fix each error (path, message, fix) and call again; needs-secrets = saved, the user must type the listed secrets (secret: true) on the Routine page; ready = saved. ' +
       'Never pass a password, PAT or test DB password: leave it out (refused otherwise); the ones the user already stored for the same routine id are kept. Re-proposing the same routine.id replaces it. dryRun: true validates only. ' +
-      'Saving never runs a routine nor enables its trigger: the user does that on the Routine page. Read app_flow_capabilities first.',
+      'Saving never runs a routine nor enables its trigger: the user runs it in a terminal with routine run or routine watch. Read app_routine_capabilities first.',
       { package: { type: 'object' }, packagePath: { type: 'string', maxLength: 4096 }, dryRun: { type: 'boolean' } }, false, args => {
         const inline = args.package !== undefined, file = args.packagePath !== undefined;
         if (inline === file) throw new Error('Supply exactly one of package or packagePath');
@@ -71,12 +71,12 @@ export function packageTools(deps: PackageToolsDeps): ToolDef[] {
           throw error;
         }
       }),
-    tool('app_flow_packages', 'Saved routine packages: no id = the list (id, title, steps, trigger, missingSecrets); id = that package with every secret masked (*** = stored, <set-by-user> = still missing). Read one before revising it with app_flow_propose.',
+    tool('app_routine_packages', 'Saved routine packages: no id = the list (id, title, steps, trigger, missingSecrets); id = that package with every secret masked (*** = stored, <set-by-user> = still missing). Read one before revising it with app_routine_save.',
       { id: string }, true, args => {
         if (args.id === undefined) return { packages: deps.store().list() };
         if (typeof args.id !== 'string') throw new Error('id: expected text');
         const pkg = deps.store().get(args.id);
-        if (!pkg) throw new Error(`No saved routine "${args.id}"; app_flow_packages without id lists them`);
+        if (!pkg) throw new Error(`No saved routine "${args.id}"; app_routine_packages without id lists them`);
         return maskPackage(pkg);
       }),
   ];

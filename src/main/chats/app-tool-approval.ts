@@ -13,7 +13,7 @@ export function appEndpoint(raw: string | null | undefined): boolean {
   } catch { return false; }
 }
 
-export const APP_CHAT_TOOLS = ['send_to_chat', 'list_chats', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_work_decisions', 'agent_integrate_child', 'agent_integrate_children', 'agent_report', 'agent_children', 'agent_ask_parent', 'agent_answer_child', 'plan_propose', 'plan_update', 'maintenance_pack', 'maintenance_propose', 'flow_devops_write', 'flow_pr_build_status', 'flow_test_db_query', 'flow_output', 'flow_downgrade', 'flow_intake', 'flow_verdict', 'flow_step_history'] as const;
+export const APP_CHAT_TOOLS = ['send_to_chat', 'list_chats', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_work_decisions', 'agent_integrate_child', 'agent_integrate_children', 'agent_report', 'agent_children', 'agent_ask_parent', 'agent_answer_child', 'plan_propose', 'plan_update', 'maintenance_pack', 'maintenance_propose'] as const;
 
 export function cursorAppPermissions(mcpUrl?: string | null, appMcpUrl?: string | null): string[] {
   return [

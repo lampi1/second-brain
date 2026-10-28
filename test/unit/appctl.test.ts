@@ -528,9 +528,3 @@ describe('app control tools', () => {
     expect(ok({ chatId: 'r2', token: t2 })).toBe(false);
   });
 });
-
-it('app screenshot refuses a protected routine login before capturing pixels', async () => {
-  const capturePage = vi.fn();
-  const tool = appControlTools({ chats:{} as ChatService, brain:{} as BrainService, browser:{hasPrivateTabs:()=>true,capturePrivacyVersion:()=>1} as unknown as BrowserService, window:()=>({webContents:{capturePage}}) as never, emitUi:()=>{}, version:'0' }).find(t=>t.name==='app_screenshot')!;
-  expect(await tool.run({})).toContain('private'); expect(capturePage).not.toHaveBeenCalled();
-});

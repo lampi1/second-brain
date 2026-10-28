@@ -3,7 +3,7 @@
 // hand-kept description: the map is read when asked, from the code that draws the app. The renderer gives what the UI
 // holds (window.__sbAppMap, renderer/lib/app-map.ts: the rail as drawn, pages, Memoria tabs, Settings sections,
 // palette actions with their keys, the "?" help texts, the view); main adds the settings schema with the current values,
-// the active routines (flows/service.ts, read only: starting one stays app_flow_start's),
+// the static terminal-only routine guidance (never scans run data),
 // the concepts of the Guida page (shared/concept-guide.ts) and the caller's own tools. Called on demand only, so it
 // costs no tokens in the Orchestrator's other turns (the token plan, ADR 0089). Without a topic: a short index; with
 // one: the matching entries in full. The outline (window.__sbScreen) is what is on screen now, private content left out
@@ -11,7 +11,6 @@
 import type { BrowserWindow } from 'electron';
 import type { SettingDef, Settings } from '../../shared/contract';
 import { CONCEPTS, textOf, type GuideLang } from '../../shared/concept-guide';
-import type { FlowSnapshot } from '../../shared/flows';
 import { getAt } from '../brain/settings-schema';
 import type { ToolDef } from './tools';
 import { ROUTINE_AUTHORING_SUMMARY } from '../flows/capabilities';
@@ -36,47 +35,20 @@ export interface GuideDeps {
   personalShown?: () => boolean;
   /** false on the open /mcp/app mount: settings are listed without their current values (local paths, budgets) */
   showValues?: () => boolean;
-  /** the routines (flows/service.ts snapshot): the guide names the active ones and their last run, read only */
-  flows?: () => FlowSnapshot | null;
 }
 
-/** The active routines in one line each: what the user calls them, version, steps, last run (start: app_flow_start). */
-export function routineLines(snap: FlowSnapshot | null | undefined): Entry[] {
-  if (!snap) return [];
-  return Object.entries(snap.active).flatMap(([id, version]) => {
-    const v = snap.versions.find(x => x.definition.id === id && x.version === version);
-    if (!v) return [];
-    const runs = snap.runs.filter(r => r.flowId === id).sort((a, b) => b.updatedAt - a.updatedAt);
-    const last = runs[0], open = runs.filter(r => r.status === 'active' || r.status === 'approval' || r.status === 'blocked').length;
-    const def = v.definition;
-    return [{ kind: 'routine', title: `${def.title} (flowId "${id}", v${version})`, text: [def.description, def.aliases.length ? `also called: ${def.aliases.join(', ')}` : '', `${def.steps.length} steps`,
-      last ? `last run ${new Date(last.updatedAt).toISOString()} ${last.status}` : 'never run', open ? `${open} open run(s): app_flow_overview` : '',
-      triggerText(snap, id), 'start for the user: app_flow_match then app_flow_start'].filter(Boolean).join(' · ') }];
-  });
-}
 /** How the Agenti page measures the roles (agents/judge-sample.ts, standing.ts), so the Orchestrator explains the counters and the
  *  review switch from the code's rules. */
 const AGENT_REVIEWS = 'Automatic reviews («Revisione · …» chats, a Sentinel in a fresh session): setting judging (Agenti page switch «Abilita controllo livello e performance»; change: app_config area setting judging). On = every finished root work chat gets one review, no daily limit (the old delegation.judgeDaily count is gone), at most two running at once; off = none. Never reviewed: a review chat itself (also a later task or a continuation of it), a delegated child (its parent judged it), a run its receipts (the repo checks after its last change) already decide. One review in ten gets a second one that grades the first.';
 const AGENT_LEVELS = 'Agent cards: «Lavori conclusi» counts the ended runs; the Orchestrator\'s are the root jobs it opened, Flash\'s its answers, Pulse\'s (Battito) its card runs. Level = XP from verified successes only (user verdict, verified review, receipts, verified parent), by job size; Flash and Pulse also earn a small low-trust XP from observed outcomes (Flash: the user did not correct or re-ask; Pulse: a card run that answered; a saved/acted/dismissed card is the user\'s verdict). Why a level is stuck: npm run levels.';
-/** How the app runs routines (ADR 0175, 0176), so the Orchestrator answers from the code's rules, not a guess. One
+/** How the app prepares and observes terminal routines (ADR 0179), so the Orchestrator answers from the code's rules. One
  *  entry each: app_guide cuts an entry's text at 700 characters. */
 const ROUTINE_RULES: [title: string, text: string][] = [
-  ['Routine: pacchetti e chi decide (how routines run)', ['A routine is a package (routine.json) run by the shared routine runtime: each step is a plain Claude Code session, never an app role or chat. The app and the `routine` command in a terminal on this PC write the same run folders (events, report.md); the Routine page lists the packages and both runs, a run opens on its live view (a step waiting for a person in red, with the DevOps comment link).',
-    'A package\'s trigger, filters, credentials and a prod «Esegui» are the user\'s clicks on the Routine page. Old role-based routines sit under «Routine da convertire» («Converti in pacchetto»; an enabled old trigger moves to the package); app_config area routine switches and pauses only the old routines\' triggers and runs.'].join(' ')],
-  ['Routine: trigger, filtri, avvio (package trigger)', 'On the open package: «Trigger DevOps» on/off and its filters (states, tags all of, excluded tags, work item ids, max per hour; «Salva filtri»): an active trigger checks DevOps and starts a run for each new work item it finds; «Avvia» starts one work item by hand. A package with a missing secret asks for it under «Credenziali» first.'],
-  ['Routine: credenziali, export, terminale (secrets)', 'On every save, import and migration the app fills each <set-by-user> secret it holds (DevOps token of the Azure DevOps connector, routine site passwords, the app\'s test-only SQL login for a test DB, never a production one): never ask the user for one the app holds. «Esporta per il terminale» or app_routine_export writes the filled zip only under %LOCALAPPDATA%/routine-runtime/packages/<id>/ and answers its path and the filled and missing secret names, never a value. «Da terminale» gives the run / resume / watch commands; «Importa zip» takes a package zip.'],
+  ['Routine: terminal only', 'The terminal routine CLI is the only executor: run, watch and resume keep their existing behavior. The app never starts, advances, retries, cancels, settles or reconciles a run. Triggers and automation belong only to routine watch. Give the user the terminal command; do not launch it from an app chat.'],
+  ['Routine: live view and history', 'Open Routine, select a run to watch steps, actions, screenshots, evidence and reports. Only that open view watches its run folder. Closing it stops the watch; there are no background scans, polling, routine notifications or questions. app_routine_status reads progress only when the user explicitly asks; generic recaps must not scan routines. Old app runs are read-only archives, including unresolved writes.'],
+  ['Routine: packages and export', 'The app can prepare, import and export a package for the terminal without executing it. app_routine_export fills known secret placeholders and writes the zip in the terminal packages folder, returning its path and secret names only. Never copy credentials into a repository or the brain. Old definitions can be converted explicitly; conversion never resumes their runs.'],
 ];
-/** A routine's trigger as the Routine page shows it: state, what it watches, its filters, the queue (ADR 0155). */
-function triggerText(snap: FlowSnapshot, flowId: string): string {
-  const auto = snap.automation, r = auto?.rules.find(x => x.config.flowId === flowId && x.status !== 'rejected');
-  if (!r) return 'no trigger (starts only by hand)';
-  const t = r.config.trigger, queue = auto!.events.filter(e => e.ruleId === r.id && ['pending', 'notified', 'blocked'].includes(e.status) && !e.sourceKey.startsWith('restart:')).length;
-  const state = auto!.paused ? 'all routines paused' : r.status === 'enabled' ? 'on' : r.status === 'paused' ? 'paused' : 'waiting for the user\'s approval';
-  const watch = t.kind === 'manual' ? 'on demand only (grants remain independent of scheduling)' : t.kind === 'devops' ? `DevOps ${t.workItemType} in ${t.areaPath} (${t.states.join('/')}) every ${t.everyMinutes} min` : `every ${t.everyMinutes} min`;
-  const filters = t.kind === 'devops' ? [t.includeTags?.length ? `tags ${t.includeTags.join('+')}` : '', t.excludeTags?.length ? `not tags ${t.excludeTags.join(', ')}` : '',
-    t.workItemIds?.length ? `only ids ${t.workItemIds.join(', ')}` : '', t.iterationPath ? `iteration ${t.iterationPath}` : '', t.maxPerHour ? `max ${t.maxPerHour}/h` : ''].filter(Boolean).join(', ') : '';
-  return `trigger ${state}: ${watch}${filters ? `, filters ${filters}` : t.kind === 'devops' ? ', no filters (tags, ids, iteration, max per hour can be set)' : ''}, queue ${queue}; change trigger, filters, queue, a run's pause: app_config area routine`;
-}
+
 
 /** Runs one of the renderer's fixed readers (never code an agent wrote) with a time limit. */
 export async function readUi<T>(win: BrowserWindow | null, expr: string, ms = 3000): Promise<T | null> {
@@ -119,8 +91,7 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
   out.push({ kind: 'agents', title: 'Agenti: revisioni automatiche on/off (reviews, judging)', text: AGENT_REVIEWS });
   out.push({ kind: 'agents', title: 'Agenti: lavori conclusi e livelli (completed counter, levels, XP)', text: AGENT_LEVELS });
   out.push({ kind: 'concept', title: 'Connettori: moduli MCP elicitation nelle domande', text: 'Claude MCP forms appear in Da rispondere: up to eight flat text, enum, boolean or numeric fields; Altro accepts typed input. The user fills or refuses the form; defaults never approve it and there is no always-allow. Empty forms ask for confirmation. Nested schemas, unsupported constraints, URL requests and credential fields are cancelled with an explanation; use the connector login route for credentials. app_pending lists requests read-only; the user answers in the question panel.' });
-  out.push(...routineLines(d.flows?.()));
-  if (d.flows) for (const [title, text] of ROUTINE_RULES) out.push({ kind: 'routine', title, text });
+  for (const [title, text] of ROUTINE_RULES) out.push({ kind: 'routine', title, text });
   out.push({ kind: 'routine', title: 'Routine: creare un pacchetto (author a routine package from the user need)', text: ROUTINE_AUTHORING_SUMMARY });
   for (const c of CONCEPTS) out.push({ kind: 'concept', title: textOf(c.title, lang), text: `${textOf(c.summary, lang)} ${c.points.slice(0, 3).map(p => textOf(p, lang)).join(' ')} (more: the Guida page)` });
   for (const t of d.tools()) out.push({ kind: 'tool', title: t.name, text: t.description });
@@ -158,8 +129,7 @@ function index(ui: UiMap | null, d: GuideDeps, lang: GuideLang): string {
     lines.push('Palette actions: ' + ui.actions.filter(a => a.group !== 'Vai a').map(a => `${a.title}${a.shortcut ? ` (${a.shortcut})` : ''}`).join(', '));
     lines.push('Help topics: ' + ui.help.map(h => h.title).join(', '));
   } else lines.push('(the window did not answer: pages and sections missing; try again)');
-  const routines = routineLines(d.flows?.());
-  lines.push(routines.length ? `Routines (page Routine, active): ${routines.map(r => r.title).join(', ')}; triggers, filters, queue, pause: app_config area routine; how they run: app_guide topic "routine"` : 'Routines: none active yet (page Routine).');
+  lines.push('Routines: terminal execution only; open Routine for live progress and history, or ask app_routine_status explicitly.');
   lines.push('Concepts (Guida page): ' + CONCEPTS.map(c => textOf(c.title, lang)).join(', '));
   lines.push(`Settings: ${d.settings.schema().length} keys, read and change them with app_config (area setting).`);
   lines.push('Ask app_guide with a topic for details ("tema", "notifiche", "Memoria", "chiusura automatica", "permessi Scout"…); app_ui action "outline" = what is on screen now with positions; app_config = change any configuration.');

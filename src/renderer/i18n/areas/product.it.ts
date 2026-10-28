@@ -12,6 +12,7 @@ export const productIt={
 
  "viewer.imageBefore":"Prima",
  "viewer.imageAfter":"Dopo",
+ "viewer.imageFitWidth":"Adatta alla larghezza",
  "report.image.select":"Seleziona area",
  "report.image.hint":"Trascina sull’immagine per selezionare un’area.",
  "report.image.clear":"Cancella selezione",

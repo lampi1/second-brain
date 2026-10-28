@@ -2,11 +2,9 @@
 // result) and event channels (main → renderer). The preload exposes exactly these channels and nothing else
 // (src/preload/index.ts reads INVOKE_CHANNELS / EVENT_CHANNELS); main registers a handler for every invoke channel
 // (src/main/ipc.ts) and rejects senders that are not the app's own page. Change a shape here first, then both sides.
-import type { ReconcileDecision } from './flow-reconciliation';
 import type { AgentContextSnapshot } from './agent-context';
 import type { WorkThread, WorkDecision } from './workflows';
-import type { FlowAutomationDecision } from './flow-automation';
-import type { FlowSnapshot, FlowActivate, FlowDecision, FlowContext, FlowCancel, FlowRestart, FlowRestartDecision, FlowRun } from './flows';
+import type { FlowSnapshot } from './flows';
 import type { LearnedRuleProposal } from './agent-pack';
 import type { LearningEvidence, LearningReviewState, MemoryReviewRecord, ReplayComparison, ReplayRecord, SkillCandidateView } from './learning-review';
 import type { SysCode, SysParams } from './sys';
@@ -18,14 +16,6 @@ import type { VoiceHeard, VoiceSpeech, VoiceAsr, VoiceName, VoiceState } from '.
 import type { RecFound, RecSegment, RecSource, RecState, Recording } from './recordings';
 /** What the shareable brain zip holds (counts), or why it was not written: guard findings, or no brain / no guard. */
 export type BrainShareResult = { ok: true; path: string; skills: number; rules: number; roles: number; scripts: number; skipped: number } | { ok: false; findings: PackFinding[] } | { ok: false; error: string };
-/** What a routine package zip holds (ADR 0156): brain paths and names, before it is saved. */
-export interface RoutinePackageSummary { title: string; cited: string[]; missing: string[]; rules: string[]; skills: string[]; roles: string[]; memory: string[]; scripts: string[]; skipped: string[] }
-export type RoutinePackageResult = { ok: true; path: string; summary: RoutinePackageSummary } | { ok: false; findings: PackFinding[] } | { ok: false; error: string };
-/** One thing a routine package could write into the brain: new, the same as the brain's, different (kept unless
- *  ticked), or a skill the brain already loads from elsewhere (home, the app's copy: never written). */
-export interface RoutineImportItem { key: string; kind: 'cited' | 'rule' | 'skill' | 'script' | 'query'; label: string; status: 'new' | 'same' | 'different' | 'elsewhere'; files?: string[]; text: string }
-export interface RoutineImportPreview { digest: string; title: string; steps: number; version: number; exportedAt: string; items: RoutineImportItem[]; memory: { role: string; lines: number; sample: string[] }[] }
-export interface RoutineImportResult { snapshot: FlowSnapshot; written: number; failed: string[]; remembered: number; refused: number }
 import type { BrainModelState, ClassifiersState, MaintenanceJobId } from './brain-model';
 import type { ApprovalDecision, ApprovalItem, PulseActResult, PulseDismissReason, PulseList, PulsePlace, PulseResult, PulseStatus, PulseSettings, PulseType } from './pulse';
 import type { ConnectorId, ConnectorState, ConnectorToken } from './connectors';
@@ -52,7 +42,7 @@ import type { RunEstimates } from './task-estimate';
 import type { MacroTask } from './macro-tasks';
 import type { JudgingEstimate } from './agents';
 import type { AgentImages } from './agent-images';
-import type { RoutineRunDetail, RoutineRunRef, RoutinesSnapshot, RoutineTerminalExport, RoutineTriggerFilters } from './routines';
+import type { RoutineRunDetail, RoutineRunRef, RoutinesSnapshot, RoutineTerminalExport } from './routines';
 export type { CloudAgent, CloudApplyResult, CloudCaps, CloudEngine, CloudMessage, CloudReady, CloudStartRequest, CloudState, CloudStatus } from './cloud';
 
 /** An engine id from the engine registry (src/main/engines/registry.ts, ADR 0046): 'claude', 'cursor', … */
@@ -132,6 +122,8 @@ export interface QueuedInfo { kind: 'start' | 'turn'; position: number; since: n
 export interface ChatSummary {
   launchContext?: AgentContextSnapshot;
   /** Host-only immutable routine identity, never accepted by app_create_chat. */
+  /** Retired routine worker or descendant: transcript only, never an executable session. */
+  routineArchived?: true;
   routine?: { browserWrite?: true; runId: string; stepId: string };
   routinePackage?: string;
   routinePromptHash?: string;
@@ -535,8 +527,6 @@ export interface HandoffAccount {
 
 /** One entry of the "Credenziali" panel (the user's credentials file). Never the password: main copies it from the
  *  file on the user's click ('credentials:copy'), as for login hand-offs (ADR 0012). */
-export interface SiteCredentialInput { id?: string; origin: string; user: string; password: string }
-export interface SiteCredentials { entries: PersonalLogin[]; origins: string[]; unavailable: string | null }
 export interface CredentialEntry {
   id: string;                 // stable while the file does not change (a Copia after a change finds nothing)
   group: string;              // the keys that lead to it in the file: "ExampleApp · test"
@@ -1282,23 +1272,15 @@ export interface InvokeMap {
   'routines:import': [{ data: string }, RoutinesSnapshot];
   /** writes the filled zip under %LOCALAPPDATA%/routine-runtime/packages/<id>/ in main: the zip never crosses IPC */
   'routines:export': [{ id: string }, RoutineTerminalExport];
-  'routines:startItem': [{ id: string; workItem: number }, RoutineRunRef];
-  'routines:setTrigger': [{ id: string; enabled: boolean; filters?: RoutineTriggerFilters }, RoutinesSnapshot];
   'routines:setSecrets': [{ id: string; values: Record<string, string> }, RoutinesSnapshot];
   'routines:run': [RoutineRunRef, RoutineRunDetail];
-  'routines:cancel': [RoutineRunRef, void];
+  'routines:image': [{ ref: RoutineRunRef; path: string }, FileViewResult];
+  'routines:watch': [{ ref: RoutineRunRef; subscription: string }, RoutineRunDetail];
+  'routines:unwatch': [{ subscription: string }, void];
   'routines:convert': [{ flowId: string }, RoutinesSnapshot];
-  'flows:list': [void, FlowSnapshot];
+  'routines:archive': [void, FlowSnapshot];
   /** the routine package (ADR 0156): what it would hold; then built, guard-scanned and saved where the user picks (null = cancelled) */
   /** a routine package zip (base64): what importing it would write; then the routine as a new draft plus the ticked items */
-  'flows:autoDecide': [FlowContext<FlowAutomationDecision>, FlowSnapshot];
-  'flows:definitionDecide': [FlowContext<FlowActivate>, FlowSnapshot];
-  'flows:decide': [FlowContext<FlowDecision>, FlowSnapshot];
-  'flows:reconcileDecide': [FlowContext<ReconcileDecision>, FlowRun];
-  'flows:cancel': [FlowContext<FlowCancel>, FlowSnapshot];
-  'flows:cancelDecide': [FlowContext<FlowRestartDecision>, FlowSnapshot];
-  'flows:restart': [FlowContext<FlowRestart>, FlowSnapshot];
-  'flows:restartDecide': [FlowContext<FlowRestartDecision>, FlowSnapshot];
   // the app's routine runner (ADR 0155): the user's own controls on the Routine page
   /** «Esegui» on a prod step: only this click runs a prod command; `command` is the exact text the user saw */
   'work:lessons': [void, LearnedRuleProposal[]];
@@ -1526,9 +1508,6 @@ export interface InvokeMap {
   'personal:onScreen': [{ on: boolean }, void];
   /** the "Credenziali" panel: the entries of the user's credentials file, without passwords */
   'credentials:list': [void, CredentialEntry[]];
-  'credentials:sites': [void, SiteCredentials];
-  'credentials:saveSite': [SiteCredentialInput, void];
-  'credentials:removeSite': [{ id: string }, void];
   /** main copies an entry's user name or password (read from the file now); a password is cleared from the clipboard
    *  after 30 s if still there. Returns false when it could not (no such entry, e.g. the file changed). */
   'credentials:copy': [{ id: string; field: 'user' | 'password' }, boolean];
@@ -1707,7 +1686,7 @@ export interface ClipboardImage { mimeType: string; bytes: Uint8Array }
 
 /** main → renderer. */
 export interface EventMap {
-  'flows:changed': FlowSnapshot;
+  'routines:progress': { subscription: string; run?: RoutineRunDetail; error?: string };
   'work:changed': WorkThread[];
   'update:state': AppUpdateState;
   'update:checkpointRequest': UpdateCheckpointRequest;
@@ -1793,8 +1772,9 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
-  'routines:list', 'routines:import', 'routines:export', 'routines:startItem', 'routines:setTrigger', 'routines:setSecrets', 'routines:run', 'routines:cancel', 'routines:convert',
-  'flows:list', 'flows:definitionDecide', 'flows:decide', 'flows:reconcileDecide', 'flows:cancel', 'flows:cancelDecide', 'flows:restart', 'flows:restartDecide', 'flows:autoDecide',
+  'routines:list', 'routines:import', 'routines:export', 'routines:setSecrets', 'routines:run', 'routines:watch', 'routines:unwatch', 'routines:convert',
+  'routines:image',
+  'routines:archive',
   'work:lessons', 'work:lessonDecide', 'work:list', 'work:decide',
   'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'pulse:runNow', 'approvals:list', 'approvals:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect', 'connectors:useToken',
@@ -1816,7 +1796,7 @@ export const INVOKE_CHANNELS = [
   'browser:handoffs', 'browser:handoffResolve', 'browser:handoffCopy', 'browser:envList',
   'personal:state', 'personal:open', 'personal:navigate', 'personal:go', 'personal:select', 'personal:close', 'personal:restore', 'personal:bookmarkAdd', 'personal:bookmarkRemove',
   'personal:sessionSave', 'personal:sessionOpen', 'personal:sessionRemove', 'personal:historyClear', 'personal:loginFill', 'personal:loginSave', 'personal:loginRemove', 'personal:loginCopy', 'personal:loginImport', 'personal:lend', 'personal:reclaim', 'personal:onScreen',
-  'credentials:sites', 'credentials:saveSite', 'credentials:removeSite', 'credentials:list', 'credentials:copy', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
+  'credentials:list', 'credentials:copy', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
   'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'source:get', 'source:dismissLaunch', 'source:check', 'source:updateNow',
   'clipboard:image',
   'orchestrator:get', 'orchestrator:ensure',
@@ -1829,8 +1809,7 @@ export const INVOKE_CHANNELS = [
   'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:readiness', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
-  'flows:changed',
-  'work:changed',
+  'routines:progress', 'work:changed',
   'pulse:changed', 'approvals:changed', 'proposals:changed', 'maintenance:changed', 'maintenance:done',
   'update:state', 'update:checkpointRequest', 'update:checkpointRelease',
   'progress:changed',

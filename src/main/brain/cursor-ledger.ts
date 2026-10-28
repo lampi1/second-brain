@@ -87,9 +87,12 @@ export function parseLedgerLine(line: string): LedgerRow | null {
 }
 
 /** The ledger since a time, one row per generation (a CLI turn may also fire the hook). */
-export function readLedger(file: string, since = 0): LedgerRow[] {
+export function readLedger(file: string, since = 0, onReadError?: () => void): LedgerRow[] {
   let text: string;
-  try { text = fs.readFileSync(file, 'utf8'); } catch { return []; }
+  try { text = fs.readFileSync(file, 'utf8'); } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') onReadError?.();
+    return [];
+  }
   const seen = new Set<string>();
   const out: LedgerRow[] = [];
   for (const line of text.split(/\r?\n/)) {
@@ -179,11 +182,14 @@ export function calibrate(csv: CsvRow[], ledger: LedgerRow[], csvFile: string, e
   return { csvFile, exportedAt, from, factors, margin };
 }
 
-export function readCalibration(file: string): Calibration | null {
+export function readCalibration(file: string, onReadError?: () => void): Calibration | null {
   try {
     const c = JSON.parse(fs.readFileSync(file, 'utf8')) as Calibration;
     return isObj(c) && isObj(c.factors) && typeof c.exportedAt === 'number' && typeof c.margin === 'number' ? c : null;
-  } catch { return null; }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') onReadError?.();
+    return null;
+  }
 }
 
 /** Today's Cursor $: the CSV's exact rows up to its export time (when `exportedAt`, the CSV actually read, is from today
@@ -290,20 +296,41 @@ export function installHook(dir = ledgerDir()): string {
   return file;
 }
 
+type Today = CursorDay & { calibration: Calibration | null };
+// One profile's last reading only. The 30-second usage refresh must not reparse unchanged multi-MB ledgers.
+let todayCache: { key: string; at: number; expires: number; value: Today } | undefined;
+const fileStamp = (file: string) => {
+  try { const s = fs.statSync(file); return `${s.dev}/${s.ino}/${s.size}/${s.mtimeMs}/${s.ctimeMs}`; }
+  catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return 'missing'; throw error; }
+};
 /** Everything for today in one call: ledger, newest CSV (recalibrating when it is new), today's figures. */
 export function cursorToday(opts: { dir?: string; downloads?: string; now?: number } = {}): CursorDay & { calibration: Calibration | null } {
   const dir = opts.dir ?? ledgerDir(), now = opts.now ?? Date.now();
-  const ledger = readLedger(path.join(dir, LEDGER_FILE), now - 60 * 864e5);
+  const ledgerFile = path.join(dir, LEDGER_FILE), retention = 60 * 864e5;
   const calFile = path.join(dir, CALIBRATION_FILE);
-  let cal = readCalibration(calFile);
   const exp = newestExport(opts.downloads ?? path.join(os.homedir(), 'Downloads'));
+  const key = () => {
+    try { return JSON.stringify([dir, opts.downloads, romeDay(now), uiLocale(), fileStamp(ledgerFile), fileStamp(calFile), exp?.file, exp?.mtime, exp && fileStamp(exp.file)]); }
+    catch { return undefined; } // A sharing lock is not evidence that the files are unchanged.
+  };
+  const before = key();
+  if (before !== undefined && todayCache?.key === before && now >= todayCache.at && now < todayCache.expires) return todayCache.value;
+  let readable = true;
+  const failedRead = () => { readable = false; };
+  const ledger = readLedger(ledgerFile, now - retention, failedRead);
+  let cal = readCalibration(calFile, failedRead);
   let csv: CsvRow[] = [];
   if (exp) {
-    try { csv = parseUsageCsv(fs.readFileSync(exp.file, 'utf8')); } catch { csv = []; }
+    try { csv = parseUsageCsv(fs.readFileSync(exp.file, 'utf8')); } catch { csv = []; failedRead(); }
     if (csv.length && (!cal || cal.csvFile !== exp.file || cal.exportedAt !== exp.mtime)) {
       cal = calibrate(csv, ledger, exp.file, exp.mtime, cal);
       try { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(calFile, JSON.stringify(cal, null, 1)); } catch { /* next time */ }
     }
   }
-  return { ...cursorDay(ledger, cal, csv, now, exp && csv.length ? exp.mtime : 0), calibration: cal };
+  const value = { ...cursorDay(ledger, cal, csv, now, exp && csv.length ? exp.mtime : 0), calibration: cal };
+  // Recheck after reading: a concurrent append must be read on the next refresh, never cached as already observed.
+  const after = key();
+  if (readable && after !== undefined && before === after) todayCache = { key: after, at: now, expires: ledger.reduce((end, row) => Math.min(end, row.at + retention + 1), Infinity), value };
+  else todayCache = undefined;
+  return value;
 }

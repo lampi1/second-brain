@@ -13,9 +13,6 @@ export interface RoutineTriggerFilters {
 }
 export interface RoutineTriggerView extends RoutineTriggerFilters {
   organization: string; project: string; areaPath: string; workItemType: string;
-  /** the app's own switch (app.json): one trigger loop per package while on */
-  enabled: boolean;
-  lastCheckAt?: number; lastResult?: string;
 }
 export interface RoutineStepView {
   id: string; title: string; model?: string; effort?: string;
@@ -63,12 +60,12 @@ export interface RoutineRunDetail extends RoutineRunSummary {
   steps: RoutineRunStep[];
   /** report.md's path, when written (opened in the app's file viewer) */
   reportPath?: string;
-  /** the newest screenshot of the current step, inline (the live view's preview) */
-  lastShot?: { path: string; dataUrl: string };
+  /** the newest screenshot of the current step, loaded by the visible gallery only */
+  lastShot?: { path: string };
   /** the terminal command that resumes it */
   resume: string;
-  /** the app can stop it (an app run running in this process) */
-  cancellable: boolean;
+  /** A historical app run: evidence only, never resume it from the app. */
+  archived: boolean;
 }
 /** «Esporta per il terminale»: where the filled zip was written (only under the terminal's packages folder) and which
  *  secrets it carries or still lacks, by name and reason; never a value. */

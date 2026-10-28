@@ -37,14 +37,10 @@ import { t } from '../i18n';
 import { durableAsks, withDurableAsks, type DurableAsk } from '../lib/work-ask';
 import { useWorkflows } from '../store/workflows';
 import { WorkApproval } from './WorkApproval';
-import { FlowApproval } from './FlowApproval';
-import { flowAsks, type FlowAsk } from '../lib/flow-ask';
-import { useFlows } from '../store/flows';
 
 /** what the window shows: an open request, or a Strategist's plan to approve */
-type Ask = PendingRequest | PlanAsk | DurableAsk | FlowAsk;
-const isFlow = (ask: Ask): ask is FlowAsk => ask.type === 'flow-definition' || ask.type === 'flow-run' || ask.type === 'flow-automation' || ask.type === 'flow-restart' || ask.type === 'flow-cancel' || ask.type === 'flow-reconcile';
-const isHost = (ask: Ask): ask is DurableAsk | FlowAsk => isDurable(ask) || isFlow(ask);
+type Ask = PendingRequest | PlanAsk | DurableAsk;
+const isHost = (ask: Ask): ask is DurableAsk => isDurable(ask);
 const isDurable = (ask: Ask): ask is DurableAsk => ask.type === 'work' || ask.type === 'lesson';
 
 export function QuestionsWindow() {
@@ -58,9 +54,7 @@ export function QuestionsWindow() {
   const plans = useMemo(() => planKeys.map(planAskOf).filter((p): p is PlanAsk => !!p), [planKeys]);
   const { rows, lessons } = useWorkflows();
   const decisions = useMemo(() => durableAsks(rows, lessons), [rows, lessons]);
-  const { snapshot } = useFlows();
-  const flows = useMemo(() => flowAsks(snapshot), [snapshot]);
-  const pending: readonly Ask[] = [...withDurableAsks(withPlans(allPending, plans), decisions), ...flows].filter(p => (isHost(p) || !hidden.includes(p.chatId)) && !requestPostponed(reqKey(p)));
+  const pending: readonly Ask[] = [...withDurableAsks(withPlans(allPending, plans), decisions)].filter(p => (isHost(p) || !hidden.includes(p.chatId)) && !requestPostponed(reqKey(p)));
   const queue = [...pending];
   if (q.first) { const i = queue.findIndex(p => reqKey(p) === q.first); if (i > 0) queue.unshift(...queue.splice(i, 1)); }
   const cur = queue[0];
@@ -232,9 +226,7 @@ function Window({ cur, all, boxRef, hidden, openedAt }: { cur: Ask; all: readonl
             <div className="qwin-note" role="status" data-testid="qwin-elsewhere">{t('chat.questions.note')} <Keys combo="Ctrl+J" /> {t('chat.questions.note2')}</div>
           )}
           <div className="qwin-body">
-            {isFlow(cur)
-              ? <FlowApproval key={curKey} ask={cur} onEscape={later} />
-              : isDurable(cur)
+            {isDurable(cur)
               ? <WorkApproval key={curKey} ask={cur} onEscape={later} />
               : cur.type === 'plan'
               ? <PlanApproval key={curKey} ask={cur} chatTitle={name} onEscape={later} keysTo={keysEl} testid="qwin-plan" />

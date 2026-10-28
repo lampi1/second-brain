@@ -58,4 +58,14 @@
 .rs-waiting p { margin: 0; color: var(--text); }
 .rs-waiting .rs-muted { color: var(--text-3); }
 .rs-shot { padding: 0; border: 1px solid var(--border); border-radius: var(--r-m); background: none; cursor: zoom-in; max-width: 560px; overflow: hidden; }
-.rs-shot img { display: block; width: 100%; height: auto; }
+.rs-shot img { display: block; width: 100%; height: 240px; object-fit: contain; }
+
+/* Archived evidence and screenshot pairs keep large histories contained without active polling. */
+.rs-archive-evidence { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 28rem; overflow: auto; }
+.rs-shot-pair { display: flex; gap: 12px; flex-wrap: wrap; }
+.rs-shot-pair > .rs-shot { flex: 1 1 240px; min-width: 0; }
+.rs-shot-pair > .rs-shot img { width: 100%; object-fit: contain; }
+.rs-gallery { display: grid; gap: 12px; }
+
+.rs-archive-chat { height: 70vh; min-height: 300px; display: flex; }
+.rs-archive-chat .chat-transcript { flex: 1; min-width: 0; }

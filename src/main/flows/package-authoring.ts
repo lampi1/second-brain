@@ -1,9 +1,9 @@
 // Routine package authoring for the Orchestrator (ADR 0175, 0176): turns a package an agent wrote from the user's
-// plain-language need into a saved `routine.json` that the shared runtime (packages/routine-runtime) can run in the app
-// or a terminal. One source for the authoring rules: app_flow_capabilities, app_flow_connectors, the app_guide topic
+// plain-language need into a saved `routine.json` that the shared runtime (packages/routine-runtime) runs only in a
+// terminal. One source for the authoring rules: app_routine_capabilities, app_routine_connectors, the app_guide topic
 // "routine" and docs/routines/authoring.md all say what ROUTINE_AUTHORING says. Secrets never pass through an agent:
 // the agent leaves them out (or writes SECRET_PLACEHOLDER), the tool keeps the ones the user already stored for the same
-// routine, and preflight names the rest for the user to type. Used by package-tools.ts (app_flow_propose and friends).
+// routine, and preflight names the rest for the user to type. Used by package-tools.ts (app_routine_save and friends).
 import fs from 'node:fs';
 import path from 'node:path';
 import {
@@ -116,7 +116,7 @@ export function authorPackage(raw: unknown, store: RoutinePackageStore, options:
   const result = preflightRoutinePackage(filled, options.recognisedTestDbs ? { recognisedTestDbs: options.recognisedTestDbs } : {});
   const blocking = result.errors.filter(e => !e.secret);
   const base = { errors: result.errors, warnings: result.warnings, preflight: formatPreflight(result) };
-  if (blocking.length || !result.pkg) return { ...base, status: 'invalid', next: 'Fix every non-secret error (each names its field and the fix), then call app_flow_propose again. Nothing was saved.' };
+  if (blocking.length || !result.pkg) return { ...base, status: 'invalid', next: 'Fix every non-secret error (each names its field and the fix), then call app_routine_save again. Nothing was saved.' };
   const status = result.errors.length ? 'needs-secrets' : 'ready';
   if (options.dryRun) return { ...base, status, routineId: result.pkg.routine.id, next: 'dryRun: nothing saved.' };
   const saved = store.save(result.pkg);

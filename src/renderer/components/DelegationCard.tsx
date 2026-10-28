@@ -8,7 +8,7 @@
 // "Vai alla chat" opens it in focus mode. KidsBar is the parent's summary at the foot of its strip ("4 figli · 2 in
 // corso · 1 ti aspetta", the children's characters, one bar segment each, Comprimi / Espandi: prefs.treeCollapsed).
 // Mounted by AgentStrips.tsx; the sidebar tree (SidebarTree.tsx) brings a card on screen with focusChat.
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import type { ChatItem, ChatSummary, PendingRequest } from '@shared/contract';
 import { useApp, loadItems, answer, send, stop } from '../store/store';
 import { setChatExpanded, setFocusMode, setTreeCollapsed, ui } from '../store/ui';
@@ -109,10 +109,16 @@ function Head({ chat, state, parent }: { chat: ChatSummary; state: ChildState; p
 function Steps({ chat, items, state }: { chat: ChatSummary; items: readonly ChatItem[]; state: ChildState }) {
   const [all, setAll] = useState(false);
   const live = state === 'run' || state === 'start';
-  const opts = { live, doneWhen: chat.delegation?.doneWhen, ...(chat.delegation?.result ? { result: chat.delegation.result } : {}) };
-  const { steps } = runSteps(items, { ...opts, all });
+  const relevant = items.filter(item => item.kind === 'tool' || item.kind === 'system');
+  const stable = useRef(relevant);
+  if (!sameList(stable.current, relevant)) stable.current = relevant;
+  const projection = stable.current, doneWhen = chat.delegation?.doneWhen, result = chat.delegation?.result, language = locale();
+  const { steps, total } = useMemo(() => {
+    const opts = { live, doneWhen, result };
+    const visible = runSteps(projection, { ...opts, all });
+    return { ...visible, total: all ? visible.steps.length : runSteps(projection, { ...opts, all: true }).steps.length };
+  }, [projection, live, doneWhen, result, all, language]);
   // every step stays reachable: the card shows the latest, one click shows them all
-  const total = all ? steps.length : runSteps(items, { ...opts, all: true }).steps.length;
   const shown = steps.length ? steps : [{ mark: live ? 'cur' : 'todo', text: t('tree.noSteps') } as RunStep];
   const MARK: Record<StepMark, string> = { done: '✓', cur: '✱', todo: '○', bad: '✗' };
   return <>

@@ -35,10 +35,10 @@ export function readUsageCsv(file) {
   })).filter(r => Number.isFinite(r.at));
 }
 
-export function newestExport(dir = process.env.COMPARE_DOWNLOADS || path.join(os.homedir(), 'Downloads')) {
+export function newestExport(dir = process.env.COMPARE_DOWNLOADS || path.join(os.homedir(), 'Downloads'), onError = () => {}) {
   try {
     return fs.readdirSync(dir).filter(f => /^team-usage-events-.*\.csv$/i.test(f))
       .map(f => path.join(dir, f)).sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0] ?? null;
-  } catch { return null; }
+  } catch (e) { if (e?.code !== 'ENOENT') onError(e); return null; }
 }
 

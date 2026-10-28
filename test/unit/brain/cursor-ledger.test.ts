@@ -1,7 +1,7 @@
 // Cursor ledger (src/main/brain/cursor-ledger.ts): the hook script on real stop-hook and `agent -p` result input, list
 // price + Token Rate, calibration from a usage CSV (factor per model, margin, edge days left out), today's figure
 // (exact from the CSV up to its export, estimated after it) and the newest export in Downloads.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -16,6 +16,52 @@ const row = (at: number, p: Partial<LedgerRow> = {}): LedgerRow => ({
 });
 const T = (iso: string) => Date.parse(iso);
 const runHook = (file: string, input: string, args: string[] = []) => execFileSync(process.execPath, [file, ...args], { input, encoding: 'utf8' });
+
+it('does not re-read unchanged usage, but sees appends and a new day', () => {
+  const dir = tmpDir(), downloads = tmpDir(), now = T('2026-10-10T14:00:00Z'), file = path.join(dir, LEDGER_FILE);
+  fs.writeFileSync(file, JSON.stringify(row(now)) + '\n');
+  expect(cursorToday({ dir, downloads, now }).turns).toBe(1);
+  const read = vi.spyOn(fs, 'readFileSync');
+  try {
+    expect(cursorToday({ dir, downloads, now: now + 30_000 }).turns).toBe(1);
+    expect(read).not.toHaveBeenCalled();
+    fs.appendFileSync(file, JSON.stringify(row(now + 31_000)) + '\n');
+    expect(cursorToday({ dir, downloads, now: now + 60_000 }).turns).toBe(2);
+    expect(read).toHaveBeenCalled();
+    expect(cursorToday({ dir, downloads, now: now + 864e5 }).turns).toBe(0);
+  } finally { read.mockRestore(); }
+});
+
+it('retries unchanged usage after a transient file lock', () => {
+  const dir = tmpDir(), downloads = tmpDir(), now = T('2026-10-10T16:00:00Z');
+  fs.writeFileSync(path.join(dir, LEDGER_FILE), JSON.stringify(row(now)) + '\n');
+  const read = vi.spyOn(fs, 'readFileSync').mockImplementationOnce(() => { throw Object.assign(new Error('Locked'), { code: 'EBUSY' }); });
+  try { expect(cursorToday({ dir, downloads, now }).turns).toBe(0); } finally { read.mockRestore(); }
+  expect(cursorToday({ dir, downloads, now: now + 30_000 }).turns).toBe(1);
+});
+
+it('invalidates the selected export time when a CSV changes during fingerprinting', () => {
+  const dir = tmpDir(), downloads = tmpDir(), now = T('2026-10-10T16:00:00Z');
+  const file = path.join(downloads, 'team-usage-events-race.csv');
+  const oldAt = now - 3 * 3600_000, newAt = now - 3600_000;
+  const csv = 'Date,Model,Total Tokens,Cost\n2026-10-10T12:00:00Z,grok-4.7,100,5\n';
+  fs.writeFileSync(file, csv); fs.utimesSync(file, oldAt / 1000, oldAt / 1000);
+  fs.writeFileSync(path.join(dir, CALIBRATION_FILE), JSON.stringify({ csvFile: file, exportedAt: oldAt, from: now - 4 * 3600_000, factors: {}, margin: 0.2 }));
+  const stat = fs.statSync; let updated = false;
+  const spy = vi.spyOn(fs, 'statSync').mockImplementation(((target, options) => {
+    const result = stat(target, options);
+    if (String(target) === file && !updated) {
+      updated = true;
+      fs.writeFileSync(file, csv + '2026-10-10T14:00:00Z,grok-4.7,200,10\n');
+      fs.utimesSync(file, newAt / 1000, newAt / 1000);
+    }
+    return result;
+  }) as typeof fs.statSync);
+  try { cursorToday({ dir, downloads, now }); } finally { spy.mockRestore(); }
+  const next = cursorToday({ dir, downloads, now: now + 30_000 });
+  expect(next.usd).toBe(15);
+  expect(next.calibration?.exportedAt).toBe(newAt);
+});
 
 describe('hook script', () => {
   it('appends one line per stop hook turn (uncached input = input − cache), one per -p result, and answers {}', () => {

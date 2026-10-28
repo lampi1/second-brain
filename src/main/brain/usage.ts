@@ -22,6 +22,7 @@ import { brainScript } from '../rules/tools';
 import type { ChatSpend, Spend } from './budget';
 import type { CursorDay } from './cursor-ledger';
 import { uiLocale } from '../locale';
+import type { InputRevision } from './input-revision';
 
 // Checked 2026-10-11 (cursor-cost research note §1, §3, outside the repo): no documented usage API for a personal account (the
 // Admin API is for team admins), the CLI's ACP mode sends no tokens (bug confirmed by Cursor), the dashboard's internal
@@ -164,6 +165,7 @@ export interface UsageMonitorOptions {
   cursorEveryMs?: number;        // default 30 s
   costTimeoutMs?: number;        // cost.mjs's time limit, default COST_TIMEOUT_MS
   now?: () => number;            // clock (tests)
+  costInputs?: InputRevision;    // only known shipped inputs; failed watches retain the normal poll
   onUsage(u: Usage, spend: Spend): void;
 }
 
@@ -176,17 +178,21 @@ export class UsageMonitor {
   private running = false;
   private warned = false;
   private timeoutWarnAt = -Infinity;
+  private costRevision: string | null = null;
+  private stopped = false;
 
   constructor(private o: UsageMonitorOptions) {}
 
   start(): void {
-    void this.refresh();
-    this.timer = setInterval(() => void this.refresh(), this.o.everyMs ?? 180e3);
+    void this.refresh(false);
+    this.timer = setInterval(() => void this.refresh(false), this.o.everyMs ?? 180e3);
     // Re-read the local Cursor ledger so a turn appears within half a minute.
     if (this.o.cursor) this.cursorTimer = setInterval(() => { if (this.readCursor()) this.o.onUsage(this.get(), this.spend()); }, this.o.cursorEveryMs ?? 30e3);
   }
 
   stop(): void {
+    this.stopped = true;
+    this.o.costInputs?.stop();
     if (this.timer) clearInterval(this.timer);
     if (this.cursorTimer) clearInterval(this.cursorTimer);
     this.timer = null; this.cursorTimer = null;
@@ -197,6 +203,7 @@ export class UsageMonitor {
     if (!this.o.cursor) return false;
     try {
       const next = this.o.cursor();
+      if (next === this.cursor) return false;
       const changed = JSON.stringify(next) !== JSON.stringify(this.cursor);
       this.cursor = next;
       return changed;
@@ -229,23 +236,36 @@ export class UsageMonitor {
     return cached.at > this.limits.at ? mergeLimits(cached, this.limits) : mergeLimits(this.limits, cached);
   }
 
-  async refresh(): Promise<void> {
-    if (this.running) return;
+  async refresh(force = true): Promise<void> {
+    if (this.running || this.stopped) return;
     this.running = true;
     try {
       const script = this.o.root ? brainScript(this.o.root, 'ops/tools/cost.mjs') : null;
       if (!script || !fs.existsSync(script)) {
+        this.costRevision = null;
         if (!this.warned) log.warn('brain', 'no cost.mjs in this brain: usage without $', { data: { script } });
         this.warned = true;
         this.cost = { todayUsd: 0, chats: [], cursorTodayUsd: null, cursorNote: 'Cursor: costo sconosciuto', costKnown: false, costNote: 'costi non disponibili: il brain non ha ops/tools/cost.mjs' };
       } else {
+        const revision = await this.o.costInputs?.revision() ?? null;
+        const token = revision === null ? null : `${romeDay(this.o.now?.() ?? Date.now())}:${script}:${revision}`;
+        if (this.stopped) return;
+        if (!force && token !== null && token === this.costRevision) {
+          this.readCursor(); this.o.onUsage(this.get(), this.spend());
+          return;
+        }
         const at = Date.now(); // before the run: what a chat spends while cost.mjs reads may count twice until the next run, never lost
         const limit = this.o.costTimeoutMs ?? COST_TIMEOUT_MS;
-        const r = await runNode(this.o.node, script, ['--days', '1', '--json'], this.o.root!, limit);
+        const r = await runNode(this.o.node, script, ['--days', '1', '--json', '--summary'], this.o.root!, limit);
+        if (this.stopped) return;
         let j: unknown = null;
         try { j = JSON.parse(r.stdout); } catch { /* below */ }
-        if (j) this.cost = { ...parseCost(j, romeDay()), at };
+        if (j) {
+          this.cost = { ...parseCost(j, romeDay()), at };
+          this.costRevision = !r.error && this.cost.costKnown && (j as { complete?: boolean }).complete === true ? token : null;
+        }
         else {
+          this.costRevision = null;
           if (r.killed) {
             const now = this.o.now?.() ?? Date.now();
             if (now - this.timeoutWarnAt >= TIMEOUT_WARN_MS) {

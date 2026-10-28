@@ -3,7 +3,6 @@
 // Copia for user and password. The password never reaches this page: main reads it from the file at the click and
 // clears the clipboard after 30 s (credentials:copy, ADR 0012). Why: the user asked "dammi url e credenziali di test X"
 // ~12 times in 6 days (2026-10-13). Opened from the command palette and the top bar; rendered by App.tsx (modal 'credentials').
-import { RoutineSiteLogins } from './RoutineSiteLogins';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CredentialEntry } from '@shared/contract';
 import { sb } from '../sb';
@@ -66,7 +65,6 @@ export function CredentialsDialog() {
     <Modal onClose={closeModal} label={t('dialogs.logins.title')} testid="credentials" className="modal-credentials" bodyClassName="cred-body" closeButton
       icon={<IconLogin size={16} />} title={t('dialogs.logins.title')} subtitle={t('dialogs.logins.hint')}
       footer={<span className="ho-safe"><IconShield size={13} /> {t('dialogs.logins.passwordSafe')}</span>}>
-      <RoutineSiteLogins />
       <h3 className="cred-group-title">{t('flows.brainLogins')}</h3>
       <div className="palette-search cred-search">
         <IconSearch size={16} />

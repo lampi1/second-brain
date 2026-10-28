@@ -282,7 +282,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
    *  written once it is accepted (a refused report writes nothing, so a retry does not count twice) */
   function rememberLines(a: Record<string, unknown>, self: ChatSummary | undefined): (() => number) {
     if (a.remember === undefined) return () => 0;
-    if (self?.routine?.browserWrite) throw new Error('Browser routine steps use declared flow_output only; omit remember');
+    if (self?.routine || self?.routinePackage) throw new Error('Archived routine chats cannot submit new work; use the terminal CLI.');
     const lines = Array.isArray(a.remember) && a.remember.length <= REMEMBER_MAX && a.remember.every(l => typeof l === 'string' && l.trim() && l.length <= REMEMBER_LINE && !/[\x00-\x1f\x7f]/.test(l))
       ? (a.remember as string[]).map(l => l.trim()) : null;
     if (!lines) throw new Error(`agent_report: remember = up to ${REMEMBER_MAX} single lines of at most ${REMEMBER_LINE} characters.`);
@@ -416,7 +416,6 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
 
   const str = { type: 'string' };
   const reportSchema: Record<string, unknown> = { type: 'object', required: ['outcome', 'summary', 'output', 'doneWhen'], additionalProperties: false, properties: {
-      browserWrite: { type: 'object', additionalProperties: false, required: ['outcome', 'evidence'], description: 'Required for routine writeVia browser steps: actual effect and screenshot/read-back evidence. not-done means nothing was written; partial requires reconciliation before repeating.', properties: { outcome: { type: 'string', enum: ['done', 'partial', 'not-done'] }, evidence: { type: 'array', minItems: 1, maxItems: 12, items: { type: 'string', maxLength: 2000 } } } },
       outcome: { type: 'string', enum: ['done', 'partial', 'blocked'] }, summary: { ...str, maxLength: SUMMARY_MAX }, output: { ...str, maxLength: RESULT_OUTPUT_MAX },
       verdict: { type: 'string', enum: ['success', 'partial', 'fail'], description: 'Only app-owned independent reviews: assessment of the reviewed work, separate from completion of your review.' },
       verified: { type: 'string', enum: ['yes', 'partial', 'no'], description: 'Only with verdict: yes only when you independently checked the evidence; never inferred from completing the review.' },

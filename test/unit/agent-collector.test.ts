@@ -2,12 +2,12 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
 import { AgentAnalyticsCollector } from '../../src/main/agents/collector';
 
 const dirs: string[] = [];
-afterEach(() => { for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
+afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
 function setup() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-collector-')); dirs.push(dir);
   let now = 100;
@@ -15,6 +15,41 @@ function setup() {
 }
 const chat = (sessionId = 'one', harness = 'claude'): ChatSummary => ({ id: `${harness}-${sessionId}`, sessionId, harness, agent: { id: 'a', revision: 1, name: 'Agent' } } as ChatSummary);
 const result = (id: string, at: number) => ({ kind: 'result' as const, id, at, costUsd: 999, durationMs: 999, turns: 1, isError: false });
+
+it('does not rewrite analytics for streamed text, context or an unchanged state', () => {
+  const s = setup(), c = s.create(), ch = chat();
+  c.patch(ch, { sessionId: 'one', state: 'running' });
+  const write = vi.spyOn(fs, 'writeFileSync');
+  s.tick(1000);
+  for (let n = 0; n < 100; n++) { c.patch(ch, { lastText: `token ${n}` }); c.patch(ch, { contextTokens: n }); c.patch(ch, { state: 'running' }); }
+  expect(write).not.toHaveBeenCalled();
+  c.patch(ch, { state: 'idle' });
+  expect(write).toHaveBeenCalledTimes(1);
+  expect(c.readModel().agents[0]!.timing.execution.observedPartialMs).toBe(900);
+});
+
+it('coalesces observed changes and flushes the latest record at shutdown', async () => {
+  vi.useFakeTimers();
+  const s = setup(), c = new AgentAnalyticsCollector(s.dir, Date.now, 1000), ch = chat();
+  const write = vi.spyOn(fs.promises, 'writeFile');
+  c.patch(ch, { sessionId: 'one', modelObserved: 'first' });
+  c.patch(ch, { modelObserved: 'second' });
+  expect(write).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1000);
+  c.patch(ch, { modelObserved: 'third' });
+  c.flush();
+  await vi.advanceTimersByTimeAsync(1000);
+  const saved = JSON.parse(fs.readFileSync(path.join(s.dir, 'agent-analytics.json'), 'utf8'));
+  expect(saved.rows[0].observation.provenance.modelObserved).toBe('third');
+  expect(vi.getTimerCount()).toBe(0);
+});
+it('persists unknown accounting on a session-only resume of a settled archive', () => {
+  const s = setup(), first = s.create();
+  first.patch(chat(), { sessionId: 'one', turnCostUsd: 2 }); first.item(chat(), result('r', 100), false);
+  s.tick(200); const restored = s.create(); restored.patch(chat(), { sessionId: 'one' }); restored.flush();
+  const saved = JSON.parse(fs.readFileSync(path.join(s.dir, 'agent-analytics.json'), 'utf8'));
+  expect(saved.rows[0]).toMatchObject({ costMissing: true, tokensMissing: true, observation: { listPriceUsd: null } });
+});
 
 it('keeps list equivalents distinct, namespaces native IDs and never borrows selected models', () => {
   const s = setup(), c = s.create();

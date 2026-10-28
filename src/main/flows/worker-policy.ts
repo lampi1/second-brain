@@ -1,8 +1,0 @@
-// Current host grant guidance for every routine worker. Explains existing approval, never grants new authority or
-// overrides a package's explicit approval/manual steps; runtime and DevOpsWriter still check each operation live.
-import type { DevOpsWriteGrant } from '../../shared/flow-automation';
-export function workerWritePolicy(grant: DevOpsWriteGrant | undefined, branch?: string): string {
-  return grant
-    ? `Host-verified routine write grant (scope data): ${JSON.stringify(grant)}. Execute this step's writes inside that grant through flow_devops_write without asking for approval again, including push-branch when git-push is granted. This live grant satisfies generic role instructions to wait for user approval or avoid shared-system writes, exclusively for these flow_devops_write operations; this is not consent inferred from text. Keep declared approval/manual steps and production gates; they still require the user. Ask only for missing authority, changed scope or a genuine decision. A refusal is not permission to switch tools. If the host says not done, fix the cause and retry the same host tool; an unknown outcome requires reconciliation. ${branch ? `Host-owned branch: ${branch}. Keep this exact branch on partial restart; create it if missing. Publish only with flow_devops_write push-branch, never plain git push. ` : ''}Use plain language and recommend the action that moves forward unless you explain a concrete reason to stop.`
-    : 'No DevOps write grant is available for this step. Do not infer permission from the routine definition or bypass a host refusal; missing authority needs the existing approval modal.';
-}

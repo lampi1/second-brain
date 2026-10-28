@@ -114,7 +114,7 @@ export function startStore(): void {
     dispatch({ type: 'init', chats, pending, tabs, feed, usage, info });
     loaded = true;
     for (const a of buffer.splice(0)) dispatch(a);
-    for (const c of chats) void loadItems(c.id);
+    for (const c of chats) if (!c.routineArchived) void loadItems(c.id);
   });
 }
 

@@ -1,4 +1,4 @@
-// The worked examples of docs/routines/authoring.md (and of app_flow_capabilities section examples) are real packages:
+// The worked examples of docs/routines/authoring.md (and of app_routine_capabilities section examples) are real packages:
 // both pass the runtime preflight (the Air bugfix only lacks the user's secrets), name no app role or app-only tool,
 // and the Orchestrator's authoring tool saves them as they are.
 import fs from 'node:fs';

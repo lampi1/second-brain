@@ -87,10 +87,11 @@ function ResultReady({ item }: { item: Extract<ChatItem, { kind: 'system' }> }) 
 
 function ResultSynthesis({ runId }: { runId: string }) {
   const chatId = useContext(ChatIdCtx);
+  const readOnly = useContext(ReadOnlyCtx);
   const available = useApp(s => !!chatId && !!s.chats[chatId]?.availableResultIds?.includes(runId));
   const pending = useApp(s => !!chatId && !!s.chats[chatId]?.pendingResultIds?.includes(runId));
   const [busy, setBusy] = useState(false);
-  if (!available && !pending) return null;
+  if (readOnly || !available && !pending) return null;
   return <div className="result-synthesis">
     <button type="button" className="result-synth-btn" disabled={busy || pending} onClick={async () => { setBusy(true); try { await synthesizeResult(runId); } finally { setBusy(false); } }}>
       <IconSparkle size={13} />{t(pending || busy ? 'chat.resultDeliveryPending' : 'chat.resultSynthesize')}
@@ -117,6 +118,7 @@ export const Markdown = memo(function Markdown({ text, streaming }: { text: stri
 
 /** The chat whose items are shown (null: no "Esegui", e.g. a list without a chat). */
 const ChatIdCtx = createContext<string | null>(null);
+const ReadOnlyCtx = createContext(false);
 
 /** A fence line (``` or ~~~): a message without one renders as plain Markdown. */
 const FENCE = /^\s{0,3}(`{3,}|~{3,})/m;
@@ -127,6 +129,7 @@ type Group = { kind: 'md'; parts: { key: string; html: string }[] } | { kind: 'c
  *  never touched again); the markdown between two code blocks lays out as one .md, its pieces as .md-b. */
 const Message = memo(function Message({ id, text, streaming }: { id: string; text: string; streaming?: boolean }) {
   const chatId = useContext(ChatIdCtx);
+  const readOnly = useContext(ReadOnlyCtx);
   const t = text || '…';
   if (!FENCE.test(t)) return <><Markdown text={t} streaming={streaming} /><MessageImages chatId={chatId} text={t} id={id} streaming={streaming}/></>;
   const blocks = streaming ? splitBlocks(t) : [t];
@@ -148,8 +151,8 @@ const Message = memo(function Message({ id, text, streaming }: { id: string; tex
         const tail = !!streaming && i === groups.length - 1;
         return g.kind === 'md'
           ? <div key={i} className={`md ${tail ? 'streaming' : ''}`}>{g.parts.map(x => <div key={x.key} className="md-b" dangerouslySetInnerHTML={{ __html: x.html }} />)}</div>
-          : isVisualLang(g.part.lang) ? <VisualBlock key={i} chatId={chatId} itemId={id} lang={g.part.lang} code={g.part.code} streaming={tail} />
-          : <CodeBlock key={i} chatId={chatId} itemId={id} lang={g.part.lang} code={g.part.code} streaming={tail} />;
+          : isVisualLang(g.part.lang) ? <VisualBlock key={i} chatId={readOnly ? null : chatId} itemId={id} lang={g.part.lang} code={g.part.code} streaming={tail} />
+          : <CodeBlock key={i} chatId={readOnly ? null : chatId} itemId={id} lang={g.part.lang} code={g.part.code} streaming={tail} />;
       })}
     </div>
   );
@@ -248,6 +251,7 @@ const ToolRow = memo(function ToolRow({ item }: { item: Tool }) {
  *  what the question is about (lib/askContext.ts thinkingBeforeAsk). */
 const Thinking = memo(function Thinking({ text, beforeAsk, marks }: { text: string; beforeAsk?: boolean; marks?: readonly string[] }) {
   const chatId = useContext(ChatIdCtx);
+  const readOnly = useContext(ReadOnlyCtx);
   const [open, setOpen] = useState(!!beforeAsk);
   useEffect(() => { if (beforeAsk) setOpen(true); }, [beforeAsk]);
   return (
@@ -255,7 +259,7 @@ const Thinking = memo(function Thinking({ text, beforeAsk, marks }: { text: stri
       <button type="button" className="thinking-row" onClick={() => setOpen(o => !o)} aria-expanded={open} data-testid="thinking-toggle">
         <IconSparkle size={13} /><span>{beforeAsk ? t('chat.items.thinkingBeforeAskLabel') : t('chat.items.thinkingLabel')}</span><IconChevronRight size={12} className="tool-chev" />
       </button>
-      {open && <ThoughtText chatId={chatId} text={text} marks={marks} />}
+      {open && <ThoughtText chatId={readOnly ? null : chatId} text={text} marks={marks} />}
     </div>
   );
 });
@@ -311,7 +315,7 @@ const ProcessGroup = memo(function ProcessGroup({ id, items, open: openIds, mark
       {chips.map(c => <ToolChatRef key={c.id} chatId={c.chatId} title={c.title} how={c.how} />)}
     </div>
   );
-});
+}, (a, b) => a.id === b.id && a.items.length === b.items.length && a.items.every((item, i) => item === b.items[i] && a.open.has(item.id) === b.open.has(item.id) && (a.marks.get(item.id) ?? []).join('\n') === (b.marks.get(item.id) ?? []).join('\n')));
 
 /** A visual in the chat's list: its relative file paths open inside the chat's folder. */
 function ChatArtifact({ item }: { item: Extract<ChatItem, { kind: 'artifact' }> }) {
@@ -383,11 +387,12 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
 /** The divider of a cold continuation (ADR 0031): the same chat goes on in a fresh session from its hand-off note. */
 function ColdDivider({ session }: { session: string | undefined }) {
   const chatId = useContext(ChatIdCtx);
+  const readOnly = useContext(ReadOnlyCtx);
   return (
     <div className="cold-divider" role="separator" data-testid="cold-divider">
       <span className="result-line" />
       <span>{t('chat.items.coldDividerStart')}</span>
-      {chatId && <button type="button" className="link-btn" onClick={() => openHandoff(chatId, session)} data-tip={t('chat.items.coldDividerNote')} data-testid="cold-note">{t('chat.items.coldNoteButton')}</button>}
+      {!readOnly && chatId && <button type="button" className="link-btn" onClick={() => openHandoff(chatId, session)} data-tip={t('chat.items.coldDividerNote')} data-testid="cold-note">{t('chat.items.coldNoteButton')}</button>}
       <span className="result-line" />
     </div>
   );
@@ -411,13 +416,13 @@ export function turnActivity(items: readonly ChatItem[] | undefined): 'scrive' |
   return 'pensa';
 }
 
-type ItemListProps={items:readonly ChatItem[];empty?:string;footer?:ReactNode;chatId?:string|null};
+type ItemListProps={items:readonly ChatItem[];empty?:string;footer?:ReactNode;chatId?:string|null;readOnly?:boolean};
 export function ItemList(props:ItemListProps){
   const guideId=agents.use(s=>guideChatId(s.setup));
   const items=useMemo(()=>visibleGuideItems(props.items,props.chatId??null,guideId),[props.items,props.chatId,guideId]);
   return <ItemListFor key={props.chatId??'unowned'} {...props} items={items}/>;
 }
-function ItemListFor({ items, empty, footer, chatId = null }: ItemListProps) {
+function ItemListFor({ items, empty, footer, chatId = null, readOnly = false }: ItemListProps) {
   const ref = useRef<HTMLDivElement>(null);
   const peek = useLinkPeek(chatId);
   const content=useRef<HTMLDivElement>(null);
@@ -437,7 +442,7 @@ function ItemListFor({ items, empty, footer, chatId = null }: ItemListProps) {
   const lastSig = last ? `${last.id}:${'text' in last ? last.text.length : 0}:${last.kind === 'tool' ? last.status : ''}` : '';
   const follow=useFollowBottom(ref,content,chatId,`${items.length}:${lastSig}`);
   return (
-    <ChatIdCtx.Provider value={chatId}>
+    <ChatIdCtx.Provider value={chatId}><ReadOnlyCtx.Provider value={readOnly}>
     <div className="items-wrap">
       <div className="items" ref={ref} data-chat-log={chatId??undefined} tabIndex={0} aria-label={auditText('audit.ChatItems.messages')} onClick={peek.onClick} onWheel={peek.onWheel} role="log" aria-live="off">
         <div ref={content} className="items-content">
@@ -455,6 +460,6 @@ function ItemListFor({ items, empty, footer, chatId = null }: ItemListProps) {
         </button>
       )}
     </div>
-    </ChatIdCtx.Provider>
+    </ReadOnlyCtx.Provider></ChatIdCtx.Provider>
   );
 }

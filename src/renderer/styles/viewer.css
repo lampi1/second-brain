@@ -158,6 +158,7 @@
   background-size: 18px 18px;
 }
 .vw-main .viewer-image-open img { max-height: calc(100vh - 280px); border-radius: 6px; box-shadow: 0 16px 40px -18px rgba(0, 0, 0, 0.6); }
+.vw-main .viewer-image-open.is-wide img { max-height: none; width: 100%; height: auto; }
 .vw-main .bx-pdf { max-height: calc(100vh - 210px); border-radius: 12px; padding: 18px; }
 .vw-layer:not(.is-full) .vw-main .bx-pdf { max-height: calc(100vh - 270px); }
 .vw-main .bx-pdf-page { border-radius: 3px; box-shadow: 0 10px 30px -12px rgba(0, 0, 0, 0.55); }

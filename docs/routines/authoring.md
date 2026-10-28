@@ -1,14 +1,14 @@
 # Authoring a routine package
 
 How a routine is written (ADR 0175, 0176): by the Orchestrator from the user's plain-language need, or by hand. The
-Orchestrator reads the same rules live (`app_flow_capabilities`, `app_flow_connectors`, the `app_guide` topic
+Orchestrator reads the same rules live (`app_routine_capabilities`, `app_routine_connectors`, the `app_guide` topic
 "routine"); this page is the long form, with two worked examples that pass the preflight in the unit tests
 (`test/unit/routine-examples.test.ts`).
 
 ## The model
 
-- A routine is a **package**: one `routine.json` (and the secrets the user typed into it). The app and a terminal
-  (`routine run`) run it with the same runtime, `packages/routine-runtime`.
+- A routine is a **package**: one `routine.json` (and the secrets the user typed into it). Only the terminal CLI
+  (`routine run`, `watch`, `resume`) executes it through `packages/routine-runtime`; the app prepares packages and reads run evidence on demand.
 - Each **step is one plain Claude Code session**: a prompt, an optional model and effort, the Claude Code tools it may
   use (`allowedTools`), the MCP servers the package declares. No app roles, no app chats, no app tools, no approval
   steps.
@@ -76,7 +76,7 @@ clicks (Air: `["#draggable", "ai-chat"]`, the Maia chat). Plain selectors only (
 1. Ask the user only what the need leaves open: inputs, the site and its test account, the DevOps project, area,
    states and tags, who is asked when a person is needed (a DevOps identity GUID: never guessed).
 2. Write the know-how into the step prompts (read the brain now: a run never reads the brain).
-3. `app_flow_propose { package }` (or `packagePath`, a JSON file inside the brain; `dryRun: true` only checks). It runs
+3. `app_routine_save { package }` (or `packagePath`, a JSON file inside the brain; `dryRun: true` only checks). It runs
    the preflight:
    - `invalid`: each error has `path`, `message` and `fix`; fix them and propose again. Nothing was saved.
    - `needs-secrets`: saved in `<userData>/routines/<id>/routine.json`; the errors marked `secret: true` are the
@@ -84,7 +84,7 @@ clicks (Air: `["#draggable", "ai-chat"]`, the Maia chat). Plain selectors only (
    - `ready`: saved.
 4. A password or PAT in a proposal is refused. A revision of the same routine id keeps the secrets the user already
    stored (same `loginUrl` and user; same test DB id and user).
-5. Saving runs nothing and switches no trigger on: the user starts the routine or enables its trigger.
+5. Saving runs nothing and switches no trigger on: the user executes `routine run`, `routine watch` or `routine resume` in a terminal. The app never launches the CLI.
 
 ## Example 1: Air bugfix (DevOps, browser, escalation)
 

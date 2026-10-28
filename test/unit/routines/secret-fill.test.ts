@@ -14,6 +14,7 @@ import { log } from '../../../src/main/log';
 import type { McpServerDef } from '../../../src/shared/mcp-servers';
 import { appControlTools } from '../../../src/main/appctl/tools';
 import type { BrainService, BrowserService, ChatService } from '../../../src/main/services';
+import { LoginVault } from '../../../src/main/personal/vault';
 import { SiteVault } from '../../../src/main/browser/site-vault';
 import type { SecretCipher } from '../../../src/main/engines/secrets';
 import { done, fakeDevOps, folderText, routinePackage, scriptedEngine, tempDir } from '../routine-runtime/fakes';
@@ -199,8 +200,7 @@ describe('a filled package at run time', () => {
 describe('export for the terminal', () => {
   const setup = (forbidden: () => string[] = () => []) => {
     const userData = tempDir('routines-export-'), packagesDir = path.join(tempDir('routine-runtime-'), 'packages');
-    const svc = createRoutines({ userData, packagesDir, terminalRuns: tempDir('routines-term-'), secrets: allSources(), forbiddenRoots: forbidden,
-      runtimeFor: () => { throw new Error('not run'); }, convert: () => { throw new Error('no legacy'); }, loop: () => ({ start() {}, stop() {} }) });
+    const svc = createRoutines({ userData, packagesDir, terminalRuns: tempDir('routines-term-'), secrets: allSources(), forbiddenRoots: forbidden });
     return { svc, userData, packagesDir };
   };
 
@@ -241,7 +241,7 @@ describe('export for the terminal', () => {
     const { svc, packagesDir } = setup();
     svc.store.save(savable());
     const chats = { list: () => [{ id: 'orch', isOrchestrator: true, harness: 'claude' }, { id: 'w', isOrchestrator: false, harness: 'claude' }] } as unknown as ChatService;
-    const deps = { chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0', routines: { has: (id: string) => svc.has(id), exportForTerminal: (id: string) => svc.exportForTerminal(id) } };
+    const deps = { chats, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0', routines: { snapshot: () => svc.snapshot(), run: svc.run, has: (id: string) => svc.has(id), exportForTerminal: (id: string) => svc.exportForTerminal(id) } };
     expect(appControlTools(deps).some(t => t.name === 'app_routine_export')).toBe(false);
     expect(appControlTools(deps, 'w').some(t => t.name === 'app_routine_export')).toBe(false);
     const tool = appControlTools(deps, 'orch').find(t => t.name === 'app_routine_export')!;
@@ -256,13 +256,15 @@ describe('export for the terminal', () => {
 describe('site vault for a package', () => {
   it('one exact-origin login, else a reason without values', () => {
     const cipher: SecretCipher = { unavailable: () => null, encrypt: s => Buffer.from(s.split('').reverse().join('')), decrypt: b => b.toString().split('').reverse().join('') };
-    const vault = new SiteVault(path.join(tempDir('site-vault-'), 'vault.json'), cipher, () => [AIR]);
+    const file = path.join(tempDir('site-vault-'), 'vault.json');
+    const old = new LoginVault(file, cipher, Date.now, url => new URL(String(url)).origin);
+    const vault = { forPackage: (origin: string) => new SiteVault(file, cipher).forPackage(origin) };
     expect(vault.forPackage(AIR)).toEqual({ reason: 'nessuna password salvata per questo sito' });
     expect(vault.forPackage('not a url')).toEqual({ reason: 'indirizzo di login non valido' });
-    vault.save({ origin: AIR, user: 'qa', password: SITE_PW });
+    old.save(AIR, 'qa', SITE_PW);
     expect(vault.forPackage(AIR)).toEqual({ value: { user: 'qa', password: SITE_PW } });
     expect('reason' in vault.forPackage('https://www.air.example.test')).toBe(true);
-    vault.save({ origin: AIR, user: 'qa2', password: DB_PW });
+    old.save(AIR, 'qa2', DB_PW);
     const two = vault.forPackage(AIR);
     expect(two).toEqual({ reason: expect.stringMatching(/più account/) });
     noValues(JSON.stringify(two));

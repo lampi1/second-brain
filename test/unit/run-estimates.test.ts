@@ -24,6 +24,13 @@ describe('estimate texts', () => {
 });
 
 describe('the runs to ask for', () => {
+  it('invalidates late settled usage but ignores per-token metrics of unfinished runs', () => {
+    const run = runOf('r_000000000001');
+    const key = (r: AgentRun) => runIdsOf([chat('x', r)]).key;
+    expect(key({ ...run, costUsd: 5, executionMs: 500 })).toBe(key(run));
+    const ended = { ...run, endedAt: NOW, endReason: 'completed' as const };
+    for (const patch of [{ costUsd: 5 }, { executionMs: 500 }, { endReason: 'stale' as const }]) expect(key({ ...ended, ...patch })).not.toBe(key(ended));
+  });
   it('lists runs newest first and changes its key when one ends', () => {
     const a = runOf('r_000000000001', { startedAt: 1 }), b = runOf('r_000000000002', { startedAt: 2 });
     const one = runIdsOf([chat('x', a), chat('y', b), chat('z'), undefined]);

@@ -1,11 +1,8 @@
 // The Routine page run by the app's runner (ADR 0155): tabs, run cards, the open routine, the start dialog, the dry-run.
 export const routineEn = {
-  'rt.title': "Routines",
   'rt.start': "Start",
-  'rt.run': "Run",
   'rt.cancel': "Cancel",
   'rt.save': "Save",
-  'rt.completed': "finished",
   'rt.item': "Work item (optional)",
   'rt.context.title': "Agent context",
   'rt.context.unknown': "This chat has no recorded launch manifest.",

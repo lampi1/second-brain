@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { TestDbQueryExecutor, readTestDbTargets, validateTestDbSql, validateTestDbQueryRequest } from '../../../src/main/flows/test-db-query';
+import { TestDbQueryExecutor, readTestDbTargets, validateTestDbSql, validateTestDbQueryRequest } from '../../../packages/routine-runtime/src/test-db-query';
 
 const dirs: string[] = [];
 const target = { id: 'test-a', server: 'sql.example.invalid', database: 'ExplicitSandbox' };

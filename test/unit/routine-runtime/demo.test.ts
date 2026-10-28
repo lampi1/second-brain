@@ -8,7 +8,6 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { main } from '../../../packages/routine-runtime/src/cli';
 import { createClaudeEngine, loadRoutinePackage, readRun, type EngineRunner } from '../../../packages/routine-runtime/src/index';
-import { createRoutineHost } from '../../../src/main/flows/routine-host';
 import { fakeDevOps, tempDir } from './fakes';
 
 const DEMO = path.resolve(__dirname, '../../../packages/routine-runtime/demo');
@@ -29,16 +28,6 @@ function devopsWithItem() {
   const devops = fakeDevOps();
   devops.addItem({ id: 126308, project: 'Planning', fields: { 'System.Title': 'Demo bug', 'System.WorkItemType': 'Bug', 'System.State': 'New' } });
   return devops;
-}
-
-/** The headings of a report.md and the step folders of a run: the shape both hosts must share. */
-function shape(runDir: string) {
-  const report = fs.readFileSync(path.join(runDir, 'report.md'), 'utf8');
-  return {
-    steps: fs.readdirSync(path.join(runDir, 'steps')),
-    files: fs.readdirSync(path.join(runDir, 'steps')).map(s => fs.readdirSync(path.join(runDir, 'steps', s)).sort()),
-    headings: report.split(/\r?\n/).filter(l => l.startsWith('#')).map(l => l.replace(/\d{8}-\d{6}-[0-9a-f]{6}/g, '<run>')),
-  };
 }
 
 describe('routine runtime demo', () => {
@@ -73,25 +62,4 @@ describe('routine runtime demo', () => {
     expect(out).toContain(`Report: ${path.join(runDir, 'report.md')}`);
   }, 60_000);
 
-  it('parity: the app host and the CLI give the same step folders and report.md structure', async () => {
-    const cli = cleanDemo(), devops = devopsWithItem();
-    let out = '';
-    expect(await main(['run', cli.dir, '--runs-dir', path.join(cli.dir, 'runs')], {
-      engine: () => cli.engine, mcp: () => stub, env: {}, stdout: { write: s => { out += s; return true; } }, stderr: quiet(),
-      onInterrupt: () => () => undefined, repaintMs: 60_000, devops: { authorization: devops.authorization, request: devops.request },
-    })).toBe(0);
-    const cliRun = /Folder: (.+)/.exec(out)![1]!.trim();
-
-    const app = cleanDemo(), userData = tempDir('routine-demo-app-');
-    const mcpEntry = path.join(userData, 'routine-mcp.js');
-    fs.writeFileSync(mcpEntry, '');
-    const host = createRoutineHost({ userData, engine: app.engine, token: devops.authorization, mcpEntry, devopsRequest: devops.request });
-    const runtime = host.runtimeFor(loadRoutinePackage(app.dir));
-    const { runId, finished } = runtime.start({});
-    expect((await finished).status).toBe('done');
-    const appRun = path.join(host.runsRoot('demo'), runId);
-
-    expect(shape(appRun)).toEqual(shape(cliRun));
-    expect(shape(cliRun).steps).toEqual(['01-air-login', '02-work-item']);
-  }, 60_000);
 });

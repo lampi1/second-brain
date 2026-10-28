@@ -9,7 +9,6 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { initRelease } from './release';
 import { appPageUrl, armLoopback, createWindow, hiddenOpened, hiddenRun } from './window';
-import { createFlowBackground } from './flows/background';
 import { startTaskbar } from './taskbar';
 import { Emitter, registerHandlers, type Handlers } from './ipc';
 import { createServices } from './wiring';
@@ -106,19 +105,18 @@ app.whenReady().then(async () => {
   if (process.env.SB_DEMO !== '1') jobGuard.start(path.join(app.getPath('userData'), 'jobguard'));
   const s = await createServices({ emitter, window: () => win, userData: app.getPath('userData') });
   setUiLangSource(() => { const l = s.brain.settings().language; return isLang(l) ? l : systemLang(); });
-  const flowBackground = createFlowBackground({ window: win, icon: path.join(outDir, process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
-    hidden: hiddenRun(), quit: () => app.quit(), count: () => s.flows?.snapshot().runner?.active ?? 0,
-    enabled: () => !!s.brain.info().brainRoot && (s.flows?.automation().snapshot().background === true || (s.flows?.snapshot().runner?.active ?? 0) > 0) });
-  emitter.tap(channel => { if (channel === 'flows:changed' || channel === 'settings:changed') flowBackground.sync(); });
-  flowBackground.sync();
   // the Log page (ADR 0111): the app's own events, readable and live, kept 7 days at most; zero tokens
   const activity = attachActivity({ userData: app.getPath('userData'), emitter, chats: () => s.chats.list(), brainRoot: () => s.brain.info().brainRoot });
   if (process.env.SB_DEMO === '1') journal.seed(demoLog(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now()));
   /** The Routine section's service; the demo gets seeded run folders read by the same code. */
   let demoRoutines: Routines | undefined;
+  const stopRoutineView = () => { s.routines?.stop(); demoRoutines?.stop(); };
+  win.webContents.on('render-process-gone', stopRoutineView);
+  win.webContents.on('did-start-navigation', (_event, _url, isInPlace, isMainFrame) => { if (isMainFrame && !isInPlace) stopRoutineView(); });
+  win.on('closed', stopRoutineView);
   const routinesOf = (): Routines => {
     if (s.routines) return s.routines;
-    if (process.env.SB_DEMO === '1') return demoRoutines ??= createDemoRoutines(app.getPath('userData'), process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now());
+    if (process.env.SB_DEMO === '1') return demoRoutines ??= createDemoRoutines(app.getPath('userData'), process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), change => emitter.emit('routines:progress', change));
     throw new Error('Routine non disponibili: riavvia l’app.');
   };
   const requireReviewRoot = (expected: unknown): void => {
@@ -441,9 +439,6 @@ app.whenReady().then(async () => {
     'browser:handoffResolve': a => s.browser.resolveHandoff(a.id, a.outcome, a.note),
     'browser:handoffCopy': a => s.browser.copyFromHandoff(a.id, a.field),
     'browser:envList': () => s.browser.envs(),
-    'credentials:sites': () => s.browser.siteCredentials?.() ?? { entries: [], origins: [], unavailable: 'Site vault unavailable' },
-    'credentials:saveSite': a => { if (!s.browser.saveSiteCredential) throw new Error('Site vault unavailable'); s.browser.saveSiteCredential(a); },
-    'credentials:removeSite': a => { if (!s.browser.removeSiteCredential) throw new Error('Site vault unavailable'); s.browser.removeSiteCredential(a.id); },
     'credentials:list': () => s.browser.credentials(),
     'credentials:copy': a => s.browser.copyCredential(a.id, a.field),
     'feed:list': () => s.brain.feed(),
@@ -504,7 +499,7 @@ app.whenReady().then(async () => {
     'overlay:action': a => overlay.relay(a),
     'overlay:focus': a => overlay.focus(a.target),
     // a run answers the "Comando da eseguire" request of that block (Esegui on the card or under the block)
-    'run:start': a => { const run = s.runner.start(a); s.asks.ran(run.chatId, run.itemId, run.code); return run; },
+    'run:start': a => { if (s.chats.list().some(c => c.id === a.chatId && c.routineArchived)) throw new Error('Archived routine chats are read-only.'); const run = s.runner.start(a); s.asks.ran(run.chatId, run.itemId, run.code); return run; },
     'run:dismiss': a => s.asks.dismiss(a.chatId, a.requestId),
     'run:stop': a => s.runner.stop(a.runId),
     'run:list': a => s.runner.list(a?.chatId),
@@ -531,72 +526,13 @@ app.whenReady().then(async () => {
     'routines:list': () => routinesOf().snapshot(),
     'routines:import': a => routinesOf().importZip(Buffer.from(String(a.data), 'base64')),
     'routines:export': a => routinesOf().exportForTerminal(String(a.id)),
-    'routines:startItem': a => routinesOf().startItem(a.id, Number(a.workItem)),
-    'routines:setTrigger': a => routinesOf().setTrigger(a.id, a.enabled === true, a.filters),
     'routines:setSecrets': a => routinesOf().setSecrets(a.id, a.values && typeof a.values === 'object' ? a.values : {}),
+    'routines:image': a => routinesOf().image(a.ref, a.path),
     'routines:run': a => routinesOf().run(a),
-    'routines:cancel': a => { routinesOf().cancel(a); },
+    'routines:watch': a => routinesOf().watch(a.ref, a.subscription),
+    'routines:unwatch': a => routinesOf().unwatch(a.subscription),
+    'routines:archive': () => s.routineArchive?.snapshot() ?? { contextKey: 'unavailable', drafts: [], versions: [], active: {}, runs: [] },
     'routines:convert': a => routinesOf().convert(a.flowId),
-    'flows:list': () => s.flows?.snapshot() ?? { contextKey: 'unavailable', drafts: [], versions: [], active: {}, runs: [] },
-    'flows:autoDecide': a => {
-      if (!s.flows || a.contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la proposta.');
-      const { contextKey: _context, ...decision } = a;
-      const rule = s.flows.automation().decide(decision);
-      const target = s.chats.list().find(c => c.id === rule.ownerOrchestratorId && c.isOrchestrator && !c.closedAt);
-      if (target) void s.chats.send(target.id, `[evento app] Decisione sulla modalità automatica ${rule.id} salvata. Rileggi app_flow_auto_list; se c’è una risposta libera prepara la proposta corretta nella modale. Questa notifica non concede altri permessi.`, undefined, false, 'Routine', false, { kind: 'app' }).catch(e => log.warn('flows', 'Automatic decision wake failed', { cause: errText(e), hint: 'Decision and feedback remain saved in Flussi.' }));
-      return s.flows.snapshot();
-    },
-    'flows:definitionDecide': a => {
-      const service = s.flows?.service();
-      if (!service || a.contextKey !== service.snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la proposta.');
-      const { contextKey: _context, ...decision } = a;
-      service.decideDefinition(decision);
-      const target = orchestrator.get();
-      if (target) void s.chats.send(target.id, '[evento app] Decisione sulla definizione del flusso salvata. Rileggi app_flow_list. Approvare la definizione non autorizza operazioni esterne o produzione.', undefined, false, 'Routine', false, { kind: 'app' }).catch(e => log.warn('flows', 'Definition decision wake failed', { cause: errText(e), hint: 'Decision persisted; reread the catalog.' }));
-      return s.flows!.snapshot();
-    },
-    'flows:decide': async a => {
-      const service = s.flows?.service();
-      if (!service || a.contextKey !== service.snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la decisione.');
-      const { contextKey: _context, ...decision } = a;
-      await s.flows!.decide(decision);
-      const run = service.snapshot().runs.find(r => r.id === a.runId);
-      const target = s.chats.list().find(c => c.id === run?.ownerOrchestratorId && c.isOrchestrator && !c.closedAt);
-      if (target) void s.chats.send(target.id, `[evento app] Decisione salvata per il flusso ${a.runId}. Rileggi app_flow_status; questa notifica non concede altri permessi.`, undefined, false, 'Routine', false, { kind: 'app' }).catch(e => log.warn('flows', 'Run decision wake failed', { cause: errText(e), hint: 'Decision persisted in the flow run.' }));
-      return s.flows!.snapshot();
-    },
-    'flows:reconcileDecide': a => {
-      if (!s.flows || a.contextKey !== s.flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato.');
-      const { contextKey: _context, ...input } = a; return s.flows.decideReconcile(input);
-    },
-    'flows:cancel': async a => {
-      const flows = s.flows;
-      if (!flows || a.contextKey !== flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la routine.');
-      const { contextKey: _context, ...input } = a;
-      await flows.cancel(input);
-      return flows.snapshot();
-    },
-    'flows:cancelDecide': async a => {
-      const flows = s.flows;
-      if (!flows || a.contextKey !== flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la proposta.');
-      const { contextKey: _context, ...input } = a;
-      await flows.decideCancel(input);
-      return flows.snapshot();
-    },
-    'flows:restart': async a => {
-      const flows = s.flows;
-      if (!flows || a.contextKey !== flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la routine.');
-      const { contextKey: _context, ...input } = a;
-      await flows.restart(input);
-      return flows.snapshot();
-    },
-    'flows:restartDecide': async a => {
-      const flows = s.flows;
-      if (!flows || a.contextKey !== flows.service().snapshot().contextKey) throw new Error('Il brain è cambiato: rileggi la proposta.');
-      const { contextKey: _context, ...input } = a;
-      await flows.decideRestart(input);
-      return flows.snapshot();
-    },
     'work:list': () => workflows.list(),
     'work:decide': a => {
       const row = workflows.decide(a);
@@ -706,13 +642,11 @@ app.whenReady().then(async () => {
   // of claude.exe would otherwise outlive the app); will-quit kills again in case this path is skipped.
   let quitting = false;
   app.on('before-quit', e => {
-    flowBackground.beforeQuit();
     // closing the window quits twice (our 'closed' handler + Electron's window-all-closed): every repeat is held too,
     // or the app would exit in the same tick without the clean shutdown (app.exit below emits no before-quit)
     e.preventDefault();
     if (quitting) return;
     quitting = true;
-    flowBackground.stop();
     void connectors.service.cancelLogin();
     headline.stop();
     pulse?.stop(); unsubscribePulse(); stopTaskbar(); proposals.stop();
