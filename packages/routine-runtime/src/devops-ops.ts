@@ -9,6 +9,7 @@
 // writes point at them by the session's ref, and the next prompts list them (`runResources`).
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
 import type { TestDeployTarget } from '../../../src/shared/flow-automation';
 import { DevOpsCallError, commentHtml, html, mentionHtml, type DevOpsClient } from './devops';
 import type { RoutineDevOps } from './format';
@@ -44,11 +45,21 @@ export interface ExtendedContext {
   /** the person a downgrade comment mentions (the escalation contact) */
   contact?: { id: string; name?: string };
   push?: (p: HostPush) => Promise<{ branch: string; commit: string }>;
+  /** a parking package (escalation.park): the downgrade parks the run instead of handing it over (see downgrade) */
+  park?: ParkStop;
+  /** the branch a checkout is on (`refs/heads/...`), undefined when detached or unreadable (tests replace it) */
+  headOf?: (workspace: string) => Promise<string | undefined>;
   sleep(ms: number): Promise<void>;
   now(): number;
 }
 
-export interface ExtendedOutcome { done: string[]; notVerified: string[]; failed: string[]; downgraded?: string }
+/** Where a parked run stopped: `n` = the run's park count (its own ledger keys); step titles for the comment. */
+export interface ParkStop { n: number; step: string; position: string;
+  /** the title of the step the run resumes from: the named one when it is this step or an earlier one, else this step */
+  resumeStep: (id?: string) => string }
+export interface ExtendedOutcome { done: string[]; notVerified: string[]; failed: string[]; downgraded?: string; resumeFrom?: string;
+  /** a parked downgrade: its comment and whether the run branch was published */
+  parked?: { commentId?: number; branch: string; pushed: boolean } }
 
 /** One write as the settle loop sees it: a ledger key, a label, the attempt and the read-back. */
 interface Plan {
@@ -376,7 +387,8 @@ export async function executeExtended(ctx: ExtendedContext, write: Exclude<StepW
     }
     case 'downgrade': {
       out.downgraded = masker.mask(write.reason);
-      await downgrade(ctx, write.reason, settle, out, classic);
+      if (write.resumeFrom) out.resumeFrom = write.resumeFrom;
+      await downgrade(ctx, write.reason, settle, out, classic, write.resumeFrom);
       return;
     }
   }
@@ -467,36 +479,78 @@ async function cancelDeploy(ctx: ExtendedContext, target: TestDeployTarget, key:
 /** The comment a downgrade leaves (the app's text, Italian like its other routine comments). */
 export const needsHumanComment = (reason: string): string => `Serve un intervento umano: ${reason}. La routine si è fermata; segue la pulizia automatica.`;
 
+/** The one comment of a parked run (Italian, for its contact): why, the step reached, the run branch, how it resumes. */
+export const parkComment = (reason: string, park: ParkStop, pushed: { branch: string; pushed: boolean; note: string }, tag: string, resumeFrom?: string): string => [
+  `Serve il tuo aiuto: ${reason.trim().replace(/[.\s]+$/, '')}.`,
+  `Punto della run: passaggio «${park.step}» (${park.position}).`,
+  `Branch: ${pushed.branch} ${pushed.note}.`,
+  `Rispondi con un commento qui sotto: la routine riprende questa run dal passaggio «${park.resumeStep(resumeFrom)}», sullo stesso branch, e toglie il tag ${tag}. Intanto continua con gli altri bug.`,
+].join('\n');
+
+/** Publishes the run branch before a park when a push target's checkout is on it (fast-forward, like push-branch).
+ *  Detached or another branch: nothing to publish yet (an analysis lives in the run folder, kept for the resume). */
+async function pushParked(ctx: ExtendedContext, scope: string, settle: (plan: Plan) => Promise<'done' | 'not-verified' | 'failed'>, out: ExtendedOutcome, classic: (write: StepWrite, key: string) => Promise<void>): Promise<{ branch: string; pushed: boolean; note: string }> {
+  const branch = runBranch(ctx.runId), name = branch.slice('refs/heads/'.length);
+  if (!ctx.grant.ops.includes('git-push')) return { branch: name, pushed: false, note: 'non pubblicato (il pacchetto non può fare push)' };
+  const headOf = ctx.headOf ?? gitHead;
+  for (const target of ctx.grant.pushTargets ?? []) {
+    const workspace = ctx.inputs[target.workspaceInput];
+    if (!workspace || await headOf(workspace) !== branch) continue;
+    const key = `${scope}:push`;
+    await executeExtended(ctx, { op: 'push-branch', project: target.project, repositoryId: target.repositoryId }, key, settle, out, classic);
+    const state = ctx.store.ledger(ctx.runId)[`push:${key}`]?.state;
+    return state === 'done' ? { branch: name, pushed: true, note: 'pubblicato con tutti i commit della run' } : { branch: name, pushed: false, note: 'non pubblicato: il push non è riuscito, i commit restano nella cartella di lavoro locale' };
+  }
+  return { branch: name, pushed: false, note: 'non ancora creato: nessun commit, l\'analisi resta nella cartella della run' };
+}
+
+/** `refs/heads/...` of a checkout's HEAD; undefined when detached or unreadable (read only, no credentials). */
+const gitHead = (workspace: string): Promise<string | undefined> => new Promise(resolve => execFile('git', ['-C', workspace, 'symbolic-ref', '--quiet', 'HEAD'],
+  { timeout: 30_000, windowsHide: true, encoding: 'utf8' }, (error, stdout) => resolve(error ? undefined : stdout.trim() || undefined)));
+
 /** The downgrade, as the app's cleanup did it: the run's draft PR abandoned and its test deployment ended, the reason
  *  kept in downgrade.md, then the package's tag removed, its tag added, its state set, a comment for a person; each
  *  phase one ledger entry, so a resumed run continues where it stopped. */
-async function downgrade(ctx: ExtendedContext, reason: string, settle: (plan: Plan) => Promise<'done' | 'not-verified' | 'failed'>, out: ExtendedOutcome, classic: (write: StepWrite, key: string) => Promise<void>): Promise<void> {
-  const policy = ctx.grant.downgrade!;
+async function downgrade(ctx: ExtendedContext, reason: string, settle: (plan: Plan) => Promise<'done' | 'not-verified' | 'failed'>, out: ExtendedOutcome, classic: (write: StepWrite, key: string) => Promise<void>, resumeFrom?: string): Promise<void> {
+  const policy = ctx.grant.downgrade!, park = ctx.park;
+  // each park of a run has its own ledger keys: a run parked, answered and parked again writes again
+  const scope = park ? `downgrade:p${park.n}` : 'downgrade';
   const cleanup = async (phase: string) => {
-    const pr = ledgerResources(ctx.store.ledger(ctx.runId)).pr;
-    if (pr) await executeExtended(ctx, { op: 'abandon-pr' }, `downgrade:${phase}:abandon-pr`, settle, out, classic);
+    // a parked run keeps its draft PR: the answered run goes on with it; its test deployment ends (others need it)
+    const pr = park ? undefined : ledgerResources(ctx.store.ledger(ctx.runId)).pr;
+    if (pr) await executeExtended(ctx, { op: 'abandon-pr' }, `${scope}:${phase}:abandon-pr`, settle, out, classic);
     for (const targetId of ctx.deployments?.ownedTargets(ctx.runId) ?? []) {
       const target = ctx.grant.deployTargets?.find(t => t.id === targetId);
-      if (target) await cancelDeploy(ctx, target, `downgrade:${phase}:cancel:${targetId}`, settle, out);
+      if (target) await cancelDeploy(ctx, target, `${scope}:${phase}:cancel:${targetId}`, settle, out);
     }
     if (ctx.deployments && !await ctx.deployments.settle(ctx.runId, () => {}).catch(() => false)) out.notVerified.push('test deployment still active or uncertain: its lease is kept');
   };
   await cleanup('before');
   fs.mkdirSync(ctx.runDir, { recursive: true });
   fs.writeFileSync(path.join(ctx.runDir, 'downgrade.md'), ctx.masker.mask(`# Downgrade\n\nClassification correction: ${reason}\nRun: ${ctx.runId}; step: ${ctx.stepId}. Evidence for a future reviewed routine update, not an automatic rule.\n`));
-  await classic({ op: 'tags', remove: [policy.removeTag] }, 'downgrade:remove-tag');
-  await classic({ op: 'tags', add: [policy.addTag] }, 'downgrade:add-tag');
-  await classic({ op: 'state', state: policy.state }, 'downgrade:state');
-  const marker = `routine run ${ctx.runId} · downgrade`;
-  const mentions = [...new Set([...(ctx.grant.mentions ?? []), ...(ctx.contact ? [ctx.contact.id] : [])])];
-  await settle({ key: 'downgrade:comment', what: 'downgrade comment',
+  const pushed = park ? await pushParked(ctx, scope, settle, out, classic) : undefined;
+  await classic({ op: 'tags', remove: [policy.removeTag] }, `${scope}:remove-tag`);
+  await classic({ op: 'tags', add: [policy.addTag] }, `${scope}:add-tag`);
+  await classic({ op: 'state', state: policy.state }, `${scope}:state`);
+  const marker = park ? `routine run ${ctx.runId} · park ${park.n} ·` : `routine run ${ctx.runId} · downgrade`;
+  // a parked run talks only to its contact (owner, 2026-10-28: the bug comment mentions only the contact)
+  const mentions = park && ctx.contact ? [ctx.contact.id] : [...new Set([...(ctx.grant.mentions ?? []), ...(ctx.contact ? [ctx.contact.id] : [])])];
+  const text = park && pushed ? parkComment(reason, park, pushed, policy.addTag, resumeFrom) : needsHumanComment(reason);
+  await settle({ key: `${scope}:comment`, what: 'downgrade comment',
     async once(t) {
       const tags = mentions.map(id => mentionHtml(id, id === ctx.contact?.id ? ctx.contact.name : undefined)).join(' ');
       const r = await t.call('POST', `https://dev.azure.com/${encodeURIComponent(ctx.grant.organization)}/${encodeURIComponent(ctx.project)}/_apis/wit/workItems/${ctx.workItem}/comments?api-version=7.1-preview.4`,
-        { text: `${tags ? `${tags}<br/>` : ''}${commentHtml(ctx.masker.mask(needsHumanComment(reason)))}<br/><small>${html(marker)}</small>` });
+        { text: `${tags ? `${tags}<br/>` : ''}${commentHtml(ctx.masker.mask(text))}<br/><small>${html(marker)}</small>` });
       return typeof r.id === 'number' ? { commentId: r.id } : undefined;
     },
-    async verify() { return (await ctx.client.comments(ctx.grant.organization, ctx.project, ctx.workItem)).some(c => c.text.includes(marker)) ? { seen: 'present' } : { seen: 'absent' }; } });
+    async verify() {
+      const found = (await ctx.client.comments(ctx.grant.organization, ctx.project, ctx.workItem)).find(c => c.text.includes(marker));
+      return found ? { seen: 'present', extra: { commentId: found.id } } : { seen: 'absent' };
+    } });
+  if (park && pushed) {
+    const commentId = ctx.store.ledger(ctx.runId)[`${scope}:comment`]?.commentId;
+    out.parked = { branch: pushed.branch, pushed: pushed.pushed, ...(typeof commentId === 'number' ? { commentId } : {}) };
+  }
   await cleanup('after');
 }
 

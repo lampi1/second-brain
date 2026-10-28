@@ -36,7 +36,8 @@ export type StepWrite =
   | { op: 'deploy-test'; targetId: string; waitMinutes?: number }
   | { op: 'cancel-test-deploy'; targetId: string }
   // stops the run: cleanup, tags and state from the package's devops.downgrade, a comment for a person
-  | { op: 'downgrade'; reason: string };
+  // resumeFrom (a parking package, escalation.park): the step an answered run restarts from (default: this step)
+  | { op: 'downgrade'; reason: string; resumeFrom?: string };
 export type StepWriteOp = StepWrite['op'];
 
 /** The package grant category each write needs (format.ts DEVOPS_OPS). */
@@ -157,8 +158,8 @@ function write(v: unknown, i: number): StepWrite {
       if (w.waitMinutes !== undefined && !(Number.isInteger(w.waitMinutes) && (w.waitMinutes as number) >= 1 && (w.waitMinutes as number) <= 240)) bad(`${what}.waitMinutes: 1-240`);
       return { op: 'deploy-test', targetId: text(w.targetId, `${what}.targetId`, 80), ...(w.waitMinutes !== undefined ? { waitMinutes: w.waitMinutes as number } : {}) };
     case 'downgrade':
-      keysOnly(w, ['op', 'reason'], what);
-      return { op: 'downgrade', reason: text(w.reason, `${what}.reason`, 2000) };
+      keysOnly(w, ['op', 'reason', 'resumeFrom'], what);
+      return { op: 'downgrade', reason: text(w.reason, `${what}.reason`, 2000), ...(w.resumeFrom !== undefined ? { resumeFrom: ref(w.resumeFrom, `${what}.resumeFrom`) } : {}) };
     default: return bad(`${what}.op: one of ${Object.keys(WRITE_CATEGORY).join(', ')}`);
   }
 }
@@ -211,7 +212,7 @@ const SHAPES: Record<StepWriteOp, string> = {
 
 /** The protocol paragraph appended to every step prompt: where and what to write. `ops`: the write ops the package
  *  grants (none = no devopsWrites). */
-export function stepResultInstructions(stepDir: string, ops: readonly StepWriteOp[] | boolean, loop?: { to: string; max: number }): string {
+export function stepResultInstructions(stepDir: string, ops: readonly StepWriteOp[] | boolean, loop?: { to: string; max: number }, park?: { steps: readonly string[] }): string {
   const allowed = ops === true ? (['comment', 'state', 'fields', 'tags'] as StepWriteOp[]) : ops === false ? [] : [...ops];
   const file = `${stepDir.replace(/\\/g, '/')}/${STEP_RESULT_FILE}`;
   return [
@@ -222,12 +223,16 @@ export function stepResultInstructions(stepDir: string, ops: readonly StepWriteO
     `Save evidence files under ${stepDir.replace(/\\/g, '/')}/evidence/ and screenshots under ${stepDir.replace(/\\/g, '/')}/screenshots/.`,
     ...(allowed.length ? [
       'devopsWrites are done by the runtime after you stop, in order, only with outcome "done", on this run\'s work item and its own resources; never do them yourself. Allowed:',
-      ...allowed.map(op => `- ${SHAPES[op]}`),
+      ...allowed.map(op => op === 'downgrade' && park
+        ? `- {"op":"downgrade","reason":"...","resumeFrom?":"<step id>"} (last write; the run parks: one comment for the contact with the step reached and the run branch, the run branch pushed when it is checked out, the package's tag; when the contact answers, the same run restarts from resumeFrom, one of ${park.steps.join(', ')}, default this step)`
+        : `- ${SHAPES[op]}`),
       'A write never blocks the run: what was done, not verified or refused is listed for the next steps.',
       'Images in a comment are files of this step folder only ("evidence/<file>" or "screenshots/<file>", PNG or JPEG).',
     ] : []),
     ...(loop ? [`To send the run back to step ${loop.to} (for example findings it must fix), use outcome "done" with "sendBack": {"reason": "what must be fixed"}; at most ${loop.max} times per run, then a person decides.`] : []),
-    'Use needs-human only when a person must decide or provide something; the runtime asks them on DevOps and runs this step again with the answer.',
+    park
+      ? 'Use needs-human only when a person must decide or provide something: the runtime parks the run (as a downgrade from this step) and runs this step again with the answer.'
+      : 'Use needs-human only when a person must decide or provide something; the runtime asks them on DevOps and runs this step again with the answer.',
   ].join('\n');
 }
 

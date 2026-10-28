@@ -25,6 +25,13 @@ export function defaultPackagesDir(env: NodeJS.ProcessEnv = process.env, platfor
   return p.join(p.dirname(defaultRunsDir({ ...env, [RUNS_DIR_ENV]: '' }, platform, home)), 'packages');
 }
 
+/** The lock folder every terminal shares (locks.ts), whatever its runs directory: Windows
+ *  `%LOCALAPPDATA%\routine-runtime\locks` (no override, so `--runs-dir` never splits it). */
+export function defaultLocksDir(env: NodeJS.ProcessEnv = process.env, platform: NodeJS.Platform = process.platform, home: string = os.homedir()): string {
+  const p = platform === 'win32' ? path.win32 : path.posix;
+  return p.join(p.dirname(defaultRunsDir({ ...env, [RUNS_DIR_ENV]: '' }, platform, home)), 'locks');
+}
+
 /** The run folders of one routine under a runs directory: `<dir>/<routineId>/<runId>/`, its workspace inside. */
 export function routinePaths(runsDir: string, routineId: string): Paths {
   if (!/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,127}$/.test(routineId) || routineId.includes('..')) throw new Error('Invalid routine id');

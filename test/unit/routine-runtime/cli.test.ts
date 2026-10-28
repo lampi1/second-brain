@@ -7,7 +7,7 @@ import path from 'node:path';
 import zlib from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { main, parseArgs, PACKAGE_SOURCE_FILE, type CliDeps } from '../../../packages/routine-runtime/src/cli';
-import { parseEvents, progressFrom, type RoutineTrigger } from '../../../packages/routine-runtime/src/index';
+import { createLocks, parseEvents, progressFrom, type RoutineTrigger } from '../../../packages/routine-runtime/src/index';
 import { readProgress, renderProgress } from '../../../packages/routine-runtime/src/terminal';
 import { extractPackageZip, readZip } from '../../../packages/routine-runtime/src/zip';
 import type { FlowDetectionResult } from '../../../src/shared/flow-automation';
@@ -20,7 +20,7 @@ function harness(script: Script, over: Partial<CliDeps> = {}) {
   const engine = scriptedEngine(script);
   let interrupt: (() => void) | undefined;
   const deps: Partial<CliDeps> = {
-    stdout, stderr, env: {}, engine: () => engine, mcp: () => undefined, repaintMs: 10_000,
+    stdout, stderr, env: {}, engine: () => engine, mcp: () => undefined, repaintMs: 10_000, locksDir: tempDir(),
     onInterrupt: handler => { interrupt = handler; return () => { interrupt = undefined; }; },
     ...over,
   };
@@ -169,6 +169,20 @@ describe('routine CLI', () => {
       expect(h.stdout.text).toMatch(/Stopped\. Interrupted runs stay resumable/);
       const runDir = fs.readdirSync(path.join(runs, 'demo')).find(d => d !== 'trigger.json')!;
       expect(JSON.parse(fs.readFileSync(path.join(runs, 'demo', runDir, 'run.json'), 'utf8')).status).toBe('cancelled');
+    });
+
+    it('a second watch of the same routine (another terminal, any runs dir) is refused; the first frees its lock', async () => {
+      const { devops, pkg, runs } = setup();
+      const locksDir = tempDir();
+      const over = { devops: { authorization: devops.authorization, request: devops.request, detect: oneItem }, sleep: async () => undefined, locksDir };
+      createLocks(locksDir, { alive: () => true }).acquire('watch-demo', 'watch-elsewhere');
+      const second = harness(r => done(`did ${r.stepId}`), { ...over, maxPolls: 1 });
+      expect(await main(['watch', pkg, '--runs-dir', tempDir()], second.deps)).toBe(1);
+      expect(second.stderr.text).toMatch(/Another routine watch of "demo" is running/);
+      createLocks(locksDir).release(['watch-demo'], 'watch-elsewhere');
+      const first = harness(r => done(`did ${r.stepId}`), { ...over, maxPolls: 1 });
+      expect(await main(['watch', pkg, '--runs-dir', runs], first.deps)).toBe(0);
+      expect(fs.readdirSync(locksDir)).toEqual([]);
     });
 
     it('a package without a trigger is refused', async () => {

@@ -53,6 +53,17 @@ export interface RunRecord {
   createdAt: number; updatedAt: number; endedAt?: number; error?: string;
   steps: RunStepRecord[];
   escalation?: RunEscalation;
+  /** a parked run (escalation.park): stopped at stepId, resumes from resumeFrom when its contact answers on the work item */
+  parked?: RunPark;
+  /** parks already answered: the next park takes the next number (its own ledger keys) */
+  parks?: number;
+}
+export interface RunPark {
+  n: number; stepId: string; resumeFrom: string; at: number; question: string;
+  /** the park comment: an answer is a later comment of the contact */
+  commentId?: number; branch: string; pushed: boolean;
+  /** the contact's answer, kept while the resumed steps run */
+  answer?: { commentId: number; at: number; text: string; author: string };
 }
 /** A DevOps write of a run. "writing" = sent, outcome not known yet (verified on DevOps before anything else);
  *  "not-verified" = its effect could not be confirmed; "failed" = DevOps refused it. None of them blocks the run.
@@ -60,7 +71,9 @@ export interface RunRecord {
  *  deployment receipt), read back by later writes and listed in the next prompts. */
 export interface LedgerEntry { state: 'writing' | 'done' | 'not-verified' | 'failed'; what: string; at: number; tries: number; commentId?: number; rev?: number; resource?: Record<string, string | number | boolean> }
 export interface TriggerSubject { runId: string; at: number; title?: string }
-export interface TriggerState { schema: 1; cursor: Record<string, string>; subjects: Record<string, TriggerSubject>; starts: number[]; lastCheckAt?: number; lastResult?: string }
+export interface TriggerState { schema: 1; cursor: Record<string, string>;
+  /** cursors of the trigger's further areas (key project|areaPath) */
+  cursors?: Record<string, Record<string, string>>; subjects: Record<string, TriggerSubject>; starts: number[]; lastCheckAt?: number; lastResult?: string }
 
 /** A runtime whose attempt is no longer the run's current one (a newer resume took over). */
 export class StaleAttempt extends Error {}
