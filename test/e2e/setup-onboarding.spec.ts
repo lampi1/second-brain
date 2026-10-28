@@ -40,7 +40,7 @@ const light = async (page: Page, on: boolean) => page.evaluate(v => { document.d
 
 test('setup: fields take typing, tools end in a real check, a new brain, the guide chat on confirm', async () => {
   test.setTimeout(150_000);
-  const home = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-home-')));
+  const home = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-home-')));
   const found = path.join(home, 'Projects'), picked = path.join(home, 'lavoro', 'clienti');
   for (const repo of ['shop', 'api']) fs.mkdirSync(path.join(found, repo, '.git'), { recursive: true });
   fs.mkdirSync(picked, { recursive: true });

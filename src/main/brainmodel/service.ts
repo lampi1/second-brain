@@ -9,19 +9,20 @@ import { MAINTENANCE_JOBS } from '../../shared/brain-model';
 import type { RoutingInfo } from '../../shared/contract';
 import type { AgentCatalogService } from '../agents/catalog';
 import type { AgentPackFlows } from '../agents/pack/flows';
-import { portableId } from '../agents/pack/flows';
 import type { AgentPackLearning } from '../agents/pack/learning';
 import { readLocal, writeLocal } from '../agents/local-store';
 import { errText, log } from '../log';
 import { ChangeLog, type AgentRestorer, type AgentSnapshot } from './changes';
 import { classifiersState, readJobs } from './classifiers';
-import { claimOf, learningState, measurable, seal, type IntervalCache } from './evidence';
+import { seal, type IntervalCache } from './evidence';
 import { appendUnder, brainJsonWithTopic, corrections, LESSONS_RULE, LESSONS_WHEN, migrate, repeatedTask, skillText, type AgentWriter, type JobContext, type JobResult } from './jobs';
+import { ignoreWrite, sourceOfSkill } from './migration-ignore';
 import { procedureSections } from './procedure-sources';
 import type { UpgradeAsk } from './upgrade';
-import { memoryStats } from './memory-stats';
+import { readBrainView, type BrainViewInput } from './view';
+import { readWorker } from '../read-work';
 import { readNoise, scanLogs, writeNoise } from './log-scan';
-import { readMemory, readRules, readSkills, readSmall, type SkillDir } from './model';
+import { readRules, readSkills, readSmall, type SkillDir } from './model';
 import type { ResearchProposal } from '../../shared/maintenance-research';
 import { NAME_RE, parseMd, setBody } from '../../shared/skillmd';
 import { checkPermissionText } from '../agents/tool-policy';
@@ -80,19 +81,6 @@ export class BrainModelService {
   private root(): string | null { const r = this.d.root(); try { return r && fs.statSync(r).isDirectory() ? fs.realpathSync(r) : null; } catch { return null; } }
   private profiles(): AgentProfile[] { try { return this.d.catalog.list().profiles; } catch { return []; } }
   private roles(): AgentProfile[] { return this.profiles().filter(p => p.scope === 'role'); }
-  /** Each change with its evidence claim (sealed when it was made; an older entry is sealed with today's roles). */
-  private withClaims(changes: BrainChange[], roles: AgentProfile[], runs: AgentRun[]): BrainChange[] {
-    try { this.log.sealMissing(c => seal(c, roles)); } catch { /* sealed below for this read only */ }
-    if (this.intervals.size > 4000) this.intervals.clear();
-    const ok = measurable(runs);
-    let failed = 0;
-    const out = changes.map(c => {
-      try { return { ...c, claim: claimOf(c, this.log.seedOf(c.id) ?? seal(c, roles), ok, this.intervals) }; }
-      catch { failed++; return c; }
-    });
-    if (failed) log.warn('brain', 'evidence claims failed', { data: { failed }, hint: 'those changes are listed without their claim; the others keep theirs' });
-    return out;
-  }
   private skillDirs(root: string | null): SkillDir[] {
     const dirs: SkillDir[] = [];
     if (root) dirs.push({ dir: path.join(root, '.claude', 'skills'), home: 'brain' }, { dir: path.join(root, '.agents', 'skills'), home: 'brain' });
@@ -124,7 +112,7 @@ export class BrainModelService {
           const files = this.d.packs.ownSkills(p, true);
           knowhow = this.d.packs.persistSkills(id, files, patch.linked ?? p.knowhow?.linked ?? []);
         }
-        const r = this.d.catalog.maintain(id, { ...(patch.instructions !== undefined ? { instructions: patch.instructions } : {}), ...(knowhow ? { knowhow } : {}) }, reason);
+        const r = this.d.catalog.maintain(id, { ...(patch.skills !== undefined ? { skills: patch.skills } : {}), ...(patch.instructions !== undefined ? { instructions: patch.instructions } : {}), ...(knowhow ? { knowhow } : {}) }, reason);
         return r ? { id, before: r.before, after: r.profile.activeVersion } : null;
       },
     };
@@ -139,31 +127,36 @@ export class BrainModelService {
       now: () => this.now(),
     };
   }
+  /** A requested maintenance pass repairs only absent declarations. Each role correction has its own Undo. */
+  private repairMissingSkills(): JobResult {
+    const plans = this.roles().filter(p => !p.trial).map(p => ({ p, missing: this.d.packs.missingSkills(p) }));
+    let changes = 0;
+    for (const { p, missing } of plans) {
+      if (!missing.length) continue;
+      const result = this.d.catalog.maintain(p.id, { skills: p.skills.filter(s => !missing.includes(s)),
+        ...(p.knowhow ? { knowhow: { ...p.knowhow, linked: p.knowhow.linked.filter(s => !missing.includes(s)) } } : {}) },
+      'Manutenzione: rimossi riferimenti a skill non più disponibili');
+      const snap = result ? { id: p.id, before: result.before, after: result.profile.activeVersion } : null;
+      if (snap) {
+        this.log.record({ job: 'merge-skills', kind: 'agent', action: 'unlink', target: p.id,
+          summary: `${p.name}: riferimenti a skill mancanti rimossi`, reason: 'Inventario completo del runtime: skill assenti anche nelle copie personali e incorporate.', evidence: missing }, [], snap);
+        changes++;
+      }
+    }
+    return { job: 'merge-skills', changes, note: 'Solo riferimenti mancanti rimossi; per fondere i contenuti serve approvazione esplicita.' };
+  }
   report(): MigrationReport | null { try { return (readLocal(this.reportFile) as MigrationReport | undefined) ?? null; } catch { return null; } }
   private lastRun(): MaintenanceRun | null { try { return (readLocal(this.runFile) as MaintenanceRun | undefined) ?? null; } catch { return null; } }
 
-  state(): BrainModelState {
-    const root = this.root(), profiles = this.profiles(), restorer = this.restorer(profiles);
-    const skills = readSkills(this.skillDirs(root), root, profiles).map(s => ({ ...s, madeBy: this.log.madeBy(s.file) }));
-    const roles = profiles.filter(p => p.scope === 'role'), memory = readMemory(root, roles);
-    const runs = (() => { try { return this.d.runs(); } catch { return []; } })();
-    let stats: BrainModelState['memoryStats'];
-    if (root) {
-      try { stats = memoryStats({ root, memory, profiles: roles, runs, skills, now: this.now() }); }
-      catch (e) { log.warn('brain', 'memory statistics failed', { cause: errText(e), hint: 'the Memoria page shows the files without the charts' }); }
-    }
-    const changes = this.withClaims(this.log.list(restorer), roles, runs);
-    let learning: BrainModelState['learning'];
-    try { learning = learningState(changes, roles, runs, this.now()); }
-    catch (e) { log.warn('brain', 'learning page failed', { cause: errText(e), hint: 'the Apprendimento page shows no curves' }); }
-    return {
-      root,
-      agents: profiles.filter(p => p.scope === 'role').map(p => ({ id: p.id, name: p.name, role: p.purpose, skills: [...new Set([...p.skills, ...(p.knowhow?.linked ?? [])])], memory: root ? `agents/${portableId(p.id)}/memory.md` : null })),
-      skills, rules: readRules(root), memory,
-      changes, migration: this.report(), lastRun: this.lastRun(),
-      ...(stats ? { memoryStats: stats } : {}), ...(learning ? { learning } : {}),
-    };
+  private viewInput(): BrainViewInput {
+    const profiles = this.profiles();
+    // Old entries are sealed once, in the writer process; the read worker never changes evidence scope.
+    try { this.log.sealMissing(c => seal(c, profiles.filter(p => p.scope === 'role'))); } catch { /* view retains the previous fail-soft fallback */ }
+    let runs: AgentRun[] = []; try { runs = this.d.runs(); } catch { /* unavailable history */ }
+    return { userData: this.d.userData, root: this.d.root(), home: this.d.home, profiles, runs, now: this.now() };
   }
+  state(): BrainModelState { return readBrainView(this.viewInput(), this.log, this.intervals); }
+  stateAsync(): Promise<BrainModelState> { return readWorker.call({ op: 'brain', input: this.viewInput() }); }
 
   /** The change log alone, newest first, with what can still be undone (the morning block, ADR 0102): no skill or memory read. */
   changes(): BrainChange[] { return this.log.list(this.restorer()); }
@@ -185,6 +178,7 @@ export class BrainModelService {
           const r: JobResult = id === 'migration' ? migrate(ctx)
             : id === 'corrections' ? { ...corrections(ctx), note: 'Solo lezioni già approvate; gli errori ricorrenti restano da proporre con evidenze e approvare.' }
             : id === 'repeated-task' ? repeatedTask(ctx)
+            : id === 'merge-skills' && !opts.auto ? this.repairMissingSkills()
             : { job: id, changes: 0, note: 'Modifica rinviata: serve una proposta concreta in Proposte e l’approvazione esplicita prima di cambiare skill, memoria o struttura.' };
           if (r.report) writeLocal(this.reportFile, mergeReport(this.report(), r.report));
           done.push(r);
@@ -256,6 +250,7 @@ export class BrainModelService {
   remove(kind: 'skill' | 'rule' | 'script', target: string, by?: { job: 'research'; reason: string; evidence: string[] }): { state: BrainModelState; changeId: string } {
     const root = this.root();
     if (!root) throw new Error('Scegli prima la cartella del brain.');
+    const decisions: { file: string; text: string }[] = [];
     let files: string[] = [], summary = '', reason = by?.reason ?? 'Eliminata da te in Memoria → Approvate.', evidence: string[] = [];
     if (kind === 'skill') {
       const skill = readSkills(this.skillDirs(root), root, []).find(x => x.name === target && x.home === 'brain');
@@ -264,6 +259,8 @@ export class BrainModelService {
       if (!insideBrain(root, dir)) throw new Error('Questa skill è un collegamento fuori dal brain: eliminala dal disco.');
       files = listFiles(dir);
       if (files.some(f => !isText(f))) throw new Error('La skill ha file non di testo (modelli, immagini): non si potrebbero rimettere con Annulla, eliminala dal disco.');
+      const source = sourceOfSkill(readSmall(skill.file) ?? '', procedureSections(root));
+      if (source) decisions.push(ignoreWrite(root, source, skill.name, this.now()));
       summary = `Skill «${skill.name}» eliminata`; evidence = [skill.rel ?? skill.file];
     } else if (kind === 'rule') {
       const rel = target.replace(/\\/g, '/');
@@ -279,7 +276,7 @@ export class BrainModelService {
     }
     if (!files.length) throw new Error('Niente da eliminare.');
     if (files.length > 64 || files.some(f => { try { return fs.statSync(f).size > 256 * 1024; } catch { return true; } })) throw new Error('Troppo grande per poterlo annullare: eliminalo dal disco.');
-    const c = this.log.apply({ job: by?.job ?? 'user', kind, action: 'remove', target, summary, reason, evidence: [...evidence, ...(by?.evidence ?? [])] }, files.map(file => ({ file, text: null })));
+    const c = this.log.apply({ job: by?.job ?? 'user', kind, action: 'remove', target, summary, reason, evidence: [...evidence, ...(by?.evidence ?? [])], ...(decisions.length ? { migrationIgnored: true } : {}) }, [...files.map(file => ({ file, text: null })), ...decisions]);
     if (!c) throw new Error('Niente da eliminare.');
     log.info('brain', by ? 'item forgotten (maintenance card)' : 'item removed by the user', { data: { kind, files: files.length } });
     if (kind === 'script') this.d.scripts?.changed();

@@ -32,6 +32,7 @@ export default defineConfig({
   // the fake CLIs' children left suspended by this run are ended at its end (test/fixtures/sweep-suspended.mjs)
   globalSetup: './test/fixtures/sweep-suspended.mjs',
   // without the project name: one baseline per screenshot whichever project runs it
+  updateSnapshots: 'none', // ordinary checks never create unreviewed source-tree media
   snapshotPathTemplate: '{testDir}/{testFilePath}-snapshots/{arg}{-snapshotSuffix}{ext}',
   projects: [
     { name: 'parallel', testIgnore: exclusive, outputDir: 'test-results/parallel' },

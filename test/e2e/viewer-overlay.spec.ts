@@ -218,7 +218,7 @@ for (const scheme of ['dark', 'light'] as const) {
       await expect.poll(() => copies(page)).toHaveLength(1);
       const link = (await copies(page))[0]!;
       expect(link.startsWith('sb://file/')).toBe(true);
-      expect(JSON.parse(decodeURIComponent(link.slice('sb://file/@file:'.length)))).toMatchObject({ path: path.join(repo, 'SettingsForm.tsx'), line: 18 });
+      expect(JSON.parse(decodeURIComponent(link.slice('sb://file/@file:'.length)))).toMatchObject({ path: path.join(repo, 'SettingsForm.tsx').replace(/\\/g, '/'), line: 18 });
       await expect(code.locator('[data-l="18"]')).toHaveClass(/is-picked/);
       await page.mouse.move(2, 2);
       await shot(page, `viewer-overlay-code-${scheme}`);

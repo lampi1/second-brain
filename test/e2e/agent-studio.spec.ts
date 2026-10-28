@@ -11,9 +11,8 @@ test('a role page opens its editor on Modifica and the draft survives page navig
     const studio = page.getByTestId('agent-studio'); await expect(studio).toBeVisible();
     await expect(studio.getByRole('heading', { name: 'Scout', exact: true })).toBeVisible();
     await expect(page.getByTestId('agent-prompt')).toBeVisible(); // the role's instructions, in full
-    await expect(page.getByTestId('agent-editor')).toHaveCount(0);  // the editor opens on request
+    await expect(page.getByTestId('agent-editor')).toBeVisible(); // openAgents chose Modifica il ruolo
     await shot(page, 'role-page-dark');
-    await studio.getByTestId('agent-edit').click();
     await page.getByTestId('agent-instructions').fill('Cerca prima nel repository, poi sul web.');
     await page.getByTestId('nav-task').click();
     await openAgents(page, 'scout');
@@ -27,7 +26,6 @@ test('a role edit is a version that survives a restart; Ripristina predefinito b
   try {
     await openAgents(first.page, 'artisan');
     await expect(first.page.getByTestId('agent-reset')).toBeDisabled(); // nothing to reset on a shipped role
-    await first.page.getByTestId('agent-edit').click();
     await first.page.getByTestId('agent-skill-input').fill('brain-edit');
     await first.page.getByTestId('agent-skill-add').click();
     await choose(first.page.getByTestId('agent-tier'), 'top');

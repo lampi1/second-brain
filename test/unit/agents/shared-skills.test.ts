@@ -33,3 +33,9 @@ describe('shared skills', () => {
     expect(skillFolders({ root: '/b', home: null, appTools: null })).toHaveLength(2);
   });
 });
+
+it('ignores a regular non-skill file beside skill directories', () => {
+  const root = tmp(); skill(root, 'usable');
+  fs.writeFileSync(path.join(root, 'notes'), 'not a skill folder');
+  expect(skillsIn([root]).map(s => s.name)).toEqual(['usable']);
+});

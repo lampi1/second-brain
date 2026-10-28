@@ -151,27 +151,33 @@ function MoreButton() {
 /** Fit steps, applied in order while the bar's actions overflow (2026-10-13, settings pushed off at 1920 px): 1 icon-only
  *  buttons, 2 shorter usage strip, 3 icon-only search / next, 4 no Cursor in the strip, 5 icon-only popups switch and
  *  connectors, 6 (the narrowest windows: 1000 px at 110 % zoom) the language switch as its code only (no globe), the
- *  search without its Ctrl+K hint and tighter gaps. Every action stays on the bar. Read by app.css (data-fit). */
-const FIT_STEPS = 6;
+ *  search without its Ctrl+K hint and tighter gaps; 7 hides the decorative mark and tightens button padding.
+ *  Updates are coalesced per frame; an already fitting bar never resets all its layout steps. Every action stays on the bar. Read by app.css (data-fit). */
+const FIT_STEPS = 7;
 function useFit(head: RefObject<HTMLElement | null>, main: RefObject<HTMLElement | null>) {
   useLayoutEffect(() => {
     const h = head.current, m = main.current;
     if (!h || !m) return;
+    let frame = 0, step = 0, reset = false, disposed = false;
+    const fits = () => m.scrollWidth <= m.clientWidth && [...m.querySelectorAll('button')].every(button => {
+      const r = button.getBoundingClientRect(); return !r.width || r.right <= m.getBoundingClientRect().right + 0.25;
+    });
     const fit = () => {
-      for (let n = 0; n <= FIT_STEPS; n++) {
-        if (n) h.dataset.fit = Array.from({ length: n }, (_, i) => i + 1).join(' ');
-        else delete h.dataset.fit;
-        if (m.scrollWidth <= m.clientWidth + 1) return;
+      frame = 0;
+      if (reset) { step = 0; delete h.dataset.fit; reset = false; }
+      while (!fits() && step < FIT_STEPS) {
+        step++; h.dataset.fit = Array.from({ length: step }, (_, i) => i + 1).join(' ');
       }
     };
+    const schedule = (expand = false) => { reset ||= expand; if (!disposed && !frame) frame = requestAnimationFrame(fit); };
     fit();
-    const ro = new ResizeObserver(fit);
-    ro.observe(h);
-    // a label that changes ("Niente ti aspetta" → "Prossima cosa per te", a count) can overflow the bar again
-    const mo = new MutationObserver(fit);
+    let width = h.clientWidth;
+    const ro = new ResizeObserver(() => { const next = h.clientWidth; schedule(next > width); width = next; });
+    ro.observe(h); ro.observe(m); // the recording pill can shrink main without resizing the header
+    const mo = new MutationObserver(() => schedule());
     mo.observe(m, { childList: true, subtree: true, characterData: true });
-    void document.fonts?.ready.then(fit);
-    return () => { ro.disconnect(); mo.disconnect(); };
+    void document.fonts?.ready.then(() => schedule(true));
+    return () => { disposed = true; cancelAnimationFrame(frame); ro.disconnect(); mo.disconnect(); };
   }, [head, main]);
 }
 

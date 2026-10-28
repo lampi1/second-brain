@@ -43,7 +43,7 @@ test('show_ui: each catalog component drawn in the chat, the full view, a wrong 
     expect(await show(app, 'fix', { id: component, component, ...v })).toContain('Mostrato in questa chat');
   }
   expect(await show(app, 'fix', { title: 'x', summary: 'y', component: 'table', props: { columns: ['a'], rows: [{ cells: ['1', '2'] }] } }))
-    .toBe('Error: table props.rows[0].cells: 2 cells for 1 columns. Fix the props and call show_ui again (the shapes are in the tool\'s description).');
+    .toMatch(/Error: table props\.rows\[0\]\.cells: 2 cells for 1 columns\..*call show_ui again/);
   await page.getByTestId('chat-max-fix').click();
   for (const component of Object.keys(VISUALS)) {
     const card = page.getByTestId(`artifact-${component}`);

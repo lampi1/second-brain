@@ -21,6 +21,9 @@ fs.copyFileSync(path.join(root, 'src/main/tasks/devops-me.mjs'), path.join(root,
 await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/index.ts')], outfile: path.join(root, 'out/main/index.js'), format: 'esm', external: ['electron', 'playwright-core'],
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
 
+// Read-only page and estimate calculations, started lazily on the first request.
+await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/read-worker.ts')], outfile: path.join(root, 'out/main/read-worker.js'), format: 'esm' });
+
 // the hybrid search's worker thread (src/main/search/hybrid/worker.ts), next to the main bundle
 await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/search/hybrid/worker.ts')], outfile: path.join(root, 'out/main/search-worker.js'), format: 'esm',
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });

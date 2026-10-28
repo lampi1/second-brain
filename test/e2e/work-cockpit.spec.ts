@@ -10,7 +10,7 @@ test('Home contains agents, while a durable proposal is deferred and answered in
   const work = new Workflows(path.join(userData, 'work-threads.json'));
   const row = work.create({ title: 'Search accessibility', profile: 'feature', priority: 'support', chatIds: [] });
   work.report({ id: row.id, expectedVersion: row.version, action: 'propose', summary: 'Add keyboard navigation to the search results' });
-  const { app, page } = await launchDemo({ userData, orchestrator: true });
+  const { app, page } = await launchDemo({ userData, orchestrator: true, questions: true });
   try {
     await expect(page.getByTestId('home')).toBeVisible();
     await expect(page.getByTestId('work-cockpit')).toHaveCount(0);

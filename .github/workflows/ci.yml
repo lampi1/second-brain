@@ -41,6 +41,8 @@ jobs:
         run: npm run check:branch
       - name: Main gate (Linux)
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && runner.os == 'Linux'
+        env:
+          SB_E2E_ELECTRON_ARGS: --use-angle=swiftshader --enable-unsafe-swiftshader
         run: xvfb-run --auto-servernum -s "-screen 0 1920x1080x24" npm run check
       - name: Main gate
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && runner.os != 'Linux'

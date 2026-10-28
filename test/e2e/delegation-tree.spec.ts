@@ -18,7 +18,7 @@ const FAKE = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-claude.mj
 /** The child's whole turn: what the fake CLI reads in its goal (the words before, then one MCP call on the line). */
 const reportGoal = (words: string, summary: string, criterion: string) =>
   `${words} mcpcall second-brain agent_report ${JSON.stringify({ outcome: 'done', summary, output: `${summary} (dettagli)`, doneWhen: [{ criterion, met: true, evidence: 'visto' }] })}`;
-const task = (role: string, title: string, goal: string, criterion: string) => ({ role, title, contract: { goal, doneWhen: [criterion] } });
+const task = (role: string, title: string, goal: string, criterion: string) => ({ role, title, contract: { goal, doneWhen: [criterion], tools: ['read'] } });
 const delegate = (tasks: object[]) => `Pianifico.\nmcpcall second-brain agent_delegate ${JSON.stringify({ tasks })}`;
 
 const list = (page: Page): Promise<ChatSummary[]> => page.evaluate(() => window.sb.invoke('chat:list', undefined));

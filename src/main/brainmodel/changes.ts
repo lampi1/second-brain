@@ -18,7 +18,7 @@ import type { MemoryTidyUndo } from '../rules/memory-records';
 export interface FileSnapshot { file: string; before: string | null; after: string | null }
 /** A role's version before and after. */
 export interface AgentSnapshot { id: string; before: number; after: number }
-export interface StoredChange extends Omit<BrainChange, 'canRollback' | 'claim'> { files: FileSnapshot[]; agent?: AgentSnapshot; seed?: ClaimSeed; memory?: MemoryTidyUndo }
+export interface StoredChange extends Omit<BrainChange, 'canRollback' | 'claim'> { files: FileSnapshot[]; agent?: AgentSnapshot; seed?: ClaimSeed; memory?: MemoryTidyUndo; migrationIgnored?: boolean }
 /** Seals a change's evidence claim when it is recorded (evidence.ts seal with the roles of that moment). */
 export type Sealer = (c: Pick<BrainChange, 'kind' | 'action' | 'target'>) => ClaimSeed | undefined;
 export interface AgentRestorer {
@@ -26,7 +26,7 @@ export interface AgentRestorer {
   /** the memory store's side (absent = a memory tidy-up cannot be undone here) */
   memory?: { canUndo(u: MemoryTidyUndo): boolean; undo(u: MemoryTidyUndo): void };
 }
-const JOBS: readonly string[] = [...MAINTENANCE_JOBS, 'user'];
+const JOBS: readonly string[] = [...MAINTENANCE_JOBS, 'user', 'research'];
 
 const MAX = 400, SNAP = 256 * 1024;
 const read = (file: string): string | null => { try { return fs.readFileSync(file, 'utf8'); } catch { return null; } };
@@ -91,6 +91,30 @@ export class ChangeLog {
     return structuredClone(entry);
   }
   all(): StoredChange[] { return structuredClone(this.entries); }
+  /** Backfill a forgotten source into its original removal, so that original Undo also restores migration eligibility.
+   *  Existing file snapshots keep their original before text; failure restores both disk and the retained entry. */
+  rememberMigrationRemoval(id: string, writes: { file: string; text: string | null }[]): void {
+    const entry = this.entries.find(c => c.id === id);
+    if (!entry || entry.rolledBackAt || entry.migrationIgnored || entry.kind !== 'skill' || entry.action !== 'remove') return;
+    const before = structuredClone(entry), applied: { file: string; text: string | null }[] = [];
+    try {
+      for (const w of writes) {
+        const text = read(w.file);
+        if ((text?.length ?? 0) > SNAP || (w.text?.length ?? 0) > SNAP) throw new Error('Migration decision is too large');
+        if (text === w.text) continue;
+        if (w.text !== null) fs.mkdirSync(path.dirname(w.file), { recursive: true });
+        const file = path.join(fs.realpathSync(path.dirname(w.file)), path.basename(w.file));
+        writeText(file, w.text); applied.push({ file, text });
+        const prior = entry.files.find(f => f.file === file);
+        if (prior) prior.after = w.text; else entry.files.push({ file, before: text, after: w.text });
+      }
+      entry.migrationIgnored = true; this.persist();
+    } catch (e) {
+      Object.assign(entry, before); if (!before.migrationIgnored) delete entry.migrationIgnored;
+      for (const w of applied.reverse()) writeText(w.file, w.text);
+      throw e;
+    }
+  }
   /** Seals the entries recorded without a seed (before ADR 0109, or a dropped one) once, and keeps it. */
   sealMissing(sealer: Sealer): void {
     let changed = false;
@@ -117,8 +141,8 @@ export class ChangeLog {
     const files = new Map<string, string | null>();
     const current = (file: string) => { if (!files.has(file)) files.set(file, read(file)); return files.get(file)!; };
     return [...this.entries].reverse().slice(0, limit).map(entry => {
-      const { files: _f, agent: _a, seed: _s, memory: _m, ...c } = entry;
-      void _f; void _a; void _s; void _m;
+      const { files: _f, agent: _a, seed: _s, memory: _m, migrationIgnored: _i, ...c } = entry;
+      void _f; void _a; void _s; void _m; void _i;
       return { ...c, canRollback: this.canRollback(entry, agents, current) };
     });
   }

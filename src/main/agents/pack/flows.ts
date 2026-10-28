@@ -18,7 +18,7 @@ import { checkPackPath, type PackFiles } from './zip';
 
 export interface PackFlowDeps {
   catalog: AgentCatalogService; brainRoot: () => string | null;
-  sharedSkills?: () => { name: string; folder: string }[];
+  sharedSkills?: (strict?: boolean) => { name: string; folder: string }[];
   tempRoot?: string;
   runtimeRoot?: string;
 }
@@ -44,12 +44,19 @@ export class AgentPackFlows {
   constructor(readonly deps: PackFlowDeps) {}
   root(): string { const root = this.deps.brainRoot(); if (!root || !fs.statSync(root).isDirectory()) throw new Error('Choose a brain folder first'); return fs.realpathSync(root); }
   profile(id: string): AgentProfile { const p = this.deps.catalog.list().profiles.find(p => p.id === id); if (!p) throw new Error('Role not found'); return p; }
+  /** Resolve missing declarations against the same complete shared and embedded inventory used at launch. */
+  missingSkills(profile: AgentProfile): string[] {
+    if (!this.deps.sharedSkills) throw new Error('Skill inventory unavailable');
+    const own = this.ownSkills(profile), shared = new Set(this.deps.sharedSkills(true).map(s => s.name));
+    return [...new Set([...profile.skills, ...(profile.knowhow?.linked ?? [])])]
+      .filter(name => !shared.has(name) && !own.has(`skills/${name}/SKILL.md`));
+  }
   /** The plugin a launch runs with: the role's own know-how, its default and linked skills and the skills this launch
    *  asks for (`launch`, a delegation's or app_create_chat's), and nothing else: a skill outside it is not there to load
    *  (and the role gate refuses a call to it). A launch skill that does not exist refuses the start, by name. */
   runtime(id: string, launch: readonly string[] = [], context: LaunchMemoryContext = {}): { pluginDir: string; skillRoot: string; instructions: string; memory: string; skills: string[]; context: AgentContextSnapshot } {
     const profile = this.profile(id), files = this.ownSkills(profile), all = this.deps.sharedSkills?.() ?? [];
-    const missing = launch.filter(name => !all.some(s => s.name === name));
+    const missing = launch.filter(name => !all.some(s => s.name === name) && !files.has(`skills/${name}/SKILL.md`));
     if (missing.length) throw new Error(`Skill non trovata: ${missing.join(', ')} (pagina Skill).`);
     const declared = [...profile.skills, ...(profile.knowhow?.linked ?? [])];
     const skills = [...new Set([...declared, ...launch])];
@@ -57,6 +64,7 @@ export class AgentPackFlows {
     for (const name of skills) {
       const shared = all.find(s => s.name === name);
       // a declared skill that is gone (undone, merged, deleted by hand) never blocks the role's start
+      if (!shared && files.has(`skills/${name}/SKILL.md`)) { loaded.push(name); continue; }
       if (!shared) { log.warn('agents', 'Declared skill missing at start', { data: { agent: id, skill: name }, cause: 'The skill folder is gone', hint: 'Run the maintenance on the Skill page: it relinks or drops missing skills' }); continue; }
       for (const [file, data] of readPackSource(shared.folder)) files.set(`skills/${name}/${file}`, data);
       loaded.push(name);

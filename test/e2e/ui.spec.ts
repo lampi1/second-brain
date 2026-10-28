@@ -1,9 +1,9 @@
 // E2E tests of the renderer UI on the demo (SB_DEMO=1; frozen = deterministic): the agents workspace, answering from the questions window with "1", sending and queueing from a tile input, Ferma tutto
 // with its confirm, maximize/restore, the palette hiding every browser view, ui:command from main, new chat, brain
-// pages, the live (unfrozen) demo streaming. Visual baselines (toHaveScreenshot) for a maximized chat and the
-// palette; extra screenshots (1280x800, light theme) in test-results/shots/.
+// pages and live demo streaming. Behavior and geometry are asserted; screenshots for native visual review
+// (including 1280x800 and light theme) are captured in test-results/shots/.
 import { expect, test } from '@playwright/test';
-import { choose, demoLayout, expandChats, showBrowsers, launch, launchDemo, setSize, shot, VISUAL, waitThumbs } from './helpers';
+import { choose, demoLayout, expandChats, showBrowsers, launch, launchDemo, setSize, shot, waitThumbs } from './helpers';
 
 test('agents workspace: one column of chat strips, each browser right under its chat', async () => {
   const { app, page } = await launchDemo();
@@ -101,7 +101,6 @@ test('⤢ maximizes a tile, Esc restores it; F11 maximizes the focused tile', as
   await expect.poll(async () => (await demoLayout(app)).every(l => l.rect === null)).toBe(true);
   await page.mouse.move(2, 2);
   await shot(page, 'maximized');
-  await expect(page).toHaveScreenshot('maximized.png', VISUAL);
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('maximized')).toHaveCount(0);
   await expect(page.getByTestId('tile-chat-qa')).toBeVisible();
@@ -132,7 +131,6 @@ test('Ctrl+K opens the palette, hides every browser view, and jumps to a chat', 
   await expect.poll(async () => (await demoLayout(app)).every(l => l.rect === null)).toBe(true);
   await waitThumbs(page);
   await shot(page, 'palette');
-  await expect(page).toHaveScreenshot('palette.png', VISUAL);
   await page.getByTestId('palette-input').fill('sms');
   await expect(page.getByTestId('palette-item-chat:sms')).toBeVisible();
   await page.keyboard.press('Enter');

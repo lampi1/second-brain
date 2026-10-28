@@ -38,7 +38,7 @@ test('Brain pages: skills with links and undo, rules, memory, classifiers, map; 
     await expect(page.getByTestId(`bm-skill-${name}`)).toContainText(agentName);
     const maint = skills.getByTestId('bm-maintenance');
     await expect(maint.getByTestId('bm-change').first()).toContainText(name);
-    await expect(maint).toContainText('senza chiederti nulla');
+    await expect(maint).toContainText('Parte solo quando premi «Manutenzione»');
     await target.getByTestId(`bm-toggles-${name}`).locator('summary').click(); // folds the popover
     await maint.scrollIntoViewIfNeeded();
     await shot(page, 'brain-skills-linked-dark');
@@ -59,7 +59,8 @@ test('Brain pages: skills with links and undo, rules, memory, classifiers, map; 
     await memory.getByTestId('mh-tab-file').click(); // the files are Memoria's File tab (ADR 0122)
     for (const s of ['knowledge', 'happened', 'agents']) await expect(memory.getByTestId(`bm-mem-section-${s}`)).toBeVisible();
     await expect(memory.getByTestId('bm-mem-section-agents').locator('article.catalog-card').first()).toBeVisible();
-    await expect(memory.getByTestId('bm-maint-memory').getByTestId('bm-run')).toHaveText('Unisci i doppioni');
+    await expect(memory.getByTestId('bm-maint-memory').getByTestId('bm-run')).toHaveCount(0);
+    await expect(page.getByTestId('topbar-maint')).toBeVisible();
     await shot(page, 'brain-memory-dark');
 
     // ── Classificatori: read only, "nessun dato ancora" where nothing was measured

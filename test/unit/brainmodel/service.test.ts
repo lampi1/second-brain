@@ -6,10 +6,13 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgentCatalogService } from '../../../src/main/agents/catalog';
 import { AgentPackFlows, portableId } from '../../../src/main/agents/pack/flows';
 import { AgentPackLearning } from '../../../src/main/agents/pack/learning';
+import { ChangeLog } from '../../../src/main/brainmodel/changes';
+import { ignoreFile } from '../../../src/main/brainmodel/migration-ignore';
+import { migrationReceipt } from '../../../src/main/brainmodel/migration-source';
 import { BrainModelService } from '../../../src/main/brainmodel/service';
 import { writeDemoBrain } from '../../../src/main/brainmodel/demo';
 import type { AgentModelChoice, AgentRun } from '../../../src/shared/agents';
@@ -35,8 +38,10 @@ function world(opts: { demo?: boolean; upgradeAsk?: UpgradeAsk; scripts?: { file
   const brain = opts.demo ? writeDemoBrain(path.join(base, 'brain'), NOW) : path.join(base, 'brain');
   if (!opts.demo) { fs.mkdirSync(brain); put(brain, 'brain.json', JSON.stringify({ machinery: 'product-v1', rules: { topicFiles: [], appRules: true } })); }
   const catalog = new AgentCatalogService({ userData: data, models });
+  const shipped = [...new Set(catalog.list().profiles.flatMap(p => p.skills))].map(name => ({ name, folder: path.join(base, 'app-skills', name) }));
+  for (const s of shipped) put(s.folder, 'SKILL.md', `---\nname: ${s.name}\ndescription: Fixture skill.\n---\nRead the fixture.\n`);
   const flows = new AgentPackFlows({ catalog, brainRoot: () => brain, tempRoot: base, runtimeRoot: path.join(base, 'runtime'),
-    sharedSkills: () => { const dir = path.join(brain, '.claude', 'skills'); try { return fs.readdirSync(dir).map(name => ({ name, folder: path.join(dir, name) })); } catch { return []; } } });
+    sharedSkills: () => { const dir = path.join(brain, '.claude', 'skills'); try { return [...fs.readdirSync(dir).map(name => ({ name, folder: path.join(dir, name) })), ...shipped]; } catch { return shipped; } } });
   catalog.onKnowhowChange((p, previous) => flows.publishCurrent(p, previous));
   const learning = new AgentPackLearning(flows, data);
   let emitted = 0;
@@ -510,5 +515,92 @@ describe('applyResearch (ADR 0132)', () => {
     fs.mkdirSync(path.join(v.brain, 'rules'), { recursive: true }); fs.symlinkSync(real, path.join(v.brain, 'rules/lessons.md'));
     expect(() => v.service.applyResearch(card({ kind: 'rule', change: { target: 'rule', text: 'x' } }))).toThrow(/non si può leggere/);
     expect(fs.readFileSync(real, 'utf8')).toBe('# mine\n');
+  });
+});
+
+
+describe('durable approved skill forgets (#264, #266)', () => {
+  const source = '# Operations\n\n## Deploy fixture\n1. Build a fixture.\n2. Verify the result.\n\n## Inspect fixture\n1. Read the report.\n2. Check its output.\n';
+  it('keeps a forgotten source absent across migration, reload and history rollover; Undo re-enables it', async () => {
+    const w = world(); put(w.brain, 'runbooks/fixture.md', source);
+    const first = await w.service.maintain('migration'), skill = first.skills.find(s => s.name === 'deploy-fixture')!;
+    const receipt = migrationReceipt(fs.readFileSync(skill.file, 'utf8'))!;
+    const removed = w.service.remove('skill', skill.name, { job: 'research', reason: 'Unused', evidence: ['reviewed fixture'] });
+    const restoredLog = new ChangeLog(w.data);
+    expect(restoredLog.all().find(c => c.id === removed.changeId)?.job).toBe('research');
+    expect(fs.existsSync(ignoreFile(w.brain, receipt.source))).toBe(true);
+    for (let i = 0; i < 2; i++) expect((await w.service.maintain('migration')).skills.map(s => s.name)).toEqual(['inspect-fixture']);
+    w.service.rollback(removed.changeId);
+    expect(fs.existsSync(ignoreFile(w.brain, receipt.source))).toBe(false);
+    expect((await w.service.maintain('migration')).skills.map(s => s.name)).toContain(skill.name);
+    w.service.remove('skill', skill.name);
+    for (let i = 0; i < 401; i++) w.service.log.record({ job: 'user', kind: 'rule', action: 'update', target: 'fixture', summary: 'Fixture', reason: 'History rollover', evidence: [] }, []);
+    expect((await w.service.maintain('migration')).skills.map(s => s.name)).not.toContain(skill.name);
+    // A retained marker is independently removable after history rollover.
+    fs.unlinkSync(ignoreFile(w.brain, receipt.source));
+    expect((await w.service.maintain('migration')).skills.map(s => s.name)).toContain(skill.name);
+  });
+  it('backfills old research removals, repairs untouched re-creations, and keeps the original Undo', async () => {
+    const w = world(); put(w.brain, 'runbooks/fixture.md', source);
+    const skill = (await w.service.maintain('migration')).skills.find(s => s.name === 'deploy-fixture')!;
+    const old = w.service.log.apply({ job: 'research', kind: 'skill', action: 'remove', target: skill.name, summary: 'Forgotten', reason: 'Approved', evidence: [] }, [{ file: skill.file, text: null }])!;
+    // A historical generated re-creation is removed only when proven unedited.
+    const original = old.files[0]!.before!;
+    const receipt = migrationReceipt(original)!;
+    const { sealMigration } = await import('../../../src/main/brainmodel/migration-source');
+    const text = original.replace(/\n<!-- second-brain-migration:[^\n]* -->\n?$/, '');
+    put(w.brain, path.relative(w.brain, skill.file), sealMigration(text, receipt.source, 'fixture', NOW + 1));
+    await w.service.maintain('migration');
+    expect(fs.existsSync(skill.file)).toBe(false);
+    expect(w.service.state().changes.find(c => c.id === old.id)?.canRollback).toBe(true);
+    w.service.rollback(old.id);
+    expect(fs.readFileSync(skill.file, 'utf8')).toBe(original);
+    expect(fs.existsSync(ignoreFile(w.brain, receipt.source))).toBe(false);
+  });
+  it('repairs missing defaults and links independently per role, while keeping embedded and shipped skills', async () => {
+    const w = world();
+    for (const id of [DEV, OTHER]) w.catalog.maintain(id, { skills: [...w.agent(id).skills, 'missing-fixture'] }, 'Fixture');
+    const before = w.agent(DEV).activeVersion;
+    await w.service.maintain('merge-skills');
+    for (const id of [DEV, OTHER]) expect(w.agent(id).skills).not.toContain('missing-fixture');
+    expect(w.agent(OTHER).skills).toContain('code-investigation');
+    const change = w.service.state().changes.find(c => c.target === DEV && c.action === 'unlink')!;
+    w.service.rollback(change.id); expect(w.agent(DEV).activeVersion).toBe(before);
+    expect(w.agent(DEV).skills).toContain('missing-fixture');
+    const available = vi.spyOn(w.flows.deps, 'sharedSkills').mockImplementation(() => { throw new Error('Inventory unavailable'); });
+    await w.service.maintain('merge-skills');
+    expect(w.agent(DEV).skills).toContain('missing-fixture'); available.mockRestore();
+  });
+});
+
+// Regression cases for the confirmed review findings.
+describe('review reproductions', () => {
+  it('does not activate pending editable know-how during a missing declaration repair', async () => {
+    const w = world(), id = DEV;
+    const files = w.flows.ownSkills(w.agent(id));
+    const file = `skills/${id}/SKILL.md`;
+    const original = files.get(file)!.toString();
+    const knowhow = w.flows.persistSkills(id, files, []);
+    w.catalog.maintain(id, { knowhow, skills: [...w.agent(id).skills, 'missing-fixture'] }, 'Fixture');
+    put(w.brain, `agents/${id}/skills/${id}/SKILL.md`, original + '\nPENDING EDIT NOT SAVED\n');
+    await w.service.maintain('merge-skills');
+    expect(w.flows.ownSkills(w.agent(id)).get(file)!.toString()).toBe(original);
+  });
+  it('does not forget an explicitly undone newer removal based on an older removal', async () => {
+    const { sealMigration } = await import('../../../src/main/brainmodel/migration-source');
+    const w = world();
+    put(w.brain, 'runbooks/fixture.md', '# Operations\n\n## Deploy fixture\n1. Build a fixture.\n2. Verify the result.\n');
+    const skill = (await w.service.maintain('migration')).skills[0]!;
+    const old = w.service.log.apply({ job: 'user', kind: 'skill', action: 'remove', target: skill.name, summary: 'Old remove', reason: 'Old', evidence: [] }, [{ file: skill.file, text: null }])!;
+    const original = old.files[0]!.before!, receipt = migrationReceipt(original)!;
+    const text = original.replace(/\n<!-- second-brain-migration:[^\n]* -->\n?$/, '');
+    const recreated = sealMigration(text, receipt.source, 'fixture', NOW + 1);
+    put(w.brain, path.relative(w.brain, skill.file), recreated);
+    vi.spyOn(w.service.log as unknown as { now: () => number }, 'now').mockReturnValue(NOW + 2);
+    const newer = w.service.remove('skill', skill.name);
+    w.service.rollback(newer.changeId);
+    expect(fs.readFileSync(skill.file, 'utf8')).toBe(recreated);
+    await w.service.maintain('migration');
+    expect(fs.existsSync(skill.file)).toBe(true);
   });
 });

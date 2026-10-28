@@ -1639,7 +1639,7 @@ export class ChatManager implements ChatService {
       requestOrigin: mode === 'new-task' ? (options.source?.kind === 'chat' ? 'agent' : options.source?.kind === 'app' ? 'app' : 'user') : previous.requestOrigin ?? 'app',
       tags: previous.tags ? { ...previous.tags, skills: [] } : undefined, tier: previous.tier, model: previous.model,
       ...(r.s.parentId && this.chats.get(r.s.parentId)?.s.run ? { parentRunId: this.chats.get(r.s.parentId)!.s.run!.runId } : {}),
-      ...(mode === 'rework' ? { reworkOf: previous.runId } : {}) });
+      ...(mode === 'rework' ? { reworkOf: previous.runId } : {}) }, !this.deferWrites());
     const brainRoot = this.opts.brainRoot?.();
     if (brainRoot) next.scope = { brainRoot: path.resolve(brainRoot), projectRoot: path.resolve(r.s.cwd) };
     next.taskId = mode === 'new-task' ? next.runId : previous.taskId ?? previous.runId;
@@ -2853,7 +2853,7 @@ export class ChatManager implements ChatService {
   private startRun(r: Rec, s: Omit<Parameters<AgentRunStore['start']>[0], 'chatId' | 'startedAt'>): void {
     if (this.runs.problem) return;
     try {
-      r.s.run = this.runs.start({ ...s, chatId: r.s.id, startedAt: r.createdAt });
+      r.s.run = this.runs.start({ ...s, chatId: r.s.id, startedAt: r.createdAt }, !this.deferWrites());
       const brainRoot = this.opts.brainRoot?.();
       if (brainRoot) r.s.run.scope = { brainRoot: path.resolve(brainRoot), projectRoot: path.resolve(r.s.cwd) };
       r.s.run.taskId = r.s.run.runId; r.s.run.taskVersion = 1;
@@ -2949,8 +2949,8 @@ export class ChatManager implements ChatService {
    *  agent-runs.json grows to RUNS_BYTES (7 MB) and every write is a synchronous serialize + write + rename on the main
    *  process, i.e. the window's UI thread. Written at every settled turn of every chat, it froze the app for 50-250 ms
    *  each time (measured 2026-10-27: 45 ms a write at 7 MB on a fast Linux disk, 236 ms with a prune; slower on Windows
-   *  with an antivirus scanning each new file): the owner's "va a scatti … si freeza senza loader". A run's start and
-   *  end still write at once; the pending write is flushed at stop, at exit and whenever metrics are read. */
+   *  with an antivirus scanning each new file): the owner's "va a scatti … si freeza senza loader". Starts and ends also use
+   *  the deferred writer; their chat checkpoints retain the run mirror. Only shutdown/exit flush synchronously. */
   private runSaveTimer: ReturnType<typeof setTimeout> | undefined;
   private runSaveSoon(): void {
     if (this.runs.problem) return;

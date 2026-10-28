@@ -6,6 +6,8 @@
 // Screenshots dark and light: a card mid-drag, the end state, the empty state (test-results/shots/proposals-*.png).
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
+import { ResearchStore } from '../../src/main/brainmodel/research-store';
 import { expect, test, type Page } from '@playwright/test';
 import { launchDemo, setQuestionsAside, shot } from './helpers';
 
@@ -41,7 +43,10 @@ const list = (page: Page) => page.evaluate(() => window.sb.invoke('proposals:lis
 
 test('the deck: every source in one stack, swipe / buttons / keys, undo, the end state and the badge', async () => {
   test.setTimeout(120_000);
-  const { app, page } = await launchDemo();
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-deck-'));
+  // This deck test starts after a requested maintenance pass; pre-click hiding is covered separately.
+  new ResearchStore(userData).setClickAt(1791707400000);
+  const { app, page } = await launchDemo({ userData });
   try {
     await openDeck(page);
     const first = await list(page);

@@ -248,8 +248,8 @@ async function runTurn(text) {
   if (/garbage/.test(text)) { process.stdout.write('this is not json\n{"broken": \n[1,2]\n"str"\n'); }
   let final = 'Ciao dal motore';
   if (/waitqa/.test(text)) final = 'Fatto il fix.\nAspetto la QA sui controlli A, B e C…';
-  if (/ask/.test(text) && !turn.aborted) {
-    const input = /asksn/.test(text)
+  if (/\b(?:ask|asksn)\b/.test(text) && !turn.aborted) {
+    const input = /\basksn\b/.test(text)
       ? { questions: [{ question: 'Lo pubblico?', header: 'Pubblica', options: [{ label: 'Sì (consigliato)' }, { label: 'No' }], multiSelect: false }] }
       : { questions: [{ question: 'Che colore?', header: 'Colore', options: [{ label: 'Blu', description: 'il mare' }, { label: 'Rosso' }], multiSelect: false }] };
     assistant([{ type: 'tool_use', id: 'toolu_ask', name: 'AskUserQuestion', input }]);

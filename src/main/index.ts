@@ -41,7 +41,8 @@ import { createRoutedChat, previewRoute } from './chats/routed';
 import { FROZEN_EPOCH } from './demo';
 import { createDemoRoutines } from './routines/demo';
 import type { Routines } from './routines/service';
-import { checkRunIds, demoEstimateRuns, estimatesState, mergeRuns } from './agents/run-estimates';
+import { readWorker } from './read-work';
+import { checkRunIds, demoEstimateRuns, mergeRuns } from './agents/run-estimates';
 import { macroTasks } from '../shared/macro-tasks';
 import { judgingEstimate } from './agents/judge-sample';
 import { systemLang } from './lang';
@@ -268,7 +269,7 @@ app.whenReady().then(async () => {
     'agents:reset': a => s.agents.reset(String(a?.id ?? '')),
     'brain:share': () => s.agentPacks.share(),
     // the Brain pages (ADR 0077): read, the maintenance button, an undo, a skill toggle; Classificatori read-only
-    'brainmodel:state': () => s.brainModel.state(),
+    'brainmodel:state': () => s.brainModel.stateAsync(),
     'memory:reviewList': a => s.memoryReview?.list(undefined, a?.asOf) ?? [],
     'memory:confirm': async a => { requireReviewRoot(a.expectedRoot); if (!s.memoryReview) throw new Error('Memory review unavailable.'); try { return await s.memoryReview.confirm(a.id, a.evidence, a.keep === 'new' || a.keep === 'both' ? { keep: a.keep, ids: Array.isArray(a.conflicts) ? a.conflicts.filter(x => typeof x === 'string').slice(0, 50) : [] } : undefined); } finally { await search.invalidateBrain(); } },
     'memory:retract': async a => { requireReviewRoot(a.expectedRoot); if (!s.memoryReview) throw new Error('Memory review unavailable.'); try { return await s.memoryReview.retract(a.id, a.reason); } finally { await search.invalidateBrain(); } },
@@ -318,7 +319,7 @@ app.whenReady().then(async () => {
     'agents:estimates': a => {
       const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
       const runs = mergeRuns(demo ? demoEstimateRuns(now) : s.agentRuns?.list() ?? [], s.chats.list().map(c => c.run));
-      return estimatesState(runs, checkRunIds(a?.runIds), now);
+      return readWorker.call({ op: 'estimates', runs, runIds: checkRunIds(a?.runIds), now });
     },
     'agents:judgingEstimate': () => {
       const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
@@ -648,7 +649,7 @@ app.whenReady().then(async () => {
     if (quitting) return;
     quitting = true;
     void connectors.service.cancelLogin();
-    headline.stop();
+    headline.stop(); readWorker.stop();
     pulse?.stop(); unsubscribePulse(); stopTaskbar(); proposals.stop();
     log.info('app', 'quit started');
     // the stable launcher (scripts/release.mjs) waits for a quitting app to go before starting again; an open one it leaves be

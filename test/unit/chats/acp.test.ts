@@ -242,10 +242,11 @@ describe('AcpSession as Cursor', () => {
     s.answer(sink.pendings[1]!.id, { kind: 'permission', allow: false, message: 'dopo' });
     await waitFor(() => results(sink).length === 4, 'turn 4', 4000);
 
-    const b = start({ yesNo: true, briefReady: () => false });
+    let waiting = false;
+    const b = start({ yesNo: true, briefReady: () => { waiting = true; return false; } });
     b.s.send('asksn');
-    await new Promise(r => setTimeout(r, 300));
-    b.s.interrupt();
+    await waitFor(() => waiting, 'brief wait started', 4000);
+    await b.s.interrupt();
     await waitFor(() => answerOf(b.logFile)?.outcome === 'cancelled', 'cancelled', 4000);
     expect(b.sink.pendings).toHaveLength(0);
   });

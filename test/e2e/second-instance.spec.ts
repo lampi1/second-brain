@@ -16,7 +16,7 @@ test('a second start on the same profile exits with 75; a quitting app writes qu
   // as root (a Linux container) Chromium refuses to start without --no-sandbox, which Playwright adds to the first
   // instance by itself; the second one needs it too to reach the single-instance lock
   const root = process.getuid?.() === 0 ? ['--no-sandbox'] : [];
-  const second = spawn(electronExe, [...root, '.'], {
+  const second = spawn(electronExe, [...root, ...(process.env.SB_E2E_ELECTRON_ARGS ?? '').split(/\s+/).filter(Boolean), '.'], {
     cwd: path.resolve(import.meta.dirname, '..', '..'), stdio: 'ignore',
     env: { ...process.env, SB_USER_DATA: userData, SB_MCP_PORT: '0', SB_TEST: '1', SB_HIDDEN: '1', SB_DEMO: '1' },
   });
