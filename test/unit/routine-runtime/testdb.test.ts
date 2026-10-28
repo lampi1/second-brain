@@ -72,4 +72,18 @@ describe('test DB: never a blocker', () => {
     expect(JSON.stringify(ok)).not.toContain('isError');
     expect(fs.readFileSync(evidence, 'utf8')).toContain('SELECT COUNT(*) AS n FROM Patients');
   });
+
+  it('tells a query error (the server answered) from a database it cannot reach, masking the login', async () => {
+    const evidence = path.join(tempDir(), 'q.md');
+    const config = { targets: [{ id: 'qa', server: 'qa-sql.test.local', port: 1433, database: 'AirTest', user: 'ro_reader_x', password: 'pw-qa-123' }], evidence };
+    const failing = (stage: string, detail: string) => async () => { throw Object.assign(new Error('Test database transport failed'), { stage, detail }); };
+    const bad = JSON.stringify(await handleTestDbMessage(call({ target: 'qa', query: 'SELECT Nope FROM Patients' }), config, failing('query', "Invalid column name 'Nope'.") as never));
+    expect(bad).toContain('Query error (the database is reachable)');
+    expect(bad).toContain("Invalid column name 'Nope'");
+    expect(bad).not.toContain('DB unavailable');
+    const down = JSON.stringify(await handleTestDbMessage(call({ target: 'qa', query: 'SELECT 1 AS n' }), config, failing('connect', "Login failed for user 'ro_reader_x'.") as never));
+    expect(down).toContain('DB unavailable: could not connect or sign in');
+    expect(down).not.toContain('ro_reader_x');
+    expect(fs.readFileSync(evidence, 'utf8')).not.toContain('ro_reader_x');
+  });
 });

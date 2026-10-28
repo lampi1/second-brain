@@ -59,9 +59,16 @@ export async function handleTestDbMessage(message: Json, config: TestDbServerCon
         const result = await driver({ target: { id: target.id, server: target.server, port: target.port, database: target.database }, userName: target.user, password: target.password, query: sql, maxRows });
         log(`\n## ${target.id} (${target.database})\n\n\`\`\`sql\n${sql}\n\`\`\`\n\nRows: ${result.rowCount}${result.truncated ? ' (truncated)' : ''}\n`);
         return text(masker.mask(JSON.stringify({ columns: result.columns, rows: result.rows, rowCount: result.rowCount, truncated: result.truncated })));
-      } catch {
-        log(`\n## ${target.id} (${target.database})\n\n\`\`\`sql\n${sql}\n\`\`\`\n\nDB unavailable (the query failed)\n`);
-        return text('DB unavailable: the query failed (VPN or permissions). Continue without it.', true);
+      } catch (e) {
+        // a bad query (the server answered) is not an unreachable database: say which, with the server's own words
+        const { stage, detail } = e as { stage?: string; detail?: string };
+        const why = detail ? masker.mask(detail) : 'no detail';
+        if (stage === 'query') {
+          log(`\n## ${target.id} (${target.database})\n\n\`\`\`sql\n${sql}\n\`\`\`\n\nQuery error: ${why}\n`);
+          return text(`Query error (the database is reachable): ${why}. Fix the query: check the table and its columns with SELECT TOP 1 * FROM <table>.`, true);
+        }
+        log(`\n## ${target.id} (${target.database})\n\n\`\`\`sql\n${sql}\n\`\`\`\n\nDB unavailable (${why})\n`);
+        return text(`DB unavailable: could not connect or sign in (${why}). Continue without it.`, true);
       }
     }
     default: return { jsonrpc: '2.0', id, error: { code: -32601, message: 'Method not found' } };

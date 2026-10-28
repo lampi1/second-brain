@@ -5,7 +5,11 @@ import type { TestDbCell, TestDbDriver, TestDbDriverInput, TestDbQueryResult } f
 
 const DEADLINE_MS = 95_000, CLEANUP_MS = 2_000, MAX_BYTES = 1_048_576, MAX_CELL = 4096, MAX_COLUMNS = 128;
 type Result = Omit<TestDbQueryResult, 'targetId'>;
-const failure = (): Error => new Error('Test database transport failed');
+/** Every failure has the same message; `stage` and the server's `detail` let a caller tell a bad query (the database
+ *  answered: invalid column, missing table, no permission on an object) from a database it could not reach or log into. */
+export type TestDbTransportError = Error & { stage: 'connect' | 'query'; detail?: string };
+const failure = (stage: 'connect' | 'query' = 'connect', detail?: string): TestDbTransportError =>
+  Object.assign(new Error('Test database transport failed'), { stage, ...(detail ? { detail: detail.split('\n')[0]!.slice(0, 300) } : {}) });
 
 export const runTestDbQuery: TestDbDriver = async (input: TestDbDriverInput): Promise<Result> => {
   const { target, signal } = input;
@@ -28,7 +32,7 @@ export const runTestDbQuery: TestDbDriver = async (input: TestDbDriverInput): Pr
   const close = () => { if (!closed) { closed = true; connection.close(); } };
   // Closing a connection also rolls back an open transaction server-side if cancellation/transport failure prevents
   // the explicit rollback below. Never return a connection to a pool, and never commit, even after a successful read.
-  const stop = () => { stopped = true; rejectStop(failure()); close(); };
+  const stop = (error?: unknown) => { stopped = true; rejectStop(failure('connect', error instanceof Error ? error.message : 'connection ended or timed out')); close(); };
   connection.on('error', stop);
   connection.on('end', () => { if (!closed) stop(); });
   signal?.addEventListener('abort', stop, { once: true });
@@ -36,7 +40,7 @@ export const runTestDbQuery: TestDbDriver = async (input: TestDbDriverInput): Pr
   const wait = <T>(work: Promise<T>): Promise<T> => Promise.race([work, stopping]);
   const callback = (start: (done: (error?: Error | null) => void) => void): Promise<void> => wait(new Promise((resolve, reject) => {
     if (stopped) { reject(failure()); return; }
-    start(error => error ? reject(failure()) : resolve());
+    start(error => error ? reject(failure('connect', error.message)) : resolve());
   }));
   const read = (sql: string, maxRows: number): Promise<Result> => {
     const requestTimer = setTimeout(stop, 60_000);
@@ -44,7 +48,8 @@ export const runTestDbQuery: TestDbDriver = async (input: TestDbDriverInput): Pr
     const columns: string[] = [], rows: TestDbCell[][] = [];
     let bytes = 0, truncated = false, invalid = false;
     const request = new Request(sql, error => {
-      if (error || invalid) reject(failure());
+      if (error) reject(failure('query', error.message));
+      else if (invalid) reject(failure('query', 'a column type or result size the reader does not return (xml, UDT, too many columns)'));
       else resolve({ columns, rows, rowCount: rows.length, truncated });
     });
     request.on('columnMetadata', metadata => {
