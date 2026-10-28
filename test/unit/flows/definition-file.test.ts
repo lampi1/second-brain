@@ -75,14 +75,20 @@ it('rejects file replacement between checking and opening without reading the re
   expect(() => readDefinitionFile(f.root, f.file, f.args.contextKey)).toThrow('changed while opening'); expect(read).not.toHaveBeenCalled();
 });
 it('rejects mutation after the bounded read and always closes the descriptor', () => {
-  const f = setup(), stat = fs.fstatSync; let checked = false;
+  const f = setup(), stat = fs.fstatSync, open = fs.openSync; let checked = false;
+  // An incidental ancestor change may retry before reading. Each new descriptor gets its own first check.
+  vi.spyOn(fs, 'openSync').mockImplementation((file, flags, mode) => {
+    const fd = open(file, flags, mode);
+    if (file === f.file) checked = false;
+    return fd;
+  });
   vi.spyOn(fs, 'fstatSync').mockImplementation((fd, options) => {
     if (checked) fs.appendFileSync(f.file, ' ');
     checked = true;
     return stat(fd, options);
   });
-  const close = vi.spyOn(fs, 'closeSync');
-  expect(() => readDefinitionFile(f.root, f.file, f.args.contextKey)).toThrow('changed while reading'); expect(close).toHaveBeenCalled();
+  const close = vi.spyOn(fs, 'closeSync'), read = vi.spyOn(fs, 'readSync');
+  expect(() => readDefinitionFile(f.root, f.file, f.args.contextKey)).toThrow('changed while reading'); expect(read).toHaveBeenCalled(); expect(close).toHaveBeenCalled();
 });
 it('rejects a parent swapped to an outside junction after realpath even when restored before the next component check', () => {
   const f = setup(), parent = path.dirname(f.file), held = path.join(f.root, 'held'), outside = path.join(f.dir, 'outside');
