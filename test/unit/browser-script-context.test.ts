@@ -55,6 +55,20 @@ it('enables context events before use and discards every context when the debugg
   expect(cdp.executionContexts.defaultFor('root')?.uniqueId).toBe('first');
   listeners.get('detach')!(undefined,'target closed');expect(cdp.executionContexts.defaultFor('root')).toBeNull();
 });
+it('resumes a paused iframe even when a CDP initialization command never answers',async()=>{
+  vi.useFakeTimers();
+  const listeners=new Map<string,(...args:unknown[])=>void>();
+  const sendCommand=vi.fn((method:string,_params:unknown,sid?:string)=>sid==='child'&&method==='Network.enable'?new Promise(()=>{}):Promise.resolve({}));
+  const debuggerApi={isAttached:()=>false,attach:vi.fn(),removeListener:vi.fn(),on:(event:string,listener:(...args:unknown[])=>void)=>listeners.set(event,listener),sendCommand};
+  const cdp=new TabCdp({isDestroyed:()=>false,debugger:debuggerApi} as unknown as WebContents,()=>{},'synthetic');
+  try {
+    await cdp.attach();
+    listeners.get('message')!(undefined,'Target.attachedToTarget',{sessionId:'child',targetInfo:{type:'iframe',url:'http://localhost:3000/frame'}});
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(sendCommand).toHaveBeenCalledWith('Runtime.runIfWaitingForDebugger',{},'child');
+    expect(vi.getTimerCount()).toBe(0);
+  } finally { cdp.dispose();vi.useRealTimers(); }
+});
 it('does not dispatch after a user handoff starts during the metadata await',async()=>{
   const f=fixture();f.send.mockImplementation(async()=>{f.handoff();return {frameTree:{frame:{id:'root',url:f.frame.url}}};});
   await expect(f.actions.evaluate(f.tab,'opaque caller source')).rejects.toThrow('user is working');

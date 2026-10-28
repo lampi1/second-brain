@@ -50,8 +50,13 @@ for (const scheme of ['dark', 'light'] as const) {
 test('keyboard focus opens the explanation, Esc closes it and stays on the page; a click pins it', async () => {
   const { page } = await launchDemo();
   await openSettings(page);
+  // Other sections load independently; isolate Roles so their late content cannot move its open tooltip.
+  await page.getByTestId('st-search').fill('Ruoli e deleghe');
+  await expect(page.getByTestId('st-group-connectors')).toBeHidden();
   const mark = page.getByTestId('st-stall-help');
   const bubble = page.getByTestId('st-stall-help-bubble');
+  // Settle scrolling before opening: moving the anchor intentionally dismisses its tooltip.
+  await mark.scrollIntoViewIfNeeded();
   // Tab from the control just before it: a real keyboard focus (focus-visible)
   await page.getByTestId('st-delegation-maxParallel').focus();
   await page.keyboard.press('Tab');
@@ -62,6 +67,7 @@ test('keyboard focus opens the explanation, Esc closes it and stays on the page;
   await expect(mark).toHaveAccessibleName('Spiegazione: Quando una chat figlia è «ferma»');
   await expect(mark).toHaveAccessibleDescription(/non produce nulla per questi minuti/);
   await shot(page, 'helptip-focus');
+  await expect(bubble).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(bubble).toBeHidden();
   await expect(page.getByTestId('settings-page')).toBeVisible();
