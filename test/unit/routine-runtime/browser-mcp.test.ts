@@ -205,6 +205,21 @@ describe.skipIf(!browserAvailable)('routine browser over a fixture login page', 
     expect(JSON.parse(fs.readFileSync(path.join(dir, 'events.jsonl'), 'utf8').trim())).toEqual({ type: 'screenshot', at: 42, n: 1, path: file });
   }, 60_000);
 
+  it('a highlighted screenshot draws a red box on the proving element only in that PNG', async () => {
+    const snap = (await call('snapshot')).text;
+    const ref = /\[(e\d+)\] a "Elsewhere"/.exec(snap)?.[1] ?? '';
+    const style = () => browser.page.evaluate<string>(`document.querySelector('[data-routine-ref="${ref}"]').style.cssText`);
+    const before = await style();
+    const plain = await call('screenshot', { name: 'plain' });
+    const marked = await call('screenshot', { name: 'marked', highlight: [ref] });
+    expect(marked).toMatchObject({ isError: false });
+    expect(marked.text).toContain(`with a red box on ${ref}`);
+    expect(fs.readFileSync(path.join(config.evidence, 'marked.png')).equals(fs.readFileSync(path.join(config.evidence, 'plain.png')))).toBe(false);
+    expect(plain.text).not.toContain('red box');
+    expect(await style()).toBe(before); // the page is left as it was
+    expect(await call('screenshot', { name: 'x', highlight: ['e1', 'e2', 'e3', 'e4', 'e5', 'e6'] })).toMatchObject({ isError: true });
+  }, 60_000);
+
   it("recognises Air's real login form (<input type=button> login button) in a real browser", async () => {
     await browser.page.goto(`${site.origin}/Account/Login?mode=local`, { waitUntil: 'load' });
     const facts = await browser.page.evaluate<LoginFormFacts>(`(${inspectLoginForm.toString()})().facts`);
