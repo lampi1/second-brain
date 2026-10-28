@@ -125,6 +125,9 @@ export interface WriteContext {
   /** who a downgrade comment mentions besides devops.mentions */
   contact?: ExtendedContext['contact'];
   push?: ExtendedContext['push'];
+  /** set when the package parks runs: a downgrade becomes a park of this step (scoped keys, run branch pushed) */
+  park?: ExtendedContext['park'];
+  headOf?: ExtendedContext['headOf'];
   /** the step's own folder: comment images are read only from its evidence/ and screenshots/ */
   stepDir?: string;
   /** the review→fix round of the step (1 = first pass): a later round's writes are new writes, not duplicates */
@@ -194,6 +197,10 @@ export interface WritesOutcome {
   failed: string[];
   /** a downgrade ran (its reason): the run stops and waits for a person */
   downgraded?: string;
+  /** the step the parked run resumes from (a step id the model named) */
+  resumeFrom?: string;
+  /** a parked downgrade: the comment the answer must follow and the run branch */
+  parked?: { commentId?: number; branch: string; pushed: boolean };
 }
 
 /**
@@ -318,6 +325,7 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
       inputs: context.inputs ?? {}, runDir: store.runDir(context.runId), ...(context.stepDir ? { stepDir: context.stepDir } : {}),
       ...(context.deployments ? { deployments: context.deployments } : {}), ...(context.arm ? { arm: context.arm } : {}),
       ...(context.contact ? { contact: context.contact } : {}), ...(context.push ? { push: context.push } : {}),
+      ...(context.park ? { park: context.park } : {}), ...(context.headOf ? { headOf: context.headOf } : {}),
       sleep: context.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms))), now,
     }, write, resourceKey, settle, ext, (w, k) => isClassic(w) ? classic(w, k) : Promise.resolve());
     if (out.downgraded) break;

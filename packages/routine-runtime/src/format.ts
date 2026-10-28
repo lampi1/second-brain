@@ -50,6 +50,10 @@ export interface RoutineTrigger {
   kind: 'devops'; everyMinutes: number; organization: string; project: string; areaPath: string; workItemType: string;
   states: string[]; includeExisting: boolean;
   includeTags?: string[]; excludeTags?: string[]; workItemIds?: number[]; iterationPath?: string; maxPerHour?: number;
+  /** more areas watched with the same rule (another project's area too): one cursor each, one dedup for all */
+  areas?: { project: string; areaPath: string }[];
+  /** at most this many runs at once (a shared test environment or checkout); more items wait for the next poll */
+  maxActive?: number;
 }
 /** What step results may write on the run's work item; anything else is refused by the runtime. */
 export interface RoutineDevOps {
@@ -64,7 +68,11 @@ export interface RoutineDevOps {
   downgrade?: { removeTag: string; addTag: string; state: string };
 }
 /** Who is asked on DevOps when a step needs a person: a DevOps identity id (lowercase GUID). */
-export interface RoutineEscalation { contact: string; contactName?: string; pollMinutes?: number; reminderMinutes?: number }
+export interface RoutineEscalation { contact: string; contactName?: string; pollMinutes?: number; reminderMinutes?: number;
+  /** park instead of waiting: a step that needs a person writes one comment (step reached, run branch), the package's
+   *  downgrade tag, pushes the run branch and ends the run; `routine watch` resumes the same run, from the step it
+   *  names, when the contact answers on the work item (ADR 0175) */
+  park?: boolean }
 /** The runtime's browser (ADR 0175): the only origins its pages may open; logins come from `credentials`. `hide` =
  *  CSS selectors of overlays (a chat widget) the runtime hides on every page, so they never cover what a step clicks. */
 export interface RoutineBrowser { origins: string[]; hide?: string[] }
@@ -127,7 +135,7 @@ function step(v: unknown, i: number): RoutineStep {
 
 export function parseTrigger(v: unknown): RoutineTrigger {
   const t = obj(v, 'trigger');
-  only(t, ['kind', 'everyMinutes', 'organization', 'project', 'areaPath', 'workItemType', 'states', 'includeExisting', 'includeTags', 'excludeTags', 'workItemIds', 'iterationPath', 'maxPerHour'], 'trigger');
+  only(t, ['kind', 'everyMinutes', 'organization', 'project', 'areaPath', 'workItemType', 'states', 'includeExisting', 'includeTags', 'excludeTags', 'workItemIds', 'iterationPath', 'maxPerHour', 'areas', 'maxActive'], 'trigger');
   if (t.kind !== 'devops') fail('trigger.kind: only "devops"');
   const organization = str(t.organization, 'trigger.organization', 50);
   if (!ORG.test(organization)) fail('trigger.organization: invalid');
@@ -140,6 +148,8 @@ export function parseTrigger(v: unknown): RoutineTrigger {
     ...opt(t, 'includeTags', x => strs(x, 'trigger.includeTags')), ...opt(t, 'excludeTags', x => strs(x, 'trigger.excludeTags')),
     ...opt(t, 'workItemIds', x => list(x, 'trigger.workItemIds', 500).map((n, i) => int(n, `trigger.workItemIds[${i}]`, 1, Number.MAX_SAFE_INTEGER))),
     ...opt(t, 'iterationPath', x => str(x, 'trigger.iterationPath', 512)), ...opt(t, 'maxPerHour', x => int(x, 'trigger.maxPerHour', 1, 1000)),
+    ...opt(t, 'areas', x => list(x, 'trigger.areas', 8).map((a, i) => { const o = obj(a, `trigger.areas[${i}]`); only(o, ['project', 'areaPath'], `trigger.areas[${i}]`); return { project: str(o.project, `trigger.areas[${i}].project`, 128), areaPath: str(o.areaPath, `trigger.areas[${i}].areaPath`, 512) }; })),
+    ...opt(t, 'maxActive', x => int(x, 'trigger.maxActive', 1, 20)),
   } as RoutineTrigger;
 }
 
@@ -179,11 +189,12 @@ function devops(v: unknown): RoutineDevOps {
 }
 
 function escalation(v: unknown): RoutineEscalation {
-  const e = obj(v, 'escalation'); only(e, ['contact', 'contactName', 'pollMinutes', 'reminderMinutes'], 'escalation');
+  const e = obj(v, 'escalation'); only(e, ['contact', 'contactName', 'pollMinutes', 'reminderMinutes', 'park'], 'escalation');
   const contact = str(e.contact, 'escalation.contact', 64).toLowerCase();
   if (!GUID.test(contact)) fail('escalation.contact: a DevOps identity id (GUID)');
   return { contact, ...opt(e, 'contactName', n => str(n, 'escalation.contactName', 120)), ...opt(e, 'pollMinutes', n => int(n, 'escalation.pollMinutes', 1, 1440)),
-    ...opt(e, 'reminderMinutes', n => int(n, 'escalation.reminderMinutes', 0, 10_080)) } as RoutineEscalation;
+    ...opt(e, 'reminderMinutes', n => int(n, 'escalation.reminderMinutes', 0, 10_080)),
+    ...opt(e, 'park', b => typeof b === 'boolean' ? b : fail('escalation.park: true or false')) } as RoutineEscalation;
 }
 
 function successRule(v: unknown, what: string): LoginSuccessRule {

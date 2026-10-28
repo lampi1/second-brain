@@ -32,6 +32,7 @@ export * from './testdb-guard';
 export * from './trigger';
 export * from './runtime';
 export * from './paths';
+export * from './locks';
 export * from './cli-command';
 export { createRunStore, readRun, listRuns, stepFolderName, StaleAttempt } from './run-store';
 export type { RunRecord, RunStatus, RunStepRecord, StepStatus, RunEscalation, RunFolder, RunStepFolder, RunStore, TriggerState, LedgerEntry } from './run-store';

@@ -16,7 +16,8 @@ import { createClaudeEngine } from './claude';
 import { createRoutineRuntime, type RoutineRuntime } from './runtime';
 import { createTriggerLoop, type Detect } from './trigger';
 import { azureCliTokenProvider, patTokenProvider } from './token';
-import { defaultRunsDir, routinePaths } from './paths';
+import { defaultLocksDir, defaultRunsDir, routinePaths } from './paths';
+import { createLocks, type Locks } from './locks';
 import { cliCommand } from './cli-command';
 import { extractPackageZip } from './zip';
 import { followRun, renderProgress, readProgress } from './terminal';
@@ -47,6 +48,8 @@ export interface CliDeps {
   maxPolls?: number;
   /** repaint interval of the progress (ms) */
   repaintMs: number;
+  /** the lock folder every terminal shares (locks.ts; default: defaultLocksDir); false = no locks */
+  locksDir?: string | false;
 }
 
 const USAGE = `Usage:
@@ -180,10 +183,11 @@ export async function main(argv: readonly string[], partial: Partial<CliDeps> = 
   try {
     const recognised = args.testDbs ? readTestDbs(args.testDbs) : undefined;
     const runsDir = path.resolve(args.runsDir ?? defaultRunsDir(deps.env));
+    const locks = deps.locksDir === false ? undefined : createLocks(deps.locksDir ?? defaultLocksDir(deps.env));
     const runtimeFor = (pkg: RoutinePackage, paths: Paths): RoutineRuntime => {
       const devopsMcp = deps.mcp('devops'), testDbServer = deps.mcp('testdb'), browserServer = deps.mcp('browser');
       return createRoutineRuntime({
-        pkg, paths, engine: deps.engine(), log,
+        pkg, paths, engine: deps.engine(), log, ...(locks ? { locks } : {}),
         devops: { ...(deps.devops?.authorization ? { authorization: deps.devops.authorization } : {}), ...(deps.devops?.request ? { request: deps.devops.request } : {}), ...(devopsMcp ? { mcp: devopsMcp } : {}) },
         testDb: { ...(recognised ? { recognised } : {}), ...(testDbServer ? { server: testDbServer } : {}) },
         ...(browserServer ? { browser: { server: browserServer, headless: !args.headed } } : {}),
@@ -191,7 +195,7 @@ export async function main(argv: readonly string[], partial: Partial<CliDeps> = 
     };
     if (args.command === 'run') return await run(args, runsDir, recognised, runtimeFor, deps);
     if (args.command === 'resume') return await resume(args, recognised, runtimeFor, deps);
-    return await watch(args, runsDir, recognised, runtimeFor, deps);
+    return await watch(args, runsDir, recognised, runtimeFor, deps, locks);
   } catch (e) {
     stderr.write(`${e instanceof Error ? e.message : String(e)}\n`);
     return e instanceof UsageError ? 2 : 1;
@@ -262,13 +266,20 @@ async function resume(args: Parsed, recognised: RecognisedTestDb[] | undefined, 
   } finally { loaded.dispose(); }
 }
 
-async function watch(args: Parsed, runsDir: string, recognised: RecognisedTestDb[] | undefined, runtimeFor: (p: RoutinePackage, paths: Paths) => RoutineRuntime, deps: CliDeps): Promise<number> {
+async function watch(args: Parsed, runsDir: string, recognised: RecognisedTestDb[] | undefined, runtimeFor: (p: RoutinePackage, paths: Paths) => RoutineRuntime, deps: CliDeps, locks?: Locks): Promise<number> {
   const loaded = loadChecked(args.target!, recognised, deps.stderr);
   if (!loaded) return 1;
   const { stdout } = deps;
+  // one watch per routine on this machine: two would start the same new items and overwrite each other's trigger.json
+  const watchLock = `watch-${loaded.pkg.routine.id}`, watcher = `watch-${process.pid}-${Date.now()}`;
   try {
     const pkg = loaded.pkg, trigger = pkg.routine.trigger;
     if (!trigger) throw new UsageError(`routine "${pkg.routine.id}" has no DevOps trigger (routine.trigger): use routine run`);
+    if (locks && !locks.acquire(watchLock, watcher)) {
+      const holder = locks.holder(watchLock);
+      deps.stderr.write(`Another routine watch of "${pkg.routine.id}" is running (pid ${holder?.pid ?? '?'} on ${holder?.host ?? '?'}): stop it first, or close that terminal.\n`);
+      return 1;
+    }
     const runtime = runtimeFor(pkg, routinePaths(runsDir, pkg.routine.id));
     const active = new Map<string, Promise<RunRecord>>();
     const stop = new AbortController();
@@ -281,19 +292,35 @@ async function watch(args: Parsed, runsDir: string, recognised: RecognisedTestDb
         const runDir = path.join(runsDir, pkg.routine.id, handle.runId);
         writeSource(runDir, args.target!);
         stdout.write(`Work item ${workItem}: run ${handle.runId} started (${runDir})\n`);
-        active.set(handle.runId, handle.finished.then(record => {
-          active.delete(handle.runId);
-          stdout.write(`Work item ${workItem}: run ${handle.runId} ${renderProgress(readProgress(runDir), Date.now())[0] ?? record.status}\n`);
-          if (fs.existsSync(path.join(runDir, 'report.md'))) stdout.write(`  report: ${path.join(runDir, 'report.md')}\n`);
-          return record;
-        }));
+        follow(handle);
         return handle;
       },
+      // a parked run whose contact answered on the work item goes on (escalation.park); the others stay as they are
+      resume: async runId => {
+        if (active.has(runId)) return null;
+        const handle = await runtime.resumeParked(runId);
+        if (!handle) return null;
+        stdout.write(`Work item ${runtime.store.read(runId).workItem ?? '?'}: run ${runId} resumed after an answer (${path.join(runsDir, pkg.routine.id, runId)})\n`);
+        follow(handle);
+        return handle;
+      },
+      admit: workItem => runtime.admitItem(workItem),
+      active: () => active.size,
     });
+    function follow(handle: { runId: string; finished: Promise<RunRecord> }): void {
+      const runDir = path.join(runsDir, pkg.routine.id, handle.runId);
+      active.set(handle.runId, handle.finished.then(record => {
+        active.delete(handle.runId);
+        stdout.write(`Work item ${record.workItem ?? '?'}: run ${handle.runId} ${renderProgress(readProgress(runDir), Date.now())[0] ?? record.status}\n`);
+        if (fs.existsSync(path.join(runDir, 'report.md'))) stdout.write(`  report: ${path.join(runDir, 'report.md')}\n`);
+        return record;
+      }));
+    }
     const off = deps.onInterrupt(() => { if (stop.signal.aborted) return; stdout.write('\nStopping the watch…\n'); stop.abort(); loop.stop(); });
     stdout.write(`Watching DevOps for "${pkg.routine.title}" every ${trigger.everyMinutes} min (Ctrl+C to stop). Runs: ${path.join(runsDir, pkg.routine.id)}\n`);
     try {
       for (let polls = 0; !stop.signal.aborted; ) {
+        locks?.refresh([watchLock], watcher);
         const result = await loop.tick();
         stdout.write(`${new Date().toLocaleTimeString()} ${result.summary}\n`);
         if (deps.maxPolls !== undefined && ++polls >= deps.maxPolls) break;
@@ -307,5 +334,5 @@ async function watch(args: Parsed, runsDir: string, recognised: RecognisedTestDb
     }
     if (stop.signal.aborted) stdout.write('Stopped. Interrupted runs stay resumable with routine resume <run folder>.\n');
     return 0;
-  } finally { loaded.dispose(); }
+  } finally { locks?.release([watchLock], watcher); loaded.dispose(); }
 }

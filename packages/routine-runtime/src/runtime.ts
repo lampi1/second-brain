@@ -11,10 +11,10 @@ import type { Clock, CredentialStore, EngineRunner, Paths, RuntimeLog, TokenProv
 import type { RoutinePackage, RoutineStep } from './format';
 import { packageSecrets } from './format';
 import { createMasker, type Masker } from './mask';
-import { createRunStore, StaleAttempt, stepFolderName, type RunRecord, type RunStepRecord, type RunStore, type RunEscalation } from './run-store';
-import { STEP_RESULT_FILE, StepResultError, grantedWriteOps, stepResultInstructions, validateStepResult, type StepResult } from './step-result';
+import { createRunStore, StaleAttempt, stepFolderName, type RunRecord, type RunStepRecord, type RunStore, type RunEscalation, type RunPark } from './run-store';
+import { STEP_RESULT_FILE, StepResultError, grantedWriteOps, stepResultInstructions, validateStepResult, type StepResult, type StepWrite } from './step-result';
 import { createDevOpsClient, executeWrites, type DevOpsClient, type WriteContext, type WritesOutcome } from './devops';
-import { runResources, type Deployments } from './devops-ops';
+import { runResources, type Deployments, type ParkStop } from './devops-ops';
 import { TestDeploymentCoordinator } from './devops-host/test-deployment';
 import { runBranch } from './devops-host/git-push';
 import { ESCALATION_POLL_MS, ESCALATION_REMINDER_MIN, MAX_ESCALATIONS, pollEscalation, replyText, writeEscalation, type EscalationIo } from './escalation';
@@ -26,6 +26,7 @@ import { checkStepTestDbs, TESTDB_EVIDENCE, TESTDB_SERVER_NAME, writeTestDbServe
 import type { RecognisedTestDb } from './testdb-guard';
 import { driveLogin, type LoginPageDriver } from './login-form';
 import { writeReport } from './report';
+import { pathLockName, type Locks } from './locks';
 
 export const DEFAULT_STEP_TIMEOUT_MS = 60 * 60_000;
 export const DEFAULT_MAX_ATTEMPTS = 2;
@@ -46,6 +47,8 @@ export interface RoutineRuntimeOptions {
     deployments?: Deployments;
     /** the host git push (default: git-push.ts) and the read-only Azure Resource Manager GET (default: az + fetch) */
     push?: WriteContext['push']; arm?: WriteContext['arm'];
+    /** the branch a checkout is on, for a park's push (default: git symbolic-ref) */
+    headOf?: WriteContext['headOf'];
   };
   /** site logins: default the package's embedded ones */
   credentials?: CredentialStore;
@@ -64,7 +67,12 @@ export interface RoutineRuntimeOptions {
   sleep?(ms: number, signal: AbortSignal): Promise<void>;
   /** more values to mask (host secrets) */
   secrets?: string[];
+  /** cross-process locks (locks.ts): one run per work item and per `workspace` input at a time; none = not locked */
+  locks?: Locks;
 }
+
+/** Thrown when another live run (any terminal) holds the work item or the workspace. */
+export class ResourceBusy extends Error {}
 
 export interface StartRequest {
   inputs?: Record<string, string>;
@@ -151,7 +159,8 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
   function inputsFor(request: StartRequest): Record<string, string> {
     const inputs: Record<string, string> = {};
     for (const input of routine.inputs) {
-      const value = request.inputs?.[input.name] ?? input.default;
+      // a default may name the run's work item: one checkout per item (…\app-{{workItem}})
+      const value = request.inputs?.[input.name] ?? (request.workItem !== undefined ? input.default?.replace(/\{\{\s*workItem\s*\}\}/g, String(request.workItem)) : input.default);
       if (value !== undefined) inputs[input.name] = value;
     }
     if (request.workItem !== undefined) {
@@ -168,12 +177,54 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     return raw && /^\d{1,10}$/.test(raw) ? Number(raw) : undefined;
   };
 
+  /** escalation.park: a step that needs a person parks the run (one comment, tag, run branch pushed) instead of waiting */
+  const parking = (run: Pick<RunRecord, 'workItem'>) => Boolean(routine.escalation?.park && routine.devops?.ops.includes('downgrade') && routine.devops.downgrade && run.workItem !== undefined);
+  const contactOf = () => routine.escalation ? { id: routine.escalation.contact, ...(routine.escalation.contactName ? { name: routine.escalation.contactName } : {}) } : undefined;
+  /** the step a park resumes from: the named one when it is this step or an earlier one, else this step */
+  const resumeStepOf = (stepId: string, named?: string): string => {
+    const here = routine.steps.findIndex(s => s.id === stepId), at = named === undefined ? -1 : routine.steps.findIndex(s => s.id === named);
+    return at >= 0 && at <= here ? named! : stepId;
+  };
+  const parkStop = (run: RunRecord, def: RoutineStep): ParkStop => {
+    const n = run.steps.find(s => s.id === def.id)?.n ?? 0;
+    return { n: (run.parks ?? 0) + 1, step: def.title, position: `passo ${n} di ${run.steps.length}`,
+      resumeStep: named => routine.steps.find(s => s.id === resumeStepOf(def.id, named))?.title ?? def.title };
+  };
+  const writeContext = (runId: string, attempt: number, def: RoutineStep, run: RunRecord, round: number, signal: AbortSignal, stepDir?: string, stepId = def.id): WriteContext => {
+    const contact = contactOf();
+    return { runId, attempt, stepId, workItem: run.workItem!, grant: routine.devops!, client: devops(), store, masker,
+      inputs: run.inputs, deployments, arm, ...(contact ? { contact } : {}), ...(options.devops?.push ? { push: options.devops.push } : {}),
+      ...(parking(run) ? { park: parkStop(run, def) } : {}), ...(options.devops?.headOf ? { headOf: options.devops.headOf } : {}),
+      ...(stepDir ? { stepDir } : {}), round, sleep: ms => sleep(ms, signal), now: () => clock.now() };
+  };
+
+  /** The locks a run holds while it goes on: its work item and its `workspace` input (any terminal, any package). */
+  const lockNames = (run: Pick<RunRecord, 'workItem' | 'inputs'>): string[] => [
+    ...(run.workItem !== undefined ? [`item-${(organization ?? 'none').replace(/[^a-zA-Z0-9_-]/g, '_')}-${run.workItem}`] : []),
+    ...(run.inputs.workspace?.trim() ? [pathLockName('workspace', run.inputs.workspace.trim())] : []),
+  ];
+  /** Takes every lock of the run, or none: the message names the live holder. */
+  function lockRun(runId: string, run: Pick<RunRecord, 'workItem' | 'inputs'>): void {
+    const locks = options.locks;
+    if (!locks) return;
+    const taken: string[] = [];
+    for (const name of lockNames(run)) {
+      if (locks.acquire(name, runId)) { taken.push(name); continue; }
+      locks.release(taken, runId);
+      const holder = locks.holder(name);
+      const what = name.startsWith('item-') ? `work item ${run.workItem}` : `workspace ${run.inputs.workspace}`;
+      throw new ResourceBusy(`${what} is in use by run ${holder?.owner ?? '?'} (pid ${holder?.pid ?? '?'} on ${holder?.host ?? '?'}): start it again when that run ends`);
+    }
+  }
+  const unlockRun = (runId: string, run: Pick<RunRecord, 'workItem' | 'inputs'>) => { try { options.locks?.release(lockNames(run), runId); } catch { /* best effort: the lock expires */ } };
+
   /** Starts a new run. */
   function start(request: StartRequest = {}): RunHandle {
     const inputs = inputsFor(request), now = clock.now(), runId = newRunId(now);
     const workItem = workItemOf(inputs, request.workItem);
     const from = request.fromStep === undefined ? 0 : routine.steps.findIndex(s => s.id === request.fromStep);
     if (from < 0) throw new Error(`No step "${request.fromStep}" in this routine (steps: ${routine.steps.map(s => s.id).join(', ')})`);
+    lockRun(runId, { inputs, ...(workItem !== undefined ? { workItem } : {}) });
     const run: RunRecord = {
       schema: 1, runId, routineId: routine.id, routineTitle: routine.title, status: 'running', attempt: 0,
       inputs, ...(workItem !== undefined ? { workItem } : {}), ...(request.subjectKey ? { subjectKey: request.subjectKey } : {}),
@@ -182,9 +233,9 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
         ? { n: i + 1, id: s.id, title: s.title, status: 'done', attempts: 0, summary: `skipped (started from step ${request.fromStep})` }
         : { n: i + 1, id: s.id, title: s.title, status: 'pending', attempts: 0 }),
     };
-    fs.mkdirSync(paths.runsRoot, { recursive: true });
-    store.create(run);
-    const claimed = store.claim(runId);
+    let claimed: RunRecord;
+    try { fs.mkdirSync(paths.runsRoot, { recursive: true }); store.create(run); claimed = store.claim(runId); }
+    catch (e) { unlockRun(runId, run); throw e; }
     emit(runId, { type: 'run-start', at: now, runId, routine: routine.id, total: routine.steps.length, ...(workItem !== undefined ? { workItem } : {}) });
     info('run started', { runId, routine: routine.id, workItem });
     return { runId, finished: execute(runId, claimed.attempt) };
@@ -199,6 +250,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     running.get(runId)?.abort();
     const before = store.read(runId);
     if (before.status === 'done') throw new Error(`Run ${runId} is done`);
+    lockRun(runId, before);
     const claimed = store.claim(runId, run => {
       run.status = run.escalation && run.escalation.state !== 'answered' ? 'waiting-human' : 'running';
       delete run.error; delete run.endedAt;
@@ -237,6 +289,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
           if (!answered) return finish(runId, attempt, controller.signal);
           guidance = answered;
         } else if (run.escalation?.stepId === def.id && run.escalation.answer) guidance = run.escalation.answer;
+        else if (run.parked?.answer && parkedRange(run.parked).includes(def.id)) guidance = run.parked.answer;
         const max = def.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
         let tries = 0, lastError: string | undefined, back: number | undefined;
         for (;;) {
@@ -265,9 +318,27 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
             emit(runId, { type: 'step-end', at: clock.now(), n: record.n, id: def.id, status: 'needs-human', summary: question });
             outcome = { kind: 'needs-human', question };
           }
+          // a parking package: the step that needs a person parks the run (the watch resumes it on the answer)
+          if (outcome.kind === 'needs-human' && parking(run)) outcome = await parkWrites(runId, attempt, def, outcome.question, controller.signal);
+          if (outcome.kind === 'downgraded' && outcome.parked) {
+            const parked = outcome.parked, reason = outcome.reason, resumeFrom = resumeStepOf(def.id, outcome.resumeFrom);
+            update(r => {
+              const s = step(r, def.id); s.status = 'needs-human'; s.endedAt = clock.now();
+              r.parked = { n: (r.parks ?? 0) + 1, stepId: def.id, resumeFrom, at: clock.now(), question: reason,
+                branch: parked.branch, pushed: parked.pushed, ...(parked.commentId !== undefined ? { commentId: parked.commentId } : {}) };
+              r.status = 'needs-human'; r.endedAt = clock.now(); r.error = `step ${def.id} parked: ${reason}`;
+            });
+            emit(runId, { type: 'step-end', at: clock.now(), n: record.n, id: def.id, status: 'needs-human', summary: `parked: ${reason}` });
+            return finish(runId, attempt, controller.signal);
+          }
           // a downgrade handed the item back to a person: the run stops here (no later step)
           if (outcome.kind === 'downgraded') { update(r => { r.status = 'needs-human'; r.endedAt = clock.now(); r.error = `step ${def.id} downgraded the work item: ${outcome.reason}`; }); return finish(runId, attempt, controller.signal); }
           if (controller.signal.aborted) return finish(runId, attempt, controller.signal);
+          if (outcome.kind === 'needs-human' && parking(run)) {
+            // the park itself did not run (refused, item unreadable): the run stops for a person, as without a contact
+            update(r => { r.status = 'needs-human'; r.endedAt = clock.now(); r.error = `step ${def.id} needs a person: ${outcome.question}`; });
+            return finish(runId, attempt, controller.signal);
+          }
           if (outcome.kind === 'needs-human') {
             const escalated = await escalate(runId, attempt, def, outcome.question);
             if (!escalated) { update(r => { r.status = 'needs-human'; r.endedAt = clock.now(); r.error = `step ${def.id} needs a person: ${outcome.question}`; }); return finish(runId, attempt, controller.signal); }
@@ -303,18 +374,42 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     if (signal.aborted && (run.status === 'running' || run.status === 'waiting-human')) {
       run = store.update(runId, attempt, r => { r.status = 'cancelled'; r.endedAt = clock.now(); for (const s of r.steps) if (s.status === 'running') s.status = 'pending'; });
     }
+    unlockRun(runId, run);
     writeReport(store, run);
     emit(runId, { type: 'run-end', at: clock.now(), status: run.status, ...(run.error ? { error: run.error } : {}) });
     info('run ended', { runId, status: run.status });
     return run;
   }
 
-  type StepOutcome = { kind: 'done' } | { kind: 'failed'; error: string } | { kind: 'needs-human'; question: string } | { kind: 'downgraded'; reason: string } | { kind: 'send-back'; reason: string };
+  type StepOutcome = { kind: 'done' } | { kind: 'failed'; error: string } | { kind: 'needs-human'; question: string } | { kind: 'send-back'; reason: string }
+    | { kind: 'downgraded'; reason: string; resumeFrom?: string; parked?: WritesOutcome['parked'] };
+
+  /** The steps a park answer guides: from the resume step through the parked one. */
+  function parkedRange(p: RunPark): string[] {
+    const from = routine.steps.findIndex(s => s.id === p.resumeFrom), to = routine.steps.findIndex(s => s.id === p.stepId);
+    return from < 0 || to < from ? [p.stepId] : routine.steps.slice(from, to + 1).map(s => s.id);
+  }
+
+  /** Parks the run at a step that needs a person: the package's downgrade as a park (comment, tags, run branch). */
+  async function parkWrites(runId: string, attempt: number, def: RoutineStep, question: string, signal: AbortSignal): Promise<Extract<StepOutcome, { kind: 'needs-human' | 'downgraded' }>> {
+    const run = store.read(runId), record = run.steps.find(s => s.id === def.id)!;
+    let writes: WritesOutcome;
+    try { writes = await executeWrites(writeContext(runId, attempt, def, run, record.round ?? 1, signal), [{ op: 'downgrade', reason: question }]); }
+    catch (e) {
+      if (e instanceof StaleAttempt) throw e;
+      warn('run not parked', { runId }, e instanceof Error ? e.message : String(e));
+      return { kind: 'needs-human', question };
+    }
+    for (const [status, list] of [['done', writes.done], ['not-verified', writes.notVerified], ['failed', writes.failed]] as const)
+      for (const what of list) emit(runId, { type: 'write', at: clock.now(), n: record.n, what, status });
+    return writes.parked ? { kind: 'downgraded', reason: question, parked: writes.parked } : { kind: 'needs-human', question };
+  }
 
   async function runStep(runId: string, attempt: number, def: RoutineStep, guidance: RunEscalation['answer'] | undefined, lastError: string | undefined, signal: AbortSignal): Promise<StepOutcome> {
     const update = (mutate: (record: RunStepRecord, run: RunRecord) => void) => store.update(runId, attempt, r => mutate(r.steps.find(s => s.id === def.id)!, r));
     let run = update((s, r) => { s.status = 'running'; s.attempts += 1; s.startedAt = clock.now(); delete s.endedAt; delete s.error; r.status = 'running'; });
     const record = run.steps.find(s => s.id === def.id)!;
+    try { options.locks?.refresh(lockNames(run), runId); } catch { /* best effort */ }
     emit(runId, { type: 'step-start', at: clock.now(), n: record.n, total: run.steps.length, id: def.id, title: def.title, attempt: record.attempts });
     const dir = store.stepDir(runId, record.n, def.id, record.round);
     const resultFile = path.join(dir, STEP_RESULT_FILE);
@@ -439,10 +534,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
       try {
         if (run.workItem === undefined) throw new Error('DevOps writes need a run started for a work item');
         if (!routine.devops) throw new Error('the package does not declare devops writes');
-        const contact = routine.escalation ? { id: routine.escalation.contact, ...(routine.escalation.contactName ? { name: routine.escalation.contactName } : {}) } : undefined;
-        writes = await executeWrites({ runId, attempt, stepId: def.id, workItem: run.workItem, grant: routine.devops, client: devops(), store, masker,
-          inputs: run.inputs, deployments, arm, ...(contact ? { contact } : {}), ...(options.devops?.push ? { push: options.devops.push } : {}), stepDir: dir, round: record.round ?? 1,
-          sleep: ms => sleep(ms, signal), now: () => clock.now() }, result.devopsWrites);
+        writes = await executeWrites(writeContext(runId, attempt, def, run, record.round ?? 1, signal, dir), result.devopsWrites);
       } catch (e) {
         if (e instanceof StaleAttempt) throw e;
         // a write the package does not allow is the session's mistake: the step retries with the reason
@@ -462,7 +554,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
         if (writes?.failed.length) s.failedWrites = writes.failed;
       });
       ended('done', { summary });
-      if (writes?.downgraded) return { kind: 'downgraded', reason: writes.downgraded };
+      if (writes?.downgraded) return { kind: 'downgraded', reason: writes.downgraded, ...(writes.resumeFrom ? { resumeFrom: writes.resumeFrom } : {}), ...(writes.parked ? { parked: writes.parked } : {}) };
       return result.sendBack && def.loop ? { kind: 'send-back', reason: masker.mask(result.sendBack.reason) } : { kind: 'done' };
     }
     if (result?.outcome === 'needs-human') {
@@ -509,12 +601,17 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     if (lastError) parts.push('', '## The previous attempt failed', lastError);
     const me = run.steps.find(s => s.id === def.id);
     if (me?.sentBack && (me.round ?? 1) > 1) parts.push('', `## Sent back by ${me.sentBack.by} (round ${me.round})`, 'Fix these findings, then finish the step as usual:', me.sentBack.reason);
-    else if ((me?.round ?? 1) > 1) parts.push('', `## Round ${me!.round}`, `This step runs again after an earlier step fixed findings; the previous round is in steps/${stepFolderName(me!.n, def.id, me!.round! - 1)}.`);
+    else if ((me?.round ?? 1) > 1 && !run.parked?.answer) parts.push('', `## Round ${me!.round}`, `This step runs again after an earlier step fixed findings; the previous round is in steps/${stepFolderName(me!.n, def.id, me!.round! - 1)}.`);
     const writable = routine.devops && run.workItem !== undefined ? routine.devops : undefined;
+    if (run.parked?.answer) {
+      const branch = runBranch(run.runId).slice('refs/heads/'.length), at = routine.steps.find(s => s.id === run.parked!.stepId)?.title ?? run.parked.stepId;
+      parts.push('', '## Resumed run', `This run was parked at step ${at} and resumed after the answer below. If the checkout is on the run branch ${branch}, stay on it with its commits: never detach, reset or switch it (this overrides the step's own checkout instructions). If it is not on it (no commit yet), follow the step as written. The earlier work of this run is in its steps/ folders.`);
+    }
     if (writable?.ops.includes('git-push')) parts.push('', '## Run branch', `Commit the fix on the local branch ${runBranch(run.runId).slice('refs/heads/'.length)} of the checkout; the runtime publishes exactly that branch with a push-branch write.`);
     const resources = writable ? runResources(store.ledger(run.runId), writable.organization) : [];
     if (resources.length) parts.push('', '## DevOps resources of this run', 'Refer to them by their ref in later writes.', ...resources);
-    parts.push('', stepResultInstructions(dir, writable ? grantedWriteOps(writable.ops) : false, def.loop ? { to: def.loop.to, max: def.loop.max ?? DEFAULT_LOOP_MAX } : undefined));
+    parts.push('', stepResultInstructions(dir, writable ? grantedWriteOps(writable.ops) : false, def.loop ? { to: def.loop.to, max: def.loop.max ?? DEFAULT_LOOP_MAX } : undefined,
+      parking(run) ? { steps: routine.steps.slice(0, routine.steps.findIndex(s => s.id === def.id) + 1).map(s => s.id) } : undefined));
     return `${parts.join('\n')}\n`;
   }
 
@@ -564,6 +661,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
       if (!first) await sleep(pollMs, signal);
       first = false;
       if (signal.aborted) return undefined;
+      try { options.locks?.refresh(lockNames(run), runId); } catch { /* best effort */ }
       try { escalation = await pollEscalation(io, escalation, reminderMs); }
       catch (e) { if (e instanceof StaleAttempt) throw e; warn('escalation poll failed', { runId }, e instanceof Error ? e.message : String(e)); }
     }
@@ -573,6 +671,61 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     });
     if (run.escalation?.answer) emit(runId, { type: 'human-answer', at: clock.now(), n, author: run.escalation.answer.author });
     return run.escalation?.answer;
+  }
+
+  /** Resumes a parked run when its contact answered on the work item after the park comment: the steps from the park's
+   *  resume step through the parked one run again (next round, the answer as guidance) on the same run branch, and the
+   *  park tag goes. null = not parked, already resumed or running, or no answer yet. */
+  async function resumeParked(runId: string): Promise<RunHandle | null> {
+    if (running.has(runId)) return null;
+    const run = store.read(runId), p = run.parked, policy = routine.devops?.downgrade;
+    if (run.status !== 'needs-human' || !p || p.answer || run.workItem === undefined || !routine.escalation || !organization || !policy) return null;
+    const item = await devops().item(organization, run.workItem);
+    const contact = routine.escalation.contact.toLowerCase();
+    const answers = (await devops().comments(organization, item.project, run.workItem))
+      .filter(c => (p.commentId !== undefined ? c.id > p.commentId : c.createdAt > p.at) && c.authorId.toLowerCase() === contact && !c.text.includes('routine run ') && replyText(c.text).trim())
+      .sort((a, b) => a.id - b.id);
+    const last = answers.at(-1);
+    if (!last) return null;
+    // another live run holds the item or the workspace: the answer waits for the next pass
+    try { lockRun(runId, run); } catch (e) { if (e instanceof ResourceBusy) { info('parked run waits: resource busy', { runId, why: e.message }); return null; } throw e; }
+    const answer ={ commentId: last.id, at: clock.now(), text: masker.mask(answers.map(c => replyText(c.text)).join('\n\n')), author: last.authorName ?? last.authorId };
+    const range = new Set(parkedRange(p));
+    let claimed: RunRecord;
+    try {
+      claimed = store.claim(runId, r => {
+        r.status = 'running'; delete r.error; delete r.endedAt;
+        r.parks = p.n; r.parked = { ...p, answer };
+        for (const s of r.steps) if (range.has(s.id)) { s.status = 'pending'; s.round = (s.round ?? 1) + 1; delete s.error; delete s.endedAt; }
+      });
+    } catch (e) { unlockRun(runId, run); throw e; }
+    emit(runId, { type: 'run-resume', at: clock.now(), attempt: claimed.attempt });
+    emit(runId, { type: 'human-answer', at: clock.now(), n: run.steps.find(s => s.id === p.stepId)?.n ?? 0, author: answer.author });
+    info('parked run resumed', { runId, from: p.resumeFrom, attempt: claimed.attempt });
+    const def = routine.steps.find(s => s.id === p.stepId)!;
+    const untag: StepWrite = { op: 'tags', remove: [policy.addTag] };
+    const finished = (async () => {
+      // the park tag goes first (its own write key per park): the item is the routine's again
+      try { await executeWrites(writeContext(runId, claimed.attempt, def, store.read(runId), 1, new AbortController().signal, undefined, `park-${p.n}`), [untag]); }
+      catch (e) {
+        if (e instanceof StaleAttempt) return store.read(runId);
+        warn('park tag not removed', { runId }, e instanceof Error ? e.message : String(e));
+      }
+      return execute(runId, claimed.attempt);
+    })();
+    return { runId, finished };
+  }
+
+  /** Whether the trigger may start a new run for an item: an item already carrying the park tag (parked by an older
+   *  run or by hand) starts only when the contact wrote its latest comment and that comment is not the routine's. */
+  async function admitItem(workItem: number): Promise<boolean> {
+    const tag = routine.escalation?.park ? routine.devops?.downgrade?.addTag : undefined;
+    if (!tag || !organization || !routine.escalation) return true;
+    const item = await devops().item(organization, workItem);
+    const tags = String(item.fields['System.Tags'] ?? '').split(';').map(t => t.trim().toLowerCase());
+    if (!tags.includes(tag.toLowerCase())) return true;
+    const last = (await devops().comments(organization, item.project, workItem)).sort((a, b) => a.id - b.id).at(-1);
+    return Boolean(last && last.authorId.toLowerCase() === routine.escalation.contact.toLowerCase() && !last.text.includes('routine run '));
   }
 
   /** A host-side site login with the run's credentials and the package's success rule (the app's Electron tab or a
@@ -589,6 +742,6 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     return driveLogin(page, target.origin, { user: credential.user, password: credential.password }, rule);
   }
 
-  return { pkg, store, masker, start, startItem, resume, cancel, login, isRunning: (runId: string) => running.has(runId) };
+  return { pkg, store, masker, start, startItem, resume, resumeParked, admitItem, cancel, login, isRunning: (runId: string) => running.has(runId) };
 }
 export type RoutineRuntime = ReturnType<typeof createRoutineRuntime>;

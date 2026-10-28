@@ -94,7 +94,8 @@ export function preflightRoutinePackage(value: unknown, options: PreflightOption
     if (!r.devops) warn('trigger', 'the routine is started from DevOps but may not write anything back', 'Add routine.devops (organization, projects, ops) if the steps should comment, change state, fields or tags.');
     else {
       if (r.devops.organization.toLowerCase() !== r.trigger.organization.toLowerCase()) err('devops.organization', `differs from trigger.organization "${r.trigger.organization}"`, 'Writes go to the run\'s work item: use the trigger\'s organization.');
-      if (!r.devops.projects.some(p => p.toLowerCase() === r.trigger!.project.toLowerCase())) err('devops.projects', `does not include the trigger project "${r.trigger.project}"`, `Add "${r.trigger.project}" to devops.projects.`);
+      for (const project of new Set([r.trigger.project, ...(r.trigger.areas ?? []).map(a => a.project)]))
+        if (!r.devops.projects.some(p => p.toLowerCase() === project.toLowerCase())) err('devops.projects', `does not include the trigger project "${project}"`, `Add "${project}" to devops.projects.`);
     }
     if (!r.trigger.states.length) err('trigger.states', 'no state to watch', 'List the states that start a run, e.g. ["New"].');
     if (!r.trigger.includeTags?.length && !r.trigger.workItemIds?.length) warn('trigger', 'every work item of that type and state starts a run', 'Narrow it with includeTags (e.g. ["ai-fixable"]) or workItemIds.');
@@ -111,6 +112,7 @@ export function preflightRoutinePackage(value: unknown, options: PreflightOption
     if (ops.includes('downgrade') && !r.escalation && !r.devops.mentions?.length) warn('devops.downgrade', 'the downgrade comment mentions nobody', 'Add escalation.contact or devops.mentions so a person is notified.');
     if (!pkg.secrets?.devopsPat) warn('secrets.devopsPat', 'no PAT: DevOps calls use the Azure CLI login of the machine that runs it', 'Embed a PAT (Work Items read & write) if it must run on a machine without az login.');
   }
+  if (r.escalation?.park && !r.devops?.ops.includes('downgrade')) err('escalation.park', 'parking a run needs the downgrade op (its tag and state mark the parked item)', 'Add "downgrade" to devops.ops and devops.downgrade, or drop escalation.park.');
   if ((r.devops || r.trigger) && !r.escalation) warn('escalation', 'a step that needs a person ends the run', 'Add escalation.contact (the DevOps identity GUID to mention) so the runtime asks on the work item and waits.');
   if (r.escalation && !hasWorkItem) err('escalation', 'escalation asks on the work item, but the routine has no trigger and no workItem input', 'Add the workItem input or remove escalation.');
 
