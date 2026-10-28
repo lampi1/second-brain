@@ -52,7 +52,8 @@ test('Lingua nella barra: same options as Settings, live, saved, the profile fol
 
   // the narrowest window (minWidth 1000): the switch stays on screen and still works
   await setSize(app, 1000, 700);
-  await expect.poll(() => page.evaluate(() => window.innerWidth)).toBe(1000);
+  // The native frame may add pixels on Windows; the control must fit the actual narrow viewport.
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
   await expect(button).toBeVisible();
   const box = await button.boundingBox(), width = await page.evaluate(() => window.innerWidth);
   expect(box && box.x + box.width).toBeLessThanOrEqual(width);

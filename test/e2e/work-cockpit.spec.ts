@@ -21,7 +21,7 @@ test('Home contains agents, while a durable proposal is deferred and answered in
     const pick = page.getByTestId('qwin-pick').filter({ hasText: 'Search accessibility' });
     if (await pick.count()) await pick.click();
     await expect(proposal).toContainText('Add keyboard navigation');
-    await expect(proposal.getByRole('button', { name: 'Altro…', exact: true })).toBeVisible();
+    await expect(proposal.getByTestId('qwin-work-other')).toBeVisible();
     await shot(page, 'work-modal-proposal');
     await page.getByTestId('qwin-later').click();
     await expect(proposal).toHaveCount(0);
@@ -30,9 +30,9 @@ test('Home contains agents, while a durable proposal is deferred and answered in
     const again = page.getByTestId('qwin-pick').filter({ hasText: 'Search accessibility' });
     if (await again.count()) await again.click();
     await expect(proposal).toBeVisible();
-    await proposal.getByRole('button', { name: 'Altro…', exact: true }).click();
-    await proposal.getByRole('textbox', { name: 'La tua risposta' }).fill('Limit the change to search results only.');
-    await proposal.getByRole('button', { name: 'Invia risposta', exact: true }).click();
+    await proposal.getByTestId('qwin-work-other').click();
+    await proposal.getByTestId('qwin-work-other-input').fill('Limit the change to search results only.');
+    await proposal.getByTestId('qwin-work-other-send').click();
     await expect(proposal).toHaveCount(0);
     const saved = new Workflows(path.join(userData, 'work-threads.json')).list()[0]!;
     expect(saved.status).toBe('blocked');

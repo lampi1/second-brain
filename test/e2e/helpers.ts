@@ -16,6 +16,10 @@ export interface Launched { app: ElectronApplication; page: Page; userData: stri
 // "exit" line, written synchronously after the shutdown, the storage flush included) and the process ends in the
 // background; a relaunch on the same profile waits for it first (single-instance lock, files). ADR 0042.
 const exiting = new Map<string, Promise<void>>();
+/** Profile deletion must wait for Chromium's real exit, beyond fastClose's application checkpoint. */
+export async function waitForExit(userData: string): Promise<void> {
+  await exiting.get(fs.realpathSync.native(userData));
+}
 const exitLines = (userData: string): number => {
   const dir = path.join(userData, 'logs');
   try {
