@@ -107,7 +107,7 @@ jobs:
 
   # Opt-in hidden renderer profiling for performance branches; synthetic data, no E2E or providers.
   renderer-profile:
-    if: github.event_name == 'pull_request' && (startsWith(github.head_ref, 'fix/renderer-throughput-') || github.head_ref == 'refactor/terminal-only-routines')
+    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'fix/renderer-throughput-')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

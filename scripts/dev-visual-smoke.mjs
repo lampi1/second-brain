@@ -132,7 +132,8 @@ try {
   await page.getByTestId('routine-detail').waitFor();
   await capture('routine-detail');
   // The demo has no review services. A separate isolated SB_TEST instance reads a clearly synthetic memory
-  // store through the real services; no replay/run actions are clicked and all automatic work stays disabled.
+  // store through real services; automatic token-spending work stays disabled. Production read-only pollers are
+  // enabled for the subsequent idle trace, so it can expose background process launches and stalls.
   await captureRoutineWorkbench(app, page, capture);
   await app.close();
   app = undefined;
@@ -149,7 +150,10 @@ try {
     status: 'confirmed', supersedes: null, transitions: [{ at: observedAt, status: 'confirmed' }],
   }], null, 2));
   const routineRuns = path.join(profile, 'terminal-runs');
-  const reviewEnv = { ...env, ROUTINE_RUNS_DIR: routineRuns, SB_BRAIN: brain, SB_USER_DATA: realProfile, SB_BENCH_TIMERS: '1', SB_ORCHESTRATOR_EVENTS: '0', SB_RUN_RESULTS: '0', SB_BRAIN_JOBS: '0', SB_COMPARE_QUEUE: '0' };
+  const usageFixture = path.join(profile, 'synthetic-usage');
+  await fs.mkdir(usageFixture, { recursive: true });
+  await fs.writeFile(path.join(usageFixture, 'cursor-ledger.jsonl'), Array.from({ length: 5000 }, (_, i) => JSON.stringify({ at: Date.now() - i * 1000, source: 'hook', conversationId: 'visual-conversation', generationId: `visual-${i}`, model: 'grok-4.7', input: 100, cacheWrite: 0, cacheRead: 0, output: 10 })).join('\n'));
+  const reviewEnv = { ...env, ROUTINE_RUNS_DIR: routineRuns, SB_BRAIN: brain, SB_USER_DATA: realProfile, SB_CURSOR_LEDGER: usageFixture, SB_DOWNLOADS: usageFixture, SB_BENCH_TIMERS: '1', SB_ORCHESTRATOR_EVENTS: '0', SB_RUN_RESULTS: '0', SB_BRAIN_JOBS: '0', SB_COMPARE_QUEUE: '0' };
   delete reviewEnv.SB_DEMO;
   delete reviewEnv.SB_DEMO_FREEZE;
   app = await electron.launch({ cwd: root, args: ['.'], env: reviewEnv, timeout: 30_000 });

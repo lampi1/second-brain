@@ -39,7 +39,9 @@ export async function startRoutineTrace(app, roots) {
       };
       restores.push(() => { target[method] = original; });
     }
-    globalThis.__routineTrace = { events, watches, reset: () => { events.length = 0; }, stop: () => restores.forEach(fn => fn()) };
+    const sync = () => process.getBuiltinModule('module').syncBuiltinESMExports();
+    sync(); // Main is ESM: named fs imports must observe the wrappers as well as the default object.
+    globalThis.__routineTrace = { events, watches, reset: () => { events.length = 0; }, stop: () => { restores.forEach(fn => fn()); sync(); } };
     // Contents only for diagnostics: production code does not depend on this capture-only global.
     globalThis.__routineTrace.profile = app.getPath('userData');
   }, roots);
@@ -58,16 +60,19 @@ export async function captureIdlePerformance(app, page, output) {
     const events = [], spawns = [], cp = process.getBuiltinModule('child_process');
     let previous = performance.now(), maximum = 0;
     const timer = setInterval(() => {
-      const now = performance.now(), late = Math.max(0, now - previous - 100); previous = now;
+      const now = performance.now(), late = Math.max(0, now - previous - 10); previous = now;
       maximum = Math.max(maximum, late);
-      if (late >= 100) events.push({ at: new Date().toISOString(), lateMs: late });
-    }, 100);
-    const restores = ['spawn', 'execFile'].map(method => {
-      const original = cp[method];
-      cp[method] = function (...args) { spawns.push({ at: new Date().toISOString(), method, executable: String(args[0]), args: args[1] }); return Reflect.apply(original, this, args); };
-      return () => { cp[method] = original; };
-    });
-    globalThis.__idlePerformance = { events, spawns, maximum: () => maximum, stop: () => { clearInterval(timer); restores.forEach(f => f()); } };
+      if (late >= 90) events.push({ at: new Date().toISOString(), lateMs: late });
+    }, 10); // A >100ms task implies >=90ms delay at this cadence, independent of its start phase.
+    // Observe the underlying launch, including ESM imports and promisifiers captured before this trace.
+    // Leave spawn/execFile APIs untouched (especially execFile's {stdout, stderr} and promise.child contract).
+    const original = cp.ChildProcess.prototype.spawn;
+    cp.ChildProcess.prototype.spawn = function (...args) {
+      const result = Reflect.apply(original, this, args);
+      if (this.pid) spawns.push({ at: new Date().toISOString(), pid: this.pid, executable: String(args[0]?.file), args: args[0]?.args?.slice(1) });
+      return result;
+    };
+    globalThis.__idlePerformance = { events, spawns, maximum: () => maximum, stop: () => { clearInterval(timer); cp.ChildProcess.prototype.spawn = original; } };
     globalThis.__routineTrace.reset();
   });
   await page.evaluate(() => {
@@ -85,9 +90,11 @@ export async function captureIdlePerformance(app, page, output) {
   }
   const main = await app.evaluate(() => { const p = globalThis.__idlePerformance; p.stop(); return { stalls: p.events, processStarts: p.spawns }; });
   const renderer = await page.evaluate(() => { const p = globalThis.__idlePerformance; p.observer.disconnect(); return p.entries; });
-  const result = { environment: 'Hidden Electron on CI, synthetic product brain, production timers enabled, no user input or agent turns', startedAt, endedAt: new Date().toISOString(), minutes, ...main, rendererLongTasks: renderer };
+  const result = { environment: 'Hidden Electron on CI, synthetic product brain and usage ledger; wiring read-only pollers enabled; paid jobs, personal probes and engine sweeper disabled; no input or turns', samplingIntervalMs: 10, stallDelayThresholdMs: 90, processCoverage: 'Successful asynchronous Node child launches by main; excludes synchronous launches, Chromium/utility processes and grandchildren', startedAt, endedAt: new Date().toISOString(), minutes, ...main, rendererLongTasks: renderer };
   await fs.writeFile(path.join(output, 'idle-performance.json'), JSON.stringify(result, null, 2));
   if (minutes.some(m => m.routineReads || m.routineWatches)) throw new Error('Routine background IO during idle trace');
+  if (result.stalls.length) throw new Error('Main timer delay reached 90ms during the 10ms-cadence idle trace');
+  if (renderer.reduce((sum, entry) => sum + entry.durationMs, 0) > 6000) throw new Error('Renderer long tasks exceeded 1% of the idle trace');
   return result;
 }
 

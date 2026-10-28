@@ -1,6 +1,6 @@
 // Routine package authoring for the Orchestrator (ADR 0175, 0176): turns a package an agent wrote from the user's
-// plain-language need into a saved `routine.json` that the shared runtime (packages/routine-runtime) can run in the app
-// or a terminal. One source for the authoring rules: app_routine_capabilities, app_routine_connectors, the app_guide topic
+// plain-language need into a saved `routine.json` that the shared runtime (packages/routine-runtime) runs only in a
+// terminal. One source for the authoring rules: app_routine_capabilities, app_routine_connectors, the app_guide topic
 // "routine" and docs/routines/authoring.md all say what ROUTINE_AUTHORING says. Secrets never pass through an agent:
 // the agent leaves them out (or writes SECRET_PLACEHOLDER), the tool keeps the ones the user already stored for the same
 // routine, and preflight names the rest for the user to type. Used by package-tools.ts (app_routine_save and friends).
