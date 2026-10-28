@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import type { FlowSnapshot } from '@shared/flows';
 import { sb } from '../sb';
 import { t } from '../i18n';
-import { openFileViewer } from '../actions';
+import { go, openFileViewer } from '../actions';
+import { routineChatArg } from '../lib/routine-chats';
+import { RoutineScreenshots } from './RoutineScreenshots';
 
 export function LegacyRoutineHistory() {
   const [open, setOpen] = useState(false), [archive, setArchive] = useState<FlowSnapshot | null>(null);
@@ -28,6 +30,9 @@ export function LegacyRoutineHistory() {
         <ol>{run.steps.map((step, i) => <li key={`${step.stepId}/${i}`}>
           <strong>{step.stepId}</strong> · {step.status}
           {step.reason && <p>{step.reason}</p>}{step.receipt && <pre className="rs-archive-evidence">{JSON.stringify(step.receipt, null, 2)}</pre>}
+          {step.chatId && <button type="button" className="btn btn-ghost btn-s" onClick={() => go({ page: 'flussi', arg: routineChatArg(step.chatId!) })}>{step.chatId}</button>}
+          {step.receipt?.evidence?.map((file, k) => <button key={k} type="button" className="btn btn-ghost btn-s" onClick={() => openFileViewer(file)}>{file}</button>)}
+          <RoutineScreenshots files={(step.receipt?.evidence ?? []).filter(file => /\.(png|jpe?g|webp)$/i.test(file))} onOpenFile={openFileViewer} />
         </li>)}</ol>
         {run.outputs?.map(output => <details key={output.id}><summary>{output.id}</summary><pre className="rs-archive-evidence">{output.content}</pre></details>)}
         {run.dossierPath && <button type="button" className="btn btn-ghost btn-s" onClick={() => openFileViewer(run.dossierPath!)}>{t('rs.report')}</button>}

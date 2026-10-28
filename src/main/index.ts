@@ -499,7 +499,7 @@ app.whenReady().then(async () => {
     'overlay:action': a => overlay.relay(a),
     'overlay:focus': a => overlay.focus(a.target),
     // a run answers the "Comando da eseguire" request of that block (Esegui on the card or under the block)
-    'run:start': a => { const run = s.runner.start(a); s.asks.ran(run.chatId, run.itemId, run.code); return run; },
+    'run:start': a => { if (s.chats.list().some(c => c.id === a.chatId && c.routineArchived)) throw new Error('Archived routine chats are read-only.'); const run = s.runner.start(a); s.asks.ran(run.chatId, run.itemId, run.code); return run; },
     'run:dismiss': a => s.asks.dismiss(a.chatId, a.requestId),
     'run:stop': a => s.runner.stop(a.runId),
     'run:list': a => s.runner.list(a?.chatId),
@@ -527,6 +527,7 @@ app.whenReady().then(async () => {
     'routines:import': a => routinesOf().importZip(Buffer.from(String(a.data), 'base64')),
     'routines:export': a => routinesOf().exportForTerminal(String(a.id)),
     'routines:setSecrets': a => routinesOf().setSecrets(a.id, a.values && typeof a.values === 'object' ? a.values : {}),
+    'routines:image': a => routinesOf().image(a.ref, a.path),
     'routines:run': a => routinesOf().run(a),
     'routines:watch': a => routinesOf().watch(a.ref, a.subscription),
     'routines:unwatch': a => routinesOf().unwatch(a.subscription),

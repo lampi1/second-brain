@@ -26,7 +26,7 @@ export function createLegacyArchive(options: { userData: string; brainRoot(): st
         const context = location(); if (!context) return empty('unavailable');
         const value = read(path.join(context.dir, 'state.json')) as Partial<FlowSnapshot> | null;
         if (!value) return empty(context.key);
-        if (!Array.isArray(value.runs) || !Array.isArray(value.versions)) throw new Error('Invalid legacy archive');
+        if (!Array.isArray(value.runs) || !Array.isArray(value.versions) || value.runs.some(r => !r || typeof r.id !== 'string' || !Array.isArray(r.steps)) || value.versions.some(v => !v?.definition || !Array.isArray(v.definition.steps))) throw new Error('Invalid legacy archive');
         return { ...empty(context.key), runs: value.runs, versions: value.versions, active: value.active ?? {} };
       } catch { return { ...empty('unavailable'), storageError: 'Archivio routine non leggibile. I file originali sono conservati.' }; }
     },

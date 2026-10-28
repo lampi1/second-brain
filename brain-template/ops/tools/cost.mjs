@@ -7,7 +7,8 @@
 // Cursor: totals from its usage export CSV (Cursor dashboard → Usage → Export CSV, newest in ~/Downloads); the CSV has
 // no chat id, so Cursor is split only by day and model.
 // Usage: node "{{BRAIN}}/ops/tools/cost.mjs" [--since AAAA-MM-GG | --days 7] [--until AAAA-MM-GG]
-//          [--top 8] [--cursor <csv> | --no-cursor] [--json]      (--root: tests only)
+//          [--top 8] [--cursor <csv> | --no-cursor] [--json] [--summary] (--root: tests only)
+// --summary is for background usage: prices only, without spawning brain-lint or generating advice.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -186,10 +187,10 @@ async function main() {
     }
   }
   let fixedChars = 0;
-  if (!arg('--root')) { try { fixedChars = JSON.parse(spawnSync(process.execPath, [path.join(HERE, 'brain-lint.mjs'), '--json'], { encoding: 'utf8' }).stdout).fixedTotal ?? 0; } catch {} }
+  if (!arg('--root') && !argv.includes('--summary')) { try { fixedChars = JSON.parse(spawnSync(process.execPath, [path.join(HERE, 'brain-lint.mjs'), '--json'], { encoding: 'utf8' }).stdout).fixedTotal ?? 0; } catch {} }
   const S = summarize(scanned, cursorRows, fixedChars);
   if (cursorInfo) Object.assign(S.cursor, cursorInfo);
-  if (argv.includes('--json')) console.log(JSON.stringify({ from, to, ...S, advice: advice(S) }, null, 1));
+  if (argv.includes('--json')) console.log(JSON.stringify({ from, to, ...S, ...(argv.includes('--summary') ? {} : { advice: advice(S) }) }, null, 1));
   else console.log(render(S, { from, to, top: Number(arg('--top') ?? 8), cursorFile }));
 }
 

@@ -4,7 +4,9 @@ import path from 'node:path';
 import type { ChatItem, ChatSummary, PendingRequest } from '../../shared/contract';
 import type { SessionPatch, TokenUsage } from '../chats/session';
 import { aggregateAgentUsage, type AgentSessionObservation, type ObservedProvenance, type TimingKind } from './analytics';
-import { readLocal, writeLocal } from './local-store';
+import { readLocal, writeLocalText, writeLocalTextAsync } from './local-store';
+import { log, errText } from '../log';
+import { timedStep } from '../perf';
 
 // rolledUp: the chat's agent run ended and keeps its own cost, tokens and time (agent-runs.json): the row may be evicted
 interface Row { observation: AgentSessionObservation; resultIds: string[]; partialCost: number; costMissing: boolean; partialTokens: TokenUsage; tokensMissing: boolean; rolledUp?: boolean }
@@ -20,8 +22,11 @@ export class AgentAnalyticsCollector {
   private readonly native = new Set<string>();
   private problem: unknown;
   private readonly started: number;
+  private revision = 0;
+  private saved = 0;
+  private timer: ReturnType<typeof setTimeout> | undefined;
 
-  constructor(userData: string, private readonly clock: () => number = Date.now) {
+  constructor(userData: string, private readonly clock: () => number = Date.now, private readonly writeDelayMs = 0) {
     this.file = path.join(userData, 'agent-analytics.json');
     this.started = this.clock();
     try {
@@ -79,10 +84,31 @@ export class AgentAnalyticsCollector {
 
   private save(row: Row): void {
     row.observation.observedAt = this.clock();
-    writeLocal(this.file, { version: 1, rows: [...this.rows.values()] });
+    this.revision++;
+    if (!this.writeDelayMs) { this.flush(); return; }
+    if (this.timer) return;
+    this.timer = setTimeout(() => {
+      this.timer = undefined;
+      const revision = this.revision, body = this.body();
+      void writeLocalTextAsync(this.file, body, () => this.revision === revision).then(written => {
+        if (written) this.saved = revision;
+      }).catch(error => log.warn('agents', 'analytics save failed', { cause: errText(error), hint: 'the next change or shutdown retries the unsaved observations' }));
+    }, this.writeDelayMs);
+    this.timer.unref?.();
+  }
+
+  private body(): string { return timedStep('agent-analytics.json serialize', () => JSON.stringify({ version: 1, rows: [...this.rows.values()] })); }
+  /** Quit-time durability; invalidate an older asynchronous rename before writing the latest observation. */
+  flush(): void {
+    if (this.timer) { clearTimeout(this.timer); this.timer = undefined; }
+    if (this.problem || this.saved === this.revision) return;
+    const revision = ++this.revision;
+    timedStep('agent-analytics.json write', () => writeLocalText(this.file, this.body()));
+    this.saved = revision;
   }
 
   private transition(row: Row, live: Live, kind: TimingKind | null): void {
+    if (live.kind === kind) return;
     const now = this.clock();
     if (live.kind && now > live.since && row.observation.spans.length < SPAN_LIMIT) row.observation.spans.push({ kind: live.kind, start: live.since, end: now });
     live.kind = kind; live.since = now;
@@ -93,11 +119,16 @@ export class AgentAnalyticsCollector {
   }
 
   patch(chat: ChatSummary, p: SessionPatch): void {
+    if (!['sessionId', 'modelObserved', 'effortObserved', 'effortSubmitted', 'costKnown', 'turnCostUsd', 'turnTokens', 'state'].some(key => key in p)) return;
     chat = { ...chat, sessionId: p.sessionId ?? chat.sessionId };
     if (p.sessionId && p.sessionId === chat.sessionId) this.native.add(`${chat.harness}:${p.sessionId}`);
+    const known = this.rows.has(`${chat.harness}:${chat.sessionId}`);
+    const wasLive = this.live.has(`${chat.harness}:${chat.sessionId}`);
     const current = this.current(chat); if (!current) return;
     const { row, live } = current, observation = row.observation;
-    if ('modelObserved' in p) {
+    const signature = () => JSON.stringify([observation.provenance, observation.modelAttribution, observation.spans.length, row.resultIds.length]);
+    const before = signature();
+    if ('modelObserved' in p && p.modelObserved !== live.origin.modelObserved) {
       const model = p.modelObserved;
       live.origin = { ...live.origin, modelObserved: typeof model === 'string' && model.length > 0 && model.length <= 200 ? model : null, at: this.clock() };
       if (typeof model === 'string' && model.length > 0 && model.length <= 200) {
@@ -118,7 +149,7 @@ export class AgentAnalyticsCollector {
     if ('turnCostUsd' in p || p.turnTokens) live.metrics = true;
     if (live.result && live.metrics) this.settle(row, live);
     if (p.state) this.transition(row, live, p.state === 'running' ? 'execution' : p.state === 'waiting' ? this.waiting(live) : p.state === 'starting' ? 'unknown' : null);
-    this.save(row);
+    if (!known || !wasLive || before !== signature()) this.save(row);
   }
 
   item(chat: ChatSummary, item: ChatItem, replace: boolean): void {

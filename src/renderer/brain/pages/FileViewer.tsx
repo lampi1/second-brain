@@ -237,7 +237,7 @@ export function CitedFile({reference,chrome}:{reference:FileReference;chrome?:Vi
   const ref=JSON.stringify(reference);const[request,setRequest]=useState<{ref:string;page:Request}>({ref,page:{line:reference.line}});
   const page=request.ref===ref?request.page:{line:reference.line},key=JSON.stringify([ref,page]);
   const[state,setState]=useState<{key:string;result:FileViewResult|null}>({key:'',result:null});
-  useEffect(()=>{let live=true;void import('../../sb').then(({sb})=>sb.invoke('app:readFile',{path:reference.path,chatId:reference.chatId,...page})).then(result=>{if(live)setState({key,result});}).catch(()=>{if(live)setState({key,result:{kind:'missing',reason:'missing'}});});return()=>{live=false;};},[key]);
+  useEffect(()=>{let live=true;void import('../../sb').then(({sb})=>reference.routine?sb.invoke('routines:image',{ref:reference.routine,path:reference.path}):sb.invoke('app:readFile',{path:reference.path,chatId:reference.chatId,...page})).then(result=>{if(live)setState({key,result});}).catch(()=>{if(live)setState({key,result:{kind:'missing',reason:'missing'}});});return()=>{live=false;};},[key]);
   // the page shown so far stays on screen while the next one loads
   const[last,setLast]=useState<{ref:string;result:FileViewResult}|null>(null);
   const fresh=state.key===key?state.result:null;

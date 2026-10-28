@@ -16,7 +16,7 @@ async function until(fn, label, ms = 15_000) {
 /** Installs read/watch instrumentation in the main process; does not create routine reads or timers. */
 export async function startRoutineTrace(app, roots) {
   await app.evaluate(async ({ app }, roots) => {
-    const fs = (await import('node:fs')).default, promises = (await import('node:fs/promises')).default, path = (await import('node:path')).default;
+    const fs = process.getBuiltinModule('fs'), promises = fs.promises, path = process.getBuiltinModule('path');
     const events = [], watches = new Set(), restores = [];
     const match = value => typeof value === 'string' && roots.some(root => { const rel = path.relative(root, value); return rel === '' || !rel.startsWith('..') && !path.isAbsolute(rel); });
     for (const target of [fs, promises]) for (const method of ['readFileSync', 'readFile', 'readdirSync', 'readdir', 'open', 'openSync', 'stat', 'statSync', 'realpath', 'realpathSync', 'watch']) {
@@ -46,13 +46,52 @@ export async function idleRoutineTrace(app, label, seconds = 15) {
   return { label, durationMs: Date.now() - at, ...trace };
 }
 
+/** Ten minutes of real idle UI/main activity, independent of whether any keys were typed. */
+export async function captureIdlePerformance(app, page, output) {
+  await app.evaluate(() => {
+    const events = [], spawns = [], cp = process.getBuiltinModule('child_process');
+    let previous = performance.now(), maximum = 0;
+    const timer = setInterval(() => {
+      const now = performance.now(), late = Math.max(0, now - previous - 100); previous = now;
+      maximum = Math.max(maximum, late);
+      if (late >= 100) events.push({ at: new Date().toISOString(), lateMs: late });
+    }, 100);
+    const restores = ['spawn', 'execFile'].map(method => {
+      const original = cp[method];
+      cp[method] = function (...args) { spawns.push({ at: new Date().toISOString(), method, executable: String(args[0]), args: args[1] }); return Reflect.apply(original, this, args); };
+      return () => { cp[method] = original; };
+    });
+    globalThis.__idlePerformance = { events, spawns, maximum: () => maximum, stop: () => { clearInterval(timer); restores.forEach(f => f()); } };
+    globalThis.__routineTrace.reset();
+  });
+  await page.evaluate(() => {
+    const entries = [];
+    const observer = new PerformanceObserver(list => entries.push(...list.getEntries().map(e => ({ at: performance.timeOrigin + e.startTime, durationMs: e.duration }))));
+    observer.observe({ type: 'longtask', buffered: false });
+    globalThis.__idlePerformance = { entries, visibility: document.visibilityState, observer };
+  });
+  const startedAt = new Date().toISOString(), minutes = [];
+  for (let minute = 1; minute <= 10; minute++) {
+    await pause(60_000);
+    const main = await app.evaluate(() => ({ stalls: globalThis.__idlePerformance.events.length, maxDelayMs: globalThis.__idlePerformance.maximum(), processStarts: globalThis.__idlePerformance.spawns.length, routineReads: globalThis.__routineTrace.events.length, routineWatches: globalThis.__routineTrace.watches.size }));
+    const renderer = await page.evaluate(() => ({ longTaskMs: globalThis.__idlePerformance.entries.reduce((n, e) => n + e.durationMs, 0), visibility: globalThis.__idlePerformance.visibility }));
+    const line = { at: new Date().toISOString(), minute, ...main, ...renderer }; minutes.push(line); console.log(`idle performance ${JSON.stringify(line)}`);
+  }
+  const main = await app.evaluate(() => { const p = globalThis.__idlePerformance; p.stop(); return { stalls: p.events, processStarts: p.spawns }; });
+  const renderer = await page.evaluate(() => { const p = globalThis.__idlePerformance; p.observer.disconnect(); return p.entries; });
+  const result = { environment: 'Hidden Electron on CI, synthetic profile, no user input or agent turns', startedAt, endedAt: new Date().toISOString(), minutes, ...main, rendererLongTasks: renderer };
+  await fs.writeFile(path.join(output, 'idle-performance.json'), JSON.stringify(result, null, 2));
+  if (minutes.some(m => m.routineReads || m.routineWatches)) throw new Error('Routine background IO during idle trace');
+  return result;
+}
+
 export async function captureTerminalRoutine({ app, page, capture, root, profile, runs, output, manifest }) {
   const control = path.join(profile, 'visual-control'), pkg = path.join(profile, 'visual-package');
   await fs.mkdir(control, { recursive: true }); await fs.mkdir(pkg, { recursive: true });
   const web = http.createServer((req, res) => {
-    const after = req.url === '/after';
+    const after = req.url?.startsWith('/after'), revised = req.url === '/after-revised';
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.end(`<!doctype html><html lang="it"><style>body{font:24px system-ui;padding:70px;background:#edf2fa;color:#18324d}article{background:white;padding:45px;border-radius:16px;max-width:900px}h1{font-size:42px}.state{padding:25px;border-radius:10px;background:${after ? '#d6f2df' : '#ffe0db'}}</style><article><p>VERIFICA SINTETICA · CLI REALE</p><h1>Vista live delle routine</h1><div class="state">${after ? 'Dopo · modifica verificata' : 'Prima · problema riprodotto'}</div><p>Screenshot acquisito dal browser del runtime, senza servizi esterni.</p></article></html>`);
+    res.end(`<!doctype html><html lang="it"><style>body{font:24px system-ui;padding:70px;background:#edf2fa;color:#18324d;min-height:5000px}article{background:white;padding:45px;border-radius:16px;max-width:900px}h1{font-size:42px}.state{padding:25px;border-radius:10px;background:${after ? '#d6f2df' : '#ffe0db'}}</style><article><p>VERIFICA SINTETICA · CLI REALE</p><h1>Vista live delle routine</h1><div class="state">${revised ? 'Dopo · seconda acquisizione nello stesso file' : after ? 'Dopo · modifica verificata' : 'Prima · problema riprodotto'}</div><p>Screenshot acquisito dal browser del runtime, senza servizi esterni.</p></article></html>`);
   });
   web.listen(0, '127.0.0.1'); await once(web, 'listening');
   const origin = `http://127.0.0.1:${web.address().port}`;
@@ -79,13 +118,16 @@ process.exitCode = await main(process.argv.slice(2), { engine: () => createClaud
     await page.getByTestId(`routine-run-${runId}`).click();
     await page.getByTestId('routine-run-view').waitFor();
     const stage = async (gate, file) => {
+      const shot = page.getByRole('img', { name: file, exact: true }).first();
+      const previous = await shot.count() ? await shot.getAttribute('src') : null;
+      const sentAt = Date.now();
       await fs.writeFile(path.join(control, gate), 'go');
       const screenshot = await until(async () => {
         const events = (await fs.readFile(path.join(dir, 'events.jsonl'), 'utf8')).split('\n').filter(Boolean).map(line => JSON.parse(line));
-        return events.find(e => e.type === 'screenshot' && path.basename(e.path) === file);
+        return events.findLast(e => e.type === 'screenshot' && path.basename(e.path) === file && (!previous || e.at >= sentAt));
       }, `${file} emitted`, 30_000);
       await page.getByRole('img', { name: file, exact: true }).first().waitFor();
-      await page.waitForFunction(name => [...document.querySelectorAll('.rs-gallery img')].some(img => img.alt === name && img.naturalWidth > 0), file);
+      await page.waitForFunction(({ name, previous }) => [...document.querySelectorAll('.rs-gallery img')].some(img => img.alt === name && img.naturalHeight > 4096 && img.src !== previous), { name: file, previous });
       const latencyMs = Date.now() - screenshot.at;
       if (latencyMs > 5000) throw new Error(`Screenshot took ${latencyMs}ms to appear`);
       return { screenshot: file, emittedAt: screenshot.at, visibleLatencyMs: latencyMs };
@@ -99,6 +141,8 @@ process.exitCode = await main(process.argv.slice(2), { engine: () => createClaud
     await pair.locator('button[title="after.png"]').click();
     await page.getByTestId('cited-file-viewer').locator('img').waitFor(); await capture('routine-cli-enlarged');
     await page.getByTestId('viewer-close').click();
+    manifest.routineLive.shots.push(await stage('overwrite', 'after.png'));
+    await capture('routine-cli-overwritten-shot');
     await fs.writeFile(path.join(control, 'next'), 'go');
     await page.getByTestId('run-current-step').filter({ hasText: 'Scrivi il rapporto' }).waitFor();
     await page.getByTestId('run-last-action').filter({ hasText: 'Secondo passo dal terminale' }).waitFor();

@@ -1,6 +1,7 @@
 // On-demand package catalog and run reader. The app never instantiates a runtime or a trigger (ADR 0179).
 // The only subscription is an fs.watch owned by an open run view; stop/unwatch releases it immediately.
 import fs from 'node:fs';
+import { readRoutineImage } from './images';
 import { createRunReader, confined } from './reader';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -146,6 +147,7 @@ export function createRoutines(options: RoutinesOptions) {
       store.setSecrets(id, values);
       return api.snapshot();
     },
+    async image(ref: RoutineRunRef, file: string) { return readRoutineImage(await confined(roots[ref.source], runDir(ref)), file); },
     async run(ref: RoutineRunRef, reader = createRunReader(), signal?: AbortSignal): Promise<RoutineRunDetail> {
       const dir = await confined(roots[ref.source], runDir(ref));
       signal?.throwIfAborted();

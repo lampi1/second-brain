@@ -3,6 +3,10 @@
 import type { ChatSummary } from '@shared/contract';
 import type { FlowSnapshot } from '@shared/flows';
 type Chats = Readonly<Record<string, ChatSummary | undefined>>;
+/** All archived worker identities, including package-only workers without legacy flow placement metadata. */
+export function routineChatIds(chats: Chats): Set<string> {
+  return new Set([...routinePlacements(chats).keys(), ...Object.values(chats).filter(c => c?.routineArchived || c?.routinePackage).map(c => c!.id)]);
+}
 export function routinePlacements(chats: Chats, snapshot?: Pick<FlowSnapshot, 'runs'> | null): Map<string, NonNullable<ChatSummary['routine']>> {
   const found = new Map<string, NonNullable<ChatSummary['routine']>>();
   for (const chat of Object.values(chats)) if (chat?.routine) found.set(chat.id, chat.routine);

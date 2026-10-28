@@ -7,7 +7,8 @@
 // in a new one, the brain pages' bridge ("Discuti") and the ui:command event from main.
 // Used by App.tsx (keyboard), the command palette, the sidebar, the notification center, the top bar and the tiles.
 import type { EventMap, Harness, MorningNext, PendingRequest } from '@shared/contract';
-import { routinePlacements, routineChatArg } from './lib/routine-chats';
+import type { RoutineRunRef } from '@shared/routines';
+import { routineChatIds, routineChatArg } from './lib/routine-chats';
 import { nextPriority } from '@shared/morning';
 import { morningBriefNow } from './store/morning';
 import type { DiscussBridge } from './brain';
@@ -309,7 +310,7 @@ export function focusChat(chatId: string): void {
   const s = app.get();
   const c = s.chats[chatId];
   if (!c) return;
-  if (routinePlacements(s.chats).has(chatId)) { setFocusMode(null); setMaximized(null); go({ page: 'flussi', arg: routineChatArg(chatId) }); requestFocus(chatId); return; }
+  if (routineChatIds(s.chats).has(chatId)) { setFocusMode(null); setMaximized(null); go({ page: 'flussi', arg: routineChatArg(chatId) }); requestFocus(chatId); return; }
   const u = ui.get();
   // the Orchestrator: its column is beside every page (the Dashboard and the 3D map too), so the page stays
   if (chatId === orchestratorIdOf(s)) { requestFocus(chatId); flashTile('orchestrator'); return; }
@@ -332,7 +333,7 @@ export function focusChat(chatId: string): void {
  *  maximized chat. */
 export function showTab(tabId: string): void {
   const state = app.get(), ownerId = state.tabs.find(tab => tab.id === tabId)?.ownerChatId;
-  if (ownerId && routinePlacements(state.chats).has(ownerId)) { setFocusMode(null); setMaximized(null); go({ page: 'flussi', arg: routineChatArg(ownerId, tabId) }); return; }
+  if (ownerId && routineChatIds(state.chats).has(ownerId)) { setFocusMode(null); setMaximized(null); go({ page: 'flussi', arg: routineChatArg(ownerId, tabId) }); return; }
   const u = ui.get();
   if (u.page !== 'home' || u.map) go({ page: 'home' });
   if (u.focusMode) setFocusMode(null);
@@ -360,8 +361,8 @@ export async function openInAppBrowser(url: string): Promise<void> {
 export function newBrowser():Promise<void>{return openInAppBrowser('about:blank');}
 
 /** Opening a file is navigation only. Main resolves its scope when the viewer requests the bounded contents. */
-export function openFileViewer(raw:string,chatId?:string):void{
-  openViewer({kind:'file',arg:fileViewArg(fileReference(raw,chatId))});
+export function openFileViewer(raw:string,chatId?:string,routine?:RoutineRunRef):void{
+  openViewer({kind:'file',arg:fileViewArg({...fileReference(raw,chatId),...(routine?{routine}:{})})});
 }
 
 /** The viewer overlay shows `entry` above the current page (which keeps its state), after the one on screen in its
@@ -425,6 +426,7 @@ export async function archiveChat(chatId: string, auto = true): Promise<boolean>
 
 /** A closed chat back on the grid, shown and ready for a message (its session resumes with that message). */
 export async function reopenChat(chatId: string): Promise<void> {
+  if (app.get().chats[chatId]?.routineArchived) { go({ page: 'flussi', arg: routineChatArg(chatId) }); return; }
   try {
     dispatch({ type: 'chat:updated', chat: await sb.invoke('chat:reopen', { chatId }) });
     touch(chatId, now());
@@ -551,7 +553,7 @@ export function toggleMaximize(key?: string | null): void {
   const k = key ?? ui.get().focused ?? ui.get().prefs.lastFocus;
   if (!k) { toast(t('appText.actions.selectTile'), 'info'); return; }
   const state = app.get(), routineId = k.startsWith('chat:') ? k.slice(5) : k.startsWith('browser:') ? state.tabs.find(tab => tab.id === k.slice(8))?.ownerChatId : null;
-  if (routineId && routinePlacements(state.chats).has(routineId)) { if (k.startsWith('browser:')) showTab(k.slice(8)); else focusChat(routineId); return; }
+  if (routineId && routineChatIds(state.chats).has(routineId)) { if (k.startsWith('browser:')) showTab(k.slice(8)); else focusChat(routineId); return; }
   if (k === 'orchestrator') { toast(t('appText.actions.orchestratorResize'), 'info'); return; }
   setMaximized(ui.get().maximized === k ? null : k);
 }
@@ -565,7 +567,7 @@ export function toggleFocusMode(): void {
   const sel = chatOfTile(u.focused);
   const id = (open(sel) ? sel : null) ?? s.order.find(x => open(x) && !s.chats[x]!.isOrchestrator && isBusy(s.chats[x]!)) ?? s.order.find(x => open(x) && !s.chats[x]!.isOrchestrator);
   if (!id || s.chats[id]?.isOrchestrator) { toast(t('appText.actions.selectFocus'), 'info'); return; }
-  if (routinePlacements(s.chats).has(id)) { focusChat(id); return; }
+  if (routineChatIds(s.chats).has(id)) { focusChat(id); return; }
   if (u.page !== 'home' || u.map) go({ page: 'home' });
   setFocusMode(id);
   requestFocus(id);
@@ -619,8 +621,8 @@ export function uiCommand(cmd: EventMap['ui:command']): void {
         setOrchestratorOpen(true);
         flashTile('orchestrator');
       }
-      else if (s.chats[v]) { if (routinePlacements(s.chats).has(v)) focusChat(v); else setMaximized(`chat:${v}`); }
-      else if (s.tabs.some(t => t.id === v)) { const owner = s.tabs.find(t => t.id === v)?.ownerChatId; if (owner && routinePlacements(s.chats).has(owner)) showTab(v); else setMaximized(`browser:${v}`); }
+      else if (s.chats[v]) { if (routineChatIds(s.chats).has(v)) focusChat(v); else setMaximized(`chat:${v}`); }
+      else if (s.tabs.some(t => t.id === v)) { const owner = s.tabs.find(t => t.id === v)?.ownerChatId; if (owner && routineChatIds(s.chats).has(owner)) showTab(v); else setMaximized(`browser:${v}`); }
       break;
     }
     case 'restore': setMaximized(null); setFocusMode(null); go({ page: 'home' }); break;

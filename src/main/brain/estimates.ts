@@ -168,7 +168,7 @@ export class Ledger {
     if (meta.backfillAt && now - meta.backfillAt < 20 * 3600e3) return { added: 0, skipped: 'fatto da meno di 20 ore' };
     this.backfilling = true;
     try {
-      const r = await runNode(node, script, ['--days', String(BACKFILL_DAYS), '--json', '--no-cursor'], root!, 300e3);
+      const r = await runNode(node, script, ['--days', String(BACKFILL_DAYS), '--json', '--no-cursor', '--summary'], root!, 300e3);
       let j: unknown = null;
       try { j = JSON.parse(r.stdout); } catch { /* below */ }
       if (!j) {

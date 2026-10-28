@@ -4,7 +4,7 @@ import { _electron as electron } from 'playwright';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { captureTerminalRoutine, startRoutineTrace, idleRoutineTrace } from './dev-visual-routines.mjs';
+import { captureTerminalRoutine, startRoutineTrace, idleRoutineTrace, captureIdlePerformance } from './dev-visual-routines.mjs';
 import { captureRoutineWorkbench } from './dev-visual-workbench.mjs';
 
 const root = path.resolve(import.meta.dirname, '..');
@@ -24,10 +24,10 @@ const mainPage = async application => {
   throw new Error('Main app renderer not found');
 };
 const deadline = setTimeout(() => {
-  console.error('Dev visual capture exceeded 300 seconds');
+  console.error('Dev visual capture exceeded 900 seconds');
   app?.process().kill('SIGKILL');
   process.exitCode = 1;
-}, 300_000);
+}, 900_000);
 try {
   const env = { ...process.env, SB_DEMO: '1', SB_DEMO_FREEZE: '1', SB_HIDDEN: '1', SB_TEST: '1',
     SB_USER_DATA: profile, SB_MCP_PORT: '0', SB_LANG: 'it' };
@@ -167,6 +167,7 @@ try {
   await startRoutineTrace(app, [routineRuns, path.join(realProfile, 'flows'), path.join(realProfile, 'routines'), path.join(realProfile, 'routine-runs')]);
   manifest.routineIdle = await idleRoutineTrace(app, 'home before opening routines');
   await captureTerminalRoutine({ app, page, capture, root, profile, runs: routineRuns, output, manifest });
+  manifest.idlePerformance = await captureIdlePerformance(app, page, output);
   await page.getByTestId('nav-memoria').click();
   // Facts no longer enter the proposals deck (ADR 0150). Inspect the saved fact in Approvate and check
   // its source through the read-only review API, without resurrecting the retired approval path.

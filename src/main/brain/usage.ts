@@ -241,7 +241,7 @@ export class UsageMonitor {
       } else {
         const at = Date.now(); // before the run: what a chat spends while cost.mjs reads may count twice until the next run, never lost
         const limit = this.o.costTimeoutMs ?? COST_TIMEOUT_MS;
-        const r = await runNode(this.o.node, script, ['--days', '1', '--json'], this.o.root!, limit);
+        const r = await runNode(this.o.node, script, ['--days', '1', '--json', '--summary'], this.o.root!, limit);
         let j: unknown = null;
         try { j = JSON.parse(r.stdout); } catch { /* below */ }
         if (j) this.cost = { ...parseCost(j, romeDay()), at };

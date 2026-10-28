@@ -593,7 +593,7 @@ export class ChatManager implements ChatService {
   private readonly warm = new WarmPool({ spawn: (cwd, launch) => this.spawnWarm(cwd, launch), enabled: () => !!this.opts.prewarm && !this.quitting && !updateActivity.frozen && !this.admission?.busy() && this.opts.engineOn?.('claude') !== false });
 
   constructor(private readonly opts: ChatManagerOptions) {
-    this.analytics = new AgentAnalyticsCollector(opts.userData);
+    this.analytics = new AgentAnalyticsCollector(opts.userData, Date.now, opts.writeDelayMs ? Math.max(1000, opts.writeDelayMs) : 0);
     this.runs = new AgentRunStore(opts.userData);
     if (this.runs.problem) log.warn('chats', 'agent runs file unreadable', { cause: this.runs.problem, hint: 'move agent-runs.json aside to record runs again' });
     // a pruned run lives on in the rollups only: a chat mirror of it would be adopted back and counted twice
@@ -609,7 +609,11 @@ export class ChatManager implements ChatService {
     this.home = opts.claudeHome ?? claudeHome();
     this.max = opts.maxItems ?? 2000;
     const stored = this.store.load();
-    for (const c of stored) this.chats.set(c.id, this.restore(c));
+    // Existing chat metadata is already loaded. Archive the full routine tree without reading any routine file.
+    const archived = new Set(stored.filter(c => c.routineArchived || c.routine || c.routinePackage).map(c => c.id));
+    let added = true;
+    while (added) { added = false; for (const c of stored) if (c.parentId && archived.has(c.parentId) && !archived.has(c.id)) { archived.add(c.id); added = true; } }
+    for (const c of stored) this.chats.set(c.id, this.restore(archived.has(c.id) ? { ...c, routineArchived: true } : c));
     if (stored.some(c => !c.agent)) this.persist();
     process.on('exit', this.onExit); // Windows keeps orphaned children alive: kill them when the app dies
     // the plan windows stay fresh in the top bar even while a long turn runs (get_usage spends no model call)
@@ -617,7 +621,7 @@ export class ChatManager implements ChatService {
     if ((opts.coldEveryMs ?? 60_000) > 0) { this.coldTimer = setInterval(() => this.coldTick(), opts.coldEveryMs ?? 60_000); this.coldTimer.unref?.(); }
     if ((opts.runEveryMs ?? 600_000) > 0) { this.runTimer = setInterval(() => this.staleRuns(), opts.runEveryMs ?? 600_000); this.runTimer.unref?.(); }
     if (opts.prewarm) {
-      const last = [...this.chats.values()].filter(r => !!engineOf(r.s.harness)?.caps.warm && r.s.origin === 'app' && !r.s.isOrchestrator).sort((a, b) => b.createdAt - a.createdAt)[0];
+      const last = [...this.chats.values()].filter(r => !r.s.routineArchived && !!engineOf(r.s.harness)?.caps.warm && r.s.origin === 'app' && !r.s.isOrchestrator).sort((a, b) => b.createdAt - a.createdAt)[0];
       if (last && fs.existsSync(last.s.cwd)) this.warm.schedule(last.s.cwd, opts.prewarmDelayMs ?? 20000);
       // the Orchestrator's engine resumes ahead of the user's first message of the day: no 10-17 s start then, and an idle
       // engine makes no model call
@@ -665,6 +669,7 @@ export class ChatManager implements ChatService {
   private resultIndex(): ResultIndex {
     const byChat = new Map<string, AgentRun[]>(), roots: AgentRun[] = [];
     for (const run of this.runs.list()) {
+      if (this.chats.get(run.chatId)?.s.routineArchived) continue;
       if (run.parentRunId || !run.report?.canonical) continue;
       if (run.startedBy === 'user') { const l = byChat.get(run.chatId); if (l) l.push(run); else byChat.set(run.chatId, [run]); }
       else if (run.startedBy === 'orchestrator' && !this.chats.get(run.chatId)?.s.parentId) roots.push(run);
@@ -733,6 +738,7 @@ export class ChatManager implements ChatService {
     // A root chat the Orchestrator opens is bound by its own role (and the user's defaults), not by the Orchestrator's
     // policy: the Orchestrator plans, the Artisan it starts writes (ADR 0083)
     const forkSrc = req.resumeSessionId?.trim() ? [...this.chats.values()].find(r => r.s.sessionId === req.resumeSessionId?.trim()) : undefined;
+    if (forkSrc?.s.routineArchived || forkSrc?.s.routine || forkSrc?.s.routinePackage) throw new Error('Archived routine chats cannot be forked.');
     // a chat from the unauthenticated /mcp/app mount (any local process can call it) runs no wider than the Orchestrator
     const bound = opts.boundByOrchestrator ? [...this.chats.values()].find(r => r.s.isOrchestrator && !r.s.closedAt) : undefined;
     if (opts.boundByOrchestrator && !bound) throw new Error('Senza un Orchestrator aperto questo endpoint non apre chat.');
@@ -917,7 +923,7 @@ export class ChatManager implements ChatService {
   async send(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, source?: TaskSource, receipt?: SubmissionReceipt): Promise<void> {
     updateActivity.assertOpen();
     const r = this.need(chatId);
-    if (r.s.routine || r.s.routinePackage) throw new Error('Archived routine chat: use the terminal routine CLI.');
+    if (r.s.routineArchived || r.s.routine || r.s.routinePackage) throw new Error('Archived routine chat: use the terminal routine CLI.');
     // Flash follows its card (ADR 0107): the user's question goes to a Flash on the card's engine and model
     if (r.s.quick && from === undefined && !resumed && (!source || source.kind === 'user')) {
       const next = await this.flashFollow(r);
@@ -1552,7 +1558,7 @@ export class ChatManager implements ChatService {
   /** Back on the grid; the session resumes on the next message (Claude --resume, Cursor session/load). */
   async reopen(chatId: string): Promise<ChatSummary> {
     const r = this.need(chatId);
-    if (r.s.routine || r.s.routinePackage) throw new Error('Archived routine chat: use the terminal routine CLI.');
+    if (r.s.routineArchived || r.s.routine || r.s.routinePackage) throw new Error('Archived routine chat: use the terminal routine CLI.');
     if (r.s.closedAt) this.unarchive(r);
     return { ...r.s };
   }
@@ -1590,6 +1596,7 @@ export class ChatManager implements ChatService {
   /** An explicit assignment reuses the conversation, but creates a separately accountable task run. */
   async assignTask(chatId: string, prompt: string, options: TaskAssignmentOptions = {}): Promise<void> {
     const r = this.need(chatId);
+    if (r.s.routineArchived) throw new Error('Archived routine chats are read-only.');
     if (!prompt.trim()) throw new Error('Task prompt is required.');
     if (options.expectedVersion !== undefined && options.expectedVersion !== (r.s.run?.taskVersion ?? 1)) throw new Error('Task version changed; refresh before assigning.');
     const source = options.source ?? { kind: 'user' as const };
@@ -1670,8 +1677,7 @@ export class ChatManager implements ChatService {
   /** The §5 metrics per agent and version (A6): runs kept plus the rollups of the pruned ones. `aiErrors` = the brain's
    *  ai-errors.md text (its lines naming a run, seen by Brother, are a secondary column); undefined = not read. */
   runMetrics(opts: { aiErrors?: string; since?: number; skill?: string; app?: string; repo?: string } = {}): ReturnType<typeof runMetrics> {
-    // a failed write (a locked file, a full disk, an unreadable store) still answers from memory
-    try { this.runs.flush(); } catch (e) { log.warn('chats', 'agent runs not saved', { cause: errText(e), hint: 'the next run change writes them again' }); }
+    // Metrics read the current in-memory record; reading must not force a synchronous archive write.
     const runs = this.runs.list(), rollups = this.runs.rolledUp();
     const live = (run: AgentRun) => { const r = this.chats.get(run.chatId); return !!r && !r.s.closedAt && r.s.run?.runId === run.runId; };
     const metrics = runMetrics(runs, { rollups, live, ...(opts.aiErrors !== undefined ? { aiErrors: aiErrorRuns(opts.aiErrors) } : {}), ...(opts.since !== undefined ? { since: opts.since } : {}),
@@ -1685,6 +1691,7 @@ export class ChatManager implements ChatService {
    *  an open run ends as completed, an ended one keeps how it ended. */
   markRun(chatId: string, verdict: AgentRunOutcome['verdict'], note?: string): ChatSummary {
     const r = this.need(chatId);
+    if (r.s.routineArchived) throw new Error('Archived routine chats are read-only.');
     const run = r.s.run;
     if (!run) throw new Error('Questa chat non è un’esecuzione di un Agente.');
     if (!['success', 'partial', 'fail', 'unknown'].includes(verdict)) throw new Error('Esito non valido.');
@@ -1714,6 +1721,7 @@ export class ChatManager implements ChatService {
   staleRuns(now = Date.now()): number {
     let n = 0;
     for (const r of this.chats.values()) {
+      if (r.s.routineArchived) continue;
       const run = r.s.run;
       if (!run || run.endedAt !== undefined) continue;
       const waiting = r.pending.size > 0 || !!r.commandsOpen?.size || !!r.working || !!r.session?.busy || !!r.s.queued;
@@ -1732,6 +1740,7 @@ export class ChatManager implements ChatService {
     for (const r of this.chats.values()) if (r.heldResult && !r.working) this.releaseResult(r);
     // child results the last quit held back reach their parent now, as one batch
     for (const r of this.chats.values()) {
+      if (r.s.routineArchived) continue;
       const held = r.heldResults?.filter(item => !item.runId || !this.runs.get(item.runId)?.delivery?.synthesisSubmittedAt);
       const removed = (r.heldResults?.length ?? 0) !== (held?.length ?? 0);
       r.heldResults = held;
@@ -1755,6 +1764,7 @@ export class ChatManager implements ChatService {
 
   async set(chatId: string, patch: { model?: string; effort?: Effort; permissionMode?: PermissionMode; title?: string; workStatus?: 'assigned'|'waiting-mail'|'completed' }): Promise<ChatSummary> {
     const r = this.need(chatId);
+    if (r.s.routineArchived) throw new Error('Archived routine chats are read-only.');
     const sess = r.session;
     if(patch.workStatus !== undefined){
       if(Object.keys(patch).some(key=>key!=='workStatus'))throw new Error('Aggiorna lo stato incarico separatamente dalle altre impostazioni.');
@@ -1832,6 +1842,7 @@ export class ChatManager implements ChatService {
    *  token-free note built by the app (source 'auto'). Refused while the chat works or waits for the user. */
   async handoff(chatId: string, opts: HandoffOptions = {}): Promise<HandoffInfo> {
     const r = this.need(chatId);
+    if (r.s.routineArchived) throw new Error('Archived routine chats are read-only.');
     if (r.handoffTurn) throw new Error('La chat sta già facendo un turno breve dell’app (passaggio di consegne o riassunto): riprova tra poco.');
     this.ensureHistory(r);
     const hasTurns = r.lastTurnAt > 0 || r.items.some(i => i.kind === 'result' || i.kind === 'user');
@@ -1875,6 +1886,7 @@ export class ChatManager implements ChatService {
 
   private async doContinue(chatId: string, opts: { allowStart?: boolean; promptPrefix?: string }): Promise<ChatSummary> {
     const r = this.need(chatId);
+    if (r.s.routineArchived) throw new Error('Archived routine chats are read-only.');
     if (r.s.isOrchestrator) throw new Error('L’Orchestrator non si riprende così: usa «Ricomincia da capo» dal suo menu.');
     const next = r.s.continuedBy && this.chats.get(r.s.continuedBy.id);
     if (next) return { ...next.s };
@@ -1990,6 +2002,7 @@ export class ChatManager implements ChatService {
     const on = this.coldOn(), idle = this.opts.coldIdleMs?.() ?? 50 * 60_000, day = !!this.opts.orchestratorDayCompact?.();
     let n = 0;
     for (const r of this.chats.values()) {
+      if (r.s.routineArchived) continue;
       if ((r.deliveryHolds ?? 0) > 0 || this.observedChildrenBusy(r)) continue;
       if (this.freshReady(r, now)) {
         const existing = this.handoffs.read(r.s.id);
@@ -2328,6 +2341,7 @@ export class ChatManager implements ChatService {
   /** A child's result for its parent: while siblings still owe theirs, it waits (at most CHILD_RESULTS_MS) so the parent
    *  reads the batch in one turn instead of one turn per child, each re-reading its whole context. */
   private queueChildResult(parentId: string, title: string, message: string, runId?: string): void {
+    if (this.chats.get(parentId)?.s.routineArchived) return;
     const q = this.childResults.get(parentId) ?? { items: [], timer: null };
     if (q.items.some(item => item.title === title && item.message === message)) return;
     const item: HeldChildResult = { id: runId ? `result-${runId}` : crypto.randomUUID(), ...(runId ? { runId } : {}), title, message };
@@ -2349,7 +2363,7 @@ export class ChatManager implements ChatService {
     this.childResults.delete(parentId);
     if (q.timer) clearTimeout(q.timer);
     const parent = this.chats.get(parentId);
-    if (!parent || !q.items.length) return;
+    if (!parent || parent.s.routineArchived || !q.items.length) return;
     parent.heldResults = uniqueChildResults([...(parent.heldResults ?? []), ...q.items]);
     // A restored queue may alias heldResults. Freeze this batch before asynchronous engine startup;
     // later reports must never join its acknowledgment without joining its submitted message body.
@@ -2366,7 +2380,7 @@ export class ChatManager implements ChatService {
       if (acknowledged || retrying) return;
       retrying = true;
       const parent = this.chats.get(parentId);
-      if (parent && !this.quitting) {
+      if (parent && !parent.s.routineArchived && !this.quitting) {
         const retry = this.childResults.get(parentId) ?? { items: [], timer: null };
         for (const item of batch) if (!retry.items.some(x => x.id === item.id)) retry.items.push(item);
         if (!retry.timer) { retry.timer = setTimeout(() => this.flushChildResults(parentId), this.opts.childResultsMs ?? CHILD_RESULTS_MS); retry.timer.unref?.(); }
@@ -2495,7 +2509,7 @@ export class ChatManager implements ChatService {
     for (const run of this.runs.list()) {
       if (run.delivery?.policy !== 'synthesize' || run.delivery.synthesisSubmittedAt || !(run.startedBy === 'orchestrator' || run.startedBy === 'user' && run.delivery.synthesisRequestedAt !== undefined) || run.parentRunId) continue;
       const worker = this.chats.get(run.chatId);
-      if (worker?.s.parentId || worker?.s.run?.runId === run.runId && (worker.working || this.midTurn(worker))) continue;
+      if (worker?.s.routineArchived || worker?.s.parentId || worker?.s.run?.runId === run.runId && (worker.working || this.midTurn(worker))) continue;
       void this.synthesizeResult(run.runId, run.startedBy === 'user' ? { kind: 'user' } : { kind: 'chat', chatId: orchestrator.s.id }).catch(e => log.warn('chats', 'synthesis delivery deferred', { cause: errText(e), hint: 'the persisted result stays available' }));
     }
   }
@@ -2521,7 +2535,7 @@ export class ChatManager implements ChatService {
     const orchestrator = this.openOrchestrator(), changed = new Set<Rec>();
     for (const run of this.runs.list().slice().sort((a, b) => a.startedAt - b.startedAt)) {
       const result = run.report?.canonical, worker = this.chats.get(run.chatId);
-      if (!result || run.parentRunId || worker?.s.parentId || worker?.s.isOrchestrator) continue;
+      if (worker?.s.routineArchived || !result || run.parentRunId || worker?.s.parentId || worker?.s.isOrchestrator) continue;
       const local = run.startedBy === 'user' || run.startedBy === 'app' && run.taskContract?.reportExpected;
       const target = run.startedBy === 'orchestrator' ? orchestrator : local ? worker : undefined;
       if (!target || worker?.s.run?.runId === run.runId && (worker.working || this.midTurn(worker))) continue;
@@ -2547,6 +2561,7 @@ export class ChatManager implements ChatService {
    *  clean, else a message that wakes the Orchestrator; once. A clean one the user waits for also leaves the app's notice in
    *  the Orchestrator's chat (sys resultReady: the summary and the chat to open; no turn, no token). */
   private releaseResult(r: Rec): void {
+    if (r.s.routineArchived) return;
     const held = r.heldResult;
     if (!held) return;
     const orchestrator = held.local ? r : this.openOrchestrator();
@@ -2644,6 +2659,7 @@ export class ChatManager implements ChatService {
 
   /** Starts the chat's engine if it is not running (a resumed Cursor chat: waits until its replayed past has landed). */
   private async ensureSession(r: Rec): Promise<void> {
+    if (r.s.routineArchived) throw new Error('Archived routine chats are read-only.');
     updateActivity.assertOpen();
     if (r.releasing) await r.releasing; // never into an engine released for idleness: it ends, then this resumes
     if (!r.session) {
@@ -2850,6 +2866,7 @@ export class ChatManager implements ChatService {
   private finishRun(run: AgentRun | undefined, reason: AgentRunEnd, at = Date.now()): void {
     if (!run || run.endedAt !== undefined) return;
     const r = this.chats.get(run.chatId), mine = !!r && r.s.run === run;
+    if (r?.s.routineArchived) return;
     if (mine) this.ranUntil(r!, at);
     endRun(run, reason, at);
     // the receipts' verdict now, unless a turn's files are still coming (receiptTurn settles it then)
@@ -2921,6 +2938,7 @@ export class ChatManager implements ChatService {
   /** Everything still waiting or being written, now and synchronously: the quit, the process exit, a test. A failure
    *  is logged (the next start reads the last good write), never thrown. */
   flushWrites(): void {
+    try { this.analytics.flush(); } catch (e) { log.warn('chats', 'analytics not saved at quit', { cause: errText(e) }); }
     if (this.persistTimer) { clearTimeout(this.persistTimer); this.persistTimer = undefined; }
     if (this.runWriteTimer) { clearTimeout(this.runWriteTimer); this.runWriteTimer = undefined; }
     if (this.runSaveTimer) { clearTimeout(this.runSaveTimer); this.runSaveTimer = undefined; }
@@ -3175,7 +3193,7 @@ export class ChatManager implements ChatService {
   }
 
   private restore(c: StoredChat): Rec {
-    if (c.routine || c.routinePackage) c = { ...c, closedAt: c.closedAt ?? c.createdAt, closedBy: 'auto' };
+    if (c.routineArchived || c.routine || c.routinePackage) c = { ...c, routineArchived: true, closedAt: c.closedAt ?? c.createdAt, closedBy: 'auto' };
     const restored = new AgentChildrenReducer(c.agentChildren);
     restored.end();
     const children = new AgentChildrenReducer(restored.snapshot());
@@ -3189,6 +3207,7 @@ export class ChatManager implements ChatService {
       s: {
         agent: restoredOwner(c),
         ...(c.launchContext ? { launchContext: c.launchContext } : {}),
+        ...(c.routineArchived ? { routineArchived: true as const } : {}),
         ...(c.routine ? { routine: c.routine } : {}),
         ...(c.routinePackage ? { routinePackage: c.routinePackage, routinePromptHash: c.routinePromptHash } : {}),
         ...(run ? { run } : {}),
@@ -3258,6 +3277,7 @@ export class ChatManager implements ChatService {
     return [...this.chats.values()].map(r => ({
       ...(r.s.launchContext ? { launchContext: r.s.launchContext } : {}),
       id: r.s.id, harness: r.s.harness, cwd: r.s.cwd, sessionId: r.s.sessionId, ...(r.forkFrom ? { forkFrom: r.forkFrom } : {}),
+      ...(r.s.routineArchived ? { routineArchived: true as const } : {}),
       ...(r.s.routine ? { routine: r.s.routine } : {}),
       ...(r.s.routinePackage ? { routinePackage: r.s.routinePackage, routinePromptHash: r.s.routinePromptHash } : {}),
       ...(r.s.agent ? { agent: r.s.agent, agentInstructions: r.agentInstructions ?? '' } : {}),

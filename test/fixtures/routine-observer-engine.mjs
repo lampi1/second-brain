@@ -40,6 +40,9 @@ try {
     await gate('after');
     await call('navigate', { url: `${process.env.ROUTINE_VISUAL_ORIGIN}/after` });
     await call('screenshot', { name: 'after' }); say('Screenshot dopo disponibile');
+    await gate('overwrite');
+    await call('navigate', { url: `${process.env.ROUTINE_VISUAL_ORIGIN}/after-revised` });
+    await call('screenshot', { name: 'after' }); say('Screenshot aggiornato nello stesso file');
     await gate('next');
     const exited = once(server, 'exit'); server.stdin.end(); await exited; server = undefined;
   } else { say('Secondo passo dal terminale'); await gate('finish'); }

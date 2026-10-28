@@ -1,6 +1,7 @@
 // The Routine section (ADR 0175, 0176): packages, their trigger and credentials, the runs from the app and the
 // terminal, the live run view.
 export const routinesEn = {
+  'rs.imageUnavailable': 'Image unavailable',
   'rs.actions': "Recent actions",
   'rs.fullStream': "Open full stream",
 

@@ -26,7 +26,7 @@ export function cleanReport(a: unknown): InputLagReport {
 
 export function logInputLag(a: unknown): void {
   const r = cleanReport(a);
-  if (!r.keys) return;
+  if (!r.keys) { log.info('perf', 'renderer activity', { data: r }); return; }
   if (r.p95 > SLOW_P95_MS) {
     log.warn('perf', 'input lag', {
       data: r, cause: `keys took up to ${r.p95} ms (p95) to show while typing`,
@@ -38,7 +38,7 @@ export function logInputLag(a: unknown): void {
 /** a label whose steps add up to this much (ms) during one stall is named in its log line */
 export const SLOW_STEP_MS = 20;
 /** the main thread late by this much (ms) is a freeze the user sees */
-export const STALL_MS = 200;
+export const STALL_MS = 100;
 const TICK_MS = 100;
 type Tally = Map<string, { ms: number; n: number }>;
 /** every labelled step since the last tick (label → total ms, count); outer = time inside outermost steps only */
@@ -85,7 +85,7 @@ export const STARVED_SHARE = 0.25;
 export function stallCause(s: Stall): string {
   if (s.steps.length) return `the window froze ${s.ms} ms while ${named(s.steps)}`;
   if (s.cpuMs !== undefined && s.cpuMs < s.ms * STARVED_SHARE) {
-    return `the window froze ${s.ms} ms with the app on the CPU for only ${s.cpuMs} ms: it was waiting for a busy PC${s.machineCpu !== undefined ? ` (CPU ${s.machineCpu}%)` : ''}, not running its own code`;
+    return `the window froze ${s.ms} ms with the app on the CPU for only ${s.cpuMs} ms: CPU scheduling, a lock or synchronous I/O may be responsible${s.machineCpu !== undefined ? ` (machine CPU ${s.machineCpu}%)` : ''}`;
   }
   return `the window froze ${s.ms} ms (no labelled step ran: GC, a native call, an unlabelled callback or the PC itself)`;
 }

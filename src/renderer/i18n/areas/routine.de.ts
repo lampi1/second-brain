@@ -1,6 +1,5 @@
 // The Routine page run by the app's runner (ADR 0155): tabs, run cards, the open routine, the start dialog, the dry-run.
 export const routineDe = {
-  'rt.title': "Routinen",
   'rt.start': "Starten",
   'rt.cancel': "Abbrechen",
   'rt.save': "Speichern",

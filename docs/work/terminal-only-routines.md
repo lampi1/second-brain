@@ -30,7 +30,14 @@ Exact check, visual trace and reviewer results: pending at this checkpoint.
 The supplied stable Windows diagnosis measured 0.7–1.6 second stalls about every five seconds. Its attribution to
 snapshot/GC was an evidence-backed hypothesis, not a CPU-profile proof. Removing both app executors eliminates that
 periodic routine work; a Linux dev trace cannot establish an equivalent end-to-end speedup on the user's Windows PC.
-Independent `brainmodel:state` and renderer costs from the diagnosis are not resolved merely by removing routines.
+The owner's subsequent d3ce40f6 field measurement confirms the old periodic pattern disappeared: 14.4 stalls/minute,
+median 925 ms before, about one/minute, median 255 ms after. This is supplied field evidence, not a new measurement
+of this branch. Remaining renderer and storage costs are separate: this branch removes minute-based estimate
+backtests, avoids no-op analytics saves, coalesces real analytics writes asynchronously, avoids flushing run storage
+on metrics reads, caches the rendered tool copy, skips advisory lint in background cost reads, and reuses unchanged
+transcript/step projections. The probe now counts stalls from 100 ms and reports renderer long tasks without keys.
+The CI idle trace records ten minutes with timestamps; a separate baseline/candidate renderer profile uses identical
+synthetic sessions. Windows background-busy cursor behavior still requires a Windows field observation.
 
 `fs.watch` is intended for local run folders; network/virtual filesystems may lose notifications. Reopening the view
 reads the current files. Existing files are preserved, so any manually desired external reconciliation stays outside

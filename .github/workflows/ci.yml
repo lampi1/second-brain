@@ -78,7 +78,7 @@ jobs:
   dev-visual:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -107,7 +107,7 @@ jobs:
 
   # Opt-in hidden renderer profiling for performance branches; synthetic data, no E2E or providers.
   renderer-profile:
-    if: github.event_name == 'pull_request' && startsWith(github.head_ref, 'fix/renderer-throughput-')
+    if: github.event_name == 'pull_request' && (startsWith(github.head_ref, 'fix/renderer-throughput-') || github.head_ref == 'refactor/terminal-only-routines')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

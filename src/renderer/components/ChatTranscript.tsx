@@ -8,7 +8,7 @@ import { useApp } from '../store/store';
 import { ItemList, turnActivity, Typing } from './ChatItems';
 
 const EMPTY: readonly ChatItem[] = [];
-export const ChatTranscript = memo(function ChatTranscript({ chatId, busy, expanded }: { chatId: string; busy: boolean; expanded: boolean }) {
+export const ChatTranscript = memo(function ChatTranscript({ chatId, busy, expanded, readOnly = false }: { chatId: string; busy: boolean; expanded: boolean; readOnly?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   // First paint must not depend on an observer callback (hidden/restored windows may deliver it late).
   const [visible, setVisible] = useState(true);
@@ -27,7 +27,7 @@ export const ChatTranscript = memo(function ChatTranscript({ chatId, busy, expan
   const items = useApp(s => snapshot.current(s.items[chatId], active));
   return <div ref={ref} className="chat-transcript" data-transcript-visible={active ? 'true' : 'false'}>
     {items === undefined ? <div className="items-wrap"><div className={`items skeleton${active ? '' : ' still'}`} aria-label={t('product.transcriptLoading')}><i /><i /><i className="short" /></div></div> :
-      <ItemList chatId={chatId} items={items ?? EMPTY} empty={t('product.transcriptEmpty')}
+      <ItemList chatId={chatId} readOnly={readOnly} items={items ?? EMPTY} empty={t('product.transcriptEmpty')}
         footer={busy ? <Typing what={turnActivity(items)} testid={`typing-${chatId}`} items={items} /> : null} />}
   </div>;
 });

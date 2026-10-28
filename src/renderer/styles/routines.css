@@ -66,3 +66,6 @@
 .rs-shot-pair > .rs-shot { flex: 1 1 240px; min-width: 0; }
 .rs-shot-pair > .rs-shot img { width: 100%; object-fit: contain; }
 .rs-gallery { display: grid; gap: 12px; }
+
+.rs-archive-chat { height: 70vh; min-height: 300px; display: flex; }
+.rs-archive-chat .chat-transcript { flex: 1; min-width: 0; }

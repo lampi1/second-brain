@@ -122,6 +122,8 @@ export interface QueuedInfo { kind: 'start' | 'turn'; position: number; since: n
 export interface ChatSummary {
   launchContext?: AgentContextSnapshot;
   /** Host-only immutable routine identity, never accepted by app_create_chat. */
+  /** Retired routine worker or descendant: transcript only, never an executable session. */
+  routineArchived?: true;
   routine?: { browserWrite?: true; runId: string; stepId: string };
   routinePackage?: string;
   routinePromptHash?: string;
@@ -1272,6 +1274,7 @@ export interface InvokeMap {
   'routines:export': [{ id: string }, RoutineTerminalExport];
   'routines:setSecrets': [{ id: string; values: Record<string, string> }, RoutinesSnapshot];
   'routines:run': [RoutineRunRef, RoutineRunDetail];
+  'routines:image': [{ ref: RoutineRunRef; path: string }, FileViewResult];
   'routines:watch': [{ ref: RoutineRunRef; subscription: string }, RoutineRunDetail];
   'routines:unwatch': [{ subscription: string }, void];
   'routines:convert': [{ flowId: string }, RoutinesSnapshot];
@@ -1770,6 +1773,7 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
   'routines:list', 'routines:import', 'routines:export', 'routines:setSecrets', 'routines:run', 'routines:watch', 'routines:unwatch', 'routines:convert',
+  'routines:image',
   'routines:archive',
   'work:lessons', 'work:lessonDecide', 'work:list', 'work:decide',
   'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'pulse:runNow', 'approvals:list', 'approvals:decide',

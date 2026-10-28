@@ -22,10 +22,11 @@ describe('typing probe', () => {
     expect(cleanReport(null).keys).toBe(0);
   });
 
-  it('logs a warning with cause and hint when typing is slow, info otherwise, nothing without keys', () => {
+  it('logs slow typing and also reports idle renderer activity', () => {
     const n = log.recent.length;
     logInputLag({ keys: 0, p50: 500, p95: 900, max: 900, longTaskMs: 0, windowSec: 60 });
-    expect(log.recent.length).toBe(n);
+    expect(log.recent.length).toBe(n + 1);
+    expect(log.recent.at(-1)).toMatchObject({ msg: 'renderer activity', data: { keys: 0 } });
     logInputLag({ keys: 40, p50: 10, p95: 20, max: 30, longTaskMs: 0, windowSec: 60 });
     expect(log.recent.at(-1)).toMatchObject({ lvl: 'info', scope: 'perf', msg: 'input lag', data: { keys: 40, p95: 20 } });
     logInputLag({ keys: 40, p50: 60, p95: SLOW_P95_MS + 1, max: 300, longTaskMs: 900, windowSec: 60 });
@@ -146,7 +147,7 @@ describe('main-process stall watch (2026-10-27: "va a scatti")', () => {
     t += 2100; cpu += 40_000; busy += 9500; total += 10_000; vi.advanceTimersByTime(100);
     const call = warn.mock.calls[0]![2]!;
     expect(call.data).toMatchObject({ ms: 2000, cpuMs: 40, machineCpu: 95 });
-    expect(String(call.cause)).toContain('waiting for a busy PC (CPU 95%)');
+    expect(String(call.cause)).toContain('CPU scheduling, a lock or synchronous I/O');
     stop(); warn.mockRestore(); vi.useRealTimers();
   });
   it('a stall the app spent on the CPU is not blamed on the PC', () => {

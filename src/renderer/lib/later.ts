@@ -25,6 +25,7 @@ export function resumeQuestions():void {
 export function startLater():void {
   void sb.invoke('later:set',{on:false}).catch(()=>{});
   const prune = () => {
+    if (!postponed.size) return;
     const s=app.get();
     const keys=new Set([...s.pending.map(keyOf),...planAskKeys(s),...durableAskKeys()]);
     let changed=false;

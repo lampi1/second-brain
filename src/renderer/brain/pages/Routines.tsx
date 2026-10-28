@@ -129,8 +129,10 @@ function RoutineDetail({ routine, runs, onBack, onOpenRun, onSaved, now }: {
 }
 
 function RunPage({ runRef, onBack }: { runRef: RoutineRunRef; onBack: () => void }) {
+  const covered = ui.use(s => s.map);
   const [run, setRun] = useState<RoutineRunDetail | null>(null), [error, setError] = useState<string | null>(null);
   useEffect(() => {
+    if (covered) return;
     const subscription = crypto.randomUUID();
     let closed = false, received = false;
     setRun(null); setError(null);
@@ -142,14 +144,14 @@ function RunPage({ runRef, onBack }: { runRef: RoutineRunRef; onBack: () => void
     });
     void sb.invoke('routines:watch', { ref: runRef, subscription }).then(value => { if (!closed && !received) setRun(value); }).catch(e => { if (!closed) setError(plain(e)); });
     return () => { closed = true; off(); void sb.invoke('routines:unwatch', { subscription }).catch(() => {}); };
-  }, [runRef.source, runRef.routineId, runRef.runId]);
+  }, [runRef.source, runRef.routineId, runRef.runId, covered]);
   return <div className="rs-detail">
     <header className="rs-head">
       <button type="button" className="btn btn-ghost btn-s" onClick={onBack}>← {t('rs.back')}</button>
       <h2>{run?.title ?? runRef.routineId}</h2>
     </header>
     {error && <p className="rs-error" role="alert">{error}</p>}
-    {run && <RoutineRunView run={run} onOpenFile={path => openFileViewer(path)} onCopy={text => void copy(text)} />}
+    {run && <RoutineRunView run={run} onOpenFile={path => openFileViewer(path, undefined, /\.(png|jpe?g|webp)$/i.test(path) ? runRef : undefined)} onCopy={text => void copy(text)} />}
   </div>;
 }
 
@@ -157,7 +159,7 @@ type View = { kind: 'list' } | { kind: 'routine'; id: string } | { kind: 'run'; 
 
 export function Routines() {
   const chatArg = ui.use(state => state.page === 'flussi' ? readRoutineChatArg(state.pageArg) : null);
-  const routineChat = useApp(state => chatArg && routinePlacements(state.chats).has(chatArg.chatId) ? chatArg.chatId : null);
+  const routineChat = useApp(state => chatArg && (state.chats[chatArg.chatId]?.routineArchived || routinePlacements(state.chats).has(chatArg.chatId)) ? chatArg.chatId : null);
   const [view, setView] = useState<View>({ kind: 'list' });
   const [override, setOverride] = useState<RoutinesSnapshot | null>(null);
   const { value, error, reload } = useRead<RoutinesSnapshot>(() => sb.invoke('routines:list', undefined), []);

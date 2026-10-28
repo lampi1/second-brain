@@ -7,8 +7,8 @@ Orchestrator reads the same rules live (`app_routine_capabilities`, `app_routine
 
 ## The model
 
-- A routine is a **package**: one `routine.json` (and the secrets the user typed into it). The app and a terminal
-  (`routine run`) run it with the same runtime, `packages/routine-runtime`.
+- A routine is a **package**: one `routine.json` (and the secrets the user typed into it). Only the terminal CLI
+  (`routine run`, `watch`, `resume`) executes it through `packages/routine-runtime`; the app prepares packages and reads run evidence on demand.
 - Each **step is one plain Claude Code session**: a prompt, an optional model and effort, the Claude Code tools it may
   use (`allowedTools`), the MCP servers the package declares. No app roles, no app chats, no app tools, no approval
   steps.

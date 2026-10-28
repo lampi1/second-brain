@@ -34,6 +34,7 @@ export interface RoutineRunViewProps {
 
 export function RoutineRunView({ run, onOpenFile, onCopy }: RoutineRunViewProps) {
   const p = progressFrom(run.events);
+  const revisions = Object.fromEntries(run.events.filter(e => e.type === 'screenshot').map((e, i) => [e.path, `${e.at}/${i}`]));
   const status = run.status;
   return <section className="rs-run" data-testid="routine-run-view" data-status={status}>
     <header className="rs-run-head">
@@ -66,7 +67,7 @@ export function RoutineRunView({ run, onOpenFile, onCopy }: RoutineRunViewProps)
     </div> : null}
     {(p.error ?? run.error) && <p className="rs-error" role="alert">{p.error ?? run.error}</p>}
 
-    {run.lastShot && <RoutineScreenshots files={[run.lastShot.path]} onOpenFile={onOpenFile} />}
+    {run.lastShot && <RoutineScreenshots runRef={run} revisions={revisions} files={[run.lastShot.path]} onOpenFile={onOpenFile} />}
     <details className="rs-card"><summary>{t('rs.actions')}</summary>
       <ol>{run.events.filter(e => e.type === 'action').slice(-200).map((e, i) => <li key={`${e.at}/${i}`}>{e.type === 'action' ? e.text : ''}</li>)}</ol>
       <button type="button" className="btn btn-ghost btn-s" onClick={() => onOpenFile(`${run.dir}/events.jsonl`)}>{t('rs.fullStream')}</button>
@@ -84,7 +85,7 @@ export function RoutineRunView({ run, onOpenFile, onCopy }: RoutineRunViewProps)
         {s.error && <p className="rs-error">{s.error}</p>}
         {s.writes.length > 0 && <p className="rs-muted">{t('rs.writes', { list: s.writes.join(', ') })}</p>}
         {s.failedWrites.length > 0 && <p className="rs-warn">{t('rs.failedWrites', { list: s.failedWrites.join(', ') })}</p>}
-        <RoutineScreenshots files={[...new Set([...s.screenshots, ...s.evidence.filter(f => /\.(png|jpe?g|webp)$/i.test(f)), ...run.events.flatMap(e => e.type === 'screenshot' && e.n === s.n ? [e.path] : [])])]} onOpenFile={onOpenFile} />
+        <RoutineScreenshots runRef={run} revisions={revisions} files={[...new Set([...s.screenshots, ...s.evidence.filter(f => /\.(png|jpe?g|webp)$/i.test(f)), ...run.events.flatMap(e => e.type === 'screenshot' && e.n === s.n ? [e.path] : [])])]} onOpenFile={onOpenFile} />
         {(s.screenshots.length > 0 || s.evidence.length > 0) && <div className="rs-files">
           {[...s.screenshots, ...s.evidence].map(f => <button key={f} type="button" className="btn btn-ghost btn-xs" onClick={() => onOpenFile(f)}>{base(f)}</button>)}
         </div>}
