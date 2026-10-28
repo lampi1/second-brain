@@ -43,8 +43,9 @@ describe('parked runs', () => {
     const comments = devops.comments.get(5)!;
     expect(comments).toHaveLength(1);
     expect(comments[0]!.text).toContain('Serve il tuo aiuto: Quale campo devo usare.');
-    expect(comments[0]!.text).toContain('Punto della run: passaggio «Fix» (passo 2 di 3).');
-    expect(comments[0]!.text).toContain('dal passaggio «Fix», sullo stesso branch, e toglie il tag ai-needs-human');
+    expect(comments[0]!.text).toContain('Passo 2 di 3.');
+    expect(comments[0]!.text).not.toContain('Punto della run');
+    expect(comments[0]!.text).not.toContain('Rispondi');
     expect(comments[0]!.text).toContain(`version:2.0,${CONTACT}`);
     expect(comments[0]!.text).not.toContain(MENTION);
     expect(run.parked!.commentId).toBe(comments[0]!.id);

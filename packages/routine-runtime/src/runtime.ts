@@ -189,8 +189,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
   };
   const parkStop = (run: RunRecord, def: RoutineStep): ParkStop => {
     const n = run.steps.find(s => s.id === def.id)?.n ?? 0;
-    return { n: (run.parks ?? 0) + 1, step: def.title, position: `passo ${n} di ${run.steps.length}`,
-      resumeStep: named => routine.steps.find(s => s.id === resumeStepOf(def.id, named))?.title ?? def.title };
+    return { n: (run.parks ?? 0) + 1, position: `Passo ${n} di ${run.steps.length}` };
   };
   const writeContext = (runId: string, attempt: number, def: RoutineStep, run: RunRecord, round: number, signal: AbortSignal, stepDir?: string, stepId = def.id): WriteContext => {
     const contact = contactOf();

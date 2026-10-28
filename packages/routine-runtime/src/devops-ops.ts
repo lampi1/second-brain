@@ -53,10 +53,8 @@ export interface ExtendedContext {
   now(): number;
 }
 
-/** Where a parked run stopped: `n` = the run's park count (its own ledger keys); step titles for the comment. */
-export interface ParkStop { n: number; step: string; position: string;
-  /** the title of the step the run resumes from: the named one when it is this step or an earlier one, else this step */
-  resumeStep: (id?: string) => string }
+/** Where a parked run stopped: `n` = the run's park count (its own ledger keys); `position` = "Passo i di n" for the comment. */
+export interface ParkStop { n: number; position: string }
 export interface ExtendedOutcome { done: string[]; notVerified: string[]; failed: string[]; downgraded?: string; resumeFrom?: string;
   /** a parked downgrade: its comment and whether the run branch was published */
   parked?: { commentId?: number; branch: string; pushed: boolean } }
@@ -403,7 +401,7 @@ export async function executeExtended(ctx: ExtendedContext, write: Exclude<StepW
     case 'downgrade': {
       out.downgraded = masker.mask(write.reason);
       if (write.resumeFrom) out.resumeFrom = write.resumeFrom;
-      await downgrade(ctx, write.reason, settle, out, classic, write.resumeFrom);
+      await downgrade(ctx, write.reason, settle, out, classic);
       return;
     }
   }
@@ -494,19 +492,17 @@ async function cancelDeploy(ctx: ExtendedContext, target: TestDeployTarget, key:
 /** The comment a downgrade leaves (the app's text, Italian like its other routine comments). */
 export const needsHumanComment = (reason: string): string => `Serve un intervento umano: ${reason}. La routine si è fermata; segue la pulizia automatica.`;
 
-/** The one comment of a parked run (Italian, for its contact): why, the step reached, the run branch, how it resumes. */
-export const parkComment = (reason: string, park: ParkStop, pushed: { branch: string; pushed: boolean; note: string }, tag: string, resumeFrom?: string): string => [
+/** The one comment of a parked run (Italian, for its contact): why, then only the step number (owner, 2026-10-28). */
+export const parkComment = (reason: string, park: ParkStop): string => [
   `Serve il tuo aiuto: ${reason.trim().replace(/[.\s]+$/, '')}.`,
-  `Punto della run: passaggio «${park.step}» (${park.position}).`,
-  `Branch: ${pushed.branch} ${pushed.note}.`,
-  `Rispondi con un commento qui sotto: la routine riprende questa run dal passaggio «${park.resumeStep(resumeFrom)}», sullo stesso branch, e toglie il tag ${tag}. Intanto continua con gli altri bug.`,
+  `${park.position}.`,
 ].join('\n');
 
 /** Publishes the run branch before a park when a push target's checkout is on it (fast-forward, like push-branch).
  *  Detached or another branch: nothing to publish yet (an analysis lives in the run folder, kept for the resume). */
-async function pushParked(ctx: ExtendedContext, scope: string, settle: (plan: Plan) => Promise<'done' | 'not-verified' | 'failed'>, out: ExtendedOutcome, classic: (write: StepWrite, key: string) => Promise<void>): Promise<{ branch: string; pushed: boolean; note: string }> {
+async function pushParked(ctx: ExtendedContext, scope: string, settle: (plan: Plan) => Promise<'done' | 'not-verified' | 'failed'>, out: ExtendedOutcome, classic: (write: StepWrite, key: string) => Promise<void>): Promise<{ branch: string; pushed: boolean }> {
   const branch = runBranch(ctx.runId), name = branch.slice('refs/heads/'.length);
-  if (!ctx.grant.ops.includes('git-push')) return { branch: name, pushed: false, note: 'non pubblicato (il pacchetto non può fare push)' };
+  if (!ctx.grant.ops.includes('git-push')) return { branch: name, pushed: false };
   const headOf = ctx.headOf ?? gitHead;
   for (const target of ctx.grant.pushTargets ?? []) {
     const workspace = ctx.inputs[target.workspaceInput];
@@ -514,9 +510,9 @@ async function pushParked(ctx: ExtendedContext, scope: string, settle: (plan: Pl
     const key = `${scope}:push`;
     await executeExtended(ctx, { op: 'push-branch', project: target.project, repositoryId: target.repositoryId }, key, settle, out, classic);
     const state = ctx.store.ledger(ctx.runId)[`push:${key}`]?.state;
-    return state === 'done' ? { branch: name, pushed: true, note: 'pubblicato con tutti i commit della run' } : { branch: name, pushed: false, note: 'non pubblicato: il push non è riuscito, i commit restano nella cartella di lavoro locale' };
+    return { branch: name, pushed: state === 'done' };
   }
-  return { branch: name, pushed: false, note: 'non ancora creato: nessun commit, l\'analisi resta nella cartella della run' };
+  return { branch: name, pushed: false };
 }
 
 /** `refs/heads/...` of a checkout's HEAD; undefined when detached or unreadable (read only, no credentials). */
@@ -526,7 +522,7 @@ const gitHead = (workspace: string): Promise<string | undefined> => new Promise(
 /** The downgrade, as the app's cleanup did it: the run's draft PR abandoned and its test deployment ended, the reason
  *  kept in downgrade.md, then the package's tag removed, its tag added, its state set, a comment for a person; each
  *  phase one ledger entry, so a resumed run continues where it stopped. */
-async function downgrade(ctx: ExtendedContext, reason: string, settle: (plan: Plan) => Promise<'done' | 'not-verified' | 'failed'>, out: ExtendedOutcome, classic: (write: StepWrite, key: string) => Promise<void>, resumeFrom?: string): Promise<void> {
+async function downgrade(ctx: ExtendedContext, reason: string, settle: (plan: Plan) => Promise<'done' | 'not-verified' | 'failed'>, out: ExtendedOutcome, classic: (write: StepWrite, key: string) => Promise<void>): Promise<void> {
   const policy = ctx.grant.downgrade!, park = ctx.park;
   // each park of a run has its own ledger keys: a run parked, answered and parked again writes again
   const scope = park ? `downgrade:p${park.n}` : 'downgrade';
@@ -550,7 +546,7 @@ async function downgrade(ctx: ExtendedContext, reason: string, settle: (plan: Pl
   const marker = park ? `routine run ${ctx.runId} · park ${park.n} ·` : `routine run ${ctx.runId} · downgrade`;
   // a parked run talks only to its contact (owner, 2026-10-28: the bug comment mentions only the contact)
   const mentions = park && ctx.contact ? [ctx.contact.id] : [...new Set([...(ctx.grant.mentions ?? []), ...(ctx.contact ? [ctx.contact.id] : [])])];
-  const text = park && pushed ? parkComment(reason, park, pushed, policy.addTag, resumeFrom) : needsHumanComment(reason);
+  const text = park ? parkComment(reason, park) : needsHumanComment(reason);
   await settle({ key: `${scope}:comment`, what: 'downgrade comment',
     async once(t) {
       const tags = mentions.map(id => mentionHtml(id, id === ctx.contact?.id ? ctx.contact.name : undefined)).join(' ');
