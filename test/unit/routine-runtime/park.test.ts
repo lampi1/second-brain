@@ -116,6 +116,69 @@ describe('parked runs', () => {
     expect(await runtime.admitItem(6)).toBe(true);
   });
 
+  it('the run of an item admitted by @AI replies once first, and every step gets the instruction as guidance', async () => {
+    const { devops, engine, runtime } = parkingRuntime({ fixNeedsHuman: () => false });
+    devops.addItem({ id: 6, fields: { 'System.Tags': 'ai-needs-human' } });
+    devops.reply(6, g('9'), '@AI: ecco il dato');
+    expect(await runtime.admitItem(6)).toBe(true);
+    const run = await runtime.startItem(6).finished;
+    expect(run.status).toBe('done');
+    expect(run.admitted).toMatchObject({ text: 'ecco il dato', authorId: g('9') });
+    const replies = devops.comments.get(6)!.filter(c => c.text.includes('Presa in carico.'));
+    expect(replies).toHaveLength(1);
+    // no step has run yet and the first one declares no model: the signature is AI alone
+    expect(replies[0]!.text).toMatch(/^AI<br\/><a [^>]*data-vss-mention="version:2\.0,[^"]*"[^>]*>@[^<]*<\/a> Presa in carico\./);
+    expect(replies[0]!.text).toContain(`version:2.0,${g('9')}`);
+    // the reply comes before the first step's own writes; every step reads the instruction
+    expect(engine.requests.map(r => r.stepId)).toEqual(['analyse', 'fix', 'report']);
+    for (const r of engine.requests) expect(r.prompt).toContain('## Answer from a person');
+    expect(engine.requests[0]!.prompt).toContain('ecco il dato');
+    // a later start of the same item without a new admission carries nothing
+    const again = await runtime.startItem(6).finished;
+    expect(again.admitted).toBeUndefined();
+  });
+
+  it('a reply lost to a crash after the claim is written by the recovered run, exactly once', async () => {
+    const { devops, runtime } = parkingRuntime();
+    const { runId } = await runtime.startItem(5).finished;
+    // the process died right after taking the @AI answer: the run is left running, no reply on DevOps yet
+    runtime.store.claim(runId, r => {
+      r.status = 'running';
+      r.parked = { ...r.parked!, answer: { commentId: 999, at: Date.now(), text: 'Usa il campo Note', author: 'Person', authorId: g('9') } };
+    });
+    const run = await runtime.recover(runId)!.finished;
+    expect(run.status).toBe('done');
+    const replies = () => devops.comments.get(5)!.filter(c => c.text.includes('Presa in carico.'));
+    expect(replies()).toHaveLength(1);
+    expect(replies()[0]!.text).toContain(`version:2.0,${g('9')}`);
+    // the watch passing again neither recovers the done run nor replies twice
+    expect(runtime.recover(runId)).toBeNull();
+    expect(await runtime.resumeParked(runId)).toBeNull();
+    expect(replies()).toHaveLength(1);
+  });
+
+  it('an answer recorded by an older runtime (no author id) gets no late reply', async () => {
+    const { devops, runtime } = parkingRuntime();
+    const { runId } = await runtime.startItem(5).finished;
+    runtime.store.claim(runId, r => { r.status = 'running'; r.parked = { ...r.parked!, answer: { commentId: 999, at: Date.now(), text: 'x', author: 'Person' } }; });
+    await runtime.recover(runId)!.finished;
+    expect(devops.comments.get(5)!.filter(c => c.text.includes('Presa in carico.'))).toHaveLength(0);
+  });
+
+  it('a failed reply POST is retried before the next step; a POST that landed but timed out is found by its marker, never doubled', async () => {
+    for (const mode of ['status', 'lost'] as const) {
+      const { devops, runtime } = parkingRuntime();
+      const { runId } = await runtime.startItem(5).finished;
+      devops.reply(5, g('9'), '@AI Usa il campo Note');
+      devops.faults.push({ method: 'POST', path: /\/workItems\/5\/comments$/i, mode, status: 400, times: 1 });
+      const run = await (await runtime.resumeParked(runId))!.finished;
+      expect(run.status).toBe('done');
+      expect(devops.comments.get(5)!.filter(c => c.text.includes('Presa in carico.'))).toHaveLength(1);
+      // refused: written again on the second try; landed but timed out: found by its marker, no second POST
+      expect(runtime.store.ledger(runId)['park:p1:ack']).toMatchObject({ state: 'done', tries: mode === 'status' ? 2 : 1 });
+    }
+  });
+
   it('a parked run resumed by hand that parks again writes a new park comment (the next park number)', async () => {
     const { devops, runtime } = parkingRuntime({ fixNeedsHuman: call => call < 2 });
     const { runId } = await runtime.startItem(5).finished;

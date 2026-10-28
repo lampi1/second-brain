@@ -49,7 +49,7 @@ export interface ExtendedContext {
   park?: ParkStop;
   /** the branch a checkout is on (`refs/heads/...`), undefined when detached or unreadable (tests replace it) */
   headOf?: (workspace: string) => Promise<string | undefined>;
-  /** the step's commentSignature: the last line of its PR and park comments */
+  /** the step's commentSignature: the first line of its PR and park comments */
   signature?: string;
   sleep(ms: number): Promise<void>;
   now(): number;

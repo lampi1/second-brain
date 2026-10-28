@@ -11,7 +11,7 @@ import type { Clock, CredentialStore, EngineRunner, Paths, RuntimeLog, TokenProv
 import type { RoutinePackage, RoutineStep } from './format';
 import { packageSecrets } from './format';
 import { createMasker, type Masker } from './mask';
-import { createRunStore, StaleAttempt, stepFolderName, type RunRecord, type RunStepRecord, type RunStore, type RunEscalation, type RunPark } from './run-store';
+import { createRunStore, StaleAttempt, stepFolderName, type AiAnswer, type RunRecord, type RunStepRecord, type RunStore, type RunEscalation, type RunPark } from './run-store';
 import { STEP_RESULT_FILE, StepResultError, grantedWriteOps, stepResultInstructions, validateStepResult, type StepResult, type StepWrite } from './step-result';
 import { aiInstruction, commentSignature, createDevOpsClient, executeWrites, html, isRoutineComment, mentionHtml, signedHtml, type DevOpsClient, type WriteContext, type WritesOutcome } from './devops';
 import { runResources, type Deployments, type ParkStop } from './devops-ops';
@@ -34,6 +34,8 @@ export const DEFAULT_MAX_ATTEMPTS = 2;
 export const DEFAULT_LOOP_MAX = 2;
 /** a park that could not be written: how many times the watch runs its step again (runtime.recover) */
 export const PARK_RETRIES = 2;
+/** tries of the reply to an @AI comment ("Presa in carico") before the run goes on without it */
+export const ACK_TRIES = 3;
 
 type Request = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -193,6 +195,8 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
   };
   /** the model each running step's session reported (runId:stepId), before its record is saved */
   const liveModels = new Map<string, string>();
+  /** the @AI comment admitItem accepted for a tagged item, taken by the next start of that item */
+  const admissions = new Map<number, AiAnswer>();
   /** The signature of a step's DevOps comments: the model it declares, else the one its session reported, else the
    *  last executed step's; its effort when it declares one. */
   const signatureOf = (run: RunRecord, def?: RoutineStep): string => {
@@ -237,9 +241,12 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     const from = request.fromStep === undefined ? 0 : routine.steps.findIndex(s => s.id === request.fromStep);
     if (from < 0) throw new Error(`No step "${request.fromStep}" in this routine (steps: ${routine.steps.map(s => s.id).join(', ')})`);
     lockRun(runId, { inputs, ...(workItem !== undefined ? { workItem } : {}) });
+    const admitted = workItem !== undefined ? admissions.get(workItem) : undefined;
+    if (workItem !== undefined) admissions.delete(workItem);
     const run: RunRecord = {
       schema: 1, runId, routineId: routine.id, routineTitle: routine.title, status: 'running', attempt: 0,
       inputs, ...(workItem !== undefined ? { workItem } : {}), ...(request.subjectKey ? { subjectKey: request.subjectKey } : {}),
+      ...(admitted ? { admitted } : {}),
       createdAt: now, updatedAt: now,
       steps: routine.steps.map((s, i) => i < from
         ? { n: i + 1, id: s.id, title: s.title, status: 'done', attempts: 0, summary: `skipped (started from step ${request.fromStep})` }
@@ -316,6 +323,9 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
         let run = store.read(runId);
         let record = step(run, def.id);
         if (record.status === 'done') continue;
+        // a reply to an @AI comment lost to a crash or a failed POST is written before the step (a no-op once done)
+        await ensureAck(runId, attempt, def);
+        run = store.read(runId);
         let guidance: RunEscalation['answer'] | undefined;
         if (run.escalation?.stepId === def.id && run.escalation.state !== 'answered') {
           const answered = await waitForHuman(runId, attempt, controller.signal);
@@ -323,6 +333,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
           guidance = answered;
         } else if (run.escalation?.stepId === def.id && run.escalation.answer) guidance = run.escalation.answer;
         else if (run.parked?.answer && parkedRange(run.parked).includes(def.id)) guidance = run.parked.answer;
+        else if (run.admitted && !run.parked) guidance = run.admitted;
         const max = def.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
         let tries = 0, lastError: string | undefined, back: number | undefined;
         for (;;) {
@@ -729,7 +740,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     // another live run holds the item or the workspace: the answer waits for the next pass
     try { lockRun(runId, run); } catch (e) { if (e instanceof ResourceBusy) { info('parked run waits: resource busy', { runId, why: e.message }); return null; } throw e; }
     const instruction = answers.map(c => aiInstruction(c.text)).filter(Boolean).join('\n\n') || 'Riprendi.';
-    const answer = { commentId: last.id, at: clock.now(), text: masker.mask(instruction), author: last.authorName ?? last.authorId };
+    const answer = { commentId: last.id, at: clock.now(), text: masker.mask(instruction), author: last.authorName ?? last.authorId, authorId: last.authorId };
     const range = new Set(parkedRange(p));
     let claimed: RunRecord;
     try {
@@ -743,23 +754,10 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     emit(runId, { type: 'human-answer', at: clock.now(), n: run.steps.find(s => s.id === p.stepId)?.n ?? 0, author: answer.author });
     info('parked run resumed', { runId, from: p.resumeFrom, attempt: claimed.attempt });
     const def = routine.steps.find(s => s.id === p.stepId)!;
-    // the reply to the @AI comment, once per park (ledger key; a crash mid-write is settled by its marker)
-    const ackKey = `park:p${p.n}:ack`, ackMarker = `routine run ${runId} · park ${p.n} · presa in carico`;
-    try {
-      const entry = store.ledger(runId)[ackKey];
-      const found = entry?.state === 'writing' ? (await devops().comments(organization, item.project, run.workItem)).find(c => c.text.includes(ackMarker)) : undefined;
-      if (entry?.state !== 'done' && !found) {
-        store.setLedger(runId, claimed.attempt, ackKey, { state: 'writing', what: 'reply to the @AI comment', at: clock.now(), tries: (entry?.tries ?? 0) + 1 });
-        const commentId = await devops().comment(organization, item.project, run.workItem,
-          signedHtml(`${mentionHtml(last.authorId, last.authorName)} Presa in carico.<br/><small>${html(ackMarker)}</small>`, signatureOf(store.read(runId))));
-        store.setLedger(runId, claimed.attempt, ackKey, { state: 'done', what: 'reply to the @AI comment', at: clock.now(), tries: (entry?.tries ?? 0) + 1, commentId });
-      } else if (found) store.setLedger(runId, claimed.attempt, ackKey, { ...entry!, state: 'done', commentId: found.id });
-    } catch (e) {
-      if (e instanceof StaleAttempt) throw e;
-      warn('reply to the @AI comment not written', { runId }, e instanceof Error ? e.message : String(e));
-    }
     const untag: StepWrite = { op: 'tags', remove: [policy.addTag] };
     const finished = (async () => {
+      // the reply to the @AI comment comes first; execute retries it before each step if this one is lost
+      try { await ensureAck(runId, claimed.attempt); } catch (e) { if (e instanceof StaleAttempt) return store.read(runId); throw e; }
       // the park tag goes first (its own write key per park): the item is the routine's again
       try { await executeWrites(writeContext(runId, claimed.attempt, def, store.read(runId), 1, new AbortController().signal, undefined, `park-${p.n}`), [untag]); }
       catch (e) {
@@ -774,13 +772,45 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
   /** Whether the trigger may start a new run for an item: an item already carrying the park tag (parked by an older
    *  run or by hand) starts only when its latest comment starts with @AI and is not the routine's. */
   async function admitItem(workItem: number): Promise<boolean> {
+    admissions.delete(workItem);
     const tag = routine.escalation?.park ? routine.devops?.downgrade?.addTag : undefined;
     if (!tag || !organization || !routine.escalation) return true;
     const item = await devops().item(organization, workItem);
     const tags = String(item.fields['System.Tags'] ?? '').split(';').map(t => t.trim().toLowerCase());
     if (!tags.includes(tag.toLowerCase())) return true;
     const last = (await devops().comments(organization, item.project, workItem)).sort((a, b) => a.id - b.id).at(-1);
-    return Boolean(last && !isRoutineComment(last.text) && aiInstruction(last.text) !== undefined);
+    const instruction = last && !isRoutineComment(last.text) ? aiInstruction(last.text) : undefined;
+    if (!last || instruction === undefined) return false;
+    // the run startItem makes next takes the comment: its reply first, its instruction as guidance for every step
+    admissions.set(workItem, { commentId: last.id, at: clock.now(), text: masker.mask(instruction || 'Riprendi.'), author: last.authorName ?? last.authorId, authorId: last.authorId });
+    return true;
+  }
+
+  /** The reply to the @AI comment that resumed a parked run or admitted a tagged item: signature, a mention of its
+   *  author, "Presa in carico.", the run marker. Exactly once (ledger key; a write whose outcome is unknown is looked
+   *  for by its marker first); a crash or a failed POST is retried before the next step, at most ACK_TRIES times.
+   *  An answer recorded without its author id (an older runtime) gets no late reply. StaleAttempt propagates. */
+  async function ensureAck(runId: string, attempt: number, next?: RoutineStep): Promise<void> {
+    const run = store.read(runId);
+    const source = run.parked?.answer
+      ? { answer: run.parked.answer, key: `park:p${run.parked.n}:ack`, marker: `routine run ${runId} · park ${run.parked.n} · presa in carico` }
+      : run.admitted ? { answer: run.admitted, key: 'admit:ack', marker: `routine run ${runId} · presa in carico` } : undefined;
+    if (!source?.answer.authorId || run.workItem === undefined || !organization) return;
+    const entry = store.ledger(runId)[source.key];
+    if (entry?.state === 'done' || (entry?.tries ?? 0) >= ACK_TRIES) return;
+    const what = 'reply to the @AI comment', tries = (entry?.tries ?? 0) + 1;
+    try {
+      const item = await devops().item(organization, run.workItem);
+      const found = entry ? (await devops().comments(organization, item.project, run.workItem)).find(c => c.text.includes(html(source.marker))) : undefined;
+      if (found) { store.setLedger(runId, attempt, source.key, { ...entry!, state: 'done', commentId: found.id }); return; }
+      store.setLedger(runId, attempt, source.key, { state: 'writing', what, at: clock.now(), tries });
+      const commentId = await devops().comment(organization, item.project, run.workItem,
+        signedHtml(`${mentionHtml(source.answer.authorId, source.answer.author)} Presa in carico.<br/><small>${html(source.marker)}</small>`, signatureOf(run, run.steps.some(s => s.startedAt !== undefined) ? undefined : next)));
+      store.setLedger(runId, attempt, source.key, { state: 'done', what, at: clock.now(), tries, commentId });
+    } catch (e) {
+      if (e instanceof StaleAttempt) throw e;
+      warn('reply to the @AI comment not written', { runId, tries }, e instanceof Error ? e.message : String(e));
+    }
   }
 
   /** A host-side site login with the run's credentials and the package's success rule (the app's Electron tab or a
