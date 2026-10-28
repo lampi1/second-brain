@@ -16,6 +16,10 @@
 // SB_ROUTINE_BROWSER_CONFIG (it holds the credentials, so it never lives in the run folder). A failed login names its
 // reason code (driveLoginResult) and saves one screenshot of the page, password fields emptied first, to evidence/. A
 // launch that fails on a profile held by a leftover browser of the run (or a stale lock file) cleans it and retries once.
+// Every widget of a real app is reachable (owner, 2026-10-28): the snapshot names pointer-cursor divs, toggles, datepicker
+// days and SVG groups too, `type` presses real keys, `press`/`hover`/`click_at`/`scroll`/`wait` cover the rest and `eval`
+// runs JavaScript on the declared origins only, refused while a password field holds a value; errors carry Playwright's
+// call log, masked like every reply.
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -23,10 +27,10 @@ import readline from 'node:readline';
 import { createMasker } from './mask';
 import { readConfigOnce } from './fs-util';
 import { driveLoginResult, LOGIN_FAIL_REASONS, type LoginResult, type LoginSuccessRule } from './login-form';
-import { playwrightLoginDriver, SNAPSHOT_SCRIPT, type BrowserPage } from './browser-page';
+import { evalScript, PASSWORD_HELD_SCRIPT, playwrightLoginDriver, SNAPSHOT_SCRIPT, type BrowserPage } from './browser-page';
 
 export const BROWSER_SERVER_NAME = 'routine-browser';
-export const BROWSER_TOOLS = ['navigate', 'snapshot', 'click', 'type', 'select_option', 'screenshot', 'login', 'fill_secret'] as const;
+export const BROWSER_TOOLS = ['navigate', 'snapshot', 'click', 'type', 'select_option', 'press', 'hover', 'click_at', 'scroll', 'wait', 'eval', 'screenshot', 'login', 'fill_secret'] as const;
 /** `id`: a named credential (a second user of the same login page); the first login of a page is its default. */
 export interface BrowserLogin { id?: string; loginUrl: string; user: string; password: string; success?: LoginSuccessRule }
 export interface BrowserServerConfig {
@@ -46,13 +50,21 @@ export interface BrowserServerConfig {
 }
 
 type Json = Record<string, unknown>;
-const REF = { type: 'string', description: 'an element ref from the last snapshot, e.g. e12' };
+const REF = { type: 'string', description: 'an element ref from the last snapshot, e.g. e12 (f1e3: inside frame f1)' };
+const PX = { type: 'number', minimum: 0, description: 'page pixels, as in the full-page screenshot and the snapshot\'s @x,y' };
+const KEY = { type: 'string', description: 'a key or chord: Enter, Tab, Escape, ArrowDown, PageDown, Control+a…' };
 const TOOLS = [
   { name: 'navigate', description: 'Open a URL (only the routine\'s declared origins). Logins are done for you.', inputSchema: { type: 'object', additionalProperties: false, required: ['url'], properties: { url: { type: 'string' } } } },
-  { name: 'snapshot', description: 'The current page as text plus its interactive elements with refs (e1, e2…) for click/type/select_option. Take a new one after the page changes.', inputSchema: { type: 'object', additionalProperties: false, properties: {} } },
-  { name: 'click', description: 'Click an element by ref.', inputSchema: { type: 'object', additionalProperties: false, required: ['ref'], properties: { ref: REF } } },
-  { name: 'type', description: 'Replace the text of an input or textarea by ref (never a password field).', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'text'], properties: { ref: REF, text: { type: 'string' } } } },
+  { name: 'snapshot', description: 'The current page as text plus its interactive elements with refs (e1, e2…; f1e1… inside an iframe) and their centre @x,y, for click/type/select_option/hover. Take a new one after the page changes.', inputSchema: { type: 'object', additionalProperties: false, properties: {} } },
+  { name: 'click', description: 'Click an element by ref. force: skip the checks when another element covers it (the error says "intercepts pointer events").', inputSchema: { type: 'object', additionalProperties: false, required: ['ref'], properties: { ref: REF, force: { type: 'boolean' } } } },
+  { name: 'type', description: 'Replace the text of an input, textarea or editable element by ref with real key presses (a datepicker sees them; never a password field). then: a key pressed after it (Tab or Escape closes a picker, Enter submits).', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'text'], properties: { ref: REF, text: { type: 'string' }, then: { type: 'string', enum: ['Tab', 'Enter', 'Escape'] } } } },
   { name: 'select_option', description: 'Choose an option of a select by ref, by its value or label.', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'value'], properties: { ref: REF, value: { type: 'string' } } } },
+  { name: 'press', description: 'Press a key, on an element by ref or on whatever has the focus.', inputSchema: { type: 'object', additionalProperties: false, required: ['key'], properties: { key: KEY, ref: REF } } },
+  { name: 'hover', description: 'Move the mouse over an element by ref (menus and tooltips that open on hover).', inputSchema: { type: 'object', additionalProperties: false, required: ['ref'], properties: { ref: REF } } },
+  { name: 'click_at', description: 'Click a point of the page, for what has no ref (a canvas, a cross-origin frame): x,y in the full-page screenshot\'s pixels. Returns what was there.', inputSchema: { type: 'object', additionalProperties: false, required: ['x', 'y'], properties: { x: PX, y: PX, button: { type: 'string', enum: ['left', 'right', 'middle'] }, double: { type: 'boolean' } } } },
+  { name: 'scroll', description: 'Scroll an element by ref into view, or scroll the wheel by dx,dy pixels (default 600 down) over the point x,y (a scrolling panel) or the page.', inputSchema: { type: 'object', additionalProperties: false, properties: { ref: REF, dx: { type: 'number' }, dy: { type: 'number' }, x: PX, y: PX } } },
+  { name: 'wait', description: 'Wait ms milliseconds, or until a text shows on the page or a CSS selector is visible (gone: true = until it disappears, a spinner), at most timeout ms (default 10000, max 30000).', inputSchema: { type: 'object', additionalProperties: false, properties: { ms: { type: 'number', minimum: 0, maximum: 30000 }, text: { type: 'string' }, selector: { type: 'string' }, gone: { type: 'boolean' }, timeout: { type: 'number', minimum: 0, maximum: 30000 } } } },
+  { name: 'eval', description: 'Run a JavaScript expression in the page (only on the routine\'s origins) and return its value as JSON (a promise is awaited; statements: wrap them in (() => { …; return x; })()). Powerful: use it when no other tool can, e.g. to read a widget\'s state or call the page\'s own functions. Refused while a password field holds a value.', inputSchema: { type: 'object', additionalProperties: false, required: ['expression'], properties: { expression: { type: 'string' } } } },
   { name: 'screenshot', description: 'Save a PNG of the page into this step\'s evidence folder; returns its path. highlight: refs of the proving elements, drawn with a red box in this PNG.', inputSchema: { type: 'object', additionalProperties: false, properties: { name: { type: 'string', description: 'file name without extension' }, highlight: { type: 'array', maxItems: 5, items: REF, description: 'element refs from snapshot to mark with a red box' } } } },
   { name: 'login', description: 'Sign out and in again as a named credential of the routine (the runtime fills the password). user: another login name for that credential\'s stored password. No credential: back to the default login.', inputSchema: { type: 'object', additionalProperties: false, properties: { credential: { type: 'string', description: 'a credential id' }, user: { type: 'string', description: 'the login name to use instead of the stored one' } } } },
   { name: 'fill_secret', description: 'Fill a password field by ref with the password of a named credential (e.g. to set a user\'s password in an admin page). The value is never shown.', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'credential'], properties: { ref: REF, credential: { type: 'string', description: 'a credential id' } } } },
@@ -116,6 +128,15 @@ export function bareOrigin(url: string): boolean {
 export function loginFailedText(result: Exclude<LoginResult, { ok: true }>, screenshot?: string | null): string {
   const detail = result.detail ? ` (${result.detail})` : '';
   return `The site login failed [${result.reason}]: ${LOGIN_FAIL_REASONS[result.reason]}${detail}.${screenshot ? ` Screenshot of the page: ${screenshot}.` : ''} Report it as needs-human.`;
+}
+
+const ANSI = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
+/** A failed call's error for the agent: Playwright's whole message, its call log included ("… intercepts pointer
+ *  events", "element is not visible"), without colours, at most 20 lines and 2000 characters (masked by the caller). */
+export function errorText(e: unknown): string {
+  const lines = (e instanceof Error ? e.message : String(e)).replace(ANSI, '').split('\n').map(l => l.trimEnd()).filter(l => l.trim());
+  const text = lines.slice(0, 20).join('\n') + (lines.length > 20 ? `\n… (${lines.length - 20} more lines)` : '');
+  return text.length > 2000 ? `${text.slice(0, 1999)}…` : text;
 }
 
 /** Empties every password field of the page (native setter + input event); true when they are all empty now. */
@@ -216,9 +237,32 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
   }
   async function where(page: BrowserPage): Promise<string> { return `Now at ${page.url()} (${await page.title().catch(() => '')}).`; }
   const locate = (page: BrowserPage, ref: unknown) => {
-    if (typeof ref !== 'string' || !/^e\d{1,4}$/.test(ref)) throw new Error('ref: an element ref from snapshot, e.g. e12');
-    return page.locator(`[data-routine-ref="${ref}"]`);
+    const m = typeof ref === 'string' ? /^(?:(f\d{1,2}))?e\d{1,4}$/.exec(ref) : null;
+    if (!m) throw new Error('ref: an element ref from snapshot, e.g. e12 or f1e3');
+    const el = `[data-routine-ref="${String(ref)}"]`;
+    return m[1] ? page.frameLocator(`[data-routine-frame="${m[1]}"]`).locator(el) : page.locator(el);
   };
+  const num = (v: unknown, name: string, min: number, max: number): number => {
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < min || n > max) throw new Error(`${name}: a number from ${min} to ${max}`);
+    return n;
+  };
+  /** Page pixels (the full-page screenshot's) → viewport pixels, scrolling the window first when the point is outside. */
+  async function toViewport(page: BrowserPage, x: number, y: number): Promise<{ x: number; y: number }> {
+    const view = () => page.evaluate<{ sx: number; sy: number; w: number; h: number }>('({ sx: scrollX, sy: scrollY, w: innerWidth, h: innerHeight })');
+    let v = await view();
+    if (x < v.sx || x >= v.sx + v.w || y < v.sy || y >= v.sy + v.h) {
+      await page.evaluate(`scrollTo(${Math.max(0, Math.round(x - v.w / 2))}, ${Math.max(0, Math.round(y - v.h / 2))})`);
+      v = await view();
+    }
+    const vx = x - v.sx, vy = y - v.sy;
+    if (vx < 0 || vx >= v.w || vy < 0 || vy >= v.h) throw new Error(`x,y ${x},${y}: outside the page (it scrolls only to ${v.sx},${v.sy} with a ${v.w}x${v.h} viewport)`);
+    return { x: vx, y: vy };
+  }
+  /** The element at a viewport point, named like a snapshot line (tag.class "text"). */
+  const elementAt = (page: BrowserPage, x: number, y: number) => page.evaluate<string>(`(() => { const e = document.elementFromPoint(${x}, ${y}); if (!e) return 'nothing';
+    const c = (e.getAttribute('class') || '').trim().split(/\\s+/)[0]; const t = (e.getAttribute('aria-label') || e.getAttribute('title') || e.textContent || '').replace(/\\s+/g, ' ').trim().slice(0, 60);
+    return e.tagName.toLowerCase() + (c ? '.' + c : '') + (e.tagName === 'IFRAME' ? ' (a frame: the click went inside it)' : '') + (t ? ' "' + t + '"' : ''); })()`);
   async function settle(page: BrowserPage): Promise<string | null> {
     await page.waitForLoadState('load', { timeout: ACTION_TIMEOUT }).catch(() => undefined);
     return ensureLoggedIn(page);
@@ -247,16 +291,100 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
         return { text: `URL: ${s.url}\nTitle: ${s.title}\n\nElements:\n${s.elements.join('\n') || '(none)'}\n\nText:\n${s.text}` };
       }
       case 'click': {
-        await locate(page, args.ref).click({ timeout: ACTION_TIMEOUT });
+        await locate(page, args.ref).click({ timeout: ACTION_TIMEOUT, ...(args.force === true ? { force: true } : {}) });
         const failed = await settle(page);
         return failed ? { text: failed, isError: true } : { text: `Clicked ${String(args.ref)}. ${await where(page)}` };
       }
       case 'type': {
         const el = locate(page, args.ref);
+        const then = args.then === undefined ? undefined : String(args.then);
+        if (then !== undefined && !['Tab', 'Enter', 'Escape'].includes(then)) return { text: 'then: Tab, Enter or Escape.', isError: true };
         const kind = await el.evaluate(e => `${e.tagName.toLowerCase()}:${(e.getAttribute('type') ?? '').toLowerCase()}`);
         if (kind.endsWith(':password')) return { text: 'Refused: password fields are filled only by the runtime\'s own login.', isError: true };
-        await el.fill(String(args.text ?? ''), { timeout: ACTION_TIMEOUT });
-        return { text: `Typed into ${String(args.ref)}.` };
+        const text = String(args.text ?? '');
+        // real keys (keydown/keypress/input/keyup per character): bootstrap-datepicker reads the date only on keyup, and
+        // its forceParse would put the old date back on blur after a bare fill; a long text is filled, then one End key
+        if (text.length <= 300) {
+          await el.fill('', { timeout: ACTION_TIMEOUT });
+          await el.pressSequentially(text, { timeout: ACTION_TIMEOUT });
+        } else {
+          await el.fill(text, { timeout: ACTION_TIMEOUT });
+          await el.press('End', { timeout: ACTION_TIMEOUT });
+        }
+        if (!then) return { text: `Typed into ${String(args.ref)}.` };
+        await el.press(then, { timeout: ACTION_TIMEOUT });
+        const failed = await settle(page);
+        return failed ? { text: failed, isError: true } : { text: `Typed into ${String(args.ref)}, then ${then}. ${await where(page)}` };
+      }
+      case 'press': {
+        const key = String(args.key ?? '');
+        if (!/^[^\s]{1,40}$/.test(key)) return { text: 'key: a key name such as Enter, Tab, Escape, ArrowDown or Control+a.', isError: true };
+        if (args.ref === undefined) await page.keyboard.press(key);
+        else await locate(page, args.ref).press(key, { timeout: ACTION_TIMEOUT });
+        const failed = await settle(page);
+        return failed ? { text: failed, isError: true } : { text: `Pressed ${key}${args.ref === undefined ? '' : ` on ${String(args.ref)}`}. ${await where(page)}` };
+      }
+      case 'hover': {
+        await locate(page, args.ref).hover({ timeout: ACTION_TIMEOUT });
+        return { text: `The mouse is over ${String(args.ref)}.` };
+      }
+      case 'click_at': {
+        const button = args.button === undefined ? 'left' : String(args.button);
+        if (button !== 'left' && button !== 'right' && button !== 'middle') return { text: 'button: left, right or middle.', isError: true };
+        const at = await toViewport(page, num(args.x, 'x', 0, 100_000), num(args.y, 'y', 0, 100_000));
+        const what = await elementAt(page, at.x, at.y);
+        await page.mouse.click(at.x, at.y, { button, clickCount: args.double === true ? 2 : 1 });
+        const failed = await settle(page);
+        return failed ? { text: failed, isError: true } : { text: `Clicked ${String(args.x)},${String(args.y)} on ${what}. ${await where(page)}` };
+      }
+      case 'scroll': {
+        if (args.ref !== undefined) {
+          await locate(page, args.ref).scrollIntoViewIfNeeded({ timeout: ACTION_TIMEOUT });
+          return { text: `${String(args.ref)} is in view.` };
+        }
+        const dx = args.dx === undefined ? 0 : num(args.dx, 'dx', -100_000, 100_000);
+        const dy = args.dy === undefined ? (args.dx === undefined ? 600 : 0) : num(args.dy, 'dy', -100_000, 100_000);
+        if (args.x !== undefined || args.y !== undefined) {
+          const at = await toViewport(page, num(args.x, 'x', 0, 100_000), num(args.y, 'y', 0, 100_000));
+          await page.mouse.move(at.x, at.y);
+        }
+        await page.mouse.wheel(dx, dy);
+        await page.waitForTimeout(250);
+        const pos = await page.evaluate<{ x: number; y: number }>('({ x: Math.round(scrollX), y: Math.round(scrollY) })');
+        return { text: `Scrolled by ${dx},${dy}; the window is at ${pos.x},${pos.y} (a panel that scrolled by itself does not move it). Take a new snapshot.` };
+      }
+      case 'wait': {
+        if (args.ms !== undefined) {
+          const ms = num(args.ms, 'ms', 0, 30_000);
+          await page.waitForTimeout(ms);
+          return { text: `Waited ${ms} ms. ${await where(page)}` };
+        }
+        const text = args.text === undefined ? undefined : String(args.text);
+        const selector = args.selector === undefined ? undefined : String(args.selector);
+        if (!text === !selector) return { text: 'wait: ms, or one of text and selector.', isError: true };
+        const timeout = args.timeout === undefined ? 10_000 : num(args.timeout, 'timeout', 0, 30_000);
+        const gone = args.gone === true;
+        const probe = text !== undefined
+          ? `(document.body ? document.body.innerText : '').includes(${JSON.stringify(text)})`
+          : `(() => { const e = document.querySelector(${JSON.stringify(selector)}); if (!e) return false; const r = e.getBoundingClientRect(), s = getComputedStyle(e); return r.width > 0 && r.height > 0 && s.visibility !== 'hidden' && s.display !== 'none'; })()`;
+        const what = text !== undefined ? `the text "${text}"` : `the selector ${selector!}`;
+        const start = Date.now();
+        for (;;) {
+          if ((await page.evaluate<boolean>(probe)) !== gone) return { text: `${gone ? 'Gone' : 'Found'}: ${what} after ${Date.now() - start} ms. ${await where(page)}` };
+          if (Date.now() - start >= timeout) return { text: `${what} ${gone ? 'is still on the page' : 'did not show'} after ${timeout} ms. ${await where(page)}`, isError: true };
+          await page.waitForTimeout(250);
+        }
+      }
+      case 'eval': {
+        const expression = String(args.expression ?? '');
+        if (!expression.trim() || expression.length > 20_000) return { text: 'expression: some JavaScript, up to 20000 characters.', isError: true };
+        // the page must be one of the routine's sites (the test hosts navigate allows), never a login page
+        if (!allowedOrigin(config, page.url())) return { text: `Refused: eval runs only on ${config.origins.join(', ')}; this page is ${originOf(page.url()) || page.url()}.`, isError: true };
+        if (loginPageFor(state, page.url())) return { text: 'Refused: eval never runs on a login page.', isError: true };
+        if (await page.evaluate<boolean>(PASSWORD_HELD_SCRIPT)) return { text: 'Refused: a password field of this page holds a value (eval could read it). Run it before fill_secret or after the form is saved.', isError: true };
+        const value = await page.evaluate<string>(evalScript(expression));
+        const failed = await settle(page);
+        return failed ? { text: failed, isError: true } : { text: `Result: ${value}` };
       }
       case 'select_option': {
         await locate(page, args.ref).selectOption(String(args.value ?? ''), { timeout: ACTION_TIMEOUT });
@@ -330,7 +458,7 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
           const r = await call(name, (params.arguments ?? {}) as Json);
           return reply({ content: [{ type: 'text', text: masker.mask(r.text) }], ...(r.isError ? { isError: true } : {}) });
         } catch (e) {
-          return reply({ content: [{ type: 'text', text: masker.mask(`Browser ${name} failed: ${e instanceof Error ? e.message.split('\n')[0] : String(e)}`) }], isError: true });
+          return reply({ content: [{ type: 'text', text: masker.mask(`Browser ${name} failed: ${errorText(e)}`) }], isError: true });
         }
       }
       default: return { jsonrpc: '2.0', id, error: { code: -32601, message: 'Method not found' } };
