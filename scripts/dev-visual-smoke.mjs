@@ -168,9 +168,10 @@ try {
     corrections: { tagged: 0, afterReport: 0 }, tags: { skills: ['fixture-skill'] },
   }));
   await fs.writeFile(path.join(realProfile, 'agent-runs.json'), JSON.stringify({ version: 1, runs: history }));
-  const baseline = path.join(profile, 'read-baseline.mjs');
+  const baseline = path.join(profile, 'read-baseline.cjs');
   await bundle({ stdin: { contents: "export { estimatesState } from './src/main/agents/run-estimates.ts';", resolveDir: root },
-    outfile: baseline, bundle: true, platform: 'node', format: 'esm', target: 'node22' });
+    outfile: baseline, bundle: true, platform: 'node', format: 'cjs', target: 'node22',
+    define: { 'import.meta': '__readMeta' }, banner: { js: "const __readMeta = { url: require('node:url').pathToFileURL(__filename).href, dirname: __dirname, filename: __filename };" } });
   const observedAt = '2026-10-11T08:30:00.000Z';
   await fs.writeFile(path.join(brain, 'memory/records.json'), JSON.stringify([{
     memoryId: 'synthetic-visual-memory', scope: { roleId: 'scout', project: 'DEMO SINTETICA', environment: 'sandbox' },
@@ -203,7 +204,7 @@ try {
   manifest.readPerformance = { startedAt: new Date().toISOString(), runs: history.length,
     bytes: (await fs.stat(path.join(realProfile, 'agent-runs.json'))).size };
   manifest.readPerformance.before = await app.evaluate(async (_electron, { baseline, history, runIds, now }) => {
-    const { estimatesState } = await import((await import('node:url')).pathToFileURL(baseline).href);
+    const { estimatesState } = process.getBuiltinModule('module').createRequire(baseline)(baseline);
     const start = performance.now(); const value = estimatesState(history, runIds, now);
     return { mainBlockedMs: performance.now() - start, accuracyN: value.accuracy.n };
   }, { baseline, history, runIds, now: measuredAt });
