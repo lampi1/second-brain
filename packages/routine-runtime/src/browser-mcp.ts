@@ -265,17 +265,22 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
       }
       case 'screenshot': {
         // highlight: the proving elements get a red box in this PNG only (their inline style is put back after it)
-        const refs = args.highlight === undefined ? [] : Array.isArray(args.highlight) ? args.highlight : [args.highlight];
+        const refs = [...new Set(args.highlight === undefined ? [] : Array.isArray(args.highlight) ? args.highlight : [args.highlight])];
         if (refs.length > 5) return { text: 'highlight: at most 5 element refs.', isError: true };
-        const marked = refs.map(ref => locate(page, ref));
-        for (const el of marked) {
-          await el.evaluate(e => { const s = (e as HTMLElement).style; e.setAttribute('data-routine-style', s.cssText); s.setProperty('outline', '3px solid red', 'important'); s.setProperty('outline-offset', '2px', 'important'); });
-        }
+        for (const ref of refs) locate(page, ref); // validates each ref before the page is touched
+        // the originals live here, not on the page: only the elements really marked get their own style back
+        let marked: Array<[ref: string, style: string]> = [];
         try {
+          const found = await page.evaluate<{ marked: Array<[string, string]>; missing?: string }>(`((refs) => { const marked = [];
+            for (const ref of refs) { const e = document.querySelector('[data-routine-ref="' + ref + '"]'); if (!e) return { marked, missing: ref };
+              marked.push([ref, e.style.cssText]); e.style.setProperty('outline', '3px solid red', 'important'); e.style.setProperty('outline-offset', '2px', 'important'); }
+            return { marked }; })(${JSON.stringify(refs)})`);
+          marked = found.marked;
+          if (found.missing) return { text: `highlight: ${found.missing} is not on the page; take a new snapshot.`, isError: true };
           const file = await saveShot(page, String(args.name ?? ''));
           return { text: `Saved ${file}${refs.length ? ` with a red box on ${refs.join(', ')}` : ''}. ${await where(page)}` };
         } finally {
-          for (const el of marked) await el.evaluate(e => { (e as HTMLElement).style.cssText = e.getAttribute('data-routine-style') ?? ''; e.removeAttribute('data-routine-style'); }).catch(() => undefined);
+          if (marked.length) await page.evaluate(`((marked) => { for (const [ref, style] of marked) { const e = document.querySelector('[data-routine-ref="' + ref + '"]'); if (e) e.style.cssText = style; } })(${JSON.stringify(marked)})`).catch(() => undefined);
         }
       }
       case 'login': {
