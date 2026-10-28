@@ -2,7 +2,8 @@
 // lock folder (`%LOCALAPPDATA%\routine-runtime\locks` for the CLI), whatever their runs root. One file per resource
 // (a work item, a workspace folder, a package's watcher), created exclusively; it names its owner run, pid and host and
 // expires (refreshed at every step). A lock is taken over when it expired or its process on this host is gone.
-// Best effort by design: two hosts sharing a folder, clock skew or a process alive under a reused pid are not covered.
+// Best effort by design: two hosts sharing a folder, clock skew, a process alive under a reused pid and two takers of
+// the same stale lock at the same instant are not covered.
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -45,6 +46,12 @@ export function createLocks(dir: string, options: LocksOptions = {}): Locks {
   };
   const live = (o: LockOwner | null): o is LockOwner => Boolean(o && o.expiresAt > now() && !(o.host === host && !alive(o.pid)));
   const content = (owner: string): LockOwner => { const at = now(); return { owner, pid, host, at, expiresAt: at + ttl }; };
+  // a rewrite goes through a temp file and a rename: a reader never sees a half-written lock (and takes it for free)
+  const rewrite = (name: string, value: LockOwner) => {
+    const temp = `${file(name)}.${pid}.${Math.random().toString(36).slice(2)}.tmp`;
+    fs.writeFileSync(temp, JSON.stringify(value));
+    try { fs.renameSync(temp, file(name)); } catch (e) { fs.rmSync(temp, { force: true }); throw e; }
+  };
 
   const locks: Locks = {
     acquire(name, owner) {
@@ -54,15 +61,16 @@ export function createLocks(dir: string, options: LocksOptions = {}): Locks {
         try { fs.writeFileSync(file(name), JSON.stringify(mine), { flag: 'wx' }); return mine; }
         catch (e) { if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e; }
         const held = read(name);
-        if (held?.owner === owner) { fs.writeFileSync(file(name), JSON.stringify(mine)); return mine; }
+        if (held?.owner === owner) { rewrite(name, mine); return mine; }
         if (live(held)) return null;
-        // expired, or its process on this host is gone: take it over (a racing taker loses the next exclusive create)
+        // expired, or its process on this host is gone: remove it and retry the exclusive create once. Best effort: two
+        // takers at the same instant can both win (the second removes the first one's fresh lock); accepted, rare.
         try { fs.rmSync(file(name), { force: true }); } catch { /* another process removed it */ }
       }
       return null;
     },
     refresh(names, owner) {
-      for (const name of names) if (read(name)?.owner === owner) { try { fs.writeFileSync(file(name), JSON.stringify(content(owner))); } catch { /* best effort */ } }
+      for (const name of names) if (read(name)?.owner === owner) { try { rewrite(name, content(owner)); } catch { /* best effort: it expires later */ } }
     },
     release(names, owner) {
       for (const name of names) if (read(name)?.owner === owner) { try { fs.rmSync(file(name), { force: true }); } catch { /* best effort */ } }

@@ -295,12 +295,14 @@ async function watch(args: Parsed, runsDir: string, recognised: RecognisedTestDb
         follow(handle);
         return handle;
       },
-      // a parked run whose contact answered on the work item goes on (escalation.park); the others stay as they are
+      // a parked run whose contact answered on the work item goes on (escalation.park); a run stopped by Ctrl+C, a crash
+      // or a park that could not be written goes on from its step (runtime.recover); done and failed runs stay
       resume: async runId => {
         if (active.has(runId)) return null;
-        const handle = await runtime.resumeParked(runId);
+        const answered = await runtime.resumeParked(runId);
+        const handle = answered ?? runtime.recover(runId);
         if (!handle) return null;
-        stdout.write(`Work item ${runtime.store.read(runId).workItem ?? '?'}: run ${runId} resumed after an answer (${path.join(runsDir, pkg.routine.id, runId)})\n`);
+        stdout.write(`Work item ${runtime.store.read(runId).workItem ?? '?'}: run ${runId} ${answered ? 'resumed after an answer' : 'resumed where it stopped'} (${path.join(runsDir, pkg.routine.id, runId)})\n`);
         follow(handle);
         return handle;
       },
@@ -332,7 +334,7 @@ async function watch(args: Parsed, runsDir: string, recognised: RecognisedTestDb
       await Promise.allSettled([...active.values()]);
       off();
     }
-    if (stop.signal.aborted) stdout.write('Stopped. Interrupted runs stay resumable with routine resume <run folder>.\n');
+    if (stop.signal.aborted) stdout.write('Stopped. Interrupted runs stay resumable: the next watch goes on with them (or routine resume <run folder>).\n');
     return 0;
   } finally { locks?.release([watchLock], watcher); loaded.dispose(); }
 }
