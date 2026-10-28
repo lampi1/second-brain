@@ -67,7 +67,19 @@ export interface DeploymentPorts {
 export class TestDeploymentCoordinator {
   private queue: Promise<unknown> = Promise.resolve();
   /** `targets`: the app's locally approved targets file, or (routine runtime) the package's own targets. */
-  constructor(private readonly targetsFile: string | (() => TestDeployTarget[]), private readonly stateFile: string) {}
+  /** `settled(runId)`: the run has ended for good and no process runs it (the routine runtime reads its run.json); a
+   *  lease it left behind is stale. Absent (the app): no lease is ever healed. */
+  constructor(private readonly targetsFile: string | (() => TestDeployTarget[]), private readonly stateFile: string, private readonly settled?: (runId: string) => boolean) {}
+  /** Releases what settled runs other than `runId` left behind: step leases, and deployments whose state is terminal
+   *  (an active or uncertain one keeps the node, whoever started it). True when the state changed. */
+  private heal(state: State, runId: string): boolean {
+    if (!this.settled) return false;
+    const verdict = new Map<string, boolean>(), gone = (id: string) => { if (!verdict.has(id)) verdict.set(id, this.settled!(id)); return verdict.get(id)!; };
+    let changed = false;
+    for (const d of state.deployments) if (!d.released && d.runId !== runId && ['succeeded', 'failed', 'canceled'].includes(d.state) && gone(d.runId)) { d.released = true; changed = true; }
+    for (const l of state.stepLeases ?? []) if (!l.releasedAt && l.runId !== runId && gone(l.runId)) { l.releasedAt = Date.now(); changed = true; }
+    return changed;
+  }
   /** Does not pretend aborting an HTTP request stopped a remote release. Unknown/active deployments retain ownership. */
   async settle(runId: string, authorize: () => void): Promise<boolean> {
     const job = this.queue.then(() => { authorize(); const state = this.read(), owned = state.deployments.filter(d => d.runId === runId && !d.released);
@@ -89,6 +101,7 @@ export class TestDeploymentCoordinator {
       authorize(); const local = this.targets().find(t => t.id === target.id);
       if (!local || deploymentHash(local) !== deploymentHash(target)) throw new Error('Test environment target changed; approve it again');
       const state = this.read(), key = deploymentLeaseKey(target);
+      if (this.heal(state, runId)) this.save(state);
       if (state.stepLeases?.some(l => !l.releasedAt && deploymentLeaseKey(l.target) === key && (l.runId !== runId || l.stepId !== stepId)) || state.deployments.some(d => !d.released && deploymentLeaseKey(d.target) === key && (d.runId !== runId || !['succeeded', 'failed', 'canceled'].includes(d.state)))) throw new Error('Test environment is already leased or a deployment is still active/uncertain');
       if (state.stepLeases?.some(l => !l.releasedAt && l.runId === runId && l.stepId === stepId && deploymentHash(l.target) === deploymentHash(target))) return;
       if ((state.stepLeases?.length ?? 0) >= 10000) throw new Error('Test environment lease journal is full');
@@ -188,6 +201,7 @@ export class TestDeploymentCoordinator {
     if (history.some(d => deploymentHash(d.target) !== deploymentHash(target))) throw new Error('Further deployments must use the same exact approved target');
     if (history.some(d => !['succeeded', 'failed', 'canceled'].includes(d.state))) throw new Error('This run already requested an active or uncertain deployment. Read test-deploy-status before creating another.');
     const leaseKey = deploymentLeaseKey;
+    if (this.heal(state, p.runId)) this.save(state);
     if (state.stepLeases?.some(l => !l.releasedAt && leaseKey(l.target) === leaseKey(target) && l.runId !== p.runId) || state.deployments.some(d => leaseKey(d.target) === leaseKey(target) && !d.released && d.runId !== p.runId)) throw new Error('The exact test node is leased by another deployment or an unresolved request');
     if (!p.source || p.source.repositoryId !== target.repositoryId || !/^[a-f0-9]{40,64}$/i.test(p.source.commit)) throw new Error('Test deployment requires a verified source commit from this run’s own PR');
     if (buildId === undefined && p.source.pullRequestId) {
