@@ -486,6 +486,19 @@ describe('comment signature and @AI', () => {
     expect(isRoutineComment('AI · Opus 5.5 · medium<br/>Serve un umano')).toBe(true);
     expect(isRoutineComment('x <small>routine run r1 · park 1</small>')).toBe(true);
     expect(isRoutineComment('@AI riprendi')).toBe(false);
+    expect(isRoutineComment('@AI la routine run di ieri ha sbagliato')).toBe(false);
+    expect(isRoutineComment('AI<br/>Serve un umano')).toBe(true);
+  });
+
+  it('@AI parsing: numeric entities decoded, @AI-bot and mention anchors of an identity named AI never count', () => {
+    expect(aiInstruction('&#160;@AI&#160;riprendi')).toBe('riprendi');
+    expect(aiInstruction('&#xA0;@ai: riprendi')).toBe('riprendi');
+    expect(aiInstruction('@AI-bot riprendi')).toBeUndefined();
+    expect(aiInstruction('@AI.riprendi')).toBeUndefined();
+    expect(aiInstruction('@AI')).toBe('');
+    expect(aiInstruction(`<a href="#" data-vss-mention="version:2.0,${g('9')}">@AI Bot</a> riprendi`)).toBeUndefined();
+    expect(aiInstruction(`<a href="#" data-vss-mention="version:2.0,${g('9')}">@Mario</a> @AI riprendi`)).toBeUndefined();
+    expect(aiInstruction(`@AI riprendi, chiedi a <a href="#" data-vss-mention="version:2.0,${g('9')}">@Mario</a>`)).toBe('riprendi, chiedi a [mention]');
   });
 });
 

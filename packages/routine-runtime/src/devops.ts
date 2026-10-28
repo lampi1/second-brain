@@ -116,7 +116,10 @@ export const runMarker = (runId: string, key: string): string => `routine run ${
 /** Comment HTML → plain text for the next prompt (DevOps returns HTML). */
 export const replyText = (htmlText: string): string =>
   htmlText.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li)>/gi, '\n').replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, '\'').replace(/&amp;/g, '&')
+    .replace(/&nbsp;/g, ' ').replace(/&#(?:x([0-9a-f]{1,6})|(\d{1,7}));/gi, (raw, hex: string | undefined, dec: string | undefined) => {
+      const code = hex ? parseInt(hex, 16) : Number(dec);
+      return code === 0 || code === 38 || code > 0x10ffff ? raw : String.fromCodePoint(code);
+    }).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, '\'').replace(/&amp;/g, '&')
     .replace(/\n{3,}/g, '\n\n').trim().slice(0, 4000);
 const MODEL_NAMES: [RegExp, string][] = [[/^claude-opus-5-5/i, 'Opus 5.5'], [/^claude-sonnet-5(?![-.\d])/i, 'Sonnet 5'], [/^claude-fable-5-1/i, 'Fable 5.1'], [/^claude-haiku-4-5/i, 'Haiku 4.5']];
 /** A model id as people read it (claude-opus-5-5 → Opus 5.5); an unknown id loses the vendor word. */
@@ -125,12 +128,14 @@ export const modelDisplayName = (id: string): string => MODEL_NAMES.find(([re]) 
 export const commentSignature = (model?: string, effort?: string): string => ['AI', ...(model && modelDisplayName(model) ? [modelDisplayName(model)] : []), ...(effort ? [effort] : [])].join(' · ');
 /** Comment HTML with the signature as its first line. */
 export const signedHtml = (body: string, signature?: string): string => signature ? `${html(signature)}<br/>${body}` : body;
-/** Whether a comment is the runtime's own: it starts with the signature or carries a run marker. */
-export const isRoutineComment = (htmlText: string): boolean => /^AI(?: · |\s|$)/.test(replyText(htmlText).trimStart()) || htmlText.includes('routine run ');
-/** The instruction of a comment that starts with @AI (any case), the prefix removed; undefined for any other comment. */
+/** Whether a comment is the runtime's own: it starts with the signature (AI · …, or a bare AI line) or carries the
+ *  small run marker every marked runtime comment ends with; a person's text that merely says "routine run" is not. */
+export const isRoutineComment = (htmlText: string): boolean => /^AI(?: · |\n|$)/.test(replyText(htmlText).trimStart()) || /<small>\s*routine run /i.test(htmlText);
+/** The instruction of a comment whose literal text starts with @AI (any case) followed by a space, ":", "," or the end;
+ *  the prefix removed. undefined for any other comment: @AI-bot, @AIUTO, or a DevOps mention of an identity named AI. */
 export const aiInstruction = (htmlText: string): string | undefined => {
-  const text = replyText(htmlText).trimStart();
-  return /^@AI\b/i.test(text) ? text.replace(/^@AI\b[\s:,.;-]*/i, '').trim() : undefined;
+  const text = replyText(htmlText.replace(/<a\b[^>]*data-vss-mention[^>]*>[\s\S]*?<\/a>/gi, '[mention]')).trimStart();
+  return /^@AI(?=[\s:,]|$)/i.test(text) ? text.replace(/^@AI[\s:,]*/i, '').trim() : undefined;
 };
 
 export interface WriteContext {
@@ -151,7 +156,7 @@ export interface WriteContext {
   stepDir?: string;
   /** the review→fix round of the step (1 = first pass): a later round's writes are new writes, not duplicates */
   round?: number;
-  /** the commentSignature of the step: the last line of its comments (bug, PR, park) */
+  /** the commentSignature of the step: the first line of its comments (bug, PR, park) */
   signature?: string;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;

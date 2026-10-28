@@ -61,13 +61,18 @@ export interface RunRecord {
   parks?: number;
   /** a park that could not be written, retried by the watch (runtime.recover): bounded, each retry runs the step again */
   parkRetries?: number;
+  /** the @AI comment that admitted an item already carrying the park tag: guidance for every step */
+  admitted?: AiAnswer;
 }
+/** A comment starting with @AI: its instruction (prefix removed, masked) and its author. `authorId` is set from the
+ *  version that acknowledges it ("Presa in carico"); an answer recorded without it gets no late reply. */
+export interface AiAnswer { commentId: number; at: number; text: string; author: string; authorId?: string }
 export interface RunPark {
   n: number; stepId: string; resumeFrom: string; at: number; question: string;
   /** the park comment: an answer is a later comment of the contact */
   commentId?: number; branch: string; pushed: boolean;
   /** the @AI answer (its instruction), kept while the resumed steps run */
-  answer?: { commentId: number; at: number; text: string; author: string };
+  answer?: AiAnswer;
   /** resumed by hand before an answer: spent, a later comment of the contact no longer resumes it */
   spent?: boolean;
 }

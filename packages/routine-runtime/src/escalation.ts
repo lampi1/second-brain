@@ -59,7 +59,7 @@ export { replyText };
 export interface EscalationIo {
   runId: string; client: DevOpsClient; organization: string; project: string; workItem: number;
   contact: RoutineEscalation; masker: Masker;
-  /** the commentSignature of the escalated step: the last line of the comment and its reminder */
+  /** the commentSignature of the escalated step: the first line of the comment and its reminder */
   signature?: string;
   /** persists the escalation in run.json (fenced by the run attempt) */
   save(escalation: RunEscalation): void;
