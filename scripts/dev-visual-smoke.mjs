@@ -139,6 +139,7 @@ try {
   const brain = path.join(profile, 'synthetic-brain'), realProfile = path.join(profile, 'review-profile');
   await fs.mkdir(path.join(brain, 'memory'), { recursive: true });
   await fs.mkdir(realProfile, { recursive: true });
+  await fs.writeFile(path.join(brain, 'brain.json'), JSON.stringify({ machinery: 'product-v1', template: { OWNER: 'Synthetic fixture' } }));
   await fs.writeFile(path.join(realProfile, 'config.json'), JSON.stringify({ theme: 'dark' }));
   const observedAt = '2026-10-11T08:30:00.000Z';
   await fs.writeFile(path.join(brain, 'memory/records.json'), JSON.stringify([{
@@ -148,7 +149,7 @@ try {
     status: 'confirmed', supersedes: null, transitions: [{ at: observedAt, status: 'confirmed' }],
   }], null, 2));
   const routineRuns = path.join(profile, 'terminal-runs');
-  const reviewEnv = { ...env, ROUTINE_RUNS_DIR: routineRuns, SB_BRAIN: brain, SB_USER_DATA: realProfile, SB_ORCHESTRATOR_EVENTS: '0', SB_RUN_RESULTS: '0', SB_BRAIN_JOBS: '0', SB_COMPARE_QUEUE: '0' };
+  const reviewEnv = { ...env, ROUTINE_RUNS_DIR: routineRuns, SB_BRAIN: brain, SB_USER_DATA: realProfile, SB_BENCH_TIMERS: '1', SB_ORCHESTRATOR_EVENTS: '0', SB_RUN_RESULTS: '0', SB_BRAIN_JOBS: '0', SB_COMPARE_QUEUE: '0' };
   delete reviewEnv.SB_DEMO;
   delete reviewEnv.SB_DEMO_FREEZE;
   app = await electron.launch({ cwd: root, args: ['.'], env: reviewEnv, timeout: 30_000 });

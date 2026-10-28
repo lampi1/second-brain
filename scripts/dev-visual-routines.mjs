@@ -19,7 +19,7 @@ export async function startRoutineTrace(app, roots) {
     const fs = process.getBuiltinModule('fs'), promises = fs.promises, path = process.getBuiltinModule('path');
     const events = [], watches = new Set(), restores = [];
     const match = value => typeof value === 'string' && roots.some(root => { const rel = path.relative(root, value); return rel === '' || !rel.startsWith('..') && !path.isAbsolute(rel); });
-    for (const target of [fs, promises]) for (const method of ['readFileSync', 'readFile', 'readdirSync', 'readdir', 'open', 'openSync', 'stat', 'statSync', 'realpath', 'realpathSync', 'watch']) {
+    for (const target of [fs, promises]) for (const method of ['readFileSync', 'readFile', 'readdirSync', 'readdir', 'open', 'openSync', 'stat', 'statSync', 'lstat', 'lstatSync', 'access', 'accessSync', 'existsSync', 'readlink', 'readlinkSync', 'realpath', 'realpathSync', 'watch']) {
       if (typeof target[method] !== 'function') continue;
       const original = target[method];
       target[method] = function (...args) {
@@ -30,6 +30,12 @@ export async function startRoutineTrace(app, roots) {
           watches.add(result); result.once('close', () => watches.delete(result));
         }
         return result;
+      };
+      // localFile uses realpathSync.native. Preserve its API and include that route in the trace.
+      Object.assign(target[method], original);
+      if (typeof original.native === 'function') target[method].native = function (...args) {
+        if (match(args[0])) events.push({ at: Date.now(), method: `${method}.native`, path: args[0] });
+        return Reflect.apply(original.native, this, args);
       };
       restores.push(() => { target[method] = original; });
     }
@@ -79,7 +85,7 @@ export async function captureIdlePerformance(app, page, output) {
   }
   const main = await app.evaluate(() => { const p = globalThis.__idlePerformance; p.stop(); return { stalls: p.events, processStarts: p.spawns }; });
   const renderer = await page.evaluate(() => { const p = globalThis.__idlePerformance; p.observer.disconnect(); return p.entries; });
-  const result = { environment: 'Hidden Electron on CI, synthetic profile, no user input or agent turns', startedAt, endedAt: new Date().toISOString(), minutes, ...main, rendererLongTasks: renderer };
+  const result = { environment: 'Hidden Electron on CI, synthetic product brain, production timers enabled, no user input or agent turns', startedAt, endedAt: new Date().toISOString(), minutes, ...main, rendererLongTasks: renderer };
   await fs.writeFile(path.join(output, 'idle-performance.json'), JSON.stringify(result, null, 2));
   if (minutes.some(m => m.routineReads || m.routineWatches)) throw new Error('Routine background IO during idle trace');
   return result;
@@ -137,21 +143,27 @@ process.exitCode = await main(process.argv.slice(2), { engine: () => createClaud
     await capture('routine-cli-live-before');
     manifest.routineLive.shots.push(await stage('after', 'after.png'));
     const pair = page.getByTestId('run-shot-pair'); await pair.waitFor(); await pair.scrollIntoViewIfNeeded();
+    await page.waitForFunction(() => [...document.querySelectorAll('[data-testid="run-shot-pair"] img')].filter(img => img.naturalWidth > 0).length === 2);
     await capture('routine-cli-live-pair');
     await pair.locator('button[title="after.png"]').click();
-    await page.getByTestId('cited-file-viewer').locator('img').waitFor(); await capture('routine-cli-enlarged');
+    await page.getByTestId('cited-file-viewer').locator('img').waitFor();
+    await page.waitForFunction(() => { const img = document.querySelector('.viewer-image-open.is-wide img'); return img?.naturalWidth > 0 && img.getBoundingClientRect().width > 600; });
+    await capture('routine-cli-enlarged');
     await page.getByTestId('viewer-close').click();
     manifest.routineLive.shots.push(await stage('overwrite', 'after.png'));
     await capture('routine-cli-overwritten-shot');
     await fs.writeFile(path.join(control, 'next'), 'go');
     await page.getByTestId('run-current-step').filter({ hasText: 'Scrivi il rapporto' }).waitFor();
     await page.getByTestId('run-last-action').filter({ hasText: 'Secondo passo dal terminale' }).waitFor();
+    await page.locator('.rs-run-head').scrollIntoViewIfNeeded();
     await capture('routine-cli-live-step-two');
     await fs.writeFile(path.join(control, 'finish'), 'go');
     const [code] = await ended; if (code !== 0) throw new Error(`CLI failed (${code}): ${log}`);
     await page.locator('[data-testid="routine-run-view"][data-status="done"]').waitFor();
-    await page.getByTestId('run-report').waitFor(); await capture('routine-cli-complete');
-    await page.getByTestId('run-report').click(); await page.getByTestId('cited-file-viewer').waitFor(); await capture('routine-cli-report'); await page.getByTestId('viewer-close').click();
+    await page.getByTestId('run-report').waitFor(); await page.locator('.rs-run-head').scrollIntoViewIfNeeded(); await capture('routine-cli-complete');
+    await page.getByTestId('run-report').click();
+    await page.getByTestId('viewer-markdown').getByRole('heading', { name: '1. Confronta prima e dopo (done)', exact: true }).waitFor();
+    await capture('routine-cli-report'); await page.getByTestId('viewer-close').click();
     await page.getByTestId('nav-home').click();
     manifest.routineClosed = await idleRoutineTrace(app, 'after closing live view');
     await page.getByTestId('nav-flussi').click(); await page.getByTestId(`routine-run-${runId}`).click();

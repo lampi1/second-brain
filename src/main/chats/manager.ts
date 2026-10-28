@@ -3565,6 +3565,7 @@ export class ChatManager implements ChatService {
   }
 
   private startSession(r: Rec): void {
+    if (r.s.routineArchived) throw new Error('Archived routine chats are read-only.');
     r.s.effortStatus = initialEffort(!!engineOf(r.s.harness)?.caps.effort, r.choice.effort);
     const chatId = r.s.id;
     let sessionId = r.s.sessionId;

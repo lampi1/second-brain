@@ -82,9 +82,9 @@ first runs on main: say so in the hand-off, so the Orchestrator knows which bran
    user's personal Browser page, encrypted with safeStorage, filled only into a page of their own site at the user's
    click, never shown to the renderer, an agent, the app MCP or a log; its tabs in `persist:personal`, out of every
    agent tool and screenshot, except one tab the user gives to a chat with «Affida a un agente» until «Riprendi»
-   (ADR 0133); routine site passwords, encrypted in the app profile and filled only by the host into the exact
-   approved origin of the active browser-write step, never exposed to agents, transcripts, evidence or logs
-   (ADR 0165).
+   (ADR 0133); historical routine site passwords stay encrypted in the app profile and are read only during explicit
+   package preparation/export for the terminal, never printed in transcripts, evidence or logs (ADR 0179).
+   The app no longer has a routine browser host.
 3. **Dependencies:** only well-known packages, exact versions, published ≥ 14 days before install (`npm install
    --save-exact --before=<date>`), an ADR line for each new runtime dependency. Prefer writing 100 lines over adding a
    package with a large tree.
@@ -92,8 +92,8 @@ first runs on main: say so in the hand-off, so the Orchestrator knows which bran
    Cursor chats and for the token-free login check (`agent status`), with the user's own login; a cloud agent
    (`claude --cloud`, `codex cloud`, Cursor's API with its own key) spends only its own vendor's plan or key (ADR 0080). An agent working on this repo inside Claude Code never runs the Cursor CLI.
 5. **No production from agents or routines**: no agent, tool or routine runner ever runs a prod command (prod DB,
-   ops scripts, write `az`). A routine's prod step only shows the exact command; the app runs it on the user's own
-   «Esegui» click, after checking it equals what they saw, and keeps a receipt (owner, 2026-10-24; ADR 0155).
+   ops scripts, write `az`). The app never executes routine commands, including production steps; historical receipts
+   are read-only (ADR 0179). The terminal runtime's production boundary remains unchanged.
 6. **Coexistence**: the app never changes Claude desktop / Cursor config, hooks or settings files; it reads their
    transcripts and state read-only; an external session is resumed only as a fork (never two writers).
 7. **Tests:** every module has unit tests; every user-visible feature has an e2e test with a screenshot; "done" =

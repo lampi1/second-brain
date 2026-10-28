@@ -154,10 +154,12 @@ function Pdf({data,name}:{data:Uint8Array;name:string}){
 }
 
 /** A standalone raster uses the same explicit zoom/region review flow as an image inside a report. */
-function ImageBody({result}:{result:Extract<FileViewResult,{kind:'image'}>}){
+function ImageBody({result,wide=false}:{result:Extract<FileViewResult,{kind:'image'}>;wide?:boolean}){
   const [open,setOpen]=useState(false),close=useCallback(()=>setOpen(false),[]);
+  const [fitWidth,setFitWidth]=useState(wide);
   const name=baseName(result.path);
-  return <><button type="button" className="viewer-image-open" onClick={()=>setOpen(true)} aria-label={t('viewer.imageZoom')}>
+  return <><div className="bx-row vw-tools"><button type="button" className="vw-toggle" aria-pressed={fitWidth} onClick={()=>setFitWidth(!fitWidth)} data-testid="viewer-image-width">{t('viewer.imageFitWidth')}</button></div>
+  <button type="button" className={`viewer-image-open${fitWidth?' is-wide':''}`} onClick={()=>setOpen(true)} aria-label={t('viewer.imageZoom')}>
     <img src={result.dataUrl} alt={name}/>
   </button>{open&&<Suspense fallback={null}><ImageZoom images={[{src:result.dataUrl,caption:name,imagePath:result.path,reportFile:result.path}]} index={0} onMove={()=>{}} onClose={close} testBase="viewer"/></Suspense>}</>;
 }
@@ -306,7 +308,7 @@ export function CitedFile({reference,chrome}:{reference:FileReference;chrome?:Vi
             {compare&&<Compare key={ref} path={reference.path} chatId={reference.chatId}/>}
             {pageError&&<p role="alert" data-testid="viewer-page-error">{t(`viewer.${pageError}`)}</p>}
             <ReportReview key={real??ref} file={real??reference.path} snapshot={result&&'size'in result?{size:result.size,...('mtimeMs'in result&&typeof result.mtimeMs==='number'?{mtimeMs:result.mtimeMs}:{}),...(result.kind==='text'?{offset:result.offset,shown:result.shown}:{})}:undefined}>{!result?<p role="status" className="vw-loading">{t('viewer.loading')}</p>:reason?<Empty title={t(`viewer.${reason}`)}/>
-              :result.kind==='image'?<ImageBody key={result.path} result={result}/>
+              :result.kind==='image'?<ImageBody key={result.path} result={result} wide={!!reference.routine}/>
               :result.kind==='pdf'?<Pdf key={ref} data={result.data} name={baseName(result.path)}/>
               :result.kind==='text'?<TextBody key={ref} result={result} line={page.line} go={go} picked={picked} onPick={copyLine}/>:null}</ReportReview>
           </div>

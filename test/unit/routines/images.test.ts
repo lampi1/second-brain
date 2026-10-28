@@ -31,7 +31,8 @@ it('refuses traversal, hard links, oversized raster dimensions and malformed ima
 it('binds the opened descriptor to the checked file, even when its pathname is restored', async () => {
   const dir = await fixture(), outside = await fixture(), safe = path.join(dir, 'safe.png'), secret = path.join(outside, 'private.png');
   await fs.writeFile(safe, png(20, 20)); await fs.writeFile(secret, png(30, 30));
+  const canonicalSafe = await fs.realpath(safe);
   const original = fs.open.bind(fs);
-  vi.spyOn(fs, 'open').mockImplementation(((file: string, flags: number) => original(file === safe ? secret : file, flags)) as typeof fs.open);
+  vi.spyOn(fs, 'open').mockImplementation(((file: string, flags: number) => original(file === canonicalSafe ? secret : file, flags)) as typeof fs.open);
   expect(await readRoutineImage(dir, safe)).toMatchObject({ kind: 'refused', reason: 'changed' });
 });

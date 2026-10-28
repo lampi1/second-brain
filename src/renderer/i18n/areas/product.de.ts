@@ -13,6 +13,7 @@ export const productDe:typeof productIt={
 
  "viewer.imageBefore":"Vorher",
  "viewer.imageAfter":"Nachher",
+ "viewer.imageFitWidth":"An Breite anpassen",
  "report.image.select":"Bereich auswählen",
  "report.image.hint":"Zieh über das Bild, um einen Bereich auszuwählen.",
  "report.image.clear":"Auswahl aufheben",
