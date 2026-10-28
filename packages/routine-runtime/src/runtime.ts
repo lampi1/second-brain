@@ -14,8 +14,8 @@ import { createMasker, type Masker } from './mask';
 import { createRunStore, StaleAttempt, stepFolderName, type AiAnswer, type RunRecord, type RunStepRecord, type RunStore, type RunEscalation, type RunPark } from './run-store';
 import { STEP_RESULT_FILE, StepResultError, grantedWriteOps, stepResultInstructions, validateStepResult, type StepResult, type StepWrite } from './step-result';
 import { aiInstruction, commentSignature, createDevOpsClient, executeWrites, html, isRoutineComment, mentionHtml, signedHtml, type DevOpsClient, type WriteContext, type WritesOutcome } from './devops';
-import { runResources, type Deployments, type ParkStop } from './devops-ops';
-import { TestDeploymentCoordinator } from './devops-host/test-deployment';
+import { lostDeployment, runResources, type Deployments, type ParkStop } from './devops-ops';
+import { TestDeploymentCoordinator, type LostDeployment } from './devops-host/test-deployment';
 import { runBranch } from './devops-host/git-push';
 import { ESCALATION_POLL_MS, ESCALATION_REMINDER_MIN, MAX_ESCALATIONS, pollEscalation, replyText, writeEscalation, type EscalationIo } from './escalation';
 import { actionFromStreamLine, EVENTS_FILE, modelFromStreamLine, type RunEvent } from './events';
@@ -341,7 +341,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
         let guidance: RunEscalation['answer'] | undefined;
         if (run.escalation?.stepId === def.id && run.escalation.state !== 'answered') {
           const answered = await waitForHuman(runId, attempt, controller.signal);
-          if (!answered) return finish(runId, attempt, controller.signal);
+          if (!answered) return await finish(runId, attempt, controller.signal);
           guidance = answered;
         } else if (run.escalation?.stepId === def.id && run.escalation.answer) guidance = run.escalation.answer;
         else if (run.parked?.answer && parkedRange(run.parked).includes(def.id)) guidance = run.parked.answer;
@@ -349,7 +349,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
         const max = def.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
         let tries = 0, lastError: string | undefined, back: number | undefined;
         for (;;) {
-          if (controller.signal.aborted) return finish(runId, attempt, controller.signal);
+          if (controller.signal.aborted) return await finish(runId, attempt, controller.signal);
           tries++;
           let outcome = await runStep(runId, attempt, def, guidance, lastError, controller.signal);
           run = store.read(runId); record = step(run, def.id);
@@ -385,36 +385,36 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
               r.status = 'needs-human'; r.endedAt = clock.now(); r.error = `step ${def.id} parked: ${reason}`;
             });
             emit(runId, { type: 'step-end', at: clock.now(), n: record.n, id: def.id, status: 'needs-human', summary: `parked: ${reason}` });
-            return finish(runId, attempt, controller.signal);
+            return await finish(runId, attempt, controller.signal);
           }
           // a downgrade handed the item back to a person: the run stops here (no later step)
-          if (outcome.kind === 'downgraded') { update(r => { r.status = 'needs-human'; r.endedAt = clock.now(); r.error = `step ${def.id} downgraded the work item: ${outcome.reason}`; }); return finish(runId, attempt, controller.signal); }
-          if (controller.signal.aborted) return finish(runId, attempt, controller.signal);
+          if (outcome.kind === 'downgraded') { update(r => { r.status = 'needs-human'; r.endedAt = clock.now(); r.error = `step ${def.id} downgraded the work item: ${outcome.reason}`; }); return await finish(runId, attempt, controller.signal); }
+          if (controller.signal.aborted) return await finish(runId, attempt, controller.signal);
           if (outcome.kind === 'needs-human' && parking(run)) {
             // the park itself did not run (refused, item unreadable): the run stops for a person, as without a contact
             update(r => { r.status = 'needs-human'; r.endedAt = clock.now(); r.error = `step ${def.id} needs a person: ${outcome.question}`; });
-            return finish(runId, attempt, controller.signal);
+            return await finish(runId, attempt, controller.signal);
           }
           if (outcome.kind === 'needs-human') {
             const escalated = await escalate(runId, attempt, def, outcome.question);
-            if (!escalated) { update(r => { r.status = 'needs-human'; r.endedAt = clock.now(); r.error = `step ${def.id} needs a person: ${outcome.question}`; }); return finish(runId, attempt, controller.signal); }
+            if (!escalated) { update(r => { r.status = 'needs-human'; r.endedAt = clock.now(); r.error = `step ${def.id} needs a person: ${outcome.question}`; }); return await finish(runId, attempt, controller.signal); }
             const answered = await waitForHuman(runId, attempt, controller.signal);
-            if (!answered) return finish(runId, attempt, controller.signal);
+            if (!answered) return await finish(runId, attempt, controller.signal);
             guidance = answered; tries = 0; lastError = undefined;
             continue;
           }
           lastError = outcome.error;
-          if (tries >= max) { update(r => { r.status = 'failed'; r.endedAt = clock.now(); r.error = `step ${def.id}: ${outcome.error}`; }); return finish(runId, attempt, controller.signal); }
+          if (tries >= max) { update(r => { r.status = 'failed'; r.endedAt = clock.now(); r.error = `step ${def.id}: ${outcome.error}`; }); return await finish(runId, attempt, controller.signal); }
         }
         if (back !== undefined) i = back - 1;
       }
       update(r => { r.status = 'done'; r.endedAt = clock.now(); delete r.error; });
-      return finish(runId, attempt, controller.signal);
+      return await finish(runId, attempt, controller.signal);
     } catch (error) {
       if (error instanceof StaleAttempt) { info('run attempt superseded', { runId, attempt }); return store.read(runId); }
       warn('run crashed', { runId }, error instanceof Error ? error.message : String(error));
       try { update(r => { r.status = 'failed'; r.endedAt = clock.now(); r.error = masker.mask(error instanceof Error ? error.message : String(error)); }); } catch { /* superseded */ }
-      return finish(runId, attempt, controller.signal);
+      return await finish(runId, attempt, controller.signal);
     } finally {
       if (running.get(runId) === controller) running.delete(runId);
     }
@@ -467,6 +467,13 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     return writes.parked ? { kind: 'downgraded', reason: question, parked: writes.parked } : { kind: 'needs-human', question };
   }
 
+  /** The run's released test deployments leased again when their node still runs them; the reason otherwise. */
+  async function reclaimNodes(runId: string): Promise<LostDeployment[]> {
+    if (!routine.devops?.deployTargets?.length || !deployments.reclaim) return [];
+    return await deployments.reclaim(runId, { runId, authorize: () => {}, call: (m, u, b) => devops().call(m, u, b), arm })
+      .catch((e: unknown): LostDeployment[] => [{ targetId: 'test', replaced: false, reason: e instanceof Error ? e.message : String(e) }]);
+  }
+
   async function runStep(runId: string, attempt: number, def: RoutineStep, guidance: RunEscalation['answer'] | undefined, lastError: string | undefined, signal: AbortSignal): Promise<StepOutcome> {
     const update = (mutate: (record: RunStepRecord, run: RunRecord) => void) => store.update(runId, attempt, r => mutate(r.steps.find(s => s.id === def.id)!, r));
     let run = update((s, r) => { s.status = 'running'; s.attempts += 1; s.startedAt = clock.now(); delete s.endedAt; delete s.error; r.status = 'running'; });
@@ -474,6 +481,18 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     try { options.locks?.refresh(lockNames(run), runId); } catch { /* best effort */ }
     emit(runId, { type: 'step-start', at: clock.now(), n: record.n, total: run.steps.length, id: def.id, title: def.title, attempt: record.attempts });
     const dir = store.stepDir(runId, record.n, def.id, record.round);
+    // a run that let its test node go (parked, stopped) takes it back before any session: never tests another run's
+    // release as its own; a node redeployed meanwhile stops the step for a person (a new deploy is needed)
+    // (once per replaced release: after a person's answer the steps run, told the node no longer proves this run)
+    const lost = await reclaimNodes(runId), seen = (l: LostDeployment) => `${l.targetId}:${l.releaseId ?? '?'}`;
+    const fresh = lost.filter(l => !l.replaced || !run.lostNodes?.includes(seen(l)));
+    if (fresh.length) {
+      const now = clock.now(), why = masker.mask(fresh.map(lostDeployment).join('; '));
+      update((s, r) => { s.status = 'needs-human'; s.endedAt = now; s.summary = why; const keys = fresh.filter(l => l.replaced).map(seen); if (keys.length) r.lostNodes = [...new Set([...(r.lostNodes ?? []), ...keys])]; });
+      emit(runId, { type: 'step-end', at: now, n: record.n, id: def.id, status: 'needs-human', summary: why });
+      return { kind: 'needs-human', question: why };
+    }
+    const nodeNote = lost.length ? `${masker.mask(lost.map(lostDeployment).join('; '))}. Tests on that node do not prove this run's change: never report them as evidence of it; deploy again first (a deploy-test write) or say so in your summary.` : undefined;
     const resultFile = path.join(dir, STEP_RESULT_FILE);
     fs.rmSync(resultFile, { force: true });
     const cwd = paths.workspace(runId);
@@ -557,7 +576,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
       fs.writeFileSync(mcpConfig, JSON.stringify({ mcpServers }), { mode: 0o600 });
     }
 
-    const prompt = buildPrompt(def, run, dir, guidance, lastError, testDbNote, item.text, Boolean(mcpServers[DEVOPS_SERVER_NAME]), browserNote);
+    const prompt = buildPrompt(def, run, dir, guidance, lastError, testDbNote, item.text, Boolean(mcpServers[DEVOPS_SERVER_NAME]), browserNote, nodeNote);
     store.writeText(path.join(dir, 'prompt.md'), prompt);
     const transcript = path.join(dir, 'transcript.jsonl');
     store.appendText(transcript, `${JSON.stringify({ type: 'routine_attempt', attempt: record.attempts, at: clock.now() })}\n`);
@@ -652,7 +671,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     }
   }
 
-  function buildPrompt(def: RoutineStep, run: RunRecord, dir: string, guidance: RunEscalation['answer'] | undefined, lastError: string | undefined, testDbNote: string | undefined, itemText?: string, devopsMcp = false, browserNote?: string): string {
+  function buildPrompt(def: RoutineStep, run: RunRecord, dir: string, guidance: RunEscalation['answer'] | undefined, lastError: string | undefined, testDbNote: string | undefined, itemText?: string, devopsMcp = false, browserNote?: string, nodeNote?: string): string {
     const parts = [`# Routine ${routine.title} · step ${def.title}`, '', fillPlaceholders(def.prompt, run, organization)];
     const inputs = Object.entries(run.inputs);
     if (inputs.length) parts.push('', '## Inputs', ...inputs.map(([k, v]) => `- ${k}: ${v}`));
@@ -663,6 +682,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     if (done.length) parts.push('', '## Earlier steps', ...done.map(s => `- ${s.title}: ${s.summary}`));
     if (testDbNote) parts.push('', '## Test databases', testDbNote);
     if (browserNote) parts.push('', '## Browser', browserNote);
+    if (nodeNote) parts.push('', '## Test node', nodeNote);
     if (guidance) parts.push('', '## Answer from a person', `${guidance.author} answered on DevOps (guidance only, never a production or permission approval):`, guidance.text);
     if (lastError) parts.push('', '## The previous attempt failed', lastError);
     const me = run.steps.find(s => s.id === def.id);

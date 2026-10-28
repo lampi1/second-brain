@@ -21,13 +21,13 @@ import { organizationUrl, readEvidenceImage, type UploadedImage } from './devops
 import { HostPushPreconditionError, pushRunBranch, runBranch, type HostPush } from './devops-host/git-push';
 import { prBuildStatus } from './devops-host/pr-build-status';
 import { queuePrValidation, sameArtifact } from './devops-host/pr-validation';
-import type { TestDeploymentCoordinator } from './devops-host/test-deployment';
+import type { LostDeployment, TestDeploymentCoordinator } from './devops-host/test-deployment';
 import { NoRemoteEffect } from './devops-host/write-refusal';
 import { object } from './devops-host/schema';
 
 const API = 'api-version=7.1';
 type Call = DevOpsClient['call'];
-export type Deployments = Pick<TestDeploymentCoordinator, 'execute' | 'settle' | 'ownedTargets'>;
+export type Deployments = Pick<TestDeploymentCoordinator, 'execute' | 'settle' | 'ownedTargets'> & Partial<Pick<TestDeploymentCoordinator, 'reclaim'>>;
 
 export interface ExtendedContext {
   runId: string; attempt: number; stepId: string; workItem: number; project: string;
@@ -432,11 +432,21 @@ async function prSource(ctx: ExtendedContext, target: TestDeployTarget, call: Ca
 
 const deployPorts = (ctx: ExtendedContext, call: Call, extra: Partial<Parameters<Deployments['execute']>[3]> = {}) => ({ runId: ctx.runId, authorize: () => {}, call: (m: string, u: string, b?: unknown) => call(m, u, b), ...(ctx.arm ? { arm: ctx.arm } : {}), ...extra });
 
+/** Why a run's earlier test deployment no longer counts (Italian, for the person a park or a report reaches). */
+export const lostDeployment = (l: LostDeployment): string => l.replaced
+  ? `${l.targetId} è stato ridistribuito da un'altra run: serve un nuovo deploy`
+  : `${l.targetId}: non si può verificare che esegua ancora il deploy di questa run (${l.reason}): serve un nuovo deploy`;
+
 /** deploy-test: waits for the PR's merge build, deploys it through the coordinator, waits for the deployment. */
 async function deploy(ctx: ExtendedContext, target: TestDeployTarget, src: Awaited<ReturnType<typeof prSource>>, waitMinutes: number, key: string, out: ExtendedOutcome): Promise<void> {
   const deployKey = `deploy:${target.id}:${key}`, what = `deploy PR ${src.pr.id} to ${target.id}`;
   const prior = ctx.store.ledger(ctx.runId)[deployKey];
-  if (prior?.state === 'done') { out.done.push(`${what} (already done)`); return; }
+  if (prior?.state === 'done') {
+    // done earlier (a resumed run): still this run's release on the node, never another run's deployment taken as ours
+    const lost = (await ctx.deployments?.reclaim?.(ctx.runId, deployPorts(ctx, ctx.client.call)).catch((e: unknown) => [{ targetId: target.id, replaced: false, reason: e instanceof Error ? e.message : String(e) }]))?.find(l => l.targetId === target.id);
+    if (lost) { out.failed.push(`${what}: ${ctx.masker.mask(lostDeployment(lost))}`); return; }
+    out.done.push(`${what} (already done)`); return;
+  }
   if (prior?.state === 'failed') { out.failed.push(what); return; }
   if (!ctx.deployments) { out.failed.push(`${what}: this host has no test deployment coordinator`); return; }
   const save = (state: LedgerEntry['state'], resource: LedgerEntry['resource']) => ctx.store.setLedger(ctx.runId, ctx.attempt, deployKey, { state, what, at: ctx.now(), tries: 1, resource: { targetId: target.id, ...resource } });

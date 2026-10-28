@@ -64,6 +64,8 @@ export interface DeploymentPorts {
   verifySource?: () => Promise<void>;
   arm?: (resourceId: string) => Promise<Record<string, unknown>>;
 }
+/** A run's earlier successful deployment that no longer counts: replaced on its node (lasting) or not provable now. */
+export interface LostDeployment { targetId: string; releaseId?: number; replaced: boolean; reason: string }
 export class TestDeploymentCoordinator {
   private queue: Promise<unknown> = Promise.resolve();
   /** `targets`: the app's locally approved targets file, or (routine runtime) the package's own targets. */
@@ -113,6 +115,36 @@ export class TestDeploymentCoordinator {
     const job = this.queue.then(() => { const state = this.read(); let changed = false;
       for (const l of state.stepLeases ?? []) if (l.runId === runId && !l.releasedAt && l.stepId !== activeStep) { l.releasedAt = Date.now(); changed = true; }
       if (changed) this.save(state);
+    }); this.queue = job.catch(() => undefined); return job;
+  }
+  /** A run that let its node go (parked, or stopped and resumed) and goes on: for each target whose latest deployment
+   *  of this run succeeded and was released, the node is leased again only when it still runs exactly that release
+   *  (same release, first attempt, same deployment when known). A replaced one gets a lasting evidence conflict (its
+   *  status never reports success again); a node another run holds, or a check that fails, is lost for now. Returns
+   *  the lost targets; empty = every successful deployment of this run is still its own on its node. */
+  async reclaim(runId: string, ports: DeploymentPorts): Promise<LostDeployment[]> {
+    const job = this.queue.then(async () => {
+      const state = this.read(), lost: LostDeployment[] = [];
+      if (this.heal(state, runId)) this.save(state);
+      const latest = new Map<string, Deployment>();
+      for (const d of state.deployments) if (d.runId === runId) latest.set(d.target.id, d);
+      for (const own of latest.values()) {
+        if (own.state !== 'succeeded' || !own.released || own.deleted) continue;
+        if (own.evidenceConflict) { lost.push({ targetId: own.target.id, releaseId: own.releaseId, replaced: true, reason: own.evidenceConflict }); continue; }
+        const key = deploymentLeaseKey(own.target), local = this.targets().find(t => t.id === own.target.id);
+        try {
+          ports.authorize();
+          if (!local || deploymentHash(local) !== deploymentHash(own.target)) throw new Error('Test target changed or is not locally configured');
+          if (state.stepLeases?.some(l => !l.releasedAt && l.runId !== runId && deploymentLeaseKey(l.target) === key) || state.deployments.some(d => !d.released && d.runId !== runId && deploymentLeaseKey(d.target) === key)) throw new Error('Another run holds this test node now');
+          const snapshot = await testEnvironmentSnapshot(local, (m, u) => ports.call(m, u)), observed: unknown[] = snapshot === 'empty' ? [] : JSON.parse(snapshot);
+          if (observed[1] !== own.releaseId || observed[5] !== 1 || (own.successfulDeploymentId !== undefined && observed[0] !== own.successfulDeploymentId)) {
+            own.evidenceConflict = 'Another release or deployment attempt replaced this run deployment while the run was stopped; test evidence is invalid';
+            lost.push({ targetId: own.target.id, releaseId: own.releaseId, replaced: true, reason: own.evidenceConflict });
+          } else own.released = false;
+        } catch (error) { lost.push({ targetId: own.target.id, releaseId: own.releaseId, replaced: false, reason: error instanceof Error ? error.message : String(error) }); }
+      }
+      this.save(state);
+      return lost;
     }); this.queue = job.catch(() => undefined); return job;
   }
   verifyStepSnapshot(runId: string, stepId: string, snapshot: string): void {
@@ -213,7 +245,8 @@ export class TestDeploymentCoordinator {
     const build = await call('GET', `${base}/_apis/build/builds/${pos(buildId)}?${API}`);
     if (p.source.pullRequestId && (p.source.branch !== `refs/pull/${p.source.pullRequestId}/merge` || build.reason !== 'pullRequest')) throw new Error('Expected this run PR merge build, not a branch build');
     if (build.id !== buildId || build.status !== 'completed' || build.result !== 'succeeded' || object(build.project, 'build project').id !== target.projectId || object(build.definition, 'build definition').id !== target.buildDefinitionId || String(object(build.repository, 'build repository').id).toLowerCase() !== target.repositoryId || build.sourceVersion !== p.source.commit || build.sourceBranch !== p.source.branch) throw new Error('Build is not the successful build of the run-owned PR verified commit');
-    if (history.some(d => d.buildId === buildId)) throw new Error('This run already deployed this build; read test-deploy-status with its releaseId');
+    // the same build again only when each earlier deployment of it lost its evidence (another release replaced it)
+    if (history.some(d => d.buildId === buildId && !d.evidenceConflict)) throw new Error('This run already deployed this build; read test-deploy-status with its releaseId');
     const definition = await call('GET', `${releaseBase}/definitions/${target.releaseDefinitionId}?${API}`);
     if (definition.id !== target.releaseDefinitionId || definition.revision !== target.definitionRevision || releaseDefinitionFingerprint(definition) !== target.definitionSha256) throw new Error('Release definition changed since the test target was approved');
     const environments = Array.isArray(definition.environments) ? definition.environments.map(v => object(v, 'environment')) : [];
