@@ -1,5 +1,5 @@
-// Parked runs (escalation.park, ADR 0175): a step that needs a person writes one comment for the contact only (step
-// reached, run branch), the package's downgrade tag, and ends the run; the contact's later comment resumes the same run
+// Parked runs (escalation.park, ADR 0175): a step that needs a person writes one comment for the contact only (reason,
+// step number, the step's model signature), the package's downgrade tag, and ends the run; the contact's later comment resumes the same run
 // from the named step with the answer, and the tag goes. The trigger: further areas with their own cursor, parked runs
 // resumed first, items already carrying the park tag admitted only after a comment of the contact, maxActive.
 import path from 'node:path';
@@ -12,7 +12,7 @@ import { done, fakeDevOps, routinePackage, scriptedEngine, tempDir } from './fak
 const g = (c: string) => [8, 4, 4, 4, 12].map(n => c.repeat(n)).join('-');
 const MENTION = g('c'), CONTACT = g('d');
 
-function parkingRuntime(opts: { fixNeedsHuman?: (call: number) => boolean; locks?: Locks } = {}) {
+function parkingRuntime(opts: { fixNeedsHuman?: (call: number) => boolean; locks?: Locks; fix?: { model?: string; effort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max' } } = {}) {
   const root = tempDir(), devops = fakeDevOps();
   devops.addItem({ id: 5, fields: { 'System.Title': 'x', 'System.Tags': 'ai-fixable', 'System.State': 'New' } });
   let fixCalls = 0;
@@ -24,6 +24,7 @@ function parkingRuntime(opts: { fixNeedsHuman?: (call: number) => boolean; locks
     escalation: { contact: CONTACT, contactName: 'Davide', park: true },
     devops: { organization: 'contoso', projects: ['Proj'], ops: ['comment', 'state', 'fields', 'tags', 'downgrade'], fields: [], mentions: [MENTION],
       downgrade: { removeTag: 'ai-fixable', addTag: 'ai-needs-human', state: 'New' } },
+    ...(opts.fix ? { steps: routinePackage().routine.steps.map(s => s.id === 'fix' ? { ...s, ...opts.fix } : s) } : {}),
   });
   const runtime = createRoutineRuntime({ pkg, paths: { runsRoot: path.join(root, 'runs'), workspace: id => path.join(root, 'ws', id) }, engine, devops: { authorization: devops.authorization, request: devops.request },
     ...(opts.locks ? { locks: opts.locks } : {}) });
@@ -42,13 +43,22 @@ describe('parked runs', () => {
     expect(devops.items.get(5)!.fields['System.Tags']).toBe('ai-needs-human');
     const comments = devops.comments.get(5)!;
     expect(comments).toHaveLength(1);
-    expect(comments[0]!.text).toContain('Serve il tuo aiuto: Quale campo devo usare.');
+    expect(comments[0]!.text).toContain('Serve un umano: Quale campo devo usare.');
     expect(comments[0]!.text).toContain('Passo 2 di 3.');
     expect(comments[0]!.text).not.toContain('Punto della run');
     expect(comments[0]!.text).not.toContain('Rispondi');
+    // no model declared: the comment is signed with the one the step's session reported
+    expect(comments[0]!.text).toMatch(/<\/small><br\/>— claude-sonnet-5$/);
+    expect(run.steps.find(s => s.id === 'fix')!.model).toBe('claude-sonnet-5');
     expect(comments[0]!.text).toContain(`version:2.0,${CONTACT}`);
     expect(comments[0]!.text).not.toContain(MENTION);
     expect(run.parked!.commentId).toBe(comments[0]!.id);
+  });
+
+  it('a step that declares its model and effort signs the park comment with both', async () => {
+    const { devops, runtime } = parkingRuntime({ fix: { model: 'claude-opus-5-5', effort: 'medium' } });
+    await runtime.startItem(5).finished;
+    expect(devops.comments.get(5)![0]!.text).toMatch(/<br\/>— claude-opus-5-5 · medium$/);
   });
 
   it('the contact\'s answer resumes the same run from the parked step, with the answer, and the tag goes', async () => {
@@ -78,7 +88,7 @@ describe('parked runs', () => {
     devops.addItem({ id: 7, fields: { 'System.Tags': 'other' } });
     expect(await runtime.admitItem(7)).toBe(true);
     expect(await runtime.admitItem(6)).toBe(false);
-    devops.reply(6, devops.me, 'Serve il tuo aiuto <small>routine run x · park 1 ·</small>');
+    devops.reply(6, devops.me, 'Serve un umano <small>routine run x · park 1 ·</small>');
     expect(await runtime.admitItem(6)).toBe(false);
     devops.reply(6, CONTACT, 'ecco il dato');
     expect(await runtime.admitItem(6)).toBe(true);

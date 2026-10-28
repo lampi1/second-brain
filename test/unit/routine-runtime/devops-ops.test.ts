@@ -266,7 +266,7 @@ describe('PR, push and deploy writes', () => {
   });
 
   it('push → draft PR linked to the work item → the second create is a no-op → comment → publish', async () => {
-    const { ado, store, exec, pushed } = setup();
+    const { ado, store, exec, pushed, context } = setup();
     const out = await exec(prWrites);
     expect(out.failed).toEqual([]);
     expect(pushed).toEqual([{ workspace: expect.stringMatching(/checkout$/), authorization: 'Bearer fake-token' }]);
@@ -274,13 +274,14 @@ describe('PR, push and deploy writes', () => {
     const pr = ado.prs[0]!;
     expect(pr).toMatchObject({ isDraft: true, sourceRefName: BRANCH });
     expect(ado.items.get(9)!.relations).toEqual([expect.objectContaining({ rel: 'ArtifactLink', url: expect.stringContaining(`%2F${pr.pullRequestId}`) })]);
-    const again = await exec([prWrites[1]!, { op: 'pr-comment', text: 'Ready for review.', mentions: [MENTION] }, { op: 'publish-pr' }], 'review');
+    const again = await executeWrites({ ...context, stepId: 'review', signature: '— claude-opus-5-5 · high' }, [prWrites[1]!, { op: 'pr-comment', text: 'Ready for review.', mentions: [MENTION] }, { op: 'publish-pr' }]);
     expect(again.done[0]).toBe(`PR ${pr.pullRequestId} (already created by this run)`);
     expect(again.failed).toEqual([]);
     expect(ado.prs).toHaveLength(1);
     expect(pr.threads).toHaveLength(1);
     expect(pr.threads[0]!.comments[0]!.content).toContain(`@<${MENTION.toUpperCase()}>`);
     expect(pr.threads[0]!.comments[0]!.content).toContain(`routine run ${RUN}`);
+    expect(pr.threads[0]!.comments[0]!.content).toMatch(/\n\n— claude-opus-5-5 · high$/);
     expect(pr.isDraft).toBe(false);
     expect(runResources(store.ledger(RUN), 'contoso').join('\n')).toContain(`pushed ${BRANCH} at ${PUSHED}`);
   });
@@ -333,7 +334,7 @@ describe('downgrade', () => {
     const { ado, exec, pushed, context } = setup();
     await exec(prWrites);
     const park = { n: 1, position: 'Passo 3 di 5' };
-    const out = await executeWrites({ ...context, stepId: 'review', park, headOf: async () => BRANCH }, [{ op: 'downgrade', reason: 'manca un dato', resumeFrom: 'fix' }]);
+    const out = await executeWrites({ ...context, stepId: 'review', park, headOf: async () => BRANCH, signature: '— claude-opus-5-5 · medium' }, [{ op: 'downgrade', reason: 'manca un dato', resumeFrom: 'fix' }]);
     expect(out.failed).toEqual([]);
     expect(out.resumeFrom).toBe('fix');
     expect(out.parked).toMatchObject({ branch: `fix/routine-${RUN}`, pushed: true, commentId: expect.any(Number) });
@@ -341,8 +342,8 @@ describe('downgrade', () => {
     expect(ado.prs[0]).toMatchObject({ isDraft: true, status: 'active' });
     expect(ado.items.get(9)!.fields['System.Tags']).toBe('needs-human');
     const comment = ado.comments.get(9)!.join('\n');
-    expect(comment).toContain('Serve il tuo aiuto: manca un dato.');
-    expect(comment).toContain('Serve il tuo aiuto: manca un dato.<br/>Passo 3 di 5.<br/><small>');
+    expect(comment).toContain('Serve un umano: manca un dato.<br/>Passo 3 di 5.<br/><small>');
+    expect(comment).toMatch(/<\/small><br\/>— claude-opus-5-5 · medium$/);
     expect(comment).not.toContain('Branch:');
     expect(comment).not.toContain('Rispondi');
     expect(comment).toContain(`version:2.0,${CONTACT}`);
@@ -463,9 +464,10 @@ describe('comment images (upload-image)', () => {
 
 describe('work item comment mentions', () => {
   it('an identity of devops.mentions becomes a DevOps mention; one outside it is refused before anything is sent', async () => {
-    const { ado, exec } = setup();
-    const out = await exec([{ op: 'comment', text: 'Serve una verifica', mentions: [MENTION] }]);
+    const { ado, exec, context } = setup();
+    const out = await executeWrites({ ...context, stepId: 'fix', signature: '— claude-opus-5-5 · medium' }, [{ op: 'comment', text: 'Serve una verifica', mentions: [MENTION] }]);
     expect(out.done).toEqual(['comment']);
+    expect(ado.comments.get(9)!.at(-1)).toMatch(/<\/small><br\/>— claude-opus-5-5 · medium$/);
     expect(ado.comments.get(9)!.at(-1)).toMatch(new RegExp(`^<a href="#" data-vss-mention="version:2\\.0,${MENTION}">@Anna Bianchi</a><br/>Serve una verifica`));
     const sent = ado.calls.length;
     await expect(exec([{ op: 'comment', text: 'x', mentions: [g('9')] }])).rejects.toThrow(/mentions/);

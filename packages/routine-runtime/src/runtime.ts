@@ -13,12 +13,12 @@ import { packageSecrets } from './format';
 import { createMasker, type Masker } from './mask';
 import { createRunStore, StaleAttempt, stepFolderName, type RunRecord, type RunStepRecord, type RunStore, type RunEscalation, type RunPark } from './run-store';
 import { STEP_RESULT_FILE, StepResultError, grantedWriteOps, stepResultInstructions, validateStepResult, type StepResult, type StepWrite } from './step-result';
-import { createDevOpsClient, executeWrites, type DevOpsClient, type WriteContext, type WritesOutcome } from './devops';
+import { commentSignature, createDevOpsClient, executeWrites, type DevOpsClient, type WriteContext, type WritesOutcome } from './devops';
 import { runResources, type Deployments, type ParkStop } from './devops-ops';
 import { TestDeploymentCoordinator } from './devops-host/test-deployment';
 import { runBranch } from './devops-host/git-push';
 import { ESCALATION_POLL_MS, ESCALATION_REMINDER_MIN, MAX_ESCALATIONS, pollEscalation, replyText, writeEscalation, type EscalationIo } from './escalation';
-import { actionFromStreamLine, EVENTS_FILE, type RunEvent } from './events';
+import { actionFromStreamLine, EVENTS_FILE, modelFromStreamLine, type RunEvent } from './events';
 import { DEVOPS_SERVER_NAME, type DevOpsServerConfig } from './devops-mcp';
 import { BROWSER_SERVER_NAME, BROWSER_TOOLS, type BrowserServerConfig } from './browser-mcp';
 import { azureCliToken, azureCliTokenProvider, patTokenProvider } from './token';
@@ -191,9 +191,20 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     const n = run.steps.find(s => s.id === def.id)?.n ?? 0;
     return { n: (run.parks ?? 0) + 1, position: `Passo ${n} di ${run.steps.length}` };
   };
+  /** the model each running step's session reported (runId:stepId), before its record is saved */
+  const liveModels = new Map<string, string>();
+  /** The signature of a step's DevOps comments: the model it declares, else the one its session reported, else the
+   *  last executed step's; its effort when it declares one. */
+  const signatureOf = (run: RunRecord, def?: RoutineStep): string => {
+    const recent = [...run.steps].sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0));
+    const step = def ?? routine.steps.find(s => s.id === recent.find(r => r.startedAt !== undefined)?.id);
+    const model = step?.model ?? (step && (liveModels.get(`${run.runId}:${step.id}`) ?? run.steps.find(s => s.id === step.id)?.model))
+      ?? recent.find(s => s.model)?.model ?? 'claude';
+    return commentSignature(model, step?.effort);
+  };
   const writeContext = (runId: string, attempt: number, def: RoutineStep, run: RunRecord, round: number, signal: AbortSignal, stepDir?: string, stepId = def.id): WriteContext => {
     const contact = contactOf();
-    return { runId, attempt, stepId, workItem: run.workItem!, grant: routine.devops!, client: devops(), store, masker,
+    return { runId, attempt, stepId, workItem: run.workItem!, grant: routine.devops!, client: devops(), store, masker, signature: signatureOf(run, def),
       inputs: run.inputs, deployments, arm, ...(contact ? { contact } : {}), ...(options.devops?.push ? { push: options.devops.push } : {}),
       ...(parking(run) ? { park: parkStop(run, def) } : {}), ...(options.devops?.headOf ? { headOf: options.devops.headOf } : {}),
       ...(stepDir ? { stepDir } : {}), round, sleep: ms => sleep(ms, signal), now: () => clock.now() };
@@ -532,6 +543,8 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
         timeoutMs: def.timeoutMs ?? DEFAULT_STEP_TIMEOUT_MS, signal,
         onLine: line => {
           store.appendText(transcript, `${line}\n`);
+          const model = modelFromStreamLine(line);
+          if (model) liveModels.set(`${runId}:${def.id}`, model);
           const action = actionFromStreamLine(line);
           if (action && action !== lastAction) { lastAction = action; emit(runId, { type: 'action', at: clock.now(), n: record.n, text: action }); }
         },
@@ -540,6 +553,8 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
       for (const dispose of disposers) dispose();
     }
     store.maskFolder(dir);
+    const seenModel = liveModels.get(`${runId}:${def.id}`);
+    if (seenModel) update(s => { s.model = seenModel; });
     try { for (const shot of fs.readdirSync(path.join(dir, 'screenshots')).sort()) emit(runId, { type: 'screenshot', at: clock.now(), n: record.n, path: path.join(dir, 'screenshots', shot) }); } catch { /* none */ }
 
     let result: StepResult | undefined, error: string | undefined;
@@ -643,6 +658,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     const item = await devops().item(organization, run.workItem);
     return {
       runId, client: devops(), organization, project: item.project, workItem: run.workItem, contact, masker,
+      signature: signatureOf(run, routine.steps.find(s => s.id === run.escalation?.stepId)),
       save: escalation => { store.update(runId, attempt, r => { r.escalation = escalation; }); },
       now: () => clock.now(),
     };

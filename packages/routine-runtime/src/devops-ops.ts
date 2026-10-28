@@ -11,7 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import type { TestDeployTarget } from '../../../src/shared/flow-automation';
-import { DevOpsCallError, commentHtml, html, mentionHtml, type DevOpsClient } from './devops';
+import { DevOpsCallError, commentHtml, html, mentionHtml, signedHtml, type DevOpsClient } from './devops';
 import type { RoutineDevOps } from './format';
 import type { Masker } from './mask';
 import type { LedgerEntry, RunStore } from './run-store';
@@ -49,6 +49,8 @@ export interface ExtendedContext {
   park?: ParkStop;
   /** the branch a checkout is on (`refs/heads/...`), undefined when detached or unreadable (tests replace it) */
   headOf?: (workspace: string) => Promise<string | undefined>;
+  /** the step's commentSignature: the last line of its PR and park comments */
+  signature?: string;
   sleep(ms: number): Promise<void>;
   now(): number;
 }
@@ -340,7 +342,7 @@ export async function executeExtended(ctx: ExtendedContext, write: Exclude<StepW
       if (write.images?.length && ledger()[key]?.state !== 'done') images = await uploadImages(ctx, write.images, settle, out);
       const body = prCommentBody(masker.mask(write.text), images);
       await settle({ key, what: `PR ${pr.id} comment`,
-        async once(t) { await devopsResource({ op: 'pr-comment', pullRequestId: pr.id, text: `${body}\n\n${marker}`, ...(write.mentions ? { mentions: write.mentions } : {}) }, resourcePorts(t)); },
+        async once(t) { await devopsResource({ op: 'pr-comment', pullRequestId: pr.id, text: `${body}\n\n${marker}${ctx.signature ? `\n\n${ctx.signature}` : ''}`, ...(write.mentions ? { mentions: write.mentions } : {}) }, resourcePorts(t)); },
         async verify() {
           const r = await client.call('GET', threads);
           return (Array.isArray(r.value) ? r.value : []).some(th => (Array.isArray(object(th, 'thread').comments) ? (object(th, 'thread').comments as unknown[]) : []).some(c => String(object(c, 'comment').content ?? '').includes(marker))) ? { seen: 'present' } : { seen: 'absent' };
@@ -494,7 +496,7 @@ export const needsHumanComment = (reason: string): string => `Serve un intervent
 
 /** The one comment of a parked run (Italian, for its contact): why, then only the step number (owner, 2026-10-28). */
 export const parkComment = (reason: string, park: ParkStop): string => [
-  `Serve il tuo aiuto: ${reason.trim().replace(/[.\s]+$/, '')}.`,
+  `Serve un umano: ${reason.trim().replace(/[.\s]+$/, '')}.`,
   `${park.position}.`,
 ].join('\n');
 
@@ -551,7 +553,7 @@ async function downgrade(ctx: ExtendedContext, reason: string, settle: (plan: Pl
     async once(t) {
       const tags = mentions.map(id => mentionHtml(id, id === ctx.contact?.id ? ctx.contact.name : undefined)).join(' ');
       const r = await t.call('POST', `https://dev.azure.com/${encodeURIComponent(ctx.grant.organization)}/${encodeURIComponent(ctx.project)}/_apis/wit/workItems/${ctx.workItem}/comments?api-version=7.1-preview.4`,
-        { text: `${tags ? `${tags}<br/>` : ''}${commentHtml(ctx.masker.mask(text))}<br/><small>${html(marker)}</small>` });
+        { text: signedHtml(`${tags ? `${tags}<br/>` : ''}${commentHtml(ctx.masker.mask(text))}<br/><small>${html(marker)}</small>`, ctx.signature) });
       return typeof r.id === 'number' ? { commentId: r.id } : undefined;
     },
     async verify() {

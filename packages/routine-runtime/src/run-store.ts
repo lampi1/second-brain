@@ -24,6 +24,8 @@ export interface RunStepRecord {
   /** session attempts of this step so far */
   attempts: number;
   startedAt?: number; endedAt?: number; summary?: string; error?: string; sessionId?: string;
+  /** the model the step's session reported (signs its DevOps comments when the step declares none) */
+  model?: string;
   /** test DB reachability, probed once per step */
   testDb?: 'available' | 'unavailable' | 'refused';
   testDbNote?: string;
