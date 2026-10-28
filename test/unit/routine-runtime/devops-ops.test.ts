@@ -329,10 +329,10 @@ describe('downgrade', () => {
     expect(fs.readFileSync(path.join(root, RUN, 'downgrade.md'), 'utf8')).toContain('Classification correction: serve una decisione di prodotto');
   });
 
-  it('a park keeps the draft PR, pushes the run branch, mentions only the contact, names the step and the branch', async () => {
+  it('a park keeps the draft PR, pushes the run branch, mentions only the contact, gives only the reason and the step number', async () => {
     const { ado, exec, pushed, context } = setup();
     await exec(prWrites);
-    const park = { n: 1, step: 'Review', position: 'passo 3 di 5', resumeStep: (id?: string) => id === 'fix' ? 'Fix' : 'Review' };
+    const park = { n: 1, position: 'Passo 3 di 5' };
     const out = await executeWrites({ ...context, stepId: 'review', park, headOf: async () => BRANCH }, [{ op: 'downgrade', reason: 'manca un dato', resumeFrom: 'fix' }]);
     expect(out.failed).toEqual([]);
     expect(out.resumeFrom).toBe('fix');
@@ -342,22 +342,22 @@ describe('downgrade', () => {
     expect(ado.items.get(9)!.fields['System.Tags']).toBe('needs-human');
     const comment = ado.comments.get(9)!.join('\n');
     expect(comment).toContain('Serve il tuo aiuto: manca un dato.');
-    expect(comment).toContain('Punto della run: passaggio «Review» (passo 3 di 5).');
-    expect(comment).toContain(`Branch: fix/routine-${RUN} pubblicato con tutti i commit della run.`);
-    expect(comment).toContain('dal passaggio «Fix»');
+    expect(comment).toContain('Serve il tuo aiuto: manca un dato.<br/>Passo 3 di 5.<br/><small>');
+    expect(comment).not.toContain('Branch:');
+    expect(comment).not.toContain('Rispondi');
     expect(comment).toContain(`version:2.0,${CONTACT}`);
     expect(comment).not.toContain(MENTION);
   });
 
   it('each park of a run writes again (its own keys); a detached checkout publishes nothing', async () => {
     const { ado, store, pushed, context } = setup();
-    const park = (n: number) => ({ n, step: 'Analyse', position: 'passo 1 di 5', resumeStep: () => 'Analyse' });
+    const park = (n: number) => ({ n, position: 'Passo 1 di 5' });
     await executeWrites({ ...context, stepId: 'analyse', park: park(1), headOf: async () => undefined }, [{ op: 'downgrade', reason: 'primo dubbio' }]);
     const out = await executeWrites({ ...context, stepId: 'analyse', park: park(2), headOf: async () => undefined }, [{ op: 'downgrade', reason: 'secondo dubbio' }]);
     expect(out.parked).toMatchObject({ pushed: false });
     expect(pushed).toEqual([]);
     expect(ado.comments.get(9)!).toHaveLength(2);
-    expect(ado.comments.get(9)![1]).toContain('non ancora creato: nessun commit');
+    expect(ado.comments.get(9)![1]).toContain('secondo dubbio.<br/>Passo 1 di 5.');
     expect(Object.keys(store.ledger(RUN))).toEqual(expect.arrayContaining(['downgrade:p1:comment', 'downgrade:p2:comment']));
   });
 
