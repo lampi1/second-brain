@@ -75,15 +75,21 @@ export class TabCdp {
 
   private async initChild(sid: string): Promise<void> {
     const dbg = this.wc.debugger;
+    let deadline: ReturnType<typeof setTimeout> | undefined;
     try {
-      await Promise.all([
-        dbg.sendCommand('Runtime.enable', {}, sid),
-        dbg.sendCommand('Network.enable', { maxPostDataSize: 65536 }, sid),
-        dbg.sendCommand('Target.setAutoAttach', AUTO_ATTACH, sid),
+      // A child starts paused. Even a command that never answers must not leave its page frozen.
+      await Promise.race([
+        Promise.all([
+          dbg.sendCommand('Runtime.enable', {}, sid),
+          dbg.sendCommand('Network.enable', { maxPostDataSize: 65536 }, sid),
+          dbg.sendCommand('Target.setAutoAttach', AUTO_ATTACH, sid),
+        ]),
+        new Promise<never>((_resolve, reject) => { deadline = setTimeout(() => reject(new Error('child initialization timed out')), 2000); }),
       ]);
     } catch (e) {
       log.debug('browser', 'CDP child init failed', { data: { tab: this.label, cause: errText(e) } });
     } finally {
+      clearTimeout(deadline);
       await dbg.sendCommand('Runtime.runIfWaitingForDebugger', {}, sid).catch(() => {});
     }
   }
