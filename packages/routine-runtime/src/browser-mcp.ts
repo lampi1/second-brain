@@ -53,7 +53,7 @@ const TOOLS = [
   { name: 'click', description: 'Click an element by ref.', inputSchema: { type: 'object', additionalProperties: false, required: ['ref'], properties: { ref: REF } } },
   { name: 'type', description: 'Replace the text of an input or textarea by ref (never a password field).', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'text'], properties: { ref: REF, text: { type: 'string' } } } },
   { name: 'select_option', description: 'Choose an option of a select by ref, by its value or label.', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'value'], properties: { ref: REF, value: { type: 'string' } } } },
-  { name: 'screenshot', description: 'Save a PNG of the page into this step\'s evidence folder; returns its path.', inputSchema: { type: 'object', additionalProperties: false, properties: { name: { type: 'string', description: 'file name without extension' } } } },
+  { name: 'screenshot', description: 'Save a PNG of the page into this step\'s evidence folder; returns its path. highlight: refs of the proving elements, drawn with a red box in this PNG.', inputSchema: { type: 'object', additionalProperties: false, properties: { name: { type: 'string', description: 'file name without extension' }, highlight: { type: 'array', maxItems: 5, items: REF, description: 'element refs from snapshot to mark with a red box' } } } },
   { name: 'login', description: 'Sign out and in again as a named credential of the routine (the runtime fills the password). user: another login name for that credential\'s stored password. No credential: back to the default login.', inputSchema: { type: 'object', additionalProperties: false, properties: { credential: { type: 'string', description: 'a credential id' }, user: { type: 'string', description: 'the login name to use instead of the stored one' } } } },
   { name: 'fill_secret', description: 'Fill a password field by ref with the password of a named credential (e.g. to set a user\'s password in an admin page). The value is never shown.', inputSchema: { type: 'object', additionalProperties: false, required: ['ref', 'credential'], properties: { ref: REF, credential: { type: 'string', description: 'a credential id' } } } },
 ];
@@ -264,8 +264,19 @@ export function createBrowserSession(config: BrowserServerConfig, io: BrowserSer
         return failed ? { text: failed, isError: true } : { text: `Selected "${String(args.value)}" in ${String(args.ref)}.` };
       }
       case 'screenshot': {
-        const file = await saveShot(page, String(args.name ?? ''));
-        return { text: `Saved ${file}. ${await where(page)}` };
+        // highlight: the proving elements get a red box in this PNG only (their inline style is put back after it)
+        const refs = args.highlight === undefined ? [] : Array.isArray(args.highlight) ? args.highlight : [args.highlight];
+        if (refs.length > 5) return { text: 'highlight: at most 5 element refs.', isError: true };
+        const marked = refs.map(ref => locate(page, ref));
+        for (const el of marked) {
+          await el.evaluate(e => { const s = (e as HTMLElement).style; e.setAttribute('data-routine-style', s.cssText); s.setProperty('outline', '3px solid red', 'important'); s.setProperty('outline-offset', '2px', 'important'); });
+        }
+        try {
+          const file = await saveShot(page, String(args.name ?? ''));
+          return { text: `Saved ${file}${refs.length ? ` with a red box on ${refs.join(', ')}` : ''}. ${await where(page)}` };
+        } finally {
+          for (const el of marked) await el.evaluate(e => { (e as HTMLElement).style.cssText = e.getAttribute('data-routine-style') ?? ''; e.removeAttribute('data-routine-style'); }).catch(() => undefined);
+        }
       }
       case 'login': {
         const named = args.credential === undefined ? null : namedLogin(args.credential);

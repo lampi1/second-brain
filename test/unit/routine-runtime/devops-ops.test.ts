@@ -405,6 +405,21 @@ describe('comment images (upload-image)', () => {
     expect(thread).toContain(`![after.png](${afterUrl})`);
   });
 
+  it('a PR comment places each image at its {{image:<name>}} line, right under its caption', async () => {
+    const { ado, exec, context } = setup();
+    fs.writeFileSync(path.join(context.stepDir!, 'evidence', 'before.png'), png(1));
+    fs.writeFileSync(path.join(context.stepDir!, 'evidence', 'after.png'), png(2));
+    fs.writeFileSync(path.join(context.stepDir!, 'evidence', 'extra.png'), png(3));
+    await exec(prWrites);
+    const out = await exec([{ op: 'pr-comment', images: ['evidence/before.png', 'evidence/after.png', 'evidence/extra.png'],
+      text: 'TC01 prima: il saldo resta 94\n{{image:before.png}}\n\nTC01 dopo: il saldo è 244\n{{image:after.png}}\n{{image:missing.png}}' }]);
+    expect(out.failed).toEqual([]);
+    const [beforeUrl, afterUrl, extraUrl] = [g('1'), g('2'), g('3')].map(id => `${ATTACHMENTS}/${id}`);
+    const thread = ado.prs[0]!.threads.at(-1)!.comments[0]!.content;
+    expect(thread).toContain(`TC01 prima: il saldo resta 94\n![before.png](${beforeUrl})\n\nTC01 dopo: il saldo è 244\n![after.png](${afterUrl})\nimmagine missing.png non caricata\n\n![extra.png](${extraUrl})`);
+    expect(thread).not.toContain('{{image:');
+  });
+
   it('only files of the step\'s own evidence/ or screenshots/ folder: any other path is refused', () => {
     const result = (images: string[]) => () => validateStepResult({ outcome: 'done', summary: 's', devopsWrites: [{ op: 'comment', text: 't', images }] });
     expect(result(['screenshots/a.png'])).not.toThrow();

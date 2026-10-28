@@ -325,9 +325,9 @@ export async function executeExtended(ctx: ExtendedContext, write: Exclude<StepW
       const marker = `routine run ${ctx.runId} · ${key.slice(0, 12)}`;
       const threads = `${org}/${encodeURIComponent(pr.project)}/_apis/git/repositories/${pr.repositoryId}/pullrequests/${pr.id}/threads?${API}`;
       if (write.images?.length && ledger()[key]?.state !== 'done') images = await uploadImages(ctx, write.images, settle, out);
-      const shown = images.map(i => `\n\n![${i.name.replace(/[[\]]/g, '')}](attachment:${i.id})`).join('');
+      const body = prCommentBody(masker.mask(write.text), images);
       await settle({ key, what: `PR ${pr.id} comment`,
-        async once(t) { await devopsResource({ op: 'pr-comment', pullRequestId: pr.id, text: `${masker.mask(write.text)}${shown}\n\n${marker}`, ...(write.mentions ? { mentions: write.mentions } : {}) }, resourcePorts(t)); },
+        async once(t) { await devopsResource({ op: 'pr-comment', pullRequestId: pr.id, text: `${body}\n\n${marker}`, ...(write.mentions ? { mentions: write.mentions } : {}) }, resourcePorts(t)); },
         async verify() {
           const r = await client.call('GET', threads);
           return (Array.isArray(r.value) ? r.value : []).some(th => (Array.isArray(object(th, 'thread').comments) ? (object(th, 'thread').comments as unknown[]) : []).some(c => String(object(c, 'comment').content ?? '').includes(marker))) ? { seen: 'present' } : { seen: 'absent' };
@@ -615,6 +615,21 @@ export async function mentionTags(ctx: Pick<ExtendedContext, 'grant' | 'client' 
     tags.push(mentionHtml(id, name));
   }
   return tags.join(' ');
+}
+
+/** A PR comment's text with its images: `{{image:<file name>}}` in the text puts that image there (so a caption line
+ *  can sit right above it); the images it does not place follow the text; a placeholder whose image did not upload
+ *  says so instead of showing the raw token. */
+export function prCommentBody(text: string, images: readonly UploadedImage[]): string {
+  const md = (i: UploadedImage) => `![${i.name.replace(/[[\]]/g, '')}](attachment:${i.id})`;
+  const placed = new Set<UploadedImage>();
+  const body = text.replace(/\{\{image:([^{}\r\n]{1,200})\}\}/g, (_, name: string) => {
+    const image = images.find(i => i.name === name.trim());
+    if (!image) return `immagine ${name.trim()} non caricata`;
+    placed.add(image);
+    return md(image);
+  });
+  return `${body}${images.filter(i => !placed.has(i)).map(i => `\n\n${md(i)}`).join('')}`;
 }
 
 /** The images of a work item comment, as HTML after its text. */
