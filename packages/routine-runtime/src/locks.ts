@@ -46,11 +46,21 @@ export function createLocks(dir: string, options: LocksOptions = {}): Locks {
   };
   const live = (o: LockOwner | null): o is LockOwner => Boolean(o && o.expiresAt > now() && !(o.host === host && !alive(o.pid)));
   const content = (owner: string): LockOwner => { const at = now(); return { owner, pid, host, at, expiresAt: at + ttl }; };
-  // a rewrite goes through a temp file and a rename: a reader never sees a half-written lock (and takes it for free)
+  // a rewrite goes through a temp file and a rename, a create through a temp file and a hard link: a reader never sees a
+  // half-written lock (and takes it for free)
+  const temp = (name: string, value: LockOwner) => {
+    const at = `${file(name)}.${pid}.${Math.random().toString(36).slice(2)}.tmp`;
+    fs.writeFileSync(at, JSON.stringify(value));
+    return at;
+  };
   const rewrite = (name: string, value: LockOwner) => {
-    const temp = `${file(name)}.${pid}.${Math.random().toString(36).slice(2)}.tmp`;
-    fs.writeFileSync(temp, JSON.stringify(value));
-    try { fs.renameSync(temp, file(name)); } catch (e) { fs.rmSync(temp, { force: true }); throw e; }
+    const at = temp(name, value);
+    try { fs.renameSync(at, file(name)); } catch (e) { fs.rmSync(at, { force: true }); throw e; }
+  };
+  // the exclusive create links a fully written temp file into place (EEXIST = taken): the lock never exists empty
+  const create = (name: string, value: LockOwner) => {
+    const at = temp(name, value);
+    try { fs.linkSync(at, file(name)); } finally { fs.rmSync(at, { force: true }); }
   };
 
   const locks: Locks = {
@@ -58,7 +68,7 @@ export function createLocks(dir: string, options: LocksOptions = {}): Locks {
       fs.mkdirSync(dir, { recursive: true });
       for (let tries = 0; tries < 2; tries++) {
         const mine = content(owner);
-        try { fs.writeFileSync(file(name), JSON.stringify(mine), { flag: 'wx' }); return mine; }
+        try { create(name, mine); return mine; }
         catch (e) { if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e; }
         const held = read(name);
         if (held?.owner === owner) { rewrite(name, mine); return mine; }
