@@ -58,7 +58,7 @@ A step gets these by declaring them, never by adding them to `routine.mcpServers
 |--------|--------------------|-------|
 | `routine-devops` | the run has a work item | `get_work_item`, `get_work_item_comments`, `get_attachment` (read only) |
 | `routine-testdb` | the step lists ids in `testDbs` | `test_db_query` (read only, TEST databases only) |
-| `routine-browser` | the step has `browser: true` and the routine `browser.origins` | `navigate`, `snapshot`, `click`, `type`, `select_option`, `screenshot`, `login`, `fill_secret` |
+| `routine-browser` | the step has `browser: true` and the routine `browser.origins` | `navigate`, `snapshot`, `click`, `type`, `select_option`, `press`, `hover`, `click_at`, `scroll`, `wait`, `eval`, `screenshot`, `login`, `fill_secret` |
 
 Allow their tools with `mcp__<server>__*` in `allowedTools`.
 
@@ -70,6 +70,19 @@ credentials or selectors.
 
 `browser.hide` (optional): CSS selectors of overlays the runtime hides on every page, so they never cover what a step
 clicks (Air: `["#draggable", "ai-chat"]`, the Maia chat). Plain selectors only (no braces).
+
+**Every widget is reachable.** `snapshot` gives a ref to links, buttons, fields, ARIA roles, Bootstrap toggles
+(`data-toggle`), `.btn` divs, datepicker days, any element with a pointer cursor its parent lacks, SVG groups that draw
+shapes (Air's odontogram) and the elements of same-origin iframes (`f1e3`); each line ends with `@x,y`, the element's
+centre in the full-page screenshot. `type` presses real keys (a datepicker sees them; `then: "Tab"` closes it).
+`press`, `hover`, `scroll`, `wait` (ms, a text, a selector, or `gone`) and `click_at` (screenshot pixels: a canvas, a
+cross-origin frame) cover the rest. A failed action returns Playwright's call log (e.g. "… intercepts pointer
+events": `click` with `force: true`).
+
+**`eval` is a powerful tool**: it runs any JavaScript expression in the page and returns its value as JSON (at most
+4000 characters). It runs only on `browser.origins`, never on a login page, and is refused while a password field
+holds a value; every reply is masked against the package's passwords. It can still change data the page can change:
+allow it (`mcp__routine-browser__eval`) only where a prompt needs it, and say in the prompt what it may do.
 
 ## Workflow (the Orchestrator)
 
