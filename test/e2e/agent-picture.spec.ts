@@ -60,7 +60,7 @@ test('a role takes the user\'s own picture, keeps it across a restart, and "Imma
     await expect(hero.locator('svg.agent-avatar.character')).toBeVisible();
     await expect(hero.locator('img.agent-avatar.picture')).toHaveCount(0);
     await expect(second.page.getByTestId('agent-picture-reset')).toHaveCount(0);
-  } finally { await second.app.close(); fs.rmSync(userData, { recursive: true, force: true }); }
+  } finally { await second.app.close(); fs.rmSync(userData, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 });
 
 test('a file that is not a picture is refused with a readable line', async () => {

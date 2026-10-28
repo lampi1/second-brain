@@ -43,8 +43,8 @@ for (const engine of ['claude', 'cursor'] as const) {
     const logDir = tmp('sb-e2e-log-');
     const claudeLog = path.join(logDir, 'claude.jsonl'), cursorLogFile = path.join(logDir, 'cursor.jsonl');
     const { app, page } = await launch({
-      SB_CLAUDE_PATH: path.join(FIX, 'fake-claude.mjs'), CLAUDE_CONFIG_DIR: tmp('sb-e2e-claude-'), FAKE_CLAUDE_LOG: claudeLog, FAKE_CLAUDE_DELAY: '40',
-      SB_CURSOR_PATH: path.join(FIX, 'fake-cursor-acp.mjs'), CURSOR_CONFIG_DIR: tmp('sb-e2e-cursor-user-'), FAKE_CURSOR_LOG: cursorLogFile, FAKE_CURSOR_DELAY: '40',
+      SB_CLAUDE_PATH: path.join(FIX, 'fake-claude.mjs'), CLAUDE_CONFIG_DIR: tmp('sb-e2e-claude-'), FAKE_CLAUDE_LOG: claudeLog, FAKE_CLAUDE_DELAY: '40', FAKE_CLAUDE_SLOW_TICKS: '5000',
+      SB_CURSOR_PATH: path.join(FIX, 'fake-cursor-acp.mjs'), CURSOR_CONFIG_DIR: tmp('sb-e2e-cursor-user-'), FAKE_CURSOR_LOG: cursorLogFile, FAKE_CURSOR_DELAY: '40', FAKE_CURSOR_SLOW_TICKS: '5000',
     });
     await setSize(app, 1400, 900);
     const chat: ChatSummary = await page.evaluate(([h, dir]) => window.sb.invoke('chat:create', { harness: h, cwd: dir, title: 'Screenshot' }), [engine, cwd] as const);

@@ -4,6 +4,8 @@ import { _electron as electron } from 'playwright';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { build as bundle } from 'esbuild';
+import { createRequire } from 'node:module';
 import { captureTerminalRoutine, startRoutineTrace, idleRoutineTrace, captureIdlePerformance } from './dev-visual-routines.mjs';
 import { captureRoutineWorkbench } from './dev-visual-workbench.mjs';
 
@@ -119,6 +121,22 @@ try {
   await result.scrollIntoViewIfNeeded();
   await result.getByText('Proposta disponibile', { exact: false }).waitFor();
   await capture('canonical-result');
+  await app.evaluate(({ BrowserWindow }) => {
+    const w = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay'));
+    w.setSize(1000, 700); w.webContents.setZoomFactor(1.1);
+  });
+  await page.waitForTimeout(300);
+  manifest.compactTopbar = await page.evaluate(() => {
+    const bar = document.querySelector('.topbar-main').getBoundingClientRect();
+    return { fit: document.querySelector('.topbar').dataset.fit, width: innerWidth,
+      clipped: [...document.querySelectorAll('.topbar-main button')].filter(b => b.getBoundingClientRect().width && b.getBoundingClientRect().right > bar.right + .5).map(b => b.dataset.testid) };
+  });
+  await capture('topbar-compact');
+  if (manifest.compactTopbar.clipped.length) throw new Error(`Clipped topbar actions: ${manifest.compactTopbar.clipped.join(', ')}`);
+  await app.evaluate(({ BrowserWindow }) => {
+    const w = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay'));
+    w.webContents.setZoomFactor(1); w.setSize(1600, 1100);
+  });
   await page.getByTestId('nav-memoria').click();
   await page.getByTestId('bm-memory-page').waitFor();
   await page.getByTestId('mh-tab-statistiche').click();
@@ -142,6 +160,21 @@ try {
   await fs.mkdir(realProfile, { recursive: true });
   await fs.writeFile(path.join(brain, 'brain.json'), JSON.stringify({ machinery: 'product-v1', template: { OWNER: 'Synthetic fixture' } }));
   await fs.writeFile(path.join(realProfile, 'config.json'), JSON.stringify({ theme: 'dark' }));
+  const measuredAt = Date.now(), history = Array.from({ length: 5000 }, (_, i) => ({
+    runId: `r_${(0xe00000000000 + i).toString(16)}`, chatId: `fixture-${i}`, agentId: 'artisan', version: 1,
+    goal: 'Fix the fixture parser and verify the result. '.repeat(14), startedBy: 'user',
+    startedAt: measuredAt - (5001 - i) * 300_000, endedAt: measuredAt - (5001 - i) * 300_000 + 120_000,
+    endReason: 'completed', executionMs: 120_000, costUsd: 0.2, tokens: null,
+    counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null },
+    corrections: { tagged: 0, afterReport: 0 }, tags: { skills: ['fixture-skill'], app: null, repo: null },
+  }));
+  await fs.writeFile(path.join(realProfile, 'agent-runs.json'), JSON.stringify({ version: 1, runs: history }));
+  const baseline = path.join(profile, 'read-baseline.cjs');
+  await bundle({ stdin: { contents: "export { estimatesState } from './src/main/agents/run-estimates.ts'; export { readRun } from './src/main/agents/runs.ts';", resolveDir: root },
+    outfile: baseline, bundle: true, platform: 'node', format: 'cjs', target: 'node22',
+    define: { 'import.meta': '__readMeta' }, banner: { js: "const __readMeta = { url: require('node:url').pathToFileURL(__filename).href, dirname: __dirname, filename: __filename };" } });
+  const { readRun } = createRequire(import.meta.url)(baseline);
+  if (history.some(row => !readRun(row))) throw new Error('Invalid performance history fixture');
   const observedAt = '2026-10-11T08:30:00.000Z';
   await fs.writeFile(path.join(brain, 'memory/records.json'), JSON.stringify([{
     memoryId: 'synthetic-visual-memory', scope: { roleId: 'scout', project: 'DEMO SINTETICA', environment: 'sandbox' },
@@ -169,6 +202,29 @@ try {
   const setup = page.getByTestId('first-interview');
   await setup.waitFor({ timeout: 3000 }).catch(() => {});
   if (await setup.isVisible()) { await page.keyboard.press('Escape'); await setup.waitFor({ state: 'hidden' }); }
+  // Same 5,000-run history: former synchronous calculation vs the real asynchronous IPC handler.
+  const runIds = history.slice(-3).map(r => r.runId);
+  manifest.readPerformance = { startedAt: new Date().toISOString(), runs: history.length,
+    bytes: (await fs.stat(path.join(realProfile, 'agent-runs.json'))).size };
+  manifest.readPerformance.before = await app.evaluate(async (_electron, { baseline, history, runIds, now }) => {
+    const { estimatesState } = process.getBuiltinModule('module').createRequire(baseline)(baseline);
+    const start = performance.now(); const value = estimatesState(history, runIds, now);
+    return { mainBlockedMs: performance.now() - start, accuracyN: value.accuracy.n };
+  }, { baseline, history, runIds, now: measuredAt });
+  await app.evaluate(() => {
+    let previous = performance.now();
+    const trace = globalThis.__readTrace = { maxDelayMs: 0, samples: 0 };
+    trace.timer = setInterval(() => { const now = performance.now(); trace.maxDelayMs = Math.max(trace.maxDelayMs, now - previous - 10); trace.samples++; previous = now; }, 10);
+  });
+  const requested = Date.now();
+  const readResult = await page.evaluate(async runIds => ({ estimates: await window.sb.invoke('agents:estimates', { runIds }), brain: await window.sb.invoke('brainmodel:state', undefined) }), runIds);
+  await page.waitForTimeout(30);
+  manifest.readPerformance.after = await app.evaluate(() => { const trace = globalThis.__readTrace; clearInterval(trace.timer); return { mainMaxDelayMs: trace.maxDelayMs, samples: trace.samples }; });
+  manifest.readPerformance.after.requestMs = Date.now() - requested;
+  manifest.readPerformance.after.accuracyN = readResult.estimates.accuracy.n;
+  manifest.readPerformance.endedAt = new Date().toISOString();
+  if (readResult.estimates.accuracy.n !== manifest.readPerformance.before.accuracyN) throw new Error('Worker estimate differs from synchronous reference');
+  await fs.writeFile(path.join(output, 'read-performance.json'), JSON.stringify(manifest.readPerformance, null, 2));
   await startRoutineTrace(app, [routineRuns, path.join(realProfile, 'flows'), path.join(realProfile, 'routines'), path.join(realProfile, 'routine-runs')]);
   manifest.routineIdle = await idleRoutineTrace(app, 'home before opening routines');
   await captureTerminalRoutine({ app, page, capture, root, profile, runs: routineRuns, output, manifest });

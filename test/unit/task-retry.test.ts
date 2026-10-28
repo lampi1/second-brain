@@ -15,10 +15,10 @@ function setup() {
   const service = new TaskService({ file: path.join(dir, 'tasks.json'), brainRoot: () => root, settings: () => ({ enabled: false, sound: false, everyMin: 30 }), locate: () => 'reader.mjs', locateQa: () => null, run, emit, feed });
   return { service, run, emit, feed, warning, ok, changeBrain: () => { root += '-other'; } };
 }
-it.each(['ECONNRESET', 'UND_ERR_CONNECT_TIMEOUT'])('recovers from %s with backoff and one quiet warning', async code => {
+it.each(['ECONNRESET', 'UND_ERR_CONNECT_TIMEOUT'])('recovers from %s with backoff without a bug warning', async code => {
   const s = setup(); s.run.mockResolvedValueOnce({ stdout: '', stderr: code, code: 1 });
   const pending = s.service.refresh(); await vi.advanceTimersByTimeAsync(999); expect(s.run).toHaveBeenCalledTimes(1); expect(s.service.get().error).toBeNull();
-  await vi.advanceTimersByTimeAsync(1); expect((await pending).error).toBeNull(); expect(s.run).toHaveBeenCalledTimes(3); expect(s.warning).toHaveBeenCalledTimes(1); expect(s.feed).not.toHaveBeenCalled(); s.service.shutdown();
+  await vi.advanceTimersByTimeAsync(1); expect((await pending).error).toBeNull(); expect(s.run).toHaveBeenCalledTimes(3); expect(s.warning).not.toHaveBeenCalled(); expect(s.feed).not.toHaveBeenCalled(); s.service.shutdown();
 });
 it('fails only after three attempts with increasing backoff and one warning', async () => {
   const s = setup(); s.run.mockResolvedValue({ stdout: '', stderr: 'ECONNRESET', code: 1 }); const pending = s.service.refresh();
@@ -32,7 +32,7 @@ it.each(['AADSTS700082', 'HTTP 403', 'Malformed JSON'])('does not retry a perman
 it.each(['shutdown', 'brain-change'])('stops retries on %s without applying an obsolete result', async reason => {
   const s = setup(); s.run.mockResolvedValue({ stdout: '', stderr: 'ECONNRESET', code: 1 }); const pending = s.service.refresh(); await vi.advanceTimersByTimeAsync(0);
   if (reason === 'shutdown') s.service.shutdown(); else s.changeBrain();
-  await vi.advanceTimersByTimeAsync(4000); await pending; expect(s.run).toHaveBeenCalledTimes(1); expect(s.service.get().at).toBeNull(); s.service.shutdown();
+  await vi.advanceTimersByTimeAsync(4000); await pending; expect(s.run).toHaveBeenCalledTimes(1); expect(s.service.get().at).toBeNull(); expect(s.warning).not.toHaveBeenCalled(); s.service.shutdown();
 });
 it('retries the PR read independently and does not publish partial news', async () => {
   const s = setup(); s.run.mockResolvedValueOnce(s.ok).mockResolvedValueOnce({ stdout: '', stderr: 'UND_ERR_CONNECT_TIMEOUT', code: 1 }).mockResolvedValue(s.ok);

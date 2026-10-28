@@ -21,8 +21,14 @@ export function skillFolders(o: { root: string | null; home: string | null; appT
 /** Every skill (a kebab-case folder with a SKILL.md) in `dirs`; the first folder that has a name wins. */
 export function skillsIn(dirs: readonly string[]): { name: string; folder: string }[] {
   const found = new Map<string, { name: string; folder: string }>();
-  for (const folder of dirs) if (fs.existsSync(folder)) for (const name of fs.readdirSync(folder)) {
-    if (NAME.test(name) && !found.has(name) && fs.existsSync(path.join(folder, name, 'SKILL.md'))) found.set(name, { name, folder: path.join(folder, name) });
+  for (const folder of dirs) {
+    let names: string[];
+    try { names = fs.readdirSync(folder); } catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') continue; throw e; }
+    for (const name of names) {
+      if (!NAME.test(name) || found.has(name)) continue;
+      try { if (fs.statSync(path.join(folder, name, 'SKILL.md')).isFile()) found.set(name, { name, folder: path.join(folder, name) }); }
+      catch (e) { if (!['ENOENT', 'ENOTDIR'].includes((e as NodeJS.ErrnoException).code ?? '')) throw e; }
+    }
   }
   return [...found.values()];
 }

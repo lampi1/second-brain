@@ -41,6 +41,7 @@ function fastClose(app: ElectronApplication, userData: string): void {
 
 /** Launches the built app (out/) with an isolated profile and test ports; returns the app and its window. */
 export async function launch(env: Record<string, string> = {}, userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-'))): Promise<Launched> {
+  userData = fs.realpathSync.native(userData);
   await exiting.get(userData); // the previous app on this profile is still ending
   const app = await electron.launch({
     // SB_E2E_ELECTRON_ARGS: extra Chromium switches for a machine without a GPU, e.g. a Linux container where the 3D
@@ -64,8 +65,9 @@ export async function launch(env: Record<string, string> = {}, userData = fs.mkd
 
 export async function setSize(app: ElectronApplication, width: number, height: number): Promise<void> {
   await app.evaluate(({ BrowserWindow }, [w, h]) => {
-    const win = BrowserWindow.getAllWindows()[0];
-    win?.setContentSize(w!, h!);
+    const win = BrowserWindow.getAllWindows().find(x => x.webContents.getURL().startsWith('file:') && !x.webContents.getURL().includes('#overlay'));
+    // All test windows are hidden and frameless: setContentSize adds phantom frame pixels on Windows.
+    win?.setSize(w!, h!);
   }, [width, height]);
 }
 
@@ -277,11 +279,6 @@ export async function windowShot(app: ElectronApplication, name: string): Promis
   if (b64) fs.writeFileSync(file, Buffer.from(b64, 'base64'));
   return file;
 }
-
-/** Visual baseline options: tolerant to sub-pixel font rendering, strict on layout. */
-export const VISUAL = { maxDiffPixelRatio: 0.015, animations: 'disabled' as const, caret: 'hide' as const, timeout: 15_000 };
-
-
 
 /** Closes the questions window by setting every request it shows aside («Rispondi dopo»), e.g. after a test reopened it. */
 export async function closeQuestions(page: Page): Promise<void> {

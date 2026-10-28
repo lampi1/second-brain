@@ -221,7 +221,7 @@ async function prompt(id, p) {
   }
   // reasoning streamed until cancelled ("Correggi il pensiero" selects its first sentence)
   if (/think/.test(text) && !turn.cancelled) await say(sid, 'agent_thought_chunk', ['Penso di usare la libreria vecchia. ', ...Array.from({ length: Number(process.env.FAKE_CURSOR_THINK_TICKS ?? 200) }, (_, i) => `Passo ${i + 1}. `)]);
-  if (/slow/.test(text)) await say(sid, 'agent_message_chunk', Array.from({ length: 300 }, () => 'tick '));
+  if (/slow/.test(text)) await say(sid, 'agent_message_chunk', Array.from({ length: Number(process.env.FAKE_CURSOR_SLOW_TICKS ?? 300) }, () => 'tick '));
   else if (!turn.cancelled && final) {
     await say(sid, 'agent_thought_chunk', ['Penso ', 'un attimo']);
     await say(sid, 'agent_message_chunk', [final.slice(0, 4), final.slice(4)]);

@@ -381,12 +381,12 @@ export class AgentCatalogService {
   /** A maintenance job's change (ADR 0083: applied at once, logged with an Undo by brainmodel/changes.ts): only the role
    *  text (a lesson from the user's corrections or a review's finding) or its skills. Tools, permissions, engine, model
    *  tier and limits change only with the user's approval. Null when nothing changes; refused during an open trial. */
-  maintain(id: string, patch: { instructions?: string; knowhow?: AgentProfile['knowhow'] }, reason: string): { profile: AgentProfile; before: number } | null {
+  maintain(id: string, patch: { instructions?: string; skills?: string[]; knowhow?: AgentProfile['knowhow'] }, reason: string): { profile: AgentProfile; before: number } | null {
     this.writable();
     const old = this.find(id);
     if (old.trial) throw new Error('Open trial: maintenance waits');
-    if (Object.keys(patch).some(k => k !== 'instructions' && k !== 'knowhow')) throw new Error('Maintenance changes only the role text and the skills');
-    const next = this.behaviour({ ...(patch.instructions !== undefined ? { instructions: patch.instructions } : {}), ...(patch.knowhow !== undefined ? { knowhow: patch.knowhow } : {}) }, id, false, old);
+    if (Object.keys(patch).some(k => k !== 'instructions' && k !== 'knowhow' && k !== 'skills')) throw new Error('Maintenance changes only the role text and the skills');
+    const next = this.behaviour({ ...(patch.skills !== undefined ? { skills: patch.skills } : {}), ...(patch.instructions !== undefined ? { instructions: patch.instructions } : {}), ...(patch.knowhow !== undefined ? { knowhow: patch.knowhow } : {}) }, id, false, old);
     if (sameBehaviour(old, next)) return null;
     return { profile: this.version(old, next, 'maintenance', reason), before: old.activeVersion };
   }

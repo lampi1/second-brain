@@ -124,6 +124,10 @@ html[data-blink="1"] .pill-dot { opacity: 0.35; } /* lib/beat.ts */
 /* 6 the narrowest windows: the search is its icon (Ctrl+K still opens it) and the actions sit closer */
 .topbar[data-fit~="6"] .search .keys { display: none; }
 .topbar[data-fit~="6"], .topbar[data-fit~="6"] .topbar-main, .topbar[data-fit~="6"] .topbar-end { gap: 6px; }
+/* Last compact step preserves all controls and usage figures at high zoom; only the decorative brand goes. */
+.topbar[data-fit~="7"] .brand { display: none; }
+.topbar[data-fit~="7"] .btn-m { padding-inline: 6px; }
+.topbar[data-fit~="7"] .topbar-main, .topbar[data-fit~="7"] .topbar-end { gap: 4px; }
 /* the connectors (SPEC 21) */
 .connectors-btn { gap: 7px; }
 .connector-mark { display: inline-flex; align-items: center; gap: 4px; }

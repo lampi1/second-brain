@@ -58,7 +58,7 @@ describe('terminal-only app observer', () => {
   });
 
   it('archives the four stuck cancelled runs without changing unknown outcomes or the original files', () => {
-    const root = fs.realpathSync(tempDir('routine-legacy-')), key = flowBrainContextKey(root), dir = path.join(root, 'flows', key);
+    const root = fs.realpathSync(tempDir('routine-archive-')), key = flowBrainContextKey(root), dir = path.join(root, 'flows', key);
     fs.mkdirSync(dir, { recursive: true });
     const runs = Array.from({ length: 4 }, (_, i) => ({ id: `stuck-${i}`, flowId: 'air-bugfix-auto', flowVersion: 19, status: 'cancelled', steps: [], settlementError: 'A previous DevOps write has an unknown outcome', disposition: { cleanup: 'pending', error: 'unknown' }, pendingReconciliation: { requestedAt: 1 } }));
     const original = JSON.stringify({ schema: 1, versions: [], active: {}, drafts: [], runs });

@@ -53,6 +53,7 @@ export function Splash({ mode, onDone }: { mode: SplashMode; onDone: () => void 
     const media = matchMedia('(prefers-reduced-motion: reduce)');
     const changed = () => setReduce(media.matches);
     media.addEventListener('change', changed);
+    changed(); // preference may have changed between the initial render and this subscription
     return () => media.removeEventListener('change', changed);
   }, []);
 

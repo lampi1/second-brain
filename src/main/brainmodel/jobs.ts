@@ -31,11 +31,12 @@ import { changeText } from './change-text';
 import type { UpgradeAsk } from './upgrade';
 import { tidyMemoryJob } from './memory-tidy';
 import { maskSecrets } from '../brain/mask';
+import { backfillForgotten, migrationIgnored } from './migration-ignore';
 import { generatedUnchanged, legacyMarker, migrationReceipt, sealMigration, sourceHash, sourceId } from './migration-source';
 
 /** The role side of a job: only the role text and the declared skills. */
 export interface AgentWriter {
-  update(id: string, patch: { instructions?: string; linked?: string[] }, reason: string): AgentSnapshot | null;
+  update(id: string, patch: { instructions?: string; linked?: string[]; skills?: string[] }, reason: string): AgentSnapshot | null;
 }
 export interface JobContext {
   root: string;
@@ -113,12 +114,16 @@ const brainRel = (root: string, file: string) => path.relative(root, file).split
 // ── migration ───────────────────────────────────────────────────────────────────────────────────────────────────────
 export function migrate(ctx: JobContext): JobResult {
   const sections = procedureSections(ctx.root);
+  backfillForgotten(ctx.root, sections, ctx.log);
   const existing = ctx.skills();
   const taken = new Set(existing.map(s => s.name));
   const items: MigrationItem[] = [];
   let changes = 0;
   for (const s of sections) {
     const source = sourceId(s);
+    if (migrationIgnored(ctx.root, source)) {
+      items.push({ source, title: s.title, skill: null, status: 'skipped', note: 'Dimenticata da te: Annulla la rimozione per reimportarla.' }); continue;
+    }
     const marker = `Spostata qui da \`${s.file}\` (sezione «${s.title}», riga ${s.line})`;
     if (sections.filter(other => sourceId(other) === source).length > 1) {
       items.push({ source, title: s.title, skill: null, status: 'skipped', note: 'titoli duplicati nello stesso gruppo: serve un titolo univoco' }); continue;

@@ -40,6 +40,15 @@ function fixture(extra: Partial<ChatManagerOptions> = {}) {
 }
 
 describe('ChatManager with writeDelayMs', () => {
+  it('a new assignment never synchronously rewrites the full run ledger (#262)', async () => {
+    const f = fixture({ writeDelayMs: 60_000 });
+    const writes = vi.spyOn(AgentRunStore.prototype, 'save');
+    const chat = await f.create('Start');
+    expect(writes).not.toHaveBeenCalled();
+    expect(f.chats().find(c => c.id === chat.id)?.run?.runId).toBeTruthy();
+    f.m.flushWrites();
+    expect(f.runs().map(r => r.chatId)).toContain(chat.id);
+  });
   it('flushes every pending chat and run write at quit: nothing changed in the last burst is lost', async () => {
     const f = fixture({ writeDelayMs: 60_000 }); // the timer never fires in this test: only the quit writes
     const a = await f.create('Primo'), b = await f.create('Secondo');

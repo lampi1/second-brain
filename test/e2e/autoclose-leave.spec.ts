@@ -16,7 +16,7 @@ test('a delegation tree closed by the app leaves anonymous fading copies; a chat
     const tree = list.filter(c => c.id.startsWith('tree-'));
     expect(tree.length).toBeGreaterThan(2);
     const close = (rows: ChatSummary[], by: 'auto' | 'user') => app.evaluate(({ BrowserWindow }, [rs, who]) => {
-      const wc = BrowserWindow.getAllWindows()[0]!.webContents;
+      const wc = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay'))!.webContents;
       for (const r of rs as ChatSummary[]) wc.send('chat:updated', { ...r, closedAt: Date.now(), closedBy: who, state: 'closed' });
     }, [rows, by] as const);
 

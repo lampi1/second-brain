@@ -439,7 +439,6 @@ export class AgentRunStore {
       this.recoverySource = null;
     }
     const all = this.list();
-    const ended = all.filter(r => r.endedAt !== undefined).sort((a, b) => a.endedAt! - b.endedAt! || a.startedAt - b.startedAt);
     // Runs on the main process at every run event: the file (up to RUNS_BYTES) is written compact and serialized once
     // when nothing has to go; only a store over its budget measures runs one by one.
     const bytesOf = (v: unknown) => Buffer.byteLength(JSON.stringify(v), 'utf8');
@@ -455,6 +454,7 @@ export class AgentRunStore {
     const over = () => all.length - drop.size > RUNS_MAX || bytes > budget;
     this.dirty = true; // stays set when the write fails: the next flush tries again
     if (!over()) return { body: whole, commit: () => {} };
+    const ended = all.filter(r => r.endedAt !== undefined).sort((a, b) => a.endedAt! - b.endedAt! || a.startedAt - b.startedAt);
     const take = (r: AgentRun) => { if (!drop.has(r)) { drop.add(r); bytes -= bytesOf(r); } };
     // a review goes with the run it reviews (its findings count there); then, if still over, any ended run
     for (const r of ended) {
