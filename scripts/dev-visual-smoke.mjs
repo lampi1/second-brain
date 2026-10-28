@@ -5,6 +5,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { build as bundle } from 'esbuild';
+import { createRequire } from 'node:module';
 import { captureTerminalRoutine, startRoutineTrace, idleRoutineTrace, captureIdlePerformance } from './dev-visual-routines.mjs';
 import { captureRoutineWorkbench } from './dev-visual-workbench.mjs';
 
@@ -165,13 +166,15 @@ try {
     startedAt: measuredAt - (5001 - i) * 300_000, endedAt: measuredAt - (5001 - i) * 300_000 + 120_000,
     endReason: 'completed', executionMs: 120_000, costUsd: 0.2, tokens: null,
     counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null },
-    corrections: { tagged: 0, afterReport: 0 }, tags: { skills: ['fixture-skill'] },
+    corrections: { tagged: 0, afterReport: 0 }, tags: { skills: ['fixture-skill'], app: null, repo: null },
   }));
   await fs.writeFile(path.join(realProfile, 'agent-runs.json'), JSON.stringify({ version: 1, runs: history }));
   const baseline = path.join(profile, 'read-baseline.cjs');
-  await bundle({ stdin: { contents: "export { estimatesState } from './src/main/agents/run-estimates.ts';", resolveDir: root },
+  await bundle({ stdin: { contents: "export { estimatesState } from './src/main/agents/run-estimates.ts'; export { readRun } from './src/main/agents/runs.ts';", resolveDir: root },
     outfile: baseline, bundle: true, platform: 'node', format: 'cjs', target: 'node22',
     define: { 'import.meta': '__readMeta' }, banner: { js: "const __readMeta = { url: require('node:url').pathToFileURL(__filename).href, dirname: __dirname, filename: __filename };" } });
+  const { readRun } = createRequire(import.meta.url)(baseline);
+  if (history.some(row => !readRun(row))) throw new Error('Invalid performance history fixture');
   const observedAt = '2026-10-11T08:30:00.000Z';
   await fs.writeFile(path.join(brain, 'memory/records.json'), JSON.stringify([{
     memoryId: 'synthetic-visual-memory', scope: { roleId: 'scout', project: 'DEMO SINTETICA', environment: 'sandbox' },
