@@ -79,6 +79,21 @@ function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: str
 }
 
 describe('agent_delegate', () => {
+  it('accepts a small summary overflow and extra evidence with warnings, without weakening completion guards', async () => {
+    const f = fixture(), parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Fixture report')] });
+    const child = f.m.list().find(c => c.parentId === parent.id)!;
+    const report = { outcome: 'done', summary: 'word '.repeat(60) + 'done', output: 'Complete evidence', evidence: ['fixture.txt'], doneWhen: [{ criterion: 'criterion A', met: false }] };
+    expect(report.summary).toHaveLength(304);
+    await expect(f.call('agent_report', child.id, report)).rejects.toThrow('every criterion');
+    const result = await f.call('agent_report', child.id, { ...report, doneWhen: [{ criterion: 'criterion A', met: true, evidence: 'verified result' }] });
+    expect(result).toMatchObject({ reported: true, warnings: [expect.stringContaining('summary'), expect.stringContaining('evidence')] });
+    const stored = f.m.list().find(c => c.id === child.id)!.run!.report!.canonical!;
+    expect(stored.summary.length).toBeLessThanOrEqual(300);
+    expect(stored.summary).toMatch(/word…$/);
+    expect(stored.output).toBe(report.output);
+    expect(stored.doneWhen[0]!.evidence).toBe('verified result');
+  });
   it('a Strategist launches a Scout and a Sentinel at once: two children under it, each with its contract only, and their results come back', async () => {
     const f = fixture();
     const parent = await f.root('strategist');

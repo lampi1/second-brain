@@ -386,6 +386,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const req = d.chats.pending().find(p => p.chatId === chatId && p.id === requestId);
         if (!req) throw new Error('questa domanda non è più aperta (quelle aperte: app_pending)');
         if (req.type !== 'question' || !req.questions?.length) throw new Error('bloccato: solo le domande; permessi e comandi li risponde solo l\'utente con un clic');
+        // MCP field values must reach the server verbatim and may include an explicit external confirmation.
+        // This relay adds a narrative prefix, so these forms stay in the user's own question panel.
+        if (req.tool.startsWith('mcp__')) throw new Error('bloccato: compila il modulo MCP nel pannello delle domande; le risposte non possono essere riscritte dall’Orchestrator');
         const orchestrator = caller();
         if (!orchestrator || !decidedSince(orchestrator.id, req.at)) throw new Error('bloccato: L\'utente non ha scritto né risposto nell’Orchestrator da quando la domanda si è aperta. Chiedigliela prima: una tua scelta non vale come sua');
         const given = a.answers && typeof a.answers === 'object' && !Array.isArray(a.answers) ? a.answers as Record<string, unknown> : {};

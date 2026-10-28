@@ -177,6 +177,16 @@ export class FlowService {
     });
   }
   snapshot(): FlowSnapshot { this.reconcileDeadlines(); return copy({ contextKey: this.options.contextKey, drafts: this.data.drafts, versions: this.data.versions, active: this.data.active, runs: this.data.runs, ...(this.options.appBuild ? { appBuild: this.options.appBuild } : {}), ...(this.storageError ? { storageError: this.storageError } : {}) }); }
+  /** Host polling reads only the required records, never every archived definition for each run. Copies retain
+   *  the isolation of snapshot(); deadlines are still reconciled before a run can be used to authorize work. */
+  get contextKey(): string { return this.options.contextKey; }
+  runsSnapshot(): FlowRun[] { this.reconcileDeadlines(); return copy(this.data.runs); }
+  runSnapshot(id: string): FlowRun | undefined { this.reconcileDeadlines(); const run = this.data.runs.find(r => r.id === id); return run ? copy(run) : undefined; }
+  versionSnapshot(flowId: string, version: number): FlowVersion | undefined {
+    this.reconcileDeadlines();
+    const found = this.data.versions.find(v => v.definition.id === flowId && v.version === version);
+    return found ? copy(found) : undefined;
+  }
   outputsSinceActive(flowId: string, ownerId: string, offset = 0): unknown {
     const version = this.version(flowId, this.data.active[flowId] ?? 0), start = integer(offset, 'offset', 0, 100000);
     const rows = this.data.runs.filter(r => r.flowId === flowId && (r.ownerOrchestratorId === ownerId || r.ownerOrchestratorId === APP_OWNER)).flatMap(r => (r.outputs ?? []).filter(o => o.at >= version.activatedAt).map(o => ({ runId: r.id, flowVersion: r.flowVersion, disposition: r.disposition?.kind, ...o }))).sort((a, b) => a.at - b.at || a.runId.localeCompare(b.runId) || a.id.localeCompare(b.id));

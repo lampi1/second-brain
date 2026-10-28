@@ -284,7 +284,8 @@ async function runTurn(text) {
   if (/elicit/.test(text) && !turn.aborted) {
     const request_id = `req_${++n}`, form = /elicitform/.test(text);
     out({ type: 'control_request', request_id, request: { subtype: 'elicitation', mcp_server_name: 'wiz', message: 'Confermi la pubblicazione?', mode: 'form',
-      requested_schema: form ? { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } : { type: 'object', properties: {} } } });
+      requested_schema: /elicitformmulti/.test(text) ? { type: 'object', properties: { count: { type: 'integer', minimum: 1, maximum: 3 }, name: { type: 'string' } }, required: ['count', 'name'] }
+        : form ? { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } : { type: 'object', properties: {} } } });
     turn.waitingId = request_id;
     const r = await new Promise(resolve => waiters.set(request_id, resolve)).finally(() => { if (turn) turn.waitingId = null; });
     final = `Elicitation ${JSON.stringify(r ?? null)}`;

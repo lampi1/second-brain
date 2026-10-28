@@ -28,6 +28,7 @@ import { createPortal } from 'react-dom';
 import{t}from'../i18n';
 import { explainTool } from '@shared/explain';
 import { isYesNo, yesNoOf } from '@shared/yes-no';
+import { isMcpFormRequest } from '@shared/mcp-form';
 import type { Answer, ChatItem, EngineInfo, Harness, PendingRequest, Question, UiBrief } from '@shared/contract';
 import { answerText, cleanDescription, confirmPicks, getPermissionOptions, initialDraft, markedRecommended, permissionAnswer, pickOption, requestKey, type Draft, type KeyResult } from '../lib/keys';
 import { ago, toolLabel } from '../lib/format';
@@ -125,6 +126,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
   const q = req.questions?.[draft.step];
   const testBase = testid ?? (variant === 'lane' ? `lane-card-${req.chatId}-${req.id}` : `request-${req.chatId}-${req.id}`);
   const isPerm = req.type === 'permission';
+  const isMcpForm = isMcpFormRequest(req);
   // free text on every question; Cursor gets it as a skip with the text as the reason (its ACP answer has room only
   // for option ids: acp.ts freeTextReason), so the box says so
   const canOther = !isPerm && !!q;
@@ -141,7 +143,10 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
       const next = all[all.indexOf(here) + 1] ?? all.find(x => x !== here);
       requestAnimationFrame(() => { if (next && next.isConnected) next.focus(); else document.querySelector<HTMLElement>('[data-testid="orchestrator-input"]')?.focus(); });
     }
-    void answer(req, a).then(ok => { if (ok) onAnswered?.(); else setSent(false); });
+    void answer(req, a).then(ok => {
+      if (ok) onAnswered?.();
+      else { if (isMcpForm) { setDraft(initialDraft(req)); setOther(null); } setSent(false); }
+    });
   };
   const apply = (r: KeyResult, viaKey = false) => {
     if (r.other) { if (canOther) setOther(''); return; }
@@ -211,7 +216,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
         <span className="other-hint"><Kbd>{t('genui.request.enter')}</Kbd>{' '}{t('genui.request.sendHint')} · <Kbd>Esc</Kbd>{' '}{t('genui.request.backHint')}</span>
         <span className="sp" />
         <button type="button" className="btn btn-ghost btn-s" onClick={closeOther} data-testid={`${testBase}-other-cancel`}>{t('genui.request.cancel')}</button>
-        <button type="button" className="btn btn-primary btn-s" onClick={sendOther} disabled={sent || !(other ?? '').trim()} data-testid={`${testBase}-other-send`}>{t('genui.request.send')}</button>
+        <button type="button" className="btn btn-primary btn-s" onClick={sendOther} disabled={sent || (!isMcpForm && !(other ?? '').trim())} data-testid={`${testBase}-other-send`}>{t('genui.request.send')}</button>
       </div>
     </div>
   );
@@ -223,7 +228,10 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
 
   // One renderer for every host; disclosure actions are separate from answering.
   // a yes/no question (the only kind agents ask, ADR 0135): its answers are the big Sì / No tiles (ChoiceCard yn)
-  const yesNo = !!q && isYesNo(q);
+  // MCP booleans are typed field values, not a narrative yes/no decision with a free-text skip.
+  const yesNo = !isMcpForm && !!q && isYesNo(q);
+  const formContext = isMcpForm ? <div className="ask-lead" style={{ whiteSpace: 'pre-wrap' }} data-testid={`${testBase}-form-context`}>{req.detail || req.title}</div> : null;
+  const formRefuse = isMcpForm ? <button type="button" className="btn btn-ghost btn-s" disabled={sent} data-testid={`${testBase}-form-refuse`} onClick={() => finish({ kind: 'permission', allow: false })}>{t('genui.request.declineForm')}</button> : null;
   const choiceCards = () => q?.options.map((option, i) => (
     <ChoiceCard key={draft.step + ':' + i} option={option} number={i + 1} recommended={i === recIdx} previewOpen={variant === 'window'}
       yn={yesNo && !q.multiSelect ? yesNoOf(option.label) ?? undefined : undefined}
@@ -283,6 +291,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
     const split = isPerm ? null : splitAsk(title);
     return (
       <div {...common} className={`wq ${isPerm ? 'perm' : 'question'} ${sent ? 'sent' : ''}`}>
+        {formContext}
         {keysTo && q && createPortal(<><Kbd>1</Kbd>–<Kbd>{otherKey ?? q.options.length}</Kbd>{' '}{t('genui.request.choose')} <Kbd>↑</Kbd><Kbd>↓</Kbd>{' '}{t('genui.request.move')} <Kbd>{t('genui.request.enter')}</Kbd>{' '}{t('genui.request.confirmHint')}</>, keysTo)}
         <div className="wq-kicker">
           {/* a permission says in two words what it does (shared/gist.ts) */}
@@ -320,6 +329,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
             )}
           </>
         ) : null}
+        {formRefuse}
       </div>
     );
   }
@@ -327,6 +337,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
   if (variant === 'lane' || variant === 'compact') {
     return (
       <div {...common} className={`need-card ${isPerm ? 'perm' : 'question'} ${sent ? 'sent' : ''}`} data-lane={variant === 'lane' ? '' : undefined}>
+        {formContext}
         <div className="need-head">
           {variant === 'lane' ? (
             <><HarnessMark harness={harness} size={16} /><b className="need-title">{chatTitle}</b></>
@@ -340,9 +351,11 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
           {isPerm && variant === 'lane' ? <span className="need-kind">{t('genui.request.permission')}</span> : null}
           {title}
         </div>
+        {isMcpForm && variant === 'lane' && q?.header && <div className="ask-lead">{q.header}</div>}
         {isPerm && rawFull && <code className="need-raw" title={rawFull} data-testid={`${testBase}-raw`}>{rawFull.split('\n')[0]}</code>}
         {variant === 'compact' && <AskContext req={req} defaultOpen={false} testBase={testBase} onToggle={refocus} />}
         <div className="need-opts">{chips()}</div>
+        {formRefuse}
         {laterBtn && <div className="ask-later-row">{laterBtn}</div>}
       </div>
     );
@@ -351,6 +364,8 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
   if (variant === 'plain' && q) {
     return (
       <div {...common} className={`ask-plain ${sent ? 'sent' : ''}`}>
+        {formContext}
+        {isMcpForm && q.header && <div className="ask-lead">{q.header}</div>}
         <div className="ask-plain-q" data-testid={`${testBase}-q`}>{title}{stepBadge}</div>
         <div className="ask-plain-opts" role={q.multiSelect ? 'group' : undefined}>
           {choiceCards()}
@@ -363,6 +378,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
         {q.multiSelect && (
           <button type="button" className="btn btn-primary btn-s" onClick={() => apply(confirmPicks(req, draft))} disabled={sent || draft.picks.length === 0} data-testid={`${testBase}-confirm`}>{t('genui.request.confirm')} <Kbd>{t('genui.request.enter')}</Kbd></button>
         )}
+        {formRefuse}
       </div>
     );
   }
@@ -370,11 +386,13 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
   if (variant === 'orchestrator') {
     return (
       <div {...common} className={`decision ${sent ? 'sent' : ''}`}>
+        {formContext}
         <div className="decision-k">{t('genui.request.decision')}{q?.header ? ` · ${q.header}` : ''}{stepBadge}</div>
         <div className="decision-q" title={isPerm ? rawFull || undefined : undefined}>{title}</div>
         {isPerm && rawFull && <code className="need-raw" title={rawFull} data-testid={`${testBase}-raw`}>{rawFull.split('\n')[0]}</code>}
         <AskContext req={req} defaultOpen={!!ctxOpen} testBase={testBase} onToggle={refocus} />
         <div className="need-opts">{chips()}</div>
+        {formRefuse}
         {laterBtn && <div className="ask-later-row">{laterBtn}</div>}
         {/* after the choices: Tab from the card reaches an option first, never a command's Esegui */}
         {commands}
@@ -387,6 +405,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
   const tileSplit = isPerm ? null : splitAsk(title);
   return (
     <div {...common} className={`ask ${isPerm ? 'perm' : 'question'} ${sent ? 'sent' : ''}`}>
+      {formContext}
       <div className="ask-head">
         <span className="ask-icon">{isPerm ? <IconShield size={14} /> : <IconQuestion size={14} />}</span>
         <span className="ask-kind">{t(isPerm ? 'genui.request.permission' : 'genui.request.question')}</span>
@@ -435,6 +454,7 @@ function AskPanel({ req, variant, chatTitle, harness = 'claude', engine, onAnswe
         </>
       ) : null}
       {/* after the choices: Tab from the card reaches an option first, never a command's Esegui */}
+      {formRefuse}
       {commands}
     </div>
   );

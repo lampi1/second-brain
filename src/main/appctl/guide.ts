@@ -118,6 +118,7 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
     text: `${x.description} · type ${x.type}${x.values ? ` ${x.values.join('|')}` : ''}${x.key.includes('*') || !values ? '' : ` · now ${show(getAt(s, x.key))}`} · change: app_config area setting` });
   out.push({ kind: 'agents', title: 'Agenti: revisioni automatiche on/off (reviews, judging)', text: AGENT_REVIEWS });
   out.push({ kind: 'agents', title: 'Agenti: lavori conclusi e livelli (completed counter, levels, XP)', text: AGENT_LEVELS });
+  out.push({ kind: 'concept', title: 'Connettori: moduli MCP elicitation nelle domande', text: 'Claude MCP forms appear in Da rispondere: up to eight flat text, enum, boolean or numeric fields; Altro accepts typed input. The user fills or refuses the form; defaults never approve it and there is no always-allow. Empty forms ask for confirmation. Nested schemas, unsupported constraints, URL requests and credential fields are cancelled with an explanation; use the connector login route for credentials. app_pending lists requests read-only; the user answers in the question panel.' });
   out.push(...routineLines(d.flows?.()));
   if (d.flows) for (const [title, text] of ROUTINE_RULES) out.push({ kind: 'routine', title, text });
   out.push({ kind: 'routine', title: 'Routine: creare un pacchetto (author a routine package from the user need)', text: ROUTINE_AUTHORING_SUMMARY });

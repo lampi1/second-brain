@@ -253,7 +253,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const migrateLegacy = (host: RoutineHost, flow: FlowService, key: string): void => {
     if (migrated.has(key)) return; migrated.add(key);
     const job = (async () => {
-      const runs = flow.snapshot().runs, writer = writerFor(key);
+      const runs = flow.runsSnapshot(), writer = writerFor(key);
       const operations = runs.flatMap(run => writer.operationsFor(run.id).filter(op => op.state === 'pending').map(op => ({ id: op.requestHash, runId: run.id, op: op.op ?? 'unknown-write', state: op.state, ...(op.at ? { at: op.at } : {}), ...(op.organization ? { organization: op.organization } : {}), ...(op.workItemId ? { workItemId: op.workItemId } : {}) })));
       // stuck in cleanup, holding a pending write, or active with progress and no package run (M2: ended, never restarted)
       const progressed = (run: FlowRun) => run.steps.some(s => !['pending', 'ready'].includes(s.status));
@@ -279,11 +279,11 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   };
   const sharedDetect = (host: RoutineHost, flow: FlowService) => async (config: FlowAutomationConfig, _cursor: Record<string, string>, signal?: AbortSignal): Promise<FlowDetectionResult> => {
     if (options.packaged?.(config.flowId)) throw new Error('La routine è un pacchetto: il suo trigger è nella sezione Routine.');
-    const definition = flow.snapshot().versions.find(v => v.definition.id === config.flowId && v.version === config.flowVersion)?.definition;
+    const definition = flow.versionSnapshot(config.flowId, config.flowVersion)?.definition;
     if (!definition) throw new Error('Routine version unavailable');
-    const prefix = `app:${config.flowId}:`, events = automations.get(flow.snapshot().contextKey)?.snapshot().events ?? [];
+    const prefix = `app:${config.flowId}:`, events = automations.get(flow.contextKey)?.snapshot().events ?? [];
     const of = (inputs: Record<string, string>) => Number(inputs['work-item-id']);
-    host.releaseLost(definition, prefix, workItem => events.some(e => of(e.inputs) === workItem) || flow.snapshot().runs.some(r => r.flowId === config.flowId && of(r.inputs) === workItem));
+    host.releaseLost(definition, prefix, workItem => events.some(e => of(e.inputs) === workItem) || flow.runsSnapshot().some(r => r.flowId === config.flowId && of(r.inputs) === workItem));
     let base: FlowDetectionResult | undefined;
     const items: FlowDetectionResult['items'] = [];
     const loop = host.trigger(definition, config, async (c, cursor, own) => (base = await detector(c, cursor, own ?? signal)), workItem => {
@@ -329,23 +329,23 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       .finally(() => {
         pumps.delete(key);
         const dirty = dirtyPumps.delete(key);
-        try { if (!stopped && options.brainRoot() && current().key === contextKey) { const run = service().snapshot().runs.find(run => run.id === runId); if (run) blockedReady(run); if (dirty) void pumpRun(runId, contextKey); } }
+        try { if (!stopped && options.brainRoot() && current().key === contextKey) { const run = service().runSnapshot(runId); if (run) blockedReady(run); if (dirty) void pumpRun(runId, contextKey); } }
         catch { /* The brain may disappear while a background reconciliation finishes. */ }
       });
     pumps.set(key, pending); return pending;
   };
-  const specOf = (run: FlowRun): FlowStep | undefined => service().snapshot().versions.find(version => version.definition.id === run.flowId && version.version === run.flowVersion)?.definition.steps[run.currentStep];
+  const specOf = (run: FlowRun): FlowStep | undefined => service().versionSnapshot(run.flowId, run.flowVersion)?.definition.steps[run.currentStep];
   const dirs = (key: string, runId: string) => ({ attachments: path.join(options.userData, 'flows', key, 'attachments'), work: path.join(options.userData, 'flows', key, 'work', runId) });
   const resolveFor = (run: FlowRun, spec: FlowStep, context: { key: string; root: string }): ResolvedCommand => {
     const where = dirs(context.key, run.id);
-    try { const version = service().snapshot().versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion);
+    try { const version = service().versionSnapshot(run.flowId, run.flowVersion);
       const root = version?.definition.package ? materializePackage(path.join(options.userData, 'flows', context.key, 'packages', version.digest), version.definition.package) : context.root;
       return { ...resolve(root, spec, run, where.attachments, where.work), cwd: root }; }
     catch (error) { return { kind: spec.action!.kind as 'script' | 'query', ref: spec.action!.ref, env: spec.env ?? 'test', command: `(${spec.action!.ref})`, program: '', args: [], file: '', sha256: '', values: {}, problems: [error instanceof Error ? error.message : String(error)] }; }
   };
   /** The runner's self-heal (ADR 0155): a failed step with attempts left retries, or sends the work back to the step its
    *  definition names. Not for the user's own blocks, a prod step, content that changed, or a paused run. */
-  const healable = (run: FlowRun, _spec?: FlowStep): boolean => isHealable(run, service().snapshot().versions.find(version => version.definition.id === run.flowId && version.version === run.flowVersion)?.definition);
+  const healable = (run: FlowRun, _spec?: FlowStep): boolean => isHealable(run, service().versionSnapshot(run.flowId, run.flowVersion)?.definition);
   const heal = (flow: FlowService, run: FlowRun, spec: FlowStep): boolean => {
     const step = run.steps[run.currentStep]!;
     if (!healable(run, spec) || commands.has(run.id) || interrupting.has(run.id)) return false;
@@ -379,7 +379,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     return String(result.snapshot);
   };
   const reconcileEnvironment = async (run: FlowRun, flow: FlowService, all = false): Promise<void> => {
-    const definition = flow.snapshot().versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)?.definition;
+    const definition = flow.versionSnapshot(run.flowId, run.flowVersion)?.definition;
     const keep = !all && run.status === 'active' && !run.disposition && ['ready', 'running'].includes(run.steps[run.currentStep]?.status ?? '') ? run.steps[run.currentStep]?.stepId : undefined;
     for (const step of run.steps) {
       if (step.stepId === keep || !definition?.steps.find(s => s.id === step.stepId)?.testEnvironment) continue;
@@ -399,11 +399,11 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     const flow = instances.get(key);
     if (!flow) return Promise.resolve();
     const job = (async () => {
-      for (const run of flow.snapshot().runs) {
-        const definition = flow.snapshot().versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)?.definition;
+      for (const run of flow.runsSnapshot()) {
+        const definition = flow.versionSnapshot(run.flowId, run.flowVersion)?.definition;
         if (!definition?.steps.some(s => s.testEnvironment)) continue;
         await reconcileEnvironment(run, flow, true);
-        const current = flow.snapshot().runs.find(r => r.id === run.id);
+        const current = flow.runSnapshot(run.id);
         if (current?.status === 'active' && current.steps[current.currentStep]?.status === 'running') flow.blockStep(current.id, current.revision, current.steps[current.currentStep]!.stepId, `${HOLD}Routine context closed; verify the interrupted step before retry.`);
       }
     })().catch(error => { log.warn('flows', 'Environment cleanup on context exit is incomplete', { cause: String(error), hint: 'The lease remains held until its exact worker stops.' }); throw error; }).finally(() => leaving.delete(key));
@@ -538,7 +538,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       if (creatingWorkers + options.chats().filter(chat => !chat.closedAt && !chat.isOrchestrator && ['running', 'starting', 'waiting'].includes(chat.state)).length >= 2) return;
       creatingWorkers++;
       let worker: ChatSummary | undefined, bound: FlowRun | undefined;
-      const unchanged = () => { if (!valid()) return false; const live = flow.snapshot().runs.find(item => item.id === runId); return live?.status === 'active' && !live.paused && live.revision === run.revision && live.steps[live.currentStep]?.stepId === step.stepId && live.steps[live.currentStep]?.status === 'ready'; };
+      const unchanged = () => { if (!valid()) return false; const live = flow.runSnapshot(runId); return live?.status === 'active' && !live.paused && live.revision === run.revision && live.steps[live.currentStep]?.stepId === step.stepId && live.steps[live.currentStep]?.status === 'ready'; };
       try {
       if (spec.testEnvironment) {
         const authorize = () => { const latest = flow.status(runId, run.ownerOrchestratorId), grant = automation().grantFor(latest)?.grant;
@@ -586,7 +586,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
         };
         const onFailure = (error: unknown) => {
           if (!valid()) return;
-          const latest = flow.snapshot().runs.find(item => item.id === run.id), currentStep = latest?.steps[latest.currentStep];
+          const latest = flow.runSnapshot(run.id), currentStep = latest?.steps[latest.currentStep];
           if (latest?.status === 'active' && latest.revision === bound!.revision && currentStep?.stepId === step.stepId && currentStep.chatRunId === binding.chatRunId && currentStep.taskVersion === binding.taskVersion) {
             flow.blockStep(run.id, latest.revision, step.stepId, `Worker submission failed: ${(error instanceof Error ? error.message : 'host delivery failed').slice(0, 2000)}`); void pumpRun(run.id, contextKey);
           }
@@ -605,7 +605,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
           }
         }
         if (valid()) {
-          const latest = flow.snapshot().runs.find(item => item.id === runId), expected = bound?.revision ?? run.revision;
+          const latest = flow.runSnapshot(runId), expected = bound?.revision ?? run.revision;
           // a launch that never bound is not an attempt: the user sees why (engine missing, refused), the runner does not loop on it
           if (latest?.status === 'active' && latest.revision === expected && latest.steps[latest.currentStep]?.stepId === step.stepId) flow.blockStep(runId, expected, step.stepId, `${bound ? '' : HOLD}Automatic worker launch failed: ${error instanceof Error ? error.message : 'host creation or first turn failed'}`);
         }
@@ -618,13 +618,13 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
    *  an app restart resumes the same package run from its unfinished step. */
   const packageRun = (host: RoutineHost, runId: string, contextKey: string): void => {
     if (packageRuns.has(runId)) return;
-    const flow = service(), snap = flow.snapshot(), run = snap.runs.find(r => r.id === runId);
+    const flow = service(), run = flow.runSnapshot(runId);
     // blocked = the package run failed or needs a human: only the user's retry (back to active) resumes it, never a pump
     if (!run || run.status === 'completed' || run.status === 'cancelled' || run.status === 'blocked' || run.paused || run.pendingCancellation) return;
     // the legacy migration of this context decides first: a run it ends must never start in the package
     const migration = migrating.get(contextKey);
     if (migration) { if (!waiting.has(runId)) { waiting.add(runId); void migration.finally(() => { waiting.delete(runId); packageRun(host, runId, contextKey); }); } return; }
-    const definition = snap.versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)?.definition;
+    const definition = flow.versionSnapshot(run.flowId, run.flowVersion)?.definition;
     if (!definition) return;
     const grant = automation().grantFor(run)?.grant;
     packageRuns.add(runId);
@@ -655,15 +655,15 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     if (!holding) return;
     leaseRecovery ??= deployments.recoverStepLeases(); await leaseRecovery;
     const context = current(), flow = service();
-    for (const run of flow.snapshot().runs.filter(run => run.status === 'cancelled' && run.cancellation?.interruption === 'pending')) {
+    for (const run of flow.runsSnapshot().filter(run => run.status === 'cancelled' && run.cancellation?.interruption === 'pending')) {
       try { await confirmStopped(run, context); }
       catch (error) { log.warn('flows', 'Cancelled flow still awaiting worker interruption', { cause: String(error), hint: 'The automatic slot remains reserved; interruption retries for the exact bound task.' }); }
       if (stopped || current().key !== context.key) return;
     }
     // active runs advance; blocked ones may heal; a prod step waiting for the user gets (and keeps) its exact command
-    for (const run of flow.snapshot().runs) { await settleRun(run.id, context.key); if (pumpable(run)) await pumpRun(run.id, context.key); }
+    for (const run of flow.runsSnapshot()) { await settleRun(run.id, context.key); if (pumpable(run)) await pumpRun(run.id, context.key); }
     if (stopped || !options.brainRoot() || current().key !== context.key) return;
-    for (const run of flow.snapshot().runs) { recoveryReady(run); blockedReady(run); }
+    for (const run of flow.runsSnapshot()) { recoveryReady(run); blockedReady(run); }
     await automation().tick();
     // Metadata refresh does not delay the runner and spends no model tokens.
     void components().tick().catch(() => {});
@@ -691,7 +691,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   const cancel = async (input: FlowCancel, ownerId?: string): Promise<FlowRun> => {
     if (stopped) throw new Error('Flow runtime stopped');
     const context = current(), flow = service(), run = flow.cancel(input, ownerId);
-    if (options.routineHost) { const definition = flow.snapshot().versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)?.definition; if (definition) options.routineHost.cancel(run.id, definition); }
+    if (options.routineHost) { const definition = flow.versionSnapshot(run.flowId, run.flowVersion)?.definition; if (definition) options.routineHost.cancel(run.id, definition); }
     await reconcileRecovery(run, context); return flow.status(run.id, run.ownerOrchestratorId);
   };
   const proposeCancel = async (input: FlowCancel, ownerId: string): Promise<FlowRun> => service().proposeCancel(input, ownerId);
@@ -706,7 +706,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   };
   const restart = async (input: FlowRestart): Promise<FlowRun> => {
     if (stopped) throw new Error('Flow runtime stopped');
-    const context = current(), flow = service(), source = flow.snapshot().runs.find(run => run.id === input.runId);
+    const context = current(), flow = service(), source = flow.runSnapshot(input.runId);
     if (!source) throw new Error('Flow run not found');
     const existing = flow.restarted(input);
     if (existing) { const run = source.subjectKey.startsWith('auto:') ? automation().restart(input) : existing; await reconcileRecovery(source, context); return run; }
@@ -753,7 +753,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   /** Only what needs the user reaches the Orchestrator (ADR 0155): a block the runner cannot heal, or a prod step
    *  waiting for «Esegui». Healable failures, retries and progress stay on the Routine page. */
   const blockedReady = (run: FlowRun): void => {
-    if (!options.send || run.paused) return;
+    if (!options.send || run.paused || (!['blocked', 'approval'].includes(run.status) && !run.settlementError)) return;
     const step = run.steps[run.currentStep], spec = specOf(run);
     const prod = run.status === 'approval' && !!run.awaitingUser, blocked = run.status === 'blocked' && !!spec && !healable(run, spec);
     if (!prod && !blocked && !run.settlementError) return;
@@ -770,9 +770,9 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
   };
   const reportReady = (chatId: string): boolean => {
     if (!options.brainRoot() || stopped) return false;
-    const runs = service().snapshot().runs.filter(r => r.status === 'active' && r.steps[r.currentStep]?.chatId === chatId);
+    const runs = service().runsSnapshot().filter(r => r.status === 'active' && r.steps[r.currentStep]?.chatId === chatId);
     if (!runs.length) return false;
-    for (const run of runs) void pumpRun(run.id, service().snapshot().contextKey);
+    for (const run of runs) void pumpRun(run.id, service().contextKey);
     return true;
   };
   const hint = (text: string, ownerId: string): string => {
@@ -824,9 +824,9 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     const active = requestSignal(run.id, signal);
     const authorize = () => {
       if (stopped || current().key !== context.key || interrupting.has(run.id)) throw new Error('DevOps write context changed');
-      const latest = flow.snapshot().runs.find(r => r.id === run.id), live = options.chats().find(c => c.id === chatId), bound = latest?.steps[latest.currentStep];
+      const latest = flow.runSnapshot(run.id), live = options.chats().find(c => c.id === chatId), bound = latest?.steps[latest.currentStep];
       if (!latest || latest.paused || latest.status !== 'active' || latest.currentStep !== run.currentStep || bound?.status !== 'running' || bound.chatRunId !== step.chatRunId || bound.taskVersion !== step.taskVersion || bound.chatId !== chatId || !live?.run || live.run.runId !== step.chatRunId || (live.run.taskVersion ?? 1) !== step.taskVersion || live.closedAt || live.run.report || live.run.endedAt || Date.now() - (bound.startedAt ?? 0) > spec.timeoutMs) throw new Error('DevOps write binding is no longer active');
-      if (request.op === 'push-branch' || request.op === 'create-pr') assertLatestBranch(latest, flow.snapshot().runs);
+      if (request.op === 'push-branch' || request.op === 'create-pr') assertLatestBranch(latest, flow.runsSnapshot());
       assertPackageBinding(latest, spec, { chatId, chatRunId: bound.chatRunId!, taskVersion: bound.taskVersion!, launched: launchOf(live) });
       const fresh = automation().grantFor(latest); if (!fresh || JSON.stringify(fresh) !== JSON.stringify(granted)) throw new Error('DevOps write grant changed');
     };
@@ -861,7 +861,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     return first && kept.every(k => k && k.organization === first.organization && k.workItemId === first.workItemId) ? first : null;
   };
   const writeReconciliation = (runId: string): ReconciliationView => {
-    const context = current(), run = service().snapshot().runs.find(r => r.id === runId);
+    const context = current(), run = service().runSnapshot(runId);
     if (!run) throw new Error('Run non trovata.');
     const stoppedRun = ['blocked', 'cancelled', 'completed'].includes(run.status) && run.cancellation?.interruption !== 'pending';
     const busy = commands.has(runId) || activeRequests.has(runId) || settling.has(runId) || interrupting.has(runId);
@@ -874,14 +874,14 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     const context = current(), flow = service(), view = writeReconciliation(input.runId);
     if (!view.canReconcile) throw new Error(view.blockedReason);
     if (view.revision !== input.expectedRevision) throw new Error('La run è cambiata: riapri la riconciliazione.');
-    const run = flow.snapshot().runs.find(r => r.id === input.runId)!, scope = reconcileScope(run, view.operations)!;
+    const run = flow.runSnapshot(input.runId)!, scope = reconcileScope(run, view.operations)!;
     // a receipt is local bookkeeping: it needs only the organization and work item the write was made under
     const grant = { ...(automation().approvedConfigFor(run)?.devopsWrite ?? { projects: [], ops: [], fields: [] }), organization: scope.organization };
     interrupting.add(run.id);
     try {
       await quiesceReconciliationWorker(run, context.root);
       const authorize = () => {
-        const live = flow.snapshot().runs.find(r => r.id === run.id);
+        const live = flow.runSnapshot(run.id);
         if (stopped || current().key !== context.key || !live || live.revision !== input.expectedRevision || !['blocked', 'cancelled', 'completed'].includes(live.status) || live.cancellation?.interruption === 'pending' || commands.has(run.id) || activeRequests.has(run.id) || settling.has(run.id)) throw new Error('La run o il brain sono cambiati; nessuna riconciliazione salvata.');
       };
       await writerFor(context.key).reconcile({ runId: run.id, workItemId: scope.workItemId, grant, authorize }, input);
@@ -908,7 +908,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     // A crash after the durable attestation leaves the same proposal for the user; retry never repeats a write.
     if (!already || already.outcome !== outcome || already.note !== proposal.evidence) await reconcileWrites({ runId: input.runId, expectedRevision: input.expectedRevision, digest: proposal.digest, decisions: [{ id: proposal.requestHash, outcome, note: proposal.evidence }] });
     if (stopped || current().key !== context.key) throw new Error('Brain context changed; reconciliation saved, recovery remains pending');
-    const run = flow.snapshot().runs.find(r => r.id === input.runId)!;
+    const run = flow.runSnapshot(input.runId)!;
     if (interrupting.has(run.id) || commands.has(run.id) || activeRequests.has(run.id) || settling.has(run.id)) throw new Error('Run operations are still stopping; recovery remains pending');
     interrupting.add(run.id);
     let resume = false;
@@ -924,8 +924,9 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     options.changed(snapshot()); if (resume) await tick();
     return flow.status(run.id, run.ownerOrchestratorId);
   };
+  const dossierInputs = new Map<string, string>();
   const dossier = (runId: string, ownerId: string) => {
-    const context = current(), flow = service(), run = flow.status(runId, ownerId), version = flow.snapshot().versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)!;
+    const context = current(), flow = service(), run = flow.status(runId, ownerId), version = flow.versionSnapshot(run.flowId, run.flowVersion)!;
     const report = routineDossier(run, version, writerFor(context.key).operationsFor(runId), deployments.history(runId), automation().approvedConfigFor(run));
     const files = saveDossier(path.join(options.userData, 'flows', context.key, 'reports'), report);
     const safe = report.run;
@@ -967,10 +968,10 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     if (interrupting.has(runId) || settling.has(runId) || stopped || current().key !== contextKey) return;
     settling.add(runId);
     try {
-      const flow = service(), snap = flow.snapshot(), run = snap.runs.find(r => r.id === runId);
+      const flow = service(), run = flow.runSnapshot(runId);
       if (!run) return;
       await reconcileEnvironment(run, flow);
-      const definition = snap.versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)?.definition;
+      const definition = flow.versionSnapshot(run.flowId, run.flowVersion)?.definition;
       if (!definition?.package || run.disposition?.kind === 'skipped') return;
       for (const output of run.outputs ?? []) if (output.brainPath && !output.projectedAt) { try { projectRunOutput(current().root, run.id, output); flow.projected(run.id, output.id); } catch (error) { if (run.disposition) flow.downgradeProgress(run.id, run.disposition.phase, error instanceof Error ? error.message : 'Declared output unavailable'); return; } }
       const granted = automation().settlementGrantFor(run);
@@ -981,7 +982,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
       }
       const authorize = () => {
         if (stopped || current().key !== contextKey) throw new Error('Routine settlement context changed');
-        const latest = flow.snapshot().runs.find(r => r.id === runId), fresh = latest && automation().settlementGrantFor(latest);
+        const latest = flow.runSnapshot(runId), fresh = latest && automation().settlementGrantFor(latest);
         if (!latest || latest.paused || !fresh || JSON.stringify(fresh) !== JSON.stringify(granted)) throw new Error('Routine settlement grant changed');
       };
       const writer = writerFor(contextKey), ctx = { runId, ...granted, authorize, ...(run.currentStep === 0 ? { mentionReason: 'intake' as const } : {}), evidenceRoot: path.join(options.userData, 'flows', contextKey, 'evidence', runId) };
@@ -998,7 +999,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
         try { return await writer.execute(context, request); }
         catch (error) { if (error instanceof ReconciledWrite && error.outcome === 'done') return { reconciled: true }; throw error; }
       };
-      const d = flow.snapshot().runs.find(r => r.id === runId)?.disposition, policy = definition.package.downgrade;
+      const d = flow.runSnapshot(runId)?.disposition, policy = definition.package.downgrade;
       const settleResources = async () => {
         for (const pr of writer.ownedPrs(runId)) await cleanupWrite(ctx, { op: 'abandon-pr', pullRequestId: pr.id });
         for (const targetId of deployments.ownedTargets(runId)) {
@@ -1021,17 +1022,34 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
             for (const pr of writer.ownedPrs(runId)) await cleanupWrite(ctx, { op: 'abandon-pr', pullRequestId: pr.id });
             for (const targetId of deployments.ownedTargets(runId)) { const status = await cleanupWrite(ctx, { op: 'test-deploy-status', targetId }); if (!status.terminal) { await cleanupWrite(ctx, { op: 'cancel-test-deploy', targetId }); await cleanupWrite(ctx, { op: 'test-deploy-status', targetId }); } }
             if (!await deployments.settle(runId, authorize)) throw new Error('Test deployment still active or uncertain; cleanup retains its lease');
-            const outputs = flow.snapshot().runs.find(r => r.id === runId)?.outputs ?? [];
+            const outputs = flow.runSnapshot(runId)?.outputs ?? [];
             for (const o of outputs) if (o.brainPath && !o.projectedAt) { projectRunOutput(current().root, runId, o); flow.projected(runId, o.id); }
             flow.downgradeProgress(runId, 6);
           }
-        } catch (error) { const currentPhase = flow.snapshot().runs.find(r => r.id === runId)?.disposition?.phase ?? d.phase; flow.downgradeProgress(runId, currentPhase, error instanceof Error ? error.message : 'Cleanup failed'); }
+        } catch (error) { const currentPhase = flow.runSnapshot(runId)?.disposition?.phase ?? d.phase; flow.downgradeProgress(runId, currentPhase, error instanceof Error ? error.message : 'Cleanup failed'); }
       } else if (['completed', 'cancelled'].includes(run.status)) { for (const targetId of deployments.ownedTargets(runId)) { const status = await cleanupWrite(ctx, { op: 'test-deploy-status', targetId }); if (!status.terminal) { await cleanupWrite(ctx, { op: 'cancel-test-deploy', targetId }); await cleanupWrite(ctx, { op: 'test-deploy-status', targetId }); } } if (!await deployments.settle(runId, authorize)) throw new Error('Test deployment still active or uncertain; cleanup retains its lease'); }
       flow.settlementResult(runId, historyFailure);
     } catch (error) {
       // One uncertain external effect must retain its lease without starving unrelated runs and triggers.
       service().settlementResult(runId, error instanceof Error ? error.message : 'Routine settlement failed');
-    } finally { settling.delete(runId); try { if (!stopped && current().key === contextKey) { const run = service().snapshot().runs.find(r => r.id === runId); if (run) dossier(runId, run.ownerOrchestratorId); } } catch (error) { log.warn('flows', 'Routine dossier unavailable', { cause: String(error), hint: 'The original host ledgers are retained; inspect the run and storage.' }); } }
+    } finally {
+      settling.delete(runId);
+      try {
+        if (!stopped && current().key === contextKey) {
+          const run = service().runSnapshot(runId);
+          if (run) {
+            const key = `${contextKey}:${runId}`;
+            // Ledgers and settlement errors can change without the run revision changing.
+            const fingerprint = JSON.stringify([run, writerFor(contextKey).operationsFor(runId), deployments.history(runId), automation().approvedConfigFor(run)]);
+            if (dossierInputs.get(key) !== fingerprint) {
+              dossier(runId, run.ownerOrchestratorId);
+              dossierInputs.set(key, fingerprint);
+              if (dossierInputs.size > 1000) dossierInputs.delete(dossierInputs.keys().next().value!);
+            }
+          }
+        }
+      } catch (error) { log.warn('flows', 'Routine dossier unavailable', { cause: String(error), hint: 'The original host ledgers are retained; inspect the run and storage.' }); }
+    }
   };
   /** Only the authenticated chat bound to the current read-only adapter step may query an approved test target. */
   const testDbRead = async (chatId: string, request: Record<string, unknown>, signal?: AbortSignal): Promise<Record<string, unknown>> => {
@@ -1076,7 +1094,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     } catch {
       // Never leak server, credentials, SQL-driver diagnostics or result data through an error.
       const evidenceId = evidence?.id;
-      if (evidenceId && flow.snapshot().runs.find(item => item.id === run.id)?.testDbEvidence?.find(item => item.id === evidenceId)?.status === 'pending') flow.finishTestDbQuery(run.id, evidenceId);
+      if (evidenceId && flow.runSnapshot(run.id)?.testDbEvidence?.find(item => item.id === evidenceId)?.status === 'pending') flow.finishTestDbQuery(run.id, evidenceId);
       throw new Error('Test DB read failed or permission changed; inspect the run query evidence');
     } finally { active.done(); }
   };
@@ -1102,7 +1120,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
     const why = trigger ? [...scopeMisses(trigger, facts), ...filterMisses(trigger, facts)] : [];
     const fold = (s: string) => s.normalize('NFKC').trim().toLowerCase();
     if (trigger && (fold(trigger.organization) !== fold(target.organization) || fold(trigger.project) !== fold(target.project))) blocking.push(`è nel progetto ${target.organization}/${target.project}, la routine lavora su ${trigger.organization}/${trigger.project}`);
-    const active = service().snapshot().runs.find(run => run.flowId === flowId && run.inputs['work-item-id'] === String(item.id) && !['completed', 'cancelled'].includes(run.status));
+    const active = service().runsSnapshot().find(run => run.flowId === flowId && run.inputs['work-item-id'] === String(item.id) && !['completed', 'cancelled'].includes(run.status));
     if (active) blocking.push('ha già una run attiva di questa routine');
     return { id: item.id, title: item.title, type: item.type, state: item.state, areaPath: item.areaPath, tags: item.tags, url: item.url, revision: item.revision,
       matches: !why.length, why, blocking, ...(active ? { activeRun: active.id } : {}) };
@@ -1184,7 +1202,7 @@ export function createFlowRuntime(options: FlowRuntimeOptions) {
    *  (recomputed and compared), stores the receipt and continues the run with the result. */
   const runUserCommand = async (runId: string, expectedRevision: number, stepId: string, shown: string): Promise<FlowRun> => {
     if (stopped) throw new Error('Flow runtime stopped');
-    const context = current(), flow = service(), run = flow.snapshot().runs.find(item => item.id === runId), spec = run && specOf(run);
+    const context = current(), flow = service(), run = flow.runSnapshot(runId), spec = run && specOf(run);
     if (!run || !spec || run.revision !== expectedRevision || run.steps[run.currentStep]?.stepId !== stepId || !commandStep(spec) || spec.env !== 'prod' || run.awaitingUser?.stepId !== stepId) throw new Error('La run è cambiata: ricontrolla prima di eseguire.');
     if (commands.has(run.id)) throw new Error('Questo comando è già in esecuzione.');
     const resolved = resolveFor(run, spec, context);

@@ -41,6 +41,7 @@ import { AgentChildrenReporter } from './agent-children';
 import type { ChildObservation } from '../../shared/agents';
 import { claudeMcp, claudeTools, suggestedAbove } from '../agents/tool-policy';
 import { BRIEF_GRACE_MS, BRIEF_REFUSAL, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
+import { mcpForm, mcpFormAnswer, type McpForm } from '../../shared/mcp-form';
 
 export interface ClaudeOptions extends SessionOptions {
   /** claude binary or a .mjs fake (tests); default: `claude` resolved on PATH */
@@ -141,7 +142,7 @@ const PRODUCT_IDS: ReadonlySet<string> = new Set(Object.values(PRODUCT_HOOKS));
 const PERMISSION_MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
-interface Call { requestId: string; tool: string; input: Obj; toolUseId: string; suggestions: unknown[]; question: boolean; noAlways: boolean; elicitation?: true }
+interface Call { requestId: string; tool: string; input: Obj; toolUseId: string; suggestions: unknown[]; question: boolean; noAlways: boolean; elicitation?: true; form?: McpForm }
 interface Control { resolve(v: Obj): void; reject(e: Error): void; timer: NodeJS.Timeout; subtype: string }
 interface Stream { key: string; item: Extract<ChatItem, { kind: 'assistant' | 'thinking' }>; emitted: boolean; done: boolean }
 type ToolItem = Extract<ChatItem, { kind: 'tool' }>;
@@ -389,8 +390,14 @@ export class ClaudeSession implements HarnessSession {
     if (!call) return false;
     let response: Obj;
     if (call.elicitation) {
-      if (answer.kind !== 'permission') throw new Error('Questa è una richiesta di conferma: rispondi consenti o rifiuta.');
-      response = answer.allow ? { action: 'accept', content: {} } : { action: 'decline' };
+      if (answer.kind === 'permission' && !answer.allow) response = { action: 'decline' };
+      else if (call.form?.fields.length) {
+        if (answer.kind !== 'question') throw new Error('Compila i campi del modulo prima di inviare.');
+        response = { action: 'accept', content: mcpFormAnswer(call.form, answer.answers) };
+      } else {
+        if (answer.kind !== 'permission') throw new Error('Questa è una richiesta di conferma: rispondi consenti o rifiuta.');
+        response = { action: 'accept', content: {} };
+      }
     } else if (call.question) {
       if (answer.kind === 'question') response = { behavior: 'allow', updatedInput: { ...call.input, answers: flattenAnswers(answer.answers) }, toolUseID: call.toolUseId };
       else if (!answer.allow) response = { behavior: 'deny', message: answer.message?.trim() || 'Nessuna risposta dall’utente.', toolUseID: call.toolUseId };
@@ -781,32 +788,32 @@ export class ClaudeSession implements HarnessSession {
     return true;
   }
 
-  /** An MCP server asks the user through the CLI (#148): a form without fields (a confirmation) is a permission panel,
-   *  answered accept / decline, like the Codex chat (codex.ts elicitation). A form with fields or a URL the app cannot
-   *  render is answered cancel (never an error, which failed the server's call at once), told in the chat and logged
-   *  once per chat. Raw values never enter the logs. */
+  /** An MCP server asks through the CLI: empty forms use a permission panel; supported flat forms use questions.
+   *  Unsupported schemas/URLs are cancelled explicitly. The host never invents values or logs form answers. */
   private onElicitation(id: string, r: Obj): void {
     if (this.calls.has(id)) return;
     const server = s(r.mcp_server_name) || s(r.server_name) || 'MCP', message = s(r.message);
     const schema = o(r.requested_schema), mode = s(r.mode) || 'form';
     const fields = Object.keys(o(schema.properties)).length;
-    if (mode !== 'form' || fields > 0 || !message.trim()) {
+    let form: McpForm | undefined, unsupported = '';
+    try { form = mcpForm(schema, message); } catch (error) { unsupported = error instanceof Error ? error.message : 'invalid schema'; }
+    if (mode !== 'form' || !form || !message.trim()) {
       try { this.write({ type: 'control_response', response: { subtype: 'success', request_id: id, response: { action: 'cancel' } } }); } catch { /* gone */ }
       this.sys(`MCP ${server}: ${mode === 'url' ? 'chiede di aprire un indirizzo' : 'chiede dati con un modulo'} che l'app non sa mostrare: annullato.`, 'warn');
       if (!this.elicitationLogged) {
         this.elicitationLogged = true;
-        log.warn('chats', 'MCP elicitation the app cannot show: cancelled', { chat: this.opts.chatId, cause: mode !== 'form' ? `mode ${mode}` : fields ? 'a form with fields' : 'no message',
-          hint: 'only a confirmation (a form without fields) is shown as a panel; logged once per chat', data: { server, mode, fields } });
+        log.warn('chats', 'MCP elicitation the app cannot show: cancelled', { chat: this.opts.chatId, cause: mode !== 'form' ? `mode ${mode}` : unsupported || 'no message',
+          hint: 'flat string, enum, boolean and numeric fields are supported; credential fields require a login handoff; logged once per chat', data: { server, mode, fields } });
       }
       return;
     }
     const tool = `mcp__${server}`, input = trimInput({ server });
     // the server writes the message: its name leads the headline, and no control or bidi character can reorder it
     const plain = (x: string) => stripAnsi(x).replace(/[\u0000-\u0008\u000b-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, '');
-    this.calls.set(id, { requestId: id, tool, input: {}, toolUseId: '', suggestions: [], question: false, noAlways: true, elicitation: true });
+    this.calls.set(id, { requestId: id, tool, input: {}, toolUseId: '', suggestions: [], question: false, noAlways: true, elicitation: true, form });
     log.info('chats', 'MCP elicitation', { chat: this.opts.chatId, data: { requestId: id, server } });
     this.setState('waiting');
-    this.sink.pending({ id, type: 'permission', tool, title: cut(`MCP ${plain(server)}: ${plain(message)}`, 140), detail: cut(`Server: ${plain(server)}\n${plain(message)}`, 8000), input, noAlways: true, at: Date.now() });
+    this.sink.pending({ id, type: fields ? 'question' : 'permission', tool, title: cut(`MCP ${plain(server)}: ${plain(message)}`, 140), detail: cut(`Server: ${plain(server)}\n${plain(message)}`, 8000), input, ...(fields ? { questions: form.questions } : {}), noAlways: true, at: Date.now() });
   }
 
   /** The hooks registered at initialize: the Orchestrator's turn budget, a product brain's rules (in process). */

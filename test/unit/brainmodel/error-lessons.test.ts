@@ -1,5 +1,5 @@
-// Recurring errors of ai-errors.md become rules in rules/lessons.md (src/main/brainmodel/error-lessons.ts): a group of
-// two or more lines gives one rule (its own «regola:» first), once; an undo is never redone; a single error stays a note.
+// Legacy error-rule writer: only complete reusable prevention from distinct date/chat occurrences qualifies.
+// It remains unmounted in automatic maintenance; an undo is never redone and a single occurrence stays a note.
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -31,11 +31,11 @@ const ERRORS = `# Errori
 describe('recurring errors become rules', () => {
   it('writes one rule per recurring group, its own «regola:» first, and never twice', () => {
     const s = setup(ERRORS);
-    expect(errorLessons(s.ctx)).toBe(2);
+    expect(errorLessons(s.ctx)).toBe(1);
     const text = s.lessons();
     expect(text).toContain('## Errori ricorrenti');
     expect(text).toContain('- niente «fatto» senza screenshot (2 volte');
-    expect(text).toMatch(/Errore già successo 2 volte \(«Test dato per passato senza eseguirlo»\)/);
+    expect(text).not.toContain('Test dato per passato'); // an observation without a prevention rule is not policy
     expect(text).not.toContain('inglese tecnico'); // once is a note, not a rule
     expect(JSON.parse(fs.readFileSync(path.join(s.root, 'brain.json'), 'utf8')).rules.topicFiles).toEqual(['rules/lessons.md']);
     expect(errorLessons(s.ctx)).toBe(0);
@@ -48,8 +48,19 @@ describe('recurring errors become rules', () => {
     expect(errorLessons(s.ctx)).toBe(0);
   });
 
-  it('words a rule-less group from the error itself', () => {
-    expect(errorRule({ label: 'x', count: 3, sample: 'y', rule: null })).toBe('Errore già successo 3 volte («x»): y. Controlla questo punto prima di consegnare.');
-    expect(errorRule({ label: 'x', count: 3, sample: 'y', rule: 'fai z' })).toBe('fai z');
+  it('keeps full reusable prevention and rejects case-specific or missing rules', () => {
+    expect(errorRule({ rule: null })).toBeNull();
+    expect(errorRule({ rule: 'Prima di chiudere il ticket 12345, verificare la build.' })).toBeNull();
+    const rule = `Prima di consegnare, ${'verifica le evidenze e i risultati osservati; '.repeat(15)}riporta eventuali limiti.`;
+    expect(errorRule({ rule })).toBe(rule);
+    expect(errorRule({ rule: 'Verifica le evidenze…' })).toBeNull();
+  });
+  it('ten lines from one chat on one day are one occurrence', () => {
+    const line = '- 2026-10-01 09:40 · fixture-chat · test · verifica mancata · vero: nessuno screenshot · regola: Verifica lo screenshot prima di consegnare';
+    const s = setup(Array(10).fill(line).join('\n'));
+    expect(errorLessons(s.ctx)).toBe(0);
+    fs.appendFileSync(path.join(s.root, 'ai-errors.md'), `\n${line.replace('2026-10-01', '2026-10-02')}`);
+    expect(errorLessons(s.ctx)).toBe(1);
+    expect(s.lessons()).toContain('(2 volte');
   });
 });

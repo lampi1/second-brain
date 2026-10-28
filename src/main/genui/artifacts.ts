@@ -61,7 +61,7 @@ export class Artifacts {
     if (a.component === 'brief' && target !== 'next-ask') problems.push('brief: only with target "next-ask" (it is the context of your next question)');
     if (!ui.ok) problems.push(ui.error);
     if (a.id !== undefined && a.id !== null && (typeof a.id !== 'string' || !KEY.test(a.id))) problems.push('id: 1-40 letters, digits, ".", "_" or "-"');
-    if (problems.length || !ui.ok) throw new Error(`${problems.join('; ')}. Fix all fields and call show_ui again (see the complete brief example in the description).`);
+    if (problems.length || !ui.ok) throw new Error(`${problems.join('; ')}. Fix all fields and call show_ui again.${a.component === 'brief' ? ` Minimal brief example: ${BRIEF_EXAMPLE}` : ''}`);
     // a brief's screenshot the card cannot show is sent back now, while the chat can still move it (ADR 0150)
     if (ui.spec.component === 'brief' && this.d.imageProblem) {
       for (const [i, im] of (ui.spec.props.images ?? []).entries()) {
@@ -236,11 +236,12 @@ function text(v: unknown, name: string, max: number): string {
 export const SHOW_UI_HINT = 'show_ui: prefer it for tables, options, boards, file lists, charts, only when it explains better than text (a status table, a comparison, the changed files), never as decoration; keep it short; it never answers a question or a permission.';
 
 /** show_ui on a chat's own endpoint (/mcp/chat/:chatId/:token: the path names the caller). */
+const BRIEF_EXAMPLE = '{"title":"Fix verified","summary":"The regression test passes; approve the next step.","component":"brief","target":"next-ask","props":{"done":["Unit tests pass"],"ifYes":"Continue with the proposed next step","ifNo":"Keep the current state and revise the proposal"}}';
 export function showUiTool(store: Artifacts): McpTool {
   return {
     name: 'show_ui',
     description: [
-      'Brief example: {"title":"Fix verified","summary":"The regression test passes; approve the next step.","component":"brief","target":"next-ask","props":{"done":["Implemented the fix","Unit tests pass"],"ifYes":"Continue with the proposed next step","ifNo":"Keep the current state and revise the proposal"}}',
+      `Brief example: ${BRIEF_EXAMPLE}`,
       'brief requires title and summary plus props.done (1–5 strings, or one string; each ≤200 chars), ifYes and ifNo (each ≤200 chars). Use target next-ask, then ask the question. All shape errors are returned together.',
       'Show the user a visual instead of a wall of text: a trusted component of the app\'s catalog, drawn by the app (never HTML). Prefer it for tables, options to choose from, boards (QA test cases, chat status), changed-file lists, charts. Keep it short.',
       'summary = the same content in one or two plain sentences (shown when the visual cannot be drawn). target: chat (default: a card in this chat) · orchestrator (in your Orchestrator\'s panel) · next-ask (attached to your next AskUserQuestion; with no question within 60 s it becomes a card here). The same id again replaces that visual (a board you update). It never answers a question or a permission: still ask with AskUserQuestion.',
@@ -258,10 +259,14 @@ export function showUiTool(store: Artifacts): McpTool {
       type: 'object',
       properties: {
         id: { type: 'string', description: 'optional: your id for this visual (1-40 chars); the same id replaces it' },
-        title: { type: 'string', description: `one line, at most ${TITLE_MAX} chars` },
-        summary: { type: 'string', description: `plain text, at most ${SUMMARY_MAX} chars: the fallback and the line under the title` },
+        title: { type: 'string', minLength: 1, maxLength: TITLE_MAX, description: `one line, at most ${TITLE_MAX} chars` },
+        summary: { type: 'string', minLength: 1, maxLength: SUMMARY_MAX, description: `plain text, at most ${SUMMARY_MAX} chars: the fallback and the line under the title` },
         component: { type: 'string', enum: [...UI_COMPONENTS] },
-        props: { type: 'object', description: 'the component\'s props (see the description)' },
+        props: { type: 'object', description: 'the component\'s props (see the description); brief requires done, ifYes and ifNo', properties: {
+          done: { type: 'array', minItems: 1, maxItems: 5, items: { type: 'string', minLength: 1, maxLength: 200 }, examples: [['Unit tests pass']] },
+          ifYes: { type: 'string', minLength: 1, maxLength: 200 },
+          ifNo: { type: 'string', minLength: 1, maxLength: 200 },
+        } },
         target: { type: 'string', enum: [...ARTIFACT_TARGETS], description: 'default chat' },
       },
       required: ['title', 'summary', 'component', 'props'],

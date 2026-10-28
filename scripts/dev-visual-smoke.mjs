@@ -91,6 +91,20 @@ try {
     await page.waitForFunction(previous => document.querySelector('[data-testid="qwin"] [data-request-key]')?.getAttribute('data-request-key') !== previous, key);
   }
   await page.getByTestId('qwin-backdrop').waitFor({ state: 'hidden' });
+  // Inspect the MCP form shell separately from narrative agent decisions; no connector or provider is called.
+  await app.evaluate(() => {
+    void globalThis.__sbDemo.ask('qa', { type: 'question', tool: 'mcp__fixture', title: 'MCP fixture: conferma pubblicazione',
+      detail: 'Server: fixture\nConfermi la pubblicazione del documento dimostrativo?', input: {}, noAlways: true,
+      questions: [{ question: 'Numero di copie', header: 'Obbligatorio · Numero intero · Minimo: 1 · Massimo: 3', multiSelect: false, options: [] }] });
+  });
+  await questions.locator('[data-testid$="-form-context"]').waitFor();
+  await questions.locator('[data-testid$="-form-refuse"]').waitFor();
+  await capture('mcp-form-context');
+  await questions.locator('[data-testid$="-other"]').click();
+  await questions.locator('textarea').fill('2');
+  await capture('mcp-form-editing');
+  await questions.locator('[data-testid$="-form-refuse"]').click();
+  await questions.waitFor({ state: 'hidden' });
   await page.getByTestId('plan-toggle-tree-plan').waitFor();
   await page.getByTestId('tile-chat-tree-plan').scrollIntoViewIfNeeded();
   await capture('plan-compact');

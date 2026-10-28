@@ -12,6 +12,44 @@ declare global { interface Window { __ev: { ch: string; p: unknown }[] } }
 
 const FAKE = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-claude.mjs');
 
+test('a Claude MCP form accepts explicit field input through the question panel', async () => {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-form-'));
+  const { app, page } = await launch({ SB_CLAUDE_PATH: FAKE, CLAUDE_CONFIG_DIR: home });
+  try {
+    const setup = page.getByTestId('first-interview');
+    await expect(setup).toBeVisible();
+    await page.keyboard.press('Escape');
+    const chat = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, prompt: 'elicitform', title: 'Modulo MCP' }), home);
+    const panel = page.getByTestId('qwin');
+    await expect(panel).toBeVisible();
+    await expect(panel).toContainText('name');
+    await expect(panel).toContainText('Server: wiz');
+    await expect(panel).toContainText('Confermi la pubblicazione?');
+    await panel.locator('[data-testid$="-other"]').click();
+    await panel.locator('textarea').fill('  Example  ');
+    await shot(page, 'claude-mcp-form');
+    await panel.locator('[data-testid$="-other-send"]').click();
+    await expect.poll(async () => (await page.evaluate(id => window.sb.invoke('chat:items', { chatId: id }), chat.id))
+      .some(i => i.kind === 'assistant' && i.text.includes('"action":"accept"') && i.text.includes('"name":"  Example  "'))).toBe(true);
+    await page.evaluate(id => window.sb.invoke('chat:close', { chatId: id }), chat.id);
+    const multi = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, prompt: 'elicitformmulti', title: 'Modulo con limiti' }), home);
+    const fill = async (text: string) => { await panel.locator('[data-testid$="-other"]').click(); await panel.locator('textarea').fill(text); await panel.locator('[data-testid$="-other-send"]').click(); };
+    await expect(panel).toContainText('Minimo: 1');
+    await expect(panel).toContainText('Massimo: 3');
+    await fill('0'); await fill('Trial'); // invalid first field must remain recoverable after final submission
+    await expect(panel.locator('[data-testid$="-q"]')).toHaveText('count');
+    await fill('2'); await fill('');
+    await expect.poll(async () => (await page.evaluate(id => window.sb.invoke('chat:items', { chatId: id }), multi.id))
+      .some(i => i.kind === 'assistant' && i.text.includes('"count":2') && i.text.includes('"name":""'))).toBe(true);
+    await page.evaluate(id => window.sb.invoke('chat:close', { chatId: id }), multi.id);
+    const decline = await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, prompt: 'elicitform', title: 'Rifiuto modulo' }), home);
+    await panel.locator('[data-testid$="-other"]').click();
+    await panel.locator('[data-testid$="-form-refuse"]').click();
+    await expect.poll(async () => (await page.evaluate(id => window.sb.invoke('chat:items', { chatId: id }), decline.id))
+      .some(i => i.kind === 'assistant' && i.text.includes('"action":"decline"'))).toBe(true);
+  } finally { await app.close(); }
+});
+
 test('a Claude chat runs a turn, asks a question, takes the answer and streams events to the page', async () => {
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));

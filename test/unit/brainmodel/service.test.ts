@@ -359,6 +359,17 @@ describe('maintenance cannot approve unseen semantic changes', () => {
     expect(fs.existsSync(path.join(w.brain, 'rules/lessons.md'))).toBe(false);
     expect(w.service.state().changes.map(c => c.kind)).toEqual(['agent']);
   });
+  it('refuses case-specific lessons even with evidence and user approval', async () => {
+    const w = world(); lessonEvidence(w, ['r_000000000001']);
+    const before = w.agent(DEV).instructions;
+    const lesson = w.learning.propose(DEV, 'Prima di chiudere il ticket 12345, verificare la build.', 'r_000000000001');
+    w.learning.review(lesson.id, true);
+    await w.service.maintain('corrections', { auto: true });
+    expect(w.agent(DEV).instructions).toBe(before);
+    expect(w.service.state().changes).toEqual([]);
+    expect(JSON.parse(fs.readFileSync(path.join(w.data, 'agent-learn-proposals.json'), 'utf8')).proposals)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: lesson.id, status: 'discarded' })]));
+  });
 });
 
 describe('announcing the passes the app ran by itself (ADR 0102)', () => {

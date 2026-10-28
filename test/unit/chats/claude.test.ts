@@ -261,7 +261,7 @@ describe('ClaudeSession', () => {
     expect(sink.last('assistant')?.text).toBe('Ok, non lo eseguo.');
   });
 
-  it('an MCP confirmation from the CLI is a permission panel answered accept / decline; a form it cannot show is cancelled, never an error (#148)', async () => {
+  it('MCP confirmations and forms reach the user and return the exact typed answer (#148, #253)', async () => {
     const { s, sink } = start();
     s.send('elicit');
     const p = await waitFor(() => sink.pendings[0], 'elicitation panel');
@@ -274,8 +274,12 @@ describe('ClaudeSession', () => {
     s.answer(q.id, { kind: 'permission', allow: false });
     await waitFor(() => sink.last('assistant')?.text === 'Elicitation {"action":"decline"}', 'declined');
     s.send('elicitform');
-    await waitFor(() => sink.last('assistant')?.text === 'Elicitation {"action":"cancel"}', 'form cancelled');
-    expect(sink.pendings).toHaveLength(2);
+    const form = await waitFor(() => sink.pendings[2], 'form panel');
+    expect(form).toMatchObject({ type: 'question', questions: [{ question: 'name', options: [] }] });
+    expect(() => s.answer(form.id, { kind: 'permission', allow: true })).toThrow('Compila');
+    expect(s.answer(form.id, { kind: 'question', answers: { name: 'Example' } })).toBe(true);
+    await waitFor(() => sink.last('assistant')?.text === 'Elicitation {"action":"accept","content":{"name":"Example"}}', 'form answered');
+    expect(sink.pendings).toHaveLength(3);
   });
 
   it('interrupts a streaming turn', async () => {

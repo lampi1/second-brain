@@ -21,6 +21,12 @@ const win = (answer: unknown) => ({ isDestroyed: () => false, webContents: { exe
 const deps = (over: Partial<GuideDeps> = {}): GuideDeps => ({ window: () => win(UI), settings: { schema, get: () => DEFAULTS }, tools: () => [{ name: 'app_config', description: 'Read and change the configuration. More text.' }], ...over });
 
 describe('app_guide', () => {
+  it('explains MCP forms and their explicit user answer boundary', async () => {
+    const out = String(await guideTool(deps()).run({ topic: 'MCP elicitation' }));
+    expect(out).toContain('up to eight');
+    expect(out).toContain('defaults never approve');
+    expect(out).toContain('app_pending');
+  });
   it('without a topic: the rail as drawn, Memoria tabs, Settings sections, actions and the hint to ask more', async () => {
     const out = String(await guideTool(deps()).run({}));
     expect(out).toContain('Memoria [memoria, G Y]');

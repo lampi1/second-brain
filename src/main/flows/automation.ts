@@ -238,7 +238,7 @@ export class FlowAutomationService {
     const item = this.result({ cursor: {}, items: [detected], summary: '' }).items[0]!;
     if (Object.keys(item.inputs).some(key => Object.hasOwn(rule.config.inputs, key))) throw new Error('Inputs conflict with the approved configuration');
     const inputs = validateInputs({ ...rule.config.inputs, ...item.inputs }), id = inputs['work-item-id'];
-    const runs = this.options.flow().snapshot().runs;
+    const runs = this.options.flow().runsSnapshot();
     const active = id ? runs.find(run => occupied(run) && run.flowId === rule.config.flowId && run.inputs['work-item-id'] === id) : undefined;
     if (active) throw new Error(`Questo work item ha già una run attiva (${active.id.slice(0, 8)}).`);
     const sourceKey = `manual:${item.key}:${this.now()}`;
@@ -304,7 +304,7 @@ export class FlowAutomationService {
       const trigger = rule.config.trigger, expected = `https://dev.azure.com/${encodeURIComponent(trigger.organization)}/${encodeURIComponent(trigger.project)}/_workitems/edit/${inputs['work-item-id']}`;
       if (inputs['work-item-url'] !== expected) throw new Error('Automatic restart cannot move a work item to a different organization or project');
     }
-    const running = this.options.flow().snapshot().runs.filter(run => run.id !== source.id && occupied(run) && this.data.rules.some(item => run.subjectKey.startsWith(`auto:${item.id}:`)));
+    const running = this.options.flow().runsSnapshot().filter(run => run.id !== source.id && occupied(run) && this.data.rules.some(item => run.subjectKey.startsWith(`auto:${item.id}:`)));
     if (running.length >= 2 || running.some(run => run.subjectKey.startsWith(`auto:${rule.id}:`))) throw new Error('Automatic flow concurrency limit reached; cancel the other run before restarting');
     return copy({ rule, source, inputs });
   }
@@ -344,7 +344,7 @@ export class FlowAutomationService {
     if (this.reconciling || this.storageError || this.stopped) return;
     this.reconciling = true;
     try {
-      const runs = this.options.flow().snapshot().runs;
+      const runs = this.options.flow().runsSnapshot();
       const cancelled = this.data.events.filter(event => event.status !== 'cancelled' && runs.some(run => run.status === 'cancelled' && run.subjectKey === event.subjectKey && (!event.runId || event.runId === run.id)));
       const recovered = this.data.events.flatMap(event => {
         if (event.status === 'cancelled' || !event.sourceKey.startsWith('restart:')) return [];
@@ -399,7 +399,7 @@ export class FlowAutomationService {
     // Only a run the host started from this event: recorded as started with this run id, or being started right now.
     const own = ((event?.status === 'started' || (settlement && event?.status === 'cancelled' && !!run.cancellation)) && event.runId === run.id) || (event !== undefined && this.starting === event.id && event.runId === undefined);
     if (!event || !own || String(event.ruleRevision) !== match![2] || hash(event.inputs) !== hash(run.inputs)) return null;
-    const pack = this.options.flow().snapshot().versions.find(v => v.definition.id === run.flowId && v.version === run.flowVersion)?.definition.package;
+    const pack = this.options.flow().versionSnapshot(run.flowId, run.flowVersion)?.definition.package;
     if (pack?.requiredOps.some(op => !config.devopsWrite?.ops.includes(op as DevOpsWriteGrant['ops'][number])) || (pack?.downgrade && !config.devopsWrite?.fields.some(f => f.toLowerCase() === 'system.state'))) return null;
     return config;
   }
@@ -407,8 +407,8 @@ export class FlowAutomationService {
   stop(): void { this.stopped = true; this.invalidate(); }
   private async poll(): Promise<void> {
     this.reconcileRuns();
-    const generation = this.generation, flow = this.options.flow(), context = flow.snapshot().contextKey;
-    const valid = (): boolean => !this.stopped && !this.data.paused && generation === this.generation && this.options.flow() === flow && flow.snapshot().contextKey === context;
+    const generation = this.generation, flow = this.options.flow(), context = flow.contextKey;
+    const valid = (): boolean => !this.stopped && !this.data.paused && generation === this.generation && this.options.flow() === flow && flow.contextKey === context;
     this.controller = new AbortController();
     const ordered = (): FlowAutomationRule[] => this.data.rules.filter(rule => rule.status === 'enabled' && rule.approvedRevision === rule.revision).sort((a, b) => Number(b.config.priority === 'urgent') - Number(a.config.priority === 'urgent') || a.createdAt - b.createdAt);
     for (const candidate of ordered()) {
@@ -470,7 +470,7 @@ export class FlowAutomationService {
       for (const event of this.data.events.filter(item => item.ruleId === rule.id && item.ruleRevision === rule.revision && item.status === 'pending' && !item.sourceKey.startsWith('restart:') && (item.nextAttemptAt ?? 0) <= this.now())) {
         if (!valid()) return;
         if (rule.error) break;
-        const runs = flow.snapshot().runs.filter(run => occupied(run) && this.data.rules.some(item => run.subjectKey.startsWith(`auto:${item.id}:`)));
+        const runs = flow.runsSnapshot().filter(run => occupied(run) && this.data.rules.some(item => run.subjectKey.startsWith(`auto:${item.id}:`)));
         if (runs.length >= 2 || runs.some(run => run.subjectKey.startsWith(`auto:${rule.id}:`))) break;
         const max = rule.config.trigger.kind === 'devops' ? rule.config.trigger.maxPerHour : undefined;
         if (max && this.data.events.filter(item => item.ruleId === rule.id && item.status === 'started' && !item.manual && item.updatedAt > this.now() - 3_600_000).length >= max) break;
