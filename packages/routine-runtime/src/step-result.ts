@@ -232,7 +232,7 @@ export function stepResultInstructions(stepDir: string, ops: readonly StepWriteO
     ...(allowed.length ? [
       'devopsWrites are done by the runtime after you stop, in order, only with outcome "done", on this run\'s work item and its own resources; never do them yourself. Allowed:',
       ...allowed.map(op => op === 'downgrade' && park
-        ? `- {"op":"downgrade","reason":"...","resumeFrom?":"<step id>"} (last write; the run parks: one comment for the contact with the reason and the step number, the run branch pushed when it is checked out, the package's tag; when the contact answers, the same run restarts from resumeFrom, one of ${park.steps.join(', ')}, default this step)`
+        ? `- {"op":"downgrade","reason":"...","resumeFrom?":"<step id>"} (last write; the run parks: one comment for the contact with the reason and the step number, the run branch pushed when it is checked out, the package's tag; when somebody answers with a comment starting with @AI, the same run restarts from resumeFrom, one of ${park.steps.join(', ')}, default this step)`
         : `- ${SHAPES[op]}`),
       'A write never blocks the run: what was done, not verified or refused is listed for the next steps.',
       'Images in a comment are files of this step folder only ("evidence/<file>" or "screenshots/<file>", PNG or JPEG).',

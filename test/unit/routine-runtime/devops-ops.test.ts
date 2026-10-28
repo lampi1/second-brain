@@ -8,6 +8,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createDevOpsClient, createMasker, createRoutineRuntime, createRunStore, executeWrites, readConfigOnce, runResources, validateStepResult, type RunRecord, type StepWrite, type WriteContext } from '../../../packages/routine-runtime/src/index';
+import { aiInstruction, commentSignature, isRoutineComment, modelDisplayName } from '../../../packages/routine-runtime/src/devops';
 import { done, fakeDevOps, routinePackage, scriptedEngine, tempDir } from './fakes';
 
 // GUIDs built at run time (the repo guard refuses GUID literals)
@@ -274,14 +275,15 @@ describe('PR, push and deploy writes', () => {
     const pr = ado.prs[0]!;
     expect(pr).toMatchObject({ isDraft: true, sourceRefName: BRANCH });
     expect(ado.items.get(9)!.relations).toEqual([expect.objectContaining({ rel: 'ArtifactLink', url: expect.stringContaining(`%2F${pr.pullRequestId}`) })]);
-    const again = await executeWrites({ ...context, stepId: 'review', signature: '— claude-opus-5-5 · high' }, [prWrites[1]!, { op: 'pr-comment', text: 'Ready for review.', mentions: [MENTION] }, { op: 'publish-pr' }]);
+    const again = await executeWrites({ ...context, stepId: 'review', signature: commentSignature('claude-opus-5-5', 'high') }, [prWrites[1]!, { op: 'pr-comment', text: 'Ready for review.', mentions: [MENTION] }, { op: 'publish-pr' }]);
     expect(again.done[0]).toBe(`PR ${pr.pullRequestId} (already created by this run)`);
     expect(again.failed).toEqual([]);
     expect(ado.prs).toHaveLength(1);
     expect(pr.threads).toHaveLength(1);
     expect(pr.threads[0]!.comments[0]!.content).toContain(`@<${MENTION.toUpperCase()}>`);
     expect(pr.threads[0]!.comments[0]!.content).toContain(`routine run ${RUN}`);
-    expect(pr.threads[0]!.comments[0]!.content).toMatch(/\n\n— claude-opus-5-5 · high$/);
+    expect(pr.threads[0]!.comments[0]!.content).toMatch(new RegExp(`^AI · Opus 5\\.5 · high\\n\\n@<${MENTION.toUpperCase()}>\\n\\nReady for review\\.`));
+    expect(pr.threads[0]!.comments[0]!.content).not.toMatch(/claude/i);
     expect(pr.isDraft).toBe(false);
     expect(runResources(store.ledger(RUN), 'contoso').join('\n')).toContain(`pushed ${BRANCH} at ${PUSHED}`);
   });
@@ -323,7 +325,7 @@ describe('downgrade', () => {
     expect(item.fields['System.Tags']).toBe('needs-human');
     expect(item.fields['System.State']).toBe('Active');
     const comment = ado.comments.get(9)!.join('\n');
-    expect(comment).toContain('Serve un intervento umano: serve una decisione di prodotto.');
+    expect(comment).toContain('Serve un umano: serve una decisione di prodotto.');
     expect(comment).toContain(`version:2.0,${MENTION}`);
     expect(comment).toContain(`version:2.0,${CONTACT}`);
     expect(comment).toContain('@Mario Rossi');
@@ -334,7 +336,7 @@ describe('downgrade', () => {
     const { ado, exec, pushed, context } = setup();
     await exec(prWrites);
     const park = { n: 1, position: 'Passo 3 di 5' };
-    const out = await executeWrites({ ...context, stepId: 'review', park, headOf: async () => BRANCH, signature: '— claude-opus-5-5 · medium' }, [{ op: 'downgrade', reason: 'manca un dato', resumeFrom: 'fix' }]);
+    const out = await executeWrites({ ...context, stepId: 'review', park, headOf: async () => BRANCH, signature: commentSignature('claude-opus-5-5', 'medium') }, [{ op: 'downgrade', reason: 'manca un dato', resumeFrom: 'fix' }]);
     expect(out.failed).toEqual([]);
     expect(out.resumeFrom).toBe('fix');
     expect(out.parked).toMatchObject({ branch: `fix/routine-${RUN}`, pushed: true, commentId: expect.any(Number) });
@@ -342,8 +344,10 @@ describe('downgrade', () => {
     expect(ado.prs[0]).toMatchObject({ isDraft: true, status: 'active' });
     expect(ado.items.get(9)!.fields['System.Tags']).toBe('needs-human');
     const comment = ado.comments.get(9)!.join('\n');
-    expect(comment).toContain('Serve un umano: manca un dato.<br/>Passo 3 di 5.<br/><small>');
-    expect(comment).toMatch(/<\/small><br\/>— claude-opus-5-5 · medium$/);
+    expect(comment).toContain('Serve un umano: manca un dato.<br/>Passo 3 di 5.<br/>Per riprendere rispondi con un commento che inizia con @AI.<br/><small>');
+    expect(comment).toMatch(/^AI · Opus 5\.5 · medium<br\/>/);
+    expect(comment).toMatch(/<\/small>$/);
+    expect(comment).not.toMatch(/claude/i);
     expect(comment).not.toContain('Branch:');
     expect(comment).not.toContain('Rispondi');
     expect(comment).toContain(`version:2.0,${CONTACT}`);
@@ -374,7 +378,7 @@ describe('downgrade', () => {
     expect(run.error).toBe('step analyse downgraded the work item: not a bug');
     expect(engine.requests.map(r => r.stepId)).toEqual(['analyse']);
     expect(devops.items.get(5)!.fields['System.Tags']).toBe('needs-human');
-    expect(devops.comments.get(5)!.some(c => c.text.includes('Serve un intervento umano: not a bug'))).toBe(true);
+    expect(devops.comments.get(5)!.some(c => c.text.includes('Serve un umano: not a bug'))).toBe(true);
   });
 });
 
@@ -462,13 +466,36 @@ describe('comment images (upload-image)', () => {
   });
 });
 
+describe('comment signature and @AI', () => {
+  it('names the model without the word claude, effort optional', () => {
+    expect(modelDisplayName('claude-opus-5-5')).toBe('Opus 5.5');
+    expect(modelDisplayName('claude-sonnet-5')).toBe('Sonnet 5');
+    expect(modelDisplayName('claude-fable-5-1')).toBe('Fable 5.1');
+    expect(modelDisplayName('claude-haiku-4-5-20251001')).toBe('Haiku 4.5');
+    expect(modelDisplayName('claude-nova-7')).toBe('nova-7');
+    expect(commentSignature('claude-opus-5-5', 'medium')).toBe('AI · Opus 5.5 · medium');
+    expect(commentSignature('claude-opus-5-5')).toBe('AI · Opus 5.5');
+    expect(commentSignature()).toBe('AI');
+  });
+
+  it('an instruction only from a comment starting with @AI; the runtime\'s own comments are recognized', () => {
+    expect(aiInstruction('<div>  @ai, usa il campo Note</div>')).toBe('usa il campo Note');
+    expect(aiInstruction('@AI')).toBe('');
+    expect(aiInstruction('ciao @AI usa il campo Note')).toBeUndefined();
+    expect(aiInstruction('@AIUTO')).toBeUndefined();
+    expect(isRoutineComment('AI · Opus 5.5 · medium<br/>Serve un umano')).toBe(true);
+    expect(isRoutineComment('x <small>routine run r1 · park 1</small>')).toBe(true);
+    expect(isRoutineComment('@AI riprendi')).toBe(false);
+  });
+});
+
 describe('work item comment mentions', () => {
   it('an identity of devops.mentions becomes a DevOps mention; one outside it is refused before anything is sent', async () => {
     const { ado, exec, context } = setup();
-    const out = await executeWrites({ ...context, stepId: 'fix', signature: '— claude-opus-5-5 · medium' }, [{ op: 'comment', text: 'Serve una verifica', mentions: [MENTION] }]);
+    const out = await executeWrites({ ...context, stepId: 'fix', signature: commentSignature('claude-opus-5-5', 'medium') }, [{ op: 'comment', text: 'Serve una verifica', mentions: [MENTION] }]);
     expect(out.done).toEqual(['comment']);
-    expect(ado.comments.get(9)!.at(-1)).toMatch(/<\/small><br\/>— claude-opus-5-5 · medium$/);
-    expect(ado.comments.get(9)!.at(-1)).toMatch(new RegExp(`^<a href="#" data-vss-mention="version:2\\.0,${MENTION}">@Anna Bianchi</a><br/>Serve una verifica`));
+    expect(ado.comments.get(9)!.at(-1)).toMatch(/<\/small>$/);
+    expect(ado.comments.get(9)!.at(-1)).toMatch(new RegExp(`^AI · Opus 5\\.5 · medium<br/><a href="#" data-vss-mention="version:2\\.0,${MENTION}">@Anna Bianchi</a><br/>Serve una verifica`));
     const sent = ado.calls.length;
     await expect(exec([{ op: 'comment', text: 'x', mentions: [g('9')] }])).rejects.toThrow(/mentions/);
     expect(ado.calls.length).toBe(sent);

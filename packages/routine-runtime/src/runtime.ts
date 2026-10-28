@@ -13,7 +13,7 @@ import { packageSecrets } from './format';
 import { createMasker, type Masker } from './mask';
 import { createRunStore, StaleAttempt, stepFolderName, type RunRecord, type RunStepRecord, type RunStore, type RunEscalation, type RunPark } from './run-store';
 import { STEP_RESULT_FILE, StepResultError, grantedWriteOps, stepResultInstructions, validateStepResult, type StepResult, type StepWrite } from './step-result';
-import { commentSignature, createDevOpsClient, executeWrites, type DevOpsClient, type WriteContext, type WritesOutcome } from './devops';
+import { aiInstruction, commentSignature, createDevOpsClient, executeWrites, html, isRoutineComment, mentionHtml, signedHtml, type DevOpsClient, type WriteContext, type WritesOutcome } from './devops';
 import { runResources, type Deployments, type ParkStop } from './devops-ops';
 import { TestDeploymentCoordinator } from './devops-host/test-deployment';
 import { runBranch } from './devops-host/git-push';
@@ -199,7 +199,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     const recent = [...run.steps].sort((a, b) => (b.startedAt ?? 0) - (a.startedAt ?? 0));
     const step = def ?? routine.steps.find(s => s.id === recent.find(r => r.startedAt !== undefined)?.id);
     const model = step?.model ?? (step && (liveModels.get(`${run.runId}:${step.id}`) ?? run.steps.find(s => s.id === step.id)?.model))
-      ?? recent.find(s => s.model)?.model ?? 'claude';
+      ?? recent.find(s => s.model)?.model;
     return commentSignature(model, step?.effort);
   };
   const writeContext = (runId: string, attempt: number, def: RoutineStep, run: RunRecord, round: number, signal: AbortSignal, stepDir?: string, stepId = def.id): WriteContext => {
@@ -711,23 +711,25 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     return run.escalation?.answer;
   }
 
-  /** Resumes a parked run when its contact answered on the work item after the park comment: the steps from the park's
-   *  resume step through the parked one run again (next round, the answer as guidance) on the same run branch, and the
-   *  park tag goes. null = not parked, already resumed or running, or no answer yet. */
+  /** Resumes a parked run when somebody answered on the work item after the park comment with a comment that starts
+   *  with @AI (owner, 2026-10-28; any author, the routine's own comments never count): the runtime replies "Presa in
+   *  carico" to its author first, then the steps from the park's resume step through the parked one run again (next
+   *  round, the instruction as guidance) on the same run branch, and the park tag goes. null = not parked, already
+   *  resumed or running, or no @AI answer yet. */
   async function resumeParked(runId: string): Promise<RunHandle | null> {
     if (running.has(runId)) return null;
     const run = store.read(runId), p = run.parked, policy = routine.devops?.downgrade;
     if (run.status !== 'needs-human' || !p || p.answer || p.spent || run.workItem === undefined || !routine.escalation || !organization || !policy) return null;
     const item = await devops().item(organization, run.workItem);
-    const contact = routine.escalation.contact.toLowerCase();
     const answers = (await devops().comments(organization, item.project, run.workItem))
-      .filter(c => (p.commentId !== undefined ? c.id > p.commentId : c.createdAt > p.at) && c.authorId.toLowerCase() === contact && !c.text.includes('routine run ') && replyText(c.text).trim())
+      .filter(c => (p.commentId !== undefined ? c.id > p.commentId : c.createdAt > p.at) && !isRoutineComment(c.text) && aiInstruction(c.text) !== undefined)
       .sort((a, b) => a.id - b.id);
     const last = answers.at(-1);
     if (!last) return null;
     // another live run holds the item or the workspace: the answer waits for the next pass
     try { lockRun(runId, run); } catch (e) { if (e instanceof ResourceBusy) { info('parked run waits: resource busy', { runId, why: e.message }); return null; } throw e; }
-    const answer ={ commentId: last.id, at: clock.now(), text: masker.mask(answers.map(c => replyText(c.text)).join('\n\n')), author: last.authorName ?? last.authorId };
+    const instruction = answers.map(c => aiInstruction(c.text)).filter(Boolean).join('\n\n') || 'Riprendi.';
+    const answer = { commentId: last.id, at: clock.now(), text: masker.mask(instruction), author: last.authorName ?? last.authorId };
     const range = new Set(parkedRange(p));
     let claimed: RunRecord;
     try {
@@ -741,6 +743,21 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     emit(runId, { type: 'human-answer', at: clock.now(), n: run.steps.find(s => s.id === p.stepId)?.n ?? 0, author: answer.author });
     info('parked run resumed', { runId, from: p.resumeFrom, attempt: claimed.attempt });
     const def = routine.steps.find(s => s.id === p.stepId)!;
+    // the reply to the @AI comment, once per park (ledger key; a crash mid-write is settled by its marker)
+    const ackKey = `park:p${p.n}:ack`, ackMarker = `routine run ${runId} · park ${p.n} · presa in carico`;
+    try {
+      const entry = store.ledger(runId)[ackKey];
+      const found = entry?.state === 'writing' ? (await devops().comments(organization, item.project, run.workItem)).find(c => c.text.includes(ackMarker)) : undefined;
+      if (entry?.state !== 'done' && !found) {
+        store.setLedger(runId, claimed.attempt, ackKey, { state: 'writing', what: 'reply to the @AI comment', at: clock.now(), tries: (entry?.tries ?? 0) + 1 });
+        const commentId = await devops().comment(organization, item.project, run.workItem,
+          signedHtml(`${mentionHtml(last.authorId, last.authorName)} Presa in carico.<br/><small>${html(ackMarker)}</small>`, signatureOf(store.read(runId))));
+        store.setLedger(runId, claimed.attempt, ackKey, { state: 'done', what: 'reply to the @AI comment', at: clock.now(), tries: (entry?.tries ?? 0) + 1, commentId });
+      } else if (found) store.setLedger(runId, claimed.attempt, ackKey, { ...entry!, state: 'done', commentId: found.id });
+    } catch (e) {
+      if (e instanceof StaleAttempt) throw e;
+      warn('reply to the @AI comment not written', { runId }, e instanceof Error ? e.message : String(e));
+    }
     const untag: StepWrite = { op: 'tags', remove: [policy.addTag] };
     const finished = (async () => {
       // the park tag goes first (its own write key per park): the item is the routine's again
@@ -755,7 +772,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
   }
 
   /** Whether the trigger may start a new run for an item: an item already carrying the park tag (parked by an older
-   *  run or by hand) starts only when the contact wrote its latest comment and that comment is not the routine's. */
+   *  run or by hand) starts only when its latest comment starts with @AI and is not the routine's. */
   async function admitItem(workItem: number): Promise<boolean> {
     const tag = routine.escalation?.park ? routine.devops?.downgrade?.addTag : undefined;
     if (!tag || !organization || !routine.escalation) return true;
@@ -763,7 +780,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     const tags = String(item.fields['System.Tags'] ?? '').split(';').map(t => t.trim().toLowerCase());
     if (!tags.includes(tag.toLowerCase())) return true;
     const last = (await devops().comments(organization, item.project, workItem)).sort((a, b) => a.id - b.id).at(-1);
-    return Boolean(last && last.authorId.toLowerCase() === routine.escalation.contact.toLowerCase() && !last.text.includes('routine run '));
+    return Boolean(last && !isRoutineComment(last.text) && aiInstruction(last.text) !== undefined);
   }
 
   /** A host-side site login with the run's credentials and the package's success rule (the app's Electron tab or a

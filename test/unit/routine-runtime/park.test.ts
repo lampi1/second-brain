@@ -1,7 +1,8 @@
 // Parked runs (escalation.park, ADR 0175): a step that needs a person writes one comment for the contact only (reason,
-// step number, the step's model signature), the package's downgrade tag, and ends the run; the contact's later comment resumes the same run
-// from the named step with the answer, and the tag goes. The trigger: further areas with their own cursor, parked runs
-// resumed first, items already carrying the park tag admitted only after a comment of the contact, maxActive.
+// step number, opened by the AI · model · effort signature), the package's downgrade tag, and ends the run; a later
+// comment starting with @AI, from anybody, is acknowledged once and resumes the same run from the named step with its
+// instruction, and the tag goes. The trigger: further areas with their own cursor, parked runs resumed first, items
+// already carrying the park tag admitted only after an @AI comment, maxActive.
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createDevOpsDetector, createLocks, createMasker, createRoutineRuntime, createRunStore, createTriggerLoop, PARK_RETRIES, preflightRoutinePackage, type Locks, type RoutineTrigger, type StepResult } from '../../../packages/routine-runtime/src/index';
@@ -46,9 +47,10 @@ describe('parked runs', () => {
     expect(comments[0]!.text).toContain('Serve un umano: Quale campo devo usare.');
     expect(comments[0]!.text).toContain('Passo 2 di 3.');
     expect(comments[0]!.text).not.toContain('Punto della run');
-    expect(comments[0]!.text).not.toContain('Rispondi');
-    // no model declared: the comment is signed with the one the step's session reported
-    expect(comments[0]!.text).toMatch(/<\/small><br\/>— claude-sonnet-5$/);
+    expect(comments[0]!.text).toContain('Per riprendere rispondi con un commento che inizia con @AI.');
+    // no model declared: the comment opens with the one the step's session reported, never the word claude
+    expect(comments[0]!.text).toMatch(/^AI · Sonnet 5<br\/>/);
+    expect(comments[0]!.text).not.toMatch(/claude/i);
     expect(run.steps.find(s => s.id === 'fix')!.model).toBe('claude-sonnet-5');
     expect(comments[0]!.text).toContain(`version:2.0,${CONTACT}`);
     expect(comments[0]!.text).not.toContain(MENTION);
@@ -58,31 +60,49 @@ describe('parked runs', () => {
   it('a step that declares its model and effort signs the park comment with both', async () => {
     const { devops, runtime } = parkingRuntime({ fix: { model: 'claude-opus-5-5', effort: 'medium' } });
     await runtime.startItem(5).finished;
-    expect(devops.comments.get(5)![0]!.text).toMatch(/<br\/>— claude-opus-5-5 · medium$/);
+    expect(devops.comments.get(5)![0]!.text).toMatch(/^AI · Opus 5.5 · medium<br\/>/);
   });
 
-  it('the contact\'s answer resumes the same run from the parked step, with the answer, and the tag goes', async () => {
+  it('a comment not starting with @AI, and the runtime\'s own comments, never resume a parked run', async () => {
     const { devops, engine, runtime } = parkingRuntime();
     const { runId } = await runtime.startItem(5).finished;
     expect(await runtime.resumeParked(runId)).toBeNull();
-    devops.reply(5, g('9'), 'non sono il contatto');
-    expect(await runtime.resumeParked(runId)).toBeNull();
     devops.reply(5, CONTACT, 'Usa il campo Note');
+    devops.reply(5, g('9'), 'ciao @AI usa il campo Note');
+    expect(await runtime.resumeParked(runId)).toBeNull();
+    devops.reply(5, devops.me, 'AI · Sonnet 5<br/>@AI riprendi');
+    devops.reply(5, devops.me, '@AI riprendi <small>routine run x · park 1 ·</small>');
+    expect(await runtime.resumeParked(runId)).toBeNull();
+    expect(devops.comments.get(5)).toHaveLength(5);
+    expect(engine.requests.map(r => r.stepId)).toEqual(['analyse', 'fix']);
+  });
+
+  it('an @AI comment from anybody resumes the same run from the parked step, with the instruction; the reply is posted once', async () => {
+    const { devops, engine, runtime } = parkingRuntime();
+    const { runId } = await runtime.startItem(5).finished;
+    devops.reply(5, g('9'), '<p>  @ai: Usa il campo Note</p>');
     const handle = await runtime.resumeParked(runId);
     expect(handle?.runId).toBe(runId);
     expect(await runtime.resumeParked(runId)).toBeNull();
     const run = await handle!.finished;
     expect(run.status).toBe('done');
+    expect(await runtime.resumeParked(runId)).toBeNull();
+    const replies = devops.comments.get(5)!.filter(c => c.text.includes('Presa in carico.'));
+    expect(replies).toHaveLength(1);
+    expect(replies[0]!.text).toMatch(/^AI · Sonnet 5<br\/><a [^>]*data-vss-mention="version:2\.0,[^"]*"[^>]*>@[^<]*<\/a> Presa in carico\./);
+    expect(replies[0]!.text).toContain(`version:2.0,${g('9')}`);
+    expect(replies[0]!.text).not.toMatch(/claude/i);
     expect(engine.requests.map(r => r.stepId)).toEqual(['analyse', 'fix', 'fix', 'report']);
     const prompt = engine.requests[2]!.prompt;
     expect(prompt).toContain('## Resumed run');
     expect(prompt).toContain('Usa il campo Note');
+    expect(prompt).not.toContain('@ai');
     expect(prompt).toContain(`fix/routine-${runId}`);
     expect(String(devops.items.get(5)!.fields['System.Tags'])).not.toContain('ai-needs-human');
     expect(run.parks).toBe(1);
   });
 
-  it('an item already carrying the park tag is admitted only when the contact wrote the latest comment', async () => {
+  it('an item already carrying the park tag is admitted only when the latest comment starts with @AI', async () => {
     const { devops, runtime } = parkingRuntime();
     devops.addItem({ id: 6, fields: { 'System.Tags': 'ai-needs-human' } });
     devops.addItem({ id: 7, fields: { 'System.Tags': 'other' } });
@@ -91,6 +111,8 @@ describe('parked runs', () => {
     devops.reply(6, devops.me, 'Serve un umano <small>routine run x · park 1 ·</small>');
     expect(await runtime.admitItem(6)).toBe(false);
     devops.reply(6, CONTACT, 'ecco il dato');
+    expect(await runtime.admitItem(6)).toBe(false);
+    devops.reply(6, g('9'), '@AI ecco il dato');
     expect(await runtime.admitItem(6)).toBe(true);
   });
 
@@ -110,7 +132,7 @@ describe('parked runs', () => {
     const { runId } = await runtime.startItem(5).finished;
     // a counter already past this park's number (an earlier park spent by hand) stays where it is
     runtime.store.claim(runId, r => { r.parks = 3; });
-    devops.reply(5, CONTACT, 'Usa il campo Note');
+    devops.reply(5, CONTACT, '@AI Usa il campo Note');
     const resumed = await (await runtime.resumeParked(runId))!.finished;
     expect(resumed.status).toBe('done');
     expect(resumed.parks).toBe(3);
@@ -123,7 +145,7 @@ describe('parked runs', () => {
     expect(byHand.parked).toMatchObject({ n: 1, spent: true });
     // even if the run is found waiting for a person again, the contact's comment does not resume the spent park
     other.runtime.store.claim(parked.runId, r => { r.status = 'needs-human'; });
-    other.devops.reply(5, CONTACT, 'ecco il dato');
+    other.devops.reply(5, CONTACT, '@AI ecco il dato');
     expect(await other.runtime.resumeParked(parked.runId)).toBeNull();
   });
 

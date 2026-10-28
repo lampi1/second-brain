@@ -130,8 +130,8 @@ describe('routine runtime: resume', () => {
     const handle = a.startItem(42);
     for (let i = 0; i < 400 && !wake; i++) await new Promise(r => setTimeout(r, 5));
     expect(a.store.read(handle.runId).escalation?.state).toBe('waiting');
-    // the escalation comment is signed with the escalated step's reported model and declared effort
-    expect(devops.comments.get(42)![0]!.text).toMatch(/<br\/>— claude-sonnet-5 · high$/);
+    // the escalation comment opens with the escalated step's reported model and declared effort
+    expect(devops.comments.get(42)![0]!.text).toMatch(/^AI · Sonnet 5 · high<br\/>/);
 
     devops.reply(42, contact, '<div>riprova</div>');
     t += 5 * 60_000;
