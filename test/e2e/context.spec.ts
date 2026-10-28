@@ -56,7 +56,10 @@ for (const engine of ['claude', 'cursor'] as const) {
     const next = (await list()).find(c => c.continuedFrom?.id === chat.id)!;
     expect(next).toMatchObject({ harness: engine, cwd, title: 'Ordini · Fix totale (2)' });
     const nextTile = page.getByTestId(`tile-chat-${next.id}`);
-    await expandChats(page, next.id, chat.id); // transcripts and links: the strips start folded
+    // The main chat list can update before resumeChat finishes opening the new strip in the renderer.
+    // Wait for that user-visible result: toggling it here can race the automatic open and close it again.
+    await expect(page.getByTestId(`chat-expand-${next.id}`)).toHaveAttribute('aria-expanded', 'true');
+    await expandChats(page, chat.id);
     await expect(nextTile).toContainText('Ripreso dal passaggio', { timeout: 15_000 });
     await expect(page.getByTestId(`chat-links-${next.id}`)).toContainText('Segue da «Ordini · Fix totale»');
     await expect(page.getByTestId(`chat-links-${chat.id}`)).toContainText('Il lavoro continua in «Ordini · Fix totale (2)»');
