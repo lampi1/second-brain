@@ -10,7 +10,7 @@
 // after an inline confirmation. Editing never changes running chats. Rendered by AgentCatalogPage.tsx. Styles:
 // styles/agent-studio.css.
 import { Select } from './Select';
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
 import { completedRuns, MAX_CONTEXT_RANGE, type AgentDraft, type AgentMetrics, type AgentProfile, type AgentVersion } from '@shared/agents';
 import { MODEL_TIERS, WORK_ROLE_IDS, FLASH_ID, isRoleId, roleName, tierRank, type ModelTier } from '@shared/roles';
 import { characterOf } from '@shared/characters';
@@ -68,22 +68,26 @@ export function AgentStudio({ profile, children }: { profile: AgentProfile; chil
   useEffect(() => { if (busy) return holdUpdate(t('studio.hold')); }, [busy]);
   useEffect(() => { if (editing) rememberAgentEditor({ id: shown.id, baseRevision: base, draft: editing }); }, [editing, base, shown.id]);
   const firstField = useRef<HTMLTextAreaElement>(null);
+  const focusNext = useRef(false);
+  const focusEditor = () => {
+    firstField.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    firstField.current?.focus({ preventScroll: true });
+  };
   const openEditor = () => {
-    if (!editing) { setEditing(draftOf(shown)); setBase(shown.updatedAt); }
-    setProblem(null); requestAnimationFrame(() => { firstField.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); firstField.current?.focus(); });
+    if (!editing) { focusNext.current = true; setEditing(draftOf(shown)); setBase(shown.updatedAt); }
+    else focusEditor();
+    setProblem(null);
   };
   const closeEditor = () => { forgetAgentEditor(shown.id); setProblem(null); setEditing(null); };
   // opened from the card: the editor comes up at once, and leaving it without saving goes back to the card
   const fromCard = useRef(false);
   const hl = ui.use(s => s.highlight);
-  const focusNext = useRef(false);
-  useEffect(() => { if (hl?.id !== EDIT_ELEMENT || hl.n === editHandled) return; editHandled = hl.n; fromCard.current = true; focusNext.current = true; openEditor(); }, [hl?.n]);
-  // the editor mounts after the page: give the instructions the focus once they are there
-  useEffect(() => {
+  useEffect(() => { if (hl?.id !== EDIT_ELEMENT || hl.n === editHandled) return; editHandled = hl.n; fromCard.current = true; openEditor(); }, [hl?.n]);
+  // Focus in the mounting commit: a delayed callback could steal input from a field the user already chose.
+  useLayoutEffect(() => {
     if (!focusNext.current || !editing || !catalog) return;
     focusNext.current = false;
-    const id = setTimeout(() => firstField.current?.focus({ preventScroll: true }), 50);
-    return () => clearTimeout(id);
+    focusEditor();
   }, [!!editing, !!catalog]);
   const cancel = () => { closeEditor(); if (fromCard.current) { fromCard.current = false; back(); } };
   useEffect(() => {

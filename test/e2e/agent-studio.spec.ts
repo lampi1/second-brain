@@ -27,6 +27,7 @@ test('a role edit is a version that survives a restart; Ripristina predefinito b
     await openAgents(first.page, 'artisan');
     await expect(first.page.getByTestId('agent-reset')).toBeDisabled(); // nothing to reset on a shipped role
     await first.page.getByTestId('agent-skill-input').fill('brain-edit');
+    await expect(first.page.getByTestId('agent-skill-input')).toHaveValue('brain-edit');
     await first.page.getByTestId('agent-skill-add').click();
     await choose(first.page.getByTestId('agent-tier'), 'top');
     await first.page.getByTestId('agent-launches').getByRole('checkbox', { name: 'Herald' }).check();

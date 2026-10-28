@@ -51,6 +51,8 @@ test.describe.serial('internal browser over MCP', () => {
   test('navigates and reads the page, both iframes included (cross-origin too)', async () => {
     const nav = await agent.ok('navigate', { url: `${sites.a}/index.html` });
     expect(nav).toContain('Fixture QA');
+    // The top document can settle while the cross-site frame still has its initial about:blank document.
+    await agent.ok('wait_for', { text: 'Conferma codice', timeout_ms: 10000 });
     const tree = await agent.ok('read_page');
     expect(tree).toMatch(/textbox "Nome" \[e\d+\]/);
     expect(tree).toMatch(/combobox "Città" value="--" options=--\|Roma\|Milano \[e\d+\]/);

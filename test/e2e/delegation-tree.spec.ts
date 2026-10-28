@@ -206,15 +206,17 @@ test('a child\'s question waits in the questions window; a permission above the 
 
 test('three Scouts run at once, each one writable; a call over the parallel limit is refused and shown', async () => {
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-cwd-'));
-  const { app, page, home } = await start();
+  const { app, page, home } = await start(undefined, { FAKE_CLAUDE_TASK_MS: '60000' });
   try {
     await closeSetup(page);
     await page.evaluate(() => window.sb.invoke('settings:set', { delegation: { maxParallel: 4 } }));
-    // the Scouts do not report: they stay running, holding their slots
-    const three = ['Ordini', 'Clienti', 'Fatture'].map(a => task('scout', `${a} · ricerca`, `Cerca in ${a}.`, 'Elenco'));
+    // Real background work keeps their slots occupied while allowing another user message. An idle fake turn
+    // without a report would instead trigger the app's missing-report recovery and its decision window.
+    const three = ['Ordini', 'Clienti', 'Fatture'].map(a => task('scout', `${a} · ricerca`, `Cerca in ${a}. background`, 'Elenco'));
     const parent = await strategist(page, cwd, delegate(three));
     await expect.poll(async () => (await childrenOf(page, parent.id)).length, { timeout: 20000 }).toBe(3);
     const kids = await childrenOf(page, parent.id);
+    await expect.poll(async () => (await childrenOf(page, parent.id)).map(c => c.background), { timeout: 20000 }).toEqual([1, 1, 1]);
     await page.getByTestId('nav-home').click();
     for (const k of kids) await expect(page.getByTestId(`delegation-card-${k.id}`)).toBeVisible();
     await expect(page.getByTestId(`tree-toggle-${parent.id}`)).toContainText('3 figli');
