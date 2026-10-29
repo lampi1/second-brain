@@ -14,7 +14,7 @@ import { short } from '../lib/text';
 import { trend, typeLabel, type ErrorGroup, type ErrorPatterns as Patterns, type Trend } from '../lib/stats';
 import type { Quote } from '../lib/discuss';
 import { DiscussBar, DiscussContext } from './Discuss';
-import { useAppChats } from './Composer';
+import { useAppChats } from '../lib/app-chats';
 import { Pill, type Navigate, type Tone } from './ui';
 import { HelpTip } from '../../components/HelpTip';
 import { t as tr, type TextKey } from '../../i18n';

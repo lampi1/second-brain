@@ -1,6 +1,6 @@
 // A small weekly trend chart for the Classificatori cards and their detail (dataviz rules: one axis, 2px lines, ≥8px
 // dots with a surface ring, recessive hairline grid, palette slots in fixed order, a legend from two series up, a
-// crosshair tooltip on hover, text in text tokens). Unlike brain/components/Charts.tsx LineChart it leaves a gap for a
+// crosshair tooltip on hover, text in text tokens). It leaves a gap for a
 // week without data (null), never a zero. compact = the card's sparkline-sized version (no axis labels, no legend).
 // Colors are the --bx-cat-* tokens (brain.css), stepped for light and dark. Used by ClassifiersPage and ClassifierDetail.
 import { useId, useLayoutEffect, useRef, useState } from 'react';

@@ -1,4 +1,4 @@
-// The Dashboard's Errori view (src/renderer/dashboard/errors.ts) and the Costi facts (dashboard/facts.ts): known
+// Qualità's app errors (src/renderer/dashboard/errors.ts) and the Costi facts (brain/lib/cost-facts.ts): known
 // causes, the text signature that makes repeats fall together, the groups with their 14-day series, places and
 // skills, the AI errors by type with the rule's status, the trend and the quiet days; cost facts only from enough data.
 import { describe, expect, it } from 'vitest';

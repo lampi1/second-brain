@@ -50,3 +50,22 @@ it.each(['brain-migration.json', 'brain-maintenance.json'])('keeps Memoria avail
     expect(fs.readFileSync(file, 'utf8')).toBe('{');
   } finally { fs.unlinkSync(file); }
 });
+
+it('sends the runs once per key: a read with the same key reuses the worker copy, a new key or worker sends them again (#276)', async () => {
+  const now = Date.parse('2026-10-28T12:00:00Z'), runs = demoEstimateRuns(now), runIds = runs.slice(-3).map(r => r.runId);
+  const posted: { runs: number; cached?: true; runsKey?: string }[] = [];
+  const spy = (w: ReadWorker) => {
+    const inner = (w as unknown as { worker: { postMessage(m: unknown): void } | null }).worker!;
+    const post = inner.postMessage.bind(inner);
+    inner.postMessage = (m: unknown) => { const x = m as { request: { runs: unknown[] }; cached?: true; runsKey?: string }; posted.push({ runs: x.request.runs.length, cached: x.cached, runsKey: x.runsKey }); post(m); };
+  };
+  const expected = estimatesState(runs, runIds, now);
+  expect(await worker.call({ op: 'estimates', runs, runIds, now }, 'k1')).toEqual(expected);
+  spy(worker);
+  expect(await worker.call({ op: 'estimates', runs, runIds, now }, 'k1')).toEqual(expected);
+  expect(posted.at(-1)).toMatchObject({ runs: 0, cached: true });
+  expect(await worker.call({ op: 'estimates', runs: runs.slice(0, -1), runIds, now }, 'k2')).toEqual(estimatesState(runs.slice(0, -1), runIds, now));
+  expect(posted.at(-1)).toMatchObject({ runs: runs.length - 1, runsKey: 'k2' });
+  worker.stop();
+  expect(await worker.call({ op: 'estimates', runs, runIds, now }, 'k2')).toEqual(expected); // a new worker holds nothing: sent again
+});

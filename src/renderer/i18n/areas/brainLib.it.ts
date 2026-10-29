@@ -10,7 +10,6 @@ export const brainLibIt = {
   'brainLib.charts.noData': 'Nessun dato.',
   'brainLib.charts.nValuesMax': (p: { n: number; max: string; values: string }) => `${p.n} valori; il più alto ${p.max}: ${p.values}`,
   'brainLib.charts.nBarsRange': (p: { n: number; from: string; to: string }) => `${p.n} barre; da ${p.from} a ${p.to}.`,
-  'brainLib.charts.nPointsMax': (p: { n: number; max: string }) => `${p.n} punti; massimo ${p.max}.`,
   'brainLib.charts.firstLabel': (p: { n: number; first: string; value: string }) => `${p.n} voci; la prima: ${p.first}, ${p.value}.`,
 
   // record-discuss.ts

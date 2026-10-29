@@ -25,7 +25,7 @@ export const catalogIt = {
   'runs.facts.provisional': ({ until }: { until: Date }) => `Dichiarato concluso; osservazione fino al ${until.toLocaleDateString()}. Non è una verifica.`,
   'runs.facts.reworked': 'Rilavorazione osservata (proxy, non verdetto verificato).',
   'runs.facts.blocked': 'Blocco dichiarato dall’agente, non verificato.',
-  'runs.run': 'Avvia', 'runs.started': 'Avviata, la trovi nella Home', 'runs.startedShort': 'Avviata', 'runs.open': 'Apri',
+  'runs.run': 'Avvia', 'runs.started': 'Avviata, la trovi nella Grindhouse', 'runs.startedShort': 'Avviata', 'runs.open': 'Apri',
   'runs.goal': 'Obiettivo', 'runs.folder': 'Cartella', 'runs.startError': 'Avvio non riuscito. Riprova.',
   'contextPulse.title': 'Dal Battito', 'contextPulse.error': 'Schede non disponibili.', 'contextPulse.actionError': 'Azione non riuscita. Riprova.',
   'contextPulse.save': 'Salva nelle idee', 'contextPulse.saved': 'Salvata nelle idee', 'contextPulse.act': 'Fallo', 'contextPulse.dismiss': 'Non mi serve',

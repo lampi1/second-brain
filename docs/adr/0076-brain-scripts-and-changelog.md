@@ -1,10 +1,10 @@
 <!-- Decision record for the brain's Script and Changelog sections: where scripts live, who changes them, how changes are logged, and why no classifier picks them. -->
 # ADR 0076: The brain's scripts and its changelog, two sections under Brain
 
-Date: 2026-10-19 · Status: accepted (owner, 19/10: "una sezione dedicata agli script, tutti gli script creati e
+Date: 2026-10-19 · Status: partly superseded by ADR 0096 (point 3); accepted (owner, 19/10: "una sezione dedicata agli script, tutti gli script creati e
 riutilizzabili provati che funzionano, piena libertà all'orchestratore per modificarli, aggiungerne, correggerli o
 eliminarli … i cambiamenti finiscono nel changelog del brain che farei una sezione a parte … voglio rendere il brain più
-visibile in assoluto all'utente") · Builds on: ADR 0072 (a fresh brain starts empty), ADR 0068 (hybrid brain search)
+visibile in assoluto all'utente") · Builds on: ADR 0072 (a fresh brain starts empty), ADR 0094 (hybrid brain search)
 
 ## Decision
 1. **Scripts live in the brain**, in `scripts/`, flat, one file each (`.mjs .js .cjs .ts .py .sh .ps1 .rb .sql .cmd
@@ -30,7 +30,7 @@ visibile in assoluto all'utente") · Builds on: ADR 0072 (a fresh brain starts e
 6. **Clean install (ADR 0072)**: no `scripts/` and no `changelog.md` until the first save; both pages show an empty state.
 
 ## No classifier to pick scripts (for now)
-The agent classifier (ADR 0074) ranks agents from confirmed runs, with thresholds calibrated under approval. Scripts
+The agent classifier (ADR 0174) ranks agents from confirmed runs, with thresholds calibrated under approval. Scripts
 are a different problem: few, each describing itself in one line, with no history of "this script was the right pick".
 A word search over title, description, usage and tags (`findScripts`) plus the model reading the few hits is enough and
 costs nothing; a classifier would need labelled outcomes the app does not have. Revisit when a brain holds more than about
@@ -38,6 +38,6 @@ costs nothing; a classifier would need labelled outcomes the app does not have. 
 any classifier. This threshold is our estimate, not a measurement.
 
 ## Consequences
-- The hybrid search does not index scripts (ADR 0068: notes only, scripts may hold tokens); `brain_scripts` is the way in.
+- The hybrid search does not index scripts (ADR 0094: notes only, scripts may hold tokens); `brain_scripts` is the way in.
 - Two app instances writing the changelog at the same moment can interleave lines (one writer per process, no lock).
 - Tests: `test/unit/brain/scripts.test.ts`; e2e `test/e2e/brain-scripts.spec.ts` (demo data, `scripts-demo.ts`).

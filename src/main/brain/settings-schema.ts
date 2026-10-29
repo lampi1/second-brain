@@ -34,10 +34,10 @@ const budgetDefs = (h: 'claude' | 'cursor'): SettingDef[] => [
 ];
 
 const BASE: readonly SettingDef[] = [
-  { key: 'pulse.on', type: 'boolean', default: true, protected: true, label: 'Battito', description: 'Carte e frase della Dashboard, soltanto mentre la finestra è aperta.' },
+  { key: 'pulse.on', type: 'boolean', default: true, protected: true, label: 'Battito', description: 'Carte e frase in cima a Memoria, soltanto mentre la finestra è aperta.' },
   { key: 'pulse.dailyUsd', type: 'usd', min: 0.01, max: 2, default: 0.25, protected: true, label: 'Battito: budget giornaliero ($)', description: 'Stima di ammissione condivisa tra carte e frase. I costi non riportati restano sconosciuti.' },
   { key: 'pulse.slots', type: 'slots', default: ['08:30', '13:00', '18:30'], protected: true, label: 'Battito: orari', description: 'Da uno a tre orari locali; nessun recupero dei giorni precedenti.' },
-  { key: 'pulse.headline.on', type: 'boolean', default: true, protected: true, label: 'Battito: frase Dashboard', description: 'Una frase al giorno, scritta nella prima chiamata del Battito della giornata, nello stesso budget.' },
+  { key: 'pulse.headline.on', type: 'boolean', default: true, protected: true, label: 'Battito: frase di Memoria', description: 'Una frase al giorno, scritta nella prima chiamata del Battito della giornata, nello stesso budget.' },
   { key: 'jobs.fallback', type: 'enum', values: ['auto', 'off'], default: 'auto', protected: true, label: 'Battito: motore alternativo', description: 'Automatico: API, poi Claude Code senza strumenti.' },
   ...PULSE_TYPES.map((t): SettingDef => ({ key: `pulse.types.${t}`, type: 'boolean', default: true, protected: false, label: `Battito: ${t}`, description: 'Mostra questo tipo di carta.' })),
   ...(['board', 'agent', 'search', 'file'] as const).map((p): SettingDef => ({ key: `pulse.places.${p}`, type: 'boolean', default: true, protected: false, label: `Battito: ${p}`, description: 'Mostra le carte in questa posizione.' })),

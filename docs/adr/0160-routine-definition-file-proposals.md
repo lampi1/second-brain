@@ -1,5 +1,7 @@
 # 0160 — Large routine proposals from brain JSON files
 
+Status: partly superseded by ADR 0179 (app-execution portions); accepted.
+
 Large self-contained definitions should not need to fit into one model tool-call payload. `app_flow_propose` accepts exactly one of `definition` or `definitionPath`, plus the existing `contextKey` and `expectedRevision`. The path may be relative to the selected brain or absolute inside it. This focused transport change needs no multipart upload state.
 
 Read only a regular, single-link `.json` file of at most 1 MiB. Reject traversal, paths outside the current brain, symbolic links/junctions, alternate streams, invalid UTF-8/JSON and files changed while opening or reading. Pin directory identities and nanosecond change metadata from the filesystem root through every ancestor and file parent, including swaps restored between path checks. Bound the actual read, not just its initial stat; do not echo filesystem paths or parser excerpts on errors. The file contains the plain definition object, not an export or tool-call envelope.

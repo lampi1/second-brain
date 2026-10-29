@@ -1,41 +1,9 @@
-// The Settings page's pure parts: the model comparison words (lib/compare.ts: each side by engine, model and effort, the
-// "cost so far" line), the model choices of "Chat aperte dall'Orchestrator" (lib/models.ts), the spending limit amounts and
-// the MCP port (lib/settings-page.ts) and the Ctrl+, shortcut that opens the page (lib/keys.ts).
+// The Settings page's pure parts: the model choices of "Chat aperte dall'Orchestrator" (lib/models.ts), the spending
+// limit amounts and the MCP port (lib/settings-page.ts) and the Ctrl+, shortcut that opens the page (lib/keys.ts).
 import { describe, expect, it } from 'vitest';
-import type { CompareExperiment } from '@shared/contract';
-import { autoLine, costLine, sideName, sidesLine } from '../../src/renderer/lib/compare';
 import { resolveShortcut } from '../../src/renderer/lib/keys';
 import { MODELS, modelOptions } from '../../src/renderer/lib/models';
 import { matchesSettingsSearch, parseUsd, portOf } from '../../src/renderer/lib/settings-page';
-
-const exp = (o: Partial<CompareExperiment> = {}): CompareExperiment => ({
-  name: 'x', title: 'X', description: '', on: true, changedAt: null,
-  a: { engine: 'cursor', label: 'Cursor' }, b: { engine: 'claude', label: 'Claude', model: 'opus', effort: 'medium' }, judge: { engine: 'kimi', label: 'Kimi', model: 'k2' },
-  agents: [], rounds: 4, cost: { a: { usd: 1.84, missing: 1 }, b: { usd: 6.12, missing: 0 } }, ...o,
-});
-
-describe('model comparison words', () => {
-  it('names each side by its engine, model and effort, nothing hard-coded', () => {
-    expect(sideName({ label: 'Claude', model: 'opus', effort: 'medium' })).toBe('Claude opus medium');
-    expect(sideName({ label: 'Cursor' })).toBe('Cursor');
-    expect(sideName({ label: '', model: null })).toBe('motore non indicato');
-    const agents = [{ name: 'sentinel', on: true }, { name: 'scout', on: false }];
-    expect(sidesLine(exp({ agents }))).toBe('A: Cursor (Sentinel) · B: Claude opus medium · giudice: Kimi k2');
-    expect(sidesLine(exp())).toBe('A: Cursor · B: Claude opus medium · giudice: Kimi k2');
-  });
-  it('says the cost so far per side, the rounds without a cost, and nothing before the first round', () => {
-    expect(costLine(exp())).toBe('Finora 4 confronti · Claude opus medium 6,12 $ · Cursor 1,84 $ (1 confronto senza costo)');
-    expect(costLine(exp({ rounds: 1, cost: { a: { usd: null, missing: 1 }, b: { usd: 0.4, missing: 0 } } })))
-      .toBe('Finora 1 confronto · Claude opus medium 0,40 $ · Cursor: costo non ancora importato');
-    expect(costLine(exp({ rounds: 0 }))).toBeNull();
-  });
-  it('names the main switch in the user\'s words', () => {
-    const agents = [{ name: 'sentinel', on: true }, { name: 'scout', on: false }];
-    expect(autoLine(exp({ agents }))).toBe('Opus rifà in automatico il lavoro di Sentinel, Scout di Cursor');
-    expect(autoLine(exp({ agents: [{ name: 'scout', on: true }] }))).toBe('Opus rifà in automatico il lavoro di Scout di Cursor');
-    expect(autoLine(exp({ b: { engine: 'kimi', label: 'Kimi', model: null, effort: null }, agents: [] }))).toBe('Kimi rifà in automatico il lavoro degli agenti di Cursor');
-  });
-});
 
 describe('model choices (lib/models.ts)', () => {
   const seen = { cursor: { at: 1, ids: [{ id: 'grok-4.7', name: 'Grok 4.7' }, { id: 'gpt-5', name: '' }] } };

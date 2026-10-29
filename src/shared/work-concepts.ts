@@ -4,7 +4,7 @@
 // almost nothing without the local model (measured on test/fixtures/classifiers: 10/50 right), and on a clean install
 // (no brain estimates rules, ADR 0072) the routing kind of every chat was "altro". Dictionary-based query translation is
 // the classic remedy for that vocabulary gap in cross-language retrieval (Ballesteros & Croft, SIGIR 1997).
-// Used by agents/classifier.ts (words are folded into concept tokens on both sides) and brain/routing.ts (builtinTask:
+// Used by skills/suggest.ts and brainmodel/jobs.ts (words are folded into concept tokens on both sides) and brain/routing.ts (builtinTask:
 // the routing kind when the brain has no rule for the chat). Pure, no Node: pinned by test/unit/classifiers/*.test.ts.
 import type { TaskKind } from './contract';
 

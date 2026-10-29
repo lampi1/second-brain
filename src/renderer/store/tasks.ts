@@ -6,6 +6,7 @@ import type { TasksState, Settings } from '@shared/contract';
 import { createStore } from './createStore';
 import { toast } from './ui';
 import { t } from '../i18n';
+import { errText } from '../lib/ipc-error';
 
 export const tasks = createStore<TasksState | null>(null);
 /** The intervals offered by the page and the gear menu (any 5..720 is valid in the settings). */
@@ -26,8 +27,6 @@ export function useTasks<T>(sel: (s: TasksState | null) => T): T {
   start();
   return tasks.use(sel);
 }
-
-const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 
 /** "Aggiorna ora" from anywhere: the outcome is always said (a toast), also when the page is not open. */
 export function refreshTasks(): void {

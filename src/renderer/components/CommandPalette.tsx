@@ -58,7 +58,7 @@ function buildCommands(): Cmd[] {
   }
   for (const id of s.order) {
     const c = s.chats[id];
-    if (!c || c.quick || u.hidden.includes(id) || c.closedAt) continue; // Lampo lives in its own tab, never in the list
+    if (!c || c.quick || u.hidden.includes(id) || c.closedAt) continue; // Flash lives in its own tab, never in the list
     const st = stateInfo(c);
     out.push({
       id: `chat:${id}`, group: 'Chat', title: chatName(c), sub: `${engineName(c.harness)} · ${st.label} · ${folderName(c.cwd)}${c.lastText ? ` · ${c.lastText}` : ''}`,

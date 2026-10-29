@@ -2,7 +2,7 @@
 // Qualità and Idee): a panel with its "Discuti" (a source-preserving draft for the Orchestrator, never sent by itself),
 // an empty state, the source line with its refresh, a number tile with its "?" and a count-up that eases a number to
 // its new value (the last frame is always the exact value; none under prefers-reduced-motion). Used by
-// brain/pages/Qualita.tsx (the app's own errors, ErrorsTab.tsx), brain/pages/Idee.tsx (the ideas' themes, Themes.tsx)
+// AppErrors.tsx (Qualità: the app's own errors), Themes.tsx (the themes on Memoria → Idee and Qualità), BrainNotesMap.tsx
 // and components/brain-model/MemoryPage.tsx (the live counters). Styles: dashboard.css.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { brainBridge } from '../actions';
@@ -55,5 +55,5 @@ export function Stat({ label, value, note, n, format, help }: { label: string; v
   return <div className="dash-stat"><span className="dash-stat-label">{label}{help && <HelpTip title={label} label={label}>{help}</HelpTip>}</span><strong>{shown !== undefined && format ? format(shown) : value}</strong><small>{note}</small><Discuss title={label} facts={`${value} · ${note}`} source="second-brain" /></div>;
 }
 
-/** The parts as one object, for the views that take them as props (ErrorsTab.tsx, Themes.tsx: no import cycle). */
+/** The parts as one object, for the views that take them as props (Themes.tsx: no import cycle). */
 export const PARTS = { Panel, Empty, Source, Stat, Discuss };

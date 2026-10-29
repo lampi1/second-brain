@@ -1,7 +1,7 @@
 // The "/" list of a chat's input (ADR 0018): when the message starts with "/" and the caret is still in that first word,
 // which commands match what was typed (name prefix first, then a match anywhere in name or description; skills before
 // the engine's own commands), and the text once one is picked ("/<name> " in place of the typed word). Pure: used by
-// components/ChatInput.tsx (with SlashMenu.tsx) and test/unit/slash.test.ts.
+// components/ChatInput.tsx (its SlashMenu) and test/unit/slash.test.ts.
 import type { ChatCommand } from '@shared/contract';
 
 /** The typed command word without "/" ('' right after the slash), or null when the list must not show. */

@@ -3,7 +3,8 @@
 // measures them and reports the screen rects, and reports `null` for tabs not on screen or covered by an overlay
 // (palette, dialogs, menus: anything registered with registerOverlay, or a modal that blocks everything).
 // It reports on resize/scroll/transition, after any change (a short burst of frames covers animations) and on a
-// slow safety poll, and only sends when something changed. Used by BrowserTile.tsx, Popover.tsx and App.tsx.
+// slow safety poll, and only sends when something changed. Used by BrowserTile.tsx, BrowserPage.tsx,
+// the overlays (ui.tsx, Select.tsx, HelpTip.tsx, Overlays.tsx…) and App.tsx.
 import type { Rect, ViewLayout } from '@shared/contract';
 
 const views = new Map<string, HTMLElement>();

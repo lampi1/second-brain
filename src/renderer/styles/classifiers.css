@@ -1,7 +1,7 @@
 /* The Classificatori page (components/brain-model/ClassifiersPage.tsx, ClassifierDetail.tsx, TrendChart.tsx): a
    summary strip, a grid of classifier cards in the Agenti cards' look (agent-catalog.css .catalog-card, a tone per
    classifier), each with its numbers, a compact weekly trend, the learning meter and a curious fact; the detail view
-   with its explanations, charts and tables. Also the Dashboard's grouped errors (dashboard/ErrorsTab.tsx). Theme tokens
+   with its explanations, charts and tables. Also Qualità's grouped app errors (dashboard/AppErrors.tsx). Theme tokens
    only (tokens.css; chart hues from brain.css --bx-cat-*): dark and light follow the app. One column when narrow. */
 
 .cls-page .dash-header{height:auto;min-height:120px}
@@ -98,7 +98,7 @@
 .cls-compare small{font-size:10px;color:var(--text-4)}
 .cls-detail .dash-panel h3{display:flex;align-items:center;gap:6px}
 
-/* ── Dashboard → Errori: recurring errors as cards ── */
+/* ── Qualità's app errors (dashboard/AppErrors.tsx): recurring errors as cards ── */
 .err-facts{display:flex;flex-wrap:wrap;gap:8px}
 .err-fact{display:flex;gap:8px;align-items:flex-start;padding:9px 12px;border-radius:var(--r-m);border:1px solid var(--border);background:var(--surface);font-size:var(--fs-s);line-height:1.45;color:var(--text)}
 .err-fact>span:first-child{color:var(--amber)}

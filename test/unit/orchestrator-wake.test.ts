@@ -257,7 +257,7 @@ describe('OrchestratorWake', () => {
     expect(sent).toHaveLength(1);
   });
 
-  it('nothing when off, without a Orchestrator, for the Orchestrator itself, a hand-off turn or an archived chat', async () => {
+  it('nothing when off, without an Orchestrator, for the Orchestrator itself, a hand-off turn or an archived chat', async () => {
     const off = make({ enabled: false });
     off.finish('qa', 'fatto');
     await vi.advanceTimersByTimeAsync(2000);
@@ -279,7 +279,7 @@ describe('OrchestratorWake', () => {
     expect(none.queued()).toEqual([]);
   });
 
-  it('a Orchestrator that did not change since the app started is found in the chat list', async () => {
+  it('an Orchestrator that did not change since the app started is found in the chat list', async () => {
     const sent: string[] = [];
     const w = new OrchestratorWake({ send: async id => { sent.push(id); }, enabled: () => true, groupMs: 10, list: () => [chat({ id: 'orchestrator', isOrchestrator: true, state: 'idle' })] });
     w.observe('chat:updated', chat({ id: 'qa', state: 'running' }));

@@ -13,8 +13,8 @@ import { locale, t } from '../i18n';
 import { Button } from './ui';
 import { IconArrowDown, IconCopy, IconFolder, IconMic, IconPlay, IconRefresh, IconSearch, IconSparkle, IconStop, IconTrash, IconFile } from './Icons';
 import '../styles/recordings.css';
+import { errText } from '../lib/ipc-error';
 
-const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 const fail = (e: unknown) => toast(`${t('rec.failed')} ${errText(e)}`, 'err');
 
 function when(at: number): string {

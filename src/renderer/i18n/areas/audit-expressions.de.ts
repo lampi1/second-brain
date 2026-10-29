@@ -34,8 +34,6 @@ export const auditExpressionsDe: typeof auditExpressionsIt = {
   "auditExpression.ImageStrip.text61": (p: { v0: string | number }) => `Bild ${p.v0}`,
   "auditExpression.ImageStrip.text62": (p: { v0: string | number }) => `Bild ${p.v0} entfernen`,
   "auditExpression.ImageStrip.text63": (p: { v0: string | number }) => `Bild ${p.v0}`,
-  "auditExpression.ProgressPanel.text76": "erreicht",
-  "auditExpression.ProgressPanel.text77": "noch nicht erreicht",
   "auditExpression.StatoDialog.text159": "Berechtigung",
   "auditExpression.StatoDialog.text160": "Befehl",
   "auditExpression.StatoDialog.text161": "Frage",

@@ -4,17 +4,10 @@
 // maintenance_propose turns one finding into a card (research.ts checks it). Both refuse any other chat. Used by
 // wiring.ts and demo-wiring.ts.
 import type { McpTool } from '../mcp/server';
+import { callerOf } from '../mcp/caller';
 import { RESEARCH_KINDS } from '../../shared/maintenance-research';
 import { PACK_SECTIONS } from './research-pack';
 import type { ResearchService } from './research';
-
-export const RESEARCH_TOOLS = ['maintenance_pack', 'maintenance_propose'] as const;
-
-const callerOf = (params: Record<string, string>): string => {
-  const id = params.chatId;
-  if (!id) throw new Error('This tool works only on a chat\'s own endpoint.');
-  return id;
-};
 
 export function researchTools(research: Pick<ResearchService, 'pack' | 'propose'>): McpTool[] {
   const s = (description: string) => ({ type: 'string', description });

@@ -25,7 +25,6 @@ import { withApiModels } from './engines/sessions';
 import { agentsMayOpen, engineOn } from './engines/policy';
 import { OverlayLayer } from './overlay';
 import { showLocal, type Shell } from './open-path';
-import { peekFile } from './peek-file';
 import { readFileView } from './file-view';
 import { readFileDiff } from './file-diff';
 import type { DiffAgainst } from '../shared/file-diff';
@@ -37,7 +36,7 @@ import { gitBranches } from './chats/branch';
 import { SearchService, demoBranchOf, brainHitsFrom } from './search/service';
 import { gitBranch } from './search/sources';
 import { findTranscript } from './chats/transcript';
-import { createRoutedChat, previewRoute } from './chats/routed';
+import { createRoutedChat } from './chats/routed';
 import { FROZEN_EPOCH } from './demo';
 import { createDemoRoutines } from './routines/demo';
 import type { Routines } from './routines/service';
@@ -60,7 +59,6 @@ import { createPulse } from './pulse/wiring';
 import { pulseDemoHandlers } from './pulse/demo';
 import { markRunOutcome } from './run/outcome';
 import { canonicalRepoRoot } from './brain/adapters/codex-policy';
-import { suggestRequest } from './skills/suggest';
 import type { CloudService } from './cloud/service';
 import { ProposalsService } from './proposals/service';
 import { Workflows } from './workflows/service';
@@ -256,14 +254,11 @@ app.whenReady().then(async () => {
     // the first setup's new memory, in the app's data folder (the only way the app creates one)
     'app:createBrain': a => defaultBrain.ensure(a?.language, a?.harness),
     'progress:get': () => s.progress.get(),
-    'progress:setHidden': a => s.progress.setHidden(a?.hidden),
-    'progress:confirmResult': a => s.progress.confirmResult(a?.chatId, a?.resultAt),
     'chat:autoCloseGet': () => { s.autoClose.refresh(); return s.autoClose.state(); },
     'chat:autoClosePresence': a => s.autoClose.setPresence(Array.isArray(a?.holds) ? a.holds : []),
     'chat:autoCloseKeep': a => { if (typeof a?.chatId !== 'string' || typeof a.keep !== 'boolean') throw new Error('Richiesta non valida.'); s.autoClose.keepOpen(a.chatId, a.keep); },
     'agents:list': () => s.agents.list(),
     // the brain skills that fit a request (the role start dialog); the demo ranks by words only
-    'skills:suggest': a => { if (!s.suggestSkills) throw new Error('Suggerimenti delle skill non disponibili.'); return s.suggestSkills(suggestRequest(a?.request)); },
     'agents:undo': a => { if (!s.runFeedback) throw new Error('Annulla non disponibile.'); return s.runFeedback.undo(a); },
     'agents:save': a => s.agentPacks.learning.save(a.profile, a.id),
     'agents:reset': a => s.agents.reset(String(a?.id ?? '')),
@@ -271,7 +266,6 @@ app.whenReady().then(async () => {
     // the Brain pages (ADR 0077): read, the maintenance button, an undo, a skill toggle; Classificatori read-only
     'brainmodel:state': () => s.brainModel.stateAsync(),
     'memory:reviewList': a => s.memoryReview?.list(undefined, a?.asOf) ?? [],
-    'memory:confirm': async a => { requireReviewRoot(a.expectedRoot); if (!s.memoryReview) throw new Error('Memory review unavailable.'); try { return await s.memoryReview.confirm(a.id, a.evidence, a.keep === 'new' || a.keep === 'both' ? { keep: a.keep, ids: Array.isArray(a.conflicts) ? a.conflicts.filter(x => typeof x === 'string').slice(0, 50) : [] } : undefined); } finally { await search.invalidateBrain(); } },
     'memory:retract': async a => { requireReviewRoot(a.expectedRoot); if (!s.memoryReview) throw new Error('Memory review unavailable.'); try { return await s.memoryReview.retract(a.id, a.reason); } finally { await search.invalidateBrain(); } },
     'memory:delete': async a => { requireReviewRoot(a.expectedRoot); if (!s.memoryReview) throw new Error('Memory review unavailable.'); try { return await s.memoryReview.delete(a.id); } finally { await search.invalidateBrain(); } },
     'learning:state': () => s.learningReview?.state() ?? { datasets: [], replays: [], candidates: [], replayAvailable: false },
@@ -319,7 +313,9 @@ app.whenReady().then(async () => {
     'agents:estimates': a => {
       const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
       const runs = mergeRuns(demo ? demoEstimateRuns(now) : s.agentRuns?.list() ?? [], s.chats.list().map(c => c.run));
-      return readWorker.call({ op: 'estimates', runs, runIds: checkRunIds(a?.runIds), now });
+      // the chats' runs are the store's own records (adopted ones too): its revision plus the count covers both
+      const key = !demo && s.agentRuns ? `store:${s.agentRuns.revision}/${runs.length}` : undefined;
+      return readWorker.call({ op: 'estimates', runs, runIds: checkRunIds(a?.runIds), now }, key);
     },
     'agents:judgingEstimate': () => {
       const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
@@ -350,7 +346,6 @@ app.whenReady().then(async () => {
     },
     // an agent's run (SB_HIDDEN, the e2e suite) never opens Explorer: it records what it would have shown
     'app:showInFolder': a => showLocal(String(a?.path ?? '').slice(0, 4096), hiddenRun() ? hiddenShell : shell),
-    'app:peekFile': a => peekFile(String(a?.path ?? '').slice(0, 1000), typeof a?.cwd === 'string' ? a.cwd : undefined),
     'app:readFile': a => {
       const chat=typeof a?.chatId==='string'?s.chats.list().find(chat=>chat.id===a.chatId):undefined;
       const brainRoot=demo?process.env.SB_BRAIN:s.brain.info().brainRoot;
@@ -378,7 +373,6 @@ app.whenReady().then(async () => {
     'chat:create': a => s.chats.create(a),
     // "Nuova chat" and a new Orchestrator: the routing table picks the engine, model and effort (ADR 0032)
     'chat:createRouted': a => createRoutedChat({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h), create: r => s.chats.create(r) }, a, { byUser: true }),
-    'routing:preview': a => previewRoute({ route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h) }, a),
     'chat:send': async a => {
       noteUserTyped(a.chatId);
       const spoken = a.voice === true && typeof a.text === 'string';
@@ -386,7 +380,6 @@ app.whenReady().then(async () => {
       try { await s.chats.send(a.chatId, a.text, a.images); } finally { if (spoken) s.chats.spokenNext?.(a.chatId, null); }
       s.chats.resumedByUser?.(a.chatId, a.text);
     },
-    'chat:userEvents': a => { if (!s.chats.userEvents) throw new Error('Task events unavailable.'); return s.chats.userEvents(a.chatId, a.afterSeq); },
     'chat:synthesize': a => { if (!s.chats.synthesizeResult) throw new Error('Result synthesis unavailable.'); return s.chats.synthesizeResult(a.runId, { kind: 'user' }); },
     'chat:answer': async a => { activity.answered(a.chatId, a.requestId); try { await s.chats.answer(a.chatId, a.requestId, a.answer); } catch (e) { activity.notAnswered(a.chatId, a.requestId); throw e; } },
     'chat:plan': a => s.chats.planDecide(a.chatId, a.decision, a.at, a.text),
@@ -438,7 +431,6 @@ app.whenReady().then(async () => {
     'credentials:list': () => s.browser.credentials(),
     'credentials:copy': a => s.browser.copyCredential(a.id, a.field),
     'feed:list': () => s.brain.feed(),
-    'feed:mute': a => s.brain.mute(a.kind, a.muted),
     'settings:get': () => s.brain.settings(),
     // API keys: write-only from the page, never returned (engines/secrets.ts); no MCP tool reaches these
     'secrets:status': () => s.engines.secretsStatus(),
@@ -448,12 +440,10 @@ app.whenReady().then(async () => {
     'engines:spend': () => s.engines.apiSpend(),
     // cloud agents (ADR 0080, main/cloud/): the user's clicks; agents reach them only through app_create_chat / app_chats
     'cloud:list': a => cloudOf(s).list(a?.refresh === true),
-    'cloud:start': a => cloudOf(s).start(a, 'user'),
     'cloud:followUp': a => cloudOf(s).followUp(String(a?.id ?? ''), String(a?.text ?? '')),
     'cloud:stop': a => cloudOf(s).stop(String(a?.id ?? '')),
     'cloud:apply': a => cloudOf(s).apply(String(a?.id ?? '')),
     'cloud:watch': a => cloudOf(s).watch(typeof a?.id === 'string' ? a.id : null),
-    'cloud:readiness': a => cloudOf(s).readiness(String(a?.cwd ?? '')),
     'cloud:dismiss': a => cloudOf(s).dismiss(String(a?.id ?? '')),
     'settings:set': async a => {
       const saved = await s.brain.setSettings(a);
@@ -471,7 +461,6 @@ app.whenReady().then(async () => {
     'estimate:record': a => s.brain.recordJob(a),
     'brain:api': a => s.brain.api(a?.path),
     'compare:list': () => s.brain.compareList(),
-    'compare:set': a => s.brain.compareSet(a?.experiment, a?.on, a?.agent),
     'learn:act': a => s.brain.learnAct(a),
     'models:seen': () => withApiModels(s.brain.modelsSeen()),
     'routing:get': () => s.brain.routingInfo(),
@@ -479,7 +468,6 @@ app.whenReady().then(async () => {
     'routing:save': a => s.brain.saveRouting(Array.isArray(a?.routes) ? a.routes : [], typeof a?.reason === 'string' && a.reason.trim() ? a.reason.trim().slice(0, 300) : null,
       { ...(a?.exploration !== undefined ? { exploration: Number(a.exploration) } : {}), ...(a?.costWeight !== undefined ? { costWeight: Number(a.costWeight) } : {}),
         ...(Number.isInteger(a?.baseVersion) ? { base: a.baseVersion } : {}) }),
-    'routing:restore': a => s.brain.restoreRouting(Number(a?.version)),
     'tasks:get': () => s.tasks.get(),
     'tasks:refresh': () => s.tasks.refresh(),
     // only the folders of the app's own chats, never a network path (a stat on \\host\share would reach out)
@@ -524,7 +512,6 @@ app.whenReady().then(async () => {
     'routines:export': a => routinesOf().exportForTerminal(String(a.id)),
     'routines:setSecrets': a => routinesOf().setSecrets(a.id, a.values && typeof a.values === 'object' ? a.values : {}),
     'routines:image': a => routinesOf().image(a.ref, a.path),
-    'routines:run': a => routinesOf().run(a),
     'routines:watch': a => routinesOf().watch(a.ref, a.subscription),
     'routines:unwatch': a => routinesOf().unwatch(a.subscription),
     'routines:archive': () => s.routineArchive?.snapshot() ?? { contextKey: 'unavailable', drafts: [], versions: [], active: {}, runs: [] },
@@ -536,7 +523,6 @@ app.whenReady().then(async () => {
       if (target) void s.chats.send(target.id, `[evento app] Decisione registrata nel filo ${row.id}. Rileggi app_work_list e prosegui dalla decisione salvata; questa notifica non concede altri permessi.`, undefined, false, 'Lavoro', false, { kind: 'app' }).catch(e => log.warn('chats', 'workflow decision wake failed', { cause: errText(e), hint: 'The decision is saved; Fai il punto resumes it.' }));
       return row;
     },
-    'orchestrator:get': () => orchestrator.get(),
     'orchestrator:ensure': a => orchestrator.ensure(a),
     'source:dismissLaunch': () => s.source.dismissLaunch(),
     'source:check': () => s.source.sourceCheck(),
@@ -545,7 +531,6 @@ app.whenReady().then(async () => {
     'search:query': async a => { await s.memoryReview?.retryInvalidations(); return search.query(String(a?.q ?? '')); },
     'search:status': async () => s.hybrid?.status() ?? { model: { state: 'missing' }, docs: 0, chunks: 0, vectors: 0, vec: false },
     'search:retryModel': async () => s.hybrid ? s.hybrid.retryModel() : { model: { state: 'missing' }, docs: 0, chunks: 0, vectors: 0, vec: false },
-    'later:get': () => s.later.get(),
     'later:set': a => s.later.set(a?.on === true),
     'sync:get': () => s.brain.syncState(),
     'sync:now': a => s.brain.syncNow(a?.domain),

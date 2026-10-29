@@ -81,8 +81,6 @@ export function undoLast(): Proposal | null {
 }
 export const canUndo = (s: DeckState): boolean => s.decided.some(d => d.state === 'held');
 export const dismissRefusal = (): void => deck.set(s => ({ ...s, refused: null }));
-/** «Ricomincia»: the counts of the end state start again (the open cards stay). */
-export const resetSession = (): void => deck.set(s => ({ ...s, decided: s.decided.filter(d => d.state !== 'done') }));
 
 /** The cards still to decide: main's open ones minus this session's decisions in flight. */
 export function openCards(s: DeckState): Proposal[] {

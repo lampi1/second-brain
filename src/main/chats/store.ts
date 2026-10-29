@@ -82,7 +82,7 @@ export interface StoredChat {
   /** null = never chosen by the user: the CLI follows settings.json (ADR 0002) */
   permissionMode: PermissionMode | null;
   isOrchestrator: boolean;
-  /** «Lampo», the quick lane (ADR 0105) */
+  /** «Flash», the quick lane (ADR 0105, 0107) */
   quick?: true;
   /** the maintenance research (ADR 0132) */
   research?: true;

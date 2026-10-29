@@ -371,14 +371,6 @@ html[data-blink="1"] .bx-live { box-shadow: 0 0 0 6px transparent; } /* lib/beat
 .bx-done details summary { cursor: pointer; color: var(--bx-text-3); font-size: var(--bx-fs-s); width: fit-content; }
 .bx-done details ul { margin: 4px 0 0; padding-left: 14px; display: grid; gap: 3px; font-size: var(--bx-fs-s); }
 
-.bx-harness { display: inline-grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; font: 700 10px/1 var(--bx-font); flex: none; }
-.bx-harness.claude { background: var(--claude, #e2805a); color: var(--claude-fg, #fff6f1); }
-.bx-harness.cursor { background: var(--cursor-bg, #e3e6ed); color: var(--cursor-fg, #14161b); }
-
-.bx-composer { display: grid; gap: 10px; }
-.bx-composer .chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.bx-chip { height: 26px; padding: 0 10px; border-radius: 999px; border: 1px solid var(--bx-border-2); background: var(--bx-surface-2); color: var(--bx-text-2); font-size: var(--bx-fs-s); cursor: pointer; }
-.bx-chip:hover { color: var(--bx-text); border-color: var(--bx-blue-line); }
 .bx-confirm { display: grid; gap: 8px; padding: 10px 12px; border-radius: var(--bx-r-m); border: 1px solid var(--bx-blue-line); background: var(--bx-blue-bg); }
 
 .bx-spunto { display: grid; gap: 8px; align-content: start; }
@@ -558,8 +550,7 @@ html[data-blink="1"] .bx-live-dot.run { box-shadow: 0 0 0 4px rgba(255, 209, 102
 @keyframes bx-discuss-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .bx-discuss-box { animation: none; } }
 
-/* code copy in the Markdown viewer (Markdown.tsx `copy` / `copyBlocks`: the file viewer), and a pressed chip */
-.bx-chip[aria-pressed="true"] { background: var(--bx-blue-bg); border-color: var(--bx-blue-line); color: var(--bx-text); }
+/* code copy in the Markdown viewer (Markdown.tsx `copy` / `copyBlocks`: the file viewer) */
 .bx-pre { position: relative; }
 .bx-pre > pre { padding-top: 34px; }
 .bx-pre-copy { position: absolute; top: 6px; right: 6px; }
@@ -790,7 +781,6 @@ html[data-blink="1"] .bx-live-dot.run { box-shadow: 0 0 0 4px rgba(255, 209, 102
 .bx-md code.bx-copy { cursor: copy; }
 .bx-md code.bx-copy:hover { border-color: var(--bx-blue-line); }
 .bx-md code.bx-copy:focus-visible { border-color: var(--bx-blue-line); outline: 2px solid var(--bx-focus); outline-offset: 1px; }
-.bx-chip[aria-pressed="true"] { background: var(--bx-blue-bg); border-color: var(--bx-blue-line); color: var(--bx-text); }
 /* Regole imparate inside the Regole page (brain/pages/LearnedRules.tsx, ADR 0082) */
 .bx-learned { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 24px; min-width: 0; }
 .bx-learned-head { display: grid; gap: 6px; }

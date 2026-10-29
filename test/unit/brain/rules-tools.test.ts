@@ -1,6 +1,6 @@
 // App-owned template utilities, launch activation, reference migration and crash recovery (ADR 0062), all in temp
 // folders: the release template is the repo's brain-template; no real brain, global settings, app or model is used.
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -63,6 +63,53 @@ describe('app-owned template utilities', () => {
     expect(fs.readFileSync(path.join(dir, 'ops/tools/mem.mjs'), 'utf8')).toContain('Other');
     expect(fs.readdirSync(path.dirname(dir)).filter(n => n.includes('.new-') || n.includes('.old-'))).toEqual([]);
   }, 60_000); // renders the whole release template three times: slow on a loaded machine (check:branch runs 200 files)
+  it('a copy Windows holds open (rename refused) is updated in place, not lost (issues #275, #278)', () => {
+    const root = brain();
+    const dir = ensureTools(root);
+    fs.writeFileSync(path.join(dir, 'ops/tools/dropped.mjs'), '// a file the release no longer ships\n');
+    fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', template: { OWNER: 'Held' }, rules: { topicFiles: [] } }));
+    const real = fs.renameSync;
+    const spy = vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+      if (from === dir) throw Object.assign(new Error(`EPERM: operation not permitted, rename '${from}'`), { code: 'EPERM' });
+      real(from, to);
+    });
+    try { expect(ensureTools(root)).toBe(dir); } finally { spy.mockRestore(); }
+    expect(fs.readFileSync(path.join(dir, 'ops/tools/mem.mjs'), 'utf8')).toContain('Held');
+    expect(fs.existsSync(path.join(dir, 'ops/tools/dropped.mjs'))).toBe(false);
+    const stamp = fs.statSync(path.join(dir, '.sb-tools.json')).mtimeMs;
+    expect(ensureTools(root)).toBe(dir); // the marker is current: no second render
+    expect(fs.statSync(path.join(dir, '.sb-tools.json')).mtimeMs).toBe(stamp);
+    expect(fs.readdirSync(path.dirname(dir)).filter(n => n.includes('.new-') || n.includes('.old-'))).toEqual([]);
+  }, 60_000);
+  it('a held file the in-place update cannot replace keeps the old marker, and the next call finishes the update', () => {
+    const root = brain();
+    const dir = ensureTools(root);
+    const marker = fs.readFileSync(path.join(dir, '.sb-tools.json'), 'utf8');
+    fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', template: { OWNER: 'Later' }, rules: { topicFiles: [] } }));
+    const realRename = fs.renameSync, realCopy = fs.copyFileSync;
+    const held = path.join(dir, 'ops/tools/mem.mjs');
+    const rename = vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+      if (from === dir) throw Object.assign(new Error('EPERM'), { code: 'EPERM' });
+      realRename(from, to);
+    });
+    const copy = vi.spyOn(fs, 'copyFileSync').mockImplementation((from, to, mode) => {
+      if (to === held) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
+      realCopy(from, to, mode);
+    });
+    try { expect(() => ensureTools(root)).toThrow(/EBUSY/); } finally { copy.mockRestore(); }
+    // hooks and tools still find the brain root in the old marker meanwhile
+    expect(fs.readFileSync(path.join(dir, '.sb-tools.json'), 'utf8')).toBe(marker);
+    try { expect(ensureTools(root)).toBe(dir); } finally { rename.mockRestore(); }
+    expect(fs.readFileSync(held, 'utf8')).toContain('Later');
+  }, 60_000);
+  it('without a stored TODAY the copy keeps one date (no re-render at midnight)', () => {
+    const root = brain();
+    const dir = ensureTools(root);
+    const stamp = fs.statSync(path.join(dir, '.sb-tools.json')).mtimeMs;
+    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(Date.now() + 3 * 86_400_000));
+    try { expect(ensureTools(root)).toBe(dir); } finally { vi.useRealTimers(); }
+    expect(fs.statSync(path.join(dir, '.sb-tools.json')).mtimeMs).toBe(stamp);
+  }, 60_000);
   it('a product text the release no longer ships leaves the copy and the plugin at the next render (no leftovers)', () => {
     const template = path.join(base, 'template');
     fs.cpSync(TEMPLATE, template, { recursive: true, filter: src => path.basename(src) !== 'node_modules' });

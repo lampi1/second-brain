@@ -95,17 +95,6 @@ export const toolsDe: typeof toolsIt = {
   'tools.skillsPage.theSkill': 'den Skill',
 
   // Compare: model comparison labels
-  'tools.compare.engineNotSet': 'Engine nicht festgelegt',
-  'tools.compare.judge': 'Richter',
-  'tools.compare.runsAutomatically': 'wiederholt automatisch die Arbeit',
-  'tools.compare.of': 'von',
-  'tools.compare.ofAgents': 'der Agenten',
-  'tools.compare.anotherModel': 'Ein anderes Modell',
-  'tools.compare.rounds': (p: { n: number }) => `${p.n} ${p.n === 1 ? 'Vergleich' : 'Vergleiche'}`,
-  'tools.compare.costNotYet': 'Kosten noch nicht importiert',
-  'tools.compare.noCost': 'keine Kosten',
-  'tools.compare.soFar': 'Bisher',
-  'tools.compare.separator': ' · ',
 
   // Foreign: item origin labels
   'tools.foreign.otherChat': "ein anderer Chat",
@@ -193,14 +182,6 @@ export const toolsDe: typeof toolsIt = {
   'tools.routing.kindAppFeature': 'Neues Feature',
   'tools.routing.kindOrchestrator': 'Orchestrator',
   'tools.routing.kindOther': 'Sonstiges',
-  'tools.routing.errorNoStart': "Startet nicht",
-  'tools.routing.reasoning': 'Denkaufwand',
-  'tools.routing.agentSource': 'aus dem Profil des Agenten',
-  'tools.routing.overrideSource': 'von dir gewählt: hat Vorrang vor der Tabelle',
-  'tools.routing.tableSource': 'aus der Tabelle',
-  'tools.routing.exploreSource': 'ein wenig genutztes Modell ausprobieren',
-  'tools.routing.defaultSource': 'keine Zeile für',
-  'tools.routing.defaultSourceEnd': 'deine Standardwerte',
 
   // DevOps
   'tools.tasks.notReadTimeout': 'Tasks nicht gelesen: Anmeldung abgelaufen, führe «az login» in einem Terminal aus',

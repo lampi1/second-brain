@@ -1,6 +1,6 @@
 # ADR 0176 · Routine packages carry their secrets in clear text (exception to AGENTS.md rule 2)
 
-Status: accepted (2026-10-27, owner decision relayed by the «App · motore routine unico (app + terminale)» thread).
+Status: partly superseded by ADR 0179 (app-execution portions); accepted (2026-10-27, owner decision relayed by the «App · motore routine unico (app + terminale)» thread).
 
 ## Context
 

@@ -316,7 +316,7 @@ export function seed(E: number): Seed {
     ev('f-6', 40 * MIN, 'win', 'Fatto', 'quiet', 'PR fix SMS unita', 'La correzione degli SMS è in main'),
     ev('f-7', 9 * 60 * MIN, 'reflection', 'Riflessione', 'quiet', 'Le domande a scelta fanno risparmiare tempo', 'Rispondere con 1-9 evita di aprire la chat', { away: true }),
     ev('f-8', 10 * 60 * MIN, 'journal', 'Diario', 'quiet', 'Giornata chiusa', '4 PR, 2 bug aperti, 1 idea', { away: true }),
-    // older app errors that repeat, for the Dashboard's grouped Errori view (dashboard/errors.ts)
+    // older app errors that repeat, for Qualità's grouped app errors (dashboard/errors.ts)
     ev('f-e1', 26 * 60 * MIN, 'error', 'Errore', 'quiet', 'Limite d’uso', 'API Error: 429 rate_limit_error: Number of requests has exceeded your rate limit', { chatId: 'qa', away: true }),
     ev('f-e2', 3 * 1440 * MIN, 'error', 'Errore', 'quiet', 'Limite d’uso', 'API Error: 429 rate_limit_error: Number of requests has exceeded your rate limit', { chatId: 'sms', away: true }),
     ev('f-e3', 6 * 1440 * MIN, 'error', 'Errore', 'quiet', 'Limite d’uso', 'API Error: 429 rate_limit_error: usage limit reached', { chatId: 'feedback', away: true }),
@@ -918,7 +918,6 @@ const LIVE_FEED: [string, string, Priority, string, string][] = [
 
 export class DemoBrain implements BrainService {
   private events: FeedEvent[];
-  private muted = new Set<string>();
   private timers: ReturnType<typeof setInterval>[] = [];
   private n = 0;
   private base: number;
@@ -951,13 +950,11 @@ export class DemoBrain implements BrainService {
   }
 
   private push(e: FeedEvent): void {
-    if (this.muted.has(e.kind)) return;
     this.events = [e, ...this.events].slice(0, 300);
     this.emit('feed:events', [e]);
   }
 
-  feed(): FeedEvent[] { return this.events.filter(e => !this.muted.has(e.kind)); }
-  mute(kind: string, muted: boolean): void { if (muted) this.muted.add(kind); else this.muted.delete(kind); }
+  feed(): FeedEvent[] { return this.events.slice(); }
 
   usage(): Usage {
     const today = Math.round((this.base + this.chats.list().reduce((a, c) => a + c.costUsd, 0)) * 100) / 100;

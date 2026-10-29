@@ -112,7 +112,7 @@ export class OrchestratorWake {
   /** held-news.ts: told when what waits may have changed (#88) */
   private listener: (() => void) | null = null;
   private toldEmpty = true;
-  /** Lampo chats (ADR 0105): their requests are the user's own, never news */
+  /** Flash chats (ADR 0105): their requests are the user's own, never news */
   private quick = new Set<string>();
 
   constructor(private readonly d: OrchestratorWakeDeps) {
@@ -182,7 +182,7 @@ export class OrchestratorWake {
     // the Orchestrator's gate changed (only the change: its other updates never cut the grouping window short): what it now
     // lets through is timed again (it started working: all goes into its turn; it is free again: what waited goes)
     if (c.isOrchestrator) { if (this.buffer.size && (!was || gateOf(was) !== gateOf(c))) this.schedule(this.now()); return; }
-    // Lampo (ADR 0105) is the user's quick lane, never work the Orchestrator follows
+    // Flash (ADR 0105) is the user's quick lane, never work the Orchestrator follows
     if (c.quick) return;
     // the maintenance research (ADR 0132) ends in cards for the user, never news for the Orchestrator
     if (c.research) return;
@@ -223,7 +223,7 @@ export class OrchestratorWake {
     const known = this.chats.get(n.chatId), listed = known ? undefined : this.d.list?.().find(x => x.id === n.chatId);
     if (listed) this.remember(listed);
     const c = known ?? listed;
-    // Lampo (ADR 0105) is the user's own quick lane: what he writes there is never news («Hai scritto · Lampo», #123)
+    // Flash (ADR 0105) is the user's own quick lane: what he writes there is never news (once «Hai scritto · Lampo», #123)
     if (!c || c.isOrchestrator || c.closedAt || this.quick.has(n.chatId)) return;
     const e: WakeEvent = { eventId: n.eventId ?? randomUUID(), ...(n.seq !== undefined ? { seq: n.seq } : {}), chatId: n.chatId, title: n.title, harness: c.harness, kind: 'user-message', detail: n.text, at: n.at ?? this.now(),
       ...(n.parentTitle !== null ? { child: { role: n.role ?? 'ruolo', parent: n.parentTitle } } : {}) };

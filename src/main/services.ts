@@ -7,7 +7,6 @@ import type {
 import type { AgentMetrics, AgentRunOutcome, UserTaskEvents } from '../shared/agents';
 import type { AgentPolicy } from './agents/tool-policy';
 import type { TaskAssignmentOptions, TaskSource } from '../shared/delegation';
-import type { Emitter } from './ipc';
 import type { KnownOutcome, RouteRequest, RouteResult, RoutingActual, RoutingPrediction } from './brain/routing';
 
 export interface ChatService {
@@ -114,7 +113,6 @@ export interface FeedInput { kind: string; title: string; detail?: string; who?:
 
 export interface BrainService {
   feed(): FeedEvent[];
-  mute(kind: string, muted: boolean): void;
   usage(): Usage;
   info(): Pick<AppInfo, 'brainRoot' | 'brainProblem'>;
   settings(): Settings;
@@ -197,9 +195,3 @@ export interface SkillsApi {
   commandsFor(harness: Harness, cwd: string): ChatCommand[];
 }
 
-export interface Services {
-  chats: ChatService;
-  browser: BrowserService;
-  brain: BrainService;
-  emitter: Emitter;
-}

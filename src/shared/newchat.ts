@@ -1,7 +1,7 @@
 // How a message to an Orchestrator should be handled, chosen in its input (ADR 0034, revised 2026-10-20 by the owner:
 // «il pulsante nuova chat oggi è inutile»): "Strategist" = hand it to a Strategist chat that plans it and delegates the
 // parts. Not ticked = the Orchestrator decides with the app's estimate as usual. "Veloce" is gone (#124, 2026-10-21):
-// quick questions have their own lane, Lampo (ADR 0105). The message goes with a first line that names its own meaning,
+// quick questions have their own lane, Flash (ADR 0105, 0107). The message goes with a first line that names its own meaning,
 // so it works even where the MCP instructions (SEND_MODE_RULE) do not reach the model; the chat view hides that line and
 // shows a badge instead. Messages saved with the old "[veloce]" or "[nuova chat]" line still read as such (their badge). Pure. Used by ChatInput/ChatItems (renderer), main/wiring.ts (the Orchestrator's
 // MCP instructions) and the demo's Orchestrator.

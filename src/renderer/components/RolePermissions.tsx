@@ -16,6 +16,7 @@ import { AgentMcpSection } from './AgentMcpSection';
 import { t } from '../i18n';
 import { HelpTip } from './HelpTip';
 import '../styles/role-permissions.css';
+import { errText as reason } from '../lib/ipc-error';
 
 /** What the permissions card edits: the role's tool policy and its ceiling (one save, one version). */
 export interface PermissionDraft { tools: AgentToolPolicy | null; permissionCeiling: PermissionCeiling | null }
@@ -25,7 +26,6 @@ export interface PermissionSection { id: string; title: () => string; hint: () =
 
 /** The element id the card back's "Modifica permessi" goes to (actions.ts go → highlight). */
 export const PERMISSIONS_ELEMENT = 'permessi';
-const reason = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 
 /** The narrower class a wider one includes (tool-policy.ts INCLUDED_BY): shown under it, on while the wider is on. */
 const NARROWER: Partial<Record<ToolClass, ToolClass>> = { shell: 'shell-read', browser: 'browser-read', edit: 'brain-write' };

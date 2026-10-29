@@ -93,17 +93,6 @@ export const toolsIt = {
   'tools.skillsPage.theSkill': 'la skill',
 
   // Compare: model comparison labels
-  'tools.compare.engineNotSet': 'motore non indicato',
-  'tools.compare.judge': 'giudice',
-  'tools.compare.runsAutomatically': 'rifà in automatico il lavoro',
-  'tools.compare.of': 'di',
-  'tools.compare.ofAgents': 'degli agenti',
-  'tools.compare.anotherModel': 'Un altro modello',
-  'tools.compare.rounds': (p: { n: number }): string => `${p.n} ${p.n === 1 ? 'confronto' : 'confronti'}`,
-  'tools.compare.costNotYet': 'costo non ancora importato',
-  'tools.compare.noCost': 'senza costo',
-  'tools.compare.soFar': 'Finora',
-  'tools.compare.separator': ' · ',
 
   // Foreign: item origin labels
   'tools.foreign.otherChat': "un'altra chat",
@@ -191,14 +180,6 @@ export const toolsIt = {
   'tools.routing.kindAppFeature': 'Funzione nuova',
   'tools.routing.kindOrchestrator': 'Orchestrator',
   'tools.routing.kindOther': 'Altro',
-  'tools.routing.errorNoStart': 'Non parte',
-  'tools.routing.reasoning': 'ragionamento',
-  'tools.routing.agentSource': 'dal profilo dell’agente',
-  'tools.routing.overrideSource': 'scelto da te: vince sulla tabella',
-  'tools.routing.tableSource': 'dalla tabella',
-  'tools.routing.exploreSource': 'prova un modello poco usato',
-  'tools.routing.defaultSource': 'nessuna riga per',
-  'tools.routing.defaultSourceEnd': 'i tuoi predefiniti',
 
   // DevOps
   'tools.tasks.notReadTimeout': 'Task non letti: accesso scaduto, lancia «az login» in un terminale',

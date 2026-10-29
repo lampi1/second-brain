@@ -9,7 +9,7 @@ import { setLang, t } from '../../src/renderer/i18n';
 import { fmt, minutesAgo } from '../../src/renderer/brain/lib/format';
 const fixture = vi.hoisted(() => ({ data: null as CostData | null }));
 vi.mock('../../src/renderer/brain/api', () => ({ useBrain: () => ({ data: fixture.data, at: Date.now() - 120_000, loading: false, refreshing: false, error: null, reload: vi.fn() }) }));
-vi.mock('../../src/renderer/brain/components/Composer', () => ({ useAppChats: () => null }));
+vi.mock('../../src/renderer/brain/lib/app-chats', () => ({ useAppChats: () => null }));
 vi.mock('../../src/renderer/brain/components/Discuss', async () => {
   const { createContext } = await import('react');
   return { DiscussContext: createContext(null), DiscussBar: () => null };

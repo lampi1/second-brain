@@ -450,7 +450,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Comandi: quelli di produzione (az, sqlcmd, script ops) chiedono un secondo clic e il main ricontrolla; per un ruolo a sola lettura un comando conta come lettura solo se è un lettore noto, senza concatenazioni, redirezioni, sottoespressioni né opzioni che scrivono o eseguono (sort e uniq solo dopo una pipe).',
         'Commands: production ones (az, sqlcmd, ops scripts) ask for a second click and main checks again; for a read-only role a command counts as reading only if it is a known reader, with no chaining, redirection, subexpression or option that writes or runs (sort and uniq only after a pipe).'),
       // src/renderer/lib/foreign.ts; src/main/chats/admission.ts; src/shared/waiting.ts
-      // src/shared/roles.ts ROLE_DEFAULTS.router
+      // src/shared/roles.ts ROLE_DEFAULTS.orchestrator
       b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda per carico (CPU > 75% o RAM libera < 15%). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI. Smistare un lotto di lavoro (una inbox, una lista di ticket) lo fa invece l’Orchestrator, una chat per richiesta, quando glielo affidi.',
         'Others: messages you did not type (shown muted), "Waits for work" on the text, the load queue (CPU > 75% or free RAM < 15%). Permissions and questions are not guessed: they arrive structured from the CLI. Triaging a batch of work (an inbox, a list of tickets) is instead the Orchestrator’s, one chat per request, when you hand it one.'),
       // src/renderer/components/brain-model/ClassifiersPage.tsx, src/main/brainmodel/classifier-cards.ts
@@ -606,7 +606,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('«Approvate» elenca tutto quello che è nel brain adesso (skill, regole, fatti confermati, script): il cestino lo toglie con un clic e per qualche secondo «Annulla» lo rimette; skill, regole e script passano dal registro delle modifiche, quindi restano annullabili anche in Apprendimento.',
         '\"Approved\" lists everything in the brain now (skills, rules, confirmed facts, scripts): the bin takes one out in a click and for a few seconds \"Undo\" puts it back; skills, rules and scripts go through the change log, so they stay undoable in Learning too.'),
       // src/renderer/brain/pages/Idee.tsx
-      b('«Idee» divide le tue da quelle dell’AI (la colonna «Chi» di ideas.md: «IA» è l’AI) e «Rispolvera» ti ripropone a caso un’idea vecchia ancora aperta; sotto, il Battito e i temi delle idee.',
+      b('«Idee» divide le tue da quelle dell’IA (la colonna «Chi» di ideas.md: «IA» è l’IA) e «Rispolvera» ti ripropone a caso un’idea vecchia ancora aperta; sotto, il Battito e i temi delle idee.',
         '\"Ideas\" splits yours from the AI’s (the \"Chi\" column of ideas.md: \"IA\" is the AI) and \"Dust one off\" brings back an old idea still open at random; below, the Pulse and the ideas’ themes.'),
       b('La Dashboard non c’è più: la frase e i contatori sono in cima a Memoria, il contesto delle chat in Costi, gli errori dell’app e i temi degli errori in Qualità, gli spunti dell’AI in Idee; il resto erano doppioni.',
         'The Dashboard is gone: the sentence and the counters are at the top of Memoria, the chats’ context in Costi, the app’s errors and the errors’ themes in Quality, the AI’s tips in Ideas; the rest were duplicates.'),
@@ -741,7 +741,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Punteggio: corrispondenza nel titolo, poi frase intera, poi parole sparse, più un premio per le cose recenti.',
         'Score: a match in the title, then the whole phrase, then loose words, plus a bonus for recent things.'),
       b('L’indice di chat e branch si aggiorna solo quando cerchi (al massimo ogni 2 secondi), senza timer né osservatori.', 'The chats and branches index refreshes only when you search (at most every 2 seconds), with no timer or watcher.'),
-      // src/main/search/hybrid/service.ts, engine.ts (ADR 0068 hybrid brain search)
+      // src/main/search/hybrid/service.ts, engine.ts (ADR 0094 hybrid brain search)
       b('Il gruppo «Nel brain» usa la ricerca ibrida: parole (BM25, anche con un errore di battitura) e significato (multilingual-e5, scaricato una volta e poi offline), così una frase in inglese trova una nota in italiano. Finché il modello non è pronto cerca solo per parole.',
         'The "In the brain" group uses the hybrid search: words (BM25, a typo allowed too) and meaning (multilingual-e5, downloaded once then offline), so an English phrase finds an Italian note. Until the model is ready it searches by words only.'),
       // src/renderer/components/CommandPalette.tsx
@@ -755,7 +755,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'Titolo 600 + testo + recentezza (fino a 150, lineare su 30 giorni); frase 200; parole 100.', 'Title 600 + text + recency (up to 150, linear over 30 days); phrase 200; words 100.'),
       tech(WHERE, 'Chat e branch: indice in memoria nel processo main (src/main/search), canale search:query. Brain: indice ibrido in userData/search/index.db, in un worker, lo stesso usato da /api/search e dallo strumento brain_search delle chat.', 'Chats and branches: in-memory index in the main process (src/main/search), channel search:query. Brain: hybrid index in userData/search/index.db, in a worker, the same one /api/search and the chats’ brain_search tool use.'),
     ],
-    sources: ['src/main/search/service.ts', 'src/main/search/text-index.ts', 'src/main/search/sources.ts', 'src/main/search/hybrid/service.ts', 'src/main/search/hybrid/engine.ts', 'src/renderer/components/CommandPalette.tsx', 'docs/adr/0023-full-text-search.md', 'docs/adr/0068-hybrid-brain-search.md'],
+    sources: ['src/main/search/service.ts', 'src/main/search/text-index.ts', 'src/main/search/sources.ts', 'src/main/search/hybrid/service.ts', 'src/main/search/hybrid/engine.ts', 'src/renderer/components/CommandPalette.tsx', 'docs/adr/0023-full-text-search.md', 'docs/adr/0094-hybrid-brain-search.md'],
   },
   {
     id: 'file-viewer',
@@ -1109,8 +1109,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Regole dell’app segnalano da sole le anomalie: risposta duplicata, approvazione nascosta (un permesso chiuso senza la tua risposta), revisione senza verdetto.',
         'App rules flag anomalies by themselves: a duplicate reply, a hidden approval (a permission closed without your answer), a review without a verdict.'),
       // src/main/activity/journal.ts
-      b('Leggerlo non consuma token: sono eventi e contatori salvati dall’app. Solo «Fai analizzare all’AI» prepara un messaggio per l’Orchestrator, che parte se lo invii tu.',
-        'Reading it spends no tokens: these are events and counters the app saved. Only "Fai analizzare all’AI" prepares a message for the Orchestrator, sent only if you send it.'),
+      b('Leggerlo non consuma token: sono eventi e contatori salvati dall’app. Solo «Fai analizzare all’IA» prepara un messaggio per l’Orchestrator, che parte se lo invii tu.',
+        'Reading it spends no tokens: these are events and counters the app saved. Only "Fai analizzare all’IA" prepares a message for the Orchestrator, sent only if you send it.'),
       // src/main/activity/journal.ts clean
       b('Si pulisce da solo: tiene 7 giorni e al massimo 20 MB, il resto si cancella.',
         'It cleans itself: it keeps 7 days and at most 20 MB, the rest is deleted.'),

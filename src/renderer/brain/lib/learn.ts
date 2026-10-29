@@ -1,8 +1,8 @@
-// The Miglioramento page's data and words (ADR 0030): /api/improve (the brain's ops/improve/improve.mjs status, one row
+// The data and words of «Regole imparate» (ADR 0030, once the Miglioramento page): /api/improve (the brain's ops/improve/improve.mjs status, one row
 // per policy of the shared self-improvement loop) normalized defensively, and every number turned into a plain Italian
 // line with its n: the typical error (× between estimate and truth, median of the last ones), how often the 80% range
 // held, what a proposal gains on the shared items (paired bootstrap, 90% interval), the after-check of the last change.
-// DOM-free, unit-tested (test/unit/brain-ui/learn.test.ts); used by pages/Miglioramento.tsx.
+// DOM-free, unit-tested (test/unit/brain-ui/learn.test.ts); used by pages/LearnedRules.tsx and lib/classifier-view.ts.
 import { t, locale } from '../../i18n';
 
 export interface Diff { mean: number; lo: number; hi: number }

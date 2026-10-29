@@ -1,5 +1,5 @@
 // Shows a local file the user chose in Explorer (the viewer's "Show in folder"), selected and never opened or run:
-// every file link opens in the app's read-only viewer (SPEC 22, ADR 0068), so nothing here hands a file to its own app.
+// every file link opens in the app's read-only viewer (SPEC 22, ADR 0183), so nothing here hands a file to its own app.
 // The path comes from a model's text, so it is untrusted: only an absolute local path (Windows: a drive letter, never a
 // UNC \\host share, which would send the Windows login to that host; macOS/Linux: a /-rooted path, ADR 0054), read with
 // realpath. Used by index.ts (app:showInFolder) and file-view.ts; pinned by test/unit/open-path.test.ts.

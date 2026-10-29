@@ -1,6 +1,6 @@
 // Battito orchestration: one serial model path, durable budget claims, cards and explicit user actions.
 // No output mutates a brain file or agent until a renderer action calls the supplied capability. One scheduled job, the
-// cards at the user's slots; the Dashboard line rides in the day's first call (at most once a day, ADR 0102), and the
+// cards at the user's slots; Memoria's headline rides in the day's first call (at most once a day, ADR 0102), and the
 // cards may carry an action (promemoria: "Fallo" hands it to the Orchestrator). No idea cards: ideas come only from the
 // user's «Manutenzione» (ADR 0153).
 import { randomBytes } from 'node:crypto';
@@ -60,7 +60,7 @@ export class PulseService {
   stop(): void { this.scheduler?.stop(); this.scheduler = null; }
   /** Proposals waiting for the user's decision (counted in "Da approvare" by the morning block). */
   pendingApprovals(): number { return this.store.data.approvals.filter(a => a.state === 'pending').length; }
-  /** The Dashboard line is still to write today: on, and no model line yet this local day. */
+  /** Memoria's headline is still to write today: on, and no model line yet this local day. */
   private headlineDue(at: number): boolean {
     const h = this.store.data.headline;
     return this.settings().headline.on && !(h?.source === 'model' && h.at !== null && localDay(h.at) === localDay(at));
@@ -224,7 +224,6 @@ export class PulseService {
   handlers(): Pick<Handlers, Extract<keyof Handlers, `pulse:${string}` | `approvals:${string}`>> {
     return {
       'pulse:list': a => this.list(a?.place), 'pulse:status': () => this.status(),
-      'pulse:runNow': () => this.run('pulse'),
       'pulse:seen': a => { if (!Array.isArray(a?.ids) || a.ids.length > 200 || this.store.problem) return;
         for (const c of this.store.data.cards) if (a.ids.includes(c.id) && c.state === 'new') c.state = 'seen'; this.store.save(); },
       'pulse:save': a => this.action(a?.id, async c => { if (!this.d.canSave()) throw Error(); await this.d.saveIdea(c); c.state = 'saved'; }),

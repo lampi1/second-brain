@@ -1,6 +1,6 @@
 # ADR 0167 — User reconciliation of uncertain routine writes
 
-Status: accepted. Date: 2026-10-26.
+Status: partly superseded by ADR 0169 (the terminal-only restriction) and ADR 0179 (app-execution portions); accepted. Date: 2026-10-26.
 
 ## Decision
 

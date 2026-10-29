@@ -1,7 +1,7 @@
 // E2E of ADR 0102, the app shows what it does by itself (frozen demo): a collapsed strip says its current step (the
 // demo's "Fix totale ordine" runs `dotnet test`), the morning block "Mentre eri via" is one line atop the Orchestrator
 // while strips are open, unfolds into its rows and goes away with Ok for the day; the Battito's settings sit in
-// Settings → Notifiche with today's spend; its board shows in Dashboard → Spunti. SB_MORNING=1: the block is off in the
+// Settings → Notifiche with today's spend; its board shows in Memoria → Idee «Dell'IA». SB_MORNING=1: the block is off in the
 // test suites otherwise.
 import { expect, test } from '@playwright/test';
 import { goPage, launchDemo, shot } from './helpers';
@@ -28,7 +28,7 @@ test('strips say their step; the morning line unfolds and Ok dismisses it; the B
   await expect(page.getByTestId('st-pulse-today')).toContainText('Oggi');
   await page.getByTestId('st-pulse').scrollIntoViewIfNeeded();
   await shot(page, 'alive-settings-pulse');
-  // Memoria → Idee «Dell'AI»: the Battito's board, at most three cards (it was the Dashboard's Spunti, ADR 0122)
+  // Memoria → Idee «Dell'IA»: the Battito's board, at most three cards (it was the Dashboard's Spunti, ADR 0122)
   await page.keyboard.press('Control+K'); await page.getByTestId('palette-input').fill('sb://memoria/idee/ia'); await page.keyboard.press('Enter');
   const board = page.locator('[data-testid="context-pulse"][data-place="board"]');
   await expect(board).toBeVisible();

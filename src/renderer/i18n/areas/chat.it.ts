@@ -80,7 +80,7 @@ export const chatIt = {
   'chat.resultHide': 'Nascondi',
   'chat.resultSynthesize': 'Sintetizza con l’Orchestrator',
   'chat.resultDeliveryPending': 'Consegna in attesa',
-  'chat.resultSynthesizeCost': 'Avvia un turno AI e usa i token del tuo motore.',
+  'chat.resultSynthesizeCost': 'Avvia un turno IA e usa i token del tuo motore.',
   'chat.taskContext': 'Incarico corrente',
   'chat.taskLastResult': 'Ultimo risultato',
   'chat.taskContinue': 'Continua qui',

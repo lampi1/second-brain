@@ -1,6 +1,6 @@
 # ADR 0132 · The maintenance with research, the «Idee dell'app» tab and the phrases of the day
 
-Date: 2026-10-23 · Status: accepted (owner asked for it and approved the design doc, the 5 $ default cap and keeping the
+Date: 2026-10-23 · Status: partly superseded by ADR 0153 (§1 dialog, §5, the six-hourly cleanup) and ADR 0173 (point 7, the phrases of the day); accepted (owner asked for it and approved the design doc, the 5 $ default cap and keeping the
 6-hourly zero-token cleanup; «Ogni giorno in automatico» chosen on a decision card for the phrases) · Builds on: ADR
 0077 (changes apply with log and undo), 0112 (the maintenance reads the logs), 0122 (Memoria is the hub of proposals),
 0123 (the proposals deck), 0126 (every card asks a plain question)

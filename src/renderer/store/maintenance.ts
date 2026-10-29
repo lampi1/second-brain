@@ -7,10 +7,10 @@ import type { MaintenanceDone, MaintenanceStatus } from '@shared/maintenance-res
 import { announceMaintenanceDone } from '../lib/maintenance-notice';
 import { sb } from '../sb';
 import { createStore } from './createStore';
+import { errText } from '../lib/ipc-error';
 
 /** `justDone`: the end the button celebrates for a few seconds (null after) */
 export const maintenance = createStore<{ status: MaintenanceStatus | null; error: string | null; justDone: MaintenanceDone | null }>({ status: null, error: null, justDone: null });
-const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 let started = false;
 let doneTimer: ReturnType<typeof setTimeout> | null = null;
 

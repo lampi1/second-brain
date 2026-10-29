@@ -1,6 +1,6 @@
 # ADR 0002 · Chats run through the official CLIs, spoken to directly (no SDK runtime dependency)
 
-Date: 2026-10-11 · Status: accepted
+Date: 2026-10-11 · Status: partly superseded by ADR 0010 (the coexistence parts); accepted
 
 ## Context
 The user wants to keep Claude desktop and Cursor closed and log in "nelle loro cli". Claude Code's Agent SDK

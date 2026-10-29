@@ -1,4 +1,4 @@
-// Semantic node styles and bounded label priority for the Dashboard's brain graph and tests.
+// Semantic node styles and bounded label priority for the brain graph (Graph.tsx, BrainNotesMap.tsx) and tests.
 import { t } from '../i18n';
 
 export function nodeStyle(kind = 'note', layer?: string) {

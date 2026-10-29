@@ -6,7 +6,7 @@
 // RulesPage.tsx and MemoryPage.tsx (the Memoria hub's tabs, ADR 0122); Change also by LearningPage.tsx. Each change shows its evidence claim (ADR 0109): the
 // hypothesis, where it is measured and what the data say so far, with the verdict. Styles: styles/brain-model.css.
 import { useState } from 'react';
-import type { BrainChange, MaintenanceRun, MigrationReport } from '@shared/brain-model';
+import type { BrainChange, MigrationReport } from '@shared/brain-model';
 import { locale, t } from '../../i18n';
 import { brainModel, rollbackChange, useBrainModel } from '../../store/brain-model';
 import { toast } from '../../store/ui';
@@ -77,4 +77,3 @@ export function MigrationReportPanel({ report }: { report: MigrationReport }) {
   </details>;
 }
 
-export const lastRunChanges = (run: MaintenanceRun | null): number => run?.jobs.reduce((n, j) => n + j.changes, 0) ?? 0;

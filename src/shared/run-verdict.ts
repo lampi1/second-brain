@@ -8,7 +8,6 @@ export const FACTS_SETTLE_MS = 7 * 86_400_000;
 export type FactsVerdict = 'success' | 'fail' | 'provisional' | 'unknown';
 /** The bases that count as verified evidence: the user and a verified independent review. */
 export type VerifiedBasis = 'human' | 'reviewed-evidence';
-export const VERIFIED_BASES: readonly VerifiedBasis[] = ['human', 'reviewed-evidence'];
 export interface VerifiedVerdict { verdict: Exclude<AgentRunOutcome['verdict'], 'unknown'>; basis: VerifiedBasis }
 
 type FactsRun = Pick<AgentRun, 'endedAt' | 'report' | 'corrections' | 'counters'>;

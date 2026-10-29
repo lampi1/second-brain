@@ -206,5 +206,3 @@ export function normMap(v: unknown): MapData {
 
 export const normFiles = (v: unknown): string[] => arr(v).map(str).filter(Boolean);
 export const normFile = (v: unknown): FileText => { const o = obj(v); return { path: str(o.path), size: num(o.size), modified: str(o.modified), text: str(o.text) }; };
-export const normHits = (v: unknown): SearchHit[] => arr(v).filter(isObj).map(h => ({ file: str(h.file), line: num(h.line), text: str(h.text) }));
-export const normVersion = (v: unknown): Version => { const o = obj(v); return { site: str(o.site), root: str(o.root), here: str(o.here) }; };

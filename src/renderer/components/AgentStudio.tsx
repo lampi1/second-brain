@@ -33,11 +33,11 @@ import { useBrainModel } from '../store/brain-model';
 import '../styles/agent-studio.css';
 import '../styles/brain-model.css';
 import { rolePurpose } from '../lib/role-text';
+import { errText as reason } from '../lib/ipc-error';
 
 const percent = (v: number) => new Intl.NumberFormat(locale(), { style: 'percent', maximumFractionDigits: 0 }).format(v);
 const usd = (v: number) => formatCost(v);
 const tierLabel = (tier: ModelTier) => t(`roles.tier.${tier}`);
-const reason = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 const SKILL = /^[a-z0-9][a-z0-9._-]{0,79}$/i;
 
 const draftOf = agentDraftOf;

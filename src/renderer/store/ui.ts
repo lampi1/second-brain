@@ -212,8 +212,6 @@ export const closeModal = () => ui.set(s => ({ ...s, modal: null, confirm: null,
 export const openOrchestratorRenew = (orchestratorRenew: { chatId: string; to: Harness }) => ui.set(s => ({ ...s, modal: 'orchestratorRenew', orchestratorRenew }));
 export const askConfirm = (confirm: ConfirmSpec) => ui.set(s => ({ ...s, modal: 'confirm', confirm }));
 export const openHandoff = (chatId: string, session?: string) => ui.set(s => ({ ...s, modal: 'handoff', handoffChat: chatId, handoffSession: session ?? null }));
-/** The × of the long-chat notice: hidden until the context grows by another quarter of the threshold (any tile of it). */
-export const hideCtxNotice = (chatId: string, tokens: number) => ui.set(s => ({ ...s, ctxHidden: { ...s.ctxHidden, [chatId]: tokens } }));
 export const setMaximized = (key: string | null) => ui.set(s => ({ ...s, maximized: key }));
 export const setFocused = (key: string | null) => { if (ui.get().focused !== key) ui.set(s => ({ ...s, focused: key })); };
 /** Low level: show a page without touching the history (use actions.go). */
@@ -270,8 +268,6 @@ export const setClosing = (chatId: string, on: boolean) => ui.set(s => ({ ...s, 
 export const hideChat = (chatId: string, hidden: boolean) => ui.set(s => ({ ...s, hidden: hidden ? [...s.hidden, chatId] : s.hidden.filter(id => id !== chatId) }));
 export const hideTab = (tabId: string, hidden: boolean) => ui.set(s => ({ ...s, hiddenTabs: hidden ? [...s.hiddenTabs, tabId] : s.hiddenTabs.filter(id => id !== tabId) }));
 
-/** Is something covering the whole window (browser views must hide)? A dialog, the full-screen map or the file viewer. */
-export const coversWorkspace = (s: UiState) => s.modal !== null || s.map || s.viewer.open;
 /** The file viewer overlay (low level: actions.ts openViewer, closeViewer, viewerStep, toggleViewerFull). */
 export const setViewer = (fn: (v: ViewerState) => ViewerState) => ui.set(s => { const viewer = fn(s.viewer); return viewer === s.viewer ? s : { ...s, viewer }; });
 

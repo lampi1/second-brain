@@ -21,7 +21,6 @@ export function pulseStubHandlers(): Pick<Handlers, PulseChannels> {
     'pulse:save': () => ({ ok: false, error }),
     'pulse:act': () => ({ ok: false, error }),
     'pulse:dismiss': () => ({ ok: false, error }),
-    'pulse:runNow': () => ({ ok: false, error }),
     'approvals:list': () => [],
     'approvals:decide': () => ({ ok: false, error }),
   };

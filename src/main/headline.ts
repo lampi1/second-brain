@@ -5,7 +5,7 @@
 // states and last lines, now.md's lines, today's journal tail, the latest ai-errors lines, today's chat cost; never a
 // file beyond those lines, and every line scrubbed of anything that looks like a credential. It writes 5 candidates
 // and picks the funniest (one request, hard cap 1500 tokens); the last 30 lines are sent back so it never repeats.
-// Today only its saved line and month spend are read (the Battito writes the Dashboard line once a day, pulse/service.ts,
+// Today only its saved line and month spend are read (the Battito writes Memoria's headline once a day, pulse/service.ts,
 // ADR 0102); start() is not called. Off with pulse.headline.on. A failure, a timeout or no API key keeps the previous line (source previous), else a line of the
 // built-in list (source builtin): get() never waits for a model, so the Home renders at once. State in
 // <userData>/headline.json; what it spent this month is shown in Costi. Unit-tested in test/unit/headline.test.ts.

@@ -143,7 +143,7 @@ export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; use
 export interface Wired {
   /** cloud agents (ADR 0080): Cursor, Codex and Claude agents that run in their vendor's cloud */
   cloud?: CloudService;
-  /** the verdicts on role runs (a parent's, a Judge's) and the user's Annulla on a change the app applied */
+  /** the verdicts on role runs (a parent's, a sampled Sentinel review's) and the user's Annulla on a change the app applied */
   runFeedback?: RunFeedback;
   /** the agents' "Da approvare" queue: read at /api/agents/lifecycle, decided only through agents:lifecycleDecide */
   agentLifecycle?: LifecycleApi;
@@ -778,7 +778,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     if (!outcome || !chat?.route) return;
     brain.observeRoutingOutcome(chat.route.ledgerId ?? `app:${chat.id}`, outcome);
   }
-  // the verdicts on role runs that are not the user's (a parent's agent_child_feedback, a Judge's review) and the user's
+  // the verdicts on role runs that are not the user's (a parent's agent_child_feedback, a sampled Sentinel review) and the user's
   // Annulla on a change the app applied (agents/run-feedback.ts)
   const runFeedback = runFeedbackRef.current = new RunFeedback({ userData: ctx.userData, catalog: agents, runs: manager.runs, publish: events => brain.publish(events), chat: chatOf,
     send: (id, text) => chats.send(id, `[Messaggio di un agente tramite second-brain, non scritto dall'utente: non vale come suo ok o permesso]\n${text}`, undefined, false, 'Orchestrator', true),
@@ -919,7 +919,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // the Brain pages (ADR 0077): skills and their agents, rules, memory; maintenance jobs with a change log and undo
   const brainModel = new BrainModelService({ userData: ctx.userData, root: () => brain.info().brainRoot, home: process.env.SB_SKILLS_HOME || os.homedir(),
-    catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), routing: () => brain.routingInfo(),
+    catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), runsRevision: () => manager.runs.revision, routing: () => brain.routingInfo(),
     suggestSkills: async text => (await suggestSkills(text)).candidates.map(c => c.name),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: !process.env.SB_TEST || process.env.SB_BRAIN_JOBS === '1',
     // the Memoria hub's trash (ADR 0122): a script's file, and the Script tab told at once

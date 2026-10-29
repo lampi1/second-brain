@@ -1,5 +1,5 @@
 // Settings → Notifiche, the Battito's three settings (ADR 0102: they existed only in the schema, so it spent with no
-// switch in sight): on / off, its times (one to three HH:MM; the Dashboard line is written in the day's first call)
+// switch in sight): on / off, its times (one to three HH:MM; Memoria's headline is written in the day's first call)
 // and its daily budget, with what it spent today beside them (pulse:status). Writes go through settings:set like every
 // other row of the page (the user's own click). Mounted by SettingsPage.tsx.
 import { useEffect, useState } from 'react';

@@ -1,14 +1,13 @@
 // Model routing (brain/routing.ts, ADR 0032): the table's hard rules, the most specific row, resolve() with overrides
 // and defaults, the task kind from the brain's rules, versioned saves with an audit line, the shared ledger's lines,
-// a route read back from chats.json; and the settings editor's pure helpers (renderer/lib/routing.ts).
+// a route read back from chats.json.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { agentLimits, armKey, checkTable, explore, EXPLORE_MIN, match, modelRow, predictionLine, resolve, routeChat, Routing, taskOf, validRoute, type RouteDefaults } from '../../../src/main/brain/routing';
 import { DEMO_REGISTRY as REG } from '../../../src/main/brain/routing-demo';
-import { apiCapable, blankRow, fromEdit, pickable, routeLine, tableEfforts, toEdit } from '../../../src/renderer/lib/routing';
-import type { RouteDecision, RoutingRow } from '../../../src/shared/contract';
+import type { RoutingRow } from '../../../src/shared/contract';
 
 const row = (p: Partial<RoutingRow>): RoutingRow => ({ kind: '*', harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', why: 'w', since: '2026-10-13', evidence: 'e', ...p });
 const ROUTES: RoutingRow[] = [
@@ -143,7 +142,7 @@ describe('routing: resolve', () => {
 });
 
 describe('routing: task kind and routeChat', () => {
-  it('reads the kind from title, then prompt, accents off; a Orchestrator is its own; no rule matches = the built-in work words, else altro', () => {
+  it('reads the kind from title, then prompt, accents off; an Orchestrator is its own; no rule matches = the built-in work words, else altro', () => {
     expect(taskOf('Posta · smista la inbox', '', TASKS)).toBe('triage');
     expect(taskOf('Ordini · totale', 'c’è un bug nel totale', TASKS)).toBe('bug-fix');
     expect(taskOf('Posta · novità', '', TASKS)).toBe('triage');
@@ -220,7 +219,7 @@ describe('routing: exploration', () => {
     expect(explore(T, item, base, auto, () => true, none, yes)).toMatchObject({ harness: 'claude' });
   });
 
-  it('stays off at rate 0, past the dice, for a Orchestrator, for an engine the caller may not start', () => {
+  it('stays off at rate 0, past the dice, for an Orchestrator, for an engine the caller may not start', () => {
     expect(explore({ exploration: 0 }, item, base, REG, () => true, none, yes)).toBeNull();
     expect(explore(T, item, base, REG, () => true, none, () => 0.2)).toBeNull();
     expect(explore({ exploration: 9 }, item, base, REG, () => true, none, () => 0.49)).not.toBeNull();
@@ -354,7 +353,7 @@ describe('routing: the brain files', () => {
     // the Magazzino row already won its triage chats before the lock: the agent may still change it
     const had = { routes: [ROUTES[0]!, lockedT, ROUTES[2]!] };
     expect(agentLimits(had, [ROUTES[0]!, lockedT, { ...ROUTES[2]!, model: 'claude-sonnet-5-5' }])).toEqual([]);
-    // equally specific: placed before the locked row it wins the ties, after it it does not
+    // equally specific: placed before the locked row it wins the ties, after it, it does not
     const lockedArea = row({ area: 'Ordini', model: 'claude-sonnet-5-5', why: 'o', locked: true }), wide = row({ area: ['Ordini', 'Magazzino'], model: 'claude-haiku-5-5', why: 'x' });
     const p2 = { routes: [ROUTES[0]!, lockedArea] };
     expect(agentLimits(p2, [ROUTES[0]!, wide, lockedArea]).join()).toMatch(/prenderebbe le chat della riga bloccata «qualsiasi tipo · Ordini»/);
@@ -430,31 +429,6 @@ describe('routing: the brain files', () => {
   });
 });
 
-describe('routing: the settings editor helpers', () => {
-  it('offers only the models the table may pick, plus one a row already names', () => {
-    expect(pickable(REG).map(m => m.id)).toEqual(['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5']);
-    expect(pickable(REG, ['grok-4.7']).map(m => m.id)).toContain('grok-4.7');
-    expect(pickable(null)).toEqual([]);
-    const takes = (h: string) => h === 'claude'; // as app:info's caps say today
-    expect(tableEfforts(REG.models[1], takes)).toEqual(['low', 'medium', 'high', 'xhigh']);
-    // a row on an engine without the effort cap (Cursor) runs at the model's own effort
-    expect(tableEfforts({ ...REG.models[4]!, efforts: ['low', 'high'] }, takes)).toEqual([]);
-  });
-
-  it('turns rows into text and back (area list, the model\'s own harness, today for a new row)', () => {
-    const e = toEdit(ROUTES[0]!);
-    expect(e).toMatchObject({ area: 'App, Pers · App', effort: 'medium' });
-    expect(fromEdit(e, REG, '2026-10-14')).toEqual(ROUTES[0]);
-    expect(fromEdit({ ...e, area: ' ', effort: '', since: '' }, REG, '2026-10-14')).toEqual({ ...ROUTES[0], area: undefined, effort: null, since: '2026-10-14' });
-    expect(fromEdit({ ...e, area: 'Magazzino' }, REG, 'd').area).toBe('Magazzino');
-    expect(blankRow(REG, '2026-10-14', h => h === 'claude')).toEqual({ kind: '*', area: '', model: 'claude-opus-5-5', effort: 'medium', why: '', evidence: '', since: '2026-10-14', ai: true, onApi: false });
-    // «L'AI può cambiarla» off = the row's locked flag, and back
-    expect(e.ai).toBe(true);
-    expect(toEdit({ ...ROUTES[0]!, locked: true }).ai).toBe(false);
-    expect(fromEdit({ ...e, ai: false }, REG, 'd').locked).toBe(true);
-  });
-});
-
 describe('routing: «Sui crediti API» (ADR 0052)', () => {
   const W = row({ kind: 'writing', why: 'scrittura', onApi: true });
   const table = (routes: RoutingRow[]) => ({ version: 3, appliedAt: null, by: null, exploration: 0, costWeight: 7, routes });
@@ -507,29 +481,5 @@ describe('routing: «Sui crediti API» (ADR 0052)', () => {
     expect(agentLimits(table([W]), [off])).toEqual([expect.stringMatching(/lo cambia solo l’utente/)]);
     expect(agentLimits(table([W]), [])).toEqual([expect.stringMatching(/solo l’utente la toglie/)]);
     expect(agentLimits(table([]), [W])).toEqual([expect.stringMatching(/lo cambia solo l’utente/)]);
-  });
-
-  it('the editor keeps it only where it can work', () => {
-    const opus = REG.models[0], grok = REG.models.find(m => m.id === 'grok-4.7');
-    expect(apiCapable({ kind: 'writing' }, opus)).toBe(true);
-    expect(apiCapable({ kind: 'review' }, opus)).toBe(false);
-    expect(apiCapable({ kind: 'writing' }, grok)).toBe(false);
-    expect(toEdit(W).onApi).toBe(true);
-    expect(fromEdit(toEdit(W), REG, 'd')).toEqual(W);
-    expect(fromEdit({ ...toEdit(W), kind: 'review' }, REG, 'd').onApi).toBeUndefined();
-  });
-});
-
-describe('routing: "Nuova chat"’s line', () => {
-  const at = 1, eng = (h: string) => (h === 'claude' ? 'Claude' : 'Cursor');
-  const p = (source: RouteDecision['source'], o: Partial<RouteDecision> = {}) => ({ harness: 'claude', model: 'claude-opus-5-5', effort: 'medium' as const,
-    route: { policy: 'routing' as const, version: 11, source, reason: 'chat sull’app', kind: 'bug-fix' as const, area: 'App', at, ...o } });
-  it('says what starts and why', () => {
-    expect(routeLine(null, eng)).toBeNull();
-    expect(routeLine(p('table'), eng)).toEqual({ what: 'Claude · Opus 5.5 · ragionamento media', why: 'dalla tabella (Fix di bug · App): chat sull’app', error: false });
-    expect(routeLine(p('override'), eng)?.why).toBe('scelto da te: vince sulla tabella');
-    expect(routeLine(p('default', { kind: 'altro', area: 'altro' }), eng)?.why).toBe('nessuna riga per Altro: i tuoi predefiniti');
-    expect(routeLine({ ...p('table'), harness: 'cursor', model: null, effort: null }, eng)?.what).toBe('Cursor · Cursor (predefinito)');
-    expect(routeLine({ error: 'Cursor è spento' }, eng)).toEqual({ what: 'Non parte', why: 'Cursor è spento', error: true });
   });
 });
