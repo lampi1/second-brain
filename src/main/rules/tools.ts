@@ -57,8 +57,11 @@ function values(root: string): Record<string, string> {
   const raw = read(root, 'brain.json');
   const stored = (raw ? (JSON.parse(raw) as { template?: TemplateValues }).template : undefined) ?? {};
   const B = fwd(root), H = fwd(os.homedir()), R = fwd(stored.REPOS ?? path.join(os.homedir(), 'source', 'repos'));
+  // without a stored TODAY the brain's own birth day: today's date would change the copy's signature every midnight,
+  // re-rendering it under running chats (issue #278)
+  const born = () => { try { return fs.statSync(path.join(root, 'brain.json')).birthtime.toISOString().slice(0, 10); } catch { return new Date().toISOString().slice(0, 10); } };
   const out: Record<string, string> = {
-    OWNER: stored.OWNER ?? 'Owner', BRAIN_NAME: path.basename(root), TODAY: stored.TODAY ?? new Date().toISOString().slice(0, 10),
+    OWNER: stored.OWNER ?? 'Owner', BRAIN_NAME: path.basename(root), TODAY: stored.TODAY ?? born(),
     BRAIN: B, BRAIN_WIN: win(B), BRAIN_JS: B, BRAIN_RE: B.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'),
     REPOS: R, REPOS_WIN: win(R), REPOS_JS: R, HOME: H, HOME_WIN: win(H), HOME_JS: H,
     DEVOPS_ORG: stored.DEVOPS_ORG ?? 'your-org', DEVOPS_PROJECT: stored.DEVOPS_PROJECT ?? 'your-project',
@@ -128,18 +131,40 @@ function verified(source: string, files: string[]): void {
     if (createHash('sha256').update(fs.readFileSync(path.join(source, rel))).digest('hex') !== expected[rel]) throw new Error('The release template changed after install; reinstall this release.');
   }
 }
+/** The template's files and their content hash, read again only when a file's size, time or the file list changed: every
+ * Claude launch (warm engines too) and role start asks for the copy, and reading the whole template each time is what a
+ * Windows virus scanner makes slow on the main process (#277). The stamp walks with stat only. */
+const scans = new Map<string, { stamp: string; app: { text: string[]; topics: string[] }; files: string[]; hash: string }>();
+function templateScan(source: string): { app: { text: string[]; topics: string[] }; files: string[]; hash: string } {
+  const parts: string[] = [];
+  const walk = (d: string) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name < b.name ? -1 : 1)) {
+      const file = path.join(d, e.name);
+      if (e.isSymbolicLink()) { parts.push(`L ${file}`); continue; } // the full scan below refuses it
+      if (e.isDirectory()) { if (e.name !== 'node_modules') walk(file); continue; }
+      const st = fs.statSync(file);
+      parts.push(`${file}|${st.size}|${st.mtimeMs}`);
+    }
+  };
+  walk(source);
+  const stamp = parts.join('\n'), hit = scans.get(source);
+  if (hit?.stamp === stamp) return hit;
+  const app = appFiles(source), files = [...codeFiles(source), ...app.text].sort();
+  const h = createHash('sha256');
+  for (const rel of files) h.update(rel).update(fs.readFileSync(path.join(source, rel)));
+  const scan = { stamp, app, files, hash: h.digest('hex') };
+  scans.set(source, scan);
+  return scan;
+}
 export function toolsDir(root: string): string {
   return path.join(toolsHome(), 'brain-tools', createHash('sha256').update(process.platform === 'win32' ? fs.realpathSync(root).toLowerCase() : fs.realpathSync(root)).digest('hex').slice(0, 16));
 }
 /** Renders the release's utilities for this brain once per (release, values); the swap keeps the old copy on failure. */
 export function ensureTools(root: string): string {
   const source = templateRoot();
-  const app = appFiles(source), own = new Set(app.text);
-  const files = [...codeFiles(source), ...app.text].sort();
+  const { app, files, hash } = templateScan(source), own = new Set(app.text);
   const V = values(fs.realpathSync(root));
-  const sig = createHash('sha256').update('render-v2').update(JSON.stringify(V));
-  for (const rel of files) sig.update(rel).update(fs.readFileSync(path.join(source, rel)));
-  const digest = sig.digest('hex');
+  const digest = createHash('sha256').update('render-v3').update(JSON.stringify(V)).update(hash).digest('hex');
   const target = toolsDir(root);
   const marker = path.join(target, '.sb-tools.json');
   const current = () => { try { return (JSON.parse(fs.readFileSync(marker, 'utf8')) as { sig?: string }).sig === digest; } catch { return false; } };
@@ -159,12 +184,45 @@ export function ensureTools(root: string): string {
     // topics: the product's topic rules in this copy, read by the hook runtime (rules/topics.ts) for appRules brains
     fs.writeFileSync(path.join(stage, '.sb-tools.json'), JSON.stringify({ root: fs.realpathSync(root), sig: digest, topics: app.topics }));
     const old = `${target}.old-${process.pid}-${Date.now()}`;
-    if (fs.existsSync(target)) fs.renameSync(target, old);
+    if (fs.existsSync(target)) {
+      try { fs.renameSync(target, old); }
+      catch (e) {
+        // Windows refuses to rename a folder a running chat or hook holds (issues #275, #278): update it in place
+        if (!LOCKED.has((e as NodeJS.ErrnoException).code ?? '')) throw e;
+        if (current()) return target;
+        overwrite(stage, target);
+        return target;
+      }
+    }
     try { fs.renameSync(stage, target); }
     catch (e) { if (current()) return target; /* a concurrent launch won */ if (fs.existsSync(old)) fs.renameSync(old, target); throw e; }
     fs.rmSync(old, { recursive: true, force: true });
   } finally { fs.rmSync(stage, { recursive: true, force: true }); }
   return target;
+}
+const LOCKED = new Set(['EPERM', 'EBUSY', 'EACCES']);
+/** In-place update of a held copy: every staged file over its old one, files the release dropped removed (best effort:
+ * a file still open stays), the marker last so a half-done update renders again next time. */
+function overwrite(stage: string, target: string): void {
+  const marker = path.join(target, '.sb-tools.json');
+  fs.rmSync(marker, { force: true });
+  const keep = new Set<string>();
+  const walk = (d: string, base: string, each: (rel: string, file: string, dir: boolean) => void) => {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const file = path.join(d, e.name), rel = path.relative(base, file);
+      each(rel, file, e.isDirectory());
+      if (e.isDirectory()) walk(file, base, each);
+    }
+  };
+  walk(stage, stage, (rel, file, dir) => {
+    keep.add(rel);
+    if (dir) fs.mkdirSync(path.join(target, rel), { recursive: true });
+    else if (rel !== '.sb-tools.json') fs.copyFileSync(file, path.join(target, rel));
+  });
+  const extra: string[] = [];
+  walk(target, target, rel => { if (!keep.has(rel)) extra.push(rel); });
+  for (const rel of extra) { try { fs.rmSync(path.join(target, rel), { recursive: true, force: true }); } catch { /* held: harmless, unreferenced */ } }
+  fs.copyFileSync(path.join(stage, '.sb-tools.json'), marker);
 }
 /** Where the app runs `rel` (e.g. ops/tools/cost.mjs) for this brain: the app copy for template code of a product brain,
  * else the brain's own file (legacy brains, personal scripts); null when neither exists. */

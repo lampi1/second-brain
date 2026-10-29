@@ -914,7 +914,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // the Brain pages (ADR 0077): skills and their agents, rules, memory; maintenance jobs with a change log and undo
   const brainModel = new BrainModelService({ userData: ctx.userData, root: () => brain.info().brainRoot, home: process.env.SB_SKILLS_HOME || os.homedir(),
-    catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), routing: () => brain.routingInfo(),
+    catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), runsRevision: () => manager.runs.revision, routing: () => brain.routingInfo(),
     suggestSkills: async text => (await suggestSkills(text)).candidates.map(c => c.name),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: !process.env.SB_TEST || process.env.SB_BRAIN_JOBS === '1',
     // the Memoria hub's trash (ADR 0122): a script's file, and the Script tab told at once

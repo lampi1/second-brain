@@ -37,6 +37,8 @@ export interface BrainModelDeps {
   packs: AgentPackFlows;
   learning: AgentPackLearning;
   runs: () => AgentRun[];
+  /** the run store's revision (AgentRunStore.revision): the read worker keeps the runs while it holds; absent = sent each read */
+  runsRevision?: () => number;
   routing: () => RoutingInfo;
   /** the skill names skills_suggest ranks for a request (skills/suggest.ts), best first */
   suggestSkills: (request: string) => Promise<string[]>;
@@ -156,7 +158,10 @@ export class BrainModelService {
     return { userData: this.d.userData, root: this.d.root(), home: this.d.home, profiles, runs, now: this.now() };
   }
   state(): BrainModelState { return readBrainView(this.viewInput(), this.log, this.intervals); }
-  stateAsync(): Promise<BrainModelState> { return readWorker.call({ op: 'brain', input: this.viewInput() }); }
+  stateAsync(): Promise<BrainModelState> {
+    const rev = this.d.runsRevision?.();
+    return readWorker.call({ op: 'brain', input: this.viewInput() }, rev === undefined ? undefined : `store:${rev}`);
+  }
 
   /** The change log alone, newest first, with what can still be undone (the morning block, ADR 0102): no skill or memory read. */
   changes(): BrainChange[] { return this.log.list(this.restorer()); }

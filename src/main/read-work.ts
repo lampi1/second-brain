@@ -1,18 +1,19 @@
 // One lazy worker for requested Memoria views and task estimates. No startup work, filesystem watches or polling;
 // idle threads receive no jobs. A failure rejects the read, never falls back to blocking the main thread.
+// The agent runs (up to 5000) are copied to the worker only when they changed: a caller that passes the store's revision
+// gets them sent once per revision, the worker keeps that copy (posting them every time froze the window, #276, #277).
 import { Worker } from 'node:worker_threads';
-import type { AgentRun } from '../shared/agents';
-import type { BrainModelState } from '../shared/brain-model';
-import type { RunEstimates } from '../shared/task-estimate';
-import type { BrainViewInput } from './brainmodel/view';
-export type ReadRequest = { op: 'brain'; input: BrainViewInput } | { op: 'estimates'; runs: AgentRun[]; runIds: string[]; now: number };
-export interface ReadResults { brain: BrainModelState; estimates: RunEstimates }
+import { withRuns, type ReadMessage, type ReadRequest, type ReadResults } from './read-protocol';
+export type { ReadRequest, ReadResults } from './read-protocol';
 export class ReadWorker {
   private worker: Worker | null = null;
   private seq = 0;
+  /** the key of the runs the current worker holds (null: none, or a new worker) */
+  private sent: string | null = null;
   private waiting = new Map<number, { resolve(value: unknown): void; reject(error: Error): void; timer: NodeJS.Timeout }>();
   constructor(private readonly file: URL | string = new URL('./read-worker.js', import.meta.url)) {}
-  call<K extends ReadRequest['op']>(request: Extract<ReadRequest, { op: K }>): Promise<ReadResults[K]> {
+  /** runsKey: what identifies the request's runs (the store's revision); same key as the last sent = not copied again. */
+  call<K extends ReadRequest['op']>(request: Extract<ReadRequest, { op: K }>, runsKey?: string): Promise<ReadResults[K]> {
     if (!this.worker) {
       const w = new Worker(this.file); this.worker = w;
       w.on('message', (m: { id: number; value?: unknown; error?: string }) => {
@@ -28,12 +29,14 @@ export class ReadWorker {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { this.stop(new Error('Read worker timed out')); }, 60_000); timer.unref();
       this.waiting.set(id, { resolve: value => resolve(value as ReadResults[K]), reject, timer });
-      try { w.postMessage({ id, request }); }
+      const message: ReadMessage = runsKey === undefined ? { id, request }
+        : runsKey === this.sent ? { id, request: withRuns(request, []), cached: true } : { id, request, runsKey };
+      try { w.postMessage(message); if (message.runsKey !== undefined) this.sent = message.runsKey; }
       catch (e) { clearTimeout(timer); this.waiting.delete(id); reject(e); }
     });
   }
   stop(error = new Error('Read worker stopped')): void {
-    const w = this.worker; this.worker = null;
+    const w = this.worker; this.worker = null; this.sent = null;
     for (const p of this.waiting.values()) { clearTimeout(p.timer); p.reject(error); }
     this.waiting.clear(); if (w) void w.terminate();
   }

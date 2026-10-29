@@ -1,9 +1,11 @@
 // MCP server over plain HTTP with a fake tool set: protocol (initialize, tools/list, tools/call, batch, notifications),
 // errors, security (Host, Origin, content type, body cap, unknown routes and tokens) and per-route isolation.
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import http from 'node:http';
 import { McpServer, mcpPortFromEnv, toContent, type CallCtx, type McpTool } from '../../src/main/mcp/server';
 import { EndpointTokens } from '../../src/main/mcp/tokens';
+import { ToolRefusal } from '../../src/main/mcp/refusal';
+import { log } from '../../src/main/log';
 
 interface Reply { status: number; headers: http.IncomingHttpHeaders; body: string; json(): any } // eslint-disable-line @typescript-eslint/no-explicit-any
 
@@ -35,6 +37,7 @@ describe('McpServer', () => {
     { name: 'picture', description: 'text + image', inputSchema: { type: 'object' }, run: () => ({ text: 'a picture', images: [{ data: 'AAAA', mimeType: 'image/png' }] }) },
     { name: 'hang', description: 'waits for the client to go away', inputSchema: { type: 'object' },
       run: (_a, ctx) => new Promise(resolve => { ctx.signal.addEventListener('abort', () => { aborted = true; resolve('aborted'); }); }) },
+    { name: 'refuse', description: 'refuses by its rules', inputSchema: { type: 'object' }, run: () => { throw new ToolRefusal('wrong role'); } },
   ];
   let port = 0;
 
@@ -65,7 +68,7 @@ describe('McpServer', () => {
 
   it('lists tools with schema and annotations', async () => {
     const r = (await request(port, '/mcp', rpc(1, 'tools/list'))).json();
-    expect(r.result.tools.map((t: { name: string }) => t.name)).toEqual(['whoami', 'boom', 'picture', 'hang']);
+    expect(r.result.tools.map((t: { name: string }) => t.name)).toEqual(['whoami', 'boom', 'picture', 'hang', 'refuse']);
     expect(r.result.tools[0]).toEqual({ name: 'whoami', description: 'echo the scope', inputSchema: { type: 'object' }, annotations: { readOnlyHint: true } });
     expect(r.result.tools[1].annotations).toBeUndefined();
   });
@@ -77,6 +80,17 @@ describe('McpServer', () => {
     expect(pic.result.content).toEqual([{ type: 'image', data: 'AAAA', mimeType: 'image/png' }, { type: 'text', text: 'a picture' }]);
     const bad = (await request(port, '/mcp', rpc(3, 'tools/call', { name: 'boom' }))).json();
     expect(bad.result).toEqual({ content: [{ type: 'text', text: 'Error: kaboom' }], isError: true });
+  });
+
+  it('logs a tool failure as a warning but an expected refusal only as info (issue #274)', async () => {
+    const warn = vi.spyOn(log, 'warn'), info = vi.spyOn(log, 'info');
+    try {
+      await request(port, '/mcp', rpc(1, 'tools/call', { name: 'boom' }));
+      const refused = (await request(port, '/mcp', rpc(2, 'tools/call', { name: 'refuse' }))).json();
+      expect(refused.result).toEqual({ content: [{ type: 'text', text: 'Error: wrong role' }], isError: true });
+      expect(warn.mock.calls.map(c => c[1])).toEqual(['tool boom failed']);
+      expect(info.mock.calls.map(c => c[1])).toContain('tool refuse refused');
+    } finally { warn.mockRestore(); info.mockRestore(); }
   });
 
   it('answers protocol errors: unknown tool, unknown method, parse error, invalid batch', async () => {

@@ -319,7 +319,9 @@ app.whenReady().then(async () => {
     'agents:estimates': a => {
       const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
       const runs = mergeRuns(demo ? demoEstimateRuns(now) : s.agentRuns?.list() ?? [], s.chats.list().map(c => c.run));
-      return readWorker.call({ op: 'estimates', runs, runIds: checkRunIds(a?.runIds), now });
+      // the chats' runs are the store's own records (adopted ones too): its revision plus the count covers both
+      const key = !demo && s.agentRuns ? `store:${s.agentRuns.revision}/${runs.length}` : undefined;
+      return readWorker.call({ op: 'estimates', runs, runIds: checkRunIds(a?.runIds), now }, key);
     },
     'agents:judgingEstimate': () => {
       const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();

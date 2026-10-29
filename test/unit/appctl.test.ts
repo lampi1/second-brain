@@ -14,6 +14,7 @@ import type { RunFeedback } from '../../src/main/agents/run-feedback';
 import { routeChat, type RouteRequest } from '../../src/main/brain/routing';
 import { DemoRouting } from '../../src/main/brain/routing-demo';
 import type { NewChat, RoutingRow, RoutingTable } from '../../src/shared/contract';
+import { ToolRefusal } from '../../src/main/mcp/refusal';
 
 /** a brain with no routing table and no registry (a role chat's route is its role's, brain/routing.ts routeAgent) */
 const ROUTED = { routingInfo: () => ({ registry: null }), route: (req: RouteRequest) => routeChat(req, null, null, null, 7) };
@@ -52,7 +53,11 @@ describe('app control tools', () => {
     await tool.run(args);
     expect(assignTask).toHaveBeenCalledWith('w', `${AGENT_LABEL}\n\nExpand the second point`, { mode: 'continue', expectedVersion: 2, source: { kind: 'chat', chatId: 'o' } });
     await expect(Promise.resolve().then(() => tool.run({ ...args, cwd: '/different' }))).rejects.toThrow(/Project changed/);
-    await expect(Promise.resolve().then(() => tool.run({ ...args, roleId: 'sentinel' }))).rejects.toThrow(/Role mismatch/);
+    await expect(Promise.resolve().then(() => tool.run({ ...args, roleId: 'sentinel' }))).rejects.toThrow(/independent Sentinel review/);
+    // the refusal names the chat's own role (issue #274) and is an expected refusal, not an app failure
+    const wrong = await Promise.resolve().then(() => tool.run({ ...args, roleId: 'artisan' })).catch((e: unknown) => e);
+    expect(wrong).toBeInstanceOf(ToolRefusal);
+    expect((wrong as Error).message).toMatch(/this chat runs scout, not artisan/);
     await expect(Promise.resolve().then(() => tools().find(t => t.name === 'app_assign_task')!.run(args))).rejects.toThrow(/authenticated/);
     expect(assignTask).toHaveBeenCalledTimes(1);
   });

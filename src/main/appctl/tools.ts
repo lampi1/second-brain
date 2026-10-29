@@ -46,6 +46,7 @@ import { metricsTool, type RunFeedback } from '../agents/run-feedback';
 import { estimateTool, estimateTask, SimilarIndex } from '../agents/task-estimate';
 import { agentLearnTool, lessonReviewTool, type AgentPackLearning } from '../agents/pack/learning';
 import type { McpTool } from '../mcp/server';
+import { ToolRefusal } from '../mcp/refusal';
 import type { CloudService } from '../cloud/service';
 import { isCloudEngine } from '../../shared/cloud';
 import type { BrainScripts } from '../brain/scripts';
@@ -571,12 +572,14 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const orchestrator = caller();
         if (!authed() || !orchestrator || !d.chats.assignTask) throw new Error('app_assign_task requires an authenticated Orchestrator.');
         const target = d.chats.list().find(c => c.id === a.chatId);
-        if (!target || !mine(target) || target.parentId || target.isOrchestrator) throw new Error('Work conversation not found; use app_chats.');
-        if (!isWorkRole(a.roleId) || target.agent?.id !== a.roleId || a.roleId === 'sentinel') throw new Error('Role mismatch or independent review: create a fresh chat.');
-        if (typeof a.cwd !== 'string' || !path.isAbsolute(a.cwd) || path.resolve(a.cwd) !== path.resolve(target.cwd)) throw new Error('Project changed: create a fresh chat.');
+        if (!target || !mine(target) || target.parentId || target.isOrchestrator) throw new ToolRefusal('Work conversation not found; use app_chats.');
+        // said with the chat's own role, so the next call is right (issue #274): a fresh chat, or this chat's role
+        if (a.roleId === 'sentinel' || target.agent?.id === 'sentinel') throw new ToolRefusal('An independent Sentinel review always needs a fresh chat: use app_create_chat.');
+        if (!isWorkRole(a.roleId) || target.agent?.id !== a.roleId) throw new ToolRefusal(`Role mismatch: this chat runs ${target.agent?.id ?? 'no role'}, not ${String(a.roleId)}. Assign ${target.agent?.id ?? 'its role'} work here, or use app_create_chat for ${String(a.roleId)}.`);
+        if (typeof a.cwd !== 'string' || !path.isAbsolute(a.cwd) || path.resolve(a.cwd) !== path.resolve(target.cwd)) throw new ToolRefusal('Project changed: create a fresh chat.');
         const profile = d.agents?.().profiles.find(p => p.id === a.roleId);
-        if (!profile || profile.activeVersion !== target.agent.version) throw new Error('Role configuration changed: create a fresh chat.');
-        if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || !Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1) throw new Error('Invalid assignment mode/version.');
+        if (!profile || profile.activeVersion !== target.agent.version) throw new ToolRefusal('Role configuration changed: create a fresh chat.');
+        if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || !Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1) throw new ToolRefusal('Invalid assignment mode/version.');
         const prompt = typeof a.prompt === 'string' ? a.prompt.trim() : '';
         if (!prompt) throw new Error('prompt: required');
         if (prompt.length > CHAT_PROMPT_MAX) throw new Error(`prompt: at most ${CHAT_PROMPT_MAX} characters (this one has ${prompt.length})`);
