@@ -10,6 +10,7 @@ import path from 'node:path';
 import { ChatManager } from '../../../src/main/chats/manager';
 import type { SessionSink } from '../../../src/main/chats/session';
 import { plainOwner } from '../../../src/main/agents/catalog';
+import { exportRuns } from '../../../src/main/agents/runs-db';
 
 const roots: string[] = [], managers: ChatManager[] = [];
 afterEach(async () => { for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
@@ -62,7 +63,7 @@ describe('receipts on a run (ADR 0130)', () => {
     expect(f.run(c.id)?.receipts).toMatchObject({ commands: [{ cmd: 'npm test', exit: 0, check: true }], files: ['src/a.ts'], filesKnown: true, filesGap: false, codeTouched: true, testsTouched: false });
     await f.m.set(c.id, { workStatus: 'completed' });
     expect(f.run(c.id)?.receipts?.verdict).toMatchObject({ result: 'pass', reason: 'checks-passed' });
-    const stored = JSON.parse(fs.readFileSync(path.join(f.userData, 'agent-runs.json'), 'utf8')) as { runs: { receipts?: unknown }[] };
+    const stored = exportRuns(path.join(f.userData, 'app.db')) as { runs: { receipts?: unknown }[] };
     expect(stored.runs[0]!.receipts).toMatchObject({ verdict: { result: 'pass' } });
   });
   it('a failing check after the change fails the run', async () => {

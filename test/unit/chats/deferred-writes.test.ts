@@ -1,5 +1,5 @@
-// The deferred store writes (writeDelayMs, the main-process freezes of 2026-10-27): chats.json and agent-runs.json are
-// written once per burst, asynchronously, and nothing is lost on quit or exit (the pending writes are flushed
+// The deferred store writes (writeDelayMs, the main-process freezes of 2026-10-27): chats.json and the agent runs (app.db,
+// ADR 0199; agent-runs.json when the database cannot be used) are written once per burst, asynchronously, and nothing is lost on quit or exit (the pending writes are flushed
 // synchronously). Also pins the async writer's rules: a newer write always wins over an older one still in flight, a
 // locked rename is retried without blocking, an unchanged body is not written again, a sync save during a deferred one
 // is never undone by it in memory (`last`, the prune), a failed deferred write retries on its own, and the startup
@@ -14,11 +14,13 @@ import type { HarnessSession } from '../../../src/main/chats/session';
 import { plainOwner } from '../../../src/main/agents/catalog';
 import { ChatStore, type StoredChat } from '../../../src/main/chats/store';
 import { AgentRunStore, RUNS_MAX, endRun } from '../../../src/main/agents/runs';
+import { closeAppDbs } from '../../../src/main/app-db';
 import { writeLocalTextAsync } from '../../../src/main/agents/local-store';
+import { RunsDb, exportRuns, type RunsWrite } from '../../../src/main/agents/runs-db';
 import { log } from '../../../src/main/log';
 
 const roots: string[] = [], managers: ChatManager[] = [];
-afterEach(async () => { vi.restoreAllMocks(); for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+afterEach(async () => { vi.restoreAllMocks(); for (const m of managers.splice(0)) await m.shutdown(); closeAppDbs(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 const tmpDir = (p: string) => { const d = fs.mkdtempSync(path.join(os.tmpdir(), p)); roots.push(d); return d; };
 const CORRECTION = '[Reasoning correction]\nNo, il bug è nel parser.';
 const tmps = (dir: string) => fs.readdirSync(dir).filter(f => f.endsWith('.tmp'));
@@ -35,7 +37,7 @@ function fixture(extra: Partial<ChatManagerOptions> = {}) {
   const create = (title: string) => m.create({ harness: 'claude', cwd: dir, prompt: 'Rivedi il PR', title }, 'user',
     { owner: { ...plainOwner('claude', null), source: 'catalog', id: 'reviewer', version: 3 }, instructions: 'Sei un revisore.', policy: null });
   const chats = () => { try { return (JSON.parse(fs.readFileSync(path.join(dir, 'chats.json'), 'utf8')) as { chats: StoredChat[] }).chats; } catch { return []; } };
-  const runs = () => { try { return (JSON.parse(fs.readFileSync(path.join(dir, 'agent-runs.json'), 'utf8')) as { runs: { chatId: string }[] }).runs; } catch { return []; } };
+  const runs = () => { try { return (exportRuns(path.join(dir, 'app.db'))?.runs ?? []) as { chatId: string }[]; } catch { return []; } };
   return { m, dir, create, chats, runs };
 }
 
@@ -79,14 +81,16 @@ describe('ChatManager with writeDelayMs', () => {
   it('writes a burst of changes once, asynchronously, after the delay', async () => {
     const f = fixture({ writeDelayMs: 30 });
     const a = await f.create('Uno');
-    const writes = vi.spyOn(fs.promises, 'writeFile');
+    const writes = vi.spyOn(fs.promises, 'writeFile'), dbWrites = vi.spyOn(RunsDb.prototype, 'write');
     for (let i = 0; i < 5; i++) f.m.resumedByUser(a.id, CORRECTION);
     expect(writes).not.toHaveBeenCalled(); // nothing written in-line
+    expect(dbWrites).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(f.chats().find(c => c.id === a.id)?.run?.corrections?.tagged).toBe(5), { timeout: 3000 });
     await vi.waitFor(() => expect((f.runs() as { chatId: string; corrections?: { tagged: number } }[]).find(r => r.chatId === a.id)?.corrections?.tagged).toBe(5), { timeout: 3000 });
     const of = (name: string) => writes.mock.calls.filter(([p]) => path.basename(String(p)).startsWith(name)).length;
-    expect(of('chats.json')).toBe(1); // five changes, ten saves asked: one write per file
-    expect(of('agent-runs.json')).toBe(1);
+    expect(of('chats.json')).toBe(1); // five changes, ten saves asked: one write per store
+    expect(dbWrites).toHaveBeenCalledTimes(1);
+    expect(dbWrites.mock.calls[0]![0].upsert.map(r => r.id)).toEqual([f.m.list().find(c => c.id === a.id)!.run!.runId]); // only the changed run
   });
 
   it('a failed deferred write is tried again on its own, with no later change to trigger it', async () => {
@@ -97,17 +101,21 @@ describe('ChatManager with writeDelayMs', () => {
     vi.spyOn(log, 'warn').mockImplementation(() => undefined);
     const writes = vi.spyOn(fs.promises, 'writeFile').mockImplementation(((p: fs.PathLike, ...rest: never[]) => {
       const name = path.basename(String(p));
-      const key = name.startsWith('chats.json') ? 'chats' : name.startsWith('agent-runs.json') ? 'runs' : null;
-      if (key && failed[key] === 0) { failed[key]++; return Promise.reject(Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' })); }
+      if (name.startsWith('chats.json') && failed.chats === 0) { failed.chats++; return Promise.reject(Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' })); }
       return (real as (...a: unknown[]) => Promise<void>)(p, ...rest);
     }) as typeof fs.promises.writeFile);
+    const realDb = RunsDb.prototype.write;
+    const dbWrites = vi.spyOn(RunsDb.prototype, 'write').mockImplementation(function (this: RunsDb, w: RunsWrite) {
+      if (failed.runs === 0) { failed.runs++; throw Object.assign(new Error('SQLITE_FULL'), { errcode: 13 }); }
+      return realDb.call(this, w);
+    });
     f.m.resumedByUser(a.id, CORRECTION); // the only change: nothing else will ask for a save
     await vi.waitFor(() => expect(f.chats().find(c => c.id === a.id)?.run?.corrections?.tagged).toBe(1), { timeout: 3000 });
     await vi.waitFor(() => expect((f.runs() as { chatId: string; corrections?: { tagged: number } }[]).find(r => r.chatId === a.id)?.corrections?.tagged).toBe(1), { timeout: 3000 });
     expect(failed).toEqual({ chats: 1, runs: 1 });
     const of = (name: string) => writes.mock.calls.filter(([p]) => path.basename(String(p)).startsWith(name)).length;
     expect(of('chats.json')).toBe(2);
-    expect(of('agent-runs.json')).toBe(2);
+    expect(dbWrites).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -118,8 +126,8 @@ describe('startup cleanup', () => {
     const names = [`chats.json.${id}.tmp`, `agent-runs.json.${id}.tmp`, `other.json.${id}.tmp`, 'chats.json.tmp', 'chats.json.bad.tmp', `chats.json.${id}.tmp.keep`];
     for (const n of names) fs.writeFileSync(path.join(dir, n), '{}');
     new ChatStore(dir).load();
-    new AgentRunStore(dir);
-    expect(fs.readdirSync(dir).sort()).toEqual([`other.json.${id}.tmp`, 'chats.json.tmp', 'chats.json.bad.tmp', `chats.json.${id}.tmp.keep`].sort());
+    new AgentRunStore(dir).close();
+    expect(fs.readdirSync(dir).filter(n => !n.startsWith('app.db')).sort()).toEqual([`other.json.${id}.tmp`, 'chats.json.tmp', 'chats.json.bad.tmp', `chats.json.${id}.tmp.keep`].sort());
   });
 });
 
@@ -162,9 +170,9 @@ describe('the async store writers', () => {
     expect(new ChatStore(dir).load()[0]!.title).toBe('A');
   });
 
-  it('AgentRunStore: a sync save with a prune during a deferred pruning write is not rolled back by it', async () => {
+  it('AgentRunStore (agent-runs.json): a sync save with a prune during a deferred pruning write is not rolled back by it', async () => {
     const dir = tmpDir('sb-runstore-prune-');
-    const s = new AgentRunStore(dir);
+    const s = new AgentRunStore(dir, { db: false });
     const start = (startedAt: number) => ({ chatId: 'c1', agentId: 'reviewer', version: 1, goal: 'Rivedi', startedBy: 'user' as const, startedAt, costKnown: true });
     for (let i = 0; i < RUNS_MAX; i++) endRun(s.start(start(10), false), 'closed', 1000 + i);
     endRun(s.start(start(10), false), 'closed', 9000); // one over: the deferred write prunes the oldest end
@@ -187,14 +195,14 @@ describe('the async store writers', () => {
     expect(s.rolledUp()).toEqual(after.rolled);
     expect(s.list()).toHaveLength(after.size);
     expect(ok).toBe(true);
-    const disk = new AgentRunStore(dir);
+    const disk = new AgentRunStore(dir, { db: false });
     expect(disk.rolledUp()).toEqual(after.rolled);
     expect(disk.list()).toHaveLength(after.size);
   }, 30_000);
 
-  it('AgentRunStore: flush() at quit writes over a deferred write still in flight', async () => {
+  it('AgentRunStore (agent-runs.json): flush() at quit writes over a deferred write still in flight', async () => {
     const dir = tmpDir('sb-runstore-');
-    const runs = new AgentRunStore(dir);
+    const runs = new AgentRunStore(dir, { db: false });
     const start = (chatId: string) => ({ chatId, agentId: 'reviewer', version: 1, goal: 'Rivedi', startedBy: 'user' as const, startedAt: Date.now(), costKnown: true });
     runs.start(start('c1'), false);
     const pending = runs.saveAsync();
@@ -207,9 +215,9 @@ describe('the async store writers', () => {
     expect(runs.pending).toBe(false);
   });
 
-  it('AgentRunStore: the deferred save serializes the runs in slices, writes the same file as a sync save, and keeps a change made meanwhile (#297)', async () => {
+  it('AgentRunStore (agent-runs.json): the deferred save serializes the runs in slices, writes the same file as a sync save, and keeps a change made meanwhile (#297)', async () => {
     const dir = tmpDir('sb-runslices-'), other = tmpDir('sb-runslices-sync-');
-    const a = new AgentRunStore(dir), b = new AgentRunStore(other);
+    const a = new AgentRunStore(dir, { db: false }), b = new AgentRunStore(other, { db: false });
     const start = (chatId: string, at: number) => ({ chatId, agentId: 'reviewer', version: 1, goal: `Rivedi ${'x'.repeat(4000)}`, startedBy: 'user' as const, startedAt: at, costKnown: true });
     for (let i = 0; i < 400; i++) { const run = start(`c${i}`, 1000 + i); const ra = a.start(run, false), rb = b.start(run, false); rb.runId = ra.runId; }
     b.save();
@@ -221,6 +229,62 @@ describe('the async store writers', () => {
     await a.saveAsync();
     expect((JSON.parse(fs.readFileSync(path.join(dir, 'agent-runs.json'), 'utf8')) as { runs: unknown[] }).runs).toHaveLength(401);
   });
+
+  it('AgentRunStore (app.db): flush() at quit writes over a deferred save still in its slices', async () => {
+    const dir = tmpDir('sb-runstore-db-');
+    const runs = new AgentRunStore(dir);
+    expect(runs.backend).toBe('sqlite');
+    const start = (chatId: string) => ({ chatId, agentId: 'reviewer', version: 1, goal: 'Rivedi', startedBy: 'user' as const, startedAt: Date.now(), costKnown: true });
+    runs.start(start('c1'), false);
+    const pending = runs.saveAsync();
+    runs.start(start('c2'), false);
+    expect(runs.pending).toBe(true);
+    runs.flush();
+    expect(await pending).toBe(true); // superseded by the flush
+    expect((exportRuns(path.join(dir, 'app.db'))!.runs as { chatId: string }[]).map(r => r.chatId)).toEqual(['c1', 'c2']);
+    expect(runs.pending).toBe(false);
+    runs.close();
+  });
+
+  it('AgentRunStore (app.db): the deferred save writes only the changed runs, the same rows as a sync save, and keeps a change made meanwhile (#297)', async () => {
+    const dir = tmpDir('sb-runslices-db-'), other = tmpDir('sb-runslices-db-sync-');
+    const a = new AgentRunStore(dir), b = new AgentRunStore(other);
+    const start = (chatId: string, at: number) => ({ chatId, agentId: 'reviewer', version: 1, goal: `Rivedi ${'x'.repeat(4000)}`, startedBy: 'user' as const, startedAt: at, costKnown: true });
+    for (let i = 0; i < 400; i++) { const run = start(`c${i}`, 1000 + i); const ra = a.start(run, false), rb = b.start(run, false); rb.runId = ra.runId; }
+    b.save();
+    const writes = vi.spyOn(RunsDb.prototype, 'write');
+    const pending = a.saveAsync();
+    a.start(start('late', 9999), false); // a change while the slices run
+    expect(await pending).toBe(true);
+    expect(exportRuns(path.join(dir, 'app.db'))).toEqual(exportRuns(path.join(other, 'app.db')));
+    expect(a.pending).toBe(true); // 'late' is written by the next save
+    a.list()[0]!.costUsd = 1; // and one run changed in place
+    await a.saveAsync();
+    const ids = writes.mock.calls.at(-1)![0].upsert.map(r => r.id);
+    expect(ids).toHaveLength(2); // 'late' and the run changed in place, not the other 399
+    expect(ids).toContain(a.list()[0]!.runId);
+    expect(exportRuns(path.join(dir, 'app.db'))!.runs).toHaveLength(401);
+    a.close(); b.close();
+  });
+
+  it('AgentRunStore (app.db): a sync save with a prune during a deferred save is not rolled back by it', async () => {
+    const dir = tmpDir('sb-runstore-db-prune-');
+    const s = new AgentRunStore(dir);
+    const start = (startedAt: number) => ({ chatId: 'c1', agentId: 'reviewer', version: 1, goal: 'Rivedi', startedBy: 'user' as const, startedAt, costKnown: true });
+    for (let i = 0; i < RUNS_MAX; i++) endRun(s.start(start(10), false), 'closed', 1000 + i);
+    endRun(s.start(start(10), false), 'closed', 9000); // one over
+    const deferred = s.saveAsync(); // its slices yield: the sync save below runs first
+    endRun(s.start(start(10), false), 'closed', 9001);
+    s.save(); // prunes two and commits
+    const after = { rolled: structuredClone(s.rolledUp()), size: s.list().length };
+    expect(await deferred).toBe(true);
+    expect(s.rolledUp()).toEqual(after.rolled);
+    expect(s.list()).toHaveLength(after.size);
+    const disk = new AgentRunStore(dir);
+    expect(disk.rolledUp()).toEqual(after.rolled);
+    expect(disk.list()).toHaveLength(after.size);
+    s.close(); disk.close();
+  }, 30_000);
 
   it('writeLocalTextAsync retries a locked rename without blocking, and drops a superseded write', async () => {
     const dir = tmpDir('sb-lsasync-');

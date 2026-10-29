@@ -1,7 +1,7 @@
 {
   "version": 1,
   "hashes": {
-    "scripts/levels.mjs": "c7b41547db7ae732",
+    "scripts/levels.mjs": "78875557fa90a6ec",
     "src/main/activity/chat-watch.ts": "7f372f313f54bc93",
     "src/main/activity/journal.ts": "802c30b7fab658f1",
     "src/main/activity/journal.ts#clean": "05f9d9b0dd2b5708",

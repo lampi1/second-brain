@@ -8,6 +8,7 @@ import type { HarnessSession, SessionSink } from '../../../src/main/chats/sessio
 import { contextBudgetDue, FRESH_HANDOFF_MARK, FRESH_IDLE_MS, protectedHandoff } from '../../../src/main/chats/handoff';
 import { plainOwner } from '../../../src/main/agents/catalog';
 import { tmp } from './helpers';
+import { exportRuns } from '../../../src/main/agents/runs-db';
 
 const managers: ChatManager[] = [];
 afterEach(async () => { for (const m of managers.splice(0)) await m.shutdown(); vi.restoreAllMocks(); });
@@ -164,7 +165,7 @@ describe('protected continuation', () => {
     const current = f.m.list()[0]!;
     expect(current.sessionId).not.toBe(c.sessionId); expect(current.run!.taskId).toBe(c.run!.taskId); expect(current.run!.taskVersion).toBe(2);
     expect(current.run!.continuedFrom).toBe(c.run!.runId); expect(f.sent.at(-1)).toContain('Second phase, still local');
-    expect(f.sent.at(-1)).toContain('Never push or deploy'); expect(JSON.parse(fs.readFileSync(path.join(f.userData, 'agent-runs.json'), 'utf8')).runs).toHaveLength(2);
+    expect(f.sent.at(-1)).toContain('Never push or deploy'); expect(exportRuns(path.join(f.userData, 'app.db'))!.runs).toHaveLength(2);
   });
   it('does not rotate a restored historical session whose provider transcript is missing', async () => {
     const f = fixture(), c = await f.create();

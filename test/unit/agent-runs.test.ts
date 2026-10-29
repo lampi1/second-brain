@@ -1,17 +1,21 @@
 // The agent run store (A5): strict record reading with partial recovery, the pure lifecycle steps, bounds that prune only ended runs, refused links.
+// Most run through app.db (ADR 0199); the file-format tests run on agent-runs.json, the fallback (JSON_ONLY).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { AgentRunStore, ROLLUP_BYTES, RUNS_MAX, STALE_MS, addTurn, endRun, fitRollups, readRun, readTally, reopenRun, staleDue, type RunStart } from '../../src/main/agents/runs';
+import { closeAppDbs } from '../../src/main/app-db';
 import { ONE_SHOT_PURPOSES } from '../../src/shared/agents';
 import { log } from '../../src/main/log';
 import { SAMPLE_MAX, emptyTally } from '../../src/main/agents/run-metrics';
 
 const roots: string[] = [];
-afterEach(() => { vi.restoreAllMocks(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
+afterEach(() => { vi.restoreAllMocks(); closeAppDbs(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
 const tmp = () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-runs-')); roots.push(dir); return dir; };
 const start = (o: Partial<RunStart> = {}): RunStart => ({ chatId: 'c1', agentId: 'reviewer', version: 2, goal: '  Rivedi  ', startedBy: 'user', startedAt: 1000, costKnown: true, ...o });
+/** agent-runs.json as the store (the fallback path, ADR 0199): the tests of its file format and recovery copy. */
+const JSON_ONLY = { db: false } as const;
 
 describe('agent run store', () => {
   it('starts, saves and reads back a run', () => {
@@ -120,7 +124,7 @@ describe('agent run store', () => {
   });
 
   it('recovers valid runs around malformed and duplicate records, logs once, and keeps recording', () => {
-    const dir = tmp(), file = path.join(dir, 'agent-runs.json'), seed = new AgentRunStore(dir);
+    const dir = tmp(), file = path.join(dir, 'agent-runs.json'), seed = new AgentRunStore(dir, JSON_ONLY);
     const first = seed.start(start()), last = seed.start(start({ chatId: 'c2' }));
     const tally = emptyTally('reviewer', 1);
     const stored = { version: 1, runs: [null, first, { ...first, goal: 'duplicate' },
@@ -128,7 +132,7 @@ describe('agent run store', () => {
       { ...last, tokens: { input: -1 } }, last, 42], rollups: [tally], prunedThrough: 500 };
     fs.writeFileSync(file, JSON.stringify(stored));
     const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
-    const recovered = new AgentRunStore(dir);
+    const recovered = new AgentRunStore(dir, JSON_ONLY);
     expect(recovered.problem).toBeNull();
     expect(recovered.list()).toEqual([first, last]);
     expect(recovered.rolledUp()).toEqual([tally]);
@@ -142,10 +146,10 @@ describe('agent run store', () => {
     const copies = fs.readdirSync(dir).filter(name => name.startsWith('agent-runs-recovery-'));
     expect(copies).toHaveLength(1);
     expect(fs.readFileSync(path.join(dir, copies[0]!), 'utf8')).toBe(JSON.stringify(stored));
-    expect(new AgentRunStore(dir).list()).toEqual([first, last]);
+    expect(new AgentRunStore(dir, JSON_ONLY).list()).toEqual([first, last]);
     expect(warn).toHaveBeenCalledTimes(1);
     const next = recovered.start(start({ chatId: 'c3', startedBy: 'orchestrator' }));
-    const reloaded = new AgentRunStore(dir);
+    const reloaded = new AgentRunStore(dir, JSON_ONLY);
     expect(reloaded.list()).toEqual([first, last, next]);
     expect(reloaded.rolledUp()).toEqual([tally]);
     expect(fs.readdirSync(dir).filter(name => name.startsWith('agent-runs-recovery-'))).toEqual(copies);
@@ -155,7 +159,7 @@ describe('agent run store', () => {
   it('does not replace malformed source when preserving its original bytes fails', () => {
     const dir = tmp(), file = path.join(dir, 'agent-runs.json'), source = '{"version":1,"runs":[null]}';
     fs.writeFileSync(file, source);
-    const recovered = new AgentRunStore(dir), open = fs.openSync;
+    const recovered = new AgentRunStore(dir, JSON_ONLY), open = fs.openSync;
     const spy = vi.spyOn(fs, 'openSync').mockImplementation(((filePath: fs.PathLike, flags: fs.OpenMode, mode?: fs.Mode) => {
       if (String(filePath).includes('agent-runs-recovery-')) throw Object.assign(new Error('Denied'), { code: 'EACCES' });
       return open(filePath, flags, mode);
@@ -163,7 +167,7 @@ describe('agent run store', () => {
     expect(() => recovered.flush()).toThrow('Denied');
     expect(fs.readFileSync(file, 'utf8')).toBe(source);
     spy.mockRestore(); recovered.flush();
-    expect(new AgentRunStore(dir).problem).toBeNull();
+    expect(new AgentRunStore(dir, JSON_ONLY).problem).toBeNull();
   });
 
   it('an all-invalid run list still permits new runs', () => {
@@ -235,14 +239,14 @@ describe('agent run store', () => {
 
   it('a failed write stays pending: the next flush writes it', () => {
     const dir = tmp(), file = path.join(dir, 'agent-runs.json');
-    const s = new AgentRunStore(dir);
+    const s = new AgentRunStore(dir, JSON_ONLY);
     const run = s.start(start());
     fs.linkSync(file, path.join(dir, 'link.json')); // a linked file: the local store refuses to write it
     endRun(run, 'closed', 9);
     expect(() => s.save()).toThrow(/collegato/);
     fs.rmSync(path.join(dir, 'link.json'));
     s.flush();
-    expect(new AgentRunStore(dir).get(run.runId)?.endReason).toBe('closed');
+    expect(new AgentRunStore(dir, JSON_ONLY).get(run.runId)?.endReason).toBe('closed');
   });
 
   it('adopt takes back a lost run once', () => {
@@ -359,10 +363,10 @@ describe('agent run store: A6 fields and rollups', () => {
     // written with zeroed placeholders, so an older release (npm run rollback) still reads the file; read back without them
     const dir = tmp(), file = path.join(dir, 'agent-runs.json');
     fs.writeFileSync(file, JSON.stringify({ version: 1, runs: [], rollups: [t] }));
-    const s = new AgentRunStore(dir); s.start(start(), false); s.save();
+    const s = new AgentRunStore(dir, JSON_ONLY); s.start(start(), false); s.save();
     const written = (JSON.parse(fs.readFileSync(file, 'utf8')) as { rollups: Record<string, unknown>[] }).rollups[0]!;
     expect(written).toMatchObject({ permissions: 0, aiErrors: { runs: 0, lines: 0 }, contextPeak: { n: 0, values: [] } });
-    expect(new AgentRunStore(dir).rolledUp()).toEqual([t]);
+    expect(new AgentRunStore(dir, JSON_ONLY).rolledUp()).toEqual([t]);
   });
 
   it('past their budget the largest rollup samples are halved, counts kept', () => {
@@ -381,19 +385,19 @@ describe('agent run store: A6 fields and rollups', () => {
 
 describe('Flash outcomes and plan records in the run store (ADR 0131)', () => {
   it('keeps Flash\'s answer outcomes across a restart; a flash block out of shape never refuses the file', () => {
-    const dir = tmp(), s = new AgentRunStore(dir);
+    const dir = tmp(), s = new AgentRunStore(dir, JSON_ONLY);
     s.start(start());
     s.flashEvent({ kind: 'asked', text: 'quanto costa il piano Pro di Claude?', at: 1000 });
     s.flashEvent({ kind: 'answered', at: 2000 });
     s.flashEvent({ kind: 'asked', text: 'no, è sbagliato', at: 3000 });
     s.flush();
-    const again = new AgentRunStore(dir);
+    const again = new AgentRunStore(dir, JSON_ONLY);
     expect(again.problem).toBeNull();
     expect(again.flashLog().done).toEqual([{ at: 3000, verdict: 'fail', why: 'corrected' }]);
     const file = path.join(dir, 'agent-runs.json'), raw = JSON.parse(fs.readFileSync(file, 'utf8'));
     expect(JSON.stringify(raw.flash)).not.toContain('piano');
     fs.writeFileSync(file, JSON.stringify({ ...raw, flash: { version: 1, open: 'x', done: [{ at: 'no' }] } }));
-    const lenient = new AgentRunStore(dir);
+    const lenient = new AgentRunStore(dir, JSON_ONLY);
     expect(lenient.problem).toBeNull();
     expect(lenient.list()).toHaveLength(1);
     expect(lenient.flashLog().done).toEqual([]);

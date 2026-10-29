@@ -591,7 +591,7 @@ export class ChatManager implements ChatService {
   constructor(private readonly opts: ChatManagerOptions) {
     this.analytics = new AgentAnalyticsCollector(opts.userData, Date.now, opts.writeDelayMs ? Math.max(1000, opts.writeDelayMs) : 0);
     this.runs = new AgentRunStore(opts.userData);
-    if (this.runs.problem) log.warn('chats', 'agent runs file unreadable', { cause: this.runs.problem, hint: 'move agent-runs.json aside to record runs again' });
+    if (this.runs.problem) log.warn('chats', 'agent runs file unreadable', { cause: this.runs.problem, hint: 'move agent-runs.json (or app.db, ADR 0199) aside to record runs again' });
     // a pruned run lives on in the rollups only: a chat mirror of it would be adopted back and counted twice
     this.runs.onPrune = ids => {
       let any = false;
@@ -2256,6 +2256,7 @@ export class ChatManager implements ChatService {
     for (const q of this.childResults.values()) if (q.timer) clearTimeout(q.timer); // the results stay on the children (agent_children)
     this.counters.flush();
     this.flushWrites();
+    this.runs.close(); // app.db's handle released at quit (a later save opens it again)
     process.off('exit', this.onExit);
     log.info('chats', 'manager stopped', { data: { sessions: live.length, left: live.filter(x => x.alive).length, ms: Date.now() - end + capMs, spawnMs } });
   }

@@ -5,11 +5,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { AgentRunStore, ROLLUP_BYTES, RUNS_MAX, SKILLS_MAX, addSkill, endRun, fitRollups, readRun, readTally, type RunStart } from '../../src/main/agents/runs';
+import { closeAppDbs } from '../../src/main/app-db';
 import { emptyTally, matchesTags, rollUp, runMetrics, tagOf, type RunTally } from '../../src/main/agents/run-metrics';
 import type { AgentRun, AgentRunTags } from '../../src/shared/agents';
 
 const roots: string[] = [];
-afterEach(() => { for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
+afterEach(() => { closeAppDbs(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
 const tmp = () => { const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-run-tags-')); roots.push(dir); return dir; };
 const tags = (o: Partial<AgentRunTags> = {}): AgentRunTags => ({ skills: ['review'], app: 'crm', repo: 'second-brain', ...o });
 const start = (o: Partial<RunStart> = {}): RunStart => ({ chatId: 'c1', agentId: 'coder', version: 1, goal: 'g', startedBy: 'user', startedAt: 1000, costKnown: true, tags: tags(), ...o });

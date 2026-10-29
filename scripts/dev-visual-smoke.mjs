@@ -168,7 +168,9 @@ try {
     counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null },
     corrections: { tagged: 0, afterReport: 0 }, tags: { skills: ['fixture-skill'], app: null, repo: null },
   }));
-  await fs.writeFile(path.join(realProfile, 'agent-runs.json'), JSON.stringify({ version: 1, runs: history }));
+  // the app moves it into app.db at start and renames it (ADR 0199): its size is measured here, before
+  const historyBody = JSON.stringify({ version: 1, runs: history });
+  await fs.writeFile(path.join(realProfile, 'agent-runs.json'), historyBody);
   const baseline = path.join(profile, 'read-baseline.cjs');
   await bundle({ stdin: { contents: "export { estimatesState } from './src/main/agents/run-estimates.ts'; export { readRun } from './src/main/agents/runs.ts';", resolveDir: root },
     outfile: baseline, bundle: true, platform: 'node', format: 'cjs', target: 'node22',
@@ -205,7 +207,7 @@ try {
   // Same 5,000-run history: former synchronous calculation vs the real asynchronous IPC handler.
   const runIds = history.slice(-3).map(r => r.runId);
   manifest.readPerformance = { startedAt: new Date().toISOString(), runs: history.length,
-    bytes: (await fs.stat(path.join(realProfile, 'agent-runs.json'))).size };
+    bytes: Buffer.byteLength(historyBody, 'utf8') };
   manifest.readPerformance.before = await app.evaluate(async (_electron, { baseline, history, runIds, now }) => {
     const { estimatesState } = process.getBuiltinModule('module').createRequire(baseline)(baseline);
     const start = performance.now(); const value = estimatesState(history, runIds, now);

@@ -6,11 +6,12 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { ONE_SHOT_PURPOSES } from '../../../src/shared/agents';
 import { OneShotService } from '../../../src/main/agents/oneshot';
 import { AgentRunStore } from '../../../src/main/agents/runs';
+import { closeAppDbs } from '../../../src/main/app-db';
 import { AgentCatalogService } from '../../../src/main/agents/catalog';
 import { setBrainEngines, setTrust, fingerprint, brainEngine } from '../../../src/main/engines/registry';
 import type { EngineEntry } from '../../../src/main/engines/registry';
 const dirs: string[] = [];
-afterEach(() => { setBrainEngines([]); setTrust({}); for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+afterEach(() => { setBrainEngines([]); setTrust({}); closeAppDbs(); for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 function setup(engine = 'cursor') {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'pulse-once-')); dirs.push(userData);
   const profile = new AgentCatalogService({ userData, models: () => [], pulsePreset: () => ({ engine, model: null }) }).list().profiles.find(p => p.id === 'pulse')!;

@@ -667,7 +667,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     return {
       chatsOpen: chats.filter(c => !c.closedAt).length, chatsArchived: chats.filter(c => c.closedAt).length,
       engines: manager.engines().live.length, connectorProcs: mcpServers.gateway.openCount, memMbByType: byType,
-      chatsJsonKb: fileKb('chats.json'), agentRunsKb: fileKb('agent-runs.json'), analyticsKb: fileKb('agent-analytics.json'),
+      chatsJsonKb: fileKb('chats.json'), agentRunsKb: manager.runs.backend === 'sqlite' ? fileKb('app.db') : fileKb('agent-runs.json'), analyticsKb: fileKb('agent-analytics.json'),
     };
   });
   // browser events for the live feed ("rifai l'accesso a example-test-3")

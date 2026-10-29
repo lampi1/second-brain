@@ -202,3 +202,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0195](0195-candidate-brain-and-role-reflection.md) The maintenance writes a candidate brain, and reflects on one role's text as a trial — accepted
 - [0196](0196-guide-knows-when-stale.md) The Guida knows when it is stale, answers questions, draws from the code and picks cards for the user — accepted
 - [0198](0198-developer-speed-typecheck-e2e-baseline-agents-map.md) Developer speed: TypeScript 7 typecheck, an e2e baseline of known reds, AGENTS.md as a map — accepted
+- [0199](0199-agent-runs-in-sqlite.md) The agent runs move from agent-runs.json to SQLite (userData/app.db) — accepted
