@@ -14,7 +14,7 @@ let themed = '';
 
 const css = (name: string, fallback: string): string => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 
-/** A bigger, tighter drawing (Impara's blackboard, ADR 0181): larger labels, less space between the nodes. */
+/** A bigger, tighter drawing (Impara's blackboard, ADR 0183): larger labels, less space between the nodes. */
 export interface DrawOptions { fontSize?: number; nodeSpacing?: number; rankSpacing?: number }
 
 function configure(o: DrawOptions = {}): void {

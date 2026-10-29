@@ -20,7 +20,7 @@ a screenshot that was looked at, `npm run check` is green, and the fresh-context
 - [ ] "anche l'app abbia tutte le sezioni che aveva il sito. fatte meglio da app enterprise" (2026-10-11): every v2 site section exists in the app, in the app style (filterable/sortable tables, exports, a short explanation on top, calm density), each proven by an e2e test + screenshot:
   - [ ] Oggi (home): today's costs, what was done, what waits for you, AI insights
   - [ ] Adesso: live chats with their state, mailbox, now.md line, message box
-  - [ ] Fatto e standup: done items with DevOps links (PRs, work items), stand-up sentences
+  - [ ] ~~Fatto e standup: done items with DevOps links (PRs, work items), stand-up sentences~~ (removed 2026-10-29, ADR 0181)
   - [ ] ~~Da fare: brief, open threads (now.md), due ideas, decisions waiting~~ (dropped 2026-10-13, ADR 0041)
   - [ ] Idee: ideas with filters (area, state, who), due dates; "Dall'IA" (once "Spunti dell'IA"): the AI's ideas and reflections (Notato / Penso / Sicurezza / Non so)
   - [ ] Costi: charts by day / model / chat, savings, the estimate ledger

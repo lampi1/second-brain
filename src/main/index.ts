@@ -43,7 +43,6 @@ import { createDemoRoutines } from './routines/demo';
 import type { Routines } from './routines/service';
 import { readWorker } from './read-work';
 import { checkRunIds, demoEstimateRuns, mergeRuns } from './agents/run-estimates';
-import { macroTasks } from '../shared/macro-tasks';
 import { judgingEstimate } from './agents/judge-sample';
 import { systemLang } from './lang';
 import { setUiLangSource, uiLang } from './locale';
@@ -325,11 +324,6 @@ app.whenReady().then(async () => {
     'agents:judgingEstimate': () => {
       const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
       return judgingEstimate(mergeRuns(demo ? demoEstimateRuns(now) : s.agentRuns?.list() ?? [], s.chats.list().map(c => c.run)), now);
-    },
-    'runs:macro': a => {
-      const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
-      const since = typeof a?.since === 'number' && Number.isFinite(a.since) ? a.since : now - 14 * 864e5;
-      return macroTasks(mergeRuns(demo ? demoEstimateRuns(now) : s.agentRuns?.list() ?? [], s.chats.list().map(c => c.run)), since);
     },
     'agents:restoreVersion': a => s.agents.restoreVersion(a.id, a.version),
     'setup:get': () => s.setup.get(),

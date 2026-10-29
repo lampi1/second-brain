@@ -624,35 +624,33 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/renderer/components/brain-model/MemoryPage.tsx', 'src/renderer/components/brain-model/ApprovedTab.tsx', 'src/renderer/lib/memory-hub.ts', 'src/renderer/brain/pages/Idee.tsx', 'src/renderer/components/ContextNow.tsx', 'src/renderer/dashboard/AppErrors.tsx', 'src/main/brainmodel/service.ts'],
   },
   {
-    id: 'task-fatto',
-    title: b('Task e Fatto', 'Tasks and Done'),
-    summary: b('Task mostra quello che ti aspetta su Azure DevOps; Fatto elenca le attività che hai chiesto, dalla più recente, con il loro costo.',
-      'Tasks shows what waits for you on Azure DevOps; Done lists the tasks you asked for, newest first, with their cost.'),
+    id: 'tasks',
+    title: b('Task', 'Tasks'),
+    summary: b('Task mostra quello che ti aspetta su Azure DevOps: notizie, PR, review e work item.',
+      'Tasks shows what waits for you on Azure DevOps: news, PRs, reviews and work items.'),
     points: [
       // src/renderer/brain/pages/Task.tsx, src/main/tasks/service.ts
       b('«Task» legge con il lettore devops-me.mjs le tue PR, le review, i work item e le menzioni: quello incluso nell’app, o quello del brain se c’è; sola lettura, zero token.',
         '"Tasks" reads your PRs, reviews, work items and mentions with the devops-me.mjs reader: the one shipped with the app, or the brain’s own when it has one; read-only, zero tokens.'),
       b('La lettura parte con «Aggiorna ora» o da sola, ogni 15 minuti fino a 2 ore, se accendi la lettura automatica; una menzione ti avvisa con un suono che puoi spegnere.',
         'The read starts with "Refresh now" or by itself, every 15 minutes up to 2 hours, when the automatic read is on; a mention alerts you with a sound you can turn off.'),
+      b('Ogni notizia, PR, review o work item è una striscia a sinistra; a destra c’è il dettaglio di quella scelta. «Per te» raccoglie quello che aspetta te; J e K scorrono, E segna letta.',
+        'Every news, PR, review or work item is a strip on the left; the selected one’s detail is on the right. "For you" gathers what waits for you; J and K move, E marks read.'),
       b('Ogni record ha «Discuti»: l’Orchestrator riceve una bozza con titolo, link, stato e cartella; se serve lavoro, è lui ad aprire e istruire la chat.',
         'Every record has "Discuss": the Orchestrator gets a draft with title, link, state and folder; if work is needed, it opens and briefs the chat itself.'),
-      // src/renderer/brain/pages/Fatto.tsx, src/shared/macro-tasks.ts
-      b('«Fatto» elenca per giorno, dalla più recente, solo le attività principali: quelle avviate da te o dall’Orchestrator; una chat delegata non è mai una riga a sé.',
-        '"Done" lists by day, newest first, only the main tasks: the ones you or the Orchestrator started; a delegated chat is never a row of its own.'),
-      b('Il costo di una riga è il suo più quello di tutto ciò che ha avviato (figli, nipoti, revisioni, rifacimenti); «n/d» se una parte non ha un costo noto. Ogni giorno ha il suo totale.',
-        'A row’s cost is its own plus everything it started (children, grandchildren, reviews, reworks); "n/a" when a part has no known cost. Each day has its total.'),
-      b('Lo stand-up in cima ha una riga per attività dell’ultimo giorno di lavoro e di oggi, da copiare; la pagina non spende token e non legge niente fuori dall’app.',
-        'The stand-up on top has one line per task of the last work day and today, ready to copy; the page spends no tokens and reads nothing outside the app.'),
+      // src/renderer/brain/pages/TaskQa.tsx
+      b('«Test e QA» mostra, per ogni tua PR con un test plan, quanti test case sono fatti e quanti mancano, chi li ha eseguiti e i bug collegati.',
+        '"Tests and QA" shows, for each of your PRs with a test plan, how many test cases are done and how many are missing, who ran them and the linked bugs.'),
     ],
-    analogy: b('Task è la posta in arrivo del lavoro; Fatto è il diario di bordo.',
-      'Tasks is the work’s inbox; Done is the logbook.'),
+    analogy: b('Task è la posta in arrivo del lavoro.',
+      'Tasks is the work’s inbox.'),
     tech: [
-      tech(DATA, 'Task: la cache tasks.json nella cartella dati dell’app; Fatto: il registro delle esecuzioni dell’app (agent-runs.json, IPC runs:macro).',
-        'Tasks: the tasks.json cache in the app’s data folder; Done: the app’s run store (agent-runs.json, IPC runs:macro).'),
-      tech(WHERE, 'Lettura e avvisi in src/main/tasks/, le pagine in brain/pages/Task.tsx e Fatto.tsx. Fino al 19/10/2026 Task si chiamava DevOps: impostazioni e link vecchi passano da soli al nome nuovo (ADR 0079).',
-        'Reads and alerts in src/main/tasks/, the pages in brain/pages/Task.tsx and Fatto.tsx. Until 19/10/2026 Tasks was called DevOps: old settings and links move to the new name by themselves (ADR 0079).'),
+      tech(DATA, 'La cache tasks.json nella cartella dati dell’app.',
+        'The tasks.json cache in the app’s data folder.'),
+      tech(WHERE, 'Lettura e avvisi in src/main/tasks/, la pagina in brain/pages/Task.tsx. Fino al 19/10/2026 Task si chiamava DevOps: impostazioni e link vecchi passano da soli al nome nuovo (ADR 0079).',
+        'Reads and alerts in src/main/tasks/, the page in brain/pages/Task.tsx. Until 19/10/2026 Tasks was called DevOps: old settings and links move to the new name by themselves (ADR 0079).'),
     ],
-    sources: ['src/renderer/brain/pages/Task.tsx', 'src/main/tasks/service.ts', 'src/renderer/brain/pages/Fatto.tsx', 'src/shared/macro-tasks.ts'],
+    sources: ['src/renderer/brain/pages/Task.tsx', 'src/main/tasks/service.ts'],
   },
   {
     id: 'setup',
@@ -1152,7 +1150,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(WHERE, 'Pagina G X; IPC impara:*; ogni risposta del modello è una sessione nascosta in sola lettura su un motore acceso (Claude per primo).', 'Page G X; IPC impara:*; each model answer is a hidden read-only session on an engine that is on (Claude first).'),
       tech(LIMITS, 'Diff in linea fino a 60.000 caratteri (il resto nel file), schema di 4-10 nodi, al massimo 12 pezzi per risposta.', 'Diff inline up to 60,000 characters (the rest in the file), a 4-10 node diagram, at most 12 pieces per answer.'),
     ],
-    sources: ['src/shared/lesson.ts', 'src/main/learn/service.ts', 'src/main/learn/material.ts', 'src/main/learn/prompt.ts', 'src/renderer/components/impara/ImparaPlayer.tsx', 'docs/adr/0181-impara-lessons.md'],
+    sources: ['src/shared/lesson.ts', 'src/main/learn/service.ts', 'src/main/learn/material.ts', 'src/main/learn/prompt.ts', 'src/renderer/components/impara/ImparaPlayer.tsx', 'docs/adr/0183-impara-lessons.md'],
   },
   {
     id: 'held-news',
@@ -1244,6 +1242,263 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(WHERE, 'Pagina Qualità (sidebar → Andamento, o G Q); dati da /api/tables e /api/quality.', 'Quality page (sidebar → Trends, or G Q); data from /api/tables and /api/quality.'),
     ],
     sources: ['src/renderer/brain/pages/Qualita.tsx', 'src/main/brain/quality.ts', 'src/renderer/brain/lib/quality.ts'],
+  },
+  {
+    id: 'flash',
+    title: b('Flash, la domanda al volo',
+      'Flash, the quick side question'),
+    summary: b('Accanto all’Orchestrator, Flash risponde in pochi secondi a domande e spiegazioni sul lavoro in corso, in sola lettura, senza disturbare nessuno.',
+      'Next to the Orchestrator, Flash answers questions and explanations about the work in progress in seconds, read only, without disturbing anyone.'),
+    points: [
+      // src/shared/roles.ts FLASH_ID; src/renderer/components/LampoTile.tsx
+      b('Flash è la scheda accanto all’Orchestrator nella colonna di destra: è un agente con la sua carta in Agenti, mai un ruolo di lavoro e mai delegato.',
+        'Flash is the tab next to the Orchestrator in the right column: an agent with its own card in Agents, never a work role and never delegated.'),
+      // src/main/chats/lampo-context.ts (ADR 0106)
+      b('A ogni tua domanda riceve ciò che è successo nella chat dell’Orchestrator dall’ultima volta, così risponde sul lavoro in corso senza chiederti il contesto. L’Orchestrator non sa nulla di Flash.',
+        'With each of your questions it gets what happened in the Orchestrator’s chat since it last looked, so it answers about the work in progress without asking for context. The Orchestrator knows nothing of Flash.'),
+      // src/main/chats/manager.ts flashAgent (permissionMode plan)
+      b('Lavora in sola lettura: legge file e web, non cambia niente, non lancia comandi che scrivono.',
+        'It works read only: it reads files and the web, changes nothing, runs no command that writes.'),
+      // src/main/chats/manager.ts flashFollow (ADR 0107)
+      b('Ha un modello suo, separato da quello dell’Orchestrator: lo scegli dal chip del modello nella sua testata o sulla sua carta, e vale dalla domanda dopo.',
+        'It has a model of its own, separate from the Orchestrator’s: pick it from the model chip in its header or on its card, and it applies from the next question.'),
+      // src/renderer/i18n/areas/lampo.it.ts lampo.toWork
+      b('Quando la risposta diventa un lavoro vero, «Fanne un lavoro» prepara il messaggio per l’Orchestrator con la tua domanda e la risposta di Flash.',
+        'When the answer turns into real work, "Make it a job" drafts the message for the Orchestrator with your question and Flash’s answer.'),
+      // src/renderer/components/LampoTile.tsx: the eraser in the head
+      b('La gomma nella testata pulisce Flash in un clic: la conversazione ricomincia da zero, sulla sua carta.',
+        'The eraser in its header clears Flash in one click: the conversation starts over, on its card.'),
+    ],
+    analogy: b('Come chiedere al collega di banco «ma cos’è quella cosa?» mentre il capo parla: risponde sottovoce e non interrompe la riunione.',
+      'Like asking the colleague next to you "what was that?" while the boss is talking: they whisper the answer and the meeting goes on.'),
+    diagram: { kind: 'flow', steps: [b('Tua domanda', 'Your question'), b('Contesto Orchestrator', 'Orchestrator context'), b('Risposta', 'Answer'), b('Lavoro, se serve', 'A job, if needed')] },
+    tech: [
+      tech(LIMITS, 'Permessi: modalità plan (sola lettura); strumenti lettura e web; mai delegabile, scope background come Battito.',
+        'Permissions: plan mode (read only); read and web tools; never delegable, background scope like Pulse.'),
+      tech(WHERE, 'Carta «flash» in roles.json; il contesto passa da ChatManager.deliverNow.',
+        'Card "flash" in roles.json; the context goes through ChatManager.deliverNow.'),
+    ],
+    sources: ['src/main/chats/lampo-context.ts', 'src/main/chats/manager.ts', 'src/shared/roles.ts', 'src/renderer/components/LampoTile.tsx'],
+  },
+  {
+    id: 'orchestrator-app',
+    title: b('L’Orchestrator conosce l’app',
+      'The Orchestrator knows the app'),
+    summary: b('Chiedi all’Orchestrator dove sta una cosa o di cambiare un’impostazione: legge la mappa dell’app dal vivo e la cambia per te, con «Annulla».',
+      'Ask the Orchestrator where something is, or to change a setting: it reads the app’s map live and changes it for you, with "Undo".'),
+    points: [
+      // src/main/appctl/guide.ts app_guide
+      b('Quando gli serve, legge la mappa dell’app così come è disegnata ora: le voci della barra, le pagine, le schede di Memoria, le sezioni delle Impostazioni con i valori attuali, le scorciatoie, i testi dei «?» e queste carte della Guida.',
+        'When it needs to, it reads the app’s map as it is drawn now: the rail’s items, the pages, Memoria’s tabs, the Settings sections with their current values, the shortcuts, the "?" texts and these Guide cards.'),
+      // src/main/appctl/guide.ts outline (window.__sbScreen)
+      b('Sa anche cosa c’è sullo schermo adesso e dove sta ogni controllo, senza leggere il contenuto privato delle chat.',
+        'It also knows what is on screen right now and where each control sits, without reading the chats’ private content.'),
+      // src/main/appctl/config.ts app_config
+      b('Cambia per te ogni configurazione: impostazioni, vista (tema, densità), la carta di un ruolo, un connettore acceso o spento, «Rispondi dopo». Anche le impostazioni protette cambiano subito.',
+        'It changes every configuration for you: settings, the view (theme, density), a role’s card, a connector on or off, "Answer later". Protected settings change at once too.'),
+      // src/main/appctl/user-words.ts
+      b('Cambia qualcosa solo se gliel’hai scritto tu, di recente, in un messaggio che è l’ultimo della sua chat: le notizie dell’app o la posta di un agente non bastano.',
+        'It changes something only if you typed the ask yourself, recently, in a message that is the latest of its chat: the app’s news or an agent’s mail are not enough.'),
+      // src/main/appctl/config.ts: logged as the agent’s change
+      b('Ogni impostazione cambiata finisce nel registro dei cambi con il suo «Annulla»; la carta di un ruolo torna alla versione di prima; vista e connettori si rimettono chiedendoglielo di nuovo.',
+        'Every setting change goes to the change log with its "Undo"; a role’s card can go back to its previous version; the view and connectors are set back by asking again.'),
+      // src/main/appctl/config.ts: secrets, own tools
+      b('Non tocca mai segreti, chiavi o password, né i suoi stessi strumenti e permessi: quelli restano un tuo clic.',
+        'It never touches secrets, keys or passwords, nor its own tools and permissions: those stay your click.'),
+    ],
+    analogy: b('Come un assistente che conosce l’ufficio a memoria: gli dici «abbassa il riscaldamento» e lo fa, lasciando un biglietto per rimetterlo com’era.',
+      'Like an assistant who knows the office by heart: you say "turn the heating down" and they do it, leaving a note so you can put it back.'),
+    tech: [
+      tech(TOOLS, 'app_guide (la mappa, su richiesta), app_ui «outline» (lo schermo), app_config (setting, view, agent, connector, later).',
+        'app_guide (the map, on demand), app_ui "outline" (the screen), app_config (setting, view, agent, connector, later).'),
+      tech(LIMITS, 'app_config solo sull’endpoint dell’Orchestrator (app_guide e app_ui anche altrove, senza i valori delle impostazioni); nessun costo di token negli altri turni: la mappa si legge solo quando serve.',
+        'app_config only on the Orchestrator’s endpoint (app_guide and app_ui elsewhere too, without the settings’ values); no token cost in its other turns: the map is read only when needed.'),
+    ],
+    sources: ['src/main/appctl/guide.ts', 'src/main/appctl/config.ts', 'src/main/appctl/user-words.ts', 'src/renderer/lib/app-map.ts'],
+  },
+  {
+    id: 'voice',
+    title: b('La voce: dettare e parlare',
+      'Voice: dictate and talk'),
+    summary: b('Detti nel campo di testo con il microfono, oppure parli con l’Orchestrator e lui risponde a voce. Tutto gira sul tuo PC, gratis.',
+      'Dictate into the text field with the mic, or talk to the Orchestrator and hear it answer. It all runs on your PC, for free.'),
+    points: [
+      // src/renderer/lib/voice.ts dictation
+      b('Il microfono nel campo dell’Orchestrator e di Flash (o Ctrl+M) è solo dettatura: scrive quello che dici nel campo, non invia niente e non legge niente ad alta voce.',
+        'The mic in the Orchestrator’s and Flash’s field (or Ctrl+M) is dictation only: it writes what you say into the field, sends nothing and reads nothing aloud.'),
+      // src/renderer/lib/voice.ts conversation; src/renderer/components/VoiceSettings.tsx
+      b('La conversazione a voce si accende in Impostazioni → Voce (o Ctrl+Maiusc+Spazio): ciò che dici va all’Orchestrator come messaggio e la risposta viene letta mentre si scrive, frase per frase.',
+        'The voice conversation is switched on in Settings → Voice (or Ctrl+Shift+Space): what you say goes to the Orchestrator as a message and the reply is read while it is being written, sentence by sentence.'),
+      // src/renderer/lib/voice.ts barge-in
+      b('Se parli sopra l’app, lei smette subito di parlare e ascolta te.',
+        'If you talk over the app, it stops speaking at once and listens to you.'),
+      // src/renderer/lib/voice.ts useVoiceQuestion, parseSpokenAnswer
+      b('Con la conversazione accesa, le carte di domanda si leggono ad alta voce: un «sì», un «no» o «non voglio rispondere» detti valgono come il clic; qualsiasi altra frase va come tua risposta scritta, mai come un sì.',
+        'With the conversation on, question cards are read aloud: a spoken "yes", "no" or "I don’t want to answer" counts as the click; any other sentence goes as your written answer, never as a yes.'),
+      // src/main/voice/service.ts; src/main/voice/catalog.ts
+      b('Trascrizione con Whisper e voce italiana con Piper, sul tuo PC: niente esce dal computer, a parte lo scarico una tantum dei modelli, controllati con la loro impronta.',
+        'Transcription with Whisper and an Italian voice with Piper, on your PC: nothing leaves the computer except the one-time model downloads, checked against their hash.'),
+      // src/renderer/lib/mic.ts
+      b('In Impostazioni → Voce scegli trascrizione Veloce o Precisa, la voce (Paola, Miro, Dii) e il microfono; uno USB collegato mentre l’app è aperta si usa subito.',
+        'In Settings → Voice you pick Fast or Accurate transcription, the voice (Paola, Miro, Dii) and the microphone; a USB one plugged in while the app runs is used at once.'),
+      // src/renderer/lib/voice.ts header
+      b('L’app non parla mai di sua iniziativa: solo per rispondere a te.',
+        'The app never speaks on its own initiative: only to answer you.'),
+    ],
+    analogy: b('Come un interfono in ufficio: premi per dettare un appunto, oppure lo lasci aperto e parli con chi coordina.',
+      'Like an office intercom: press it to dictate a note, or leave it open and talk to the coordinator.'),
+    diagram: { kind: 'flow', steps: [b('Microfono', 'Microphone'), b('Whisper sul PC', 'Whisper on the PC'), b('Orchestrator', 'Orchestrator'), b('Piper legge', 'Piper reads it')] },
+    tech: [
+      tech(WHERE, 'Un processo a parte (voice/worker.ts, sherpa-onnx); il microfono manda pezzi a 16 kHz; Silero taglia le frasi.',
+        'A separate process (voice/worker.ts, sherpa-onnx); the mic streams 16 kHz chunks; Silero cuts the sentences.'),
+      tech(LIMITS, 'Modelli: Veloce 374 MB, Precisa 1 GB; la voce in modalità conversazione non registra niente su disco.',
+        'Models: Fast 374 MB, Accurate 1 GB; voice mode records nothing to disk.'),
+    ],
+    sources: ['src/renderer/lib/voice.ts', 'src/main/voice/service.ts', 'src/main/voice/catalog.ts', 'src/renderer/lib/mic.ts', 'src/renderer/components/VoiceSettings.tsx'],
+  },
+  {
+    id: 'recordings',
+    title: b('Le registrazioni delle call',
+      'Call recordings'),
+    summary: b('Registri una call (audio del PC e microfono) o importi un file: Whisper la trascrive sul tuo PC, a zero token, e l’Orchestrator la trova da solo.',
+      'Record a call (the PC’s audio and your mic) or import a file: Whisper transcribes it on your PC at zero tokens, and the Orchestrator finds it by itself.'),
+    points: [
+      // src/renderer/lib/recorder.ts
+      b('«Registra call» prende il tuo microfono e l’audio del PC (Teams, Meet, qualsiasi cosa suoni) in due canali: a sinistra «Tu», a destra «Altri». Senza l’audio del PC registra solo il microfono.',
+        '"Record call" takes your mic and the PC’s audio (Teams, Meet, anything playing) on two channels: left "You", right "Others". Without the PC’s audio it records the mic alone.'),
+      // src/renderer/components/TopBar.tsx REC pill
+      b('Mentre registri, la pillola REC con il tempo resta in alto su ogni pagina e la ferma con un clic. La conversazione a voce si spegne: risponderebbe alla call.',
+        'While recording, the REC pill with the timer stays at the top on every page and stops it in one click. The voice conversation turns off: it would answer the call.'),
+      // src/main/recordings/service.ts
+      b('Alla fine, Whisper la trascrive in locale, una alla volta, a zero token; nella pagina cerchi nel testo, la riascolti o la copi.',
+        'At the end Whisper transcribes it locally, one at a time, at zero tokens; on the page you search the text, listen again or copy it.'),
+      // src/main/recordings/find.ts
+      b('«Trovate sul PC» elenca i file audio e video delle ultime settimane nelle cartelle solite (Download, Documenti, Video, Desktop, le registrazioni di Teams in OneDrive): niente si legge finché non lo importi.',
+        '"Found on the PC" lists the audio and video files of the last weeks in the usual folders (Downloads, Documents, Videos, Desktop, Teams recordings in OneDrive): nothing is read until you import it.'),
+      // src/main/appctl/recordings.ts
+      b('L’Orchestrator legge l’elenco e le trascrizioni («apri un bug da quello che ci siamo detti») e può chiedere di importare un file trovato. Solo lui: una call è privata.',
+        'The Orchestrator reads the list and the transcripts ("open a bug from what we said") and can ask to import a file found. Only it: a call is private.'),
+      // src/main/recordings/store.ts
+      b('Audio e testo restano solo sul tuo PC, nei dati dell’app, mai nel brain.',
+        'Audio and text stay only on your PC, in the app’s data, never in the brain.'),
+    ],
+    analogy: b('Come il registratore sul tavolo della riunione, con una stenografa che batte il verbale a fine incontro e lo mette nel cassetto giusto.',
+      'Like the recorder on the meeting table, with a stenographer who types the minutes when it ends and files them in the right drawer.'),
+    diagram: { kind: 'flow', steps: [b('Registra o importa', 'Record or import'), b('Whisper sul PC', 'Whisper on the PC'), b('Tu / Altri', 'You / Others'), b('Orchestrator', 'Orchestrator')] },
+    tech: [
+      tech(FILES, 'userData/recordings/<id>/: meta.json, audio.wav (16 kHz, 16 bit; stereo per una call), transcript.json, trascrizione.md.',
+        'userData/recordings/<id>/: meta.json, audio.wav (16 kHz, 16-bit; stereo for a call), transcript.json, trascrizione.md.'),
+      tech(TOOLS, 'app_recordings (elenco, trascrizioni, file trovati) e app_recording_import, solo sull’endpoint dell’Orchestrator.',
+        'app_recordings (list, transcripts, files found) and app_recording_import, only on the Orchestrator’s endpoint.'),
+      tech(WHERE, 'Pagina Registrazioni (barra a sinistra, o G V).',
+        'Recordings page (left rail, or G V).'),
+    ],
+    sources: ['src/renderer/lib/recorder.ts', 'src/main/recordings/service.ts', 'src/main/recordings/store.ts', 'src/main/recordings/find.ts', 'src/main/appctl/recordings.ts', 'src/renderer/components/RecordingsPage.tsx'],
+  },
+  {
+    id: 'personal-browser',
+    title: b('Il tuo Browser personale',
+      'Your personal Browser'),
+    summary: b('Un browser di tutti i giorni dentro l’app, con preferiti, sessioni e password, separato da quelli degli agenti: loro non lo vedono mai.',
+      'An everyday browser inside the app, with bookmarks, sessions and passwords, apart from the agents’ ones: they never see it.'),
+    points: [
+      // src/main/personal/browser.ts (persist:personal)
+      b('Le sue schede vivono in una partizione tutta loro: nessuno strumento degli agenti le elenca, le legge o le fotografa, e loro non vedono le sessioni degli agenti.',
+        'Its tabs live in a partition of their own: no agent tool lists, reads or screenshots them, and they never see the agents’ sessions.'),
+      // src/renderer/components/BrowserPage.tsx
+      b('Barra degli indirizzi con suggerimenti da preferiti e cronologia, stella per i preferiti, sessioni salvate (un gruppo di schede con un nome) e «Riapri le ultime schede».',
+        'An address bar with suggestions from bookmarks and history, a star for bookmarks, saved sessions (a named set of tabs) and "Reopen the last tabs".'),
+      // src/main/personal/vault.ts
+      b('Le password sono cifrate dal sistema (DPAPI su Windows) e si riempiono solo in una pagina del loro sito, al tuo clic; puoi importare il CSV di Google Password Manager, Chrome, Edge o Firefox.',
+        'Passwords are encrypted by the system (DPAPI on Windows) and filled only into a page of their own site, at your click; you can import the CSV from Google Password Manager, Chrome, Edge or Firefox.'),
+      // src/main/browser/tabs.ts lend (ADR 0133)
+      b('«Affida a un agente» presta una sola scheda a una chat finché non premi «Riprendi la scheda»: solo il tuo clic la presta, e torna indietro viva.',
+        '"Give to an agent" lends one tab to a chat until you press "Take the tab back": only your click lends it, and it comes back alive.'),
+      // src/main/personal/browser.ts: tabs keep running
+      b('Una scheda che non è sullo schermo continua a girare: la musica o una call vanno avanti mentre cambi pagina.',
+        'A tab that is off screen keeps running: music or a call go on while you change page.'),
+    ],
+    analogy: b('Come la tua scrivania personale nello stesso ufficio della squadra: è nella stanza, ma i cassetti sono tuoi e nessuno ci guarda.',
+      'Like your own desk in the team’s office: it is in the room, but the drawers are yours and nobody looks inside.'),
+    target: [b('Google a volte rifiuta l’accesso dai browser dentro le app («browser non sicuro»): per quel sito serve Chrome.',
+        'Google sometimes refuses sign-in from browsers inside apps ("browser not secure"): that site needs Chrome.')],
+    tech: [
+      tech(FILES, 'userData/personal-browser.json (preferiti, sessioni, cronologia, ultime schede); userData/personal-passwords.json (cifrate).',
+        'userData/personal-browser.json (bookmarks, sessions, history, last tabs); userData/personal-passwords.json (encrypted).'),
+      tech(WHERE, 'Pagina Browser (barra a sinistra, o G W).',
+        'Browser page (left rail, or G W).'),
+    ],
+    sources: ['src/main/personal/browser.ts', 'src/main/personal/vault.ts', 'src/main/personal/store.ts', 'src/main/browser/tabs.ts', 'src/renderer/components/BrowserPage.tsx'],
+  },
+  {
+    id: 'notifications',
+    title: b('Avvisi e suoni',
+      'Notices and sounds'),
+    summary: b('Ogni avviso dell’app è la stessa carta, con un suono suo per tipo; suona solo ciò che arriva da sé, mai la risposta a un tuo clic.',
+      'Every notice of the app is the same card, with its own sound per kind; only what arrives by itself rings, never the answer to your click.'),
+    points: [
+      // src/renderer/components/Notice.tsx (ADR 0151)
+      b('Una sola carta per tutti gli avvisi, nell’app e sopra i browser: tipo, titolo, dettaglio, eventuali etichette e un’azione.',
+        'One card for every notice, in the app and over the browsers: kind, title, detail, optional chips and an action.'),
+      // src/renderer/lib/sounds.ts SoundKind
+      b('Sei tipi, sei suoni brevi sintetizzati al momento: riuscito, informazione, attenzione, avviso, errore e festa.',
+        'Six kinds, six short sounds synthesized on the spot: success, info, attention, warning, error and celebrate.'),
+      // src/renderer/lib/sounds.ts RANK
+      b('Più avvisi insieme suonano una volta sola, con il tipo più importante.',
+        'Several notices together ring once, with the most important kind.'),
+      // src/renderer/lib/notice.ts
+      b('Una Manutenzione che ha prodotto qualcosa finisce con la carta «festa»: più grande, con il riepilogo e «Apri Memoria».',
+        'A Maintenance that produced something ends with the "celebrate" card: bigger, with the summary and "Open Memoria".'),
+      // src/renderer/lib/notice.ts: tasks.sound, mute, do-not-disturb
+      b('Il suono segue l’interruttore degli avvisi, il muto del tipo e «Non disturbare»; le notifiche di Windows restano silenziose.',
+        'The sound follows the alerts switch, the kind’s mute and "Do not disturb"; Windows notifications stay silent.'),
+    ],
+    analogy: b('Come i campanelli di un albergo: uno per la reception, uno per la cucina, uno per le emergenze. Dal suono sai già chi chiama.',
+      'Like the bells in a hotel: one for reception, one for the kitchen, one for emergencies. From the sound you already know who is calling.'),
+    tech: [
+      tech(LIMITS, 'Durata: 8 s, la carta festa 20 s; ogni suono sotto 0,9 s, a volume basso, senza file audio.',
+        'Duration: 8 s, the celebrate card 20 s; every sound under 0.9 s, at low volume, without audio files.'),
+      tech(WHERE, 'notify() in lib/notice.ts per i lavori in background; toast() per la risposta a un tuo clic.',
+        'notify() in lib/notice.ts for background jobs; toast() for the answer to your own click.'),
+    ],
+    sources: ['src/renderer/components/Notice.tsx', 'src/renderer/lib/notice.ts', 'src/renderer/lib/sounds.ts'],
+  },
+  {
+    id: 'routines',
+    title: b('Le routine, dal terminale',
+      'Routines, from the terminal'),
+    summary: b('Una routine è un pacchetto di passi che gira dal terminale con il comando routine; l’app aiuta a prepararlo e mostra le run quando le apri.',
+      'A routine is a package of steps that runs from the terminal with the routine command; the app helps you prepare it and shows the runs when you open them.'),
+    points: [
+      // packages/routine-runtime/README.md
+      b('Il terminale è l’unico esecutore: routine run fa una run, routine resume la riprende dal passo non finito, routine watch segue il trigger DevOps e avvia una run per ogni work item nuovo.',
+        'The terminal is the only executor: routine run does one run, routine resume continues it from the step that did not finish, routine watch follows the DevOps trigger and starts one run per new work item.'),
+      // packages/routine-runtime/README.md
+      b('Ogni passo è una sessione Claude Code; quando serve una persona, il runtime chiede in un commento DevOps e aspetta la risposta lì.',
+        'Each step is a Claude Code session; when a person is needed, the runtime asks in a DevOps comment and waits for the answer there.'),
+      // src/renderer/brain/pages/Routines.tsx (ADR 0179)
+      b('Nell’app prepari il pacchetto con l’Orchestrator, inserisci le credenziali e lo esporti; la pagina Routine non avvia, non riprova e non pianifica niente.',
+        'In the app you prepare the package with the Orchestrator, enter its credentials and export it; the Routines page starts, retries and schedules nothing.'),
+      // src/renderer/brain/pages/Routines.tsx RunPage
+      b('Aprendo una run vedi dal vivo passi, azioni, screenshot, prove e rapporto; chiudendo la vista l’osservazione si ferma.',
+        'Opening a run shows its steps, actions, screenshots, evidence and report live; closing the view stops the watching.'),
+      // src/renderer/components/LegacyRoutineHistory.tsx
+      b('Le vecchie run fatte dall’app restano un archivio in sola lettura.',
+        'The old runs made by the app stay a read-only archive.'),
+      // src/main/appctl/tools.ts app_routine_status
+      b('L’Orchestrator legge stato e prove di una run solo quando glielo chiedi, e non la esegue mai.',
+        'The Orchestrator reads a run’s state and evidence only when you ask, and never executes it.'),
+    ],
+    analogy: b('Come una ricetta scritta per la cucina: la prepari a tavolino, poi in cucina la segue chi è ai fornelli; tu guardi dalla finestrella quando vuoi.',
+      'Like a recipe written for the kitchen: you prepare it at the desk, then whoever is at the stove follows it; you look through the hatch when you want.'),
+    diagram: { kind: 'flow', steps: [b('Prepara', 'Prepare'), b('Esporta', 'Export'), b('routine run', 'routine run'), b('Guarda la run', 'Watch the run')] },
+    tech: [
+      tech(WHERE, 'Pagina Routine (barra a sinistra, o G U); runtime in packages/routine-runtime (comando routine).',
+        'Routines page (left rail, or G U); runtime in packages/routine-runtime (the routine command).'),
+      tech(LIMITS, 'Nessun timer, polling o scansione all’avvio nell’app: solo una run aperta osserva i suoi file (run.json, events.jsonl, report.md).',
+        'No timers, polling or startup scans in the app: only an open run watches its files (run.json, events.jsonl, report.md).'),
+    ],
+    sources: ['packages/routine-runtime/README.md', 'src/renderer/brain/pages/Routines.tsx', 'src/renderer/components/LegacyRoutineHistory.tsx', 'src/main/appctl/tools.ts', 'docs/adr/0179-terminal-only-routines.md'],
   },
 ];
 

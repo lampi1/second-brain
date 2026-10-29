@@ -1,4 +1,4 @@
-// Impara in the demo (ADR 0181): no engine runs there, so the lessons come from here. `demoRun` answers the app's own
+// Impara in the demo (ADR 0183): no engine runs there, so the lessons come from here. `demoRun` answers the app's own
 // read-only commands (gh pr view / diff, git) with the real PR #251 of second-brain («replies stream word by word»),
 // `demoTeach` answers each of the model's rounds with a lesson about it written by hand (plan, the rest, the four extras,
 // the grade), after a short wait so the screens in between are seen. `seedDemoLessons` writes two saved lessons the

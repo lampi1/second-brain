@@ -1,4 +1,4 @@
-// Impara (ADR 0181): the lessons the user asks for to master a PR of theirs, a technical topic or a pasted text. A lesson
+// Impara (ADR 0183): the lessons the user asks for to master a PR of theirs, a technical topic or a pasted text. A lesson
 // is a base flowchart that grows piece by piece (each piece lights its nodes: the app adds the classes, the model only
 // names the node ids), a short narration per piece (read aloud by the app's voice or just written), checks after some
 // pieces, extra pieces the user asks for («Spiegamelo meglio», «Fammi un esempio», «Mostrami il codice», a question of

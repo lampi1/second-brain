@@ -5,6 +5,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ## [Unreleased]
 
+### Changed
+- README back to a short, playful tour with 14 screenshots (`npm run shots` fixed and extended); the Guide gains
+  cards for Flash, the Orchestrator's app knowledge, voice, call recordings, the personal Browser, notices and
+  terminal routines.
+
 ### Fixed
 - Routines compose existing browser, pinned script/query and registered MCP connector capabilities, with preflight
   before activation and on-demand grants independent of scheduling. Durable receipts prevent duplicate unknown
@@ -15,6 +20,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   Workers reuse approved write grants without duplicate questions (ADR 0164).
 
 ### Added
+- Impara: a page that teaches one of your PRs, a technical topic or a pasted text piece by piece on a growing
+  diagram, with the app's voice, spoken or typed answers, checks between pieces, «Spiegalo tu» at the end and every
+  lesson saved where you left it (ADR 0183).
 - **Routine browser writes** (ADR 0165): exact approved site origins, isolated Claude workers, visible effect outcomes
   and bounded retries. Credenziali now manages encrypted site logins; the host fills compatible forms without exposing
   passwords to agents, with user handoff for missing credentials or complex login. Production rules stay unchanged.

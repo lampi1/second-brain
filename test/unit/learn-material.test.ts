@@ -1,4 +1,4 @@
-// What an Impara lesson is made from (ADR 0181, src/main/learn/material.ts): a GitHub PR through gh (view + diff, the
+// What an Impara lesson is made from (ADR 0183, src/main/learn/material.ts): a GitHub PR through gh (view + diff, the
 // user's own login, no credential passed), one of the Task page's DevOps PRs through git in its clone (branch against
 // target), without a clone the description only and saying so, a pasted text, nothing for a topic; a long diff is cut
 // for the prompt and kept whole in its file.

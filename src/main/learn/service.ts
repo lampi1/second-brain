@@ -1,4 +1,4 @@
-// Impara in main (ADR 0181): makes, keeps and moves the user's lessons. A start gathers the material (material.ts: a
+// Impara in main (ADR 0183): makes, keeps and moves the user's lessons. A start gathers the material (material.ts: a
 // PR's diff through the user's own gh or git, a pasted text, nothing for a topic), then asks the model in two hidden
 // read-only runs (deps.teach, compare/headless.ts): the plan with the first two pieces (the user starts learning on
 // them) and, in the background, the rest. «Spiegamelo meglio», «Fammi un esempio», «Mostrami il codice», a question and

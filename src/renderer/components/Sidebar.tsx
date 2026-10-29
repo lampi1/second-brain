@@ -13,7 +13,7 @@ import { useTasks } from '../store/tasks';
 import { ui } from '../store/ui';
 import { go } from '../actions';
 import {
-  IconBook, IconLearn, IconBrain, IconBranch, IconChart, IconTarget, IconCoins, IconGlobe, IconGrid, IconHistory, IconLayers, IconLightbulb, IconList, IconMap, IconMic, IconQuestion, IconSettings, IconShield, IconSparkle, IconTerminal, IconTicket,
+  IconLearn, IconBrain, IconBranch, IconChart, IconTarget, IconCoins, IconGlobe, IconGrid, IconHistory, IconLayers, IconLightbulb, IconList, IconMap, IconMic, IconQuestion, IconSettings, IconShield, IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
 import { t } from '../i18n';
 import {workProfile} from '../../shared/work-profiles';
@@ -24,7 +24,7 @@ import { HUB_PAGES } from '../lib/memory-hub';
 const ICON: Record<BrainPageId, ReactNode> = {
   home: <IconGrid />, flussi: <IconBranch />,
   agenti: <IconLayers />,
-  fatto: <IconBook />, idee: <IconLightbulb />,
+  idee: <IconLightbulb />,
   costi: <IconCoins />, qualita: <IconChart />, apprendimento: <IconTarget />, script: <IconTerminal />, log: <IconList />, confronto: <IconLayers />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
   guida: <IconQuestion />, browser: <IconGlobe />, registrazioni: <IconMic />, impara: <IconLearn />,
   regole: <IconShield />, memoria: <IconHistory />, classificatori: <IconBranch />, collegamenti: <IconMap />,
@@ -49,7 +49,7 @@ export function Sidebar() {
   const saved=ui.use(s=>s.prefs.workProfile);
   const composition=workProfile(saved,BRAIN_PAGES.map(page=>page.id));
   const show=(id:BrainPageId)=>!composition||composition.pageIds.includes(id);
-  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','log','guida','browser','registrazioni','impara','task','flussi','fatto','impostazioni',...BRAIN_CORE,...TRENDS,...IN_MEMORIA].includes(id)):BRAIN_GROUP;
+  const brainPages=composition?composition.pageIds.filter((id):id is BrainPageId=>BRAIN_PAGES.some(page=>page.id===id)&&!['home','log','guida','browser','registrazioni','impara','task','flussi','impostazioni',...BRAIN_CORE,...TRENDS,...IN_MEMORIA].includes(id)):BRAIN_GROUP;
   const page = ui.use(s => s.page);
   const map = ui.use(s => s.map);
   const read = ui.use(s => s.read);
@@ -88,7 +88,6 @@ export function Sidebar() {
         {page1('flussi')}
         {page1('impara')}
         {page1('registrazioni')}
-        {show('fatto')&&page1('fatto')}
         {title(t('dialogs.sidebar.brain'), 'brain')}
         {BRAIN_CORE.map(page1)}
         {brainPages.map(page1)}

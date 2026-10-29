@@ -1,4 +1,4 @@
-// A check under the lesson's board (ADR 0181; mockup /mnt/project-files/ui-review/impara/3-A-verifica.png): the question
+// A check under the lesson's board (ADR 0183; mockup /mnt/project-files/ui-review/impara/3-A-verifica.png): the question
 // (predict or choose), its options (click, 1-4 / A-D, or said aloud: «la b»), then the right one and why, the user's
 // own marked, and «Eri sicuro?» (tirato a caso, abbastanza, sicurissimo: a wrong answer given with certainty is the one
 // to look at again). No grade: it is there to fix the piece in memory (practice testing, Dunlosky et al. 2013). The

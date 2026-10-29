@@ -1,6 +1,6 @@
 // E2E of the look the owner asked for in issue #85 (ADR 0079): Task, Agenti and Guida side by side, in the demo (no
 // network, no tokens), dark and light. The three heads share the title's size and weight and the subtitle's color, and
-// Task's number cards are Agenti's cards (same surface, radius and border). Screenshots for the side-by-side review:
+// Task's detail pane wears Agenti's card surface (same radius, border and background). Screenshots for the side-by-side review:
 // test-results/shots/look-{task,agenti,guida}-{dark,light}.png.
 import { expect, test, type Page } from '@playwright/test';
 import { goPage, launchDemo, openAgentOverview, shot } from './helpers';
@@ -22,11 +22,11 @@ for (const scheme of ['dark', 'light'] as const) {
       await page.getByTestId('nav-task').click();
       const dv = page.getByTestId('brain-page-task');
       await dv.getByTestId('task-refresh').click();
-      await expect(dv.getByTestId('task-tiles')).toBeVisible({ timeout: 30_000 });
+      await expect(dv.getByTestId('task-detail')).toBeVisible({ timeout: 30_000 });
       await expect(dv.getByTestId('task-refresh')).toBeEnabled();
       for (const x of await page.getByTestId('toast-close').all()) await x.click();
       await page.mouse.move(2, 2);
-      const task = await look(page, '.tk-page .catalog-head h2', '.tk-page .catalog-head p', '.tk-tile');
+      const task = await look(page, '.tk-page .catalog-head h2', '.tk-page .catalog-head p', '.tk-detail');
       await shot(page, `look-task-${scheme}`);
 
       await openAgentOverview(page);

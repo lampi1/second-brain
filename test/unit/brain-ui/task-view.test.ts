@@ -2,7 +2,7 @@
 // "fermo" days, the test outcomes in one line, work items in state order, names and avatars from DevOps' name formats.
 import { describe, expect, it } from 'vitest';
 import type { DevopsItem, DevopsPr } from '../../../src/shared/contract';
-import { byState, daysSince, firstName, initials, lastComment, prWait, sinceLabel, stuckDays, testSummary } from '../../../src/renderer/brain/lib/tasks';
+import { daysSince, firstName, initials, lastComment, prWait, sinceLabel, stuckDays, testSummary } from '../../../src/renderer/brain/lib/tasks';
 
 const NOW = Date.parse('2026-10-12T12:00:00Z');
 const daysAgo = (d: number) => new Date(NOW - d * 864e5).toISOString();
@@ -42,12 +42,6 @@ describe('Task page rules', () => {
     expect(testSummary([t('Passed'), t('Passed')])).toMatchObject({ tone: 'good', text: '2 test: 2 passati' });
     expect(testSummary([t('Passed'), t('Failed'), t(null)])).toMatchObject({ tone: 'bad', text: '3 test: 1 passato, 1 fallito, 1 da eseguire' });
     expect(testSummary([t('Blocked')])!.tone).toBe('warn');
-  });
-
-  it('orders work items by state (working first), then priority, then the longest still', () => {
-    const g = byState([wi(1, 'New', 3, 1), wi(2, 'Active', 3, 1), wi(3, 'Active', 2, 1), wi(4, 'Active', 2, 9), wi(5, 'Weird', 1, 1)]);
-    expect(g.map(x => x.state)).toEqual(['Active', 'New', 'Weird']);
-    expect(g[0]!.items.map(w => w.id)).toEqual([4, 3, 2]);
   });
 
   it('reads DevOps names and picks the last comment of someone else', () => {

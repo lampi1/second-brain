@@ -1,4 +1,4 @@
-// Impara in the renderer (ADR 0181): main's list and the open lesson (impara:changed keeps both current), the actions
+// Impara in the renderer (ADR 0183): main's list and the open lesson (impara:changed keeps both current), the actions
 // of the page and the player (each an impara:* call, a failure said in a toast), the user's choices that outlive a
 // restart (voice of the app, «Rispondo a voce», depth, level: localStorage, a convenience only) and the colours a lit
 // piece gets on the diagram, taken from the theme's tokens as hex (mermaid's classDef cannot take rgba).

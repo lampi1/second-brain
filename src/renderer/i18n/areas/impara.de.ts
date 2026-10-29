@@ -1,4 +1,4 @@
-// Impara (ADR 0181): die Seite, die Tafel, die Fragen, das Ende mit «Erklär es selbst».
+// Impara (ADR 0183): die Seite, die Tafel, die Fragen, das Ende mit «Erklär es selbst».
 import type { imparaIt } from './impara.it';
 export const imparaDe: typeof imparaIt = {
   'brainPages.nav.impara': 'Lernen',

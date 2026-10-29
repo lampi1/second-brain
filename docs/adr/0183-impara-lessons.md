@@ -1,4 +1,4 @@
-# 0181 — Impara: lessons on a blackboard
+# 0183 — Impara: lessons on a blackboard
 
 2026-10-29. Accepted.
 

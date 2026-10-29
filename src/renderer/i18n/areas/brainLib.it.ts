@@ -13,10 +13,8 @@ export const brainLibIt = {
   'brainLib.charts.nPointsMax': (p: { n: number; max: string }) => `${p.n} punti; massimo ${p.max}.`,
   'brainLib.charts.firstLabel': (p: { n: number; first: string; value: string }) => `${p.n} voci; la prima: ${p.first}, ${p.value}.`,
 
-
   // record-discuss.ts
   'brainLib.recordDiscuss.untitled': 'senza titolo',
-
 
   // learn.ts
   'brainLib.learn.waiting': (p: { n: number }) => `in attesa dei primi ${p.n} casi dopo il cambio`,
