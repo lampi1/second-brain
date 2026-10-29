@@ -5,6 +5,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ## [Unreleased]
 
+### Changed
+- README back to a short, playful tour with 14 screenshots (`npm run shots` fixed and extended); the Guide gains
+  cards for Flash, the Orchestrator's app knowledge, voice, call recordings, the personal Browser, notices and
+  terminal routines.
+
 ### Fixed
 - Routines compose existing browser, pinned script/query and registered MCP connector capabilities, with preflight
   before activation and on-demand grants independent of scheduling. Durable receipts prevent duplicate unknown
