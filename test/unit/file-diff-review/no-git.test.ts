@@ -1,7 +1,6 @@
-// Review proof for PR #26 (runs against the #26 head, 058f5f9): when git cannot be started (not installed, not on
-// PATH: e.g. a GitHub Desktop user, whose git is bundled), main/file-diff.ts atRef turns the failed `rev-parse` into
-// reason 'ref', so "Compare with HEAD" on a file in a real repository says "Commit or branch not found." instead of
-// the reason that exists for it ('git': "git could not read that version.").
+// "Compare with HEAD" without a usable git (regression of PR #26): when git cannot be started (not installed, not on
+// PATH: e.g. a GitHub Desktop user, whose git is bundled), main/file-diff.ts says so (reason 'git': "git could not read
+// that version.") instead of "Commit or branch not found.", and works again once git is there.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';

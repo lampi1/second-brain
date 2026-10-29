@@ -1,9 +1,8 @@
-// Review proof for PR #26 (runs against the #26 head, 058f5f9): the "no transport" guard of main/file-diff.ts is
-// `-c protocol.allow=never`, but git's per-protocol setting `protocol.<name>.allow` wins over `protocol.allow` even
-// when it comes from the (untrusted) repository's own config. The only other guard is GIT_NO_LAZY_FETCH, which git
-// honours only since 2.44 (backported to 2.39.4/2.40.2/2.41.1/2.42.2/2.43.4, May 2024). On an older git, simulated here
-// by dropping that variable at the spawn boundary, a partial clone missing the blob lazy-fetches it over ssh
-// and runs the repository's core.sshCommand: opening "Compare" on a file in a planted folder runs that folder's command.
+// file-diff runs no repository command (security, regression of PR #26): `-c protocol.allow=never` alone is not enough,
+// because git's per-protocol `protocol.<name>.allow` wins over it even from the (untrusted) repository's own config, and
+// GIT_NO_LAZY_FETCH works only since git 2.44 (backported to 2.39.4/2.40.2/2.41.1/2.42.2/2.43.4, May 2024). With that
+// variable dropped at the spawn boundary (an older git, on Windows too, real git), a partial clone missing the blob
+// must not lazy-fetch it over ssh: opening "Compare" on a file in a planted folder never runs its core.sshCommand.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';

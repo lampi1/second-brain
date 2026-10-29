@@ -1,6 +1,6 @@
-// Review proof for PR #26 (runs against the #26 head, 058f5f9): main/file-diff.ts atRef decides "outside the
-// repository" with rel.startsWith('..'), so a tracked file whose name merely starts with two dots (e.g. `..notes.md`)
-// at the repository top is reported as "not in a git repository" instead of being compared with HEAD.
+// "Compare with HEAD" on a dot-dot name (regression of PR #26): main/file-diff.ts atRef decides "outside the repository"
+// on a real ../ path, not on rel.startsWith('..'), so a tracked file whose name merely starts with two dots (e.g.
+// `..notes.md`) at the repository top is compared with HEAD, never reported as "not in a git repository".
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
