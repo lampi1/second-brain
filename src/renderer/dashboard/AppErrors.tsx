@@ -4,12 +4,12 @@
 // as cards (cause in plain words, how many times, a 14-day trend, last seen, where: chat, role and skills in use, one
 // example, what it means and what to do). It says what will appear when there is nothing yet. Grouping and causes:
 // errors.ts; live from the app's chats, their items and the feed. Styles: styles/classifiers.css (err-*).
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { goTarget } from '../actions';
 import { HelpTip } from '../components/HelpTip';
 import { locale, t } from '../i18n';
 import { observedErrors } from './data';
-import { useApp } from '../store/store';
+import { loadClosedErrors, useApp } from '../store/store';
 import { now as clockNow } from '../lib/clock';
 import { Discuss, Empty, Panel, Stat } from './parts';
 import { groupErrors, trendOf, type Cause } from './errors';
@@ -31,8 +31,10 @@ function Trend({ days }: { days: number[] }) {
 }
 
 export function AppErrors() {
-  const chats = useApp(s => s.chats), items = useApp(s => s.items), feed = useApp(s => s.feed);
-  const errors = useMemo(() => observedErrors(Object.values(chats), items, feed, t('brainText.dash.turnError')), [chats, items, feed]);
+  const chats = useApp(s => s.chats), items = useApp(s => s.items), closedErrors = useApp(s => s.closedErrors), feed = useApp(s => s.feed);
+  // closed chats keep only their error items (store/state.ts closedErrors); those closed in an earlier run are read once
+  useEffect(() => { void loadClosedErrors(); }, []);
+  const errors = useMemo(() => observedErrors(Object.values(chats), { ...closedErrors, ...items }, feed, t('brainText.dash.turnError')), [chats, items, closedErrors, feed]);
   const groups = groupErrors(errors, clockNow());
   const recurring = groups.filter(g => g.count > 1);
   const facts: string[] = [];

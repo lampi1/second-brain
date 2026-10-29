@@ -34,6 +34,18 @@ describe('reducer: closed chats let go of their items', () => {
     expect(reduce(open, { type: 'chat:updated', chat: chat('a', { closedAt: 5 }), keep: true }).items.a).toHaveLength(1);
   });
 
+  it('keeps only the error items of a closed chat for «Errori», and forgets them when it leaves the app', () => {
+    const failed: ChatItem = { kind: 'tool', id: 't1', at: 1, name: 'Bash', summary: 'npm test', status: 'error' } as ChatItem;
+    const s = reduce(reduce(open, { type: 'items', chatId: 'a', items: [msg('m1'), failed] }), { type: 'chat:updated', chat: chat('a', { closedAt: 5 }) });
+    expect(s.items.a).toBeUndefined();
+    expect(s.closedErrors.a?.map(i => i.id)).toEqual(['t1']);
+    expect(reduce(s, { type: 'chat:removed', chatId: 'a' }).closedErrors.a).toBeUndefined();
+    // a chat closed in an earlier run: its errors read once (store.ts loadClosedErrors), never for an open chat
+    const earlier = reduce(initialState, { type: 'init', chats: [chat('b', { closedAt: 3 }), chat('c')], pending: [], tabs: [], feed: [], usage: null, info: null });
+    expect(reduce(earlier, { type: 'closedErrors', chatId: 'b', items: [msg('m2'), failed] }).closedErrors.b?.map(i => i.id)).toEqual(['t1']);
+    expect(reduce(earlier, { type: 'closedErrors', chatId: 'c', items: [failed] }).closedErrors.c).toBeUndefined();
+  });
+
   it('keeps items loaded on demand for a chat already closed (no reload loop on its next update)', () => {
     let s = reduce(open, { type: 'chat:updated', chat: chat('a', { closedAt: 5 }) });
     s = reduce(s, { type: 'items', chatId: 'a', items: [msg('m1')] });

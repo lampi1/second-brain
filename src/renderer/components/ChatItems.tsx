@@ -451,7 +451,11 @@ function ItemListFor({ items, empty, footer, chatId = null, readOnly = false }: 
   // a cold continuation (ADR 0031): what came before the last divider is the previous session, folded
   const cut = useMemo(() => { for (let i = items.length - 1; i >= 0; i--) { const x = items[i]; if (x?.kind === 'system' && x.continued) return i; } return -1; }, [items]);
   const session = useMemo(() => (cut > 0 && !pastOpen ? items.slice(cut) : items), [items, cut, pastOpen]);
-  const start = tailStart(session, limit);
+  // the window slides with new rows only while the user follows the bottom: reading higher up (or after «Mostra
+  // precedenti») it stays pinned to its first row, so nothing unmounts under the reader
+  const pin = useRef<string | null>(null);
+  const tail = tailStart(session, limit), pinAt = pin.current ? session.findIndex(x => x.id === pin.current) : -1;
+  const start = pinAt >= 0 ? Math.min(tail, pinAt) : tail;
   const shown = useMemo(() => (start > 0 ? session.slice(start) : session), [session, start]);
   const asking = useApp(s => !!chatId && s.pending.some(p => p.chatId === chatId && p.type === 'question'));
   // the reasoning before a question, among the rows drawn (a walk back stops at the turn's start, so the tail suffices)
@@ -465,6 +469,9 @@ function ItemListFor({ items, empty, footer, chatId = null, readOnly = false }: 
   const last = items[items.length - 1];
   const lastSig = last ? `${last.id}:${'text' in last ? last.text.length : 0}:${last.kind === 'tool' ? last.status : ''}` : '';
   const follow=useFollowBottom(ref,content,chatId,`${items.length}:${lastSig}`);
+  useEffect(() => { pin.current = follow.following && limit === TAIL_ITEMS ? null : shown[0]?.id ?? null; }, [follow.following, limit, shown]);
+  // back at the bottom: the window goes back to its tail (the rows revealed above leave once the user follows again)
+  useEffect(() => { if (follow.following) setLimit(TAIL_ITEMS); }, [follow.following]);
   return (
     <ChatIdCtx.Provider value={chatId}><ReadOnlyCtx.Provider value={readOnly}>
     <div className="items-wrap">

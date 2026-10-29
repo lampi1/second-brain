@@ -12,7 +12,8 @@ export function observeFollowBottom(el:HTMLDivElement,body:HTMLDivElement,chatId
     };
     const scroll=()=>follower.scrolled(pointer||performance.now()<until);
     const resize=new ResizeObserver(()=>follower.resized());resize.observe(el);resize.observe(body);
-    const mutations=new MutationObserver(()=>follower.resized());mutations.observe(body,{childList:true,subtree:true,characterData:true,attributes:true});
+    // the alive marks' beat (beat.ts data-blink, twice a second on every mark) changes no size: never a re-measure
+    const mutations=new MutationObserver(records=>{if(records.every(r=>r.type==='attributes'&&r.attributeName==='data-blink'))return;follower.resized();});mutations.observe(body,{childList:true,subtree:true,characterData:true,attributes:true});
     el.addEventListener('scroll',scroll,{passive:true});el.addEventListener('wheel',wheel,{passive:true});el.addEventListener('pointerdown',down,{passive:true});el.addEventListener('keydown',key);
     window.addEventListener('pointerup',up);window.addEventListener('pointercancel',up);
     return {follower,dispose:()=>{
