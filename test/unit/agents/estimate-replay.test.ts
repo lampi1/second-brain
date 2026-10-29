@@ -1,4 +1,4 @@
-// The task estimate's replay on the synthetic history (test/fixtures/estimates/synthetic-jobs.ts, ADR 0182): the old
+// The task estimate's replay on the synthetic history (test/fixtures/estimates/synthetic-jobs.ts, ADR 0186): the old
 // estimator (median execution time of similar runs) reproduces the measured actual/estimate ratios (p25 1.03, p50 2.01,
 // p75 4.21) and holds less than half the time; the new one (the job's elapsed time and tree cost, calibrated per kind)
 // holds at least 60% of the time on the same history.

@@ -1,4 +1,4 @@
-// The review sampler's state as the Agenti page and `npm run levels` say it (ADR 0182): when the switch «Abilita
+// The review sampler's state as the Agenti page and `npm run levels` say it (ADR 0186): when the switch «Abilita
 // controllo livello e performance» (Settings.judging, main/agents/judge-sample.ts) is off, no verified outcome arrives,
 // and both places say so with the day it was turned off, read from the settings' change log (changes.jsonl /
 // settings:history). Pure; used by renderer components/JudgingSwitch.tsx and main/agents/level-diagnosis.ts.

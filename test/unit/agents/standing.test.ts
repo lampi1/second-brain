@@ -224,12 +224,12 @@ describe('every role progresses without a manual verdict (ADR 0125)', () => {
     expect(earnedVerdict(r, earnIndex([x, r, review(x, 'fail', T + 20_000_000)]))).toEqual({ verdict: 'fail', basis: 'graded', by: 'audit' });
     // a review that started before the first one ended is not a check of it
     expect(earnedVerdict(r, earnIndex([x, r, review(x, 'success', T + 7200_000 - 1)]))).toBeNull();
-    // a rework grades it: against a pass, for a review that found the run lacking (ADR 0182)
+    // a rework grades it: against a pass, for a review that found the run lacking (ADR 0186)
     const reopened = { ...x, counters: { ...x.counters, reopened: 1 } };
     expect(earnedVerdict(r, earnIndex([reopened, r]))).toEqual({ verdict: 'fail', basis: 'graded', by: 'facts' });
     const said = review(x, 'fail');
     expect(earnedVerdict(said, earnIndex([reopened, said]))).toEqual({ verdict: 'success', basis: 'graded', by: 'facts' });
-    // a review that could not check all its evidence is graded too (191 reviews stayed ungraded before ADR 0182)
+    // a review that could not check all its evidence is graded too (191 reviews stayed ungraded before ADR 0186)
     const unverified = { ...r, report: { ...r.report!, verified: 'partial' as const } };
     expect(earnedVerdict(unverified, earnIndex([{ ...x, outcome: human('success') }, unverified]))).toEqual({ verdict: 'success', basis: 'graded', by: 'human' });
   });
@@ -381,7 +381,7 @@ describe('XP, decision signals and the Bayesian performance (ADR 0131)', () => {
     expect(standings([], [], NOW, emptyFlashLog()).has(FLASH_ID)).toBe(false);
     expect(TRUST.quick).toBeLessThan(TRUST.chain);
   });
-  it('Pulse and the retired roles get no standing nor catalog stats; their runs stay readable (ADR 0182)', () => {
+  it('Pulse and the retired roles get no standing nor catalog stats; their runs stay readable (ADR 0186)', () => {
     const pulse = run({ agentId: PULSE_ID, source: 'oneshot', startedBy: 'orchestrator', oneshot: { engine: 'anthropic', job: 'pulse', fallback: false, costBasis: 'reported', ok: true }, outcome: human('success') });
     const judge = run({ agentId: 'judge', outcome: human('success') }), scribe = run({ agentId: 'scribe', outcome: human('success') });
     const st = standings([pulse, judge, scribe], [{ ...emptyTally('judge', 1), ended: 3, verdicts: { success: 3, partial: 0, fail: 0 } }], NOW);

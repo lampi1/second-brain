@@ -158,7 +158,7 @@ describe('routing: task kind and routeChat', () => {
     expect(taskOf('Ordini · x', 'y', undefined)).toBe('altro');
   });
 
-  it('routes a chat: area from the caller (the app space is App; a title label is no area, ADR 0182), kind, version, time', () => {
+  it('routes a chat: area from the caller (the app space is App; a title label is no area, ADR 0186), kind, version, time', () => {
     const table = { version: 5, appliedAt: null, by: null, exploration: 0, costWeight: 7, routes: ROUTES };
     expect(routeChat({ title: 'Magazzino · smista i ticket', prompt: '', ask: {}, defaults: DEF }, table, REG, { tasks: TASKS }, 42)).toMatchObject({ route: { kind: 'triage', area: 'altro' } });
     const r = routeChat({ title: 'Magazzino · smista i ticket', area: 'Magazzino', prompt: '', ask: {}, defaults: DEF }, table, REG, { tasks: TASKS }, 42);
@@ -180,7 +180,7 @@ describe('routing: task kind and routeChat', () => {
   });
 });
 
-describe('routing: no exploration (ADR 0182)', () => {
+describe('routing: no exploration (ADR 0186)', () => {
   it('a table with an exploration rate routes by its row; an old "explore" route still loads', () => {
     const t = { version: 3, appliedAt: null, by: null, exploration: 0.5, costWeight: 7, routes: ROUTES };
     expect(routeChat({ title: 'Ordini · smista', prompt: '', ask: {}, defaults: DEF }, t, REG, { tasks: TASKS })).toMatchObject({ route: { source: 'table', kind: 'triage' } });

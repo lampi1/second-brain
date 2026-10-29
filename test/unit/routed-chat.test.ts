@@ -61,7 +61,7 @@ describe('createRoutedChat', () => {
     expect(made[1]).toMatchObject({ harness: 'claude', permissionMode: 'acceptEdits' });
   });
 
-  it('a title label is no area (ADR 0182): an area row is not picked from the title', async () => {
+  it('a title label is no area (ADR 0186): an area row is not picked from the title', async () => {
     const { d, made } = deps();
     await createRoutedChat(d, base({ title: 'Shop · Login', prompt: 'review della PR del login' }));
     expect(made[0]!.route).toMatchObject({ kind: 'review', area: 'altro' });

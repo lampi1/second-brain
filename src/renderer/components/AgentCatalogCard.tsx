@@ -1,7 +1,7 @@
 // Role card of the Agenti catalogue (AgentCatalogPage): on the front the character large and centred, its name and what
 // it is for, engine and model tier («Modello: alto»), a live status, its level (from the XP of its verified successful runs, ADR 0131,
 // shown beside it: «Lv 7 Praticante · 124 XP», ADR 0100) and performance % (a Bayesian estimate of the verdicts weighted by trust and
-// recency, with its ±, the agent's own word excluded, with the verdicts it rests on; main/agents/standing.ts), each with a "?" giving the formula, and four compact run metrics (the success rate among them: verified verdicts only, shared/success.ts, ADR 0182); a click anywhere on the card flips it in 3D (#81)
+// recency, with its ±, the agent's own word excluded, with the verdicts it rests on; main/agents/standing.ts), each with a "?" giving the formula, and four compact run metrics (the success rate among them: verified verdicts only, shared/success.ts, ADR 0186); a click anywhere on the card flips it in 3D (#81)
 // to the back: the role's instructions, the skills it loads at every launch, its memory, its permissions («Tutto consentito» or how
 // far the user narrowed it, with "Modifica permessi" to its permissions card, where its MCP servers are too, ADR 0085,
 // 0086), the run facts, its costs (median per run, per verified success, over how many runs: the only per-agent costs in
@@ -137,7 +137,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
     window.addEventListener('keydown', esc, true);
     return () => window.removeEventListener('keydown', esc, true);
   }, [flipped]);
-  // Pulse (Battito) is a background job: no level nor performance (ADR 0182)
+  // Pulse (Battito) is a background job: no level nor performance (ADR 0186)
   const rated = profile.id !== PULSE_ID;
   const stats = metrics?.all, standing = loaded && rated ? metrics?.standing ?? NONE : null;
   const ended = loaded ? completedRuns(metrics) : null;
@@ -148,7 +148,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
   const values: Record<'runs' | 'open' | 'success' | 'cost', Value> = {
     runs: { text: ended?.toLocaleString(locale()) ?? null },
     open: { text: open?.toLocaleString(locale()) ?? null },
-    // the one success definition (ADR 0182): verified verdicts only; under MIN_SUCCESS_SAMPLE the count, «troppo pochi»
+    // the one success definition (ADR 0186): verified verdicts only; under MIN_SUCCESS_SAMPLE the count, «troppo pochi»
     success: !loaded || !rate?.n || rate.value === null ? { text: null, samples: sample(rate?.n ?? 0) }
       : enoughVerdicts(rate) ? { text: pct(rate.value), samples: sample(rate.n) }
       : { text: `${rate.n}/${MIN_SUCCESS_SAMPLE}`, samples: t('agentsGrid.successFew', { n: rate.n, min: MIN_SUCCESS_SAMPLE }) },

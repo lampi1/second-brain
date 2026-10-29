@@ -95,7 +95,7 @@ export function claimOf(c: Pick<BrainChange, 'id' | 'at' | 'rolledBackAt'>, seed
   };
 }
 
-/** The lessons proposed from `from` to `now`, by status (ADR 0182: the page shows how few there are, not a trend). */
+/** The lessons proposed from `from` to `now`, by status (ADR 0186: the page shows how few there are, not a trend). */
 export function lessonCounts(lessons: readonly LessonStub[], from: number, now: number): LearningLessons {
   const out: LearningLessons = { proposed: 0, approved: 0, discarded: 0, waiting: 0 };
   for (const l of lessons) {

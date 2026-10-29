@@ -154,7 +154,7 @@ describe('readReceipts', () => {
   });
 });
 
-describe('a turn without a git checkpoint (ADR 0182)', () => {
+describe('a turn without a git checkpoint (ADR 0186)', () => {
   it('knows its files from its edit rows when no command that may write ran', () => {
     expect(rowChanges(edit('src\\a.ts', 10))).toEqual({ files: ['src/a.ts'], mayWrite: false });
     for (const c of ['git status', 'git diff --stat', 'ls -la', 'cat src/a.ts | head -5', 'npm test', 'cd app && npx tsc --noEmit', 'rg foo src'])

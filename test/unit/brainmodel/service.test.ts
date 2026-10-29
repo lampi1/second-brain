@@ -54,7 +54,7 @@ function world(opts: { demo?: boolean; upgradeAsk?: UpgradeAsk; scripts?: { file
 }
 const snapshot = (root: string) => { const out: Record<string, string> = {}; const walk = (d: string) => { for (const e of fs.readdirSync(path.join(root, d), { withFileTypes: true })) { const rel = d ? `${d}/${e.name}` : e.name; if (e.isDirectory()) { if (!rel.startsWith('.claude') && !rel.startsWith('agents')) walk(rel); } else if (rel !== 'brain.json') out[rel] = fs.readFileSync(path.join(root, rel), 'utf8'); } }; walk(''); return out; };
 
-describe('the pages\' state cache (ADR 0182)', () => {
+describe('the pages\' state cache (ADR 0186)', () => {
   it('two reads without a change compute once; a change, a new run or a verdict computes again; a failure is not kept', async () => {
     const runs: AgentRun[] = [];
     const w = world({ runs });

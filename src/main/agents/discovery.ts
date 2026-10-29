@@ -1,7 +1,7 @@
 // Read-only role discovery for every chat: agent_catalog lists the roles (what each is for, its engine and model
 // tier, which roles it may launch, its default skills and whether its engine is ready, and a warning for each skill —
 // its own or the ones the caller names in `skills` — that needs a tool class the role lacks, agents/skill-needs.ts),
-// never their instructions. It grants nothing (the skill suggester is gone, ADR 0182: 3 hits in 4129). Used by wiring.ts
+// never their instructions. It grants nothing (the skill suggester is gone, ADR 0186: 3 hits in 4129). Used by wiring.ts
 // (every chat endpoint) and appctl/tools.ts (the Orchestrator's).
 import type { AgentCatalog, AgentProfile } from '../../shared/agents';
 import type { McpTool } from '../mcp/server';

@@ -51,7 +51,7 @@ export const usdOf = (v: number | null): string | null => (v === null ? null : m
 
 /** The value a slice key stands for, in words. */
 export function sliceLabel(id: CardId, key: string): string {
-  // one taxonomy (ADR 0182): the cost ledger's kinds are the routing table's
+  // one taxonomy (ADR 0186): the cost ledger's kinds are the routing table's
   if (id === 'kind' || id === 'jobkind') return (getKindIt() as Record<string, string>)[key] ?? key;
   if (id === 'model') return key === '—' ? t('stats.cls.defaultModel') : prettyModel(key);
   return key;

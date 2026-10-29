@@ -69,7 +69,7 @@ describe('Apprendimento page', () => {
     expect(html).toContain('misurata su tutti i ruoli');
     expect(html).toContain('Cambiamenti vicini nel tempo condividono le stesse esecuzioni');
   });
-  it('says how few lessons the agents proposed, and that their evidence is never causal (ADR 0182)', () => {
+  it('says how few lessons the agents proposed, and that their evidence is never causal (ADR 0186)', () => {
     state.current = page();
     expect(renderToStaticMarkup(createElement(LearningPage))).not.toContain('data-testid="lr-lessons"'); // not read: nothing said
     state.current = { ...page(), learning: { ...page().learning!, lessons: { proposed: 1, approved: 0, discarded: 0, waiting: 1 } } };

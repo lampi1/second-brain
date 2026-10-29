@@ -315,7 +315,7 @@ interface Rec {
   checkpoints?: Checkpoint[];
   /** the turn going on now has its own checkpoint (auto-permit lets edits and commands through only then) */
   turnCheckpoint?: boolean;
-  /** the open turn's edit-tool paths and whether a command that may write ran (receipts without a checkpoint, ADR 0182) */
+  /** the open turn's edit-tool paths and whether a command that may write ran (receipts without a checkpoint, ADR 0186) */
   receiptTurn?: { files: string[]; mayWrite: boolean };
   /** the session whose first API call was counted already (context-stats.ts cache) */
   cacheSession?: string;
@@ -493,7 +493,7 @@ const MAX_ARCHIVED = 60;
 /** run changes are written at most this often (runSave) */
 export const RUN_SAVE_MS = 1000;
 /** A user message within this long of the previous one is part of a conversation going on (no estimate for a short
- *  follow-up, ADR 0182). */
+ *  follow-up, ADR 0186). */
 const FOLLOW_UP_WINDOW_MS = 30 * 60_000;
 export const USER_NOTES_LABEL = "[nota dell'app · l'utente ha scritto direttamente in chat che hai delegato: tienine conto nel piano, non disfare ciò che le ha chiesto]";
 /** One message the user typed in a work chat (userWrote): what the Orchestrator and the parent learn. */
@@ -1106,7 +1106,7 @@ export class ChatManager implements ChatService {
     const noted = r.undoNote ? `${r.undoNote}\n\n${noted0}` : noted0;
     r.undoNote = undefined;
     // the user's own NEW request to the Orchestrator carries the app's estimate (zero tokens), never the app's news or
-    // mail, nor a short follow-up ("ok", "vai", an answer) in a conversation going on (ADR 0182)
+    // mail, nor a short follow-up ("ok", "vai", an answer) in a conversation going on (ADR 0186)
     const said = r.items.filter(i => i.kind === 'user'), before = said.at(-2);
     const ongoing = !!before && before.at >= Date.now() - FOLLOW_UP_WINDOW_MS;
     const estimate = r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') && newRequest(t, ongoing) ? this.requestEstimate(t) : null;

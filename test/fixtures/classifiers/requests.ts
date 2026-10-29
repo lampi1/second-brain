@@ -1,5 +1,5 @@
 // Labelled requests for the classifier evaluations (test/unit/classifiers/*.test.ts): one realistic first prompt per
-// row, labelled with its kind of work (the one taxonomy, shared/work-concepts.ts taskOf: ADR 0182) and
+// row, labelled with its kind of work (the one taxonomy, shared/work-concepts.ts taskOf: ADR 0186) and
 // the packaged role agent that should take it (agents/classifier.ts; null = none fits, the dialog should offer to create
 // one). Written by hand for these tests, mostly Italian like the owner's own prompts: NOT the user's real data, so the
 // accuracies they give are indicative. `DEV` was used while tuning the rules; `HOLDOUT` was written beforehand and only

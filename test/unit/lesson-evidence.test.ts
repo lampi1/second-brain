@@ -57,7 +57,7 @@ describe('host evidence before lesson approval', () => {
     expect(legacy.pending()).toEqual([]); expect(legacy.waiting()).toHaveLength(1);
     expect(() => legacy.review(p.id, true)).toThrow(/evidence/);
   });
-  it('hands the Apprendimento page only each lesson\'s date and status (ADR 0182)', () => {
+  it('hands the Apprendimento page only each lesson\'s date and status (ADR 0186)', () => {
     const w = world(), p = w.propose();
     expect(w.service.stubs()).toEqual([{ createdAt: p.createdAt, status: 'pending' }]);
   });

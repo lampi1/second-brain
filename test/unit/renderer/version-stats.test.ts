@@ -1,4 +1,4 @@
-// A role version's numbers on its page (AgentStudio.tsx VersionStats, ADR 0182): runs and verified outcomes, the success
+// A role version's numbers on its page (AgentStudio.tsx VersionStats, ADR 0186): runs and verified outcomes, the success
 // share with its ± from MIN_SUCCESS_SAMPLE verified outcomes, «troppo pochi» below, a plain line with no run.
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';

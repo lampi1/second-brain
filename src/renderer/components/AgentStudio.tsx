@@ -3,7 +3,7 @@
 // permissions card (RolePermissions: tool classes and ceiling, each with its "?", ADR 0085), the instructions it runs
 // with, its configuration (tools, permission ceiling, the roles it may launch), the skills it loads at every launch, its
 // versions (a new one only for text, skills, model or tier; each with its runs, verified outcomes and success ±, ADR
-// 0182). "Modifica" opens the editor in place: only the
+// 0186). "Modifica" opens the editor in place: only the
 // behaviour is editable (instructions, engine, model, tier, launches, skills, context; the permissions on their own
 // card); name and summary belong to the role; the character can be swapped for the user's own picture
 // (AgentImagePicker, under the badge). The card back's «Modifica il ruolo» lands straight in the editor (EDIT_ELEMENT, #126):
@@ -203,7 +203,7 @@ function RoleEditor({ profile, draft, busy, canSave, tierOk, change, firstField,
   </form>;
 }
 
-/** One version's runs, verified outcomes and success with its ± (ADR 0182), or «troppo pochi» under the sample. */
+/** One version's runs, verified outcomes and success with its ± (ADR 0186), or «troppo pochi» under the sample. */
 export function VersionStats({ m }: { m: VersionMetrics | undefined }) {
   if (!m || !m.ended) return <p className="ad-version-stats" data-testid="version-stats">{t('studio.versionNoRuns')}</p>;
   const rate = m.successRate, margin = successMargin(rate);

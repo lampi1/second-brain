@@ -121,7 +121,7 @@ describe('role catalog', () => {
     expect(list.profiles.map(p => p.id)).toEqual(catalog.list().profiles.map(p => p.id));
     const get = (id: string) => list.profiles.find(p => p.id === id)!;
     expect(get('strategist')).toMatchObject({ launches: ['scout', 'artisan', 'sentinel', 'herald'], instructions: ROLE_DEFAULTS.strategist.instructions, lastEditedBy: 'default' });
-    // a migration changes the active version in place (ADR 0182), and says so on it
+    // a migration changes the active version in place (ADR 0186), and says so on it
     expect(again.history('strategist').flatMap(v => (v.amended ?? []).map(a => a.reason))).toContain('Cinque ruoli di lavoro (ADR 0100)');
     expect(get('strategist')).toMatchObject({ version: 1, activeVersion: 1 });
     expect(get('artisan')).toMatchObject({ launches: ['scout', 'sentinel'], instructions: 'My own Artisan text.' });
@@ -204,11 +204,11 @@ describe('default engine (issue #96)', () => {
     w.state.preferred = 'cursor';
     expect(w.engineOf('artisan')).toBe('cursor');
     expect(w.engineOf('scout')).toBe('claude');
-    // a rebind is not a change of the role (ADR 0182): the same version, with a note on it
+    // a rebind is not a change of the role (ADR 0186): the same version, with a note on it
     expect(w.catalog.list().profiles.find(p => p.id === 'artisan')).toMatchObject({ engine: 'cursor', version: 1, activeVersion: 1 });
     expect(w.catalog.history('artisan')[0]).toMatchObject({ version: 1, behaviour: { engine: 'cursor' }, amended: [expect.objectContaining({ reason: 'Motore disponibile' })] });
   });
-  it('makes a new version only for the role\'s text, skills, model or tier, and records which (ADR 0182)', () => {
+  it('makes a new version only for the role\'s text, skills, model or tier, and records which (ADR 0186)', () => {
     const { catalog } = setup(), scout = catalog.list().profiles.find(p => p.id === 'scout')!;
     const tools = catalog.save(edit(scout, { tools: { allow: ['read'] } as never, maxContext: 200_000 }), 'scout');
     expect(tools).toMatchObject({ version: 1, activeVersion: 1, userLocked: true, lastEditedBy: 'user', tools: { allow: ['read'] } });

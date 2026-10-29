@@ -77,7 +77,7 @@ describe('reasons (#72)', () => {
     expect(agentStatsLine({ ended: 0, successRate: { value: null, n: 0 } })).toBeNull();
   });
 
-  it('routes a table chat with the row\'s own reason (ADR 0182: no counts appended)', () => {
+  it('routes a table chat with the row\'s own reason (ADR 0186: no counts appended)', () => {
     const t = table([row({ kind: 'bug-fix', why: 'scelta di Alex' })]);
     expect(routeChat(base, t, REG, null)).toMatchObject({ route: { source: 'table', reason: 'scelta di Alex' } });
   });

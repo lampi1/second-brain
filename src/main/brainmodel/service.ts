@@ -166,7 +166,7 @@ export class BrainModelService {
   /** Something the Brain pages show changed (the brain watcher's or a job's 'brainmodel:changed', 'agents:changed',
    *  wiring.ts taps them): the next stateAsync computes again. */
   invalidate(): void { this.generation++; }
-  /** The pages' state from the read worker, cached (ADR 0182: every page open recomputed the memory statistics and the
+  /** The pages' state from the read worker, cached (ADR 0186: every page open recomputed the memory statistics and the
    *  learning curves over every run and file): the same generation, brain and runs (the run store's revision, else
    *  their count and latest change) within CACHE_MS give the same promise. A failed read is never kept. */
   stateAsync(): Promise<BrainModelState> {

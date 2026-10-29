@@ -83,7 +83,7 @@ const readOnly = (cmd: string): boolean => !/(?<![<>&=\d])>(?!&)|\btee\b|-delete
 const editFiles = (item: ToolItem, input: Obj): string[] => [...(item.diff ?? []).map(d => d.path), ...[input.file_path, input.notebook_path, input.path].filter((p): p is string => typeof p === 'string'),
   ...(Array.isArray(input.files) ? input.files.filter((p): p is string => typeof p === 'string') : [])];
 
-/** What a finished tool row says about the files of its turn (ADR 0182): the paths an edit tool changed, and whether it
+/** What a finished tool row says about the files of its turn (ADR 0186): the paths an edit tool changed, and whether it
  *  was a command that may have written files the edit rows do not show (anything but a read-only command or a check). */
 export function rowChanges(item: ToolItem): { files: string[]; mayWrite: boolean } {
   if (item.status === 'running') return { files: [], mayWrite: false };
@@ -115,7 +115,7 @@ export function noteTool(rc: AgentRunReceipts, item: ToolItem): boolean {
 }
 
 /** A turn without a git checkpoint (not git, checkpoints off, a queued turn) still knows its files when nothing but its
- *  edit tools could have changed any (ADR 0182: about 70% of runs had filesKnown false, so the receipts never decided
+ *  edit tools could have changed any (ADR 0186: about 70% of runs had filesKnown false, so the receipts never decided
  *  them): the edit rows' paths; null = a command that may write ran, the files are unknown. */
 export const turnFilesWithoutGit = (turn: { files: readonly string[]; mayWrite: boolean }): string[] | null => turn.mayWrite ? null : [...new Set(turn.files)];
 

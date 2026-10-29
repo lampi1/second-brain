@@ -25,7 +25,7 @@ describe('parts of a request', () => {
     expect(partsOf('Fix the bug and then add a test')).toBe(2);
     expect(partsOf(Array.from({ length: 12 }, (_, i) => `${i + 1}. step`).join('\n'))).toBe(8);
   });
-  it('counts a join only before an imperative, and a pasted block as one part (ADR 0182)', () => {
+  it('counts a join only before an imperative, and a pasted block as one part (ADR 0186)', () => {
     expect(partsOf('guarda il log e poi dimmi cosa succede')).toBe(1);
     expect(partsOf('controlla poi se funziona anche su Safari')).toBe(1);
     expect(partsOf('Fix it then also the tests')).toBe(1);
@@ -51,7 +51,7 @@ describe('estimate from similar tasks', () => {
   it('uses the same agent and kind first, with median, middle half and confidence', () => {
     const e = estimateTask(new SimilarIndex(fixes(12)), { text: 'Correggi il bug dello sconto', agentId: 'artisan' });
     expect(e).toMatchObject({ kind: 'bug-fix', basis: 'agent-kind', n: 12, parts: 1, confidence: 'high', path: 'one-agent', quick: true });
-    // elapsed 5..7 min (ADR 0182), times the kind's past actual/estimate ratio
+    // elapsed 5..7 min (ADR 0186), times the kind's past actual/estimate ratio
     expect(e.timeMs).toBeGreaterThanOrEqual(5 * MIN);
     expect(e.timeMs).toBeLessThanOrEqual(8 * MIN);
     expect(e.timeLowMs).toBeLessThanOrEqual(e.timeMs!);
@@ -87,7 +87,7 @@ describe('estimate from similar tasks', () => {
   });
   it('learns only from ended, measured, non one-shot runs', () => {
     const r = run({ agentId: 'a', goal: 'x' });
-    expect(actualOf(r)).toEqual({ timeMs: 5 * MIN, costUsd: 0.12 }); // elapsed, waits included (ADR 0182)
+    expect(actualOf(r)).toEqual({ timeMs: 5 * MIN, costUsd: 0.12 }); // elapsed, waits included (ADR 0186)
     expect(actualOf({ ...r, endReason: 'closed' })).toEqual({ timeMs: 4 * MIN, costUsd: 0.12 }); // not completed: its execution time
     expect(actualOf(r, 0.5)).toEqual({ timeMs: 5 * MIN, costUsd: 0.5 }); // the tree's cost
     const kid = { ...run({ agentId: 'scout', goal: 'y', usd: 0.3 }), parentRunId: r.runId }, grandkid = { ...run({ agentId: 'scout', goal: 'z', usd: 0.1 }), parentRunId: kid.runId };

@@ -1,5 +1,5 @@
 // Unit tests of the brain template's app-text recogniser (brain-template/ops/tools/app-text.mjs) and the correction
-// regex (signals-regex.mjs, ADR 0182): the app's labels copied into the template equal their sources, the app's own
+// regex (signals-regex.mjs, ADR 0186): the app's labels copied into the template equal their sources, the app's own
 // wrapper text is never the owner's correction, and the owner's real corrections still are.
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs from the brain template, no types

@@ -13,18 +13,18 @@ export type EstimateConfidence = 'high' | 'medium' | 'low';
 export type FastPath = 'self' | 'one-agent' | 'tree';
 
 export interface TaskEstimate {
-  /** the request's kind of work (shared/work-concepts.ts taskOf, the one taxonomy: ADR 0182) */
+  /** the request's kind of work (shared/work-concepts.ts taskOf, the one taxonomy: ADR 0186) */
   kind: TaskKind;
   /** null = fewer than MIN_SIMILAR similar tasks: no figure, only the parts and the path */
   basis: EstimateBasis | null;
   /** similar ended tasks the figures rest on */
   n: number;
-  /** median time of the similar jobs (each one's elapsed time, start to end, ADR 0182), calibrated by the kind's past
+  /** median time of the similar jobs (each one's elapsed time, start to end, ADR 0186), calibrated by the kind's past
    *  actual/estimate ratio, ms; low/high = the middle half */
   timeMs: number | null; timeLowMs: number | null; timeHighMs: number | null;
   /** median cost of the similar jobs' trees (their delegated children too), USD, calibrated the same way */
   costUsd: number | null; costLowUsd: number | null; costHighUsd: number | null;
-  /** from the spread of the similar jobs' actuals (ADR 0182), never from how many there are */
+  /** from the spread of the similar jobs' actuals (ADR 0186), never from how many there are */
   confidence: EstimateConfidence | null;
   /** independent parts read from the request (a list; a join followed by an imperative; a pasted block = one part) */
   parts: number;

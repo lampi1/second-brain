@@ -31,7 +31,7 @@ describe('agent metrics', () => {
     expect(m.selfReport).toEqual({ value: 0.25, n: 2 });
   });
 
-  it('corrections per run rest only on runs that counted them; no ai-errors column (ADR 0182)', () => {
+  it('corrections per run rest only on runs that counted them; no ai-errors column (ADR 0186)', () => {
     const runs = [run({ corrections: { tagged: 2, afterReport: 1 } }), run({ corrections: { tagged: 0, afterReport: 0 } }), run()];
     const m = one(runs).versions[0]!;
     expect(m.correctionsPerRun).toEqual({ value: 1.5, n: 2, coverage: 2 / 3 });
@@ -55,11 +55,11 @@ describe('agent metrics', () => {
     const m = runMetrics(runs)[0]!.versions[0]!;
     expect(m.costPerRun).toEqual({ median: { value: 2, n: 2, coverage: 2 / 3 }, p90: 3, total: 4 });
     expect(m.tokensPerRun.output).toEqual({ value: 40, n: 2, coverage: 2 / 3 });
-    expect(m).not.toHaveProperty('contextPeak'); // no page showed it (ADR 0182)
+    expect(m).not.toHaveProperty('contextPeak'); // no page showed it (ADR 0186)
     expect(m.timeToDone.elapsed).toEqual({ value: 2 * H, n: 3, coverage: 1 });
     expect(m.timeToDone.execution).toEqual({ value: 200, n: 2, coverage: 2 / 3 });
     expect(m.questionsPerRun.value).toBeCloseTo(2 / 3);
-    expect(m).not.toHaveProperty('permissionsPerRun'); // 0 on every run since every role has every permission (ADR 0182)
+    expect(m).not.toHaveProperty('permissionsPerRun'); // 0 on every run since every role has every permission (ADR 0186)
     expect(m.commandsPerRun).toEqual({ value: 1, n: 3, coverage: 1 });
     expect(median([5, 1, 3])).toBe(3);
     expect(p90([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])).toBe(9);

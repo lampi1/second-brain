@@ -1,4 +1,4 @@
-// The one definition of "success" every figure of the app uses (ADR 0182): only verified verdicts count (the user's
+// The one definition of "success" every figure of the app uses (ADR 0186): only verified verdicts count (the user's
 // or a verified independent review's, run-verdict.ts VERIFIED_BASES; never the agent's own word, the Orchestrator's
 // opinion or the silence proxy), a partial counts half, and below MIN_SUCCESS_SAMPLE verdicts there is no share, only
 // the count ("troppo pochi"). Before, the Skill statistics took any verdict and wanted 10 (memory-stats.ts

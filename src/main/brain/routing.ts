@@ -7,7 +7,7 @@
 // routing predictions and their measured actuals to the shared ledger of the improvement loop
 // (ops/state/improve/outcomes.jsonl, append-only, same id = later line wins). Routed only at chat creation: switching
 // mid-chat restarts the prompt cache. A row the user locked («L'AI può cambiarla» off) no agent may change (agentLimits).
-// ADR 0182 removed exploration (no live path rolled the dice: role chats route by their role, the user's chats and the
+// ADR 0186 removed exploration (no live path rolled the dice: role chats route by their role, the user's chats and the
 // Orchestrator never explored; the stored rate is kept, used by nothing; an old 'explore' route still loads), the per-kind
 // counts appended to a row's reason and the title labels read as areas. The kinds are the one taxonomy of
 // shared/work-concepts.ts. Used by brain/index.ts (routing:get/save), appctl/tools.ts and wiring.ts. ADR 0032.
@@ -55,7 +55,7 @@ const isApp = (area: string): boolean => APP_AREAS.includes(area);
 export const isAppChat = (title: string): boolean => isApp(areaOf(title));
 
 /** The area of a chat: the app's own (its title starts "App · " or "Pers · App", the user's 2026-10-14 rule "App · any"),
- *  an Orchestrator's, else none ('altro'). ADR 0182: the other title labels ("Alfa · …", once read as an area with the
+ *  an Orchestrator's, else none ('altro'). ADR 0186: the other title labels ("Alfa · …", once read as an area with the
  *  brain's `kinds` rules) are gone: an area comes from the caller (a DevOps record's project, app_create_chat's app). */
 export function areaOf(title: string): string {
   const t = String(title ?? '').trim();

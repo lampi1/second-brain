@@ -1,4 +1,4 @@
-// Unit tests of the review sampler's state line (src/shared/judging.ts, ADR 0182) and its place in the levels
+// Unit tests of the review sampler's state line (src/shared/judging.ts, ADR 0186) and its place in the levels
 // diagnostic: the day it was turned off comes from the newest change of `judging` to false; turned on again it is not off.
 import { describe, expect, it } from 'vitest';
 import { judgingOffSince, samplerOffLine } from '../../../src/shared/judging';

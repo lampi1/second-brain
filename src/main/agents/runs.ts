@@ -223,7 +223,7 @@ export interface RunStart extends RunLinks { chatId: string; agentId: string; ve
 const sample = (v: unknown): boolean => { const s = v as { n?: unknown; values?: unknown; sum?: unknown } | null; return !!s && count(s.n) && Array.isArray(s.values) && s.values.length <= SAMPLE_MAX && s.values.length <= s.n && s.values.every(time)
   && (s.sum === undefined || typeof s.sum === 'number' && Number.isFinite(s.sum) && s.sum >= 0); };
 const verdicts = (v: unknown): boolean => { const x = v as Record<string, unknown> | null; return !!x && count(x.success) && count(x.partial) && count(x.fail); };
-/** the ai-errors-per-run count of an older rollup (ADR 0182 dropped it): still read, then deleted */
+/** the ai-errors-per-run count of an older rollup (ADR 0186 dropped it): still read, then deleted */
 const aiErrors = (v: unknown): boolean => { const a = v as Record<string, unknown> | null; return !!a && typeof a === 'object' && count(a.runs) && count(a.lines); };
 const counts = (v: unknown): v is TagTally => {
   const t = v as Record<string, unknown> | null, c = t?.corrections as Record<string, unknown> | null;
@@ -262,7 +262,7 @@ export function readTally(v: unknown): RunTally | null {
   if (!xpOk(t.xp, XP_MAX * (t.ended as number)) || !xpOk(t.decisionXp, XP_MAX * ((t.decisions as number | undefined) ?? 0))) return null;
   if ((t.tags !== undefined && !tagTallies(t.tags)) || (t.tagsLost !== undefined && t.tagsLost !== true) || (t.tags !== undefined && t.tagsLost !== undefined)) return null;
   const result = structuredClone(t) as unknown as RunTally;
-  // the permissions count, the context peak and the ai-errors count are gone (ADR 0182): an older rollup's are dropped, its tags' too
+  // the permissions count, the context peak and the ai-errors count are gone (ADR 0186): an older rollup's are dropped, its tags' too
   const old = result as unknown as { permissions?: number; contextPeak?: unknown; aiErrors?: unknown };
   delete old.permissions; delete old.contextPeak; delete old.aiErrors;
   for (const bucket of Object.values(result.tags ?? {})) for (const tag of Object.values(bucket as Record<string, TagTally>)) { delete (tag as { permissions?: number }).permissions; delete (tag as { aiErrors?: unknown }).aiErrors; }

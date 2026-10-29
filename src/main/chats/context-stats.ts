@@ -1,6 +1,6 @@
 // Counters of how the app's Claude chats use their context (ADR 0031), from the API usage every engine reports (zero
 // tokens): calls, calls over 200k, cold cache re-writes over 100k, compactions, the list-price $ of the first calls
-// after an auto-compaction (ADR 0182 dropped the cold notes' and the continuation's counters: no page read them), and the prompt cache per
+// after an auto-compaction (ADR 0186 dropped the cold notes' and the continuation's counters: no page read them), and the prompt cache per
 // kind of chat (read, written, uncached; and on each session's first call, whether it found its prefix cached). Why: the owner decided
 // (13/10) on measured numbers and wants to see whether the fix holds. Kept in <userData>/context-stats.json (saved a
 // few seconds after a change), notable events logged on scope chats; app_state shows the snapshot. Used by manager.ts.
@@ -61,7 +61,7 @@ export class ContextCounters {
     this.save();
   }
 
-  /** A cold hand-off note written or used: logged only (ADR 0182 dropped its counters). */
+  /** A cold hand-off note written or used: logged only (ADR 0186 dropped its counters). */
   note(chatId: string, what: 'written' | 'used', data: Record<string, unknown> = {}): void {
     log.info('chats', `context: cold note ${what}`, { chat: chatId, data });
   }

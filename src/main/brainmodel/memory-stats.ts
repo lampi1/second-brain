@@ -102,7 +102,7 @@ export function groupErrors(entries: Omit<ErrorEntry, 'group'>[], weeks: string[
 export function skillUses(skills: BrainSkill[], runs: AgentRun[], now: number): SkillUse[] {
   return skills.map(s => {
     const mine = runs.filter(r => r.tags?.skills.includes(s.name));
-    // the one success definition (shared/success.ts, ADR 0182): verified verdicts only, a partial half, 5 at least
+    // the one success definition (shared/success.ts, ADR 0186): verified verdicts only, a partial half, 5 at least
     const counted = mine.map(countedVerdict).filter((v): v is Verdict => v !== null);
     const share = successShare(counted), ok = counted.filter(v => v === 'success').length, success = share.value;
     const verdict: SkillVerdict = !mine.length ? (s.changedAt && now - s.changedAt < NEW_SKILL_DAYS * DAY ? 'new' : 'unused')

@@ -58,7 +58,7 @@ describe('app control tools', () => {
     const wrong = await Promise.resolve().then(() => tool.run({ ...args, roleId: 'artisan' })).catch((e: unknown) => e);
     expect(wrong).toBeInstanceOf(ToolRefusal);
     expect((wrong as Error).message).toMatch(/this chat runs scout, not artisan/);
-    // a permission changed in place (same version, ADR 0182) still needs a fresh chat
+    // a permission changed in place (same version, ADR 0186) still needs a fresh chat
     target.agent.revision = scout.updatedAt - 1;
     await expect(Promise.resolve().then(() => tool.run(args))).rejects.toThrow(/Role configuration changed/);
     target.agent.revision = scout.updatedAt;
@@ -263,7 +263,7 @@ describe('app control tools', () => {
     expect(appControlTools(deps).some(x => x.name === 'task_estimate')).toBe(false);
     expect(await appControlTools(deps, 'r').find(x => x.name === 'task_estimate')!.run({ request: 'Correggi il bug dello sconto', agentId: 'artisan' })).toMatchObject({ basis: 'agent-kind', n: 4, path: 'one-agent', quick: true });
     const created = await appControlTools(deps, 'r').find(x => x.name === 'app_create_chat')!.run({ title: 'Ordini · Fix', prompt: 'Correggi il bug dello sconto', roleId: 'artisan' });
-    // elapsed time (start to end) and four equal past jobs: no spread, high confidence (ADR 0182)
+    // elapsed time (start to end) and four equal past jobs: no spread, high confidence (ADR 0186)
     expect(created).toMatchObject({ estimate: { timeMs: 300_000, n: 4, parts: 1, path: 'one-agent', confidence: 'high' } });
   });
 
@@ -375,7 +375,7 @@ describe('app control tools', () => {
     // built on an older version: refused, the newer one stays (no silent overwrite)
     await expect(Promise.resolve().then(() => save.run({ routes, reason: 'r', evidence: 'e', baseVersion: 2 }))).rejects.toThrow(/è cambiata .ora versione 3,/);
     expect(await save.run({ routes, exploration: 0.2, reason: 'mail su Haiku', evidence: '12 chat, 0 correzioni', baseVersion: 3 })).toEqual({ version: 4, rows: 5 });
-    // exploration is no parameter any more (ADR 0182): the stored rate stays as it was
+    // exploration is no parameter any more (ADR 0186): the stored rate stays as it was
     expect(routing.info().history[0]).toMatchObject({ to: 4, by: 'agente: Orchestrator', reason: 'mail su Haiku', evidence: '12 chat, 0 correzioni' });
     expect(routing.info().history[0]).not.toHaveProperty('exploration');
     // Never Fable, and changing an app row must still preserve every locked row.

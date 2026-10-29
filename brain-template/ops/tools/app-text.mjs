@@ -1,6 +1,6 @@
 // The text second-brain itself writes into a chat's prompt, recognised so the correction hook and the flow signals
 // judge only {{OWNER}}'s own words. Why: the app's labels say "non vale come suo ok", which the correction regex read as
-// "non va", so the hook fired on the app's own wrapper text (1 tagged correction in 944 runs, ADR 0182). Copies of the
+// "non va", so the hook fired on the app's own wrapper text (1 tagged correction in 944 runs, ADR 0186). Copies of the
 // app's labels (src/shared/agent-label.ts, src/main/chats/reply-rules.ts, orchestrator-wake.ts, run/results.ts,
 // lampo-context.ts, orchestrator-role.ts, shared/task-estimate.ts): test/unit/brain/app-text.test.ts checks each copy
 // equals its source. Pure; used by .claude/hooks/correction-catch.mjs.

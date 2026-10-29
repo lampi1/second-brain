@@ -1,4 +1,4 @@
-// The one success definition (src/shared/success.ts, ADR 0182): verified verdicts only, a partial counts half, no share
+// The one success definition (src/shared/success.ts, ADR 0186): verified verdicts only, a partial counts half, no share
 // under MIN_SUCCESS_SAMPLE verdicts.
 import { describe, expect, it } from 'vitest';
 import { countedVerdict, enoughVerdicts, MIN_SUCCESS_SAMPLE, runsSuccess, successMargin, successShare } from '../../../src/shared/success';

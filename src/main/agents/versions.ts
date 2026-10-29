@@ -24,7 +24,7 @@ export function sameBehaviour(a: AgentBehaviour, b: AgentBehaviour): boolean {
   return BEHAVIOUR_FIELDS.every(k => k === 'knowhow' ? x.knowhow?.hash === y.knowhow?.hash : JSON.stringify(norm(x[k] ?? null)) === JSON.stringify(norm(y[k] ?? null)));
 }
 
-/** The fields behind each versioned change (ADR 0182). */
+/** The fields behind each versioned change (ADR 0186). */
 const VERSIONED_FIELDS: Record<VersionedChange, readonly (typeof BEHAVIOUR_FIELDS)[number][]> = {
   text: ['instructions'], skills: ['skills', 'knowhow'], model: ['engine', 'model', 'effort'], tier: ['tier', 'tierMax'],
 };
@@ -45,13 +45,13 @@ function readEntry(v: unknown): AgentVersion {
   if (!e || typeof e !== 'object' || typeof e.agentId !== 'string' || !ID.test(e.agentId) || !count(e.version) || !(e.parentVersion === null || count(e.parentVersion))
     || !e.behaviour || typeof e.behaviour !== 'object' || typeof e.behaviour.instructions !== 'string' || typeof e.behaviour.engine !== 'string'
     || !AUTHORS.includes(e.author as AgentAuthor) || typeof e.reason !== 'string' || e.reason.length > 600 || !Number.isFinite(e.at) || !STATES.includes(e.state as AgentVersionState)) throw new Error('Invalid role history entry');
-  // `changed` (ADR 0182) is a record only: one out of shape is dropped, never a reason to refuse the history
+  // `changed` (ADR 0186) is a record only: one out of shape is dropped, never a reason to refuse the history
   const out = { ...e } as AgentVersion;
   if (e.changed !== undefined && !(Array.isArray(e.changed) && e.changed.every(c => (VERSIONED_CHANGES as readonly unknown[]).includes(c)))) delete out.changed;
   if (e.amended !== undefined && !(Array.isArray(e.amended) && e.amended.length <= AMENDS_KEPT && e.amended.every(a => a && Number.isFinite(a.at) && AUTHORS.includes(a.by) && typeof a.reason === 'string' && a.reason.length <= 600))) delete out.amended;
   return out;
 }
-/** A version whose behaviour is updated in place (ADR 0182: a change that makes no new version). */
+/** A version whose behaviour is updated in place (ADR 0186: a change that makes no new version). */
 export interface VersionAmend { agentId: string; version: number; behaviour: AgentBehaviour; at: number; by: AgentAuthor; reason: string }
 /** A change to a stored version: its state. */
 export interface VersionChange { agentId: string; version: number; state: AgentVersionState }
@@ -76,7 +76,7 @@ export class AgentHistory {
   /**
    * Applies all changes in one write. Adding version N drops that agent's entries from N up: they belong to a save
    * whose catalog write failed, or to an agent whose catalog was regenerated, and the new N supersedes them. `amends`
-   * rewrite a version's behaviour in place (ADR 0182: a change that makes no new version).
+   * rewrite a version's behaviour in place (ADR 0186: a change that makes no new version).
    */
   commit(add: AgentVersion[], states: VersionChange[] = [], amends: VersionAmend[] = []): void {
     if (this.problem) throw new Error(this.problem);

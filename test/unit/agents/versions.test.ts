@@ -1,4 +1,4 @@
-// Role versions (src/main/agents/versions.ts, ADR 0182): only the role's text, skills, model or tier make a new version;
+// Role versions (src/main/agents/versions.ts, ADR 0186): only the role's text, skills, model or tier make a new version;
 // an amend rewrites a version's behaviour in place with a bounded note; an older history (no `changed`, no `amended`,
 // or one of them out of shape) still loads.
 import fs from 'node:fs';

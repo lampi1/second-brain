@@ -2,7 +2,7 @@
 // card (standing.ts) and says, per role, how many runs it has, its verified successes by basis and their XP, and why the
 // other runs earned nothing (no verdict, only its own word, only an opinion, an unverified review, a broken chain, the
 // receipts' reason, one-shots and open runs left out...), and whether the review sampler is off (no verified outcome
-// arrives, ADR 0182); the retired roles and Pulse have no level. For the Orchestrator, the same over its decisions plus the
+// arrives, ADR 0186); the retired roles and Pulse have no level. For the Orchestrator, the same over its decisions plus the
 // decision signals; for Flash, its answer outcomes. Read only, pure: diagnose() and formatDiagnosis() are used by
 // levels-cli.ts (`npm run levels -- <agent-runs.json>`) and pinned by test/unit/agents/level-diagnosis.test.ts.
 import type { AgentRun, AgentStanding } from '../../shared/agents';
@@ -60,7 +60,7 @@ export function diagnose(runs: readonly AgentRun[], rollups: readonly RunTally[]
   const ix = earnIndex(runs), roles = new Map<string, RoleDiagnosis>();
   const of = (id: string) => { let d = roles.get(id); if (!d) roles.set(id, d = blank(id)); return d; };
   for (const t of rollups) {
-    if (unrated(t.agentId)) continue; // the retired roles and Pulse have no level (ADR 0182)
+    if (unrated(t.agentId)) continue; // the retired roles and Pulse have no level (ADR 0186)
     const d = of(t.agentId);
     d.rolled.ended += t.ended; d.rolled.wins += t.verdicts.success + (t.earnedWins ?? 0);
     if (t.xp !== undefined) d.rolled.xp = r2((d.rolled.xp ?? 0) + t.xp);

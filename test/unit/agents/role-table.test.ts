@@ -32,7 +32,7 @@ describe('role table model', () => {
     expect(roleTableModel(brain(app, seen), 'claude', { ...req, routeHint: { appCode: true } })).toEqual({ model: 'claude-opus-5-5', effort: 'high' });
     expect(seen.at(-1)).toMatchObject({ appCode: true });
   });
-  it('never moves to the API engine (and nothing explores since ADR 0182)', () => {
+  it('never moves to the API engine (and nothing explores since ADR 0186)', () => {
     const seen: RouteRequest[] = [];
     const t = table([row({ kind: '*', effort: 'low', onApi: true })]);
     expect(roleTableModel(brain(t, seen), 'claude', { title: 'x', prompt: 'y' })).toEqual({ model: 'claude-opus-5-5', effort: 'low' });

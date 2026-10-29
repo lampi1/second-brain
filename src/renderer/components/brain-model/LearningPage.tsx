@@ -3,7 +3,7 @@
 // each tile a filter of the list. Then the changes that made things worse, each with its Annulla (never undone silently).
 // Then per role the corrections per run of the last 12 weeks, with the changes measured on its runs as vertical marks in
 // their verdict's color: the real progress, without levels. Then the agents' lessons of the same weeks, a count with
-// no causal claim (ADR 0182: their evidence is never causal, and they are few). Then every change with its hypothesis, scope and numbers
+// no causal claim (ADR 0186: their evidence is never causal, and they are few). Then every change with its hypothesis, scope and numbers
 // (MaintenancePanel Change), and how to read it all. Zero tokens: data from BrainModelState.changes[].claim and
 // .learning. Rendered by MemoryPage.tsx for the «Apprendimento» tab; styles: styles/learning.css.
 import { useId, useState, type CSSProperties } from 'react';
@@ -79,7 +79,7 @@ function Curves({ s }: { s: LearningState }) {
   </section>;
 }
 
-/** below this many lessons in the weeks shown the count is not a trend (ADR 0182: one proposal in 10 days) */
+/** below this many lessons in the weeks shown the count is not a trend (ADR 0186: one proposal in 10 days) */
 const LESSONS_FEW = 5;
 /** The agents' lessons of the weeks shown, said as they are: a count, how they ended, never a causal claim. */
 function Lessons({ l }: { l: LearningLessons }) {

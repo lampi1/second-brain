@@ -3,9 +3,9 @@
 // bigger median error than the median cost). The ledger is a JSON-lines file behind a pluggable store (default
 // userData/jobs.jsonl). It starts from day one with a backfill from the brain's cost.mjs (per-chat $ and
 // first-to-last-message span of the last 30 days). The prompt text is never stored: only its length and kind of work
-// (shared/work-concepts.ts taskOf, the routing table's own kinds: ADR 0182; an older row's own kind is mapped on load).
+// (shared/work-concepts.ts taskOf, the routing table's own kinds: ADR 0186; an older row's own kind is mapped on load).
 // A row is appended only when it changed, and the file is compacted on load once repeats outnumber twice the ids
-// (ADR 0182). Used by brain/index.ts for 'estimate:record'; the chat manager records jobs and their actuals; the
+// (ADR 0186). Used by brain/index.ts for 'estimate:record'; the chat manager records jobs and their actuals; the
 // brain's estimates.mjs reads jobs.jsonl for its own routing table (brain-estimates.ts).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -34,14 +34,14 @@ export interface JobRecord {
 export interface JobStore { load(): JobRecord[]; append(r: JobRecord): void }
 
 /** A row as the ledger keeps it: the kind in the one taxonomy, the actual without the token fields no engine ever
- *  filled (ADR 0182: tokensIn and tokensOut were null on every row). */
+ *  filled (ADR 0186: tokensIn and tokensOut were null on every row). */
 function clean(r: JobRecord): JobRecord {
   const a = r.actual as (JobActual & { tokensIn?: unknown; tokensOut?: unknown }) | null;
   const { tokensIn: _i, tokensOut: _o, ...actual } = a ?? ({} as JobActual & { tokensIn?: unknown; tokensOut?: unknown });
   return { ...r, kind: fromLedgerKind(r.kind), actual: a ? actual as JobActual : null };
 }
 
-/** Rewrite the file with one line per id once the repeated lines outnumber twice the ids (ADR 0182: a chat's every turn
+/** Rewrite the file with one line per id once the repeated lines outnumber twice the ids (ADR 0186: a chat's every turn
  *  used to append its whole row again, 30 000 lines for 1 000 jobs). */
 export const COMPACT_RATIO = 2;
 
@@ -151,7 +151,7 @@ export class Ledger {
       actual: input.actual !== undefined ? checkActual(input.actual) : old?.actual ?? null,
       source: 'app',
     };
-    // a turn that changed nothing (the same totals again) writes no line (ADR 0182)
+    // a turn that changed nothing (the same totals again) writes no line (ADR 0186)
     if (old && JSON.stringify(old) === JSON.stringify(r)) return { id };
     this.jobs.set(id, r);
     this.store.append(r);

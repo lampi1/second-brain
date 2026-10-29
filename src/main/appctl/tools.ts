@@ -582,7 +582,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (typeof a.cwd !== 'string' || !path.isAbsolute(a.cwd) || path.resolve(a.cwd) !== path.resolve(target.cwd)) throw new ToolRefusal('Project changed: create a fresh chat.');
         if (!d.agents) throw new Error('app_assign_task: the role catalog is not available.');
         const profile = d.agents().profiles.find(p => p.id === a.roleId);
-        // the revision too: tools, permissions and limits change the version in use in place (ADR 0182)
+        // the revision too: tools, permissions and limits change the version in use in place (ADR 0186)
         if (!profile || profile.activeVersion !== target.agent.version || profile.updatedAt !== target.agent.revision) throw new ToolRefusal('Role configuration changed: create a fresh chat.');
         if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || !Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1) throw new ToolRefusal('Invalid assignment mode/version.');
         const prompt = typeof a.prompt === 'string' ? a.prompt.trim() : '';

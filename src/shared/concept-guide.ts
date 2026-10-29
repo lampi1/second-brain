@@ -156,7 +156,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/catalog.ts reset()
       b('«Ripristina predefinito» riporta il ruolo com’è nell’app, dopo una conferma. I ruoli sono fissi: non si creano, non si importano e non si esportano (si condivide il brain intero, Impostazioni → «Condividi il brain»).',
         '"Restore default" brings the role back as the app ships it, after a confirmation. The roles are fixed: they are not created, imported or exported (the whole brain is shared instead, Settings → "Condividi il brain").'),
-      // src/shared/agents.ts VERSIONED_CHANGES; src/main/agents/versions.ts versionedChanges (ADR 0182)
+      // src/shared/agents.ts VERSIONED_CHANGES; src/main/agents/versions.ts versionedChanges (ADR 0186)
       b('Una versione nuova nasce solo quando cambiano testo, skill, modello (motore, modello, sforzo) o livello, e dice cosa è cambiato; strumenti, permessi, limiti, le migrazioni dell’app e il cambio automatico di motore aggiornano la versione in uso. Per ogni versione la pagina mostra run, esiti verificati e la riuscita con il suo ± (sotto 5 esiti: «troppo pochi»), e ne riattiva una vecchia con un clic.',
         'A new version comes only when the text, skills, model (engine, model, effort) or tier change, and it says what changed; tools, permissions, limits, the app’s migrations and the automatic engine switch update the version in use. For each version the page shows runs, verified outcomes and the success with its ± (under 5 outcomes: "too few"), and brings an older one back with a click.'),
       // src/main/agents/model-tier.ts tierModel; src/main/agents/role-table.ts; src/main/agents/catalog.ts resolve()
@@ -370,7 +370,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/i18n/areas/home.it.ts home.rulesReading
       b('Una regola conta come «tenuta» se il suo errore non ricompare nei giorni osservati: non è una prova di causa.',
         'A rule counts as "holding" if its error does not reappear in the observed days: it is not proof of cause.'),
-      // src/main/chats/manager.ts; src/main/agents/run-metrics.ts (ADR 0182: no ai-errors column)
+      // src/main/chats/manager.ts; src/main/agents/run-metrics.ts (ADR 0186: no ai-errors column)
       b('Le run contano correzioni esplicite e riaperture dell’utente dopo un report valido. Le righe di ai-errors.md non entrano nelle metriche delle run: il comando error dell’app non scrive la run.',
         'Runs count explicit corrections and user reopenings after a valid report. ai-errors.md lines are not part of the run metrics: the app’s error command does not write the run.'),
     ],
@@ -428,9 +428,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
     summary: b('Dove l’app smista qualcosa da sola senza spendere token: il tipo di lavoro, la posta dell’Orchestrator, i comandi delicati.',
       'Where the app sorts something by itself without spending tokens: the kind of work, the Orchestrator’s mail, sensitive commands.'),
     points: [
-      // src/main/agents/discovery.ts agent_catalog (ADR 0182: the suggester is gone)
-      b('Skill per un compito: nessun suggeritore (ADR 0182: 3 consigli giusti su 4129); l’Orchestrator, o il ruolo che delega, passa per nome le skill che servono. Un ruolo usa solo le skill che il suo avvio gli dà.',
-        'Skills for a task: no suggester (ADR 0182: 3 right suggestions in 4129); the Orchestrator, or the role that delegates, passes the skills it needs by name. A role uses only the skills its launch gives it.'),
+      // src/main/agents/discovery.ts agent_catalog (ADR 0186: the suggester is gone)
+      b('Skill per un compito: nessun suggeritore (ADR 0186: 3 consigli giusti su 4129); l’Orchestrator, o il ruolo che delega, passa per nome le skill che servono. Un ruolo usa solo le skill che il suo avvio gli dà.',
+        'Skills for a task: no suggester (ADR 0186: 3 right suggestions in 4129); the Orchestrator, or the role that delegates, passes the skills it needs by name. A role uses only the skills its launch gives it.'),
       // src/shared/work-concepts.ts CONCEPTS
       b('Italiano e inglese si incontrano: un piccolo lessico di lavori («correggi» = fix, «revisiona» = review, «fonti» = sources…) unisce le richieste in italiano e le skill scritte in inglese.',
         'Italian and English meet: a small lexicon of kinds of work ("correggi" = fix, "revisiona" = review, "fonti" = sources…) joins Italian requests and skills written in English.'),
@@ -959,7 +959,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/brainmodel/jobs.ts corrections, merge-memory
       b('Le lezioni imparate dalle tue correzioni vanno nel testo del ruolo, in una skill o nelle regole del brain; la stessa riga in più memorie va una volta sola nella memoria condivisa.',
         'Lessons learnt from your corrections go to the role’s text, a skill or the brain’s rules; the same line in several memories goes once into the shared memory.'),
-      // src/main/agents/pack/lesson-evidence.ts (causal: false), brainmodel/evidence.ts lessonCounts (ADR 0182)
+      // src/main/agents/pack/lesson-evidence.ts (causal: false), brainmodel/evidence.ts lessonCounts (ADR 0186)
       b('Le prove di una lezione citano run con esito verificato, ma non misurano se la lezione ha aiutato: non sono mai causali. Memoria → Apprendimento dice quante lezioni sono state proposte nelle ultime 12 settimane e come sono finite, oppure «Nessun dato».',
         'A lesson’s evidence cites runs with a verified outcome, but does not measure whether the lesson helped: it is never causal. Memory → Apprendimento says how many lessons were proposed in the last 12 weeks and how they ended, or "No data".'),
       // src/main/brainmodel/jobs.ts migration

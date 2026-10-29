@@ -78,13 +78,13 @@ export type AgentVersionState = 'active' | 'trial' | 'kept' | 'rejected' | 'supe
 export interface AgentVersion {
   agentId: string; version: number; parentVersion: number | null;
   behaviour: AgentBehaviour; author: AgentAuthor; reason: string; at: number; state: AgentVersionState;
-  /** what made it a new version (ADR 0182); missing on a version saved before */
+  /** what made it a new version (ADR 0186); missing on a version saved before */
   changed?: VersionedChange[];
-  /** the changes made to it in place (ADR 0182: migrations, rebinds, tools or limits), newest last, at most AMENDS_KEPT */
+  /** the changes made to it in place (ADR 0186: migrations, rebinds, tools or limits), newest last, at most AMENDS_KEPT */
   amended?: { at: number; by: AgentAuthor; reason: string }[];
 }
 export const AMENDS_KEPT = 5;
-/** The only changes that make a new role version (ADR 0182): its text, its skills (and know-how), its model (engine,
+/** The only changes that make a new role version (ADR 0186): its text, its skills (and know-how), its model (engine,
  *  model, effort), its tier (and ceiling). Tools, permissions, launches and limits change the active version in place,
  *  and so do the app's migrations and engine rebinds: a version's runs then compare what the role does. */
 export const VERSIONED_CHANGES = ['text', 'skills', 'model', 'tier'] as const;

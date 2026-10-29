@@ -1,5 +1,5 @@
 // mem.mjs error tags the agent run an error belongs to (" · run: r_…"): the brain's own tools read it; the app's per-run
-// ai-errors column is gone (ADR 0182: the app's own `error` command never wrote a run, so it was always empty).
+// ai-errors column is gone (ADR 0186: the app's own `error` command never wrote a run, so it was always empty).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

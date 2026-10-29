@@ -43,7 +43,7 @@ describe('the estimate line under a request to the Orchestrator', () => {
     // the item the chat view shows keeps the user's words
     const items = m.items(orch.id).filter(i => i.kind === 'user');
     expect(items.at(-1)).toMatchObject({ text: ask });
-    // a short follow-up in the conversation going on is no new request (ADR 0182)
+    // a short follow-up in the conversation going on is no new request (ADR 0186)
     await m.send(orch.id, 'ok vai');
     await m.send(orch.id, 'il secondo');
     expect(sent.slice(-2)).toEqual(['ok vai', 'il secondo']);

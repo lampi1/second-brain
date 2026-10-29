@@ -5,7 +5,7 @@
 //   chose that protected keys change at once too), logged as the agent's change with its Annulla (undo / history);
 // - view: theme, density, work profile (renderer prefs, lib/view-prefs.ts) via ui:command 'prefs';
 // - agent: a role's card (Brain → Agenti) via the same save as the page (a new version for text, skills, model or tier,
-//   undo = the previous version; tools, permissions and limits change the version in use, undo = set the old value, ADR 0182);
+//   undo = the previous version; tools, permissions and limits change the version in use, undo = set the old value, ADR 0186);
 // - connector: an MCP server on/off and a role's access to it (Settings → Connettori); adding or removing a server, its
 //   tokens and the accounts' logins stay the user's, in Settings (they run commands or hold credentials);
 // - later: «Rispondi dopo»;
@@ -141,7 +141,7 @@ export function configTool(d: ConfigDeps): ToolDef {
           if (p.updatedAt === old.updatedAt) return { agentId: p.id, unchanged: true, note: 'già così' };
           log.info('appctl', 'Orchestrator changed a role', { chat: d.callerId, data: { role: p.id, key, version: p.activeVersion } });
           const before = (old as unknown as Record<string, unknown>)[key] ?? null;
-          // tools, permissions and limits change the version in use in place (ADR 0182): undo = set the old value back
+          // tools, permissions and limits change the version in use in place (ADR 0186): undo = set the old value back
           return { agentId: p.id, changed: key, before, after: (p as unknown as Record<string, unknown>)[key] ?? null, version: p.activeVersion,
             undo: p.activeVersion === old.activeVersion ? { agentId: p.id, key, value: before, how: 'set it back with the "before" value (same version)' } : { agentId: p.id, version: old.activeVersion } };
         }

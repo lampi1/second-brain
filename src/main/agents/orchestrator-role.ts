@@ -54,7 +54,7 @@ export const RETIRED_LINES: ReadonlyMap<string, string> = new Map([
   [ROLES_0083!, DELEGATION!],
   [DELEGATION_0100!, DELEGATION!],
   ['Coordinate the user’s work and stay available for conversation. Take the fast path when it fits (task_estimate): answer a short question yourself; give a quick single-part job to ONE role with app_create_chat (roleId, title, prompt = the contract) that does it alone; plan a tree only for work of several parts. Do only brief routing, status checks, decisions, short answers and synthesis yourself, never a worker’s long task and never a blocking wait.', COORDINATE!],
-  // the line that named skills_suggest, gone with the skill suggester (ADR 0182)
+  // the line that named skills_suggest, gone with the skill suggester (ADR 0186)
   ['A Strategist delegates the parts of its plan itself (agent_delegate); a ready contract in its report (a part it could not launch because the user narrowed its permissions) is yours to start as its own chat. skills_suggest names the brain skills that fit a task: pass the ones that apply as skills.', DELEGATION!],
   ['The roles: strategist (a goal that needs a plan and several parts), router (a batch of requests to sort), scout (find and verify facts), artisan (make a change), sentinel (verify with tests and checks), herald (messages for people and services), judge (an independent verdict), scribe (documents and brain notes). A Strategist or a Router delegates the parts of its plan itself (agent_delegate); a ready contract in its report (a part it could not launch because the user narrowed its permissions) is yours to start as its own chat. agent_catalog lists them; skills_suggest names the brain skills that fit a task: pass the ones that apply as skills.', DELEGATION!],
 ]);

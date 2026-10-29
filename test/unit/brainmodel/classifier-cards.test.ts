@@ -22,7 +22,7 @@ const run = (chatId: string, agentId: string, verdict: 'success' | 'fail' | null
 const base = (o: Partial<CardInputs> = {}): CardInputs => ({ now: NOW, predictions: [], actuals: new Map(), outcomes: new Map(), runs: [], jobs: [], ...o });
 
 describe('classifier cards', () => {
-  it('has three cards with no data: nulls, never zeros, and 8 empty weeks (no skill card, ADR 0182)', () => {
+  it('has three cards with no data: nulls, never zeros, and 8 empty weeks (no skill card, ADR 0186)', () => {
     const cards = classifierCards(base());
     expect(cards.map(c => c.id)).toEqual(['kind', 'model', 'jobkind']);
     for (const c of cards) {
@@ -69,7 +69,7 @@ describe('the cards’ inputs', () => {
   it('reads the job ledger (last line of an id wins, torn lines skipped) and the ledger’s known outcomes', () => {
     const d = tmp(), f = path.join(d, 'jobs.jsonl');
     fs.writeFileSync(f, [{ id: 'j1', at: 1, kind: 'fix', actual: null }, { id: 'j1', at: 1, kind: 'fix', actual: { usd: 0.5 } }, { id: 'j2', at: 2, kind: 'qa', actual: { usd: 1 } }].map(x => JSON.stringify(x)).join('\n') + '\n{torn');
-    expect(readJobs(f)).toEqual([{ at: 1, kind: 'bug-fix', usd: 0.5 }, { at: 2, kind: 'qa-run', usd: 1 }]); // old kinds mapped (ADR 0182)
+    expect(readJobs(f)).toEqual([{ at: 1, kind: 'bug-fix', usd: 0.5 }, { at: 2, kind: 'qa-run', usd: 1 }]); // old kinds mapped (ADR 0186)
     expect(readJobs(path.join(d, 'missing.jsonl'))).toEqual([]);
     fs.mkdirSync(path.join(d, 'ops/state/improve'), { recursive: true });
     fs.writeFileSync(path.join(d, 'ops/state/improve/outcomes.jsonl'), [

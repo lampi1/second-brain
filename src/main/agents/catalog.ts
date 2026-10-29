@@ -251,7 +251,7 @@ export class AgentCatalogService {
       if (engine !== preferred && current?.enabled && current.trusted && current.installed !== false && current.authenticated !== false) return p;
       // still at its defaults: its tools follow the engine (the API engine reads only, the others get the role's defaults)
       const tools = isRoleId(p.id) ? { allow: engineOf(engine)?.kind === 'api' ? ['read' as const] : [...ROLE_DEFAULTS[p.id].tools] } : p.tools;
-      // in place (ADR 0182): an engine the app rebinds is not a change the role made, so no new version
+      // in place (ADR 0186): an engine the app rebinds is not a change the role made, so no new version
       const updated: AgentProfile = { ...p, engine, tools, updatedAt: Math.max(this.now(), p.updatedAt + 1) };
       changed.push(updated); return updated;
     });
@@ -308,7 +308,7 @@ export class AgentCatalogService {
     this.writable(); const old = this.find(id);
     return { ...this.face(id), ...this.behaviour(obj(value), id, true, old) };
   }
-  /** A new version when the role's text, skills, model or tier change (ADR 0182), recording which; any other change, and
+  /** A new version when the role's text, skills, model or tier change (ADR 0186), recording which; any other change, and
    *  every migration (`migration`), updates the active version in place: its number, and so its run statistics, stay. */
   private version(old: AgentProfile, next: Behaviour, author: AgentAuthor, reason: string, state: 'active' | 'trial' = 'active', migration = false): AgentProfile {
     const at = Math.max(this.now(), old.updatedAt + 1), changed = migration ? [] : versionedChanges(old, next);

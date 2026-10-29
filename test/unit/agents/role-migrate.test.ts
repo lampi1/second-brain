@@ -60,7 +60,7 @@ describe('full default permissions (ADR 0085)', () => {
     expect(get('sentinel').instructions).toBe('Sentinel with a learned lesson.');
     expect(get('scout')).toMatchObject({ version: 1, tools: { allow: ['read', 'web'] }, permissionCeiling: 'default', userLocked: true });
     const history = make().history('artisan');
-    // in place (ADR 0182): the migration is a note on version 1, not a version of its own
+    // in place (ADR 0186): the migration is a note on version 1, not a version of its own
     expect(history).toHaveLength(1);
     expect(history[0]!.amended).toEqual([expect.objectContaining({ by: 'default', reason: 'Permessi completi predefiniti (ADR 0085)' })]);
     // a second start changes nothing

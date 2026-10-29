@@ -1,4 +1,4 @@
-// The job ledger (src/main/brain/estimates.ts): the kind of work of a job (the one taxonomy, ADR 0182; old rows mapped), the cost.mjs backfill parser
+// The job ledger (src/main/brain/estimates.ts): the kind of work of a job (the one taxonomy, ADR 0186; old rows mapped), the cost.mjs backfill parser
 // on a fixture, the ledger (upsert, last wins, prompt never stored, backfill never overrides app jobs). ADR 0053
 // removed the per-job cost/time estimate this module used to compute for the UI.
 import { describe, expect, it } from 'vitest';
@@ -8,7 +8,7 @@ import { FileJobStore, Ledger, backfillFromCost } from '../../../src/main/brain/
 import type { TaskKind } from '../../../src/shared/contract';
 import { FIXTURES, plainNode, tmpDir } from './helpers';
 
-describe('kind of work (ADR 0182: the routing table\'s own kinds)', () => {
+describe('kind of work (ADR 0186: the routing table\'s own kinds)', () => {
   const cases: [string, TaskKind][] = [
     ['Fix the login error on the settings page', 'bug-fix'],
     ["C'è un bug: l'agenda non si apre, correggilo", 'bug-fix'],
@@ -57,12 +57,12 @@ describe('estimates', () => {
     const again = new Ledger(new FileJobStore(file)).all();
     expect(again).toHaveLength(1);
     expect(again[0]).toMatchObject({ id, kind: 'bug-fix', promptChars: 24, actual: { usd: 1.2, minutes: 14, turns: 3 }, source: 'app' });
-    expect(again[0]!.actual).not.toHaveProperty('tokensIn'); // never filled by any engine: not kept (ADR 0182)
+    expect(again[0]!.actual).not.toHaveProperty('tokensIn'); // never filled by any engine: not kept (ADR 0186)
     expect(() => l.record({ harness: 'x' as never, model: null, effort: null })).toThrow(/harness/);
     expect(() => l.record({ harness: 'claude', model: null, effort: null, actual: { usd: -1, minutes: null, turns: null } })).toThrow(/≥ 0/);
   });
 
-  it('1000 turn ends of one job with the same totals write one line; a change writes one more (ADR 0182)', () => {
+  it('1000 turn ends of one job with the same totals write one line; a change writes one more (ADR 0186)', () => {
     const file = path.join(tmpDir(), 'jobs.jsonl');
     const l = new Ledger(new FileJobStore(file));
     const job = { id: 'claude:s1', harness: 'claude' as const, model: null, effort: null, prompt: 'Correggi il bug', actual: { usd: 1, minutes: 2, turns: 1 } };

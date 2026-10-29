@@ -138,7 +138,7 @@ describe('learningState', () => {
     expect(s).not.toHaveProperty('lessons'); // the lesson store was not read: no count, not a zero
   });
 
-  it('counts the lessons proposed in the weeks shown, by how they ended (ADR 0182)', () => {
+  it('counts the lessons proposed in the weeks shown, by how they ended (ADR 0186)', () => {
     const now = AT + 20 * 86_400_000, from = now - WEEKS * WEEK;
     const lessons = [{ createdAt: now - 86_400_000, status: 'approved' as const }, { createdAt: now - 2 * 86_400_000, status: 'pending' as const },
       { createdAt: now - 3 * 86_400_000, status: 'discarded' as const }, { createdAt: from - 1, status: 'approved' as const }, { createdAt: now + 1, status: 'pending' as const }];

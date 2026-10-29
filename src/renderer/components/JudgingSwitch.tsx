@@ -3,7 +3,7 @@
 // a Sentinel in a new session (main/agents/judge-sample.ts), from now on (judgingSince: no backlog); off = none. Beside
 // it, what it costs a day: the runs a day it would review times what a review cost so far (agents:judgingEstimate,
 // zero tokens), and the runs a day their receipts decide with no review (ADR 0130). Off, it says plainly since when no
-// verified outcome arrives (ADR 0182). It replaced the "reviews per day" count of Impostazioni → Ruoli e deleghe. Used by AgentCatalogPage.tsx.
+// verified outcome arrives (ADR 0186). It replaced the "reviews per day" count of Impostazioni → Ruoli e deleghe. Used by AgentCatalogPage.tsx.
 import { useEffect, useState } from 'react';
 import type { JudgingEstimate } from '@shared/agents';
 import { judgingOffSince } from '@shared/judging';
@@ -18,7 +18,7 @@ export function JudgingSwitch() {
   const loaded = useApp(s => !!s.settings);
   const [estimate, setEstimate] = useState<JudgingEstimate | null>(null);
   const [busy, setBusy] = useState(false);
-  // off: since when, from the settings' change log (ADR 0182); null = not in the log
+  // off: since when, from the settings' change log (ADR 0186); null = not in the log
   const [offSince, setOffSince] = useState<number | null>(null);
   useEffect(() => {
     if (on || !loaded) return;

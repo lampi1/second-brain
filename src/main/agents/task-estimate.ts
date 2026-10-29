@@ -3,7 +3,7 @@
 // tasks, and the path that follows: the Orchestrator answers a small question itself, starts ONE agent with no children
 // for a quick single-part job, and plans a delegation tree only for work of several parts. Similar = same agent and same
 // kind of work (shared/work-concepts.ts taskOf on the run's goal, the routing table's own kinds), else the same kind on any agent, else the same
-// agent on any kind; the most recent MAX_SIMILAR of the first group with MIN_SIMILAR or more. ADR 0182 (10 days of real
+// agent on any kind; the most recent MAX_SIMILAR of the first group with MIN_SIMILAR or more. ADR 0186 (10 days of real
 // data: held 41% of the time, actual/estimate median 2.01): a job is measured as the user lives it, the run's elapsed
 // time (start to end) and the cost of the whole tree it started (its delegated children too), not one run's execution
 // time; the figure is then multiplied by the median actual/estimate ratio of the past jobs of the same kind (a
@@ -23,7 +23,7 @@ import { logEvent } from '../activity/journal';
 
 /** accents off, lower case, one space */
 const normalize = (text: string): string => String(text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
-/** A question: it ends with "?" or opens with a question word (the job ledger's old "question" rule, ADR 0182). */
+/** A question: it ends with "?" or opens with a question word (the job ledger's old "question" rule, ADR 0186). */
 const QUESTION = /\?\s*$|^(cosa|come|quanto|quanti|quale|quali|qual|dove|quando|chi|what|how|which|where|when|who|is|are|can|does|do|spiegami|spiega|explain|dimmi|tell me)\b|\bstatus\b|\bcome siamo messi\b/;
 /** Kinds that make or check something: a question about them is still work for an agent. */
 const MAKES: readonly TaskKind[] = ['bug-fix', 'app-feature', 'review', 'qa-run', 'writing'];
@@ -52,7 +52,7 @@ export function kindOfRun(r: Pick<AgentRun, 'runId' | 'goal'>): TaskKind {
   return kind;
 }
 
-/** What an ended run actually took as a job (ADR 0182), or null when it is not a task to learn from (open, a one-shot
+/** What an ended run actually took as a job (ADR 0186), or null when it is not a task to learn from (open, a one-shot
  *  job, nothing measured): its elapsed time when it completed within MAX_ELAPSED_MS (else its execution time), and the
  *  cost of its tree (treeCostUsd: its own and its delegated children's; omitted = its own). */
 export function actualOf(r: AgentRun, treeCostUsd?: number | null): EstimateActual | null {
@@ -82,7 +82,7 @@ export function treeCosts(runs: readonly AgentRun[]): Map<string, number> {
 }
 
 /** The ended runs grouped the three ways a task can be similar, each group sorted by end time; and, per kind, the
- *  backtested actual/estimate ratios that calibrate the figure (ADR 0182). */
+ *  backtested actual/estimate ratios that calibrate the figure (ADR 0186). */
 export class SimilarIndex {
   private groups = new Map<string, Sample[]>();
   private ratios = new Map<TaskKind, Ratio[]>();
@@ -164,7 +164,7 @@ function rawFigures(index: SimilarIndex, kind: TaskKind, agentId: string | undef
 }
 
 const LIST_ITEM = /^\s*(?:[-*•]|\d{1,2}[.)])\s+\S/;
-/** Where a request may change step: ";" or a join word (a bare "poi", "then", "also" is not one by itself, ADR 0182). */
+/** Where a request may change step: ";" or a join word (a bare "poi", "then", "also" is not one by itself, ADR 0186). */
 const SEPARATOR = /;|\b(?:e poi|poi|inoltre|e anche|infine|dopodiche|dopo di che|and then|then|also|after that|finally|as well as)\b/;
 /** A step starts with an imperative (Italian or English; a clitic may follow: «aggiungilo», «mandala»). Telling the
  *  user (dimmi, spiegami, fammi sapere, tell me, let me know) is not a step of its own. */
@@ -174,7 +174,7 @@ const MAIL_HEADER = /^\s*(?:da|from|a|to|cc|oggetto|subject|inviato|sent|data|da
 const LOG_LINE = /^\s*(?:\[?\d{4}-\d{2}-\d{2}[ t]\d{2}:\d{2}|\[?\d{2}:\d{2}:\d{2}|at\s+\S+\s*\(|\w*(?:error|exception)\b.*:|traceback\b)/i;
 
 /** The request without what was pasted or quoted into it: fenced code, `>` quotes, a mail (from its first header line
- *  on) and log lines. Their lists and joins are not parts of the task (ADR 0182). */
+ *  on) and log lines. Their lists and joins are not parts of the task (ADR 0186). */
 export function ownRequest(text: string): string {
   const lines = String(text ?? '').replace(/```[\s\S]*?(?:```|$)/g, '\n').split(/\r?\n/).filter(l => !/^\s*>/.test(l));
   const mail = lines.findIndex(l => MAIL_HEADER.test(l));
@@ -182,7 +182,7 @@ export function ownRequest(text: string): string {
   return head.filter(l => !LOG_LINE.test(l)).join('\n');
 }
 
-/** Independent parts of a request (ADR 0182): the items of a real list (two or more, at most 8), else 1 + the joins
+/** Independent parts of a request (ADR 0186): the items of a real list (two or more, at most 8), else 1 + the joins
  *  followed by an imperative verb ("fai A; poi fai B" = 2, "guarda il log e poi dimmi" = 1). Pasted blocks count 1. */
 export function partsOf(text: string): number {
   const own = ownRequest(text);
@@ -192,7 +192,7 @@ export function partsOf(text: string): number {
   return 1 + pieces.filter(p => IMPERATIVE.test(p.replace(/^[\s,.:;!-]+/, ''))).length;
 }
 
-/** The confidence from the spread of the similar jobs' actuals (ADR 0182: the old "30 similar jobs" was the cap, not a
+/** The confidence from the spread of the similar jobs' actuals (ADR 0186: the old "30 similar jobs" was the cap, not a
  *  quality signal): the middle half within ×2 = high, within ×4 medium, else low; one step lower when only the agent
  *  matched (another kind of work). */
 function confidenceOf(basis: EstimateBasis, s: Spread | null): EstimateConfidence {
@@ -202,7 +202,7 @@ function confidenceOf(basis: EstimateBasis, s: Spread | null): EstimateConfidenc
 }
 
 /** A short follow-up in an ongoing chat ("sì", "ok", "vai", "continua", an answer under FOLLOW_UP_CHARS): not a new
- *  request, so no estimate (ADR 0182: after 401 of 582 "one-agent" estimates the Orchestrator started no run). */
+ *  request, so no estimate (ADR 0186: after 401 of 582 "one-agent" estimates the Orchestrator started no run). */
 export const FOLLOW_UP_CHARS = 40;
 const FOLLOW_UP = /^(?:s[iì]|ok(?:ay)?|vai|va bene|continua|procedi|prosegui|avanti|fallo|fatto|perfetto|grazie|no|yes|go|go on|continue|proceed|done|thanks)(?![\wàèéìòù])[\s.,!]*$/i;
 export function newRequest(text: string, ongoing: boolean): boolean {
@@ -232,7 +232,7 @@ export function estimateTask(index: SimilarIndex, input: EstimateInput): TaskEst
   const timeMs = t ? Math.round(t.mid * cal.time) : null, costUsd = c ? Math.round(c.mid * cal.cost * 1000) / 1000 : null;
   const quick = timeMs !== null && timeMs <= QUICK_MS && (costUsd === null || costUsd <= QUICK_USD);
   const shortQuestion = !MAKES.includes(kind) && QUESTION.test(normalize(text)) && text.trim().length <= SELF_CHARS;
-  // a tree only for three parts or more, or two parts of a long, slow request (ADR 0182: 25 trees came from requests
+  // a tree only for three parts or more, or two parts of a long, slow request (ADR 0186: 25 trees came from requests
   // under 300 characters); two small parts are one agent's work
   const path: FastPath = parts >= 3 || (parts === 2 && !quick && text.trim().length > SELF_CHARS) ? 'tree'
     : shortQuestion && parts === 1 && (quick || timeMs === null) ? 'self' : 'one-agent';

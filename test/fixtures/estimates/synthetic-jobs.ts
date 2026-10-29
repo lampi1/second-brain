@@ -1,4 +1,4 @@
-// Synthetic job history for the task estimate's replay (ADR 0182). Not real data: built so that the old estimator (the
+// Synthetic job history for the task estimate's replay (ADR 0186). Not real data: built so that the old estimator (the
 // median execution time of similar runs) against what the user waited (the job's elapsed time) gives the ratios measured
 // on 10 days of the owner's runs (actual/estimate p25 1.03, p50 2.01, p75 4.21): each kind of job waits a different share
 // of its time (a fix runs straight, a feature and a QA job wait twice their work, a research job about four times),

@@ -53,7 +53,7 @@ describe('classifiers', () => {
     ];
     const s = await classifiersState({ root: d, routing: routing([row('writing', 'sonnet'), row('bug-fix', 'opus')]), runs, profiles }, NOW);
     expect(s.routing).toMatchObject({ version: 4, by: 'user', error: null });
-    expect(s.kinds).toEqual([{ kind: 'writing', chats: 3, known: 2, ok: 1 }]); // verified outcomes only (ADR 0182)
+    expect(s.kinds).toEqual([{ kind: 'writing', chats: 3, known: 2, ok: 1 }]); // verified outcomes only (ADR 0186)
     expect(s.routing.routes[0]).toMatchObject({ kind: 'writing', model: 'sonnet', effort: 'high', why: 'perché writing', result: { runs: 2, success: { value: 0.5, n: 2 }, avgCostUsd: expect.closeTo(0.3) } });
     expect(s.routing.routes[1]!.result).toEqual({ runs: 0, success: { value: null, n: 0 }, avgCostUsd: null }); // no data yet
     expect(s.history).toEqual([{ at: '2026-10-10T08:00:00Z', from: 3, to: 4, by: 'user', reason: 'meno costi', evidence: '12 chat' }]);

@@ -1,7 +1,7 @@
 // How good the task estimate is (ADR 0087; owner, 2026-10-19: «il progresso dei classificatori nelle
 // stime»): a backtest of the same estimator (task-estimate.ts) on every ended run of the last weeks, each one estimated
 // only from the runs that had ended before it started, as it would have been shown then. Per week: how many runs had an
-// estimate, the share whose real time (the job's elapsed time, ADR 0182) fell between half and double it, the median relative error, and the share
+// estimate, the share whose real time (the job's elapsed time, ADR 0186) fell between half and double it, the median relative error, and the share
 // resting on the most specific match (same agent and same kind: it grows as the classifier sees more tasks). A small
 // module of its own so the Classificatori page can read the series too (IPC agents:estimates returns
 // it as `accuracy`). Pure. Used by index.ts (agents:estimates).

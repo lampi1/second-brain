@@ -1080,7 +1080,7 @@ describe('explicit independent review reports', () => {
   });
 });
 
-describe('no skill suggestion snapshot (ADR 0182)', () => {
+describe('no skill suggestion snapshot (ADR 0186)', () => {
   it('a role run records no suggestions: the suggester is gone', async () => {
     const f = fixture();
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Lungo', prompt: `Analizza ${'x'.repeat(5000)}` }, 'user');

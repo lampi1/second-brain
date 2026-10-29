@@ -248,7 +248,7 @@ export interface ContextStats {
   coldRewrites: number;
   compactions: number;
   /** the list-price $ of the first calls after an auto-compaction (the cold notes and continuation counters went in
-   *  ADR 0182: no page read them; the log keeps each note's line) */
+   *  ADR 0186: no page read them; the log keeps each note's line) */
   afterCompaction: { calls: number; usd: number };
   /** the prompt cache per kind of chat (token plan 2026-10-20: measure before trusting the estimates): tokens read from
    *  the cache, written to it and sent uncached, over every call and over the first call of each session (whether a new
@@ -965,7 +965,7 @@ export interface JobRecordInput {
 }
 
 // ── Model routing: which harness, model and effort a chat opened by an agent gets (ADR 0032) ─────────────────────────
-/** The kinds of work the routing table decides on: the one taxonomy (shared/work-concepts.ts, ADR 0182). */
+/** The kinds of work the routing table decides on: the one taxonomy (shared/work-concepts.ts, ADR 0186). */
 export { WORK_KINDS as TASK_KINDS, type TaskKind } from './work-concepts';
 import type { TaskKind } from './work-concepts';
 /** One row of the brain's model registry and price table (harness/models.json): USD per million tokens. */
@@ -1002,7 +1002,7 @@ export interface RoutingRow {
 /** The table in force: <brain>/ops/state/improve/routing/v<version>.json, current.json says which (versioned: every save
  *  is a new version + a line in audit.jsonl; old versions stay for rollback). */
 export interface RoutingTable {
-  /** exploration: the share of chats that once tried a little-sampled model; read and kept, used by nothing (ADR 0182) */
+  /** exploration: the share of chats that once tried a little-sampled model; read and kept, used by nothing (ADR 0186) */
   version: number; appliedAt: string | null; by: string | null; exploration: number; routes: RoutingRow[];
   /** how much cost weighs against quality when the loop compares models: 0 = only quality, 10 = only cost (the user's
    *  λ, 7 on 2026-10-14; like OpenRouter's cost_quality_tradeoff); only the user changes it */
@@ -1516,7 +1516,7 @@ export interface InvokeMap {
   /** the routing table and the model registry (Impostazioni → «Instradamento modelli») */
   'routing:get': [void, RoutingInfo];
   /** the user saves the table from the settings page: checked against the hard rules, written as a new version
-   *  (a table's stored exploration rate is kept as it is: no chat explores since ADR 0182) */
+   *  (a table's stored exploration rate is kept as it is: no chat explores since ADR 0186) */
   'routing:save': [{ routes: RoutingRow[]; reason?: string; costWeight?: number; baseVersion?: number }, RoutingInfo];
   'tasks:get': [void, TasksState];
   /** "Aggiorna ora": runs the scripts now (resolves when done; a read already running is joined) */

@@ -1,7 +1,7 @@
 // A run's receipts recorded by ChatManager (ADR 0130) on a real git repository: the commands its engine reported with
 // their exit codes, the files its turn changed (from the per-turn checkpoint), and the deterministic verdict once the
 // run ended and its last turn's files are in; without checkpoints the edit rows give them unless a command may have
-// written (ADR 0182).
+// written (ADR 0186).
 import { afterEach, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -79,7 +79,7 @@ describe('receipts on a run (ADR 0130)', () => {
     await f.m.set(c.id, { workStatus: 'completed' });
     expect(f.run(c.id)?.receipts).toMatchObject({ filesKnown: false, filesGap: true, codeTouched: true, verdict: { result: 'unknown', reason: 'files-unknown' } });
   });
-  it('without checkpoints the edit rows give the files when only checks ran (ADR 0182)', async () => {
+  it('without checkpoints the edit rows give the files when only checks ran (ADR 0186)', async () => {
     const f = fixture(false, 'npm test', 0);
     const c = await f.create();
     await waitFor(() => !!f.run(c.id)?.receipts?.filesKnown);

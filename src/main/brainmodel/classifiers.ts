@@ -2,7 +2,7 @@
 // table in force (task kind → engine, model, effort, why), its change history, and per row the measured results of the
 // chats it routed (runs, verified success rate, average cost per chat) from the improvement loop's ledger
 // (<brain>/ops/state/improve/outcomes.jsonl, predictions joined with their actuals and the verdicts of the agent runs of
-// the same chats). The skill suggester is gone (ADR 0182: 3 hits in 4129 suggestions), and its card with it. Per kind of work: the
+// the same chats). The skill suggester is gone (ADR 0186: 3 hits in 4129 suggestions), and its card with it. Per kind of work: the
 // verified outcomes of the chats routed with it; per source: how many chats the table, the role (ADR 0083) or a default chose the model of. Quality over
 // time: success and cost per route, by week; a row without runs says so (null values), never zero. "Verified" = the
 // user's or a reviewed verdict, from the agent run or from the ledger (a run in both counts once; ADR 0095); the
@@ -73,7 +73,7 @@ export function rowOf(routes: RoutingRow[], p: Pick<Prediction, 'kind' | 'area'>
   return exact >= 0 ? exact : routes.findIndex(r => r.kind === '*' && (!areas(r).length || areas(r).includes(p.area)));
 }
 /** Per kind of work: the routed chats, how many have a verified outcome, how many of those succeeded. Verified only, as
- *  every other success figure on the page (ADR 0182: the routing's own per-kind counts took the brain's proxy too). */
+ *  every other success figure on the page (ADR 0186: the routing's own per-kind counts took the brain's proxy too). */
 function kindsOf(predictions: readonly { id: string; kind: string }[], runByChat: Map<string, AgentRun>, outcomes: Map<string, LedgerOutcome>): ClassifiersState['kinds'] {
   const by = new Map<string, { kind: string; chats: number; known: number; ok: number }>();
   for (const p of predictions) {

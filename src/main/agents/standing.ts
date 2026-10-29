@@ -14,7 +14,7 @@
 //   the result built on it) and did not judge it badly (agent_child_feedback partial or fail);
 // - graded: it is a Sentinel's verified review, and what happened later grades it: the user's verdict on the reviewed
 //   run, else a later independent second review of it (judge-sample.ts audits a fixed share), else its parent's
-//   feedback on its findings, else a rework of the reviewed run (against a pass, for a fail; ADR 0182: verified or not,
+//   feedback on its findings, else a rework of the reviewed run (against a pass, for a fail; ADR 0186: verified or not,
 //   a completed review with a verdict is graded). Agreement is a success, one step off partial, opposite a fail.
 // The performance (ADR 0131) is a Bayesian estimate: the verdicts, each weighted by how much it is trusted (TRUST: the
 // user and a review × 1, a graded review × 0.8, the receipts × 0.7, the Orchestrator × 0.6, a decision signal and a chain
@@ -29,7 +29,7 @@
 // halved when it was re-delegated or reworked. The decisions among pruned runs live on in the rollups
 // (RunTally.decisions, decisionWins, decisionXp; the chain, graded and receipts successes in earnedWins, all XP in xp).
 // Flash records no run: its answers' outcomes (flash-outcomes.ts) give it a small XP and a low-trust performance. Pulse
-// (Battito, a background job) and the retired roles get no standing (unrated, ADR 0182).
+// (Battito, a background job) and the retired roles get no standing (unrated, ADR 0186).
 // Used by ChatManager.runMetrics (agents:metrics), run-metrics.ts rollUp, the levels diagnostic (level-diagnosis.ts) and
 // the demo; the card's "?" tips repeat these rules.
 import type { AgentMetrics, AgentRun, AgentStanding } from '../../shared/agents';
@@ -58,10 +58,10 @@ type Source = keyof typeof TRUST;
 type Verdict = keyof typeof SCORE;
 
 /** Same exclusions as the §5 metrics (run-metrics.ts foldRun): headline and fallback one-shots are not the agent's work;
- *  a retired role's runs (Judge, Scribe, Router: ADR 0100) and Pulse's card jobs have no level (ADR 0182), their runs
+ *  a retired role's runs (Judge, Scribe, Router: ADR 0100) and Pulse's card jobs have no level (ADR 0186), their runs
  *  stay readable. */
 export const counts = (r: AgentRun): boolean => r.endedAt !== undefined && !r.oneshot?.fallback && r.oneshot?.job !== 'headline' && !unrated(r.agentId);
-/** Ids that get no standing: the retired roles and Pulse, a background job (ADR 0182). */
+/** Ids that get no standing: the retired roles and Pulse, a background job (ADR 0186). */
 export const unrated = (agentId: string): boolean => isRetiredRoleId(agentId) || agentId === PULSE_ID;
 /** A root run the Orchestrator opened: one of its decisions (ADR 0097). */
 export const orchestratorDecision = (r: AgentRun): boolean => r.startedBy === 'orchestrator' && r.source !== 'oneshot' && !r.oneshot
@@ -100,13 +100,13 @@ const REVIEWERS: ReadonlySet<string> = new Set(['sentinel', 'judge']);
 /** An ended, completed independent review that checked its evidence and gave a verdict on the run it reviews. */
 export const verifiedReview = (r: AgentRun): boolean => !!r.reviewOf && REVIEWERS.has(r.agentId) && r.endedAt !== undefined && r.endReason === 'completed'
   && r.report?.verified === 'yes' && !!r.report.verdict;
-/** An ended, completed review with a verdict, verified or not (ADR 0182): what happened later can grade it. */
+/** An ended, completed review with a verdict, verified or not (ADR 0186): what happened later can grade it. */
 export const gradableReview = (r: AgentRun): boolean => !!r.reviewOf && REVIEWERS.has(r.agentId) && r.endedAt !== undefined && r.endReason === 'completed'
   && !!r.report?.verdict;
 /** how far two verdicts are: 0 agree, 0.5 one step off, 1 opposite */
 const gap = (a: Verdict, b: Verdict): number => Math.abs(SCORE[a] - SCORE[b]);
 const agreement = (a: Verdict, b: Verdict): Verdict => gap(a, b) === 0 ? 'success' : gap(a, b) === 0.5 ? 'partial' : 'fail';
-/** grading a review (ADR 0125, 0182): the user's verdict on the reviewed run, else a later independent review, else
+/** grading a review (ADR 0125, 0186): the user's verdict on the reviewed run, else a later independent review, else
  *  what its parent did with its findings (agent_child_feedback on the review run: accepted or rejected), else a fact
  *  (the run it passed was then reopened or reworked; the run it failed was reworked, as it said) */
 function graded(review: AgentRun, ix: EarnIndex): EarnedVerdict | null {

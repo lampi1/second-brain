@@ -13,7 +13,7 @@ import { demoAgentRuns, demoFlashLog, DEMO_NOW } from '../demo-agent-runs';
 
 const argv = process.argv.slice(2);
 
-/** The review switch from the app's config.json and changes.jsonl beside the file (ADR 0182); undefined = not there. */
+/** The review switch from the app's config.json and changes.jsonl beside the file (ADR 0186); undefined = not there. */
 function samplerBeside(file: string): SamplerState | undefined {
   const dir = path.dirname(file);
   try {

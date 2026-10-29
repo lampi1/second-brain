@@ -31,7 +31,7 @@ export interface RunTally {
   corrections: { runs: number; tagged: number; afterReport: number };
   /** ai-errors.md lines naming the run, seen by Brother: runs checked against the file, and lines */
   reworked: number;
-  // no permissions count nor context peak (ADR 0182): with every role's permissions on by default the first was 0 on
+  // no permissions count nor context peak (ADR 0186): with every role's permissions on by default the first was 0 on
   // every run, and no page showed the second; an older rollup's fields are dropped on load (runs.ts readTally)
   questions: number; commands: number;
   cost: Sample; tokens: Record<TokenKind, Sample>; elapsed: Sample; execution: Sample;
@@ -253,7 +253,7 @@ export function p90(values: readonly number[]): number | null {
 }
 const ratio = (num: number, den: number): number | null => den > 0 ? num / den : null;
 const metric = (value: number | null, n: number, ended: number): Metric => ({ value: n > 0 ? value : null, n, coverage: ratio(n, ended) });
-// the one success definition (shared/success.ts, ADR 0182): a partial counts half
+// the one success definition (shared/success.ts, ADR 0186): a partial counts half
 const rate = (v: Verdicts): { value: number | null; n: number } => { const n = v.success + v.partial + v.fail; return { value: ratio(v.success * VERDICT_WEIGHT.success + v.partial * VERDICT_WEIGHT.partial, n), n }; };
 
 export function finalize(t: RunTally, version: number | null): VersionMetrics {
@@ -303,7 +303,7 @@ export function runMetrics(runs: readonly AgentRun[], input: MetricsInput = {}):
     if (!tallies.has(k)) tallies.set(k, emptyTally(run.agentId, run.version));
     foldRun(tallies.get(k)!, run, index);
   }
-  // the retired roles and Pulse have no catalog stats (ADR 0182): their runs stay in the file, readable
+  // the retired roles and Pulse have no catalog stats (ADR 0186): their runs stay in the file, readable
   const agents = new Set([...[...tallies.values()].map(t => t.agentId), ...open.keys()].filter(id => !unrated(id)));
   return [...agents].sort((a, b) => a.localeCompare(b, 'en')).map(agentId => {
     const own = [...tallies.values()].filter(t => t.agentId === agentId).sort((a, b) => a.version - b.version);
