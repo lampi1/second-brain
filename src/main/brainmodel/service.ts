@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
-import type { BrainChange, BrainModelState, ClassifiersState, LogScan, MaintenanceJobId, MaintenanceRun, MigrationReport } from '../../shared/brain-model';
+import type { BrainChange, BrainModelState, ClassifiersState, LogScan, MaintenanceJobId, MaintenanceRun, LessonStub, MigrationReport } from '../../shared/brain-model';
 import { MAINTENANCE_JOBS } from '../../shared/brain-model';
 import type { RoutingInfo } from '../../shared/contract';
 import type { AgentCatalogService } from '../agents/catalog';
@@ -156,7 +156,8 @@ export class BrainModelService {
     // Old entries are sealed once, in the writer process; the read worker never changes evidence scope.
     try { this.log.sealMissing(c => seal(c, profiles.filter(p => p.scope === 'role'))); } catch { /* view retains the previous fail-soft fallback */ }
     let runs: AgentRun[] = []; try { runs = this.d.runs(); } catch { /* unavailable history */ }
-    return { userData: this.d.userData, root: this.d.root(), home: this.d.home, profiles, runs, now: this.now() };
+    let lessons: LessonStub[] | undefined; try { lessons = this.d.learning.stubs(); } catch { lessons = undefined; }
+    return { userData: this.d.userData, root: this.d.root(), home: this.d.home, profiles, runs, now: this.now(), ...(lessons ? { lessons } : {}) };
   }
   state(): BrainModelState { return readBrainView(this.viewInput(), this.log, this.intervals); }
 
@@ -177,7 +178,8 @@ export class BrainModelService {
       for (const r of runs) { last = Math.max(last, r.endedAt ?? r.startedAt, r.outcome?.at ?? 0); if (r.outcome) judged++; }
       runsKey = `${runs.length}|${last}|${judged}`;
     }
-    const key = `${this.generation}|${this.d.root() ?? ''}|${runsKey}`, now = this.now();
+    let lessons = ''; try { const l = this.d.learning.stubs(); lessons = `${l.length}:${l.filter(x => x.status !== 'pending').length}:${l.at(-1)?.createdAt ?? 0}`; } catch { /* none */ }
+    const key = `${this.generation}|${this.d.root() ?? ''}|${runsKey}|${lessons}`, now = this.now();
     if (this.cached && this.cached.key === key && now - this.cached.at < CACHE_MS) return this.cached.state;
     const state = readWorker.call({ op: 'brain', input: this.viewInput() }, rev === undefined ? undefined : `store:${rev}`);
     const entry = { key, at: now, state };

@@ -31,13 +31,11 @@ describe('agent metrics', () => {
     expect(m.selfReport).toEqual({ value: 0.25, n: 2 });
   });
 
-  it('corrections per run rest only on runs that counted them; ai errors only when the file was read', () => {
+  it('corrections per run rest only on runs that counted them; no ai-errors column (ADR 0182)', () => {
     const runs = [run({ corrections: { tagged: 2, afterReport: 1 } }), run({ corrections: { tagged: 0, afterReport: 0 } }), run()];
     const m = one(runs).versions[0]!;
     expect(m.correctionsPerRun).toEqual({ value: 1.5, n: 2, coverage: 2 / 3 });
-    expect(m.aiErrorsPerRun).toEqual({ value: null, n: 0, coverage: 0 });
-    const withErrors = one(runs, { aiErrors: new Map([[runs[0]!.runId, 3]]) }).versions[0]!;
-    expect(withErrors.aiErrorsPerRun).toEqual({ value: 1, n: 3, coverage: 1 });
+    expect(m).not.toHaveProperty('aiErrorsPerRun');
   });
 
   it('rework: reopened, or reworked / continued by a run started within 7 days of the end', () => {

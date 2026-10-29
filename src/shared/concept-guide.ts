@@ -370,9 +370,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/i18n/areas/home.it.ts home.rulesReading
       b('Una regola conta come «tenuta» se il suo errore non ricompare nei giorni osservati: non è una prova di causa.',
         'A rule counts as "holding" if its error does not reappear in the observed days: it is not proof of cause.'),
-      // src/main/chats/manager.ts; src/main/agents/run-metrics.ts aiErrorRuns
-      b('Le run contano correzioni esplicite e riaperture dell’utente dopo un report valido; le metriche includono anche righe di ai-errors.md con runId e «visto da: Brother».',
-        'Runs count explicit corrections and user reopenings after a valid report; metrics also include ai-errors.md entries with a runId and "visto da: Brother".'),
+      // src/main/chats/manager.ts; src/main/agents/run-metrics.ts (ADR 0182: no ai-errors column)
+      b('Le run contano correzioni esplicite e riaperture dell’utente dopo un report valido. Le righe di ai-errors.md non entrano nelle metriche delle run: il comando error dell’app non scrive la run.',
+        'Runs count explicit corrections and user reopenings after a valid report. ai-errors.md lines are not part of the run metrics: the app’s error command does not write the run.'),
     ],
     analogy: b('Come il registro degli incidenti di un reparto: si annota, si raggruppa, si scrive una regola e si guarda se l’incidente torna.',
       'Like a department’s incident log: write it down, group it, write a rule, and watch whether the incident comes back.'),
@@ -959,6 +959,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/brainmodel/jobs.ts corrections, merge-memory
       b('Le lezioni imparate dalle tue correzioni vanno nel testo del ruolo, in una skill o nelle regole del brain; la stessa riga in più memorie va una volta sola nella memoria condivisa.',
         'Lessons learnt from your corrections go to the role’s text, a skill or the brain’s rules; the same line in several memories goes once into the shared memory.'),
+      // src/main/agents/pack/lesson-evidence.ts (causal: false), brainmodel/evidence.ts lessonCounts (ADR 0182)
+      b('Le prove di una lezione citano run con esito verificato, ma non misurano se la lezione ha aiutato: non sono mai causali. Memoria → Apprendimento dice quante lezioni sono state proposte nelle ultime 12 settimane e come sono finite, oppure «Nessun dato».',
+        'A lesson’s evidence cites runs with a verified outcome, but does not measure whether the lesson helped: it is never causal. Memory → Apprendimento says how many lessons were proposed in the last 12 weeks and how they ended, or "No data".'),
       // src/main/brainmodel/jobs.ts migration
       b('Una volta sola, i vecchi runbook e le sezioni «routines» del brain diventano skill, con un resoconto di dove è finito ciascuno.',
         'Once, the brain’s old runbooks and "routines" sections become skills, with a report of where each one went.'),

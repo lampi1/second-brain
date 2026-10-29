@@ -71,7 +71,7 @@ import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { toolShownToChat, toolShownToUnknown, toolShownToWarm } from './tool-visibility';
 import { RESULT_OUTPUT_MAX, checkResult, resultMessage, type DelegationLimitHit, type DelegationResult, type TaskSource, type TaskAssignmentOptions } from '../../shared/delegation';
 import { finishPlan, afterReport, isPlanApproval, PLAN_APPROVED, planChange, STRATEGY_FLOW, withClarified, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
-import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
+import { runMetrics } from '../agents/run-metrics';
 import { standings, withStandings } from '../agents/standing';
 import { isCorrection } from '../../shared/correction';
 import { AgentChildrenReducer } from './agent-children';
@@ -1653,13 +1653,12 @@ export class ChatManager implements ChatService {
     if (isCorrection(text) && r.s.run?.corrections) { r.s.run.corrections.tagged++; this.runSave(); this.persist(); }
   }
 
-  /** The §5 metrics per agent and version (A6): runs kept plus the rollups of the pruned ones. `aiErrors` = the brain's
-   *  ai-errors.md text (its lines naming a run, seen by Brother, are a secondary column); undefined = not read. */
-  runMetrics(opts: { aiErrors?: string; since?: number; skill?: string; app?: string; repo?: string } = {}): ReturnType<typeof runMetrics> {
+  /** The §5 metrics per agent and version (A6): runs kept plus the rollups of the pruned ones. */
+  runMetrics(opts: { since?: number; skill?: string; app?: string; repo?: string } = {}): ReturnType<typeof runMetrics> {
     // Metrics read the current in-memory record; reading must not force a synchronous archive write.
     const runs = this.runs.list(), rollups = this.runs.rolledUp();
     const live = (run: AgentRun) => { const r = this.chats.get(run.chatId); return !!r && !r.s.closedAt && r.s.run?.runId === run.runId; };
-    const metrics = runMetrics(runs, { rollups, live, ...(opts.aiErrors !== undefined ? { aiErrors: aiErrorRuns(opts.aiErrors) } : {}), ...(opts.since !== undefined ? { since: opts.since } : {}),
+    const metrics = runMetrics(runs, { rollups, live, ...(opts.since !== undefined ? { since: opts.since } : {}),
       filter: { ...(opts.skill !== undefined ? { skill: opts.skill } : {}), ...(opts.app !== undefined ? { app: opts.app } : {}), ...(opts.repo !== undefined ? { repo: opts.repo } : {}) } });
     // the card's level and performance are the agent's whole record, whatever the filter
     const standing = standings(runs, rollups, Date.now(), this.runs.flashLog());

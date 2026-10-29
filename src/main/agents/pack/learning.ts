@@ -4,6 +4,7 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { AgentDraft, AgentProfile } from '../../../shared/agents';
 import type { LearnedRuleProposal, LessonTarget } from '../../../shared/agent-pack';
+import type { LessonStub } from '../../../shared/brain-model';
 import type { AgentRun } from '../../../shared/agents';
 import { readLocal, writeLocal } from '../local-store';
 import { checkPermissionText } from '../tool-policy';
@@ -75,6 +76,8 @@ export class AgentPackLearning {
     if (accept) try { this.onProposed?.(); } catch { /* the next maintenance pass applies it */ }
     return structuredClone(this.proposals.find(x => x.id === id)!);
   }
+  /** Every stored lesson's date and status, for the Apprendimento page's honest count (ADR 0182). */
+  stubs(): LessonStub[] { return this.proposals.map(p => ({ createdAt: p.createdAt, status: p.status })); }
   /** Durable user corrections remain readable after a failed wake or restart; these are history, not approvals. */
   feedbackHistory(): LearnedRuleProposal[] {
     return structuredClone(this.proposals.filter(p => p.status === 'discarded' && typeof p.feedback === 'string' && p.feedback.trim()));

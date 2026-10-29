@@ -351,6 +351,13 @@ describe('agent run store: A6 fields and rollups', () => {
     expect(new AgentRunStore(dir).rolledUp()).toEqual([t]);
   });
 
+  it('reads an older rollup with the dropped counters and leaves them out (ADR 0182)', () => {
+    const t = emptyTally('coder', 1);
+    const old = { ...t, permissions: 4, contextPeak: { n: 1, values: [10] }, aiErrors: { runs: 2, lines: 1 } };
+    expect(readTally(old)).toEqual(t);
+    expect(readTally({ ...t, aiErrors: { runs: -1, lines: 0 } })).toBeNull();
+  });
+
   it('past their budget the largest rollup samples are halved, counts kept', () => {
     const big = Array.from({ length: 60 }, (_, i) => {
       const t = emptyTally(`agent-${i}`, 1);

@@ -128,7 +128,14 @@ export interface LearningState {
   roles: LearningRole[];
   /** start of the first week shown, and the week length */
   from: number; week: number;
+  /** the agents' lessons proposed in the same weeks (agents/pack/learning.ts), by where they ended; missing = the
+   *  lesson store was not read. Their evidence is never causal (lesson-evidence.ts `causal: false`): the page says so. */
+  lessons?: LearningLessons;
 }
+/** The lessons proposed from `from` on: approved = applied or accepted, discarded, waiting = still for the user. */
+export interface LearningLessons { proposed: number; approved: number; discarded: number; waiting: number }
+/** What the view needs of one stored lesson. */
+export interface LessonStub { createdAt: number; status: 'pending' | 'approved' | 'discarded' }
 
 /** One former procedure (a runbook or routines section) and where it went. */
 export interface MigrationItem {

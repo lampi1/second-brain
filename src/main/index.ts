@@ -300,12 +300,9 @@ app.whenReady().then(async () => {
     'agents:history': a => s.agents.history(a.id),
     'run:outcome': a => markRunOutcome(s.chats, a),
     'agents:metrics': a => {
-      const root = demo ? null : s.brain.info().brainRoot;
-      let aiErrors: string | undefined;
-      try { if (root) aiErrors = fs.readFileSync(path.join(root, 'ai-errors.md'), 'utf8'); } catch { aiErrors = undefined; }
       const tag = (v: unknown) => typeof v === 'string' && v.length <= 120 ? v : undefined;
       const skill = tag(a?.skill), app = tag(a?.app), repo = tag(a?.repo);
-      return s.chats.runMetrics?.({ ...(aiErrors !== undefined ? { aiErrors } : {}), ...(typeof a?.since === 'number' ? { since: a.since } : {}),
+      return s.chats.runMetrics?.({ ...(typeof a?.since === 'number' ? { since: a.since } : {}),
         ...(skill !== undefined ? { skill } : {}), ...(app !== undefined ? { app } : {}), ...(repo !== undefined ? { repo } : {}) }) ?? [];
     },
     // the strips' and the Orchestrator plan's estimates (ADR 0087); the demo brings its own run history

@@ -223,10 +223,12 @@ export interface RunStart extends RunLinks { chatId: string; agentId: string; ve
 const sample = (v: unknown): boolean => { const s = v as { n?: unknown; values?: unknown; sum?: unknown } | null; return !!s && count(s.n) && Array.isArray(s.values) && s.values.length <= SAMPLE_MAX && s.values.length <= s.n && s.values.every(time)
   && (s.sum === undefined || typeof s.sum === 'number' && Number.isFinite(s.sum) && s.sum >= 0); };
 const verdicts = (v: unknown): boolean => { const x = v as Record<string, unknown> | null; return !!x && count(x.success) && count(x.partial) && count(x.fail); };
+/** the ai-errors-per-run count of an older rollup (ADR 0182 dropped it): still read, then deleted */
+const aiErrors = (v: unknown): boolean => { const a = v as Record<string, unknown> | null; return !!a && typeof a === 'object' && count(a.runs) && count(a.lines); };
 const counts = (v: unknown): v is TagTally => {
-  const t = v as Record<string, unknown> | null, c = t?.corrections as Record<string, unknown> | null, a = t?.aiErrors as Record<string, unknown> | null;
+  const t = v as Record<string, unknown> | null, c = t?.corrections as Record<string, unknown> | null;
   return !!t && typeof t === 'object' && count(t.ended) && verdicts(t.verdicts) && verdicts(t.opinion) && verdicts(t.selfReport) && count(t.reworked) && count(t.questions) && (t.permissions === undefined || count(t.permissions)) && count(t.commands)
-    && !!c && count(c.runs) && count(c.tagged) && count(c.afterReport) && !!a && count(a.runs) && count(a.lines);
+    && !!c && count(c.runs) && count(c.tagged) && count(c.afterReport) && (t.aiErrors === undefined || aiErrors(t.aiErrors));
 };
 const bucket = (v: unknown, key: (k: string) => boolean): boolean => !!v && typeof v === 'object' && !Array.isArray(v) && Object.entries(v).every(([k, t]) => key(k) && counts(t));
 const tagTallies = (v: unknown): boolean => {
@@ -247,8 +249,8 @@ export function readTally(v: unknown): RunTally | null {
   const t = v as Record<string, unknown> | null;
   if (!t || typeof t !== 'object' || !str(t.agentId, 80) || !AGENT_ID.test(t.agentId) || !count(t.version) || !count(t.ended) || !verdicts(t.verdicts) || !verdicts(t.opinion) || !verdicts(t.selfReport)
     || !count(t.reworked) || !count(t.questions) || (t.permissions !== undefined && !count(t.permissions)) || !count(t.commands)) return null;
-  const c = t.corrections as Record<string, unknown> | null, a = t.aiErrors as Record<string, unknown> | null, k = t.tokens as Record<string, unknown> | null;
-  if (!c || !count(c.runs) || !count(c.tagged) || !count(c.afterReport) || !a || !count(a.runs) || !count(a.lines) || !k || !['input', 'output', 'cacheRead', 'cacheWrite'].every(x => sample(k[x]))
+  const c = t.corrections as Record<string, unknown> | null, k = t.tokens as Record<string, unknown> | null;
+  if (!c || !count(c.runs) || !count(c.tagged) || !count(c.afterReport) || (t.aiErrors !== undefined && !aiErrors(t.aiErrors)) || !k || !['input', 'output', 'cacheRead', 'cacheWrite'].every(x => sample(k[x]))
     || ![t.cost, t.elapsed, t.execution].every(sample) || (t.contextPeak !== undefined && !sample(t.contextPeak))) return null;
   const reviews = t.reviews as Record<string, Record<string, unknown>> | null;
   if (!reviews || typeof reviews !== 'object' || Array.isArray(reviews) || !Object.entries(reviews).every(([key, r]) => /^[a-z][a-z0-9_-]{0,79}\/\d+$/.test(key) && r && count(r.runs) && r.runs > 0 && count(r.findings) && count(r.blockingRuns) && count(r.blocking))) return null;
@@ -260,10 +262,10 @@ export function readTally(v: unknown): RunTally | null {
   if (!xpOk(t.xp, XP_MAX * (t.ended as number)) || !xpOk(t.decisionXp, XP_MAX * ((t.decisions as number | undefined) ?? 0))) return null;
   if ((t.tags !== undefined && !tagTallies(t.tags)) || (t.tagsLost !== undefined && t.tagsLost !== true) || (t.tags !== undefined && t.tagsLost !== undefined)) return null;
   const result = structuredClone(t) as unknown as RunTally;
-  // the permissions count and the context peak are gone (ADR 0182): an older rollup's are dropped, its tags' too
-  const old = result as unknown as { permissions?: number; contextPeak?: unknown };
-  delete old.permissions; delete old.contextPeak;
-  for (const bucket of Object.values(result.tags ?? {})) for (const tag of Object.values(bucket as Record<string, TagTally>)) delete (tag as { permissions?: number }).permissions;
+  // the permissions count, the context peak and the ai-errors count are gone (ADR 0182): an older rollup's are dropped, its tags' too
+  const old = result as unknown as { permissions?: number; contextPeak?: unknown; aiErrors?: unknown };
+  delete old.permissions; delete old.contextPeak; delete old.aiErrors;
+  for (const bucket of Object.values(result.tags ?? {})) for (const tag of Object.values(bucket as Record<string, TagTally>)) { delete (tag as { permissions?: number }).permissions; delete (tag as { aiErrors?: unknown }).aiErrors; }
   if (result.verdictSchema !== 2) {
     // Old rollups mix self-reported silence with independent outcomes. Counts remain, quality is unknown.
     result.verdicts = { success: 0, partial: 0, fail: 0 };

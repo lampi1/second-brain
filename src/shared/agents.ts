@@ -159,7 +159,6 @@ export interface VersionMetrics {
   successRate: Metric;
   opinion: { value: number | null; n: number }; selfReport: { value: number | null; n: number };
   correctionsPerRun: Metric;
-  aiErrorsPerRun: Metric;
   reworkRate: Metric;
   /** total: the cost of every run with a known cost (its n), null when an older saved summary did not keep it (#125) */
   costPerRun: { median: Metric; p90: number | null; total: number | null };

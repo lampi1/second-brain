@@ -2,11 +2,12 @@
 // in the brain really helped. Top: the counter (beneficio provato · senza effetto · in raccolta · peggiora · annullati),
 // each tile a filter of the list. Then the changes that made things worse, each with its Annulla (never undone silently).
 // Then per role the corrections per run of the last 12 weeks, with the changes measured on its runs as vertical marks in
-// their verdict's color: the real progress, without levels. Then every change with its hypothesis, scope and numbers
+// their verdict's color: the real progress, without levels. Then the agents' lessons of the same weeks, a count with
+// no causal claim (ADR 0182: their evidence is never causal, and they are few). Then every change with its hypothesis, scope and numbers
 // (MaintenancePanel Change), and how to read it all. Zero tokens: data from BrainModelState.changes[].claim and
 // .learning. Rendered by MemoryPage.tsx for the «Apprendimento» tab; styles: styles/learning.css.
 import { useId, useState, type CSSProperties } from 'react';
-import type { BrainChange, ClaimVerdict, LearningRole, LearningState } from '@shared/brain-model';
+import type { BrainChange, ClaimVerdict, LearningLessons, LearningRole, LearningState } from '@shared/brain-model';
 import { locale, t } from '../../i18n';
 import { useBrainModel } from '../../store/brain-model';
 import { HubIntro } from './HubIntro';
@@ -78,6 +79,18 @@ function Curves({ s }: { s: LearningState }) {
   </section>;
 }
 
+/** below this many lessons in the weeks shown the count is not a trend (ADR 0182: one proposal in 10 days) */
+const LESSONS_FEW = 5;
+/** The agents' lessons of the weeks shown, said as they are: a count, how they ended, never a causal claim. */
+function Lessons({ l }: { l: LearningLessons }) {
+  return <section className="bm-section lr-lessons" aria-labelledby="lr-lessons-h" data-testid="lr-lessons">
+    <header><div><h3 id="lr-lessons-h">{t('learn.lessons')} <HelpTip label={t('learn.lessons')} wide>{t('learn.lessonsHelp')}</HelpTip></h3><p>{t('learn.lessonsLead')}</p></div></header>
+    {l.proposed ? <p data-testid="lr-lessons-count">{t('learn.lessonsCount', { n: l.proposed, approved: l.approved, discarded: l.discarded, waiting: l.waiting })}{l.proposed < LESSONS_FEW ? ` ${t('learn.lessonsFew')}` : ''}</p>
+      : <p className="bm-empty" data-testid="lr-lessons-none">{t('learn.lessonsNone')}</p>}
+    <p className="bm-note" data-testid="lr-lessons-causal">{t('learn.lessonsCausal')}</p>
+  </section>;
+}
+
 export function LearningPage() {
   const { state, error, busy } = useBrainModel();
   const [filter, setFilter] = useState<ClaimVerdict | null>(null);
@@ -96,6 +109,7 @@ export function LearningPage() {
         <ul className="bm-changes">{worse.map(c => <Change key={c.id} c={c} busy={busy} />)}</ul>
       </section>}
       <Curves s={learning} />
+      {learning.lessons && <Lessons l={learning.lessons} />}
       <section className="bm-section" aria-labelledby="lr-changes-h" data-testid="lr-changes">
         <header><div><h3 id="lr-changes-h">{t('learn.changes')}</h3><p>{t('learn.changesLead')}</p></div>
           <div className="lr-chips" role="group" aria-label={t('learn.filterLabel')}>

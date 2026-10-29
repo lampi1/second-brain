@@ -69,6 +69,20 @@ describe('Apprendimento page', () => {
     expect(html).toContain('misurata su tutti i ruoli');
     expect(html).toContain('Cambiamenti vicini nel tempo condividono le stesse esecuzioni');
   });
+  it('says how few lessons the agents proposed, and that their evidence is never causal (ADR 0182)', () => {
+    state.current = page();
+    expect(renderToStaticMarkup(createElement(LearningPage))).not.toContain('data-testid="lr-lessons"'); // not read: nothing said
+    state.current = { ...page(), learning: { ...page().learning!, lessons: { proposed: 1, approved: 0, discarded: 0, waiting: 1 } } };
+    let html = renderToStaticMarkup(createElement(LearningPage));
+    expect(html).toContain('1 proposta: 0 applicate, 0 scartate, 1 in attesa. Sono troppo poche');
+    expect(html).toContain('non sono mai causali');
+    state.current = { ...page(), learning: { ...page().learning!, lessons: { proposed: 0, approved: 0, discarded: 0, waiting: 0 } } };
+    html = renderToStaticMarkup(createElement(LearningPage));
+    expect(html).toContain('data-testid="lr-lessons-none"');
+    expect(html).toContain('Nessun dato');
+    setLang('en');
+    expect(renderToStaticMarkup(createElement(LearningPage))).toContain('never causal');
+  });
   it('says so when the learning data could not be computed, instead of a blank page', () => {
     state.current = { ...page(), learning: undefined };
     expect(renderToStaticMarkup(createElement(LearningPage))).toContain('data-testid="lr-unavailable"');

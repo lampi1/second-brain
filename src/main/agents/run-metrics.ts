@@ -30,7 +30,6 @@ export interface RunTally {
   /** runs whose corrections were counted (recorded since A6) and their sums */
   corrections: { runs: number; tagged: number; afterReport: number };
   /** ai-errors.md lines naming the run, seen by Brother: runs checked against the file, and lines */
-  aiErrors: { runs: number; lines: number };
   reworked: number;
   // no permissions count nor context peak (ADR 0182): with every role's permissions on by default the first was 0 on
   // every run, and no page showed the second; an older rollup's fields are dropped on load (runs.ts readTally)
@@ -56,7 +55,7 @@ export interface RunTally {
   tagsLost?: true;
 }
 /** Counts only (no samples): what a filtered metric can still say about pruned runs. */
-export type TagTally = Pick<RunTally, 'ended' | 'verdicts' | 'opinion' | 'selfReport' | 'corrections' | 'aiErrors' | 'reworked' | 'questions' | 'commands'>;
+export type TagTally = Pick<RunTally, 'ended' | 'verdicts' | 'opinion' | 'selfReport' | 'corrections' | 'reworked' | 'questions' | 'commands'>;
 export interface TagTallies { skills: Record<string, TagTally>; apps: Record<string, TagTally>; repos: Record<string, TagTally>; combined?: Record<string, TagTally> }
 /** JSON tuple avoids collisions between arbitrary app/repo names and absent dimensions. */
 export const tagFilterKey = (f: TagFilter): string => JSON.stringify([f.skill ?? null, f.app ?? null, f.repo ?? null]);
@@ -64,8 +63,6 @@ export const tagFilterKey = (f: TagFilter): string => JSON.stringify([f.skill ??
 export interface TagFilter { skill?: string; app?: string; repo?: string }
 export interface MetricsInput {
   rollups?: readonly RunTally[];
-  /** ai-errors.md lines per runId (aiErrorRuns); missing = the file was not read: the column stays unknown */
-  aiErrors?: ReadonlyMap<string, number>;
   /** only runs ended from then on; the rollups (older by construction) are then left out */
   since?: number;
   /** the clock for the facts' verdict (default: now) */
@@ -80,7 +77,7 @@ export interface MetricsInput {
 const emptySample = (): Sample => ({ n: 0, values: [], sum: 0 });
 const verdicts = (): Verdicts => ({ success: 0, partial: 0, fail: 0 });
 export function emptyTally(agentId: string, version: number): RunTally {
-  return { agentId, version, verdictSchema: 2, ended: 0, verdicts: verdicts(), opinion: verdicts(), selfReport: verdicts(), corrections: { runs: 0, tagged: 0, afterReport: 0 }, aiErrors: { runs: 0, lines: 0 },
+  return { agentId, version, verdictSchema: 2, ended: 0, verdicts: verdicts(), opinion: verdicts(), selfReport: verdicts(), corrections: { runs: 0, tagged: 0, afterReport: 0 },
     reworked: 0, questions: 0, commands: 0, cost: emptySample(), tokens: { input: emptySample(), output: emptySample(), cacheRead: emptySample(), cacheWrite: emptySample() },
     elapsed: emptySample(), execution: emptySample(), reviews: {} };
 }
@@ -98,7 +95,7 @@ export function indexRuns(all: readonly AgentRun[], now = Date.now()): RunIndex 
 }
 
 /** Adds one ended run (an open one is ignored: the unit is the ended run). */
-export function foldRun(t: RunTally, run: AgentRun, index: RunIndex, aiErrors?: ReadonlyMap<string, number>): void {
+export function foldRun(t: RunTally, run: AgentRun, index: RunIndex): void {
   if (run.endedAt === undefined) return;
   // Headline and fallback runs are not comparable with the agent version's card/task baseline.
   // Their complete cost ledger remains available under Battito's job budgets.
@@ -111,7 +108,6 @@ export function foldRun(t: RunTally, run: AgentRun, index: RunIndex, aiErrors?: 
   if (o?.basis === 'self-report') addVerdict(t.selfReport, o.verdict);
   else if (run.report) addVerdict(t.selfReport, REPORTED[run.report.outcome]);
   if (run.corrections) { t.corrections.runs++; t.corrections.tagged += run.corrections.tagged; t.corrections.afterReport += run.corrections.afterReport; }
-  if (aiErrors) { t.aiErrors.runs++; t.aiErrors.lines += aiErrors.get(run.runId) ?? 0; }
   const end = run.endedAt;
   if (reworkedWithin(run, starts)) t.reworked++;
   t.questions += run.counters.questions; t.commands += run.counters.commands;
@@ -147,7 +143,6 @@ export function mergeTallies(a: RunTally, b: RunTally, agentId = a.agentId, vers
   return {
     agentId, version, verdictSchema: 2, ended: a.ended + b.ended, verdicts: mergeVerdicts(a.verdicts, b.verdicts), opinion: mergeVerdicts(a.opinion, b.opinion), selfReport: mergeVerdicts(a.selfReport, b.selfReport),
     corrections: { runs: a.corrections.runs + b.corrections.runs, tagged: a.corrections.tagged + b.corrections.tagged, afterReport: a.corrections.afterReport + b.corrections.afterReport },
-    aiErrors: { runs: a.aiErrors.runs + b.aiErrors.runs, lines: a.aiErrors.lines + b.aiErrors.lines },
     reworked: a.reworked + b.reworked, questions: a.questions + b.questions, commands: a.commands + b.commands,
     cost: mergeSample(a.cost, b.cost), tokens: Object.fromEntries(TOKEN_KINDS.map(k => [k, mergeSample(a.tokens[k], b.tokens[k])])) as Record<TokenKind, Sample>,
     elapsed: mergeSample(a.elapsed, b.elapsed), execution: mergeSample(a.execution, b.execution), reviews,
@@ -163,14 +158,13 @@ export function mergeTallies(a: RunTally, b: RunTally, agentId = a.agentId, vers
 
 const TAG_FIELDS = ['ended', 'reworked', 'questions', 'commands'] as const;
 export function countsOf(t: TagTally): TagTally {
-  return { ended: t.ended, verdicts: { ...t.verdicts }, opinion: { ...t.opinion }, selfReport: { ...t.selfReport }, corrections: { ...t.corrections }, aiErrors: { ...t.aiErrors },
+  return { ended: t.ended, verdicts: { ...t.verdicts }, opinion: { ...t.opinion }, selfReport: { ...t.selfReport }, corrections: { ...t.corrections },
     reworked: t.reworked, questions: t.questions, commands: t.commands };
 }
 function addCounts(a: TagTally, b: TagTally): void {
   for (const k of TAG_FIELDS) a[k] += b[k];
   for (const k of ['verdicts', 'opinion', 'selfReport'] as const) { a[k].success += b[k].success; a[k].partial += b[k].partial; a[k].fail += b[k].fail; }
   a.corrections.runs += b.corrections.runs; a.corrections.tagged += b.corrections.tagged; a.corrections.afterReport += b.corrections.afterReport;
-  a.aiErrors.runs += b.aiErrors.runs; a.aiErrors.lines += b.aiErrors.lines;
 }
 /** Own keys only: a tag named like an Object.prototype member never reaches the prototype. */
 export const tagOf = (rec: Record<string, TagTally>, key: string): TagTally | undefined => Object.hasOwn(rec, key) ? rec[key] : undefined;
@@ -268,7 +262,6 @@ export function finalize(t: RunTally, version: number | null): VersionMetrics {
     agentId: t.agentId, version, ended: e,
     successRate: metric(success.value, success.n, e), opinion: rate(t.opinion), selfReport: rate(t.selfReport),
     correctionsPerRun: metric(ratio(t.corrections.tagged + t.corrections.afterReport, t.corrections.runs), t.corrections.runs, e),
-    aiErrorsPerRun: metric(ratio(t.aiErrors.lines, t.aiErrors.runs), t.aiErrors.runs, e),
     reworkRate: metric(ratio(t.reworked, e), e, e),
     costPerRun: { median: metric(median(t.cost.values), t.cost.n, e), p90: p90(t.cost.values), total: t.cost.n > 0 ? sumOf(t.cost) ?? null : null },
     tokensPerRun: Object.fromEntries(TOKEN_KINDS.map(k => [k, metric(median(t.tokens[k].values), t.tokens[k].n, e)])) as Record<TokenKind, Metric>,
@@ -308,7 +301,7 @@ export function runMetrics(runs: readonly AgentRun[], input: MetricsInput = {}):
     if (input.since !== undefined && run.endedAt < input.since) continue;
     const k = keyOf(run.agentId, run.version);
     if (!tallies.has(k)) tallies.set(k, emptyTally(run.agentId, run.version));
-    foldRun(tallies.get(k)!, run, index, input.aiErrors);
+    foldRun(tallies.get(k)!, run, index);
   }
   // the retired roles and Pulse have no catalog stats (ADR 0182): their runs stay in the file, readable
   const agents = new Set([...[...tallies.values()].map(t => t.agentId), ...open.keys()].filter(id => !unrated(id)));
@@ -323,15 +316,3 @@ export function runMetrics(runs: readonly AgentRun[], input: MetricsInput = {}):
   });
 }
 
-/** ai-errors.md lines with `run: r_…` (mem.mjs writes it) seen by Brother: lines per runId. */
-export function aiErrorRuns(text: string): Map<string, number> {
-  const out = new Map<string, number>();
-  for (const line of text.split(/\r?\n/)) {
-    if (!line.startsWith('- ')) continue;
-    const fields = line.slice(2).split(' · ');
-    const run = fields.find(f => /^run: r_[a-f0-9]{12}$/.test(f))?.slice(5);
-    if (!run || !fields.some(f => /^visto da: .*\bBrother\b/i.test(f))) continue;
-    out.set(run, (out.get(run) ?? 0) + 1);
-  }
-  return out;
-}
