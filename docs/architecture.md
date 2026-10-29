@@ -105,7 +105,12 @@
   approval; app ideas and bugs as «Apri issue» cards that open the issue on GitHub when approved (gh, else the
   pre-filled new-issue page; `brainmodel/issue-open.ts`); app ideas also land in Idee on the AI's side. The end is a
   notice (`maintenance:done`). Nothing else proposes by itself: no timer, the Battito makes no idea cards, and the
-  skill candidates and the Battito's rules wait in the deck until the next click (`proposals/service.ts` heldBack). Memoria's statistics (`brainmodel/memory-stats.ts`, `BrainModelState.memoryStats`) are counts over the
+  skill candidates and the Battito's rules wait in the deck until the next click (`proposals/service.ts` heldBack).
+  Every Proposte decision goes to a ledger (`proposals/ledger.ts`, userData `proposal-decisions.json`); a card of an
+  allow-listed group (skill, rule, fact, script/query, learning) whose recent decisions are near-always yes (90% Wilson
+  lower bound ≥ 0.95 over ≥ 10, an undo counting as no) is applied by itself through its source's own decide and listed
+  in «Applicate da sole» with Annulla; roles, settings, permissions, issues, production and outside texts are always
+  asked, and every card left says why (`proposals/policy.ts`, ADR 0193). Memoria's statistics (`brainmodel/memory-stats.ts`, `BrainModelState.memoryStats`) are counts over the
   memory files, `ai-errors.md` and the recorded agent runs: zero tokens, nothing written.
 - **Live brain**: `fs.watch` on the brain folder + periodic `chats.mjs list` → diffed into `FeedEvent`s →
   `feed:events`; urgent ones also as a Windows toast when the window is not focused.

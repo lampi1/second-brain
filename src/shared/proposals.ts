@@ -3,7 +3,8 @@
 // brain changes the maintenance applied by itself, agents' protected settings, role trials and tier suggestions, the
 // Battito's learned rules, the improvement loop's policies) and shown one card at a time by the renderer
 // (components/brain-model/ProposalsDeck.tsx). Data only: main rechecks every decision and runs it through the source's
-// own path. Used by the contract (proposals:*), main/proposals and renderer/lib/proposals.ts.
+// own path. Also why a card is still asked, the cards applied by themselves and each group's policy (ADR 0193). Used by
+// the contract (proposals:*), main/proposals, main/brainmodel/research-pack.ts and renderer/lib/proposals.ts.
 import type { ResearchKind, ResearchSource } from './maintenance-research';
 
 /** Where an item comes from: each source keeps its own decide path (main/proposals/sources.ts). */
@@ -109,6 +110,52 @@ export interface Proposal {
   readFirst?: boolean;
   /** runs whose retained result the card can open (learning:evidence): a candidate's source and verified example */
   evidenceRuns?: string[];
+  /** why the app still asks (ADR 0193): «Te la chiedo perché: …», worded by the renderer; never a suggested answer */
+  why?: ProposalWhy;
+}
+
+/** The groups that may be applied by themselves once the user's own decisions show the answer is obvious (ADR 0193).
+ *  Explicit allow-list: role, setting, forget and issue are never applied without the user, whatever the history
+ *  (roles carry permissions, tiers and tools; settings are protected; forgetting removes; an issue is published on GitHub). */
+export const AUTO_GROUPS: readonly ProposalGroup[] = ['skill', 'rule', 'fact', 'script', 'learning'];
+/** Why a card is still in front of the user (ADR 0193), as data:
+ *  never = a kind the app always asks (what: why); irreversible = no Annulla from here; first = no decision of this kind
+ *  yet; few = n decisions so far, all yes, not enough; rejected = no times out of n; undone = changes the app applied by
+ *  itself in this group the user took back; building = yes out of n, not sure enough yet; blocked = it could not be
+ *  applied by itself (or one side is blocked). */
+export type ProposalWhy =
+  | { code: 'never'; what: 'external' | 'setting' | 'permissions' | 'role' | 'forget' | 'production' }
+  | { code: 'irreversible' }
+  | { code: 'first' }
+  | { code: 'few'; n: number }
+  | { code: 'rejected'; no: number; n: number }
+  | { code: 'undone'; n: number }
+  | { code: 'building'; yes: number; n: number }
+  | { code: 'blocked' };
+/** A card the app applied by itself (ADR 0193), for Memoria → Proposte «Applicate da sole». */
+export interface ProposalAutoApplied {
+  /** the decision's id in the ledger (proposals:undoAuto) */
+  id: string;
+  card: string;
+  source: ProposalSource;
+  group: ProposalGroup;
+  title: string;
+  at: number;
+  undoneAt?: number;
+  /** Annulla still works (the change is still as the app left it) */
+  canUndo: boolean;
+}
+/** One group's policy now (ADR 0193): what the ledger says and whether its new cards apply by themselves. */
+export interface ProposalGroupPolicy {
+  group: ProposalGroup;
+  /** never = not on the allow-list; ask = not sure enough; auto = new cards apply by themselves (with Annulla) */
+  mode: 'never' | 'ask' | 'auto';
+  /** the decisions the policy counts (the window), yes and no (an undo after a yes counts as no) */
+  n: number; yes: number; no: number; undone: number;
+  /** the 90% Wilson lower bound of the yes share (null below the sample) and the bound it must reach */
+  low: number | null; threshold: number;
+  /** of the last auto-applied ones (at most 20): how many, how many undone */
+  autoN: number; autoUndone: number;
 }
 
 export interface ProposalsState {
@@ -116,6 +163,10 @@ export interface ProposalsState {
   /** the sources that could not be read now (the others still show) */
   problems: ProposalSource[];
   at: number;
+  /** the cards the app applied by itself lately, newest first (ADR 0193) */
+  auto?: ProposalAutoApplied[];
+  /** cards applied by themselves this week (since Monday) and not undone: «Carte risparmiate questa settimana» */
+  saved?: number;
 }
 /** `seen`: the card's content the user decided on; main refuses when the card changed since (a skill draft edited
  *  between the read and the click is never approved unseen). */

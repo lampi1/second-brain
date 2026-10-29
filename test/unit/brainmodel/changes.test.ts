@@ -47,6 +47,16 @@ describe('ChangeLog', () => {
     expect(log.madeBy(file)).toBeNull();
     expect(new ChangeLog(d).list(agents({}))[0]).toMatchObject({ id: c.id, canRollback: false }); // persisted, undone
   });
+  it('tells its listeners after each rollback (the Proposte ledger, ADR 0193); a throwing listener never fails it', () => {
+    const d = tmp(), log = new ChangeLog(d, () => 5), heard: string[] = [];
+    log.onRolledBack(() => { throw new Error('boom'); });
+    const off = log.onRolledBack(id => heard.push(id));
+    const a = log.apply(base, [{ file: path.join(d, 'a.md'), text: 'a' }])!, b = log.apply(base, [{ file: path.join(d, 'b.md'), text: 'b' }])!;
+    log.rollback(a.id, agents({}));
+    off();
+    log.rollback(b.id, agents({}));
+    expect(heard).toEqual([a.id]);
+  });
   it('never overwrites a newer edit, and refuses a change that would not be undoable', () => {
     const d = tmp(), log = new ChangeLog(d), file = path.join(d, 'a.md');
     writeText(file, 'prima');
