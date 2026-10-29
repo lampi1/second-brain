@@ -38,7 +38,7 @@ release vs. anything run from this repo. The rest: `docs/agents/glossary.md`.
 | Unit · e2e | `npm test` · `npm run test:e2e` · `node scripts/e2e.mjs <specs>` (never on branches) |
 | e2e baseline | `node scripts/e2e-baseline.mjs [--update]` (main, after a full run) |
 | Live tests (real tokens) | `SB_LIVE=1 npx vitest run test/live` (Claude only) |
-| Machine ready? · logs | `npm run doctor -- --json` · `npm run logs -- --level warn --since 1h [--dev]` |
+| Machine ready? · logs | `npm run doctor -- --json` · `npm run logs -- --level warn --since 1h [--run <id>] [--scope renderer] [--dev]` |
 | Demo data (no tokens) | `npm run demo -- --hidden` |
 | Drive the app | MCP `http://127.0.0.1:<mcpPort>/mcp/app` (`app_state`, `app_ui`, `app_guide`, …) |
 | Guard (public repo) | runs in the git hooks; by hand `node tools/guard/scan.mjs . --allow .guardallow`; never `--no-verify` |
