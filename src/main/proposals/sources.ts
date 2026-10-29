@@ -282,11 +282,23 @@ const policy: Source = {
 
 // ── the maintenance's findings (ADR 0132) ─────────────────────────────────────────────────────────────────────────────
 const RESEARCH_GROUP: Readonly<Record<string, ProposalGroup>> = { skill: 'skill', rule: 'rule', role: 'role', forget: 'forget' };
+/** A lint card's chip (ADR 0194): facts with the facts, a skill's or a rule's line with them, notes on their own; a revert
+ *  card with what the change it undoes was about. */
+function researchGroup(x: ResearchProposal): ProposalGroup | null {
+  if (x.kind === 'lint' && x.lint) {
+    const c = x.lint.check;
+    return c === 'stale-fact' || c === 'changed-fact' ? 'fact' : c === 'stale-cite' ? (x.lint.file?.startsWith('rules/') ? 'rule' : 'skill') : 'note';
+  }
+  if (x.kind === 'revert' && x.revert) return x.revert.kind === 'agent' ? 'role' : x.revert.kind === 'memory' ? 'fact' : x.revert.kind === 'script' ? 'script' : x.revert.kind;
+  return null;
+}
 /** The text the card is about, as it is: what a change adds, what forgetting removes, or the issue as it will be opened. */
 function researchContent(x: ResearchProposal): string {
   if (x.issue && !x.change) return x.issue.body;
   if (x.change) return x.change.target === 'skill' ? x.change.text : `> ${x.change.text.replace(/\n/g, '\n> ')}`;
   if (x.forget) return `\`${x.forget.what === 'rule' ? x.forget.name : `.claude/skills/${x.forget.name}/`}\``;
+  // a lint card: the line or the fact it is about, as it is
+  if (x.lint) return x.lint.line ? `> ${x.lint.line.trim()}` : x.lint.about && (x.lint.check === 'stale-fact' || x.lint.check === 'changed-fact') ? `> ${x.lint.about}` : '';
   return '';
 }
 /** A candidate brain as one card (ADR 0195): the findings it gathers, a diff per file, its checks and replay. */
@@ -318,14 +330,15 @@ const research: Source = {
       const issue = !!x.issue && !x.change && (x.kind === 'app-idea' || x.kind === 'app-bug' || x.kind === 'bold');
       const repo = issue ? p.research!.repo?.() ?? null : null;
       return card('research', x.id, {
-        group: issue ? 'issue' : x.kind === 'bold' ? RESEARCH_GROUP[x.change?.target ?? 'rule'] ?? 'rule' : RESEARCH_GROUP[x.kind] ?? 'rule', applied: false, title: issue ? x.issue!.title : x.title, content: researchContent(x),
-        ask: { kind: 'research', finding: x.kind, adds: x.adds, removes: x.removes, why: x.why, expected: x.expected, risk: x.risk, evidence: x.evidence, sources: x.sources, ...(x.roleTrial ? { trial: true } : {}) },
+        group: issue ? 'issue' : researchGroup(x) ?? (x.kind === 'bold' ? RESEARCH_GROUP[x.change?.target ?? 'rule'] ?? 'rule' : RESEARCH_GROUP[x.kind] ?? 'rule'), applied: false, title: issue ? x.issue!.title : x.title, content: researchContent(x),
+        // «riuscito se…» (ADR 0194) is said with what to expect
+        ask: { kind: 'research', finding: x.kind, adds: x.adds, removes: x.removes, why: x.why, expected: [x.expected, x.success?.text ?? ''].filter(Boolean).join(' '), risk: x.risk, evidence: x.evidence, sources: x.sources, ...(x.roleTrial ? { trial: true } : {}) },
         // a revised role text (ADR 0195): its before and after
         ...(x.roleTrial ? { diffs: [{ file: x.roleTrial.role, before: x.roleTrial.before, after: x.roleTrial.text }] } : {}),
         facts: [...(role ?? x.roleTrial?.role ? [{ key: 'target' as const, value: (role ?? x.roleTrial?.role)! }] : []), ...(x.change?.name ? [{ key: 'target' as const, value: x.change.name }] : []),
           ...(issue && repo ? [{ key: 'target' as const, value: repo }] : []), ...(issue && x.issue!.labels?.length ? [{ key: 'scope' as const, value: x.issue!.labels.join(', ') }] : []),
           ...(issue && x.issue!.duplicateOf ? [{ key: 'before' as const, value: x.issue!.duplicateOf.url }] : [])],
-        provenance: prov({ who: { kind: 'maintenance', id: x.chatId ? 'research' : 'cleanup' }, ...(chat ? { chat: { id: chat.id, title: chat.title } } : {}), at: iso(x.at), evidence: x.evidence }),
+        provenance: prov({ who: { kind: 'maintenance', id: x.chatId ? 'research' : 'cleanup' }, ...(chat ? { chat: { id: chat.id, title: chat.title } } : {}), ...(x.lint?.file ? { files: [x.lint.file] } : {}), at: iso(x.at), evidence: x.evidence }),
         canApprove: !issue || !!repo, canReject: true, ...(issue && !repo ? { blocked: ['noRepo'] } : {}),
       });
     })];

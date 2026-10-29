@@ -25,6 +25,7 @@ import { secretLine, withHeader } from '../brain/scripts';
 import { queryNote } from '../brain/queries';
 import type { ChangeLog } from './changes';
 import type { JobResult } from './jobs';
+import { declareRemoved, type RemovedItem } from './item-delta';
 
 /** The one-shot question: a system text and a prompt, the model's text back (ok false: retried at the next pass). */
 export type UpgradeAsk = (system: string, prompt: string) => Promise<{ ok: boolean; text: string; reason?: string }>;
@@ -396,13 +397,13 @@ function itemEntry(c: Candidate, v: Verdict, markers: readonly string[], today: 
 
 /** The files the kept candidates become (or the entries appended to the place's file), the notes with their pointer
  *  lines, and how many candidates moved. */
-export function plan(root: string, section: LayoutSection, list: readonly Candidate[], verdicts: readonly Verdict[], today: string, now = Date.now()): { writes: { file: string; text: string | null }[]; moved: number; stale: number } {
+export function plan(root: string, section: LayoutSection, list: readonly Candidate[], verdicts: readonly Verdict[], today: string, now = Date.now()): { writes: { file: string; text: string | null; removed?: RemovedItem[] }[]; moved: number; stale: number } {
   const r = section.receives!, target = path.join(root, section.place), taken = new Set<string>();
   if (!insideBrain(root, target)) return { writes: [], moved: 0, stale: 0 };
   let stale = 0;
   const texts = new Map<string, string>();
   const current = (file: string): string => texts.get(file) ?? texts.set(file, fs.readFileSync(path.join(root, file), 'utf8')).get(file)!;
-  const writes: { file: string; text: string | null }[] = [];
+  const writes: { file: string; text: string | null; removed?: RemovedItem[] }[] = [];
   const pointers = new Map<string, { start: number; end: number; line: string }[]>();
   const point = (c: Candidate, line: string) => { const at = pointers.get(c.file) ?? pointers.set(c.file, []).get(c.file)!; at.push({ start: c.start, end: c.end, line }); };
   // the place's file for appended items, and the titles it holds (an item already there is not added twice)
@@ -460,7 +461,8 @@ export function plan(root: string, section: LayoutSection, list: readonly Candid
   for (const [file, cuts] of pointers) {
     let text = current(file);
     for (const cut of [...cuts].sort((a, b) => b.start - a.start)) text = text.slice(0, cut.start) + cut.line + text.slice(cut.end);
-    writes.push({ file: path.join(root, file), text });
+    // the moved lines are listed as removed, each with where it went (item-delta.ts, ADR 0194)
+    writes.push({ file: path.join(root, file), text, removed: declareRemoved(current(file), text, `spostato in ${section.place}, con un rimando qui`) });
   }
   return { writes, moved: [...pointers.values()].reduce((n, c) => n + c.length, 0), stale };
 }

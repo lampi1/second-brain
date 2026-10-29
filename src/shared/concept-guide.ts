@@ -1142,21 +1142,21 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/brainmodel/research-candidate.ts, role-reflect.ts (ADR 0195)
       b('Le modifiche ai file del brain proposte da una ricerca (skill, regole per tutti i ruoli, cosa dimenticare) non arrivano una per una: diventano una «versione candidata del brain», una copia dei file toccati tenuta fuori dal brain, con una carta sola che mostra prima e dopo di ogni file, i controlli (senza token) e il replay sui casi registrati quando il budget rimasto basta. Con il tuo sì entra tutto insieme, con un solo «Annulla»; se nel frattempo hai cambiato uno di quei file, non la applica. Se resta budget, la ricerca guarda anche il ruolo con più lavori falliti o corretti negli ultimi 30 giorni (uno per clic) e può proporre un testo migliore per quel ruolo: con il tuo sì parte una prova contro la versione di ora, che poi tieni o annulli dalla sua carta. I ruoli restano gli stessi.',
         'The brain-file changes a research proposes (skills, rules for every role, what to forget) do not arrive one by one: they become a "candidate brain", a copy of the touched files kept outside the brain, with one card showing each file before and after, the checks (no tokens) and the replay on recorded cases when the budget left covers it. With your yes it all goes in together, with one "Undo"; if you changed one of those files in the meantime, it is not applied. When budget is left, the research also looks at the role with the most failed or corrected jobs in the last 30 days (one per click) and may propose a better text for it: with your yes a trial starts against the current version, which you then keep or roll back from its card. The roles stay the same.'),
-      // src/main/brainmodel/jobs.ts repeated-task, merge-skills
-      b('Se tre o più lavori finiti chiedono la stessa cosa e nessuna skill la copre, scrive una skill nuova; due skill quasi uguali diventano una.',
-        'When three or more finished jobs ask the same thing and no skill covers it, it writes a new skill; two near-identical skills become one.'),
-      // src/main/brainmodel/jobs.ts corrections, merge-memory
-      b('Le lezioni imparate dalle tue correzioni vanno nel testo del ruolo, in una skill o nelle regole del brain; la stessa riga in più memorie va una volta sola nella memoria condivisa.',
-        'Lessons learnt from your corrections go to the role’s text, a skill or the brain’s rules; the same line in several memories goes once into the shared memory.'),
+      // src/main/brainmodel/jobs.ts repeated-task, merge-skills, corrections, merge-memory
+      b('Se tre o più lavori finiti chiedono la stessa cosa e nessuna skill la copre, scrive una skill nuova; due skill quasi uguali diventano una. Le lezioni imparate dalle tue correzioni vanno nel testo del ruolo, in una skill o nelle regole del brain.',
+        'When three or more finished jobs ask the same thing and no skill covers it, it writes a new skill; two near-identical skills become one. Lessons learnt from your corrections go to the role’s text, a skill or the brain’s rules.'),
       // src/main/agents/pack/lesson-evidence.ts (causal: false), brainmodel/evidence.ts lessonCounts (ADR 0186)
       b('Le prove di una lezione citano run con esito verificato, ma non misurano se la lezione ha aiutato: non sono mai causali. Memoria → Apprendimento dice quante lezioni sono state proposte nelle ultime 12 settimane e come sono finite, oppure «Nessun dato».',
         'A lesson’s evidence cites runs with a verified outcome, but does not measure whether the lesson helped: it is never causal. Memory → Apprendimento says how many lessons were proposed in the last 12 weeks and how they ended, or "No data".'),
       // src/main/brainmodel/jobs.ts migration, src/main/brainmodel/upgrade.ts, src/shared/brain-layout.ts
-      b('Una volta sola, i vecchi runbook e le sezioni «routines» del brain diventano skill, con un resoconto di dove è finito ciascuno. Con una nuova versione, il brain si mette in pari da solo: l’app descrive dove tiene ogni tipo di contenuto e ciò che nelle note ora ha un suo posto ci viene spostato, con un rimando dove stava: uno script in scripts/, una query SQL o KQL in queries/ (Memoria → Script & Query), un’idea («Idea:», «💡», le voci sotto «## Idee») in ideas.md con la nota da cui viene, la data e se era tua o dell’IA. Un agente senza strumenti decide solo quando c’è qualcosa da spostare.',
-        'Once, the brain’s old runbooks and "routines" sections become skills, with a report of where each one went. With a new version the brain catches up by itself: the app describes where it keeps each kind of content, and what in the notes now has a place of its own moves there, with a pointer where it was: a script to scripts/, an SQL or KQL query to queries/ (Memory → Script & Query), an idea ("Idea:", "💡", the items under "## Ideas") to ideas.md with the note it came from, the date and whether it was yours or the AI’s. An agent with no tools decides only when there is something to move.'),
-      // src/main/brainmodel/changes.ts rollback
-      b('Ogni cambio finisce nel registro con cosa, perché e le prove; «Annulla» rimette il testo di prima, ma solo se nessuno l’ha cambiato dopo. Un cambio annullato non viene rifatto.',
-        'Every change goes to the log with what, why and the evidence; "Undo" puts the earlier text back, but only if nobody changed it since. An undone change is not made again.'),
+      b('Una volta sola, i vecchi runbook e le sezioni «routines» del brain diventano skill, con un resoconto. Con una nuova versione, il brain si mette in pari da solo: l’app descrive dove tiene ogni tipo di contenuto e ciò che nelle note ora ha un suo posto ci viene spostato, con un rimando dove stava: uno script in scripts/, una query SQL o KQL in queries/ (Memoria → Script & Query), un’idea («Idea:», «💡», le voci sotto «## Idee») in ideas.md con la nota da cui viene, la data e se era tua o dell’IA. Un agente senza strumenti decide solo quando c’è qualcosa da spostare.',
+        'Once, the brain’s old runbooks and "routines" sections become skills, with a report. With a new version the brain catches up by itself: the app describes where it keeps each kind of content, and what in the notes now has a place of its own moves there, with a pointer where it was: a script to scripts/, an SQL or KQL query to queries/ (Memory → Script & Query), an idea ("Idea:", "💡", the items under "## Ideas") to ideas.md with the note it came from, the date and whether it was yours or the AI’s. An agent with no tools decides only when there is something to move.'),
+      // src/main/brainmodel/brain-lint.ts, lint-cards.ts, rules/launch-memory.ts (ADR 0194)
+      b('Al clic controlla anche il brain senza spendere token: note che nessuna nota collega, link che non portano a niente, parole citate in tre note senza una nota loro, fatti e skill che citano file che non ci sono più («Il file citato non c’è più: tolgo il fatto?»). Un fatto così non viene più dato agli agenti.',
+        'On the click it also checks the brain without spending tokens: notes no note links to, links that lead nowhere, words cited in three notes with no note of their own, facts and skills citing files that are gone ("The cited file is gone: remove the fact?"). Such a fact is no longer given to the agents.'),
+      // src/main/brainmodel/changes.ts rollback, item-delta.ts, success-check.ts (ADR 0194)
+      b('Cambia una riga alla volta, mai un file riscritto da capo (una modifica che toglierebbe righe senza dire perché è rifiutata); ogni cambio finisce nel registro con cosa, perché e le prove, e «Annulla» rimette il testo di prima se nessuno l’ha cambiato dopo. Ogni proposta dice «riuscito se…» con una misura che l’app calcola da sola: una settimana dopo, se è andata peggio, una carta chiede «Questo cambio non ha aiutato: lo annullo?» con i numeri.',
+        'It changes one line at a time, never a file rewritten from scratch (a change that would drop lines without saying why is refused); every change goes to the log with what, why and the evidence, and "Undo" puts the earlier text back if nobody changed it since. Every proposal says "worked if…" with a measure the app computes by itself: a week later, if it got worse, a card asks "This change did not help: undo it?" with the numbers.'),
       // src/main/brainmodel/jobs.ts header: what stays with the user
       b('Non tocca mai da sola permessi, strumenti, motore, livello di modello o limiti di un ruolo: quelli diventano una carta in Memoria → Proposte.',
         'It never changes a role’s permissions, tools, engine, model tier or limits by itself: those become a card in Memory → Proposals.'),
@@ -1176,12 +1176,14 @@ export const CONCEPTS: readonly ConceptCard[] = [
     anchors: {
       0: ['src/main/brainmodel/service.ts#start'],
       1: ['src/main/brainmodel/research-candidate.ts'],
-      3: ['src/main/brainmodel/jobs.ts#corrections'],
-      4: ['src/main/agents/pack/lesson-evidence.ts'],
-      5: ['src/shared/brain-layout.ts'],
-      6: ['src/main/brainmodel/changes.ts#rollback'],
+      2: ['src/main/brainmodel/jobs.ts#corrections'],
+      3: ['src/main/agents/pack/lesson-evidence.ts'],
+      4: ['src/shared/brain-layout.ts'],
+      5: ['src/main/brainmodel/brain-lint.ts'],
+      6: ['src/main/brainmodel/changes.ts#rollback', 'src/main/brainmodel/item-delta.ts'],
     },
-    sources: ['src/main/brainmodel/jobs.ts', 'src/main/brainmodel/upgrade.ts', 'src/shared/brain-layout.ts', 'src/main/brain/queries.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/service.ts', 'src/shared/brain-model.ts', 'src/renderer/components/brain-model/MaintenanceButton.tsx', 'src/main/brainmodel/research-candidate.ts', 'src/main/brainmodel/role-reflect.ts', 'src/main/log-digest.ts', 'src/main/brainmodel/research-pack-logs.ts'],
+    sources: ['src/main/brainmodel/jobs.ts', 'src/main/brainmodel/upgrade.ts', 'src/shared/brain-layout.ts', 'src/main/brain/queries.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/service.ts', 'src/shared/brain-model.ts', 'src/renderer/components/brain-model/MaintenanceButton.tsx',
+      'src/main/brainmodel/item-delta.ts', 'src/main/brainmodel/brain-lint.ts', 'src/main/brainmodel/success-check.ts', 'docs/adr/0194-itemized-maintenance-lint-and-success-criteria.md'],
   },
   {
     id: 'proposals',

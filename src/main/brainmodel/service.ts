@@ -27,7 +27,14 @@ import { readRules, readSkills, readSmall, type SkillDir } from './model';
 import type { ResearchProposal } from '../../shared/maintenance-research';
 import { NAME_RE, parseMd, setBody } from '../../shared/skillmd';
 import { checkPermissionText } from '../agents/tool-policy';
-import { canUndoMemoryTidy, undoMemoryTidy } from '../rules/memory-records';
+import { canUndoMemoryTidy, readMemoryRecords, tidyMemory, undoMemoryTidy } from '../rules/memory-records';
+import { queueMemoryInvalidation } from '../rules/memory-invalidations';
+import type { ResearchRevert } from '../../shared/maintenance-research';
+import { checkDelta, DeltaRefused, WHOLE_FILE, type RemovedItem } from './item-delta';
+import { lintPlan } from './lint-cards';
+import { checkChange } from './success-check';
+import { countLogGroup } from './log-scan';
+import { randomBytes } from 'node:crypto';
 
 /** How long an unchanged state is reused (the day's figures still move with the clock). */
 export const CACHE_MS = 5 * 60_000;
@@ -52,7 +59,7 @@ export interface BrainModelDeps {
   logDir?: () => string | null;
   /** the cards the pass the user started makes from its log step and the skills nobody uses (ADR 0132, before it the
    *  pass's result went to the Orchestrator, #150); absent = no cards */
-  findings?: (logs: LogScan) => { bugs: number; forget: number };
+  findings?: (logs: LogScan) => NonNullable<MaintenanceRun['cards']>;
   /** Compatibility input for a future reviewed upgrade; generic maintenance does not rewrite layout metadata. */
   appVersion?: () => string;
   /** Compatibility input for reviewed rewrites; never invoked by automatic or generic manual maintenance. */
@@ -335,7 +342,9 @@ export class BrainModelService {
     }
     if (!files.length) throw new Error('Niente da eliminare.');
     if (files.length > 64 || files.some(f => { try { return fs.statSync(f).size > 256 * 1024; } catch { return true; } })) throw new Error('Troppo grande per poterlo annullare: eliminalo dal disco.');
-    const c = this.log.apply({ job: by?.job ?? 'user', kind, action: 'remove', target, summary, reason, evidence: [...evidence, ...(by?.evidence ?? [])], ...(decisions.length ? { migrationIgnored: true } : {}) }, [...files.map(file => ({ file, text: null })), ...decisions]);
+    // a maintenance card's removal declares the whole file removed, with the card's reason (item-delta.ts, ADR 0194)
+    const c = this.log.apply({ job: by?.job ?? 'user', kind, action: 'remove', target, summary, reason, evidence: [...evidence, ...(by?.evidence ?? [])], ...(decisions.length ? { migrationIgnored: true } : {}) },
+      [...files.map(file => ({ file, text: null, ...(by ? { removed: [{ item: WHOLE_FILE, reason }] } : {}) })), ...decisions]);
     if (!c) throw new Error('Niente da eliminare.');
     log.info('brain', by ? 'item forgotten (maintenance card)' : 'item removed by the user', { data: { kind, files: files.length } });
     if (kind === 'skill') this.unlinkRemoved(target, by?.job ?? 'user');
@@ -351,6 +360,15 @@ export class BrainModelService {
     const root = this.root();
     if (!root) throw new Error('Scegli prima la cartella del brain.');
     const why = oneLine(p.why, 400), evidence = [`maintenance:${p.id}`, ...p.evidence.slice(0, 5).map(e => oneLine(e, 200))];
+    // a change that did not help (ADR 0194): «Annulla» through the change log, as on the Log page
+    if (p.kind === 'revert') {
+      if (!p.revert) throw new Error('Proposta senza il cambio da annullare.');
+      this.rollback(p.revert.changeId);
+      return p.revert.changeId;
+    }
+    if (p.kind === 'lint') return this.applyLint(p, root, why, evidence);
+    // «riuscito se…» goes with the change: checked a week later (checkOutcomes)
+    const success = p.success ? { success: p.success } : {};
     const roleOf = (id: string | undefined) => {
       if (!id) return null;
       const r = this.roles().find(x => x.id === id);
@@ -381,7 +399,7 @@ export class BrainModelService {
       // the role it is for declares it, in the same change: «Annulla» takes back the skill and the link together
       const linked = role ? this.d.packs.profile(role.id).knowhow?.linked ?? [] : null;
       const snap = role && linked && !linked.includes(name) ? this.writer().update(role.id, { linked: [...linked, name] }, `Manutenzione: skill ${name}`) : null;
-      const c = this.log.apply({ job: 'research', kind: 'skill', action: have ? 'update' : 'create', target: name, summary: `${have ? 'Skill aggiornata' : 'Nuova skill'} «${name}»${role && snap ? ` per ${role.name}` : ''}: ${oneLine(p.title, 100)}`, reason: why, evidence }, [{ file, text: next }], snap ?? undefined);
+      const c = this.log.apply({ job: 'research', kind: 'skill', action: have ? 'update' : 'create', target: name, summary: `${have ? 'Skill aggiornata' : 'Nuova skill'} «${name}»${role && snap ? ` per ${role.name}` : ''}: ${oneLine(p.title, 100)}`, reason: why, evidence, ...success }, [{ file, text: next }], snap ?? undefined);
       if (!c) throw new Error('Niente da cambiare.');
       return this.done(c.id);
     }
@@ -392,7 +410,7 @@ export class BrainModelService {
       const writes = [{ file, text: appendUnder(had ?? LESSONS_WHEN, 'Dalla manutenzione', `- ${oneLine(text, 600)} ${stamp}`) }];
       const cfg = brainJsonWithTopic(root, LESSONS_RULE);
       if (cfg) writes.push(cfg);
-      const c = this.log.apply({ job: 'research', kind: 'rule', action: 'update', target: LESSONS_RULE, summary: `Regola: ${oneLine(text, 120)}`, reason: why, evidence }, writes);
+      const c = this.log.apply({ job: 'research', kind: 'rule', action: 'update', target: LESSONS_RULE, summary: `Regola: ${oneLine(text, 120)}`, reason: why, evidence, ...success }, writes);
       if (!c) throw new Error('Niente da cambiare.');
       return this.done(c.id);
     }
@@ -400,9 +418,12 @@ export class BrainModelService {
     if (!role) throw new Error('Manca il ruolo a cui va la modifica.');
     const instructions = appendUnder(role.instructions, 'Dalla manutenzione', `- ${oneLine(text, 800)} ${stamp}`);
     if (instructions.length > 8000) throw new Error(`Il testo di ${role.name} è al limite di 8000 caratteri: prima va accorciato.`);
+    // the role's text is a brain text too: one line added, nothing lost (item-delta.ts, ADR 0194)
+    const v = checkDelta(role.instructions, instructions);
+    if (!v.ok) { log.warn('brain', 'maintenance write refused: not itemized', { data: { kind: 'agent', target: role.id }, cause: v.cause, hint: v.hint }); throw new DeltaRefused(`${role.id}.md`, v); }
     const snap = this.writer().update(role.id, { instructions }, `Manutenzione: ${oneLine(p.title, 100)}`);
     if (!snap) throw new Error('Il ruolo non si può cambiare adesso (forse è in prova).');
-    const c = this.log.record({ job: 'research', kind: 'agent', action: 'update', target: role.id, summary: `${role.name}: ${oneLine(text, 140)}`, reason: why, evidence }, [], snap);
+    const c = this.log.record({ job: 'research', kind: 'agent', action: 'update', target: role.id, summary: `${role.name}: ${oneLine(text, 140)}`, reason: why, evidence, ...success }, [], snap);
     return this.done(c.id);
   }
   private done(changeId: string): string { this.d.emit(); return changeId; }
@@ -415,12 +436,51 @@ export class BrainModelService {
   }
   /** An approved candidate brain (ADR 0195): every file write as ONE change-log entry (its one «Annulla» restores all
    *  of them), then the forgotten skills unlinked from the roles that declared them (as Memoria's trash does). */
-  applyCandidate(meta: { kind: 'skill' | 'rule'; summary: string; reason: string; evidence: string[]; target: string }, writes: { file: string; text: string | null }[], forgetSkills: string[]): string {
+  applyCandidate(meta: { kind: 'skill' | 'rule'; summary: string; reason: string; evidence: string[]; target: string }, writes: { file: string; text: string | null; removed?: RemovedItem[] }[], forgetSkills: string[]): string {
     if (!this.root()) throw new Error('Scegli prima la cartella del brain.');
     const c = this.log.apply({ job: 'research', kind: meta.kind, action: 'update', target: meta.target, summary: meta.summary.slice(0, 300), reason: meta.reason, evidence: meta.evidence }, writes);
     if (!c) throw new Error('Niente da cambiare, o un file è troppo grande per poterlo annullare.');
     for (const name of forgetSkills) this.unlinkRemoved(name, 'research');
     return this.done(c.id);
+  }
+  /** A brain lint card the user approved (ADR 0194): the finding checked again, then one item delta with its Annulla —
+   *  a fact retired, one line removed or relinked, one hub line or one new note. */
+  private applyLint(p: ResearchProposal, root: string, why: string, evidence: string[]): string {
+    const f = p.lint;
+    if (!f) throw new Error('Proposta senza cosa controllare.');
+    const plan = lintPlan(root, f, f.lang ?? 'it', why);
+    if (plan.kind === 'memory') {
+      const r = readMemoryRecords(root).find(x => x.memoryId === plan.memoryId);
+      if (!r || r.validTo !== null || (r.status !== 'proposed' && r.status !== 'confirmed')) throw new Error('Il fatto non c\'è più: rifiuta la proposta.');
+      const tag = `lint-${randomBytes(6).toString('hex')}`;
+      const undo = tidyMemory(root, r.status === 'proposed' ? { retire: [{ id: r.memoryId, reason: `lint:${f.check}` }], generalize: [] } : { retire: [], generalize: [], prune: [{ id: r.memoryId, reason: `lint:${f.check}` }] }, tag, new Date(this.now()).toISOString());
+      if (!undo.retired.length) throw new Error('Il fatto non si può togliere adesso.');
+      try { queueMemoryInvalidation(root, ['memory/records.json']); } catch { /* the search index catches up at its next read */ }
+      const c = this.log.record({ job: 'research', kind: 'memory', action: 'remove', target: `agents/${r.scope.roleId}/memory.md`, summary: plan.summary, reason: why, evidence: [...evidence, f.target ?? ''].filter(Boolean), memory: undo }, []);
+      return this.done(c.id);
+    }
+    const c = this.log.apply({ job: 'research', kind: plan.kind, action: plan.action, target: plan.target, summary: plan.summary, reason: why, evidence }, [{ file: plan.file!, text: plan.text!, ...(plan.removed ? { removed: plan.removed } : {}) }]);
+    if (!c) throw new Error('Niente da cambiare.');
+    return this.done(c.id);
+  }
+  /** The «riuscito se…» check (ADR 0194, M4): every change with a criterion whose week after is over is measured once,
+   *  zero tokens; the ones that got worse and can still be undone are returned for a card «Questo cambio non ha
+   *  aiutato: lo annullo?». Called at app start, hourly and at the user's «Manutenzione» (research.ts). */
+  checkOutcomes(): ResearchRevert[] {
+    const now = this.now(), dir = this.d.logDir?.() ?? null, out: ResearchRevert[] = [];
+    const due = this.log.all().filter(c => c.success && !c.successCheck && !c.rolledBackAt);
+    if (!due.length) return out;
+    let runs: AgentRun[] = []; try { runs = this.d.runs(); } catch { /* no history: unknown */ }
+    const data = { runs, ...(dir ? { logCount: (key: string, from: number, to: number) => countLogGroup(dir, key, from, to) } : {}) };
+    const restorer = this.restorer();
+    for (const c of due) {
+      const check = checkChange(c.at, c.success!, data, now);
+      if (!check) continue;
+      this.log.setCheck(c.id, check);
+      log.info('brain', 'maintenance change checked', { data: { job: c.job, kind: c.kind, metric: c.success!.metric, verdict: check.verdict, before: check.before, after: check.after } });
+      if (check.verdict === 'worse' && this.log.canRollback(c, restorer)) out.push({ changeId: c.id, kind: c.kind, summary: c.summary, criterion: c.success!, check });
+    }
+    return out;
   }
   /** The brain's skills by name and description (the demo's made-up runs name them). */
   skillList(): { name: string; description: string }[] {

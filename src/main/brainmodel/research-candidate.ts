@@ -10,6 +10,7 @@
 // changed in between makes the candidate stale (never applied over the user's edit). Findings that change a role (its
 // text, a skill linked to it) and the app's issues stay individual cards. Used by research.ts (the hooks) and wiring.ts
 // (the ports); tests: test/unit/brainmodel/research-candidate.test.ts.
+import { declareRemoved, WHOLE_FILE, type RemovedItem } from './item-delta';
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -203,7 +204,7 @@ export interface CandidatePorts {
   /** the brain's real path and what it holds now (fresh: no cache); null = no brain */
   input(): Omit<PlanInput, 'now'> | null;
   /** applies every write as one change-log entry and returns its id; then unlinks the forgotten skills from roles */
-  apply(meta: { kind: 'skill' | 'rule'; summary: string; reason: string; evidence: string[]; target: string }, writes: { file: string; text: string | null }[], forgetSkills: string[]): string;
+  apply(meta: { kind: 'skill' | 'rule'; summary: string; reason: string; evidence: string[]; target: string }, writes: { file: string; text: string | null; removed?: RemovedItem[] }[], forgetSkills: string[]): string;
   /** starts the replay of the candidate when it is possible and paid for by the budget left (else why not) */
   replay?(c: { name: string; text: string; budgetUsd: number }): { replayId?: string; note: string };
   /** a started replay's state now (null = gone) */
@@ -294,7 +295,10 @@ export class CandidateService {
     if (!c || c.state !== 'open') throw new Error('Versione candidata non più aperta.');
     const input = this.ports.input();
     if (!input) throw new Error('Scegli prima la cartella del brain.');
-    const writes = c.files.map(f => ({ file: path.join(input.root, ...f.rel.split('/')), text: f.after }));
+    // every line the candidate drops was on the before/after diff the user approved: declared as removed (ADR 0194)
+    const shown = 'shown on the candidate brain\'s before/after the user approved (ADR 0195)';
+    const writes = c.files.map(f => ({ file: path.join(input.root, ...f.rel.split('/')), text: f.after,
+      removed: f.before === null ? [] : f.after === null ? [{ item: WHOLE_FILE, reason: shown }] : declareRemoved(f.before, f.after, shown) }));
     if (c.files.some((f, i) => readSmall(writes[i]!.file) !== f.before)) {
       this.store.save({ ...c, state: 'stale', decidedAt: this.now() });
       throw new Error('Il brain è cambiato dopo la versione candidata: non la applico sopra le modifiche nuove. Rilancia la manutenzione.');

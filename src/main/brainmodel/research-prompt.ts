@@ -18,6 +18,8 @@ Metodo:
 7. Proponi anche cosa dimenticare: skill o regole mai usate o superate (i fatti della memoria li riordina già la pulizia gratuita).
 8. Idee e bug sul codice dell'app vanno come app-idea o app-bug, con la issue già scritta bene (contesto, passi o prove, proposta, come verificarla): l'utente vede una card «Apro la issue?» e, se approva, la issue si apre su GitHub così com'è. Le app-idea finiscono anche tra le Idee dell'IA.
 9. Al massimo una proposta audace (bold): un cambio più grande che secondo te vale la pena, con il rischio spiegato.
+10. Controlla le contraddizioni tra le note, le regole e le skill del brain (una dice di fare X, un'altra il contrario; un valore diverso per la stessa cosa): proponi la riga da correggere o da togliere come modifica di regola o di skill, citando entrambe le righe nelle evidenze.
+11. Ogni modifica è a righe singole: aggiungi, cambia o togli una riga alla volta, mai un file riscritto da capo (riscrivere tutto perde i dettagli). Dichiara «riuscito se…» (success) con una delle misure fisse: l'app la confronta una settimana prima e una dopo, e se peggiora propone di annullare.
 Meglio due proposte solide che cinque deboli. Se non trovi niente che regga, dillo.`;
 
 const EN = `You are second-brain's maintenance with research. Your job: look at how the user's work really went and propose a few changes that make it succeed more often, faster or cheaper.
@@ -32,6 +34,8 @@ Method:
 7. Propose what to forget too: skills or rules never used or outdated (the free cleanup already tidies memory facts).
 8. Ideas and bugs about the app's code go as app-idea or app-bug, with the issue already well written (context, steps or evidence, proposal, how to verify it): the user sees a card «Open this issue?» and, when approved, it is opened on GitHub as written. App ideas also land in the AI's Idee.
 9. At most one bold proposal: a bigger change you think is worth it, with the risk explained.
+10. Check for contradictions between the brain's notes, rules and skills (one says do X, another the opposite; two values for the same thing): propose the line to fix or remove as a rule or skill change, citing both lines in the evidence.
+11. Every change is line by line: add, change or remove one line at a time, never a file rewritten from scratch (rewriting it whole loses details). Declare «worked if…» (success) with one of the fixed measures: the app compares the week before with the week after and, if it got worse, proposes to undo it.
 Two solid proposals beat five weak ones. If nothing holds up, say so.`;
 
 /** The method as shipped, in the UI language. */
@@ -51,6 +55,7 @@ export function researchFrame(lang: Lang, o: { web: boolean; capUsd: number; bra
     `Proposals: one maintenance_propose call each. At most ${c.brain} brain changes (skill, rule, role), ${c.forget} to forget, ${c.app} app ideas or bugs, ${c.bold} bold. The tool refuses more and duplicates.`,
     `Card language: every text you give the tool (title, adds, removes, why, expected, risk, issue) is in ${LANG_NAME[lang]}, plain words a non-developer understands; raw ids, paths and numbers go in evidence.`,
     'A change never grants permissions, never weakens a safety rule and never touches settings or hooks: those the tool refuses.',
+    'A change is item by item: change.text is the lines to add; the app appends them and refuses any write that would drop a line it was not told to remove. Give each brain change a success criterion (fewer-corrections, more-verified, fewer-log-errors, skill-used).',
     `Issues (app-idea, app-bug): no private data in title or body (no home paths, user names, e-mails, server or company names, tokens, text quoted from the user's work); the app removes what it recognizes, you write it clean. ${o.web && o.issuesUrl ? `Look at the open issues first (${o.issuesUrl}): if one covers it, pass duplicateOf.` : ''}`,
     `Budget: the app stops this chat at ${o.capUsd.toFixed(2)} $. Read what you need, not everything.`,
     'When you are done, reply with one short line: how many proposals you made. The user reads them as cards, not in this chat.',

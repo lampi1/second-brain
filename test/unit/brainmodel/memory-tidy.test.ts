@@ -115,6 +115,13 @@ describe('tidyMemoryJob', () => {
     expect(await tidyMemoryJob(ctx(root, log, ask))).toMatchObject({ changes: 1 });
     expect(byId(root).get('f0')!.status).toBe('retracted');
   });
+  it('refuses a rewrite that shrinks the fact to a stub (ADR 0194): the fact stays as it was', async () => {
+    const root = tmp(), log = new ChangeLog(tmp(), () => NOW);
+    store(root, [{ value: 'Dopo il login su https://app.example.com:8443 il deploy di staging richiede prima la migrazione e poi il riavvio del worker' }]);
+    const ask: UpgradeAsk = async () => ({ ok: true, text: '{"items":[{"id":"m1","keep":"Deploy ok."}]}' });
+    expect(await tidyMemoryJob(ctx(root, log, ask))).toMatchObject({ changes: 0, note: expect.stringMatching(/1 riscritture rifiutate/) });
+    expect(byId(root).get('f0')).toMatchObject({ status: 'proposed', validTo: null });
+  });
   it('a change made since blocks the undo', async () => {
     const root = tmp(), log = new ChangeLog(tmp(), () => NOW);
     store(root, [{ value: 'Il server di test si riavvia ogni notte alle 6' }, { value: 'Il server di test si riavvia ogni notte alle 6' }]);

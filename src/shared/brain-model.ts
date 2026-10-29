@@ -3,6 +3,7 @@
 // permissions, role); a skill = how a job is done, shared and loaded when the agent starts. Rules apply to every agent;
 // memory is the brain's knowledge and what happened, plus one memory per agent. Every change a maintenance job makes is
 // a BrainChange: logged, explained, and undone with one click (no approval: owner, 2026-10-19).
+import type { SuccessCheck, SuccessCriterion } from './maintenance-research';
 
 /** Where a skill lives: the brain's shared skills (`.claude/skills`, `.agents/skills`) or the user's own CLI folders. */
 export type SkillHome = 'brain' | 'user';
@@ -81,6 +82,9 @@ export interface BrainChange {
   canRollback: boolean;
   /** its evidence claim (brainmodel/evidence.ts, ADR 0109): missing only where the runs could not be read */
   claim?: ChangeClaim;
+  /** «riuscito se…» a maintenance finding declared (ADR 0194), and the check a week after it was applied */
+  success?: SuccessCriterion;
+  successCheck?: SuccessCheck;
 }
 
 // ── The evidence layer (ADR 0109): every change is a hypothesis measured on the user's corrections per run ─────────────
@@ -159,7 +163,7 @@ export interface MaintenanceRun {
   /** the pass's result went to the Orchestrator (#150): true = delivered, else why not */
   handoff?: { sent: true } | { sent: false; why: string };
   /** the cards the pass the user started made (ADR 0132): app bugs from the log step, skills to forget */
-  cards?: { bugs: number; forget: number };
+  cards?: { bugs: number; forget: number; lint?: number; reverts?: number };
 }
 
 /** The warn and error lines of the app logs (userData/logs/app-*.jsonl) grouped by scope | msg | cause (#150). */

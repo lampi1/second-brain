@@ -8,7 +8,10 @@
 // through the change log only when the user approves; ideas and bugs about the app's code, each with its issue already
 // written, opened on GitHub at once when the user approves (issue-open.ts). An app idea is also written to the brain's
 // Idee, on the AI's side. The pass also makes cards by itself, at zero tokens: one app bug per new log group and the
-// brain skills no job used in 60 days. When it is all over, `done` tells the renderer what it made (the end notice).
+// brain skills no job used in 60 days, the brain lint's findings (brain-lint.ts: orphans, broken links, concepts with no
+// note, facts and skills citing files that are gone, ADR 0194) and the changes whose «riuscito se…» check a week after
+// came out worse (success-check.ts, also at app start and hourly). When it is all over, `done` tells the renderer what
+// it made (the end notice).
 // ADR 0195 hooks: the brain-file findings of one research are held and, when it ends, gathered into ONE candidate brain
 // (research-candidate.ts: a copy under userData, one card with a diff per file, one change and one «Annulla» when
 // approved); and the research may propose one revised role text from that role's failed runs (role-reflect.ts), which
@@ -21,7 +24,7 @@ import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { BrainModelState, LogScan, MaintenanceRun } from '../../shared/brain-model';
 import type { ChatSummary, Effort, Harness, Lang, NewChat } from '../../shared/contract';
-import { CANDIDATE_PENDING, familyOf, isAppKind, RESEARCH_CAP_USD, type BrainCandidate, type BrainCandidateView, RESEARCH_CAPS, RESEARCH_KINDS, type MaintenanceDone, type MaintenanceStatus, type ResearchChange, type ResearchForget,
+import { CANDIDATE_PENDING, RESEARCH_TOOL_KINDS, type LintCheck, type LintFinding, type ResearchRevert, familyOf, isAppKind, RESEARCH_CAP_USD, type BrainCandidate, type BrainCandidateView, RESEARCH_CAPS, RESEARCH_KINDS, type MaintenanceDone, type MaintenanceStatus, type ResearchChange, type ResearchForget,
   type ResearchIssue, type ResearchKind, type ResearchOptions, type ResearchProposal, type ResearchRunInfo, type ResearchSource } from '../../shared/maintenance-research';
 import { isRoleId } from '../../shared/roles';
 import { errText, log } from '../log';
@@ -39,6 +42,17 @@ import { CandidateService, isCandidateFinding, type CandidatePorts } from './res
 import { guideMaintenanceSection } from '../guide/maintenance';
 import { GUIDE_SECTION } from './research-tools';
 import { checkRoleText, pickRole, reflectSection, REFLECT_BUDGET_SHARE, ROLE_REFLECT_SECTION, type ReflectPick } from './role-reflect';
+import { readLocal, writeLocal } from '../agents/local-store';
+import { readMemoryRecords } from '../rules/memory-records';
+import { lintBrain } from './brain-lint';
+import { lintCard, revertCard } from './lint-cards';
+import { defaultSuccess, parseSuccess, successText } from './success-check';
+
+/** At most this many lint cards of each check per pass (the worst first), so a messy brain is not one wall of cards. */
+export const LINT_CAPS: Readonly<Record<LintCheck, number>> = { 'stale-fact': 5, 'stale-cite': 3, 'broken-link': 3, 'changed-fact': 3, concept: 3, orphan: 3 };
+const LINT_ORDER: readonly LintCheck[] = ['stale-fact', 'stale-cite', 'broken-link', 'changed-fact', 'concept', 'orphan'];
+/** The «riuscito se…» check runs this long after the app starts, then every hour. */
+export const OUTCOMES_FIRST_MS = 90_000, OUTCOMES_EVERY_MS = 60 * 60_000;
 
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 const MODEL_ID = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
@@ -61,7 +75,9 @@ export interface ResearchDeps {
   runs: () => readonly AgentRun[];
   roles: () => readonly AgentProfile[];
   /** maintain: the free cleanup of a click (every job, the log step and its cards), resolving with the pass it wrote */
-  brain: { state(): BrainModelState; apply(p: ResearchProposal): string; noise(key: string, known: boolean): void; maintain(): Promise<BrainModelState> };
+  brain: { state(): BrainModelState; apply(p: ResearchProposal): string; noise(key: string, known: boolean): void; maintain(): Promise<BrainModelState>;
+    /** the «riuscito se…» check (BrainModelService.checkOutcomes, ADR 0194): the changes that got worse; absent = none */
+    outcomes?(): ResearchRevert[] };
   chats: { create(req: NewChat): Promise<ChatSummary>; get(id: string): ChatSummary | undefined; stop(id: string): Promise<void> };
   /** opens an approved app card's issue on GitHub (issue-open.ts); absent = app cards cannot be approved */
   issues?: { open(repo: string, issue: ResearchIssue): Promise<IssueOpened> };
@@ -194,7 +210,16 @@ export class ResearchService {
     this.candidates = d.candidates ? new CandidateService(d.userData, d.candidates, d.lang, () => this.now()) : null;
     // findings held for a candidate the app was closed before building: their own cards again
     for (const p of this.store.all().filter(x => x.candidateId === CANDIDATE_PENDING)) this.store.update(p.id, { candidateId: undefined });
+    // the «riuscito se…» check: soon after the start, then hourly (and at every click, afterPass); zero tokens
+    if (d.brain.outcomes) {
+      const tick = () => { try { if (this.outcomes()) this.d.changed(); } catch (e) { log.warn('brain', 'maintenance outcome check failed', { cause: errText(e), hint: 'it runs again within the hour and at the next «Manutenzione»' }); } };
+      const first = setTimeout(tick, OUTCOMES_FIRST_MS), every = setInterval(tick, OUTCOMES_EVERY_MS);
+      first.unref?.(); every.unref?.();
+      this.outcomeTimers.push(first, every);
+    }
   }
+  /** Stops the hourly check (tests, shutdown). */
+  dispose(): void { for (const t of this.outcomeTimers) { clearTimeout(t); clearInterval(t); } this.outcomeTimers = []; }
   private now(): number { return this.d.now?.() ?? Date.now(); }
   private privacy() {
     const base = this.d.privacy ?? { home: os.homedir(), user: (() => { try { return os.userInfo().username; } catch { return ''; } })() };
@@ -206,7 +231,8 @@ export class ResearchService {
   /** The free cleanup of a click is running (before the research starts). */
   private passing = false;
   /** The free cleanup's cards of the click now running, added to the research's in the end notice. */
-  private passCards = { bugs: 0, forget: 0 };
+  private passCards = { bugs: 0, forget: 0, lint: 0, reverts: 0 };
+  private outcomeTimers: NodeJS.Timeout[] = [];
   status(): MaintenanceStatus {
     return { running: this.passing || this.starting || !!this.run, research: this.run ? this.info(this.run) : null, last: this.store.lastDone() ?? null, canResearch: this.d.engines().length > 0 };
   }
@@ -228,13 +254,13 @@ export class ResearchService {
     if (this.passing || this.starting || this.run) throw new Error('La manutenzione è già in corso.');
     if (!this.d.root()) throw new Error('Scegli prima la cartella del brain.');
     this.passing = true;
-    this.passCards = { bugs: 0, forget: 0 };
+    this.passCards = { bugs: 0, forget: 0, lint: 0, reverts: 0 };
     this.store.setClickAt(this.now());
     this.d.changed();
     let pass: MaintenanceRun | null = null;
     try { pass = (await this.d.brain.maintain()).lastRun; }
     finally { this.passing = false; }
-    this.passCards = { bugs: pass?.cards?.bugs ?? 0, forget: pass?.cards?.forget ?? 0 };
+    this.passCards = { bugs: pass?.cards?.bugs ?? 0, forget: pass?.cards?.forget ?? 0, lint: pass?.cards?.lint ?? 0, reverts: pass?.cards?.reverts ?? 0 };
     const o = this.defaults();
     if (!o) { this.announce({ state: 'free', costUsd: 0 }, null); this.d.changed(); return this.status(); }
     try { await this.start(o); }
@@ -246,11 +272,11 @@ export class ResearchService {
     const mine = chatId ? this.store.all().filter(p => p.chatId === chatId) : [];
     const d: MaintenanceDone = {
       at: this.now(), state: end.state, costUsd: end.costUsd, ...(end.why ? { why: end.why } : {}),
-      proposals: this.passCards.forget + mine.filter(p => !isAppCard(p)).length,
+      proposals: this.passCards.forget + this.passCards.lint + this.passCards.reverts + mine.filter(p => !isAppCard(p)).length,
       ideas: mine.filter(p => p.kind === 'app-idea' && p.ideaSaved).length,
       issues: this.passCards.bugs + mine.filter(p => isAppCard(p)).length,
     };
-    this.passCards = { bugs: 0, forget: 0 };
+    this.passCards = { bugs: 0, forget: 0, lint: 0, reverts: 0 };
     this.store.setLastDone(d);
     try { this.d.done?.(d); } catch (e) { log.warn('brain', 'maintenance end notice not sent', { cause: errText(e) }); }
   }
@@ -358,7 +384,7 @@ export class ResearchService {
   propose(chatId: string, a: Input): { id: string; left: Record<string, number> } {
     const r = this.mine(chatId);
     const kind = a.kind as ResearchKind;
-    if (!RESEARCH_KINDS.includes(kind)) throw new Error(`kind: one of ${RESEARCH_KINDS.join(', ')}.`);
+    if (!(RESEARCH_TOOL_KINDS as readonly string[]).includes(kind)) throw new Error(`kind: one of ${RESEARCH_TOOL_KINDS.join(', ')}.`);
     const card = this.card(kind, a, chatId);
     const fam = familyOf(kind), mine = this.store.all().filter(p => p.chatId === chatId);
     if (mine.filter(p => familyOf(p.kind) === fam).length >= RESEARCH_CAPS[fam]) throw new Error(`Limit reached: at most ${RESEARCH_CAPS[fam]} proposals of this family per research.`);
@@ -412,6 +438,9 @@ export class ResearchService {
       else throw new Error('bold: give a change (for the brain) or an issue (for the app).');
     } else out.change = this.change(a.change, kind);
     if (kind === 'app-bug' && typeof a.logKey === 'string' && a.logKey.trim()) out.logKey = str(a.logKey, 1000, 'logKey');
+    // «riuscito se…» (ADR 0194): the research's criterion, else the default of a brain change; in the user's words
+    const success = parseSuccess(a.success) ?? defaultSuccess(out.change);
+    if (success && out.change) out.success = { ...success, text: successText(success, this.d.lang()) };
     return out;
   }
   private change(v: unknown, kind?: ResearchKind): ResearchChange {
@@ -446,7 +475,7 @@ export class ResearchService {
   // ── the free cleanup's own cards (zero tokens) ───────────────────────────────────────────────────────────────────
   /** After the pass the user started: one app bug per new log group (never one already carded or dismissed), and the
    *  brain skills no job used in 60 days (never one already proposed in the last 90 days). */
-  afterPass(logs: LogScan): { bugs: number; forget: number } {
+  afterPass(logs: LogScan): { bugs: number; forget: number; lint: number; reverts: number } {
     const all = this.store.all(), p = this.privacy(), w = CLEANUP_WORDS[this.d.lang() === 'it' ? 'it' : 'en'];
     let bugs = 0, forget = 0;
     for (const g of logs.groups.filter(x => !x.known)) {
@@ -474,8 +503,57 @@ export class ResearchService {
         forget: { what: 'skill', name: c.name, lastUsed: c.lastUsed ?? null, uses: 0 } });
       forget++;
     }
-    if (bugs || forget) this.d.changed();
-    return { bugs, forget };
+    const lint = this.lint();
+    const reverts = this.outcomes();
+    if (bugs || forget || lint || reverts) this.d.changed();
+    return { bugs, forget, lint, reverts };
+  }
+
+  /** The brain lint (ADR 0194, M2), zero tokens: new findings become cards (never one already carded, approved or
+   *  rejected: its key), at most LINT_CAPS per check; an open lint card whose problem is gone is dismissed. */
+  lint(): number {
+    // the real folder: the skills are listed by their real paths (BrainModelService), a linked brain root must match them
+    let root: string;
+    try { const r = this.d.root(); if (!r) return 0; root = fs.realpathSync(r); } catch { return 0; }
+    const hashFile = path.join(this.d.userData, 'brain-lint.json');
+    let hashes: Record<string, string> = {};
+    try { const raw = readLocal(hashFile) as { hashes?: Record<string, string> } | undefined; if (raw?.hashes && typeof raw.hashes === 'object') hashes = { ...raw.hashes }; } catch { /* a fresh baseline */ }
+    let records: ReturnType<typeof readMemoryRecords> = [];
+    try { records = readMemoryRecords(root); } catch (e) { log.warn('brain', 'brain lint: memory not read', { cause: errText(e), hint: 'the fact checks wait for a readable memory/records.json; the note checks still run' }); }
+    let found: LintFinding[];
+    try { found = lintBrain({ root, skills: this.d.brain.state().skills, records, hashes }); }
+    catch (e) { log.warn('brain', 'brain lint failed', { cause: errText(e), hint: 'the next «Manutenzione» tries again' }); return 0; }
+    try { writeLocal(hashFile, { version: 1, hashes }); } catch (e) { log.warn('brain', 'brain lint hashes not saved', { cause: errText(e), hint: 'a changed cited file is noticed one pass later' }); }
+    const all = this.store.all(), keys = new Set(found.map(f => f.key));
+    // a problem fixed by hand (or by another card) takes its open card away
+    for (const p of all.filter(x => x.kind === 'lint' && x.state === 'open' && x.lint && !keys.has(x.lint.key))) this.store.update(p.id, { state: 'dismissed', decidedAt: this.now() });
+    const seen = new Set(all.filter(x => x.lint).map(x => x.lint!.key));
+    const lang = this.d.lang();
+    let made = 0;
+    for (const check of LINT_ORDER) {
+      let n = all.filter(x => x.kind === 'lint' && x.state === 'open' && x.lint?.check === check).length;
+      for (const f of found.filter(x => x.check === check)) {
+        if (n >= LINT_CAPS[check] || seen.has(f.key)) continue;
+        this.store.add(lintCard(f, lang)); seen.add(f.key); n++; made++;
+      }
+    }
+    log.info('brain', 'brain lint', { data: { found: found.length, cards: made, ...Object.fromEntries(LINT_ORDER.map(c => [c, found.filter(f => f.check === c).length])) } });
+    return made;
+  }
+
+  /** The «riuscito se…» check (ADR 0194, M4): a card «Questo cambio non ha aiutato: lo annullo?» per change that got
+   *  worse (never twice for one change). Returns the cards made. */
+  outcomes(): number {
+    const worse = this.d.brain.outcomes?.() ?? [];
+    if (!worse.length) return 0;
+    const all = this.store.all(), lang = this.d.lang();
+    let made = 0;
+    for (const r of worse) {
+      if (all.some(p => p.revert?.changeId === r.changeId)) continue;
+      this.store.add(revertCard(r, lang)); made++;
+      log.info('brain', 'maintenance change did not help', { data: { change: r.changeId, metric: r.criterion.metric, before: r.check.before, after: r.check.after } });
+    }
+    return made;
   }
 
   // ── Proposte (the 'research' source) ─────────────────────────────────────────────────────────────────────────────

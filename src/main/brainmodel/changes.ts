@@ -5,7 +5,10 @@
 // Rollback restores the "before" only while the target still is the "after" (a newer change, or the user's own edit on
 // disk, is never overwritten: undo the newer change first). Kept in userData (brain-changes.json, last 400 entries,
 // snapshots of at most 256 KB each): the app's machinery stays out of the brain. Each entry keeps the seed of its evidence
-// claim (evidence.ts `seal`: the roles and the skill it is measured on), sealed when it is recorded (ADR 0109). Used by brainmodel/service.ts and
+// claim (evidence.ts `seal`: the roles and the skill it is measured on), sealed when it is recorded (ADR 0109). A
+// maintenance write (every job but the user's own) to a markdown file must be itemized (item-delta.ts, ADR 0194): a line
+// it loses is listed as removed with a reason, else nothing is written and DeltaRefused is thrown. A change may carry its
+// «riuscito se…» criterion and, a week later, its check (success-check.ts, ADR 0194). Used by brainmodel/service.ts and
 // jobs.ts; unit tests: test/unit/brainmodel/changes.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -14,6 +17,9 @@ import { MAINTENANCE_JOBS, type BrainChange } from '../../shared/brain-model';
 import { readLocal, writeLocal } from '../agents/local-store';
 import { validSeed, type ClaimSeed } from './evidence';
 import type { MemoryTidyUndo } from '../rules/memory-records';
+import type { SuccessCheck } from '../../shared/maintenance-research';
+import { checkDelta, DeltaRefused, guarded, type RemovedItem } from './item-delta';
+import { log } from '../log';
 
 export interface FileSnapshot { file: string; before: string | null; after: string | null }
 /** A role's version before and after. */
@@ -64,10 +70,20 @@ export class ChangeLog {
 
   /** Applies the file writes of one change and records it; nothing is recorded when no file actually changes. All or
    *  nothing: when one file is too big to keep a copy of (it could not be undone), none is written (a move that wrote
-   *  only its pointers would lose what it moved). */
-  apply(change: Omit<StoredChange, 'id' | 'at' | 'files'>, writes: { file: string; text: string | null }[], agent?: AgentSnapshot): StoredChange | null {
+   *  only its pointers would lose what it moved). A maintenance write to a markdown file loses only the items it lists in
+   *  `removed` (ADR 0194): otherwise none is written and DeltaRefused is thrown (logged with cause and hint). */
+  apply(change: Omit<StoredChange, 'id' | 'at' | 'files'>, writes: { file: string; text: string | null; removed?: RemovedItem[] }[], agent?: AgentSnapshot): StoredChange | null {
     const todo = writes.map(w => ({ ...w, before: read(w.file) })).filter(w => w.before !== w.text);
     if (todo.some(w => (w.before?.length ?? 0) > SNAP || (w.text?.length ?? 0) > SNAP)) return null;
+    if (change.job !== 'user') {
+      for (const w of todo) {
+        if (!guarded(w.file)) continue;
+        const v = checkDelta(w.before, w.text, w.removed);
+        if (v.ok) continue;
+        log.warn('brain', 'maintenance write refused: not itemized', { data: { job: change.job, kind: change.kind, target: change.target, missing: v.missing.length }, cause: v.cause, hint: v.hint });
+        throw new DeltaRefused(w.file, v);
+      }
+    }
     const files: FileSnapshot[] = [];
     try {
       for (const w of todo) {
@@ -118,6 +134,13 @@ export class ChangeLog {
       for (const w of applied.reverse()) writeText(w.file, w.text);
       throw e;
     }
+  }
+  /** The week-after check of a change's «riuscito se…» (success-check.ts): kept once, never redone. */
+  setCheck(id: string, check: SuccessCheck): void {
+    const e = this.entries.find(c => c.id === id);
+    if (!e || e.successCheck) return;
+    e.successCheck = structuredClone(check);
+    this.persist();
   }
   /** Seals the entries recorded without a seed (before ADR 0109, or a dropped one) once, and keeps it. */
   sealMissing(sealer: Sealer): void {

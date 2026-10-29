@@ -111,11 +111,16 @@
   «Annulla»), refused when a brain file changed since. While budget is left the research may also propose one revised
   text for the role with the most verified failures or corrections (`brainmodel/role-reflect.ts`,
   `maintenance_role_trial`): approving it starts a trial version (catalog `approveTrial`). The end is a
-  notice (`maintenance:done`). Nothing else proposes by itself: no timer, the Battito makes no idea cards, and the
+  notice (`maintenance:done`). Every maintenance write is itemized (ADR 0194, `brainmodel/item-delta.ts`): `ChangeLog.apply`
+  refuses a write to a brain `.md` file that drops lines it does not list as removed with a reason. The click also runs
+  a zero-token brain lint (`brainmodel/brain-lint.ts`: orphans, broken links, concepts without a note, facts and skill
+  lines citing files that are gone) whose findings are Proposte cards; the launch memory skips a fact citing a missing
+  file. Each brain proposal carries a «riuscito se…» criterion (`brainmodel/success-check.ts`), checked a week after it
+  was applied (start, hourly, click): worse → a card «Questo cambio non ha aiutato: lo annullo?». Nothing else proposes by itself: no timer, the Battito makes no idea cards, and the
   skill candidates and the Battito's rules wait in the deck until the next click (`proposals/service.ts` heldBack).
   Every Proposte decision goes to a ledger (`proposals/ledger.ts`, userData `proposal-decisions.json`); a card of an
   allow-listed group (skill, rule, fact, script/query, learning) whose recent decisions are near-always yes (90% Wilson
-  lower bound ≥ 0.95 over ≥ 10, an undo counting as no) is applied by itself through its source's own decide and listed
+  lower bound ≥ 0.80 over ≥ 10, i.e. 11 yes in a row, an undo counting as no) is applied by itself through its source's own decide and listed
   in «Applicate da sole» with Annulla; roles, settings, permissions, issues, production and outside texts are always
   asked, and every card left says why (`proposals/policy.ts`, ADR 0193). Memoria's statistics (`brainmodel/memory-stats.ts`, `BrainModelState.memoryStats`) are counts over the
   memory files, `ai-errors.md` and the recorded agent runs: zero tokens, nothing written.

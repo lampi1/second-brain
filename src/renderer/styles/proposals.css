@@ -15,6 +15,8 @@
 .pd .pd-g-issue { --pd-c: var(--pair-3, var(--violet)); }
 .pd .pd-g-brain { --pd-c: var(--pair-6); }
 
+.pd .pd-g-note { --pd-c: var(--pair-4, var(--green)); }
+
 /* ── head: chips and progress ─────────────────────────────────────────────────────────────────────────────── */
 .pd-head { width: min(780px, 100%); display: flex; flex-direction: column; gap: 12px; }
 .pd-chips { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }

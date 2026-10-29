@@ -13,7 +13,8 @@ export type ProposalSource = (typeof PROPOSAL_SOURCES)[number];
 /** The filter chips on top of the deck, in this order. */
 /** issue: a GitHub issue the maintenance wrote about the app's code, opened at once when approved (ADR 0153) */
 /** brain: a candidate version of the brain, several file changes decided as one (ADR 0195) */
-export const PROPOSAL_GROUPS = ['skill', 'rule', 'fact', 'script', 'role', 'setting', 'learning', 'forget', 'issue', 'brain'] as const;
+/** note: a brain note the maintenance's lint found unlinked, broken or missing (ADR 0194) */
+export const PROPOSAL_GROUPS = ['skill', 'rule', 'fact', 'script', 'role', 'setting', 'learning', 'forget', 'issue', 'brain', 'note'] as const;
 export type ProposalGroup = (typeof PROPOSAL_GROUPS)[number];
 /** approve = Approva (or Tieni on an applied change); reject = Rifiuta (or Annulla on an applied change). */
 export type ProposalDecision = 'approve' | 'reject';
