@@ -1,5 +1,5 @@
 // Shapes of the brain's data API (the brain's own server, proxied by main as 'brain:api'): /api/tables (every parsed
-// table), /api/cost, /api/day (report or brief), /api/map, /api/files, /api/file, /api/search, /api/version; plus
+// table), /api/cost, /api/map, /api/files, /api/file, /api/search, /api/version; plus
 // /api/quality, /api/scripts, /api/script and /api/changelog, answered by main itself (AppQuality, ADR 0076). The server is another program that may be older
 // or newer than the app, so every read goes through a normalizer that fills what is missing (lists → [], text → '')
 // instead of trusting the shape. Used by the pages.
@@ -55,19 +55,6 @@ export interface CostData {
   advice: { usd: number; text: string }[];
 }
 
-export interface WorkItemRef { type: string; title: string; state: string; assignee?: string; url: string }
-export interface DayRow {
-  kind: string; title: string; area: string; url?: string; state?: string; type?: string; tag?: string; time?: string;
-  target?: string; from?: string; to?: string; his?: number; last?: string;
-  /** a chat's project folder (day.mjs ≥ 2026-10-13; '' or absent before) */
-  cwd?: string;
-}
-export interface DayReport { date: string; day: string; devops: boolean | null; areas: string[]; rows: DayRow[]; commits: string[]; text: string }
-export interface BriefPr { title: string; target: string; draft?: boolean; url: string; area: string; items: WorkItemRef[]; votes?: string; build?: string; buildUrl?: string; autocomplete?: boolean }
-/** aiFound: a bug an AI filed, waiting for a human to validate it (see aiFoundFlag) */
-export interface BriefItem { type: string; title: string; state: string; url: string; aiFound: boolean; area: string }
-export interface BriefThread { section: string; label: string; date: string; next: string; stale: boolean; done: boolean; area: string }
-export interface Brief { date: string; day: string; devops: boolean | null; areas: string[]; prs: BriefPr[]; items: BriefItem[]; threads: BriefThread[]; text: string }
 
 /** label: the speaking name ("Coda dei test"); name: the technical one (file, agent, /skill), when the brain sends it */
 export interface MapMember { id: string; label: string; name?: string; what?: string; uses?: number }
@@ -200,31 +187,6 @@ export function normCost(v: unknown): CostData {
     cursor: cur ? { total: num(cur.total), downloaded: cur.downloaded ? str(cur.downloaded) : undefined, lastRow: cur.lastRow ? str(cur.lastRow) : undefined } : null,
     fixed: fixed ? { chars: num(fixed.chars), usd: num(fixed.usd) } : null,
     advice: arr(o.advice).filter(isObj).map(a => ({ usd: num(a.usd), text: str(a.text) })),
-  };
-}
-
-const devops = (v: unknown): boolean | null => (v === false ? false : v === true ? true : null);
-export function normReport(v: unknown): DayReport {
-  const o = obj(v);
-  return {
-    date: str(o.date), day: str(o.day || o.date), devops: devops(o.devops), areas: arr(o.areas).map(str),
-    rows: arr(o.rows).filter(isObj).map(r => ({ ...r, kind: str(r.kind), title: str(r.title), area: str(r.area) || 'Altro' })) as DayRow[],
-    commits: arr(o.commits).map(str), text: str(o.text),
-  };
-}
-// The brief marks the work items an AI found (they wait for a human) with a boolean named after the tracker project
-// that holds them; a neutral "aiFound" is read first, else any other true flag of a work item means the same.
-const ITEM_FLAGS = new Set(['aiFound', 'done', 'stale', 'draft', 'autocomplete']);
-export const aiFoundFlag = (i: Obj): boolean => i.aiFound === true || Object.entries(i).some(([k, v]) => v === true && !ITEM_FLAGS.has(k));
-export function normBrief(v: unknown): Brief {
-  const o = obj(v);
-  const items = (x: unknown): WorkItemRef[] => rows<WorkItemRef>(x, ['type', 'title', 'state', 'assignee', 'url']);
-  return {
-    date: str(o.date), day: str(o.day || o.date), devops: devops(o.devops), areas: arr(o.areas).map(str),
-    prs: arr(o.prs).filter(isObj).map(p => ({ ...strs<BriefPr>(p, ['title', 'target', 'url', 'area', 'votes', 'build', 'buildUrl']), area: str(p.area) || 'Altro', draft: !!p.draft, items: items(p.items) })),
-    items: arr(o.items).filter(isObj).map(i => ({ ...strs<BriefItem>(i, ['type', 'title', 'state', 'url', 'area']), area: str(i.area) || 'Altro', aiFound: aiFoundFlag(i) })),
-    threads: arr(o.threads).filter(isObj).map(t => ({ ...strs<BriefThread>(t, ['section', 'label', 'date', 'next', 'area']), area: str(t.area) || 'Altro', stale: !!t.stale, done: !!t.done })),
-    text: str(o.text),
   };
 }
 

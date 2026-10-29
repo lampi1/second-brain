@@ -624,10 +624,10 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/renderer/components/brain-model/MemoryPage.tsx', 'src/renderer/components/brain-model/ApprovedTab.tsx', 'src/renderer/lib/memory-hub.ts', 'src/renderer/brain/pages/Idee.tsx', 'src/renderer/components/ContextNow.tsx', 'src/renderer/dashboard/AppErrors.tsx', 'src/main/brainmodel/service.ts'],
   },
   {
-    id: 'task-fatto',
-    title: b('Task e Fatto', 'Tasks and Done'),
-    summary: b('Task mostra quello che ti aspetta su Azure DevOps; Fatto elenca le attività che hai chiesto, dalla più recente, con il loro costo.',
-      'Tasks shows what waits for you on Azure DevOps; Done lists the tasks you asked for, newest first, with their cost.'),
+    id: 'tasks',
+    title: b('Task', 'Tasks'),
+    summary: b('Task mostra quello che ti aspetta su Azure DevOps: notizie, PR, review e work item.',
+      'Tasks shows what waits for you on Azure DevOps: news, PRs, reviews and work items.'),
     points: [
       // src/renderer/brain/pages/Task.tsx, src/main/tasks/service.ts
       b('«Task» legge con il lettore devops-me.mjs le tue PR, le review, i work item e le menzioni: quello incluso nell’app, o quello del brain se c’è; sola lettura, zero token.',
@@ -636,23 +636,19 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'The read starts with "Refresh now" or by itself, every 15 minutes up to 2 hours, when the automatic read is on; a mention alerts you with a sound you can turn off.'),
       b('Ogni record ha «Discuti»: l’Orchestrator riceve una bozza con titolo, link, stato e cartella; se serve lavoro, è lui ad aprire e istruire la chat.',
         'Every record has "Discuss": the Orchestrator gets a draft with title, link, state and folder; if work is needed, it opens and briefs the chat itself.'),
-      // src/renderer/brain/pages/Fatto.tsx, src/shared/macro-tasks.ts
-      b('«Fatto» elenca per giorno, dalla più recente, solo le attività principali: quelle avviate da te o dall’Orchestrator; una chat delegata non è mai una riga a sé.',
-        '"Done" lists by day, newest first, only the main tasks: the ones you or the Orchestrator started; a delegated chat is never a row of its own.'),
-      b('Il costo di una riga è il suo più quello di tutto ciò che ha avviato (figli, nipoti, revisioni, rifacimenti); «n/d» se una parte non ha un costo noto. Ogni giorno ha il suo totale.',
-        'A row’s cost is its own plus everything it started (children, grandchildren, reviews, reworks); "n/a" when a part has no known cost. Each day has its total.'),
-      b('Lo stand-up in cima ha una riga per attività dell’ultimo giorno di lavoro e di oggi, da copiare; la pagina non spende token e non legge niente fuori dall’app.',
-        'The stand-up on top has one line per task of the last work day and today, ready to copy; the page spends no tokens and reads nothing outside the app.'),
+      // src/renderer/brain/pages/TaskQa.tsx
+      b('«Test e QA» mostra, per ogni tua PR con un test plan, quanti test case sono fatti e quanti mancano, chi li ha eseguiti e i bug collegati.',
+        '"Tests and QA" shows, for each of your PRs with a test plan, how many test cases are done and how many are missing, who ran them and the linked bugs.'),
     ],
-    analogy: b('Task è la posta in arrivo del lavoro; Fatto è il diario di bordo.',
-      'Tasks is the work’s inbox; Done is the logbook.'),
+    analogy: b('Task è la posta in arrivo del lavoro.',
+      'Tasks is the work’s inbox.'),
     tech: [
-      tech(DATA, 'Task: la cache tasks.json nella cartella dati dell’app; Fatto: il registro delle esecuzioni dell’app (agent-runs.json, IPC runs:macro).',
-        'Tasks: the tasks.json cache in the app’s data folder; Done: the app’s run store (agent-runs.json, IPC runs:macro).'),
-      tech(WHERE, 'Lettura e avvisi in src/main/tasks/, le pagine in brain/pages/Task.tsx e Fatto.tsx. Fino al 19/10/2026 Task si chiamava DevOps: impostazioni e link vecchi passano da soli al nome nuovo (ADR 0079).',
-        'Reads and alerts in src/main/tasks/, the pages in brain/pages/Task.tsx and Fatto.tsx. Until 19/10/2026 Tasks was called DevOps: old settings and links move to the new name by themselves (ADR 0079).'),
+      tech(DATA, 'La cache tasks.json nella cartella dati dell’app.',
+        'The tasks.json cache in the app’s data folder.'),
+      tech(WHERE, 'Lettura e avvisi in src/main/tasks/, la pagina in brain/pages/Task.tsx. Fino al 19/10/2026 Task si chiamava DevOps: impostazioni e link vecchi passano da soli al nome nuovo (ADR 0079).',
+        'Reads and alerts in src/main/tasks/, the page in brain/pages/Task.tsx. Until 19/10/2026 Tasks was called DevOps: old settings and links move to the new name by themselves (ADR 0079).'),
     ],
-    sources: ['src/renderer/brain/pages/Task.tsx', 'src/main/tasks/service.ts', 'src/renderer/brain/pages/Fatto.tsx', 'src/shared/macro-tasks.ts'],
+    sources: ['src/renderer/brain/pages/Task.tsx', 'src/main/tasks/service.ts'],
   },
   {
     id: 'setup',

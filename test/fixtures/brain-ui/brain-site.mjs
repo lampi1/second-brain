@@ -27,11 +27,6 @@ export function makeServer(root) {
       if (p === '/api/tables') return json(200, D.tables);
       if (p === '/api/now') return json(200, wrap(D.now));
       if (p === '/api/cost') { const days = Math.min(90, Math.max(1, Number(u.searchParams.get('days')) || 7)); return json(200, wrap(D.cost(days))); }
-      if (p === '/api/day') {
-        if (u.searchParams.get('kind') === 'brief') return json(200, wrap(D.brief));
-        const date = /^\d{4}-\d{2}-\d{2}$/.test(u.searchParams.get('date') ?? '') ? u.searchParams.get('date') : D.tables.today;
-        return json(200, wrap(D.report(date)));
-      }
       if (p === '/api/map') return json(200, wrap(D.map));
       if (p === '/api/files') return json(200, D.files);
       if (p === '/api/file') {

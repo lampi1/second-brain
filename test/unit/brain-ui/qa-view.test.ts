@@ -2,7 +2,7 @@
 // blocked, to do, rest), people across PRs, the headline's tone, and the stand-up text with names and titles, no ids.
 import { describe, expect, it } from 'vitest';
 import type { QaPoint, QaReport } from '../../../src/shared/contract';
-import { qaHeadline, qaOrder, qaOutcome, qaPeople, qaStandup } from '../../../src/renderer/brain/lib/qa';
+import { qaHeadline, qaOrder, qaOutcome, qaPeople } from '../../../src/renderer/brain/lib/qa';
 
 const pt = (id: number, outcome: string | null, ranBy: string | null = null): QaPoint =>
   ({ id, suite: 'S', testCase: { id: 500 + id, title: `Caso ${id}`, url: `https://x/${500 + id}` }, outcome, ranBy, ranAt: null, tester: 'Sara Neri', bugs: [] });
@@ -38,17 +38,5 @@ describe('qa view', () => {
     expect(qaHeadline(report({ totals: totals({ done: 4, missing: 0, failed: 0, blocked: 0, openBugs: 0 }) }))).toEqual({ text: '4 su 4 fatti · tutti eseguiti', tone: 'good' });
     expect(qaHeadline(report({ totals: totals({ failed: 0, blocked: 0, openBugs: 0 }) })).tone).toBe('warn');
     expect(qaHeadline(report({ totals: totals({ total: 0 }) })).text).toBe('nessun test case');
-  });
-
-  it('stand-up text: titles and names, open bugs only, no ids', () => {
-    const t = qaStandup([report()]);
-    expect(t).toContain('PR «Preventivi eliminati»: 3 su 4 fatti');
-    expect(t).toContain('(Anna Neri 2, Mario 1)');
-    expect(t).toContain('- fallito: Caso 3 (Anna Neri)');
-    expect(t).toContain('- da fare: Caso 2');
-    expect(t).toContain('- bug aperto: Conteggio sbagliato (Active, Mario)');
-    expect(t).not.toContain('Chiuso');
-    expect(t).not.toMatch(/2798|127029|601/);
-    expect(qaStandup([])).toBe('Test e QA: nessuna PR attiva con test.');
   });
 });

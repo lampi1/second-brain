@@ -6,9 +6,9 @@
 // its count. The news as cards with the whole comment or mention; my PRs with who they wait for, a four-step check
 // strip (build, votes, discussions, auto-complete), the voters, the last comment and the linked work items' test
 // outcomes; "Test e QA" (TaskQa.tsx); the reviews waiting for me and since when; my work items by state, each opening
-// in place on its description, last comments and test cases; the tickets I follow with their changes; the stand-up
-// sentences. All of it from the brain's read-only script devops-me.mjs --full, kept by main's TaskService (imported
-// automatically when the read is on): zero tokens, no AI summary. Each record has "Discuti" (RecordDiscussButton.tsx: a draft for the Orchestrator).
+// in place on its description, last comments and test cases; the tickets I follow with their changes. All of it from the
+// brain's read-only script devops-me.mjs --full, kept by main's TaskService (imported automatically when the read is
+// on): zero tokens, no AI summary. Each record has "Discuti" (RecordDiscussButton.tsx: a draft for the Orchestrator).
 // A failed read says why (az login expired → the command). Why: the user, 2026-10-11 ("vorrei un aggiornamento
 // automatico da DevOps"), 2026-10-12 ("falla figa e usabile ... info aggiuntive sempre a costo 0 token"), 2026-10-19
 // (#85: "rinomina DevOps in Task", same look as Agenti). Styles: brain.css (dv-*) and worklog.css (tk-*).
@@ -18,12 +18,8 @@ import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { markTasksRead, refreshTasks, useTasks } from '../../store/tasks';
 import { fmt } from '../lib/format';
 import { BUILD_WORDS, byState, daysSince, firstName, hue, initials, lastComment, outcomeLabel, prWait, sinceLabel, stateTone, stuckDays, testSummary } from '../lib/tasks';
-import { normTables } from '../types';
-import { useBrain } from '../api';
-import { ownerOf } from '../lib/text';
 import { Empty, Loading } from '../components/States';
-import { copyText, ExtLink, IconCopy, IconExternal, Pill, Section, toast, type Navigate, type Tone } from '../components/ui';
-import { Standup } from './day';
+import { copyText, ExtLink, IconCopy, IconExternal, Pill, Section, toast, type Tone } from '../components/ui';
 import { QaSection } from './TaskQa';
 import { RecordDiscussButton } from '../components/RecordDiscussButton';
 import { HelpTip } from '../../components/HelpTip';
@@ -41,7 +37,7 @@ const newsLine = (n: DevopsNews) => { const v = tr(VERB[n.kind]); return n.who ?
 /** "failed (20261011.4)" → "fallita (20261011.4)": the script's build result in Italian. */
 const buildDetail = (d: string) => d.replace(/^(\w+)/, w => BUILD_WORDS[w] ?? w);
 const ERROR_TITLE: Record<NonNullable<TasksState['error']>['kind'], TextKey> = { login: 'brainText.task.error.login', script: 'brainText.task.error.script', failed: 'brainText.task.error.failed' };
-type SecId = 'news' | 'prs' | 'qa' | 'reviews' | 'items' | 'followed' | 'standup';
+type SecId = 'news' | 'prs' | 'qa' | 'reviews' | 'items' | 'followed';
 /** Scrolls to a section and moves the keyboard focus there (Tab goes on inside it, not back among the tiles). */
 const jump = (id: SecId) => { const el = document.getElementById(`dv-${id}`); el?.scrollIntoView({ behavior: 'smooth', block: 'start' }); el?.focus({ preventScroll: true }); };
 
@@ -380,9 +376,8 @@ function Head({ s, lead }: { s: TasksState | null; lead?: ReactNode }) {
   );
 }
 
-export function TaskPage({ nav }: { nav?: Navigate }) {
+export function TaskPage() {
   const s = useTasks(x => x);
-  const t = useBrain('/api/tables', normTables);
   // the news unread at the last read stay in "Da leggere" (marked "letta" once read) until the next read: a card
   // never jumps away under the pointer or takes the keyboard focus with it
   const top = useRef<{ at: number | null; keys: Set<string> }>({ at: null, keys: new Set() });
@@ -412,7 +407,6 @@ export function TaskPage({ nav }: { nav?: Navigate }) {
     { id: 'reviews', label: tr('brainText.task.sec.reviews'), n: reviews.length, hot: reviews.length > 0 },
     { id: 'items', label: tr('brainText.task.sec.items'), n: s.assigned.length, hot: hot.length > 0 },
     ...(followed.size ? [{ id: 'followed' as const, label: tr('brainText.task.sec.followed'), n: followed.size, hot: unreadFollowed > 0 }] : []),
-    ...(t.data ? [{ id: 'standup' as const, label: tr('brainText.task.sec.standup') }] : []),
   ];
   const lead = s.error
     ? <><b>{tr(ERROR_TITLE[s.error.kind])}</b>{s.at ? <>{tr('brainText.task.lead.lastOk', { ago: fmt.ago(s.at) })}</> : '.'}</>
@@ -499,15 +493,6 @@ export function TaskPage({ nav }: { nav?: Navigate }) {
               <Section title={tr('brainText.task.sec.followed')} count={followed.size} note={tr('brainText.task.followed.note')} testId="task-followed">
                 <div className="dv-stack">{[...followed.values()].map(ns => <FollowedCard key={ns[0]!.key} news={ns} details={s.details} />)}</div>
               </Section>
-            </Anchor>
-          )}
-
-          {t.data && (
-            <Anchor id="standup">
-              <div className="dv-standup">
-                <Standup tables={t.data} owner={ownerOf(t.data.ideas)} />
-                {nav && <button type="button" className="bx-go" onClick={() => nav('fatto')}>{tr('brainText.task.allDone')}</button>}
-              </div>
             </Anchor>
           )}
         </>

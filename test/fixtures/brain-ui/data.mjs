@@ -12,9 +12,6 @@ const dm = t => { const d = new Date(t); return `${String(d.getDate()).padStart(
 function rng(seed) { let s = seed >>> 0; return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 2 ** 32; }; }
 
 const OWNER = 'Alex';
-const PR = n => `https://dev.example.com/proj/_git/app/pullrequest/${n}`;
-const WI = n => `https://dev.example.com/proj/_workitems/edit/${n}`;
-const AREAS = ['Prodotto', 'Clienti', 'Produzione', 'Personale e OS', 'Altro'];
 
 /** opts.mapExtra adds that many synthetic notes to the full map (clusters of linked notes under a few areas, plus
  *  some loose ones), to see the brain map with a large brain (issue #77). */
@@ -209,50 +206,6 @@ export function build(now = Date.now(), opts = {}) {
         { usd: total * 0.01, text: 'Contesto fisso del cervello: 14.2k caratteri: pesa poco, accorciarlo non è la leva' },
       ],
     };
-  };
-
-  // ── day report / brief (day.mjs --json) ────────────────────────────────────────────────────────────────────────
-  const report = date => ({
-    date, kind: 'report', day: date, devops: true, areas: AREAS,
-    rows: [
-      { kind: 'pr-unita', time: '11:52', title: '#90680 fix(orders): apply the discount once', target: 'main', url: PR(51001), area: 'Prodotto' },
-      { kind: 'pr-aperta', time: '09:30', title: 'feat(export): invoices CSV export', target: 'main', url: PR(51003), area: 'Clienti' },
-      { kind: 'work-item', time: '12:05', type: 'Bug', title: '[Fatture] - Sconto applicato due volte sul totale', state: 'Resolved', url: WI(90680), area: 'Prodotto' },
-      { kind: 'work-item', time: '09:12', type: 'User Story', title: '[Export] Export delle fatture in CSV', state: 'Active', url: WI(90701), area: 'Clienti' },
-      { kind: 'diario', time: '08:50', tag: 'fatto', title: 'Clienti · Export fatture: prima versione del CSV verificata a mano', area: 'Clienti' },
-      { kind: 'diario', time: '10:40', tag: 'verificato', title: 'Prodotto · Fix calcolo sconto: build verde dopo il rebase', area: 'Prodotto' },
-      { kind: 'diario', time: '11:15', tag: 'decisione', title: 'Le chat finite sopra 200k di contesto si chiudono', area: 'Personale e OS' },
-      { kind: 'chat', title: 'QA ordini', from: '09:02', to: '11:40', his: 6, last: 'Test case 1-6 passati, il 7 fallisce anche su master.', area: 'Prodotto' },
-      { kind: 'chat', title: 'Produzione · lentezza login', from: '07:30', to: '07:55', his: 2, last: 'Carico normale per una domenica.', area: 'Produzione' },
-      { kind: 'chat', title: 'OS · Mappa 3D', from: '13:10', to: '15:20', his: 4, last: 'La vista essenziale è in main.', area: 'Personale e OS' },
-      { kind: 'chat-cursor', title: 'Cursor · Ricerca librerie grafici · finito', area: 'Personale e OS' },
-      { kind: 'diario', time: '13:05', tag: 'fatto', title: 'Procedure · pagina Procedure al posto di Comunicazione', area: 'Prodotto' },
-      { kind: 'chat', title: 'Pagina Procedure', from: '13:00', to: '14:10', his: 3, last: 'Pronta, mandata all’Orchestrator.', area: 'Prodotto' },
-    ],
-    commits: ['map: essential view', 'cost: savings per long chat', 'procedures: publish the Procedure page'], brief: false,
-    text: `# Giornata ${date}: materiale per il report\n\n## Prodotto\n- PR unita "fix(orders): apply the discount once" ${PR(51001)}\n- chat "QA ordini" 09:02-11:40, 6 messaggi tuoi\n- chat Claude "Pagina Procedure" 13:00-14:10, 3 messaggi tuoi\n\n## Clienti\n- PR aperta "feat(export)" ${PR(51003)}\n\n| Chat | Messaggi |\n|---|---|\n| QA ordini | 6 |\n| Pagina Procedure | 3 |\n| OS · Mappa 3D | 4 |\n`,
-  });
-  const brief = {
-    date: today, kind: 'brief', day: today, devops: true, areas: AREAS,
-    prs: [
-      { kind: 'pr', title: 'fix(orders): apply the discount once', target: 'main', draft: false, url: PR(51002), area: 'Prodotto', items: [
-        { type: 'Bug', title: '[Fatture] - Sconto applicato due volte sul totale', state: 'Resolved', assignee: 'Sam', url: WI(90680) },
-        { type: 'P-', title: '[App] Pr 51002 test', state: 'Active', assignee: 'Robin', url: WI(90720) },
-      ], autocomplete: true, votes: 'nessuno (4 revisori)', build: 'succeeded', buildUrl: 'https://dev.example.com/proj/_build/results?buildId=1' },
-      { kind: 'pr', title: 'feat(export): invoices CSV export', target: 'main', draft: false, url: PR(51003), area: 'Clienti', items: [{ type: 'User Story', title: '[Export] Export delle fatture in CSV', state: 'Active', assignee: OWNER, url: WI(90701) }], votes: '1 approvato', build: 'failed', buildUrl: 'https://dev.example.com/proj/_build/results?buildId=2' },
-      { kind: 'pr', title: 'chore(print): list layout', target: 'main', draft: true, url: PR(51004), area: 'Prodotto', items: [], votes: '' },
-    ],
-    items: [
-      { kind: 'work-item', type: 'Feature', title: '[Fatture] Contabilità', state: 'Active', url: WI(90011), aiFound: false, area: 'Prodotto' },
-      { kind: 'work-item', type: 'Bug', title: '[Login] - Sessione non rinnovata dopo 8 ore', state: 'New', url: WI(90750), aiFound: false, area: 'Produzione' },
-      { kind: 'work-item', type: 'Bug', title: '[Fatture] - Si può eliminare una fattura d\'acconto già scalata', state: 'New', url: WI(90423), aiFound: true, area: 'Altro' },
-      { kind: 'work-item', type: 'Bug', title: '[Stampa] - Colonna tagliata nell\'elenco', state: 'New', url: WI(90424), aiFound: true, area: 'Altro' },
-    ],
-    threads: [
-      ...nowRows.map(x => ({ section: x.sezione, label: x.filo, date: x.aggiornato, next: x.prossimo, stale: x.aggiornato < d(7), done: /^FATT/i.test(x.prossimo), area: /^(OS|Pers)/.test(x.filo) ? 'Personale e OS' : x.filo.startsWith('Clienti') ? 'Clienti' : x.filo.startsWith('Produzione') ? 'Produzione' : 'Prodotto' })),
-      { section: 'Lavoro', label: 'Pagina Procedure', date: today, next: "prossimo: l'Orchestrator unisce il ramo", stale: false, done: false, area: 'Prodotto' },
-    ],
-    text: `# Brief ${today}\n\n## Le tue PR, dal vivo\n\n- "fix(orders): apply the discount once" → main ${PR(51002)}\n  voti: nessuno (4 revisori) · ultima build: succeeded\n\n## Fili aperti\n\n- **Clienti · Export fatture**: ${OWNER} decide se il PDF entra\n`,
   };
 
   // ── map (brain-map.mjs --json) ─────────────────────────────────────────────────────────────────────────────────
@@ -494,7 +447,7 @@ export function build(now = Date.now(), opts = {}) {
   const files = Object.keys(texts).sort();
 
   return {
-    tables, now: nowData, cost, report, brief, map, files, texts,
+    tables, now: nowData, cost, map, files, texts,
     version: { site: 'abc1234 2026-10-11T10:00:00+02:00', root, here: `${root}/ops/tools` },
     fileMeta: f => ({ path: f, size: texts[f].length, modified: iso(now - (f.length % 5) * DAY), text: texts[f] }),
   };

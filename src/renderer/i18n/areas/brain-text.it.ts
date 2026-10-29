@@ -1,4 +1,4 @@
-// Italian texts of the "brainText" area: the brain pages' texts moved out of the components (Qualità, Task, stand-up, Stats, map): issue #162. The source of brain-text.en.ts and brain-text.de.ts.
+// Italian texts of the "brainText" area: the brain pages' texts moved out of the components (Qualità, Task, Stats, map): issue #162. The source of brain-text.en.ts and brain-text.de.ts.
 export const brainTextIt = {
   // shared by several brain pages
   'brainText.common.last7': 'negli ultimi 7 giorni',
@@ -219,9 +219,6 @@ export const brainTextIt = {
   'brainText.qa.failed': (p: { n: number }) => `${p.n} ${p.n === 1 ? 'fallito' : 'falliti'}`,
   'brainText.qa.blocked': (p: { n: number }) => `${p.n} ${p.n === 1 ? 'bloccato' : 'bloccati'}`,
   'brainText.qa.openBugs': (p: { n: number }) => `${p.n} ${p.n === 1 ? 'bug aperto' : 'bug aperti'}`,
-  'brainText.qa.standupNone': 'Test e QA: nessuna PR attiva con test.',
-  'brainText.qa.standupTodo': (p: { list: string }) => `- da fare: ${p.list}`,
-  'brainText.qa.standupBug': (p: { title: string; state: string }) => `- bug aperto: ${p.title} (${p.state})`,
 
   // pages/TaskQa.tsx
   'brainText.taskQa.barLabel': (p: { done: number; total: number }) => `${p.done} su ${p.total} eseguiti`,
@@ -237,7 +234,6 @@ export const brainTextIt = {
   'brainText.taskQa.unassigned': 'non assegnato',
   'brainText.taskQa.ranBy': 'Eseguiti da ',
   'brainText.taskQa.otherBugs': 'Altri bug collegati',
-  'brainText.taskQa.standupCopied': 'Stand-up copiato',
   'brainText.taskQa.title': 'Test e QA',
   'brainText.taskQa.helpTitle': 'Come leggere la barra',
   'brainText.taskQa.helpExample': '7 su 10: 5 passati, 1 fallito, 1 bloccato, 3 ancora da fare.',
@@ -246,7 +242,6 @@ export const brainTextIt = {
   'brainText.taskQa.allRun': 'tutti i test eseguiti',
   'brainText.taskQa.ranByList': (p: { list: string }) => ` · eseguiti da ${p.list}`,
   'brainText.taskQa.noteEmpty': 'i test plan delle tue PR attive',
-  'brainText.taskQa.copyStandup': 'Copia per lo stand-up',
   'brainText.taskQa.previous': ' Qui sotto la lettura precedente.',
   'brainText.taskQa.emptyTitle': 'Nessuna PR attiva con test',
   'brainText.taskQa.emptyBody': 'Quando una tua PR ha un test plan collegato, qui vedi cosa è fatto, chi l\'ha fatto e cosa manca.',
@@ -315,7 +310,6 @@ export const brainTextIt = {
   'brainText.task.sec.reviews': 'Review',
   'brainText.task.sec.items': 'Work item',
   'brainText.task.sec.followed': 'Ticket che segui',
-  'brainText.task.sec.standup': 'Stand-up',
   'brainText.task.lead.lastOk': (p: { ago: string }) => `: qui sotto i dati dell'ultima lettura riuscita (${p.ago}).`,
   'brainText.task.lead.firstRead': 'Leggo Azure DevOps per la prima volta…',
   'brainText.task.lead.never': 'Task non ancora letti: premi «Aggiorna ora».',
@@ -354,21 +348,6 @@ export const brainTextIt = {
   'brainText.task.items.note': 'clic su una riga: descrizione, commenti e test case',
   'brainText.task.items.none': 'Nessun work item aperto',
   'brainText.task.followed.note': 'stato, assegnatario e commenti degli altri',
-  'brainText.task.allDone': 'Tutto il fatto e il diario →',
-
-  // lib/text.ts: the stand-up sentences
-  'brainText.standup.and': ' e ',
-  'brainText.standup.merged': 'ho unito',
-  'brainText.standup.opened': 'ho aperto',
-  'brainText.standup.thePr': 'la PR',
-  'brainText.standup.nPrs': (p: { n: number }) => `${p.n} PR:`,
-  'brainText.standup.closed': (p: { what: string }) => `ho chiuso ${p.what}`,
-  'brainText.standup.worked': (p: { what: string }) => `ho lavorato a ${p.what}`,
-  'brainText.standup.yesterday': 'Ieri',
-  'brainText.standup.nothing': (p: { day: string }) => `${p.day}: niente di registrato sul lavoro.`,
-  'brainText.standup.openPrs': (p: { n: number; list: string; waiting: boolean }) => `Ho ${p.n === 1 ? 'una PR aperta' : `${p.n} PR aperte`}: ${p.list}${p.waiting ? ', aspettano revisione' : ''}.`,
-  'brainText.standup.today': (p: { list: string }) => `Oggi: ${p.list}.`,
-  'brainText.standup.waiting': (p: { list: string }) => `Aspetto: ${p.list}.`,
 
   // pages/Script.tsx and lib/brain-sections.ts
   'brainText.script.tested': 'Provato',
