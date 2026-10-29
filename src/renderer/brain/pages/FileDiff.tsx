@@ -53,7 +53,7 @@ function SplitView({rows,w}:{rows:SplitRow[];w:number}){
   </div>;
 }
 
-function DiffView({diff}:{diff:Diff}){
+export function DiffView({diff}:{diff:Diff}){
   const[layout,setLayoutState]=useState<Layout>(readLayout);
   const setLayout=(l:Layout)=>{setLayoutState(l);try{localStorage.setItem(LAYOUT_KEY,l);}catch{/* storage off: this session only */}};
   const[state,setState]=useState<{diff:Diff;patch:StructuredPatch|'slow'}|null>(null);

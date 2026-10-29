@@ -27,6 +27,7 @@ describe('native Codex app tool approval', () => {
       'mcp_servers.second-brain.tools.plan_update.approval_mode=approve',
       'mcp_servers.second-brain.tools.maintenance_pack.approval_mode=approve',
       'mcp_servers.second-brain.tools.maintenance_propose.approval_mode=approve',
+      'mcp_servers.second-brain.tools.maintenance_role_trial.approval_mode=approve',
       'mcp_servers.second-brain-app.default_tools_approval_mode=approve',
     ]);
     expect(values).toContain('mcp_servers.second-brain.default_tools_approval_mode=prompt');

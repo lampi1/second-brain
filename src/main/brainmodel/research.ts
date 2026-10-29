@@ -9,14 +9,19 @@
 // written, opened on GitHub at once when the user approves (issue-open.ts). An app idea is also written to the brain's
 // Idee, on the AI's side. The pass also makes cards by itself, at zero tokens: one app bug per new log group and the
 // brain skills no job used in 60 days. When it is all over, `done` tells the renderer what it made (the end notice).
-// Used by wiring.ts and demo-wiring.ts; IPC maintenance:* (index.ts); tests: test/unit/brainmodel/research.test.ts.
+// ADR 0195 hooks: the brain-file findings of one research are held and, when it ends, gathered into ONE candidate brain
+// (research-candidate.ts: a copy under userData, one card with a diff per file, one change and one «Annulla» when
+// approved); and the research may propose one revised role text from that role's failed runs (role-reflect.ts), which
+// becomes a trial version only when the user approves its card.
+// Used by wiring.ts and demo-wiring.ts; IPC maintenance:* (index.ts); tests: test/unit/brainmodel/research.test.ts,
+// research-candidate.test.ts, role-reflect.test.ts.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { BrainModelState, LogScan, MaintenanceRun } from '../../shared/brain-model';
 import type { ChatSummary, Effort, Harness, Lang, NewChat } from '../../shared/contract';
-import { familyOf, isAppKind, RESEARCH_CAP_USD, RESEARCH_CAPS, RESEARCH_KINDS, type MaintenanceDone, type MaintenanceStatus, type ResearchChange, type ResearchForget,
+import { CANDIDATE_PENDING, familyOf, isAppKind, RESEARCH_CAP_USD, type BrainCandidate, type BrainCandidateView, RESEARCH_CAPS, RESEARCH_KINDS, type MaintenanceDone, type MaintenanceStatus, type ResearchChange, type ResearchForget,
   type ResearchIssue, type ResearchKind, type ResearchOptions, type ResearchProposal, type ResearchRunInfo, type ResearchSource } from '../../shared/maintenance-research';
 import { isRoleId } from '../../shared/roles';
 import { errText, log } from '../log';
@@ -30,6 +35,8 @@ import { readLedger } from '../proposals/ledger';
 import { allPolicies } from '../proposals/policy';
 import { defaultPrompt, MAX_PROMPT, researchFrame, researchMessage } from './research-prompt';
 import { ResearchStore } from './research-store';
+import { CandidateService, isCandidateFinding, type CandidatePorts } from './research-candidate';
+import { checkRoleText, pickRole, reflectSection, REFLECT_BUDGET_SHARE, ROLE_REFLECT_SECTION, type ReflectPick } from './role-reflect';
 
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 const MODEL_ID = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
@@ -71,7 +78,16 @@ export interface ResearchDeps {
   logDir?: () => string | null;
   /** the Log page's events in memory; default the app's journal */
   events?: () => readonly LogEvent[];
+  /** the candidate brain's ports (ADR 0195); absent = every brain finding stays its own card */
+  candidates?: CandidatePorts;
+  /** starts a trial version of a role with a revised text (catalog approveTrial), refused when the role is no longer on
+   *  `baseVersion` (ADR 0195); absent = the research gets no role reflection */
+  roleTrial?: (role: string, text: string, baseVersion: number, reason: string) => void;
 }
+
+/** The research's extra frame lines for the ADR 0195 steps (after the method and the fixed frame). */
+const CANDIDATE_FRAME = 'Brain changes that only write brain files (skills without a role, rules for every role, what to forget) are gathered by the app into ONE candidate version of the brain when you end: the user sees one card with a before/after per file and keeps or discards all of it.';
+const REFLECT_FRAME = `Role text: read maintenance_pack section "${ROLE_REFLECT_SECTION}" once; when it names a role, you may propose ONE revised full text for it with maintenance_role_trial (a trial version the user approves, measured against the current one).`;
 
 type Input = Record<string, unknown>;
 const str = (v: unknown, max: number, field: string, required = true): string => {
@@ -161,13 +177,18 @@ export const isAppCard = (p: Pick<ResearchProposal, 'kind' | 'issue' | 'change'>
 
 export class ResearchService {
   readonly store: ResearchStore;
-  private run: (ResearchRunInfo & { sawWork: boolean; pack: Pack; timer: NodeJS.Timeout | null; saves: Promise<void>[] }) | null = null;
+  private run: (ResearchRunInfo & { sawWork: boolean; pack: Pack; timer: NodeJS.Timeout | null; saves: Promise<void>[]; reflect: ReflectPick | null }) | null = null;
+  /** the candidate brain (ADR 0195), when the app gives its ports */
+  readonly candidates: CandidateService | null;
   /** a start between its checks and its chat: a second start is refused */
   private starting = false;
   constructor(private readonly d: ResearchDeps) {
     this.store = new ResearchStore(d.userData, () => this.now());
     // a research the app was closed during never ends by itself: it is closed as stopped (its chat ended with the app)
     for (const r of this.store.runs().filter(x => x.state === 'running')) this.store.saveRun({ ...r, state: 'stopped', endedAt: r.endedAt ?? this.now(), why: 'app chiusa durante la ricerca' });
+    this.candidates = d.candidates ? new CandidateService(d.userData, d.candidates, d.lang, () => this.now()) : null;
+    // findings held for a candidate the app was closed before building: their own cards again
+    for (const p of this.store.all().filter(x => x.candidateId === CANDIDATE_PENDING)) this.store.update(p.id, { candidateId: undefined });
   }
   private now(): number { return this.d.now?.() ?? Date.now(); }
   private privacy() {
@@ -260,10 +281,12 @@ export class ResearchService {
     const state = this.d.brain.state(), logs = await this.logSections(state);
     const pack = buildPack({ now: this.now(), runs: this.d.runs(), state, roles: this.d.roles(), past: this.store.all(), appVersion: this.d.appVersion(), ...(logs ? { logs } : {}), decisions: allPolicies(readLedger(this.d.userData)) });
     const frame = researchFrame(lang, { web, capUsd: cap, brainRoot: root, issuesUrl: this.d.issuesUrl() });
-    const chat = await this.d.chats.create({ harness, cwd: root, title: RESEARCH_TITLE, research: { web }, prompt: researchMessage(method, frame),
+    const reflect = this.d.roleTrial ? pickRole(this.d.runs(), this.d.roles(), this.now()) : null;
+    const extra = [...(this.candidates ? [CANDIDATE_FRAME] : []), ...(this.d.roleTrial ? [REFLECT_FRAME] : [])];
+    const chat = await this.d.chats.create({ harness, cwd: root, title: RESEARCH_TITLE, research: { web }, prompt: [researchMessage(method, frame), ...extra].join('\n'),
       ...(model ? { model } : {}), ...(effort ? { effort } : {}) });
     const startedAt = this.now();
-    this.run = { chatId: chat.id, startedAt, harness, model, effort, capUsd: cap, costUsd: 0, state: 'running', proposals: 0, sawWork: false, pack, timer: null, saves: [] };
+    this.run = { chatId: chat.id, startedAt, harness, model, effort, capUsd: cap, costUsd: 0, state: 'running', proposals: 0, sawWork: false, pack, timer: null, saves: [], reflect };
     const timer = setTimeout(() => { void this.finish('stopped', 'più di un\'ora senza finire').catch(() => { /* logged */ }); }, RESEARCH_MAX_MS);
     timer.unref?.();
     this.run.timer = timer;
@@ -308,6 +331,7 @@ export class ResearchService {
     log.info('brain', 'maintenance research ended', { chat: r.chatId, data: { state, proposals: info.proposals, costUsd: info.costUsd } });
     // the ideas still being written to Idee count in the notice
     await Promise.allSettled(r.saves);
+    this.gather(r.chatId, Math.max(info.costUsd, r.costUsd), r.capUsd);
     this.announce({ state, costUsd: info.costUsd, ...(why ? { why } : {}) }, r.chatId);
     this.d.changed();
   }
@@ -320,6 +344,7 @@ export class ResearchService {
   }
   pack(chatId: string, section: unknown): string {
     const r = this.mine(chatId), s = (section ?? 'summary') as PackSection;
+    if (section === ROLE_REFLECT_SECTION) return reflectSection(r.reflect, { clean: t => scrub(t, this.privacy()), budgetLeft: this.reflectBudget(r) });
     if (!PACK_SECTIONS.includes(s)) throw new Error(`section: one of ${PACK_SECTIONS.join(', ')}.`);
     return r.pack[s];
   }
@@ -335,6 +360,8 @@ export class ResearchService {
     if (this.store.all().some(p => same(p) && (p.state === 'open' || p.state === 'rejected'))) throw new Error('Duplicate: the same proposal is already open or was rejected.');
     // a better version of the bug card the log step wrote from the same log group: that card is rewritten
     const was = card.logKey ? this.store.all().find(p => p.logKey === card.logKey && p.state === 'open' && p.chatId === null) : undefined;
+    // a brain-file finding waits for the candidate brain, built when the research ends (ADR 0195)
+    if (this.candidates && isCandidateFinding(card)) card.candidateId = CANDIDATE_PENDING;
     const replaced = was ? this.store.replace(was.id, card) : null;
     const saved = replaced || this.store.add(card);
     // the cleanup's card the notice already counts is now this research's
@@ -447,13 +474,19 @@ export class ResearchService {
 
   // ── Proposte (the 'research' source) ─────────────────────────────────────────────────────────────────────────────
   /** Open findings, newest first: brain changes and what to forget, and the app cards that open an issue. */
-  cards(): ResearchProposal[] { return this.store.all().filter(p => p.state === 'open').reverse(); }
+  cards(): ResearchProposal[] { return this.store.all().filter(p => p.state === 'open' && !p.candidateId).reverse(); }
+  /** The open candidate brains (ADR 0195): one card each. */
+  candidateCards(): BrainCandidateView[] {
+    const all = new Map(this.store.all().map(p => [p.id, p]));
+    return (this.candidates?.open() ?? []).map(c => ({ ...c, items: c.proposalIds.flatMap(id => { const p = all.get(id); return p ? [{ kind: p.kind, title: p.title }] : []; }) }));
+  }
   /** When the user last pressed «Manutenzione»: the other parts of the app's skill and rule proposals made after it
    *  wait for the next click (ADR 0153). null = never pressed. */
   clickAt(): number | null { return this.store.clickAt(); }
   /** The app repository as owner/name, null when unknown (an app card then cannot be approved). */
   repo(): string | null { return repoOf(this.d.issuesUrl()); }
   async approve(id: string): Promise<string> {
+    if (this.candidates?.isId(id)) return this.approveCandidate(id);
     const p = this.store.get(id);
     if (!p || p.state !== 'open') throw new Error('Proposta non più aperta.');
     if (isAppCard(p)) {
@@ -467,6 +500,15 @@ export class ResearchService {
       this.d.changed();
       return opened.url;
     }
+    if (p.roleTrial) {
+      // a revised role text (ADR 0195): a trial version through the catalog's own path, kept or rolled back on its card
+      if (!this.d.roleTrial) throw new Error('Le prove dei ruoli non sono disponibili qui.');
+      this.d.roleTrial(p.roleTrial.role, p.roleTrial.text, p.roleTrial.baseVersion, `Manutenzione: ${p.title}`.slice(0, 300));
+      this.store.update(id, { state: 'approved', decidedAt: this.now() });
+      log.info('brain', 'maintenance role trial started', { data: { role: p.roleTrial.role } });
+      this.d.changed();
+      return '';
+    }
     const changeId = this.d.brain.apply(p);
     this.store.update(id, { state: 'approved', decidedAt: this.now(), changeId });
     log.info('brain', 'maintenance finding approved', { data: { kind: p.kind, change: changeId } });
@@ -474,11 +516,71 @@ export class ResearchService {
     return changeId;
   }
   reject(id: string): void {
+    if (this.candidates?.isId(id)) {
+      const c = this.candidates.reject(id);
+      for (const pid of c.proposalIds) this.store.update(pid, { state: 'rejected', decidedAt: this.now() });
+      this.d.changed();
+      return;
+    }
     const p = this.store.get(id);
     if (!p || p.state !== 'open') throw new Error('Proposta non più aperta.');
     this.store.update(id, { state: 'rejected', decidedAt: this.now() });
     // a bug from a log group: that group is known noise now, never carded again
     if (p.logKey) { try { this.d.brain.noise(p.logKey, true); } catch (e) { log.warn('brain', 'log group not marked known', { cause: errText(e) }); } }
     this.d.changed();
+  }
+
+  // ── ADR 0195: the candidate brain and the role reflection ─────────────────────────────────────────────────────────
+  /** When the research ends: its held brain-file findings become one candidate (the ones it could not plan, and all of
+   *  them when no candidate is built, are their own cards again). `capUsd - costUsd` is what the replay may spend. */
+  private gather(chatId: string, costUsd: number, capUsd: number): void {
+    const held = this.store.all().filter(p => p.chatId === chatId && p.candidateId === CANDIDATE_PENDING && p.state === 'open');
+    if (!held.length) return;
+    let built: BrainCandidate | null = null;
+    try { built = this.candidates?.build(chatId, held, Math.max(0, capUsd - costUsd)).candidate ?? null; }
+    catch (e) { log.warn('brain', 'candidate brain not built', { cause: errText(e), hint: 'its findings are shown as single cards in Proposte' }); }
+    for (const p of held) this.store.update(p.id, { candidateId: built?.proposalIds.includes(p.id) ? built.id : undefined });
+  }
+  private async approveCandidate(id: string): Promise<string> {
+    const c = this.candidates!.get(id);
+    if (!c || c.state !== 'open') throw new Error('Versione candidata non più aperta.');
+    const members = c.proposalIds.flatMap(pid => { const p = this.store.get(pid); return p ? [p] : []; });
+    const summary = `Versione candidata del brain: ${members.length} ${members.length === 1 ? 'modifica' : 'modifiche'} in ${c.files.length} file`;
+    const reason = members.map(p => `${p.title}: ${p.why}`).join(' · ').replace(/\s+/g, ' ').slice(0, 400);
+    const evidence = [`maintenance:${id}`, ...members.slice(0, 8).map(p => `maintenance:${p.id}`)];
+    let changeId: string;
+    try { changeId = this.candidates!.approve(id, summary, reason, evidence); }
+    catch (e) {
+      // a stale candidate: its findings are their own cards again, each checked against the brain as it is now
+      if (this.candidates!.get(id)?.state === 'stale') { for (const p of members) this.store.update(p.id, { candidateId: undefined }); this.d.changed(); }
+      throw e;
+    }
+    for (const p of members) this.store.update(p.id, { state: 'approved', decidedAt: this.now(), changeId });
+    this.d.changed();
+    return changeId;
+  }
+  /** The role step runs only while the engine reports cost and the research spent less than its share of the cap. */
+  private reflectBudget(r: NonNullable<ResearchService['run']>): boolean {
+    const c = this.d.chats.get(r.chatId);
+    return (c?.costUsd ?? r.costUsd) < r.capUsd * REFLECT_BUDGET_SHARE;
+  }
+  /** maintenance_role_trial: ONE revised text for the role the app picked this click, as a card whose approval starts a
+   *  trial version (never a direct replacement). */
+  proposeRoleTrial(chatId: string, a: Input): { id: string } {
+    const r = this.mine(chatId);
+    if (!this.d.roleTrial || !r.reflect) throw new Error('No role to reflect on in this research.');
+    if (!this.reflectBudget(r)) throw new Error('Budget: the role step is skipped, the research has spent most of its cap.');
+    const role = r.reflect.role;
+    if (a.role !== role.id) throw new Error(`role: this research reflects only on ${role.id}.`);
+    if (this.store.all().some(p => p.chatId === chatId && p.roleTrial)) throw new Error('Limit reached: one revised role text per research.');
+    if (this.store.all().some(p => p.roleTrial?.role === role.id && p.state === 'open')) throw new Error('Duplicate: a revised text for this role is already waiting in Proposte.');
+    const text = checkRoleText(role.instructions, a.text);
+    const title = str(a.title, 120, 'title'), why = str(a.why, 1500, 'why');
+    const saved = this.store.add({ chatId, kind: 'role', title, adds: str(a.adds, 1500, 'adds', false), removes: str(a.removes, 1500, 'removes', false), why,
+      evidence: strList(a.evidence, 12, 300, 'evidence'), sources: [], expected: str(a.expected, 600, 'expected', false), risk: str(a.risk, 600, 'risk', false),
+      roleTrial: { role: role.id, baseVersion: role.activeVersion, before: role.instructions, text } });
+    r.proposals++;
+    this.d.changed();
+    return { id: saved.id };
   }
 }

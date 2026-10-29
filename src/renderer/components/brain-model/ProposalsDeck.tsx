@@ -20,6 +20,7 @@ import { go, openChatRef, openFileViewer } from '../../actions';
 import { app } from '../../store/store';
 import { AgentAvatar } from '../AgentAvatar';
 import { LearningEvidenceInspector } from './LearningEvidence';
+import { CandidateBody, ProposalDiffs } from './ProposalDiffs';
 import '../../styles/proposals.css';
 
 const reduced = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -175,6 +176,8 @@ export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalC
         <pre className="pd-scroll" data-lang={x.lang}><code>{x.text}</code></pre>
       </figure>)}
       {c.ask.kind === 'research' && <ResearchBody a={c.ask} top={top} />}
+      {c.ask.kind === 'candidate' && <CandidateBody a={c.ask} top={top} />}
+      {top && c.diffs && c.diffs.length > 0 && <ProposalDiffs diffs={c.diffs} role={c.ask.kind === 'research' && !!c.ask.trial} />}
       {lead && <p className="pd-lead">{lead}</p>}
       {html && <div className={`pd-why${c.ask.kind === 'research' ? ' pd-exact' : ''}`}>{words.bodyLabel && <span className="pd-label">{words.bodyLabel}</span>}<div className="md pd-md" dangerouslySetInnerHTML={{ __html: html }} /></div>}
       {(words.scope || words.advice) && <p className="pd-scope">{[words.scope, words.advice].filter(Boolean).join(' ')}</p>}
@@ -184,7 +187,7 @@ export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalC
       {open && top && root && c.evidenceRuns?.map(id => <LearningEvidenceInspector key={id} root={root} runId={id} />)}
       {open && top && c.source === 'memory' && <label className="pd-note">{t('proposals.note')}<input value={note} maxLength={900} onChange={e => setNote(e.target.value)} data-testid="pd-note" /></label>}
     </div>
-    {(html.length > 220 || code.length > 0 || c.ask.kind === 'research' || c.facts.length > 0 || evidence.some(e => e !== quote) || files.length > 0 || c.readFirst || c.source === 'memory') && top &&
+    {(html.length > 220 || code.length > 0 || c.ask.kind === 'research' || c.ask.kind === 'candidate' || c.facts.length > 0 || evidence.some(e => e !== quote) || files.length > 0 || c.readFirst || c.source === 'memory') && top &&
       <button type="button" className="pd-more" aria-expanded={open} data-testid="pd-more" onClick={() => { setOpen(o => !o); setRead(true); }}>
         {open ? t('proposals.less') : c.readFirst && !read ? t('proposals.readFirstOpen') : t('proposals.more')}
       </button>}

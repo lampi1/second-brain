@@ -86,8 +86,11 @@ export function cardWords(c: Pick<Proposal, 'ask' | 'title' | 'content' | 'appli
       if (c.group === 'issue') return { question: t('proposals.ask.issue', { title: c.title.trim() }), yes: t('proposals.yes.issue'), no: t('proposals.no.issue'), lead: '',
         ...(c.content ? { bodyLabel: t('proposals.research.issueBody') } : {}) };
       // the finding's title read as the question («Dimenticare la skill «x»?», «Artisan lancia i test prima di dire «fatto»?»)
-      return { question: `${c.title.trim().replace(/[.!?:;…\s]+$/u, '')}?`, yes: t(a.finding === 'forget' ? 'proposals.yes.forget' : 'proposals.yes.research'), no: t('proposals.no.research'), lead: '',
+      return { question: `${c.title.trim().replace(/[.!?:;…\s]+$/u, '')}?`, yes: t(a.trial ? 'proposals.yes.roleTrial' : a.finding === 'forget' ? 'proposals.yes.forget' : 'proposals.yes.research'), no: t('proposals.no.research'), lead: '',
         ...(c.content ? { bodyLabel: t(a.finding === 'forget' ? 'proposals.research.forgets' : 'proposals.research.exact') } : {}) };
+    // a candidate version of the brain (ADR 0195): its findings, files and checks are the card's own body
+    case 'candidate':
+      return { question: t('proposals.ask.candidate', { n: a.items.length }), yes: t('proposals.yes.candidate'), no: t('proposals.no.candidate'), lead: '', hideBody: true };
   }
 }
 

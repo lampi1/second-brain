@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
-import type { BrainChange, BrainModelState, ClassifiersState, LogScan, MaintenanceJobId, MaintenanceRun, LessonStub, MigrationReport } from '../../shared/brain-model';
+import type { BrainChange, BrainModelState, BrainRule, BrainSkill, ClassifiersState, LogScan, MaintenanceJobId, MaintenanceRun, LessonStub, MigrationReport } from '../../shared/brain-model';
 import { MAINTENANCE_JOBS } from '../../shared/brain-model';
 import type { RoutingInfo } from '../../shared/contract';
 import type { AgentCatalogService } from '../agents/catalog';
@@ -17,7 +17,7 @@ import { classifiersState, readJobs } from './classifiers';
 import { seal, type IntervalCache } from './evidence';
 import { appendUnder, brainJsonWithTopic, corrections, LESSONS_RULE, LESSONS_WHEN, migrate, repeatedTask, skillText, type AgentWriter, type JobContext, type JobResult } from './jobs';
 import { ignoreWrite, sourceOfSkill } from './migration-ignore';
-import { procedureSections } from './procedure-sources';
+import { procedureSections, type ProcedureSection } from './procedure-sources';
 import type { UpgradeAsk } from './upgrade';
 import { readBrainView, type BrainViewInput } from './view';
 import { readWorker } from '../read-work';
@@ -406,6 +406,22 @@ export class BrainModelService {
     return this.done(c.id);
   }
   private done(changeId: string): string { this.d.emit(); return changeId; }
+  /** The candidate brain's view of the brain now (ADR 0195, research-candidate.ts): its real path, every skill (the
+   *  user's own too, never changed), its rules and procedure sections. Fresh reads, no cache. null = no brain. */
+  candidateInput(): { root: string; skills: BrainSkill[]; rules: BrainRule[]; sections: () => ProcedureSection[] } | null {
+    const root = this.root();
+    if (!root) return null;
+    return { root, skills: readSkills(this.skillDirs(root), root, this.profiles()), rules: readRules(root), sections: () => procedureSections(root) };
+  }
+  /** An approved candidate brain (ADR 0195): every file write as ONE change-log entry (its one «Annulla» restores all
+   *  of them), then the forgotten skills unlinked from the roles that declared them (as Memoria's trash does). */
+  applyCandidate(meta: { kind: 'skill' | 'rule'; summary: string; reason: string; evidence: string[]; target: string }, writes: { file: string; text: string | null }[], forgetSkills: string[]): string {
+    if (!this.root()) throw new Error('Scegli prima la cartella del brain.');
+    const c = this.log.apply({ job: 'research', kind: meta.kind, action: 'update', target: meta.target, summary: meta.summary.slice(0, 300), reason: meta.reason, evidence: meta.evidence }, writes);
+    if (!c) throw new Error('Niente da cambiare, o un file è troppo grande per poterlo annullare.');
+    for (const name of forgetSkills) this.unlinkRemoved(name, 'research');
+    return this.done(c.id);
+  }
   /** The brain's skills by name and description (the demo's made-up runs name them). */
   skillList(): { name: string; description: string }[] {
     const root = this.root();
