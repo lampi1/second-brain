@@ -1,6 +1,6 @@
 # ADR 0008 · Live changes: settings as data, silent updates, a change log; never silent on protected things
 
-Date: 2026-10-11 · Status: accepted
+Date: 2026-10-11 · Status: partly superseded by ADR 0020 (point 2, the silent code-update design); accepted
 
 ## Context
 The user: "se chiedo all'IA di modificare qualche configurazione possa farlo magari con un deploy sotto il culo in modo

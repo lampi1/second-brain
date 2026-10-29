@@ -94,7 +94,6 @@ export interface FlowReceipt {
 export interface FlowAgentBinding { chatId: string; chatRunId: string; taskVersion: number;
   /** What the host read from the chat at bind (never stored): its role, the tier it launched on, whether its model came from the routing table's row instead of that tier. */
   launched?: { roleId?: string; tier?: ModelTier; fromTable?: boolean; packageDigest?: string; promptHash?: string; engine?: string; model?: string | null; effort?: string } }
-export interface FlowVerifiedReport extends FlowAgentBinding { id: string; summary: string; evidence: string[]; completed: boolean; roleId?: string; reviewOf?: string }
 export interface FlowStepRun {
   stepId: string; status: 'pending' | 'ready' | 'running' | 'approval' | 'blocked' | 'completed' | 'cancelled';
   attempts: number; startedAt?: number; chatId?: string; chatRunId?: string; taskVersion?: number;
@@ -165,12 +164,6 @@ export interface FlowHealEntry { at: number; stepId: string; action: 'retry' | '
 export interface FlowDryRunStep {
   stepId: string; title: string; kind: FlowStep['kind']; who: string; command?: string; prod: boolean; auto: boolean; problems: string[];
 }
-export interface FlowDryRun { flowId: string; version: number; steps: FlowDryRunStep[]; problems: string[] }
-/** One row of app_flow_overview: what a routine run is doing, in plain words. */
-export interface FlowOverviewRow {
-  runId: string; flow: string; version: number; workItem?: { title: string; url?: string }; step?: string; state: string;
-  blocker?: string; updatedAt: number; next: string;
-}
 export interface FlowSnapshot {
   contextKey: string; drafts: FlowDraft[]; versions: FlowVersion[]; active: Record<string, number>;
   runs: FlowRun[]; storageError?: string; automation?: FlowAutomationSnapshot;
@@ -185,28 +178,4 @@ export interface FlowSnapshot {
 }
 /** A role's launch facts: its own fixed model (null = none) and, per tier, the model the routing table gives on its engine. */
 export interface FlowRoleInfo { engine?: string; name: string; avatar: AgentAvatar; tier: ModelTier; tierMax: ModelTier; model: string | null; models: Partial<Record<ModelTier, string | null>> }
-export interface FlowMatch { status: 'none' | 'match' | 'ambiguous'; candidates: FlowVersion[] }
-export interface FlowPropose { definition: FlowDefinition; expectedRevision: number }
-export interface FlowActivate { id: string; expectedRevision: number; answer: 'yes' | 'no' | 'other'; feedback?: string }
-/** The user's tier pick on one agent step (null = leave it to the role): from the exact draft revision or active version
- * shown, it only ever yields a new proposed draft revision that the existing approval modal activates (or not). */
-export interface FlowStepTierEdit { flowId: string; base: { version: number } | { draftRevision: number }; stepId: string; tier: ModelTier | null }
-export interface FlowStart { flowId: string; flowVersion: number; subjectKey: string; scope: FlowScope; inputs: Record<string, string>; title?: string; attachments?: FlowAttachment[] }
-/** The owner of a run the app's runner started (the Routine page, a trigger): no Orchestrator needed (ADR 0155). */
-export const APP_OWNER = 'app';
-/** The user's start from the Routine page: one work item (id or link) and/or attachments, plus typed params. */
-export interface FlowStartItem { flowId: string; workItem?: string; params?: Record<string, string>; attachments?: { name: string; content: string }[]; dryRun?: boolean }
-/** A work item before a manual start: `why` = what the trigger's filters would say (a warning, the user may still start
- *  it), `blocking` = why it cannot start here (another project than the routine's approved trigger, a run already active). */
-export interface FlowItemPreview { id: number; title: string; type: string; state: string; areaPath: string; tags: string[]; url: string; revision: number; matches: boolean; why: string[]; blocking: string[]; activeRun?: string }
-/** The user's engine/model pick on one agent step (null = back to the role's). Applied at once as a new version. */
-export interface FlowStepModelEdit { flowId: string; version: number; stepId: string; engine: string | null; model: string | null; effort?: Effort | null }
-export interface FlowReport { runId: string; expectedRevision: number; stepId: string; reportId: string }
-export interface FlowDecision { runId: string; expectedRevision: number; stepId: string; answer: 'yes' | 'no' | 'other'; feedback?: string }
-/** Explicit controls preserve the original run and pin the exact version reviewed by the user. */
-export interface FlowCancel { runId: string; expectedRevision: number; reason?: string }
 export interface FlowRestart { runId: string; expectedRevision: number; mode: 'from-start' | 'from-step'; stepId?: string; acknowledgeEffects: boolean; targetVersion: number; targetDigest: string; automationRule?: { id: string; revision: number } }
-export type FlowRestartProposal = Omit<FlowRestart, 'acknowledgeEffects'>;
-export interface FlowRestartDecision { runId: string; expectedRevision: number; answer: 'yes' | 'no' | 'other'; feedback?: string }
-/** Binds a renderer decision to the brain whose proposal was actually displayed. */
-export type FlowContext<T> = T & { contextKey: string };

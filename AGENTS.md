@@ -3,7 +3,7 @@
 Desktop cockpit (Electron, Windows first) where the user runs their Claude Code and Cursor agents (a strip each in the
 Grindhouse, coordinated by the Orchestrator), answers their questions and permissions as panels, watches internal browsers that agents drive over MCP, and sees their brain
 (a brain folder chosen at setup) update live. Vision: `docs/VISION.md`. Architecture: `docs/architecture.md`. Decisions:
-`docs/adr/`. Human contributors: `CONTRIBUTING.md`. UI language Italian; code, comments, commits and docs English.
+`docs/adr/` (index: `docs/adr/README.md`). Human contributors: `CONTRIBUTING.md`. UI language Italian; code, comments, commits and docs English.
 
 Words used everywhere: **Orchestrator** = the coordinating chat and the one place where work starts (it plans, opens
 role chats, answers their mail; a full-height column on the right; it sees the work chats' state and the user's own
@@ -41,7 +41,7 @@ run from this repo; **Aggiorna** (the button, Settings → Aggiornamenti) = upda
 | Why is a role's level stuck? (ADR 0131) | `npm run levels -- [<agent-runs.json>] [--dev] [--json] [--demo]`: read only, zero tokens; per role the verified successes by basis, XP, and why the other runs earned none (default file: the stable app's `agent-runs.json`) |
 | Demo data (no CLIs, no tokens) | `npm run demo` (build + fake chats, tabs and a synthetic brain; `-- --frozen` fixed clock, `-- --hidden` for agents); bare: `SB_DEMO=1 npm start` (brain pages empty), deterministic: `SB_DEMO_FREEZE=1` |
 | README screenshots | `npm run shots` (frozen demo → `docs/screenshots/*.webp`, < 300 KB each); look at them before committing |
-| Drive the running app as an agent | MCP `http://127.0.0.1:<mcpPort>/mcp/app` (tools `app_state`, `app_chats`, `app_chat_items`, `app_pending`, `app_feed`, `app_logs`, `app_screenshot`, `app_ui` (`outline` = the screen now), `app_guide` (the app map, read live), `app_send_to_chat`, `app_close_chat`, `app_command_runs`); see ADR 0006. The Orchestrator's own mount also has `app_config` (every configuration, ADR 0149) Each Orchestrator calls its own `/mcp/app/o/<orchestratorId>/<token>` (ADR 0021), the only mount with `app_update_code` (ADR 0074); `/mcp/improve` and "Migliora l'app" are gone (ADR 0079) |
+| Drive the running app as an agent | MCP `http://127.0.0.1:<mcpPort>/mcp/app` (tools `app_state`, `app_chats`, `app_chat_items`, `app_pending`, `app_feed`, `app_logs`, `app_screenshot`, `app_ui` (`outline` = the screen now), `app_guide` (the app map, read live), `app_send_to_chat`, `app_close_chat`, `app_command_runs`); see ADR 0006. The Orchestrator's own mount also has `app_config` (every configuration, ADR 0149). Each Orchestrator calls its own `/mcp/app/o/<orchestratorId>/<token>` (ADR 0021), the only mount with `app_update_code` (ADR 0074); `/mcp/improve` and "Migliora l'app" are gone (ADR 0079) |
 
 **Stable vs dev (ADR 0007).** The user's cockpit is a frozen release in `%LOCALAPPDATA%/second-brain/releases/`
 started by `%LOCALAPPDATA%/second-brain/launch.cmd` (userData `second-brain`, MCP 4319). Anything run from this repo

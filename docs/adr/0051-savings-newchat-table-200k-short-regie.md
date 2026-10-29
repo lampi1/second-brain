@@ -3,7 +3,7 @@
 > Routing parts superseded by [ADR 0078](0078-agent-first-routing.md): an agent's profile decides engine, model and
 > effort; the table only fills a model the profile leaves open, and the override rule applies only to agentless chats.
 
-Date: 2026-10-14 · Status: accepted · Amends: ADR 0031 (compaction window default), ADR 0032 (user-started chats)
+Date: 2026-10-14 · Status: partly superseded by ADR 0078 (routing parts); accepted · Amends: ADR 0031 (compaction window default), ADR 0032 (user-started chats)
 
 ## Context
 On 2026-10-14 the app cost $431/day against $214 before it; 3016 of 3020 $ were Opus 5.5. 19 chats went over 400k

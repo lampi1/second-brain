@@ -27,8 +27,8 @@ import '../../dashboard/dashboard.css';
 import '../../styles/agent-catalog.css';
 import '../../styles/brain-model.css';
 import '../../styles/classifiers.css';
+import { errText } from '../../lib/ipc-error';
 
-const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 function Card({ c, sources, onOpen }: { c: CardView; sources: ClassifiersState['sources']; onOpen: () => void }) {
   const name = ct(c.id, 'name'), fact = facts(c, sources)[0];
   const k3 = third(c);

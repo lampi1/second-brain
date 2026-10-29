@@ -1,6 +1,8 @@
 <!-- Branch identity, incremental publication and honest write outcomes for routine engine maintainers. -->
 # 0164 — Routine push recovery without full-history bundles
 
+Status: partly superseded by ADR 0179 (app-execution portions); accepted.
+
 ## Context
 
 A one-commit fix failed because the host bundled the complete history (256 MiB cap). A partial restart also changed

@@ -7,9 +7,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { BrainApi } from '../../src/main/brain/api';
 import { ApiSession } from '../../src/main/chats/api';
-import { previewRoute } from '../../src/main/chats/routed';
+import { createRoutedChat } from '../../src/main/chats/routed';
 import { routeChat } from '../../src/main/brain/routing';
-import type { ChatItem } from '../../src/shared/contract';
+import type { ChatItem, ChatSummary, NewChat } from '../../src/shared/contract';
 
 afterEach(() => vi.restoreAllMocks());
 describe('general main-process findings', () => {
@@ -32,8 +32,10 @@ describe('general main-process findings', () => {
     try { session.start(); session.send('Synthetic request'); await done; expect(items.find(i => i.kind === 'result')).toMatchObject({ isError: true }); }
     finally { await session.close(); fs.rmSync(dir, { recursive: true, force: true }); }
   });
-  it('keeps an arbitrary registered engine default model when no task routing row applies', () => {
-    const result = previewRoute({ route: request => routeChat(request, null, null, null, 1), engineOn: () => true, agentsMayOpen: () => true }, { cwd: '/', title: '', prompt: 'Ordinary request', defaults: { harness: 'codex', model: 'known-model' } });
-    expect(result).toMatchObject({ harness: 'codex', model: 'known-model' });
+  it('keeps an arbitrary registered engine default model when no task routing row applies', async () => {
+    const made: NewChat[] = [];
+    await createRoutedChat({ route: request => routeChat(request, null, null, null, 1), engineOn: () => true, agentsMayOpen: () => true, create: async req => { made.push(req); return { id: 'c1' } as ChatSummary; } },
+      { cwd: '/', title: '', prompt: 'Ordinary request', defaults: { harness: 'codex', model: 'known-model' } }, { byUser: true });
+    expect(made[0]).toMatchObject({ harness: 'codex', model: 'known-model' });
   });
 });

@@ -1,7 +1,7 @@
 <!-- Records the provenance gate and read-only launch memory selection used by agent packs. -->
 # 0137 — Evidence before lesson approval; selective launch memory
 
-Date: 2026-10-23
+Date: 2026-10-23 · Status: partly superseded by ADR 0153 (the timers); accepted
 
 The uploaded research proposes evaluating learned rules and reducing unnecessary permanent context. The existing
 explicit user approval gate remains mandatory. A cited outcome is evidence about an observed run, not proof that a

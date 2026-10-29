@@ -15,6 +15,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { log, errText } from '../log';
+import { ToolRefusal } from './refusal';
 import { timedStep } from '../perf';
 import { updateActivity } from '../update/activity';
 
@@ -264,7 +265,8 @@ export class McpServer {
             if (typeof out === 'object' && 'raw' in out) return ok(id, { content: out.raw.content, ...(out.raw.isError ? { isError: true } : {}), ...(out.raw.structuredContent !== undefined ? { structuredContent: out.raw.structuredContent } : {}) });
             return ok(id, { content: toContent(out) });
           } catch (e) {
-            log.warn('mcp', `tool ${name} failed`, { chat: who, cause: errText(e), data: { mount: mount.name, ms: Date.now() - t0 } });
+            if (e instanceof ToolRefusal) log.info('mcp', `tool ${name} refused`, { chat: who, cause: errText(e), data: { mount: mount.name } });
+            else log.warn('mcp', `tool ${name} failed`, { chat: who, cause: errText(e), data: { mount: mount.name, ms: Date.now() - t0 } });
             return ok(id, { content: [{ type: 'text', text: `Error: ${errText(e)}` }], isError: true });
           } finally {
               leaveActivity?.();

@@ -125,7 +125,7 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.idee.whatAI': "The AI's ideas to improve the brain, your way of working and itself, each with its reasoning. Click a row to read it and discuss it with the Orchestrator.",
   'brainPages.idee.whatDefault': "Your ideas and the AI's, from ideas.md. Filter by status, area and who had it; click a row to read it in full and discuss it with the Orchestrator.",
 
-  // Miglioramento.tsx
+  // LearnedRules.tsx (once the Miglioramento page)
   'brainPages.miglioramento.pageTitle': 'Learned rules',
   'brainPages.miglioramento.helpQuestion': 'What does this mean?',
   'brainPages.miglioramento.noData': 'no data',
@@ -146,29 +146,6 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.miglioramento.lead': (p: { count: number }) => `${p.count} ${p.count === 1 ? "policy" : "policies"} learning from results; `,
   'brainPages.miglioramento.leadPending': (p: { pending: number }) => `${p.pending} ${p.pending === 1 ? "proposal" : "proposals"} to decide`,
   'brainPages.miglioramento.leadNoPending': 'no proposals to decide',
-
-  // Composer.tsx
-  'brainPages.composer.empty': 'To write from here you need the Orchestrator open in the app',
-  'brainPages.composer.emptyDesc': 'Open the Orchestrator in the workspace: from this page you can send it messages, and it will forward them to chats the app only reads.',
-  'brainPages.composer.label': 'To',
-  'brainPages.composer.selectLabel': 'Chat to write to',
-  'brainPages.composer.selectEmpty': 'Choose the chat…',
-  'brainPages.composer.selectGroup1': 'App chats',
-  'brainPages.composer.selectGroup2': 'Via Orchestrator (inter-chat mail)',
-  'brainPages.composer.viaOrchestrator': 'the Orchestrator forwards it via inter-chat mail',
-  'brainPages.composer.chatGone': 'the chosen chat is no longer open: choose another',
-  'brainPages.composer.placeholder': 'Write what you want to ask…',
-  'brainPages.composer.ariaLabel': 'Message text',
-  'brainPages.composer.sendBtn': 'Send…',
-  'brainPages.composer.shortcut': 'Ctrl+Enter',
-  'brainPages.composer.confirmDialog': 'Send confirmation',
-  'brainPages.composer.confirmText': (p: { name: string }) => `Send to ${p.name}?`,
-  'brainPages.composer.confirmViaOrchestrator': 'I\'ll send it to the Orchestrator, which will forward it via inter-chat mail.',
-  'brainPages.composer.confirmApp': 'It arrives in the chat as your message and makes it work.',
-  'brainPages.composer.confirmBtn': 'Yes, send',
-  'brainPages.composer.cancelBtn': 'Cancel',
-  'brainPages.composer.sentApp': (p: { name: string }) => `Sent to ${p.name}`,
-  'brainPages.composer.sentOrchestrator': (p: { name: string }) => `Sent to Orchestrator, which forwards it to ${p.name}`,
 
   // RecordDiscussButton.tsx
   'brainPages.recordDiscuss.title': 'Opens the Orchestrator next to the page with a ready message about this record: if work is needed, it opens the chat',

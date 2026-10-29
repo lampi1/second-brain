@@ -17,7 +17,7 @@ import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { ClassifierChoice, ClassifierRoute, ClassifiersState, RouteResult } from '../../shared/brain-model';
 import type { RoutingInfo, RoutingRow } from '../../shared/contract';
 import { foldOutcome, type LedgerOutcome } from '../brain/routing';
-import { classifierCards, verifiedOf, type JobRow, type Launch } from './classifier-cards';
+import { classifierCards, isoWeek, lastIsoWeeks, verifiedOf, type JobRow, type Launch } from './classifier-cards';
 
 interface Prediction { id: string; at: number; kind: string; area: string; harness: string; model: string | null; source: string }
 interface Actual { usd: number }
@@ -80,15 +80,10 @@ function result(ids: string[], actuals: Map<string, Actual>, runByChat: Map<stri
   return { runs: ids.length, success: { value: known.length ? known.filter(Boolean).length / known.length : null, n: known.length },
     avgCostUsd: costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : null };
 }
-/** ISO week label "2026-W42" of a time. */
-export function weekOf(ms: number): string {
-  const d = new Date(ms); d.setUTCHours(0, 0, 0, 0); d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
-  const y = d.getUTCFullYear(), w = Math.ceil(((d.getTime() - Date.UTC(y, 0, 1)) / 86400e3 + 1) / 7);
-  return `${y}-W${String(w).padStart(2, '0')}`;
-}
+/** ISO week label "2026-W42" of a time (classifier-cards.ts isoWeek). */
+export const weekOf = isoWeek;
 /** whoever delegates passes the suggestions scoring at least this (shared/skill-suggest.ts, the Guida) */
 const SKILL_CUT = 60;
-const lastWeeks = (now: number, n: number) => Array.from({ length: n }, (_, i) => weekOf(now - (n - 1 - i) * 7 * 86400e3));
 
 export async function classifiersState(i: ClassifierInputs, now = Date.now()): Promise<ClassifiersState> {
   const table = i.routing.table, routes = table?.routes ?? [];
@@ -108,7 +103,7 @@ export async function classifiersState(i: ClassifierInputs, now = Date.now()): P
     if (choices.length < 15) choices.push({ at: r.startedAt, chatId: r.chatId, goal: r.goal.slice(0, 240), role: { id: r.agentId, name: name(r.agentId) }, suggested: suggested.slice(0, 5), used: [...used] });
   }
   // quality by week: per route (its predictions)
-  const weeks = lastWeeks(now, 6);
+  const weeks = lastIsoWeeks(now, 6);
   const quality: ClassifiersState['quality'] = rows.map((row, k) => ({ key: `route:${k}`, label: `${row.kind}${row.area ? ` · ${row.area}` : ''} → ${row.model}`,
     weeks: weeks.map(w => { const ids = perRow[k]!.filter(id => weekOf(predictions.find(p => p.id === id)!.at) === w), res = result(ids, actuals, runByChat, outcomes); return { week: w, runs: res.runs, success: res.success.value, avgCostUsd: res.avgCostUsd }; }) }));
   return {

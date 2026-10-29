@@ -1,4 +1,4 @@
-// Persistent coordinator column, with the Orchestrator or «Lampo», the quick lane (ADR 0105), in two tabs. The shell and native overlays share its exact width;
+// Persistent coordinator column, with the Orchestrator or «Flash», the quick lane (ADR 0105, 0107), in two tabs. The shell and native overlays share its exact width;
 // pointer and keyboard resizing preserve a usable workspace without covering inputs.
 import { t as auditText } from '../i18n';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
@@ -45,7 +45,7 @@ const LANES = ['orchestrator', 'lampo'] as const;
 
 export function OrchestratorOverlay() {
   const active = useApp(orchestratorIdOf);
-  // the column holds the Orchestrator or Lampo (ADR 0105); a request to focus the Orchestrator brings it back
+  // the column holds the Orchestrator or Flash (ADR 0105); a request to focus the Orchestrator brings it back
   const [lane, setLane] = useState<typeof LANES[number]>('orchestrator');
   const focusReq = ui.use(s => (active && s.focusReq?.chatId === active ? s.focusReq.n : 0));
   useEffect(() => { if (focusReq) setLane('orchestrator'); }, [focusReq]);
@@ -69,7 +69,7 @@ export function OrchestratorOverlay() {
             if (next !== null) { event.preventDefault(); setLane(LANES[next]!); document.getElementById(`lane-tab-${LANES[next]}`)?.focus(); }
           }}>{id === 'orchestrator' ? <><span className="orchestrator-column-mark" aria-hidden="true">✦</span>{t('lampo.tabOrchestrator')}</> : <><span aria-hidden="true">⚡</span>{t('lampo.tab')}</>}</button>)}
       </div>
-      {/* Lampo's hint lives in its tile header only */}
+      {/* Flash's hint lives in its tile header only */}
       <span className="sp" />{lane === 'orchestrator' && <span className="orchestrator-column-hint">{t('home.startHere')}</span>}
     </div>
     <div className="orchestrator-body" id="orchestrator-panel" role="tabpanel" aria-labelledby={`lane-tab-${lane}`}>{lane === 'lampo' ? <LampoTile onWork={() => setLane('orchestrator')} /> : <OrchestratorTile key={active ?? 'none'} chatId={active} />}</div>

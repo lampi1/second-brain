@@ -62,14 +62,6 @@ export interface FlowAutomationSnapshot {
   revision: number; paused: boolean; background: boolean; rules: FlowAutomationRule[];
   events: FlowAutomationEvent[]; storageError?: string;
 }
-export interface FlowAutomationPropose { config: FlowAutomationConfig; expectedRevision: number }
-export interface FlowAutomationDecision { id: string; expectedRevision: number; answer: 'yes' | 'no' | 'other'; feedback?: string }
-export interface FlowAutomationPause { id: string; expectedRevision: number; paused: boolean }
-export interface FlowAutomationControl { expectedRevision: number; paused?: boolean; background?: boolean }
 export interface FlowDetectionItem { key: string; title: string; inputs: Record<string, string> }
-/** «Svuota coda»: the user saw `count` waiting events of this rule and discards exactly those. */
-export interface FlowAutomationClear { id: string; count: number }
-/** The user's edit of a rule's filters from the Routine page: applied as a new approved revision (their click). */
-export interface FlowAutomationFilters { id: string; expectedRevision: number; includeTags: string[]; excludeTags: string[]; workItemIds: number[]; iterationPath?: string; maxPerHour?: number }
 /** A detector never writes external state. Cursor is committed atomically with the corresponding events. */
 export interface FlowDetectionResult { cursor: Record<string, string>; items: FlowDetectionItem[]; summary: string }

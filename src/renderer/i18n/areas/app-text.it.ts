@@ -194,30 +194,20 @@ export const appTextIt = {
   'appText.raster.avatarFormat': 'Formato o dimensione non supportati',
   'appText.raster.avatarSize': 'Dimensioni raster non supportate',
   'appText.raster.avatarInvalid': 'Raster non valido',
-  // lib/agent-drafts.ts, lib/agent-lifecycle.ts, lib/agent-setup.ts, lib/agent-team.ts: roles and the first-run interview
+  // lib/agent-drafts.ts, lib/agent-setup.ts: roles and the first-run interview
   'appText.agentDrafts.notSaved': 'La copia locale delle modifiche ai ruoli non è stata salvata. Libera spazio prima di aggiornare.',
   'appText.agentDrafts.invalid': 'Copia delle modifiche ai ruoli non valida.',
-  'appText.agentLifecycle.invalid': 'Risposta ciclo Agenti non valida',
   'appText.agentSetup.name': 'Il nome non può contenere # * ` [ ] < > | _ \\',
   'appText.agentSetup.role': 'Il ruolo non può contenere «. Language:».',
   'appText.agentSetup.language': 'Scrivi solo la lingua, per esempio: italiano.',
   'appText.agentSetup.areas': (p: { n: number }) => `Al massimo ${p.n} aree: raggruppa le più vicine.`,
   'appText.agentSetup.area': (p: { n: number }) => `Ogni area al massimo ${p.n} caratteri.`,
-  'appText.agentTeam.unknown': 'Sottoagenti: dati non disponibili',
-  'appText.agentTeam.complete': (p: { active: number; total: number }) => `Sottoagenti: ${p.active} attivi · ${p.total} totali`,
-  'appText.agentTeam.partial': (p: { active: number; total: number }) => `Sottoagenti osservati: ${p.active} attivi · ${p.total} totali · visione parziale`,
-  'appText.agentTeam.notReported': 'non riportato',
-  'appText.agentTeam.noTask': 'attività osservata senza compito riportato',
-  'appText.agentTeam.notObserved': 'non presente nelle osservazioni',
-  // lib/images.ts, lib/models.ts, lib/progress-bridge.ts
+  // lib/images.ts, lib/models.ts
   'appText.images.noCanvas': 'canvas non disponibile',
   'appText.images.readFailed': 'lettura non riuscita',
   'appText.images.unreadable': 'Immagine non leggibile.',
   'appText.images.tooBig': 'Immagine troppo grande anche ridotta.',
   'appText.models.cliDefault': 'Predefinito della CLI',
-  'appText.progress.firstAgent': 'Primo ruolo personalizzato',
-  'appText.progress.setupComplete': 'Spazio di lavoro configurato',
-  'appText.progress.firstResult': 'Primo risultato confermato',
   // components: AgentFeedAction, DelegationCard (the deny message the chat gets), CodexAutonomy, RoutingGroup
   'appText.feedAction.review': 'Esamina proposta',
   'appText.feedAction.undone': 'Annullata',

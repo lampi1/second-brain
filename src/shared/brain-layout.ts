@@ -114,6 +114,3 @@ export function sectionHash(s: LayoutSection): string {
 export const pendingSections = (record: LayoutRecord | null, layout: readonly LayoutSection[] = BRAIN_LAYOUT): LayoutSection[] =>
   layout.filter(s => record?.sections[s.id] !== sectionHash(s));
 
-/** The record of a brain in line with the whole layout (a fresh brain, or after a full pass). */
-export const fullRecord = (app: string, at: string, layout: readonly LayoutSection[] = BRAIN_LAYOUT): LayoutRecord =>
-  ({ app, at, sections: Object.fromEntries(layout.map(s => [s.id, sectionHash(s)])) });

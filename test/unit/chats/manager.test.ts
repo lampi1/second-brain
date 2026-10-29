@@ -334,7 +334,7 @@ describe('ChatManager', () => {
       await waitFor(() => m.list().find(c => c.id === old.id)?.state === 'idle', 'idle');
       await m.create({ harness: 'claude', cwd: e.cwd, title: 'Orchestrator', orchestrator: true, replaces: old.id }); // the old Orchestrator's process ends
       await waitFor(() => !alive(pid), 'the old engine exited');
-      await new Promise(r => setTimeout(r, 5000)); // longer than a quick process list: a reap would have run
+      await new Promise(r => setTimeout(r, process.platform === 'win32' ? 5000 : 1000)); // longer than a process list (WMI on Windows, /proc here): a reap would have run
       expect(orphans().every(alive)).toBe(true);
       await m.close(old.id);
       await waitFor(() => orphans().every(p => !alive(p)), 'its tools reaped at the real close', 180000); // WMI + taskkill: past 90 s at 100% CPU (2026-10-14)
@@ -607,7 +607,7 @@ describe('ChatManager', () => {
     expect(results(m, m.list()[0]!.id)).toHaveLength(0); // still in its first turn (the meter pause)
   });
 
-  it('an idle chat with an explicitly complete census releases after the delay and resumes; never a Orchestrator', async () => {
+  it('an idle chat with an explicitly complete census releases after the delay and resumes; never an Orchestrator', async () => {
     const e = env();
     // Simulate a provider that can prove there are no unobserved children. Real Claude's partial census is covered
     // by archive.test.ts and must not be interpreted as a complete zero by releaseIdle.

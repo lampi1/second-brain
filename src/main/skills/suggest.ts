@@ -1,7 +1,7 @@
 // Local, advisory skill suggestions: which of the brain's skills fit a request, best first (top SKILL_SUGGESTIONS_MAX,
 // above a floor and near the best one, #159: no list of weak matches in name order). Words (BM25 with query coverage) and, when the local model is ready, the hybrid
 // search's embeddings. Never loads, grants or installs a skill. Used by the skills_suggest MCP tool on every chat
-// endpoint (wiring.ts), the role start dialog (skills:suggest IPC) and the Classificatori page (suggested vs used).
+// endpoint (wiring.ts) and the Classificatori page (suggested vs used).
 import { createHash } from 'node:crypto';
 import type { AgentRun } from '../../shared/agents';
 import { reworkStartsOf, verifiedVerdict } from '../../shared/run-verdict';

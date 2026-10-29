@@ -94,7 +94,7 @@ export const learningReviewIt = {
   "lr.problem.already-promoted": "Esiste già una skill con questo nome: la promozione non la sovrascrive.",
   "lr.problem.unknown": "Verifica richiesta prima della promozione. Aggiorna lo stato delle prove.",
   "lr.comparisonMethod": "Confronto descrittivo dei lavori conservati e abbinati, con copertura esplicita dei dati. I totali includono il lavoro delegato conservato; escludono dati rimossi e costi delle revisioni indipendenti. I costi di listino API non sono addebiti di fattura.",
-  "lr.replayCost": "Avvia replay usa i provider AI configurati: per ogni caso lavora un ruolo e Sentinel esegue una revisione indipendente. Entrambi consumano token alle normali tariffe dei provider. Il costo dipende dai casi e dalle risposte.",
+  "lr.replayCost": "Avvia replay usa i provider IA configurati: per ogni caso lavora un ruolo e Sentinel esegue una revisione indipendente. Entrambi consumano token alle normali tariffe dei provider. Il costo dipende dai casi e dalle risposte.",
   "lr.draftLimit": "Limite della bozza: 24.000 caratteri.",
   "lr.inspectEvidence": "Ispeziona risultato e verifica",
   "lr.retainedEvidence": "Prove conservate",

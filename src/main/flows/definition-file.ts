@@ -1,5 +1,5 @@
-// Bounded, confined JSON reader for files in the selected brain: routine package proposals (app_routine_save, package-tools.ts)
-// and component import definitions (components/service.ts). Loading grants nothing: the caller validates the content.
+// Bounded, confined JSON reader for files in the selected brain: routine package proposals (app_routine_save,
+// package-tools.ts). Loading grants nothing: the caller validates the content.
 import fs from 'node:fs';
 import path from 'node:path';
 import { flowBrainContextKey } from './context';

@@ -7,3 +7,4 @@ playwright-report/
 .env
 *.env
 packages/routine-runtime/dist/
+.claude/worktrees/

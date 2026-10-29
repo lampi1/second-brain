@@ -25,7 +25,3 @@ export function rasterSize(data: Buffer, mime: string): { width: number; height:
   }
   return null;
 }
-export function boundedRaster(data: Buffer, mime: string): { width: number; height: number } | null {
-  const size = rasterSize(data, mime);
-  return size && size.width >= 16 && size.height >= 16 && size.width <= 1024 && size.height <= 1024 ? size : null;
-}

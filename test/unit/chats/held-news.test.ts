@@ -106,7 +106,7 @@ describe('OrchestratorWake.heldNews and the hub', () => {
     expect(sent).toHaveLength(1);
   });
 
-  it('what the user writes in Lampo is never news (#123)', () => {
+  it('what the user writes in Flash is never news (#123)', () => {
     const { w, hub, up } = make();
     up({ id: 'lampo', title: 'Lampo', quick: true, state: 'idle' });
     w.userMessage({ chatId: 'lampo', title: 'Lampo', role: null, parentTitle: null, text: 'che ore sono?' });

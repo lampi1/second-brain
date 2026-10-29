@@ -1,5 +1,4 @@
-// A chat the user starts without choosing everything (chat:createRouted): "Nuova chat" (its one-line preview too:
-// previewRoute) and a new Orchestrator (Ricomincia da capo, Cambia motore, Pulisci). The brain pages never start one:
+// A chat the user starts without choosing everything (chat:createRouted): "Nuova chat" and a new Orchestrator (Ricomincia da capo, Cambia motore, Pulisci). The brain pages never start one:
 // their "Discuti" goes to the Orchestrator, which delegates (2026-10-19).
 // Harness, model and effort come from the routing table (brain/routing.ts, ADR 0032), the same decision app_create_chat
 // makes for an Orchestrator, and the chat carries its route, so its prediction and actuals reach the improvement loop's ledger
@@ -7,7 +6,7 @@
 // the user's defaults, as before. Why: the user, 2026-10-14, "quando dalla sezione devops premo fai partire chat mi
 // aspetto che comunque passi dalle configurazioni di scelta del modello", then the same for the other paths
 // (2026-10-14). Used by index.ts; test/unit/routed-chat.test.ts.
-import { type ChatSummary, type Harness, type NewChat, type RoutedNewChat, type RoutePreview, type TaskKind } from '../../shared/contract';
+import { type ChatSummary, type Harness, type NewChat, type RoutedNewChat, type TaskKind } from '../../shared/contract';
 import { EFFORTS, type RouteRequest, type RouteResult } from '../brain/routing';
 import { engineLabel, engineOf } from '../engines/registry';
 import { log } from '../log';
@@ -28,19 +27,16 @@ export interface RoutedSpace { appCode?: boolean; byUser?: boolean }
 const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const harnessOf = (v: unknown): Harness | undefined => (typeof v === 'string' && engineOf(v) ? v : undefined);
 
-/** The route of a request, shared by the creation and the dialog's preview: what the user named, the table, the
- *  engines they may start now. `preview` = no exploration and no checks on the texts (the dialog asks while typing). */
+/** The route of a request: what the user named, the table, the engines they may start now. */
 type Decided = { error: string } | { routed: Exclude<RouteResult, { error: string }>; title: string; prompt: string; cwd: string; harness: Harness };
-function decide(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>, req: RoutedNewChat, own: RoutedSpace, preview: boolean): Decided {
+function decide(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>, req: RoutedNewChat, own: RoutedSpace): Decided {
   const orchestrator = req?.orchestrator === true;
   // an Orchestrator's title is its mail address and a rename has no limit: kept whole, a work chat's capped
   const title = text(req?.title, orchestrator ? 1000 : 80), prompt = typeof req?.prompt === 'string' ? req.prompt.trim() : '', cwd = text(req?.cwd, 1000);
-  if (!preview) {
-    // an empty title is made from the prompt (or "Orchestrator") by the chat manager, as for chat:create
-    if (!prompt && !orchestrator) throw new Error('il primo messaggio serve');
-    if (!own.byUser && prompt.length > (orchestrator ? 40_000 : 8000)) throw new Error(`primo messaggio troppo lungo (≤ ${orchestrator ? 40_000 : 8000} caratteri)`);
-    if (!cwd) throw new Error('nessuna cartella per la chat');
-  }
+  // an empty title is made from the prompt (or "Orchestrator") by the chat manager, as for chat:create
+  if (!prompt && !orchestrator) throw new Error('il primo messaggio serve');
+  if (!own.byUser && prompt.length > (orchestrator ? 40_000 : 8000)) throw new Error(`primo messaggio troppo lungo (≤ ${orchestrator ? 40_000 : 8000} caratteri)`);
+  if (!cwd) throw new Error('nessuna cartella per la chat');
   // an Orchestrator's work is always 'orchestrator', whatever its title or handoff says
   const kind: TaskKind | undefined = orchestrator ? 'orchestrator' : undefined;
   const def = req.defaults ?? { harness: 'claude' };
@@ -61,8 +57,8 @@ function decide(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>,
     canRun: h => !refusal(h),
     ask: named ? { ...(said.harness ? { harness: said.harness } : {}), ...(said.model ? { model: said.model } : {}), ...(said.effort ? { effort: said.effort } : {}), reason: text(req.ask?.reason, 300) || 'scelta dell’utente' } : {},
     defaults: { harness, models: { [harness]: text(def.model, 200) || null }, effort },
-    // the preview shows the table's choice and "Nuova chat" starts what it showed: no dice roll for either
-    ...(preview || own.byUser ? { counts: undefined } : {}),
+    // "Nuova chat" starts the table's choice: no dice roll
+    ...(own.byUser ? { counts: undefined } : {}),
   });
   if ('error' in routed) return { error: routed.error };
   const no = refusal(routed.harness);
@@ -70,16 +66,8 @@ function decide(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>,
   return { routed, title, prompt, cwd, harness };
 }
 
-/** What createRoutedChat would start now ("Nuova chat" shows it in one line while the user types). */
-export function previewRoute(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>, req: RoutedNewChat): RoutePreview {
-  try {
-    const r = decide(d, req, { byUser: true }, true);
-    return 'error' in r ? r : { harness: r.routed.harness, model: r.routed.model, effort: r.routed.effort, route: r.routed.route };
-  } catch (e) { return { error: (e as Error).message }; }
-}
-
 export async function createRoutedChat(d: RoutedChatDeps, req: RoutedNewChat, own: RoutedSpace = {}): Promise<ChatSummary> {
-  const dec = decide(d, req, own, false);
+  const dec = decide(d, req, own);
   if ('error' in dec) throw new Error(dec.error);
   const { routed, title, prompt, cwd, harness } = dec;
   // the permission mode belongs to the user's choice on an engine that has them: kept only when the chat stays there,

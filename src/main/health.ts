@@ -32,9 +32,3 @@ export function healthSnapshot(): AppHealth {
 // e2e: read from the main process (Playwright's page dies with a crashed renderer)
 (globalThis as Record<string, unknown>).__sbHealth = healthSnapshot;
 
-/** Tests only: back to a fresh start. */
-export function resetHealth(): void {
-  state.mcp = { wanted: null, port: null, fallback: false, cause: null };
-  state.renderer = { crashes: 0, hangs: 0, reloads: 0, last: null };
-  engineKills.count = 0;
-}

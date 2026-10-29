@@ -5,9 +5,9 @@ import type { InvokeChannel } from '../../shared/contract';
 const READS = new Set<InvokeChannel>([
   'app:info', 'app:usage', 'app:inputLag', 'chat:list', 'chat:items', 'chat:pending', 'chat:commands', 'chat:handoffRead',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'browser:list', 'browser:handoffs', 'browser:envList', 'views:layout', 'personal:state', 'personal:onScreen', 'feed:list',
-  'settings:get', 'settings:schema', 'settings:history', 'settings:pending', 'models:seen', 'routing:get', 'routing:preview',
+  'settings:get', 'settings:schema', 'settings:history', 'settings:pending', 'models:seen', 'routing:get',
   'overlay:model', 'overlay:size', 'overlay:focus', 'run:list', 'secrets:status', 'engines:spend', 'tasks:get', 'sync:get',
-  'later:get', 'source:get', 'agents:list', 'agents:history', 'agents:metrics', 'agents:estimates', 'setup:get', 'profile:get', 'progress:get', 'headline:get', 'orchestrator:held', 'log:list',
+  'source:get', 'agents:list', 'agents:history', 'agents:metrics', 'agents:estimates', 'setup:get', 'profile:get', 'progress:get', 'headline:get', 'orchestrator:held', 'log:list',
 ]);
 export class UpdateActivity {
   private active = 0;

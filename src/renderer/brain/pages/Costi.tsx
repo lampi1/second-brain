@@ -28,7 +28,7 @@ import { Kpi, Pill, Section, Seg } from '../components/ui';
 import { DiscussBar, DiscussContext } from '../components/Discuss';
 import { Reading } from '../components/Stats';
 import { costFacts, cursorCoverage } from '../lib/cost-facts';
-import { useAppChats } from '../components/Composer';
+import { useAppChats } from '../lib/app-chats';
 import { LiveCostList } from '../../components/LiveCosts';
 import { costRows } from '../../lib/live-costs';
 import { t } from '../../i18n';

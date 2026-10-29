@@ -34,7 +34,7 @@ export const memoryHubIt = {
   'mh.ap.locked': 'File sempre caricato: si modifica, non si elimina da qui',
   'mh.ap.note': 'Skill, regole e script eliminati restano nella cronologia delle modifiche (Apprendimento) con il loro «Annulla»; un fatto confermato invece si cancella davvero quando il messaggio sparisce.',
   // Idee
-  'mh.idee.mine': 'Le tue', 'mh.idee.ai': 'Dell’AI',
+  'mh.idee.mine': 'Le tue', 'mh.idee.ai': 'Dell’IA',
   'mh.idee.mineHint': 'Scritte da te', 'mh.idee.aiHint': 'Notate dagli agenti mentre lavorano',
   'mh.idee.splitLine': (p: S) => `${p.open} aperte · l’ultima ${p.last}`,
   'mh.idee.dust': 'Rispolvera',

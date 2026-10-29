@@ -1,6 +1,6 @@
 // Italian UI texts of the statistics redesign (owner, 2026-10-19): the Classificatori grid and its detail views
-// (components/brain-model/ClassifiersPage.tsx, ClassifierDetail.tsx, lib/classifier-view.ts) and the Dashboard's Errori
-// view (dashboard/ErrorsTab.tsx, dashboard/errors.ts). Every "?" says exactly how its number is computed. Spread into it.ts.
+// (components/brain-model/ClassifiersPage.tsx, ClassifierDetail.tsx, lib/classifier-view.ts) and Qualità's app errors
+// (dashboard/AppErrors.tsx, dashboard/errors.ts; once the Dashboard's Errori view). Every "?" says exactly how its number is computed. Spread into it.ts.
 type N = { n: number };
 
 export const statsIt = {
@@ -139,7 +139,7 @@ export const statsIt = {
   'stats.jk.fix': 'correzione', 'stats.jk.qa': 'QA e test', 'stats.jk.review': 'revisione', 'stats.jk.feature': 'funzionalità',
   'stats.jk.research': 'indagine', 'stats.jk.question': 'domanda', 'stats.jk.other': 'altro',
 
-  // ── Dashboard → Errori
+  // ── Qualità → the app's errors (dashboard/AppErrors.tsx)
   'stats.err.recurring': 'Errori che si ripetono',
   'stats.err.recurringHelp': 'Gruppi di errori dell’app e degli strumenti con la stessa causa (limite d’uso, rete, accesso…) o, se la causa non è nota, lo stesso testo una volta tolti numeri, id, percorsi e link; contano quelli visti almeno 2 volte nei dati conservati (feed e chat aperte).',
   'stats.err.events': 'Eventi di errore',

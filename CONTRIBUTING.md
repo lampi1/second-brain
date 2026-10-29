@@ -103,6 +103,8 @@ fixtures are fictional (example.com, "Alfa", made-up names), never real people, 
 `docs/adr/NNNN-short-title.md`, numbered in order: **Context** (the problem and the forces), **Decision** (what we do,
 precisely), **Consequences** (what it costs, what it enables). Read the ADRs of the area you touch first: most "why is
 it like this?" questions are answered there.
+The index `docs/adr/README.md` (number, title, status) is generated: after adding or changing an ADR, run
+`node scripts/adr-index.mjs` (`--check` fails on a stale index or a reused number).
 
 ## A map of the modules
 

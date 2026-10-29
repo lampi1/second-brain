@@ -1,6 +1,6 @@
 # ADR 0156 · A routine travels as one package: steps, cited files, rules, skills, roles, scripts and memory
 
-Date: 2026-10-24 · Status: accepted (owner, 2026-10-24: «quando esporto la routine come si porta dietro i prompt e rule
+Date: 2026-10-24 · Status: partly superseded by ADR 0179 (app-execution portions); accepted (owner, 2026-10-24: «quando esporto la routine come si porta dietro i prompt e rule
 e memoria degli agenti?», after finding that «Esporta JSON» did not; his original ask for routines was "exportable to
 cloud agents" with the same results) · Builds on: ADR 0088 (shareable brain zip), ADR 0155 (routine runner, portable
 definition with pinned scripts) · Amends: ADR 0088 (a routine package may carry the memory of the roles it uses)

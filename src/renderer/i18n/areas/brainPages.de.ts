@@ -125,7 +125,7 @@ export const brainPagesDe: typeof brainPagesIt = {
   'brainPages.idee.whatAI': 'Die Ideen der KI, um das Brain, deine Arbeitsweise und sich selbst zu verbessern, jede mit ihrer Begründung. Klick auf eine Zeile, um sie zu lesen und mit dem Orchestrator zu besprechen.',
   'brainPages.idee.whatDefault': 'Deine Ideen und die der KI, aus ideas.md. Filter nach Status, Bereich und wer sie hatte; klick auf eine Zeile, um sie ganz zu lesen und mit dem Orchestrator zu besprechen.',
 
-  // Miglioramento.tsx
+  // LearnedRules.tsx (once the Miglioramento page)
   'brainPages.miglioramento.pageTitle': 'Gelernte Regeln',
   'brainPages.miglioramento.helpQuestion': 'Was heißt das?',
   'brainPages.miglioramento.noData': 'keine Daten',
@@ -146,29 +146,6 @@ export const brainPagesDe: typeof brainPagesIt = {
   'brainPages.miglioramento.lead': (p: { count: number }) => `${p.count} ${p.count === 1 ? "Richtlinie lernt" : "Richtlinien lernen"} aus Ergebnissen; `,
   'brainPages.miglioramento.leadPending': (p: { pending: number }) => `${p.pending} ${p.pending === 1 ? "Vorschlag" : "Vorschläge"} zu entscheiden`,
   'brainPages.miglioramento.leadNoPending': 'keine Vorschläge zu entscheiden',
-
-  // Composer.tsx
-  'brainPages.composer.empty': 'Um von hier zu schreiben, muss der Orchestrator in der App offen sein',
-  'brainPages.composer.emptyDesc': 'Öffne den Orchestrator im Arbeitsbereich: von dieser Seite kannst du ihm Nachrichten schicken, und er leitet sie an Chats weiter, die die App nur liest.',
-  'brainPages.composer.label': 'An',
-  'brainPages.composer.selectLabel': 'Chat, an den du schreibst',
-  'brainPages.composer.selectEmpty': 'Chat auswählen…',
-  'brainPages.composer.selectGroup1': 'App-Chats',
-  'brainPages.composer.selectGroup2': 'Über den Orchestrator (Post zwischen Chats)',
-  'brainPages.composer.viaOrchestrator': 'der Orchestrator leitet sie per Post zwischen Chats weiter',
-  'brainPages.composer.chatGone': 'der gewählte Chat ist nicht mehr offen: wähl einen anderen',
-  'brainPages.composer.placeholder': 'Schreib, was du fragen willst…',
-  'brainPages.composer.ariaLabel': 'Nachrichtentext',
-  'brainPages.composer.sendBtn': 'Senden…',
-  'brainPages.composer.shortcut': 'Strg+Eingabe',
-  'brainPages.composer.confirmDialog': 'Senden bestätigen',
-  'brainPages.composer.confirmText': (p: { name: string }) => `An ${p.name} senden?`,
-  'brainPages.composer.confirmViaOrchestrator': 'Ich schicke sie an den Orchestrator, der sie per Post zwischen Chats weiterleitet.',
-  'brainPages.composer.confirmApp': 'Sie kommt im Chat als deine Nachricht an und bringt ihn zum Arbeiten.',
-  'brainPages.composer.confirmBtn': 'Ja, senden',
-  'brainPages.composer.cancelBtn': 'Abbrechen',
-  'brainPages.composer.sentApp': (p: { name: string }) => `An ${p.name} gesendet`,
-  'brainPages.composer.sentOrchestrator': (p: { name: string }) => `An den Orchestrator gesendet, der sie an ${p.name} weiterleitet`,
 
   // RecordDiscussButton.tsx
   'brainPages.recordDiscuss.title': 'Öffnet den Orchestrator neben der Seite mit einer fertigen Nachricht zu diesem Eintrag: wenn Arbeit nötig ist, öffnet er den Chat',

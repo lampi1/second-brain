@@ -1,5 +1,5 @@
 // A chat's effort as four facts (requested, submitted, effective, session default): the manager keeps them per chat
-// (ChatSummary.effortStatus), the chat header and tiles show the effective one (renderer/lib/effort-label.ts).
+// (ChatSummary.effortStatus), the chat header and tiles show the effective one (renderer/lib/format.ts effortLabel).
 import type { Effort } from '../../shared/contract';
 import type { ChatEffortStatus } from '../../shared/effort';
 export const effortValue = (value: unknown): string | null => typeof value === 'string' && /^[a-z][a-z0-9_-]{0,39}$/.test(value) ? value : null;

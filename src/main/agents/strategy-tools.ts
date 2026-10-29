@@ -6,6 +6,7 @@
 // before any question is refused unless it says why none was needed (shared/strategy.ts proposalGate, ADR 0121). Used by
 // wiring.ts.
 import type { McpTool } from '../mcp/server';
+import { callerOf } from '../mcp/caller';
 import { checkProposal, proposalGate, STEP_STATES, stepIndex, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
 import { WORK_ROLE_IDS } from '../../shared/roles';
 
@@ -15,12 +16,6 @@ export interface StrategyChats {
   planPropose(chatId: string, steps: PlanStep[], doneWhen?: string): StrategyPlan;
   planUpdate(chatId: string, i: number, state: StepState): StrategyPlan;
 }
-
-const callerOf = (params: Record<string, string>): string => {
-  const id = params.chatId;
-  if (!id) throw new Error('This tool works only on a chat\'s own endpoint.');
-  return id;
-};
 
 export function strategyTools(chats: StrategyChats): McpTool[] {
   const str = { type: 'string' };

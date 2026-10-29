@@ -14,7 +14,7 @@ export type OneShotPurpose = (typeof ONE_SHOT_PURPOSES)[number];
 export type AgentAvatar = { kind: 'character'; value: CharacterId };
 
 /** Abstract tool classes. A definition only narrows what the engine and the user's settings already allow.
- *  shell-read = read-only commands only (agents/shell-readonly.ts); browser-read = navigate and read pages, no typing. */
+ *  shell-read = read-only commands only (agents/tool-policy.ts readOnlyCommand); browser-read = navigate and read pages, no typing. */
 export const TOOL_CLASSES = ['read', 'edit', 'shell', 'shell-read', 'web', 'browser', 'browser-read', 'mail-draft', 'calendar-read', 'brain-write', 'mcp'] as const;
 export type ToolClass = (typeof TOOL_CLASSES)[number];
 export interface AgentToolPolicy { allow: ToolClass[]; mcp?: string[] }

@@ -13,8 +13,8 @@
 │   mcp-servers/ store (+ tokens) · gateway · client · import (ADR 0086)        │
 │   brain/   brain folder config · Live feed (fs.watch + chats.mjs) · notify    │
 │            usage · costs · budget · estimates · quality · model defaults      │
-│   tasks/   Task page (brain script, read only) · run/ "Esegui" shell blocks   │
-│   search/  Ctrl+K index · skills/ skills page · update/ Aggiorna (Settings)   │
+│   tasks/   Task page (DevOps reader, read only) · run/ "Esegui" shell blocks  │
+│   search/  Ctrl+K index · skills/ Skill tab · update/ Aggiorna (Settings)     │
 │   brainmodel/ Brain section: skills, rules, memory, jobs + undo (0077, 0082)  │
 │   cloud/   cloud agents: Cursor REST v1 · codex cloud · claude --cloud (0080) │
 │   personal/ the user's own Browser page: persist:personal, vault (ADR 0133)   │
@@ -79,9 +79,9 @@
   3 or more (the 30 most recent), its middle half, a confidence and its parts, and a path (self / one-agent / tree). The
   Orchestrator reads it with `task_estimate` and in `app_create_chat`'s answer; IPC `agents:estimates`
   (`agents/run-estimates.ts`) gives the strips each run's estimate made before it started, its actual once ended, and
-  `agents/estimate-accuracy.ts`'s weekly backtest (`EstimateAccuracy`, also for the Dashboard / Classificatori);
+  `agents/estimate-accuracy.ts`'s weekly backtest (`EstimateAccuracy`, also for Classificatori);
   `lib/run-estimates.ts` reads it once for every strip, `RunEstimate.tsx` draws the chip, its "?" and the Orchestrator's plan.
-- **A cloud agent** (ADR 0080): the Orchestrator's `app_create_chat where:'cloud'` → `cloud:start` →
+- **A cloud agent** (ADR 0080): the Orchestrator's `app_create_chat where:'cloud'` →
   CloudService checks readiness (key / sign-in, GitHub remote, pushed branch, Cursor budget) → the vendor's provider
   starts it (`cloud/cursor.ts` REST, `codex.ts` / `claude.ts` CLIs) → `cloud:changed` → a cloud strip
   (`CloudStrips.tsx`). The vendors' lists are polled only while the window is visible (30 s while running, back-off to
@@ -93,12 +93,12 @@
 - **Browsers on screen**: each browser view (under its agent's strip, ADR 0071) reports its rect (`views:layout`); main adds/positions/removes the
   WebContentsViews. An overlay (menu, dialog) reports `rect: null` for the views under it (views always draw above
   the page).
-- **An agent changes by itself** (ADR 0077, 0082): the maintenance jobs (`brainmodel/jobs.ts`: a skill from repeated
-  work, duplicate skills and memories merged, the user's corrections applied) and the Orchestrator's `agent_update` /
-  `agent_rollback` / `agent_archive` / `agent_restore` apply at once; each change is a `BrainChange` in
-  `userData/brain-changes.json` with "Annulla" (`brainmodel/changes.ts`), a behavioural agent change as a trial version.
-  Tools, permissions and the engine of an agent wait for the user in Agenti → Da approvare (`agents:proposalDecide`).
-  The "Manutenzione" button (top bar, Orchestrator head, Memoria) is one click (`maintenance:run`, ADR 0153): the free
+- **How the brain and the roles change** (ADR 0077, 0125, 0153): the roles are fixed (no Orchestrator tool edits,
+  archives or restores them); the maintenance jobs (`brainmodel/jobs.ts`: structural migration, the user's approved
+  corrections from `agent_learn_propose`, repeated-task skill candidates held for review) write only what the user
+  approved; each change is a `BrainChange` in `userData/brain-changes.json` with "Annulla" (`brainmodel/changes.ts`), a
+  behavioural role change as a trial version (`agents:trialDecide`). A role's tools and permissions change only from
+  its Permessi card (ADR 0085). The "Manutenzione" button (top bar, Orchestrator head, Memoria) is one click (`maintenance:run`, ADR 0153): the free
   cleanup runs every job (`brainmodel:maintain`) and the log step, then one invisible app chat (no strip, no notice)
   researches with the app's best choice (strongest model, 5 $ cap, a data pack; `brainmodel/research.ts`, ADR 0132).
   Its findings are cards in Memoria → Proposte: brain changes and what to forget, applied through the change log on

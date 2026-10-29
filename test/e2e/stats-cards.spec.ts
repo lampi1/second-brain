@@ -1,6 +1,6 @@
 // Statistics redesign (owner, 2026-10-19): Brain → Classificatori as a grid of classifier cards (numbers with a "?",
 // an 8-week trend, the learning meter toward 20 verified cases, a curious fact) with a detail per classifier (history,
-// slices, the routing table under "Scelta del modello"), and the Dashboard's Errori tab with recurring errors grouped
+// slices, the routing table under "Scelta del modello"), and Qualità's app errors (once the Dashboard's Errori tab) with recurring errors grouped
 // into cards (cause, count, trend, where, what it means, what to do). Frozen demo with its made-up classifier history
 // (main/demo-classifiers.ts) and the brain-ui fixture (ai-errors.md). Screenshots dark and light in
 // test-results/shots/stats-*.png.

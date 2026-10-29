@@ -281,7 +281,13 @@ export class AgentRunStore {
   /** the latest end among the pruned runs: a chat mirror of an ended run up to it is already in the rollups, never adopted */
   private prunedThrough = 0;
   private flash: FlashLog = emptyFlashLog();
-  private dirty = false;
+  private unsaved = false;
+  private rev = 0;
+  /** Bumped by every change worth a write (dirty) and every run that leaves memory: the read worker keeps its copy of the
+   *  runs while it holds (read-work.ts), so a Memoria or estimate read does not copy thousands of runs again (#276, #277). */
+  get revision(): number { return this.rev; }
+  private get dirty(): boolean { return this.unsaved; }
+  private set dirty(v: boolean) { if (v) this.rev++; this.unsaved = v; }
   /** Exact preimage retained until an exclusive recovery copy is durable; repair never discards malformed rows. */
   private recoverySource: Buffer | null = null;
   /** the runs just pruned (folded into the rollups): ChatManager drops their chat mirrors */
@@ -364,7 +370,7 @@ export class AgentRunStore {
     };
     this.runs.set(run.runId, run);
     if (!save) { this.dirty = true; return run; }
-    try { this.save(); } catch (e) { this.runs.delete(run.runId); throw e; }
+    try { this.save(); } catch (e) { this.runs.delete(run.runId); this.rev++; throw e; }
     return run;
   }
   /** A run known only from a chat's mirror (written before a lost or reset store): taken back as it is; undefined = an
@@ -472,6 +478,7 @@ export class AgentRunStore {
       body: `${JSON.stringify(record(next, rollups, prunedThrough))}\n`,
       commit: () => {
         for (const r of drop) this.runs.delete(r.runId);
+        if (drop.size) this.rev++;
         this.rollups = rollups; this.prunedThrough = prunedThrough;
         if (drop.size) this.onPrune?.(new Set([...drop].map(r => r.runId)));
       },

@@ -89,7 +89,7 @@ describe('chatRefsOf', () => {
     expect(refs.has('a3')).toBe(false);
     expect(chatRefsOf(items, key).get('a2')).toBe(refs.get('a2')); // same array: the row does not re-render
   });
-  it('is empty outside a Orchestrator (no key)', () => {
+  it('is empty outside an Orchestrator (no key)', () => {
     expect(chatRefsOf([asst('a1', '«QA · Report»')], '').size).toBe(0);
   });
 });

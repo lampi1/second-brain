@@ -1,8 +1,8 @@
-// Review proof for PR #26 (runs against the #26 head, 058f5f9): main/file-diff.ts findRepo promises to refuse a
-// repository whose git folder or objects "could lead to a network share", but it follows links with statSync/realpath
-// (which on Windows already connect to the share and send the login, unlike open-path.ts linksToShare, which lstat/readlinks
-// first) and, when the share does not answer, falls back to the unresolved path and lets git read through the link.
-// On Linux a `//host/share/...` link target is just a missing path, which is exactly the "share did not answer" case.
+// file-diff's repository lookup and network shares (security, regression of PR #26): main/file-diff.ts findRepo refuses a
+// repository whose git folder or objects could lead to a network share before following the link (statSync/realpath
+// would already connect to the share and send the login on Windows, unlike open-path.ts linksToShare, which
+// lstat/readlinks first), and never falls back to the unresolved path when the share does not answer. On Linux a
+// `//host/share/...` link target is just a missing path, which is exactly the "share did not answer" case.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';

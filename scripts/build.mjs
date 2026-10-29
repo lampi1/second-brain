@@ -27,7 +27,7 @@ await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/read-worker.t
 // the hybrid search's worker thread (src/main/search/hybrid/worker.ts), next to the main bundle
 await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/search/hybrid/worker.ts')], outfile: path.join(root, 'out/main/search-worker.js'), format: 'esm',
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
-// its runtime packages (loaded with createRequire, never bundled: native code, ADR 0068) travel in out/node_modules, so
+// its runtime packages (loaded with createRequire, never bundled: native code, ADR 0094) travel in out/node_modules, so
 // the dev build and every release (a copy of out/) resolve them; onnxruntime-node keeps only this platform's CPU binaries
 // the voice process (src/main/voice/worker.ts, ADR 0152): its own bundle, sherpa-onnx (native, with its own onnxruntime)
 // beside it in out/node_modules

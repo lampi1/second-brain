@@ -78,8 +78,6 @@ export class FileJobStore implements JobStore {
   }
 }
 
-export const modelKey = (m: string | null | undefined): string | null => (m ? m.toLowerCase().replace(/^claude-/, '').replace(/\[.*\]$/, '').trim() || null : null);
-
 // ── backfill from cost.mjs ──────────────────────────────────────────────────────────────────────────────────────────
 export const BACKFILL_DAYS = 30;
 export const MAX_SPAN_MIN = 8 * 60; // a longer first-to-last span is a chat left open, not working time: no duration

@@ -7,6 +7,7 @@ import type { AppSourceState } from '@shared/contract';
 import { createStore } from './createStore';
 import { askConfirm, toast } from './ui';
 import { t } from '../i18n';
+import { errText } from '../lib/ipc-error';
 
 export const source = createStore<AppSourceState | null>(null);
 
@@ -25,8 +26,6 @@ export function useSource<T>(sel: (s: AppSourceState | null) => T): T {
   start();
   return source.use(sel);
 }
-
-const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 
 export function dismissLaunch(): void {
   source.set(s => (s ? { ...s, launch: null } : s));

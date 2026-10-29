@@ -12,7 +12,6 @@ export const brainLibEn: typeof brainLibIt = {
   'brainLib.charts.noData': 'No data.',
   'brainLib.charts.nValuesMax': (p: { n: number; max: string; values: string }) => `${p.n} values; highest ${p.max}: ${p.values}`,
   'brainLib.charts.nBarsRange': (p: { n: number; from: string; to: string }) => `${p.n} bars; from ${p.from} to ${p.to}.`,
-  'brainLib.charts.nPointsMax': (p: { n: number; max: string }) => `${p.n} points; maximum ${p.max}.`,
   'brainLib.charts.firstLabel': (p: { n: number; first: string; value: string }) => `${p.n} items; first: ${p.first}, ${p.value}.`,
 
   // record-discuss.ts

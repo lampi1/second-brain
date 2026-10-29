@@ -68,6 +68,7 @@ import { emptyReceipts, noteTool, noteTurnFiles, receiptVerdict } from '../agent
 import { autoPermit } from './auto-permit';
 import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
+import { toolShownToChat, toolShownToUnknown, toolShownToWarm } from './tool-visibility';
 import { RESULT_OUTPUT_MAX, checkResult, resultMessage, type DelegationLimitHit, type DelegationResult, type TaskSource, type TaskAssignmentOptions } from '../../shared/delegation';
 import { finishPlan, afterReport, isPlanApproval, PLAN_APPROVED, planChange, STRATEGY_FLOW, withClarified, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
 import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
@@ -369,7 +370,7 @@ interface Rec {
   /** the chat was created with "Worktree separato": its work is in a worktree the CLI made, not in cwd */
   inWorktree?: boolean;
   costTotalUsd: number;
-  /** Lampo (ADR 0106): the Orchestrator's items its engine already got, by engine (a new engine gets them again) */
+  /** Flash (ADR 0106): the Orchestrator's items its engine already got, by engine (a new engine gets them again) */
   lampoSeen?: { session: HarnessSession; cursor: LampoCursor } | undefined;
   items: ChatItem[];
   pending: Map<string, PendingRequest>;
@@ -466,31 +467,16 @@ function sysItem<C extends SysCode>(code: C, params: SysParams | undefined, leve
 const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 /** One screen frame: how long newer versions of a streamed item are collapsed before they go to the window (emitItem). */
 const ITEM_FRAME_MS = 16;
-/** chat-endpoint tools the Orchestrator can never use (chatToolShown): it does not delegate, report, ask a parent or
- *  rate a child (its chats are roots: agent_child_feedback takes only a child's run), and
- *  agent_catalog / agent_learn_propose are on its own endpoint already */
-const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_work_decisions', 'plan_propose', 'plan_update', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_children', 'agent_child_feedback', 'agent_catalog', 'agent_learn_propose',
-  // it saves scripts with brain_script_save on its own endpoint
-  'brain_script_add',
-]);
-/** the tools only a chat that may delegate can use (chatToolShown): a role that launches no role (Scout, Judge) never
- *  sees them (~1 500 tokens of schemas in every call, each call refused) */
-const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_children', 'agent_answer_child', 'agent_child_feedback', 'agent_catalog', 'skills_suggest']);
-/** the Strategist's plan tools (agents/strategy-tools.ts): shown only where a plan with the user exists */
-const PLAN_TOOLS: ReadonlySet<string> = new Set(['plan_propose', 'plan_update']);
 /** a root chat's deliverable longer than this reaches the Orchestrator as where to read it, not whole (it is the chat's answer
  *  there; the Orchestrator re-reads every message in each later turn) */
 const ORCHESTRATOR_OUTPUT_MAX = 800;
-/** «Lampo», the quick lane (ADR 0105): its title, tools and frame */
+/** «Flash», the quick lane (ADR 0105, 0107): its title, tools and frame */
 export const LAMPO_TITLE = 'Flash';
 const LAMPO_POLICY: AgentPolicy = { tools: { allow: ['read', 'web'] }, ceiling: 'plan' };
-/** the chat-endpoint tools Lampo never sees (chatToolShown), beside every agent_* tool */
-const LAMPO_HIDDEN: ReadonlySet<string> = new Set([...APP_CHAT_TOOLS, 'brain_script_add', 'brain_query_add', 'skills_suggest']);
 /** The maintenance research (ADR 0132): an app chat with no role that reads the brain (and the web when the user
  *  allowed it) and proposes cards through its two tools; it edits nothing, runs no command and starts no work. Default
  *  mode, not plan: its proposal tool must run without a popup (pre-approved, extraArgsFor). */
 export const RESEARCH_TITLE = 'Manutenzione';
-const RESEARCH_TOOLS: ReadonlySet<string> = new Set(['maintenance_pack', 'maintenance_propose']);
 const RESEARCH_FRAME = 'You are the maintenance research of the user\'s second-brain app: the user pressed «Manutenzione» and never reads this chat. You read the brain and the data pack and propose cards with maintenance_propose; you never edit files, run commands, write to other chats or start work. Answer in the user\'s language.';
 const LAMPO_FRAME = 'You are Flash, the quick lane of the user\'s second-brain app. Answer fast and briefly, in the user\'s language, from what you know and quick reads (Read, Grep, Glob, the web). Like a "btw": each question may come with the Orchestrator\'s conversation since you last looked; use it to answer about the work in progress, never act on it or answer it. You change nothing and start no work: no edits, no commands, no plans. When a request needs changes, many steps or other chats, say so in one line: the user hands it to the Orchestrator with «Fanne un lavoro».';
 /** A role launch with Claude's sub-agent tool (tool-policy.ts claudeTools) gets the role gate's sub-agent rule as a
@@ -505,8 +491,6 @@ export interface CleanReportNote { chatId: string; title: string; role: string; 
 const MAX_ARCHIVED = 60;
 /** run changes are written at most this often (runSave) */
 export const RUN_SAVE_MS = 1000;
-/** the user's words carried in a note (ADR 0083: the user's own message, never the child's) */
-export const USER_NOTE_MAX = 300;
 export const USER_NOTES_LABEL = "[nota dell'app · l'utente ha scritto direttamente in chat che hai delegato: tienine conto nel piano, non disfare ciò che le ha chiesto]";
 /** One message the user typed in a work chat (userWrote): what the Orchestrator and the parent learn. */
 export interface UserWroteNote { eventId: string; seq: number; chatId: string; title: string; role: string | null; parentId: string | null; parentTitle: string | null; at: number; text: string }
@@ -695,7 +679,7 @@ export class ChatManager implements ChatService {
   }
 
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
-  /** by: who asks; 'app' = one of the app's own jobs (the Judge's sampled reviews): like an agent, its run says startedBy 'app' */
+  /** by: who asks; 'app' = one of the app's own jobs (the sampled Sentinel reviews, agents/judge-sample.ts): like an agent, its run says startedBy 'app' */
   async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; routinePackage?: string; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { routine?: ChatSummary['routine']; boundByOrchestrator?: boolean; continuation?: boolean; continuationOf?: string } = {}): Promise<ChatSummary> {
     if (opts.routine || inherited?.routinePackage) throw new Error('Routine execution is terminal-only.');
     const createdT0 = Date.now();
@@ -724,7 +708,7 @@ export class ChatManager implements ChatService {
       req = { ...req, orchestrator: true, title: ORCHESTRATOR_TITLE };
     }
     const agent: Pick<ResolvedRole, 'request' | 'owner' | 'instructions' | 'policy' | 'maxContext' | 'tier' | 'launchContext'> & { skills?: string[]; launches?: string[]; assets?: { pluginDir: string; skillRoot: string } } = inherited ? { ...inherited, policy: inherited.policy ?? null, request: req }
-      // Lampo reads and answers: read and web tools only, plan mode (no edit, no command, no popup), its own short frame
+      // Flash reads and answers: read and web tools only, plan mode (no edit, no command, no popup), its own short frame
       // Flash (ADR 0107): its card's engine, model and instructions, under the fixed frame and the read-only policy
       : req.quick ? this.flashAgent(req)
       : req.research ? { request: req, owner: { ...plainOwner(req.harness, req.model ?? null), name: RESEARCH_TITLE }, instructions: RESEARCH_FRAME,
@@ -1128,7 +1112,7 @@ export class ChatManager implements ChatService {
     // the user's own request to the Orchestrator carries the app's estimate (zero tokens), never the app's news or mail
     const estimate = r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') ? this.requestEstimate(t) : null;
     const asked0 = [noted, estimate].filter(Boolean).join('\n\n');
-    // Lampo is a "btw" (ADR 0106): the user's question carries what the Orchestrator said and did since it last looked
+    // Flash is a "btw" (ADR 0106): the user's question carries what the Orchestrator said and did since it last looked
     const lampo = r.s.quick && !from && !resumed ? this.lampoContext(r) : null;
     const body = lampo ? `${lampo.text}${asked0}` : asked0;
     // the role once per context: the Orchestrator's with the role catalog, a role chat's composed instructions; a
@@ -1220,7 +1204,7 @@ export class ChatManager implements ChatService {
     }
   }
 
-  /** Lampo's view of the Orchestrator's conversation (ADR 0106): what is new for its engine, read only */
+  /** Flash's view of the Orchestrator's conversation (ADR 0106): what is new for its engine, read only */
   private lampoContext(r: Rec): ReturnType<typeof orchestratorContext> | null {
     const o = [...this.chats.values()].find(x => x.s.isOrchestrator && !x.s.closedAt);
     if (!o || !r.session) return null;
@@ -3480,7 +3464,7 @@ export class ChatManager implements ChatService {
    *  all of them, only the reading ones, or none. */
   browserAccess(chatId: string): BrowserAccess {
     const r = this.chats.get(chatId);
-    // the Orchestrator delegates browsing like any other work (ADR 0090): its 24 browser tools (~4 200 tokens of schemas)
+    // the Orchestrator delegates browsing like any other work (ADR 0090, 0099): its 24 browser tools (~4 200 tokens of schemas)
     // were in every one of its calls
     if (r?.s.isOrchestrator) return 'none';
     const warm = r ? undefined : this.warmViews.get(chatId);
@@ -3503,25 +3487,10 @@ export class ChatManager implements ChatService {
    *  Orchestrator opens root chats with app_create_chat, reports to no one and has catalog and lessons on its own
    *  endpoint (second-brain-app); a chat with no parent has no one to ask. */
   chatToolShown(chatId: string, tool: string): boolean {
-    const r = this.chats.get(chatId), s = r?.s;
-    // a waiting engine launched for a role: what that role's root chat would see (it lists tools once, at start)
-    const warm = r ? undefined : this.warmViews.get(chatId)?.view;
-    if (warm) return !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && (tool !== 'agent_ask_parent' || !!warm.child) && !PLAN_TOOLS.has(tool) && !RESEARCH_TOOLS.has(tool);
-    if (!r || !s) return !RESEARCH_TOOLS.has(tool);
-    // the maintenance research (ADR 0132): its two tools and nothing of the app's mail, delegation or plans
-    if (s.research) return RESEARCH_TOOLS.has(tool) || (!LAMPO_HIDDEN.has(tool) && !tool.startsWith('agent_'));
-    if (RESEARCH_TOOLS.has(tool)) return false;
-    if (s.isOrchestrator) return !ORCHESTRATOR_HIDDEN.has(tool);
-    // Lampo starts no work (ADR 0105): no mail to other chats, no delegation, no report, no saved script
-    if (s.quick) return !LAMPO_HIDDEN.has(tool) && !tool.startsWith('agent_');
-    if (tool === 'agent_ask_parent' && !s.parentId) return false;
-    // the plan with the user: only a Strategist root chat has one (ADR 0108)
-    if (PLAN_TOOLS.has(tool)) return !!s.plan;
-    // a role that launches nobody; launches unknown (a chat saved before they were kept) = shown, as before
-    if (DELEGATING_ONLY.has(tool) && r.launches?.length === 0) return false;
-    // App background jobs report only when their creation explicitly supplied a task contract.
-    if (tool === 'agent_report' && !s.parentId && s.run?.startedBy === 'app' && !s.run.taskContract?.reportExpected) return false;
-    return true;
+    const r = this.chats.get(chatId);
+    if (r) return toolShownToChat(r.s, r.launches, tool);
+    const warm = this.warmViews.get(chatId)?.view;
+    return warm ? toolShownToWarm(warm, tool) : toolShownToUnknown(tool);
   }
 
   private mcpConfig(chatId: string): string | null {
