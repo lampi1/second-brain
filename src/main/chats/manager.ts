@@ -68,6 +68,7 @@ import { emptyReceipts, noteTool, noteTurnFiles, receiptVerdict } from '../agent
 import { autoPermit } from './auto-permit';
 import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
+import { toolShownToChat, toolShownToUnknown, toolShownToWarm } from './tool-visibility';
 import { RESULT_OUTPUT_MAX, checkResult, resultMessage, type DelegationLimitHit, type DelegationResult, type TaskSource, type TaskAssignmentOptions } from '../../shared/delegation';
 import { finishPlan, afterReport, isPlanApproval, PLAN_APPROVED, planChange, STRATEGY_FLOW, withClarified, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
 import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
@@ -466,31 +467,16 @@ function sysItem<C extends SysCode>(code: C, params: SysParams | undefined, leve
 const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 /** One screen frame: how long newer versions of a streamed item are collapsed before they go to the window (emitItem). */
 const ITEM_FRAME_MS = 16;
-/** chat-endpoint tools the Orchestrator can never use (chatToolShown): it does not delegate, report, ask a parent or
- *  rate a child (its chats are roots: agent_child_feedback takes only a child's run), and
- *  agent_catalog / agent_learn_propose are on its own endpoint already */
-const ORCHESTRATOR_HIDDEN: ReadonlySet<string> = new Set(['agent_work_decisions', 'plan_propose', 'plan_update', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_report', 'agent_ask_parent', 'agent_answer_child', 'agent_children', 'agent_child_feedback', 'agent_catalog', 'agent_learn_propose',
-  // it saves scripts with brain_script_save on its own endpoint
-  'brain_script_add',
-]);
-/** the tools only a chat that may delegate can use (chatToolShown): a role that launches no role (Scout, Judge) never
- *  sees them (~1 500 tokens of schemas in every call, each call refused) */
-const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_children', 'agent_answer_child', 'agent_child_feedback', 'agent_catalog', 'skills_suggest']);
-/** the Strategist's plan tools (agents/strategy-tools.ts): shown only where a plan with the user exists */
-const PLAN_TOOLS: ReadonlySet<string> = new Set(['plan_propose', 'plan_update']);
 /** a root chat's deliverable longer than this reaches the Orchestrator as where to read it, not whole (it is the chat's answer
  *  there; the Orchestrator re-reads every message in each later turn) */
 const ORCHESTRATOR_OUTPUT_MAX = 800;
 /** «Lampo», the quick lane (ADR 0105): its title, tools and frame */
 export const LAMPO_TITLE = 'Flash';
 const LAMPO_POLICY: AgentPolicy = { tools: { allow: ['read', 'web'] }, ceiling: 'plan' };
-/** the chat-endpoint tools Lampo never sees (chatToolShown), beside every agent_* tool */
-const LAMPO_HIDDEN: ReadonlySet<string> = new Set([...APP_CHAT_TOOLS, 'brain_script_add', 'brain_query_add', 'skills_suggest']);
 /** The maintenance research (ADR 0132): an app chat with no role that reads the brain (and the web when the user
  *  allowed it) and proposes cards through its two tools; it edits nothing, runs no command and starts no work. Default
  *  mode, not plan: its proposal tool must run without a popup (pre-approved, extraArgsFor). */
 export const RESEARCH_TITLE = 'Manutenzione';
-const RESEARCH_TOOLS: ReadonlySet<string> = new Set(['maintenance_pack', 'maintenance_propose']);
 const RESEARCH_FRAME = 'You are the maintenance research of the user\'s second-brain app: the user pressed «Manutenzione» and never reads this chat. You read the brain and the data pack and propose cards with maintenance_propose; you never edit files, run commands, write to other chats or start work. Answer in the user\'s language.';
 const LAMPO_FRAME = 'You are Flash, the quick lane of the user\'s second-brain app. Answer fast and briefly, in the user\'s language, from what you know and quick reads (Read, Grep, Glob, the web). Like a "btw": each question may come with the Orchestrator\'s conversation since you last looked; use it to answer about the work in progress, never act on it or answer it. You change nothing and start no work: no edits, no commands, no plans. When a request needs changes, many steps or other chats, say so in one line: the user hands it to the Orchestrator with «Fanne un lavoro».';
 /** A role launch with Claude's sub-agent tool (tool-policy.ts claudeTools) gets the role gate's sub-agent rule as a
@@ -3501,25 +3487,10 @@ export class ChatManager implements ChatService {
    *  Orchestrator opens root chats with app_create_chat, reports to no one and has catalog and lessons on its own
    *  endpoint (second-brain-app); a chat with no parent has no one to ask. */
   chatToolShown(chatId: string, tool: string): boolean {
-    const r = this.chats.get(chatId), s = r?.s;
-    // a waiting engine launched for a role: what that role's root chat would see (it lists tools once, at start)
-    const warm = r ? undefined : this.warmViews.get(chatId)?.view;
-    if (warm) return !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && (tool !== 'agent_ask_parent' || !!warm.child) && !PLAN_TOOLS.has(tool) && !RESEARCH_TOOLS.has(tool);
-    if (!r || !s) return !RESEARCH_TOOLS.has(tool);
-    // the maintenance research (ADR 0132): its two tools and nothing of the app's mail, delegation or plans
-    if (s.research) return RESEARCH_TOOLS.has(tool) || (!LAMPO_HIDDEN.has(tool) && !tool.startsWith('agent_'));
-    if (RESEARCH_TOOLS.has(tool)) return false;
-    if (s.isOrchestrator) return !ORCHESTRATOR_HIDDEN.has(tool);
-    // Lampo starts no work (ADR 0105): no mail to other chats, no delegation, no report, no saved script
-    if (s.quick) return !LAMPO_HIDDEN.has(tool) && !tool.startsWith('agent_');
-    if (tool === 'agent_ask_parent' && !s.parentId) return false;
-    // the plan with the user: only a Strategist root chat has one (ADR 0108)
-    if (PLAN_TOOLS.has(tool)) return !!s.plan;
-    // a role that launches nobody; launches unknown (a chat saved before they were kept) = shown, as before
-    if (DELEGATING_ONLY.has(tool) && r.launches?.length === 0) return false;
-    // App background jobs report only when their creation explicitly supplied a task contract.
-    if (tool === 'agent_report' && !s.parentId && s.run?.startedBy === 'app' && !s.run.taskContract?.reportExpected) return false;
-    return true;
+    const r = this.chats.get(chatId);
+    if (r) return toolShownToChat(r.s, r.launches, tool);
+    const warm = this.warmViews.get(chatId)?.view;
+    return warm ? toolShownToWarm(warm, tool) : toolShownToUnknown(tool);
   }
 
   private mcpConfig(chatId: string): string | null {
