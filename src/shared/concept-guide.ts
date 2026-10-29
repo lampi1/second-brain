@@ -337,6 +337,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/receipts.ts; src/main/agents/judge-sample.ts byReceipts (ADR 0130)
       b('Prima di una revisione l’app guarda le ricevute del lavoro, registrate gratis mentre girava: i comandi con il loro codice di uscita, i file cambiati, i commit e le PR. Se i test o i controlli del progetto, non toccati dall’agente, sono passati dopo l’ultima modifica e l’agente dice di aver finito, il lavoro è riuscito senza revisione (peso × 0,7); se falliscono e l’agente lo ammette, è fallito. Se le ricevute non bastano o non concordano col resoconto, decide il Sentinel; una ricevuta su dieci viene rivista comunque.',
         'Before a review the app reads the run’s receipts, recorded for free while it ran: the commands with their exit code, the files changed, commits and PRs. If the project’s tests or checks, untouched by the agent, passed after the last change and the agent says it finished, the run succeeded with no review (weight × 0.7); if they fail and the agent admits it, it failed. When the receipts are not enough or disagree with the report, the Sentinel decides; one receipt in ten is reviewed anyway.'),
+      // src/shared/ppi.ts; src/main/agents/judge-agreement.ts; src/renderer/components/AgentStudio.tsx (ADR 0197)
+      b('Accanto ai successi verificati, da 5 lavori giudicati sia da te sia da un giudice automatico, la «Stima con tutti i giudizi»: la media dei giudizi automatici (revisioni del Sentinel, ricevute) corretta da quanto sbagliano rispetto a te (prediction-powered inference), con la sua forchetta al 90%; e l’«Accordo Sentinel–te» (quota e kappa di Cohen, con quanti lavori).',
+        'Beside the verified successes, from 5 runs judged both by you and by an automatic judge, the «Estimate with every judgment»: the mean of the automatic judgments (Sentinel reviews, receipts) corrected by how far they are from you (prediction-powered inference), with its 90% range; and the «Sentinel–you agreement» (share and Cohen’s kappa, with how many runs).'),
     ],
     analogy: b('Come il cruscotto di una flotta: consumi e tempi per veicolo, con scritto quando un dato manca invece di inventarlo.',
       'Like a fleet dashboard: consumption and times per vehicle, saying when a figure is missing instead of inventing it.'),
@@ -347,7 +350,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(WHERE, 'Diagnosi dei livelli: npm run levels -- <agent-runs.json> ricalcola livello e performance di ogni ruolo e dice perché i lavori non hanno dato XP (solo lettura, zero token).', 'Levels diagnostic: npm run levels -- <agent-runs.json> recomputes every role’s level and performance and says why runs gave no XP (read only, zero tokens).'),
       tech(WHERE, 'Metriche delle run: IPC agents:metrics, anche filtrate per tag skill, app e repo; le statistiche delle sessioni restano interne (/api/agents/analytics).', 'Run metrics: agents:metrics IPC, also filtered by skill, app and repo tags; the session statistics stay internal (/api/agents/analytics).'),
     ],
-    sources: ['src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/agents/standing.ts', 'src/main/agents/judge-sample.ts', 'src/renderer/components/AgentCatalogCard.tsx', 'src/main/index.ts', 'src/main/agents/collector.ts', 'docs/agent-evidence.md', 'docs/adr/0125-every-role-levels-up-from-outcomes.md', 'src/main/agents/receipts.ts', 'docs/adr/0130-run-receipts-before-reviews.md', 'src/main/agents/xp.ts', 'src/main/agents/flash-outcomes.ts', 'src/main/agents/level-diagnosis.ts', 'docs/adr/0131-levels-by-job-size-and-bayesian-performance.md'],
+    sources: ['src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/agents/standing.ts', 'src/main/agents/judge-sample.ts', 'src/renderer/components/AgentCatalogCard.tsx', 'src/main/index.ts', 'src/main/agents/collector.ts', 'docs/agent-evidence.md', 'docs/adr/0125-every-role-levels-up-from-outcomes.md', 'src/main/agents/receipts.ts', 'docs/adr/0130-run-receipts-before-reviews.md', 'src/main/agents/xp.ts', 'src/main/agents/flash-outcomes.ts', 'src/main/agents/level-diagnosis.ts', 'docs/adr/0131-levels-by-job-size-and-bayesian-performance.md', 'src/shared/ppi.ts', 'src/main/agents/judge-agreement.ts'],
   },
   {
     id: 'errors-rules',
@@ -450,6 +453,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/brain-model/ClassifiersPage.tsx, src/main/brainmodel/classifier-cards.ts
       b('Brain → Classificatori ne mostra quattro come schede: decisioni, quanto spesso «prendono» (tipo riconosciuto, costo dentro la forchetta, tempo del task fra metà e doppio della stima), quante chat decise sono riuscite (verificate da te o da una revisione, dai run o dal registro del brain, mai l’autovalutazione; gli esiti automatici del brain, come «chiusa senza errori», sono contati a parte come non verificati), il costo medio, 8 settimane di andamento e i casi verificati raccolti sui 20 che servono per calibrarsi. Ogni numero ha un «?».',
         'Brain → Classifiers shows four of them as cards: decisions, how often they "get it" (kind recognised, cost inside the range, task time between half and double the estimate), how many decided chats succeeded (verified by you or a review, never a self-report), the average cost, 8 weeks of trend and the verified cases collected of the 20 needed to calibrate. Every number has a "?".'),
+      // src/main/brainmodel/kind-model.ts, kind-centroids.ts; src/renderer/components/brain-model/KindModelCard.tsx (ADR 0197)
+      b('Tipo di lavoro per esempi (in prova): la richiesta va al tipo i cui esempi (i tuoi lavori conclusi e verificati, con il tipo dato dalle parole) le somigliano di più per significato, con il modello locale della ricerca e zero token; sotto una soglia dice «altro». La scheda mostra l’accordo con le parole sul 20% tenuto da parte e la matrice di confusione; la tabella dei modelli resta sulle parole.',
+        'Kind of work by examples (on trial): a request goes to the kind whose examples (your ended, verified runs, with the kind the words gave them) resemble it most in meaning, with the search’s local model and zero tokens; below a threshold it says «altro». Its card shows the agreement with the words on the 20% kept apart and the confusion matrix; the model table stays on the words.'),
     ],
     analogy: b('Come lo smistamento della posta in portineria: regole scritte, una casella «varie» quando non si capisce, e per un sacco intero di posta si chiama chi smista di mestiere.',
       'Like mail sorting at the front desk: written rules, a "misc" box when it is unclear, and for a whole sack of mail you call the person whose job is sorting.'),
@@ -459,7 +465,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, orchestrator, altro.',
         'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, orchestrator, altro.'),
     ],
-    sources: ['src/main/brainmodel/classifier-cards.ts', 'src/renderer/components/brain-model/ClassifiersPage.tsx', 'src/renderer/lib/classifier-view.ts', 'src/main/agents/discovery.ts', 'src/shared/work-concepts.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts',
+    sources: ['src/main/brainmodel/classifier-cards.ts', 'src/main/brainmodel/kind-model.ts', 'src/main/brainmodel/kind-centroids.ts', 'src/renderer/components/brain-model/ClassifiersPage.tsx', 'src/renderer/lib/classifier-view.ts', 'src/main/agents/discovery.ts', 'src/shared/work-concepts.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts',
       'src/main/agents/tool-policy.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'src/shared/waiting.ts', 'src/shared/roles.ts'],
   },
   {
@@ -1220,9 +1226,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
     summary: b('Quattro numeri su come lavora l’IA, ciascuno con la sua fonte, i giorni che copre e il prossimo passo.',
       'Four numbers on how the AI works, each with its source, the days it covers and the next step.'),
     points: [
-      // src/renderer/brain/pages/Qualita.tsx 1)
-      b('Errori che hai dovuto trovare tu ogni 100 turni: le righe di ai-errors.md «visto da» te, divise per i turni finiti nell’app negli stessi giorni.',
-        'Errors you had to catch yourself per 100 turns: the ai-errors.md rows "seen by" you, divided by the turns finished in the app on the same days.'),
+      // src/renderer/brain/pages/Qualita.tsx 1); src/main/brain/user-corrections.ts (ADR 0197)
+      b('Correzioni che hai dovuto fare tu ogni 100 turni: i tuoi messaggi alle chat dell’app riconosciuti come correzione quando li mandi («Correggi il pensiero», una correzione dopo il report, il rilevatore del brain; mai il testo salvato), più le righe di ai-errors.md viste da te oltre quelle; diviso per i turni finiti negli stessi giorni. «Come lo conto» lo spiega; senza dati dice «nessun dato», mai zero.',
+        'Corrections you had to make per 100 turns: your messages to the app’s chats recognised as a correction when sent («Correggi il pensiero», a correction after the report, the brain’s detector; the text is never saved), plus the ai-errors.md rows seen by you beyond those; divided by the turns finished on the same days. «Come lo conto» explains it; with no data it says «no data», never zero.'),
       // Qualita.tsx 2); ADR 0024
       b('Regole che hanno funzionato: per ogni regola nata da un errore, se lo stesso tipo di errore è tornato entro 14 giorni. Una regola giovane è «troppo presto».',
         'Rules that worked: for each rule born from an error, whether the same kind of error came back within 14 days. A young rule is "too early".'),
@@ -1242,7 +1248,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(FILES, 'ai-errors.md nel brain; turni dai log dell’app (14 giorni); bug riaperti da ops/tools/bug-reopen.mjs, al massimo ogni 12 h.', 'ai-errors.md in the brain; turns from the app’s logs (14 days); reopened bugs from ops/tools/bug-reopen.mjs, at most every 12 h.'),
       tech(WHERE, 'Pagina Qualità (sidebar → Andamento, o G Q); dati da /api/tables e /api/quality.', 'Quality page (sidebar → Trends, or G Q); data from /api/tables and /api/quality.'),
     ],
-    sources: ['src/renderer/brain/pages/Qualita.tsx', 'src/main/brain/quality.ts', 'src/renderer/brain/lib/quality.ts'],
+    sources: ['src/renderer/brain/pages/Qualita.tsx', 'src/main/brain/quality.ts', 'src/renderer/brain/lib/quality.ts', 'src/main/brain/user-corrections.ts', 'docs/adr/0197-corrections-kind-examples-and-ppi.md'],
   },
   {
     id: 'flash',
