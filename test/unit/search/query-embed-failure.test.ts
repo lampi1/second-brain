@@ -1,15 +1,13 @@
-// Proves (PR #12, hybrid search): a failure of the model while embedding the query makes Engine.query reject instead of
-// answering from BM25 (ADR 0068 / hybrid/service.ts: "until then, or if it fails, results come from BM25 only"). Only
-// the background pump turns a broken model off; the query path awaits embedder.embed unguarded, so with a model that
-// fails at run time every search fails: brain_search returns an error to the agent and /api/search, Ctrl+K drop to the
-// substring search even though the words index is fine.
+// Hybrid search with a failing model (regression of PR #12): a model failure while embedding the query falls back to the
+// words (BM25) hits instead of rejecting (ADR 0068 / hybrid/service.ts: "if it fails, results come from BM25 only"), so
+// brain_search, /api/search and Ctrl+K keep answering from the words index.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Engine } from '../../../../src/main/search/hybrid/engine';
-import type { Embedder } from '../../../../src/main/search/hybrid/embedder';
-import { Store } from '../../../../src/main/search/hybrid/store';
+import { Engine } from '../../../src/main/search/hybrid/engine';
+import type { Embedder } from '../../../src/main/search/hybrid/embedder';
+import { Store } from '../../../src/main/search/hybrid/store';
 
 describe('query when the model fails at run time', () => {
   it('still returns the words (BM25) hits', async () => {

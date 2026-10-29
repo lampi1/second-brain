@@ -1,17 +1,15 @@
-// Review proof for PR #27 (error recall): wiring.ts now passes `env: { SB_APP_RECALL: url }` to the ChatManager. Before,
-// `env` was undefined, so ChatManager.modeFor read Brother's Claude defaultMode with `this.opts.env ?? process.env`;
-// now it reads it from an env that holds only SB_APP_RECALL, so CLAUDE_CONFIG_DIR is ignored and ~/.claude is read
-// instead. The Claude CLI itself still gets process.env (claude.ts merges it), so it applies CLAUDE_CONFIG_DIR's
-// defaultMode: an agent's permission ceiling is not enforced. This test FAILS on the PR head.
+// Error recall and the permission ceiling (regression of PR #27): wiring.ts passes `env: { SB_APP_RECALL: url }` to the
+// ChatManager; an agent's permission mode must still be clamped to its ceiling against the Claude settings the CLI
+// itself reads (CLAUDE_CONFIG_DIR, from process.env), never against ~/.claude read through that reduced env.
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { ChatManager, type ChatManagerOptions } from '../../../../src/main/chats/manager';
-import type { HarnessSession, SessionOptions } from '../../../../src/main/chats/session';
-import { plainOwner } from '../../../../src/main/agents/catalog';
-import type { AgentPolicy } from '../../../../src/main/agents/tool-policy';
-import { RECALL_ENV } from '../../../../src/main/search/hybrid/recall';
+import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
+import type { HarnessSession, SessionOptions } from '../../../src/main/chats/session';
+import { plainOwner } from '../../../src/main/agents/catalog';
+import type { AgentPolicy } from '../../../src/main/agents/tool-policy';
+import { RECALL_ENV } from '../../../src/main/search/hybrid/recall';
 
 const saved = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE, CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR };
 const managers: ChatManager[] = [], dirs: string[] = [];

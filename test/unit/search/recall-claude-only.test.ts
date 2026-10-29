@@ -1,13 +1,13 @@
-// Regression for PR27's Claude-only recall: drive the real manager with fake sessions and assert the wire text.
-// Replaces the cloud proof's source-text scan with behavioral coverage of initial and later deliveries.
+// Claude-only error recall (PR #27): drives the real manager with fake sessions and asserts the wire text of the first
+// and later deliveries.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { ChatManager, type ChatManagerOptions } from '../../../../src/main/chats/manager';
-import type { HarnessSession } from '../../../../src/main/chats/session';
-import type { Harness } from '../../../../src/shared/contract';
-import type { Recall } from '../../../../src/main/search/hybrid/recall';
+import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
+import type { HarnessSession } from '../../../src/main/chats/session';
+import type { Harness } from '../../../src/shared/contract';
+import type { Recall } from '../../../src/main/search/hybrid/recall';
 
 const managers: ChatManager[] = [], dirs: string[] = [];
 afterEach(async () => {
