@@ -1,0 +1,656 @@
+{
+  "about": "e2e tests already red on main in the Linux container (ADR 0198). They all still run; a failure here is a «rosso noto», a failure elsewhere a «nuovo rosso» that fails the check. Rewrite with `node scripts/e2e-baseline.mjs --update` after a full run on main; never add a branch's own red.",
+  "source": "failing list of main 2026-10-21 (groups A, B, C of the triage)",
+  "groups": {
+    "group-A": "Impostazioni page: settings groups, switches and search not found or not reachable",
+    "group-B": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed",
+    "group-C": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs"
+  },
+  "updated": "2026-10-21",
+  "tests": [
+    {
+      "file": "admission.spec.ts",
+      "title": "a resume after a restart waits while the machine is busy; \"Avvia ora\" starts it",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; Error: expect(locator).toHaveAttribute(expected) failed"
+    },
+    {
+      "file": "agent-approvals.spec.ts",
+      "title": "tier suggestions gather in Da approvare, open a trial only after confirmation, and the trial is decided there",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toHaveText(expected) failed"
+    },
+    {
+      "file": "agent-authoring.spec.ts",
+      "title": "review an automatic suggestion and create it only from the decision panel",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toBeVisible() failed"
+    },
+    {
+      "file": "agent-identity.spec.ts",
+      "title": "agent owner and team observability are available before entering the transcript",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toBeVisible() failed"
+    },
+    {
+      "file": "agent-lifecycle.spec.ts",
+      "title": "pending lifecycle evidence survives reload and opening its editor never applies it",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toContainText(expected) failed"
+    },
+    {
+      "file": "agent-studio.spec.ts",
+      "title": "a role edit is a version that survives a restart; Ripristina predefinito brings the shipped role back",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: locator.selectOption: Error: Element is not a <select> element"
+    },
+    {
+      "file": "api-credits.spec.ts",
+      "title": "Motori: Anthropic API turns on by the user's click, takes a key and shows this month's spend and the Max credits",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.scrollIntoViewIfNeeded: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "api-credits.spec.ts",
+      "title": "Settings retires routing API controls while preserving a legacy writing row on API credits",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.click: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "brain-nav.spec.ts",
+      "title": "brain pages: arguments through links and history, page-to-page links, map to a file, one toast area",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; TimeoutError: locator.click: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "browser-close.spec.ts",
+      "title": "closing a browser tile › ✕ hides the tile with Annulla; the agent then gets a clear error on that tab, never another tab",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; TimeoutError: locator.click: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "browser-close.spec.ts",
+      "title": "demo: the ✕ closes a browser tile and its native view leaves the layout",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; TimeoutError: locator.getAttribute: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "browser-envs.spec.ts",
+      "title": "browser environments and the password guard › HARD LIMIT: type, fill_form and key never put a password into a remote field",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: no line matches /button \"Mostra\"/ in:"
+    },
+    {
+      "file": "browser-local-javascript.spec.ts",
+      "title": "remote browser inspection works while caller JavaScript is limited to the verified local page",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: navigate failed: Error: Refused: 127.0.0.1:38365 is a local stack, and local stacks always load in environment \"local\" (its own session for the local tes"
+    },
+    {
+      "file": "browser-zone.spec.ts",
+      "title": "each browser beside its chat, folded by its globe; a saved hide-browsers choice hides nothing",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(received).toBe(expected) // Object.is equality"
+    },
+    {
+      "file": "browser.spec.ts",
+      "title": "internal browser over MCP › Ctrl+W in a page never closes the app (the default menu would; in the app it closes that tab, with Annulla)",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; TimeoutError: locator.click: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "chats.spec.ts",
+      "title": "a Claude chat runs a turn, asks a question, takes the answer and streams events to the page",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(received).toMatchObject(expected)"
+    },
+    {
+      "file": "chats.spec.ts",
+      "title": "a Cursor chat (fake ACP agent) asks permission, takes the answer, ends the turn with the cost unknown",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(received).toBe(expected) // Object.is equality"
+    },
+    {
+      "file": "chats.spec.ts",
+      "title": "quitting the app leaves no claude process behind, even mid-turn (job guard)",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(received).toBe(expected) // Object.is equality"
+    },
+    {
+      "file": "codeblocks.spec.ts",
+      "title": "code blocks: Copia everywhere, Esegui on shell blocks, output and outcome to the chat (dark)",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toHaveAttribute(expected) failed"
+    },
+    {
+      "file": "codeblocks.spec.ts",
+      "title": "code blocks: Copia everywhere, Esegui on shell blocks, output and outcome to the chat (light)",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toHaveAttribute(expected) failed"
+    },
+    {
+      "file": "codex.spec.ts",
+      "title": "Codex: turned on by the user, a chat answers a turn and asks a command approval",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.click: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "command-asks.spec.ts",
+      "title": "a command left by a chat waits in its tile and runs from there; an example asks for nothing",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toHaveCount(expected) failed"
+    },
+    {
+      "file": "command-asks.spec.ts",
+      "title": "on a page the command floats in the request layer and Esegui there runs it in its chat",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(received).toBe(expected) // Object.is equality"
+    },
+    {
+      "file": "command-asks.spec.ts",
+      "title": "when a run of Esegui ends, the chat that proposed it gets the exit code and the output by itself",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(received).toContain(expected) // indexOf"
+    },
+    {
+      "file": "connectors-hub.spec.ts",
+      "title": "Connettori: accounts and MCP servers as cards, Prova, write-only token, add a server, dark and light",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.click: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "context.spec.ts",
+      "title": "claude: a long chat shows its meter, writes its hand-off on request, and \"Riprendi\" continues it in a new linked chat",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; TimeoutError: locator.click: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "context.spec.ts",
+      "title": "claude: explicit legacy opt-in preserves cold continuation behavior",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toContainText(expected) failed"
+    },
+    {
+      "file": "context.spec.ts",
+      "title": "cursor: a long chat shows its meter, writes its hand-off on request, and \"Riprendi\" continues it in a new linked chat",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; TimeoutError: locator.click: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "context.spec.ts",
+      "title": "demo: the meter near the compaction, a cold continuation, the hand-off dialog (look)",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toBeVisible() failed"
+    },
+    {
+      "file": "dashboard-map-fit.spec.ts",
+      "title": "the brain map fills its panel, centred and readable (demo brain)",
+      "since": "2026-10-21",
+      "group": "unsorted",
+      "reason": "red on main 2026-10-21"
+    },
+    {
+      "file": "delegation-tree.spec.ts",
+      "title": "a Strategist launches a Scout and a Sentinel: indented children, results back, the fold survives a restart",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(received).toBe(expected) // Object.is equality"
+    },
+    {
+      "file": "devlinks.spec.ts",
+      "title": "a chat tile shows its DevOps links as chips; a click opens them in the system browser",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(locator).toBeVisible() failed"
+    },
+    {
+      "file": "explain.spec.ts",
+      "title": "every command says what it does, the raw command folded under it (dark)",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toContainText(expected) failed"
+    },
+    {
+      "file": "explain.spec.ts",
+      "title": "every command says what it does, the raw command folded under it (light)",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toContainText(expected) failed"
+    },
+    {
+      "file": "genui.spec.ts",
+      "title": "target orchestrator: the visual shows in the Orchestrator widget, with the chat that sent it",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(received).toContain(expected) // indexOf"
+    },
+    {
+      "file": "grindhouse-strips.spec.ts",
+      "title": "an expanded strip opens its own browser beside its chat from its globe, each with its own full-screen control",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(received).toBeGreaterThanOrEqual(expected)"
+    },
+    {
+      "file": "helptip.spec.ts",
+      "title": "a setting's \"?\" opens a styled explanation on hover (dark)",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.scrollIntoViewIfNeeded: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "helptip.spec.ts",
+      "title": "a setting's \"?\" opens a styled explanation on hover (light)",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.click: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "helptip.spec.ts",
+      "title": "keyboard focus opens the explanation, Esc closes it and stays on the page; a click pins it",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.focus: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "home.spec.ts",
+      "title": "Home is the default Grindhouse and keeps detail routes (en)",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(locator).toHaveCount(expected) failed"
+    },
+    {
+      "file": "home.spec.ts",
+      "title": "Home is the default Grindhouse and keeps detail routes (it)",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(locator).toHaveCount(expected) failed"
+    },
+    {
+      "file": "image-native-overlay.spec.ts",
+      "title": "an attachment modal hides native pages and closing it restores them",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(received).toBe(expected) // Object.is equality"
+    },
+    {
+      "file": "language.spec.ts",
+      "title": "Lingua: English from Windows, switched live in Settings and saved",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.scrollIntoViewIfNeeded: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "link-peek.spec.ts",
+      "title": "question context and a full Orchestrator visual open files without answering the question or covering the viewer",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; TimeoutError: locator.click: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "mandato.spec.ts",
+      "title": "Mandato on a text to send: Copiato, Mandato ✓, the chat gets one line; Esegui outcome reaches the chat by itself",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toHaveAttribute(expected) failed"
+    },
+    {
+      "file": "map-live.spec.ts",
+      "title": "the live map: legend of the chats at work, lit pieces with \"Adesso\", a click opens the chat, off switch; pulse cost",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(locator).not.toContainText(expected) failed"
+    },
+    {
+      "file": "map-perf.spec.ts",
+      "title": "the 3D map: fast first frame, nothing drawn while idle, fluid while dragged",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(received).toBeGreaterThan(expected)"
+    },
+    {
+      "file": "memory.spec.ts",
+      "title": "Memoria: statistics with explanations, rendered memories that open, Manutenzione with undo",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; Error: expect(locator).toContainText(expected) failed"
+    },
+    {
+      "file": "navigation.spec.ts",
+      "title": "section badges count new events and clear when the section is visited",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(locator).toBeVisible() failed"
+    },
+    {
+      "file": "orchestrator-esegui.spec.ts",
+      "title": "Esegui in the Orchestrator: its own blocks run as hers",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toHaveAttribute(expected) failed"
+    },
+    {
+      "file": "orchestrator-esegui.spec.ts",
+      "title": "the questions window: a work chat's question brings the commands of its turn, with Esegui",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toHaveAttribute(expected) failed"
+    },
+    {
+      "file": "orchestrator-overlay.spec.ts",
+      "title": "always open on the right, no collapse and no tabs; Ctrl+R focuses its input, Esc keeps it open",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toHaveCount(expected) failed"
+    },
+    {
+      "file": "orchestrator.spec.ts",
+      "title": "light theme: the Orchestrator menu and the Nuovo Orchestrator confirm",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; TimeoutError: locator.click: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "orchestrator.spec.ts",
+      "title": "the Orchestrator menu, Ricomincia da capo (Ctrl+Shift+R) and Cambia motore Claude → Cursor, the old ones kept",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toHaveCount(expected) failed"
+    },
+    {
+      "file": "pairs.spec.ts",
+      "title": "a chat and its browser share a color, light up together and link to each other, in the column and in focus mode",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(received).toBe(expected) // Object.is equality"
+    },
+    {
+      "file": "panels.spec.ts",
+      "title": "question panels look like a product and answer from the keyboard (dark)",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toBeVisible() failed"
+    },
+    {
+      "file": "panels.spec.ts",
+      "title": "question panels look like a product and answer from the keyboard (light)",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toBeVisible() failed"
+    },
+    {
+      "file": "personal-progress-real.spec.ts",
+      "title": "the real profile awards its milestones: \"Confermo\" on a finished result, a customized role, a completed setup",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; Error: page.evaluate: Error: Error invoking remote method 'agents:save': Error: Choose a brain folder first"
+    },
+    {
+      "file": "questions-images.spec.ts",
+      "title": "a question shows its images, large on a click · dark",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toBeFocused() failed"
+    },
+    {
+      "file": "questions-images.spec.ts",
+      "title": "a question shows its images, large on a click · light",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toBeFocused() failed"
+    },
+    {
+      "file": "questions-perf.spec.ts",
+      "title": "ten requests waiting: the rail lists them, the keyboard answers them one after another",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toBeFocused() failed"
+    },
+    {
+      "file": "questions-perf.spec.ts",
+      "title": "the questions window opens fast, stays still, and other chats never render it",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toBeFocused() failed"
+    },
+    {
+      "file": "questions.spec.ts",
+      "title": "a file link clicked in the questions window shows the viewer in front; the pill brings the same question back",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: locator.click: Error: strict mode violation: getByTestId('qwin').getByText('report TC16') resolved to 2 elements:"
+    },
+    {
+      "file": "review.spec.ts",
+      "title": "C2/C10: an old finished chat is reachable from the palette, tabs without a snapshot show title and address",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(locator).toContainText(expected) failed"
+    },
+    {
+      "file": "review.spec.ts",
+      "title": "C3/C4/C7: free text for Cursor questions too, with a note; long details keep the buttons visible; a failed answer comes back",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; TimeoutError: locator.focus: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "review.spec.ts",
+      "title": "C9: the layer page reloads after a crash and shows the cards again",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(received).toBe(expected) // Object.is equality"
+    },
+    {
+      "file": "review.spec.ts",
+      "title": "S1: markdown from a chat cannot navigate the app window (area/map, forms, frames, file:, UNC, //host)",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: expect(received).toEqual(expected) // deep equality"
+    },
+    {
+      "file": "role-preferences.spec.ts",
+      "title": "role selection previews, cancels, persists and restores the previous choice",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; Error: expect(locator).toBeVisible() failed"
+    },
+    {
+      "file": "role-run.spec.ts",
+      "title": "a chat started with a role is a run of that role; one without a role is plain",
+      "since": "2026-10-21",
+      "group": "group-B",
+      "reason": "chats, questions, agent pages and the Orchestrator: panels, counts and texts changed; Error: page.evaluate: Error: Error invoking remote method 'chat:create': Error: Skill non trovata: review (pagina Skill)."
+    },
+    {
+      "file": "routing-ledger.spec.ts",
+      "title": "a chat opened without a model writes its routing prediction, then its measured actuals, to the ledger",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; Error: expect(received).toMatchObject(expected)"
+    },
+    {
+      "file": "second-instance.spec.ts",
+      "title": "a second start on the same profile exits with 75; a quitting app writes quitting.json",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; Error: expect(received).toBe(expected) // Object.is equality"
+    },
+    {
+      "file": "settings-routing.spec.ts",
+      "title": "Settings retires the routing matrix without resetting legacy routing choices or history",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.click: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "settings.spec.ts",
+      "title": "Chat aperte dall’Orchestrator: engine, models (Cursor's own list), effort; saved at once",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.scrollIntoViewIfNeeded: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "settings.spec.ts",
+      "title": "Codex autonomy is an explicit empty-by-default repository selection and can be revoked",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; Error: expect(locator).toHaveValue(expected) failed"
+    },
+    {
+      "file": "settings.spec.ts",
+      "title": "Impostazioni: groups, theme live, messaging always available, model comparison switches with their cost",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; Error: expect(locator).toBeVisible() failed"
+    },
+    {
+      "file": "settings.spec.ts",
+      "title": "Impostazioni: the Claude chats compact at 200k by default and «Orchestrators corte» is on; both saved at once",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.scrollIntoViewIfNeeded: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "settings.spec.ts",
+      "title": "Motori: a new engine turns on by the user's click, its API key is saved encrypted and shown only as a mask",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.scrollIntoViewIfNeeded: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "settings.spec.ts",
+      "title": "settings search finds labels, descriptions and sections, preserves drafts and explains no matches",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; Error: expect(locator).toBeVisible() failed"
+    },
+    {
+      "file": "settings.spec.ts",
+      "title": "spending limits, Windows notifications, the engines the Orchestrator may use, the brain folder read only",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.scrollIntoViewIfNeeded: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "stream.spec.ts",
+      "title": "a running turn's dots and spinner step twice a second, and stand still with reduced motion",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(received).toBe(expected) // Object.is equality"
+    },
+    {
+      "file": "stream.spec.ts",
+      "title": "a small (compact) tile shows the typing line while its chat works",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(locator).toBeVisible() failed"
+    },
+    {
+      "file": "stream.spec.ts",
+      "title": "at the bottom, the list stays there while content grows frame after frame (its own scroll never detaches it)",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(received).toBe(expected) // Object.is equality"
+    },
+    {
+      "file": "stream.spec.ts",
+      "title": "scrolled up to read, the list does not jump: a \"nuove righe\" pill appears",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(received).toBe(expected) // Object.is equality"
+    },
+    {
+      "file": "topbar-fit.spec.ts",
+      "title": "settings and every action stay reachable at 1280, 1366 and 1920 px, windowed and full screen",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; Error: expect(received).toEqual(expected) // deep equality"
+    },
+    {
+      "file": "ui.spec.ts",
+      "title": "⤢ maximizes a tile, Esc restores it; F11 maximizes the focused tile",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: A snapshot doesn't exist at /home/user/second-brain/test/e2e/ui.spec.ts-snapshots/maximized-linux.png, writing actual."
+    },
+    {
+      "file": "ui.spec.ts",
+      "title": "agents workspace: one column of chat strips, each browser right under its chat",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(locator).toHaveCount(expected) failed"
+    },
+    {
+      "file": "ui.spec.ts",
+      "title": "answering a tile panel with \"1\" resolves the request without opening the chat",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(locator).toBeFocused() failed"
+    },
+    {
+      "file": "ui.spec.ts",
+      "title": "Ctrl+K opens the palette, hides every browser view, and jumps to a chat",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(received).toBe(expected) // Object.is equality"
+    },
+    {
+      "file": "ui.spec.ts",
+      "title": "screenshots at 1280x800, in light theme, and with no data (empty states)",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; TimeoutError: locator.click: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "ui.spec.ts",
+      "title": "the live demo streams text and finishes running tools",
+      "since": "2026-10-21",
+      "group": "group-C",
+      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: expect(locator).toHaveAttribute(expected) failed"
+    },
+    {
+      "file": "usage.spec.ts",
+      "title": "Cursor today: estimated from the ledger (≈, margin), exact once a usage CSV covers it; the Costi page agrees",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.click: Timeout 30000ms exceeded."
+    },
+    {
+      "file": "usage.spec.ts",
+      "title": "usage strip always shows today, Claude 5 h / week with resets and Cursor (light)",
+      "since": "2026-10-21",
+      "group": "group-A",
+      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.click: Timeout 30000ms exceeded."
+    }
+  ]
+}
