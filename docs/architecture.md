@@ -34,6 +34,11 @@
         · node brain tools (chats.mjs, cost.mjs, …) run with Electron as Node
 ```
 
+The four files nearly every change touched are split by area (ADR 0200): the contract's shapes and invoke channels in
+`shared/contract/*.ts` behind `shared/contract.ts`; the IPC handlers in `main/ipc-handlers/*.ts`, registered by
+`index.ts`; `wiring.ts` with `wiring-types.ts`, `wiring-shared.ts`, `wiring-builders.ts`; `ChatManager` as a chain of
+layer classes in `chats/manager-*.ts` under `chats/manager.ts` (layout: `docs/agents/layout.md`).
+
 ## Key flows
 
 - **A chat turn**: renderer `chat:send` → ChatManager → session `send()` writes a stream-json user line → CLI streams

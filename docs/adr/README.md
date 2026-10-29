@@ -205,3 +205,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0197](0197-corrections-kind-examples-and-ppi.md) The user's corrections counted by the app, the kind of work by examples, and PPI for role success — accepted
 - [0198](0198-developer-speed-typecheck-e2e-baseline-agents-map.md) Developer speed: TypeScript 7 typecheck, an e2e baseline of known reds, AGENTS.md as a map — accepted
 - [0199](0199-agent-runs-in-sqlite.md) The agent runs move from agent-runs.json to SQLite (userData/app.db) — accepted
+- [0200](0200-split-the-shared-files-by-area.md) Split the four shared files by area; ChatManager as a chain of layer classes — accepted
