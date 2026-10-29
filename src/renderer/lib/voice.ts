@@ -45,7 +45,9 @@ let captureSession: string | null = null;
 let session = 0; // each start and stop; an await that comes back to another session gives up
 let onSince = 0, startWhenReady = false, transcribeTimer: ReturnType<typeof setTimeout> | null = null;
 /** push to talk: on in Settings (read when the conversation starts), the key or button held now, a release being closed */
-let ptt = false, pttHeld = false, pttClosing = false, pttDrop = false;
+let ptt = false, pttHeld = false, pttClosing = false, pttDrop = false, spaceHeld = false;
+/** the release delay running (pttRelease) and whether Esc came with it */
+let releasing: ReturnType<typeof setTimeout> | null = null, releaseDrop = false;
 const pttOn = () => ptt && voice.get().mode === 'talk' && voice.get().phase !== 'off';
 
 /** The chat a target writes to: the open Orchestrator or the open Flash chat. */
@@ -84,8 +86,12 @@ export function startVoice(): void {
   app.subscribe(() => {
     const s = voice.get(), want = s.mode === 'talk' && app.get().settings?.voicePtt === true;
     if (s.phase === 'off' || want === ptt) return;
-    ptt = want; pttHeld = false; pttClosing = false; pttDrop = false;
+    if (releasing) { clearTimeout(releasing); releasing = null; }
+    ptt = want; pttHeld = false; pttDrop = false;
     set({ ptt, holding: false });
+    // the turn in progress (held, releasing, or a hands-free one being spoken) is closed and sent as it is
+    pttClosing = true;
+    void window.sb.invoke('voice:commit', { session: captureSession ?? '' }).catch(() => { pttClosing = false; });
   });
   // another microphone (chosen in Settings → Voce, plugged in, unplugged) while voice is on: reopened on it at once
   onMicChange(() => {
@@ -97,10 +103,15 @@ export function startVoice(): void {
     if (e.key === 'Escape' && pttHeld) { e.preventDefault(); e.stopPropagation(); pttRelease(true); return; }
     if (e.key === 'Escape' && voice.get().phase === 'speaking') { e.preventDefault(); e.stopPropagation(); stopSpeaking(); return; }
     // Ctrl+Space held: push to talk (only when it is on: otherwise the key does nothing here)
-    if (e.code === 'Space' && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && pttOn()) { e.preventDefault(); e.stopPropagation(); if (!e.repeat) pttPress(); }
+    if (e.code === 'Space' && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && pttOn()) { e.preventDefault(); e.stopPropagation(); if (!e.repeat) { spaceHeld = true; pttPress(); } return; }
+    // Ctrl let go before Space: the Space still held types nothing and toggles nothing until it is let go
+    if (e.code === 'Space' && spaceHeld) { e.preventDefault(); e.stopPropagation(); }
   }, true);
-  window.addEventListener('keyup', e => { if (pttHeld && (e.code === 'Space' || e.key === 'Control' || e.key === 'Meta')) { e.preventDefault(); pttRelease(); } }, true);
-  window.addEventListener('blur', () => { if (pttHeld) pttRelease(); }); // the key's release would never come
+  window.addEventListener('keyup', e => {
+    if (e.code === 'Space') spaceHeld = false;
+    if (pttHeld && (e.code === 'Space' || e.key === 'Control' || e.key === 'Meta')) { e.preventDefault(); pttRelease(); }
+  }, true);
+  window.addEventListener('blur', () => { spaceHeld = false; if (pttHeld) pttRelease(); }); // the key's release would never come
   void window.sb.invoke('voice:state', undefined).then(st => set({ engine: st }), () => {});
 }
 
@@ -270,6 +281,7 @@ export function stopVoice(preserve = false): void {
   stopSpeaking(false);
   if (transcribeTimer) clearTimeout(transcribeTimer);
   pttHeld = false; pttClosing = false; pttDrop = false;
+  if (releasing) { clearTimeout(releasing); releasing = null; }
   set({ phase: 'off', level: 0, holding: false });
   thoughts.reset(preserve);
   hinted = false;
@@ -280,12 +292,13 @@ export function stopVoice(preserve = false): void {
 
 // ── push to talk ──
 /** Ctrl+Space down / the bar's button pressed: the voice stops, the turn opens (LiveKit's start_turn). */
-let releasing: ReturnType<typeof setTimeout> | null = null, releaseDrop = false;
 export function pttPress(): void {
   if (releasing) { clearTimeout(releasing); releasing = null; releaseDrop = false; if (pttHeld) { set({ holding: true }); return; } } // pressed again within the release delay: the same turn goes on
   if (!pttOn() || pttHeld) return;
   if (speakingNow()) stopSpeaking();
-  if (pttClosing) thoughts.flush(); // the previous release still closing: it goes as it is
+  // the previous release still waiting for its end: it is settled now (sent, or dropped after Esc); its words still
+  // being transcribed go with it, the new press's words make a new turn
+  if (pttClosing) { if (pttDrop) thoughts.drop(); else thoughts.flush(); }
   pttHeld = true; pttClosing = false; pttDrop = false;
   set({ holding: true, phase: voice.get().phase === 'speaking' ? 'listening' : voice.get().phase });
 }
@@ -311,7 +324,7 @@ export function pttRelease(drop = false): void {
 function committed(): void {
   if (!pttClosing) return;
   pttClosing = false;
-  if (pttDrop) { pttDrop = false; thoughts.reset(); } else thoughts.flush();
+  if (pttDrop) { pttDrop = false; thoughts.drop(); } else thoughts.flush();
   if (['hearing', 'transcribing'].includes(voice.get().phase)) set({ phase: speakingNow() ? 'speaking' : 'listening' });
 }
 

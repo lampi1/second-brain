@@ -89,10 +89,35 @@ describe('push to talk (manual turns)', () => {
     turns.finish(1, 'arrivo tardi');
     expect(deliver).toHaveBeenCalledExactlyOnceWith(target, 'arrivo tardi');
   });
-  it('reset (Esc while holding) sends nothing', () => {
+  it('drop (Esc while holding) sends nothing', () => {
     const { turns, deliver, draft } = manual();
     turns.start(1, target, false); turns.finish(1, 'annulla');
-    turns.reset(); turns.flush(); vi.advanceTimersByTime(1000);
+    turns.drop(); turns.flush(); vi.advanceTimersByTime(1000);
     expect(deliver).not.toHaveBeenCalled(); expect(draft).not.toHaveBeenCalled();
+  });
+  it('a press while the last release is still transcribed makes a new turn; Esc on it keeps the released one', () => {
+    const { turns, deliver } = manual();
+    turns.start(1, target, false); turns.finish(1, 'prima');
+    turns.start(2, target, false);
+    turns.flush(); // released, «2» still being transcribed
+    turns.start(3, target, false); // pressed again
+    turns.drop(); // Esc on the new press
+    turns.finish(2, 'frase');
+    expect(deliver).toHaveBeenCalledExactlyOnceWith(target, 'prima frase');
+    turns.finish(3, 'annullata');
+    turns.flush();
+    expect(deliver).toHaveBeenCalledTimes(1);
+  });
+  it('the next turn after a closing one is sent on its own release', () => {
+    const { turns, deliver } = manual();
+    turns.start(1, target, false); turns.flush();
+    turns.start(2, target, false);
+    turns.finish(1, 'uno');
+    expect(deliver).toHaveBeenLastCalledWith(target, 'uno');
+    turns.finish(2, 'due');
+    vi.advanceTimersByTime(2000);
+    expect(deliver).toHaveBeenCalledTimes(1);
+    turns.flush();
+    expect(deliver).toHaveBeenLastCalledWith(target, 'due');
   });
 });
