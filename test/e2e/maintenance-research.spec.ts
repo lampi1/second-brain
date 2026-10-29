@@ -34,7 +34,7 @@ test('Manutenzione: one click, invisible research, end notice, issue cards in Pr
     await deck.getByTestId('pd-chip-brain').click();
     await expect(deck.getByTestId('pd-question')).toContainText('versione candidata del brain');
     await expect(deck.getByTestId('pd-candidate')).toContainText('Il server di staging si chiama «stg-eu»');
-    await expect(deck.getByTestId('pd-diffs').getByTestId('viewer-diff')).toBeVisible();
+    await expect(deck.getByTestId('pd-diffs').getByTestId('viewer-diff').first()).toBeVisible();
     await page.mouse.move(2, 2);
     await shot(page, 'maintenance-candidate-brain-dark');
 
