@@ -86,13 +86,20 @@ header whose counters move while the agents work.
 
 <p align="center"><img src="docs/screenshots/memory.webp" alt="Memory: the live header with its counters, the tabs, and a proposal card swiped toward APPROVE" width="560"></p>
 
-### Maintenance: one button, a tidy brain
+### Quality you can measure, a brain that tidies itself
 
-Press **Maintenance** and walk away. The free part merges duplicate skills, files lessons from your corrections and
+**Quality** counts the AI's mistakes instead of its compliments: errors you had to catch yourself per 100 turns, rules
+that actually stopped their error (or didn't, within 14 days), PRs held by a failed build or QA, bugs that came back.
+Every number says where it comes from and how many cases it covers, and "Discuss" hands it to the Orchestrator.
+
+Then press **Maintenance** and walk away. The free part merges duplicate skills, files lessons from your corrections and
 moves scripts and ideas where they belong; then an invisible agent (capped at $5) looks for improvements and app
 bugs. When it found something you get a little party, and every change has a reason and an Undo.
 
-<p align="center"><img src="docs/screenshots/maintenance.webp" alt="The Memory page with the «Maintenance done» notice: one proposal and three issues to open" width="640"></p>
+<p align="center">
+  <img src="docs/screenshots/quality.webp" alt="The Quality page: errors you had to catch per 100 turns and the rules whose error came back, each with its source" width="420">
+  <img src="docs/screenshots/maintenance.webp" alt="The Memory page with the «Maintenance done» notice: one proposal and three issues to open" width="420">
+</p>
 
 ### Agents that level up
 
@@ -111,11 +118,30 @@ instead of replying, on every engine, so those tokens go to work instead.
 
 ### Talk to it
 
-Hit **Ctrl+M** and dictate into the Orchestrator or Flash. Switch on the voice conversation and it answers out loud,
-sentence by sentence while it writes; talk over it and it shuts up and listens (we wish people did that). Questions are
-read to you and "yes" counts as a click. Whisper and Piper run on your PC: no audio leaves it.
+Two ways to use your voice:
 
-<p align="center"><img src="docs/screenshots/voice.webp" alt="Settings, Voice: voice conversation, Fast or Accurate transcription, the Italian voice and the microphone" width="600"></p>
+- **Dictation.** Hit **Ctrl+M** (or the mic in the field) and speak into the Orchestrator or Flash: it types, you send.
+- **Voice conversation.** Switch it on in Settings → Voice, or **Ctrl+Shift+Space**, and just talk: what you say goes
+  to the Orchestrator, and its answer is read out loud sentence by sentence while it is still writing. Talk over it and
+  it shuts up and listens (we wish people did that). Question cards are read to you, and a spoken "yes" or "no" counts
+  as the click.
+
+Whisper hears you and Piper speaks (a choice of Italian voices), both on your PC: no audio leaves it, and it costs
+nothing. The app never starts talking on its own.
+
+<p align="center">
+  <img src="docs/screenshots/voice-talk.webp" alt="The Orchestrator in a voice conversation: the spoken question, its answer, the red Listening bar" width="400">
+  <img src="docs/screenshots/voice.webp" alt="Settings, Voice: voice conversation, Fast or Accurate transcription, the Italian voice and the microphone" width="440">
+</p>
+
+### Automated tests in a real browser
+
+Ask for a QA run and the agent opens your test environment in a browser tab inside the app, next to its chat: it
+navigates, clicks, fills forms and takes screenshots on its own, and every step shows on its strip. The tab says which
+chat is driving it, and the evidence (screenshots, the failing value) lands in the report. Here the QA agent re-ran test
+case 7 and caught a refund that ignores the original discount.
+
+<p align="center"><img src="docs/screenshots/browser.webp" alt="Automated test: the QA chat on the left, the test environment's refund page it drives on the right, with the wrong refund total in red" width="760"></p>
 
 ### Calls, written down
 
@@ -129,6 +155,24 @@ read to you and "yes" counts as a click. Whisper and Piper run on your PC: no au
 Notes, chats, agents and tools as a 3D map you can spin, glowing along the links where the work is happening right now.
 
 <p align="center"><img src="docs/screenshots/brain-map.webp" alt="The 3D brain map: notes, chats, agents and tools linked, the live ones glowing" width="640"></p>
+
+### Classifiers: small decisions, zero tokens
+
+Not everything needs a model. Small sorters on your PC decide the kind of work, the model a chat runs on, how long and
+how much a job will probably take, and which mail the Orchestrator reads now or later. The Classifiers page shows each
+one as a card: how many decisions, how often it got them right, how many of those chats succeeded (only verified ones
+count), the last 8 weeks, and what you could change.
+
+<p align="center"><img src="docs/screenshots/classifiers.webp" alt="The Classifiers page: decisions made, verified outcomes, and the Kind of work and Model choice cards with their 8-week trend" width="640"></p>
+
+### Learn what your agents built
+
+The agents wrote the code; now you want to understand it. **Learn** takes one of your PRs, a technical concept or a
+text you paste, and explains it piece by piece on a blackboard whose diagram grows as you go, out loud if you like.
+"Explain it better", "Give me an example" or "Show me the code" when you're lost; a quick check to see if it stuck; at
+the end you explain it back. Every lesson is saved and reopens where you left it.
+
+<p align="center"><img src="docs/screenshots/learn.webp" alt="A Learn lesson about a PR: the blackboard diagram, piece 2 of 3, and the buttons Got it, Explain it better, Give me an example, Show me the code" width="640"></p>
 
 ### Nothing happens off the record
 
@@ -155,15 +199,12 @@ the Orchestrator to explain it your way.
 
 - **Answer with one key.** Questions and permissions show up as cards in one window, with an estimate before and a
   verdict after.
-- **Browsers they drive.** Real tabs inside the app over MCP: the agents click, type and take screenshots.
 - **A browser of your own.** The Browser page is your everyday browser, with bookmarks, sessions and passwords the
   agents never see; lend them one tab when you want.
 - **Connectors.** MCP servers in Settings, switched on per role.
 - **A brain in plain Markdown.** Notes, rules, skills and scripts live in a folder you own, readable without the app.
 - **Your own logins.** It drives the official CLIs with your account and never touches their settings. The UI speaks
   Italian, English and German.
-
-<p align="center"><img src="docs/screenshots/browser.webp" alt="A QA chat in focus mode with the browser tab it drives" width="720"></p>
 
 ## The rest
 

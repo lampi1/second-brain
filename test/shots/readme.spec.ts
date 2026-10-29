@@ -2,7 +2,7 @@
 // scripts/demo-brain.mjs) so they always show the current UI with fictional data only: English UI (SB_LANG=en), dark
 // theme, 1600x1000, saved as WebP (< 300 KB each) in docs/screenshots/: the whole window, one part of it, or two parts
 // side by side. The showcase (memory, agent-levels, brain-map, orchestrator-flash, reactions, plan), the app's own pages
-// (voice, recordings, log, costs, maintenance) and the rest. Not part
+// (voice, log, recordings, classifiers, quality, learn, costs, maintenance) and the rest. Not part
 // of `npm run check`: run by `npm run shots` (its own Playwright config, playwright.shots.config.ts). The app runs hidden
 // (SB_HIDDEN, set by launch()). The 3D map needs WebGL: on a machine without a GPU set
 // SB_E2E_ELECTRON_ARGS="--use-angle=swiftshader --enable-unsafe-swiftshader" (and xvfb-run on Linux).
@@ -129,13 +129,17 @@ test('README screenshots', async () => {
   await waitThumbs(page);
   await save('orchestrator', page.getByTestId('orchestrator-overlay'));
 
-  // 3. A browser driven by an agent, big next to its chat (focus mode on the chat)
+  // 3. A browser driven by an agent for an automated test: the QA chat and its test-environment tab side by side
+  // (focus mode on the chat, a wider window so the whole test page shows), cut to the two of them
+  await setSize(app, 2200, H);
   await page.getByTestId('tile-chat-qa').locator('.tile-head').click();
   await page.keyboard.press('Control+Shift+F');
   await expect(page.getByTestId('focus-view')).toBeVisible();
   await waitThumbs(page);
-  await save('browser');
+  await page.waitForTimeout(600); // the tab follows the new size
+  await save('browser', page.getByTestId('focus-view'));
   await page.getByTestId('focus-exit').click();
+  await setSize(app, W, H);
 
   // 4. The 3D brain map, lit where the chats are working right now
   await tool('fix', { id: 'shot-read', name: 'Read', input: { file_path: 'C:\\brains\\demo\\now.md' }, summary: 'now.md' });
@@ -148,20 +152,6 @@ test('README screenshots', async () => {
   await save('brain-map', page.getByTestId('brain-map'));
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('brain-map')).toHaveCount(0);
-
-  // 5. Task: pull requests, work items and the QA status of each PR, read on demand
-  await page.getByTestId('nav-task').click();
-  const dv = page.getByTestId('brain-page-task');
-  await dv.getByTestId('task-refresh').click();
-  await expect(dv.getByTestId('task-qa')).toBeVisible({ timeout: 30_000 });
-  await dv.evaluate(el => { el.scrollTop = 0; });
-  await save('task');
-
-  // 6. Qualità: four measured metrics about how the agents work, each with its source
-  await goPage(page, 'qualita');
-  await expect(page.getByTestId('page-qualita').getByTestId('bx-q-trovati')).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
-  await save('quality');
 
   // 7. Script: the brain's tested, reusable scripts as cards (ADR 0076)
   await goPage(page, 'script'); // a tab of Memoria now (ADR 0122)
@@ -296,7 +286,7 @@ test('README showcase: the Strategist\'s plan to approve in the questions window
   await save('plan', page.getByTestId('qwin'));
 });
 
-test('README showcase: voice, recordings, Log, Costs, the maintenance notice', async () => {
+test('README showcase: voice, Log, recordings, classifiers, quality, learn, costs, the maintenance notice', async () => {
   test.setTimeout(180_000);
   // the plan's questions window is done: every request from here on is set aside, as a user busy elsewhere would
   await keepQuestionsAside(page);
@@ -309,7 +299,18 @@ test('README showcase: voice, recordings, Log, Costs, the maintenance notice', a
   await voice.scrollIntoViewIfNeeded();
   await expect(page.getByTestId('st-voice-models')).toBeVisible({ timeout: 30_000 });
   await save('voice', voice);
+  // the voice conversation on: what the fake engine hears goes to the Orchestrator, its reply is read aloud
+  await page.getByTestId('st-voice-talk-on').click();
   await page.keyboard.press('Escape');
+  await goPage(page, 'home');
+  const said = page.getByTestId('tile-orchestrator').locator('.msg-user').last();
+  await expect(said).toContainText('Ciao', { timeout: 15_000 });
+  await page.waitForTimeout(4000); // the reply
+  const ob = (await page.getByTestId('orchestrator-overlay').boundingBox())!, sb = (await said.boundingBox())!;
+  const top = Math.round(Math.max(ob.y, sb.y - 260));
+  await save('voice-talk', { x: Math.round(ob.x), y: top, width: Math.round(ob.width), height: Math.round(ob.y + ob.height - top) });
+  await page.keyboard.press('Control+Shift+Space'); // off again
+  await expect(page.getByTestId('orchestrator-input-voice')).toHaveCount(0);
 
   // Log: everything the app did, live, with the task chains and the flags
   await goPage(page, 'log');
@@ -326,6 +327,26 @@ test('README showcase: voice, recordings, Log, Costs, the maintenance notice', a
   await expect(page.getByTestId('rec-lines').locator('.rec-line')).toHaveCount(4, { timeout: 15_000 });
   const db = (await page.getByTestId('rec-detail').boundingBox())!;
   await save('recordings', { ...column, height: Math.round(Math.min(column.height, db.y + db.height + 14 - column.y)) });
+
+  // Classifiers: the small sorters that decide by themselves at zero tokens, each card with its numbers
+  await goPage(page, 'classificatori');
+  await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
+  await page.waitForTimeout(800);
+  await save('classifiers', await frameOf(page.getByTestId('page-classificatori').locator('h1').first()));
+
+  // Quality: four measured numbers about the AI's mistakes, each with its source
+  await goPage(page, 'qualita');
+  await expect(page.getByTestId('page-qualita').getByTestId('bx-q-trovati')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
+  await save('quality', await frameOf(page.getByTestId('page-qualita').getByTestId('bx-q-trovati')));
+
+  // Learn: a saved lesson about a PR on the blackboard, its diagram growing piece by piece
+  await goPage(page, 'impara');
+  await expect(page.getByTestId('impara-lessons').locator('.ip-card').first()).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId('impara-lessons').locator('.ip-card').first().locator('.ip-card-open').click();
+  await expect(page.getByTestId('impara-player')).toBeVisible({ timeout: 15_000 });
+  await page.waitForTimeout(1500); // the diagram draws in
+  await save('learn', { ...column, height: 800 });
 
   // Costs: where the money goes, from the recorded chats, no tokens spent to know it
   await goPage(page, 'costi');
