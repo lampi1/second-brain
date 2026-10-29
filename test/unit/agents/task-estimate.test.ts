@@ -2,7 +2,7 @@
 // (an estimate made before the run started), the weekly accuracy backtest, the demo history and the Orchestrator's tool.
 import { describe, expect, it } from 'vitest';
 import type { AgentRun } from '../../../src/shared/agents';
-import { actualOf, estimateTask, estimateTool, partsOf, requestText, runEstimates, SimilarIndex, held } from '../../../src/main/agents/task-estimate';
+import { actualOf, estimateTask, estimateTool, newRequest, ownRequest, partsOf, requestText, runEstimates, SimilarIndex, held, treeCosts } from '../../../src/main/agents/task-estimate';
 import { estimateAccuracy, weekStart } from '../../../src/main/agents/estimate-accuracy';
 import { checkRunIds, demoEstimateRuns, estimatesState, mergeRuns } from '../../../src/main/agents/run-estimates';
 
@@ -21,9 +21,26 @@ describe('parts of a request', () => {
   it('counts list items, else the joins between steps', () => {
     expect(partsOf('Correggi il bug del totale')).toBe(1);
     expect(partsOf('- leggi i log\n- trova la causa\n- sistema il bug')).toBe(3);
-    expect(partsOf('Trova la causa e poi sistemala; inoltre aggiorna la guida')).toBe(4);
+    expect(partsOf('Trova la causa e poi sistemala; inoltre aggiorna la guida')).toBe(3);
     expect(partsOf('Fix the bug and then add a test')).toBe(2);
     expect(partsOf(Array.from({ length: 12 }, (_, i) => `${i + 1}. step`).join('\n'))).toBe(8);
+  });
+  it('counts a join only before an imperative, and a pasted block as one part (ADR 0182)', () => {
+    expect(partsOf('guarda il log e poi dimmi cosa succede')).toBe(1);
+    expect(partsOf('controlla poi se funziona anche su Safari')).toBe(1);
+    expect(partsOf('Fix it then also the tests')).toBe(1);
+    expect(partsOf('fai A; poi fai B')).toBe(2);
+    const mail = 'Rispondi a questa mail in modo cortese\n\nDa: Mario Rossi\nOggetto: report\n\nCiao,\n- manca il totale\n- poi aggiungi il grafico\n- e controlla le date\nGrazie';
+    expect(partsOf(mail)).toBe(1);
+    expect(ownRequest(mail)).not.toMatch(/Mario/);
+    expect(partsOf('Perché fallisce?\n```\n- a\n- b\n```\n> - c\n> - d')).toBe(1);
+    expect(partsOf('Guarda questo log\n2026-10-29 10:00:01 Error: x; poi fai y\n2026-10-29 10:00:02 Error: z')).toBe(1);
+  });
+  it('estimates only a new request, never a short follow-up', () => {
+    for (const t of ['sì', 'ok', 'Vai!', 'continua', 'va bene']) expect(newRequest(t, false), t).toBe(false);
+    expect(newRequest('il secondo', true)).toBe(false);
+    expect(newRequest('il secondo', false)).toBe(true);
+    expect(newRequest('Correggi il bug del totale nella pagina ordini', true)).toBe(true);
   });
   it('drops the app\'s agent label before reading the request', () => {
     expect(requestText('[Messaggio di un agente tramite second-brain, non scritto dall\'utente]\n\nQuanti ordini?')).toBe('Quanti ordini?');
@@ -34,7 +51,9 @@ describe('estimate from similar tasks', () => {
   it('uses the same agent and kind first, with median, middle half and confidence', () => {
     const e = estimateTask(new SimilarIndex(fixes(12)), { text: 'Correggi il bug dello sconto', agentId: 'artisan' });
     expect(e).toMatchObject({ kind: 'fix', basis: 'agent-kind', n: 12, parts: 1, confidence: 'high', path: 'one-agent', quick: true });
-    expect(e.timeMs).toBe(5 * MIN);
+    // elapsed 5..7 min (ADR 0182), times the kind's past actual/estimate ratio
+    expect(e.timeMs).toBeGreaterThanOrEqual(5 * MIN);
+    expect(e.timeMs).toBeLessThanOrEqual(8 * MIN);
     expect(e.timeLowMs).toBeLessThanOrEqual(e.timeMs!);
     expect(e.timeHighMs).toBeGreaterThanOrEqual(e.timeMs!);
     expect(e.costUsd).toBeCloseTo(0.12);
@@ -43,7 +62,7 @@ describe('estimate from similar tasks', () => {
   it('falls back to the kind on any agent, then to the agent on any kind, else gives no figure', () => {
     const runs = [...fixes(4, 'artisan'), ...Array.from({ length: 3 }, (_, i) => run({ agentId: 'sentinel', goal: `Esegui i test case ${i} in staging` }))];
     const idx = new SimilarIndex(runs);
-    expect(estimateTask(idx, { text: 'Correggi il bug', agentId: 'sentinel' })).toMatchObject({ basis: 'kind', n: 4, confidence: 'low' });
+    expect(estimateTask(idx, { text: 'Correggi il bug', agentId: 'sentinel' })).toMatchObject({ basis: 'kind', n: 4, confidence: 'high' }); // a tight spread
     expect(estimateTask(idx, { text: 'Scrivi la nota di rilascio', agentId: 'sentinel' })).toMatchObject({ basis: 'agent', n: 3 });
     const none = estimateTask(idx, { text: 'Scrivi la nota di rilascio', agentId: 'herald' });
     expect(none).toMatchObject({ basis: null, n: 0, timeMs: null, costUsd: null, confidence: null, path: 'one-agent' });
@@ -60,14 +79,19 @@ describe('estimate from similar tasks', () => {
     expect(estimateTask(idx, { text: 'Quanti ordini sono in sospeso?' }).path).toBe('self');
     expect(estimateTask(idx, { text: 'Quanti ordini sono in sospeso?' + ' x'.repeat(300) }).path).toBe('one-agent');
     expect(estimateTask(idx, { text: '- correggi il bug A\n- correggi il bug B\n- correggi il bug C' }).path).toBe('tree');
-    expect(estimateTask(idx, { text: 'Correggi il bug A e poi il bug B', agentId: 'artisan' }).path).toBe('one-agent'); // two quick parts
-    const slow = new SimilarIndex(fixes(5, 'artisan', 60));
-    expect(estimateTask(slow, { text: 'Correggi il bug A e poi il bug B', agentId: 'artisan' })).toMatchObject({ path: 'tree', quick: false });
+    expect(estimateTask(idx, { text: 'Correggi il bug A; poi correggi il bug B', agentId: 'artisan' }).path).toBe('one-agent'); // two quick parts
+    const slow = new SimilarIndex(fixes(5, 'artisan', 60)), long = ` ${'nel modulo dei totali degli ordini '.repeat(12)}`;
+    expect(estimateTask(slow, { text: 'Correggi il bug A; poi correggi il bug B', agentId: 'artisan' })).toMatchObject({ path: 'one-agent', quick: false }); // short: one agent
+    expect(estimateTask(slow, { text: `Correggi il bug A${long}; poi correggi il bug B`, agentId: 'artisan' })).toMatchObject({ path: 'tree', quick: false });
     expect(estimateTask(slow, { text: 'Correggi il bug A', agentId: 'artisan' }).why).toMatch(/long/);
   });
   it('learns only from ended, measured, non one-shot runs', () => {
     const r = run({ agentId: 'a', goal: 'x' });
-    expect(actualOf(r)).toEqual({ timeMs: 4 * MIN, costUsd: 0.12 });
+    expect(actualOf(r)).toEqual({ timeMs: 5 * MIN, costUsd: 0.12 }); // elapsed, waits included (ADR 0182)
+    expect(actualOf({ ...r, endReason: 'closed' })).toEqual({ timeMs: 4 * MIN, costUsd: 0.12 }); // not completed: its execution time
+    expect(actualOf(r, 0.5)).toEqual({ timeMs: 5 * MIN, costUsd: 0.5 }); // the tree's cost
+    const kid = { ...run({ agentId: 'scout', goal: 'y', usd: 0.3 }), parentRunId: r.runId }, grandkid = { ...run({ agentId: 'scout', goal: 'z', usd: 0.1 }), parentRunId: kid.runId };
+    expect(treeCosts([r, kid, grandkid]).get(r.runId)).toBeCloseTo(0.52);
     expect(actualOf({ ...r, endedAt: undefined })).toBeNull();
     expect(actualOf({ ...r, source: 'oneshot' })).toBeNull();
     expect(actualOf({ ...r, executionMs: undefined, endReason: 'stale', costUsd: null })).toBeNull();
@@ -85,7 +109,7 @@ describe('the strips\' view', () => {
     const ended = run({ agentId: 'artisan', goal: 'Correggi un altro bug', min: 30, at: 2_001 * DAY });
     const views = runEstimates([...past, openRun, ended], [openRun.runId, ended.runId, 'r_ffffffffffff']);
     expect(views[openRun.runId]).toMatchObject({ actual: null, hit: null, estimate: { basis: 'agent-kind', n: 5 } });
-    expect(views[ended.runId]).toMatchObject({ actual: { timeMs: 30 * MIN }, hit: false, estimate: { n: 5 } }); // itself not counted
+    expect(views[ended.runId]).toMatchObject({ actual: { timeMs: 31 * MIN }, hit: false, estimate: { n: 5 } }); // itself not counted
     expect(views['r_ffffffffffff']).toBeUndefined();
     expect(runEstimates(past.slice(0, 1), [past[0]!.runId])[past[0]!.runId]).toMatchObject({ estimate: null });
   });

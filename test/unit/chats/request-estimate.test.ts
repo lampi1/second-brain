@@ -36,12 +36,17 @@ describe('the estimate line under a request to the Orchestrator', () => {
     const m = manager(sent, t => { asked.push(t); return LINE; });
     const orch = await m.create({ harness: 'anthropic', cwd: tmp(), orchestrator: true, prompt: 'Ciao' });
     expect(sent.at(-1)!.endsWith(`Ciao\n\n${LINE}`)).toBe(true);
-    await m.send(orch.id, 'che ore sono a Tokyo?');
-    expect(sent.at(-1)).toBe(`che ore sono a Tokyo?\n\n${LINE}`);
-    expect(asked).toEqual(['Ciao', 'che ore sono a Tokyo?']);
+    const ask = 'che ore sono a Tokyo e a New York, adesso?';
+    await m.send(orch.id, ask);
+    expect(sent.at(-1)).toBe(`${ask}\n\n${LINE}`);
+    expect(asked).toEqual(['Ciao', ask]);
     // the item the chat view shows keeps the user's words
     const items = m.items(orch.id).filter(i => i.kind === 'user');
-    expect(items.at(-1)).toMatchObject({ text: 'che ore sono a Tokyo?' });
+    expect(items.at(-1)).toMatchObject({ text: ask });
+    // a short follow-up in the conversation going on is no new request (ADR 0182)
+    await m.send(orch.id, 'ok vai');
+    await m.send(orch.id, 'il secondo');
+    expect(sent.slice(-2)).toEqual(['ok vai', 'il secondo']);
     // the app's news, an agent's mail and a mode-tagged message: no line
     await m.send(orch.id, '[evento app · messaggio automatico] Novità');
     await m.send(orch.id, 'Fatto il lavoro', undefined, false, 'Artisan · fix');

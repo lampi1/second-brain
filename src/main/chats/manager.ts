@@ -64,6 +64,7 @@ import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, SKILL_ID, 
 import { reportOf } from '../agents/run-report';
 import { gateRequest, runtimePluginName, SubagentGate } from '../agents/role-gate';
 import { afterTree, KEEP as CHECKPOINTS_KEPT, prune as pruneCheckpoints, restore as restoreCheckpoint, snapshot as takeCheckpoint, turnFiles, type Checkpoint } from './checkpoints';
+import { newRequest } from '../agents/task-estimate';
 import { emptyReceipts, noteTool, noteTurnFiles, receiptVerdict, rowChanges, turnFilesWithoutGit } from '../agents/receipts';
 import { autoPermit } from './auto-permit';
 import { TurnToolBudget } from '../agents/orchestrator-budget';
@@ -493,6 +494,9 @@ export interface CleanReportNote { chatId: string; title: string; role: string; 
 const MAX_ARCHIVED = 60;
 /** run changes are written at most this often (runSave) */
 export const RUN_SAVE_MS = 1000;
+/** A user message within this long of the previous one is part of a conversation going on (no estimate for a short
+ *  follow-up, ADR 0182). */
+const FOLLOW_UP_WINDOW_MS = 30 * 60_000;
 export const USER_NOTES_LABEL = "[nota dell'app · l'utente ha scritto direttamente in chat che hai delegato: tienine conto nel piano, non disfare ciò che le ha chiesto]";
 /** One message the user typed in a work chat (userWrote): what the Orchestrator and the parent learn. */
 export interface UserWroteNote { eventId: string; seq: number; chatId: string; title: string; role: string | null; parentId: string | null; parentTitle: string | null; at: number; text: string }
@@ -1111,8 +1115,11 @@ export class ChatManager implements ChatService {
     // the user put the files back before the last turn: the chat learns it with its next message
     const noted = r.undoNote ? `${r.undoNote}\n\n${noted0}` : noted0;
     r.undoNote = undefined;
-    // the user's own request to the Orchestrator carries the app's estimate (zero tokens), never the app's news or mail
-    const estimate = r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') ? this.requestEstimate(t) : null;
+    // the user's own NEW request to the Orchestrator carries the app's estimate (zero tokens), never the app's news or
+    // mail, nor a short follow-up ("ok", "vai", an answer) in a conversation going on (ADR 0182)
+    const said = r.items.filter(i => i.kind === 'user'), before = said.at(-2);
+    const ongoing = !!before && before.at >= Date.now() - FOLLOW_UP_WINDOW_MS;
+    const estimate = r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') && newRequest(t, ongoing) ? this.requestEstimate(t) : null;
     const asked0 = [noted, estimate].filter(Boolean).join('\n\n');
     // Flash is a "btw" (ADR 0106): the user's question carries what the Orchestrator said and did since it last looked
     const lampo = r.s.quick && !from && !resumed ? this.lampoContext(r) : null;
