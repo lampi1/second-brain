@@ -1,6 +1,6 @@
 // The routine runtime's tiny read-only DevOps stdio MCP server (ADR 0175, owner decision 2026-10-27): a step may read
-// work items, their comments and attachments through the runtime's OWN DevOps adapter (devops.ts, az or the package
-// PAT), never through a third-party MCP. No write tool: every DevOps write stays runtime-side, from step-result.json
+// work items, their comments and attachments and a team's current sprint through the runtime's OWN DevOps adapter
+// (devops.ts, az or the package PAT), never through a third-party MCP. No write tool: every DevOps write stays runtime-side, from step-result.json
 // through the ledger. Reads are limited to the package's organization and projects. With deploy targets it also reads
 // the run's PR build, the test environment and the run's test deployment (status only). Config: the 0600 temp file
 // named by SB_ROUTINE_DEVOPS_CONFIG (it may hold the PAT, so it never lives in the run folder); the server deletes it
@@ -29,10 +29,12 @@ export interface DevOpsServerConfig {
 type Json = Record<string, unknown>;
 const ID = { type: 'number', description: 'work item id' };
 const TOOLS = [
-  { name: 'get_work_item', description: 'Read one work item (title, state, type, description, repro steps, tags, links to attachments).', inputSchema: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: ID } } },
+  { name: 'get_work_item', description: 'Read one work item (title, state, type, area and iteration path, description, repro steps, tags, links to attachments).', inputSchema: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: ID } } },
   { name: 'get_work_item_comments', description: 'Read the comments of one work item, newest first, as plain text.', inputSchema: { type: 'object', additionalProperties: false, required: ['id'], properties: { id: ID } } },
   { name: 'get_attachment', description: 'Download one attachment of a work item into this step\'s evidence folder; returns the saved file path.', inputSchema: { type: 'object', additionalProperties: false, required: ['id', 'url'], properties: { id: ID, url: { type: 'string', description: 'the attachment URL from get_work_item' } } } },
+  { name: 'current_iteration', description: 'Read the current sprint of a team (iteration path, name, start and finish date).', inputSchema: { type: 'object', additionalProperties: false, required: ['project', 'team'], properties: { project: { type: 'string', description: 'one of this routine\'s projects' }, team: { type: 'string', description: 'the team name, e.g. "Planning Team"' } } } },
 ];
+const TEAM = /^[^\u0000-\u001f/\\?#%]{1,128}$/;
 const TARGET = { type: 'string', description: 'the deploy target id' };
 const STATUS_TOOLS = [
   { name: 'pr_build_status', description: 'Read the build validation of this run\'s PR on a deploy target (queued, running, succeeded, failed).', inputSchema: { type: 'object', additionalProperties: false, required: ['targetId'], properties: { targetId: TARGET } } },
@@ -66,6 +68,13 @@ export async function handleDevOpsMessage(message: Json, config: DevOpsServerCon
         try { return text(clip(await statusRead(String(params.name), target, config, io))); }
         catch (e) { return text(`DevOps read failed: ${e instanceof Error ? e.message : String(e)}`, true); }
       }
+      if (params.name === 'current_iteration') {
+        const project = config.projects.find(p => typeof args.project === 'string' && p.toLowerCase() === args.project.toLowerCase());
+        if (!project) return text('project: not one of this routine\'s projects', true);
+        if (typeof args.team !== 'string' || !TEAM.test(args.team.trim())) return text('team: a team name', true);
+        try { return text(await currentIteration(config.organization, project, args.team.trim(), io)); }
+        catch (e) { return text(`DevOps read failed: ${e instanceof Error ? e.message : String(e)}`, true); }
+      }
       const wid = args.id;
       if (typeof wid !== 'number' || !Number.isSafeInteger(wid) || wid <= 0) return text('id: a positive work item id', true);
       try {
@@ -76,7 +85,7 @@ export async function handleDevOpsMessage(message: Json, config: DevOpsServerCon
           const relations = ((await io.client.relations(config.organization, wid)) ?? []).filter(r => r.rel === 'AttachedFile');
           return text(clip(JSON.stringify({
             id: wid, rev: item.rev, project: item.project, type: s('System.WorkItemType'), state: s('System.State'), title: s('System.Title'),
-            tags: s('System.Tags'), assignedTo: (f['System.AssignedTo'] as Json | undefined)?.displayName ?? '',
+            areaPath: s('System.AreaPath'), iterationPath: s('System.IterationPath'), tags: s('System.Tags'), assignedTo: (f['System.AssignedTo'] as Json | undefined)?.displayName ?? '',
             description: replyText(s('System.Description')), reproSteps: replyText(s('Microsoft.VSTS.TCM.ReproSteps')),
             acceptanceCriteria: replyText(s('Microsoft.VSTS.Common.AcceptanceCriteria')),
             attachments: relations.map(r => ({ url: r.url, name: r.name })),
@@ -105,6 +114,15 @@ export async function handleDevOpsMessage(message: Json, config: DevOpsServerCon
     }
     default: return { jsonrpc: '2.0', id, error: { code: -32601, message: 'Method not found' } };
   }
+}
+
+/** The team's current sprint ($timeframe=current); an error when the team has none. */
+async function currentIteration(organization: string, project: string, team: string, io: DevOpsServerIo): Promise<string> {
+  const r = await io.client.call('GET', `https://dev.azure.com/${encodeURIComponent(organization)}/${encodeURIComponent(project)}/${encodeURIComponent(team)}/_apis/work/teamsettings/iterations?$timeframe=current&api-version=7.1`);
+  const first = (Array.isArray(r.value) ? r.value as Json[] : []).find(i => typeof i.path === 'string' && i.path);
+  if (!first) throw new Error(`team "${team}" of project ${project} has no current iteration`);
+  const dates = (first.attributes ?? {}) as Json, day = (v: unknown) => typeof v === 'string' ? v.slice(0, 10) : '';
+  return JSON.stringify({ project, team, path: first.path, name: typeof first.name === 'string' ? first.name : '', startDate: day(dates.startDate), finishDate: day(dates.finishDate) }, null, 2);
 }
 
 const readJson = <T>(file: string | undefined): T | undefined => { if (!file) return undefined; try { return JSON.parse(fs.readFileSync(file, 'utf8')) as T; } catch { return undefined; } };

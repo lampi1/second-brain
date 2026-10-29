@@ -100,7 +100,7 @@ describe('read-only DevOps MCP server', () => {
   const call = (name: string, args: Record<string, unknown>) => ({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } });
   function setup() {
     const devops = fakeDevOps();
-    devops.addItem({ id: 42, fields: { 'System.Title': 'Login broken', 'Microsoft.VSTS.TCM.ReproSteps': '<p>Click</p>' } });
+    devops.addItem({ id: 42, fields: { 'System.Title': 'Login broken', 'Microsoft.VSTS.TCM.ReproSteps': '<p>Click</p>', 'System.AreaPath': 'Proj\\Web', 'System.IterationPath': 'Proj' } });
     devops.addItem({ id: 50, project: 'Other', fields: { 'System.Title': 'x' } });
     devops.reply(42, 'someone', '<div>Use env B</div>');
     const client = createDevOpsClient({ authorization: devops.authorization, request: devops.request });
@@ -113,8 +113,10 @@ describe('read-only DevOps MCP server', () => {
   it('lists only read tools and reads item, comments and attachments', async () => {
     const { devops, io, url, config } = setup();
     const list = await handleDevOpsMessage({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, config, io as never);
-    expect(((list as { result: { tools: { name: string }[] } }).result.tools).map(t => t.name)).toEqual(['get_work_item', 'get_work_item_comments', 'get_attachment']);
-    expect(textOf(await handleDevOpsMessage(call('get_work_item', { id: 42 }), config, io as never))).toContain('"reproSteps": "Click"');
+    expect(((list as { result: { tools: { name: string }[] } }).result.tools).map(t => t.name)).toEqual(['get_work_item', 'get_work_item_comments', 'get_attachment', 'current_iteration']);
+    const item = textOf(await handleDevOpsMessage(call('get_work_item', { id: 42 }), config, io as never));
+    expect(item).toContain('"reproSteps": "Click"');
+    expect(JSON.parse(item)).toMatchObject({ project: 'Proj', areaPath: 'Proj\\Web', iterationPath: 'Proj' });
     expect(textOf(await handleDevOpsMessage(call('get_work_item_comments', { id: 42 }), config, io as never))).toContain('Use env B');
     const saved = textOf(await handleDevOpsMessage(call('get_attachment', { id: 42, url }), config, io as never));
     expect(fs.readFileSync(path.join(config.evidence, 'wi42-log_file.txt'), 'utf8')).toBe('log line');
@@ -126,5 +128,20 @@ describe('read-only DevOps MCP server', () => {
     const { io, config } = setup();
     expect(JSON.stringify(await handleDevOpsMessage(call('get_work_item', { id: 50 }), config, io as never))).toContain('outside');
     expect(JSON.stringify(await handleDevOpsMessage(call('get_attachment', { id: 42, url: 'https://evil.example/x' }), config, io as never))).toContain('Not an attachment');
+  });
+
+  it('current_iteration reads the team\'s current sprint, only in the routine\'s projects', async () => {
+    const { io, config } = setup();
+    const urls: string[] = [];
+    let value: unknown[] = [{ id: 'i1', name: 'Sprint 20', path: 'Proj\\2026\\Sprint 20', attributes: { startDate: '2026-10-26T00:00:00Z', finishDate: '2026-11-06T00:00:00Z', timeFrame: 'current' } }];
+    const reading = { ...io, client: { ...io.client, call: async (method: string, url: string) => { urls.push(`${method} ${url}`); return { count: value.length, value }; } } };
+    const sprint = JSON.parse(textOf(await handleDevOpsMessage(call('current_iteration', { project: 'proj', team: 'Proj Team' }), config, reading as never)));
+    expect(sprint).toEqual({ project: 'Proj', team: 'Proj Team', path: 'Proj\\2026\\Sprint 20', name: 'Sprint 20', startDate: '2026-10-26', finishDate: '2026-11-06' });
+    expect(urls).toEqual([`GET ${ORG_URL}/Proj/Proj%20Team/_apis/work/teamsettings/iterations?$timeframe=current&api-version=7.1`]);
+    expect(JSON.stringify(await handleDevOpsMessage(call('current_iteration', { project: 'Other', team: 'T' }), config, reading as never))).toContain('not one of this routine');
+    expect(JSON.stringify(await handleDevOpsMessage(call('current_iteration', { project: 'Proj', team: '../x' }), config, reading as never))).toContain('team: a team name');
+    value = [];
+    expect(JSON.stringify(await handleDevOpsMessage(call('current_iteration', { project: 'Proj', team: 'Proj Team' }), config, reading as never))).toContain('has no current iteration');
+    expect(urls).toHaveLength(2);
   });
 });
