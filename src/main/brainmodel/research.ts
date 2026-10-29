@@ -31,6 +31,7 @@ import { errText, log } from '../log';
 import type { IssueOpened } from './issue-open';
 import { buildPack, forgetCandidates, PACK_SECTIONS, type Pack, type PackSection } from './research-pack';
 import { logSections, periodDays, type LogSections } from './research-pack-logs';
+import { makeFence, type Fence } from './pack-fence';
 import { journal } from '../activity/journal';
 import { JOURNAL_DIR } from '../log-digest';
 import type { LogEvent } from '../../shared/activity-log';
@@ -198,7 +199,7 @@ export const isAppCard = (p: Pick<ResearchProposal, 'kind' | 'issue' | 'change'>
 
 export class ResearchService {
   readonly store: ResearchStore;
-  private run: (ResearchRunInfo & { sawWork: boolean; pack: Pack; timer: NodeJS.Timeout | null; saves: Promise<void>[]; reflect: ReflectPick | null }) | null = null;
+  private run: (ResearchRunInfo & { sawWork: boolean; pack: Pack; timer: NodeJS.Timeout | null; saves: Promise<void>[]; reflect: ReflectPick | null; fence: Fence }) | null = null;
   /** the candidate brain (ADR 0195), when the app gives its ports */
   readonly candidates: CandidateService | null;
   /** a start between its checks and its chat: a second start is refused */
@@ -300,16 +301,17 @@ export class ResearchService {
     try { return await this.open(engine.harness, model, effort, cap, method, web, lang, root); } finally { this.starting = false; }
   }
   /** The pack's sections about the period since the previous pass (ADR 0192); never throws (absent = not read). */
-  private async logSections(state: BrainModelState): Promise<LogSections | undefined> {
+  private async logSections(state: BrainModelState, fence: Fence): Promise<LogSections | undefined> {
     try {
       const dir = (this.d.logDir ?? (() => log.folder))(), now = this.now(), since = state.lastRun?.logs?.since ?? null;
       if (!dir) return undefined;
       const days = await periodDays(dir, path.join(this.d.userData, JOURNAL_DIR), since, now);
-      return logSections({ now, since, days, events: (this.d.events ?? (() => journal.list().events))(), groups: state.lastRun?.logs?.groups ?? [] });
+      return logSections({ now, since, days, events: (this.d.events ?? (() => journal.list().events))(), groups: state.lastRun?.logs?.groups ?? [], fence });
     } catch (e) { log.warn('brain', 'maintenance pack: log sections not read', { cause: errText(e), hint: 'the research runs without them; npm run logs -- --scope brain shows why' }); return undefined; }
   }
   private async open(harness: Harness, model: string | null, effort: Effort | null, cap: number, method: string, web: boolean, lang: Lang, root: string): Promise<ResearchRunInfo> {
-    const state = this.d.brain.state(), logs = await this.logSections(state);
+    // one nonce per research: the untrusted values of its pack go between markers no value can write (pack-fence.ts)
+    const fence = makeFence(), state = this.d.brain.state(), logs = await this.logSections(state, fence);
     const pack = buildPack({ now: this.now(), runs: this.d.runs(), state, roles: this.d.roles(), past: this.store.all(), appVersion: this.d.appVersion(), ...(logs ? { logs } : {}), decisions: allPolicies(readLedger(this.d.userData)) });
     const frame = researchFrame(lang, { web, capUsd: cap, brainRoot: root, issuesUrl: this.d.issuesUrl() });
     const reflect = this.d.roleTrial ? pickRole(this.d.runs(), this.d.roles(), this.now()) : null;
@@ -317,7 +319,7 @@ export class ResearchService {
     const chat = await this.d.chats.create({ harness, cwd: root, title: RESEARCH_TITLE, research: { web }, prompt: [researchMessage(method, frame), ...extra].join('\n'),
       ...(model ? { model } : {}), ...(effort ? { effort } : {}) });
     const startedAt = this.now();
-    this.run = { chatId: chat.id, startedAt, harness, model, effort, capUsd: cap, costUsd: 0, state: 'running', proposals: 0, sawWork: false, pack, timer: null, saves: [], reflect };
+    this.run = { chatId: chat.id, startedAt, harness, model, effort, capUsd: cap, costUsd: 0, state: 'running', proposals: 0, sawWork: false, pack, timer: null, saves: [], reflect, fence };
     const timer = setTimeout(() => { void this.finish('stopped', 'più di un\'ora senza finire').catch(() => { /* logged */ }); }, RESEARCH_MAX_MS);
     timer.unref?.();
     this.run.timer = timer;
@@ -376,7 +378,7 @@ export class ResearchService {
   pack(chatId: string, section: unknown): string {
     const r = this.mine(chatId), s = (section ?? 'summary') as PackSection;
     if (section === GUIDE_SECTION) { const repo = this.d.guideRepo?.() ?? null; return repo ? guideMaintenanceSection(repo) : 'Not offered: the app is not running from its repository.'; }
-    if (section === ROLE_REFLECT_SECTION) return reflectSection(r.reflect, { clean: t => scrub(t, this.privacy()), budgetLeft: this.reflectBudget(r) });
+    if (section === ROLE_REFLECT_SECTION) return reflectSection(r.reflect, { clean: t => scrub(t, this.privacy()), budgetLeft: this.reflectBudget(r), fence: r.fence });
     if (!PACK_SECTIONS.includes(s)) throw new Error(`section: one of ${PACK_SECTIONS.join(', ')}.`);
     return r.pack[s];
   }

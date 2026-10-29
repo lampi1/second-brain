@@ -19,6 +19,8 @@ const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-packlogs-')); dirs.push(d); return d; };
 
+/** A section without the pack's fence markers (pack-fence.ts). */
+const plain = (t: string): string => t.replace(/⟦\/?data [0-9a-f]+⟧/g, '');
 const NOW = Date.parse('2026-10-29T12:00:00Z'), DAY = 864e5;
 const uiKey = groupKey('renderer', 'x is undefined', 'a React component threw');
 const day = (d: string, over: Partial<DigestDay> = {}): DigestDay => ({
@@ -45,10 +47,10 @@ describe('logSections', () => {
     expect(s.journal).not.toContain('fine');
     expect(s.perf).toContain('Total: 8 stalls, worst 800 ms; slow-typing minutes 2.');
     expect(s.perf).toContain('the window froze 300 ms');
-    expect(s['ui-errors']).toContain('x is undefined ×2 on 2 days');
+    expect(plain(s['ui-errors'])).toContain('x is undefined ×2 on 2 days');
     expect(s['ui-errors']).toContain(`key: ${uiKey}`);
     expect(s['ui-errors']).toContain('at MemoryPage');
-    expect(s.digest).toContain('- 2026-10-08 · 10/2/1 · 3 · 4 (800) · 1 · 5 · chats: pid 1 died ×2');
+    expect(plain(s.digest)).toContain('- 2026-10-08 · 10/2/1 · 3 · 4 (800) · 1 · 5 · chats: pid 1 died ×2');
     expect(s.digest).toContain('- 2026-10-28 · 10/2/1 · 3 · 4 (800) · 1 · —');
   });
 });

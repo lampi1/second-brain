@@ -23,7 +23,7 @@ import { readBrainView, type BrainViewInput } from './view';
 import { readWorker } from '../read-work';
 import { timedStep } from '../perf';
 import { readNoise, scanLogs, writeNoise } from './log-scan';
-import { readRules, readSkills, readSmall, type SkillDir } from './model';
+import { landsInsideBrain, readRules, readSkills, readSmall, type SkillDir } from './model';
 import type { ResearchProposal } from '../../shared/maintenance-research';
 import { NAME_RE, parseMd, setBody } from '../../shared/skillmd';
 import { checkPermissionText } from '../agents/tool-policy';
@@ -395,6 +395,8 @@ export class BrainModelService {
       const have = readSkills(this.skillDirs(root), root, []).find(s => s.name === name);
       if (have && have.home !== 'brain') throw new Error('Questa skill è tua (fuori dal brain): la manutenzione non la cambia.');
       const file = have?.file ?? path.join(root, '.claude', 'skills', name, 'SKILL.md');
+      // a new skill's folder resolved through links stays in the brain (a symlinked .claude/skills points elsewhere)
+      if (!have && !landsInsideBrain(root, file)) throw new Error('La cartella delle skill del brain è un collegamento fuori dal brain: la manutenzione non ci scrive.');
       const before = have ? readSmall(file) : null;
       if (have && before === null) throw new Error('Skill non leggibile.');
       const next = before !== null ? setBody(before, appendUnder(parseMd(before).body, 'Dalla manutenzione', text)) : skillText(name, oneLine(p.title, 300), text);

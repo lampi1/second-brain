@@ -589,6 +589,14 @@ describe('applyResearch (ADR 0132)', () => {
     expect(() => v.service.applyResearch(card({ kind: 'rule', change: { target: 'rule', text: 'x' } }))).toThrow(/non si può leggere/);
     expect(fs.readFileSync(real, 'utf8')).toBe('# mine\n');
   });
+  it('a new skill is never written through a .claude/skills linked outside the brain', () => {
+    const w = world();
+    const outside = path.join(w.base, 'other-skills'); fs.mkdirSync(outside, { recursive: true });
+    fs.mkdirSync(path.join(w.brain, '.claude'), { recursive: true });
+    fs.symlinkSync(outside, path.join(w.brain, '.claude/skills'), 'dir');
+    expect(() => w.service.applyResearch(card({ change: { target: 'skill', name: 'fuori', text: 'passi' } }))).toThrow(/collegamento fuori dal brain/);
+    expect(fs.readdirSync(outside)).toEqual([]);
+  });
 });
 
 describe('lint and revert cards, «riuscito se…» (ADR 0194)', () => {

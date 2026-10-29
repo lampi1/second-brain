@@ -24,7 +24,7 @@ import { checkPermissionText } from '../agents/tool-policy';
 import { errText, log } from '../log';
 import { appendUnder, brainJsonWithTopic, LESSONS_RULE, LESSONS_WHEN, skillText } from './jobs';
 import { ignoreWrite, sourceOfSkill } from './migration-ignore';
-import { readSmall } from './model';
+import { landsInsideBrain, readSmall } from './model';
 import type { ProcedureSection } from './procedure-sources';
 
 const DAY = 86_400_000;
@@ -136,6 +136,7 @@ export function planCandidate(input: PlanInput, proposals: readonly ResearchProp
           const have = input.skills.find(s => s.name === name);
           if (have && have.home !== 'brain') throw new Error('skill dell\'utente, fuori dal brain');
           const file = have?.file ?? path.join(root, '.claude', 'skills', name, 'SKILL.md');
+          if (!have && !landsInsideBrain(root, file)) throw new Error('cartella delle skill collegata fuori dal brain');
           const before = read(file);
           if (have && before === null) throw new Error(writes.has(file) || files.has(file) ? 'la skill è tolta da un\'altra proposta' : 'skill non leggibile');
           put(file, before !== null ? setBody(before, appendUnder(parseMd(before).body, 'Dalla manutenzione', text)) : skillText(name, oneLine(p.title, 300), text));
