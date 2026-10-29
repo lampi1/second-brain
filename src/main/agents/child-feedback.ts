@@ -6,20 +6,16 @@
 // run. Used by wiring.ts (addChatTools); pinned by test/unit/agents/agent-loop.test.ts.
 import { AGENT_FEEDBACK_SCHEMA } from '../../shared/agent-lifecycle';
 import type { McpTool } from '../mcp/server';
+import { callerOf } from '../mcp/caller';
 import type { LifecycleApi } from './lifecycle-api';
 
 export function childFeedbackTools(api: Pick<LifecycleApi, 'childFeedback'>): McpTool[] {
-  const caller = (params: Record<string, string>): string => {
-    const id = params.chatId;
-    if (!id) throw new Error('This tool works only on a chat\'s own endpoint.');
-    return id;
-  };
   const { sendToRun: _s, ...properties } = AGENT_FEEDBACK_SCHEMA.properties; void _s;
   return [{
     name: 'agent_child_feedback',
     description: 'Your opinion of the run of one of YOUR delegated children (runId from agent_children): verdict, notes, evidence; optionally worked, failed, and gap + a short stable gapKey when part of its definition fell short. An opinion, never the user\'s verdict (which always wins); refused on any run that is not your own child\'s.',
     inputSchema: { ...AGENT_FEEDBACK_SCHEMA, properties },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
-    run: async (a, ctx) => JSON.stringify(await api.childFeedback(a, caller(ctx.params))),
+    run: async (a, ctx) => JSON.stringify(await api.childFeedback(a, callerOf(ctx.params))),
   }];
 }

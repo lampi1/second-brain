@@ -20,6 +20,7 @@ import { CRITERION_MAX, EVIDENCE_MAX, RESULT_OUTPUT_MAX, SUMMARY_MAX, checkContr
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { delegationGate, stepIndex, type StrategyPlan } from '../../shared/strategy';
 import type { McpTool } from '../mcp/server';
+import { callerOf } from '../mcp/caller';
 import { allowsClass, belowParent, type AgentPolicy } from './tool-policy';
 import { withinParent } from './worktrees';
 import { gapLines, skillGaps } from './skill-needs';
@@ -85,12 +86,6 @@ export function withoutReviewFields(schema: Record<string, unknown>): Record<str
   const { verdict: _v, verified: _w, ...properties } = schema.properties as Record<string, unknown>;
   return { ...schema, properties };
 }
-
-const callerOf = (params: Record<string, string>): string => {
-  const id = params.chatId;
-  if (!id) throw new Error('This tool works only on a chat\'s own endpoint.');
-  return id;
-};
 
 /** A delegated child counts against its parent's parallel limit until it reports or closes. */
 export const busyChild = (c: ChatSummary): boolean => !c.closedAt && !c.delegation?.result;
