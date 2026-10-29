@@ -146,14 +146,10 @@ Prepare a routine package with the Orchestrator, export it, and run it anywhere 
 `resume`. The app never runs routines by itself: it just shows a run's steps, screenshots and evidence when you open it.
 How-to: [packages/routine-runtime](packages/routine-runtime/README.md).
 
-<p align="center"><img src="docs/screenshots/routines.webp" alt="The Routines page: routine packages and their terminal runs" width="640"></p>
-
 ### Lost? There's a guide
 
 Every concept of the app as a card: how it works, an everyday analogy, the source files. **Discuss** sends the card to
 the Orchestrator to explain it your way.
-
-<p align="center"><img src="docs/screenshots/guide.webp" alt="The Guide page: concept cards with How it works and Discuss" width="560"></p>
 
 ## Also on board
 

@@ -2,7 +2,7 @@
 // scripts/demo-brain.mjs) so they always show the current UI with fictional data only: English UI (SB_LANG=en), dark
 // theme, 1600x1000, saved as WebP (< 300 KB each) in docs/screenshots/: the whole window, one part of it, or two parts
 // side by side. The showcase (memory, agent-levels, brain-map, orchestrator-flash, reactions, plan), the app's own pages
-// (voice, recordings, log, routines, costs, guide, maintenance) and the rest. Not part
+// (voice, recordings, log, costs, maintenance) and the rest. Not part
 // of `npm run check`: run by `npm run shots` (its own Playwright config, playwright.shots.config.ts). The app runs hidden
 // (SB_HIDDEN, set by launch()). The 3D map needs WebGL: on a machine without a GPU set
 // SB_E2E_ELECTRON_ARGS="--use-angle=swiftshader --enable-unsafe-swiftshader" (and xvfb-run on Linux).
@@ -296,7 +296,7 @@ test('README showcase: the Strategist\'s plan to approve in the questions window
   await save('plan', page.getByTestId('qwin'));
 });
 
-test('README showcase: voice, recordings, Log, Routines, Costs, Guide, the maintenance notice', async () => {
+test('README showcase: voice, recordings, Log, Costs, the maintenance notice', async () => {
   test.setTimeout(180_000);
   // the plan's questions window is done: every request from here on is set aside, as a user busy elsewhere would
   await keepQuestionsAside(page);
@@ -327,27 +327,12 @@ test('README showcase: voice, recordings, Log, Routines, Costs, Guide, the maint
   const db = (await page.getByTestId('rec-detail').boundingBox())!;
   await save('recordings', { ...column, height: Math.round(Math.min(column.height, db.y + db.height + 14 - column.y)) });
 
-  // Routines: packages run from the terminal, their runs observed here
-  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
-  await page.keyboard.press('g');
-  await page.keyboard.press('u');
-  const routines = page.getByTestId('brain-page-flussi');
-  await expect(routines).toBeVisible({ timeout: 30_000 });
-  await expect(routines.getByText('Legacy run history')).toBeVisible({ timeout: 30_000 });
-  await save('routines', { ...column, height: 510 }); // above the run folders' paths
-
   // Costs: where the money goes, from the recorded chats, no tokens spent to know it
   await goPage(page, 'costi');
   const costs = page.getByTestId('brain-page-costi');
   await expect(costs).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
   await save('costs', await frameOf(costs));
-
-  // Guide: the app's concepts as cards, each with how it works and «Discuss» with the Orchestrator
-  await goPage(page, 'guida');
-  const guide = page.locator('.guide-grid');
-  await expect(guide).toBeVisible({ timeout: 30_000 });
-  await save('guide', await frameOf(guide));
 
   // Maintenance: one click, then the celebrating notice over Memoria when it ends
   await page.getByTestId('nav-memoria').click();
