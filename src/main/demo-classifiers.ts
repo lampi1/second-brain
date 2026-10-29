@@ -86,7 +86,7 @@ export function writeDemoClassifiers(brainRoot: string, userData: string, now: n
       const age = (90 - k) / 90, at = Math.round(now - age * 55 * DAY - r() * DAY);
       const j = pick(r, JK.map(x => [x, x[1]] as [typeof x, number]));
       const kind = r() < 0.05 + 0.2 * age ? 'altro' : j[0];
-      out.push(JSON.stringify({ id: `demo-job-${k}`, at, harness: 'claude', model: null, effort: null, kind, promptChars: 180, actual: { usd: Math.round(j[2] * (0.4 + r() * 1.2) * 1000) / 1000, minutes: 10 + Math.round(r() * 40), tokensIn: null, tokensOut: null, turns: null }, source: 'app' }));
+      out.push(JSON.stringify({ id: `demo-job-${k}`, at, harness: 'claude', model: null, effort: null, kind, promptChars: 180, actual: { usd: Math.round(j[2] * (0.4 + r() * 1.2) * 1000) / 1000, minutes: 10 + Math.round(r() * 40), turns: null }, source: 'app' }));
     }
     fs.writeFileSync(jobs, `${out.join('\n')}\n`);
   }

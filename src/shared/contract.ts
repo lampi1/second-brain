@@ -954,7 +954,7 @@ export interface BudgetAlert {
 // to the user: measured on 178 chats it held only 47% of the time with a bigger median error than the median cost) ──
 /** minutesKind 'work' = effective work time (running, never waiting for the user's answers: the app since 2026-10-11, the
  *  same figure the chat tile shows); without it the minutes are a chat's span or the CLI's turn time and only $ count. */
-export interface JobActual { usd: number; minutes: number | null; minutesKind?: 'work'; tokensIn: number | null; tokensOut: number | null; turns: number | null }
+export interface JobActual { usd: number; minutes: number | null; minutesKind?: 'work'; turns: number | null }
 /** Record (or update: same id, last wins) one job in the ledger. The prompt text is never stored: only its length and kind. */
 export interface JobRecordInput {
   id?: string;

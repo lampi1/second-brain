@@ -578,7 +578,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
         ...(info.sessionId ? { id: `${info.harness}:${info.sessionId}` } : {}), harness: info.harness, model: info.model, effort: info.effort,
         ...(job.prompt ? { prompt: job.prompt } : {}),
         // minutes = real work time (running, not waiting for the user's answers), the same the tile shows
-        actual: { usd: job.usd, minutes: Math.round(manager.workMs(info.chatId) / 6000) / 10, minutesKind: 'work', tokensIn: null, tokensOut: null, turns: job.turns },
+        actual: { usd: job.usd, minutes: Math.round(manager.workMs(info.chatId) / 6000) / 10, minutesKind: 'work', turns: job.turns },
       });
       // a chat an agent routed (app_create_chat): its prediction once, then its measured actuals at every turn end, in
       // the improvement loop's ledger (ops/state/improve/outcomes.jsonl; the same id, later line wins; ADR 0032)

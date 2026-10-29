@@ -3,8 +3,10 @@
 // bigger median error than the median cost). The ledger is a JSON-lines file behind a pluggable store (default
 // userData/jobs.jsonl). It starts from day one with a backfill from the brain's cost.mjs (per-chat $ and
 // first-to-last-message span of the last 30 days). The prompt text is never stored: only its length and kind of work
-// (shared/work-concepts.ts taskOf, the routing table's own kinds: ADR 0182; an older row's own kind is mapped on load). Used by brain/index.ts for 'estimate:record'; the chat manager records
-// jobs and their actuals; the brain's estimates.mjs reads jobs.jsonl for its own routing table (brain-estimates.ts).
+// (shared/work-concepts.ts taskOf, the routing table's own kinds: ADR 0182; an older row's own kind is mapped on load).
+// A row is appended only when it changed, and the file is compacted on load once repeats outnumber twice the ids
+// (ADR 0182). Used by brain/index.ts for 'estimate:record'; the chat manager records jobs and their actuals; the
+// brain's estimates.mjs reads jobs.jsonl for its own routing table (brain-estimates.ts).
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -31,17 +33,45 @@ export interface JobRecord {
 /** Where the ledger lives. Append-only JSON lines; the last line of an id wins. */
 export interface JobStore { load(): JobRecord[]; append(r: JobRecord): void }
 
+/** A row as the ledger keeps it: the kind in the one taxonomy, the actual without the token fields no engine ever
+ *  filled (ADR 0182: tokensIn and tokensOut were null on every row). */
+function clean(r: JobRecord): JobRecord {
+  const a = r.actual as (JobActual & { tokensIn?: unknown; tokensOut?: unknown }) | null;
+  const { tokensIn: _i, tokensOut: _o, ...actual } = a ?? ({} as JobActual & { tokensIn?: unknown; tokensOut?: unknown });
+  return { ...r, kind: fromLedgerKind(r.kind), actual: a ? actual as JobActual : null };
+}
+
+/** Rewrite the file with one line per id once the repeated lines outnumber twice the ids (ADR 0182: a chat's every turn
+ *  used to append its whole row again, 30 000 lines for 1 000 jobs). */
+export const COMPACT_RATIO = 2;
+
 export class FileJobStore implements JobStore {
   constructor(readonly file: string) {}
   load(): JobRecord[] {
     let text = '';
     try { text = fs.readFileSync(this.file, 'utf8'); } catch { return []; }
     const byId = new Map<string, JobRecord>();
+    let lines = 0;
     for (const l of text.split(/\r?\n/)) {
       if (!l.trim()) continue;
-      try { const r = JSON.parse(l) as JobRecord; if (r && typeof r.id === 'string') byId.set(r.id, { ...r, kind: fromLedgerKind(r.kind) }); } catch { /* partial line */ }
+      lines++;
+      try { const r = JSON.parse(l) as JobRecord; if (r && typeof r.id === 'string') byId.set(r.id, clean(r)); } catch { /* partial line */ }
     }
-    return [...byId.values()];
+    const rows = [...byId.values()];
+    if (lines - rows.length > COMPACT_RATIO * rows.length) this.compact(rows, lines);
+    return rows;
+  }
+  /** The last row of each id, written next to the file and renamed over it: a crash leaves the old file whole. */
+  private compact(rows: JobRecord[], lines: number): void {
+    const tmp = `${this.file}.${process.pid}.tmp`;
+    try {
+      fs.writeFileSync(tmp, rows.map(r => `${JSON.stringify(r)}\n`).join(''));
+      fs.renameSync(tmp, this.file);
+      log.info('brain', 'job ledger compacted', { data: { lines, rows: rows.length } });
+    } catch (e) {
+      try { fs.rmSync(tmp, { force: true }); } catch { /* nothing to remove */ }
+      log.warn('brain', 'job ledger not compacted', { cause: String(e), hint: 'check that jobs.jsonl in the app data folder is writable; the ledger still works' });
+    }
   }
   append(r: JobRecord): void {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
@@ -69,7 +99,7 @@ export function backfillFromCost(j: unknown, o: { now: number; windowStartMs: nu
     out.push({
       id: `claude:${sid}`, at: from, harness: 'claude', model: null, effort: null,
       kind: /^[0-9a-f]{8}$/.test(title) ? 'altro' : taskOf(title, '', undefined), promptChars: null,
-      actual: { usd: Math.round(usd * 1000) / 1000, minutes: span <= MAX_SPAN_MIN ? span : null, tokensIn: null, tokensOut: null, turns: null },
+      actual: { usd: Math.round(usd * 1000) / 1000, minutes: span <= MAX_SPAN_MIN ? span : null, turns: null },
       source: 'backfill',
     });
   }
@@ -86,7 +116,7 @@ const n0 = (v: unknown, f: string): number | null => {
 function checkActual(a: unknown): JobActual | null {
   if (a === null || a === undefined) return null;
   const x = a as Record<string, unknown>;
-  return { usd: n0(x.usd, 'actual.usd') ?? 0, minutes: n0(x.minutes, 'actual.minutes'), ...(x.minutesKind === 'work' ? { minutesKind: 'work' as const } : {}), tokensIn: n0(x.tokensIn, 'actual.tokensIn'), tokensOut: n0(x.tokensOut, 'actual.tokensOut'), turns: n0(x.turns, 'actual.turns') };
+  return { usd: n0(x.usd, 'actual.usd') ?? 0, minutes: n0(x.minutes, 'actual.minutes'), ...(x.minutesKind === 'work' ? { minutesKind: 'work' as const } : {}), turns: n0(x.turns, 'actual.turns') };
 }
 export function checkHarness(h: unknown): Harness { if (typeof h !== 'string' || !engineOf(h)) throw new Error(`harness: ${engines().map(e => e.id).join(' | ')}`); return h; }
 export function checkModel(m: unknown): string | null { if (m === null || m === undefined || m === '') return null; if (typeof m !== 'string' || m.length > 120) throw new Error('model: testo breve o null'); return m; }
@@ -97,7 +127,7 @@ export class Ledger {
   private backfilling = false;
 
   constructor(private store: JobStore, private metaFile: string | null = null) {
-    for (const r of store.load()) this.jobs.set(r.id, r);
+    for (const r of store.load()) this.jobs.set(r.id, clean(r));
   }
 
   all(): JobRecord[] { return [...this.jobs.values()]; }
@@ -121,6 +151,8 @@ export class Ledger {
       actual: input.actual !== undefined ? checkActual(input.actual) : old?.actual ?? null,
       source: 'app',
     };
+    // a turn that changed nothing (the same totals again) writes no line (ADR 0182)
+    if (old && JSON.stringify(old) === JSON.stringify(r)) return { id };
     this.jobs.set(id, r);
     this.store.append(r);
     return { id };
