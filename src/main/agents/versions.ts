@@ -21,8 +21,12 @@ export function behaviourOf(p: AgentBehaviour): AgentBehaviour {
 export function sameBehaviour(a: AgentBehaviour, b: AgentBehaviour): boolean {
   const norm = (v: unknown): unknown => Array.isArray(v) ? v.map(norm) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map(k => [k, norm((v as Record<string, unknown>)[k])])) : v;
   const x = behaviourOf(a), y = behaviourOf(b);
-  return BEHAVIOUR_FIELDS.every(k => k === 'knowhow' ? x.knowhow?.hash === y.knowhow?.hash : JSON.stringify(norm(x[k] ?? null)) === JSON.stringify(norm(y[k] ?? null)));
+  return BEHAVIOUR_FIELDS.every(k => k === 'knowhow' ? x.knowhow?.hash === y.knowhow?.hash && sameLinked(x.knowhow, y.knowhow) : JSON.stringify(norm(x[k] ?? null)) === JSON.stringify(norm(y[k] ?? null)));
 }
+/** The linked skills are part of the know-how: the snapshot's hash covers only its own files, so a skill unlinked
+ *  (the Skill page, a removed skill, #292) changed nothing before and stayed declared. */
+const sameLinked = (a?: { linked?: readonly string[] }, b?: { linked?: readonly string[] }): boolean =>
+  JSON.stringify([...(a?.linked ?? [])].sort()) === JSON.stringify([...(b?.linked ?? [])].sort());
 
 /** The fields behind each versioned change (ADR 0186). */
 const VERSIONED_FIELDS: Record<VersionedChange, readonly (typeof BEHAVIOUR_FIELDS)[number][]> = {
@@ -33,7 +37,7 @@ export function versionedChanges(a: AgentBehaviour, b: AgentBehaviour): Versione
   const x = behaviourOf(a), y = behaviourOf(b);
   // the first know-how snapshot of a role with no linked skill (any save copies the skill files it already used) is no
   // change of them; a linked skill, or another snapshot, is
-  const same = (k: (typeof BEHAVIOUR_FIELDS)[number]): boolean => k === 'knowhow' ? (!x.knowhow ? !y.knowhow?.linked?.length : x.knowhow.hash === y.knowhow?.hash)
+  const same = (k: (typeof BEHAVIOUR_FIELDS)[number]): boolean => k === 'knowhow' ? (!x.knowhow ? !y.knowhow?.linked?.length : x.knowhow.hash === y.knowhow?.hash && sameLinked(x.knowhow, y.knowhow))
     : k === 'skills' ? JSON.stringify([...x.skills].sort()) === JSON.stringify([...y.skills].sort()) : JSON.stringify(x[k] ?? null) === JSON.stringify(y[k] ?? null);
   return VERSIONED_CHANGES.filter(c => VERSIONED_FIELDS[c].some(k => !same(k)));
 }

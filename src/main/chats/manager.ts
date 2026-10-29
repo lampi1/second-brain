@@ -1363,9 +1363,12 @@ export class ChatManager implements ChatService {
     // Full request scope stays private (ADR 0083); shared user events carry only the user's own choices/words.
     const decision = JSON.stringify({ requestId, title: req.title, detail: req.detail, questions: req.questions ?? [], answer });
     r.continuationDecisions = r.continuationDecisions ? `${r.continuationDecisions}\n${decision}` : decision;
-    this.persist(true);
-    if (answer.kind === 'question') this.userWrote(chatId, JSON.stringify({ requestId, answers: Object.values(answer.answers) }));
-    else this.userWrote(chatId, JSON.stringify({ requestId, allow: answer.allow, ...(answer.message ? { message: answer.message } : {}) }));
+    // one checkpoint carries the decision and the user's event: two synchronous checkpoints per click froze the window (#294)
+    let saved = false;
+    try {
+      saved = answer.kind === 'question' ? this.userWrote(chatId, JSON.stringify({ requestId, answers: Object.values(answer.answers) }))
+        : this.userWrote(chatId, JSON.stringify({ requestId, allow: answer.allow, ...(answer.message ? { message: answer.message } : {}) }));
+    } finally { if (!saved) this.persist(true); } // the decision is on disk even when the event could not be recorded
     // a Strategist still asking: the answer is one more thing its strip shows as already clear (ADR 0108)
     const plan = r.s.plan;
     if (plan && (plan.phase === 'asking' || plan.phase === 'revising') && answer.kind === 'question' && req.questions?.length) {
@@ -1570,9 +1573,10 @@ export class ChatManager implements ChatService {
   /** The user typed in this chat himself (chat:send only, ADR 0083): so that nothing conflicts, the Orchestrator learns it
    *  as quiet news (orchestrator-wake.ts, its own listener) and, for a delegated chat, its parent gets the same note with
    *  its next message (and a line in its transcript now). The user's own words go, never the child's. */
-  userWrote(chatId: string, text: string): void {
+  /** true = recorded and checkpointed (chats.json written); false = not a chat that keeps the user's events. */
+  userWrote(chatId: string, text: string): boolean {
     const r = this.chats.get(chatId);
-    if (!r || r.s.isOrchestrator || r.s.quick) return;
+    if (!r || r.s.isOrchestrator || r.s.quick) return false;
     const ledger = r.userTaskEvents ?? { events: [], latestSeq: 0, acknowledgedSeq: 0 };
     if (ledger.latestSeq === Number.MAX_SAFE_INTEGER) throw new Error('The user event ledger is invalid; the instruction cannot be recorded safely.');
     const at = Date.now(), seq = ledger.latestSeq + 1, eventId = crypto.randomUUID();
@@ -1588,6 +1592,7 @@ export class ChatManager implements ChatService {
       this.updated(parent);
     }
     for (const fn of this.userWroteListeners) { try { fn(note); } catch (e) { log.warn('chats', 'user note listener failed', { chat: chatId, cause: errText(e), hint: 'the Orchestrator may not learn of this message' }); } }
+    return true;
   }
   /** orchestrator-wake.ts: told of every message the user typed in a work chat */
   onUserWrote(fn: (n: UserWroteNote) => void): void { this.userWroteListeners.push(fn); }

@@ -21,6 +21,7 @@ import { procedureSections } from './procedure-sources';
 import type { UpgradeAsk } from './upgrade';
 import { readBrainView, type BrainViewInput } from './view';
 import { readWorker } from '../read-work';
+import { timedStep } from '../perf';
 import { readNoise, scanLogs, writeNoise } from './log-scan';
 import { readRules, readSkills, readSmall, type SkillDir } from './model';
 import type { ResearchProposal } from '../../shared/maintenance-research';
@@ -143,21 +144,34 @@ export class BrainModelService {
   }
   /** A requested maintenance pass repairs only absent declarations. Each role correction has its own Undo. */
   private repairMissingSkills(): JobResult {
-    const plans = this.roles().filter(p => !p.trial).map(p => ({ p, missing: this.d.packs.missingSkills(p) }));
+    const changes = this.unlinkMissing(null, 'merge-skills', 'Inventario completo del runtime: skill assenti anche nelle copie personali e incorporate.');
+    return { job: 'merge-skills', changes, note: 'Solo riferimenti mancanti rimossi; per fondere i contenuti serve approvazione esplicita.' };
+  }
+  /** Drops the roles' declarations of skills that exist nowhere any more (`only`: just these names; null = every one).
+   *  A skill removed (the trash, a forget card, an undone creation) leaves no role link behind: the role logged
+   *  «Declared skill missing at start» at every launch (#292). Each role's correction is its own change with its Undo. */
+  private unlinkMissing(only: ReadonlySet<string> | null, job: BrainChange['job'], reason: string): number {
     let changes = 0;
-    for (const { p, missing } of plans) {
+    for (const p of this.roles().filter(x => !x.trial)) {
+      let missing: string[];
+      try { missing = this.d.packs.missingSkills(p).filter(s => !only || only.has(s)); } catch { continue; }
       if (!missing.length) continue;
       const result = this.d.catalog.maintain(p.id, { skills: p.skills.filter(s => !missing.includes(s)),
         ...(p.knowhow ? { knowhow: { ...p.knowhow, linked: p.knowhow.linked.filter(s => !missing.includes(s)) } } : {}) },
       'Manutenzione: rimossi riferimenti a skill non più disponibili');
       const snap = result ? { id: p.id, before: result.before, after: result.profile.activeVersion } : null;
       if (snap) {
-        this.log.record({ job: 'merge-skills', kind: 'agent', action: 'unlink', target: p.id,
-          summary: `${p.name}: riferimenti a skill mancanti rimossi`, reason: 'Inventario completo del runtime: skill assenti anche nelle copie personali e incorporate.', evidence: missing }, [], snap);
+        this.log.record({ job, kind: 'agent', action: 'unlink', target: p.id,
+          summary: `${p.name}: riferimenti a skill mancanti rimossi`, reason, evidence: missing }, [], snap);
         changes++;
       }
     }
-    return { job: 'merge-skills', changes, note: 'Solo riferimenti mancanti rimossi; per fondere i contenuti serve approvazione esplicita.' };
+    return changes;
+  }
+  /** After a skill left the brain: its role links go too (logged; never throws, the removal itself already happened). */
+  private unlinkRemoved(name: string, job: BrainChange['job']): void {
+    try { this.unlinkMissing(new Set([name]), job, `La skill «${name}» non esiste più: tolta anche dai ruoli che la dichiaravano.`); }
+    catch (e) { log.warn('brain', 'removed skill still linked', { cause: errText(e), hint: 'the requested maintenance pass removes the missing reference' }); }
   }
   report(): MigrationReport | null { try { return (readLocal(this.reportFile) as MigrationReport | undefined) ?? null; } catch { return null; } }
   private lastRun(): MaintenanceRun | null { try { return (readLocal(this.runFile) as MaintenanceRun | undefined) ?? null; } catch { return null; } }
@@ -192,7 +206,9 @@ export class BrainModelService {
     let lessons = ''; try { const l = this.d.learning.stubs(); lessons = `${l.length}:${l.filter(x => x.status !== 'pending').length}:${l.at(-1)?.createdAt ?? 0}`; } catch { /* none */ }
     const key = `${this.generation}|${this.d.root() ?? ''}|${runsKey}|${lessons}|${this.homeSkillsKey()}`, now = this.now();
     if (this.cached && this.cached.key === key && now - this.cached.at < CACHE_MS) return this.cached.state;
-    const state = readWorker.call({ op: 'brain', input: this.viewInput() }, rev === undefined ? undefined : `store:${rev}`);
+    // named in the stall log on its own: what is left on the main process once the runs go to the worker in slices (#295)
+    const input = timedStep('brainmodel view input', () => this.viewInput());
+    const state = readWorker.call({ op: 'brain', input }, rev === undefined ? undefined : `store:${rev}`);
     const entry = { key, at: now, state };
     this.cached = entry;
     state.catch(() => { if (this.cached === entry) this.cached = null; });
@@ -269,6 +285,8 @@ export class BrainModelService {
   rollback(id: string): BrainModelState {
     const c = this.log.rollback(id, this.restorer());
     log.info('brain', 'maintenance change undone', { data: { job: c.job, kind: c.kind, target: c.target } });
+    // an undone skill creation (a promoted candidate too) takes the skill away: its role links go with it
+    if (c.kind === 'skill' && c.action === 'create') this.unlinkRemoved(c.target, 'user');
     if (c.kind === 'script') this.d.scripts?.changed();
     this.d.emit();
     return this.state();
@@ -320,6 +338,7 @@ export class BrainModelService {
     const c = this.log.apply({ job: by?.job ?? 'user', kind, action: 'remove', target, summary, reason, evidence: [...evidence, ...(by?.evidence ?? [])], ...(decisions.length ? { migrationIgnored: true } : {}) }, [...files.map(file => ({ file, text: null })), ...decisions]);
     if (!c) throw new Error('Niente da eliminare.');
     log.info('brain', by ? 'item forgotten (maintenance card)' : 'item removed by the user', { data: { kind, files: files.length } });
+    if (kind === 'skill') this.unlinkRemoved(target, by?.job ?? 'user');
     if (kind === 'script') this.d.scripts?.changed();
     this.d.emit();
     return { state: this.state(), changeId: c.id };
