@@ -1,4 +1,4 @@
-// Impara (ADR 0183): the page, the blackboard player, the checks, the end with «Explain it yourself».
+// Impara (ADR 0185): the page, the blackboard player, the checks, the end with «Explain it yourself».
 import type { imparaIt } from './impara.it';
 export const imparaEn: typeof imparaIt = {
   'brainPages.nav.impara': 'Learn',

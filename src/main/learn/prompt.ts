@@ -1,4 +1,4 @@
-// The words Impara gives the model (ADR 0183): one hidden read-only run per answer (compare/headless.ts), JSON back,
+// The words Impara gives the model (ADR 0185): one hidden read-only run per answer (compare/headless.ts), JSON back,
 // checked by shared/lesson.ts. The teaching rules come from documented methods: one idea per piece and the learner's
 // pace (Mayer: segmenting), short spoken sentences next to the picture rather than a wall of text (modality, redundancy),
 // the lit nodes and a note for what matters (signaling), new words before the piece that needs them (pre-training),

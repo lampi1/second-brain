@@ -210,7 +210,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   // the user's own browser is real in the demo too (nothing to fake: it loads only what the user types)
   const personal = new PersonalBrowser({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, cipher: safeStorageCipher(safeStorage), appName: app.getName(), lang: () => (brain.settings().language === 'en' ? 'en' : 'it') });
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
-  // Impara (ADR 0183): the lessons are written by hand (learn/demo.ts), about the real PR #251
+  // Impara (ADR 0185): the lessons are written by hand (learn/demo.ts), about the real PR #251
   const lessons = new LessonStore(path.join(ctx.userData, 'learn'));
   seedDemoLessons(lessons, now());
   const learn = new LearnService({ store: lessons, lang: uiLang, run: demoRun, now, teach: demoTeach, cannotTeach: () => null,

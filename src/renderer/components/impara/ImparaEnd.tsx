@@ -1,4 +1,4 @@
-// The end of a lesson (ADR 0183): «Spiegalo tu», the learner explains the whole thing in their own words (typed or said
+// The end of a lesson (ADR 0185): «Spiegalo tu», the learner explains the whole thing in their own words (typed or said
 // with «Rispondo a voce»; ICAP: constructive), one short run grades it (what they got, what they left out); then how
 // each piece went (its checks, the extras it needed) with «Rivedi» on the weak ones, and the checks' score. Skipping
 // the explanation ends the lesson without a grade. Under the whole diagram. Used by ImparaPlayer.tsx.

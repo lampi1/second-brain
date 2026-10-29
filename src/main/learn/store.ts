@@ -1,4 +1,4 @@
-// The Impara lessons on disk (ADR 0183): userData/learn/<id>/ holds lesson.json (the whole lesson: diagram, pieces,
+// The Impara lessons on disk (ADR 0185): userData/learn/<id>/ holds lesson.json (the whole lesson: diagram, pieces,
 // checks, the user's answers, where they are) and the material it was made from (materiale.md, diff.patch), so a lesson
 // opens again exactly where the user left it. Only on this PC, never in the brain (like the recordings, ADR 0154).
 // Written atomically (tmp + rename). Used by learn/service.ts; tests: test/unit/learn-service.test.ts.

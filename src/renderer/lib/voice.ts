@@ -7,7 +7,7 @@
 //   current one plays), and talking over the app stops it at once (barge-in). Question cards registered with
 //   useVoiceQuestion are read and answered by voice (parseSpokenAnswer). The app never speaks on its own initiative.
 // The microphone streams 16 kHz chunks to main (voice:audio); main's voice process cuts utterances (Silero) and
-// transcribes them locally (Whisper). Impara (ADR 0183) uses both halves on its own: narrate() reads a lesson's piece
+// transcribes them locally (Whisper). Impara (ADR 0185) uses both halves on its own: narrate() reads a lesson's piece
 // aloud with the microphone off too, and its «Rispondo a voce» is dictation into the lesson (target 'impara': the words
 // go to onImparaHeard, never to a chat). Used by components/VoiceControls.tsx, ChatInput.tsx, VoiceSettings.tsx, App.tsx
 // (Ctrl+M), the question cards and components/impara/.

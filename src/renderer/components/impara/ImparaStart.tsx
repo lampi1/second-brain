@@ -1,4 +1,4 @@
-// The start of Impara (ADR 0183; mockup /mnt/project-files/ui-review/impara/1-pagina-impara.png): «Cosa vuoi capire
+// The start of Impara (ADR 0185; mockup /mnt/project-files/ui-review/impara/1-pagina-impara.png): «Cosa vuoi capire
 // davvero, oggi?» with what to learn (a PR: one of the Task page's, or a GitHub link; a technical topic; a pasted text),
 // how much the user knows already (the lesson adapts from the first piece), how deep, and the two voices; under it the
 // user's PRs with how far each was studied, and the saved lessons (their diagram as a thumbnail, how far they got),

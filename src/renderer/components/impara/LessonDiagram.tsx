@@ -1,4 +1,4 @@
-// The lesson's blackboard (ADR 0183): the lesson's flowchart drawn by the app's diagram viewer (lib/viz/mermaid.ts:
+// The lesson's blackboard (ADR 0185): the lesson's flowchart drawn by the app's diagram viewer (lib/viz/mermaid.ts:
 // strict, an image, never DOM) with the piece's nodes lit, the ones seen before calm and the rest dimmed (shared/lesson.ts
 // withFocus: the app adds the classes, the model only names node ids), or the piece's own diagram. A new piece fades in
 // over the old one, so the picture grows instead of jumping. «Tutto lo schema» shows it without focus, «Ingrandisci»

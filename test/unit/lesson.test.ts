@@ -1,4 +1,4 @@
-// Impara's shared rules (ADR 0183, src/shared/lesson.ts): the node ids a flowchart declares (labels and edge text left
+// Impara's shared rules (ADR 0185, src/shared/lesson.ts): the node ids a flowchart declares (labels and edge text left
 // out), the lit piece added by the app only on known ids, the play order (a piece, its extras, its checks, the end),
 // progress and how each piece went, the model's answers checked and capped, the spoken commands and choices.
 import { describe, expect, it } from 'vitest';

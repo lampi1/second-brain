@@ -1,4 +1,4 @@
-// What an Impara lesson is made from (ADR 0183), gathered by the app itself, read only, before any model runs: a GitHub
+// What an Impara lesson is made from (ADR 0185), gathered by the app itself, read only, before any model runs: a GitHub
 // PR through the user's own `gh` (view + diff), one of the Task page's Azure DevOps PRs through git in its local clone
 // (the PR's branch against its target: diff, stat, commits; the app never fetches), a pasted text, or nothing for a
 // topic. The model gets the material inline (up to INLINE_MAX characters) and the whole of it as files in the lesson's

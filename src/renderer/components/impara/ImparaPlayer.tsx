@@ -1,4 +1,4 @@
-// One lesson of Impara, the blackboard (ADR 0183, style A chosen by the owner 2026-10-29: mockup
+// One lesson of Impara, the blackboard (ADR 0185, style A chosen by the owner 2026-10-29: mockup
 // /mnt/project-files/ui-review/impara/2-A-lavagna-lezione.png): on the left the pieces (seen, now, still to come, the
 // extras asked and the checks), in the middle the diagram that grows piece by piece, under it the narration (read
 // aloud by the app's voice when «Voce dell'app» is on: then the short spoken text with «Testo completo»; off: the

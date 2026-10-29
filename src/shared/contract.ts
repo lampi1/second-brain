@@ -1610,7 +1610,7 @@ export interface InvokeMap {
   'rec:find': [void, RecFound[]];
   'rec:readFound': [{ path: string }, Uint8Array];
   'rec:open': [{ id: string; what: 'audio' | 'text' | 'folder' }, void];
-  /** Impara (ADR 0183, main/learn/): the saved lessons, one whole, a new one (its material is gathered and the model
+  /** Impara (ADR 0185, main/learn/): the saved lessons, one whole, a new one (its material is gathered and the model
    *  writes it in the background: 'impara:changed' brings each step), where the user is, an extra piece at a piece, a
    *  check's answer, the final «Spiegalo tu», «Riprova», delete */
   'impara:state': [void, ImparaState];
@@ -1741,7 +1741,7 @@ export interface EventMap {
   'voice:speech': VoiceSpeech;
   /** call recordings (ADR 0154): the list, the one running, a transcription's progress */
   'rec:changed': RecState;
-  /** Impara (ADR 0183): the list changed, and the lesson that changed (whole) when there is one */
+  /** Impara (ADR 0185): the list changed, and the lesson that changed (whole) when there is one */
   'impara:changed': { state: ImparaState; lesson?: Lesson };
 }
 

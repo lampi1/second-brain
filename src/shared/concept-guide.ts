@@ -1150,7 +1150,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(WHERE, 'Pagina G X; IPC impara:*; ogni risposta del modello è una sessione nascosta in sola lettura su un motore acceso (Claude per primo).', 'Page G X; IPC impara:*; each model answer is a hidden read-only session on an engine that is on (Claude first).'),
       tech(LIMITS, 'Diff in linea fino a 60.000 caratteri (il resto nel file), schema di 4-10 nodi, al massimo 12 pezzi per risposta.', 'Diff inline up to 60,000 characters (the rest in the file), a 4-10 node diagram, at most 12 pieces per answer.'),
     ],
-    sources: ['src/shared/lesson.ts', 'src/main/learn/service.ts', 'src/main/learn/material.ts', 'src/main/learn/prompt.ts', 'src/renderer/components/impara/ImparaPlayer.tsx', 'docs/adr/0183-impara-lessons.md'],
+    sources: ['src/shared/lesson.ts', 'src/main/learn/service.ts', 'src/main/learn/material.ts', 'src/main/learn/prompt.ts', 'src/renderer/components/impara/ImparaPlayer.tsx', 'docs/adr/0185-impara-lessons.md'],
   },
   {
     id: 'held-news',

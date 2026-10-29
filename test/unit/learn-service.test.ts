@@ -1,4 +1,4 @@
-// Impara in main (ADR 0183, src/main/learn/service.ts, store.ts): a start saves the lesson at once and writes it in two
+// Impara in main (ADR 0185, src/main/learn/service.ts, store.ts): a start saves the lesson at once and writes it in two
 // runs (the first pieces, then the rest in the background); a failed run leaves a sentence and «Riprova», never a
 // broken lesson; extras land after the piece and the user lands on them; checks are judged at zero tokens and the first
 // answer stays; «Spiegalo tu» is graded; a lesson the app was closed during is marked, an extra or grade cut off frees

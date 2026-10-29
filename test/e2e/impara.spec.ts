@@ -1,4 +1,4 @@
-// E2E of Impara (ADR 0183) on the frozen demo, whose lessons are written by hand about the real PR #251
+// E2E of Impara (ADR 0185) on the frozen demo, whose lessons are written by hand about the real PR #251
 // (main/learn/demo.ts) and whose voice is the fake one: the page lists the saved lessons, a GitHub PR link starts a
 // lesson (preparing, then the first pieces while the rest is written), the blackboard lights the piece's nodes, the
 // code of the piece shows, a check marks the answer and says why, «Spiegamelo meglio» adds a piece after the current

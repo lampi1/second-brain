@@ -66,7 +66,7 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   page('browser', 'G W'),
   // not a brain page either: the call recordings and their local transcripts (components/RecordingsPage.tsx, ADR 0154)
   page('registrazioni', 'G V'),
-  // not a brain page either: the lessons the user asks for to master a PR or a topic (components/impara/, ADR 0183)
+  // not a brain page either: the lessons the user asks for to master a PR or a topic (components/impara/, ADR 0185)
   page('impara', 'G X'),
 ];
 const IDS = new Set<string>(['file',...BRAIN_PAGES.map(p => p.id)]);

@@ -178,7 +178,7 @@ export interface Wired {
   personal: PersonalBrowser;
   /** the call recordings on disk (ADR 0154, recordings/store.ts): main/index.ts records and transcribes, app_recordings reads */
   recordings: RecordingStore;
-  /** Impara (ADR 0183, learn/service.ts): the user's lessons; absent = the impara:* channels say it is not available */
+  /** Impara (ADR 0185, learn/service.ts): the user's lessons; absent = the impara:* channels say it is not available */
   learn?: LearnService;
   /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */
   engines: EnginesApi;
@@ -953,7 +953,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     changed: () => ctx.emitter.emit('maintenance:changed', undefined),
     done: d => ctx.emitter.emit('maintenance:done', d) });
   researchRef.current = research;
-  // Impara (ADR 0183): each lesson is written by hidden read-only runs (compare/headless.ts) on the best engine that is
+  // Impara (ADR 0185): each lesson is written by hidden read-only runs (compare/headless.ts) on the best engine that is
   // on and reads files (Claude first, its strongest model), the material gathered by the app with the user's own gh / git
   const teachers = () => engineInfos().filter(e => e.kind !== 'api' && e.caps.tools && engineOn(brain.settings(), e.id));
   const teacher = () => { const all = teachers(); return all.find(e => e.kind === 'claude') ?? all[0] ?? null; };

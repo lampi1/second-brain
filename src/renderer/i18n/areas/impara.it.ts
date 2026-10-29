@@ -1,4 +1,4 @@
-// Impara (ADR 0183): the page, the blackboard player, the checks, the end with «Spiegalo tu».
+// Impara (ADR 0185): the page, the blackboard player, the checks, the end with «Spiegalo tu».
 export const imparaIt = {
   'brainPages.nav.impara': 'Impara',
   'brainPages.impara.subtitle': 'Lezioni a pezzi, salvate su questo PC: una PR dell’utente (link GitHub o una PR del Task), un concetto tecnico o un testo incollato; lo schema mermaid cresce pezzo per pezzo, la voce dell’app legge, l’utente risponde a voce o con i tasti («Avanti», «Spiegamelo meglio», «Fammi un esempio», «Mostrami il codice», una domanda), verifiche dopo alcuni pezzi e «Spiegalo tu» alla fine. La lezione la scrive un motore acceso in sola lettura. L’Orchestrator apre la pagina (app_ui page impara) ma non avvia lezioni: le sceglie l’utente.',
