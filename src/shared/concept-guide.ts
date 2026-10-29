@@ -373,7 +373,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       6: ['src/main/agents/run-feedback.ts#recordFeedback'],
       7: ['src/main/run/outcome.ts', 'src/renderer/components/RunSurface.tsx'],
     },
-    sources: ['src/shared/agents.ts', 'src/main/agents/runs.ts', 'src/main/agents/run-report.ts', 'src/main/agents/run-feedback.ts', 'src/main/chats/manager.ts', 'src/main/index.ts', 'src/main/run/outcome.ts', 'src/main/chats/manager-persistence.ts', 'src/main/chats/manager-requests.ts'],
+    sources: ['src/shared/agents.ts', 'src/main/agents/runs.ts', 'src/main/agents/run-report.ts', 'src/main/agents/run-feedback.ts', 'src/main/chats/manager.ts', 'src/main/ipc-handlers/agents.ts', 'src/main/run/outcome.ts', 'src/main/chats/manager-persistence.ts', 'src/main/chats/manager-requests.ts'],
   },
   {
     id: 'metrics',
@@ -384,7 +384,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/analytics.ts, src/main/agents/collector.ts (#125: no page lists them since Costi dropped its per-agent blocks)
       b('L’app osserva le sessioni di ogni agente (costi e tempi) per il suo uso interno; non le mostra più per agente in Costi.',
         'The app observes each agent’s sessions (costs and times) for its own use; Costs no longer lists them per agent.'),
-      // src/main/agents/run-metrics.ts; src/main/index.ts agents:metrics
+      // src/main/agents/run-metrics.ts; src/main/ipc-handlers/agents.ts agents:metrics
       b('Il main calcola anche metriche per agente e versione dalle run concluse nel registro delle run (app.db) e dai riepiloghi delle run potate; le carte della pagina Agenti ne mostrano lavori conclusi, in corso e costo mediano.',
         'Main also computes per-agent and per-version metrics from ended runs in the run store (app.db) and rollups of pruned runs; the Agenti page cards show ended runs, open runs and the median cost.'),
       // src/renderer/components/AgentCatalogCard.tsx Costs (#125)
@@ -425,7 +425,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       6: ['src/main/agents/receipts.ts', 'src/main/agents/judge-sample.ts#byReceipts'],
       7: ['src/shared/ppi.ts'],
     },
-    sources: ['src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/agents/standing.ts', 'src/main/agents/judge-sample.ts', 'src/renderer/components/AgentCatalogCard.tsx', 'src/main/index.ts', 'src/main/agents/collector.ts', 'docs/agent-evidence.md', 'docs/adr/0125-every-role-levels-up-from-outcomes.md', 'src/main/agents/receipts.ts', 'docs/adr/0130-run-receipts-before-reviews.md', 'src/main/agents/xp.ts', 'src/main/agents/flash-outcomes.ts', 'src/main/agents/level-diagnosis.ts', 'docs/adr/0131-levels-by-job-size-and-bayesian-performance.md', 'src/shared/ppi.ts', 'src/main/agents/judge-agreement.ts'],
+    sources: ['src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/agents/standing.ts', 'src/main/agents/judge-sample.ts', 'src/renderer/components/AgentCatalogCard.tsx', 'src/main/ipc-handlers/agents.ts', 'src/main/agents/collector.ts', 'docs/agent-evidence.md', 'docs/adr/0125-every-role-levels-up-from-outcomes.md', 'src/main/agents/receipts.ts', 'docs/adr/0130-run-receipts-before-reviews.md', 'src/main/agents/xp.ts', 'src/main/agents/flash-outcomes.ts', 'src/main/agents/level-diagnosis.ts', 'docs/adr/0131-levels-by-job-size-and-bayesian-performance.md', 'src/shared/ppi.ts', 'src/main/agents/judge-agreement.ts'],
   },
   {
     id: 'errors-rules',
@@ -911,7 +911,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
     summary: b('Apre in sola lettura un file citato in chat o nel brain, alla riga giusta, solo dentro le cartelle di lavoro.',
       'Opens a file mentioned in a chat or the brain read-only, at the right line, only inside the working folders.'),
     points: [
-      // src/main/index.ts (allowed roots); src/main/file-view.ts
+      // src/main/ipc-handlers/app.ts (allowed roots); src/main/file-view.ts
       b('Cartelle ammesse: il brain, la cartella del repo dell’app (Impostazioni) e la cartella della chat.',
         'Allowed folders: the brain, the app’s repo folder (Settings) and the chat’s folder.'),
       b('Rifiuta file fuori da queste cartelle (controllato prima e dopo aver risolto il percorso reale), radici di disco e condivisioni di rete.',
@@ -944,7 +944,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       5: ['src/renderer/components/viewer/ViewerOverlay.tsx'],
       6: ['src/main/peek-file.ts'],
     },
-    sources: ['src/shared/file-view.ts', 'src/main/file-view.ts', 'src/main/peek-file.ts', 'src/main/index.ts', 'src/renderer/brain/pages/FileViewer.tsx', 'src/renderer/brain/components/ReportHtml.tsx', 'src/renderer/brain/components/ReportImages.tsx'],
+    sources: ['src/shared/file-view.ts', 'src/main/file-view.ts', 'src/main/peek-file.ts', 'src/main/ipc-handlers/app.ts', 'src/renderer/brain/pages/FileViewer.tsx', 'src/renderer/brain/components/ReportHtml.tsx', 'src/renderer/brain/components/ReportImages.tsx'],
   },
   {
     id: 'routing',
