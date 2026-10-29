@@ -10,7 +10,9 @@
 // that did not write the facts, and, while it runs, the questions the files run found worth asking (at most two). The
 // lesson is written from the verified facts and cites them. Who explains is the user's choice (LessonStart.teacher).
 // A finished lesson leaves review cards (ADR 0189, review-store.ts): its checks at once, and the cards one more short
-// run writes from the verified facts; the reviews are scheduled by FSRS (shared/review.ts).
+// run writes from the verified facts; the reviews are scheduled by FSRS (shared/review.ts). Beside the lesson, the tutor
+// (ADR 0190): a question answered in seconds, word by word, from the verified facts (no new research), on a session
+// started while the learner types (`tutorWarm`); it first lets the learner try (coach) unless they ask for the answer.
 // Wired in wiring.ts / demo-wiring.ts, IPC impara:* in index.ts; tests: test/unit/learn-service.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -19,18 +21,19 @@ import type { Effort, Lang } from '@shared/contract';
 import {
   LESSON_DEPTHS, LESSON_EXTRAS, LESSON_LEVELS, TEACHER_EFFORTS, applyVerdicts, checkKey, diagramNodes, jsonIn, parseExtra, parseFacts, parseGrade, parsePlan, parseQuestions, playlist, stepKey,
   type ImparaState, type Lesson, type LessonConfidence, type LessonExtraKind, type LessonFact, type LessonKind, type LessonPrep, type LessonStart, type LessonStep, type LessonTeacher,
-  type PrepPhase, type TeacherOption, subjectOf,
+  type PrepPhase, type TeacherOption, type TutorMode, type TutorTurn, subjectOf, TUTOR_KEEP, TUTOR_Q_MAX, tutorCard, tutorShown,
 } from '@shared/lesson';
 import { REVIEW_GRADES, parseCards, queueOf, subjectName, summarize, type ReviewCard, type ReviewGrade, type ReviewItem, type ReviewMode } from '@shared/review';
 import { cutDiff, gather, INLINE_MAX, type GatherDeps, type Material } from './material';
-import { cardsPrompt, extraPrompt, filesResearchPrompt, gradePrompt, planPrompt, restPrompt, verifyPrompt, webResearchPrompt } from './prompt';
+import { cardsPrompt, extraPrompt, filesResearchPrompt, gradePrompt, planPrompt, restPrompt, tutorPrompt, verifyPrompt, webResearchPrompt } from './prompt';
 import { ReviewStore } from './review-store';
 import type { LessonStore } from './store';
 
-export type TeachRound = 'impara-web' | 'impara-files' | 'impara-verify-web' | 'impara-verify-files' | 'impara-plan' | 'impara-rest' | 'impara-extra' | 'impara-grade' | 'impara-cards';
+export type TeachRound = 'impara-web' | 'impara-files' | 'impara-verify-web' | 'impara-verify-files' | 'impara-plan' | 'impara-rest' | 'impara-extra' | 'impara-grade' | 'impara-cards' | 'impara-tutor';
 /** One hidden run. teacher = the user's choice (null = the app's); effort = the one to use (null = the engine's own);
- *  web = the web-only run (Claude, no file: compare/headless.ts web mode). */
-export interface TeachRun { cwd: string; prompt: string; effort: Effort | null; round: TeachRound; timeoutMs: number; teacher: LessonTeacher | null; web?: boolean }
+ *  web = the web-only run (Claude, no file: compare/headless.ts web mode); a prompt still to come = a warm start (the
+ *  tutor: null = not needed); onText = the answer so far, as it streams. */
+export interface TeachRun { cwd: string; prompt: string | Promise<string | null>; effort: Effort | null; round: TeachRound; timeoutMs: number; teacher: LessonTeacher | null; web?: boolean; onText?: (text: string) => void }
 export type TeachResult = { ok: true; text: string; costUsd: number | null; engine: string | null; model: string | null } | { ok: false; error: string };
 
 export interface LearnDeps extends GatherDeps {
@@ -50,6 +53,8 @@ export interface LearnDeps extends GatherDeps {
   places?: () => { brain: string | null; appSource: string | null };
   /** the app's guide as markdown (every concept and page), written next to the material for the files research */
   guide?: (lang: Lang) => string;
+  /** a tutor answer so far, as it streams (ADR 0190: 'impara:tutor'); the lesson gets the whole answer when it ends */
+  tutorText?: (lessonId: string, turnId: string, text: string) => void;
 }
 
 const KINDS: readonly LessonKind[] = ['pr', 'topic', 'text'];
@@ -62,6 +67,11 @@ const WEB_DIR = 'web';
 const TEXT_ASK = 'Spiegami questo testo.';
 /** the effort a research, a plan and the rest use when the user named none */
 const DEFAULT_EFFORT: Effort = 'high';
+/** how long a tutor session started ahead waits for the question, then closes (it has cost nothing: no prompt sent) */
+const WARM_MS = 3 * MIN;
+
+/** A tutor session started ahead (ADR 0190): the engine is up, the question goes in when it comes. */
+interface Warm { give(prompt: string | null): void; result: Promise<TeachResult>; listen: ((text: string) => void) | null }
 
 /** A file fact's reference as the user opens it from «Fonti» (ADR 0188): a relative path becomes absolute under the
  *  first of `roots` (the run's folder, the brain, the app's source) where the file exists, else under the first; the
@@ -85,6 +95,9 @@ export class LearnService {
   private readonly cardJobs = new Set<string>();
   /** the review cards (ADR 0189), next to the lessons */
   readonly review: ReviewStore;
+  /** lessons whose tutor is answering now, and the tutor sessions started ahead (ADR 0190) */
+  private readonly tutoring = new Set<string>();
+  private readonly warm = new Map<string, Warm>();
   constructor(private readonly d: LearnDeps) {
     this.review = new ReviewStore(path.join(d.store.root, 'review.json'));
     // a lesson the app was closed while it was being written never finishes by itself: «Riprova» starts it again;
@@ -95,6 +108,7 @@ export class LearnService {
       if (l && l.state !== 'preparing') { try { this.review.fromChecks(l, subjectOf(l)); } catch (e) { log.warn('learn', 'review cards not written', { cause: errText(e) }); } }
       // one lesson object for both cuts below, so the second save keeps the first
       if (l?.cards?.state === 'making') { l = { ...l, cards: { state: 'failed', error: 'interrotta: l’app si è chiusa mentre scrivevo le carte' } }; d.store.save(l); }
+      if (l?.tutor?.some(x => x.state === 'asking')) { l = { ...l, tutor: l.tutor.map(x => (x.state === 'asking' ? { ...x, state: 'failed' as const, error: 'interrotta: l’app si è chiusa mentre rispondevo' } : x)) }; d.store.save(l); }
       if (!l || (l.state !== 'preparing' && l.state !== 'more' && !l.busy)) continue;
       const cut = l.busy ? { busy: undefined, busyError: 'interrotta: l’app si è chiusa mentre la preparavo' } : {};
       d.store.save(l.state === 'preparing' ? { ...l, ...cut, state: 'failed', error: 'interrotta: l’app si è chiusa mentre la preparavo' }
@@ -166,13 +180,15 @@ export class LearnService {
     };
     const teacher = this.teacherOf(raw.teacher);
     if (teacher) req.teacher = teacher;
+    const subject = subjectName(raw.subject);
+    if (subject) req.subject = subject;
     if (kind === 'pr' && !req.prUrl) throw new Error('Scegli una PR o incollane il link.');
     if (kind === 'text' && !req.text?.trim()) throw new Error('Incolla il testo da spiegare.');
     const now = this.now(), id = this.d.store.newId(now);
     const l: Lesson = {
       id, title: kind === 'topic' ? ask.slice(0, 120) : kind === 'text' ? 'Testo incollato' : 'La tua PR', kind, ask: req.ask, depth: req.depth, level: req.level,
       createdAt: now, updatedAt: now, state: 'preparing', diagram: '', outline: [], steps: [], checks: [], at: '', costUsd: null, engine: null, model: null, sources: [],
-      ...(teacher ? { teacher } : {}), prep: { phases: { gather: 'now' } },
+      ...(teacher ? { teacher } : {}), ...(subject ? { subject } : {}), prep: { phases: { gather: 'now' } },
     };
     this.d.store.save(l);
     this.d.store.writeFile(id, START_FILE, JSON.stringify(req));
@@ -500,6 +516,75 @@ export class LearnService {
     } finally { this.extras.delete(id); this.d.store.sweep(id); }
   }
 
+  /** The tutor's session, started while the learner opens the tutor or types (ADR 0190): the engine starts now (its
+   *  start is most of the wait) and gets the question when it comes; unused for a few minutes, it closes, having sent
+   *  nothing and cost nothing. One per lesson. */
+  tutorWarm(id: string): void {
+    const l = this.d.store.get(String(id));
+    if (!l || l.state === 'preparing' || l.state === 'failed' || this.warm.has(l.id) || this.tutoring.has(l.id) || this.d.cannotTeach()) return;
+    let give!: (p: string | null) => void;
+    const prompt = new Promise<string | null>(r => { give = r; });
+    const timer = setTimeout(() => { if (this.warm.get(l.id) === w) this.warm.delete(l.id); give(null); }, WARM_MS);
+    timer.unref?.();
+    const w: Warm = { give: p => { clearTimeout(timer); give(p); }, listen: null, result: Promise.resolve({ ok: false, error: '' }) };
+    w.result = this.run(this.teacherReq(l), { cwd: this.folder(l), prompt, effort: 'low', round: 'impara-tutor', timeoutMs: WARM_MS + 3 * MIN, onText: t => w.listen?.(t) });
+    this.warm.set(l.id, w);
+  }
+
+  /** A question to the tutor (ADR 0190), typed, spoken or from a node of the board: answered beside the lesson, word
+   *  by word; coach (the default) lets the learner try first, tell («Dimmelo e basta») answers at once. One at a time. */
+  tutor(id: string, at: string, question: string, mode: TutorMode = 'coach'): Lesson {
+    const l = this.must(id);
+    if (l.state === 'preparing' || l.state === 'failed' || !l.diagram) throw new Error('La lezione non è ancora pronta.');
+    if (this.tutoring.has(l.id) || l.tutor?.some(x => x.state === 'asking')) throw new Error('Il tutor sta già rispondendo.');
+    const q = String(question ?? '').replace(/\s+/g, ' ').trim().slice(0, TUTOR_Q_MAX);
+    if (!q) throw new Error('Scrivi la domanda.');
+    const why = this.d.cannotTeach();
+    if (why) throw new Error(why);
+    const key = String(at ?? '');
+    const piece = key === 'end' ? null : this.pieceAt(l, key);
+    const now = this.now();
+    const turn: TutorTurn = { id: `t${now.toString(36)}${Math.random().toString(36).slice(2, 5)}`, q, at: key, mode: mode === 'tell' ? 'tell' : 'coach', a: '', state: 'asking', createdAt: now };
+    const next = this.edit(l.id, x => ({ ...x, tutor: [...(x.tutor ?? []), turn].slice(-TUTOR_KEEP) }))!;
+    void this.answerTutor(l.id, turn, piece);
+    return next;
+  }
+
+  private async answerTutor(id: string, turn: TutorTurn, piece: LessonStep | null): Promise<void> {
+    this.tutoring.add(id);
+    const set = (patch: Partial<TutorTurn>, r?: Extract<TeachResult, { ok: true }>) =>
+      this.edit(id, l => ({ ...l, ...(r ? this.cost(l, r) : {}), tutor: (l.tutor ?? []).map(x => (x.id === turn.id ? { ...x, ...patch } : x)) }));
+    try {
+      const l = this.d.store.get(id);
+      if (!l) return;
+      const prompt = tutorPrompt(this.d.lang(), { ...l, tutor: (l.tutor ?? []).filter(x => x.id !== turn.id) }, piece, turn.q, turn.mode, this.folder(l));
+      let heard = false;
+      const listen = (t: string) => { heard = true; this.d.tutorText?.(id, turn.id, tutorShown(t, true)); };
+      const cold = () => this.run(this.teacherReq(l), { cwd: this.folder(l), prompt, effort: 'low', round: 'impara-tutor', timeoutMs: 3 * MIN, onText: listen });
+      const w = this.warm.get(id);
+      this.warm.delete(id);
+      let r: TeachResult;
+      if (w) { w.listen = listen; w.give(prompt); r = await w.result; if (!r.ok && !heard) r = await cold(); } // a warm engine that died meanwhile: once more, cold
+      else r = await cold();
+      if (!this.d.store.get(id)) return;
+      if (!r.ok) { set({ state: 'failed', error: r.error.slice(0, 300) }); return; }
+      const a = tutorShown(r.text);
+      if (!a) { set({ state: 'failed', error: 'nessuna risposta' }, r); return; }
+      // a full explanation the verified facts support leaves a review card (cites checked as for every card)
+      let card: string | undefined;
+      const raw = tutorCard(r.text);
+      if (raw && typeof raw === 'object') {
+        const verified = (l.facts ?? []).filter(f => f.check !== 'unsure').map(f => f.id);
+        const [draft] = parseCards({ cards: [{ ...(raw as object), kind: 'recall' }] }, [], verified);
+        if (draft) { try { card = this.review.addOne(id, subjectOf(this.d.store.get(id) ?? l), draft, `t:${turn.id}`, 'tutor', this.now()).id; } catch (e) { log.warn('learn', 'tutor card not written', { cause: errText(e) }); } }
+      }
+      set({ a, state: 'done', ...(card ? { card } : {}) }, r);
+      log.info('learn', 'tutor answered', { data: { id, mode: turn.mode, warm: !!w, card: !!card, costUsd: r.costUsd } });
+    } catch (e) {
+      set({ state: 'failed', error: errText(e).slice(0, 300) });
+    } finally { this.tutoring.delete(id); this.d.store.sweep(id); }
+  }
+
   /** The final «Spiegalo tu»: graded by one short run; an empty answer ends the lesson without a grade. */
   explain(id: string, text: string): Lesson {
     const l = this.must(id);
@@ -538,7 +623,9 @@ export class LearnService {
     const wake = this.waits.get(id);
     this.waits.delete(id);
     // a run still working in the folder (Windows keeps it busy): the lesson is gone now, its folder when the run ends
-    try { this.d.store.remove(String(id), this.jobs.has(id) || this.extras.has(id) || this.cardJobs.has(id)); } finally { wake?.(); }
+    this.warm.get(id)?.give(null);
+    this.warm.delete(id);
+    try { this.d.store.remove(String(id), this.jobs.has(id) || this.extras.has(id) || this.cardJobs.has(id) || this.tutoring.has(id)); } finally { wake?.(); }
     try { this.review.removeLesson(String(id)); } catch (e) { log.warn('learn', 'review cards not removed', { cause: errText(e) }); }
     log.info('learn', 'lesson removed', { data: { id } });
     this.emit();

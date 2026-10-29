@@ -4,10 +4,12 @@
 // and the two voices; under it the
 // review (ImparaReviewHome.tsx, ADR 0189: what is due today, the subjects and their quiz), the user's PRs with how far
 // each was studied, and the saved lessons (their diagram as a thumbnail, how far they got, their subject, filtered by
-// subject), each reopening where it was left. Used by ImparaPage.tsx.
+// subject), each reopening where it was left. Another page can send the user here with the form filled in (ADR 0190:
+// «Capiscila» from Task, «Spiegamelo» from Memoria, «Imparalo» from the Guide; lib/impara.ts learnAbout), with the
+// subject it belongs to; the user starts it. Used by ImparaPage.tsx.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { LESSON_DEPTHS, LESSON_LEVELS, type LessonKind, type LessonStart, type LessonSummary } from '@shared/lesson';
-import { impara, imparaPrefs, removeLesson, setImparaPrefs, startLesson } from '../../lib/impara';
+import { impara, imparaDraft, imparaPrefs, removeLesson, setImparaPrefs, startLesson } from '../../lib/impara';
 import { useTasks } from '../../store/tasks';
 import { go } from '../../actions';
 import { askConfirm } from '../../store/ui';
@@ -77,7 +79,17 @@ export function ImparaStart() {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [only, setOnly] = useState<string | null>(null);
+  const [subject, setSubject] = useState<{ name: string; from: string } | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  // sent here by another page: the form opens filled in, the start button ready (one click starts it)
+  const draft = imparaDraft.use(d => d);
+  useEffect(() => {
+    if (!draft) return;
+    imparaDraft.set(() => null);
+    setKind(draft.kind); setAsk(draft.ask); setPrUrl(draft.prUrl ?? ''); setText(draft.text ?? '');
+    setSubject(draft.subject ? { name: draft.subject, from: draft.from } : null);
+    requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('[data-testid="impara-start-btn"]')?.focus());
+  }, [draft]);
   const lessons = state?.lessons ?? [];
   const subjects = [...new Set(lessons.map(l => l.subject))].sort((a, b) => a.localeCompare(b));
   const shown = only && subjects.includes(only) ? lessons.filter(l => l.subject === only) : lessons;
@@ -88,7 +100,7 @@ export function ImparaStart() {
   const begin = async (req: Partial<LessonStart> = {}) => {
     if (busy) return;
     setBusy(true);
-    const l = await startLesson({ kind, ask: ask.trim(), depth: prefs.depth, level: prefs.level, ...(prefs.teacher ? { teacher: prefs.teacher } : {}),
+    const l = await startLesson({ kind, ask: ask.trim(), depth: prefs.depth, level: prefs.level, ...(prefs.teacher ? { teacher: prefs.teacher } : {}), ...(subject ? { subject: subject.name } : {}),
       ...(kind === 'pr' ? { prUrl: prUrl.trim() } : {}), ...(kind === 'text' ? { text } : {}), ...req } as LessonStart);
     setBusy(false);
     if (l) go({ page: 'impara', arg: l.id });
@@ -106,6 +118,12 @@ export function ImparaStart() {
             placeholder={t(kind === 'pr' ? 'impara.askPr' : kind === 'text' ? 'impara.askText' : 'impara.askTopic')} aria-label={t('impara.askLabel')} />
           <Button variant="primary" type="submit" disabled={!ready || !can || busy} testid="impara-start-btn">{busy ? <IconSpinner size={12} /> : null}{t('impara.start')} <IconArrowRight size={13} /></Button>
         </form>
+        {subject && (
+          <div className="ip-from" data-testid="impara-from">
+            <span className="ip-muted">{t('impara.from', { from: subject.from })}</span>
+            <span className="ip-subject on">{subject.name}<button type="button" onClick={() => setSubject(null)} aria-label={t('impara.fromClear')} data-tip={t('impara.fromClear')}>×</button></span>
+          </div>
+        )}
         <div className="ip-chips" role="radiogroup" aria-label={t('impara.whatLabel')}>
           {(['pr', 'topic', 'text'] as LessonKind[]).map(k => (
             <button key={k} type="button" role="radio" aria-checked={kind === k} className={`ip-chip ${kind === k ? 'on' : ''}`} onClick={() => { setKind(k); input.current?.focus(); }} data-testid={`impara-kind-${k}`}>{KIND_ICON[k]}{t(`impara.kindPick.${k}`)}</button>

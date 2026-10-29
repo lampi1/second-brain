@@ -150,7 +150,7 @@ describe('LearnService review', () => {
     const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
     await until(() => store.get(l.id)?.cards?.state === 'done');
     const done = store.get(l.id)!;
-    expect(done.subject).toBe('Second brain');
+    expect(done.subject).toBe('second-brain');
     expect(runs.find(r => r.round === 'impara-plan')!.prompt).toContain('"subject"');
     const cardsRun = runs.find(r => r.round === 'impara-cards')!;
     expect(cardsRun.prompt).toContain('f1 [verified');
@@ -161,12 +161,12 @@ describe('LearnService review', () => {
     expect(own.filter(c => c.origin === 'cards')).toHaveLength(4);
     expect(own.filter(c => c.origin === 'check')).toHaveLength(3);
     // not read yet: nothing to ask
-    expect(svc.state().review!.subjects).toEqual([expect.objectContaining({ name: 'Second brain', lessons: 1, cards: 0, fresh: 0 })]);
-    expect(svc.queue('quiz', 'Second brain')).toEqual([]);
+    expect(svc.state().review!.subjects).toEqual([expect.objectContaining({ name: 'second-brain', lessons: 1, cards: 0, fresh: 0 })]);
+    expect(svc.queue('quiz', 'second-brain')).toEqual([]);
     svc.move(l.id, 'end');
     const st = svc.state().review!;
-    expect(st.subjects).toEqual([expect.objectContaining({ name: 'Second brain', lessons: 1, cards: 7, due: 0, fresh: 7, recall: null })]);
-    const items = svc.queue('quiz', 'Second brain');
+    expect(st.subjects).toEqual([expect.objectContaining({ name: 'second-brain', lessons: 1, cards: 7, due: 0, fresh: 7, recall: null })]);
+    const items = svc.queue('quiz', 'second-brain');
     expect(items).toHaveLength(7);
     const node = items.find(i => i.card.kind === 'node')!;
     expect(node.diagram).toContain('flowchart');
@@ -200,7 +200,7 @@ describe('LearnService review', () => {
     seedDemoLessons(new LessonStore(root), T0);
     const { svc } = make(root);
     const r = svc.state().review!;
-    expect(r.subjects.map(s => s.name).sort()).toEqual(['Second brain', 'Sicurezza web']);
+    expect(r.subjects.map(s => s.name).sort()).toEqual(['Sicurezza web', 'second-brain']);
     expect(r.due).toBeGreaterThan(0);
     expect(svc.queue('due').length).toBeGreaterThan(0);
   });

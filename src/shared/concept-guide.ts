@@ -1125,22 +1125,23 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/learn/service.ts research
       b('Prima di spiegare cerca le fonti: sul web (solo Claude, vede solo la tua domanda, mai i tuoi file) e nei file (il materiale, il tuo brain, la guida e il codice dell’app). Un secondo modello verifica ogni fatto sulla sua fonte: confermato, corretto o da verificare.',
         'Before explaining it looks for sources: on the web (Claude only, it sees only your question, never your files) and in the files (the material, your brain, the app’s guide and code). A second model checks each fact against its source: confirmed, corrected or unconfirmed.'),
-      b('Se la domanda può voler dire cose diverse, ti chiede al massimo due cose prima di iniziare. Ogni pezzo mostra le sue fonti; «Fonti» in alto le raccoglie tutte (pagine web e file del PC, apribili con un clic).',
-        'If the question can mean different things, it asks you at most two things before starting. Each piece shows its sources; «Sources» at the top gathers them all (web pages and files on your PC, opened with one click).'),
       // src/renderer/components/impara/TeacherChip.tsx
-      b('«Chi spiega» sceglie motore, modello e impegno; senza scelta Claude con il modello più forte, impegno alto.',
-        '«Who explains» picks the engine, model and effort; with no choice, Claude with its strongest model, high effort.'),
+      b('Se la domanda può voler dire cose diverse, ti chiede al massimo due cose prima di iniziare. Ogni pezzo mostra le sue fonti; «Fonti» in alto le raccoglie tutte (pagine web e file del PC, apribili con un clic). «Chi spiega» sceglie motore, modello e impegno; senza scelta Claude con il modello più forte, impegno alto.',
+        'If the question can mean different things, it asks you at most two things before starting. Each piece shows its sources; «Sources» at the top gathers them all (web pages and files on your PC, opened with one click). «Who explains» picks the engine, model and effort; with no choice, Claude with its strongest model, high effort.'),
       // src/renderer/components/impara/LessonStage.tsx
       b('La lezione è a tutto schermo (Esc per uscire). Lo schema si muove frase per frase: si accendono i nodi di cui parla, una luce corre lungo la freccia, «Qui» indica il punto. Quelli già visti restano calmi, quelli che verranno sono sbiaditi.',
         'The lesson is full screen (Esc to leave). The diagram moves sentence by sentence: the nodes it talks about light up, a light runs along the arrow, «Here» marks the spot. Seen ones stay calm, coming ones are faint.'),
-      b('«Spiegamelo meglio», «Fammi un esempio», «Mostrami il codice» e le tue domande aggiungono un pezzo subito dopo. Con «Rispondo a voce» dici «avanti», «ripeti», «non ho capito», «la b».',
-        '«Explain it better», «Give me an example», «Show me the code» and your questions add a piece right after. With «I answer by voice» you say «next», «repeat», «I don’t understand», «b».'),
-      // src/main/learn/store.ts
-      b('Verifiche dopo alcuni pezzi, «Spiegalo tu» alla fine. Ogni lezione resta salvata su questo PC e riapre dal punto in cui eri.',
-        'Checks after some pieces, «Explain it yourself» at the end. Every lesson stays saved on this PC and reopens where you were.'),
-      // src/shared/review.ts, src/renderer/components/impara/ImparaReview.tsx
-      b('Ogni lezione ha una materia e lascia carte di ripasso: le sue verifiche e altre scritte solo dai fatti verificati. «Ripassa ora» e il «Quiz» di ogni materia le ripropongono quando stai per dimenticarle (FSRS); la percentuale è una stima, non un voto.',
-        'Every lesson has a subject and leaves review cards: its checks and others written only from the verified facts. «Review now» and each subject’s «Quiz» bring them back when you are about to forget them (FSRS); the percentage is an estimate, not a score.'),
+      b('«Spiegamelo meglio», «Fammi un esempio», «Mostrami il codice» aggiungono un pezzo subito dopo. Con «Rispondo a voce» dici «avanti», «ripeti», «non ho capito», «la b».',
+        '«Explain it better», «Give me an example», «Show me the code» add a piece right after. With «I answer by voice» you say «next», «repeat», «I don’t understand», «b».'),
+      // src/renderer/components/impara/ImparaTutor.tsx
+      b('«Domanda» (o T) apre il tutor accanto allo schema: scrivi, parli o clicchi una parte dello schema, e la risposta arriva parola per parola dai fatti verificati, con le fonti. Con «Prima provo io» per un perché ti dà prima un indizio; «Dimmelo e basta» risponde subito. Quello che spiega finisce nel ripasso.',
+        '«Question» (or T) opens the tutor beside the diagram: write, speak or click a part of the diagram, and the answer arrives word by word from the verified facts, with its sources. With «Let me try first» a why gets a hint first; «Just tell me» answers at once. What it explains goes into your reviews.'),
+      // src/renderer/brain/components/RecordDiscussButton.tsx, src/main/appctl/impara.ts
+      b('Si impara anche da dove sei: «Capiscila» su una PR o un work item del Task, «Spiegamelo» su una regola, skill o script in Memoria (materia «Il mio brain»), «Imparalo» su un concetto della Guida. Oppure chiedi all’Orchestrator «spiegami come funziona…».',
+        'You learn from where you are too: «Understand it» on a PR or work item of the Task page, «Explain it» on a rule, skill or script in Memory (subject «My brain»), «Learn it» on a Guide concept. Or ask the Orchestrator «explain how … works».'),
+      // src/main/learn/store.ts, src/shared/review.ts, src/renderer/components/impara/ImparaReview.tsx
+      b('Verifiche dopo alcuni pezzi, «Spiegalo tu» alla fine; la lezione resta salvata su questo PC e riapre dal punto in cui eri. Ogni lezione ha una materia e lascia carte di ripasso, scritte solo dai fatti verificati: «Ripassa ora» e il «Quiz» di ogni materia le ripropongono quando stai per dimenticarle (FSRS); la percentuale è una stima, non un voto.',
+        'Checks after some pieces, «Explain it yourself» at the end; the lesson stays saved on this PC and reopens where you were. Every lesson has a subject and leaves review cards, written only from the verified facts: «Review now» and each subject’s «Quiz» bring them back when you are about to forget them (FSRS); the percentage is an estimate, not a score.'),
     ],
     analogy: b('Come un collega che prima si documenta, poi ti spiega alla lavagna indicando il punto giusto mentre parla.',
       'Like a colleague who reads up first, then explains at the whiteboard pointing at the right spot while talking.'),
@@ -1148,8 +1149,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(FILES, 'userData/learn/<id>/: lesson.json (lezione, fatti verificati, risposte, punto in cui sei), il materiale (materiale.md, diff.patch, testo.md) e guida-app.md.', 'userData/learn/<id>/: lesson.json (lesson, verified facts, answers, where you are), the material (materiale.md, diff.patch, testo.md) and guida-app.md.'),
       tech(WHERE, 'Pagina G X; IPC impara:* (impara:clarify per le risposte alle domande); ogni risposta del modello è una sessione nascosta in sola lettura; la ricerca web è l’unica con WebSearch/WebFetch e nessuno strumento sui file.', 'Page G X; IPC impara:* (impara:clarify for the answers to the questions); each model answer is a hidden read-only session; the web research is the only one with WebSearch/WebFetch and no file tool.'),
       tech(LIMITS, 'Al massimo 24 fatti per ricerca, 2 domande, 6 battute per pezzo; schema di 4-10 nodi; etichette mai oltre 1,2× e schema intero quando si legge almeno all’80%.', 'At most 24 facts per research, 2 questions, 6 beats per piece; a 4-10 node diagram; labels never past 1.2× and the whole diagram whenever it reads at 80% or more.'),
+      tech(TOOLS, 'app_learn (avvia e apre una lezione, o elenca lezioni e ripasso), solo sull’endpoint dell’Orchestrator.', 'app_learn (starts and opens a lesson, or lists lessons and reviews), only on the Orchestrator’s endpoint.'),
     ],
-    sources: ['src/shared/lesson.ts', 'src/main/learn/service.ts', 'src/main/learn/prompt.ts', 'src/main/compare/headless.ts', 'src/renderer/components/impara/LessonStage.tsx', 'src/renderer/components/impara/ImparaSources.tsx', 'src/renderer/components/impara/ImparaPlayer.tsx', 'docs/adr/0185-impara-lessons.md', 'docs/adr/0188-impara-research-and-animated-board.md', 'src/shared/review.ts', 'docs/adr/0189-impara-subjects-and-spaced-review.md'],
+    sources: ['src/shared/lesson.ts', 'src/main/learn/service.ts', 'src/main/learn/prompt.ts', 'src/main/compare/headless.ts', 'src/renderer/components/impara/LessonStage.tsx', 'src/renderer/components/impara/ImparaSources.tsx', 'src/renderer/components/impara/ImparaPlayer.tsx', 'docs/adr/0185-impara-lessons.md', 'docs/adr/0188-impara-research-and-animated-board.md', 'src/shared/review.ts', 'docs/adr/0189-impara-subjects-and-spaced-review.md', 'src/renderer/components/impara/ImparaTutor.tsx', 'src/main/appctl/impara.ts', 'docs/adr/0190-impara-tutor-and-entry-points.md'],
   },
   {
     id: 'held-news',

@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- Impara tutor and entry points (ADR 0190): «Domanda» opens a tutor beside the lesson that answers word by word in
+  seconds from the verified facts (typed, spoken or by clicking the diagram), lets you try first unless you say «Dimmelo
+  e basta», and turns what it explains into review cards; «Capiscila» on Task PRs and work items, «Spiegamelo» in
+  Memoria, «Imparalo» in the Guide, and the Orchestrator's app_learn start a lesson from where you are.
 - Impara review (ADR 0189): every lesson has a subject and leaves review cards (its checks, and cards written only
   from its verified facts: recall, choice, click on the diagram); «Ripassa ora» and each subject's «Quiz» bring them
   back with FSRS spacing, lessons mixed; each subject shows the estimated recall today.

@@ -14,7 +14,7 @@ import type { MaintenanceDone, MaintenanceStatus } from './maintenance-research'
 import type { PackFinding } from './agent-pack';
 import type { VoiceHeard, VoiceSpeech, VoiceAsr, VoiceName, VoiceState } from './voice';
 import type { RecFound, RecSegment, RecSource, RecState, Recording } from './recordings';
-import type { ImparaState, Lesson, LessonConfidence, LessonExtraKind, LessonStart } from './lesson';
+import type { ImparaState, Lesson, LessonConfidence, LessonExtraKind, LessonStart, TutorMode } from './lesson';
 import type { ReviewCard, ReviewGrade, ReviewItem, ReviewMode } from './review';
 /** What the shareable brain zip holds (counts), or why it was not written: guard findings, or no brain / no guard. */
 export type BrainShareResult = { ok: true; path: string; skills: number; rules: number; roles: number; scripts: number; skipped: number } | { ok: false; findings: PackFinding[] } | { ok: false; error: string };
@@ -1628,6 +1628,10 @@ export interface InvokeMap {
   'impara:queue': [{ mode: ReviewMode; subject?: string }, ReviewItem[]];
   'impara:grade': [{ card: string; grade: ReviewGrade }, ReviewCard];
   'impara:subject': [{ id: string; subject: string }, Lesson];
+  /** the tutor (ADR 0190): a question beside the lesson ('impara:tutor' streams the answer), and the session started
+   *  ahead while the learner opens the tutor or types */
+  'impara:tutor': [{ id: string; at: string; q: string; mode?: TutorMode }, Lesson];
+  'impara:tutorWarm': [{ id: string }, void];
   'orchestrator:held': [void, HeldNewsState];
   /** the user opened a held news item's chat from the list: that chat's items are read, never wake the Orchestrator (#123) */
   'orchestrator:heldSeen': [{ chatId: string }, HeldNewsState];
@@ -1751,6 +1755,8 @@ export interface EventMap {
   'rec:changed': RecState;
   /** Impara (ADR 0185): the list changed, and the lesson that changed (whole) when there is one */
   'impara:changed': { state: ImparaState; lesson?: Lesson };
+  /** a tutor answer so far, as it streams (ADR 0190); the lesson brings the whole answer when it ends */
+  'impara:tutor': { lesson: string; turn: string; text: string };
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -1792,7 +1798,7 @@ export const INVOKE_CHANNELS = [
   'suggest:get', 'suggest:cancel', 'suggest:state',
   'voice:state', 'voice:prepare', 'voice:listen', 'voice:audio', 'voice:commit', 'voice:speak', 'voice:cancelSpeech',
   'rec:state', 'rec:arm', 'rec:start', 'rec:chunk', 'rec:stop', 'rec:transcribe', 'rec:rename', 'rec:remove', 'rec:transcript', 'rec:find', 'rec:readFound', 'rec:open',
-  'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:clarify', 'impara:remove', 'impara:queue', 'impara:grade', 'impara:subject',
+  'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:clarify', 'impara:remove', 'impara:queue', 'impara:grade', 'impara:subject', 'impara:tutor', 'impara:tutorWarm',
   'orchestrator:held', 'orchestrator:heldSeen',
   'cloud:list', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
@@ -1812,7 +1818,7 @@ export const EVENT_CHANNELS = [
   'personal:changed',
   'voice:changed', 'voice:heard', 'voice:speech', 'voice:committed',
   'rec:changed',
-  'impara:changed',
+  'impara:changed', 'impara:tutor',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

@@ -4,7 +4,8 @@
 // leaves, and a toast offers «Annulla» for a few seconds. Skills, rules and scripts go through the change log
 // ('brainmodel:remove', so «Annulla» is its rollback and the change shows in Apprendimento too); a confirmed fact is
 // deleted ('memory:delete', which cannot be undone) only when its toast has expired, so «Annulla» simply keeps it. The
-// always-loaded files (CLAUDE.md and the like) are edited, never deleted from here. Rendered by MemoryPage.tsx.
+// always-loaded files (CLAUDE.md and the like) are edited, never deleted from here. «Spiegamelo» on a row opens Impara's
+// start filled in about it, in the subject «Il mio brain» (ADR 0190). Rendered by MemoryPage.tsx.
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react';
 import type { MemoryReviewRecord } from '@shared/learning-review';
 import { sb } from '../../sb';
@@ -15,7 +16,8 @@ import { toast } from '../../store/ui';
 import { goTarget } from '../../actions';
 import { useBrain } from '../../brain/api';
 import { normScripts } from '../../brain/types';
-import { IconCheck, IconSearch, IconShield, IconSparkle, IconTerminal, IconTrash } from '../Icons';
+import { IconCheck, IconLearn, IconSearch, IconShield, IconSparkle, IconTerminal, IconTrash } from '../Icons';
+import { learnAbout } from '../../lib/impara';
 
 type Kind = 'skill' | 'rule' | 'fact' | 'script';
 interface Row { kind: Kind; id: string; name: string; sub: string; at: number | null; locked?: string; open?: () => void }
@@ -99,6 +101,7 @@ function ApprovedRow({ row, index }: { row: Row; index: number }) {
       {row.open ? <button type="button" className="mh-row-name" onClick={row.open}>{row.kind === 'skill' ? <code>/{row.name}</code> : row.name}</button> : <b className="mh-row-name">{row.name}</b>}
       <small title={row.sub}>{row.sub}</small>
     </div>
+    <button type="button" className="mh-learn" aria-label={t('impara.learnBrain', { name: row.name })} data-tip={t('impara.learnBrain', { name: row.name })} onClick={() => learnAbout({ kind: 'topic', ask: t(`impara.askBrain.${row.kind}`, { name: row.name, where: row.sub }).slice(0, 600), subject: t('impara.subjectBrain'), from: t('impara.fromMemory') })} data-testid={`mh-learn-${row.kind}-${row.id}`}><IconLearn size={15} /></button>
     {row.at && <time className="mh-row-when" dateTime={new Date(row.at).toISOString()}>{new Date(row.at).toLocaleDateString(locale(), { day: 'numeric', month: 'short' })}</time>}
     <button type="button" className="mh-trash" aria-label={label} data-tip={row.locked ?? label} disabled={!!row.locked} onClick={() => void remove(row)} data-testid={`mh-del-${row.kind}-${row.id}`}><IconTrash size={15} /></button>
   </li>;

@@ -3,7 +3,8 @@
 // («Come funziona») opens a reading panel that slides in over the grid with the numbered points, the diagram, an
 // everyday analogy, the technical details with the source files, what is in an open pull request («in arrivo») and what
 // is still a target. Esc, the close button or a click outside closes it and gives the focus back to the card.
-// «Discuti» puts the card, as a ready message, in the Orchestrator's input: it never opens a work chat. The prominent
+// «Discuti» puts the card, as a ready message, in the Orchestrator's input: it never opens a work chat. «Imparalo» opens
+// Impara's start filled in about the card, in the subject «second-brain» (ADR 0190). The prominent
 // card («Ogni compito passa da un ruolo») sits on top as a wide hero with its
 // diagram always visible. A filter narrows the cards by any text of theirs. Mounted by App.tsx PageFrame for the page
 // 'guida' (left rail, Ctrl+K, G E); its arg is a card id (go({ page: 'guida', arg }), the «Come funziona →» of a "?",
@@ -14,6 +15,7 @@ import { CONCEPTS, orchestratorText, textOf, type ConceptCard, type ConceptDiagr
 import { lang, t } from '../i18n';
 import { toast } from '../store/ui';
 import { brainBridge } from '../actions';
+import { learnAbout } from '../lib/impara';
 import { IconChevronRight } from './Icons';
 import { Modal } from './ui';
 import '../styles/guide.css';
@@ -101,6 +103,17 @@ function DiscussButton({ card, l, compact }: { card: ConceptCard; l: GuideLang; 
   );
 }
 
+/** «Imparalo»: a lesson about this concept of the app (researched in its source and guide, ADR 0188). */
+function LearnButton({ card, l }: { card: ConceptCard; l: GuideLang }) {
+  const title = textOf(card.title, l);
+  return (
+    <button type="button" className="btn btn-ghost btn-s guide-learn" onClick={() => learnAbout({ kind: 'topic', ask: t('impara.askGuide', { title, summary: textOf(card.summary, l) }).slice(0, 600), subject: 'second-brain', from: t('impara.fromGuide') })}
+      data-testid={`guide-learn-${card.id}`} data-tip={t('impara.learnGuideTip')} aria-label={`${t('impara.learnGuide')}: ${title}`}>
+      {t('impara.learnGuide')}
+    </button>
+  );
+}
+
 function Card({ card, index, l, open, panel, onToggle }: { card: ConceptCard; index: number; l: GuideLang; open: boolean; panel: string; onToggle: () => void }) {
   const L = (x: Parameters<typeof textOf>[0]) => textOf(x, l);
   const title = L(card.title);
@@ -122,6 +135,7 @@ function Card({ card, index, l, open, panel, onToggle }: { card: ConceptCard; in
           {t('guide.howItWorks')} <IconChevronRight size={13} />
         </button>
         <span className="sp" />
+        <LearnButton card={card} l={l} />
         <DiscussButton card={card} l={l} />
       </div>
     </article>
@@ -138,7 +152,7 @@ function DetailPanel({ id, card, index, l, onClose }: { id: string; card: Concep
   const badges = card.coming?.length || card.target?.length ? <Badges card={card} /> : undefined;
   return (
     <Modal size="side" onClose={onClose} label={title} testid="guide-panel" className="guide-panel" style={accentOf(index)}
-      title={title} subtitle={badges} icon={<Glyph id={card.id} size={22} />} footer={<DiscussButton card={card} l={l} compact />}>
+      title={title} subtitle={badges} icon={<Glyph id={card.id} size={22} />} footer={<><LearnButton card={card} l={l} /><DiscussButton card={card} l={l} compact /></>}>
       <div id={id} ref={scroller} className="guide-panel-content">
         <p className="guide-panel-summary">{L(card.summary)}</p>
         <div className="guide-body" data-testid={`guide-body-${card.id}`}>

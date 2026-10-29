@@ -75,6 +75,9 @@ export interface LessonStart {
   level: LessonLevel;
   /** who explains; absent = the app's choice (Claude's strongest model when it is on) */
   teacher?: LessonTeacher;
+  /** the subject chosen by where the lesson starts (ADR 0190: «Il mio brain» from Memoria, «second-brain» from the
+   *  Guide); absent = the plan picks one */
+  subject?: string;
 }
 
 export interface LessonCode { file: string; diff: string }
@@ -170,6 +173,46 @@ export interface Lesson {
   subject?: string;
   /** the review cards from the verified facts: being written, written (how many), or failed */
   cards?: { state: 'making' | 'done' | 'failed'; n?: number; error?: string };
+  /** the tutor's conversation (ADR 0190), oldest first, the last TUTOR_KEEP */
+  tutor?: TutorTurn[];
+}
+
+// ── the tutor (ADR 0190) ───────────────────────────────────────────────────────────────────────────────────────────
+
+/** coach: when the learner has not tried yet, a hint or a question back first (Bastani et al. 2024: a tutor that does
+ *  not hand out the answer keeps the learning); tell: the answer at once («Dimmelo e basta») */
+export type TutorMode = 'coach' | 'tell';
+export interface TutorTurn {
+  id: string;
+  /** what the learner asked or tried (maybe spoken) */
+  q: string;
+  /** the play-list key the learner was on */
+  at: string;
+  mode: TutorMode;
+  /** the answer (markdown; [f1] cites a fact), growing while it streams */
+  a: string;
+  state: 'asking' | 'done' | 'failed';
+  error?: string;
+  /** the review card the answer left (its id), when it explained something the verified facts support */
+  card?: string;
+  createdAt: number;
+}
+export const TUTOR_KEEP = 40;
+export const TUTOR_Q_MAX = 600;
+/** The line a tutor answer ends with when it leaves a review card. */
+const CARD_LINE = /(?:^|\n)[ \t]*CARD:\s*(\{[\s\S]*\})\s*$/;
+/** A tutor answer as the learner reads it (also while it streams): without its trailing card line, nor a half-written
+ *  one. */
+export function tutorShown(text: string, streaming = false): string {
+  const cut = text.search(/(^|\n)[ \t]*CARD:/);
+  const t = cut >= 0 ? text.slice(0, cut) : text;
+  return (streaming ? t.replace(/\n[ \t]*C(?:A(?:RD?)?)?$/, '') : t).trimEnd();
+}
+/** The review card a finished tutor answer proposes (still to be checked by parseCards), or null. */
+export function tutorCard(text: string): unknown {
+  const m = CARD_LINE.exec(text);
+  if (!m) return null;
+  try { return JSON.parse(m[1]!); } catch { return null; }
 }
 
 /** A lesson's subject: its own, else the repository of a PR, else «Generale». */

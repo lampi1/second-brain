@@ -3,8 +3,10 @@
 // restart (voice of the app, «Rispondo a voce», depth, level, who explains, full screen: localStorage, a convenience
 // only) and the colours a lit
 // piece gets on the diagram, taken from the theme's tokens as hex (mermaid's classDef cannot take rgba).
-// Used by components/impara/.
-import type { ImparaState, Lesson, LessonConfidence, LessonDepth, LessonExtraKind, LessonLevel, LessonStart, LessonTeacher, FocusColors } from '@shared/lesson';
+// The tutor's answers as they stream (ADR 0190: 'impara:tutor', `tutorLive`), and the start form's draft when another
+// page sends the user here to learn something («Capiscila», «Spiegamelo», «Imparalo»: `learnAbout`).
+// Used by components/impara/, brain/components/RecordLearnButton.tsx, brain-model/ApprovedTab.tsx, GuidePage.tsx.
+import type { ImparaState, Lesson, LessonConfidence, LessonDepth, LessonExtraKind, LessonKind, LessonLevel, LessonStart, LessonTeacher, FocusColors, TutorMode } from '@shared/lesson';
 import type { ReviewCard, ReviewGrade, ReviewItem, ReviewMode } from '@shared/review';
 import { createStore } from '../store/createStore';
 import { toast } from '../store/ui';
@@ -14,10 +16,10 @@ export interface ImparaUi { state: ImparaState | null; lessons: Record<string, L
 export const impara = createStore<ImparaUi>({ state: null, lessons: {} });
 
 /** teacher null = the app's choice (Claude's strongest model, high effort); full = the lesson fills the window (the
- *  owner, 2026-10-29: «di base a tutto schermo») */
-export interface ImparaPrefs { voice: boolean; mic: boolean; depth: LessonDepth; level: LessonLevel; teacher: LessonTeacher | null; full: boolean }
+ *  owner, 2026-10-29: «di base a tutto schermo»); coach = the tutor's «Prima provo io» (ADR 0190) */
+export interface ImparaPrefs { voice: boolean; mic: boolean; depth: LessonDepth; level: LessonLevel; teacher: LessonTeacher | null; full: boolean; coach: boolean }
 const PREFS_KEY = 'sb.impara.v1';
-const DEFAULT_PREFS: ImparaPrefs = { voice: true, mic: false, depth: 'lesson', level: 'basics', teacher: null, full: true };
+const DEFAULT_PREFS: ImparaPrefs = { voice: true, mic: false, depth: 'lesson', level: 'basics', teacher: null, full: true, coach: true };
 const teacherIn = (v: unknown): LessonTeacher | null => {
   if (!v || typeof v !== 'object') return null;
   const o = v as Record<string, unknown>;
@@ -30,7 +32,7 @@ function readPrefs(): ImparaPrefs {
     return {
       voice: typeof p.voice === 'boolean' ? p.voice : DEFAULT_PREFS.voice, mic: typeof p.mic === 'boolean' ? p.mic : DEFAULT_PREFS.mic,
       depth: p.depth === 'quick' || p.depth === 'deep' ? p.depth : 'lesson', level: p.level === 'new' || p.level === 'expert' ? p.level : 'basics',
-      teacher: teacherIn(p.teacher), full: typeof p.full === 'boolean' ? p.full : DEFAULT_PREFS.full,
+      teacher: teacherIn(p.teacher), full: typeof p.full === 'boolean' ? p.full : DEFAULT_PREFS.full, coach: typeof p.coach === 'boolean' ? p.coach : DEFAULT_PREFS.coach,
     };
   } catch { return DEFAULT_PREFS; }
 }
@@ -53,6 +55,7 @@ export function startImpara(): void {
   if (wired || typeof window === 'undefined' || !window.sb) return;
   wired = true;
   window.sb.on('impara:changed', ({ state, lesson }) => impara.set(s => ({ state, lessons: lesson ? { ...s.lessons, [lesson.id]: mine(lesson) } : s.lessons })));
+  window.sb.on('impara:tutor', ({ turn, text }) => tutorLive.set(s => ({ ...s, [turn]: text })));
   void window.sb.invoke('impara:state', undefined).then(state => impara.set(s => ({ ...s, state: s.state ?? state })), () => {});
 }
 
@@ -128,4 +131,31 @@ export function focusColors(): FocusColors {
     done: { fill: hex(mix(s3, green, 0.1)), stroke: hex(mix(border, green, 0.55)), text: hex(text2) },
     dim: { fill: hex(s2), stroke: hex(border), text: hex(mix(text4, s2, 0.25)) },
   };
+}
+
+// ── the tutor (ADR 0190) ───────────────────────────────────────────────────────────────────────────────────────────
+
+/** a tutor answer so far, by turn id, while it streams (the lesson has the whole answer once it ends) */
+export const tutorLive = createStore<Record<string, string>>({});
+export const askTutor = (id: string, at: string, q: string, mode: TutorMode = 'coach') => call(window.sb.invoke('impara:tutor', { id, at, q, mode }));
+const warmed = new Map<string, number>();
+/** Starts the tutor's engine ahead (opening the tutor, typing): at most once a minute per lesson; main keeps one. */
+export function warmTutor(id: string): void {
+  const now = Date.now();
+  if (now - (warmed.get(id) ?? 0) < 60_000) return;
+  warmed.set(id, now);
+  void window.sb.invoke('impara:tutorWarm', { id }).catch(() => {});
+}
+
+// ── learning from another page (ADR 0190) ──────────────────────────────────────────────────────────────────────────
+
+/** What the start form opens with when another page sends the user to learn something; null = nothing waiting. */
+export interface ImparaDraft { kind: LessonKind; ask: string; prUrl?: string; text?: string; subject?: string; from: string }
+export const imparaDraft = createStore<ImparaDraft | null>(null);
+/** «Capiscila», «Spiegamelo», «Imparalo»: Impara's start opens filled in (who explains and how deep stay the user's);
+ *  the user starts it with one click, so nothing is spent without them. */
+export function learnAbout(d: ImparaDraft): void {
+  imparaDraft.set(() => d);
+  // actions.ts imports half the renderer (this file among them): loaded on use, never at start
+  void import('../actions').then(a => a.go({ page: 'impara' }));
 }
