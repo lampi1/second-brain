@@ -107,7 +107,7 @@
 .bx-lead b { color: var(--bx-text); font-weight: 600; }
 .bx-what { color: var(--bx-text-3); font-size: var(--bx-fs-s); max-width: 90ch; }
 .bx-live { width: 8px; height: 8px; border-radius: 50%; background: var(--bx-green); box-shadow: 0 0 0 3px var(--bx-green-bg); }
-html[data-blink="1"] .bx-live { box-shadow: 0 0 0 6px transparent; } /* lib/beat.ts */
+.bx-live[data-blink="1"] { box-shadow: 0 0 0 6px transparent; } /* lib/beat.ts */
 
 .bx-section { display: grid; gap: 10px; align-content: start; min-width: 0; }
 .bx-section-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
@@ -492,7 +492,7 @@ html[data-blink="1"] .bx-live { box-shadow: 0 0 0 6px transparent; } /* lib/beat
 /* the live map: the legend of the chats at work (bottom right, beside the piece panel when it is open) */
 .bx-live-dot { display: inline-block; flex: none; width: 8px; height: 8px; margin-right: 6px; border-radius: 50%; background: #ffd166; vertical-align: 1px; }
 .bx-live-dot.run { box-shadow: 0 0 0 0 rgba(255, 209, 102, 0.6); }
-html[data-blink="1"] .bx-live-dot.run { box-shadow: 0 0 0 4px rgba(255, 209, 102, 0.25); } /* lib/beat.ts */
+.bx-live-dot.run[data-blink="1"] { box-shadow: 0 0 0 4px rgba(255, 209, 102, 0.25); } /* lib/beat.ts */
 .bx-map-live { position: absolute; right: 12px; bottom: 18px; z-index: 2; width: 300px; display: grid; gap: 6px; padding: 10px 12px; border-radius: 14px; border: 1px solid rgba(255, 209, 102, 0.28); background: rgba(18, 21, 30, 0.92); backdrop-filter: blur(12px); box-shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.8); }
 .bx-map-live.shifted { right: 364px; }
 .bx-map-live.inline { position: static; width: auto; max-width: 640px; margin-bottom: 12px; box-shadow: none; }

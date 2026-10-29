@@ -13,6 +13,7 @@ import { go, focusChat } from '../actions';
 import { LiveCostList } from './LiveCosts';
 import { useNow } from '../lib/clock';
 import { useApp } from '../store/store';
+import { chatList } from '../lib/chat-derived';
 import { HarnessMark } from './Icons';
 import { Popover } from './ui';
 
@@ -121,7 +122,7 @@ export function UsageBar() {
   const now = useNow(30_000);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLButtonElement>(null);
-  const list = Object.values(chats);
+  const list = chatList(chats);
   const total = liveTotal(usage, list);
   const tip = [
     total ? auditText(total.partial ? 'cmp.usage.todayPartial' : 'cmp.usage.today', { cost: `${total.estimated ? '≈ ' : ''}${formatCost(total.usd)}` }) : auditText('cmp.usage.todayUnavailable'),

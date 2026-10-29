@@ -1,6 +1,7 @@
 // The app data state and its reducer, pure (no DOM, no bridge): main-process events and the initial loads become
 // actions; every update keeps the references of the parts that did not change, so a tile that selects
-// `items[chatId]` re-renders only when its own chat changes (streaming one chat never re-renders the others).
+// `items[chatId]` re-renders only when its own chat changes (streaming one chat never re-renders the others). A chat
+// that closes drops its items (they load again on demand), so a day of archived chats does not stay in memory.
 // Used by store.ts (the live store) and pinned by test/unit/state.test.ts.
 import { chatWindow, CHAT_WINDOW_ITEMS } from '@shared/chat-window';
 import type { AppInfo, BrowserTab, ChatItem, ChatSummary, FeedEvent, ImageAttachment, PendingRequest, Settings, Usage } from '@shared/contract';
@@ -33,7 +34,8 @@ export const initialState: AppState = { ready: false, info: null, usage: null, c
 export type Action =
   | { type: 'init'; chats: ChatSummary[]; pending: PendingRequest[]; tabs: BrowserTab[]; feed: FeedEvent[]; usage: Usage | null; info: AppInfo | null }
   | { type: 'items'; chatId: string; items: ChatItem[] }
-  | { type: 'chat:updated'; chat: ChatSummary }
+  /** keep: the chat's items stay even if it closes now (a close the user can still undo, store.ts closeChat) */
+  | { type: 'chat:updated'; chat: ChatSummary; keep?: boolean }
   | { type: 'chat:removed'; chatId: string }
   | { type: 'chat:item'; chatId: string; item: ChatItem; replace?: boolean }
   | { type: 'pending:added'; req: PendingRequest }
@@ -95,7 +97,11 @@ export function reduce(s: AppState, a: Action): AppState {
       const chat = withLedger(a.chat, s.usage);
       if (prev && shallowEqual(prev, chat)) return s;
       const chats = { ...s.chats, [a.chat.id]: chat };
-      return { ...s, chats, order: prev ? s.order : [...s.order, a.chat.id] };
+      // a chat that just closed lets go of its transcript (main keeps up to 60 archived chats a day): a view that shows a
+      // closed chat loads it on demand (loadItems), a reopened one gets it back (store.ts dispatch)
+      let items = s.items;
+      if (chat.closedAt && !prev?.closedAt && !a.keep && items[a.chat.id]) { const { [a.chat.id]: _, ...rest } = items; items = rest; }
+      return { ...s, chats, items, order: prev ? s.order : [...s.order, a.chat.id] };
     }
     case 'chat:removed': {
       if (!s.chats[a.chatId]) return s;
@@ -108,6 +114,8 @@ export function reduce(s: AppState, a: Action): AppState {
       return { ...s, chats, items, queued, order: s.order.filter(id => id !== a.chatId), pending: s.pending.filter(p => p.chatId !== a.chatId) };
     }
     case 'chat:item': {
+      // a closed chat whose transcript is not held: one item would pass for the whole list (it loads on demand)
+      if (!s.items[a.chatId] && s.chats[a.chatId]?.closedAt) return s;
       let list = s.items[a.chatId] ?? [];
       // the real user message replaces its optimistic copy (id "local:…", same text)
       if (a.item.kind === 'user' && !a.item.id.startsWith('local:')) {

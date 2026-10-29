@@ -3,12 +3,28 @@
 // after the user's own message sticks to that bubble as a small reaction, WhatsApp style. Anywhere else it means "noted,
 // nothing for you" and is not drawn at all (the owner, 2026-10-20: «non deve rispondere un cazzo a un messaggio dell'app
 // che non dice niente»): with it go the app news or mail it answered, the folded work of that turn and its "Turno
-// finito" line, so a turn that had nothing for the user leaves no trace. Pure, so the layout is unit tested. Used by
+// finito" line, so a turn that had nothing for the user leaves no trace. A long transcript draws only its tail
+// (tailStart: the last TAIL_ITEMS items, from a turn's start; «Mostra precedenti» reveals more), so a chat open all day
+// does not lay out and re-render up to 600 rows on every streamed word. Pure, so the layout is unit tested. Used by
 // ChatItems.tsx (ItemListFor).
 import type { ChatItem } from '@shared/contract';
 import { isReaction } from '@shared/reaction';
 import { foreignOf } from './foreign';
 import { toolChatRef } from './chatrefs';
+
+/** The items a transcript draws by default, counted from its end. */
+export const TAIL_ITEMS = 120;
+/** How far past the cut a turn's first message is looked for (the window starts at a turn when it can). */
+const TURN_SLACK = 30;
+
+/** Where the drawn tail of `items` starts for at most `limit` items: 0 = everything; else the first user message
+ *  within TURN_SLACK items after the plain cut (a turn is never cut in half when it can be helped), or the plain cut. */
+export function tailStart(items: readonly ChatItem[], limit: number): number {
+  if (!(items.length > limit)) return 0;
+  const cut = items.length - limit;
+  for (let i = cut, end = Math.min(items.length, cut + TURN_SLACK); i < end; i++) if (items[i]!.kind === 'user') return i;
+  return cut;
+}
 
 export type ViewItem =
   | { kind: 'item'; item: ChatItem; reaction?: string }

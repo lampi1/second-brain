@@ -86,7 +86,7 @@ export function textChatRefs(text: string, index: TitleIndex, exclude: readonly 
 
 // per message: the answer for one titles key and exclusion (a streaming transcript asks again every frame; a finished
 // message keeps its array, so its memoized row does not re-render)
-const cache = new WeakMap<ChatItem, { sig: string; ids: string[] }>();
+const cache = new WeakMap<ChatItem, { key: string; shown: string; ids: string[] }>();
 let lastIndex: { key: string; index: TitleIndex } = { key: '', index: new Map() };
 const EMPTY: string[] = [];
 
@@ -102,9 +102,10 @@ export function chatRefsOf(items: readonly ChatItem[], key: string): ReadonlyMap
     if (it.kind === 'user') shown = [];
     else if (it.kind === 'tool') { const r = toolChatRef(it); if (r) shown = [...shown, r.chatId]; }
     else if (it.kind === 'assistant' && !it.streaming) {
-      const sig = `${key}\n${shown.join(',')}`;
+      // the key (every work chat's title) and what the turn shows compared apart: no long string built per message
+      const seen = shown.join(',');
       let c = cache.get(it);
-      if (!c || c.sig !== sig) { const ids = textChatRefs(it.text, index, shown); c = { sig, ids: ids.length ? ids : EMPTY }; cache.set(it, c); }
+      if (!c || c.key !== key || c.shown !== seen) { const ids = textChatRefs(it.text, index, shown); c = { key, shown: seen, ids: ids.length ? ids : EMPTY }; cache.set(it, c); }
       if (c.ids.length) out.set(it.id, c.ids);
     }
   }

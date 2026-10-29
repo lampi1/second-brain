@@ -4,13 +4,14 @@ import { useEffect } from 'react';
 import { hasDraft } from './ChatInput';
 import { touch } from '../lib/autoclose';
 import { now } from '../lib/clock';
-import { app } from '../store/store';
+import { app, onChatRemoved } from '../store/store';
 import { ui } from '../store/ui';
 import { autoCloseProblem, reportAutoClosePresence } from '../store/auto-close';
 
 let lastPresence = '', lastSentAt = 0;
 let interactionSequence = 0;
 const interactions = new Map<string, number>();
+onChatRemoved(chatId => { interactions.delete(chatId); });
 function report(): void {
   const s = app.get(), u = ui.get();
   if (!s.ready) return;

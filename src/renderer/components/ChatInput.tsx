@@ -29,7 +29,7 @@ import { IMAGES_MAX_TOTAL, type ChatCommand, type ChatSummary, type ImageAttachm
 import { applyCommand, filterCommands, slashQuery } from '../lib/slash';
 import { fullSrc, imageFiles, pasteKind, roomFor, toAttachment } from '../lib/images';
 import { isBusy, type QueuedMsg } from '../store/state';
-import { app, send, sendQueuedNow, unqueue, useApp } from '../store/store';
+import { app, onChatRemoved, send, sendQueuedNow, unqueue, useApp } from '../store/store';
 import { toast } from '../store/ui';
 import { IconBolt, IconBranch, IconSend, IconSpinner, IconX } from './Icons';
 import { ImageStrip } from './ImageStrip';
@@ -101,6 +101,13 @@ function loadCommands(chatId: string, done: (list: ChatCommand[]) => void): void
   if (c && Date.now() - c.at < 30_000) return;
   void window.sb.invoke('chat:commands', { chatId }).then(list => { commandCache.set(chatId, { at: Date.now(), list }); done(list); }, () => { /* no list: the menu stays closed */ });
 }
+
+// a chat that left the app for good takes its draft, images, hooks and caches with it (a draft lives as long as its chat)
+onChatRemoved(chatId => {
+  for (const m of [drafts, draftImages, modeOn] as Map<string, unknown>[]) if (m.has(chatId)) m.delete(chatId);
+  onSentHooks.delete(chatId); freshDrafts.delete(chatId); prewarmAt.delete(chatId); commandCache.delete(chatId);
+  if (readingN.delete(chatId)) changed();
+});
 
 /** The "/" list above the input: the commands matching the typed word; a click picks one. */
 function SlashMenu({ items, sel, onPick, testid }: { items: ChatCommand[]; sel: number; onPick: (c: ChatCommand) => void; testid: string }) {

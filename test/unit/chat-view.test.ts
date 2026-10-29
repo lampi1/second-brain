@@ -1,8 +1,8 @@
 // Tests for lib/chat-view.ts: Orchestrator process rows fold into one group; an emoji-only reply sticks to the user's
-// own message (WhatsApp style) and stands alone anywhere else.
+// own message (WhatsApp style) and stands alone anywhere else; a long transcript draws only its tail, from a turn's start.
 import { describe, expect, it } from 'vitest';
 import type { ChatItem } from '../../src/shared/contract';
-import { chatView } from '../../src/renderer/lib/chat-view';
+import { chatView, tailStart, TAIL_ITEMS } from '../../src/renderer/lib/chat-view';
 
 const user = (id: string, text: string, extra: object = {}) => ({ kind: 'user', id, text, ...extra }) as ChatItem;
 const said = (id: string, text: string, streaming = false) => ({ kind: 'assistant', id, text, streaming }) as ChatItem;
@@ -49,5 +49,24 @@ describe('chatView', () => {
 
   it('does not fold outside an Orchestrator', () => {
     expect(chatView([think('t1'), tool('k1')], { foldProcess: false }).map(r => r.kind)).toEqual(['item', 'item']);
+  });
+});
+
+describe('tailStart: only the tail of a long transcript is drawn', () => {
+  const many = (n: number, userEvery = 0) => Array.from({ length: n }, (_, i) => (userEvery && i % userEvery === 0 ? user(`u${i}`, 'q') : said(`a${i}`, 'r')));
+  it('draws everything up to the limit', () => {
+    expect(tailStart(many(TAIL_ITEMS), TAIL_ITEMS)).toBe(0);
+    expect(tailStart([], TAIL_ITEMS)).toBe(0);
+    expect(tailStart(many(600), Infinity)).toBe(0);
+  });
+  it('starts at the plain cut when no turn starts nearby', () => {
+    expect(tailStart(many(600), TAIL_ITEMS)).toBe(600 - TAIL_ITEMS);
+  });
+  it('starts at the next user message after the cut, so a turn is not cut in half', () => {
+    const items = many(600, 7);
+    const at = tailStart(items, TAIL_ITEMS);
+    expect(at).toBeGreaterThanOrEqual(600 - TAIL_ITEMS);
+    expect(at).toBeLessThan(600 - TAIL_ITEMS + 7);
+    expect(items[at]!.kind).toBe('user');
   });
 });

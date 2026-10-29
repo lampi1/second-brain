@@ -16,6 +16,7 @@ import { sameList } from '../store/state';
 import { activeState, childState, kidCounts, type ChildState, type TreeNode } from '../lib/chat-tree';
 import { runSteps, type RunStep, type StepMark } from '../lib/run-steps';
 import { requestHost } from '../lib/child-requests';
+import { openKidsOf } from '../lib/chat-derived';
 import { focusChat, reqKey } from '../actions';
 import { useNow } from '../lib/clock';
 import { formatCost, modelWithEffort } from '../lib/format';
@@ -50,7 +51,7 @@ export function ChildPill({ state, testid }: { state: ChildState; testid?: strin
   return <span className={`pill pill-${TONE[state]}`} data-testid={testid} data-child-state={state}>{(state === 'run' || state === 'start' || state === 'wait') && <span className="pill-dot" aria-hidden="true" />}{t(`tree.state.${state}`)}</span>;
 }
 
-function useChild(chatId: string) {
+function useChild(chatId: string, open: boolean) {
   const items = useApp(s => s.items[chatId] ?? EMPTY);
   const refused = useApp(s => refusedIn(s.items[chatId]));
   const refusal = useApp(s => lastRefusal(s.items[chatId]));
@@ -58,7 +59,10 @@ function useChild(chatId: string) {
   const reqs = useApp(s => s.pending.filter(p => p.chatId === chatId), sameList);
   const parentTitle = useApp(s => { const p = s.chats[chatId]?.parentId; return p ? s.chats[p]?.title ?? '' : ''; });
   const parent = useApp(s => { const p = s.chats[chatId]?.parentId; const c = p ? s.chats[p] : undefined; return c ? c.agent?.name || c.title : ''; });
-  useEffect(() => { if (!loaded) void loadItems(chatId); }, [chatId, loaded]);
+  // a closed child's transcript is read only when the user opens its card (main re-reads an archived one from disk):
+  // its head, state and result come from its summary
+  const closed = useApp(s => !!s.chats[chatId]?.closedAt);
+  useEffect(() => { if (!loaded && (!closed || open)) void loadItems(chatId); }, [chatId, loaded, closed, open]);
   return { items, refused, refusal, reqs, parent, parentTitle };
 }
 
@@ -166,8 +170,8 @@ function Result({ chat, parent }: { chat: ChatSummary; parent: string }) {
 /** A delegated chat's thread card; expanded, its whole chat under the card's summary. */
 export function DelegationCard({ chatId }: { chatId: string }) {
   const chat = useApp(s => s.chats[chatId]);
-  const c = useChild(chatId);
   const open = ui.use(s => s.prefs.chatExpanded[chatId] === true);
+  const c = useChild(chatId, open);
   // the question shows on the card only when no open chat holds it (lib/child-requests.ts requestHost: once on screen)
   const expandedAll = ui.use(s => s.prefs.chatExpanded), focusModeId = ui.use(s => s.focusMode), maxKey = ui.use(s => s.maximized);
   const treeCollapsed = ui.use(s => s.prefs.treeCollapsed);
@@ -221,11 +225,17 @@ export function DelegationCard({ chatId }: { chatId: string }) {
   </article>;
 }
 
+const sameAvatar = (a: ChatSummary['agent'], b: ChatSummary['agent']) => a?.avatar === b?.avatar || (!!a?.avatar && !!b?.avatar && a.avatar.kind === b.avatar.kind && a.avatar.value === b.avatar.value);
+const sameKids = (a: readonly ChatSummary[], b: readonly ChatSummary[]) => a === b || (a.length === b.length && a.every((k, i) => {
+  const o = b[i]!;
+  return k === o || (k.id === o.id && childState(k) === childState(o) && k.agent?.name === o.agent?.name && sameAvatar(k.agent, o.agent));
+}));
+
 /** The parent's summary of its children, at the foot of its strip: counts by state, their characters, one segment each,
  *  and the fold (kept across restarts); the limit it hit, when it did. */
 export function KidsBar({ chatId }: { chatId: string }) {
-  const kids = useApp(s => Object.values(s.chats).filter((c): c is ChatSummary => !!c && c.parentId === chatId && !c.closedAt)
-    .sort((a, b) => (a.delegation?.at ?? 0) - (b.delegation?.at ?? 0)), (a, b) => JSON.stringify(a.map(k => [k.id, childState(k), k.agent?.avatar, k.agent?.name])) === JSON.stringify(b.map(k => [k.id, childState(k), k.agent?.avatar, k.agent?.name])));
+  // once per chats object for every bar (lib/chat-derived.ts); re-renders only when what it shows changed
+  const kids = useApp(s => openKidsOf(s.chats, chatId), sameKids);
   const folded = ui.use(s => s.prefs.treeCollapsed[chatId] === true);
   const title = useApp(s => s.chats[chatId]?.title ?? '');
   const limit = useApp(s => s.chats[chatId]?.limitHit);

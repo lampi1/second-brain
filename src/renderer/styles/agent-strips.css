@@ -30,7 +30,8 @@
 .chat-work-inner { display:flex; flex-direction:column; overflow:hidden; min-height:0; }
 .chat-transcript { display:flex; flex-direction:column; flex:1; min-height:0; min-width:0; contain:layout paint; }
 .chat-work.expanded .items-wrap { min-height:0; flex:1; }
-.chat-work:not(.expanded) .chat-work-inner { visibility:hidden; }
+.chat-work:not(.expanded) .chat-work-inner { visibility:hidden; content-visibility:hidden; } /* a collapsed strip keeps its DOM, scroll and draft, but its transcript costs no style, layout or paint */
+.chat-work:not(.expanded) .spin { animation-play-state:paused; }
 .chat-expand { white-space:nowrap; }
 .chat-tile.is-strip .tile-requests { max-height:180px; overflow:auto; }
 .workspace,.workspace.no-orchestrator { padding-top:calc(var(--gap) + var(--orchestrator-t,0px)); }
