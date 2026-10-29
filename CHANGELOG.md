@@ -6,6 +6,15 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- Solid app and effective maintenance (ADR 0192-0200): logs carry a run and step id, interface errors are logged and a
+  page that fails shows «Ricarica la pagina» instead of emptying the app, a 90-day daily digest feeds Manutenzione;
+  Proposte apply by themselves in a group after 11 yes in a row (never production, permissions, settings, hooks, scripts,
+  external texts, issues, removals or reverts), with «Applicate da sole» and Annulla; maintenance changes go line by
+  line, a zero-token brain lint, «riuscito se…» checked a week later, one candidate brain card with a diff per file, a
+  role text proposed as a trial; the Guida marks stale cards, answers questions and draws diagrams from the code;
+  Qualità counts the corrections you actually made; kind of work by examples and estimates with every judgment; agent
+  runs in SQLite (userData/app.db); TypeScript 7 typecheck (~4 s); e2e read against known reds; AGENTS.md as a map;
+  the four shared files split by area.
 - Impara tutor and entry points (ADR 0190): «Domanda» opens a tutor beside the lesson that answers word by word in
   seconds from the verified facts (typed, spoken or by clicking the diagram), lets you try first unless you say «Dimmelo
   e basta», and turns what it explains into review cards; «Capiscila» on Task PRs and work items, «Spiegamelo» in
