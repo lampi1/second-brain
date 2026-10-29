@@ -634,6 +634,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
         '"Tasks" reads your PRs, reviews, work items and mentions with the devops-me.mjs reader: the one shipped with the app, or the brain’s own when it has one; read-only, zero tokens.'),
       b('La lettura parte con «Aggiorna ora» o da sola, ogni 15 minuti fino a 2 ore, se accendi la lettura automatica; una menzione ti avvisa con un suono che puoi spegnere.',
         'The read starts with "Refresh now" or by itself, every 15 minutes up to 2 hours, when the automatic read is on; a mention alerts you with a sound you can turn off.'),
+      b('Ogni notizia, PR, review o work item è una striscia a sinistra; a destra c’è il dettaglio di quella scelta. «Per te» raccoglie quello che aspetta te; J e K scorrono, E segna letta.',
+        'Every news, PR, review or work item is a strip on the left; the selected one’s detail is on the right. "For you" gathers what waits for you; J and K move, E marks read.'),
       b('Ogni record ha «Discuti»: l’Orchestrator riceve una bozza con titolo, link, stato e cartella; se serve lavoro, è lui ad aprire e istruire la chat.',
         'Every record has "Discuss": the Orchestrator gets a draft with title, link, state and folder; if work is needed, it opens and briefs the chat itself.'),
       // src/renderer/brain/pages/TaskQa.tsx
