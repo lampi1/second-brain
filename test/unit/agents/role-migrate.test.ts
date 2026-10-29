@@ -53,14 +53,16 @@ describe('full default permissions (ADR 0085)', () => {
     const get = (id: string) => after.find(p => p.id === id)!;
     for (const id of ROLE_IDS.filter(r => r !== 'scout')) {
       expect([id, [...get(id).tools!.allow].sort(), get(id).permissionCeiling]).toEqual([id, [...TOOL_CLASSES].sort(), null]);
-      expect(get(id)).toMatchObject({ version: 2, activeVersion: 2, lastEditedBy: 'default', userLocked: false, launches: ROLE_DEFAULTS[id].launches });
+      expect(get(id)).toMatchObject({ version: 1, activeVersion: 1, lastEditedBy: 'default', userLocked: false, launches: ROLE_DEFAULTS[id].launches });
     }
     expect(get('strategist').instructions).toBe(ROLE_DEFAULTS.strategist.instructions);
     expect(get('orchestrator').instructions).toBe(ROLE_DEFAULTS.orchestrator.instructions);
     expect(get('sentinel').instructions).toBe('Sentinel with a learned lesson.');
     expect(get('scout')).toMatchObject({ version: 1, tools: { allow: ['read', 'web'] }, permissionCeiling: 'default', userLocked: true });
     const history = make().history('artisan');
-    expect(history.find(v => v.version === 2)).toMatchObject({ version: 2, author: 'default', reason: 'Permessi completi predefiniti (ADR 0085)' });
+    // in place (ADR 0186): the migration is a note on version 1, not a version of its own
+    expect(history).toHaveLength(1);
+    expect(history[0]!.amended).toEqual([expect.objectContaining({ by: 'default', reason: 'Permessi completi predefiniti (ADR 0085)' })]);
     // a second start changes nothing
     expect(make().list().profiles.map(p => p.version)).toEqual(after.map(p => p.version));
   });

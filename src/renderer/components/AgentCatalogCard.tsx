@@ -1,7 +1,7 @@
 // Role card of the Agenti catalogue (AgentCatalogPage): on the front the character large and centred, its name and what
 // it is for, engine and model tier («Modello: alto»), a live status, its level (from the XP of its verified successful runs, ADR 0131,
 // shown beside it: «Lv 7 Praticante · 124 XP», ADR 0100) and performance % (a Bayesian estimate of the verdicts weighted by trust and
-// recency, with its ±, the agent's own word excluded, with the verdicts it rests on; main/agents/standing.ts), each with a "?" giving the formula, and three compact run metrics; a click anywhere on the card flips it in 3D (#81)
+// recency, with its ±, the agent's own word excluded, with the verdicts it rests on; main/agents/standing.ts), each with a "?" giving the formula, and four compact run metrics (the success rate among them: verified verdicts only, shared/success.ts, ADR 0186); a click anywhere on the card flips it in 3D (#81)
 // to the back: the role's instructions, the skills it loads at every launch, its memory, its permissions («Tutto consentito» or how
 // far the user narrowed it, with "Modifica permessi" to its permissions card, where its MCP servers are too, ADR 0085,
 // 0086), the run facts, its costs (median per run, per verified success, over how many runs: the only per-agent costs in
@@ -13,6 +13,8 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { completedRuns, type AgentMetrics, type AgentProfile, type AgentStanding } from '@shared/agents';
 import { characterOf } from '@shared/characters';
+import { PULSE_ID } from '@shared/roles';
+import { MIN_SUCCESS_SAMPLE, enoughVerdicts } from '@shared/success';
 import { characterTone } from '../lib/character-art';
 import type { MemoryFile } from '@shared/brain-model';
 import { locale, t } from '../i18n';
@@ -31,13 +33,15 @@ export function useWorkingChats(agentId: string): number {
   return useApp(s => Object.values(s.chats).filter(c => c.agent?.id === agentId && !c.closedAt && isBusy(c)).length);
 }
 
-type Value = { text: string | null; samples?: string };
+/** note: a short visible line under the value (the success under its sample: how many of the verdicts it needs) */
+type Value = { text: string | null; samples?: string; note?: string };
 
-function Metric({ label, full, value, unknown, help }: { label: string; full: string; value: Value; unknown: string; help?: ReactNode }) {
+function Metric({ label, full, value, unknown, help, testid }: { label: string; full: string; value: Value; unknown: string; help?: ReactNode; testid?: string }) {
   const tip = [full, value.text ?? unknown, value.samples].filter(Boolean).join(' · ');
-  return <div title={tip}>
+  return <div title={tip} data-testid={testid}>
     <dt>{label}{help}</dt>
     <dd>{value.text ?? <><span aria-hidden="true">—</span><span className="sr-only">{unknown}</span></>}</dd>
+    {value.note && <small className="catalog-stat-note" data-testid={testid ? `${testid}-note` : undefined}>{value.note}</small>}
   </div>;
 }
 
@@ -135,7 +139,9 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
     window.addEventListener('keydown', esc, true);
     return () => window.removeEventListener('keydown', esc, true);
   }, [flipped]);
-  const stats = metrics?.all, standing = loaded ? metrics?.standing ?? NONE : null;
+  // Pulse (Battito) is a background job: no level nor performance (ADR 0186)
+  const rated = profile.id !== PULSE_ID;
+  const stats = metrics?.all, standing = loaded && rated ? metrics?.standing ?? NONE : null;
   const ended = loaded ? completedRuns(metrics) : null;
   const open = loaded ? metrics?.open ?? 0 : null;
   const unknown = t('catalog.unknown');
@@ -144,7 +150,10 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
   const values: Record<'runs' | 'open' | 'success' | 'cost', Value> = {
     runs: { text: ended?.toLocaleString(locale()) ?? null },
     open: { text: open?.toLocaleString(locale()) ?? null },
-    success: { text: rate?.value != null ? pct(rate.value) : null, samples: sample(rate?.n ?? 0) },
+    // the one success definition (ADR 0186): verified verdicts only; under MIN_SUCCESS_SAMPLE the count, «troppo pochi»
+    success: !loaded || !rate?.n || rate.value === null ? { text: null, samples: sample(rate?.n ?? 0) }
+      : enoughVerdicts(rate) ? { text: pct(rate.value), samples: sample(rate.n) }
+      : { text: null, samples: t('agentsGrid.successFew', { n: rate.n, min: MIN_SUCCESS_SAMPLE }), note: t('agentsGrid.successNote', { n: rate.n, min: MIN_SUCCESS_SAMPLE }) },
     cost: { text: cost?.value != null ? formatCost(cost.value) : null, samples: sample(cost?.n ?? 0) },
   };
   const trial = !!profile.trial;
@@ -178,10 +187,12 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
           <span className="catalog-chip" data-kind="model" title={profile.model ?? tier}>{profile.model ?? tier}</span>
           <span className="catalog-chip" data-kind="skills">{t('bm.map.agentSkills', { n: skills.length })}</span>
         </div>
-        <Standing id={profile.id} standing={standing} />
+        {rated && <Standing id={profile.id} standing={standing} />}
         <dl className="catalog-stats">
           <Metric label={t('agentsGrid.runs')} full={t('catalog.runs')} value={values.runs} unknown={unknown} />
           <Metric label={t('agentsGrid.open')} full={t('catalog.open')} value={values.open} unknown={unknown} />
+          <Metric label={t('agentsGrid.success')} full={t('catalog.success')} value={values.success} unknown={unknown} testid={`catalog-success-${profile.id}`}
+            help={<HelpTip label={t('catalog.success')} testid={`catalog-success-help-${profile.id}`}>{t('agentsGrid.successHelp', { min: MIN_SUCCESS_SAMPLE })}</HelpTip>} />
           <Metric label={t('agentsGrid.cost')} full={t('catalog.cost')} value={values.cost} unknown={unknown}
             help={<HelpTip label={t('catalog.cost')} testid={`catalog-cost-help-${profile.id}`}>{t('agentsGrid.costHelp')}</HelpTip>} />
         </dl>
@@ -209,7 +220,6 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
           <div><dt>{t('bm.card.memory')}</dt><dd>{memory?.entries ? t('bm.mem.entries', { n: memory.entries }) : t('bm.card.memoryNone')}</dd></div>
           <div><dt>{t('catalog.engine')}</dt><dd>{engine} · {profile.model ?? tier}</dd></div>
           <div><dt>{t('agentDetail.version')}</dt><dd>{origin} · v{profile.activeVersion}</dd></div>
-          <div><dt>{t('catalog.success')}</dt><dd>{values.success.text ?? unknown} <small>{values.success.samples}</small></dd></div>
           <div><dt>{t('catalog.last')}</dt><dd>{last}</dd></div>
         </dl>
         <Costs id={profile.id} metrics={stats} wins={standing?.wins ?? null} loaded={loaded} />

@@ -46,8 +46,8 @@ export interface ChatService {
   spokenNext?(chatId: string, text: string | null): void;
   /** the user typed this in the chat himself (chat:send only): the Orchestrator and the chat's parent learn it (ADR 0083) */
   userWrote?(chatId: string, text: string): void;
-  /** the agent metrics (AGENTS-DESIGN §5, A6); aiErrors = the brain's ai-errors.md text */
-  runMetrics?(opts?: { aiErrors?: string; since?: number; skill?: string; app?: string; repo?: string }): AgentMetrics[];
+  /** the agent metrics (AGENTS-DESIGN §5, A6) */
+  runMetrics?(opts?: { since?: number; skill?: string; app?: string; repo?: string }): AgentMetrics[];
   /** Explicit user verdict from renderer IPC only; never exposed through agent tools. */
   markRun?(chatId: string, verdict: AgentRunOutcome['verdict'], note?: string): ChatSummary;
   /** a "Comando da eseguire" request was opened in this chat (run/asks.ts): its agent run counts it once (A5) */

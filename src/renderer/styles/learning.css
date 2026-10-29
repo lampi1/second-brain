@@ -36,3 +36,4 @@
 .lr-chip:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .lr-note{max-width:90ch;margin-top:22px}
 .lr-worse .bm-changes{background:var(--surface)}.lr-worse .bm-change{background:var(--surface)}
+.lr-lessons .bm-note{margin-top:10px}

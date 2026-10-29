@@ -148,7 +148,7 @@ describe('"Nuova chat" through the table (2026-10-14)', () => {
     expect(made[1]).not.toHaveProperty('worktree');
   });
 
-  it('started by the user: no cap on the first message, no dice roll, the picked permission mode kept on the routed engine', async () => {
+  it('started by the user: no cap on the first message, the picked permission mode kept on the routed engine', async () => {
     const { d, made } = deps();
     const asked: RouteRequest[] = [];
     const spy = { ...d, route: (r: RouteRequest) => { asked.push(r); return d.route(r); } };
@@ -157,6 +157,5 @@ describe('"Nuova chat" through the table (2026-10-14)', () => {
     // the defaults say Cursor, the table says Claude: the plan mode picked on the Claude the dialog showed stays
     await createRoutedChat(spy, base({ prompt: long, defaults: { harness: 'cursor' }, permissionMode: 'plan' }), { byUser: true });
     expect(made[0]).toMatchObject({ harness: 'claude', permissionMode: 'plan' });
-    expect(asked.at(-1)).toHaveProperty('counts', undefined);
   });
 });

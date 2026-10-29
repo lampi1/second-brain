@@ -453,7 +453,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     {
       name: 'app_create_chat',
-      description: 'Delegate: create a work chat that runs one role (roleId, from agent_catalog) and start it with a self-contained prompt. Fast path first (task_estimate): a short question needs no chat; a quick one-part job is ONE chat that works alone; only several independent parts get a plan. The answer carries the estimate from similar past tasks; it shows under you in the sidebar tree and reports back to you. Never an Orchestrator: only the user picks it. Title "Area · cosa". The role decides engine, model and effort (its tier; `tier` asks a higher one up to the role\'s tierMax); nothing overrides it. `skills` = the brain skills the chat may use (skills_suggest ranks them; without a skill the role cannot use it; `warnings` in the answer names a skill that needs tools the role lacks). Its permissions are its role\'s (tools, ceiling) within the user\'s defaults, not yours: you plan, the chat does the work. reviewOf / reworkOf = the run it reviews or redoes; goal = the run\'s goal. The chat starts in the brain folder unless cwd is given (pick the repo or worktree from the task). The prompt is labelled as written by an agent.',
+      description: 'Delegate: create a work chat that runs one role (roleId, from agent_catalog) and start it with a self-contained prompt. Fast path first (task_estimate): a short question needs no chat; a quick one-part job is ONE chat that works alone; only several independent parts get a plan. The answer carries the estimate from similar past tasks; it shows under you in the sidebar tree and reports back to you. Never an Orchestrator: only the user picks it. Title "Area · cosa". The role decides engine, model and effort (its tier; `tier` asks a higher one up to the role\'s tierMax); nothing overrides it. `skills` = the brain skills the chat may use (their SKILL.md names; without a skill the role cannot use it; `warnings` in the answer names a skill that needs tools the role lacks). Its permissions are its role\'s (tools, ceiling) within the user\'s defaults, not yours: you plan, the chat does the work. reviewOf / reworkOf = the run it reviews or redoes; goal = the run\'s goal. The chat starts in the brain folder unless cwd is given (pick the repo or worktree from the task). The prompt is labelled as written by an agent.',
       inputSchema: obj({
         title: { ...str('"Area · cosa", e.g. "Ordini · Fix totale"'), maxLength: CHAT_TITLE_MAX }, prompt: { ...str(`what the chat must do: goal, inputs, constraints, the expected output; at most ${CHAT_PROMPT_MAX} characters`), maxLength: CHAT_PROMPT_MAX },
         roleId: { type: 'string', enum: ROLE_IDS.filter(r => r !== 'orchestrator'), description: 'the role the chat runs (agent_catalog)' },
@@ -461,7 +461,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         doneWhen: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 300 } },
         deliveryPolicy: { type: 'string', enum: ['display', 'notify', 'synthesize'], description: 'display expands the full result without AI; notify also adds quiet news; synthesize requests an AI integration turn' },
         tier: { type: 'string', enum: [...MODEL_TIERS], description: 'optional model tier, at most the role\'s tierMax; omitted = the role\'s own' },
-        skills: { type: 'array', items: { type: 'string' }, maxItems: 16, description: 'the brain skills this chat may use (names from skills_suggest)' },
+        skills: { type: 'array', items: { type: 'string' }, maxItems: 16, description: 'the brain skills this chat may use (their SKILL.md names)' },
         reviewOf: str('Run being reviewed'), reworkOf: str('Run being reworked'), goal: str('Run goal, up to 2000 characters'),
         kind: str(`optional kind of task: ${TASK_KINDS.join(' | ')}; omitted: read from title and prompt`),
         cwd: str('optional absolute folder (repo or worktree); default: the brain folder'),
@@ -519,7 +519,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (typeof a.roleId !== 'string' || !isWorkRole(a.roleId)) throw new Error(`roleId required: ${ROLE_IDS.filter(r => r !== 'orchestrator').join(' | ')} (agent_catalog).`);
         if (a.tier !== undefined && !(MODEL_TIERS as readonly unknown[]).includes(a.tier)) throw new Error(`tier: ${MODEL_TIERS.join(' | ')}`);
         const skills = a.skills === undefined ? [] : Array.isArray(a.skills) && a.skills.length <= 16 && a.skills.every(x => typeof x === 'string' && /^[a-z0-9][a-z0-9_-]{0,79}$/.test(x)) ? [...new Set(a.skills as string[])] : null;
-        if (!skills) throw new Error('skills: up to 16 skill names (skills_suggest).');
+        if (!skills) throw new Error('skills: up to 16 skill names (SKILL.md names).');
         if (!d.resolveRole || !d.agents) throw new Error('Catalogo dei ruoli non disponibile.');
         // the caller is the Orchestrator (the only chat given these tools), on any engine: a chat on another engine spends that
         // engine's tokens, so it starts only when the user allows chats across engines (engines/policy.ts)
@@ -582,7 +582,8 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (typeof a.cwd !== 'string' || !path.isAbsolute(a.cwd) || path.resolve(a.cwd) !== path.resolve(target.cwd)) throw new ToolRefusal('Project changed: create a fresh chat.');
         if (!d.agents) throw new Error('app_assign_task: the role catalog is not available.');
         const profile = d.agents().profiles.find(p => p.id === a.roleId);
-        if (!profile || profile.activeVersion !== target.agent.version) throw new ToolRefusal('Role configuration changed: create a fresh chat.');
+        // the revision too: tools, permissions and limits change the version in use in place (ADR 0186)
+        if (!profile || profile.activeVersion !== target.agent.version || profile.updatedAt !== target.agent.revision) throw new ToolRefusal('Role configuration changed: create a fresh chat.');
         if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || !Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1) throw new ToolRefusal('Invalid assignment mode/version.');
         const prompt = typeof a.prompt === 'string' ? a.prompt.trim() : '';
         if (!prompt) throw new Error('prompt: required');
@@ -666,7 +667,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     {
       name: 'app_routing',
-      description: 'The model routing table in force: the defaults for chats started without an agent (Generale) and the model a profile without one takes (ADR 0078; an agent\'s own profile always decides). Rows: kind, area, model, effort, why; exploration rate; the models it may pick, the rule for the app\'s chats, and its last changes (who, when, why, with what data). Read it before app_routing_save.',
+      description: 'The model routing table in force: the defaults for chats started without an agent (Generale) and the model a profile without one takes (ADR 0078; an agent\'s own profile always decides). Rows: kind, area, model, effort, why; the models it may pick, the rule for the app\'s chats, and its last changes (who, when, why, with what data). Read it before app_routing_save.',
       inputSchema: obj(),
       run: () => {
         const i = d.brain.routingInfo();
@@ -681,7 +682,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       inputSchema: obj({
         routes: { type: 'array', description: 'every row: { kind (task kind or "*"), area? (string or list), harness, model, effort (or null), why, since?, evidence? }', items: { type: 'object' } },
         // the cost weight (costWeight) is the user's: not a parameter, a save keeps it
-        exploration: num('optional share of chats that try a little-sampled model of the same engine, 0 to 0.5; omitted = unchanged'),
         reason: str('why this change (shown to the user in the table\'s history)'),
         evidence: str('the data behind it: outcomes, costs, counts, the ledger lines you read'),
         baseVersion: num('the table version you read with app_routing: refused when another version is in force since (reload, redo the change)'),
@@ -692,9 +692,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (!Array.isArray(a.routes)) throw new Error('routes: la tabella intera (vedi app_routing)');
         if (!Number.isInteger(a.baseVersion)) throw new Error('baseVersion: la versione letta con app_routing');
         const who = caller()?.title ?? 'Orchestrator';
-        const i = d.brain.saveRouting(a.routes as RoutingRow[], reason, { ...(a.exploration === undefined || a.exploration === null ? {} : { exploration: Number(a.exploration) }), by: `agente: ${who}`, evidence, base: a.baseVersion as number });
+        const i = d.brain.saveRouting(a.routes as RoutingRow[], reason, { by: `agente: ${who}`, evidence, base: a.baseVersion as number });
         log.info('appctl', 'agent saved the routing table', { data: { version: i.table?.version ?? null, by: who, reason } });
-        return { version: i.table?.version ?? null, exploration: i.table?.exploration ?? null, rows: i.table?.routes.length ?? 0 };
+        return { version: i.table?.version ?? null, rows: i.table?.routes.length ?? 0 };
       },
     },
   ];

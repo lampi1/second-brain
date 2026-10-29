@@ -24,13 +24,11 @@ import { estimateRecords } from './activity/records';
 import { logEvent } from './activity/journal';
 import { reviewPack } from './agents/review-pack';
 import { estimateLine } from '../shared/task-estimate';
-import { agentCatalogTool, CATALOG_GUIDANCE, roleCatalogBrief, skillsSuggestTool } from './agents/discovery';
-import { SkillSuggester } from './skills/suggest';
+import { agentCatalogTool, CATALOG_GUIDANCE, roleCatalogBrief } from './agents/discovery';
 import { SetupService } from './agents/setup';
 import { uiLang } from './locale';
 import { AutoCloseService, autoCloseNow } from './chats/auto-close';
 import { readLocal, writeLocal } from './agents/local-store';
-import { ProgressService } from './agents/progress';
 import { mountLifecycleApi, type LifecycleApi } from './agents/lifecycle-api';
 import { maintenanceEvent, proposalEvent } from './brain/announce';
 import { MorningService } from './morning/service';
@@ -44,7 +42,6 @@ import { memoryTools } from './rules/memory-tool';
 import { MemoryService } from './rules/memory-service';
 import { writeAgentMemory } from './rules/memory';
 import type { AgentRun } from '../shared/agents';
-import type { SkillSuggestions } from '../shared/skill-suggest';
 import { mountTextTool, TEXT_ENV } from './engines/text-mcp';
 import { agentsMayOpen, crossRefusal, engineOn, openRefusal } from './engines/policy';
 import { checkedDelegation } from '../shared/roles';
@@ -155,14 +152,11 @@ export interface Wired {
   queries?: BrainQueries;
   /** the hybrid brain search (SPEC 23); absent in the demo (Ctrl+K then uses its own index) */
   hybrid?: HybridSearch;
-  /** the brain skills that fit a request, best first (skills/suggest.ts) */
   workflows?: Workflows;
   routineArchive?: LegacyArchive;
   /** the Routine section's packages and runs (routines:* IPC); absent in the demo */
   routines?: Routines;
-  suggestSkills?: (request: string) => Promise<SkillSuggestions>;
   updateChats?: { problem: () => string | null; checkpoint: () => void };
-  progress: ProgressService;
   autoClose: AutoCloseService;
   agents: AgentCatalogService;
   agentPacks: ReturnType<typeof createAgentPacks>;
@@ -460,8 +454,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     visible: () => { const w = ctx.window(); return !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized(); },
   });
   cloud.startPolling();
-  // Retired personal milestones: keep legacy IPC read-only and preserve the existing progress file.
-  const progressService = new ProgressService(ctx.userData, { enabled: false, chats: () => [] });
   // live turn costs and the Claude model list at the brain's per-model list prices (harness/models.json, else the
   // release template's), re-read at most every 30 s; set before the catalog reads its models (issue #96)
   setPriceTable(priceTableSource(() => brain.routingInfo().registry, () => { try { return path.join(templateRoot(), 'harness', 'models.json'); } catch { return null; } }));
@@ -470,17 +462,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // renderer (issue #96: the role editor showed the startup snapshot). Tests never run installed vendors.
   if (!process.env.SB_TEST) void engineStatuses().then(all => { cliCache = all; agents.refresh(); ctx.emitter.emit('cli:ready', all); });
   brain.onSettingChange(c => { if (c.key === 'brainRoot' || c.key.startsWith('engineOn.') || c.key === 'orchestratorChats.harness' || c.key.startsWith('modelTiers.')) agents.refresh(); });
-  // skills_suggest: the brain's skills that fit a request, on the search's own HybridSearch (one worker and one model for
-  // search, recall, corrections and skill suggestions); the skills are read when asked (the Brain pages' reader)
+  // the Brain pages' reader, set once they are built (the skills a role's tools need)
   const brainModelRef: { current?: BrainModelService } = {};
   const researchRef: { current?: ResearchService } = {};
-  const suggester = new SkillSuggester(hybrid);
-  const suggestSkills = (request: string): Promise<SkillSuggestions> => suggester.suggest(request, brainModelRef.current?.skillList() ?? [], manager.runs.list());
   const agentPacks = createAgentPacks(ctx.userData, brain, agents);
   const memoryReview = new MemoryService({ root: () => agentPacks.packs.root(), embed: (texts, mode) => hybrid.embed(texts, mode), invalidate: async () => { if (!await hybrid.sync()) throw new Error('Memory changed, but search invalidation is pending. Retry before continuing.'); } });
   // agent_learn_propose on a work chat's endpoint: only its own role's lessons, queued for the Orchestrator and the user
   const skillTools = () => brainModelRef.current?.skillTools() ?? [];
-  addChatTools([agentCatalogTool(() => agents.list(), skillTools), skillsSuggestTool(suggestSkills), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool(async (q, o) => { await memoryReview.retryInvalidations(); return hybrid.query(q, o); }), brainScriptsTool(brainScripts), brainQueriesTool(brainQueries)]);
+  addChatTools([agentCatalogTool(() => agents.list(), skillTools), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool(async (q, o) => { await memoryReview.retryInvalidations(); return hybrid.query(q, o); }), brainScriptsTool(brainScripts), brainQueriesTool(brainQueries)]);
   addChatTools(memoryTools({ root: () => agentPacks.packs.root(), recall: (scope, query, options) => memoryReview.recall(scope, query, options), context: chatId => {
     const chat = manager.list().find(c => c.id === chatId);
     if (!chat || chat.agent?.source !== 'catalog' || chat.isOrchestrator || !chat.run) return null;
@@ -513,7 +502,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     prepareDelegation: delegateWorktrees.prepare,
     freshSessions: () => true,
     continuationContext: chatId => workflowsRef ? JSON.stringify(workflowsRef.list().filter(row => row.chatIds.includes(chatId))) : null,
-    suggestSkills: async goal => (await suggestSkills(goal)).candidates.map(c => c.name),
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     worktrees: gitWorktrees,
     resolveAgent: req => {
@@ -586,7 +574,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
         ...(info.sessionId ? { id: `${info.harness}:${info.sessionId}` } : {}), harness: info.harness, model: info.model, effort: info.effort,
         ...(job.prompt ? { prompt: job.prompt } : {}),
         // minutes = real work time (running, not waiting for the user's answers), the same the tile shows
-        actual: { usd: job.usd, minutes: Math.round(manager.workMs(info.chatId) / 6000) / 10, minutesKind: 'work', tokensIn: null, tokensOut: null, turns: job.turns },
+        actual: { usd: job.usd, minutes: Math.round(manager.workMs(info.chatId) / 6000) / 10, minutesKind: 'work', turns: job.turns },
       });
       // a chat an agent routed (app_create_chat): its prediction once, then its measured actuals at every turn end, in
       // the improvement loop's ledger (ops/state/improve/outcomes.jsonl; the same id, later line wins; ADR 0032)
@@ -920,7 +908,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the Brain pages (ADR 0077): skills and their agents, rules, memory; maintenance jobs with a change log and undo
   const brainModel = new BrainModelService({ userData: ctx.userData, root: () => brain.info().brainRoot, home: process.env.SB_SKILLS_HOME || os.homedir(),
     catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), runsRevision: () => manager.runs.revision, routing: () => brain.routingInfo(),
-    suggestSkills: async text => (await suggestSkills(text)).candidates.map(c => c.name),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: !process.env.SB_TEST || process.env.SB_BRAIN_JOBS === '1',
     // the Memoria hub's trash (ADR 0122): a script's file, and the Script tab told at once
     scripts: { file: id => brainScripts.get(id).path, changed: () => { brainScripts.invalidate(); ctx.emitter.emit('scripts:changed', undefined); } },
@@ -932,6 +919,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     findings: logs => researchRef.current?.afterPass(logs) ?? { bugs: 0, forget: 0 },
     // a pass the app ran by itself: a quiet feed event with Annulla (ADR 0102)
     applied: changes => { const e = maintenanceEvent(changes); if (e) brain.publish([e]); } });
+  // its cached state (ADR 0186) is read again after whatever the Brain pages refresh on
+  ctx.emitter.tap(ch => { if (ch === 'brainmodel:changed' || ch === 'agents:changed') brainModel.invalidate(); });
   brainModelRef.current = brainModel;
   // the one-click maintenance (ADR 0132, 0153): the free cleanup, the invisible research chat, its cards in Proposte
   const issuesUrl = issuesUrlOf(app.getAppPath()), appIssuesUrl = () => issuesUrl;
@@ -989,7 +978,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     workflows, routineArchive, routines, brainModel, research, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
-    cloud, chats, browser, personal, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,
+    cloud, chats, browser, personal, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

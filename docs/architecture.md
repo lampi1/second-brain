@@ -72,7 +72,7 @@
   successor wherever stored data names them (catalog load, launches, chat owners, delegations, packs; their MCP access
   entries are dropped). `shared/run-verdict.ts` computes a run's verdict from facts on read (agent_report done with every
   criterion met, no correction, no rework within 7 days; provisional until then): verified evidence for
-  `run-metrics.ts`, `trials.ts`, `suggestions.ts`, `skills/suggest.ts` and `agents/standing.ts`, whose level counts
+  `run-metrics.ts`, `trials.ts`, `suggestions.ts` and `agents/standing.ts`, whose level counts
   only verified successes (`AgentStanding.wins`) and whose performance gives the agent's own word no weight.
 - **The task estimate** (ADR 0087): `agents/task-estimate.ts` groups the ended agent runs by agent × kind (the keyword
   classifier of `brain/estimates.ts` on the run's goal), kind, agent; a request takes the median of the first group with
@@ -125,7 +125,7 @@
 - API key ciphertext and masks are in `userData/secrets.json`, protected by the OS-backed Electron secret store;
   main decrypts a key when its engine needs it. This is separate from unencrypted API conversation history.
 - Agent profiles, frozen chat owners and their instructions, and local setup preferences are private profile data
-  (`agents.json`, `chats.json`, `setup.json`). Local milestones store only achievement IDs, dates and visibility.
+  (`agents.json`, `chats.json`, `setup.json`).
   Browser sign-in/password hand-offs follow their explicit user-action flow; profile backups must be treated as private.
 - Every record has an `id`; owner fields can be added for the team horizon (`VISION.md`) without breaking shapes.
 

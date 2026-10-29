@@ -253,7 +253,6 @@ app.whenReady().then(async () => {
     },
     // the first setup's new memory, in the app's data folder (the only way the app creates one)
     'app:createBrain': a => defaultBrain.ensure(a?.language, a?.harness),
-    'progress:get': () => s.progress.get(),
     'chat:autoCloseGet': () => { s.autoClose.refresh(); return s.autoClose.state(); },
     'chat:autoClosePresence': a => s.autoClose.setPresence(Array.isArray(a?.holds) ? a.holds : []),
     'chat:autoCloseKeep': a => { if (typeof a?.chatId !== 'string' || typeof a.keep !== 'boolean') throw new Error('Richiesta non valida.'); s.autoClose.keepOpen(a.chatId, a.keep); },
@@ -301,12 +300,9 @@ app.whenReady().then(async () => {
     'agents:history': a => s.agents.history(a.id),
     'run:outcome': a => markRunOutcome(s.chats, a),
     'agents:metrics': a => {
-      const root = demo ? null : s.brain.info().brainRoot;
-      let aiErrors: string | undefined;
-      try { if (root) aiErrors = fs.readFileSync(path.join(root, 'ai-errors.md'), 'utf8'); } catch { aiErrors = undefined; }
       const tag = (v: unknown) => typeof v === 'string' && v.length <= 120 ? v : undefined;
       const skill = tag(a?.skill), app = tag(a?.app), repo = tag(a?.repo);
-      return s.chats.runMetrics?.({ ...(aiErrors !== undefined ? { aiErrors } : {}), ...(typeof a?.since === 'number' ? { since: a.since } : {}),
+      return s.chats.runMetrics?.({ ...(typeof a?.since === 'number' ? { since: a.since } : {}),
         ...(skill !== undefined ? { skill } : {}), ...(app !== undefined ? { app } : {}), ...(repo !== undefined ? { repo } : {}) }) ?? [];
     },
     // the strips' and the Orchestrator plan's estimates (ADR 0087); the demo brings its own run history
@@ -466,7 +462,7 @@ app.whenReady().then(async () => {
     'routing:get': () => s.brain.routingInfo(),
     // the renderer is the user's (sender check in ipc.ts): agents never reach this write, they only propose in chat
     'routing:save': a => s.brain.saveRouting(Array.isArray(a?.routes) ? a.routes : [], typeof a?.reason === 'string' && a.reason.trim() ? a.reason.trim().slice(0, 300) : null,
-      { ...(a?.exploration !== undefined ? { exploration: Number(a.exploration) } : {}), ...(a?.costWeight !== undefined ? { costWeight: Number(a.costWeight) } : {}),
+      { ...(a?.costWeight !== undefined ? { costWeight: Number(a.costWeight) } : {}),
         ...(Number.isInteger(a?.baseVersion) ? { base: a.baseVersion } : {}) }),
     'tasks:get': () => s.tasks.get(),
     'tasks:refresh': () => s.tasks.refresh(),

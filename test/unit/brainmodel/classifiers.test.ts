@@ -1,6 +1,6 @@
 // The Classificatori page's data (src/main/brainmodel/classifiers.ts, ADR 0077), read-only: the routing table with the
 // measured results of the chats each row routed (runs, verified success, average cost) from the improvement ledger, the
-// table's change history, the skills suggested now versus the ones the launch gave for recent role runs, and the weekly
+// table's change history and the weekly
 // quality per route, where a week without runs has no value (null), never zero. Temp folders only.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -15,7 +15,7 @@ afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true
 const NOW = Date.parse('2026-10-19T09:00:00Z'), DAY = 86400e3;
 const row = (kind: RoutingRow['kind'], model: string, area?: string): RoutingRow => ({ kind, ...(area ? { area } : {}), harness: 'claude', model, effort: 'high', why: `perché ${kind}`, since: '2026-10-01', evidence: '' });
 const routing = (routes: RoutingRow[]): RoutingInfo => ({ table: { version: 4, appliedAt: '2026-10-10T08:00:00Z', by: 'user', exploration: 0, costWeight: 7, routes }, registry: null, kinds: [], error: null,
-  history: [{ at: '2026-10-10T08:00:00Z', from: 3, to: 4, by: 'user', reason: 'meno costi', evidence: '12 chat', stored: true }], kindStats: { writing: { chats: 3, known: 2, ok: 1 } } });
+  history: [{ at: '2026-10-10T08:00:00Z', from: 3, to: 4, by: 'user', reason: 'meno costi', evidence: '12 chat', stored: true }] });
 const run = (chatId: string, at: number, verdict: 'success' | 'fail' | null, extra: Partial<AgentRun> = {}): AgentRun => ({ runId: `r_${chatId.padStart(12, '0')}`, chatId, agentId: 'scribe', version: 1, goal: `Scrivi la mail ${chatId}`, startedBy: 'user', startedAt: at,
   skillSuggestions: { at, suggested: chatId === 'c1' ? ['mail-writing', 'tone'] : [], used: chatId === 'c1' ? ['mail-writing'] : [] }, counters: {} as AgentRun['counters'], costUsd: 0.5, tokens: null, ...(verdict ? { outcome: { verdict, basis: 'human' } as AgentRun['outcome'] } : {}), ...extra });
 const profiles = [{ id: 'scribe', name: 'Scribe' }, { id: 'scout', name: 'Scout' }] as AgentProfile[];
@@ -44,20 +44,19 @@ describe('classifiers', () => {
     expect(rowOf(routes, { kind: 'code', area: 'Italia' })).toBe(2);
     expect(weekOf(Date.parse('2026-10-19T09:00:00Z'))).toBe('2026-W43');
   });
-  it('measures each route, shows the history and the skill choices, and marks weeks without data', async () => {
+  it('measures each route, shows the history and marks weeks without data', async () => {
     const d = brain([pred('c1', NOW - DAY, 'writing'), pred('c2', NOW - 2 * DAY, 'writing'), pred('c3', NOW - 3 * DAY, 'writing', 'override'), actual('c1', 0.4), actual('c2', 0.2)]);
     const runs = [
       run('c1', NOW - DAY, 'success', { tags: { skills: ['mail-writing'], app: null, repo: null } }),
       run('c2', NOW - 2 * DAY, 'fail', { tags: { skills: [], app: null, repo: null } }),
       run('c4', NOW - 2 * DAY, 'fail', { skillSuggestions: undefined }), // no tags: not a role launch with skills
     ];
-    const s = await classifiersState({ root: d, routing: routing([row('writing', 'sonnet'), row('bug-fix', 'opus')]), runs, profiles, suggest: async () => { throw new Error('must never recompute historical suggestions'); } }, NOW);
+    const s = await classifiersState({ root: d, routing: routing([row('writing', 'sonnet'), row('bug-fix', 'opus')]), runs, profiles }, NOW);
     expect(s.routing).toMatchObject({ version: 4, by: 'user', error: null });
-    expect(s.kinds).toEqual([{ kind: 'writing', chats: 3, known: 2, ok: 1 }]);
+    expect(s.kinds).toEqual([{ kind: 'writing', chats: 3, known: 2, ok: 1 }]); // verified outcomes only (ADR 0186)
     expect(s.routing.routes[0]).toMatchObject({ kind: 'writing', model: 'sonnet', effort: 'high', why: 'perché writing', result: { runs: 2, success: { value: 0.5, n: 2 }, avgCostUsd: expect.closeTo(0.3) } });
     expect(s.routing.routes[1]!.result).toEqual({ runs: 0, success: { value: null, n: 0 }, avgCostUsd: null }); // no data yet
     expect(s.history).toEqual([{ at: '2026-10-10T08:00:00Z', from: 3, to: 4, by: 'user', reason: 'meno costi', evidence: '12 chat' }]);
-    expect(s.choices.map(c => [c.chatId, c.role.name, c.suggested, c.used])).toEqual([['c1', 'Scribe', ['mail-writing', 'tone'], ['mail-writing']], ['c2', 'Scribe', [], []]]);
     const writing = s.quality.find(q => q.key === 'route:0')!;
     expect(writing.weeks).toHaveLength(6);
     expect(writing.weeks.at(-2)).toMatchObject({ week: '2026-W42', runs: 2, success: 0.5 }); // Sunday and Saturday
@@ -67,9 +66,8 @@ describe('classifiers', () => {
     expect(s.sources).toEqual([{ source: 'table', chats: 2 }, { source: 'override', chats: 1 }]);
   });
   it('no table and no ledger: empty, with the routing error passed through', async () => {
-    const s = await classifiersState({ root: null, routing: { table: null, registry: null, kinds: [], error: 'manca la tabella', history: [] }, runs: [], profiles, suggest: async () => [] }, NOW);
+    const s = await classifiersState({ root: null, routing: { table: null, registry: null, kinds: [], error: 'manca la tabella', history: [] }, runs: [], profiles }, NOW);
     expect(s.routing).toEqual({ version: null, appliedAt: null, by: null, routes: [], error: 'manca la tabella' });
-    expect(s.choices).toEqual([]);
     expect(s.kinds).toEqual([]);
     expect(s.quality.every(q => q.weeks.every(w => w.success === null && w.runs === 0))).toBe(true);
   });

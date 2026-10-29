@@ -3,7 +3,7 @@
 // only at the checkpoints; an undone change reads «annullato»; the Apprendimento page counts verdicts and draws weekly
 // corrections per role with the changes on them.
 import { describe, expect, it } from 'vitest';
-import { BASELINE_MAX, claimOf, learningState, seal, validSeed, WEEK, WEEKS, type IntervalCache } from '../../../src/main/brainmodel/evidence';
+import { BASELINE_MAX, claimOf, learningState, lessonCounts, seal, validSeed, WEEK, WEEKS, type IntervalCache } from '../../../src/main/brainmodel/evidence';
 import type { AgentRun } from '../../../src/shared/agents';
 import type { BrainChange } from '../../../src/shared/brain-model';
 
@@ -135,5 +135,15 @@ describe('learningState', () => {
     expect(artisan.weeks.at(-1)).toMatchObject({ runs: 2, corrections: 3 });
     expect(artisan.changes.map(c => c.id)).toEqual(['a', 'b']);
     expect(s.roles.find(r => r.id === 'herald')!.changes.map(c => c.id)).toEqual(['b']);
+    expect(s).not.toHaveProperty('lessons'); // the lesson store was not read: no count, not a zero
+  });
+
+  it('counts the lessons proposed in the weeks shown, by how they ended (ADR 0186)', () => {
+    const now = AT + 20 * 86_400_000, from = now - WEEKS * WEEK;
+    const lessons = [{ createdAt: now - 86_400_000, status: 'approved' as const }, { createdAt: now - 2 * 86_400_000, status: 'pending' as const },
+      { createdAt: now - 3 * 86_400_000, status: 'discarded' as const }, { createdAt: from - 1, status: 'approved' as const }, { createdAt: now + 1, status: 'pending' as const }];
+    expect(lessonCounts(lessons, from, now)).toEqual({ proposed: 3, approved: 1, discarded: 1, waiting: 1 });
+    expect(learningState([], roles, [], now, lessons).lessons).toEqual({ proposed: 3, approved: 1, discarded: 1, waiting: 1 });
+    expect(learningState([], roles, [], now, []).lessons).toEqual({ proposed: 0, approved: 0, discarded: 0, waiting: 0 });
   });
 });

@@ -70,7 +70,7 @@ test('Brain pages: skills with links and undo, rules, memory, classifiers, map; 
     await expect(cls.getByTestId('cls-grid')).toBeVisible();
     await expect(cls.locator('input, textarea, select')).toHaveCount(0);
     await shot(page, 'brain-classifiers-dark');
-    for (const [card, tables] of [['model', ['routing', 'quality']], ['kind', ['kinds']], ['skills', ['choices']]] as const) {
+    for (const [card, tables] of [['model', ['routing', 'quality']], ['kind', ['kinds']]] as const) {
       await cls.getByTestId(`cls-card-${card}`).locator('h3 button').click();
       for (const p of tables) await expect(cls.getByTestId(`bm-cls-${p}`)).toBeVisible();
       if (card === 'model') await expect(cls.getByText('nessun dato ancora').first()).toBeVisible();

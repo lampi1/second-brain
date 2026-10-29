@@ -1,7 +1,7 @@
 // How good the task estimate is (ADR 0087; owner, 2026-10-19: «il progresso dei classificatori nelle
 // stime»): a backtest of the same estimator (task-estimate.ts) on every ended run of the last weeks, each one estimated
 // only from the runs that had ended before it started, as it would have been shown then. Per week: how many runs had an
-// estimate, the share whose real work time fell between half and double it, the median relative error, and the share
+// estimate, the share whose real time (the job's elapsed time, ADR 0186) fell between half and double it, the median relative error, and the share
 // resting on the most specific match (same agent and same kind: it grows as the classifier sees more tasks). A small
 // module of its own so the Classificatori page can read the series too (IPC agents:estimates returns
 // it as `accuracy`). Pure. Used by index.ts (agents:estimates).
@@ -26,7 +26,7 @@ export function estimateAccuracy(runs: readonly AgentRun[], now: number, weeks =
   for (let w = 0; w < weeks; w++) buckets.set(weekStart(first + w * WEEK + 3 * 86400_000), { hits: 0, n: 0, errs: [], specific: 0 });
   for (const r of runs) {
     if (r.endedAt === undefined || r.endedAt < first || r.endedAt > now) continue;
-    const actual = actualOf(r);
+    const actual = index.actual(r.runId) ?? actualOf(r);
     if (actual?.timeMs == null) continue;
     const e = estimateTask(index, { text: r.goal, agentId: r.agentId, before: r.startedAt });
     if (e.timeMs === null || !(e.timeMs > 0)) continue;

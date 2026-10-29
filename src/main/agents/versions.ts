@@ -1,7 +1,7 @@
 // Role definition versions: the bounded behaviour history (role-history.json). The catalog owns the roles; this module
 // owns what each version did, so metrics can compare versions later.
 import path from 'node:path';
-import { BEHAVIOUR_FIELDS, type AgentAuthor, type AgentBehaviour, type AgentProfile, type AgentVersion, type AgentVersionState } from '../../shared/agents';
+import { AMENDS_KEPT, BEHAVIOUR_FIELDS, VERSIONED_CHANGES, type AgentAuthor, type AgentBehaviour, type AgentProfile, type AgentVersion, type AgentVersionState, type VersionedChange } from '../../shared/agents';
 import { readLocal, writeLocal } from './local-store';
 
 export const HISTORY_PER_AGENT = 50;
@@ -24,6 +24,20 @@ export function sameBehaviour(a: AgentBehaviour, b: AgentBehaviour): boolean {
   return BEHAVIOUR_FIELDS.every(k => k === 'knowhow' ? x.knowhow?.hash === y.knowhow?.hash : JSON.stringify(norm(x[k] ?? null)) === JSON.stringify(norm(y[k] ?? null)));
 }
 
+/** The fields behind each versioned change (ADR 0186). */
+const VERSIONED_FIELDS: Record<VersionedChange, readonly (typeof BEHAVIOUR_FIELDS)[number][]> = {
+  text: ['instructions'], skills: ['skills', 'knowhow'], model: ['engine', 'model', 'effort'], tier: ['tier', 'tierMax'],
+};
+/** What changed between two behaviours that makes a new version; empty = the active version is updated in place. */
+export function versionedChanges(a: AgentBehaviour, b: AgentBehaviour): VersionedChange[] {
+  const x = behaviourOf(a), y = behaviourOf(b);
+  // the first know-how snapshot of a role with no linked skill (any save copies the skill files it already used) is no
+  // change of them; a linked skill, or another snapshot, is
+  const same = (k: (typeof BEHAVIOUR_FIELDS)[number]): boolean => k === 'knowhow' ? (!x.knowhow ? !y.knowhow?.linked?.length : x.knowhow.hash === y.knowhow?.hash)
+    : k === 'skills' ? JSON.stringify([...x.skills].sort()) === JSON.stringify([...y.skills].sort()) : JSON.stringify(x[k] ?? null) === JSON.stringify(y[k] ?? null);
+  return VERSIONED_CHANGES.filter(c => VERSIONED_FIELDS[c].some(k => !same(k)));
+}
+
 export function firstVersion(p: AgentProfile, author: AgentAuthor, reason: string, at: number): AgentVersion {
   return { agentId: p.id, version: 1, parentVersion: null, behaviour: behaviourOf(p), author, reason, at, state: 'active' };
 }
@@ -33,8 +47,14 @@ function readEntry(v: unknown): AgentVersion {
   if (!e || typeof e !== 'object' || typeof e.agentId !== 'string' || !ID.test(e.agentId) || !count(e.version) || !(e.parentVersion === null || count(e.parentVersion))
     || !e.behaviour || typeof e.behaviour !== 'object' || typeof e.behaviour.instructions !== 'string' || typeof e.behaviour.engine !== 'string'
     || !AUTHORS.includes(e.author as AgentAuthor) || typeof e.reason !== 'string' || e.reason.length > 600 || !Number.isFinite(e.at) || !STATES.includes(e.state as AgentVersionState)) throw new Error('Invalid role history entry');
-  return e as AgentVersion;
+  // `changed` (ADR 0186) is a record only: one out of shape is dropped, never a reason to refuse the history
+  const out = { ...e } as AgentVersion;
+  if (e.changed !== undefined && !(Array.isArray(e.changed) && e.changed.every(c => (VERSIONED_CHANGES as readonly unknown[]).includes(c)))) delete out.changed;
+  if (e.amended !== undefined && !(Array.isArray(e.amended) && e.amended.length <= AMENDS_KEPT && e.amended.every(a => a && Number.isFinite(a.at) && AUTHORS.includes(a.by) && typeof a.reason === 'string' && a.reason.length <= 600))) delete out.amended;
+  return out;
 }
+/** A version whose behaviour is updated in place (ADR 0186: a change that makes no new version). */
+export interface VersionAmend { agentId: string; version: number; behaviour: AgentBehaviour; at: number; by: AgentAuthor; reason: string }
 /** A change to a stored version: its state. */
 export interface VersionChange { agentId: string; version: number; state: AgentVersionState }
 
@@ -57,12 +77,14 @@ export class AgentHistory {
   get(agentId: string, version: number): AgentVersion | undefined { const e = this.entries.find(x => x.agentId === agentId && x.version === version); return e && structuredClone(e); }
   /**
    * Applies all changes in one write. Adding version N drops that agent's entries from N up: they belong to a save
-   * whose catalog write failed, or to an agent whose catalog was regenerated, and the new N supersedes them.
+   * whose catalog write failed, or to an agent whose catalog was regenerated, and the new N supersedes them. `amends`
+   * rewrite a version's behaviour in place (ADR 0186: a change that makes no new version).
    */
-  commit(add: AgentVersion[], states: VersionChange[] = []): void {
+  commit(add: AgentVersion[], states: VersionChange[] = [], amends: VersionAmend[] = []): void {
     if (this.problem) throw new Error(this.problem);
     let next = this.entries.map(e => states.filter(x => x.agentId === e.agentId && x.version === e.version)
       .reduce<AgentVersion>((v, s) => ({ ...v, state: s.state }), e));
+    next = next.map(e => { const a = amends.find(x => x.agentId === e.agentId && x.version === e.version); return a ? { ...e, behaviour: structuredClone(a.behaviour), amended: [...(e.amended ?? []), { at: a.at, by: a.by, reason: a.reason.slice(0, 600) }].slice(-AMENDS_KEPT) } : e; });
     for (const e of add) next = [...next.filter(x => !(x.agentId === e.agentId && x.version >= e.version)), structuredClone(e)];
     const removable = (e: AgentVersion) => e.version !== 1 && (e.state === 'superseded' || e.state === 'rejected');
     for (const agentId of new Set(add.map(e => e.agentId))) {

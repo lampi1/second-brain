@@ -43,7 +43,7 @@ function deps() {
 describe('app control tools', () => {
   it('assigns a scoped follow-up with stable source identity and refuses changed scope or unauthenticated reuse', async () => {
     const catalog = roleCatalog(), scout = catalog.list().profiles.find(p => p.id === 'scout')!;
-    const target = { id: 'w', harness: 'claude', cwd: '/project', state: 'idle', agent: { id: 'scout', version: scout.activeVersion }, run: { taskVersion: 2, taskId: 'task', runId: 'run' } };
+    const target = { id: 'w', harness: 'claude', cwd: '/project', state: 'idle', agent: { id: 'scout', version: scout.activeVersion, revision: scout.updatedAt }, run: { taskVersion: 2, taskId: 'task', runId: 'run' } };
     const assignTask = vi.fn(async () => {});
     const chats = { list: () => [{ id: 'o', isOrchestrator: true, harness: 'claude' }, target], assignTask } as unknown as ChatService;
     const brain = { settings: () => ({ messaging: { crossHarness: false } }) } as unknown as BrainService;
@@ -58,6 +58,10 @@ describe('app control tools', () => {
     const wrong = await Promise.resolve().then(() => tool.run({ ...args, roleId: 'artisan' })).catch((e: unknown) => e);
     expect(wrong).toBeInstanceOf(ToolRefusal);
     expect((wrong as Error).message).toMatch(/this chat runs scout, not artisan/);
+    // a permission changed in place (same version, ADR 0186) still needs a fresh chat
+    target.agent.revision = scout.updatedAt - 1;
+    await expect(Promise.resolve().then(() => tool.run(args))).rejects.toThrow(/Role configuration changed/);
+    target.agent.revision = scout.updatedAt;
     await expect(Promise.resolve().then(() => tools().find(t => t.name === 'app_assign_task')!.run(args))).rejects.toThrow(/authenticated/);
     expect(assignTask).toHaveBeenCalledTimes(1);
   });
@@ -259,7 +263,8 @@ describe('app control tools', () => {
     expect(appControlTools(deps).some(x => x.name === 'task_estimate')).toBe(false);
     expect(await appControlTools(deps, 'r').find(x => x.name === 'task_estimate')!.run({ request: 'Correggi il bug dello sconto', agentId: 'artisan' })).toMatchObject({ basis: 'agent-kind', n: 4, path: 'one-agent', quick: true });
     const created = await appControlTools(deps, 'r').find(x => x.name === 'app_create_chat')!.run({ title: 'Ordini · Fix', prompt: 'Correggi il bug dello sconto', roleId: 'artisan' });
-    expect(created).toMatchObject({ estimate: { timeMs: 240_000, n: 4, parts: 1, path: 'one-agent', confidence: 'low' } });
+    // elapsed time (start to end) and four equal past jobs: no spread, high confidence (ADR 0186)
+    expect(created).toMatchObject({ estimate: { timeMs: 300_000, n: 4, parts: 1, path: 'one-agent', confidence: 'high' } });
   });
 
   it('app_ui never maximizes a delegated chat or its browser (no screenshot of its content); a root chat it may', () => {
@@ -369,8 +374,10 @@ describe('app control tools', () => {
     await expect(Promise.resolve().then(() => save.run({ routes, reason: 'r', evidence: 'e' }))).rejects.toThrow(/baseVersion/);
     // built on an older version: refused, the newer one stays (no silent overwrite)
     await expect(Promise.resolve().then(() => save.run({ routes, reason: 'r', evidence: 'e', baseVersion: 2 }))).rejects.toThrow(/è cambiata .ora versione 3,/);
-    expect(await save.run({ routes, exploration: 0.2, reason: 'mail su Haiku', evidence: '12 chat, 0 correzioni', baseVersion: 3 })).toEqual({ version: 4, exploration: 0.2, rows: 5 });
-    expect(routing.info().history[0]).toMatchObject({ to: 4, by: 'agente: Orchestrator', reason: 'mail su Haiku', evidence: '12 chat, 0 correzioni', exploration: { from: 0, to: 0.2 } });
+    expect(await save.run({ routes, exploration: 0.2, reason: 'mail su Haiku', evidence: '12 chat, 0 correzioni', baseVersion: 3 })).toEqual({ version: 4, rows: 5 });
+    // exploration is no parameter any more (ADR 0186): the stored rate stays as it was
+    expect(routing.info().history[0]).toMatchObject({ to: 4, by: 'agente: Orchestrator', reason: 'mail su Haiku', evidence: '12 chat, 0 correzioni' });
+    expect(routing.info().history[0]).not.toHaveProperty('exploration');
     // Never Fable, and changing an app row must still preserve every locked row.
     await expect(Promise.resolve().then(() => save.run({ routes: [{ ...routes[0], model: 'claude-sonnet-5-5' }], reason: 'r', evidence: 'e', baseVersion: 4 }))).rejects.toThrow(/bloccata dall’utente/);
     await expect(Promise.resolve().then(() => save.run({ routes: [{ kind: 'review', harness: 'claude', model: 'claude-fable-5-1', effort: 'high', why: 'w' }], reason: 'r', evidence: 'e', baseVersion: 4 }))).rejects.toThrow(/Fable mai/);

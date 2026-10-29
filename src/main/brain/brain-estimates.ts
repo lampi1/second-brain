@@ -1,7 +1,7 @@
 // The brain's own table (<brain>/ops/state/estimates.json, written by ops/tools/estimates.mjs from every past
 // transcript: real work time, $, the chat title's area and kind). ADR 0053 removed the user-facing cost/time estimate
 // (measured on 178 chats it held only 47% of the time with a bigger median error than the median cost); what is left
-// here feeds the model-routing table (brain/routing.ts): the kind/area rules (areaOf, used by routeChat and isAppChat)
+// here feeds the model-routing table (brain/routing.ts): the kind rules (`tasks`, read by shared/work-concepts.ts taskOf)
 // and the refreshed table itself (table(), schedule(), run a little after each turn ends, at most every 5 minutes, by
 // brain/index.ts's recordJob). No model is ever called: the table is refreshed by running the script (incremental,
 // < 1 s warm).
@@ -22,23 +22,8 @@ export interface BrainTable {
     range80?: { qMin: number | null; qUsd: number | null; inMin: number | null; inUsd?: number | null; covered: number };
   };
   groups: Record<string, Group>;
-  kinds?: [string, string, string][];
-}
-
-/** The kind a text names, with the rules the table carries (the brain's estimates.mjs KINDS); null for none. */
-function kindWord(s: string, kinds: BrainTable['kinds']): string | null {
-  for (const [k, src, flags] of kinds ?? []) { try { if (new RegExp(src, flags).test(s)) return k; } catch { /* a bad rule is skipped */ } }
-  return null;
-}
-
-/** Area of a chat title, the same rule as the brain's estimates.mjs: "Alfa · …" → Alfa, "Pers · App: …" → "Pers · App",
- *  a label that names a kind ("Fix · …") → altro. */
-export function areaOf(title: string, kinds: BrainTable['kinds']): string {
-  const t = String(title ?? '').trim();
-  if (/^orchestrator\b/i.test(t)) return 'Orchestrator';
-  const m = t.match(/^([A-Za-zÀ-ú-]{2,12}) · (.*)$/);
-  if (!m || kindWord(m[1]!, kinds)) return 'altro';
-  return m[1] + (m[1] === 'Pers' && /^(App|second-brain)\b/i.test(m[2]!) ? ' · App' : '');
+  /** the brain's own kind rules for the routing table, read by taskOf */
+  tasks?: [string, string, string][];
 }
 
 export const REFRESH_DELAY = 60e3, REFRESH_MIN_GAP = 5 * 60e3;

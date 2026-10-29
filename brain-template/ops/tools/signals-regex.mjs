@@ -1,6 +1,8 @@
 // Regexes that recognise {{OWNER}}'s corrections and confusion in a message. One copy, shared by `flow-signals.mjs`
 // (counting) and the `correction-catch` hook (reminder to log the error in `ai-errors.md`, P-042).
-export const CORRECTION = /\b(no[,.!]|no$|non (così|va|è|devi|serve|funziona)|ti ho (già )?detto|te l'ho detto|sbagliat|di nuovo|ancora una volta|ma perché|perché non|mai più|ricordati|smett|basta|come mai)/i;
+// Each alternative ends at a word boundary ("non vale", "non funzionano" are not "non va", "non funziona"); a plain
+// question ("come mai…?", "perché non…?") is not a correction: it counts only with "ma" in front ("ma perché non…").
+export const CORRECTION = /\b(no[,.!]|no$|non (così|va|è|devi|serve|funziona)(?![\wàèéìòù])|ti ho (già )?detto|te l'ho detto|sbagliat|di nuovo|ancora una volta|ma (perché|come mai)|mai più|ricordati|smett|basta\b)/i;
 export const CONFUSION = /(non (capisco|ho capito)|cosa (vuol dire|significa|intendi)|che (cos'è|vuol dire)|\?\?|in che senso|spiegami)/i;
 // Explicit praise (feedback-log.mjs) (tuned on real messages, 2026-10-09): he praises at the
 // START of a message ("ok perfetto, ora…", "Ora funziona, però…"); the same words later are mostly requests ("un piano

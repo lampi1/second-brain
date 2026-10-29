@@ -4,12 +4,12 @@
 // decisions per week; what it decided (slices with count, success, cost and the role that ran it most); success when
 // the advice that ends with an action (ADR 0101); and the tables of before, each under its classifier: the routing
 // table with its history, who chose the model and the quality by week (Scelta del modello), the outcomes per kind
-// (Tipo di lavoro), the skill choices (Skill per un compito). Read only. Used by ClassifiersPage.tsx.
+// (Tipo di lavoro). Read only. Used by ClassifiersPage.tsx.
 import type { ReactNode } from 'react';
 import type { ClassifiersState, RouteResult } from '@shared/brain-model';
 import { roleName } from '@shared/roles';
 import { locale, t } from '../../i18n';
-import { choiceMatch, noData, pct, usd } from '../../lib/brain-model-view';
+import { noData, pct, usd } from '../../lib/brain-model-view';
 import { facts, hitSeries, kOfN, pctOf, sliceLabel, successSeries, usdOf, weekLabel, type CardView } from '../../lib/classifier-view';
 import { BarChart, HBarChart } from '../../brain/components/Charts';
 import { HelpTip } from '../HelpTip';
@@ -65,18 +65,6 @@ function KindTable({ state }: { state: ClassifiersState }) {
     </table></div> : <p className="bm-empty">{t('bm.cls.kindsEmpty')}</p>}
   </Panel>;
 }
-function SkillChoices({ state }: { state: ClassifiersState }) {
-  return <Panel testId="bm-cls-choices" title={t('bm.cls.choices')} lead={t('bm.cls.choicesLead')}>
-    {state.choices.length ? <div className="bm-table-wrap"><table className="bm-table">
-      <thead><tr><th>{t('bm.cls.col.when')}</th><th>{t('bm.cls.col.goal')}</th><th>{t('bm.cls.col.role')}</th><th>{t('bm.cls.col.suggested')}</th><th>{t('bm.cls.col.used')}</th><th /></tr></thead>
-      <tbody>{state.choices.map(c => { const m = choiceMatch(c); return <tr key={`${c.chatId}-${c.at}`} data-testid="bm-cls-choice">
-        <td className="num">{when(c.at)}</td><td className="goal">{c.goal}</td><td>{c.role.name}</td>
-        <td>{c.suggested.length ? c.suggested.join(', ') : '—'}</td><td>{c.used.length ? c.used.join(', ') : '—'}</td>
-        <td><span className="bm-match" data-match={m}>{t(`bm.cls.${m}`)}</span></td>
-      </tr>; })}</tbody>
-    </table></div> : <p className="bm-empty">{t('bm.cls.choicesEmpty')}</p>}
-  </Panel>;
-}
 
 export function ClassifierDetail({ c, state, onBack }: { c: CardView; state: ClassifiersState; onBack: () => void }) {
   const name = ct(c.id, 'name'), all = facts(c, state.sources), k3 = third(c);
@@ -92,7 +80,6 @@ export function ClassifierDetail({ c, state, onBack }: { c: CardView; state: Cla
       <div><span className="bm-label">{t('stats.cls.use')}</span><p>{ct(c.id, 'use')}</p></div>
     </div>
     <p data-testid="cls-coverage">{t('stats.cls.coverage', { n: c.success.n, total: c.decisions })}</p>
-    {c.id === 'skills' && <p>{t('stats.cls.skillsCoverage')}</p>}
     {c.id === 'model' && <p>{t('stats.cls.modelCoverage')}</p>}
     {c.id === 'jobkind' && <p>{t('stats.cls.jobCoverage')}</p>}
     <div className="cls-summary">
@@ -100,7 +87,6 @@ export function ClassifierDetail({ c, state, onBack }: { c: CardView; state: Cla
       <Num label={ct(c.id, 'hit')} value={pctOf(c.hit)} sub={kOfN(c.hit)} help={ct(c.id, 'hitHelp')} />
       {c.id !== 'estimates' && c.id !== 'jobkind' && c.id !== 'tasks' && <Num label={t('stats.cls.success')} value={pctOf(c.success)} sub={kOfN(c.success)} help={t('stats.cls.successHelp')} />}
       <Num label={k3.label} value={k3.value} help={k3.help} />
-      {c.id === 'skills' && <Num label={t('stats.cls.threshold')} value={c.threshold === null ? null : String(c.threshold)} help={t('stats.cls.thresholdHelp')} />}
     </div>
     <section className="dash-panel cls-facts" data-testid="cls-facts"><header><div><h3>{t('stats.cls.facts')}</h3></div></header>
       {all.length ? <ul>{all.map((f, i) => <li key={i}><span aria-hidden="true">✦</span>{f}</li>)}</ul> : <p className="bm-empty">{t('stats.cls.factsNone')}</p>}
@@ -130,6 +116,5 @@ export function ClassifierDetail({ c, state, onBack }: { c: CardView; state: Cla
     </div>}
     {c.id === 'model' && <ModelTables state={state} />}
     {c.id === 'kind' && <KindTable state={state} />}
-    {c.id === 'skills' && <SkillChoices state={state} />}
   </div>;
 }
