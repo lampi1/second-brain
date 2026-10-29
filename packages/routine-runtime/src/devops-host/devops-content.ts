@@ -1,5 +1,6 @@
 // Safe routine evidence rendering and image reads. No agent-supplied HTML, remote image URL or arbitrary local path.
-// Used by the host DevOps writer; strings are escaped before a tiny Markdown link/image syntax is recognized (Markdown code stays verbatim).
+// Used by the host DevOps writer and the routine runtime's work item comments; strings are escaped before a tiny Markdown
+// syntax is recognized (PR Markdown: links/images, code verbatim; work item HTML: also bold, lists, headings).
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
@@ -75,37 +76,73 @@ export function organizationUrl(raw: string, organization: string): string {
 /** HTML for work items, Markdown for PR threads. All other syntax remains literal escaped text. */
 export function renderDevOpsComment(source: string, organization: string, images: readonly UploadedImage[], format: 'html' | 'markdown' = 'html'): string {
   if (!source.trim() || source.length > 10_000 || /[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/.test(source)) throw new Error('Invalid comment text');
+  if (format === 'html') return markdownHtml(source, organization, images, true);
   const out: string[] = [];
   // Markdown: every line ending a renderer may see (CRLF, a lone CR as in CommonMark, U+2028/2029/0085 in some) becomes
   // \n, so the lines split here are the renderer's lines
-  const markdown = () => splitMarkdownCode(source.replace(/\r\n?|[\u2028\u2029\u0085]/g, '\n'));
-  for (const segment of format === 'html' ? [{ raw: false, text: source }] : markdown()) {
-    if (segment.raw) out.push(segment.text); else renderPlain(segment.text, organization, images, format, out);
+  for (const segment of splitMarkdownCode(source.replace(/\r\n?|[\u2028\u2029\u0085]/g, '\n'))) {
+    if (segment.raw) out.push(segment.text); else renderPlain(segment.text, organization, images, out);
   }
-  return format === 'html' ? out.join('').replace(/\r?\n/g, '<br/>') : out.join('');
+  return out.join('');
 }
-/** Plain text: escaped, except the approved links and this run's images. */
-function renderPlain(source: string, organization: string, images: readonly UploadedImage[], format: 'html' | 'markdown', out: string[]): void {
-  const escape = format === 'html' ? escapeHtml : escapeMd;
+/** Work item HTML (DevOps stores those comments and System.Description as HTML, format 1) from the small Markdown agents
+ * write: `**bold**`, `- ` / `* ` list lines, `#` headings (as h3), links to the approved organization and, with images,
+ * this run's uploaded attachments. Everything else is escaped text; other lines keep their breaks as <br/>. Never throws
+ * on a link: one outside the organization stays literal text. An image this run did not upload throws when strictImages,
+ * else it stays text too (the runtime adds its images itself, after the text). */
+export function markdownHtml(source: string, organization: string, images: readonly UploadedImage[] = [], strictImages = false): string {
+  let out = '', list = false, block = true;
+  for (const line of source.replace(/\u0000/g, '').split(/\r\n?|\n|[\u2028\u2029\u0085]/)) {
+    const item = /^ {0,3}[-*][ \t]+(.+)$/.exec(line), heading = item ? undefined : /^ {0,3}#{1,6}[ \t]+(.+?)[ \t]*$/.exec(line);
+    if (list && !item) { out += '</ul>'; list = false; }
+    if (item) { out += `${list ? '' : '<ul>'}<li>${inlineHtml(item[1]!, organization, images, strictImages)}</li>`; list = true; }
+    else if (heading) out += `<h3>${inlineHtml(heading[1]!, organization, images, strictImages)}</h3>`;
+    else out += `${block ? '' : '<br/>'}${inlineHtml(line, organization, images, strictImages)}`;
+    // a list or a heading is a block: the line after it needs no <br/>
+    block = !!(item || heading);
+  }
+  return list ? `${out}</ul>` : out;
+}
+/** One line: approved links and images become placeholders (NUL never survives into the source), the rest is escaped,
+ * then **bold** is applied and the placeholders put back, so bold never reaches inside a generated tag. */
+function inlineHtml(source: string, organization: string, images: readonly UploadedImage[], strictImages: boolean): string {
+  const tags: string[] = [];
+  // element text keeps its apostrophes (quotes only matter inside attributes, which use escapeHtml)
+  const escapeText = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const keep = (tag: string) => `\u0000${tags.push(tag) - 1}\u0000`;
+  const bold = (s: string) => s.replace(/\*\*(?!\s)(.+?)(?<!\s)\*\*/g, '<strong>$1</strong>');
+  const marked = source.replace(/(!?)\[([^\]\n]{1,300})\]\(([^)\s]{1,2000})\)/g, (raw, bang: string, label: string, href: string) => {
+    if (bang) {
+      const image = images.find(i => `attachment:${i.id}` === href);
+      if (!image) { if (strictImages) throw new Error('Images must reference an attachment uploaded by this run'); return raw; }
+      return keep(`<img src="${escapeHtml(organizationUrl(image.url, organization))}" alt="${escapeHtml(label)}"/>`);
+    }
+    let url: string; try { url = organizationUrl(href, organization); } catch { return raw; }
+    return keep(`<a href="${escapeHtml(url)}" rel="noopener noreferrer">${bold(escapeText(label))}</a>`);
+  });
+  return bold(escapeText(marked)).replace(/\u0000(\d+)\u0000/g, (_, i: string) => tags[Number(i)]!);
+}
+/** Plain Markdown text: escaped, except the approved links and this run's images. */
+function renderPlain(source: string, organization: string, images: readonly UploadedImage[], out: string[]): void {
   // a generated link survives every pass a renderer runs before links: a GFM table splits its cells on | first, so the
   // href keeps only plain URL characters (the rest percent-encoded) and the label escapes |
   const target = (url: string) => url.replace(/[^A-Za-z0-9\-._~:/?#@!$&'*+,;=%]/g, c => encodeURIComponent(c));
   const text = (label: string) => escapeMd(label).replace(/\|/g, '\\|');
   let at = 0;
   for (const match of source.matchAll(/(!?)\[([^\]\n]{1,300})\]\(([^)\s]{1,2000})\)/g)) {
-    out.push(escape(source.slice(at, match.index))); at = match.index! + match[0].length;
+    out.push(escapeMd(source.slice(at, match.index))); at = match.index! + match[0].length;
     const label = match[2]!, href = match[3]!;
     if (match[1]) {
       const image = images.find(i => `attachment:${i.id}` === href);
       if (!image) throw new Error('Images must reference an attachment uploaded by this run');
       const url = organizationUrl(image.url, organization);
-      out.push(format === 'html' ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(label)}"/>` : `![${text(label)}](${target(url)})`);
+      out.push(`![${text(label)}](${target(url)})`);
     } else {
       const url = organizationUrl(href, organization);
-      out.push(format === 'html' ? `<a href="${escapeHtml(url)}" rel="noopener noreferrer">${escapeHtml(label)}</a>` : `[${text(label)}](${target(url)})`);
+      out.push(`[${text(label)}](${target(url)})`);
     }
   }
-  out.push(escape(source.slice(at)));
+  out.push(escapeMd(source.slice(at)));
 }
 /** Flat, run-owned evidence only. Open once, refuse links/hardlinks, bound bytes and inspect actual image signatures. */
 export function readEvidenceImage(root: string, name: string): { data: Buffer; sha256: string; name: string } {
