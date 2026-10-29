@@ -5,6 +5,11 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ## [Unreleased]
 
+### Changed
+- README back to a short, playful tour with 14 screenshots (`npm run shots` fixed and extended); the Guide gains
+  cards for Flash, the Orchestrator's app knowledge, voice, call recordings, the personal Browser, notices and
+  terminal routines.
+
 ### Fixed
 - Routines compose existing browser, pinned script/query and registered MCP connector capabilities, with preflight
   before activation and on-demand grants independent of scheduling. Durable receipts prevent duplicate unknown
@@ -164,7 +169,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   batched, a lighter tool prefix, rules hooks in process, browser reads as deltas, a review pack for the Sentinel.
 - **Evidence before a change is kept** (ADR 0104): trials and tier proposals on Wilson / Newcombe intervals at fixed
   checkpoints; honest statistics, one money format, Guide links on every "?" (ADR 0101).
-- **Your own picture for a role** (owner, 2026-10-20; ADR 0182): "Cambia immagine" under the badge on a role's page
+- **Your own picture for a role** (owner, 2026-10-20; ADR 0184): "Cambia immagine" under the badge on a role's page
   takes a PNG, JPG or WebP; its centre square replaces the character everywhere. "Immagine predefinita" brings the
   character back.
 - **The brain without the app** (owner, 2026-10-20; ADR 0088): Settings → Il mio spazio → "Condividi il brain" saves a

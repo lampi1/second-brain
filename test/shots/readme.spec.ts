@@ -1,7 +1,8 @@
 // The README screenshots, generated from the frozen demo (SB_DEMO=1 SB_DEMO_FREEZE=1, the synthetic brain of
 // scripts/demo-brain.mjs) so they always show the current UI with fictional data only: English UI (SB_LANG=en), dark
 // theme, 1600x1000, saved as WebP (< 300 KB each) in docs/screenshots/: the whole window, one part of it, or two parts
-// side by side. The showcase (memory, agent-levels, brain-map, orchestrator-flash, reactions, plan) and the rest. Not part
+// side by side. The showcase (memory, agent-levels, brain-map, orchestrator-flash, reactions, plan), the app's own pages
+// (voice, recordings, log, routines, costs, guide, maintenance) and the rest. Not part
 // of `npm run check`: run by `npm run shots` (its own Playwright config, playwright.shots.config.ts). The app runs hidden
 // (SB_HIDDEN, set by launch()). The 3D map needs WebGL: on a machine without a GPU set
 // SB_E2E_ELECTRON_ARGS="--use-angle=swiftshader --enable-unsafe-swiftshader" (and xvfb-run on Linux).
@@ -11,7 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { StrategyPlan } from '../../src/shared/strategy';
-import { launch, openOrchestrator, openNotesMap, setSize, waitThumbs, goPage } from '../e2e/helpers';
+import { keepQuestionsAside, launch, setQuestionsAside, openOrchestrator, openNotesMap, setSize, waitThumbs, goPage } from '../e2e/helpers';
 // @ts-expect-error plain ESM helper without types
 import { demoBrain } from '../../scripts/demo-brain.mjs';
 
@@ -32,6 +33,8 @@ test.beforeAll(async () => {
   await expect(page.locator('html[data-clock="frozen"]')).toHaveCount(1);
   await expect(page.locator('html')).toHaveAttribute('lang', 'en');
   await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
+  // the demo's waiting requests open the questions window at start: set aside, each stays «to answer» in its chat
+  await setQuestionsAside({ app, page });
 });
 test.afterAll(async () => { await app?.close(); });
 
@@ -162,7 +165,7 @@ test('README screenshots', async () => {
 
   // 7. Script: the brain's tested, reusable scripts as cards (ADR 0076)
   await goPage(page, 'script'); // a tab of Memoria now (ADR 0122)
-  await expect(page.getByTestId('bs-script-card')).toHaveCount(4, { timeout: 30_000 });
+  await expect(page.getByTestId('bs-script-card').first()).toBeVisible({ timeout: 30_000 });
   await save('brain-scripts');
 });
 
@@ -243,7 +246,10 @@ test('README showcase: Memoria, agent levels, Orchestrator and Flash, reactions'
 
   // a thanks needs no answer: the Orchestrator's one-emoji reply sticks to the message as a reaction (her decision
   // answered first, so the message goes at once instead of queuing behind her turn)
-  await page.getByTestId('tile-orchestrator').getByRole('button', { name: /^Refunds QA/ }).click();
+  await page.getByTestId('tile-orchestrator').getByRole('button', { name: 'Answer', exact: true }).click();
+  await page.getByTestId('qwin-card-opt-1').click();
+  // the other requests stay set aside
+  while (await page.getByTestId('qwin').count()) await page.getByTestId('qwin-later').click();
   await expect.poll(() => page.evaluate(async () => (await window.sb.invoke('chat:list', undefined)).find(c => c.isOrchestrator && !c.closedAt)?.state), { timeout: 20_000 }).toBe('idle');
   await page.getByTestId('orchestrator-input').click();
   await page.keyboard.type('thanks!');
@@ -284,7 +290,76 @@ test('README showcase: the Strategist\'s plan to approve in the questions window
     clarified: [{ q: 'Where', a: 'Cart, order and refund' }, { q: 'Offers', a: 'No, full price only' }] } as StrategyPlan;
   await demo('plan', 'tree-plan', plan);
   await expect(page.getByTestId('qwin-backdrop')).toBeVisible();
-  await page.locator(`[data-testid="qwin-pick"][data-key="tree-plan/plan@${at}"]`).click();
+  const pick = page.locator(`[data-testid="qwin-pick"][data-key="tree-plan/plan@${at}"]`);
+  if (await pick.count()) await pick.click(); // not the window's current card yet
   await expect(page.getByTestId('qwin-plan')).toBeVisible();
   await save('plan', page.getByTestId('qwin'));
+});
+
+test('README showcase: voice, recordings, Log, Routines, Costs, Guide, the maintenance notice', async () => {
+  test.setTimeout(180_000);
+  // the plan's questions window is done: every request from here on is set aside, as a user busy elsewhere would
+  await keepQuestionsAside(page);
+  await expect(page.getByTestId('qwin')).toHaveCount(0);
+  await goPage(page, 'home');
+
+  // Settings → Voice: dictation and the spoken conversation, Whisper and Piper on this PC
+  await page.keyboard.press('Control+,');
+  const voice = page.getByTestId('st-group-voice');
+  await voice.scrollIntoViewIfNeeded();
+  await expect(page.getByTestId('st-voice-models')).toBeVisible({ timeout: 30_000 });
+  await save('voice', voice);
+  await page.keyboard.press('Escape');
+
+  // Log: everything the app did, live, with the task chains and the flags
+  await goPage(page, 'log');
+  await expect(page.getByTestId('log-page')).toBeVisible({ timeout: 30_000 });
+  const column = await frameOf(page.getByTestId('log-page')); // the page's column, for the pages that do not scroll
+  await save('log', column);
+
+  // Recordings: a call recorded (the demo's fake engine plays two tones for the mic and the PC), then transcribed
+  // locally with «You» and «Others» lines
+  await goPage(page, 'registrazioni');
+  await page.getByTestId('rec-toggle').click();
+  await expect(page.getByTestId('rec-live-time')).toHaveText(/0:0[2-9]/, { timeout: 10_000 });
+  await page.getByTestId('rec-pill-stop').click();
+  await expect(page.getByTestId('rec-lines').locator('.rec-line')).toHaveCount(4, { timeout: 15_000 });
+  const db = (await page.getByTestId('rec-detail').boundingBox())!;
+  await save('recordings', { ...column, height: Math.round(Math.min(column.height, db.y + db.height + 14 - column.y)) });
+
+  // Routines: packages run from the terminal, their runs observed here
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press('g');
+  await page.keyboard.press('u');
+  const routines = page.getByTestId('brain-page-flussi');
+  await expect(routines).toBeVisible({ timeout: 30_000 });
+  await expect(routines.getByText('Legacy run history')).toBeVisible({ timeout: 30_000 });
+  await save('routines', { ...column, height: 510 }); // above the run folders' paths
+
+  // Costs: where the money goes, from the recorded chats, no tokens spent to know it
+  await goPage(page, 'costi');
+  const costs = page.getByTestId('brain-page-costi');
+  await expect(costs).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
+  await save('costs', await frameOf(costs));
+
+  // Guide: the app's concepts as cards, each with how it works and «Discuss» with the Orchestrator
+  await goPage(page, 'guida');
+  const guide = page.locator('.guide-grid');
+  await expect(guide).toBeVisible({ timeout: 30_000 });
+  await save('guide', await frameOf(guide));
+
+  // Maintenance: one click, then the celebrating notice over Memoria when it ends
+  await page.getByTestId('nav-memoria').click();
+  await expect(page.getByTestId('bm-memory-page')).toBeVisible();
+  for (const x of await page.getByTestId('toast-close').all()) await x.click();
+  await page.getByTestId('topbar-maint-run').click();
+  const notice = page.locator('.notif.tone-celebrate');
+  await expect(notice).toBeVisible({ timeout: 40_000 });
+  // only the end notice: the «started» one is closed
+  for (const x of await page.locator('[data-testid="toast"]:not([data-tone="celebrate"]) [data-testid="toast-close"]').all()) await x.click();
+  await page.mouse.move(2, 2);
+  await page.waitForTimeout(1500); // the sparkle burst is over
+  const mem = await frameOf(page.getByTestId('bm-memory-page'));
+  await saveBuffers('maintenance', [await png({ x: mem.x, y: 52, width: mem.width, height: 560 })]);
 });

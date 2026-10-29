@@ -1,18 +1,15 @@
 // The Task page's "Test e QA" section: for each of the user's active PRs with a test plan, how many test cases are done
 // and how many are missing, who ran them, the failed/blocked ones first, each test case with its outcome, who and when,
-// and the QA bugs linked to it (state, link); "Copia per lo stand-up" copies the same as plain text. Names and titles
-// only, ids only inside links. Data: the brain's read-only qa-status.mjs --mine, read with the page by main's
+// and the QA bugs linked to it (state, link). Names and titles only, ids only inside links. Data: the brain's read-only qa-status.mjs --mine, read with the page by main's
 // TaskService (zero tokens). Why: the user asked QA progress ~30 times in a week (2026-10-13: "quali abbiamo fatto,
-// quali ha fatto Anna", "quanti test case mancano?", "a quale PR appartiene questo bug", a stand-up card).
+// quali ha fatto Anna", "quanti test case mancano?", "a quale PR appartiene questo bug").
 // Each test plan and test case has "Discuti" (components/RecordDiscussButton.tsx). Used by pages/Task.tsx.
 import type { DevopsPrRef, QaBug, QaPlan, QaReport } from '@shared/contract';
 import { fmt } from '../lib/format';
-import { qaHeadline, qaOrder, qaOutcome, qaPeople, qaStandup } from '../lib/qa';
-import { Empty } from '../components/States';
-import { copyText, ExtLink, IconCopy, IconExternal, Pill, Section, toast } from '../components/ui';
+import { qaHeadline, qaOrder, qaOutcome } from '../lib/qa';
+import { ExtLink, IconExternal, Pill } from '../components/ui';
 import { stateTone } from '../lib/tasks';
 import { RecordDiscussButton } from '../components/RecordDiscussButton';
-import { HelpTip } from '../../components/HelpTip';
 import { t as tr } from '../../i18n';
 
 function Bar({ t }: { t: QaReport['totals'] }) {
@@ -68,7 +65,7 @@ function PlanView({ p, bugs, pr }: { p: QaPlan; bugs: Map<number, QaBug>; pr: De
   );
 }
 
-function QaCard({ r }: { r: QaReport }) {
+export function QaCard({ r }: { r: QaReport }) {
   const h = qaHeadline(r);
   const bugs = new Map(r.bugs.map(b => [b.id, b]));
   const loose = r.bugs.filter(b => !b.testCases.length);
@@ -88,24 +85,5 @@ function QaCard({ r }: { r: QaReport }) {
         </div>
       )}
     </article>
-  );
-}
-
-export function QaSection({ qa, error }: { qa: QaReport[]; error: string | null }) {
-  const people = qaPeople(qa);
-  const missing = qa.reduce((s, r) => s + r.totals.missing, 0);
-  const copy = () => { void copyText(qaStandup(qa)).then(ok => toast(ok ? tr('brainText.taskQa.standupCopied') : tr('brainText.common.copyFailed'))); };
-  return (
-    <Section title={tr('brainText.taskQa.title')} count={qa.length} testId="task-qa"
-      help={<HelpTip label={tr('brainText.taskQa.title')} title={tr('brainText.taskQa.helpTitle')} testid="qa-help"
-        example={tr('brainText.taskQa.helpExample')}>
-        {tr('brainText.taskQa.helpBody')}
-      </HelpTip>}
-      note={qa.length ? <>{missing ? tr('brainText.taskQa.missing', { n: missing }) : tr('brainText.taskQa.allRun')}{people.length > 0 && tr('brainText.taskQa.ranByList', { list: people.map(p => `${p.name} ${p.done}`).join(', ') })}</> : tr('brainText.taskQa.noteEmpty')}
-      actions={qa.length > 0 ? <button type="button" className="bx-btn s" onClick={copy} data-testid="qa-copy"><IconCopy /> {tr('brainText.taskQa.copyStandup')}</button> : undefined}>
-      {error && <p className="small dv-bad" role="status" data-testid="qa-error">{error}{qa.length ? tr('brainText.taskQa.previous') : ''}</p>}
-      {qa.length ? <div className="dv-prs">{qa.map(r => <QaCard key={r.pr?.id ?? r.plans[0]?.id} r={r} />)}</div>
-        : !error && <Empty title={tr('brainText.taskQa.emptyTitle')}>{tr('brainText.taskQa.emptyBody')}</Empty>}
-    </Section>
   );
 }

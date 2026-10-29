@@ -30,7 +30,6 @@ git locale della cartella: niente si perde, niente esce dal PC.
 | Pagina | Mostra | Il primo giorno | Si riempie quando |
 |--------|--------|-----------------|-------------------|
 | Da fare | Decisioni che ti aspettano, fili aperti, idee da riprendere | Vuota | Una chat apre un filo in `now.md` o un'idea ha una data passata |
-| Fatto e standup | Gli esiti del giorno e le frasi per lo standup | Vuota | Le chat scrivono righe `fatto` nel diario (`journal/`) |
 | Idee | Le tue idee e quelle dell'IA | Vuota | Dici "segnatelo", o una chat propone una sua idea |
 | Qualità | Quante volte hai dovuto correggere l'IA, se le regole funzionano | Trattini | Una correzione finisce in `ai-errors.md`, una proposta in `proposals.md` |
 | Costi | Quanto costano le chat a prezzo di listino, dove risparmiare | Quasi vuota | Usi le chat: legge le trascrizioni sul PC, zero token |

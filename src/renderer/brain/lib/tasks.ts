@@ -1,6 +1,5 @@
 // Pure rules of the Task page (pages/Task.tsx), computed locally from what the brain's script read (zero tokens):
-// who a PR is waiting for, how long a work item has not moved, the test cases' outcomes in one line, the work items in
-// state order, the review/stuck/build counts of the head tiles. Why: the user, 2026-10-12, "falla figa e usabile ... con
+// who a PR is waiting for, how long a work item has not moved, the test cases' outcomes in one line. Why: the user, 2026-10-12, "falla figa e usabile ... con
 // info aggiuntive sempre a costo 0 token". Pinned by test/unit/brain-ui/task-view.test.ts.
 import type { DevopsDetail, DevopsItem, DevopsPr, DevopsTest } from '@shared/contract';
 import type { Tone } from '../components/ui';
@@ -86,19 +85,6 @@ export function stateTone(state: string): Tone {
   if (/^(Resolved|Done|Closed|Completed)$/i.test(state)) return 'good';
   if (/^New$/i.test(state)) return 'outline';
   return '';
-}
-
-const STATE_ORDER = ['Active', 'In Progress', 'Doing', 'Committed', 'Approved', 'New', 'Resolved'];
-const stateRank = (s: string) => { const i = STATE_ORDER.findIndex(x => x.toLowerCase() === s.toLowerCase()); return i < 0 ? STATE_ORDER.length : i; };
-
-/** Work items by state (working ones first), each group by priority then the longest still first. */
-export function byState(items: readonly DevopsItem[]): { state: string; items: DevopsItem[] }[] {
-  const groups = new Map<string, DevopsItem[]>();
-  for (const w of items) groups.set(w.state || '—', [...(groups.get(w.state || '—') ?? []), w]);
-  return [...groups.entries()].sort(([a], [b]) => stateRank(a) - stateRank(b) || a.localeCompare(b)).map(([state, xs]) => ({
-    state,
-    items: [...xs].sort((a, b) => (a.priority ?? 9) - (b.priority ?? 9) || (Date.parse(a.changedAt ?? '') || 0) - (Date.parse(b.changedAt ?? '') || 0)),
-  }));
 }
 
 /** The last comment by someone else (what is worth reading first), else the last one. */

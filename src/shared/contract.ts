@@ -38,7 +38,6 @@ import type { CloudAgent, CloudApplyResult, CloudCaps, CloudState } from './clou
 import type { MorningOp, MorningState } from './morning';
 export type { MorningBrief, MorningChange, MorningCloud, MorningIdea, MorningNext, MorningOp, MorningOutcome, MorningPr, MorningRun, MorningStalled, MorningState } from './morning';
 import type { RunEstimates } from './task-estimate';
-import type { MacroTask } from './macro-tasks';
 import type { JudgingEstimate } from './agents';
 import type { AgentImages } from './agent-images';
 import type { RoutineRunDetail, RoutineRunRef, RoutinesSnapshot, RoutineTerminalExport } from './routines';
@@ -1324,9 +1323,6 @@ export interface InvokeMap {
   /** the task estimates of these runs (estimate made before each started, actual once ended) and the estimator's weekly
    *  accuracy (ADR 0087, src/main/agents/run-estimates.ts) */
   'agents:estimates': [{ runIds?: string[] } | undefined, RunEstimates];
-  /** the macro tasks started since then (top-level runs with the cost of all they started, #160; shared/macro-tasks.ts),
-   *  newest first; from the run store only, zero tokens */
-  'runs:macro': [{ since?: number } | undefined, MacroTask[]];
   /** what «Abilita controllo livello e performance» costs a day (agents/judge-sample.ts judgingEstimate), zero tokens */
   'agents:judgingEstimate': [void, JudgingEstimate];
   /** Brother's verdict on a settled agent run (Home strip); renderer only, never an agent tool. */
@@ -1751,7 +1747,7 @@ export const INVOKE_CHANNELS = [
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'chat:synthesize', 'memory:reviewList', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare', 'proposals:list', 'proposals:count', 'proposals:decide',
   'maintenance:run', 'maintenance:status', 'maintenance:stop',
-  'agents:list', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'runs:macro', 'agents:judgingEstimate', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
+  'agents:list', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'agents:judgingEstimate', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
   'brain:share', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'queries:list', 'queries:get', 'queries:delete', 'brainmodel:noise', 'brainmodel:link', 'brainmodel:remove', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:prewarm', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'chat:undoTurn', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',

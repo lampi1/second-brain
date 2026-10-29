@@ -14,10 +14,8 @@ export const brainLibEn: typeof brainLibIt = {
   'brainLib.charts.nBarsRange': (p: { n: number; from: string; to: string }) => `${p.n} bars; from ${p.from} to ${p.to}.`,
   'brainLib.charts.firstLabel': (p: { n: number; first: string; value: string }) => `${p.n} items; first: ${p.first}, ${p.value}.`,
 
-
   // record-discuss.ts
   'brainLib.recordDiscuss.untitled': 'untitled',
-
 
   // learn.ts
   'brainLib.learn.waiting': (p: { n: number }) => `waiting for the first ${p.n} cases after the change`,

@@ -102,7 +102,7 @@ status, alerts); quality metrics; full-text search; the Brain section (Agenti, S
 self-maintaining skills and agents and a change log with undo; agents exported with their skills; six fixed roles (the Orchestrator and five work roles, ADR 0100; every permission by default, narrowed from their cards, ADR 0085) with direct parent-to-child delegation in visible chats (permissions only go
 down, questions go to the parent first, the user's words in any chat reach the Orchestrator and the parent, each
 request shown once; the delegation tree as thread cards in the Grindhouse and the sidebar; work starts only from the
-Orchestrator, ADR 0083); Fatto, the log of what was done; and one-click updates
+Orchestrator, ADR 0083); and one-click updates
 from Settings → Aggiornamenti, where the user moves the app to main's tip.
 
 ## Horizon (designed for, not built yet)

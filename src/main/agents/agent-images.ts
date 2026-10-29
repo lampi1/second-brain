@@ -2,7 +2,7 @@
 // role. Main never trusts the renderer's bytes: a picture must be a PNG within AGENT_IMAGE_BYTES, decode (Electron's
 // nativeImage, injected so the tests pass a fake), be square and small, and is re-encoded at AGENT_IMAGE_SIDE before
 // it is written (no metadata, no extra chunks survive). Ids are checked against the fixed roles, so a name can never
-// leave the folder (ADR 0182). Used by index.ts ('avatars:get' / 'avatars:set' / 'avatars:reset'); unit tests in
+// leave the folder (ADR 0184). Used by index.ts ('avatars:get' / 'avatars:set' / 'avatars:reset'); unit tests in
 // test/unit/agent-images.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';

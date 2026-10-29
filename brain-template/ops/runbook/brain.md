@@ -14,17 +14,17 @@ Tutti i comandi partono dalla cartella del cervello (`{{BRAIN}}`); sono in sola 
 
 - **Dove**: il messaggio nomina lo script che è fallito (le pagine leggono il cervello con i suoi tool, in `ops/tools/`).
 - **Comando**: lancia lo stesso script a mano e leggi l'errore intero:
-  `node ops/tools/day.mjs report --json` (Fatto), `node ops/tools/day.mjs brief --json` (Da fare),
+  `node ops/tools/day.mjs report --json` (report della giornata), `node ops/tools/day.mjs brief --json` (Da fare),
   `node ops/tools/cost.mjs --days 7 --json` (Costi), `node ops/tools/brain-map.mjs --json` (Mappa 3D).
 - **Atteso**: un JSON. "Cannot find module" = manca un file del cervello: aggiorna il cervello dal prodotto invece di
   scriverlo a mano.
 - **Note**: una pagina **vuota** non è un errore: quella memoria non ha ancora righe (`START-HERE.md`, la tabella delle
   pagine).
 
-## Fatto o Da fare dicono "DevOps non letto"
+## Il report della giornata o Da fare dicono "DevOps non letto"
 
 - **Dove**: `day.mjs` legge PR e work item con il login di Azure CLI.
-- **Comando**: `az login` (solo se usi Azure DevOps), poi "Aggiorna" nella pagina.
+- **Comando**: `az login` (solo se usi Azure DevOps), poi rileggi.
 - **Atteso**: le PR e i work item del giorno compaiono.
 - **Note**: senza Azure DevOps l'avviso resta ed è innocuo: il diario, i fili e le chat si vedono lo stesso.
 

@@ -9,7 +9,6 @@ export const brainPagesIt = {
   'brainPages.registrazioni.subtitle': 'Le call registrate (audio del PC + microfono) e i file importati, trascritti sul PC a zero token: «Registra call», la trascrizione Tu/Altri, «Chiedi all’Orchestrator», «Trovate sul PC».',
   'brainPages.nav.browser': 'Browser',
   'brainPages.nav.task': 'Task',
-  'brainPages.nav.fatto': 'Fatto e standup',
   'brainPages.nav.idee': 'Idee',
   'brainPages.nav.costi': 'Costi',
   'brainPages.nav.qualita': 'Qualità',
@@ -46,14 +45,7 @@ export const brainPagesIt = {
   'brainPages.confronto.tableLabel': 'File del confronto',
   'brainPages.confronto.updated': 'aggiornato',
 
-  // day.tsx
-  'brainPages.day.standupTitle': 'Per lo standup',
-  'brainPages.day.standupDesc': 'e oggi, da leggere a voce',
-  'brainPages.day.copyBtn': 'Copia',
-  'brainPages.day.copied': 'Frasi copiate',
-  'brainPages.day.copyFailed': 'Copia non riuscita: seleziona il testo',
-  'brainPages.day.loading': 'Preparo le frasi (Azure DevOps e diario)…',
-  'brainPages.day.note': (p: { hasDevops: boolean }) => `Fatto dal diario, dalle chat${p.hasDevops ? ' e da Azure DevOps' : ''}; da fare dal brief e dai fili aperti.`,
+  // Esplora.tsx
 
   // Task.tsx (ADR 0079: the DevOps page became Task)
   'brainPages.task.title': 'Task',
@@ -78,39 +70,6 @@ export const brainPagesIt = {
   'brainPages.task.neverBody': 'Premi «Aggiorna ora»: novità, PR e work item da Azure DevOps compaiono qui.',
   'brainPages.task.firstRead': 'Leggo Azure DevOps (la prima volta anche qualche minuto)…',
   'brainPages.task.loading': 'Leggo lo stato dei task…',
-
-  // Fatto.tsx (a log, ADR 0079)
-  'brainPages.fatto.title': 'Fatto',
-  'brainPages.fatto.subtitle': 'Le attività che hai chiesto, dalla più recente, con quanto sono costate in tutto.',
-  'brainPages.fatto.from': 'Dal giorno',
-  'brainPages.fatto.range': 'Giorni',
-  'brainPages.fatto.today': 'Oggi',
-  'brainPages.fatto.refresh': 'Rileggi',
-  'brainPages.fatto.summary': (p: { days: number }) => `Ultimi ${p.days} giorni`,
-  'brainPages.fatto.note': 'Una riga per attività: il costo comprende le chat che ha avviato, le revisioni e i rifacimenti. Nessun token speso per questa pagina.',
-  'brainPages.fatto.count': (p: { n: number }) => (p.n === 1 ? '1 attività' : `${p.n} attività`),
-  'brainPages.fatto.total': (p: { cost: string }) => `Totale ${p.cost}`,
-  'brainPages.fatto.totalTip': 'La somma delle attività del giorno; n/d se una non ha un costo noto.',
-  'brainPages.fatto.unknownCost': 'n/d',
-  'brainPages.fatto.soFar': 'finora',
-  'brainPages.fatto.costSoFar': 'In corso: il costo fino ad adesso, sue chat comprese.',
-  'brainPages.fatto.costTip': (p: { n: number }) => (p.n === 1 ? 'Il costo di questa chat.' : `Il costo di questa chat e delle altre ${p.n - 1} che ha avviato (revisioni e rifacimenti compresi).`),
-  'brainPages.fatto.since': (p: { at: string }) => `dalle ${p.at}`,
-  'brainPages.fatto.parts': (p: { n: number }) => `${p.n} chat`,
-  'brainPages.fatto.outcome.done': 'fatto',
-  'brainPages.fatto.outcome.partial': 'in parte',
-  'brainPages.fatto.outcome.blocked': 'bloccato',
-  'brainPages.fatto.outcome.running': 'in corso',
-  'brainPages.fatto.outcome.closed': 'chiuso',
-  'brainPages.fatto.empty': 'Nessuna attività in questo giorno.',
-  'brainPages.fatto.emptyHint': 'Un’attività nasce quando chiedi un lavoro all’Orchestrator o a un ruolo.',
-  'brainPages.fatto.error': 'Attività non lette:',
-  'brainPages.fatto.standupDesc': 'l’ultimo giorno di lavoro e oggi, una riga per attività.',
-  'brainPages.fatto.standupEmpty': 'Ancora nessuna attività da raccontare.',
-  'brainPages.fatto.standupLine': (p: { when: string; what: string; role: string; outcome: string }) => `${p.when}: ${p.what} (${p.role}, ${p.outcome})`,
-  'brainPages.fatto.more': 'Mostra altri giorni',
-  'brainPages.fatto.openChat': (p: { title: string }) => `Apri la chat «${p.title}»`,
-  'brainPages.fatto.log': 'Registro del fatto',
 
   // Idee.tsx
   'brainPages.idee.pageTitle': 'Idee',

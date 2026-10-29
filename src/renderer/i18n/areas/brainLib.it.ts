@@ -12,10 +12,8 @@ export const brainLibIt = {
   'brainLib.charts.nBarsRange': (p: { n: number; from: string; to: string }) => `${p.n} barre; da ${p.from} a ${p.to}.`,
   'brainLib.charts.firstLabel': (p: { n: number; first: string; value: string }) => `${p.n} voci; la prima: ${p.first}, ${p.value}.`,
 
-
   // record-discuss.ts
   'brainLib.recordDiscuss.untitled': 'senza titolo',
-
 
   // learn.ts
   'brainLib.learn.waiting': (p: { n: number }) => `in attesa dei primi ${p.n} casi dopo il cambio`,

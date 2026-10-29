@@ -1,9 +1,9 @@
 // E2E of the Task page (real app, a synthetic brain with a fake ops/tools/devops-me.mjs from test/fixtures/devops):
-// nothing is read until asked (automatic read off by default); "Aggiorna ora" runs the script, shows news with titles
-// and links and their whole text, the unread ones highlighted, PRs with who they wait for, work items opening in place on
-// description, comments and test outcomes, a sidebar badge and a feed event; "Segna tutte come lette" clears them; an
-// expired az login shows the command to run; the page turns the automatic read on. Laid out like Agenti (ADR 0079:
-// the DevOps page became Task): the same head, toolbar and cards. Screenshots dark and light: test-results/shots/task-*.png.
+// nothing is read until asked (automatic read off by default); "Aggiorna ora" runs the script and fills the list (one
+// strip per record, those for me first, ADR 0182): a chosen strip shows in the detail pane the news with its link and
+// whole text, the PR with who it waits for, the work item with its description, comments and test outcomes; J/K move,
+// E marks read; a sidebar badge and a feed event; "Segna tutte come lette" clears them; an expired az login shows the
+// command to run; the page's link turns the automatic read on. The head is Agenti's (ADR 0079). Screenshots dark and light: test-results/shots/task-*.png.
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -37,37 +37,43 @@ test('Task page: read on demand, unread news with links, badge and feed, mark re
     await expect(dv.getByTestId('bx-lead')).toContainText('Task non ancora letti');
     await expect(dv.getByTestId('task-never')).toBeVisible();
     await shot(page, 'task-empty');
-    await expect(dv.getByTestId('task-prs')).toHaveCount(0); // no empty sections claiming "nothing" before a read
+    await expect(dv.getByTestId('task-list')).toHaveCount(0); // no empty list claiming "nothing" before a read
 
-    // Aggiorna ora: the script runs, news with title + link, unread highlighted
+    // Aggiorna ora: the list opens on "Per te", the mention and the PR waiting for me first; the first one is shown
     await dv.getByTestId('task-refresh').click();
-    const mention = dv.getByTestId('task-news-mention:1');
-    await expect(mention).toHaveAttribute('data-unread', '1', { timeout: 30_000 });
+    const strip = dv.getByTestId('task-row-news:mention:1');
+    await expect(strip).toHaveAttribute('data-unread', '1', { timeout: 30_000 });
+    await expect(dv.getByTestId('task-tab-mine')).toHaveAttribute('aria-selected', 'true');
+    await expect(strip).toContainText('Giulia ti menziona');
+    await expect(dv.getByTestId('task-row-pr:812')).toContainText('Aspetta te: build fallita');
+    const detail = dv.getByTestId('task-detail');
+    const mention = detail.getByTestId('task-news-mention:1');
     await expect(mention.getByRole('link', { name: 'Il totale del rimborso ignora lo sconto' })).toHaveAttribute('href', 'https://dev.azure.com/o/Shop/_workitems/edit/4711');
-    await expect(mention).toContainText('Giulia ti menziona');
-    await expect(dv.getByTestId('task-followed').getByTestId('task-news-followed:4650:12')).toContainText('stato Active → Resolved');
-    await expect(dv.getByTestId('task-pr-812')).toContainText('build fallita');
-    await expect(dv.getByTestId('task-pr-812')).toContainText('auto-complete attivo');
-    await expect(dv.getByTestId('task-pr-812')).toContainText('Giulia Bianchi: approvata');
-    await expect(dv.getByTestId('task-assigned')).toContainText('Fatture: invio PEC dal dettaglio');
-    // the content is in the app (2026-10-12): the whole mention, who the PR waits for, its last comment, and a work
-    // item that opens in place on its description, comments and test outcomes
-    await expect(dv.getByTestId('task-body-mention:1')).toHaveText('Riesci a guardarlo oggi? Il cliente ha già fatto due resi così.');
-    await expect(dv.getByTestId('task-wait-812')).toHaveText('Aspetta te: build fallita');
-    await expect(dv.getByTestId('task-pr-812')).toContainText('Manca il test per lo sconto percentuale.');
-    await expect(dv.getByTestId('task-tile-prs')).toContainText('1 aspetta te');
-    const item = dv.getByTestId('task-assigned').getByTestId('task-item-4711');
-    await expect(item).toContainText('2 test: 1 passato, 1 fallito');
-    await expect(item).toContainText('Giulia: Riesci a guardarlo oggi?');
-    await expect(item.getByTestId('task-desc-4711')).toBeHidden();
-    await item.locator('summary').click();
+    // the content is in the app (2026-10-12): the whole mention
+    await expect(detail.getByTestId('task-body-mention:1')).toHaveText('Riesci a guardarlo oggi? Il cliente ha già fatto due resi così.');
+    // J moves to the next strip: the PR with who it waits for, its checks, voters and last comment
+    await dv.getByTestId('task-list').focus();
+    await page.keyboard.press('j');
+    await expect(dv.getByTestId('task-row-pr:812')).toHaveAttribute('aria-selected', 'true');
+    await expect(detail.getByTestId('task-wait-812')).toHaveText('Aspetta te: build fallita');
+    await expect(detail.getByTestId('task-pr-812')).toContainText('auto-complete attivo');
+    await expect(detail.getByTestId('task-pr-812')).toContainText('Giulia Bianchi: approvata');
+    await expect(detail.getByTestId('task-pr-812')).toContainText('Manca il test per lo sconto percentuale.');
+    // Notifiche: the followed ticket is one strip with its changes
+    await dv.getByTestId('task-tab-news').click();
+    await dv.getByTestId('task-row-followed:4650').click();
+    await expect(detail.getByTestId('task-news-followed:4650:12')).toContainText('stato Active → Resolved');
+    // Work item: the item in full, its description, comments and test outcomes
+    await dv.getByTestId('task-tab-items').click();
+    await expect(dv.getByTestId('task-list')).toContainText('Fatture: invio PEC dal dettaglio');
+    await expect(dv.getByTestId('task-row-item:4711')).toContainText('2 test: 1 passato, 1 fallito');
+    await dv.getByTestId('task-row-item:4711').click();
+    const item = detail.getByTestId('task-item-4711');
     await expect(item.getByTestId('task-desc-4711')).toContainText('Con un reso parziale il rimborso usa il prezzo pieno.');
     await expect(item.getByTestId('task-tests')).toContainText('Reso parziale con sconto di riga');
-    await dv.getByTestId('task-tile-items').click();   // a tile jumps to its section
-    await expect(dv.getByTestId('task-assigned')).toBeInViewport();
+    await expect(item).toContainText('Riesci a guardarlo oggi?');
     await shot(page, 'task-item-open');
-    await item.locator('summary').click();
-    await dv.getByTestId('task-tile-news').click();
+    await dv.getByTestId('task-tab-mine').click();
     await expect(page.getByTestId('nav-badge-task')).toHaveText('2');
     // the feed (the Orchestrator's Novità and the notification center) got the news, once
     await page.keyboard.press('Control+Shift+N');
@@ -82,17 +88,21 @@ test('Task page: read on demand, unread news with links, badge and feed, mark re
     await shot(page, 'task-light');
     await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'dark' }));
 
-    // "Da leggere" counts its own news (the followed ticket is told apart); "Segna tutte come lette" marks only those, the
-    // followed ticket has its own "Letta"; the rows stay in place, marked read, until the next read
-    await expect(dv.getByTestId('task-tile-news')).toContainText('1');
+    // the lead counts the news apart from the followed ticket; "Segna tutte come lette" marks only those, the followed
+    // ticket has its own "Letta" (or E on its strip); the strips stay in place, marked read, until the next read
+    await expect(dv.getByTestId('bx-lead')).toContainText('3 per te'); // the mention, the PR waiting for me, the review asked of me
     await expect(dv.getByTestId('bx-lead')).toContainText('1 novità da leggere');
     await expect(dv.getByTestId('bx-lead')).toContainText('1 sui ticket che segui');
     await dv.getByTestId('task-mark-all').click();
     await expect(page.getByTestId('nav-badge-task')).toHaveText('1');
-    await dv.getByTestId('task-read-followed-followed:4650:12').click();
+    await dv.getByTestId('task-tab-news').click();
+    await dv.getByTestId('task-row-followed:4650').click();
+    await page.keyboard.press('e');
     await expect(page.getByTestId('nav-badge-task')).toHaveText('');
-    await expect(mention).toHaveAttribute('data-unread', '0');
-    await expect(mention).toContainText('letta');
+    await expect(dv.getByTestId('task-row-followed:4650')).toHaveAttribute('data-unread', '0');
+    await dv.getByTestId('task-row-news:mention:1').click();
+    await expect(detail.getByTestId('task-news-mention:1')).toHaveAttribute('data-unread', '0');
+    await expect(detail.getByTestId('task-news-mention:1')).toContainText('letta');
 
     // az login expired: a clear message with the command, the last data stays
     fs.writeFileSync(path.join(brain, 'task-fail'), '');
@@ -102,7 +112,8 @@ test('Task page: read on demand, unread news with links, badge and feed, mark re
     await expect(page.getByTestId('toasts')).toContainText('accesso scaduto');
     await expect(dv.getByTestId('task-refresh')).toBeEnabled();
     await expect(dv.getByTestId('task-error-command')).toHaveText('az login');
-    await expect(dv.getByTestId('task-pr-812')).toBeVisible();
+    await dv.getByTestId('task-tab-all').click();
+    await expect(dv.getByTestId('task-row-pr:812')).toBeVisible(); // the last data stays
     await shot(page, 'task-login-expired');
 
     // the page's link opens Settings → Notifiche, where the automatic read is turned on and its interval set (one place)

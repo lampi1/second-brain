@@ -15,8 +15,8 @@ migliorano**. La revisione (solo su richiesta) li trasforma in regole, routine e
 
 ## Com'è fatto un giorno
 
-Il primo file nasce con la prima riga del giorno. La pagina "Fatto e standup" dell'app lo legge (con le chat e i
-commit del giorno) e ne ricava le frasi per lo standup. Un esempio inventato, per vedere la forma:
+Il primo file nasce con la prima riga del giorno. Il report di fine giornata (`routines.md`) lo legge con le chat e i
+commit del giorno. Un esempio inventato, per vedere la forma:
 
 ```
 # 2026-01-15 (giovedì)

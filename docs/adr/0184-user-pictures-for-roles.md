@@ -1,4 +1,4 @@
-# ADR 0182 · The user's own picture for a role
+# ADR 0184 · The user's own picture for a role
 
 Numbered 0090 until 2026-10-29, when duplicate ADR numbers were removed.
 

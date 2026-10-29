@@ -1,30 +1,26 @@
-// Task (until 2026-10-19 "DevOps", ADR 0079): the brain's first page, everything the user needs from Azure DevOps with
-// the content shown in the app, so a link is opened only for a PR. Laid out like Agenti and Guida (issue #85: same
-// cards, spacing, type and colors): the page head (title, subtitle, "Aggiorna ora" and the time of the read); the
-// toolbar with the automatic read, its interval and the alerts' sound (ADR 0029); four number cards (to read, my PRs,
-// reviews for me, work items not moving) that jump to their section; a bar that stays on top with every section and
-// its count. The news as cards with the whole comment or mention; my PRs with who they wait for, a four-step check
-// strip (build, votes, discussions, auto-complete), the voters, the last comment and the linked work items' test
-// outcomes; "Test e QA" (TaskQa.tsx); the reviews waiting for me and since when; my work items by state, each opening
-// in place on its description, last comments and test cases; the tickets I follow with their changes; the stand-up
-// sentences. All of it from the brain's read-only script devops-me.mjs --full, kept by main's TaskService (imported
-// automatically when the read is on): zero tokens, no AI summary. Each record has "Discuti" (RecordDiscussButton.tsx: a draft for the Orchestrator).
-// A failed read says why (az login expired → the command). Why: the user, 2026-10-11 ("vorrei un aggiornamento
-// automatico da DevOps"), 2026-10-12 ("falla figa e usabile ... info aggiuntive sempre a costo 0 token"), 2026-10-19
-// (#85: "rinomina DevOps in Task", same look as Agenti). Styles: brain.css (dv-*) and worklog.css (tk-*).
+// Task (until 2026-10-19 "DevOps", ADR 0079): everything the user needs from Azure DevOps with the content shown in the
+// app, laid out as a list and a detail (ADR 0182, mockup C the owner picked on 2026-10-29: "una striscia per task o
+// notifica"). On top the page head (title with the read's dot, one line of what waits, "Aggiorna ora"), the automatic
+// read in one line (its settings live in Settings → Notifiche, ADR 0101) and a failed read with why (az login expired →
+// the command). Left: tabs (Per te, Notifiche, PR, Work item, Test e QA, Tutto) over one strip per record: a news item,
+// a ticket I follow (its changes together), my PR, a review waiting for me, my work item, a QA report; those that ask
+// something of me first, then the unread, then the newest. Right: the chosen strip in full (the whole comment, the PR's
+// four checks, voters and last comment, the work item's description, comments and test cases, the test plans), with
+// "Discuti" (RecordDiscussButton.tsx: a draft for the Orchestrator) and "Segna letta". J/K or the arrows move, E marks
+// read. All of it from the brain's read-only script devops-me.mjs --full, kept by main's TaskService: zero tokens, no AI
+// summary. Why: the user, 2026-10-11 ("vorrei un aggiornamento automatico da DevOps"), 2026-10-12 ("falla figa e usabile
+// ... info aggiuntive sempre a costo 0 token"), 2026-10-29 ("molto più pulita e usabile"). Styles: brain.css (dv-*) and
+// worklog.css (tk-*).
 // Used by brain/index.tsx (page 'task').
 import type { DevopsComment, DevopsDetail, DevopsItem, DevopsNews, DevopsPr, DevopsPrRef, TasksState, DevopsTest } from '@shared/contract';
-import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { markTasksRead, refreshTasks, useTasks } from '../../store/tasks';
 import { fmt } from '../lib/format';
-import { BUILD_WORDS, byState, daysSince, firstName, hue, initials, lastComment, outcomeLabel, prWait, sinceLabel, stateTone, stuckDays, testSummary } from '../lib/tasks';
-import { normTables } from '../types';
-import { useBrain } from '../api';
-import { ownerOf } from '../lib/text';
-import { Empty, Loading } from '../components/States';
-import { copyText, ExtLink, IconCopy, IconExternal, Pill, Section, toast, type Navigate, type Tone } from '../components/ui';
-import { Standup } from './day';
-import { QaSection } from './TaskQa';
+import { BUILD_WORDS, daysSince, firstName, hue, initials, lastComment, outcomeLabel, prWait, sinceLabel, stateTone, stuckDays, testSummary } from '../lib/tasks';
+import { Loading } from '../components/States';
+import { copyText, ExtLink, IconCopy, IconExternal, Pill, toast, type Tone } from '../components/ui';
+import { QaCard } from './TaskQa';
+import { qaHeadline } from '../lib/qa';
 import { RecordDiscussButton } from '../components/RecordDiscussButton';
 import { HelpTip } from '../../components/HelpTip';
 import { IconSettings } from '../../components/Icons';
@@ -41,9 +37,6 @@ const newsLine = (n: DevopsNews) => { const v = tr(VERB[n.kind]); return n.who ?
 /** "failed (20261011.4)" → "fallita (20261011.4)": the script's build result in Italian. */
 const buildDetail = (d: string) => d.replace(/^(\w+)/, w => BUILD_WORDS[w] ?? w);
 const ERROR_TITLE: Record<NonNullable<TasksState['error']>['kind'], TextKey> = { login: 'brainText.task.error.login', script: 'brainText.task.error.script', failed: 'brainText.task.error.failed' };
-type SecId = 'news' | 'prs' | 'qa' | 'reviews' | 'items' | 'followed' | 'standup';
-/** Scrolls to a section and moves the keyboard focus there (Tab goes on inside it, not back among the tiles). */
-const jump = (id: SecId) => { const el = document.getElementById(`dv-${id}`); el?.scrollIntoView({ behavior: 'smooth', block: 'start' }); el?.focus({ preventScroll: true }); };
 
 // ---- small pieces ------------------------------------------------------------------------------------------------
 
@@ -326,35 +319,31 @@ function AutoState({ s }: { s: TasksState }) {
   );
 }
 
-/** A number at a glance, as one of Agenti's cards; a click jumps to its section. */
-function Tile({ k, v, s, tone, to, testId, index }: { k: string; v: number; s: ReactNode; tone?: Tone; to: SecId; testId: string; index: number }) {
+/** A review waiting for me, in the detail pane: who asked, where, since when; Discuti and the PR one click away. */
+function ReviewDetail({ p, now }: { p: DevopsPrRef; now: number }) {
+  const d = daysSince(p.createdAt, now);
   return (
-    <button type="button" className={`catalog-card tk-tile ${tone || 'none'}`} style={{ ['--row-index' as string]: index }} onClick={() => jump(to)} data-testid={testId}>
-      <span className="k"><i aria-hidden="true" />{k}</span>
-      <span className="v">{v}</span>
-      <span className="s">{s}</span>
-    </button>
+    <article className="tk-review" data-testid={`task-review-${p.id}`}>
+      <div className="dv-pr-head"><h3><ExtLink href={p.url} title={tr('brainText.common.openPr')}>{p.title} <IconExternal /></ExtLink></h3><RecordDiscussButton rec={{ kind: 'pr', pr: p, mine: false }} /></div>
+      <div className="tk-review-who"><Avatar name={p.author} /><span><b>{p.author?.replace(/\s*<.*$/, '') ?? tr('brainText.task.someone')}</b> <span className="muted">· {p.repo}</span></span>
+        {d !== null && <Pill tone={d >= 3 ? 'warn' : 'outline'}>{tr('brainText.task.waits', { since: sinceLabel(d) })}</Pill>}</div>
+    </article>
   );
 }
 
-/** A section's place on the page: the anchor the tiles and the section bar jump to. */
-function Anchor({ id, children }: { id: SecId; children: ReactNode }) {
-  return <div id={`dv-${id}`} className="dv-anchor" tabIndex={-1}>{children}</div>;
-}
-
-function Reviews({ list, now }: { list: DevopsPrRef[]; now: number }) {
+/** A work item in the detail pane: its title, state and priority on top, then what DetailView reads. */
+function ItemDetail({ w, d, now }: { w: DevopsItem; d: DevopsDetail | undefined; now: number }) {
+  const stuck = stuckDays(w, now);
   return (
-    <div className="bx-card tight"><ul className="bx-list">{list.map(p => {
-      const d = daysSince(p.createdAt, now);
-      return (
-        <li key={p.id} data-testid={`task-review-${p.id}`}>
-          <Avatar name={p.author} />
-          <span className="t"><ExtLink href={p.url} title={tr('brainText.common.openPr')}>{p.title}</ExtLink><span className="small muted"> · {p.author?.replace(/\s*<.*$/, '') ?? ''} · {p.repo}</span></span>
-          {d !== null && <Pill tone={d >= 3 ? 'warn' : 'outline'}>{tr('brainText.task.waits', { since: sinceLabel(d) })}</Pill>}
-          <RecordDiscussButton rec={{ kind: 'pr', pr: p, mine: false }} />
-        </li>
-      );
-    })}</ul></div>
+    <article className="tk-item" data-testid={`task-item-${w.id}`}>
+      <div className="dv-pr-head"><h3><ExtLink href={w.url}>{w.title} <IconExternal /></ExtLink></h3><RecordDiscussButton rec={{ kind: 'workitem', item: w }} /></div>
+      <div className="bx-row">
+        <Pill tone={stateTone(w.state)}>{w.state || '—'}</Pill>
+        <span className="small muted">{w.type}{w.priority !== null ? ` · P${w.priority}` : ''}</span>
+        {stuck !== null && <span className={`small ${stuck >= 7 ? 'dv-bad' : 'dv-warn'}`}>{tr('brainText.task.stuck', { since: sinceLabel(stuck) })}</span>}
+      </div>
+      <DetailView w={w} d={d} />
+    </article>
   );
 }
 
@@ -380,51 +369,176 @@ function Head({ s, lead }: { s: TasksState | null; lead?: ReactNode }) {
   );
 }
 
-export function TaskPage({ nav }: { nav?: Navigate }) {
+
+// ---- the list and the detail -------------------------------------------------------------------------------------
+
+type TabId = 'mine' | 'news' | 'prs' | 'items' | 'qa' | 'all';
+type Glyph = 'mention' | 'comment' | 'build' | 'pr' | 'review' | 'item' | 'bug' | 'follow' | 'qa';
+/** One strip of the list: what it is, which tabs hold it, and what the detail pane shows when it is chosen. */
+interface Row {
+  key: string; tabs: TabId[]; mine: boolean; unread: boolean; at: number | null;
+  /** unread at the last read: keeps its place (and its tab) until the next read, read or not */
+  fresh: boolean;
+  glyph: Glyph; tone: Tone; kind: string; title: string; sub: string; subTone?: Tone;
+  /** the news this strip marks read (E, "Segna letta") */
+  readKeys: string[];
+  detail: () => ReactNode;
+}
+const NEWS_GLYPH: Record<DevopsNews['kind'], Glyph> = { mention: 'mention', touched: 'item', taken: 'item', review: 'review', comment: 'comment', vote: 'review', build: 'build', followed: 'follow' };
+/** The news that ask something of me: someone named me, asked my vote, took my item, broke my build. */
+const NEWS_MINE = new Set<DevopsNews['kind']>(['mention', 'review', 'taken', 'build']);
+const ms = (iso: string | null | undefined): number | null => { const t = iso ? Date.parse(iso) : NaN; return Number.isFinite(t) ? t : null; };
+const oneLine = (s: string | undefined) => (s ?? '').replace(/\s+/g, ' ').trim();
+
+/** A strip's small icon: a stroke drawing per kind, in the strip's tone. */
+function GlyphIcon({ g }: { g: Glyph }) {
+  const d: Record<Glyph, ReactNode> = {
+    mention: <><circle cx="12" cy="12" r="4" /><path d="M16 8v5a3 3 0 0 0 6 0v-1a10 10 0 1 0-4 8" /></>,
+    comment: <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />,
+    build: <><path d="M12 3 2 20h20L12 3z" /><path d="M12 10v4M12 17h.01" /></>,
+    pr: <><circle cx="6" cy="6" r="2.5" /><circle cx="6" cy="18" r="2.5" /><circle cx="18" cy="18" r="2.5" /><path d="M6 8.5v7M18 15.5V10a3 3 0 0 0-3-3h-4" /></>,
+    review: <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></>,
+    item: <><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M8 9h8M8 13h8M8 17h5" /></>,
+    bug: <><rect x="8" y="6" width="8" height="13" rx="4" /><path d="M12 10v9M4 13h4M16 13h4M5 7l3 2M19 7l-3 2M5 19l3-2M19 19l-3-2" /></>,
+    follow: <path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10 21h4" />,
+    qa: <><rect x="4" y="4" width="16" height="16" rx="3" /><path d="m8.5 12 2.5 2.5 4.5-5" /></>,
+  };
+  return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{d[g]}</svg>;
+}
+
+/** Every record of the read as one strip: news (a followed ticket is one strip with its changes), my PRs, the reviews
+ *  waiting for me, my work items, the QA reports. Those that ask something of me first, then the unread, then the newest. */
+function buildRows(s: TasksState, now: number, kept: (n: DevopsNews) => boolean): Row[] {
+  const rows: Row[] = [];
+  for (const n of s.news.filter(x => x.kind !== 'followed')) {
+    const text = n.body ?? (n.kind === 'build' && n.detail ? buildDetail(n.detail) : n.detail);
+    const fresh = kept(n);
+    const mine = fresh && NEWS_MINE.has(n.kind);
+    rows.push({
+      key: `news:${n.key}`, tabs: ['news', 'all', ...(mine ? ['mine' as const] : [])], mine, unread: n.unread, fresh, at: ms(n.at),
+      glyph: NEWS_GLYPH[n.kind], tone: n.unread ? KIND_TONE[n.kind] ?? 'blue' : '', kind: newsLine(n), title: n.title, sub: oneLine(text),
+      readKeys: n.unread ? [n.key] : [], detail: () => <NewsCard n={n} details={s.details} now={now} />,
+    });
+  }
+  const followed = new Map<string, DevopsNews[]>();
+  for (const n of s.news.filter(x => x.kind === 'followed')) { const k = String(n.item?.id ?? n.url.match(/edit\/(\d+)/)?.[1] ?? n.url); followed.set(k, [...(followed.get(k) ?? []), n]); }
+  for (const [k, ns] of followed) {
+    const first = ns[0]!;
+    const unread = ns.filter(n => n.unread);
+    rows.push({
+      key: `followed:${k}`, tabs: ['news', 'all'], mine: false, unread: unread.length > 0, fresh: ns.some(kept), at: ms(first.at),
+      glyph: 'follow', tone: unread.length ? 'blue' : '', kind: tr('brainText.task.sec.followed'), title: first.title,
+      sub: oneLine(`${first.who ?? ''} ${(first.detail ?? '').replace(/ · commento: ".*$/, '')}`),
+      readKeys: unread.map(n => n.key), detail: () => <FollowedCard news={ns} details={s.details} />,
+    });
+  }
+  for (const p of s.prs) {
+    const w = prWait(p);
+    const mine = w.who === 'me' && (w.tone === 'bad' || w.tone === 'warn');
+    rows.push({
+      key: `pr:${p.id}`, tabs: ['prs', 'all', ...(mine ? ['mine' as const] : [])], mine, unread: false, fresh: false, at: ms(p.lastComment?.at) ?? ms(p.createdAt),
+      glyph: 'pr', tone: mine ? w.tone : '', kind: tr('brainText.task.sec.prs'), title: p.title, sub: w.text, subTone: w.tone,
+      readKeys: [], detail: () => <PrCard p={p} details={s.details} now={now} />,
+    });
+  }
+  for (const p of s.reviews) {
+    const d = daysSince(p.createdAt, now);
+    rows.push({
+      key: `review:${p.id}`, tabs: ['prs', 'all', 'mine'], mine: true, unread: false, fresh: false, at: ms(p.createdAt),
+      glyph: 'review', tone: 'violet', kind: tr('brainText.task.tab.review'), title: p.title,
+      sub: [p.author?.replace(/\s*<.*$/, ''), d !== null ? tr('brainText.task.waits', { since: sinceLabel(d) }) : ''].filter(Boolean).join(' · '), subTone: d !== null && d >= 3 ? 'warn' : '',
+      readKeys: [], detail: () => <ReviewDetail p={p} now={now} />,
+    });
+  }
+  for (const w of s.assigned) {
+    const stuck = stuckDays(w, now);
+    const hot = w.type === 'Bug' && (w.priority ?? 9) <= 2 && stuck !== null;
+    const sum = testSummary(s.details[String(w.id)]?.tests ?? []);
+    rows.push({
+      key: `item:${w.id}`, tabs: ['items', 'all', ...(hot ? ['mine' as const] : [])], mine: hot, unread: false, fresh: false, at: ms(w.changedAt),
+      glyph: w.type === 'Bug' ? 'bug' : 'item', tone: hot ? 'bad' : stuck !== null ? 'warn' : '', kind: `${w.type}${w.priority !== null ? ` · P${w.priority}` : ''}`, title: w.title,
+      sub: [w.state, stuck !== null ? tr('brainText.task.stuck', { since: sinceLabel(stuck) }) : '', sum?.text ?? ''].filter(Boolean).join(' · '), subTone: stuck !== null ? (stuck >= 7 ? 'bad' : 'warn') : '',
+      readKeys: [], detail: () => <ItemDetail w={w} d={s.details[String(w.id)]} now={now} />,
+    });
+  }
+  for (const r of s.qa) {
+    const h = qaHeadline(r);
+    rows.push({
+      key: `qa:${r.pr?.id ?? r.plans[0]?.id}`, tabs: ['qa', 'all'], mine: false, unread: false, fresh: false, at: null,
+      glyph: 'qa', tone: h.tone === 'bad' ? 'bad' : '', kind: tr('brainText.taskQa.title'), title: r.pr?.title ?? r.plans[0]?.name ?? '', sub: h.text, subTone: h.tone,
+      readKeys: [], detail: () => <QaCard r={r} />,
+    });
+  }
+  return rows.sort((a, b) => Number(b.mine) - Number(a.mine) || Number(b.fresh) - Number(a.fresh) || (b.at ?? 0) - (a.at ?? 0));
+}
+
+function Strip({ r, on, onPick, now }: { r: Row; on: boolean; onPick: () => void; now: number }) {
+  return (
+    <li role="option" aria-selected={on} id={`tk-row-${r.key}`} className={`tk-strip ${on ? 'on' : ''} ${r.unread ? 'unread' : ''} t-${r.tone || 'none'}`}
+      onClick={onPick} data-testid={`task-row-${r.key}`} data-unread={r.unread ? '1' : '0'}>
+      <span className="tk-glyph" aria-hidden="true"><GlyphIcon g={r.glyph} /></span>
+      <span className="tk-strip-text">
+        <span className="tk-strip-top"><span className="tk-strip-kind">{r.kind}</span>{r.at !== null && <time className="tk-strip-when" dateTime={new Date(r.at).toISOString()} title={fmt.when(r.at)}>{fmt.ago(r.at, now)}</time>}</span>
+        <b className="tk-strip-title">{r.title}</b>
+        {r.sub && <span className={`tk-strip-sub ${r.subTone ? `dv-${r.subTone}` : ''}`}>{r.sub}</span>}
+      </span>
+    </li>
+  );
+}
+
+export function TaskPage() {
   const s = useTasks(x => x);
-  const t = useBrain('/api/tables', normTables);
-  // the news unread at the last read stay in "Da leggere" (marked "letta" once read) until the next read: a card
-  // never jumps away under the pointer or takes the keyboard focus with it
+  // the news unread at the last read stay unread-looking ("letta" once read) until the next read: a strip never jumps
+  // away under the pointer or takes the keyboard focus with it
   const top = useRef<{ at: number | null; keys: Set<string> }>({ at: null, keys: new Set() });
+  const [tab, setTab] = useState<TabId | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
+  const list = useRef<HTMLUListElement>(null);
   if (!s) return <section className="tk-page"><Head s={null} /><Loading label={tr('brainPages.task.loading')} /></section>;
   if (top.current.at !== s.at || top.current.keys.size === 0) top.current = { at: s.at, keys: new Set(s.news.filter(n => n.unread).map(n => n.key)) };
   const now = Date.now();
   const kept = (n: DevopsNews) => n.unread || top.current.keys.has(n.key);
-  const direct = s.news.filter(n => n.kind !== 'followed');
-  const fresh = direct.filter(kept);
-  const read = direct.filter(n => !kept(n));
-  const followed = new Map<string, DevopsNews[]>();
-  for (const n of s.news.filter(x => x.kind === 'followed')) { const k = String(n.item?.id ?? n.url); followed.set(k, [...(followed.get(k) ?? []), n]); }
-  const reviews = s.reviews;
-  const waitMe = s.prs.filter(p => prWait(p).who === 'me');
-  const stuck = s.assigned.filter(w => stuckDays(w, now) !== null);
-  const hot = s.assigned.filter(w => w.type === 'Bug' && (w.priority ?? 9) <= 2 && stuckDays(w, now) !== null);
-  const mentions = s.news.filter(n => n.unread && n.kind === 'mention').length;
-  const unreadDirect = direct.filter(n => n.unread);
-  const unreadFollowed = s.news.filter(n => n.unread && n.kind === 'followed').length;
-  const never = s.at === null;
-  const hasQa = s.qa.length > 0 || !!s.qaError;
-
-  const secs: { id: SecId; label: string; n?: number; hot?: boolean }[] = [
-    { id: 'news', label: tr('brainText.task.sec.news'), n: unreadDirect.length, hot: unreadDirect.length > 0 },
-    { id: 'prs', label: tr('brainText.task.sec.prs'), n: s.prs.length, hot: waitMe.length > 0 },
-    ...(hasQa ? [{ id: 'qa' as const, label: tr('brainText.taskQa.title'), n: s.qa.length }] : []),
-    { id: 'reviews', label: tr('brainText.task.sec.reviews'), n: reviews.length, hot: reviews.length > 0 },
-    { id: 'items', label: tr('brainText.task.sec.items'), n: s.assigned.length, hot: hot.length > 0 },
-    ...(followed.size ? [{ id: 'followed' as const, label: tr('brainText.task.sec.followed'), n: followed.size, hot: unreadFollowed > 0 }] : []),
-    ...(t.data ? [{ id: 'standup' as const, label: tr('brainText.task.sec.standup') }] : []),
+  const rows = buildRows(s, now, kept);
+  const count = (id: TabId) => rows.filter(r => r.tabs.includes(id)).length;
+  const mineN = count('mine');
+  const tabs: { id: TabId; label: string; n: number }[] = [
+    { id: 'mine', label: tr('brainText.task.tab.mine'), n: mineN },
+    { id: 'news', label: tr('brainText.task.tab.news'), n: count('news') },
+    { id: 'prs', label: tr('brainText.task.tab.prs'), n: count('prs') },
+    { id: 'items', label: tr('brainText.task.sec.items'), n: count('items') },
+    ...(s.qa.length || s.qaError ? [{ id: 'qa' as const, label: tr('brainText.taskQa.title'), n: count('qa') }] : []),
+    { id: 'all', label: tr('brainText.task.tab.all'), n: rows.length },
   ];
+  const cur: TabId = tab && tabs.some(x => x.id === tab) ? tab : mineN ? 'mine' : 'all';
+  const shown = rows.filter(r => r.tabs.includes(cur));
+  const sel = shown.find(r => r.key === picked) ?? shown[0] ?? null;
+  const unreadNews = s.news.filter(n => n.unread);
+  const unreadDirect = unreadNews.filter(n => n.kind !== 'followed');
+  const unreadFollowed = unreadNews.length - unreadDirect.length;
+  const mentions = unreadNews.filter(n => n.kind === 'mention').length;
+  const waitMe = s.prs.filter(p => prWait(p).who === 'me').length;
+  const never = s.at === null;
+
+  const pick = (key: string) => { setPicked(key); requestAnimationFrame(() => document.getElementById(`tk-row-${key}`)?.scrollIntoView({ block: 'nearest' })); };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.altKey || e.ctrlKey || e.metaKey) return;
+    const i = sel ? shown.indexOf(sel) : -1;
+    const k = e.key.toLowerCase();
+    if ((k === 'j' || k === 'arrowdown') && i < shown.length - 1) { e.preventDefault(); pick(shown[i + 1]!.key); }
+    else if ((k === 'k' || k === 'arrowup') && i > 0) { e.preventDefault(); pick(shown[i - 1]!.key); }
+    else if (k === 'e' && sel?.readKeys.length) { e.preventDefault(); markTasksRead(sel.readKeys); }
+  };
+
   const lead = s.error
     ? <><b>{tr(ERROR_TITLE[s.error.kind])}</b>{s.at ? <>{tr('brainText.task.lead.lastOk', { ago: fmt.ago(s.at) })}</> : '.'}</>
     : never
       ? <b>{s.running ? tr('brainText.task.lead.firstRead') : tr('brainText.task.lead.never')}</b>
       : <>
-          <b>{unreadDirect.length ? tr('brainText.task.lead.unread', { n: unreadDirect.length }) : tr('brainText.task.lead.noUnread')}</b>
+          <b>{mineN ? tr('brainText.task.lead.mine', { n: mineN }) : tr('brainText.task.lead.noMine')}</b>
+          {' · '}{unreadDirect.length ? tr('brainText.task.lead.unread', { n: unreadDirect.length }) : tr('brainText.task.lead.noUnread')}
           {mentions > 0 && <>, {tr('brainText.task.mentions', { n: mentions })}</>}
           {unreadFollowed > 0 && tr('brainText.task.lead.followed', { n: unreadFollowed })}
-          {waitMe.length ? tr('brainText.task.lead.waitMe', { n: waitMe.length }) : tr('brainText.task.lead.noWait')}
-          {reviews.length > 0 && tr('brainText.task.lead.reviews', { n: reviews.length })}
-          {hot.length > 0 && <> · <b className="dv-bad">{tr('brainText.task.lead.hot', { n: hot.length })}</b></>}
+          {waitMe ? tr('brainText.task.lead.waitMe', { n: waitMe }) : tr('brainText.task.lead.noWait')}
         </>;
 
   return (
@@ -434,83 +548,33 @@ export function TaskPage({ nav }: { nav?: Navigate }) {
       <AutoState s={s} />
 
       {never ? (s.running ? <Loading label={tr('brainPages.task.firstRead')} lines={4} /> : <p className="tk-empty" data-testid="task-never"><b>{tr('brainPages.task.neverTitle')}</b> {tr('brainPages.task.neverBody')}</p>) : (
-        <>
-          <div className="tk-tiles" data-testid="task-tiles">
-            <Tile k={tr('brainText.task.sec.news')} v={unreadDirect.length} to="news" testId="task-tile-news" index={0} tone={mentions ? 'warn' : unreadDirect.length ? 'blue' : ''}
-              s={unreadDirect.length ? (mentions ? tr('brainText.task.tile.mentionsForYou', { n: mentions }) : tr('brainText.task.tile.commentsChanges')) : unreadFollowed ? tr('brainText.task.tile.followed', { n: unreadFollowed }) : tr('brainText.task.tile.allRead')} />
-            <Tile k={tr('brainText.task.sec.prs')} v={s.prs.length} to="prs" testId="task-tile-prs" index={1} tone={s.prs.some(p => prWait(p).tone === 'bad') ? 'bad' : waitMe.length ? 'warn' : ''}
-              s={s.prs.length ? (waitMe.length ? tr('brainText.task.tile.waitYou', { n: waitMe.length }) : tr('brainText.task.tile.waitOthers')) : tr('brainText.task.tile.noneActive')} />
-            <Tile k={tr('brainText.task.tile.reviews')} v={reviews.length} to="reviews" testId="task-tile-reviews" index={2} tone={reviews.some(p => (daysSince(p.createdAt, now) ?? 0) >= 3) ? 'warn' : reviews.length ? 'blue' : ''}
-              s={reviews.length ? tr('brainText.task.tile.oldest', { since: sinceLabel(Math.max(...reviews.map(p => daysSince(p.createdAt, now) ?? 0))) }) : tr('brainText.task.tile.noReviews')} />
-            <Tile k={tr('brainText.task.sec.items')} v={s.assigned.length} to="items" testId="task-tile-items" index={3} tone={hot.length ? 'bad' : stuck.length ? 'warn' : ''}
-              s={!s.assigned.length ? tr('brainText.task.tile.noneOpen') : stuck.length ? tr('brainText.task.tile.stuck', { n: stuck.length, hot: hot.length }) : tr('brainText.task.tile.allMove')} />
+        <div className="tk-split" onKeyDown={onKey}>
+          <div className="tk-side">
+            <div className="tk-tabs" role="tablist" aria-label={tr('brainPages.task.sections')} data-testid="task-tabs">
+              {tabs.map(x => (
+                <button key={x.id} type="button" role="tab" aria-selected={x.id === cur} className={x.id === cur ? 'on' : ''} onClick={() => { setTab(x.id); setPicked(null); }} data-testid={`task-tab-${x.id}`}>
+                  {x.label}<span className="n">{x.n}</span>
+                </button>
+              ))}
+            </div>
+            {s.qaError && cur === 'qa' && <p className="small dv-bad" role="status" data-testid="qa-error">{s.qaError}{s.qa.length ? tr('brainText.taskQa.previous') : ''}</p>}
+            {shown.length
+              ? <ul ref={list} className="tk-list" role="listbox" tabIndex={0} aria-label={tabs.find(x => x.id === cur)?.label} aria-activedescendant={sel ? `tk-row-${sel.key}` : undefined} data-testid="task-list">
+                  {shown.map((r, i) => <Fragment key={r.key}>
+                    {i > 0 && cur !== 'mine' && shown[i - 1]!.mine && !r.mine && <li className="tk-sep" role="presentation" aria-hidden="true" />}
+                    <Strip r={r} on={r === sel} onPick={() => { setPicked(r.key); list.current?.focus({ preventScroll: true }); }} now={now} />
+                  </Fragment>)}
+                </ul>
+              : <p className="tk-empty" data-testid="task-list-empty"><b>{tr('brainText.task.list.empty')}</b> {tr('brainText.task.list.emptyBody')}</p>}
+            <div className="tk-side-foot">
+              {unreadDirect.length > 0 && <button type="button" className="bx-btn s" onClick={() => markTasksRead(unreadDirect.map(n => n.key))} data-testid="task-mark-all">{tr('brainText.task.news.markAll')}</button>}
+              <span className="tk-keys small muted"><kbd>J</kbd> <kbd>K</kbd> {tr('brainText.task.keys.move')} · <kbd>E</kbd> {tr('brainText.task.keys.read')}</span>
+            </div>
           </div>
-
-          <nav className="dv-secbar" aria-label={tr('brainPages.task.sections')} data-testid="task-sections">
-            {secs.map(x => (
-              <button key={x.id} type="button" className={x.hot ? 'hot' : ''} onClick={() => jump(x.id)} data-testid={`task-jump-${x.id}`}>
-                {x.label}{x.n !== undefined && <span className="n">{x.n}</span>}
-              </button>
-            ))}
-          </nav>
-
-          <Anchor id="news">
-            <Section title={tr('brainText.task.sec.news')} count={fresh.length} note={tr('brainText.task.news.note')} testId="task-news"
-              actions={unreadDirect.length > 0 ? <button type="button" className="bx-btn s" onClick={() => markTasksRead(unreadDirect.map(n => n.key))} data-testid="task-mark-all">{tr('brainText.task.news.markAll')}</button> : undefined}>
-              {fresh.length > 0
-                ? <div className="dv-stack">{fresh.map(n => <NewsCard key={n.key} n={n} details={s.details} now={now} />)}</div>
-                : <Empty title={tr('brainText.task.news.nothing')}>{tr('brainText.task.news.nothingBody')}</Empty>}
-              {read.length > 0 && (
-                <details className="bx-details">
-                  <summary>{tr('brainText.task.news.alreadyRead', { n: read.length })}</summary>
-                  <div className="body dv-stack">{read.map(n => <NewsCard key={n.key} n={n} details={s.details} now={now} />)}</div>
-                </details>
-              )}
-            </Section>
-          </Anchor>
-
-          <Anchor id="prs">
-            <Section title={tr('brainText.task.sec.prs')} count={s.prs.length} note={tr('brainText.task.prs.note')} testId="task-prs">
-              {s.prs.length ? <div className="dv-prs">{[...s.prs].sort((a, b) => Number(prWait(b).who === 'me') - Number(prWait(a).who === 'me')).map(p => <PrCard key={p.id} p={p} details={s.details} now={now} />)}</div> : <Empty title={tr('brainText.task.prs.none')} />}
-            </Section>
-          </Anchor>
-
-          {hasQa && <Anchor id="qa"><QaSection qa={s.qa} error={s.qaError} /></Anchor>}
-
-          <Anchor id="reviews">
-            <Section title={tr('brainText.task.reviews.title')} count={reviews.length} note={tr('brainText.task.reviews.note')} testId="task-reviews">
-              {reviews.length ? <Reviews list={reviews} now={now} /> : <Empty title={tr('brainText.task.reviews.none')} />}
-            </Section>
-          </Anchor>
-
-          <Anchor id="items">
-            <Section title={tr('brainText.task.items.title')} count={s.assigned.length} note={tr('brainText.task.items.note')} testId="task-assigned">
-              {s.assigned.length ? <div className="dv-groups">{byState(s.assigned).map(g => (
-                <div key={g.state} className="dv-group" data-testid={`task-state-${g.state}`}>
-                  <h3><Pill tone={stateTone(g.state)}>{g.state}</Pill><span className="count">{g.items.length}</span></h3>
-                  <div className="dv-items">{g.items.map(w => <ItemRow key={w.id} w={w} d={s.details[String(w.id)]} now={now} state={false} />)}</div>
-                </div>
-              ))}</div> : <Empty title={tr('brainText.task.items.none')} />}
-            </Section>
-          </Anchor>
-
-          {followed.size > 0 && (
-            <Anchor id="followed">
-              <Section title={tr('brainText.task.sec.followed')} count={followed.size} note={tr('brainText.task.followed.note')} testId="task-followed">
-                <div className="dv-stack">{[...followed.values()].map(ns => <FollowedCard key={ns[0]!.key} news={ns} details={s.details} />)}</div>
-              </Section>
-            </Anchor>
-          )}
-
-          {t.data && (
-            <Anchor id="standup">
-              <div className="dv-standup">
-                <Standup tables={t.data} owner={ownerOf(t.data.ideas)} />
-                {nav && <button type="button" className="bx-go" onClick={() => nav('fatto')}>{tr('brainText.task.allDone')}</button>}
-              </div>
-            </Anchor>
-          )}
-        </>
+          <div className="tk-detail" data-testid="task-detail" aria-live="polite">
+            {sel ? <Fragment key={sel.key}>{sel.detail()}</Fragment> : <p className="tk-empty"><b>{tr('brainText.task.list.pick')}</b></p>}
+          </div>
+        </div>
       )}
     </section>
   );

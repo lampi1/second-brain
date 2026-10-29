@@ -26,7 +26,7 @@ import {
   toggleMaximize, toggleOrchestrator, askRenewOrchestrator, askClearOrchestrator, orchestratorId, newBrowser, newRequest,
 } from '../actions';
 import {
-  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconBook, IconBranch, IconFile, IconBrain, IconChart, IconTarget, IconCoins, IconShield, IconFocus, IconGlobe,
+  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconBranch, IconFile, IconBrain, IconChart, IconTarget, IconCoins, IconShield, IconFocus, IconGlobe,
   IconHistory, IconKeyboard, IconLayers, IconLightbulb, IconLink, IconList, IconLogin, IconMap, IconMaximize, IconMic, IconPlus, IconQuestion, IconSearch, IconSettings, IconStop,
   IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
@@ -42,7 +42,7 @@ interface Cmd {
 const PAGE_ICON: Record<BrainPageId, ReactNode> = {
   home: <IconBrain />, flussi: <IconBranch />,
   agenti: <IconLayers />,
-  fatto: <IconBook />, idee: <IconLightbulb />,
+  idee: <IconLightbulb />,
   costi: <IconCoins />, qualita: <IconChart />, apprendimento: <IconTarget />, script: <IconTerminal />, log: <IconList />, confronto: <IconLayers />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
   guida: <IconQuestion />, browser: <IconGlobe />, registrazioni: <IconMic />,
   regole: <IconShield />, memoria: <IconHistory />, classificatori: <IconBranch />, collegamenti: <IconMap />,

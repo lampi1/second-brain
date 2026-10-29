@@ -186,5 +186,7 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0178](0178-mcp-form-and-report-compatibility.md) Accept supported MCP forms and recover harmless report shape errors — accepted
 - [0179](0179-terminal-only-routines.md) terminal-only routines, demand-driven app observation — accepted
 - [0180](0180-requested-statistics-and-forgotten-skills.md) Requested statistics and durable forgotten skills — not stated
-- [0181](0181-one-read-only-file-viewer.md) One read-only in-app viewer for every file link — accepted
-- [0182](0182-user-pictures-for-roles.md) The user's own picture for a role — accepted
+- [0181](0181-remove-fatto-and-standup.md) Fatto e standup removed — not stated
+- [0182](0182-task-list-and-detail.md) Task page: one strip per record, detail beside it — not stated
+- [0183](0183-one-read-only-file-viewer.md) One read-only in-app viewer for every file link — accepted
+- [0184](0184-user-pictures-for-roles.md) The user's own picture for a role — accepted

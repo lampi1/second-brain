@@ -1,77 +1,67 @@
-/* Task and Fatto in the language of Agenti and Guida (issue #85, ADR 0079): the page head, toolbar, summary and cards
-   come from styles/agent-catalog.css (catalog-head, catalog-filters, catalog-summary, catalog-card, catalog-badge,
-   catalog-chip); this file adds what the two pages need on top: Fatto's day cards with their log rows, Task's number
-   cards and its sections dressed as the same cards. Only theme tokens, so dark and light follow the app; the entrance
-   animation is catalog-card's own, off under reduced motion. Used by pages/Fatto.tsx and pages/Task.tsx. */
-.wl-page, .tk-page { display: block; min-width: 0; padding-top: 6px; color: var(--text); font-size: var(--fs-m); }
-.wl-page .catalog-head, .tk-page .catalog-head { margin-bottom: 22px; }
-.wl-page .catalog-filters input[type=date] { height: 32px; }
-/* the day in the app's language over the native field (its own text follows the OS locale) */
-.wl-datefield { position: relative; display: inline-flex; align-items: center; min-width: 150px; height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r-s); background: var(--surface); font-variant-numeric: tabular-nums; }
-.wl-datefield:focus-within { outline: 2px solid var(--blue); outline-offset: 1px; }
-.wl-datefield input[type=date] { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
-.wl-page .bx-standup { margin: 0 0 4px; }
-
-/* Fatto: one card per day, newest first */
-.wl-days { display: grid; gap: 14px; }
-.wl-day { --tone: var(--blue); gap: 10px; padding: 18px 20px 14px; }
-.wl-day:hover, .wl-day:focus-within { transform: none; }
-.wl-day-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.wl-day-head h3 { font-size: var(--fs-xl); }
-.wl-date { color: var(--text-3); font-size: var(--fs-s); }
-.wl-day-head .sp { flex: 1; }
-.wl-list { list-style: none; margin: 0; padding: 0; display: grid; }
-.wl-entry { --tone: var(--blue); position: relative; display: grid; grid-template-columns: 64px 14px minmax(0, 1fr); align-items: start; gap: 0 10px; padding: 9px 0; border-top: 1px solid var(--border); }
-.wl-entry:first-child { border-top: 0; }
-.wl-time { font-variant-numeric: tabular-nums; color: var(--text-2); font-size: var(--fs-s); line-height: 22px; white-space: nowrap; }
-.wl-notime { color: var(--text-4); font-size: var(--fs-xs); }
-.wl-dot { width: 8px; height: 8px; margin-top: 7px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent); }
-.wl-body { display: grid; gap: 4px; min-width: 0; }
-.wl-what { line-height: 22px; overflow-wrap: anywhere; }
-.wl-link { font: inherit; color: var(--text); text-align: left; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: none; }
-.wl-link:hover { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
-.wl-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
-.wl-link svg { width: 12px; height: 12px; vertical-align: -1px; color: var(--text-3); }
-.wl-what-row { display: flex; align-items: baseline; gap: 12px; }
-.wl-what-row > :first-child { flex: 1; min-width: 0; }
-/* a macro task's cost (#160): its own plus everything it started, right-aligned, figures aligned */
-.wl-cost { flex: none; font-variant-numeric: tabular-nums; color: var(--text-2); font-size: var(--fs-s); font-weight: 600; white-space: nowrap; }
-.wl-entry[data-outcome="running"] .wl-cost { color: var(--blue); }
-.wl-total { font-variant-numeric: tabular-nums; }
-.wl-meta { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; font-size: var(--fs-xs); color: var(--text-3); }
-.wl-kind { color: var(--text-2); }
-.wl-who { color: var(--text-2); font-weight: 550; }
-.wl-area::before { content: "·"; margin-right: 10px; color: var(--text-4); }
-.wl-empty, .tk-empty, .tk-page .bx-empty { display: block; margin: 0; padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--r-l); background: linear-gradient(145deg, var(--surface-2), var(--surface)); color: var(--text-3); line-height: 1.6; text-align: left; }
+/* Task: the page head comes from styles/agent-catalog.css (catalog-head, as on Agenti and Guida, issue #85); this file
+   adds the list of strips and the detail pane (ADR 0182). Only theme tokens, so dark and light follow the app; the
+   entrance animations are catalog's own, off under reduced motion. Used by pages/Task.tsx. */
+.tk-page { display: block; min-width: 0; padding-top: 6px; color: var(--text); font-size: var(--fs-m); }
+.tk-page .catalog-head { margin-bottom: 22px; }
+.tk-empty, .tk-page .bx-empty { display: block; margin: 0; padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--r-l); background: linear-gradient(145deg, var(--surface-2), var(--surface)); color: var(--text-3); line-height: 1.6; text-align: left; }
 .tk-page .bx-empty > span { display: inline; }
-.wl-empty b, .tk-empty b, .tk-page .bx-empty > b { color: var(--text-2); font-weight: 600; margin-right: 4px; }
-.wl-detail { border-top: 1px solid var(--border); padding-top: 10px; }
-.wl-detail > summary { cursor: pointer; color: var(--text-3); font-size: var(--fs-s); }
-.wl-detail[open] > summary { margin-bottom: 8px; }
-.wl-more { display: flex; justify-content: center; margin-top: 18px; }
+.tk-empty b, .tk-page .bx-empty > b { color: var(--text-2); font-weight: 600; margin-right: 4px; }
 
-/* Task: the number cards, then the sections as cards */
+/* Task: the head, then the list of strips on the left and the chosen one in full on the right (ADR 0182) */
 .tk-page .catalog-head > .tk-head-side { flex: none; min-width: 0; display: flex; align-items: center; gap: 10px; }
 .tk-page .catalog-head .dv-lead { margin-top: 8px; color: var(--text-2); }
 .tk-head-side .when { color: var(--text-3); font-size: var(--fs-s); white-space: nowrap; }
 .tk-dot { display: inline-block; width: 9px; height: 9px; margin-left: 12px; border-radius: 50%; vertical-align: 6px; background: var(--text-4); }
 .tk-dot.good { background: var(--green); } .tk-dot.bad { background: var(--red); } .tk-dot.run { background: var(--blue); animation: catalog-beat 2.2s ease-in-out infinite; }
-.tk-page .catalog-filters { align-items: center; }
-.tk-page .catalog-filters .tk-field { display: grid; gap: 5px; }
-.tk-page .catalog-filters .tk-field > span { font-size: 10px; letter-spacing: .12em; text-transform: uppercase; font-weight: 650; color: var(--text-3); }
-.tk-page .catalog-filters .tk-next { color: var(--text-3); font-size: var(--fs-xs); align-self: flex-end; padding-bottom: 6px; }
-.tk-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); gap: 14px; margin-bottom: 22px; }
-.tk-tile { gap: 6px; padding: 16px 18px 14px; text-align: left; font: inherit; color: var(--text); cursor: pointer; }
-.tk-tile.blue { --tone: var(--blue); } .tk-tile.warn { --tone: var(--amber); } .tk-tile.bad { --tone: var(--red); } .tk-tile.none { --tone: var(--border-3); }
-.tk-tile:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-.tk-tile .k { display: flex; align-items: center; gap: 7px; color: var(--text-3); font-size: var(--fs-s); font-weight: 550; }
-.tk-tile .k i { width: 7px; height: 7px; border-radius: 50%; background: var(--tone); }
-.tk-tile .v { font-size: 30px; font-weight: 600; letter-spacing: -1px; line-height: 1.1; font-variant-numeric: tabular-nums; }
-.tk-tile.warn .v { color: var(--amber); } .tk-tile.bad .v { color: var(--red); }
-.tk-tile .s { color: var(--text-2); font-size: var(--fs-s); }
-.tk-page .dv-secbar { margin-bottom: 18px; }
-.tk-page .dv-anchor { padding-top: 6px; }
-.tk-page .dv-anchor + .dv-anchor { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border); }
-.tk-page .dv-news, .tk-page .dv-pr, .tk-page .bx-card { border-radius: var(--r-l); background: linear-gradient(160deg, var(--surface-2), var(--surface) 62%); animation: catalog-row-enter 320ms var(--ease) both; }
-.tk-page .dv-stack { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr)); gap: 14px; align-items: start; }
-@media (prefers-reduced-motion: reduce) { .tk-page .dv-news, .tk-page .dv-pr, .tk-page .bx-card, .tk-dot.run { animation: none; } }
+.tk-page .tk-auto-state { margin: -10px 0 18px; }
+
+.tk-split { display: grid; grid-template-columns: minmax(300px, 420px) minmax(0, 1fr); gap: 20px; align-items: start; }
+.tk-side { display: grid; gap: 10px; min-width: 0; }
+.tk-tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.tk-tabs::-webkit-scrollbar { display: none; }
+.tk-tabs > button { appearance: none; display: inline-flex; align-items: center; gap: 6px; flex: none; height: 32px; padding: 0 9px; border: 0; border-radius: var(--r-s);
+  background: transparent; color: var(--text-3); font: inherit; font-size: var(--fs-s); font-weight: 600; cursor: pointer; transition: background .15s var(--ease), color .15s var(--ease); }
+.tk-tabs > button:hover { color: var(--text); background: var(--surface-2); }
+.tk-tabs > button.on { color: var(--text); background: var(--surface-3); }
+.tk-tabs > button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.tk-tabs .n { min-width: 18px; height: 18px; padding: 0 5px; display: inline-grid; place-items: center; border-radius: 999px; font-size: var(--fs-xs); font-weight: 700;
+  font-variant-numeric: tabular-nums; color: var(--text-2); background: var(--surface-2); }
+.tk-tabs > button.on .n { color: var(--bg); background: var(--blue); }
+
+/* one strip per record: the kind's glyph in its tone, kind and time, the title, one line of what it says */
+.tk-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; outline: none; }
+.tk-list:focus-visible .tk-strip.on { outline: 2px solid var(--focus); outline-offset: -2px; }
+.tk-strip { --tone: var(--text-3); display: flex; gap: 12px; padding: 11px 12px; border: 1px solid transparent; border-radius: var(--r-m); cursor: pointer;
+  transition: background .15s var(--ease), border-color .15s var(--ease); animation: catalog-row-enter 260ms var(--ease) both; }
+.tk-strip:hover { background: var(--surface); }
+.tk-strip.on { background: var(--surface-2); border-color: var(--border-2); }
+.tk-strip.t-warn { --tone: var(--amber); } .tk-strip.t-bad { --tone: var(--red); } .tk-strip.t-blue { --tone: var(--blue); } .tk-strip.t-violet { --tone: var(--violet); } .tk-strip.t-good { --tone: var(--green); }
+.tk-glyph { flex: none; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: var(--tone); background: color-mix(in srgb, var(--tone) 14%, transparent); }
+.tk-strip.t-none .tk-glyph, .tk-strip.t-outline .tk-glyph { background: var(--surface-2); }
+.tk-strip-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.tk-strip-top { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.tk-strip-kind { flex: 1; min-width: 0; font-size: var(--fs-xs); font-weight: 650; letter-spacing: .04em; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tk-strip-when { flex: none; font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.tk-strip-title { font-size: var(--fs-m); font-weight: 550; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tk-strip.unread .tk-strip-title, .tk-strip.on .tk-strip-title { color: var(--text); font-weight: 650; }
+.tk-strip.unread .tk-strip-title::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--blue); vertical-align: 2px; }
+.tk-strip-sub { font-size: var(--fs-s); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tk-sep { height: 1px; margin: 8px 12px; background: var(--border); }
+.tk-side-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 2px; }
+.tk-keys { margin-left: auto; }
+.tk-keys kbd { font: inherit; font-size: var(--fs-xs); font-weight: 700; padding: 0 5px; border: 1px solid var(--border-2); border-radius: 5px; color: var(--text-2); }
+
+/* the chosen strip in full: one calm card that stays in view; the record's own card loses its frame inside it */
+.tk-detail { position: sticky; top: 8px; max-height: calc(100vh - 150px); overflow: auto; min-width: 0; padding: 24px 26px; box-sizing: border-box;
+  border: 1px solid var(--border); border-radius: var(--r-l); background: linear-gradient(160deg, var(--surface-2), var(--surface) 62%); animation: catalog-row-enter 220ms var(--ease) both; }
+.tk-detail > .dv-news, .tk-detail > .dv-pr, .tk-detail > .tk-item, .tk-detail > .tk-review { display: grid; gap: 14px; margin: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.tk-detail > .dv-news.unread { box-shadow: none; }
+.tk-detail .dv-news-head { flex-wrap: nowrap; }
+.tk-detail .dv-news-who { flex: 1; font-size: var(--fs-l); }
+.tk-detail .dv-news-head .sp { display: none; }
+.tk-detail .dv-news-what a { font-size: var(--fs-xl); line-height: 1.3; }
+.tk-detail .dv-pr-head h3 { font-size: var(--fs-xl); font-weight: 650; letter-spacing: -.2px; line-height: 1.3; }
+.tk-detail .dv-wait { margin: 0; border-radius: var(--r-s); }
+.tk-review-who { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+@media (max-width: 900px) { .tk-split { grid-template-columns: minmax(0, 1fr); } .tk-detail { position: static; max-height: none; } }
+@media (prefers-reduced-motion: reduce) { .tk-strip, .tk-detail, .tk-dot.run { animation: none; transition: none; } }

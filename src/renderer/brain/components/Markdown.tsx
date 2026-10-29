@@ -6,7 +6,7 @@
 // the blocks get it: copy only, nothing here ever runs. Code blocks wrap their long lines (brain.css .bx-md pre), so
 // nothing is cut off on the right. With `imageBase` (the file viewer: the path of the report shown) its images show,
 // rewritten and loaded by ReportImages.tsx: embedded rasters, local files read by main, never a remote URL; a click
-// opens one large. Used by Fatto, Idee, Confronto, Esplora, FileViewer.
+// opens one large. Used by Idee, Confronto, Esplora, FileViewer.
 import { useMemo, useState, type MouseEvent } from 'react';
 import { localizeImages, useReportImages } from './ReportImages';
 import { Marked } from 'marked';
