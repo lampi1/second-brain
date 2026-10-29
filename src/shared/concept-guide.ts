@@ -450,7 +450,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Comandi: quelli di produzione (az, sqlcmd, script ops) chiedono un secondo clic e il main ricontrolla; per un ruolo a sola lettura un comando conta come lettura solo se è un lettore noto, senza concatenazioni, redirezioni, sottoespressioni né opzioni che scrivono o eseguono (sort e uniq solo dopo una pipe).',
         'Commands: production ones (az, sqlcmd, ops scripts) ask for a second click and main checks again; for a read-only role a command counts as reading only if it is a known reader, with no chaining, redirection, subexpression or option that writes or runs (sort and uniq only after a pipe).'),
       // src/renderer/lib/foreign.ts; src/main/chats/admission.ts; src/shared/waiting.ts
-      // src/shared/roles.ts ROLE_DEFAULTS.router
+      // src/shared/roles.ts ROLE_DEFAULTS.orchestrator
       b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda per carico (CPU > 75% o RAM libera < 15%). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI. Smistare un lotto di lavoro (una inbox, una lista di ticket) lo fa invece l’Orchestrator, una chat per richiesta, quando glielo affidi.',
         'Others: messages you did not type (shown muted), "Waits for work" on the text, the load queue (CPU > 75% or free RAM < 15%). Permissions and questions are not guessed: they arrive structured from the CLI. Triaging a batch of work (an inbox, a list of tickets) is instead the Orchestrator’s, one chat per request, when you hand it one.'),
       // src/renderer/components/brain-model/ClassifiersPage.tsx, src/main/brainmodel/classifier-cards.ts
@@ -606,7 +606,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('«Approvate» elenca tutto quello che è nel brain adesso (skill, regole, fatti confermati, script): il cestino lo toglie con un clic e per qualche secondo «Annulla» lo rimette; skill, regole e script passano dal registro delle modifiche, quindi restano annullabili anche in Apprendimento.',
         '\"Approved\" lists everything in the brain now (skills, rules, confirmed facts, scripts): the bin takes one out in a click and for a few seconds \"Undo\" puts it back; skills, rules and scripts go through the change log, so they stay undoable in Learning too.'),
       // src/renderer/brain/pages/Idee.tsx
-      b('«Idee» divide le tue da quelle dell’AI (la colonna «Chi» di ideas.md: «IA» è l’AI) e «Rispolvera» ti ripropone a caso un’idea vecchia ancora aperta; sotto, il Battito e i temi delle idee.',
+      b('«Idee» divide le tue da quelle dell’IA (la colonna «Chi» di ideas.md: «IA» è l’IA) e «Rispolvera» ti ripropone a caso un’idea vecchia ancora aperta; sotto, il Battito e i temi delle idee.',
         '\"Ideas\" splits yours from the AI’s (the \"Chi\" column of ideas.md: \"IA\" is the AI) and \"Dust one off\" brings back an old idea still open at random; below, the Pulse and the ideas’ themes.'),
       b('La Dashboard non c’è più: la frase e i contatori sono in cima a Memoria, il contesto delle chat in Costi, gli errori dell’app e i temi degli errori in Qualità, gli spunti dell’AI in Idee; il resto erano doppioni.',
         'The Dashboard is gone: the sentence and the counters are at the top of Memoria, the chats’ context in Costi, the app’s errors and the errors’ themes in Quality, the AI’s tips in Ideas; the rest were duplicates.'),
@@ -1111,8 +1111,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Regole dell’app segnalano da sole le anomalie: risposta duplicata, approvazione nascosta (un permesso chiuso senza la tua risposta), revisione senza verdetto.',
         'App rules flag anomalies by themselves: a duplicate reply, a hidden approval (a permission closed without your answer), a review without a verdict.'),
       // src/main/activity/journal.ts
-      b('Leggerlo non consuma token: sono eventi e contatori salvati dall’app. Solo «Fai analizzare all’AI» prepara un messaggio per l’Orchestrator, che parte se lo invii tu.',
-        'Reading it spends no tokens: these are events and counters the app saved. Only "Fai analizzare all’AI" prepares a message for the Orchestrator, sent only if you send it.'),
+      b('Leggerlo non consuma token: sono eventi e contatori salvati dall’app. Solo «Fai analizzare all’IA» prepara un messaggio per l’Orchestrator, che parte se lo invii tu.',
+        'Reading it spends no tokens: these are events and counters the app saved. Only "Fai analizzare all’IA" prepares a message for the Orchestrator, sent only if you send it.'),
       // src/main/activity/journal.ts clean
       b('Si pulisce da solo: tiene 7 giorni e al massimo 20 MB, il resto si cancella.',
         'It cleans itself: it keeps 7 days and at most 20 MB, the rest is deleted.'),

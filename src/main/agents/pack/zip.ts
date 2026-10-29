@@ -3,7 +3,7 @@ import { deflateRawSync, inflateRawSync } from 'node:zlib';
 
 export interface ZipLimits { packed: number; unpacked: number; entries: number; file: number; ratio: number; depth: number }
 export const ZIP_LIMITS = { packed: 20 * 1024 ** 2, unpacked: 50 * 1024 ** 2, entries: 500, file: 2 * 1024 ** 2, ratio: 100, depth: 8 } as const;
-/** A whole shared brain (brain/share.ts): more files than one role's pack, each skill in two tool folders. */
+/** A whole shared brain (brain-share.ts): more files than one role's pack, each skill in two tool folders. */
 export const BRAIN_ZIP_LIMITS: ZipLimits = { ...ZIP_LIMITS, packed: 60 * 1024 ** 2, unpacked: 150 * 1024 ** 2, entries: 4000 };
 export type PackFiles = Map<string, Buffer>;
 const fail = (): never => { throw new Error('Invalid or unsafe agent pack archive'); };

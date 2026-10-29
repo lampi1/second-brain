@@ -45,7 +45,7 @@ export const logIt = {
   'log.detail': 'Dettaglio', 'log.input': 'Input', 'log.result': 'Risultato', 'log.errorsLabel': 'Errori',
   'log.noDetail': 'Nessun altro dettaglio registrato per questo passaggio.',
   'log.history': 'Storico e ripristino',
-  'log.ai': 'Fai analizzare all’AI',
+  'log.ai': 'Fai analizzare all’IA',
   'log.aiHint': 'Prepara un messaggio per l’Orchestrator: consuma token solo se lo invii',
   'log.aiNoOrchestrator': 'Apri un Orchestrator per farlo analizzare.',
   'log.aiPrompt': 'Analizza questo dal Log dell’app e dimmi cosa non va e cosa conviene fare:',

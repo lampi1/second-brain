@@ -373,7 +373,7 @@ export const brainTextIt = {
   // pages/Script.tsx and lib/brain-sections.ts
   'brainText.script.tested': 'Provato',
   'brainText.script.cannotRead': 'Non riesco a leggere lo script',
-  'brainText.script.loading': 'Carico…',
+  'brainText.script.loading': 'Caricamento…',
   'brainText.script.brainScript': 'Script del brain',
   'brainText.script.lastTest': 'Ultimo test',
   'brainText.script.reviewQuestion': 'Rivediamolo: è ancora giusto? Va corretto, esteso o eliminato?',
@@ -488,7 +488,7 @@ export const brainTextIt = {
   'brainText.live.innerBrowser': 'browser interno',
   'brainText.live.inBrowser': 'nel browser',
 
-  // dashboard/Dashboard.tsx
+  // dashboard/parts.tsx, AppErrors.tsx, ContextNow.tsx (once the Dashboard's)
   'brainText.dash.discuss': 'Discuti',
   'brainText.dash.source': 'Fonte',
   'brainText.dash.question': 'Analizziamo questi dati e il prossimo passo?',

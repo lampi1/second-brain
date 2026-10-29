@@ -89,7 +89,7 @@ describe('demo chats (frozen)', () => {
     expect(last && 'text' in last ? last.text : '').toMatch(/Ti aspettano \d/);
   });
 
-  it('a Orchestrator in place of one (replaces) takes the role: the old one goes on as a normal chat', async () => {
+  it('an Orchestrator in place of one (replaces) takes the role: the old one goes on as a normal chat', async () => {
     const { chats, events } = make();
     const c = await chats.create({ harness: 'cursor', cwd: 'C:\lavoro\brain', title: 'Orchestrator', orchestrator: true, replaces: 'orchestrator' });
     expect(chats.list().filter(x => x.isOrchestrator).map(x => x.id)).toEqual([c.id]);

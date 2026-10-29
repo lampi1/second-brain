@@ -1,11 +1,11 @@
-// «Lampo», the quick lane (ADR 0105), pure: the last question and answer that «Fanne un lavoro» drafts into the
+// «Flash» (code name lampo), the quick lane (ADR 0105, 0107), pure: the last question and answer that «Fanne un lavoro» drafts into the
 // Orchestrator's input. Kept out of LampoTile.tsx so it runs without a DOM. Used by LampoTile.tsx; pinned by
 // test/unit/chats/lampo.test.ts.
 import type { ChatItem } from '@shared/contract';
 
 const oneLine = (s: string, max: number): string => { const x = s.replace(/\s+/g, ' ').trim(); return x.length > max ? `${x.slice(0, max - 1)}…` : x; };
 
-/** The last question the user asked Lampo and the answer it gave, for «Fanne un lavoro». */
+/** The last question the user asked Flash and the answer it gave, for «Fanne un lavoro». */
 export function lastExchange(items: readonly ChatItem[] | undefined): { question: string; answer: string } | null {
   const list = items ?? [];
   let q = -1;

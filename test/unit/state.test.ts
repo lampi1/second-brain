@@ -1,6 +1,6 @@
 // Unit tests of the renderer's data reducer and selectors (src/renderer/store/state.ts): events merge without losing
 // what arrived during the initial load, unchanged parts keep their references (per-tile re-render), pending stays
-// oldest-first, queued messages flush when a chat becomes idle, Corsie columns.
+// oldest-first, queued messages flush when a chat becomes idle.
 import { describe, expect, it } from 'vitest';
 import type { ChatItem, ChatSummary, PendingRequest } from '@shared/contract';
 import { initialState, reduce, runningCount, toFlush, todayCost, type AppState } from '../../src/renderer/store/state';

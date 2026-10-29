@@ -1,7 +1,7 @@
 // "Mappa" (G B, ADR 0077): who uses what. The default view draws the links graph agent → skills → rules → memory
 // (lib/brain-model-view.ts linkGraph) with an inspector: an agent shows its skills and opens its page, a skill shows
 // who uses it and opens the Skill page, a rule or a memory opens its file. "Note del brain" is the brain's notes map,
-// moved as is from the Dashboard (dashboard/BrainNotesMap.tsx), with "Esplora in 3D". Both use the Dashboard's Graph
+// moved as is from the old Dashboard (dashboard/BrainNotesMap.tsx), with "Esplora in 3D". Both use dashboard/Graph.tsx
 // unchanged. Rendered by App.tsx PageFrame for 'collegamenti'.
 import { useMemo, useState } from 'react';
 import { go, goTarget } from '../../actions';

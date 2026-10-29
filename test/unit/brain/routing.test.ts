@@ -143,7 +143,7 @@ describe('routing: resolve', () => {
 });
 
 describe('routing: task kind and routeChat', () => {
-  it('reads the kind from title, then prompt, accents off; a Orchestrator is its own; no rule matches = the built-in work words, else altro', () => {
+  it('reads the kind from title, then prompt, accents off; an Orchestrator is its own; no rule matches = the built-in work words, else altro', () => {
     expect(taskOf('Posta · smista la inbox', '', TASKS)).toBe('triage');
     expect(taskOf('Ordini · totale', 'c’è un bug nel totale', TASKS)).toBe('bug-fix');
     expect(taskOf('Posta · novità', '', TASKS)).toBe('triage');
@@ -220,7 +220,7 @@ describe('routing: exploration', () => {
     expect(explore(T, item, base, auto, () => true, none, yes)).toMatchObject({ harness: 'claude' });
   });
 
-  it('stays off at rate 0, past the dice, for a Orchestrator, for an engine the caller may not start', () => {
+  it('stays off at rate 0, past the dice, for an Orchestrator, for an engine the caller may not start', () => {
     expect(explore({ exploration: 0 }, item, base, REG, () => true, none, yes)).toBeNull();
     expect(explore(T, item, base, REG, () => true, none, () => 0.2)).toBeNull();
     expect(explore({ exploration: 9 }, item, base, REG, () => true, none, () => 0.49)).not.toBeNull();
@@ -354,7 +354,7 @@ describe('routing: the brain files', () => {
     // the Magazzino row already won its triage chats before the lock: the agent may still change it
     const had = { routes: [ROUTES[0]!, lockedT, ROUTES[2]!] };
     expect(agentLimits(had, [ROUTES[0]!, lockedT, { ...ROUTES[2]!, model: 'claude-sonnet-5-5' }])).toEqual([]);
-    // equally specific: placed before the locked row it wins the ties, after it it does not
+    // equally specific: placed before the locked row it wins the ties, after it, it does not
     const lockedArea = row({ area: 'Ordini', model: 'claude-sonnet-5-5', why: 'o', locked: true }), wide = row({ area: ['Ordini', 'Magazzino'], model: 'claude-haiku-5-5', why: 'x' });
     const p2 = { routes: [ROUTES[0]!, lockedArea] };
     expect(agentLimits(p2, [ROUTES[0]!, wide, lockedArea]).join()).toMatch(/prenderebbe le chat della riga bloccata «qualsiasi tipo · Ordini»/);

@@ -3,7 +3,7 @@
 // only from the runs that had ended before it started, as it would have been shown then. Per week: how many runs had an
 // estimate, the share whose real work time fell between half and double it, the median relative error, and the share
 // resting on the most specific match (same agent and same kind: it grows as the classifier sees more tasks). A small
-// module of its own so the Dashboard and the Classificatori page can read the series too (IPC agents:estimates returns
+// module of its own so the Classificatori page can read the series too (IPC agents:estimates returns
 // it as `accuracy`). Pure. Used by index.ts (agents:estimates).
 import type { AgentRun } from '../../shared/agents';
 import type { AccuracyPoint, EstimateAccuracy } from '../../shared/task-estimate';

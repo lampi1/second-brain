@@ -489,7 +489,7 @@ export const brainTextEn: typeof brainTextIt = {
   'brainText.live.innerBrowser': 'built-in browser',
   'brainText.live.inBrowser': 'in the browser',
 
-  // dashboard/Dashboard.tsx
+  // dashboard/parts.tsx, AppErrors.tsx, ContextNow.tsx (once the Dashboard's)
   'brainText.dash.discuss': 'Discuss',
   'brainText.dash.source': 'Source',
   'brainText.dash.question': 'Can we analyse these data and the next step?',

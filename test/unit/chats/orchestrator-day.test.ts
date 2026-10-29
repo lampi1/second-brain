@@ -18,7 +18,7 @@ const v: OrchestratorDayView = {
 };
 
 describe('orchestrator day rule', () => {
-  it('a Orchestrator with a context from yesterday, idle a few minutes, compacts once today', () => {
+  it('an Orchestrator with a context from yesterday, idle a few minutes, compacts once today', () => {
     expect(romeDay(Date.parse('2026-10-13T22:30:00Z'))).toBe('2026-10-14'); // past midnight in Rome
     expect(orchestratorDayDue(v, NOW)).toBe(true);
     for (const x of [

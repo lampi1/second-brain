@@ -27,7 +27,7 @@ describe('done log', () => {
     expect(rowEntry({ kind: 'chat-cursor', title: 'Cursor · Ricerca librerie · finito', area: 'A' }, 'd', 5, names)).toMatchObject({ kind: 'chat', what: 'Ricerca librerie', who: 'Cursor' });
   });
 
-  it('an app chat counts when a turn ended well or its work completed; never a Orchestrator', () => {
+  it('an app chat counts when a turn ended well or its work completed; never an Orchestrator', () => {
     const t = at('2026-10-18', '14:20');
     expect(chatEntry(chat({ id: 'a', title: 'Fix', lastResult: { at: t, isError: false }, agent: { name: 'Correzione bug' } as ChatSummary['agent'] }), engine))
       .toMatchObject({ day: '2026-10-18', time: '14:20', who: 'Correzione bug', chatId: 'a', what: 'Fix' });

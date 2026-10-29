@@ -14,7 +14,7 @@
 // the keyboard goes back to the field it came from. It renders only on its own requests' changes (selectors return
 // primitives or stable lists; counted in lib/questions.ts qwinStats). A Strategist's plan waiting for
 // the user's ok is one more card here (lib/plan-ask.ts, PlanApproval.tsx, ADR 0121), in the order it came, its strip only
-// pointing to it. Mounted by App.tsx; pinned by test/e2e/questions.spec.ts, answer-later.spec.ts, questions-perf.spec.ts,
+// pointing to it. Mounted by App.tsx; pinned by test/e2e/questions.spec.ts, questions-perf.spec.ts,
 // questions-gallery.spec.ts and strategist-plan-popup.spec.ts.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { PendingRequest } from '@shared/contract';

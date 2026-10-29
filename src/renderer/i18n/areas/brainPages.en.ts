@@ -57,8 +57,6 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.day.loading': 'Preparing sentences (Azure DevOps and diary)…',
   'brainPages.day.note': (p: { hasDevops: boolean }) => `From diary, chats${p.hasDevops ? ' and Azure DevOps' : ''}; to do from brief and open threads.`,
 
-  // Esplora.tsx
-
   // Task.tsx (ADR 0079: the DevOps page became Task)
   'brainPages.task.title': 'Tasks',
   'brainPages.task.subtitle': 'Your PRs, reviews, work items and news from Azure DevOps, with their content right here. Read-only, zero tokens.',
@@ -168,7 +166,7 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.idee.whatAI': "The AI's ideas to improve the brain, your way of working and itself, each with its reasoning. Click a row to read it and discuss it with the Orchestrator.",
   'brainPages.idee.whatDefault': "Your ideas and the AI's, from ideas.md. Filter by status, area and who had it; click a row to read it in full and discuss it with the Orchestrator.",
 
-  // Miglioramento.tsx
+  // LearnedRules.tsx (once the Miglioramento page)
   'brainPages.miglioramento.pageTitle': 'Learned rules',
   'brainPages.miglioramento.helpQuestion': 'What does this mean?',
   'brainPages.miglioramento.noData': 'no data',

@@ -66,7 +66,7 @@ export const auditExpressionsEn: typeof auditExpressionsIt = {
   "auditExpression.TopBar.text190": "More actions|credentials",
   "auditExpression.TopBar.text197": (p: { v0: string | number }) => `${p.v0} queued due to PC load: show the first`,
   "auditExpression.TopBar.text198": "To answer: requests saved for later, one at a time; opening turns popups back on|Ctrl+J",
-  "auditExpression.TopBar.text199": "Answer later is on: new requests go to To answer without popups. Click to turn popups back on",
+  "auditExpression.TopBar.text199": "Answer later is on: new requests go to \"To answer\" without popups. Click to turn popups back on",
   "auditExpression.TopBar.text200": "The oldest thing waiting for you|Ctrl+J",
   "auditExpression.TopBar.text201": (p: { v0: string | number }) => `To answer: ${p.v0} (Ctrl+J)`,
   "auditExpression.TopBar.text202": "Popups paused: click to turn them back on",

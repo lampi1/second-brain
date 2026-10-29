@@ -1,7 +1,7 @@
 // The Grindhouse is only the agents' strips (Brother, 18/10): collapsed by default with the key facts on screen, a click
 // anywhere on a strip expands it and a click on its head collapses it, a decision waiting is a "Ti aspetta" pill that
-// opens that strip's decision in the questions window (popups off too), and the headline moved to the Dashboard.
-// Frozen demo; screenshots in test-results/shots/strips-*.png and dashboard-headline.png.
+// opens that strip's decision in the questions window (popups off too), and the headline moved to Memoria (ADR 0122).
+// Frozen demo; screenshots in test-results/shots/strips-*.png and memoria-headline.png.
 import { expect, test } from '@playwright/test';
 import { launchDemo, layerState, setQuestionsAside, shot } from './helpers';
 

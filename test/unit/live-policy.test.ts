@@ -9,7 +9,7 @@ describe('live feed policy', () => {
     for (const k of ['chat-done', 'now', 'done', 'decision', 'proposal', 'mail', 'sync-ok']) expect(KINDS[k]?.priority).toBe('quiet');
   });
 
-  it('a turn end: nothing for a Orchestrator, chat-failed on an error, chat-done otherwise', () => {
+  it('a turn end: nothing for an Orchestrator, chat-failed on an error, chat-done otherwise', () => {
     const c = { id: 'a', title: 'Fix', isOrchestrator: false };
     expect(doneEvent(undefined)).toBeNull();
     expect(doneEvent({ ...c, isOrchestrator: true })).toBeNull();

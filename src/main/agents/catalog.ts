@@ -34,7 +34,7 @@ const isBackground = (id: string): boolean => id === PULSE_ID || id === FLASH_ID
 const FLASH = { name: 'Flash', purpose: 'Risposte al volo accanto all’Orchestrator: vede la sua chat, legge, non cambia nulla',
   instructions: 'Answer fast and briefly, in the user\'s language. Lead with the answer.' };
 const FLASH_TOOLS: AgentToolPolicy = { allow: ['read', 'web'] };
-const PULSE = { name: 'Pulse', purpose: 'Idee, consigli, promemoria, collegamenti e frase della Dashboard',
+const PULSE = { name: 'Pulse', purpose: 'Idee, consigli, promemoria, collegamenti e frase in cima a Memoria',
   instructions: 'Use only the digest you are given. Cite the sources. Propose a few concrete cards without inventing facts. Take no action.' };
 
 function text(v: unknown, max: number, label: string, empty = false): string {

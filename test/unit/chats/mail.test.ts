@@ -247,7 +247,7 @@ describe('mail to an idle Orchestrator', () => {
     expect(cls('nota: rilasciato', 'bogus')).toBe('quiet'); // an unknown kind: the words decide
   });
 
-  it('a Orchestrator waiting for the user gets only urgent mail; the rest goes once it is free', async () => {
+  it('an Orchestrator waiting for the user gets only urgent mail; the rest goes once it is free', async () => {
     const { mail, sent, post, list } = orchestratorSetup('waiting', { isOrchestrator: true, pending: 1 });
     post('feat/x pronto da unire: 3c6f315');
     clock.t += ORCHESTRATOR_GROUP_MS * 2;

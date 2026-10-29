@@ -11,7 +11,7 @@
 // ↑↓ choose, Tab or Invio completes "/<name> ", Esc closes; lib/slash.ts), read from main ('chat:commands') when the
 // list opens. An Orchestrator's input also has "Strategist" (ADR 0034, 2026-10-20): ticked, the message goes with the
 // line that asks her for a Strategist's plan (shared/newchat.ts); it resets after a send. "Veloce" is gone (#124): quick
-// questions go to Lampo (ADR 0105).
+// questions go to Flash (ADR 0105).
 // The inline suggestion (issue #167, ADR 0118): grey text after the caret, from local sources first (past prompts,
 // "/" commands, roles, skills, chat titles, the chat's files: lib/composer-suggest.ts, zero tokens), else from a small
 // model after a typing pause ('suggest:get'; every key cancels the pause and the request in flight). Tab accepts it,
