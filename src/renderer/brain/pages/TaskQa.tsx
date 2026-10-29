@@ -6,12 +6,10 @@
 // Each test plan and test case has "Discuti" (components/RecordDiscussButton.tsx). Used by pages/Task.tsx.
 import type { DevopsPrRef, QaBug, QaPlan, QaReport } from '@shared/contract';
 import { fmt } from '../lib/format';
-import { qaHeadline, qaOrder, qaOutcome, qaPeople } from '../lib/qa';
-import { Empty } from '../components/States';
-import { ExtLink, IconExternal, Pill, Section } from '../components/ui';
+import { qaHeadline, qaOrder, qaOutcome } from '../lib/qa';
+import { ExtLink, IconExternal, Pill } from '../components/ui';
 import { stateTone } from '../lib/tasks';
 import { RecordDiscussButton } from '../components/RecordDiscussButton';
-import { HelpTip } from '../../components/HelpTip';
 import { t as tr } from '../../i18n';
 
 function Bar({ t }: { t: QaReport['totals'] }) {
@@ -67,7 +65,7 @@ function PlanView({ p, bugs, pr }: { p: QaPlan; bugs: Map<number, QaBug>; pr: De
   );
 }
 
-function QaCard({ r }: { r: QaReport }) {
+export function QaCard({ r }: { r: QaReport }) {
   const h = qaHeadline(r);
   const bugs = new Map(r.bugs.map(b => [b.id, b]));
   const loose = r.bugs.filter(b => !b.testCases.length);
@@ -87,22 +85,5 @@ function QaCard({ r }: { r: QaReport }) {
         </div>
       )}
     </article>
-  );
-}
-
-export function QaSection({ qa, error }: { qa: QaReport[]; error: string | null }) {
-  const people = qaPeople(qa);
-  const missing = qa.reduce((s, r) => s + r.totals.missing, 0);
-  return (
-    <Section title={tr('brainText.taskQa.title')} count={qa.length} testId="task-qa"
-      help={<HelpTip label={tr('brainText.taskQa.title')} title={tr('brainText.taskQa.helpTitle')} testid="qa-help"
-        example={tr('brainText.taskQa.helpExample')}>
-        {tr('brainText.taskQa.helpBody')}
-      </HelpTip>}
-      note={qa.length ? <>{missing ? tr('brainText.taskQa.missing', { n: missing }) : tr('brainText.taskQa.allRun')}{people.length > 0 && tr('brainText.taskQa.ranByList', { list: people.map(p => `${p.name} ${p.done}`).join(', ') })}</> : tr('brainText.taskQa.noteEmpty')}>
-      {error && <p className="small dv-bad" role="status" data-testid="qa-error">{error}{qa.length ? tr('brainText.taskQa.previous') : ''}</p>}
-      {qa.length ? <div className="dv-prs">{qa.map(r => <QaCard key={r.pr?.id ?? r.plans[0]?.id} r={r} />)}</div>
-        : !error && <Empty title={tr('brainText.taskQa.emptyTitle')}>{tr('brainText.taskQa.emptyBody')}</Empty>}
-    </Section>
   );
 }

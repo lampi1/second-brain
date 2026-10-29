@@ -25,13 +25,6 @@ export function qaOrder(points: readonly QaPoint[]): QaPoint[] {
   return points.map((p, i) => ({ p, i })).sort((a, b) => (RANK[a.p.outcome ?? ''] ?? 3) - (RANK[b.p.outcome ?? ''] ?? 3) || a.i - b.i).map(x => x.p);
 }
 
-/** Who ran how many tests over all the reports, most first. */
-export function qaPeople(reports: readonly QaReport[]): { name: string; done: number }[] {
-  const by = new Map<string, number>();
-  for (const r of reports) for (const p of r.totals.byPerson) by.set(p.name, (by.get(p.name) ?? 0) + p.done);
-  return [...by.entries()].map(([name, done]) => ({ name, done })).sort((a, b) => b.done - a.done || a.name.localeCompare(b.name));
-}
-
 /** "4 su 6 fatti · mancano 2 · 1 fallito · 1 bloccato · 1 bug aperto" and the tone of the worst part. */
 export function qaHeadline(r: QaReport): { text: string; tone: Tone } {
   const t = r.totals;

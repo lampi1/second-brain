@@ -2,7 +2,7 @@
 // blocked, to do, rest), people across PRs, the headline's tone, and the stand-up text with names and titles, no ids.
 import { describe, expect, it } from 'vitest';
 import type { QaPoint, QaReport } from '../../../src/shared/contract';
-import { qaHeadline, qaOrder, qaOutcome, qaPeople } from '../../../src/renderer/brain/lib/qa';
+import { qaHeadline, qaOrder, qaOutcome } from '../../../src/renderer/brain/lib/qa';
 
 const pt = (id: number, outcome: string | null, ranBy: string | null = null): QaPoint =>
   ({ id, suite: 'S', testCase: { id: 500 + id, title: `Caso ${id}`, url: `https://x/${500 + id}` }, outcome, ranBy, ranAt: null, tester: 'Sara Neri', bugs: [] });
@@ -27,10 +27,6 @@ describe('qa view', () => {
 
   it('stand-up order: failed, blocked, to do, then the rest', () => {
     expect(qaOrder(report().plans[0]!.points).map(p => p.id)).toEqual([3, 4, 2, 1]);
-  });
-
-  it('people across PRs, most first', () => {
-    expect(qaPeople([report(), report()])).toEqual([{ name: 'Anna Neri', done: 4 }, { name: 'Mario', done: 2 }]);
   });
 
   it('headline and its tone', () => {
