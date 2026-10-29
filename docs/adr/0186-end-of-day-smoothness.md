@@ -36,6 +36,9 @@ pile grow over a day, and why closing chats did not bring it down:
    checked when it is read. The context meter is saved at the turn's end, not with every assistant message.
 4. `chats.json`'s synchronous checkpoint (write, fsync, read back) is named in the stall log
    (`chats.json checkpoint`), so the next stall log says whether it is a cause.
+5. Every 10 minutes the perf log gets an `app health` line: main heap and handles, chats open and archived, live
+   engines, connector processes, memory per process type, the sizes of `chats.json`, `agent-runs.json` and
+   `agent-analytics.json` (`npm run logs -- --scope perf --grep health`): what grows over a day shows from the log.
 
 ## Consequences
 

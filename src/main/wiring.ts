@@ -95,6 +95,7 @@ import type { ChatMcpContext } from './mcp-servers/access';
 import { createDemoServices } from './demo-wiring';
 import { forcedSampler, OsLoadSampler } from './chats/admission';
 import { ProductSync } from './sync';
+import { startHealthLog } from './perf';
 import fs from 'node:fs';
 import { CommandRunner } from './run/runner';
 import { CommandAsks } from './run/asks';
@@ -658,6 +659,17 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // idle engines released after engineIdleMin, orphans of ended engines swept every 15 min (ADR 0026; zero tokens)
   const sweeper = new EngineSweeper({ userData: ctx.userData, owners: () => manager.engines(), releaseIdle: ms => manager.releaseIdle(ms), idleMin: () => brain.settings().engineIdleMin ?? 30 });
   if (!process.env.SB_TEST) sweeper.start();
+  // what grows over a day, every 10 minutes in the perf log (ADR 0186)
+  const fileKb = (name: string): number | null => { try { return Math.round(fs.statSync(path.join(ctx.userData, name)).size / 1024); } catch { return null; } };
+  const stopHealth = process.env.SB_TEST ? () => {} : startHealthLog(() => {
+    const chats = manager.list(), byType: Record<string, number> = {};
+    for (const p of app.getAppMetrics()) byType[p.type] = Math.round(((byType[p.type] ?? 0) + (p.memory.privateBytes ?? p.memory.workingSetSize) / 1024) * 10) / 10;
+    return {
+      chatsOpen: chats.filter(c => !c.closedAt).length, chatsArchived: chats.filter(c => c.closedAt).length,
+      engines: manager.engines().live.length, connectorProcs: mcpServers.gateway.openCount, memMbByType: byType,
+      chatsJsonKb: fileKb('chats.json'), agentRunsKb: fileKb('agent-runs.json'), analyticsKb: fileKb('agent-analytics.json'),
+    };
+  });
   // browser events for the live feed ("rifai l'accesso a example-test-3")
   browser.setFeed(e => brain.publish([e]));
   brainRoot = () => brain.info().brainRoot;
@@ -1002,7 +1014,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { routines.stop(); mcpServers.stop(); brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { routines.stop(); mcpServers.stop(); brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }

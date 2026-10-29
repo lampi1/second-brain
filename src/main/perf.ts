@@ -130,3 +130,23 @@ export function startStallWatch(now: () => number = () => performance.now(), usa
   timer.unref?.();
   return () => clearInterval(timer);
 }
+
+/** this often (ms) the app's size is logged: what grows over a day shows in `npm run logs -- --scope perf --grep health` */
+export const HEALTH_EVERY_MS = 10 * 60_000;
+const mb = (bytes: number): number => Math.round(bytes / 1048576 * 10) / 10;
+/** The app health line (2026-10-29, "verso fine giornata va a scatti … anche se dopo le chiudo"): every HEALTH_EVERY_MS,
+ *  the main process's heap and handles plus what `read` counts (chats, engines, connector processes, file sizes, each
+ *  process type's memory), so a slow evening can be compared with the morning from the log alone. Never throws. */
+export function startHealthLog(read: () => Record<string, unknown>, every = HEALTH_EVERY_MS): () => void {
+  const t0 = Date.now();
+  const tick = () => {
+    try {
+      const m = process.memoryUsage();
+      const handles = (process as unknown as { _getActiveHandles?: () => unknown[] })._getActiveHandles?.().length;
+      log.info('perf', 'app health', { data: { upMin: Math.round((Date.now() - t0) / 60000), heapMb: mb(m.heapUsed), rssMb: mb(m.rss), ...(handles !== undefined ? { handles } : {}), ...read() } });
+    } catch (e) { log.debug('perf', 'app health not read', { data: String(e) }); }
+  };
+  const timer = setInterval(tick, every);
+  timer.unref?.();
+  return () => clearInterval(timer);
+}

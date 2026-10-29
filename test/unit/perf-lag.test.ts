@@ -1,8 +1,9 @@
 // Unit tests of the "Lag nell'app" fixes (2026-10-12): the typing probe's summary (renderer/lib/inputlag.ts) and its
 // log line (main/perf.ts: clamped numbers, a warning above 100 ms p95), and the alive-marks heartbeat
 // (renderer/lib/beat.ts: steps only while a mark is on the page, attributes in turn).
+// Also the app health line (startHealthLog, 2026-10-29): what grows over a day, logged every 10 minutes.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanReport, logInputLag, SLOW_P95_MS, SLOW_STEP_MS, STALL_MS, slowStep, stallCause, stallOf, startStallWatch, timedStep } from '../../src/main/perf';
+import { cleanReport, HEALTH_EVERY_MS, logInputLag, SLOW_P95_MS, SLOW_STEP_MS, STALL_MS, slowStep, stallCause, stallOf, startHealthLog, startStallWatch, timedStep } from '../../src/main/perf';
 import { log } from '../../src/main/log';
 
 const invoke = vi.fn(() => Promise.resolve());
@@ -156,3 +157,20 @@ describe('main-process stall watch (2026-10-27: "va a scatti")', () => {
   });
 });
 
+
+describe('app health line', () => {
+  it('logs the heap and what it is given every 10 minutes, and survives a reader that throws', () => {
+    vi.useFakeTimers();
+    const info = vi.spyOn(log, 'info').mockImplementation(() => {});
+    let fail = false;
+    const stop = startHealthLog(() => { if (fail) throw new Error('gone'); return { chatsOpen: 3, connectorProcs: 2 }; });
+    vi.advanceTimersByTime(HEALTH_EVERY_MS - 1);
+    expect(info).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(info).toHaveBeenCalledWith('perf', 'app health', expect.objectContaining({ data: expect.objectContaining({ chatsOpen: 3, connectorProcs: 2, heapMb: expect.any(Number), rssMb: expect.any(Number) }) }));
+    fail = true;
+    expect(() => vi.advanceTimersByTime(HEALTH_EVERY_MS)).not.toThrow();
+    expect(info).toHaveBeenCalledTimes(1);
+    stop(); info.mockRestore(); vi.useRealTimers();
+  });
+});
