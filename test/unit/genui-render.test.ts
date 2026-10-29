@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: vi.fn() } }));
-vi.mock('../../src/renderer/store/store', () => ({ useApp: vi.fn() }));
+vi.mock('../../src/renderer/store/store', () => ({ useApp: vi.fn(), onChatRemoved: () => () => {} }));
 vi.mock('../../src/renderer/store/ui', () => ({ ui: {}, closeModal: vi.fn(), openModal: vi.fn(), toast: vi.fn() }));
 vi.mock('../../src/renderer/components/ui', () => ({ Modal: () => null }));
 vi.mock('../../src/renderer/brain/components/ui', () => ({ copyText: vi.fn() }));
