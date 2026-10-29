@@ -7,10 +7,11 @@
 // is kept across restarts); a root chat the Orchestrator started, or the app started or resumed by itself, says so above
 // it (Origin, ADR 0102).
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
-import { routineChatIds } from '../lib/routine-chats';
-import { workspaceTiles, tileKey, type TileRef } from '../lib/grid';
+import { tileKey, type TileRef } from '../lib/grid';
 import { areaOf } from '../lib/agent-order';
-import { chatTree, childState, visibleTree, type TreeNode } from '../lib/chat-tree';
+import { childState, visibleTree, type TreeNode } from '../lib/chat-tree';
+import { originFor, sameOrigin, sameTree, stripTiles, stripTree, tabOwners } from '../lib/chat-derived';
+import { sameRecord } from '../lib/memo';
 import { schedule } from '../lib/viewports';
 import { app, useApp } from '../store/store';
 import { leaveGhost } from '../lib/leave-ghost';
@@ -23,7 +24,6 @@ import { BrowserTile } from './BrowserTile';
 import { ChildStrips } from './ChildStrips';
 import { DelegationCard, KidsBar, TreeRails } from './DelegationCard';
 import { go, toggleMaximize } from '../actions';
-import { originOf } from '../lib/chat-origin';
 import { GrindhouseEmpty } from './MorningBlock';
 import '../styles/alive.css';
 import { pairOf, pairStyle } from '../lib/pairs';
@@ -33,7 +33,7 @@ import '../styles/agent-strips.css';
 /** Below this column width a chat and its browser stack instead of sitting side by side. */
 const NARROW_PX = 640;
 
-const equalTiles = (a: TileRef[], b: TileRef[]) => sameList(a.map(tileKey), b.map(tileKey));
+const equalTiles = (a: TileRef[], b: TileRef[]) => a === b || sameList(a.map(tileKey), b.map(tileKey));
 
 /** The one control above the strips: back from a maximized strip. */
 export function AgentStripsActions() {
@@ -43,19 +43,18 @@ export function AgentStripsActions() {
 }
 
 export function AgentStrips() {
-  const routineIds = useApp(s => [...routineChatIds(s.chats).keys()], sameList);
-  const routineSet = new Set(routineIds);
   const ready = useApp(s => s.ready);
   const panelsVersion = ui.use(s => s.prefs.chatPanelsV);
   const expansion = ui.use(s => s.prefs.chatExpanded);
   const browserOpen = ui.use(s => s.prefs.browserOpen);
   const hidden = ui.use(s => s.hidden, sameList), hiddenTabs = ui.use(s => s.hiddenTabs, sameList);
-  const tree = useApp(s => chatTree(s.order.filter(id => !routineSet.has(id)), s.chats), (a, b) => JSON.stringify(a) === JSON.stringify(b));
+  // derived once per chats object for every subscriber (lib/chat-derived.ts), compared without JSON.stringify
+  const tree = useApp(s => stripTree(s.order, s.chats), sameTree);
   const collapsed = ui.use(s => s.prefs.treeCollapsed);
-  const tiles = useApp(s => workspaceTiles(chatTree(s.order.filter(id => !routineSet.has(id)), s.chats).map(n => n.id), s.chats, s.tabs, routineSet), equalTiles);
+  const tiles = useApp(s => stripTiles(s.order, s.chats, s.tabs), equalTiles);
   const nodes = new Map<string, TreeNode>(tree.map(n => [n.id, n]));
   const inTree = new Set(visibleTree(tree, collapsed).map(n => n.id));
-  const owners = useApp(s => Object.fromEntries(s.tabs.filter(t => t.ownerChatId).map(t => [t.id, t.ownerChatId!])), (a, b) => JSON.stringify(a) === JSON.stringify(b));
+  const owners = useApp(s => tabOwners(s.tabs), sameRecord);
   const areas = useApp(s => tiles.map(t => t.kind === 'chat' ? areaOf(s.chats[t.id] ?? { cwd: '' }) : ''), sameList);
   const pairs = useApp(s => tiles.map(t => t.kind === 'browser' ? pairOf(s, s.tabs.find(tab => tab.id === t.id)?.ownerChatId) : null), sameList);
   const maximized = ui.use(s => s.maximized);
@@ -161,7 +160,7 @@ function ChildRails({ node }: { node: TreeNode }) {
  *  resumed after a restart ("Ripresa dall'app dopo il riavvio · 09:12") says so too (ADR 0102): a strip never appears
  *  from nowhere. */
 function Origin({ chatId }: { chatId: string }) {
-  const o = useApp(s => originOf(s.chats[chatId], Object.values(s.chats)), (a, b) => JSON.stringify(a) === JSON.stringify(b));
+  const o = useApp(s => originFor(s.chats, chatId), sameOrigin);
   if (!o || o.kind === 'orchestrator') return null;
   const time = (at: number) => new Date(at).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
   if (o.kind === 'resumed') return <div className="tree-origin is-app" data-testid={`tree-origin-${chatId}`} data-origin="resumed"><span>{tr('alive.origin.resumed', { time: time(o.at) })}</span></div>;
