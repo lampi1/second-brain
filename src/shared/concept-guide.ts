@@ -578,7 +578,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'The request comes from the engine (Claude, Cursor, or Codex for commands and file changes) and becomes a panel with the available responses.'),
       b('«Consenti sempre» vale solo per questa sessione: l’app non scrive mai i file di impostazioni di Claude o Cursor.',
         '"Allow always" lasts for this session only: the app never writes Claude’s or Cursor’s settings files.'),
-      // src/shared/contract.ts PermissionMode; src/renderer/lib/format.ts labels
+      // src/shared/contract/chats.ts PermissionMode; src/renderer/lib/format.ts labels
       b('Modalità: Chiedi ogni volta, Accetta le modifiche, Automatico, Solo piano, Senza permessi; si sceglie all’avvio o dal menu ⋯ (solo Claude).',
         'Modes: Ask every time, Accept edits, Automatic, Plan only, No permissions; chosen at start or from the ⋯ menu (Claude only).'),
       // src/shared/agents.ts PERMISSION_CEILINGS; src/main/agents/tool-policy.ts
@@ -606,11 +606,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
     ],
     anchors: {
       0: ['src/main/chats/claude.ts#onControlRequest'],
-      2: ['src/shared/contract.ts#PermissionMode', 'src/renderer/lib/format.ts'],
+      2: ['src/shared/contract/chats.ts#PermissionMode', 'src/renderer/lib/format.ts'],
       3: ['src/shared/agents.ts#PERMISSION_CEILINGS'],
       5: ['src/main/agents/tool-policy.ts#FAIL_CLOSED'],
     },
-    sources: ['src/main/chats/claude.ts', 'src/main/chats/acp.ts', 'src/main/chats/codex.ts', 'src/shared/contract.ts', 'src/shared/agents.ts', 'src/main/agents/tool-policy.ts', 'src/main/chats/manager.ts', 'src/renderer/lib/format.ts'],
+    sources: ['src/main/chats/claude.ts', 'src/main/chats/acp.ts', 'src/main/chats/codex.ts', 'src/shared/contract/chats.ts', 'src/shared/agents.ts', 'src/main/agents/tool-policy.ts', 'src/main/chats/manager.ts', 'src/renderer/lib/format.ts'],
   },
   {
     id: 'questions',
@@ -657,7 +657,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       5: ['src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts#SCREENSHOT_HINT'],
       6: ['src/main/chats/orchestrator-wake.ts#QUIET'],
     },
-    sources: ['src/renderer/store/state.ts', 'src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx', 'src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts', 'src/renderer/lib/later.ts', 'src/main/later.ts', 'src/main/chats/orchestrator-wake.ts', 'src/shared/contract.ts'],
+    sources: ['src/renderer/store/state.ts', 'src/renderer/lib/questions.ts', 'src/renderer/components/QuestionsWindow.tsx', 'src/renderer/components/AskImages.tsx', 'src/main/ask-image.ts', 'src/renderer/lib/later.ts', 'src/main/later.ts', 'src/main/chats/orchestrator-wake.ts', 'src/shared/contract/chats.ts'],
   },
   {
     id: 'grindhouse',
@@ -1025,7 +1025,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'Costo = (input·prezzo + scritture cache + letture cache + output·prezzo) / 1e6, con fascia per prompt lunghi.', 'Cost = (input·price + cache writes + cache reads + output·price) / 1e6, with a long-prompt tier.'),
     ],
     target: [
-      // src/shared/contract.ts budget 'ask' mode; nothing subscribes to the alert
+      // src/shared/contract/settings.ts budget 'ask' mode; nothing subscribes to the alert
       b('La modalità «chiedi» dei limiti (fermare o continuare?) è descritta ma oggi aggiunge solo una nota all’avviso.',
         'The limits’ "ask" mode (stop or continue?) is described but today only adds a note to the alert.'),
     ],

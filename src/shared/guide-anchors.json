@@ -255,7 +255,7 @@
     "src/shared/auto-close.ts#AutoCloseWaiting": "5e2e46560e9b0671",
     "src/shared/brain-layout.ts": "9241e467ae1dc05f",
     "src/shared/context.ts#NEAR_COMPACTION": "af6cbcf8970ff64b",
-    "src/shared/contract.ts#PermissionMode": "1cac51d4d239c9aa",
+    "src/shared/contract/chats.ts#PermissionMode": "1cac51d4d239c9aa",
     "src/shared/delegation.ts": "f69fb91967394c98",
     "src/shared/delegation.ts#delegationPrompt": "7b672c97f4d3b3b3",
     "src/shared/delegation.ts#resultMessage": "6d79717487aa7f0a",

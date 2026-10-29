@@ -2,7 +2,9 @@
 
 Where the code lives. Moved from `AGENTS.md` (ADR 0198); the full picture is in `docs/architecture.md`.
 
-- `src/shared/contract.ts`: THE contract: data shapes + IPC channels. Change it first, then both sides.
+- `src/shared/contract.ts`: THE contract: data shapes + IPC channels. Change it first, then both sides. The shapes and
+  each area's invoke channels live in `src/shared/contract/*.ts` (chats, browser, settings, brain, agents, …); the entry
+  re-exports them and assembles `InvokeMap` / `EventMap` / the channel lists, so imports stay `@shared/contract`.
 - `src/main/`: main process. `index.ts` (bootstrap + handlers), `wiring.ts` (builds services), `services.ts`
   (interfaces), `ipc.ts` (typed IPC, sender check), `window.ts`; modules: `chats/` (CLI harnesses: Claude stream-json,
   Cursor ACP; chat manager; external chats), `browser/` (tabs as WebContentsViews, page scripts), `mcp/` (local MCP

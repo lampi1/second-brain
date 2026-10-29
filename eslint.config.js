@@ -7,7 +7,7 @@ import tseslint from 'typescript-eslint';
 const LONG_FILES = [
   'src/main/browser/actions.ts', 'src/main/chats/acp.ts', 'src/main/chats/claude.ts', 'src/main/chats/codex.ts',
   'src/main/chats/manager.ts', 'src/main/demo.ts', 'src/main/wiring.ts', 'src/renderer/brain/map/engine.ts',
-  'src/shared/concept-guide.ts', 'src/shared/contract.ts', 'test/unit/agents/delegation.test.ts',
+  'src/shared/concept-guide.ts', 'test/unit/agents/delegation.test.ts',
 ];
 const MAX_LINES = 800;
 
