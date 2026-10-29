@@ -73,7 +73,7 @@ export function OrchestratorOverlay() {
       {/* Flash's hint lives in its tile header only */}
       <span className="sp" />{lane === 'orchestrator' && <span className="orchestrator-column-hint">{t('home.startHere')}</span>}
     </div>
-    <div className="orchestrator-body" id="orchestrator-panel" role="tabpanel" aria-labelledby={`lane-tab-${lane}`}><ErrorBoundary where={lane === 'lampo' ? 'lampo' : 'orchestrator'} compact key={lane}>{lane === 'lampo' ? <LampoTile onWork={() => setLane('orchestrator')} /> : <OrchestratorTile key={active ?? 'none'} chatId={active} />}</ErrorBoundary></div>
+    <div className="orchestrator-body" id="orchestrator-panel" role="tabpanel" aria-labelledby={`lane-tab-${lane}`}><ErrorBoundary where={lane === 'lampo' ? 'lampo' : 'orchestrator'} compact key={`${lane}-${active ?? 'none'}`}>{lane === 'lampo' ? <LampoTile onWork={() => setLane('orchestrator')} /> : <OrchestratorTile key={active ?? 'none'} chatId={active} />}</ErrorBoundary></div>
     <div className="orchestrator-column-resize" role="separator" tabIndex={0} aria-label={t('home.orchestratorWidth')} aria-orientation="vertical"
       aria-valuemin={280} aria-valuemax={Math.max(280, viewport().W - viewport().left - 360)} aria-valuenow={size.w} data-testid="orchestrator-resize"
       onPointerDown={event => { if (event.button !== 0) return; drag.current = { x: event.clientX, w: size.w }; event.currentTarget.setPointerCapture(event.pointerId); event.preventDefault(); }}

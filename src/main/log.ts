@@ -14,7 +14,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { redact } from '../../packages/routine-runtime/src/mask';
-import { JOURNAL_DIR, updateDigest } from './log-digest';
+import { DIGEST_KEEP_DAYS, digestedDays, JOURNAL_DIR, updateDigest } from './log-digest';
 
 export type Level = 'debug' | 'info' | 'warn' | 'error';
 const ORDER: Record<Level, number> = { debug: 0, info: 1, warn: 2, error: 3 };
@@ -55,20 +55,28 @@ class Logger {
   }
 
   /** The past days not yet summarized go to the digest, then the raw files past LOG_KEEP_DAYS are deleted (never a
-   *  digest file: those rotate by themselves at 90 days). At start and at each day's rollover; one at a time. */
+   *  digest file: those rotate by themselves at 90 days; never a day the digest does not hold yet, within those 90). At start and at each day's rollover; one at a time. */
   housekeep(now = Date.now()): Promise<void> {
     if (this.housekeeping) return this.housekeeping;
     const dir = this.dir, userData = this.userData;
     if (!dir) return Promise.resolve();
     this.housekeeping = (async () => {
       await updateDigest(dir, userData ? path.join(userData, JOURNAL_DIR) : null, now);
-      const cutoff = now - LOG_KEEP_DAYS * 864e5;
+      const cutoff = now - LOG_KEEP_DAYS * 864e5, digestFrom = now - DIGEST_KEEP_DAYS * 864e5;
       let names: string[] = [];
       try { names = fs.readdirSync(dir); } catch { return; }
+      // a raw day whose digest line is not there (its write failed) is kept until a later pass writes it, or until it is
+      // past the digest's own window (it would never be summarized then)
+      const done = digestedDays(dir, now);
       for (const f of names) {
         if (f.startsWith('digest-')) continue;
-        const full = path.join(dir, f);
-        try { if (fs.statSync(full).mtimeMs < cutoff) fs.unlinkSync(full); } catch { /* in use or gone */ }
+        const full = path.join(dir, f), day = /^app-(\d{4}-\d{2}-\d{2})\.jsonl$/.exec(f)?.[1];
+        try {
+          const at = fs.statSync(full).mtimeMs;
+          if (at >= cutoff) continue;
+          if (day && !done.has(day) && at >= digestFrom) continue;
+          fs.unlinkSync(full);
+        } catch { /* in use or gone */ }
       }
     })().catch(() => { /* never breaks the app */ }).finally(() => { this.housekeeping = null; });
     return this.housekeeping;

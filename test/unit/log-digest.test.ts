@@ -109,4 +109,21 @@ describe('logger correlation and housekeeping', () => {
     expect(readDigest(logs, now).map(d => d.day)).toEqual([ymd(20)]);
     expect(readDigest(logs, now)[0]!.levels.warn).toBe(1);
   });
+
+  it('keeps a raw day the digest could not hold (its write failed); past the digest window it goes', async () => {
+    const now = Date.now(), ymd = (ago: number) => new Date(now - ago * 864e5).toISOString().slice(0, 10);
+    const root = tmp(), logs = path.join(root, 'logs');
+    fs.mkdirSync(logs);
+    const raw = path.join(logs, `app-${ymd(20)}.jsonl`), ancient = path.join(logs, `app-${ymd(120)}.jsonl`);
+    fs.writeFileSync(raw, line({ t: `${ymd(20)}T10:00:00Z`, lvl: 'warn', scope: 'a', msg: 'kept' }));
+    fs.writeFileSync(ancient, line({ t: `${ymd(120)}T10:00:00Z`, lvl: 'warn', scope: 'a', msg: 'gone' }));
+    // the month's digest file cannot be written: a folder in its place
+    fs.mkdirSync(path.join(logs, `digest-${ymd(20).slice(0, 7)}.jsonl`));
+    const past = new Date(now - 20 * 864e5), older = new Date(now - 120 * 864e5);
+    fs.utimesSync(raw, past, past); fs.utimesSync(ancient, older, older);
+    log.init(root);
+    await log.housekeep(now);
+    expect(fs.existsSync(raw)).toBe(true);
+    expect(fs.existsSync(ancient)).toBe(false);
+  });
 });
