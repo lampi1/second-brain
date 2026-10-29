@@ -1,5 +1,5 @@
 // UI primitives of the design system: Button, IconButton (aria-label + tooltip with its shortcut), Kbd, StatePill,
-// Segmented, Popover (anchored menu that hides the browser views it covers), Modal (focus trap, Esc, restores focus)
+// Popover (anchored menu that hides the browser views it covers), Modal (focus trap, Esc, restores focus)
 // and the global TooltipLayer (any element with data-tip gets a tooltip; it avoids covering browser views, which are
 // native and draw above the page). Used by every component.
 import { createPortal } from 'react-dom';

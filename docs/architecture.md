@@ -81,7 +81,7 @@
   (`agents/run-estimates.ts`) gives the strips each run's estimate made before it started, its actual once ended, and
   `agents/estimate-accuracy.ts`'s weekly backtest (`EstimateAccuracy`, also for the Dashboard / Classificatori);
   `lib/run-estimates.ts` reads it once for every strip, `RunEstimate.tsx` draws the chip, its "?" and the Orchestrator's plan.
-- **A cloud agent** (ADR 0080): the Orchestrator's `app_create_chat where:'cloud'` → `cloud:start` →
+- **A cloud agent** (ADR 0080): the Orchestrator's `app_create_chat where:'cloud'` →
   CloudService checks readiness (key / sign-in, GitHub remote, pushed branch, Cursor budget) → the vendor's provider
   starts it (`cloud/cursor.ts` REST, `codex.ts` / `claude.ts` CLIs) → `cloud:changed` → a cloud strip
   (`CloudStrips.tsx`). The vendors' lists are polled only while the window is visible (30 s while running, back-off to

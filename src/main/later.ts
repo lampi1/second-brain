@@ -2,7 +2,7 @@
 // kept in userData/answer-later.json so it survives a restart. On = every open question, permission and command waits in
 // the "Da rispondere" queue and new ones join it without a popup or a Windows notification (the page still rings); off again when the user opens the queue. The flag lives in
 // main because main must hold back the Windows notification of a new request too (brain/notify.ts, `held`); the page
-// reads it at start ('later:get'), sets it ('later:set') and follows it ('later:changed'). Nothing is ever sent to the
+// sets it ('later:set') and follows it ('later:changed'). Nothing is ever sent to the
 // asking chats: they stay blocked on their request. Built by wiring.ts and demo-wiring.ts; pinned by test/unit/later.test.ts.
 import fs from 'node:fs';
 import type { AnswerLater } from '../shared/contract';
