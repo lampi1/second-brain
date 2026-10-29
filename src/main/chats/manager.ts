@@ -59,19 +59,19 @@ import { withinParent } from '../agents/worktrees';
 import { FAIL_CLOSED, aboveCeiling, allowsClass, belowParent, browserAccess, claudeDefaultMode, claudeTools, COMMAND_TOOLS, commandsReadOnly, narrowest, readOnlyCommand, toolClassOf, within, type AgentPolicy, type BrowserAccess, type ReadScripts } from '../agents/tool-policy';
 import { readOnlyTools } from '../agents/read-tools';
 import { type UserTaskEvents, type TaskDeliveryPolicy, type AgentOwnerSnapshot, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
-import { suggestInput } from '../../shared/skill-suggest';
 import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, SKILL_ID, SKILLS_MAX, staleDue, tagName, type RunLinks } from '../agents/runs';
 import { reportOf } from '../agents/run-report';
 import { gateRequest, runtimePluginName, SubagentGate } from '../agents/role-gate';
 import { afterTree, KEEP as CHECKPOINTS_KEPT, prune as pruneCheckpoints, restore as restoreCheckpoint, snapshot as takeCheckpoint, turnFiles, type Checkpoint } from './checkpoints';
-import { emptyReceipts, noteTool, noteTurnFiles, receiptVerdict } from '../agents/receipts';
+import { newRequest } from '../agents/task-estimate';
+import { emptyReceipts, noteTool, noteTurnFiles, receiptVerdict, rowChanges, turnFilesWithoutGit } from '../agents/receipts';
 import { autoPermit } from './auto-permit';
 import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { toolShownToChat, toolShownToUnknown, toolShownToWarm } from './tool-visibility';
 import { RESULT_OUTPUT_MAX, checkResult, resultMessage, type DelegationLimitHit, type DelegationResult, type TaskSource, type TaskAssignmentOptions } from '../../shared/delegation';
 import { finishPlan, afterReport, isPlanApproval, PLAN_APPROVED, planChange, STRATEGY_FLOW, withClarified, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
-import { aiErrorRuns, runMetrics } from '../agents/run-metrics';
+import { runMetrics } from '../agents/run-metrics';
 import { standings, withStandings } from '../agents/standing';
 import { isCorrection } from '../../shared/correction';
 import { AgentChildrenReducer } from './agent-children';
@@ -113,7 +113,6 @@ export interface ChatManagerOptions {
   writeRetryMs?: number;
   /** a brief waits for this chat's next question (genui/artifacts.ts hasBrief, ADR 0150); absent = none asked for */
   briefReady?: (chatId: string) => boolean;
-  suggestSkills?: (goal: string) => Promise<string[]>;
   /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */
   roleCatalogBrief?: () => string;
   /** the language the user wants replies in (ADR 0120: locale.ts uiLang, the setting or Windows'); absent = not named */
@@ -316,6 +315,8 @@ interface Rec {
   checkpoints?: Checkpoint[];
   /** the turn going on now has its own checkpoint (auto-permit lets edits and commands through only then) */
   turnCheckpoint?: boolean;
+  /** the open turn's edit-tool paths and whether a command that may write ran (receipts without a checkpoint, ADR 0186) */
+  receiptTurn?: { files: string[]; mayWrite: boolean };
   /** the session whose first API call was counted already (context-stats.ts cache) */
   cacheSession?: string;
   gitRoot?: string | null;
@@ -491,6 +492,9 @@ export interface CleanReportNote { chatId: string; title: string; role: string; 
 const MAX_ARCHIVED = 60;
 /** run changes are written at most this often (runSave) */
 export const RUN_SAVE_MS = 1000;
+/** A user message within this long of the previous one is part of a conversation going on (no estimate for a short
+ *  follow-up, ADR 0186). */
+const FOLLOW_UP_WINDOW_MS = 30 * 60_000;
 export const USER_NOTES_LABEL = "[nota dell'app · l'utente ha scritto direttamente in chat che hai delegato: tienine conto nel piano, non disfare ciò che le ha chiesto]";
 /** One message the user typed in a work chat (userWrote): what the Orchestrator and the parent learn. */
 export interface UserWroteNote { eventId: string; seq: number; chatId: string; title: string; role: string | null; parentId: string | null; parentTitle: string | null; at: number; text: string }
@@ -848,20 +852,12 @@ export class ChatManager implements ChatService {
       items: [], pending: new Map(), session: null, historyLoaded: false,
       jobNew: true, firstPrompt: null, turnSinceDone: false, lastTurnAt: 0,
     };
-    const runGoal = req.goal ?? prompt ?? title;
-    const suggestFor = agent.owner.source === 'catalog' && !req.orchestrator ? suggestInput(runGoal) : null;
-    let suggested: string[] | undefined;
-    if (suggestFor && this.opts.suggestSkills) {
-      try { suggested = await this.opts.suggestSkills(suggestFor); }
-      catch (e) { log.warn('chats', 'skill suggestion snapshot unavailable', { cause: errText(e), hint: 'the launch continues without a suggestion snapshot' }); }
-    }
     // Finish every await and bind live delegation authority before a durable child run exists.
     bindDelegation?.(id);
     if (agent.owner.source === 'catalog' && !req.orchestrator) this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 1, goal: req.goal ?? prompt ?? title, startedBy: delegator ? 'parent' : by === 'app' ? 'app' : by === 'agent' ? 'orchestrator' : 'user', costKnown: caps.cost, ...links,
       tags: { ...asked, repo: repoOf(cwd) }, ...(agent.tier ? { tier: agent.tier } : {}), model: req.model ?? null });
     if (r.s.run) { r.s.run.taskContract = { ...(by === 'app' && req.doneWhen !== undefined ? { reportExpected: true } : {}), goal: r.s.run.goal, doneWhen: req.doneWhen ?? req.delegation?.doneWhen ?? [], deliveryPolicy: this.deliveryPolicy(req.deliveryPolicy, !!delegator) }; this.runSave(); }
     if (r.s.run?.startedBy === 'app' && r.s.run.reviewOf && r.s.run.taskContract?.reportExpected && !r.s.work) r.s.work = { status: 'assigned', updatedAt: now };
-    if (r.s.run && suggested) { r.s.run.skillSuggestions = { at: now, suggested, used: [] }; this.runSave(); }
     // the Orchestrator opened it while answering the user's own message: the user waits for what it finds (#123)
     if (by === 'agent' && !delegator && r.s.run?.startedBy === 'orchestrator') r.userWaits = this.orchestratorAnswering();
     // checked again where the chat joins the list: chats created at once (agent_delegate's children) awaited in between
@@ -1117,8 +1113,12 @@ export class ChatManager implements ChatService {
     // the user put the files back before the last turn: the chat learns it with its next message
     const noted = r.undoNote ? `${r.undoNote}\n\n${noted0}` : noted0;
     r.undoNote = undefined;
-    // the user's own request to the Orchestrator carries the app's estimate (zero tokens), never the app's news or mail
-    const estimate = r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') ? this.requestEstimate(t) : null;
+    // the user's own NEW request to the Orchestrator carries the app's estimate (zero tokens), never the app's news or
+    // mail, nor a short follow-up ("ok", "vai", an answer) in a conversation going on (ADR 0186)
+    // the user's own messages only: an agent's mail (from) or an app note ([…) is not the user going on
+    const said = r.items.filter(i => i.kind === 'user' && !i.from && !i.text.startsWith('[')), before = said.at(-2);
+    const ongoing = !!before && before.at >= Date.now() - FOLLOW_UP_WINDOW_MS;
+    const estimate = r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') && newRequest(t, ongoing) ? this.requestEstimate(t) : null;
     const asked0 = [noted, estimate].filter(Boolean).join('\n\n');
     // Flash is a "btw" (ADR 0106): the user's question carries what the Orchestrator said and did since it last looked
     const lampo = r.s.quick && !from && !resumed ? this.lampoContext(r) : null;
@@ -1652,10 +1652,6 @@ export class ChatManager implements ChatService {
     if (mode === 'continue') next.continuedFrom = previous.runId;
     r.s.run = next;
     if (mode === 'new-task' && r.s.plan) r.s.plan = { phase: 'asking', clarified: [], steps: [], at };
-    const suggestFor = suggestInput(prompt);
-    if (suggestFor && this.opts.suggestSkills) void this.opts.suggestSkills(suggestFor).then(suggested => {
-      next.skillSuggestions = { at, suggested, used: [...(next.tags?.skills ?? [])] }; this.runSave(); this.persist();
-    }).catch(e => log.warn('chats', 'skill suggestion snapshot unavailable', { cause: errText(e), hint: 'the task continues without a snapshot' }));
     r.s.work = { status: 'assigned', updatedAt: at };
     if (r.s.delegation) r.s.delegation = { ...r.s.delegation, goal: prompt, doneWhen: next.taskContract.doneWhen, at, result: undefined };
     delete r.rootReportAt; delete r.report; delete r.autoCompleted; delete r.runSeen;
@@ -1678,13 +1674,12 @@ export class ChatManager implements ChatService {
     if (isCorrection(text) && r.s.run?.corrections) { r.s.run.corrections.tagged++; this.runSave(); this.persist(); }
   }
 
-  /** The §5 metrics per agent and version (A6): runs kept plus the rollups of the pruned ones. `aiErrors` = the brain's
-   *  ai-errors.md text (its lines naming a run, seen by Brother, are a secondary column); undefined = not read. */
-  runMetrics(opts: { aiErrors?: string; since?: number; skill?: string; app?: string; repo?: string } = {}): ReturnType<typeof runMetrics> {
+  /** The §5 metrics per agent and version (A6): runs kept plus the rollups of the pruned ones. */
+  runMetrics(opts: { since?: number; skill?: string; app?: string; repo?: string } = {}): ReturnType<typeof runMetrics> {
     // Metrics read the current in-memory record; reading must not force a synchronous archive write.
     const runs = this.runs.list(), rollups = this.runs.rolledUp();
     const live = (run: AgentRun) => { const r = this.chats.get(run.chatId); return !!r && !r.s.closedAt && r.s.run?.runId === run.runId; };
-    const metrics = runMetrics(runs, { rollups, live, ...(opts.aiErrors !== undefined ? { aiErrors: aiErrorRuns(opts.aiErrors) } : {}), ...(opts.since !== undefined ? { since: opts.since } : {}),
+    const metrics = runMetrics(runs, { rollups, live, ...(opts.since !== undefined ? { since: opts.since } : {}),
       filter: { ...(opts.skill !== undefined ? { skill: opts.skill } : {}), ...(opts.app !== undefined ? { app: opts.app } : {}), ...(opts.repo !== undefined ? { repo: opts.repo } : {}) } });
     // the card's level and performance are the agent's whole record, whatever the filter
     const standing = standings(runs, rollups, Date.now(), this.runs.flashLog());
@@ -3067,6 +3062,11 @@ export class ChatManager implements ChatService {
     const seen = r.receiptRows ??= new Set();
     if (seen.has(item.id) || !noteTool(run.receipts ??= emptyReceipts(), item)) return;
     seen.add(item.id);
+    // the turn's own record of its changes, for a turn without a checkpoint (receiptTurn)
+    const ch = rowChanges(item), turn = r.receiptTurn ??= { files: [], mayWrite: false };
+    const inCwd = (f: string): string => { const rel = path.relative(r.s.cwd, path.resolve(r.s.cwd, f)); return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel.replace(/\\/g, '/') : f; };
+    if (turn.files.length < 200) turn.files.push(...ch.files.slice(0, 200 - turn.files.length).map(inCwd));
+    if (ch.mayWrite) turn.mayWrite = true;
     if (seen.size > 500) seen.delete(seen.values().next().value!);
     this.runs.touch();
   }
@@ -3075,8 +3075,9 @@ export class ChatManager implements ChatService {
   private receiptTurn(r: Rec, turnAt: number | undefined, end: number): void {
     const run = r.s.run;
     if (!run || run.source === 'oneshot' || (run.endedAt !== undefined && (turnAt === undefined || run.endedAt < turnAt))) return;
-    const rc = run.receipts ??= emptyReceipts(), cp = r.checkpoints?.at(-1);
-    if (!r.turnCheckpoint || !cp || r.receiptCp === cp) { noteTurnFiles(rc, null, 0, end); this.receiptsIn(r, run); return; }
+    const rc = run.receipts ??= emptyReceipts(), cp = r.checkpoints?.at(-1), turn = r.receiptTurn ?? { files: [], mayWrite: false };
+    r.receiptTurn = undefined;
+    if (!r.turnCheckpoint || !cp || r.receiptCp === cp) { noteTurnFiles(rc, turnFilesWithoutGit(turn), turnAt ?? end, end); this.receiptsIn(r, run); return; }
     r.receiptCp = cp; r.receiptsBusy = true;
     void (async () => {
       let files: string[] | null = null;
@@ -3740,7 +3741,7 @@ export class ChatManager implements ChatService {
         // a skill Claude loaded while the run is open joins its tags (only Claude reports skills as a tool)
         if (item.kind === 'tool' && item.name === 'Skill' && r.s.harness === 'claude' && r.s.run) {
           const input = item.input as { skill?: unknown; command?: unknown } | null;
-          if (addSkill(r.s.run, input?.skill ?? input?.command)) { if (r.s.run.skillSuggestions) r.s.run.skillSuggestions.used = [...r.s.run.tags!.skills]; this.runSaveSoon(); }
+          if (addSkill(r.s.run, input?.skill ?? input?.command)) this.runSaveSoon();
         }
         if (item.kind === 'tool' && r.s.run) this.noteReceipt(r, item);
         if (item.kind === 'result' && !replace) this.turnEnded(r, item);

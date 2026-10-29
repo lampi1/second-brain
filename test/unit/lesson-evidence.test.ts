@@ -57,6 +57,10 @@ describe('host evidence before lesson approval', () => {
     expect(legacy.pending()).toEqual([]); expect(legacy.waiting()).toHaveLength(1);
     expect(() => legacy.review(p.id, true)).toThrow(/evidence/);
   });
+  it('hands the Apprendimento page only each lesson\'s date and status (ADR 0186)', () => {
+    const w = world(), p = w.propose();
+    expect(w.service.stubs()).toEqual([{ createdAt: p.createdAt, status: 'pending' }]);
+  });
   it('does not accept a model-supplied evidence assessment', () => {
     const w = world(), tool = agentLearnTool(w.service);
     expect(() => tool.run({ agentId: 'artisan', rule: 'Check output.', evidence: 'run:r_example', assessment: { state: 'supported' } }, {} as never)).toThrow(/Invalid lesson/);

@@ -1,6 +1,6 @@
 // Counters of how the app's Claude chats use their context (ADR 0031), from the API usage every engine reports (zero
-// tokens): calls, calls over 200k, cold cache re-writes over 100k, compactions, cold hand-off notes written and used,
-// the list-price $ of the first calls after a cold continuation vs after an auto-compaction, and the prompt cache per
+// tokens): calls, calls over 200k, cold cache re-writes over 100k, compactions, the list-price $ of the first calls
+// after an auto-compaction (ADR 0186 dropped the cold notes' and the continuation's counters: no page read them), and the prompt cache per
 // kind of chat (read, written, uncached; and on each session's first call, whether it found its prefix cached). Why: the owner decided
 // (13/10) on measured numbers and wants to see whether the fix holds. Kept in <userData>/context-stats.json (saved a
 // few seconds after a change), notable events logged on scope chats; app_state shows the snapshot. Used by manager.ts.
@@ -15,8 +15,7 @@ const COLD = 100_000;
 const zeroCache = (): CacheTotals => ({ calls: 0, read: 0, write: 0, input: 0, firstCalls: 0, firstRead: 0, firstWrite: 0 });
 const emptyCache = (): Record<CacheKind, CacheTotals> => ({ orchestrator: zeroCache(), root: zeroCache(), child: zeroCache() });
 const empty = (now: number): ContextStats => ({
-  since: now, calls: 0, over200k: 0, coldRewrites: 0, compactions: 0, notesWritten: 0, notesUsed: 0,
-  afterContinuation: { calls: 0, usd: 0 }, afterCompaction: { calls: 0, usd: 0 }, cache: emptyCache(),
+  since: now, calls: 0, over200k: 0, coldRewrites: 0, compactions: 0, afterCompaction: { calls: 0, usd: 0 }, cache: emptyCache(),
 });
 const totals = (v: unknown): CacheTotals => {
   const o = (v ?? {}) as Record<string, unknown>;
@@ -52,7 +51,7 @@ export class ContextCounters {
       this.s.coldRewrites++;
       log.info('chats', 'context: cache re-written', { chat: chatId, data: { context: c.context, cacheWrite: c.cacheWrite, usd: round(c.usd), after } });
     }
-    if (after) { const p = after === 'continuation' ? this.s.afterContinuation : this.s.afterCompaction; p.calls++; p.usd = round(p.usd + c.usd); }
+    if (after === 'compaction') { const p = this.s.afterCompaction; p.calls++; p.usd = round(p.usd + c.usd); }
     this.save();
   }
 
@@ -62,15 +61,14 @@ export class ContextCounters {
     this.save();
   }
 
+  /** A cold hand-off note written or used: logged only (ADR 0186 dropped its counters). */
   note(chatId: string, what: 'written' | 'used', data: Record<string, unknown> = {}): void {
-    if (what === 'written') this.s.notesWritten++; else this.s.notesUsed++;
     log.info('chats', `context: cold note ${what}`, { chat: chatId, data });
-    this.save();
   }
 
   snapshot(): ContextStats {
     const s = this.s;
-    return { ...s, afterContinuation: { ...s.afterContinuation }, afterCompaction: { ...s.afterCompaction }, cache: structuredClone(s.cache ?? emptyCache()) };
+    return { ...s, afterCompaction: { ...s.afterCompaction }, cache: structuredClone(s.cache ?? emptyCache()) };
   }
 
   /** Writes now (the app quits). */
@@ -97,7 +95,7 @@ export class ContextCounters {
       if (!n(o.since)) return null;
       return {
         since: n(o.since), calls: n(o.calls), over200k: n(o.over200k), coldRewrites: n(o.coldRewrites), compactions: n(o.compactions),
-        notesWritten: n(o.notesWritten), notesUsed: n(o.notesUsed), afterContinuation: pair(o.afterContinuation), afterCompaction: pair(o.afterCompaction),
+        afterCompaction: pair(o.afterCompaction),
         cache: { orchestrator: totals((o.cache as Record<string, unknown> | undefined)?.orchestrator), root: totals((o.cache as Record<string, unknown> | undefined)?.root), child: totals((o.cache as Record<string, unknown> | undefined)?.child) },
       };
     } catch { return null; }

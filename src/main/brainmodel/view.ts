@@ -3,7 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
-import type { BrainModelState, MigrationReport, MaintenanceRun } from '../../shared/brain-model';
+import type { BrainModelState, LessonStub, MigrationReport, MaintenanceRun } from '../../shared/brain-model';
 import { ChangeLog } from './changes';
 import { claimOf, learningState, measurable, seal, type IntervalCache } from './evidence';
 import { readMemory, readRules, readSkills, type SkillDir } from './model';
@@ -13,7 +13,7 @@ import { portableId } from '../agents/pack/flows';
 import { readLocal } from '../agents/local-store';
 import { errText, log } from '../log';
 
-export interface BrainViewInput { userData: string; root: string | null; home: string | null; profiles: AgentProfile[]; runs: AgentRun[]; now: number }
+export interface BrainViewInput { userData: string; root: string | null; home: string | null; profiles: AgentProfile[]; runs: AgentRun[]; now: number; lessons?: LessonStub[] }
 const optionalReport = <T>(file: string): T | null => { try { return (readLocal(file) as T | undefined) ?? null; } catch { return null; } };
 export function readBrainView(i: BrainViewInput, changes = new ChangeLog(i.userData), intervals: IntervalCache = new Map()): BrainModelState {
   let root: string | null = null;
@@ -35,7 +35,7 @@ export function readBrainView(i: BrainViewInput, changes = new ChangeLog(i.userD
   if (root) try { stats = memoryStats({ root, memory, profiles: roles, runs, skills, now: i.now }); }
   catch (e) { log.warn('brain', 'memory statistics failed', { cause: errText(e), hint: 'the Memoria page shows the files without the charts' }); }
   let learning: BrainModelState['learning'];
-  try { learning = learningState(claims, roles, runs, i.now); }
+  try { learning = learningState(claims, roles, runs, i.now, i.lessons); }
   catch (e) { log.warn('brain', 'learning page failed', { cause: errText(e), hint: 'the Apprendimento page shows no curves' }); }
   return { root, agents: roles.map(p => ({ id: p.id, name: p.name, role: p.purpose,
     skills: [...new Set([...p.skills, ...(p.knowhow?.linked ?? [])])], memory: root ? `agents/${portableId(p.id)}/memory.md` : null })),

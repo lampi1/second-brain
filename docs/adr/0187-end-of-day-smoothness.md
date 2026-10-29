@@ -1,4 +1,4 @@
-# ADR 0186 · Closing chats frees what they started; repeated work stops growing with the day
+# ADR 0187 · Closing chats frees what they started; repeated work stops growing with the day
 
 Status: accepted (2026-10-29, owner: "verso fine giornata va a scatti, o quando iniziano ad esserci tante chat attive va
 a scatti, anche se dopo le chiudo").

@@ -2,47 +2,20 @@
 // per-job cost/time estimate once shown next to them: measured on 178 chats it held only 47% of the time with a
 // bigger median error than the median cost). The ledger is a JSON-lines file behind a pluggable store (default
 // userData/jobs.jsonl). It starts from day one with a backfill from the brain's cost.mjs (per-chat $ and
-// first-to-last-message span of the last 30 days). The prompt text is never stored: only its length and kind
-// (classify(), keywords Italian + English). Used by brain/index.ts for 'estimate:record'; the chat manager records
-// jobs and their actuals; the brain's estimates.mjs reads jobs.jsonl for its own routing table (brain-estimates.ts).
+// first-to-last-message span of the last 30 days). The prompt text is never stored: only its length and kind of work
+// (shared/work-concepts.ts taskOf, the routing table's own kinds: ADR 0186; an older row's own kind is mapped on load).
+// A row is appended only when it changed, and the file is compacted on load once repeats outnumber twice the ids
+// (ADR 0186). Used by brain/index.ts for 'estimate:record'; the chat manager records jobs and their actuals; the
+// brain's estimates.mjs reads jobs.jsonl for its own routing table (brain-estimates.ts).
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import type { Effort, Harness, JobActual, JobKind, JobRecordInput } from '../../shared/contract';
+import type { Effort, Harness, JobActual, JobRecordInput, TaskKind } from '../../shared/contract';
+import { fromLedgerKind, taskOf, WORK_KINDS } from '../../shared/work-concepts';
 import { log } from '../log';
 import { runNode, type NodeRunner } from './node';
 import { brainScript } from '../rules/tools';
 import { engineOf, engines } from '../engines/registry';
-
-export const KIND_LABELS: Record<JobKind, string> = {
-  fix: 'correzione', qa: 'QA e test', review: 'revisione', feature: 'funzionalità', research: 'indagine', question: 'domanda', other: 'altro',
-};
-
-// ── classifier ──────────────────────────────────────────────────────────────────────────────────────────────────────
-// Each pattern that matches scores 1 for its kind; the highest score wins, ties go to the earlier kind in this list.
-const RULES: [JobKind, RegExp[]][] = [
-  ['qa', [/\bqa\b/, /\btest ?case\b/, /\btest ?plan\b/, /\be2e\b/, /\bcollaud/, /\brieseg/, /\b(prova|esegui|lancia) (il |i |un )?test/, /\bverifica (la |il )?(pr|fix)\b/, /\bsmoke\b/, /\bretest/, /\btesta(re|lo|la)?\b/, /\btest (the|this) (pr|fix)\b/, /\baccettazion/, /\bacceptance\b/, /\bstaging\b/]],
-  ['review', [/\breview/, /\brevision/, /\brived/, /\brecensi/, /\bcontrolla (la |il )?(pr|diff|codice)\b/, /\bguarda (la |il )?(pr|diff)\b/, /\bcode ?review\b/]],
-  ['fix', [/\bfix/, /\bbug/, /\berror[ei]?\b/, /\berrors\b/, /\bcrash/, /\brott[oaie]\b/, /\bbroken\b/, /\bnon (funziona|va|parte)\b/, /\b(doesn'?t|does not|not) work/, /\bissue\b/, /\bproblem/, /\bsistem[ai]/, /\bcorregg/, /\bregress/, /\bexception\b/, /\beccezion/, /\bfail/, /\bfallisc/, /\b5\d\d\b/, /\bhotfix/]],
-  ['feature', [/\bimplement/, /\baggiung/, /\badd\b/, /\bcrea(re)?\b/, /\bcreate\b/, /\bbuild\b/, /\bcostruisc/, /\bnuov[ao] (funzionalita|feature|pagina|schermata)\b/, /\bfeature\b/, /\bfeat\b/, /\bsviluppa/, /\bdevelop/, /\bmigra/, /\brefactor/, /\bscaffold/, /\bintegra/]],
-  ['research', [/\binvestig/, /\bindag/, /\bricerc/, /\bresearch/, /\banalizz/, /\banaly[sz]/, /\bperche\b/, /\bwhy\b/, /\bcerca\b/, /\btrova\b/, /\bfind\b/, /\bstudia/, /\bexplor/, /\besplor/, /\bconfront/, /\bcompar/, /\broot cause\b/, /\bda quando\b/, /\bchi l'?ha\b/, /\blogs?\b/, /\bstato dell'?arte\b/, /\banalisi\b/, /\bverific[ah]\b/, /\balert/, /\ballarm/, /\bincident/, /\boutage/, /\bdiagnos/, /\blatenz/, /\blatency\b/]],
-  ['question', [/\?\s*$/, /^(cosa|come|quanto|quanti|quale|quali|qual|dove|quando|chi|what|how|which|where|when|who|is|are|can|does|do|spiegami|spiega|explain|dimmi|tell me)\b/, /\bstatus\b/, /\bspiegazion/, /\bcome siamo messi\b/]],
-];
-
-export function normalize(text: string): string {
-  return String(text ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
-}
-
-/** Kind of a job from its first prompt (or a chat title when backfilling). */
-export function classify(prompt: string): JobKind {
-  const t = normalize(String(prompt ?? '').slice(0, 4000)).slice(0, 2000);
-  let best: JobKind = 'other', score = 0;
-  for (const [kind, res] of RULES) {
-    const s = res.reduce((n, re) => n + (re.test(t) ? 1 : 0), 0);
-    if (s > score) { best = kind; score = s; }
-  }
-  return best;
-}
 
 // ── ledger ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 export interface JobRecord {
@@ -51,7 +24,7 @@ export interface JobRecord {
   harness: Harness;
   model: string | null;
   effort: Effort | null;
-  kind: JobKind;
+  kind: TaskKind;
   promptChars: number | null;
   actual: JobActual | null;
   source: 'app' | 'backfill';
@@ -60,17 +33,45 @@ export interface JobRecord {
 /** Where the ledger lives. Append-only JSON lines; the last line of an id wins. */
 export interface JobStore { load(): JobRecord[]; append(r: JobRecord): void }
 
+/** A row as the ledger keeps it: the kind in the one taxonomy, the actual without the token fields no engine ever
+ *  filled (ADR 0186: tokensIn and tokensOut were null on every row). */
+function clean(r: JobRecord): JobRecord {
+  const a = r.actual as (JobActual & { tokensIn?: unknown; tokensOut?: unknown }) | null;
+  const { tokensIn: _i, tokensOut: _o, ...actual } = a ?? ({} as JobActual & { tokensIn?: unknown; tokensOut?: unknown });
+  return { ...r, kind: fromLedgerKind(r.kind), actual: a ? actual as JobActual : null };
+}
+
+/** Rewrite the file with one line per id once the repeated lines outnumber twice the ids (ADR 0186: a chat's every turn
+ *  used to append its whole row again, 30 000 lines for 1 000 jobs). */
+export const COMPACT_RATIO = 2;
+
 export class FileJobStore implements JobStore {
   constructor(readonly file: string) {}
   load(): JobRecord[] {
     let text = '';
     try { text = fs.readFileSync(this.file, 'utf8'); } catch { return []; }
     const byId = new Map<string, JobRecord>();
+    let lines = 0;
     for (const l of text.split(/\r?\n/)) {
       if (!l.trim()) continue;
-      try { const r = JSON.parse(l) as JobRecord; if (r && typeof r.id === 'string') byId.set(r.id, r); } catch { /* partial line */ }
+      lines++;
+      try { const r = JSON.parse(l) as JobRecord; if (r && typeof r.id === 'string') byId.set(r.id, clean(r)); } catch { /* partial line */ }
     }
-    return [...byId.values()];
+    const rows = [...byId.values()];
+    if (lines - rows.length > COMPACT_RATIO * rows.length) this.compact(rows, lines);
+    return rows;
+  }
+  /** The last row of each id, written next to the file and renamed over it: a crash leaves the old file whole. */
+  private compact(rows: JobRecord[], lines: number): void {
+    const tmp = `${this.file}.${process.pid}.tmp`;
+    try {
+      fs.writeFileSync(tmp, rows.map(r => `${JSON.stringify(r)}\n`).join(''));
+      fs.renameSync(tmp, this.file);
+      log.info('brain', 'job ledger compacted', { data: { lines, rows: rows.length } });
+    } catch (e) {
+      try { fs.rmSync(tmp, { force: true }); } catch { /* nothing to remove */ }
+      log.warn('brain', 'job ledger not compacted', { cause: String(e), hint: 'check that jobs.jsonl in the app data folder is writable; the ledger still works' });
+    }
   }
   append(r: JobRecord): void {
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
@@ -97,8 +98,8 @@ export function backfillFromCost(j: unknown, o: { now: number; windowStartMs: nu
     const span = Math.max(1, Math.round((to - from) / 6e4));
     out.push({
       id: `claude:${sid}`, at: from, harness: 'claude', model: null, effort: null,
-      kind: /^[0-9a-f]{8}$/.test(title) ? 'other' : classify(title), promptChars: null,
-      actual: { usd: Math.round(usd * 1000) / 1000, minutes: span <= MAX_SPAN_MIN ? span : null, tokensIn: null, tokensOut: null, turns: null },
+      kind: /^[0-9a-f]{8}$/.test(title) ? 'altro' : taskOf(title, '', undefined), promptChars: null,
+      actual: { usd: Math.round(usd * 1000) / 1000, minutes: span <= MAX_SPAN_MIN ? span : null, turns: null },
       source: 'backfill',
     });
   }
@@ -107,7 +108,6 @@ export function backfillFromCost(j: unknown, o: { now: number; windowStartMs: nu
 
 // ── input validation (the renderer sends it) ────────────────────────────────────────────────────────────────────────
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
-const KINDS = Object.keys(KIND_LABELS) as JobKind[];
 const n0 = (v: unknown, f: string): number | null => {
   if (v === null || v === undefined) return null;
   if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) throw new Error(`${f}: numero ≥ 0`);
@@ -116,7 +116,7 @@ const n0 = (v: unknown, f: string): number | null => {
 function checkActual(a: unknown): JobActual | null {
   if (a === null || a === undefined) return null;
   const x = a as Record<string, unknown>;
-  return { usd: n0(x.usd, 'actual.usd') ?? 0, minutes: n0(x.minutes, 'actual.minutes'), ...(x.minutesKind === 'work' ? { minutesKind: 'work' as const } : {}), tokensIn: n0(x.tokensIn, 'actual.tokensIn'), tokensOut: n0(x.tokensOut, 'actual.tokensOut'), turns: n0(x.turns, 'actual.turns') };
+  return { usd: n0(x.usd, 'actual.usd') ?? 0, minutes: n0(x.minutes, 'actual.minutes'), ...(x.minutesKind === 'work' ? { minutesKind: 'work' as const } : {}), turns: n0(x.turns, 'actual.turns') };
 }
 export function checkHarness(h: unknown): Harness { if (typeof h !== 'string' || !engineOf(h)) throw new Error(`harness: ${engines().map(e => e.id).join(' | ')}`); return h; }
 export function checkModel(m: unknown): string | null { if (m === null || m === undefined || m === '') return null; if (typeof m !== 'string' || m.length > 120) throw new Error('model: testo breve o null'); return m; }
@@ -127,7 +127,7 @@ export class Ledger {
   private backfilling = false;
 
   constructor(private store: JobStore, private metaFile: string | null = null) {
-    for (const r of store.load()) this.jobs.set(r.id, r);
+    for (const r of store.load()) this.jobs.set(r.id, clean(r));
   }
 
   all(): JobRecord[] { return [...this.jobs.values()]; }
@@ -138,7 +138,7 @@ export class Ledger {
     if (!input || typeof input !== 'object') throw new Error('lavoro: oggetto atteso');
     if (input.id !== undefined && (typeof input.id !== 'string' || !/^[\w:.-]{1,120}$/.test(input.id))) throw new Error('id: lettere, cifre, : . _ -');
     if (input.prompt !== undefined && (typeof input.prompt !== 'string' || input.prompt.length > 2e6)) throw new Error('prompt: testo');
-    if (input.kind !== undefined && !KINDS.includes(input.kind)) throw new Error(`kind: ${KINDS.join(' | ')}`);
+    if (input.kind !== undefined && !(WORK_KINDS as readonly string[]).includes(input.kind)) throw new Error(`kind: ${WORK_KINDS.join(' | ')}`);
     const id = input.id ?? `job_${crypto.randomUUID()}`;
     const old = this.jobs.get(id);
     const r: JobRecord = {
@@ -146,11 +146,13 @@ export class Ledger {
       harness: checkHarness(input.harness ?? old?.harness),
       model: input.model !== undefined ? checkModel(input.model) : old?.model ?? null,
       effort: input.effort !== undefined ? checkEffort(input.effort) : old?.effort ?? null,
-      kind: input.kind ?? (input.prompt !== undefined ? classify(input.prompt) : old?.kind ?? 'other'),
+      kind: input.kind ?? (input.prompt !== undefined ? taskOf('', input.prompt, undefined) : old?.kind ?? 'altro'),
       promptChars: input.prompt !== undefined ? input.prompt.length : old?.promptChars ?? null,
       actual: input.actual !== undefined ? checkActual(input.actual) : old?.actual ?? null,
       source: 'app',
     };
+    // a turn that changed nothing (the same totals again) writes no line (ADR 0186)
+    if (old && JSON.stringify(old) === JSON.stringify(r)) return { id };
     this.jobs.set(id, r);
     this.store.append(r);
     return { id };

@@ -22,6 +22,7 @@ import type { ResearchProposal } from '../../../src/shared/maintenance-research'
 import { maintenanceEvent } from '../../../src/main/brain/announce';
 import type { UpgradeAsk } from '../../../src/main/brainmodel/upgrade';
 import { proposeMemory, confirmMemory } from '../../../src/main/rules/memory-records';
+import { readWorker } from '../../../src/main/read-work';
 
 const roots: string[] = [];
 afterEach(() => { for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true }); });
@@ -46,13 +47,39 @@ function world(opts: { demo?: boolean; upgradeAsk?: UpgradeAsk; scripts?: { file
   const learning = new AgentPackLearning(flows, data);
   let emitted = 0;
   const service = new BrainModelService({ userData: data, root: () => brain, home: null, catalog, packs: flows, learning, runs: () => opts.runs ?? [], routing: () => routing,
-    suggestSkills: async () => [],
     emit: () => { emitted++; }, auto: false, ...(opts.upgradeAsk ? { upgradeAsk: opts.upgradeAsk } : {}), now: () => NOW, ...(opts.applied ? { applied: opts.applied } : {}),
     ...(opts.logDir ? { logDir: () => opts.logDir! } : {}), ...(opts.findings ? { findings: opts.findings } : {}), ...(opts.scripts ? { scripts: opts.scripts } : {}) });
   const agent = (id: string) => catalog.list().profiles.find(p => p.id === id)!;
   return { base, brain, data, catalog, flows, learning, service, agent, emitted: () => emitted };
 }
 const snapshot = (root: string) => { const out: Record<string, string> = {}; const walk = (d: string) => { for (const e of fs.readdirSync(path.join(root, d), { withFileTypes: true })) { const rel = d ? `${d}/${e.name}` : e.name; if (e.isDirectory()) { if (!rel.startsWith('.claude') && !rel.startsWith('agents')) walk(rel); } else if (rel !== 'brain.json') out[rel] = fs.readFileSync(path.join(root, rel), 'utf8'); } }; walk(''); return out; };
+
+describe('the pages\' state cache (ADR 0186)', () => {
+  it('two reads without a change compute once; a change, a new run or a verdict computes again; a failure is not kept', async () => {
+    const runs: AgentRun[] = [];
+    const w = world({ runs });
+    const call = vi.spyOn(readWorker, 'call').mockImplementation(async () => w.service.state());
+    try {
+      const a = await w.service.stateAsync(), b = await w.service.stateAsync();
+      expect(call).toHaveBeenCalledTimes(1);
+      expect(b).toBe(a);
+      w.service.invalidate();
+      await w.service.stateAsync();
+      expect(call).toHaveBeenCalledTimes(2);
+      runs.push({ runId: 'r_000000000001', chatId: 'c1', agentId: DEV, version: 1, goal: 'x', startedBy: 'user', startedAt: NOW - 1000, counters: {}, costUsd: 0, tokens: null } as unknown as AgentRun);
+      await w.service.stateAsync();
+      expect(call).toHaveBeenCalledTimes(3);
+      runs[0] = { ...runs[0]!, outcome: { verdict: 'success', basis: 'human', at: NOW, by: 'user' } } as AgentRun;
+      await w.service.stateAsync(); await w.service.stateAsync();
+      expect(call).toHaveBeenCalledTimes(4);
+      call.mockImplementationOnce(async () => { throw new Error('worker gone'); });
+      w.service.invalidate();
+      await expect(w.service.stateAsync()).rejects.toThrow('worker gone');
+      await w.service.stateAsync();
+      expect(call).toHaveBeenCalledTimes(6);
+    } finally { call.mockRestore(); }
+  });
+});
 
 describe('one-time migration', () => {
   it('turns every runbook and routines section into a brain skill, without losing or leaking content', async () => {
@@ -72,7 +99,7 @@ describe('one-time migration', () => {
     expect(fs.readFileSync(path.join(w.brain, '.claude/skills', query.skill!, 'SKILL.md'), 'utf8')).not.toMatch(/demo-non-reale/);
     expect(query.note).toMatch(/nascost/);
     expect(snapshot(w.brain)).toEqual(before); // originals untouched
-    // no role is changed: a role loads a skill when its launch gives it (skills_suggest picks them)
+    // no role is changed: a role loads a skill when its launch gives it (the Orchestrator passes them)
     expect(w.catalog.list().profiles.every(p => p.lastEditedBy === 'default')).toBe(true);
     // one change per skill, all undoable
     expect(state.changes.filter(c => c.job === 'migration')).toHaveLength(report.items.length);
@@ -316,7 +343,7 @@ describe('repeated tasks, duplicates and the user toggle', () => {
   it('refuses an unknown job and works without a brain only to say so', async () => {
     const w = world();
     await expect(w.service.maintain('everything' as never)).rejects.toThrow(/Unknown/);
-    const none = new BrainModelService({ userData: w.data, root: () => null, home: null, catalog: w.catalog, packs: w.flows, learning: w.learning, runs: () => [], routing: () => routing, suggestSkills: async () => [], emit: () => {}, auto: false });
+    const none = new BrainModelService({ userData: w.data, root: () => null, home: null, catalog: w.catalog, packs: w.flows, learning: w.learning, runs: () => [], routing: () => routing, emit: () => {}, auto: false });
     await expect(none.maintain()).rejects.toThrow(/cartella del brain/);
     expect(none.state()).toMatchObject({ root: null, skills: [], rules: [], memory: [] });
   });

@@ -88,6 +88,7 @@
 .ad-versions{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:8px;font-size:var(--fs-s)}
 .ad-versions li{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 10px;padding-bottom:8px;border-bottom:1px solid var(--border)}
 .ad-versions li:last-child{border-bottom:0}.ad-versions small{color:var(--text-3)}.ad-versions p{flex-basis:100%;margin:0;color:var(--text-3)}
+.ad-versions .ad-version-stats{color:var(--text-2)}.ad-versions .ad-version-stats b{color:var(--text);font-weight:600}
 .agent-editor-foot{display:flex;justify-content:flex-end;gap:8px;padding-top:12px;border-top:1px solid var(--border)}
 
 @keyframes ad-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}

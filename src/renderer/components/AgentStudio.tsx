@@ -2,7 +2,8 @@
 // 96 px, English name, what it is for, engine, model tier, trial and customized chips, Avvia), its run numbers, the
 // permissions card (RolePermissions: tool classes and ceiling, each with its "?", ADR 0085), the instructions it runs
 // with, its configuration (tools, permission ceiling, the roles it may launch), the skills it loads at every launch, its
-// versions. "Modifica" opens the editor in place: only the
+// versions (a new one only for text, skills, model or tier; each with its runs, verified outcomes and success ±, ADR
+// 0186). "Modifica" opens the editor in place: only the
 // behaviour is editable (instructions, engine, model, tier, launches, skills, context; the permissions on their own
 // card); name and summary belong to the role; the character can be swapped for the user's own picture
 // (AgentImagePicker, under the badge). The card back's «Modifica il ruolo» lands straight in the editor (EDIT_ELEMENT, #126):
@@ -11,7 +12,8 @@
 // styles/agent-studio.css.
 import { Select } from './Select';
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type RefObject } from 'react';
-import { completedRuns, MAX_CONTEXT_RANGE, type AgentDraft, type AgentMetrics, type AgentProfile, type AgentVersion } from '@shared/agents';
+import { completedRuns, MAX_CONTEXT_RANGE, type AgentDraft, type AgentMetrics, type AgentProfile, type AgentVersion, type VersionMetrics } from '@shared/agents';
+import { MIN_SUCCESS_SAMPLE, successInterval } from '@shared/success';
 import { MODEL_TIERS, WORK_ROLE_IDS, FLASH_ID, isRoleId, roleName, tierRank, type ModelTier } from '@shared/roles';
 import { characterOf } from '@shared/characters';
 import { agentHistory, refreshAgents, resetAgent, restoreAgentVersion, saveAgent, useAgents } from '../store/agents';
@@ -201,7 +203,21 @@ function RoleEditor({ profile, draft, busy, canSave, tierOk, change, firstField,
   </form>;
 }
 
-function Versions({ profile }: { profile: AgentProfile }) {
+/** a stored reason on one short line (the full text stays in the title) */
+const oneLine = (s: string): string => s.length > 80 ? `${s.slice(0, 79)}…` : s;
+
+/** One version's runs, verified outcomes and success with its ± (ADR 0186), or «troppo pochi» under the sample. */
+export function VersionStats({ m }: { m: VersionMetrics | undefined }) {
+  if (!m || !m.ended) return <p className="ad-version-stats" data-testid="version-stats">{t('studio.versionNoRuns')}</p>;
+  const rate = m.successRate, range = successInterval(rate);
+  return <p className="ad-version-stats" data-testid="version-stats">
+    {t('studio.versionRuns', { runs: m.ended, n: rate.n })} · {rate.value !== null && range !== null
+      ? <b>{t('studio.versionSuccess', { pct: percent(rate.value), low: Math.round(range.low * 100), high: Math.round(range.high * 100) })}</b>
+      : <span>{t('studio.versionFew', { n: rate.n, min: MIN_SUCCESS_SAMPLE })}</span>}
+  </p>;
+}
+
+function Versions({ profile, metrics }: { profile: AgentProfile; metrics: AgentMetrics | null | undefined }) {
   const [list, setList] = useState<AgentVersion[] | null>(null), [failed, setFailed] = useState(false), [busy, setBusy] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -223,6 +239,9 @@ function Versions({ profile }: { profile: AgentProfile }) {
       {v.version === profile.activeVersion ? <span className="ad-chip">{t('studio.versionActive')}</span>
         : !profile.trial && v.state !== 'rejected' && <button type="button" className="link-btn" disabled={busy} onClick={() => void use(v.version)}>{t('studio.versionRestore')}</button>}
       {v.reason && <p>{v.reason}</p>}
+      {v.changed?.length ? <p className="ad-hint">{t('studio.versionChanged', { what: v.changed.map(c => t(`studio.versionChange.${c}`)).join(', ') })}</p> : null}
+      {v.amended?.length ? <p className="ad-hint" title={v.amended.map(a => a.reason).join(' · ')}>{t('studio.versionAmended', { n: v.amended.length, last: oneLine(v.amended.at(-1)!.reason) })}</p> : null}
+      <VersionStats m={metrics?.versions.find(x => x.version === v.version)} />
     </li>)}</ol>}
   </section>;
 }
@@ -325,7 +344,7 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
             <p>{t('bm.card.memory')}: {memory?.entries ? <button type="button" className="link-btn" onClick={() => goTarget(`file/${memory.file}`)}>{t('bm.mem.entries', { n: memory.entries })}</button> : t('bm.card.memoryNone')}</p>
             <button type="button" className="link-btn" onClick={() => go({ page: 'skill' })}>{t('bm.studio.manage')}</button>
           </section>
-          <Versions profile={profile} />
+          <Versions profile={profile} metrics={metrics} />
         </div>
       </div>
       {children}

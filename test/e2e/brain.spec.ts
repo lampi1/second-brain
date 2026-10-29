@@ -73,7 +73,7 @@ test('brain: an idea line becomes a live feed event; settings change live, undo,
   expect(await page.evaluate(() => window.sb.invoke('brain:api', { path: '/api/send' }))).toMatchObject({ ok: false });
 
   // the job ledger: real cost and time only (ADR 0053 removed the per-job estimate); usage without cost.mjs says so
-  const rec = await page.evaluate(() => window.sb.invoke('estimate:record', { harness: 'claude', model: 'claude-opus-5-5', effort: 'high', prompt: 'Fix it', actual: { usd: 1, minutes: 3, tokensIn: null, tokensOut: null, turns: 1 } }));
+  const rec = await page.evaluate(() => window.sb.invoke('estimate:record', { harness: 'claude', model: 'claude-opus-5-5', effort: 'high', prompt: 'Fix it', actual: { usd: 1, minutes: 3, turns: 1 } }));
   expect(rec.id).toMatch(/^job_/);
   const usage = await page.evaluate(() => window.sb.invoke('app:usage', undefined));
   expect(usage).toMatchObject({ costKnown: false, fiveHourPct: null });

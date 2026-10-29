@@ -191,4 +191,5 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0183](0183-one-read-only-file-viewer.md) One read-only in-app viewer for every file link — accepted
 - [0184](0184-user-pictures-for-roles.md) The user's own picture for a role — accepted
 - [0185](0185-impara-lessons.md) Impara: lessons on a blackboard — not stated
-- [0186](0186-end-of-day-smoothness.md) Closing chats frees what they started; repeated work stops growing with the day — accepted
+- [0186](0186-honest-classifiers-and-statistics.md) Honest classifiers and statistics: one taxonomy, one success, fewer numbers — not stated
+- [0187](0187-end-of-day-smoothness.md) Closing chats frees what they started; repeated work stops growing with the day — accepted

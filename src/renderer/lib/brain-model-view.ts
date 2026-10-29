@@ -3,7 +3,7 @@
 // skill editor sees), filters, the links graph agent → skills → rules → memory, the "same / different" of an agent
 // choice and the number formats where a missing value is "no data yet", never zero. No React, no IPC: unit-tested in
 // test/unit/brain-ui/brain-model-view.test.ts.
-import type { BrainChange, BrainModelState, BrainSkill, ClassifierChoice, MemoryFile } from '@shared/brain-model';
+import type { BrainChange, BrainModelState, BrainSkill, MemoryFile } from '@shared/brain-model';
 import type { SkillCatalog, SkillEntry } from '@shared/contract';
 import { formatCost } from './format';
 import { locale } from '../i18n';
@@ -78,9 +78,6 @@ export function linkGraph(state: BrainModelState | null): { nodes: LinkNode[]; e
   }
   return { nodes, edges };
 }
-
-/** A skill choice: every skill used is among those suggested today, some are not, or nothing is suggested. */
-export const choiceMatch = (c: ClassifierChoice): 'same' | 'differ' | 'none' => (!c.suggested.length ? 'none' : c.used.every(s => c.suggested.includes(s)) ? 'same' : 'differ');
 
 /** 0.5 → "50%"; null stays null (the page says "no data yet"). */
 export const pct = (v: number | null, loc = locale()): string | null => (v === null ? null : new Intl.NumberFormat(loc, { style: 'percent', maximumFractionDigits: 0 }).format(v));

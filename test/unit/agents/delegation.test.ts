@@ -8,7 +8,7 @@
 // Orchestrator opened reports to it with agent_report (issue #93), quietly when the result is clean; a child's result
 // waits for its siblings' so the parent reads them in one turn. Pins agents/delegation.ts, agents/role-gate.ts and
 // the delegation part of chats/manager.ts.
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -23,9 +23,7 @@ import { AGENT_LABEL, oneLine } from '../../../src/shared/agent-label';
 import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
 import type { McpTool } from '../../../src/main/mcp/server';
-import { log } from '../../../src/main/log';
 import { ChatMail } from '../../../src/main/chats/mail';
-import { SUGGEST_REQUEST_MAX, suggestInput } from '../../../src/shared/skill-suggest';
 import { ADR0083_DEFAULTS } from '../../../src/main/agents/role-migrate';
 import type { PermissionCeiling, ToolClass } from '../../../src/shared/agents';
 
@@ -1082,18 +1080,11 @@ describe('explicit independent review reports', () => {
   });
 });
 
-describe('skill suggestion snapshot for long goals (#185)', () => {
-  it('a run whose goal is longer than the skills_suggest limit still gets its snapshot, from the first 2000 characters; an empty goal asks nothing', async () => {
-    const asked: string[] = [];
-    const warn = vi.spyOn(log, 'warn');
-    const f = fixture({}, undefined, undefined, undefined, {}, [], { suggestSkills: async goal => { asked.push(goal); return ['debug']; } });
+describe('no skill suggestion snapshot (ADR 0186)', () => {
+  it('a role run records no suggestions: the suggester is gone', async () => {
+    const f = fixture();
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Lungo', prompt: `Analizza ${'x'.repeat(5000)}` }, 'user');
-    expect(asked[0]).toHaveLength(SUGGEST_REQUEST_MAX);
-    expect(f.m.list().find(x => x.id === c.id)!.run!.skillSuggestions?.suggested).toEqual(['debug']);
-    expect(warn.mock.calls.some(([, msg]) => msg === 'skill suggestion snapshot unavailable')).toBe(false);
-    expect(suggestInput('   ')).toBeNull();
-    expect(suggestInput(undefined)).toBeNull();
-    warn.mockRestore();
+    expect(f.m.list().find(x => x.id === c.id)!.run!.skillSuggestions).toBeUndefined();
   });
 });
 
@@ -1112,7 +1103,7 @@ describe('two open chats with the same title (#187)', () => {
     expect([...live.values()].map(x => x.id).sort()).toEqual([a.id, b.id, c.id].sort());
   });
   it('children started at once with one title still get distinct titles', async () => {
-    const f = fixture({}, undefined, undefined, undefined, {}, [], { suggestSkills: async () => { await new Promise(r => setTimeout(r, 20)); return []; } });
+    const f = fixture();
     const parent = await f.root('strategist');
     const out = await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log'), f.task('scout', 'Ordini · Log')] });
     expect(out.children.map((c: { title: string }) => c.title).sort()).toEqual(['Ordini · Log', 'Ordini · Log · 2']);

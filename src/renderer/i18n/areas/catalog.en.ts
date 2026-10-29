@@ -6,6 +6,8 @@ export const catalogEn: typeof catalogIt = {
   'catalog.judging.onDesc': 'On: every finished task is reviewed by a Sentinel in a new session, except those the project\'s tests already decide. Level and performance rest on real verdicts.',
   'catalog.judging.receipts': (p: { runs: string }) => `Another ${p.runs} tasks a day are decided by their receipts (the tests and checks run after the last change): no review, no cost.`,
   'catalog.judging.offDesc': 'Off: no reviews. Level and performance count only your votes, the Orchestrator’s and the facts.',
+  'catalog.judging.offSince': (p: { day: string }) => `Check off since ${p.day}: no independent review, only your own votes count.`,
+  'catalog.judging.offNoDay': 'Check off: no independent review, only your own votes count.',
   'catalog.judging.cost': (p: { cost: string; runs: string; each: string; audits: string }) => `Estimated cost: about ${p.cost} a day (${p.runs} tasks a day × ${p.each} per review, plus ${p.audits} second reviews a day that judge the judge).`,
   'catalog.judging.costNoReview': (p: { runs: string }) => `Estimated cost: ${p.runs} reviews a day; the price of one review shows after the first.`,
   'catalog.judging.costNone': 'Estimated cost: no data yet (no task finished in the last 7 days).',

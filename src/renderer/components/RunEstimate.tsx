@@ -9,6 +9,7 @@ import type { RunEstimateView } from '@shared/task-estimate';
 import { accuracySummary, estimateText, useRunEstimates, type AccuracySummary } from '../lib/run-estimates';
 import { minutes } from '../lib/format';
 import { locale, t } from '../i18n';
+import { getKindIt } from '../lib/routing';
 import { HelpTip } from './HelpTip';
 import '../styles/estimate.css';
 
@@ -35,10 +36,13 @@ export function AccuracyNote({ summary }: { summary: AccuracySummary | null }) {
   </div>;
 }
 
+/** The kind of an estimate in words, the routing table's (ADR 0186: one taxonomy); an unknown one is «altro». */
+export const kindWord = (k: string): string => (getKindIt() as Record<string, string>)[k] ?? getKindIt().altro;
+
 /** The "?" of an estimate: how it is computed, its range and confidence, the actual once ended, the accuracy. */
 function EstimateHelp({ view, agent, summary }: { view: RunEstimateView; agent: string; summary: AccuracySummary | null }) {
   const e = view.estimate!;
-  const kind = t(`estimate.kind.${e.kind}` as 'estimate.kind.fix');
+  const kind = kindWord(e.kind);
   const basis = t(`estimate.basis.${e.basis!}` as 'estimate.basis.kind', { agent });
   const est = estimateText(e);
   return <HelpTip title={t('estimate.tipTitle')} label={t('estimate.tipTitle')} wide guide="classifiers" testid={`estimate-help-${view.runId}`} example={t('estimate.example')}>

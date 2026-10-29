@@ -1,15 +1,30 @@
 // `npm run levels -- [<agent-runs.json>] [--dev] [--json] [--demo]` (ADR 0131): read only, zero tokens. Recomputes every
 // role's level and performance from an agent-runs.json with the card's own rules and prints why each role is where it
-// is (level-diagnosis.ts). Default file: the stable app's (%APPDATA%/second-brain/agent-runs.json; --dev the dev
+// is (level-diagnosis.ts), and whether the review sampler is off (config.json and changes.jsonl beside the file). Default file: the stable app's (%APPDATA%/second-brain/agent-runs.json; --dev the dev
 // instance's). --demo diagnoses the frozen demo history instead (demo-agent-runs.ts). Bundled and run by
 // scripts/levels.mjs; never writes anything.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { diagnose, diagnoseFile, formatDiagnosis } from './level-diagnosis';
+import { judgingOffSince, type SamplerState } from '../../shared/judging';
+import type { SettingChange } from '../../shared/contract';
 import { demoAgentRuns, demoFlashLog, DEMO_NOW } from '../demo-agent-runs';
 
 const argv = process.argv.slice(2);
+
+/** The review switch from the app's config.json and changes.jsonl beside the file (ADR 0186); undefined = not there. */
+function samplerBeside(file: string): SamplerState | undefined {
+  const dir = path.dirname(file);
+  try {
+    const cfg = JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8').replace(/^\uFEFF/, '')) as { judging?: unknown };
+    // a config without the key takes the default (on, settings-schema.ts)
+    if (cfg.judging !== false) return { on: true, offSince: null };
+    let changes: SettingChange[] = [];
+    try { changes = fs.readFileSync(path.join(dir, 'changes.jsonl'), 'utf8').split(/\r?\n/).flatMap(l => { try { return l.trim() ? [JSON.parse(l) as SettingChange] : []; } catch { return []; } }); } catch { /* no log */ }
+    return { on: false, offSince: judgingOffSince(changes) };
+  } catch { return undefined; }
+}
 const flag = (k: string): boolean => argv.includes(k);
 const appData = process.platform === 'win32' ? process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming')
   : process.platform === 'darwin' ? path.join(os.homedir(), 'Library', 'Application Support') : process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
@@ -21,7 +36,7 @@ function main(): number {
   else {
     const file = argv.find(a => !a.startsWith('--')) ?? path.join(appData, flag('--dev') ? 'second-brain-dev' : 'second-brain', 'agent-runs.json');
     if (!fs.existsSync(file)) { console.error(`no file: ${file} (pass the path of an agent-runs.json)`); return 2; }
-    try { d = diagnoseFile(JSON.parse(fs.readFileSync(file, 'utf8')) as unknown, Date.now()); } catch (e) { console.error(`${file}: ${e instanceof Error ? e.message : String(e)}`); return 2; }
+    try { d = diagnoseFile(JSON.parse(fs.readFileSync(file, 'utf8')) as unknown, Date.now(), samplerBeside(file)); } catch (e) { console.error(`${file}: ${e instanceof Error ? e.message : String(e)}`); return 2; }
     console.log(`file: ${file}`);
   }
   console.log(flag('--json') ? JSON.stringify(d, null, 2) : formatDiagnosis(d));

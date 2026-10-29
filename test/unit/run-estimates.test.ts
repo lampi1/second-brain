@@ -11,7 +11,7 @@ const NOW = new Date(2026, 9, 19, 15).getTime();
 const runOf = (id: string, p: Partial<AgentRun> = {}): AgentRun => ({ runId: id, chatId: `c-${id}`, agentId: 'artisan', version: 1, goal: 'g', startedBy: 'orchestrator', startedAt: NOW - 3600_000,
   costUsd: null, tokens: null, counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, ...p });
 const chat = (id: string, run?: AgentRun): ChatSummary => ({ id, title: `T ${id}`, run } as unknown as ChatSummary);
-const est = (p: Partial<TaskEstimate> = {}): TaskEstimate => ({ kind: 'fix', basis: 'agent-kind', n: 12, timeMs: 4 * 60_000, timeLowMs: null, timeHighMs: null, costUsd: 0.12, costLowUsd: null, costHighUsd: null,
+const est = (p: Partial<TaskEstimate> = {}): TaskEstimate => ({ kind: 'bug-fix', basis: 'agent-kind', n: 12, timeMs: 4 * 60_000, timeLowMs: null, timeHighMs: null, costUsd: 0.12, costLowUsd: null, costHighUsd: null,
   confidence: 'high', parts: 1, quick: true, path: 'one-agent', why: '', ...p });
 
 describe('estimate texts', () => {

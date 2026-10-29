@@ -5,6 +5,8 @@ export const catalogIt = {
   'catalog.judging.onDesc': 'Acceso: ogni lavoro finito viene rivisto da un Sentinel in una sessione nuova, tranne quelli che i test del progetto già decidono. Livello e performance si basano su verdetti veri.',
   'catalog.judging.receipts': (p: { runs: string }) => `Altri ${p.runs} lavori al giorno li decidono le ricevute (i test e i controlli eseguiti dopo l’ultima modifica): nessuna revisione, nessun costo.`,
   'catalog.judging.offDesc': 'Spento: nessuna revisione. Livello e performance contano solo i voti tuoi, dell’Orchestrator e i fatti.',
+  'catalog.judging.offSince': (p: { day: string }) => `Controllo spento dal ${p.day}: nessuna revisione indipendente, contano solo i tuoi voti.`,
+  'catalog.judging.offNoDay': 'Controllo spento: nessuna revisione indipendente, contano solo i tuoi voti.',
   'catalog.judging.cost': (p: { cost: string; runs: string; each: string; audits: string }) => `Costo stimato: circa ${p.cost} al giorno (${p.runs} lavori al giorno × ${p.each} a revisione, più ${p.audits} seconde revisioni al giorno che giudicano il giudice).`,
   'catalog.judging.costNoReview': (p: { runs: string }) => `Costo stimato: ${p.runs} revisioni al giorno; il prezzo di una revisione si vedrà dopo la prima.`,
   'catalog.judging.costNone': 'Costo stimato: ancora nessun dato (nessun lavoro finito negli ultimi 7 giorni).',

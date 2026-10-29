@@ -84,7 +84,7 @@ export const memoryEn: typeof memoryIt = {
   'mm.skillsEmpty': 'No skill in the brain yet.',
   'mm.skillsHelp': 'For each brain skill, the recorded runs that had it (at launch or loaded by the engine) and how they ended. An outcome counts only when known: success, partial or fail, decided by you or a review.',
   'mm.col.skill': 'Skill', 'mm.col.skillHelp': 'The skill\'s name: a click opens its SKILL.md.',
-  'mm.col.verdict': 'Verdict', 'mm.col.verdictHelp': 'Useful: at least 10 known outcomes and 70% successful. To review: at least 10 known and below 50%. Unclear: in between. Few data: fewer than 10 known outcomes. Never used: no run for at least 14 days. New: younger than 14 days.',
+  'mm.col.verdict': 'Verdict', 'mm.col.verdictHelp': 'Useful: at least 5 verified outcomes and 70% successful (a partial counts half). To review: at least 5 verified and below 50%. Unclear: in between. Few data: fewer than 5 verified outcomes. Never used: no run for at least 14 days. New: younger than 14 days.',
   'mm.col.uses': 'Runs', 'mm.col.usesHelp': 'How many runs had the skill.',
   'mm.col.success': 'Successful', 'mm.col.successHelp': 'Successful runs out of runs with a known outcome (success, partial or fail).',
   'mm.col.last': 'Last use', 'mm.col.lastHelp': 'The start of the last run that had it.',

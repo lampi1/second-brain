@@ -114,7 +114,7 @@ export function checkContract(v: unknown, role: WorkRoleId): DelegationContract 
   const tools = o.tools === undefined ? undefined : Array.isArray(o.tools) && o.tools.every(c => (TOOL_CLASSES as readonly unknown[]).includes(c)) ? [...new Set(o.tools as ToolClass[])] : null;
   if (tools === null) throw new Error(`contract.tools: classes among ${TOOL_CLASSES.join(', ')}.`);
   const skills = o.skills === undefined ? undefined : Array.isArray(o.skills) && o.skills.length <= 16 && o.skills.every(s => typeof s === 'string' && SKILL.test(s)) ? [...new Set(o.skills as string[])] : null;
-  if (skills === null) throw new Error('contract.skills: up to 16 skill names (skills_suggest).');
+  if (skills === null) throw new Error('contract.skills: up to 16 skill names (SKILL.md names).');
   if (o.tier !== undefined && !(MODEL_TIERS as readonly unknown[]).includes(o.tier)) throw new Error(`contract.tier: ${MODEL_TIERS.join(' | ')}.`);
   return {
     goal: text(o.goal, GOAL_MAX, 'contract.goal'),

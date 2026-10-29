@@ -1,7 +1,8 @@
 // The levels diagnostic (ADR 0131): from an agent-runs.json, recomputes every role's standing with the same rules as the
 // card (standing.ts) and says, per role, how many runs it has, its verified successes by basis and their XP, and why the
 // other runs earned nothing (no verdict, only its own word, only an opinion, an unverified review, a broken chain, the
-// receipts' reason, one-shots and open runs left out...). For the Orchestrator, the same over its decisions plus the
+// receipts' reason, one-shots and open runs left out...), and whether the review sampler is off (no verified outcome
+// arrives, ADR 0186); the retired roles and Pulse have no level. For the Orchestrator, the same over its decisions plus the
 // decision signals; for Flash, its answer outcomes. Read only, pure: diagnose() and formatDiagnosis() are used by
 // levels-cli.ts (`npm run levels -- <agent-runs.json>`) and pinned by test/unit/agents/level-diagnosis.test.ts.
 import type { AgentRun, AgentStanding } from '../../shared/agents';
@@ -11,7 +12,8 @@ import type { RunTally } from './run-metrics';
 import { runReceiptVerdict } from './receipts';
 import { readFlashLog, settleDue, type FlashLog } from './flash-outcomes';
 import { FLASH_XP } from './xp';
-import { chainBlock, counts, decisionSignals, decisionXp, earnIndex, earnedVerdict, orchestratorDecision, runXp, standings, verifiedReview, type EarnIndex } from './standing';
+import { chainBlock, counts, decisionSignals, decisionXp, earnIndex, earnedVerdict, gradableReview, orchestratorDecision, runXp, standings, unrated, type EarnIndex } from './standing';
+import { samplerOffLine, type SamplerState } from '../../shared/judging';
 
 /** Why a counted run earned no XP. */
 export type NoXpReason = 'verified-partial' | 'verified-fail' | 'not-completed' | 'review-unverified' | 'review-not-graded-yet'
@@ -33,14 +35,15 @@ export interface RoleDiagnosis {
   flash?: { open: number; held: number; corrected: number; reasked: number; handed: number; total: FlashLog['total'] };
   standing: AgentStanding | null;
 }
-export interface Diagnosis { runs: number; invalid: number; rollups: number; now: number; roles: RoleDiagnosis[] }
+/** sampler = the review switch, when the caller knows it (levels-cli.ts reads the app's settings next to the file) */
+export interface Diagnosis { runs: number; invalid: number; rollups: number; now: number; roles: RoleDiagnosis[]; sampler?: SamplerState }
 
 /** why a run with no XP-earning success got none */
 export function noXpReason(r: AgentRun, ix: EarnIndex): NoXpReason {
   const e = earnedVerdict(r, ix);
   if (e) return e.verdict === 'partial' ? 'verified-partial' : 'verified-fail';
   if (r.endReason !== 'completed') return 'not-completed';
-  if (r.reviewOf && (r.agentId === 'sentinel' || r.agentId === 'judge')) return verifiedReview(r) ? 'review-not-graded-yet' : 'review-unverified';
+  if (r.reviewOf && (r.agentId === 'sentinel' || r.agentId === 'judge')) return gradableReview(r) ? 'review-not-graded-yet' : 'review-unverified';
   if (r.parentRunId) { const b = chainBlock(r, ix); return b ? `chain:${b}` : 'parent-unverified'; }
   const rc = r.receipts ? runReceiptVerdict(r) : null;
   if (rc && r.outcome?.basis !== 'orchestrator-opinion') return `receipts:${rc.result === 'pass' ? 'pass-but-report-not-done' : rc.reason}`;
@@ -53,10 +56,11 @@ const blank = (agentId: string): RoleDiagnosis => ({ agentId, counted: 0, open: 
 const bump = <K extends string>(rec: Partial<Record<K, number>>, k: K, n = 1): void => { rec[k] = (rec[k] ?? 0) + n; };
 const r2 = (n: number): number => Math.round(n * 100) / 100;
 
-export function diagnose(runs: readonly AgentRun[], rollups: readonly RunTally[], now: number, flash: FlashLog | null = null, invalid = 0): Diagnosis {
+export function diagnose(runs: readonly AgentRun[], rollups: readonly RunTally[], now: number, flash: FlashLog | null = null, invalid = 0, sampler?: SamplerState): Diagnosis {
   const ix = earnIndex(runs), roles = new Map<string, RoleDiagnosis>();
   const of = (id: string) => { let d = roles.get(id); if (!d) roles.set(id, d = blank(id)); return d; };
   for (const t of rollups) {
+    if (unrated(t.agentId)) continue; // the retired roles and Pulse have no level (ADR 0186)
     const d = of(t.agentId);
     d.rolled.ended += t.ended; d.rolled.wins += t.verdicts.success + (t.earnedWins ?? 0);
     if (t.xp !== undefined) d.rolled.xp = r2((d.rolled.xp ?? 0) + t.xp);
@@ -68,6 +72,7 @@ export function diagnose(runs: readonly AgentRun[], rollups: readonly RunTally[]
     }
   }
   for (const r of runs) {
+    if (unrated(r.agentId)) continue;
     const d = of(r.agentId), decision = orchestratorDecision(r);
     const targets = decision ? [d, of('orchestrator')] : [d];
     if (r.endedAt === undefined) { for (const x of targets) x.open++; continue; }
@@ -97,11 +102,11 @@ export function diagnose(runs: readonly AgentRun[], rollups: readonly RunTally[]
   }
   const st = standings(runs, rollups, now, flash);
   for (const d of roles.values()) { d.xp = r2(d.xp); d.standing = st.get(d.agentId) ?? null; }
-  return { runs: runs.length, invalid, rollups: rollups.length, now, roles: [...roles.values()].sort((a, b) => (a.agentId === 'orchestrator' ? -1 : b.agentId === 'orchestrator' ? 1 : a.agentId.localeCompare(b.agentId, 'en'))) };
+  return { runs: runs.length, invalid, rollups: rollups.length, now, ...(sampler ? { sampler } : {}), roles: [...roles.values()].sort((a, b) => (a.agentId === 'orchestrator' ? -1 : b.agentId === 'orchestrator' ? 1 : a.agentId.localeCompare(b.agentId, 'en'))) };
 }
 
 /** An agent-runs.json's content (parsed JSON) read with the store's own checks; runs out of shape are counted, not used. */
-export function diagnoseFile(raw: unknown, now: number): Diagnosis {
+export function diagnoseFile(raw: unknown, now: number, sampler?: SamplerState): Diagnosis {
   const f = raw as { version?: unknown; runs?: unknown; rollups?: unknown; flash?: unknown } | null;
   if (!f || typeof f !== 'object' || f.version !== 1 || !Array.isArray(f.runs)) throw new Error('not an agent-runs.json (version 1 with a runs list)');
   const runs: AgentRun[] = [];
@@ -113,12 +118,12 @@ export function diagnoseFile(raw: unknown, now: number): Diagnosis {
     seen.add(r.runId); runs.push(r);
   }
   const rollups = (Array.isArray(f.rollups) ? f.rollups : []).map(readTally).filter((t): t is RunTally => !!t);
-  return diagnose(runs, rollups, now, f.flash === undefined ? null : readFlashLog(f.flash), invalid);
+  return diagnose(runs, rollups, now, f.flash === undefined ? null : readFlashLog(f.flash), invalid, sampler);
 }
 
 const REASONS: Record<string, string> = {
   'verified-partial': 'verified, but partial', 'verified-fail': 'verified, but failed', 'not-completed': 'closed or stale, never completed',
-  'review-unverified': 'a review that did not verify its evidence', 'review-not-graded-yet': 'a review nothing has graded yet (no user verdict, no audit)',
+  'review-unverified': 'a review with no verdict', 'review-not-graded-yet': 'a review nothing has graded yet (no user verdict, audit, parent feedback or rework)',
   'parent-unverified': 'delegated child, parent not verified', 'opinion-only': 'only the Orchestrator\'s opinion (weighs, earns no XP)',
   'self-only': 'only its own report (weighs nothing)', 'no-verdict': 'no verdict at all',
   'chain:no-parent': 'delegated child, parent gone or open', 'chain:not-completed': 'delegated child, not completed', 'chain:no-full-report': 'delegated child, no agent_report with every criterion met',
@@ -130,7 +135,8 @@ const pct = (v: number | null): string => v === null ? 'in rodaggio' : `${Math.r
 
 /** Plain text, one block per role. */
 export function formatDiagnosis(d: Diagnosis): string {
-  const out = [`agent-runs: ${d.runs} runs kept${d.invalid ? ` (${d.invalid} out of shape, left out)` : ''}, ${d.rollups} rollups · at ${new Date(d.now).toISOString()}`, ''];
+  const off = d.sampler ? samplerOffLine(d.sampler, ms => new Date(ms).toISOString().slice(0, 10)) : '';
+  const out = [`agent-runs: ${d.runs} runs kept${d.invalid ? ` (${d.invalid} out of shape, left out)` : ''}, ${d.rollups} rollups · at ${new Date(d.now).toISOString()}`, ...(off ? [off] : []), ''];
   for (const r of d.roles) {
     const s = r.standing;
     out.push(`${r.agentId}: ${s ? `Lv ${s.level} · ${s.xp} XP${s.nextAt !== null ? ` (Lv ${s.level + 1} at ${s.nextAt})` : ''} · ${s.wins} verified successes · performance ${pct(s.performance)}${s.spread !== null ? ` ±${Math.round(s.spread * 100)}` : ''} on ${s.evaluated} verdicts` : 'no standing'}`);

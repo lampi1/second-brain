@@ -78,7 +78,17 @@ export type AgentVersionState = 'active' | 'trial' | 'kept' | 'rejected' | 'supe
 export interface AgentVersion {
   agentId: string; version: number; parentVersion: number | null;
   behaviour: AgentBehaviour; author: AgentAuthor; reason: string; at: number; state: AgentVersionState;
+  /** what made it a new version (ADR 0186); missing on a version saved before */
+  changed?: VersionedChange[];
+  /** the changes made to it in place (ADR 0186: migrations, rebinds, tools or limits), newest last, at most AMENDS_KEPT */
+  amended?: { at: number; by: AgentAuthor; reason: string }[];
 }
+export const AMENDS_KEPT = 5;
+/** The only changes that make a new role version (ADR 0186): its text, its skills (and know-how), its model (engine,
+ *  model, effort), its tier (and ceiling). Tools, permissions, launches and limits change the active version in place,
+ *  and so do the app's migrations and engine rebinds: a version's runs then compare what the role does. */
+export const VERSIONED_CHANGES = ['text', 'skills', 'model', 'tier'] as const;
+export type VersionedChange = (typeof VERSIONED_CHANGES)[number];
 /** The Orchestrator's role: it shapes the Orchestrator chat only and never starts a work chat. */
 export const ORCHESTRATOR_AGENT_ID = 'orchestrator';
 /** Frozen when a chat starts; editing the catalog never relabels existing sessions. catalog = a role's run, plain = a
@@ -159,14 +169,12 @@ export interface VersionMetrics {
   successRate: Metric;
   opinion: { value: number | null; n: number }; selfReport: { value: number | null; n: number };
   correctionsPerRun: Metric;
-  aiErrorsPerRun: Metric;
   reworkRate: Metric;
   /** total: the cost of every run with a known cost (its n), null when an older saved summary did not keep it (#125) */
   costPerRun: { median: Metric; p90: number | null; total: number | null };
   tokensPerRun: Record<keyof AgentRunTokens, Metric>;
-  contextPeak: { median: Metric; max: number | null; ofWindow: number | null };
   timeToDone: { elapsed: Metric; execution: Metric };
-  questionsPerRun: Metric; permissionsPerRun: Metric; commandsPerRun: Metric;
+  questionsPerRun: Metric; commandsPerRun: Metric;
   reviews: { reviewer: { agentId: string; version: number }; runs: number; findingsPerRun: number; blockingPerRun: Metric }[];
 }
 export interface AgentMetrics { agentId: string; versions: VersionMetrics[]; all: VersionMetrics | null; open: number;

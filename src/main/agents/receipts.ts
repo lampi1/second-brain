@@ -3,7 +3,8 @@
 // their exit code (ChatItem tool exitCode: Claude's Bash/PowerShell results, Codex's commandExecution.exitCode, an ACP
 // rawOutput that carries one; else null = unknown), which of them run a repo check (tests, typecheck, lint), the files
 // the run's turns changed (the per-turn git checkpoints, chats/checkpoints.ts turnFiles), when a file last changed (an
-// edit tool, else the end of a turn whose files changed through a command), and the commits and PRs it made. Bounded:
+// edit tool, else the end of a turn whose files changed through a command; a turn with no checkpoint knows them from its
+// edit rows when it ran no command that may write, turnFilesWithoutGit), and the commits and PRs it made. Bounded:
 // RECEIPT_COMMANDS commands and RECEIPT_FILES paths per run, cut texts (agent-runs.json has a byte budget, runs.ts).
 // receiptVerdict decides pass / fail / unknown without a model; receiptDecision says whether that is clear enough to
 // skip the Sentinel's review (judge-sample.ts): only a verdict the agent's own report agrees with. Pure: ChatManager
@@ -75,6 +76,23 @@ function touch(rc: AgentRunReceipts, file: string): void {
   if (!NON_CODE.test(f)) rc.codeTouched = true;
 }
 
+/** Commands that only read: a turn that ran only these (and checks) changed files only through its edit tools. A
+ *  redirection (`>`) or an unknown command may write: not read-only. */
+const READ_ONLY = /^(cd|ls|dir|cat|type|head|tail|wc|pwd|echo|grep|rg|find|which|where|tree|stat|file|du|df|env|printenv|date|whoami|node\s+(-v|--version)|npm\s+(ls|view|-v)|git\s+(status|diff|log|show|blame|branch|rev-parse|ls-files|remote|config\s+--get|grep)|gh\s+(pr|issue|run)\s+(view|list|diff|checks)|Get-(Content|ChildItem|Item|Location)|Select-String|Test-Path)(\s|$)/;
+const readOnly = (cmd: string): boolean => !/(?<![<>&=\d])>(?!&)|\btee\b|-delete\b|-exec\b/.test(cmd) && segmentsOf(cmd).every(seg => READ_ONLY.test(seg) || CHECKS.some(re => re.test(seg)));
+const editFiles = (item: ToolItem, input: Obj): string[] => [...(item.diff ?? []).map(d => d.path), ...[input.file_path, input.notebook_path, input.path].filter((p): p is string => typeof p === 'string'),
+  ...(Array.isArray(input.files) ? input.files.filter((p): p is string => typeof p === 'string') : [])];
+
+/** What a finished tool row says about the files of its turn (ADR 0186): the paths an edit tool changed, and whether it
+ *  was a command that may have written files the edit rows do not show (anything but a read-only command or a check). */
+export function rowChanges(item: ToolItem): { files: string[]; mayWrite: boolean } {
+  if (item.status === 'running') return { files: [], mayWrite: false };
+  const input = obj(item.input);
+  if (COMMAND_TOOLS.includes(item.name)) return { files: [], mayWrite: typeof input.command !== 'string' || !readOnly(input.command.trim()) };
+  if (EDIT_TOOLS.has(item.name) && item.status === 'ok') return { files: editFiles(item, input).map(f => f.replace(/\\/g, '/')), mayWrite: false };
+  return { files: [], mayWrite: false };
+}
+
 /** A finished tool row of the run (sink.item): a command with its exit code, a file edit, a PR. True = something was
  *  recorded. The caller passes each row once (a row is replaced while it runs). */
 export function noteTool(rc: AgentRunReceipts, item: ToolItem): boolean {
@@ -89,14 +107,17 @@ export function noteTool(rc: AgentRunReceipts, item: ToolItem): boolean {
   }
   if (EDIT_TOOLS.has(item.name) && item.status === 'ok') {
     rc.lastChangeAt = Math.max(rc.lastChangeAt ?? 0, item.at);
-    const files = [...(item.diff ?? []).map(d => d.path), ...[input.file_path, input.notebook_path, input.path].filter((p): p is string => typeof p === 'string'),
-      ...(Array.isArray(input.files) ? input.files.filter((p): p is string => typeof p === 'string') : [])];
-    for (const f of files) touch(rc, f);
+    for (const f of editFiles(item, input)) touch(rc, f);
     return true;
   }
   if (/^mcp__.+__create_pull_request$/.test(item.name) && item.status === 'ok') { rc.prs++; return true; }
   return false;
 }
+
+/** A turn without a git checkpoint (not git, checkpoints off, a queued turn) still knows its files when nothing but its
+ *  edit tools could have changed any (ADR 0186: about 70% of runs had filesKnown false, so the receipts never decided
+ *  them): the edit rows' paths; null = a command that may write ran, the files are unknown. */
+export const turnFilesWithoutGit = (turn: { files: readonly string[]; mayWrite: boolean }): string[] | null => turn.mayWrite ? null : [...new Set(turn.files)];
 
 /** A turn of the run ended: the files it changed (null = not recorded: not git, checkpoints off, git failed, a queued
  *  turn under an earlier checkpoint). turnStart = its checkpoint's time; a turn whose files changed with no edit tool

@@ -3,7 +3,7 @@
 // skill/memory merge helpers are retained for compatibility but cannot run from a timer or generic maintenance click.
 // Every approved mutation is logged with undo; permissions, settings and tools remain outside these helpers.
 //   migration      re-runnable, idempotent: every runbook / routines section of the brain becomes a skill in
-//                  <brain>/.claude/skills (a role loads it when a task asks for it: skills_suggest). Writes a report.
+//                  <brain>/.claude/skills (a role loads it when its launch gives it). Writes a report.
 //   corrections    the lessons queue (agent_learn_propose): each lesson goes to the role's text (default), to a skill,
 //                  or to the brain's rules (rules/lessons.md, a topic file listed in brain.json), only after explicit
 //                  approval of the evidence-backed proposal. Recurring error text is not applied on its own.
@@ -159,7 +159,7 @@ export function migrate(ctx: JobContext): JobResult {
     const text = sealMigration(skillText(name, description, [`# ${s.title}`, '', body.text, '',
       `${marker} il ${day(ctx.now())}.${body.masked ? ` ${body.masked} righe con possibili credenziali sono nascoste qui: il testo intero resta nel file originale.` : ''}`].join('\n')), source, body.text, receipt?.createdAt ?? ctx.now());
     const file = already?.file ?? path.join(ctx.skillDir, name, 'SKILL.md');
-    const c = ctx.log.apply({ job: 'migration', kind: 'skill', action: already ? 'update' : 'create', target: name, summary: already ? `${name}: aggiornata dalla stessa sezione sorgente` : changeText().newSkill({ name, file: s.file, title: s.title }), reason: 'Le procedure diventano skill: il contenuto è lo stesso, ora un ruolo la carica quando il compito la chiede (skills_suggest).', evidence: [source, `sha256:${bodyHash}`] }, [{ file, text }]);
+    const c = ctx.log.apply({ job: 'migration', kind: 'skill', action: already ? 'update' : 'create', target: name, summary: already ? `${name}: aggiornata dalla stessa sezione sorgente` : changeText().newSkill({ name, file: s.file, title: s.title }), reason: 'Le procedure diventano skill: il contenuto è lo stesso, ora un ruolo la carica quando il compito la chiede.', evidence: [source, `sha256:${bodyHash}`] }, [{ file, text }]);
     if (!c) { items.push({ source, title: s.title, skill: already?.name ?? null, status: 'skipped', note: 'contenuto troppo grande per una modifica annullabile' }); continue; }
     changes++;
     items.push({ source, title: s.title, skill: name, status: 'moved', ...(body.masked ? { note: `${body.masked} righe nascoste (credenziali)` } : {}) });

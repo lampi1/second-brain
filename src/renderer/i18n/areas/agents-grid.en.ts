@@ -33,6 +33,10 @@ export const agentsGridEn: typeof agentsGridIt = {
   'agentsGrid.perfSources': ({ human, review, receipts, graded, orchestrator, decision, chain, quick, self }) =>
     `Verdicts so far: ${human} yours, ${review} from independent reviews, ${receipts} from test receipts, ${graded} reviews graded by what happened, ${chain} from a verified parent, ${orchestrator} from the Orchestrator`
     + (decision ? `, ${decision} on its choices` : '') + (quick ? `, ${quick} answer outcomes` : '') + (self ? `; ${self} only from the agent itself, which do not count.` : '.'),
+  'agentsGrid.success': 'Success',
+  'agentsGrid.successFew': ({ n, min }: { n: number; min: number }) => `Too few verified outcomes: ${n} of ${min}`,
+  'agentsGrid.successNote': ({ n, min }: { n: number; min: number }) => `verified: ${n} of ${min} needed`,
+  'agentsGrid.successHelp': ({ min }: { min: number }) => `The share of ended jobs with a verified outcome, yours or an independent review's, that succeeded; a partial counts half. Below ${min} verified outcomes no percentage: only how many of ${min}. Different from Performance, which also weighs the Orchestrator's and reviewers' votes.`,
   'agentsGrid.costHelp': 'The median cost of an ended run: half the runs cost less, half more. Only runs whose engine reports a cost count.',
   'agentsGrid.noRuns': 'No verified success yet: the first one moves it towards Lv 2.',
 };

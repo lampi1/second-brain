@@ -8,7 +8,7 @@
 // undecided after 160 runs), else «in raccolta». Changes that overlap share runs: a verdict is about the period, not a
 // proof of one cause (said on the page). Pure; used by brainmodel/service.ts; tests: test/unit/brainmodel/evidence.test.ts.
 import type { AgentProfile, AgentRun } from '../../shared/agents';
-import type { BrainChange, ChangeClaim, ClaimSide, ClaimVerdict, LearningRole, LearningState } from '../../shared/brain-model';
+import type { BrainChange, ChangeClaim, ClaimSide, ClaimVerdict, LearningLessons, LearningRole, LearningState, LessonStub } from '../../shared/brain-model';
 import { atCheckpoint, bootstrapDiff, CHECKPOINTS, verdictOf } from '../../shared/evidence-stats';
 import { portableId } from '../agents/pack/flows';
 
@@ -95,8 +95,20 @@ export function claimOf(c: Pick<BrainChange, 'id' | 'at' | 'rolledBackAt'>, seed
   };
 }
 
-/** The Apprendimento page: the verdict counts and, per role, the weekly corrections per run with the changes on its runs. */
-export function learningState(changes: readonly BrainChange[], roles: readonly Role[], runs: readonly AgentRun[], now: number): LearningState {
+/** The lessons proposed from `from` to `now`, by status (ADR 0186: the page shows how few there are, not a trend). */
+export function lessonCounts(lessons: readonly LessonStub[], from: number, now: number): LearningLessons {
+  const out: LearningLessons = { proposed: 0, approved: 0, discarded: 0, waiting: 0 };
+  for (const l of lessons) {
+    if (!Number.isFinite(l.createdAt) || l.createdAt < from || l.createdAt > now) continue;
+    out.proposed++;
+    if (l.status === 'approved') out.approved++; else if (l.status === 'discarded') out.discarded++; else out.waiting++;
+  }
+  return out;
+}
+
+/** The Apprendimento page: the verdict counts and, per role, the weekly corrections per run with the changes on its runs;
+ *  `lessons` = the agents' stored lessons (undefined = not read). */
+export function learningState(changes: readonly BrainChange[], roles: readonly Role[], runs: readonly AgentRun[], now: number, lessons?: readonly LessonStub[]): LearningState {
   const counts: Record<ClaimVerdict, number> = { raccolta: 0, aiuta: 0, 'nessun-effetto': 0, peggiora: 0, annullato: 0 };
   for (const c of changes) if (c.claim) counts[c.claim.verdict]++;
   const from = now - WEEKS * WEEK, ok = measurable(runs);
@@ -111,5 +123,5 @@ export function learningState(changes: readonly BrainChange[], roles: readonly R
       .sort((a, b) => a.at - b.at).map(c => ({ id: c.id, at: c.at, verdict: c.claim!.verdict, summary: c.summary }));
     return { id: r.id, name: r.name, weeks, changes: mine };
   });
-  return { counts, roles: out, from, week: WEEK };
+  return { counts, roles: out, from, week: WEEK, ...(lessons ? { lessons: lessonCounts(lessons, from, now) } : {}) };
 }

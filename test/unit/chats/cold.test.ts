@@ -139,7 +139,7 @@ describe('ChatManager cold chats', () => {
     expect(cont.kind === 'system' && cont.continued?.session).toBe(oldSession);
     expect(m.readHandoff(c.id, oldSession!)?.text).toContain('Aprire la PR.');
     expect(m.readHandoff(c.id, oldSession!)?.path).not.toBe(m.readHandoff(c.id)?.path);
-    expect(m.contextStats()).toMatchObject({ notesWritten: 1, notesUsed: 1 });
+    expect(m.contextStats()).not.toHaveProperty('notesWritten'); // logged only (ADR 0186)
     // a restart reads both sessions back: the old one, the divider, the new one (the note not shown as the message)
     await m.shutdown();
     const again = make();

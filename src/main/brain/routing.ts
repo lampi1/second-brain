@@ -6,19 +6,22 @@
 // its rules (match, resolve, check) so app_create_chat decides at zero tokens and in-process. It also appends the
 // routing predictions and their measured actuals to the shared ledger of the improvement loop
 // (ops/state/improve/outcomes.jsonl, append-only, same id = later line wins). Routed only at chat creation: switching
-// mid-chat restarts the prompt cache. With the table's `exploration` rate a chat may try a little-sampled arm
-// instead (source 'explore'), so the loop can compare arms; never on a row the user locked («L'AI può cambiarla» off),
-// which no agent may change either (agentLimits). Used by brain/index.ts (routing:get/save), appctl/tools.ts and wiring.ts. ADR 0032.
+// mid-chat restarts the prompt cache. A row the user locked («L'AI può cambiarla» off) no agent may change (agentLimits).
+// ADR 0186 removed exploration (no live path rolled the dice: role chats route by their role, the user's chats and the
+// Orchestrator never explored; the stored rate is kept, used by nothing; an old 'explore' route still loads), the per-kind
+// counts appended to a row's reason and the brain's `kinds` rules for title labels. The kinds are the one taxonomy of
+// shared/work-concepts.ts. Used by brain/index.ts (routing:get/save), appctl/tools.ts and wiring.ts. ADR 0032.
 // Role first (ADR 0083): a role chat takes the engine, model (its tier's) and effort the role resolved to; the table
 // never overrides nor refuses such a chat, it only records its kind and area. The known outcomes of role runs (the user's, the Orchestrator's or a reviewed verdict, issue #72) go to the same
-// ledger, and a row's reason is refreshed from the current counts at every routing (statsLine).
+// ledger.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Effort, Harness, ModelRegistry, RegistryModel, RouteAgent, RouteDecision, RoutingChange, RoutingInfo, RoutingRow, RoutingTable, TaskKind } from '../../shared/contract';
 import { TASK_KINDS } from '../../shared/contract';
 import { MODEL_TIERS } from '../../shared/roles';
-import { builtinTask } from '../../shared/work-concepts';
-import { areaOf } from './brain-estimates';
+import { enoughVerdicts } from '../../shared/success';
+export { taskOf } from '../../shared/work-concepts';
+import { conceptOf, taskOf } from '../../shared/work-concepts';
 import { log } from '../log';
 import { engineLabel, engineOf, engines } from '../engines/registry';
 import { availableEngine } from '../../shared/engine-readiness';
@@ -49,7 +52,18 @@ const areasOf = (r: Pick<RoutingRow, 'area'>): string[] | null => (r.area === un
 const isApp = (area: string): boolean => APP_AREAS.includes(area);
 /** A chat titled in an app area ("App · …", "Pers · App: …").
  *  Its queued work waits behind the other chats' (ADR 0036; chats/manager.ts). */
-export const isAppChat = (title: string): boolean => isApp(areaOf(title, undefined));
+export const isAppChat = (title: string): boolean => isApp(areaOf(title));
+
+/** The area of a chat title, as the brain's estimates.mjs reads it: "Alfa · …" → Alfa, "Pers · App: …" → "Pers · App",
+ *  an Orchestrator's own; a label that names a kind of work ("Fix · …", the one taxonomy's words, ADR 0186) or no
+ *  label → 'altro'. The owner's area rows keep matching their titles. */
+export function areaOf(title: string): string {
+  const t = String(title ?? '').trim();
+  if (/^orchestrator\b/i.test(t)) return 'Orchestrator';
+  const m = t.match(/^([A-Za-zÀ-ú-]{2,12}) · (.*)$/);
+  if (!m || conceptOf(m[1]!)) return 'altro';
+  return m[1] + (m[1] === 'Pers' && /^(App|second-brain)\b/i.test(m[2]!) ? ' · App' : '');
+}
 
 // ── the registry ────────────────────────────────────────────────────────────────────────────────────────────────────
 const bare = (m: string): string => m.toLowerCase().trim().replace(/\[.*\]$/, '').replace(/-\d{8}$/, '');
@@ -69,33 +83,6 @@ const takesEffort = (h: Harness): boolean => !!engineOf(h)?.caps.effort;
  *  (Cursor, through its thought_level) keeps its own setting (cursorReasoning) unless a row or the chat names one. */
 const defaultEffort = (h: Harness, defaults: { effort: Effort | null }): Effort | null => h === 'claude' ? defaults.effort : null;
 const looksClaude = (m: string | null): boolean => /\b(claude|opus|sonnet|haiku|fable|mythos)\b/i.test(String(m ?? '').replace(/[-_.]/g, ' '));
-
-// ── task kind ───────────────────────────────────────────────────────────────────────────────────────────────────────
-/** accents off: \b does not see an accented letter as part of a word (the brain's estimates.mjs `plain`) */
-const plain = (s: string): string => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
-// A title that only names a topic ("Magazzino · Telemetria ordini": ops-read) loses to a prompt that asks to build
-// or fix something: that chat writes code (2026-10-14: an implementation on two repos went to Haiku). Same rule and
-// words as the brain's estimates.mjs taskOf.
-const TOPIC_KINDS: readonly string[] = ['ops-read', 'research-web'];
-const BUILD = /\b(implement\w*|pull request|(apri|aprire|apra|crea|creare|open) (la |una |a )?pr|refactor\w*)\b/i;
-const FIX = /\b(fix\w*|hotfix|correggi\w*|corregger\w*|sistema (il|la|i|le) (bug|errore|crash))\b/i;
-/** Task kind of a chat with the brain's rules (estimates.json `tasks`, from estimates.mjs TASKS): the title first, then
- *  the first prompt (which wins over a topic-only title when it builds or fixes); an Orchestrator is its own kind; no rules or no
- *  match = 'altro'. */
-export function taskOf(title: string, prompt: string, rules: [string, string, string][] | undefined): TaskKind {
-  const t = String(title ?? '').trim();
-  if (/^orchestrator\b/i.test(t)) return 'orchestrator';
-  const word = (s: string): TaskKind | null => {
-    for (const [k, src, flags] of rules ?? []) {
-      try { if (new RegExp(src, flags).test(plain(s)) && (TASK_KINDS as readonly string[]).includes(k)) return k as TaskKind; } catch { /* a bad rule is skipped */ }
-    }
-    return null;
-  };
-  const k = word(t), p = plain(String(prompt ?? '').slice(0, 2000));
-  if ((!k || TOPIC_KINDS.includes(k)) && (BUILD.test(p) || FIX.test(p))) return BUILD.test(p) ? 'app-feature' : 'bug-fix';
-  // the built-in bilingual work words (shared/work-concepts.ts) when the brain's rules say nothing or there are none
-  return k ?? word(p) ?? builtinTask(`${t} ${p}`) ?? 'altro';
-}
 
 // ── the table's rules ───────────────────────────────────────────────────────────────────────────────────────────────
 /** Hard-rule errors of a table (Italian, one per broken rule); [] = valid. Same rules as routing.mjs check(). */
@@ -243,43 +230,6 @@ export function resolve(table: Pick<RoutingTable, 'routes'> | null, item: { kind
   return { harness, model: model ?? null, effort: effort ?? null, source, reason: source === 'override' ? reason || null : usable?.why ?? null };
 }
 
-// ── exploration ─────────────────────────────────────────────────────────────────────────────────────────────────────
-/** Samples an arm needs before the loop may judge it (the shared loop's minimum n per arm). */
-export const EXPLORE_MIN = 20;
-type Arm = { harness: Harness; model: string | null; effort: Effort | null };
-/** The ledger key of an arm: harness, registry id of the model (an alias counts as its model), effort. */
-export const armKey = (a: Arm, reg: ModelRegistry | null): string => `${a.harness}|${modelRow(a.model, reg)?.id ?? a.model ?? ''}|${a.effort ?? ''}`;
-
-/** With probability `table.exploration` (0 to 0.5) a chat whose agent named nothing tries another arm, the one with the
- *  fewest samples for its kind among those under EXPLORE_MIN: so the loop gets data on arms the table never picks. Only
- *  auto models on the engine the chat gets anyway (an app chat stays on Claude, a work chat on Cursor stays on Cursor:
- *  exploring never spends the other engine's tokens; the user, 2026-10-14), if the caller may start it; never max, never
- *  an Orchestrator (the user's own work), never the arm it would get anyway. null = no exploration this time. */
-export function explore(table: Pick<RoutingTable, 'exploration'> | null, item: { kind: TaskKind; area: string }, base: Arm, reg: ModelRegistry | null,
-  canRun: (h: Harness) => boolean, counts: (kind: TaskKind) => Map<string, number>, rnd: () => number = Math.random): (Arm & { samples: number }) | null {
-  const rate = Math.min(Math.max(Number(table?.exploration) || 0, 0), 0.5);
-  if (!reg || rate <= 0 || item.kind === 'orchestrator' || rnd() >= rate) return null;
-  const arms: Arm[] = [];
-  for (const m of reg.models) {
-    const h = m.harness;
-    if (h !== base.harness || !harnessAuto(h, reg) || m.routing !== 'auto' || isFable(m) || !canRun(h)) continue;
-    const efforts = takesEffort(h) ? (m.efforts ?? []).filter(e => e !== 'max') : [];
-    for (const effort of efforts.length ? efforts : [null]) arms.push({ harness: h, model: m.id, effort });
-  }
-  // an empty default is the CLI's own model and effort: the registry's default model and that model's default effort
-  // (what the ledger records for such a chat), so the arm it would get anyway is still left out
-  const dm = modelRow(reg.defaultModel, reg);
-  const bm = base.model ? modelRow(base.model, reg) : dm?.harness === base.harness ? dm : null;
-  const own = armKey({ harness: base.harness, model: bm?.id ?? base.model, effort: base.effort ?? (takesEffort(base.harness) ? bm?.defaultEffort ?? null : null) }, reg);
-  const n = counts(item.kind);
-  let best: (Arm & { samples: number }) | null = null;
-  for (const a of arms) {
-    const k = armKey(a, reg), c = n.get(k) ?? 0;
-    if (k !== own && c < EXPLORE_MIN && (!best || c < best.samples)) best = { ...a, samples: c };
-  }
-  return best;
-}
-
 export interface RouteRequest {
   /** the chat's title ("Area · cosa"): its area and, with the prompt, its kind */
   title: string; prompt: string;
@@ -295,13 +245,8 @@ export interface RouteRequest {
   /** the Anthropic API engine when it is on and has a key (brain/index.ts apiRoute): a writing row «Sui crediti API»
    *  sends its chats there, if this caller may start it (canRun); null = the row's own harness (ADR 0052) */
   api?: Harness | null;
-  /** the ledger's samples per arm for a kind (Routing.armCounts) and the dice, for exploration; none = no exploration */
-  counts?: (kind: TaskKind) => Map<string, number>;
-  rnd?: () => number;
   /** the role the chat starts from (ADR 0083): it decides; absent = the table / the defaults */
   agent?: AgentChoice;
-  /** the ledger's counts for a kind (Routing.kindStats): a table row's reason is refreshed from them */
-  stats?: (kind: TaskKind) => KindStats;
 }
 /** The role a chat starts from, as the catalog resolved it: engine, model (null = the engine's default), effort, tier,
  *  and who launched it; stats = its own results line (agentStatsLine), shown as the route's reason. */
@@ -311,31 +256,12 @@ export interface AgentChoice {
   /** 'table' = the catalog took the model from the table's row (a role with no model of its own; ADR 0091) */
   modelFrom?: 'table';
 }
-/** One task kind in the ledger: app chats predicted, how many have a known outcome, how many of those succeeded. */
-export interface KindStats { chats: number; known: number; ok: number }
-/** Below this many known outcomes a success share says nothing ("100%" from one outcome, #159): only the counts. */
-export const STATS_MIN_OUTCOMES = 5;
-/** "16 chat, 10 con esito, 70% riuscite" (issue #72); null = no chat yet. */
-export function statsLine(s: KindStats | null | undefined): string | null {
-  if (!s || s.chats <= 0) return null;
-  if (s.known <= 0) return `${s.chats} chat, nessuna con esito`;
-  if (s.known < STATS_MIN_OUTCOMES) return `${s.chats} chat, ${s.known} con esito (troppo pochi per una percentuale)`;
-  return `${s.chats} chat, ${s.known} con esito, ${Math.round(100 * s.ok / s.known)}% riuscite`;
-}
-/** A row's stored reason with today's counts: a stale "nessun dato ancora" goes once there is data (issue #72). */
-export function freshReason(why: string | null | undefined, s: KindStats | null | undefined): string | null {
-  const line = statsLine(s);
-  const base = String(why ?? '').trim();
-  if (!line) return base || null;
-  const kept = base.replace(/[,;·]?\s*nessun dato ancora\.?/i, '').trim().replace(/[,;·]$/, '').trim();
-  return kept ? `${kept} · ${line}` : line;
-}
 /** An agent version's results for its route's reason: "12 run, 9 con esito, 78% riuscite" (agents/run-metrics.ts
  *  VersionMetrics: ended runs, runs with a verdict, their success share); null = no ended run yet. */
 export function agentStatsLine(m: { ended: number; successRate: { value: number | null; n: number } } | null | undefined): string | null {
   if (!m || m.ended <= 0) return null;
   if (!m.successRate.n || m.successRate.value === null) return `${m.ended} run, nessuna con esito`;
-  if (m.successRate.n < STATS_MIN_OUTCOMES) return `${m.ended} run, ${m.successRate.n} con esito (troppo pochi per una percentuale)`;
+  if (!enoughVerdicts(m.successRate)) return `${m.ended} run, ${m.successRate.n} con esito (troppo pochi per una percentuale)`;
   return `${m.ended} run, ${m.successRate.n} con esito, ${Math.round(100 * m.successRate.value)}% riuscite`;
 }
 const CHOSEN_BY: Record<RouteAgent['chosenBy'], string> = { orchestrator: 'avviato dall’Orchestrator', parent: 'avviato dal suo genitore', app: 'avviato dall’app' };
@@ -343,10 +269,10 @@ const CHOSEN_BY: Record<RouteAgent['chosenBy'], string> = { orchestrator: 'avvia
 /** The route of a role chat (ADR 0083): the resolved engine, model and effort as they are. Never 'override', never
  *  exploration, never the API switch of a writing row: nothing overrides the role. */
 export function routeAgent(req: RouteRequest & { agent: AgentChoice }, reg: ModelRegistry | null,
-  rules: { kinds?: [string, string, string][]; tasks?: [string, string, string][] } | null, now = Date.now()): RouteResult {
+  rules: { tasks?: [string, string, string][] } | null, now = Date.now()): RouteResult {
   const a = req.agent;
   const kind = req.kind ?? taskOf(req.title, req.prompt, rules?.tasks);
-  const area = req.appCode ? 'App' : req.area?.trim().slice(0, 40) || areaOf(req.title, rules?.kinds);
+  const area = req.appCode ? 'App' : req.area?.trim().slice(0, 40) || areaOf(req.title);
   const model = a.model;
   let effort = a.effort;
   const from: RouteAgent['modelFrom'] = !model ? 'engine' : a.modelFrom === 'table' ? 'table' : a.tier ? 'tier' : 'role';
@@ -363,10 +289,10 @@ export type RouteResult = { harness: Harness; model: string | null; effort: Effo
 /** Routes one chat: kind and area, then resolve() on the table in force. The brain's estimates rules travel in
  *  estimates.json (`kinds` for the area, `tasks` for the kind); without them every chat is 'altro'. */
 export function routeChat(req: RouteRequest, table: RoutingTable | null, reg: ModelRegistry | null,
-  rules: { kinds?: [string, string, string][]; tasks?: [string, string, string][] } | null, now = Date.now()): RouteResult {
+  rules: { tasks?: [string, string, string][] } | null, now = Date.now()): RouteResult {
   if (req.agent) return routeAgent({ ...req, agent: req.agent }, reg, rules, now);
   const kind = req.kind ?? taskOf(req.title, req.prompt, rules?.tasks);
-  const area = req.appCode ? 'App' : req.area?.trim().slice(0, 40) || areaOf(req.title, rules?.kinds);
+  const area = req.appCode ? 'App' : req.area?.trim().slice(0, 40) || areaOf(req.title);
   const r = resolve(table, { kind, area }, req.ask, req.defaults, reg, req.canRun);
   if ('error' in r) return r;
   // a writing row the user set «Sui crediti API»: the same model on the user's API key, no effort (the API engine takes
@@ -375,14 +301,8 @@ export function routeChat(req: RouteRequest, table: RoutingTable | null, reg: Mo
   if (row?.onApi === true && row.kind === 'writing' && req.api && (req.canRun ?? (() => true))(req.api))
     return { harness: req.api, model: r.model, effort: null,
       route: { policy: 'routing', version: table?.version ?? null, source: 'table', reason: `${r.reason ? `${r.reason} · ` : ''}sui crediti API`, kind, area, at: now } };
-  const named = req.ask.harness !== undefined || req.ask.model !== undefined || req.ask.effort !== undefined;
-  // a row the user locked keeps all its chats: exploration never tries another model there
-  const x = !named && req.counts && !match(table?.routes, { kind, area })?.locked ? explore(table, { kind, area }, r, reg, req.canRun ?? (() => true), req.counts, req.rnd) : null;
-  if (x) return { harness: x.harness, model: x.model, effort: x.effort,
-    route: { policy: 'routing', version: table?.version ?? null, source: 'explore', reason: `esplorazione: ${x.samples} campioni su ${EXPLORE_MIN} per ${kind}`, kind, area, at: now } };
-  const reason = r.source === 'table' && req.stats ? freshReason(r.reason, req.stats(kind)) : r.reason;
   return { harness: r.harness, model: r.model, effort: r.effort,
-    route: { policy: 'routing', version: table?.version ?? null, source: r.source, reason, kind, area, at: now } };
+    route: { policy: 'routing', version: table?.version ?? null, source: r.source, reason: r.reason, kind, area, at: now } };
 }
 
 /** A route read back from chats.json (chats/store.ts): kept only when well formed. */
@@ -546,7 +466,7 @@ export class Routing {
     const t = this.stored();
     const broken = t ? checkTable(t.routes, reg) : [];
     return { table: t, registry: reg, kinds: TASK_KINDS, error: !this.root() ? 'nessun brain collegato' : !reg ? 'il brain non ha harness/models.json'
-      : broken.length ? `tabella ignorata (decidono i default), infrange una regola: ${broken.join('; ')}` : null, history: this.history(), kindStats: this.allKindStats() };
+      : broken.length ? `tabella ignorata (decidono i default), infrange una regola: ${broken.join('; ')}` : null, history: this.history() };
   }
 
   /** The table's last changes (audit.jsonl, domain routing), newest first: who, when, why, with what data. */
@@ -643,29 +563,6 @@ export class Routing {
     return last;
   }
 
-  /** Samples per arm (armKey) of one task kind: the routing predictions of the app's chats in the shared ledger, one per job. */
-  armCounts(kind: TaskKind): Map<string, number> {
-    const out = new Map<string, number>();
-    const d = this.dir();
-    if (!d) return out;
-    let text: string;
-    try { text = fs.readFileSync(path.join(d, 'outcomes.jsonl'), 'utf8'); } catch { return out; }
-    const reg = this.registry(), seen = new Set<string>();
-    for (const line of text.split('\n')) {
-      if (!line.includes('"predicted"') || !line.includes('"routing"')) continue;
-      try {
-        const j = JSON.parse(line) as Partial<RoutingPrediction>;
-        // only the app's chats (app:<chat id>): other lines of the routing domain (the brain's sub-agent lines, sub:…)
-        // measure another unit of work and never count as a chat's sample
-        if (j.domain !== 'routing' || !j.item || j.item.kind !== kind || !j.predicted || typeof j.id !== 'string' || !j.id.startsWith('app:') || seen.has(j.id)) continue;
-        seen.add(j.id);
-        const k = armKey(j.item, reg);
-        out.set(k, (out.get(k) ?? 0) + 1);
-      } catch { /* a torn line */ }
-    }
-    return out;
-  }
-
   /** Appends one line to the shared ledger; false without a brain (nothing is lost but this line). A measured line of an
    *  id that already has a known outcome carries that outcome (the same id = the later line wins: a verdict must not be
    *  undone by the next turn's actuals). */
@@ -715,36 +612,5 @@ export class Routing {
     }
     this.known = { dir: d, size, map };
     return map;
-  }
-
-  /** One task kind in the ledger (issue #72): the app's chats predicted for it, how many have a known outcome (any
-   *  source: an agent run's verdict, the brain's settlement or judge), how many of those succeeded. Later line wins. */
-  kindStats(kind: TaskKind): KindStats { return this.allKindStats()[kind] ?? { chats: 0, known: 0, ok: 0 }; }
-
-  /** kindStats for every kind in one pass (RoutingInfo.kindStats: the outcomes behind each row, ADR 0078). */
-  allKindStats(): Partial<Record<TaskKind, KindStats>> {
-    const d = this.dir();
-    if (!d) return {};
-    let text: string;
-    try { text = fs.readFileSync(path.join(d, 'outcomes.jsonl'), 'utf8'); } catch { return {}; }
-    const kindOf = new Map<string, TaskKind>(), result = new Map<string, LedgerOutcome>();
-    for (const line of text.split('\n')) {
-      if (!line.includes('"app:')) continue;
-      try {
-        const j = JSON.parse(line) as Partial<RoutingPrediction> & Partial<RoutingActual> & { domain?: unknown; outcome?: unknown };
-        // an app: id is a routing line; the brain's settlement may leave the domain out
-        if ((j.domain !== 'routing' && j.domain !== undefined) || typeof j.id !== 'string' || !j.id.startsWith('app:')) continue;
-        if (j.predicted && j.item && (TASK_KINDS as readonly string[]).includes(j.item.kind)) kindOf.set(j.id, j.item.kind);
-        if (j.outcome) foldOutcome(result, j.id, j.outcome);
-      } catch { /* a torn line */ }
-    }
-    const out: Partial<Record<TaskKind, KindStats>> = {};
-    for (const [id, kind] of kindOf) {
-      const s = out[kind] ??= { chats: 0, known: 0, ok: 0 };
-      s.chats++;
-      const o = result.get(id);
-      if (o) { s.known++; if (o.success) s.ok++; }
-    }
-    return out;
   }
 }

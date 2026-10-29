@@ -1,6 +1,6 @@
 // Turns the chats' own events (chat:updated, chat:item, pending:added/resolved, on the main Emitter's tap) into the Log's
 // task chain (shared/activity-log.ts): a chat opened (who chose the role and why, plus the routing classifier's pick and
-// the skills suggested), each finished turn (cost, time, tools, tool errors, the input it answered and its last words),
+// its model), each finished turn (cost, time, tools, tool errors, the input it answered and its last words),
 // the requests to the user and who closed them, the delivered result, an independent review and its verdict, the close.
 // Pure state machine over app events: no model, no file. Chats already open when the app starts are only remembered.
 // Used by activity/wiring.ts; tests: test/unit/activity/chat-watch.test.ts.
@@ -114,10 +114,6 @@ export class ChatWatch {
       const model = c.model ? ` · ${c.model}` : '';
       const SOURCE: Record<string, string> = { table: 'dalla tabella', default: 'scelta di base', override: 'scelta a mano', explore: 'in prova', agent: 'dal ruolo' };
       out.push({ ...base, kind: 'classifier', level: 'info', title: `Classificatore: ${r.kind}${r.area ? ` / ${r.area}` : ''} → ${c.harness}${model}`, text: [SOURCE[r.source], r.reason].filter(Boolean).join(' · ') });
-    }
-    const sk = c.run?.skillSuggestions;
-    if (sk && (sk.suggested.length || sk.used.length)) {
-      out.push({ ...base, kind: 'classifier', level: 'info', title: `Skill per ${base.who}: ${sk.used.length ? sk.used.join(', ') : 'nessuna'}`, text: sk.suggested.length ? `Suggerite: ${sk.suggested.join(', ')}` : 'Nessuna skill adatta' });
     }
     return out;
   }

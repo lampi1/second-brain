@@ -128,7 +128,14 @@ export interface LearningState {
   roles: LearningRole[];
   /** start of the first week shown, and the week length */
   from: number; week: number;
+  /** the agents' lessons proposed in the same weeks (agents/pack/learning.ts), by where they ended; missing = the
+   *  lesson store was not read. Their evidence is never causal (lesson-evidence.ts `causal: false`): the page says so. */
+  lessons?: LearningLessons;
 }
+/** The lessons proposed from `from` on: approved = applied or accepted, discarded, waiting = still for the user. */
+export interface LearningLessons { proposed: number; approved: number; discarded: number; waiting: number }
+/** What the view needs of one stored lesson. */
+export interface LessonStub { createdAt: number; status: 'pending' | 'approved' | 'discarded' }
 
 /** One former procedure (a runbook or routines section) and where it went. */
 export interface MigrationItem {
@@ -244,9 +251,9 @@ export interface SkillUse {
   name: string; rel: string | null;
   /** runs that had it (tagged at start or loaded by the engine while open) */
   uses: number;
-  /** of those, runs with a known verdict (success, partial or fail) and the successful ones */
+  /** of those, runs with a verified verdict (success, partial or fail) and the successful ones */
   known: number; ok: number;
-  /** ok / known, null with no known verdict */
+  /** the share of shared/success.ts (a partial counts half), null with no verified verdict */
   success: number | null;
   lastUse: number | null;
   /** agents that declare it */
@@ -291,19 +298,9 @@ export interface ClassifierRoute {
   /** measured from the outcomes log of the routed chats (and the verified verdicts of their runs) */
   result: RouteResult;
 }
-export interface ClassifierChoice {
-  at: number; chatId: string; goal: string;
-  /** the role that ran it */
-  role: { id: string; name: string };
-  /** the skills skills_suggest ranks for the goal now, best first (empty = none fits) */
-  suggested: string[];
-  /** the skills the launch gave the run */
-  used: string[];
-}
 export interface ClassifiersState {
   routing: { version: number | null; appliedAt: string | null; by: string | null; routes: ClassifierRoute[]; error: string | null };
   history: { at: string; from: number | null; to: number; by: string; reason: string | null; evidence: string | null }[];
-  choices: ClassifierChoice[];
   /** per kind of work: the app's chats in the ledger, how many have a known outcome and how many succeeded */
   kinds: { kind: string; chats: number; known: number; ok: number }[];
   /** how the model of the app's chats was chosen: by the table, by the agent's profile, by default or override */
@@ -318,13 +315,13 @@ export interface ClassifiersState {
 export interface ClassifierStat { value: number | null; n: number }
 /** One ISO week of a classifier: its decisions, how many it "got" (its own hit measure), the verified outcomes. */
 export interface ClassifierWeek { week: string; decisions: number; hits: number; known: number; ok: number; avgCostUsd: number | null }
-/** One value it decided (a kind, a model, a skill): how often, with what outcome and cost, and who ran it most. */
+/** One value it decided (a kind, a model): how often, with what outcome and cost, and who ran it most. */
 export interface ClassifierSlice { key: string; count: number; known: number; ok: number; avgCostUsd: number | null; top?: { key: string; count: number } }
-export type ClassifierCardId = 'kind' | 'model' | 'skills' | 'jobkind';
+export type ClassifierCardId = 'kind' | 'model' | 'jobkind';
 export interface ClassifierCard {
   id: ClassifierCardId;
   decisions: number;
-  /** its own measure: kind/jobkind = recognised (not "altro"); skills = the launch used only suggested skills; model = decided by the table */
+  /** its own measure: kind/jobkind = recognised (not "altro"); model = decided by the table */
   hit: ClassifierStat;
   /** verified success of the chats it decided (the user's or a review's verdict; never a self-report) */
   success: ClassifierStat;
@@ -332,8 +329,6 @@ export interface ClassifierCard {
    *  Orchestrator's opinion): their success share, shown apart and never counted in `success` (ADR 0095) */
   unverified?: ClassifierStat;
   avgCostUsd: number | null;
-  /** the score cut in force, when the classifier has one (0-100) */
-  threshold: number | null;
   /** last 8 ISO weeks, oldest first */
   weeks: ClassifierWeek[];
   slices: ClassifierSlice[];

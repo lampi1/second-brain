@@ -47,11 +47,11 @@ test('agent cards: big centred character, level and performance with their "?" f
     await expect(artisan.locator('.catalog-chip[data-kind="model"]')).toContainText('Modello:');
     const big = await artisan.locator('.catalog-hero .agent-avatar').boundingBox();
     expect(big!.width).toBeGreaterThanOrEqual(96);
-    // a new role: still warming up; a role with no runs: Lv 1 and the empty-state line
+    // a new role: still warming up
     await expect(overview.getByTestId('catalog-perf-herald')).toContainText('In rodaggio');
     await expect(overview.getByTestId('catalog-perf-herald')).toHaveAttribute('data-band', 'warmup');
-    await expect(overview.getByTestId('catalog-level-pulse')).toContainText('Lv 1');
-    await expect(overview.getByTestId('catalog-level-pulse')).toContainText('Nessun lavoro riuscito verificato ancora');
+    // Pulse is background work: no level (ADR 0186), its card stays
+    await expect(overview.getByTestId('catalog-level-pulse')).toHaveCount(0);
 
     // the "?" give the formulas, with the agent's own numbers
     await artisan.getByTestId('catalog-level-help-artisan').click();

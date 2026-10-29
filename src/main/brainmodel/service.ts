@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
-import type { BrainChange, BrainModelState, ClassifiersState, LogScan, MaintenanceJobId, MaintenanceRun, MigrationReport } from '../../shared/brain-model';
+import type { BrainChange, BrainModelState, ClassifiersState, LogScan, MaintenanceJobId, MaintenanceRun, LessonStub, MigrationReport } from '../../shared/brain-model';
 import { MAINTENANCE_JOBS } from '../../shared/brain-model';
 import type { RoutingInfo } from '../../shared/contract';
 import type { AgentCatalogService } from '../agents/catalog';
@@ -28,6 +28,9 @@ import { NAME_RE, parseMd, setBody } from '../../shared/skillmd';
 import { checkPermissionText } from '../agents/tool-policy';
 import { canUndoMemoryTidy, undoMemoryTidy } from '../rules/memory-records';
 
+/** How long an unchanged state is reused (the day's figures still move with the clock). */
+export const CACHE_MS = 5 * 60_000;
+
 export interface BrainModelDeps {
   userData: string;
   root: () => string | null;
@@ -40,8 +43,6 @@ export interface BrainModelDeps {
   /** the run store's revision (AgentRunStore.revision): the read worker keeps the runs while it holds; absent = sent each read */
   runsRevision?: () => number;
   routing: () => RoutingInfo;
-  /** the skill names skills_suggest ranks for a request (skills/suggest.ts), best first */
-  suggestSkills: (request: string) => Promise<string[]>;
   emit: () => void;
   /** a pass the app ran by itself (the timers, a new lesson) changed something: the feed's quiet "Ruolo aggiornato" event
    *  with its Annulla (wiring.ts → brain.publish, ADR 0102); never called for a pass the user started with the button */
@@ -88,6 +89,17 @@ export class BrainModelService {
     if (root) dirs.push({ dir: path.join(root, '.claude', 'skills'), home: 'brain' }, { dir: path.join(root, '.agents', 'skills'), home: 'brain' });
     if (this.d.home) dirs.push({ dir: path.join(this.d.home, '.claude', 'skills'), home: 'user' }, { dir: path.join(this.d.home, '.agents', 'skills'), home: 'user' });
     return dirs;
+  }
+  /** The user's own skill folders (~/.claude/skills, ~/.agents/skills) are not watched: their SKILL.md times join the
+   *  cache key, so a skill added or edited there shows at the next page open (a stat per skill, no read). */
+  private homeSkillsKey(): string {
+    if (!this.d.home) return '';
+    const out: string[] = [];
+    for (const d of this.skillDirs(null)) {
+      let names: string[] = []; try { names = fs.readdirSync(d.dir); } catch { continue; }
+      for (const n of names) { try { out.push(`${n}:${fs.statSync(path.join(d.dir, n, 'SKILL.md')).mtimeMs}`); } catch { out.push(n); } }
+    }
+    return out.join(',');
   }
   private restorer(profiles?: readonly AgentProfile[]): AgentRestorer {
     return {
@@ -155,12 +167,36 @@ export class BrainModelService {
     // Old entries are sealed once, in the writer process; the read worker never changes evidence scope.
     try { this.log.sealMissing(c => seal(c, profiles.filter(p => p.scope === 'role'))); } catch { /* view retains the previous fail-soft fallback */ }
     let runs: AgentRun[] = []; try { runs = this.d.runs(); } catch { /* unavailable history */ }
-    return { userData: this.d.userData, root: this.d.root(), home: this.d.home, profiles, runs, now: this.now() };
+    let lessons: LessonStub[] | undefined; try { lessons = this.d.learning.stubs(); } catch { lessons = undefined; }
+    return { userData: this.d.userData, root: this.d.root(), home: this.d.home, profiles, runs, now: this.now(), ...(lessons ? { lessons } : {}) };
   }
   state(): BrainModelState { return readBrainView(this.viewInput(), this.log, this.intervals); }
+
+  private cached: { key: string; at: number; state: Promise<BrainModelState> } | null = null;
+  private generation = 0;
+  /** Something the Brain pages show changed (the brain watcher's or a job's 'brainmodel:changed', 'agents:changed',
+   *  wiring.ts taps them): the next stateAsync computes again. */
+  invalidate(): void { this.generation++; }
+  /** The pages' state from the read worker, cached (ADR 0186: every page open recomputed the memory statistics and the
+   *  learning curves over every run and file): the same generation, brain and runs (the run store's revision, else
+   *  their count and latest change) within CACHE_MS give the same promise. A failed read is never kept. */
   stateAsync(): Promise<BrainModelState> {
     const rev = this.d.runsRevision?.();
-    return readWorker.call({ op: 'brain', input: this.viewInput() }, rev === undefined ? undefined : `store:${rev}`);
+    let runsKey = `store:${rev}`;
+    if (rev === undefined) {
+      let runs: AgentRun[] = []; try { runs = this.d.runs(); } catch { /* unavailable history */ }
+      let last = 0, judged = 0;
+      for (const r of runs) { last = Math.max(last, r.endedAt ?? r.startedAt, r.outcome?.at ?? 0); if (r.outcome) judged++; }
+      runsKey = `${runs.length}|${last}|${judged}`;
+    }
+    let lessons = ''; try { const l = this.d.learning.stubs(); lessons = `${l.length}:${l.filter(x => x.status !== 'pending').length}:${l.at(-1)?.createdAt ?? 0}`; } catch { /* none */ }
+    const key = `${this.generation}|${this.d.root() ?? ''}|${runsKey}|${lessons}|${this.homeSkillsKey()}`, now = this.now();
+    if (this.cached && this.cached.key === key && now - this.cached.at < CACHE_MS) return this.cached.state;
+    const state = readWorker.call({ op: 'brain', input: this.viewInput() }, rev === undefined ? undefined : `store:${rev}`);
+    const entry = { key, at: now, state };
+    this.cached = entry;
+    state.catch(() => { if (this.cached === entry) this.cached = null; });
+    return state;
   }
 
   /** The change log alone, newest first, with what can still be undone (the morning block, ADR 0102): no skill or memory read. */
@@ -351,7 +387,7 @@ export class BrainModelService {
     return this.done(c.id);
   }
   private done(changeId: string): string { this.d.emit(); return changeId; }
-  /** The brain's skills by name and description, for skills_suggest (skills/suggest.ts). */
+  /** The brain's skills by name and description (the demo's made-up runs name them). */
   skillList(): { name: string; description: string }[] {
     const root = this.root();
     return readSkills(this.skillDirs(root), root, []).map(s => ({ name: s.name, description: s.description }));
@@ -363,7 +399,7 @@ export class BrainModelService {
   }
   classifiers(): Promise<ClassifiersState> {
     return classifiersState({ root: this.root(), routing: this.d.routing(), runs: (() => { try { return this.d.runs(); } catch { return []; } })(), profiles: this.profiles(),
-      suggest: goal => this.d.suggestSkills(goal), jobs: () => readJobs(path.join(this.d.userData, 'jobs.jsonl')) }, this.now());
+      jobs: () => readJobs(path.join(this.d.userData, 'jobs.jsonl')) }, this.now());
   }
 
   /** The structural migration once, a minute after the start. Nothing else runs by itself: the cleanup, the memory's

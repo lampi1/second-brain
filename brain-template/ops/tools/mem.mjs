@@ -19,7 +19,7 @@
 //        " · agente: <type>", which settles that sub-agent's routing outcome, improve/routing-outcomes.mjs; adds
 //        " · lavoro: <key>", the work the error fails as a whole (improve/work-keys.mjs: --work, else the key of the
 //        app chat whose title the line names; none found = no field, matched later by that title); adds " · run: <id>",
-//        the agent run the error belongs to (--run, else the run of that app chat): the app's agent metrics count it)
+//        the agent run the error belongs to (--run, else the run of that app chat): for the brain's own tools; the app no longer counts it, ADR 0186)
 //   node .../mem.mjs journal --text "<tag · text>"                   (adds "- HH:MM · " and today's file)
 //   node .../mem.mjs idea --area lavoro|personale --title "<title>" --file <md: Idea / Come / Perché / Fonte lines>
 //        [--per second-brain|owner|ia]   (required when Fonte starts with "IA": what the AI's idea improves; an
@@ -212,7 +212,7 @@ const errorCmd = (text, agent, work, run) => {
   let key = work ?? null;
   const app = arg('--app') ? { appDir: arg('--app') } : {};
   if (!key) try { key = workOfLine(f.slice(1).join(' · '), app); } catch { key = null; }
-  // the agent run it belongs to (AGENTS-DESIGN §5: the app counts the lines Brother saw per run, as a secondary column)
+  // the agent run it belongs to (AGENTS-DESIGN §5; the app's per-run column is gone, ADR 0186)
   let runId = run ?? null;
   if (!runId) try { runId = runOfLine(f.slice(1).join(' · '), app); } catch { runId = null; }
   const context = eventContext();

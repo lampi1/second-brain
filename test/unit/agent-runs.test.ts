@@ -351,10 +351,24 @@ describe('agent run store: A6 fields and rollups', () => {
     expect(new AgentRunStore(dir).rolledUp()).toEqual([t]);
   });
 
+  it('reads an older rollup with the dropped counters and leaves them out (ADR 0186)', () => {
+    const t = emptyTally('coder', 1);
+    const old = { ...t, permissions: 4, contextPeak: { n: 1, values: [10] }, aiErrors: { runs: 2, lines: 1 } };
+    expect(readTally(old)).toEqual(t);
+    expect(readTally({ ...t, aiErrors: { runs: -1, lines: 0 } })).toBeNull();
+    // written with zeroed placeholders, so an older release (npm run rollback) still reads the file; read back without them
+    const dir = tmp(), file = path.join(dir, 'agent-runs.json');
+    fs.writeFileSync(file, JSON.stringify({ version: 1, runs: [], rollups: [t] }));
+    const s = new AgentRunStore(dir); s.start(start(), false); s.save();
+    const written = (JSON.parse(fs.readFileSync(file, 'utf8')) as { rollups: Record<string, unknown>[] }).rollups[0]!;
+    expect(written).toMatchObject({ permissions: 0, aiErrors: { runs: 0, lines: 0 }, contextPeak: { n: 0, values: [] } });
+    expect(new AgentRunStore(dir).rolledUp()).toEqual([t]);
+  });
+
   it('past their budget the largest rollup samples are halved, counts kept', () => {
     const big = Array.from({ length: 60 }, (_, i) => {
       const t = emptyTally(`agent-${i}`, 1);
-      for (const s of [t.cost, t.contextPeak, t.elapsed, t.execution, ...Object.values(t.tokens)]) { s.n = 1000; s.values = Array.from({ length: SAMPLE_MAX }, (_, j) => 1_000_000 + j + 0.123456789); }
+      for (const s of [t.cost, t.elapsed, t.execution, ...Object.values(t.tokens)]) { s.n = 1000; s.values = Array.from({ length: SAMPLE_MAX }, (_, j) => 1_000_000 + j + 0.123456789); }
       return t;
     });
     const fit = fitRollups(big);

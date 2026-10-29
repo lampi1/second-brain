@@ -1,32 +1,34 @@
-// The job ledger (src/main/brain/estimates.ts): the kind classifier (Italian + English), the cost.mjs backfill parser
+// The job ledger (src/main/brain/estimates.ts): the kind of work of a job (the one taxonomy, ADR 0186; old rows mapped), the cost.mjs backfill parser
 // on a fixture, the ledger (upsert, last wins, prompt never stored, backfill never overrides app jobs). ADR 0053
 // removed the per-job cost/time estimate this module used to compute for the UI.
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { FileJobStore, Ledger, backfillFromCost, classify } from '../../../src/main/brain/estimates';
-import type { JobKind } from '../../../src/shared/contract';
+import { FileJobStore, Ledger, backfillFromCost } from '../../../src/main/brain/estimates';
+import type { TaskKind } from '../../../src/shared/contract';
 import { FIXTURES, plainNode, tmpDir } from './helpers';
 
-describe('classify', () => {
-  const cases: [string, JobKind][] = [
-    ['Fix the login error on the settings page', 'fix'],
-    ["C'è un bug: l'agenda non si apre, correggilo", 'fix'],
-    ['White prescription 500 errors in prod', 'fix'],
-    ['Prova il test case della PR e verifica il fix', 'qa'],
-    ['Riesegui il test plan E2E', 'qa'],
+describe('kind of work (ADR 0186: the routing table\'s own kinds)', () => {
+  const cases: [string, TaskKind][] = [
+    ['Fix the login error on the settings page', 'bug-fix'],
+    ["C'è un bug: l'agenda non si apre, correggilo", 'bug-fix'],
+    ['Riesegui il test plan E2E', 'qa-run'],
     ['Fai la review della PR 42', 'review'],
-    ['Rivedi il diff prima del merge', 'review'],
-    ['Implementa la nuova pagina dei preventivi', 'feature'],
-    ['Add a settings panel with undo', 'feature'],
-    ['Investiga perché il login fallisce da martedì', 'research'],
-    ['Find out why the build is slow, check the logs', 'research'],
-    ['Cosa devo fare oggi?', 'question'],
-    ['how do I rebase onto main', 'question'],
-    ['Orchestrator', 'other'],
-    ['Brief mattino', 'other'],
+    ['Implementa la nuova pagina dei preventivi', 'app-feature'],
+    ['Investiga perché il login fallisce da martedì', 'investigation'],
+    ['Brief mattino', 'altro'],
   ];
-  for (const [text, kind] of cases) it(`${kind}: ${text}`, () => expect(classify(text)).toBe(kind));
+  for (const [text, kind] of cases) it(`${kind}: ${text}`, () => {
+    const l = new Ledger({ load: () => [], append: () => {} });
+    const { id } = l.record({ harness: 'claude', model: null, effort: null, prompt: text });
+    expect(l.all().find(r => r.id === id)!.kind).toBe(kind);
+  });
+  it('an old row keeps loading: its own kind is mapped to the one taxonomy', () => {
+    const d = tmpDir();
+    const f = path.join(d, 'jobs.jsonl');
+    fs.writeFileSync(f, ['fix', 'qa', 'research', 'question', 'other', 'bug-fix', 'nonsense'].map((kind, i) => JSON.stringify({ id: `j${i}`, at: i, harness: 'claude', model: null, effort: null, kind, promptChars: 1, actual: null, source: 'app' })).join('\n') + '\n');
+    expect(new FileJobStore(f).load().map(r => r.kind)).toEqual(['bug-fix', 'qa-run', 'investigation', 'altro', 'altro', 'bug-fix', 'altro']);
+  });
 });
 
 describe('estimates', () => {
@@ -35,8 +37,8 @@ describe('estimates', () => {
     const start = Date.parse(`${j.from}T00:00:00+02:00`) - 2 * 864e5; // pretend a window that began two days earlier
     const rows = backfillFromCost(j, { now: Date.parse(`${j.from}T20:00:00+02:00`), windowStartMs: start });
     expect(rows.map(r => [r.id.slice(0, 15), r.kind, r.actual!.usd, r.actual!.minutes])).toEqual([
-      ['claude:11111111', 'fix', 8.25, 40],
-      ['claude:22222222', 'other', 4.25, 120],
+      ['claude:11111111', 'bug-fix', 8.25, 40],
+      ['claude:22222222', 'orchestrator', 4.25, 120],
     ]);
     expect(rows[0]).toMatchObject({ harness: 'claude', model: null, source: 'backfill', promptChars: null });
     // the same chats seen from a window that starts on their day (maybe cut) or while still active: skipped
@@ -50,13 +52,40 @@ describe('estimates', () => {
     const file = path.join(tmpDir(), 'jobs.jsonl');
     const l = new Ledger(new FileJobStore(file));
     const { id } = l.record({ harness: 'claude', model: 'claude-opus-5-5', effort: 'high', prompt: 'Fix the login bug please' });
-    l.record({ id, harness: 'claude', model: 'claude-opus-5-5', effort: 'high', actual: { usd: 1.2, minutes: 14, tokensIn: 1000, tokensOut: 200, turns: 3 } });
+    l.record({ id, harness: 'claude', model: 'claude-opus-5-5', effort: 'high', actual: { usd: 1.2, minutes: 14, tokensIn: 1000, tokensOut: 200, turns: 3 } as never });
     expect(fs.readFileSync(file, 'utf8')).not.toMatch(/login bug/);
     const again = new Ledger(new FileJobStore(file)).all();
     expect(again).toHaveLength(1);
-    expect(again[0]).toMatchObject({ id, kind: 'fix', promptChars: 24, actual: { usd: 1.2, minutes: 14, turns: 3 }, source: 'app' });
+    expect(again[0]).toMatchObject({ id, kind: 'bug-fix', promptChars: 24, actual: { usd: 1.2, minutes: 14, turns: 3 }, source: 'app' });
+    expect(again[0]!.actual).not.toHaveProperty('tokensIn'); // never filled by any engine: not kept (ADR 0186)
     expect(() => l.record({ harness: 'x' as never, model: null, effort: null })).toThrow(/harness/);
-    expect(() => l.record({ harness: 'claude', model: null, effort: null, actual: { usd: -1, minutes: null, tokensIn: null, tokensOut: null, turns: null } })).toThrow(/≥ 0/);
+    expect(() => l.record({ harness: 'claude', model: null, effort: null, actual: { usd: -1, minutes: null, turns: null } })).toThrow(/≥ 0/);
+  });
+
+  it('1000 turn ends of one job with the same totals write one line; a change writes one more (ADR 0186)', () => {
+    const file = path.join(tmpDir(), 'jobs.jsonl');
+    const l = new Ledger(new FileJobStore(file));
+    const job = { id: 'claude:s1', harness: 'claude' as const, model: null, effort: null, prompt: 'Correggi il bug', actual: { usd: 1, minutes: 2, turns: 1 } };
+    for (let i = 0; i < 1000; i++) l.record(job);
+    expect(fs.readFileSync(file, 'utf8').trim().split('\n')).toHaveLength(1);
+    l.record({ ...job, actual: { usd: 2, minutes: 3, turns: 2 } });
+    expect(fs.readFileSync(file, 'utf8').trim().split('\n')).toHaveLength(2);
+  });
+
+  it('compacts on load once repeated lines outnumber twice the ids: last row of an id wins, old token fields dropped', () => {
+    const file = path.join(tmpDir(), 'jobs.jsonl');
+    const row = (id: string, usd: number) => JSON.stringify({ id, at: 1, harness: 'claude', model: null, effort: null, kind: 'fix', promptChars: 3, actual: { usd, minutes: 1, tokensIn: null, tokensOut: null, turns: 1 }, source: 'app' });
+    // 2 ids, 4 repeats: not above 2 × 2, left alone
+    fs.writeFileSync(file, `${[row('a', 1), row('a', 2), row('a', 3), row('b', 1), row('b', 2), row('b', 3)].join('\n')}\n`);
+    expect(new FileJobStore(file).load()).toHaveLength(2);
+    expect(fs.readFileSync(file, 'utf8').trim().split('\n')).toHaveLength(6);
+    fs.writeFileSync(file, `${Array.from({ length: 1000 }, (_, i) => row('a', i)).join('\n')}\n{torn`);
+    const rows = new FileJobStore(file).load();
+    expect(rows).toEqual([expect.objectContaining({ id: 'a', kind: 'bug-fix', actual: { usd: 999, minutes: 1, turns: 1 } })]);
+    const lines = fs.readFileSync(file, 'utf8').trim().split('\n');
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines[0]!)).toMatchObject({ id: 'a', kind: 'bug-fix', actual: { usd: 999 } });
+    expect(fs.readdirSync(path.dirname(file))).toEqual(['jobs.jsonl']); // no temp file left
   });
 
   it('a backfill never overrides app jobs', async () => {
@@ -68,7 +97,7 @@ describe('estimates', () => {
     // a fake cost.mjs whose window starts long before the fixture chats, so none of them is "cut"
     fs.writeFileSync(path.join(root, 'ops', 'tools', 'cost.mjs'), `const j = ${fx};\nj.from = '2026-09-01';\nconsole.log(JSON.stringify(j));\n`);
     const l = new Ledger(new FileJobStore(path.join(dir, 'jobs.jsonl')), path.join(dir, 'jobs-meta.json'));
-    l.record({ id: 'claude:11111111-1111-4111-8111-111111111111', harness: 'claude', model: 'opus-5-5', effort: null, prompt: 'fix', actual: { usd: 9, minutes: 41, tokensIn: null, tokensOut: null, turns: 2 } });
+    l.record({ id: 'claude:11111111-1111-4111-8111-111111111111', harness: 'claude', model: 'opus-5-5', effort: null, prompt: 'fix', actual: { usd: 9, minutes: 41, turns: 2 } });
     const now = Date.parse(`${j.from}T20:00:00+02:00`);
     const r = await l.backfill(root, plainNode, now);
     expect(r).toEqual({ added: 1, skipped: null });
