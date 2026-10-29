@@ -35,12 +35,13 @@ export function runsSuccess(runs: readonly Pick<AgentRun, 'endedAt' | 'report' |
   return successShare(runs.map(countedVerdict).filter((v): v is Verdict => v !== null));
 }
 
-/** The ± of a share at 90% (Wilson score interval, half its width): from 5 verdicts a share says "80% ± 26", never a
- *  bare "80%" that reads as a fact. Null below the sample or with no share. */
-export function successMargin(s: SuccessShare, z = 1.645): number | null {
+/** The 90% Wilson score interval of a share: from 5 verdicts a share says "80% (50–94%)", never a bare "80%" that
+ *  reads as a fact, and never a ± around the share that would run past 0 or 100%. Null below the sample or with no share. */
+export function successInterval(s: SuccessShare, z = 1.645): { low: number; high: number } | null {
   if (s.value === null || s.n < MIN_SUCCESS_SAMPLE) return null;
   const p = s.value, n = s.n, z2 = z * z;
-  return (z * Math.sqrt(p * (1 - p) / n + z2 / (4 * n * n))) / (1 + z2 / n);
+  const centre = (p + z2 / (2 * n)) / (1 + z2 / n), half = (z * Math.sqrt(p * (1 - p) / n + z2 / (4 * n * n))) / (1 + z2 / n);
+  return { low: Math.max(0, centre - half), high: Math.min(1, centre + half) };
 }
 
 /** true = enough verdicts for a share to be shown. */

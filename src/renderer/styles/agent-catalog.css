@@ -169,3 +169,4 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .judging-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .judging-toggle:disabled { opacity: .6; cursor: default; }
 @media (prefers-reduced-motion: reduce) { .judging-toggle, .judging-toggle .judging-knob { transition: none; } }
+.catalog-stats .catalog-stat-note{display:block;margin-top:2px;font-size:var(--fs-xs);color:var(--text-3);white-space:normal;line-height:1.3}

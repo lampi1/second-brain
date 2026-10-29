@@ -1107,7 +1107,8 @@ export class ChatManager implements ChatService {
     r.undoNote = undefined;
     // the user's own NEW request to the Orchestrator carries the app's estimate (zero tokens), never the app's news or
     // mail, nor a short follow-up ("ok", "vai", an answer) in a conversation going on (ADR 0186)
-    const said = r.items.filter(i => i.kind === 'user'), before = said.at(-2);
+    // the user's own messages only: an agent's mail (from) or an app note ([…) is not the user going on
+    const said = r.items.filter(i => i.kind === 'user' && !i.from && !i.text.startsWith('[')), before = said.at(-2);
     const ongoing = !!before && before.at >= Date.now() - FOLLOW_UP_WINDOW_MS;
     const estimate = r.s.isOrchestrator && !from && !resumed && t && !t.startsWith('[') && newRequest(t, ongoing) ? this.requestEstimate(t) : null;
     const asked0 = [noted, estimate].filter(Boolean).join('\n\n');

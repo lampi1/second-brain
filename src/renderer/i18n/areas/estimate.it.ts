@@ -28,11 +28,4 @@ export const estimateIt = {
   'estimate.specific': (p: { pct: number }) => `${p.pct}% delle stime ormai su stesso agente e stesso tipo`,
   'estimate.weekBar': (p: { week: string; pct: number; n: number }) => `settimana del ${p.week}: ${p.pct}% entro ×2, su ${p.n}`,
   'estimate.noAccuracy': 'Quanto tengono le stime compare dopo i primi lavori finiti con una stima.',
-  'estimate.kind.fix': 'correzione',
-  'estimate.kind.qa': 'QA e test',
-  'estimate.kind.review': 'revisione',
-  'estimate.kind.feature': 'funzionalità',
-  'estimate.kind.research': 'indagine',
-  'estimate.kind.question': 'domanda',
-  'estimate.kind.other': 'altro',
 };

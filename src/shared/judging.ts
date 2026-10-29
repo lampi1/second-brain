@@ -15,5 +15,5 @@ export function judgingOffSince(changes: readonly Pick<SettingChange, 'key' | 'a
 /** The plain line (Italian, the UI's and the owner's): '' while the sampler is on. */
 export function samplerOffLine(s: SamplerState, day: (ms: number) => string): string {
   if (s.on) return '';
-  return `Campionatore spento${s.offSince !== null ? ` dal ${day(s.offSince)}` : ''}: nessun esito verificato arriva.`;
+  return `Controllo spento${s.offSince !== null ? ` dal ${day(s.offSince)}` : ''}: nessuna revisione indipendente, contano solo i tuoi voti.`;
 }

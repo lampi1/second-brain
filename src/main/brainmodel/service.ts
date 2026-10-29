@@ -90,6 +90,17 @@ export class BrainModelService {
     if (this.d.home) dirs.push({ dir: path.join(this.d.home, '.claude', 'skills'), home: 'user' }, { dir: path.join(this.d.home, '.agents', 'skills'), home: 'user' });
     return dirs;
   }
+  /** The user's own skill folders (~/.claude/skills, ~/.agents/skills) are not watched: their SKILL.md times join the
+   *  cache key, so a skill added or edited there shows at the next page open (a stat per skill, no read). */
+  private homeSkillsKey(): string {
+    if (!this.d.home) return '';
+    const out: string[] = [];
+    for (const d of this.skillDirs(null)) {
+      let names: string[] = []; try { names = fs.readdirSync(d.dir); } catch { continue; }
+      for (const n of names) { try { out.push(`${n}:${fs.statSync(path.join(d.dir, n, 'SKILL.md')).mtimeMs}`); } catch { out.push(n); } }
+    }
+    return out.join(',');
+  }
   private restorer(profiles?: readonly AgentProfile[]): AgentRestorer {
     return {
       activeVersion: id => (profiles ?? this.profiles()).find(p => p.id === id)?.activeVersion ?? null,
@@ -179,7 +190,7 @@ export class BrainModelService {
       runsKey = `${runs.length}|${last}|${judged}`;
     }
     let lessons = ''; try { const l = this.d.learning.stubs(); lessons = `${l.length}:${l.filter(x => x.status !== 'pending').length}:${l.at(-1)?.createdAt ?? 0}`; } catch { /* none */ }
-    const key = `${this.generation}|${this.d.root() ?? ''}|${runsKey}|${lessons}`, now = this.now();
+    const key = `${this.generation}|${this.d.root() ?? ''}|${runsKey}|${lessons}|${this.homeSkillsKey()}`, now = this.now();
     if (this.cached && this.cached.key === key && now - this.cached.at < CACHE_MS) return this.cached.state;
     const state = readWorker.call({ op: 'brain', input: this.viewInput() }, rev === undefined ? undefined : `store:${rev}`);
     const entry = { key, at: now, state };

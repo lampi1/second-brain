@@ -312,8 +312,10 @@ export class AgentCatalogService {
    *  every migration (`migration`), updates the active version in place: its number, and so its run statistics, stay. */
   private version(old: AgentProfile, next: Behaviour, author: AgentAuthor, reason: string, state: 'active' | 'trial' = 'active', migration = false): AgentProfile {
     const at = Math.max(this.now(), old.updatedAt + 1), changed = migration ? [] : versionedChanges(old, next);
+    // a trial always compares two versions, whatever it changes (its rollback restores the baseline as a whole)
+    const inPlace = !changed.length && state !== 'trial';
     const who = { lastEditedBy: author, userLocked: author === 'default' ? false : author === 'user' ? true : old.userLocked };
-    if (!changed.length) {
+    if (inPlace) {
       // the profile's other fields stay; its behaviour is `next` as a whole (a field `next` leaves out is gone, as in a new version)
       const rest = Object.fromEntries(Object.entries(old).filter(([k]) => !(BEHAVIOUR_FIELDS as readonly string[]).includes(k)));
       const profile = { ...rest, ...next, ...who, updatedAt: at } as AgentProfile;
@@ -418,7 +420,12 @@ export class AgentCatalogService {
     const entry = this.store.get(id, version);
     if (!entry) throw new Error('Questa versione non è più nella cronologia.');
     const { knowhow: _k, effort: _e, maxContext: _m, ...rest } = p; void _k; void _e; void _m;
-    const profile: AgentProfile = { ...rest, ...this.behaviour(entry.behaviour as unknown as Record<string, unknown>, id, true, rest as Behaviour, false), activeVersion: version,
+    // a version is its text, skills, model and tier (ADR 0186): going back to one keeps today's tools, permission
+    // ceiling, launches and limits, so an undo never widens what the user narrowed since (they change in place)
+    const kept = { tools: p.tools, permissionCeiling: p.permissionCeiling, launches: p.launches, ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}) };
+    const target = { ...(entry.behaviour as unknown as Record<string, unknown>), ...kept };
+    if (typeof p.maxContext !== 'number') delete target.maxContext;
+    const profile: AgentProfile = { ...rest, ...this.behaviour(target, id, true, rest as Behaviour, false), activeVersion: version,
       updatedAt: Math.max(this.now(), p.updatedAt + 1), lastEditedBy: by, ...(by === 'user' ? { userLocked: true } : {}) };
     this.commit(this.profiles.map(x => x.id === id ? profile : x), [], [{ agentId: id, version: p.activeVersion, state: 'superseded' }, { agentId: id, version, state: 'active' }]);
     this.knowhowChanged(p, profile);

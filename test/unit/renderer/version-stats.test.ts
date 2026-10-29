@@ -13,12 +13,12 @@ const m = (ended: number, value: number | null, n: number) => ({ ended, successR
 const html = (v: VersionMetrics | undefined) => renderToStaticMarkup(createElement(VersionStats, { m: v }));
 
 describe('VersionStats', () => {
-  it('shows the share with its ± from 5 verified outcomes, the count below', () => {
-    expect(html(m(12, 0.8, 5))).toMatch(/12 run, 5 esiti verificati · <b>80%\s?riuscite ± 26<\/b>/);
+  it('shows the share with its 90% interval from 5 verified outcomes, the count below', () => {
+    expect(html(m(12, 0.8, 5))).toMatch(/12 run, 5 esiti verificati · <b>80%\s?riuscite \(probabilmente tra 44 e 95%\)<\/b>/);
     expect(html(m(9, 1, 3))).toContain('troppo pochi per una percentuale (3/5)');
     expect(html(m(0, null, 0))).toContain('Nessuna run finita');
     expect(html(undefined)).toContain('Nessuna run finita');
     setLang('en');
-    expect(html(m(12, 0.8, 5))).toContain('succeeded ± 26');
+    expect(html(m(12, 0.8, 5))).toContain('succeeded (likely between 44 and 95%)');
   });
 });

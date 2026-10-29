@@ -28,7 +28,7 @@ export const learningIt = {
   'learn.lessons': 'Lezioni degli agenti',
   'learn.lessonsLead': 'Le regole che gli agenti propongono dopo un lavoro (la tua approvazione decide). Ultime 12 settimane.',
   'learn.lessonsHelp': 'Un agente propone una lezione citando run con esito verificato. Quelle run giustificano la proposta, ma nessuno misura se poi la lezione ha ridotto le correzioni: la prova non è mai di causa.',
-  'learn.lessonsCount': (p: { n: number; approved: number; discarded: number; waiting: number }) => `${p.n === 1 ? '1 proposta' : `${p.n} proposte`}: ${p.approved} applicate, ${p.discarded} scartate, ${p.waiting} in attesa.`,
+  'learn.lessonsCount': (p: { n: number; approved: number; discarded: number; waiting: number }) => `${p.n === 1 ? '1 proposta' : `${p.n} proposte`}: ${p.approved} ${p.approved === 1 ? 'applicata' : 'applicate'}, ${p.discarded} ${p.discarded === 1 ? 'scartata' : 'scartate'}, ${p.waiting} in attesa.`,
   'learn.lessonsNone': 'Nessun dato: nessuna lezione proposta nelle ultime 12 settimane.',
   'learn.lessonsFew': 'Sono troppo poche per dire se gli agenti imparano: questo numero non è un andamento.',
   'learn.lessonsCausal': 'Le prove di una lezione non sono mai causali: dicono che le run citate sono andate bene, non che la lezione abbia aiutato.',

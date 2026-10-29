@@ -35,7 +35,8 @@ export const agentsGridDe: typeof agentsGridIt = {
     + (decision ? `, ${decision} zu seinen Entscheidungen` : '') + (quick ? `, ${quick} Antwort-Ergebnisse` : '') + (self ? `; ${self} nur vom Agenten selbst, die nicht zählen.` : '.'),
   'agentsGrid.success': 'Erfolg',
   'agentsGrid.successFew': ({ n, min }: { n: number; min: number }) => `Zu wenige geprüfte Ergebnisse: ${n} von ${min}`,
-  'agentsGrid.successHelp': ({ min }: { min: number }) => `Der Anteil der beendeten Aufgaben mit geprüftem Ergebnis, von dir oder einem unabhängigen Review, die gelungen sind; ein Teilerfolg zählt halb. Unter ${min} geprüften Ergebnissen kein Prozentwert: nur wie viele von ${min}.`,
+  'agentsGrid.successNote': ({ n, min }: { n: number; min: number }) => `geprüft: ${n} von ${min} nötig`,
+  'agentsGrid.successHelp': ({ min }: { min: number }) => `Der Anteil der beendeten Aufgaben mit geprüftem Ergebnis, von dir oder einem unabhängigen Review, die gelungen sind; ein Teilerfolg zählt halb. Unter ${min} geprüften Ergebnissen kein Prozentwert: nur wie viele von ${min}. Anders als Performance, die auch die Stimmen des Orchestrators und der Prüfer gewichtet.`,
   'agentsGrid.costHelp': 'Die Mediankosten eines beendeten Runs: Die Hälfte der Runs kostet weniger, die Hälfte mehr. Es zählen nur Runs, deren Engine Kosten meldet.',
   'agentsGrid.noRuns': 'Noch kein geprüfter Erfolg: Der erste bringt ihn Richtung Lv 2.',
 };

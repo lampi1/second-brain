@@ -28,11 +28,4 @@ export const estimateEn: typeof estimateIt = {
   'estimate.specific': (p: { pct: number }) => `${p.pct}% of estimates now on the same agent and kind`,
   'estimate.weekBar': (p: { week: string; pct: number; n: number }) => `week of ${p.week}: ${p.pct}% within ×2, of ${p.n}`,
   'estimate.noAccuracy': 'How well estimates hold shows after the first finished jobs with an estimate.',
-  'estimate.kind.fix': 'fix',
-  'estimate.kind.qa': 'QA and tests',
-  'estimate.kind.review': 'review',
-  'estimate.kind.feature': 'feature',
-  'estimate.kind.research': 'research',
-  'estimate.kind.question': 'question',
-  'estimate.kind.other': 'other',
 };

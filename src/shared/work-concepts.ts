@@ -21,7 +21,7 @@ const LEDGER_KINDS: Readonly<Record<string, TaskKind>> = {
 /** A kind read back from a file: a work kind as it is, an old ledger kind mapped, anything else 'altro'. */
 export function fromLedgerKind(k: unknown): TaskKind {
   if ((WORK_KINDS as readonly unknown[]).includes(k)) return k as TaskKind;
-  return LEDGER_KINDS[String(k)] ?? 'altro';
+  return Object.hasOwn(LEDGER_KINDS, String(k)) ? LEDGER_KINDS[String(k)]! : 'altro';
 }
 
 export type Concept = 'fix' | 'build' | 'review' | 'qa' | 'cause' | 'ops' | 'runbook' | 'research' | 'write' | 'inbox' | 'plan';

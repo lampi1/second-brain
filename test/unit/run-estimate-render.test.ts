@@ -8,7 +8,7 @@ vi.mock('../../src/renderer/store/store', () => ({ useApp: vi.fn(), app: { get: 
 vi.mock('../../src/renderer/store/agents', () => ({ useAgents: () => ({ catalog: { profiles: [] } }) }));
 import type { ChatSummary } from '../../src/shared/contract';
 import type { RunEstimateView } from '../../src/shared/task-estimate';
-import { AccuracyNote, EstimateChip } from '../../src/renderer/components/RunEstimate';
+import { AccuracyNote, EstimateChip, kindWord } from '../../src/renderer/components/RunEstimate';
 import { it as itDict } from '../../src/renderer/i18n/it';
 import { setLang } from '../../src/renderer/i18n';
 
@@ -31,6 +31,8 @@ describe('estimate chip', () => {
     expect(html).toContain('data-testid="estimate-help-r_000000000001"');
     expect(html).toContain('Come si calcola la stima');
     expect(html).not.toContain('precisione');
+    expect(kindWord('bug-fix')).toBe('Fix di bug'); // the kind in words (ADR 0186: one taxonomy), never «undefined»
+    expect(kindWord('fix')).toBe(kindWord('altro'));
   });
   it('shows estimate → actual with a mark once ended', () => {
     const html = render(chat(7 * MIN), view({ actual: { timeMs: 6 * MIN, costUsd: 0.1 }, hit: true }), false);

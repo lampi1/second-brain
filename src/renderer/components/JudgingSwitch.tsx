@@ -48,7 +48,7 @@ export function JudgingSwitch() {
       <span className="judging-title"><label htmlFor="judging-on">{t('catalog.judging.title')}</label>
         <HelpTip title={t('explain.judge.title')} testid="judging-help"><p>{t('explain.judge.p1')}</p><p>{t('explain.judge.p2')}</p><p>{t('explain.judge.p3')}</p></HelpTip></span>
       <p className="judging-desc">{t(on ? 'catalog.judging.onDesc' : 'catalog.judging.offDesc')}</p>
-      {!on && <p className="judging-off" role="status" data-testid="judging-off">{offSince !== null
+      {!on && <p className="judging-off" data-testid="judging-off">{offSince !== null
         ? t('catalog.judging.offSince', { day: new Date(offSince).toLocaleDateString(locale(), { day: 'numeric', month: 'long', year: 'numeric' }) }) : t('catalog.judging.offNoDay')}</p>}
       <p className="judging-cost" data-testid="judging-cost">{cost}{free && ` ${free}`}</p>
     </div>

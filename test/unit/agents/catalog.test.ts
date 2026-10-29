@@ -217,7 +217,14 @@ describe('default engine (issue #96)', () => {
     const text = catalog.save(edit(tools, { instructions: 'Read first.', tier: 'top' }), 'scout');
     expect(text).toMatchObject({ version: 2, activeVersion: 2 });
     expect(catalog.history('scout')[0]).toMatchObject({ version: 2, changed: ['text', 'tier'] });
-    expect(catalog.restoreVersion('scout', 1).tools).toEqual({ allow: ['read'] }); // the amended snapshot
+    // going back to v1 brings back its text and tier, never wider tools than today's (ADR 0186)
+    const narrowed = catalog.save(edit(catalog.list().profiles.find(p => p.id === 'scout')!, { tools: { allow: [] } as never, permissionCeiling: 'plan' }), 'scout');
+    expect(narrowed).toMatchObject({ version: 2, tools: { allow: [] }, permissionCeiling: 'plan' });
+    const back = catalog.restoreVersion('scout', 1);
+    expect(back).toMatchObject({ activeVersion: 1, instructions: scout.instructions, tier: scout.tier, tools: { allow: [] }, permissionCeiling: 'plan' });
+    // a trial always makes a version, even for tools only
+    const trial = catalog.approveTrial('scout', { ...edit(back, { tools: { allow: ['read'] } as never }) }, 'prova');
+    expect(trial.trial).toMatchObject({ version: 3, baseline: 1 });
   });
   it('ignores a chosen engine that is not usable', () => {
     const w = world({ preferred: 'cursor', models: [choice('claude', { installed: true, authenticated: true }), choice('cursor', { authenticated: false })] });

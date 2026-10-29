@@ -64,7 +64,7 @@ export const studioIt = {
   'studio.versions': 'Versioni',
   'studio.versionsHint': 'Una nuova versione nasce solo quando cambiano testo, skill, modello o livello; strumenti, permessi e limiti aggiornano quella in uso. Le chat aperte restano sulla loro.',
   'studio.versionRuns': ({ runs, n }: { runs: number; n: number }) => `${runs === 1 ? '1 run' : `${runs} run`}, ${n === 1 ? '1 esito verificato' : `${n} esiti verificati`}`,
-  'studio.versionSuccess': ({ pct, margin }: { pct: string; margin: number }) => `${pct} riuscite ± ${margin}`,
+  'studio.versionSuccess': ({ pct, low, high }: { pct: string; low: number; high: number }) => `${pct} riuscite (probabilmente tra ${low} e ${high}%)`,
   'studio.versionFew': ({ n, min }: { n: number; min: number }) => `troppo pochi per una percentuale (${n}/${min})`,
   'studio.versionNoRuns': 'Nessuna run finita con questa versione.',
   'studio.versionChanged': ({ what }: { what: string }) => `Cambiato: ${what}`,

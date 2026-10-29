@@ -15,10 +15,10 @@ describe('judging state', () => {
   });
   it('says plainly that no verified outcome arrives, in the levels diagnostic too', () => {
     const day = (ms: number) => new Date(ms).toISOString().slice(0, 10), off = Date.UTC(2026, 9, 27);
-    expect(samplerOffLine({ on: false, offSince: off }, day)).toBe('Campionatore spento dal 2026-10-27: nessun esito verificato arriva.');
-    expect(samplerOffLine({ on: false, offSince: null }, day)).toBe('Campionatore spento: nessun esito verificato arriva.');
+    expect(samplerOffLine({ on: false, offSince: off }, day)).toBe('Controllo spento dal 2026-10-27: nessuna revisione indipendente, contano solo i tuoi voti.');
+    expect(samplerOffLine({ on: false, offSince: null }, day)).toBe('Controllo spento: nessuna revisione indipendente, contano solo i tuoi voti.');
     expect(samplerOffLine({ on: true, offSince: null }, day)).toBe('');
-    expect(formatDiagnosis(diagnose([], [], off, null, 0, { on: false, offSince: off }))).toContain('Campionatore spento dal 2026-10-27');
-    expect(formatDiagnosis(diagnose([], [], off, null, 0, { on: true, offSince: null }))).not.toContain('Campionatore');
+    expect(formatDiagnosis(diagnose([], [], off, null, 0, { on: false, offSince: off }))).toContain('Controllo spento dal 2026-10-27');
+    expect(formatDiagnosis(diagnose([], [], off, null, 0, { on: true, offSince: null }))).not.toContain('Controllo spento');
   });
 });

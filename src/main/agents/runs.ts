@@ -278,6 +278,17 @@ export function readTally(v: unknown): RunTally | null {
   return result;
 }
 
+/** A rollup as written: with zeroed placeholders of the counters ADR 0186 dropped, so a rollback to an older release
+ *  (`npm run rollback`, same userData) still reads the file; this build deletes them on load (readTally). */
+const LEGACY_ZERO = { permissions: 0, aiErrors: { runs: 0, lines: 0 } };
+function olderReadable(t: RunTally): RunTally {
+  const tag = (x: TagTally) => ({ ...x, ...LEGACY_ZERO });
+  const tags = t.tags && { ...t.tags, skills: mapValues(t.tags.skills, tag), apps: mapValues(t.tags.apps, tag), repos: mapValues(t.tags.repos, tag),
+    ...(t.tags.combined ? { combined: mapValues(t.tags.combined, tag) } : {}) };
+  return { ...t, ...LEGACY_ZERO, contextPeak: { n: 0, values: [] }, ...(tags ? { tags } : {}) } as RunTally;
+}
+const mapValues = <T, U>(o: Record<string, T>, f: (v: T) => U): Record<string, U> => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, f(v)]));
+
 /** agent-runs.json `{version:1, runs, rollups}`: bounded by count and bytes; only ended runs are ever pruned, oldest end
  *  first, and only after they are folded into their (agentId, version) rollup. A review is pruned with the run it reviews. */
 export class AgentRunStore {
@@ -455,7 +466,7 @@ export class AgentRunStore {
     // when nothing has to go; only a store over its budget measures runs one by one.
     const bytesOf = (v: unknown) => Buffer.byteLength(JSON.stringify(v), 'utf8');
     const record = (runs: AgentRun[], rollups: RunTally[], prunedThrough: number) =>
-      ({ version: 1, runs, ...(rollups.length ? { rollups } : {}), ...(prunedThrough ? { prunedThrough } : {}),
+      ({ version: 1, runs, ...(rollups.length ? { rollups: rollups.map(olderReadable) } : {}), ...(prunedThrough ? { prunedThrough } : {}),
         // Flash's outcomes: bounded by flash-outcomes.ts (a few tens of KB at most), inside the same byte budget
         ...(this.flash.open.length || this.flash.done.length || this.flash.asking || this.flash.total.success + this.flash.total.partial + this.flash.total.fail ? { flash: this.flash } : {}) });
     const whole = `${JSON.stringify(record(all, this.rollups, this.prunedThrough))}\n`;

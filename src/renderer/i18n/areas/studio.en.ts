@@ -63,7 +63,7 @@ export const studioEn: typeof studioIt = {
   'studio.versions': 'Versions',
   'studio.versionsHint': 'A new version comes only when the text, skills, model or tier change; tools, permissions and limits update the one in use. Open chats keep theirs.',
   'studio.versionRuns': ({ runs, n }: { runs: number; n: number }) => `${runs === 1 ? '1 run' : `${runs} runs`}, ${n === 1 ? '1 verified outcome' : `${n} verified outcomes`}`,
-  'studio.versionSuccess': ({ pct, margin }: { pct: string; margin: number }) => `${pct} succeeded ± ${margin}`,
+  'studio.versionSuccess': ({ pct, low, high }: { pct: string; low: number; high: number }) => `${pct} succeeded (likely between ${low} and ${high}%)`,
   'studio.versionFew': ({ n, min }: { n: number; min: number }) => `too few for a percentage (${n}/${min})`,
   'studio.versionNoRuns': 'No finished run with this version.',
   'studio.versionChanged': ({ what }: { what: string }) => `Changed: ${what}`,

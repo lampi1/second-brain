@@ -63,7 +63,7 @@ export const studioDe: typeof studioIt = {
   'studio.versions': 'Versionen',
   'studio.versionsHint': 'Eine neue Version entsteht nur, wenn sich Text, Skills, Modell oder Stufe ändern; Tools, Berechtigungen und Grenzen aktualisieren die aktive. Offene Chats behalten ihre.',
   'studio.versionRuns': ({ runs, n }: { runs: number; n: number }) => `${runs === 1 ? '1 Run' : `${runs} Runs`}, ${n === 1 ? '1 geprüftes Ergebnis' : `${n} geprüfte Ergebnisse`}`,
-  'studio.versionSuccess': ({ pct, margin }: { pct: string; margin: number }) => `${pct} erfolgreich ± ${margin}`,
+  'studio.versionSuccess': ({ pct, low, high }: { pct: string; low: number; high: number }) => `${pct} erfolgreich (wahrscheinlich zwischen ${low} und ${high} %)`,
   'studio.versionFew': ({ n, min }: { n: number; min: number }) => `zu wenige für einen Prozentwert (${n}/${min})`,
   'studio.versionNoRuns': 'Kein beendeter Run mit dieser Version.',
   'studio.versionChanged': ({ what }: { what: string }) => `Geändert: ${what}`,

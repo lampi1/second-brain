@@ -33,13 +33,15 @@ export function useWorkingChats(agentId: string): number {
   return useApp(s => Object.values(s.chats).filter(c => c.agent?.id === agentId && !c.closedAt && isBusy(c)).length);
 }
 
-type Value = { text: string | null; samples?: string };
+/** note: a short visible line under the value (the success under its sample: how many of the verdicts it needs) */
+type Value = { text: string | null; samples?: string; note?: string };
 
 function Metric({ label, full, value, unknown, help, testid }: { label: string; full: string; value: Value; unknown: string; help?: ReactNode; testid?: string }) {
   const tip = [full, value.text ?? unknown, value.samples].filter(Boolean).join(' · ');
   return <div title={tip} data-testid={testid}>
     <dt>{label}{help}</dt>
     <dd>{value.text ?? <><span aria-hidden="true">—</span><span className="sr-only">{unknown}</span></>}</dd>
+    {value.note && <small className="catalog-stat-note" data-testid={testid ? `${testid}-note` : undefined}>{value.note}</small>}
   </div>;
 }
 
@@ -151,7 +153,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
     // the one success definition (ADR 0186): verified verdicts only; under MIN_SUCCESS_SAMPLE the count, «troppo pochi»
     success: !loaded || !rate?.n || rate.value === null ? { text: null, samples: sample(rate?.n ?? 0) }
       : enoughVerdicts(rate) ? { text: pct(rate.value), samples: sample(rate.n) }
-      : { text: `${rate.n}/${MIN_SUCCESS_SAMPLE}`, samples: t('agentsGrid.successFew', { n: rate.n, min: MIN_SUCCESS_SAMPLE }) },
+      : { text: null, samples: t('agentsGrid.successFew', { n: rate.n, min: MIN_SUCCESS_SAMPLE }), note: t('agentsGrid.successNote', { n: rate.n, min: MIN_SUCCESS_SAMPLE }) },
     cost: { text: cost?.value != null ? formatCost(cost.value) : null, samples: sample(cost?.n ?? 0) },
   };
   const trial = !!profile.trial;
