@@ -13,7 +13,7 @@ import { IconCheck, IconSpinner } from '../Icons';
 
 function why(code: string | undefined): string {
   if (!code) return '';
-  if (code === 'pr' || code === 'off' || code === 'none') return t(`impara.prep.why.${code}`);
+  if (code === 'pr' || code === 'off' || code === 'none' || code === 'noask') return t(`impara.prep.why.${code}`);
   return t('impara.prep.why.failed');
 }
 

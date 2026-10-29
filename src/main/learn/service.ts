@@ -55,14 +55,19 @@ const GUIDE_FILE = 'guida-app.md';
 /** the empty folder a web run starts in (it reads no file anyway) */
 const WEB_DIR = 'web';
 /** the effort a research, a plan and the rest use when the user named none */
+/** A pasted text's ask when the user wrote none. */
+const TEXT_ASK = 'Spiegami questo testo.';
 const DEFAULT_EFFORT: Effort = 'high';
 
-/** A file fact's reference as the user opens it from «Fonti» (ADR 0188): a path the files run wrote relative to its
- *  folder becomes absolute, the line kept; an absolute one stays. */
-export function fullRef(ref: string, cwd: string): string {
+/** A file fact's reference as the user opens it from «Fonti» (ADR 0188): a relative path becomes absolute under the
+ *  first of `roots` (the run's folder, the brain, the app's source) where the file exists, else under the first; the
+ *  line is kept; an absolute one stays. */
+export function fullRef(ref: string, roots: readonly string[]): string {
   const m = /^(.*?)(:\d+(?:[-:]\d+)?)?$/.exec(ref.trim());
   const file = m?.[1] || ref.trim();
-  return path.isAbsolute(file) ? ref.trim() : path.join(cwd, file) + (m?.[2] ?? '');
+  if (path.isAbsolute(file) || !roots.length) return ref.trim();
+  const root = roots.find(r => { try { return fs.existsSync(path.join(r, file)); } catch { return false; } }) ?? roots[0]!;
+  return path.join(root, file) + (m?.[2] ?? '');
 }
 
 export class LearnService {
@@ -129,7 +134,7 @@ export class LearnService {
     const ask = String(raw.ask ?? '').trim().slice(0, 600);
     if (!ask && kind === 'topic') throw new Error('Scrivi cosa vuoi capire.');
     const req: LessonStart = {
-      kind, ask: ask || (kind === 'pr' ? 'Voglio padroneggiare questa PR.' : 'Spiegami questo testo.'),
+      kind, ask: ask || (kind === 'pr' ? 'Voglio padroneggiare questa PR.' : TEXT_ASK),
       depth: LESSON_DEPTHS.includes(raw.depth) ? raw.depth : 'lesson', level: LESSON_LEVELS.includes(raw.level) ? raw.level : 'basics',
       ...(kind === 'pr' ? { prUrl: String(raw.prUrl ?? '').trim().slice(0, 500) } : {}),
       ...(kind === 'text' ? { text: String(raw.text ?? '') } : {}),
@@ -228,13 +233,15 @@ export class LearnService {
    *  A research run that fails is said on the Preparing screen and the lesson goes on with what the other found. */
   private async research(id: string, req: LessonStart, m: Material, l0: Lesson): Promise<LessonFact[] | null> {
     const lang = this.d.lang();
-    const web = req.kind !== 'pr' && !!this.d.webOk?.();
+    // the web run sees only the ask: a PR's says nothing a search could use, nor does a text's when the user wrote none
+    const noWeb = req.kind === 'pr' ? 'pr' : req.kind === 'text' && req.ask === TEXT_ASK ? 'noask' : !this.d.webOk?.() ? 'off' : null;
+    const web = !noWeb;
     const places = (() => { try { return this.d.places?.() ?? { brain: null, appSource: null }; } catch { return { brain: null, appSource: null }; } })();
     let guide: string | null = null;
     try { const text = this.d.guide?.(lang); if (text) { this.d.store.writeFile(id, GUIDE_FILE, text); guide = path.join(this.d.store.dir(id), GUIDE_FILE); } } catch (e) { log.warn('learn', 'app guide not written', { cause: errText(e) }); }
     const webDir = path.join(this.d.store.dir(id), WEB_DIR);
     if (web) fs.mkdirSync(webDir, { recursive: true });
-    this.phase(id, { web: web ? 'now' : 'skip', files: 'now' }, {}, web ? {} : { web: req.kind === 'pr' ? 'pr' : 'off' });
+    this.phase(id, { web: web ? 'now' : 'skip', files: 'now' }, {}, noWeb ? { web: noWeb } : {});
     const effort = this.effort(req);
     const material = Object.keys(m.files).map(f => path.join(this.d.store.dir(id), f));
     const [rw, rf] = await Promise.all([
@@ -248,6 +255,8 @@ export class LearnService {
       try { const v = jsonIn(r.text); return { facts: parseFacts(v, webSide, start), v }; } catch (e) { return { facts: [], v: null, error: errText(e) }; }
     };
     const w = read(rw, true, 1), f = read(rf, false, w.facts.length + 1);
+    // with the web on, the files run was told to cite files only: a fact without one is left out
+    if (web) f.facts = f.facts.filter(x => x.from === 'file');
     let qs: ReturnType<typeof parseQuestions> = [];
     try { if (f.v) qs = parseQuestions(f.v); } catch { qs = []; }
     this.edit(id, l => {
@@ -259,11 +268,12 @@ export class LearnService {
         prep: { ...p, web: w.facts.length, files: f.facts.length, phases: { ...p.phases, ...(web ? { web: w.error ? 'skip' : 'done' } : {}), files: f.error ? 'skip' : 'done', verify: 'now', ...(qs.length ? { ask: 'now' } : {}) }, ...(Object.keys(why).length ? { why } : {}) } };
     });
     log.info('learn', 'lesson research done', { data: { id, web: w.facts.length, files: f.facts.length, questions: qs.length, webError: w.error ?? null, filesError: f.error ?? null } });
-    // the verification: the web side re-reads the pages (and checks the model's own knowledge when it can), the files
-    // side re-reads the files; each run did not write what it checks
+    // the verification: the web side re-reads the pages, the files side re-reads the files (and checks the model's own
+    // knowledge as well as it can); each run did not write what it checks. Nothing the files run wrote ever reaches a
+    // run with the web, not even a fact it gave without a file: it may carry what it read (ADR 0188, Security)
     const all = [...w.facts, ...f.facts];
-    const onWeb = web ? all.filter(x => x.from !== 'file') : [];
-    const onFiles = all.filter(x => !onWeb.includes(x));
+    const onWeb = w.facts;
+    const onFiles = f.facts;
     const [vw, vf] = await Promise.all([
       onWeb.length ? this.run(req, { cwd: webDir, prompt: verifyPrompt(lang, onWeb, true), effort, round: 'impara-verify-web', timeoutMs: 6 * MIN, web: true }) : Promise.resolve(null),
       onFiles.length ? this.run(req, { cwd: this.folder(l0), prompt: verifyPrompt(lang, onFiles, false), effort, round: 'impara-verify-files', timeoutMs: 6 * MIN }) : Promise.resolve(null),
@@ -275,7 +285,8 @@ export class LearnService {
       try { const out = applyVerdicts(facts, jsonIn(r.text)); dropped += out.dropped; return out.facts; } catch { return facts; }
     };
     const byId = new Map([...checked(onWeb, vw), ...checked(onFiles, vf)].map(x => [x.id, x]));
-    const facts = all.map(x => byId.get(x.id)).filter((x): x is LessonFact => !!x).map(x => (x.from === 'file' ? { ...x, ref: fullRef(x.ref, this.folder(l0)) } : x));
+    const roots = [this.folder(l0), places.brain, places.appSource].filter((x): x is string => !!x);
+    const facts = all.map(x => byId.get(x.id)).filter((x): x is LessonFact => !!x).map(x => (x.from === 'file' ? { ...x, ref: fullRef(x.ref, roots) } : x));
     const count = (c: LessonFact['check']) => facts.filter(x => x.check === c).length;
     const verifyError = [vw, vf].map(r => (r && !r.ok ? r.error : '')).filter(Boolean).join(' · ');
     this.edit(id, l => {
@@ -440,8 +451,7 @@ export class LearnService {
     const wake = this.waits.get(id);
     this.waits.delete(id);
     // a run still working in the folder (Windows keeps it busy): the lesson is gone now, its folder when the run ends
-    this.d.store.remove(String(id), this.jobs.has(id) || this.extras.has(id));
-    wake?.();
+    try { this.d.store.remove(String(id), this.jobs.has(id) || this.extras.has(id)); } finally { wake?.(); }
     log.info('learn', 'lesson removed', { data: { id } });
     this.emit();
   }

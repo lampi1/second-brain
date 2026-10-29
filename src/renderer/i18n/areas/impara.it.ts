@@ -154,6 +154,7 @@ export const imparaIt = {
   'impara.prep.ask': 'Ti chiedo cosa intendi',
   'impara.prep.found': ({ n }: { n: number }) => (n === 1 ? '1 fatto' : `${n} fatti`),
   'impara.prep.checked': ({ ok, fixed, unsure, dropped }: { ok: number; fixed: number; unsure: number; dropped: number }) => [`${ok} confermati`, fixed ? `${fixed} corretti` : '', unsure ? `${unsure} da verificare` : '', dropped ? `${dropped} scartati` : ''].filter(Boolean).join(' · '),
+  'impara.prep.why.noask': 'nessuna domanda da cercare: spiego dal testo',
   'impara.prep.why.pr': 'una PR si spiega dai suoi file',
   'impara.prep.why.off': 'serve Claude acceso',
   'impara.prep.why.failed': 'non riuscita, vado avanti con il resto',

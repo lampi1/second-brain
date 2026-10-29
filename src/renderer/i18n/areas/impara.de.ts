@@ -155,6 +155,7 @@ export const imparaDe: typeof imparaIt = {
   'impara.prep.ask': 'Ich frage, was du meinst',
   'impara.prep.found': ({ n }: { n: number }) => (n === 1 ? '1 Fakt' : `${n} Fakten`),
   'impara.prep.checked': ({ ok, fixed, unsure, dropped }: { ok: number; fixed: number; unsure: number; dropped: number }) => [`${ok} bestätigt`, fixed ? `${fixed} korrigiert` : '', unsure ? `${unsure} unbestätigt` : '', dropped ? `${dropped} verworfen` : ''].filter(Boolean).join(' · '),
+  'impara.prep.why.noask': 'keine Frage zum Suchen: aus dem Text erklärt',
   'impara.prep.why.pr': 'ein PR wird aus seinen Dateien erklärt',
   'impara.prep.why.off': 'braucht Claude',
   'impara.prep.why.failed': 'fehlgeschlagen, es geht mit dem Rest weiter',

@@ -168,11 +168,12 @@ test('a topic: «Chi spiega», the web and the files researched, a question firs
     // full-screen lesson), the model's knowledge; Esc closes the viewer, then the drawer, the lesson stays full screen
     await page.getByTestId('impara-cites-all').click();
     const drawer = page.getByTestId('impara-sources');
-    await expect(drawer).toContainText('2 pagine web · 3 file · 7 fatti');
+    await expect(drawer).toContainText('2 pagine web · 3 file · 6 fatti');
     await expect(drawer.getByTestId('impara-src-web')).toHaveCount(2);
     await expect(drawer.getByTestId('impara-src-web').first().locator('a')).toHaveAttribute('href', /developer\.mozilla\.org/);
     await expect(drawer.getByTestId('impara-src-file')).toHaveCount(3);
-    await expect(drawer).toContainText('Dalla conoscenza del modello');
+    // with the web on, a files fact without a file never reaches the lesson (nor the web check)
+    await expect(drawer).not.toContainText('Dalla conoscenza del modello');
     await shot(page, 'impara-sources-dark');
     await drawer.getByTestId('impara-src-file').filter({ hasText: 'store.ts' }).getByTestId('impara-src-file-open').click();
     const viewer = page.getByTestId('viewer-overlay');

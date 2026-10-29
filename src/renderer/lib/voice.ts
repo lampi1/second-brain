@@ -442,7 +442,7 @@ async function pump(): Promise<void> {
   lines.shift();
   if (!r || r.error || !r.samples.length) {
     line.start?.(); // a beat that cannot sound still moves its board
-    if (r?.error) { set({ error: r.error }); toast(t('voice.speakFailed', { error: r.error }), 'err'); lines = []; }
+    if (r?.error) { set({ error: r.error }); toast(t('voice.speakFailed', { error: r.error }), 'err'); silentRest(line, lines, n); lines = []; }
     void pump();
     return;
   }
@@ -450,6 +450,19 @@ async function pump(): Promise<void> {
   playing = src;
   line.start?.();
   src.onended = () => { if (playing !== src) return; playing = null; line.done?.(); quietUntil = Date.now() + 400; void pump(); };
+}
+
+/** The voice failed: the lines still waiting are not said, but their beats move the board at reading pace (as Impara
+ *  does without the voice), and the last one's `done` still comes; a stop or a new narration cancels them. */
+function silentRest(failed: Line, rest: readonly Line[], n: number): void {
+  const readMs = (text: string) => Math.min(6500, Math.max(2200, text.split(/\s+/).length * 330));
+  let at = readMs(failed.text);
+  for (const l of rest) {
+    const { start, done } = l;
+    if (start) setTimeout(() => { if (n === speakN) start(); }, at);
+    at += readMs(l.text);
+    if (done) setTimeout(() => { if (n === speakN) done(); }, at);
+  }
 }
 
 function play(samples: Float32Array, rate: number): AudioBufferSourceNode {

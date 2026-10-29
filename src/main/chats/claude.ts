@@ -95,20 +95,24 @@ export function stableGuards(shared: string): Record<string, unknown> {
 export const READ_ONLY_TOOLS: readonly string[] = ['Read', 'Grep', 'Glob'];
 
 /** A read-only run's session-only settings: deny rules for every tool that writes, runs or reaches the network (deny
- *  wins over the user's own allow rules, at any level) and no hooks (the user's hooks would see a chat the user never
- *  opened). */
+ *  wins over the user's own allow rules, at any level), no hooks (the user's hooks would see a chat the user never
+ *  opened) and no claude.ai connectors (a connector the user allowed could send out what the run read; MCP servers
+ *  from config files are already out: --strict-mcp-config). */
 export const READ_ONLY_SETTINGS: Record<string, unknown> = {
   permissions: { deny: ['Bash', 'PowerShell', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'WebFetch', 'WebSearch'] },
   disableAllHooks: true,
+  disableClaudeAiConnectors: true,
 };
 
 /** The only tools a web-only run has (SessionOptions.webOnly, Impara's web research, ADR 0188): searching and reading
  *  the web, never a file. It sees only what its prompt says, so the web never meets the user's files in one run. */
 export const WEB_ONLY_TOOLS: readonly string[] = ['WebSearch', 'WebFetch'];
-/** A web-only run's session settings: every file tool and every tool that writes or runs denied, no hooks. */
+/** A web-only run's session settings: every file tool and every tool that writes or runs denied, no hooks, no
+ *  claude.ai connectors (they could hold the user's data). */
 export const WEB_ONLY_SETTINGS: Record<string, unknown> = {
   permissions: { deny: ['Bash', 'PowerShell', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Read', 'Grep', 'Glob', 'LS'] },
   disableAllHooks: true,
+  disableClaudeAiConnectors: true,
 };
 
 /** The Claude Code rule that denies reading a folder and everything in it, in its absolute-path form (`//` + the path
@@ -326,6 +330,7 @@ export class ClaudeSession implements HarnessSession {
     const env = { ...process.env, ...this.opts.env };
     env.MCP_TOOL_TIMEOUT = env.MCP_TOOL_TIMEOUT ?? '600000'; // browser tools may wait on a page
     env.CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS = '1';         // session_state_changed: the authoritative running/idle
+    if (this.opts.readOnly) env.ENABLE_CLAUDEAI_MCP_SERVERS = '0'; // a hidden read-only run never loads claude.ai connectors
     const args = this.args();
     const c = commandFor(cli, args, env);
     const startedAt = Date.now();

@@ -94,6 +94,13 @@ describe('LearnService', () => {
     await new Promise(r => setTimeout(r, 30));
     expect(runs.some(r => r.round === 'impara-plan')).toBe(false);
     expect(store.get(l.id)!.facts!.filter(f => f.from === 'web').map(f => f.check)).toEqual(['ok', 'ok']);
+    // nothing the files run wrote reaches a run with the web: the web check sees only the web facts, and a files fact
+    // with no file (the demo's «60 Hz») is left out when the web is on
+    const vweb = runs.find(r => r.round === 'impara-verify-web')!;
+    expect(vweb.web).toBe(true);
+    expect(vweb.prompt).not.toContain('ITEM_FRAME_MS');
+    expect(vweb.prompt).not.toContain('60 Hz');
+    expect(store.get(l.id)!.facts!.some(f => f.from === 'known')).toBe(false);
     expect(() => svc.clarify('nope', [])).toThrow();
     svc.clarify(l.id, ['Dentro second-brain']);
     expect(() => svc.clarify(l.id, ['x'])).toThrow();
@@ -131,12 +138,14 @@ describe('LearnService', () => {
     expect(store.get(l.id)!.facts).toEqual([]);
   });
 
-  it('keeps a file reference openable: relative ones from the run folder, absolute ones and their line as they are', () => {
-    const dir = path.join(os.tmpdir(), 'lesson');
-    expect(fullRef('materiale.md', dir)).toBe(path.join(dir, 'materiale.md'));
-    expect(fullRef('src/a.ts:12-20', dir)).toBe(`${path.join(dir, 'src/a.ts')}:12-20`);
+  it('keeps a file reference openable: relative ones under the root that has the file, absolute ones as they are', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-ref-')), app = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-app-'));
+    fs.mkdirSync(path.join(app, 'src'));
+    fs.writeFileSync(path.join(app, 'src', 'a.ts'), 'x');
+    expect(fullRef('materiale.md', [dir, app])).toBe(path.join(dir, 'materiale.md'));
+    expect(fullRef('src/a.ts:12-20', [dir, app])).toBe(`${path.join(app, 'src/a.ts')}:12-20`);
     const abs = path.join(os.tmpdir(), 'brain', 'note.md');
-    expect(fullRef(`${abs}:4`, dir)).toBe(`${abs}:4`);
+    expect(fullRef(`${abs}:4`, [dir])).toBe(`${abs}:4`);
   });
 
   it('refuses a start it cannot serve, with the reason', () => {

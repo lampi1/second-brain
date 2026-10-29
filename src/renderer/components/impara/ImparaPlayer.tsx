@@ -229,7 +229,7 @@ function Board({ lesson }: { lesson: Lesson }) {
   useEffect(() => {
     if (!prefs.full) return;
     const esc = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented || isTyping(e.target) || document.querySelector('.modal-backdrop, .backdrop, .qwin, .vw-layer, .ip-srcs')) return;
+      if (e.key !== 'Escape' || e.defaultPrevented || isTyping(e.target) || document.querySelector('.modal-backdrop, .backdrop, .qwin, .vw-layer, [role=dialog], [role=menu]')) return;
       e.preventDefault(); e.stopPropagation();
       setImparaPrefs({ full: false });
     };
