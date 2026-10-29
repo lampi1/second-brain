@@ -5,6 +5,7 @@
 // server's token goes only into its own process environment or its own request header, decided by the caller
 // (service.ts); errors are mapped to a code, an Italian message and a fix, never with a token or a response body.
 // Used by gateway.ts (a chat's calls) and service.ts (the Settings test).
+import os from 'node:os';
 import { spawn, type ChildProcess } from 'node:child_process';
 import path from 'node:path';
 import { findCli, killTrees } from '../chats/cli';
@@ -202,6 +203,8 @@ class StdioUpstream extends Rpc {
     const { command, args, env, verbatim } = spawnPlan(this.ep);
     const child = spawn(command, args, { cwd: this.ep.cwd, env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true, windowsVerbatimArguments: verbatim });
     this.child = child;
+    // below the window, like the engines that call it (jobguard.ts lowerEnginePriority): one copy runs per open chat
+    if (child.pid) { try { os.setPriority(child.pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch { /* gone or not allowed: runs as before */ } }
     let buf = '';
     child.stdout!.setEncoding('utf8');
     child.stdout!.on('data', (chunk: string) => {

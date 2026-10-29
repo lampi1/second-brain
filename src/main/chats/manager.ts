@@ -649,20 +649,28 @@ export class ChatManager implements ChatService {
   }
 
   /** The finished canonical results a chat can still show: a user chat's own root runs, and for the Orchestrator the
-   *  root runs it started in top-level chats. One pass over the runs, kept in their order. */
+   *  root runs it started in top-level chats. One pass over the runs, kept in their order, and only when the runs changed
+   *  (runs.revision): summary() runs for every open chat every second and updated() several times per assistant message,
+   *  and a pass over up to 5000 runs each time grew with the day's history (2026-10-29). Which chat a run belongs to
+   *  (routine archive, delegated child) is checked when it is read, so the cached index never goes stale on a chat. */
+  private resultCache: { rev: number; index: ResultIndex } | null = null;
   private resultIndex(): ResultIndex {
+    const rev = this.runs.revision;
+    if (this.resultCache?.rev === rev) return this.resultCache.index;
     const byChat = new Map<string, AgentRun[]>(), roots: AgentRun[] = [];
     for (const run of this.runs.list()) {
-      if (this.chats.get(run.chatId)?.s.routineArchived) continue;
       if (run.parentRunId || !run.report?.canonical) continue;
       if (run.startedBy === 'user') { const l = byChat.get(run.chatId); if (l) l.push(run); else byChat.set(run.chatId, [run]); }
-      else if (run.startedBy === 'orchestrator' && !this.chats.get(run.chatId)?.s.parentId) roots.push(run);
+      else if (run.startedBy === 'orchestrator') roots.push(run);
     }
-    return { byChat, roots };
+    const index = { byChat, roots };
+    this.resultCache = { rev, index };
+    return index;
   }
   private refreshTaskSummary(r: Rec, index: ResultIndex = this.resultIndex()): void {
     if (r.userTaskEvents) r.s.userEvents = { latestSeq: r.userTaskEvents.latestSeq, acknowledgedSeq: r.userTaskEvents.acknowledgedSeq };
-    const runs = r.s.isOrchestrator ? index.roots : index.byChat.get(r.s.id) ?? [];
+    const shown = (run: AgentRun): boolean => { const c = this.chats.get(run.chatId)?.s; return !c?.routineArchived && (!r.s.isOrchestrator || !c?.parentId); };
+    const runs = (r.s.isOrchestrator ? index.roots : r.s.routineArchived ? [] : index.byChat.get(r.s.id) ?? []).filter(shown);
     r.s.availableResultIds = runs.filter(run => !run.delivery?.synthesisSubmittedAt).map(run => run.runId);
     r.s.pendingResultIds = runs.filter(run => !run.delivery?.displayedAt || run.delivery?.synthesisPending).map(run => run.runId);
   }
@@ -1329,7 +1337,8 @@ export class ChatManager implements ChatService {
       if (!valid()) return;
       try { await this.ensureHandoff(chatId, { ask: false, allowStart: false }); } catch { return; }
       if (!valid()) return;
-      if (sess) { r.autoEnding = true; await sess.close(); if (!valid()) return; this.reapKept(r); }
+      if (sess) { r.autoEnding = true; await sess.close(); if (!valid()) return; }
+      this.reapKept(r); // the engines it outlived, also when it had none left (archive above)
       authorized = true;
     })();
     r.archiving = run;
@@ -1474,6 +1483,9 @@ export class ChatManager implements ChatService {
   /** The chat goes on in a new process: the old one ends, but a dev server it started stays for the next turn
    *  (owner, 2026-10-12); its tools are reaped when the chat really closes (reapKept). */
   private closeKeeping(r: Rec, sess: HarnessSession): Promise<void> {
+    // the Orchestrator and Flash never close, so nothing would ever reap what their old engines left: MCP servers and
+    // shells piled up all day (2026-10-29); they start no dev server of their own, so their tools end with the engine
+    if (r.s.isOrchestrator || r.s.quick) return sess.close();
     (r.kept ??= []).push(sess);
     return sess.close(undefined, true);
   }
@@ -1515,10 +1527,13 @@ export class ChatManager implements ChatService {
         }
         // the user's ✕ stops a running turn at once (#168): the engine's exit may take seconds, its work must not
         if (sess && !opts.auto && sess.busy) await sess.interrupt({ byUser: true }).catch(e => log.info('chats', 'interrupt at close failed', { chat: chatId, data: errText(e) }));
-        if (sess && !keep) { await sess.close(); this.reapKept(r); }
+        if (sess && !keep) await sess.close();
       })();
       try { await r.archiving; } finally { r.archiving = undefined; }
     }
+    // the engines it outlived (a model change, a prewarm, an idle release) go too, even when it had no engine left now:
+    // only close() reaped them before, and a chat archived without one left its MCP servers running all day (2026-10-29)
+    this.reapKept(r);
     for (const id of [...r.pending.keys()]) this.dropPending(r, id);
     this.flushItems(chatId);
     r.s.closedAt = Date.now();
@@ -2828,6 +2843,7 @@ export class ChatManager implements ChatService {
   private pruneArchived(): void {
     const old = [...this.chats.values()].filter(r => r.s.closedAt).sort((a, b) => (b.s.closedAt ?? 0) - (a.s.closedAt ?? 0)).slice(MAX_ARCHIVED);
     for (const r of old) {
+      this.reapKept(r);
       this.chats.delete(r.s.id);
       this.opts.emitter.emit('chat:removed', { chatId: r.s.id });
     }
@@ -3156,7 +3172,9 @@ export class ChatManager implements ChatService {
         setTimeout(unused, this.opts.prewarmUnusedMs ?? PREWARM_UNUSED_MS).unref(); return;
       }
       log.info('chats', 'engine started while typing ended unused', { chat: r.s.id });
-      r.releasing = this.closeKeeping(r, sess!).finally(() => { r.releasing = undefined; });
+      // it never ran a turn, so it started no dev server to keep: its MCP servers end with it (a kept one was reaped
+      // only when the chat really closed, so every unused prewarm left its tools running until then)
+      r.releasing = sess!.close().finally(() => { r.releasing = undefined; });
     };
     if (sess) setTimeout(unused, this.opts.prewarmUnusedMs ?? PREWARM_UNUSED_MS).unref();
     return true;
@@ -3896,7 +3914,9 @@ export class ChatManager implements ChatService {
       r.ctxSince = Date.now(); save = true;
       r.rolePrimed = undefined; // the summary may have dropped the role text: the next message carries it again
     }
-    if (p.contextTokens !== undefined && p.contextTokens > 0) save = true; // the meter of a closed chat survives a restart
+    // the meter of a closed chat survives a restart: saved when it changes outside a turn; inside one, the turn's end
+    // saves it (working → idle above), not a full chats.json write for nearly every assistant message (2026-10-29)
+    if (p.contextTokens !== undefined && p.contextTokens > 0 && !r.working) save = true;
     if (save) this.persist();
     this.updated(r);
     // the turn that reported is over: its result goes now, after the chat shows as finished (#123)

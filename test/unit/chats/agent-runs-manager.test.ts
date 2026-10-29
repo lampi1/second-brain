@@ -46,6 +46,20 @@ function fixture(extra: Partial<ChatManagerOptions> = {}) {
 }
 
 describe('agent runs on chats', () => {
+  // 2026-10-29: the auto-close tick asks summary() for every open chat every second and updated() runs several times
+  // per assistant message: the result index is rebuilt only when the runs changed, never once per call
+  it('reads the runs for the result index once per change, not once per summary', async () => {
+    const f = fixture();
+    const c = await f.create();
+    const spy = vi.spyOn(AgentRunStore.prototype, 'list');
+    try {
+      f.m.summary(c.id);
+      const after = spy.mock.calls.length;
+      for (let i = 0; i < 50; i++) { f.m.summary(c.id); f.m.list(); }
+      expect(spy.mock.calls.length).toBe(after);
+    } finally { spy.mockRestore(); }
+  });
+
   it('starts a run for a catalog agent only, with its version, goal and starter', async () => {
     const f = fixture();
     const c = await f.create('agent');

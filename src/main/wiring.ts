@@ -496,6 +496,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const orchestratorTokens = new EndpointTokens();
   // the user's MCP servers (ADR 0086): reached by every chat through the app's gateway, tokens only in main
   const mcpServers: McpServersService = new McpServersService({ userData: ctx.userData, cipher: safeStorageCipher(safeStorage), mcp, context: (id): ChatMcpContext | null => manager.mcpContext(id), emit: st => ctx.emitter.emit('mcpservers:changed', st) });
+  // a chat that closes (archived or removed) ends its connector processes at once (gateway.closeChat)
+  ctx.emitter.tap((ch, p) => {
+    if (ch === 'chat:removed') mcpServers.gateway.closeChat((p as { chatId: string }).chatId);
+    else if (ch === 'chat:updated' && (p as ChatSummary).closedAt) mcpServers.gateway.closeChat((p as ChatSummary).id);
+  });
   const coldTest = process.env.SB_TEST && process.env.SB_COLD_MS ? process.env.SB_COLD_MS.split(',').map(Number) as [number, number, number] : null;
   // rules on the chats' replies, checked at every turn end so they hold with any model (ADR 0063)
   const replyRules = new ReplyRules({ send: (chatId, text) => manager.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }) });

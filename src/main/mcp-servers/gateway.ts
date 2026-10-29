@@ -122,6 +122,13 @@ export class McpGateway {
     for (const [key, c] of this.conns) if (!server || key.endsWith(`|${server}`)) { c.up.close(); this.conns.delete(key); }
   }
 
+  /** The chat closed (archived or removed): its server processes end now, not 10 idle minutes later. Every chat that
+   *  starts lists its tools, so each open chat had its own copy of every connector running: closing many chats left
+   *  them all up for 10 more minutes (2026-10-29). A reopened chat opens them again at its next call. */
+  closeChat(chatId: string): void {
+    for (const [key, c] of this.conns) if (key.startsWith(`${chatId}|`)) { c.up.close(); this.conns.delete(key); }
+  }
+
   private sweep(): void {
     const idle = this.deps.idleMs ?? 10 * 60_000;
     for (const [key, c] of this.conns) if (Date.now() - c.used > idle) { c.up.close(); this.conns.delete(key); }

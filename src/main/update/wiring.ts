@@ -49,7 +49,7 @@ export function createAppUpdates(d: UpdateWiring): AppUpdates {
   }
   const node = electronNode(), script = path.join(base, 'release.mjs');
   const cli = async (args: string[], timeout = 60_000): Promise<string> => {
-    const result = await runNode({ ...node, env: { ...node.env, SB_RELEASES_ROOT: base } }, script, args, base, timeout);
+    const result = await runNode({ ...node, normalPriority: true, env: { ...node.env, SB_RELEASES_ROOT: base } }, script, args, base, timeout);
     if (result.code !== 0) throw new Error('Verifica del servizio aggiornamenti non riuscita. La versione aperta è conservata.');
     return result.stdout.trim();
   };
