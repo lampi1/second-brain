@@ -82,7 +82,9 @@ export interface RunPark {
  *  "not-verified" = its effect could not be confirmed; "failed" = DevOps refused it. None of them blocks the run.
  *  `resource`: what a write created or found (a test plan, suite or case id, the run's PR, the pushed branch, the
  *  deployment receipt), read back by later writes and listed in the next prompts. */
-export interface LedgerEntry { state: 'writing' | 'done' | 'not-verified' | 'failed'; what: string; at: number; tries: number; commentId?: number; rev?: number; resource?: Record<string, string | number | boolean> }
+export interface LedgerEntry { state: 'writing' | 'done' | 'not-verified' | 'failed'; what: string; at: number; tries: number; commentId?: number; rev?: number;
+  /** DevOps's reason for a refused (failed) write */
+  error?: string; resource?: Record<string, string | number | boolean> }
 export interface TriggerSubject { runId: string; at: number; title?: string }
 export interface TriggerState { schema: 1; cursor: Record<string, string>;
   /** cursors of the trigger's further areas (key project|areaPath) */
