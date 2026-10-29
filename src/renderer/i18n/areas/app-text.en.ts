@@ -210,15 +210,12 @@ export const appTextEn: typeof appTextIt = {
   'appText.agentTeam.notReported': 'not reported',
   'appText.agentTeam.noTask': 'observed activity with no reported task',
   'appText.agentTeam.notObserved': 'not in the observations',
-  // lib/images.ts, lib/models.ts, lib/progress-bridge.ts
+  // lib/images.ts, lib/models.ts
   'appText.images.noCanvas': 'canvas not available',
   'appText.images.readFailed': 'read failed',
   'appText.images.unreadable': 'Image not readable.',
   'appText.images.tooBig': 'Image too large even when scaled down.',
   'appText.models.cliDefault': 'CLI default',
-  'appText.progress.firstAgent': 'First custom role',
-  'appText.progress.setupComplete': 'Workspace set up',
-  'appText.progress.firstResult': 'First confirmed result',
   // components: AgentFeedAction, DelegationCard, CodexAutonomy, RoutingGroup
   'appText.feedAction.review': 'Review proposal',
   'appText.feedAction.undone': 'Undone',

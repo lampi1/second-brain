@@ -209,15 +209,12 @@ export const appTextIt = {
   'appText.agentTeam.notReported': 'non riportato',
   'appText.agentTeam.noTask': 'attività osservata senza compito riportato',
   'appText.agentTeam.notObserved': 'non presente nelle osservazioni',
-  // lib/images.ts, lib/models.ts, lib/progress-bridge.ts
+  // lib/images.ts, lib/models.ts
   'appText.images.noCanvas': 'canvas non disponibile',
   'appText.images.readFailed': 'lettura non riuscita',
   'appText.images.unreadable': 'Immagine non leggibile.',
   'appText.images.tooBig': 'Immagine troppo grande anche ridotta.',
   'appText.models.cliDefault': 'Predefinito della CLI',
-  'appText.progress.firstAgent': 'Primo ruolo personalizzato',
-  'appText.progress.setupComplete': 'Spazio di lavoro configurato',
-  'appText.progress.firstResult': 'Primo risultato confermato',
   // components: AgentFeedAction, DelegationCard (the deny message the chat gets), CodexAutonomy, RoutingGroup
   'appText.feedAction.review': 'Esamina proposta',
   'appText.feedAction.undone': 'Annullata',

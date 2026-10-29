@@ -193,14 +193,6 @@ export const toolsEn: typeof toolsIt = {
   'tools.routing.kindAppFeature': 'New feature',
   'tools.routing.kindOrchestrator': 'Orchestrator',
   'tools.routing.kindOther': 'Other',
-  'tools.routing.errorNoStart': "Won't start",
-  'tools.routing.reasoning': 'reasoning',
-  'tools.routing.agentSource': 'from the agent’s profile',
-  'tools.routing.overrideSource': 'chosen by you: wins over the table',
-  'tools.routing.tableSource': 'from the table',
-  'tools.routing.exploreSource': 'try an underused model',
-  'tools.routing.defaultSource': 'no row for',
-  'tools.routing.defaultSourceEnd': 'your defaults',
 
   // DevOps
   'tools.tasks.notReadTimeout': 'Tasks not read: login expired, run «az login» in a terminal',

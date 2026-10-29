@@ -22,11 +22,10 @@ import type { ConnectorId, ConnectorState, ConnectorToken } from './connectors';
 import type { McpImportCandidate, McpServerDef, McpServersState, McpToolAccess } from './mcp-servers';
 import type { FileViewResult } from './file-view';
 import type { DiffAgainst, FileDiffResult } from './file-diff';
-import type { UserTaskEvents, TaskDeliveryPolicy, CanonicalResult, AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentUndo, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
+import type { TaskDeliveryPolicy, CanonicalResult, AgentCatalog, AgentMetrics, AgentMetricsFilter, AgentDraft, AgentOwnerSnapshot, AgentProfile, AgentRun, AgentUndo, AgentVersion, AgentChildren, SetupDraft, SetupState } from './agents';
 import type { DelegationSettings, ModelTier, RoleId } from './roles';
 import type { ChatDelegation, DelegationLimitHit } from './delegation';
 import type { StrategyPlan } from './strategy';
-import type { SkillSuggestions } from './skill-suggest';
 import type { SuggestAnswer, SuggestRequest, SuggestState } from './composer-suggest';
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
 import type { LogEvent, LogList } from './activity-log';
@@ -357,13 +356,6 @@ export interface PendingRequest {
  *  explanation right before the block, plain text (shared/command-ask.ts), shown on the card without a click. */
 export interface CommandAsk { itemId: string; code: string; lang: string; prod?: string; lead?: string }
 export type OpenPathResult = { how: 'folder' } | { how: 'missing' | 'refused'; reason: string };
-/** app:peekFile: a clicked file's preview (main/peek-file.ts): its first lines, an image thumbnail, or why not */
-export type PeekResult =
-  | { kind: 'text'; path: string; size: number; text: string; more: boolean }
-  | { kind: 'image'; path: string; size: number; dataUrl: string }
-  | { kind: 'other'; path: string; size: number; what: string }
-  | { kind: 'missing'; reason: string; path: string }
-  | { kind: 'refused'; reason: string };
 /** app:askImage: an image a question names, as a data: URL (main/ask-image.ts: allowed folders, magic bytes, size), or why not */
 export type AskImageResult =
   | { kind: 'image'; path: string; dataUrl: string }
@@ -1040,9 +1032,6 @@ export interface RouteDecision {
 /** The role a routed chat runs: who launched it, its model tier, and where its model came from (the role's own model,
  *  its tier on the engine, or the engine's default). */
 export interface RouteAgent { id: string; version: number; chosenBy: 'orchestrator' | 'parent' | 'app'; tier?: ModelTier; modelFrom?: 'role' | 'tier' | 'table' | 'engine' }
-/** routing:preview → the engine, model and effort the table (or the user's pick, or the defaults) gives a new chat, and
- *  why; error = what chat:createRouted would refuse (Italian). */
-export type RoutePreview = { harness: Harness; model: string | null; effort: Effort | null; route: RouteDecision } | { error: string };
 
 /** The brain's own data server (ops/tools/brain-site.mjs), read-only: GET paths under /api/ (tables, now, cost, day,
  *  map, files, file, search, version, status). Never throws for a missing brain server: ok false + error. */
@@ -1273,7 +1262,6 @@ export interface InvokeMap {
   /** writes the filled zip under %LOCALAPPDATA%/routine-runtime/packages/<id>/ in main: the zip never crosses IPC */
   'routines:export': [{ id: string }, RoutineTerminalExport];
   'routines:setSecrets': [{ id: string; values: Record<string, string> }, RoutinesSnapshot];
-  'routines:run': [RoutineRunRef, RoutineRunDetail];
   'routines:image': [{ ref: RoutineRunRef; path: string }, FileViewResult];
   'routines:watch': [{ ref: RoutineRunRef; subscription: string }, RoutineRunDetail];
   'routines:unwatch': [{ subscription: string }, void];
@@ -1312,14 +1300,11 @@ export interface InvokeMap {
   'update:recovery': [void, UpdateRecovery | null];
   'update:recoveryAck': [{ id: string }, void];
   'progress:get': [void, ProgressState];
-  'progress:setHidden': [{ hidden: boolean }, ProgressState];
-  'progress:confirmResult': [{ chatId: string; resultAt: number }, ProgressState];
   'chat:autoCloseGet': [void, AutoCloseStatus[]];
   'chat:autoClosePresence': [{ holds: AutoClosePresence[] }, void];
   'chat:autoCloseKeep': [{ chatId: string; keep: boolean }, void];
   'agents:list': [void, AgentCatalog];
   /** the brain skills that fit a request, best first (skills/suggest.ts; advisory: the user picks what a role chat may use) */
-  'skills:suggest': [{ request: string }, SkillSuggestions];
   /** the user's Annulla on a change the app applied (feed card, change log) */
   'agents:undo': [AgentUndo, AgentProfile];
   /** the shareable brain zip for colleagues (ADR 0088): rules, skills, roles, scripts, never memory; null = save dialog cancelled */
@@ -1356,12 +1341,10 @@ export interface InvokeMap {
   /** the Brain pages (ADR 0077, src/main/brainmodel): agents, skills and their links, rules, memory, the change log */
   'brainmodel:state': [void, BrainModelState];
   /** Explicit user review of provenance-bearing memory and skill candidates; never exposed as model approval. */
-  'chat:userEvents': [{ chatId: string; afterSeq?: number }, UserTaskEvents];
   'chat:synthesize': [{ runId: string }, void];
   'memory:reviewList': [{ asOf?: string } | undefined, MemoryReviewRecord[]];
   /** keep: the user's answer when confirmed facts say something else (new = replace them, both = keep them too), on the
    *  fact ids they saw (memory-records.ts confirmMemory) */
-  'memory:confirm': [{ expectedRoot: string; id: string; evidence: string; keep?: 'new' | 'both'; conflicts?: string[] }, MemoryReviewRecord];
   'memory:retract': [{ expectedRoot: string; id: string; reason: string }, MemoryReviewRecord];
   'memory:delete': [{ expectedRoot: string; id: string }, void];
   'learning:evidence': [{ runId: string; expectedRoot: string }, LearningEvidence];
@@ -1423,7 +1406,6 @@ export interface InvokeMap {
   /** the viewer's "Show in folder": a local file selected in Explorer, never opened or run (main/open-path.ts) */
   'app:showInFolder': [{ path: string }, OpenPathResult];
   /** the first lines or a thumbnail of a file a message names (absolute, or relative to the chat's folder) */
-  'app:peekFile': [{ path: string; cwd?: string }, PeekResult];
   /** A user-opened file link: any local file, never a network share, read-only and bounded; text one page at a time
    *  around a cited `line`, ending at `before`, or from `offset` (`align`: at the next line start). Main renderer only. */
   'app:readFile': [{ path:string; chatId?:string; offset?:number; align?:boolean; before?:number; line?:number }, FileViewResult];
@@ -1512,7 +1494,6 @@ export interface InvokeMap {
    *  after 30 s if still there. Returns false when it could not (no such entry, e.g. the file changed). */
   'credentials:copy': [{ id: string; field: 'user' | 'password' }, boolean];
   'feed:list': [void, FeedEvent[]];
-  'feed:mute': [{ kind: string; muted: boolean }, void];
   'settings:get': [void, Settings];
   /** the stored API keys' masks; set and delete answer the same (a key never comes back, engines/secrets.ts) */
   'secrets:status': [void, SecretsStatus];
@@ -1536,7 +1517,6 @@ export interface InvokeMap {
   'brain:api': [{ path: string }, BrainApiResult];
   /** the brain's model comparisons (harness/compare): read through its config.mjs, switched through its switch.mjs */
   'compare:list': [void, CompareState];
-  'compare:set': [{ experiment: string; on: boolean; agent?: string }, CompareState];
   /** the brain's self-improvement loop: a click of the Miglioramento page (brain/learn.ts) */
   'learn:act': [LearnAction, LearnResult];
   'models:seen': [void, ModelsSeen];
@@ -1546,9 +1526,7 @@ export interface InvokeMap {
    *  exploration = the share of chats (0 to 0.5) that try a little-sampled model, omitted = unchanged */
   'routing:save': [{ routes: RoutingRow[]; reason?: string; exploration?: number; costWeight?: number; baseVersion?: number }, RoutingInfo];
   /** the user brings back an older version: a new version with its rows and exploration (history stays linear) */
-  'routing:restore': [{ version: number }, RoutingInfo];
   /** "Nuova chat": what chat:createRouted would start for this request now, without starting it (no exploration) */
-  'routing:preview': [RoutedNewChat, RoutePreview];
   'tasks:get': [void, TasksState];
   /** "Aggiorna ora": runs the scripts now (resolves when done; a read already running is joined) */
   'tasks:refresh': [void, TasksState];
@@ -1584,7 +1562,6 @@ export interface InvokeMap {
   /** Settings → Aggiornamenti: the version in use, the code folder, the restart notice (refresh = read git now) */
   'source:get': [{ refresh?: boolean }, AppSourceState];
   /** Read without starting an engine; ensure creates only when no coordinator exists. */
-  'orchestrator:get': [void, ChatSummary | null];
   'orchestrator:ensure': [{ harness: Harness; model?: string }, ChatSummary];
   /** the restart notice was read */
   'source:dismissLaunch': [void, AppSourceState];
@@ -1600,7 +1577,6 @@ export interface InvokeMap {
   'search:status': [void, SearchIndexStatus];
   'search:retryModel': [void, SearchIndexStatus];
   /** "Rispondi dopo" (on: true) or the queue opened by the user (on: false) */
-  'later:get': [void, AnswerLater];
   'later:set': [{ on: boolean }, AnswerLater];
   /** brain domains and their sync (ADR 0059): the status, a sync now (one domain or all), the user's choice on a conflict */
   'sync:get': [void, SyncState];
@@ -1647,7 +1623,6 @@ export interface InvokeMap {
   'pulse:save': [{ id: string }, PulseResult];
   'pulse:act': [{ id: string }, PulseActResult];
   'pulse:dismiss': [{ id: string; reason?: PulseDismissReason }, PulseResult];
-  'pulse:runNow': [void, PulseResult];
   'approvals:list': [{ agentId?: string }, ApprovalItem[]];
   'approvals:decide': [ApprovalDecision, PulseResult];
   /** cloud agents (ADR 0080, main/cloud/): the known ones (refresh = ask the vendors now, at most every 30 s) */
@@ -1661,7 +1636,6 @@ export interface InvokeMap {
   /** the strip expanded now (its messages stream while it stays open, Cursor), or null */
   'cloud:watch': [{ id: string | null }, void];
   /** whether each engine can start a cloud agent from this folder now (key, sign-in, GitHub remote, pushed branch) */
-  'cloud:readiness': [{ cwd: string }, Record<string, { ok: boolean; why?: string }>];
   /** forget a finished agent (the vendor keeps it) */
   'cloud:dismiss': [{ id: string }, CloudState];
 }
@@ -1691,7 +1665,6 @@ export interface EventMap {
   'update:state': AppUpdateState;
   'update:checkpointRequest': UpdateCheckpointRequest;
   'update:checkpointRelease': { requestId: string };
-  'progress:changed': ProgressState;
   'chat:autoCloseStatus': AutoCloseStatus[];
   'agents:changed': AgentCatalog;
   /** the "Da approvare" queue changed (a proposal, an evaluation, a decision): read /api/agents/lifecycle again */
@@ -1772,47 +1745,46 @@ export type InvokeResult<K extends InvokeChannel> = InvokeMap[K][1];
 
 // Runtime lists (the preload allow-list). Kept in sync with the maps by the compile-time checks below.
 export const INVOKE_CHANNELS = [
-  'routines:list', 'routines:import', 'routines:export', 'routines:setSecrets', 'routines:run', 'routines:watch', 'routines:unwatch', 'routines:convert',
+  'routines:list', 'routines:import', 'routines:export', 'routines:setSecrets', 'routines:watch', 'routines:unwatch', 'routines:convert',
   'routines:image',
   'routines:archive',
   'work:lessons', 'work:lessonDecide', 'work:list', 'work:decide',
-  'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'pulse:runNow', 'approvals:list', 'approvals:decide',
+  'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'approvals:list', 'approvals:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect', 'connectors:useToken',
   'mcpservers:state', 'mcpservers:save', 'mcpservers:remove', 'mcpservers:setSecret', 'mcpservers:deleteSecret', 'mcpservers:setAccess', 'mcpservers:test', 'mcpservers:importScan', 'mcpservers:importApply',
   'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
   'app:createBrain', 'app:projectsFolder', 'app:pickProjects',
-  'progress:get', 'progress:setHidden', 'progress:confirmResult',
+  'progress:get',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
-  'chat:userEvents', 'chat:synthesize', 'memory:reviewList', 'memory:confirm', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare', 'proposals:list', 'proposals:count', 'proposals:decide',
+  'chat:synthesize', 'memory:reviewList', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare', 'proposals:list', 'proposals:count', 'proposals:decide',
   'maintenance:run', 'maintenance:status', 'maintenance:stop',
-  'agents:list', 'skills:suggest', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'runs:macro', 'agents:judgingEstimate', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
-  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:peekFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
+  'agents:list', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'runs:macro', 'agents:judgingEstimate', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
+  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
   'brain:share', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'queries:list', 'queries:get', 'queries:delete', 'brainmodel:noise', 'brainmodel:link', 'brainmodel:remove', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:prewarm', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'chat:undoTurn', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
-  'browser:close', 'views:layout', 'feed:list', 'feed:mute', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
+  'browser:close', 'views:layout', 'feed:list', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',
   'tasks:get', 'tasks:refresh', 'tasks:markRead', 'chat:branches',
-  'compare:list', 'compare:set', 'learn:act', 'models:seen', 'routing:get', 'routing:save', 'routing:restore', 'routing:preview',
+  'compare:list', 'learn:act', 'models:seen', 'routing:get', 'routing:save',
   'browser:handoffs', 'browser:handoffResolve', 'browser:handoffCopy', 'browser:envList',
   'personal:state', 'personal:open', 'personal:navigate', 'personal:go', 'personal:select', 'personal:close', 'personal:restore', 'personal:bookmarkAdd', 'personal:bookmarkRemove',
   'personal:sessionSave', 'personal:sessionOpen', 'personal:sessionRemove', 'personal:historyClear', 'personal:loginFill', 'personal:loginSave', 'personal:loginRemove', 'personal:loginCopy', 'personal:loginImport', 'personal:lend', 'personal:reclaim', 'personal:onScreen',
   'credentials:list', 'credentials:copy', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
   'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'source:get', 'source:dismissLaunch', 'source:check', 'source:updateNow',
   'clipboard:image',
-  'orchestrator:get', 'orchestrator:ensure',
-  'search:query', 'search:status', 'search:retryModel', 'later:get', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
+  'orchestrator:ensure',
+  'search:query', 'search:status', 'search:retryModel', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
   'sync:get', 'sync:now', 'sync:resolve', 'headline:get', 'log:list',
   'suggest:get', 'suggest:cancel', 'suggest:state',
   'voice:state', 'voice:prepare', 'voice:listen', 'voice:audio', 'voice:speak', 'voice:cancelSpeech',
   'rec:state', 'rec:arm', 'rec:start', 'rec:chunk', 'rec:stop', 'rec:transcribe', 'rec:rename', 'rec:remove', 'rec:transcript', 'rec:find', 'rec:readFound', 'rec:open',
   'orchestrator:held', 'orchestrator:heldSeen',
-  'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:readiness', 'cloud:dismiss',
+  'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'routines:progress', 'work:changed',
   'pulse:changed', 'approvals:changed', 'proposals:changed', 'maintenance:changed', 'maintenance:done',
   'update:state', 'update:checkpointRequest', 'update:checkpointRelease',
-  'progress:changed',
   'chat:autoCloseStatus',
   'agents:changed', 'agents:lifecycleChanged', 'avatars:changed',
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',

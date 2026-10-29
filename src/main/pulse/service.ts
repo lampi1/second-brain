@@ -224,7 +224,6 @@ export class PulseService {
   handlers(): Pick<Handlers, Extract<keyof Handlers, `pulse:${string}` | `approvals:${string}`>> {
     return {
       'pulse:list': a => this.list(a?.place), 'pulse:status': () => this.status(),
-      'pulse:runNow': () => this.run('pulse'),
       'pulse:seen': a => { if (!Array.isArray(a?.ids) || a.ids.length > 200 || this.store.problem) return;
         for (const c of this.store.data.cards) if (a.ids.includes(c.id) && c.state === 'new') c.state = 'seen'; this.store.save(); },
       'pulse:save': a => this.action(a?.id, async c => { if (!this.d.canSave()) throw Error(); await this.d.saveIdea(c); c.state = 'saved'; }),

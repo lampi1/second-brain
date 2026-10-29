@@ -2,7 +2,7 @@
 // routing table's row picks engine, model and effort; no row = the user's last "Nuova chat" choice; the kind and area
 // come from the title and first message (the brain pages send no hints since "Discuti" goes to the Orchestrator); an engine that is off is never picked, nor one the Orchestrators may not use unless the user names it for a work chat; the chat carries its route (so the ledger gets it); bad input throws.
 import { describe, expect, it } from 'vitest';
-import { createRoutedChat, previewRoute } from '../../src/main/chats/routed';
+import { createRoutedChat } from '../../src/main/chats/routed';
 import { routeChat, type RouteRequest } from '../../src/main/brain/routing';
 import { DEMO_REGISTRY } from '../../src/main/brain/routing-demo';
 import type { ChatSummary, NewChat, RoutedNewChat, RoutingTable } from '../../src/shared/contract';
@@ -146,17 +146,6 @@ describe('"Nuova chat" through the table (2026-10-14)', () => {
     await createRoutedChat(d, base({ prompt: 'Task', worktree: true }));
     expect(made[1]).toMatchObject({ harness: 'cursor' });
     expect(made[1]).not.toHaveProperty('worktree');
-  });
-
-  it('the preview says what would start, never explores, never starts, and reports a refusal', () => {
-    const { d, made } = deps();
-    const asked: RouteRequest[] = [];
-    const spy = { ...d, route: (r: RouteRequest) => { asked.push(r); return d.route(r); } };
-    expect(previewRoute(spy, base({ title: '', prompt: 'qa', cwd: '' }))).toMatchObject({ harness: 'claude', model: 'claude-sonnet-5-5', route: { source: 'table', kind: 'qa-run' } });
-    expect(asked[0]).toHaveProperty('counts', undefined);
-    expect(made).toHaveLength(0);
-    const off = deps({ claude: false, cursor: true });
-    expect(previewRoute(off.d, base({ prompt: 'x', defaults: { harness: 'claude' } }))).toMatchObject({ harness: 'cursor' });
   });
 
   it('started by the user: no cap on the first message, no dice roll, the picked permission mode kept on the routed engine', async () => {

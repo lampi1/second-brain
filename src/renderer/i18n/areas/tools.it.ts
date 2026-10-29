@@ -191,14 +191,6 @@ export const toolsIt = {
   'tools.routing.kindAppFeature': 'Funzione nuova',
   'tools.routing.kindOrchestrator': 'Orchestrator',
   'tools.routing.kindOther': 'Altro',
-  'tools.routing.errorNoStart': 'Non parte',
-  'tools.routing.reasoning': 'ragionamento',
-  'tools.routing.agentSource': 'dal profilo dell’agente',
-  'tools.routing.overrideSource': 'scelto da te: vince sulla tabella',
-  'tools.routing.tableSource': 'dalla tabella',
-  'tools.routing.exploreSource': 'prova un modello poco usato',
-  'tools.routing.defaultSource': 'nessuna riga per',
-  'tools.routing.defaultSourceEnd': 'i tuoi predefiniti',
 
   // DevOps
   'tools.tasks.notReadTimeout': 'Task non letti: accesso scaduto, lancia «az login» in un terminale',

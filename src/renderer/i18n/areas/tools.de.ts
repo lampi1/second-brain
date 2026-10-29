@@ -193,14 +193,6 @@ export const toolsDe: typeof toolsIt = {
   'tools.routing.kindAppFeature': 'Neues Feature',
   'tools.routing.kindOrchestrator': 'Orchestrator',
   'tools.routing.kindOther': 'Sonstiges',
-  'tools.routing.errorNoStart': "Startet nicht",
-  'tools.routing.reasoning': 'Denkaufwand',
-  'tools.routing.agentSource': 'aus dem Profil des Agenten',
-  'tools.routing.overrideSource': 'von dir gewählt: hat Vorrang vor der Tabelle',
-  'tools.routing.tableSource': 'aus der Tabelle',
-  'tools.routing.exploreSource': 'ein wenig genutztes Modell ausprobieren',
-  'tools.routing.defaultSource': 'keine Zeile für',
-  'tools.routing.defaultSourceEnd': 'deine Standardwerte',
 
   // DevOps
   'tools.tasks.notReadTimeout': 'Tasks nicht gelesen: Anmeldung abgelaufen, führe «az login» in einem Terminal aus',
