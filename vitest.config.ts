@@ -1,3 +1,4 @@
+// Vitest config of the unit and live tests (`npm test`, `npx vitest run`).
 import { defineConfig } from 'vitest/config';
 import path from 'node:path';
 

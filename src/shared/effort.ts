@@ -1,3 +1,5 @@
+// The shape of a chat's reasoning effort as the UI shows it: what the user chose, what the turn sent and what the
+// provider reports, kept apart because they are different facts. Used by src/main/chats/effort.ts and the renderer.
 import type { Effort } from './contract';
 /** A UI choice, an outgoing turn parameter and a provider-resolved value are different facts. */
 export interface ChatEffortStatus {

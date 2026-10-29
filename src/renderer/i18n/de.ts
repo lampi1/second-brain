@@ -1,3 +1,5 @@
+// The German UI dictionary, the same keys as it.ts, built from the area files under i18n/areas. Used by the
+// renderer's t() when the language is German; the i18n unit tests check it covers every Italian key.
 import { flowsDe } from './areas/flows.de';
 import { routineDe } from './areas/routine.de';
 import { routinesDe } from './areas/routines.de';
