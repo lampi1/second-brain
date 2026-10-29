@@ -60,12 +60,28 @@ describe('UserCorrectionStore', () => {
     s.flush();
     const text = fs.readFileSync(file, 'utf8');
     expect(text).not.toContain('segreto');
-    expect(after).toEqual(['r_1']);
+    // the bare regex counts the day, never the run: its afterReport needs the tag or a semantic yes
+    expect(after).toEqual([]);
     const back = parseDays(text);
     expect(back.since).toBe('2026-10-29');
     expect(back.days).toEqual([{ date: '2026-10-29', messages: 3, tagged: 1, afterReport: 1, recognized: 0, semantic: 0, chats: ['Fix login', 'Report'] }]);
-    // a new store reads it back
-    expect(new UserCorrectionStore({ file, runs: () => [], now: () => now }).summary().byDay[0]!.messages).toBe(3);
+    expect(back.afterReportSince).toBe(now);
+    // a new store reads it back, the start of the runs' counting included
+    const again = new UserCorrectionStore({ file, runs: () => [], now: () => now + 86_400_000 });
+    expect(again.summary().byDay[0]!.messages).toBe(3);
+    expect(again.afterReportSince()).toBe(now);
+  });
+
+  it('a semantic yes after a report reaches the run; a plain «no» to a question by the regex alone does not', async () => {
+    const file = path.join(tmp(), 'user-corrections.json');
+    const after: string[] = [];
+    const yes = new UserCorrectionStore({ file, runs: () => [], detect: async () => ({ ready: true, correction: true }) });
+    await yes.note('Il totale è quello dell\'anno scorso', { title: 'Report', reportedRunId: 'r_2' }, id => after.push(id));
+    const cold = new UserCorrectionStore({ file: path.join(tmp(), 'u.json'), runs: () => [], detect: async () => ({ ready: false, correction: false }) });
+    expect((await cold.note('no', { title: 'PR', reportedRunId: 'r_3' }, id => after.push(id))).kind).toBe('afterReport'); // the day still counts it
+    const said = new UserCorrectionStore({ file: path.join(tmp(), 'v.json'), runs: () => [], detect: async () => ({ ready: true, correction: false }) });
+    await said.note('no', { title: 'PR', reportedRunId: 'r_4' }, id => after.push(id));
+    expect(after).toEqual(['r_2']);
   });
 
   it('an unreadable file starts again, and the summary carries the runs\' counters', () => {

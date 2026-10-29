@@ -5,8 +5,11 @@
 // «Correggi il pensiero» (the tag, shared/correction.ts), else the same decision as the brain's correction-catch hook
 // (the local semantic detector, search/hybrid/corrections.ts, when its model is warm; the hook's CORRECTION regex
 // otherwise; a CONFUSION-only match, «non capisco», is a question, not an error, and never counts here). A correction
-// to a run whose agent had already reported is its own bucket (the run's `corrections.afterReport`, written here at
-// last). Only counts per Rome day are kept, plus the titles of the chats corrected that day (to match ai-errors.md rows
+// to a run whose agent had already reported is its own bucket; the run's own `corrections.afterReport` counts only a
+// semantic-detector yes there (the tag has its own counter, `corrections.tagged`): the bare regex would count a plain
+// «no» to «Apro la PR?» as a correction, so it stays in the daily count only. The file also keeps `afterReportSince`
+// (ms), when the runs' afterReport started to be written: «riuscito se» (success-check.ts fewer-corrections) leaves out
+// runs started before it, whose afterReport was always 0. Only counts per Rome day are kept, plus the titles of the chats corrected that day (to match ai-errors.md rows
 // with no «visto da»), in userData/user-corrections.json for 90 days: never the message text. Read by brain/quality.ts
 // (/api/quality); wired in wiring.ts and index.ts ('chat:send'). Unit tests: test/unit/brain/user-corrections.test.ts.
 import fs from 'node:fs';
@@ -56,12 +59,13 @@ const emptyDay = (date: string): UserCorrectionDay => ({ date, messages: 0, tagg
 const count = (v: unknown): number => (typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : 0);
 
 /** The file's days, kept only when well formed. */
-export function parseDays(text: string): { since: string | null; days: UserCorrectionDay[] } {
-  const o = JSON.parse(text) as { since?: unknown; days?: unknown };
+export function parseDays(text: string): { since: string | null; days: UserCorrectionDay[]; afterReportSince: number | null } {
+  const o = JSON.parse(text) as { since?: unknown; days?: unknown; afterReportSince?: unknown };
   const days = (Array.isArray(o.days) ? o.days : []).filter((d): d is Record<string, unknown> => !!d && typeof d === 'object' && /^\d{4}-\d{2}-\d{2}$/.test(String((d as { date?: unknown }).date)))
     .map(d => ({ date: String(d.date), messages: count(d.messages), tagged: count(d.tagged), afterReport: count(d.afterReport), recognized: count(d.recognized), semantic: count(d.semantic),
       chats: (Array.isArray(d.chats) ? d.chats : []).filter((c): c is string => typeof c === 'string').map(c => c.slice(0, 200)).slice(0, CHATS_PER_DAY) }));
-  return { since: typeof o.since === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.since) ? o.since : null, days };
+  const ars = typeof o.afterReportSince === 'number' && Number.isFinite(o.afterReportSince) && o.afterReportSince > 0 ? o.afterReportSince : null;
+  return { since: typeof o.since === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.since) ? o.since : null, days, afterReportSince: ars };
 }
 
 /** The runs' own correction counters by the Rome day each run started (only runs that count them: `corrections` set). */
@@ -88,6 +92,8 @@ export interface UserCorrectionDeps {
 export class UserCorrectionStore {
   private days = new Map<string, UserCorrectionDay>();
   private since: string | null = null;
+  /** when the runs' afterReport started to be written (ms) */
+  private arSince: number | null = null;
   private timer: NodeJS.Timeout | null = null;
   private readonly now: () => number;
   constructor(private readonly d: UserCorrectionDeps) {
@@ -95,11 +101,16 @@ export class UserCorrectionStore {
     try {
       const f = parseDays(fs.readFileSync(d.file, 'utf8'));
       this.since = f.since;
+      this.arSince = f.afterReportSince;
       for (const day of f.days) this.days.set(day.date, day);
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'ENOENT') log.warn('quality', 'user corrections file unreadable', { cause: errText(e), hint: 'counting starts again today; the old file is replaced on the next message' });
     }
+    // the first start that writes the runs' afterReport: from now on it is counted (kept in the file)
+    if (this.arSince === null) { this.arSince = this.now(); this.schedule(); }
   }
+  /** When the runs' `corrections.afterReport` started to be counted (ms): runs started before it say nothing. */
+  afterReportSince(): number { return this.arSince ?? this.now(); }
 
   /** The user sent `text` to chat `chat` (its title); `reportedRunId` = the run whose agent had reported before it.
    *  Returns the class (tests), after counting it. */
@@ -114,7 +125,8 @@ export class UserCorrectionStore {
         if (c.semantic) day.semantic++;
         const title = String(chat.title ?? '').trim().slice(0, 200);
         if (title && !day.chats.includes(title) && day.chats.length < CHATS_PER_DAY) day.chats.push(title);
-        if (c.kind === 'afterReport' && chat.reportedRunId) onAfterReport?.(chat.reportedRunId);
+        // the run's own counter: a semantic yes only, never the bare regex (a plain «no» to «Apro la PR?» is no correction)
+        if (c.kind === 'afterReport' && c.semantic && chat.reportedRunId) onAfterReport?.(chat.reportedRunId);
       }
       this.days.set(date, day);
       this.schedule();
@@ -146,7 +158,7 @@ export class UserCorrectionStore {
     try {
       fs.mkdirSync(path.dirname(this.d.file), { recursive: true });
       const tmp = `${this.d.file}.tmp`;
-      fs.writeFileSync(tmp, JSON.stringify({ since: this.since, days: [...this.days.values()].sort((a, b) => a.date.localeCompare(b.date)) }));
+      fs.writeFileSync(tmp, JSON.stringify({ since: this.since, ...(this.arSince !== null ? { afterReportSince: this.arSince } : {}), days: [...this.days.values()].sort((a, b) => a.date.localeCompare(b.date)) }));
       fs.renameSync(tmp, this.d.file);
     } catch (e) {
       log.warn('quality', 'user corrections not saved', { cause: errText(e), hint: 'check that userData is writable; the counts stay in memory until the app closes' });

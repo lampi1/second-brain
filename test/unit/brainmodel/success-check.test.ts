@@ -66,6 +66,11 @@ describe('checkChange', () => {
     const all = checkChange(AT, { metric: 'fewer-corrections' }, { runs: [...runs, run({ end: AT + H, startedAt: AT - H, corrections: { tagged: 9, afterReport: 0 } as AgentRun['corrections'] })] }, NOW)!;
     expect(all).toMatchObject({ nBefore: 4, nAfter: 3 });
   });
+  it('fewer-corrections leaves out runs started before the runs\' afterReport was counted', () => {
+    const runs = [corr(AT - 2 * H, 0), corr(AT - 3 * H, 1), corr(AT - 4 * H, 0), corr(AT + 2 * H, 2), corr(AT + 3 * H, 1), corr(AT + 4 * H, 2)];
+    expect(checkChange(AT, { metric: 'fewer-corrections' }, { runs, correctionsSince: AT - 3.5 * H }, NOW)).toMatchObject({ nBefore: 1, nAfter: 3, verdict: 'unknown' });
+    expect(checkChange(AT, { metric: 'fewer-corrections' }, { runs, correctionsSince: null }, NOW)).toMatchObject({ nBefore: 3, nAfter: 3 });
+  });
   it('too few runs on a side: unknown', () => {
     expect(checkChange(AT, { metric: 'fewer-corrections' }, { runs: [corr(AT - H, 0), corr(AT + 2 * H, 5)] }, NOW)).toMatchObject({ verdict: 'unknown', nBefore: 1, nAfter: 1 });
   });
@@ -87,7 +92,9 @@ describe('checkChange', () => {
     const used = (end: number) => run({ end, tags: { skills: ['note-rilascio'] } as AgentRun['tags'] });
     const c = { metric: 'skill-used' as const, skill: 'note-rilascio', n: 2 };
     expect(checkChange(AT, c, { runs: [used(AT + H), used(AT + 2 * H)] }, NOW)).toMatchObject({ nAfter: 2, verdict: 'better' });
-    const k = checkChange(AT, c, { runs: [used(AT + H), used(AT + WINDOW_MS + 2 * H)] }, NOW)!;
+    // a quiet week (fewer than MIN_RUNS runs after): unknown, never «worse»
+    expect(checkChange(AT, c, { runs: [used(AT + H), used(AT + WINDOW_MS + 2 * H)] }, NOW)).toMatchObject({ nAfter: 1, verdict: 'unknown' });
+    const k = checkChange(AT, c, { runs: [used(AT + H), run({ end: AT + 2 * H }), run({ end: AT + 3 * H })] }, NOW)!;
     expect(k).toMatchObject({ nAfter: 1, verdict: 'worse' });
     expect(checkWords(c, k, 'it')).toBe('La skill «note-rilascio» è stata usata 1 volta nella settimana dopo (ne servivano 2).');
   });

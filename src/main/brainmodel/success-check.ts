@@ -78,7 +78,12 @@ export function checkWords(c: SuccessCriterion, k: SuccessCheck, lang: Lang): st
 }
 
 /** What the check reads: the runs, and the lines of one log group between two times (absent = no log metric). */
-export interface CheckData { runs: readonly AgentRun[]; logCount?: (key: string, from: number, to: number) => number }
+export interface CheckData {
+  runs: readonly AgentRun[]; logCount?: (key: string, from: number, to: number) => number;
+  /** when the runs' corrections.afterReport started to be counted (user-corrections.ts): earlier runs say nothing on
+   *  corrections (their afterReport was always 0) */
+  correctionsSince?: number | null;
+}
 
 const mean = (xs: readonly number[]): number | null => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 const ended = (r: AgentRun, from: number, to: number): boolean => r.endedAt !== undefined && r.endedAt >= from && r.endedAt < to;
@@ -103,7 +108,7 @@ export function checkChange(at: number, c: SuccessCriterion, d: CheckData, now: 
   const done = (x: Omit<SuccessCheck, 'at'>): SuccessCheck => ({ at: now, ...x });
   switch (c.metric) {
     case 'fewer-corrections': {
-      const pool = d.runs.filter(r => r.source !== 'oneshot' && !!r.corrections).filter(inRole(c));
+      const pool = d.runs.filter(r => r.source !== 'oneshot' && !!r.corrections && (d.correctionsSince == null || r.startedAt >= d.correctionsSince)).filter(inRole(c));
       const v = (r: AgentRun) => r.corrections!.tagged + r.corrections!.afterReport;
       const before = pool.filter(r => ended(r, b0, at)).map(v), after = pool.filter(r => r.startedAt >= at && ended(r, at, a1)).map(v);
       const mb = mean(before), ma = mean(after);
@@ -128,7 +133,9 @@ export function checkChange(at: number, c: SuccessCriterion, d: CheckData, now: 
     case 'skill-used': {
       const used = (from: number, to: number) => d.runs.filter(r => ended(r, from, to) && (r.tags?.skills ?? []).includes(c.skill ?? '')).length;
       const nb = used(b0, at), na = used(at, a1), want = c.n ?? DEFAULT_USES;
-      return done({ before: nb, after: na, nBefore: nb, nAfter: na, verdict: na >= want ? 'better' : 'worse' });
+      // fewer uses than wanted says «worse» only when there was work to use it in: a quiet week is unknown
+      const busy = d.runs.filter(r => ended(r, at, a1)).length >= MIN_RUNS;
+      return done({ before: nb, after: na, nBefore: nb, nAfter: na, verdict: na >= want ? 'better' : busy ? 'worse' : 'unknown' });
     }
   }
 }

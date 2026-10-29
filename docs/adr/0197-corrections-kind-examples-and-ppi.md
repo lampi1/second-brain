@@ -29,7 +29,10 @@ Three measures did not say what really happened.
   when warm, else the hook's `CORRECTION` regex (a pinned copy of `signals-regex.mjs`; the test checks it is equal).
   A CONFUSION-only match («non capisco», «spiegami») is a question, not an error: it never counts here (the hook
   still reminds the chat). A correction to a chat whose current run had already reported is «riapertura dopo il
-  report» and increments that run's `corrections.afterReport`, written at last.
+  report» in the day's count; it increments that run's `corrections.afterReport` only on a semantic-detector yes (the
+  tag has its own counter, `corrections.tagged`): the bare regex would count a plain «no» to «Apro la PR?» (review
+  2026-10-29). `user-corrections.json` keeps `afterReportSince` (ms), the first start that wrote it; «riuscito se»
+  `fewer-corrections` (ADR 0194) leaves out runs started before it.
 - Only counts per Rome day are kept (messages, tagged, afterReport, recognized, semantic) plus the titles of the chats
   corrected that day (at most 30, to match ai-errors.md rows with no «visto da»), in `userData/user-corrections.json`,
   90 days. Never the message text.
@@ -80,7 +83,8 @@ Three measures did not say what really happened.
 ## Consequences
 
 - The Qualità number can only grow from the day the app starts counting; before it, the runs' tags and ai-errors.md
-  give a minimum, and the card says from which day the app counted.
+  give the rest, and the card says from which day the app counted. While the semantic model is not ready the
+  regex may also count a «no» that corrected nothing, so the day's number can be a little over as well as under.
 - Contract additions (all optional): `AppQuality.corrections` (`UserCorrections`, `UserCorrectionDay`),
   `ClassifiersState.kindModel` (`KindModelCard`), `VersionMetrics.judges` (`RoleJudges`). Services: `ChatService`
   `correctionContext`, `correctedAfterReport`; `Wired.userCorrections`; `BrainModelDeps.kindModel`.

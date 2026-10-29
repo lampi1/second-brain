@@ -682,6 +682,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const kindModel = new KindModel({ runs: () => manager.runs.list(), embed: texts => hybrid.embed(texts, 'query'), ready: () => hybrid.status().model.state === 'ready' });
   const brainModel = new BrainModelService({ userData: ctx.userData, root: () => brain.info().brainRoot, home: process.env.SB_SKILLS_HOME || os.homedir(), kindModel: () => kindModel.state(),
     catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), runsRevision: () => manager.runs.revision, routing: () => brain.routingInfo(),
+    correctionsSince: () => userCorrections.afterReportSince(),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: !process.env.SB_TEST || process.env.SB_BRAIN_JOBS === '1',
     // the Memoria hub's trash (ADR 0122): a script's file, and the Script tab told at once
     scripts: { file: id => brainScripts.get(id).path, changed: () => { brainScripts.invalidate(); ctx.emitter.emit('scripts:changed', undefined); } },

@@ -57,6 +57,8 @@ export interface BrainModelDeps {
   applied?: (changes: BrainChange[]) => void;
   /** the app's log folder (log.ts): the log step of a pass the user starts (#150); absent = no log step */
   logDir?: () => string | null;
+  /** when the runs' corrections.afterReport started to be counted (brain/user-corrections.ts), for «riuscito se» */
+  correctionsSince?: () => number | null;
   /** the cards the pass the user started makes from its log step and the skills nobody uses (ADR 0132, before it the
    *  pass's result went to the Orchestrator, #150); absent = no cards */
   findings?: (logs: LogScan) => NonNullable<MaintenanceRun['cards']>;
@@ -475,7 +477,7 @@ export class BrainModelService {
     const due = this.log.all().filter(c => c.success && !c.successCheck && !c.rolledBackAt);
     if (!due.length) return out;
     let runs: AgentRun[] = []; try { runs = this.d.runs(); } catch { /* no history: unknown */ }
-    const data = { runs, ...(dir ? { logCount: (key: string, from: number, to: number) => countLogGroup(dir, key, from, to) } : {}) };
+    const data = { runs, correctionsSince: this.d.correctionsSince?.() ?? null, ...(dir ? { logCount: (key: string, from: number, to: number) => countLogGroup(dir, key, from, to) } : {}) };
     const restorer = this.restorer();
     for (const c of due) {
       const check = checkChange(c.at, c.success!, data, now);
