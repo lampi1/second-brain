@@ -42,6 +42,9 @@ export interface ChatService {
   reopen(chatId: string): Promise<ChatSummary>;
   /** the user went on with this chat himself (chat:send, chat:reopen only): reopens its ended agent run (A5) */
   resumedByUser?(chatId: string, text?: string): void;
+  /** ADR 0197: the chat's title and its reported run before a user message; the after-report correction of that run */
+  correctionContext?(chatId: string): { title: string; reportedRunId: string | null } | null;
+  correctedAfterReport?(runId: string): void;
   /** the user's next message to this chat was said in the voice conversation: the reply is made to be heard */
   spokenNext?(chatId: string, text: string | null): void;
   /** the user typed this in the chat himself (chat:send only): the Orchestrator and the chat's parent learn it (ADR 0083) */

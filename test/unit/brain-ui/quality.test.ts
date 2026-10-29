@@ -1,7 +1,7 @@
 // The Qualità page's numbers (src/renderer/brain/lib/quality.ts) and their normalizers (types.ts): errors caught by the
 // user per 100 turns over the days both sources cover, rules by outcome, rows out of the count, reopened share.
 import { describe, expect, it } from 'vitest';
-import { caughtPer100, outOfCount, rate, reopenShare, ruleStats } from '../../../src/renderer/brain/lib/quality';
+import { caughtPer100, outOfCount, rate, reopenShare, ruleStats, sameChat } from '../../../src/renderer/brain/lib/quality';
 import { normAppQuality, normErrQuality, normTables, type ErrQuality } from '../../../src/renderer/brain/types';
 
 const q = (over: Partial<ErrQuality> = {}): ErrQuality => ({
@@ -21,9 +21,9 @@ describe('caughtPer100', () => {
     const c = caughtPer100(seen, turns);
     expect(c).toMatchObject({ from: '2026-10-11', to: '2026-10-13', turns: 125, caught: 5, others: 2, unknown: 1, per100: 4, before: 4 });
     expect(c.days).toEqual([
-      { date: '2026-10-11', turns: 100, caught: 3, others: 2 },
-      { date: '2026-10-12', turns: 0, caught: 2, others: 0 },
-      { date: '2026-10-13', turns: 25, caught: 0, others: 0 },
+      { date: '2026-10-11', turns: 100, caught: 3, others: 2, source: 'errors' },
+      { date: '2026-10-12', turns: 0, caught: 2, others: 0, source: 'errors' },
+      { date: '2026-10-13', turns: 25, caught: 0, others: 0, source: 'errors' },
     ]);
   });
 
@@ -31,6 +31,42 @@ describe('caughtPer100', () => {
     const c = caughtPer100(seen, { from: null, to: null, byDay: [] });
     expect(c).toMatchObject({ turns: 0, caught: 0, per100: null, days: [], before: 0 });
     expect(caughtPer100([], { from: '2026-10-11', to: '2026-10-11', byDay: [] }).per100).toBeNull();
+  });
+
+  // ADR 0197: the owner's «in questi ho sempre zero» (0 from ai-errors.md while he corrected agents every day)
+  describe('with the app\'s own count of his corrections', () => {
+    const t3 = { from: '2026-10-11', to: '2026-10-13', byDay: [{ date: '2026-10-11', claude: 100, cursor: 0 }, { date: '2026-10-12', claude: 50, cursor: 0 }, { date: '2026-10-13', claude: 50, cursor: 0 }] };
+    const day = (date: string, o: Partial<{ messages: number; tagged: number; afterReport: number; recognized: number; semantic: number; chats: string[] }> = {}) =>
+      ({ date, messages: 10, tagged: 0, afterReport: 0, recognized: 0, semantic: 0, chats: [], ...o });
+
+    it('counts tags, after-report corrections and recognised messages; ai-errors rows only beyond them', () => {
+      const corr = { since: '2026-10-12', runs: [{ date: '2026-10-11', tagged: 2, afterReport: 0 }],
+        byDay: [day('2026-10-12', { tagged: 1, afterReport: 1, recognized: 2, semantic: 1, chats: ['Fix login'] }), day('2026-10-13', { recognized: 1 })] };
+      const seen = [{ date: '2026-10-12', owner: 1, other: 3, unknown: 2 }, { date: '2026-10-13', owner: 3, other: 0, unknown: 0 }];
+      const rows = [{ data: '2026-10-12', chi: 'fix login', visto: '' }, { data: '2026-10-12', chi: 'Altro', visto: '' }];
+      const c = caughtPer100(seen, t3, corr, rows);
+      // 11th: runs' 2 tags; 12th: 4 from the app (rows: 1 owner + 1 matched = 2, not beyond 4); 13th: 1 + (3 − 1) rows
+      expect(c).toMatchObject({ caught: 9, turns: 200, per100: 4.5, tagged: 1, afterReport: 1, recognized: 3, semantic: 1, fromRuns: 2, fromErrors: 2, matched: 1, messages: 20, others: 3, unknown: 2, since: '2026-10-12' });
+      expect(c.days.map(d => [d.date, d.caught, d.source])).toEqual([['2026-10-11', 2, 'runs'], ['2026-10-12', 4, 'app'], ['2026-10-13', 3, 'app']]);
+    });
+
+    it('a day the app counted with no correction is a real zero', () => {
+      const c = caughtPer100([], t3, { since: '2026-10-11', runs: [], byDay: [day('2026-10-11')] });
+      expect(c).toMatchObject({ caught: 0, per100: 0, messages: 10 });
+    });
+
+    it('nothing measured at all → no number, never a fake zero', () => {
+      const c = caughtPer100([{ date: '2026-10-12', owner: 0, other: 26, unknown: 186 }], t3, { since: null, runs: [], byDay: [] });
+      expect(c.per100).toBeNull();
+      expect(c).toMatchObject({ caught: 0, others: 26, unknown: 186 });
+    });
+
+    it('matches a row\'s chat to a corrected chat loosely, never a short or unrelated name', () => {
+      expect(sameChat('Fix login', ['fix login'])).toBe(true);
+      expect(sameChat('Artisan · Fix login page', ['Fix login page'])).toBe(true);
+      expect(sameChat('UI', ['UI work'])).toBe(false);
+      expect(sameChat('Report vendite', ['Fix login'])).toBe(false);
+    });
   });
 
   it('rate per day, one decimal, Italian comma', () => {

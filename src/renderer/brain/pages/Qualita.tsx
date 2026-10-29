@@ -1,6 +1,7 @@
 // Qualità: four numbers about how well the AI works, each with its source and the dates it covers, and the next step
-// (the user, 2026-10-13: "la sezione qualità sia veramente utile e veritiera"; few, true, actionable). 1) errors he had
-// to catch himself per 100 turns (ai-errors.md "visto da" ÷ the app's finished turns, same days only); 2) rules whose
+// (the user, 2026-10-13: "la sezione qualità sia veramente utile e veritiera"; few, true, actionable). 1) corrections he
+// had to make per 100 turns (his messages the app recognised as corrections, «Correggi il pensiero», after-report
+// corrections, ai-errors.md rows he saw: ADR 0197, with «Come lo conto»; ÷ the app's finished turns, same days only); 2) rules whose
 // error came back within 14 days (11 official types, near-duplicates mapped, rows out of the count shown, young rules
 // "troppo presto"); 3) his active PRs held by a failed build or QA; 4) his resolved bugs sent back to an open state.
 // The improvement proposals are one row. Praise, notebooks and measures are gone until they have real data. Below the
@@ -16,7 +17,7 @@ import { FeedbackOrigins } from '../components/FeedbackOrigins';
 import { useBrain } from '../api';
 import { fmt } from '../lib/format';
 import { ownerOf, short } from '../lib/text';
-import { caughtPer100, caughtWeeks, outOfCount, rate, reopenShare, ruleStats } from '../lib/quality';
+import { caughtPer100, caughtWeeks, outOfCount, rate, reopenShare, ruleStats, type Caught } from '../lib/quality';
 import { errorPatterns, trend, type Trend } from '../lib/stats';
 import type { Quote } from '../lib/discuss';
 import { Async, Explain, PageHead } from '../components/States';
@@ -55,13 +56,32 @@ function Metric({ id, title, help, value, unit, tone, reading, find, next, sourc
   );
 }
 
+/** The card's reading of its number (ADR 0197): his corrections with their parts, the errors others caught, the rows
+ *  nobody signed; «Nessun dato» when nothing was measured, never a zero. counted = this main counts his messages. */
+function CaughtFind({ c, counted }: { c: Caught; counted: boolean }) {
+  const parts = [
+    c.tagged ? tr('brainText.qualita.caught.partTagged', { n: c.tagged }) : '',
+    c.afterReport ? tr('brainText.qualita.caught.partAfter', { n: c.afterReport }) : '',
+    c.recognized ? tr('brainText.qualita.caught.partRecognized', { n: c.recognized }) + (c.semantic ? tr('brainText.qualita.caught.semantic', { n: c.semantic }) : '') : '',
+    c.fromRuns ? tr('brainText.qualita.caught.partRuns', { n: c.fromRuns }) : '',
+    c.fromErrors ? tr('brainText.qualita.caught.partErrors', { n: c.fromErrors }) : '',
+  ].filter(Boolean);
+  if (c.per100 === null && c.turns) return <span data-testid="bx-q-trovati-nodata">{tr('brainText.qualita.caught.noData')}</span>;
+  return <>
+    {range(c.from, c.to)}: <b>{tr('brainText.qualita.caught.mine', { n: c.caught, turns: fmt.int(c.turns) })}</b>{parts.length ? `: ${parts.join(', ')}` : ''}
+    {tr('brainText.qualita.caught.othersRest', { n: c.others })}
+    {c.unknown ? tr('brainText.qualita.caught.unknownRows', { n: c.unknown, matched: c.matched }) : null}
+    {!counted ? <> {tr('brainText.qualita.caught.oldMain')}</> : c.since && c.from && c.since > c.from ? tr('brainText.qualita.caught.sinceNote', { day: fmt.day(c.since) }) : null}
+  </>;
+}
+
 export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
   const t = useBrain('/api/tables', normTables);
   const a = useBrain('/api/quality', normAppQuality);
   const d = t.data, app = a.data, q = d?.quality ?? null;
   const reload = () => { t.reload(); a.reload(true); }; // fresh: main reads DevOps again now (brain/quality.ts)
 
-  const caught = q && app ? caughtPer100(q.seenByDay, app.turns) : null;
+  const caught = q && app ? caughtPer100(q.seenByDay, app.turns, app.corrections, d?.errors ?? []) : null;
   const rules = q ? ruleStats(q) : null;
   const out = q ? outOfCount(q) : null;
   const share = app ? reopenShare(app.reopen) : null;
@@ -94,10 +114,14 @@ export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
                   facts: [tr('brainText.qualita.caught.fact', { per100: num(caught.per100), range: range(caught.from, caught.to), caught: caught.caught, turns: caught.turns, others: caught.others }),
                     caughtReading ? caughtReading.text : '', tr('brainText.qualita.caught.factOutside')],
                   question: tr('brainText.qualita.caught.question') } : undefined}
-                find={caught && caught.from ? <>{range(caught.from, caught.to)}: <b>{tr('brainText.qualita.caught.find', { n: caught.caught })}</b>{tr('brainText.qualita.caught.findRest', { turns: fmt.int(caught.turns), others: caught.others })}{caught.unknown ? <>{tr('brainText.qualita.caught.unknown', { n: caught.unknown })}</> : null}</>
-                  : <>{tr('brainText.qualita.caught.noTurns')}</>}
+                find={caught && caught.from ? <CaughtFind c={caught} counted={!!app?.corrections} /> : <>{tr('brainText.qualita.caught.noTurns')}</>}
                 next={caught?.caught ? <>{tr('brainText.qualita.caught.nextOpen')}<button type="button" className="bx-go" onClick={() => nav('esplora/ai-errors.md')}>ai-errors.md</button>{tr('brainText.qualita.caught.nextRest')}</> : undefined}
                 source={<>{tr('brainText.qualita.caught.source', { range: range(app?.turns.from, app?.turns.to) })}{caught?.before ? <>{tr('brainText.qualita.caught.before', { n: caught.before })}</> : null}</>}>
+                <details className="bx-q-more" data-testid="bx-q-trovati-how"><summary>{tr('brainText.qualita.caught.how')}</summary>
+                  <ul className="bx-list compact">
+                    {(['how1', 'how2', 'how3', 'how4'] as const).map(k => <li key={k}><span className="t">{tr(`brainText.qualita.caught.${k}`)}</span></li>)}
+                  </ul>
+                </details>
                 {caught && caught.days.length > 0 && (
                   <details className="bx-q-more"><summary>{tr('brainText.qualita.caught.byDay')}</summary>
                     <ul className="bx-list compact" data-testid="bx-q-trovati-days">

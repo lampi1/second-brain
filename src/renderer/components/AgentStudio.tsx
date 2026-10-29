@@ -260,6 +260,7 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
   const state = profile.trial ? 'trial' : working > 0 ? 'working' : 'active';
   const unknown = t('catalog.unknown');
   const stats = metrics?.all;
+  const ppi = stats?.judges?.ppi ?? null, agree = stats?.judges?.sentinel ?? null;
   const loaded = metrics !== undefined;
   const sample = (n: number) => loaded ? t('catalog.samples', { n, total: completedRuns(metrics) }) : '';
   const last = lastStart ? new Date(lastStart).toLocaleString(locale(), { dateStyle: 'medium', timeStyle: 'short' }) : null;
@@ -267,6 +268,9 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
     { label: t('catalog.runs'), value: loaded ? completedRuns(metrics).toLocaleString(locale()) : null },
     { label: t('catalog.open'), value: loaded ? open.toLocaleString(locale()) : null },
     { label: t('catalog.success'), value: stats?.successRate.value != null ? percent(stats.successRate.value) : null, note: sample(stats?.successRate.n ?? 0) },
+    // ADR 0197: beside it, only with 5 runs judged by both the user and an automatic judge; the Sentinel's agreement from one
+    ...(ppi ? [{ label: t('catalog.ppi'), value: percent(ppi.value), note: t('catalog.ppiNote', { n: ppi.n, auto: ppi.unlabeled, low: Math.round(ppi.low * 100), high: Math.round(ppi.high * 100) }) }] : []),
+    ...(agree?.share != null ? [{ label: t('catalog.agreement'), value: t('catalog.agreementValue', { pct: percent(agree.share), kappa: agree.kappa === null ? '—' : agree.kappa.toLocaleString(locale(), { maximumFractionDigits: 2 }) }), note: t('catalog.agreementNote', { n: agree.n }) }] : []),
     { label: t('catalog.cost'), value: stats?.costPerRun.median.value != null ? usd(stats.costPerRun.median.value) : null, note: sample(stats?.costPerRun.median.n ?? 0) },
     { label: t('catalog.tokens'), value: stats?.tokensPerRun.input.value != null && stats.tokensPerRun.output.value != null ? `${Math.round(stats.tokensPerRun.input.value)} / ${Math.round(stats.tokensPerRun.output.value)}` : null, note: sample(stats?.tokensPerRun.input.n ?? 0) },
     { label: t('catalog.cacheTokens'), value: stats?.tokensPerRun.cacheRead.value != null && stats.tokensPerRun.cacheWrite.value != null ? `${Math.round(stats.tokensPerRun.cacheRead.value)} / ${Math.round(stats.tokensPerRun.cacheWrite.value)}` : null, note: t('catalog.cacheTokensNote') },

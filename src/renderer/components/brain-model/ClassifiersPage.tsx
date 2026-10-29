@@ -10,7 +10,8 @@
 // record (the Orchestrator's mail, sensitive commands) get a small explained card. Every number has a "?" saying how
 // it is computed. A clean install shows the cards empty with what will appear. Data: 'classifiers:state'
 // (main/brainmodel/classifiers.ts + classifier-cards.ts) and agents:estimates (the task estimator's weekly backtest,
-// ADR 0087, via lib/run-estimates.ts). Rendered by App.tsx
+// ADR 0087, via lib/run-estimates.ts). The kind of work by examples (ADR 0197) has its own wide card at the end of the
+// grid (KindModelCard.tsx). Rendered by App.tsx
 // PageFrame for 'classificatori'; view helpers in lib/classifier-view.ts; styles in styles/classifiers.css.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ClassifiersState } from '@shared/brain-model';
@@ -23,6 +24,7 @@ import { GuideLink } from '../GuideLink';
 import { when } from './MaintenancePanel';
 import { TrendChart } from './TrendChart';
 import { ClassifierDetail } from './ClassifierDetail';
+import { KindModelCard } from './KindModelCard';
 import '../../dashboard/dashboard.css';
 import '../../styles/agent-catalog.css';
 import '../../styles/brain-model.css';
@@ -76,6 +78,13 @@ export function ClassifiersPage() {
     try { setState(await sb.invoke('classifiers:state', undefined)); setError(null); } catch (e) { setError(errText(e)); }
   }, []);
   useEffect(() => { void load(); }, [load]);
+  // the kind model embeds its examples in the background (ADR 0197): look again while it says «busy»
+  const busy = state?.kindModel?.state === 'busy';
+  useEffect(() => {
+    if (!busy) return;
+    const id = setTimeout(() => { void load(); }, 5000);
+    return () => clearTimeout(id);
+  }, [busy, state, load]);
   const cards = useMemo(() => cardViews(state, undefined, taskEst?.accuracy), [state, taskEst]);
   const total = cards.reduce((s, c) => s + c.decisions, 0);
   const week = cards.reduce((s, c) => s + (c.weeks?.[c.weeks.length - 1]?.decisions ?? 0), 0);
@@ -105,6 +114,7 @@ export function ClassifiersPage() {
       {total === 0 && <p className="cls-clean" role="status" data-testid="cls-clean">{t('stats.cls.empty')}</p>}
       <div className="catalog-grid cls-grid" data-testid="cls-grid">
         {cards.map(c => <Card key={c.id} c={c} sources={state.sources} onOpen={() => setOpen(c.id)} />)}
+        {state.kindModel && <KindModelCard c={state.kindModel} />}
       </div>
       <section className="cls-plain-wrap"><h2>{t('stats.cls.noRecord')}</h2><p>{t('stats.cls.noRecordLead')}</p>
         <div className="catalog-grid cls-grid">{(['mail', 'cmd'] as const).map(id => <Plain key={id} id={id} />)}</div></section>

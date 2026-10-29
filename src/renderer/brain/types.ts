@@ -141,6 +141,13 @@ export function normAppQuality(v: unknown): AppQuality {
     reopen: { at: nul(r.at), days: num(r.days) || 90, resolved: num(r.resolved), reopened: num(r.reopened), error: nul(r.error), refreshing: r.refreshing === true,
       bugs: arr(r.bugs).filter(isObj).map(b => ({ id: num(b.id), title: str(b.title), state: str(b.state), url: str(b.url),
         reopened: arr(b.reopened).filter(isObj).map(x => ({ resolvedAt: str(x.resolvedAt), reopenedAt: str(x.reopenedAt), by: str(x.by), to: str(x.to) })) })) },
+    // ADR 0197: absent from an older main (the page then counts ai-errors.md alone and says so)
+    ...(isObj(o.corrections) ? { corrections: {
+      since: nul(o.corrections.since),
+      byDay: arr(o.corrections.byDay).filter(isObj).map(d => ({ date: str(d.date), messages: num(d.messages), tagged: num(d.tagged), afterReport: num(d.afterReport), recognized: num(d.recognized), semantic: num(d.semantic),
+        chats: arr(d.chats).filter((c): c is string => typeof c === 'string') })),
+      runs: arr(o.corrections.runs).filter(isObj).map(d => ({ date: str(d.date), tagged: num(d.tagged), afterReport: num(d.afterReport) })),
+    } } : {}),
   };
 }
 

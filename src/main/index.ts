@@ -379,8 +379,10 @@ app.whenReady().then(async () => {
       noteUserTyped(a.chatId);
       const spoken = a.voice === true && typeof a.text === 'string';
       if (spoken) s.chats.spokenNext?.(a.chatId, a.text);
+      const said = s.userCorrections && typeof a.text === 'string' ? s.chats.correctionContext?.(a.chatId) ?? null : null; // ADR 0197
       try { await s.chats.send(a.chatId, a.text, a.images); } finally { if (spoken) s.chats.spokenNext?.(a.chatId, null); }
       s.chats.resumedByUser?.(a.chatId, a.text);
+      if (said) void s.userCorrections!.note(a.text, said, runId => s.chats.correctedAfterReport?.(runId));
     },
     'chat:synthesize': a => { if (!s.chats.synthesizeResult) throw new Error('Result synthesis unavailable.'); return s.chats.synthesizeResult(a.runId, { kind: 'user' }); },
     'chat:answer': async a => { activity.answered(a.chatId, a.requestId); try { await s.chats.answer(a.chatId, a.requestId, a.answer); } catch (e) { activity.notAnswered(a.chatId, a.requestId); throw e; } },

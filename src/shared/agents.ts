@@ -5,6 +5,7 @@ import type { AgentKnowhow, AgentPackIdentity } from './agent-pack';
 
 import type { CharacterId } from './characters';
 import type { ModelTier } from './roles';
+import type { RoleJudges } from './ppi';
 
 /** One-shot purposes: the service and persisted run reader share this list so new jobs survive a restart. */
 export const ONE_SHOT_PURPOSES = ['pulse', 'headline', 'upgrade', 'phrases', 'guide'] as const;
@@ -176,6 +177,9 @@ export interface VersionMetrics {
   timeToDone: { elapsed: Metric; execution: Metric };
   questionsPerRun: Metric; commandsPerRun: Metric;
   reviews: { reviewer: { agentId: string; version: number }; runs: number; findingsPerRun: number; blockingPerRun: Metric }[];
+  /** the all-versions row only: PPI success with every automatic judgment, and the Sentinel's agreement with the user
+   *  (shared/ppi.ts, ADR 0197); absent on version rows and from an older main */
+  judges?: RoleJudges;
 }
 export interface AgentMetrics { agentId: string; versions: VersionMetrics[]; all: VersionMetrics | null; open: number;
   /** level and performance on the agent card (agents/standing.ts), over all its runs whatever the filter */

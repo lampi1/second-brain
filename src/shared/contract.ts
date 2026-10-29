@@ -1057,7 +1057,18 @@ export interface AppQuality {
     bugs: { id: number; title: string; state: string; url: string; reopened: QualityReopen[] }[];
     error: string | null; refreshing: boolean;
   };
+  /** the user's corrections the app saw (main/brain/user-corrections.ts, ADR 0197); absent from an older main */
+  corrections?: UserCorrections;
 }
+/** One Rome day of the user's own messages to the app's chats, counted when sent (never their text): tagged = «Correggi
+ *  il pensiero»; afterReport = a correction to a run whose agent had already reported; recognized = any other message
+ *  the correction detector (semantic, else the hook's regex) reads as a correction; semantic = how many of afterReport +
+ *  recognized the semantic detector decided; chats = titles of the chats corrected that day (at most 30), for matching
+ *  ai-errors.md rows with no «visto da». */
+export interface UserCorrectionDay { date: string; messages: number; tagged: number; afterReport: number; recognized: number; semantic: number; chats: string[] }
+/** since = the first day the app counted; runs = the «Correggi il pensiero» and after-report corrections on the agent
+ *  runs by the Rome day the run started (agent-runs.json), the only source before `since`. */
+export interface UserCorrections { since: string | null; byDay: UserCorrectionDay[]; runs: { date: string; tagged: number; afterReport: number }[] }
 
 /** One side of a comparison's cost so far: usd null = no round has a cost yet; missing = rounds without one (e.g. a
  *  Cursor export not imported). */

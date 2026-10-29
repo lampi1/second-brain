@@ -81,6 +81,12 @@
   (`agents/run-estimates.ts`) gives the strips each run's estimate made before it started, its actual once ended, and
   `agents/estimate-accuracy.ts`'s weekly backtest (`EstimateAccuracy`, also for Classificatori);
   `lib/run-estimates.ts` reads it once for every strip, `RunEstimate.tsx` draws the chip, its "?" and the Orchestrator's plan.
+- **The user's corrections, a kind by examples, PPI** (ADR 0197): `chat:send` → `brain/user-corrections.ts` classifies
+  the user's message (tag, after-report, semantic detector or the hook's regex; counts per day, never the text) →
+  `/api/quality` → Qualità's «Errori che hai dovuto trovare tu». `brainmodel/kind-model.ts` trains a nearest-centroid
+  kind classifier on the local e5 embeddings of verified runs when Classificatori asks (`kind-centroids.ts`, word-rule
+  labels, held-out test). `agents/judge-agreement.ts` gives each role's all-versions metrics a prediction-powered success
+  estimate and the Sentinel's agreement with the user (`shared/ppi.ts`).
 - **A cloud agent** (ADR 0080): the Orchestrator's `app_create_chat where:'cloud'` →
   CloudService checks readiness (key / sign-in, GitHub remote, pushed branch, Cursor budget) → the vendor's provider
   starts it (`cloud/cursor.ts` REST, `codex.ts` / `claude.ts` CLIs) → `cloud:changed` → a cloud strip
