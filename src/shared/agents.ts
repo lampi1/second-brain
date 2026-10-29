@@ -269,7 +269,7 @@ export interface AgentRun {
    *  user approved one; a decision signal for the Orchestrator */
   plan?: AgentRunPlan;
 }
-export interface AgentRunPlan { proposals: number; changes: number; approvedAt?: number }
+export interface AgentRunPlan { proposals: number; changes: number; approvedAt?: number; /** approved by the app for the absent user (ADR 0191): no decision signal */ byApp?: boolean }
 /** skills = skill ids it started with plus the ones its engine loaded while open; app = the product it is about;
  *  repo = the name of the git top-level folder of its cwd (null outside a repository). */
 export interface AgentRunTags { skills: string[]; app: string | null; repo: string | null }

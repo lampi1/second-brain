@@ -872,6 +872,9 @@ export interface Settings {
   voiceName?: VoiceName;
   /** the voice conversation is push to talk: the microphone counts only while Ctrl+Space or the bar's button is held */
   voicePtt?: boolean;
+  /** «Modalità notte» (ADR 0191): the user is away; no questions reach them, every agent goes on with the recommended
+   *  choice until the job is done; production, secrets, permissions and messages to people wait for their return */
+  awayMode?: boolean;
   /** fields forced by the environment (SB_BRAIN, SB_MCP_PORT): shown read-only, never saved */
   locked?: ('brainRoot' | 'mcpPort')[];
 }
@@ -902,7 +905,7 @@ export type SettingKey =
   | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
-  | 'suggestOn' | 'suggestModel' | 'suggestDailyUsd' | 'voiceAsr' | 'voiceName' | 'voicePtt'
+  | 'suggestOn' | 'suggestModel' | 'suggestDailyUsd' | 'voiceAsr' | 'voiceName' | 'voicePtt' | 'awayMode'
   | `delegation.${keyof DelegationSettings}` | `modelTiers.${Harness}.${ModelTier}`;
 export interface SettingDef {
   key: SettingKey;            // 'mute.*' stands for every feed kind

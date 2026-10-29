@@ -57,7 +57,7 @@ import { AGENT_LABEL } from '../../shared/agent-label';
 import { voiceDiagnostics } from '../voice/diagnostics';
 import { packageTools } from '../flows/package-tools';
 import type { RoutinePackageStore } from '../flows/package-authoring';
-import { workflowTools } from '../workflows/tools';
+import { workflowTools, type WorkAway } from '../workflows/tools';
 import type { Workflows } from '../workflows/service';
 import { guideTool, screenOutline } from './guide';
 import { CONFIG_ASK_MIN, configTool, type ConfigDeps } from './config';
@@ -71,6 +71,8 @@ export interface ToolDef { name: string; description: string; inputSchema: objec
 
 export interface AppCtlDeps {
   workflows?: Workflows;
+  /** «Modalità notte» (ADR 0191): proposals approved for the absent user (workflows/tools.ts) */
+  away?: WorkAway;
   /** the routine package store (ADR 0175): app_routine_save saves there; absent = no package authoring tools */
   routinePackages?: () => RoutinePackageStore;
   /** cloud agents (ADR 0080): app_create_chat where:'cloud' starts one, app_chats lists them */
@@ -235,7 +237,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     }] : []),
     ...(d.config && authed() ? [configTool({ ...d.config, brain: d.brain, callerId: callerId!, userAsked: () => configAsked(callerId!) })] : []),
     ...(d.routinePackages && authed() ? packageTools({ store: d.routinePackages, brainRoot: () => d.brain.info().brainRoot, authed }) : []),
-    ...(d.workflows && authed() ? workflowTools(d.workflows, id => d.chats.list().some(c => c.id === id && mine(c) && !c.parentId && !c.isOrchestrator), id => d.chats.list().find(c => c.id === id)) : []),
+    ...(d.workflows && authed() ? workflowTools(d.workflows, id => d.chats.list().some(c => c.id === id && mine(c) && !c.parentId && !c.isOrchestrator), id => d.chats.list().find(c => c.id === id), d.away) : []),
     ...(d.agentLearning ? [learnTool(d, callerId, authed())] : []),
     ...(d.agentLearning && authed() ? [toolDef(lessonReviewTool(d.agentLearning))] : []),
     ...(d.brainScripts && authed() ? scriptWriteTools(d.brainScripts.scripts, d.brainScripts.changelog, () => caller()?.title || 'Orchestrator') : []),

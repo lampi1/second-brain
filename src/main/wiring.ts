@@ -2,7 +2,7 @@
 // the app-control tools are mounted on the same local MCP server. Used by index.ts (one call at start).
 // SB_DEMO=1 swaps in the demo services (demo-wiring.ts: fake chats, brain and browser tabs; SB_DEMO_FREEZE=1 = deterministic).
 import type { BrowserWindow } from 'electron';
-import { app, safeStorage, shell } from 'electron';
+import { app, powerSaveBlocker, safeStorage, shell } from 'electron';
 import os from 'node:os';
 import { LearningReviewService } from './brainmodel/learning-review';
 import { replayExecutor } from './brainmodel/replay-executor';
@@ -112,6 +112,7 @@ import path from 'node:path';
 import { templateRoot } from './rules/tools';
 import { log, errText, addRedaction } from './log';
 import { AnswerLaterStore, REQUEST_KINDS } from './later';
+import { attachAway, AwayLog } from './chats/away-log';
 import { Artifacts, showUiTool } from './genui/artifacts';
 import { releaseId } from './release';
 import { launcherName, restartWaiter, sharedDir } from './platform';
@@ -503,6 +504,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const delegateWorktrees = new DelegateWorktrees(path.join(ctx.userData, 'delegation-worktrees.json'));
   // the question gates ask for a brief before a yes/no question (ADR 0150): the visuals' store exists further down
   const briefRef: { current?: Artifacts } = {};
+  // «Modalità notte» (ADR 0191): the user is away; what the app chooses or parks for them waits for the recap
+  const awayLog = new AwayLog(path.join(ctx.userData, 'away-log.json'));
+  const awayOn = () => brain.settings().awayMode === true;
   const manager = new ChatManager({
     writeDelayMs: 250, // chats.json and agent-runs.json: one asynchronous write per burst (the main-process freezes, 2026-10-27)
     briefReady: chatId => briefRef.current?.hasBrief(chatId) ?? true,
@@ -528,6 +532,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     roleCatalogBrief: () => roleCatalogBrief(() => agents.list()),
     // the reply language (ADR 0120): the setting, or Windows' language on «Come il sistema», the same as the UI's
     replyLang: uiLang,
+    away: awayOn,
+    onAway: e => awayLog.add(e),
     // the estimate task_estimate would give, under the user's request (one model round trip less, ADR 0087)
     requestEstimate: text => {
       if (!runFeedbackRef.current) return null;
@@ -770,7 +776,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const prodPollers = !process.env.SB_TEST || process.env.SB_BENCH_TIMERS === '1';
   const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_ORCHESTRATOR_EVENTS === '1'));
   manager.onUserWrote(n => wake.userMessage(n)); // the user typed in a work chat: quiet news (ADR 0083)
-  manager.onCleanReport(n => wake.cleanReport({ ...n, workflow: workflows.list().some(r => r.status === 'active' && r.chatIds.includes(n.chatId)) }));
+  // a root chat's clean result wakes the Orchestrator during an active workflow, or while the user is away (ADR 0191): the
+  // Orchestrator carries the work on to its end instead of waiting for the user's next message
+  manager.onCleanReport(n => wake.cleanReport({ ...n, workflow: awayOn() || workflows.list().some(r => r.status === 'active' && r.chatIds.includes(n.chatId)) }));
+  attachAway({ on: awayOn, log: awayLog, chats: manager, onSettingChange: f => brain.onSettingChange(f), blocker: powerSaveBlocker });
 
   const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
   const heldNews = attachHeldNews(ctx.emitter, wake, mail);
@@ -809,7 +818,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
     remember: (roleId, line, chat) => writeAgentMemory(agentPacks.packs.root(), portableId(roleId), line, { scope: { roleId: portableId(roleId), project: chat.cwd }, sourceRunId: chat.run?.runId ?? `chat:${chat.id}`, sourceEventId: `report:${chat.run?.runId ?? chat.id}` }) }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
-  addChatTools(strategyTools(manager));
+  addChatTools(strategyTools(manager, awayOn));
   addChatTools(workDecisionTools({ chats: manager, workflows }));
   // the independent reviews of finished runs (agents/judge-sample.ts): they spend tokens, so they run only in the user's
   // own app, never in tests or an agent's hidden run (judgeSamplingOn, issue #112), and only with the Agenti switch on
@@ -859,7 +868,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
   // routine packages the Orchestrator authors (ADR 0175): <userData>/routines/<id>/routine.json, the Routine section's store
   const routinePackageStore = createFolderPackageStore(path.join(ctx.userData, 'routines'));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, routinePackages: () => routinePackageStore, personal, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, routinePackages: () => routinePackageStore, personal, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },

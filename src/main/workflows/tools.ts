@@ -3,7 +3,13 @@ import type { ToolDef } from '../appctl/tools';
 import type { Workflows } from './service';
 import type { ChatSummary } from '../../shared/contract';
 import type { WorkCreate, WorkReport } from '../../shared/workflows';
-export function workflowTools(service: Workflows, knownChat: (id: string) => boolean, chat?: (id: string) => ChatSummary | undefined): ToolDef[] {
+import type { AwayEntry } from '../chats/away-log';
+/** «Modalità notte» (ADR 0191): while the user is away a mockup or plan proposal is approved by the app as the
+ *  recommended choice (its event carries by 'app-away') and logged for the recap; any other proposal waits for the user. */
+export interface WorkAway { on(): boolean; log(e: Omit<AwayEntry, 'at'>): void }
+export const AWAY_FEEDBACK = 'Modalità notte: approvata dall’app come scelta consigliata, l’utente è via (non è un suo ok esplicito).';
+
+export function workflowTools(service: Workflows, knownChat: (id: string) => boolean, chat?: (id: string) => ChatSummary | undefined, away?: WorkAway): ToolDef[] {
   const string = { type: 'string' }, chats = { type: 'array', items: string, maxItems: 40 };
   const checkChats = (a: Record<string, unknown>) => {
     if (a.chatIds !== undefined && (!Array.isArray(a.chatIds) || a.chatIds.some(id => typeof id !== 'string' || !knownChat(id)))) throw new Error('Collega solo chat visibili già esistenti.');
@@ -32,7 +38,12 @@ export function workflowTools(service: Workflows, knownChat: (id: string) => boo
           || (chat?.(row.implementation.chatId)?.run?.taskVersion ?? 1) !== row.implementation.taskVersion)
           throw new Error('Serve una review Sentinel collegata, verificata e successiva all’ultima implementazione (reviewChatId).');
       }
-      return service.report({ ...a, ...(implementation ? { implementation } : {}) } as unknown as WorkReport);
+      const out = service.report({ ...a, ...(implementation ? { implementation } : {}) } as unknown as WorkReport);
+      // only a mockup or a plan: a deploy is production, and a review/test/QA proposal may follow three failures (ADR 0191)
+      if (a.action !== 'propose' || !away?.on() || (out.stage !== 'mockup' && out.stage !== 'plan') || !out.proposal) return out;
+      const decided = service.decide({ id: out.id, expectedVersion: out.version, proposalId: out.proposal.id, approve: true }, AWAY_FEEDBACK);
+      away.log({ kind: 'proposal', title: out.title, text: `${out.stage}: ${out.proposal.text}` });
+      return { ...decided, note: 'The user is away (Modalità notte): the app approved this proposal as the recommended choice. Go on with it now; other proposals (deploy, review, test, QA) always wait for the user.' };
     } },
   ];
 }
