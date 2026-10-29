@@ -358,9 +358,6 @@ html[data-blink="1"] .bx-live { box-shadow: 0 0 0 6px transparent; } /* lib/beat
 
 /* ── pages ────────────────────────────────────────────────────────────────────────────────────────────────────── */
 
-.bx-standup .lines { display: grid; gap: 6px; font-size: var(--bx-fs-l); color: var(--bx-text); line-height: 1.55; }
-.bx-standup .lines p { max-width: 100ch; }
-
 .bx-topics { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
 .bx-topic { display: grid; gap: 8px; align-content: start; }
 .bx-topic h3 { font-size: var(--bx-fs-m); font-weight: 650; display: flex; gap: 8px; align-items: baseline; }
@@ -726,8 +723,6 @@ html[data-blink="1"] .bx-live-dot.run { box-shadow: 0 0 0 4px rgba(255, 209, 102
 .dv-tests { display: grid; gap: 6px; justify-items: start; }
 .dv-tests ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .dv-tests li { display: flex; gap: 8px; align-items: baseline; font-size: var(--bx-fs-s); color: var(--bx-text-2); }
-.dv-standup { display: grid; gap: 8px; justify-items: start; }
-.dv-standup > section { width: 100%; }
 /* "Test e QA" (pages/TaskQa.tsx) */
 .qa-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; gap: 2px; background: var(--bx-surface-2); }
 .qa-seg { min-width: 6px; }

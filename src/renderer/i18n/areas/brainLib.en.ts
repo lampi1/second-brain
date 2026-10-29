@@ -15,10 +15,8 @@ export const brainLibEn: typeof brainLibIt = {
   'brainLib.charts.nPointsMax': (p: { n: number; max: string }) => `${p.n} points; maximum ${p.max}.`,
   'brainLib.charts.firstLabel': (p: { n: number; first: string; value: string }) => `${p.n} items; first: ${p.first}, ${p.value}.`,
 
-
   // record-discuss.ts
   'brainLib.recordDiscuss.untitled': 'untitled',
-
 
   // learn.ts
   'brainLib.learn.waiting': (p: { n: number }) => `waiting for the first ${p.n} cases after the change`,

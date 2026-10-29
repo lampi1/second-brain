@@ -11,7 +11,6 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.registrazioni.subtitle': 'Recorded calls (PC audio + microphone) and imported files, transcribed on the PC at zero tokens: «Record call», the You/Others transcript, «Ask the Orchestrator», «Found on the PC».',
   'brainPages.nav.browser': 'Browser',
   'brainPages.nav.task': 'Tasks',
-  'brainPages.nav.fatto': 'Done & stand-up',
   'brainPages.nav.idee': 'Ideas',
   'brainPages.nav.costi': 'Costs',
   'brainPages.nav.qualita': 'Quality',
@@ -48,15 +47,6 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.confronto.tableLabel': 'Comparison files',
   'brainPages.confronto.updated': 'updated',
 
-  // day.tsx
-  'brainPages.day.standupTitle': 'For stand-up',
-  'brainPages.day.standupDesc': 'and today, to read aloud',
-  'brainPages.day.copyBtn': 'Copy',
-  'brainPages.day.copied': 'Sentences copied',
-  'brainPages.day.copyFailed': 'Copy failed: select the text',
-  'brainPages.day.loading': 'Preparing sentences (Azure DevOps and diary)…',
-  'brainPages.day.note': (p: { hasDevops: boolean }) => `From diary, chats${p.hasDevops ? ' and Azure DevOps' : ''}; to do from brief and open threads.`,
-
   // Esplora.tsx
 
   // Task.tsx (ADR 0079: the DevOps page became Task)
@@ -82,39 +72,6 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.task.neverBody': 'Press "Refresh now": news, PRs and work items from Azure DevOps show up here.',
   'brainPages.task.firstRead': 'Reading Azure DevOps (the first time can take a few minutes)…',
   'brainPages.task.loading': 'Reading the task state…',
-
-  // Fatto.tsx (a log, ADR 0079)
-  'brainPages.fatto.title': 'Done',
-  'brainPages.fatto.subtitle': 'The tasks you asked for, newest first, with what each cost in all.',
-  'brainPages.fatto.from': 'From day',
-  'brainPages.fatto.range': 'Days',
-  'brainPages.fatto.today': 'Today',
-  'brainPages.fatto.refresh': 'Reload',
-  'brainPages.fatto.summary': (p: { days: number }) => `Last ${p.days} days`,
-  'brainPages.fatto.note': 'One row per task: its cost includes the chats it started, the reviews and the reworks. This page spends no tokens.',
-  'brainPages.fatto.count': (p: { n: number }) => (p.n === 1 ? '1 task' : `${p.n} tasks`),
-  'brainPages.fatto.total': (p: { cost: string }) => `Total ${p.cost}`,
-  'brainPages.fatto.totalTip': 'The sum of the day’s tasks; n/a when one has no known cost.',
-  'brainPages.fatto.unknownCost': 'n/a',
-  'brainPages.fatto.soFar': 'so far',
-  'brainPages.fatto.costSoFar': 'Running: its cost up to now, its chats included.',
-  'brainPages.fatto.costTip': (p: { n: number }) => (p.n === 1 ? 'The cost of this chat.' : `The cost of this chat and of the ${p.n - 1} others it started (reviews and reworks included).`),
-  'brainPages.fatto.since': (p: { at: string }) => `since ${p.at}`,
-  'brainPages.fatto.parts': (p: { n: number }) => `${p.n} chats`,
-  'brainPages.fatto.outcome.done': 'done',
-  'brainPages.fatto.outcome.partial': 'partly',
-  'brainPages.fatto.outcome.blocked': 'blocked',
-  'brainPages.fatto.outcome.running': 'running',
-  'brainPages.fatto.outcome.closed': 'closed',
-  'brainPages.fatto.empty': 'No task on this day.',
-  'brainPages.fatto.emptyHint': 'A task starts when you ask the Orchestrator or a role for some work.',
-  'brainPages.fatto.error': 'Tasks not read:',
-  'brainPages.fatto.standupDesc': 'the last work day and today, one line per task.',
-  'brainPages.fatto.standupEmpty': 'No task to tell yet.',
-  'brainPages.fatto.standupLine': (p: { when: string; what: string; role: string; outcome: string }) => `${p.when}: ${p.what} (${p.role}, ${p.outcome})`,
-  'brainPages.fatto.more': 'Show more days',
-  'brainPages.fatto.openChat': (p: { title: string }) => `Open the chat "${p.title}"`,
-  'brainPages.fatto.log': 'Log of what was done',
 
   // Idee.tsx
   'brainPages.idee.pageTitle': 'Ideas',

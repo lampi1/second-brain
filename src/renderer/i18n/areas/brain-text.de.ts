@@ -220,9 +220,6 @@ export const brainTextDe: typeof brainTextIt = {
   'brainText.qa.failed': (p: { n: number }) => `${p.n} fehlgeschlagen`,
   'brainText.qa.blocked': (p: { n: number }) => `${p.n} blockiert`,
   'brainText.qa.openBugs': (p: { n: number }) => `${p.n} ${p.n === 1 ? 'offener Bug' : 'offene Bugs'}`,
-  'brainText.qa.standupNone': 'Tests und QA: kein aktiver PR mit Tests.',
-  'brainText.qa.standupTodo': (p: { list: string }) => `- offen: ${p.list}`,
-  'brainText.qa.standupBug': (p: { title: string; state: string }) => `- offener Bug: ${p.title} (${p.state})`,
 
   // pages/TaskQa.tsx
   'brainText.taskQa.barLabel': (p: { done: number; total: number }) => `${p.done} von ${p.total} ausgeführt`,
@@ -238,7 +235,6 @@ export const brainTextDe: typeof brainTextIt = {
   'brainText.taskQa.unassigned': 'nicht zugewiesen',
   'brainText.taskQa.ranBy': 'Ausgeführt von ',
   'brainText.taskQa.otherBugs': 'Weitere verknüpfte Bugs',
-  'brainText.taskQa.standupCopied': 'Stand-up kopiert',
   'brainText.taskQa.title': 'Tests und QA',
   'brainText.taskQa.helpTitle': 'So liest du den Balken',
   'brainText.taskQa.helpExample': '7 von 10: 5 bestanden, 1 fehlgeschlagen, 1 blockiert, 3 noch offen.',
@@ -247,7 +243,6 @@ export const brainTextDe: typeof brainTextIt = {
   'brainText.taskQa.allRun': 'alle Tests ausgeführt',
   'brainText.taskQa.ranByList': (p: { list: string }) => ` · ausgeführt von ${p.list}`,
   'brainText.taskQa.noteEmpty': 'die Testpläne deiner aktiven PRs',
-  'brainText.taskQa.copyStandup': 'Fürs Stand-up kopieren',
   'brainText.taskQa.previous': ' Unten die vorige Lesung.',
   'brainText.taskQa.emptyTitle': 'Kein aktiver PR mit Tests',
   'brainText.taskQa.emptyBody': 'Wenn einer deiner PRs einen verknüpften Testplan hat, siehst du hier, was erledigt ist, wer es gemacht hat und was fehlt.',
@@ -316,7 +311,6 @@ export const brainTextDe: typeof brainTextIt = {
   'brainText.task.sec.reviews': 'Reviews',
   'brainText.task.sec.items': 'Work Items',
   'brainText.task.sec.followed': 'Tickets, denen du folgst',
-  'brainText.task.sec.standup': 'Stand-up',
   'brainText.task.lead.lastOk': (p: { ago: string }) => `: Unten die Daten der letzten erfolgreichen Lesung (${p.ago}).`,
   'brainText.task.lead.firstRead': 'Lese Azure DevOps zum ersten Mal…',
   'brainText.task.lead.never': 'Tasks noch nicht gelesen: Drück «Jetzt aktualisieren».',
@@ -355,21 +349,6 @@ export const brainTextDe: typeof brainTextIt = {
   'brainText.task.items.note': 'Klick auf eine Zeile: Beschreibung, Kommentare und Testfälle',
   'brainText.task.items.none': 'Kein offenes Work Item',
   'brainText.task.followed.note': 'Status, Zuständige und Kommentare der anderen',
-  'brainText.task.allDone': 'Alles Erledigte und das Tagebuch →',
-
-  // lib/text.ts: the stand-up sentences
-  'brainText.standup.and': ' und ',
-  'brainText.standup.merged': 'zusammengeführt:',
-  'brainText.standup.opened': 'geöffnet:',
-  'brainText.standup.thePr': 'PR',
-  'brainText.standup.nPrs': (p: { n: number }) => `${p.n} PRs:`,
-  'brainText.standup.closed': (p: { what: string }) => `${p.what} abgeschlossen`,
-  'brainText.standup.worked': (p: { what: string }) => `an ${p.what} gearbeitet`,
-  'brainText.standup.yesterday': 'Gestern',
-  'brainText.standup.nothing': (p: { day: string }) => `${p.day}: nichts zur Arbeit erfasst.`,
-  'brainText.standup.openPrs': (p: { n: number; list: string; waiting: boolean }) => `Ich habe ${p.n === 1 ? 'einen offenen PR' : `${p.n} offene PRs`}: ${p.list}${p.waiting ? ', warten auf Review' : ''}.`,
-  'brainText.standup.today': (p: { list: string }) => `Heute: ${p.list}.`,
-  'brainText.standup.waiting': (p: { list: string }) => `Ich warte auf: ${p.list}.`,
 
   // pages/Script.tsx and lib/brain-sections.ts
   'brainText.script.tested': 'Getestet',

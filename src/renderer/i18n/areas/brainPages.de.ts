@@ -11,7 +11,6 @@ export const brainPagesDe: typeof brainPagesIt = {
   'brainPages.registrazioni.subtitle': 'Aufgenommene Calls (PC-Audio + Mikrofon) und importierte Dateien, auf dem PC ohne Tokens transkribiert: «Call aufnehmen», Transkript Du/Andere, «Orchestrator fragen», «Auf dem PC gefunden».',
   'brainPages.nav.browser': 'Browser',
   'brainPages.nav.task': 'Tasks',
-  'brainPages.nav.fatto': 'Erledigt & Stand-up',
   'brainPages.nav.idee': 'Ideen',
   'brainPages.nav.costi': 'Kosten',
   'brainPages.nav.qualita': 'Qualität',
@@ -48,15 +47,6 @@ export const brainPagesDe: typeof brainPagesIt = {
   'brainPages.confronto.tableLabel': 'Vergleichsdateien',
   'brainPages.confronto.updated': 'aktualisiert',
 
-  // day.tsx
-  'brainPages.day.standupTitle': 'Fürs Stand-up',
-  'brainPages.day.standupDesc': 'und heute, zum Vorlesen',
-  'brainPages.day.copyBtn': 'Kopieren',
-  'brainPages.day.copied': 'Sätze kopiert',
-  'brainPages.day.copyFailed': 'Kopieren fehlgeschlagen: markier den Text',
-  'brainPages.day.loading': 'Bereite die Sätze vor (Azure DevOps und Tagebuch)…',
-  'brainPages.day.note': (p: { hasDevops: boolean }) => `Aus Tagebuch, Chats${p.hasDevops ? ' und Azure DevOps' : ''}; Offenes aus Brief und offenen Fäden.`,
-
   // Esplora.tsx
 
   // Task.tsx (ADR 0079: the DevOps page became Task)
@@ -82,39 +72,6 @@ export const brainPagesDe: typeof brainPagesIt = {
   'brainPages.task.neverBody': 'Drück „Jetzt aktualisieren“: Neuigkeiten, PRs und Work Items aus Azure DevOps erscheinen hier.',
   'brainPages.task.firstRead': 'Lese Azure DevOps (beim ersten Mal kann das ein paar Minuten dauern)…',
   'brainPages.task.loading': 'Lese den Stand der Tasks…',
-
-  // Fatto.tsx (a log, ADR 0079)
-  'brainPages.fatto.title': 'Erledigt',
-  'brainPages.fatto.subtitle': 'Die Aufgaben, um die du gebeten hast, neueste zuerst, mit ihren Gesamtkosten.',
-  'brainPages.fatto.from': 'Ab Tag',
-  'brainPages.fatto.range': 'Tage',
-  'brainPages.fatto.today': 'Heute',
-  'brainPages.fatto.refresh': 'Neu laden',
-  'brainPages.fatto.summary': (p: { days: number }) => `Letzte ${p.days} Tage`,
-  'brainPages.fatto.note': 'Eine Zeile pro Aufgabe: die Kosten enthalten die gestarteten Chats, die Reviews und die Nacharbeiten. Diese Seite verbraucht keine Tokens.',
-  'brainPages.fatto.count': (p: { n: number }) => (p.n === 1 ? '1 Aufgabe' : `${p.n} Aufgaben`),
-  'brainPages.fatto.total': (p: { cost: string }) => `Gesamt ${p.cost}`,
-  'brainPages.fatto.totalTip': 'Die Summe der Aufgaben des Tages; k. A., wenn eine keine bekannten Kosten hat.',
-  'brainPages.fatto.unknownCost': 'k. A.',
-  'brainPages.fatto.soFar': 'bisher',
-  'brainPages.fatto.costSoFar': 'Läuft: die Kosten bis jetzt, inklusive ihrer Chats.',
-  'brainPages.fatto.costTip': (p: { n: number }) => (p.n === 1 ? 'Die Kosten dieses Chats.' : p.n === 2 ? 'Die Kosten dieses Chats und des einen weiteren, den er gestartet hat (Reviews und Nacharbeiten inklusive).' : `Die Kosten dieses Chats und der ${p.n - 1} weiteren, die er gestartet hat (Reviews und Nacharbeiten inklusive).`),
-  'brainPages.fatto.since': (p: { at: string }) => `seit ${p.at}`,
-  'brainPages.fatto.parts': (p: { n: number }) => `${p.n} Chats`,
-  'brainPages.fatto.outcome.done': 'erledigt',
-  'brainPages.fatto.outcome.partial': 'teilweise',
-  'brainPages.fatto.outcome.blocked': 'blockiert',
-  'brainPages.fatto.outcome.running': 'läuft',
-  'brainPages.fatto.outcome.closed': 'geschlossen',
-  'brainPages.fatto.empty': 'Keine Aufgabe an diesem Tag.',
-  'brainPages.fatto.emptyHint': 'Eine Aufgabe entsteht, wenn du den Orchestrator oder eine Rolle um Arbeit bittest.',
-  'brainPages.fatto.error': 'Aufgaben nicht gelesen:',
-  'brainPages.fatto.standupDesc': 'der letzte Arbeitstag und heute, eine Zeile pro Aufgabe.',
-  'brainPages.fatto.standupEmpty': 'Noch keine Aufgabe zum Erzählen.',
-  'brainPages.fatto.standupLine': (p: { when: string; what: string; role: string; outcome: string }) => `${p.when}: ${p.what} (${p.role}, ${p.outcome})`,
-  'brainPages.fatto.more': 'Mehr Tage anzeigen',
-  'brainPages.fatto.openChat': (p: { title: string }) => `Chat „${p.title}“ öffnen`,
-  'brainPages.fatto.log': 'Log des Erledigten',
 
   // Idee.tsx
   'brainPages.idee.pageTitle': 'Ideen',

@@ -220,9 +220,6 @@ export const brainTextEn: typeof brainTextIt = {
   'brainText.qa.failed': (p: { n: number }) => `${p.n} failed`,
   'brainText.qa.blocked': (p: { n: number }) => `${p.n} blocked`,
   'brainText.qa.openBugs': (p: { n: number }) => `${p.n} ${p.n === 1 ? 'open bug' : 'open bugs'}`,
-  'brainText.qa.standupNone': 'Tests and QA: no active PR with tests.',
-  'brainText.qa.standupTodo': (p: { list: string }) => `- to do: ${p.list}`,
-  'brainText.qa.standupBug': (p: { title: string; state: string }) => `- open bug: ${p.title} (${p.state})`,
 
   // pages/TaskQa.tsx
   'brainText.taskQa.barLabel': (p: { done: number; total: number }) => `${p.done} of ${p.total} run`,
@@ -238,7 +235,6 @@ export const brainTextEn: typeof brainTextIt = {
   'brainText.taskQa.unassigned': 'unassigned',
   'brainText.taskQa.ranBy': 'Run by ',
   'brainText.taskQa.otherBugs': 'Other linked bugs',
-  'brainText.taskQa.standupCopied': 'Stand-up copied',
   'brainText.taskQa.title': 'Tests and QA',
   'brainText.taskQa.helpTitle': 'How to read the bar',
   'brainText.taskQa.helpExample': '7 of 10: 5 passed, 1 failed, 1 blocked, 3 still to do.',
@@ -247,7 +243,6 @@ export const brainTextEn: typeof brainTextIt = {
   'brainText.taskQa.allRun': 'all tests run',
   'brainText.taskQa.ranByList': (p: { list: string }) => ` · run by ${p.list}`,
   'brainText.taskQa.noteEmpty': 'the test plans of your active PRs',
-  'brainText.taskQa.copyStandup': 'Copy for the stand-up',
   'brainText.taskQa.previous': ' The previous read is below.',
   'brainText.taskQa.emptyTitle': 'No active PR with tests',
   'brainText.taskQa.emptyBody': 'When one of your PRs has a linked test plan, here you see what is done, who did it and what is missing.',
@@ -316,7 +311,6 @@ export const brainTextEn: typeof brainTextIt = {
   'brainText.task.sec.reviews': 'Reviews',
   'brainText.task.sec.items': 'Work items',
   'brainText.task.sec.followed': 'Tickets you follow',
-  'brainText.task.sec.standup': 'Stand-up',
   'brainText.task.lead.lastOk': (p: { ago: string }) => `: below, the data of the last successful read (${p.ago}).`,
   'brainText.task.lead.firstRead': 'Reading Azure DevOps for the first time…',
   'brainText.task.lead.never': 'Tasks not read yet: press «Refresh now».',
@@ -355,21 +349,6 @@ export const brainTextEn: typeof brainTextIt = {
   'brainText.task.items.note': 'click a row: description, comments and test cases',
   'brainText.task.items.none': 'No open work item',
   'brainText.task.followed.note': 'state, assignee and other people\'s comments',
-  'brainText.task.allDone': 'Everything done and the diary →',
-
-  // lib/text.ts: the stand-up sentences
-  'brainText.standup.and': ' and ',
-  'brainText.standup.merged': 'I merged',
-  'brainText.standup.opened': 'I opened',
-  'brainText.standup.thePr': 'the PR',
-  'brainText.standup.nPrs': (p: { n: number }) => `${p.n} PRs:`,
-  'brainText.standup.closed': (p: { what: string }) => `I closed ${p.what}`,
-  'brainText.standup.worked': (p: { what: string }) => `I worked on ${p.what}`,
-  'brainText.standup.yesterday': 'Yesterday',
-  'brainText.standup.nothing': (p: { day: string }) => `${p.day}: nothing logged on work.`,
-  'brainText.standup.openPrs': (p: { n: number; list: string; waiting: boolean }) => `I have ${p.n === 1 ? 'one open PR' : `${p.n} open PRs`}: ${p.list}${p.waiting ? ', waiting for review' : ''}.`,
-  'brainText.standup.today': (p: { list: string }) => `Today: ${p.list}.`,
-  'brainText.standup.waiting': (p: { list: string }) => `Waiting for: ${p.list}.`,
 
   // pages/Script.tsx and lib/brain-sections.ts
   'brainText.script.tested': 'Tested',

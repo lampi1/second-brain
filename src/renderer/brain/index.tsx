@@ -1,17 +1,16 @@
-// Brain area of the app: the pages of the brain (Task, Fatto e standup, Idee (shown as a Memoria tab, ADR 0122), Costi, Qualità,
-// Confronto modelli, Esplora; Task took the place of Oggi and Adesso on 2026-10-12, their old links open it; the old
+// Brain area of the app: the pages of the brain (Task, Idee (shown as a Memoria tab, ADR 0122), Costi, Qualità, Confronto
+// modelli, Esplora; Task took the place of Oggi and Adesso on 2026-10-12, their old links open it; the old
 // Miglioramento page lives inside Regole since ADR 0082, its links open Regole) and the full-screen 3D map, in the app's own style, fed by the
 // brain's data API (invoke 'brain:api'). This file is the ONE mount point the workspace UI imports:
 //   <BrainPage id="costi" arg="30" onNavigate={t => …} />  renders a page (it fills and scrolls its container);
 //   <BrainMap onClose={…} onNavigate={…} />                 is the full-screen map overlay (Esc closes).
-// onNavigate receives "<page>[/<arg>]" ("esplora/now.md", "costi/30", "fatto/2026-10-09", "idee/ia",
+// onNavigate receives "<page>[/<arg>]" ("esplora/now.md", "costi/30", "idee/ia",
 // "qualita") or "mappa" / "mappa/tutto" for the map. Without onNavigate a page follows its own links and opens the
 // map itself, so it also works alone (test route: brain/testRoute.tsx). `bridge` (DiscussBridge) gives the pages the
 // app's Orchestrator and chats for "Discuti" (to the Orchestrator, never a work chat directly). Old "spunti[/x]" targets (the AI's ideas, now inside Idee) open "idee/ia". Built in feat/brain-ui.
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import './brain.css';
 import { Toaster } from './components/ui';
-import { Fatto } from './pages/Fatto';
 import { Idee } from './pages/Idee';
 import { Costi } from './pages/Costi';
 import { Qualita } from './pages/Qualita';
@@ -31,7 +30,7 @@ export type { DiscussBridge };
 export type { LiveSnapshot, LiveSource, LiveTool } from './lib/live';
 export { FADE_MS } from './lib/live';
 
-export type BrainPageId = 'home' | 'flussi' | 'task' | 'fatto' | 'idee' | 'costi' | 'qualita' | 'apprendimento' | 'script' | 'log' | 'confronto' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'guida' | 'browser' | 'registrazioni' | 'regole' | 'memoria' | 'classificatori' | 'collegamenti';
+export type BrainPageId = 'home' | 'flussi' | 'task' | 'idee' | 'costi' | 'qualita' | 'apprendimento' | 'script' | 'log' | 'confronto' | 'file' | 'skill' | 'impostazioni' | 'agenti' | 'guida' | 'browser' | 'registrazioni' | 'regole' | 'memoria' | 'classificatori' | 'collegamenti';
 
 /** label is a getter (ADR 0057): read at use time, so it follows the current language */
 const page = (id: BrainPageId, key: string): { id: BrainPageId; readonly label: string; key: string } => ({ id, key, get label() { return id==='file'?t('viewer.title'):t(`brainPages.nav.${id}`); } });
@@ -40,7 +39,6 @@ export const BRAIN_PAGES: { id: BrainPageId; readonly label: string; key: string
   page('agenti', 'G A'),
   page('task', 'G O'),
   page('flussi', 'G U'),
-  page('fatto', 'G F'),
   // Idee, Skill, Regole, Script and Apprendimento are tabs of Memoria (ADR 0122): their ids, keys and links stay and land
   // on the tab (actions.ts go() → lib/memory-hub.ts); the sidebar no longer lists them
   page('idee', 'G I'),
@@ -73,8 +71,8 @@ const IDS = new Set<string>(['file',...BRAIN_PAGES.map(p => p.id)]);
 export const isBrainPage = (s: string): s is BrainPageId => IDS.has(s);
 /** Old page ids still found in links (feed, notes, the Orchestrator's habits) → today's. Oggi (home) and Adesso became DevOps
  *  (the user, 2026-10-12: "li trovo ridondanti e poco utili, mentre sezione devops super utile"), DevOps became Task
- *  (ADR 0079). */
-export const PAGE_ALIAS: Record<string, BrainPageId> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', esplora: 'file', procedure: 'skill', procedura: 'skill', miglioramento: 'regole', changelog: 'log', diagnostica: 'log', dashboard: 'memoria' };
+ *  (ADR 0079). Fatto e standup left (ADR 0181): its old links open the Log, the app's record of what was done. */
+export const PAGE_ALIAS: Record<string, BrainPageId> = { fatto: 'log', diario: 'log', oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', esplora: 'file', procedure: 'skill', procedura: 'skill', miglioramento: 'regole', changelog: 'log', diagnostica: 'log', dashboard: 'memoria' };
 /** Their old go-to keys still work: G R (the old Regole imparate) opens Regole, where those rules live now (ADR 0082);
  *  G D (the Dashboard, gone with ADR 0122: its parts live in Memoria, Costi, Qualità and Idee) opens Memoria. */
 export const GO_ALIASES: { id: BrainPageId; key: string }[] = [{ id: 'regole', key: 'G R' }, { id: 'memoria', key: 'G D' }];
@@ -110,14 +108,13 @@ export function BrainPage({ id, arg, onNavigate, bridge }: { id: BrainPageId; ar
   switch (cur.id) {
     case 'home': page = <Suspense fallback={null}><Home nav={nav} /></Suspense>; break;
     case 'flussi': page = <Suspense fallback={null}><Routines /></Suspense>; break;
-    case 'fatto': page = <Fatto arg={cur.arg} nav={nav} />; break;
     case 'idee': page = <Idee arg={cur.arg} nav={nav} />; break;
     case 'costi': page = <Costi arg={cur.arg} nav={nav} />; break;
     case 'qualita': page = <Qualita arg={cur.arg} nav={nav} />; break;
     case 'confronto': page = <Confronto nav={nav} />; break;
     case 'file': page = <FileViewer arg={cur.arg}/>; break;
     case 'impostazioni': case 'apprendimento': case 'skill': case 'guida': case 'browser': case 'registrazioni': case 'regole': case 'memoria': case 'classificatori': case 'collegamenti': case 'script': case 'log': page = null; break; // rendered by the app (App.tsx PageFrame)
-    case 'task': page = <TaskPage nav={nav} />; break;
+    case 'task': page = <TaskPage />; break;
   }
   return (
     <div ref={scroller} className="bx bx-page bx-scroll" data-testid={`brain-page-${cur.id}`} role="region" aria-label={label}>

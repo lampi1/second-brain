@@ -52,7 +52,7 @@ function rows(b: MorningBrief, undo: { done: boolean; busy: boolean; run: () => 
     const one = b.runs.length === 1 ? b.runs[0]! : null;
     const listed = b.runs.slice(0, 3).map(r => `${r.title} · ${outcome(r)}`).join(' — ') + (b.runs.length > 3 ? ` — ${t('alive.m.more', { n: b.runs.length - 3 })}` : '');
     out.push({ key: 'runs', tone: b.runs.some(r => r.outcome === 'blocked') ? 'bad' : b.runs.every(r => r.outcome === 'done') ? 'good' : '', text: t('alive.m.runs', { n: b.runs.length }), sub: listed,
-      open: () => (one?.open ? focusChat(one.chatId) : go({ page: 'fatto' })) });
+      open: () => (one?.open ? focusChat(one.chatId) : go({ page: 'log' })) });
   }
   for (const p of b.prs.filter(x => x.why === 'vote').slice(0, 2)) out.push({ key: `vote-${p.id}`, text: t('alive.m.prVote', { title: p.title }), open: () => go({ page: 'task' }) });
   for (const i of b.ideas.slice(0, 2)) out.push({ key: `idea-${i.title}`, text: t('alive.m.idea', { title: i.title }), sub: i.due, open: () => openMorningNext({ kind: 'idea', idea: i }) });

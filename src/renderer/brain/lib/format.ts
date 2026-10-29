@@ -26,11 +26,6 @@ export const fmt = {
     const d = dayDate(s);
     return d ? d.toLocaleDateString(locale(), { weekday: 'short', day: '2-digit', month: '2-digit' }) : String(s ?? '');
   },
-  /** "sab 11/10/2026": a day with its year, in the UI's locale (the Fatto date field) */
-  dayFull(s: string | null | undefined): string {
-    const d = dayDate(s);
-    return d ? d.toLocaleDateString(locale(), { weekday: 'short', day: '2-digit', month: '2-digit', year: 'numeric' }) : String(s ?? '');
-  },
   /** "sabato 11 ottobre" */
   dayLong(s: string | null | undefined): string {
     const d = dayDate(s);

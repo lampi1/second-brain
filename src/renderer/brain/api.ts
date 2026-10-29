@@ -21,7 +21,7 @@ export interface Entry {
   fetchedAt: number;
 }
 
-const WRAPPED = new Set(['/api/now', '/api/cost', '/api/day', '/api/map', '/api/improve']);
+const WRAPPED = new Set(['/api/now', '/api/cost', '/api/map', '/api/improve']);
 const pathname = (p: string) => p.split('?')[0] ?? p;
 export const withFresh = (p: string): string => `${p}${p.includes('?') ? '&' : '?'}fresh=1`;
 

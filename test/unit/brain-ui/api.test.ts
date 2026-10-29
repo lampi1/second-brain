@@ -4,7 +4,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { BrainApiResult } from '../../../src/shared/contract';
 import { BrainClient, unwrap, withFresh } from '../../../src/renderer/brain/api';
-import { normBrief, normCost, normMap, normTables } from '../../../src/renderer/brain/types';
+import { normCost, normMap, normTables } from '../../../src/renderer/brain/types';
 
 describe('unwrap', () => {
   it('cached sources come as {value, at, refreshing}; the rest as they are', () => {
@@ -76,11 +76,8 @@ describe('normalizers', () => {
     expect(t.recurrence).toEqual({ totals: [], rules: [] });
     expect(t.ideas[0]).toMatchObject({ titolo: 'x', stato: '', chi: '' });
   });
-  it('cost: chats as an object become a list; brief and map fill their lists', () => {
+  it('cost: chats as an object become a list; map fills its lists', () => {
     expect(normCost({ total: 3, chats: { a: { title: 'x', usd: 2 } } }).chats).toEqual([expect.objectContaining({ title: 'x', usd: 2 })]);
-    expect(normBrief({ prs: [{ title: 'p' }] }).prs[0]).toMatchObject({ title: 'p', area: 'Altro', items: [] });
-    // the AI-found flag: the neutral name, or any other true flag of a work item
-    expect(normBrief({ items: [{ title: 'a', aiFound: true }, { title: 'b', inTrackerX: true }, { title: 'c', inTrackerX: false }] }).items.map(i => i.aiFound)).toEqual([true, true, false]);
     const m = normMap({ nodes: [{ id: 'a' }], flows: [{ id: 'f', steps: [{ from: 'a', to: 'b' }] }] });
     expect(m.nodes[0]).toMatchObject({ id: 'a', label: 'a', members: [] });
     expect(m.flows[0]!.steps[0]).toMatchObject({ verified: true, source: { file: '', text: '' } });

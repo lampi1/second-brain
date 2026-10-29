@@ -1,54 +1,13 @@
-/* Task and Fatto in the language of Agenti and Guida (issue #85, ADR 0079): the page head, toolbar, summary and cards
-   come from styles/agent-catalog.css (catalog-head, catalog-filters, catalog-summary, catalog-card, catalog-badge,
-   catalog-chip); this file adds what the two pages need on top: Fatto's day cards with their log rows, Task's number
-   cards and its sections dressed as the same cards. Only theme tokens, so dark and light follow the app; the entrance
-   animation is catalog-card's own, off under reduced motion. Used by pages/Fatto.tsx and pages/Task.tsx. */
-.wl-page, .tk-page { display: block; min-width: 0; padding-top: 6px; color: var(--text); font-size: var(--fs-m); }
-.wl-page .catalog-head, .tk-page .catalog-head { margin-bottom: 22px; }
-.wl-page .catalog-filters input[type=date] { height: 32px; }
-/* the day in the app's language over the native field (its own text follows the OS locale) */
-.wl-datefield { position: relative; display: inline-flex; align-items: center; min-width: 150px; height: 32px; padding: 0 10px; border: 1px solid var(--border); border-radius: var(--r-s); background: var(--surface); font-variant-numeric: tabular-nums; }
-.wl-datefield:focus-within { outline: 2px solid var(--blue); outline-offset: 1px; }
-.wl-datefield input[type=date] { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
-.wl-page .bx-standup { margin: 0 0 4px; }
-
-/* Fatto: one card per day, newest first */
-.wl-days { display: grid; gap: 14px; }
-.wl-day { --tone: var(--blue); gap: 10px; padding: 18px 20px 14px; }
-.wl-day:hover, .wl-day:focus-within { transform: none; }
-.wl-day-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-.wl-day-head h3 { font-size: var(--fs-xl); }
-.wl-date { color: var(--text-3); font-size: var(--fs-s); }
-.wl-day-head .sp { flex: 1; }
-.wl-list { list-style: none; margin: 0; padding: 0; display: grid; }
-.wl-entry { --tone: var(--blue); position: relative; display: grid; grid-template-columns: 64px 14px minmax(0, 1fr); align-items: start; gap: 0 10px; padding: 9px 0; border-top: 1px solid var(--border); }
-.wl-entry:first-child { border-top: 0; }
-.wl-time { font-variant-numeric: tabular-nums; color: var(--text-2); font-size: var(--fs-s); line-height: 22px; white-space: nowrap; }
-.wl-notime { color: var(--text-4); font-size: var(--fs-xs); }
-.wl-dot { width: 8px; height: 8px; margin-top: 7px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 0 3px color-mix(in srgb, var(--tone) 18%, transparent); }
-.wl-body { display: grid; gap: 4px; min-width: 0; }
-.wl-what { line-height: 22px; overflow-wrap: anywhere; }
-.wl-link { font: inherit; color: var(--text); text-align: left; background: none; border: 0; padding: 0; cursor: pointer; text-decoration: none; }
-.wl-link:hover { color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
-.wl-link:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
-.wl-link svg { width: 12px; height: 12px; vertical-align: -1px; color: var(--text-3); }
-.wl-what-row { display: flex; align-items: baseline; gap: 12px; }
-.wl-what-row > :first-child { flex: 1; min-width: 0; }
-/* a macro task's cost (#160): its own plus everything it started, right-aligned, figures aligned */
-.wl-cost { flex: none; font-variant-numeric: tabular-nums; color: var(--text-2); font-size: var(--fs-s); font-weight: 600; white-space: nowrap; }
-.wl-entry[data-outcome="running"] .wl-cost { color: var(--blue); }
-.wl-total { font-variant-numeric: tabular-nums; }
-.wl-meta { display: flex; align-items: center; gap: 6px 10px; flex-wrap: wrap; font-size: var(--fs-xs); color: var(--text-3); }
-.wl-kind { color: var(--text-2); }
-.wl-who { color: var(--text-2); font-weight: 550; }
-.wl-area::before { content: "·"; margin-right: 10px; color: var(--text-4); }
-.wl-empty, .tk-empty, .tk-page .bx-empty { display: block; margin: 0; padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--r-l); background: linear-gradient(145deg, var(--surface-2), var(--surface)); color: var(--text-3); line-height: 1.6; text-align: left; }
+/* Task in the language of Agenti and Guida (issue #85, ADR 0079): the page head, toolbar, summary and cards come from
+   styles/agent-catalog.css (catalog-head, catalog-filters, catalog-summary, catalog-card, catalog-badge, catalog-chip);
+   this file adds what the page needs on top: its number cards and its sections dressed as the same cards. Only theme
+   tokens, so dark and light follow the app; the entrance animation is catalog-card's own, off under reduced motion.
+   Used by pages/Task.tsx. */
+.tk-page { display: block; min-width: 0; padding-top: 6px; color: var(--text); font-size: var(--fs-m); }
+.tk-page .catalog-head { margin-bottom: 22px; }
+.tk-empty, .tk-page .bx-empty { display: block; margin: 0; padding: 16px 18px; border: 1px solid var(--border); border-radius: var(--r-l); background: linear-gradient(145deg, var(--surface-2), var(--surface)); color: var(--text-3); line-height: 1.6; text-align: left; }
 .tk-page .bx-empty > span { display: inline; }
-.wl-empty b, .tk-empty b, .tk-page .bx-empty > b { color: var(--text-2); font-weight: 600; margin-right: 4px; }
-.wl-detail { border-top: 1px solid var(--border); padding-top: 10px; }
-.wl-detail > summary { cursor: pointer; color: var(--text-3); font-size: var(--fs-s); }
-.wl-detail[open] > summary { margin-bottom: 8px; }
-.wl-more { display: flex; justify-content: center; margin-top: 18px; }
+.tk-empty b, .tk-page .bx-empty > b { color: var(--text-2); font-weight: 600; margin-right: 4px; }
 
 /* Task: the number cards, then the sections as cards */
 .tk-page .catalog-head > .tk-head-side { flex: none; min-width: 0; display: flex; align-items: center; gap: 10px; }

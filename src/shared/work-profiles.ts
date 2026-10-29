@@ -5,10 +5,10 @@
 export interface WorkProfile { id: string; title: string; pageIds: readonly string[]; homePageId: string }
 
 export const WORK_PROFILES: readonly WorkProfile[] = [
-  { id: 'dev', title: 'Dev', pageIds: ['agenti', 'task', 'skill', 'fatto'], homePageId: 'agenti' },
-  { id: 'qa', title: 'QA', pageIds: ['qualita', 'agenti', 'task', 'skill', 'fatto'], homePageId: 'qualita' },
-  { id: 'po', title: 'PO', pageIds: ['idee', 'agenti', 'task', 'fatto'], homePageId: 'idee' },
-  { id: 'cto', title: 'CTO', pageIds: ['costi', 'agenti', 'qualita', 'confronto', 'task', 'fatto'], homePageId: 'costi' },
+  { id: 'dev', title: 'Dev', pageIds: ['agenti', 'task', 'skill'], homePageId: 'agenti' },
+  { id: 'qa', title: 'QA', pageIds: ['qualita', 'agenti', 'task', 'skill'], homePageId: 'qualita' },
+  { id: 'po', title: 'PO', pageIds: ['idee', 'agenti', 'task'], homePageId: 'idee' },
+  { id: 'cto', title: 'CTO', pageIds: ['costi', 'agenti', 'qualita', 'confronto', 'task'], homePageId: 'costi' },
 ];
 
 /** The saved profile with only the pages this build has; null = none chosen, an unknown id, or a profile whose
