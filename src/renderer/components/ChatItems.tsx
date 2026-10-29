@@ -33,11 +33,12 @@ import { ImageStrip } from './ImageStrip';
 import {MessageImages} from './MessageImages';
 import { thinkingBeforeAsk } from '../lib/askContext';
 import { useApp, synthesizeResult } from '../store/store';
-import { chatRefsOf, reportOutput, titlesKey, toolChatRef } from '../lib/chatrefs';
+import { chatRefsOf, reportOutput, toolChatRef } from '../lib/chatrefs';
+import { titlesKeyOf } from '../lib/chat-derived';
 import { splitMode } from '@shared/newchat';
 import { isRoleId, ROLE_DEFAULTS, ROLE_IDS } from '@shared/roles';
 import { isReaction } from '@shared/reaction';
-import { chatView } from '../lib/chat-view';
+import { chatView, TAIL_ITEMS, tailStart } from '../lib/chat-view';
 import { AgentAvatar } from './AgentAvatar';
 import { NamedChatRefs, ToolChatRef } from './ChatRefChips';
 import { openHandoff } from '../store/ui';
@@ -119,6 +120,8 @@ export const Markdown = memo(function Markdown({ text, streaming }: { text: stri
 /** The chat whose items are shown (null: no "Esegui", e.g. a list without a chat). */
 const ChatIdCtx = createContext<string | null>(null);
 const ReadOnlyCtx = createContext(false);
+/** false while the transcript is folded away (a collapsed strip, ChatTranscript.tsx): its rows' clocks stand still */
+export const TranscriptLiveCtx = createContext(true);
 
 /** A fence line (``` or ~~~): a message without one renders as plain Markdown. */
 const FENCE = /^\s{0,3}(`{3,}|~{3,})/m;
@@ -189,7 +192,7 @@ function DiffView({ diff }: { diff: FileDiff[] }) {
 }
 
 function Elapsed({ since }: { since: number }) {
-  const now = useNow(1000);
+  const now = useNow(useContext(TranscriptLiveCtx) ? 1000 : 3_600_000);
   return <span className="tool-meta">{duration(now - since)}</span>;
 }
 
@@ -407,6 +410,15 @@ function FoldedPast({ count, onOpen }: { count: number; onOpen: () => void }) {
   );
 }
 
+/** The earlier items of a long transcript, left out until asked for (lib/chat-view.ts tailStart). */
+function ShowEarlier({ count, onOpen }: { count: number; onOpen: () => void }) {
+  return (
+    <button type="button" className="cold-past" onClick={onOpen} data-testid="show-earlier">
+      <IconChevronRight size={12} /> {t('chat.items.showEarlier', { count })}
+    </button>
+  );
+}
+
 /** The scrolling list, sticky to the bottom. */
 /** What a running turn is doing, from its last item: writing (streaming text), working (a tool runs), thinking. */
 export function turnActivity(items: readonly ChatItem[] | undefined): 'scrive' | 'pensa' | 'lavora' {
@@ -427,16 +439,21 @@ function ItemListFor({ items, empty, footer, chatId = null, readOnly = false }: 
   const peek = useLinkPeek(chatId);
   const content=useRef<HTMLDivElement>(null);
   const [pastOpen, setPastOpen] = useState(false);
+  // only the tail is drawn (lib/chat-view.ts tailStart): «Mostra precedenti» adds TAIL_ITEMS more each time
+  const [limit, setLimit] = useState(TAIL_ITEMS);
   // a cold continuation (ADR 0031): what came before the last divider is the previous session, folded
   const cut = useMemo(() => { for (let i = items.length - 1; i >= 0; i--) { const x = items[i]; if (x?.kind === 'system' && x.continued) return i; } return -1; }, [items]);
-  const shown = cut > 0 && !pastOpen ? items.slice(cut) : items;
+  const session = useMemo(() => (cut > 0 && !pastOpen ? items.slice(cut) : items), [items, cut, pastOpen]);
+  const start = tailStart(session, limit);
+  const shown = useMemo(() => (start > 0 ? session.slice(start) : session), [session, start]);
   const asking = useApp(s => !!chatId && s.pending.some(p => p.chatId === chatId && p.type === 'question'));
-  const open = useMemo(() => thinkingBeforeAsk(items, asking), [items, asking]);
+  // the reasoning before a question, among the rows drawn (a walk back stops at the turn's start, so the tail suffices)
+  const open = useMemo(() => thinkingBeforeAsk(shown, asking), [shown, asking]);
   // an Orchestrator's messages get "Apri" chips for the work chats they name (one key of the titles: rebuilt only when they change)
-  const tkey = useApp(s => { const c = chatId ? s.chats[chatId] : undefined; return c?.isOrchestrator ? titlesKey(s.chats) : ''; });
+  const tkey = useApp(s => { const c = chatId ? s.chats[chatId] : undefined; return c?.isOrchestrator ? titlesKeyOf(s.chats) : ''; });
   const orch = useApp(s => !!chatId && !!s.chats[chatId]?.isOrchestrator);
   const view = useMemo(() => chatView(shown, { foldProcess: orch }), [shown, orch]);
-  const refs = useMemo(() => chatRefsOf(items, tkey), [items, tkey]);
+  const refs = useMemo(() => chatRefsOf(shown, tkey), [shown, tkey]);
   const fixed = useMemo(() => correctedThoughts(items), [items]);
   const last = items[items.length - 1];
   const lastSig = last ? `${last.id}:${'text' in last ? last.text.length : 0}:${last.kind === 'tool' ? last.status : ''}` : '';
@@ -446,7 +463,8 @@ function ItemListFor({ items, empty, footer, chatId = null, readOnly = false }: 
     <div className="items-wrap">
       <div className="items" ref={ref} data-chat-log={chatId??undefined} tabIndex={0} aria-label={auditText('audit.ChatItems.messages')} onClick={peek.onClick} onWheel={peek.onWheel} role="log" aria-live="off">
         <div ref={content} className="items-content">
-        {cut > 0 && !pastOpen && <FoldedPast count={cut} onOpen={() => setPastOpen(true)} />}
+        {cut > 0 && !pastOpen && start === 0 && <FoldedPast count={cut} onOpen={() => { setPastOpen(true); setLimit(Infinity); }} />}
+        {start > 0 && <ShowEarlier count={start} onOpen={() => setLimit(l => l + TAIL_ITEMS)} />}
         {items.length === 0 && empty && !footer ? <div className="items-empty">{empty}</div> : view.map(v => v.kind === 'process'
           ? <ProcessGroup key={v.id} id={v.id} items={v.items} open={open} marks={fixed} />
           : <Item key={v.item.id} item={v.item} beforeAsk={open.has(v.item.id)} refs={refs.get(v.item.id)} marks={fixed.get(v.item.id)} reaction={v.reaction} />)}

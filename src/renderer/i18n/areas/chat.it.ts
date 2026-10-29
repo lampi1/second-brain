@@ -69,6 +69,7 @@ export const chatIt = {
   'chat.items.coldDividerNote': 'La sessione precedente era ferma da più di un\'ora: questa riparte dal suo passaggio di consegne invece di rileggerla tutta',
   'chat.items.coldNoteButton': 'passaggio di consegne',
   'chat.items.coldPastSession': (p: { count: number }) => p.count === 1 ? 'Sessione precedente · 1 riga' : `Sessione precedente · ${p.count} righe`,
+  'chat.items.showEarlier': (p: { count: number }) => p.count === 1 ? 'Mostra precedenti · 1 riga' : `Mostra precedenti · ${p.count} righe`,
   'chat.items.resultError': 'Turno finito con errore',
   'chat.items.resultInterrupted': 'Turno interrotto da te',
   'chat.criterionMet': 'Criterio soddisfatto',

@@ -62,13 +62,22 @@ export function markPieces(text: string, quotes: readonly string[]): { text: str
   return out;
 }
 
+// per user message, its correction once read (items are immutable: a transcript re-reads the same ones on every
+// streamed word, and the parse is a few regexes over the whole text)
+const parsed = new WeakMap<ChatItem, { quote: string; fix: string } | null>();
+const correctionOf = (it: ChatItem & { kind: 'user' }): { quote: string; fix: string } | null => {
+  let c = parsed.get(it);
+  if (c === undefined) { c = parseCorrection(splitNotes(it.text).text); parsed.set(it, c); } // notes may ride on it (Mandato, Copiato)
+  return c;
+};
+
 /** For each reasoning block, the sentences the user corrected: each correction marks the latest reasoning before it
  *  that holds its quote. */
 export function correctedThoughts(items: readonly ChatItem[]): Map<string, string[]> {
   const out = new Map<string, string[]>();
   items.forEach((it, i) => {
     if (it.kind !== 'user') return;
-    const c = parseCorrection(splitNotes(it.text).text); // notes may ride on it (Mandato, Copiato)
+    const c = correctionOf(it);
     if (!c) return;
     for (let j = i - 1; j >= 0; j--) {
       const t = items[j];
