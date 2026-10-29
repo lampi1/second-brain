@@ -5,11 +5,11 @@
 // signaling, temporal contiguity). Nodes of the pieces seen stay calm, the ones still to come are faint, so the picture
 // grows piece by piece; «Tutto lo schema» (or a double click) shows it whole. The camera fits the drawing to the board
 // whatever its shape: the whole drawing when its labels read well, else close to the beat; labels never oversized. A drawing mermaid cannot lay out falls back
-// to the still image (LessonDiagram.tsx). Motion is off for reduced-motion users. With `onPick` the nodes are buttons:
+// to the still image (LessonDiagram.tsx). Motion is off for reduced-motion users. With `onPick` the nodes are buttons (a double click picks once):
 // a review card asks to click the part that answers it (ImparaReview.tsx, ADR 0189; in a lesson a click asks the tutor
 // about that part, ADR 0190), `marks` then shows the right one and
 // a wrong pick. Used by ImparaPlayer.tsx and ImparaReview.tsx; styles impara.css (.st-*).
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import type { FlowEdge, FlowLayout, FlowNode } from '../../lib/viz/flow-layout';
 import { ui } from '../../store/ui';
 import { t } from '../../i18n';
@@ -142,7 +142,7 @@ export function LessonStage({ code, beat, done, whole, onWhole, caption, beatKey
             {focusBox && <rect key={`r${beatKey}`} className="st-ring" x={focusBox.x - 10} y={focusBox.y - 10} width={focusBox.w + 20} height={focusBox.h + 20} rx={16} />}
             {L.nodes.map(n => (
               <g key={n.id} className={`st-node ${stateOf(n.id)} ${marks?.[n.id] ?? ''} ${onPick ? 'pick' : ''}`} transform={`translate(${n.x} ${n.y})`} data-node={n.id}
-                {...(onPick ? { role: 'button', tabIndex: 0, 'aria-label': n.lines.join(' '), onClick: () => onPick(n.id, n.lines.join(' ')), onKeyDown: (e: KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick(n.id, n.lines.join(' ')); } } } : {})}>
+                {...(onPick ? { role: 'button', tabIndex: 0, 'aria-label': n.lines.join(' '), onClick: (e: MouseEvent) => { if (e.detail <= 1) onPick(n.id, n.lines.join(' ')); }, onKeyDown: (e: KeyboardEvent) => { if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); onPick(n.id, n.lines.join(' ')); } } } : {})}>
                 <Shape n={n} />
                 <text textAnchor="middle" dominantBaseline="central">
                   {n.lines.map((line, i) => <tspan key={i} x={0} y={(i - (n.lines.length - 1) / 2) * LINE}>{line}</tspan>)}

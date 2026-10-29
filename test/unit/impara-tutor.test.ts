@@ -26,6 +26,14 @@ describe('tutor answers (pure)', () => {
     expect(tutorCard(`Testo\n${CARD}`)).toMatchObject({ q: 'Perché due ricerche separate?', cites: ['f1'] });
     expect(tutorCard('Testo senza carta')).toBeNull();
     expect(tutorCard('Testo\nCARD: {rotto')).toBeNull();
+    // as models also write it: bold, lower case, the JSON fenced; a sentence that starts with «Card:» stays
+    expect(tutorShown('A.\n**CARD:** {"q": "x"}')).toBe('A.');
+    expect(tutorCard('A.\n**CARD:** {"q": "x"}')).toEqual({ q: 'x' });
+    expect(tutorShown('A.\ncard:\n```json\n{"q": "x"}\n```')).toBe('A.');
+    expect(tutorCard('A.\ncard:\n```json\n{"q": "x"}\n```')).toEqual({ q: 'x' });
+    expect(tutorShown('Card: una carta del ripasso.\nB')).toBe('Card: una carta del ripasso.\nB');
+    expect(tutorShown('A.\nCARD: ', true)).toBe('A.');
+    expect(tutorShown('A.\n**CA', true)).toBe('A.');
   });
 });
 
@@ -136,16 +144,22 @@ describe('LearnService tutor', () => {
 });
 
 describe('app_learn', () => {
-  it('starts a lesson and opens it in Impara; without an ask, lists the lessons and the cards due', () => {
+  it('starts a lesson and opens it in Impara, one per user message and never on a turn the user did not write; without an ask, lists the lessons and the cards due', () => {
     const started: unknown[] = [], ui: unknown[] = [];
+    let turn: { who: string; at: number } | null = { who: 'o1', at: 1 };
     const [tool] = imparaTools({
       start: req => { started.push(req); return { id: 'L1' } as Lesson; },
       state: () => ({ lessons: [{ id: 'L0', title: 'Reti', subject: 'Reti', state: 'ready', done: true } as never], dir: '', canTeach: true, review: { due: 3, fresh: 1, subjects: [], streak: 0, reviewedToday: 0 } }),
-    }, cmd => ui.push(cmd));
+    }, cmd => ui.push(cmd), () => turn);
     expect(tool!.name).toBe('app_learn');
     expect(tool!.run({ ask: 'come funziona il DNS', depth: 'quick' })).toMatchObject({ id: 'L1', page: 'impara/L1' });
     expect(started[0]).toMatchObject({ kind: 'topic', ask: 'come funziona il DNS', depth: 'quick', level: 'basics' });
     expect(ui).toEqual([{ action: 'page', value: 'impara/L1' }]);
+    expect(() => tool!.run({ ask: 'e anche il TCP' })).toThrow(/già partita/);
+    turn = null; // app news or an agent's mail woke the Orchestrator
+    expect(() => tool!.run({ ask: 'come funziona il DNS' })).toThrow(/solo quando l’utente/);
+    expect(tool!.run({})).toMatchObject({ reviewDue: 3 }); // reading what Impara holds needs no ask
+    turn = { who: 'o1', at: 2 };
     tool!.run({ prUrl: 'https://github.com/a/b/pull/1', depth: 'huge' });
     expect(started[1]).toMatchObject({ kind: 'pr', prUrl: 'https://github.com/a/b/pull/1', depth: 'lesson' });
     expect(tool!.run({})).toEqual({ lessons: [{ id: 'L0', title: 'Reti', subject: 'Reti', state: 'finita', page: 'impara/L0' }], reviewDue: 3, reviewNew: 1 });

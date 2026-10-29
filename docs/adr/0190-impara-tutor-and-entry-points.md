@@ -52,7 +52,8 @@ deep stay the user's choice, and the user starts the lesson with one click, so n
 - **Guida:** «Imparalo» on each concept. The subject is «second-brain», and the files research reads the app's guide
   and code.
 - **Orchestrator:** `app_learn`, only on its own endpoint. When the user asks to understand something, it starts the
-  lesson and opens it in Impara. Without an ask, it lists the lessons and the cards due today. Its description lets
+  lesson and opens it in Impara. A start is refused unless the Orchestrator's latest message is the user's own, written
+  in the last 10 minutes (not app news, not an agent's mail), and one message starts at most one lesson. Without an ask, it lists the lessons and the cards due today. Its description lets
   the Orchestrator offer «Vuoi capirla in 5 minuti?» after delivering a PR, and start the lesson only on a yes. A start
   from another page can name its subject (`LessonStart.subject`), which the plan then keeps.
 
@@ -61,5 +62,7 @@ deep stay the user's choice, and the user starts the lesson with one click, so n
 Each tutor answer is one more short run, and its cost adds to the lesson's. A warm session keeps the engine's process
 running for up to 3 minutes, at no token cost. The app's own start of the Orchestrator does not know the teacher the
 user picked in Impara (a renderer preference), so the app's choice explains those lessons. The coach behaviour is
-asked of the model in the prompt and not enforced, so a model can still answer at once. The tutor's speed and answers
+asked of the model in the prompt and not enforced, so a model can still answer at once. A tutor card follows ADR
+0189: it is asked only once its lesson was read to the end. A warm run that failed after receiving the question
+reports no cost, so the cold retry's cost is the only one added. The tutor's speed and answers
 were tried on the demo, not yet on a real model.

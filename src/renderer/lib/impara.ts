@@ -139,10 +139,11 @@ export function focusColors(): FocusColors {
 export const tutorLive = createStore<Record<string, string>>({});
 export const askTutor = (id: string, at: string, q: string, mode: TutorMode = 'coach') => call(window.sb.invoke('impara:tutor', { id, at, q, mode }));
 const warmed = new Map<string, number>();
-/** Starts the tutor's engine ahead (opening the tutor, typing): at most once a minute per lesson; main keeps one. */
+/** Starts the tutor's engine ahead (opening the tutor, typing): at most every few seconds per lesson (keystrokes); main
+ *  keeps one and starts another once the last one answered. */
 export function warmTutor(id: string): void {
   const now = Date.now();
-  if (now - (warmed.get(id) ?? 0) < 60_000) return;
+  if (now - (warmed.get(id) ?? 0) < 5_000) return;
   warmed.set(id, now);
   void window.sb.invoke('impara:tutorWarm', { id }).catch(() => {});
 }

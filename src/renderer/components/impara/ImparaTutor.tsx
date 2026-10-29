@@ -19,21 +19,22 @@ import { hostOf, openFact } from './ImparaSources';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 
-/** The answer's markdown with each [f1] of a known fact as a small chip (its source on hover, opened on click). */
-function answerHtml(text: string, facts: readonly LessonFact[]): string {
+/** The answer's markdown with each [f1] of a known fact as a small chip (its source on hover, opened on click); only
+ *  in the text, never inside a tag. Not cached while it streams (every word is a new text). */
+function answerHtml(text: string, facts: readonly LessonFact[], streaming: boolean): string {
   const n = new Map(facts.map((f, i) => [f.id, { f, i: i + 1 }]));
-  return renderMarkdown(text).replace(/\[(f\d+)\]/g, (all, id: string) => {
+  return renderMarkdown(text, !streaming).split(/(<[^>]*>)/).map(part => (part.startsWith('<') ? part : part.replace(/\[(f\d+)\]/g, (all, id: string) => {
     const hit = n.get(id);
     if (!hit) return all;
     const where = hit.f.from === 'web' ? hostOf(hit.f.ref) : hit.f.from === 'file' ? hit.f.ref.split(/[\\/]/).pop() ?? hit.f.ref : t('impara.src.known');
     return `<button type="button" class="ip-tcite" data-fact="${esc(id)}" data-tip="${esc(`${hit.f.claim}|${where}`)}">${hit.i}</button>`;
-  });
+  }))).join('');
 }
 
 function Turn({ turn, facts, last, again, onTell, onRetry }: { turn: TutorTurn; facts: readonly LessonFact[]; last: boolean; again: boolean; onTell: () => void; onRetry: () => void }) {
   const live = tutorLive.use(s => s[turn.id]);
   const text = turn.state === 'asking' ? live ?? '' : tutorShown(turn.a);
-  const html = useMemo(() => answerHtml(text, facts), [text, facts]);
+  const html = useMemo(() => answerHtml(text, facts, turn.state === 'asking'), [text, facts, turn.state]);
   const open = (e: MouseEvent) => {
     const id = (e.target as HTMLElement).closest<HTMLElement>('[data-fact]')?.dataset.fact;
     const f = id ? facts.find(x => x.id === id) : null;
@@ -88,11 +89,12 @@ export function ImparaTutor({ lesson, at, seed, onSeed, onClose }: { lesson: Les
     }
   }, [turns, voiceOn]);
 
-  const send = (text: string, mode: 'coach' | 'tell' = coach ? 'coach' : 'tell') => {
+  // a question from the box that did not go (no engine, an error said by a notice) comes back into the box
+  const send = (text: string, mode: 'coach' | 'tell' = coach ? 'coach' : 'tell', fromBox = false) => {
     const v = text.trim();
     if (!v || asking) return;
-    setQ('');
-    void askTutor(lesson.id, at, v, mode);
+    if (fromBox) setQ('');
+    void askTutor(lesson.id, at, v, mode).then(l => { if (!l && fromBox) setQ(cur => cur.trim() ? cur : v); });
   };
 
   return (
@@ -112,11 +114,11 @@ export function ImparaTutor({ lesson, at, seed, onSeed, onClose }: { lesson: Les
         )}
         {turns.map((x, i) => <Turn key={x.id} turn={x} facts={facts} last={i === turns.length - 1} again={x.mode === 'tell' && turns[i - 1]?.q === x.q} onTell={() => send(x.q, 'tell')} onRetry={() => send(x.q, x.mode)} />)}
       </div>
-      <form className="ip-tutor-in" onSubmit={e => { e.preventDefault(); send(q); }}>
+      <form className="ip-tutor-in" onSubmit={e => { e.preventDefault(); send(q, undefined, true); }}>
         <textarea ref={input} value={q} rows={2} maxLength={600} placeholder={t('impara.tutor.placeholder')} aria-label={t('impara.tutor.placeholder')} data-testid="impara-tutor-input"
           onChange={e => { setQ(e.target.value); warmTutor(lesson.id); }}
           onKeyDown={e => {
-            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(q); }
+            if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); send(q, undefined, true); }
             else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); }
           }} />
         <div className="ip-tutor-row">

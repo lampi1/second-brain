@@ -623,9 +623,12 @@ export class LearnService {
     const wake = this.waits.get(id);
     this.waits.delete(id);
     // a run still working in the folder (Windows keeps it busy): the lesson is gone now, its folder when the run ends
-    this.warm.get(id)?.give(null);
+    // the tutor's session started ahead ends unsent; its engine still has the folder until it exits
+    const w = this.warm.get(id);
+    w?.give(null);
     this.warm.delete(id);
-    try { this.d.store.remove(String(id), this.jobs.has(id) || this.extras.has(id) || this.cardJobs.has(id) || this.tutoring.has(id)); } finally { wake?.(); }
+    if (w) void w.result.finally(() => this.d.store.sweep(id));
+    try { this.d.store.remove(String(id), !!w || this.jobs.has(id) || this.extras.has(id) || this.cardJobs.has(id) || this.tutoring.has(id)); } finally { wake?.(); }
     try { this.review.removeLesson(String(id)); } catch (e) { log.warn('learn', 'review cards not removed', { cause: errText(e) }); }
     log.info('learn', 'lesson removed', { data: { id } });
     this.emit();

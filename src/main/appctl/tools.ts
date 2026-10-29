@@ -155,6 +155,8 @@ export const CHAT_TITLE_MAX = 80;
 export const PULL_ASK_MIN = 10;
 /** app_unblock opens the waiting requests only within this many minutes of a message the user wrote to the Orchestrator */
 export const UNBLOCK_ASK_MIN = 10;
+/** app_learn starts a lesson only on a user message from the last minutes (ADR 0190) */
+export const LEARN_ASK_MIN = 10;
 export { AGENT_LABEL };
 /** how a work chat sees an answer the Orchestrator delivered for the user (app_resolve_question) */
 export const RESOLVED_LABEL = 'Risposto nell’Orchestrator dall\'utente:';
@@ -239,7 +241,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.brainScripts && authed() ? scriptWriteTools(d.brainScripts.scripts, d.brainScripts.changelog, () => caller()?.title || 'Orchestrator') : []),
     ...(d.agents ? [toolDef(agentCatalogTool(d.agents, d.skillTools))] : []),
     ...(d.recordings && authed() ? recordingTools(d.recordings, d.emitUi) : []),
-    ...(d.impara && authed() ? imparaTools(d.impara, d.emitUi) : []),
+    ...(d.impara && authed() ? imparaTools(d.impara, d.emitUi, () => imparaAsked(callerId!)) : []),
     ...(d.runFeedback && authed() ? [metricsTool(d.runFeedback)] : []),
     ...(d.runFeedback && authed() ? [estimateTool(() => d.runFeedback!.runList())] : []),
     {
@@ -758,6 +760,12 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     const last = d.chats.items(orchestratorId).filter(i => i.kind === 'user').at(-1);
     // the item the send added carries (about) the time it was typed; any later 'user' item came from elsewhere
     return !!last && Math.abs(last.at - at) <= 5_000;
+  }
+
+  /** app_learn's proof (ADR 0190): the time of the user's own latest message when this turn is his, else null */
+  function imparaAsked(orchestratorId: string): { who: string; at: number } | null {
+    const last = d.chats.items(orchestratorId).filter(i => i.kind === 'user').at(-1);
+    return last && userTurn(orchestratorId, Date.now() - LEARN_ASK_MIN * 60_000) ? { who: orchestratorId, at: last.at } : null;
   }
 
   /** is this turn the user's: the Orchestrator's latest message is one he wrote (not app news, not an agent's mail), at

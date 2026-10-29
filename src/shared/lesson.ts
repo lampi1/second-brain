@@ -199,14 +199,18 @@ export interface TutorTurn {
 }
 export const TUTOR_KEEP = 40;
 export const TUTOR_Q_MAX = 600;
-/** The line a tutor answer ends with when it leaves a review card. */
-const CARD_LINE = /(?:^|\n)[ \t]*CARD:\s*(\{[\s\S]*\})\s*$/;
+/** The line a tutor answer ends with when it leaves a review card, as models write it: «CARD: {…}», also in bold or
+ *  code, lower case, or with the JSON fenced. Only a head followed by the JSON (or nothing yet) is the card line. */
+const CARD_HEAD = String.raw`(?:^|\n)[ \t]*[*_\x60>]*[ \t]*card[*_\x60]*[ \t]*:`;
+const CARD_OPEN = String.raw`[*_\x60 \t]*\s*(?:\x60{3}(?:json)?\s*)?`;
+const CARD_LINE = new RegExp(String.raw`${CARD_HEAD}${CARD_OPEN}(\{[\s\S]*\})[\s\x60]*$`, 'i');
+const CARD_CUT = new RegExp(String.raw`${CARD_HEAD}${CARD_OPEN}(?:\{|$)`, 'i');
 /** A tutor answer as the learner reads it (also while it streams): without its trailing card line, nor a half-written
  *  one. */
 export function tutorShown(text: string, streaming = false): string {
-  const cut = text.search(/(^|\n)[ \t]*CARD:/);
+  const cut = text.search(CARD_CUT);
   const t = cut >= 0 ? text.slice(0, cut) : text;
-  return (streaming ? t.replace(/\n[ \t]*C(?:A(?:RD?)?)?$/, '') : t).trimEnd();
+  return (streaming ? t.replace(/\n[ \t]*[*_`>]*[ \t]*C(?:A(?:RD?)?)?[*_`]*$/i, '') : t).trimEnd();
 }
 /** The review card a finished tutor answer proposes (still to be checked by parseCards), or null. */
 export function tutorCard(text: string): unknown {

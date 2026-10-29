@@ -213,7 +213,7 @@ function Board({ lesson }: { lesson: Lesson }) {
     if (cmd === 'better' || cmd === 'example' || cmd === 'code') return extra(cmd);
     if (item.kind === 'end' && !lesson.explain?.answer) { setDraft(d => (d.trim() ? `${d} ${text}` : text)); return; }
     // anything else of three words or more is a question for the tutor (ADR 0190), sent at once
-    if (text.trim().split(/\s+/).length >= 3) { setTutor(true); if (!lesson.tutor?.some(x => x.state === 'asking')) void askTutor(lesson.id, item.key, text, prefs.coach ? 'coach' : 'tell'); }
+    if (text.trim().split(/\s+/).length >= 3) { setTutor(true); if (lesson.tutor?.some(x => x.state === 'asking')) setSeed(text); else void askTutor(lesson.id, item.key, text, prefs.coach ? 'coach' : 'tell'); }
   };
   useEffect(() => { onImparaHeard(text => onHeard.current(text)); return () => onImparaHeard(null); }, []);
 
@@ -222,8 +222,9 @@ function Board({ lesson }: { lesson: Lesson }) {
       if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target) || document.querySelector('.modal-backdrop, .backdrop')) return;
       if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); back(); }
-      else if (e.key === ' ') { e.preventDefault(); if (narrating) stopSpeaking(false); else speakNow(); }
-      else if (e.key === '?' || e.key.toLowerCase() === 't') { e.preventDefault(); setTutor(true); }
+      // Space plays or stops the voice, except on a cited source chip, which it opens
+      else if (e.key === ' ') { if ((e.target as HTMLElement | null)?.closest?.('.ip-tcite')) return; e.preventDefault(); if (narrating) stopSpeaking(false); else speakNow(); }
+      else if (e.key === '?' || e.key.toLowerCase() === 't') { e.preventDefault(); setTutor(true); requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-testid="impara-tutor-input"]')?.focus()); }
       else if (item.kind === 'check' && !item.check.answer) {
         const i = '1234'.indexOf(e.key) >= 0 ? '1234'.indexOf(e.key) : 'abcd'.indexOf(e.key.toLowerCase());
         if (i >= 0 && i < item.check.options.length) { e.preventDefault(); answer(item.check, i); }

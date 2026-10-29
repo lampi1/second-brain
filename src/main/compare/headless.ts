@@ -370,7 +370,7 @@ export class HeadlessRunner {
         const ready = await Promise.race([Promise.resolve(session.ready).then(() => true), ended.then(() => false)]);
         // a warm start waits for its prompt here, the engine already up (null = not needed: the run ends unsent)
         const prompt = ready && session.alive ? await Promise.race([Promise.resolve(req.prompt), ended.then(() => null)]) : null;
-        if (prompt === null) settle({ error: ready ? 'non usata' : 'il motore si è chiuso prima di finire' });
+        if (prompt === null) settle({ error: ready && session.alive ? 'non usata' : 'il motore si è chiuso prima di finire' });
         else if (session.alive) session.send(prompt);
       }
       const end = await ended;
