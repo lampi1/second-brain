@@ -48,6 +48,7 @@ export const getKeymap = (): readonly { keys: string; what: string }[] => [
   { keys: t('tools.keys.settingsKey'), what: t('tools.keys.settingsWhat') },
   { keys: t('tools.keys.voiceKey'), what: t('tools.keys.voiceWhat') },
   { keys: t('tools.keys.talkKey'), what: t('tools.keys.talkWhat') },
+  { keys: t('tools.keys.pttKey'), what: t('tools.keys.pttWhat') },
   { keys: t('tools.keys.stopChatKey'), what: t('tools.keys.stopChatWhat') },
   { keys: t('tools.keys.closeChatKey'), what: t('tools.keys.closeChatWhat') },
   { keys: t('tools.keys.stopAllKey'), what: t('tools.keys.stopAllWhat') },

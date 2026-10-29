@@ -190,6 +190,21 @@ port.on('message', ({ data: m }) => {
         tail = all.slice(at);
         return;
       }
+      case 'commit': {
+        if (!listening || m.session !== listening) return;
+        // push to talk released (LiveKit's end_turn: commit the user turn): the speech still open is closed at once
+        if (vad) {
+          if (tail.length) { const pad = new Float32Array(WINDOW); pad.set(tail.subarray(0, WINDOW)); vad.acceptWaveform(pad); tail = new Float32Array(0); }
+          vad.flush();
+          drain();
+          vad.reset();
+          lastDetected = false; currentUtterance = 0;
+        }
+        // after every decode queued above (one queue): the renderer sends what was said without waiting for more
+        const session = m.session;
+        later(() => { if (session === listening) send({ type: 'committed', session }); });
+        return;
+      }
       case 'cancel-speech': speechCancelledThrough = Math.max(speechCancelledThrough, m.through); return;
       case 'speak': laterSpeak(async () => {
         if (m.id <= speechCancelledThrough) return;

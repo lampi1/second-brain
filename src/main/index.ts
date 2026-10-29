@@ -195,6 +195,7 @@ app.whenReady().then(async () => {
     changed: st => emitter.emit('voice:changed', st),
     heard: event => emitter.emit('voice:heard', event),
     speech: event => emitter.emit('voice:speech', event),
+    committed: session => emitter.emit('voice:committed', { session }),
     fake: process.env.SB_VOICE_FAKE === '1' || demo ? { text: process.env.SB_VOICE_FAKE_TEXT ?? 'Ciao, cosa c’è di nuovo?', delayMs: Number(process.env.SB_VOICE_FAKE_DELAY_MS) || 600 } : null,
   });
   s.brain.onSettingChange(change => { if (change.key === 'voiceAsr' || change.key === 'voiceName') voice.settingsChanged(); });
@@ -540,6 +541,7 @@ app.whenReady().then(async () => {
     'voice:prepare': () => voice.prepare(),
     'voice:listen': a => voice.listen(a?.on === true, a?.session, a?.talk === true),
     'voice:audio': a => voice.audio(a?.samples, a?.session),
+    'voice:commit': a => voice.commit(a?.session),
     'voice:cancelSpeech': () => voice.cancelSpeech(),
     'voice:speak': a => voice.speak(String(a?.text ?? ''), a?.voice && ['paola', 'miro', 'dii'].includes(a.voice) ? a.voice : undefined),
     'rec:state': () => recordings.state(),

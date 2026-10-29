@@ -89,6 +89,8 @@ const BASE: readonly SettingDef[] = [
     description: 'Veloce = Whisper small (374 MB), risponde prima. Precisa = Whisper turbo (circa 1 GB), sbaglia meno parole ma è più lenta sul processore. Tutto in locale, gratis.' },
   { key: 'voiceName', type: 'enum', values: ['paola', 'miro', 'dii'], default: 'paola', protected: false, label: 'Voce: chi parla',
     description: 'La voce italiana con cui l’app ti risponde nella modalità voce (Piper, in locale, circa 64 MB ognuna).' },
+  { key: 'voicePtt', type: 'boolean', default: false, protected: false, label: 'Voce: premi per parlare',
+    description: 'Nella conversazione a voce il microfono conta solo mentre tieni premuto Ctrl+Spazio (o il pulsante nella barra): al rilascio il messaggio parte subito. Spento: ascolta da solo e capisce quando hai finito.' },
   { key: 'osToasts', type: 'enum', values: ['urgent', 'normal', 'off'], default: 'urgent', protected: true, label: 'Notifiche di sistema',
     description: 'Solo le urgenti (una chat ti aspetta), anche le normali, o nessuna (resta tutto nel feed).' },
   { key: 'dndUntil', type: 'int', min: 0, max: 8.64e15, nullable: true, default: null, protected: true, label: 'Non disturbare fino a',
@@ -264,7 +266,7 @@ export function defaults(): Settings {
     projectsRoot: null,
     loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15,
     suggestOn: true, suggestModel: true, suggestDailyUsd: 0.05,
-    voiceAsr: 'fast', voiceName: 'paola',
+    voiceAsr: 'fast', voiceName: 'paola', voicePtt: false,
     delegation: { ...DELEGATION_DEFAULTS }, modelTiers: {},
   };
 }

@@ -66,3 +66,33 @@ describe('complete spoken thoughts', () => {
     expect(deliver).toHaveBeenCalledExactlyOnceWith(next, 'second');
   });
 });
+describe('push to talk (manual turns)', () => {
+  function manual() {
+    vi.useFakeTimers();
+    const current = vi.fn(() => true), deliver = vi.fn(), draft = vi.fn();
+    return { turns: new VoiceTurns({ current, deliver, draft, manual: () => true }), deliver, draft };
+  }
+  it('a pause while holding sends nothing; the release sends everything at once', () => {
+    const { turns, deliver } = manual();
+    turns.start(1, target, false); turns.finish(1, 'prima parte');
+    vi.advanceTimersByTime(5000);
+    expect(deliver).not.toHaveBeenCalled();
+    turns.start(2, target, false); turns.finish(2, 'seconda');
+    turns.flush();
+    expect(deliver).toHaveBeenCalledExactlyOnceWith(target, 'prima parte seconda');
+  });
+  it('a transcript still on its way at the release goes as soon as it comes', () => {
+    const { turns, deliver } = manual();
+    turns.start(1, target, false);
+    turns.flush();
+    expect(deliver).not.toHaveBeenCalled();
+    turns.finish(1, 'arrivo tardi');
+    expect(deliver).toHaveBeenCalledExactlyOnceWith(target, 'arrivo tardi');
+  });
+  it('reset (Esc while holding) sends nothing', () => {
+    const { turns, deliver, draft } = manual();
+    turns.start(1, target, false); turns.finish(1, 'annulla');
+    turns.reset(); turns.flush(); vi.advanceTimersByTime(1000);
+    expect(deliver).not.toHaveBeenCalled(); expect(draft).not.toHaveBeenCalled();
+  });
+});

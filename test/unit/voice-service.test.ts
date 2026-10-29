@@ -18,13 +18,13 @@ class FakeChild extends EventEmitter {
   kill() { this.emit('exit', 0); return true; }
 }
 
-function make(fake: { text: string } | null = null) {
+function make(fake: { text: string } | null = null, committed?: (session: string) => void) {
   const children: FakeChild[] = [], states: VoiceState[] = [], heard: string[] = [];
   const svc = new VoiceService({
     root: fs.mkdtempSync(path.join(os.tmpdir(), 'sb-voice-svc-')), script: 'w.js',
     settings: () => ({ asr: 'fast', voice: 'paola' }),
     fork: () => { const c = new FakeChild(); children.push(c); return c as never; },
-    changed: s => states.push(s), heard: t => heard.push(t.text), speech: () => {}, fake,
+    changed: s => states.push(s), heard: t => heard.push(t.text), speech: () => {}, fake, committed,
   });
   return { svc, children, states, heard };
 }
@@ -87,6 +87,25 @@ describe('VoiceService', () => {
     expect((await svc.speak('ciao')).samples.length).toBeGreaterThan(0);
     expect(children).toHaveLength(0);
     vi.useRealTimers();
+  });
+  it('push to talk: commit is sent to the worker for the live session only, and committed comes back once', () => {
+    const committed: string[] = [];
+    const { svc, children } = make(null, s => committed.push(s));
+    svc.listen(true, 'one');
+    svc.commit('old');
+    svc.commit('one');
+    expect(children[0]!.sent.filter(m => m.type === 'commit')).toEqual([{ type: 'commit', session: 'one' }]);
+    children[0]!.reply({ type: 'committed', session: 'old' });
+    children[0]!.reply({ type: 'committed', session: 'one' });
+    expect(committed).toEqual(['one']);
+  });
+  it('the fake engine hears its sentence on each release', () => {
+    const committed: string[] = [];
+    const { svc, heard } = make({ text: 'prova' }, s => committed.push(s));
+    svc.listen(true, 'one');
+    svc.commit('one');
+    expect(heard).toEqual(['prova']);
+    expect(committed).toEqual(['one']);
   });
   it('drops old sessions, unpaired/duplicate transcripts, old audio and delayed stops', () => {
     const { svc, children, heard } = make();

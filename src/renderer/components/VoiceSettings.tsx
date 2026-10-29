@@ -1,5 +1,5 @@
 // Settings → Voce (ADR 0152): the spoken conversation with the Orchestrator, on or off (the mic button in the inputs
-// only dictates, owner 2026-10-24), which Whisper transcribes (Veloce / Precisa), which Italian voice answers (with «Prova»),
+// only dictates, owner 2026-10-24), push-to-talk for it (owner 2026-10-29), which Whisper transcribes (Veloce / Precisa), which Italian voice answers (with «Prova»),
 // which microphone listens (lib/mic.ts: the list follows what is plugged in), and the local models: what is on disk, what is missing, the one-time download with its progress. Writes go through
 // settings:set like every other row of the page. Mounted by SettingsPage.tsx.
 import { useEffect, useState } from 'react';
@@ -37,6 +37,10 @@ export function VoiceSettings() {
     <div className="st-row" data-testid="st-voice-talk">
       <div className="st-text"><span className="st-title">{t('voice.talkTitle')}</span><p className="st-desc">{t('voice.talkHint')}</p></div>
       <div className="st-ctl"><Switch on={talking} onChange={on => void setTalk(on)} label={t('voice.talkTitle')} testid="st-voice-talk-on" /></div>
+    </div>
+    <div className="st-row" data-testid="st-voice-ptt">
+      <div className="st-text"><span className="st-title">{t('voice.pttTitle')}</span><p className="st-desc">{t('voice.pttHint')}</p></div>
+      <div className="st-ctl"><Switch on={settings.voicePtt === true} onChange={on => void setSetting({ voicePtt: on })} label={t('voice.pttTitle')} testid="st-voice-ptt-on" /></div>
     </div>
     <div className="st-row" data-testid="st-voice-asr">
       <div className="st-text"><span className="st-title">{t('voice.asrTitle')}</span><p className="st-desc">{t('voice.asrHint')}</p></div>
