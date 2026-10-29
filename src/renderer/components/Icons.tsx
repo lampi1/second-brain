@@ -82,7 +82,7 @@ export const IconSpinner = ({ size = 16, ...rest }: P) => (
   </svg>
 );
 
-/** The harness mark of a tile: Claude (warm spark), Cursor (cursor arrow), Orchestrator (violet four-point star, the ✦ of its column; once a Orchestrator "R"). */
+/** The harness mark of a tile: Claude (warm spark), Cursor (cursor arrow), Orchestrator (violet four-point star, the ✦ of its column; once an "R"). */
 export function HarnessMark({ harness, orchestrator, size = 20 }: { harness: Harness; orchestrator?: boolean; size?: number }) {
   if (orchestrator) {
     return (

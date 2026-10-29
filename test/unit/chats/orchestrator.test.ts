@@ -131,7 +131,7 @@ describe('OrchestratorService', () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
-  it('ensure routes like a Orchestrator: the row for kind orchestrator gives model and effort, a named model beats it', async () => {
+  it('ensure routes like an Orchestrator: the row for kind orchestrator gives model and effort, a named model beats it', async () => {
     const table = { version: 1, appliedAt: null, by: null, exploration: 0, costWeight: 7, routes: [
       { kind: 'orchestrator', harness: 'claude', model: 'claude-sonnet-5-5', effort: 'high', why: 'Orchestrator: Sonnet', since: '2026-10-17', evidence: 'prova' },
     ] } as RoutingTable;
@@ -178,7 +178,7 @@ describe('app control scope', () => {
   const orch = summary({ id: 'o', isOrchestrator: true, title: 'Orchestrator' });
   const work = summary({ id: 'w' });
 
-  it('the authenticated Orchestrator creates work chats in the brain folder or the folder it names, never a Orchestrator', async () => {
+  it('the authenticated Orchestrator creates work chats in the brain folder or the folder it names, never an Orchestrator', async () => {
     const t = tools([orch, work], 'o');
     expect(await t.create.run({ title: 'A', prompt: 'p', roleId: 'artisan' })).toMatchObject({ cwd: 'C:/brain' });
     expect(await t.create.run({ title: 'B', prompt: 'p', roleId: 'artisan', cwd: 'C:/repo' })).toMatchObject({ cwd: 'C:/repo' });

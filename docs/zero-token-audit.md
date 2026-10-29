@@ -57,7 +57,7 @@ Done (`src/main/chats/mail.ts`, `orchestratorWait`): mail to an idle Orchestrato
 (more mail, the sender's "ha finito" wake, the user's message) costs one turn; "urgente" goes at once; only a note that
 reads as pure progress (a progress word and no request, sha, branch, push, "fatto", failure or question) rides along
 with the Orchestrator's next turn, at the latest after 30 minutes (a Cursor Orchestrator, which takes no mail mid-turn, gets it right
-after that turn). A Orchestrator that works gets mail at once as before. Nothing is dropped: held mail stays unread in its box
+after that turn). An Orchestrator that works gets mail at once as before. Nothing is dropped: held mail stays unread in its box
 and goes in full with the first message due. Replayed on the same week: 86 → 72 turns, $25.35 → $22.53 (≈ $2.8/week);
 the longest added wait for a request is 60 s.
 

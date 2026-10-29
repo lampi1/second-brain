@@ -607,7 +607,7 @@ describe('ChatManager', () => {
     expect(results(m, m.list()[0]!.id)).toHaveLength(0); // still in its first turn (the meter pause)
   });
 
-  it('an idle chat with an explicitly complete census releases after the delay and resumes; never a Orchestrator', async () => {
+  it('an idle chat with an explicitly complete census releases after the delay and resumes; never an Orchestrator', async () => {
     const e = env();
     // Simulate a provider that can prove there are no unobserved children. Real Claude's partial census is covered
     // by archive.test.ts and must not be interpreted as a complete zero by releaseIdle.

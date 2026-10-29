@@ -78,7 +78,7 @@ describe('createRoutedChat', () => {
     expect(off.made).toHaveLength(1);
   });
 
-  it('«Gli Orchestrator possono usare Cursor» off: a table row or a default on Cursor is not used, the user’s own pick is; a Orchestrator never moves there', async () => {
+  it('«Gli Orchestrator possono usare Cursor» off: a table row or a default on Cursor is not used, the user’s own pick is; an Orchestrator never moves there', async () => {
     const cursorRow: RoutingTable = { ...table, routes: [{ kind: 'bug-fix', harness: 'cursor', model: 'composer-2.5', effort: null, why: 'bug: Cursor', since: '2026-10-14', evidence: 'n=1' }] };
     const { d, made } = deps({ claude: true, cursor: true }, { claude: true, cursor: false });
     d.route = (req: RouteRequest) => routeChat(req, cursorRow, DEMO_REGISTRY, rules, 7);
@@ -93,7 +93,7 @@ describe('createRoutedChat', () => {
     expect(made).toHaveLength(2);
   });
 
-  it('a Orchestrator: kind orchestrator whatever its text, no first message needed, its role passed on; the engine the user picked beats the row', async () => {
+  it('an Orchestrator: kind orchestrator whatever its text, no first message needed, its role passed on; the engine the user picked beats the row', async () => {
     const { d, made } = deps();
     await createRoutedChat(d, { title: 'Orchestrator · lavoro', cwd: 'C:/brain', orchestrator: true, replaces: 'old1', defaults: { harness: 'claude' }, ask: { harness: 'claude', reason: 'Ricomincia' } });
     expect(made[0]).toMatchObject({ harness: 'claude', model: 'claude-sonnet-5-5', effort: 'high', orchestrator: true, replaces: 'old1', route: { kind: 'orchestrator', source: 'table' } });

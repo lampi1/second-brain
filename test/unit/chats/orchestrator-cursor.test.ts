@@ -47,7 +47,7 @@ async function setup(cross = true) {
 
 const call = (roleId: string, title: string) => `mcpcall second-brain-app app_create_chat ${JSON.stringify({ title, prompt: 'ciao', roleId })}`;
 
-describe('a Orchestrator on Cursor', () => {
+describe('an Orchestrator on Cursor', () => {
   it('gets the app tools and delegates role chats on both engines, each on its role\'s engine', async () => {
     const { m, cwd, claudeLog, curLog } = await setup();
     const orchestrator = await m.create({ harness: 'cursor', cwd, title: 'Orchestrator', orchestrator: true, prompt: [call('scout', 'Prova · Claude'), call('artisan', 'Prova · Cursor')].join('\n') });
