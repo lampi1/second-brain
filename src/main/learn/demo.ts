@@ -243,7 +243,7 @@ export function seedDemoLessons(store: LessonStore, now: number, appRoot: string
   };
   const app: Lesson = {
     id: store.newId(now - 3 * day), title: 'Come nasce una lezione di Impara', kind: 'topic', ask: 'Come fa Impara a preparare una lezione affidabile?',
-    depth: 'quick', level: 'basics', createdAt: now - 3 * day, updatedAt: now - 3 * day + 300_000, state: 'ready',
+    depth: 'quick', level: 'basics', createdAt: now - 3 * day, updatedAt: now - 3 * day + 300_000, state: 'ready', doneAt: now - 3 * day + 300_000, // read before: its cards are in the review
     diagram: 'flowchart TB\n  ask["La tua domanda"] --> web["Ricerca sul web<br/>(vede solo la domanda)"]\n  ask --> files["Ricerca nei file<br/>(brain, app, materiale)"]\n  subgraph check["Verifica"]\n    vweb["Controllo<br/>delle pagine"]\n    vfiles["Controllo<br/>dei file"]\n  end\n  web --> vweb\n  files --> vfiles\n  vweb --> facts["Fatti verificati"]\n  vfiles --> facts\n  files -.->|"se ambigua"| q["Domande"]\n  q --> plan["Piano e pezzi"]\n  facts --> plan\n  plan --> you["La lezione"]',
     outline: ['Due ricerche separate', 'La verifica', 'La lezione'],
     steps: [

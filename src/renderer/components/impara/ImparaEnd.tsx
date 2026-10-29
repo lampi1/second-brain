@@ -74,13 +74,16 @@ export function ImparaEnd({ lesson, draft, setDraft, onSend, onReview }: { lesso
 
 function Cards({ lesson }: { lesson: Lesson }) {
   const c = lesson.cards, subject = subjectOf(lesson);
-  if (!c && !lesson.checks.length) return null;
+  // a lesson finished before cards existed (ADR 0189) can still get them from its verified facts
+  const canMake = !c && lesson.state === 'ready' && (lesson.facts ?? []).some(f => f.check !== 'unsure');
+  if (!c && !lesson.checks.length && !canMake) return null;
   return (
     <div className="ip-end-cards" data-testid="impara-end-cards" data-state={c?.state ?? 'checks'}>
       {c?.state === 'making' ? <span className="ip-muted"><IconSpinner size={12} /> {t('impara.rv.making')}</span>
         : c?.state === 'failed' ? <><span className="ip-muted">{t('impara.rv.cardsFailed')}</span><Button size="s" onClick={() => void retryLesson(lesson.id)} testid="impara-cards-retry"><IconRefresh size={12} />{t('impara.retry')}</Button></>
-        : <><span>{t('impara.rv.ready', { n: (c?.n ?? 0) + lesson.checks.length, subject })}</span>
-          <Button size="s" onClick={() => go({ page: 'impara', arg: reviewArg(subject) })} testid="impara-end-quiz">{t('impara.rv.quizSubject')}</Button></>}
+        : <><span>{(c?.n ?? 0) + lesson.checks.length ? t('impara.rv.ready', { n: (c?.n ?? 0) + lesson.checks.length, subject }) : t('impara.rv.noCards')}</span>
+          {canMake && <Button size="s" onClick={() => void retryLesson(lesson.id)} testid="impara-cards-make">{t('impara.rv.make')}</Button>}
+          {(c?.n || lesson.checks.length) ? <Button size="s" onClick={() => go({ page: 'impara', arg: reviewArg(subject) })} testid="impara-end-quiz">{t('impara.rv.quizSubject')}</Button> : null}</>}
     </div>
   );
 }

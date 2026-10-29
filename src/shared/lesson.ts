@@ -173,7 +173,7 @@ export interface Lesson {
 }
 
 /** A lesson's subject: its own, else the repository of a PR, else «Generale». */
-export const subjectOf = (l: Pick<Lesson, 'subject' | 'pr'>): string => l.subject || l.pr?.repo.split('/').pop() || 'Generale';
+export const subjectOf = (l: Pick<Lesson, 'subject' | 'pr'>): string => l.subject || subjectName(l.pr?.repo.split('/').pop()) || 'Generale';
 
 /** One line of the Impara page's list. */
 export interface LessonSummary {

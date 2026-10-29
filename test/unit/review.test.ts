@@ -65,6 +65,8 @@ describe('cards and queues', () => {
     expect(out.map(c => c.q)).toEqual(['Perché?', 'Quale?', 'Dove?']);
     expect(out[1]).toMatchObject({ kind: 'choice', correct: 1, cites: ['f2'] });
     expect(parseCards('nonsense', [], ['f1'])).toEqual([]);
+    // an empty option drops the card (removing it would move `correct` onto another option)
+    expect(parseCards({ cards: [{ kind: 'choice', q: 'Q', options: ['', 'A', 'B'], correct: 1, answer: 'x', cites: ['f1'] }] }, [], ['f1'])).toEqual([]);
   });
 
   it('mixes the lessons of a subject; «Ripassa» brings the due ones first, the most forgotten first, then a few new', () => {
@@ -120,6 +122,17 @@ describe('ReviewStore', () => {
     expect(new ReviewStore(file).cards()).toEqual([]);
     expect(() => again.grade('nope', 3, T0)).toThrow();
   });
+
+  it('never writes over a file it cannot read: a broken one is kept aside', () => {
+    const dir = tmp(), file = path.join(dir, 'review.json');
+    fs.writeFileSync(file, '{"cards": [');
+    const s = new ReviewStore(file);
+    expect(s.cards()).toEqual([]);
+    expect(fs.readdirSync(dir).some(f => f.startsWith('review.json.bad-'))).toBe(true);
+    // a read error other than «no file» is thrown, not taken for an empty review
+    fs.mkdirSync(path.join(dir, 'dir.json'));
+    expect(() => new ReviewStore(path.join(dir, 'dir.json')).cards()).toThrow();
+  });
 });
 
 describe('LearnService review', () => {
@@ -147,6 +160,10 @@ describe('LearnService review', () => {
     const own = svc.review.ofLesson(l.id);
     expect(own.filter(c => c.origin === 'cards')).toHaveLength(4);
     expect(own.filter(c => c.origin === 'check')).toHaveLength(3);
+    // not read yet: nothing to ask
+    expect(svc.state().review!.subjects).toEqual([expect.objectContaining({ name: 'Second brain', lessons: 1, cards: 0, fresh: 0 })]);
+    expect(svc.queue('quiz', 'Second brain')).toEqual([]);
+    svc.move(l.id, 'end');
     const st = svc.state().review!;
     expect(st.subjects).toEqual([expect.objectContaining({ name: 'Second brain', lessons: 1, cards: 7, due: 0, fresh: 7, recall: null })]);
     const items = svc.queue('quiz', 'Second brain');
@@ -164,6 +181,18 @@ describe('LearnService review', () => {
     expect(() => svc.setSubject(l.id, '  ')).toThrow();
     svc.remove(l.id);
     expect(svc.review.cards()).toEqual([]);
+  });
+
+  it('cards and an extra both cut by a close: both freed on the next start, so «Riprova» makes the cards', async () => {
+    const root = tmp();
+    const { store, svc } = make(root);
+    const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    await until(() => store.get(l.id)?.cards?.state === 'done');
+    store.save({ ...store.get(l.id)!, cards: { state: 'making' }, busy: { kind: 'grade', of: 'end', since: T0 } });
+    make(root);
+    const after = store.get(l.id)!;
+    expect(after.cards?.state).toBe('failed');
+    expect(after.busy).toBeUndefined();
   });
 
   it('the demo opens with subjects, a due card and a streak', () => {

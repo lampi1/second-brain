@@ -91,9 +91,10 @@ export class LearnService {
     // an extra or a grade cut off the same way frees the lesson and says so; a folder left by a remove is cleared
     d.store.sweep();
     for (const s of d.store.list()) {
-      const l = d.store.get(s.id);
+      let l = d.store.get(s.id);
       if (l && l.state !== 'preparing') { try { this.review.fromChecks(l, subjectOf(l)); } catch (e) { log.warn('learn', 'review cards not written', { cause: errText(e) }); } }
-      if (l?.cards?.state === 'making') d.store.save({ ...l, cards: { state: 'failed', error: 'interrotta: l’app si è chiusa mentre scrivevo le carte' } });
+      // one lesson object for both cuts below, so the second save keeps the first
+      if (l?.cards?.state === 'making') { l = { ...l, cards: { state: 'failed', error: 'interrotta: l’app si è chiusa mentre scrivevo le carte' } }; d.store.save(l); }
       if (!l || (l.state !== 'preparing' && l.state !== 'more' && !l.busy)) continue;
       const cut = l.busy ? { busy: undefined, busyError: 'interrotta: l’app si è chiusa mentre la preparavo' } : {};
       d.store.save(l.state === 'preparing' ? { ...l, ...cut, state: 'failed', error: 'interrotta: l’app si è chiusa mentre la preparavo' }
@@ -121,10 +122,16 @@ export class LearnService {
     const bySubject = new Map<string, number>();
     for (const s of lessons) if (s.state !== 'failed') bySubject.set(s.subject, (bySubject.get(s.subject) ?? 0) + 1);
     let review: ImparaState['review'];
-    try { review = summarize(this.review.cards(), this.review.log(), bySubject, this.now()); } catch (e) { log.warn('learn', 'review summary failed', { cause: errText(e) }); }
+    try { review = summarize(this.askable(), this.review.log(), bySubject, this.now()); } catch (e) { log.warn('learn', 'review summary failed', { cause: errText(e) }); }
     return { lessons, dir: this.d.store.root, canTeach: !why, ...(why ? { why } : {}), teachers: this.teachers(), ...(review ? { review } : {}) };
   }
   get(id: string): Lesson | null { return this.d.store.get(String(id)); }
+  /** The cards a review may ask: the ones studied already, and new ones only from lessons the user read to the end (a
+   *  lesson just written and never opened does not quiz its reader blind). */
+  private askable(): ReviewCard[] {
+    const done = new Set(this.d.store.list().filter(s => s.done || (s.state === 'ready' && s.planned > 0 && s.seen >= s.planned)).map(s => s.id));
+    return this.review.cards().filter(c => c.mem || done.has(c.lessonId));
+  }
 
   private emit(l?: Lesson): void { try { this.d.changed(this.state(), l); } catch (e) { log.warn('learn', 'lesson change not sent', { cause: errText(e) }); } }
   /** Reads the lesson now, changes it, writes it: no await in between, so two runs that end together never lose a change. */
@@ -381,7 +388,7 @@ export class LearnService {
   /** A review session's cards (ADR 0189): «Ripassa» = the due ones and a few new; a subject's quiz = its cards, mixed. */
   queue(mode: unknown, subject?: string): ReviewItem[] {
     const m: ReviewMode = mode === 'quiz' ? 'quiz' : 'due';
-    const cards = queueOf(this.review.cards(), m, this.now(), subject ? { subject: subjectName(subject) } : {});
+    const cards = queueOf(this.askable(), m, this.now(), subject ? { subject: subjectName(subject) } : {});
     const lessons = new Map<string, Lesson | null>();
     const lessonOf = (id: string) => { if (!lessons.has(id)) lessons.set(id, this.d.store.get(id)); return lessons.get(id)!; };
     return cards.flatMap((card): ReviewItem[] => {
@@ -426,7 +433,8 @@ export class LearnService {
     }
     const next = this.edit(l.id, x => ({ ...x, error: undefined, busyError: undefined, ...(x.busy && !this.extras.has(x.id) ? { busy: undefined } : {}), ...(x.cards?.state === 'failed' ? { cards: undefined } : {}) }))!;
     if (l.state === 'more' && !this.jobs.has(l.id)) void this.rest(l.id);
-    else if (l.state === 'ready' && l.cards?.state === 'failed') void this.makeCards(l.id);
+    // a failed cards run, or a lesson finished before cards existed (ADR 0189): «Crea le carte»
+    else if (l.state === 'ready' && (l.cards?.state === 'failed' || !l.cards)) void this.makeCards(l.id);
     return next;
   }
 

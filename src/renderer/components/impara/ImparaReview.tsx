@@ -87,11 +87,16 @@ function Card({ item, onGrade }: { item: ReviewItem; onGrade: (g: ReviewGrade) =
   const answered = c.kind === 'recall' ? shown : c.kind === 'choice' ? choice !== null : pick !== null;
   const right = c.kind === 'choice' ? choice === c.correct : c.kind === 'node' ? pick === c.node : null;
   const answer = (k: number) => { if (choice === null) setChoice(k); };
+  // «Non lo so»: counts as forgotten and shows the answer (also the way past a diagram that cannot be drawn)
+  const dunno = () => { if (c.kind === 'choice') setChoice(-1); else setPick(''); };
   const marks = useMemo(() => (pick && c.node ? { [c.node]: 'right' as const, ...(pick !== c.node ? { [pick]: 'wrong' as const } : {}) } : undefined), [pick, c.node]);
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target) || document.querySelector('.modal-backdrop, .backdrop')) return;
+      if (e.defaultPrevented || e.repeat || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target) || document.querySelector('.modal-backdrop, .backdrop')) return;
+      // Enter or Space on a focused button is that button's click, not a grade (an option already answered is disabled)
+      const on = e.target instanceof HTMLElement ? e.target.closest<HTMLElement>('button, a, [role=button]') : null;
+      if ((e.key === 'Enter' || e.key === ' ') && on && !(on instanceof HTMLButtonElement && on.disabled)) return;
       if (!answered) {
         if (c.kind === 'recall' && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); setShown(true); }
         if (c.kind === 'choice') {
@@ -130,6 +135,9 @@ function Card({ item, onGrade }: { item: ReviewItem; onGrade: (g: ReviewGrade) =
           </div>
           {pick === null && <p className="ip-muted rv-hint">{t('impara.rv.pickHint')}</p>}
         </>
+      )}
+      {c.kind !== 'recall' && !answered && (
+        <div className="rv-dunno"><Button variant="ghost" size="s" onClick={dunno} testid="impara-review-dunno">{t('impara.rv.dunno')}</Button></div>
       )}
       {c.kind === 'recall' && !shown && (
         <div className="rv-recall">

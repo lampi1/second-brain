@@ -1,5 +1,5 @@
 // Impara's review cards on disk (ADR 0189): userData/learn/review.json holds every card (with its memory state) and the
-// last reviews, next to the lessons; only on this PC, like them. Written atomically (tmp + rename) after each change. A
+// last reviews, next to the lessons; only on this PC, like them. Written atomically (tmp + rename) after each change; a broken file is moved aside, never overwritten. A
 // lesson's checks become cards at zero tokens (`fromChecks`), the cards run adds its own (`add`), a removed lesson
 // takes its cards away, a lesson moved to another subject moves them. Used by learn/service.ts; tests:
 // test/unit/review.test.ts.
@@ -17,11 +17,21 @@ export class ReviewStore {
 
   private read(): File {
     if (this.data) return this.data;
-    try {
-      const raw = JSON.parse(fs.readFileSync(this.file, 'utf8')) as Partial<File>;
-      this.data = { v: 1, cards: Array.isArray(raw.cards) ? raw.cards : [], log: Array.isArray(raw.log) ? raw.log : [] };
-    } catch { this.data = { v: 1, cards: [], log: [] }; }
-    return this.data;
+    let text: string;
+    try { text = fs.readFileSync(this.file, 'utf8'); } catch (e) {
+      // no file yet: none to lose. Any other error (a file held by an antivirus on Windows) is thrown and not
+      // remembered, so the next call reads again and nothing is written over the cards meanwhile
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
+      return (this.data = { v: 1, cards: [], log: [] });
+    }
+    let raw: Partial<File> | null = null;
+    try { raw = JSON.parse(text) as Partial<File>; } catch { /* below */ }
+    if (!raw || typeof raw !== 'object') {
+      // a broken file is kept aside (never overwritten) and the review starts again
+      fs.renameSync(this.file, `${this.file}.bad-${Date.now()}`);
+      return (this.data = { v: 1, cards: [], log: [] });
+    }
+    return (this.data = { v: 1, cards: Array.isArray(raw.cards) ? raw.cards : [], log: Array.isArray(raw.log) ? raw.log : [] });
   }
   private write(): void {
     const d = this.read();

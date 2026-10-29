@@ -102,7 +102,7 @@ export function streakOf(log: readonly ReviewLog[], now: number): { streak: numb
   const days = new Set(log.map(l => day(l.at)));
   const today = day(now);
   let streak = 0;
-  for (let d = days.has(today) ? today : today - DAY; days.has(d); d = day(d - DAY / 2)) streak++;
+  for (let d = days.has(today) ? today : day(today - DAY / 2); days.has(d); d = day(d - DAY / 2)) streak++;
   return { streak, today: log.filter(l => day(l.at) === today).length };
 }
 
@@ -165,9 +165,10 @@ export function parseCards(v: unknown, nodes: readonly string[], facts: readonly
     const cites = (Array.isArray(x.cites) ? x.cites : []).filter((id): id is string => typeof id === 'string' && facts.includes(id)).slice(0, 4);
     if (!q || !answer || !cites.length) continue;
     if (x.kind === 'choice') {
-      const options = (Array.isArray(x.options) ? x.options : []).map(op => str(op, 160)).filter(Boolean).slice(0, 4);
+      // an empty option is not dropped (that would shift `correct` onto another one): the card is
+      const options = (Array.isArray(x.options) ? x.options : []).map(op => str(op, 160));
       const correct = typeof x.correct === 'number' && Number.isInteger(x.correct) ? x.correct : -1;
-      if (options.length < 2 || correct < 0 || correct >= options.length || new Set(options).size !== options.length) continue;
+      if (options.length < 2 || options.length > 4 || options.some(op => !op) || correct < 0 || correct >= options.length || new Set(options).size !== options.length) continue;
       out.push({ kind: 'choice', q, options, correct, answer, cites });
     } else if (x.kind === 'node') {
       const node = typeof x.node === 'string' ? x.node.trim() : '';
