@@ -1270,8 +1270,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Cambia qualcosa solo se gliel’hai scritto tu, di recente, in un messaggio che è l’ultimo della sua chat: le notizie dell’app o la posta di un agente non bastano.',
         'It changes something only if you typed the ask yourself, recently, in a message that is the latest of its chat: the app’s news or an agent’s mail are not enough.'),
       // src/main/appctl/config.ts: logged as the agent’s change
-      b('Ogni cambio finisce nel registro con il suo «Annulla».',
-        'Every change goes to the log with its "Undo".'),
+      b('Ogni impostazione cambiata finisce nel registro dei cambi con il suo «Annulla»; la carta di un ruolo torna alla versione di prima; vista e connettori si rimettono chiedendoglielo di nuovo.',
+        'Every setting change goes to the change log with its "Undo"; a role’s card can go back to its previous version; the view and connectors are set back by asking again.'),
       // src/main/appctl/config.ts: secrets, own tools
       b('Non tocca mai segreti, chiavi o password, né i suoi stessi strumenti e permessi: quelli restano un tuo clic.',
         'It never touches secrets, keys or passwords, nor its own tools and permissions: those stay your click.'),
@@ -1281,8 +1281,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
     tech: [
       tech(TOOLS, 'app_guide (la mappa, su richiesta), app_ui «outline» (lo schermo), app_config (setting, view, agent, connector, later).',
         'app_guide (the map, on demand), app_ui "outline" (the screen), app_config (setting, view, agent, connector, later).'),
-      tech(LIMITS, 'Solo sull’endpoint dell’Orchestrator; nessun costo di token negli altri turni (la mappa si legge solo quando serve).',
-        'Only on the Orchestrator’s endpoint; no token cost in its other turns (the map is read only when needed).'),
+      tech(LIMITS, 'app_config solo sull’endpoint dell’Orchestrator (app_guide e app_ui anche altrove, senza i valori delle impostazioni); nessun costo di token negli altri turni: la mappa si legge solo quando serve.',
+        'app_config only on the Orchestrator’s endpoint (app_guide and app_ui elsewhere too, without the settings’ values); no token cost in its other turns: the map is read only when needed.'),
     ],
     sources: ['src/main/appctl/guide.ts', 'src/main/appctl/config.ts', 'src/main/appctl/user-words.ts', 'src/renderer/lib/app-map.ts'],
   },
@@ -1303,8 +1303,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Se parli sopra l’app, lei smette subito di parlare e ascolta te.',
         'If you talk over the app, it stops speaking at once and listens to you.'),
       // src/renderer/lib/voice.ts useVoiceQuestion, parseSpokenAnswer
-      b('Con la conversazione accesa, le carte di domanda si leggono ad alta voce e una risposta detta («sì», «no», la scelta) vale come il clic. Una frase ambigua resta da correggere, non diventa un sì.',
-        'With the conversation on, question cards are read aloud and a spoken answer ("yes", "no", the choice) counts as the click. An ambiguous sentence stays editable instead of becoming a yes.'),
+      b('Con la conversazione accesa, le carte di domanda si leggono ad alta voce: un «sì», un «no» o «non voglio rispondere» detti valgono come il clic; qualsiasi altra frase va come tua risposta scritta, mai come un sì.',
+        'With the conversation on, question cards are read aloud: a spoken "yes", "no" or "I don’t want to answer" counts as the click; any other sentence goes as your written answer, never as a yes.'),
       // src/main/voice/service.ts; src/main/voice/catalog.ts
       b('Trascrizione con Whisper e voce italiana con Piper, sul tuo PC: niente esce dal computer, a parte lo scarico una tantum dei modelli, controllati con la loro impronta.',
         'Transcription with Whisper and an Italian voice with Piper, on your PC: nothing leaves the computer except the one-time model downloads, checked against their hash.'),
@@ -1356,8 +1356,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Like the recorder on the meeting table, with a stenographer who types the minutes when it ends and files them in the right drawer.'),
     diagram: { kind: 'flow', steps: [b('Registra o importa', 'Record or import'), b('Whisper sul PC', 'Whisper on the PC'), b('Tu / Altri', 'You / Others'), b('Orchestrator', 'Orchestrator')] },
     tech: [
-      tech(FILES, 'userData/recordings/<id>/: meta.json, audio.wav (16 kHz, 16 bit; stereo per una call), trascrizione.md.',
-        'userData/recordings/<id>/: meta.json, audio.wav (16 kHz, 16-bit; stereo for a call), trascrizione.md.'),
+      tech(FILES, 'userData/recordings/<id>/: meta.json, audio.wav (16 kHz, 16 bit; stereo per una call), transcript.json, trascrizione.md.',
+        'userData/recordings/<id>/: meta.json, audio.wav (16 kHz, 16-bit; stereo for a call), transcript.json, trascrizione.md.'),
       tech(TOOLS, 'app_recordings (elenco, trascrizioni, file trovati) e app_recording_import, solo sull’endpoint dell’Orchestrator.',
         'app_recordings (list, transcripts, files found) and app_recording_import, only on the Orchestrator’s endpoint.'),
       tech(WHERE, 'Pagina Registrazioni (barra a sinistra, o G V).',
@@ -1376,8 +1376,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Le sue schede vivono in una partizione tutta loro: nessuno strumento degli agenti le elenca, le legge o le fotografa, e loro non vedono le sessioni degli agenti.',
         'Its tabs live in a partition of their own: no agent tool lists, reads or screenshots them, and they never see the agents’ sessions.'),
       // src/renderer/components/BrowserPage.tsx
-      b('Barra degli indirizzi con suggerimenti da preferiti e cronologia, stella per i preferiti, sessioni salvate (un gruppo di schede con un nome) e «Riapri le schede di prima».',
-        'An address bar with suggestions from bookmarks and history, a star for bookmarks, saved sessions (a named set of tabs) and "Reopen the earlier tabs".'),
+      b('Barra degli indirizzi con suggerimenti da preferiti e cronologia, stella per i preferiti, sessioni salvate (un gruppo di schede con un nome) e «Riapri le ultime schede».',
+        'An address bar with suggestions from bookmarks and history, a star for bookmarks, saved sessions (a named set of tabs) and "Reopen the last tabs".'),
       // src/main/personal/vault.ts
       b('Le password sono cifrate dal sistema (DPAPI su Windows) e si riempiono solo in una pagina del loro sito, al tuo clic; puoi importare il CSV di Google Password Manager, Chrome, Edge o Firefox.',
         'Passwords are encrypted by the system (DPAPI on Windows) and filled only into a page of their own site, at your click; you can import the CSV from Google Password Manager, Chrome, Edge or Firefox.'),
@@ -1417,8 +1417,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Più avvisi insieme suonano una volta sola, con il tipo più importante.',
         'Several notices together ring once, with the most important kind.'),
       // src/renderer/lib/notice.ts
-      b('La fine della Manutenzione è la carta «festa»: più grande, con il riepilogo e «Apri Memoria».',
-        'The end of the Maintenance is the "celebrate" card: bigger, with the summary and "Open Memoria".'),
+      b('Una Manutenzione che ha prodotto qualcosa finisce con la carta «festa»: più grande, con il riepilogo e «Apri Memoria».',
+        'A Maintenance that produced something ends with the "celebrate" card: bigger, with the summary and "Open Memoria".'),
       // src/renderer/lib/notice.ts: tasks.sound, mute, do-not-disturb
       b('Il suono segue l’interruttore degli avvisi, il muto del tipo e «Non disturbare»; le notifiche di Windows restano silenziose.',
         'The sound follows the alerts switch, the kind’s mute and "Do not disturb"; Windows notifications stay silent.'),

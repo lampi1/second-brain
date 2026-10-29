@@ -90,7 +90,7 @@ header whose counters move while the agents work.
 
 Press **Maintenance** and walk away. The free part merges duplicate skills, files lessons from your corrections and
 moves scripts and ideas where they belong; then an invisible agent (capped at $5) looks for improvements and app
-bugs. You get a little party when it's done, and every change has a reason and an Undo.
+bugs. When it found something you get a little party, and every change has a reason and an Undo.
 
 <p align="center"><img src="docs/screenshots/maintenance.webp" alt="The Memory page with the «Maintenance done» notice: one proposal and three issues to open" width="640"></p>
 
