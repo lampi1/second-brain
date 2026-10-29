@@ -12,6 +12,8 @@ import { clip, LOG_FIELD_MAX, LOG_KEEP_DAYS, LOG_MAX_BYTES, LOG_RECENT, type Log
 import { redact } from '../log';
 
 const DAY_MAX_BYTES = LOG_MAX_BYTES / 2;
+/** How many days past LOG_KEEP_DAYS a day not yet in the logs' digest may wait for it. */
+const HOLD_DAYS = 30;
 
 const FILE = /^log-(\d{4}-\d{2}-\d{2})\.jsonl$/;
 const TEXT_FIELDS = ['title', 'text', 'input', 'output', 'error', 'task'] as const;
@@ -25,6 +27,9 @@ export class Journal {
   private cleanTimer: ReturnType<typeof setInterval> | null = null;
   private emitFn: ((events: LogEvent[]) => void) | null = null;
   private seq = 0;
+  /** A day the logs' daily digest (log-digest.ts) has not summarized yet is kept past LOG_KEEP_DAYS (at most HOLD_DAYS
+   *  more), so a start after a long pause summarizes it before it goes; the size cap still applies. Set by wiring. */
+  hold: ((day: string) => boolean) | null = null;
   constructor(private readonly now: () => number = Date.now) {}
 
   /** Opens the folder, cleans it and loads the last events (newest LOG_RECENT of the kept days). */
@@ -118,8 +123,9 @@ export class Journal {
   clean(): void {
     if (!this.dir) return;
     const today = localDay(this.now()), oldest = localDay(this.now() - (LOG_KEEP_DAYS - 1) * 864e5);
+    const held = localDay(this.now() - (LOG_KEEP_DAYS - 1 + HOLD_DAYS) * 864e5);
     let files = this.files();
-    for (const f of files) if (f.day < oldest) this.drop(f.name);
+    for (const f of files) if (f.day < oldest && !(f.day >= held && this.held(f.day))) this.drop(f.name);
     files = this.files();
     let total = files.reduce((n, f) => n + f.size, 0);
     for (const f of files) {
@@ -127,6 +133,8 @@ export class Journal {
       this.drop(f.name); total -= f.size;
     }
   }
+
+  private held(day: string): boolean { try { return !!this.hold?.(day); } catch { return false; } }
 
   private drop(name: string): void { try { fs.unlinkSync(path.join(this.dir!, name)); } catch { /* in use or gone */ } }
 

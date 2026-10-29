@@ -17,6 +17,7 @@ import { demoLog } from './activity/demo';
 import { journal } from './activity/journal';
 import { errText, log } from './log';
 import { logInputLag, startStallWatch } from './perf';
+import { RendererErrors } from './renderer-errors';
 import { APP_ID, ensureShortcuts, taskbarDetails } from './shortcuts';
 import { installAppMenu } from './app-menu';
 import { engineStatus, openLogin } from './cli';
@@ -83,6 +84,8 @@ app.setPath('userData', process.env.SB_USER_DATA ?? path.join(app.getPath('appDa
 if (!app.requestSingleInstanceLock()) app.exit(75);
 
 let win: BrowserWindow | null = null;
+/** the page's interface errors to the `renderer` log, rate-limited (ADR 0192) */
+const rendererErrors = new RendererErrors();
 
 app.whenReady().then(async () => {
   log.init(app.getPath('userData'));
@@ -477,6 +480,7 @@ app.whenReady().then(async () => {
     'overlay:model': a => overlay.setModel(a),
     'overlay:size': a => overlay.setSize(a.width, a.height),
     'app:inputLag': a => logInputLag(a),
+    'log:renderer': a => { rendererErrors.report(a); },
     'overlay:action': a => overlay.relay(a),
     'overlay:focus': a => overlay.focus(a.target),
     // a run answers the "Comando da eseguire" request of that block (Esegui on the card or under the block)

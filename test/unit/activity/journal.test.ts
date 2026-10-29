@@ -61,6 +61,17 @@ describe('journal', () => {
     expect(j.list().events).toEqual([]);
   });
 
+  it('keeps an old day the logs digest has not summarized yet (ADR 0192), never past the hold', () => {
+    const dir = tmp(), act = path.join(dir, 'activity');
+    fs.mkdirSync(act, { recursive: true });
+    const day = (ago: number) => { const d = new Date(Date.now() - ago * 864e5); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+    for (const ago of [LOG_KEEP_DAYS + 2, LOG_KEEP_DAYS + 3, LOG_KEEP_DAYS + 60]) fs.writeFileSync(path.join(act, `log-${day(ago)}.jsonl`), '{}\n');
+    const j = new Journal();
+    j.hold = d => d !== day(LOG_KEEP_DAYS + 3); // +3 is already in the digest
+    j.init(dir); j.stop();
+    expect(fs.readdirSync(act)).toEqual([`log-${day(LOG_KEEP_DAYS + 2)}.jsonl`]);
+  });
+
   it('keeps demo events in memory only', () => {
     const dir = tmp(), j = new Journal(); j.init(dir);
     j.seed([{ id: 'd1', at: 1, kind: 'pulse', level: 'ok', title: 'Battito' }]);

@@ -774,7 +774,7 @@ export class ClaudeSession implements HarnessSession {
       req = { id, type: 'permission', tool, title: sub + t.title, detail: t.detail, input: trimInput(input), at: Date.now(), ...(always.length ? { alwaysRules: always } : { noAlways: true }) };
     }
     if (call.toolUseId) req.toolUseId = call.toolUseId;
-    log.info('chats', 'can_use_tool', { chat: this.opts.chatId, data: { requestId: id, tool, type: req.type, toolUseId: call.toolUseId || null } });
+    log.info('chats', 'can_use_tool', { chat: this.opts.chatId, op: 'execute_tool', ...(call.toolUseId ? { step: call.toolUseId } : {}), data: { requestId: id, tool, type: req.type, toolUseId: call.toolUseId || null } });
     this.setState('waiting');
     this.sink.pending(req);
   }
@@ -1075,7 +1075,7 @@ export class ClaudeSession implements HarnessSession {
       // the last result; if nothing reopened the turn within 3 s, the chat is idle (else the tile stays "al lavoro")
       else setTimeout(() => { if (!this.turnOpen && this.state === 'running') this.setState(this.calls.size ? 'waiting' : 'idle'); }, 3000).unref?.();
     }
-    log.info('chats', 'turn done', { chat: this.opts.chatId, data: { costUsd: turn, durationMs: m.duration_ms, turns: m.num_turns, isError, interrupted, queued } });
+    log.info('chats', 'turn done', { chat: this.opts.chatId, op: 'invoke_agent', data: { costUsd: turn, durationMs: m.duration_ms, turns: m.num_turns, isError, interrupted, queued } });
     this.logTiming(m);
     this.contextUsage().then(u => { if (u) this.sink.changed({ contextTokens: u.totalTokens, contextMaxTokens: u.maxTokens }); }).catch(() => { /* old CLI or gone */ });
   }

@@ -624,6 +624,8 @@ export class ChatManager implements ChatService {
       const t = setTimeout(() => this.prewarmOrchestrator(), opts.prewarmDelayMs ?? 20000);
       t.unref?.();
     }
+    // every log line about a chat carries the agent run it is (ADR 0192: npm run logs -- --run <id>)
+    log.correlate(chatId => this.chats.get(chatId)?.s.run?.runId);
     const claude = resolveClaude(opts.enginePaths?.claude ?? null);
     log.info('chats', 'manager ready', { data: { restored: this.chats.size, claude: claude ? `${claude.source}: ${claude.path}` : 'not found', overrides: opts.enginePaths ?? null } });
   }
@@ -1161,7 +1163,7 @@ export class ChatManager implements ChatService {
       if (awayHint) { if (awayOn) r.awayTold = session; else delete r.awayTold; }
       receipt?.submitted();
       if (r.continuationPending) { r.continuationPending = undefined; this.persist(true); }
-      log.info('chats', 'timing: before send', { chat: r.s.id, data: { totalMs: Date.now() - t0, ...lap, engineStarted: !hadEngine, cold: !!cold, harness: r.s.harness } });
+      log.info('chats', 'timing: before send', { chat: r.s.id, op: 'invoke_agent', data: { totalMs: Date.now() - t0, ...lap, engineStarted: !hadEngine, cold: !!cold, harness: r.s.harness } });
       if (langHint) { r.replyLang = wantLang; if (!role) this.persist(); }
       if (lampo) r.lampoSeen = { session: r.session, cursor: lampo.seen }; // seen only once it went
       if (role) { r.rolePrimed = { session: r.s.sessionId ?? '', sig: roleSig }; this.persist(); }

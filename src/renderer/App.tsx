@@ -20,6 +20,7 @@ import {
   back, brainBridge, closeViewer, escapeOne, toggleViewerFull, viewerStep, focusChat, focusTile, forward, go, goTarget, nextThing, openLink, stopAllAsk, stopFocused, closeFocused, toggleCenter, toggleFocusMode, toggleMaximize, toggleOrchestrator, askRenewOrchestrator, newRequest,
 } from './actions';
 import { TopBar } from './components/TopBar';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { BrainSetupBanner } from './components/BrainSetupBanner';
 import { HealthBanner } from './components/HealthBanner';
 import { Sidebar } from './components/Sidebar';
@@ -188,12 +189,14 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
       </div>
       {/* keyed by the page: every page change replays the entry (linear.css panel-enter), no hard cut */}
       <div className="page-body" key={id}>
+        <ErrorBoundary where={id}>
         {hub ? null : id === 'log' ? <LogPage /> : id === 'guida' ? <Suspense fallback={null}><GuidePage arg={arg ?? undefined} /></Suspense> : id === 'browser' ? <BrowserPage /> : id === 'registrazioni' ? <RecordingsPage /> : id === 'impara' ? <ImparaPage /> : id === 'agenti' ? <AgentCatalogPage /> : id === 'impostazioni'
           ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.settings')}><div className="bx-inner"><SettingsPage /></div></div>
           : id === 'memoria'
             ? <div className="bx bx-page bx-scroll" role="region" aria-label={pageLabel(id)}><div className="bx-inner mh-inner"><MemoryPage /></div></div>
             : id === 'classificatori' ? <ClassifiersPage /> : id === 'collegamenti' ? <MapPage />
               : <BrainPage id={id} arg={arg ?? undefined} onNavigate={goTarget} bridge={brainBridge} />}
+        </ErrorBoundary>
       </div>
     </div>
   );
@@ -258,17 +261,17 @@ export function App() {
           {showLane && <NeedsLane peek={lanePeek} />}
           <main className="workspace no-orchestrator" data-testid="workspace">
             <div className="view-area">
-              {inFocus ? <FocusView chatId={focusMode} /> : <PageFrame id={page} />}
+              {inFocus ? <ErrorBoundary where="focus" key={`focus-${focusMode}`}><FocusView chatId={focusMode} /></ErrorBoundary> : <PageFrame id={page} />}
             </div>
           </main>
         </div>
       </div>
       {map && (
         <div className="map-layer" data-testid="map-layer">
-          <BrainMap onClose={() => setMap(false)} full={mapArg === 'tutto'} mode={mapArg === 'flat' ? 'flat' : undefined}
+          <ErrorBoundary where="map"><BrainMap onClose={() => setMap(false)} full={mapArg === 'tutto'} mode={mapArg === 'flat' ? 'flat' : undefined}
             focus={mapArg && mapArg !== 'tutto' && mapArg !== 'flat' ? mapArg : undefined}
             onNavigate={t => { setMap(false); goTarget(t); }}
-            live={liveSource} onOpenChat={id => { setMap(false); focusChat(id); }} />
+            live={liveSource} onOpenChat={id => { setMap(false); focusChat(id); }} /></ErrorBoundary>
         </div>
       )}
       <OrchestratorOverlay />{/* always: every page and the 3D map sit beside it, never over it */}

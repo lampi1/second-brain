@@ -1259,6 +1259,20 @@ export interface SearchIndexStatus { model: SearchModelState; docs: number; chun
 /** renderer → main. Each entry: [argument, result]. */
 /** Key → letter on screen in the app page over one window (ms): keydown to the first frame after its input event. */
 export interface InputLagReport { keys: number; p50: number; p95: number; max: number; longTaskMs: number; windowSec: number }
+/** An interface error the page reports (renderer/lib/ui-errors.ts → main/renderer-errors.ts, ADR 0192): a window
+ *  'error', an unhandled promise rejection or a React render error caught by a page's ErrorBoundary. Only the error's
+ *  own text and stack (cut), never the user's content; main rate-limits and redacts it into the `renderer` log. */
+export interface RendererErrorReport {
+  kind: 'error' | 'rejection' | 'render';
+  message: string;
+  stack?: string;
+  /** the React component stack (render errors) */
+  componentStack?: string;
+  /** script:line:col of a window error */
+  source?: string;
+  /** where it happened: the page id or the column ('orchestrator', 'focus', 'map') */
+  where?: string;
+}
 
 export interface InvokeMap {
   // the Routine section (ADR 0175, 0176): packages, their trigger and secrets, runs read from the run folders
@@ -1537,6 +1551,8 @@ export interface InvokeMap {
   'overlay:size': [{ width: number; height: number }, void];
   /** the app page's typing probe (renderer/lib/inputlag.ts): one summary a minute while the user types, to the log */
   'app:inputLag': [InputLagReport, void];
+  /** the app page's interface errors (ADR 0192): to the `renderer` log, rate-limited */
+  'log:renderer': [RendererErrorReport, void];
   /** the layer page → main → the app page: the user used a toast, pressed Ctrl+J or left the layer */
   'overlay:action': [OverlayAction, void];
   /** move the keyboard to the layer (Ctrl+J, a click) or back to the app; never automatic */
@@ -1804,6 +1820,7 @@ export const INVOKE_CHANNELS = [
   'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:clarify', 'impara:remove', 'impara:queue', 'impara:grade', 'impara:subject', 'impara:tutor', 'impara:tutorWarm',
   'orchestrator:held', 'orchestrator:heldSeen',
   'cloud:list', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:dismiss',
+  'log:renderer',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'routines:progress', 'work:changed',

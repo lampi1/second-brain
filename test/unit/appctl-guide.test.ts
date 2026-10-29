@@ -26,6 +26,12 @@ describe('app_guide', () => {
     expect(out).toContain('defaults never approve');
     expect(out).toContain('app_pending');
   });
+  it('explains a page\'s error card and where interface errors are logged (ADR 0192)', async () => {
+    const out = String(await guideTool(deps()).run({ topic: 'errore pagina' }));
+    expect(out).toContain('Questa pagina ha avuto un errore');
+    expect(out).toContain('Ricarica la pagina');
+    expect(out).toContain('--scope renderer');
+  });
   it('without a topic: the rail as drawn, Memoria tabs, Settings sections, actions and the hint to ask more', async () => {
     const out = String(await guideTool(deps()).run({}));
     expect(out).toContain('Memoria [memoria, G Y]');

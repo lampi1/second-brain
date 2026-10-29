@@ -982,9 +982,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'BrainChange { id, at, job, kind: skill | agent | rule | memory, action, target, summary, reason, evidence, rolledBackAt?, canRollback }.',
         'BrainChange { id, at, job, kind: skill | agent | rule | memory, action, target, summary, reason, evidence, rolledBackAt?, canRollback }.'),
       tech(FILES, 'userData/brain-changes.json: ultimi 400 cambi, istantanee prima/dopo fino a 256 KB ciascuna.', 'userData/brain-changes.json: last 400 changes, before/after snapshots up to 256 KB each.'),
+      // src/main/log-digest.ts, src/main/brainmodel/research-pack-logs.ts (ADR 0192)
+      tech(FILES, 'userData/logs/digest-YYYY-MM.jsonl: un riepilogo al giorno dei log, tenuto 90 giorni (i log completi 14, la pagina Log 7); la ricerca lo legge insieme agli eventi della pagina Log, ai blocchi della finestra e agli errori dell’interfaccia dall’ultima manutenzione (sezioni journal, perf, ui-errors, digest del pacchetto).', 'userData/logs/digest-YYYY-MM.jsonl: one summary per day of the logs, kept 90 days (the full logs 14, the Log page 7); the research reads it, the Log page’s events, the window stalls and the interface errors since the previous maintenance (pack sections journal, perf, ui-errors, digest).'),
       tech(LIMITS, 'Lavori: migration, upgrade, corrections, repeated-task, merge-skills, merge-memory; solo al clic su «Manutenzione», la migrazione un minuto dopo l’avvio.', 'Jobs: migration, upgrade, corrections, repeated-task, merge-skills, merge-memory; only on a «Manutenzione» click, the migration a minute after start.'),
     ],
-    sources: ['src/main/brainmodel/jobs.ts', 'src/main/brainmodel/upgrade.ts', 'src/shared/brain-layout.ts', 'src/main/brain/queries.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/service.ts', 'src/shared/brain-model.ts', 'src/renderer/components/brain-model/MaintenanceButton.tsx'],
+    sources: ['src/main/brainmodel/jobs.ts', 'src/main/brainmodel/upgrade.ts', 'src/shared/brain-layout.ts', 'src/main/brain/queries.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/service.ts', 'src/shared/brain-model.ts', 'src/renderer/components/brain-model/MaintenanceButton.tsx', 'src/main/log-digest.ts', 'src/main/brainmodel/research-pack-logs.ts'],
   },
   {
     id: 'proposals',

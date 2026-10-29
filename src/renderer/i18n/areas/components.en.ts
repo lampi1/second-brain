@@ -182,4 +182,8 @@ export const componentsEn: typeof componentsIt = {
   "cmp.durable.recap.summary": (p: { count: number; freshness: string }) => `PRs and QA · ${p.count} PRs · recap without a model · QA: ${p.freshness}`,
   "cmp.durable.recap.qaError": (p: { error: string }) => `QA not refreshed: ${p.error}. The last successful data remains.`,
   "cmp.durable.recap.build": (p: { build: string; reviews: number }) => `Build: ${p.build} · Required reviews: ${p.reviews}`,
+  "cmp.errorBoundary.title": 'This page ran into an error',
+  "cmp.errorBoundary.text": 'The rest of the app and the agents keep working. The error was written to the log.',
+  "cmp.errorBoundary.reload": 'Reload the page',
+  "cmp.errorBoundary.details": 'Details',
 };

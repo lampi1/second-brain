@@ -127,6 +127,14 @@
 - Agent profiles, frozen chat owners and their instructions, and local setup preferences are private profile data
   (`agents.json`, `chats.json`, `setup.json`).
   Browser sign-in/password hand-offs follow their explicit user-action flow; profile backups must be treated as private.
+- Logs (ADR 0192): the technical log `userData/logs/app-YYYY-MM-DD.jsonl` (`main/log.ts`, 14 days; lines about a chat
+  carry its agent run as `run`, and `op`/`step` named after the OpenTelemetry GenAI operations: `npm run logs -- --run <id>`),
+  the Log page's journal `userData/activity/log-*.jsonl` (7 days) and the daily digest `userData/logs/digest-YYYY-MM.jsonl`
+  (`main/log-digest.ts`, 90 days: per day levels, warn/error groups, stalls, interface errors, journal kinds; written
+  for each finished day before its raw files may go). The page's uncaught errors, unhandled rejections and the render
+  errors of each page's `ErrorBoundary` («Questa pagina ha avuto un errore», «Ricarica la pagina») reach the log as
+  scope `renderer` through `log:renderer` (`main/renderer-errors.ts`, rate-limited). The maintenance pack reads the
+  period since the previous pass from them (sections journal, perf, ui-errors, digest; `brainmodel/research-pack-logs.ts`).
 - Every record has an `id`; owner fields can be added for the team horizon (`VISION.md`) without breaking shapes.
 
 ## Instances and processes

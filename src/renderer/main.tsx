@@ -12,6 +12,7 @@ import { sb } from './sb';
 import { startViewports } from './lib/viewports';
 import { startBeat } from './lib/beat';
 import { startInputLag } from './lib/inputlag';
+import { startUiErrors } from './lib/ui-errors';
 import { nextThing, openLink, uiCommand } from './actions';
 import { checkDnd, startStore } from './store/store';
 import { startVoice } from './lib/voice';
@@ -39,6 +40,7 @@ import './styles/linear.css';
 
 const root = createRoot(document.getElementById('root')!);
 startBeat(); // every page: the alive marks (dots, spinners, pulses) step 5 times a second instead of animating
+startUiErrors(); // every page: uncaught errors and unhandled rejections go to the `renderer` log (ADR 0192)
 if (isBrainTestRoute()) {
   // #brain-test/<page>: a brain page alone (e2e of brain/testRoute.tsx)
   root.render(<StrictMode><BrainTestRoute /></StrictMode>);

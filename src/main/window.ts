@@ -124,11 +124,11 @@ export function guardRenderer(win: BrowserWindow, reload: () => Promise<void>, o
     killedForHang = false;
     if (!hang) {
       recordRenderer('gone', d.reason);
-      log.error('app', 'main window renderer gone, reloading it', { data: { reason: d.reason, exitCode: d.exitCode }, cause: `render-process-gone: ${d.reason} (exit ${d.exitCode})`, hint: 'chats and CLIs keep running in main; if it repeats, npm run logs -- --level warn --since 15m and look for a renderer error just before' });
+      log.error('app', 'main window renderer gone, reloading it', { data: { reason: d.reason, exitCode: d.exitCode }, cause: `render-process-gone: ${d.reason} (exit ${d.exitCode})`, hint: 'chats and CLIs keep running in main; if it repeats, npm run logs -- --scope renderer --since 15m shows the interface errors the page reported before (a native crash may leave none: then npm run logs -- --level warn --since 15m)' });
     }
     const now = Date.now();
     if (!reloadAllowed(times, now)) {
-      log.error('app', 'main window renderer keeps crashing, not reloading it', { cause: `${MAX_RELOADS} reloads in ${RELOAD_WINDOW_MS / 1000} s`, hint: 'restart the app; the last renderer error in the log is the likely cause' });
+      log.error('app', 'main window renderer keeps crashing, not reloading it', { cause: `${MAX_RELOADS} reloads in ${RELOAD_WINDOW_MS / 1000} s`, hint: 'restart the app; the last `renderer` error in the log (npm run logs -- --scope renderer), if any, is the likely cause' });
       return;
     }
     times.push(now);

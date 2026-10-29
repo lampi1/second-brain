@@ -22,6 +22,10 @@ import { isRoleId } from '../../shared/roles';
 import { errText, log } from '../log';
 import type { IssueOpened } from './issue-open';
 import { buildPack, forgetCandidates, PACK_SECTIONS, type Pack, type PackSection } from './research-pack';
+import { logSections, periodDays, type LogSections } from './research-pack-logs';
+import { journal } from '../activity/journal';
+import { JOURNAL_DIR } from '../log-digest';
+import type { LogEvent } from '../../shared/activity-log';
 import { defaultPrompt, MAX_PROMPT, researchFrame, researchMessage } from './research-prompt';
 import { ResearchStore } from './research-store';
 
@@ -61,6 +65,10 @@ export interface ResearchDeps {
   privacy?: { home: string; user: string };
   /** the app's own folder, removed from the issues' text like the brain's */
   appDir?: () => string;
+  /** the technical logs' folder (the digest's too) for the pack's journal/perf/ui-errors/digest sections; default log.folder */
+  logDir?: () => string | null;
+  /** the Log page's events in memory; default the app's journal */
+  events?: () => readonly LogEvent[];
 }
 
 type Input = Record<string, unknown>;
@@ -237,8 +245,18 @@ export class ResearchService {
     this.starting = true;
     try { return await this.open(engine.harness, model, effort, cap, method, web, lang, root); } finally { this.starting = false; }
   }
+  /** The pack's sections about the period since the previous pass (ADR 0192); never throws (absent = not read). */
+  private async logSections(state: BrainModelState): Promise<LogSections | undefined> {
+    try {
+      const dir = (this.d.logDir ?? (() => log.folder))(), now = this.now(), since = state.lastRun?.logs?.since ?? null;
+      if (!dir) return undefined;
+      const days = await periodDays(dir, path.join(this.d.userData, JOURNAL_DIR), since, now);
+      return logSections({ now, since, days, events: (this.d.events ?? (() => journal.list().events))(), groups: state.lastRun?.logs?.groups ?? [] });
+    } catch (e) { log.warn('brain', 'maintenance pack: log sections not read', { cause: errText(e), hint: 'the research runs without them; npm run logs -- --scope brain shows why' }); return undefined; }
+  }
   private async open(harness: Harness, model: string | null, effort: Effort | null, cap: number, method: string, web: boolean, lang: Lang, root: string): Promise<ResearchRunInfo> {
-    const pack = buildPack({ now: this.now(), runs: this.d.runs(), state: this.d.brain.state(), roles: this.d.roles(), past: this.store.all(), appVersion: this.d.appVersion() });
+    const state = this.d.brain.state(), logs = await this.logSections(state);
+    const pack = buildPack({ now: this.now(), runs: this.d.runs(), state, roles: this.d.roles(), past: this.store.all(), appVersion: this.d.appVersion(), ...(logs ? { logs } : {}) });
     const frame = researchFrame(lang, { web, capUsd: cap, brainRoot: root, issuesUrl: this.d.issuesUrl() });
     const chat = await this.d.chats.create({ harness, cwd: root, title: RESEARCH_TITLE, research: { web }, prompt: researchMessage(method, frame),
       ...(model ? { model } : {}), ...(effort ? { effort } : {}) });
