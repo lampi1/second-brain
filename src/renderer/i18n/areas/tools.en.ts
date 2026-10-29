@@ -95,17 +95,6 @@ export const toolsEn: typeof toolsIt = {
   'tools.skillsPage.theSkill': 'the skill',
 
   // Compare: model comparison labels
-  'tools.compare.engineNotSet': 'engine not set',
-  'tools.compare.judge': 'judge',
-  'tools.compare.runsAutomatically': 'runs the work of',
-  'tools.compare.of': 'of',
-  'tools.compare.ofAgents': 'the agents',
-  'tools.compare.anotherModel': 'Another model',
-  'tools.compare.rounds': (p: { n: number }) => `${p.n} ${p.n === 1 ? 'comparison' : 'comparisons'}`,
-  'tools.compare.costNotYet': 'cost not yet imported',
-  'tools.compare.noCost': 'no cost',
-  'tools.compare.soFar': 'So far',
-  'tools.compare.separator': ' · ',
 
   // Foreign: item origin labels
   'tools.foreign.otherChat': "another chat",
@@ -193,14 +182,6 @@ export const toolsEn: typeof toolsIt = {
   'tools.routing.kindAppFeature': 'New feature',
   'tools.routing.kindOrchestrator': 'Orchestrator',
   'tools.routing.kindOther': 'Other',
-  'tools.routing.errorNoStart': "Won't start",
-  'tools.routing.reasoning': 'reasoning',
-  'tools.routing.agentSource': 'from the agent’s profile',
-  'tools.routing.overrideSource': 'chosen by you: wins over the table',
-  'tools.routing.tableSource': 'from the table',
-  'tools.routing.exploreSource': 'try an underused model',
-  'tools.routing.defaultSource': 'no row for',
-  'tools.routing.defaultSourceEnd': 'your defaults',
 
   // DevOps
   'tools.tasks.notReadTimeout': 'Tasks not read: login expired, run «az login» in a terminal',

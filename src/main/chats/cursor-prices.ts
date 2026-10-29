@@ -7,8 +7,6 @@
 // 0: warned once per model in the log (here) and shown as «prezzo sconosciuto» (Usage.cursorUnpriced, the live costs).
 import { log } from '../log';
 
-export const PRICES_READ_ON = '2026-10-11';
-
 interface Price { input: number; cacheWrite: number; cacheRead: number; output: number }
 
 // key = the model's name tokens; a cache-write price missing on the page counts as input

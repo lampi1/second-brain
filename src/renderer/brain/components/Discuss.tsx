@@ -14,7 +14,7 @@ import {
   addDiscussed, discussText, fileOf, lineOf, readDiscussed, titleOf, topicKey, writeDiscussed,
   type Discussed, type DiscussedMap, type KV, type Topic,
 } from '../lib/discuss';
-import { useAppChats } from './Composer';
+import { useAppChats } from '../lib/app-chats';
 import { toast, useEsc } from './ui';
 import { t } from '../../i18n';
 

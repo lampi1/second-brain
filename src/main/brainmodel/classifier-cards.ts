@@ -31,7 +31,7 @@ export interface CardInputs {
 }
 
 const WEEKS = 8;
-/** ISO week label "2026-W42" of a time (same rule as classifiers.ts weekOf). */
+/** ISO week label "2026-W42" of a time (also classifiers.ts weekOf). */
 export function isoWeek(ms: number): string {
   const d = new Date(ms); d.setUTCHours(0, 0, 0, 0); d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
   const y = d.getUTCFullYear(), w = Math.ceil(((d.getTime() - Date.UTC(y, 0, 1)) / 86400e3 + 1) / 7);

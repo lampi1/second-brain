@@ -10,8 +10,7 @@ import { closeModal, setMaximized, toast } from '../store/ui';
 import { t } from '../i18n';
 import { IconAlert, IconCheck, IconLogin, IconSearch, IconShield, IconSpinner } from './Icons';
 import { Button, Modal } from './ui';
-
-const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
+import { errText } from '../lib/ipc-error';
 
 function CopyButton({ id, field, label, testid }: { id: string; field: 'user' | 'password'; label: string; testid: string }) {
   const [done, setDone] = useState(false);

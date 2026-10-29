@@ -12,6 +12,7 @@ import { t } from '../i18n';
 import { openMicStream } from './mic';
 import { blockVoiceWhile, stopVoice, voice } from './voice';
 import { REC_IMPORT_MAX_BYTES, REC_RATE, recExtensionOk, type RecState } from '@shared/recordings';
+import { errText } from './ipc-error';
 
 export interface RecorderUi {
   phase: 'off' | 'starting' | 'on' | 'stopping';
@@ -38,8 +39,6 @@ export function startRecs(): void {
   window.sb.on('rec:changed', s => recs.set(s));
   void window.sb.invoke('rec:state', undefined).then(s => recs.set(x => x ?? s), () => {});
 }
-
-const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 
 /** One call's devices and audio graph; a start that is stopped (or started again) before it is up releases its own. */
 interface Run { gen: number; ctx: AudioContext | null; proc: ScriptProcessorNode | null; streams: MediaStream[]; nodes: AudioScheduledSourceNode[]; channels: number }

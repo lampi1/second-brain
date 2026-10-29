@@ -1,5 +1,5 @@
 // UI primitives of the design system: Button, IconButton (aria-label + tooltip with its shortcut), Kbd, StatePill,
-// Segmented, Popover (anchored menu that hides the browser views it covers), Modal (focus trap, Esc, restores focus)
+// Popover (anchored menu that hides the browser views it covers), Modal (focus trap, Esc, restores focus)
 // and the global TooltipLayer (any element with data-tip gets a tooltip; it avoids covering browser views, which are
 // native and draw above the page). Used by every component.
 import { createPortal } from 'react-dom';
@@ -49,19 +49,6 @@ export function StatePill({ chat, testid }: { chat: Pick<ChatSummary, 'state' | 
       {(s.tone === 'run' || s.tone === 'wait') && <span className="pill-dot" aria-hidden="true" />}
       {s.label}
     </span>
-  );
-}
-
-export function Segmented<T extends string>({ value, options, onChange, label, testid }: { value: T; options: { value: T; label: string; icon?: ReactNode; tip?: string }[]; onChange: (v: T) => void; label: string; testid?: string }) {
-  return (
-    <div className="segmented" role="radiogroup" aria-label={label} data-testid={testid}>
-      {options.map(o => (
-        <button key={o.value} type="button" role="radio" aria-checked={o.value === value} className={o.value === value ? 'on' : ''} onClick={() => onChange(o.value)}
-          data-tip={o.tip} data-testid={testid ? `${testid}-${o.value}` : undefined}>
-          {o.icon}{o.label && <span>{o.label}</span>}
-        </button>
-      ))}
-    </div>
   );
 }
 

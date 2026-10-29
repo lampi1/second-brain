@@ -73,4 +73,3 @@ export function createAgentLoop(d: AgentLoopDeps) {
   }
   return { lifecycle, api, hooks, tick, evaluate };
 }
-export type AgentLoop = ReturnType<typeof createAgentLoop>;

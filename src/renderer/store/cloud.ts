@@ -2,10 +2,11 @@
 // (refresh: the vendors are asked now, main limits it to every 30 s), which strip is expanded (its messages stream,
 // Cursor) and the user's actions (start, follow-up, stop, "Porta in locale", "Apri", dismiss) with their errors as
 // toasts. Starts itself on first use, like handoffs.ts. Used by CloudStrips.tsx and AgentStrips.tsx.
-import type { CloudAgent, CloudStartRequest, CloudState } from '@shared/contract';
+import type { CloudAgent, CloudState } from '@shared/contract';
 import { createStore } from './createStore';
 import { toast } from './ui';
 import { t } from '../i18n';
+import { errText as why } from '../lib/ipc-error';
 
 interface CloudUi { state: CloudState | null; expanded: string | null }
 export const cloudStore = createStore<CloudUi>({ state: null, expanded: null });
@@ -38,11 +39,6 @@ export function setCloudExpanded(id: string, on: boolean): void {
   void window.sb.invoke('cloud:watch', { id: next }).catch(() => {});
 }
 
-const why = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
-
-export async function startCloud(req: CloudStartRequest): Promise<CloudAgent | string> {
-  try { return await window.sb.invoke('cloud:start', req); } catch (e) { return why(e); }
-}
 export async function cloudFollowUp(id: string, text: string): Promise<boolean> {
   try { await window.sb.invoke('cloud:followUp', { id, text }); return true; } catch (e) { toast(t('cloud.failed', { why: why(e) }), 'err'); return false; }
 }

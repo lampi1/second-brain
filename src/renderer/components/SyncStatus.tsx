@@ -12,6 +12,7 @@ import { useNow } from '../lib/clock';
 import { blockLines, blockTitle, domainLine, scopeLabel, syncSummary } from '../lib/sync';
 import { IconRefresh } from './Icons';
 import { MenuLabel, Popover } from './ui';
+import { errText } from '../lib/ipc-error';
 
 export function SyncStatus() {
   const [st, setSt] = useState<SyncState | null>(null);
@@ -30,7 +31,7 @@ export function SyncStatus() {
   if (!sum.show) return null;
   const act = async (key: string, f: () => Promise<SyncState>) => {
     setBusy(key); setErr(null);
-    try { setSt(await f()); } catch (e) { setErr(e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e)); } finally { setBusy(null); }
+    try { setSt(await f()); } catch (e) { setErr(errText(e)); } finally { setBusy(null); }
   };
   const choose = (domain: string, choice: SyncChoice) => act(`${domain}:${choice}`, () => sb.invoke('sync:resolve', { domain, choice }));
   return (

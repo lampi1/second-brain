@@ -1,4 +1,0 @@
-.progress-panel{border:1px solid var(--line,#8884);border-radius:8px;padding:12px;margin-block:12px;font-size:var(--text-sm,13px)}
-.progress-panel header,.progress-result{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-.progress-panel header b{flex:1}.progress-panel ul{display:flex;flex-wrap:wrap;gap:8px 20px;list-style:none;padding:0;margin:10px 0}
-.progress-result label{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.progress-result select{max-width:260px}

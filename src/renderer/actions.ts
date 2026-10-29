@@ -36,6 +36,7 @@ import {
 import { currentEntry, pushEntry, stepEntry, type Shot, type ViewerEntry } from './lib/viewer-stack';
 import { applyViewPrefs } from './lib/view-prefs';
 import { importFound } from './lib/recorder';
+import { errText } from './lib/ipc-error';
 
 /** The Orchestrator's id (the right column), null while there is none. */
 export const orchestratorId = (): string | null => orchestratorIdOf(app.get());
@@ -271,13 +272,6 @@ export async function copyLink(link: string = currentLink()): Promise<void> {
   toast(t('appText.actions.linkCopied', { link }), 'ok');
 }
 
-/** The overlay closes to its pill from inside (Ctrl+R, Esc, "Riduci"): the keyboard follows to the pill, never lost
- *  on the page. */
-export function collapseOrchestrator(): void {
-  // Legacy callers may release focus, but the coordinator column always stays open.
-  (document.activeElement as HTMLElement | null)?.blur();
-}
-
 /** Ctrl+R: the Orchestrator column from anywhere, the page stays (the column is on every page, the
  *  3D map included): its input takes the keyboard. */
 export function toggleOrchestrator(): void {
@@ -404,7 +398,6 @@ export async function resumeChat(chatId: string): Promise<void> {
 
 /** How long a closing tile fades out before it leaves the grid (styles: .chat-tile.closing). */
 export const CLOSE_ANIM_MS = 320;
-export const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 
 /** A finished chat closes (archived in main): its tile fades out, then a short notice offers to reopen it. auto = the
  *  auto-close; main refuses it if the chat went back to work meanwhile, and then it simply stays. */

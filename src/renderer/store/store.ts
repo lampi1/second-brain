@@ -21,6 +21,7 @@ import { setMark, type Mark } from '../lib/marks';
 import { canCorrectAtNextStep, cleanQuote, correctionBlocked, correctionText } from '../lib/correction';
 import { now as clockNow } from '../lib/clock';
 import { costHistory } from '../lib/live-costs';
+import { errText } from '../lib/ipc-error';
 
 export const app = createStore<AppState>(initialState, { batch: true });
 /** How often streamed text reaches the screen (startStore): one frame, so words show as they come. */
@@ -48,7 +49,6 @@ export function dispatch(a: Action): void {
   }
 }
 
-const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 const fail = (what: string) => (e: unknown) => { toast(`${what}: ${errText(e)}`, 'err'); };
 
 /** Explicit user request: reading the result remains free of inference. */
@@ -288,7 +288,6 @@ export function undoSent(key: string): boolean {
   setMark(key, u.before);
   return true;
 }
-export const canUndo = (key: string): boolean => undos.has(key);
 
 export const unqueue = (chatId: string, id: string) => dispatch({ type: 'unqueue', chatId, id });
 
