@@ -82,7 +82,7 @@ describe('the tools a chat sees on its own endpoint', () => {
     const dir = tmp(), sent: string[] = [], sinks: SessionSink[] = [];
     const m = manager(dir, sent, sinks);
     const scout = await m.create({ harness: 'anthropic', cwd: tmp(), roleId: 'scout', prompt: 'cerca' }, 'agent');
-    for (const t of ['agent_delegate', 'agent_children', 'agent_answer_child', 'agent_child_feedback', 'agent_catalog', 'skills_suggest']) expect(m.chatToolShown(scout.id, t), t).toBe(false);
+    for (const t of ['agent_delegate', 'agent_children', 'agent_answer_child', 'agent_child_feedback', 'agent_catalog']) expect(m.chatToolShown(scout.id, t), t).toBe(false);
     expect(m.chatToolShown(scout.id, 'agent_report')).toBe(true);
     const strategist = await m.create({ harness: 'anthropic', cwd: tmp(), roleId: 'strategist', prompt: 'piano' }, 'agent');
     expect(m.chatToolShown(strategist.id, 'agent_delegate')).toBe(true);

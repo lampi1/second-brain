@@ -46,7 +46,6 @@ function world(opts: { demo?: boolean; upgradeAsk?: UpgradeAsk; scripts?: { file
   const learning = new AgentPackLearning(flows, data);
   let emitted = 0;
   const service = new BrainModelService({ userData: data, root: () => brain, home: null, catalog, packs: flows, learning, runs: () => opts.runs ?? [], routing: () => routing,
-    suggestSkills: async () => [],
     emit: () => { emitted++; }, auto: false, ...(opts.upgradeAsk ? { upgradeAsk: opts.upgradeAsk } : {}), now: () => NOW, ...(opts.applied ? { applied: opts.applied } : {}),
     ...(opts.logDir ? { logDir: () => opts.logDir! } : {}), ...(opts.findings ? { findings: opts.findings } : {}), ...(opts.scripts ? { scripts: opts.scripts } : {}) });
   const agent = (id: string) => catalog.list().profiles.find(p => p.id === id)!;
@@ -72,7 +71,7 @@ describe('one-time migration', () => {
     expect(fs.readFileSync(path.join(w.brain, '.claude/skills', query.skill!, 'SKILL.md'), 'utf8')).not.toMatch(/demo-non-reale/);
     expect(query.note).toMatch(/nascost/);
     expect(snapshot(w.brain)).toEqual(before); // originals untouched
-    // no role is changed: a role loads a skill when its launch gives it (skills_suggest picks them)
+    // no role is changed: a role loads a skill when its launch gives it (the Orchestrator passes them)
     expect(w.catalog.list().profiles.every(p => p.lastEditedBy === 'default')).toBe(true);
     // one change per skill, all undoable
     expect(state.changes.filter(c => c.job === 'migration')).toHaveLength(report.items.length);
@@ -316,7 +315,7 @@ describe('repeated tasks, duplicates and the user toggle', () => {
   it('refuses an unknown job and works without a brain only to say so', async () => {
     const w = world();
     await expect(w.service.maintain('everything' as never)).rejects.toThrow(/Unknown/);
-    const none = new BrainModelService({ userData: w.data, root: () => null, home: null, catalog: w.catalog, packs: w.flows, learning: w.learning, runs: () => [], routing: () => routing, suggestSkills: async () => [], emit: () => {}, auto: false });
+    const none = new BrainModelService({ userData: w.data, root: () => null, home: null, catalog: w.catalog, packs: w.flows, learning: w.learning, runs: () => [], routing: () => routing, emit: () => {}, auto: false });
     await expect(none.maintain()).rejects.toThrow(/cartella del brain/);
     expect(none.state()).toMatchObject({ root: null, skills: [], rules: [], memory: [] });
   });

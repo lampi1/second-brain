@@ -4,7 +4,6 @@ type N = { n: number };
 
 export const statsEn: typeof statsIt = {
   'stats.cls.coverage': ({ n, total }) => `${n} verified outcomes across ${total} decisions. Completion and user silence do not prove correctness. Reviews are sampled: no verification does not mean failure.`,
-  'stats.cls.skillsCoverage': 'Only suggestions recorded at launch: earlier runs without a snapshot are excluded. Agreement measures the choice, not result quality.',
   'stats.cls.modelCoverage': 'Routing rows count only table decisions; role routing may leave them empty.',
   'stats.cls.jobCoverage': 'The cost log does not verify results: success cannot be measured here.',
   'stats.cls.eyebrow': 'HOW THE APP DECIDES, BY ITSELF',
@@ -34,10 +33,7 @@ export const statsEn: typeof statsIt = {
   'stats.cls.noRecord': 'No record',
   'stats.cls.noRecordLead': 'They work on every message or command but keep no statistics: here only what they do and why.',
   'stats.cls.defaultModel': 'engine default',
-  'stats.cls.noSkill': 'no skill',
   'stats.cls.lastAt': (p: { at: string }) => `last decision ${p.at}`,
-  'stats.cls.threshold': 'Threshold',
-  'stats.cls.thresholdHelp': 'The minimum score (0-100) for a suggested skill to actually reach the role: whoever delegates passes only skills from 60 up. The score measures how much the skill’s name and description resemble the request.',
   'stats.cls.cost': 'Average cost',
   'stats.cls.costHelp': 'The average real cost (API equivalent, in dollars) of the chats or jobs this classifier decided, from the latest measure of each. Cases without a known cost stay out of the average.',
   'stats.cls.decisions': 'Decisions',
@@ -73,15 +69,6 @@ export const statsEn: typeof statsIt = {
   'stats.c.model.hitHelp': 'Of the recorded chats, the share whose model came from a table row; the others took it from the role’s profile, the default or your own choice.',
   'stats.c.model.decisionsHelp': 'The app’s chats recorded in the routing ledger: each notes who chose the model and which one.',
   'stats.c.model.empty': 'No chat recorded yet: the models used and who chose them will show here.',
-  'stats.c.skills.name': 'Skills for a task',
-  'stats.c.skills.decides': 'Which of the brain’s skills fit a request, best first.',
-  'stats.c.skills.why': 'A role uses only the skills its launch gives it: good advice avoids redoing by hand a job the brain already knows.',
-  'stats.c.skills.how': 'It compares the request with each skill’s name and description, by words (BM25) and, when the local model is ready, by meaning; it passes those from 60 up.',
-  'stats.c.skills.use': 'If often-used skills are not the suggested ones, their description does not say what they are for: rewrite it on the Skill page.',
-  'stats.c.skills.hit': 'Same as the suggester',
-  'stats.c.skills.hitHelp': 'Of the latest 40 role launches, how many had only skills the suggester proposes today for the same request, out of how many. It measures agreement with today’s suggester, not whether the skills were right.',
-  'stats.c.skills.decisionsHelp': 'The latest 40 role launches with their launch skills recorded (agent-runs.json).',
-  'stats.c.skills.empty': 'No role launch yet: here you will see how often the suggester guesses the right skills.',
   'stats.c.estimates.name': 'Cost and time estimates',
   'stats.c.estimates.decides': 'How much a job will cost and how long it will take, with a range, before it starts.',
   'stats.c.estimates.why': 'Knowing beforehand whether a job costs 20 cents or 5 dollars lets you choose what to start, and when.',
@@ -151,7 +138,6 @@ export const statsEn: typeof statsIt = {
   'stats.err.todo': 'What to do',
   'stats.err.trend.up': 'rising', 'stats.err.trend.down': 'falling', 'stats.err.trend.flat': 'steady',
   'stats.err.trendHelp': 'Compares the last 7 days with the 7 before: rising when it has more, falling when fewer. Each bar is one day, today is the last.',
-  
   
   'stats.err.memory': 'Every logged error with the rule each produced is also on the Memory page.',
   'stats.err.openMemory': 'Open Memory',

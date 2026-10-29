@@ -1,13 +1,10 @@
 // Read-only role discovery for every chat: agent_catalog lists the roles (what each is for, its engine and model
 // tier, which roles it may launch, its default skills and whether its engine is ready, and a warning for each skill —
 // its own or the ones the caller names in `skills` — that needs a tool class the role lacks, agents/skill-needs.ts),
-// never their instructions; and
-// skills_suggest ranks the brain's skills for a request (skills/suggest.ts). Neither grants anything. Used by wiring.ts
+// never their instructions. It grants nothing (the skill suggester is gone, ADR 0182: 3 hits in 4129). Used by wiring.ts
 // (every chat endpoint) and appctl/tools.ts (the Orchestrator's).
 import type { AgentCatalog, AgentProfile } from '../../shared/agents';
 import type { McpTool } from '../mcp/server';
-import type { SkillSuggestions } from '../../shared/skill-suggest';
-import { suggestRequest } from '../skills/suggest';
 import { gapLines, skillGaps } from './skill-needs';
 
 /** The brain's skills with the tools each calls (brainmodel/service.ts skillTools); absent = no skill warnings. */
@@ -42,18 +39,6 @@ export function agentCatalogTool(source: CatalogSource, skillTools?: SkillToolsS
       skills: { type: 'array', items: { type: 'string' }, maxItems: 16, description: 'optional: skills you plan to pass; each role says which of them need tools it lacks' } }, additionalProperties: false },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     run: async args => JSON.stringify(discoverRoles(source, args, skillTools)),
-  };
-}
-
-/** skills_suggest: the brain's skills that fit a request, best first (advisory; a role uses only the skills its launch
- *  gives it). */
-export function skillsSuggestTool(suggest: (request: string) => Promise<SkillSuggestions>): McpTool {
-  return {
-    name: 'skills_suggest',
-    description: 'Suggest the brain skills that fit a task, best first (text affinity, advisory). Pass the ones you choose as `skills` in agent_delegate; a role can use only the skills its launch gives it.',
-    inputSchema: { type: 'object', required: ['request'], properties: { request: { type: 'string', minLength: 1, maxLength: 2000 } }, additionalProperties: false },
-    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
-    run: async args => JSON.stringify(await suggest(suggestRequest(args.request))),
   };
 }
 

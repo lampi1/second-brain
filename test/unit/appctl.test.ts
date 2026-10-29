@@ -259,7 +259,8 @@ describe('app control tools', () => {
     expect(appControlTools(deps).some(x => x.name === 'task_estimate')).toBe(false);
     expect(await appControlTools(deps, 'r').find(x => x.name === 'task_estimate')!.run({ request: 'Correggi il bug dello sconto', agentId: 'artisan' })).toMatchObject({ basis: 'agent-kind', n: 4, path: 'one-agent', quick: true });
     const created = await appControlTools(deps, 'r').find(x => x.name === 'app_create_chat')!.run({ title: 'Ordini · Fix', prompt: 'Correggi il bug dello sconto', roleId: 'artisan' });
-    expect(created).toMatchObject({ estimate: { timeMs: 240_000, n: 4, parts: 1, path: 'one-agent', confidence: 'low' } });
+    // elapsed time (start to end) and four equal past jobs: no spread, high confidence (ADR 0182)
+    expect(created).toMatchObject({ estimate: { timeMs: 300_000, n: 4, parts: 1, path: 'one-agent', confidence: 'high' } });
   });
 
   it('app_ui never maximizes a delegated chat or its browser (no screenshot of its content); a root chat it may', () => {

@@ -186,20 +186,5 @@ describe('protected continuation', () => {
     await f.m.set(parent.id, { workStatus: 'completed' }); release();
     await expect(child).rejects.toThrow('Parent assignment changed'); expect(f.m.list()).toHaveLength(1); expect(f.engines).toHaveLength(1);
   });
-  it('does not leave an orphan run if its parent finishes during skill suggestion', async () => {
-    let release!: (skills: string[]) => void;
-    const waiting = new Promise<string[]>(resolve => { release = resolve; });
-    const suggestSkills = vi.fn(async () => [] as string[]);
-    const f = fixture({ suggestSkills, prepareDelegation: async parent => ({ cwd: parent.cwd, parentRunId: parent.run?.runId, parentTaskVersion: parent.run?.taskVersion }) });
-    const parent = await f.create();
-    suggestSkills.mockImplementationOnce(() => waiting);
-    const child = f.m.create({ harness: 'claude', cwd: parent.cwd, parentId: parent.id, prompt: 'Inspect repository conventions and prepare a local update' }, 'agent', {
-      owner: { ...plainOwner('claude', null), source: 'catalog', id: 'artisan', version: 1 }, instructions: 'Work locally.', policy: null,
-    });
-    await vi.waitFor(() => expect(suggestSkills).toHaveBeenCalledTimes(2));
-    await f.m.set(parent.id, { workStatus: 'completed' }); release([]);
-    await expect(child).rejects.toThrow('Parent assignment or permissions changed');
-    expect(f.m.runs.list()).toHaveLength(1); expect(f.m.list()).toHaveLength(1); expect(f.engines).toHaveLength(1);
-  });
 
 });

@@ -72,7 +72,7 @@
   successor wherever stored data names them (catalog load, launches, chat owners, delegations, packs; their MCP access
   entries are dropped). `shared/run-verdict.ts` computes a run's verdict from facts on read (agent_report done with every
   criterion met, no correction, no rework within 7 days; provisional until then): verified evidence for
-  `run-metrics.ts`, `trials.ts`, `suggestions.ts`, `skills/suggest.ts` and `agents/standing.ts`, whose level counts
+  `run-metrics.ts`, `trials.ts`, `suggestions.ts` and `agents/standing.ts`, whose level counts
   only verified successes (`AgentStanding.wins`) and whose performance gives the agent's own word no weight.
 - **The task estimate** (ADR 0087): `agents/task-estimate.ts` groups the ended agent runs by agent × kind (the keyword
   classifier of `brain/estimates.ts` on the run's goal), kind, agent; a request takes the median of the first group with

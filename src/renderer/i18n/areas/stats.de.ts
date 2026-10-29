@@ -4,7 +4,6 @@ type N = { n: number };
 
 export const statsDe: typeof statsIt = {
   'stats.cls.coverage': ({ n, total }) => `${n} verifizierte Ergebnisse bei ${total} Entscheidungen. Abschluss und Schweigen des Benutzers beweisen keine Korrektheit. Reviews sind Stichproben: keine Verifizierung heißt nicht Fehlschlag.`,
-  'stats.cls.skillsCoverage': 'Nur beim Start erfasste Vorschläge: frühere Runs ohne Snapshot sind ausgenommen. Die Übereinstimmung misst die Wahl, nicht die Qualität des Ergebnisses.',
   'stats.cls.modelCoverage': 'Routing-Zeilen zählen nur Tabellenentscheidungen; Rollen-Routing kann sie leer lassen.',
   'stats.cls.jobCoverage': 'Das Kostenprotokoll verifiziert keine Ergebnisse: Erfolg ist hier nicht messbar.',
   'stats.cls.eyebrow': 'WIE DIE APP SELBST ENTSCHEIDET',
@@ -34,10 +33,7 @@ export const statsDe: typeof statsIt = {
   'stats.cls.noRecord': 'Keine Aufzeichnung',
   'stats.cls.noRecordLead': 'Sie arbeiten bei jeder Nachricht oder jedem Befehl, führen aber keine Statistik: hier nur, was sie tun und warum.',
   'stats.cls.defaultModel': 'Standard der Engine',
-  'stats.cls.noSkill': 'kein Skill',
   'stats.cls.lastAt': (p: { at: string }) => `letzte Entscheidung ${p.at}`,
-  'stats.cls.threshold': 'Schwelle',
-  'stats.cls.thresholdHelp': 'Der Mindestwert (0-100), damit ein vorgeschlagener Skill wirklich bei der Rolle ankommt: Wer delegiert, gibt nur Skills ab 60 weiter. Der Wert misst, wie sehr Name und Beschreibung des Skills der Anfrage ähneln.',
   'stats.cls.cost': 'Durchschnittskosten',
   'stats.cls.costHelp': 'Die durchschnittlichen echten Kosten (API-Äquivalent, in Dollar) der Chats oder Jobs, die dieser Klassifikator entschieden hat, aus der jeweils letzten Messung. Fälle ohne bekannte Kosten bleiben außen vor.',
   'stats.cls.decisions': 'Entscheidungen',
@@ -73,15 +69,6 @@ export const statsDe: typeof statsIt = {
   'stats.c.model.hitHelp': 'Von den erfassten Chats der Anteil, dessen Modell aus einer Tabellenzeile kam; die anderen nahmen es aus dem Profil der Rolle, dem Standard oder deiner eigenen Wahl.',
   'stats.c.model.decisionsHelp': 'Die Chats der App im Routing-Ledger: Jeder notiert, wer das Modell gewählt hat und welches.',
   'stats.c.model.empty': 'Noch kein Chat erfasst: Hier erscheinen die genutzten Modelle und wer sie gewählt hat.',
-  'stats.c.skills.name': 'Skills für eine Aufgabe',
-  'stats.c.skills.decides': 'Welche Skills des Brain zu einer Anfrage passen, der beste zuerst.',
-  'stats.c.skills.why': 'Eine Rolle nutzt nur die Skills, die ihr Start ihr mitgibt: Ein guter Tipp erspart, einen Job von Hand zu wiederholen, den das Brain schon kann.',
-  'stats.c.skills.how': 'Er vergleicht die Anfrage mit Name und Beschreibung jedes Skills, nach Wörtern (BM25) und, wenn das lokale Modell bereit ist, nach Bedeutung; er gibt die ab 60 weiter.',
-  'stats.c.skills.use': 'Sind oft genutzte Skills nicht die vorgeschlagenen, sagt ihre Beschreibung nicht, wofür sie da sind: Schreib sie auf der Skill-Seite neu.',
-  'stats.c.skills.hit': 'Gleich wie der Vorschlag',
-  'stats.c.skills.hitHelp': 'Von den letzten 40 Rollenstarts, wie viele nur Skills hatten, die der Vorschlag heute für dieselbe Anfrage vorschlägt, von wie vielen. Misst die Übereinstimmung mit dem heutigen Vorschlag, nicht ob die Skills richtig waren.',
-  'stats.c.skills.decisionsHelp': 'Die letzten 40 Rollenstarts mit erfassten Start-Skills (agent-runs.json).',
-  'stats.c.skills.empty': 'Noch kein Rollenstart: Hier siehst du, wie oft der Vorschlag die richtigen Skills trifft.',
   'stats.c.estimates.name': 'Kosten- und Zeitschätzungen',
   'stats.c.estimates.decides': 'Wie viel ein Job kosten und wie lange er dauern wird, mit Spanne, bevor er startet.',
   'stats.c.estimates.why': 'Wenn du vorher weißt, ob ein Job 20 Cent oder 5 Dollar kostet, kannst du wählen, was du startest, und wann.',
@@ -151,7 +138,6 @@ export const statsDe: typeof statsIt = {
   'stats.err.todo': 'Was zu tun ist',
   'stats.err.trend.up': 'steigend', 'stats.err.trend.down': 'fallend', 'stats.err.trend.flat': 'stabil',
   'stats.err.trendHelp': 'Vergleicht die letzten 7 Tage mit den 7 davor: steigend bei mehr, fallend bei weniger. Jeder Balken ist ein Tag, heute ist der letzte.',
-  
   
   'stats.err.memory': 'Jeder erfasste Fehler mit der jeweils erzeugten Regel steht auch auf der Seite Gedächtnis.',
   'stats.err.openMemory': 'Gedächtnis öffnen',

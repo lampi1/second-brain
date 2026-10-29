@@ -434,7 +434,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
           doneWhen: { type: 'array', items: str, minItems: 1, maxItems: 12, description: 'checkable criteria' },
           context: { ...str, description: 'facts, sources and constraints the child needs' },
           tools: { type: 'array', items: str, description: 'optional: narrows the role\'s tool classes' },
-          skills: { type: 'array', items: str, description: 'brain skills it may use (skills_suggest)' },
+          skills: { type: 'array', items: str, description: 'brain skills it may use (their SKILL.md names)' },
           tier: { type: 'string', enum: ['light', 'mid', 'top'] },
         } },
       } } },

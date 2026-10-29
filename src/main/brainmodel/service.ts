@@ -40,8 +40,6 @@ export interface BrainModelDeps {
   /** the run store's revision (AgentRunStore.revision): the read worker keeps the runs while it holds; absent = sent each read */
   runsRevision?: () => number;
   routing: () => RoutingInfo;
-  /** the skill names skills_suggest ranks for a request (skills/suggest.ts), best first */
-  suggestSkills: (request: string) => Promise<string[]>;
   emit: () => void;
   /** a pass the app ran by itself (the timers, a new lesson) changed something: the feed's quiet "Ruolo aggiornato" event
    *  with its Annulla (wiring.ts → brain.publish, ADR 0102); never called for a pass the user started with the button */
@@ -351,7 +349,7 @@ export class BrainModelService {
     return this.done(c.id);
   }
   private done(changeId: string): string { this.d.emit(); return changeId; }
-  /** The brain's skills by name and description, for skills_suggest (skills/suggest.ts). */
+  /** The brain's skills by name and description (the demo's made-up runs name them). */
   skillList(): { name: string; description: string }[] {
     const root = this.root();
     return readSkills(this.skillDirs(root), root, []).map(s => ({ name: s.name, description: s.description }));
@@ -363,7 +361,7 @@ export class BrainModelService {
   }
   classifiers(): Promise<ClassifiersState> {
     return classifiersState({ root: this.root(), routing: this.d.routing(), runs: (() => { try { return this.d.runs(); } catch { return []; } })(), profiles: this.profiles(),
-      suggest: goal => this.d.suggestSkills(goal), jobs: () => readJobs(path.join(this.d.userData, 'jobs.jsonl')) }, this.now());
+      jobs: () => readJobs(path.join(this.d.userData, 'jobs.jsonl')) }, this.now());
   }
 
   /** The structural migration once, a minute after the start. Nothing else runs by itself: the cleanup, the memory's

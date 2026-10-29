@@ -60,7 +60,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/actions.ts newRequest (Ctrl+N); src/main/agents/catalog.ts resolve()
       b('Il lavoro parte solo dall’Orchestrator: Ctrl+N porta il cursore nella sua colonna («Cosa vuoi fare?»), lui sceglie il ruolo e le skill; la chat nasce con motore, modello del suo livello e istruzioni del ruolo.',
         'Work starts only from the Orchestrator: Ctrl+N puts the cursor in its column ("What do you want to do?"), it picks the role and the skills; the chat is born with the role’s engine, its tier’s model and the role’s instructions.'),
-      // src/main/appctl/tools.ts app_create_chat; src/main/agents/discovery.ts agent_catalog, skills_suggest
+      // src/main/appctl/tools.ts app_create_chat; src/main/agents/discovery.ts agent_catalog
       b('L’Orchestrator legge l’elenco dei ruoli, si fa suggerire le skill adatte e apre il lavoro nominando il ruolo: motore, modello e sforzo li decide il ruolo, nient’altro li scavalca.',
         'The Orchestrator reads the list of roles, asks for the fitting skills and opens the work naming the role: the role decides engine, model and effort, nothing overrides them.'),
       // src/shared/roles.ts canLaunch, launches; src/main/appctl/tools.ts
@@ -89,8 +89,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'userData/roles.json (the six roles and Pulse) and role-history.json (each role’s versions).'),
       // src/shared/roles.ts DELEGATION_DEFAULTS
       tech(LIMITS, 'Deleghe: profondità 2 e 5 figli in corso per genitore, di serie (Impostazioni → Ruoli e deleghe).', 'Delegation: depth 2 and 5 running children per parent by default (Settings → Roles and delegation).'),
-      tech(TOOLS, 'agent_catalog (i ruoli), skills_suggest (le skill), app_create_chat con roleId (apre il lavoro), agent_report (il rapporto finale).',
-        'agent_catalog (the roles), skills_suggest (the skills), app_create_chat with roleId (opens the work), agent_report (the final report).'),
+      tech(TOOLS, 'agent_catalog (i ruoli e le loro skill), app_create_chat con roleId (apre il lavoro), agent_report (il rapporto finale).',
+        'agent_catalog (the roles and their skills), app_create_chat with roleId (opens the work), agent_report (the final report).'),
     ],
     target: [
       b('Su Codex e Cursor il divieto dei sotto-agenti interni del motore è scritto nelle istruzioni, non applicato dall’app.',
@@ -207,8 +207,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Regole valgono per tutti i ruoli; Memoria tiene conoscenza, quello che è successo e una memoria per ruolo, con i numeri (righe per ruolo, crescita per settimana, ricordi più richiamati, file fermi, errori ricorrenti, skill utili o mai usate, curiosità; ogni «?» dice come è calcolato) e ogni file si apre nel visore; Mappa mostra ruolo → skill → regole → memoria.',
         'Rules apply to every role; Memory holds knowledge, what happened and one memory per role, with the numbers (lines per role, weekly growth, most recalled memories, stale files, recurring errors, useful or never used skills, curious facts; each "?" says how it is computed) and every file opens in the viewer; Map shows role → skills → rules → memory.'),
       // src/main/brainmodel/classifiers.ts
-      b('Classificatori, in sola lettura: una scheda per classificatore (tipo di lavoro, modello, skill, stima dai task simili, stime, tipo nel registro dei costi) con cosa decide, i suoi numeri, l’andamento per settimana, quanto ha imparato e una curiosità; un clic apre il dettaglio con la storia e le tabelle (la tabella del modello, le skill suggerite contro quelle date).',
-        'Classifiers, read only: one card per classifier (kind of work, model, skills, estimates, cost-ledger kind) with what it decides, its numbers, the weekly trend, how much it has learned and a curious fact; a click opens the detail with the history and the tables (the model table, the suggested skills versus the ones given).'),
+      b('Classificatori, in sola lettura: una scheda per classificatore (tipo di lavoro, modello, stima dai task simili, tipo nel registro dei costi) con cosa decide, i suoi numeri, l’andamento per settimana, quanto ha imparato e una curiosità; un clic apre il dettaglio con la storia e le tabelle (la tabella del modello).',
+        'Classifiers, read only: one card per classifier (kind of work, model, similar-task estimate, cost-ledger kind) with what it decides, its numbers, the weekly trend, how much it has learned and a curious fact; a click opens the detail with the history and the tables (the model table).'),
     ],
     analogy: b('Come una squadra con un manuale condiviso: le persone sono i ruoli, le pagine del manuale sono le skill, e qualcuno lo tiene in ordine ogni notte.',
       'Like a team with a shared manual: the people are the roles, the manual’s pages are the skills, and someone keeps it tidy every night.'),
@@ -258,10 +258,10 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'Risposta di app_create_chat: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom: role | tier | table | engine } } }.',
         'app_create_chat result: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom: role | tier | table | engine } } }.'),
       tech(LIMITS, 'Fino a 16 skill per chat delegata; un figlio non ha mai strumenti o tetto sopra quelli di chi lo avvia.', 'Up to 16 skills per delegated chat; a child never has tools or a ceiling above its launcher’s.'),
-      tech(TOOLS, 'agent_catalog (i ruoli), app_create_chat con roleId e tier (apre il lavoro), skills_suggest (le skill), task_estimate (la stima), agent_metrics (stato e numeri dei figli), agent_report (il rapporto del figlio).',
-        'agent_catalog (the roles), app_create_chat with roleId and tier (opens the work), skills_suggest (the skills), task_estimate (the estimate), agent_metrics (the children’s state and numbers), agent_report (the child’s report).'),
-      tech(WHERE, 'MCP dell’app su 127.0.0.1 (tool app_*, agent_catalog, skills_suggest, agent_metrics), ognuno con il suo endpoint e token.',
-        'The app’s MCP on 127.0.0.1 (app_*, agent_catalog, skills_suggest, agent_metrics tools), each with its own endpoint and token.'),
+      tech(TOOLS, 'agent_catalog (i ruoli), app_create_chat con roleId e tier (apre il lavoro), task_estimate (la stima), agent_metrics (stato e numeri dei figli), agent_report (il rapporto del figlio).',
+        'agent_catalog (the roles), app_create_chat with roleId and tier (opens the work), task_estimate (the estimate), agent_metrics (the children’s state and numbers), agent_report (the child’s report).'),
+      tech(WHERE, 'MCP dell’app su 127.0.0.1 (tool app_*, agent_catalog, agent_metrics), ognuno con il suo endpoint e token.',
+        'The app’s MCP on 127.0.0.1 (app_*, agent_catalog, agent_metrics tools), each with its own endpoint and token.'),
     ],
     sources: ['src/main/agents/orchestrator-role.ts', 'src/main/agents/task-estimate.ts', 'src/main/chats/orchestrator-service.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/main/agents/run-feedback.ts', 'src/shared/newchat.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/main/chats/held-news.ts', 'src/renderer/lib/orchestrator-route.ts'],
   },
@@ -428,12 +428,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'classifiers',
     title: b('I classificatori', 'The classifiers'),
-    summary: b('Dove l’app smista qualcosa da sola senza spendere token: le skill adatte a un compito, il tipo di lavoro, la posta dell’Orchestrator, i comandi delicati.',
-      'Where the app sorts something by itself without spending tokens: the skills that fit a task, the kind of work, the Orchestrator’s mail, sensitive commands.'),
+    summary: b('Dove l’app smista qualcosa da sola senza spendere token: il tipo di lavoro, la posta dell’Orchestrator, i comandi delicati.',
+      'Where the app sorts something by itself without spending tokens: the kind of work, the Orchestrator’s mail, sensitive commands.'),
     points: [
-      // src/main/skills/suggest.ts; src/main/agents/discovery.ts skills_suggest
-      b('Skill per un compito: la richiesta è confrontata con nome e descrizione di ogni skill del brain, per parole (BM25) e, quando il modello locale è pronto, per significato; l’Orchestrator, o il ruolo che delega, passa le migliori al ruolo. È un consiglio: un ruolo usa solo le skill che il suo avvio gli dà.',
-        'Skills for a task: the request is compared with each brain skill’s name and description, by words (BM25) and, when the local model is ready, by meaning; the Orchestrator, or the role that delegates, passes the best ones to the role. It is advice: a role uses only the skills its launch gives it.'),
+      // src/main/agents/discovery.ts agent_catalog (ADR 0182: the suggester is gone)
+      b('Skill per un compito: nessun suggeritore (ADR 0182: 3 consigli giusti su 4129); l’Orchestrator, o il ruolo che delega, passa per nome le skill che servono. Un ruolo usa solo le skill che il suo avvio gli dà.',
+        'Skills for a task: no suggester (ADR 0182: 3 right suggestions in 4129); the Orchestrator, or the role that delegates, passes the skills it needs by name. A role uses only the skills its launch gives it.'),
       // src/shared/work-concepts.ts CONCEPTS
       b('Italiano e inglese si incontrano: un piccolo lessico di lavori («correggi» = fix, «revisiona» = review, «fonti» = sources…) unisce le richieste in italiano e le skill scritte in inglese.',
         'Italian and English meet: a small lexicon of kinds of work ("correggi" = fix, "revisiona" = review, "fonti" = sources…) joins Italian requests and skills written in English.'),
@@ -454,23 +454,18 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda per carico (CPU > 75% o RAM libera < 15%). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI. Smistare un lotto di lavoro (una inbox, una lista di ticket) lo fa invece l’Orchestrator, una chat per richiesta, quando glielo affidi.',
         'Others: messages you did not type (shown muted), "Waits for work" on the text, the load queue (CPU > 75% or free RAM < 15%). Permissions and questions are not guessed: they arrive structured from the CLI. Triaging a batch of work (an inbox, a list of tickets) is instead the Orchestrator’s, one chat per request, when you hand it one.'),
       // src/renderer/components/brain-model/ClassifiersPage.tsx, src/main/brainmodel/classifier-cards.ts
-      b('Brain → Classificatori ne mostra sei come schede: decisioni, quanto spesso «prendono» (tipo riconosciuto, skill azzeccate, costo dentro la forchetta, tempo del task fra metà e doppio della stima), quante chat decise sono riuscite (verificate da te o da una revisione, dai run o dal registro del brain, mai l’autovalutazione; gli esiti automatici del brain, come «chiusa senza errori», sono contati a parte come non verificati), il costo medio, 8 settimane di andamento e i casi verificati raccolti sui 20 che servono per calibrarsi. Ogni numero ha un «?».',
-        'Brain → Classifiers shows five of them as cards: decisions, how often they "get it" (kind recognised, skills spot on, cost inside the range), how many decided chats succeeded (verified by you or a review, never a self-report), the average cost, 8 weeks of trend and the verified cases collected of the 20 needed to calibrate. Every number has a "?".'),
+      b('Brain → Classificatori ne mostra quattro come schede: decisioni, quanto spesso «prendono» (tipo riconosciuto, costo dentro la forchetta, tempo del task fra metà e doppio della stima), quante chat decise sono riuscite (verificate da te o da una revisione, dai run o dal registro del brain, mai l’autovalutazione; gli esiti automatici del brain, come «chiusa senza errori», sono contati a parte come non verificati), il costo medio, 8 settimane di andamento e i casi verificati raccolti sui 20 che servono per calibrarsi. Ogni numero ha un «?».',
+        'Brain → Classifiers shows four of them as cards: decisions, how often they "get it" (kind recognised, cost inside the range, task time between half and double the estimate), how many decided chats succeeded (verified by you or a review, never a self-report), the average cost, 8 weeks of trend and the verified cases collected of the 20 needed to calibrate. Every number has a "?".'),
     ],
     analogy: b('Come lo smistamento della posta in portineria: regole scritte, una casella «varie» quando non si capisce, e per un sacco intero di posta si chiama chi smista di mestiere.',
       'Like mail sorting at the front desk: written rules, a "misc" box when it is unclear, and for a whole sack of mail you call the person whose job is sorting.'),
-    diagram: { kind: 'flow', steps: [b('Richiesta', 'Request'), b('Parole e lessico', 'Words and lexicon'), b('Skill suggerite', 'Suggested skills'), b('Avvio del ruolo', 'Role launch')] },
+    diagram: { kind: 'flow', steps: [b('Richiesta', 'Request'), b('Parole e lessico', 'Words and lexicon'), b('Ruolo e skill per nome', 'Role and skills by name'), b('Avvio del ruolo', 'Role launch')] },
     tech: [
-      // src/shared/skill-suggest.ts
-      tech(DATA, 'SkillSuggestions { candidates: { name, score 0–100, why }[] (al massimo 5, la migliore prima), mode: hybrid | words }; chi delega passa quelle da 60 in su.',
-        'SkillSuggestions { candidates: { name, score 0–100, why }[] (at most 5, best first), mode: hybrid | words }; whoever delegates passes those from 60 up.'),
       // src/shared/contract.ts TaskKind
       tech(DATA, 'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, orchestrator, altro.',
         'TaskKind: qa-run, review, bug-fix, ops-read, writing, triage, research-web, investigation, app-feature, orchestrator, altro.'),
-      tech(LIMITS, 'Richiesta letta fino a 2000 caratteri; il modello locale ha 2,5 s, poi si risponde a sole parole; nessun token speso.', 'Request read up to 2000 characters; the local model gets 2.5 s, then the answer is words only; no token spent.'),
-      tech(TOOLS, 'Skill per un compito: lo strumento skills_suggest dell’MCP dell’app.', 'Skills for a task: the app MCP’s skills_suggest tool.'),
     ],
-    sources: ['src/main/brainmodel/classifier-cards.ts', 'src/renderer/components/brain-model/ClassifiersPage.tsx', 'src/renderer/lib/classifier-view.ts', 'src/main/skills/suggest.ts', 'src/shared/skill-suggest.ts', 'src/main/agents/discovery.ts', 'src/shared/work-concepts.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts',
+    sources: ['src/main/brainmodel/classifier-cards.ts', 'src/renderer/components/brain-model/ClassifiersPage.tsx', 'src/renderer/lib/classifier-view.ts', 'src/main/agents/discovery.ts', 'src/shared/work-concepts.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts',
       'src/main/agents/tool-policy.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'src/shared/waiting.ts', 'src/shared/roles.ts'],
   },
   {

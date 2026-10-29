@@ -4,10 +4,10 @@
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { BrainModelState, ClassifierChoice } from '../../../src/shared/brain-model';
+import type { BrainModelState } from '../../../src/shared/brain-model';
 import type { SkillCatalog, SkillEntry } from '../../../src/shared/contract';
 vi.mock('../../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(() => new Promise(() => {})), on: () => () => {} } }));
-import { choiceMatch, changesOf, filterSkills, linkGraph, memorySections, noData, pct, skillRows, usd } from '../../../src/renderer/lib/brain-model-view';
+import { changesOf, filterSkills, linkGraph, memorySections, noData, pct, skillRows, usd } from '../../../src/renderer/lib/brain-model-view';
 // the store's hook (useSyncExternalStore) has no server snapshot: the pages read a fixed state instead
 const store = vi.hoisted(() => ({ value: { state: null as unknown, error: null, busy: false } }));
 vi.mock('../../../src/renderer/store/brain-model', () => ({
@@ -79,13 +79,11 @@ describe('links and sections', () => {
     expect([s.knowledge.length, s.happened.length, s.agents.length]).toEqual([1, 1, 2]);
     expect(changesOf(state.changes, ['skill']).map(c => c.id)).toEqual(['c2']);
   });
-  it('says no data instead of zero and matches skill choices', () => {
+  it('says no data instead of zero', () => {
     expect(pct(null)).toBeNull(); expect(usd(null)).toBeNull();
     expect(pct(0.5, 'en-US')).toBe('50%');
     expect(noData([{ runs: 0, success: null, avgCostUsd: null }])).toBe(true);
     expect(noData([{ runs: 1, success: null, avgCostUsd: null }])).toBe(false);
-    const c = (suggested: string[], used: string[]): ClassifierChoice => ({ at: 1, chatId: 'c', goal: 'g', role: { id: 'scout', name: 'Scout' }, suggested, used });
-    expect([choiceMatch(c(['a', 'b'], ['a'])), choiceMatch(c(['a'], ['a', 'x'])), choiceMatch(c([], ['b']))]).toEqual(['same', 'differ', 'none']);
   });
 });
 

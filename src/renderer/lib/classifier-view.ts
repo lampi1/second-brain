@@ -16,7 +16,7 @@ import { getKindIt } from './routing';
 import { formatCost, prettyModel } from './format';
 
 export type CardId = ClassifierCardId | 'estimates' | 'tasks';
-export const CARD_ORDER: CardId[] = ['kind', 'model', 'skills', 'tasks', 'jobkind'];
+export const CARD_ORDER: CardId[] = ['kind', 'model', 'tasks', 'jobkind'];
 
 export interface CardView {
   id: CardId;
@@ -26,7 +26,6 @@ export interface CardView {
   /** cases with only an unverified outcome (the brain's proxy), shown apart from success (ADR 0095) */
   unverified?: ClassifierStat;
   avgCostUsd: number | null;
-  threshold: number | null;
   /** weekly series (null: the classifier reports none, e.g. the estimates loop) */
   weeks: ClassifierWeek[] | null;
   /** the estimates loop's last typical errors (×), oldest first */
@@ -54,7 +53,6 @@ export const usdOf = (v: number | null): string | null => (v === null ? null : m
 export function sliceLabel(id: CardId, key: string): string {
   if (id === 'kind') return (getKindIt() as Record<string, string>)[key] ?? key;
   if (id === 'model') return key === '—' ? t('stats.cls.defaultModel') : prettyModel(key);
-  if (id === 'skills') return key || t('stats.cls.noSkill');
   if (id === 'jobkind') return JOB_KINDS.includes(key as JobKindKey) ? t(`stats.jk.${key as JobKindKey}`) : key;
   return key;
 }
@@ -63,7 +61,7 @@ type JobKindKey = (typeof JOB_KINDS)[number];
 
 /** Main's card as the page draws it. */
 export function fromMain(c: ClassifierCard): CardView {
-  return { id: c.id, decisions: c.decisions, hit: c.hit, success: c.success, ...(c.unverified ? { unverified: c.unverified } : {}), avgCostUsd: c.avgCostUsd, threshold: c.threshold, weeks: c.weeks, spark: [], slices: c.slices, compare: c.compare, lastAt: c.lastAt };
+  return { id: c.id, decisions: c.decisions, hit: c.hit, success: c.success, ...(c.unverified ? { unverified: c.unverified } : {}), avgCostUsd: c.avgCostUsd, weeks: c.weeks, spark: [], slices: c.slices, compare: c.compare, lastAt: c.lastAt };
 }
 
 /** The estimates loop's policy as a card: decisions = estimates recorded, hit = how often the real value fell inside
@@ -73,7 +71,7 @@ export function fromEstimates(p: LearnPolicy | undefined): CardView {
   return {
     id: 'estimates', decisions: p?.recorded.predictions ?? 0,
     hit: p?.coverage ? { value: p.coverage.rate, n: p.coverage.n } : { value: null, n: 0 },
-    success: { value: null, n: 0 }, avgCostUsd: null, threshold: null, weeks: null, spark: p?.spark ?? [], slices: [], compare: null,
+    success: { value: null, n: 0 }, avgCostUsd: null, weeks: null, spark: p?.spark ?? [], slices: [], compare: null,
     lastAt: Number.isFinite(appliedAt) ? appliedAt : null,
     estimates: { typical: p?.typical ?? null, version: p?.version ?? null, check: p?.lastCheck?.state ?? null, pending: !!p?.pending, n: p?.n ?? 0 },
   };
@@ -95,7 +93,7 @@ export function fromTaskAccuracy(a: EstimateAccuracy | null | undefined): CardVi
   const last = withData[withData.length - 1];
   return {
     id: 'tasks', decisions: a?.n ?? 0, hit: { value: a?.hitRate ?? null, n: a?.n ?? 0 }, success: { value: null, n: 0 },
-    avgCostUsd: null, threshold: null, spark: [], slices: [], compare: null, lastAt: null,
+    avgCostUsd: null, spark: [], slices: [], compare: null, lastAt: null,
     weeks: points.map(p => ({ week: isoWeekOf(p.weekStart), decisions: p.n, hits: p.hitRate === null ? 0 : Math.round(p.hitRate * p.n), known: 0, ok: 0, avgCostUsd: null })),
     tasks: { specific: points.map(p => (p.n ? p.specificShare : null)), medianErr: last?.medianErr ?? null, lastSpecific: last?.specificShare ?? null },
   };
@@ -107,7 +105,7 @@ export function cardViews(state: ClassifiersState | null, estimates: LearnPolicy
   return CARD_ORDER.map(id => (id === 'estimates' ? fromEstimates(estimates) : id === 'tasks' ? fromTaskAccuracy(tasks) : byId.get(id) ?? fromMain(emptyCard(id))));
 }
 export function emptyCard(id: ClassifierCardId): ClassifierCard {
-  return { id, decisions: 0, hit: { value: null, n: 0 }, success: { value: null, n: 0 }, avgCostUsd: null, threshold: null, weeks: [], slices: [], compare: null, lastAt: null };
+  return { id, decisions: 0, hit: { value: null, n: 0 }, success: { value: null, n: 0 }, avgCostUsd: null, weeks: [], slices: [], compare: null, lastAt: null };
 }
 
 /** The weekly hit share (null: a week without decisions). */

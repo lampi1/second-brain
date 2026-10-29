@@ -6,7 +6,6 @@ type N = { n: number };
 export const statsIt = {
   // ── Classificatori: page
   'stats.cls.coverage': ({ n, total }: { n: number; total: number }) => `${n} verifiche su ${total} decisioni. La conclusione e il silenzio dell’utente non provano la correttezza. Le review sono campionate: assenza di verifica non significa fallimento.`,
-  'stats.cls.skillsCoverage': 'Solo suggerimenti registrati al lancio: le esecuzioni precedenti senza snapshot sono escluse. L’accordo misura la scelta, non la qualità del risultato.',
   'stats.cls.modelCoverage': 'Le righe di routing contano solo decisioni della tabella; il routing per ruolo può lasciarle vuote.',
   'stats.cls.jobCoverage': 'Il registro dei costi non contiene una verifica del risultato: la riuscita non è misurabile qui.',
   'stats.cls.eyebrow': 'COME DECIDE L’APP, DA SOLA',
@@ -36,10 +35,7 @@ export const statsIt = {
   'stats.cls.noRecord': 'Senza registro',
   'stats.cls.noRecordLead': 'Lavorano a ogni messaggio o comando ma non tengono statistiche: qui solo cosa fanno e perché.',
   'stats.cls.defaultModel': 'predefinito del motore',
-  'stats.cls.noSkill': 'nessuna skill',
   'stats.cls.lastAt': (p: { at: string }) => `ultima decisione ${p.at}`,
-  'stats.cls.threshold': 'Soglia',
-  'stats.cls.thresholdHelp': 'Il punteggio minimo (0-100) perché una skill suggerita passi davvero al ruolo: chi delega dà solo le skill da 60 in su. Il punteggio misura quanto nome e descrizione della skill somigliano alla richiesta.',
   'stats.cls.cost': 'Costo medio',
   'stats.cls.costHelp': 'La media del costo reale (equivalente API, in dollari) delle chat o dei lavori che questo classificatore ha deciso, presa dall’ultima misura di ciascuno. I casi senza costo noto non entrano nella media.',
   'stats.cls.decisions': 'Decisioni',
@@ -76,15 +72,6 @@ export const statsIt = {
   'stats.c.model.hitHelp': 'Delle chat registrate, la quota il cui modello è venuto da una riga della tabella; le altre l’hanno preso dal profilo del ruolo, dal predefinito o da una tua scelta.',
   'stats.c.model.decisionsHelp': 'Le chat dell’app registrate nel ledger di instradamento: per ognuna è annotato chi ha scelto il modello e quale.',
   'stats.c.model.empty': 'Nessuna chat registrata ancora: compariranno qui i modelli usati e chi li ha scelti.',
-  'stats.c.skills.name': 'Skill per un compito',
-  'stats.c.skills.decides': 'Quali skill del brain servono per una richiesta, la migliore per prima.',
-  'stats.c.skills.why': 'Un ruolo usa solo le skill che il suo avvio gli dà: un buon consiglio evita di rifare a mano un lavoro che il brain sa già fare.',
-  'stats.c.skills.how': 'Confronta la richiesta con nome e descrizione di ogni skill, per parole (BM25) e, quando il modello locale è pronto, per significato; passa quelle da 60 in su.',
-  'stats.c.skills.use': 'Se le skill usate spesso non sono quelle suggerite, la loro descrizione non dice bene a cosa servono: riscrivila nella pagina Skill.',
-  'stats.c.skills.hit': 'Uguali al suggeritore',
-  'stats.c.skills.hitHelp': 'Degli ultimi 40 avvii dei ruoli, quanti hanno avuto solo skill che il suggeritore propone oggi per la stessa richiesta, su quanti. Misura l’accordo con il suggeritore di oggi, non se le skill erano quelle giuste.',
-  'stats.c.skills.decisionsHelp': 'Gli ultimi 40 avvii dei ruoli con le skill del lancio registrate (agent-runs.json).',
-  'stats.c.skills.empty': 'Nessun avvio di un ruolo ancora: qui vedrai quante volte il suggeritore indovina le skill giuste.',
   'stats.c.estimates.name': 'Stime di costo e tempo',
   'stats.c.estimates.decides': 'Quanto costerà e quanto durerà un lavoro, con una forchetta, prima di avviarlo.',
   'stats.c.estimates.why': 'Sapere prima se un lavoro è da 20 centesimi o da 5 dollari ti fa scegliere cosa avviare, e quando.',
@@ -157,7 +144,6 @@ export const statsIt = {
   'stats.err.todo': 'Cosa fare',
   'stats.err.trend.up': 'in aumento', 'stats.err.trend.down': 'in calo', 'stats.err.trend.flat': 'stabile',
   'stats.err.trendHelp': 'Confronta gli ultimi 7 giorni con i 7 prima: in aumento se ne ha di più, in calo se meno. Le barrette sono un giorno ciascuna, oggi è l’ultima.',
-  
   
   'stats.err.memory': 'Ogni errore registrato con la regola nata da ciascuno è anche nella pagina Memoria.',
   'stats.err.openMemory': 'Apri Memoria',

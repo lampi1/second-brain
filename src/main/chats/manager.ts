@@ -59,7 +59,6 @@ import { withinParent } from '../agents/worktrees';
 import { FAIL_CLOSED, aboveCeiling, allowsClass, belowParent, browserAccess, claudeDefaultMode, claudeTools, COMMAND_TOOLS, commandsReadOnly, narrowest, readOnlyCommand, toolClassOf, within, type AgentPolicy, type BrowserAccess, type ReadScripts } from '../agents/tool-policy';
 import { readOnlyTools } from '../agents/read-tools';
 import { type UserTaskEvents, type TaskDeliveryPolicy, type AgentOwnerSnapshot, type AgentRun, type AgentRunEnd, type AgentRunOutcome, type AgentRunTags } from '../../shared/agents';
-import { suggestInput } from '../../shared/skill-suggest';
 import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, SKILL_ID, SKILLS_MAX, staleDue, tagName, type RunLinks } from '../agents/runs';
 import { reportOf } from '../agents/run-report';
 import { gateRequest, runtimePluginName, SubagentGate } from '../agents/role-gate';
@@ -114,7 +113,6 @@ export interface ChatManagerOptions {
   writeRetryMs?: number;
   /** a brief waits for this chat's next question (genui/artifacts.ts hasBrief, ADR 0150); absent = none asked for */
   briefReady?: (chatId: string) => boolean;
-  suggestSkills?: (goal: string) => Promise<string[]>;
   /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */
   roleCatalogBrief?: () => string;
   /** the language the user wants replies in (ADR 0120: locale.ts uiLang, the setting or Windows'); absent = not named */
@@ -846,20 +844,12 @@ export class ChatManager implements ChatService {
       items: [], pending: new Map(), session: null, historyLoaded: false,
       jobNew: true, firstPrompt: null, turnSinceDone: false, lastTurnAt: 0,
     };
-    const runGoal = req.goal ?? prompt ?? title;
-    const suggestFor = agent.owner.source === 'catalog' && !req.orchestrator ? suggestInput(runGoal) : null;
-    let suggested: string[] | undefined;
-    if (suggestFor && this.opts.suggestSkills) {
-      try { suggested = await this.opts.suggestSkills(suggestFor); }
-      catch (e) { log.warn('chats', 'skill suggestion snapshot unavailable', { cause: errText(e), hint: 'the launch continues without a suggestion snapshot' }); }
-    }
     // Finish every await and bind live delegation authority before a durable child run exists.
     bindDelegation?.(id);
     if (agent.owner.source === 'catalog' && !req.orchestrator) this.startRun(r, { agentId: agent.owner.id, version: agent.owner.version ?? 1, goal: req.goal ?? prompt ?? title, startedBy: delegator ? 'parent' : by === 'app' ? 'app' : by === 'agent' ? 'orchestrator' : 'user', costKnown: caps.cost, ...links,
       tags: { ...asked, repo: repoOf(cwd) }, ...(agent.tier ? { tier: agent.tier } : {}), model: req.model ?? null });
     if (r.s.run) { r.s.run.taskContract = { ...(by === 'app' && req.doneWhen !== undefined ? { reportExpected: true } : {}), goal: r.s.run.goal, doneWhen: req.doneWhen ?? req.delegation?.doneWhen ?? [], deliveryPolicy: this.deliveryPolicy(req.deliveryPolicy, !!delegator) }; this.runSave(); }
     if (r.s.run?.startedBy === 'app' && r.s.run.reviewOf && r.s.run.taskContract?.reportExpected && !r.s.work) r.s.work = { status: 'assigned', updatedAt: now };
-    if (r.s.run && suggested) { r.s.run.skillSuggestions = { at: now, suggested, used: [] }; this.runSave(); }
     // the Orchestrator opened it while answering the user's own message: the user waits for what it finds (#123)
     if (by === 'agent' && !delegator && r.s.run?.startedBy === 'orchestrator') r.userWaits = this.orchestratorAnswering();
     // checked again where the chat joins the list: chats created at once (agent_delegate's children) awaited in between
@@ -1641,10 +1631,6 @@ export class ChatManager implements ChatService {
     if (mode === 'continue') next.continuedFrom = previous.runId;
     r.s.run = next;
     if (mode === 'new-task' && r.s.plan) r.s.plan = { phase: 'asking', clarified: [], steps: [], at };
-    const suggestFor = suggestInput(prompt);
-    if (suggestFor && this.opts.suggestSkills) void this.opts.suggestSkills(suggestFor).then(suggested => {
-      next.skillSuggestions = { at, suggested, used: [...(next.tags?.skills ?? [])] }; this.runSave(); this.persist();
-    }).catch(e => log.warn('chats', 'skill suggestion snapshot unavailable', { cause: errText(e), hint: 'the task continues without a snapshot' }));
     r.s.work = { status: 'assigned', updatedAt: at };
     if (r.s.delegation) r.s.delegation = { ...r.s.delegation, goal: prompt, doneWhen: next.taskContract.doneWhen, at, result: undefined };
     delete r.rootReportAt; delete r.report; delete r.autoCompleted; delete r.runSeen;
@@ -3732,7 +3718,7 @@ export class ChatManager implements ChatService {
         // a skill Claude loaded while the run is open joins its tags (only Claude reports skills as a tool)
         if (item.kind === 'tool' && item.name === 'Skill' && r.s.harness === 'claude' && r.s.run) {
           const input = item.input as { skill?: unknown; command?: unknown } | null;
-          if (addSkill(r.s.run, input?.skill ?? input?.command)) { if (r.s.run.skillSuggestions) r.s.run.skillSuggestions.used = [...r.s.run.tags!.skills]; this.runSaveSoon(); }
+          if (addSkill(r.s.run, input?.skill ?? input?.command)) this.runSaveSoon();
         }
         if (item.kind === 'tool' && r.s.run) this.noteReceipt(r, item);
         if (item.kind === 'result' && !replace) this.turnEnded(r, item);

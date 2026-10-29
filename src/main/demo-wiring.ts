@@ -29,8 +29,6 @@ import { ResearchService } from './brainmodel/research';
 import { DEMO_LIVE, writeDemoResearch } from './brainmodel/research-demo';
 import { writeDemoLogs } from './brainmodel/log-scan';
 import { writeDemoClassifiers, type DemoClassifierData } from './demo-classifiers';
-import { SkillSuggester } from './skills/suggest';
-import type { SkillSuggestions } from '../shared/skill-suggest';
 import { demoDevopsRun } from './tasks/demo';
 import { TaskService } from './tasks/service';
 import { writeDemoScripts } from './brain/scripts-demo';
@@ -124,9 +122,6 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
       resolveTrial: (id, decision) => agents.resolveTrial(id, decision),
       tierTrial: (id, tier, reason) => { const p = roles().find(x => x.id === id); if (!p) throw new Error('Ruolo non trovato.'); return agents.approveTrial(id, { ...p, tier }, reason); },
     } });
-  // skills_suggest by words only (the demo has no local model)
-  const suggester = new SkillSuggester();
-  const suggestSkills = (request: string): Promise<SkillSuggestions> => suggester.suggest(request, brainModel.skillList());
   mountLifecycleApi(brain, agentLifecycle);
   // the Brain pages (ADR 0077): a made-up brain in the demo agent packs' folder, its former runbook sections moved into
   // skills by the real migration at start (masking included); the other jobs run on the Manutenzione button
@@ -141,7 +136,6 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const demoLogs = writeDemoLogs(path.join(ctx.userData, 'demo-logs'), path.join(ctx.userData, 'maintenance-noise.json'), now());
   const brainModel: BrainModelService = new BrainModelService({ userData: ctx.userData, root: () => demoBrainRoot, home: null, catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning,
     runs: (): AgentRun[] => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...demoLearningRuns(now()), ...(demoCls ??= writeDemoClassifiers(demoBrainRoot, ctx.userData, now(), brainModel.skillList().map((x: { name: string }) => x.name).filter(n => n !== 'pulizia-ambiente'))).runs], routing: () => brain.routingInfo(), now,
-    suggestSkills: async text => (await suggestSkills(text)).candidates.map(c => c.name),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: false,
     scripts: { file: id => demoScripts.get(id).path, changed: () => { demoScripts.invalidate(); ctx.emitter.emit('scripts:changed', undefined); } },
     // the log step of the Manutenzione (#150): made-up logs, whose new groups become app bug cards (ADR 0132)
@@ -292,7 +286,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   return {
     morning,
     cloud, chats, browser, personal, recordings, learn, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, source, engines, later: createLater(ctx),
-    agents, runFeedback, agentLifecycle, agentPacks, brainModel, research, suggestSkills, queries, memoryReview, learningReview,
+    agents, runFeedback, agentLifecycle, agentPacks, brainModel, research, queries, memoryReview, learningReview,
     setup: new SetupService(ctx.userData, true, now),
     autoClose: new AutoCloseService({ now: autoCloseNow, delayMs: () => 0, candidates: () => [], archive: async () => false, emit: states => ctx.emitter.emit('chat:autoCloseStatus', states) }),
     progress: new ProgressService(ctx.userData, { enabled: false, chats: () => chats.list() }),
