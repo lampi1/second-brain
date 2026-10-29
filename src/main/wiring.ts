@@ -959,7 +959,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   brainModelRef.current = brainModel;
   // the one-click maintenance (ADR 0132, 0153): the free cleanup, the invisible research chat, its cards in Proposte
   const issuesUrl = issuesUrlOf(app.getAppPath()), appIssuesUrl = () => issuesUrl;
-  const research = new ResearchService({ userData: ctx.userData, lang: uiLang, root: () => brain.info().brainRoot, appVersion: () => app.getVersion(), issuesUrl: appIssuesUrl, appDir: () => app.getAppPath(),
+  const research = new ResearchService({ guideRepo: () => repoRootOf(path.dirname(fileURLToPath(import.meta.url))), userData: ctx.userData, lang: uiLang, root: () => brain.info().brainRoot, appVersion: () => app.getVersion(), issuesUrl: appIssuesUrl, appDir: () => app.getAppPath(),
     // engines that are on, read files (an API engine has no tools here) and report their cost (the cap is enforced on
     // it: Codex and the ACP engines report none, so the research would run to the hour with "0 $" on screen)
     engines: () => engineInfos().filter(e => e.kind !== 'api' && e.caps.cost && e.caps.tools && engineOn(brain.settings(), e.id)).map(e => ({ harness: e.id, label: e.label, web: true, effort: e.caps.effort })),

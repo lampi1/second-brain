@@ -36,6 +36,8 @@ import { allPolicies } from '../proposals/policy';
 import { defaultPrompt, MAX_PROMPT, researchFrame, researchMessage } from './research-prompt';
 import { ResearchStore } from './research-store';
 import { CandidateService, isCandidateFinding, type CandidatePorts } from './research-candidate';
+import { guideMaintenanceSection } from '../guide/maintenance';
+import { GUIDE_SECTION } from './research-tools';
 import { checkRoleText, pickRole, reflectSection, REFLECT_BUDGET_SHARE, ROLE_REFLECT_SECTION, type ReflectPick } from './role-reflect';
 
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -83,6 +85,9 @@ export interface ResearchDeps {
   /** starts a trial version of a role with a revised text (catalog approveTrial), refused when the role is no longer on
    *  `baseVersion` (ADR 0195); absent = the research gets no role reflection */
   roleTrial?: (role: string, text: string, baseVersion: number, reason: string) => void;
+  /** the app's own repository when run from a clone (guide/anchors.ts repoRootOf): the Guida cards whose code changed
+   *  and the German left to translate (ADR 0196), read as the pack section «guide»; absent or null = not offered */
+  guideRepo?: () => string | null;
 }
 
 /** The research's extra frame lines for the ADR 0195 steps (after the method and the fixed frame). */
@@ -344,6 +349,7 @@ export class ResearchService {
   }
   pack(chatId: string, section: unknown): string {
     const r = this.mine(chatId), s = (section ?? 'summary') as PackSection;
+    if (section === GUIDE_SECTION) { const repo = this.d.guideRepo?.() ?? null; return repo ? guideMaintenanceSection(repo) : 'Not offered: the app is not running from its repository.'; }
     if (section === ROLE_REFLECT_SECTION) return reflectSection(r.reflect, { clean: t => scrub(t, this.privacy()), budgetLeft: this.reflectBudget(r) });
     if (!PACK_SECTIONS.includes(s)) throw new Error(`section: one of ${PACK_SECTIONS.join(', ')}.`);
     return r.pack[s];
