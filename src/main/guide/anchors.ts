@@ -35,6 +35,15 @@ export function computeHashes(root: string, cards = CONCEPTS): { hashes: Record<
 }
 
 export const storedAnchors = (): StoredAnchors => stored as StoredAnchors;
+/** The stored hashes of a checkout (its src/shared/guide-anchors.json as it is on disk), else the bundled copy: a clone
+ *  updated but not rebuilt must not show cards «da verificare» only because the build is older. */
+export function anchorsIn(root: string): StoredAnchors {
+  try {
+    const o = JSON.parse(fs.readFileSync(path.join(root, 'src', 'shared', 'guide-anchors.json'), 'utf8')) as Partial<StoredAnchors>;
+    if (o && o.version === 1 && o.hashes && typeof o.hashes === 'object') return o as StoredAnchors;
+  } catch { /* unreadable: the bundled copy */ }
+  return storedAnchors();
+}
 
 /** The cards whose anchored code differs from the stored hashes. */
 export function staleInRepo(root: string, cards = CONCEPTS, table: StoredAnchors = storedAnchors()): StaleCard[] {

@@ -25,7 +25,10 @@ src/shared/guide-anchors.json, committed. test/unit/guide-anchors.test.ts fails 
 card and point: "card X point Y: … code changed, re-read and update the text, then run node scripts/guide-anchors.mjs";
 it also fails when an anchor no longer resolves. In a run from the repo (out/main/.. holds a .git, the same rule as
 "Aggiorna"'s devRepo) IPC `guide:stale` gives the stale cards and the Guida marks them «da verificare», naming the points
-and the code in the panel. A packaged build has no sources: nothing is marked. main/guide/maintenance.ts exports
+and the code in the panel; it compares with the repo's own src/shared/guide-anchors.json (the bundled copy only when
+that file cannot be read), so a clone updated but not rebuilt shows no spurious badges (review 2026-10-29). A packaged
+build has no sources: nothing is marked. A question whose engine throws gets a clean Italian reason.
+main/guide/maintenance.ts exports
 `guideMaintenanceSection(repoRoot)`, a text section the Manutenzione research can take (the integrator wires it into the
 research pack; research-pack.ts is not changed here).
 

@@ -8,6 +8,10 @@ import { GUIDE_DE } from '@shared/concept-guide.de';
 import { answerPieces, citations, guidePrompt, rankCards } from '@shared/guide-ask';
 import { germanReport, germanReportText } from '@shared/guide-german';
 import type { OneShotRequest, OneShotResult } from '../../src/main/agents/oneshot';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { anchorsIn, storedAnchors } from '../../src/main/guide/anchors';
 import { GuideService } from '../../src/main/guide/service';
 
 const result = (over: Partial<OneShotResult> = {}): OneShotResult => ({ ok: true, text: 'Usa agent_delegate [card:delegation], vedi `src/shared/delegation.ts` e `src/nope.ts` [card:made-up].',
@@ -72,6 +76,19 @@ describe('GuideService.ask (fake engine)', () => {
   });
   it('checks nothing in a packaged build', () => {
     expect(make(result()).svc.stale()).toEqual({ checked: false, cards: [] });
+  });
+  it('an engine that throws answers a clean Italian reason, never the raw error', async () => {
+    const svc = new GuideService({ runOnce: async () => { throw new Error('spawn ENOENT C:/x/claude.exe'); }, index: async () => '', repoRoot: null });
+    const a = await svc.ask({ question: 'Come delego?', lang: 'it' });
+    expect(a).toMatchObject({ ok: false, reason: 'La Guida non ha potuto rispondere adesso: riprova tra poco.' });
+  });
+  it('compares against the repo\'s own stored hashes, not the bundled copy', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-guide-'));
+    fs.mkdirSync(path.join(root, 'src', 'shared'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'src', 'shared', 'guide-anchors.json'), JSON.stringify({ version: 1, hashes: { 'src/x.ts#y': 'abc' } }));
+    expect(anchorsIn(root).hashes).toEqual({ 'src/x.ts#y': 'abc' });
+    fs.writeFileSync(path.join(root, 'src', 'shared', 'guide-anchors.json'), '{ broken');
+    expect(anchorsIn(root)).toBe(storedAnchors());
   });
 });
 
