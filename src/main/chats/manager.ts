@@ -1740,6 +1740,24 @@ export class ChatManager implements ChatService {
     if (isCorrection(text) && r.s.run?.corrections) { r.s.run.corrections.tagged++; this.runSave(); this.persist(); }
   }
 
+  /** Before a user message is sent (ADR 0197): the chat's title and the run whose agent had already reported (a reply in
+   *  the run, or its agent_report), so a correction to it counts as «riapertura dopo il report»; null = no such chat. */
+  correctionContext(chatId: string): { title: string; reportedRunId: string | null } | null {
+    const r = this.chats.get(chatId);
+    if (!r) return null;
+    const run = r.s.run;
+    return { title: r.s.title, reportedRunId: run?.report ? run.runId : null };
+  }
+
+  /** A correction reached a run after its agent reported (ADR 0197): its `corrections.afterReport` (AGENTS-DESIGN §5),
+   *  never written before. Runs recorded before corrections were counted stay unknown. */
+  correctedAfterReport(runId: string): void {
+    const run = this.runs.get(runId);
+    if (!run?.corrections) return;
+    run.corrections.afterReport++;
+    this.runSave(); this.persist();
+  }
+
   /** The §5 metrics per agent and version (A6): runs kept plus the rollups of the pruned ones. */
   runMetrics(opts: { since?: number; skill?: string; app?: string; repo?: string } = {}): ReturnType<typeof runMetrics> {
     // Metrics read the current in-memory record; reading must not force a synchronous archive write.

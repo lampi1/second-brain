@@ -14,4 +14,5 @@ corregge, non si toglie.
 Vuoto il primo giorno. La pagina Qualità dell'app legge da qui quante volte hai dovuto correggere l'IA e se le
 regole nate da un errore lo hanno fermato davvero.
 
-Formato: `- AAAA-MM-GG HH:MM · chat/agente · area · tipo · detto: … · vero: … · visto da: chi e come [· regola: quella nata]`
+Formato: `- AAAA-MM-GG HH:MM · chat/agente · area · tipo · detto: … · vero: … · visto da: chi e come [· regola: quella nata]`.
+Quando l'errore lo ha trovato {{OWNER}} (un suo messaggio), «visto da» comincia col suo nome: `visto da: {{OWNER}}, …`.

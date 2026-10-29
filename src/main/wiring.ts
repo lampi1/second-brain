@@ -126,6 +126,7 @@ import { JudgeSampler, judgeSamplingOn } from './agents/judge-sample';
 import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
 import { HybridSearch, workerFileNextTo } from './search/hybrid/service';
+import { UserCorrectionStore } from './brain/user-corrections';
 import { apiSearch, brainSearchTool } from './search/hybrid/tool';
 import { BrainScripts, touchesScripts } from './brain/scripts';
 import { BrainChangelog } from './brain/changelog';
@@ -155,6 +156,8 @@ export interface Wired {
   queries?: BrainQueries;
   /** the hybrid brain search (SPEC 23); absent in the demo (Ctrl+K then uses its own index) */
   hybrid?: HybridSearch;
+  /** the user's corrections counted at chat:send (ADR 0197); absent in the demo */
+  userCorrections?: UserCorrectionStore;
   workflows?: Workflows;
   routineArchive?: LegacyArchive;
   /** the Routine section's packages and runs (routines:* IPC); absent in the demo */
@@ -892,9 +895,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   brain.onSettingChange(c => { if (c.key.startsWith('tasks.') || c.key === 'brainRoot') tasks.schedule(); });
   tasks.schedule();
   // Qualità page's app half (/api/quality): this app's turns, the PRs of the last DevOps read, the brain's bug-reopen.mjs
+  // the user's corrections, counted by the app when he sends a message (ADR 0197): the Qualità card's numerator
+  const userCorrections = new UserCorrectionStore({ file: path.join(ctx.userData, 'user-corrections.json'), detect: text => hybrid.detectCorrection(text), runs: () => manager.runs.list() });
   const quality = new Quality({
     logDir: path.join(ctx.userData, 'logs'), cacheFile: path.join(ctx.userData, 'quality-reopen.json'), brainRoot: () => brain.info().brainRoot,
-    tasks: () => tasks.get(), run: (script, args, cwd, ms) => runNode(node, script, args, cwd, ms),
+    tasks: () => tasks.get(), run: (script, args, cwd, ms) => runNode(node, script, args, cwd, ms), corrections: () => userCorrections.summary(),
   });
   brain.serveApi('/api/quality', q => quality.get({ fresh: q.get('fresh') === '1' }));
   brain.serveApi('/api/agents/analytics', () => manager.analytics.readModel());
@@ -1019,7 +1024,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     workflows, routineArchive, routines, brainModel, research, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
-    cloud, chats, browser, personal, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid,
+    cloud, chats, browser, personal, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, userCorrections,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
@@ -1027,7 +1032,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { routines.stop(); mcpServers.stop(); brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); engines.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { routines.stop(); mcpServers.stop(); brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
     killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
   };
 }
