@@ -245,7 +245,6 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
 
   return {
     feed: () => feed.slice(),
-    mute: (kind, muted) => { if (!kindOk(kind) || typeof muted !== 'boolean') throw new Error('feed:mute: tipo e true/false'); cfg.set({ mute: { [kind]: muted } }); },
     usage: () => lastUsage ?? usage?.get() ?? { todayUsd: 0, fiveHourPct: null, fiveHourResetsAt: null, weekPct: null },
     info: () => {
       const root = cfg.brainRoot();

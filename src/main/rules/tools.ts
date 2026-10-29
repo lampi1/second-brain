@@ -57,11 +57,8 @@ function values(root: string): Record<string, string> {
   const raw = read(root, 'brain.json');
   const stored = (raw ? (JSON.parse(raw) as { template?: TemplateValues }).template : undefined) ?? {};
   const B = fwd(root), H = fwd(os.homedir()), R = fwd(stored.REPOS ?? path.join(os.homedir(), 'source', 'repos'));
-  // without a stored TODAY the brain's own birth day: today's date would change the copy's signature every midnight,
-  // re-rendering it under running chats (issue #278)
-  const born = () => { try { return fs.statSync(path.join(root, 'brain.json')).birthtime.toISOString().slice(0, 10); } catch { return new Date().toISOString().slice(0, 10); } };
   const out: Record<string, string> = {
-    OWNER: stored.OWNER ?? 'Owner', BRAIN_NAME: path.basename(root), TODAY: stored.TODAY ?? born(),
+    OWNER: stored.OWNER ?? 'Owner', BRAIN_NAME: path.basename(root), TODAY: stored.TODAY ?? new Date().toISOString().slice(0, 10),
     BRAIN: B, BRAIN_WIN: win(B), BRAIN_JS: B, BRAIN_RE: B.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&'),
     REPOS: R, REPOS_WIN: win(R), REPOS_JS: R, HOME: H, HOME_WIN: win(H), HOME_JS: H,
     DEVOPS_ORG: stored.DEVOPS_ORG ?? 'your-org', DEVOPS_PROJECT: stored.DEVOPS_PROJECT ?? 'your-project',
@@ -163,8 +160,12 @@ export function toolsDir(root: string): string {
 export function ensureTools(root: string): string {
   const source = templateRoot();
   const { app, files, hash } = templateScan(source), own = new Set(app.text);
-  const V = values(fs.realpathSync(root));
-  const digest = createHash('sha256').update('render-v3').update(JSON.stringify(V)).update(hash).digest('hex');
+  const real = fs.realpathSync(root), V = values(real);
+  // a TODAY the brain does not store is today's date: kept out of the signature, or the copy would be rendered again
+  // every midnight under running chats (issue #278)
+  let storedToday = false;
+  try { storedToday = typeof (JSON.parse(read(real, 'brain.json') || '{}') as { template?: TemplateValues }).template?.TODAY === 'string'; } catch { /* values() already refused it */ }
+  const digest = createHash('sha256').update('render-v3').update(JSON.stringify(storedToday ? V : { ...V, TODAY: '' })).update(hash).digest('hex');
   const target = toolsDir(root);
   const marker = path.join(target, '.sb-tools.json');
   const current = () => { try { return (JSON.parse(fs.readFileSync(marker, 'utf8')) as { sig?: string }).sig === digest; } catch { return false; } };
@@ -202,10 +203,10 @@ export function ensureTools(root: string): string {
 }
 const LOCKED = new Set(['EPERM', 'EBUSY', 'EACCES']);
 /** In-place update of a held copy: every staged file over its old one, files the release dropped removed (best effort:
- * a file still open stays), the marker last so a half-done update renders again next time. */
+ * a file still open stays), the new marker last. The old marker stays meanwhile: hooks and tools read the brain root and
+ * the topics from it, and its old signature makes a half-done update (a held file refused) render again next time. */
 function overwrite(stage: string, target: string): void {
   const marker = path.join(target, '.sb-tools.json');
-  fs.rmSync(marker, { force: true });
   const keep = new Set<string>();
   const walk = (d: string, base: string, each: (rel: string, file: string, dir: boolean) => void) => {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
@@ -216,8 +217,11 @@ function overwrite(stage: string, target: string): void {
   };
   walk(stage, stage, (rel, file, dir) => {
     keep.add(rel);
-    if (dir) fs.mkdirSync(path.join(target, rel), { recursive: true });
-    else if (rel !== '.sb-tools.json') fs.copyFileSync(file, path.join(target, rel));
+    const to = path.join(target, rel);
+    // a file that became a folder in this release, or the other way round
+    try { if (fs.lstatSync(to).isDirectory() !== dir) fs.rmSync(to, { recursive: true, force: true }); } catch { /* new */ }
+    if (dir) fs.mkdirSync(to, { recursive: true });
+    else if (rel !== '.sb-tools.json') fs.copyFileSync(file, to);
   });
   const extra: string[] = [];
   walk(target, target, rel => { if (!keep.has(rel)) extra.push(rel); });

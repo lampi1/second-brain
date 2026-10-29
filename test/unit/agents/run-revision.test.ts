@@ -1,5 +1,6 @@
-// The run store's revision (AgentRunStore.revision): every change worth a write bumps it, a save alone does not, so the
-// read worker can keep its copy of the runs between Memoria and estimate reads (issues #276, #277).
+// The run store's revision (AgentRunStore.revision): every change worth a write and every save bumps it (a direct save()
+// after a mutation is how some callers record a change), so the read worker can keep its copy of the runs between
+// Memoria and estimate reads (issues #276, #277).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,7 +10,7 @@ import { AgentRunStore } from '../../../src/main/agents/runs';
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
-it('bumps on a new run and on touch, never on a save that changes nothing', () => {
+it('bumps on a new run and on touch, not on a flush with nothing to write', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-runrev-')); dirs.push(dir);
   const store = new AgentRunStore(dir);
   const r0 = store.revision;

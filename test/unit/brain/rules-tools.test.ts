@@ -81,6 +81,27 @@ describe('app-owned template utilities', () => {
     expect(fs.statSync(path.join(dir, '.sb-tools.json')).mtimeMs).toBe(stamp);
     expect(fs.readdirSync(path.dirname(dir)).filter(n => n.includes('.new-') || n.includes('.old-'))).toEqual([]);
   }, 60_000);
+  it('a held file the in-place update cannot replace keeps the old marker, and the next call finishes the update', () => {
+    const root = brain();
+    const dir = ensureTools(root);
+    const marker = fs.readFileSync(path.join(dir, '.sb-tools.json'), 'utf8');
+    fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', template: { OWNER: 'Later' }, rules: { topicFiles: [] } }));
+    const realRename = fs.renameSync, realCopy = fs.copyFileSync;
+    const held = path.join(dir, 'ops/tools/mem.mjs');
+    const rename = vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+      if (from === dir) throw Object.assign(new Error('EPERM'), { code: 'EPERM' });
+      realRename(from, to);
+    });
+    const copy = vi.spyOn(fs, 'copyFileSync').mockImplementation((from, to, mode) => {
+      if (to === held) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
+      realCopy(from, to, mode);
+    });
+    try { expect(() => ensureTools(root)).toThrow(/EBUSY/); } finally { copy.mockRestore(); }
+    // hooks and tools still find the brain root in the old marker meanwhile
+    expect(fs.readFileSync(path.join(dir, '.sb-tools.json'), 'utf8')).toBe(marker);
+    try { expect(ensureTools(root)).toBe(dir); } finally { rename.mockRestore(); }
+    expect(fs.readFileSync(held, 'utf8')).toContain('Later');
+  }, 60_000);
   it('without a stored TODAY the copy keeps one date (no re-render at midnight)', () => {
     const root = brain();
     const dir = ensureTools(root);

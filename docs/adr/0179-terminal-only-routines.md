@@ -1,7 +1,7 @@
 <!-- The sole routine executor is the terminal CLI; the app observes explicitly opened runs. -->
 # ADR 0179: terminal-only routines, demand-driven app observation
 
-Date: 2026-10-28. Status: accepted. Supersedes the app-execution portions of ADRs 0155, 0156, 0158–0162, 0164–0170 and 0175–0177 (not 0157, voice, or 0163, renderer budgets).
+Date: 2026-10-28. Status: accepted. Supersedes the app-execution portions of ADRs 0155, 0156, 0158–0162, 0164–0169 and 0175–0177 (not 0157, voice, or 0163, renderer budgets).
 
 The app's retired flows host still advanced and settled historical runs, including cancelled runs whose DevOps writes
 had unknown outcomes. Its five-second loop and repeated full-state copies also contributed unnecessary main-process

@@ -10,8 +10,11 @@ const intervals: IntervalCache = new Map();
 let runs: { key: string; list: AgentRun[] } | null = null;
 parentPort!.on('message', ({ id, request, runsKey, cached }: ReadMessage) => {
   try {
-    if (runsKey !== undefined) runs = { key: runsKey, list: runsOf(request) };
-    else if (cached) { if (!runs) throw new Error('No runs cached in the read worker'); request = withRuns(request, runs.list); }
+    if (cached) {
+      // the main process forgets what it sent when this fails: the next read sends the runs again (read-work.ts)
+      if (!runs || runs.key !== runsKey) throw new Error('Read worker runs out of date');
+      request = withRuns(request, runs.list);
+    } else if (runsKey !== undefined) runs = { key: runsKey, list: runsOf(request) };
     const value = request.op === 'brain' ? readBrainView(request.input, undefined, intervals)
       : estimatesState(request.runs, request.runIds, request.now);
     parentPort!.postMessage({ id, value });

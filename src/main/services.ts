@@ -113,7 +113,6 @@ export interface FeedInput { kind: string; title: string; detail?: string; who?:
 
 export interface BrainService {
   feed(): FeedEvent[];
-  mute(kind: string, muted: boolean): void;
   usage(): Usage;
   info(): Pick<AppInfo, 'brainRoot' | 'brainProblem'>;
   settings(): Settings;

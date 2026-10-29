@@ -575,9 +575,13 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (!target || !mine(target) || target.parentId || target.isOrchestrator) throw new ToolRefusal('Work conversation not found; use app_chats.');
         // said with the chat's own role, so the next call is right (issue #274): a fresh chat, or this chat's role
         if (a.roleId === 'sentinel' || target.agent?.id === 'sentinel') throw new ToolRefusal('An independent Sentinel review always needs a fresh chat: use app_create_chat.');
-        if (!isWorkRole(a.roleId) || target.agent?.id !== a.roleId) throw new ToolRefusal(`Role mismatch: this chat runs ${target.agent?.id ?? 'no role'}, not ${String(a.roleId)}. Assign ${target.agent?.id ?? 'its role'} work here, or use app_create_chat for ${String(a.roleId)}.`);
+        if (!isWorkRole(a.roleId) || target.agent?.id !== a.roleId) {
+          const asked = String(a.roleId).slice(0, 40), runs = target.agent?.id ?? 'no role';
+          throw new ToolRefusal(`Role mismatch: this chat runs ${runs}, not ${asked}. Assign ${target.agent?.id ?? 'its role'} work here, or use app_create_chat for ${asked}.`);
+        }
         if (typeof a.cwd !== 'string' || !path.isAbsolute(a.cwd) || path.resolve(a.cwd) !== path.resolve(target.cwd)) throw new ToolRefusal('Project changed: create a fresh chat.');
-        const profile = d.agents?.().profiles.find(p => p.id === a.roleId);
+        if (!d.agents) throw new Error('app_assign_task: the role catalog is not available.');
+        const profile = d.agents().profiles.find(p => p.id === a.roleId);
         if (!profile || profile.activeVersion !== target.agent.version) throw new ToolRefusal('Role configuration changed: create a fresh chat.');
         if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || !Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1) throw new ToolRefusal('Invalid assignment mode/version.');
         const prompt = typeof a.prompt === 'string' ? a.prompt.trim() : '';

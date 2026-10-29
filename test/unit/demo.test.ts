@@ -123,11 +123,9 @@ describe('demo chats (frozen)', () => {
     await expect(chats.continueChat('orchestrator')).rejects.toThrow(/Orchestrator/);
   });
 
-  it('brain: feed, mute and usage that follows the chats\' cost', () => {
+  it('brain: feed and usage that follows the chats\' cost', () => {
     const { brain } = make();
     expect(brain.feed().length).toBeGreaterThan(5);
-    brain.mute('idea', true);
-    expect(brain.feed().some(e => e.kind === 'idea')).toBe(false);
     expect(brain.usage().todayUsd).toBeCloseTo(38.2);
   });
 });

@@ -175,7 +175,7 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0167](0167-user-write-reconciliation.md) User reconciliation of uncertain routine writes — accepted, partly superseded by 0169, 0179
 - [0168](0168-routine-test-deploy-started-release.md) A routine test deploy creates one started release; a stuck draft is deleted — accepted, partly superseded by 0179
 - [0169](0169-proposed-write-reconciliation.md) Proposed write reconciliation and same-run recovery — accepted, partly superseded by 0179
-- [0170](0170-reviews-on-off-counters-and-write-scope.md) Reviews on/off, honest counters for the Orchestrator, Flash and Pulse, reconcilable writes without a grant — accepted, partly superseded by 0179
+- [0170](0170-reviews-on-off-counters-and-write-scope.md) Reviews on/off, honest counters for the Orchestrator, Flash and Pulse, reconcilable writes without a grant — accepted
 - [0171](0171-main-process-stalls-deferred-store-writes.md) Main-process stalls: per-second work kept linear, store writes deferred and asynchronous — accepted
 - [0172](0172-engines-below-normal-priority.md) Engines run below normal CPU priority; stalls say whether the app was working or waiting — accepted
 - [0173](0173-working-line-shows-real-activity.md) The working line shows what the chat really does — accepted

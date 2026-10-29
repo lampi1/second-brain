@@ -918,7 +918,6 @@ const LIVE_FEED: [string, string, Priority, string, string][] = [
 
 export class DemoBrain implements BrainService {
   private events: FeedEvent[];
-  private muted = new Set<string>();
   private timers: ReturnType<typeof setInterval>[] = [];
   private n = 0;
   private base: number;
@@ -951,13 +950,11 @@ export class DemoBrain implements BrainService {
   }
 
   private push(e: FeedEvent): void {
-    if (this.muted.has(e.kind)) return;
     this.events = [e, ...this.events].slice(0, 300);
     this.emit('feed:events', [e]);
   }
 
-  feed(): FeedEvent[] { return this.events.filter(e => !this.muted.has(e.kind)); }
-  mute(kind: string, muted: boolean): void { if (muted) this.muted.add(kind); else this.muted.delete(kind); }
+  feed(): FeedEvent[] { return this.events.slice(); }
 
   usage(): Usage {
     const today = Math.round((this.base + this.chats.list().reduce((a, c) => a + c.costUsd, 0)) * 100) / 100;

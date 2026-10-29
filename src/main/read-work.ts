@@ -19,9 +19,11 @@ export class ReadWorker {
       w.on('message', (m: { id: number; value?: unknown; error?: string }) => {
         const pending = this.waiting.get(m.id); if (!pending) return;
         clearTimeout(pending.timer); this.waiting.delete(m.id);
-        if (m.error) pending.reject(new Error(m.error)); else pending.resolve(m.value);
+        // a failed read may have left the worker without the runs it was sent: they go again with the next read
+        if (m.error) { this.sent = null; pending.reject(new Error(m.error)); } else pending.resolve(m.value);
       });
       w.on('error', e => { if (this.worker === w) this.stop(e); });
+      w.on('messageerror', e => { if (this.worker === w) this.stop(e); });
       w.on('exit', code => { if (this.worker === w) this.stop(new Error(`Read worker exited (${code})`)); });
       w.unref();
     }
@@ -30,8 +32,8 @@ export class ReadWorker {
       const timer = setTimeout(() => { this.stop(new Error('Read worker timed out')); }, 60_000); timer.unref();
       this.waiting.set(id, { resolve: value => resolve(value as ReadResults[K]), reject, timer });
       const message: ReadMessage = runsKey === undefined ? { id, request }
-        : runsKey === this.sent ? { id, request: withRuns(request, []), cached: true } : { id, request, runsKey };
-      try { w.postMessage(message); if (message.runsKey !== undefined) this.sent = message.runsKey; }
+        : runsKey === this.sent ? { id, request: withRuns(request, []), runsKey, cached: true } : { id, request, runsKey };
+      try { w.postMessage(message); if (!message.cached && message.runsKey !== undefined) this.sent = message.runsKey; }
       catch (e) { clearTimeout(timer); this.waiting.delete(id); reject(e); }
     });
   }

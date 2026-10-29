@@ -1304,7 +1304,6 @@ export interface InvokeMap {
   'chat:autoClosePresence': [{ holds: AutoClosePresence[] }, void];
   'chat:autoCloseKeep': [{ chatId: string; keep: boolean }, void];
   'agents:list': [void, AgentCatalog];
-  /** the brain skills that fit a request, best first (skills/suggest.ts; advisory: the user picks what a role chat may use) */
   /** the user's Annulla on a change the app applied (feed card, change log) */
   'agents:undo': [AgentUndo, AgentProfile];
   /** the shareable brain zip for colleagues (ADR 0088): rules, skills, roles, scripts, never memory; null = save dialog cancelled */
@@ -1405,7 +1404,6 @@ export interface InvokeMap {
   'app:createBrain': [CreateBrainRequest, CreatedBrain | null];
   /** the viewer's "Show in folder": a local file selected in Explorer, never opened or run (main/open-path.ts) */
   'app:showInFolder': [{ path: string }, OpenPathResult];
-  /** the first lines or a thumbnail of a file a message names (absolute, or relative to the chat's folder) */
   /** A user-opened file link: any local file, never a network share, read-only and bounded; text one page at a time
    *  around a cited `line`, ending at `before`, or from `offset` (`align`: at the next line start). Main renderer only. */
   'app:readFile': [{ path:string; chatId?:string; offset?:number; align?:boolean; before?:number; line?:number }, FileViewResult];
@@ -1525,8 +1523,6 @@ export interface InvokeMap {
   /** the user saves the table from the settings page: checked against the hard rules, written as a new version;
    *  exploration = the share of chats (0 to 0.5) that try a little-sampled model, omitted = unchanged */
   'routing:save': [{ routes: RoutingRow[]; reason?: string; exploration?: number; costWeight?: number; baseVersion?: number }, RoutingInfo];
-  /** the user brings back an older version: a new version with its rows and exploration (history stays linear) */
-  /** "Nuova chat": what chat:createRouted would start for this request now, without starting it (no exploration) */
   'tasks:get': [void, TasksState];
   /** "Aggiorna ora": runs the scripts now (resolves when done; a read already running is joined) */
   'tasks:refresh': [void, TasksState];
@@ -1627,14 +1623,12 @@ export interface InvokeMap {
   'approvals:decide': [ApprovalDecision, PulseResult];
   /** cloud agents (ADR 0080, main/cloud/): the known ones (refresh = ask the vendors now, at most every 30 s) */
   'cloud:list': [{ refresh?: boolean } | void, CloudState];
-  /** the user's click (or app_create_chat where:'cloud'): fails closed with the reason (not signed in, no GitHub remote…) */
   'cloud:followUp': [{ id: string; text: string }, CloudAgent];
   'cloud:stop': [{ id: string }, CloudAgent];
   /** "Porta in locale": the result into a NEW worktree beside the repo (never into the checkout itself) */
   'cloud:apply': [{ id: string }, CloudApplyResult];
   /** the strip expanded now (its messages stream while it stays open, Cursor), or null */
   'cloud:watch': [{ id: string | null }, void];
-  /** whether each engine can start a cloud agent from this folder now (key, sign-in, GitHub remote, pushed branch) */
   /** forget a finished agent (the vendor keeps it) */
   'cloud:dismiss': [{ id: string }, CloudState];
 }

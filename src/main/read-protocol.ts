@@ -6,8 +6,8 @@ import type { RunEstimates } from '../shared/task-estimate';
 import type { BrainViewInput } from './brainmodel/view';
 export type ReadRequest = { op: 'brain'; input: BrainViewInput } | { op: 'estimates'; runs: AgentRun[]; runIds: string[]; now: number };
 export interface ReadResults { brain: BrainModelState; estimates: RunEstimates }
-/** The message to the worker: `runsKey` = the runs it carries are stored under this key; `cached` = no runs sent, use the
- *  stored ones. */
+/** The message to the worker: `runsKey` = the runs it carries are stored under this key; `cached` = no runs sent, use
+ *  the ones stored under `runsKey` (another key stored = an error, never another key's runs). */
 export interface ReadMessage { id: number; request: ReadRequest; runsKey?: string; cached?: true }
 export const runsOf = (r: ReadRequest): AgentRun[] => r.op === 'brain' ? r.input.runs : r.runs;
 export const withRuns = (r: ReadRequest, runs: AgentRun[]): ReadRequest => r.op === 'brain' ? { ...r, input: { ...r.input, runs } } : { ...r, runs };
