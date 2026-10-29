@@ -128,6 +128,8 @@ export interface SessionOptions {
    *  read-only means (Claude: plan mode, read tools only, no MCP, no hooks, no transcript; ACP: its read-only mode,
    *  the engine's allow rules left out). Its owner still answers every permission itself. */
   readOnly?: boolean;
+  /** with readOnly, Claude only: the run searches and reads the web and never a file (Impara's web research, ADR 0188) */
+  webOnly?: boolean;
   /** Output cap for HTTP one-shot sessions; CLI adapters may only enforce a soft cap. */
   maxTokens?: number;
   /** with readOnly: absolute folders the run may never read (the comparison's other side and verdicts); each adapter

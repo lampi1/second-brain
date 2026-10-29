@@ -399,7 +399,7 @@ function heard({ text: raw, utterance }: VoiceHeard): void {
 
 // ── speaking ──
 /** The sentences of the reply being read: synthesized one ahead of the one playing, played back to back. */
-interface Line { done?: () => void; text: string; audio: Promise<{ samples: Float32Array; rate: number; error?: string } | null> | null }
+interface Line { done?: () => void; start?: () => void; text: string; audio: Promise<{ samples: Float32Array; rate: number; error?: string } | null> | null }
 let lines: Line[] = [];
 let speakN = 0; // each stop; a synthesis or a play that comes back to another one gives up
 let out: AudioContext | null = null, playing: AudioBufferSourceNode | null = null, pumping = false;
@@ -441,13 +441,28 @@ async function pump(): Promise<void> {
   if (voice.get().phase === 'off' && !narrating) return;
   lines.shift();
   if (!r || r.error || !r.samples.length) {
-    if (r?.error) { set({ error: r.error }); toast(t('voice.speakFailed', { error: r.error }), 'err'); lines = []; }
+    line.start?.(); // a beat that cannot sound still moves its board
+    if (r?.error) { set({ error: r.error }); toast(t('voice.speakFailed', { error: r.error }), 'err'); silentRest(line, lines, n); lines = []; }
     void pump();
     return;
   }
   const src = play(r.samples, r.rate);
   playing = src;
+  line.start?.();
   src.onended = () => { if (playing !== src) return; playing = null; line.done?.(); quietUntil = Date.now() + 400; void pump(); };
+}
+
+/** The voice failed: the lines still waiting are not said, but their beats move the board at reading pace (as Impara
+ *  does without the voice), and the last one's `done` still comes; a stop or a new narration cancels them. */
+function silentRest(failed: Line, rest: readonly Line[], n: number): void {
+  const readMs = (text: string) => Math.min(6500, Math.max(2200, text.split(/\s+/).length * 330));
+  let at = readMs(failed.text);
+  for (const l of rest) {
+    const { start, done } = l;
+    if (start) setTimeout(() => { if (n === speakN) start(); }, at);
+    at += readMs(l.text);
+    if (done) setTimeout(() => { if (n === speakN) done(); }, at);
+  }
 }
 
 function play(samples: Float32Array, rate: number): AudioBufferSourceNode {
@@ -472,6 +487,23 @@ export function narrate(text: string, done?: () => void): void {
   narrating = true;
   set({ narrating: true });
   for (const c of chunks) queueLine(c);
+  const last = lines.at(-1);
+  if (last && done) last.done = done;
+}
+
+/** Impara's beats (ADR 0188): each text read in turn, `onStart(i)` the moment beat i starts to sound (the board moves
+ *  to its part then), `done` when the last ends. A beat whose synthesis fails is skipped, its start still called. */
+export function narrateBeats(texts: readonly string[], onStart: (i: number) => void, done?: () => void): void {
+  stopSpeaking(false);
+  let any = false;
+  texts.forEach((text, i) => {
+    const chunks = speechChunks(speakable(text, Number.MAX_SAFE_INTEGER));
+    chunks.forEach((c, k) => { queueLine(c); if (k === 0) lines.at(-1)!.start = () => onStart(i); });
+    any ||= chunks.length > 0;
+  });
+  if (!any) { done?.(); return; }
+  narrating = true;
+  set({ narrating: true });
   const last = lines.at(-1);
   if (last && done) last.done = done;
 }

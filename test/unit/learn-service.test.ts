@@ -1,5 +1,7 @@
-// Impara in main (ADR 0185, src/main/learn/service.ts, store.ts): a start saves the lesson at once and writes it in two
-// runs (the first pieces, then the rest in the background); a failed run leaves a sentence and «Riprova», never a
+// Impara in main (ADR 0185, 0188, src/main/learn/service.ts, store.ts): a start saves the lesson at once, researches it
+// (a web run that sees only the ask, a files run over the material, brain and app), has each fact checked by a run
+// that did not write it, asks its questions and waits for the answers, then writes it in two runs (the first pieces,
+// then the rest in the background), citing the verified facts; a failed run leaves a sentence and «Riprova», never a
 // broken lesson; extras land after the piece and the user lands on them; checks are judged at zero tokens and the first
 // answer stays; «Spiegalo tu» is graded; a lesson the app was closed during is marked, an extra or grade cut off frees
 // it; remove deletes its folder, also when a run still works in it (when that run ends) or a delete failed (next start).
@@ -9,19 +11,23 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, errText: (e: unknown) => (e instanceof Error ? e.message : String(e)) }));
 import { LessonStore } from '../../src/main/learn/store';
-import { LearnService, type TeachResult, type TeachRun } from '../../src/main/learn/service';
+import { LearnService, fullRef, type TeachResult, type TeachRun } from '../../src/main/learn/service';
 import { demoRun, demoTeach } from '../../src/main/learn/demo';
 import { checkKey, playlist, stepKey, type Lesson } from '../../src/shared/lesson';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'sb-learn-'));
 const until = async (fn: () => boolean, ms = 3000) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > ms) throw new Error('timeout'); await new Promise(r => setTimeout(r, 5)); } };
 
-function make(teach: (r: TeachRun) => Promise<TeachResult> = demoTeach, opts: { cannot?: string; root?: string } = {}) {
+const TEACHERS = [{ engine: 'claude', label: 'Claude', models: [{ id: 'opus', name: 'Opus' }, { id: 'sonnet', name: 'Sonnet' }], efforts: ['low', 'medium', 'high', 'xhigh'] as const, web: true },
+  { engine: 'codex', label: 'Codex', models: [], efforts: [] as const, web: false }].map(t => ({ ...t, efforts: [...t.efforts] }));
+
+function make(teach: (r: TeachRun) => Promise<TeachResult> = demoTeach, opts: { cannot?: string; root?: string; web?: boolean; brain?: string } = {}) {
   const store = new LessonStore(opts.root ?? tmp());
   const runs: TeachRun[] = [];
   const events: (Lesson | undefined)[] = [];
   const svc = new LearnService({ store, lang: () => 'it', run: demoRun, devops: () => ({ prs: [], repoDirs: {} }), cannotTeach: () => opts.cannot ?? null,
-    teach: r => { runs.push(r); return teach(r); }, changed: (_s, l) => events.push(l) });
+    teach: r => { runs.push(r); return teach(r); }, changed: (_s, l) => events.push(l),
+    teachers: () => TEACHERS, webOk: () => !!opts.web, places: () => ({ brain: opts.brain ?? null, appSource: null }), guide: () => '# Guida dell’app' });
   return { store, svc, runs, events };
 }
 const fast = (r: TeachRun) => { vi.useFakeTimers({ toFake: ['setTimeout'] }); const p = demoTeach(r); vi.runAllTimers(); vi.useRealTimers(); return p; };
@@ -39,25 +45,107 @@ describe('LearnService', () => {
     expect(done.steps.filter(s => !s.extra)).toHaveLength(5);
     expect(done.checks.length).toBe(3);
     expect(done.at).toBe(stepKey(done.steps[0]!.id));
-    expect(runs.map(r => r.round)).toEqual(['impara-plan', 'impara-rest']);
+    // a PR has no web research: its files, their check, then the plan and the rest, at the default effort
+    expect(runs.map(r => r.round)).toEqual(['impara-files', 'impara-verify-files', 'impara-plan', 'impara-rest']);
+    expect(runs.every(r => !r.web && r.effort === 'high' && r.teacher === null)).toBe(true);
     // the material is in the lesson's folder and named in the prompt; the diff is inline
     expect(store.readFile(l.id, 'diff.patch')).toContain('ITEM_FRAME_MS');
-    expect(runs[0]!.prompt).toContain('diff.patch');
-    expect(runs[0]!.prompt).toContain('STREAM_HIDDEN_MS');
-    expect(runs[0]!.cwd).toBe(store.dir(l.id));
-    expect(done.costUsd).toBeCloseTo(0.39);
+    const plan = runs[2]!;
+    expect(plan.prompt).toContain('diff.patch');
+    expect(plan.prompt).toContain('STREAM_HIDDEN_MS');
+    expect(plan.cwd).toBe(store.dir(l.id));
+    // the facts: checked by the second run, the wrong number corrected, the model's own knowledge left unsure
+    expect(done.facts?.map(f => f.check)).toEqual(['ok', 'fixed', 'ok', 'ok', 'unsure']);
+    expect(done.facts![1]!.claim).toContain('da 100 a 16 ms');
+    // a file the run named relative to its folder is kept as a full path, so «Fonti» can open it
+    const store27 = `${path.join(store.dir(l.id), 'src/renderer/store/store.ts')}:27`;
+    expect(done.facts![1]!.ref).toBe(store27);
+    expect(done.facts![3]!.ref).toBe(path.join(store.dir(l.id), 'materiale.md'));
+    expect(plan.prompt).toContain(`f2 [verified; file ${store27}] STREAM_MS nello store del renderer passa da 100 a 16 ms.`);
+    expect(plan.prompt).toContain('f5 [NOT CONFIRMED; model knowledge]');
+    expect(plan.prompt).not.toContain('da 100 a 10 ms');
+    expect(runs[1]!.prompt).toContain('da 100 a 10 ms');
+    expect(done.prep).toMatchObject({ files: 5, ok: 3, fixed: 1, unsure: 1, dropped: 0, phases: { gather: 'done', web: 'skip', files: 'done', verify: 'done', ask: 'skip', plan: 'done' }, why: { web: 'pr' } });
+    // the pieces cite the facts, their beats name known nodes
+    expect(done.steps[1]!.cites).toEqual(['f1', 'f5']);
+    expect(done.steps[1]!.beats?.[1]).toMatchObject({ focus: ['manager', 'store'], flow: { from: 'manager', to: 'store' } });
+    expect(done.costUsd).toBeCloseTo(0.5);
   });
 
-  it('a run that fails or writes nonsense leaves a sentence and «Riprova» starts it again', async () => {
+  it('a topic: the web run sees only the ask and has only the web; the files run reads brain and guide; questions wait for the answers', async () => {
+    const { svc, store, runs } = make(fast, { web: true, brain: '/home/me/brain' });
+    const l = svc.start({ kind: 'topic', ask: 'Come funziona lo streaming nella mia app', depth: 'quick', level: 'new', teacher: { engine: 'claude', model: 'sonnet', effort: 'xhigh' } });
+    expect(l.teacher).toEqual({ engine: 'claude', model: 'sonnet', effort: 'xhigh' });
+    await until(() => !!store.get(l.id)?.clarify);
+    const web = runs.find(r => r.round === 'impara-web')!, files = runs.find(r => r.round === 'impara-files')!;
+    expect(web.web).toBe(true);
+    expect(web.prompt).toContain('Come funziona lo streaming nella mia app');
+    // nothing private reaches the web run: no brain, no guide, no lesson folder
+    expect(web.prompt).not.toContain('/home/me/brain');
+    expect(web.prompt).not.toContain(store.dir(l.id));
+    expect(web.cwd).toBe(path.join(store.dir(l.id), 'web'));
+    expect(files.web).toBeUndefined();
+    expect(files.prompt).toContain('/home/me/brain');
+    expect(files.prompt).toContain(path.join(store.dir(l.id), 'guida-app.md'));
+    expect(store.readFile(l.id, 'guida-app.md')).toBe('# Guida dell’app');
+    expect(runs.every(r => r.effort === 'xhigh' && r.teacher?.model === 'sonnet')).toBe(true);
+    // the questions wait: no plan until they are answered
+    await until(() => store.get(l.id)?.prep?.phases.verify === 'done');
+    await new Promise(r => setTimeout(r, 30));
+    expect(runs.some(r => r.round === 'impara-plan')).toBe(false);
+    expect(store.get(l.id)!.facts!.filter(f => f.from === 'web').map(f => f.check)).toEqual(['ok', 'ok']);
+    // nothing the files run wrote reaches a run with the web: the web check sees only the web facts, and a files fact
+    // with no file (the demo's «60 Hz») is left out when the web is on
+    const vweb = runs.find(r => r.round === 'impara-verify-web')!;
+    expect(vweb.web).toBe(true);
+    expect(vweb.prompt).not.toContain('ITEM_FRAME_MS');
+    expect(vweb.prompt).not.toContain('60 Hz');
+    expect(store.get(l.id)!.facts!.some(f => f.from === 'known')).toBe(false);
+    expect(() => svc.clarify('nope', [])).toThrow();
+    svc.clarify(l.id, ['Dentro second-brain']);
+    expect(() => svc.clarify(l.id, ['x'])).toThrow();
+    await until(() => store.get(l.id)?.state === 'ready');
+    const plan = runs.find(r => r.round === 'impara-plan')!;
+    expect(plan.prompt).toContain('→ Dentro second-brain');
+    expect(store.get(l.id)!.prep?.phases.ask).toBe('done');
+  });
+
+  it('keeps only a teacher it offers; a removed lesson stops waiting for its answers', async () => {
+    const { svc, store, runs } = make(fast, { web: true });
+    expect(svc.state().teachers?.map(t => t.engine)).toEqual(['claude', 'codex']);
+    const a = svc.start({ kind: 'topic', ask: 'x', depth: 'quick', level: 'new', teacher: { engine: 'gemini', model: 'x', effort: 'high' } });
+    expect(a.teacher).toBeUndefined();
+    const b = svc.start({ kind: 'topic', ask: 'y', depth: 'quick', level: 'new', teacher: { engine: 'claude', model: 'fable', effort: 'max' } });
+    expect(b.teacher).toEqual({ engine: 'claude', model: null, effort: null });
+    await until(() => !!store.get(a.id)?.clarify && store.get(a.id)?.prep?.phases.verify === 'done');
+    svc.remove(a.id);
+    await new Promise(r => setTimeout(r, 30));
+    expect(runs.filter(r => r.round === 'impara-plan')).toHaveLength(0);
+  });
+
+  it('a run that fails or writes nonsense leaves a sentence and «Riprova» starts it again; a failed research goes on', async () => {
     let n = 0;
-    const { svc, store } = make(async r => (n++ === 0 ? { ok: false, error: 'tempo scaduto' } : n === 2 ? { ok: true, text: 'not json', costUsd: null, engine: 'claude', model: null } : fast(r)));
-    const l = svc.start({ kind: 'topic', ask: 'Come funziona lo streaming', depth: 'quick', level: 'new' });
+    const { svc, store } = make(async r => (r.round === 'impara-files' ? { ok: false, error: 'rete giù' } : r.round !== 'impara-plan' ? fast(r)
+      : n++ === 0 ? { ok: false, error: 'tempo scaduto' } : n === 2 ? { ok: true, text: 'not json', costUsd: null, engine: 'claude', model: null } : fast(r)));
+    const l = svc.start({ kind: 'text', ask: 'Come funziona lo streaming', text: 'Due attese da 100 ms.', depth: 'quick', level: 'new' });
     await until(() => store.get(l.id)?.state === 'failed');
     expect(store.get(l.id)!.error).toMatch(/tempo scaduto/);
     svc.retry(l.id);
     await until(() => store.get(l.id)?.state === 'failed' && /non era valida/.test(store.get(l.id)!.error ?? ''));
     svc.retry(l.id);
     await until(() => store.get(l.id)?.state === 'ready');
+    expect(store.get(l.id)!.prep).toMatchObject({ phases: { files: 'skip' }, why: { files: expect.stringMatching(/^failed: rete giù/) } });
+    expect(store.get(l.id)!.facts).toEqual([]);
+  });
+
+  it('keeps a file reference openable: relative ones under the root that has the file, absolute ones as they are', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-ref-')), app = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-app-'));
+    fs.mkdirSync(path.join(app, 'src'));
+    fs.writeFileSync(path.join(app, 'src', 'a.ts'), 'x');
+    expect(fullRef('materiale.md', [dir, app])).toBe(path.join(dir, 'materiale.md'));
+    expect(fullRef('src/a.ts:12-20', [dir, app])).toBe(`${path.join(app, 'src/a.ts')}:12-20`);
+    const abs = path.join(os.tmpdir(), 'brain', 'note.md');
+    expect(fullRef(`${abs}:4`, [dir])).toBe(`${abs}:4`);
   });
 
   it('refuses a start it cannot serve, with the reason', () => {
@@ -110,6 +198,8 @@ describe('LearnService', () => {
 
     const m = make(fast);
     const l2 = m.svc.start({ kind: 'topic', ask: 'x', depth: 'quick', level: 'new' });
+    await until(() => !!m.store.get(l2.id)?.clarify);
+    m.svc.clarify(l2.id, ['']);
     await until(() => m.store.get(l2.id)?.state === 'ready');
     const ended = m.svc.explain(l2.id, '');
     expect(ended.doneAt).toBeTruthy();

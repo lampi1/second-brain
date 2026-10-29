@@ -1,6 +1,7 @@
 // The start of Impara (ADR 0185; mockup /mnt/project-files/ui-review/impara/1-pagina-impara.png): «Cosa vuoi capire
 // davvero, oggi?» with what to learn (a PR: one of the Task page's, or a GitHub link; a technical topic; a pasted text),
-// how much the user knows already (the lesson adapts from the first piece), how deep, and the two voices; under it the
+// how much the user knows already (the lesson adapts from the first piece), how deep, who explains (TeacherChip.tsx),
+// and the two voices; under it the
 // user's PRs with how far each was studied, and the saved lessons (their diagram as a thumbnail, how far they got),
 // each reopening where it was left. Used by ImparaPage.tsx.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
@@ -13,6 +14,7 @@ import { locale, t } from '../../i18n';
 import { Button } from '../ui';
 import { IconArrowRight, IconBook, IconBranch, IconEdit, IconLightbulb, IconSparkle, IconSpinner, IconTrash } from '../Icons';
 import { ImparaSwitch } from './ImparaSwitch';
+import { TeacherChip } from './TeacherChip';
 
 const KIND_ICON: Record<LessonKind, ReactNode> = { pr: <IconBranch size={12} />, topic: <IconLightbulb size={12} />, text: <IconEdit size={12} /> };
 
@@ -80,7 +82,8 @@ export function ImparaStart() {
   const begin = async (req: Partial<LessonStart> = {}) => {
     if (busy) return;
     setBusy(true);
-    const l = await startLesson({ kind, ask: ask.trim(), depth: prefs.depth, level: prefs.level, ...(kind === 'pr' ? { prUrl: prUrl.trim() } : {}), ...(kind === 'text' ? { text } : {}), ...req } as LessonStart);
+    const l = await startLesson({ kind, ask: ask.trim(), depth: prefs.depth, level: prefs.level, ...(prefs.teacher ? { teacher: prefs.teacher } : {}),
+      ...(kind === 'pr' ? { prUrl: prUrl.trim() } : {}), ...(kind === 'text' ? { text } : {}), ...req } as LessonStart);
     setBusy(false);
     if (l) go({ page: 'impara', arg: l.id });
   };
@@ -120,6 +123,7 @@ export function ImparaStart() {
             {LESSON_DEPTHS.map(d => <button key={d} type="button" role="radio" aria-checked={prefs.depth === d} className={prefs.depth === d ? 'on' : ''} onClick={() => setImparaPrefs({ depth: d })} data-testid={`impara-depth-${d}`}>{t(`impara.depth.${d}.label`)}</button>)}
           </span>
         </div>
+        {state?.teachers?.length ? <div className="ip-opts ip-opts-2"><TeacherChip options={state.teachers} value={prefs.teacher} onChange={teacher => setImparaPrefs({ teacher })} /></div> : null}
         {!can && <p className="ip-warn" data-testid="impara-cannot">{state?.why}</p>}
       </section>
 

@@ -571,6 +571,7 @@ app.whenReady().then(async () => {
     'impara:answer': a => learn().answer(String(a?.id ?? ''), String(a?.checkId ?? ''), Number(a?.choice), a?.confidence),
     'impara:explain': a => learn().explain(String(a?.id ?? ''), String(a?.text ?? '')),
     'impara:retry': a => learn().retry(String(a?.id ?? '')),
+    'impara:clarify': a => learn().clarify(String(a?.id ?? ''), a?.answers),
     'impara:remove': a => learn().remove(String(a?.id ?? '')),
     'orchestrator:held': () => s.heldNews?.get() ?? { items: [] },
     'orchestrator:heldSeen': a => { if (typeof a?.chatId !== 'string' || !a.chatId || a.chatId.length > 100) throw new Error('chatId required'); return s.heldNews?.seen(a.chatId) ?? { items: [] }; },

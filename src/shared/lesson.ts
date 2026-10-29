@@ -6,7 +6,11 @@
 // (segmenting, signaling, modality, redundancy, pre-training), LearnLM's principles (active learning, adapt to the
 // learner), Chi & Wylie's ICAP (explain in your own words). Everything the model writes is untrusted: this file checks
 // and caps it (parse*), the renderer draws diagrams only through lib/viz/mermaid.ts (strict, an image, never DOM).
+// Before teaching, the lesson is researched and verified (ADR 0188): facts with their source (a web page, a file, or
+// what the model knows), each checked by a second run that did not write it; up to two questions when the ask can mean
+// different things; then every piece cites its facts and is split into beats the board animates one at a time.
 // Shared by main/learn/ (generation, store) and the renderer (components/impara/); pinned by test/unit/lesson.test.ts.
+import type { Effort } from './contract';
 
 export type LessonDepth = 'quick' | 'lesson' | 'deep';
 export const LESSON_DEPTHS: readonly LessonDepth[] = ['quick', 'lesson', 'deep'];
@@ -25,6 +29,35 @@ export const DEPTH_STEPS: Record<LessonDepth, { min: number; max: number; minute
   quick: { min: 3, max: 4, minutes: 5 }, lesson: { min: 5, max: 7, minutes: 15 }, deep: { min: 8, max: 10, minutes: 30 },
 };
 
+/** Who explains (owner, 2026-10-29: «il modello che spiega può essere scelto dall'utente»): an engine that is on, its
+ *  model (null = the engine's default) and effort (null = none or the default). */
+export interface LessonTeacher { engine: string; model: string | null; effort: Effort | null }
+/** An engine the start form offers as the teacher, with its models and efforts; web = it can run the web research. */
+export interface TeacherOption { engine: string; label: string; models: { id: string; name: string }[]; efforts: Effort[]; web: boolean }
+/** The efforts a lesson may ask (max only from the chats, where the user sees what it costs: compare/headless.ts askRefusal) */
+export const TEACHER_EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh'];
+
+/** One fact the lesson stands on, with where it comes from: a web page (its address), a file (path and line), or what
+ *  the model knows (no source: «conoscenza del modello»). check = what the verification found: ok, fixed (the claim
+ *  was corrected), unsure (not confirmed: the lesson says so). A fact found wrong is dropped, never shown. */
+export type FactFrom = 'web' | 'file' | 'known';
+export interface LessonFact { id: string; claim: string; from: FactFrom; ref: string; quote?: string; check: 'ok' | 'fixed' | 'unsure' }
+
+/** The research before the lesson, as the Preparing screen shows it: the phase now, the phases done or skipped (with
+ *  why), and the counts so far. */
+export type PrepPhase = 'gather' | 'web' | 'files' | 'verify' | 'ask' | 'plan';
+export const PREP_PHASES: readonly PrepPhase[] = ['gather', 'web', 'files', 'verify', 'ask', 'plan'];
+export interface LessonPrep {
+  phases: Partial<Record<PrepPhase, 'now' | 'done' | 'skip'>>;
+  /** why a phase was skipped (no web engine on, nothing to ask…) */
+  why?: Partial<Record<PrepPhase, string>>;
+  web?: number; files?: number; ok?: number; fixed?: number; dropped?: number; unsure?: number;
+}
+
+/** Questions asked before the lesson when the ask can mean different things (at most two), and the user's answers
+ *  ('' = skipped). */
+export interface LessonClarify { qs: { q: string; options: string[] }[]; answers?: string[] }
+
 export interface LessonPr { provider: 'github' | 'devops'; url: string; title: string; repo: string; number: number }
 
 /** The start form (impara:start). */
@@ -38,10 +71,15 @@ export interface LessonStart {
   text?: string;
   depth: LessonDepth;
   level: LessonLevel;
+  /** who explains; absent = the app's choice (Claude's strongest model when it is on) */
+  teacher?: LessonTeacher;
 }
 
 export interface LessonCode { file: string; diff: string }
 export interface LessonWord { term: string; meaning: string }
+/** One beat of a piece: a sentence said while the board shows its part (Mayer: temporal contiguity, signaling): the
+ *  camera goes to `focus`, an arrow `flow` lights with a packet moving along it, `note` is the «guarda qui» callout. */
+export interface LessonBeat { say: string; focus: string[]; flow?: { from: string; to: string }; note?: string }
 export interface LessonStep {
   id: string;
   title: string;
@@ -60,6 +98,10 @@ export interface LessonStep {
   diagram?: string;
   /** an extra piece the user asked for, after the piece `of` */
   extra?: { kind: LessonExtraKind; of: string; ask?: string };
+  /** the beats of `say`, in order (absent: the board splits `say` into sentences, all on `focus`) */
+  beats?: LessonBeat[];
+  /** the ids of the lesson's facts this piece stands on (shown as its sources) */
+  cites?: string[];
 }
 
 export interface LessonAnswer { choice: number; confidence?: LessonConfidence; at: number }
@@ -114,6 +156,14 @@ export interface Lesson {
   /** the folder the model reads around the material (a PR's local clone); absent = the lesson's own folder */
   readDir?: string;
   doneAt?: number;
+  /** who was asked to explain (the start form's choice) */
+  teacher?: LessonTeacher;
+  /** the research's verified facts (ADR 0188) */
+  facts?: LessonFact[];
+  /** the research as it goes (while preparing) and how it ended */
+  prep?: LessonPrep;
+  /** the questions before the lesson, while preparing */
+  clarify?: LessonClarify;
 }
 
 /** One line of the Impara page's list. */
@@ -124,7 +174,7 @@ export interface LessonSummary {
   diagram: string;
 }
 
-export interface ImparaState { lessons: LessonSummary[]; dir: string; canTeach: boolean; why?: string }
+export interface ImparaState { lessons: LessonSummary[]; dir: string; canTeach: boolean; why?: string; teachers?: TeacherOption[] }
 
 // ── the play-list ──────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -292,18 +342,51 @@ function parseCode(v: unknown): LessonCode | undefined {
   return { file: file || '', diff: lines };
 }
 
-/** One piece the model wrote. `nodes` = the base diagram's ids: a focus on another id is dropped. */
-export function parseStep(v: unknown, nodes: readonly string[], id: string): LessonStep {
+const BEATS_MAX = 6;
+/** A piece's beats: each a sentence with its nodes (known ids only), an arrow between two known nodes, a short note.
+ *  Beats with nothing to say are left out; at most BEATS_MAX. */
+function parseBeats(v: unknown, nodes: readonly string[]): LessonBeat[] {
+  const out: LessonBeat[] = [];
+  for (const b of list(v).slice(0, BEATS_MAX)) {
+    if (!b || typeof b !== 'object') continue;
+    const o = b as Obj, say = text(o.say, 300, 'beat.say', false);
+    if (!say) continue;
+    const focus = list(o.focus).filter((x): x is string => typeof x === 'string' && nodes.includes(x)).slice(0, 4);
+    const f = o.flow && typeof o.flow === 'object' ? o.flow as Obj : null;
+    const flow = f && typeof f.from === 'string' && typeof f.to === 'string' && nodes.includes(f.from) && nodes.includes(f.to) && f.from !== f.to ? { from: f.from, to: f.to } : undefined;
+    const note = text(o.note, 140, 'beat.note', false);
+    out.push({ say, focus, ...(flow ? { flow } : {}), ...(note ? { note } : {}) });
+  }
+  return out;
+}
+
+/** One piece the model wrote. `nodes` = the base diagram's ids: a focus on another id is dropped; `facts` = the ids of
+ *  the lesson's facts: a citation of another id is dropped. With beats, `say` is their sentences in order. */
+export function parseStep(v: unknown, nodes: readonly string[], id: string, facts: readonly string[] = []): LessonStep {
   const o = obj(v, 'pezzo');
   const own = text(o.diagram, STEP_DIAGRAM_MAX, 'diagram', false);
+  const beats = own ? [] : parseBeats(o.beats, nodes);
   const focus = list(o.focus).filter((x): x is string => typeof x === 'string' && NODE_ID.test(x) && nodes.includes(x)).slice(0, 8);
   const words = list(o.words).map(w => (w && typeof w === 'object' ? w as Obj : {})).map(w => ({ term: text(w.term, 60, 'term', false), meaning: text(w.meaning, 240, 'meaning', false) }))
     .filter(w => w.term && w.meaning).slice(0, 4);
   const code = parseCode(o.code), note = text(o.note, 220, 'note', false);
+  const cites = [...new Set(list(o.cites).filter((x): x is string => typeof x === 'string' && facts.includes(x)))].slice(0, 8);
+  const say = beats.length ? beats.map(b => b.say).join(' ') : text(o.say, 600, 'say');
+  // the piece's nodes: its own, else every node its beats name
+  const lit = focus.length ? focus : [...new Set(beats.flatMap(b => [...b.focus, ...(b.flow ? [b.flow.from, b.flow.to] : [])]))].slice(0, 8);
   return {
-    id, title: text(o.title, 120, 'title'), say: text(o.say, 600, 'say'), text: text(o.text, 1800, 'text', false) || text(o.say, 600, 'say'),
-    focus, ...(note ? { note } : {}), ...(code ? { code } : {}), ...(words.length ? { words } : {}), ...(own ? { diagram: own } : {}),
+    id, title: text(o.title, 120, 'title'), say, text: text(o.text, 1800, 'text', false) || say,
+    focus: lit, ...(note ? { note } : {}), ...(code ? { code } : {}), ...(words.length ? { words } : {}), ...(own ? { diagram: own } : {}),
+    ...(beats.length > 1 ? { beats } : {}), ...(cites.length ? { cites } : {}),
   };
+}
+
+/** The beats the board plays for a piece: its own, else its `say` split into sentences, all on its nodes (the note on
+ *  the first). Never empty for a piece that says something. */
+export function beatsOf(s: Pick<LessonStep, 'say' | 'focus' | 'note' | 'beats'>): LessonBeat[] {
+  if (s.beats?.length) return s.beats;
+  const parts = (s.say.match(/[^.!?…]+(?:[.!?…]+|$)/g) ?? [s.say]).map(x => x.trim()).filter(Boolean);
+  return (parts.length ? parts : [s.say]).map((say, i) => ({ say, focus: [...s.focus], ...(i === 0 && s.note ? { note: s.note } : {}) }));
 }
 
 export function parseCheck(v: unknown, after: string, id: string): LessonCheck {
@@ -319,7 +402,7 @@ export interface ParsedPlan { title: string; diagram: string; outline: string[];
 
 /** The first answer (plan, diagram, the first pieces) or the second (the rest): pieces with their checks, in order.
  *  A check is tied to a piece by its index in the answer's own `steps` (afterStep, from 1). */
-export function parsePlan(v: unknown, opts: { now?: number; base?: string } = {}): ParsedPlan {
+export function parsePlan(v: unknown, opts: { now?: number; base?: string; facts?: readonly string[] } = {}): ParsedPlan {
   const o = obj(v, 'lezione');
   const diagram = opts.base ?? text(o.diagram, DIAGRAM_MAX + 1, 'diagram');
   if (!isFlowchart(diagram)) throw new Error('diagram: deve essere un flowchart mermaid');
@@ -328,7 +411,7 @@ export function parsePlan(v: unknown, opts: { now?: number; base?: string } = {}
   if (nodes.length < 2) throw new Error('diagram: servono almeno 2 nodi');
   const now = opts.now ?? Date.now();
   const steps: LessonStep[] = [];
-  for (const s of list(o.steps).slice(0, 12)) { try { steps.push(parseStep(s, nodes, newId('p', now))); } catch { /* a piece that does not hold is left out */ } }
+  for (const s of list(o.steps).slice(0, 12)) { try { steps.push(parseStep(s, nodes, newId('p', now), opts.facts)); } catch { /* a piece that does not hold is left out */ } }
   if (!steps.length) throw new Error('nessun pezzo valido');
   const checks: LessonCheck[] = [];
   for (const c of list(o.checks).slice(0, 8)) {
@@ -342,9 +425,9 @@ export function parsePlan(v: unknown, opts: { now?: number; base?: string } = {}
 }
 
 /** An extra piece the user asked for: one piece, maybe with one check. */
-export function parseExtra(v: unknown, nodes: readonly string[], of: string, kind: LessonExtraKind, ask: string | undefined, now = Date.now()): { step: LessonStep; check: LessonCheck | null } {
+export function parseExtra(v: unknown, nodes: readonly string[], of: string, kind: LessonExtraKind, ask: string | undefined, now = Date.now(), facts: readonly string[] = []): { step: LessonStep; check: LessonCheck | null } {
   const o = obj(v, 'pezzo extra');
-  const step: LessonStep = { ...parseStep(o.step ?? o, nodes, newId('x', now)), extra: { kind, of, ...(ask ? { ask } : {}) } };
+  const step: LessonStep = { ...parseStep(o.step ?? o, nodes, newId('x', now), facts), extra: { kind, of, ...(ask ? { ask } : {}) } };
   let check: LessonCheck | null = null;
   if (o.check) { try { check = parseCheck(o.check, of, newId('q', now)); } catch { check = null; } }
   return { step, check };
@@ -355,6 +438,77 @@ export function parseGrade(v: unknown): { grade: LessonGrade; feedback: string; 
   const grade: LessonGrade = o.grade === 'ok' || o.grade === 'partial' ? o.grade : 'miss';
   const missing = text(o.missing, 400, 'missing', false);
   return { grade, feedback: text(o.feedback, 700, 'feedback'), ...(missing ? { missing } : {}) };
+}
+
+// ── the research (ADR 0188) ───────────────────────────────────────────────────────────────────────────────────────
+
+const FACTS_MAX = 24;
+const URL_RE = /^https?:\/\/[^\s"'<>]{3,500}$/i;
+
+/** The facts of a research run. web = the web run: every fact needs a web address (else it is left out); otherwise a
+ *  fact is from a file (path, with a line when known) or from what the model knows. Ids are given here, from `start`
+ *  (f1, f2…), so two runs never clash. */
+export function parseFacts(v: unknown, web: boolean, start = 1): LessonFact[] {
+  const o = obj(v, 'ricerca');
+  const out: LessonFact[] = [];
+  for (const f of list(o.facts).slice(0, FACTS_MAX)) {
+    if (!f || typeof f !== 'object') continue;
+    const x = f as Obj, claim = text(x.claim, 400, 'claim', false);
+    if (!claim) continue;
+    const quote = text(x.quote, 300, 'quote', false);
+    if (web) {
+      const url = typeof x.url === 'string' ? x.url.trim() : typeof x.ref === 'string' ? x.ref.trim() : '';
+      if (!URL_RE.test(url)) continue;
+      out.push({ id: `f${start + out.length}`, claim, from: 'web', ref: url, ...(quote ? { quote } : {}), check: 'unsure' });
+    } else {
+      const ref = text(x.ref, 200, 'ref', false);
+      const from: FactFrom = x.from === 'file' && ref ? 'file' : 'known';
+      out.push({ id: `f${start + out.length}`, claim, from, ref: from === 'file' ? ref : '', ...(quote ? { quote } : {}), check: 'unsure' });
+    }
+  }
+  return out;
+}
+
+/** The questions a research run asks before the lesson: at most two, each with 2 to 4 short options. */
+export function parseQuestions(v: unknown): LessonClarify['qs'] {
+  const o = obj(v, 'ricerca');
+  const out: LessonClarify['qs'] = [];
+  for (const q of list(o.questions).slice(0, 2)) {
+    if (!q || typeof q !== 'object') continue;
+    const x = q as Obj, ask = text(x.q, 240, 'q', false);
+    const options = list(x.options).map(y => text(y, 120, 'option', false)).filter(Boolean).slice(0, 4);
+    if (ask && options.length >= 2) out.push({ q: ask, options });
+  }
+  return out;
+}
+
+/** A verification run's verdicts applied to the facts it was given: ok keeps the fact, wrong with a fix keeps the fix
+ *  (fixed), wrong without one drops it, unsure (or no verdict) keeps it as unsure. A fix may bring a better source. */
+export function applyVerdicts(facts: readonly LessonFact[], v: unknown): { facts: LessonFact[]; dropped: number } {
+  const o = obj(v, 'verifica');
+  const by = new Map<string, Obj>();
+  for (const x of list(o.verdicts)) if (x && typeof x === 'object' && typeof (x as Obj).id === 'string') by.set((x as Obj).id as string, x as Obj);
+  const out: LessonFact[] = [];
+  let dropped = 0;
+  for (const f of facts) {
+    const r = by.get(f.id), verdict = r?.verdict;
+    if (verdict === 'ok') { out.push({ ...f, check: 'ok' }); continue; }
+    if (verdict === 'wrong') {
+      const fix = text(r!.fix, 400, 'fix', false);
+      if (!fix) { dropped++; continue; }
+      const ref = typeof r!.ref === 'string' ? r!.ref.trim() : '';
+      const better = f.from === 'web' ? (URL_RE.test(ref) ? ref : f.ref) : f.from === 'file' ? (ref.slice(0, 200) || f.ref) : f.ref;
+      out.push({ ...f, claim: fix, ref: better, check: 'fixed' });
+      continue;
+    }
+    out.push({ ...f, check: 'unsure' });
+  }
+  return { facts: out, dropped };
+}
+
+/** The facts as the plan's prompt lists them: one line each, id, how sure, where from. */
+export function factLines(facts: readonly LessonFact[]): string {
+  return facts.map(f => `${f.id} [${f.check === 'unsure' ? 'NOT CONFIRMED' : 'verified'}; ${f.from === 'web' ? f.ref : f.from === 'file' ? `file ${f.ref}` : 'model knowledge'}] ${f.claim}`).join('\n');
 }
 
 // ── what the user says ─────────────────────────────────────────────────────────────────────────────────────────────

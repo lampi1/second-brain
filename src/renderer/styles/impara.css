@@ -2,8 +2,11 @@
    hero (a soft violet glow), the PRs and the saved lessons with their diagram as a thumbnail; the player as a
    blackboard: the pieces on the left, the dotted canvas with the diagram (the new piece fades in over the old one) and
    its note, the narration with the voice's ring and wave, the buttons, the code and the new words; a check opens over
-   the board, the end shows «Spiegalo tu» and how each piece went. Shared tokens, both themes; motion is off for
-   reduced-motion users. */
+   the board, the end shows «Spiegalo tu» and how each piece went. Since ADR 0188: the lesson fills the window
+   (.ip-full, above the Orchestrator's dock, below the question window, toasts and dialogs), the animated board (.st-*:
+   camera, faint nodes still to come, the «guarda qui» ring and note, the light along an arrow), the research on the
+   Preparing screen with its questions, «Chi spiega» and each piece's sources. Shared tokens, both themes; motion is
+   off for reduced-motion users. */
 .ip-inner{max-width:1320px}
 .ip-muted{color:var(--text-3)}
 .ip-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
@@ -240,14 +243,143 @@
 .ip-piece-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ip-end-acts{margin-top:8px}
 
-/* a narrow page (the Orchestrator open beside it): the rail keeps only its numbers (titles in the tooltip), the board gets the width */
+/* a narrower page (the Orchestrator open beside it): the rail keeps its titles on one line; only a really narrow one
+   keeps just the numbers (titles in the tooltip) */
 @container (max-width:1000px){
-  .ip-layout{grid-template-columns:52px minmax(0,1fr);gap:12px}
+  .ip-layout{grid-template-columns:176px minmax(0,1fr);gap:12px}
+  .ip-st-t{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ip-st-t small{display:none}
+  .ip-st-x,.ip-st-q{margin-left:10px}
+}
+@container (max-width:720px){
+  .ip-layout{grid-template-columns:52px minmax(0,1fr)}
   .ip-rail{padding:8px 6px;align-items:center}
   .ip-st{padding:6px;justify-content:center}
   .ip-st-t,.ip-sources{display:none}
   .ip-st-x,.ip-st-q{margin-left:0}
 }
+
+/* ── full screen (ADR 0188): the lesson over the whole window ── */
+.ip-full{position:fixed;inset:0;z-index:36;overflow:auto;padding:14px 22px 22px;background:radial-gradient(1400px 420px at 50% -10%,color-mix(in srgb,var(--blue) 7%,transparent),transparent 70%),var(--bg);animation:fadeIn var(--dur) var(--ease)}
+.ip-full .ip-layout{grid-template-columns:240px minmax(0,1fr)}
+.ip-full .ip-rail{max-height:calc(100vh - 110px)}
+.ip-full .ip-canvas{height:max(380px,calc(100vh - 320px))}
+
+/* ── the animated board ── */
+.st-board{position:absolute;inset:0;overflow:hidden;cursor:default}
+.st-svg{display:block;font-family:var(--font)}
+.st-cam{transition:transform .9s cubic-bezier(.22,.8,.24,1);transform-origin:0 0}
+.st-node .st-shape{fill:var(--surface-3);stroke:var(--border-3);stroke-width:1.5;transition:fill .5s,stroke .5s,opacity .5s,stroke-width .3s}
+.st-node text{font-size:16px;fill:var(--text);transition:fill .5s,opacity .5s}
+.st-node{transition:opacity .6s var(--ease)}
+.st-node.now .st-shape{fill:color-mix(in srgb,var(--blue) 24%,var(--surface-3));stroke:var(--blue);stroke-width:2.5}
+.st-node.done .st-shape{fill:color-mix(in srgb,var(--green) 9%,var(--surface-3));stroke:color-mix(in srgb,var(--green) 55%,var(--border-3))}
+.st-node.done text{fill:var(--text-2)}
+.st-node.dim{opacity:.32}
+.st-edge path{fill:none;stroke:var(--text-4);stroke-width:1.6;transition:stroke .5s,opacity .5s,stroke-width .3s}
+.st-edge.dashed path{stroke-dasharray:6 5}
+.st-edge.dim{opacity:.22}
+.st-edge.done path{stroke:var(--text-3)}
+.st-edge.flow path{stroke:var(--blue);stroke-width:2.6}
+.st-edge .st-run{stroke:color-mix(in srgb,var(--blue) 55%,white);stroke-width:2.6;stroke-dasharray:8 14;animation:stRun 1s linear infinite}
+@keyframes stRun{to{stroke-dashoffset:-22}}
+.st-arrowhead{fill:var(--text-4)}
+.st-arrowhead.lit{fill:var(--blue)}
+.st-packet{fill:var(--blue);filter:drop-shadow(0 0 6px var(--blue))}
+.st-elabel rect{fill:var(--surface);stroke:var(--border-2)}
+.st-elabel text{font-size:13px;fill:var(--text-3)}
+.st-elabel.dim{opacity:.25}
+.st-elabel.flow rect{stroke:var(--blue-line)}
+.st-elabel.flow text{fill:var(--text)}
+.st-cluster rect{fill:color-mix(in srgb,var(--text) 2.5%,transparent);stroke:var(--border-3);stroke-dasharray:5 5}
+.st-cluster text{font-size:12.5px;fill:var(--text-3);font-weight:600;letter-spacing:.02em}
+.st-ring{fill:none;stroke:var(--amber);stroke-width:2;stroke-dasharray:7 6;animation:stRing 1.6s var(--ease) both,stDash 12s linear infinite}
+@keyframes stRing{0%{opacity:0;stroke-width:6}30%{opacity:1}100%{opacity:.85;stroke-width:2}}
+@keyframes stDash{to{stroke-dashoffset:-130}}
+.st-note{position:absolute;z-index:3;transform:translateX(-50%);max-width:300px;background:var(--surface-3);border:1px solid var(--amber-line);border-radius:10px;padding:7px 11px;font-size:13px;line-height:1.45;color:var(--text);box-shadow:0 10px 30px rgba(0,0,0,.25);transition:left .9s cubic-bezier(.22,.8,.24,1),top .9s cubic-bezier(.22,.8,.24,1);animation:ipNote .45s .35s var(--ease) both}
+.st-note b{color:var(--amber)}
+.ip-beats{display:inline-flex;align-items:center;gap:4px;margin-right:4px}
+.ip-beats i{width:7px;height:7px;border-radius:50%;background:var(--surface-4);transition:background .3s,transform .3s}
+.ip-beats i.d{background:var(--green)}
+.ip-beats i.c{background:var(--blue);transform:scale(1.25)}
+.ip-tools .ip-pill{display:inline-flex;align-items:center;gap:5px}
+.ip-say span{transition:color .4s,opacity .4s;cursor:default}
+.ip-say span.past{color:var(--text-3)}
+.ip-say span.next{color:var(--text-3);opacity:.7}
+.ip-say span.on{color:var(--text)}
+
+/* the research on the Preparing screen, and its questions */
+.ip-prep-steps li{align-items:flex-start}
+.ip-prep-ic{flex:none;width:14px;display:grid;place-items:center;margin-top:2px}
+.ip-prep-l{display:flex;flex-direction:column;gap:1px}
+.ip-prep-l small{color:var(--text-3);font-size:11.5px}
+.ip-prep-steps li.done .ip-prep-l small{color:color-mix(in srgb,var(--green) 70%,var(--text-3))}
+.ip-prep-steps li.skip{color:var(--text-4)}
+.ip-clarify{align-self:stretch;text-align:left;display:flex;flex-direction:column;gap:12px;padding:14px 16px;border:1px solid var(--blue-line);border-radius:14px;background:var(--blue-bg);animation:ipIn .35s var(--ease) both}
+.ip-clarify-q{display:flex;flex-direction:column;gap:6px}
+.ip-clarify-q b{font-size:14px;font-weight:600;color:var(--text)}
+.ip-clarify-q .ip-chips{margin-top:0}
+.ip-clarify-in{background:var(--bg);border:1px solid var(--blue-line);border-radius:9px;padding:7px 10px;color:var(--text);font:13px var(--font);outline:none}
+.ip-preparing{max-width:620px}
+
+/* «Chi spiega» */
+.ip-opts-2{margin-top:10px}
+.ip-teacher{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
+.ip-teacher-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border-3);border-radius:999px;padding:4px 11px;background:var(--surface-2);color:var(--text);font:inherit;font-size:12.5px;cursor:pointer}
+.ip-teacher-chip:hover{border-color:var(--text-4)}
+.ip-caret{color:var(--text-3);font-size:10px}
+.ip-teacher-web{font-size:12px}
+
+/* a piece's sources */
+.ip-cites{margin-top:10px}
+.ip-cites-head{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:0;border:0;background:none;font:inherit;font-size:12px;cursor:pointer;text-align:left}
+.ip-cite{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;border:1px solid var(--border-3);color:var(--text-2);font-size:11.5px;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ip-cite.ok{border-color:color-mix(in srgb,var(--green) 45%,transparent)}
+.ip-cite.fixed{border-color:var(--blue-line)}
+.ip-cite.unsure{border-color:var(--amber-line);color:var(--amber)}
+.ip-facts{list-style:none;margin:8px 0 0;padding:0;display:flex;flex-direction:column;gap:8px}
+.ip-facts li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:4px 10px;align-items:baseline;padding:8px 10px;border-radius:10px;background:var(--surface-2);font-size:12.5px;line-height:1.5}
+.ip-fact-c{color:var(--text)}
+.ip-fact-q,.ip-fact-r{grid-column:2;color:var(--text-3);font-size:12px;overflow-wrap:anywhere}
+.ip-fact-q{font-style:italic}
+.ip-fact-r code{font:11.5px var(--mono)}
+.ip-verified{display:flex;align-items:center;gap:5px;margin-top:4px;color:var(--green)}
 @media (prefers-reduced-motion:reduce){
-  .ip-diagram-img.in,.ip-diagram-img.out,.ip-note,.ip-say,.ip-fb,.ip-grade,.ip-quiz,.ip-sketch i,.ip-sketch b,.ip-wave i,.ip-ava.on{animation:none}
+  .ip-diagram-img.in,.ip-diagram-img.out,.ip-note,.ip-say,.ip-fb,.ip-grade,.ip-quiz,.ip-sketch i,.ip-sketch b,.ip-wave i,.ip-ava.on,.ip-full,.ip-clarify,.st-ring,.st-run,.st-note{animation:none}
+  .st-cam,.st-note,.st-node,.st-node .st-shape,.st-edge path{transition:none}
+  .st-packet{display:none}
 }
+
+/* «Fonti» (ADR 0188, ImparaSources.tsx): every source of the lesson in a drawer over it; the file viewer opens above a
+   full-screen lesson */
+body:has(.ip-full) .vw-layer{z-index:37}
+.ip-count{margin-left:2px;padding:0 6px;border-radius:999px;background:var(--surface-2);color:var(--text-2);font-size:11px;line-height:17px}
+button.ip-verified{padding:0;border:0;background:none;font:inherit;cursor:pointer;text-align:left}
+button.ip-verified:hover{text-decoration:underline}
+.ip-fact-open{margin:0;text-align:left;overflow-wrap:anywhere}
+.ip-facts-all{display:block!important;padding:0!important;background:none!important}
+.ip-srcs-scrim{position:fixed;inset:0;z-index:29;background:color-mix(in srgb,var(--bg) 40%,transparent);animation:fadeIn var(--dur) var(--ease)}
+.ip-srcs{position:fixed;top:0;bottom:var(--orchestrator-b,0px);right:var(--orchestrator-r,0px);z-index:30;width:min(460px,100%);display:flex;flex-direction:column;background:var(--surface);border-left:1px solid var(--border);box-shadow:-18px 0 48px rgba(0,0,0,.18);animation:ipSlideIn .22s var(--ease)}
+.ip-full .ip-srcs{bottom:0;right:0}
+.ip-full .ip-srcs-scrim{inset:0}
+@keyframes ipSlideIn{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
+.ip-srcs-head{display:flex;align-items:flex-start;gap:10px;padding:18px 18px 12px;border-bottom:1px solid var(--border)}
+.ip-srcs-head>div{flex:1;min-width:0}
+.ip-srcs-head h3{margin:0 0 2px;font-size:16px}
+.ip-srcs-head p{margin:0;font-size:12.5px}
+.ip-srcs-body{flex:1;overflow:auto;padding:12px 18px 24px;display:flex;flex-direction:column;gap:18px}
+.ip-srcs-body section{display:flex;flex-direction:column;gap:10px}
+.ip-srcs-body .ip-label{display:flex;align-items:center;gap:6px}
+.ip-srcs-item{display:flex;flex-direction:column;gap:6px;padding:10px;border:1px solid var(--border);border-radius:12px;background:var(--bg)}
+.ip-srcs-item .ip-facts{margin:0}
+.ip-srcs-link{display:flex;align-items:baseline;gap:6px;min-width:0;padding:0;border:0;background:none;font:inherit;color:var(--blue);text-decoration:none;cursor:pointer;text-align:left}
+.ip-srcs-link b{flex:none;font-weight:600}
+.ip-srcs-link span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-3);font-size:12px}
+.ip-srcs-link svg{flex:none;align-self:center;opacity:.7}
+.ip-srcs-link:hover b{text-decoration:underline}
+.ip-srcs-line,.ip-srcs-piece{padding:1px 8px;border:1px solid var(--border-3);border-radius:999px;background:none;font:inherit;font-size:11.5px;color:var(--blue);cursor:pointer}
+.ip-srcs-line{grid-column:2;justify-self:start}
+.ip-srcs-used{grid-column:2;display:flex;align-items:center;gap:4px;flex-wrap:wrap;color:var(--text-3);font-size:11.5px}
+.ip-srcs-material{font-size:12.5px;overflow-wrap:anywhere}
+.ip-prep-srcs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;max-width:620px;margin:4px auto 0;font-size:12px}
+@media (prefers-reduced-motion:reduce){.ip-srcs,.ip-srcs-scrim{animation:none}}

@@ -1116,30 +1116,37 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'impara',
     title: b('Impara: lezioni a pezzi', 'Impara: lessons piece by piece'),
-    summary: b('Una lezione su una tua PR, un concetto tecnico o un testo: lo schema cresce pezzo per pezzo, la voce dell’app spiega, tu vai avanti quando hai capito.',
-      'A lesson on one of your PRs, a technical concept or a text: the diagram grows piece by piece, the app’s voice explains, you go on when you got it.'),
+    summary: b('Una lezione su una tua PR, un argomento (anche il tuo lavoro, il tuo brain o l’app) o un testo: prima la ricerca e la verifica delle fonti, poi lo schema che si muove mentre la voce spiega, tu vai avanti quando hai capito.',
+      'A lesson on one of your PRs, a topic (your work, your brain or the app too) or a text: first the sources are researched and checked, then the diagram moves while the voice explains, you go on when you got it.'),
     points: [
       // src/main/learn/material.ts
       b('Per una PR l’app legge da sola descrizione e diff (gh per GitHub, git nella copia locale per le PR del Task), in sola lettura e con il tuo login.',
         'For a PR the app itself reads the description and the diff (gh for GitHub, git in the local clone for the Task page’s PRs), read-only, with your own login.'),
-      // src/main/learn/service.ts
-      b('Prima arrivano lo schema e i primi due pezzi, il resto mentre studi. «Spiegamelo meglio», «Fammi un esempio», «Mostrami il codice» e le tue domande aggiungono un pezzo subito dopo.',
-        'The diagram and the first two pieces come first, the rest while you study. «Explain it better», «Give me an example», «Show me the code» and your questions add a piece right after.'),
-      // src/shared/lesson.ts parseLessonCommand
-      b('Con «Rispondo a voce» dici «avanti», «ripeti», «non ho capito», «la b»; il resto è una domanda. Verifiche dopo alcuni pezzi, «Spiegalo tu» alla fine.',
-        'With «I answer by voice» you say «next», «repeat», «I don’t understand», «b»; anything else is a question. Checks after some pieces, «Explain it yourself» at the end.'),
+      // src/main/learn/service.ts research
+      b('Prima di spiegare cerca le fonti: sul web (solo Claude, vede solo la tua domanda, mai i tuoi file) e nei file (il materiale, il tuo brain, la guida e il codice dell’app). Un secondo modello verifica ogni fatto sulla sua fonte: confermato, corretto o da verificare.',
+        'Before explaining it looks for sources: on the web (Claude only, it sees only your question, never your files) and in the files (the material, your brain, the app’s guide and code). A second model checks each fact against its source: confirmed, corrected or unconfirmed.'),
+      b('Se la domanda può voler dire cose diverse, ti chiede al massimo due cose prima di iniziare. Ogni pezzo mostra le sue fonti; «Fonti» in alto le raccoglie tutte (pagine web e file del PC, apribili con un clic).',
+        'If the question can mean different things, it asks you at most two things before starting. Each piece shows its sources; «Sources» at the top gathers them all (web pages and files on your PC, opened with one click).'),
+      // src/renderer/components/impara/TeacherChip.tsx
+      b('«Chi spiega» sceglie motore, modello e impegno; senza scelta Claude con il modello più forte, impegno alto.',
+        '«Who explains» picks the engine, model and effort; with no choice, Claude with its strongest model, high effort.'),
+      // src/renderer/components/impara/LessonStage.tsx
+      b('La lezione è a tutto schermo (Esc per uscire). Lo schema si muove frase per frase: si accendono i nodi di cui parla, una luce corre lungo la freccia, «Qui» indica il punto. Quelli già visti restano calmi, quelli che verranno sono sbiaditi.',
+        'The lesson is full screen (Esc to leave). The diagram moves sentence by sentence: the nodes it talks about light up, a light runs along the arrow, «Here» marks the spot. Seen ones stay calm, coming ones are faint.'),
+      b('«Spiegamelo meglio», «Fammi un esempio», «Mostrami il codice» e le tue domande aggiungono un pezzo subito dopo. Con «Rispondo a voce» dici «avanti», «ripeti», «non ho capito», «la b».',
+        '«Explain it better», «Give me an example», «Show me the code» and your questions add a piece right after. With «I answer by voice» you say «next», «repeat», «I don’t understand», «b».'),
       // src/main/learn/store.ts
-      b('Ogni lezione resta salvata su questo PC e riapre dal punto in cui eri.',
-        'Every lesson stays saved on this PC and reopens where you were.'),
+      b('Verifiche dopo alcuni pezzi, «Spiegalo tu» alla fine. Ogni lezione resta salvata su questo PC e riapre dal punto in cui eri.',
+        'Checks after some pieces, «Explain it yourself» at the end. Every lesson stays saved on this PC and reopens where you were.'),
     ],
-    analogy: b('Come un collega alla lavagna che disegna mentre spiega e si ferma quando glielo chiedi.',
-      'Like a colleague at the whiteboard who draws while explaining and stops when you ask.'),
+    analogy: b('Come un collega che prima si documenta, poi ti spiega alla lavagna indicando il punto giusto mentre parla.',
+      'Like a colleague who reads up first, then explains at the whiteboard pointing at the right spot while talking.'),
     tech: [
-      tech(FILES, 'userData/learn/<id>/: lesson.json (lezione, risposte, punto in cui sei) e il materiale (materiale.md, diff.patch).', 'userData/learn/<id>/: lesson.json (lesson, answers, where you are) and the material (materiale.md, diff.patch).'),
-      tech(WHERE, 'Pagina G X; IPC impara:*; ogni risposta del modello è una sessione nascosta in sola lettura su un motore acceso (Claude per primo).', 'Page G X; IPC impara:*; each model answer is a hidden read-only session on an engine that is on (Claude first).'),
-      tech(LIMITS, 'Diff in linea fino a 60.000 caratteri (il resto nel file), schema di 4-10 nodi, al massimo 12 pezzi per risposta.', 'Diff inline up to 60,000 characters (the rest in the file), a 4-10 node diagram, at most 12 pieces per answer.'),
+      tech(FILES, 'userData/learn/<id>/: lesson.json (lezione, fatti verificati, risposte, punto in cui sei), il materiale (materiale.md, diff.patch, testo.md) e guida-app.md.', 'userData/learn/<id>/: lesson.json (lesson, verified facts, answers, where you are), the material (materiale.md, diff.patch, testo.md) and guida-app.md.'),
+      tech(WHERE, 'Pagina G X; IPC impara:* (impara:clarify per le risposte alle domande); ogni risposta del modello è una sessione nascosta in sola lettura; la ricerca web è l’unica con WebSearch/WebFetch e nessuno strumento sui file.', 'Page G X; IPC impara:* (impara:clarify for the answers to the questions); each model answer is a hidden read-only session; the web research is the only one with WebSearch/WebFetch and no file tool.'),
+      tech(LIMITS, 'Al massimo 24 fatti per ricerca, 2 domande, 6 battute per pezzo; schema di 4-10 nodi; etichette mai oltre 1,2× e schema intero quando si legge almeno all’80%.', 'At most 24 facts per research, 2 questions, 6 beats per piece; a 4-10 node diagram; labels never past 1.2× and the whole diagram whenever it reads at 80% or more.'),
     ],
-    sources: ['src/shared/lesson.ts', 'src/main/learn/service.ts', 'src/main/learn/material.ts', 'src/main/learn/prompt.ts', 'src/renderer/components/impara/ImparaPlayer.tsx', 'docs/adr/0185-impara-lessons.md'],
+    sources: ['src/shared/lesson.ts', 'src/main/learn/service.ts', 'src/main/learn/prompt.ts', 'src/main/compare/headless.ts', 'src/renderer/components/impara/LessonStage.tsx', 'src/renderer/components/impara/ImparaSources.tsx', 'src/renderer/components/impara/ImparaPlayer.tsx', 'docs/adr/0185-impara-lessons.md', 'docs/adr/0188-impara-research-and-animated-board.md'],
   },
   {
     id: 'held-news',

@@ -1,8 +1,10 @@
 // Impara in the demo (ADR 0185): no engine runs there, so the lessons come from here. `demoRun` answers the app's own
 // read-only commands (gh pr view / diff, git) with the real PR #251 of second-brain («replies stream word by word»),
-// `demoTeach` answers each of the model's rounds with a lesson about it written by hand (plan, the rest, the four extras,
-// the grade), after a short wait so the screens in between are seen. `seedDemoLessons` writes two saved lessons the
+// `demoTeach` answers each of the model's rounds with a lesson about it written by hand (the research and its check, with
+// one fact the check corrects; a question before a topic lesson; plan, the rest, the four extras, the grade), after a
+// short wait so the screens in between are seen. `seedDemoLessons` writes two saved lessons the
 // first time, so the page has a list. Deterministic under SB_DEMO_FREEZE. Used by demo-wiring.ts; e2e: test/e2e/impara.spec.ts.
+import path from 'node:path';
 import type { Lesson } from '@shared/lesson';
 import { stepKey } from '@shared/lesson';
 import type { Run } from './material';
@@ -78,12 +80,19 @@ const PLAN = {
   diagram: DEMO_DIAGRAM,
   outline: ['Il problema: risposte a blocchi', 'Il primo freno: ChatManager', 'Il secondo freno: lo store', 'La finestra nascosta', 'Cosa non risolve'],
   steps: [
-    { title: 'Il problema: risposte a blocchi', focus: ['engine', 'view'],
-      say: 'Prima di questa PR la risposta compariva a blocchi, non parola per parola. Il testo arrivava già dal motore, ma restava fermo lungo la strada.',
+    { title: 'Il problema: risposte a blocchi', focus: ['engine', 'view'], cites: ['f4'],
+      beats: [
+        { say: 'Prima di questa PR la risposta compariva a blocchi, non parola per parola.', focus: ['view'], note: 'Qui il testo arrivava a salti' },
+        { say: 'Il testo arrivava già dal motore, ma restava fermo lungo la strada.', focus: ['engine', 'manager'], flow: { from: 'engine', to: 'manager' } },
+      ],
       text: 'Il motore manda il testo a pezzetti, ogni pochi millisecondi. Sullo schermo però si vedeva un salto ogni **100 ms** o più: due attese di 100 ms in fila, una in main e una nel renderer.',
       note: 'Il testo c’era: si fermava due volte' },
-    { title: 'Il primo freno: ChatManager', focus: ['manager'],
-      say: 'Il primo freno è in main. ChatManager raccoglie le versioni nuove dello stesso messaggio e le manda alla finestra tutte insieme. Prima aspettava cento millisecondi, ora un fotogramma.',
+    { title: 'Il primo freno: ChatManager', focus: ['manager'], cites: ['f1', 'f5'],
+      beats: [
+        { say: 'Il primo freno è in main.', focus: ['manager'] },
+        { say: 'ChatManager raccoglie le versioni nuove dello stesso messaggio e le manda alla finestra tutte insieme.', focus: ['manager', 'store'], flow: { from: 'manager', to: 'store' } },
+        { say: 'Prima aspettava cento millisecondi, ora un fotogramma.', focus: ['manager'], note: '100 ms → 16 ms, un fotogramma' },
+      ],
       text: '`emitItem` mette da parte le versioni di un messaggio che cambia e le spedisce con `flushItems`. Il timer era `100`, ora è `ITEM_FRAME_MS = 16`: circa un fotogramma a 60 Hz, quindi l’IPC non si intasa ma le parole passano subito.',
       note: '100 ms → 16 ms, un fotogramma', code: MANAGER_CODE,
       words: [{ term: 'IPC', meaning: 'il canale tra il processo main e la finestra (renderer)' }, { term: 'coalescing', meaning: 'unire più aggiornamenti dello stesso messaggio in uno solo' }] },
@@ -98,11 +107,15 @@ const PLAN = {
 
 const REST = {
   steps: [
-    { title: 'Il secondo freno: lo store', focus: ['store', 'view'],
-      say: 'Il secondo freno è nella finestra. Lo store tiene i messaggi che cambiano e li disegna tutti insieme. Anche lui aspettava cento millisecondi; ora aspetta un fotogramma.',
+    { title: 'Il secondo freno: lo store', focus: ['store', 'view'], cites: ['f2'],
+      beats: [
+        { say: 'Il secondo freno è nella finestra.', focus: ['store'] },
+        { say: 'Lo store tiene i messaggi che cambiano e li disegna tutti insieme.', focus: ['store', 'view'], flow: { from: 'store', to: 'view' } },
+        { say: 'Anche lui aspettava cento millisecondi; ora aspetta un fotogramma.', focus: ['store'], note: 'Un render per fotogramma' },
+      ],
       text: 'In `startStore` ogni `chat:item` che sostituisce un messaggio va in `held`; `release` li applica in un colpo solo. `STREAM_MS` passa da `100` a `16`: React disegna al massimo una volta per fotogramma, quanto basta per vedere le parole una alla volta.',
       note: 'Un render per fotogramma', code: STORE_CODE },
-    { title: 'La finestra nascosta', focus: ['hidden', 'store'],
+    { title: 'La finestra nascosta', focus: ['hidden', 'store'], cites: ['f3'],
       say: 'Se la finestra è nascosta nessuno vede il testo. Allora lo store aspetta di più, duecentocinquanta millisecondi, e risparmia lavoro al computer.',
       text: 'Con `document.hidden` il timer usa `STREAM_HIDDEN_MS = 250`. È la stessa idea del problema «Lag nell’app» del 12 ottobre: niente render che nessuno guarda.',
       note: 'Nascosta: 250 ms, nessuno guarda',
@@ -142,9 +155,41 @@ const EXTRA: Record<string, unknown> = {
 
 const wait = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 
+/** The research of PR #251 (files only: a PR has no web research); f2 is written wrong on purpose, the check fixes it. */
+const FILES_RESEARCH = { facts: [
+  { claim: 'ChatManager unisce le versioni nuove di un messaggio per ITEM_FRAME_MS = 16 ms prima di mandarle alla finestra.', from: 'file', ref: 'src/main/chats/manager.ts:467', quote: 'const ITEM_FRAME_MS = 16;' },
+  { claim: 'STREAM_MS nello store del renderer passa da 100 a 10 ms.', from: 'file', ref: 'src/renderer/store/store.ts:27', quote: 'export const STREAM_MS = 16;' },
+  { claim: 'Con la finestra nascosta lo store aspetta STREAM_HIDDEN_MS = 250 ms.', from: 'file', ref: 'src/renderer/store/store.ts:29', quote: 'export const STREAM_HIDDEN_MS = 250;' },
+  { claim: 'Prima della PR due attese da 100 ms in fila (main e store) facevano arrivare le risposte a blocchi.', from: 'file', ref: 'materiale.md', quote: 'Two 100 ms holds (main coalescing + renderer store) made replies appear in chunks.' },
+  { claim: 'Uno schermo a 60 Hz mostra un fotogramma nuovo circa ogni 16,7 ms.', from: 'known' },
+], questions: [] as unknown[] };
+/** The check of the files side: each fact of the prompt ok, the wrong number fixed, the model's own knowledge unsure. */
+function filesVerdicts(prompt: string): unknown {
+  const verdicts = [...prompt.matchAll(/^\{"id":"(f\d+)","claim":"([^"]*)","source":"([^"]*)"/gm)].map(([, id, claim, source]) =>
+    /da 100 a 10 ms/.test(claim!) ? { id, verdict: 'wrong', fix: 'STREAM_MS nello store del renderer passa da 100 a 16 ms.', ref: source }
+      : source === 'model knowledge' ? { id, verdict: 'unsure' } : { id, verdict: 'ok' });
+  return { verdicts };
+}
+/** A topic lesson's research in the demo: two web facts, and one question (the ask can mean two things). */
+const WEB_RESEARCH = { facts: [
+  { claim: 'Un browser disegna la pagina al massimo una volta per fotogramma, di solito 60 volte al secondo.', url: 'https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame', quote: 'The frequency of calls to the callback function will generally match the display refresh rate.' },
+  { claim: 'In Electron il processo main e la finestra parlano tramite IPC.', url: 'https://www.electronjs.org/docs/latest/tutorial/ipc', quote: 'Inter-process communication (IPC) is a key part of building feature-rich desktop applications in Electron.' },
+] };
+const TOPIC_QUESTION = { q: 'Ti interessa lo streaming dentro l’app o in generale nei browser?', options: ['Dentro second-brain', 'In generale, nei browser'] };
+
 /** The model's rounds in the demo: the lesson above, a bit at a time. */
 export async function demoTeach(r: TeachRun): Promise<TeachResult> {
   const out = (v: unknown, cost: number): TeachResult => ({ ok: true, text: JSON.stringify(v), costUsd: cost, engine: 'claude', model: 'claude-opus (demo)' });
+  if (r.round === 'impara-web') { await wait(900); return out(WEB_RESEARCH, 0.06); }
+  if (r.round === 'impara-files') {
+    await wait(1000);
+    // the app's files as full paths, as a real run would cite them (so «Fonti» opens them)
+    const root = /app's source code: (.+?) \(src\/main/.exec(r.prompt)?.[1] ?? null;
+    const facts = FILES_RESEARCH.facts.map(f => ({ ...f, ref: inApp(f.ref ?? '', root) }));
+    return out({ ...FILES_RESEARCH, facts, ...(/wants to understand something/.test(r.prompt) ? { questions: [TOPIC_QUESTION] } : {}) }, 0.07);
+  }
+  if (r.round === 'impara-verify-web') { await wait(700); return out({ verdicts: [{ id: 'f1', verdict: 'ok' }, { id: 'f2', verdict: 'ok' }] }, 0.03); }
+  if (r.round === 'impara-verify-files') { await wait(800); return out(filesVerdicts(r.prompt), 0.04); }
   if (r.round === 'impara-plan') { await wait(900); return out(PLAN, 0.21); }
   if (r.round === 'impara-rest') { await wait(1500); return out(REST, 0.18); }
   if (r.round === 'impara-grade') {
@@ -156,8 +201,12 @@ export async function demoTeach(r: TeachRun): Promise<TeachResult> {
   return out(EXTRA[kind], 0.04);
 }
 
-/** Two saved lessons the first time the demo opens Impara: one half done, one finished. */
-export function seedDemoLessons(store: LessonStore, now: number): void {
+/** Three saved lessons the first time the demo opens Impara: one half done, one finished, one about the app itself
+ *  (a tall diagram, researched and verified). */
+/** A demo reference to the app's source (src/…) as a full path when the app runs from its clone. */
+const inApp = (ref: string, root: string | null) => (root && ref.startsWith('src/') ? path.join(root, ref) : ref);
+
+export function seedDemoLessons(store: LessonStore, now: number, appRoot: string | null = null): void {
   if (store.list().length) return;
   const day = 86_400_000;
   const half: Lesson = {
@@ -188,6 +237,32 @@ export function seedDemoLessons(store: LessonStore, now: number): void {
     explain: { q: 'Spiega cos’è la CSP.', answer: 'Una lista di cosa la pagina può caricare.', grade: 'ok', feedback: 'Esatto e chiaro.', at: now - 5 * day + 800_000 },
     at: 'end', costUsd: 0.12, engine: 'claude', model: 'claude-opus (demo)', sources: [], doneAt: now - 5 * day + 850_000,
   };
+  const app: Lesson = {
+    id: store.newId(now - 3 * day), title: 'Come nasce una lezione di Impara', kind: 'topic', ask: 'Come fa Impara a preparare una lezione affidabile?',
+    depth: 'quick', level: 'basics', createdAt: now - 3 * day, updatedAt: now - 3 * day + 300_000, state: 'ready',
+    diagram: 'flowchart TB\n  ask["La tua domanda"] --> web["Ricerca sul web<br/>(vede solo la domanda)"]\n  ask --> files["Ricerca nei file<br/>(brain, app, materiale)"]\n  subgraph check["Verifica"]\n    vweb["Controllo<br/>delle pagine"]\n    vfiles["Controllo<br/>dei file"]\n  end\n  web --> vweb\n  files --> vfiles\n  vweb --> facts["Fatti verificati"]\n  vfiles --> facts\n  files -.->|"se ambigua"| q["Domande"]\n  q --> plan["Piano e pezzi"]\n  facts --> plan\n  plan --> you["La lezione"]',
+    outline: ['Due ricerche separate', 'La verifica', 'La lezione'],
+    steps: [
+      { id: 'pc1', title: 'Due ricerche separate', focus: ['ask', 'web', 'files'], cites: ['f1', 'f2'],
+        say: 'La tua domanda parte verso due ricerche. Quella sul web vede solo la domanda. Quella nei file legge il materiale, il tuo brain e l’app.',
+        text: 'Le due ricerche non si incontrano mai: chi legge il web non vede i tuoi file, chi legge i file non va sul web.',
+        beats: [
+          { say: 'La tua domanda parte verso due ricerche.', focus: ['ask'] },
+          { say: 'Quella sul web vede solo la domanda.', focus: ['web'], flow: { from: 'ask', to: 'web' }, note: 'Niente file qui' },
+          { say: 'Quella nei file legge il materiale, il tuo brain e l’app.', focus: ['files'], flow: { from: 'ask', to: 'files' } },
+        ] },
+      { id: 'pc2', title: 'La verifica', focus: ['vweb', 'vfiles', 'facts'], cites: ['f2'],
+        say: 'Un secondo modello controlla ogni fatto sulla sua fonte. Quello sbagliato viene corretto o scartato.', text: 'Ogni fatto ha la sua fonte e un esito: verificato, corretto o da verificare.' },
+      { id: 'pc3', title: 'La lezione', focus: ['plan', 'you'], say: 'Solo dopo nasce la lezione, e ogni pezzo dice da quali fatti viene.', text: 'Ogni pezzo cita i suoi fatti: li trovi sotto «Fonti».' },
+    ],
+    checks: [], explain: { q: 'Spiega perché le due ricerche sono separate.' }, at: stepKey('pc1'), costUsd: 0.44, engine: 'claude', model: 'claude-opus (demo)', sources: [],
+    facts: [
+      { id: 'f1', claim: 'Prima di scrivere, Impara cerca le fonti sul web e nei file.', from: 'file', ref: inApp('src/main/learn/service.ts:150', appRoot), check: 'ok' },
+      { id: 'f2', claim: 'Chain-of-Verification: un modello che risponde a domande di verifica indipendenti sbaglia meno fatti.', from: 'web', ref: 'https://arxiv.org/abs/2309.11495', quote: 'CoVe decreases hallucinations across a variety of tasks', check: 'ok' },
+    ],
+    prep: { phases: { gather: 'done', web: 'done', files: 'done', verify: 'done', ask: 'skip', plan: 'done' }, web: 1, files: 1, ok: 2, fixed: 0, unsure: 0, dropped: 0 },
+  };
   store.save(half);
+  store.save(app);
   store.save(done);
 }
