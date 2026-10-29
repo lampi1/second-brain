@@ -17,7 +17,7 @@ const MIN = 60_000;
 const run = { runId: 'r_000000000001', chatId: 'c', agentId: 'artisan', version: 1, goal: 'g', startedBy: 'orchestrator' as const, startedAt: 0, costUsd: null, tokens: null,
   counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null } };
 const chat = (endedAt?: number) => ({ id: 'c', title: 'Fix', agent: { name: 'Artisan' }, run: { ...run, ...(endedAt ? { endedAt } : {}) } }) as unknown as ChatSummary;
-const view = (p: Partial<RunEstimateView> = {}): RunEstimateView => ({ runId: run.runId, actual: null, hit: null, estimate: { kind: 'fix', basis: 'agent-kind', n: 12, timeMs: 4 * MIN, timeLowMs: 3 * MIN, timeHighMs: 6 * MIN,
+const view = (p: Partial<RunEstimateView> = {}): RunEstimateView => ({ runId: run.runId, actual: null, hit: null, estimate: { kind: 'bug-fix', basis: 'agent-kind', n: 12, timeMs: 4 * MIN, timeLowMs: 3 * MIN, timeHighMs: 6 * MIN,
   costUsd: 0.12, costLowUsd: null, costHighUsd: null, confidence: 'high', parts: 1, quick: true, path: 'one-agent', why: '' }, ...p });
 const summary = { pct: 68, k: 27, n: 40, weeks: 6, specificPct: 80, bars: [{ weekStart: 1, pct: 40, n: 5 }, { weekStart: 2, pct: 68, n: 9 }] };
 const render = (c: ChatSummary, v: RunEstimateView | undefined, busy = true) => renderToStaticMarkup(createElement(EstimateChip, { chat: c, view: v, summary, busy, workMs: MIN }));

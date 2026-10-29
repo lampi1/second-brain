@@ -50,7 +50,7 @@ describe('parts of a request', () => {
 describe('estimate from similar tasks', () => {
   it('uses the same agent and kind first, with median, middle half and confidence', () => {
     const e = estimateTask(new SimilarIndex(fixes(12)), { text: 'Correggi il bug dello sconto', agentId: 'artisan' });
-    expect(e).toMatchObject({ kind: 'fix', basis: 'agent-kind', n: 12, parts: 1, confidence: 'high', path: 'one-agent', quick: true });
+    expect(e).toMatchObject({ kind: 'bug-fix', basis: 'agent-kind', n: 12, parts: 1, confidence: 'high', path: 'one-agent', quick: true });
     // elapsed 5..7 min (ADR 0182), times the kind's past actual/estimate ratio
     expect(e.timeMs).toBeGreaterThanOrEqual(5 * MIN);
     expect(e.timeMs).toBeLessThanOrEqual(8 * MIN);

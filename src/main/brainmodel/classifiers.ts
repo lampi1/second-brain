@@ -2,8 +2,8 @@
 // table in force (task kind → engine, model, effort, why), its change history, and per row the measured results of the
 // chats it routed (runs, verified success rate, average cost per chat) from the improvement loop's ledger
 // (<brain>/ops/state/improve/outcomes.jsonl, predictions joined with their actuals and the verdicts of the agent runs of
-// the same chats). The skill suggester is gone (ADR 0182: 3 hits in 4129 suggestions), and its card with it. Per kind of work: the known outcomes (routing:get's
-// kindStats); per source: how many chats the table, the role (ADR 0083) or a default chose the model of. Quality over
+// the same chats). The skill suggester is gone (ADR 0182: 3 hits in 4129 suggestions), and its card with it. Per kind of work: the
+// verified outcomes of the chats routed with it; per source: how many chats the table, the role (ADR 0083) or a default chose the model of. Quality over
 // time: success and cost per route, by week; a row without runs says so (null values), never zero. "Verified" = the
 // user's or a reviewed verdict, from the agent run or from the ledger (a run in both counts once; ADR 0095); the
 // brain's proxy outcomes are known but unverified and never enter it. Nothing here writes: changes go
@@ -17,6 +17,7 @@ import type { ClassifierRoute, ClassifiersState, RouteResult } from '../../share
 import type { RoutingInfo, RoutingRow } from '../../shared/contract';
 import { foldOutcome, type LedgerOutcome } from '../brain/routing';
 import { classifierCards, isoWeek, lastIsoWeeks, verifiedOf, type JobRow } from './classifier-cards';
+import { fromLedgerKind } from '../../shared/work-concepts';
 
 interface Prediction { id: string; at: number; kind: string; area: string; harness: string; model: string | null; source: string }
 interface Actual { usd: number }
@@ -38,7 +39,7 @@ export function readJobs(file: string): JobRow[] {
     if (!l.trim()) continue;
     try {
       const j = JSON.parse(l) as { id?: unknown; at?: unknown; kind?: unknown; actual?: { usd?: unknown } | null };
-      if (typeof j.id === 'string' && typeof j.kind === 'string') byId.set(j.id, { at: Number(j.at) || 0, kind: j.kind, usd: typeof j.actual?.usd === 'number' ? j.actual.usd : null });
+      if (typeof j.id === 'string' && typeof j.kind === 'string') byId.set(j.id, { at: Number(j.at) || 0, kind: fromLedgerKind(j.kind), usd: typeof j.actual?.usd === 'number' ? j.actual.usd : null });
     } catch { /* a torn line */ }
   }
   return [...byId.values()];
@@ -71,6 +72,19 @@ export function rowOf(routes: RoutingRow[], p: Pick<Prediction, 'kind' | 'area'>
   const exact = routes.findIndex(r => r.kind === p.kind && (!areas(r).length || areas(r).includes(p.area)));
   return exact >= 0 ? exact : routes.findIndex(r => r.kind === '*' && (!areas(r).length || areas(r).includes(p.area)));
 }
+/** Per kind of work: the routed chats, how many have a verified outcome, how many of those succeeded. Verified only, as
+ *  every other success figure on the page (ADR 0182: the routing's own per-kind counts took the brain's proxy too). */
+function kindsOf(predictions: readonly { id: string; kind: string }[], runByChat: Map<string, AgentRun>, outcomes: Map<string, LedgerOutcome>): ClassifiersState['kinds'] {
+  const by = new Map<string, { kind: string; chats: number; known: number; ok: number }>();
+  for (const p of predictions) {
+    const k = by.get(p.kind) ?? { kind: p.kind, chats: 0, known: 0, ok: 0 };
+    const v = verifiedOf(p.id, runByChat, outcomes);
+    k.chats++; if (v !== null) { k.known++; if (v) k.ok++; }
+    by.set(p.kind, k);
+  }
+  return [...by.values()].sort((a, b) => b.chats - a.chats || a.kind.localeCompare(b.kind));
+}
+
 function result(ids: string[], actuals: Map<string, Actual>, runByChat: Map<string, AgentRun>, outcomes: Map<string, LedgerOutcome>): RouteResult {
   const known = ids.map(id => verifiedOf(id, runByChat, outcomes)).filter((x): x is boolean => x !== null);
   const costs = ids.map(id => actuals.get(id)?.usd).filter((x): x is number => typeof x === 'number');
@@ -96,7 +110,7 @@ export async function classifiersState(i: ClassifierInputs, now = Date.now()): P
     history: i.routing.history.map(h => ({ at: h.at, from: h.from, to: h.to, by: h.by, reason: h.reason, evidence: h.evidence })),
     quality,
     cards: classifierCards({ now, predictions, actuals, outcomes, runs: i.runs, jobs: (() => { try { return i.jobs?.() ?? []; } catch { return []; } })() }),
-    kinds: Object.entries(i.routing.kindStats ?? {}).flatMap(([kind, v]) => (v ? [{ kind, chats: v.chats, known: v.known, ok: v.ok }] : [])).sort((a, b) => b.chats - a.chats || a.kind.localeCompare(b.kind)),
+    kinds: kindsOf(predictions, runByChat, outcomes),
     sources: [...predictions.reduce((m, p) => m.set(p.source, (m.get(p.source) ?? 0) + 1), new Map<string, number>())].map(([source, chats]) => ({ source, chats })).sort((a, b) => b.chats - a.chats),
   };
 }

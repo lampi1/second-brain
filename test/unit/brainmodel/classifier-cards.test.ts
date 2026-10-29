@@ -56,7 +56,7 @@ describe('classifier cards', () => {
 
   it('scores the cost-ledger kinds', () => {
     const cards = classifierCards(base({
-      jobs: [{ at: NOW - DAY, kind: 'fix', usd: 2 }, { at: NOW - DAY, kind: 'question', usd: 0.2 }, { at: NOW - DAY, kind: 'other', usd: null }],
+      jobs: [{ at: NOW - DAY, kind: 'bug-fix', usd: 2 }, { at: NOW - DAY, kind: 'writing', usd: 0.2 }, { at: NOW - DAY, kind: 'altro', usd: null }],
     }));
     const job = cards[2]!;
     expect(job.hit).toEqual({ value: 2 / 3, n: 3 });
@@ -69,7 +69,7 @@ describe('the cards’ inputs', () => {
   it('reads the job ledger (last line of an id wins, torn lines skipped) and the ledger’s known outcomes', () => {
     const d = tmp(), f = path.join(d, 'jobs.jsonl');
     fs.writeFileSync(f, [{ id: 'j1', at: 1, kind: 'fix', actual: null }, { id: 'j1', at: 1, kind: 'fix', actual: { usd: 0.5 } }, { id: 'j2', at: 2, kind: 'qa', actual: { usd: 1 } }].map(x => JSON.stringify(x)).join('\n') + '\n{torn');
-    expect(readJobs(f)).toEqual([{ at: 1, kind: 'fix', usd: 0.5 }, { at: 2, kind: 'qa', usd: 1 }]);
+    expect(readJobs(f)).toEqual([{ at: 1, kind: 'bug-fix', usd: 0.5 }, { at: 2, kind: 'qa-run', usd: 1 }]); // old kinds mapped (ADR 0182)
     expect(readJobs(path.join(d, 'missing.jsonl'))).toEqual([]);
     fs.mkdirSync(path.join(d, 'ops/state/improve'), { recursive: true });
     fs.writeFileSync(path.join(d, 'ops/state/improve/outcomes.jsonl'), [

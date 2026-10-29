@@ -466,7 +466,7 @@ app.whenReady().then(async () => {
     'routing:get': () => s.brain.routingInfo(),
     // the renderer is the user's (sender check in ipc.ts): agents never reach this write, they only propose in chat
     'routing:save': a => s.brain.saveRouting(Array.isArray(a?.routes) ? a.routes : [], typeof a?.reason === 'string' && a.reason.trim() ? a.reason.trim().slice(0, 300) : null,
-      { ...(a?.exploration !== undefined ? { exploration: Number(a.exploration) } : {}), ...(a?.costWeight !== undefined ? { costWeight: Number(a.costWeight) } : {}),
+      { ...(a?.costWeight !== undefined ? { costWeight: Number(a.costWeight) } : {}),
         ...(Number.isInteger(a?.baseVersion) ? { base: a.baseVersion } : {}) }),
     'tasks:get': () => s.tasks.get(),
     'tasks:refresh': () => s.tasks.refresh(),

@@ -79,8 +79,9 @@ describe('classifier view', () => {
     expect(facts(model, sources)).toEqual(['Una chat su Opus 5.5 costa in media 6× una su Haiku 5.5 (16 e 14 chat): se gli esiti sono simili, scegli il più leggero nel profilo del ruolo.']);
     const few = fromMain({ ...emptyCard('model'), decisions: 10, slices: [{ key: 'claude-opus-5-5', count: 6, known: 0, ok: 0, avgCostUsd: 3 }, { key: 'claude-haiku-5-5', count: 4, known: 0, ok: 0, avgCostUsd: 0.5 }] });
     expect(facts(few, sources)).toEqual([]);
-    const job = fromMain({ ...emptyCard('jobkind'), decisions: 30, hit: { value: 1, n: 30 }, slices: [{ key: 'feature', count: 12, known: 0, ok: 0, avgCostUsd: 3 }, { key: 'question', count: 18, known: 0, ok: 0, avgCostUsd: 0.25 }] });
-    expect(facts(job)[0]).toBe('Una «funzionalità» costa in media 12× una «domanda» (12 e 18 lavori): è il primo posto dove cercare un risparmio, un modello più leggero o una skill.');
+    const job = fromMain({ ...emptyCard('jobkind'), decisions: 30, hit: { value: 1, n: 30 }, slices: [{ key: 'app-feature', count: 12, known: 0, ok: 0, avgCostUsd: 3 }, { key: 'writing', count: 18, known: 0, ok: 0, avgCostUsd: 0.25 }] });
+    // one taxonomy (ADR 0182): the cost ledger's kinds read like the routing table's
+    expect(facts(job)[0]).toBe('Una «Funzione nuova» costa in media 12× una «Scrittura» (12 e 18 lavori): è il primo posto dove cercare un risparmio, un modello più leggero o una skill.');
     expect(sliceLabel('model', '—')).toBe('predefinito del motore');
   });
 });

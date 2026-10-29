@@ -123,8 +123,6 @@ export const statsIt = {
   'stats.cost.factModel': (p: { model: string; pct: string }) => `${p.model} vale ${p.pct} della spesa del periodo.`,
   'stats.cost.factKind': (p: { kind: string; usd: string }) => `Il lavoro che costa di più è «${p.kind}»: ${p.usd} nel periodo.`,
   // ── cost-ledger kinds
-  'stats.jk.fix': 'correzione', 'stats.jk.qa': 'QA e test', 'stats.jk.review': 'revisione', 'stats.jk.feature': 'funzionalità',
-  'stats.jk.research': 'indagine', 'stats.jk.question': 'domanda', 'stats.jk.other': 'altro',
 
   // ── Qualità → the app's errors (dashboard/AppErrors.tsx)
   'stats.err.recurring': 'Errori che si ripetono',
@@ -144,7 +142,6 @@ export const statsIt = {
   'stats.err.todo': 'Cosa fare',
   'stats.err.trend.up': 'in aumento', 'stats.err.trend.down': 'in calo', 'stats.err.trend.flat': 'stabile',
   'stats.err.trendHelp': 'Confronta gli ultimi 7 giorni con i 7 prima: in aumento se ne ha di più, in calo se meno. Le barrette sono un giorno ciascuna, oggi è l’ultima.',
-  
   'stats.err.memory': 'Ogni errore registrato con la regola nata da ciascuno è anche nella pagina Memoria.',
   'stats.err.openMemory': 'Apri Memoria',
   'stats.err.factWorst': (p: { pct: string; what: string }) => `${p.pct} degli errori dell’app ha una sola causa: ${p.what}.`,

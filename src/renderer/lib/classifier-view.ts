@@ -51,13 +51,11 @@ export const usdOf = (v: number | null): string | null => (v === null ? null : m
 
 /** The value a slice key stands for, in words. */
 export function sliceLabel(id: CardId, key: string): string {
-  if (id === 'kind') return (getKindIt() as Record<string, string>)[key] ?? key;
+  // one taxonomy (ADR 0182): the cost ledger's kinds are the routing table's
+  if (id === 'kind' || id === 'jobkind') return (getKindIt() as Record<string, string>)[key] ?? key;
   if (id === 'model') return key === '—' ? t('stats.cls.defaultModel') : prettyModel(key);
-  if (id === 'jobkind') return JOB_KINDS.includes(key as JobKindKey) ? t(`stats.jk.${key as JobKindKey}`) : key;
   return key;
 }
-const JOB_KINDS = ['fix', 'qa', 'review', 'feature', 'research', 'question', 'other'] as const;
-type JobKindKey = (typeof JOB_KINDS)[number];
 
 /** Main's card as the page draws it. */
 export function fromMain(c: ClassifierCard): CardView {
@@ -135,7 +133,7 @@ export function facts(c: CardView, _sources: ClassifiersState['sources'] = []): 
     if (other / total >= 0.25) out.push(t('stats.fact.kindOther', { k: other, n: total }));
   }
   if (c.id === 'model' || c.id === 'jobkind') {
-    const list = priced(c.id === 'model' ? '' : 'other'), hi = list[0], lo = list[list.length - 1];
+    const list = priced(c.id === 'model' ? '' : 'altro'), hi = list[0], lo = list[list.length - 1];
     if (hi && lo && hi !== lo && lo.avgCostUsd! > 0 && hi.avgCostUsd! / lo.avgCostUsd! >= 1.5) {
       const p = { hi: sliceLabel(c.id, hi.key), lo: sliceLabel(c.id, lo.key), x: num(hi.avgCostUsd! / lo.avgCostUsd!), nHi: hi.count, nLo: lo.count };
       out.push(c.id === 'model' ? t('stats.fact.modelCost', p) : t('stats.fact.jobCost', p));

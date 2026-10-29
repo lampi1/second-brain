@@ -1,10 +1,10 @@
-// The brain's own table (src/main/brain/brain-estimates.ts): title → area with the table's own kind rules (used by
-// model routing, brain/routing.ts), and the refresh that runs the brain's estimates.mjs (a fake one here) once per
+// The brain's own table (src/main/brain/brain-estimates.ts): the refresh that runs the brain's estimates.mjs (a fake one here) once per
 // burst of turns. ADR 0053 removed the per-job cost/time estimate this file used to compute for the UI.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { BrainEstimates, REFRESH_DELAY, areaOf, type BrainTable } from '../../../src/main/brain/brain-estimates';
+import { BrainEstimates, REFRESH_DELAY, type BrainTable } from '../../../src/main/brain/brain-estimates';
+import { areaOf } from '../../../src/main/brain/routing';
 import { plainNode, tmpDir, until } from './helpers';
 
 const g = (n: number, mid: number) => ({ n, min: { low: mid / 2, mid, high: mid * 2 }, usd: { low: 1, mid: 2, high: 4 } });
@@ -12,17 +12,15 @@ const table = (order: string[]): BrainTable => ({
   updated: '2026-10-13T10:00:00Z',
   best: { name: 'x', order, errMin: 70, errUsd: 15, tested: 120 },
   groups: { 'area+tipo:Alfa|fix': g(9, 85), 'tipo:fix': g(18, 79), 'area:Alfa': g(12, 70), tutte: g(222, 45) },
-  kinds: [['qa', '\\b(qa|retest)\\b', 'i'], ['fix', '\\b(fix\\w*|bug\\w*)\\b', 'i']],
 });
 
 describe('brain estimates table', () => {
-  it('types a title like the brain does (area, used by model routing)', () => {
-    const k = table([]).kinds;
-    expect(areaOf('Alfa · Fix preventivi', k)).toBe('Alfa');
-    expect(areaOf('Pers · App: memoria', k)).toBe('Pers · App');
-    expect(areaOf('Orchestrator', k)).toBe('Orchestrator');
-    expect(areaOf('Brief mattino', k)).toBe('altro');
-    expect(areaOf('Fix · Listino', k)).toBe('altro'); // the label names the kind, not an area
+  it('a title gives an area only for the app and an Orchestrator (ADR 0182: other labels are no area)', () => {
+    expect(areaOf('App · Fix preventivi')).toBe('App');
+    expect(areaOf('Pers · App: memoria')).toBe('Pers · App');
+    expect(areaOf('Orchestrator')).toBe('Orchestrator');
+    expect(areaOf('Alfa · Fix preventivi')).toBe('altro');
+    expect(areaOf('Brief mattino')).toBe('altro');
   });
 });
 

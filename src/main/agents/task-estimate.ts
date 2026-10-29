@@ -2,7 +2,7 @@
 // anche con le stime per task simile»): how long and how much a request should take, from the agent runs of similar past
 // tasks, and the path that follows: the Orchestrator answers a small question itself, starts ONE agent with no children
 // for a quick single-part job, and plans a delegation tree only for work of several parts. Similar = same agent and same
-// kind (the keyword classifier of brain/estimates.ts on the run's goal), else the same kind on any agent, else the same
+// kind of work (shared/work-concepts.ts taskOf on the run's goal, the routing table's own kinds), else the same kind on any agent, else the same
 // agent on any kind; the most recent MAX_SIMILAR of the first group with MIN_SIMILAR or more. ADR 0182 (10 days of real
 // data: held 41% of the time, actual/estimate median 2.01): a job is measured as the user lives it, the run's elapsed
 // time (start to end) and the cost of the whole tree it started (its delegated children too), not one run's execution
@@ -14,12 +14,19 @@
 // app_create_chat's answer (appctl/tools.ts), by IPC agents:estimates (index.ts) for the strips, by the request
 // estimate line (wiring.ts, chats/manager.ts) and by estimate-accuracy.ts's backtest.
 import type { AgentRun } from '../../shared/agents';
-import type { JobKind } from '../../shared/contract';
+import type { TaskKind } from '../../shared/contract';
 import { MAX_SIMILAR, MIN_SIMILAR, QUICK_MS, QUICK_USD, type EstimateActual, type EstimateBasis, type EstimateConfidence, type FastPath, type RunEstimateView, type TaskEstimate } from '../../shared/task-estimate';
-import { classify, normalize } from '../brain/estimates';
+import { taskOf } from '../../shared/work-concepts';
 import type { ToolDef } from '../appctl/tools';
 import { estimateRecords } from '../activity/records';
 import { logEvent } from '../activity/journal';
+
+/** accents off, lower case, one space */
+const normalize = (text: string): string => String(text ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+/** A question: it ends with "?" or opens with a question word (the job ledger's old "question" rule, ADR 0182). */
+const QUESTION = /\?\s*$|^(cosa|come|quanto|quanti|quale|quali|qual|dove|quando|chi|what|how|which|where|when|who|is|are|can|does|do|spiegami|spiega|explain|dimmi|tell me)\b|\bstatus\b|\bcome siamo messi\b/;
+/** Kinds that make or check something: a question about them is still work for an agent. */
+const MAKES: readonly TaskKind[] = ['bug-fix', 'app-feature', 'review', 'qa-run', 'writing'];
 
 /** A longer first-to-last span without a measured execution time is a run left open, not work. */
 export const MAX_ELAPSED_MS = 8 * 3600_000;
@@ -34,12 +41,12 @@ interface Ratio { endedAt: number; time: number | null; cost: number | null }
 /** The request without the app's own leading label line ("[Messaggio di un agente …]"), which says nothing of the task. */
 export const requestText = (text: string): string => String(text ?? '').replace(/^\s*\[[^\]\n]{0,300}\]\s*/, '');
 
-const kinds = new Map<string, { goal: string; kind: JobKind }>();
+const kinds = new Map<string, { goal: string; kind: TaskKind }>();
 /** The classifier's kind of a run's goal (cached per run: the goal is frozen at the run's end). */
-export function kindOfRun(r: Pick<AgentRun, 'runId' | 'goal'>): JobKind {
+export function kindOfRun(r: Pick<AgentRun, 'runId' | 'goal'>): TaskKind {
   const hit = kinds.get(r.runId);
   if (hit && hit.goal === r.goal) return hit.kind;
-  const kind = classify(requestText(r.goal));
+  const kind = taskOf('', requestText(r.goal), undefined);
   if (kinds.size > 20_000) kinds.clear();
   kinds.set(r.runId, { goal: r.goal, kind });
   return kind;
@@ -78,11 +85,11 @@ export function treeCosts(runs: readonly AgentRun[]): Map<string, number> {
  *  backtested actual/estimate ratios that calibrate the figure (ADR 0182). */
 export class SimilarIndex {
   private groups = new Map<string, Sample[]>();
-  private ratios = new Map<JobKind, Ratio[]>();
+  private ratios = new Map<TaskKind, Ratio[]>();
   private actuals = new Map<string, EstimateActual | null>();
   constructor(runs: readonly AgentRun[]) {
     const costs = treeCosts(runs);
-    const ended: { r: AgentRun; a: EstimateActual; kind: JobKind }[] = [];
+    const ended: { r: AgentRun; a: EstimateActual; kind: TaskKind }[] = [];
     for (const r of runs) {
       const a = actualOf(r, costs.get(r.runId));
       this.actuals.set(r.runId, a);
@@ -113,7 +120,7 @@ export class SimilarIndex {
   }
   /** The calibration of a kind at `before`: the median actual/estimate ratio of its last MAX_SIMILAR jobs (time, cost);
    *  1 with fewer than MIN_SIMILAR of them; kept inside ×0.25..×4. */
-  calibration(kind: JobKind, before: number): { time: number; cost: number } {
+  calibration(kind: TaskKind, before: number): { time: number; cost: number } {
     const r = recent(this.ratios.get(kind), before);
     const of = (xs: (number | null)[]): number => {
       const v = xs.filter((x): x is number => x !== null && Number.isFinite(x) && x > 0).sort((a, b) => a - b);
@@ -142,7 +149,7 @@ const spread = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); retu
 type Spread = ReturnType<typeof spread>;
 
 /** The similar samples and their uncalibrated figures (median, middle half) for a kind and an agent at `before`. */
-function rawFigures(index: SimilarIndex, kind: JobKind, agentId: string | undefined, before: number): { basis: EstimateBasis | null; samples: Sample[]; t: Spread | null; c: Spread | null } {
+function rawFigures(index: SimilarIndex, kind: TaskKind, agentId: string | undefined, before: number): { basis: EstimateBasis | null; samples: Sample[]; t: Spread | null; c: Spread | null } {
   const tiers: [EstimateBasis, string][] = agentId
     ? [['agent-kind', `ak:${agentId}:${kind}`], ['kind', `k:${kind}`], ['agent', `a:${agentId}`]]
     : [['kind', `k:${kind}`]];
@@ -218,13 +225,13 @@ export interface EstimateInput {
 /** The estimate of one request from the index. */
 export function estimateTask(index: SimilarIndex, input: EstimateInput): TaskEstimate {
   const text = requestText(input.text);
-  const kind = classify(ownRequest(text) || text), before = input.before ?? Infinity;
+  const kind = taskOf('', ownRequest(text) || text, undefined), before = input.before ?? Infinity;
   const { basis, samples, t, c } = rawFigures(index, kind, input.agentId, before);
   const cal = index.calibration(kind, before);
   const parts = partsOf(text);
   const timeMs = t ? Math.round(t.mid * cal.time) : null, costUsd = c ? Math.round(c.mid * cal.cost * 1000) / 1000 : null;
   const quick = timeMs !== null && timeMs <= QUICK_MS && (costUsd === null || costUsd <= QUICK_USD);
-  const shortQuestion = kind === 'question' && text.trim().length <= SELF_CHARS;
+  const shortQuestion = !MAKES.includes(kind) && QUESTION.test(normalize(text)) && text.trim().length <= SELF_CHARS;
   // a tree only for three parts or more, or two parts of a long, slow request (ADR 0182: 25 trees came from requests
   // under 300 characters); two small parts are one agent's work
   const path: FastPath = parts >= 3 || (parts === 2 && !quick && text.trim().length > SELF_CHARS) ? 'tree'

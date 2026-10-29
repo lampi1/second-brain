@@ -437,12 +437,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/shared/work-concepts.ts CONCEPTS
       b('Italiano e inglese si incontrano: un piccolo lessico di lavori («correggi» = fix, «revisiona» = review, «fonti» = sources…) unisce le richieste in italiano e le skill scritte in inglese.',
         'Italian and English meet: a small lexicon of kinds of work ("correggi" = fix, "revisiona" = review, "fonti" = sources…) joins Italian requests and skills written in English.'),
-      // src/main/brain/routing.ts taskOf; src/shared/work-concepts.ts builtinTask
-      b('Tipo di lavoro per l’instradamento: prima le regole del brain (estimates.json), poi il lessico integrato, poi «altro». Una richiesta che costruisce o corregge vince su un titolo che nomina solo un tema.',
-        'Kind of work for routing: the brain’s rules first (estimates.json), then the built-in lexicon, then "altro". A request that builds or fixes wins over a title that only names a topic.'),
-      // src/main/brain/estimates.ts classify
-      b('Tipo di lavoro nel registro dei costi (correzione, QA, revisione, funzionalità, indagine, domanda, altro): espressioni in italiano e inglese, vince il tipo con più indizi.',
-        'Kind of work in the cost ledger (fix, QA, review, feature, research, question, other): Italian and English patterns, the kind with the most clues wins.'),
+      // src/shared/work-concepts.ts taskOf, builtinTask
+      b('Tipo di lavoro, uno solo per tutta l’app (tabella dei modelli, registro dei costi, stime): prima le regole del brain (estimates.json), poi il lessico integrato, poi «altro». Una richiesta che costruisce o corregge vince su un titolo che nomina solo un tema.',
+        'Kind of work, one taxonomy for the whole app (model table, cost ledger, estimates): the brain’s rules first (estimates.json), then the built-in lexicon, then "altro". A request that builds or fixes wins over a title that only names a topic.'),
       // src/main/chats/orchestrator-delivery.ts mailClassifier
       b('Posta per l’Orchestrator: urgente → subito; richiesta, finito o errore → raggruppata; solo avanzamento → silenziosa. Nel dubbio raggruppata: una richiesta tenuta ferma costa più di un’attesa.',
         'Mail for the Orchestrator: urgent → now; a request, done or error → grouped; progress only → quiet. When in doubt grouped: a request held back costs more than a wait.'),
@@ -792,9 +789,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
     summary: b('Una tabella dà motore, modello e sforzo alle chat avviate senza un ruolo; una chat di un ruolo prende il modello del livello del ruolo.',
       'A table gives engine, model and effort to chats started without a role; a role’s chat takes its role tier’s model.'),
     points: [
-      // src/main/brain/routing.ts taskOf, areaOf
-      b('Il tipo di lavoro viene dal titolo e dal primo prompt, salvo un tipo esplicito; l’area dal chiamante o dal titolo, con App per le chat nella cartella del codice dell’app.',
-        'Kind comes from the title and first prompt unless supplied explicitly; area comes from the caller or title, with App for chats in the app’s code folder.'),
+      // src/shared/work-concepts.ts taskOf; src/main/brain/routing.ts areaOf
+      b('Il tipo di lavoro viene dal titolo e dal primo prompt, salvo un tipo esplicito; l’area dal chiamante (App per le chat sul codice dell’app); dal titolo solo «App · …», «Pers · App» e l’Orchestrator, le altre etichette non sono un’area.',
+        'Kind comes from the title and first prompt unless supplied explicitly; area comes from the caller (App for chats on the app’s code); from the title only "App · …", "Pers · App" and the Orchestrator, other labels are no area.'),
       // src/main/brain/routing.ts match
       b('Vince la riga più specifica: tipo + area, poi area, poi tipo, poi «qualsiasi»; a pari merito la prima.',
         'The most specific row wins: kind + area, then area, then kind, then "any"; on a tie the first one.'),
@@ -804,12 +801,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/brain/routing.ts routeAgent (ADR 0083)
       b('Un ruolo non viene mai scavalcato: la sua chat ha il suo modello; se il ruolo non ne ha uno, quello della riga della tabella sul suo motore (e il suo sforzo, se il ruolo non ne indica uno), altrimenti il modello del suo livello. La rotta lo registra come «agent». Senza ruolo, un modello diverso dalla tabella richiede un motivo; lo sforzo max mai dalla tabella.',
         'A role is never overridden: its chat has its own model; when the role has none, the table row’s model on its engine (and its effort, when the role names none), else its tier’s model. The route records it as "agent". Without a role, a model other than the table’s needs a reason; max effort never from the table.'),
-      // src/main/brain/routing.ts knownOutcome, kindStats, freshReason; src/main/wiring.ts routingVerdict
-      b('Il tuo esito su una run di un ruolo (o quello di una revisione indipendente) entra nel registro come esito noto; il motivo della riga mostra i conteggi di oggi, per esempio «16 chat, 10 con esito, 70% riuscite».',
-        'Your verdict on a role run (or an independent review’s) enters the ledger as a known outcome; the row’s reason shows today’s counts, for example "16 chats, 10 with an outcome, 70% successful".'),
-      // src/main/brain/routing.ts explore
-      b('«Esplorazione» (0–50%) prova ogni tanto il modello con meno esempi, mai per l’Orchestrator e mai per le chat che avvii tu.',
-        '"Exploration" (0–50%) sometimes tries the model with the fewest samples, never for the Orchestrator and never for chats you start.'),
+      // src/main/brain/routing.ts knownOutcome; src/main/wiring.ts routingVerdict; src/main/brainmodel/classifiers.ts
+      b('Il tuo esito su una run di un ruolo (o quello di una revisione indipendente) entra nel registro come esito noto; i risultati di ogni riga, solo verificati, sono in Brain → Classificatori.',
+        'Your verdict on a role run (or an independent review’s) enters the ledger as a known outcome; each row’s results, verified only, are in Brain → Classifiers.'),
       // src/main/brain/routing.ts (the table's file in the brain)
       b('La tabella è un file del brain: ogni salvataggio è una versione nuova e una riga «locked» non la cambiano gli agenti.',
         'The table is a file in the brain: every save is a new version, and agents never change a «locked» row.'),
@@ -821,11 +815,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Like a call-centre switchboard: depending on why you call, it puts you through to the right department.'),
     diagram: { kind: 'flow', steps: [b('Titolo e prompt', 'Title and prompt'), b('Tipo + area', 'Kind + area'), b('Riga della tabella', 'Table row'), b('Motore e modello', 'Engine and model')] },
     tech: [
-      tech(DATA, 'Riga: { kind | *, area?, harness, model, effort, why, since, evidence, locked?, onApi? }; tabella con exploration e costWeight (default 7).',
-        'Row: { kind | *, area?, harness, model, effort, why, since, evidence, locked?, onApi? }; table with exploration and costWeight (default 7).'),
+      tech(DATA, 'Riga: { kind | *, area?, harness, model, effort, why, since, evidence, locked?, onApi? }; tabella con costWeight (default 7); exploration resta nel file ma non decide più nulla.',
+        'Row: { kind | *, area?, harness, model, effort, why, since, evidence, locked?, onApi? }; table with costWeight (default 7); exploration stays in the file but no longer decides anything.'),
       tech(FILES, '<brain>/ops/state/improve/routing/v<N>.json + current.json; prezzi e modelli in <brain>/harness/models.json, o nella copia dell’app finché un brain nuovo non ne ha una sua.',
         '<brain>/ops/state/improve/routing/v<N>.json + current.json; prices and models in <brain>/harness/models.json, or in the app’s copy until a new brain has its own.'),
-      tech(LIMITS, 'EXPLORE_MIN = 20 esempi; mai Fable; le aree App usano il motore delle chat dell’app.', 'EXPLORE_MIN = 20 samples; never Fable; App areas use the app chats’ engine.'),
+      tech(LIMITS, 'Mai Fable; le aree App usano il motore delle chat dell’app.', 'Never Fable; App areas use the app chats’ engine.'),
     ],
     sources: ['src/main/brain/routing.ts', 'src/main/brain/brain-estimates.ts', 'src/renderer/lib/routing.ts', 'docs/adr/0032-model-routing.md', 'docs/adr/0047-routing-voted-and-priced-per-work.md'],
   },

@@ -20,8 +20,7 @@ export interface RoutedChatDeps {
   create(req: NewChat): Promise<ChatSummary>;
 }
 
-/** appCode = the chat works on the app's own code (routing area App). `byUser` = "Nuova chat" (the renderer): no cap on the first message (as chat:create), no exploration (the chat starts
- *  on the model the dialog showed) and the permission mode the user picked kept on any engine that has them. */
+/** appCode = the chat works on the app's own code (routing area App). `byUser` = "Nuova chat" (the renderer): no cap on the first message (as chat:create) and the permission mode the user picked kept on any engine that has them. */
 export interface RoutedSpace { appCode?: boolean; byUser?: boolean }
 
 const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -57,8 +56,6 @@ function decide(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>,
     canRun: h => !refusal(h),
     ask: named ? { ...(said.harness ? { harness: said.harness } : {}), ...(said.model ? { model: said.model } : {}), ...(said.effort ? { effort: said.effort } : {}), reason: text(req.ask?.reason, 300) || 'scelta dell’utente' } : {},
     defaults: { harness, models: { [harness]: text(def.model, 200) || null }, effort },
-    // "Nuova chat" starts the table's choice: no dice roll
-    ...(own.byUser ? { counts: undefined } : {}),
   });
   if ('error' in routed) return { error: routed.error };
   const no = refusal(routed.harness);

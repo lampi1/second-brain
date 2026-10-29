@@ -15,7 +15,7 @@ afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true
 const NOW = Date.parse('2026-10-19T09:00:00Z'), DAY = 86400e3;
 const row = (kind: RoutingRow['kind'], model: string, area?: string): RoutingRow => ({ kind, ...(area ? { area } : {}), harness: 'claude', model, effort: 'high', why: `perché ${kind}`, since: '2026-10-01', evidence: '' });
 const routing = (routes: RoutingRow[]): RoutingInfo => ({ table: { version: 4, appliedAt: '2026-10-10T08:00:00Z', by: 'user', exploration: 0, costWeight: 7, routes }, registry: null, kinds: [], error: null,
-  history: [{ at: '2026-10-10T08:00:00Z', from: 3, to: 4, by: 'user', reason: 'meno costi', evidence: '12 chat', stored: true }], kindStats: { writing: { chats: 3, known: 2, ok: 1 } } });
+  history: [{ at: '2026-10-10T08:00:00Z', from: 3, to: 4, by: 'user', reason: 'meno costi', evidence: '12 chat', stored: true }] });
 const run = (chatId: string, at: number, verdict: 'success' | 'fail' | null, extra: Partial<AgentRun> = {}): AgentRun => ({ runId: `r_${chatId.padStart(12, '0')}`, chatId, agentId: 'scribe', version: 1, goal: `Scrivi la mail ${chatId}`, startedBy: 'user', startedAt: at,
   skillSuggestions: { at, suggested: chatId === 'c1' ? ['mail-writing', 'tone'] : [], used: chatId === 'c1' ? ['mail-writing'] : [] }, counters: {} as AgentRun['counters'], costUsd: 0.5, tokens: null, ...(verdict ? { outcome: { verdict, basis: 'human' } as AgentRun['outcome'] } : {}), ...extra });
 const profiles = [{ id: 'scribe', name: 'Scribe' }, { id: 'scout', name: 'Scout' }] as AgentProfile[];
@@ -53,7 +53,7 @@ describe('classifiers', () => {
     ];
     const s = await classifiersState({ root: d, routing: routing([row('writing', 'sonnet'), row('bug-fix', 'opus')]), runs, profiles }, NOW);
     expect(s.routing).toMatchObject({ version: 4, by: 'user', error: null });
-    expect(s.kinds).toEqual([{ kind: 'writing', chats: 3, known: 2, ok: 1 }]);
+    expect(s.kinds).toEqual([{ kind: 'writing', chats: 3, known: 2, ok: 1 }]); // verified outcomes only (ADR 0182)
     expect(s.routing.routes[0]).toMatchObject({ kind: 'writing', model: 'sonnet', effort: 'high', why: 'perché writing', result: { runs: 2, success: { value: 0.5, n: 2 }, avgCostUsd: expect.closeTo(0.3) } });
     expect(s.routing.routes[1]!.result).toEqual({ runs: 0, success: { value: null, n: 0 }, avgCostUsd: null }); // no data yet
     expect(s.history).toEqual([{ at: '2026-10-10T08:00:00Z', from: 3, to: 4, by: 'user', reason: 'meno costi', evidence: '12 chat' }]);

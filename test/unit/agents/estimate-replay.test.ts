@@ -34,6 +34,6 @@ describe('estimate replay (synthetic)', () => {
   it('a feature job is measured with its children\'s cost', () => {
     const idx = new SimilarIndex(runs), job = roots.find(r => r.goal.startsWith('Aggiungi'))!;
     expect(idx.actual(job.runId)?.costUsd).toBeCloseTo(job.costUsd! + 0.2);
-    expect(estimateTask(idx, { text: 'Aggiungi la funzione nuova al carrello', agentId: 'artisan' })).toMatchObject({ kind: 'feature', basis: 'agent-kind' });
+    expect(estimateTask(idx, { text: 'Aggiungi la funzione nuova al carrello', agentId: 'artisan' })).toMatchObject({ kind: 'app-feature', basis: 'agent-kind' });
   });
 });

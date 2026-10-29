@@ -666,7 +666,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     {
       name: 'app_routing',
-      description: 'The model routing table in force: the defaults for chats started without an agent (Generale) and the model a profile without one takes (ADR 0078; an agent\'s own profile always decides). Rows: kind, area, model, effort, why; exploration rate; the models it may pick, the rule for the app\'s chats, and its last changes (who, when, why, with what data). Read it before app_routing_save.',
+      description: 'The model routing table in force: the defaults for chats started without an agent (Generale) and the model a profile without one takes (ADR 0078; an agent\'s own profile always decides). Rows: kind, area, model, effort, why; the models it may pick, the rule for the app\'s chats, and its last changes (who, when, why, with what data). Read it before app_routing_save.',
       inputSchema: obj(),
       run: () => {
         const i = d.brain.routingInfo();
@@ -681,7 +681,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       inputSchema: obj({
         routes: { type: 'array', description: 'every row: { kind (task kind or "*"), area? (string or list), harness, model, effort (or null), why, since?, evidence? }', items: { type: 'object' } },
         // the cost weight (costWeight) is the user's: not a parameter, a save keeps it
-        exploration: num('optional share of chats that try a little-sampled model of the same engine, 0 to 0.5; omitted = unchanged'),
         reason: str('why this change (shown to the user in the table\'s history)'),
         evidence: str('the data behind it: outcomes, costs, counts, the ledger lines you read'),
         baseVersion: num('the table version you read with app_routing: refused when another version is in force since (reload, redo the change)'),
@@ -692,9 +691,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (!Array.isArray(a.routes)) throw new Error('routes: la tabella intera (vedi app_routing)');
         if (!Number.isInteger(a.baseVersion)) throw new Error('baseVersion: la versione letta con app_routing');
         const who = caller()?.title ?? 'Orchestrator';
-        const i = d.brain.saveRouting(a.routes as RoutingRow[], reason, { ...(a.exploration === undefined || a.exploration === null ? {} : { exploration: Number(a.exploration) }), by: `agente: ${who}`, evidence, base: a.baseVersion as number });
+        const i = d.brain.saveRouting(a.routes as RoutingRow[], reason, { by: `agente: ${who}`, evidence, base: a.baseVersion as number });
         log.info('appctl', 'agent saved the routing table', { data: { version: i.table?.version ?? null, by: who, reason } });
-        return { version: i.table?.version ?? null, exploration: i.table?.exploration ?? null, rows: i.table?.routes.length ?? 0 };
+        return { version: i.table?.version ?? null, rows: i.table?.routes.length ?? 0 };
       },
     },
   ];

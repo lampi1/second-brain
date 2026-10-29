@@ -36,7 +36,7 @@ describe('createRoutedChat', () => {
     const { d, made } = deps();
     await createRoutedChat(d, base({ prompt: BUG, permissionMode: 'acceptEdits', defaults: { harness: 'claude' } }));
     expect(made[0]).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', cwd: 'C:/brain', permissionMode: 'acceptEdits',
-      route: { policy: 'routing', source: 'table', kind: 'bug-fix', area: 'Shop', version: 11, at: 7 } });
+      route: { policy: 'routing', source: 'table', kind: 'bug-fix', area: 'altro', version: 11, at: 7 } });
     expect(made[0]!.prompt).toBe(BUG);
   });
 
@@ -61,10 +61,11 @@ describe('createRoutedChat', () => {
     expect(made[1]).toMatchObject({ harness: 'claude', permissionMode: 'acceptEdits' });
   });
 
-  it('the title’s area picks an area row', async () => {
+  it('a title label is no area (ADR 0182): an area row is not picked from the title', async () => {
     const { d, made } = deps();
     await createRoutedChat(d, base({ title: 'Shop · Login', prompt: 'review della PR del login' }));
-    expect(made[0]).toMatchObject({ model: 'claude-haiku-5-5', effort: 'low', route: { kind: 'review', area: 'Shop', source: 'table' } });
+    expect(made[0]!.route).toMatchObject({ kind: 'review', area: 'altro' });
+    expect(made[0]).not.toMatchObject({ model: 'claude-haiku-5-5' });
   });
 
   it('an unavailable row or default falls back to an allowed engine; an explicit pick is refused', async () => {
@@ -148,7 +149,7 @@ describe('"Nuova chat" through the table (2026-10-14)', () => {
     expect(made[1]).not.toHaveProperty('worktree');
   });
 
-  it('started by the user: no cap on the first message, no dice roll, the picked permission mode kept on the routed engine', async () => {
+  it('started by the user: no cap on the first message, the picked permission mode kept on the routed engine', async () => {
     const { d, made } = deps();
     const asked: RouteRequest[] = [];
     const spy = { ...d, route: (r: RouteRequest) => { asked.push(r); return d.route(r); } };
@@ -157,6 +158,5 @@ describe('"Nuova chat" through the table (2026-10-14)', () => {
     // the defaults say Cursor, the table says Claude: the plan mode picked on the Claude the dialog showed stays
     await createRoutedChat(spy, base({ prompt: long, defaults: { harness: 'cursor' }, permissionMode: 'plan' }), { byUser: true });
     expect(made[0]).toMatchObject({ harness: 'claude', permissionMode: 'plan' });
-    expect(asked.at(-1)).toHaveProperty('counts', undefined);
   });
 });

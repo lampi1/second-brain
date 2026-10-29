@@ -118,8 +118,6 @@ export const statsEn: typeof statsIt = {
   'stats.cost.factDay': (p: { day: string; usd: string; x: string }) => `The priciest day was ${p.day}: ${p.usd}, ${p.x}× the period’s average.`,
   'stats.cost.factModel': (p: { model: string; pct: string }) => `${p.model} takes ${p.pct} of the period’s spend.`,
   'stats.cost.factKind': (p: { kind: string; usd: string }) => `The priciest kind of work is "${p.kind}": ${p.usd} in the period.`,
-  'stats.jk.fix': 'fix', 'stats.jk.qa': 'QA and tests', 'stats.jk.review': 'review', 'stats.jk.feature': 'feature',
-  'stats.jk.research': 'research', 'stats.jk.question': 'question', 'stats.jk.other': 'other',
 
   'stats.err.recurring': 'Recurring errors',
   'stats.err.recurringHelp': 'Groups of app and tool errors with the same cause (usage limit, network, login…) or, when the cause is unknown, the same text once numbers, ids, paths and links are removed; those seen at least twice in the retained data (feed and open chats) count.',
@@ -138,7 +136,6 @@ export const statsEn: typeof statsIt = {
   'stats.err.todo': 'What to do',
   'stats.err.trend.up': 'rising', 'stats.err.trend.down': 'falling', 'stats.err.trend.flat': 'steady',
   'stats.err.trendHelp': 'Compares the last 7 days with the 7 before: rising when it has more, falling when fewer. Each bar is one day, today is the last.',
-  
   'stats.err.memory': 'Every logged error with the rule each produced is also on the Memory page.',
   'stats.err.openMemory': 'Open Memory',
   'stats.err.factWorst': (p: { pct: string; what: string }) => `${p.pct} of the app errors have one cause: ${p.what}.`,

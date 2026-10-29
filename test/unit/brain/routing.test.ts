@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { agentLimits, armKey, checkTable, explore, EXPLORE_MIN, match, modelRow, predictionLine, resolve, routeChat, Routing, taskOf, validRoute, type RouteDefaults } from '../../../src/main/brain/routing';
+import { agentLimits, checkTable, match, modelRow, predictionLine, resolve, routeChat, Routing, taskOf, validRoute, type RouteDefaults } from '../../../src/main/brain/routing';
 import { DEMO_REGISTRY as REG } from '../../../src/main/brain/routing-demo';
 import type { RoutingRow } from '../../../src/shared/contract';
 
@@ -158,9 +158,10 @@ describe('routing: task kind and routeChat', () => {
     expect(taskOf('Ordini · x', 'y', undefined)).toBe('altro');
   });
 
-  it('routes a chat: area from the title (the app space is App), kind, version, time', () => {
+  it('routes a chat: area from the caller (the app space is App; a title label is no area, ADR 0182), kind, version, time', () => {
     const table = { version: 5, appliedAt: null, by: null, exploration: 0, costWeight: 7, routes: ROUTES };
-    const r = routeChat({ title: 'Magazzino · smista i ticket', prompt: '', ask: {}, defaults: DEF }, table, REG, { tasks: TASKS }, 42);
+    expect(routeChat({ title: 'Magazzino · smista i ticket', prompt: '', ask: {}, defaults: DEF }, table, REG, { tasks: TASKS }, 42)).toMatchObject({ route: { kind: 'triage', area: 'altro' } });
+    const r = routeChat({ title: 'Magazzino · smista i ticket', area: 'Magazzino', prompt: '', ask: {}, defaults: DEF }, table, REG, { tasks: TASKS }, 42);
     expect(r).toEqual({ harness: 'claude', model: 'claude-haiku-5-5', effort: 'low', route: { policy: 'routing', version: 5, source: 'table', reason: 'triage Magazzino', kind: 'triage', area: 'Magazzino', at: 42 } });
     const app = routeChat({ title: 'Tema scuro', prompt: '', appCode: true, kind: 'app-feature', ask: {}, defaults: DEF }, table, REG, null, 1);
     expect(app).toMatchObject({ model: 'claude-opus-5-5', route: { area: 'App', kind: 'app-feature', source: 'table' } });
@@ -179,61 +180,10 @@ describe('routing: task kind and routeChat', () => {
   });
 });
 
-describe('routing: exploration', () => {
-  const T = { version: 3, exploration: 0.2, costWeight: 7, routes: ROUTES } as const;
-  const item = { kind: 'triage' as const, area: 'Ordini' };
-  const base = { harness: 'claude' as const, model: 'claude-sonnet-5-5', effort: 'medium' as const };
-  const none = (): Map<string, number> => new Map();
-  const yes = (): number => 0.1;
-
-  it('tries the least sampled auto arm, never max, never the arm it would get anyway', () => {
-    const counts = new Map([['claude|claude-opus-5-5|low', 3]]);
-    expect(explore(T, item, base, REG, () => true, () => counts, yes)).toEqual({ harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', samples: 0 });
-    const full = new Map<string, number>();
-    for (const m of REG.models) for (const e of m.efforts) full.set(`claude|${m.id}|${e}`, EXPLORE_MIN);
-    full.set('claude|claude-haiku-5-5|xhigh', 19);
-    full.set('claude|claude-haiku-5-5|max', 0);
-    expect(explore(T, item, base, REG, () => true, () => full, yes)).toMatchObject({ model: 'claude-haiku-5-5', effort: 'xhigh', samples: 19 });
-    full.set('claude|claude-haiku-5-5|xhigh', EXPLORE_MIN);
-    expect(explore(T, item, base, REG, () => true, () => full, yes)).toBeNull();
-    // the base arm itself (here an alias of sonnet) is no exploration
-    const onlyBase = new Map(full); onlyBase.set('claude|claude-sonnet-5-5|medium', 0);
-    expect(explore(T, item, { ...base, model: 'sonnet' }, REG, () => true, () => onlyBase, yes)).toBeNull();
-    // empty defaults = the registry's default model at its default effort (opus, medium)
-    const onlyDefault = new Map(full); onlyDefault.set('claude|claude-opus-5-5|medium', 0);
-    expect(explore(T, item, { harness: 'claude', model: null, effort: null }, REG, () => true, () => onlyDefault, yes)).toBeNull();
-    expect(explore(T, item, { harness: 'claude', model: null, effort: 'low' }, REG, () => true, () => onlyDefault, yes)).toMatchObject({ model: 'claude-opus-5-5', effort: 'medium' });
-  });
-
-  it('stays on the engine the chat gets anyway: an app chat tries other Claude models, never Cursor; Cursor only when auto', () => {
-    expect(explore(T, { kind: 'bug-fix', area: 'Pers · App' }, base, REG, () => true, none, yes)).toMatchObject({ harness: 'claude' });
-    const cursorBase = { harness: 'cursor' as const, model: 'grok-4.7', effort: null };
-    // the demo registry keeps Cursor manual: a work chat on Cursor explores nothing (never Claude's tokens)
-    expect(explore(T, item, cursorBase, REG, () => true, none, yes)).toBeNull();
-    const auto = { ...REG, harnesses: { ...REG.harnesses, cursor: { routing: 'auto' as const } },
-      models: [...REG.models.map(m => (m.id === 'grok-4.7' ? { ...m, routing: 'auto' as const } : m)),
-        { ...REG.models.find(m => m.id === 'grok-4.7')!, id: 'gpt-5.6-terra', routing: 'auto' as const }] };
-    expect(explore(T, item, cursorBase, auto, () => true, none, yes)).toEqual({ harness: 'cursor', model: 'gpt-5.6-terra', effort: null, samples: 0 });
-    const appArm = explore(T, { ...item, area: 'App' }, cursorBase, auto, () => true, none, yes);
-    expect(appArm === null || appArm.harness === 'cursor').toBe(true);
-    expect(explore(T, item, base, auto, () => true, none, yes)).toMatchObject({ harness: 'claude' });
-  });
-
-  it('stays off at rate 0, past the dice, for an Orchestrator, for an engine the caller may not start', () => {
-    expect(explore({ exploration: 0 }, item, base, REG, () => true, none, yes)).toBeNull();
-    expect(explore(T, item, base, REG, () => true, none, () => 0.2)).toBeNull();
-    expect(explore({ exploration: 9 }, item, base, REG, () => true, none, () => 0.49)).not.toBeNull();
-    expect(explore(T, { kind: 'orchestrator', area: 'Ordini' }, base, REG, () => true, none, yes)).toBeNull();
-    expect(explore(T, item, base, REG, h => h !== 'claude', none, yes)).toBeNull();
-    expect(explore(T, item, base, null, () => true, none, yes)).toBeNull();
-  });
-
-  it('routeChat explores only when the agent named nothing, and says so in the route', () => {
-    const req = { title: 'Ordini · smista', prompt: '', ask: {}, defaults: DEF, counts: none, rnd: yes };
-    expect(routeChat(req, { ...T, appliedAt: null, by: null, routes: [...ROUTES] }, REG, { tasks: TASKS }, 7)).toEqual({ harness: 'claude', model: 'claude-opus-5-5', effort: 'low',
-      route: { policy: 'routing', version: 3, source: 'explore', reason: `esplorazione: 0 campioni su ${EXPLORE_MIN} per triage`, kind: 'triage', area: 'Ordini', at: 7 } });
-    expect(routeChat({ ...req, ask: { model: 'sonnet' } }, { ...T, appliedAt: null, by: null, routes: [...ROUTES] }, REG, { tasks: TASKS })).toMatchObject({ route: { source: 'table' } });
-    expect(routeChat({ ...req, counts: undefined }, { ...T, appliedAt: null, by: null, routes: [...ROUTES] }, REG, { tasks: TASKS })).toMatchObject({ route: { source: 'table' } });
+describe('routing: no exploration (ADR 0182)', () => {
+  it('a table with an exploration rate routes by its row; an old "explore" route still loads', () => {
+    const t = { version: 3, appliedAt: null, by: null, exploration: 0.5, costWeight: 7, routes: ROUTES };
+    expect(routeChat({ title: 'Ordini · smista', prompt: '', ask: {}, defaults: DEF }, t, REG, { tasks: TASKS })).toMatchObject({ route: { source: 'table', kind: 'triage' } });
     expect(validRoute({ policy: 'routing', version: 3, source: 'explore', reason: 'r', kind: 'triage', area: 'Ordini', at: 7 })).toMatchObject({ source: 'explore' });
   });
 });
@@ -245,23 +195,6 @@ describe('routing: the brain files', () => {
     fs.writeFileSync(path.join(root, 'harness', 'models.json'), JSON.stringify(REG));
     return root;
   };
-
-  it('counts each job once per arm and kind from the ledger predictions', () => {
-    const root = brain();
-    const r = new Routing(() => root);
-    const route = { policy: 'routing' as const, version: 1, source: 'table' as const, reason: null, kind: 'triage' as const, area: 'Ordini', at: 1 };
-    const chat = { harness: 'claude' as const, model: 'sonnet', effort: 'medium' as const, promptChars: 1 };
-    r.observe(predictionLine(route, { ...chat, id: 'app:a' }));
-    r.observe(predictionLine(route, { ...chat, id: 'app:a' }));
-    r.observe(predictionLine(route, { ...chat, id: 'app:b', model: 'claude-sonnet-5-5' }));
-    r.observe(predictionLine({ ...route, kind: 'review' }, { ...chat, id: 'app:c' }));
-    r.observe({ id: 'app:a', domain: 'routing', actual: { usd: 1, minutes: 1, turns: 1, ctxPeak: null, handoffs: 0 }, outcome: { known: false, source: 'measured' } });
-    // a sub-agent line of the brain (sub:<session>:<agent>) is another unit of work: never a chat's sample
-    r.observe({ ...predictionLine(route, { ...chat, id: 'sub:s1:a1', model: 'claude-sonnet-5-5' }), id: 'sub:s1:a1' });
-    expect([...r.armCounts('triage')]).toEqual([[armKey(chat, REG), 2]]);
-    expect(armKey(chat, REG)).toBe('claude|claude-sonnet-5-5|medium');
-    expect(r.armCounts('bug-fix').size).toBe(0);
-  });
 
   it('saves a new version, points current.json at it, appends an audit line; refuses a broken table', () => {
     const root = brain();
@@ -366,13 +299,6 @@ describe('routing: the brain files', () => {
     expect(checkTable([ROUTES[0]!, { ...ROUTES[1]!, area: [] }], REG).join()).toMatch(/riga 2: area vuota/);
   });
 
-  it('exploration leaves the chats of a locked row alone', () => {
-    const req = { title: 'Ordini · smista', prompt: '', ask: {}, defaults: DEF, counts: () => new Map<string, number>(), rnd: () => 0 };
-    const t = { version: 3, appliedAt: null, by: null, exploration: 0.5, costWeight: 7, routes: ROUTES };
-    expect(routeChat(req, t, REG, { tasks: TASKS })).toMatchObject({ route: { source: 'explore' } });
-    expect(routeChat(req, { ...t, routes: ROUTES.map(x => (x.kind === 'triage' ? { ...x, locked: true } : x)) }, REG, { tasks: TASKS })).toMatchObject({ model: 'claude-sonnet-5-5', route: { source: 'table' } });
-  });
-
   it('after a rollback (only current.json moves back) a save never overwrites a later version', () => {
     const root = brain();
     const r = new Routing(() => root);
@@ -442,7 +368,7 @@ describe('routing: «Sui crediti API» (ADR 0052)', () => {
 
   it('sends a writing chat to the API engine with the row’s model and no effort, only when that engine may run', () => {
     expect(routeChat({ ...ask, api: 'anthropic' }, table([W]), REG, null, 9)).toEqual({ harness: 'anthropic', model: 'claude-opus-5-5', effort: null,
-      route: { policy: 'routing', version: 3, source: 'table', reason: 'scrittura · sui crediti API', kind: 'writing', area: 'Posta', at: 9 } });
+      route: { policy: 'routing', version: 3, source: 'table', reason: 'scrittura · sui crediti API', kind: 'writing', area: 'altro', at: 9 } });
     // engine off or without a key (api null), or not startable by this caller: the row as it is
     const plain = { harness: 'claude', model: 'claude-opus-5-5', effort: 'medium' };
     expect(routeChat({ ...ask, api: null }, table([W]), REG, null, 9)).toMatchObject(plain);

@@ -92,6 +92,6 @@ export function classifierCards(i: CardInputs): ClassifierCard[] {
   const routed = i.predictions.map(p => ({ p, ok: verifiedOf(p.id, runByChat, i.outcomes), proxy: unverifiedOf(p.id, runByChat, i.outcomes), usd: i.actuals.get(p.id)?.usd ?? null, role: runByChat.get(chatOf(p.id))?.agentId ?? null }));
   const kind = card('kind', routed.map(({ p, ok, proxy, usd, role }) => ({ at: p.at, key: p.kind || 'altro', hit: !!p.kind && p.kind !== 'altro', ok, proxy, usd, role })), i.now);
   const model = card('model', routed.map(({ p, ok, proxy, usd, role }) => ({ at: p.at, key: p.model ?? '—', hit: p.source === 'table', ok, proxy, usd, role })), i.now);
-  const jobkind = card('jobkind', i.jobs.map(j => ({ at: j.at, key: j.kind, hit: j.kind !== 'other', ok: null, usd: j.usd, role: null })), i.now);
+  const jobkind = card('jobkind', i.jobs.map(j => ({ at: j.at, key: j.kind, hit: j.kind !== 'altro', ok: null, usd: j.usd, role: null })), i.now);
   return [kind, model, jobkind];
 }

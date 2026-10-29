@@ -370,8 +370,10 @@ describe('app control tools', () => {
     await expect(Promise.resolve().then(() => save.run({ routes, reason: 'r', evidence: 'e' }))).rejects.toThrow(/baseVersion/);
     // built on an older version: refused, the newer one stays (no silent overwrite)
     await expect(Promise.resolve().then(() => save.run({ routes, reason: 'r', evidence: 'e', baseVersion: 2 }))).rejects.toThrow(/è cambiata .ora versione 3,/);
-    expect(await save.run({ routes, exploration: 0.2, reason: 'mail su Haiku', evidence: '12 chat, 0 correzioni', baseVersion: 3 })).toEqual({ version: 4, exploration: 0.2, rows: 5 });
-    expect(routing.info().history[0]).toMatchObject({ to: 4, by: 'agente: Orchestrator', reason: 'mail su Haiku', evidence: '12 chat, 0 correzioni', exploration: { from: 0, to: 0.2 } });
+    expect(await save.run({ routes, exploration: 0.2, reason: 'mail su Haiku', evidence: '12 chat, 0 correzioni', baseVersion: 3 })).toEqual({ version: 4, rows: 5 });
+    // exploration is no parameter any more (ADR 0182): the stored rate stays as it was
+    expect(routing.info().history[0]).toMatchObject({ to: 4, by: 'agente: Orchestrator', reason: 'mail su Haiku', evidence: '12 chat, 0 correzioni' });
+    expect(routing.info().history[0]).not.toHaveProperty('exploration');
     // Never Fable, and changing an app row must still preserve every locked row.
     await expect(Promise.resolve().then(() => save.run({ routes: [{ ...routes[0], model: 'claude-sonnet-5-5' }], reason: 'r', evidence: 'e', baseVersion: 4 }))).rejects.toThrow(/bloccata dall’utente/);
     await expect(Promise.resolve().then(() => save.run({ routes: [{ kind: 'review', harness: 'claude', model: 'claude-fable-5-1', effort: 'high', why: 'w' }], reason: 'r', evidence: 'e', baseVersion: 4 }))).rejects.toThrow(/Fable mai/);

@@ -77,15 +77,15 @@ export function writeDemoClassifiers(brainRoot: string, userData: string, now: n
   const dir = path.join(brainRoot, 'ops', 'state', 'improve');
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'outcomes.jsonl'), `${lines.map(l => JSON.stringify(l)).join('\n')}\n`);
-  // the cost ledger's kinds: "other" shrinks over the weeks too
+  // the cost ledger's kinds: "altro" shrinks over the weeks too
   const jobs = path.join(userData, 'jobs.jsonl');
   if (!fs.existsSync(jobs)) {
-    const JK: [string, number, number][] = [['fix', 28, 1.8], ['research', 20, 1.2], ['feature', 12, 3.1], ['review', 12, 0.8], ['qa', 10, 1.0], ['question', 12, 0.22]];
+    const JK: [string, number, number][] = [['bug-fix', 28, 1.8], ['investigation', 20, 1.2], ['app-feature', 12, 3.1], ['review', 12, 0.8], ['qa-run', 10, 1.0], ['writing', 12, 0.22]];
     const out: string[] = [];
     for (let k = 0; k < 90; k++) {
       const age = (90 - k) / 90, at = Math.round(now - age * 55 * DAY - r() * DAY);
       const j = pick(r, JK.map(x => [x, x[1]] as [typeof x, number]));
-      const kind = r() < 0.05 + 0.2 * age ? 'other' : j[0];
+      const kind = r() < 0.05 + 0.2 * age ? 'altro' : j[0];
       out.push(JSON.stringify({ id: `demo-job-${k}`, at, harness: 'claude', model: null, effort: null, kind, promptChars: 180, actual: { usd: Math.round(j[2] * (0.4 + r() * 1.2) * 1000) / 1000, minutes: 10 + Math.round(r() * 40), tokensIn: null, tokensOut: null, turns: null }, source: 'app' }));
     }
     fs.writeFileSync(jobs, `${out.join('\n')}\n`);

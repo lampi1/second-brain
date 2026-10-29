@@ -118,8 +118,6 @@ export const statsDe: typeof statsIt = {
   'stats.cost.factDay': (p: { day: string; usd: string; x: string }) => `Der teuerste Tag war ${p.day}: ${p.usd}, ${p.x}× der Durchschnitt des Zeitraums.`,
   'stats.cost.factModel': (p: { model: string; pct: string }) => `${p.model} macht ${p.pct} der Ausgaben des Zeitraums aus.`,
   'stats.cost.factKind': (p: { kind: string; usd: string }) => `Die teuerste Arbeitsart ist "${p.kind}": ${p.usd} im Zeitraum.`,
-  'stats.jk.fix': 'Fix', 'stats.jk.qa': 'QA und Tests', 'stats.jk.review': 'Review', 'stats.jk.feature': 'Feature',
-  'stats.jk.research': 'Recherche', 'stats.jk.question': 'Frage', 'stats.jk.other': 'Sonstiges',
 
   'stats.err.recurring': 'Wiederkehrende Fehler',
   'stats.err.recurringHelp': 'Gruppen von App- und Tool-Fehlern mit derselben Ursache (Nutzungslimit, Netzwerk, Login…) oder, bei unbekannter Ursache, demselben Text ohne Zahlen, IDs, Pfade und Links; es zählen die, die in den gespeicherten Daten (Feed und offene Chats) mindestens zweimal vorkommen.',
@@ -138,7 +136,6 @@ export const statsDe: typeof statsIt = {
   'stats.err.todo': 'Was zu tun ist',
   'stats.err.trend.up': 'steigend', 'stats.err.trend.down': 'fallend', 'stats.err.trend.flat': 'stabil',
   'stats.err.trendHelp': 'Vergleicht die letzten 7 Tage mit den 7 davor: steigend bei mehr, fallend bei weniger. Jeder Balken ist ein Tag, heute ist der letzte.',
-  
   'stats.err.memory': 'Jeder erfasste Fehler mit der jeweils erzeugten Regel steht auch auf der Seite Gedächtnis.',
   'stats.err.openMemory': 'Gedächtnis öffnen',
   'stats.err.factWorst': (p: { pct: string; what: string }) => `${p.pct} der App-Fehler haben eine Ursache: ${p.what}.`,

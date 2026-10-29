@@ -952,7 +952,6 @@ export interface BudgetAlert {
 
 // ── Job ledger: real cost and time of a job, kept for the brain's routing table (ADR 0053 dropped the estimate shown
 // to the user: measured on 178 chats it held only 47% of the time with a bigger median error than the median cost) ──
-export type JobKind = 'fix' | 'qa' | 'review' | 'feature' | 'research' | 'question' | 'other';
 /** minutesKind 'work' = effective work time (running, never waiting for the user's answers: the app since 2026-10-11, the
  *  same figure the chat tile shows); without it the minutes are a chat's span or the CLI's turn time and only $ count. */
 export interface JobActual { usd: number; minutes: number | null; minutesKind?: 'work'; tokensIn: number | null; tokensOut: number | null; turns: number | null }
@@ -963,14 +962,14 @@ export interface JobRecordInput {
   model: string | null;
   effort: Effort | null;
   prompt?: string;
-  kind?: JobKind;
+  kind?: TaskKind;
   actual?: JobActual | null;
 }
 
 // ── Model routing: which harness, model and effort a chat opened by an agent gets (ADR 0032) ─────────────────────────
-/** The task kinds the routing table decides on: the brain's estimates.mjs taskOf (its rules travel in estimates.json). */
-export const TASK_KINDS = ['qa-run', 'review', 'bug-fix', 'ops-read', 'writing', 'triage', 'research-web', 'investigation', 'app-feature', 'orchestrator', 'altro'] as const;
-export type TaskKind = (typeof TASK_KINDS)[number];
+/** The kinds of work the routing table decides on: the one taxonomy (shared/work-concepts.ts, ADR 0182). */
+export { WORK_KINDS as TASK_KINDS, type TaskKind } from './work-concepts';
+import type { TaskKind } from './work-concepts';
 /** One row of the brain's model registry and price table (harness/models.json): USD per million tokens. */
 export interface RegistryModel {
   id: string; harness: Harness; provider: string; aliases?: string[];
@@ -987,7 +986,7 @@ export interface ModelRegistry {
   models: RegistryModel[];
   modifiers?: { usGeo?: number; webSearchPerRequest?: number };
   /** the only model and effort a row for the app's chats may name (the user, 2026-10-14: "i lavori sull'app sempre in
-   *  opus medio"); other models reach them only through exploration. Absent = no such rule. */
+   *  opus medio"); other models never reach them. Absent = no such rule. */
   appChats?: { model: string; effort: Effort | null };
 }
 /** A row of the routing table: kind '*' = any; area = the title's label ("IT", "Pers · App"), one or several; no area = any. */
@@ -1005,6 +1004,7 @@ export interface RoutingRow {
 /** The table in force: <brain>/ops/state/improve/routing/v<version>.json, current.json says which (versioned: every save
  *  is a new version + a line in audit.jsonl; old versions stay for rollback). */
 export interface RoutingTable {
+  /** exploration: the share of chats that once tried a little-sampled model; read and kept, used by nothing (ADR 0182) */
   version: number; appliedAt: string | null; by: string | null; exploration: number; routes: RoutingRow[];
   /** how much cost weighs against quality when the loop compares models: 0 = only quality, 10 = only cost (the user's
    *  λ, 7 on 2026-10-14; like OpenRouter's cost_quality_tradeoff); only the user changes it */
@@ -1015,9 +1015,7 @@ export interface RoutingTable {
 export interface RoutingChange { at: string; from: number | null; to: number; by: string; reason: string | null; evidence: string | null; exploration?: { from: number; to: number }; costWeight?: { from: number; to: number }; stored: boolean }
 /** routing:get → the table (null: never applied), the registry (null: the brain has no harness/models.json) and why not;
  *  history = its last changes, newest first (the user's page and the agents both write it, ADR 0032). */
-export interface RoutingInfo { table: RoutingTable | null; registry: ModelRegistry | null; kinds: readonly TaskKind[]; error: string | null; history: RoutingChange[];
-  /** per kind: the app's chats in the ledger, how many have a known outcome, how many succeeded (ADR 0078) */
-  kindStats?: Partial<Record<TaskKind, { chats: number; known: number; ok: number }>> }
+export interface RoutingInfo { table: RoutingTable | null; registry: ModelRegistry | null; kinds: readonly TaskKind[]; error: string | null; history: RoutingChange[] }
 /** How a chat's engine was chosen: agent = the catalog agent's profile (engine, model, effort; a profile with no model
  *  takes the table row's as a default, never an override: ADR 0078); table = its row; default = no row, the user's
  *  "Chat aperte dall'Orchestrator"; override = the agent named something else, with a reason. */
@@ -1520,9 +1518,9 @@ export interface InvokeMap {
   'models:seen': [void, ModelsSeen];
   /** the routing table and the model registry (Impostazioni → «Instradamento modelli») */
   'routing:get': [void, RoutingInfo];
-  /** the user saves the table from the settings page: checked against the hard rules, written as a new version;
-   *  exploration = the share of chats (0 to 0.5) that try a little-sampled model, omitted = unchanged */
-  'routing:save': [{ routes: RoutingRow[]; reason?: string; exploration?: number; costWeight?: number; baseVersion?: number }, RoutingInfo];
+  /** the user saves the table from the settings page: checked against the hard rules, written as a new version
+   *  (a table's stored exploration rate is kept as it is: no chat explores since ADR 0182) */
+  'routing:save': [{ routes: RoutingRow[]; reason?: string; costWeight?: number; baseVersion?: number }, RoutingInfo];
   'tasks:get': [void, TasksState];
   /** "Aggiorna ora": runs the scripts now (resolves when done; a read already running is joined) */
   'tasks:refresh': [void, TasksState];
