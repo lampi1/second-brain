@@ -27,6 +27,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   Workers reuse approved write grants without duplicate questions (ADR 0164).
 
 ### Added
+- Voice conversation: «Premi per parlare» in Settings → Voce. Hold Ctrl+Space (or «Parla» in the voice bar) to talk;
+  letting go sends at once, Esc while holding cancels (ADR 0152).
 - Impara: a page that teaches one of your PRs, a technical topic or a pasted text piece by piece on a growing
   diagram, with the app's voice, spoken or typed answers, checks between pieces, «Spiegalo tu» at the end and every
   lesson saved where you left it (ADR 0185).

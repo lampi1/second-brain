@@ -66,3 +66,58 @@ describe('complete spoken thoughts', () => {
     expect(deliver).toHaveBeenCalledExactlyOnceWith(next, 'second');
   });
 });
+describe('push to talk (manual turns)', () => {
+  function manual() {
+    vi.useFakeTimers();
+    const current = vi.fn(() => true), deliver = vi.fn(), draft = vi.fn();
+    return { turns: new VoiceTurns({ current, deliver, draft, manual: () => true }), deliver, draft };
+  }
+  it('a pause while holding sends nothing; the release sends everything at once', () => {
+    const { turns, deliver } = manual();
+    turns.start(1, target, false); turns.finish(1, 'prima parte');
+    vi.advanceTimersByTime(5000);
+    expect(deliver).not.toHaveBeenCalled();
+    turns.start(2, target, false); turns.finish(2, 'seconda');
+    turns.flush();
+    expect(deliver).toHaveBeenCalledExactlyOnceWith(target, 'prima parte seconda');
+  });
+  it('a transcript still on its way at the release goes as soon as it comes', () => {
+    const { turns, deliver } = manual();
+    turns.start(1, target, false);
+    turns.flush();
+    expect(deliver).not.toHaveBeenCalled();
+    turns.finish(1, 'arrivo tardi');
+    expect(deliver).toHaveBeenCalledExactlyOnceWith(target, 'arrivo tardi');
+  });
+  it('drop (Esc while holding) sends nothing', () => {
+    const { turns, deliver, draft } = manual();
+    turns.start(1, target, false); turns.finish(1, 'annulla');
+    turns.drop(); turns.flush(); vi.advanceTimersByTime(1000);
+    expect(deliver).not.toHaveBeenCalled(); expect(draft).not.toHaveBeenCalled();
+  });
+  it('a press while the last release is still transcribed makes a new turn; Esc on it keeps the released one', () => {
+    const { turns, deliver } = manual();
+    turns.start(1, target, false); turns.finish(1, 'prima');
+    turns.start(2, target, false);
+    turns.flush(); // released, «2» still being transcribed
+    turns.start(3, target, false); // pressed again
+    turns.drop(); // Esc on the new press
+    turns.finish(2, 'frase');
+    expect(deliver).toHaveBeenCalledExactlyOnceWith(target, 'prima frase');
+    turns.finish(3, 'annullata');
+    turns.flush();
+    expect(deliver).toHaveBeenCalledTimes(1);
+  });
+  it('the next turn after a closing one is sent on its own release', () => {
+    const { turns, deliver } = manual();
+    turns.start(1, target, false); turns.flush();
+    turns.start(2, target, false);
+    turns.finish(1, 'uno');
+    expect(deliver).toHaveBeenLastCalledWith(target, 'uno');
+    turns.finish(2, 'due');
+    vi.advanceTimersByTime(2000);
+    expect(deliver).toHaveBeenCalledTimes(1);
+    turns.flush();
+    expect(deliver).toHaveBeenLastCalledWith(target, 'due');
+  });
+});

@@ -143,6 +143,8 @@ export const toolsEn: typeof toolsIt = {
   'tools.keys.voiceKey': 'Ctrl M',
   'tools.keys.talkKey': 'Ctrl Shift Space',
   'tools.keys.talkWhat': 'Voice conversation with the Orchestrator: on or off',
+  'tools.keys.pttKey': 'Ctrl Space (hold)',
+  'tools.keys.pttWhat': 'Voice conversation with «Push to talk»: talk while holding, sent when you let go',
   'tools.keys.voiceWhat': 'Dictation: microphone in the text field on or off (Orchestrator and Flash)',
   'tools.keys.stopChatKey': 'Ctrl .',
   'tools.keys.stopChatWhat': 'Stop the selected chat',

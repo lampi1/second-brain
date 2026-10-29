@@ -102,3 +102,15 @@ quanto un click». Not now: the app speaking on its own initiative (recaps). The
     percent, slashes, parentheses and colons said as words or pauses. Like the reference pronunciations in OpenAI's
     guide and ElevenLabs' alias dictionaries. The respellings are not tried on the owner's PC yet.
   - Ctrl+Shift+Space turns the conversation on and off (Ctrl+M stays dictation).
+- Push to talk in the conversation (owner, 2026-10-29: «nella modalità chat continua ci fosse il push to talk»):
+  - Settings → Voce «Premi per parlare» (`voicePtt`, off by default). On: the microphone counts only while Ctrl+Space
+    (or the «Parla» button in the voice bar) is held; nothing heard outside a press is sent. Hold Ctrl+Space is Teams'
+    press-to-unmute key (Microsoft Support, «Keyboard shortcuts for Microsoft Teams»).
+  - Pressing interrupts the voice and opens the turn; releasing closes it at once (`voice:commit`: the worker flushes
+    Silero, drains, and answers `voice:committed` after the last transcript), so no 0.5 s silence + 0.7 s hold; Esc
+    while holding drops it. These are LiveKit's manual turns (start_turn / end_turn / cancel_turn,
+    https://docs.livekit.io/agents/build/turns) and OpenAI Realtime with `turn_detection: null` and
+    `input_audio_buffer.commit` (https://developers.openai.com/api/docs/guides/realtime-vad).
+  - The release waits 120 ms for the last audio block (Discord's push-to-talk release delay, 20 ms by default,
+    https://beebom.com/how-enable-configure-push-to-talk-discord/amp/); pressing again within it continues the turn.
+    Echo detection is off under push to talk: a press is always the user. Not tried on the owner's PC yet.

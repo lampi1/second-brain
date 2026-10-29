@@ -25,6 +25,8 @@ export interface VoiceDeps {
   changed: (s: VoiceState) => void;
   heard: (event: VoiceHeard) => void;
   speech: (event: VoiceSpeech) => void;
+  /** push to talk: everything said before the release is heard (voice:committed) */
+  committed?: (session: string) => void;
   fake?: { text: string; delayMs?: number } | null;
 }
 
@@ -120,6 +122,7 @@ export class VoiceService {
         else this.measurements.endpoint(m.utterance);
         this.d.speech(m); return;
       }
+      case 'committed': if (m.session === this.listening) this.d.committed?.(m.session); return;
       case 'tprogress': this.jobs.get(m.job)?.progress(m.done); return;
       case 'transcribed': { const j = this.jobs.get(m.job); this.jobs.delete(m.job); j?.done(m); return; }
       case 'spoken': { const done = this.speaks.get(m.id); this.speaks.delete(m.id); done?.(m); return; }
@@ -165,6 +168,20 @@ export class VoiceService {
     }
     if (!on && !this.child) return;
     this.proc().postMessage({ type: 'listen', on, session, asr: this.d.settings().asr, ...(on && talk ? { voice: this.d.settings().voice } : {}) });
+  }
+
+  /** Push to talk released: close what was said now; `committed` when all of it is transcribed. */
+  commit(session: string): void {
+    if (!this.listening || session !== this.listening) return;
+    if (this.d.fake) {
+      // the fake engine «hears» its sentence for each press (no microphone)
+      this.d.speech({ session, utterance: 1, active: true });
+      this.d.speech({ session, utterance: 1, active: false });
+      this.d.heard({ session, utterance: 1, text: this.d.fake.text, ms: 600 });
+      this.d.committed?.(session);
+      return;
+    }
+    this.proc().postMessage({ type: 'commit', session });
   }
 
   audio(samples: Float32Array, session: string): void {

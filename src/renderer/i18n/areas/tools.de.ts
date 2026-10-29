@@ -143,6 +143,8 @@ export const toolsDe: typeof toolsIt = {
   'tools.keys.voiceKey': 'Strg M',
   'tools.keys.talkKey': 'Strg Umschalt Leertaste',
   'tools.keys.talkWhat': 'Sprachgespräch mit dem Orchestrator: an oder aus',
+  'tools.keys.pttKey': 'Strg Leertaste (halten)',
+  'tools.keys.pttWhat': 'Sprachgespräch mit «Drücken zum Sprechen»: sprich beim Halten, beim Loslassen gesendet',
   'tools.keys.voiceWhat': 'Diktat: Mikrofon im Textfeld an oder aus (Orchestrator und Flash)',
   'tools.keys.stopChatKey': 'Strg .',
   'tools.keys.stopChatWhat': 'Ausgewählten Chat stoppen',

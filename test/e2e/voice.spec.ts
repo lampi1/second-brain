@@ -78,3 +78,55 @@ test('voice: the mic dictates into the input, the conversation is switched on in
     await app.close();
   }
 });
+
+test('voice: push to talk in the conversation sends only what is said while holding Ctrl+Space or the bar button', async () => {
+  test.setTimeout(90_000);
+  const { app, page } = await launchDemo();
+  try {
+    const said = 'Ciao, cosa c’è di nuovo?';
+    const sent = page.getByTestId('tile-orchestrator').getByText(said);
+    const bar = page.getByTestId('orchestrator-input-voice');
+    await goPage(page, 'impostazioni');
+    const ptt = page.getByTestId('st-voice-ptt-on');
+    await ptt.scrollIntoViewIfNeeded();
+    await expect(ptt).toHaveAttribute('aria-checked', 'false');
+    await ptt.click();
+    await expect(ptt).toHaveAttribute('aria-checked', 'true');
+    await page.getByTestId('st-voice-talk-on').click();
+    await expect(bar).toHaveAttribute('data-mode', 'talk');
+    const hold = page.getByTestId('orchestrator-input-voice-ptt');
+    await expect(hold).toBeVisible();
+    await expect(bar).toContainText('Ctrl+Spazio');
+    // nobody holds the key: what the engine hears does not count
+    await page.waitForTimeout(2000);
+    await expect(sent).toHaveCount(0);
+    await shot(page, 'voice-ptt-dark');
+
+    // the bar's button held and let go: sent at once
+    const box = (await hold.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await expect(hold).toHaveClass(/\bon\b/);
+    await page.mouse.up();
+    await expect(sent).toHaveCount(1, { timeout: 10_000 });
+
+    // Ctrl+Space held and let go: the second message
+    await page.keyboard.down('Control');
+    await page.keyboard.down('Space');
+    await expect(hold).toHaveClass(/\bon\b/);
+    await page.keyboard.up('Space');
+    await page.keyboard.up('Control');
+    await expect(sent).toHaveCount(2, { timeout: 10_000 });
+
+    // Esc while holding: nothing is sent
+    await page.keyboard.down('Control');
+    await page.keyboard.down('Space');
+    await page.keyboard.press('Escape');
+    await page.keyboard.up('Space');
+    await page.keyboard.up('Control');
+    await page.waitForTimeout(1500);
+    await expect(sent).toHaveCount(2);
+  } finally {
+    await app.close();
+  }
+});

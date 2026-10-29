@@ -869,6 +869,8 @@ export interface Settings {
   /** voice mode (ADR 0152): which Whisper transcribes (fast = small, accurate = turbo) and which Italian voice speaks */
   voiceAsr?: VoiceAsr;
   voiceName?: VoiceName;
+  /** the voice conversation is push to talk: the microphone counts only while Ctrl+Space or the bar's button is held */
+  voicePtt?: boolean;
   /** fields forced by the environment (SB_BRAIN, SB_MCP_PORT): shown read-only, never saved */
   locked?: ('brainRoot' | 'mcpPort')[];
 }
@@ -899,7 +901,7 @@ export type SettingKey =
   | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
-  | 'suggestOn' | 'suggestModel' | 'suggestDailyUsd' | 'voiceAsr' | 'voiceName'
+  | 'suggestOn' | 'suggestModel' | 'suggestDailyUsd' | 'voiceAsr' | 'voiceName' | 'voicePtt'
   | `delegation.${keyof DelegationSettings}` | `modelTiers.${Harness}.${ModelTier}`;
 export interface SettingDef {
   key: SettingKey;            // 'mute.*' stands for every feed kind
@@ -1589,6 +1591,8 @@ export interface InvokeMap {
   'voice:listen': [{ on: boolean; session: string; talk?: boolean }, void];
   'voice:cancelSpeech': [void, void];
   'voice:audio': [{ session: string; samples: Float32Array }, void];
+  /** push to talk released (ADR 0152): close what was said now */
+  'voice:commit': [{ session: string }, void];
   'voice:speak': [{ text: string; voice?: VoiceName }, { samples: Float32Array; rate: number; error?: string }];
   /** call recordings (ADR 0154, main/recordings/): arm = the PC's audio may be captured for the next few seconds (the
    *  user's «Registra call»), start one, its 16-bit chunks, stop (queues the local transcript), the transcript, «Trovate sul PC» and the bytes of
@@ -1734,6 +1738,8 @@ export interface EventMap {
   'voice:changed': VoiceState;
   'voice:heard': VoiceHeard;
   'voice:speech': VoiceSpeech;
+  /** push to talk: everything said before the release is heard */
+  'voice:committed': { session: string };
   /** call recordings (ADR 0154): the list, the one running, a transcription's progress */
   'rec:changed': RecState;
   /** Impara (ADR 0185): the list changed, and the lesson that changed (whole) when there is one */
@@ -1777,7 +1783,7 @@ export const INVOKE_CHANNELS = [
   'search:query', 'search:status', 'search:retryModel', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
   'sync:get', 'sync:now', 'sync:resolve', 'headline:get', 'log:list',
   'suggest:get', 'suggest:cancel', 'suggest:state',
-  'voice:state', 'voice:prepare', 'voice:listen', 'voice:audio', 'voice:speak', 'voice:cancelSpeech',
+  'voice:state', 'voice:prepare', 'voice:listen', 'voice:audio', 'voice:commit', 'voice:speak', 'voice:cancelSpeech',
   'rec:state', 'rec:arm', 'rec:start', 'rec:chunk', 'rec:stop', 'rec:transcribe', 'rec:rename', 'rec:remove', 'rec:transcript', 'rec:find', 'rec:readFound', 'rec:open',
   'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:remove',
   'orchestrator:held', 'orchestrator:heldSeen',
@@ -1797,7 +1803,7 @@ export const EVENT_CHANNELS = [
   'scripts:changed',
   'log:events',
   'personal:changed',
-  'voice:changed', 'voice:heard', 'voice:speech',
+  'voice:changed', 'voice:heard', 'voice:speech', 'voice:committed',
   'rec:changed',
   'impara:changed',
 ] as const satisfies readonly EventChannel[];

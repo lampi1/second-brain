@@ -96,6 +96,26 @@ async function transcribe(job: number, wav: string, asr: VoiceAsr): Promise<void
   send({ type: 'transcribed', job, lines });
 }
 
+let lastDetected = false, warned = false;
+const WINDOW = 512;
+let tail = new Float32Array(0);
+/** Silero reads 512-sample windows: the chunks are cut to that size, the rest waits for the next one. */
+function feed(v: any, session: string, samples: Float32Array): void {
+  const all = tail.length ? concat(tail, samples) : samples;
+  let at = 0;
+  for (; at + WINDOW <= all.length; at += WINDOW) {
+    v.acceptWaveform(all.subarray(at, at + WINDOW));
+    const det = !!v.isDetected();
+    if (det && !lastDetected) {
+      currentUtterance = ++utterance;
+      send({ type: 'speech', session, utterance: currentUtterance, active: true });
+    }
+    lastDetected = det;
+    drain();
+  }
+  tail = all.slice(at);
+}
+
 /** Every closed segment keeps its capture identity and model, including while native inference waits. */
 function drain(): void {
   const v = vadNow();
@@ -139,9 +159,6 @@ function drain(): void {
   }
 }
 
-let lastDetected = false, warned = false;
-const WINDOW = 512;
-let tail = new Float32Array(0);
 const concat = (a: Float32Array, b: Float32Array) => { const o = new Float32Array(a.length + b.length); o.set(a); o.set(b, a.length); return o; };
 port.on('message', ({ data: m }) => {
   try {
@@ -174,20 +191,29 @@ port.on('message', ({ data: m }) => {
         if (!partReady(root, VAD)) { if (!warned) send({ type: 'error', message: 'Modelli della voce mancanti: scaricali da Impostazioni → Voce.' }); warned = true; return; }
         let v: any;
         try { v = vadNow(); } catch (e) { if (!warned) send({ type: 'error', message: msg(e) }); warned = true; return; }
-        // Silero reads 512-sample windows: the microphone's chunks are cut to that size, the rest waits for the next one
-        const all = tail.length ? concat(tail, m.samples) : m.samples;
-        let at = 0;
-        for (; at + WINDOW <= all.length; at += WINDOW) {
-          v.acceptWaveform(all.subarray(at, at + WINDOW));
-          const det = !!v.isDetected();
-          if (det && !lastDetected) {
-            currentUtterance = ++utterance;
-            send({ type: 'speech', session: m.session, utterance: currentUtterance, active: true });
+        feed(v, m.session, m.samples);
+        return;
+      }
+      case 'commit': {
+        if (!listening || m.session !== listening) return;
+        // push to talk released (LiveKit's end_turn: commit the user turn): the speech still open is closed at once
+        if (vad) {
+          // silence as long as a natural pause, so Silero ends the segment the way it always does (its flush() would cut
+          // the segment's last minSilenceDuration: the last word)
+          feed(vad, m.session, new Float32Array(Math.ceil((SILENCE_S + 0.1) * VOICE_RATE)));
+          if (currentUtterance) { vad.flush(); drain(); }
+          if (currentUtterance) {
+            // speech too short to be a segment: closed with nothing heard, so the renderer never waits for it
+            const id = currentUtterance;
+            send({ type: 'speech', session: m.session, utterance: id, active: false });
+            later(() => { if (m.session === listening) send({ type: 'heard', session: m.session, utterance: id, text: '', ms: 0 }); });
           }
-          lastDetected = det;
-          drain();
+          vad.reset();
+          lastDetected = false; currentUtterance = 0; tail = new Float32Array(0);
         }
-        tail = all.slice(at);
+        // after every decode queued above (one queue): the renderer sends what was said without waiting for more
+        const session = m.session;
+        later(() => { if (session === listening) send({ type: 'committed', session }); });
         return;
       }
       case 'cancel-speech': speechCancelledThrough = Math.max(speechCancelledThrough, m.through); return;

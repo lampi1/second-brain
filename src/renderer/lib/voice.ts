@@ -11,6 +11,10 @@
 // aloud with the microphone off too, and its «Rispondo a voce» is dictation into the lesson (target 'impara': the words
 // go to onImparaHeard, never to a chat). Used by components/VoiceControls.tsx, ChatInput.tsx, VoiceSettings.tsx, App.tsx
 // (Ctrl+M), the question cards and components/impara/.
+// Push to talk (Settings → Voce «Premi per parlare», owner 2026-10-29): in the conversation the microphone counts only
+// while Ctrl+Space (like Teams' press to unmute) or the bar's button is held. Pressing interrupts the voice and opens the
+// turn, releasing closes it at once and sends it (LiveKit's manual turns: start_turn / end_turn / cancel_turn); Esc while
+// holding drops it.
 import { useEffect, useRef } from 'react';
 import { VoiceTurns, type VoiceTurnTarget } from './voice-turns';
 import { createStore } from '../store/createStore';
@@ -28,7 +32,9 @@ export type VoiceMode = 'dictate' | 'talk';
 export type VoicePhase = 'off' | 'preparing' | 'starting' | 'listening' | 'hearing' | 'transcribing' | 'speaking';
 export interface VoiceUi { phase: VoicePhase; mode: VoiceMode; target: VoiceTarget; level: number; engine: VoiceState | null; error: string | null; question: string | null;
   /** narrate() is reading something aloud (Impara), whatever the microphone does */
-  narrating: boolean }
+  narrating: boolean;
+  /** push to talk: on for this conversation, and the key or button held now */
+  ptt?: boolean; holding?: boolean }
 
 export const voice = createStore<VoiceUi>({ phase: 'off', mode: 'dictate', target: 'orchestrator', level: 0, engine: null, error: null, question: null, narrating: false });
 export const useVoice = voice.use;
@@ -38,6 +44,11 @@ let stream: MediaStream | null = null, ctx: AudioContext | null = null, proc: Sc
 let captureSession: string | null = null;
 let session = 0; // each start and stop; an await that comes back to another session gives up
 let onSince = 0, startWhenReady = false, transcribeTimer: ReturnType<typeof setTimeout> | null = null;
+/** push to talk: on in Settings (read when the conversation starts), the key or button held now, a release being closed */
+let ptt = false, pttHeld = false, pttClosing = false, pttDrop = false, spaceHeld = false;
+/** the release delay running (pttRelease) and whether Esc came with it */
+let releasing: ReturnType<typeof setTimeout> | null = null, releaseDrop = false;
+const pttOn = () => ptt && voice.get().mode === 'talk' && voice.get().phase !== 'off';
 
 /** The chat a target writes to: the open Orchestrator or the open Flash chat. */
 export function targetChat(target: VoiceTarget): string | null {
@@ -69,14 +80,38 @@ export function startVoice(): void {
   });
   window.sb.on('voice:speech', event => { if (event.session === captureSession) speech(event); });
   window.sb.on('voice:heard', event => { if (event.session === captureSession) heard(event); });
+  window.sb.on('voice:committed', event => { if (event.session === captureSession) committed(); });
   app.subscribe(watchReplies);
+  // «Premi per parlare» switched while the conversation is on: it applies at once
+  app.subscribe(() => {
+    const s = voice.get(), want = s.mode === 'talk' && app.get().settings?.voicePtt === true;
+    if (s.phase === 'off' || want === ptt) return;
+    if (releasing) { clearTimeout(releasing); releasing = null; }
+    ptt = want; pttHeld = false; pttDrop = false;
+    set({ ptt, holding: false });
+    // the turn in progress (held, releasing, or a hands-free one being spoken) is closed and sent as it is
+    pttClosing = true;
+    void window.sb.invoke('voice:commit', { session: captureSession ?? '' }).catch(() => { pttClosing = false; });
+  });
   // another microphone (chosen in Settings → Voce, plugged in, unplugged) while voice is on: reopened on it at once
   onMicChange(() => {
     if (!stream || voice.get().phase === 'off') return;
     const { mode, target } = voice.get();
     stopVoice(true); void startListening(mode, target);
   });
-  window.addEventListener('keydown', e => { if (e.key === 'Escape' && voice.get().phase === 'speaking') { e.preventDefault(); e.stopPropagation(); stopSpeaking(); } }, true);
+  window.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && pttHeld) { e.preventDefault(); e.stopPropagation(); pttRelease(true); return; }
+    if (e.key === 'Escape' && voice.get().phase === 'speaking') { e.preventDefault(); e.stopPropagation(); stopSpeaking(); return; }
+    // Ctrl+Space held: push to talk (only when it is on: otherwise the key does nothing here)
+    if (e.code === 'Space' && (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && pttOn()) { e.preventDefault(); e.stopPropagation(); if (!e.repeat) { spaceHeld = true; pttPress(); } return; }
+    // Ctrl let go before Space: the Space still held types nothing and toggles nothing until it is let go
+    if (e.code === 'Space' && spaceHeld) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+  window.addEventListener('keyup', e => {
+    if (e.code === 'Space') spaceHeld = false;
+    if (pttHeld && (e.code === 'Space' || e.key === 'Control' || e.key === 'Meta')) { e.preventDefault(); pttRelease(); }
+  }, true);
+  window.addEventListener('blur', () => { spaceHeld = false; if (pttHeld) pttRelease(); }); // the key's release would never come
   void window.sb.invoke('voice:state', undefined).then(st => set({ engine: st }), () => {});
 }
 
@@ -112,7 +147,9 @@ async function startListening(mode: VoiceMode, target: VoiceTarget): Promise<voi
   if (no) { toast(no, 'info'); return; }
   // leaves «off» before the first await: a second click or Ctrl+M meanwhile turns it off instead of opening twice
   const my = ++session;
-  set({ mode, target, error: null, phase: 'starting' });
+  ptt = mode === 'talk' && app.get().settings?.voicePtt === true;
+  pttHeld = false; pttClosing = false; pttDrop = false;
+  set({ mode, target, error: null, phase: 'starting', ptt, holding: false });
   const st = await window.sb.invoke('voice:state', undefined).catch(() => null);
   if (my !== session) return;
   set({ engine: st });
@@ -189,6 +226,7 @@ async function openMic(my: number, reopen = false): Promise<void> {
       recent.push({ at: now, level });
       while (recent.length && now - recent[0]!.at > 400) recent.shift();
       if (Math.abs(level - voice.get().level) > 0.04) set({ level });
+      if (ptt && !pttHeld) return; // push to talk: nothing counts until the key is held
       // the mic keeps listening while the app speaks (echo cancellation on, see mic.ts micAudio): that is what lets the
       // user interrupt it; the echo that gets through is filtered by speech() below
       void window.sb.invoke('voice:audio', { session: capture, samples: downsample(input, ratio) }).catch(() => {});
@@ -242,12 +280,52 @@ export function stopVoice(preserve = false): void {
   closeMic();
   stopSpeaking(false);
   if (transcribeTimer) clearTimeout(transcribeTimer);
-  set({ phase: 'off', level: 0 });
+  pttHeld = false; pttClosing = false; pttDrop = false;
+  if (releasing) { clearTimeout(releasing); releasing = null; }
+  set({ phase: 'off', level: 0, holding: false });
   thoughts.reset(preserve);
   hinted = false;
   deliveredIds.clear();
   saidIds.clear(); // on again: the open questions are read again
   for (const q of questions) q.said = false;
+}
+
+// ── push to talk ──
+/** Ctrl+Space down / the bar's button pressed: the voice stops, the turn opens (LiveKit's start_turn). */
+export function pttPress(): void {
+  if (releasing) { clearTimeout(releasing); releasing = null; releaseDrop = false; if (pttHeld) { set({ holding: true }); return; } } // pressed again within the release delay: the same turn goes on
+  if (!pttOn() || pttHeld) return;
+  if (speakingNow()) stopSpeaking();
+  // the previous release still waiting for its end: it is settled now (sent, or dropped after Esc); its words still
+  // being transcribed go with it, the new press's words make a new turn
+  if (pttClosing) { if (pttDrop) thoughts.drop(); else thoughts.flush(); }
+  pttHeld = true; pttClosing = false; pttDrop = false;
+  set({ holding: true, phase: voice.get().phase === 'speaking' ? 'listening' : voice.get().phase });
+}
+
+/** Released: what was said is closed now and sent as soon as it is heard (end_turn); drop = Esc while holding
+ *  (cancel_turn: nothing is sent). */
+export function pttRelease(drop = false): void {
+  if (!pttHeld) return;
+  if (releasing) { releaseDrop ||= drop; return; } // Esc right after letting go still cancels
+  releaseDrop = drop;
+  set({ holding: false });
+  const capture = captureSession, my = session;
+  // the last syllable is still in the audio pipeline (one ScriptProcessor block is ~43 ms): it gets a moment, like a
+  // push-to-talk release delay (Discord's default is 20 ms; ours covers the block)
+  releasing = setTimeout(() => {
+    releasing = null;
+    if (my !== session || !capture || capture !== captureSession) return;
+    pttHeld = false; pttClosing = true; pttDrop = releaseDrop;
+    void window.sb.invoke('voice:commit', { session: capture }).catch(() => { pttClosing = false; });
+  }, 120);
+}
+
+function committed(): void {
+  if (!pttClosing) return;
+  pttClosing = false;
+  if (pttDrop) { pttDrop = false; thoughts.drop(); } else thoughts.flush();
+  if (['hearing', 'transcribing'].includes(voice.get().phase)) set({ phase: speakingNow() ? 'speaking' : 'listening' });
 }
 
 // ── what was heard ──
@@ -276,6 +354,7 @@ function preserveDraft(target: VoiceTurnTarget, text: string): void {
   }
 }
 const thoughts = new VoiceTurns({
+  manual: () => ptt,
   current: target => {
     const now = targetNow();
     return !!now && now.chatId === target.chatId && now.mode === target.mode && now.questionId === target.questionId && now.questionVersion === target.questionVersion;
@@ -297,7 +376,9 @@ function speech({ active, utterance }: VoiceSpeech): void {
   if (active) {
     const target = targetNow();
     if (!target) { toast(t(s.target === 'flash' ? 'voice.noFlash' : 'voice.noOrchestrator'), 'info'); stopVoice(true); return; }
-    const echo = (speakingNow() || Date.now() < quietUntil) && loudLately() < BARGE_LEVEL && !s.engine?.fake;
+    if (ptt && !pttHeld && !pttClosing) return; // push to talk: what the engine heard outside a press does not count
+    // a press is the user's own turn: never the app's echo
+    const echo = !ptt && (speakingNow() || Date.now() < quietUntil) && loudLately() < BARGE_LEVEL && !s.engine?.fake;
     if (!thoughts.start(utterance, target, echo) || echo) return;
     if (speakingNow()) stopSpeaking();
     set({ phase: 'hearing' });
