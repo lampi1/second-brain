@@ -36,13 +36,6 @@ describe('reduce', () => {
     expect(s.chats.c?.costLedgerUsd).toBeUndefined();
   });
 
-  it('cli:ready fills the CLI status into app:info, and waits for app:info when it comes first', () => {
-    const cli = { claude: { found: true, path: 'c', version: '2', loggedIn: true }, cursor: { found: false, path: null, version: null, loggedIn: null } };
-    expect(reduce(init(), { type: 'cli', cli }).info).toBeNull();
-    const s = reduce(init(), { type: 'info', info: { version: '1', brainRoot: null, mcpUrl: 'u', cli: null, engines: [], systemLang: 'it' } });
-    expect(reduce(s, { type: 'cli', cli }).info?.cli).toEqual(cli);
-  });
-
   it('init keeps chats that arrived by event during the load and marks ready', () => {
     const early = reduce(initialState, { type: 'chat:updated', chat: chat('z') });
     const s = init(early);

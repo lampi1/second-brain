@@ -1,8 +1,7 @@
-// Review of PR #18: proves HybridSearch.embedCached can hand back undefined vectors (and themes() then crashes in
-// similarities/dot) when two ideas calls overlap and the second one clears textVecs (TEXT_VECS_MAX overflow) while the
-// first awaits a batch: the first call's already-cached texts are gone when it reads them back.
+// Brain themes embedding cache (regression of PR #18): two overlapping ideas calls never get an entry without a vector,
+// even when the second one clears the text-vector cache (TEXT_VECS_MAX overflow) while the first awaits a batch.
 import { describe, expect, it } from 'vitest';
-import { HybridSearch } from '../../../../src/main/search/hybrid/service';
+import { HybridSearch } from '../../../src/main/search/hybrid/service';
 
 const DIM = 8;
 const unit = (axis: number) => { const v = new Float32Array(DIM); v[axis % DIM] = 1; return v; };

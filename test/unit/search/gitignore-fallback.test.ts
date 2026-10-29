@@ -1,14 +1,14 @@
-// Proves (PR #12, hybrid search): when `git ls-files` fails on the brain folder (git refuses a repository owned by
-// another account, "dubious ownership", or git is not on the PATH), brainFiles falls back to a plain folder walk that
-// ignores .gitignore, so gitignored notes (the brain keeps secrets, state and outputs gitignored) are indexed and served
-// to every chat by brain_search. The brain's own site fails closed in the same situation (no tracked files = nothing).
+// Hybrid search inventory (regression of PR #12): when `git ls-files` fails on the brain folder (git refuses a repository
+// owned by another account, "dubious ownership", or git is not on the PATH), gitignored notes (the brain keeps secrets,
+// state and outputs gitignored) stay out of the index and an existing safe index is kept; a plain folder walk that
+// ignores .gitignore never feeds brain_search.
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { brainFiles, Engine } from '../../../../src/main/search/hybrid/engine';
-import { Store } from '../../../../src/main/search/hybrid/store';
+import { brainFiles, Engine } from '../../../src/main/search/hybrid/engine';
+import { Store } from '../../../src/main/search/hybrid/store';
 
 const tmp: string[] = [];
 const savedPath = process.env.PATH;

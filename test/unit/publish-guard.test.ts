@@ -25,8 +25,10 @@ describe('publish guard', () => {
   it('the repo files carry no finding', () => {
     const { denyList } = readGuardConfig(root) as { denyList: string | null };
     if (denyList) expect(fs.existsSync(denyList), 'git config guard.denyList is set but the file is missing: restore it (or unset the key on a PC with no private list)').toBe(true);
+    // an untracked nested repository (a git worktree under .claude/worktrees/) is listed as "dir/": its files are not
+    // this repo's, and its own checkout scans them; only regular files are copied (a directory would throw EISDIR)
     const files = execFileSync('git', ['-C', root, 'ls-files', '-z', '--cached', '--others', '--exclude-standard'], { encoding: 'utf8' })
-      .split('\0').filter(f => f && (!only || only.has(f)) && fs.existsSync(path.join(root, f)));
+      .split('\0').filter(f => f && !f.endsWith('/') && (!only || only.has(f)) && fs.statSync(path.join(root, f), { throwIfNoEntry: false })?.isFile());
     for (const f of new Set(files)) {
       fs.mkdirSync(path.dirname(path.join(tmp, f)), { recursive: true });
       fs.copyFileSync(path.join(root, f), path.join(tmp, f));

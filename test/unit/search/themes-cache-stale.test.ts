@@ -1,9 +1,9 @@
-// Review of PR #18: proves HybridSearch.themes serves stale themes after an in-place edit of ai-errors.md that keeps the
-// chunk's length (e.g. fixing a date): the cache key is id:line:text.length per chunk, and the store reuses the same
-// chunk ids when the re-indexed document held the highest rowids (delete + insert without AUTOINCREMENT).
+// Brain themes cache (regression of PR #18): an in-place edit of ai-errors.md that keeps the chunk's length (a date
+// fixed) refreshes the themes, even when the store reuses the same chunk ids after re-indexing (delete + insert without
+// AUTOINCREMENT).
 import { describe, expect, it } from 'vitest';
-import { HybridSearch } from '../../../../src/main/search/hybrid/service';
-import { Store } from '../../../../src/main/search/hybrid/store';
+import { HybridSearch } from '../../../src/main/search/hybrid/service';
+import { Store } from '../../../src/main/search/hybrid/store';
 
 const DIM = 8;
 const unit = (axis: number) => { const v = new Float32Array(DIM); v[axis] = 1; return v; };

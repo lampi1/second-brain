@@ -4,10 +4,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { expect, it } from 'vitest';
-import { Engine } from '../../../../src/main/search/hybrid/engine';
-import { HybridSearch } from '../../../../src/main/search/hybrid/service';
-import type { WorkerReq } from '../../../../src/main/search/hybrid/protocol';
-import { Store } from '../../../../src/main/search/hybrid/store';
+import { Engine } from '../../../src/main/search/hybrid/engine';
+import { HybridSearch } from '../../../src/main/search/hybrid/service';
+import type { WorkerReq } from '../../../src/main/search/hybrid/protocol';
+import { Store } from '../../../src/main/search/hybrid/store';
 
 it('does not claim a retained index belongs to an unavailable brain', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-root-switch-'));

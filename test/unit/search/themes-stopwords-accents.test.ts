@@ -1,7 +1,7 @@
-// Review of PR #18: proves the accented stop words in themes.ts STOP ("perché") never match, because fold() strips
-// accents before the STOP lookup: "perche" ends up in a theme's label.
+// Brain themes labels (regression of PR #18): accented stop words in themes.ts STOP ("perché") match after fold()
+// strips the accents, so "perche" never ends up in a theme's label.
 import { describe, expect, it } from 'vitest';
-import { themesOf } from '../../../../src/main/search/hybrid/themes';
+import { themesOf } from '../../../src/main/search/hybrid/themes';
 
 const DIM = 8;
 const unit = (axis: number) => { const v = new Float32Array(DIM); v[axis] = 1; return v; };

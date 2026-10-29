@@ -1,16 +1,14 @@
-// Proves (PR #12, hybrid search): the meaning half has no similarity floor. Engine.query fuses the POOL nearest chunks
-// whatever their cosine, so a query that shares nothing with the brain (no word matches, vector orthogonal to every
-// chunk: cosine 0) still returns hits marked via 'meaning'. With the real model (unrelated e5 texts score ~0.7) every
-// query fills Ctrl+K's "Nel brain" group with 6 unrelated files (and replaces the palette's own file index), /api/search
-// returns 50 places for nonsense, and brain_search never answers "not found" to an agent looking for an exact code.
+// Hybrid search relevance (regression of PR #12): the meaning half has a similarity floor, so a query that shares
+// nothing with the brain (no word matches, vector orthogonal to every chunk) returns no hit: Ctrl+K's "Nel brain" group
+// stays empty, /api/search returns nothing for nonsense and brain_search can answer "not found".
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Engine, queryWords } from '../../../../src/main/search/hybrid/engine';
-import { meanNorm, type Embedder } from '../../../../src/main/search/hybrid/embedder';
-import { Store } from '../../../../src/main/search/hybrid/store';
-import { brainHitsFrom } from '../../../../src/main/search/service';
+import { Engine, queryWords } from '../../../src/main/search/hybrid/engine';
+import { meanNorm, type Embedder } from '../../../src/main/search/hybrid/embedder';
+import { Store } from '../../../src/main/search/hybrid/store';
+import { brainHitsFrom } from '../../../src/main/search/service';
 
 // concept words → their own axis; any other word → axis 4
 const AXIS: Record<string, number> = { costi: 0, spese: 0, soldi: 0, errore: 1, sbaglio: 1, rilascio: 2, deploy: 2 };

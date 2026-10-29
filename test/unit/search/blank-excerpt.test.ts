@@ -1,14 +1,13 @@
-// Proves (PR #12, hybrid search): a hit whose chunk holds none of the query words (a meaning hit, a typo-widened word, a
-// file-name match) takes the chunk's "first non-heading line" as its line and excerpt, but chunkText keeps the blank lines
-// between a short heading and the block it rides with, so that line is the blank one: the hit points at an empty line
-// and its text is '' (empty snippet in Ctrl+K, empty `text` in /api/search, empty `line` in brain_search).
+// Hybrid search excerpts (regression of PR #12): a hit whose chunk holds none of the query words (a meaning hit, a
+// typo-widened word, a file-name match) points at the first text line under a short heading, never at the blank line
+// chunkText keeps after it, so Ctrl+K, /api/search and brain_search never show an empty snippet.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { Engine, queryWords } from '../../../../src/main/search/hybrid/engine';
-import { meanNorm, type Embedder } from '../../../../src/main/search/hybrid/embedder';
-import { Store } from '../../../../src/main/search/hybrid/store';
+import { Engine, queryWords } from '../../../src/main/search/hybrid/engine';
+import { meanNorm, type Embedder } from '../../../src/main/search/hybrid/embedder';
+import { Store } from '../../../src/main/search/hybrid/store';
 
 const AXIS: Record<string, number> = { costi: 0, spese: 0, money: 0, budget: 0 };
 const embedder: Embedder = {
