@@ -6,6 +6,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- Honest classifiers and statistics (ADR 0186): one taxonomy of work kinds, one success definition on the agent card,
+  estimates only for new requests, no skill suggester or exploration, role versions only for text, skills, model or
+  tier, Apprendimento counts the agents' lessons; dead metrics and orphan files removed.
 - README back to a short, playful tour with 14 screenshots (`npm run shots` fixed and extended); the Guide gains
   cards for Flash, the Orchestrator's app knowledge, voice, call recordings, the personal Browser, notices and
   terminal routines.
