@@ -36,7 +36,7 @@ afterEach(() => { vi.unstubAllEnvs(); });
 function runner(o: Partial<HeadlessDeps> = {}): HeadlessRunner {
   return new HeadlessRunner({ userData, settings: () => ON, keyFor: () => null, enginePaths: () => ({ claude: FAKE, cursor: FAKE_CURSOR }), ...o });
 }
-const req = (engine: string, prompt: string, o: Partial<{ model: string | null; effort: string | null; cwd: string }> = {}) =>
+const req = (engine: string, prompt: string | Promise<string | null>, o: Partial<{ model: string | null; effort: string | null; cwd: string }> = {}) =>
   ({ engine, prompt, cwd: o.cwd ?? tmp('hl-cwd'), model: o.model ?? null, effort: o.effort ?? null, round: 'r1' });
 /** the answers this module gave in a run, from its own log lines */
 const answered = () => log.recent.filter(e => e.msg === 'headless permission answered').map(e => e.data as { tool: string; allow: boolean });
@@ -219,6 +219,22 @@ describe('hidden read-only runs on the fakes', { timeout: 60e3 }, () => {
     expect(settings.permissions.deny).toEqual(expect.arrayContaining(['Read', 'Grep', 'Glob', 'Bash', 'Edit', 'Write']));
     expect(settings.permissions.deny).not.toContain('WebFetch');
     expect(await runner().run({ ...req('cursor', 'readgate'), web: true })).toMatchObject({ ok: false, refused: true, error: expect.stringMatching(/solo su Claude/) });
+  });
+
+  it('a warm start (Impara\'s tutor, ADR 0190): the engine starts first, the prompt goes in when it comes, the answer streams; unused, nothing is sent', async () => {
+    let give!: (p: string | null) => void;
+    const seen: string[] = [];
+    const run = runner().run({ ...req('claude', new Promise<string | null>(r => { give = r; })), onText: t => seen.push(t) });
+    await waitFor(() => fakeLog(claudeLog).some(l => l.argv), 'the CLI started'); // the CLI is up before the question exists
+    expect(fakeLog(claudeLog).some(l => l.user)).toBe(false);
+    give('stream');
+    const r = await run;
+    expect(r).toMatchObject({ ok: true });
+    expect(seen.length).toBeGreaterThan(3);
+    expect(seen.some(t => t.includes('parola3'))).toBe(true);
+    expect(seen.at(-1)).toBe(r.ok ? r.text : '');
+    const unused = runner().run(req('claude', Promise.resolve(null)));
+    expect(await unused).toMatchObject({ ok: false, error: 'non usata' });
   });
 
   it('Claude: ExitPlanMode is refused with the request to answer as text', async () => {

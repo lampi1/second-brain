@@ -83,7 +83,7 @@ test('learn a PR on the blackboard: pieces, check, better explanation, explain i
     await expect(page.getByTestId('impara-score')).toContainText('0/1');
     // its review cards: the 4 checks (one came with «Spiegamelo meglio») and the 4 cards written from the verified
     // facts, in the lesson's subject
-    await expect(page.getByTestId('impara-end-cards')).toContainText('8 carte di ripasso in «Second brain»', { timeout: 10_000 });
+    await expect(page.getByTestId('impara-end-cards')).toContainText('8 carte di ripasso in «second-brain»', { timeout: 10_000 });
     await shot(page, 'impara-end-dark');
 
     // saved: the list has it, and it reopens at the end
@@ -259,6 +259,76 @@ test('the review: subjects, today’s cards (recall, choice, click on the diagra
     await expect(csp.getByTestId('impara-subject-chip')).toHaveText('Sicurezza');
     await expect(page.locator('[data-testid="impara-subject"][data-subject="Sicurezza"]')).toContainText('1 lezione · 1 carta');
     await expect(page.locator('[data-testid="impara-subject"][data-subject="Sicurezza web"]')).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
+});
+
+test('the tutor beside a lesson (ADR 0190): coach first, «Dimmelo e basta», cites, a review card, a click on the diagram; learning from Task, Memoria and the Guide', async () => {
+  test.setTimeout(120_000);
+  const { app, page } = await launchDemo();
+  try {
+    await goPage(page, 'impara');
+    await page.getByTestId('impara-lessons').locator('.ip-card', { hasText: 'Come nasce una lezione' }).locator('.ip-card-open').click();
+    await expect(page.getByTestId('impara-diagram')).toHaveAttribute('data-nodes', '9');
+    await page.getByTestId('impara-ask').click();
+    const tutor = page.getByTestId('impara-tutor');
+    await expect(tutor).toBeVisible();
+    await expect(page.getByTestId('impara-tutor-empty')).toBeVisible();
+    await expect(page.getByTestId('impara-tutor-coach')).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('impara-tutor-input')).toBeFocused();
+    // coach: a hint and a question back first, word by word
+    await page.getByTestId('impara-tutor-input').fill('Perché due ricerche separate?');
+    await page.keyboard.press('Enter');
+    const turns = tutor.getByTestId('impara-tutor-turn');
+    await expect(turns).toHaveCount(1);
+    await expect(turns.first()).toHaveAttribute('data-state', 'done', { timeout: 10_000 });
+    await expect(turns.first().getByTestId('impara-tutor-answer')).toContainText('Secondo te');
+    await expect(turns.first().locator('.ip-tcite')).toHaveCount(1);
+    // «Dimmelo e basta»: the answer, with its cites, and a review card
+    await turns.first().getByTestId('impara-tutor-tell').click();
+    await expect(turns).toHaveCount(2);
+    await expect(turns.nth(1).getByTestId('impara-tutor-answer')).toContainText('istruzioni nascoste', { timeout: 10_000 });
+    await expect(turns.nth(1)).toHaveAttribute('data-state', 'done', { timeout: 10_000 });
+    await expect(turns.nth(1).getByTestId('impara-tutor-answer')).not.toContainText('CARD');
+    await expect(turns.nth(1).locator('.ip-tcite')).toHaveCount(2);
+    await expect(turns.nth(1).getByTestId('impara-tutor-card')).toHaveText('Aggiunta al ripasso');
+    // a click on a part of the diagram asks about it
+    await page.locator('.st-node[data-node="vweb"]').click();
+    await expect(page.getByTestId('impara-tutor-input')).toHaveValue(/^«Controllo delle pagine»: cos'è/);
+    await page.waitForTimeout(400);
+    await shot(page, 'impara-tutor-dark');
+    await page.getByTestId('impara-tutor-input').press('Escape');
+    await expect(tutor).toHaveCount(0);
+
+    // learning from where you are: the Guide…
+    await page.keyboard.press('Escape');
+    await goPage(page, 'guida');
+    await page.getByTestId('guide-learn-impara').click();
+    await expect(page.getByTestId('impara-start')).toBeVisible();
+    await expect(page.getByTestId('impara-ask-what')).toHaveValue(/^Come funziona «Impara: lezioni a pezzi» in second-brain\?/);
+    await expect(page.getByTestId('impara-from')).toContainText('Dalla Guida');
+    await expect(page.getByTestId('impara-from')).toContainText('second-brain');
+    await expect(page.getByTestId('impara-start-btn')).toBeFocused();
+    // …the Task page (a PR: its lesson)…
+    await page.getByTestId('nav-task').click();
+    const dv = page.getByTestId('brain-page-task');
+    await dv.getByTestId('task-refresh').click();
+    await dv.getByTestId('task-tab-prs').click();
+    await dv.getByTestId('task-row-pr:812').click({ timeout: 30_000 });
+    await dv.getByTestId('task-detail').getByTestId('task-learn-pr-812').first().click();
+    await expect(page.getByTestId('impara-kind-pr')).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('impara-pr-url')).toHaveValue(/812/);
+    await expect(page.getByTestId('impara-from')).toHaveCount(0);
+    // …and Memoria: «Il mio brain»
+    await goPage(page, 'memoria');
+    await page.getByTestId('mh-tab-approvate').click();
+    const learn = page.getByTestId('mh-approved').locator('[data-testid^="mh-learn-rule-"]').first();
+    await learn.click();
+    await expect(page.getByTestId('impara-ask-what')).toHaveValue(/^Spiegami la regola «/);
+    await expect(page.getByTestId('impara-from')).toContainText('Il mio brain');
+    await page.getByTestId('impara-start-btn').click();
+    await expect(page.getByTestId('impara-preparing')).toBeVisible();
   } finally {
     await app.close();
   }

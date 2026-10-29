@@ -10,10 +10,11 @@
 // the adapters also get them as deny rules), everything else (edit, delete, move, shell, web, MCP,
 // ExitPlanMode) is refused, and every question gets a refusal. One exception, asked by Impara's web research (ADR 0188):
 // a web run (Claude only) gets the web search and fetch tools and no file tool at all, so a run never holds both the
-// user's files and untrusted web pages. A run ends at its first finished turn, or after 45 min
-// (killed); its session is always closed and its process tree killed. Logs carry the engine, round, duration and
-// cost, never the prompt nor the answer. Under tests only the fakes start (SB_<ID>_PATH to a .mjs). Used by
-// compare/queue.ts.
+// user's files and untrusted web pages. Impara's tutor (ADR 0190) may start a run before its prompt exists (a warm
+// start: the prompt comes later, or never) and follow the answer as it streams (onText). A run ends at its first
+// finished turn, or after 45 min (killed); its session is always closed and its process tree killed. Logs carry the
+// engine, round, duration and cost, never the prompt nor the answer. Under tests only the fakes start (SB_<ID>_PATH to
+// a .mjs). Used by compare/queue.ts and Impara (wiring.ts).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -30,7 +31,11 @@ import { errText, log, redact } from '../log';
 /** One run asked by the brain's queue (harness/compare/app-queue.mjs `list`). */
 export interface HeadlessRequest {
   engine: Harness;
-  prompt: string;
+  /** the prompt; a promise = a warm start (Impara's tutor, ADR 0190): the session starts now and gets the prompt when
+   *  it resolves; null = not needed after all (the run ends, nothing sent) */
+  prompt: string | Promise<string | null>;
+  /** the answer so far, each time it grows (streaming); never the text before a tool call once a newer one starts */
+  onText?: (text: string) => void;
   /** the folder the run reads (an existing absolute path) */
   cwd: string;
   model: string | null;
@@ -242,6 +247,9 @@ export class RunCollector {
   /** the run's tokens, summed over its turns; null when no turn reported any (never a context size or an estimate) */
   tokens: TokenUsage | null = null;
 
+  /** the last assistant message that says something so far */
+  latest(): string { return [...this.texts.values()].reverse().find(t => t.trim()) ?? ''; }
+
   item(item: ChatItem): void {
     if (item.kind === 'assistant') this.texts.set(item.id, item.text);
     else if (item.kind === 'system' && item.level === 'error') this.errorText = item.text;
@@ -327,7 +335,10 @@ export class HeadlessRunner {
     let settle!: (r: { error: string | null }) => void;
     const ended = new Promise<{ error: string | null }>(r => { settle = r; });
     const sink: SessionSink = {
-      item: item => c.item(item),
+      item: item => {
+        c.item(item);
+        if (req.onText && item.kind === 'assistant') { try { req.onText(c.latest()); } catch { /* a listener's error never stops the run */ } }
+      },
       changed: p => { if (c.changed(p)) settle({ error: null }); },
       pending: req2 => {
         const answer: Answer = req.noTools
@@ -357,7 +368,10 @@ export class HeadlessRunner {
       session.start();
       if (session.alive) {
         const ready = await Promise.race([Promise.resolve(session.ready).then(() => true), ended.then(() => false)]);
-        if (ready && session.alive) session.send(req.prompt);
+        // a warm start waits for its prompt here, the engine already up (null = not needed: the run ends unsent)
+        const prompt = ready && session.alive ? await Promise.race([Promise.resolve(req.prompt), ended.then(() => null)]) : null;
+        if (prompt === null) settle({ error: ready && session.alive ? 'non usata' : 'il motore si è chiuso prima di finire' });
+        else if (session.alive) session.send(prompt);
       }
       const end = await ended;
       const durationMs = Date.now() - t0;

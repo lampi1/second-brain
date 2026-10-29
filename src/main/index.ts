@@ -576,6 +576,8 @@ app.whenReady().then(async () => {
     'impara:queue': a => learn().queue(a?.mode, typeof a?.subject === 'string' ? a.subject : undefined),
     'impara:grade': a => learn().gradeCard(String(a?.card ?? ''), Number(a?.grade)),
     'impara:subject': a => learn().setSubject(String(a?.id ?? ''), a?.subject),
+    'impara:tutor': a => learn().tutor(String(a?.id ?? ''), String(a?.at ?? ''), String(a?.q ?? ''), a?.mode === 'tell' ? 'tell' : 'coach'),
+    'impara:tutorWarm': a => learn().tutorWarm(String(a?.id ?? '')),
     'orchestrator:held': () => s.heldNews?.get() ?? { items: [] },
     'orchestrator:heldSeen': a => { if (typeof a?.chatId !== 'string' || !a.chatId || a.chatId.length > 100) throw new Error('chatId required'); return s.heldNews?.seen(a.chatId) ?? { items: [] }; },
     ...(pulse?.handlers() ?? (demo ? pulseDemoHandlers(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), {

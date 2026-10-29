@@ -195,3 +195,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0187](0187-end-of-day-smoothness.md) Closing chats frees what they started; repeated work stops growing with the day — accepted
 - [0188](0188-impara-research-and-animated-board.md) Impara: research and verification before teaching, the animated board, the user's teacher — accepted
 - [0189](0189-impara-subjects-and-spaced-review.md) Impara: subjects, verified review cards, spaced review — accepted
+- [0190](0190-impara-tutor-and-entry-points.md) Impara: a tutor that answers at once, and learning from where you are — accepted

@@ -22,8 +22,8 @@ export interface ReviewCard {
   lessonId: string;
   subject: string;
   kind: CardKind;
-  /** where it came from: one of the lesson's checks, or the cards run */
-  origin: 'check' | 'cards';
+  /** where it came from: one of the lesson's checks, the cards run, or a tutor answer (ADR 0190) */
+  origin: 'check' | 'cards' | 'tutor';
   q: string;
   /** choice: 2-4 options and the right one */
   options?: string[];

@@ -859,7 +859,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
   // routine packages the Orchestrator authors (ADR 0175): <userData>/routines/<id>/routine.json, the Routine section's store
   const routinePackageStore = createFolderPackageStore(path.join(ctx.userData, 'routines'));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, routinePackages: () => routinePackageStore, personal, recordings, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, routinePackages: () => routinePackageStore, personal, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
@@ -984,10 +984,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       if (!e) return { ok: false, error: r.web ? 'Claude è spento' : 'nessun motore acceso' };
       // the user's model on the engine they picked; Claude's strongest otherwise
       const model = r.teacher?.engine === e.id && r.teacher.model ? r.teacher.model : e.kind === 'claude' ? 'opus' : null;
-      const out = await headless.run({ engine: e.id, model, effort: e.caps.effort ? r.effort : null, cwd: r.cwd, prompt: r.prompt, round: r.round, timeoutMs: r.timeoutMs, ...(r.web ? { web: true } : {}) });
+      const out = await headless.run({ engine: e.id, model, effort: e.caps.effort ? r.effort : null, cwd: r.cwd, prompt: r.prompt, round: r.round, timeoutMs: r.timeoutMs, ...(r.web ? { web: true } : {}), ...(r.onText ? { onText: r.onText } : {}) });
       return out.ok ? { ok: true, text: out.text, costUsd: out.costUsd, engine: e.id, model: out.model } : { ok: false, error: out.error };
     },
     changed: (state, lesson) => ctx.emitter.emit('impara:changed', { state, ...(lesson ? { lesson } : {}) }),
+    tutorText: (lesson, turn, text) => ctx.emitter.emit('impara:tutor', { lesson, turn, text }),
   });
   ctx.emitter.tap((channel, payload) => { if (channel === 'chat:updated') research.chatUpdated(payload as ChatSummary); });
   addChatTools(researchTools(research));

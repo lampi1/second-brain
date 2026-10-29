@@ -19,6 +19,7 @@
 // - After a recap the user asked for, an Orchestrator's own mount opens the questions window with everything waiting
 //   for him (app_unblock, ADR 0135); it never answers any of it.
 // - The user's call recordings and their local transcripts (app_recordings, ADR 0154): the Orchestrator's mount only.
+// - A lesson in Impara when the user asks to understand something (app_learn, ADR 0190): the Orchestrator's mount only.
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { ChatItem, ChatSummary, TasksState, Effort, EventMap, NewChat, PendingRequest, RoutingRow, RunInfo, TaskKind } from '../../shared/contract';
@@ -62,6 +63,7 @@ import { guideTool, screenOutline } from './guide';
 import { CONFIG_ASK_MIN, configTool, type ConfigDeps } from './config';
 import { lastTyped } from './user-words';
 import { recordingTools, type RecordingsRead } from './recordings';
+import { imparaTools, type ImparaControl } from './impara';
 import type { RoutineTerminalExport, RoutineRunRef } from '../../shared/routines';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
@@ -106,6 +108,8 @@ export interface AppCtlDeps {
   brainScripts?: { scripts: BrainScripts; changelog: BrainChangelog };
   /** the call recordings (ADR 0154): app_recordings / app_recording_import on the Orchestrator's own endpoint */
   recordings?: RecordingsRead;
+  /** Impara (ADR 0190): app_learn on the Orchestrator's own endpoint */
+  impara?: ImparaControl;
   /** the configuration the Orchestrator changes for the user (app_config, ADR 0149); settings come from `brain` */
   config?: Omit<ConfigDeps, 'callerId' | 'userAsked' | 'brain'>;
   /** the Routine section's packages (routines/service.ts): app_routine_export on the Orchestrator's own endpoint */
@@ -151,6 +155,8 @@ export const CHAT_TITLE_MAX = 80;
 export const PULL_ASK_MIN = 10;
 /** app_unblock opens the waiting requests only within this many minutes of a message the user wrote to the Orchestrator */
 export const UNBLOCK_ASK_MIN = 10;
+/** app_learn starts a lesson only on a user message from the last minutes (ADR 0190) */
+export const LEARN_ASK_MIN = 10;
 export { AGENT_LABEL };
 /** how a work chat sees an answer the Orchestrator delivered for the user (app_resolve_question) */
 export const RESOLVED_LABEL = 'Risposto nell’Orchestrator dall\'utente:';
@@ -235,6 +241,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.brainScripts && authed() ? scriptWriteTools(d.brainScripts.scripts, d.brainScripts.changelog, () => caller()?.title || 'Orchestrator') : []),
     ...(d.agents ? [toolDef(agentCatalogTool(d.agents, d.skillTools))] : []),
     ...(d.recordings && authed() ? recordingTools(d.recordings, d.emitUi) : []),
+    ...(d.impara && authed() ? imparaTools(d.impara, d.emitUi, () => imparaAsked(callerId!)) : []),
     ...(d.runFeedback && authed() ? [metricsTool(d.runFeedback)] : []),
     ...(d.runFeedback && authed() ? [estimateTool(() => d.runFeedback!.runList())] : []),
     {
@@ -753,6 +760,12 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     const last = d.chats.items(orchestratorId).filter(i => i.kind === 'user').at(-1);
     // the item the send added carries (about) the time it was typed; any later 'user' item came from elsewhere
     return !!last && Math.abs(last.at - at) <= 5_000;
+  }
+
+  /** app_learn's proof (ADR 0190): the time of the user's own latest message when this turn is his, else null */
+  function imparaAsked(orchestratorId: string): { who: string; at: number } | null {
+    const last = d.chats.items(orchestratorId).filter(i => i.kind === 'user').at(-1);
+    return last && userTurn(orchestratorId, Date.now() - LEARN_ASK_MIN * 60_000) ? { who: orchestratorId, at: last.at } : null;
   }
 
   /** is this turn the user's: the Orchestrator's latest message is one he wrote (not app news, not an agent's mail), at

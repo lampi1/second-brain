@@ -1,8 +1,8 @@
 // Impara's review cards on disk (ADR 0189): userData/learn/review.json holds every card (with its memory state) and the
-// last reviews, next to the lessons; only on this PC, like them. Written atomically (tmp + rename) after each change; a broken file is moved aside, never overwritten. A
-// lesson's checks become cards at zero tokens (`fromChecks`), the cards run adds its own (`add`), a removed lesson
-// takes its cards away, a lesson moved to another subject moves them. Used by learn/service.ts; tests:
-// test/unit/review.test.ts.
+// last reviews, next to the lessons; only on this PC, like them. Written atomically (tmp + rename) after each change; a
+// broken file is moved aside, never overwritten. A lesson's checks become cards at zero tokens (`fromChecks`), the
+// cards run adds its own (`add`), a tutor answer one (`addOne`, ADR 0190); a removed lesson takes its cards away, a
+// lesson moved to another subject moves them. Used by learn/service.ts; tests: test/unit/review.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import { schedule, type CardDraft, type ReviewCard, type ReviewGrade, type ReviewLog } from '@shared/review';
@@ -68,6 +68,16 @@ export class ReviewStore {
     d.cards.push(...made);
     this.write();
     return made;
+  }
+
+  /** One card of its own (a tutor answer, ADR 0190): id `<lesson>:<key>`, written again in place if it exists. */
+  addOne(lessonId: string, subject: string, draft: CardDraft, key: string, origin: ReviewCard['origin'], now: number): ReviewCard {
+    const d = this.read();
+    const id = `${lessonId}:${key}`;
+    const card: ReviewCard = { ...draft, id, lessonId, subject, origin, createdAt: now, mem: d.cards.find(c => c.id === id)?.mem ?? null };
+    d.cards = [...d.cards.filter(c => c.id !== id), card];
+    this.write();
+    return card;
   }
 
   grade(id: string, g: ReviewGrade, now: number): ReviewCard {

@@ -214,8 +214,9 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     teachers: () => engineInfos().filter(e => e.kind !== 'api' && e.caps.tools).map(e => teacherOption(e, [])), webOk: () => true, guide: appGuide,
     places: () => ({ brain: demoBrainRoot, appSource: appRoot }),
     devops: () => { const t = tasks.get(); return { prs: t.prs, repoDirs: t.repoDirs }; },
-    changed: (state, lesson) => ctx.emitter.emit('impara:changed', { state, ...(lesson ? { lesson } : {}) }) });
-  attachAppTools(mcp, { personal, recordings, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), cloud }, source, true);
+    changed: (state, lesson) => ctx.emitter.emit('impara:changed', { state, ...(lesson ? { lesson } : {}) }),
+    tutorText: (lesson, turn, text) => ctx.emitter.emit('impara:tutor', { lesson, turn, text }) });
+  attachAppTools(mcp, { personal, recordings, impara: learn, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), cloud }, source, true);
   try { recordMcpPort(mcpPortFromEnv(), await mcp.listen(mcpPortFromEnv())); } catch (e) {
     log.warn('demo', 'MCP port busy, using a random one', { data: { error: errText(e) } });
     recordMcpPort(mcpPortFromEnv(), await mcp.listen(0), errText(e)); // the banner shows in the demo too (e2e)

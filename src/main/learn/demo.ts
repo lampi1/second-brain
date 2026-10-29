@@ -79,7 +79,7 @@ const STORE_CODE = { file: 'src/renderer/store/store.ts', diff: `-export const S
 
 const PLAN = {
   title: 'Risposte parola per parola (PR #251)',
-  subject: 'Second brain',
+  subject: 'second-brain',
   diagram: DEMO_DIAGRAM,
   outline: ['Il problema: risposte a blocchi', 'Il primo freno: ChatManager', 'Il secondo freno: lo store', 'La finestra nascosta', 'Cosa non risolve'],
   steps: [
@@ -181,18 +181,36 @@ const WEB_RESEARCH = { facts: [
 const TOPIC_QUESTION = { q: 'Ti interessa lo streaming dentro l’app o in generale nei browser?', options: ['Dentro second-brain', 'In generale, nei browser'] };
 
 /** The model's rounds in the demo: the lesson above, a bit at a time. */
+/** The demo tutor (ADR 0190): coach first (a hint and a question back), the answer and its card when asked straight
+ *  or after a try; streamed a few words at a time like a real engine. */
+async function demoTutor(r: TeachRun): Promise<TeachResult> {
+  const prompt = await r.prompt;
+  if (prompt === null) return { ok: false, error: 'non usata' };
+  const now = /The learner now \(data[^)]*\): «([^»]*)»/.exec(prompt)?.[1] ?? '';
+  const tried = /Learner: «/.test(prompt) && !/\?\s*$/.test(now);
+  const text = /do NOT explain yet/.test(prompt) && !tried
+    ? 'Guarda lo schema: le due ricerche partono dalla stessa domanda ma vanno in due posti diversi [f1]. Secondo te, cosa potrebbe succedere se chi legge il web potesse leggere anche i tuoi file?'
+    : `${tried ? 'Giusto, è proprio quello il rischio. ' : ''}Chi legge il web legge pagine scritte da chiunque, e una pagina può contenere istruzioni nascoste. Se quella stessa esecuzione vedesse anche i tuoi file, potrebbe essere convinta a copiarli fuori [f1]. Per questo Impara fa due ricerche separate: quella sul web vede solo la tua domanda, quella nei file non va mai sul web, e un controllo separato verifica ogni fatto prima della lezione [f2].\nCARD: {"q": "Perché Impara tiene separate la ricerca sul web e quella nei file?", "answer": "Perché una pagina web può contenere istruzioni nascoste: se la stessa esecuzione vedesse anche i file, potrebbe portarli fuori.", "cites": ["f1"]}`;
+  const words = text.split(/(?<= )/);
+  let so = '';
+  for (let i = 0; i < words.length; i += 3) { so += words.slice(i, i + 3).join(''); r.onText?.(so); await wait(45); }
+  return { ok: true, text, costUsd: 0.01, engine: 'claude', model: 'claude-opus (demo)' };
+}
+
 export async function demoTeach(r: TeachRun): Promise<TeachResult> {
+  if (r.round === 'impara-tutor') return demoTutor(r);
   const out = (v: unknown, cost: number): TeachResult => ({ ok: true, text: JSON.stringify(v), costUsd: cost, engine: 'claude', model: 'claude-opus (demo)' });
+  const prompt = typeof r.prompt === 'string' ? r.prompt : '';
   if (r.round === 'impara-web') { await wait(900); return out(WEB_RESEARCH, 0.06); }
   if (r.round === 'impara-files') {
     await wait(1000);
     // the app's files as full paths, as a real run would cite them (so «Fonti» opens them)
-    const root = /app's source code: (.+?) \(src\/main/.exec(r.prompt)?.[1] ?? null;
+    const root = /app's source code: (.+?) \(src\/main/.exec(prompt)?.[1] ?? null;
     const facts = FILES_RESEARCH.facts.map(f => ({ ...f, ref: inApp(f.ref ?? '', root) }));
-    return out({ ...FILES_RESEARCH, facts, ...(/wants to understand something/.test(r.prompt) ? { questions: [TOPIC_QUESTION] } : {}) }, 0.07);
+    return out({ ...FILES_RESEARCH, facts, ...(/wants to understand something/.test(prompt) ? { questions: [TOPIC_QUESTION] } : {}) }, 0.07);
   }
   if (r.round === 'impara-verify-web') { await wait(700); return out({ verdicts: [{ id: 'f1', verdict: 'ok' }, { id: 'f2', verdict: 'ok' }] }, 0.03); }
-  if (r.round === 'impara-verify-files') { await wait(800); return out(filesVerdicts(r.prompt), 0.04); }
+  if (r.round === 'impara-verify-files') { await wait(800); return out(filesVerdicts(prompt), 0.04); }
   if (r.round === 'impara-plan') { await wait(900); return out(PLAN, 0.21); }
   if (r.round === 'impara-cards') { await wait(700); return out(DEMO_CARDS, 0.03); }
   if (r.round === 'impara-rest') { await wait(1500); return out(REST, 0.18); }
@@ -201,7 +219,7 @@ export async function demoTeach(r: TeachRun): Promise<TeachResult> {
     return out({ grade: 'partial', feedback: 'Hai colto il punto: le due attese da 100 ms in fila e il nuovo fotogramma da 16 ms in ChatManager e nello store.', missing: 'Manca la finestra nascosta (250 ms) e cosa la PR non risolve: un motore che manda pezzi grandi.' }, 0.03);
   }
   await wait(800);
-  const kind = /did not get this piece/.test(r.prompt) ? 'better' : /concrete example/.test(r.prompt) ? 'example' : /real code of this piece/.test(r.prompt) ? 'code' : 'question';
+  const kind = /did not get this piece/.test(prompt) ? 'better' : /concrete example/.test(prompt) ? 'example' : /real code of this piece/.test(prompt) ? 'code' : 'question';
   return out(EXTRA[kind], 0.04);
 }
 
@@ -266,7 +284,7 @@ export function seedDemoLessons(store: LessonStore, now: number, appRoot: string
     ],
     prep: { phases: { gather: 'done', web: 'done', files: 'done', verify: 'done', ask: 'skip', plan: 'done' }, web: 1, files: 1, ok: 2, fixed: 0, unsure: 0, dropped: 0 },
   };
-  half.subject = 'Second brain'; app.subject = 'Second brain'; done.subject = 'Sicurezza web';
+  half.subject = 'second-brain'; app.subject = 'second-brain'; done.subject = 'Sicurezza web';
   app.cards = { state: 'done', n: 3 };
   store.save(half);
   store.save(app);

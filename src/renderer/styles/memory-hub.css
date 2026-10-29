@@ -124,6 +124,10 @@ button.mh-row-name:hover{color:var(--blue);text-decoration:underline;text-underl
 .mh-trash:active:not(:disabled){transform:scale(.94)}
 .mh-trash:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .mh-trash:disabled{cursor:not-allowed;opacity:.25}
+.mh-learn{flex:none;appearance:none;display:inline-grid;place-items:center;width:30px;height:30px;border-radius:8px;border:1px solid transparent;background:transparent;color:var(--text-4);cursor:pointer;opacity:.45;transition:opacity var(--dur),color var(--dur),background var(--dur)}
+.mh-row:hover .mh-learn,.mh-learn:focus-visible{opacity:1}
+.mh-learn:hover{color:var(--blue);background:var(--blue-bg)}
+.mh-learn:focus-visible{outline:2px solid var(--focus);outline-offset:1px}
 .mh-approved>.bm-note{margin-top:14px}
 
 /* ── Idee ── */
