@@ -57,6 +57,10 @@ export class ChangeLog {
     for (const e of this.entries) { const s = validSeed(e.seed); if (s) e.seed = s; else delete e.seed; }
   }
   private persist(): void { writeLocal(this.file, { version: 1, changes: this.entries.slice(-MAX) }); }
+  private readonly undoneListeners = new Set<(id: string) => void>();
+  /** Called after every rollback with the change's id (the Proposte ledger counts an undone approval as a no, ADR
+   *  0193); returns the unsubscribe. A listener that throws never fails the rollback. */
+  onRolledBack(fn: (id: string) => void): () => void { this.undoneListeners.add(fn); return () => { this.undoneListeners.delete(fn); }; }
 
   /** Applies the file writes of one change and records it; nothing is recorded when no file actually changes. All or
    *  nothing: when one file is too big to keep a copy of (it could not be undone), none is written (a move that wrote
@@ -155,6 +159,7 @@ export class ChangeLog {
     for (const f of [...c.files].reverse()) writeText(f.file, f.before);
     c.rolledBackAt = this.now();
     this.persist();
+    for (const fn of this.undoneListeners) { try { fn(c.id); } catch { /* the listener's own problem */ } }
     return structuredClone(c);
   }
   /** Who made a file (the latest change that wrote it and is not undone): for "made by" on the Skill page. */

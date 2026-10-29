@@ -26,6 +26,8 @@ import { logSections, periodDays, type LogSections } from './research-pack-logs'
 import { journal } from '../activity/journal';
 import { JOURNAL_DIR } from '../log-digest';
 import type { LogEvent } from '../../shared/activity-log';
+import { readLedger } from '../proposals/ledger';
+import { allPolicies } from '../proposals/policy';
 import { defaultPrompt, MAX_PROMPT, researchFrame, researchMessage } from './research-prompt';
 import { ResearchStore } from './research-store';
 
@@ -256,7 +258,7 @@ export class ResearchService {
   }
   private async open(harness: Harness, model: string | null, effort: Effort | null, cap: number, method: string, web: boolean, lang: Lang, root: string): Promise<ResearchRunInfo> {
     const state = this.d.brain.state(), logs = await this.logSections(state);
-    const pack = buildPack({ now: this.now(), runs: this.d.runs(), state, roles: this.d.roles(), past: this.store.all(), appVersion: this.d.appVersion(), ...(logs ? { logs } : {}) });
+    const pack = buildPack({ now: this.now(), runs: this.d.runs(), state, roles: this.d.roles(), past: this.store.all(), appVersion: this.d.appVersion(), ...(logs ? { logs } : {}), decisions: allPolicies(readLedger(this.d.userData)) });
     const frame = researchFrame(lang, { web, capUsd: cap, brainRoot: root, issuesUrl: this.d.issuesUrl() });
     const chat = await this.d.chats.create({ harness, cwd: root, title: RESEARCH_TITLE, research: { web }, prompt: researchMessage(method, frame),
       ...(model ? { model } : {}), ...(effort ? { effort } : {}) });

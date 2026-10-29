@@ -2,7 +2,7 @@
 // it is about, from the card's `ask` data (shared/proposals.ts) in the UI language. Role ids become role names, tiers
 // their level names, a project path its folder name; raw keys and ids stay in the card's technical details. Pure.
 // Used by components/brain-model/ProposalsDeck.tsx; pinned by test/unit/proposal-ask.test.ts.
-import { factSentence, type MemorySign, type Proposal, type ProposalKeep } from '@shared/proposals';
+import { factSentence, type MemorySign, type Proposal, type ProposalKeep, type ProposalWhy } from '@shared/proposals';
 import { isRoleId, roleName } from '@shared/roles';
 import { locale, t, type Key } from '../i18n';
 import { proposalTitle } from './proposal-title';
@@ -88,5 +88,20 @@ export function cardWords(c: Pick<Proposal, 'ask' | 'title' | 'content' | 'appli
       // the finding's title read as the question («Dimenticare la skill «x»?», «Artisan lancia i test prima di dire «fatto»?»)
       return { question: `${c.title.trim().replace(/[.!?:;…\s]+$/u, '')}?`, yes: t(a.finding === 'forget' ? 'proposals.yes.forget' : 'proposals.yes.research'), no: t('proposals.no.research'), lead: '',
         ...(c.content ? { bodyLabel: t(a.finding === 'forget' ? 'proposals.research.forgets' : 'proposals.research.exact') } : {}) };
+  }
+}
+
+/** «Te la chiedo perché: …» (ADR 0193): why the app still asks this card, never which answer it would pick. '' = none. */
+export function whyText(why: ProposalWhy | undefined): string {
+  if (!why) return '';
+  switch (why.code) {
+    case 'never': return t(`proposals.why.never.${why.what}`);
+    case 'irreversible': return t('proposals.why.irreversible');
+    case 'first': return t('proposals.why.first');
+    case 'few': return t('proposals.why.few', { n: why.n });
+    case 'rejected': return t('proposals.why.rejected', { no: why.no, n: why.n });
+    case 'undone': return t('proposals.why.undone', { n: why.n });
+    case 'building': return t('proposals.why.building', { yes: why.yes, n: why.n });
+    case 'blocked': return t('proposals.why.blocked');
   }
 }

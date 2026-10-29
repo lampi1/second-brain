@@ -40,12 +40,13 @@ export interface ProposalPorts {
   reviewed: { has(id: string): boolean; mark(id: string): void };
 }
 
-/** One source: its cards now, and the decision on one of them (by its id in the source). */
+/** One source: its cards now, and the decision on one of them (by its id in the source). decide answers the
+ *  change-log entries an approval made or kept, when it knows them (their rollback undoes it: ADR 0193's ledger). */
 export interface Source {
   id: ProposalSource;
   available(p: ProposalPorts): boolean;
   list(p: ProposalPorts): Promise<Proposal[]>;
-  decide(p: ProposalPorts, card: Proposal, decision: ProposalDecision, note?: string, choice?: { keep: ProposalKeep; shown: string[] }): Promise<void>;
+  decide(p: ProposalPorts, card: Proposal, decision: ProposalDecision, note?: string, choice?: { keep: ProposalKeep; shown: string[] }): Promise<string[] | void>;
 }
 
 const iso = (ms: number): string => new Date(Number.isFinite(ms) ? ms : 0).toISOString();
@@ -128,7 +129,11 @@ const candidate: Source = {
     const name = native(c);
     const v = (await p.candidates!.list()).find(x => x.name === name);
     if (!v) throw new Error('Skill candidate not found.');
-    if (decision === 'approve') { await p.candidates!.promote(v.name, v.digest, v.eligibleReplayIds[0]!, v.verifiedExampleRunIds[0]!); return; }
+    if (decision === 'approve') {
+      const before = new Set((p.changes?.stored() ?? []).map(x => x.id));
+      await p.candidates!.promote(v.name, v.digest, v.eligibleReplayIds[0]!, v.verifiedExampleRunIds[0]!);
+      return (p.changes?.stored() ?? []).filter(x => !before.has(x.id) && x.kind === 'skill' && x.target === v.name).map(x => x.id);
+    }
     const origin = originOf(p, name);
     if (!origin) throw new Error('The change that wrote this candidate is gone.');
     await p.changes!.rollback(origin.id);
@@ -159,7 +164,7 @@ const change: Source = {
   },
   async decide(p, c, decision) {
     const id = native(c);
-    if (decision === 'approve') { p.reviewed.mark(id); return; }
+    if (decision === 'approve') { p.reviewed.mark(id); return [id]; }
     await p.changes!.rollback(id);
   },
 };
@@ -305,7 +310,10 @@ const research: Source = {
     });
   },
   async decide(p, c, decision) {
-    if (decision === 'approve') await p.research!.approve(native(c)); else await p.research!.reject(native(c));
+    if (decision !== 'approve') { await p.research!.reject(native(c)); return; }
+    const made = await p.research!.approve(native(c));
+    // a brain finding answers its change's id (an app card answers the issue's URL)
+    return typeof made === 'string' && (p.changes?.stored() ?? []).some(x => x.id === made) ? [made] : [];
   },
 };
 

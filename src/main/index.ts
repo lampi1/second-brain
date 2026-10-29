@@ -282,6 +282,8 @@ app.whenReady().then(async () => {
     'proposals:list': () => proposals.list(),
     'proposals:count': () => proposals.count(),
     'proposals:decide': a => proposals.decide(a),
+    'proposals:shown': a => proposals.shown(a?.id),
+    'proposals:undoAuto': a => proposals.undoAuto(a),
     'brainmodel:maintain': a => s.brainModel.maintain(a?.job),
     // the one-click maintenance (ADR 0132, 0153): the free cleanup, then the invisible research; its cards in Proposte
     'maintenance:run': () => research().runAll(),
@@ -614,6 +616,8 @@ app.whenReady().then(async () => {
   // the badge follows its sources' own events; settings proposals and the loop's status are read every minute too
   const PROPOSAL_EVENTS: readonly string[] = ['maintenance:changed', 'brainmodel:changed', 'approvals:changed', 'agents:lifecycleChanged', 'agents:changed', 'settings:proposed', 'settings:changed'];
   emitter.tap(channel => { if (PROPOSAL_EVENTS.includes(channel)) proposals.changed(); });
+  // an approved or auto-applied change rolled back from anywhere counts as a no in the Proposte ledger (ADR 0193)
+  s.brainModel.log.onRolledBack(id => proposals.changeUndone(id));
   void windowReady.then(() => proposals.start());
   registerHandlers(handlers, () => win?.webContents ?? null, { contents: () => overlay.contents, channels: ['overlay:size', 'overlay:action', 'overlay:focus'] });
   // Recovery starts before the renderer store: its IPC must already be registered on the first navigation.

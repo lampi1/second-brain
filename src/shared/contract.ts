@@ -1374,6 +1374,10 @@ export interface InvokeMap {
   'proposals:list': [void, ProposalsState];
   'proposals:count': [void, number];
   'proposals:decide': [ProposalDecide, ProposalDecideResult];
+  /** the deck shows a card on top now (ADR 0193: the ledger keeps how long a decision took); undoAuto = Annulla on a card
+   *  the app applied by itself (its ledger id), through the change log or the loop's rollback */
+  'proposals:shown': [{ id: string }, void];
+  'proposals:undoAuto': [{ id: string }, ProposalDecideResult];
   /** the maintenance button: run every job now (or one); every change is logged and can be undone */
   'brainmodel:maintain': [{ job?: MaintenanceJobId } | undefined, BrainModelState];
   'brainmodel:rollback': [{ id: string }, BrainModelState];
@@ -1821,6 +1825,7 @@ export const INVOKE_CHANNELS = [
   'orchestrator:held', 'orchestrator:heldSeen',
   'cloud:list', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:dismiss',
   'log:renderer',
+  'proposals:shown', 'proposals:undoAuto',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'routines:progress', 'work:changed',
