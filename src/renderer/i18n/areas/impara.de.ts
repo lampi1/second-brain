@@ -127,6 +127,7 @@ export const imparaDe: typeof imparaIt = {
   'impara.end.placeholder': 'Schreib (oder sag, mit «Ich antworte per Stimme») deine Erklärung…',
   'impara.end.send': 'Sag mir, wie es war',
   'impara.end.skip': 'Überspringen und Lektion schließen',
+  'impara.end.gradeLost': 'Die Bewertung ist nicht angekommen.',
   'impara.end.micHint': 'Es mit eigenen Worten zu erklären ist der stärkste Weg, es zu behalten.',
   'impara.end.checks': ({ right, n }: { right: number; n: number }) => `${right} von ${n} Fragen richtig`,
   'impara.end.byPiece': 'Wie es lief, Stück für Stück',

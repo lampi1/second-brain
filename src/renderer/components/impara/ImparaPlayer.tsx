@@ -267,8 +267,6 @@ function Board({ lesson }: { lesson: Lesson }) {
                 </div>
               </div>
 
-              {busy && <div className="ip-busy" data-testid="impara-busy" role="status"><IconSpinner size={13} />{t(`impara.busy.${lesson.busy!.kind}`)}</div>}
-              {lesson.busyError && <div className="ip-busy err" data-testid="impara-busy-error" role="alert">{lesson.busyError}<Button size="s" onClick={() => void retryLesson(lesson.id)} testid="impara-busy-dismiss">{t('impara.ok')}</Button></div>}
               {lesson.error && lesson.state === 'more' && <div className="ip-busy err" role="alert">{lesson.error}<Button size="s" onClick={() => void retryLesson(lesson.id)} testid="impara-rest-retry"><IconRefresh size={12} />{t('impara.retry')}</Button></div>}
 
               <div className="ip-acts">
@@ -304,6 +302,9 @@ function Board({ lesson }: { lesson: Lesson }) {
                 <span className="ip-muted">{t('impara.saved', { time: saved })}</span>
               </div>
             </>}
+          {/* an extra being written, or one that did not arrive: on a piece and on a check (the end shows its grade's own) */}
+          {item.kind !== 'end' && busy && <div className="ip-busy" data-testid="impara-busy" role="status"><IconSpinner size={13} />{t(`impara.busy.${lesson.busy!.kind}`)}</div>}
+          {item.kind !== 'end' && lesson.busyError && <div className="ip-busy err" data-testid="impara-busy-error" role="alert">{lesson.busyError}<Button size="s" onClick={() => void retryLesson(lesson.id)} testid="impara-busy-dismiss">{t('impara.ok')}</Button></div>}
         </section>
       </div>
     </div>

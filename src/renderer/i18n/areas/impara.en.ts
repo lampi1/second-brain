@@ -127,6 +127,7 @@ export const imparaEn: typeof imparaIt = {
   'impara.end.placeholder': 'Write (or, with «I answer by voice», say) your explanation…',
   'impara.end.send': 'Tell me how it went',
   'impara.end.skip': 'Skip and close the lesson',
+  'impara.end.gradeLost': 'The grade did not arrive.',
   'impara.end.micHint': 'Explaining it in your own words is the strongest way to keep it.',
   'impara.end.checks': ({ right, n }: { right: number; n: number }) => `${right} of ${n} questions right`,
   'impara.end.byPiece': 'How it went, piece by piece',

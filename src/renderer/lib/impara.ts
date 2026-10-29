@@ -30,14 +30,19 @@ export function setImparaPrefs(patch: Partial<ImparaPrefs>): void {
   try { localStorage.setItem(PREFS_KEY, JSON.stringify(imparaPrefs.get())); } catch { /* storage off: kept for this session */ }
 }
 
-const put = (l: Lesson) => impara.set(s => ({ ...s, lessons: { ...s.lessons, [l.id]: l } }));
+/** a move not yet confirmed by main, per lesson: a change that left main before it (the rest, an extra, the reply to
+ *  an earlier move) must not jump the user back */
+const moving = new Map<string, { at: string; n: number }>();
+let moveN = 0;
+const mine = (l: Lesson): Lesson => { const m = moving.get(l.id); return m ? { ...l, at: m.at } : l; };
+const put = (l: Lesson) => impara.set(s => ({ ...s, lessons: { ...s.lessons, [l.id]: mine(l) } }));
 
 let wired = false;
 /** main's list, once (the page mounts it). */
 export function startImpara(): void {
   if (wired || typeof window === 'undefined' || !window.sb) return;
   wired = true;
-  window.sb.on('impara:changed', ({ state, lesson }) => impara.set(s => ({ state, lessons: lesson ? { ...s.lessons, [lesson.id]: lesson } : s.lessons })));
+  window.sb.on('impara:changed', ({ state, lesson }) => impara.set(s => ({ state, lessons: lesson ? { ...s.lessons, [lesson.id]: mine(lesson) } : s.lessons })));
   void window.sb.invoke('impara:state', undefined).then(state => impara.set(s => ({ ...s, state: s.state ?? state })), () => {});
 }
 
@@ -55,9 +60,11 @@ const call = async (p: Promise<Lesson>): Promise<Lesson | null> => { try { const
 export const startLesson = (req: LessonStart) => call(window.sb.invoke('impara:start', req));
 /** Where the user is: shown at once (the file is written behind), so «Avanti» never waits for the disk. */
 export function moveTo(id: string, at: string): Promise<Lesson | null> {
-  const l = impara.get().lessons[id];
+  const l = impara.get().lessons[id], n = ++moveN;
+  moving.set(id, { at, n });
   if (l) put({ ...l, at });
-  return call(window.sb.invoke('impara:move', { id, at }));
+  const done = () => { if (moving.get(id)?.n === n) moving.delete(id); };
+  return window.sb.invoke('impara:move', { id, at }).then(x => { done(); put(x); return x; }, e => { done(); return fail(e); });
 }
 export const askExtra = (id: string, kind: LessonExtraKind, at: string, text?: string) => call(window.sb.invoke('impara:ask', { id, kind, at, ...(text ? { text } : {}) }));
 export const answerCheck = (id: string, checkId: string, choice: number, confidence?: LessonConfidence) =>

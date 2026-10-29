@@ -126,6 +126,7 @@ export const imparaIt = {
   'impara.end.placeholder': 'Scrivi (o, con «Rispondo a voce», di’) la tua spiegazione…',
   'impara.end.send': 'Fammi sapere com’è',
   'impara.end.skip': 'Salta e chiudi la lezione',
+  'impara.end.gradeLost': 'Il giudizio non è arrivato.',
   'impara.end.micHint': 'Spiegarlo con parole tue è il modo più forte per fissarlo.',
   'impara.end.checks': ({ right, n }: { right: number; n: number }) => `${right} di ${n} domande giuste`,
   'impara.end.byPiece': 'Come è andato, pezzo per pezzo',

@@ -38,13 +38,18 @@ const START_FILE = 'richiesta.json';
 export class LearnService {
   /** lessons whose plan or rest is being written now */
   private readonly jobs = new Set<string>();
+  /** lessons whose extra piece or grade is being written now */
+  private readonly extras = new Set<string>();
   constructor(private readonly d: LearnDeps) {
-    // a lesson the app was closed while it was being written never finishes by itself: «Riprova» starts it again
+    // a lesson the app was closed while it was being written never finishes by itself: «Riprova» starts it again;
+    // an extra or a grade cut off the same way frees the lesson and says so; a folder left by a remove is cleared
+    d.store.sweep();
     for (const s of d.store.list()) {
-      if (s.state !== 'preparing' && s.state !== 'more') continue;
       const l = d.store.get(s.id);
-      if (!l) continue;
-      d.store.save(s.state === 'preparing' ? { ...l, state: 'failed', error: 'interrotta: l’app si è chiusa mentre la preparavo' } : { ...l, error: 'interrotta: l’app si è chiusa mentre scrivevo il resto' });
+      if (!l || (l.state !== 'preparing' && l.state !== 'more' && !l.busy)) continue;
+      const cut = l.busy ? { busy: undefined, busyError: 'interrotta: l’app si è chiusa mentre la preparavo' } : {};
+      d.store.save(l.state === 'preparing' ? { ...l, ...cut, state: 'failed', error: 'interrotta: l’app si è chiusa mentre la preparavo' }
+        : l.state === 'more' ? { ...l, ...cut, error: 'interrotta: l’app si è chiusa mentre scrivevo il resto' } : { ...l, ...cut });
     }
   }
   private now(): number { return this.d.now?.() ?? Date.now(); }
@@ -125,6 +130,7 @@ export class LearnService {
       let m: Material;
       try { m = await gather(req, this.d); }
       catch (e) { this.edit(id, l => ({ ...l, state: 'failed', error: errText(e).slice(0, 300) })); return; }
+      if (!this.d.store.get(id)) return; // removed while its material was being read: nothing is written back
       for (const [name, content] of Object.entries(m.files)) this.d.store.writeFile(id, name, content);
       const set = this.edit(id, l => ({ ...l, sources: m.sources, ...(m.pr ? { pr: m.pr } : {}), ...(m.title ? { title: m.title.slice(0, 120) } : {}), ...(m.cwd ? { readDir: m.cwd } : {}) }));
       if (!set) return;
@@ -143,7 +149,7 @@ export class LearnService {
     } catch (e) {
       log.warn('learn', 'lesson preparation failed', { cause: errText(e), hint: 'Riprova from the lesson' });
       this.edit(id, l => ({ ...l, state: 'failed', error: errText(e).slice(0, 300) }));
-    } finally { this.jobs.delete(id); }
+    } finally { this.jobs.delete(id); this.d.store.sweep(id); }
     if (more) await this.rest(id);
   }
 
@@ -162,7 +168,7 @@ export class LearnService {
       log.info('learn', 'lesson complete', { data: { id, steps: part.steps.length, costUsd: r.costUsd } });
     } catch (e) {
       this.edit(id, l => ({ ...l, error: errText(e).slice(0, 300) }));
-    } finally { this.jobs.delete(id); }
+    } finally { this.jobs.delete(id); this.d.store.sweep(id); }
   }
 
   /** «Riprova»: a lesson that failed starts again; one whose rest is missing asks for it again; a failed extra is forgotten. */
@@ -177,7 +183,7 @@ export class LearnService {
       void this.prepare(l.id, req);
       return next;
     }
-    const next = this.edit(l.id, x => ({ ...x, error: undefined, busyError: undefined }))!;
+    const next = this.edit(l.id, x => ({ ...x, error: undefined, busyError: undefined, ...(x.busy && !this.extras.has(x.id) ? { busy: undefined } : {}) }))!;
     if (l.state === 'more' && !this.jobs.has(l.id)) void this.rest(l.id);
     return next;
   }
@@ -229,6 +235,7 @@ export class LearnService {
   private async extra(id: string, piece: LessonStep, kind: LessonExtraKind, ask: string | undefined): Promise<void> {
     const l0 = this.d.store.get(id);
     if (!l0) return;
+    this.extras.add(id);
     try {
       const r = await this.d.teach({ cwd: this.folder(l0), prompt: extraPrompt(this.d.lang(), l0, piece, kind, ask, this.material(id), this.d.store.dir(id)), effort: 'low', round: 'impara-extra', timeoutMs: 3 * MIN });
       if (!r.ok) { this.edit(id, l => ({ ...l, busy: undefined, busyError: `Non è arrivata: ${r.error}`.slice(0, 300) })); return; }
@@ -240,7 +247,7 @@ export class LearnService {
       log.info('learn', 'extra piece ready', { data: { id, kind, costUsd: r.costUsd } });
     } catch (e) {
       this.edit(id, l => ({ ...l, busy: undefined, busyError: errText(e).slice(0, 300) }));
-    }
+    } finally { this.extras.delete(id); this.d.store.sweep(id); }
   }
 
   /** The final «Spiegalo tu»: graded by one short run; an empty answer ends the lesson without a grade. */
@@ -261,6 +268,7 @@ export class LearnService {
   private async grade(id: string, answer: string): Promise<void> {
     const l0 = this.d.store.get(id);
     if (!l0) return;
+    this.extras.add(id);
     try {
       const r = await this.d.teach({ cwd: this.folder(l0), prompt: gradePrompt(this.d.lang(), l0, answer), effort: 'low', round: 'impara-grade', timeoutMs: 2 * MIN });
       if (!r.ok) { this.edit(id, l => ({ ...l, busy: undefined, busyError: `Il giudizio non è arrivato: ${r.error}`.slice(0, 300) })); return; }
@@ -271,12 +279,13 @@ export class LearnService {
         explain: { ...(l.explain ?? { q: '' }), answer, grade: g.grade, feedback: g.feedback, ...(g.missing ? { missing: g.missing } : {}) } }));
     } catch (e) {
       this.edit(id, l => ({ ...l, busy: undefined, busyError: errText(e).slice(0, 300) }));
-    }
+    } finally { this.extras.delete(id); this.d.store.sweep(id); }
   }
 
   remove(id: string): void {
     this.must(id);
-    this.d.store.remove(String(id));
+    // a run still working in the folder (Windows keeps it busy): the lesson is gone now, its folder when the run ends
+    this.d.store.remove(String(id), this.jobs.has(id) || this.extras.has(id));
     log.info('learn', 'lesson removed', { data: { id } });
     this.emit();
   }

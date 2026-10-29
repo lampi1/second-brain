@@ -32,6 +32,10 @@ export function ImparaEnd({ lesson, draft, setDraft, onSend, onReview }: { lesso
           : <>
             {ex?.answer && <blockquote className="ip-mine" data-testid="impara-explain-answer">«{ex.answer}»</blockquote>}
             {grading && <div className="ip-busy" role="status"><IconSpinner size={13} />{t('impara.busy.grade')}</div>}
+            {ex?.answer && !ex.grade && !grading && !lesson.doneAt && (
+              <div className="ip-busy err" role="alert" data-testid="impara-grade-error">{lesson.busyError ?? t('impara.end.gradeLost')}
+                <Button size="s" onClick={() => onSend(ex.answer!)} testid="impara-grade-retry"><IconRefresh size={12} />{t('impara.retry')}</Button></div>
+            )}
             {ex?.grade && (
               <div className="ip-grade" data-testid="impara-grade">
                 <span className={`ip-tag ${ex.grade === 'ok' ? 'green' : ex.grade === 'partial' ? 'amber' : 'red'}`}>{t(`impara.grade.${ex.grade}`)}</span>

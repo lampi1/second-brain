@@ -1,7 +1,8 @@
 // Impara in main (ADR 0181, src/main/learn/service.ts, store.ts): a start saves the lesson at once and writes it in two
 // runs (the first pieces, then the rest in the background); a failed run leaves a sentence and «Riprova», never a
 // broken lesson; extras land after the piece and the user lands on them; checks are judged at zero tokens and the first
-// answer stays; «Spiegalo tu» is graded; a lesson the app was closed during is marked; remove deletes its folder.
+// answer stays; «Spiegalo tu» is graded; a lesson the app was closed during is marked, an extra or grade cut off frees
+// it; remove deletes its folder, also when a run still works in it (when that run ends) or a delete failed (next start).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -129,5 +130,32 @@ describe('LearnService', () => {
     svc.remove(a.id);
     expect(fs.existsSync(store.dir(a.id))).toBe(false);
     expect(() => store.dir('../x')).toThrow();
+  });
+
+  it('an extra or a grade cut off by a restart frees the lesson and says so', () => {
+    const root = tmp(), store = new LessonStore(root);
+    const base = { title: 't', kind: 'topic' as const, ask: 'x', depth: 'quick' as const, level: 'new' as const, diagram: 'flowchart LR\n a --> b', outline: [], steps: [], checks: [], at: '', costUsd: null, engine: null, model: null, sources: [] };
+    const l: Lesson = { ...base, id: store.newId(3_000), createdAt: 3, updatedAt: 3, state: 'ready', busy: { kind: 'grade', of: 'end', since: 3 } };
+    store.save(l);
+    make(fast, { root });
+    expect(store.get(l.id)!.busy).toBeUndefined();
+    expect(store.get(l.id)!.busyError).toMatch(/interrotta/);
+    expect(store.get(l.id)!.state).toBe('ready');
+  });
+
+  it('a lesson removed while it is being written leaves no folder behind', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(r => { release = r; });
+    const { svc, store } = make(async r => { await gate; return fast(r); });
+    const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    await until(() => !!store.readFile(l.id, 'diff.patch'));
+    svc.remove(l.id);
+    expect(svc.state().lessons).toHaveLength(0);
+    release();
+    await until(() => !fs.existsSync(store.dir(l.id)));
+    // a folder left with no lesson in it (a delete that failed) goes at the next start
+    fs.mkdirSync(store.dir(store.newId(4_000)), { recursive: true });
+    make(fast, { root: store.root });
+    expect(fs.readdirSync(store.root)).toEqual([]);
   });
 });

@@ -150,8 +150,9 @@ export function shortcutTalk(): void {
 export function shortcutVoice(): void {
   if (voice.get().phase !== 'off') { stopVoice(); return; }
   const inFlash = !!(document.activeElement as HTMLElement | null)?.closest?.('[data-testid="tile-lampo"]');
-  // a lesson on screen (Impara): its «Rispondo a voce»
-  const inLesson = !inFlash && !!document.querySelector('[data-testid="impara-player"]');
+  // a lesson's board on screen (Impara) and the focus not in the Orchestrator beside it: its «Rispondo a voce»
+  const inOrch = !!(document.activeElement as HTMLElement | null)?.closest?.('[data-orchestrator-overlay]');
+  const inLesson = !inFlash && !inOrch && !!document.querySelector('[data-testid="impara-player"][data-at]');
   void toggleVoice(inFlash ? 'flash' : inLesson ? 'impara' : 'orchestrator');
 }
 
