@@ -207,6 +207,21 @@ describe('the async store writers', () => {
     expect(runs.pending).toBe(false);
   });
 
+  it('AgentRunStore: the deferred save serializes the runs in slices, writes the same file as a sync save, and keeps a change made meanwhile (#297)', async () => {
+    const dir = tmpDir('sb-runslices-'), other = tmpDir('sb-runslices-sync-');
+    const a = new AgentRunStore(dir), b = new AgentRunStore(other);
+    const start = (chatId: string, at: number) => ({ chatId, agentId: 'reviewer', version: 1, goal: `Rivedi ${'x'.repeat(4000)}`, startedBy: 'user' as const, startedAt: at, costKnown: true });
+    for (let i = 0; i < 400; i++) { const run = start(`c${i}`, 1000 + i); const ra = a.start(run, false), rb = b.start(run, false); rb.runId = ra.runId; }
+    b.save();
+    const pending = a.saveAsync();
+    a.start(start('late', 9999), false); // a change while the slices run
+    expect(await pending).toBe(true);
+    expect(fs.readFileSync(path.join(dir, 'agent-runs.json'), 'utf8')).toBe(fs.readFileSync(path.join(other, 'agent-runs.json'), 'utf8'));
+    expect(a.pending).toBe(true); // 'late' is written by the next save
+    await a.saveAsync();
+    expect((JSON.parse(fs.readFileSync(path.join(dir, 'agent-runs.json'), 'utf8')) as { runs: unknown[] }).runs).toHaveLength(401);
+  });
+
   it('writeLocalTextAsync retries a locked rename without blocking, and drops a superseded write', async () => {
     const dir = tmpDir('sb-lsasync-');
     const file = path.join(dir, 'agent-runs.json');

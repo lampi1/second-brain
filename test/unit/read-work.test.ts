@@ -53,11 +53,16 @@ it.each(['brain-migration.json', 'brain-maintenance.json'])('keeps Memoria avail
 
 it('sends the runs once per key: a read with the same key reuses the worker copy, a new key or worker sends them again (#276)', async () => {
   const now = Date.parse('2026-10-28T12:00:00Z'), runs = demoEstimateRuns(now), runIds = runs.slice(-3).map(r => r.runId);
-  const posted: { runs: number; cached?: true; runsKey?: string }[] = [];
+  const posted: { runs: number; cached?: true; runsKey?: string; op?: string }[] = [];
   const spy = (w: ReadWorker) => {
     const inner = (w as unknown as { worker: { postMessage(m: unknown): void } | null }).worker!;
     const post = inner.postMessage.bind(inner);
-    inner.postMessage = (m: unknown) => { const x = m as { request: { runs: unknown[] }; cached?: true; runsKey?: string }; posted.push({ runs: x.request.runs.length, cached: x.cached, runsKey: x.runsKey }); post(m); };
+    inner.postMessage = (m: unknown) => {
+      const x = m as { request: { op: string; runs?: unknown[]; input?: { runs: unknown[] } }; cached?: true; runsKey?: string; runsJson?: string };
+      const own = x.request.runs ?? x.request.input?.runs ?? [];
+      posted.push({ runs: x.runsJson !== undefined ? (JSON.parse(x.runsJson) as unknown[]).length : own.length, cached: x.cached, runsKey: x.runsKey, op: x.request.op });
+      post(m);
+    };
   };
   const expected = estimatesState(runs, runIds, now);
   expect(await worker.call({ op: 'estimates', runs, runIds, now }, 'k1')).toEqual(expected);
@@ -68,4 +73,20 @@ it('sends the runs once per key: a read with the same key reuses the worker copy
   expect(posted.at(-1)).toMatchObject({ runs: runs.length - 1, runsKey: 'k2' });
   worker.stop();
   expect(await worker.call({ op: 'estimates', runs, runIds, now }, 'k2')).toEqual(expected); // a new worker holds nothing: sent again
+});
+
+it('keeps one copy per kind of read: a brain view and an estimate with different keys do not send the runs again (#293-#297)', async () => {
+  const now = Date.parse('2026-10-28T12:00:00Z'), runs = demoEstimateRuns(now), runIds = runs.slice(-3).map(r => r.runId);
+  const w = new ReadWorker(path.join(root, 'read-worker.mjs'));
+  try {
+    const brain: BrainViewInput = { root: null, userData: root, home: null, profiles: [], runs, now };
+    await w.call({ op: 'brain', input: brain }, 'store:1');
+    await w.call({ op: 'estimates', runs, runIds, now }, 'store:1/9');
+    const posted: { cached?: true; json: boolean }[] = [];
+    const inner = (w as unknown as { worker: { postMessage(m: unknown): void } }).worker, post = inner.postMessage.bind(inner);
+    inner.postMessage = (m: unknown) => { const x = m as { cached?: true; runsJson?: string }; posted.push({ cached: x.cached, json: x.runsJson !== undefined }); post(m); };
+    expect(await w.call({ op: 'brain', input: brain }, 'store:1')).toEqual(readBrainView(brain));
+    expect(await w.call({ op: 'estimates', runs, runIds, now }, 'store:1/9')).toEqual(estimatesState(runs, runIds, now));
+    expect(posted).toEqual([{ cached: true, json: false }, { cached: true, json: false }]);
+  } finally { w.stop(); }
 });
