@@ -42,6 +42,7 @@ import type { RunEstimates } from './task-estimate';
 import type { JudgingEstimate } from './agents';
 import type { AgentImages } from './agent-images';
 import type { RoutineRunDetail, RoutineRunRef, RoutinesSnapshot, RoutineTerminalExport } from './routines';
+import type { GuideAnswer, GuideAskRequest, GuideStaleState } from './guide-ask';
 export type { CloudAgent, CloudApplyResult, CloudCaps, CloudEngine, CloudMessage, CloudReady, CloudStartRequest, CloudState, CloudStatus } from './cloud';
 
 /** An engine id from the engine registry (src/main/engines/registry.ts, ADR 0046): 'claude', 'cursor', … */
@@ -1656,6 +1657,10 @@ export interface InvokeMap {
   'cloud:watch': [{ id: string | null }, void];
   /** forget a finished agent (the vendor keeps it) */
   'cloud:dismiss': [{ id: string }, CloudState];
+  /** «Chiedi alla Guida» (ADR 0196): one light model, no tools, the Guida cards as context */
+  'guide:ask': [GuideAskRequest, GuideAnswer];
+  /** the Guida cards whose anchored code changed (a run from the repo; checked: false in a packaged build) */
+  'guide:stale': [void, GuideStaleState];
 }
 
 /** The Grindhouse's headline (SPEC 18): a joke on the day's real events, written about once an hour by a model on the
@@ -1804,6 +1809,7 @@ export const INVOKE_CHANNELS = [
   'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:clarify', 'impara:remove', 'impara:queue', 'impara:grade', 'impara:subject', 'impara:tutor', 'impara:tutorWarm',
   'orchestrator:held', 'orchestrator:heldSeen',
   'cloud:list', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:dismiss',
+  'guide:ask', 'guide:stale',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'routines:progress', 'work:changed',

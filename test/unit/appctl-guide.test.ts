@@ -3,7 +3,7 @@
 // silence is said plainly.
 import { describe, expect, it } from 'vitest';
 import type { BrowserWindow } from 'electron';
-import { entries, guideTool, screenOutline, search, type GuideDeps } from '../../src/main/appctl/guide';
+import { entries, guideIndex, guideTool, screenOutline, search, type GuideDeps } from '../../src/main/appctl/guide';
 import { DEFAULTS, schema } from '../../src/main/brain/config';
 
 const UI = {
@@ -20,6 +20,12 @@ const win = (answer: unknown) => ({ isDestroyed: () => false, webContents: { exe
 const deps = (over: Partial<GuideDeps> = {}): GuideDeps => ({ window: () => win(UI), settings: { schema, get: () => DEFAULTS }, tools: () => [{ name: 'app_config', description: 'Read and change the configuration. More text.' }], ...over });
 
 describe('app_guide', () => {
+  it('knows the Guida\'s «Chiedi alla Guida», «Per te» and «da verificare» (ADR 0196), and gives its index to the Guida', async () => {
+    const out = String(await guideTool(deps()).run({ topic: 'chiedi alla guida' }));
+    expect(out).toContain('one light model with no tools');
+    expect(out).toContain('«Per te»');
+    expect(await guideIndex(deps(), 'it')).toContain('Memoria [memoria, G Y]');
+  });
   it('explains MCP forms and their explicit user answer boundary', async () => {
     const out = String(await guideTool(deps()).run({ topic: 'MCP elicitation' }));
     expect(out).toContain('up to eight');

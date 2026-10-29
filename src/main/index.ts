@@ -579,6 +579,9 @@ app.whenReady().then(async () => {
     'impara:tutor': a => learn().tutor(String(a?.id ?? ''), String(a?.at ?? ''), String(a?.q ?? ''), a?.mode === 'tell' ? 'tell' : 'coach'),
     'impara:tutorWarm': a => learn().tutorWarm(String(a?.id ?? '')),
     'orchestrator:held': () => s.heldNews?.get() ?? { items: [] },
+    // «Chiedi alla Guida» and the cards «da verificare» (main/guide/service.ts, ADR 0196); none in the demo
+    'guide:ask': async a => s.guide ? s.guide.ask(a) : { ok: false, text: '', cards: [], files: [], costUsd: null, costBasis: 'unknown', model: null, reason: 'unavailable', noEngine: true },
+    'guide:stale': () => s.guide?.stale() ?? { checked: false, cards: [] },
     'orchestrator:heldSeen': a => { if (typeof a?.chatId !== 'string' || !a.chatId || a.chatId.length > 100) throw new Error('chatId required'); return s.heldNews?.seen(a.chatId) ?? { items: [] }; },
     ...(pulse?.handlers() ?? (demo ? pulseDemoHandlers(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), {
       settings: () => s.brain.settings().pulse, changed: () => emitter.emit('pulse:changed', undefined), approvalsChanged: () => emitter.emit('approvals:changed', undefined),

@@ -22,6 +22,7 @@ import { canCorrectAtNextStep, cleanQuote, correctionBlocked, correctionText } f
 import { now as clockNow } from '../lib/clock';
 import { costHistory } from '../lib/live-costs';
 import { errText } from '../lib/ipc-error';
+import { noteOrchestratorText } from '../lib/guide-usage';
 
 export const app = createStore<AppState>(initialState, { batch: true });
 /** How often streamed text reaches the screen (startStore): one frame, so words show as they come. */
@@ -220,6 +221,8 @@ async function sendNow(chatId: string, msg: QueuedMsg, before?: ChatSummary, opt
   try {
     await sb.invoke('chat:send', { chatId, text: msg.text, ...(msg.images?.length ? { images: [...msg.images] } : {}), ...(msg.voice ? { voice: true } : {}) });
     done();
+    // a question to the Orchestrator feeds the Guida's «Per te» (lib/guide-usage.ts, ADR 0196; text kept locally only)
+    if (app.get().chats[chatId]?.isOrchestrator) noteOrchestratorText(msg.text);
     // main took it and the chat is free again (a turn that already ended, a hand-off turn): the queue goes on
     const c = app.get().chats[chatId], next = app.get().queued[chatId]?.[0];
     if (c && next && !busyNow(chatId, c)) flushOne(chatId, next);

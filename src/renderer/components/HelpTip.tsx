@@ -18,6 +18,7 @@ import { registerOverlay, report } from '../lib/viewports';
 import { t } from '../i18n';
 import { placeBubble, type Pos } from '../lib/tips';
 import { GuideLink } from './GuideLink';
+import { noteHelpOpen } from '../lib/guide-usage';
 import '../styles/helptip.css';
 
 export interface HelpTipProps {
@@ -85,6 +86,8 @@ export function HelpTip({ children, title, example, label, text, testid, classNa
     clear();
     if (current && current !== self.current) current.close();
     current = self.current;
+    // the Guida's «Per te» counts the explanations opened per concept (lib/guide-usage.ts, ADR 0196)
+    if (!open && guide) noteHelpOpen(guide);
     setOpen(true);
   };
   // data-hover on the mark: its last pointer enter/leave was handled (a test waits for it, not for time)

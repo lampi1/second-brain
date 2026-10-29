@@ -99,7 +99,7 @@ export function foldRun(t: RunTally, run: AgentRun, index: RunIndex): void {
   if (run.endedAt === undefined) return;
   // Headline and fallback runs are not comparable with the agent version's card/task baseline.
   // Their complete cost ledger remains available under Battito's job budgets.
-  if (run.oneshot?.fallback || run.oneshot?.job === 'headline') return;
+  if (run.oneshot?.fallback || run.oneshot?.job === 'headline' || run.oneshot?.job === 'guide') return;
   t.ended++;
   const o = run.outcome, starts = index.reworkStarts.get(run.runId);
   const verified = verifiedVerdict(run, starts, index.now);

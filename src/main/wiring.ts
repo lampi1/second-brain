@@ -137,6 +137,9 @@ import { mountRecallTool, RECALL_ENV } from './search/hybrid/recall';
 import { timersFor } from './timers';
 import { createLegacyArchive, type LegacyArchive } from './routines/legacy';
 import { createFolderPackageStore } from './flows/package-authoring';
+import { GuideService } from './guide/service';
+import { repoRootOf } from './guide/anchors';
+import { guideIndex } from './appctl/guide';
 const { setInterval, clearInterval } = timersFor('wiring/auto-close');
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
@@ -195,6 +198,8 @@ export interface Wired {
   wake: OrchestratorWake;
   /** "N novità in attesa" (#88): what the delivery rule holds back for the Orchestrators (chats/held-news.ts) */
   heldNews?: HeldNewsHub;
+  /** the Guida's «Chiedi alla Guida» and its cards «da verificare» (main/guide/service.ts, ADR 0196) */
+  guide?: GuideService;
   /** "Aggiorna" from GitHub (Settings → Aggiornamenti), app_update_code, the restart notice (ADR 0074, 0075) */
   source: AppSourceService;
   /** "Rispondi dopo" (main/later.ts, ADR 0035) */
@@ -922,6 +927,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     settings: () => brain.settings(), registry: () => brain.routingInfo().registry,
     hasKey: id => engines.hasKey(id), addApiSpend: (id, usd) => engines.addSpend(id, usd), fallback: () => brain.settings().jobs?.fallback ?? 'auto',
     headless, text: engines.text, runs: manager.runs });
+  // «Chiedi alla Guida» (ADR 0196): one light one-shot on Flash's engine; the anchors are checked only in a run from the repo
+  const guide = new GuideService({ runOnce: r => oneShot.runOnce(r), repoRoot: repoRootOf(path.dirname(fileURLToPath(import.meta.url))),
+    index: lang => guideIndex({ window: ctx.window, settings: { schema: () => brain.settingsSchema(), get: () => brain.settings() }, tools: () => [], showValues: () => false }, lang) });
   // only the user's stable app spends tokens on the brain's rounds (the dev instance is run by agents and tests)
   if (queueAllowed(!!releaseId(), process.env)) compareRuns.start();
 
@@ -1019,7 +1027,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     workflows, routineArchive, routines, brainModel, research, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
-    cloud, chats, browser, personal, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid,
+    cloud, chats, browser, personal, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

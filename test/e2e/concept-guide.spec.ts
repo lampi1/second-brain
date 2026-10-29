@@ -70,3 +70,31 @@ test('«Discuti» docks the Orchestrator with the card as an unsent draft', asyn
   await shot(page, 'concept-guide-discuss');
   await input.fill(''); // never sent
 });
+
+// ADR 0196: «Chiedi alla Guida» (the demo has no engine: the box says so), «Per te» from the local counters, and the
+// diagram drawn from the code in the delegation card's panel, in both themes.
+test('«Chiedi alla Guida», «Per te» and the diagram from the code', async () => {
+  await page.evaluate(() => localStorage.setItem('sb.guideUsage.v1', JSON.stringify({ help: { permissions: 3 }, open: { delegation: 1 }, asked: ['come funziona la Grindhouse?'] })));
+  await page.getByTestId('nav-home').click();
+  await page.getByTestId('nav-guida').click();
+  const mine = page.getByTestId('guide-foryou');
+  await expect(mine).toBeVisible();
+  await expect(mine.locator('button')).toHaveCount(3);
+  await expect(mine.locator('button').first()).toHaveAttribute('data-testid', 'guide-foryou-permissions');
+
+  await page.getByTestId('guide-ask-input').fill('Come delego un lavoro?');
+  await page.getByTestId('guide-ask-send').click();
+  await expect(page.getByTestId('guide-ask-error')).toBeVisible();
+  await shot(page, 'concept-guide-ask-foryou');
+
+  await page.getByTestId('guide-foryou-delegation').click();
+  const diagram = page.getByTestId('guide-code-diagram-delegation');
+  await expect(diagram.locator('img')).toBeVisible({ timeout: 15_000 });
+  await shot(page, 'concept-guide-code-diagram');
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await expect(diagram.locator('img')).toBeVisible();
+  await shot(page, 'concept-guide-code-diagram-light');
+  await page.keyboard.press('Escape');
+  await shot(page, 'concept-guide-ask-foryou-light');
+  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
+});

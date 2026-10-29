@@ -91,6 +91,7 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
   out.push({ kind: 'agents', title: 'Agenti: revisioni automatiche on/off (reviews, judging)', text: AGENT_REVIEWS });
   out.push({ kind: 'agents', title: 'Agenti: lavori conclusi e livelli (completed counter, levels, XP)', text: AGENT_LEVELS });
   out.push({ kind: 'concept', title: 'Connettori: moduli MCP elicitation nelle domande', text: 'Claude MCP forms appear in Da rispondere: up to eight flat text, enum, boolean or numeric fields; Altro accepts typed input. The user fills or refuses the form; defaults never approve it and there is no always-allow. Empty forms ask for confirmation. Nested schemas, unsupported constraints, URL requests and credential fields are cancelled with an explanation; use the connector login route for credentials. app_pending lists requests read-only; the user answers in the question panel.' });
+  out.push({ kind: 'concept', title: 'Guida: Chiedi alla Guida, Per te, da verificare (ask the guide)', text: 'The Guida page (app_ui page guida) has a question box on top, «Chiedi alla Guida»: the user\'s question goes to one light model with no tools (Flash\'s engine, lightest tier) with the matching concept cards and this index; the answer cites cards (clickable) and source files, with its cost. Only the user\'s click asks; no approval (no tools). «Per te» lists the three cards this user needs most from local counters (the "?" opened, cards opened, questions to the Orchestrator, Log errors), zero tokens. A card marked «da verificare» describes code that changed after its text (only in a run from the repo). Cards about roles, delegation and the app\'s IPC show a diagram drawn from the code.' });
   for (const [title, text] of ROUTINE_RULES) out.push({ kind: 'routine', title, text });
   out.push({ kind: 'routine', title: 'Routine: creare un pacchetto (author a routine package from the user need)', text: ROUTINE_AUTHORING_SUMMARY });
   for (const c of CONCEPTS) out.push({ kind: 'concept', title: textOf(c.title, lang), text: `${textOf(c.summary, lang)} ${c.points.slice(0, 3).map(p => textOf(p, lang)).join(' ')} (more: the Guida page)` });
@@ -134,6 +135,11 @@ function index(ui: UiMap | null, d: GuideDeps, lang: GuideLang): string {
   lines.push(`Settings: ${d.settings.schema().length} keys, read and change them with app_config (area setting).`);
   lines.push('Ask app_guide with a topic for details ("tema", "notifiche", "Memoria", "chiusura automatica", "permessi Scout"…); app_ui action "outline" = what is on screen now with positions; app_config = change any configuration.');
   return lines.join('\n');
+}
+
+/** app_guide's index without a topic, read live (the Guida's «Chiedi alla Guida» gives it to its model, ADR 0196). */
+export async function guideIndex(d: GuideDeps, lang: GuideLang): Promise<string> {
+  return index(await readUi<UiMap>(d.window(), 'typeof window.__sbAppMap === "function" ? window.__sbAppMap() : null'), d, lang);
 }
 
 export function guideTool(d: GuideDeps): ToolDef {

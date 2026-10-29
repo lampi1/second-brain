@@ -106,6 +106,60 @@
 .guide-panel .guide-diagram li+li::after{left:15px;top:-6px;border:3px solid transparent;border-top:4px solid var(--guide-accent)}
 .guide-panel .guide-step-n{color:var(--guide-accent);background:color-mix(in srgb,var(--guide-accent) 14%,transparent)}
 
+/* «Chiedi alla Guida» (ADR 0196): a wide question bar under the header, the answer as a card under it */
+.guide-ask{margin:0 0 22px;display:flex;flex-direction:column;gap:10px}
+.guide-ask-box{display:flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;background:linear-gradient(135deg,color-mix(in srgb,var(--violet) 7%,var(--surface)),var(--surface) 60%);border:1px solid var(--border-2);border-radius:var(--r-l);transition:border-color 180ms,box-shadow 180ms}
+.guide-ask-box:focus-within{border-color:var(--blue-line);box-shadow:0 0 0 3px var(--blue-bg)}
+.guide-ask-icon{color:var(--violet);display:grid;place-items:center}
+.guide-ask-box input{flex:1;min-width:0;background:transparent;border:0;color:var(--text);font:inherit;font-size:13px;padding:8px 0}
+.guide-ask-box input:focus,.guide-ask-box input:focus-visible{outline:none}
+.guide-ask-box input::placeholder{color:var(--text-3)}
+.guide-ask-hint{margin:0 2px;font-size:11px;color:var(--text-3)}
+.guide-ask-answer{position:relative;display:flex;flex-direction:column;gap:10px;padding:14px 16px 12px;background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--violet);border-radius:var(--r-m);animation:guide-enter 260ms var(--ease) both}
+.guide-ask-answer.is-error{border-left-color:var(--red)}
+.guide-ask-answer.is-error p{margin:0;font-size:12.5px;color:var(--text-2)}
+.guide-ask-answer.is-error .btn{align-self:flex-start}
+.guide-ask-q{font-size:11px;font-weight:600;color:var(--text-3);letter-spacing:.02em}
+.guide-ask-text{display:flex;flex-direction:column;gap:8px;font-size:13px;line-height:1.6;color:var(--text)}
+.guide-ask-text p{margin:0}
+.guide-ask-text ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
+.guide-ask-text code{font-family:var(--mono);font-size:11px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-s);padding:1px 5px}
+.guide-ask-cite{appearance:none;font:inherit;font-size:11px;font-weight:550;color:var(--blue);background:var(--blue-bg);border:1px solid var(--blue-line);border-radius:20px;padding:0 8px;margin:0 2px;cursor:pointer;vertical-align:1px;transition:background 150ms}
+.guide-ask-cite:hover{background:color-mix(in srgb,var(--blue) 18%,transparent)}
+.guide-ask-foot{display:flex;flex-wrap:wrap;gap:6px 14px;padding-top:8px;border-top:1px solid var(--border);font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
+.guide-ask-skel{display:block;height:10px;width:92%;border-radius:6px;background:linear-gradient(90deg,var(--surface-2),var(--surface-3),var(--surface-2));background-size:200% 100%;animation:guide-shimmer 1.2s linear infinite}
+.guide-ask-skel.short{width:60%}
+@keyframes guide-shimmer{from{background-position:200% 0}to{background-position:-200% 0}}
+
+/* «Per te»: three compact cards, picked from what this user uses */
+.guide-foryou{margin:0 0 22px}
+.guide-foryou h2{display:flex;align-items:baseline;gap:10px;margin:0 0 10px;font-size:12px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:var(--text-2)}
+.guide-foryou h2 small{font-size:11px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--text-3)}
+.guide-foryou-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.guide-foryou-item{--guide-accent:var(--blue);appearance:none;font:inherit;text-align:left;display:flex;align-items:center;gap:12px;padding:10px 12px;color:var(--text);background:linear-gradient(160deg,color-mix(in srgb,var(--guide-accent) 8%,var(--surface-2)),var(--surface) 70%);border:1px solid var(--border);border-radius:var(--r-l);cursor:pointer;transition:border-color 180ms,transform 180ms}
+.guide-foryou-item:hover{border-color:color-mix(in srgb,var(--guide-accent) 55%,var(--border-2));transform:translateY(-1px)}
+.guide-foryou-item .guide-glyph{width:32px;height:32px}
+.guide-foryou-item>span:last-child{display:flex;flex-direction:column;gap:2px;min-width:0}
+.guide-foryou-item strong{font-size:12.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.guide-foryou-item small{font-size:10.5px;color:var(--text-3)}
+
+/* «da verificare»: the card's code changed after its text */
+.guide-badge-stale{color:var(--red);background:var(--red-bg);border-color:color-mix(in srgb,var(--red) 45%,transparent)}
+.guide-stale-note{margin:0 0 18px;padding:12px 14px;background:var(--red-bg);border:1px solid color-mix(in srgb,var(--red) 40%,transparent);border-radius:var(--r-m)}
+.guide-stale-note strong{font-size:11px;color:var(--red);font-weight:650}
+.guide-stale-note p{margin:5px 0 8px;font-size:12.5px;line-height:1.5;color:var(--text-2)}
+.guide-stale-note ul{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.guide-stale-note code{font-family:var(--mono);font-size:10.5px;color:var(--text-2);background:var(--surface);border:1px solid var(--border);border-radius:var(--r-s);padding:2px 7px}
+.guide-points li.is-stale::after{content:'';position:absolute;left:-10px;top:4px;bottom:4px;width:2px;border-radius:2px;background:var(--red)}
+
+/* the diagram drawn from the code: an image (lib/viz/mermaid.ts) on the panel's quiet surface */
+.guide-code-diagram figure{margin:0;display:flex;flex-direction:column;gap:8px;padding:12px;background:var(--bg-2);border:1px solid var(--border);border-radius:var(--r-m)}
+.guide-code-img{appearance:none;background:none;border:0;padding:0;cursor:zoom-in;display:flex;justify-content:center}
+.guide-code-img img{display:block;height:auto}
+.guide-code-src{margin:0;font-family:var(--mono);font-size:10.5px;color:var(--text-2);white-space:pre-wrap}
+.guide-code-wait{font-size:11px;color:var(--text-3)}
+.guide-code-diagram figcaption{font-size:10.5px;color:var(--text-3)}
+
 .guide :focus-visible{outline:2px solid var(--focus);outline-offset:3px}
 @container (max-width:640px){
   .guide-scroll{padding:22px 16px 40px}
@@ -113,7 +167,9 @@
 }
 @keyframes guide-enter{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){
-  .guide-card{animation:none}
+  .guide-card,.guide-ask-answer{animation:none}
+  .guide-ask-skel{animation:none}
+  .guide-foryou-item,.guide-foryou-item:hover{transform:none;transition:none}
   .guide-card,.guide-card:hover,.guide-card:focus-within{transform:none;transition:none}
   .guide-discuss>span,.guide-toggle svg{transition:none}
 }
