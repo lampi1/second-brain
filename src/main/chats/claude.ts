@@ -102,6 +102,15 @@ export const READ_ONLY_SETTINGS: Record<string, unknown> = {
   disableAllHooks: true,
 };
 
+/** The only tools a web-only run has (SessionOptions.webOnly, Impara's web research, ADR 0188): searching and reading
+ *  the web, never a file. It sees only what its prompt says, so the web never meets the user's files in one run. */
+export const WEB_ONLY_TOOLS: readonly string[] = ['WebSearch', 'WebFetch'];
+/** A web-only run's session settings: every file tool and every tool that writes or runs denied, no hooks. */
+export const WEB_ONLY_SETTINGS: Record<string, unknown> = {
+  permissions: { deny: ['Bash', 'PowerShell', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Read', 'Grep', 'Glob', 'LS'] },
+  disableAllHooks: true,
+};
+
 /** The Claude Code rule that denies reading a folder and everything in it, in its absolute-path form (`//` + the path
  *  with forward slashes; a Windows drive C: becomes /c): Read(//c/a/b/**). A Read rule also covers Grep and Glob. */
 export function claudeReadRule(dir: string): string {
@@ -281,7 +290,7 @@ export class ClaudeSession implements HarnessSession {
     // a read-only run: only the read tools exist (--tools is variadic: a flag follows it), no MCP server, no transcript
     // (it never shows up among the external chats)
     if (op.readOnly) {
-      const tools = op.toolPolicy ? READ_ONLY_TOOLS.filter(t => claudeTools(op.toolPolicy!).includes(t)) : READ_ONLY_TOOLS;
+      const tools = op.webOnly ? WEB_ONLY_TOOLS : op.toolPolicy ? READ_ONLY_TOOLS.filter(t => claudeTools(op.toolPolicy!).includes(t)) : READ_ONLY_TOOLS;
       if (op.toolPolicy) a.push(`--tools=${tools.join(',')}`);
       else a.push('--tools', tools.join(','));
       a.push('--strict-mcp-config', '--no-session-persistence');
@@ -300,7 +309,7 @@ export class ClaudeSession implements HarnessSession {
     if (op.title && (!op.resume || op.fork)) a.push('--name', op.title);
     if (op.worktree && !op.resume) a.push('--worktree');
     const stable = op.stable ?? !!releaseId();
-    const settings = mergeSettings(op.settings, compactSettings(op.compactWindowTokens), op.readOnly ? READ_ONLY_SETTINGS : null, op.readOnly && op.denyRead?.length ? { permissions: { deny: op.denyRead.map(claudeReadRule) } } : null, agentMcp && !agentMcp.connectors ? { disableClaudeAiConnectors: true } : null, roleSkills ? { permissions: { ask: ['Skill'] } } : null, stable ? stableGuards(op.localAppData ? path.join(op.localAppData, 'second-brain') : sharedDir()) : null);
+    const settings = mergeSettings(op.settings, compactSettings(op.compactWindowTokens), op.readOnly ? (op.webOnly ? WEB_ONLY_SETTINGS : READ_ONLY_SETTINGS) : null, op.readOnly && op.denyRead?.length ? { permissions: { deny: op.denyRead.map(claudeReadRule) } } : null, agentMcp && !agentMcp.connectors ? { disableClaudeAiConnectors: true } : null, roleSkills ? { permissions: { ask: ['Skill'] } } : null, stable ? stableGuards(op.localAppData ? path.join(op.localAppData, 'second-brain') : sharedDir()) : null);
     if (settings) a.push('--settings', JSON.stringify(settings)); // inline: session-only, no file is written
     if (op.mcpConfig && !op.readOnly) a.push('--mcp-config', op.mcpConfig); // variadic flag: keep it after the plain ones
     return [...a, ...(op.extraArgs ?? [])];

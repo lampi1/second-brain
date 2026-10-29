@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { DENIED_READ, HeadlessRunner, NO_NETWORK_PATH, NO_PLAN, NO_QUESTIONS, READ_ONLY_REFUSAL, RunCollector, askRefusal, checkModel, effortFor, isNetworkPath, readOnlyAnswer, readsDenied, refusal, shortError, type HeadlessDeps } from '../../../src/main/compare/headless';
+import { DENIED_READ, HeadlessRunner, NO_NETWORK_PATH, NO_PLAN, NO_QUESTIONS, READ_ONLY_REFUSAL, RunCollector, WEB_ONLY_REFUSAL, askRefusal, checkModel, effortFor, isNetworkPath, readOnlyAnswer, readsDenied, refusal, shortError, type HeadlessDeps } from '../../../src/main/compare/headless';
 import type { ModelRegistry } from '../../../src/shared/contract';
 import { cursorReadRule, noAllowRules } from '../../../src/main/chats/acp';
 import { claudeReadRule } from '../../../src/main/chats/claude';
@@ -51,6 +51,11 @@ describe('read-only answers (pure)', () => {
     expect(readOnlyAnswer('api', { type: 'permission', tool: 'Read' })).toMatchObject({ allow: false });
     expect(readOnlyAnswer('claude', { type: 'question', tool: 'AskUserQuestion' })).toEqual({ kind: 'permission', allow: false, message: NO_QUESTIONS });
     expect(readOnlyAnswer('acp', { type: 'question', tool: 'CreatePlan' })).toMatchObject({ allow: false, message: NO_QUESTIONS });
+    // a web run (Impara's web research, ADR 0188): the web tools only, never a file, only on Claude
+    for (const tool of ['WebSearch', 'WebFetch']) expect(readOnlyAnswer('claude', { type: 'permission', tool }, undefined, true)).toEqual({ kind: 'permission', allow: true });
+    for (const tool of ['Read', 'Grep', 'Glob', 'Bash', 'Edit']) expect(readOnlyAnswer('claude', { type: 'permission', tool }, undefined, true)).toEqual({ kind: 'permission', allow: false, message: WEB_ONLY_REFUSAL });
+    expect(readOnlyAnswer('acp', { type: 'permission', tool: 'Fetch' }, undefined, true)).toMatchObject({ allow: false });
+    expect(readOnlyAnswer('claude', { type: 'question', tool: 'AskUserQuestion' }, undefined, true)).toMatchObject({ allow: false, message: NO_QUESTIONS });
   });
 
   it('passes a model only when it cannot be read as a flag; effort only where the engine takes one', () => {
@@ -199,6 +204,21 @@ describe('hidden read-only runs on the fakes', { timeout: 60e3 }, () => {
     expect(lines).not.toContain('SEGRETO-PROMPT');
     expect(lines).not.toContain('Letto a.txt');
     expect(log.recent.find(e => e.msg === 'headless run end')?.data).toMatchObject({ engine: 'claude', round: 'r1', ok: true, costUsd: 0.01 });
+  });
+
+  it('Claude, a web run: only the web tools exist, every file tool denied, a read refused; never on another engine', async () => {
+    log.recent.length = 0;
+    const r = await runner().run({ ...req('claude', 'ask bash readgate'), web: true });
+    expect(r).toMatchObject({ ok: true });
+    expect(answered()).toEqual([
+      expect.objectContaining({ tool: 'AskUserQuestion', allow: false }), expect.objectContaining({ tool: 'Bash', allow: false }), expect.objectContaining({ tool: 'Read', allow: false }),
+    ]);
+    const argv = fakeLog(claudeLog).filter(l => l.argv).at(-1)!.argv!;
+    expect(argv.slice(argv.indexOf('--tools'), argv.indexOf('--tools') + 2)).toEqual(['--tools', 'WebSearch,WebFetch']);
+    const settings = JSON.parse(argv[argv.indexOf('--settings') + 1]!) as { permissions: { deny: string[] }; disableAllHooks: boolean };
+    expect(settings.permissions.deny).toEqual(expect.arrayContaining(['Read', 'Grep', 'Glob', 'Bash', 'Edit', 'Write']));
+    expect(settings.permissions.deny).not.toContain('WebFetch');
+    expect(await runner().run({ ...req('cursor', 'readgate'), web: true })).toMatchObject({ ok: false, refused: true, error: expect.stringMatching(/solo su Claude/) });
   });
 
   it('Claude: ExitPlanMode is refused with the request to answer as text', async () => {

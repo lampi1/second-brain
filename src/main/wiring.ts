@@ -52,6 +52,7 @@ import { RecordingStore } from './recordings/store';
 import { LessonStore } from './learn/store';
 import { LearnService, type TeachRun } from './learn/service';
 import { runRead } from './learn/material';
+import { appGuide, teacherOption } from './learn/sources';
 import { systemLang } from './lang';
 import { CloudService, cloudFile } from './cloud/service';
 import { realExec, realHttp } from './cloud/exec';
@@ -959,18 +960,31 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     changed: () => ctx.emitter.emit('maintenance:changed', undefined),
     done: d => ctx.emitter.emit('maintenance:done', d) });
   researchRef.current = research;
-  // Impara (ADR 0185): each lesson is written by hidden read-only runs (compare/headless.ts) on the best engine that is
-  // on and reads files (Claude first, its strongest model), the material gathered by the app with the user's own gh / git
+  // Impara (ADR 0185, 0188): each lesson is researched, verified and written by hidden read-only runs
+  // (compare/headless.ts) on the engine the user picked (else the best one that is on and reads files: Claude first,
+  // its strongest model); the web research and its check always on Claude, the only engine whose run can have the web
+  // tools and no file tool; the material gathered by the app with the user's own gh / git
   const teachers = () => engineInfos().filter(e => e.kind !== 'api' && e.caps.tools && engineOn(brain.settings(), e.id));
   const teacher = () => { const all = teachers(); return all.find(e => e.kind === 'claude') ?? all[0] ?? null; };
   const learn = new LearnService({
     store: new LessonStore(path.join(ctx.userData, 'learn')), lang: uiLang, run: runRead,
     devops: () => { const t = tasks.get(); return { prs: t.prs, repoDirs: t.repoDirs }; },
     cannotTeach: () => (teacher() ? null : 'Per preparare una lezione serve un motore acceso che legge i file (Impostazioni → Motori).'),
+    teachers: () => { const seen = withApiModels(brain.modelsSeen()); return teachers().map(e => teacherOption(e, seen[e.id]?.ids ?? [])); },
+    webOk: () => teachers().some(e => e.kind === 'claude'),
+    places: () => {
+      const repo = brain.settings().appRepo || app.getAppPath();
+      return { brain: brain.info().brainRoot || null, appSource: repo && fs.existsSync(path.join(repo, 'src')) ? repo : null };
+    },
+    guide: appGuide,
     teach: async (r: TeachRun) => {
-      const e = teacher();
-      if (!e) return { ok: false, error: 'nessun motore acceso' };
-      const out = await headless.run({ engine: e.id, model: e.kind === 'claude' ? 'opus' : null, effort: e.caps.effort ? r.effort : null, cwd: r.cwd, prompt: r.prompt, round: r.round, timeoutMs: r.timeoutMs });
+      const all = teachers();
+      const picked = r.teacher ? all.find(e => e.id === r.teacher!.engine) ?? null : null;
+      const e = r.web ? all.find(x => x.kind === 'claude') ?? null : picked ?? teacher();
+      if (!e) return { ok: false, error: r.web ? 'Claude è spento' : 'nessun motore acceso' };
+      // the user's model on the engine they picked; Claude's strongest otherwise
+      const model = r.teacher?.engine === e.id && r.teacher.model ? r.teacher.model : e.kind === 'claude' ? 'opus' : null;
+      const out = await headless.run({ engine: e.id, model, effort: e.caps.effort ? r.effort : null, cwd: r.cwd, prompt: r.prompt, round: r.round, timeoutMs: r.timeoutMs, ...(r.web ? { web: true } : {}) });
       return out.ok ? { ok: true, text: out.text, costUsd: out.costUsd, engine: e.id, model: out.model } : { ok: false, error: out.error };
     },
     changed: (state, lesson) => ctx.emitter.emit('impara:changed', { state, ...(lesson ? { lesson } : {}) }),

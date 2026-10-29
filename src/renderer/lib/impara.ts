@@ -1,9 +1,10 @@
 // Impara in the renderer (ADR 0185): main's list and the open lesson (impara:changed keeps both current), the actions
 // of the page and the player (each an impara:* call, a failure said in a toast), the user's choices that outlive a
-// restart (voice of the app, «Rispondo a voce», depth, level: localStorage, a convenience only) and the colours a lit
+// restart (voice of the app, «Rispondo a voce», depth, level, who explains, full screen: localStorage, a convenience
+// only) and the colours a lit
 // piece gets on the diagram, taken from the theme's tokens as hex (mermaid's classDef cannot take rgba).
 // Used by components/impara/.
-import type { ImparaState, Lesson, LessonConfidence, LessonDepth, LessonExtraKind, LessonLevel, LessonStart, FocusColors } from '@shared/lesson';
+import type { ImparaState, Lesson, LessonConfidence, LessonDepth, LessonExtraKind, LessonLevel, LessonStart, LessonTeacher, FocusColors } from '@shared/lesson';
 import { createStore } from '../store/createStore';
 import { toast } from '../store/ui';
 import { t } from '../i18n';
@@ -11,9 +12,16 @@ import { t } from '../i18n';
 export interface ImparaUi { state: ImparaState | null; lessons: Record<string, Lesson> }
 export const impara = createStore<ImparaUi>({ state: null, lessons: {} });
 
-export interface ImparaPrefs { voice: boolean; mic: boolean; depth: LessonDepth; level: LessonLevel }
+/** teacher null = the app's choice (Claude's strongest model, high effort); full = the lesson fills the window (the
+ *  owner, 2026-10-29: «di base a tutto schermo») */
+export interface ImparaPrefs { voice: boolean; mic: boolean; depth: LessonDepth; level: LessonLevel; teacher: LessonTeacher | null; full: boolean }
 const PREFS_KEY = 'sb.impara.v1';
-const DEFAULT_PREFS: ImparaPrefs = { voice: true, mic: false, depth: 'lesson', level: 'basics' };
+const DEFAULT_PREFS: ImparaPrefs = { voice: true, mic: false, depth: 'lesson', level: 'basics', teacher: null, full: true };
+const teacherIn = (v: unknown): LessonTeacher | null => {
+  if (!v || typeof v !== 'object') return null;
+  const o = v as Record<string, unknown>;
+  return typeof o.engine === 'string' ? { engine: o.engine, model: typeof o.model === 'string' ? o.model : null, effort: typeof o.effort === 'string' ? o.effort as LessonTeacher['effort'] : null } : null;
+};
 function readPrefs(): ImparaPrefs {
   try {
     const p = JSON.parse(localStorage.getItem(PREFS_KEY) ?? 'null') as Partial<ImparaPrefs> | null;
@@ -21,6 +29,7 @@ function readPrefs(): ImparaPrefs {
     return {
       voice: typeof p.voice === 'boolean' ? p.voice : DEFAULT_PREFS.voice, mic: typeof p.mic === 'boolean' ? p.mic : DEFAULT_PREFS.mic,
       depth: p.depth === 'quick' || p.depth === 'deep' ? p.depth : 'lesson', level: p.level === 'new' || p.level === 'expert' ? p.level : 'basics',
+      teacher: teacherIn(p.teacher), full: typeof p.full === 'boolean' ? p.full : DEFAULT_PREFS.full,
     };
   } catch { return DEFAULT_PREFS; }
 }
@@ -71,6 +80,8 @@ export const answerCheck = (id: string, checkId: string, choice: number, confide
   call(window.sb.invoke('impara:answer', { id, checkId, choice, ...(confidence !== undefined ? { confidence } : {}) }));
 export const explainBack = (id: string, text: string) => call(window.sb.invoke('impara:explain', { id, text }));
 export const retryLesson = (id: string) => call(window.sb.invoke('impara:retry', { id }));
+/** The answers to the questions before the lesson ('' = skipped). */
+export const clarifyLesson = (id: string, answers: string[]) => call(window.sb.invoke('impara:clarify', { id, answers }));
 export async function removeLesson(id: string): Promise<boolean> {
   try { await window.sb.invoke('impara:remove', { id }); impara.set(s => { const { [id]: _gone, ...rest } = s.lessons; return { ...s, lessons: rest }; }); toast(t('impara.removed'), 'ok'); return true; }
   catch (e) { fail(e); return false; }

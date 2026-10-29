@@ -1,6 +1,7 @@
 // The end of a lesson (ADR 0185): «Spiegalo tu», the learner explains the whole thing in their own words (typed or said
 // with «Rispondo a voce»; ICAP: constructive), one short run grades it (what they got, what they left out); then how
-// each piece went (its checks, the extras it needed) with «Rivedi» on the weak ones, and the checks' score. Skipping
+// each piece went (its checks, the extras it needed) with «Rivedi» on the weak ones, and the checks as «2/3 domande
+// giuste» (a count, not a percentage: «0%» next to «quasi» read as a contradiction, ADR 0188). Skipping
 // the explanation ends the lesson without a grade. Under the whole diagram. Used by ImparaPlayer.tsx.
 import { pieceScores, progressOf, stepKey, type Lesson } from '@shared/lesson';
 import { go } from '../../actions';
@@ -46,8 +47,8 @@ export function ImparaEnd({ lesson, draft, setDraft, onSend, onReview }: { lesso
           </>}
       </div>
       <div className="ip-end-sum">
-        <div className="ip-ring" style={{ ['--p' as string]: `${pct ?? 0}%` }} data-testid="impara-score">
-          <div><b>{pct === null ? '—' : `${pct}%`}</b><span>{t('impara.end.checks', { right: p.right, n: p.answered })}</span></div>
+        <div className="ip-ring" style={{ ['--p' as string]: `${pct ?? 0}%` }} data-testid="impara-score" role="img" aria-label={t('impara.end.checks', { right: p.right, n: p.answered })}>
+          <div><b>{pct === null ? '—' : `${p.right}/${p.answered}`}</b><span>{t('impara.end.checksLabel')}</span></div>
         </div>
         <div className="ip-pieces">
           <div className="ip-label">{t('impara.end.byPiece')}</div>

@@ -7,6 +7,7 @@
 // load anything; img-src already allows data:). No eval: mermaid's parsers are precompiled (CSP script-src 'self').
 // The theme is mermaid's 'base' fed with the app's tokens read at draw time; VisualBlock redraws when the theme changes.
 import mermaid from 'mermaid';
+import { parseFlowLayout, type FlowLayout } from './flow-layout';
 
 let seq = 0;
 let queue: Promise<unknown> = Promise.resolve();
@@ -85,6 +86,23 @@ export function drawMermaid(code: string, opts?: DrawOptions): Promise<{ src: st
       return toImage(svg);
     } finally {
       // mermaid's scratch nodes, if a failure left them behind
+      document.getElementById(id)?.remove(); document.getElementById(`d${id}`)?.remove();
+    }
+  });
+  queue = run.catch(() => undefined);
+  return run;
+}
+
+/** A flowchart's layout (lib/viz/flow-layout.ts) for Impara's board, which draws it itself; null when the code is not a
+ *  flowchart mermaid could lay out. Same queue and limits as drawMermaid; the SVG is parsed inertly, never shown. */
+export function layoutMermaid(code: string, opts?: DrawOptions): Promise<FlowLayout | null> {
+  const run = queue.then(async () => {
+    configure(opts);
+    const id = `sb-mermaid-${++seq}`;
+    try {
+      const { svg } = await mermaid.render(id, code);
+      return parseFlowLayout(svg, id);
+    } finally {
       document.getElementById(id)?.remove(); document.getElementById(`d${id}`)?.remove();
     }
   });

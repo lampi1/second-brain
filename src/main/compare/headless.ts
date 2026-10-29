@@ -8,7 +8,9 @@
 // itself: only reading, searching and thinking are allowed (never inside a denied folder: the brain's
 // reviews/compare and the folders the brain lists for a run, where the other side's answers and the verdicts live;
 // the adapters also get them as deny rules), everything else (edit, delete, move, shell, web, MCP,
-// ExitPlanMode) is refused, and every question gets a refusal. A run ends at its first finished turn, or after 45 min
+// ExitPlanMode) is refused, and every question gets a refusal. One exception, asked by Impara's web research (ADR 0188):
+// a web run (Claude only) gets the web search and fetch tools and no file tool at all, so a run never holds both the
+// user's files and untrusted web pages. A run ends at its first finished turn, or after 45 min
 // (killed); its session is always closed and its process tree killed. Logs carry the engine, round, duration and
 // cost, never the prompt nor the answer. Under tests only the fakes start (SB_<ID>_PATH to a .mjs). Used by
 // compare/queue.ts.
@@ -17,7 +19,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { Answer, ChatItem, Effort, Harness, ModelRegistry, PendingRequest, Settings } from '../../shared/contract';
 import { KIND_NAME } from '../chats/acp';
-import { READ_ONLY_TOOLS } from '../chats/claude';
+import { READ_ONLY_TOOLS, WEB_ONLY_TOOLS } from '../chats/claude';
 import type { HarnessSession, SessionPatch, SessionSink, TokenUsage } from '../chats/session';
 import { modelRow, isFable } from '../brain/routing';
 import { agentsMayOpen, engineOn } from '../engines/policy';
@@ -41,6 +43,9 @@ export interface HeadlessRequest {
   timeoutMs?: number;
   maxTokens?: number;
   noTools?: boolean;
+  /** Claude only: the run searches and reads the web and never a file (Impara's web research, ADR 0188): its prompt
+   *  must hold nothing private, since the web pages it reads are untrusted */
+  web?: boolean;
 }
 
 /** What a run gives back: the answer and what it cost, or why it failed (short, never a key). */
@@ -81,6 +86,8 @@ export const READ_ONLY_REFUSAL = 'Sola lettura: in questo confronto puoi solo le
 export const NO_PLAN = 'Niente piano da approvare: scrivi la risposta finale come testo.';
 /** What a read of a network or device path gets (\\host\share, \\?\…). */
 export const NO_NETWORK_PATH = 'Percorso di rete non ammesso: in questo confronto leggi solo i file locali con il loro percorso normale.';
+/** What a web-only run gets for anything but a web search or fetch. */
+export const WEB_ONLY_REFUSAL = 'Solo web: in questa ricerca puoi solo cercare e leggere pagine web, nessun file. Scrivi la risposta finale come testo.';
 /** What a read inside a denied folder gets (the other side's answers and the verdicts). */
 export const DENIED_READ = 'Cartella vietata: contiene le risposte dell\'altro lato del confronto e i verdetti. Lavora sugli altri file.';
 
@@ -97,8 +104,10 @@ const READ_TOOLS: Record<EngineDef['kind'], ReadonlySet<string>> = {
 
 /** The answer to a request a hidden run is blocked on: allow only the read-only tools of its adapter, refuse the rest;
  *  a question (AskUserQuestion, cursor/ask_question, cursor/create_plan) always gets a refusal. */
-export function readOnlyAnswer(kind: EngineDef['kind'], req: Pick<PendingRequest, 'type' | 'tool'> & Partial<Pick<PendingRequest, 'input' | 'detail'>>, scope?: { cwd: string; deny: readonly string[] }): Answer {
+export function readOnlyAnswer(kind: EngineDef['kind'], req: Pick<PendingRequest, 'type' | 'tool'> & Partial<Pick<PendingRequest, 'input' | 'detail'>>, scope?: { cwd: string; deny: readonly string[] }, web = false): Answer {
   if (req.type !== 'permission') return { kind: 'permission', allow: false, message: NO_QUESTIONS };
+  // a web-only run (Claude): the web tools, nothing else, never a file
+  if (web) return kind === 'claude' && WEB_ONLY_TOOLS.includes(req.tool) ? { kind: 'permission', allow: true } : { kind: 'permission', allow: false, message: WEB_ONLY_REFUSAL };
   if (READ_TOOLS[kind].has(req.tool)) {
     if (readsNetwork(req)) return { kind: 'permission', allow: false, message: NO_NETWORK_PATH };
     if (scope && readsDenied(req, scope.cwd, scope.deny)) return { kind: 'permission', allow: false, message: DENIED_READ };
@@ -302,6 +311,7 @@ export class HeadlessRunner {
     const engine = engineOf(req.engine)!;
     const override = this.d.enginePaths()[req.engine];
     const m = checkModel(req.model) as { model: string | null };
+    if (req.web && engine.kind !== 'claude') return { ...fail(`la ricerca sul web gira solo su Claude, non su ${engine.label}`), refused: true };
     if (isNetworkPath(req.cwd)) return fail(`cartella di rete non ammessa: ${req.cwd}`);
     if (!path.isAbsolute(req.cwd) || !isDir(req.cwd)) return fail(`cartella non trovata: ${req.cwd}`);
     const deny = denyList([...(this.d.denyRead?.() ?? []), ...(req.denyRead ?? [])]);
@@ -310,7 +320,7 @@ export class HeadlessRunner {
     const effort = effortFor(engine, req.effort);
     const chatId = `cmp_${crypto.randomBytes(5).toString('hex')}`;
     const where = { engine: engine.id, round: req.round, chat: chatId };
-    log.info('compare', 'headless run start', { chat: chatId, data: { engine: engine.id, round: req.round, model: m.model, effort } });
+    log.info('compare', 'headless run start', { chat: chatId, data: { engine: engine.id, round: req.round, model: m.model, effort, web: !!req.web } });
 
     const c = new RunCollector();
     let session: HarnessSession | null = null;
@@ -322,7 +332,7 @@ export class HeadlessRunner {
       pending: req2 => {
         const answer: Answer = req.noTools
           ? { kind: 'permission', allow: false, message: 'Questo job usa solo il digest ricevuto. Nessuno strumento è consentito.' }
-          : readOnlyAnswer(engine.kind, req2, { cwd: req.cwd, deny });
+          : readOnlyAnswer(engine.kind, req2, { cwd: req.cwd, deny }, !!req.web);
         log.info('compare', 'headless permission answered', { chat: chatId, data: { engine: engine.id, type: req2.type, tool: req2.tool, allow: answer.kind === 'permission' && answer.allow } });
         // answered right after the session finished reporting the request
         queueMicrotask(() => {
@@ -336,7 +346,7 @@ export class HeadlessRunner {
     const timer = setTimeout(() => settle({ error: `tempo scaduto (${Math.round(timeoutMs / 60_000) || '<1'} min): fermato` }), timeoutMs);
     timer.unref?.();
     try {
-      session = sessionFor(engine, { chatId, cwd: req.cwd, model: m.model, effort, readOnly: true, denyRead: deny, mcpConfig: null,
+      session = sessionFor(engine, { chatId, cwd: req.cwd, model: m.model, effort, readOnly: true, ...(req.web ? { webOnly: true } : {}), denyRead: deny, mcpConfig: null,
         ...(req.maxTokens !== undefined ? { maxTokens: req.maxTokens } : {}),
         ...(req.noTools ? { toolPolicy: { allow: [] }, ceiling: 'plan' } : {}),
       }, sink, {

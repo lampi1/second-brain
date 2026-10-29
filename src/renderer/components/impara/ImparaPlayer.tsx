@@ -6,21 +6,29 @@
 // code of the piece and its new words. The user goes at their own pace: → ← and the rail move, Space pauses or repeats
 // the voice; with «Rispondo a voce» the microphone takes commands («avanti», «ripeti», «non ho capito», «la b»…), and
 // anything else is a question. Checks open over the board (ImparaCheck.tsx), the end is «Spiegalo tu» (ImparaEnd.tsx).
-// Every move is saved by main at once, so the lesson reopens where it was. Used by ImparaPage.tsx; styles impara.css.
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { checkKey, doneNodes, parseLessonCommand, parseSpokenChoice, playlist, rootOf, stepKey, type Lesson, type LessonCheck, type LessonExtraKind, type LessonStep, type PlayItem } from '@shared/lesson';
+// Every move is saved by main at once, so the lesson reopens where it was. Since ADR 0188 the lesson fills the window by
+// default (Esc or the head's button leave it, remembered), the board is animated (LessonStage.tsx): each piece plays its
+// beats, one sentence each, in step with the voice (or at reading pace without it), the camera on that sentence's
+// nodes; each piece shows the verified facts it stands on, and the head's «Fonti» opens all of the lesson's sources
+// (ImparaSources.tsx: web pages, files of this PC, the material). A lesson being researched shows ImparaPrep.tsx.
+// Used by ImparaPage.tsx; styles impara.css.
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { beatsOf, checkKey, doneNodes, isFlowchart, parseLessonCommand, parseSpokenChoice, playlist, rootOf, stepKey, type Lesson, type LessonBeat, type LessonCheck, type LessonExtraKind, type LessonFact, type LessonStep, type PlayItem } from '@shared/lesson';
 import { answerCheck, askExtra, explainBack, impara, imparaPrefs, loadLesson, moveTo, removeLesson, retryLesson, setImparaPrefs } from '../../lib/impara';
-import { narrate, onImparaHeard, stopSpeaking, stopVoice, toggleVoice, useVoice, voice } from '../../lib/voice';
+import { narrate, narrateBeats, onImparaHeard, stopSpeaking, stopVoice, toggleVoice, useVoice, voice } from '../../lib/voice';
 import { renderMarkdown } from '../../lib/markdown';
 import { go } from '../../actions';
 import { askConfirm, toast } from '../../store/ui';
 import { locale, t } from '../../i18n';
 import { Button, Kbd } from '../ui';
-import { IconArrowLeft, IconArrowRight, IconBook, IconCheck, IconLightbulb, IconMic, IconQuestion, IconRefresh, IconSpinner, IconTerminal, IconTrash, IconX } from '../Icons';
+import { IconArrowLeft, IconArrowRight, IconBook, IconCheck, IconFile, IconGlobe, IconLightbulb, IconMaximize, IconMic, IconMinimize, IconPlay, IconQuestion, IconRefresh, IconSpinner, IconTerminal, IconTrash, IconX } from '../Icons';
 import { LessonDiagram } from './LessonDiagram';
+import { LessonStage } from './LessonStage';
+import { ImparaPrep } from './ImparaPrep';
 import { ImparaCheck } from './ImparaCheck';
 import { ImparaEnd } from './ImparaEnd';
 import { ImparaSwitch } from './ImparaSwitch';
+import { ImparaSources, hostOf, openFact } from './ImparaSources';
 
 const EXTRA_ICON: Record<LessonExtraKind, ReactNode> = { better: <IconLightbulb size={11} />, example: <IconBook size={11} />, code: <IconTerminal size={11} />, question: <IconQuestion size={11} /> };
 const LETTERS = ['A', 'B', 'C', 'D'];
@@ -37,7 +45,8 @@ export function ImparaPlayer({ id }: { id: string }) {
   return <Board lesson={lesson} />;
 }
 
-function Head({ lesson, right }: { lesson: Lesson; right?: ReactNode }) {
+function Head({ lesson, right, fullToggle }: { lesson: Lesson; right?: ReactNode; fullToggle?: boolean }) {
+  const full = imparaPrefs.use(p => p.full);
   const kind = lesson.pr ? `PR #${lesson.pr.number}` : t(`impara.kind.${lesson.kind}`);
   return (
     <header className="ip-head">
@@ -48,25 +57,17 @@ function Head({ lesson, right }: { lesson: Lesson; right?: ReactNode }) {
       </div>
       <span className="sp" />
       {right}
+      {fullToggle && <Button variant="ghost" size="s" onClick={() => setImparaPrefs({ full: !full })} testid="impara-fullscreen" aria-pressed={full}
+        tip={full ? `${t('impara.fullOff')}|Esc` : t('impara.fullOn')} aria-label={full ? t('impara.fullOff') : t('impara.fullOn')}>{full ? <IconMinimize size={13} /> : <IconMaximize size={13} />}</Button>}
     </header>
   );
 }
 
 function Preparing({ lesson }: { lesson: Lesson }) {
-  const gathered = lesson.sources.length > 0 || lesson.kind === 'topic';
   return (
     <div className="ip-player" data-testid="impara-player">
       <Head lesson={lesson} />
-      <div className="ip-preparing" data-testid="impara-preparing" role="status" aria-live="polite">
-        <div className="ip-sketch" aria-hidden="true"><i /><i /><i /><b /><b /></div>
-        <h3>{t('impara.preparing.title')}</h3>
-        <ol className="ip-prep-steps">
-          <li className={gathered ? 'done' : 'now'}>{gathered ? <IconCheck size={12} /> : <IconSpinner size={12} />}{t(lesson.kind === 'pr' ? 'impara.preparing.readPr' : lesson.kind === 'text' ? 'impara.preparing.readText' : 'impara.preparing.topic')}</li>
-          <li className={gathered ? 'now' : ''}>{gathered ? <IconSpinner size={12} /> : <span className="ip-dot" />}{t('impara.preparing.plan')}</li>
-          <li><span className="ip-dot" />{t('impara.preparing.rest')}</li>
-        </ol>
-        <p className="ip-muted">{t('impara.preparing.hint')}</p>
-      </div>
+      <ImparaPrep lesson={lesson} />
     </div>
   );
 }
@@ -90,6 +91,42 @@ function Failed({ lesson }: { lesson: Lesson }) {
 const isTyping = (el: EventTarget | null) => el instanceof HTMLElement && (el.closest('input, textarea, select, [contenteditable="true"]') !== null);
 const spokenCheck = (c: LessonCheck) => `${t('impara.check.spoken')} ${c.q} ${c.options.map((o, i) => `${LETTERS[i]}: ${o}.`).join(' ')}`;
 
+/** How long a beat stays on the board without the voice: about the time to read it. */
+const readMs = (say: string) => Math.min(6500, Math.max(2200, say.split(/\s+/).length * 330));
+
+/** The verified facts a piece stands on, as small chips; a click opens the list with each claim, its check and its source. */
+function Cites({ facts, onAll }: { facts: LessonFact[]; onAll: () => void }) {
+  const [open, setOpen] = useState(false);
+  if (!facts.length) return null;
+  const host = hostOf;
+  return (
+    <div className="ip-cites" data-testid="impara-cites">
+      <button type="button" className="ip-cites-head" onClick={() => setOpen(o => !o)} aria-expanded={open} data-testid="impara-cites-toggle">
+        <span className="ip-muted">{t('impara.cites')}</span>
+        {facts.map(f => (
+          <span key={f.id} className={`ip-cite ${f.check}`} data-tip={t(`impara.fact.${f.check}`)}>
+            {f.from === 'web' ? <IconGlobe size={10} /> : f.from === 'file' ? <IconFile size={10} /> : <IconLightbulb size={10} />}
+            {f.from === 'web' ? host(f.ref) : f.from === 'file' ? f.ref.split(/[\\/]/).pop() : t('impara.fact.known')}
+          </span>
+        ))}
+      </button>
+      {open && (
+        <ul className="ip-facts" data-testid="impara-facts">
+          {facts.map(f => (
+            <li key={f.id} className={f.check}>
+              <span className={`ip-tag ${f.check === 'ok' ? 'green' : f.check === 'fixed' ? 'blue' : 'amber'}`}>{t(`impara.fact.${f.check}`)}</span>
+              <span className="ip-fact-c">{f.claim}</span>
+              {f.quote && <q className="ip-fact-q">{f.quote}</q>}
+              <span className="ip-fact-r">{f.from === 'web' ? <a href={f.ref} target="_blank" rel="noreferrer" className="ip-src-link">{f.ref}</a> : f.from === 'file' ? <button type="button" className="ip-link ip-fact-open" onClick={() => openFact(f.ref)} data-testid="impara-fact-open"><code>{f.ref}</code></button> : t('impara.fact.known')}</span>
+            </li>
+          ))}
+          <li className="ip-facts-all"><button type="button" className="ip-link" onClick={onAll} data-testid="impara-cites-all">{t('impara.src.all')}</button></li>
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function Board({ lesson }: { lesson: Lesson }) {
   const prefs = imparaPrefs.use(s => s);
   const phase = useVoice(s => s.phase), micOn = useVoice(s => s.phase !== 'off' && s.target === 'impara'), narrating = useVoice(s => s.narrating);
@@ -109,14 +146,21 @@ function Board({ lesson }: { lesson: Lesson }) {
   const [asking, setAsking] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [heard, setHeard] = useState<string | null>(null);
+  const [sources, setSources] = useState(false);
+  const closeSources = useCallback(() => setSources(false), []);
   const busy = !!lesson.busy;
+  // the beats of the piece on screen, and the one being said
+  const beats: LessonBeat[] = item.kind === 'step' ? beatsOf(item.step) : [];
+  const [beat, setBeat] = useState(0);
+  const [playing, setPlaying] = useState(0);
 
   const next = () => { if (!atLast) void moveTo(lesson.id, list[idx + 1]!.key); };
   const back = () => { if (idx > 0) void moveTo(lesson.id, list[idx - 1]!.key); };
   const extra = (kind: LessonExtraKind, text?: string) => { if (!busy) { stopSpeaking(false); void askExtra(lesson.id, kind, item.key, text); } };
   const speakNow = () => {
-    if (!prefs.voice) return;
-    if (item.kind === 'step') narrate(item.step.say);
+    setBeat(0);
+    if (!prefs.voice) { setPlaying(n => n + 1); return; }
+    if (item.kind === 'step') narrateBeats(beats.map(b => b.say), i => setBeat(i));
     else if (item.kind === 'check') narrate(item.check.answer ? item.check.why : spokenCheck(item.check));
     else narrate(lesson.explain?.feedback ?? lesson.explain?.q ?? t('impara.end.spokenAsk'));
   };
@@ -126,8 +170,22 @@ function Board({ lesson }: { lesson: Lesson }) {
     if (prefs.voice) narrate(`${choice === c.correct ? t('impara.check.rightSpoken') : t('impara.check.wrongSpoken', { letter: LETTERS[c.correct]! })} ${c.why}`);
   };
 
-  // each new item is read aloud once (a piece, a check; the end's question), at the user's pace: never an auto-advance
-  useEffect(() => { setFull(false); setZoom(false); if (prefs.voice) speakNow(); else stopSpeaking(false); }, [item.key, prefs.voice]);
+  // each new item is read aloud once (a piece beat by beat, a check; the end's question), at the user's pace: never an
+  // auto-advance to the next piece
+  useEffect(() => { setFull(false); setZoom(false); setWhole(false); setBeat(0); if (prefs.voice) speakNow(); else stopSpeaking(false); }, [item.key, prefs.voice]);
+  // without the voice, the beats follow each other at reading pace (once; «Rivedi l'animazione» plays them again); the
+  // beats are read through a ref: a lesson that changes meanwhile (the rest arriving) does not start them over
+  const beatsNow = useRef(beats);
+  beatsNow.current = beats;
+  useEffect(() => {
+    const all = beatsNow.current;
+    if (prefs.voice || all.length < 2) return;
+    let i = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const step = () => { timer = setTimeout(() => { i += 1; if (i < all.length) { setBeat(i); step(); } }, readMs(all[i]!.say)); };
+    step();
+    return () => clearTimeout(timer);
+  }, [playing, prefs.voice, item.key]);
   // the end's grade arrives: its feedback is read
   useEffect(() => { if (item.kind === 'end' && lesson.explain?.feedback && prefs.voice) narrate(lesson.explain.feedback); }, [lesson.explain?.feedback]);
   // «Rispondo a voce» remembered: the microphone opens with the lesson
@@ -155,7 +213,7 @@ function Board({ lesson }: { lesson: Lesson }) {
 
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target) || document.querySelector('.modal-backdrop')) return;
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || isTyping(e.target) || document.querySelector('.modal-backdrop, .backdrop')) return;
       if (e.key === 'ArrowRight') { e.preventDefault(); next(); }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); back(); }
       else if (e.key === ' ') { e.preventDefault(); if (narrating) stopSpeaking(false); else speakNow(); }
@@ -167,6 +225,17 @@ function Board({ lesson }: { lesson: Lesson }) {
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
   });
+  // Esc leaves the full screen first (before the app's own Esc, which would leave the page)
+  useEffect(() => {
+    if (!prefs.full) return;
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || isTyping(e.target) || document.querySelector('.modal-backdrop, .backdrop, .qwin, .vw-layer, .ip-srcs')) return;
+      e.preventDefault(); e.stopPropagation();
+      setImparaPrefs({ full: false });
+    };
+    window.addEventListener('keydown', esc, true);
+    return () => window.removeEventListener('keydown', esc, true);
+  }, [prefs.full]);
 
   const toggleMic = () => { const on = !micOn; setImparaPrefs({ mic: on }); if (on) void toggleVoice('impara'); else stopVoice(); };
   const toggleVoiceOut = () => {
@@ -177,14 +246,23 @@ function Board({ lesson }: { lesson: Lesson }) {
 
   const seenUpTo = idx;
   const posOf = (key: string) => list.findIndex(p => p.key === key);
-  const focus = piece && !piece.diagram ? piece.focus : [];
+  const own = piece?.diagram;
   const done = item.kind === 'end' ? [] : doneNodes(lesson, item.key);
+  // what the board shows now: the beat being said; on a check, the piece's nodes, quietly
+  const cur = beats[Math.min(beat, beats.length - 1)];
+  const stageBeat = item.kind === 'step' && cur ? { focus: cur.focus.length ? cur.focus : item.step.focus, ...(cur.flow ? { flow: cur.flow } : {}), ...(cur.note ? { note: cur.note } : {}) }
+    : { focus: piece && !own ? piece.focus : [] };
+  const beatDone = item.kind === 'step' ? [...done, ...beats.slice(0, beat).flatMap(b => b.focus)] : done;
+  const facts = (piece?.cites ?? []).map(id => lesson.facts?.find(f => f.id === id)).filter((f): f is LessonFact => !!f);
   const label = item.kind === 'end' ? t('impara.end.kicker') : piece?.extra ? t(`impara.extra.${piece.extra.kind}`) : t('impara.pieceOf', { n: mainIndex + 1, total });
   const saved = new Date(lesson.updatedAt).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
+  const animated = !own && isFlowchart(lesson.diagram);
+  const verified = lesson.facts?.length ?? 0;
 
   return (
-    <div className="ip-player" data-testid="impara-player" data-at={lesson.at}>
-      <Head lesson={lesson} right={<>
+    <div className={`ip-player ${prefs.full ? 'ip-full' : ''}`} data-testid="impara-player" data-at={lesson.at} data-full={prefs.full ? 'true' : 'false'}>
+      <Head lesson={lesson} fullToggle right={<>
+        <Button variant="ghost" size="s" onClick={() => setSources(true)} testid="impara-sources-open" tip={t('impara.src.title')}><IconBook size={13} />{t('impara.src.open')}{verified > 0 ? <span className="ip-count">{verified}</span> : null}</Button>
         <ImparaSwitch on={prefs.voice} onChange={toggleVoiceOut} label={t('impara.voiceApp')} testid="impara-voice" />
         <ImparaSwitch on={micOn} onChange={toggleMic} label={t('impara.voiceMe')} testid="impara-mic" />
       </>} />
@@ -227,6 +305,7 @@ function Board({ lesson }: { lesson: Lesson }) {
             {lesson.pr && <a href={lesson.pr.url} target="_blank" rel="noreferrer" className="ip-src-link">{lesson.pr.repo} #{lesson.pr.number}</a>}
             {lesson.sources.map(s => <div key={s}>{s}</div>)}
             {!lesson.sources.length && <div>{t(`impara.kind.${lesson.kind}`)}</div>}
+            {verified > 0 && <button type="button" className="ip-verified" onClick={() => setSources(true)} data-testid="impara-verified" data-tip={t('impara.src.title')}><IconCheck size={10} /> {t('impara.facts', { n: verified })}</button>}
             <div className="ip-cost" data-testid="impara-cost">{lesson.costUsd !== null ? `≈ ${lesson.costUsd.toLocaleString(locale(), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} $` : ''}{lesson.model ? ` · ${lesson.model}` : ''}</div>
           </div>
         </aside>
@@ -234,11 +313,17 @@ function Board({ lesson }: { lesson: Lesson }) {
         <section className="ip-board">
           <div className="ip-canvas" data-testid="impara-canvas">
             <div className="ip-tools">
+              {item.kind === 'step' && beats.length > 1 && (
+                <span className="ip-beats" aria-hidden="true">{beats.map((_, i) => <i key={i} className={i < beat ? 'd' : i === beat ? 'c' : ''} />)}</span>
+              )}
+              {item.kind === 'step' && beats.length > 1 && <button type="button" className="ip-pill" onClick={speakNow} data-testid="impara-replay" data-tip={t('impara.replay')} aria-label={t('impara.replay')}><IconPlay size={11} /></button>}
               <button type="button" className={`ip-pill ${whole ? 'on' : ''}`} onClick={() => setWhole(w => !w)} aria-pressed={whole} data-testid="impara-whole">{t('impara.whole')}</button>
-              <button type="button" className="ip-pill" onClick={() => setZoom(true)} data-testid="impara-zoom">⤢ {t('impara.zoom')}</button>
+              {!animated && <button type="button" className="ip-pill" onClick={() => setZoom(true)} data-testid="impara-zoom">⤢ {t('impara.zoom')}</button>}
             </div>
-            <LessonDiagram base={lesson.diagram} own={piece?.diagram} focus={focus} done={done} whole={whole || item.kind === 'end'} note={item.kind === 'step' ? piece?.note : undefined}
-              caption={piece?.title ?? lesson.title} zoom={zoom} onZoom={setZoom} />
+            {animated
+              ? <LessonStage code={lesson.diagram} beat={stageBeat} done={beatDone} whole={whole || item.kind === 'end'} onWhole={() => setWhole(w => !w)} caption={piece?.title ?? lesson.title} beatKey={`${item.key}/${beat}`} />
+              : <LessonDiagram base={lesson.diagram} own={own} focus={piece && !own ? piece.focus : []} done={done} whole={whole || item.kind === 'end'} note={item.kind === 'step' ? piece?.note : undefined}
+                caption={piece?.title ?? lesson.title} zoom={zoom} onZoom={setZoom} />}
           </div>
 
           {item.kind === 'check'
@@ -259,11 +344,14 @@ function Board({ lesson }: { lesson: Lesson }) {
                   {piece?.extra?.ask && <p className="ip-asked">«{piece.extra.ask}»</p>}
                   {item.kind === 'step' && (prefs.voice
                     ? <>
-                      <p className="ip-say" data-testid="impara-say">{item.step.say}</p>
+                      <p className="ip-say" data-testid="impara-say">
+                        {beats.map((b, i) => <span key={i} className={beats.length > 1 ? (i === beat ? 'on' : i < beat ? 'past' : 'next') : ''} onClick={() => setBeat(i)}>{b.say}{i < beats.length - 1 ? ' ' : ''}</span>)}
+                      </p>
                       {item.step.text && item.step.text !== item.step.say && <button type="button" className="ip-link" onClick={() => setFull(f => !f)} aria-expanded={full} data-testid="impara-full">{full ? t('impara.lessText') : t('impara.fullText')}</button>}
                       {full && <div className="md ip-text" dangerouslySetInnerHTML={{ __html: renderMarkdown(item.step.text) }} />}
                     </>
                     : <div className="md ip-text ip-text-main" data-testid="impara-text" dangerouslySetInnerHTML={{ __html: renderMarkdown(item.step.text) }} />)}
+                  <Cites key={item.key} facts={facts} onAll={() => setSources(true)} />
                 </div>
               </div>
 
@@ -307,6 +395,7 @@ function Board({ lesson }: { lesson: Lesson }) {
           {item.kind !== 'end' && lesson.busyError && <div className="ip-busy err" data-testid="impara-busy-error" role="alert">{lesson.busyError}<Button size="s" onClick={() => void retryLesson(lesson.id)} testid="impara-busy-dismiss">{t('impara.ok')}</Button></div>}
         </section>
       </div>
+      {sources && <ImparaSources lesson={lesson} onClose={closeSources} />}
     </div>
   );
 }

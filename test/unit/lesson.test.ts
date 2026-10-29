@@ -1,10 +1,11 @@
 // Impara's shared rules (ADR 0185, src/shared/lesson.ts): the node ids a flowchart declares (labels and edge text left
 // out), the lit piece added by the app only on known ids, the play order (a piece, its extras, its checks, the end),
-// progress and how each piece went, the model's answers checked and capped, the spoken commands and choices.
+// progress and how each piece went, the model's answers checked and capped, the spoken commands and choices; the
+// research (ADR 0188): facts with a source, the questions, the check's verdicts, a piece's beats and citations.
 import { describe, expect, it } from 'vitest';
 import {
-  diagramNodes, doneNodes, jsonIn, parseExtra, parseGrade, parseLessonCommand, parsePlan, parseSpokenChoice, pieceScores, playlist, progressOf, rootOf, summaryOf, withFocus,
-  type FocusColors, type Lesson, type LessonCheck, type LessonStep,
+  applyVerdicts, beatsOf, diagramNodes, doneNodes, factLines, jsonIn, parseExtra, parseFacts, parseGrade, parseLessonCommand, parsePlan, parseQuestions, parseSpokenChoice, parseStep, pieceScores, playlist, progressOf, rootOf, summaryOf, withFocus,
+  type FocusColors, type Lesson, type LessonCheck, type LessonFact, type LessonStep,
 } from '../../src/shared/lesson';
 
 const COLORS: FocusColors = { now: { fill: '#111111', stroke: '#222222', text: '#333333' }, done: { fill: '#444444', stroke: '#555555', text: '#666666' }, dim: { fill: '#777777', stroke: '#888888', text: '#999999' } };
@@ -116,6 +117,47 @@ describe('reading the model', () => {
     expect(jsonIn('Here:\n```json\n{"a":1}\n```')).toEqual({ a: 1 });
     expect(jsonIn('ok {"a":{"b":2}} done')).toEqual({ a: { b: 2 } });
     expect(() => jsonIn('nothing')).toThrow();
+  });
+});
+
+describe('the research (ADR 0188)', () => {
+  it('a web fact needs a web address; a files fact is from a file (with its path) or from the model', () => {
+    const web = parseFacts({ facts: [{ claim: 'A', url: 'https://example.org/a', quote: 'q' }, { claim: 'B', url: 'javascript:alert(1)' }, { claim: 'C' }, { claim: '', url: 'https://x.org' }] }, true);
+    expect(web).toEqual([{ id: 'f1', claim: 'A', from: 'web', ref: 'https://example.org/a', quote: 'q', check: 'unsure' }]);
+    const files = parseFacts({ facts: [{ claim: 'D', from: 'file', ref: 'src/a.ts:3' }, { claim: 'E', from: 'file' }, { claim: 'F', from: 'known', ref: 'ignored' }] }, false, 2);
+    expect(files.map(f => [f.id, f.from, f.ref])).toEqual([['f2', 'file', 'src/a.ts:3'], ['f3', 'known', ''], ['f4', 'known', '']]);
+    expect(parseFacts({ facts: Array.from({ length: 40 }, (_, i) => ({ claim: `c${i}`, from: 'known' })) }, false)).toHaveLength(24);
+  });
+  it('at most two questions, each with 2 to 4 options', () => {
+    expect(parseQuestions({ questions: [{ q: 'A?', options: ['x', 'y', 'z', 'w', 'v'] }, { q: 'B?', options: ['only'] }, { q: 'C?', options: ['a', 'b'] }, { q: 'D?', options: ['a', 'b'] }] }))
+      .toEqual([{ q: 'A?', options: ['x', 'y', 'z', 'w'] }]);
+    expect(parseQuestions({})).toEqual([]);
+  });
+  it('the check keeps, fixes, drops or leaves unsure; a fix keeps a web source only when it is an address', () => {
+    const facts: LessonFact[] = [
+      { id: 'f1', claim: 'a', from: 'web', ref: 'https://a.org', check: 'unsure' }, { id: 'f2', claim: 'b', from: 'web', ref: 'https://b.org', check: 'unsure' },
+      { id: 'f3', claim: 'c', from: 'file', ref: 'x.ts:1', check: 'unsure' }, { id: 'f4', claim: 'd', from: 'known', ref: '', check: 'unsure' }, { id: 'f5', claim: 'e', from: 'web', ref: 'https://e.org', check: 'unsure' },
+    ];
+    const out = applyVerdicts(facts, { verdicts: [{ id: 'f1', verdict: 'ok' }, { id: 'f2', verdict: 'wrong', fix: 'b2', ref: 'not a url' }, { id: 'f3', verdict: 'wrong', fix: 'c2', ref: 'x.ts:9' }, { id: 'f4', verdict: 'wrong' }, { id: 'f9', verdict: 'ok' }] });
+    expect(out.dropped).toBe(1);
+    expect(out.facts.map(f => [f.id, f.check, f.claim, f.ref])).toEqual([['f1', 'ok', 'a', 'https://a.org'], ['f2', 'fixed', 'b2', 'https://b.org'], ['f3', 'fixed', 'c2', 'x.ts:9'], ['f5', 'unsure', 'e', 'https://e.org']]);
+    expect(factLines(out.facts.slice(0, 2))).toBe('f1 [verified; https://a.org] a\nf2 [verified; https://b.org] b2');
+    expect(factLines([out.facts[3]!])).toContain('NOT CONFIRMED');
+  });
+  it('a piece\'s beats name known nodes and arrows; its say is their sentences; its citations only known facts', () => {
+    const s = parseStep({ title: 'T', text: 'x', cites: ['f1', 'f9', 'f1'], beats: [
+      { say: 'Uno.', focus: ['a', 'zz'], note: 'qui' }, { say: 'Due.', focus: ['b'], flow: { from: 'a', to: 'b' } }, { say: '' }, { say: 'Tre.', flow: { from: 'a', to: 'nope' } },
+    ] }, ['a', 'b'], 'p1', ['f1', 'f2']);
+    expect(s.say).toBe('Uno. Due. Tre.');
+    expect(s.beats).toEqual([{ say: 'Uno.', focus: ['a'], note: 'qui' }, { say: 'Due.', focus: ['b'], flow: { from: 'a', to: 'b' } }, { say: 'Tre.', focus: [] }]);
+    expect(s.focus).toEqual(['a', 'b']);
+    expect(s.cites).toEqual(['f1']);
+    expect(() => parseStep({ title: 'T', beats: [] }, ['a'], 'p2')).toThrow(/say/);
+  });
+  it('a piece without beats plays its sentences one by one, the note on the first', () => {
+    expect(beatsOf({ say: 'Prima frase. Seconda! E la terza…', focus: ['a'], note: 'n' })).toEqual([
+      { say: 'Prima frase.', focus: ['a'], note: 'n' }, { say: 'Seconda!', focus: ['a'] }, { say: 'E la terza…', focus: ['a'] }]);
+    expect(beatsOf({ say: 'Senza punto', focus: [] })).toEqual([{ say: 'Senza punto', focus: [] }]);
   });
 });
 

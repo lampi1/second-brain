@@ -1620,6 +1620,8 @@ export interface InvokeMap {
   'impara:answer': [{ id: string; checkId: string; choice: number; confidence?: LessonConfidence }, Lesson];
   'impara:explain': [{ id: string; text: string }, Lesson];
   'impara:retry': [{ id: string }, Lesson];
+  /** the answers to the questions asked before the lesson (ADR 0188); '' = skipped */
+  'impara:clarify': [{ id: string; answers: string[] }, Lesson];
   'impara:remove': [{ id: string }, void];
   'orchestrator:held': [void, HeldNewsState];
   /** the user opened a held news item's chat from the list: that chat's items are read, never wake the Orchestrator (#123) */
@@ -1785,7 +1787,7 @@ export const INVOKE_CHANNELS = [
   'suggest:get', 'suggest:cancel', 'suggest:state',
   'voice:state', 'voice:prepare', 'voice:listen', 'voice:audio', 'voice:commit', 'voice:speak', 'voice:cancelSpeech',
   'rec:state', 'rec:arm', 'rec:start', 'rec:chunk', 'rec:stop', 'rec:transcribe', 'rec:rename', 'rec:remove', 'rec:transcript', 'rec:find', 'rec:readFound', 'rec:open',
-  'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:remove',
+  'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:clarify', 'impara:remove',
   'orchestrator:held', 'orchestrator:heldSeen',
   'cloud:list', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];

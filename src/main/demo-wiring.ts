@@ -53,6 +53,8 @@ import { RecordingStore } from './recordings/store';
 import { LessonStore } from './learn/store';
 import { LearnService } from './learn/service';
 import { demoRun, demoTeach, seedDemoLessons } from './learn/demo';
+import { appGuide, teacherOption } from './learn/sources';
+import { engineInfos } from './engines/registry';
 import { demoCloud } from './cloud/demo';
 import fs from 'node:fs';
 import { createAgentCatalog } from './wiring';
@@ -206,8 +208,11 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
   // Impara (ADR 0185): the lessons are written by hand (learn/demo.ts), about the real PR #251
   const lessons = new LessonStore(path.join(ctx.userData, 'learn'));
-  seedDemoLessons(lessons, now());
+  const appRoot = fs.existsSync(path.join(app.getAppPath(), 'src')) ? app.getAppPath() : null;
+  seedDemoLessons(lessons, now(), appRoot);
   const learn = new LearnService({ store: lessons, lang: uiLang, run: demoRun, now, teach: demoTeach, cannotTeach: () => null,
+    teachers: () => engineInfos().filter(e => e.kind !== 'api' && e.caps.tools).map(e => teacherOption(e, [])), webOk: () => true, guide: appGuide,
+    places: () => ({ brain: demoBrainRoot, appSource: appRoot }),
     devops: () => { const t = tasks.get(); return { prs: t.prs, repoDirs: t.repoDirs }; },
     changed: (state, lesson) => ctx.emitter.emit('impara:changed', { state, ...(lesson ? { lesson } : {}) }) });
   attachAppTools(mcp, { personal, recordings, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), cloud }, source, true);
