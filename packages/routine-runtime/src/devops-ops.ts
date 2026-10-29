@@ -221,7 +221,7 @@ export async function executeExtended(ctx: ExtendedContext, write: Exclude<StepW
             const created = await t.call('POST', `${org}/${encodeURIComponent(project)}/_apis/wit/workitems/$Test%20Case?${API}`, [
               { op: 'add', path: '/fields/System.Title', value: title },
               ...(steps.length ? [{ op: 'add', path: '/fields/Microsoft.VSTS.TCM.Steps', value: xml }] : []),
-              ...(write.description ? [{ op: 'add', path: '/fields/System.Description', value: commentHtml(masker.mask(write.description)) }] : []),
+              ...(write.description ? [{ op: 'add', path: '/fields/System.Description', value: commentHtml(masker.mask(write.description), grant.organization) }] : []),
               ...(write.priority !== undefined ? [{ op: 'add', path: '/fields/Microsoft.VSTS.Common.Priority', value: write.priority }] : []),
               ...(write.tags?.length ? [{ op: 'add', path: '/fields/System.Tags', value: write.tags.join('; ') }] : []),
             ], 'application/json-patch+json');
@@ -564,7 +564,7 @@ async function downgrade(ctx: ExtendedContext, reason: string, settle: (plan: Pl
     async once(t) {
       const tags = mentions.map(id => mentionHtml(id, id === ctx.contact?.id ? ctx.contact.name : undefined)).join(' ');
       const r = await t.call('POST', `https://dev.azure.com/${encodeURIComponent(ctx.grant.organization)}/${encodeURIComponent(ctx.project)}/_apis/wit/workItems/${ctx.workItem}/comments?api-version=7.1-preview.4`,
-        { text: signedHtml(`${tags ? `${tags}<br/>` : ''}${commentHtml(ctx.masker.mask(text))}<br/><small>${html(marker)}</small>`, ctx.signature) });
+        { text: signedHtml(`${tags ? `${tags}<br/>` : ''}${commentHtml(ctx.masker.mask(text), ctx.grant.organization)}<br/><small>${html(marker)}</small>`, ctx.signature) });
       return typeof r.id === 'number' ? { commentId: r.id } : undefined;
     },
     async verify() {

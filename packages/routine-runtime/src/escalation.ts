@@ -33,7 +33,7 @@ export const reminderText = (runId: string, stepId: string): string =>
   `Promemoria: la routine (run ${runId}, passaggio «${stepId}») aspetta ancora una tua risposta al commento qui sopra. Non ne scriverò altri.`;
 
 /** Comment HTML: the mention first, then the text, the step's signature last. */
-export const escalationHtml = (contact: RoutineEscalation, text: string, signature?: string): string => signedHtml(`${mentionHtml(contact.contact, contact.contactName)} ${commentHtml(text)}`, signature);
+export const escalationHtml = (contact: RoutineEscalation, text: string, signature: string | undefined, organization: string): string => signedHtml(`${mentionHtml(contact.contact, contact.contactName)} ${commentHtml(text, organization)}`, signature);
 
 /**
  * Mirrors the watchdog's reply rule: comments after ours, not ours, oldest first; the first by the contact with text is
@@ -73,7 +73,7 @@ export async function writeEscalation(io: EscalationIo, escalation: RunEscalatio
   // a crash after POST: our comment is the newest one by us quoting this run and step
   const marker = `(run ${run.runId}): il passaggio «${escalation.stepId}»`;
   const existing = (await io.client.comments(io.organization, io.project, io.workItem)).find(c => c.createdAt >= escalation.at - 60_000 && c.text.includes(marker));
-  const commentId = existing?.id ?? await io.client.comment(io.organization, io.project, io.workItem, escalationHtml(io.contact, text, io.signature));
+  const commentId = existing?.id ?? await io.client.comment(io.organization, io.project, io.workItem, escalationHtml(io.contact, text, io.signature, io.organization));
   const next: RunEscalation = { ...escalation, state: 'waiting', commentId, at: io.now() };
   io.save(next);
   return next;
@@ -86,7 +86,7 @@ export async function pollEscalation(io: EscalationIo, escalation: RunEscalation
   if (reminderDue(current, reminderMs, io.now())) {
     current = { ...current, reminder: current.reminder ?? { state: 'writing' } };
     io.save(current);
-    const commentId = await io.client.comment(io.organization, io.project, io.workItem, escalationHtml(io.contact, reminderText(io.runId, current.stepId), io.signature));
+    const commentId = await io.client.comment(io.organization, io.project, io.workItem, escalationHtml(io.contact, reminderText(io.runId, current.stepId), io.signature, io.organization));
     current = { ...current, reminder: { state: 'sent', commentId } };
     io.save(current);
   }

@@ -9,6 +9,7 @@ import { checkedAuthorization } from './token';
 import type { RoutineDevOps } from './format';
 import { WRITE_CATEGORY, type StepWrite } from './step-result';
 import type { Masker } from './mask';
+import { markdownHtml } from './devops-host/devops-content';
 import { StaleAttempt, type LedgerEntry, type RunStore } from './run-store';
 import { executeExtended, imagesHtml, mentionTags, refusal, tracker, uploadImages, type Deployments, type ExtendedContext, type ExtendedOutcome, type Plan } from './devops-ops';
 
@@ -116,8 +117,9 @@ export function createDevOpsClient(options: { authorization: TokenProvider; requ
 export type DevOpsClient = ReturnType<typeof createDevOpsClient>;
 
 export const html = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-/** Plain text → comment HTML (paragraphs and line breaks only). */
-export const commentHtml = (text: string): string => html(text).replace(/\r?\n/g, '<br/>');
+/** Agent or host text → work item HTML (DevOps stores those comments as HTML: raw Markdown would show its ** and [](…)):
+ *  escaped, with **bold**, `- ` lists, `#` headings and links to the organization rendered. Never throws. */
+export const commentHtml = (text: string, organization: string): string => markdownHtml(text, organization);
 export const mentionHtml = (identity: string, name?: string): string => `<a href="#" data-vss-mention="version:2.0,${identity}">@${html(name ?? identity)}</a>`;
 /** The visible marker that makes a comment findable after a crash (no secret, no prompt text). */
 export const runMarker = (runId: string, key: string): string => `routine run ${runId} · ${key.slice(0, 12)}`;
@@ -312,7 +314,7 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
     const once = async (): Promise<'ok' | 'definite' | 'unknown'> => {
       try {
         if (write.op === 'comment') {
-          const commentId = await client.comment(grant.organization, project!, workItem, signedHtml(`${before}${commentHtml(masker.mask(write.text))}${after}<br/><small>${html(marker)}</small>`, context.signature));
+          const commentId = await client.comment(grant.organization, project!, workItem, signedHtml(`${before}${commentHtml(masker.mask(write.text), grant.organization)}${after}<br/><small>${html(marker)}</small>`, context.signature));
           save('done', { commentId }); return 'ok';
         }
         let ops: { op: 'add' | 'replace' | 'remove'; path: string; value?: unknown }[];
