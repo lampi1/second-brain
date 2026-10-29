@@ -134,15 +134,42 @@ describe('the move from agent-runs.json', () => {
     expect(fs.existsSync(path.join(dir, 'app.db'))).toBe(false);
   });
 
-  it('agent-runs.json written beside a database that holds runs (an older release after a rollback) is kept, not read', () => {
+  it('agent-runs.json written beside a database that holds runs (a fallback session) is merged: new ids added, then moved aside', () => {
     const dir = tmp(), s = new AgentRunStore(dir), run = s.start(start());
     s.close();
-    fs.writeFileSync(path.join(dir, 'agent-runs.json'), JSON.stringify({ version: 1, runs: [] }));
-    const { warn } = quiet();
+    closeAppDbs();
+    // a session on the JSON fallback recorded the same run and two new ones
+    const json = new AgentRunStore(tmp(), { db: false });
+    const a = json.start(start({ chatId: 'fa', startedAt: 5000 }), false), b = json.start(start({ chatId: 'fb', startedAt: 6000 }), false);
+    endRun(a, 'completed', 5500);
+    const body = JSON.stringify({ version: 1, runs: [{ ...run, goal: 'changed in the JSON' }, a, b] });
+    fs.writeFileSync(path.join(dir, 'agent-runs.json'), body);
+    const { info } = quiet();
     const again = new AgentRunStore(dir);
-    expect(again.list()).toEqual([run]);
-    expect(warn).toHaveBeenCalledWith('agents', 'agent-runs.json found beside app.db', expect.anything());
-    expect(fs.readFileSync(path.join(dir, 'agent-runs.json'), 'utf8')).toBe('{"version":1,"runs":[]}');
+    expect(again.backend).toBe('sqlite');
+    expect(again.list().map(r => r.runId)).toEqual([run.runId, a.runId, b.runId]);
+    expect(again.get(run.runId)!.goal).toBe(run.goal); // app.db's own copy wins
+    expect(fs.existsSync(path.join(dir, 'agent-runs.json'))).toBe(false);
+    expect(migrated(dir)).toHaveLength(1);
+    expect(fs.readFileSync(path.join(dir, migrated(dir)[0]!), 'utf8')).toBe(body);
+    expect(info).toHaveBeenCalledWith('agents', 'agent runs merged from agent-runs.json into app.db', expect.objectContaining({ data: expect.objectContaining({ merged: 2, alreadyThere: 1 }) }));
+    again.close();
+    closeAppDbs();
+    expect(new AgentRunStore(dir).list()).toHaveLength(3); // in app.db, not only in memory
+  });
+
+  it('a crash between the JSON rename and the import commit: the empty database reads the newest migrated copy', () => {
+    const dir = tmp(), { runs } = seedJson(dir, 5);
+    // what the crash leaves: the JSON already renamed, app.db created with no runs
+    fs.renameSync(path.join(dir, 'agent-runs.json'), path.join(dir, 'agent-runs.json.migrated-2026-10-01T00-00-00-000Z'));
+    new RunsDb(openAppDb(path.join(dir, 'app.db')).db, path.join(dir, 'app.db')).close();
+    closeAppDbs();
+    const { info } = quiet();
+    const s = new AgentRunStore(dir);
+    expect(s.backend).toBe('sqlite');
+    expect(s.list()).toEqual(runs);
+    expect(info).toHaveBeenCalledWith('agents', 'agent runs read again from a migrated copy', expect.anything());
+    expect(migrated(dir)).toEqual(['agent-runs.json.migrated-2026-10-01T00-00-00-000Z']); // the copy stays a copy
   });
 });
 

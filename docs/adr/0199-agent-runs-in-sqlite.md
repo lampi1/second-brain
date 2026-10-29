@@ -40,7 +40,14 @@ refused (bad version, bad rollups) is left where it is and the store reports its
 **The fallback is the old store.** If the database cannot be opened (no `node:sqlite`, a lock, a schema from a newer
 release) or the import fails, `log.error` says why with a hint and the store keeps reading and writing `agent-runs.json`
 exactly as before; the move is tried again at the next start. `agent-runs.json` found beside a database that already
-holds runs (an older release ran after the move) is kept untouched and logged, not merged.
+holds runs (a session that fell back to the JSON, or an older release that ran after the move) is merged (review
+2026-10-29): the runs whose ids `app.db` lacks are added in one transaction (app.db's own copy of a run, its rollups and
+Flash's log win), then the file is renamed `agent-runs.json.migrated-<date>` like the first move, with the counts in the
+log (`merged`, `alreadyThere`). A file out of shape is left untouched and logged; a failed rename only means the next
+start reads it again and adds nothing twice (runs are matched by id).
+An empty database with no `agent-runs.json` reads the newest `agent-runs.json.migrated-*`, whether or not the database
+was just moved aside: the app may have stopped between the JSON's rename and the import's commit (the rename is undone
+on a failed commit, not on a crash).
 
 **A damaged database is moved aside, never deleted.** Only SQLite's own verdict counts (SQLITE_CORRUPT, SQLITE_NOTADB or
 a failed `quick_check`): the file and its `-wal`/`-shm` are renamed `app.db.corrupt-<date>`, a new database is created
@@ -64,6 +71,6 @@ measures it before the launch. The health log's `agentRunsKb` measures the store
 - `app.db` is larger than the JSON (about 9.7 MB for the same runs: pages and indexes).
 - `npm run rollback` to a release before this one starts with no runs (the JSON is renamed). To keep them, rename
   `agent-runs.json.migrated-<date>` back to `agent-runs.json` before starting the old release; back on this release,
-  that file is kept and the runs come from `app.db`.
+  the runs the old release added there are merged into `app.db` and the file goes aside again.
 - Later slices add their own areas (tables and migrations) to `app.db` through `app-db.ts`; a damaged file is moved
   aside whole, so each area needs its own way back (as the runs have the migrated JSON).

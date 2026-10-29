@@ -1,6 +1,6 @@
 // Role runs (AGENTS-DESIGN §1.2, §5): one record per chat started from a role, kept in userData/app.db (one row per run,
 // runs-db.ts, ADR 0199; agent-runs.json until then, moved in once at start and still the fallback when the database
-// cannot be used) after chats.json forgets the chat (60 closed chats). The pure lifecycle steps live here; ChatManager calls them on start,
+// cannot be used; runs a fallback session wrote there are merged in at the next start) after chats.json forgets the chat (60 closed chats). The pure lifecycle steps live here; ChatManager calls them on start,
 // end (completed / closed / stale), Brother's reopen, pending requests and settled turns. A run's receipts (what it did,
 // agents/receipts.ts, ADR 0130) are bounded there and read back here; ones out of shape are dropped, never the run.
 // The same file keeps Flash's answer outcomes (`flash`, agents/flash-outcomes.ts, ADR 0131: Flash records no run) and a
@@ -430,11 +430,15 @@ export class AgentRunStore {
           log.error('agents', 'agent runs in app.db unreadable', { cause: errText(e), hint: 'app.db is kept as it is; no new run is recorded until it is repaired or moved aside' });
           return true;
         }
-        if (fs.existsSync(this.file)) log.warn('agents', 'agent-runs.json found beside app.db', { hint: 'kept untouched and not read (written by an older release after the move?); the runs come from app.db' });
         this.db = db;
+        // agent-runs.json beside a database with runs: a session that fell back to the JSON (app.db not usable then)
+        // recorded runs there; the ones app.db lacks are merged in, then the file goes aside like the first move
+        if (fs.existsSync(this.file)) this.mergeJson(db);
         return true;
       }
-      const source = fs.existsSync(this.file) ? this.file : opened.aside ? latestMigrated(this.file) : null;
+      // an empty database and no agent-runs.json: the newest migrated copy, whether app.db was moved aside or the app
+      // stopped between the JSON's rename and the import's commit (the rename is undone on a failed commit, not on a crash)
+      const source = fs.existsSync(this.file) ? this.file : latestMigrated(this.file);
       // agent-runs.json that cannot be moved stays the store (fallback); a migrated copy that cannot be read is kept, the new database starts empty
       if (source && !this.importJson(db, source) && source === this.file) { db.close(); return false; }
       this.db = db;
@@ -494,6 +498,35 @@ export class AgentRunStore {
       hint: `the valid runs are in app.db; the original file is kept as ${path.basename(target)}` });
     log.info('agents', own ? 'agent runs moved to app.db' : 'agent runs read again from a migrated copy', { data: { runs: rows.length, rollups: s.rollups.length, kept: path.basename(target) } });
     return true;
+  }
+
+  /** agent-runs.json found beside an app.db that holds runs: the runs whose ids app.db lacks (written by a session that
+   *  fell back to the JSON) are added in one transaction, then the file is renamed to agent-runs.json.migrated-<date>
+   *  (kept, never deleted). Rollups and Flash's log stay app.db's. A file out of shape is left as it is. */
+  private mergeJson(db: RunsDb): void {
+    let s: RunsState;
+    try {
+      const raw = readLocal(this.file) as RawRuns | undefined;
+      if (raw === undefined) return;
+      s = readState(raw);
+    } catch (e) {
+      log.warn('agents', 'agent-runs.json beside app.db not readable', { cause: errText(e), hint: 'kept untouched and not read; the runs come from app.db' });
+      return;
+    }
+    const fresh = s.runs.filter(r => !this.runs.has(r.runId));
+    const rows = fresh.map(r => rowOf(r, JSON.stringify(r)));
+    try { db.write({ upsert: rows, remove: [], meta: new Map() }); } catch (e) {
+      log.error('agents', 'agent runs from agent-runs.json not merged into app.db', { cause: errText(e), hint: 'agent-runs.json is kept untouched; the merge is tried again at the next start' });
+      return;
+    }
+    for (const [i, r] of fresh.entries()) { this.runs.set(r.runId, r); this.written.set(r.runId, { json: rows[i]!.json, bytes: Buffer.byteLength(rows[i]!.json, 'utf8') }); }
+    if (fresh.length) this.rev++;
+    const target = migratedName(this.file);
+    try { renameWithRetry(this.file, target); } catch (e) {
+      log.warn('agents', 'agent-runs.json not moved aside after the merge', { cause: errText(e), data: { merged: fresh.length }, hint: 'the next start reads it again and adds nothing twice (runs are matched by id)' });
+      return;
+    }
+    log.info('agents', 'agent runs merged from agent-runs.json into app.db', { data: { merged: fresh.length, alreadyThere: s.runs.length - fresh.length, skipped: s.skipped, kept: path.basename(target) } });
   }
 
   /** Releases the database connection (the quit, tests: on Windows an open file cannot be removed); a later save opens it again. */
