@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- Impara researches before it teaches (ADR 0188): a web run that sees only the ask and a files run over the material,
+  the brain and the app; a second model verifies each fact; at most two questions first; pieces cite the facts and
+  «Fonti» lists every web page and PC file found. «Chi spiega» picks engine, model and effort. The board is animated
+  sentence by sentence and the lesson opens full screen.
 - Smooth at the end of the day (ADR 0187): closing, auto-closing or pruning a chat now ends the tools and connector
   processes it started; connectors and background brain tools run at below-normal priority; closed chats' transcripts
   leave the window's memory; long transcripts show their tail with «Mostra precedenti»; an «app health» line in the
