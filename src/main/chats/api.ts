@@ -203,7 +203,7 @@ export class ApiSession implements HarnessSession {
     const context = usage.input + usage.cacheRead + usage.cacheWrite + usage.output;
     const turnTokens = tokenUsage(usage.input, usage.cacheRead, usage.cacheWrite, usage.output);
     this.sink.changed({ turnCostUsd: cost ?? 0, costKnown: cost !== null, liveCostUsd: 0, ...(context ? { contextTokens: context, contextEstimated: false } : {}), ...(turnTokens ? { turnTokens } : {}) });
-    log.info('chats', 'api turn done', { chat: this.opts.chatId, data: { host: this.host, ms: Date.now() - t0, usage, costUsd: cost, stop: turn.stop, error: error ? sysEn(error.code, error.params) : null } });
+    log.info('chats', 'api turn done', { chat: this.opts.chatId, op: 'chat', data: { host: this.host, ms: Date.now() - t0, usage, costUsd: cost, stop: turn.stop, error: error ? sysEn(error.code, error.params) : null } });
     this.turn = null;
     if (this.queue.length) this.drain();
     else this.setState('idle');

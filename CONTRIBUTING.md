@@ -1,7 +1,7 @@
 # Contributing to second-brain
 
 Thanks for looking around. This guide gets you from a fresh clone to a merged change. AI agents working on the repo
-follow [AGENTS.md](AGENTS.md), which has the same rules in a denser form.
+follow [AGENTS.md](AGENTS.md), a short map of the same rules; their full text is in [docs/agents/](docs/agents/rules.md).
 
 ## Set up
 
@@ -51,7 +51,8 @@ shows whether the hooks are on and the config is readable.
 4. Look at the change in the running app (`SB_HIDDEN=1 npm run dev`, a screenshot): a green check on a broken-looking
    screen is not done.
 5. Push your branch (the pre-push guard scans every new commit) and open a pull request with the template filled in. After a merge, `npm run check` (everything, including the whole e2e
-   suite) runs on `main`. Run heavy suites one at a time: two e2e runs on one machine make each other flaky.
+   suite) runs on `main`; its e2e fails only on tests not listed in `test/e2e/known-red.json`, the ones already red on
+   `main` (ADR 0198). Run heavy suites one at a time: two e2e runs on one machine make each other flaky.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org): `feat(chats): …`, `fix(browser): …`,
 `test(e2e): …`, `docs: …`, in English, the subject saying what changes for the user.

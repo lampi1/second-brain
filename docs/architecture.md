@@ -34,6 +34,11 @@
         · node brain tools (chats.mjs, cost.mjs, …) run with Electron as Node
 ```
 
+The four files nearly every change touched are split by area (ADR 0200): the contract's shapes and invoke channels in
+`shared/contract/*.ts` behind `shared/contract.ts`; the IPC handlers in `main/ipc-handlers/*.ts`, registered by
+`index.ts`; `wiring.ts` with `wiring-types.ts`, `wiring-shared.ts`, `wiring-builders.ts`; `ChatManager` as a chain of
+layer classes in `chats/manager-*.ts` under `chats/manager.ts` (layout: `docs/agents/layout.md`).
+
 ## Key flows
 
 - **A chat turn**: renderer `chat:send` → ChatManager → session `send()` writes a stream-json user line → CLI streams
@@ -81,6 +86,12 @@
   (`agents/run-estimates.ts`) gives the strips each run's estimate made before it started, its actual once ended, and
   `agents/estimate-accuracy.ts`'s weekly backtest (`EstimateAccuracy`, also for Classificatori);
   `lib/run-estimates.ts` reads it once for every strip, `RunEstimate.tsx` draws the chip, its "?" and the Orchestrator's plan.
+- **The user's corrections, a kind by examples, PPI** (ADR 0197): `chat:send` → `brain/user-corrections.ts` classifies
+  the user's message (tag, after-report, semantic detector or the hook's regex; counts per day, never the text) →
+  `/api/quality` → Qualità's «Errori che hai dovuto trovare tu». `brainmodel/kind-model.ts` trains a nearest-centroid
+  kind classifier on the local e5 embeddings of verified runs when Classificatori asks (`kind-centroids.ts`, word-rule
+  labels, held-out test). `agents/judge-agreement.ts` gives each role's all-versions metrics a prediction-powered success
+  estimate and the Sentinel's agreement with the user (`shared/ppi.ts`).
 - **A cloud agent** (ADR 0080): the Orchestrator's `app_create_chat where:'cloud'` →
   CloudService checks readiness (key / sign-in, GitHub remote, pushed branch, Cursor budget) → the vendor's provider
   starts it (`cloud/cursor.ts` REST, `codex.ts` / `claude.ts` CLIs) → `cloud:changed` → a cloud strip
@@ -103,9 +114,26 @@
   researches with the app's best choice (strongest model, 5 $ cap, a data pack; `brainmodel/research.ts`, ADR 0132).
   Its findings are cards in Memoria → Proposte: brain changes and what to forget, applied through the change log on
   approval; app ideas and bugs as «Apri issue» cards that open the issue on GitHub when approved (gh, else the
-  pre-filled new-issue page; `brainmodel/issue-open.ts`); app ideas also land in Idee on the AI's side. The end is a
-  notice (`maintenance:done`). Nothing else proposes by itself: no timer, the Battito makes no idea cards, and the
-  skill candidates and the Battito's rules wait in the deck until the next click (`proposals/service.ts` heldBack). Memoria's statistics (`brainmodel/memory-stats.ts`, `BrainModelState.memoryStats`) are counts over the
+  pre-filled new-issue page; `brainmodel/issue-open.ts`); app ideas also land in Idee on the AI's side. Brain-file
+  findings (skills without a role, rules for every role, what to forget) are held and, when the research ends, gathered
+  into one candidate brain (`brainmodel/research-candidate.ts`, ADR 0195): a copy of the touched files under
+  `userData/brain-candidates/<id>/`, zero-token checks, the recorded-task replay only when an anonymized holdout set
+  exists and the budget left covers its estimate, one card with a diff per file, applied as ONE `BrainChange` (one
+  «Annulla»), refused when a brain file changed since. While budget is left the research may also propose one revised
+  text for the role with the most verified failures or corrections (`brainmodel/role-reflect.ts`,
+  `maintenance_role_trial`): approving it starts a trial version (catalog `approveTrial`). The end is a
+  notice (`maintenance:done`). Every maintenance write is itemized (ADR 0194, `brainmodel/item-delta.ts`): `ChangeLog.apply`
+  refuses a write to a brain `.md` file that drops lines it does not list as removed with a reason. The click also runs
+  a zero-token brain lint (`brainmodel/brain-lint.ts`: orphans, broken links, concepts without a note, facts and skill
+  lines citing files that are gone) whose findings are Proposte cards; the launch memory skips a fact citing a missing
+  file. Each brain proposal carries a «riuscito se…» criterion (`brainmodel/success-check.ts`), checked a week after it
+  was applied (start, hourly, click): worse → a card «Questo cambio non ha aiutato: lo annullo?». Nothing else proposes by itself: no timer, the Battito makes no idea cards, and the
+  skill candidates and the Battito's rules wait in the deck until the next click (`proposals/service.ts` heldBack).
+  Every Proposte decision goes to a ledger (`proposals/ledger.ts`, userData `proposal-decisions.json`); a card of an
+  allow-listed group (skill, rule, fact, script/query, learning) whose recent decisions are near-always yes (90% Wilson
+  lower bound ≥ 0.80 over ≥ 10, i.e. 11 yes in a row, an undo counting as no) is applied by itself through its source's own decide and listed
+  in «Applicate da sole» with Annulla; roles, settings, permissions, issues, production and outside texts are always
+  asked, and every card left says why (`proposals/policy.ts`, ADR 0193). Memoria's statistics (`brainmodel/memory-stats.ts`, `BrainModelState.memoryStats`) are counts over the
   memory files, `ai-errors.md` and the recorded agent runs: zero tokens, nothing written.
 - **Live brain**: `fs.watch` on the brain folder + periodic `chats.mjs list` → diffed into `FeedEvent`s →
   `feed:events`; urgent ones also as a Windows toast when the window is not focused.
@@ -126,7 +154,21 @@
   main decrypts a key when its engine needs it. This is separate from unencrypted API conversation history.
 - Agent profiles, frozen chat owners and their instructions, and local setup preferences are private profile data
   (`agents.json`, `chats.json`, `setup.json`).
+- The agent runs (one record per role chat, the rollups of pruned runs, Flash's outcomes) are in `userData/app.db`, a
+  SQLite database on `node:sqlite` (WAL, one row per run, only changed runs written; `main/app-db.ts`,
+  `main/agents/runs-db.ts`, ADR 0199). At the first start of a release with it, `agent-runs.json` is imported in one
+  transaction and kept as `agent-runs.json.migrated-<date>`; when the database cannot be used the store stays on
+  `agent-runs.json` (the fallback). A damaged `app.db` is renamed `app.db.corrupt-<date>`, never deleted.
+  `npm run levels` reads either, read only.
   Browser sign-in/password hand-offs follow their explicit user-action flow; profile backups must be treated as private.
+- Logs (ADR 0192): the technical log `userData/logs/app-YYYY-MM-DD.jsonl` (`main/log.ts`, 14 days; lines about a chat
+  carry its agent run as `run`, and `op`/`step` named after the OpenTelemetry GenAI operations: `npm run logs -- --run <id>`),
+  the Log page's journal `userData/activity/log-*.jsonl` (7 days) and the daily digest `userData/logs/digest-YYYY-MM.jsonl`
+  (`main/log-digest.ts`, 90 days: per day levels, warn/error groups, stalls, interface errors, journal kinds; written
+  for each finished day before its raw files may go). The page's uncaught errors, unhandled rejections and the render
+  errors of each page's `ErrorBoundary` («Questa pagina ha avuto un errore», «Ricarica la pagina») reach the log as
+  scope `renderer` through `log:renderer` (`main/renderer-errors.ts`, rate-limited). The maintenance pack reads the
+  period since the previous pass from them (sections journal, perf, ui-errors, digest; `brainmodel/research-pack-logs.ts`).
 - Every record has an `id`; owner fields can be added for the team horizon (`VISION.md`) without breaking shapes.
 
 ## Instances and processes

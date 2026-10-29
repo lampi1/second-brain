@@ -5,19 +5,22 @@
 // the content and any script or query code (expandable), who proposed it, in which chat or run,
 // when, and the evidence, with links to the chat and the file. Filter chips by group with their counts; a done state
 // with the session's counts and an empty state. Decisions go to main (proposals:decide), which checks them again and
-// runs them through their own source. Rendered by MemoryPage.tsx (the Proposte tab).
+// runs them through their own source. Each card says why it is still asked («Te la chiedo perché: …», never a guessed
+// answer); under the deck, «Applicate da sole» lists the cards the app applied by itself with Annulla and the cards
+// saved this week (ADR 0193). Rendered by MemoryPage.tsx (the Proposte tab).
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import type { Proposal, ProposalDecision, ProposalGroup, ProposalKeep } from '@shared/proposals';
+import type { Proposal, ProposalAutoApplied, ProposalDecision, ProposalGroup, ProposalKeep } from '@shared/proposals';
 import { characterOf } from '@shared/characters';
 import { roleName } from '@shared/roles';
 import { t, locale } from '../../i18n';
 import { renderMarkdown } from '../../lib/markdown';
-import { canUndo, decide, dismissRefusal, groupCounts, openCards, refreshProposals, tally, undoLast, useDeck } from '../../lib/proposals';
-import { cardWords } from '../../lib/proposal-ask';
+import { canUndo, decide, dismissRefusal, groupCounts, openCards, refreshProposals, reportShown, tally, undoAuto, undoLast, useDeck } from '../../lib/proposals';
+import { cardWords, whyText } from '../../lib/proposal-ask';
 import { go, openChatRef, openFileViewer } from '../../actions';
 import { app } from '../../store/store';
 import { AgentAvatar } from '../AgentAvatar';
 import { LearningEvidenceInspector } from './LearningEvidence';
+import { CandidateBody, ProposalDiffs } from './ProposalDiffs';
 import '../../styles/proposals.css';
 
 const reduced = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -151,6 +154,7 @@ export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalC
   const lead = words.lead || draftLead;
   const html = useMemo(() => (body && !words.hideBody ? renderMarkdown(body) : ''), [body, words.hideBody]);
   const code = c.code ?? [];
+  const asked = whyText(c.why);
   return <article ref={el} className={`pd-card pd-g-${c.group}${top ? ' pd-top' : ''}${drag ? ' pd-dragging' : ''}${leaving ? ' pd-leaving' : ''}${returning && top ? ` pd-return-${returning}` : ''}${open ? ' pd-open' : ''}${shake ? ` pd-shake-${shake % 2}` : ''}`}
     style={{ ...style, zIndex: 10 - depth, ['--k' as string]: String(k) }} aria-hidden={top ? undefined : true}
     data-testid={top ? 'pd-card-top' : undefined} data-card={c.id} data-group={c.group} data-applied={c.applied || undefined}
@@ -165,12 +169,15 @@ export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalC
       <time className="pd-when" dateTime={c.provenance.at}>{shortWhen(c.provenance.at)}</time>
     </header>
     <h3 className="pd-title" data-testid={top ? 'pd-question' : undefined}>{words.question}</h3>
+    {asked && <p className="pd-asked" data-testid={top ? 'pd-asked' : undefined}><span>{t('proposals.why.lead')}</span> {asked}</p>}
     <div className={`pd-body${open ? ' pd-scroll' : ''}`}>
       {code.map((x, i) => <figure key={`${i}:${x.file}`} className="pd-code" data-testid={top ? 'pd-code' : undefined}>
         <figcaption><span className="pd-label">{t('proposals.code')}</span><code>{x.file}</code></figcaption>
         <pre className="pd-scroll" data-lang={x.lang}><code>{x.text}</code></pre>
       </figure>)}
       {c.ask.kind === 'research' && <ResearchBody a={c.ask} top={top} />}
+      {c.ask.kind === 'candidate' && <CandidateBody a={c.ask} top={top} />}
+      {top && c.diffs && c.diffs.length > 0 && <ProposalDiffs diffs={c.diffs} role={c.ask.kind === 'research' && !!c.ask.trial} />}
       {lead && <p className="pd-lead">{lead}</p>}
       {html && <div className={`pd-why${c.ask.kind === 'research' ? ' pd-exact' : ''}`}>{words.bodyLabel && <span className="pd-label">{words.bodyLabel}</span>}<div className="md pd-md" dangerouslySetInnerHTML={{ __html: html }} /></div>}
       {(words.scope || words.advice) && <p className="pd-scope">{[words.scope, words.advice].filter(Boolean).join(' ')}</p>}
@@ -180,7 +187,7 @@ export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalC
       {open && top && root && c.evidenceRuns?.map(id => <LearningEvidenceInspector key={id} root={root} runId={id} />)}
       {open && top && c.source === 'memory' && <label className="pd-note">{t('proposals.note')}<input value={note} maxLength={900} onChange={e => setNote(e.target.value)} data-testid="pd-note" /></label>}
     </div>
-    {(html.length > 220 || code.length > 0 || c.ask.kind === 'research' || c.facts.length > 0 || evidence.some(e => e !== quote) || files.length > 0 || c.readFirst || c.source === 'memory') && top &&
+    {(html.length > 220 || code.length > 0 || c.ask.kind === 'research' || c.ask.kind === 'candidate' || c.facts.length > 0 || evidence.some(e => e !== quote) || files.length > 0 || c.readFirst || c.source === 'memory') && top &&
       <button type="button" className="pd-more" aria-expanded={open} data-testid="pd-more" onClick={() => { setOpen(o => !o); setRead(true); }}>
         {open ? t('proposals.less') : c.readFirst && !read ? t('proposals.readFirstOpen') : t('proposals.more')}
       </button>}
@@ -207,6 +214,28 @@ export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalC
     </footer>
   </article>;
 });
+
+/** «Applicate da sole» (ADR 0193): the cards the app applied by itself lately, each with Annulla while it still works,
+ *  and how many cards it spared the user this week. */
+function AutoApplied({ items, saved }: { items: readonly ProposalAutoApplied[]; saved: number }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const undo = async (x: ProposalAutoApplied) => { setBusy(x.id); try { await undoAuto(x.id, x.title); } finally { setBusy(null); } };
+  return <section className="pd-auto" aria-labelledby="pd-auto-title" data-testid="pd-auto">
+    <header className="pd-auto-head">
+      <h3 id="pd-auto-title">{t('proposals.auto.title')}</h3>
+      <span className="pd-auto-saved" data-testid="pd-auto-saved">{t('proposals.auto.saved', { n: saved })}</span>
+    </header>
+    <p className="pd-auto-lead">{items.length ? t('proposals.auto.lead') : t('proposals.auto.none')}</p>
+    {items.length > 0 && <ul className="pd-auto-list">{items.map(x => <li key={x.id} className={`pd-g-${x.group}${x.undoneAt ? ' pd-auto-off' : ''}`} data-testid="pd-auto-item">
+      <span className="pd-kind">{t(`proposals.kind.${x.group}`)}</span>
+      <b title={x.title}>{x.title}</b>
+      <time dateTime={new Date(x.at).toISOString()}>{shortWhen(new Date(x.at).toISOString())}</time>
+      {x.undoneAt ? <span className="pd-auto-state">{t('proposals.auto.undone')}</span>
+        : x.canUndo ? <button type="button" className="btn btn-s" disabled={busy !== null} aria-label={`${t('proposals.auto.undo')}: ${x.title}`} data-testid="pd-auto-undo" onClick={() => void undo(x)}>{t('proposals.auto.undo')}</button>
+          : <span className="pd-auto-state">{t('proposals.auto.cannot')}</span>}
+    </li>)}</ul>}
+  </section>;
+}
 
 function Confetti() {
   return <div className="pd-confetti" aria-hidden="true">{Array.from({ length: 14 }, (_, i) => <i key={i} style={{ ['--i' as string]: String(i) }} />)}</div>;
@@ -245,6 +274,9 @@ export function ProposalsDeck() {
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   });
+  // the card on top is reported once: the ledger keeps how long the decision took (ADR 0193)
+  const topId = top?.id;
+  useEffect(() => { if (topId) reportShown(topId); }, [topId]);
   const onDecide = (card: Proposal) => (d: ProposalDecision, note?: string, keep?: ProposalKeep) => { setReturning(null); decide(card, d, note, keep); };
 
   if (!s.data && s.loading) return <section className="pd pd-center" data-testid="proposals-deck"><p className="pd-muted">{t('proposals.loading')}</p></section>;
@@ -307,5 +339,6 @@ export function ProposalsDeck() {
             <h3>{t('proposals.empty.title')}</h3>
             <p className="pd-muted">{t('proposals.empty.lead')}</p>
           </div>}
+    {s.data && <AutoApplied items={s.data.auto ?? []} saved={s.data.saved ?? 0} />}
   </section>;
 }

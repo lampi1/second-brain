@@ -9,6 +9,7 @@ import type { ChatSummary, EventChannel, EventMap, FeedEvent } from '../../share
 import type { LogInput } from '../../shared/activity-log';
 import type { Emitter } from '../ipc';
 import { log, type Entry } from '../log';
+import { digestedDays } from '../log-digest';
 import { timersFor } from '../timers';
 import { ChatWatch } from './chat-watch';
 import { journal } from './journal';
@@ -56,6 +57,8 @@ export interface ActivityDeps {
 }
 
 export function attachActivity(d: ActivityDeps): { list: () => ReturnType<typeof journal.list>; answered: (chatId: string, requestId: string) => void; notAnswered: (chatId: string, requestId: string) => void; stopped: (chatId?: string) => void } {
+  // a day the logs' digest has not summarized yet stays until it has (ADR 0192: the digest keeps 90 days of counts)
+  journal.hold = day => { const dir = log.folder; return !!dir && !digestedDays(dir).has(day); };
   journal.init(d.userData, events => d.emitter.emit('log:events', events));
   const watch = new ChatWatch();
   const last = new Map<string, ChatSummary>();

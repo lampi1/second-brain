@@ -11,11 +11,12 @@ import type { AgentLifecycleSnapshot } from '../../shared/agent-lifecycle';
 import type { BrainChange } from '../../shared/brain-model';
 import type { ChatSummary, LearnAction, LearnResult, SettingProposal } from '../../shared/contract';
 import type { SkillCandidateView } from '../../shared/learning-review';
-import type { ResearchProposal } from '../../shared/maintenance-research';
+import type { BrainCandidateView, ResearchProposal } from '../../shared/maintenance-research';
 import type { ApprovalItem as PulseApproval, PulseResult } from '../../shared/pulse';
-import { type Proposal, type ProposalAsk, type ProposalGroup, type ProposalCode, type ProposalDecision, type ProposalKeep, type ProposalFact, type ProposalProvenance, type ProposalSource, type ProposalWho } from '../../shared/proposals';
+import { type Proposal, type ProposalAsk, type ProposalGroup, type ProposalCode, type ProposalDecision, type ProposalKeep, type ProposalFact, type ProposalNever, type ProposalProvenance, type ProposalSource, type ProposalWho } from '../../shared/proposals';
 import { isRoleId } from '../../shared/roles';
 import type { FileSnapshot, StoredChange } from '../brainmodel/changes';
+import { textNever } from './policy';
 
 /** Changes older than this are history, not news: they stay in the change log only. */
 export const CHANGE_WINDOW_MS = 14 * 86_400_000;
@@ -35,17 +36,20 @@ export interface ProposalPorts {
   pulse?: { list(): PulseApproval[] | Promise<PulseApproval[]>; decide(id: string, decision: 'approve' | 'discard'): PulseResult | Promise<PulseResult> };
   policies?: { status(): Promise<unknown>; act(a: LearnAction): Promise<LearnResult> };
   /** the maintenance's findings for the brain (ADR 0132): open cards, applied through the change log on approval */
-  research?: { list(): ResearchProposal[]; approve(id: string): unknown; reject(id: string): unknown; repo?(): string | null };
+  research?: { list(): ResearchProposal[]; approve(id: string): unknown; reject(id: string): unknown; repo?(): string | null;
+    /** the open candidate brains (ADR 0195): one card each, decided through approve / reject by their id */
+    candidates?(): BrainCandidateView[] };
   /** the reviewed marks (Tieni on an applied change) */
   reviewed: { has(id: string): boolean; mark(id: string): void };
 }
 
-/** One source: its cards now, and the decision on one of them (by its id in the source). */
+/** One source: its cards now, and the decision on one of them (by its id in the source). decide answers the
+ *  change-log entries an approval made or kept, when it knows them (their rollback undoes it: ADR 0193's ledger). */
 export interface Source {
   id: ProposalSource;
   available(p: ProposalPorts): boolean;
   list(p: ProposalPorts): Promise<Proposal[]>;
-  decide(p: ProposalPorts, card: Proposal, decision: ProposalDecision, note?: string, choice?: { keep: ProposalKeep; shown: string[] }): Promise<void>;
+  decide(p: ProposalPorts, card: Proposal, decision: ProposalDecision, note?: string, choice?: { keep: ProposalKeep; shown: string[] }): Promise<string[] | void>;
 }
 
 const iso = (ms: number): string => new Date(Number.isFinite(ms) ? ms : 0).toISOString();
@@ -128,7 +132,11 @@ const candidate: Source = {
     const name = native(c);
     const v = (await p.candidates!.list()).find(x => x.name === name);
     if (!v) throw new Error('Skill candidate not found.');
-    if (decision === 'approve') { await p.candidates!.promote(v.name, v.digest, v.eligibleReplayIds[0]!, v.verifiedExampleRunIds[0]!); return; }
+    if (decision === 'approve') {
+      const before = new Set((p.changes?.stored() ?? []).map(x => x.id));
+      await p.candidates!.promote(v.name, v.digest, v.eligibleReplayIds[0]!, v.verifiedExampleRunIds[0]!);
+      return (p.changes?.stored() ?? []).filter(x => !before.has(x.id) && x.kind === 'skill' && x.target === v.name).map(x => x.id);
+    }
     const origin = originOf(p, name);
     if (!origin) throw new Error('The change that wrote this candidate is gone.');
     await p.changes!.rollback(origin.id);
@@ -144,7 +152,10 @@ const change: Source = {
     const candidates = new Set((await p.candidates?.list() ?? []).map(c => c.name));
     // memory tidy-ups stay in the Log with Annulla, never a card: the owner sees only skills and rules (ADR 0150)
     return p.changes!.list().filter(c => c.at >= since && !c.rolledBackAt && !FORMAT_JOBS.includes(c.job) && c.kind !== 'memory' && !p.reviewed.has(c.id)).flatMap(c => {
-      const snaps = stored.find(s => s.id === c.id)?.files ?? [], files = snaps.map(f => f.file);
+      const kept = stored.find(s => s.id === c.id), snaps = kept?.files ?? [], files = snaps.map(f => f.file);
+      // the card's content is the change's reason: what never goes by itself is read in the whole text it wrote
+      // (every file's after, never clipped); a change whose text cannot be read here is asked
+      const never: ProposalNever | null = !kept || (!snaps.length && !kept.agent) ? 'unread' : textNever(snaps.map(f => `${f.file}\n${f.after ?? ''}`).join('\n'));
       // a skill candidate is its own card (Approva / Rifiuta), never twice
       if (files.some(isCandidateFile) || (c.job === 'repeated-task' && candidates.has(c.target))) return [];
       const code = codeOf(snaps), ask = changeAsk(c, code);
@@ -153,13 +164,13 @@ const change: Source = {
       return [card('change', c.id, {
         group, applied: true, title: c.summary, content: c.reason, facts, ask, ...(code.length ? { code } : {}),
         provenance: prov({ who: { kind: 'maintenance', id: c.job }, files: files.length ? files : c.kind === 'rule' || c.kind === 'memory' ? [c.target] : [], at: iso(c.at), evidence: c.evidence }),
-        canApprove: true, canReject: c.canRollback, ...(c.canRollback ? {} : { blocked: ['changed-since'] }),
+        canApprove: true, canReject: c.canRollback, ...(c.canRollback ? {} : { blocked: ['changed-since'] }), ...(never ? { never } : {}),
       })];
     });
   },
   async decide(p, c, decision) {
     const id = native(c);
-    if (decision === 'approve') { p.reviewed.mark(id); return; }
+    if (decision === 'approve') { p.reviewed.mark(id); return [id]; }
     await p.changes!.rollback(id);
   },
 };
@@ -275,37 +286,82 @@ const policy: Source = {
 
 // ── the maintenance's findings (ADR 0132) ─────────────────────────────────────────────────────────────────────────────
 const RESEARCH_GROUP: Readonly<Record<string, ProposalGroup>> = { skill: 'skill', rule: 'rule', role: 'role', forget: 'forget' };
+/** A lint card's chip (ADR 0194): facts with the facts, a skill's or a rule's line with them, notes on their own; a revert
+ *  card with what the change it undoes was about. */
+function researchGroup(x: ResearchProposal): ProposalGroup | null {
+  if (x.kind === 'lint' && x.lint) {
+    const c = x.lint.check;
+    return c === 'stale-fact' || c === 'changed-fact' ? 'fact' : c === 'stale-cite' ? (x.lint.file?.startsWith('rules/') ? 'rule' : 'skill') : 'note';
+  }
+  if (x.kind === 'revert' && x.revert) return x.revert.kind === 'agent' ? 'role' : x.revert.kind === 'memory' ? 'fact' : x.revert.kind === 'script' ? 'script' : x.revert.kind;
+  return null;
+}
 /** The text the card is about, as it is: what a change adds, what forgetting removes, or the issue as it will be opened. */
 function researchContent(x: ResearchProposal): string {
   if (x.issue && !x.change) return x.issue.body;
   if (x.change) return x.change.target === 'skill' ? x.change.text : `> ${x.change.text.replace(/\n/g, '\n> ')}`;
   if (x.forget) return `\`${x.forget.what === 'rule' ? x.forget.name : `.claude/skills/${x.forget.name}/`}\``;
+  // a lint card: the line or the fact it is about, as it is
+  if (x.lint) return x.lint.line ? `> ${x.lint.line.trim()}` : x.lint.about && (x.lint.check === 'stale-fact' || x.lint.check === 'changed-fact') ? `> ${x.lint.about}` : '';
   return '';
+}
+/** What makes a finding never go by itself that its card's fields do not show: a skill or a rule tied to a role
+ *  (applyResearch links the skill to the role, or writes the rule in the role's text), a lint finding that removes a
+ *  fact or a line. */
+function researchNever(x: ResearchProposal): ProposalNever | null {
+  if (x.change?.role) return 'role';
+  if (x.kind === 'lint' && x.lint && (x.lint.check === 'stale-fact' || x.lint.check === 'changed-fact' || x.lint.check === 'stale-cite')) return 'forget';
+  return null;
+}
+/** A candidate brain as one card (ADR 0195): the findings it gathers, a diff per file, its checks and replay. */
+function candidateCard(p: ProposalPorts, c: BrainCandidateView): Proposal {
+  // each finding with its «riuscito se…»: the candidate's one change is checked on every one of them
+  const items = c.items.map(x => ({ finding: x.kind, title: x.title, ...(x.success ? { success: x.success } : {}) }));
+  const chat = p.chats().find(x => x.id === c.chatId);
+  return card('research', c.id, {
+    group: 'brain', applied: false, title: items.map(x => x.title).join(' · ').slice(0, 300) || c.id,
+    // the card's content is what the user decides on: the findings it gathers (main refuses a card that changed since)
+    content: items.map(x => `- ${x.title}`).join('\n'),
+    ask: { kind: 'candidate', items, files: c.files.length, checks: c.evaluation.checks, replay: { state: c.evaluation.replay.state, note: c.evaluation.replay.note, ...(c.evaluation.replay.status ? { status: c.evaluation.replay.status } : {}) } },
+    diffs: c.files.map(f => ({ file: f.rel, before: f.before, after: f.after })),
+    facts: [{ key: 'cases', value: String(items.length) }, { key: 'target', value: c.files.map(f => f.rel).join(', ').slice(0, 600) }],
+    provenance: prov({ who: { kind: 'maintenance', id: 'research' }, ...(chat ? { chat: { id: chat.id, title: chat.title } } : {}), files: c.files.map(f => f.rel), at: iso(c.at),
+      evidence: items.map(x => x.title) }),
+    canApprove: true, canReject: true,
+  });
 }
 const research: Source = {
   id: 'research',
   available: p => !!p.research,
   async list(p) {
     const chats = p.chats();
-    return p.research!.list().map(x => {
+    const candidates = (p.research!.candidates?.() ?? []).map(c => candidateCard(p, c));
+    return [...candidates, ...p.research!.list().map(x => {
       const chat = x.chatId ? chats.find(c => c.id === x.chatId) : undefined;
       const role = x.change?.role;
       // an idea or a bug about the app's code (or a bold idea that is one): a card that opens its issue on GitHub (ADR 0153)
       const issue = !!x.issue && !x.change && (x.kind === 'app-idea' || x.kind === 'app-bug' || x.kind === 'bold');
       const repo = issue ? p.research!.repo?.() ?? null : null;
       return card('research', x.id, {
-        group: issue ? 'issue' : x.kind === 'bold' ? RESEARCH_GROUP[x.change?.target ?? 'rule'] ?? 'rule' : RESEARCH_GROUP[x.kind] ?? 'rule', applied: false, title: issue ? x.issue!.title : x.title, content: researchContent(x),
-        ask: { kind: 'research', finding: x.kind, adds: x.adds, removes: x.removes, why: x.why, expected: x.expected, risk: x.risk, evidence: x.evidence, sources: x.sources },
-        facts: [...(role ? [{ key: 'target' as const, value: role }] : []), ...(x.change?.name ? [{ key: 'target' as const, value: x.change.name }] : []),
+        group: issue ? 'issue' : researchGroup(x) ?? (x.kind === 'bold' ? RESEARCH_GROUP[x.change?.target ?? 'rule'] ?? 'rule' : RESEARCH_GROUP[x.kind] ?? 'rule'), applied: false, title: issue ? x.issue!.title : x.title, content: researchContent(x),
+        // «riuscito se…» (ADR 0194) is said with what to expect
+        ask: { kind: 'research', finding: x.kind, adds: x.adds, removes: x.removes, why: x.why, expected: [x.expected, x.success?.text ?? ''].filter(Boolean).join(' '), risk: x.risk, evidence: x.evidence, sources: x.sources, ...(x.roleTrial ? { trial: true } : {}) },
+        // a revised role text (ADR 0195): its before and after
+        ...(x.roleTrial ? { diffs: [{ file: x.roleTrial.role, before: x.roleTrial.before, after: x.roleTrial.text }] } : {}),
+        facts: [...(role ?? x.roleTrial?.role ? [{ key: 'target' as const, value: (role ?? x.roleTrial?.role)! }] : []), ...(x.change?.name ? [{ key: 'target' as const, value: x.change.name }] : []),
           ...(issue && repo ? [{ key: 'target' as const, value: repo }] : []), ...(issue && x.issue!.labels?.length ? [{ key: 'scope' as const, value: x.issue!.labels.join(', ') }] : []),
           ...(issue && x.issue!.duplicateOf ? [{ key: 'before' as const, value: x.issue!.duplicateOf.url }] : [])],
-        provenance: prov({ who: { kind: 'maintenance', id: x.chatId ? 'research' : 'cleanup' }, ...(chat ? { chat: { id: chat.id, title: chat.title } } : {}), at: iso(x.at), evidence: x.evidence }),
+        provenance: prov({ who: { kind: 'maintenance', id: x.chatId ? 'research' : 'cleanup' }, ...(chat ? { chat: { id: chat.id, title: chat.title } } : {}), ...(x.lint?.file ? { files: [x.lint.file] } : {}), at: iso(x.at), evidence: x.evidence }),
         canApprove: !issue || !!repo, canReject: true, ...(issue && !repo ? { blocked: ['noRepo'] } : {}),
+        ...(researchNever(x) ? { never: researchNever(x)! } : {}),
       });
-    });
+    })];
   },
   async decide(p, c, decision) {
-    if (decision === 'approve') await p.research!.approve(native(c)); else await p.research!.reject(native(c));
+    if (decision !== 'approve') { await p.research!.reject(native(c)); return; }
+    const made = await p.research!.approve(native(c));
+    // a brain finding answers its change's id (an app card answers the issue's URL)
+    return typeof made === 'string' && (p.changes?.stored() ?? []).some(x => x.id === made) ? [made] : [];
   },
 };
 

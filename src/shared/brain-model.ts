@@ -3,6 +3,7 @@
 // permissions, role); a skill = how a job is done, shared and loaded when the agent starts. Rules apply to every agent;
 // memory is the brain's knowledge and what happened, plus one memory per agent. Every change a maintenance job makes is
 // a BrainChange: logged, explained, and undone with one click (no approval: owner, 2026-10-19).
+import type { SuccessCheck, SuccessCriterion } from './maintenance-research';
 
 /** Where a skill lives: the brain's shared skills (`.claude/skills`, `.agents/skills`) or the user's own CLI folders. */
 export type SkillHome = 'brain' | 'user';
@@ -81,7 +82,18 @@ export interface BrainChange {
   canRollback: boolean;
   /** its evidence claim (brainmodel/evidence.ts, ADR 0109): missing only where the runs could not be read */
   claim?: ChangeClaim;
+  /** «riuscito se…» a maintenance finding declared (ADR 0194), and the check a week after it was applied */
+  success?: SuccessCriterion;
+  /** a candidate brain (ADR 0195) applies several findings as one change: each one's criterion; read with
+   *  changeCriteria (an old entry has only `success`) */
+  successes?: SuccessCriterion[];
+  /** the change's check: with several criteria, the worst one (a worse one makes the revert card) */
+  successCheck?: SuccessCheck;
+  /** with several criteria, each one's check in their order */
+  successChecks?: SuccessCheck[];
 }
+/** Every «riuscito se…» of a change: the several of a candidate brain, else its single one. */
+export const changeCriteria = (c: Pick<BrainChange, 'success' | 'successes'>): SuccessCriterion[] => (c.successes?.length ? c.successes : c.success ? [c.success] : []);
 
 // ── The evidence layer (ADR 0109): every change is a hypothesis measured on the user's corrections per run ─────────────
 export type ClaimVerdict = 'raccolta' | 'aiuta' | 'nessun-effetto' | 'peggiora' | 'annullato';
@@ -159,7 +171,7 @@ export interface MaintenanceRun {
   /** the pass's result went to the Orchestrator (#150): true = delivered, else why not */
   handoff?: { sent: true } | { sent: false; why: string };
   /** the cards the pass the user started made (ADR 0132): app bugs from the log step, skills to forget */
-  cards?: { bugs: number; forget: number };
+  cards?: { bugs: number; forget: number; lint?: number; reverts?: number };
 }
 
 /** The warn and error lines of the app logs (userData/logs/app-*.jsonl) grouped by scope | msg | cause (#150). */
@@ -309,6 +321,29 @@ export interface ClassifiersState {
   quality: { key: string; label: string; weeks: { week: string; runs: number; success: number | null; avgCostUsd: number | null }[] }[];
   /** one card per classifier that keeps a record (main/brainmodel/classifier-cards.ts); the page draws them as a grid */
   cards?: ClassifierCard[];
+  /** the kind of work by examples (main/brainmodel/kind-model.ts, ADR 0197); absent from an older main or the demo */
+  kindModel?: KindModelCard;
+}
+/** The kind-of-work classifier by examples (ADR 0197): nearest centroid over the local e5 embeddings of the user's own
+ *  ended runs with a verified outcome, labelled by the word rule (taskOf), with «altro» below a calibrated similarity.
+ *  state: ready = trained and tested; few = under MIN_PER_KIND examples for two kinds (the word rule decides); no-model =
+ *  the local embedder is not ready (the word rule decides); busy = embedding the examples now, at low pace. */
+export interface KindModelCard {
+  state: 'ready' | 'few' | 'no-model' | 'busy';
+  /** labelled runs (verified outcome, a goal) and their count per kind of the word rule, «altro» included */
+  examples: number;
+  perKind: { kind: string; n: number }[];
+  /** the kinds with enough examples, which have a centroid */
+  kinds: string[];
+  minPerKind: number;
+  /** cosine below which it answers «altro», calibrated on 20% of the examples kept apart from the test */
+  threshold: number | null;
+  /** on the 20% held out (by run id, never trained on): rows = the word rule's kind, columns = the classifier's; labels
+   *  = the trained kinds then «altro». agree = the diagonal; it measures agreement with the word rule, not the truth */
+  test: { n: number; agree: number; labels: string[]; matrix: number[][] } | null;
+  /** of the held-out runs the word rule called «altro», how many the classifier gives a kind (unverifiable: shown apart) */
+  altroProposed: { n: number; of: number } | null;
+  at: number;
 }
 // ── Classifier cards: each classifier's numbers, its weeks and its slices, for the Classificatori grid ───────────────
 /** A share with the count it rests on; value null = no case yet (never zero). */

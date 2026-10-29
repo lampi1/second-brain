@@ -10,10 +10,12 @@ vi.mock('react', async importOriginal => ({
   useId: () => 'id',
   useMemo: (f: () => unknown) => f(),
   useState: (init: unknown) => [typeof init === 'function' ? (init as () => unknown)() : init, () => {}],
+  // the page's data load (guide:stale, «Per te»: ADR 0196) needs the bridge; without a DOM it never runs
+  useEffect: () => {},
 }));
 vi.mock('../../src/renderer/styles/guide.css', () => ({}));
 vi.mock('../../src/renderer/i18n', () => ({ lang: () => 'it', t: (k: string) => k }));
-vi.mock('../../src/renderer/components/Icons', () => ({ IconChevronDown: () => null, IconChevronRight: () => null }));
+vi.mock('../../src/renderer/components/Icons', () => ({ IconChevronDown: () => null, IconChevronRight: () => null, IconSparkle: () => null }));
 vi.mock('../../src/renderer/actions', () => ({ brainBridge: { draftToOrchestrator: draft } }));
 vi.mock('../../src/renderer/store/ui', () => ({ toast }));
 vi.mock('../../src/renderer/store/store', () => ({ createChat }));

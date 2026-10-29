@@ -180,4 +180,8 @@ export const componentsIt = {
   "cmp.durable.recap.summary": (p: { count: number; freshness: string }) => `PR e QA · ${p.count} PR · riepilogo senza modello · QA: ${p.freshness}`,
   "cmp.durable.recap.qaError": (p: { error: string }) => `QA non aggiornate: ${p.error}. Restano gli ultimi dati riusciti.`,
   "cmp.durable.recap.build": (p: { build: string; reviews: number }) => `Build: ${p.build} · Review richieste: ${p.reviews}`,
+  "cmp.errorBoundary.title": 'Questa pagina ha avuto un errore',
+  "cmp.errorBoundary.text": 'Il resto dell\'app e gli agenti continuano a lavorare. L\'errore è stato scritto nel log.',
+  "cmp.errorBoundary.reload": 'Ricarica la pagina',
+  "cmp.errorBoundary.details": 'Dettagli',
 };

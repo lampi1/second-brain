@@ -125,4 +125,17 @@ describe('task-selective memory at launch', () => {
     expect(recallMemory(w.root, scope, 'Invoices')).toContain('accounting workbook');
     expect(fs.readFileSync(file, 'utf8')).toBe(before);
   });
+  it('skips a fact citing a file that is gone (ADR 0194), keeps one whose file is there or cannot be judged', () => {
+    const w = world();
+    fs.mkdirSync(path.join(w.root, 'docs'), { recursive: true });
+    fs.writeFileSync(path.join(w.root, 'docs', 'release.md'), 'x');
+    w.confirm(w.add('Release notes are written from `docs/release.md`.'));
+    w.confirm(w.add('Release checklist is in `docs/checklist.md`.'));
+    w.confirm(w.add('Release scripts live in `elsewhere/build.ps1`.'));
+    const selected = selectLaunchMemory(w.root, scope, 'release notes checklist scripts');
+    expect(selected.text).toContain('docs/release.md');
+    expect(selected.text).toContain('elsewhere/build.ps1');
+    expect(selected.text).not.toContain('docs/checklist.md');
+    expect(selected.selected).toBe(2);
+  });
 });

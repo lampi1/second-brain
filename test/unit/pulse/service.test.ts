@@ -7,12 +7,13 @@ import { PulseService } from '../../../src/main/pulse/service';
 import { PulseStore } from '../../../src/main/pulse/store';
 import { admitRun, budgetState, type PulseRunRecord } from '../../../src/main/pulse/budget';
 import { AgentRunStore } from '../../../src/main/agents/runs';
+import { closeAppDbs } from '../../../src/main/app-db';
 import { defaults } from '../../../src/main/brain/settings-schema';
 import { fromSaved } from '../../../src/main/brain/config';
 import { buildDigest, refExists } from '../../../src/main/pulse/digest';
 import type { OneShotService } from '../../../src/main/agents/oneshot';
 const dirs: string[] = [];
-afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+afterEach(() => { closeAppDbs(); for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 function fixture() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pulse-service-')); dirs.push(dir);
   const settings = defaults(), at = new Date(2026, 9, 18, 13).getTime();

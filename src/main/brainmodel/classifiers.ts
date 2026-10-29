@@ -13,7 +13,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
-import type { ClassifierRoute, ClassifiersState, RouteResult } from '../../shared/brain-model';
+import type { ClassifierRoute, ClassifiersState, KindModelCard, RouteResult } from '../../shared/brain-model';
 import type { RoutingInfo, RoutingRow } from '../../shared/contract';
 import { foldOutcome, type LedgerOutcome } from '../brain/routing';
 import { classifierCards, isoWeek, lastIsoWeeks, verifiedOf, type JobRow } from './classifier-cards';
@@ -28,6 +28,8 @@ export interface ClassifierInputs {
   profiles: AgentProfile[];
   /** the job ledger's rows (kind and cost of each chat), for the cost-ledger kind card; absent = none */
   jobs?: () => JobRow[];
+  /** the kind-of-work classifier by examples (kind-model.ts, ADR 0197); absent = no card */
+  kindModel?: () => Promise<KindModelCard>;
 }
 
 /** userData/jobs.jsonl (brain/estimates.ts FileJobStore: the last line of an id wins) as the cards need it. */
@@ -111,6 +113,7 @@ export async function classifiersState(i: ClassifierInputs, now = Date.now()): P
     quality,
     cards: classifierCards({ now, predictions, actuals, outcomes, runs: i.runs, jobs: (() => { try { return i.jobs?.() ?? []; } catch { return []; } })() }),
     kinds: kindsOf(predictions, runByChat, outcomes),
+    ...(i.kindModel ? { kindModel: await i.kindModel().catch(() => undefined) } : {}),
     sources: [...predictions.reduce((m, p) => m.set(p.source, (m.get(p.source) ?? 0) + 1), new Map<string, number>())].map(([source, chats]) => ({ source, chats })).sort((a, b) => b.chats - a.chats),
   };
 }

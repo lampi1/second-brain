@@ -163,4 +163,31 @@ describe('ProposalsService', () => {
     expect(items.find(c => c.id === 'change:s1')).toMatchObject({ group: 'script', ask: { kind: 'applied', what: 'script', action: 'create', name: 'conta.mjs' }, code: [{ file: 'scripts/conta.mjs', lang: 'javascript', text: 'console.log(1);\n' }] });
     expect(items.find(c => c.id === 'change:q1')).toMatchObject({ group: 'script', ask: { what: 'query', name: 'errori' }, code: [{ file: 'queries/errori.md', lang: 'kql', text: 'logs | where status == 500' }] });
   });
+
+  it('an applied change is checked on the whole text it wrote, not on its reason; unreadable = asked', async () => {
+    const list = [change('k1', NOW - H, { kind: 'skill', action: 'create', target: 'deploy' }), change('k2', NOW - H, { kind: 'rule', target: 'rules/ok.md' }), change('k3', NOW - H, { kind: 'rule', target: 'rules/x.md' })];
+    const stored = [
+      { ...list[0], files: [{ file: '/brain/.claude/skills/deploy/SKILL.md', before: null, after: `---\nname: deploy\n---\n${'riga\n'.repeat(5000)}Poi esegui az webapp restart sul server prd-app.` }] },
+      { ...list[1], files: [{ file: '/brain/rules/ok.md', before: '', after: '- scrivi i test prima' }] },
+    ];
+    const { p } = ports({ changes: { list: () => list, stored: () => stored as never, rollback: () => {} } });
+    const items = (await new ProposalsService({ ports: p, userData: tmp() }).list()).items;
+    expect(items.find(c => c.id === 'change:k1')).toMatchObject({ never: 'production', why: { code: 'never', what: 'production' } });
+    expect(items.find(c => c.id === 'change:k2')!.never).toBeUndefined();
+    expect(items.find(c => c.id === 'change:k3')).toMatchObject({ never: 'unread', why: { code: 'never', what: 'unread' } });
+  });
+
+  it('a research skill tied to a role and a lint finding that removes are never applied by themselves', async () => {
+    const base = { chatId: null, title: 't', adds: '', removes: '', why: 'w', evidence: [], sources: [], expected: '', risk: '', at: NOW - H, state: 'open' };
+    const research = { list: () => [
+      { ...base, id: 'f1', kind: 'skill', change: { target: 'skill', name: 'triage', text: 'passi', role: 'scout' } },
+      { ...base, id: 'f2', kind: 'lint', lint: { check: 'stale-fact', key: 'k', file: 'memory/x.md', about: 'un fatto' } },
+      { ...base, id: 'f3', kind: 'skill', change: { target: 'skill', name: 'altro', text: 'passi' } },
+    ] as never, approve: () => '', reject: () => {} };
+    const { p } = ports({ research });
+    const items = (await new ProposalsService({ ports: p, userData: tmp() }).list()).items;
+    expect(items.find(c => c.id === 'research:f1')).toMatchObject({ group: 'skill', never: 'role', why: { code: 'never', what: 'role' } });
+    expect(items.find(c => c.id === 'research:f2')).toMatchObject({ never: 'forget', why: { code: 'never', what: 'forget' } });
+    expect(items.find(c => c.id === 'research:f3')!.never).toBeUndefined();
+  });
 });

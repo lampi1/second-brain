@@ -193,8 +193,8 @@ describe('ResearchService', () => {
       { key: 'k1', lvl: 'warn', scope: 'chat', msg: 'pid died', cause: 'code 1', count: 3, sample: 'pid 3 died in /home/user/app' },
       { key: 'k2', lvl: 'warn', scope: 'chat', msg: 'known', cause: '', count: 9, sample: 'x', known: true },
     ] };
-    expect(t.svc.afterPass(logs)).toEqual({ bugs: 1, forget: 1 });
-    expect(t.svc.afterPass(logs)).toEqual({ bugs: 0, forget: 0 });
+    expect(t.svc.afterPass(logs)).toEqual({ bugs: 1, forget: 1, lint: 0, reverts: 0 });
+    expect(t.svc.afterPass(logs)).toEqual({ bugs: 0, forget: 0, lint: 0, reverts: 0 });
     const bug = t.svc.cards().find(isAppCard)!;
     expect(bug).toMatchObject({ kind: 'app-bug', logKey: 'k1', chatId: null });
     expect(bug.issue!.body).not.toContain('/home/user');
@@ -285,6 +285,55 @@ describe('ResearchService guards', () => {
     await t.svc.start(opts);
     const r = t.svc.propose('c1', { ...idea, issue: { title: 'x', body: 'see D:/Clienti/Acme/brain/rules/a.md and D:\\Clienti\\Acme\\brain\\x' } });
     expect(t.svc.store.get(r.id)!.issue!.body).toBe('see <brain>/rules/a.md and <brain>\\x');
+  });
+});
+
+describe('the lint, «riuscito se…» and revert cards (ADR 0194)', () => {
+  const put = (root: string, rel: string, text: string) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
+  it('a brain change carries its criterion in words; the research cannot propose the app\'s own lint and revert kinds', async () => {
+    const t = setup();
+    await t.svc.start(opts);
+    const a = t.svc.propose('c1', { kind: 'skill', title: 'Note di rilascio', adds: 'x', why: 'y', change: { name: 'note-rilascio', text: 't' } });
+    expect(t.svc.store.get(a.id)!.success).toEqual({ metric: 'skill-used', skill: 'note-rilascio', n: 3, text: 'Riuscito se la skill «note-rilascio» viene usata almeno 3 volte nella settimana dopo.' });
+    const b = t.svc.propose('c1', { kind: 'rule', title: 'Test prima', adds: 'x', why: 'y', change: { role: 'artisan', text: 't' }, success: { metric: 'more-verified', role: 'artisan' } });
+    expect(t.svc.store.get(b.id)!.success).toMatchObject({ metric: 'more-verified', role: 'artisan' });
+    expect(() => t.svc.propose('c1', { kind: 'rule', title: 'z', adds: 'x', why: 'y', change: { text: 't' }, success: { metric: 'vibes' } })).toThrow(/success.metric/);
+    expect(() => t.svc.propose('c1', { kind: 'lint', title: 'z', adds: 'x', why: 'y' })).toThrow(/kind/);
+    expect(t.svc.store.get(t.svc.propose('c1', idea).id)!.success).toBeUndefined();
+  });
+  it('the free cleanup cards the lint once, asks the human question, and dismisses a card whose problem is gone', () => {
+    const root = fs.realpathSync(tmp());
+    put(root, 'hub.md', '# Hub\n\n- [[a]]\n- [[b]]\n- [[c]]\n');
+    put(root, 'a.md', 'Con [[b]].\n'); put(root, 'b.md', 'Con [[a]].\n'); put(root, 'c.md', 'Con [[a]].\n');
+    put(root, 'docs/x.md', 'x\n');
+    put(root, 'memory/records.json', JSON.stringify([{ memoryId: 'm1', scope: { roleId: 'artisan' }, subject: 'release', predicate: 'note', value: 'Le note sono in `docs/old.md`', sourceEventId: 'e', sourceRunId: 'r',
+      observedAt: '2026-10-01T00:00:00Z', validFrom: '2026-10-01T00:00:00Z', validTo: null, status: 'confirmed', supersedes: null }]));
+    const t = setup({ root: () => root });
+    const logs: LogScan = { since: null, files: [], groups: [] };
+    expect(t.svc.afterPass(logs)).toMatchObject({ lint: 2 }); // the stale fact and the orphan docs/x.md
+    const cards = t.svc.cards().filter(c => c.kind === 'lint');
+    const stale = cards.find(c => c.lint?.check === 'stale-fact')!;
+    expect(stale.title).toBe('Il file citato non c\'è più: tolgo il fatto');
+    expect(stale.removes).toBe('Le note sono in `docs/old.md`');
+    expect(cards.find(c => c.lint?.check === 'orphan')!.title).toBe('Nessuna nota rimanda a «x»: la aggiungo all\'indice');
+    expect(t.svc.afterPass(logs)).toMatchObject({ lint: 0 }); // never twice
+    t.svc.reject(stale.id);
+    // fixed by hand: the open card goes away; a rejected one is never asked again
+    put(root, 'hub.md', '# Hub\n\n- [[a]]\n- [[b]]\n- [[c]]\n- [x](docs/x.md)\n');
+    expect(t.svc.afterPass(logs)).toMatchObject({ lint: 0 });
+    expect(t.svc.cards().filter(c => c.kind === 'lint')).toEqual([]);
+  });
+  it('a change that got worse becomes one «lo annullo?» card with the numbers, approved through the brain', async () => {
+    const worse = { changeId: 'chg-x', kind: 'rule' as const, summary: 'Regola: test prima', criterion: { metric: 'fewer-corrections' as const }, check: { at: NOW, before: 0.5, after: 1.5, nBefore: 4, nAfter: 5, verdict: 'worse' as const } };
+    const t = setup();
+    t.deps.brain.outcomes = () => [worse];
+    expect(t.svc.afterPass({ since: null, files: [], groups: [] })).toMatchObject({ reverts: 1 });
+    expect(t.svc.outcomes()).toBe(0); // one card per change
+    const c = t.svc.cards().find(x => x.kind === 'revert')!;
+    expect(c.title).toBe('Questo cambio non ha aiutato: lo annullo («Regola: test prima»)');
+    expect(c.why).toBe('Correzioni per lavoro: prima 0,5 (4 lavori), dopo 1,5 (5 lavori).');
+    await t.svc.approve(c.id);
+    expect(t.applied).toEqual([c.id]);
   });
 });
 

@@ -468,7 +468,7 @@ export class CodexSession implements HarnessSession {
     this.sink.item({ kind: 'result', id: nextId('r'), at: Date.now(), costUsd: 0, durationMs: Date.now() - this.turnStart, turns: 1, isError, ...(interrupted ? { interrupted } : {}) }, false);
     const turnTokens = this.turnTokens();
     this.sink.changed({ turnCostUsd: 0, costKnown: false, liveCostUsd: 0, ...(turnTokens ? { turnTokens } : {}) });
-    log.info('chats', 'codex turn done', { chat: this.opts.chatId, data: { engine: this.engine, turnId: this.turnId, status, error: error ? cut(error, 300) : null, codexError: typeof codexError === 'string' ? codexError : codexError ? Object.keys(o(codexError))[0] ?? null : null } });
+    log.info('chats', 'codex turn done', { chat: this.opts.chatId, op: 'invoke_agent', ...(this.turnId ? { step: String(this.turnId) } : {}), data: { engine: this.engine, turnId: this.turnId, status, error: error ? cut(error, 300) : null, codexError: typeof codexError === 'string' ? codexError : codexError ? Object.keys(o(codexError))[0] ?? null : null } });
     this.reportEstimate();
     this.prompting = false;
     this.turnId = null;
@@ -797,7 +797,7 @@ export class CodexSession implements HarnessSession {
   }
 
   private pending(req: Omit<PendingRequest, 'chatId'>): void {
-    log.info('chats', 'codex asks', { chat: this.opts.chatId, data: { engine: this.engine, requestId: req.id, type: req.type, tool: req.tool } });
+    log.info('chats', 'codex asks', { chat: this.opts.chatId, op: 'execute_tool', data: { engine: this.engine, requestId: req.id, type: req.type, tool: req.tool } });
     this.setState('waiting');
     this.sink.pending(req);
   }

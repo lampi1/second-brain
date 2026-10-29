@@ -83,5 +83,5 @@ process.stdin.on('data', d => (raw += d)).on('end', async () => {
       lastAssistant: (last?.message?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n') });
   }
   // Only the fact: how to log (format, mem.mjs, second time) lives once in the ai-errors.md header.
-  say([flagged && 'Possible correction or confusion: if it is one, log it per the {{BRAIN}}/ai-errors.md header.', warning].filter(Boolean));
+  say([flagged && 'Possible correction or confusion: if it is one, log it per the {{BRAIN}}/ai-errors.md header, with "visto da: {{OWNER}}" (he caught it).', warning].filter(Boolean));
 });

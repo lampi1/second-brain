@@ -8,22 +8,52 @@
 // through the change log only when the user approves; ideas and bugs about the app's code, each with its issue already
 // written, opened on GitHub at once when the user approves (issue-open.ts). An app idea is also written to the brain's
 // Idee, on the AI's side. The pass also makes cards by itself, at zero tokens: one app bug per new log group and the
-// brain skills no job used in 60 days. When it is all over, `done` tells the renderer what it made (the end notice).
-// Used by wiring.ts and demo-wiring.ts; IPC maintenance:* (index.ts); tests: test/unit/brainmodel/research.test.ts.
+// brain skills no job used in 60 days, the brain lint's findings (brain-lint.ts: orphans, broken links, concepts with no
+// note, facts and skills citing files that are gone, ADR 0194) and the changes whose «riuscito se…» check a week after
+// came out worse (success-check.ts, also at app start and hourly). When it is all over, `done` tells the renderer what
+// it made (the end notice).
+// ADR 0195 hooks: the brain-file findings of one research are held and, when it ends, gathered into ONE candidate brain
+// (research-candidate.ts: a copy under userData, one card with a diff per file, one change and one «Annulla» when
+// approved); and the research may propose one revised role text from that role's failed runs (role-reflect.ts), which
+// becomes a trial version only when the user approves its card.
+// Used by wiring.ts and demo-wiring.ts; IPC maintenance:* (index.ts); tests: test/unit/brainmodel/research.test.ts,
+// research-candidate.test.ts, role-reflect.test.ts.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { BrainModelState, LogScan, MaintenanceRun } from '../../shared/brain-model';
 import type { ChatSummary, Effort, Harness, Lang, NewChat } from '../../shared/contract';
-import { familyOf, isAppKind, RESEARCH_CAP_USD, RESEARCH_CAPS, RESEARCH_KINDS, type MaintenanceDone, type MaintenanceStatus, type ResearchChange, type ResearchForget,
+import { CANDIDATE_PENDING, RESEARCH_TOOL_KINDS, type LintCheck, type LintFinding, type ResearchRevert, familyOf, isAppKind, RESEARCH_CAP_USD, type BrainCandidate, type BrainCandidateView, RESEARCH_CAPS, type MaintenanceDone, type MaintenanceStatus, type ResearchChange, type ResearchForget,
   type ResearchIssue, type ResearchKind, type ResearchOptions, type ResearchProposal, type ResearchRunInfo, type ResearchSource } from '../../shared/maintenance-research';
 import { isRoleId } from '../../shared/roles';
 import { errText, log } from '../log';
 import type { IssueOpened } from './issue-open';
 import { buildPack, forgetCandidates, PACK_SECTIONS, type Pack, type PackSection } from './research-pack';
+import { logSections, periodDays, type LogSections } from './research-pack-logs';
+import { makeFence, type Fence } from './pack-fence';
+import { journal } from '../activity/journal';
+import { JOURNAL_DIR } from '../log-digest';
+import type { LogEvent } from '../../shared/activity-log';
+import { readLedger } from '../proposals/ledger';
+import { allPolicies } from '../proposals/policy';
 import { defaultPrompt, MAX_PROMPT, researchFrame, researchMessage } from './research-prompt';
 import { ResearchStore } from './research-store';
+import { CandidateService, isCandidateFinding, type CandidatePorts } from './research-candidate';
+import { guideMaintenanceSection } from '../guide/maintenance';
+import { GUIDE_SECTION } from './research-tools';
+import { checkRoleText, pickRole, reflectSection, REFLECT_BUDGET_SHARE, ROLE_REFLECT_SECTION, type ReflectPick } from './role-reflect';
+import { readLocal, writeLocal } from '../agents/local-store';
+import { readMemoryRecords } from '../rules/memory-records';
+import { lintBrain } from './brain-lint';
+import { lintCard, revertCard } from './lint-cards';
+import { defaultSuccess, parseSuccess, successText } from './success-check';
+
+/** At most this many lint cards of each check per pass (the worst first), so a messy brain is not one wall of cards. */
+export const LINT_CAPS: Readonly<Record<LintCheck, number>> = { 'stale-fact': 5, 'stale-cite': 3, 'broken-link': 3, 'changed-fact': 3, concept: 3, orphan: 3 };
+const LINT_ORDER: readonly LintCheck[] = ['stale-fact', 'stale-cite', 'broken-link', 'changed-fact', 'concept', 'orphan'];
+/** The «riuscito se…» check runs this long after the app starts, then every hour. */
+export const OUTCOMES_FIRST_MS = 90_000, OUTCOMES_EVERY_MS = 60 * 60_000;
 
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 const MODEL_ID = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
@@ -46,7 +76,9 @@ export interface ResearchDeps {
   runs: () => readonly AgentRun[];
   roles: () => readonly AgentProfile[];
   /** maintain: the free cleanup of a click (every job, the log step and its cards), resolving with the pass it wrote */
-  brain: { state(): BrainModelState; apply(p: ResearchProposal): string; noise(key: string, known: boolean): void; maintain(): Promise<BrainModelState> };
+  brain: { state(): BrainModelState; apply(p: ResearchProposal): string; noise(key: string, known: boolean): void; maintain(): Promise<BrainModelState>;
+    /** the «riuscito se…» check (BrainModelService.checkOutcomes, ADR 0194): the changes that got worse; absent = none */
+    outcomes?(): ResearchRevert[] };
   chats: { create(req: NewChat): Promise<ChatSummary>; get(id: string): ChatSummary | undefined; stop(id: string): Promise<void> };
   /** opens an approved app card's issue on GitHub (issue-open.ts); absent = app cards cannot be approved */
   issues?: { open(repo: string, issue: ResearchIssue): Promise<IssueOpened> };
@@ -61,7 +93,23 @@ export interface ResearchDeps {
   privacy?: { home: string; user: string };
   /** the app's own folder, removed from the issues' text like the brain's */
   appDir?: () => string;
+  /** the technical logs' folder (the digest's too) for the pack's journal/perf/ui-errors/digest sections; default log.folder */
+  logDir?: () => string | null;
+  /** the Log page's events in memory; default the app's journal */
+  events?: () => readonly LogEvent[];
+  /** the candidate brain's ports (ADR 0195); absent = every brain finding stays its own card */
+  candidates?: CandidatePorts;
+  /** starts a trial version of a role with a revised text (catalog approveTrial), refused when the role is no longer on
+   *  `baseVersion` (ADR 0195); absent = the research gets no role reflection */
+  roleTrial?: (role: string, text: string, baseVersion: number, reason: string) => void;
+  /** the app's own repository when run from a clone (guide/anchors.ts repoRootOf): the Guida cards whose code changed
+   *  and the German left to translate (ADR 0196), read as the pack section «guide»; absent or null = not offered */
+  guideRepo?: () => string | null;
 }
+
+/** The research's extra frame lines for the ADR 0195 steps (after the method and the fixed frame). */
+const CANDIDATE_FRAME = 'Brain changes that only write brain files (skills without a role, rules for every role, what to forget) are gathered by the app into ONE candidate version of the brain when you end: the user sees one card with a before/after per file and keeps or discards all of it.';
+const REFLECT_FRAME = `Role text: read maintenance_pack section "${ROLE_REFLECT_SECTION}" once; when it names a role, you may propose ONE revised full text for it with maintenance_role_trial (a trial version the user approves, measured against the current one).`;
 
 type Input = Record<string, unknown>;
 const str = (v: unknown, max: number, field: string, required = true): string => {
@@ -151,14 +199,28 @@ export const isAppCard = (p: Pick<ResearchProposal, 'kind' | 'issue' | 'change'>
 
 export class ResearchService {
   readonly store: ResearchStore;
-  private run: (ResearchRunInfo & { sawWork: boolean; pack: Pack; timer: NodeJS.Timeout | null; saves: Promise<void>[] }) | null = null;
+  private run: (ResearchRunInfo & { sawWork: boolean; pack: Pack; timer: NodeJS.Timeout | null; saves: Promise<void>[]; reflect: ReflectPick | null; fence: Fence }) | null = null;
+  /** the candidate brain (ADR 0195), when the app gives its ports */
+  readonly candidates: CandidateService | null;
   /** a start between its checks and its chat: a second start is refused */
   private starting = false;
   constructor(private readonly d: ResearchDeps) {
     this.store = new ResearchStore(d.userData, () => this.now());
     // a research the app was closed during never ends by itself: it is closed as stopped (its chat ended with the app)
     for (const r of this.store.runs().filter(x => x.state === 'running')) this.store.saveRun({ ...r, state: 'stopped', endedAt: r.endedAt ?? this.now(), why: 'app chiusa durante la ricerca' });
+    this.candidates = d.candidates ? new CandidateService(d.userData, d.candidates, d.lang, () => this.now()) : null;
+    // findings held for a candidate the app was closed before building: their own cards again
+    for (const p of this.store.all().filter(x => x.candidateId === CANDIDATE_PENDING)) this.store.update(p.id, { candidateId: undefined });
+    // the «riuscito se…» check: soon after the start, then hourly (and at every click, afterPass); zero tokens
+    if (d.brain.outcomes) {
+      const tick = () => { try { if (this.outcomes()) this.d.changed(); } catch (e) { log.warn('brain', 'maintenance outcome check failed', { cause: errText(e), hint: 'it runs again within the hour and at the next «Manutenzione»' }); } };
+      const first = setTimeout(tick, OUTCOMES_FIRST_MS), every = setInterval(tick, OUTCOMES_EVERY_MS);
+      first.unref?.(); every.unref?.();
+      this.outcomeTimers.push(first, every);
+    }
   }
+  /** Stops the hourly check (tests, shutdown). */
+  dispose(): void { for (const t of this.outcomeTimers) { clearTimeout(t); clearInterval(t); } this.outcomeTimers = []; }
   private now(): number { return this.d.now?.() ?? Date.now(); }
   private privacy() {
     const base = this.d.privacy ?? { home: os.homedir(), user: (() => { try { return os.userInfo().username; } catch { return ''; } })() };
@@ -170,7 +232,8 @@ export class ResearchService {
   /** The free cleanup of a click is running (before the research starts). */
   private passing = false;
   /** The free cleanup's cards of the click now running, added to the research's in the end notice. */
-  private passCards = { bugs: 0, forget: 0 };
+  private passCards = { bugs: 0, forget: 0, lint: 0, reverts: 0 };
+  private outcomeTimers: NodeJS.Timeout[] = [];
   status(): MaintenanceStatus {
     return { running: this.passing || this.starting || !!this.run, research: this.run ? this.info(this.run) : null, last: this.store.lastDone() ?? null, canResearch: this.d.engines().length > 0 };
   }
@@ -192,13 +255,13 @@ export class ResearchService {
     if (this.passing || this.starting || this.run) throw new Error('La manutenzione è già in corso.');
     if (!this.d.root()) throw new Error('Scegli prima la cartella del brain.');
     this.passing = true;
-    this.passCards = { bugs: 0, forget: 0 };
+    this.passCards = { bugs: 0, forget: 0, lint: 0, reverts: 0 };
     this.store.setClickAt(this.now());
     this.d.changed();
     let pass: MaintenanceRun | null = null;
     try { pass = (await this.d.brain.maintain()).lastRun; }
     finally { this.passing = false; }
-    this.passCards = { bugs: pass?.cards?.bugs ?? 0, forget: pass?.cards?.forget ?? 0 };
+    this.passCards = { bugs: pass?.cards?.bugs ?? 0, forget: pass?.cards?.forget ?? 0, lint: pass?.cards?.lint ?? 0, reverts: pass?.cards?.reverts ?? 0 };
     const o = this.defaults();
     if (!o) { this.announce({ state: 'free', costUsd: 0 }, null); this.d.changed(); return this.status(); }
     try { await this.start(o); }
@@ -210,11 +273,11 @@ export class ResearchService {
     const mine = chatId ? this.store.all().filter(p => p.chatId === chatId) : [];
     const d: MaintenanceDone = {
       at: this.now(), state: end.state, costUsd: end.costUsd, ...(end.why ? { why: end.why } : {}),
-      proposals: this.passCards.forget + mine.filter(p => !isAppCard(p)).length,
+      proposals: this.passCards.forget + this.passCards.lint + this.passCards.reverts + mine.filter(p => !isAppCard(p)).length,
       ideas: mine.filter(p => p.kind === 'app-idea' && p.ideaSaved).length,
       issues: this.passCards.bugs + mine.filter(p => isAppCard(p)).length,
     };
-    this.passCards = { bugs: 0, forget: 0 };
+    this.passCards = { bugs: 0, forget: 0, lint: 0, reverts: 0 };
     this.store.setLastDone(d);
     try { this.d.done?.(d); } catch (e) { log.warn('brain', 'maintenance end notice not sent', { cause: errText(e) }); }
   }
@@ -237,13 +300,26 @@ export class ResearchService {
     this.starting = true;
     try { return await this.open(engine.harness, model, effort, cap, method, web, lang, root); } finally { this.starting = false; }
   }
+  /** The pack's sections about the period since the previous pass (ADR 0192); never throws (absent = not read). */
+  private async logSections(state: BrainModelState, fence: Fence): Promise<LogSections | undefined> {
+    try {
+      const dir = (this.d.logDir ?? (() => log.folder))(), now = this.now(), since = state.lastRun?.logs?.since ?? null;
+      if (!dir) return undefined;
+      const days = await periodDays(dir, path.join(this.d.userData, JOURNAL_DIR), since, now);
+      return logSections({ now, since, days, events: (this.d.events ?? (() => journal.list().events))(), groups: state.lastRun?.logs?.groups ?? [], fence });
+    } catch (e) { log.warn('brain', 'maintenance pack: log sections not read', { cause: errText(e), hint: 'the research runs without them; npm run logs -- --scope brain shows why' }); return undefined; }
+  }
   private async open(harness: Harness, model: string | null, effort: Effort | null, cap: number, method: string, web: boolean, lang: Lang, root: string): Promise<ResearchRunInfo> {
-    const pack = buildPack({ now: this.now(), runs: this.d.runs(), state: this.d.brain.state(), roles: this.d.roles(), past: this.store.all(), appVersion: this.d.appVersion() });
+    // one nonce per research: the untrusted values of its pack go between markers no value can write (pack-fence.ts)
+    const fence = makeFence(), state = this.d.brain.state(), logs = await this.logSections(state, fence);
+    const pack = buildPack({ now: this.now(), runs: this.d.runs(), state, roles: this.d.roles(), past: this.store.all(), appVersion: this.d.appVersion(), ...(logs ? { logs } : {}), decisions: allPolicies(readLedger(this.d.userData)) });
     const frame = researchFrame(lang, { web, capUsd: cap, brainRoot: root, issuesUrl: this.d.issuesUrl() });
-    const chat = await this.d.chats.create({ harness, cwd: root, title: RESEARCH_TITLE, research: { web }, prompt: researchMessage(method, frame),
+    const reflect = this.d.roleTrial ? pickRole(this.d.runs(), this.d.roles(), this.now()) : null;
+    const extra = [...(this.candidates ? [CANDIDATE_FRAME] : []), ...(this.d.roleTrial ? [REFLECT_FRAME] : [])];
+    const chat = await this.d.chats.create({ harness, cwd: root, title: RESEARCH_TITLE, research: { web }, prompt: [researchMessage(method, frame), ...extra].join('\n'),
       ...(model ? { model } : {}), ...(effort ? { effort } : {}) });
     const startedAt = this.now();
-    this.run = { chatId: chat.id, startedAt, harness, model, effort, capUsd: cap, costUsd: 0, state: 'running', proposals: 0, sawWork: false, pack, timer: null, saves: [] };
+    this.run = { chatId: chat.id, startedAt, harness, model, effort, capUsd: cap, costUsd: 0, state: 'running', proposals: 0, sawWork: false, pack, timer: null, saves: [], reflect, fence };
     const timer = setTimeout(() => { void this.finish('stopped', 'più di un\'ora senza finire').catch(() => { /* logged */ }); }, RESEARCH_MAX_MS);
     timer.unref?.();
     this.run.timer = timer;
@@ -288,6 +364,7 @@ export class ResearchService {
     log.info('brain', 'maintenance research ended', { chat: r.chatId, data: { state, proposals: info.proposals, costUsd: info.costUsd } });
     // the ideas still being written to Idee count in the notice
     await Promise.allSettled(r.saves);
+    this.gather(r.chatId, Math.max(info.costUsd, r.costUsd), r.capUsd);
     this.announce({ state, costUsd: info.costUsd, ...(why ? { why } : {}) }, r.chatId);
     this.d.changed();
   }
@@ -300,6 +377,8 @@ export class ResearchService {
   }
   pack(chatId: string, section: unknown): string {
     const r = this.mine(chatId), s = (section ?? 'summary') as PackSection;
+    if (section === GUIDE_SECTION) { const repo = this.d.guideRepo?.() ?? null; return repo ? guideMaintenanceSection(repo) : 'Not offered: the app is not running from its repository.'; }
+    if (section === ROLE_REFLECT_SECTION) return reflectSection(r.reflect, { clean: t => scrub(t, this.privacy()), budgetLeft: this.reflectBudget(r), fence: r.fence });
     if (!PACK_SECTIONS.includes(s)) throw new Error(`section: one of ${PACK_SECTIONS.join(', ')}.`);
     return r.pack[s];
   }
@@ -307,7 +386,7 @@ export class ResearchService {
   propose(chatId: string, a: Input): { id: string; left: Record<string, number> } {
     const r = this.mine(chatId);
     const kind = a.kind as ResearchKind;
-    if (!RESEARCH_KINDS.includes(kind)) throw new Error(`kind: one of ${RESEARCH_KINDS.join(', ')}.`);
+    if (!(RESEARCH_TOOL_KINDS as readonly string[]).includes(kind)) throw new Error(`kind: one of ${RESEARCH_TOOL_KINDS.join(', ')}.`);
     const card = this.card(kind, a, chatId);
     const fam = familyOf(kind), mine = this.store.all().filter(p => p.chatId === chatId);
     if (mine.filter(p => familyOf(p.kind) === fam).length >= RESEARCH_CAPS[fam]) throw new Error(`Limit reached: at most ${RESEARCH_CAPS[fam]} proposals of this family per research.`);
@@ -315,6 +394,8 @@ export class ResearchService {
     if (this.store.all().some(p => same(p) && (p.state === 'open' || p.state === 'rejected'))) throw new Error('Duplicate: the same proposal is already open or was rejected.');
     // a better version of the bug card the log step wrote from the same log group: that card is rewritten
     const was = card.logKey ? this.store.all().find(p => p.logKey === card.logKey && p.state === 'open' && p.chatId === null) : undefined;
+    // a brain-file finding waits for the candidate brain, built when the research ends (ADR 0195)
+    if (this.candidates && isCandidateFinding(card)) card.candidateId = CANDIDATE_PENDING;
     const replaced = was ? this.store.replace(was.id, card) : null;
     const saved = replaced || this.store.add(card);
     // the cleanup's card the notice already counts is now this research's
@@ -359,6 +440,9 @@ export class ResearchService {
       else throw new Error('bold: give a change (for the brain) or an issue (for the app).');
     } else out.change = this.change(a.change, kind);
     if (kind === 'app-bug' && typeof a.logKey === 'string' && a.logKey.trim()) out.logKey = str(a.logKey, 1000, 'logKey');
+    // «riuscito se…» (ADR 0194): the research's criterion, else the default of a brain change; in the user's words
+    const success = parseSuccess(a.success) ?? defaultSuccess(out.change);
+    if (success && out.change) out.success = { ...success, text: successText(success, this.d.lang()) };
     return out;
   }
   private change(v: unknown, kind?: ResearchKind): ResearchChange {
@@ -393,7 +477,7 @@ export class ResearchService {
   // ── the free cleanup's own cards (zero tokens) ───────────────────────────────────────────────────────────────────
   /** After the pass the user started: one app bug per new log group (never one already carded or dismissed), and the
    *  brain skills no job used in 60 days (never one already proposed in the last 90 days). */
-  afterPass(logs: LogScan): { bugs: number; forget: number } {
+  afterPass(logs: LogScan): { bugs: number; forget: number; lint: number; reverts: number } {
     const all = this.store.all(), p = this.privacy(), w = CLEANUP_WORDS[this.d.lang() === 'it' ? 'it' : 'en'];
     let bugs = 0, forget = 0;
     for (const g of logs.groups.filter(x => !x.known)) {
@@ -421,19 +505,74 @@ export class ResearchService {
         forget: { what: 'skill', name: c.name, lastUsed: c.lastUsed ?? null, uses: 0 } });
       forget++;
     }
-    if (bugs || forget) this.d.changed();
-    return { bugs, forget };
+    const lint = this.lint();
+    const reverts = this.outcomes();
+    if (bugs || forget || lint || reverts) this.d.changed();
+    return { bugs, forget, lint, reverts };
+  }
+
+  /** The brain lint (ADR 0194, M2), zero tokens: new findings become cards (never one already carded, approved or
+   *  rejected: its key), at most LINT_CAPS per check; an open lint card whose problem is gone is dismissed. */
+  lint(): number {
+    // the real folder: the skills are listed by their real paths (BrainModelService), a linked brain root must match them
+    let root: string;
+    try { const r = this.d.root(); if (!r) return 0; root = fs.realpathSync(r); } catch { return 0; }
+    const hashFile = path.join(this.d.userData, 'brain-lint.json');
+    let hashes: Record<string, string> = {};
+    try { const raw = readLocal(hashFile) as { hashes?: Record<string, string> } | undefined; if (raw?.hashes && typeof raw.hashes === 'object') hashes = { ...raw.hashes }; } catch { /* a fresh baseline */ }
+    let records: ReturnType<typeof readMemoryRecords> = [];
+    try { records = readMemoryRecords(root); } catch (e) { log.warn('brain', 'brain lint: memory not read', { cause: errText(e), hint: 'the fact checks wait for a readable memory/records.json; the note checks still run' }); }
+    let found: LintFinding[];
+    try { found = lintBrain({ root, skills: this.d.brain.state().skills, records, hashes }); }
+    catch (e) { log.warn('brain', 'brain lint failed', { cause: errText(e), hint: 'the next «Manutenzione» tries again' }); return 0; }
+    try { writeLocal(hashFile, { version: 1, hashes }); } catch (e) { log.warn('brain', 'brain lint hashes not saved', { cause: errText(e), hint: 'a changed cited file is noticed one pass later' }); }
+    const all = this.store.all(), keys = new Set(found.map(f => f.key));
+    // a problem fixed by hand (or by another card) takes its open card away
+    for (const p of all.filter(x => x.kind === 'lint' && x.state === 'open' && x.lint && !keys.has(x.lint.key))) this.store.update(p.id, { state: 'dismissed', decidedAt: this.now() });
+    const seen = new Set(all.filter(x => x.lint).map(x => x.lint!.key));
+    const lang = this.d.lang();
+    let made = 0;
+    for (const check of LINT_ORDER) {
+      let n = all.filter(x => x.kind === 'lint' && x.state === 'open' && x.lint?.check === check).length;
+      for (const f of found.filter(x => x.check === check)) {
+        if (n >= LINT_CAPS[check] || seen.has(f.key)) continue;
+        this.store.add(lintCard(f, lang)); seen.add(f.key); n++; made++;
+      }
+    }
+    log.info('brain', 'brain lint', { data: { found: found.length, cards: made, ...Object.fromEntries(LINT_ORDER.map(c => [c, found.filter(f => f.check === c).length])) } });
+    return made;
+  }
+
+  /** The «riuscito se…» check (ADR 0194, M4): a card «Questo cambio non ha aiutato: lo annullo?» per change that got
+   *  worse (never twice for one change). Returns the cards made. */
+  outcomes(): number {
+    const worse = this.d.brain.outcomes?.() ?? [];
+    if (!worse.length) return 0;
+    const all = this.store.all(), lang = this.d.lang();
+    let made = 0;
+    for (const r of worse) {
+      if (all.some(p => p.revert?.changeId === r.changeId)) continue;
+      this.store.add(revertCard(r, lang)); made++;
+      log.info('brain', 'maintenance change did not help', { data: { change: r.changeId, metric: r.criterion.metric, before: r.check.before, after: r.check.after } });
+    }
+    return made;
   }
 
   // ── Proposte (the 'research' source) ─────────────────────────────────────────────────────────────────────────────
   /** Open findings, newest first: brain changes and what to forget, and the app cards that open an issue. */
-  cards(): ResearchProposal[] { return this.store.all().filter(p => p.state === 'open').reverse(); }
+  cards(): ResearchProposal[] { return this.store.all().filter(p => p.state === 'open' && !p.candidateId).reverse(); }
+  /** The open candidate brains (ADR 0195): one card each. */
+  candidateCards(): BrainCandidateView[] {
+    const all = new Map(this.store.all().map(p => [p.id, p]));
+    return (this.candidates?.open() ?? []).map(c => ({ ...c, items: c.proposalIds.flatMap(id => { const p = all.get(id); return p ? [{ kind: p.kind, title: p.title, ...(p.success?.text ? { success: p.success.text } : {}) }] : []; }) }));
+  }
   /** When the user last pressed «Manutenzione»: the other parts of the app's skill and rule proposals made after it
    *  wait for the next click (ADR 0153). null = never pressed. */
   clickAt(): number | null { return this.store.clickAt(); }
   /** The app repository as owner/name, null when unknown (an app card then cannot be approved). */
   repo(): string | null { return repoOf(this.d.issuesUrl()); }
   async approve(id: string): Promise<string> {
+    if (this.candidates?.isId(id)) return this.approveCandidate(id);
     const p = this.store.get(id);
     if (!p || p.state !== 'open') throw new Error('Proposta non più aperta.');
     if (isAppCard(p)) {
@@ -447,6 +586,15 @@ export class ResearchService {
       this.d.changed();
       return opened.url;
     }
+    if (p.roleTrial) {
+      // a revised role text (ADR 0195): a trial version through the catalog's own path, kept or rolled back on its card
+      if (!this.d.roleTrial) throw new Error('Le prove dei ruoli non sono disponibili qui.');
+      this.d.roleTrial(p.roleTrial.role, p.roleTrial.text, p.roleTrial.baseVersion, `Manutenzione: ${p.title}`.slice(0, 300));
+      this.store.update(id, { state: 'approved', decidedAt: this.now() });
+      log.info('brain', 'maintenance role trial started', { data: { role: p.roleTrial.role } });
+      this.d.changed();
+      return '';
+    }
     const changeId = this.d.brain.apply(p);
     this.store.update(id, { state: 'approved', decidedAt: this.now(), changeId });
     log.info('brain', 'maintenance finding approved', { data: { kind: p.kind, change: changeId } });
@@ -454,11 +602,73 @@ export class ResearchService {
     return changeId;
   }
   reject(id: string): void {
+    if (this.candidates?.isId(id)) {
+      const c = this.candidates.reject(id);
+      for (const pid of c.proposalIds) this.store.update(pid, { state: 'rejected', decidedAt: this.now() });
+      this.d.changed();
+      return;
+    }
     const p = this.store.get(id);
     if (!p || p.state !== 'open') throw new Error('Proposta non più aperta.');
     this.store.update(id, { state: 'rejected', decidedAt: this.now() });
     // a bug from a log group: that group is known noise now, never carded again
     if (p.logKey) { try { this.d.brain.noise(p.logKey, true); } catch (e) { log.warn('brain', 'log group not marked known', { cause: errText(e) }); } }
     this.d.changed();
+  }
+
+  // ── ADR 0195: the candidate brain and the role reflection ─────────────────────────────────────────────────────────
+  /** When the research ends: its held brain-file findings become one candidate (the ones it could not plan, and all of
+   *  them when no candidate is built, are their own cards again). `capUsd - costUsd` is what the replay may spend. */
+  private gather(chatId: string, costUsd: number, capUsd: number): void {
+    const held = this.store.all().filter(p => p.chatId === chatId && p.candidateId === CANDIDATE_PENDING && p.state === 'open');
+    if (!held.length) return;
+    let built: BrainCandidate | null = null;
+    try { built = this.candidates?.build(chatId, held, Math.max(0, capUsd - costUsd)).candidate ?? null; }
+    catch (e) { log.warn('brain', 'candidate brain not built', { cause: errText(e), hint: 'its findings are shown as single cards in Proposte' }); }
+    for (const p of held) this.store.update(p.id, { candidateId: built?.proposalIds.includes(p.id) ? built.id : undefined });
+  }
+  private async approveCandidate(id: string): Promise<string> {
+    const c = this.candidates!.get(id);
+    if (!c || c.state !== 'open') throw new Error('Versione candidata non più aperta.');
+    const members = c.proposalIds.flatMap(pid => { const p = this.store.get(pid); return p ? [p] : []; });
+    const summary = `Versione candidata del brain: ${members.length} ${members.length === 1 ? 'modifica' : 'modifiche'} in ${c.files.length} file`;
+    const reason = members.map(p => `${p.title}: ${p.why}`).join(' · ').replace(/\s+/g, ' ').slice(0, 400);
+    const evidence = [`maintenance:${id}`, ...members.slice(0, 8).map(p => `maintenance:${p.id}`)];
+    let changeId: string;
+    // every member's «riuscito se…» goes with the one change (checkOutcomes checks each)
+    const successes = members.flatMap(p => (p.success ? [p.success] : []));
+    try { changeId = this.candidates!.approve(id, summary, reason, evidence, successes); }
+    catch (e) {
+      // a stale candidate: its findings are their own cards again, each checked against the brain as it is now
+      if (this.candidates!.get(id)?.state === 'stale') { for (const p of members) this.store.update(p.id, { candidateId: undefined }); this.d.changed(); }
+      throw e;
+    }
+    for (const p of members) this.store.update(p.id, { state: 'approved', decidedAt: this.now(), changeId });
+    this.d.changed();
+    return changeId;
+  }
+  /** The role step runs only while the engine reports cost and the research spent less than its share of the cap. */
+  private reflectBudget(r: NonNullable<ResearchService['run']>): boolean {
+    const c = this.d.chats.get(r.chatId);
+    return (c?.costUsd ?? r.costUsd) < r.capUsd * REFLECT_BUDGET_SHARE;
+  }
+  /** maintenance_role_trial: ONE revised text for the role the app picked this click, as a card whose approval starts a
+   *  trial version (never a direct replacement). */
+  proposeRoleTrial(chatId: string, a: Input): { id: string } {
+    const r = this.mine(chatId);
+    if (!this.d.roleTrial || !r.reflect) throw new Error('No role to reflect on in this research.');
+    if (!this.reflectBudget(r)) throw new Error('Budget: the role step is skipped, the research has spent most of its cap.');
+    const role = r.reflect.role;
+    if (a.role !== role.id) throw new Error(`role: this research reflects only on ${role.id}.`);
+    if (this.store.all().some(p => p.chatId === chatId && p.roleTrial)) throw new Error('Limit reached: one revised role text per research.');
+    if (this.store.all().some(p => p.roleTrial?.role === role.id && p.state === 'open')) throw new Error('Duplicate: a revised text for this role is already waiting in Proposte.');
+    const text = checkRoleText(role.instructions, a.text);
+    const title = str(a.title, 120, 'title'), why = str(a.why, 1500, 'why');
+    const saved = this.store.add({ chatId, kind: 'role', title, adds: str(a.adds, 1500, 'adds', false), removes: str(a.removes, 1500, 'removes', false), why,
+      evidence: strList(a.evidence, 12, 300, 'evidence'), sources: [], expected: str(a.expected, 600, 'expected', false), risk: str(a.risk, 600, 'risk', false),
+      roleTrial: { role: role.id, baseVersion: role.activeVersion, before: role.instructions, text } });
+    r.proposals++;
+    this.d.changed();
+    return { id: saved.id };
   }
 }

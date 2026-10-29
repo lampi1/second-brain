@@ -6,9 +6,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { AgentRunStore } from '../../../src/main/agents/runs';
+import { closeAppDbs } from '../../../src/main/app-db';
 
 const dirs: string[] = [];
-afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+afterEach(() => { closeAppDbs(); for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 it('bumps on a new run and on touch, not on a flush with nothing to write', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-runrev-')); dirs.push(dir);

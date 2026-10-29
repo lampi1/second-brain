@@ -1108,5 +1108,10 @@ export function demoQuality(now = Date.now()): AppQuality {
       { id: 7101, title: 'Campo data vuoto dopo il salvataggio', state: 'Active', url: 'https://dev.example.com/proj/_workitems/edit/7101', reopened: [{ resolvedAt: `${day(6)}T10:00:00Z`, reopenedAt: `${day(4)}T09:12:00Z`, by: 'Robin (QA)', to: 'Active' }] },
       { id: 7088, title: 'Colonna tagliata in stampa', state: 'Closed', url: 'https://dev.example.com/proj/_workitems/edit/7088', reopened: [{ resolvedAt: `${day(30)}T10:00:00Z`, reopenedAt: `${day(28)}T15:40:00Z`, by: 'Kim (QA)', to: 'Active' }, { resolvedAt: `${day(26)}T10:00:00Z`, reopenedAt: `${day(25)}T11:00:00Z`, by: 'Kim (QA)', to: 'Active' }] },
     ] },
+    // the user's corrections the app counted (ADR 0197): the last 6 days, the runs' tags before
+    corrections: { since: day(5),
+      byDay: [[5, 9, 1, 0, 1], [4, 14, 1, 1, 0], [3, 11, 0, 0, 2], [2, 16, 2, 0, 1], [1, 8, 0, 1, 0], [0, 12, 1, 0, 1]]
+        .map(([n, messages, tagged, afterReport, recognized]) => ({ date: day(n!), messages: messages!, tagged: tagged!, afterReport: afterReport!, recognized: recognized!, semantic: recognized ? 1 : 0, chats: [] })),
+      runs: [{ date: day(8), tagged: 1, afterReport: 0 }, { date: day(7), tagged: 2, afterReport: 0 }] },
   };
 }

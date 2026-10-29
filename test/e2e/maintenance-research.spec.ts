@@ -2,7 +2,8 @@
 // else (no dialog): it says it started, breathes while the invisible research works (its chat never shows as a strip
 // or in the sidebar), and ends in the celebrate notice with what it made and «Apri Memoria». In Proposte an idea or a
 // bug about the app is a card «Apro su GitHub la issue …?» with the issue as it will be opened; approving it opens it
-// (the demo records the page instead of reaching GitHub) and the card leaves. Screenshots:
+// (the demo records the page instead of reaching GitHub) and the card leaves. The research's rule for every role is
+// one «versione candidata del brain» card with its diff (ADR 0195). Screenshots:
 // test-results/shots/maintenance-one-click-*.png.
 import { expect, test } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
@@ -27,9 +28,17 @@ test('Manutenzione: one click, invisible research, end notice, issue cards in Pr
     await expect(page.getByTestId('sidebar').getByText('Manutenzione', { exact: true })).toHaveCount(0);
     await notice.getByTestId('toast-action').click();
 
-    // Proposte: the issue cards
+    // Proposte: the candidate brain (ADR 0195): the research's rule for every role is one card with its diff
     const deck = page.getByTestId('proposals-deck');
     await expect(deck).toBeVisible();
+    await deck.getByTestId('pd-chip-brain').click();
+    await expect(deck.getByTestId('pd-question')).toContainText('versione candidata del brain');
+    await expect(deck.getByTestId('pd-candidate')).toContainText('Il server di staging si chiama «stg-eu»');
+    await expect(deck.getByTestId('pd-diffs').getByTestId('viewer-diff').first()).toBeVisible();
+    await page.mouse.move(2, 2);
+    await shot(page, 'maintenance-candidate-brain-dark');
+
+    // Proposte: the issue cards
     await deck.getByTestId('pd-chip-issue').click();
     await expect(deck).toContainText('Apro su GitHub la issue');
     await expect(deck).toContainText('La issue, come sarà aperta');

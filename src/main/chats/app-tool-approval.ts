@@ -2,7 +2,7 @@
 // config): the Orchestrator's app-control tools, and on every chat's own endpoint the mail between chats and the
 // delegation tools (agent_delegate, agent_report, agent_children, agent_ask_parent, agent_answer_child: ADR 0083) and a
 // Strategist's plan with the user (plan_propose, plan_update: ADR 0108) and the maintenance research's pack and cards
-// (maintenance_pack, maintenance_propose: ADR 0132; shown to that chat only). Only app-owned loopback endpoints qualify;
+// (maintenance_pack, maintenance_propose: ADR 0132; maintenance_role_trial: ADR 0195; shown to that chat only). Only app-owned loopback endpoints qualify;
 // browser actions and unrelated servers still ask for permission.
 export function appEndpoint(raw: string | null | undefined): boolean {
   if (!raw) return false;
@@ -13,7 +13,7 @@ export function appEndpoint(raw: string | null | undefined): boolean {
   } catch { return false; }
 }
 
-export const APP_CHAT_TOOLS = ['send_to_chat', 'list_chats', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_work_decisions', 'agent_integrate_child', 'agent_integrate_children', 'agent_report', 'agent_children', 'agent_ask_parent', 'agent_answer_child', 'plan_propose', 'plan_update', 'maintenance_pack', 'maintenance_propose'] as const;
+export const APP_CHAT_TOOLS = ['send_to_chat', 'list_chats', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_work_decisions', 'agent_integrate_child', 'agent_integrate_children', 'agent_report', 'agent_children', 'agent_ask_parent', 'agent_answer_child', 'plan_propose', 'plan_update', 'maintenance_pack', 'maintenance_propose', 'maintenance_role_trial'] as const;
 
 export function cursorAppPermissions(mcpUrl?: string | null, appMcpUrl?: string | null): string[] {
   return [

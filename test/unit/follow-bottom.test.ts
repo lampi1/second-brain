@@ -1,3 +1,4 @@
+// src/renderer/lib/follow-bottom.ts: a stream list follows its bottom while content grows and stops when the user reads.
 import {expect,it} from 'vitest';
 import {createFollowBottom,rememberFollowState,savedFollowState,type FollowState} from '../../src/renderer/lib/follow-bottom';
 function fixture(previous?:FollowState){

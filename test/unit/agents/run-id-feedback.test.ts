@@ -10,12 +10,13 @@ import type { BrainService, BrowserService, ChatService } from '../../../src/mai
 import { RunFeedback } from '../../../src/main/agents/run-feedback';
 import { AgentCatalogService } from '../../../src/main/agents/catalog';
 import { AgentRunStore, unknownRunError } from '../../../src/main/agents/runs';
+import { closeAppDbs } from '../../../src/main/app-db';
 import type { AgentRun } from '../../../src/shared/agents';
 import { AGENT_FEEDBACK_SCHEMA } from '../../../src/shared/agent-lifecycle';
 
 const dirs: string[] = [];
 const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-runid-')); dirs.push(d); return d; };
-afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+afterEach(() => { closeAppDbs(); for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 const run = (over: Partial<AgentRun> = {}): AgentRun => ({ runId: 'r_0123456789ab', chatId: 'c_work000001', agentId: 'reviewer', version: 2, goal: 'g', startedBy: 'orchestrator', startedAt: 1,
   counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: null, tokens: null, ...over });

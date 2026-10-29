@@ -28,7 +28,7 @@ import { BrainModelService } from './brainmodel/service';
 import { ResearchService } from './brainmodel/research';
 import { DEMO_LIVE, writeDemoResearch } from './brainmodel/research-demo';
 import { writeDemoLogs } from './brainmodel/log-scan';
-import { writeDemoClassifiers, type DemoClassifierData } from './demo-classifiers';
+import { demoKindModel, writeDemoClassifiers, type DemoClassifierData } from './demo-classifiers';
 import { demoDevopsRun } from './tasks/demo';
 import { TaskService } from './tasks/service';
 import { writeDemoScripts } from './brain/scripts-demo';
@@ -42,7 +42,8 @@ import { log, errText } from './log';
 import { McpServer, mcpPortFromEnv } from './mcp/server';
 import { demoMcpServers } from './mcp-servers/demo';
 import { recordMcpPort } from './health';
-import { attachArtifacts, attachCommandAsks, attachOrchestratorWake, attachRunResults, commandRunner, createAppSource, createLater, attachAppTools, type Ctx, type Wired } from './wiring';
+import { attachArtifacts, attachCommandAsks, attachOrchestratorWake, attachRunResults, commandRunner, createAppSource, createLater, attachAppTools } from './wiring-shared';
+import type { Ctx, Wired } from './wiring-types';
 import { attachHeldNews } from './chats/held-news';
 import { SkillsService } from './skills/service';
 import { demoSkillsHome } from './skills/demo';
@@ -57,7 +58,7 @@ import { appGuide, teacherOption } from './learn/sources';
 import { engineInfos } from './engines/registry';
 import { demoCloud } from './cloud/demo';
 import fs from 'node:fs';
-import { createAgentCatalog } from './wiring';
+import { createAgentCatalog } from './wiring-shared';
 import { SetupService } from './agents/setup';
 import { RunFeedback } from './agents/run-feedback';
 import { AgentRunStore } from './agents/runs';
@@ -137,7 +138,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const demoLogs = writeDemoLogs(path.join(ctx.userData, 'demo-logs'), path.join(ctx.userData, 'maintenance-noise.json'), now());
   const brainModel: BrainModelService = new BrainModelService({ userData: ctx.userData, root: () => demoBrainRoot, home: null, catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning,
     runs: (): AgentRun[] => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...demoLearningRuns(now()), ...(demoCls ??= writeDemoClassifiers(demoBrainRoot, ctx.userData, now(), brainModel.skillList().map((x: { name: string }) => x.name).filter(n => n !== 'pulizia-ambiente'))).runs], routing: () => brain.routingInfo(), now,
-    emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: false,
+    emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: false, kindModel: async () => demoKindModel(now()),
     scripts: { file: id => demoScripts.get(id).path, changed: () => { demoScripts.invalidate(); ctx.emitter.emit('scripts:changed', undefined); } },
     // the log step of the Manutenzione (#150): made-up logs, whose new groups become app bug cards (ADR 0132)
     logDir: () => demoLogs,
@@ -146,10 +147,10 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   // the one-click maintenance (ADR 0132, 0153) on the demo chats: past findings written once, a research proposes two
   // more; an approved issue card opens nothing (the demo records the page it would open)
   const research: ResearchService = new ResearchService({ userData: ctx.userData, lang: uiLang, root: () => demoBrainRoot, appVersion: () => app.getVersion(),
-    issuesUrl: () => 'https://github.com/lampi1/second-brain/issues', now,
+    issuesUrl: () => 'https://github.com/lampi1/second-brain/issues', now, logDir: () => demoLogs,
     engines: () => [{ harness: 'claude', label: 'Claude', web: true, effort: true }, { harness: 'cursor', label: 'Cursor', web: true, effort: false }],
     bestModel: h => (h === 'claude' ? 'opus' : null), runs: () => demoLearningRuns(now()), roles,
-    brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); }, maintain: () => brainModel.maintain() },
+    brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); }, maintain: () => brainModel.maintain(), outcomes: () => brainModel.checkOutcomes() },
     issues: { open: async (repo, issue) => { const url = newIssueUrl(repo, issue); hiddenOpened.push(`external ${url}`); return { url, via: 'browser' }; } },
     chats: {
       // the demo answers at once (frozen): the chat starts without its prompt, the research is registered, then the
@@ -166,7 +167,9 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
       get: id => chats.list().find(c => c.id === id), stop: id => chats.stop(id),
     },
     changed: () => ctx.emitter.emit('maintenance:changed', undefined),
-    done: d => ctx.emitter.emit('maintenance:done', d) });
+    done: d => ctx.emitter.emit('maintenance:done', d),
+    // ADR 0195: the demo research's brain findings become one candidate brain (no replay in the demo)
+    candidates: { input: () => brainModel.candidateInput(), apply: (meta, writes, forget) => brainModel.applyCandidate(meta, writes, forget) } });
   writeDemoResearch(research.store, now());
   ctx.emitter.tap((channel, payload) => { if (channel === 'chat:updated') research.chatUpdated(payload as ChatSummary); });
   if (!brainModel.report()) await brainModel.maintain('migration').catch(e => log.warn('demo', 'demo migration failed', { cause: errText(e), hint: 'the Skill page shows the demo brain without the migrated skills' }));

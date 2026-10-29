@@ -24,6 +24,18 @@ export const touchesBrainModel = (rel: string): boolean => {
 export function readSmall(file: string): string | null {
   try { const st = fs.lstatSync(file); if (!st.isFile() || st.size > MAX_BYTES) return null; return fs.readFileSync(file, 'utf8'); } catch { return null; }
 }
+/** A file about to be written inside the brain really lands there: the nearest folder of it that exists, resolved
+ *  through every link (a symlinked .claude/skills, a junction), is the brain root or inside it. Written by the
+ *  maintenance's new skills (service.ts applyResearch, research-candidate.ts). */
+export function landsInsideBrain(root: string, file: string): boolean {
+  try {
+    const top = fs.realpathSync(root);
+    let dir = path.dirname(path.resolve(file));
+    while (!fs.existsSync(dir)) { const up = path.dirname(dir); if (up === dir) return false; dir = up; }
+    const rel = path.relative(top, fs.realpathSync(dir));
+    return !rel.startsWith('..') && !path.isAbsolute(rel);
+  } catch { return false; }
+}
 const mtime = (file: string): number | null => { try { return fs.statSync(file).mtimeMs; } catch { return null; } };
 const inside = (root: string | null, file: string): string | null => {
   if (!root) return null;

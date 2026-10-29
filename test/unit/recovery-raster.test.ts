@@ -1,3 +1,4 @@
+// src/renderer/lib/recovery-raster.ts: recovered images are checked (magic, dimensions, size) before any decoder.
 import {expect,it} from 'vitest';
 import {validateRecoveryRaster} from '../../src/renderer/lib/recovery-raster';
 function png(width:number,height:number){const bytes=new Uint8Array(33),view=new DataView(bytes.buffer);bytes.set([137,80,78,71,13,10,26,10]);view.setUint32(8,13);bytes.set([73,72,68,82],12);view.setUint32(16,width);view.setUint32(20,height);return 'data:image/png;base64,'+btoa(String.fromCharCode(...bytes));}

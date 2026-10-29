@@ -36,7 +36,8 @@
     "dev": "node scripts/build.mjs --dev && electron .",
     "start": "electron .",
     "demo": "node scripts/demo.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "node node_modules/typescript7/bin/tsc -p tsconfig.json --noEmit",
+    "typecheck:ts6": "node node_modules/typescript/bin/tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
     "test:e2e": "node scripts/build.mjs && node scripts/e2e.mjs",
@@ -97,6 +98,7 @@
     "eslint": "10.11.0",
     "typescript": "6.0.3",
     "typescript-eslint": "8.70.1",
+    "typescript7": "npm:typescript@7.0.2",
     "vite": "8.3.1",
     "vitest": "5.0.2"
   },

@@ -2,19 +2,22 @@
 // (userData/logs/app-YYYY-MM-DD.jsonl, log.ts) written since the previous pass, grouped by scope | msg | cause with a
 // count and one sample line each, no LLM. Numbers in the cause are folded (a pid, an id, a count), so the same problem
 // is one group. The groups the user marked "noto, ignora" (maintenance-noise.json in userData) are flagged known and
-// never made a card. Each new group becomes an app bug card «Apri issue» in Memoria → Proposte with its issue written
+// never made a card. The days of the period whose raw file is gone (kept 14 days, log.ts) come from the logs' daily
+// digest (log-digest.ts, 90 days, ADR 0192): their groups count too, with a note in place of a sample line. Each new group becomes an app bug card «Apri issue» in Memoria → Proposte with its issue written
 // (brainmodel/research.ts afterPass, ADR 0132, 0153; before it the groups went to the Orchestrator, #150). Pure but for the
-// file reads; used by brainmodel/service.ts, pinned by test/unit/brainmodel/log-scan.test.ts.
+// file reads; used by brainmodel/service.ts (also countLogGroup, for the «riuscito se…» check of ADR 0194), pinned by
+// test/unit/brainmodel/log-scan.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { LogGroup, LogScan } from '../../shared/brain-model';
+import { groupKey, readDigest } from '../log-digest';
+
+export { groupKey };
 
 const FILE = /^app-(\d{4}-\d{2}-\d{2})\.jsonl$/;
 const TWO_DAYS = 2 * 864e5;
 const SAMPLE_MAX = 600, GROUPS_MAX = 40;
 
-const fold = (s: string): string => s.replace(/\d+/g, 'N').replace(/\s+/g, ' ').trim().slice(0, 200);
-export const groupKey = (scope: string, msg: string, cause: string): string => `${scope} | ${fold(msg)} | ${fold(cause)}`;
 
 /** The groups of the log files in `dir` with lines after `since` (null = the last two days), worst first. */
 export function scanLogs(dir: string, since: number | null, known: ReadonlySet<string>, now = Date.now()): LogScan {
@@ -22,6 +25,18 @@ export function scanLogs(dir: string, since: number | null, known: ReadonlySet<s
   let names: string[] = [];
   try { names = fs.readdirSync(dir).filter(f => FILE.test(f) && FILE.exec(f)![1]! >= fromDay).sort(); } catch { /* no logs yet */ }
   const groups = new Map<string, LogGroup>(), files: string[] = [];
+  // the days whose raw file is gone: their groups from the digest (a day is counted whole, even when the previous pass
+  // ran during it)
+  const raw = new Set(names.map(n => FILE.exec(n)![1]!));
+  for (const d of readDigest(dir, now)) {
+    if (d.day < fromDay || raw.has(d.day)) continue;
+    for (const g of d.groups) {
+      if (g.lvl !== 'warn' && g.lvl !== 'error') continue;
+      const have = groups.get(g.key);
+      if (have) { have.count += g.count; if (g.lvl === 'error') have.lvl = 'error'; continue; }
+      groups.set(g.key, { key: g.key, lvl: g.lvl, scope: g.scope, msg: g.msg, cause: g.cause, count: g.count, sample: `(from the daily digest of ${d.day}: its raw log file was already deleted)`, ...(known.has(g.key) ? { known: true as const } : {}) });
+    }
+  }
   for (const name of names) {
     const file = path.join(dir, name);
     let text: string;
@@ -36,7 +51,7 @@ export function scanLogs(dir: string, since: number | null, known: ReadonlySet<s
       if (!Number.isFinite(at) || at <= from) continue;
       const scope = String(e.scope ?? ''), msg = String(e.msg ?? ''), cause = typeof e.cause === 'string' ? e.cause : '';
       const key = groupKey(scope, msg, cause), g = groups.get(key);
-      if (g) { g.count++; if (e.lvl === 'error') g.lvl = 'error'; continue; }
+      if (g) { g.count++; if (e.lvl === 'error') g.lvl = 'error'; if (g.sample.startsWith('(from the daily digest')) g.sample = line.slice(0, SAMPLE_MAX); continue; }
       groups.set(key, { key, lvl: e.lvl, scope, msg, cause: cause.slice(0, 300), count: 1, sample: line.slice(0, SAMPLE_MAX), ...(known.has(key) ? { known: true as const } : {}) });
     }
   }
@@ -44,6 +59,26 @@ export function scanLogs(dir: string, since: number | null, known: ReadonlySet<s
   return { since, files, groups: list };
 }
 
+/** The warn/error lines of one log group written in [from, to) (the «riuscito se…» check, success-check.ts, ADR 0194). */
+export function countLogGroup(dir: string, key: string, from: number, to: number): number {
+  const fromDay = new Date(from).toISOString().slice(0, 10), toDay = new Date(to).toISOString().slice(0, 10);
+  let names: string[] = [];
+  try { names = fs.readdirSync(dir).filter(f => { const d = FILE.exec(f)?.[1]; return !!d && d >= fromDay && d <= toDay; }); } catch { return 0; }
+  let n = 0;
+  for (const name of names) {
+    let text: string;
+    try { text = fs.readFileSync(path.join(dir, name), 'utf8'); } catch { continue; }
+    for (const line of text.split('\n')) {
+      if (!line.includes('"lvl":"warn"') && !line.includes('"lvl":"error"')) continue;
+      let e: { t?: unknown; lvl?: unknown; scope?: unknown; msg?: unknown; cause?: unknown };
+      try { e = JSON.parse(line) as typeof e; } catch { continue; }
+      const at = typeof e.t === 'string' ? Date.parse(e.t) : NaN;
+      if (!Number.isFinite(at) || at < from || at >= to) continue;
+      if (groupKey(String(e.scope ?? ''), String(e.msg ?? ''), typeof e.cause === 'string' ? e.cause : '') === key) n++;
+    }
+  }
+  return n;
+}
 
 /** The demo's logs (#150): a day of made-up warnings and errors, one group already marked known, for the Manutenzione
  *  dialog and its e2e. Written once per demo folder. */

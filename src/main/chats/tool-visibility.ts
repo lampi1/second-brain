@@ -20,8 +20,8 @@ const DELEGATING_ONLY: ReadonlySet<string> = new Set(['agent_delegate', 'agent_a
 const PLAN_TOOLS: ReadonlySet<string> = new Set(['plan_propose', 'plan_update']);
 /** the chat-endpoint tools Flash never sees (chatToolShown), beside every agent_* tool */
 const LAMPO_HIDDEN: ReadonlySet<string> = new Set([...APP_CHAT_TOOLS, 'brain_script_add', 'brain_query_add']);
-/** the maintenance research's two tools (ADR 0132, brainmodel/research-tools.ts) */
-const RESEARCH_TOOLS: ReadonlySet<string> = new Set(['maintenance_pack', 'maintenance_propose']);
+/** the maintenance research's tools (ADR 0132, 0195, brainmodel/research-tools.ts) */
+const RESEARCH_TOOLS: ReadonlySet<string> = new Set(['maintenance_pack', 'maintenance_propose', 'maintenance_role_trial']);
 
 /** No chat and no waiting engine: every tool but the research's. */
 export const toolShownToUnknown = (tool: string): boolean => !RESEARCH_TOOLS.has(tool);

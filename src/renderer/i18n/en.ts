@@ -1,3 +1,5 @@
+// The English UI dictionary, the same keys as it.ts, built from the area files under i18n/areas. Used by the
+// renderer's t() when the language is English; the i18n unit tests check it covers every Italian key.
 import { flowsEn } from './areas/flows.en';
 import { routineEn } from './areas/routine.en';
 import { routinesEn } from './areas/routines.en';

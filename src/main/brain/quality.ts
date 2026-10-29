@@ -6,11 +6,12 @@
 // test case Failed/Blocked, a reviewer's "rifiutata" or "in attesa dell'autore"). Reopened bugs: the brain's
 // read-only ops/tools/bug-reopen.mjs (his resolved bugs sent back to an open state), run in the background at most every
 // 12 h while DevOps reading is on, its last result kept in userData/quality-reopen.json. Why: the user, 2026-10-13, "la
-// sezione qualità sia veramente utile e veritiera": few numbers, each with its source and dates. Pure parts exported
+// sezione qualità sia veramente utile e veritiera": few numbers, each with its source and dates. Corrections: the
+// user's messages the app itself recognised as corrections, per day (user-corrections.ts, ADR 0197). Pure parts exported
 // for test/unit/brain/quality.test.ts; wired in wiring.ts through brain.serveApi.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AppQuality, DevopsDetail, DevopsPr, QualityPrBlock } from '../../shared/contract';
+import type { AppQuality, DevopsDetail, DevopsPr, QualityPrBlock, UserCorrections } from '../../shared/contract';
 import type { RunResult } from './node';
 import { log, errText } from '../log';
 
@@ -96,6 +97,8 @@ export interface QualityDeps {
   brainRoot: () => string | null;
   tasks: () => { at: number | null; prs: DevopsPr[]; details: Record<string, DevopsDetail>; error: { message: string } | null; enabled: boolean };
   run: (script: string, args: string[], cwd: string, timeoutMs: number) => Promise<RunResult>;
+  /** the user's corrections the app counted (user-corrections.ts, ADR 0197); absent = not counted */
+  corrections?: () => UserCorrections;
   now?: () => number;
 }
 
@@ -154,6 +157,7 @@ export class Quality {
       turns: this.turns(),
       prs: { at: dv.at, total: dv.prs.length, blocked: prBlocks(dv.prs, dv.details), error: dv.error?.message ?? null },
       reopen,
+      ...(this.d.corrections ? { corrections: this.d.corrections() } : {}),
     };
   }
 

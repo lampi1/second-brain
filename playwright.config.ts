@@ -1,3 +1,4 @@
+// Playwright config of the e2e suite (test/e2e), run by scripts/e2e.mjs: the parallel and exclusive projects.
 import { defineConfig } from '@playwright/test';
 
 // End-to-end tests drive the real Electron app (test/e2e/*.spec.ts). No browsers are downloaded: Electron is the browser.

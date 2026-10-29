@@ -1,3 +1,4 @@
+// Smoke e2e: the app boots, the preload bridge answers and the renderer stays sandboxed (no Node in the page).
 import { test, expect } from '@playwright/test';
 import { launch, shot } from './helpers';
 

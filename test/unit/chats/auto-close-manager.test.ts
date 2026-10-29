@@ -1,3 +1,4 @@
+// src/main/chats/auto-close.ts with a real ChatManager: the automatic archive of finished chats and its reservations.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';

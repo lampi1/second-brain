@@ -2,7 +2,8 @@
 // number (proposals:count + the proposals:changed event), and this session's decisions. A decision is held for a few
 // seconds before it goes to main (proposals:decide): the next decision, leaving the deck or the timer sends it, and Z /
 // Ctrl+Z / «Annulla ultima» takes it back while it is held (nothing was applied yet). A refused decision brings its card
-// back with the reason. Used by components/brain-model/ProposalsDeck.tsx and the Memoria sidebar badge (Sidebar.tsx).
+// back with the reason. The card on top is reported once (proposals:shown) and Annulla on a card the app applied by
+// itself goes to proposals:undoAuto (ADR 0193). Used by components/brain-model/ProposalsDeck.tsx and the Memoria sidebar badge (Sidebar.tsx).
 import { useEffect } from 'react';
 import type { Proposal, ProposalDecision, ProposalGroup, ProposalKeep, ProposalsState } from '@shared/proposals';
 import { PROPOSAL_GROUPS } from '@shared/proposals';
@@ -80,6 +81,21 @@ export function undoLast(): Proposal | null {
   return held.card;
 }
 export const canUndo = (s: DeckState): boolean => s.decided.some(d => d.state === 'held');
+
+/** The card on top now, once per card (main keeps when it was first seen: ADR 0193's decision time). */
+const reported = new Set<string>();
+export function reportShown(id: string): void {
+  if (reported.has(id)) return;
+  reported.add(id);
+  void sb.invoke('proposals:shown', { id }).catch(() => { reported.delete(id); });
+}
+/** Annulla on a card the app applied by itself (ADR 0193): its ledger id; a refusal shows like a decision's. */
+export async function undoAuto(id: string, title: string): Promise<void> {
+  try {
+    const r = await sb.invoke('proposals:undoAuto', { id });
+    deck.set(s => ({ ...s, data: r.state, count: r.state.items.length, refused: r.ok ? s.refused : { title, error: r.error } }));
+  } catch (e) { deck.set(s => ({ ...s, refused: { title, error: errorText(e) } })); }
+}
 export const dismissRefusal = (): void => deck.set(s => ({ ...s, refused: null }));
 
 /** The cards still to decide: main's open ones minus this session's decisions in flight. */

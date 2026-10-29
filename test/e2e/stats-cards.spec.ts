@@ -34,6 +34,12 @@ async function classifiers(page: Page, scheme: string): Promise<void> {
   await shot(page, `stats-classifiers-${scheme}`);
   await cls.getByTestId('cls-card-jobkind').scrollIntoViewIfNeeded();
   await shot(page, `stats-classifiers-more-${scheme}`);
+  // the kind of work by examples (ADR 0197): agreement with the words k/n and the confusion matrix on the held-out part
+  const km = cls.getByTestId('cls-card-kindmodel');
+  await km.scrollIntoViewIfNeeded();
+  await expect(km.getByTestId('cls-km-agree')).toContainText('24/29');
+  await expect(km.getByTestId('cls-km-matrix').locator('tbody tr')).toHaveCount(6);
+  await shot(page, `stats-classifiers-kindmodel-${scheme}`);
   await cls.getByTestId('cls-summary').scrollIntoViewIfNeeded();
   // every number explains itself
   const help = cls.getByTestId('cls-kind-hit').locator('.help-tip');

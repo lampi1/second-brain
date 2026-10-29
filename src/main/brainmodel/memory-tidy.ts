@@ -15,13 +15,17 @@
 //   5. writes it all through rules/memory-records.ts tidyMemory and records one change per role in the change log, with
 //      what was merged, rewritten, dropped, saved and pruned as its evidence, and its undo (ChangeLog → undoMemoryTidy).
 //      A fact a tidy-up touched and the user undid is never touched again.
-// Facts with derived copies are left alone.
+// Facts with derived copies are left alone. Every rewrite of step 2 is one item edit (item-delta.ts checkFactEdit, ADR
+// 0194): a «rule» that shares nothing with its fact or shrinks it to a stub (ACE's brevity bias) is refused with a warn
+// log, and the fact stays as it was.
 // Used by brainmodel/jobs.ts mergeMemory; unit tests: test/unit/brainmodel/memory-tidy.test.ts.
 import { randomBytes } from 'node:crypto';
 import { queueMemoryInvalidation } from '../rules/memory-invalidations';
 import { memoryConflicts, readMemoryRecords, tidyMemory, type MemoryRecord, type MemoryScope } from '../rules/memory-records';
 import { memoryWorth, sameMemoryFact } from '../rules/memory-worth';
 import { changeText } from './change-text';
+import { checkFactEdit } from './item-delta';
+import { log } from '../log';
 import type { JobContext, JobResult } from './jobs';
 
 const MAX_ASKED = 20, BATCH = 10, LINE = 300;
@@ -88,7 +92,7 @@ export async function tidyMemoryJob(ctx: JobContext): Promise<JobResult> {
 
   // 2. case-specific facts: rewritten as the rule behind them, or dropped (only with an engine)
   const specific = open.filter(r => !gone.has(r.memoryId) && memoryWorth(r.subject, r.predicate, r.value).specific).slice(0, MAX_ASKED);
-  let note: string | undefined;
+  let note: string | undefined, refused = 0;
   if (specific.length && !ctx.ask) note = `${specific.length} fatti legati a un caso aspettano un motore per essere generalizzati`;
   for (let i = 0; ctx.ask && i < specific.length; i += BATCH) {
     const batch = specific.slice(i, i + BATCH), ids = batch.map((_, j) => `m${j + 1}`);
@@ -103,6 +107,13 @@ export async function tidyMemoryJob(ctx: JobContext): Promise<JobResult> {
         if (r.status === 'proposed') retire(r, 'not-generalizable', { kind: 'dropped', old: r.value });
         return;
       }
+      // an item edit, never a collapse: the rewrite keeps the fact's subject and substance
+      const edit = checkFactEdit(r.value, value);
+      if (!edit.ok) {
+        log.warn('brain', 'memory tidy rewrite refused: not an item edit', { data: { role: r.scope.roleId }, cause: edit.cause, hint: edit.hint });
+        refused++;
+        return;
+      }
       // the rule is already remembered in its scope: the case goes as merged into it
       const twin = open.find(x => x !== r && !gone.has(x.memoryId) && sameScope(x.scope, r.scope)
         && sameMemoryFact(x, { ...r, value }));
@@ -113,6 +124,8 @@ export async function tidyMemoryJob(ctx: JobContext): Promise<JobResult> {
       gone.add(r.memoryId); const p = plan(r); p.generalize.push({ id: r.memoryId, value }); p.lines.push({ kind: 'generalized', old: r.value, to: value });
     });
   }
+
+  if (refused) note = [note, `${refused} riscritture rifiutate: avrebbero perso il contenuto del fatto`].filter(Boolean).join('; ');
 
   // 3. what is left is saved without a card (ADR 0150): a newer value replaces the confirmed one it contradicts; a fact
   // tied to one case waits for an engine to make it general, a fact the user undid stays as he left it

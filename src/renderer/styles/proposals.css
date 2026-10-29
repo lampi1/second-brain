@@ -13,6 +13,9 @@
 .pd .pd-g-script { --pd-c: var(--pair-2, var(--blue)); }
 .pd .pd-g-forget { --pd-c: var(--text-3); }
 .pd .pd-g-issue { --pd-c: var(--pair-3, var(--violet)); }
+.pd .pd-g-brain { --pd-c: var(--pair-6); }
+
+.pd .pd-g-note { --pd-c: var(--pair-4, var(--green)); }
 
 /* ── head: chips and progress ─────────────────────────────────────────────────────────────────────────────── */
 .pd-head { width: min(780px, 100%); display: flex; flex-direction: column; gap: 12px; }
@@ -222,3 +225,45 @@
 .pd-sources a { color: var(--blue); }
 .pd-exact { padding: 10px 12px; border-radius: var(--r-s); background: var(--surface-2); border: 1px dashed var(--border-2); }
 .pd-exact .pd-md { font-size: var(--fs-s); }
+
+/* Why the app still asks (ADR 0193): one quiet line under the question, no suggested answer. */
+.pd-asked { margin: -4px 0 0; display: flex; gap: 6px; align-items: baseline; color: var(--text-2); font-size: var(--fs-s); line-height: 1.4; }
+.pd-asked span { flex: none; color: var(--text-3); font-weight: 600; }
+
+/* «Applicate da sole» (ADR 0193): the cards applied by themselves, with Annulla, and the cards saved this week. */
+.pd-auto { width: var(--pd-w); margin-top: 18px; padding: 14px 16px; border-radius: var(--r-m); background: var(--surface-2); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.pd-auto-head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.pd-auto-head h3 { margin: 0; font: 600 var(--fs-m) var(--font); color: var(--text); }
+.pd-auto-saved { margin-left: auto; display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 999px; font: 600 var(--fs-xs) var(--font-small);
+  color: var(--green); background: color-mix(in srgb, var(--green) 12%, transparent); border: 1px solid color-mix(in srgb, var(--green) 30%, transparent); font-variant-numeric: tabular-nums; }
+.pd-auto-lead { margin: 0; color: var(--text-3); font-size: var(--fs-s); line-height: 1.45; }
+.pd-auto-list { margin: 2px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.pd-auto-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--r-s); background: var(--surface); border: 1px solid var(--border); font-size: var(--fs-s); }
+.pd-auto-list .pd-kind { height: 20px; padding: 0 8px; }
+.pd-auto-list b { font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pd-auto-list time { color: var(--text-4); font: 500 var(--fs-xs) var(--font-small); font-variant-numeric: tabular-nums; }
+.pd-auto-state { color: var(--text-3); font-size: var(--fs-xs); }
+.pd-auto-off b { color: var(--text-3); text-decoration: line-through; }
+@media (max-width: 560px) { .pd-auto-list li { grid-template-columns: auto minmax(0, 1fr) auto; } .pd-auto-list time { display: none; } }
+
+/* A candidate version of the brain and a revised role text (ADR 0195): the findings with their kind's dot, the checks,
+   the replay's state, then one collapsible before/after per file (the file viewer's diff, brain.css .bx-diff). */
+.pd-cand-items, .pd-cand-checks { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-s); line-height: 1.45; color: var(--text); }
+.pd-cand-items li { display: flex; align-items: baseline; gap: 8px; }
+.pd-cand-success { display: block; margin-top: 2px; font-size: var(--fs-xs); color: var(--text-3); }
+.pd-cand-kind { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--pd-c); transform: translateY(-1px); }
+.pd-cand-checks li { color: var(--text-2); padding-left: 14px; position: relative; }
+.pd-cand-checks li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-size: var(--fs-xs); }
+.pd-cand-status { margin-left: 8px; padding: 1px 8px; border-radius: 999px; font: 500 var(--fs-xs) var(--font-small); background: var(--surface-3); color: var(--text-2); text-transform: none; letter-spacing: 0; }
+.pd-cand-passed { background: color-mix(in srgb, var(--green) 18%, var(--surface-3)); color: var(--text); }
+.pd-cand-failed { background: color-mix(in srgb, var(--red) 18%, var(--surface-3)); color: var(--text); }
+.pd-diffs { display: flex; flex-direction: column; gap: 6px; }
+.pd-diff-file { border: 1px solid var(--border); border-radius: var(--r-s); background: var(--surface-2); overflow: hidden; }
+.pd-diff-file summary { display: flex; align-items: center; gap: 8px; padding: 6px 10px; cursor: pointer; font-size: var(--fs-s); color: var(--text-2); }
+.pd-diff-file summary code { color: var(--text); font-size: var(--fs-xs); overflow-wrap: anywhere; }
+.pd-diff-file summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+.pd-diff-tag { padding: 0 7px; border-radius: 999px; font: 500 var(--fs-xs) var(--font-small); }
+.pd-diff-new { background: color-mix(in srgb, var(--green) 18%, var(--surface-3)); color: var(--text); }
+.pd-diff-gone { background: color-mix(in srgb, var(--red) 18%, var(--surface-3)); color: var(--text); }
+.pd-diff-body { max-height: 320px; overflow: auto; border-top: 1px solid var(--border); padding: 6px; cursor: text; user-select: text; }
+.pd-open .pd-diff-body { max-height: 60vh; }

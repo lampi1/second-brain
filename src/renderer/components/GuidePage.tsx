@@ -8,10 +8,20 @@
 // card («Ogni compito passa da un ruolo») sits on top as a wide hero with its
 // diagram always visible. A filter narrows the cards by any text of theirs. Mounted by App.tsx PageFrame for the page
 // 'guida' (left rail, Ctrl+K, G E); its arg is a card id (go({ page: 'guida', arg }), the «Come funziona →» of a "?",
-// components/GuideLink.tsx, ADR 0101): the page opens with that card's panel. Hooks in GuidePage and Card stay useId/useMemo/useState: the unit test
-// test/unit/concept-discuss-click.test.ts renders them without a DOM.
+// components/GuideLink.tsx, ADR 0101): the page opens with that card's panel. ADR 0196 adds, on top, «Chiedi alla Guida»
+// (GuideAsk.tsx: a light model answers from the cards, citing them) and «Per te» (the three cards this user needs most,
+// from local counters: lib/guide-usage.ts, and the Log's errors; no data, no section); a card whose anchored code changed
+// since its text was written shows «da verificare» (IPC guide:stale, only in a run from the repo) and its panel names the
+// points to re-read; the cards about roles, delegation and the app's IPC carry a diagram drawn from the code
+// (GuideCodeDiagram.tsx). Hooks in GuidePage and Card stay useId/useMemo/useState plus one useEffect for the page's data:
+// the unit test test/unit/concept-discuss-click.test.ts renders them without a DOM.
 import { useEffect, useId, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { CONCEPTS, orchestratorText, textOf, type ConceptCard, type ConceptDiagram, type GuideLang } from '@shared/concept-guide';
+import type { GuideStaleState } from '@shared/guide-ask';
+import { codeDiagram } from '@shared/guide-diagrams';
+import { errorsByCard, forYou, noteCardOpen, readUsage, type ForYou } from '../lib/guide-usage';
+import { GuideAsk } from './GuideAsk';
+import { GuideCodeDiagram } from './GuideCodeDiagram';
 import { lang, t } from '../i18n';
 import { toast } from '../store/ui';
 import { brainBridge } from '../actions';
@@ -83,10 +93,11 @@ function Diagram({ d, title, l }: { d: ConceptDiagram; title: string; l: GuideLa
   );
 }
 
-function Badges({ card }: { card: ConceptCard }) {
-  if (!card.coming?.length && !card.target?.length) return null;
+function Badges({ card, stale }: { card: ConceptCard; stale?: boolean }) {
+  if (!card.coming?.length && !card.target?.length && !stale) return null;
   return (
     <span className="guide-badges">
+      {stale && <span className="guide-badge guide-badge-stale" data-testid={`guide-stale-badge-${card.id}`} data-tip={t('guide.staleTip')}>{t('guide.staleBadge')}</span>}
       {card.coming?.map(x => <span key={x.pr} className="guide-badge guide-badge-coming" data-testid="guide-coming-badge">{t('guide.comingBadge', { pr: x.pr })}</span>)}
       {card.target?.length ? <span className="guide-badge" data-testid="guide-target-badge">{t('guide.targetBadge')}</span> : null}
     </span>
@@ -114,7 +125,7 @@ function LearnButton({ card, l }: { card: ConceptCard; l: GuideLang }) {
   );
 }
 
-function Card({ card, index, l, open, panel, onToggle }: { card: ConceptCard; index: number; l: GuideLang; open: boolean; panel: string; onToggle: () => void }) {
+function Card({ card, index, l, open, panel, stale, onToggle }: { card: ConceptCard; index: number; l: GuideLang; open: boolean; panel: string; stale?: boolean; onToggle: () => void }) {
   const L = (x: Parameters<typeof textOf>[0]) => textOf(x, l);
   const title = L(card.title);
   const heading = useId();
@@ -123,13 +134,13 @@ function Card({ card, index, l, open, panel, onToggle }: { card: ConceptCard; in
       data-testid={`guide-card-${card.id}`} aria-labelledby={heading}>
       <div className="guide-card-top">
         <Glyph id={card.id} size={card.prominent ? 24 : 20} />
-        <Badges card={card} />
+        <Badges card={card} stale={stale} />
       </div>
       {card.prominent && <span className="guide-hero-eyebrow">{t('guide.startHere')}</span>}
       <h3 id={heading}>{title}</h3>
       <p className="guide-summary">{L(card.summary)}</p>
       {card.prominent && card.diagram && <Diagram d={card.diagram} title={title} l={l} />}
-      <span className="guide-meta">{t('guide.pointsCount', { count: card.points.length })}{!card.prominent && card.diagram ? ` · ${t('guide.withDiagram')}` : ''}</span>
+      <span className="guide-meta">{t('guide.pointsCount', { count: card.points.length })}{!card.prominent && (card.diagram || codeDiagram(card.id, l)) ? ` · ${t('guide.withDiagram')}` : ''}</span>
       <div className="guide-card-foot">
         <button type="button" className="guide-toggle" aria-expanded={open} aria-controls={panel} onClick={onToggle} data-testid={`guide-toggle-${card.id}`}>
           {t('guide.howItWorks')} <IconChevronRight size={13} />
@@ -144,23 +155,31 @@ function Card({ card, index, l, open, panel, onToggle }: { card: ConceptCard; in
 
 /** The reading panel of the opened card: the shared side panel (components/ui.tsx Modal, size side) in the card's
  *  accent; Esc, its close button or a click outside closes it. */
-function DetailPanel({ id, card, index, l, onClose }: { id: string; card: ConceptCard; index: number; l: GuideLang; onClose: () => void }) {
+function DetailPanel({ id, card, index, l, stale, onClose }: { id: string; card: ConceptCard; index: number; l: GuideLang; stale?: GuideStaleState['cards'][number]; onClose: () => void }) {
   const L = (x: Parameters<typeof textOf>[0]) => textOf(x, l);
   const title = L(card.title);
   const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => { scroller.current?.closest('.modal-body')?.scrollTo({ top: 0 }); }, [card.id]);
-  const badges = card.coming?.length || card.target?.length ? <Badges card={card} /> : undefined;
+  const badges = card.coming?.length || card.target?.length || stale ? <Badges card={card} stale={!!stale} /> : undefined;
   return (
     <Modal size="side" onClose={onClose} label={title} testid="guide-panel" className="guide-panel" style={accentOf(index)}
       title={title} subtitle={badges} icon={<Glyph id={card.id} size={22} />} footer={<><LearnButton card={card} l={l} /><DiscussButton card={card} l={l} compact /></>}>
       <div id={id} ref={scroller} className="guide-panel-content">
         <p className="guide-panel-summary">{L(card.summary)}</p>
+        {stale && (
+          <div className="guide-stale-note" role="note" data-testid="guide-stale-note">
+            <strong>{t('guide.staleTitle')}</strong>
+            <p>{stale.points.length ? t('guide.stalePoints', { points: stale.points.map(p => p + 1).join(', ') }) : t('guide.staleTech')}</p>
+            <ul>{stale.refs.map(r => <li key={r}><code>{r}</code></li>)}</ul>
+          </div>
+        )}
         <div className="guide-body" data-testid={`guide-body-${card.id}`}>
           <section className="guide-sec" aria-label={t('guide.howItWorks')}>
             <h4>{t('guide.howItWorks')}</h4>
-            <ol className="guide-points">{card.points.map((p, i) => <li key={i}>{L(p)}</li>)}</ol>
+            <ol className="guide-points">{card.points.map((p, i) => <li key={i} className={stale?.points.includes(i) ? 'is-stale' : undefined}>{L(p)}</li>)}</ol>
           </section>
           {card.diagram && <section className="guide-sec"><Diagram d={card.diagram} title={title} l={l} /></section>}
+          <GuideCodeDiagram cardId={card.id} title={title} l={l} />
           <div className="guide-analogy"><strong>{t('guide.analogy')}</strong><p>{L(card.analogy)}</p></div>
           {card.coming?.length ? (
             <section className="guide-coming" data-testid="guide-coming">
@@ -199,6 +218,30 @@ function refocus(id: string): void {
 /** a deep link's card id, when it names a card */
 const known = (id: string | undefined): string | null => (id && CONCEPTS.some(c => c.id === id) ? id : null);
 
+/** «Per te»: the three cards this user opens, asks about or hits errors in most (lib/guide-usage.ts); none = no row. */
+function ForYouRow({ items, l, onOpen }: { items: readonly ForYou[]; l: GuideLang; onOpen: (id: string) => void }) {
+  if (!items.length) return null;
+  const why = (w: ForYou['why']) => [w.help ? t('guide.forYou.help', { count: w.help }) : '', w.asked ? t('guide.forYou.asked', { count: w.asked }) : '',
+    w.errors ? t('guide.forYou.errors', { count: w.errors }) : '', w.open ? t('guide.forYou.open', { count: w.open }) : ''].filter(Boolean).join(' · ');
+  return (
+    <section className="guide-foryou" aria-label={t('guide.forYou.title')} data-testid="guide-foryou">
+      <h2>{t('guide.forYou.title')}<small>{t('guide.forYou.lead')}</small></h2>
+      <div className="guide-foryou-row">
+        {items.map(x => {
+          const i = CONCEPTS.findIndex(c => c.id === x.id), card = CONCEPTS[i];
+          if (!card) return null;
+          return (
+            <button key={x.id} type="button" className="guide-foryou-item" style={accentOf(i)} onClick={() => onOpen(x.id)} data-testid={`guide-foryou-${x.id}`}>
+              <Glyph id={x.id} size={18} />
+              <span><strong>{textOf(card.title, l)}</strong><small>{why(x.why)}</small></span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export function GuidePage({ arg }: { arg?: string } = {}) {
   const l: GuideLang = lang();
   const panel = useId();
@@ -212,8 +255,21 @@ export function GuidePage({ arg }: { arg?: string } = {}) {
     const words = q.toLowerCase().split(/\s+/).filter(Boolean);
     return words.length ? CONCEPTS.filter(c => { const h = haystack(c, l); return words.every(w => h.includes(w)); }) : CONCEPTS;
   }, [q, l]);
+  const [stale, setStale] = useState<GuideStaleState>({ checked: false, cards: [] });
+  const [mine, setMine] = useState<ForYou[]>([]);
+  // the page's data, once: the cards «da verificare» (a run from the repo) and «Per te» (local counters, the Log's errors)
+  useEffect(() => {
+    let alive = true;
+    const usage = readUsage(), cards = CONCEPTS.map(c => ({ id: c.id, titles: [c.title.it, c.title.en, textOf(c.title, 'de')] }));
+    setMine(forYou(usage, {}, cards));
+    window.sb.invoke('log:list', undefined).then(list => { if (alive) setMine(forYou(usage, errorsByCard(list.events, cards), cards)); }, () => {});
+    window.sb.invoke('guide:stale', undefined).then(s => { if (alive) setStale(s); }, () => {});
+    return () => { alive = false; };
+  }, []);
+  const staleOf = (id: string) => stale.cards.find(c => c.id === id);
+  const show = (id: string) => { noteCardOpen(id); setOpen(id); };
   const close = () => { if (open) refocus(open); setOpen(null); };
-  const toggle = (id: string) => { if (open === id) close(); else setOpen(id); };
+  const toggle = (id: string) => { if (open === id) close(); else show(id); };
   const opened = open ? CONCEPTS.findIndex(c => c.id === open) : -1;
   return (
     <div className="guide" role="region" aria-label={t('guide.title')} data-testid="guide-page">
@@ -233,11 +289,13 @@ export function GuidePage({ arg }: { arg?: string } = {}) {
             <small>{t('guide.count', { count: shown.length })}</small>
           </label>
         </header>
+        <GuideAsk l={l} onOpen={show} />
+        {!q && <ForYouRow items={mine} l={l} onOpen={show} />}
         {shown.length === 0
           ? <p className="guide-none" role="status">{t('guide.none')}</p>
-          : <div className="guide-grid">{shown.map(c => <Card key={c.id} card={c} index={CONCEPTS.indexOf(c)} l={l} open={open === c.id} panel={panel} onToggle={() => toggle(c.id)} />)}</div>}
+          : <div className="guide-grid">{shown.map(c => <Card key={c.id} card={c} index={CONCEPTS.indexOf(c)} l={l} open={open === c.id} panel={panel} stale={!!staleOf(c.id)} onToggle={() => toggle(c.id)} />)}</div>}
       </div>
-      {opened >= 0 && <DetailPanel id={panel} card={CONCEPTS[opened]!} index={opened} l={l} onClose={close} />}
+      {opened >= 0 && <DetailPanel id={panel} card={CONCEPTS[opened]!} index={opened} l={l} stale={staleOf(CONCEPTS[opened]!.id)} onClose={close} />}
     </div>
   );
 }
