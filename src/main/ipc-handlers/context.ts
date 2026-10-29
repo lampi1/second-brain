@@ -5,7 +5,7 @@ import type { BrowserWindow } from 'electron';
 import type { DefaultBrain } from '../../modules/ai-first/default-brain';
 import type { createAppConnectors } from '../../modules/onboarding/app-host';
 import type { Emitter, Handlers } from '../ipc';
-import type { Wired } from '../wiring';
+import type { Wired } from '../wiring-types';
 import type { attachActivity } from '../activity/wiring';
 import type { RendererErrors } from '../renderer-errors';
 import type { OverlayLayer } from '../overlay';
