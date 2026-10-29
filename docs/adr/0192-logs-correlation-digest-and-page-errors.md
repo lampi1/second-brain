@@ -29,8 +29,12 @@ model call of an API engine). The chat manager registers a resolver (`log.correl
 
 **Interface errors.** `startUiErrors` (renderer/lib/ui-errors.ts) reports the page's uncaught errors and unhandled
 rejections, and each `ErrorBoundary` its render error with the component stack, through a new contract channel
-`log:renderer` (allowed while an update holds the app, like the other reads). Only the error's message and stack leave
-the page, cut to 500 and 2000 characters. Main (`main/renderer-errors.ts`) keeps only those strings, writes one
+`log:renderer` (allowed while an update holds the app, like the other reads). Only the error's name, the first line of
+its message and its stack frames leave the page (`shared/error-scrub.ts`, review 2026-10-29: a message often carries
+what the user typed or sees): quoted substrings ('…', "…", «…», `…`) become «…», paths and URLs `<path>`, long numbers
+`<n>`, long hex ids `<id>`; each stack frame is only `file:line` (the file's base name, never the message lines a stack
+repeats), a component stack the component's name and `file:line`; cut to 500 and 2000 characters. Main
+(`main/renderer-errors.ts`) scrubs the same way again (the page is not trusted), keeps only those strings, writes one
 `log.error('renderer', …)` with cause and hint, the same error at most once a minute (repeats counted on its next line)
 and at most 10 lines a minute in all. The logger redacts them like every line. The page also skips the same message
 within 5 s, so a render loop cannot flood IPC.

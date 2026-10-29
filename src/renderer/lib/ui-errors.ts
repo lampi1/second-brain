@@ -1,10 +1,11 @@
 // The app page's interface errors to the technical log (ADR 0192): window 'error', unhandled promise rejections and the
 // render errors a page's ErrorBoundary catches (components/ErrorBoundary.tsx) go to main through 'log:renderer', which
 // rate-limits and redacts them into the `renderer` log (main/renderer-errors.ts). Before, nothing the page threw was
-// ever logged. Only the error's message and stack (cut to ~2k characters) leave the page, never what the user typed or
-// sees. The same message is sent at most once every LOCAL_REPEAT_MS from here too (a render loop must not flood IPC).
+// ever logged. Only the error's name, the first line of its message (quoted text, paths, long numbers and ids folded)
+// and its stack frames as file:line (shared/error-scrub.ts) leave the page, never what the user typed or sees. The same message is sent at most once every LOCAL_REPEAT_MS from here too (a render loop must not flood IPC).
 // startUiErrors is called by main.tsx; reportUiError by ErrorBoundary.tsx. Tests: test/unit/ui-errors.test.ts.
 import type { RendererErrorReport } from '@shared/contract';
+import { scrubComponentStack, scrubMessage, scrubSource, scrubStack } from '@shared/error-scrub';
 import { sb } from '../sb';
 
 export const LOCAL_REPEAT_MS = 5_000;
@@ -17,10 +18,13 @@ const cut = (s: unknown, n: number): string | undefined => (typeof s === 'string
 export function toReport(kind: RendererErrorReport['kind'], err: unknown, extra: Partial<Pick<RendererErrorReport, 'componentStack' | 'source' | 'where'>> = {}): RendererErrorReport {
   const e = err as { message?: unknown; stack?: unknown; name?: unknown } | null | undefined;
   const named = e && typeof e === 'object' && 'message' in e;
-  const message = cut(named ? `${typeof e.name === 'string' && e.name && e.name !== 'Error' ? `${e.name}: ` : ''}${String(e.message ?? '')}` : String(err), 500) ?? 'unknown error';
-  const stack = cut(e && typeof e === 'object' ? e.stack : undefined, MAX);
-  const componentStack = cut(extra.componentStack, MAX), source = cut(extra.source, 300), where = cut(extra.where, 60);
-  return { kind, message: message.trim() || 'unknown error', ...(stack ? { stack } : {}), ...(componentStack ? { componentStack } : {}), ...(source ? { source } : {}), ...(where ? { where } : {}) };
+  const name = named && typeof e.name === 'string' && e.name && e.name !== 'Error' ? `${e.name.slice(0, 60)}: ` : '';
+  const text = cut(named ? String(e.message ?? '') : String(err), 4000);
+  const message = `${name}${text ? scrubMessage(text, 500) : ''}`.slice(0, 500).trim() || 'unknown error';
+  const rawStack = cut(e && typeof e === 'object' ? e.stack : undefined, 4 * MAX), rawComp = cut(extra.componentStack, 4 * MAX), rawSource = cut(extra.source, 1000);
+  const stack = rawStack ? scrubStack(rawStack, MAX) : undefined, componentStack = rawComp ? scrubComponentStack(rawComp, MAX) : undefined;
+  const source = rawSource ? scrubSource(rawSource) : undefined, where = cut(extra.where, 60);
+  return { kind, message, ...(stack ? { stack } : {}), ...(componentStack ? { componentStack } : {}), ...(source ? { source } : {}), ...(where ? { where } : {}) };
 }
 
 /** Sends one interface error to the log; never throws. */

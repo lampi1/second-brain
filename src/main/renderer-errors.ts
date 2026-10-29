@@ -2,10 +2,13 @@
 // and the render errors a page's ErrorBoundary caught ('log:renderer', renderer/lib/ui-errors.ts); here each becomes one
 // `renderer` error with cause and hint, so `npm run logs -- --scope renderer`, the Log page, the daily digest and the
 // maintenance pack see them (before, nothing in the page was ever logged; window.ts's crash hint pointed at it). The
-// page is not trusted: only strings are kept, cut (message 500, stacks MAX_STACK), and the logger redacts secrets. A
+// page is not trusted: only strings are kept, scrubbed again (shared/error-scrub.ts: the message's first line with
+// quoted text, paths and long numbers folded; stack frames as file:line only), cut (message 500, stacks MAX_STACK), and
+// the logger redacts secrets. A
 // broken page must not flood the log: the same error at most once per REPEAT_MS (the repeats counted on its next line),
 // at most PER_MINUTE lines a minute in all. Used by index.ts; tests: test/unit/renderer-errors.test.ts.
 import type { RendererErrorReport } from '../shared/contract';
+import { scrubComponentStack, scrubMessage, scrubSource, scrubStack } from '../shared/error-scrub';
 import { log } from './log';
 
 export const REPEAT_MS = 60_000;
@@ -22,10 +25,13 @@ const str = (v: unknown, max: number): string | undefined => {
 /** The report as logged: known kind, strings only, cut. A hostile or broken page cannot write anything else. */
 export function cleanRendererError(a: unknown): RendererErrorReport | null {
   const r = (a && typeof a === 'object' ? a : {}) as Record<string, unknown>;
-  const message = str(r.message, 500);
+  // scrubbed again here (shared/error-scrub.ts): what a page sends is never trusted to be clean
+  const raw = str(r.message, 4000), message = raw ? scrubMessage(raw, 500) : undefined;
   if (!message) return null;
   const kind = KINDS.find(k => k === r.kind) ?? 'error';
-  const stack = str(r.stack, MAX_STACK), componentStack = str(r.componentStack, MAX_STACK), source = str(r.source, 300), where = str(r.where, 60);
+  const rawStack = str(r.stack, 4 * MAX_STACK), rawComp = str(r.componentStack, 4 * MAX_STACK), rawSource = str(r.source, 1000);
+  const stack = rawStack ? scrubStack(rawStack, MAX_STACK) : undefined, componentStack = rawComp ? scrubComponentStack(rawComp, MAX_STACK) : undefined;
+  const source = rawSource ? scrubSource(rawSource) : undefined, where = str(r.where, 60);
   return { kind, message, ...(stack ? { stack } : {}), ...(componentStack ? { componentStack } : {}), ...(source ? { source } : {}), ...(where ? { where } : {}) };
 }
 
