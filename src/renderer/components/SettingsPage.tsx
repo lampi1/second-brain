@@ -28,6 +28,7 @@ import { CloudKeySetting } from './CloudKeySetting';
 import { PulseSettings } from './PulseSettings';
 import { TaskReadSettings } from './TaskReadSettings';
 import { SuggestSettings } from './SuggestSettings';
+import { AwaySettings } from './AwayToggle';
 import { VoiceSettings } from './VoiceSettings';
 import'../styles/settings.css';
 export function Switch({on,onChange,label,busy,testid}:{on:boolean;onChange:(on:boolean)=>void;label:string;busy?:boolean;testid?:string}){
@@ -68,7 +69,7 @@ export function SettingsPage(){
   {...meta.update,icon:<IconRefresh size={18}/>,body:<AppUpdateSettings/>},
   {...meta.connectors,icon:<IconLink size={18}/>,body:<ConnectorsHub/>},
   {...meta.accounts,icon:<IconTerminal size={18}/>,body:<>{engines.map(engine=><ToolConnection key={engine.id} engine={engine}/>)}</>},
-  {...meta.roles,icon:<IconBranch size={18}/>,body:<DelegationSettings/>},
+  {...meta.roles,icon:<IconBranch size={18}/>,body:<><AwaySettings/><DelegationSettings/></>},
   {...meta.space,icon:<IconFolder size={18}/>,body:<>
    <WorkProfilePreferences/>
    <Row title={t('essential.memory')}><span className="st-value" title={settings.brainRoot??undefined}>{settings.brainRoot||t('essential.memoryEmpty')}</span><button type="button" className="btn btn-ghost btn-m" onClick={()=>void window.sb.invoke('app:pickBrain',undefined).catch(()=>toast(t('essential.error'),'err'))}>{t('essential.pickMemory')}</button></Row>

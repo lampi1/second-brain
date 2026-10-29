@@ -120,7 +120,8 @@ export class Workflows {
     }
     return this.event(row, 'updated', summary);
   }
-  decide(input: WorkDecision): WorkThread {
+  /** appNote: the app decided for the absent user («Modalità notte», ADR 0191), said in the event so it never reads as theirs */
+  decide(input: WorkDecision, appNote?: string): WorkThread {
     if (typeof input.approve !== 'boolean') throw new Error('Decisione non valida.');
     const feedback = decisionFeedback(input.feedback, input.approve);
     const row = this.current(input.id, input.expectedVersion);
@@ -133,6 +134,6 @@ export class Workflows {
     if (input.approve && row.cycles >= 3 && ['review', 'test', 'qa'].includes(row.stage)) { row.stage = 'develop'; row.cycles = 0; row.evidence = ''; }
     row.nextAction = input.approve ? 'Eseguire la proposta approvata e verificarne l’esito' : 'Preparare una proposta alternativa';
     return this.event(row, input.approve ? 'approved' : 'rejected', feedback
-      ? `${proposal}\nRisposta libera dell’utente (${input.proposalId}, versione ${input.expectedVersion}): ${feedback}` : proposal);
+      ? `${proposal}\nRisposta libera dell’utente (${input.proposalId}, versione ${input.expectedVersion}): ${feedback}` : appNote ? `${proposal}\n${appNote}` : proposal);
   }
 }

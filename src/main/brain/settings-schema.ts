@@ -127,6 +127,9 @@ const BASE: readonly SettingDef[] = [
   { key: 'orchestratorOpacity', type: 'int', min: 40, max: 100, default: 100, protected: false, label: 'Opacità dell’Orchestrator (%)',
     description: 'Quanto si vede il riquadro dell’Orchestrator sopra le chat. Con il mouse sopra o mentre scrivi torna pieno.' },
   // the Orchestrator hears about the other chats by itself (the user, 2026-10-12: "quando le chat finiscono non ti notificano nulla")
+  // the user goes away (the owner, 2026-10-29: «non faccia domande e prosegua tutta la notte», ADR 0191)
+  { key: 'awayMode', type: 'boolean', default: false, protected: false, label: 'Modalità notte',
+    description: 'Sei via: nessuna domanda ti raggiunge. Ogni agente e l’Orchestrator vanno avanti con la scelta consigliata finché il lavoro è finito, e il PC non va in sospensione. Produzione, segreti, permessi e messaggi a persone restano per il tuo ritorno. Quando la spegni trovi il riepilogo nella chat dell’Orchestrator.' },
   { key: 'orchestratorEvents', type: 'boolean', default: true, protected: true, label: 'Eventi all’Orchestrator',
     description: "Quando una chat di lavoro finisce, si ferma su un errore, aspetta una tua risposta o ti lascia un comando, l'app lo scrive all’Orchestrator (una riga per chat, al massimo una volta ogni 2 minuti per chat) e lo sveglia se è fermo: decide lui se dirtelo. Ogni risveglio è un turno dell’Orchestrator." },
   // the chat learns how its command went (the user, 2026-10-12: "vorrei che ti accorgessi da sola quando eseguo un
@@ -266,7 +269,7 @@ export function defaults(): Settings {
     projectsRoot: null,
     loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15,
     suggestOn: true, suggestModel: true, suggestDailyUsd: 0.05,
-    voiceAsr: 'fast', voiceName: 'paola', voicePtt: false,
+    voiceAsr: 'fast', voiceName: 'paola', voicePtt: false, awayMode: false,
     delegation: { ...DELEGATION_DEFAULTS }, modelTiers: {},
   };
 }

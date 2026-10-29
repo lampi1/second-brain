@@ -196,3 +196,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0188](0188-impara-research-and-animated-board.md) Impara: research and verification before teaching, the animated board, the user's teacher — accepted
 - [0189](0189-impara-subjects-and-spaced-review.md) Impara: subjects, verified review cards, spaced review — accepted
 - [0190](0190-impara-tutor-and-entry-points.md) Impara: a tutor that answers at once, and learning from where you are — accepted
+- [0191](0191-night-mode.md) Modalità notte: the user is away, the agents go on with the recommended choices — accepted

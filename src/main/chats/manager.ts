@@ -67,6 +67,8 @@ import { newRequest } from '../agents/task-estimate';
 import { emptyReceipts, noteTool, noteTurnFiles, receiptVerdict, rowChanges, turnFilesWithoutGit } from '../agents/receipts';
 import { autoPermit } from './auto-permit';
 import { TurnToolBudget } from '../agents/orchestrator-budget';
+import { AWAY_BACK, AWAY_PARKED, AWAY_PLAN_NOTE, AWAY_RULE, recommendedAnswers } from '../../shared/away';
+import type { AwayEntry } from './away-log';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
 import { toolShownToChat, toolShownToUnknown, toolShownToWarm } from './tool-visibility';
 import { RESULT_OUTPUT_MAX, checkResult, resultMessage, type DelegationLimitHit, type DelegationResult, type TaskSource, type TaskAssignmentOptions } from '../../shared/delegation';
@@ -117,6 +119,10 @@ export interface ChatManagerOptions {
   roleCatalogBrief?: () => string;
   /** the language the user wants replies in (ADR 0120: locale.ts uiLang, the setting or Windows'); absent = not named */
   replyLang?: () => Lang;
+  /** «Modalità notte» (ADR 0191): the user is away; questions get the recommended option, permissions are parked */
+  away?: () => boolean;
+  /** what the app chose or parked for the absent user (chats/away-log.ts), for the recap at their return */
+  onAway?: (e: Omit<AwayEntry, 'at'>) => void;
   /** the review pack under a Sentinel's first message (agents/review-pack.ts): the change it checks, gathered with git */
   reviewPack?: (cwd: string) => Promise<string>;
   /** ADR 0103: record the files before each turn of a work chat in a git repository (checkpoints.ts); absent = off */
@@ -346,6 +352,8 @@ interface Rec {
   rolePrimed?: { session: string; sig: string } | undefined;
   /** the reply language this chat was last told (persisted, ADR 0120): a change goes in one line on its next turn */
   replyLang?: Lang;
+  /** «Modalità notte» (ADR 0191): the session that was told the user is away ('' = told, session not known yet) */
+  awayTold?: string;
   /** the user's message being sent was said in the voice conversation (ADR 0152): its text, so only that delivery takes
    *  the spoken-reply line; voiceTold = the session whose context already has the rules */
   voiceText?: string;
@@ -1135,6 +1143,10 @@ export class ChatManager implements ChatService {
     const wantLang = this.opts.replyLang?.(), langHint = replyLangTurn(wantLang, role ? undefined : r.replyLang, !!role);
     // a spoken turn: a reply made to be heard (voice-reply.ts); a new context (role text again, another session) gets
     // the rules again. Only the spoken message itself: never mail, a resume or app text that happens to go first
+    // «Modalità notte» (ADR 0191): every new context hears the user is away, and once that they are back
+    const awayOn = !!this.opts.away?.(), session = r.s.sessionId ?? '';
+    const told = r.awayTold !== undefined && (r.awayTold === '' || r.awayTold === session);
+    const awayHint = awayOn ? (role || !told ? `\n\n${AWAY_RULE}` : '') : r.awayTold !== undefined ? `\n\n${AWAY_BACK}` : '';
     const spoken = r.voiceText !== undefined && r.voiceText === text && from === undefined && !resumed;
     const voiceHint = spoken ? voiceReplyHint(!role && r.voiceTold === (r.s.sessionId ?? '')) : '';
     if (spoken) { r.voiceText = undefined; r.voiceTold = r.s.sessionId ?? ''; }
@@ -1145,7 +1157,8 @@ export class ChatManager implements ChatService {
     lap.checkpointMs = Date.now() - lapT;
     try {
       receipt?.beforeSubmit();
-      r.session.send(`${role}${warning}${body}${hint}${langHint}${voiceHint}`, imgs);
+      r.session.send(`${role}${warning}${body}${hint}${langHint}${voiceHint}${awayHint}`, imgs);
+      if (awayHint) { if (awayOn) r.awayTold = session; else delete r.awayTold; }
       receipt?.submitted();
       if (r.continuationPending) { r.continuationPending = undefined; this.persist(true); }
       log.info('chats', 'timing: before send', { chat: r.s.id, data: { totalMs: Date.now() - t0, ...lap, engineStarted: !hadEngine, cold: !!cold, harness: r.s.harness } });
@@ -1377,15 +1390,62 @@ export class ChatManager implements ChatService {
     }
   }
 
+  /** «Modalità notte» just went on (ADR 0191): what already waits for the user is settled the way a new request would be
+   *  (recommended answer, parked permission) and a plan waiting on its strip starts. Returns how many it settled. */
+  settleForAway(): number {
+    if (!this.opts.away?.()) return 0;
+    let n = 0;
+    for (const r of this.chats.values()) {
+      if (r.s.closedAt) continue;
+      for (const req of [...r.pending.values()]) if (this.awayAnswered(r, req)) { this.dropPending(r, req.id); n++; }
+      const plan = r.s.plan;
+      if (plan?.phase === 'proposed') {
+        n++;
+        this.hook('onAway', () => this.opts.onAway?.({ kind: 'plan', chatId: r.s.id, title: r.s.title || 'Strategist', text: plan.steps.map(x => x.title).join(' · ') }));
+        void this.decidePlan(r.s.id, 'approve', plan.at, undefined, `${PLAN_APPROVED}\n${AWAY_PLAN_NOTE}`)
+          .catch(e => log.warn('chats', 'away: plan not started', { chat: r.s.id, cause: errText(e), hint: 'the plan stays on its strip for the user' }));
+      }
+    }
+    if (n) log.info('chats', 'away: open requests settled', { data: { n } });
+    return n;
+  }
+
+  /** What still waits for the user (for the recap when they are back): one line per open question or permission. */
+  openForUser(): { title: string; what: string }[] {
+    const out: { title: string; what: string }[] = [];
+    for (const r of this.chats.values()) {
+      if (r.s.closedAt) continue;
+      for (const req of r.pending.values()) if (req.type !== 'command') out.push({ title: r.s.title || 'Chat', what: req.type === 'question' ? (req.questions?.[0]?.question ?? req.title) : `permesso ${req.tool}` });
+      if (r.s.plan?.phase === 'proposed') out.push({ title: r.s.title || 'Strategist', what: 'piano da approvare' });
+    }
+    return out;
+  }
+
+  /** Puts the night's recap in the Orchestrator's chat (an app notice: no turn, no token). False = no open Orchestrator. */
+  awayRecap(text: string): boolean {
+    const o = this.openOrchestrator();
+    if (!o) return false;
+    this.addItem(o, sysItem('awayRecap', { text }, 'info'), false);
+    this.updated(o);
+    return true;
+  }
+
   /** plan_propose (agents/strategy-tools.ts): the Strategist's plan waits for the user's ok on its strip. */
   planPropose(chatId: string, steps: PlanStep[], doneWhen?: string): StrategyPlan {
     const r = this.need(chatId), plan = r.s.plan;
     if (!plan) throw new Error('plan_propose: only a Strategist the Orchestrator or the user started has a plan with the user.');
     if (plan.phase === 'running' || plan.phase === 'done') throw new Error('plan_propose: the plan is approved and under way; update its steps with plan_update.');
-    r.s.plan = { phase: 'proposed', clarified: plan.clarified, ...(plan.asked ? { asked: plan.asked } : {}), steps, ...(doneWhen ? { doneWhen } : {}), at: Math.max(Date.now(), plan.at + 1) };
+    // «Modalità notte» (ADR 0191): nobody will click «Approva e parti», so the plan starts as proposed (its recommended
+    // choice) and the tool says so; the recap tells the user
+    const away = !!this.opts.away?.();
+    r.s.plan = { phase: away ? 'running' : 'proposed', clarified: plan.clarified, ...(plan.asked ? { asked: plan.asked } : {}), steps, ...(doneWhen ? { doneWhen } : {}), at: Math.max(Date.now(), plan.at + 1) };
     // the run keeps the plan's fate: a decision signal for the Orchestrator (standing.ts, ADR 0131)
     const run = r.s.run;
     if (run && run.endedAt === undefined) { run.plan = { ...(run.plan ?? { proposals: 0, changes: 0 }), proposals: (run.plan?.proposals ?? 0) + 1 }; this.runSave(); }
+    if (away) {
+      this.addItem(r, sysItem('awayPlan', { steps: steps.length }, 'info'), false);
+      this.hook('onAway', () => this.opts.onAway?.({ kind: 'plan', chatId, title: r.s.title || 'Strategist', text: steps.map(x => x.title).join(' · ') }));
+    }
     this.persist();
     this.updated(r);
     log.info('chats', 'plan proposed', { chat: chatId, data: { steps: steps.length } });
@@ -3031,6 +3091,30 @@ export class ChatManager implements ChatService {
     return true;
   }
 
+  /** «Modalità notte» (ADR 0191): nobody will answer, so a question gets its recommended option (shared/away.ts) and a
+   *  permission is refused with a note to go on without it, parked for the user's return (never granted by the app). A
+   *  command left for the user (Esegui) never blocks the chat: it stays in the queue. True = answered here. */
+  private awayAnswered(r: Rec, req: Omit<PendingRequest, 'chatId'>): boolean {
+    if (req.type === 'command' || !this.opts.away?.()) return false;
+    const title = r.s.title || r.s.agent?.name || 'Chat';
+    if (req.type === 'question') {
+      const answers = recommendedAnswers(req.questions ?? []);
+      if (!answers) return false;
+      const choice = Object.values(answers).flat().join(', ');
+      if (!r.session?.answer(req.id, { kind: 'question', answers })) return false;
+      this.addItem(r, sysItem('awayPicked', { choice }, 'info'), false);
+      this.hook('onAway', () => this.opts.onAway?.({ kind: 'picked', chatId: r.s.id, title, text: `${req.questions?.[0]?.question ?? req.title} → ${choice}` }));
+      log.info('chats', 'away: recommended answer', { chat: r.s.id, data: { questions: req.questions?.length ?? 0 } });
+      return true;
+    }
+    if (!r.session?.answer(req.id, { kind: 'permission', allow: false, message: AWAY_PARKED })) return false;
+    const what = `${req.tool}${req.detail ? `: ${req.detail}` : req.title ? `: ${req.title}` : ''}`;
+    this.addItem(r, sysItem('awayParked', { what: what.slice(0, 160) }, 'warn'), false);
+    this.hook('onAway', () => this.opts.onAway?.({ kind: 'parked', chatId: r.s.id, title, text: `permesso non concesso, ${what}` }));
+    log.info('chats', 'away: permission parked', { chat: r.s.id, data: { tool: req.tool } });
+    return true;
+  }
+
   /** Records the chat's files before a turn (checkpoints.ts); a folder outside git is asked once, a failure never holds
    *  the message. */
   private async checkpoint(r: Rec): Promise<void> {
@@ -3753,7 +3837,7 @@ export class ChatManager implements ChatService {
       },
       pending: req => {
         if (!live()) return;
-        if (this.gated(r, req) || this.refusedCommand(r, req) || this.autoPermitted(r, req)) return;
+        if (this.gated(r, req) || this.refusedCommand(r, req) || this.autoPermitted(r, req) || this.awayAnswered(r, req)) return;
         this.hook('analytics', () => this.analytics.pending(r.s, req));
         this.autoActivity(r);
         const full: PendingRequest = { ...req, chatId };

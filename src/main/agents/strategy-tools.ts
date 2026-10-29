@@ -5,6 +5,7 @@
 // it does itself. Delegated steps move by themselves (agent_delegate's `step`, the children's reports). A first proposal
 // before any question is refused unless it says why none was needed (shared/strategy.ts proposalGate, ADR 0121). Used by
 // wiring.ts.
+import { AWAY_PLAN_NOTE } from '../../shared/away';
 import type { McpTool } from '../mcp/server';
 import { callerOf } from '../mcp/caller';
 import { checkProposal, proposalGate, STEP_STATES, stepIndex, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
@@ -17,7 +18,7 @@ export interface StrategyChats {
   planUpdate(chatId: string, i: number, state: StepState): StrategyPlan;
 }
 
-export function strategyTools(chats: StrategyChats): McpTool[] {
+export function strategyTools(chats: StrategyChats, away: () => boolean = () => false): McpTool[] {
   const str = { type: 'string' };
   return [{
     name: 'plan_propose',
@@ -33,9 +34,11 @@ export function strategyTools(chats: StrategyChats): McpTool[] {
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: async (a, ctx) => {
       const id = callerOf(ctx.params), { noQuestionReason, ...proposal } = a, { steps, doneWhen } = checkProposal(proposal);
-      const plan = chats.planOf(id), refused = plan ? proposalGate(plan, noQuestionReason) : null;
+      // «Modalità notte» (ADR 0191): nobody can answer a clarifying question, so none is required
+      const plan = chats.planOf(id), refused = plan && !away() ? proposalGate(plan, noQuestionReason) : null;
       if (refused) throw new Error(refused);
-      chats.planPropose(id, steps, doneWhen);
+      // the app approved it for the absent user
+      if (chats.planPropose(id, steps, doneWhen).phase === 'running') return JSON.stringify({ approved: true, steps: steps.length, note: AWAY_PLAN_NOTE });
       return JSON.stringify({ shown: true, steps: steps.length, note: 'The plan is shown to the user with «Approva e parti» and «Cambia qualcosa». End your turn now: the answer arrives as the user\'s message. Delegate nothing before it.' });
     },
   }, {
