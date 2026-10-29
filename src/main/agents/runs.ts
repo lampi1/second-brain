@@ -19,6 +19,7 @@ import { cleanOrphanTmps, readLocal, writeLocalText, writeLocalTextAsync } from 
 import { readReceipts } from './receipts';
 import { XP_MAX } from './xp';
 import { slowStep } from '../perf';
+import { jsonArray, stringifyEach } from '../chunked-json';
 
 export const RUNS_MAX = 5000;
 /** Below the local store's 8 MB cap, with headroom for the run being added. */
@@ -424,26 +425,52 @@ export class AgentRunStore {
     if (!this.dirty || this.problem) return true;
     // a pending recovery copy is a rare, synchronous, one-off path
     if (this.recoverySource) { try { this.save(); return true; } catch (e) { log.warn('agents', 'agent runs not saved', { cause: errText(e), hint: 'retried shortly' }); return false; } }
-    const t = performance.now();
-    let w: { body: string; commit: () => void };
-    try { w = this.prepare(); } catch (e) { log.warn('agents', 'agent runs not saved', { cause: errText(e), hint: 'retried shortly' }); return false; }
-    finally { slowStep('agent-runs.json serialize', performance.now() - t); }
-    const gen = ++this.gen;
-    this.dirty = false; // a change from now on sets it again
+    // The runs are serialized one by one in slices (chunked-json.ts): one JSON.stringify of the whole file froze the window
+    // 100+ ms at every run event (#297). A change during the slices sets dirty again (the next save writes it); a sync save
+    // started meanwhile bumps gen, and this one then drops itself.
+    // in flight from the first slice: the quit's flush (pending) writes synchronously over a save still being built
+    const gen = ++this.gen, all = this.list();
+    this.dirty = false;
     this.inflight++;
     try {
-      // a sync save may have run (and pruned) during the await: committing this older prune would roll it back
-      if (await writeLocalTextAsync(this.file, w.body, () => this.gen === gen) && this.gen === gen) w.commit();
-      return true;
-    } catch (e) {
-      if (this.gen === gen) this.dirty = true;
-      log.warn('agents', 'agent runs not saved (deferred)', { cause: errText(e), hint: 'retried shortly; the quit writes them too' });
-      return this.gen !== gen;
+      let w: { body: string; commit: () => void };
+      try {
+        const parts = await stringifyEach(all);
+        if (this.gen !== gen) return true; // superseded by a newer save: it writes the newer state
+        const t = performance.now(), changed = this.unsaved;
+        try { w = this.prepare(all, parts); } finally { slowStep('agent-runs.json serialize', performance.now() - t); }
+        // prepare marks the store dirty for the sync path; here only a change made during the slices keeps it dirty
+        this.unsaved = changed;
+      } catch (e) {
+        if (this.gen === gen) this.dirty = true;
+        log.warn('agents', 'agent runs not saved', { cause: errText(e), hint: 'retried shortly' });
+        return false;
+      }
+      try {
+        // a sync save may have run (and pruned) during the await: committing this older prune would roll it back
+        if (await writeLocalTextAsync(this.file, w.body, () => this.gen === gen) && this.gen === gen) w.commit();
+        return true;
+      } catch (e) {
+        if (this.gen === gen) this.dirty = true;
+        log.warn('agents', 'agent runs not saved (deferred)', { cause: errText(e), hint: 'retried shortly; the quit writes them too' });
+        return this.gen !== gen;
+      }
     } finally { this.inflight--; }
   }
 
+  private rollupCache: { of: RunTally[]; text: string; bytes: number } | null = null;
+  /** The rollups as written (olderReadable) and their size as measured for the budget; null = none. */
+  private rollupText(): { text: string; bytes: number } | null {
+    if (!this.rollups.length) return null;
+    if (this.rollupCache?.of !== this.rollups) {
+      const text = JSON.stringify(this.rollups.map(olderReadable));
+      this.rollupCache = { of: this.rollups, text, bytes: Buffer.byteLength(JSON.stringify(this.rollups), 'utf8') };
+    }
+    return this.rollupCache;
+  }
   /** The body to write now and what to apply once it is on disk (the pruned runs leave memory, the rollups grow). */
-  private prepare(): { body: string; commit: () => void } {
+  /** `all` + `parts`: the runs and their JSON, already serialized in slices by saveAsync; absent = serialized here. */
+  private prepare(all: AgentRun[] = this.list(), parts?: readonly string[]): { body: string; commit: () => void } {
     if (this.problem) throw new Error(this.problem);
     if (this.recoverySource) {
       const stat = fs.lstatSync(this.file);
@@ -461,24 +488,30 @@ export class AgentRunStore {
       } finally { if (fd !== undefined) fs.closeSync(fd); }
       this.recoverySource = null;
     }
-    const all = this.list();
     // Runs on the main process at every run event: the file (up to RUNS_BYTES) is written compact and serialized once
     // when nothing has to go; only a store over its budget measures runs one by one.
-    const bytesOf = (v: unknown) => Buffer.byteLength(JSON.stringify(v), 'utf8');
-    const record = (runs: AgentRun[], rollups: RunTally[], prunedThrough: number) =>
-      ({ version: 1, runs, ...(rollups.length ? { rollups: rollups.map(olderReadable) } : {}), ...(prunedThrough ? { prunedThrough } : {}),
+    const json = parts ?? all.map(r => JSON.stringify(r));
+    let index: Map<AgentRun, number> | null = null;
+    const bytesOfRun = (r: AgentRun) => Buffer.byteLength(json[(index ??= new Map(all.map((x, i) => [x, i]))).get(r)!]!, 'utf8');
+    // the rollups change only when runs are pruned (commit): their text is kept per array, not rebuilt at every save
+    const rollupText = this.rollupText();
+    const record = (runs: readonly string[], rollups: string | null, prunedThrough: number) => {
+      // key order as JSON.stringify of { version, runs, rollups?, prunedThrough?, flash? } (older releases read the same file)
+      const rest = JSON.stringify({ ...(prunedThrough ? { prunedThrough } : {}),
         // Flash's outcomes: bounded by flash-outcomes.ts (a few tens of KB at most), inside the same byte budget
         ...(this.flash.open.length || this.flash.done.length || this.flash.asking || this.flash.total.success + this.flash.total.partial + this.flash.total.fail ? { flash: this.flash } : {}) });
-    const whole = `${JSON.stringify(record(all, this.rollups, this.prunedThrough))}\n`;
+      return `{"version":1,"runs":${jsonArray(runs)}${rollups ? `,"rollups":${rollups}` : ''}${rest === '{}' ? '' : `,${rest.slice(1, -1)}`}}\n`;
+    };
+    const whole = record(json, rollupText?.text ?? null, this.prunedThrough);
     // the rollups only grow when runs are pruned: their budget is checked with the runs about to go
-    const budget = RUNS_BYTES - Math.min(ROLLUP_BYTES, this.rollups.length ? bytesOf(this.rollups) : 0);
+    const budget = RUNS_BYTES - Math.min(ROLLUP_BYTES, rollupText?.bytes ?? 0);
     const drop = new Set<AgentRun>();
     let bytes = Buffer.byteLength(whole, 'utf8');
     const over = () => all.length - drop.size > RUNS_MAX || bytes > budget;
     this.dirty = true; // stays set when the write fails: the next flush tries again
     if (!over()) return { body: whole, commit: () => {} };
     const ended = all.filter(r => r.endedAt !== undefined).sort((a, b) => a.endedAt! - b.endedAt! || a.startedAt - b.startedAt);
-    const take = (r: AgentRun) => { if (!drop.has(r)) { drop.add(r); bytes -= bytesOf(r); } };
+    const take = (r: AgentRun) => { if (!drop.has(r)) { drop.add(r); bytes -= bytesOfRun(r) + 1; } };
     // a review goes with the run it reviews (its findings count there); then, if still over, any ended run
     for (const r of ended) {
       if (!over()) break;
@@ -489,10 +522,10 @@ export class AgentRunStore {
     }
     for (const r of ended) { if (!over()) break; take(r); }
     const rollups = drop.size ? fitRollups(rollUp(this.rollups, [...drop], all)) : this.rollups;
-    const next = all.filter(r => !drop.has(r));
+    const next = all.flatMap((r, i) => drop.has(r) ? [] : [json[i]!]);
     const prunedThrough = Math.max(this.prunedThrough, ...[...drop].map(r => r.endedAt!));
     return {
-      body: `${JSON.stringify(record(next, rollups, prunedThrough))}\n`,
+      body: record(next, rollups.length ? JSON.stringify(rollups.map(olderReadable)) : null, prunedThrough),
       commit: () => {
         for (const r of drop) this.runs.delete(r.runId);
         if (drop.size) this.rev++;

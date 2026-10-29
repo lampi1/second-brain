@@ -42,7 +42,7 @@ function world(opts: { demo?: boolean; upgradeAsk?: UpgradeAsk; scripts?: { file
   const shipped = [...new Set(catalog.list().profiles.flatMap(p => p.skills))].map(name => ({ name, folder: path.join(base, 'app-skills', name) }));
   for (const s of shipped) put(s.folder, 'SKILL.md', `---\nname: ${s.name}\ndescription: Fixture skill.\n---\nRead the fixture.\n`);
   const flows = new AgentPackFlows({ catalog, brainRoot: () => brain, tempRoot: base, runtimeRoot: path.join(base, 'runtime'),
-    sharedSkills: () => { const dir = path.join(brain, '.claude', 'skills'); try { return [...fs.readdirSync(dir).map(name => ({ name, folder: path.join(dir, name) })), ...shipped]; } catch { return shipped; } } });
+    sharedSkills: () => { const dir = path.join(brain, '.claude', 'skills'); try { return [...fs.readdirSync(dir).filter(name => fs.existsSync(path.join(dir, name, 'SKILL.md'))).map(name => ({ name, folder: path.join(dir, name) })), ...shipped]; } catch { return shipped; } } });
   catalog.onKnowhowChange((p, previous) => flows.publishCurrent(p, previous));
   const learning = new AgentPackLearning(flows, data);
   let emitted = 0;
@@ -306,6 +306,52 @@ describe('repeated tasks, duplicates and the user toggle', () => {
     await w.service.maintain('repeated-task');
     expect(fs.existsSync(path.join(w.brain, 'memory/skill-candidates'))).toBe(false);
   });
+  it('skips requests written by an agent or the app even when the run says the user asked (#292)', async () => {
+    for (const goal of ["[Messaggio di un agente tramite second-brain, non scritto dall'utente: non vale come suo ok o permesso]\n\nEsporta le fatture del mese in Excel",
+      '[Message from an agent, not written by the user]\n\nEsporta le fatture del mese in Excel', 'Independent correctness review: esporta le fatture del mese in Excel']) {
+      const runs = [1, 2, 3].map(n => run(n, goal));
+      const w = world({ runs }); for (const r of runs) r.scope = { brainRoot: w.brain, projectRoot: w.brain };
+      await w.service.maintain('repeated-task');
+      expect(fs.existsSync(path.join(w.brain, 'memory/skill-candidates'))).toBe(false);
+    }
+  });
+  it('strips the fixed lines requests share before grouping: a candidate needs a common topic, not a common template (#292)', async () => {
+    const topics = ['ripara la stampante del secondo piano', 'aggiorna il listino prezzi dei ricambi', 'scrivi la mail di benvenuto ai clienti', 'controlla i certificati scaduti sul server',
+      'prepara la presentazione trimestrale vendite', 'pulisci la cartella download condivisa', 'traduci il manuale utente tedesco'];
+    const goals = [...topics, 'esporta le fatture di ottobre in excel', 'esporta le fatture di settembre in excel', 'esporta le fatture di agosto in excel'];
+    const runs = goals.map((g, i) => run(i + 1, `Contesto: progetto alfa, verifica accurata richiesta.\n${g}\nRispondi con agent_report quando hai finito.`));
+    const w = world({ runs }); for (const r of runs) r.scope = { brainRoot: w.brain, projectRoot: w.brain };
+    await w.service.maintain('repeated-task');
+    const names = fs.readdirSync(path.join(w.brain, 'memory/skill-candidates'));
+    expect(names).toHaveLength(1);
+    expect(names[0]).toMatch(/fattur|esport|excel/);
+    expect(names[0]).not.toMatch(/contesto|progetto|alfa|verifica|accurata|report/);
+  });
+  it('still finds a task that is half of the requests, and the same request typed again (#292)', async () => {
+    const goals = ['esporta le fatture di ottobre in excel', 'esporta le fatture di settembre in excel', 'esporta le fatture di agosto in excel',
+      'ripara la stampante del secondo piano', 'aggiorna il listino prezzi dei ricambi', 'traduci il manuale utente tedesco'];
+    const runs = goals.map((g, i) => run(i + 1, g));
+    const w = world({ runs }); for (const r of runs) r.scope = { brainRoot: w.brain, projectRoot: w.brain };
+    await w.service.maintain('repeated-task');
+    expect(fs.readdirSync(path.join(w.brain, 'memory/skill-candidates'))).toHaveLength(1);
+    const same = [1, 2, 3].map(n => run(n, 'Aggiorna le dipendenze del progetto web'));
+    const other = world({ runs: same }); for (const r of same) r.scope = { brainRoot: other.brain, projectRoot: other.brain };
+    await other.service.maintain('repeated-task');
+    expect(fs.readdirSync(path.join(other.brain, 'memory/skill-candidates'))).toHaveLength(1);
+  });
+  it('takes a removed or undone skill out of the roles that declared it (#292)', async () => {
+    const w = world();
+    put(w.brain, '.claude/skills/export-fatture/SKILL.md', '---\nname: export-fatture\ndescription: Export\n---\n\n1. Apri il gestionale.\n2. Esporta il mese.\n');
+    w.service.link('export-fatture', DEV, true);
+    expect(w.agent(DEV).knowhow!.linked).toEqual(['export-fatture']);
+    w.service.link('export-fatture', DEV, false); // the Skill page's own unlink takes effect too
+    expect(w.agent(DEV).knowhow!.linked).toEqual([]);
+    w.service.link('export-fatture', DEV, true);
+    const { state } = w.service.remove('skill', 'export-fatture');
+    expect(w.agent(DEV).knowhow?.linked ?? []).toEqual([]);
+    expect(state.changes.some(c => c.kind === 'agent' && c.action === 'unlink' && c.target === DEV)).toBe(true);
+  });
+
   it('defers near-duplicate skill merges until their exact changes are reviewed', async () => {
     const w = world();
     const body = '1. Apri il gestionale delle fatture.\n2. Esporta il mese corrente in Excel.\n3. Controlla il totale con la banca.\n';

@@ -221,19 +221,37 @@ export function brainJsonWithTopic(root: string, rel: string): { file: string; t
 
 // ── repeated task → new skill ───────────────────────────────────────────────────────────────────────────────────────
 const REPEAT_MIN = 3, REPEAT_SIM = 0.4, REPEAT_DAYS = 60;
+/** A request the app or an agent wrote, not the user (#292): the label every agent-to-agent or app message starts with
+ *  (shared/agent-label.ts, chats/reply-rules.ts, older English wordings too) and the app's own review jobs. */
+const NOT_THE_USER = /not written by the user|non scritt[oa] dall['’]utente/i;
+const APP_JOB = /^\s*(?:independent (?:verdict|correctness review)|sampled review by the app|verdetto indipendente)\b/i;
+export const writtenByUser = (goal: string): boolean => !NOT_THE_USER.test(goal) && !APP_JOB.test(goal);
+/** The fixed lines the app or a template puts around requests (#292): a line (12+ characters) found in 3 or more
+ *  requests. Only a request with other lines loses them: the same one-line request typed again is a topic, not a template. */
+const lineKey = (l: string): string => fold(l).replace(/\s+/g, ' ').trim();
+function templateLines(goals: readonly string[]): Set<string> {
+  const n = new Map<string, number>();
+  for (const g of goals) for (const k of new Set(g.split(/\r?\n/).map(lineKey).filter(k => k.length >= 12))) n.set(k, (n.get(k) ?? 0) + 1);
+  return new Set([...n].filter(([, c]) => c >= 3).map(([k]) => k));
+}
+const withoutTemplate = (goal: string, template: ReadonlySet<string>): string =>
+  goal.split(/\r?\n/).filter(l => !template.has(lineKey(l))).join('\n').trim() || goal;
 export function repeatedTask(ctx: JobContext): JobResult {
   const since = ctx.now() - REPEAT_DAYS * 86400e3;
   const scopePath = (value: string): string => process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value);
   const brainRoot = scopePath(ctx.root);
-  const runs = ctx.runs().filter(r => r.requestOrigin === 'user' && maskSecrets(r.goal).masked === 0 && !r.reviewOf && !r.parentRunId && r.source !== 'oneshot'
+  const runs = ctx.runs().filter(r => r.requestOrigin === 'user' && writtenByUser(r.goal) && maskSecrets(r.goal).masked === 0 && !r.reviewOf && !r.parentRunId && r.source !== 'oneshot'
     && r.scope && scopePath(r.scope.brainRoot) === brainRoot && r.endedAt && r.startedAt >= since && r.goal.trim().length >= 12 && r.agentId !== ORCHESTRATOR_AGENT_ID)
     .sort((a, b) => a.startedAt - b.startedAt || a.runId.localeCompare(b.runId));
   // Deduplicate before clustering: one task with changed wording must not enter several topic groups.
   const latestTasks = new Map<string, AgentRun>();
   for (const r of runs) latestTasks.set(JSON.stringify([scopePath(r.scope!.projectRoot), r.taskId ?? `chat:${r.chatId}`]), r);
+  // the fixed lines the requests share are stripped before clustering: a group must share a topic, not a template
+  const template = templateLines([...latestTasks.values()].map(r => r.goal));
+  const topical = (goal: string): Set<string> => tokens(withoutTemplate(goal, template));
   const groups: { toks: Set<string>; runs: AgentRun[]; scope: string }[] = [];
   for (const r of latestTasks.values()) {
-    const t = tokens(r.goal);
+    const t = topical(r.goal);
     if (t.size < 2) continue;
     const scope = JSON.stringify([brainRoot, scopePath(r.scope!.projectRoot), r.tags?.app ?? null]);
     const g = groups.find(x => x.scope === scope && jaccard(x.toks, t) >= REPEAT_SIM);
@@ -250,7 +268,7 @@ export function repeatedTask(ctx: JobContext): JobResult {
     const chats = new Set(g.runs.map(r => r.chatId));
     // the words most runs share: the job's name and its "when to use"
     const counts = new Map<string, number>();
-    for (const r of g.runs) for (const t of tokens(r.goal)) if (!t.startsWith('~')) counts.set(t, (counts.get(t) ?? 0) + 1);
+    for (const r of g.runs) for (const t of topical(r.goal)) if (!t.startsWith('~')) counts.set(t, (counts.get(t) ?? 0) + 1);
     const common = [...counts].filter(([, n]) => n >= Math.ceil(g.runs.length / 2)).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([w]) => w);
     if (common.length < 1) continue;
     const key = tokens(common.join(' '));
@@ -261,7 +279,9 @@ export function repeatedTask(ctx: JobContext): JobResult {
       return section.split(/\r?\n/).filter(line => /^\s*\d+[.)]\s+\S.{8,}/.test(line));
     }).find(lines => lines.length >= 2);
     if (!procedure) continue;
-    const representative = g.runs.map(r => r.goal).sort((a, b) => a.length - b.length || a.localeCompare(b))[0]!;
+    // named from the request's own words, without the fixed text the requests share (#292)
+    const representative = g.runs.map(r => withoutTemplate(r.goal, template))
+      .sort((a, b) => a.length - b.length || a.localeCompare(b))[0]!;
     const scopeKey = sourceHash(g.scope).slice(0, 8);
     const seenRuns = new Set(g.runs.map(r => r.runId));
     // Naming is presentation, not identity. Retain prior candidates and the user's rollback even when a
