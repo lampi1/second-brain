@@ -113,3 +113,5 @@ export function HarnessMark({ harness, orchestrator, size = 20 }: { harness: Har
 // voice mode (ADR 0152): the mic button in the Orchestrator's and Flash's input, the voice preview in Settings
 export const IconMic = (p: P) => <Svg {...p}><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></Svg>;
 export const IconMicOff = (p: P) => <Svg {...p}><path d="M15 10V6a3 3 0 0 0-5.7-1.3M9 9v2a3 3 0 0 0 4.6 2.5M5.5 11a6.5 6.5 0 0 0 10.4 5.2M18.5 11a6.4 6.4 0 0 1-.5 2.5M12 17.5V21M4 4l16 16" /></Svg>;
+/** Impara (ADR 0181): a graduation cap */
+export const IconLearn = (p: P) => <Svg {...p}><path d="M2.5 9.5 12 5l9.5 4.5L12 14z" /><path d="M6.5 11.5v4.2c1.4 1.4 3.3 2.1 5.5 2.1s4.1-.7 5.5-2.1v-4.2" /><path d="M21.5 9.5v5" /></Svg>;

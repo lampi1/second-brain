@@ -52,6 +52,9 @@ import { createEngines, type EnginesApi } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
 import { PersonalBrowser } from './personal/browser';
 import { RecordingStore } from './recordings/store';
+import { LessonStore } from './learn/store';
+import { LearnService, type TeachRun } from './learn/service';
+import { runRead } from './learn/material';
 import { systemLang } from './lang';
 import { CloudService, cloudFile } from './cloud/service';
 import { realExec, realHttp } from './cloud/exec';
@@ -175,6 +178,8 @@ export interface Wired {
   personal: PersonalBrowser;
   /** the call recordings on disk (ADR 0154, recordings/store.ts): main/index.ts records and transcribes, app_recordings reads */
   recordings: RecordingStore;
+  /** Impara (ADR 0181, learn/service.ts): the user's lessons; absent = the impara:* channels say it is not available */
+  learn?: LearnService;
   /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */
   engines: EnginesApi;
   /** the chat folders' git branches ('chat:branches'); absent = read from disk (chats/branch.ts) */
@@ -948,6 +953,22 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     changed: () => ctx.emitter.emit('maintenance:changed', undefined),
     done: d => ctx.emitter.emit('maintenance:done', d) });
   researchRef.current = research;
+  // Impara (ADR 0181): each lesson is written by hidden read-only runs (compare/headless.ts) on the best engine that is
+  // on and reads files (Claude first, its strongest model), the material gathered by the app with the user's own gh / git
+  const teachers = () => engineInfos().filter(e => e.kind !== 'api' && e.caps.tools && engineOn(brain.settings(), e.id));
+  const teacher = () => { const all = teachers(); return all.find(e => e.kind === 'claude') ?? all[0] ?? null; };
+  const learn = new LearnService({
+    store: new LessonStore(path.join(ctx.userData, 'learn')), lang: uiLang, run: runRead,
+    devops: () => { const t = tasks.get(); return { prs: t.prs, repoDirs: t.repoDirs }; },
+    cannotTeach: () => (teacher() ? null : 'Per preparare una lezione serve un motore acceso che legge i file (Impostazioni → Motori).'),
+    teach: async (r: TeachRun) => {
+      const e = teacher();
+      if (!e) return { ok: false, error: 'nessun motore acceso' };
+      const out = await headless.run({ engine: e.id, model: e.kind === 'claude' ? 'opus' : null, effort: e.caps.effort ? r.effort : null, cwd: r.cwd, prompt: r.prompt, round: r.round, timeoutMs: r.timeoutMs });
+      return out.ok ? { ok: true, text: out.text, costUsd: out.costUsd, engine: e.id, model: out.model } : { ok: false, error: out.error };
+    },
+    changed: (state, lesson) => ctx.emitter.emit('impara:changed', { state, ...(lesson ? { lesson } : {}) }),
+  });
   ctx.emitter.tap((channel, payload) => { if (channel === 'chat:updated') research.chatUpdated(payload as ChatSummary); });
   addChatTools(researchTools(research));
   const replayRoot = () => { const root = brain.info().brainRoot; return root ? fs.realpathSync(root) : null; };
@@ -968,7 +989,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     workflows, routineArchive, routines, brainModel, research, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
-    cloud, chats, browser, personal, recordings, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,
+    cloud, chats, browser, personal, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid, suggestSkills,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

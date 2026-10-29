@@ -1127,6 +1127,34 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/main/activity/journal.ts', 'src/main/activity/chat-watch.ts', 'src/main/activity/wiring.ts', 'src/renderer/components/LogPage.tsx', 'src/renderer/lib/log-view.ts', 'docs/adr/0111-the-log-page.md', 'docs/adr/0134-finished-chats-close-by-default.md'],
   },
   {
+    id: 'impara',
+    title: b('Impara: lezioni a pezzi', 'Impara: lessons piece by piece'),
+    summary: b('Una lezione su una tua PR, un concetto tecnico o un testo: lo schema cresce pezzo per pezzo, la voce dell’app spiega, tu vai avanti quando hai capito.',
+      'A lesson on one of your PRs, a technical concept or a text: the diagram grows piece by piece, the app’s voice explains, you go on when you got it.'),
+    points: [
+      // src/main/learn/material.ts
+      b('Per una PR l’app legge da sola descrizione e diff (gh per GitHub, git nella copia locale per le PR del Task), in sola lettura e con il tuo login.',
+        'For a PR the app itself reads the description and the diff (gh for GitHub, git in the local clone for the Task page’s PRs), read-only, with your own login.'),
+      // src/main/learn/service.ts
+      b('Prima arrivano lo schema e i primi due pezzi, il resto mentre studi. «Spiegamelo meglio», «Fammi un esempio», «Mostrami il codice» e le tue domande aggiungono un pezzo subito dopo.',
+        'The diagram and the first two pieces come first, the rest while you study. «Explain it better», «Give me an example», «Show me the code» and your questions add a piece right after.'),
+      // src/shared/lesson.ts parseLessonCommand
+      b('Con «Rispondo a voce» dici «avanti», «ripeti», «non ho capito», «la b»; il resto è una domanda. Verifiche dopo alcuni pezzi, «Spiegalo tu» alla fine.',
+        'With «I answer by voice» you say «next», «repeat», «I don’t understand», «b»; anything else is a question. Checks after some pieces, «Explain it yourself» at the end.'),
+      // src/main/learn/store.ts
+      b('Ogni lezione resta salvata su questo PC e riapre dal punto in cui eri.',
+        'Every lesson stays saved on this PC and reopens where you were.'),
+    ],
+    analogy: b('Come un collega alla lavagna che disegna mentre spiega e si ferma quando glielo chiedi.',
+      'Like a colleague at the whiteboard who draws while explaining and stops when you ask.'),
+    tech: [
+      tech(FILES, 'userData/learn/<id>/: lesson.json (lezione, risposte, punto in cui sei) e il materiale (materiale.md, diff.patch).', 'userData/learn/<id>/: lesson.json (lesson, answers, where you are) and the material (materiale.md, diff.patch).'),
+      tech(WHERE, 'Pagina G X; IPC impara:*; ogni risposta del modello è una sessione nascosta in sola lettura su un motore acceso (Claude per primo).', 'Page G X; IPC impara:*; each model answer is a hidden read-only session on an engine that is on (Claude first).'),
+      tech(LIMITS, 'Diff in linea fino a 60.000 caratteri (il resto nel file), schema di 4-10 nodi, al massimo 12 pezzi per risposta.', 'Diff inline up to 60,000 characters (the rest in the file), a 4-10 node diagram, at most 12 pieces per answer.'),
+    ],
+    sources: ['src/shared/lesson.ts', 'src/main/learn/service.ts', 'src/main/learn/material.ts', 'src/main/learn/prompt.ts', 'src/renderer/components/impara/ImparaPlayer.tsx', 'docs/adr/0181-impara-lessons.md'],
+  },
+  {
     id: 'held-news',
     title: b('Le novità trattenute', 'Held news'),
     summary: b('«N novità in attesa»: notizie dei lavori che l’app non ha ancora passato all’Orchestrator, e perché.',

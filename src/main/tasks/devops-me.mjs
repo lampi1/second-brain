@@ -166,7 +166,7 @@ async function readOrg(api, org, full, prsMode, since) {
       const base = `https://dev.azure.com/${enc(org)}/${enc(ref.project)}/_apis/git/repositories/${enc(p.repository?.id ?? '')}/pullRequests/${p.pullRequestId}`;
       const ids = (await optional(api(`${base}/workitems?${V}`).then(r => r.value ?? []))).map(w => Number(w.id)).filter(Number.isFinite).slice(0, 20);
       const wis = ids.length ? await optional(wiql(api, org, `[System.Id] IN (${ids.join(', ')})`)) : [];
-      const pr = { ...ref, target: String(p.targetRefName ?? '').replace(/^refs\/heads\//, ''), draft: p.isDraft === true, autoComplete: !!p.autoCompleteSetBy,
+      const pr = { ...ref, target: String(p.targetRefName ?? '').replace(/^refs\/heads\//, ''), source: String(p.sourceRefName ?? '').replace(/^refs\/heads\//, ''), draft: p.isDraft === true, autoComplete: !!p.autoCompleteSetBy,
         reviewers: (p.reviewers ?? []).map(r => ({ name: r.displayName ?? '', vote: r.vote ?? 0, label: VOTES[r.vote ?? 0] ?? '', required: r.isRequired === true })).filter(r => r.name),
         build: null, workItems: wis.map(w => itemOf(org, w)) };
       if (full) {

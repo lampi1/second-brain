@@ -7,8 +7,10 @@
 //   current one plays), and talking over the app stops it at once (barge-in). Question cards registered with
 //   useVoiceQuestion are read and answered by voice (parseSpokenAnswer). The app never speaks on its own initiative.
 // The microphone streams 16 kHz chunks to main (voice:audio); main's voice process cuts utterances (Silero) and
-// transcribes them locally (Whisper). Used by components/VoiceControls.tsx, ChatInput.tsx, VoiceSettings.tsx, App.tsx
-// (Ctrl+M) and the question cards.
+// transcribes them locally (Whisper). Impara (ADR 0181) uses both halves on its own: narrate() reads a lesson's piece
+// aloud with the microphone off too, and its «Rispondo a voce» is dictation into the lesson (target 'impara': the words
+// go to onImparaHeard, never to a chat). Used by components/VoiceControls.tsx, ChatInput.tsx, VoiceSettings.tsx, App.tsx
+// (Ctrl+M), the question cards and components/impara/.
 import { useEffect, useRef } from 'react';
 import { VoiceTurns, type VoiceTurnTarget } from './voice-turns';
 import { createStore } from '../store/createStore';
@@ -18,13 +20,17 @@ import { t } from '../i18n';
 import { micAudio, onMicChange, openMicStream } from './mic';
 import { VOICE_RATE, forEar, isNoise, parseSpokenAnswer, settledText, speakable, speechChunks, spokenQuestion, turnToSpeak, type SpokenAnswer, type SpokenQuestionInput, type VoiceName, type VoiceState, type VoiceHeard, type VoiceSpeech } from '@shared/voice';
 
-export type VoiceTarget = 'orchestrator' | 'flash';
+export type VoiceTarget = 'orchestrator' | 'flash' | 'impara';
+/** Impara's dictation target: not a chat, its words go to onImparaHeard */
+export const IMPARA_TARGET = 'impara';
 /** dictate = the words go into the input; talk = a spoken conversation with the Orchestrator */
 export type VoiceMode = 'dictate' | 'talk';
 export type VoicePhase = 'off' | 'preparing' | 'starting' | 'listening' | 'hearing' | 'transcribing' | 'speaking';
-export interface VoiceUi { phase: VoicePhase; mode: VoiceMode; target: VoiceTarget; level: number; engine: VoiceState | null; error: string | null; question: string | null }
+export interface VoiceUi { phase: VoicePhase; mode: VoiceMode; target: VoiceTarget; level: number; engine: VoiceState | null; error: string | null; question: string | null;
+  /** narrate() is reading something aloud (Impara), whatever the microphone does */
+  narrating: boolean }
 
-export const voice = createStore<VoiceUi>({ phase: 'off', mode: 'dictate', target: 'orchestrator', level: 0, engine: null, error: null, question: null });
+export const voice = createStore<VoiceUi>({ phase: 'off', mode: 'dictate', target: 'orchestrator', level: 0, engine: null, error: null, question: null, narrating: false });
 export const useVoice = voice.use;
 const set = (p: Partial<VoiceUi>) => voice.set(s => ({ ...s, ...p }));
 
@@ -35,6 +41,7 @@ let onSince = 0, startWhenReady = false, transcribeTimer: ReturnType<typeof setT
 
 /** The chat a target writes to: the open Orchestrator or the open Flash chat. */
 export function targetChat(target: VoiceTarget): string | null {
+  if (target === 'impara') return IMPARA_TARGET;
   const chats = Object.values(app.get().chats);
   const c = target === 'flash' ? chats.find(x => x?.quick && !x.closedAt) : chats.find(x => x?.isOrchestrator && !x.closedAt);
   return c?.id ?? null;
@@ -43,6 +50,9 @@ export function targetChat(target: VoiceTarget): string | null {
 /** Where dictated words go (ChatInput.tsx registers its draft). */
 const dictated = new Set<(chatId: string, text: string) => void>();
 export const onDictated = (fn: (chatId: string, text: string) => void): (() => void) => { dictated.add(fn); return () => dictated.delete(fn); };
+/** Where Impara's spoken words go (components/impara/: a command, a choice, a question, «Spiegalo tu»). */
+let imparaHeard: ((text: string) => void) | null = null;
+export const onImparaHeard = (fn: ((text: string) => void) | null): void => { imparaHeard = fn; };
 
 let wired = false;
 /** Main's events, once (main.tsx). */
@@ -136,11 +146,13 @@ export function shortcutTalk(): void {
   void setTalk(!(s.mode === 'talk' && s.phase !== 'off'));
 }
 
-/** Ctrl+M: on → off; off → dictation into Flash when the focus is in Flash's tile, else into the Orchestrator. */
+/** Ctrl+M: on → off; off → dictation into Flash when the focus is in Flash's tile, into the lesson on screen, else into the Orchestrator. */
 export function shortcutVoice(): void {
   if (voice.get().phase !== 'off') { stopVoice(); return; }
   const inFlash = !!(document.activeElement as HTMLElement | null)?.closest?.('[data-testid="tile-lampo"]');
-  void toggleVoice(inFlash ? 'flash' : 'orchestrator');
+  // a lesson on screen (Impara): its «Rispondo a voce»
+  const inLesson = !inFlash && !!document.querySelector('[data-testid="impara-player"]');
+  void toggleVoice(inFlash ? 'flash' : inLesson ? 'impara' : 'orchestrator');
 }
 
 // ── the microphone ──
@@ -250,6 +262,7 @@ function targetNow(): VoiceTurnTarget | null {
     questionVersion: q ? questionVersion(q) : null, answerable: !q || deliveredIds.get(q.id) === questionVersion(q) } : null;
 }
 function preserveDraft(target: VoiceTurnTarget, text: string): void {
+  if (target.chatId === IMPARA_TARGET) { imparaHeard?.(text); return; }
   const q = questions.at(-1);
   const now = targetNow();
   const same = !!q && now?.chatId === target.chatId && now.mode === target.mode && q.id === target.questionId && questionVersion(q) === target.questionVersion;
@@ -310,6 +323,8 @@ let speakN = 0; // each stop; a synthesis or a play that comes back to another o
 let out: AudioContext | null = null, playing: AudioBufferSourceNode | null = null, pumping = false;
 /** the echo of the last words can reach the mic just after the voice stops */
 let quietUntil = 0;
+/** narrate() is on: the lines play with the microphone off too */
+let narrating = false;
 const speakingNow = () => !!playing || lines.length > 0 || pumping;
 
 function synth(text: string, voiceName?: VoiceName): NonNullable<Line['audio']> {
@@ -333,7 +348,7 @@ async function pump(): Promise<void> {
   if (pumping || playing) return;
   const n = speakN;
   const line = lines[0];
-  if (!line) { if (voice.get().phase === 'speaking') set({ phase: 'listening' }); return; }
+  if (!line) { endNarration(); if (voice.get().phase === 'speaking') set({ phase: 'listening' }); return; }
   pumping = true;
   if (voice.get().phase !== 'off') set({ phase: 'speaking' });
   line.audio ??= synth(line.text);
@@ -341,7 +356,7 @@ async function pump(): Promise<void> {
   const r = await line.audio;
   if (n !== speakN) return; // stopped meanwhile: `pumping` belongs to whoever runs now
   pumping = false;
-  if (voice.get().phase === 'off') return;
+  if (voice.get().phase === 'off' && !narrating) return;
   lines.shift();
   if (!r || r.error || !r.samples.length) {
     if (r?.error) { set({ error: r.error }); toast(t('voice.speakFailed', { error: r.error }), 'err'); lines = []; }
@@ -363,6 +378,20 @@ function play(samples: Float32Array, rate: number): AudioBufferSourceNode {
   src.connect(out.destination);
   src.start();
   return src;
+}
+
+function endNarration(): void { if (narrating) { narrating = false; set({ narrating: false }); } }
+
+/** Impara: reads `text` aloud now (what was being said stops), with or without the microphone; `done` when it ends. */
+export function narrate(text: string, done?: () => void): void {
+  stopSpeaking(false);
+  const chunks = speechChunks(speakable(text, Number.MAX_SAFE_INTEGER));
+  if (!chunks.length) { done?.(); return; }
+  narrating = true;
+  set({ narrating: true });
+  for (const c of chunks) queueLine(c);
+  const last = lines.at(-1);
+  if (last && done) last.done = done;
 }
 
 /** Settings → Voce «Prova»: a short sentence in that voice (downloaded first if missing). Returns an error, or null. */
@@ -387,6 +416,7 @@ export function stopSpeaking(back = true): void {
   try { p?.stop(); } catch { /* ended */ }
   if (p) quietUntil = Date.now() + 400;
   if (turn) turn.cut = true; // the rest of that reply stays in the chat
+  endNarration();
   if (back && voice.get().phase === 'speaking') set({ phase: 'listening' });
 }
 

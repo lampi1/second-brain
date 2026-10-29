@@ -181,7 +181,7 @@ export async function demoLayout(app: ElectronApplication): Promise<Layout> {
 }
 
 /** Opens detail pages whose sidebar entries depend on the user's role (ADR 0068). */
-const GO_KEY = { home: 'h', agenti: 'a', task: 'o', dashboard: 'd', fatto: 'f', idee: 'i', costi: 'c', qualita: 'q', regole: 'l', memoria: 'y', classificatori: 'k', collegamenti: 'b', script: 't', log: 'n', confronto: 'm', skill: 's', impostazioni: 'p', guida: 'e', registrazioni: 'v' } as const;
+const GO_KEY = { home: 'h', agenti: 'a', task: 'o', dashboard: 'd', fatto: 'f', idee: 'i', costi: 'c', qualita: 'q', regole: 'l', memoria: 'y', classificatori: 'k', collegamenti: 'b', script: 't', log: 'n', confronto: 'm', skill: 's', impostazioni: 'p', guida: 'e', registrazioni: 'v', impara: 'x' } as const;
 export async function goPage(page: Page, id: keyof typeof GO_KEY): Promise<void> {
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press('g');
