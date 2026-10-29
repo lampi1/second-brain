@@ -698,7 +698,7 @@ export class AcpSession implements HarnessSession {
     this.sink.item({ kind: 'result', id: nextId('r'), at: Date.now(), costUsd: cost ?? 0, durationMs: Date.now() - this.turnStart, turns: 1, isError, ...(interrupted ? { interrupted } : {}) }, false);
     const turnTokens = usage ? tokenUsage(usage.inputTokens, usage.cachedReadTokens, usage.cachedWriteTokens, usage.outputTokens) : undefined;
     this.sink.changed({ turnCostUsd: cost ?? 0, costKnown: cost !== null, liveCostUsd: 0, ...(turnTokens ? { turnTokens } : {}) });
-    log.info('chats', 'acp turn done', { chat: this.opts.chatId, data: { engine: this.engine, stopReason: stop || null, error: err ? errText(err) : null, costUsd: cost, usage: !!usage, netError: net } });
+    log.info('chats', 'acp turn done', { chat: this.opts.chatId, op: 'invoke_agent', data: { engine: this.engine, stopReason: stop || null, error: err ? errText(err) : null, costUsd: cost, usage: !!usage, netError: net } });
     this.reportEstimate();
     this.prompting = false;
     if (net && !this.retryOff && this.retryNet(err ? errText(err) : this.lastAnswer)) return;
@@ -1085,7 +1085,7 @@ export class AcpSession implements HarnessSession {
   }
 
   private pending(req: Omit<PendingRequest, 'chatId'>): void {
-    log.info('chats', 'acp asks', { chat: this.opts.chatId, data: { engine: this.engine, requestId: req.id, type: req.type, tool: req.tool } });
+    log.info('chats', 'acp asks', { chat: this.opts.chatId, op: 'execute_tool', data: { engine: this.engine, requestId: req.id, type: req.type, tool: req.tool } });
     this.setState('waiting');
     this.sink.pending(req);
   }

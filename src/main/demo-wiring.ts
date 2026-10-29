@@ -146,7 +146,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   // the one-click maintenance (ADR 0132, 0153) on the demo chats: past findings written once, a research proposes two
   // more; an approved issue card opens nothing (the demo records the page it would open)
   const research: ResearchService = new ResearchService({ userData: ctx.userData, lang: uiLang, root: () => demoBrainRoot, appVersion: () => app.getVersion(),
-    issuesUrl: () => 'https://github.com/lampi1/second-brain/issues', now,
+    issuesUrl: () => 'https://github.com/lampi1/second-brain/issues', now, logDir: () => demoLogs,
     engines: () => [{ harness: 'claude', label: 'Claude', web: true, effort: true }, { harness: 'cursor', label: 'Cursor', web: true, effort: false }],
     bestModel: h => (h === 'claude' ? 'opus' : null), runs: () => demoLearningRuns(now()), roles,
     brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); }, maintain: () => brainModel.maintain() },

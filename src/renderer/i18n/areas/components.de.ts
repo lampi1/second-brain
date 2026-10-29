@@ -182,4 +182,8 @@ export const componentsDe: typeof componentsIt = {
   "cmp.durable.recap.summary": (p: { count: number; freshness: string }) => `PRs und QA · ${p.count} PRs · Übersicht ohne Modell · QA: ${p.freshness}`,
   "cmp.durable.recap.qaError": (p: { error: string }) => `QA nicht aktualisiert: ${p.error}. Die letzten erfolgreich abgerufenen Daten bleiben erhalten.`,
   "cmp.durable.recap.build": (p: { build: string; reviews: number }) => `Build: ${p.build} · Erforderliche Reviews: ${p.reviews}`,
+  "cmp.errorBoundary.title": 'Diese Seite hatte einen Fehler',
+  "cmp.errorBoundary.text": 'Der Rest der App und die Agenten arbeiten weiter. Der Fehler wurde ins Log geschrieben.',
+  "cmp.errorBoundary.reload": 'Seite neu laden',
+  "cmp.errorBoundary.details": 'Details',
 };
