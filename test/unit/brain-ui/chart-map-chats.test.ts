@@ -1,9 +1,8 @@
-// Chart math (lib/chart.ts), live chat grouping (lib/chats.ts) and the map's data logic (lib/map.ts).
+// Chart math (lib/chart.ts) and the map's data logic (lib/map.ts).
 import { describe, expect, it } from 'vitest';
 import { catColor, labelStep, moneyEntries, niceMax, niceScale, tickLabel, ticks, topN } from '../../../src/renderer/brain/lib/chart';
-import { chatState, groupChats, isLive, waitsYou } from '../../../src/renderer/brain/lib/chats';
 import { byLayer, centerId, defaultKinds, fileName, findNode, groupIndex, mix, nodeSize, pickView, relFile, weakPoints } from '../../../src/renderer/brain/lib/map';
-import type { LiveChat, MapData } from '../../../src/renderer/brain/types';
+import type { MapData } from '../../../src/renderer/brain/types';
 
 describe('chart', () => {
   it('round axes: 0,10…50 for 45; 0,20…80 for 63; 0,2…8 for 7; 1 for nothing', () => {
@@ -33,26 +32,6 @@ describe('chart', () => {
   });
   it('moneyEntries drops zeros and the synthetic model', () => {
     expect(moneyEntries({ '<synthetic>': { usd: 3 }, a: { usd: 0 }, b: { usd: 2 }, c: { usd: 5 } })).toEqual([['c', 5], ['b', 2]]);
-  });
-});
-
-const chat = (o: Partial<LiveChat>): LiveChat => ({ harness: 'Claude', title: 't', folder: '', when: '', state: 'finito', id: 'x', ageMin: 5, last: '', lastOwner: '', box: null, now: null, ...o });
-describe('live chats', () => {
-  it('"now" is recent: working within 2 h, waiting within a day', () => {
-    expect(isLive(chat({ state: 'in corso', ageMin: 30 }))).toBe(true);
-    expect(isLive(chat({ state: 'in corso', ageMin: 500 }))).toBe(false);
-    expect(waitsYou(chat({ state: 'aspetta te (domanda)', ageMin: 600 }))).toBe(true);
-    expect(waitsYou(chat({ state: 'aspetta te', ageMin: 2000 }))).toBe(false);
-  });
-  it('state labels say it in words', () => {
-    expect(chatState(chat({ state: 'aspetta te (permesso)' })).label).toBe('permesso');
-    expect(chatState(chat({ state: 'aspetta te (domanda)' }))).toEqual({ label: 'ti aspetta', tone: 'warn' });
-    expect(chatState(chat({ state: 'fermo' })).tone).toBe('bad');
-    expect(chatState(chat({ state: 'in corso', ageMin: 999 })).label).toBe("ferma da un po'");
-  });
-  it('groups waiting first, then working, the rest; most recent first', () => {
-    const g = groupChats([chat({ id: 'a', state: 'finito' }), chat({ id: 'b', state: 'in corso', ageMin: 9 }), chat({ id: 'c', state: 'aspetta te' }), chat({ id: 'd', state: 'in corso', ageMin: 1 })]);
-    expect([g.wait.map(c => c.id), g.live.map(c => c.id), g.rest.map(c => c.id)]).toEqual([['c'], ['d', 'b'], ['a']]);
   });
 });
 

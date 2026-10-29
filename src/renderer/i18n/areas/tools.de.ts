@@ -95,17 +95,6 @@ export const toolsDe: typeof toolsIt = {
   'tools.skillsPage.theSkill': 'den Skill',
 
   // Compare: model comparison labels
-  'tools.compare.engineNotSet': 'Engine nicht festgelegt',
-  'tools.compare.judge': 'Richter',
-  'tools.compare.runsAutomatically': 'wiederholt automatisch die Arbeit',
-  'tools.compare.of': 'von',
-  'tools.compare.ofAgents': 'der Agenten',
-  'tools.compare.anotherModel': 'Ein anderes Modell',
-  'tools.compare.rounds': (p: { n: number }) => `${p.n} ${p.n === 1 ? 'Vergleich' : 'Vergleiche'}`,
-  'tools.compare.costNotYet': 'Kosten noch nicht importiert',
-  'tools.compare.noCost': 'keine Kosten',
-  'tools.compare.soFar': 'Bisher',
-  'tools.compare.separator': ' · ',
 
   // Foreign: item origin labels
   'tools.foreign.otherChat': "ein anderer Chat",

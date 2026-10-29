@@ -93,17 +93,6 @@ export const toolsIt = {
   'tools.skillsPage.theSkill': 'la skill',
 
   // Compare: model comparison labels
-  'tools.compare.engineNotSet': 'motore non indicato',
-  'tools.compare.judge': 'giudice',
-  'tools.compare.runsAutomatically': 'rifà in automatico il lavoro',
-  'tools.compare.of': 'di',
-  'tools.compare.ofAgents': 'degli agenti',
-  'tools.compare.anotherModel': 'Un altro modello',
-  'tools.compare.rounds': (p: { n: number }): string => `${p.n} ${p.n === 1 ? 'confronto' : 'confronti'}`,
-  'tools.compare.costNotYet': 'costo non ancora importato',
-  'tools.compare.noCost': 'senza costo',
-  'tools.compare.soFar': 'Finora',
-  'tools.compare.separator': ' · ',
 
   // Foreign: item origin labels
   'tools.foreign.otherChat': "un'altra chat",

@@ -195,21 +195,14 @@ export const appTextEn: typeof appTextIt = {
   'appText.raster.avatarFormat': 'Format or size not supported',
   'appText.raster.avatarSize': 'Raster size not supported',
   'appText.raster.avatarInvalid': 'Invalid raster',
-  // lib/agent-drafts.ts, lib/agent-lifecycle.ts, lib/agent-setup.ts, lib/agent-team.ts
+  // lib/agent-drafts.ts, lib/agent-setup.ts
   'appText.agentDrafts.notSaved': 'The local copy of the role changes was not saved. Free some space before updating.',
   'appText.agentDrafts.invalid': 'Invalid copy of the role changes.',
-  'appText.agentLifecycle.invalid': 'Invalid Agents lifecycle response',
   'appText.agentSetup.name': 'The name cannot contain # * ` [ ] < > | _ \\',
   'appText.agentSetup.role': 'The role cannot contain «. Language:».',
   'appText.agentSetup.language': 'Write only the language, for example: English.',
   'appText.agentSetup.areas': (p: { n: number }) => `At most ${p.n} areas: group the closest ones.`,
   'appText.agentSetup.area': (p: { n: number }) => `Each area at most ${p.n} characters.`,
-  'appText.agentTeam.unknown': 'Sub-agents: data not available',
-  'appText.agentTeam.complete': (p: { active: number; total: number }) => `Sub-agents: ${p.active} active · ${p.total} total`,
-  'appText.agentTeam.partial': (p: { active: number; total: number }) => `Observed sub-agents: ${p.active} active · ${p.total} total · partial view`,
-  'appText.agentTeam.notReported': 'not reported',
-  'appText.agentTeam.noTask': 'observed activity with no reported task',
-  'appText.agentTeam.notObserved': 'not in the observations',
   // lib/images.ts, lib/models.ts
   'appText.images.noCanvas': 'canvas not available',
   'appText.images.readFailed': 'read failed',

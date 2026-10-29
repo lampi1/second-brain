@@ -195,21 +195,14 @@ export const appTextDe: typeof appTextIt = {
   'appText.raster.avatarFormat': 'Format oder Größe nicht unterstützt',
   'appText.raster.avatarSize': 'Rastergröße nicht unterstützt',
   'appText.raster.avatarInvalid': 'Ungültiges Raster',
-  // lib/agent-drafts.ts, lib/agent-lifecycle.ts, lib/agent-setup.ts, lib/agent-team.ts
+  // lib/agent-drafts.ts, lib/agent-setup.ts
   'appText.agentDrafts.notSaved': 'Die lokale Kopie der Rollenänderungen wurde nicht gespeichert. Mach Platz frei, bevor du aktualisierst.',
   'appText.agentDrafts.invalid': 'Kopie der Rollenänderungen ungültig.',
-  'appText.agentLifecycle.invalid': 'Ungültige Antwort zum Agenten-Lebenszyklus',
   'appText.agentSetup.name': 'Der Name darf nicht # * ` [ ] < > | _ \\ enthalten',
   'appText.agentSetup.role': 'Die Rolle darf nicht «. Language:» enthalten.',
   'appText.agentSetup.language': 'Schreib nur die Sprache, zum Beispiel: Deutsch.',
   'appText.agentSetup.areas': (p: { n: number }) => `Höchstens ${p.n} Bereiche: Fass die ähnlichsten zusammen.`,
   'appText.agentSetup.area': (p: { n: number }) => `Jeder Bereich höchstens ${p.n} Zeichen.`,
-  'appText.agentTeam.unknown': 'Subagenten: keine Daten verfügbar',
-  'appText.agentTeam.complete': (p: { active: number; total: number }) => `Subagenten: ${p.active} aktiv · ${p.total} insgesamt`,
-  'appText.agentTeam.partial': (p: { active: number; total: number }) => `Beobachtete Subagenten: ${p.active} aktiv · ${p.total} insgesamt · Teilansicht`,
-  'appText.agentTeam.notReported': 'nicht gemeldet',
-  'appText.agentTeam.noTask': 'beobachtete Aktivität ohne gemeldete Aufgabe',
-  'appText.agentTeam.notObserved': 'nicht in den Beobachtungen',
   // lib/images.ts, lib/models.ts
   'appText.images.noCanvas': 'Canvas nicht verfügbar',
   'appText.images.readFailed': 'Lesen fehlgeschlagen',
