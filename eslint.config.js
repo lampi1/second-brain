@@ -6,7 +6,7 @@ import tseslint from 'typescript-eslint';
 /** Files over MAX_LINES today (2026-10-29): known debt, being split by another task; a new file over it warns. */
 const LONG_FILES = [
   'src/main/browser/actions.ts', 'src/main/chats/acp.ts', 'src/main/chats/claude.ts', 'src/main/chats/codex.ts',
-  'src/main/chats/manager.ts', 'src/main/demo.ts', 'src/main/wiring.ts', 'src/renderer/brain/map/engine.ts',
+  'src/main/demo.ts', 'src/main/wiring.ts', 'src/renderer/brain/map/engine.ts',
   'src/shared/concept-guide.ts', 'test/unit/agents/delegation.test.ts',
 ];
 const MAX_LINES = 800;

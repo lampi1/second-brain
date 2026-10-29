@@ -76,7 +76,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/run-report.ts; src/shared/roles.ts ROLE_PREAMBLE
       b('Ogni ruolo chiude il suo lavoro con un rapporto: esito, riassunto, risultato e i criteri del contratto con le prove. È un’autovalutazione, non una verifica indipendente.',
         'Every role closes its job with a report: outcome, summary, output and the contract’s criteria with their evidence. It is a self-report, not an independent check.'),
-      // src/main/chats/manager.ts startRun only when owner.source === 'catalog'
+      // src/main/chats/manager-persistence.ts startRun only when owner.source === 'catalog'
       b('Le chat dei ruoli di lavoro hanno una «run» con contatori e costo; l’Orchestrator e le chat avviate senza ruolo (con i tuoi permessi) no.',
         'Work-role chats have a "run" with counters and cost; the Orchestrator and chats started without a role (with your permissions) do not.'),
       // src/main/agents/loop.ts; src/main/agents/trials.ts; src/main/agents/suggestions.ts
@@ -112,10 +112,10 @@ export const CONCEPTS: readonly ConceptCard[] = [
       2: ['src/main/appctl/tools.ts#app_create_chat', 'src/main/agents/discovery.ts#agent_catalog'],
       3: ['src/shared/roles.ts#canLaunch'],
       4: ['src/main/agents/run-report.ts', 'src/shared/roles.ts#ROLE_PREAMBLE'],
-      5: ['src/main/chats/manager.ts#startRun'],
+      5: ['src/main/chats/manager-persistence.ts#startRun'],
       6: ['src/main/agents/loop.ts', 'src/main/agents/trials.ts', 'src/main/agents/suggestions.ts'],
     },
-    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/main/chats/manager.ts', 'src/renderer/actions.ts', 'src/main/agents/run-report.ts', 'src/main/agents/loop.ts'],
+    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/discovery.ts', 'src/main/appctl/tools.ts', 'src/main/chats/manager.ts', 'src/renderer/actions.ts', 'src/main/agents/run-report.ts', 'src/main/agents/loop.ts', 'src/main/chats/manager-persistence.ts'],
   },
   {
     id: 'delegation',
@@ -129,7 +129,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/delegation.ts allowsClass, launchGap; src/main/agents/worktrees.ts; src/main/agents/role-gate.ts aboveParent
       b('I permessi scendono soltanto: un figlio non ha mai più strumenti o permessi del genitore e lavora nella sua cartella (o in un worktree dello stesso repository); una richiesta oltre i permessi del genitore è rifiutata e lo dice nella chat. Di base ogni ruolo può tutto, quindi chi pianifica (Strategist) avvia anche chi cambia qualcosa (Artisan, Sentinel, Herald); se hai ristretto il genitore, un figlio che ha bisogno di più non parte: il genitore lo scrive nel suo risultato e lo avvia l’Orchestrator.',
         'Permissions only go down: a child never gets more tools or permissions than its parent and works in its folder (or a worktree of the same repository); a request beyond the parent’s permissions is refused and says so in the chat. By default every role may do everything, so a planner (Strategist) also launches the roles that change something (Artisan, Sentinel, Herald); if you narrowed the parent, a child that needs more does not start: the parent writes it in its result and the Orchestrator starts it.'),
-      // src/shared/roles.ts DELEGATION_DEFAULTS; src/main/chats/manager.ts limitNotice
+      // src/shared/roles.ts DELEGATION_DEFAULTS; src/main/chats/manager-delegation.ts limitNotice
       b('Profondità e figli in corso sono limiti tuoi (Impostazioni → Ruoli e deleghe); una delega oltre il limite è rifiutata e il genitore mostra «Limite».',
         'Depth and running children are your limits (Settings → Roles and delegation); a delegation over the limit is refused and the parent shows "Limit".'),
       // src/main/agents/delegation.ts agent_ask_parent, agent_answer_child; src/renderer/lib/child-requests.ts requestHost
@@ -138,10 +138,10 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/DelegationCard.tsx; src/renderer/lib/run-steps.ts
       b('Nella Grindhouse ogni figlio è una scheda sul filo del genitore: compito, personaggio, skill, modello, i passi veri (il piano del motore e le sue azioni), lo stato. Un clic la apre nella chat intera; «Vai alla chat» la mette a fuoco.',
         'In the Grindhouse each child is a card on its parent’s thread: task, character, skills, model, its real steps (the engine’s plan and its actions), its state. A click opens it into the whole chat; "Vai alla chat" puts it in focus.'),
-      // src/main/chats/manager.ts userWrote; src/main/chats/orchestrator-wake.ts user-message
+      // src/main/chats/manager-work.ts userWrote; src/main/chats/orchestrator-wake.ts user-message
       b('Puoi scrivere in qualunque figlio: l’Orchestrator e il genitore lo vengono a sapere con le tue parole, così nessuno disfa ciò che hai chiesto; se cambi l’obiettivo, il figlio lo dice nel suo risultato.',
         'You can write in any child: the Orchestrator and the parent learn it in your words, so nobody undoes what you asked; if you change the goal, the child says so in its result.'),
-      // src/main/chats/manager.ts reportDelegation; src/shared/delegation.ts resultMessage
+      // src/main/chats/manager-delegation.ts reportDelegation; src/shared/delegation.ts resultMessage
       b('Il figlio chiude con un rapporto: il risultato arriva al genitore come messaggio; l’Orchestrator vede solo lo stato. Una chat che l’Orchestrator ha aperto lui stesso gli riporta allo stesso modo.',
         'The child closes with a report: the result reaches the parent as a message; the Orchestrator sees only the state. A chat the Orchestrator opened itself reports to it the same way.'),
     ],
@@ -157,13 +157,13 @@ export const CONCEPTS: readonly ConceptCard[] = [
       [-1]: ['src/shared/delegation.ts'],
       0: ['src/shared/delegation.ts#delegationPrompt'],
       1: ['src/main/agents/worktrees.ts', 'src/main/agents/role-gate.ts#aboveParent'],
-      2: ['src/shared/roles.ts#DELEGATION_DEFAULTS', 'src/main/chats/manager.ts#limitNotice'],
+      2: ['src/shared/roles.ts#DELEGATION_DEFAULTS', 'src/main/chats/manager-delegation.ts#limitNotice'],
       3: ['src/main/agents/delegation.ts#agent_ask_parent', 'src/main/agents/delegation.ts#agent_answer_child', 'src/renderer/lib/child-requests.ts#requestHost'],
       4: ['src/renderer/components/DelegationCard.tsx', 'src/renderer/lib/run-steps.ts'],
-      5: ['src/main/chats/manager.ts#userWrote'],
-      6: ['src/main/chats/manager.ts#reportDelegation', 'src/shared/delegation.ts#resultMessage'],
+      5: ['src/main/chats/manager-work.ts#userWrote'],
+      6: ['src/main/chats/manager-delegation.ts#reportDelegation', 'src/shared/delegation.ts#resultMessage'],
     },
-    sources: ['src/main/agents/delegation.ts', 'src/shared/delegation.ts', 'src/main/agents/role-gate.ts', 'src/main/chats/manager.ts', 'src/main/chats/orchestrator-wake.ts', 'src/renderer/components/DelegationCard.tsx', 'src/renderer/components/SidebarTree.tsx', 'src/renderer/lib/run-steps.ts', 'src/renderer/lib/child-requests.ts'],
+    sources: ['src/main/agents/delegation.ts', 'src/shared/delegation.ts', 'src/main/agents/role-gate.ts', 'src/main/chats/manager.ts', 'src/main/chats/orchestrator-wake.ts', 'src/renderer/components/DelegationCard.tsx', 'src/renderer/components/SidebarTree.tsx', 'src/renderer/lib/run-steps.ts', 'src/renderer/lib/child-requests.ts', 'src/main/chats/manager-delegation.ts', 'src/main/chats/manager-work.ts'],
   },
   {
     id: 'agents',
@@ -189,7 +189,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/model-tier.ts tierModel; src/main/agents/role-table.ts; src/main/agents/catalog.ts resolve()
       b('Un ruolo senza un modello suo prende quello della riga di Instradamento modelli che corrisponde al lavoro sul suo motore (e il suo sforzo, se il ruolo non ne indica uno); altrimenti il livello (leggero, medio, top) diventa un modello per ogni motore: la tua scelta in Impostazioni, altrimenti il registro dei modelli del brain. Sentinel è indipendente perché parte in una sessione nuova, senza il ragionamento del genitore, non perché cambiano modello.',
         'A role without its own model takes the model of the Model routing row that matches the work on its engine (and its effort, when the role names none); else the tier (light, mid, top) becomes a model per engine: your choice in Settings, else the brain’s model registry. Sentinel is independent because it starts in a new session without the parent’s reasoning, not because they switch model.'),
-      // src/main/agents/tool-policy.ts browserAccess, readOnlyCommand; src/main/chats/manager.ts refusedCommand; src/main/agents/skill-needs.ts
+      // src/main/agents/tool-policy.ts browserAccess, readOnlyCommand; src/main/chats/manager-requests.ts refusedCommand; src/main/agents/skill-needs.ts
       b('Strumenti a classi: un ruolo limitato ai comandi di sola lettura vede rifiutato in chat un comando che scrive (se l’ha delegato una chat che può eseguirlo, decidi tu); uno che legge, o uno script node elencato in read-only-tools.md nel brain, ti arriva come permesso senza «sempre». Se una skill passata a un ruolo usa strumenti che il ruolo non ha, l’Orchestrator lo sa subito, già quando apre o delega il lavoro.',
         'Tools come in classes: a role limited to read-only commands has a writing command refused in the chat (when a chat that may run it delegated it, you decide); one that reads, or a node script listed in read-only-tools.md in the brain, reaches you as a permission without "always". When a skill passed to a role uses tools the role lacks, the Orchestrator knows at once, as it opens or delegates the work.'),
       // src/renderer/components/AgentAvatar.tsx; src/renderer/lib/character-art.ts
@@ -215,10 +215,10 @@ export const CONCEPTS: readonly ConceptCard[] = [
       3: ['src/main/agents/catalog.ts#reset'],
       4: ['src/shared/agents.ts#VERSIONED_CHANGES', 'src/main/agents/versions.ts#versionedChanges'],
       5: ['src/main/agents/model-tier.ts#tierModel', 'src/main/agents/role-table.ts', 'src/main/agents/catalog.ts#resolve'],
-      6: ['src/main/agents/tool-policy.ts#browserAccess', 'src/main/agents/tool-policy.ts#readOnlyCommand', 'src/main/chats/manager.ts#refusedCommand', 'src/main/agents/skill-needs.ts'],
+      6: ['src/main/agents/tool-policy.ts#browserAccess', 'src/main/agents/tool-policy.ts#readOnlyCommand', 'src/main/chats/manager-requests.ts#refusedCommand', 'src/main/agents/skill-needs.ts'],
       7: ['src/renderer/components/AgentAvatar.tsx', 'src/renderer/lib/character-art.ts'],
     },
-    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/versions.ts', 'src/main/agents/model-tier.ts', 'src/main/agents/role-table.ts', 'src/main/agents/tool-policy.ts', 'src/main/agents/read-tools.ts', 'src/main/agents/skill-needs.ts', 'src/renderer/components/AgentStudio.tsx', 'src/renderer/components/RolePermissions.tsx', 'src/renderer/components/AgentAvatar.tsx', 'src/renderer/lib/character-art.ts'],
+    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/versions.ts', 'src/main/agents/model-tier.ts', 'src/main/agents/role-table.ts', 'src/main/agents/tool-policy.ts', 'src/main/agents/read-tools.ts', 'src/main/agents/skill-needs.ts', 'src/renderer/components/AgentStudio.tsx', 'src/renderer/components/RolePermissions.tsx', 'src/renderer/components/AgentAvatar.tsx', 'src/renderer/lib/character-art.ts', 'src/main/chats/manager-requests.ts'],
   },
   {
     id: 'skills',
@@ -326,13 +326,13 @@ export const CONCEPTS: readonly ConceptCard[] = [
     summary: b('Una run è un lavoro di un ruolo, dall’avvio al suo rapporto finale, con contatori, costo e risultato.',
       'A run is one job of a role, from start to its final report, with counters, cost and result.'),
     points: [
-      // src/main/chats/manager.ts startRun (owner.source === 'catalog')
+      // src/main/chats/manager-persistence.ts startRun (owner.source === 'catalog')
       b('Nasce quando una chat parte con un ruolo di lavoro; startedBy dice chi l’ha avviata: tu, l’Orchestrator o la chat genitore che l’ha delegata.',
         'It starts when a chat starts with a work role; startedBy says who started it: you, the Orchestrator or the parent chat that delegated it.'),
       // src/main/chats/manager.ts create (links.parentRunId); src/main/agents/delegation.ts
       b('Una run delegata porta parentRunId, la run del genitore: così l’albero delle deleghe resta leggibile anche nelle metriche.',
         'A delegated run carries parentRunId, its parent’s run: so the delegation tree stays readable in the metrics too.'),
-      // src/main/chats/manager.ts countRequest
+      // src/main/chats/manager-requests.ts countRequest
       b('Conta domande, permessi e comandi (una volta per richiesta), riaperture, picco di contesto, correzioni e tempo di esecuzione; le statistiche dei ruoli non usano più permessi e picco di contesto (sempre 0 o mai mostrati).',
         'It counts questions, permissions and commands (once per request), reopenings, context peak, corrections and execution time; the role statistics no longer use permissions and context peak (always 0 or never shown).'),
       // src/main/agents/runs.ts addTurn
@@ -365,15 +365,15 @@ export const CONCEPTS: readonly ConceptCard[] = [
     ],
     anchors: {
       [-1]: ['src/shared/agents.ts#AgentRun', 'src/main/agents/runs.ts#RUNS_MAX', 'src/main/agents/runs.ts#RUNS_BYTES', 'src/main/agents/runs.ts#STALE_MS'],
-      0: ['src/main/chats/manager.ts#startRun'],
+      0: ['src/main/chats/manager-persistence.ts#startRun'],
       1: ['src/main/chats/manager.ts#create'],
-      2: ['src/main/chats/manager.ts#countRequest'],
+      2: ['src/main/chats/manager-requests.ts#countRequest'],
       3: ['src/main/agents/runs.ts#addTurn'],
       4: ['src/main/agents/run-report.ts#parseRunReport'],
       6: ['src/main/agents/run-feedback.ts#recordFeedback'],
       7: ['src/main/run/outcome.ts', 'src/renderer/components/RunSurface.tsx'],
     },
-    sources: ['src/shared/agents.ts', 'src/main/agents/runs.ts', 'src/main/agents/run-report.ts', 'src/main/agents/run-feedback.ts', 'src/main/chats/manager.ts', 'src/main/index.ts', 'src/main/run/outcome.ts'],
+    sources: ['src/shared/agents.ts', 'src/main/agents/runs.ts', 'src/main/agents/run-report.ts', 'src/main/agents/run-feedback.ts', 'src/main/chats/manager.ts', 'src/main/index.ts', 'src/main/run/outcome.ts', 'src/main/chats/manager-persistence.ts', 'src/main/chats/manager-requests.ts'],
   },
   {
     id: 'metrics',
@@ -680,7 +680,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/RunEstimate.tsx, src/main/agents/task-estimate.ts (ADR 0087)
       b('Una striscia di un agente mostra una stima tratteggiata, «stima ~4 min · ~0,12 $ · su 12 task simili»: la mediana dei task simili già finiti (stesso agente e stesso tipo, poi stesso tipo, poi stesso agente; almeno 3), mai il tempo né il costo di questa esecuzione. Finito il lavoro diventa «~4 min → 6 min» con ✓ se il reale sta tra la metà e il doppio. Il «?» spiega il calcolo e quanto sono state precise le stime.',
         'An agent strip shows a dashed estimate, "estimate ~4 min · ~0,12 $ · from 12 similar tasks": the median of similar finished tasks (same agent and kind, then same kind, then same agent; at least 3), never this run’s own time or cost. Once done it becomes "~4 min → 6 min" with ✓ when the actual is between half and double. The "?" explains the computation and how accurate the estimates have been.'),
-      // src/main/chats/manager.ts settleReport; src/main/chats/auto-close.ts; src/renderer/components/AutoCloseNotice.tsx (ADR 0084)
+      // src/main/chats/manager-delegation.ts settleReport; src/main/chats/auto-close.ts; src/renderer/components/AutoCloseNotice.tsx (ADR 0084)
       b('Un agente che ha mandato il report finale all’Orchestrator e non lavora più chiude il suo incarico e si chiude da solo dopo il tempo scelto in Impostazioni (lo ritrovi con Ctrl+K). Se aspetta te, un permesso, i colleghi o task in background resta aperto e la striscia dice «In attesa di…».',
         'An agent that sent its final report to the Orchestrator and is idle completes its assignment and closes by itself after the delay set in Settings (Ctrl+K finds it). If it waits for you, a permission, colleagues or background tasks it stays open and the strip says "Waiting for…".'),
       // src/renderer/components/ChatTile.tsx
@@ -704,11 +704,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       2: ['src/renderer/lib/grid.ts#workspaceTiles'],
       3: ['src/renderer/components/ChildStrips.tsx'],
       4: ['src/renderer/components/RunEstimate.tsx', 'src/main/agents/task-estimate.ts'],
-      5: ['src/main/chats/manager.ts#settleReport', 'src/main/chats/auto-close.ts', 'src/renderer/components/AutoCloseNotice.tsx'],
+      5: ['src/main/chats/manager-delegation.ts#settleReport', 'src/main/chats/auto-close.ts', 'src/renderer/components/AutoCloseNotice.tsx'],
       6: ['src/renderer/components/ChatTile.tsx'],
       7: ['src/renderer/components/CloudStrips.tsx'],
     },
-    sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/RunEstimate.tsx', 'src/renderer/components/BrowserTile.tsx', 'src/renderer/components/CloudStrips.tsx', 'src/main/cloud/service.ts'],
+    sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/RunEstimate.tsx', 'src/renderer/components/BrowserTile.tsx', 'src/renderer/components/CloudStrips.tsx', 'src/main/cloud/service.ts', 'src/main/chats/manager-delegation.ts'],
   },
   {
     id: 'memory-hub',
@@ -1292,7 +1292,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/AutoCloseNotice.tsx; the palette's "Chiuse"
       b('L’Orchestrator e le chat senza ruolo non si chiudono mai da sole; una chat chiusa resta nell’archivio e si riapre scrivendole.',
         'The Orchestrator and chats without a role never close by themselves; a closed chat stays in the archive and reopens when you write to it.'),
-      // src/main/chats/manager.ts autoCloseCandidates (ADR 0111)
+      // src/main/chats/manager-lifecycle.ts autoCloseCandidates (ADR 0111)
       b('Un albero di deleghe si chiude tutto insieme: le chat che hanno finito aspettano le altre, e il tempo parte quando ha finito l’ultima.',
         'A delegation tree closes as one: the chats that finished wait for the others, and the time starts when the last one finished.'),
       // src/renderer/components/SidebarTree.tsx
@@ -1313,10 +1313,10 @@ export const CONCEPTS: readonly ConceptCard[] = [
       2: ['src/shared/auto-close.ts#AutoCloseWaiting'],
       3: ['src/main/chats/auto-close.ts'],
       4: ['src/renderer/components/AutoCloseNotice.tsx'],
-      5: ['src/main/chats/manager.ts#autoCloseCandidates'],
+      5: ['src/main/chats/manager-lifecycle.ts#autoCloseCandidates'],
       6: ['src/renderer/components/SidebarTree.tsx'],
     },
-    sources: ['src/main/chats/auto-close.ts', 'src/shared/auto-close.ts', 'src/renderer/components/AutoCloseNotice.tsx', 'docs/adr/0084-finished-workers-close-by-themselves.md', 'docs/adr/0111-the-log-page.md', 'docs/adr/0134-finished-chats-close-by-default.md'],
+    sources: ['src/main/chats/auto-close.ts', 'src/shared/auto-close.ts', 'src/renderer/components/AutoCloseNotice.tsx', 'docs/adr/0084-finished-workers-close-by-themselves.md', 'docs/adr/0111-the-log-page.md', 'docs/adr/0134-finished-chats-close-by-default.md', 'src/main/chats/manager-lifecycle.ts'],
   },
   {
     id: 'log',
@@ -1419,7 +1419,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/chats/held-news.ts seen; src/main/chats/orchestrator-wake.ts seen (#123)
       b('Una riga che apri è letta: esce dall’elenco e non sveglia più l’Orchestrator, che la riceve solo insieme alla prossima consegna. Guardare l’elenco non spende nulla.',
         'A row you open is read: it leaves the list and no longer wakes the Orchestrator, which gets it only with the next delivery. Looking at the list spends nothing.'),
-      // src/main/chats/manager.ts releaseResult; src/shared/sys.ts resultReady (#123)
+      // src/main/chats/manager-delegation.ts releaseResult; src/shared/sys.ts resultReady (#123)
       b('Quando un ruolo che l’Orchestrator ha aperto per la tua domanda ha la risposta, nella chat dell’Orchestrator compare un avviso verde con il riassunto e «Apri»: nessun turno in più dell’Orchestrator.',
         'When a role the Orchestrator opened for your question has the answer, a green notice with the summary and "Open" shows in the Orchestrator’s chat: no extra Orchestrator turn.'),
     ],
@@ -1434,9 +1434,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       1: ['src/main/chats/orchestrator-delivery.ts#ORCHESTRATOR_GROUP_MS'],
       2: ['src/renderer/components/HeldNews.tsx'],
       3: ['src/main/chats/held-news.ts#seen', 'src/main/chats/orchestrator-wake.ts#seen'],
-      4: ['src/main/chats/manager.ts#releaseResult'],
+      4: ['src/main/chats/manager-delegation.ts#releaseResult'],
     },
-    sources: ['src/main/chats/held-news.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/main/chats/orchestrator-wake.ts', 'src/main/chats/manager.ts', 'src/shared/sys.ts', 'src/renderer/components/HeldNews.tsx'],
+    sources: ['src/main/chats/held-news.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/main/chats/orchestrator-wake.ts', 'src/main/chats/manager.ts', 'src/shared/sys.ts', 'src/renderer/components/HeldNews.tsx', 'src/main/chats/manager-delegation.ts'],
   },
   {
     id: 'context',

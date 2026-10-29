@@ -22,6 +22,6 @@ describe('repo lint rules', () => {
     const m = await lint(long, 'src/shared/new-long.ts');
     expect(m.map(x => [x.ruleId, x.severity])).toEqual([['sb/max-lines', 1]]);
     expect(m[0]!.message).toContain('Fix: split it by responsibility');
-    expect(await lint(long, 'src/main/chats/manager.ts')).toEqual([]);
+    expect(await lint(long, 'src/main/chats/claude.ts')).toEqual([]);
   });
 });
