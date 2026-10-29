@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentRun, AgentRunReceipts } from '../../../src/shared/agents';
 import type { ChatItem } from '../../../src/shared/contract';
-import { criteriaHold, emptyReceipts, isCheck, maskedCheck, noteTool, noteTurnFiles, readReceipts, RECEIPT_COMMANDS, RECEIPT_FILES, receiptDecision, receiptLine, receiptVerdict, shownCommand } from '../../../src/main/agents/receipts';
+import { criteriaHold, emptyReceipts, isCheck, maskedCheck, noteTool, noteTurnFiles, readReceipts, RECEIPT_COMMANDS, RECEIPT_FILES, receiptDecision, receiptLine, receiptVerdict, rowChanges, shownCommand, turnFilesWithoutGit } from '../../../src/main/agents/receipts';
 
 type Tool = Extract<ChatItem, { kind: 'tool' }>;
 let n = 0;
@@ -151,5 +151,24 @@ describe('readReceipts', () => {
     expect(readReceipts({ ...rc, commands: 'x' })).toBeNull();
     expect(readReceipts({ ...rc, verdict: { result: 'maybe', reason: 'checks-passed', at: 1 } })).toBeNull();
     expect(readReceipts({ ...rc, files: Array(RECEIPT_FILES + 1).fill('a') })).toBeNull();
+  });
+});
+
+describe('a turn without a git checkpoint (ADR 0182)', () => {
+  it('knows its files from its edit rows when no command that may write ran', () => {
+    expect(rowChanges(edit('src\\a.ts', 10))).toEqual({ files: ['src/a.ts'], mayWrite: false });
+    for (const c of ['git status', 'git diff --stat', 'ls -la', 'cat src/a.ts | head -5', 'npm test', 'cd app && npx tsc --noEmit', 'rg foo src'])
+      expect(rowChanges(bash(c, 0, 10)).mayWrite, c).toBe(false);
+    for (const c of ['sed -i s/a/b/ x.ts', 'echo x > a.ts', 'node build.mjs', 'git commit -m x', 'cat a | tee b', 'find . -delete'])
+      expect(rowChanges(bash(c, 0, 10)).mayWrite, c).toBe(true);
+    expect(turnFilesWithoutGit({ files: ['a.ts', 'a.ts'], mayWrite: false })).toEqual(['a.ts']);
+    expect(turnFilesWithoutGit({ files: ['a.ts'], mayWrite: true })).toBeNull();
+    // the files known this way let the receipts decide: an edit, then a passing check after it
+    const rc = emptyReceipts();
+    noteTool(rc, edit('src/a.ts', 100));
+    noteTool(rc, bash('npm test', 0, 200));
+    noteTurnFiles(rc, turnFilesWithoutGit({ files: ['src/a.ts'], mayWrite: false }), 50, 1000);
+    expect(rc.filesKnown).toBe(true);
+    expect(receiptVerdict({ receipts: rc })).toEqual({ result: 'pass', reason: 'checks-passed' });
   });
 });

@@ -13,6 +13,7 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { completedRuns, type AgentMetrics, type AgentProfile, type AgentStanding } from '@shared/agents';
 import { characterOf } from '@shared/characters';
+import { PULSE_ID } from '@shared/roles';
 import { characterTone } from '../lib/character-art';
 import type { MemoryFile } from '@shared/brain-model';
 import { locale, t } from '../i18n';
@@ -135,7 +136,9 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
     window.addEventListener('keydown', esc, true);
     return () => window.removeEventListener('keydown', esc, true);
   }, [flipped]);
-  const stats = metrics?.all, standing = loaded ? metrics?.standing ?? NONE : null;
+  // Pulse (Battito) is a background job: no level nor performance (ADR 0182)
+  const rated = profile.id !== PULSE_ID;
+  const stats = metrics?.all, standing = loaded && rated ? metrics?.standing ?? NONE : null;
   const ended = loaded ? completedRuns(metrics) : null;
   const open = loaded ? metrics?.open ?? 0 : null;
   const unknown = t('catalog.unknown');
@@ -178,7 +181,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
           <span className="catalog-chip" data-kind="model" title={profile.model ?? tier}>{profile.model ?? tier}</span>
           <span className="catalog-chip" data-kind="skills">{t('bm.map.agentSkills', { n: skills.length })}</span>
         </div>
-        <Standing id={profile.id} standing={standing} />
+        {rated && <Standing id={profile.id} standing={standing} />}
         <dl className="catalog-stats">
           <Metric label={t('agentsGrid.runs')} full={t('catalog.runs')} value={values.runs} unknown={unknown} />
           <Metric label={t('agentsGrid.open')} full={t('catalog.open')} value={values.open} unknown={unknown} />

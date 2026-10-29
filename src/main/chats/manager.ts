@@ -64,7 +64,7 @@ import { AgentRunStore, addSkill, addTurn, APP_MAX, endRun, REPO_MAX, SKILL_ID, 
 import { reportOf } from '../agents/run-report';
 import { gateRequest, runtimePluginName, SubagentGate } from '../agents/role-gate';
 import { afterTree, KEEP as CHECKPOINTS_KEPT, prune as pruneCheckpoints, restore as restoreCheckpoint, snapshot as takeCheckpoint, turnFiles, type Checkpoint } from './checkpoints';
-import { emptyReceipts, noteTool, noteTurnFiles, receiptVerdict } from '../agents/receipts';
+import { emptyReceipts, noteTool, noteTurnFiles, receiptVerdict, rowChanges, turnFilesWithoutGit } from '../agents/receipts';
 import { autoPermit } from './auto-permit';
 import { TurnToolBudget } from '../agents/orchestrator-budget';
 import { APP_CHAT_TOOLS } from './app-tool-approval';
@@ -316,6 +316,8 @@ interface Rec {
   checkpoints?: Checkpoint[];
   /** the turn going on now has its own checkpoint (auto-permit lets edits and commands through only then) */
   turnCheckpoint?: boolean;
+  /** the open turn's edit-tool paths and whether a command that may write ran (receipts without a checkpoint, ADR 0182) */
+  receiptTurn?: { files: string[]; mayWrite: boolean };
   /** the session whose first API call was counted already (context-stats.ts cache) */
   cacheSession?: string;
   gitRoot?: string | null;
@@ -3046,6 +3048,11 @@ export class ChatManager implements ChatService {
     const seen = r.receiptRows ??= new Set();
     if (seen.has(item.id) || !noteTool(run.receipts ??= emptyReceipts(), item)) return;
     seen.add(item.id);
+    // the turn's own record of its changes, for a turn without a checkpoint (receiptTurn)
+    const ch = rowChanges(item), turn = r.receiptTurn ??= { files: [], mayWrite: false };
+    const inCwd = (f: string): string => { const rel = path.relative(r.s.cwd, path.resolve(r.s.cwd, f)); return rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? rel.replace(/\\/g, '/') : f; };
+    if (turn.files.length < 200) turn.files.push(...ch.files.slice(0, 200 - turn.files.length).map(inCwd));
+    if (ch.mayWrite) turn.mayWrite = true;
     if (seen.size > 500) seen.delete(seen.values().next().value!);
     this.runs.touch();
   }
@@ -3054,8 +3061,9 @@ export class ChatManager implements ChatService {
   private receiptTurn(r: Rec, turnAt: number | undefined, end: number): void {
     const run = r.s.run;
     if (!run || run.source === 'oneshot' || (run.endedAt !== undefined && (turnAt === undefined || run.endedAt < turnAt))) return;
-    const rc = run.receipts ??= emptyReceipts(), cp = r.checkpoints?.at(-1);
-    if (!r.turnCheckpoint || !cp || r.receiptCp === cp) { noteTurnFiles(rc, null, 0, end); this.receiptsIn(r, run); return; }
+    const rc = run.receipts ??= emptyReceipts(), cp = r.checkpoints?.at(-1), turn = r.receiptTurn ?? { files: [], mayWrite: false };
+    r.receiptTurn = undefined;
+    if (!r.turnCheckpoint || !cp || r.receiptCp === cp) { noteTurnFiles(rc, turnFilesWithoutGit(turn), turnAt ?? end, end); this.receiptsIn(r, run); return; }
     r.receiptCp = cp; r.receiptsBusy = true;
     void (async () => {
       let files: string[] | null = null;

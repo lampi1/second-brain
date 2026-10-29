@@ -1,9 +1,9 @@
 // Role metrics and pruned-run rollups used by agent cards. Verified quality uses only human or independent evidence;
 // self-reports and observation proxies do not enter success. Costs and usage retain their own data coverage.
 import type { DeliveryMetrics, AgentMetrics, AgentRun, AgentRunTokens, AgentRunOutcome, Metric, VersionMetrics } from '../../shared/agents';
-import { counts, countedDecision, decisionXp, earnIndex, earnedVerdict, pulseJob, pulseProxy, runXp, verdictOf } from './standing';
+import { counts, countedDecision, decisionXp, earnIndex, earnedVerdict, runXp, unrated } from './standing';
 import { FACTS_SETTLE_MS, reworkStartsOf, reworkedWithin, verifiedVerdict } from '../../shared/run-verdict';
-import { LEGACY_XP, PULSE_XP } from './xp';
+import { LEGACY_XP } from './xp';
 
 /** the newest values kept per sample for medians (n counts them all) */
 export const SAMPLE_MAX = 200;
@@ -101,8 +101,7 @@ export function foldRun(t: RunTally, run: AgentRun, index: RunIndex, aiErrors?: 
   if (run.endedAt === undefined) return;
   // Headline and fallback runs are not comparable with the agent version's card/task baseline.
   // Their complete cost ledger remains available under Battito's job budgets.
-  // A Battito card job counts on any engine: it is Pulse's only work (standing.ts pulseJob).
-  if ((run.oneshot?.fallback && !pulseJob(run)) || run.oneshot?.job === 'headline') return;
+  if (run.oneshot?.fallback || run.oneshot?.job === 'headline') return;
   t.ended++;
   const o = run.outcome, starts = index.reworkStarts.get(run.runId);
   const verified = verifiedVerdict(run, starts, index.now);
@@ -200,9 +199,8 @@ export function rollUp(rollups: readonly RunTally[], pruned: readonly AgentRun[]
     foldRun(t, run, index);
     const e = counts(run) ? earnedVerdict(run, earn) : null;
     if (e?.verdict === 'success' && (e.basis === 'chain' || e.basis === 'graded' || e.basis === 'receipts')) t.earnedWins = (t.earnedWins ?? 0) + 1;
-    // the XP (a rollup pruned before ADR 0131 starts from its successes' floor, xp0); Pulse's proxy as in standing.ts
+    // the XP (a rollup pruned before ADR 0131 starts from its successes' floor, xp0)
     if (e) t.xp = round2(xp0 + (e.verdict === 'success' ? runXp(run, earn) : 0));
-    else if (counts(run) && pulseProxy(run) === 'success' && !verdictOf(run)) t.xp = round2(xp0 + PULSE_XP);
     if (countedDecision(run)) {
       t.decisions = (t.decisions ?? 0) + 1;
       // the same verified success as the live standing (receipts and chains too: before ADR 0131 only the user's or a
@@ -312,7 +310,8 @@ export function runMetrics(runs: readonly AgentRun[], input: MetricsInput = {}):
     if (!tallies.has(k)) tallies.set(k, emptyTally(run.agentId, run.version));
     foldRun(tallies.get(k)!, run, index, input.aiErrors);
   }
-  const agents = new Set([...[...tallies.values()].map(t => t.agentId), ...open.keys()]);
+  // the retired roles and Pulse have no catalog stats (ADR 0182): their runs stay in the file, readable
+  const agents = new Set([...[...tallies.values()].map(t => t.agentId), ...open.keys()].filter(id => !unrated(id)));
   return [...agents].sort((a, b) => a.localeCompare(b, 'en')).map(agentId => {
     const own = [...tallies.values()].filter(t => t.agentId === agentId).sort((a, b) => a.version - b.version);
     const retained = runs.filter(r => r.agentId === agentId && r.endedAt !== undefined && (input.since === undefined || r.endedAt >= input.since) && matchesTags(r, filter));

@@ -19,8 +19,6 @@ export const XP_MIN = 1, XP_MAX = 5;
 export const LEGACY_XP = XP_MIN;
 /** one Flash answer that held (flash-outcomes.ts): a small share of a job */
 export const FLASH_XP = 0.25;
-/** a Battito (Pulse) card run that answered, with no verdict of the user on its cards (standing.ts pulseProxy) */
-export const PULSE_XP = 0.25;
 /** an Orchestrator decision whose Strategist plan the user approved with no change (ADR 0131) */
 export const PLAN_XP = 1;
 
