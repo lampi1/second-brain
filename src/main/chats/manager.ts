@@ -1364,9 +1364,11 @@ export class ChatManager implements ChatService {
     const decision = JSON.stringify({ requestId, title: req.title, detail: req.detail, questions: req.questions ?? [], answer });
     r.continuationDecisions = r.continuationDecisions ? `${r.continuationDecisions}\n${decision}` : decision;
     // one checkpoint carries the decision and the user's event: two synchronous checkpoints per click froze the window (#294)
-    const saved = answer.kind === 'question' ? this.userWrote(chatId, JSON.stringify({ requestId, answers: Object.values(answer.answers) }))
-      : this.userWrote(chatId, JSON.stringify({ requestId, allow: answer.allow, ...(answer.message ? { message: answer.message } : {}) }));
-    if (!saved) this.persist(true);
+    let saved = false;
+    try {
+      saved = answer.kind === 'question' ? this.userWrote(chatId, JSON.stringify({ requestId, answers: Object.values(answer.answers) }))
+        : this.userWrote(chatId, JSON.stringify({ requestId, allow: answer.allow, ...(answer.message ? { message: answer.message } : {}) }));
+    } finally { if (!saved) this.persist(true); } // the decision is on disk even when the event could not be recorded
     // a Strategist still asking: the answer is one more thing its strip shows as already clear (ADR 0108)
     const plan = r.s.plan;
     if (plan && (plan.phase === 'asking' || plan.phase === 'revising') && answer.kind === 'question' && req.questions?.length) {

@@ -315,17 +315,29 @@ describe('repeated tasks, duplicates and the user toggle', () => {
       expect(fs.existsSync(path.join(w.brain, 'memory/skill-candidates'))).toBe(false);
     }
   });
-  it('strips the text most requests share before grouping: a candidate needs a common topic, not a common template (#292)', async () => {
+  it('strips the fixed lines requests share before grouping: a candidate needs a common topic, not a common template (#292)', async () => {
     const topics = ['ripara la stampante del secondo piano', 'aggiorna il listino prezzi dei ricambi', 'scrivi la mail di benvenuto ai clienti', 'controlla i certificati scaduti sul server',
       'prepara la presentazione trimestrale vendite', 'pulisci la cartella download condivisa', 'traduci il manuale utente tedesco'];
     const goals = [...topics, 'esporta le fatture di ottobre in excel', 'esporta le fatture di settembre in excel', 'esporta le fatture di agosto in excel'];
-    const runs = goals.map((g, i) => run(i + 1, `Contesto progetto alfa verifica accurata: ${g}`));
+    const runs = goals.map((g, i) => run(i + 1, `Contesto: progetto alfa, verifica accurata richiesta.\n${g}\nRispondi con agent_report quando hai finito.`));
     const w = world({ runs }); for (const r of runs) r.scope = { brainRoot: w.brain, projectRoot: w.brain };
     await w.service.maintain('repeated-task');
     const names = fs.readdirSync(path.join(w.brain, 'memory/skill-candidates'));
     expect(names).toHaveLength(1);
     expect(names[0]).toMatch(/fattur|esport|excel/);
-    expect(names[0]).not.toMatch(/contesto|progetto|alfa|verifica|accurata/);
+    expect(names[0]).not.toMatch(/contesto|progetto|alfa|verifica|accurata|report/);
+  });
+  it('still finds a task that is half of the requests, and the same request typed again (#292)', async () => {
+    const goals = ['esporta le fatture di ottobre in excel', 'esporta le fatture di settembre in excel', 'esporta le fatture di agosto in excel',
+      'ripara la stampante del secondo piano', 'aggiorna il listino prezzi dei ricambi', 'traduci il manuale utente tedesco'];
+    const runs = goals.map((g, i) => run(i + 1, g));
+    const w = world({ runs }); for (const r of runs) r.scope = { brainRoot: w.brain, projectRoot: w.brain };
+    await w.service.maintain('repeated-task');
+    expect(fs.readdirSync(path.join(w.brain, 'memory/skill-candidates'))).toHaveLength(1);
+    const same = [1, 2, 3].map(n => run(n, 'Aggiorna le dipendenze del progetto web'));
+    const other = world({ runs: same }); for (const r of same) r.scope = { brainRoot: other.brain, projectRoot: other.brain };
+    await other.service.maintain('repeated-task');
+    expect(fs.readdirSync(path.join(other.brain, 'memory/skill-candidates'))).toHaveLength(1);
   });
   it('takes a removed or undone skill out of the roles that declared it (#292)', async () => {
     const w = world();

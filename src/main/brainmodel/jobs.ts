@@ -226,13 +226,16 @@ const REPEAT_MIN = 3, REPEAT_SIM = 0.4, REPEAT_DAYS = 60;
 const NOT_THE_USER = /not written by the user|non scritt[oa] dall['’]utente/i;
 const APP_JOB = /^\s*(?:independent (?:verdict|correctness review)|sampled review by the app|verdetto indipendente)\b/i;
 export const writtenByUser = (goal: string): boolean => !NOT_THE_USER.test(goal) && !APP_JOB.test(goal);
-/** Words in at least half of the requests (6 or more) are the fixed text around them, not a topic (#292). */
-function boilerplate(goals: readonly string[]): Set<string> {
-  if (goals.length < 6) return new Set();
-  const df = new Map<string, number>();
-  for (const g of goals) for (const t of tokens(g)) if (!t.startsWith('~')) df.set(t, (df.get(t) ?? 0) + 1);
-  return new Set([...df].filter(([, n]) => n >= goals.length / 2).map(([w]) => w));
+/** The fixed lines the app or a template puts around requests (#292): a line (12+ characters) found in 3 or more
+ *  requests. Only a request with other lines loses them: the same one-line request typed again is a topic, not a template. */
+const lineKey = (l: string): string => fold(l).replace(/\s+/g, ' ').trim();
+function templateLines(goals: readonly string[]): Set<string> {
+  const n = new Map<string, number>();
+  for (const g of goals) for (const k of new Set(g.split(/\r?\n/).map(lineKey).filter(k => k.length >= 12))) n.set(k, (n.get(k) ?? 0) + 1);
+  return new Set([...n].filter(([, c]) => c >= 3).map(([k]) => k));
 }
+const withoutTemplate = (goal: string, template: ReadonlySet<string>): string =>
+  goal.split(/\r?\n/).filter(l => !template.has(lineKey(l))).join('\n').trim() || goal;
 export function repeatedTask(ctx: JobContext): JobResult {
   const since = ctx.now() - REPEAT_DAYS * 86400e3;
   const scopePath = (value: string): string => process.platform === 'win32' ? path.resolve(value).toLowerCase() : path.resolve(value);
@@ -243,13 +246,9 @@ export function repeatedTask(ctx: JobContext): JobResult {
   // Deduplicate before clustering: one task with changed wording must not enter several topic groups.
   const latestTasks = new Map<string, AgentRun>();
   for (const r of runs) latestTasks.set(JSON.stringify([scopePath(r.scope!.projectRoot), r.taskId ?? `chat:${r.chatId}`]), r);
-  // the fixed text the requests share is stripped before clustering: a group must share a topic, not a template
-  const boiler = boilerplate([...latestTasks.values()].map(r => r.goal));
-  const topical = (goal: string): Set<string> => {
-    const out = new Set<string>();
-    for (const w of tokens(goal)) if (!w.startsWith('~') && !boiler.has(w)) { out.add(w); const c = conceptOf(w); if (c) out.add(`~${c}`); }
-    return out;
-  };
+  // the fixed lines the requests share are stripped before clustering: a group must share a topic, not a template
+  const template = templateLines([...latestTasks.values()].map(r => r.goal));
+  const topical = (goal: string): Set<string> => tokens(withoutTemplate(goal, template));
   const groups: { toks: Set<string>; runs: AgentRun[]; scope: string }[] = [];
   for (const r of latestTasks.values()) {
     const t = topical(r.goal);
@@ -281,7 +280,7 @@ export function repeatedTask(ctx: JobContext): JobResult {
     }).find(lines => lines.length >= 2);
     if (!procedure) continue;
     // named from the request's own words, without the fixed text the requests share (#292)
-    const representative = g.runs.map(r => r.goal.split(/\s+/).filter(w => !boiler.has(fold(w).replace(/[^a-z0-9]/g, ''))).join(' ').trim() || r.goal)
+    const representative = g.runs.map(r => withoutTemplate(r.goal, template))
       .sort((a, b) => a.length - b.length || a.localeCompare(b))[0]!;
     const scopeKey = sourceHash(g.scope).slice(0, 8);
     const seenRuns = new Set(g.runs.map(r => r.runId));
