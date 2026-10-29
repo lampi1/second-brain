@@ -4,7 +4,8 @@
 // is one group. The groups the user marked "noto, ignora" (maintenance-noise.json in userData) are flagged known and
 // never made a card. Each new group becomes an app bug card «Apri issue» in Memoria → Proposte with its issue written
 // (brainmodel/research.ts afterPass, ADR 0132, 0153; before it the groups went to the Orchestrator, #150). Pure but for the
-// file reads; used by brainmodel/service.ts, pinned by test/unit/brainmodel/log-scan.test.ts.
+// file reads; used by brainmodel/service.ts (also countLogGroup, for the «riuscito se…» check of ADR 0194), pinned by
+// test/unit/brainmodel/log-scan.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { LogGroup, LogScan } from '../../shared/brain-model';
@@ -44,6 +45,26 @@ export function scanLogs(dir: string, since: number | null, known: ReadonlySet<s
   return { since, files, groups: list };
 }
 
+/** The warn/error lines of one log group written in [from, to) (the «riuscito se…» check, success-check.ts, ADR 0194). */
+export function countLogGroup(dir: string, key: string, from: number, to: number): number {
+  const fromDay = new Date(from).toISOString().slice(0, 10), toDay = new Date(to).toISOString().slice(0, 10);
+  let names: string[] = [];
+  try { names = fs.readdirSync(dir).filter(f => { const d = FILE.exec(f)?.[1]; return !!d && d >= fromDay && d <= toDay; }); } catch { return 0; }
+  let n = 0;
+  for (const name of names) {
+    let text: string;
+    try { text = fs.readFileSync(path.join(dir, name), 'utf8'); } catch { continue; }
+    for (const line of text.split('\n')) {
+      if (!line.includes('"lvl":"warn"') && !line.includes('"lvl":"error"')) continue;
+      let e: { t?: unknown; lvl?: unknown; scope?: unknown; msg?: unknown; cause?: unknown };
+      try { e = JSON.parse(line) as typeof e; } catch { continue; }
+      const at = typeof e.t === 'string' ? Date.parse(e.t) : NaN;
+      if (!Number.isFinite(at) || at < from || at >= to) continue;
+      if (groupKey(String(e.scope ?? ''), String(e.msg ?? ''), typeof e.cause === 'string' ? e.cause : '') === key) n++;
+    }
+  }
+  return n;
+}
 
 /** The demo's logs (#150): a day of made-up warnings and errors, one group already marked known, for the Manutenzione
  *  dialog and its e2e. Written once per demo folder. */

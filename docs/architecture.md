@@ -104,7 +104,12 @@
   Its findings are cards in Memoria → Proposte: brain changes and what to forget, applied through the change log on
   approval; app ideas and bugs as «Apri issue» cards that open the issue on GitHub when approved (gh, else the
   pre-filled new-issue page; `brainmodel/issue-open.ts`); app ideas also land in Idee on the AI's side. The end is a
-  notice (`maintenance:done`). Nothing else proposes by itself: no timer, the Battito makes no idea cards, and the
+  notice (`maintenance:done`). Every maintenance write is itemized (ADR 0194, `brainmodel/item-delta.ts`): `ChangeLog.apply`
+  refuses a write to a brain `.md` file that drops lines it does not list as removed with a reason. The click also runs
+  a zero-token brain lint (`brainmodel/brain-lint.ts`: orphans, broken links, concepts without a note, facts and skill
+  lines citing files that are gone) whose findings are Proposte cards; the launch memory skips a fact citing a missing
+  file. Each brain proposal carries a «riuscito se…» criterion (`brainmodel/success-check.ts`), checked a week after it
+  was applied (start, hourly, click): worse → a card «Questo cambio non ha aiutato: lo annullo?». Nothing else proposes by itself: no timer, the Battito makes no idea cards, and the
   skill candidates and the Battito's rules wait in the deck until the next click (`proposals/service.ts` heldBack). Memoria's statistics (`brainmodel/memory-stats.ts`, `BrainModelState.memoryStats`) are counts over the
   memory files, `ai-errors.md` and the recorded agent runs: zero tokens, nothing written.
 - **Live brain**: `fs.watch` on the brain folder + periodic `chats.mjs list` → diffed into `FeedEvent`s →

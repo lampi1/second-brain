@@ -149,7 +149,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     issuesUrl: () => 'https://github.com/lampi1/second-brain/issues', now,
     engines: () => [{ harness: 'claude', label: 'Claude', web: true, effort: true }, { harness: 'cursor', label: 'Cursor', web: true, effort: false }],
     bestModel: h => (h === 'claude' ? 'opus' : null), runs: () => demoLearningRuns(now()), roles,
-    brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); }, maintain: () => brainModel.maintain() },
+    brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); }, maintain: () => brainModel.maintain(), outcomes: () => brainModel.checkOutcomes() },
     issues: { open: async (repo, issue) => { const url = newIssueUrl(repo, issue); hiddenOpened.push(`external ${url}`); return { url, via: 'browser' }; } },
     chats: {
       // the demo answers at once (frozen): the chat starts without its prompt, the research is registered, then the

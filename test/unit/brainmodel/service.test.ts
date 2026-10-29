@@ -591,6 +591,59 @@ describe('applyResearch (ADR 0132)', () => {
   });
 });
 
+describe('lint and revert cards, «riuscito se…» (ADR 0194)', () => {
+  const card = (x: Partial<ResearchProposal>): ResearchProposal => ({ id: 'r-9', chatId: null, at: NOW, kind: 'lint', title: 't', adds: '', removes: '', why: 'Il file non c\'è più.', evidence: [], sources: [], expected: '', risk: '', state: 'open', ...x });
+  it('a stale fact is retired with its Annulla; a skill line citing a gone file is removed alone', () => {
+    const w = world();
+    const m = proposeMemory(w.brain, { scope: { roleId: DEV }, subject: 'release', predicate: 'note', value: 'Le note di rilascio sono in `docs/release.md`', sourceEventId: 'memory-proposal:one', sourceRunId: 'run-one' });
+    confirmMemory(w.brain, m.memoryId, { sourceEventId: 'human-review:one', sourceRunId: 'human-one', evidence: 'Confirmed by user' });
+    const id = w.service.applyResearch(card({ lint: { check: 'stale-fact', key: 'k', memoryId: m.memoryId, target: 'docs/release.md', about: 'x', lang: 'it' } }));
+    const rec = () => JSON.parse(fs.readFileSync(path.join(w.brain, 'memory/records.json'), 'utf8')).find((r: { memoryId: string }) => r.memoryId === m.memoryId);
+    expect(rec()).toMatchObject({ status: 'retracted' });
+    expect(w.service.changes()[0]).toMatchObject({ job: 'research', kind: 'memory', action: 'remove', canRollback: true });
+    w.service.rollback(id);
+    expect(rec()).toMatchObject({ status: 'confirmed', validTo: null });
+    // a skill's one line
+    const skill = '---\nname: build\ndescription: d\n---\n\n- Lancia `scripts/build.ps1`\n- Poi i test\n';
+    put(w.brain, '.claude/skills/build/SKILL.md', skill);
+    const line = '- Lancia `scripts/build.ps1`';
+    w.service.applyResearch(card({ lint: { check: 'stale-cite', key: 'k2', file: '.claude/skills/build/SKILL.md', target: 'scripts/build.ps1', line, about: 'build', lang: 'it' } }));
+    expect(fs.readFileSync(path.join(w.brain, '.claude/skills/build/SKILL.md'), 'utf8')).toBe(skill.replace(`${line}\n`, ''));
+    // asked again once the line is gone: the card says the problem is not there any more
+    expect(() => w.service.applyResearch(card({ lint: { check: 'stale-cite', key: 'k2', file: '.claude/skills/build/SKILL.md', target: 'scripts/build.ps1', line, about: 'build' } }))).toThrow(/non c'è più/);
+  });
+  it('an orphan goes into the hub, a concept gets its note, a broken link becomes its text', () => {
+    const w = world();
+    put(w.brain, 'hub.md', '# Hub\n\n- [[a]]\n');
+    put(w.brain, 'b.md', 'Vedi [[Nessuno|il nessuno]] qui.\n');
+    w.service.applyResearch(card({ lint: { check: 'orphan', key: 'o', file: 'b.md', lang: 'it' } }));
+    expect(fs.readFileSync(path.join(w.brain, 'hub.md'), 'utf8')).toBe('# Hub\n\n- [[a]]\n\n## Note da collegare\n\n- [[b]]\n');
+    w.service.applyResearch(card({ lint: { check: 'concept', key: 'c', target: 'Saldo finale', citedBy: ['a.md', 'b.md', 'c.md'], lang: 'it' } }));
+    expect(fs.readFileSync(path.join(w.brain, 'Saldo finale.md'), 'utf8')).toContain('Citato in: [[a]], [[b]], [[c]].');
+    w.service.applyResearch(card({ lint: { check: 'broken-link', key: 'b', file: 'b.md', target: 'Nessuno', line: 'Vedi [[Nessuno|il nessuno]] qui.', about: '[[Nessuno|il nessuno]]', lang: 'it' } }));
+    expect(fs.readFileSync(path.join(w.brain, 'b.md'), 'utf8')).toBe('Vedi il nessuno qui.\n');
+  });
+  it('stores the criterion with the change, checks it a week later once, and offers the undo when it got worse', () => {
+    const DAY = 86_400_000;
+    let now = NOW;
+    const runs: AgentRun[] = [];
+    const w = world({ runs });
+    (w.service as unknown as { d: { now: () => number } }).d.now = () => now;
+    const id = w.service.applyResearch(card({ kind: 'rule', change: { target: 'rule', text: 'Lancia i test prima di dire fatto.' }, success: { metric: 'fewer-corrections', text: 'Riuscito se…' } }));
+    expect(w.service.changes().find(c => c.id === id)).toMatchObject({ success: { metric: 'fewer-corrections' } });
+    const r = (end: number, k: number): AgentRun => ({ runId: `r${end}`, chatId: 'c', agentId: DEV, goal: 'g', startedAt: end - 1000, endedAt: end, corrections: { tagged: k, afterReport: 0 } } as AgentRun);
+    runs.push(r(NOW - DAY, 0), r(NOW - 2 * DAY, 0), r(NOW - 3 * DAY, 1), r(NOW + DAY, 2), r(NOW + 2 * DAY, 3), r(NOW + 3 * DAY, 2));
+    expect(w.service.checkOutcomes()).toEqual([]); // the week after is not over
+    now = NOW + 8 * DAY;
+    const worse = w.service.checkOutcomes();
+    expect(worse).toEqual([expect.objectContaining({ changeId: id, kind: 'rule', check: expect.objectContaining({ verdict: 'worse', nBefore: 3, nAfter: 3 }) })]);
+    expect(w.service.checkOutcomes()).toEqual([]); // checked once
+    // the revert card's approval is the change log's Annulla
+    w.service.applyResearch(card({ kind: 'revert', revert: worse[0]! }));
+    expect(w.service.changes().find(c => c.id === id)).toMatchObject({ canRollback: false });
+    expect(fs.existsSync(path.join(w.brain, 'rules/lessons.md'))).toBe(false); // it created the file: Annulla takes it away
+  });
+});
 
 describe('durable approved skill forgets (#264, #266)', () => {
   const source = '# Operations\n\n## Deploy fixture\n1. Build a fixture.\n2. Verify the result.\n\n## Inspect fixture\n1. Read the report.\n2. Check its output.\n';
@@ -616,7 +669,7 @@ describe('durable approved skill forgets (#264, #266)', () => {
   it('backfills old research removals, repairs untouched re-creations, and keeps the original Undo', async () => {
     const w = world(); put(w.brain, 'runbooks/fixture.md', source);
     const skill = (await w.service.maintain('migration')).skills.find(s => s.name === 'deploy-fixture')!;
-    const old = w.service.log.apply({ job: 'research', kind: 'skill', action: 'remove', target: skill.name, summary: 'Forgotten', reason: 'Approved', evidence: [] }, [{ file: skill.file, text: null }])!;
+    const old = w.service.log.apply({ job: 'research', kind: 'skill', action: 'remove', target: skill.name, summary: 'Forgotten', reason: 'Approved', evidence: [] }, [{ file: skill.file, text: null, removed: [{ item: '*', reason: 'Approved' }] }])!;
     // A historical generated re-creation is removed only when proven unedited.
     const original = old.files[0]!.before!;
     const receipt = migrationReceipt(original)!;

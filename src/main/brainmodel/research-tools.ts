@@ -1,11 +1,12 @@
 // The maintenance research's two tools (ADR 0132), on its chat's own MCP endpoint (/mcp/chat/:chatId/:token: the caller
 // is the token's chat, never an argument), pre-approved like the plan tools (chats/app-tool-approval.ts) and shown only
 // to the research chat (ChatManager.chatToolShown): maintenance_pack reads the zero-token data pack by section,
-// maintenance_propose turns one finding into a card (research.ts checks it). Both refuse any other chat. Used by
+// maintenance_propose turns one finding into a card (research.ts checks it), with its «riuscito se…» criterion from a
+// fixed set the app measures a week after the change (success-check.ts, ADR 0194). Both refuse any other chat. Used by
 // wiring.ts and demo-wiring.ts.
 import type { McpTool } from '../mcp/server';
 import { callerOf } from '../mcp/caller';
-import { RESEARCH_KINDS } from '../../shared/maintenance-research';
+import { RESEARCH_TOOL_KINDS, SUCCESS_METRICS } from '../../shared/maintenance-research';
 import { PACK_SECTIONS } from './research-pack';
 import type { ResearchService } from './research';
 
@@ -22,7 +23,7 @@ export function researchTools(research: Pick<ResearchService, 'pack' | 'propose'
     name: 'maintenance_propose',
     description: 'Make one finding a card for the user. kind: skill | rule | role (a brain change: pass change), forget (pass forget), app-idea | app-bug (about the app\'s code: pass issue, already well written), bold (one bigger idea: change or issue). Every text is plain words in the user\'s language; the user approves or rejects it, nothing changes before.',
     inputSchema: { type: 'object', required: ['kind', 'title', 'why'], additionalProperties: false, properties: {
-      kind: { type: 'string', enum: [...RESEARCH_KINDS] },
+      kind: { type: 'string', enum: [...RESEARCH_TOOL_KINDS] },
       title: s('one short line, e.g. "Artisan lancia i test prima di dire fatto"'),
       adds: s('what it adds, plain words ("" = nothing)'), removes: s('what it removes, plain words ("" = nothing)'),
       why: s('why, with the numbers of the pack it rests on'),
@@ -45,6 +46,11 @@ export function researchTools(research: Pick<ResearchService, 'pack' | 'propose'
         duplicateOf: { type: 'object', properties: { number: { type: 'integer' }, url: { type: 'string' } }, description: 'an open issue that may already cover it' },
       } },
       logKey: s('app-bug only: the key of the log group it is about (from the logs section)'),
+      success: { type: 'object', additionalProperties: false, required: ['metric'], description: 'brain changes: «worked if…», measured by the app a week before vs a week after the change; if it got worse the user is asked to undo it. fewer-corrections (role optional), more-verified (role), fewer-log-errors (logKey), skill-used (skill, n). Omitted = skill-used for a skill, fewer-corrections otherwise.', properties: {
+        metric: { type: 'string', enum: [...SUCCESS_METRICS] },
+        role: s('a role id: whose runs are measured'), logKey: s('a log group key from the logs section'), skill: s('a skill\'s kebab-case name'),
+        n: { type: 'integer', minimum: 1, maximum: 100, description: 'skill-used: uses wanted in the week after (default 3)' },
+      } },
     } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: async (a, ctx) => JSON.stringify({ proposed: true, ...research.propose(callerOf(ctx.params), a) }),

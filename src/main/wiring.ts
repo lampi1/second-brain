@@ -958,7 +958,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // the Claude CLI's «opus» is its strongest model, whatever its version; the others start on their CLI's default
     bestModel: h => (engineOf(h)?.kind === 'claude' ? 'opus' : null),
     runs: () => manager.runs.list(), roles: () => agents.list().profiles.filter(p => p.scope === 'role'),
-    brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); }, maintain: () => brainModel.maintain() },
+    brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); }, maintain: () => brainModel.maintain(), outcomes: () => brainModel.checkOutcomes() },
     chats: { create: req => manager.create(req, 'app'), get: id => manager.list().find(c => c.id === id), stop: id => manager.stop(id) },
     // an approved «Apri issue» card: gh with the user's own login, else GitHub's new-issue page already filled in; an
     // agent's hidden run never reaches GitHub (it records the page like any link it would open)

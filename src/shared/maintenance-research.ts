@@ -11,8 +11,11 @@ import type { Effort, Harness } from './contract';
 /** What a proposal is about. Brain kinds change the brain; app kinds become GitHub issues (a card «Apri issue»). */
 // No memory kind: facts have their own store and review (rules/memory-records.ts, ADR 0129), and the free cleanup's
 // merge-memory job already rewrites or retires them with «Annulla».
-export const RESEARCH_KINDS = ['skill', 'rule', 'role', 'forget', 'bold', 'app-idea', 'app-bug'] as const;
+// lint and revert are the app's own zero-token cards (ADR 0194): a brain lint finding, a change that did not help.
+export const RESEARCH_KINDS = ['skill', 'rule', 'role', 'forget', 'bold', 'app-idea', 'app-bug', 'lint', 'revert'] as const;
 export type ResearchKind = (typeof RESEARCH_KINDS)[number];
+/** The kinds the research chat may propose (maintenance_propose): never the app's own lint and revert cards. */
+export const RESEARCH_TOOL_KINDS = ['skill', 'rule', 'role', 'forget', 'bold', 'app-idea', 'app-bug'] as const satisfies readonly ResearchKind[];
 /** The kinds that are about the app's code: they never change the brain, they become issues. */
 export const APP_KINDS: readonly ResearchKind[] = ['app-idea', 'app-bug'];
 export const isAppKind = (k: ResearchKind): boolean => APP_KINDS.includes(k);
@@ -51,6 +54,65 @@ export interface ResearchIssue {
   /** an open issue that may already cover it, when the research checked */
   duplicateOf?: { number: number; url: string };
 }
+
+// ── «riuscito se…» (ADR 0194, M4) ─────────────────────────────────────────────────────────────────────────────────────
+/** The fixed criteria the app computes from what it records, a week before and a week after a change:
+ *  fewer-corrections  the user's corrections per run (of `role`, or every role) go down;
+ *  more-verified      the share of verified successes among `role`'s judged runs goes up;
+ *  fewer-log-errors   the warn/error lines of the log group `logKey` go down;
+ *  skill-used         the skill `skill` is loaded by at least `n` runs in the week after. */
+export const SUCCESS_METRICS = ['fewer-corrections', 'more-verified', 'fewer-log-errors', 'skill-used'] as const;
+export type SuccessMetric = (typeof SUCCESS_METRICS)[number];
+export interface SuccessCriterion {
+  metric: SuccessMetric;
+  role?: string;
+  logKey?: string;
+  skill?: string;
+  /** skill-used: the uses wanted (default 3) */
+  n?: number;
+  /** the criterion in the user's words, written by the app («riuscito se…») */
+  text?: string;
+}
+/** The days on each side of a change the check compares, and when it runs. */
+export const SUCCESS_DAYS = 7;
+/** better / same / worse, or unknown when a side has too few data points to say. */
+export type SuccessVerdict = 'better' | 'same' | 'worse' | 'unknown';
+export interface SuccessCheck {
+  at: number;
+  /** the metric's value in the week before and the week after (a mean, a share, a count); null = no data */
+  before: number | null; after: number | null;
+  /** the data points each side rests on (runs, log lines) */
+  nBefore: number; nAfter: number;
+  verdict: SuccessVerdict;
+}
+
+// ── the brain lint (ADR 0194, M2): zero-token checks of the free cleanup ──────────────────────────────────────────────
+/** orphan: no other note links to it; broken-link: a link that leads nowhere; stale-fact: a memory fact cites a file
+ *  that is gone; changed-fact: the file a fact cites changed since it was first seen; stale-cite: a skill or rule line
+ *  cites a file that is gone; concept: a term cited three times or more with no note of its own. */
+export type LintCheck = 'orphan' | 'broken-link' | 'stale-fact' | 'changed-fact' | 'stale-cite' | 'concept';
+export interface LintFinding {
+  check: LintCheck;
+  /** stable key: the same problem is never carded twice (a rejected one is never asked again) */
+  key: string;
+  /** the brain file it is about (relative to the brain, '/'), when there is one */
+  file?: string;
+  /** the cited path, the link target or the concept */
+  target?: string;
+  /** the line of `file` it is about, as it is (stale-cite, broken-link) */
+  line?: string;
+  /** the memory fact (stale-fact, changed-fact) */
+  memoryId?: string;
+  /** the fact as a sentence, the skill's name, the notes citing a concept */
+  about?: string;
+  /** concept: the notes citing it (relative paths) */
+  citedBy?: string[];
+  /** the language the card was written in (a created note or hub line uses it) */
+  lang?: 'it' | 'en';
+}
+
+/** A change the week-after check found worse than before (kind revert): Annulla goes through the change log. */
+export interface ResearchRevert { changeId: string; kind: 'skill' | 'agent' | 'rule' | 'memory' | 'script'; summary: string; criterion: SuccessCriterion; check: SuccessCheck }
 
 /** issue-asked and dismissed: the old «Idee dell'app» tab's states (ADR 0132), still read from older files */
 export type ResearchState = 'open' | 'approved' | 'rejected' | 'issue-asked' | 'dismissed';
@@ -91,6 +153,12 @@ export interface ResearchProposal {
   issueUrl?: string;
   /** an app idea also written to the brain's Idee (the AI's side) */
   ideaSaved?: boolean;
+  /** «riuscito se…»: the measurable criterion it declares (ADR 0194), stored with the change it applies */
+  success?: SuccessCriterion;
+  /** kind lint: what the brain lint found (ADR 0194) */
+  lint?: LintFinding;
+  /** kind revert: the change that did not help and the numbers */
+  revert?: ResearchRevert;
 }
 
 /** What a research runs with: the app's best choice (ResearchService.defaults), never a dialog since ADR 0153. */
@@ -154,6 +222,6 @@ export interface MaintenanceDone {
 /** Caps: what one research may propose, per family (the tool refuses more). */
 export const RESEARCH_CAPS = { brain: 5, forget: 5, app: 5, bold: 1 } as const;
 export const familyOf = (k: ResearchKind): keyof typeof RESEARCH_CAPS =>
-  k === 'forget' ? 'forget' : k === 'bold' ? 'bold' : isAppKind(k) ? 'app' : 'brain';
+  k === 'forget' || k === 'lint' ? 'forget' : k === 'bold' ? 'bold' : isAppKind(k) ? 'app' : 'brain';
 /** The default spending cap (owner, 2026-10-23). */
 export const RESEARCH_CAP_USD = 5;

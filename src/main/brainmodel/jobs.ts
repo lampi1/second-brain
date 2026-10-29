@@ -1,7 +1,8 @@
 // Brain maintenance implementations and review-backed writes (ADR 0077, 0083, 0137). The live dispatcher only
 // runs structural migration, explicitly approved corrections and non-loadable repeated-task candidates. Semantic
 // skill/memory merge helpers are retained for compatibility but cannot run from a timer or generic maintenance click.
-// Every approved mutation is logged with undo; permissions, settings and tools remain outside these helpers.
+// Every approved mutation is logged with undo; permissions, settings and tools remain outside these helpers. Every write
+// is itemized (item-delta.ts, ADR 0194): a line it loses is listed as removed with its reason, else ChangeLog refuses it.
 //   migration      re-runnable, idempotent: every runbook / routines section of the brain becomes a skill in
 //                  <brain>/.claude/skills (a role loads it when its launch gives it). Writes a report.
 //   corrections    the lessons queue (agent_learn_propose): each lesson goes to the role's text (default), to a skill,
@@ -33,6 +34,7 @@ import { tidyMemoryJob } from './memory-tidy';
 import { maskSecrets } from '../brain/mask';
 import { backfillForgotten, migrationIgnored } from './migration-ignore';
 import { generatedUnchanged, legacyMarker, migrationReceipt, sealMigration, sourceHash, sourceId } from './migration-source';
+import { declareRemoved, DeltaRefused, WHOLE_FILE } from './item-delta';
 
 /** The role side of a job: only the role text and the declared skills. */
 export interface AgentWriter {
@@ -159,7 +161,15 @@ export function migrate(ctx: JobContext): JobResult {
     const text = sealMigration(skillText(name, description, [`# ${s.title}`, '', body.text, '',
       `${marker} il ${day(ctx.now())}.${body.masked ? ` ${body.masked} righe con possibili credenziali sono nascoste qui: il testo intero resta nel file originale.` : ''}`].join('\n')), source, body.text, receipt?.createdAt ?? ctx.now());
     const file = already?.file ?? path.join(ctx.skillDir, name, 'SKILL.md');
-    const c = ctx.log.apply({ job: 'migration', kind: 'skill', action: already ? 'update' : 'create', target: name, summary: already ? `${name}: aggiornata dalla stessa sezione sorgente` : changeText().newSkill({ name, file: s.file, title: s.title }), reason: 'Le procedure diventano skill: il contenuto è lo stesso, ora un ruolo la carica quando il compito la chiede.', evidence: [source, `sha256:${bodyHash}`] }, [{ file, text }]);
+    // a regenerated skill (its text untouched since it was generated) lists every line it drops: the source changed them
+    const removed = already ? declareRemoved(prior, text, `la sezione «${s.title}» di ${s.file} è cambiata: la riga generata da lì non c'è più`) : [];
+    let c: ReturnType<ChangeLog['apply']>;
+    try {
+      c = ctx.log.apply({ job: 'migration', kind: 'skill', action: already ? 'update' : 'create', target: name, summary: already ? `${name}: aggiornata dalla stessa sezione sorgente` : changeText().newSkill({ name, file: s.file, title: s.title }), reason: 'Le procedure diventano skill: il contenuto è lo stesso, ora un ruolo la carica quando il compito la chiede.', evidence: [source, `sha256:${bodyHash}`] }, [{ file, text, removed }]);
+    } catch (e) {
+      if (!(e instanceof DeltaRefused)) throw e;
+      items.push({ source, title: s.title, skill: already?.name ?? null, status: 'skipped', note: 'la modifica avrebbe tolto righe senza dirlo: la skill resta com\'è' }); continue;
+    }
     if (!c) { items.push({ source, title: s.title, skill: already?.name ?? null, status: 'skipped', note: 'contenuto troppo grande per una modifica annullabile' }); continue; }
     changes++;
     items.push({ source, title: s.title, skill: name, status: 'moved', ...(body.masked ? { note: `${body.masked} righe nascoste (credenziali)` } : {}) });
@@ -347,7 +357,7 @@ export function mergeSkills(ctx: JobContext): JobResult {
     const extra = parseMd(text.get(drop.name)!).body.split(/\r?\n/).filter(l => l.trim() && !have.has(l.trim()) && !/^#\s/.test(l));
     const merged = extra.length ? setBody(kt, `${kp.body.replace(/\s+$/, '')}\n\n## Da «${drop.name}»\n\n${extra.join('\n')}\n`) : kt;
     const c = ctx.log.apply({ job: 'merge-skills', kind: 'skill', action: 'merge', target: `${drop.name}>${keep.name}`, summary: changeText().merge({ drop: drop.name, keep: keep.name }), reason: `Le due skill dicevano quasi le stesse cose (somiglianza ≥ ${Math.round(MERGE_SIM * 100)}%).`, evidence: [brainRel(ctx.root, drop.file), brainRel(ctx.root, keep.file)] },
-      [{ file: keep.file, text: merged }, { file: drop.file, text: null }]);
+      [{ file: keep.file, text: merged }, { file: drop.file, text: null, removed: [{ item: WHOLE_FILE, reason: `unita in «${keep.name}»: le sue righe diverse sono lì sotto «Da «${drop.name}»»` }] }]);
     if (!c) continue;
     changes++; gone.add(drop.name); text.set(keep.name, merged);
     for (const p of ctx.profiles().filter(x => x.knowhow?.linked.includes(drop.name))) linkTo(ctx, p, keep.name, 'merge-skills', `«${drop.name}» non c’è più: è dentro «${keep.name}».`, drop.name);

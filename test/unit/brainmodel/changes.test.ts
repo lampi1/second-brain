@@ -10,7 +10,8 @@ import { ChangeLog, writeText, type AgentRestorer } from '../../../src/main/brai
 const dirs: string[] = [];
 afterEach(() => { vi.restoreAllMocks(); for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-changes-')); dirs.push(d); return d; };
-const base = { job: 'corrections' as const, kind: 'skill' as const, action: 'update' as const, target: 'x', summary: 's', reason: 'r', evidence: [] };
+// the user's own job: these tests are about undo, not the maintenance's itemized-write guard (tested below)
+const base = { job: 'user' as const, kind: 'skill' as const, action: 'update' as const, target: 'x', summary: 's', reason: 'r', evidence: [] };
 const agents = (version: Record<string, number>): AgentRestorer & { restored: [string, number, number][] } => {
   const restored: [string, number, number][] = [];
   return { restored, activeVersion: id => version[id] ?? null, restore: (id, v, e) => { restored.push([id, v, e]); version[id] = v; } };
@@ -41,7 +42,7 @@ describe('ChangeLog', () => {
     const c = log.apply(base, [{ file, text: 'nuovo' }])!;
     expect(fs.readFileSync(file, 'utf8')).toBe('nuovo');
     expect(log.list(agents({}))).toEqual([expect.objectContaining({ id: c.id, at: 5, canRollback: true })]);
-    expect(log.madeBy(file)).toBe('corrections');
+    expect(log.madeBy(file)).toBe('user');
     log.rollback(c.id, agents({}));
     expect(fs.existsSync(path.dirname(file))).toBe(false);
     expect(log.madeBy(file)).toBeNull();
@@ -69,7 +70,7 @@ describe('ChangeLog', () => {
     const file = path.join(alias, 'nested', 'candidate.md');
     const c = log.apply(base, [{ file, text: 'new' }])!;
     expect(c.files[0]!.file).toBe(path.join(fs.realpathSync(a), 'nested', 'candidate.md'));
-    expect(log.madeBy(file)).toBe('corrections');
+    expect(log.madeBy(file)).toBe('user');
     fs.mkdirSync(path.join(b, 'nested')); fs.writeFileSync(path.join(b, 'nested', 'candidate.md'), 'new');
     fs.unlinkSync(alias); fs.symlinkSync(b, alias, 'junction');
     expect(log.madeBy(file)).toBeNull();
@@ -113,5 +114,36 @@ describe('ChangeLog', () => {
     again.sealMissing(() => { calls++; return seed; });
     expect(calls).toBe(1);
     expect(new ChangeLog(d).seedOf(c.id)).toEqual({ ...seed, scope: [] }); // kept on disk
+  });
+
+  // ADR 0194: a maintenance write is itemized; the user's own is not checked
+  it('refuses a maintenance rewrite that drops lines it does not list, writes nothing and keeps the file', () => {
+    const d = tmp(), file = path.join(d, 'SKILL.md'), log = new ChangeLog(tmp());
+    fs.writeFileSync(file, '# Skill\n\n- step one\n- step two\n');
+    const job = { ...base, job: 'corrections' as const };
+    expect(() => log.apply(job, [{ file, text: '# Skill\n\n- step one\n' }])).toThrow(/riga alla volta/);
+    expect(fs.readFileSync(file, 'utf8')).toBe('# Skill\n\n- step one\n- step two\n');
+    expect(log.all()).toHaveLength(0);
+    // the same write with the removed line listed, and an addition, go through
+    expect(log.apply(job, [{ file, text: '# Skill\n\n- step one\n- step three\n', removed: [{ item: '- step two', reason: 'superata' }] }])).not.toBeNull();
+    expect(log.apply(job, [{ file, text: '# Skill\n\n- step one\n- step three\n- step four\n' }])).not.toBeNull();
+    // a whole file removed needs its reason; a JSON file is not a brain text
+    expect(() => log.apply(job, [{ file, text: null }])).toThrow();
+    const json = path.join(d, 'brain.json');
+    fs.writeFileSync(json, '{"a":1}');
+    expect(log.apply(job, [{ file: json, text: '{}' }])).not.toBeNull();
+    expect(log.apply(job, [{ file, text: null, removed: [{ item: '*', reason: 'dimenticata' }] }])).not.toBeNull();
+    // the user's own edit is never checked
+    fs.writeFileSync(file, 'a\nb\n');
+    expect(log.apply(base, [{ file, text: 'c\n' }])).not.toBeNull();
+  });
+  it('keeps the week-after check of a change once', () => {
+    const log = new ChangeLog(tmp(), () => 5);
+    const c = log.record({ ...base, job: 'research', success: { metric: 'fewer-corrections' } }, []);
+    const check = { at: 9, before: 1, after: 2, nBefore: 3, nAfter: 3, verdict: 'worse' as const };
+    log.setCheck(c.id, check);
+    log.setCheck(c.id, { ...check, verdict: 'better' });
+    expect(log.all()[0]!.successCheck).toEqual(check);
+    expect(log.list(agents({}))[0]).toMatchObject({ success: { metric: 'fewer-corrections' }, successCheck: check });
   });
 });

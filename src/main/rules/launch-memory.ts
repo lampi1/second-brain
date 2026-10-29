@@ -1,5 +1,10 @@
 // Bounded task-relevant facts for AgentPackFlows. Launch selection never changes the searchable memory archive.
 // Confirmed facts and proposed ones not tied to one case (ADR 0150) are quoted evidence, not policy; role instructions and permission enforcement stay outside this view.
+// A fact citing a file that is gone (cited-paths.ts, ADR 0194) is not given to the agent: skipped with an info log, its
+// card «Il file citato non c'è più: tolgo il fatto?» comes from the maintenance's lint.
+import path from 'node:path';
+import { log } from '../log';
+import { missingPaths } from './cited-paths';
 import { memoryConflicts, memoryWords, scopedMemory, type MemoryRecord, type MemoryScope } from './memory-records';
 import { memoryWorth, sameMemoryFact } from './memory-worth';
 import type { MemorySelection } from '../../shared/agent-context';
@@ -38,8 +43,11 @@ export function selectLaunchMemory(root: string, scope: MemoryScope, query = '',
   let left = Number.isFinite(budgetTokens) ? Math.max(0, Math.min(Math.floor(budgetTokens), LAUNCH_MEMORY_TOKENS)) * 3 : 0;
   const chosen: string[] = [];
   const records: MemorySelection['records'] = [];
+  const bases = [root, ...[scope.repository, scope.project].filter((b): b is string => !!b && path.isAbsolute(b))];
   for (const { r, score } of ranked) {
     if (chosen.length === LAUNCH_MEMORY_RECORDS) break;
+    const gone = staleFact(r, bases);
+    if (gone) { log.info('memory', 'fact skipped at launch: the file it cites is gone', { data: { id: r.memoryId, role: r.scope.roleId, path: gone } }); continue; }
     const text = quoteLaunchMemory(r), cost = text.length + (chosen.length ? 1 : 0);
     if (cost > left) continue;
     chosen.push(text); left -= cost;
@@ -47,4 +55,9 @@ export function selectLaunchMemory(root: string, scope: MemoryScope, query = '',
   }
   const text = chosen.join('\n');
   return { text, selected: chosen.length, omitted: rows.length - chosen.length, estimatedTokens: Math.ceil(text.length / 3), selection: { available: true, records, omitted: { ineligible: rows.length - candidates.length, unmatched: candidates.length - ranked.length, budget: ranked.length - chosen.length }, estimatedTokens: Math.ceil(text.length / 3), budgetTokens: Number.isFinite(budgetTokens) ? Math.max(0, Math.min(Math.floor(budgetTokens), LAUNCH_MEMORY_TOKENS)) : 0 } };
+}
+
+/** The first file a fact cites that is gone, or null (never throws: an unreadable place keeps the fact). */
+export function staleFact(r: Pick<MemoryRecord, 'subject' | 'predicate' | 'value'>, bases: readonly string[]): string | null {
+  try { return missingPaths(`${r.subject} ${r.predicate} ${r.value}`, bases)[0] ?? null; } catch { return null; }
 }
