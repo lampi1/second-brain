@@ -56,7 +56,7 @@ A step gets these by declaring them, never by adding them to `routine.mcpServers
 
 | Server | How a step gets it | Tools |
 |--------|--------------------|-------|
-| `routine-devops` | the run has a work item | `get_work_item`, `get_work_item_comments`, `get_attachment` (read only) |
+| `routine-devops` | the run has a work item | `get_work_item`, `get_work_item_comments`, `get_attachment`, `current_iteration` (read only) |
 | `routine-testdb` | the step lists ids in `testDbs` | `test_db_query` (read only, TEST databases only) |
 | `routine-browser` | the step has `browser: true` and the routine `browser.origins` | `navigate`, `history`, `tabs`, `snapshot`, `click`, `type`, `select_option`, `check`, `press`, `hover`, `drag`, `click_at`, `scroll`, `upload`, `dialog`, `wait`, `eval`, `console`, `network`, `resize`, `screenshot`, `login`, `fill_secret` |
 

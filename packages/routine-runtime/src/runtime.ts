@@ -677,7 +677,7 @@ export function createRoutineRuntime(options: RoutineRuntimeOptions) {
     if (inputs.length) parts.push('', '## Inputs', ...inputs.map(([k, v]) => `- ${k}: ${v}`));
     if (run.workItem !== undefined) parts.push('', '## Work item', `This run is about work item ${run.workItem}${organization ? ` (${itemUrl(undefined, run.workItem)})` : ''}. DevOps writes target only this item and go in ${STEP_RESULT_FILE}, never through a tool.`);
     if (itemText) parts.push('', itemText);
-    if (devopsMcp) parts.push('', `More reads (comments, attachments): the ${DEVOPS_SERVER_NAME} MCP tools get_work_item, get_work_item_comments, get_attachment (read only).${routine.devops?.deployTargets?.length ? ' Build and test environment status: pr_build_status, test_environment_status, test_deploy_status (read only).' : ''}`);
+    if (devopsMcp) parts.push('', `More reads (comments, attachments): the ${DEVOPS_SERVER_NAME} MCP tools get_work_item, get_work_item_comments, get_attachment, current_iteration (read only).${routine.devops?.deployTargets?.length ? ' Build and test environment status: pr_build_status, test_environment_status, test_deploy_status (read only).' : ''}`);
     const done = run.steps.filter(s => s.status === 'done' && s.summary);
     if (done.length) parts.push('', '## Earlier steps', ...done.map(s => `- ${s.title}: ${s.summary}`));
     if (testDbNote) parts.push('', '## Test databases', testDbNote);

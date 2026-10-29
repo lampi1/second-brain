@@ -35,7 +35,7 @@ function readPackageFile(brainRoot: string | null, value: unknown): unknown {
 
 const CONNECTORS = {
   runtime: [
-    { name: DEVOPS_SERVER_NAME, given: 'automatically to every step of a run about a work item', tools: ['get_work_item', 'get_work_item_comments', 'get_attachment'], allowedTools: `mcp__${DEVOPS_SERVER_NAME}__*`, note: 'read only; writes go in step-result.json devopsWrites' },
+    { name: DEVOPS_SERVER_NAME, given: 'automatically to every step of a run about a work item', tools: ['get_work_item', 'get_work_item_comments', 'get_attachment', 'current_iteration'], allowedTools: `mcp__${DEVOPS_SERVER_NAME}__*`, note: 'read only; writes go in step-result.json devopsWrites' },
     { name: TESTDB_SERVER_NAME, given: 'to a step that lists testDbs', tools: ['test_db_query'], allowedTools: `mcp__${TESTDB_SERVER_NAME}__test_db_query`, note: 'read only, recognised test databases only' },
     { name: 'routine-browser', given: 'to a step with browser: true (routine.browser.origins set)', tools: ['navigate', 'snapshot', 'click', 'type', 'select_option', 'screenshot'], allowedTools: 'mcp__routine-browser__*', note: 'already signed in with the package credentials; type refuses password fields' },
   ],
