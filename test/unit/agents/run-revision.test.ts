@@ -13,7 +13,7 @@ it('bumps on a new run and on touch, never on a save that changes nothing', () =
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-runrev-')); dirs.push(dir);
   const store = new AgentRunStore(dir);
   const r0 = store.revision;
-  const run = store.start({ chatId: 'c_work000001', agentId: 'scout', version: 1, goal: 'Read the docs', startedBy: 'orchestrator', startedAt: 1 });
+  const run = store.start({ chatId: 'c_work000001', agentId: 'scout', version: 1, goal: 'Read the docs', startedBy: 'orchestrator', startedAt: 1, costKnown: true });
   const r1 = store.revision;
   expect(r1).toBeGreaterThan(r0);
   store.flush();
