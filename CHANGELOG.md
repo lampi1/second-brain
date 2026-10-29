@@ -6,6 +6,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- Impara review (ADR 0189): every lesson has a subject and leaves review cards (its checks, and cards written only
+  from its verified facts: recall, choice, click on the diagram); «Ripassa ora» and each subject's «Quiz» bring them
+  back with FSRS spacing, lessons mixed; each subject shows the estimated recall today.
 - Impara researches before it teaches (ADR 0188): a web run that sees only the ask and a files run over the material,
   the brain and the app; a second model verifies each fact; at most two questions first; pieces cite the facts and
   «Fonti» lists every web page and PC file found. «Chi spiega» picks engine, model and effort. The board is animated
