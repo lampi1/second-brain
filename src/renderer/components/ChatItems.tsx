@@ -17,7 +17,7 @@ import { sb } from '../sb';
 import { t as auditText } from '../i18n';
 import {useFollowBottom} from '../lib/use-follow-bottom';
 import '../styles/follow-bottom.css';
-import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, memo, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { ChatItem, FileDiff } from '@shared/contract';
 import { diffTotals, duration, formatCost, toolLabel } from '../lib/format';
 import { markdownParts, renderMarkdown, splitBlocks, type MdPart } from '../lib/markdown';
@@ -441,6 +441,13 @@ function ItemListFor({ items, empty, footer, chatId = null, readOnly = false }: 
   const [pastOpen, setPastOpen] = useState(false);
   // only the tail is drawn (lib/chat-view.ts tailStart): «Mostra precedenti» adds TAIL_ITEMS more each time
   const [limit, setLimit] = useState(TAIL_ITEMS);
+  // the rows added above keep the user's place: the distance from the bottom is restored after they are drawn
+  const keepPlace = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const el = ref.current, d = keepPlace.current;
+    keepPlace.current = null;
+    if (el && d !== null) el.scrollTop = el.scrollHeight - d;
+  }, [limit]);
   // a cold continuation (ADR 0031): what came before the last divider is the previous session, folded
   const cut = useMemo(() => { for (let i = items.length - 1; i >= 0; i--) { const x = items[i]; if (x?.kind === 'system' && x.continued) return i; } return -1; }, [items]);
   const session = useMemo(() => (cut > 0 && !pastOpen ? items.slice(cut) : items), [items, cut, pastOpen]);
@@ -464,7 +471,7 @@ function ItemListFor({ items, empty, footer, chatId = null, readOnly = false }: 
       <div className="items" ref={ref} data-chat-log={chatId??undefined} tabIndex={0} aria-label={auditText('audit.ChatItems.messages')} onClick={peek.onClick} onWheel={peek.onWheel} role="log" aria-live="off">
         <div ref={content} className="items-content">
         {cut > 0 && !pastOpen && start === 0 && <FoldedPast count={cut} onOpen={() => { setPastOpen(true); setLimit(Infinity); }} />}
-        {start > 0 && <ShowEarlier count={start} onOpen={() => setLimit(l => l + TAIL_ITEMS)} />}
+        {start > 0 && <ShowEarlier count={start} onOpen={() => { const el = ref.current; keepPlace.current = el ? el.scrollHeight - el.scrollTop : null; setLimit(l => l + TAIL_ITEMS); }} />}
         {items.length === 0 && empty && !footer ? <div className="items-empty">{empty}</div> : view.map(v => v.kind === 'process'
           ? <ProcessGroup key={v.id} id={v.id} items={v.items} open={open} marks={fixed} />
           : <Item key={v.item.id} item={v.item} beforeAsk={open.has(v.item.id)} refs={refs.get(v.item.id)} marks={fixed.get(v.item.id)} reaction={v.reaction} />)}
