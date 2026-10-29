@@ -18,6 +18,10 @@ describe('versionedChanges', () => {
   it('names text, skills, model and tier, and nothing for tools, launches or limits', () => {
     expect(versionedChanges(base, { ...base, tools: { allow: ['read', 'edit'] }, launches: ['scout'], maxContext: 100_000, permissionCeiling: 'plan' })).toEqual([]);
     expect(versionedChanges(base, { ...base, skills: ['b', 'a'] })).toEqual([]); // same skills, other order
+    const knowhow: NonNullable<AgentBehaviour['knowhow']> = { folder: 'agents/scout/skills', hash: 'a'.repeat(64), linked: [] };
+    expect(versionedChanges(base, { ...base, knowhow })).toEqual([]); // the first snapshot of the files it already used
+    expect(versionedChanges({ ...base, knowhow }, { ...base, knowhow: { ...knowhow, hash: 'b'.repeat(64) } })).toEqual(['skills']);
+    expect(versionedChanges(base, { ...base, knowhow: { ...knowhow, linked: ['review'] } })).toEqual(['skills']); // a linked skill is a change
     expect(versionedChanges(base, { ...base, instructions: 'y', skills: ['a'] })).toEqual(['text', 'skills']);
     expect(versionedChanges(base, { ...base, engine: 'cursor' })).toEqual(['model']);
     expect(versionedChanges(base, { ...base, effort: 'high' })).toEqual(['model']);

@@ -398,7 +398,8 @@ export class AgentCatalogService {
     if (old.trial) throw new Error('Open trial: maintenance waits');
     if (Object.keys(patch).some(k => k !== 'instructions' && k !== 'knowhow' && k !== 'skills')) throw new Error('Maintenance changes only the role text and the skills');
     const next = this.behaviour({ ...(patch.skills !== undefined ? { skills: patch.skills } : {}), ...(patch.instructions !== undefined ? { instructions: patch.instructions } : {}), ...(patch.knowhow !== undefined ? { knowhow: patch.knowhow } : {}) }, id, false, old);
-    if (sameBehaviour(old, next)) return null;
+    // only a new version can be undone by going back to the one before (maintainRestore): no versioned change = nothing
+    if (sameBehaviour(old, next) || !versionedChanges(old, next).length) return null;
     return { profile: this.version(old, next, 'maintenance', reason), before: old.activeVersion };
   }
   /** Undo of a maintenance change: the version before it is active again (the user's click in a change log). */

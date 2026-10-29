@@ -24,8 +24,9 @@ async function classifiers(page: Page, scheme: string): Promise<void> {
   await goPage(page, 'classificatori');
   const cls = page.getByTestId('bm-classifiers-page');
   await expect(cls.getByTestId('cls-grid')).toBeVisible();
-  for (const id of ['kind', 'model', 'skills', 'tasks', 'jobkind', 'mail', 'cmd']) await expect(cls.getByTestId(`cls-card-${id}`)).toBeVisible();
+  for (const id of ['kind', 'model', 'tasks', 'jobkind', 'mail', 'cmd']) await expect(cls.getByTestId(`cls-card-${id}`)).toBeVisible();
   await expect(cls.getByTestId('cls-card-estimates')).toHaveCount(0); // the brain's retired estimator (ADR 0053, 0101)
+  await expect(cls.getByTestId('cls-card-skills')).toHaveCount(0); // the skill suggester is gone (ADR 0186)
   await expect(cls.getByTestId('cls-summary')).not.toContainText('Token spesi');
   await expect(cls.getByTestId('cls-kind-decisions')).not.toContainText('nessun dato');
   await expect(cls.getByTestId('cls-kind-hit')).toContainText(/\d+\/\d+/); // k/n beside the share

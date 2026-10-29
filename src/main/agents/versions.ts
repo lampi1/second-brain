@@ -31,7 +31,9 @@ const VERSIONED_FIELDS: Record<VersionedChange, readonly (typeof BEHAVIOUR_FIELD
 /** What changed between two behaviours that makes a new version; empty = the active version is updated in place. */
 export function versionedChanges(a: AgentBehaviour, b: AgentBehaviour): VersionedChange[] {
   const x = behaviourOf(a), y = behaviourOf(b);
-  const same = (k: (typeof BEHAVIOUR_FIELDS)[number]): boolean => k === 'knowhow' ? x.knowhow?.hash === y.knowhow?.hash
+  // the first know-how snapshot of a role with no linked skill (any save copies the skill files it already used) is no
+  // change of them; a linked skill, or another snapshot, is
+  const same = (k: (typeof BEHAVIOUR_FIELDS)[number]): boolean => k === 'knowhow' ? (!x.knowhow ? !y.knowhow?.linked?.length : x.knowhow.hash === y.knowhow?.hash)
     : k === 'skills' ? JSON.stringify([...x.skills].sort()) === JSON.stringify([...y.skills].sort()) : JSON.stringify(x[k] ?? null) === JSON.stringify(y[k] ?? null);
   return VERSIONED_CHANGES.filter(c => VERSIONED_FIELDS[c].some(k => !same(k)));
 }
