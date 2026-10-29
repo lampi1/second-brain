@@ -923,6 +923,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     findings: logs => researchRef.current?.afterPass(logs) ?? { bugs: 0, forget: 0 },
     // a pass the app ran by itself: a quiet feed event with Annulla (ADR 0102)
     applied: changes => { const e = maintenanceEvent(changes); if (e) brain.publish([e]); } });
+  // its cached state (ADR 0182) is read again after whatever the Brain pages refresh on
+  ctx.emitter.tap(ch => { if (ch === 'brainmodel:changed' || ch === 'agents:changed') brainModel.invalidate(); });
   brainModelRef.current = brainModel;
   // the one-click maintenance (ADR 0132, 0153): the free cleanup, the invisible research chat, its cards in Proposte
   const issuesUrl = issuesUrlOf(app.getAppPath()), appIssuesUrl = () => issuesUrl;

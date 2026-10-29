@@ -28,6 +28,9 @@ import { NAME_RE, parseMd, setBody } from '../../shared/skillmd';
 import { checkPermissionText } from '../agents/tool-policy';
 import { canUndoMemoryTidy, undoMemoryTidy } from '../rules/memory-records';
 
+/** How long an unchanged state is reused (the day's figures still move with the clock). */
+export const CACHE_MS = 5 * 60_000;
+
 export interface BrainModelDeps {
   userData: string;
   root: () => string | null;
@@ -156,9 +159,31 @@ export class BrainModelService {
     return { userData: this.d.userData, root: this.d.root(), home: this.d.home, profiles, runs, now: this.now() };
   }
   state(): BrainModelState { return readBrainView(this.viewInput(), this.log, this.intervals); }
+
+  private cached: { key: string; at: number; state: Promise<BrainModelState> } | null = null;
+  private generation = 0;
+  /** Something the Brain pages show changed (the brain watcher's or a job's 'brainmodel:changed', 'agents:changed',
+   *  wiring.ts taps them): the next stateAsync computes again. */
+  invalidate(): void { this.generation++; }
+  /** The pages' state from the read worker, cached (ADR 0182: every page open recomputed the memory statistics and the
+   *  learning curves over every run and file): the same generation, brain and runs (the run store's revision, else
+   *  their count and latest change) within CACHE_MS give the same promise. A failed read is never kept. */
   stateAsync(): Promise<BrainModelState> {
     const rev = this.d.runsRevision?.();
-    return readWorker.call({ op: 'brain', input: this.viewInput() }, rev === undefined ? undefined : `store:${rev}`);
+    let runsKey = `store:${rev}`;
+    if (rev === undefined) {
+      let runs: AgentRun[] = []; try { runs = this.d.runs(); } catch { /* unavailable history */ }
+      let last = 0, judged = 0;
+      for (const r of runs) { last = Math.max(last, r.endedAt ?? r.startedAt, r.outcome?.at ?? 0); if (r.outcome) judged++; }
+      runsKey = `${runs.length}|${last}|${judged}`;
+    }
+    const key = `${this.generation}|${this.d.root() ?? ''}|${runsKey}`, now = this.now();
+    if (this.cached && this.cached.key === key && now - this.cached.at < CACHE_MS) return this.cached.state;
+    const state = readWorker.call({ op: 'brain', input: this.viewInput() }, rev === undefined ? undefined : `store:${rev}`);
+    const entry = { key, at: now, state };
+    this.cached = entry;
+    state.catch(() => { if (this.cached === entry) this.cached = null; });
+    return state;
   }
 
   /** The change log alone, newest first, with what can still be undone (the morning block, ADR 0102): no skill or memory read. */
