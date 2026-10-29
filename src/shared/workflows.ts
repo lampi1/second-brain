@@ -8,7 +8,7 @@ export const WORK_ROUTES: Record<WorkProfile, readonly WorkStage[]> = {
   bugfix: ['analysis', 'plan', 'develop', 'review', 'test', 'pr', 'qa', 'deploy'],
   investigation: ['analysis'],
 };
-export interface WorkEvent { at: number; stage: WorkStage; kind: 'created' | 'updated' | 'completed' | 'proposed' | 'approved' | 'rejected' | 'rework' | 'blocked'; text: string }
+export interface WorkEvent { at: number; stage: WorkStage; kind: 'created' | 'updated' | 'completed' | 'proposed' | 'approved' | 'rejected' | 'rework' | 'blocked'; text: string; /** decided by the app for the absent user («Modalità notte», ADR 0191), never by the user */ by?: 'app-away' }
 export interface WorkThread {
   id: string; version: number; title: string; profile: WorkProfile; priority: WorkPriority;
   chatIds: string[]; stage: WorkStage; status: 'active' | 'approval' | 'blocked' | 'done';

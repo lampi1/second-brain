@@ -28,13 +28,19 @@ production, secrets, permissions and messages to people ready for the user's ret
 next turn of a chat that was told gets one `AWAY_BACK` line.
 
 **Nobody waits.** In the chats (ChatManager.awayAnswered, after the role gate and auto-permit):
-- a question gets its recommended option: the one marked «(consigliato)», else «Sì», else the first. The chat shows
-  «Modalità notte: l'app ha scelto …»;
+- a question gets the option the agent marked «(consigliato)». The chat shows «Modalità notte: l'app ha scelto …».
+  An unmarked question, or one about something reserved to the user (deploy, production, release, merge, push,
+  secrets, permissions, hooks, sending mail or messages, customers, colleagues), stays for the user and shows in the recap;
+- a plan mode's «plan ready» (Claude's ExitPlanMode, Cursor's create_plan) is approved like a Strategist's plan: it
+  is a plan, not a permission, and each permission the work then asks for still goes through the checks below;
 - a permission request is **refused**, never granted, with a message to go on without it and list it in the report.
   It is parked for the recap. A command left for the user's «Esegui» is unchanged: it never blocked the chat;
 - a Strategist's `plan_propose` starts the plan at once (phase running) and needs no clarifying question first;
-- a workflow proposal (`app_work_report propose`) for mockup or plan is approved by the app. The thread's event says
-  it was the app in Modalità notte, not the user. A **deploy** proposal always waits for the user.
+- a workflow proposal (`app_work_report propose`) for **mockup or plan** is approved by the app. The thread's event
+  carries `by: 'app-away'` and says it in its text. Every other proposal (deploy, review, test, QA, a thread blocked
+  after three failures) waits for the user.
+- a plan the app approved is recorded as approved (`approvedAt`) with `byApp`, so the workflow and later workers see
+  it. It gives no decision signal for the Orchestrator's standing (ADR 0131).
 When the mode goes on, what already waits is settled the same way (`settleForAway`).
 
 **The Orchestrator carries the work on.** While the user is away, a root chat's clean report wakes the Orchestrator,
@@ -47,7 +53,8 @@ off).
 **The recap.** Every choice and every parked request goes to `userData/away-log.json` (chats/away-log.ts, bounded,
 survives a restart). When the mode goes off, the Orchestrator's chat gets one app notice: how long the night lasted, the
 choices the app made, and what waits for the user (parked permissions and anything still open). It is not a turn and costs
-no tokens.
+no tokens. When no Orchestrator is open the log is kept and the recap is tried again (every minute for about ten
+minutes, and at the next start).
 
 ## Consequences
 

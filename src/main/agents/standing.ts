@@ -176,7 +176,7 @@ export interface DecisionSignals { redelegated: boolean; reworked: boolean; plan
 export function decisionSignals(d: AgentRun, ix: EarnIndex): DecisionSignals {
   const p = d.plan;
   return { redelegated: ix.redelegated.has(d.runId), reworked: reworkedWithin(d, ix.starts.get(d.runId)),
-    plan: p?.approvedAt === undefined ? null : p.changes === 0 ? 'clean' : p.changes <= 2 ? 'changed' : 'many' };
+    plan: p?.approvedAt === undefined || p.byApp ? null : p.changes === 0 ? 'clean' : p.changes <= 2 ? 'changed' : 'many' };
 }
 /** The signals as one verdict on the decision (the worst of them); null = no signal (silence says nothing). */
 export function routeVerdict(s: DecisionSignals): Verdict | null {

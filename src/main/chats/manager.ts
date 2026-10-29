@@ -1145,7 +1145,7 @@ export class ChatManager implements ChatService {
     // the rules again. Only the spoken message itself: never mail, a resume or app text that happens to go first
     // «Modalità notte» (ADR 0191): every new context hears the user is away, and once that they are back
     const awayOn = !!this.opts.away?.(), session = r.s.sessionId ?? '';
-    const told = r.awayTold !== undefined && (r.awayTold === '' || r.awayTold === session);
+    const told = r.awayTold === session;
     const awayHint = awayOn ? (role || !told ? `\n\n${AWAY_RULE}` : '') : r.awayTold !== undefined ? `\n\n${AWAY_BACK}` : '';
     const spoken = r.voiceText !== undefined && r.voiceText === text && from === undefined && !resumed;
     const voiceHint = spoken ? voiceReplyHint(!role && r.voiceTold === (r.s.sessionId ?? '')) : '';
@@ -1402,7 +1402,7 @@ export class ChatManager implements ChatService {
       if (plan?.phase === 'proposed') {
         n++;
         this.hook('onAway', () => this.opts.onAway?.({ kind: 'plan', chatId: r.s.id, title: r.s.title || 'Strategist', text: plan.steps.map(x => x.title).join(' · ') }));
-        void this.decidePlan(r.s.id, 'approve', plan.at, undefined, `${PLAN_APPROVED}\n${AWAY_PLAN_NOTE}`)
+        void this.decidePlan(r.s.id, 'approve', plan.at, undefined, `${PLAN_APPROVED}\n${AWAY_PLAN_NOTE}`, undefined, true)
           .catch(e => log.warn('chats', 'away: plan not started', { chat: r.s.id, cause: errText(e), hint: 'the plan stays on its strip for the user' }));
       }
     }
@@ -1443,6 +1443,7 @@ export class ChatManager implements ChatService {
     const run = r.s.run;
     if (run && run.endedAt === undefined) { run.plan = { ...(run.plan ?? { proposals: 0, changes: 0 }), proposals: (run.plan?.proposals ?? 0) + 1 }; this.runSave(); }
     if (away) {
+      if (run && run.endedAt === undefined) { run.plan = { ...run.plan!, approvedAt: Date.now(), byApp: true }; this.runSave(); }
       this.addItem(r, sysItem('awayPlan', { steps: steps.length }, 'info'), false);
       this.hook('onAway', () => this.opts.onAway?.({ kind: 'plan', chatId, title: r.s.title || 'Strategist', text: steps.map(x => x.title).join(' · ') }));
     }
@@ -1483,7 +1484,7 @@ export class ChatManager implements ChatService {
   }
 
   /** Common panel/typed decision path; keep the user's original wording in the transcript and roll back failed delivery. */
-  private async decidePlan(chatId: string, decision: 'approve' | 'change', at: number, text?: string, message?: string, receipt?: SubmissionReceipt): Promise<void> {
+  private async decidePlan(chatId: string, decision: 'approve' | 'change', at: number, text?: string, message?: string, receipt?: SubmissionReceipt, byApp = false): Promise<void> {
     const r = this.need(chatId), plan = r.s.plan;
     if (!plan || plan.phase !== 'proposed') throw new Error('Questo piano non aspetta più una risposta.');
     if (plan.at !== at) throw new Error('Il piano è cambiato nel frattempo: rileggilo.');
@@ -1494,7 +1495,7 @@ export class ChatManager implements ChatService {
     r.s.plan = { ...plan, phase: decision === 'approve' ? 'running' : 'revising', at: Math.max(Date.now(), plan.at + 1) };
     this.persist();
     this.updated(r);
-    try { await this.send(chatId, message ?? (decision === 'approve' ? PLAN_APPROVED : planChange(change)), undefined, false, undefined, false, { kind: 'user' }, receipt); } catch (e) {
+    try { await this.send(chatId, message ?? (decision === 'approve' ? PLAN_APPROVED : planChange(change)), undefined, false, undefined, false, { kind: byApp ? 'app' : 'user' }, receipt); } catch (e) {
       if (r.s.plan?.phase === (decision === 'approve' ? 'running' : 'revising')) { r.s.plan = plan; this.persist(); this.updated(r); }
       throw e;
     }
@@ -1502,7 +1503,7 @@ export class ChatManager implements ChatService {
     const run = r.s.run;
     if (run && run.endedAt === undefined) {
       const p = run.plan ?? { proposals: 1, changes: 0 };
-      run.plan = decision === 'approve' ? { ...p, approvedAt: p.approvedAt ?? Date.now() } : { ...p, changes: p.changes + 1 };
+      run.plan = decision === 'approve' ? { ...p, approvedAt: p.approvedAt ?? Date.now(), ...(byApp ? { byApp: true } : {}) } : { ...p, changes: p.changes + 1 };
       this.runSave();
     }
     log.info('chats', 'plan decided', { chat: chatId, data: { decision } });
@@ -3098,13 +3099,23 @@ export class ChatManager implements ChatService {
     if (req.type === 'command' || !this.opts.away?.()) return false;
     const title = r.s.title || r.s.agent?.name || 'Chat';
     if (req.type === 'question') {
-      const answers = recommendedAnswers(req.questions ?? []);
+      // Cursor's «plan ready» (cursor/create_plan) is a plan to approve like Claude's ExitPlanMode below: its first option
+      const q0 = req.questions?.[0], plan = req.tool === 'CreatePlan' && q0?.options[0] ? { [q0.question]: q0.options[0].label } : null;
+      const answers = plan ?? recommendedAnswers(req.questions ?? []);
       if (!answers) return false;
       const choice = Object.values(answers).flat().join(', ');
       if (!r.session?.answer(req.id, { kind: 'question', answers })) return false;
       this.addItem(r, sysItem('awayPicked', { choice }, 'info'), false);
       this.hook('onAway', () => this.opts.onAway?.({ kind: 'picked', chatId: r.s.id, title, text: `${req.questions?.[0]?.question ?? req.title} → ${choice}` }));
       log.info('chats', 'away: recommended answer', { chat: r.s.id, data: { questions: req.questions?.length ?? 0 } });
+      return true;
+    }
+    // a plan mode's «plan ready» is a plan to approve, not a permission: it starts like a Strategist's plan, and every
+    // permission the work then asks for still goes through the checks above or is parked here
+    if (req.tool === 'ExitPlanMode') {
+      if (!r.session?.answer(req.id, { kind: 'permission', allow: true })) return false;
+      this.addItem(r, sysItem('awayPicked', { choice: 'Approva il piano' }, 'info'), false);
+      this.hook('onAway', () => this.opts.onAway?.({ kind: 'plan', chatId: r.s.id, title, text: req.title || 'piano' }));
       return true;
     }
     if (!r.session?.answer(req.id, { kind: 'permission', allow: false, message: AWAY_PARKED })) return false;

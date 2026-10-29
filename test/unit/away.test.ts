@@ -12,14 +12,19 @@ afterEach(() => { for (const d of roots.splice(0)) fs.rmSync(d, { recursive: tru
 const file = (): string => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-awaylog-')); roots.push(d); return path.join(d, 'away-log.json'); };
 
 describe('recommendedOption', () => {
-  it('takes the marked option, else a «Sì», else the first', () => {
+  it('takes only the option the agent marked as recommended', () => {
     expect(recommendedOption({ options: [{ label: 'No' }, { label: 'Sì (consigliato)' }] })).toBe('Sì (consigliato)');
     expect(recommendedOption({ options: [{ label: 'Rimando' }, { label: 'Lascio stare (Recommended)' }] })).toBe('Lascio stare (Recommended)');
-    expect(recommendedOption({ options: [{ label: 'No' }, { label: 'Sì' }] })).toBe('Sì');
-    expect(recommendedOption({ options: [{ label: 'A' }, { label: 'B' }] })).toBe('A');
+    expect(recommendedOption({ options: [{ label: 'No' }, { label: 'Sì' }] })).toBeNull();
     expect(recommendedOption({ options: [] })).toBeNull();
   });
-  it('answers every question by its text; one with no option leaves the request to the user', () => {
+  it('leaves to the user what is reserved to them, whatever the agent recommends', () => {
+    expect(recommendedOption({ question: 'Faccio il deploy in produzione?', options: [{ label: 'Sì (consigliato)' }, { label: 'No' }] })).toBeNull();
+    expect(recommendedOption({ question: 'Invio la mail al cliente?', options: [{ label: 'Sì (consigliato)' }, { label: 'No' }] })).toBeNull();
+    expect(recommendedOption({ question: 'Faccio il merge della PR?', options: [{ label: 'Sì (consigliato)' }, { label: 'No' }] })).toBeNull();
+    expect(recommendedOption({ question: 'Aggiungo i test mancanti?', options: [{ label: 'Sì (consigliato)' }, { label: 'No' }] })).toBe('Sì (consigliato)');
+  });
+  it('answers every question by its text; one with no pick leaves the request to the user', () => {
     expect(recommendedAnswers([
       { question: 'Uno?', multiSelect: false, options: [{ label: 'Sì (consigliato)' }, { label: 'No' }] },
       { question: 'Quali?', multiSelect: true, options: [{ label: 'X' }, { label: 'Y (consigliato)' }] },
@@ -94,5 +99,15 @@ describe('workflow proposals while the user is away', () => {
     const again = service.list()[0]!;
     const waiting = await tool.run({ id: again.id, expectedVersion: again.version, action: 'propose', summary: 'Mockup B' }) as { status: string };
     expect(waiting.status).toBe('approval');
+  });
+  it('the app\'s approval is marked on the event, never as the user\'s', async () => {
+    const { Workflows } = await import('../../src/main/workflows/service');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-awaywork-')); roots.push(dir);
+    const service = new Workflows(path.join(dir, 'work.json'));
+    let row = service.create({ title: 'Ricerca', profile: 'feature', priority: 'normal', chatIds: [] });
+    row = service.report({ id: row.id, expectedVersion: row.version, action: 'propose', summary: 'Analisi' });
+    expect(row.stage).toBe('analysis');
+    const user = service.decide({ id: row.id, expectedVersion: row.version, proposalId: row.proposal!.id, approve: true });
+    expect(user.events.at(-1)?.by).toBeUndefined();
   });
 });

@@ -70,6 +70,15 @@ describe('Modalità notte in the chats', () => {
     expect(w.log[0]!.text).toContain('Sì (consigliato)');
   });
 
+  it('leaves an unmarked question to the user, and approves a plan mode\'s plan', async () => {
+    const w = world(true), m = manager(w);
+    const chat = await m.create({ harness: 'anthropic', cwd: tmp() });
+    w.sink!.pending({ ...question('q3'), questions: [{ question: 'Quale?', multiSelect: false, options: [{ label: 'A' }, { label: 'B' }] }] });
+    w.sink!.pending({ ...permission('p3'), tool: 'ExitPlanMode', title: 'Piano pronto', detail: '' });
+    expect(w.answers).toEqual([{ id: 'p3', answer: { kind: 'permission', allow: true } }]);
+    expect(m.pending().filter(p => p.chatId === chat.id).map(p => p.id)).toEqual(['q3']);
+  });
+
   it('leaves requests to the user when the mode is off, and settles them when it goes on', async () => {
     const w = world(false), m = manager(w);
     const chat = await m.create({ harness: 'anthropic', cwd: tmp() });

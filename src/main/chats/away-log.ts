@@ -35,14 +35,17 @@ export class AwayLog {
   /** When the mode went on (null = off). */
   since(): number | null { return this.load().since; }
 
-  /** The mode went on: a new night, the old entries are gone (their recap was given). */
-  start(): void { const s = this.load(); if (s.since !== null) return; this.state = { since: this.now(), entries: [] }; this.save(); }
+  /** The mode went on: a new night (a night whose recap never found an Orchestrator keeps its entries). */
+  start(): void { const s = this.load(); if (s.since !== null) return; this.state = { since: this.now(), entries: s.entries }; this.save(); }
 
   add(e: Omit<AwayEntry, 'at'>): void {
     const s = this.load();
     s.entries = [...s.entries, { ...e, title: cut(e.title, 80), text: cut(e.text, 240), at: this.now() }].slice(-MAX);
     this.save();
   }
+
+  /** What the night held so far. */
+  peek(): { since: number | null; entries: AwayEntry[] } { const s = this.load(); return { since: s.since, entries: [...s.entries] }; }
 
   /** The mode went off: what the night held, once; the log starts empty next time. */
   finish(): { since: number | null; entries: AwayEntry[] } {
@@ -78,22 +81,29 @@ export interface AwayDeps {
   chats: { settleForAway(): number; openForUser(): { title: string; what: string }[]; awayRecap(text: string): boolean };
   onSettingChange(fn: (c: { key: string }) => void): unknown;
   blocker: { start(type: 'prevent-app-suspension'): number; stop(id: number): void };
+  /** wait before the recap is tried again when no Orchestrator was open (default 60 s) */
+  retryMs?: number;
 }
+/** how many times a recap with no Orchestrator open is tried again (about ten minutes) */
+const RECAP_TRIES = 10;
 
 /** The mode's life (wiring.ts): on = a new night log, what already waits is settled, the PC may not sleep (the work goes on
  *  all night; the screen may still turn off); off = the recap in the Orchestrator's chat and sleep allowed again. A
  *  restart with the mode on keeps the night going. */
 export function attachAway(d: AwayDeps): void {
-  let blockId: number | null = null;
+  let blockId: number | null = null, tries = 0;
   const awake = (want: boolean) => {
     if (want && blockId === null) blockId = d.blocker.start('prevent-app-suspension');
     else if (!want && blockId !== null) { d.blocker.stop(blockId); blockId = null; }
   };
   const went = (on: boolean) => {
     awake(on);
-    if (on) { d.log.start(); d.chats.settleForAway(); log.info('away', 'night mode on'); return; }
+    if (on) { tries = 0; d.log.start(); d.chats.settleForAway(); log.info('away', 'night mode on'); return; }
     if (d.log.since() === null) return;
-    const placed = d.chats.awayRecap(recapOf(d.log.finish(), d.chats.openForUser()));
+    // the log is emptied only once the recap is in an Orchestrator's chat; else it waits for the next start
+    const placed = d.chats.awayRecap(recapOf(d.log.peek(), d.chats.openForUser()));
+    if (placed) d.log.finish();
+    else if (tries++ < RECAP_TRIES) setTimeout(() => { if (!d.on()) went(false); }, d.retryMs ?? 60_000).unref?.();
     log.info('away', 'night mode off', { data: { recap: placed } });
   };
   if (d.on()) { awake(true); d.log.start(); }

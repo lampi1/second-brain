@@ -57,9 +57,9 @@ export class Workflows {
     if (!row || row.version !== version) throw new Error('Il filo è cambiato: rileggi lo stato prima di agire.');
     return structuredClone(row);
   }
-  private event(row: WorkThread, kind: WorkEvent['kind'], summary: string): WorkThread {
+  private event(row: WorkThread, kind: WorkEvent['kind'], summary: string, by?: WorkEvent['by']): WorkThread {
     row.version++; row.updatedAt = this.now();
-    row.events = [...row.events, { at: row.updatedAt, stage: row.stage, kind, text: summary }].slice(-200);
+    row.events = [...row.events, { at: row.updatedAt, stage: row.stage, kind, text: summary, ...(by ? { by } : {}) }].slice(-200);
     return this.save(row);
   }
   private advance(row: WorkThread): void {
@@ -134,6 +134,6 @@ export class Workflows {
     if (input.approve && row.cycles >= 3 && ['review', 'test', 'qa'].includes(row.stage)) { row.stage = 'develop'; row.cycles = 0; row.evidence = ''; }
     row.nextAction = input.approve ? 'Eseguire la proposta approvata e verificarne l’esito' : 'Preparare una proposta alternativa';
     return this.event(row, input.approve ? 'approved' : 'rejected', feedback
-      ? `${proposal}\nRisposta libera dell’utente (${input.proposalId}, versione ${input.expectedVersion}): ${feedback}` : appNote ? `${proposal}\n${appNote}` : proposal);
+      ? `${proposal}\nRisposta libera dell’utente (${input.proposalId}, versione ${input.expectedVersion}): ${feedback}` : appNote ? `${proposal}\n${appNote}` : proposal, appNote ? 'app-away' : undefined);
   }
 }
