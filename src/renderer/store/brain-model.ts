@@ -6,10 +6,10 @@ import { useEffect } from 'react';
 import type { BrainModelState } from '@shared/brain-model';
 import { sb } from '../sb';
 import { createStore } from './createStore';
+import { errText } from '../lib/ipc-error';
 
 export const brainModel = createStore<{ state: BrainModelState | null; error: string | null; busy: boolean }>({ state: null, error: null, busy: false });
 let started = false, revision = 0;
-const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 
 export async function refreshBrainModel(): Promise<void> {
   const r = ++revision;

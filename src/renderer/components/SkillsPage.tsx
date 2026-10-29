@@ -27,8 +27,8 @@ import { IconPlus, IconRefresh } from './Icons';
 import '../styles/skills.css';
 import '../styles/agent-catalog.css';
 import '../styles/brain-model.css';
+import { errText } from '../lib/ipc-error';
 
-const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 const placeKey = (p: Pick<SkillPlace, 'kind' | 'harness' | 'scope' | 'root'>) => `${p.kind}|${p.harness}|${p.scope}|${p.root ?? ''}`;
 const MODELS = ['inherit', 'sonnet', 'opus', 'haiku', 'fable'];
 

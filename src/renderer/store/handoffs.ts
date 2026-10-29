@@ -7,6 +7,7 @@ import { sb } from '../sb';
 import { createStore } from './createStore';
 import { toast } from './ui';
 import { t } from '../i18n';
+import { errText } from '../lib/ipc-error';
 
 const store = createStore<Record<string, BrowserHandoff>>({});   // open hand-offs by tab id
 let started = false;
@@ -39,8 +40,6 @@ export function useHandoffTabs(): string[] {
   start();
   return store.use(s => Object.keys(s).sort(), (a, b) => a.length === b.length && a.every((x, i) => x === b[i]));
 }
-
-const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 
 export async function resolveHandoff(h: BrowserHandoff, outcome: 'done' | 'failed'): Promise<void> {
   put({ ...h, state: outcome });                                  // optimistic: the banner closes at once

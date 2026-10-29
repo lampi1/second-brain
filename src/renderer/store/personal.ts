@@ -6,6 +6,7 @@ import type { PersonalState } from '@shared/contract';
 import { createStore } from './createStore';
 import { toast } from './ui';
 import { t } from '../i18n';
+import { errText } from '../lib/ipc-error';
 
 export const personal = createStore<PersonalState | null>(null);
 
@@ -25,7 +26,6 @@ export function usePersonal<T>(sel: (s: PersonalState | null) => T, eq?: (a: T, 
   return personal.use(sel, eq);
 }
 
-const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 const fail = (e: unknown) => toast(`${t('pbrowser.failed')} ${errText(e)}`, 'err');
 
 export const openTab = (url?: string) => window.sb.invoke('personal:open', url ? { url } : {}).catch(e => { fail(e); return null; });

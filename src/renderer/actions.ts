@@ -36,6 +36,7 @@ import {
 import { currentEntry, pushEntry, stepEntry, type Shot, type ViewerEntry } from './lib/viewer-stack';
 import { applyViewPrefs } from './lib/view-prefs';
 import { importFound } from './lib/recorder';
+import { errText } from './lib/ipc-error';
 
 /** The Orchestrator's id (the right column), null while there is none. */
 export const orchestratorId = (): string | null => orchestratorIdOf(app.get());
@@ -397,7 +398,6 @@ export async function resumeChat(chatId: string): Promise<void> {
 
 /** How long a closing tile fades out before it leaves the grid (styles: .chat-tile.closing). */
 export const CLOSE_ANIM_MS = 320;
-export const errText = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 
 /** A finished chat closes (archived in main): its tile fades out, then a short notice offers to reopen it. auto = the
  *  auto-close; main refuses it if the chat went back to work meanwhile, and then it simply stays. */

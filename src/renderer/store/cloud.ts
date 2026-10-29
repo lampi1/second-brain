@@ -6,6 +6,7 @@ import type { CloudAgent, CloudState } from '@shared/contract';
 import { createStore } from './createStore';
 import { toast } from './ui';
 import { t } from '../i18n';
+import { errText as why } from '../lib/ipc-error';
 
 interface CloudUi { state: CloudState | null; expanded: string | null }
 export const cloudStore = createStore<CloudUi>({ state: null, expanded: null });
@@ -37,8 +38,6 @@ export function setCloudExpanded(id: string, on: boolean): void {
   cloudStore.set(s => ({ ...s, expanded: next }));
   void window.sb.invoke('cloud:watch', { id: next }).catch(() => {});
 }
-
-const why = (e: unknown) => (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e));
 
 export async function cloudFollowUp(id: string, text: string): Promise<boolean> {
   try { await window.sb.invoke('cloud:followUp', { id, text }); return true; } catch (e) { toast(t('cloud.failed', { why: why(e) }), 'err'); return false; }
