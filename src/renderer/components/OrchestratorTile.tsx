@@ -14,7 +14,7 @@
 import { RecapButton } from './WorkCockpit';
 import { memo, useEffect, useRef, useState } from 'react';
 import { chatCost, formatCost, modelWithEffort } from '../lib/format';
-import { orchestratorTally, type OrchestratorTally } from '../lib/orchestrator-tally';
+import { sameTally, tallyOf } from '../lib/chat-derived';
 import { engineName } from '../lib/engines';
 import { isBusy, sameList } from '../store/state';
 import { ensureOrchestrator, stop, useApp } from '../store/store';
@@ -69,7 +69,7 @@ function OrchestratorSetup() {
 /** chatId = the Orchestrator shown (the overlay's tab); null = none yet */
 /** The chats it started today by state and the cost apart, its own and theirs (#153): always visible under its head. */
 function TallyLine({ chat }: { chat: Parameters<typeof chatCost>[0] }) {
-  const tally = useApp(s => orchestratorTally(Object.values(s.chats).filter((c): c is NonNullable<typeof c> => !!c)), (a: OrchestratorTally, b: OrchestratorTally) => JSON.stringify(a) === JSON.stringify(b));
+  const tally = useApp(s => tallyOf(s.chats), sameTally); // once per chats object for every subscriber (lib/chat-derived.ts)
   const { started, counts: c, startedUsd } = tally;
   const parts = started ? [c.done && t('dialogs.orchestrator.tallyDone', { n: c.done }), c.run && t('dialogs.orchestrator.tallyRun', { n: c.run }),
     c.wait && t('dialogs.orchestrator.tallyWait', { n: c.wait }), c.stuck && t('dialogs.orchestrator.tallyStuck', { n: c.stuck })].filter((x): x is string => !!x) : [];

@@ -8,6 +8,7 @@
 import { lazy, Suspense, useEffect, type CSSProperties } from 'react';
 import{t}from'./i18n';
 import { BRAIN_PAGES, BrainMap, BrainPage, GO_ALIASES } from './brain';
+import { relayToasts } from './brain/components/ui';
 import { goSequence, resolveShortcut } from './lib/keys';
 import { schedule, setBlocked, setKnownTabs } from './lib/viewports';
 import { liveSource } from './lib/liveSource';
@@ -136,18 +137,12 @@ function onPaste(e: ClipboardEvent): void {
 }
 
 /** One toast area: the brain pages and the map show their own small toasts (brain/components/ui.tsx Toaster); in the
- *  app they are hidden (shell.css) and relayed here into the app's toasts. */
+ *  app they are hidden (shell.css) and relayed here into the app's toasts. The Toaster hands them over itself: an
+ *  observer of the whole body woke on every DOM insertion (every streamed markdown block) to find them. */
 function useBrainToastRelay(): void {
   useEffect(() => {
-    const mo = new MutationObserver(records => {
-      for (const r of records) for (const n of r.addedNodes) {
-        const el = n instanceof HTMLElement ? (n.classList.contains('bx-toast') ? n : n.querySelector?.('.bx-toast')) : null;
-        const text = el?.textContent?.trim();
-        if (text) toast(text, 'info');
-      }
-    });
-    mo.observe(document.body, { childList: true, subtree: true });
-    return () => mo.disconnect();
+    relayToasts(text => toast(text, 'info'));
+    return () => relayToasts(null);
   }, []);
 }
 

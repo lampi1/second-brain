@@ -2,10 +2,15 @@
 // is data plus its tools (ADR 0004); Electron's binary runs them as plain Node with ELECTRON_RUN_AS_NODE=1 set for that
 // child only, so no separate Node install is needed and the app itself never runs as Node. Used by live.ts (chat
 // poll), usage.ts (cost), estimates.ts (backfill) and api.ts (data server). Tests pass a real `node` instead.
+// The background polls (cost.mjs, chats.mjs, the estimates) run below normal priority like the engines (lowPriority,
+// jobguard.ts lowerEnginePriority): cost.mjs re-reads every transcript changed today every few minutes, so by evening it
+// took seconds of CPU at the window's priority (2026-10-29). What the user clicks and waits on keeps normal priority.
 import { execFile } from 'node:child_process';
+import os from 'node:os';
 
 /** How to start a Node child: the executable and its environment. */
-export interface NodeRunner { exe: string; env: NodeJS.ProcessEnv }
+/** lowPriority: a background poll nobody waits on, started below normal priority */
+export interface NodeRunner { exe: string; env: NodeJS.ProcessEnv; lowPriority?: boolean }
 
 /** In the Electron main process: Electron as Node. Elsewhere (unit tests under plain Node): the same binary. */
 export function electronNode(): NodeRunner {
@@ -25,6 +30,7 @@ export function runNode(node: NodeRunner, script: string, args: string[], cwd: s
       resolve({ stdout: String(stdout ?? ''), stderr: String(stderr ?? ''), code, ...(err ? { error: err.message } : {}),
         ...(e?.killed ? { killed: true } : {}), ...(e?.signal ? { signal: e.signal } : {}) });
     });
+    if (child.pid && node.lowPriority) { try { os.setPriority(child.pid, os.constants.priority.PRIORITY_BELOW_NORMAL); } catch { /* already gone, or not allowed: it runs as before */ } }
     child.stdin?.on('error', () => { /* the script exited without reading it: its exit code says the rest */ });
     child.stdin?.end(input ?? '');
   });

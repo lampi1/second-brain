@@ -102,7 +102,8 @@ export const AskContext = memo(function AskContext({ req, defaultOpen, testBase,
  *  command card) only the context block. */
 function WindowContext({ req, testBase, question, lead }: { req: PendingRequest; testBase: string; question?: ReactNode; lead?: string }) {
   const items = useApp(s => s.items[req.chatId]);
-  useEffect(() => { if (items === undefined) void loadItems(req.chatId); }, [items, req.chatId]);
+  const closed = useApp(s => !!s.chats[req.chatId]?.closedAt); // a closed chat's request is stale: no disk read for it
+  useEffect(() => { if (items === undefined && !closed) void loadItems(req.chatId); }, [items, closed, req.chatId]);
   const ctx = useMemo(() => {
     const all = askContext(items, req);
     // a command card already shows its block and the sentence before it: the context keeps only the rest
@@ -159,7 +160,8 @@ function WindowContext({ req, testBase, question, lead }: { req: PendingRequest;
 
 const PanelContext = memo(function PanelContext({ req, defaultOpen, testBase, onToggle, noVisuals, label }: { req: PendingRequest; defaultOpen: boolean; testBase: string; onToggle?: () => void; noVisuals?: boolean; label?: string }) {
   const items = useApp(s => s.items[req.chatId]);
-  useEffect(() => { if (items === undefined) void loadItems(req.chatId); }, [items, req.chatId]);
+  const closed = useApp(s => !!s.chats[req.chatId]?.closedAt);
+  useEffect(() => { if (items === undefined && !closed) void loadItems(req.chatId); }, [items, closed, req.chatId]);
   const ctx = useMemo(() => askContext(items, req), [items, req]);
   const previews = useMemo(() => (req.questions ?? []).flatMap(q => q.options.filter(o => o.preview?.trim()).map(o => ({ label: o.label, text: o.preview! }))), [req]);
   const [open, setOpen] = useState(defaultOpen);

@@ -1,6 +1,7 @@
 // Small building blocks of the brain pages: pills (state always in text, never color alone), buttons, sections, KPI
 // tiles, tabs and segmented controls, external links (http(s) only: main opens them outside the app), icons, a toast,
-// copy to clipboard and file download (both with fallbacks: the app window grants no permissions). Used by every page.
+// copy to clipboard and file download (both with fallbacks: the app window grants no permissions). Used by every page;
+// the app relays the toasts into its own (relayToasts, App.tsx).
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { HelpTip } from '../../components/HelpTip';
 import { inSelectList } from '../../components/Select';
@@ -78,13 +79,16 @@ export const IconMap = () => <I d="M8 1.8a6.2 6.2 0 1 0 0 12.4A6.2 6.2 0 0 0 8 1
 
 // ── toast ───────────────────────────────────────────────────────────────────────────────────────────────────────
 const toasters: ((t: string) => void)[] = [];
+let relay: ((text: string) => void) | null = null;
+/** The app shows a mounted Toaster's toasts as its own (App.tsx; the brain's are hidden there, shell.css). */
+export function relayToasts(fn: ((text: string) => void) | null): void { relay = fn; }
 /** Show a toast in the most recently mounted Toaster (the map's while it is open, else the page's). */
 export function toast(text: string): void { toasters[toasters.length - 1]?.(text); }
 /** One toast at a time, 2.6 s, announced to screen readers. Mounted by each page and by the map. */
 export function Toaster() {
   const [t, setT] = useState<{ text: string; n: number } | null>(null);
   useEffect(() => {
-    const push = (text: string) => setT(x => ({ text, n: (x?.n ?? 0) + 1 }));
+    const push = (text: string) => { setT(x => ({ text, n: (x?.n ?? 0) + 1 })); const said = text.trim(); if (said) relay?.(said); };
     toasters.push(push);
     return () => { const i = toasters.indexOf(push); if (i >= 0) toasters.splice(i, 1); };
   }, []);

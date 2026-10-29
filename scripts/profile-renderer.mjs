@@ -9,12 +9,15 @@ const arg = (name, fallback) => { const i = process.argv.indexOf(name); return i
 const root = path.resolve(arg('--app-root', path.join(import.meta.dirname, '..'))), label = arg('--label', 'candidate');
 const output = path.resolve(arg('--output', 'test-results/renderer-profile'));
 const seconds = Number(arg('--seconds', '120'));
+// the end of a long day (2026-10-29): --archived N closed chats kept by the auto-close (main keeps up to 60, each with its
+// items), --orch-items N messages in the Orchestrator (mail, news, answers), beside --open N work chats (16 streaming)
+const shape = { open: Number(arg('--open', '64')), archived: Number(arg('--archived', '0')), orchItems: Number(arg('--orch-items', '4')) };
 await fs.mkdir(output, { recursive: true });
 const profileDir = await fs.mkdtemp(path.join(os.tmpdir(), 'sb-renderer-profile-'));
 const env = { ...process.env, SB_DEMO: '1', SB_DEMO_FREEZE: '1', SB_HIDDEN: '1', SB_TEST: '1', SB_USER_DATA: profileDir, SB_MCP_PORT: '0', SB_LANG: 'en' };
 for (const name of ['ELECTRON_RUN_AS_NODE', 'SB_BRAIN', 'SB_RELEASE', 'SB_RELEASE_ID', 'SB_ENGINE_CLAUDE']) delete env[name];
 let app;
-const result = { label, seconds, machine: { platform: process.platform, node: process.version, cpus: os.cpus().length, cpu: os.cpus()[0]?.model, memoryGb: os.totalmem() / 2 ** 30 }, samples: [], errors: [] };
+const result = { label, seconds, shape, machine: { platform: process.platform, node: process.version, cpus: os.cpus().length, cpu: os.cpus()[0]?.model, memoryGb: os.totalmem() / 2 ** 30 }, samples: [], errors: [] };
 const deadline = setTimeout(() => { app?.process().kill('SIGKILL'); process.exitCode = 1; }, (seconds + 120) * 1000);
 try {
   app = await electron.launch({ cwd: root, args: ['.'], env, timeout: 30000 });
@@ -26,34 +29,37 @@ try {
   await page.getByTestId('tile-orchestrator').waitFor();
   const templates = await page.evaluate(() => window.sb.invoke('chat:list', undefined));
   // The benchmark alone replaces read handlers and injects synthetic host events; production app code is untouched.
-  await app.evaluate(({ ipcMain, BrowserWindow }, templates) => {
+  await app.evaluate(({ ipcMain, BrowserWindow }, [templates, shape]) => {
     const win = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay'));
     win.setContentSize(1920, 1080);
     const at = Date.now(), worker = templates.find(c => !c.isOrchestrator), orchestrator = templates.find(c => c.isOrchestrator);
-    const chats = [{ ...orchestrator, id: 'orchestrator', pending: 0, state: 'idle', lastText: '', plan: undefined }, ...Array.from({ length: 64 }, (_, i) => ({ ...worker, id: `profile-${i}`, title: `Synthetic task ${i + 1}`, pending: 0, state: i < 16 ? 'running' : 'idle', parentId: undefined, delegation: undefined, routine: undefined, run: undefined, agentChildren: undefined, browserTabIds: [], plan: undefined, closedAt: undefined, lastText: 'Inspecting synthetic code', updatedAt: at }))];
+    const chats = [{ ...orchestrator, id: 'orchestrator', pending: 0, state: 'idle', lastText: '', plan: undefined }, ...Array.from({ length: shape.open + shape.archived }, (_, i) => ({ ...worker, id: `profile-${i}`, title: `Synthetic task ${i + 1}`, pending: 0, state: i >= shape.open ? 'closed' : i < 16 ? 'running' : 'idle', parentId: undefined, delegation: undefined, routine: undefined, run: undefined, agentChildren: undefined, browserTabIds: [], plan: undefined, closedAt: i >= shape.open ? at - i * 1000 : undefined, closedBy: i >= shape.open ? 'auto' : undefined, lastText: 'Inspecting synthetic code', updatedAt: at }))];
     const versions = Array.from({ length: 10 }, (_, i) => ({ version: 1, draftRevision: 1, digest: `profile-${i}`, activatedAt: 1, definition: { id: `profile-flow-${i}`, title: `Synthetic routine ${i}`, description: 'Synthetic profiling data', scope: {}, aliases: [], steps: Array.from({ length: 10 }, (_, j) => ({ id: `step-${j}`, title: `Step ${j}`, kind: 'agent', role: 'artisan', tier: 'mid', instructions: 'Inspect synthetic data. '.repeat(250), inputs: [], evidence: [], effect: 'read-only', timeoutMs: 60000, maxAttempts: 1 })) } }));
     const snapshot = { contextKey: 'profile', active: Object.fromEntries(versions.map(v => [v.definition.id, 1])), drafts: [], versions, runs: [], automation: { contextKey: 'profile', revision: 1, paused: true, background: false, events: [], rules: Array.from({ length: 20 }, (_, i) => ({ id: `rule-${i}`, status: 'enabled', revision: 1, ownerOrchestratorId: 'orchestrator', updatedAt: 1, config: { flowId: `profile-flow-${i % 10}`, flowVersion: 1, inputs: { specification: 'Synthetic configuration. '.repeat(500) }, priority: 'normal', trigger: { kind: 'interval', everyMinutes: 60 }, scope: {} } })) } };
-    const bench = { chats, snapshot, tick: 0, reads: 0, sent: 0, timer: null, flowTimer: null };
+    const bench = { chats, snapshot, streams: Math.min(16, shape.open), tick: 0, reads: 0, sent: 0, timer: null, flowTimer: null };
     globalThis.__rendererProfile = bench;
     const handler = (name, fn) => { ipcMain.removeHandler(name); ipcMain.handle(name, fn); };
     handler('chat:list', () => chats); handler('chat:pending', () => []); handler('browser:list', () => []); handler('feed:list', () => []); handler('flows:list', () => snapshot);
     handler('chat:items', (_event, { chatId, itemId, limit, maxBytes }) => {
       bench.reads++;
-      const count = chatId === 'orchestrator' ? 4 : 600;
-      const items = Array.from({ length: count }, (_, i) => ({ kind: 'tool', id: `${chatId}-history-${i}`, at: at - count + i, name: ['Read', 'Grep', 'Bash'][i % 3], summary: `Inspect src/module-${i}.ts`, input: { file_path: `/synthetic/src/module-${i}.ts`, command: `node inspect.mjs --module ${i}` }, output: `${chatId}/${i}: ${'Synthetic result line. '.repeat(512)}${i % 20 === 0 ? ` https://dev.azure.com/o/Profile/_build/results?buildId=${i + 1}` : ''}`, status: 'ok' })).slice(-(limit ?? count));
+      const count = chatId === 'orchestrator' ? shape.orchItems : 600;
+      const items = chatId === 'orchestrator' ? Array.from({ length: count }, (_, i) => i % 3 === 0
+        ? { kind: 'user', id: `orchestrator-${i}`, at: at - count + i, text: `Synthetic request ${i}: check the build of Synthetic task ${(i % 64) + 1}` }
+        : { kind: 'assistant', id: `orchestrator-${i}`, at: at - count + i, text: `**Synthetic task ${(i % 64) + 1}** is on it.\n\n- step one: \`npm test\`\n- step two: read [the log](https://example.com/${i})\n\n${'Synthetic answer sentence. '.repeat(20)}` })
+        : Array.from({ length: count }, (_, i) => ({ kind: 'tool', id: `${chatId}-history-${i}`, at: at - count + i, name: ['Read', 'Grep', 'Bash'][i % 3], summary: `Inspect src/module-${i}.ts`, input: { file_path: `/synthetic/src/module-${i}.ts`, command: `node inspect.mjs --module ${i}` }, output: `${chatId}/${i}: ${'Synthetic result line. '.repeat(512)}${i % 20 === 0 ? ` https://dev.azure.com/o/Profile/_build/results?buildId=${i + 1}` : ''}`, status: 'ok' })).slice(-(limit ?? count));
       if (itemId !== undefined) return items.filter(item => item.id === itemId);
       if (maxBytes === undefined) return items;
       const chars = Math.max(1, Math.floor(maxBytes / (2 * (limit ?? 600))));
       return items.map(item => item.output.length <= chars ? item : { ...item, output: item.output.slice(0, chars).split('').join(''), outputPreviewChars: item.output.length, outputUrls: [...item.output.matchAll(/https:\/\/dev\.azure\.com\/o\/[^\s]+/g)].map(match => match[0].split('').join('')) });
     });
-  }, templates);
+  }, [templates, shape]);
   await page.addInitScript(() => {
     localStorage.setItem('sb.prefs.v1', JSON.stringify({ chatPanelsV: 2, chatExpanded: {}, orchestratorOpen: true, orchestratorSizeV: 2, theme: 'dark' }));
     globalThis.__profile = { commits: 0, longMs: 0, longCount: 0, lag: [] };
     globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__ = { supportsFiber: true, renderers: new Map(), inject() { return 1; }, onCommitFiberRoot() { globalThis.__profile.commits++; }, onCommitFiberUnmount() {}, onPostCommitFiberRoot() {}, checkDCE() {} };
   });
   await page.reload();
-  await page.getByTestId('tile-chat-profile-63').waitFor({ state: 'attached', timeout: 30000 });
+  await page.getByTestId(`tile-chat-profile-${shape.open - 1}`).waitFor({ state: 'attached', timeout: 30000 });
   await page.waitForTimeout(5000);
   await page.evaluate(() => {
     new PerformanceObserver(entries => { for (const e of entries.getEntries()) { globalThis.__profile.longMs += e.duration; globalThis.__profile.longCount++; } }).observe({ type: 'longtask' });
@@ -74,7 +80,7 @@ try {
     const b = globalThis.__rendererProfile, win = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().startsWith('file:') && !w.webContents.getURL().includes('#overlay'));
     b.timer = setInterval(() => {
       const n = b.tick++, phase = n % 5, group = Math.floor(n / 5);
-      for (let i = 0; i < 16; i++) {
+      for (let i = 0; i < b.streams; i++) {
         const chatId = `profile-${i}`, item = { kind: 'assistant', id: `${chatId}-stream-${group}`, at: Date.now(), text: `${chatId}/${group}: ${'Synthetic streamed evidence. '.repeat(phase * 32 + 1)}`, streaming: phase < 4 };
         win.webContents.send('chat:item', { chatId, item, replace: phase > 0 }); b.sent++;
         if (phase === 4) { const tool = { kind: 'tool', id: `${chatId}-tool-${group}`, at: item.at, name: 'Bash', summary: 'Check synthetic result', input: { command: `node check.mjs --sample ${group}` }, output: `${chatId}/${group}: ${'Synthetic tool evidence. '.repeat(512)}`, status: 'ok' }; win.webContents.send('chat:item', { chatId, item: tool, replace: false }); b.sent++; const chat = b.chats[i + 1]; chat.updatedAt = item.at; chat.lastText = item.text.slice(0, 120); win.webContents.send('chat:updated', chat); }
@@ -96,8 +102,8 @@ try {
   const a = result.samples[0], z = result.samples.at(-1), duration = z.elapsed - a.elapsed, sorted = z.lag.sort((a, b) => a - b);
   result.summary = { rendererCpuPctOfOneCore: 100 * (z.cpuSeconds - a.cpuSeconds) / duration, longTaskMsPerSecond: (z.longMs - a.longMs) / duration, inputLagP95Ms: sorted[Math.floor(sorted.length * .95)], startRetainedMb: a.retainedHeapMb, endRetainedMb: z.retainedHeapMb, retainedRangeLastHalfMb: result.samples.slice(Math.ceil(result.samples.length / 2)).map(s => s.retainedHeapMb), commitsPerSecond: (z.commits - a.commits) / duration };
   await page.screenshot({ path: path.join(output, `${label}.png`) });
-  await page.getByTestId('chat-expand-profile-63').click();
-  await page.getByTestId('tool-toggle-profile-63-history-599').click();
+  await page.getByTestId(`chat-expand-profile-${shape.open - 1}`).click();
+  await page.getByTestId(`tool-toggle-profile-${shape.open - 1}-history-599`).click();
   await page.waitForTimeout(750);
   await page.screenshot({ path: path.join(output, `${label}-tool-detail.png`) });
   if (result.errors.length) throw new Error(`Renderer errors: ${result.errors.join('; ')}`);

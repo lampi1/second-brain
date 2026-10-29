@@ -7,10 +7,11 @@
 // restart); a folded parent shows one line with its children's characters and "3 figli · 2 in corso". The chat in view
 // is highlighted, finished ones are muted. A click on a row brings that chat's strip or card on screen, expanded and
 // briefly highlighted (focusChat); the ✕ on hover closes the chat like its strip's ✕ (6 s Annulla; owner, 2026-10-21). Hidden while no agent is open. Mounted by Sidebar.tsx.
-import type { CSSProperties } from 'react';
+import { memo, type CSSProperties } from 'react';
 import type { ChatSummary } from '@shared/contract';
-import { routineChatIds } from '../lib/routine-chats';
-import { chatTree, childState, kidCounts, visibleTree, type ChildState, type TreeNode } from '../lib/chat-tree';
+import { childState, kidCounts, visibleTree, type ChildState, type TreeNode } from '../lib/chat-tree';
+import { sameTree, sidebarTree } from '../lib/chat-derived';
+import { sameList } from '../store/state';
 import { useApp } from '../store/store';
 import { setTreeCollapsed, ui } from '../store/ui';
 import { focusChat } from '../actions';
@@ -24,7 +25,6 @@ const MAX_ROWS = 40;
 /** the dot's tint by state */
 const DOT: Record<ChildState, string> = { start: 'run', run: 'run', wait: 'wait', queued: 'off', err: 'err', stall: 'stall', refused: 'err', done: 'done', partial: 'done', blocked: 'err', noreport: 'err', closed: 'off' };
 const ENDED = new Set<ChildState>(['done', 'partial', 'blocked', 'noreport', 'closed']);
-const sameTree = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 /** A root chat's state reads like a child's: waiting, at work, failed, idle (its turn ended: done for now). */
 function rowState(c: ChatSummary): ChildState {
@@ -38,25 +38,26 @@ function rowState(c: ChatSummary): ChildState {
 }
 
 export function SidebarTree() {
-  const tree = useApp(s => { const routines = routineChatIds(s.chats); return chatTree(s.order.filter(id => !routines.has(id) && !s.chats[id]?.isOrchestrator && !s.chats[id]?.quick), s.chats); }, sameTree);
+  // one tree per chats object for every subscriber (lib/chat-derived.ts); each row reads only its own chats
+  const tree = useApp(s => sidebarTree(s.order, s.chats), sameTree);
   const collapsed = ui.use(s => s.prefs.treeCollapsed);
   const focused = ui.use(s => s.focusMode ?? (s.focused?.startsWith('chat:') ? s.focused.slice(5) : null));
-  const chats = useApp(s => s.chats);
   if (!tree.length) return null;
   const rows = visibleTree(tree, collapsed).slice(0, MAX_ROWS);
   return (
     <div className="side-tree" aria-label={t('tree.sidebar')} role="group" data-testid="nav-tree">
       {rows.length > 0 && <ul className="tn-list">
-        {rows.map(n => <Row key={n.id} node={n} chat={chats[n.id]} chats={chats} folded={collapsed[n.id] === true} on={focused === n.id} />)}
+        {rows.map(n => <Row key={n.id} node={n} folded={collapsed[n.id] === true} on={focused === n.id} />)}
       </ul>}
     </div>
   );
 }
 
-function Row({ node, chat, chats, folded, on }: { node: TreeNode; chat: ChatSummary | undefined; chats: Readonly<Record<string, ChatSummary | undefined>>; folded: boolean; on: boolean }) {
+const Row = memo(function Row({ node, folded, on }: { node: TreeNode; folded: boolean; on: boolean }) {
+  const chat = useApp(s => s.chats[node.id]);
+  const kids = useApp(s => node.children.map(id => s.chats[id]).filter((c): c is ChatSummary => !!c), sameList);
   if (!chat) return null;
   const state = rowState(chat);
-  const kids = node.children.map(id => chats[id]).filter((c): c is ChatSummary => !!c);
   const right = state === 'wait' ? <span className="tn-w">{t('tree.state.wait')}</span>
     : kids.length ? <span className="tn-x">{t('tree.kids', { n: kids.length })}</span>
     : node.depth > 0 || state !== 'done' ? <span className="tn-x">{t(`tree.state.${state}`)}</span> : null;
@@ -80,4 +81,4 @@ function Row({ node, chat, chats, folded, on }: { node: TreeNode; chat: ChatSumm
       <b>{t('tree.kids', { n: kids.length })}</b>{running > 0 && <> · {t('tree.kidsRun', { n: running })}</>}
     </span>}
   </li>;
-}
+});

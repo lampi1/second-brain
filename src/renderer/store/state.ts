@@ -1,6 +1,7 @@
 // The app data state and its reducer, pure (no DOM, no bridge): main-process events and the initial loads become
 // actions; every update keeps the references of the parts that did not change, so a tile that selects
-// `items[chatId]` re-renders only when its own chat changes (streaming one chat never re-renders the others).
+// `items[chatId]` re-renders only when its own chat changes (streaming one chat never re-renders the others). A chat
+// that closes drops its items (they load again on demand), so a day of archived chats does not stay in memory.
 // Used by store.ts (the live store) and pinned by test/unit/state.test.ts.
 import { chatWindow, CHAT_WINDOW_ITEMS } from '@shared/chat-window';
 import type { AppInfo, BrowserTab, ChatItem, ChatSummary, FeedEvent, ImageAttachment, PendingRequest, Settings, Usage } from '@shared/contract';
@@ -17,6 +18,9 @@ export interface AppState {
   /** creation order (stable: tiles never jump around when states change) */
   order: readonly string[];
   items: Readonly<Record<string, readonly ChatItem[]>>;
+  /** a closed chat's failed tools, error results and error lines, kept when its items go (the Qualità page's «Errori»,
+   *  dashboard/data.ts observedErrors): a few items each, not the transcript */
+  closedErrors: Readonly<Record<string, readonly ChatItem[]>>;
   /** open questions/permissions, oldest first */
   pending: readonly PendingRequest[];
   tabs: readonly BrowserTab[];
@@ -28,12 +32,15 @@ export interface AppState {
   settings: Settings | null;
 }
 
-export const initialState: AppState = { ready: false, info: null, usage: null, chats: {}, order: [], items: {}, pending: [], tabs: [], feed: [], queued: {}, settings: null };
+export const initialState: AppState = { ready: false, info: null, usage: null, chats: {}, order: [], items: {}, closedErrors: {}, pending: [], tabs: [], feed: [], queued: {}, settings: null };
 
 export type Action =
   | { type: 'init'; chats: ChatSummary[]; pending: PendingRequest[]; tabs: BrowserTab[]; feed: FeedEvent[]; usage: Usage | null; info: AppInfo | null }
   | { type: 'items'; chatId: string; items: ChatItem[] }
-  | { type: 'chat:updated'; chat: ChatSummary }
+  /** the errors of a closed chat whose items were never loaded this run (store.ts loadClosedErrors) */
+  | { type: 'closedErrors'; chatId: string; items: ChatItem[] }
+  /** keep: the chat's items stay even if it closes now (a close the user can still undo, store.ts closeChat) */
+  | { type: 'chat:updated'; chat: ChatSummary; keep?: boolean }
   | { type: 'chat:removed'; chatId: string }
   | { type: 'chat:item'; chatId: string; item: ChatItem; replace?: boolean }
   | { type: 'pending:added'; req: PendingRequest }
@@ -95,7 +102,15 @@ export function reduce(s: AppState, a: Action): AppState {
       const chat = withLedger(a.chat, s.usage);
       if (prev && shallowEqual(prev, chat)) return s;
       const chats = { ...s.chats, [a.chat.id]: chat };
-      return { ...s, chats, order: prev ? s.order : [...s.order, a.chat.id] };
+      // a chat that just closed lets go of its transcript (main keeps up to 60 archived chats a day): a view that shows a
+      // closed chat loads it on demand (loadItems), a reopened one gets it back (store.ts dispatch)
+      let items = s.items, closedErrors = s.closedErrors;
+      const held = items[a.chat.id];
+      if (chat.closedAt && !prev?.closedAt && !a.keep && held) {
+        const { [a.chat.id]: _, ...rest } = items; items = rest;
+        closedErrors = { ...closedErrors, [a.chat.id]: errorItems(held) };
+      }
+      return { ...s, chats, items, closedErrors, order: prev ? s.order : [...s.order, a.chat.id] };
     }
     case 'chat:removed': {
       if (!s.chats[a.chatId]) return s;
@@ -105,9 +120,17 @@ export function reduce(s: AppState, a: Action): AppState {
       delete items[a.chatId];
       const queued = { ...s.queued };
       delete queued[a.chatId];
-      return { ...s, chats, items, queued, order: s.order.filter(id => id !== a.chatId), pending: s.pending.filter(p => p.chatId !== a.chatId) };
+      const closedErrors = { ...s.closedErrors };
+      delete closedErrors[a.chatId];
+      return { ...s, chats, items, queued, closedErrors, order: s.order.filter(id => id !== a.chatId), pending: s.pending.filter(p => p.chatId !== a.chatId) };
+    }
+    case 'closedErrors': {
+      if (!s.chats[a.chatId]?.closedAt || s.items[a.chatId]) return s;
+      return { ...s, closedErrors: { ...s.closedErrors, [a.chatId]: errorItems(a.items) } };
     }
     case 'chat:item': {
+      // a closed chat whose transcript is not held: one item would pass for the whole list (it loads on demand)
+      if (!s.items[a.chatId] && s.chats[a.chatId]?.closedAt) return s;
       let list = s.items[a.chatId] ?? [];
       // the real user message replaces its optimistic copy (id "local:…", same text)
       if (a.item.kind === 'user' && !a.item.id.startsWith('local:')) {
@@ -221,4 +244,11 @@ export function queuedCount(s: Pick<AppState, 'chats'>): number {
 export function todayCost(s: Pick<AppState, 'chats' | 'usage'>): number {
   if (s.usage) return s.usage.todayUsd;
   return Object.values(s.chats).reduce((a, c) => a + c.costUsd, 0);
+}
+
+/** at most this many error items kept per closed chat (the newest) */
+export const CLOSED_ERRORS_MAX = 50;
+/** The items «Errori» counts (dashboard/data.ts observedErrors): failed tools, turns ended with an error, error lines. */
+export function errorItems(items: readonly ChatItem[]): ChatItem[] {
+  return items.filter(i => (i.kind === 'tool' && i.status === 'error') || (i.kind === 'result' && i.isError && !i.interrupted) || (i.kind === 'system' && i.level === 'error')).slice(-CLOSED_ERRORS_MAX);
 }

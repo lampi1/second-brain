@@ -12,7 +12,7 @@ import{t}from'../i18n';
 import type { CliStatus, EngineInfo } from '@shared/contract';
 import { useNow } from '../lib/clock';
 import { useEngines } from '../lib/engines';
-import { queuedCount, runningCount } from '../store/state';
+import { firstQueuedOf, queuedOf, runningOf } from '../lib/chat-derived';
 import { cliCheck, cliLogin, useApp } from '../store/store';
 import { openModal, ui } from '../store/ui';
 import { back, focusChat, forward, go, newBrowser, nextThing, recentPlaces, stopAllAsk, toggleCenter } from '../actions';
@@ -188,9 +188,10 @@ export function TopBar() {
   const inQueue = later && waiting > 0; // "Da rispondere" (not the CPU queue below)
   // "Rispondi dopo" on with nothing waiting: say it, a click turns the popups back on (lib/later.ts)
   const paused = later && waiting === 0;
-  const running = useApp(s => runningCount(s));
-  const queued = useApp(s => queuedCount(s));
-  const firstQueued = useApp(s => Object.values(s.chats).filter(c => c.queued && !c.closedAt).sort((a, b) => a.queued!.position - b.queued!.position)[0]?.id ?? null);
+  // once per chats object, not at every store notify (lib/chat-derived.ts)
+  const running = useApp(s => runningOf(s.chats));
+  const queued = useApp(s => queuedOf(s.chats));
+  const firstQueued = useApp(s => firstQueuedOf(s.chats));
   const version = useApp(s => s.info?.version);
   const head = useRef<HTMLElement>(null);
   const main = useRef<HTMLDivElement>(null);

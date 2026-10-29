@@ -344,6 +344,30 @@ describe('ChatManager', () => {
     }
   }, 260000);
 
+  // 2026-10-29: archived without an engine of its own left (the auto-close, ✕ before its 6-second Annulla ends), the
+  // tools of the engines it outlived were never reaped: only close() did it, and pruned archives dropped them
+  it('archiving a chat reaps the tools its earlier engines kept, even with no engine running now', async () => {
+    const e = env();
+    const was = process.env.SB_REAP;
+    process.env.SB_REAP = '1';
+    const { m } = manager(e);
+    const orphans = (): number[] => fakeLog(e.argLog).flatMap(l => (l.orphan ? [l.orphan] : []));
+    try {
+      const old = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'orphan', title: 'Orchestrator', orchestrator: true });
+      const pid = (await waitFor(() => fakeLog(e.argLog).find(l => l.argv), 'start')).pid;
+      await waitFor(() => orphans().length === 2, 'the background command and its child');
+      await waitFor(() => m.list().find(c => c.id === old.id)?.state === 'idle', 'idle');
+      await m.create({ harness: 'claude', cwd: e.cwd, title: 'Orchestrator', orchestrator: true, replaces: old.id }); // kept, as above
+      await waitFor(() => !alive(pid), 'the old engine exited');
+      expect(orphans().every(alive)).toBe(true);
+      await m.archive(old.id); // no engine now: before, nothing reaped what the old one kept
+      await waitFor(() => orphans().every(p => !alive(p)), 'its tools reaped at the archive', 180000);
+    } finally {
+      if (was === undefined) delete process.env.SB_REAP; else process.env.SB_REAP = was;
+      for (const p of orphans()) killStray(p);
+    }
+  }, 260000);
+
   // finding 5: only full UUIDs reach --resume
   it('resumes only full session UUIDs', async () => {
     const e = env();

@@ -56,6 +56,24 @@ describe('MCP gateway', () => {
     expect(JSON.stringify(svc.state())).not.toContain('pat-secret');
   });
 
+  // 2026-10-29: every open chat had its own copy of each connector; closing chats left them running 10 more minutes
+  it('closing a chat ends its connections at once, and only its own', async () => {
+    const { svc, base, endpoints } = await setup({ c1: { roles: ['artisan'], policy: null }, c2: { roles: ['artisan'], policy: null } });
+    const closed: string[] = [];
+    svc.save({ def: docs });
+    const urls = ['c1', 'c2'].map(id => svc.launch(id, base).servers[0]!.url);
+    for (const url of urls) expect(await toolNames(url)).toEqual(['list_items', 'update_item']);
+    expect(endpoints).toHaveLength(2);
+    // the fakes record their close through the endpoint they were opened with
+    const gw = svc.gateway as unknown as { conns: Map<string, { up: { close(): void } }> };
+    for (const [key, c] of gw.conns) { const close = c.up.close.bind(c.up); c.up.close = () => { closed.push(key); close(); }; }
+    svc.gateway.closeChat('c1');
+    expect(closed).toEqual(['c1|docs']);
+    expect([...gw.conns.keys()]).toEqual(['c2|docs']);
+    expect(await toolNames(urls[0]!)).toEqual(['list_items', 'update_item']); // a reopened chat opens it again
+    expect(endpoints).toHaveLength(3);
+  });
+
   it('a role limited on the card sees only the reading tools, and a call of another one is refused', async () => {
     const { svc, base, calls } = await setup({ c1: { roles: ['herald'], policy: null } });
     svc.save({ def: docs });

@@ -24,6 +24,7 @@ let atStart: Set<string> | null = null;
 let groups: ToastGroup[] = [];
 /** event ids that already chimed (an event sent twice chimes once) */
 const chimed = new Set<string>();
+const CHIMED_MAX = 1000;
 const toneOf = (kind: string): OverlayToast['tone'] => (kind === 'error' || kind === 'chat-failed' || kind.endsWith('-error') || kind.endsWith('-blocked') ? 'err' : kind === 'chat-waiting' ? 'attention' : kind === 'budget' || kind === 'login' || kind === 'task-alert' ? 'warn' : kind === 'chat-done' ? 'ok' : 'info');
 
 const keyOf = (r: { chatId: string; id: string }) => `${r.chatId}/${r.id}`;
@@ -102,6 +103,8 @@ export function startLayer(next: () => void, openLink: (link: string) => void): 
     const s = app.get();
     const ids = toChime(evs, chimed, { soundOn: s.settings?.tasks?.sound !== false, muted: s.settings?.mute ?? {}, dnd: dndActive(now()) });
     for (const id of ids) { chimed.add(id); const k = evs.find(e => e.id === id)?.kind; if (k && EVENT_SOUND[k]) ring(EVENT_SOUND[k]); }
+    // an event re-sent is a recent one: ids past the feed's window (state.ts MAX_FEED) never come back, they go
+    if (chimed.size > CHIMED_MAX) { const keep = new Set([...app.get().feed, ...evs].map(e => e.id)); for (const id of chimed) if (!keep.has(id)) chimed.delete(id); }
   });
   // every new request rings (several arriving together ring once: sounds.ts BURST_MS), also while "Rispondi dopo" keeps them quiet
   sb.on('pending:added', () => {

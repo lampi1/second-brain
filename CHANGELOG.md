@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- Smooth at the end of the day (ADR 0187): closing, auto-closing or pruning a chat now ends the tools and connector
+  processes it started; connectors and background brain tools run at below-normal priority; closed chats' transcripts
+  leave the window's memory; long transcripts show their tail with «Mostra precedenti»; an «app health» line in the
+  perf log every 10 minutes.
 - Honest classifiers and statistics (ADR 0186): one taxonomy of work kinds, one success definition on the agent card,
   estimates only for new requests, no skill suggester or exploration, role versions only for text, skills, model or
   tier, Apprendimento counts the agents' lessons; dead metrics and orphan files removed.

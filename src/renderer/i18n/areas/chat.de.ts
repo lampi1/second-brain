@@ -71,6 +71,7 @@ export const chatDe: typeof chatIt = {
   'chat.items.coldDividerNote': 'Die vorige Sitzung war über eine Stunde inaktiv: diese startet von ihrer Übergabenotiz, statt alles neu zu lesen',
   'chat.items.coldNoteButton': 'Übergabenotiz',
   'chat.items.coldPastSession': (p: { count: number }) => p.count === 1 ? 'Vorige Sitzung · 1 Zeile' : `Vorige Sitzung · ${p.count} Zeilen`,
+  'chat.items.showEarlier': (p: { count: number }) => p.count === 1 ? 'Frühere anzeigen · 1 Zeile' : `Frühere anzeigen · ${p.count} Zeilen`,
   'chat.items.resultError': 'Turn mit Fehler beendet',
   'chat.items.resultInterrupted': 'Turn von dir unterbrochen',
   'chat.criterionMet': 'Kriterium erfüllt',

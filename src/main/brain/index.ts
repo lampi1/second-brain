@@ -66,6 +66,8 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   let folderCheck: { root: string; at: number; problem: string | null } | null = null;
   // Discovery is only a suggestion in the interview. Until an explicit choice, start without a brain.
   const node = electronNode();
+  // the background polls nobody waits on (cost, chats, estimates) run below normal priority (node.ts, ADR 0187)
+  const bgNode = { ...node, lowPriority: true };
   const file = (f: string) => path.join(ctx.userData, f);
   const feed: FeedEvent[] = [];
   const budgetListeners = new Set<(a: BudgetAlert) => void>();
@@ -140,7 +142,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   // the Miglioramento page of a brain without the loop's CLI: an empty status from main, never the server's stack
   localApi.set('/api/improve', () => learnStatusWithoutCli(cfg.get().brainRoot));
   // the brain's estimates table (ops/state/estimates.json); tests only read it, never rescan transcripts
-  const estNode = { exe: node.exe, get env() { return { ...node.env, ...(ctx.scriptEnv?.() ?? {}) }; } };
+  const estNode = { exe: node.exe, lowPriority: true, get env() { return { ...node.env, ...(ctx.scriptEnv?.() ?? {}) }; } };
   const brainEst = new BrainEstimates(() => cfg.get().brainRoot, estNode);
   const routing = new Routing(() => cfg.get().brainRoot, file('routing-api.json'));
   const models = new ModelsSeenStore(file('cursor-models.json'));
@@ -183,7 +185,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     const product = !!root && isProduct(root);
     const costScript = product ? brainScript(root!, 'ops/tools/cost.mjs') : null;
     usage = new UsageMonitor({
-      root, node, claudeConfig: testing ? null : claudeConfigFile(env),
+      root, node: bgNode, claudeConfig: testing ? null : claudeConfigFile(env),
       ...(costScript ? { costInputs: new FileRevision(costInputs(root!, costScript, node.env)) } : {}),
       // tests point it at their own folders (never the user's ledger or Downloads)
       ...(!testing || env.SB_CURSOR_LEDGER ? { cursor: () => cursorToday({ dir: env.SB_CURSOR_LEDGER || undefined, downloads: env.SB_DOWNLOADS || undefined }) } : {}),
@@ -201,12 +203,12 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
       if (migration === 'migrated') log.info('settings', 'retired brain messaging switch migrated to always available', { data: { key: 'crossHarnessMessages', from: false, to: true } });
       else if (migration === 'unreadable') log.warn('settings', 'legacy brain settings unreadable: left unchanged', { hint: 'the app still exchanges messages; update the installed inbox tool to ignore the retired switch outside the app' });
     } catch (e) { log.warn('settings', 'legacy brain messaging migration not saved', { cause: errText(e), hint: 'the app still exchanges messages; the next start retries, or update the installed inbox tool' }); }
-    live = new Live({ root, stateFile: file('live-state.json'), node, onEvents: publishRaw, onFile: onBrainFile,
+    live = new Live({ root, stateFile: file('live-state.json'), node: bgNode, onEvents: publishRaw, onFile: onBrainFile,
       ...(product ? { chatInputs: new FileRevision(chatInputs(root, node.env)) } : {}), ...(ctx.skipChat ? { skipChat: ctx.skipChat } : {}) });
     try { await live.start(); } catch (e) { log.error('brain', 'live feed failed to start', { cause: errText(e), hint: `check the brain folder ${root}` }); }
     // estimates from day one: past chats from cost.mjs, a little after boot (it reads 30 days of transcripts)
     backfillTimer = setTimeout(() => {
-      void ledger.backfill(root, node).then(r => { if (r.skipped) log.info('brain', 'estimates backfill skipped', { data: { why: r.skipped } }); })
+      void ledger.backfill(root, bgNode).then(r => { if (r.skipped) log.info('brain', 'estimates backfill skipped', { data: { why: r.skipped } }); })
         .catch(e => log.warn('brain', 'estimates backfill failed', { data: { error: errText(e) } }));
     }, testing ? 1000 : 20e3);
     if (!testing) brainEst.schedule(); // a fresh table soon after boot (the chats run while the app was closed)

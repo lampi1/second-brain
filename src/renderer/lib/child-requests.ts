@@ -4,24 +4,41 @@
 // (the owner, 2026-10-19: no duplicated popups): requestHost names the one chat that shows it, the asker when its own
 // chat is open, else its nearest open ancestor, else the asker's own card or strip (its "Ti aspetta" line); never the
 // Orchestrator, which only learns that a chat waits. The questions window shows the same request instead of the panel
-// while it is on (ChatTile.tsx InWindowLine). Pure: used by ChatTile.tsx and DelegationCard.tsx; pinned by
+// while it is on (ChatTile.tsx InWindowLine). The descendants are found once per chats object for every tile
+// (lib/memo.ts). Pure: used by ChatTile.tsx and DelegationCard.tsx; pinned by
 // test/unit/chat-tree.test.ts.
 import type { ChatSummary, PendingRequest } from '@shared/contract';
+import { memoLast, memoPerKey } from './memo';
 
 export interface ChildRequest { req: PendingRequest; chat: Pick<ChatSummary, 'id' | 'title' | 'harness' | 'agent'> }
 
-export function childRequestsFor(parentId: string, chats: Readonly<Record<string, ChatSummary | undefined>>, pending: readonly PendingRequest[]): ChildRequest[] {
-  const below = new Set<string>();
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const c of Object.values(chats)) {
-      if (!c?.parentId || below.has(c.id) || c.closedAt) continue;
-      if (c.parentId === parentId || below.has(c.parentId)) { below.add(c.id); grew = true; }
-    }
+type Chats = Readonly<Record<string, ChatSummary | undefined>>;
+const NONE: ChildRequest[] = [];
+
+/** open chat id → its open delegated children, built once per chats object (every tile asks on every store notify) */
+const openChildren = memoLast((chats: Chats): ReadonlyMap<string, readonly string[]> => {
+  const kids = new Map<string, string[]>();
+  for (const c of Object.values(chats)) {
+    if (!c?.parentId || c.closedAt) continue;
+    const list = kids.get(c.parentId);
+    if (list) list.push(c.id); else kids.set(c.parentId, [c.id]);
   }
+  return kids;
+});
+/** every open descendant of a chat (a cycle in broken data stops the walk; the chat itself never counts) */
+const descendants = memoPerKey((chats: Chats, parentId: string): ReadonlySet<string> => {
+  const kids = openChildren(chats), below = new Set<string>(), todo = [parentId];
+  while (todo.length) for (const k of kids.get(todo.pop()!) ?? []) if (!below.has(k)) { below.add(k); todo.push(k); }
   below.delete(parentId);
-  return pending.filter(p => below.has(p.chatId)).map(req => ({ req, chat: chats[req.chatId]! }));
+  return below;
+});
+
+export function childRequestsFor(parentId: string, chats: Chats, pending: readonly PendingRequest[]): ChildRequest[] {
+  if (!pending.length) return NONE;
+  const below = descendants(chats, parentId);
+  if (!below.size) return NONE;
+  const out = pending.filter(p => below.has(p.chatId)).map(req => ({ req, chat: chats[req.chatId]! }));
+  return out.length ? out : NONE;
 }
 
 /** The view's state that decides which chat is open on screen. */

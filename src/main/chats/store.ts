@@ -353,6 +353,11 @@ export class ChatStore {
 
   /** Update boundary: throw on any failure, never fall back to a direct overwrite or claim a logged error is saved. */
   checkpoint(chats: StoredChat[]): void {
+    const t = performance.now();
+    // named in the stall log: a synchronous write + fsync + read-back at a user's click (answer, message, delivery)
+    try { this.checkpointNow(chats); } finally { slowStep('chats.json checkpoint', performance.now() - t); }
+  }
+  private checkpointNow(chats: StoredChat[]): void {
     const body = `${JSON.stringify({ version: 2, chats })}\n`;
     this.last = null;
     this.gen++;

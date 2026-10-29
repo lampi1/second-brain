@@ -30,12 +30,20 @@ export const STREAM_MS = 16;
 export const STREAM_HIDDEN_MS = 250;
 export const useApp = app.use;
 
+/** Chats closed with the ✕ whose «Annulla» is still on screen (closeChat): their items stay, so the undo shows the
+ *  transcript at once; the chat leaves for good (chat:removed) when the toast expires. */
+const undoableCloses = new Set<string>();
+
 export function dispatch(a: Action): void {
   const prev = app.get();
+  if (a.type === 'chat:updated' && undoableCloses.has(a.chat.id) && !a.keep) a = { ...a, keep: true };
   const next = reduce(prev, a);
   if (next === prev) return;
   app.set(next);
+  if (a.type === 'chat:removed') forgetChat(a.chatId);
   if (a.type === 'chat:updated') {
+    // reopened (Riapri, Annulla, an agent's reopen): a closed chat let go of its items (state.ts), they come back now
+    if (prev.chats[a.chat.id]?.closedAt && !a.chat.closedAt && !next.items[a.chat.id]) void loadItems(a.chat.id);
     // a message still on its way to main: an idle reported meanwhile is older than it (the turn it starts reports
     // running once main has it), so the queue waits for its own turn (sendNow's end checks again)
     const msg = inFlight.has(a.chat.id) ? null : toFlush(prev.chats[a.chat.id], a.chat, next.queued[a.chat.id]);
@@ -47,6 +55,20 @@ export function dispatch(a: Action): void {
     const c = next.chats[a.req.chatId];
     announce(t('appText.store.waitsForYou', { title: c?.title ?? t('appText.store.aChat'), req: a.req.title }));
   }
+}
+
+/** Modules that keep something per chat outside the store (drafts, caches, timestamps) purge it when the chat leaves
+ *  the app for good, so a day of chats leaves nothing behind (ChatInput.tsx, AutoCloser.tsx). */
+const removedHooks = new Set<(chatId: string) => void>();
+export function onChatRemoved(fn: (chatId: string) => void): () => void {
+  removedHooks.add(fn);
+  return () => { removedHooks.delete(fn); };
+}
+function forgetChat(chatId: string): void {
+  undoableCloses.delete(chatId);
+  notes.delete(chatId);
+  for (const k of attempts.keys()) if (k.startsWith(`${chatId}/`)) attempts.delete(k);
+  for (const fn of removedHooks) { try { fn(chatId); } catch { /* one module's purge never stops the others */ } }
 }
 
 const fail = (what: string) => (e: unknown) => { toast(`${what}: ${errText(e)}`, 'err'); };
@@ -114,7 +136,8 @@ export function startStore(): void {
     dispatch({ type: 'init', chats, pending, tabs, feed, usage, info });
     loaded = true;
     for (const a of buffer.splice(0)) dispatch(a);
-    for (const c of chats) if (!c.routineArchived) void loadItems(c.id);
+    // closed chats load on demand (a view that shows one, a reopen): a day of archived transcripts is not read at start
+    for (const c of chats) if (!c.routineArchived && !c.closedAt) void loadItems(c.id);
   });
 }
 
@@ -153,6 +176,21 @@ function syncSettings(): void {
 
 export async function loadItems(chatId: string): Promise<void> {
   try { dispatch({ type: 'items', chatId, items: await sb.invoke('chat:items', { chatId, limit: CHAT_WINDOW_ITEMS, maxBytes: CHAT_WINDOW_BYTES }) }); } catch { /* the tile shows its empty state */ }
+}
+
+/** «Errori» on the Qualità page counts the closed chats' errors too: after a start, the chats closed in an earlier run
+ *  have no items here (they load on demand), so their errors are read once, one chat at a time, keeping only the error
+ *  items (state.ts closedErrors). Once per run; a chat whose items are already here is skipped. */
+let closedErrorsRead = false;
+export async function loadClosedErrors(): Promise<void> {
+  if (closedErrorsRead) return;
+  closedErrorsRead = true;
+  for (const c of Object.values(app.get().chats)) {
+    const s = app.get();
+    if (!c.closedAt || c.routineArchived || s.items[c.id] || s.closedErrors[c.id]) continue;
+    try { dispatch({ type: 'closedErrors', chatId: c.id, items: await sb.invoke('chat:items', { chatId: c.id, limit: CHAT_WINDOW_ITEMS, maxBytes: CHAT_WINDOW_BYTES }) }); } catch { /* left out */ }
+    await new Promise(r => setTimeout(r, 30)); // one read at a time, the window keeps its frames
+  }
 }
 
 export async function refreshInfo(): Promise<void> {
@@ -526,19 +564,22 @@ export function closeChat(chatId: string): void {
   const wasFocus = u.focusMode === chatId ? chatId : null;
   if (wasMax || wasFocus) ui.set(s => ({ ...s, maximized: wasMax ? null : s.maximized, focusMode: wasFocus ? null : s.focusMode, lanePeek: wasFocus ? false : s.lanePeek }));
   hideChat(chatId, true);
+  undoableCloses.add(chatId);
   let undone = false;
   const closing = sb.invoke('chat:archive', { chatId, auto: false, undoable: true }).then(chat => { if (!undone) dispatch({ type: 'chat:updated', chat }); return true; },
-    e => { hideChat(chatId, false); fail(t('chat.close.failed'))(e); return false; });
+    e => { undoableCloses.delete(chatId); hideChat(chatId, false); fail(t('chat.close.failed'))(e); return false; });
   const timer = setTimeout(() => {
     pendingCloses.delete(timer);
     if (undone) return;
+    undoableCloses.delete(chatId);
     void closing.then(ok => ok ? sb.invoke('chat:close', { chatId }) : undefined).catch(fail(t('chat.close.failed'))).finally(() => hideChat(chatId, false));
   }, 6000);
   pendingCloses.add(timer);
   toast(t('chat.close.done', { title: c.title }), 'info', { label: t('chat.close.undo'), run: () => {
     undone = true; clearTimeout(timer); pendingCloses.delete(timer);
+    // the items stay held until the reopen lands: main's own «closed» event may still arrive after this click
     void closing.then(ok => ok ? sb.invoke('chat:reopen', { chatId }).then(chat => dispatch({ type: 'chat:updated', chat })) : undefined)
-      .catch(fail(t('chat.close.reopenFailed'))).finally(() => hideChat(chatId, false));
+      .catch(fail(t('chat.close.reopenFailed'))).finally(() => { undoableCloses.delete(chatId); hideChat(chatId, false); });
     if ((wasMax || wasFocus) && !ui.get().maximized && !ui.get().focusMode) ui.set(s => ({ ...s, maximized: wasMax, focusMode: wasFocus }));
   } }, 6000);
 }

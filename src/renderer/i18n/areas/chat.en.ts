@@ -71,6 +71,7 @@ export const chatEn: typeof chatIt = {
   'chat.items.coldDividerNote': 'The previous session was idle for over an hour: this one resumes from its handoff note instead of re-reading it all',
   'chat.items.coldNoteButton': 'handoff note',
   'chat.items.coldPastSession': (p: { count: number }) => p.count === 1 ? 'Previous session · 1 line' : `Previous session · ${p.count} lines`,
+  'chat.items.showEarlier': (p: { count: number }) => p.count === 1 ? 'Show earlier · 1 line' : `Show earlier · ${p.count} lines`,
   'chat.items.resultError': 'Turn ended with error',
   'chat.items.resultInterrupted': 'Turn interrupted by you',
   'chat.criterionMet': 'Criterion met',

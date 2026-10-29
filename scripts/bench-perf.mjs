@@ -63,17 +63,21 @@ await page.addInitScript(() => {
 await page.reload();
 await page.waitForLoadState('domcontentloaded');
 await page.evaluate(() => { window.sb.on('chat:item', () => { globalThis.__bench.items++; }); });
+// the first-run setup opens on a fresh profile: «Later», like a user who set up before
+await page.getByRole('button', { name: /^(Later|Più tardi|Später)$/ }).click({ timeout: 8000 }).catch(() => {});
 
 const cwd = tmp('sb-bench-cwd-');
 await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, title: 'Orchestrator', orchestrator: true }), cwd);
 const ids = [];
 for (let i = 0; i < CHATS; i++) ids.push((await page.evaluate(([dir, n, prompt]) => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, prompt, title: `Bench ${n}` }), [cwd, i, promptOf(i)])).id);
+// strips start folded (ADR 0068): every chat's work open, as a user watching them all (and its composer typed into)
+for (const id of ids) await page.getByTestId(`chat-expand-${id}`).click({ timeout: 10000 }).catch(() => {});
 // at rest: every tile is there, the working chats show their running tool, the rest have answered or asked
 if (IDLE) await page.waitForFunction(([n, w, done]) => document.querySelectorAll('[data-testid^="tile-chat-"]').length >= n
   && document.querySelectorAll('[data-testid^="typing-chat"], [data-testid^="tile-chat-"] [data-testid^="typing-"]').length >= w
   && [...document.querySelectorAll('[data-testid^="tile-chat-"]')].filter(t => /Ciao dal motore/.test(t.textContent ?? '')).length >= done
   && !document.querySelector('.md.streaming'), [CHATS, WORKING, CHATS - WORKING - ASKING], { timeout: 60000 }).catch(async e => { console.error(await page.evaluate(() => [...document.querySelectorAll('[data-testid^="tile-chat-"]')].map(t => (t.textContent ?? '').slice(0, 160)).join('\n'))); throw e; });
-else await page.waitForSelector('.md.streaming', { timeout: 20000 });
+if (!IDLE) await page.waitForSelector('.md.streaming', { timeout: 20000, state: 'attached' });
 await page.waitForTimeout(IDLE ? 5000 : 3000); // warm-up: every chat is streaming (or done and settled)
 
 if (process.env.BENCH_DEBUG) console.log(await page.evaluate(() => document.querySelector('[data-testid^="tile-chat-"]')?.innerText));

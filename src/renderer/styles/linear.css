@@ -43,9 +43,9 @@
 @keyframes panel-enter { from { opacity: .6; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes picker-enter { from { opacity: 0; transform: translateY(-4px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes picker-enter-up { from { opacity: 0; transform: translateY(4px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
-/* the running dot breathes in steps from lib/beat.ts (html[data-blink]), never as an infinite CSS animation ("Lag nell'app") */
+/* the running dot breathes in steps from lib/beat.ts ([data-blink] on the dot), never as an infinite CSS animation ("Lag nell'app") */
 .pill-run .pill-dot { box-shadow: 0 0 0 4px var(--blue-bg); }
-html[data-blink="1"] .pill-run .pill-dot { box-shadow: 0 0 0 0 var(--blue-bg); }
+.pill-run .pill-dot[data-blink="1"] { box-shadow: 0 0 0 0 var(--blue-bg); }
 @media (prefers-reduced-motion: reduce) {
   .orchestrator-column.orchestrator-ov, .page-body, .popover, .ui-select-list { animation: none; }
   .btn, .bx-btn, .icon-btn, .ui-select, .ui-select-chevron, .orchestrator-column-resize, .th-ctx-bar b, .ub-meter b { transition: none; }

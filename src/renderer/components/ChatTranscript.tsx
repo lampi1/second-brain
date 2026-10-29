@@ -1,11 +1,13 @@
 // Streaming text subscribes independently of the tile header and composer. Only on-screen transcripts render chunks;
 // offscreen lists stay mounted with their last snapshot, so reading position and drafts survive workspace scrolling.
+// A folded one (a collapsed strip: content-visibility hidden, agent-strips.css) also drops its "sta scrivendo" line and
+// stops its rows' clocks, so nothing ticks where nobody can see it; expanding brings both back and follows the bottom.
 import { memo, useEffect, useRef, useState } from 'react';
 import type { ChatItem } from '@shared/contract';
 import {t} from '../i18n';
 import { visibleSnapshot } from '../lib/visible-snapshot';
 import { useApp } from '../store/store';
-import { ItemList, turnActivity, Typing } from './ChatItems';
+import { ItemList, TranscriptLiveCtx, turnActivity, Typing } from './ChatItems';
 
 const EMPTY: readonly ChatItem[] = [];
 export const ChatTranscript = memo(function ChatTranscript({ chatId, busy, expanded, readOnly = false }: { chatId: string; busy: boolean; expanded: boolean; readOnly?: boolean }) {
@@ -27,7 +29,7 @@ export const ChatTranscript = memo(function ChatTranscript({ chatId, busy, expan
   const items = useApp(s => snapshot.current(s.items[chatId], active));
   return <div ref={ref} className="chat-transcript" data-transcript-visible={active ? 'true' : 'false'}>
     {items === undefined ? <div className="items-wrap"><div className={`items skeleton${active ? '' : ' still'}`} aria-label={t('product.transcriptLoading')}><i /><i /><i className="short" /></div></div> :
-      <ItemList chatId={chatId} readOnly={readOnly} items={items ?? EMPTY} empty={t('product.transcriptEmpty')}
-        footer={busy ? <Typing what={turnActivity(items)} testid={`typing-${chatId}`} items={items} /> : null} />}
+      <TranscriptLiveCtx.Provider value={expanded}><ItemList chatId={chatId} readOnly={readOnly} items={items ?? EMPTY} empty={t('product.transcriptEmpty')}
+        footer={busy && expanded ? <Typing what={turnActivity(items)} testid={`typing-${chatId}`} items={items} /> : null} /></TranscriptLiveCtx.Provider>}
   </div>;
 });
