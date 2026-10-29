@@ -7,6 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentRun } from '../shared/agents';
+import type { KindModelCard } from '../shared/brain-model';
 
 const DAY = 86400e3;
 /** a small deterministic generator (LCG): the same sequence every run */
@@ -91,4 +92,14 @@ export function writeDemoClassifiers(brainRoot: string, userData: string, now: n
     fs.writeFileSync(jobs, `${out.join('\n')}\n`);
   }
   return { runs };
+}
+
+/** The demo's kind-of-work-by-examples card (ADR 0197): fixed numbers, as a trained model on 140 runs would show them. */
+export function demoKindModel(now: number): KindModelCard {
+  const labels = ['app-feature', 'bug-fix', 'investigation', 'review', 'writing', 'altro'];
+  return { state: 'ready', examples: 140, minPerKind: 5, threshold: 0.81, at: now,
+    perKind: [{ kind: 'bug-fix', n: 46 }, { kind: 'app-feature', n: 31 }, { kind: 'review', n: 22 }, { kind: 'altro', n: 17 }, { kind: 'investigation', n: 14 }, { kind: 'writing', n: 10 }],
+    kinds: labels.slice(0, -1),
+    test: { n: 29, agree: 24, labels, matrix: [[6, 1, 0, 0, 0, 0], [0, 8, 1, 0, 0, 0], [0, 0, 2, 0, 0, 1], [0, 0, 0, 4, 0, 0], [0, 0, 0, 0, 2, 0], [1, 0, 0, 0, 1, 2]] },
+    altroProposed: { n: 2, of: 4 } };
 }

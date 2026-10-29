@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
-import type { BrainChange, BrainModelState, ClassifiersState, LogScan, MaintenanceJobId, MaintenanceRun, LessonStub, MigrationReport } from '../../shared/brain-model';
+import type { BrainChange, BrainModelState, ClassifiersState, LogScan, MaintenanceJobId, MaintenanceRun, LessonStub, MigrationReport, KindModelCard } from '../../shared/brain-model';
 import { MAINTENANCE_JOBS } from '../../shared/brain-model';
 import type { RoutingInfo } from '../../shared/contract';
 import type { AgentCatalogService } from '../agents/catalog';
@@ -60,6 +60,8 @@ export interface BrainModelDeps {
   /** the brain's scripts (brain/scripts.ts): a script's file by its id, and the hook that tells the Script tab it changed;
    *  absent = scripts cannot be removed here (ADR 0122) */
   scripts?: { file: (id: string) => string; changed: () => void };
+  /** the kind-of-work classifier by examples (kind-model.ts, ADR 0197): its Classificatori card; absent = no card */
+  kindModel?: () => Promise<KindModelCard>;
   /** run the jobs by themselves (timers); false in the test suites */
   auto: boolean;
   now?: () => number;
@@ -418,7 +420,7 @@ export class BrainModelService {
   }
   classifiers(): Promise<ClassifiersState> {
     return classifiersState({ root: this.root(), routing: this.d.routing(), runs: (() => { try { return this.d.runs(); } catch { return []; } })(), profiles: this.profiles(),
-      jobs: () => readJobs(path.join(this.d.userData, 'jobs.jsonl')) }, this.now());
+      jobs: () => readJobs(path.join(this.d.userData, 'jobs.jsonl')), ...(this.d.kindModel ? { kindModel: this.d.kindModel } : {}) }, this.now());
   }
 
   /** The structural migration once, a minute after the start. Nothing else runs by itself: the cleanup, the memory's

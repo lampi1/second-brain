@@ -309,6 +309,29 @@ export interface ClassifiersState {
   quality: { key: string; label: string; weeks: { week: string; runs: number; success: number | null; avgCostUsd: number | null }[] }[];
   /** one card per classifier that keeps a record (main/brainmodel/classifier-cards.ts); the page draws them as a grid */
   cards?: ClassifierCard[];
+  /** the kind of work by examples (main/brainmodel/kind-model.ts, ADR 0197); absent from an older main or the demo */
+  kindModel?: KindModelCard;
+}
+/** The kind-of-work classifier by examples (ADR 0197): nearest centroid over the local e5 embeddings of the user's own
+ *  ended runs with a verified outcome, labelled by the word rule (taskOf), with «altro» below a calibrated similarity.
+ *  state: ready = trained and tested; few = under MIN_PER_KIND examples for two kinds (the word rule decides); no-model =
+ *  the local embedder is not ready (the word rule decides); busy = embedding the examples now, at low pace. */
+export interface KindModelCard {
+  state: 'ready' | 'few' | 'no-model' | 'busy';
+  /** labelled runs (verified outcome, a goal) and their count per kind of the word rule, «altro» included */
+  examples: number;
+  perKind: { kind: string; n: number }[];
+  /** the kinds with enough examples, which have a centroid */
+  kinds: string[];
+  minPerKind: number;
+  /** cosine below which it answers «altro», calibrated on 20% of the examples kept apart from the test */
+  threshold: number | null;
+  /** on the 20% held out (by run id, never trained on): rows = the word rule's kind, columns = the classifier's; labels
+   *  = the trained kinds then «altro». agree = the diagonal; it measures agreement with the word rule, not the truth */
+  test: { n: number; agree: number; labels: string[]; matrix: number[][] } | null;
+  /** of the held-out runs the word rule called «altro», how many the classifier gives a kind (unverifiable: shown apart) */
+  altroProposed: { n: number; of: number } | null;
+  at: number;
 }
 // ── Classifier cards: each classifier's numbers, its weeks and its slices, for the Classificatori grid ───────────────
 /** A share with the count it rests on; value null = no case yet (never zero). */
