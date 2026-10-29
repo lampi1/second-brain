@@ -34,9 +34,10 @@ outcome. Eleven steps, each its own commit on `claude/project-thread-zsljzi`.
    feature→app-feature, research→investigation, question/other→altro). On the holdout fixture `taskOf` without brain
    rules gets **28/30**, the old classifier mapped to task kinds **16/30**. Removed from `brain/routing.ts`: `explore`,
    `EXPLORE_MIN`, the arm counts, `statsLine`, `freshReason`, `kindStats`, `allKindStats` and the generic
-   title-prefix area (**7 exports, 7 Italian keys**). `agentStatsLine`, `match` and `resolve` stay: «Nuova chat», the
-   Orchestrator restart and the role table still use the table path. Area rows now match only on an explicit area or
-   app code (`App · …`, `Pers · App/second-brain`); a «Shop · …» title no longer picks a row by its label.
+   brain's `kinds` rules for title labels (**7 exports, 7 Italian keys**). `agentStatsLine`, `match` and `resolve` stay:
+   «Nuova chat», the Orchestrator restart and the role table still use the table path. A title label («Shop · …») is
+   still its area, so the owner's area rows keep matching; a label that names a kind of work («Fix · …») is read with
+   the one taxonomy's words instead of the brain's rules.
    `routing.json`'s `exploration` field is kept and read (old tables load, `app_routing_save` no longer takes it);
    old `explore` routes still validate.
 6. **jobs.jsonl**: a turn end with the same totals appends nothing; on load the file keeps the last row per id and is

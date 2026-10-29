@@ -158,10 +158,9 @@ describe('routing: task kind and routeChat', () => {
     expect(taskOf('Ordini · x', 'y', undefined)).toBe('altro');
   });
 
-  it('routes a chat: area from the caller (the app space is App; a title label is no area, ADR 0186), kind, version, time', () => {
+  it('routes a chat: area from the title (the app space is App), kind, version, time', () => {
     const table = { version: 5, appliedAt: null, by: null, exploration: 0, costWeight: 7, routes: ROUTES };
-    expect(routeChat({ title: 'Magazzino · smista i ticket', prompt: '', ask: {}, defaults: DEF }, table, REG, { tasks: TASKS }, 42)).toMatchObject({ route: { kind: 'triage', area: 'altro' } });
-    const r = routeChat({ title: 'Magazzino · smista i ticket', area: 'Magazzino', prompt: '', ask: {}, defaults: DEF }, table, REG, { tasks: TASKS }, 42);
+    const r = routeChat({ title: 'Magazzino · smista i ticket', prompt: '', ask: {}, defaults: DEF }, table, REG, { tasks: TASKS }, 42);
     expect(r).toEqual({ harness: 'claude', model: 'claude-haiku-5-5', effort: 'low', route: { policy: 'routing', version: 5, source: 'table', reason: 'triage Magazzino', kind: 'triage', area: 'Magazzino', at: 42 } });
     const app = routeChat({ title: 'Tema scuro', prompt: '', appCode: true, kind: 'app-feature', ask: {}, defaults: DEF }, table, REG, null, 1);
     expect(app).toMatchObject({ model: 'claude-opus-5-5', route: { area: 'App', kind: 'app-feature', source: 'table' } });

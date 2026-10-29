@@ -9,7 +9,7 @@
 // mid-chat restarts the prompt cache. A row the user locked («L'AI può cambiarla» off) no agent may change (agentLimits).
 // ADR 0186 removed exploration (no live path rolled the dice: role chats route by their role, the user's chats and the
 // Orchestrator never explored; the stored rate is kept, used by nothing; an old 'explore' route still loads), the per-kind
-// counts appended to a row's reason and the title labels read as areas. The kinds are the one taxonomy of
+// counts appended to a row's reason and the brain's `kinds` rules for title labels. The kinds are the one taxonomy of
 // shared/work-concepts.ts. Used by brain/index.ts (routing:get/save), appctl/tools.ts and wiring.ts. ADR 0032.
 // Role first (ADR 0083): a role chat takes the engine, model (its tier's) and effort the role resolved to; the table
 // never overrides nor refuses such a chat, it only records its kind and area. The known outcomes of role runs (the user's, the Orchestrator's or a reviewed verdict, issue #72) go to the same
@@ -21,7 +21,7 @@ import { TASK_KINDS } from '../../shared/contract';
 import { MODEL_TIERS } from '../../shared/roles';
 import { enoughVerdicts } from '../../shared/success';
 export { taskOf } from '../../shared/work-concepts';
-import { taskOf } from '../../shared/work-concepts';
+import { conceptOf, taskOf } from '../../shared/work-concepts';
 import { log } from '../log';
 import { engineLabel, engineOf, engines } from '../engines/registry';
 import { availableEngine } from '../../shared/engine-readiness';
@@ -54,15 +54,15 @@ const isApp = (area: string): boolean => APP_AREAS.includes(area);
  *  Its queued work waits behind the other chats' (ADR 0036; chats/manager.ts). */
 export const isAppChat = (title: string): boolean => isApp(areaOf(title));
 
-/** The area of a chat: the app's own (its title starts "App · " or "Pers · App", the user's 2026-10-14 rule "App · any"),
- *  an Orchestrator's, else none ('altro'). ADR 0186: the other title labels ("Alfa · …", once read as an area with the
- *  brain's `kinds` rules) are gone: an area comes from the caller (a DevOps record's project, app_create_chat's app). */
+/** The area of a chat title, as the brain's estimates.mjs reads it: "Alfa · …" → Alfa, "Pers · App: …" → "Pers · App",
+ *  an Orchestrator's own; a label that names a kind of work ("Fix · …", the one taxonomy's words, ADR 0186) or no
+ *  label → 'altro'. The owner's area rows keep matching their titles. */
 export function areaOf(title: string): string {
   const t = String(title ?? '').trim();
   if (/^orchestrator\b/i.test(t)) return 'Orchestrator';
-  if (/^App · /.test(t)) return 'App';
-  if (/^Pers · (App|second-brain)\b/i.test(t)) return 'Pers · App';
-  return 'altro';
+  const m = t.match(/^([A-Za-zÀ-ú-]{2,12}) · (.*)$/);
+  if (!m || conceptOf(m[1]!)) return 'altro';
+  return m[1] + (m[1] === 'Pers' && /^(App|second-brain)\b/i.test(m[2]!) ? ' · App' : '');
 }
 
 // ── the registry ────────────────────────────────────────────────────────────────────────────────────────────────────

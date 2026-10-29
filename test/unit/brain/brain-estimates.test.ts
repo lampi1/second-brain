@@ -15,11 +15,12 @@ const table = (order: string[]): BrainTable => ({
 });
 
 describe('brain estimates table', () => {
-  it('a title gives an area only for the app and an Orchestrator (ADR 0186: other labels are no area)', () => {
+  it('a title label is its area, unless it names a kind of work (ADR 0186: the one taxonomy, no brain rules)', () => {
     expect(areaOf('App · Fix preventivi')).toBe('App');
     expect(areaOf('Pers · App: memoria')).toBe('Pers · App');
     expect(areaOf('Orchestrator')).toBe('Orchestrator');
-    expect(areaOf('Alfa · Fix preventivi')).toBe('altro');
+    expect(areaOf('Alfa · Fix preventivi')).toBe('Alfa');
+    expect(areaOf('Fix · preventivi')).toBe('altro');
     expect(areaOf('Brief mattino')).toBe('altro');
   });
 });

@@ -36,7 +36,7 @@ describe('createRoutedChat', () => {
     const { d, made } = deps();
     await createRoutedChat(d, base({ prompt: BUG, permissionMode: 'acceptEdits', defaults: { harness: 'claude' } }));
     expect(made[0]).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', cwd: 'C:/brain', permissionMode: 'acceptEdits',
-      route: { policy: 'routing', source: 'table', kind: 'bug-fix', area: 'altro', version: 11, at: 7 } });
+      route: { policy: 'routing', source: 'table', kind: 'bug-fix', area: 'Shop', version: 11, at: 7 } });
     expect(made[0]!.prompt).toBe(BUG);
   });
 
@@ -61,11 +61,10 @@ describe('createRoutedChat', () => {
     expect(made[1]).toMatchObject({ harness: 'claude', permissionMode: 'acceptEdits' });
   });
 
-  it('a title label is no area (ADR 0186): an area row is not picked from the title', async () => {
+  it('the title’s area picks an area row', async () => {
     const { d, made } = deps();
     await createRoutedChat(d, base({ title: 'Shop · Login', prompt: 'review della PR del login' }));
-    expect(made[0]!.route).toMatchObject({ kind: 'review', area: 'altro' });
-    expect(made[0]).not.toMatchObject({ model: 'claude-haiku-5-5' });
+    expect(made[0]).toMatchObject({ model: 'claude-haiku-5-5', effort: 'low', route: { kind: 'review', area: 'Shop', source: 'table' } });
   });
 
   it('an unavailable row or default falls back to an allowed engine; an explicit pick is refused', async () => {
