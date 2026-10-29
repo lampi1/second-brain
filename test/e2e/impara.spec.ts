@@ -4,7 +4,9 @@
 // lesson fills the window, the animated board plays each piece's beats (camera, the light along an arrow, «Qui»), the
 // code of the piece shows, a check marks the answer and says why, «Spiegamelo meglio» adds a piece after the current
 // one, the end grades «Spiegalo tu», and the lesson reopens where it was. A topic asks its question first and shows
-// the verified sources of a piece. Screenshots dark.
+// the verified sources of a piece. The review (ADR 0189): subjects on the start page, today's cards one at a time
+// (recall, choice, a part of the diagram to click), a subject's quiz where a forgotten card comes back, a lesson moved
+// to another subject. Screenshots dark.
 import { expect, test } from '@playwright/test';
 import { goPage, launchDemo, shot } from './helpers';
 
@@ -79,6 +81,9 @@ test('learn a PR on the blackboard: pieces, check, better explanation, explain i
     await page.getByTestId('impara-explain-send').click();
     await expect(page.getByTestId('impara-grade')).toContainText('finestra nascosta', { timeout: 10_000 });
     await expect(page.getByTestId('impara-score')).toContainText('0/1');
+    // its review cards: the 4 checks (one came with «Spiegamelo meglio») and the 4 cards written from the verified
+    // facts, in the lesson's subject
+    await expect(page.getByTestId('impara-end-cards')).toContainText('8 carte di ripasso in «Second brain»', { timeout: 10_000 });
     await shot(page, 'impara-end-dark');
 
     // saved: the list has it, and it reopens at the end
@@ -185,6 +190,75 @@ test('a topic: «Chi spiega», the web and the files researched, a question firs
     await page.keyboard.press('Escape');
     await expect(drawer).toHaveCount(0);
     await expect(page.getByTestId('impara-player')).toHaveAttribute('data-full', 'true');
+  } finally {
+    await app.close();
+  }
+});
+
+test('the review: subjects, today’s cards (recall, choice, click on the diagram), a subject’s quiz, moving a lesson', async () => {
+  test.setTimeout(90_000);
+  const { app, page } = await launchDemo();
+  try {
+    await goPage(page, 'impara');
+    const home = page.getByTestId('impara-review-home');
+    await expect(home).toBeVisible();
+    await expect(page.getByTestId('impara-review-due')).toHaveText('2 carte da ripassare oggi');
+    await expect(home).toContainText('1 nuova');
+    await expect(page.getByTestId('impara-subject')).toHaveCount(2);
+    const sec = page.locator('[data-testid="impara-subject"][data-subject="Sicurezza web"]');
+    await expect(sec.getByTestId('impara-subject-recall')).toContainText('memoria stimata oggi:');
+    await shot(page, 'impara-review-home-dark');
+
+    // today's review: the two due cards and the new one, each answered its own way
+    await page.getByTestId('impara-review-start').click();
+    const review = page.getByTestId('impara-review');
+    await expect(review).toHaveAttribute('data-full', 'true');
+    await expect(page.getByTestId('impara-review-count')).toHaveText('1 di 3');
+    const seen = new Set<string>();
+    for (let n = 0; n < 3; n++) {
+      const cardEl = page.getByTestId('impara-review-card');
+      await expect(cardEl).toBeVisible();
+      const kind = (await cardEl.getAttribute('data-kind'))!;
+      seen.add(kind);
+      if (kind === 'recall') await page.getByTestId('impara-review-show').click();
+      else if (kind === 'choice') await page.getByTestId('impara-review-opt-0').click();
+      else {
+        await expect(cardEl.locator('[data-node="vfiles"]')).toBeVisible({ timeout: 15_000 });
+        await cardEl.locator('[data-node="vfiles"]').click();
+        await expect(cardEl.locator('.st-node.right')).toHaveCount(1);
+        await expect(page.getByTestId('impara-review-facts')).toBeVisible();
+        await page.waitForTimeout(500);
+        await shot(page, 'impara-review-node-dark');
+      }
+      await expect(page.getByTestId('impara-review-answer')).toBeVisible();
+      if (kind === 'recall') await shot(page, 'impara-review-recall-dark');
+      await page.getByTestId('impara-review-grade-3').click();
+    }
+    expect([...seen].sort()).toEqual(['choice', 'node', 'recall']);
+    await expect(page.getByTestId('impara-review-score')).toHaveText('3 su 3 al primo colpo');
+    await page.getByTestId('impara-review-done').click();
+    await expect(page.getByTestId('impara-review-due')).toHaveText('Niente in scadenza oggi');
+
+    // a subject's quiz: a wrong answer comes back at the end of the session
+    await sec.getByTestId('impara-subject-quiz').click();
+    await expect(page.getByTestId('impara-review-title')).toHaveText('Quiz: Sicurezza web');
+    await page.getByTestId('impara-review-opt-1').click();
+    await expect(page.getByTestId('impara-review-opt-1')).toHaveClass(/bad/);
+    await page.getByTestId('impara-review-next').click();
+    await expect(page.getByTestId('impara-review-count')).toHaveText('2 di 2');
+    await page.getByTestId('impara-review-opt-0').click();
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('impara-review-score')).toHaveText('0 su 1 al primo colpo');
+    await page.getByTestId('impara-review-done').click();
+
+    // a lesson moved to another subject takes its cards along
+    const csp = page.getByTestId('impara-lessons').locator('.ip-card', { hasText: 'Content Security Policy' });
+    await csp.getByTestId('impara-subject-chip').click();
+    await page.getByTestId('impara-subject-input').fill('Sicurezza');
+    await page.getByTestId('impara-subject-save').click();
+    await expect(csp.getByTestId('impara-subject-chip')).toHaveText('Sicurezza');
+    await expect(page.locator('[data-testid="impara-subject"][data-subject="Sicurezza"]')).toContainText('1 lezione · 1 carta');
+    await expect(page.locator('[data-testid="impara-subject"][data-subject="Sicurezza web"]')).toHaveCount(0);
   } finally {
     await app.close();
   }

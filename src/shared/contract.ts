@@ -15,6 +15,7 @@ import type { PackFinding } from './agent-pack';
 import type { VoiceHeard, VoiceSpeech, VoiceAsr, VoiceName, VoiceState } from './voice';
 import type { RecFound, RecSegment, RecSource, RecState, Recording } from './recordings';
 import type { ImparaState, Lesson, LessonConfidence, LessonExtraKind, LessonStart } from './lesson';
+import type { ReviewCard, ReviewGrade, ReviewItem, ReviewMode } from './review';
 /** What the shareable brain zip holds (counts), or why it was not written: guard findings, or no brain / no guard. */
 export type BrainShareResult = { ok: true; path: string; skills: number; rules: number; roles: number; scripts: number; skipped: number } | { ok: false; findings: PackFinding[] } | { ok: false; error: string };
 import type { BrainModelState, ClassifiersState, MaintenanceJobId } from './brain-model';
@@ -1623,6 +1624,10 @@ export interface InvokeMap {
   /** the answers to the questions asked before the lesson (ADR 0188); '' = skipped */
   'impara:clarify': [{ id: string; answers: string[] }, Lesson];
   'impara:remove': [{ id: string }, void];
+  /** the review (ADR 0189): a session's cards (the due ones, or a subject's quiz), a card's grade, a lesson's subject */
+  'impara:queue': [{ mode: ReviewMode; subject?: string }, ReviewItem[]];
+  'impara:grade': [{ card: string; grade: ReviewGrade }, ReviewCard];
+  'impara:subject': [{ id: string; subject: string }, Lesson];
   'orchestrator:held': [void, HeldNewsState];
   /** the user opened a held news item's chat from the list: that chat's items are read, never wake the Orchestrator (#123) */
   'orchestrator:heldSeen': [{ chatId: string }, HeldNewsState];
@@ -1787,7 +1792,7 @@ export const INVOKE_CHANNELS = [
   'suggest:get', 'suggest:cancel', 'suggest:state',
   'voice:state', 'voice:prepare', 'voice:listen', 'voice:audio', 'voice:commit', 'voice:speak', 'voice:cancelSpeech',
   'rec:state', 'rec:arm', 'rec:start', 'rec:chunk', 'rec:stop', 'rec:transcribe', 'rec:rename', 'rec:remove', 'rec:transcript', 'rec:find', 'rec:readFound', 'rec:open',
-  'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:clarify', 'impara:remove',
+  'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:clarify', 'impara:remove', 'impara:queue', 'impara:grade', 'impara:subject',
   'orchestrator:held', 'orchestrator:heldSeen',
   'cloud:list', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];

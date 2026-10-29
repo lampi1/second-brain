@@ -1138,6 +1138,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/learn/store.ts
       b('Verifiche dopo alcuni pezzi, «Spiegalo tu» alla fine. Ogni lezione resta salvata su questo PC e riapre dal punto in cui eri.',
         'Checks after some pieces, «Explain it yourself» at the end. Every lesson stays saved on this PC and reopens where you were.'),
+      // src/shared/review.ts, src/renderer/components/impara/ImparaReview.tsx
+      b('Ogni lezione ha una materia e lascia carte di ripasso: le sue verifiche e altre scritte solo dai fatti verificati. «Ripassa ora» e il «Quiz» di ogni materia le ripropongono quando stai per dimenticarle (FSRS); la percentuale è una stima, non un voto.',
+        'Every lesson has a subject and leaves review cards: its checks and others written only from the verified facts. «Review now» and each subject’s «Quiz» bring them back when you are about to forget them (FSRS); the percentage is an estimate, not a score.'),
     ],
     analogy: b('Come un collega che prima si documenta, poi ti spiega alla lavagna indicando il punto giusto mentre parla.',
       'Like a colleague who reads up first, then explains at the whiteboard pointing at the right spot while talking.'),
@@ -1146,7 +1149,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(WHERE, 'Pagina G X; IPC impara:* (impara:clarify per le risposte alle domande); ogni risposta del modello è una sessione nascosta in sola lettura; la ricerca web è l’unica con WebSearch/WebFetch e nessuno strumento sui file.', 'Page G X; IPC impara:* (impara:clarify for the answers to the questions); each model answer is a hidden read-only session; the web research is the only one with WebSearch/WebFetch and no file tool.'),
       tech(LIMITS, 'Al massimo 24 fatti per ricerca, 2 domande, 6 battute per pezzo; schema di 4-10 nodi; etichette mai oltre 1,2× e schema intero quando si legge almeno all’80%.', 'At most 24 facts per research, 2 questions, 6 beats per piece; a 4-10 node diagram; labels never past 1.2× and the whole diagram whenever it reads at 80% or more.'),
     ],
-    sources: ['src/shared/lesson.ts', 'src/main/learn/service.ts', 'src/main/learn/prompt.ts', 'src/main/compare/headless.ts', 'src/renderer/components/impara/LessonStage.tsx', 'src/renderer/components/impara/ImparaSources.tsx', 'src/renderer/components/impara/ImparaPlayer.tsx', 'docs/adr/0185-impara-lessons.md', 'docs/adr/0188-impara-research-and-animated-board.md'],
+    sources: ['src/shared/lesson.ts', 'src/main/learn/service.ts', 'src/main/learn/prompt.ts', 'src/main/compare/headless.ts', 'src/renderer/components/impara/LessonStage.tsx', 'src/renderer/components/impara/ImparaSources.tsx', 'src/renderer/components/impara/ImparaPlayer.tsx', 'docs/adr/0185-impara-lessons.md', 'docs/adr/0188-impara-research-and-animated-board.md', 'src/shared/review.ts', 'docs/adr/0189-impara-subjects-and-spaced-review.md'],
   },
   {
     id: 'held-news',

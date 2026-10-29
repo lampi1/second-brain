@@ -9,6 +9,8 @@
 // ask, a files run over the material, the user's brain and the app, both at once; then a verification run per side
 // that did not write the facts, and, while it runs, the questions the files run found worth asking (at most two). The
 // lesson is written from the verified facts and cites them. Who explains is the user's choice (LessonStart.teacher).
+// A finished lesson leaves review cards (ADR 0189, review-store.ts): its checks at once, and the cards one more short
+// run writes from the verified facts; the reviews are scheduled by FSRS (shared/review.ts).
 // Wired in wiring.ts / demo-wiring.ts, IPC impara:* in index.ts; tests: test/unit/learn-service.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -17,13 +19,15 @@ import type { Effort, Lang } from '@shared/contract';
 import {
   LESSON_DEPTHS, LESSON_EXTRAS, LESSON_LEVELS, TEACHER_EFFORTS, applyVerdicts, checkKey, diagramNodes, jsonIn, parseExtra, parseFacts, parseGrade, parsePlan, parseQuestions, playlist, stepKey,
   type ImparaState, type Lesson, type LessonConfidence, type LessonExtraKind, type LessonFact, type LessonKind, type LessonPrep, type LessonStart, type LessonStep, type LessonTeacher,
-  type PrepPhase, type TeacherOption,
+  type PrepPhase, type TeacherOption, subjectOf,
 } from '@shared/lesson';
+import { REVIEW_GRADES, parseCards, queueOf, subjectName, summarize, type ReviewCard, type ReviewGrade, type ReviewItem, type ReviewMode } from '@shared/review';
 import { cutDiff, gather, INLINE_MAX, type GatherDeps, type Material } from './material';
-import { extraPrompt, filesResearchPrompt, gradePrompt, planPrompt, restPrompt, verifyPrompt, webResearchPrompt } from './prompt';
+import { cardsPrompt, extraPrompt, filesResearchPrompt, gradePrompt, planPrompt, restPrompt, verifyPrompt, webResearchPrompt } from './prompt';
+import { ReviewStore } from './review-store';
 import type { LessonStore } from './store';
 
-export type TeachRound = 'impara-web' | 'impara-files' | 'impara-verify-web' | 'impara-verify-files' | 'impara-plan' | 'impara-rest' | 'impara-extra' | 'impara-grade';
+export type TeachRound = 'impara-web' | 'impara-files' | 'impara-verify-web' | 'impara-verify-files' | 'impara-plan' | 'impara-rest' | 'impara-extra' | 'impara-grade' | 'impara-cards';
 /** One hidden run. teacher = the user's choice (null = the app's); effort = the one to use (null = the engine's own);
  *  web = the web-only run (Claude, no file: compare/headless.ts web mode). */
 export interface TeachRun { cwd: string; prompt: string; effort: Effort | null; round: TeachRound; timeoutMs: number; teacher: LessonTeacher | null; web?: boolean }
@@ -54,9 +58,9 @@ const START_FILE = 'richiesta.json';
 const GUIDE_FILE = 'guida-app.md';
 /** the empty folder a web run starts in (it reads no file anyway) */
 const WEB_DIR = 'web';
-/** the effort a research, a plan and the rest use when the user named none */
 /** A pasted text's ask when the user wrote none. */
 const TEXT_ASK = 'Spiegami questo testo.';
+/** the effort a research, a plan and the rest use when the user named none */
 const DEFAULT_EFFORT: Effort = 'high';
 
 /** A file fact's reference as the user opens it from «Fonti» (ADR 0188): a relative path becomes absolute under the
@@ -77,12 +81,20 @@ export class LearnService {
   private readonly extras = new Set<string>();
   /** lessons waiting for the user's answers to the questions before the lesson */
   private readonly waits = new Map<string, () => void>();
+  /** lessons whose review cards are being written now (apart from extras: the user can still ask for one) */
+  private readonly cardJobs = new Set<string>();
+  /** the review cards (ADR 0189), next to the lessons */
+  readonly review: ReviewStore;
   constructor(private readonly d: LearnDeps) {
+    this.review = new ReviewStore(path.join(d.store.root, 'review.json'));
     // a lesson the app was closed while it was being written never finishes by itself: «Riprova» starts it again;
     // an extra or a grade cut off the same way frees the lesson and says so; a folder left by a remove is cleared
     d.store.sweep();
     for (const s of d.store.list()) {
-      const l = d.store.get(s.id);
+      let l = d.store.get(s.id);
+      if (l && l.state !== 'preparing') { try { this.review.fromChecks(l, subjectOf(l)); } catch (e) { log.warn('learn', 'review cards not written', { cause: errText(e) }); } }
+      // one lesson object for both cuts below, so the second save keeps the first
+      if (l?.cards?.state === 'making') { l = { ...l, cards: { state: 'failed', error: 'interrotta: l’app si è chiusa mentre scrivevo le carte' } }; d.store.save(l); }
       if (!l || (l.state !== 'preparing' && l.state !== 'more' && !l.busy)) continue;
       const cut = l.busy ? { busy: undefined, busyError: 'interrotta: l’app si è chiusa mentre la preparavo' } : {};
       d.store.save(l.state === 'preparing' ? { ...l, ...cut, state: 'failed', error: 'interrotta: l’app si è chiusa mentre la preparavo' }
@@ -106,9 +118,20 @@ export class LearnService {
 
   state(): ImparaState {
     const why = this.d.cannotTeach();
-    return { lessons: this.d.store.list(), dir: this.d.store.root, canTeach: !why, ...(why ? { why } : {}), teachers: this.teachers() };
+    const lessons = this.d.store.list();
+    const bySubject = new Map<string, number>();
+    for (const s of lessons) if (s.state !== 'failed') bySubject.set(s.subject, (bySubject.get(s.subject) ?? 0) + 1);
+    let review: ImparaState['review'];
+    try { review = summarize(this.askable(), this.review.log(), bySubject, this.now()); } catch (e) { log.warn('learn', 'review summary failed', { cause: errText(e) }); }
+    return { lessons, dir: this.d.store.root, canTeach: !why, ...(why ? { why } : {}), teachers: this.teachers(), ...(review ? { review } : {}) };
   }
   get(id: string): Lesson | null { return this.d.store.get(String(id)); }
+  /** The cards a review may ask: the ones studied already, and new ones only from lessons the user read to the end (a
+   *  lesson just written and never opened does not quiz its reader blind). */
+  private askable(): ReviewCard[] {
+    const done = new Set(this.d.store.list().filter(s => s.done || (s.state === 'ready' && s.planned > 0 && s.seen >= s.planned)).map(s => s.id));
+    return this.review.cards().filter(c => c.mem || done.has(c.lessonId));
+  }
 
   private emit(l?: Lesson): void { try { this.d.changed(this.state(), l); } catch (e) { log.warn('learn', 'lesson change not sent', { cause: errText(e) }); } }
   /** Reads the lesson now, changes it, writes it: no await in between, so two runs that end together never lose a change. */
@@ -117,6 +140,8 @@ export class LearnService {
     if (!l) return null;
     const next = { ...(fn(l) ?? l), updatedAt: this.now() };
     this.d.store.save(next);
+    // every check of a lesson the user can open is also a review card (at zero tokens)
+    if (next.state !== 'preparing' && next.state !== 'failed') { try { this.review.fromChecks(next, subjectOf(next)); } catch (e) { log.warn('learn', 'review cards not written', { cause: errText(e) }); } }
     this.emit(next);
     return next;
   }
@@ -209,7 +234,8 @@ export class LearnService {
       const l1 = this.phase(id, { ask: asked ? 'done' : 'skip', plan: 'now' });
       if (!l1 || l1.state !== 'preparing') return;
       const g = { facts, ...(l1.clarify ? { clarify: l1.clarify } : {}) };
-      const r = await this.run(req, { cwd: this.folder(set), prompt: planPrompt(this.d.lang(), req, m, this.d.store.dir(id), g), effort: this.effort(req), round: 'impara-plan', timeoutMs: 8 * MIN });
+      const subjects = [...new Set(this.d.store.list().filter(s => s.id !== id).map(s => s.subject))];
+      const r = await this.run(req, { cwd: this.folder(set), prompt: planPrompt(this.d.lang(), req, m, this.d.store.dir(id), g, subjects), effort: this.effort(req), round: 'impara-plan', timeoutMs: 8 * MIN });
       if (!r.ok) { this.edit(id, l => ({ ...l, state: 'failed', error: `Il modello non ha preparato la lezione: ${r.error}`.slice(0, 300) })); return; }
       let plan: ReturnType<typeof parsePlan>;
       try { plan = parsePlan(jsonIn(r.text), { now: this.now(), facts: facts.map(f => f.id) }); }
@@ -217,7 +243,7 @@ export class LearnService {
       const done = this.edit(id, l => {
         const outline = plan.outline.length >= plan.steps.length ? plan.outline : plan.steps.map(s => s.title);
         more = outline.length > plan.steps.length;
-        return { ...l, ...this.cost(l, r), title: plan.title || l.title, diagram: plan.diagram, outline, steps: plan.steps, checks: plan.checks,
+        return { ...l, ...this.cost(l, r), title: plan.title || l.title, diagram: plan.diagram, outline, steps: plan.steps, checks: plan.checks, ...(plan.subject && !l.subject ? { subject: plan.subject } : {}),
           ...(plan.explainQ ? { explain: { q: plan.explainQ } } : {}), state: more ? 'more' : 'ready', at: stepKey(plan.steps[0]!.id), error: undefined,
           prep: { ...(l.prep ?? { phases: {} }), phases: { ...l.prep?.phases, plan: 'done' } } };
       });
@@ -227,6 +253,7 @@ export class LearnService {
       this.edit(id, l => ({ ...l, state: 'failed', error: errText(e).slice(0, 300) }));
     } finally { this.jobs.delete(id); this.waits.delete(id); this.d.store.sweep(id); }
     if (more) await this.rest(id);
+    else if (this.d.store.get(id)?.state === 'ready') await this.makeCards(id);
   }
 
   /** The research and its verification (ADR 0188): the facts the lesson may stand on, or null when the lesson is gone.
@@ -329,6 +356,64 @@ export class LearnService {
     } catch (e) {
       this.edit(id, l => ({ ...l, error: errText(e).slice(0, 300) }));
     } finally { this.jobs.delete(id); this.d.store.sweep(id); }
+    if (this.d.store.get(id)?.state === 'ready') await this.makeCards(id);
+  }
+
+  /** The review cards of a finished lesson (ADR 0189): one short run over its verified facts; a card that cites none,
+   *  or names a node the diagram lacks, is left out. A lesson with no verified fact (made before ADR 0188, or a
+   *  research that found nothing) keeps only its checks as cards. */
+  private async makeCards(id: string): Promise<void> {
+    const l0 = this.d.store.get(id);
+    const verified = (l0?.facts ?? []).filter(f => f.check !== 'unsure').map(f => f.id);
+    if (!l0 || l0.state !== 'ready' || !verified.length || l0.cards?.state === 'making' || l0.cards?.state === 'done' || this.cardJobs.has(id)) return;
+    this.cardJobs.add(id);
+    try {
+      this.edit(id, l => ({ ...l, cards: { state: 'making' } }));
+      const r = await this.run(this.teacherReq(l0), { cwd: this.folder(l0), prompt: cardsPrompt(this.d.lang(), l0), effort: 'medium', round: 'impara-cards', timeoutMs: 4 * MIN });
+      if (!this.d.store.get(id)) return;
+      if (!r.ok) { this.edit(id, l => ({ ...l, cards: { state: 'failed', error: r.error.slice(0, 300) } })); return; }
+      let drafts: ReturnType<typeof parseCards>;
+      try { drafts = parseCards(jsonIn(r.text), diagramNodes(l0.diagram), verified); }
+      catch (e) { this.edit(id, l => ({ ...l, ...this.cost(l, r), cards: { state: 'failed', error: errText(e).slice(0, 300) } })); return; }
+      const l1 = this.d.store.get(id);
+      if (!l1) return;
+      this.review.add(id, subjectOf(l1), drafts, this.now());
+      this.edit(id, l => ({ ...l, ...this.cost(l, r), cards: { state: 'done', n: drafts.length } }));
+      log.info('learn', 'review cards written', { data: { id, cards: drafts.length, costUsd: r.costUsd } });
+    } catch (e) {
+      this.edit(id, l => ({ ...l, cards: { state: 'failed', error: errText(e).slice(0, 300) } }));
+    } finally { this.cardJobs.delete(id); this.d.store.sweep(id); }
+  }
+
+  /** A review session's cards (ADR 0189): «Ripassa» = the due ones and a few new; a subject's quiz = its cards, mixed. */
+  queue(mode: unknown, subject?: string): ReviewItem[] {
+    const m: ReviewMode = mode === 'quiz' ? 'quiz' : 'due';
+    const cards = queueOf(this.askable(), m, this.now(), subject ? { subject: subjectName(subject) } : {});
+    const lessons = new Map<string, Lesson | null>();
+    const lessonOf = (id: string) => { if (!lessons.has(id)) lessons.set(id, this.d.store.get(id)); return lessons.get(id)!; };
+    return cards.flatMap((card): ReviewItem[] => {
+      const l = lessonOf(card.lessonId);
+      if (!l) return [];
+      const facts = (card.cites ?? []).map(id => l.facts?.find(f => f.id === id)).filter((f): f is LessonFact => !!f).map(f => ({ id: f.id, claim: f.claim, ref: f.ref, from: f.from }));
+      return [{ card, lesson: l.title, ...(card.kind === 'node' ? { diagram: l.diagram } : {}), facts }];
+    });
+  }
+
+  /** A card's grade: its next review (FSRS). */
+  gradeCard(cardId: string, grade: number): ReviewCard {
+    if (!(REVIEW_GRADES as readonly number[]).includes(grade)) throw new Error('Voto non valido.');
+    const card = this.review.grade(cardId, grade as ReviewGrade, this.now());
+    this.emit();
+    return card;
+  }
+
+  /** The user moves a lesson (and its cards) to another subject. */
+  setSubject(id: string, raw: unknown): Lesson {
+    const l = this.must(id);
+    const subject = subjectName(raw);
+    if (!subject) throw new Error('Scrivi il nome della materia.');
+    this.review.setSubject(l.id, subject);
+    return this.edit(l.id, x => ({ ...x, subject }))!;
   }
 
   /** The teacher of a lesson's follow-ups: the one it was made with. */
@@ -346,8 +431,10 @@ export class LearnService {
       void this.prepare(l.id, req);
       return next;
     }
-    const next = this.edit(l.id, x => ({ ...x, error: undefined, busyError: undefined, ...(x.busy && !this.extras.has(x.id) ? { busy: undefined } : {}) }))!;
+    const next = this.edit(l.id, x => ({ ...x, error: undefined, busyError: undefined, ...(x.busy && !this.extras.has(x.id) ? { busy: undefined } : {}), ...(x.cards?.state === 'failed' ? { cards: undefined } : {}) }))!;
     if (l.state === 'more' && !this.jobs.has(l.id)) void this.rest(l.id);
+    // a failed cards run, or a lesson finished before cards existed (ADR 0189): «Crea le carte»
+    else if (l.state === 'ready' && (l.cards?.state === 'failed' || !l.cards)) void this.makeCards(l.id);
     return next;
   }
 
@@ -451,7 +538,8 @@ export class LearnService {
     const wake = this.waits.get(id);
     this.waits.delete(id);
     // a run still working in the folder (Windows keeps it busy): the lesson is gone now, its folder when the run ends
-    try { this.d.store.remove(String(id), this.jobs.has(id) || this.extras.has(id)); } finally { wake?.(); }
+    try { this.d.store.remove(String(id), this.jobs.has(id) || this.extras.has(id) || this.cardJobs.has(id)); } finally { wake?.(); }
+    try { this.review.removeLesson(String(id)); } catch (e) { log.warn('learn', 'review cards not removed', { cause: errText(e) }); }
     log.info('learn', 'lesson removed', { data: { id } });
     this.emit();
   }

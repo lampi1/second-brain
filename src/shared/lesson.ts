@@ -9,8 +9,10 @@
 // Before teaching, the lesson is researched and verified (ADR 0188): facts with their source (a web page, a file, or
 // what the model knows), each checked by a second run that did not write it; up to two questions when the ask can mean
 // different things; then every piece cites its facts and is split into beats the board animates one at a time.
+// Each lesson belongs to a subject and leaves review cards (ADR 0189, shared/review.ts).
 // Shared by main/learn/ (generation, store) and the renderer (components/impara/); pinned by test/unit/lesson.test.ts.
 import type { Effort } from './contract';
+import { subjectName, type ReviewSummary } from './review';
 
 export type LessonDepth = 'quick' | 'lesson' | 'deep';
 export const LESSON_DEPTHS: readonly LessonDepth[] = ['quick', 'lesson', 'deep'];
@@ -164,7 +166,14 @@ export interface Lesson {
   prep?: LessonPrep;
   /** the questions before the lesson, while preparing */
   clarify?: LessonClarify;
+  /** the subject it belongs to (ADR 0189): the model's pick among the user's subjects, or the user's own */
+  subject?: string;
+  /** the review cards from the verified facts: being written, written (how many), or failed */
+  cards?: { state: 'making' | 'done' | 'failed'; n?: number; error?: string };
 }
+
+/** A lesson's subject: its own, else the repository of a PR, else «Generale». */
+export const subjectOf = (l: Pick<Lesson, 'subject' | 'pr'>): string => l.subject || subjectName(l.pr?.repo.split('/').pop()) || 'Generale';
 
 /** One line of the Impara page's list. */
 export interface LessonSummary {
@@ -172,9 +181,10 @@ export interface LessonSummary {
   state: LessonState; steps: number; planned: number; seen: number; right: number; asked: number; done: boolean;
   /** the first lines of the diagram, for the card's thumbnail */
   diagram: string;
+  subject: string;
 }
 
-export interface ImparaState { lessons: LessonSummary[]; dir: string; canTeach: boolean; why?: string; teachers?: TeacherOption[] }
+export interface ImparaState { lessons: LessonSummary[]; dir: string; canTeach: boolean; why?: string; teachers?: TeacherOption[]; review?: ReviewSummary }
 
 // ── the play-list ──────────────────────────────────────────────────────────────────────────────────────────────────
 
@@ -245,7 +255,7 @@ export function summaryOf(l: Lesson): LessonSummary {
   return {
     id: l.id, title: l.title, kind: l.kind, ...(l.pr ? { pr: l.pr } : {}), depth: l.depth, createdAt: l.createdAt, updatedAt: l.updatedAt,
     state: l.state, steps: l.steps.filter(s => !s.extra).length, planned: p.total, seen: p.seen, right: p.right, asked: p.asked,
-    done: !!l.doneAt, diagram: l.diagram.slice(0, 1200),
+    done: !!l.doneAt, diagram: l.diagram.slice(0, 1200), subject: subjectOf(l),
   };
 }
 
@@ -398,7 +408,7 @@ export function parseCheck(v: unknown, after: string, id: string): LessonCheck {
   return { id, after, kind: o.kind === 'predict' ? 'predict' : 'choice', q: text(o.q, 320, 'q'), options, correct, why: text(o.why, 700, 'why') };
 }
 
-export interface ParsedPlan { title: string; diagram: string; outline: string[]; steps: LessonStep[]; checks: LessonCheck[]; explainQ: string }
+export interface ParsedPlan { title: string; diagram: string; outline: string[]; steps: LessonStep[]; checks: LessonCheck[]; explainQ: string; subject: string }
 
 /** The first answer (plan, diagram, the first pieces) or the second (the rest): pieces with their checks, in order.
  *  A check is tied to a piece by its index in the answer's own `steps` (afterStep, from 1). */
@@ -421,7 +431,7 @@ export function parsePlan(v: unknown, opts: { now?: number; base?: string; facts
     try { checks.push(parseCheck(c, after.id, newId('q', now))); } catch { /* left out */ }
   }
   const outline = list(o.outline).map(x => text(x, 120, 'outline', false)).filter(Boolean).slice(0, 12);
-  return { title: text(o.title, 120, 'title', !opts.base) || '', diagram, outline, steps, checks, explainQ: text(o.explain, 320, 'explain', false) };
+  return { title: text(o.title, 120, 'title', !opts.base) || '', diagram, outline, steps, checks, explainQ: text(o.explain, 320, 'explain', false), subject: subjectName(o.subject) };
 }
 
 /** An extra piece the user asked for: one piece, maybe with one check. */

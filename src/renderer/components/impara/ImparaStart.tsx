@@ -2,8 +2,9 @@
 // davvero, oggi?» with what to learn (a PR: one of the Task page's, or a GitHub link; a technical topic; a pasted text),
 // how much the user knows already (the lesson adapts from the first piece), how deep, who explains (TeacherChip.tsx),
 // and the two voices; under it the
-// user's PRs with how far each was studied, and the saved lessons (their diagram as a thumbnail, how far they got),
-// each reopening where it was left. Used by ImparaPage.tsx.
+// review (ImparaReviewHome.tsx, ADR 0189: what is due today, the subjects and their quiz), the user's PRs with how far
+// each was studied, and the saved lessons (their diagram as a thumbnail, how far they got, their subject, filtered by
+// subject), each reopening where it was left. Used by ImparaPage.tsx.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { LESSON_DEPTHS, LESSON_LEVELS, type LessonKind, type LessonStart, type LessonSummary } from '@shared/lesson';
 import { impara, imparaPrefs, removeLesson, setImparaPrefs, startLesson } from '../../lib/impara';
@@ -15,6 +16,7 @@ import { Button } from '../ui';
 import { IconArrowRight, IconBook, IconBranch, IconEdit, IconLightbulb, IconSparkle, IconSpinner, IconTrash } from '../Icons';
 import { ImparaSwitch } from './ImparaSwitch';
 import { TeacherChip } from './TeacherChip';
+import { ImparaReviewHome, SubjectChip } from './ImparaReviewHome';
 
 const KIND_ICON: Record<LessonKind, ReactNode> = { pr: <IconBranch size={12} />, topic: <IconLightbulb size={12} />, text: <IconEdit size={12} /> };
 
@@ -46,7 +48,7 @@ function stateChip(s: LessonSummary) {
   return s.seen ? <span className="ip-tag amber">{t('impara.state.half')}</span> : <span className="ip-tag">{t('impara.state.new')}</span>;
 }
 
-function LessonCard({ s }: { s: LessonSummary }) {
+function LessonCard({ s, subjects }: { s: LessonSummary; subjects: readonly string[] }) {
   const pct = s.planned ? Math.round((s.seen / s.planned) * 100) : 0;
   return (
     <div className="ip-card" data-testid={`impara-lesson-${s.id}`}>
@@ -58,6 +60,7 @@ function LessonCard({ s }: { s: LessonSummary }) {
           <span className="ip-bar"><i style={{ width: `${s.done ? 100 : pct}%` }} className={s.done ? '' : 'half'} /></span>
         </span>
       </button>
+      <span className="ip-card-subj"><SubjectChip lessonId={s.id} subject={s.subject} subjects={subjects} /></span>
       <button type="button" className="ip-card-del" onClick={() => askConfirm({ title: t('impara.removeTitle'), body: t('impara.removeBody', { title: s.title }), confirmLabel: t('impara.remove'), danger: true, onConfirm: () => void removeLesson(s.id) })}
         aria-label={t('impara.remove')} data-tip={t('impara.remove')} data-testid={`impara-del-${s.id}`}><IconTrash size={12} /></button>
     </div>
@@ -73,8 +76,11 @@ export function ImparaStart() {
   const [prUrl, setPrUrl] = useState('');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [only, setOnly] = useState<string | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const lessons = state?.lessons ?? [];
+  const subjects = [...new Set(lessons.map(l => l.subject))].sort((a, b) => a.localeCompare(b));
+  const shown = only && subjects.includes(only) ? lessons.filter(l => l.subject === only) : lessons;
   const byPr = new Map(lessons.filter(l => l.pr).map(l => [l.pr!.url, l]));
   const can = state?.canTeach !== false;
   const ready = kind === 'topic' ? !!ask.trim() : kind === 'pr' ? !!prUrl.trim() : !!text.trim();
@@ -127,6 +133,8 @@ export function ImparaStart() {
         {!can && <p className="ip-warn" data-testid="impara-cannot">{state?.why}</p>}
       </section>
 
+      {state?.review && <ImparaReviewHome review={state.review} />}
+
       <div className="ip-cols">
         {prs.length > 0 && (
           <section className="ip-col-prs">
@@ -148,8 +156,14 @@ export function ImparaStart() {
         )}
         <section className="ip-col-lessons">
           <h3>{t('impara.yourLessons')} <span className="ip-muted">· {t('impara.savedHint')}</span></h3>
+          {subjects.length > 1 && (
+            <div className="ip-chips ip-filter" role="radiogroup" aria-label={t('impara.rv.filter')} data-testid="impara-filter">
+              <button type="button" role="radio" aria-checked={!only} className={`ip-chip ${!only ? 'on' : ''}`} onClick={() => setOnly(null)}>{t('impara.rv.all')}</button>
+              {subjects.map(n => <button key={n} type="button" role="radio" aria-checked={only === n} className={`ip-chip ${only === n ? 'on' : ''}`} onClick={() => setOnly(n)} data-testid="impara-filter-subject">{n}</button>)}
+            </div>
+          )}
           {lessons.length
-            ? <div className="ip-grid" data-testid="impara-lessons">{lessons.map(s => <LessonCard key={s.id} s={s} />)}</div>
+            ? <div className="ip-grid" data-testid="impara-lessons">{shown.map(s => <LessonCard key={s.id} s={s} subjects={subjects} />)}</div>
             : <div className="ip-empty" data-testid="impara-empty"><IconBook size={18} /><p>{t('impara.empty')}</p></div>}
         </section>
       </div>

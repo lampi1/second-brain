@@ -2,9 +2,11 @@
 // with «Rispondo a voce»; ICAP: constructive), one short run grades it (what they got, what they left out); then how
 // each piece went (its checks, the extras it needed) with «Rivedi» on the weak ones, and the checks as «2/3 domande
 // giuste» (a count, not a percentage: «0%» next to «quasi» read as a contradiction, ADR 0188). Skipping
-// the explanation ends the lesson without a grade. Under the whole diagram. Used by ImparaPlayer.tsx.
-import { pieceScores, progressOf, stepKey, type Lesson } from '@shared/lesson';
+// the explanation ends the lesson without a grade. Then its review cards (ADR 0189): being written, ready in its subject
+// with «Ripassa la materia», or failed with «Riprova». Under the whole diagram. Used by ImparaPlayer.tsx.
+import { pieceScores, progressOf, stepKey, subjectOf, type Lesson } from '@shared/lesson';
 import { go } from '../../actions';
+import { retryLesson, reviewArg } from '../../lib/impara';
 import { t } from '../../i18n';
 import { Button } from '../ui';
 import { IconRefresh, IconSpinner } from '../Icons';
@@ -59,12 +61,29 @@ export function ImparaEnd({ lesson, draft, setDraft, onSend, onReview }: { lesso
               {s.score !== null && s.score < 0.6 ? <Button size="s" onClick={() => onReview(stepKey(s.id))} testid={`impara-review-${s.id}`}>{t('impara.end.review')}</Button> : <span className="ip-piece-pad" />}
             </div>
           ))}
+          <Cards lesson={lesson} />
           <div className="ip-row ip-end-acts">
             {first && <Button onClick={() => onReview(stepKey(first.id))} testid="impara-restart"><IconRefresh size={12} />{t('impara.end.restart')}</Button>}
             <Button variant="primary" onClick={() => go({ page: 'impara' })} testid="impara-new">{t('impara.end.new')}</Button>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function Cards({ lesson }: { lesson: Lesson }) {
+  const c = lesson.cards, subject = subjectOf(lesson);
+  // a lesson finished before cards existed (ADR 0189) can still get them from its verified facts
+  const canMake = !c && lesson.state === 'ready' && (lesson.facts ?? []).some(f => f.check !== 'unsure');
+  if (!c && !lesson.checks.length && !canMake) return null;
+  return (
+    <div className="ip-end-cards" data-testid="impara-end-cards" data-state={c?.state ?? 'checks'}>
+      {c?.state === 'making' ? <span className="ip-muted"><IconSpinner size={12} /> {t('impara.rv.making')}</span>
+        : c?.state === 'failed' ? <><span className="ip-muted">{t('impara.rv.cardsFailed')}</span><Button size="s" onClick={() => void retryLesson(lesson.id)} testid="impara-cards-retry"><IconRefresh size={12} />{t('impara.retry')}</Button></>
+        : <><span>{(c?.n ?? 0) + lesson.checks.length ? t('impara.rv.ready', { n: (c?.n ?? 0) + lesson.checks.length, subject }) : t('impara.rv.noCards')}</span>
+          {canMake && <Button size="s" onClick={() => void retryLesson(lesson.id)} testid="impara-cards-make">{t('impara.rv.make')}</Button>}
+          {(c?.n || lesson.checks.length) ? <Button size="s" onClick={() => go({ page: 'impara', arg: reviewArg(subject) })} testid="impara-end-quiz">{t('impara.rv.quizSubject')}</Button> : null}</>}
     </div>
   );
 }

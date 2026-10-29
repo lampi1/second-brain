@@ -38,7 +38,7 @@ describe('LearnService', () => {
     const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
     expect(l.state).toBe('preparing');
     expect(store.get(l.id)?.state).toBe('preparing');
-    await until(() => store.get(l.id)?.state === 'ready');
+    await until(() => store.get(l.id)?.cards?.state === 'done');
     const done = store.get(l.id)!;
     expect(done.title).toBe('Risposte parola per parola (PR #251)');
     expect(done.pr).toMatchObject({ provider: 'github', number: 251, repo: 'lampi1/second-brain' });
@@ -46,8 +46,10 @@ describe('LearnService', () => {
     expect(done.checks.length).toBe(3);
     expect(done.at).toBe(stepKey(done.steps[0]!.id));
     // a PR has no web research: its files, their check, then the plan and the rest, at the default effort
-    expect(runs.map(r => r.round)).toEqual(['impara-files', 'impara-verify-files', 'impara-plan', 'impara-rest']);
-    expect(runs.every(r => !r.web && r.effort === 'high' && r.teacher === null)).toBe(true);
+    // then the review cards, at medium effort
+    expect(runs.map(r => r.round)).toEqual(['impara-files', 'impara-verify-files', 'impara-plan', 'impara-rest', 'impara-cards']);
+    expect(runs.slice(0, 4).every(r => !r.web && r.effort === 'high' && r.teacher === null)).toBe(true);
+    expect(runs[4]!.effort).toBe('medium');
     // the material is in the lesson's folder and named in the prompt; the diff is inline
     expect(store.readFile(l.id, 'diff.patch')).toContain('ITEM_FRAME_MS');
     const plan = runs[2]!;
@@ -69,7 +71,7 @@ describe('LearnService', () => {
     // the pieces cite the facts, their beats name known nodes
     expect(done.steps[1]!.cites).toEqual(['f1', 'f5']);
     expect(done.steps[1]!.beats?.[1]).toMatchObject({ focus: ['manager', 'store'], flow: { from: 'manager', to: 'store' } });
-    expect(done.costUsd).toBeCloseTo(0.5);
+    expect(done.costUsd).toBeCloseTo(0.53);
   });
 
   it('a topic: the web run sees only the ask and has only the web; the files run reads brain and guide; questions wait for the answers', async () => {

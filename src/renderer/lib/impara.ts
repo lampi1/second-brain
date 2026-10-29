@@ -5,6 +5,7 @@
 // piece gets on the diagram, taken from the theme's tokens as hex (mermaid's classDef cannot take rgba).
 // Used by components/impara/.
 import type { ImparaState, Lesson, LessonConfidence, LessonDepth, LessonExtraKind, LessonLevel, LessonStart, LessonTeacher, FocusColors } from '@shared/lesson';
+import type { ReviewCard, ReviewGrade, ReviewItem, ReviewMode } from '@shared/review';
 import { createStore } from '../store/createStore';
 import { toast } from '../store/ui';
 import { t } from '../i18n';
@@ -82,6 +83,19 @@ export const explainBack = (id: string, text: string) => call(window.sb.invoke('
 export const retryLesson = (id: string) => call(window.sb.invoke('impara:retry', { id }));
 /** The answers to the questions before the lesson ('' = skipped). */
 export const clarifyLesson = (id: string, answers: string[]) => call(window.sb.invoke('impara:clarify', { id, answers }));
+/** The review (ADR 0189): a session's cards, a card's grade, a lesson moved to another subject. */
+export const reviewQueue = (mode: ReviewMode, subject?: string): Promise<ReviewItem[] | null> =>
+  window.sb.invoke('impara:queue', { mode, ...(subject ? { subject } : {}) }).catch(fail);
+export const gradeCard = (card: string, grade: ReviewGrade): Promise<ReviewCard | null> => window.sb.invoke('impara:grade', { card, grade }).catch(fail);
+export const setLessonSubject = (id: string, subject: string) => call(window.sb.invoke('impara:subject', { id, subject }));
+/** The page argument of a review session: today's, or one subject's quiz. */
+export const reviewArg = (subject?: string): string => (subject ? `ripasso:${encodeURIComponent(subject)}` : 'ripasso');
+export function readReviewArg(arg: string | null | undefined): { subject?: string } | null {
+  if (arg === 'ripasso') return {};
+  if (!arg?.startsWith('ripasso:')) return null;
+  try { return { subject: decodeURIComponent(arg.slice(8)) }; } catch { return null; }
+}
+
 export async function removeLesson(id: string): Promise<boolean> {
   try { await window.sb.invoke('impara:remove', { id }); impara.set(s => { const { [id]: _gone, ...rest } = s.lessons; return { ...s, lessons: rest }; }); toast(t('impara.removed'), 'ok'); return true; }
   catch (e) { fail(e); return false; }

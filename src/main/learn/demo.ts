@@ -4,8 +4,10 @@
 // one fact the check corrects; a question before a topic lesson; plan, the rest, the four extras, the grade), after a
 // short wait so the screens in between are seen. `seedDemoLessons` writes two saved lessons the
 // first time, so the page has a list. Deterministic under SB_DEMO_FREEZE. Used by demo-wiring.ts; e2e: test/e2e/impara.spec.ts.
+import fs from 'node:fs';
 import path from 'node:path';
 import type { Lesson } from '@shared/lesson';
+import type { ReviewCard } from '@shared/review';
 import { stepKey } from '@shared/lesson';
 import type { Run } from './material';
 import type { TeachResult, TeachRun } from './service';
@@ -77,6 +79,7 @@ const STORE_CODE = { file: 'src/renderer/store/store.ts', diff: `-export const S
 
 const PLAN = {
   title: 'Risposte parola per parola (PR #251)',
+  subject: 'Second brain',
   diagram: DEMO_DIAGRAM,
   outline: ['Il problema: risposte a blocchi', 'Il primo freno: ChatManager', 'Il secondo freno: lo store', 'La finestra nascosta', 'Cosa non risolve'],
   steps: [
@@ -191,6 +194,7 @@ export async function demoTeach(r: TeachRun): Promise<TeachResult> {
   if (r.round === 'impara-verify-web') { await wait(700); return out({ verdicts: [{ id: 'f1', verdict: 'ok' }, { id: 'f2', verdict: 'ok' }] }, 0.03); }
   if (r.round === 'impara-verify-files') { await wait(800); return out(filesVerdicts(r.prompt), 0.04); }
   if (r.round === 'impara-plan') { await wait(900); return out(PLAN, 0.21); }
+  if (r.round === 'impara-cards') { await wait(700); return out(DEMO_CARDS, 0.03); }
   if (r.round === 'impara-rest') { await wait(1500); return out(REST, 0.18); }
   if (r.round === 'impara-grade') {
     await wait(700);
@@ -239,7 +243,7 @@ export function seedDemoLessons(store: LessonStore, now: number, appRoot: string
   };
   const app: Lesson = {
     id: store.newId(now - 3 * day), title: 'Come nasce una lezione di Impara', kind: 'topic', ask: 'Come fa Impara a preparare una lezione affidabile?',
-    depth: 'quick', level: 'basics', createdAt: now - 3 * day, updatedAt: now - 3 * day + 300_000, state: 'ready',
+    depth: 'quick', level: 'basics', createdAt: now - 3 * day, updatedAt: now - 3 * day + 300_000, state: 'ready', doneAt: now - 3 * day + 300_000, // read before: its cards are in the review
     diagram: 'flowchart TB\n  ask["La tua domanda"] --> web["Ricerca sul web<br/>(vede solo la domanda)"]\n  ask --> files["Ricerca nei file<br/>(brain, app, materiale)"]\n  subgraph check["Verifica"]\n    vweb["Controllo<br/>delle pagine"]\n    vfiles["Controllo<br/>dei file"]\n  end\n  web --> vweb\n  files --> vfiles\n  vweb --> facts["Fatti verificati"]\n  vfiles --> facts\n  files -.->|"se ambigua"| q["Domande"]\n  q --> plan["Piano e pezzi"]\n  facts --> plan\n  plan --> you["La lezione"]',
     outline: ['Due ricerche separate', 'La verifica', 'La lezione'],
     steps: [
@@ -262,7 +266,30 @@ export function seedDemoLessons(store: LessonStore, now: number, appRoot: string
     ],
     prep: { phases: { gather: 'done', web: 'done', files: 'done', verify: 'done', ask: 'skip', plan: 'done' }, web: 1, files: 1, ok: 2, fixed: 0, unsure: 0, dropped: 0 },
   };
+  half.subject = 'Second brain'; app.subject = 'Second brain'; done.subject = 'Sicurezza web';
+  app.cards = { state: 'done', n: 3 };
   store.save(half);
   store.save(app);
   store.save(done);
+  // the review (ADR 0189): the checks already answered, and the cards of the lesson about Impara, some due today
+  const mem = (lastDays: number, s: number, reps = 1) => ({ due: now - lastDays * day + Math.max(1, Math.round(s)) * day, s, d: 5, reps, lapses: 0, last: now - lastDays * day });
+  const card = (l: Lesson, k: string, extra: Partial<ReviewCard>): ReviewCard => ({ id: `${l.id}:${k}`, lessonId: l.id, subject: l.subject!, kind: 'recall', origin: 'cards', q: '', answer: '', createdAt: l.createdAt, mem: null, ...extra });
+  const cards: ReviewCard[] = [
+    card(half, 'k:qa1', { kind: 'choice', origin: 'check', q: half.checks[0]!.q, options: half.checks[0]!.options, correct: 0, answer: half.checks[0]!.why, mem: mem(2, 1.2) }),
+    card(done, 'k:qb1', { kind: 'choice', origin: 'check', q: done.checks[0]!.q, options: done.checks[0]!.options, correct: 0, answer: done.checks[0]!.why, mem: mem(5, 15, 2) }),
+    card(app, 'c1', { kind: 'recall', q: 'Perché Impara fa due ricerche separate, una sul web e una nei file?', answer: 'Perché chi legge il web non deve vedere i tuoi file: così un testo trovato online non può portare fuori i tuoi dati.', cites: ['f1'], mem: mem(4, 3) }),
+    card(app, 'c2', { kind: 'choice', q: 'Chi controlla un fatto trovato nella ricerca?', options: ['Un secondo modello che non l’ha scritto', 'Lo stesso modello che l’ha trovato', 'Nessuno'], correct: 0, answer: 'Chain-of-Verification: chi verifica non ha scritto il fatto, così sbaglia meno.', cites: ['f2'], mem: mem(1, 2.5) }),
+    card(app, 'c3', { kind: 'node', q: 'In quale parte dello schema un fatto sbagliato viene corretto?', node: 'vfiles', answer: 'Il controllo dei file rilegge ogni file alla riga citata e corregge il fatto.', cites: ['f1'] }),
+  ];
+  try { fs.writeFileSync(path.join(store.root, 'review.json'), JSON.stringify({ v: 1, cards, log: [{ card: cards[1]!.id, at: now - 5 * day, grade: 3 }, { card: cards[2]!.id, at: now - 4 * day, grade: 3 }, { card: cards[0]!.id, at: now - 2 * day, grade: 2 }, { card: cards[3]!.id, at: now - day, grade: 3 }] })); } catch { /* the demo goes on without reviews */ }
 }
+
+/** The review cards the demo's model writes at the end of a lesson: from the PR #251 facts (one cites only the
+ *  unconfirmed fact and is dropped). */
+const DEMO_CARDS = { cards: [
+  { kind: 'recall', q: 'Perché prima della PR #251 le risposte comparivano a blocchi?', answer: 'Due attese da 100 ms in fila, una in main e una nello store della finestra, raccoglievano il testo prima di mostrarlo.', cites: ['f4'] },
+  { kind: 'choice', q: 'Dopo la PR #251, ogni quanto ChatManager manda alla finestra le versioni nuove di un messaggio?', options: ['Ogni 16 ms', 'Ogni 100 ms', 'Ogni 250 ms'], correct: 0, answer: 'ITEM_FRAME_MS = 16: un fotogramma. 250 ms vale solo con la finestra nascosta.', cites: ['f1'] },
+  { kind: 'node', q: 'Quale parte aspetta 250 ms quando la finestra è nascosta?', node: 'store', answer: 'Lo store della finestra: STREAM_HIDDEN_MS = 250, perché nessuno guarda.', cites: ['f3'] },
+  { kind: 'choice', q: 'Se STREAM_MS tornasse a 100 ms, cosa vedresti?', options: ['Il testo di nuovo a scatti', 'Nessuna differenza', 'La chat non si aggiornerebbe più'], correct: 0, answer: 'Tornerebbe una delle due attese da 100 ms: il testo arriverebbe a scatti.', cites: ['f2'] },
+  { kind: 'recall', q: 'Quanti fotogrammi al secondo mostra uno schermo a 60 Hz?', answer: '60.', cites: ['f5'] },
+] };
