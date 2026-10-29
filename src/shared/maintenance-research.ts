@@ -91,6 +91,22 @@ export interface ResearchProposal {
   issueUrl?: string;
   /** an app idea also written to the brain's Idee (the AI's side) */
   ideaSaved?: boolean;
+  /** a brain-file finding gathered into the candidate brain (ADR 0195): CANDIDATE_PENDING while the research runs, then
+   *  the candidate's id; such a finding is no card of its own (the candidate's one card decides it) */
+  candidateId?: string;
+  /** a revised role text the research proposes from the role's failed runs (ADR 0195, GEPA-style): approving it starts
+   *  a trial version (catalog approveTrial), never a direct replacement */
+  roleTrial?: RoleTrialProposal;
+}
+
+/** A whole revised text for one role, proposed as a trial version (ADR 0195). */
+export interface RoleTrialProposal {
+  role: string;
+  /** the active version the text was written against: approval is refused when the role moved on */
+  baseVersion: number;
+  /** the role's text at that version (the card's «before») */
+  before: string;
+  text: string;
 }
 
 /** What a research runs with: the app's best choice (ResearchService.defaults), never a dialog since ADR 0153. */
@@ -157,3 +173,36 @@ export const familyOf = (k: ResearchKind): keyof typeof RESEARCH_CAPS =>
   k === 'forget' ? 'forget' : k === 'bold' ? 'bold' : isAppKind(k) ? 'app' : 'brain';
 /** The default spending cap (owner, 2026-10-23). */
 export const RESEARCH_CAP_USD = 5;
+
+// ── The candidate brain (ADR 0195, after Anthropic's «dreaming»): the research's brain-file findings of one click are
+// gathered into one copy of the affected files under userData, never written to the brain until the user approves the
+// one card, applied then as one change with one «Annulla».
+/** Marks a finding held for the candidate while its research still runs. */
+export const CANDIDATE_PENDING = 'pending';
+/** One file of the candidate: its brain-relative path, the text now (null = new file) and in the candidate (null = removed). */
+export interface CandidateFile { rel: string; before: string | null; after: string | null }
+export interface CandidateEvaluation {
+  /** zero-token checks, one plain line each (UI language) */
+  checks: string[];
+  /** the recorded-task replay (brainmodel/evaluation.ts): started when an anonymized holdout set exists and the
+   *  research's budget covers its estimate, else skipped with the reason */
+  replay: { state: 'started' | 'skipped'; replayId?: string; note: string; status?: 'running' | 'passed' | 'failed' | 'awaiting-review' };
+}
+/** stale = a brain file changed after the candidate was built: it can no longer be applied as shown */
+export type CandidateState = 'open' | 'approved' | 'rejected' | 'stale';
+export interface BrainCandidate {
+  /** `bc-<time36>-<rand>` */
+  id: string;
+  chatId: string;
+  at: number;
+  state: CandidateState;
+  /** the findings it gathers (ResearchProposal ids), in the order proposed */
+  proposalIds: string[];
+  files: CandidateFile[];
+  evaluation: CandidateEvaluation;
+  decidedAt?: number;
+  /** the one change-log entry an approval wrote (its one «Annulla») */
+  changeId?: string;
+}
+/** A candidate as its card shows it: with the findings it gathers in words. */
+export interface BrainCandidateView extends BrainCandidate { items: { kind: ResearchKind; title: string }[] }

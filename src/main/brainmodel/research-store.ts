@@ -56,10 +56,12 @@ export class ResearchStore {
     this.save();
     return structuredClone(this.data.proposals[i]);
   }
-  update(id: string, patch: Partial<Pick<ResearchProposal, 'state' | 'decidedAt' | 'changeId' | 'issueUrl' | 'ideaSaved'>>): ResearchProposal | undefined {
+  update(id: string, patch: Partial<Pick<ResearchProposal, 'state' | 'decidedAt' | 'changeId' | 'issueUrl' | 'ideaSaved' | 'candidateId'>>): ResearchProposal | undefined {
     const p = this.data.proposals.find(x => x.id === id);
     if (!p) return undefined;
     Object.assign(p, patch);
+    // a field set to undefined is gone (a finding released from the candidate brain, ADR 0195)
+    for (const k of Object.keys(patch) as (keyof typeof patch)[]) if (patch[k] === undefined) delete p[k];
     this.save();
     return structuredClone(p);
   }

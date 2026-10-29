@@ -11,7 +11,7 @@ import type { AgentLifecycleSnapshot } from '../../shared/agent-lifecycle';
 import type { BrainChange } from '../../shared/brain-model';
 import type { ChatSummary, LearnAction, LearnResult, SettingProposal } from '../../shared/contract';
 import type { SkillCandidateView } from '../../shared/learning-review';
-import type { ResearchProposal } from '../../shared/maintenance-research';
+import type { BrainCandidateView, ResearchProposal } from '../../shared/maintenance-research';
 import type { ApprovalItem as PulseApproval, PulseResult } from '../../shared/pulse';
 import { type Proposal, type ProposalAsk, type ProposalGroup, type ProposalCode, type ProposalDecision, type ProposalKeep, type ProposalFact, type ProposalProvenance, type ProposalSource, type ProposalWho } from '../../shared/proposals';
 import { isRoleId } from '../../shared/roles';
@@ -35,7 +35,9 @@ export interface ProposalPorts {
   pulse?: { list(): PulseApproval[] | Promise<PulseApproval[]>; decide(id: string, decision: 'approve' | 'discard'): PulseResult | Promise<PulseResult> };
   policies?: { status(): Promise<unknown>; act(a: LearnAction): Promise<LearnResult> };
   /** the maintenance's findings for the brain (ADR 0132): open cards, applied through the change log on approval */
-  research?: { list(): ResearchProposal[]; approve(id: string): unknown; reject(id: string): unknown; repo?(): string | null };
+  research?: { list(): ResearchProposal[]; approve(id: string): unknown; reject(id: string): unknown; repo?(): string | null;
+    /** the open candidate brains (ADR 0195): one card each, decided through approve / reject by their id */
+    candidates?(): BrainCandidateView[] };
   /** the reviewed marks (Tieni on an applied change) */
   reviewed: { has(id: string): boolean; mark(id: string): void };
 }
@@ -282,12 +284,29 @@ function researchContent(x: ResearchProposal): string {
   if (x.forget) return `\`${x.forget.what === 'rule' ? x.forget.name : `.claude/skills/${x.forget.name}/`}\``;
   return '';
 }
+/** A candidate brain as one card (ADR 0195): the findings it gathers, a diff per file, its checks and replay. */
+function candidateCard(p: ProposalPorts, c: BrainCandidateView): Proposal {
+  const items = c.items.map(x => ({ finding: x.kind, title: x.title }));
+  const chat = p.chats().find(x => x.id === c.chatId);
+  return card('research', c.id, {
+    group: 'brain', applied: false, title: items.map(x => x.title).join(' · ').slice(0, 300) || c.id,
+    // the card's content is what the user decides on: the findings it gathers (main refuses a card that changed since)
+    content: items.map(x => `- ${x.title}`).join('\n'),
+    ask: { kind: 'candidate', items, files: c.files.length, checks: c.evaluation.checks, replay: { state: c.evaluation.replay.state, note: c.evaluation.replay.note, ...(c.evaluation.replay.status ? { status: c.evaluation.replay.status } : {}) } },
+    diffs: c.files.map(f => ({ file: f.rel, before: f.before, after: f.after })),
+    facts: [{ key: 'cases', value: String(items.length) }, { key: 'target', value: c.files.map(f => f.rel).join(', ').slice(0, 600) }],
+    provenance: prov({ who: { kind: 'maintenance', id: 'research' }, ...(chat ? { chat: { id: chat.id, title: chat.title } } : {}), files: c.files.map(f => f.rel), at: iso(c.at),
+      evidence: items.map(x => x.title) }),
+    canApprove: true, canReject: true,
+  });
+}
 const research: Source = {
   id: 'research',
   available: p => !!p.research,
   async list(p) {
     const chats = p.chats();
-    return p.research!.list().map(x => {
+    const candidates = (p.research!.candidates?.() ?? []).map(c => candidateCard(p, c));
+    return [...candidates, ...p.research!.list().map(x => {
       const chat = x.chatId ? chats.find(c => c.id === x.chatId) : undefined;
       const role = x.change?.role;
       // an idea or a bug about the app's code (or a bold idea that is one): a card that opens its issue on GitHub (ADR 0153)
@@ -295,14 +314,16 @@ const research: Source = {
       const repo = issue ? p.research!.repo?.() ?? null : null;
       return card('research', x.id, {
         group: issue ? 'issue' : x.kind === 'bold' ? RESEARCH_GROUP[x.change?.target ?? 'rule'] ?? 'rule' : RESEARCH_GROUP[x.kind] ?? 'rule', applied: false, title: issue ? x.issue!.title : x.title, content: researchContent(x),
-        ask: { kind: 'research', finding: x.kind, adds: x.adds, removes: x.removes, why: x.why, expected: x.expected, risk: x.risk, evidence: x.evidence, sources: x.sources },
-        facts: [...(role ? [{ key: 'target' as const, value: role }] : []), ...(x.change?.name ? [{ key: 'target' as const, value: x.change.name }] : []),
+        ask: { kind: 'research', finding: x.kind, adds: x.adds, removes: x.removes, why: x.why, expected: x.expected, risk: x.risk, evidence: x.evidence, sources: x.sources, ...(x.roleTrial ? { trial: true } : {}) },
+        // a revised role text (ADR 0195): its before and after
+        ...(x.roleTrial ? { diffs: [{ file: x.roleTrial.role, before: x.roleTrial.before, after: x.roleTrial.text }] } : {}),
+        facts: [...(role ?? x.roleTrial?.role ? [{ key: 'target' as const, value: (role ?? x.roleTrial?.role)! }] : []), ...(x.change?.name ? [{ key: 'target' as const, value: x.change.name }] : []),
           ...(issue && repo ? [{ key: 'target' as const, value: repo }] : []), ...(issue && x.issue!.labels?.length ? [{ key: 'scope' as const, value: x.issue!.labels.join(', ') }] : []),
           ...(issue && x.issue!.duplicateOf ? [{ key: 'before' as const, value: x.issue!.duplicateOf.url }] : [])],
         provenance: prov({ who: { kind: 'maintenance', id: x.chatId ? 'research' : 'cleanup' }, ...(chat ? { chat: { id: chat.id, title: chat.title } } : {}), at: iso(x.at), evidence: x.evidence }),
         canApprove: !issue || !!repo, canReject: true, ...(issue && !repo ? { blocked: ['noRepo'] } : {}),
       });
-    });
+    })];
   },
   async decide(p, c, decision) {
     if (decision === 'approve') await p.research!.approve(native(c)); else await p.research!.reject(native(c));

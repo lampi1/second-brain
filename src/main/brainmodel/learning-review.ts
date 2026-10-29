@@ -7,6 +7,7 @@ import type { LearningEvidence, LearningEvidenceRun, LearningReviewState, Replay
 import type { ChangeLog } from './changes';
 import { contentDigest, EvaluationStore, type ReplayExecution } from './evaluation';
 import { SkillCandidateService } from './skill-candidates';
+import { replayEstimate } from './research-candidate';
 
 export interface LearningReviewDeps {
   userData: string;
@@ -69,4 +70,24 @@ export class LearningReviewService {
   saveCandidate(name: string, text: string, expectedDigest: string): SkillCandidateView { return this.scope().candidates.save(name, text, expectedDigest); }
   promote(name: string, expectedDigest: string, replayId: string, exampleRunId: string): SkillCandidateView { return this.scope().candidates.promote(name, expectedDigest, replayId, exampleRunId); }
   compare(beforeId: string, afterId: string): ReplayComparison { return this.scope().evaluations.compare(beforeId, afterId); }
+  /** The maintenance's candidate brain (ADR 0195): its replay on the newest anonymized set with holdout cases, only when
+   *  the estimate (research-candidate.ts replayEstimate) fits in `budgetUsd`, what the research left of its cap. Never
+   *  on the synthetic fixture (not evidence). Returns the replay's id, or why it was skipped (Italian, shown on the card). */
+  replayBrainCandidate(c: { name: string; text: string; budgetUsd: number }): { replayId?: string; note: string } {
+    if (!this.deps.execute || !this.deps.root()) return { note: 'Replay saltato: in questa app non si può eseguire.' };
+    const s = this.scope();
+    const set = s.evaluations.datasets().filter(d => d.origin === 'anonymized' && d.cases.some(x => x.split === 'holdout')).sort((a, b) => b.createdAt - a.createdAt)[0];
+    if (!set) return { note: 'Replay saltato: nessun set di casi anonimizzati con casi di verifica (Apprendimento → Valutazione per importarne uno).' };
+    const cases = set.cases.filter(x => x.split === 'holdout').length;
+    const estimate = replayEstimate(cases, this.deps.runs(), this.deps.now?.() ?? Date.now());
+    if (estimate === null) return { note: 'Replay saltato: nessun lavoro recente con un costo da cui stimarlo.' };
+    if (estimate > c.budgetUsd) return { note: `Replay saltato: ${cases} casi costerebbero circa ${estimate.toFixed(2)} $, restano ${c.budgetUsd.toFixed(2)} $ del tetto della manutenzione.` };
+    const r = s.evaluations.startReplay(set.id, 'holdout', { name: c.name, text: c.text, digest: contentDigest(c.text) });
+    return { replayId: r.id, note: `Replay avviato su ${cases} casi di «${set.name}» (stima ${estimate.toFixed(2)} $): l'esito arriva in Apprendimento.` };
+  }
+  /** A replay's state now, null when gone or no brain. */
+  replayStatus(id: string): ReplayRecord['status'] | null {
+    if (!this.deps.root()) return null;
+    return this.scope().evaluations.replay(id)?.status ?? null;
+  }
 }

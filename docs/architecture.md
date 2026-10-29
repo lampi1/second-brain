@@ -103,7 +103,14 @@
   researches with the app's best choice (strongest model, 5 $ cap, a data pack; `brainmodel/research.ts`, ADR 0132).
   Its findings are cards in Memoria → Proposte: brain changes and what to forget, applied through the change log on
   approval; app ideas and bugs as «Apri issue» cards that open the issue on GitHub when approved (gh, else the
-  pre-filled new-issue page; `brainmodel/issue-open.ts`); app ideas also land in Idee on the AI's side. The end is a
+  pre-filled new-issue page; `brainmodel/issue-open.ts`); app ideas also land in Idee on the AI's side. Brain-file
+  findings (skills without a role, rules for every role, what to forget) are held and, when the research ends, gathered
+  into one candidate brain (`brainmodel/research-candidate.ts`, ADR 0195): a copy of the touched files under
+  `userData/brain-candidates/<id>/`, zero-token checks, the recorded-task replay only when an anonymized holdout set
+  exists and the budget left covers its estimate, one card with a diff per file, applied as ONE `BrainChange` (one
+  «Annulla»), refused when a brain file changed since. While budget is left the research may also propose one revised
+  text for the role with the most verified failures or corrections (`brainmodel/role-reflect.ts`,
+  `maintenance_role_trial`): approving it starts a trial version (catalog `approveTrial`). The end is a
   notice (`maintenance:done`). Nothing else proposes by itself: no timer, the Battito makes no idea cards, and the
   skill candidates and the Battito's rules wait in the deck until the next click (`proposals/service.ts` heldBack). Memoria's statistics (`brainmodel/memory-stats.ts`, `BrainModelState.memoryStats`) are counts over the
   memory files, `ai-errors.md` and the recorded agent runs: zero tokens, nothing written.

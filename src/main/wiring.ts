@@ -967,7 +967,16 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       : { run: ghRun, openUrl: url => shell.openExternal(url) }) },
     saveIdea: idea => saveAiIdea({ root: brain.info().brainRoot, userData: ctx.userData, ...idea, source: 'Manutenzione' }),
     changed: () => ctx.emitter.emit('maintenance:changed', undefined),
-    done: d => ctx.emitter.emit('maintenance:done', d) });
+    done: d => ctx.emitter.emit('maintenance:done', d),
+    // ADR 0195: the candidate brain (one card, one change) and the revised role text as a trial version
+    candidates: { input: () => brainModel.candidateInput(), apply: (meta, writes, forget) => brainModel.applyCandidate(meta, writes, forget),
+      replay: c => learningReview.replayBrainCandidate(c), replayStatus: id => learningReview.replayStatus(id) },
+    roleTrial: (id, text, base, reason) => {
+      const p = agents.list().profiles.find(x => x.id === id && x.scope === 'role');
+      if (!p) throw new Error('Ruolo non trovato.');
+      if (p.activeVersion !== base) throw new Error('Il ruolo è cambiato dopo la proposta: rilancia la manutenzione.');
+      agents.approveTrial(id, { ...p, instructions: text }, reason);
+    } });
   researchRef.current = research;
   // Impara (ADR 0185, 0188): each lesson is researched, verified and written by hidden read-only runs
   // (compare/headless.ts) on the engine the user picked (else the best one that is on and reads files: Claude first,

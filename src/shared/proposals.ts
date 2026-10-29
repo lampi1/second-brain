@@ -11,7 +11,8 @@ export const PROPOSAL_SOURCES = ['memory', 'candidate', 'change', 'setting', 'tr
 export type ProposalSource = (typeof PROPOSAL_SOURCES)[number];
 /** The filter chips on top of the deck, in this order. */
 /** issue: a GitHub issue the maintenance wrote about the app's code, opened at once when approved (ADR 0153) */
-export const PROPOSAL_GROUPS = ['skill', 'rule', 'fact', 'script', 'role', 'setting', 'learning', 'forget', 'issue'] as const;
+/** brain: a candidate version of the brain, several file changes decided as one (ADR 0195) */
+export const PROPOSAL_GROUPS = ['skill', 'rule', 'fact', 'script', 'role', 'setting', 'learning', 'forget', 'issue', 'brain'] as const;
 export type ProposalGroup = (typeof PROPOSAL_GROUPS)[number];
 /** approve = Approva (or Tieni on an applied change); reject = Rifiuta (or Annulla on an applied change). */
 export type ProposalDecision = 'approve' | 'reject';
@@ -55,7 +56,12 @@ export type ProposalAsk =
   | { kind: 'policy'; domain: string; name: string; from?: number; to?: number; cases?: number }
   /** a finding of the maintenance (ADR 0132): the card shows what it adds and removes, why, the evidence and the sources
    *  as they are (plain words the research or the cleanup wrote), never «if you press…» lines */
-  | { kind: 'research'; finding: ResearchKind; adds: string; removes: string; why: string; expected: string; risk: string; evidence: string[]; sources: ResearchSource[] };
+  | { kind: 'research'; finding: ResearchKind; adds: string; removes: string; why: string; expected: string; risk: string; evidence: string[]; sources: ResearchSource[];
+    /** a revised role text: approving it starts a trial version of the role (ADR 0195) */
+    trial?: boolean }
+  /** a candidate version of the brain (ADR 0195): the findings it gathers, decided as one, with its checks and replay */
+  | { kind: 'candidate'; items: { finding: ResearchKind; title: string }[]; files: number; checks: string[];
+    replay: { state: 'started' | 'skipped'; note: string; status?: 'running' | 'passed' | 'failed' | 'awaiting-review' } };
 /** The code a card is about, shown as it is: a script or a saved query the change writes (or removes). */
 /** What makes a memory fact look tied to one case (main/rules/memory-worth.ts, ADR 0129). */
 export type MemorySign = 'url' | 'id' | 'commit' | 'path' | 'date' | 'branch';
@@ -70,6 +76,8 @@ export function factSentence(subject: string, predicate: string, value: string):
   return `${subject.trim()} ${predicate.trim()} ${v}`;
 }
 export interface ProposalCode { file: string; lang: string; text: string }
+/** A file a card would change, before and after (null = the file is created / removed): shown as a diff (ADR 0195). */
+export interface ProposalDiff { file: string; before: string | null; after: string | null }
 
 export interface ProposalProvenance {
   who: ProposalWho;
@@ -96,6 +104,8 @@ export interface Proposal {
   ask: ProposalAsk;
   /** a script's or a query's code, when the card is about one */
   code?: ProposalCode[];
+  /** the files it changes, before and after (a candidate brain, a revised role text) */
+  diffs?: ProposalDiff[];
   /** the full content, Markdown (the fact, the skill draft, the change's summary and reason) */
   content: string;
   facts: ProposalFact[];

@@ -166,7 +166,9 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
       get: id => chats.list().find(c => c.id === id), stop: id => chats.stop(id),
     },
     changed: () => ctx.emitter.emit('maintenance:changed', undefined),
-    done: d => ctx.emitter.emit('maintenance:done', d) });
+    done: d => ctx.emitter.emit('maintenance:done', d),
+    // ADR 0195: the demo research's brain findings become one candidate brain (no replay in the demo)
+    candidates: { input: () => brainModel.candidateInput(), apply: (meta, writes, forget) => brainModel.applyCandidate(meta, writes, forget) } });
   writeDemoResearch(research.store, now());
   ctx.emitter.tap((channel, payload) => { if (channel === 'chat:updated') research.chatUpdated(payload as ChatSummary); });
   if (!brainModel.report()) await brainModel.maintain('migration').catch(e => log.warn('demo', 'demo migration failed', { cause: errText(e), hint: 'the Skill page shows the demo brain without the migrated skills' }));
