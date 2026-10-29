@@ -1,6 +1,6 @@
 // Agent runs (A5): a chat started from a catalog agent is a run; it ends as completed, closed or stale, a parent's end
 // closes its spawned runs downward, only the user reopens one, requests count once, cost and tokens follow the turns,
-// and the record survives a restart (agent-runs.json is the source, chats.json keeps a mirror).
+// and the record survives a restart (app.db is the source, ADR 0199; chats.json keeps a mirror).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -15,6 +15,7 @@ import { diagnoseFile } from '../../../src/main/agents/level-diagnosis';
 import { delegationTools } from '../../../src/main/agents/delegation';
 import { DELEGATION_DEFAULTS } from '../../../src/shared/roles';
 import { AgentRunStore, STALE_MS } from '../../../src/main/agents/runs';
+import { exportRuns } from '../../../src/main/agents/runs-db';
 import type { AgentOwnerSnapshot } from '../../../src/shared/agents';
 
 const roots: string[] = [], managers: ChatManager[] = [];
@@ -41,7 +42,7 @@ function fixture(extra: Partial<ChatManagerOptions> = {}) {
     return c;
   };
   const run = (id: string) => m.list().find(x => x.id === id)?.run;
-  const file = () => JSON.parse(fs.readFileSync(path.join(dir, 'agent-runs.json'), 'utf8')) as { version: number; runs: { runId: string; endReason?: string }[] };
+  const file = () => exportRuns(path.join(dir, 'app.db')) as { version: number; runs: { runId: string; endReason?: string }[] };
   return { m, dir, create, run, file, sink: (id: string) => sinks.get(id)! };
 }
 
@@ -76,10 +77,11 @@ describe('agent runs on chats', () => {
     phrases.source = 'oneshot'; phrases.oneshot = { engine: 'claude', job: 'phrases', fallback: false, costBasis: 'reported' };
     f.m.runs.save();
     await f.m.shutdown(); managers.splice(managers.indexOf(f.m), 1);
-    const file = path.join(f.dir, 'agent-runs.json');
-    const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+    // the store as an agent-runs.json with a record out of shape: moved into a new app.db at the next start
+    const saved = exportRuns(path.join(f.dir, 'app.db'))!;
     saved.runs.splice(1, 0, { ...phrases, runId: 'r_ffffffffffff', oneshot: { ...phrases.oneshot, job: 'future-job' } });
-    fs.writeFileSync(file, JSON.stringify(saved));
+    for (const n of fs.readdirSync(f.dir)) if (n.startsWith('app.db')) fs.rmSync(path.join(f.dir, n));
+    fs.writeFileSync(path.join(f.dir, 'agent-runs.json'), JSON.stringify(saved));
     const recovered = fixture({ userData: f.dir });
     expect(recovered.m.runs.problem).toBeNull();
     expect(recovered.m.runs.get(old.run!.runId)).toBeDefined();
@@ -258,7 +260,7 @@ describe('agent runs on chats', () => {
     expect(f.run(c.id)).toMatchObject({ costUsd: null, tokens: null });
   });
 
-  it('writes a settled turn to agent-runs.json once per RUN_SAVE_MS, not at each turn (a 7 MB sync write froze the window)', async () => {
+  it('writes a settled turn to the run store once per RUN_SAVE_MS, not at each turn (a 7 MB sync write froze the window)', async () => {
     const f = fixture();
     const c = await f.create();
     const tokens = { input: 10, cacheRead: 5, cacheWrite: 1, output: 2 };
@@ -292,7 +294,7 @@ describe('agent runs on chats', () => {
     const id = f.run(c.id)!.runId;
     await f.m.archive(c.id);
     await f.m.shutdown(); managers.splice(managers.indexOf(f.m), 1);
-    fs.rmSync(path.join(f.dir, 'agent-runs.json'));
+    for (const n of fs.readdirSync(f.dir)) if (n.startsWith('app.db')) fs.rmSync(path.join(f.dir, n));
     const g = fixture({ userData: f.dir });
     expect(g.m.runs.get(id)).toMatchObject({ endReason: 'closed' });
   });

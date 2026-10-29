@@ -126,6 +126,12 @@
   main decrypts a key when its engine needs it. This is separate from unencrypted API conversation history.
 - Agent profiles, frozen chat owners and their instructions, and local setup preferences are private profile data
   (`agents.json`, `chats.json`, `setup.json`).
+- The agent runs (one record per role chat, the rollups of pruned runs, Flash's outcomes) are in `userData/app.db`, a
+  SQLite database on `node:sqlite` (WAL, one row per run, only changed runs written; `main/app-db.ts`,
+  `main/agents/runs-db.ts`, ADR 0199). At the first start of a release with it, `agent-runs.json` is imported in one
+  transaction and kept as `agent-runs.json.migrated-<date>`; when the database cannot be used the store stays on
+  `agent-runs.json` (the fallback). A damaged `app.db` is renamed `app.db.corrupt-<date>`, never deleted.
+  `npm run levels` reads either, read only.
   Browser sign-in/password hand-offs follow their explicit user-action flow; profile backups must be treated as private.
 - Every record has an `id`; owner fields can be added for the team horizon (`VISION.md`) without breaking shapes.
 

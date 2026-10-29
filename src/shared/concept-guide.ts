@@ -303,7 +303,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/shared/agents.ts AgentRun
       tech(DATA, 'AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, outcome?, counters, costUsd | null, tokens | null, report?, tier?, parentRunId?, reviewOf?, reworkOf?, continuedFrom?, tags? }.',
         'AgentRun { runId, chatId, agentId, version, goal, startedBy, startedAt, endedAt?, endReason?, outcome?, counters, costUsd | null, tokens | null, report?, tier?, parentRunId?, reviewOf?, reworkOf?, continuedFrom?, tags? }.'),
-      tech(FILES, 'userData/agent-runs.json è la fonte; ChatSummary.run ne è una copia; i giudizi in run-feedback.json.', 'userData/agent-runs.json is the source; ChatSummary.run mirrors it; verdicts in run-feedback.json.'),
+      tech(FILES, 'userData/app.db (SQLite, una riga per run; prima dell’ADR 0199 agent-runs.json, conservato come agent-runs.json.migrated-<data>) è la fonte; ChatSummary.run ne è una copia; i giudizi in run-feedback.json.', 'userData/app.db (SQLite, one row per run; agent-runs.json before ADR 0199, kept as agent-runs.json.migrated-<date>) is the source; ChatSummary.run mirrors it; verdicts in run-feedback.json.'),
       // src/main/agents/runs.ts RUNS_MAX, RUNS_BYTES, STALE_MS
       tech(LIMITS, 'RUNS_MAX = 5000, RUNS_BYTES = 7 000 000, STALE_MS = 72 h.', 'RUNS_MAX = 5000, RUNS_BYTES = 7,000,000, STALE_MS = 72 h.'),
       tech(TOOLS, 'Il rapporto finale è lo strumento agent_report del ruolo.', 'The final report is the role’s agent_report tool.'),
@@ -320,8 +320,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('L’app osserva le sessioni di ogni agente (costi e tempi) per il suo uso interno; non le mostra più per agente in Costi.',
         'The app observes each agent’s sessions (costs and times) for its own use; Costs no longer lists them per agent.'),
       // src/main/agents/run-metrics.ts; src/main/index.ts agents:metrics
-      b('Il main calcola anche metriche per agente e versione dalle run concluse in agent-runs.json e dai riepiloghi delle run potate; le carte della pagina Agenti ne mostrano lavori conclusi, in corso e costo mediano.',
-        'Main also computes per-agent and per-version metrics from ended runs in agent-runs.json and rollups of pruned runs; the Agenti page cards show ended runs, open runs and the median cost.'),
+      b('Il main calcola anche metriche per agente e versione dalle run concluse nel registro delle run (app.db) e dai riepiloghi delle run potate; le carte della pagina Agenti ne mostrano lavori conclusi, in corso e costo mediano.',
+        'Main also computes per-agent and per-version metrics from ended runs in the run store (app.db) and rollups of pruned runs; the Agenti page cards show ended runs, open runs and the median cost.'),
       // src/renderer/components/AgentCatalogCard.tsx Costs (#125)
       b('Sul retro della carta, i costi dell’agente: costo mediano per lavoro e costo per lavoro riuscito e verificato (il costo di tutti i lavori conclusi diviso per i riusciti verificati), con su quanti lavori. Un numero che manca è un trattino, con una riga che dice perché.',
         'On the back of the card, the agent’s costs: median cost per run and cost per verified successful run (the cost of every ended run divided by the verified successful ones), with how many runs. A missing number is a dash, with one line saying why.'),
@@ -344,7 +344,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'AgentMeasure { total, knownSubtotal, knownSessions, unknownSessions }; timing per categoria con medianMs.', 'AgentMeasure { total, knownSubtotal, knownSessions, unknownSessions }; timing per category with medianMs.'),
       // src/main/wiring.ts /api/agents/analytics
       // src/main/agents/level-diagnosis.ts, scripts/levels.mjs (ADR 0131)
-      tech(WHERE, 'Diagnosi dei livelli: npm run levels -- <agent-runs.json> ricalcola livello e performance di ogni ruolo e dice perché i lavori non hanno dato XP (solo lettura, zero token).', 'Levels diagnostic: npm run levels -- <agent-runs.json> recomputes every role’s level and performance and says why runs gave no XP (read only, zero tokens).'),
+      tech(WHERE, 'Diagnosi dei livelli: npm run levels -- [<app.db | agent-runs.json | cartella userData>] ricalcola livello e performance di ogni ruolo e dice perché i lavori non hanno dato XP (solo lettura, zero token).', 'Levels diagnostic: npm run levels -- [<app.db | agent-runs.json | userData folder>] recomputes every role’s level and performance and says why runs gave no XP (read only, zero tokens).'),
       tech(WHERE, 'Metriche delle run: IPC agents:metrics, anche filtrate per tag skill, app e repo; le statistiche delle sessioni restano interne (/api/agents/analytics).', 'Run metrics: agents:metrics IPC, also filtered by skill, app and repo tags; the session statistics stay internal (/api/agents/analytics).'),
     ],
     sources: ['src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/agents/standing.ts', 'src/main/agents/judge-sample.ts', 'src/renderer/components/AgentCatalogCard.tsx', 'src/main/index.ts', 'src/main/agents/collector.ts', 'docs/agent-evidence.md', 'docs/adr/0125-every-role-levels-up-from-outcomes.md', 'src/main/agents/receipts.ts', 'docs/adr/0130-run-receipts-before-reviews.md', 'src/main/agents/xp.ts', 'src/main/agents/flash-outcomes.ts', 'src/main/agents/level-diagnosis.ts', 'docs/adr/0131-levels-by-job-size-and-bayesian-performance.md'],

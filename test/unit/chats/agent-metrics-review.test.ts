@@ -11,6 +11,7 @@ import type { HarnessSession, SessionSink } from '../../../src/main/chats/sessio
 import { ChatStore } from '../../../src/main/chats/store';
 import { plainOwner } from '../../../src/main/agents/catalog';
 import { RUNS_MAX, endRun } from '../../../src/main/agents/runs';
+import { RunsDb } from '../../../src/main/agents/runs-db';
 
 const roots: string[] = [], managers: ChatManager[] = [];
 afterEach(async () => { vi.useRealTimers(); for (const m of managers.splice(0)) await m.shutdown(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
@@ -94,7 +95,9 @@ describe('a pruned run is never counted again', () => {
     await f.m.archive(c.id);
     const endedAt = f.run(c.id)!.endedAt!;
     await f.m.shutdown(); managers.splice(managers.indexOf(f.m), 1);
-    // the store pruned the run but chats.json still holds its mirror (e.g. the app stopped before chats.json was written)
+    // the store pruned the run but chats.json still holds its mirror (e.g. the app stopped before chats.json was written):
+    // that store as an agent-runs.json, moved into a new app.db at the next start
+    for (const n of fs.readdirSync(f.dir)) if (n.startsWith('app.db')) fs.rmSync(path.join(f.dir, n));
     fs.writeFileSync(path.join(f.dir, 'agent-runs.json'), JSON.stringify({ version: 1, runs: [], prunedThrough: endedAt }));
 
     const g = fixture({ userData: f.dir });
@@ -200,22 +203,22 @@ describe('a run report goes to its own turn', () => {
 });
 
 describe('agents:metrics on a failed write', () => {
-  it('runMetrics still answers from memory when agent-runs.json cannot be written', async () => {
+  it('runMetrics still answers from memory when the run store cannot be written', async () => {
     const f = fixture();
     const c = await f.create();
-    // agent-runs.json cannot be replaced (on Windows: a lock held by an antivirus or indexer; here: a directory)
-    fs.rmSync(path.join(f.dir, 'agent-runs.json'));
-    fs.mkdirSync(path.join(f.dir, 'agent-runs.json'));
+    // app.db cannot be written (a lock held by another process past the busy timeout, a full disk)
+    const write = vi.spyOn(RunsDb.prototype, 'write').mockImplementation(() => { throw Object.assign(new Error('database is locked'), { errcode: 5 }); });
     f.sink(c.id).changed({ contextTokens: 500 }); // touch(): the store is dirty
     expect(() => f.m.runMetrics()).not.toThrow();
+    write.mockRestore();
   });
 
   it('the answer from memory has the open run in it', async () => {
     const f = fixture();
     const c = await f.create();
-    fs.rmSync(path.join(f.dir, 'agent-runs.json'));
-    fs.mkdirSync(path.join(f.dir, 'agent-runs.json'));
+    const write = vi.spyOn(RunsDb.prototype, 'write').mockImplementation(() => { throw Object.assign(new Error('database is locked'), { errcode: 5 }); });
     f.sink(c.id).changed({ contextTokens: 500 });
     expect(f.m.runMetrics().find(a => a.agentId === 'reviewer')).toMatchObject({ open: 1 });
+    write.mockRestore();
   });
 });

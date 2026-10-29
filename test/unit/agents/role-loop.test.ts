@@ -9,6 +9,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AgentCatalogService } from '../../../src/main/agents/catalog';
 import { AgentRunStore } from '../../../src/main/agents/runs';
+import { closeAppDbs } from '../../../src/main/app-db';
 import { RunFeedback } from '../../../src/main/agents/run-feedback';
 import { createAgentLoop } from '../../../src/main/agents/loop';
 import { evaluateTrial, TRIAL_MAX_DAYS } from '../../../src/main/agents/trials';
@@ -16,7 +17,7 @@ import { suggestTiers, TIER_MIN_KNOWN } from '../../../src/main/agents/suggestio
 import type { AgentModelChoice, AgentProfile, AgentRun } from '../../../src/shared/agents';
 
 const dirs: string[] = [];
-afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+afterEach(() => { closeAppDbs(); for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-role-loop-')); dirs.push(d); return d; };
 const models = (): AgentModelChoice[] => [{ engine: 'claude', label: 'Claude', enabled: true, trusted: true, effort: true, defaultModel: true, modelSelectable: true, modelReason: null, source: 'observed', models: [], installed: null, authenticated: null }];
 const DAY = 86_400_000, T0 = Date.UTC(2026, 9, 1, 12);
