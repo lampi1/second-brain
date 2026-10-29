@@ -3,12 +3,14 @@
 // e2e project (scripts/e2e.mjs, one worker less than the machine allows); then, alone, the unit tests that start real
 // processes (scripts/process-units.mjs finds them by a rule: their deadlines miss beside three Electron instances),
 // then the exclusive e2e specs (they time things: nothing else may load the machine). A red step never stops
-// the others: one run shows every failure, the summary lists them. Green, it records the commit through
-// scripts/check-pass.mjs. Used by package.json "check" (and so by `npm run promote`).
+// the others: one run shows every failure, the summary lists them. The e2e steps fail only on «nuovi rossi» (failed and
+// not in test/e2e/known-red.json, ADR 0198); the summary repeats the verdict of both projects (rossi noti, nuovi verdi).
+// Green, it records the commit through scripts/check-pass.mjs. Used by package.json "check" (and so by `npm run promote`).
 import { spawn, spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { pickWorkers } from './e2e.mjs';
+import { REPORT_DIR, classify, formatVerdict, loadReports, readBaseline } from './e2e-verdict.mjs';
 import { processUnits } from './process-units.mjs';
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -52,7 +54,8 @@ async function main() {
   const vitest = bin('vitest', 'vitest.mjs');
   const units = processUnits();
   for (const [label, args] of [
-    ['typecheck', [bin('typescript', 'bin/tsc'), '-p', 'tsconfig.json', '--noEmit']],
+    // the native TypeScript 7 compiler (ADR 0198, ~9x faster); eslint keeps TypeScript 6's API (`typescript`)
+    ['typecheck', [bin('typescript7', 'bin/tsc'), '-p', 'tsconfig.json', '--noEmit']],
     ['lint', [bin('eslint', 'bin/eslint.js'), '.']],
     ['unit', [vitest, 'run', ...units.flatMap(f => ['--exclude', f])]],
   ]) note(label, await held(label, args));
@@ -62,6 +65,8 @@ async function main() {
   note('unit (processes)', spawnSync(process.execPath, [vitest, 'run', ...units], { stdio: 'inherit' }).status ?? 1);
   console.log('\n> e2e exclusive (alone)');
   note('e2e (exclusive)', spawnSync(process.execPath, ['scripts/e2e.mjs', '--only', 'exclusive', '--keep-shots'], { stdio: 'inherit' }).status ?? 1);
+  const { report, results } = loadReports(['parallel', 'exclusive'].map(p => path.join(REPORT_DIR, `${p}.json`)));
+  if (report) console.log(formatVerdict(classify(results, readBaseline()), 'e2e (both projects)', { showMissing: true }));
   if (failed.length) fail(failed.join(', '), 1);
   step('record', ['scripts/check-pass.mjs']);
 }

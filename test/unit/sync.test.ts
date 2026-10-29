@@ -1,3 +1,4 @@
+// src/main/sync.ts: the product sync of brain paths (globs, failure dedup, outcome events), also across restarts.
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';

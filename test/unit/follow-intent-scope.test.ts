@@ -1,3 +1,4 @@
+// src/renderer/lib/observe-follow-bottom.ts: only the list's own pointer gestures count as reading intent.
 import {expect,it,vi} from 'vitest';
 import {observeFollowBottom} from '../../src/renderer/lib/observe-follow-bottom';
 it('does not treat a mosaic resize pointerup elsewhere as reading intent and observes intrinsic content',()=>{

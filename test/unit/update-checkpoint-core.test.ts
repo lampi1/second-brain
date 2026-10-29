@@ -1,3 +1,4 @@
+// src/renderer/lib/update-checkpoint-core.ts: the UI snapshot kept across an update (allowed keys, size, freeze/release).
 import {expect,it,vi} from 'vitest';
 import {UPDATE_SNAPSHOT_KEYS,type UpdateSnapshot} from '../../src/shared/app-update';
 import {adoptUpdateRecovery,createCheckpointCoordinator,validateUpdateSnapshot} from '../../src/renderer/lib/update-checkpoint-core';

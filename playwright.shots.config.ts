@@ -1,3 +1,4 @@
+// Playwright config of the README screenshots (`npm run shots`).
 import { defineConfig } from '@playwright/test';
 
 // README screenshots (test/shots/readme.spec.ts → docs/screenshots/*.webp), run by `npm run shots`. Never part of the

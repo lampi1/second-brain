@@ -1,3 +1,4 @@
+// Vite config of the renderer build (scripts/build.mjs); main and preload build with esbuild.
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'node:path';

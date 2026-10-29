@@ -47,7 +47,7 @@ function main() {
   console.log(`check:branch on ${branch} (base ${mainRef} ${base.slice(0, 7)}): ${changed.length} changed files; no e2e (only on main, ADR 0027)`);
 
   run('start', 'node', ['scripts/check-pass.mjs', '--start']);
-  run('typecheck', 'npm', ['run', 'typecheck']);
+  run('typecheck', 'npm', ['run', 'typecheck']); // the native TypeScript 7 compiler (ADR 0198)
   const lintAll = changed.some(f => /^(eslint\.config\.|package(-lock)?\.json$|tsconfig\.json$)/.test(f));
   const lintable = changed.filter(f => /\.(ts|tsx|mjs|js|cjs)$/.test(f) && fs.existsSync(f));
   if (lintAll) run('lint', 'npx', ['eslint', '.']);

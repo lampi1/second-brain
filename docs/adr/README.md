@@ -197,3 +197,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0189](0189-impara-subjects-and-spaced-review.md) Impara: subjects, verified review cards, spaced review — accepted
 - [0190](0190-impara-tutor-and-entry-points.md) Impara: a tutor that answers at once, and learning from where you are — accepted
 - [0191](0191-night-mode.md) Modalità notte: the user is away, the agents go on with the recommended choices — accepted
+- [0198](0198-developer-speed-typecheck-e2e-baseline-agents-map.md) Developer speed: TypeScript 7 typecheck, an e2e baseline of known reds, AGENTS.md as a map — accepted
