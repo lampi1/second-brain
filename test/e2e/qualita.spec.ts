@@ -33,10 +33,12 @@ test('Qualità: four true metrics with source and dates, out-of-count rows visib
   await expect(p.getByTestId('bx-q-trovati')).toBeVisible({ timeout: 30000 });
   await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30000 });
 
-  // 1) caught per 100 turns: the logs' days, both sides
+  // 1) his corrections per 100 turns (ADR 0197): the logs' days, both sides, with the breakdown and «Come lo conto»
   const caught = p.getByTestId('bx-q-trovati');
   await expect(caught).toContainText('ogni 100 turni');
-  await expect(caught).toContainText(/Fonte: ai-errors\.md.*dal .* al /);
+  await expect(caught).toContainText(/Fonte: le tue correzioni.*ai-errors\.md.*dal .* al /);
+  await expect(caught).toContainText(/correzioni tue su .* turni: .*«Correggi il pensiero»/);
+  await expect(caught.getByTestId('bx-q-trovati-how')).toContainText('Come lo conto');
   // 2) rules: judged ones only, young ones "troppo presto", rows out of the count said
   const rules = p.getByTestId('bx-q-tornati');
   await expect(rules).toContainText('2 su 4');
@@ -48,7 +50,7 @@ test('Qualità: four true metrics with source and dates, out-of-count rows visib
   await expect(p.getByTestId('bx-q-pr-list')).toContainText('test case fallito: Sconto in fattura saldo');
   await expect(p.getByTestId('bx-q-riaperti')).toContainText('su 38 risolti da te (8%)');
   await expect(p.getByTestId('bx-q-riaperti-list')).toContainText('riaperto');
-  await expect(p.getByTestId('bx-lead')).toContainText('errori ogni 100 turni');
+  await expect(p.getByTestId('bx-lead')).toContainText('correzioni ogni 100 turni');
   // gone until they have data
   for (const gone of ['lodi', 'taccuini', 'misure']) await expect(p.getByTestId(`bx-tab-${gone}`)).toHaveCount(0);
   await shot(page, 'qualita');
