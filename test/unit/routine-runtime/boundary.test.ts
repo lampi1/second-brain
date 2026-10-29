@@ -140,6 +140,8 @@ describe('read-only DevOps MCP server', () => {
     expect(urls).toEqual([`GET ${ORG_URL}/Proj/Proj%20Team/_apis/work/teamsettings/iterations?$timeframe=current&api-version=7.1`]);
     expect(JSON.stringify(await handleDevOpsMessage(call('current_iteration', { project: 'Other', team: 'T' }), config, reading as never))).toContain('not one of this routine');
     expect(JSON.stringify(await handleDevOpsMessage(call('current_iteration', { project: 'Proj', team: '../x' }), config, reading as never))).toContain('team: a team name');
+    for (const team of ['.', '..', ' ... ']) expect(JSON.stringify(await handleDevOpsMessage(call('current_iteration', { project: 'Proj', team }), config, reading as never))).toContain('team: a team name');
+    expect(urls).toHaveLength(1);
     value = [];
     expect(JSON.stringify(await handleDevOpsMessage(call('current_iteration', { project: 'Proj', team: 'Proj Team' }), config, reading as never))).toContain('has no current iteration');
     expect(urls).toHaveLength(2);
