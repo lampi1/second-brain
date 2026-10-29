@@ -26,12 +26,12 @@ pile grow over a day, and why closing chats did not bring it down:
 ## Decision
 
 1. Archiving a chat (by hand or automatically) reaps the tools of the engines it outlived, whether or not it has an
-   engine now; pruning an archive reaps them before the record goes. The Orchestrator and Flash never keep an old
-   engine's tools (they run no dev server of their own), and an engine started while typing that ends unused takes its
-   tools with it (it ran no turn). A chat that goes on still keeps a dev server it started until it really closes.
+   engine now; pruning an archive reaps them before the record goes. The Orchestrator and Flash keep an old
+   engine's tools only while a background command of theirs still runs, and only until their next engine change (they
+   never close), and an engine started while typing that ends unused takes its tools with it (it ran no turn). A chat that goes on still keeps a dev server it started until it really closes.
 2. A chat that closes (archived or removed) ends its connector processes at once (`McpGateway.closeChat`); a reopened
-   chat opens them again at its next call. Connector processes and the brain's Node tools start below normal priority,
-   like the engines; the update's build (the user waits on it) keeps normal priority.
+   chat opens them again at its next call. Connector processes and the brain's background polls (cost, chats, estimates)
+   start below normal priority, like the engines; what the user clicks and waits on keeps normal priority.
 3. The result index is rebuilt only when the runs changed (`AgentRunStore.revision`); which chat a run belongs to is
    checked when it is read. The context meter is saved at the turn's end, not with every assistant message.
 4. `chats.json`'s synchronous checkpoint (write, fsync, read back) is named in the stall log

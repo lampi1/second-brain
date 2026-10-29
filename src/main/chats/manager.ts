@@ -1484,8 +1484,12 @@ export class ChatManager implements ChatService {
    *  (owner, 2026-10-12); its tools are reaped when the chat really closes (reapKept). */
   private closeKeeping(r: Rec, sess: HarnessSession): Promise<void> {
     // the Orchestrator and Flash never close, so nothing would ever reap what their old engines left: MCP servers and
-    // shells piled up all day (2026-10-29); they start no dev server of their own, so their tools end with the engine
-    if (r.s.isOrchestrator || r.s.quick) return sess.close();
+    // shells piled up all day (2026-10-29). Their tools end with the engine, unless a background command still runs
+    // (a check it started): that engine is kept until their next engine change, which reaps the ones kept before.
+    if (r.s.isOrchestrator || r.s.quick) {
+      this.reapKept(r);
+      if (!(r.s.background ?? 0)) return sess.close();
+    }
     (r.kept ??= []).push(sess);
     return sess.close(undefined, true);
   }
@@ -1531,9 +1535,10 @@ export class ChatManager implements ChatService {
       })();
       try { await r.archiving; } finally { r.archiving = undefined; }
     }
-    // the engines it outlived (a model change, a prewarm, an idle release) go too, even when it had no engine left now:
-    // only close() reaped them before, and a chat archived without one left its MCP servers running all day (2026-10-29)
-    this.reapKept(r);
+    // the engines it outlived (a model change, an idle release) go too, even when it had no engine left now: only
+    // close() reaped them before, and a chat archived without one left its MCP servers running all day (2026-10-29).
+    // The user's ✕ leaves them to its final close (chat:close after the «Annulla» toast): an Annulla finds its dev server.
+    if (!opts.undoable) this.reapKept(r);
     for (const id of [...r.pending.keys()]) this.dropPending(r, id);
     this.flushItems(chatId);
     r.s.closedAt = Date.now();
