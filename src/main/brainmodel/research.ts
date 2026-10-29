@@ -24,7 +24,7 @@ import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { BrainModelState, LogScan, MaintenanceRun } from '../../shared/brain-model';
 import type { ChatSummary, Effort, Harness, Lang, NewChat } from '../../shared/contract';
-import { CANDIDATE_PENDING, RESEARCH_TOOL_KINDS, type LintCheck, type LintFinding, type ResearchRevert, familyOf, isAppKind, RESEARCH_CAP_USD, type BrainCandidate, type BrainCandidateView, RESEARCH_CAPS, RESEARCH_KINDS, type MaintenanceDone, type MaintenanceStatus, type ResearchChange, type ResearchForget,
+import { CANDIDATE_PENDING, RESEARCH_TOOL_KINDS, type LintCheck, type LintFinding, type ResearchRevert, familyOf, isAppKind, RESEARCH_CAP_USD, type BrainCandidate, type BrainCandidateView, RESEARCH_CAPS, type MaintenanceDone, type MaintenanceStatus, type ResearchChange, type ResearchForget,
   type ResearchIssue, type ResearchKind, type ResearchOptions, type ResearchProposal, type ResearchRunInfo, type ResearchSource } from '../../shared/maintenance-research';
 import { isRoleId } from '../../shared/roles';
 import { errText, log } from '../log';
