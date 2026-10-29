@@ -70,7 +70,7 @@ input, textarea, .md, .bubble, .tool-pre, .diff-patch, .ask-cmd, .thinking-text 
 
 .pill { display: inline-flex; align-items: center; gap: 5px; height: 20px; padding: 0 8px; border-radius: 99px; font-size: 11px; font-weight: 600; white-space: nowrap; flex: none; letter-spacing: 0.01em; }
 .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
-html[data-blink="1"] .pill-dot { opacity: 0.35; } /* lib/beat.ts */
+.pill-dot[data-blink="1"] { opacity: 0.35; } /* lib/beat.ts */
 .pill-run { background: var(--blue-bg); color: var(--blue); }
 .pill-wait { background: var(--amber-bg); color: var(--amber); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--amber) 30%, transparent); }
 .pill-done { background: var(--green-bg); color: var(--green); }
@@ -435,7 +435,7 @@ button.lc-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 
   content: ""; display: inline-block; width: 7px; height: 14px; margin-left: 3px; vertical-align: -2px; border-radius: 1.5px;
   background: var(--blue);
 }
-html[data-blink="1"] .md.streaming > .md-b:last-child > :last-child::after { opacity: 0; } /* lib/beat.ts */
+.md.streaming[data-blink="1"] > .md-b:last-child > :last-child::after { opacity: 0; } /* lib/beat.ts */
 
 .tool { border: 1px solid var(--border); background: var(--bg); border-radius: var(--r-s); overflow: hidden; flex: none; }
 .tool-row {

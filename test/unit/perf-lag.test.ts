@@ -1,6 +1,6 @@
 // Unit tests of the "Lag nell'app" fixes (2026-10-12): the typing probe's summary (renderer/lib/inputlag.ts) and its
 // log line (main/perf.ts: clamped numbers, a warning above 100 ms p95), and the alive-marks heartbeat
-// (renderer/lib/beat.ts: steps only while a mark is on the page, attributes in turn).
+// (renderer/lib/beat.ts: steps only while a mark is on the page, on the marks themselves, all together).
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanReport, logInputLag, SLOW_P95_MS, SLOW_STEP_MS, STALL_MS, slowStep, stallCause, stallOf, startStallWatch, timedStep } from '../../src/main/perf';
 import { log } from '../../src/main/log';
@@ -66,31 +66,34 @@ describe('typing probe pairing', () => {
 describe('alive-marks heartbeat', () => {
   afterEach(() => { vi.unstubAllGlobals(); vi.resetModules(); });
 
-  const fakeDom = (alive: () => boolean) => {
-    const attrs = new Map<string, string>();
-    const doc = {
-      hidden: false,
-      documentElement: { getAttribute: (k: string) => attrs.get(k) ?? null, setAttribute: (k: string, v: string) => { attrs.set(k, v); }, removeAttribute: (k: string) => { attrs.delete(k); } },
-      querySelector: () => (alive() ? {} : null),
-      addEventListener: () => {},
-    };
+  const el = () => { const attrs = new Map<string, string>(); return { attrs, getAttribute: (k: string) => attrs.get(k) ?? null, setAttribute: (k: string, v: string) => { attrs.set(k, v); }, removeAttribute: (k: string) => { attrs.delete(k); } }; };
+  /** marks: class list → the elements that carry it (live: the test may add some later) */
+  const fakeDom = (marks: Record<string, ReturnType<typeof el>[]>) => {
+    const root = el();
+    const doc = { hidden: false, documentElement: root, getElementsByClassName: (c: string) => (marks[c] ??= []), addEventListener: () => {} };
     vi.stubGlobal('document', doc);
-    return attrs;
+    return root;
   };
 
   it('does nothing while no alive mark is on the page', async () => {
-    const attrs = fakeDom(() => false);
+    const root = fakeDom({});
     const { step } = await import('../../src/renderer/lib/beat');
     step(); step();
-    expect(attrs.size).toBe(0);
+    expect(root.attrs.size).toBe(0);
   });
 
-  it('steps dots, spinner and blink in turn while a mark is there', async () => {
-    const attrs = fakeDom(() => true);
+  it('blinks every mark together, on the marks themselves, never on the root', async () => {
+    const dot = el(), caret = el(), live = el();
+    const marks = { 'pill-dot': [dot], 'md streaming': [caret], 'bx-live-dot run': [live] };
+    const root = fakeDom(marks);
     const { step } = await import('../../src/renderer/lib/beat');
     const seen: string[] = [];
-    for (let i = 0; i < 4; i++) { step(); seen.push(`${attrs.get('data-b3')}${attrs.get('data-b4')}${attrs.get('data-blink')}`); }
-    expect(seen).toEqual(['111', '220', '031', '100']);
+    for (let i = 0; i < 4; i++) { step(); seen.push(`${dot.attrs.get('data-blink')}${caret.attrs.get('data-blink')}${live.attrs.get('data-blink')}`); }
+    expect(seen).toEqual(['111', '000', '111', '000']);
+    expect(root.attrs.size).toBe(0); // nothing on <html>: no whole-document restyle
+    const late = el(); marks['pill-dot'].push(late); // a mark that appears takes the beat at the next step
+    step();
+    expect(late.attrs.get('data-blink')).toBe(dot.attrs.get('data-blink'));
   });
 });
 
