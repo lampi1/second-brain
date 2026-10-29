@@ -253,7 +253,6 @@ app.whenReady().then(async () => {
     },
     // the first setup's new memory, in the app's data folder (the only way the app creates one)
     'app:createBrain': a => defaultBrain.ensure(a?.language, a?.harness),
-    'progress:get': () => s.progress.get(),
     'chat:autoCloseGet': () => { s.autoClose.refresh(); return s.autoClose.state(); },
     'chat:autoClosePresence': a => s.autoClose.setPresence(Array.isArray(a?.holds) ? a.holds : []),
     'chat:autoCloseKeep': a => { if (typeof a?.chatId !== 'string' || typeof a.keep !== 'boolean') throw new Error('Richiesta non valida.'); s.autoClose.keepOpen(a.chatId, a.keep); },

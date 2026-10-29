@@ -1,7 +1,8 @@
 // Approval-only version evaluation: compare the trial version's runs with the frozen pre-trial baseline over the same
-// role × skill set (ADR 0083: the unit of comparison). The success rate counts verified verdicts: the user's, a verified
-// review's and the facts' once settled (ADR 0100, shared/run-verdict.ts). Lifecycle adapters persist the result as a
-// proposal; this module never changes a catalog version. Used by lifecycle.ts.
+// role × skill set (ADR 0083: the unit of comparison). The success rate counts verified verdicts only: the user's and a
+// verified review's (shared/run-verdict.ts verifiedVerdict; the facts' proxy never counts since ADR 0100). Lifecycle
+// adapters persist the result as a proposal; this module never changes a catalog version. Kept by ADR 0182: a trial
+// still starts whenever the user approves a "Da approvare" proposal (catalog.ts approveTrial). Used by lifecycle.ts.
 import type { AgentProfile, AgentRun, VersionMetrics } from '../../shared/agents';
 import type { TrialEvaluation } from '../../shared/agent-lifecycle';
 import { rollUp, runMetrics } from './run-metrics';

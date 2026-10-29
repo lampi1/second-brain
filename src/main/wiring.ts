@@ -29,7 +29,6 @@ import { SetupService } from './agents/setup';
 import { uiLang } from './locale';
 import { AutoCloseService, autoCloseNow } from './chats/auto-close';
 import { readLocal, writeLocal } from './agents/local-store';
-import { ProgressService } from './agents/progress';
 import { mountLifecycleApi, type LifecycleApi } from './agents/lifecycle-api';
 import { maintenanceEvent, proposalEvent } from './brain/announce';
 import { MorningService } from './morning/service';
@@ -158,7 +157,6 @@ export interface Wired {
   /** the Routine section's packages and runs (routines:* IPC); absent in the demo */
   routines?: Routines;
   updateChats?: { problem: () => string | null; checkpoint: () => void };
-  progress: ProgressService;
   autoClose: AutoCloseService;
   agents: AgentCatalogService;
   agentPacks: ReturnType<typeof createAgentPacks>;
@@ -456,8 +454,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     visible: () => { const w = ctx.window(); return !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized(); },
   });
   cloud.startPolling();
-  // Retired personal milestones: keep legacy IPC read-only and preserve the existing progress file.
-  const progressService = new ProgressService(ctx.userData, { enabled: false, chats: () => [] });
   // live turn costs and the Claude model list at the brain's per-model list prices (harness/models.json, else the
   // release template's), re-read at most every 30 s; set before the catalog reads its models (issue #96)
   setPriceTable(priceTableSource(() => brain.routingInfo().registry, () => { try { return path.join(templateRoot(), 'harness', 'models.json'); } catch { return null; } }));
@@ -982,7 +978,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     workflows, routineArchive, routines, brainModel, research, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
-    cloud, chats, browser, personal, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, progress: progressService, hybrid,
+    cloud, chats, browser, personal, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

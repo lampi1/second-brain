@@ -54,14 +54,14 @@ describe('agent metrics', () => {
       run({ costUsd: 3, tokens: tokens(30), counters: { questions: 0, permissions: 1, commands: 3, reopened: 0, contextPeak: 3000 }, executionMs: 300, startedAt: 0, endedAt: 2 * H }),
       run({ costUsd: null, tokens: null, startedAt: 0, endedAt: H }),
     ];
-    const m = runMetrics(runs, { windowOf: () => 4000 })[0]!.versions[0]!;
+    const m = runMetrics(runs)[0]!.versions[0]!;
     expect(m.costPerRun).toEqual({ median: { value: 2, n: 2, coverage: 2 / 3 }, p90: 3, total: 4 });
     expect(m.tokensPerRun.output).toEqual({ value: 40, n: 2, coverage: 2 / 3 });
-    expect(m.contextPeak).toEqual({ median: { value: 2000, n: 2, coverage: 2 / 3 }, max: 3000, ofWindow: 0.5 });
+    expect(m).not.toHaveProperty('contextPeak'); // no page showed it (ADR 0182)
     expect(m.timeToDone.elapsed).toEqual({ value: 2 * H, n: 3, coverage: 1 });
     expect(m.timeToDone.execution).toEqual({ value: 200, n: 2, coverage: 2 / 3 });
     expect(m.questionsPerRun.value).toBeCloseTo(2 / 3);
-    expect(m.permissionsPerRun.value).toBeCloseTo(2 / 3);
+    expect(m).not.toHaveProperty('permissionsPerRun'); // 0 on every run since every role has every permission (ADR 0182)
     expect(m.commandsPerRun).toEqual({ value: 1, n: 3, coverage: 1 });
     expect(median([5, 1, 3])).toBe(3);
     expect(p90([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])).toBe(9);

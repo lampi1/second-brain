@@ -225,7 +225,7 @@ const sample = (v: unknown): boolean => { const s = v as { n?: unknown; values?:
 const verdicts = (v: unknown): boolean => { const x = v as Record<string, unknown> | null; return !!x && count(x.success) && count(x.partial) && count(x.fail); };
 const counts = (v: unknown): v is TagTally => {
   const t = v as Record<string, unknown> | null, c = t?.corrections as Record<string, unknown> | null, a = t?.aiErrors as Record<string, unknown> | null;
-  return !!t && typeof t === 'object' && count(t.ended) && verdicts(t.verdicts) && verdicts(t.opinion) && verdicts(t.selfReport) && count(t.reworked) && count(t.questions) && count(t.permissions) && count(t.commands)
+  return !!t && typeof t === 'object' && count(t.ended) && verdicts(t.verdicts) && verdicts(t.opinion) && verdicts(t.selfReport) && count(t.reworked) && count(t.questions) && (t.permissions === undefined || count(t.permissions)) && count(t.commands)
     && !!c && count(c.runs) && count(c.tagged) && count(c.afterReport) && !!a && count(a.runs) && count(a.lines);
 };
 const bucket = (v: unknown, key: (k: string) => boolean): boolean => !!v && typeof v === 'object' && !Array.isArray(v) && Object.entries(v).every(([k, t]) => key(k) && counts(t));
@@ -246,10 +246,10 @@ const tagTallies = (v: unknown): boolean => {
 export function readTally(v: unknown): RunTally | null {
   const t = v as Record<string, unknown> | null;
   if (!t || typeof t !== 'object' || !str(t.agentId, 80) || !AGENT_ID.test(t.agentId) || !count(t.version) || !count(t.ended) || !verdicts(t.verdicts) || !verdicts(t.opinion) || !verdicts(t.selfReport)
-    || !count(t.reworked) || !count(t.questions) || !count(t.permissions) || !count(t.commands)) return null;
+    || !count(t.reworked) || !count(t.questions) || (t.permissions !== undefined && !count(t.permissions)) || !count(t.commands)) return null;
   const c = t.corrections as Record<string, unknown> | null, a = t.aiErrors as Record<string, unknown> | null, k = t.tokens as Record<string, unknown> | null;
   if (!c || !count(c.runs) || !count(c.tagged) || !count(c.afterReport) || !a || !count(a.runs) || !count(a.lines) || !k || !['input', 'output', 'cacheRead', 'cacheWrite'].every(x => sample(k[x]))
-    || ![t.cost, t.contextPeak, t.elapsed, t.execution].every(sample)) return null;
+    || ![t.cost, t.elapsed, t.execution].every(sample) || (t.contextPeak !== undefined && !sample(t.contextPeak))) return null;
   const reviews = t.reviews as Record<string, Record<string, unknown>> | null;
   if (!reviews || typeof reviews !== 'object' || Array.isArray(reviews) || !Object.entries(reviews).every(([key, r]) => /^[a-z][a-z0-9_-]{0,79}\/\d+$/.test(key) && r && count(r.runs) && r.runs > 0 && count(r.findings) && count(r.blockingRuns) && count(r.blocking))) return null;
   if (t.decisions !== undefined && !count(t.decisions)) return null;
@@ -260,6 +260,10 @@ export function readTally(v: unknown): RunTally | null {
   if (!xpOk(t.xp, XP_MAX * (t.ended as number)) || !xpOk(t.decisionXp, XP_MAX * ((t.decisions as number | undefined) ?? 0))) return null;
   if ((t.tags !== undefined && !tagTallies(t.tags)) || (t.tagsLost !== undefined && t.tagsLost !== true) || (t.tags !== undefined && t.tagsLost !== undefined)) return null;
   const result = structuredClone(t) as unknown as RunTally;
+  // the permissions count and the context peak are gone (ADR 0182): an older rollup's are dropped, its tags' too
+  const old = result as unknown as { permissions?: number; contextPeak?: unknown };
+  delete old.permissions; delete old.contextPeak;
+  for (const bucket of Object.values(result.tags ?? {})) for (const tag of Object.values(bucket as Record<string, TagTally>)) delete (tag as { permissions?: number }).permissions;
   if (result.verdictSchema !== 2) {
     // Old rollups mix self-reported silence with independent outcomes. Counts remain, quality is unknown.
     result.verdicts = { success: 0, partial: 0, fail: 0 };
@@ -496,7 +500,7 @@ export function fitRollups(rollups: RunTally[]): RunTally[] {
     if (!big || tagCount(big) === 0) break;
     delete big.tags; big.tagsLost = true;
   }
-  const samples = (t: RunTally) => [t.cost, t.contextPeak, t.elapsed, t.execution, ...Object.values(t.tokens)];
+  const samples = (t: RunTally) => [t.cost, t.elapsed, t.execution, ...Object.values(t.tokens)];
   const size = (t: RunTally) => samples(t).reduce((n, s) => n + s.values.length, 0);
   while (Buffer.byteLength(JSON.stringify(out, null, 2), 'utf8') > ROLLUP_BYTES) {
     const big = out.reduce((a, b) => size(b) > size(a) ? b : a, out[0]!);

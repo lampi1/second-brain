@@ -32,8 +32,10 @@ export interface RunTally {
   /** ai-errors.md lines naming the run, seen by Brother: runs checked against the file, and lines */
   aiErrors: { runs: number; lines: number };
   reworked: number;
-  questions: number; permissions: number; commands: number;
-  cost: Sample; tokens: Record<TokenKind, Sample>; contextPeak: Sample; elapsed: Sample; execution: Sample;
+  // no permissions count nor context peak (ADR 0182): with every role's permissions on by default the first was 0 on
+  // every run, and no page showed the second; an older rollup's fields are dropped on load (runs.ts readTally)
+  questions: number; commands: number;
+  cost: Sample; tokens: Record<TokenKind, Sample>; elapsed: Sample; execution: Sample;
   /** findings on this key's runs, per Reviewer `agentId/version`: the first parsed review of each run */
   reviews: Record<string, ReviewTally>;
   /** the same counts per run tag (AGENTS-DESIGN §4.8), for filtered metrics over pruned runs; untagged runs are in none */
@@ -54,7 +56,7 @@ export interface RunTally {
   tagsLost?: true;
 }
 /** Counts only (no samples): what a filtered metric can still say about pruned runs. */
-export type TagTally = Pick<RunTally, 'ended' | 'verdicts' | 'opinion' | 'selfReport' | 'corrections' | 'aiErrors' | 'reworked' | 'questions' | 'permissions' | 'commands'>;
+export type TagTally = Pick<RunTally, 'ended' | 'verdicts' | 'opinion' | 'selfReport' | 'corrections' | 'aiErrors' | 'reworked' | 'questions' | 'commands'>;
 export interface TagTallies { skills: Record<string, TagTally>; apps: Record<string, TagTally>; repos: Record<string, TagTally>; combined?: Record<string, TagTally> }
 /** JSON tuple avoids collisions between arbitrary app/repo names and absent dimensions. */
 export const tagFilterKey = (f: TagFilter): string => JSON.stringify([f.skill ?? null, f.app ?? null, f.repo ?? null]);
@@ -68,8 +70,6 @@ export interface MetricsInput {
   since?: number;
   /** the clock for the facts' verdict (default: now) */
   now?: number;
-  /** the model window of an agent version, for context peak ÷ window */
-  windowOf?: (agentId: string, version: number) => number | null;
   /** Only runs whose tags match; untagged runs never match. Rollups retain counts for combined filters too. */
   filter?: TagFilter;
   /** Whether an open run still belongs to a chat in the app (not closed, not gone, still its current run): a run left
@@ -81,8 +81,8 @@ const emptySample = (): Sample => ({ n: 0, values: [], sum: 0 });
 const verdicts = (): Verdicts => ({ success: 0, partial: 0, fail: 0 });
 export function emptyTally(agentId: string, version: number): RunTally {
   return { agentId, version, verdictSchema: 2, ended: 0, verdicts: verdicts(), opinion: verdicts(), selfReport: verdicts(), corrections: { runs: 0, tagged: 0, afterReport: 0 }, aiErrors: { runs: 0, lines: 0 },
-    reworked: 0, questions: 0, permissions: 0, commands: 0, cost: emptySample(), tokens: { input: emptySample(), output: emptySample(), cacheRead: emptySample(), cacheWrite: emptySample() },
-    contextPeak: emptySample(), elapsed: emptySample(), execution: emptySample(), reviews: {} };
+    reworked: 0, questions: 0, commands: 0, cost: emptySample(), tokens: { input: emptySample(), output: emptySample(), cacheRead: emptySample(), cacheWrite: emptySample() },
+    elapsed: emptySample(), execution: emptySample(), reviews: {} };
 }
 const push = (s: Sample, v: number): void => { s.n++; if (s.sum !== undefined) s.sum += v; s.values.push(v); if (s.values.length > SAMPLE_MAX) s.values.splice(0, s.values.length - SAMPLE_MAX); };
 const addVerdict = (v: Verdicts, verdict: AgentRunOutcome['verdict']): void => { if (verdict !== 'unknown') v[verdict]++; };
@@ -114,10 +114,9 @@ export function foldRun(t: RunTally, run: AgentRun, index: RunIndex, aiErrors?: 
   if (aiErrors) { t.aiErrors.runs++; t.aiErrors.lines += aiErrors.get(run.runId) ?? 0; }
   const end = run.endedAt;
   if (reworkedWithin(run, starts)) t.reworked++;
-  t.questions += run.counters.questions; t.permissions += run.counters.permissions; t.commands += run.counters.commands;
+  t.questions += run.counters.questions; t.commands += run.counters.commands;
   if (run.costUsd !== null) push(t.cost, run.costUsd);
   if (run.tokens) for (const k of TOKEN_KINDS) push(t.tokens[k], run.tokens[k]);
-  if (run.counters.contextPeak !== null) push(t.contextPeak, run.counters.contextPeak);
   push(t.elapsed, Math.max(0, end - run.startedAt));
   if (typeof run.executionMs === 'number') push(t.execution, run.executionMs);
   const first = new Map<string, AgentRun>();
@@ -149,9 +148,9 @@ export function mergeTallies(a: RunTally, b: RunTally, agentId = a.agentId, vers
     agentId, version, verdictSchema: 2, ended: a.ended + b.ended, verdicts: mergeVerdicts(a.verdicts, b.verdicts), opinion: mergeVerdicts(a.opinion, b.opinion), selfReport: mergeVerdicts(a.selfReport, b.selfReport),
     corrections: { runs: a.corrections.runs + b.corrections.runs, tagged: a.corrections.tagged + b.corrections.tagged, afterReport: a.corrections.afterReport + b.corrections.afterReport },
     aiErrors: { runs: a.aiErrors.runs + b.aiErrors.runs, lines: a.aiErrors.lines + b.aiErrors.lines },
-    reworked: a.reworked + b.reworked, questions: a.questions + b.questions, permissions: a.permissions + b.permissions, commands: a.commands + b.commands,
+    reworked: a.reworked + b.reworked, questions: a.questions + b.questions, commands: a.commands + b.commands,
     cost: mergeSample(a.cost, b.cost), tokens: Object.fromEntries(TOKEN_KINDS.map(k => [k, mergeSample(a.tokens[k], b.tokens[k])])) as Record<TokenKind, Sample>,
-    contextPeak: mergeSample(a.contextPeak, b.contextPeak), elapsed: mergeSample(a.elapsed, b.elapsed), execution: mergeSample(a.execution, b.execution), reviews,
+    elapsed: mergeSample(a.elapsed, b.elapsed), execution: mergeSample(a.execution, b.execution), reviews,
     ...(a.decisions || b.decisions ? { decisions: (a.decisions ?? 0) + (b.decisions ?? 0) } : {}),
     ...(a.decisionWins || b.decisionWins ? { decisionWins: (a.decisionWins ?? 0) + (b.decisionWins ?? 0) } : {}),
     ...(a.earnedWins || b.earnedWins ? { earnedWins: (a.earnedWins ?? 0) + (b.earnedWins ?? 0) } : {}),
@@ -162,10 +161,10 @@ export function mergeTallies(a: RunTally, b: RunTally, agentId = a.agentId, vers
   };
 }
 
-const TAG_FIELDS = ['ended', 'reworked', 'questions', 'permissions', 'commands'] as const;
+const TAG_FIELDS = ['ended', 'reworked', 'questions', 'commands'] as const;
 export function countsOf(t: TagTally): TagTally {
   return { ended: t.ended, verdicts: { ...t.verdicts }, opinion: { ...t.opinion }, selfReport: { ...t.selfReport }, corrections: { ...t.corrections }, aiErrors: { ...t.aiErrors },
-    reworked: t.reworked, questions: t.questions, permissions: t.permissions, commands: t.commands };
+    reworked: t.reworked, questions: t.questions, commands: t.commands };
 }
 function addCounts(a: TagTally, b: TagTally): void {
   for (const k of TAG_FIELDS) a[k] += b[k];
@@ -263,8 +262,8 @@ const metric = (value: number | null, n: number, ended: number): Metric => ({ va
 // the one success definition (shared/success.ts, ADR 0182): a partial counts half
 const rate = (v: Verdicts): { value: number | null; n: number } => { const n = v.success + v.partial + v.fail; return { value: ratio(v.success * VERDICT_WEIGHT.success + v.partial * VERDICT_WEIGHT.partial, n), n }; };
 
-export function finalize(t: RunTally, version: number | null, window: number | null = null): VersionMetrics {
-  const e = t.ended, success = rate(t.verdicts), peak = median(t.contextPeak.values);
+export function finalize(t: RunTally, version: number | null): VersionMetrics {
+  const e = t.ended, success = rate(t.verdicts);
   return {
     agentId: t.agentId, version, ended: e,
     successRate: metric(success.value, success.n, e), opinion: rate(t.opinion), selfReport: rate(t.selfReport),
@@ -273,9 +272,8 @@ export function finalize(t: RunTally, version: number | null, window: number | n
     reworkRate: metric(ratio(t.reworked, e), e, e),
     costPerRun: { median: metric(median(t.cost.values), t.cost.n, e), p90: p90(t.cost.values), total: t.cost.n > 0 ? sumOf(t.cost) ?? null : null },
     tokensPerRun: Object.fromEntries(TOKEN_KINDS.map(k => [k, metric(median(t.tokens[k].values), t.tokens[k].n, e)])) as Record<TokenKind, Metric>,
-    contextPeak: { median: metric(peak, t.contextPeak.n, e), max: t.contextPeak.values.length ? Math.max(...t.contextPeak.values) : null, ofWindow: peak !== null && window ? peak / window : null },
     timeToDone: { elapsed: metric(median(t.elapsed.values), t.elapsed.n, e), execution: metric(median(t.execution.values), t.execution.n, e) },
-    questionsPerRun: metric(ratio(t.questions, e), e, e), permissionsPerRun: metric(ratio(t.permissions, e), e, e), commandsPerRun: metric(ratio(t.commands, e), e, e),
+    questionsPerRun: metric(ratio(t.questions, e), e, e), commandsPerRun: metric(ratio(t.commands, e), e, e),
     reviews: Object.entries(t.reviews).sort(([a], [b]) => a.localeCompare(b, 'en')).map(([k, r]) => {
       const cut = k.lastIndexOf('/');
       return { reviewer: { agentId: k.slice(0, cut), version: Number(k.slice(cut + 1)) }, runs: r.runs, findingsPerRun: r.findings / r.runs, blockingPerRun: metric(ratio(r.blocking, r.blockingRuns), r.blockingRuns, r.runs) };
@@ -319,7 +317,7 @@ export function runMetrics(runs: readonly AgentRun[], input: MetricsInput = {}):
     const retained = runs.filter(r => r.agentId === agentId && r.endedAt !== undefined && (input.since === undefined || r.endedAt >= input.since) && matchesTags(r, filter));
     return {
       agentId, open: open.get(agentId) ?? 0,
-      versions: own.map(t => ({ ...finalize(t, t.version, input.windowOf?.(agentId, t.version) ?? null), delivery: deliveryMetrics(retained.filter(r => r.version === t.version)) })),
+      versions: own.map(t => ({ ...finalize(t, t.version), delivery: deliveryMetrics(retained.filter(r => r.version === t.version)) })),
       all: own.length ? { ...finalize(own.slice(1).reduce((acc, t) => mergeTallies(acc, t, agentId, 0), own[0]!), null), delivery: deliveryMetrics(retained) } : null,
     };
   });

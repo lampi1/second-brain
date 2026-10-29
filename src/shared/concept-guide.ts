@@ -278,8 +278,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Una run delegata porta parentRunId, la run del genitore: così l’albero delle deleghe resta leggibile anche nelle metriche.',
         'A delegated run carries parentRunId, its parent’s run: so the delegation tree stays readable in the metrics too.'),
       // src/main/chats/manager.ts countRequest
-      b('Conta domande, permessi e comandi (una volta per richiesta), riaperture, picco di contesto, correzioni e tempo di esecuzione.',
-        'It counts questions, permissions and commands (once per request), reopenings, context peak, corrections and execution time.'),
+      b('Conta domande, permessi e comandi (una volta per richiesta), riaperture, picco di contesto, correzioni e tempo di esecuzione; le statistiche dei ruoli non usano più permessi e picco di contesto (sempre 0 o mai mostrati).',
+        'It counts questions, permissions and commands (once per request), reopenings, context peak, corrections and execution time; the role statistics no longer use permissions and context peak (always 0 or never shown).'),
       // src/main/agents/runs.ts addTurn
       b('Somma costo e token di ogni turno; se un turno non li riporta, il totale diventa «sconosciuto» (null), non zero.',
         'It adds each turn’s cost and tokens; if a turn does not report them, the total becomes "unknown" (null), not zero.'),
@@ -361,9 +361,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Ci sono 11 tipi ufficiali (es. test-passato-a-torto, richiesta-fraintesa, regola-ignorata); una riga illeggibile è «Formato non riconosciuto».',
         'There are 11 official types (e.g. test-passato-a-torto, richiesta-fraintesa, regola-ignorata); an unreadable line is "Unrecognised format".'),
       b('Un tipo è «ricorrente» da 2 righe in su; si confronta la settimana con la precedente.', 'A type is "recurring" from 2 rows up; the week is compared with the previous one.'),
-      // src/main/brainmodel/error-lessons.ts
-      b('Un errore ricorrente diventa da solo una regola per ogni ruolo in rules/lessons.md (la sua «regola:», se scritta), con Annulla nel Log.',
-        'A recurring error becomes a rule for every role in rules/lessons.md by itself (its own "regola:", when written), with Undo in the Log.'),
       // src/renderer/lib/correction.ts, src/renderer/components/CorrectThought.tsx (ADR 0058)
       b('«Correggi» su un pezzo di ragionamento manda all’agente la citazione e la tua correzione; è bloccato se c’è una domanda aperta.',
         '"Correct" on a piece of reasoning sends the agent the quote and your fix; it is blocked while a question is open.'),

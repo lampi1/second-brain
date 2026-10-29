@@ -354,7 +354,7 @@ describe('agent run store: A6 fields and rollups', () => {
   it('past their budget the largest rollup samples are halved, counts kept', () => {
     const big = Array.from({ length: 60 }, (_, i) => {
       const t = emptyTally(`agent-${i}`, 1);
-      for (const s of [t.cost, t.contextPeak, t.elapsed, t.execution, ...Object.values(t.tokens)]) { s.n = 1000; s.values = Array.from({ length: SAMPLE_MAX }, (_, j) => 1_000_000 + j + 0.123456789); }
+      for (const s of [t.cost, t.elapsed, t.execution, ...Object.values(t.tokens)]) { s.n = 1000; s.values = Array.from({ length: SAMPLE_MAX }, (_, j) => 1_000_000 + j + 0.123456789); }
       return t;
     });
     const fit = fitRollups(big);

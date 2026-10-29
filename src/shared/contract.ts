@@ -31,7 +31,6 @@ import type { SuggestAnswer, SuggestRequest, SuggestState } from './composer-sug
 import type { AutoClosePresence, AutoCloseStatus } from './auto-close';
 import type { LogEvent, LogList } from './activity-log';
 import type { ChatEffortStatus } from './effort';
-import type { ProgressState } from './progress';
 import type { CreateBrainRequest, CreatedBrain } from './brain-create';
 import type { OwnerProfile, ProfileResult, ProfileSave } from './profile';
 import type { AppUpdateState, UpdateCheckpointAnswer, UpdateCheckpointRequest, UpdateRecovery } from './app-update';
@@ -248,9 +247,8 @@ export interface ContextStats {
   /** calls that re-wrote more than 100k of cache (a cold resume or a compaction's first call) */
   coldRewrites: number;
   compactions: number;
-  notesWritten: number;
-  notesUsed: number;
-  afterContinuation: { calls: number; usd: number };
+  /** the list-price $ of the first calls after an auto-compaction (the cold notes and continuation counters went in
+   *  ADR 0182: no page read them; the log keeps each note's line) */
   afterCompaction: { calls: number; usd: number };
   /** the prompt cache per kind of chat (token plan 2026-10-20: measure before trusting the estimates): tokens read from
    *  the cache, written to it and sent uncached, over every call and over the first call of each session (whether a new
@@ -1300,7 +1298,6 @@ export interface InvokeMap {
   'update:checkpointAnswer': [UpdateCheckpointAnswer, void];
   'update:recovery': [void, UpdateRecovery | null];
   'update:recoveryAck': [{ id: string }, void];
-  'progress:get': [void, ProgressState];
   'chat:autoCloseGet': [void, AutoCloseStatus[]];
   'chat:autoClosePresence': [{ holds: AutoClosePresence[] }, void];
   'chat:autoCloseKeep': [{ chatId: string; keep: boolean }, void];
@@ -1759,7 +1756,6 @@ export const INVOKE_CHANNELS = [
   'mcpservers:state', 'mcpservers:save', 'mcpservers:remove', 'mcpservers:setSecret', 'mcpservers:deleteSecret', 'mcpservers:setAccess', 'mcpservers:test', 'mcpservers:importScan', 'mcpservers:importApply',
   'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
   'app:createBrain', 'app:projectsFolder', 'app:pickProjects',
-  'progress:get',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'chat:synthesize', 'memory:reviewList', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare', 'proposals:list', 'proposals:count', 'proposals:decide',
   'maintenance:run', 'maintenance:status', 'maintenance:stop',

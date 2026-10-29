@@ -125,7 +125,7 @@
 - API key ciphertext and masks are in `userData/secrets.json`, protected by the OS-backed Electron secret store;
   main decrypts a key when its engine needs it. This is separate from unencrypted API conversation history.
 - Agent profiles, frozen chat owners and their instructions, and local setup preferences are private profile data
-  (`agents.json`, `chats.json`, `setup.json`). Local milestones store only achievement IDs, dates and visibility.
+  (`agents.json`, `chats.json`, `setup.json`).
   Browser sign-in/password hand-offs follow their explicit user-action flow; profile backups must be treated as private.
 - Every record has an `id`; owner fields can be added for the team horizon (`VISION.md`) without breaking shapes.
 

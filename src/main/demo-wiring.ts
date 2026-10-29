@@ -62,7 +62,6 @@ import { AgentRunStore } from './agents/runs';
 import { createAgentPacks } from './agents/pack/wiring';
 import { aggregateAgentUsage } from './agents/analytics';
 import { AutoCloseService, autoCloseNow } from './chats/auto-close';
-import { ProgressService } from './agents/progress';
 import { AgentLifecycle } from './agents/lifecycle';
 import { createLifecycleApi, mountLifecycleApi } from './agents/lifecycle-api';
 import { MorningService } from './morning/service';
@@ -290,7 +289,6 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     agents, runFeedback, agentLifecycle, agentPacks, brainModel, research, queries, memoryReview, learningReview,
     setup: new SetupService(ctx.userData, true, now),
     autoClose: new AutoCloseService({ now: autoCloseNow, delayMs: () => 0, candidates: () => [], archive: async () => false, emit: states => ctx.emitter.emit('chat:autoCloseStatus', states) }),
-    progress: new ProgressService(ctx.userData, { enabled: false, chats: () => chats.list() }),
     // the demo folders do not exist: made-up branches, so the "Stato" view shows one per chat
     branches: cwds => gitBranches(cwds, c => DEMO_BRANCHES[c.split(/[\\/]/).pop() ?? ''] ?? null),
     cli: () => ({ claude: demoCli('2.3.0 (demo)', 'demo@example.com'), cursor: demoCli('2026.10.01 (demo)', 'demo@example.com') }),
