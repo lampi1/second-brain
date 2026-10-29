@@ -162,7 +162,6 @@ function NewsCard({ n, details, now }: { n: DevopsNews; details: TasksState['det
         <span className="sp" />
         {n.item ? <RecordDiscussButton rec={{ kind: 'workitem', item: n.item }} /> : n.pr ? <RecordDiscussButton rec={{ kind: 'pr', pr: n.pr, mine: n.kind !== 'review' }} /> : null}
         {n.unread ? <Pill tone={KIND_TONE[n.kind] ?? 'blue'}>{tr('brainText.task.new')}</Pill> : <Pill tone="outline">{tr('brainText.task.read')}</Pill>}
-        {n.unread && <button type="button" className="bx-btn s" onClick={() => markTasksRead([n.key])} data-testid={`task-read-${n.key}`}>{tr('brainText.task.markRead')}</button>}
       </div>
       <div className="dv-news-what">
         {n.item && <Pill tone={stateTone(n.item.state)}>{n.item.state}</Pill>}
@@ -195,7 +194,6 @@ function FollowedCard({ news, details }: { news: DevopsNews[]; details: TasksSta
         {first.item?.assignedTo && <span className="small muted">{tr('brainText.common.to', { name: first.item.assignedTo.replace(/\s*<.*$/, '') })}</span>}
         <span className="sp" />
         {first.item && <RecordDiscussButton rec={{ kind: 'workitem', item: first.item }} />}
-        {unread.length > 0 && <button type="button" className="bx-btn s" onClick={() => markTasksRead(unread.map(n => n.key))} data-testid={`task-read-followed-${first.item?.id ?? first.key}`}>{tr('brainText.task.markRead')}</button>}
       </div>
       <ul className="dv-changes">
         {news.map(n => (
@@ -519,14 +517,16 @@ export function TaskPage() {
   const waitMe = s.prs.filter(p => prWait(p).who === 'me').length;
   const never = s.at === null;
 
-  const pick = (key: string) => { setPicked(key); requestAnimationFrame(() => document.getElementById(`tk-row-${key}`)?.scrollIntoView({ block: 'nearest' })); };
+  // opening a strip is reading it (owner, 2026-10-29: "basta che clicco su un item ... per leggerlo non deve nemmeno
+  // esserci il pulsante letto"); the first strip shown on its own is not opened by the user, so it stays unread
+  const open = (key: string) => { setPicked(key); const r = shown.find(x => x.key === key); if (r?.readKeys.length) markTasksRead(r.readKeys); };
+  const pick = (key: string) => { open(key); requestAnimationFrame(() => document.getElementById(`tk-row-${key}`)?.scrollIntoView({ block: 'nearest' })); };
   const onKey = (e: KeyboardEvent) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.altKey || e.ctrlKey || e.metaKey) return;
     const i = sel ? shown.indexOf(sel) : -1;
     const k = e.key.toLowerCase();
     if ((k === 'j' || k === 'arrowdown') && i < shown.length - 1) { e.preventDefault(); pick(shown[i + 1]!.key); }
     else if ((k === 'k' || k === 'arrowup') && i > 0) { e.preventDefault(); pick(shown[i - 1]!.key); }
-    else if (k === 'e' && sel?.readKeys.length) { e.preventDefault(); markTasksRead(sel.readKeys); }
   };
 
   const lead = s.error
@@ -562,13 +562,13 @@ export function TaskPage() {
               ? <ul ref={list} className="tk-list" role="listbox" tabIndex={0} aria-label={tabs.find(x => x.id === cur)?.label} aria-activedescendant={sel ? `tk-row-${sel.key}` : undefined} data-testid="task-list">
                   {shown.map((r, i) => <Fragment key={r.key}>
                     {i > 0 && cur !== 'mine' && shown[i - 1]!.mine && !r.mine && <li className="tk-sep" role="presentation" aria-hidden="true" />}
-                    <Strip r={r} on={r === sel} onPick={() => { setPicked(r.key); list.current?.focus({ preventScroll: true }); }} now={now} />
+                    <Strip r={r} on={r === sel} onPick={() => { open(r.key); list.current?.focus({ preventScroll: true }); }} now={now} />
                   </Fragment>)}
                 </ul>
               : <p className="tk-empty" data-testid="task-list-empty"><b>{tr('brainText.task.list.empty')}</b> {tr('brainText.task.list.emptyBody')}</p>}
             <div className="tk-side-foot">
               {unreadDirect.length > 0 && <button type="button" className="bx-btn s" onClick={() => markTasksRead(unreadDirect.map(n => n.key))} data-testid="task-mark-all">{tr('brainText.task.news.markAll')}</button>}
-              <span className="tk-keys small muted"><kbd>J</kbd> <kbd>K</kbd> {tr('brainText.task.keys.move')} · <kbd>E</kbd> {tr('brainText.task.keys.read')}</span>
+              <span className="tk-keys small muted"><kbd>J</kbd> <kbd>K</kbd> {tr('brainText.task.keys.move')}</span>
             </div>
           </div>
           <div className="tk-detail" data-testid="task-detail" aria-live="polite">

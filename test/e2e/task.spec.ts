@@ -59,10 +59,12 @@ test('Task page: read on demand, unread news with links, badge and feed, mark re
     await expect(detail.getByTestId('task-pr-812')).toContainText('auto-complete attivo');
     await expect(detail.getByTestId('task-pr-812')).toContainText('Giulia Bianchi: approvata');
     await expect(detail.getByTestId('task-pr-812')).toContainText('Manca il test per lo sconto percentuale.');
-    // Notifiche: the followed ticket is one strip with its changes
+    // Notifiche: the followed ticket is one strip with its changes; opening it is reading it (no «Letta» button)
     await dv.getByTestId('task-tab-news').click();
     await dv.getByTestId('task-row-followed:4650').click();
     await expect(detail.getByTestId('task-news-followed:4650:12')).toContainText('stato Active → Resolved');
+    await expect(dv.getByTestId('task-row-followed:4650')).toHaveAttribute('data-unread', '0');
+    await expect(detail.getByRole('button', { name: 'Letta' })).toHaveCount(0);
     // Work item: the item in full, its description, comments and test outcomes
     await dv.getByTestId('task-tab-items').click();
     await expect(dv.getByTestId('task-list')).toContainText('Fatture: invio PEC dal dettaglio');
@@ -74,7 +76,7 @@ test('Task page: read on demand, unread news with links, badge and feed, mark re
     await expect(item).toContainText('Riesci a guardarlo oggi?');
     await shot(page, 'task-item-open');
     await dv.getByTestId('task-tab-mine').click();
-    await expect(page.getByTestId('nav-badge-task')).toHaveText('2');
+    await expect(page.getByTestId('nav-badge-task')).toHaveText('1'); // the mention: shown first on its own, not opened yet
     // the feed (the Orchestrator's Novità and the notification center) got the news, once
     await page.keyboard.press('Control+Shift+N');
     await expect(page.getByTestId('center')).toContainText('2 novità su DevOps'); // a first read: one summary line
@@ -88,19 +90,16 @@ test('Task page: read on demand, unread news with links, badge and feed, mark re
     await shot(page, 'task-light');
     await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'dark' }));
 
-    // the lead counts the news apart from the followed ticket; "Segna tutte come lette" marks only those, the followed
-    // ticket has its own "Letta" (or E on its strip); the strips stay in place, marked read, until the next read
+    // the lead counts the news apart from the followed ticket (already read above); clicking the mention's strip reads
+    // it; the strips stay in place, marked read, until the next read
     await expect(dv.getByTestId('bx-lead')).toContainText('3 per te'); // the mention, the PR waiting for me, the review asked of me
     await expect(dv.getByTestId('bx-lead')).toContainText('1 novità da leggere');
-    await expect(dv.getByTestId('bx-lead')).toContainText('1 sui ticket che segui');
-    await dv.getByTestId('task-mark-all').click();
-    await expect(page.getByTestId('nav-badge-task')).toHaveText('1');
-    await dv.getByTestId('task-tab-news').click();
-    await dv.getByTestId('task-row-followed:4650').click();
-    await page.keyboard.press('e');
-    await expect(page.getByTestId('nav-badge-task')).toHaveText('');
-    await expect(dv.getByTestId('task-row-followed:4650')).toHaveAttribute('data-unread', '0');
+    await expect(dv.getByTestId('bx-lead')).not.toContainText('sui ticket che segui');
+    await expect(dv.getByTestId('task-mark-all')).toBeVisible();
     await dv.getByTestId('task-row-news:mention:1').click();
+    await expect(page.getByTestId('nav-badge-task')).toHaveText('');
+    await expect(dv.getByTestId('task-mark-all')).toHaveCount(0);
+    await expect(dv.getByTestId('task-row-news:mention:1')).toHaveAttribute('data-unread', '0');
     await expect(detail.getByTestId('task-news-mention:1')).toHaveAttribute('data-unread', '0');
     await expect(detail.getByTestId('task-news-mention:1')).toContainText('letta');
 
