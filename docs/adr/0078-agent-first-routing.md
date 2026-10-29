@@ -66,7 +66,7 @@ user's message. Agents had no per-agent context limit.
 
 ## Consequences
 - An agent's chat is never refused for disagreeing with the table; the table no longer silently wins over the agent.
-- Without `agentId`, which agent runs depends on the classifier's threshold (Agenti → Classificatori, ADR 0074): a
+- Without `agentId`, which agent runs depends on the classifier's threshold (Agenti → Classificatori, ADR 0174): a
   wrong match is visible in the route's reason and score.
 - Known outcomes start to accumulate from the app's own verdicts; the brain's loop can reach its 20 per kind.
 - A worker can spend tokens on a catalog agent without asking the Orchestrator, bounded by the limits above and by

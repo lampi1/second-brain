@@ -1,6 +1,6 @@
 # 0140 — Routine PR and QA recaps use observed data first
 
-Date: 2026-10-23
+Date: 2026-10-23 · Status: partly superseded by ADR 0141 (the prose recap); accepted
 
 ## Decision
 

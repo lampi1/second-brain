@@ -3480,7 +3480,7 @@ export class ChatManager implements ChatService {
    *  all of them, only the reading ones, or none. */
   browserAccess(chatId: string): BrowserAccess {
     const r = this.chats.get(chatId);
-    // the Orchestrator delegates browsing like any other work (ADR 0090): its 24 browser tools (~4 200 tokens of schemas)
+    // the Orchestrator delegates browsing like any other work (ADR 0090, 0099): its 24 browser tools (~4 200 tokens of schemas)
     // were in every one of its calls
     if (r?.s.isOrchestrator) return 'none';
     const warm = r ? undefined : this.warmViews.get(chatId);

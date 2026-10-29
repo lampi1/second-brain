@@ -1,4 +1,6 @@
-# 0068 — Hybrid brain search: BM25 + a local multilingual embedding model
+# 0094 — Hybrid brain search: BM25 + a local multilingual embedding model
+
+Numbered 0068 until 2026-10-29, when duplicate ADR numbers were removed.
 
 Date: 2026-10-17. Status: accepted (SPEC 23, S1).
 

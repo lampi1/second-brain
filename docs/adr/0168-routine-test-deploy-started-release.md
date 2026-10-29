@@ -1,6 +1,8 @@
-# ADR 0170 · A routine test deploy creates one started release; a stuck draft is deleted
+# ADR 0168 · A routine test deploy creates one started release; a stuck draft is deleted
 
-Status: accepted (owner, 2026-10-27). Supersedes the draft/activation part of ADR 0158 and the "before activation"
+Numbered 0170 until 2026-10-29, when duplicate ADR numbers were removed.
+
+Status: partly superseded by ADR 0179 (app-execution portions); accepted (owner, 2026-10-27). Supersedes the draft/activation part of ADR 0158 and the "before activation"
 part of ADR 0159.
 
 ## Context

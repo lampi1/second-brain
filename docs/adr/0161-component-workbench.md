@@ -1,7 +1,7 @@
 <!-- Architecture and authority boundaries for the component platform, used by maintainers and routine authors. -->
 # 0161 — Curated knowledge and evidence workbench
 
-Status: implemented on the feature branch; final validation is tracked in `docs/work/routine-component-platform.md`.
+Status: partly superseded by ADR 0179 (app-execution portions); implemented on the feature branch; final validation is tracked in `docs/work/routine-component-platform.md`.
 
 External templates are authoring material, never executable authority. Public GitHub repositories and local text
 bundles feed a bounded, token-free catalog. Network reads use fixed GitHub origins, reject redirects, pin a commit

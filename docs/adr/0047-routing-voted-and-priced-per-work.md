@@ -3,7 +3,7 @@
 > Routing parts superseded by [ADR 0078](0078-agent-first-routing.md): an agent's profile decides engine, model and
 > effort; the table only fills a model the profile leaves open, and the override rule applies only to agentless chats.
 
-Date: 2026-10-14 · Status: accepted
+Date: 2026-10-14 · Status: partly superseded by ADR 0078 (routing parts); accepted
 
 ## Context
 The model loop (ADR 0032) learns from `ops/state/improve/outcomes.jsonl`. On 2026-10-14 the ledger held 819 routed

@@ -3,7 +3,7 @@
 > Routing parts superseded by [ADR 0078](0078-agent-first-routing.md): an agent's profile decides engine, model and
 > effort; the table only fills a model the profile leaves open, and the override rule applies only to agentless chats.
 
-Date: 2026-10-13 · Status: accepted
+Date: 2026-10-13 · Status: partly superseded by ADR 0078 (routing parts) and ADR 0071 (chat-space portions); accepted
 
 ## Context
 The Regia opened every work chat with the same engine, model and effort (the user's "Chat aperte dalla Regia"), and
