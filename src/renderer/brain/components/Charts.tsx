@@ -215,49 +215,6 @@ export function StackedBars({ labels, series, height = 220, ...c }: Common & { l
   );
 }
 
-/** Lines over time (points on each value; one series gets a soft area under it). */
-export function LineChart({ labels, series, height = 190, ...c }: Common & { labels: string[]; series: Series[]; height?: number }) {
-  const [ref, W] = useWidth<HTMLDivElement>();
-  const [tip, setTip] = useState<TipState | null>(null);
-  const [hover, setHover] = useState<number | null>(null);
-  const id = useId();
-  const max = Math.max(0, ...series.flatMap(s => s.values)), m = niceMax(max);
-  const left = c.money ? 50 : 34, right = W - 10, top = 14, bottom = 24, plotH = height - top - bottom;
-  const n = labels.length, dx = n > 1 ? (right - left - 12) / (n - 1) : 0;
-  const X = (i: number) => left + 6 + i * dx, Y = (v: number) => top + plotH - (v / m) * plotH;
-  const step = labelStep(n, right - left, 62);
-  const desc = n ? t('brainLib.charts.nPointsMax', { n, max: val(max, c.money) }) : t('brainLib.charts.noData');
-  return (
-    <ChartCard {...c} labels={labels} series={series} legend>
-      <div ref={ref} className="bx-plot">
-        <svg width={W} height={height} role="img" aria-labelledby={`${id}t ${id}d`} onMouseLeave={() => { setTip(null); setHover(null); }}>
-          <title id={`${id}t`}>{c.title}</title><desc id={`${id}d`}>{desc}</desc>
-          <Axis max={max} money={c.money} left={left} right={right} top={top} plotH={plotH} />
-          {hover != null && <line className="grid" x1={X(hover)} x2={X(hover)} y1={top} y2={top + plotH} />}
-          {series.map((s, si) => {
-            const col = s.color ?? catColor(si);
-            const pts = s.values.map((v, i) => `${X(i)},${Y(v)}`).join(' ');
-            return (
-              <g key={si}>
-                {series.length === 1 && n > 1 && <polygon points={`${X(0)},${top + plotH} ${pts} ${X(n - 1)},${top + plotH}`} style={{ fill: col, opacity: 0.12 }} />}
-                <polyline points={pts} fill="none" style={{ stroke: col }} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
-                {s.values.map((v, i) => <circle key={i} cx={X(i)} cy={Y(v)} r={hover === i ? 4 : 2.5} style={{ fill: col }} />)}
-              </g>
-            );
-          })}
-          {labels.map((l, i) => (
-            <g key={i}>
-              <rect className="hit" x={X(i) - Math.max(dx, 12) / 2} y={top} width={Math.max(dx, 12)} height={plotH} onMouseMove={e => { setHover(i); setTip({ x: e.clientX, y: e.clientY, title: l, rows: series.map((s, si) => ({ color: s.color ?? catColor(si), label: s.label, value: val(s.values[i] ?? 0, c.money) })) }); }} />
-              {i % step === 0 && <text x={X(i)} y={height - 6} textAnchor="middle">{l}</text>}
-            </g>
-          ))}
-        </svg>
-        <Tip tip={tip} />
-      </div>
-    </ChartCard>
-  );
-}
-
 /** Tiny bars for a tile (last one highlighted); an image with a label for screen readers. */
 export function Sparkline({ values, labels, label, highlightLast = true, money }: { values: number[]; labels?: string[]; label: string; highlightLast?: boolean; money?: boolean }) {
   const max = Math.max(1e-9, ...values);

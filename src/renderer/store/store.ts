@@ -288,7 +288,6 @@ export function undoSent(key: string): boolean {
   setMark(key, u.before);
   return true;
 }
-export const canUndo = (key: string): boolean => undos.has(key);
 
 export const unqueue = (chatId: string, id: string) => dispatch({ type: 'unqueue', chatId, id });
 

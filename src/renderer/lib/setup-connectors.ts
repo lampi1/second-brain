@@ -7,7 +7,6 @@
 import type { ConnectorId, ConnectorPort, ConnectorState } from '@shared/connectors';
 import { plainError } from './setup-wizard';
 
-export const TOOL_IDS: readonly ConnectorId[] = ['github', 'azure', 'jira'];
 export type ToolPhase = 'idle' | 'signingIn' | 'waiting' | 'verifying' | 'connected' | 'failed' | 'error';
 export interface ToolLink {
   phase: ToolPhase;

@@ -34,7 +34,7 @@ import type { ProgressState } from './progress';
 import type { CreateBrainRequest, CreatedBrain } from './brain-create';
 import type { OwnerProfile, ProfileResult, ProfileSave } from './profile';
 import type { AppUpdateState, UpdateCheckpointAnswer, UpdateCheckpointRequest, UpdateRecovery } from './app-update';
-import type { CloudAgent, CloudApplyResult, CloudCaps, CloudStartRequest, CloudState } from './cloud';
+import type { CloudAgent, CloudApplyResult, CloudCaps, CloudState } from './cloud';
 import type { MorningOp, MorningState } from './morning';
 export type { MorningBrief, MorningChange, MorningCloud, MorningIdea, MorningNext, MorningOp, MorningOutcome, MorningPr, MorningRun, MorningStalled, MorningState } from './morning';
 import type { RunEstimates } from './task-estimate';
@@ -1628,7 +1628,6 @@ export interface InvokeMap {
   /** cloud agents (ADR 0080, main/cloud/): the known ones (refresh = ask the vendors now, at most every 30 s) */
   'cloud:list': [{ refresh?: boolean } | void, CloudState];
   /** the user's click (or app_create_chat where:'cloud'): fails closed with the reason (not signed in, no GitHub remote…) */
-  'cloud:start': [CloudStartRequest, CloudAgent];
   'cloud:followUp': [{ id: string; text: string }, CloudAgent];
   'cloud:stop': [{ id: string }, CloudAgent];
   /** "Porta in locale": the result into a NEW worktree beside the repo (never into the checkout itself) */
@@ -1779,7 +1778,7 @@ export const INVOKE_CHANNELS = [
   'voice:state', 'voice:prepare', 'voice:listen', 'voice:audio', 'voice:speak', 'voice:cancelSpeech',
   'rec:state', 'rec:arm', 'rec:start', 'rec:chunk', 'rec:stop', 'rec:transcribe', 'rec:rename', 'rec:remove', 'rec:transcript', 'rec:find', 'rec:readFound', 'rec:open',
   'orchestrator:held', 'orchestrator:heldSeen',
-  'cloud:list', 'cloud:start', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:dismiss',
+  'cloud:list', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'routines:progress', 'work:changed',

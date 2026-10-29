@@ -1,7 +1,5 @@
 // Exact browser-origin declarations and reported effects shared by routine validation, UI and browser guards.
-import type { FlowStep } from './flows';
 export interface BrowserWriteResult { outcome: 'done' | 'partial' | 'not-done'; evidence: string[] }
-export const browserWriteStep = (s: FlowStep): boolean => s.kind === 'agent' && s.effect === 'external-write' && s.writeVia === 'browser' && !!s.browserTargets?.length && !s.adapter && !s.action;
 /** Origins only, never patterns, credentials, paths, queries, fragments or opaque URLs. */
 export function browserOrigins(value: unknown): string[] {
   if (!Array.isArray(value) || !value.length || value.length > 16) throw new Error('browserTargets: 1–16 exact HTTPS origins (HTTP only on localhost)');

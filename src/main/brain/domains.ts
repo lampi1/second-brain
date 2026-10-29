@@ -111,7 +111,3 @@ export function resolvePlaceholders(text: string, ctx: { brainRoot: string | nul
   return { text: out, unknown: [...new Set(unknown)] };
 }
 
-/** Reads a brain file with its placeholders resolved (utf8). */
-export function readBrainText(file: string, ctx: { brainRoot: string | null; domains: Pick<Domain, 'name' | 'root'>[] }): { text: string; unknown: string[] } {
-  return resolvePlaceholders(fs.readFileSync(file, 'utf8'), ctx);
-}

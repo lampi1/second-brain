@@ -11,7 +11,7 @@ import { dayTotal, macroDay } from '@shared/macro-tasks';
 import { roleName } from '@shared/roles';
 import { dayName, fmt, isDay, shiftDay } from '../lib/format';
 import { lastDays } from '../lib/done-log';
-import { useAppChats } from '../components/Composer';
+import { useAppChats } from '../lib/app-chats';
 import { DiscussContext } from '../components/Discuss';
 import { copyText, IconCopy, toast, type Navigate } from '../components/ui';
 import { Select } from '../../components/Select';

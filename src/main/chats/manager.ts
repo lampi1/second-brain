@@ -505,8 +505,6 @@ export interface CleanReportNote { chatId: string; title: string; role: string; 
 const MAX_ARCHIVED = 60;
 /** run changes are written at most this often (runSave) */
 export const RUN_SAVE_MS = 1000;
-/** the user's words carried in a note (ADR 0083: the user's own message, never the child's) */
-export const USER_NOTE_MAX = 300;
 export const USER_NOTES_LABEL = "[nota dell'app · l'utente ha scritto direttamente in chat che hai delegato: tienine conto nel piano, non disfare ciò che le ha chiesto]";
 /** One message the user typed in a work chat (userWrote): what the Orchestrator and the parent learn. */
 export interface UserWroteNote { eventId: string; seq: number; chatId: string; title: string; role: string | null; parentId: string | null; parentTitle: string | null; at: number; text: string }

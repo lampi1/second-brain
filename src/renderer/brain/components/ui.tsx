@@ -61,11 +61,6 @@ export function ExtLink({ href, children, title, className, onClick }: { href?: 
   return <a href={u} target="_blank" rel="noopener noreferrer" title={title ?? u} className={className} onClick={onClick} onAuxClick={e => { if (e.button === 1) onClick?.(); }}>{children}</a>;
 }
 
-export function Harness({ name }: { name: string }) {
-  const c = /cursor/i.test(name);
-  return <span className={`bx-harness ${c ? 'cursor' : 'claude'}`} title={c ? 'Cursor' : 'Claude'} aria-label={c ? 'Cursor' : 'Claude'}>{c ? 'Cu' : 'C'}</span>;
-}
-
 // ── icons (16px, stroke = currentColor) ─────────────────────────────────────────────────────────────────────────────
 const I = ({ d, size = 14 }: { d: string; size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d} /></svg>
@@ -80,8 +75,6 @@ export const IconExternal = () => <I d="M9.5 2.5h4v4M13.5 2.5 7.5 8.5M11.5 9.5v4
 export const IconChevL = () => <I d="M10 3 5 8l5 5" />;
 export const IconChevR = () => <I d="M6 3l5 5-5 5" />;
 export const IconMap = () => <I d="M8 1.8a6.2 6.2 0 1 0 0 12.4A6.2 6.2 0 0 0 8 1.8zM8 1.8c-2 2-2 10.4 0 12.4M8 1.8c2 2 2 10.4 0 12.4M2 8h12" />;
-export const IconPlay = () => <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z" fill="currentColor" /></svg>;
-export const IconPause = () => <svg width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5h3v11H4zM9 2.5h3v11H9z" fill="currentColor" /></svg>;
 
 // ── toast ───────────────────────────────────────────────────────────────────────────────────────────────────────
 const toasters: ((t: string) => void)[] = [];

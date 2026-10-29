@@ -271,13 +271,6 @@ export async function copyLink(link: string = currentLink()): Promise<void> {
   toast(t('appText.actions.linkCopied', { link }), 'ok');
 }
 
-/** The overlay closes to its pill from inside (Ctrl+R, Esc, "Riduci"): the keyboard follows to the pill, never lost
- *  on the page. */
-export function collapseOrchestrator(): void {
-  // Legacy callers may release focus, but the coordinator column always stays open.
-  (document.activeElement as HTMLElement | null)?.blur();
-}
-
 /** Ctrl+R: the Orchestrator column from anywhere, the page stays (the column is on every page, the Dashboard and the
  *  3D map included): its input takes the keyboard. */
 export function toggleOrchestrator(): void {

@@ -16,10 +16,6 @@ export function formatCost(usd: number, opts: { round?: boolean } = {}): string 
   return `${v.toLocaleString(locale(), { minimumFractionDigits: digits, maximumFractionDigits: max })} $`;
 }
 
-/** formatCost for a value that may be missing: null when it is (the caller shows its own "—" / "n/d"). */
-export const costOrNull = (usd: number | null | undefined, opts?: { round?: boolean }): string | null =>
-  usd == null || !Number.isFinite(usd) ? null : formatCost(usd, opts);
-
 /** The cost shown on a chat: Cursor does not report a per-chat cost yet, so 0 there reads "costo n/d"; "≈" while part
  *  of it is the running turn's estimate (the real figure replaces it at the end of the turn). */
 export function chatCost(c: Pick<ChatSummary, 'harness' | 'costUsd'> & { costKnown?: boolean; costLiveUsd?: number; costLedgerUsd?: number }): string {

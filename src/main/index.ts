@@ -445,7 +445,6 @@ app.whenReady().then(async () => {
     'engines:spend': () => s.engines.apiSpend(),
     // cloud agents (ADR 0080, main/cloud/): the user's clicks; agents reach them only through app_create_chat / app_chats
     'cloud:list': a => cloudOf(s).list(a?.refresh === true),
-    'cloud:start': a => cloudOf(s).start(a, 'user'),
     'cloud:followUp': a => cloudOf(s).followUp(String(a?.id ?? ''), String(a?.text ?? '')),
     'cloud:stop': a => cloudOf(s).stop(String(a?.id ?? '')),
     'cloud:apply': a => cloudOf(s).apply(String(a?.id ?? '')),

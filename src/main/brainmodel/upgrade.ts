@@ -466,9 +466,6 @@ export function plan(root: string, section: LayoutSection, list: readonly Candid
 }
 
 // ── the job ─────────────────────────────────────────────────────────────────────────────────────────────────────────
-/** The layout entries this brain still has to be brought in line with. */
-export const pending = (root: string, userData: string, layout: readonly LayoutSection[] = BRAIN_LAYOUT): LayoutSection[] =>
-  pendingSections(readRecord(root, userData), layout);
 
 export async function upgrade(ctx: UpgradeContext): Promise<JobResult> {
   const layout = ctx.layout ?? BRAIN_LAYOUT;

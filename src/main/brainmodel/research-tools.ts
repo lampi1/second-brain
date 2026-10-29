@@ -8,8 +8,6 @@ import { RESEARCH_KINDS } from '../../shared/maintenance-research';
 import { PACK_SECTIONS } from './research-pack';
 import type { ResearchService } from './research';
 
-export const RESEARCH_TOOLS = ['maintenance_pack', 'maintenance_propose'] as const;
-
 const callerOf = (params: Record<string, string>): string => {
   const id = params.chatId;
   if (!id) throw new Error('This tool works only on a chat\'s own endpoint.');

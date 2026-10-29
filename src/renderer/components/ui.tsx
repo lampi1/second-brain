@@ -52,19 +52,6 @@ export function StatePill({ chat, testid }: { chat: Pick<ChatSummary, 'state' | 
   );
 }
 
-export function Segmented<T extends string>({ value, options, onChange, label, testid }: { value: T; options: { value: T; label: string; icon?: ReactNode; tip?: string }[]; onChange: (v: T) => void; label: string; testid?: string }) {
-  return (
-    <div className="segmented" role="radiogroup" aria-label={label} data-testid={testid}>
-      {options.map(o => (
-        <button key={o.value} type="button" role="radio" aria-checked={o.value === value} className={o.value === value ? 'on' : ''} onClick={() => onChange(o.value)}
-          data-tip={o.tip} data-testid={testid ? `${testid}-${o.value}` : undefined}>
-          {o.icon}{o.label && <span>{o.label}</span>}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 // ---------------------------------------------------------------- Popover
 
 export function Popover({ anchor, open, onClose, children, align = 'end', testid, width,kind='menu',label }: { anchor: RefObject<HTMLElement | null>; open: boolean; onClose: () => void; children: ReactNode; align?: 'start' | 'end'; testid?: string; width?: number;kind?:'menu'|'dialog';label?:string }) {
