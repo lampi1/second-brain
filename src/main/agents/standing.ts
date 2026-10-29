@@ -60,7 +60,7 @@ type Verdict = keyof typeof SCORE;
 /** Same exclusions as the §5 metrics (run-metrics.ts foldRun): headline and fallback one-shots are not the agent's work;
  *  a retired role's runs (Judge, Scribe, Router: ADR 0100) and Pulse's card jobs have no level (ADR 0186), their runs
  *  stay readable. */
-export const counts = (r: AgentRun): boolean => r.endedAt !== undefined && !r.oneshot?.fallback && r.oneshot?.job !== 'headline' && !unrated(r.agentId);
+export const counts = (r: AgentRun): boolean => r.endedAt !== undefined && !r.oneshot?.fallback && r.oneshot?.job !== 'headline' && r.oneshot?.job !== 'guide' && !unrated(r.agentId);
 /** Ids that get no standing: the retired roles and Pulse, a background job (ADR 0186). */
 export const unrated = (agentId: string): boolean => isRetiredRoleId(agentId) || agentId === PULSE_ID;
 /** A root run the Orchestrator opened: one of its decisions (ADR 0097). */

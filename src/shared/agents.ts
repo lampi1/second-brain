@@ -7,7 +7,7 @@ import type { CharacterId } from './characters';
 import type { ModelTier } from './roles';
 
 /** One-shot purposes: the service and persisted run reader share this list so new jobs survive a restart. */
-export const ONE_SHOT_PURPOSES = ['pulse', 'headline', 'upgrade', 'phrases'] as const;
+export const ONE_SHOT_PURPOSES = ['pulse', 'headline', 'upgrade', 'phrases', 'guide'] as const;
 export type OneShotPurpose = (typeof ONE_SHOT_PURPOSES)[number];
 
 /** The cartoon character a role is drawn as (renderer/lib/character-art.ts): fixed per role, never user content. */

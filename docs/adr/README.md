@@ -200,4 +200,5 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0192](0192-logs-correlation-digest-and-page-errors.md) Logs: run correlation, interface errors, a page's error card and a 90-day daily digest — accepted
 - [0193](0193-proposals-ask-only-when-not-obvious.md) Proposte asks only when the answer is not obvious — accepted
 - [0195](0195-candidate-brain-and-role-reflection.md) The maintenance writes a candidate brain, and reflects on one role's text as a trial — accepted
+- [0196](0196-guide-knows-when-stale.md) The Guida knows when it is stale, answers questions, draws from the code and picks cards for the user — accepted
 - [0198](0198-developer-speed-typecheck-e2e-baseline-agents-map.md) Developer speed: TypeScript 7 typecheck, an e2e baseline of known reds, AGENTS.md as a map — accepted
