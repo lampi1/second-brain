@@ -5,6 +5,7 @@
 // and saves screenshots into the step's evidence folder + events.jsonl. Skipped when no Chromium/Edge is installed.
 import fs from 'node:fs';
 import path from 'node:path';
+import { chromium } from 'playwright-core';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { bareOrigin, createBrowserSession, credentialFor, launchBrowser, launchOnProfile, loginFailedText, loginFor, loginPageFor, profileHolders, type BrowserServerConfig, type ProfileRecovery } from '../../../packages/routine-runtime/src/browser-mcp';
 import { classifyLoginForm, inspectLoginForm, type LoginFormFacts } from '../../../packages/routine-runtime/src/login-form';
@@ -13,12 +14,12 @@ import { FIXTURE_PASSWORD, FIXTURE_USER, FIXTURE_USER2, startFixtureSite } from 
 const TESTER_PASSWORD = 'tester-Pass-5521';
 import { tempDir } from './fakes';
 
+// the Chromium the runtime launches (Playwright's own lookup, PLAYWRIGHT_BROWSERS_PATH included), else Edge on Windows
 const browserAvailable = (() => {
   try {
-    const local = process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'ms-playwright') : path.join(process.env.HOME ?? '', '.cache', 'ms-playwright');
-    if (fs.existsSync(local) && fs.readdirSync(local).some(d => d.startsWith('chromium'))) return true;
-    return process.platform === 'win32' && fs.existsSync('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe');
-  } catch { return false; }
+    if (fs.existsSync(chromium.executablePath())) return true;
+  } catch { /* no Chromium for this Playwright version */ }
+  return process.platform === 'win32' && fs.existsSync('C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe');
 })();
 
 type Reply = { result?: { content: { text: string }[]; isError?: boolean } };
@@ -110,7 +111,8 @@ describe.skipIf(!browserAvailable)('routine browser over a node that redirects t
     expect((await callOn(step, 'snapshot')).text).not.toContain('Login - Portal');
   }, 60_000);
 
-  it('a wrong credential is a login error on the node, never a page left on the portal', async () => {
+  // one failed login for both checks: the runtime waits ~20 s for a login that never succeeds
+  it('a wrong credential is a login error on the node, never a page left on the portal, with one screenshot of the emptied form', async () => {
     const bad = createBrowserSession({ ...config, logins: [{ ...config.logins[0]!, password: 'wrong' }] }, { page: async () => browser.page });
     await callOn(newStep(), 'navigate', { url: `${site.origin}/logout` });
     const nav = await callOn(bad, 'navigate', { url: `${site.origin}/form` });
@@ -118,14 +120,9 @@ describe.skipIf(!browserAvailable)('routine browser over a node that redirects t
     expect(nav.text).toMatch(/login failed \[still-on-login\]/);
     expect(nav.text).not.toContain(FIXTURE_USER);
     expect(nav.text).not.toContain('wrong');
-  }, 60_000);
-
-  it('a failed login saves one screenshot to evidence/ with the password field already emptied', async () => {
-    const bad = createBrowserSession({ ...config, logins: [{ ...config.logins[0]!, password: 'wrong-again' }] }, { page: async () => browser.page });
-    await callOn(newStep(), 'navigate', { url: `${site.origin}/logout` });
-    const nav = await callOn(bad, 'navigate', { url: `${site.origin}/form` });
     const file = /Screenshot of the page: (.+?\.png)\./.exec(nav.text)?.[1];
     expect(file && path.dirname(file)).toBe(config.evidence);
+    expect(fs.readdirSync(config.evidence).filter(f => f.endsWith('.png'))).toHaveLength(1);
     expect(fs.statSync(file!).size).toBeGreaterThan(1000);
     expect(browser.page.url()).toContain('/Account/Login');
     expect(await browser.page.evaluate<string>('document.getElementById("txtPassword").value')).toBe('');
