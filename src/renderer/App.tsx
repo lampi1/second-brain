@@ -50,6 +50,7 @@ import { LogPage } from './components/LogPage';
 // the Guida (three languages of cards) loads when it opens, not with the first screen
 import { BrowserPage } from './components/BrowserPage';
 import { RecordingsPage } from './components/RecordingsPage';
+import { ImparaPage } from './components/impara/ImparaPage';
 import { shortcutTalk, shortcutVoice } from './lib/voice';
 const GuidePage = lazy(() => import('./components/GuidePage').then(m => ({ default: m.GuidePage })));
 // the file viewer overlay loads when a file is first opened
@@ -192,7 +193,7 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
       </div>
       {/* keyed by the page: every page change replays the entry (linear.css panel-enter), no hard cut */}
       <div className="page-body" key={id}>
-        {hub ? null : id === 'log' ? <LogPage /> : id === 'guida' ? <Suspense fallback={null}><GuidePage arg={arg ?? undefined} /></Suspense> : id === 'browser' ? <BrowserPage /> : id === 'registrazioni' ? <RecordingsPage /> : id === 'agenti' ? <AgentCatalogPage /> : id === 'impostazioni'
+        {hub ? null : id === 'log' ? <LogPage /> : id === 'guida' ? <Suspense fallback={null}><GuidePage arg={arg ?? undefined} /></Suspense> : id === 'browser' ? <BrowserPage /> : id === 'registrazioni' ? <RecordingsPage /> : id === 'impara' ? <ImparaPage /> : id === 'agenti' ? <AgentCatalogPage /> : id === 'impostazioni'
           ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.settings')}><div className="bx-inner"><SettingsPage /></div></div>
           : id === 'memoria'
             ? <div className="bx bx-page bx-scroll" role="region" aria-label={pageLabel(id)}><div className="bx-inner mh-inner"><MemoryPage /></div></div>

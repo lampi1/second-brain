@@ -52,6 +52,9 @@ import { createEngines } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
 import { PersonalBrowser } from './personal/browser';
 import { RecordingStore } from './recordings/store';
+import { LessonStore } from './learn/store';
+import { LearnService } from './learn/service';
+import { demoRun, demoTeach, seedDemoLessons } from './learn/demo';
 import { demoCloud } from './cloud/demo';
 import fs from 'node:fs';
 import { createAgentCatalog } from './wiring';
@@ -207,6 +210,12 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   // the user's own browser is real in the demo too (nothing to fake: it loads only what the user types)
   const personal = new PersonalBrowser({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, cipher: safeStorageCipher(safeStorage), appName: app.getName(), lang: () => (brain.settings().language === 'en' ? 'en' : 'it') });
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
+  // Impara (ADR 0185): the lessons are written by hand (learn/demo.ts), about the real PR #251
+  const lessons = new LessonStore(path.join(ctx.userData, 'learn'));
+  seedDemoLessons(lessons, now());
+  const learn = new LearnService({ store: lessons, lang: uiLang, run: demoRun, now, teach: demoTeach, cannotTeach: () => null,
+    devops: () => { const t = tasks.get(); return { prs: t.prs, repoDirs: t.repoDirs }; },
+    changed: (state, lesson) => ctx.emitter.emit('impara:changed', { state, ...(lesson ? { lesson } : {}) }) });
   attachAppTools(mcp, { personal, recordings, agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), resolveRole: req => agents.resolve(req), runFeedback, window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), cloud }, source, true);
   try { recordMcpPort(mcpPortFromEnv(), await mcp.listen(mcpPortFromEnv())); } catch (e) {
     log.warn('demo', 'MCP port busy, using a random one', { data: { error: errText(e) } });
@@ -282,7 +291,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
 
   return {
     morning,
-    cloud, chats, browser, personal, recordings, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, source, engines, later: createLater(ctx),
+    cloud, chats, browser, personal, recordings, learn, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, source, engines, later: createLater(ctx),
     agents, runFeedback, agentLifecycle, agentPacks, brainModel, research, suggestSkills, queries, memoryReview, learningReview,
     setup: new SetupService(ctx.userData, true, now),
     autoClose: new AutoCloseService({ now: autoCloseNow, delayMs: () => 0, candidates: () => [], archive: async () => false, emit: states => ctx.emitter.emit('chat:autoCloseStatus', states) }),

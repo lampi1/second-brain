@@ -14,6 +14,7 @@ import type { MaintenanceDone, MaintenanceStatus } from './maintenance-research'
 import type { PackFinding } from './agent-pack';
 import type { VoiceHeard, VoiceSpeech, VoiceAsr, VoiceName, VoiceState } from './voice';
 import type { RecFound, RecSegment, RecSource, RecState, Recording } from './recordings';
+import type { ImparaState, Lesson, LessonConfidence, LessonExtraKind, LessonStart } from './lesson';
 /** What the shareable brain zip holds (counts), or why it was not written: guard findings, or no brain / no guard. */
 export type BrainShareResult = { ok: true; path: string; skills: number; rules: number; roles: number; scripts: number; skipped: number } | { ok: false; findings: PackFinding[] } | { ok: false; error: string };
 import type { BrainModelState, ClassifiersState, MaintenanceJobId } from './brain-model';
@@ -604,6 +605,9 @@ export interface DevopsDetail {
 export interface DevopsPrRef { id: number; title: string; repo: string; project: string; author: string | null; createdAt: string; url: string }
 export interface DevopsPr extends DevopsPrRef {
   target: string; draft: boolean; autoComplete: boolean;
+  /** the PR's own branch (sourceRefName without refs/heads/): Impara reads its diff in the local clone; absent from a
+   *  brain's own older devops-me.mjs */
+  source?: string;
   reviewers: { name: string; vote: number; label: string; required: boolean }[];
   build: { result: string | null; status: string; number: string; url: string; at: string | null } | null;
   workItems: DevopsItem[];
@@ -1606,6 +1610,18 @@ export interface InvokeMap {
   'rec:find': [void, RecFound[]];
   'rec:readFound': [{ path: string }, Uint8Array];
   'rec:open': [{ id: string; what: 'audio' | 'text' | 'folder' }, void];
+  /** Impara (ADR 0185, main/learn/): the saved lessons, one whole, a new one (its material is gathered and the model
+   *  writes it in the background: 'impara:changed' brings each step), where the user is, an extra piece at a piece, a
+   *  check's answer, the final «Spiegalo tu», «Riprova», delete */
+  'impara:state': [void, ImparaState];
+  'impara:get': [{ id: string }, Lesson | null];
+  'impara:start': [LessonStart, Lesson];
+  'impara:move': [{ id: string; at: string }, Lesson];
+  'impara:ask': [{ id: string; kind: LessonExtraKind; at: string; text?: string }, Lesson];
+  'impara:answer': [{ id: string; checkId: string; choice: number; confidence?: LessonConfidence }, Lesson];
+  'impara:explain': [{ id: string; text: string }, Lesson];
+  'impara:retry': [{ id: string }, Lesson];
+  'impara:remove': [{ id: string }, void];
   'orchestrator:held': [void, HeldNewsState];
   /** the user opened a held news item's chat from the list: that chat's items are read, never wake the Orchestrator (#123) */
   'orchestrator:heldSeen': [{ chatId: string }, HeldNewsState];
@@ -1725,6 +1741,8 @@ export interface EventMap {
   'voice:speech': VoiceSpeech;
   /** call recordings (ADR 0154): the list, the one running, a transcription's progress */
   'rec:changed': RecState;
+  /** Impara (ADR 0185): the list changed, and the lesson that changed (whole) when there is one */
+  'impara:changed': { state: ImparaState; lesson?: Lesson };
 }
 
 export type InvokeChannel = keyof InvokeMap;
@@ -1767,6 +1785,7 @@ export const INVOKE_CHANNELS = [
   'suggest:get', 'suggest:cancel', 'suggest:state',
   'voice:state', 'voice:prepare', 'voice:listen', 'voice:audio', 'voice:speak', 'voice:cancelSpeech',
   'rec:state', 'rec:arm', 'rec:start', 'rec:chunk', 'rec:stop', 'rec:transcribe', 'rec:rename', 'rec:remove', 'rec:transcript', 'rec:find', 'rec:readFound', 'rec:open',
+  'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:remove',
   'orchestrator:held', 'orchestrator:heldSeen',
   'cloud:list', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:dismiss',
 ] as const satisfies readonly InvokeChannel[];
@@ -1786,6 +1805,7 @@ export const EVENT_CHANNELS = [
   'personal:changed',
   'voice:changed', 'voice:heard', 'voice:speech',
   'rec:changed',
+  'impara:changed',
 ] as const satisfies readonly EventChannel[];
 
 type Missing<All, Listed> = Exclude<All, Listed>;

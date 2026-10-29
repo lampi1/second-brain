@@ -22,6 +22,7 @@ import { connectorsIt } from './areas/connectors.it';
 import { genuiRequestIt } from './areas/genui-request.it';
 import { voiceIt } from './areas/voice.it';
 import { recIt } from './areas/rec.it';
+import { imparaIt } from './areas/impara.it';
 import {studioIt}from'./areas/studio.it';
 import { permissionsIt } from './areas/permissions.it';
 import { langSwitchIt } from './areas/lang-switch.it';
@@ -85,6 +86,7 @@ export const it = {
   ...genuiRequestIt,
   ...voiceIt,
   ...recIt,
+  ...imparaIt,
   'genui.request.question': 'Domanda',
   'genui.request.permission': 'Permesso',
   'genui.request.from': ({ kind, chat, title }: { kind: string; chat?: string; title: string }) => `${kind} da ${chat ?? 'una chat'}: ${title}`,

@@ -14,7 +14,10 @@ let themed = '';
 
 const css = (name: string, fallback: string): string => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 
-function configure(): void {
+/** A bigger, tighter drawing (Impara's blackboard, ADR 0185): larger labels, less space between the nodes. */
+export interface DrawOptions { fontSize?: number; nodeSpacing?: number; rankSpacing?: number }
+
+function configure(o: DrawOptions = {}): void {
   const vars = {
     background: css('--surface', '#191a1f'),
     primaryColor: css('--surface-3', '#272930'),
@@ -41,15 +44,16 @@ function configure(): void {
     signalTextColor: css('--text', '#eceef3'),
     edgeLabelBackground: css('--surface', '#191a1f'),
     fontFamily: css('--font', 'system-ui, sans-serif'),
-    fontSize: '13px',
+    fontSize: `${o.fontSize ?? 13}px`,
   };
-  const key = JSON.stringify(vars);
+  const flowchart = { nodeSpacing: o.nodeSpacing ?? 50, rankSpacing: o.rankSpacing ?? 50 };
+  const key = JSON.stringify([vars, flowchart]);
   if (key === themed) return;
   themed = key;
   mermaid.initialize({
     startOnLoad: false, securityLevel: 'strict', theme: 'base', themeVariables: vars, fontFamily: vars.fontFamily,
     // SVG text labels: the diagram is shown as an image, where HTML labels inside foreignObject would add nothing
-    htmlLabels: false, suppressErrorRendering: true, maxTextSize: 20_000, maxEdges: 400, deterministicIds: true,
+    htmlLabels: false, flowchart: { ...flowchart, htmlLabels: false }, suppressErrorRendering: true, maxTextSize: 20_000, maxEdges: 400, deterministicIds: true,
     deterministicIDSeed: 'sb',
     // edge labels on an opaque chip (mermaid's own is half transparent: a line showed through the text), rounder boxes
     themeCSS: `.edgeLabel rect, .labelBkg { opacity: 1 !important; fill: ${vars.background} !important; } .node rect { rx: 6px; ry: 6px; }`,
@@ -72,9 +76,9 @@ function toImage(svg: string): { src: string; width: number; height: number } {
 
 /** The diagram as an image data URL, or a rejection (bad syntax, too big): the caller then shows the code. One at a
  *  time (mermaid keeps global state while it draws). */
-export function drawMermaid(code: string): Promise<{ src: string; width: number; height: number }> {
+export function drawMermaid(code: string, opts?: DrawOptions): Promise<{ src: string; width: number; height: number }> {
   const run = queue.then(async () => {
-    configure();
+    configure(opts);
     const id = `sb-mermaid-${++seq}`;
     try {
       const { svg } = await mermaid.render(id, code);

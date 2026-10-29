@@ -108,7 +108,7 @@ export function prOf(v: unknown): DevopsPr | null {
     const lc = p.lastComment ? commentOf(p.lastComment) : null;
     const lcUrl = p.lastComment ? httpUrl(obj(p.lastComment).url) : null;
     return {
-      ...ref, target: str(p.target) ?? '', draft: p.draft === true, autoComplete: p.autoComplete === true,
+      ...ref, target: str(p.target) ?? '', ...(str(p.source) ? { source: str(p.source)! } : {}), draft: p.draft === true, autoComplete: p.autoComplete === true,
       reviewers: arr(p.reviewers).map(obj).filter(r => str(r.name)).map(r => ({ name: str(r.name)!, vote: num(r.vote) ?? 0, label: str(r.label) ?? '', required: r.required === true })),
       build: b && bUrl ? { result: str(b.result), status: str(b.status) ?? '', number: str(b.number) ?? '', url: bUrl, at: str(b.at) } : null,
       workItems: some(arr(p.workItems), itemOf),

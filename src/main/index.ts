@@ -219,6 +219,7 @@ app.whenReady().then(async () => {
     const connectors = createAppConnectors(app.getPath('userData'), () => s.tasks.refreshFresh(), l => s.tasks.onRead(l));
     await connectors.ready;
     const research = () => { if (!s.research) throw new Error('Manutenzione con ricerca non disponibile.'); return s.research; };
+    const learn = () => { if (!s.learn) throw new Error('Impara non è disponibile.'); return s.learn; };
   const handlers: Handlers = {
       'connectors:list': () => connectors.service.list(),
       'connectors:login': a => connectors.service.login(a?.provider),
@@ -564,6 +565,15 @@ app.whenReady().then(async () => {
       const err = await shell.openPath(a?.what === 'text' ? s.recordings.textFile(id) : s.recordings.wav(id));
       if (err) throw new Error(err);
     },
+    'impara:state': () => learn().state(),
+    'impara:get': a => learn().get(String(a?.id ?? '')),
+    'impara:start': a => learn().start(a),
+    'impara:move': a => learn().move(String(a?.id ?? ''), String(a?.at ?? '')),
+    'impara:ask': a => learn().ask(String(a?.id ?? ''), a?.kind, String(a?.at ?? ''), typeof a?.text === 'string' ? a.text : undefined),
+    'impara:answer': a => learn().answer(String(a?.id ?? ''), String(a?.checkId ?? ''), Number(a?.choice), a?.confidence),
+    'impara:explain': a => learn().explain(String(a?.id ?? ''), String(a?.text ?? '')),
+    'impara:retry': a => learn().retry(String(a?.id ?? '')),
+    'impara:remove': a => learn().remove(String(a?.id ?? '')),
     'orchestrator:held': () => s.heldNews?.get() ?? { items: [] },
     'orchestrator:heldSeen': a => { if (typeof a?.chatId !== 'string' || !a.chatId || a.chatId.length > 100) throw new Error('chatId required'); return s.heldNews?.seen(a.chatId) ?? { items: [] }; },
     ...(pulse?.handlers() ?? (demo ? pulseDemoHandlers(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), {
