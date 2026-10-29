@@ -97,6 +97,14 @@ describe('executeWrites: verify then decide', () => {
     expect(devops.items.get(9)).toMatchObject({ project: 'Planning', fields: { 'System.AreaPath': move['System.AreaPath'], 'System.IterationPath': move['System.IterationPath'] } });
   });
 
+  it('after a project move, a later comment of the same step goes to the new project', async () => {
+    const { devops, context } = setup();
+    const moving = { ...context, grant: { ...context.grant, projects: ['Proj', 'Planning'], fields: ['System.TeamProject', 'System.AreaPath'] } };
+    const out = await executeWrites(moving, [{ op: 'fields', fields: { 'System.TeamProject': 'Planning', 'System.AreaPath': 'Planning\\OrisDent Air' } }, { op: 'comment', text: 'x' }]);
+    expect(out.done).toEqual(['fields System.TeamProject, System.AreaPath', 'comment']);
+    expect(devops.calls.filter(c => c.method === 'POST').map(c => new URL(c.url).pathname)).toEqual(['/contoso/Planning/_apis/wit/workItems/9/comments']);
+  });
+
   it('refuses a move to a project outside the package\'s devops.projects, before sending anything', async () => {
     const { devops, context } = setup();
     const moving = { ...context, grant: { ...context.grant, fields: ['System.TeamProject'] } };

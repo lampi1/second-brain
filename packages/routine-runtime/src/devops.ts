@@ -293,7 +293,7 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
     if (entry?.state === 'done') { out.done.push(`${what} (already done)`); return; }
     if (entry?.state === 'not-verified') { out.notVerified.push(what); return; }
     if (entry?.state === 'failed') { out.failed.push(entry.error ? `${what}: ${entry.error}` : what); return; }
-    const save =(state: LedgerEntry['state'], extra: Partial<LedgerEntry> = {}) => store.setLedger(context.runId, context.attempt, key, { state, what, at: Date.now(), tries: extra.tries ?? store.ledger(context.runId)[key]?.tries ?? 0, ...extra });
+    const save = (state: LedgerEntry['state'], extra: Partial<LedgerEntry> = {}) => store.setLedger(context.runId, context.attempt, key, { state, what, at: Date.now(), tries: extra.tries ?? store.ledger(context.runId)[key]?.tries ?? 0, ...extra });
     if (!project) {
       try { project = (await client.item(grant.organization, workItem)).project; }
       // nothing was sent: no ledger entry, so a resumed run tries again
@@ -349,6 +349,8 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
     if (result === 'ok') out.done.push(label);
     else if (result === 'definite') { save('failed', reason ? { error: reason } : {}); out.failed.push(reason ? `${what}: ${reason}` : what); }
     else { save('not-verified'); out.notVerified.push(what); }
+    // a project move: the later comments go to the new project; an unverified move is re-read before the next write
+    if (write.op === 'fields' && 'System.TeamProject' in write.fields && result !== 'definite') project = result === 'ok' ? String(write.fields['System.TeamProject']) : undefined;
   };
   for (const [index, write] of writes.entries()) {
     const key = writeKey(context.runId, context.stepId, index, write, context.round);

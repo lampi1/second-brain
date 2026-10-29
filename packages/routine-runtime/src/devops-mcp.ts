@@ -71,7 +71,8 @@ export async function handleDevOpsMessage(message: Json, config: DevOpsServerCon
       if (params.name === 'current_iteration') {
         const project = config.projects.find(p => typeof args.project === 'string' && p.toLowerCase() === args.project.toLowerCase());
         if (!project) return text('project: not one of this routine\'s projects', true);
-        if (typeof args.team !== 'string' || !TEAM.test(args.team.trim())) return text('team: a team name', true);
+        // dots only ('.', '..') would leave the project's URL segment
+        if (typeof args.team !== 'string' || !TEAM.test(args.team.trim()) || /^\.+$/.test(args.team.trim())) return text('team: a team name', true);
         try { return text(await currentIteration(config.organization, project, args.team.trim(), io)); }
         catch (e) { return text(`DevOps read failed: ${e instanceof Error ? e.message : String(e)}`, true); }
       }
