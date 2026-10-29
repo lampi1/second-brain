@@ -123,19 +123,29 @@ export interface Proposal {
   evidenceRuns?: string[];
   /** why the app still asks (ADR 0193): «Te la chiedo perché: …», worded by the renderer; never a suggested answer */
   why?: ProposalWhy;
+  /** set by the card's source when what it decides on is never applied by itself, for a reason the card's own fields do
+   *  not show (policy.ts neverAuto): the text an applied change wrote, a research skill tied to a role, a lint finding
+   *  that removes something */
+  never?: ProposalNever;
 }
 
+/** Why a card is never applied by itself (ADR 0193): external = it leaves the app; setting; permissions = tools,
+ *  permissions or hooks; role; forget = it removes something (or takes a change back); production; script = a script
+ *  or a query (it runs commands); unread = the text it wrote could not be read to check; brain = a candidate brain
+ *  (several changes as one); note = a brain note or hub line. */
+export type ProposalNever = 'external' | 'setting' | 'permissions' | 'role' | 'forget' | 'production' | 'script' | 'unread' | 'brain' | 'note';
+
 /** The groups that may be applied by themselves once the user's own decisions show the answer is obvious (ADR 0193).
- *  Explicit allow-list: role, setting, forget and issue are never applied without the user, whatever the history
+ *  Explicit allow-list: role, setting, forget, issue, script (scripts and queries run commands), brain and note are never applied without the user, whatever the history
  *  (roles carry permissions, tiers and tools; settings are protected; forgetting removes; an issue is published on GitHub). */
-export const AUTO_GROUPS: readonly ProposalGroup[] = ['skill', 'rule', 'fact', 'script', 'learning'];
+export const AUTO_GROUPS: readonly ProposalGroup[] = ['skill', 'rule', 'fact', 'learning'];
 /** Why a card is still in front of the user (ADR 0193), as data:
  *  never = a kind the app always asks (what: why); irreversible = no Annulla from here; first = no decision of this kind
  *  yet; few = n decisions so far, all yes, not enough; rejected = no times out of n; undone = changes the app applied by
  *  itself in this group the user took back; building = yes out of n, not sure enough yet; blocked = it could not be
  *  applied by itself (or one side is blocked). */
 export type ProposalWhy =
-  | { code: 'never'; what: 'external' | 'setting' | 'permissions' | 'role' | 'forget' | 'production' }
+  | { code: 'never'; what: ProposalNever }
   | { code: 'irreversible' }
   | { code: 'first' }
   | { code: 'few'; n: number }
@@ -159,6 +169,9 @@ export interface ProposalAutoApplied {
 /** One group's policy now (ADR 0193): what the ledger says and whether its new cards apply by themselves. */
 export interface ProposalGroupPolicy {
   group: ProposalGroup;
+  /** the source the policy is for (ADR 0193: trust is built per group and source, so «Tieni» on changes already applied
+   *  never lets new research cards go by themselves); absent = the group's decisions from every source */
+  source?: ProposalSource;
   /** never = not on the allow-list; ask = not sure enough; auto = new cards apply by themselves (with Annulla) */
   mode: 'never' | 'ask' | 'auto';
   /** the decisions the policy counts (the window), yes and no (an undo after a yes counts as no) */

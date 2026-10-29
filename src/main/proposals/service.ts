@@ -14,7 +14,7 @@ import { readLocal, writeLocal } from '../agents/local-store';
 import { logEvent } from '../activity/journal';
 import { log, errText } from '../log';
 import { DecisionLedger, type DecisionEntry } from './ledger';
-import { allPolicies, autoNow, cardSize, hasEvidence, policyLine, reversible, savedThisWeek, whyAsked } from './policy';
+import { autoNow, cardSize, groupPolicy, hasEvidence, policyLine, reversible, savedThisWeek, whyAsked } from './policy';
 import { SOURCES, shortPath, type ProposalPorts, type Source } from './sources';
 
 const KEEP_MS = 60 * 86_400_000;
@@ -73,13 +73,22 @@ export class ProposalsService {
   private readonly shownAt = new Map<string, number>();
   /** cards whose automatic approval failed: shown to the user, never retried by itself */
   private readonly autoFailed = new Set<string>();
+  /** an approved revert card is rolling its change back now (apply) */
+  private appReverting = 0;
   constructor(private readonly o: ProposalsOptions) {
     this.ports = { ...o.ports, reviewed: new ReviewedMarks(o.userData, o.ports.now) };
     this.sources = o.sources ?? SOURCES;
     this.ledger = new DecisionLedger(o.userData, o.ports.now);
   }
 
+  /** One list at a time: two reads at once could apply the same obvious card twice. */
+  private listing: Promise<unknown> = Promise.resolve();
   async list(): Promise<ProposalsState> {
+    const next = this.listing.then(() => this.listNow());
+    this.listing = next.catch(() => {});
+    return next;
+  }
+  private async listNow(): Promise<ProposalsState> {
     const root = this.o.root?.() ?? null;
     const read = await Promise.allSettled(this.sources.map(s => (s.available(this.ports) ? s.list(this.ports) : Promise.resolve([]))));
     const problems: ProposalSource[] = [], items: Proposal[] = [];
@@ -89,10 +98,16 @@ export class ProposalsService {
     });
     for (const it of items) if (it.provenance.files) it.provenance.files = it.provenance.files.map(f => shortPath(f, root));
     // the obvious ones go by themselves (ADR 0193); each one still shown says why it is asked
-    const policy = new Map(allPolicies(this.ledger.all()).map(p => [p.group, p]));
+    // per group and source: «Tieni» on applied changes never builds trust for new research cards
+    const policy = new Map<string, ProposalGroupPolicy>(), ledger = this.ledger.all();
+    const policyOf = (c: Proposal): ProposalGroupPolicy => {
+      const key = `${c.group}|${c.source}`;
+      if (!policy.has(key)) policy.set(key, groupPolicy(c.group, ledger, c.source));
+      return policy.get(key)!;
+    };
     const shown: Proposal[] = [];
     for (const c of sortProposals(items)) {
-      const p = policy.get(c.group)!;
+      const p = policyOf(c);
       if (!this.autoFailed.has(c.id) && autoNow(c, p) && await this.autoApply(c, p)) continue;
       shown.push({ ...c, why: whyAsked(c, p) });
     }
@@ -131,7 +146,12 @@ export class ProposalsService {
 
   /** The decision through the card's own source, then one ledger entry (a ledger problem never undoes the decision). */
   private async apply(source: Source, card: Proposal, decision: ProposalDecision, by: DecisionEntry['by'], note?: string, choice?: { keep: ProposalKeep; shown: string[] }): Promise<void> {
-    const made = await source.decide(this.ports, card, decision, note, choice);
+    // a «riuscito se» revert rolls a change back through the change log: the app's own check, never the user's undo of
+    // the decision that made it (changeUndone ignores rollbacks while it runs)
+    const revert = decision === 'approve' && card.ask.kind === 'research' && card.ask.finding === 'revert';
+    if (revert) this.appReverting++;
+    let made: string[] | void;
+    try { made = await source.decide(this.ports, card, decision, note, choice); } finally { if (revert) this.appReverting--; }
     const first = this.shownAt.get(card.id), now = this.ports.now();
     this.shownAt.delete(card.id);
     try {
@@ -150,6 +170,9 @@ export class ProposalsService {
     if (!source || this.deciding.has(card.id)) return false;
     this.deciding.add(card.id);
     try {
+      // read again from its source, as decide does: still open, unchanged, approve side still possible
+      const fresh = (await source.list(this.ports)).find(c => c.id === card.id);
+      if (!fresh || !fresh.canApprove || fresh.content !== card.content) return false;
       await this.apply(source, card, 'approve', 'auto');
       const reason = policyLine(p);
       log.info('proposals', 'auto-applied', { data: { group: card.group, source: card.source, reason } });
@@ -173,6 +196,11 @@ export class ProposalsService {
   /** A change-log entry was rolled back (from anywhere: the deck, the Log, the feed): the decisions that made or kept
    *  it count as no from now on. */
   changeUndone(changeId: string): void {
+    if (this.appReverting > 0) {
+      log.info('proposals', 'change rolled back by an approved revert card', { data: { change: changeId } });
+      this.changed();
+      return;
+    }
     const hit = this.ledger.changeUndone(changeId);
     if (!hit.length) return;
     log.info('proposals', 'approved change undone', { data: { groups: [...new Set(hit.map(e => e.group))], auto: hit.filter(e => e.by === 'auto').length } });
@@ -189,7 +217,9 @@ export class ProposalsService {
     try {
       if (e.changes?.length) {
         if (!this.ports.changes) throw new Error('Registro delle modifiche non disponibile.');
-        for (const c of [...e.changes].reverse()) await this.ports.changes.rollback(c);
+        // a change already rolled back (from the Log, a revert card) is skipped: nothing left to undo there
+        const gone = new Set(this.ports.changes.stored().filter(c => c.rolledBackAt !== undefined).map(c => c.id));
+        for (const c of [...e.changes].reverse()) if (!gone.has(c)) await this.ports.changes.rollback(c);
       } else if (e.source === 'policy' && e.domain) {
         const r = await this.ports.policies?.act({ action: 'rollback', domain: e.domain });
         if (!r?.ok) throw new Error(r && !r.ok ? r.error : 'Ciclo di miglioramento non disponibile.');
@@ -209,12 +239,21 @@ export class ProposalsService {
     const since = this.ports.now() - AUTO_LIST_MS;
     const recent = this.ledger.all().filter(e => e.by === 'auto' && e.at >= since).slice(-AUTO_LIST).reverse();
     if (!recent.length) return [];
-    let changes: { id: string; canRollback: boolean }[] = [];
+    let changes: { id: string; canRollback: boolean; rolledBackAt?: number }[] = [];
     try { changes = this.ports.changes?.list() ?? []; } catch { /* unreadable now: Annulla shows as not possible */ }
+    // a change already rolled back elsewhere (the Log, a revert card): its entry shows as taken back, no Annulla
+    const back = (e: DecisionEntry): number | undefined => {
+      if (!e.changes?.length) return undefined;
+      const at = e.changes.map(id => changes.find(c => c.id === id)?.rolledBackAt);
+      return at.every(x => x !== undefined) ? Math.max(...(at as number[])) : undefined;
+    };
     const undoable = (e: DecisionEntry): boolean => e.undoneAt === undefined && (e.changes?.length
-      ? e.changes.every(id => changes.find(c => c.id === id)?.canRollback === true)
+      ? back(e) === undefined && e.changes.every(id => { const c = changes.find(x => x.id === id); return c?.canRollback === true || c?.rolledBackAt !== undefined; })
       : e.source === 'policy' && !!e.domain && !!this.ports.policies);
-    return recent.map(e => ({ id: e.id, card: e.card, source: e.source, group: e.group, title: e.title, at: e.at, ...(e.undoneAt !== undefined ? { undoneAt: e.undoneAt } : {}), canUndo: undoable(e) }));
+    return recent.map(e => {
+      const undoneAt = e.undoneAt ?? back(e);
+      return { id: e.id, card: e.card, source: e.source, group: e.group, title: e.title, at: e.at, ...(undoneAt !== undefined ? { undoneAt } : {}), canUndo: undoable(e) };
+    });
   }
 
   /** A source said something changed: count again a moment later (several events in a row count once). */

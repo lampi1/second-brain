@@ -8,7 +8,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn() }, errText: (e: unknown) => String(e instanceof Error ? e.message : e) }));
 import { DecisionLedger, LEDGER_FILE, LEDGER_MAX, readLedger, type DecisionEntry } from '../../../src/main/proposals/ledger';
-import { allPolicies, autoNow, groupPolicy, neverAuto, POLICY, reversible, savedThisWeek, weekStart, whyAsked } from '../../../src/main/proposals/policy';
+import { allPolicies, autoNow, groupPolicy, neverAuto, POLICY, reversible, savedThisWeek, textNever, weekStart, whyAsked } from '../../../src/main/proposals/policy';
 import { buildPack, PACK_SECTIONS } from '../../../src/main/brainmodel/research-pack';
 import { AUTO_GROUPS, type Proposal, type ProposalGroup } from '../../../src/shared/proposals';
 
@@ -42,9 +42,9 @@ describe('proposals policy (ADR 0193)', () => {
   });
 
   it('the first decisions only record: below 10 nothing goes by itself, whatever the share', () => {
-    const p = groupPolicy('script', many(9, 'script'));
+    const p = groupPolicy('skill', many(9, 'skill'));
     expect(p).toMatchObject({ mode: 'ask', n: 9, yes: 9 });
-    expect(whyAsked(card({ group: 'script' }), p)).toEqual({ code: 'few', n: 9 });
+    expect(whyAsked(card({ group: 'skill' }), p)).toEqual({ code: 'few', n: 9 });
     expect(whyAsked(card(), groupPolicy('rule', []))).toEqual({ code: 'first' });
   });
 
@@ -73,7 +73,7 @@ describe('proposals policy (ADR 0193)', () => {
   });
 
   it('never by itself: role, setting, forget, issue, tiers, trials, tools/permissions/hooks, production, external', () => {
-    expect([...AUTO_GROUPS].sort()).toEqual(['fact', 'learning', 'rule', 'script', 'skill']);
+    expect([...AUTO_GROUPS].sort()).toEqual(['fact', 'learning', 'rule', 'skill']);
     for (const g of ['role', 'setting', 'forget', 'issue'] as const) expect(groupPolicy(g, many(200, g)).mode).toBe('never');
     const auto = groupPolicy('rule', many(60, 'rule'));
     expect(autoNow(card(), auto)).toBe(true);
@@ -97,6 +97,73 @@ describe('proposals policy (ADR 0193)', () => {
     }
     // «products» is no production
     expect(neverAuto(card({ content: 'i products del catalogo' }))).toBeNull();
+  });
+
+  it('never-auto detection has no bypass: quoted lines, mid-line values, identifiers, hosts and commands', () => {
+    const cases: [string, string][] = [
+      // a research rule quoted with «> »: anchored patterns missed it
+      ['> allowed-tools: Bash(*)', 'permissions'],
+      ['> - usa sempre permissions: allow', 'permissions'],
+      ['scrivi in .claude/settings.local.json', 'permissions'],
+      ['lancia con --dangerously-skip-permissions', 'permissions'],
+      ['> Connettiti a PROD_DB per i dati', 'production'],
+      ['usa prodDb quando serve', 'production'],
+      ['la variabile dbProd', 'production'],
+      ['server prd-sql01', 'production'],
+      ['apri https://api-live.contoso.com/v1', 'production'],
+      ['vai su db.prod.contoso.internal', 'production'],
+      ['az webapp restart --name app', 'production'],
+      ['kubectl --context=aks-prod get pods', 'production'],
+      ['ConnectionString punta a sql-prod', 'production'],
+      ['in produzione si fa così', 'production'],
+      ['> gh issue create --title x', 'external'],
+      ['curl -X POST https://hooks.example.com/x', 'external'],
+      ['Invoke-WebRequest -Uri https://api.example.com', 'external'],
+      ['wget https://example.org/file', 'external'],
+      ['Send-MailMessage -To someone@example.com', 'external'],
+      ['manda via smtp al team', 'external'],
+      ['posta su https://hooks.slack.com/services/x', 'external'],
+      ['webhook di Teams per avvisare', 'external'],
+      ['az account show', 'external'],
+      ['kubectl get pods', 'external'],
+    ];
+    for (const [content, what] of cases) expect(neverAuto(card({ content })), content).toBe(what);
+    // the title counts too; localhost calls and plain words do not
+    expect(neverAuto(card({ title: 'Regola per PROD_DB' }))).toBe('production');
+    for (const ok of ['curl http://localhost:3000/health', 'curl http://127.0.0.1:8080/x', 'i prodotti e i products', 'riproduci il bug', 'vivi la vita', 'la riga hooks del testo'])
+      expect(neverAuto(card({ content: ok })), ok).toBeNull();
+    // the whole text: a pattern past MAX_CODE still counts
+    expect(textNever(`${'x'.repeat(30_000)}\nInvoke-Sql -Server PROD_DB`)).toBe('production');
+  });
+
+  it('scripts and queries, revert cards, lint removals, role-tied findings, brain and note cards always ask', () => {
+    const auto = groupPolicy('rule', many(60, 'rule'));
+    const research = card().ask as Extract<Proposal['ask'], { kind: 'research' }>;
+    const cases: [Partial<Proposal>, string][] = [
+      [{ group: 'script', code: [{ file: 'scripts/x.ps1', lang: 'powershell', text: 'Get-ChildItem' }] }, 'script'],
+      [{ group: 'rule', ask: { ...research, finding: 'revert' } }, 'forget'],
+      [{ group: 'fact', never: 'forget' }, 'forget'],
+      [{ group: 'skill', never: 'role' }, 'role'],
+      [{ group: 'skill', never: 'unread' }, 'unread'],
+      [{ group: 'brain', ask: { kind: 'candidate', items: [], files: 1, checks: [], replay: { state: 'skipped', note: '' } } }, 'brain'],
+      [{ group: 'note' }, 'note'],
+    ];
+    for (const [x, what] of cases) {
+      const c = card(x);
+      expect(neverAuto(c), JSON.stringify(x)).toBe(what);
+      expect(autoNow(c, { ...auto, group: c.group, mode: 'auto' })).toBe(false);
+      expect(whyAsked(c, auto)).toEqual({ code: 'never', what });
+    }
+    // a revert's Annulla could not work: it is not reversible from here either
+    expect(reversible(card({ ask: { ...research, finding: 'revert' } }))).toBe(false);
+  });
+
+  it('trust is per group and source: «Tieni» on applied changes never lets new research cards go by themselves', () => {
+    const kept = many(60, 'rule', 'approve', { source: 'change', applied: true, card: 'change:x' });
+    expect(groupPolicy('rule', kept, 'change').mode).toBe('auto');
+    expect(groupPolicy('rule', kept, 'research')).toMatchObject({ mode: 'ask', n: 0, source: 'research' });
+    expect(whyAsked(card(), groupPolicy('rule', kept, 'research'))).toEqual({ code: 'first' });
+    expect(allPolicies([...kept, ...many(2, 'rule')]).map(p => `${p.group}|${p.source}`)).toEqual(['rule|change', 'rule|research']);
   });
 
   it('a card that cannot be undone from here, or whose approve side is blocked, is asked', () => {
@@ -155,9 +222,10 @@ describe('proposals policy (ADR 0193)', () => {
     expect(PACK_SECTIONS).toContain('decisions');
     const ledger = [...many(52, 'rule'), ...many(3, 'issue', 'reject'), entry('skill', 'approve', { undoneAt: NOW })];
     const pack = buildPack({ now: NOW, runs: [], roles: [], past: [], appVersion: '1.0.0', state: { skills: [], rules: [], memory: [], changes: [], lastRun: null } as never, decisions: allPolicies(ledger) });
-    expect(pack.decisions).toContain('- rule: applied by itself, with Annulla · 52 decisions: approved 52, rejected 0');
-    expect(pack.decisions).toContain('- issue: always asked (never applied by itself) · 3 decisions: approved 0, rejected 3');
-    expect(pack.decisions).toContain('- skill: asked · 1 decisions: approved 0, rejected 0, undone after approval 1');
+    expect(pack.decisions).toContain('- rule from research: applied by itself, with Annulla · 52 decisions: approved 52, rejected 0');
+    expect(pack.decisions).toContain('- issue from research: always asked (never applied by itself) · 3 decisions: approved 0, rejected 3');
+    expect(pack.decisions).toContain('- skill from research: asked · 1 decisions: approved 0, rejected 0, undone after approval 1');
+    expect(pack.decisions).toContain('brain, note');
     expect(pack.decisions).not.toContain('- fact:');
     expect(buildPack({ now: NOW, runs: [], roles: [], past: [], appVersion: '1.0.0', state: { skills: [], rules: [], memory: [], changes: [], lastRun: null } as never }).decisions).toContain('no decision recorded yet');
   });

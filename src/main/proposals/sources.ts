@@ -13,9 +13,10 @@ import type { ChatSummary, LearnAction, LearnResult, SettingProposal } from '../
 import type { SkillCandidateView } from '../../shared/learning-review';
 import type { BrainCandidateView, ResearchProposal } from '../../shared/maintenance-research';
 import type { ApprovalItem as PulseApproval, PulseResult } from '../../shared/pulse';
-import { type Proposal, type ProposalAsk, type ProposalGroup, type ProposalCode, type ProposalDecision, type ProposalKeep, type ProposalFact, type ProposalProvenance, type ProposalSource, type ProposalWho } from '../../shared/proposals';
+import { type Proposal, type ProposalAsk, type ProposalGroup, type ProposalCode, type ProposalDecision, type ProposalKeep, type ProposalFact, type ProposalNever, type ProposalProvenance, type ProposalSource, type ProposalWho } from '../../shared/proposals';
 import { isRoleId } from '../../shared/roles';
 import type { FileSnapshot, StoredChange } from '../brainmodel/changes';
+import { textNever } from './policy';
 
 /** Changes older than this are history, not news: they stay in the change log only. */
 export const CHANGE_WINDOW_MS = 14 * 86_400_000;
@@ -151,7 +152,10 @@ const change: Source = {
     const candidates = new Set((await p.candidates?.list() ?? []).map(c => c.name));
     // memory tidy-ups stay in the Log with Annulla, never a card: the owner sees only skills and rules (ADR 0150)
     return p.changes!.list().filter(c => c.at >= since && !c.rolledBackAt && !FORMAT_JOBS.includes(c.job) && c.kind !== 'memory' && !p.reviewed.has(c.id)).flatMap(c => {
-      const snaps = stored.find(s => s.id === c.id)?.files ?? [], files = snaps.map(f => f.file);
+      const kept = stored.find(s => s.id === c.id), snaps = kept?.files ?? [], files = snaps.map(f => f.file);
+      // the card's content is the change's reason: what never goes by itself is read in the whole text it wrote
+      // (every file's after, never clipped); a change whose text cannot be read here is asked
+      const never: ProposalNever | null = !kept || (!snaps.length && !kept.agent) ? 'unread' : textNever(snaps.map(f => `${f.file}\n${f.after ?? ''}`).join('\n'));
       // a skill candidate is its own card (Approva / Rifiuta), never twice
       if (files.some(isCandidateFile) || (c.job === 'repeated-task' && candidates.has(c.target))) return [];
       const code = codeOf(snaps), ask = changeAsk(c, code);
@@ -160,7 +164,7 @@ const change: Source = {
       return [card('change', c.id, {
         group, applied: true, title: c.summary, content: c.reason, facts, ask, ...(code.length ? { code } : {}),
         provenance: prov({ who: { kind: 'maintenance', id: c.job }, files: files.length ? files : c.kind === 'rule' || c.kind === 'memory' ? [c.target] : [], at: iso(c.at), evidence: c.evidence }),
-        canApprove: true, canReject: c.canRollback, ...(c.canRollback ? {} : { blocked: ['changed-since'] }),
+        canApprove: true, canReject: c.canRollback, ...(c.canRollback ? {} : { blocked: ['changed-since'] }), ...(never ? { never } : {}),
       })];
     });
   },
@@ -301,6 +305,14 @@ function researchContent(x: ResearchProposal): string {
   if (x.lint) return x.lint.line ? `> ${x.lint.line.trim()}` : x.lint.about && (x.lint.check === 'stale-fact' || x.lint.check === 'changed-fact') ? `> ${x.lint.about}` : '';
   return '';
 }
+/** What makes a finding never go by itself that its card's fields do not show: a skill or a rule tied to a role
+ *  (applyResearch links the skill to the role, or writes the rule in the role's text), a lint finding that removes a
+ *  fact or a line. */
+function researchNever(x: ResearchProposal): ProposalNever | null {
+  if (x.change?.role) return 'role';
+  if (x.kind === 'lint' && x.lint && (x.lint.check === 'stale-fact' || x.lint.check === 'changed-fact' || x.lint.check === 'stale-cite')) return 'forget';
+  return null;
+}
 /** A candidate brain as one card (ADR 0195): the findings it gathers, a diff per file, its checks and replay. */
 function candidateCard(p: ProposalPorts, c: BrainCandidateView): Proposal {
   const items = c.items.map(x => ({ finding: x.kind, title: x.title }));
@@ -340,6 +352,7 @@ const research: Source = {
           ...(issue && x.issue!.duplicateOf ? [{ key: 'before' as const, value: x.issue!.duplicateOf.url }] : [])],
         provenance: prov({ who: { kind: 'maintenance', id: x.chatId ? 'research' : 'cleanup' }, ...(chat ? { chat: { id: chat.id, title: chat.title } } : {}), ...(x.lint?.file ? { files: [x.lint.file] } : {}), at: iso(x.at), evidence: x.evidence }),
         canApprove: !issue || !!repo, canReject: true, ...(issue && !repo ? { blocked: ['noRepo'] } : {}),
+        ...(researchNever(x) ? { never: researchNever(x)! } : {}),
       });
     })];
   },

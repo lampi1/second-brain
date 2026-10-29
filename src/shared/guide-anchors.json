@@ -142,7 +142,7 @@
     "src/main/mcp-servers/store.ts": "8eaa154a62da1b3e",
     "src/main/peek-file.ts": "79c965e3d2e3fd41",
     "src/main/personal/vault.ts": "da78fe7ba21a58ab",
-    "src/main/proposals/service.ts": "fd2fe2d866df3876",
+    "src/main/proposals/service.ts": "cf8fb8610508b8a3",
     "src/main/recordings/find.ts": "ef55b0aa7dc991f1",
     "src/main/recordings/service.ts": "4cee5489002da995",
     "src/main/recordings/store.ts": "e4897ba362c7a2ff",

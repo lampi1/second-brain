@@ -12,7 +12,7 @@ import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { BrainModelState, BrainSkill } from '../../shared/brain-model';
 import type { ResearchForget, ResearchProposal } from '../../shared/maintenance-research';
 import type { LogSections } from './research-pack-logs';
-import type { ProposalGroupPolicy } from '../../shared/proposals';
+import { PROPOSAL_GROUPS, PROPOSAL_SOURCES, type ProposalGroupPolicy } from '../../shared/proposals';
 
 export const PACK_SECTIONS = ['summary', 'runs', 'roles', 'skills', 'rules', 'memory', 'changes', 'logs', 'past', 'journal', 'perf', 'ui-errors', 'digest', 'decisions'] as const;
 export type PackSection = (typeof PACK_SECTIONS)[number];
@@ -123,7 +123,7 @@ export function buildPack(i: PackInput): Pack {
   const pct = (x: number | null) => (x === null ? '—' : `${Math.round(x * 100)}%`);
   const MODE: Record<ProposalGroupPolicy['mode'], string> = { never: 'always asked (never applied by itself)', ask: 'asked', auto: 'applied by itself, with Annulla' };
   const decisionLines = (i.decisions ?? []).filter(p => p.n > 0 || p.autoN > 0).map(p =>
-    `- ${p.group}: ${MODE[p.mode]} · ${p.n} decisions: approved ${p.yes}, rejected ${p.no - p.undone}, undone after approval ${p.undone} · approve rate low bound ${pct(p.low)} (needs ${pct(p.threshold)}) · auto-applied ${p.autoN}, undone ${p.autoUndone}`);
+    `- ${p.group}${p.source ? ` from ${p.source}` : ''}: ${MODE[p.mode]} · ${p.n} decisions: approved ${p.yes}, rejected ${p.no - p.undone}, undone after approval ${p.undone} · approve rate low bound ${pct(p.low)} (needs ${pct(p.threshold)}) · auto-applied ${p.autoN}, undone ${p.autoUndone}`);
 
   const verdicts = (x: string) => ended.filter(r => verdictOf(r) === x).length;
   const total = ended.reduce((s, r) => s + (r.costUsd ?? 0), 0);
@@ -152,7 +152,7 @@ export function buildPack(i: PackInput): Pack {
     'ui-errors': cut(i.logs?.['ui-errors'] ?? NOT_READ),
     digest: cut(i.logs?.digest ?? NOT_READ),
     decisions: cut([
-      'How the user decided the Proposte cards, per group (skill, rule, fact, script, role, setting, learning, forget, issue). A group the user mostly rejects: propose it only with new, strong evidence (say which); one applied by itself: the user trusts it, keep the same quality.',
+      `How the user decided the Proposte cards, per group (${PROPOSAL_GROUPS.join(', ')}) and source (${PROPOSAL_SOURCES.join(', ')}: change = already applied by the maintenance, Tieni or Annulla; research = new findings). A group the user mostly rejects: propose it only with new, strong evidence (say which); one applied by itself: the user trusts it, keep the same quality.`,
       ...(decisionLines.length ? decisionLines : ['- no decision recorded yet']),
     ].join('\n')),
   };
