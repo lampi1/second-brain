@@ -4,7 +4,7 @@
 // under their parent), with automatic flags; on the right the live stream of every event (classifiers, estimates,
 // errors and memory written to the brain, Battito, the brain's changes with their history, the app's warnings). A click
 // on a step or a line opens its details: input, result, errors, tools. Reading it spends no AI tokens (the app's own
-// events, main/activity/journal.ts); only «Fai analizzare all'AI» prepares a message for the Orchestrator, sent by
+// events, main/activity/journal.ts); only «Fai analizzare all'IA» prepares a message for the Orchestrator, sent by
 // the user. Mounted by App.tsx's PageFrame; pure helpers in lib/log-view.ts; styles in styles/log.css.
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { LOG_KINDS, LOG_RECENT, type LogEvent, type LogKind, type LogList } from '@shared/activity-log';
@@ -254,7 +254,7 @@ function DetailPanel({ detail, chats, onClose }: { detail: Detail; chats: Readon
   </Modal>;
 }
 
-/** «Fai analizzare all'AI»: a draft in the Orchestrator's input, never sent by the app (it spends tokens only if the user sends it). */
+/** «Fai analizzare all'IA»: a draft in the Orchestrator's input, never sent by the app (it spends tokens only if the user sends it). */
 function AiButton({ text }: { text: string }) {
   const ask = () => {
     if (!brainBridge.draftToOrchestrator(`${t('log.aiPrompt')}\n\n${text}`, () => {}))

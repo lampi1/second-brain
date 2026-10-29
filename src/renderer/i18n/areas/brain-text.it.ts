@@ -373,7 +373,7 @@ export const brainTextIt = {
   // pages/Script.tsx and lib/brain-sections.ts
   'brainText.script.tested': 'Provato',
   'brainText.script.cannotRead': 'Non riesco a leggere lo script',
-  'brainText.script.loading': 'Carico…',
+  'brainText.script.loading': 'Caricamento…',
   'brainText.script.brainScript': 'Script del brain',
   'brainText.script.lastTest': 'Ultimo test',
   'brainText.script.reviewQuestion': 'Rivediamolo: è ancora giusto? Va corretto, esteso o eliminato?',

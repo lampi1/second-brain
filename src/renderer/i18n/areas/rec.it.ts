@@ -42,7 +42,7 @@ export const recIt = {
   'rec.noOrchestrator': 'L’Orchestrator non è aperto.',
   'rec.copy': 'Copia testo',
   'rec.copied': 'Trascrizione copiata.',
-  'rec.loading': 'Carico…',
+  'rec.loading': 'Caricamento…',
   'rec.empty': 'Nessuna voce riconosciuta in questa registrazione.',
   'rec.pick': 'Scegli una registrazione a sinistra.',
   'rec.emptyList': 'Ancora nessuna registrazione. Premi «Registra call» quando parte la call su Teams.',

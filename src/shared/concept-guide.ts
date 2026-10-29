@@ -606,7 +606,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('«Approvate» elenca tutto quello che è nel brain adesso (skill, regole, fatti confermati, script): il cestino lo toglie con un clic e per qualche secondo «Annulla» lo rimette; skill, regole e script passano dal registro delle modifiche, quindi restano annullabili anche in Apprendimento.',
         '\"Approved\" lists everything in the brain now (skills, rules, confirmed facts, scripts): the bin takes one out in a click and for a few seconds \"Undo\" puts it back; skills, rules and scripts go through the change log, so they stay undoable in Learning too.'),
       // src/renderer/brain/pages/Idee.tsx
-      b('«Idee» divide le tue da quelle dell’AI (la colonna «Chi» di ideas.md: «IA» è l’AI) e «Rispolvera» ti ripropone a caso un’idea vecchia ancora aperta; sotto, il Battito e i temi delle idee.',
+      b('«Idee» divide le tue da quelle dell’IA (la colonna «Chi» di ideas.md: «IA» è l’IA) e «Rispolvera» ti ripropone a caso un’idea vecchia ancora aperta; sotto, il Battito e i temi delle idee.',
         '\"Ideas\" splits yours from the AI’s (the \"Chi\" column of ideas.md: \"IA\" is the AI) and \"Dust one off\" brings back an old idea still open at random; below, the Pulse and the ideas’ themes.'),
       b('La Dashboard non c’è più: la frase e i contatori sono in cima a Memoria, il contesto delle chat in Costi, gli errori dell’app e i temi degli errori in Qualità, gli spunti dell’AI in Idee; il resto erano doppioni.',
         'The Dashboard is gone: the sentence and the counters are at the top of Memoria, the chats’ context in Costi, the app’s errors and the errors’ themes in Quality, the AI’s tips in Ideas; the rest were duplicates.'),
@@ -1111,8 +1111,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Regole dell’app segnalano da sole le anomalie: risposta duplicata, approvazione nascosta (un permesso chiuso senza la tua risposta), revisione senza verdetto.',
         'App rules flag anomalies by themselves: a duplicate reply, a hidden approval (a permission closed without your answer), a review without a verdict.'),
       // src/main/activity/journal.ts
-      b('Leggerlo non consuma token: sono eventi e contatori salvati dall’app. Solo «Fai analizzare all’AI» prepara un messaggio per l’Orchestrator, che parte se lo invii tu.',
-        'Reading it spends no tokens: these are events and counters the app saved. Only "Fai analizzare all’AI" prepares a message for the Orchestrator, sent only if you send it.'),
+      b('Leggerlo non consuma token: sono eventi e contatori salvati dall’app. Solo «Fai analizzare all’IA» prepara un messaggio per l’Orchestrator, che parte se lo invii tu.',
+        'Reading it spends no tokens: these are events and counters the app saved. Only "Fai analizzare all’IA" prepares a message for the Orchestrator, sent only if you send it.'),
       // src/main/activity/journal.ts clean
       b('Si pulisce da solo: tiene 7 giorni e al massimo 20 MB, il resto si cancella.',
         'It cleans itself: it keeps 7 days and at most 20 MB, the rest is deleted.'),

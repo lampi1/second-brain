@@ -4,7 +4,7 @@
 // text, the AI's reasoning (Ho notato / Penso / Sicurezza / Non so / Cosa fare), "Discuti" (the Orchestrator with a ready
 // draft; components/Discuss); a discussed idea is marked in the table. "Dall'IA" also lists the
 // AI's reflections on itself (ai-reflections.md) as cards with the same buttons. Data: /api/tables.
-// In the Memoria hub (`embedded`, ADR 0122) the head is a clear split «Le tue» / «Dell'AI» (who wrote it is the table's
+// In the Memoria hub (`embedded`, ADR 0122) the head is a clear split «Le tue» / «Dell'IA» (who wrote it is the table's
 // `Chi` column: "IA" is the AI, anything else is the user) and «Rispolvera» brings back an old open idea at random
 // (MemoryPage.tsx adds the Battito's board and the ideas' themes around it).
 import { useState, type ReactNode } from 'react';
