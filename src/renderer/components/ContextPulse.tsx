@@ -1,5 +1,5 @@
 // Quiet Battito cards for agent, search and file contexts, and its board (at most 3 cards: the empty Grindhouse under the
-// morning block and Dashboard → Spunti, ADR 0102). All mutations are explicit clicks through typed IPC.
+// morning block and Memoria → Idee «Dell'AI», ADR 0102, 0122). All mutations are explicit clicks through typed IPC.
 import { useEffect, useRef, useState } from 'react';
 import type { PulseCard, PulseList, PulsePlace } from '@shared/pulse';
 import { sb } from '../sb';
@@ -16,7 +16,7 @@ export function FilePulse({ path }: { path: string }) {
   const place = filePulsePlace(path, brainRoot);
   return place ? <ContextPulse key={place} place={place} /> : null;
 }
-/** The Battito's board: at most three of its 'board' cards (the empty Grindhouse, Dashboard → Spunti). */
+/** The Battito's board: at most three of its 'board' cards (the empty Grindhouse, Memoria → Idee «Dell'AI»). */
 export function PulseBoard() { return <ContextPulse place="board" max={3} title={t('alive.pulse.board')} />; }
 
 export function ContextPulse({ place, max = 2, title }: { place: PulsePlace; max?: number; title?: string }) {

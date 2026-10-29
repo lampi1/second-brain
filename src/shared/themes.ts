@@ -1,5 +1,5 @@
 // The shape of /api/themes (SPEC 23 b): errors or ideas grouped by theme, computed in main (search/hybrid/themes.ts)
-// and shown by the Dashboard's Temi tab (renderer/dashboard/Themes.tsx).
+// and shown by renderer/dashboard/Themes.tsx (the ideas' themes on Memoria → Idee, the errors' themes on Qualità).
 
 export type ThemeKind = 'errors' | 'ideas';
 /** One error line or one idea, by its 1-based line in the brain file. */

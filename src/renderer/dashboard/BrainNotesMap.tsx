@@ -1,7 +1,7 @@
 // The brain's notes map (the Dashboard's former "Mappa brain" tab, moved as is by ADR 0077 to the Brain section's
 // Mappa page, "Note del brain" view): notes, areas, agents and tools of the brain from /api/map, searchable, with an
-// inspector, "Esplora in 3D" and the brain checks. The Dashboard keeps statistics only. Uses the Dashboard's own
-// Panel, Source, Empty and Discuss and its Graph (owned by the map work, unchanged). Rendered by
+// inspector, "Esplora in 3D" and the brain checks. Uses the shared
+// Panel, Source, Empty and Discuss (parts.tsx) and Graph.tsx (owned by the map work, unchanged). Rendered by
 // components/brain-model/MapPage.tsx.
 import { useMemo, useState } from 'react';
 import { goTarget } from '../actions';

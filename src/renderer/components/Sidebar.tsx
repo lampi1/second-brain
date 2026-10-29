@@ -30,7 +30,7 @@ const ICON: Record<BrainPageId, ReactNode> = {
   regole: <IconShield />, memoria: <IconHistory />, classificatori: <IconBranch />, collegamenti: <IconMap />,
 };
 
-/** The pages of the two lower groups, in order (Lavoro is built by hand: Task can hide; the Dashboard shows under any role). */
+/** The pages of the two lower groups, in order (Lavoro is built by hand: Task can hide). */
 const BRAIN_GROUP: BrainPageId[] = [];
 /** The Brain section: always shown, whatever the role (ADR 0077; the owner, 2026-10-19: the brain must be visible; its
  *  changelog is on the Log page, ADR 0111). Skill, Regole, Script, Idee and Apprendimento are Memoria's tabs (ADR 0122). */

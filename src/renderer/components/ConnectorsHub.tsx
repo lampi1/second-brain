@@ -1,5 +1,5 @@
 // Settings → Connettori (issue #91, ADR 0086): one section for everything the app connects to, as cards in a grid like
-// the Dashboard and Agenti pages. On top three totals with a "?" each (how they are counted); then the app's account
+// the Agenti page. On top three totals with a "?" each (how they are counted); then the app's account
 // connectors (Azure DevOps, GitHub, Jira: AppConnectorScreen embedded) and the MCP servers the agents use: each card
 // says what it is (local command or remote address), whether it works (its last "Prova"), what it is used for, how
 // many tools it has (reading and writing) and how many roles may use it, with the error and its fix when it fails and

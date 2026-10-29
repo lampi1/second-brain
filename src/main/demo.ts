@@ -316,7 +316,7 @@ export function seed(E: number): Seed {
     ev('f-6', 40 * MIN, 'win', 'Fatto', 'quiet', 'PR fix SMS unita', 'La correzione degli SMS è in main'),
     ev('f-7', 9 * 60 * MIN, 'reflection', 'Riflessione', 'quiet', 'Le domande a scelta fanno risparmiare tempo', 'Rispondere con 1-9 evita di aprire la chat', { away: true }),
     ev('f-8', 10 * 60 * MIN, 'journal', 'Diario', 'quiet', 'Giornata chiusa', '4 PR, 2 bug aperti, 1 idea', { away: true }),
-    // older app errors that repeat, for the Dashboard's grouped Errori view (dashboard/errors.ts)
+    // older app errors that repeat, for Qualità's grouped app errors (dashboard/errors.ts)
     ev('f-e1', 26 * 60 * MIN, 'error', 'Errore', 'quiet', 'Limite d’uso', 'API Error: 429 rate_limit_error: Number of requests has exceeded your rate limit', { chatId: 'qa', away: true }),
     ev('f-e2', 3 * 1440 * MIN, 'error', 'Errore', 'quiet', 'Limite d’uso', 'API Error: 429 rate_limit_error: Number of requests has exceeded your rate limit', { chatId: 'sms', away: true }),
     ev('f-e3', 6 * 1440 * MIN, 'error', 'Errore', 'quiet', 'Limite d’uso', 'API Error: 429 rate_limit_error: usage limit reached', { chatId: 'feedback', away: true }),

@@ -1189,7 +1189,7 @@ html.overlay body:focus-within .layer-hint { display: none; }
 .sent-to-orchestrator.in-window .btn { margin-left: auto; }
 /* "Rispondi dopo" on: the request waits in "Da rispondere" (lib/later.ts), quieter than one asking now */
 .sent-to-orchestrator.in-window.in-queue { background: var(--surface-2); color: var(--text-2); }
-/* credentials panel (CredentialsDialog.tsx) */
+/* credentials panel (LoginsDialog.tsx) */
 .modal-credentials { width: min(720px, calc(100vw - 32px)); max-height: min(780px, calc(100vh - 48px)); display: flex; flex-direction: column; }
 
 .cred-search { flex: none; height: 42px; padding: 0 12px; border: 1px solid var(--border-2); border-radius: var(--r-m); background: var(--surface-2); position: sticky; top: 0; z-index: 1; }

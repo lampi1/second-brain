@@ -488,7 +488,7 @@ export const brainTextIt = {
   'brainText.live.innerBrowser': 'browser interno',
   'brainText.live.inBrowser': 'nel browser',
 
-  // dashboard/Dashboard.tsx
+  // dashboard/parts.tsx, AppErrors.tsx, ContextNow.tsx (once the Dashboard's)
   'brainText.dash.discuss': 'Discuti',
   'brainText.dash.source': 'Fonte',
   'brainText.dash.question': 'Analizziamo questi dati e il prossimo passo?',

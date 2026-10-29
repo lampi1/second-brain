@@ -216,7 +216,7 @@ export interface ChatSummary {
   route?: RouteDecision;
   /** ADR 0103: when the checkpoint before its last turn was taken (its files can go back to it); absent = none */
   checkpointAt?: number;
-  /** «Lampo» (ADR 0105): the always-on quick lane beside the Orchestrator: reads and answers, changes nothing, starts no
+  /** «Flash», once «Lampo» (ADR 0105, 0107): the always-on quick lane beside the Orchestrator: reads and answers, changes nothing, starts no
    *  work; never a strip, never news for the Orchestrator, never closed by itself */
   quick?: true;
   /** the maintenance research chat (ADR 0132): reads and proposes cards, changes nothing */
@@ -417,7 +417,7 @@ export interface NewChat {
   fork?: boolean;             // resume as a copy: never two writers on one session
   /** the Orchestrator (created only by the user: OrchestratorService.ensure, Ricomincia da capo, Cambia motore, Pulisci) */
   orchestrator?: boolean;
-  /** «Lampo», the quick lane (ADR 0105): only the user; one at a time (the open one is returned) */
+  /** «Flash», the quick lane (ADR 0105, 0107): only the user; one at a time (the open one is returned) */
   quick?: boolean;
   /** the maintenance research (ADR 0132): only the app; reads the brain (and the web when `web`), proposes through
    *  maintenance_propose, changes nothing */

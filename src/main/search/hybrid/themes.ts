@@ -1,4 +1,4 @@
-// Errors and ideas grouped by theme (SPEC 23 b, the Dashboard's Temi tab): the entries of ai-errors.md (one dated line
+// Errors and ideas grouped by theme (SPEC 23 b; shown on Memoria → Idee and Qualità): the entries of ai-errors.md (one dated line
 // each) and ideas.md (one "## date · [area] · title · `state`" section each) take the vectors the hybrid index already
 // has for their chunks, are clustered by meaning (average linkage over cosine), and each theme gets a label (its most
 // distinctive words), its size and whether it is growing (a larger share of the last 7 days than of the 7 before). Pairs

@@ -140,7 +140,7 @@ export class HybridSearch {
   /** Every embedded chunk of the documents under a key prefix ("brain:ai-errors.md"). */
   vectors(prefix: string): Promise<{ id: number; doc: string; line: number; text: string; v: Float32Array }[]> { return this.call({ op: 'vectors', prefix }); }
 
-  /** Errors or ideas grouped by theme (the Dashboard's Temi tab); not ready without the model or a synced index. The
+  /** Errors or ideas grouped by theme (Memoria → Idee and Qualità); not ready without the model or a synced index. The
    *  result is kept until the file's chunks or the day change: the tab polls every minute and clustering runs here, in
    *  the main process. */
   async themes(kind: ThemeKind, now = Date.now()): Promise<Themes> {

@@ -1,7 +1,7 @@
-// SVG network with searchable, keyboard-accessible nodes and a focused inspector supplied by Dashboard.
+// SVG network with searchable, keyboard-accessible nodes and a focused inspector supplied by the caller (BrainNotesMap.tsx, MapPage.tsx).
 // Data coordinates are stable between live updates; the CSS pulse represents observed recent messages only.
 // The map's own commands live inside its frame (owner, 18/10: «i comandi devono stare dentro la mappa»): an optional
-// floating toolbar on top (search, overview, 3D: supplied by Dashboard) and a footer with the legend and the zoom group.
+// floating toolbar on top (search, overview, 3D: supplied by the caller) and a footer with the legend and the zoom group.
 // The drawing is measured (ResizeObserver) and drawn 1 SVG unit = 1 CSS pixel: the layout is fitted to the panel's own
 // size and aspect (fitLayout), so the map fills the panel centred at any width, and labels are placed at their real size
 // inside it (minor ones that find no free spot are hidden, never overlapped). "Adatta" drops zoom and selection and

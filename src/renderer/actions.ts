@@ -278,7 +278,7 @@ export function collapseOrchestrator(): void {
   (document.activeElement as HTMLElement | null)?.blur();
 }
 
-/** Ctrl+R: the Orchestrator column from anywhere, the page stays (the column is on every page, the Dashboard and the
+/** Ctrl+R: the Orchestrator column from anywhere, the page stays (the column is on every page, the
  *  3D map included): its input takes the keyboard. */
 export function toggleOrchestrator(): void {
   setOrchestratorOpen(true);
@@ -312,7 +312,7 @@ export function focusChat(chatId: string): void {
   if (!c) return;
   if (routineChatIds(s.chats).has(chatId)) { setFocusMode(null); setMaximized(null); go({ page: 'flussi', arg: routineChatArg(chatId) }); requestFocus(chatId); return; }
   const u = ui.get();
-  // the Orchestrator: its column is beside every page (the Dashboard and the 3D map too), so the page stays
+  // the Orchestrator: its column is beside every page (the 3D map too), so the page stays
   if (chatId === orchestratorIdOf(s)) { requestFocus(chatId); flashTile('orchestrator'); return; }
   if (u.page !== 'home' || u.map) go({ page: 'home' });
   if (u.focusMode && u.focusMode !== chatId) setFocusMode(chatId);

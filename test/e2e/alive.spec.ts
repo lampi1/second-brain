@@ -1,7 +1,7 @@
 // E2E of ADR 0102, the app shows what it does by itself (frozen demo): a collapsed strip says its current step (the
 // demo's "Fix totale ordine" runs `dotnet test`), the morning block "Mentre eri via" is one line atop the Orchestrator
 // while strips are open, unfolds into its rows and goes away with Ok for the day; the Battito's settings sit in
-// Settings → Notifiche with today's spend; its board shows in Dashboard → Spunti. SB_MORNING=1: the block is off in the
+// Settings → Notifiche with today's spend; its board shows in Memoria → Idee «Dell'AI». SB_MORNING=1: the block is off in the
 // test suites otherwise.
 import { expect, test } from '@playwright/test';
 import { goPage, launchDemo, shot } from './helpers';

@@ -266,8 +266,8 @@ function TabBar({ tab, onTab }: { tab: HubTab; onTab: (tab: HubTab) => void }) {
 function IdeasTab({ rest }: { rest: string | null }) {
   return <div className="bx mh-bx"><DiscussContext.Provider value={brainBridge}>
     <Idee arg={rest ?? undefined} embedded nav={target => goTarget(target)} />
-    {/* the AI's side also shows the Battito's board (once Dashboard → Spunti); the ideas' themes close the tab (once
-        Dashboard → Temi) */}
+    {/* the AI's side also shows the Battito's board (once the Dashboard's Spunti); the ideas' themes close the tab (once
+        its Temi, ADR 0122) */}
     {filterOf(rest ?? undefined) === 'ia' && <PulseBoard />}
     <section className="bx-section mh-idee-themes"><ThemesPanel kind="ideas" /></section>
   </DiscussContext.Provider><Toaster /></div>;
