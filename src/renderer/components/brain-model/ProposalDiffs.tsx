@@ -1,4 +1,5 @@
-// The Proposte card's before/after (ADR 0195): a candidate version of the brain shows the findings it gathers, its
+// The Proposte card's before/after (ADR 0195): a candidate version of the brain shows the findings it gathers (each with
+// its «riuscito se…», ADR 0194: the one change is checked on every one), its
 // zero-token checks and its replay, then one diff per file it changes; a revised role text shows the role's text now
 // against the trial one. The diff is the file viewer's own (brain/pages/FileDiff.tsx DiffView: jsdiff in a worker,
 // side by side or unified, the layout remembered), so nothing new is drawn here. Only the top card mounts the diffs
@@ -17,7 +18,8 @@ export function CandidateBody({ a, top }: { a: CandidateAsk; top: boolean }) {
   const status = a.replay.status ? t(`proposals.candidate.status.${a.replay.status}`) : '';
   return <div className="pd-research pd-candidate" data-testid={top ? 'pd-candidate' : undefined}>
     <div className="pd-rs"><span className="pd-label">{t('proposals.candidate.items')}</span>
-      <ul className="pd-cand-items">{a.items.map((x, i) => <li key={i}><span className={`pd-cand-kind pd-g-${x.finding === 'forget' ? 'forget' : x.finding === 'skill' ? 'skill' : 'rule'}`} aria-hidden="true" />{x.title}</li>)}</ul></div>
+      <ul className="pd-cand-items">{a.items.map((x, i) => <li key={i}><span className={`pd-cand-kind pd-g-${x.finding === 'forget' ? 'forget' : x.finding === 'skill' ? 'skill' : 'rule'}`} aria-hidden="true" />
+        <span>{x.title}{x.success && <small className="pd-cand-success" data-testid={top ? 'pd-cand-success' : undefined}>{x.success}</small>}</span></li>)}</ul></div>
     <div className="pd-rs"><span className="pd-label">{t('proposals.candidate.checks')}</span>
       <ul className="pd-cand-checks">{a.checks.map((x, i) => <li key={i}>{x}</li>)}</ul></div>
     <div className="pd-rs" data-testid={top ? 'pd-candidate-replay' : undefined}><span className="pd-label">{t('proposals.candidate.replay')}{status && <span className={`pd-cand-status pd-cand-${a.replay.status}`}>{status}</span>}</span>

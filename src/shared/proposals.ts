@@ -62,7 +62,7 @@ export type ProposalAsk =
     /** a revised role text: approving it starts a trial version of the role (ADR 0195) */
     trial?: boolean }
   /** a candidate version of the brain (ADR 0195): the findings it gathers, decided as one, with its checks and replay */
-  | { kind: 'candidate'; items: { finding: ResearchKind; title: string }[]; files: number; checks: string[];
+  | { kind: 'candidate'; items: { finding: ResearchKind; title: string; success?: string }[]; files: number; checks: string[];
     replay: { state: 'started' | 'skipped'; note: string; status?: 'running' | 'passed' | 'failed' | 'awaiting-review' } };
 /** The code a card is about, shown as it is: a script or a saved query the change writes (or removes). */
 /** What makes a memory fact look tied to one case (main/rules/memory-worth.ts, ADR 0129). */

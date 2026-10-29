@@ -17,7 +17,7 @@ import { BrainModelService } from '../../../src/main/brainmodel/service';
 import { writeDemoBrain } from '../../../src/main/brainmodel/demo';
 import type { AgentModelChoice, AgentRun } from '../../../src/shared/agents';
 import type { RoutingInfo } from '../../../src/shared/contract';
-import type { BrainChange, LogScan } from '../../../src/shared/brain-model';
+import { changeCriteria, type BrainChange, type LogScan } from '../../../src/shared/brain-model';
 import type { ResearchProposal } from '../../../src/shared/maintenance-research';
 import { maintenanceEvent } from '../../../src/main/brain/announce';
 import type { UpgradeAsk } from '../../../src/main/brainmodel/upgrade';
@@ -650,6 +650,24 @@ describe('lint and revert cards, «riuscito se…» (ADR 0194)', () => {
     w.service.applyResearch(card({ kind: 'revert', revert: worse[0]! }));
     expect(w.service.changes().find(c => c.id === id)).toMatchObject({ canRollback: false });
     expect(fs.existsSync(path.join(w.brain, 'rules/lessons.md'))).toBe(false); // it created the file: Annulla takes it away
+  });
+  it('a candidate brain keeps every member\'s criterion; each is checked and a worse one offers the undo', () => {
+    const DAY = 86_400_000;
+    let now = NOW;
+    const runs: AgentRun[] = [];
+    const w = world({ runs });
+    (w.service as unknown as { d: { now: () => number } }).d.now = () => now;
+    const id = w.service.applyCandidate({ kind: 'rule', summary: 'Versione candidata', reason: 'r', evidence: [], target: 'candidate:bc-1',
+      successes: [{ metric: 'skill-used', skill: 'nessuna', n: 1 }, { metric: 'fewer-corrections', text: 'Riuscito se…' }] }, [{ file: path.join(w.brain, 'rules/x.md'), text: '- una regola\n' }], []);
+    expect(w.service.changes().find(c => c.id === id)).toMatchObject({ successes: [{ metric: 'skill-used' }, { metric: 'fewer-corrections' }] });
+    const r = (end: number, k: number): AgentRun => ({ runId: `r${end}`, chatId: 'c', agentId: DEV, goal: 'g', startedAt: end - 1000, endedAt: end, corrections: { tagged: k, afterReport: 0 } } as AgentRun);
+    runs.push(r(NOW - DAY, 0), r(NOW - 2 * DAY, 0), r(NOW - 3 * DAY, 1), r(NOW + DAY, 2), r(NOW + 2 * DAY, 3), r(NOW + 3 * DAY, 2));
+    now = NOW + 8 * DAY;
+    const worse = w.service.checkOutcomes();
+    // the first criterion (the skill never used, a busy week) is worse already: its card carries that criterion
+    expect(worse).toEqual([expect.objectContaining({ changeId: id, criterion: expect.objectContaining({ metric: 'skill-used' }), check: expect.objectContaining({ verdict: 'worse' }) })]);
+    expect(w.service.changes().find(c => c.id === id)!.successChecks).toHaveLength(2);
+    expect(changeCriteria({ success: { metric: 'fewer-corrections' } })).toEqual([{ metric: 'fewer-corrections' }]);
   });
 });
 

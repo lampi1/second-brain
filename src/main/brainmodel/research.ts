@@ -564,7 +564,7 @@ export class ResearchService {
   /** The open candidate brains (ADR 0195): one card each. */
   candidateCards(): BrainCandidateView[] {
     const all = new Map(this.store.all().map(p => [p.id, p]));
-    return (this.candidates?.open() ?? []).map(c => ({ ...c, items: c.proposalIds.flatMap(id => { const p = all.get(id); return p ? [{ kind: p.kind, title: p.title }] : []; }) }));
+    return (this.candidates?.open() ?? []).map(c => ({ ...c, items: c.proposalIds.flatMap(id => { const p = all.get(id); return p ? [{ kind: p.kind, title: p.title, ...(p.success?.text ? { success: p.success.text } : {}) }] : []; }) }));
   }
   /** When the user last pressed «Manutenzione»: the other parts of the app's skill and rule proposals made after it
    *  wait for the next click (ADR 0153). null = never pressed. */
@@ -635,7 +635,9 @@ export class ResearchService {
     const reason = members.map(p => `${p.title}: ${p.why}`).join(' · ').replace(/\s+/g, ' ').slice(0, 400);
     const evidence = [`maintenance:${id}`, ...members.slice(0, 8).map(p => `maintenance:${p.id}`)];
     let changeId: string;
-    try { changeId = this.candidates!.approve(id, summary, reason, evidence); }
+    // every member's «riuscito se…» goes with the one change (checkOutcomes checks each)
+    const successes = members.flatMap(p => (p.success ? [p.success] : []));
+    try { changeId = this.candidates!.approve(id, summary, reason, evidence, successes); }
     catch (e) {
       // a stale candidate: its findings are their own cards again, each checked against the brain as it is now
       if (this.candidates!.get(id)?.state === 'stale') { for (const p of members) this.store.update(p.id, { candidateId: undefined }); this.d.changed(); }

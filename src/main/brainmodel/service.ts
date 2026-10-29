@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { BrainChange, BrainModelState, BrainRule, BrainSkill, ClassifiersState, LogScan, MaintenanceJobId, MaintenanceRun, LessonStub, MigrationReport, KindModelCard } from '../../shared/brain-model';
-import { MAINTENANCE_JOBS } from '../../shared/brain-model';
+import { changeCriteria, MAINTENANCE_JOBS } from '../../shared/brain-model';
 import type { RoutingInfo } from '../../shared/contract';
 import type { AgentCatalogService } from '../agents/catalog';
 import type { AgentPackFlows } from '../agents/pack/flows';
@@ -29,7 +29,7 @@ import { NAME_RE, parseMd, setBody } from '../../shared/skillmd';
 import { checkPermissionText } from '../agents/tool-policy';
 import { canUndoMemoryTidy, readMemoryRecords, tidyMemory, undoMemoryTidy } from '../rules/memory-records';
 import { queueMemoryInvalidation } from '../rules/memory-invalidations';
-import type { ResearchRevert } from '../../shared/maintenance-research';
+import type { ResearchRevert, SuccessCheck, SuccessCriterion } from '../../shared/maintenance-research';
 import { checkDelta, DeltaRefused, WHOLE_FILE, type RemovedItem } from './item-delta';
 import { lintPlan } from './lint-cards';
 import { checkChange } from './success-check';
@@ -442,9 +442,11 @@ export class BrainModelService {
   }
   /** An approved candidate brain (ADR 0195): every file write as ONE change-log entry (its one «Annulla» restores all
    *  of them), then the forgotten skills unlinked from the roles that declared them (as Memoria's trash does). */
-  applyCandidate(meta: { kind: 'skill' | 'rule'; summary: string; reason: string; evidence: string[]; target: string }, writes: { file: string; text: string | null; removed?: RemovedItem[] }[], forgetSkills: string[]): string {
+  applyCandidate(meta: { kind: 'skill' | 'rule'; summary: string; reason: string; evidence: string[]; target: string; successes?: SuccessCriterion[] }, writes: { file: string; text: string | null; removed?: RemovedItem[] }[], forgetSkills: string[]): string {
     if (!this.root()) throw new Error('Scegli prima la cartella del brain.');
-    const c = this.log.apply({ job: 'research', kind: meta.kind, action: 'update', target: meta.target, summary: meta.summary.slice(0, 300), reason: meta.reason, evidence: meta.evidence }, writes);
+    // every member's «riuscito se…» (ADR 0194) rides on the one change: checkOutcomes checks each
+    const c = this.log.apply({ job: 'research', kind: meta.kind, action: 'update', target: meta.target, summary: meta.summary.slice(0, 300), reason: meta.reason, evidence: meta.evidence,
+      ...(meta.successes?.length ? { successes: meta.successes.slice(0, 20) } : {}) }, writes);
     if (!c) throw new Error('Niente da cambiare, o un file è troppo grande per poterlo annullare.');
     for (const name of forgetSkills) this.unlinkRemoved(name, 'research');
     return this.done(c.id);
@@ -474,17 +476,20 @@ export class BrainModelService {
    *  aiutato: lo annullo?». Called at app start, hourly and at the user's «Manutenzione» (research.ts). */
   checkOutcomes(): ResearchRevert[] {
     const now = this.now(), dir = this.d.logDir?.() ?? null, out: ResearchRevert[] = [];
-    const due = this.log.all().filter(c => c.success && !c.successCheck && !c.rolledBackAt);
+    const due = this.log.all().filter(c => changeCriteria(c).length && !c.successCheck && !c.rolledBackAt);
     if (!due.length) return out;
     let runs: AgentRun[] = []; try { runs = this.d.runs(); } catch { /* no history: unknown */ }
     const data = { runs, correctionsSince: this.d.correctionsSince?.() ?? null, ...(dir ? { logCount: (key: string, from: number, to: number) => countLogGroup(dir, key, from, to) } : {}) };
     const restorer = this.restorer();
     for (const c of due) {
-      const check = checkChange(c.at, c.success!, data, now);
-      if (!check) continue;
-      this.log.setCheck(c.id, check);
-      log.info('brain', 'maintenance change checked', { data: { job: c.job, kind: c.kind, metric: c.success!.metric, verdict: check.verdict, before: check.before, after: check.after } });
-      if (check.verdict === 'worse' && this.log.canRollback(c, restorer)) out.push({ changeId: c.id, kind: c.kind, summary: c.summary, criterion: c.success!, check });
+      // a candidate brain carries several criteria: each is checked; the change's check is the first worse one
+      const criteria = changeCriteria(c), checks = criteria.map(k => checkChange(c.at, k, data, now));
+      if (checks.some(k => !k)) continue;
+      const all = checks as SuccessCheck[], at = Math.max(0, all.findIndex(k => k.verdict === 'worse'));
+      const criterion = criteria[at]!, check = all[at]!;
+      this.log.setCheck(c.id, check, all.length > 1 ? all : undefined);
+      log.info('brain', 'maintenance change checked', { data: { job: c.job, kind: c.kind, metric: criterion.metric, verdict: check.verdict, before: check.before, after: check.after, criteria: all.length } });
+      if (check.verdict === 'worse' && this.log.canRollback(c, restorer)) out.push({ changeId: c.id, kind: c.kind, summary: c.summary, criterion, check });
     }
     return out;
   }

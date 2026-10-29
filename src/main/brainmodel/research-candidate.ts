@@ -17,7 +17,7 @@ import { randomBytes } from 'node:crypto';
 import type { AgentRun } from '../../shared/agents';
 import type { BrainRule, BrainSkill } from '../../shared/brain-model';
 import type { Lang } from '../../shared/contract';
-import type { BrainCandidate, CandidateEvaluation, CandidateFile, ResearchProposal } from '../../shared/maintenance-research';
+import type { BrainCandidate, CandidateEvaluation, CandidateFile, ResearchProposal, SuccessCriterion } from '../../shared/maintenance-research';
 import { NAME_RE, parseMd, setBody } from '../../shared/skillmd';
 import { readLocal, writeLocal } from '../agents/local-store';
 import { checkPermissionText } from '../agents/tool-policy';
@@ -205,7 +205,7 @@ export interface CandidatePorts {
   /** the brain's real path and what it holds now (fresh: no cache); null = no brain */
   input(): Omit<PlanInput, 'now'> | null;
   /** applies every write as one change-log entry and returns its id; then unlinks the forgotten skills from roles */
-  apply(meta: { kind: 'skill' | 'rule'; summary: string; reason: string; evidence: string[]; target: string }, writes: { file: string; text: string | null; removed?: RemovedItem[] }[], forgetSkills: string[]): string;
+  apply(meta: { kind: 'skill' | 'rule'; summary: string; reason: string; evidence: string[]; target: string; successes?: SuccessCriterion[] }, writes: { file: string; text: string | null; removed?: RemovedItem[] }[], forgetSkills: string[]): string;
   /** starts the replay of the candidate when it is possible and paid for by the budget left (else why not) */
   replay?(c: { name: string; text: string; budgetUsd: number }): { replayId?: string; note: string };
   /** a started replay's state now (null = gone) */
@@ -291,7 +291,7 @@ export class CandidateService {
   isId(id: string): boolean { return ID.test(id); }
   /** Applies the whole candidate as one change. Refused (and the candidate marked stale) when a brain file is not what
    *  the candidate started from any more: the user's edit is never overwritten. */
-  approve(id: string, summary: string, reason: string, evidence: string[]): string {
+  approve(id: string, summary: string, reason: string, evidence: string[], successes: SuccessCriterion[] = []): string {
     const c = this.store.get(id);
     if (!c || c.state !== 'open') throw new Error('Versione candidata non più aperta.');
     const input = this.ports.input();
@@ -305,7 +305,7 @@ export class CandidateService {
       throw new Error('Il brain è cambiato dopo la versione candidata: non la applico sopra le modifiche nuove. Rilancia la manutenzione.');
     }
     const kind = c.files.some(f => /(^|\/)SKILL\.md$/.test(f.rel)) ? 'skill' : 'rule';
-    const changeId = this.ports.apply({ kind, summary, reason, evidence, target: `candidate:${c.id}` }, writes, c.forgetSkills);
+    const changeId = this.ports.apply({ kind, summary, reason, evidence, target: `candidate:${c.id}`, ...(successes.length ? { successes } : {}) }, writes, c.forgetSkills);
     this.store.save({ ...c, state: 'approved', decidedAt: this.now(), changeId });
     log.info('brain', 'candidate brain applied', { data: { files: c.files.length, findings: c.proposalIds.length } });
     return changeId;

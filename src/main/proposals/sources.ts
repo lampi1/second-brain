@@ -315,7 +315,8 @@ function researchNever(x: ResearchProposal): ProposalNever | null {
 }
 /** A candidate brain as one card (ADR 0195): the findings it gathers, a diff per file, its checks and replay. */
 function candidateCard(p: ProposalPorts, c: BrainCandidateView): Proposal {
-  const items = c.items.map(x => ({ finding: x.kind, title: x.title }));
+  // each finding with its «riuscito se…»: the candidate's one change is checked on every one of them
+  const items = c.items.map(x => ({ finding: x.kind, title: x.title, ...(x.success ? { success: x.success } : {}) }));
   const chat = p.chats().find(x => x.id === c.chatId);
   return card('research', c.id, {
     group: 'brain', applied: false, title: items.map(x => x.title).join(' · ').slice(0, 300) || c.id,

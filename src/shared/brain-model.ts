@@ -84,8 +84,16 @@ export interface BrainChange {
   claim?: ChangeClaim;
   /** «riuscito se…» a maintenance finding declared (ADR 0194), and the check a week after it was applied */
   success?: SuccessCriterion;
+  /** a candidate brain (ADR 0195) applies several findings as one change: each one's criterion; read with
+   *  changeCriteria (an old entry has only `success`) */
+  successes?: SuccessCriterion[];
+  /** the change's check: with several criteria, the worst one (a worse one makes the revert card) */
   successCheck?: SuccessCheck;
+  /** with several criteria, each one's check in their order */
+  successChecks?: SuccessCheck[];
 }
+/** Every «riuscito se…» of a change: the several of a candidate brain, else its single one. */
+export const changeCriteria = (c: Pick<BrainChange, 'success' | 'successes'>): SuccessCriterion[] => (c.successes?.length ? c.successes : c.success ? [c.success] : []);
 
 // ── The evidence layer (ADR 0109): every change is a hypothesis measured on the user's corrections per run ─────────────
 export type ClaimVerdict = 'raccolta' | 'aiuta' | 'nessun-effetto' | 'peggiora' | 'annullato';

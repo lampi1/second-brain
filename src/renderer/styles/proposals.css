@@ -250,6 +250,7 @@
    the replay's state, then one collapsible before/after per file (the file viewer's diff, brain.css .bx-diff). */
 .pd-cand-items, .pd-cand-checks { margin: 0; padding-left: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-s); line-height: 1.45; color: var(--text); }
 .pd-cand-items li { display: flex; align-items: baseline; gap: 8px; }
+.pd-cand-success { display: block; margin-top: 2px; font-size: var(--fs-xs); color: var(--text-3); }
 .pd-cand-kind { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--pd-c); transform: translateY(-1px); }
 .pd-cand-checks li { color: var(--text-2); padding-left: 14px; position: relative; }
 .pd-cand-checks li::before { content: "✓"; position: absolute; left: 0; color: var(--green); font-size: var(--fs-xs); }

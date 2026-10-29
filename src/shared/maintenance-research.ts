@@ -273,4 +273,4 @@ export interface BrainCandidate {
   changeId?: string;
 }
 /** A candidate as its card shows it: with the findings it gathers in words. */
-export interface BrainCandidateView extends BrainCandidate { items: { kind: ResearchKind; title: string }[] }
+export interface BrainCandidateView extends BrainCandidate { items: { kind: ResearchKind; title: string; success?: string }[] }

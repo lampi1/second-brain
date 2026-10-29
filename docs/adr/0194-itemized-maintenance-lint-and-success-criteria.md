@@ -58,7 +58,13 @@ change (`BrainChange.success`). Seven days after the change, `BrainModelService.
 with the week after once (`successCheck`): means need three runs a side and move by the evidence layer's margin, shares
 by 15 points, log counts by a quarter and two lines. Worse, and still undoable → a card «Questo cambio non ha aiutato: lo
 annullo?» (kind `revert`) with the numbers; approving it is the change log's rollback. It runs 90 s after the start,
-hourly, and at every click.
+hourly, and at every click. `skill-used` with fewer uses than wanted is worse only when the week after had at least
+three runs (a quiet week is unknown); `fewer-corrections` leaves out runs started before the app counted the runs'
+corrections after a report (ADR 0197). A candidate brain (ADR 0195) applies several findings as one change: it carries
+every member's criterion (`BrainChange.successes`, read with `changeCriteria`, an old entry's single `success` too), its
+card shows each finding's «riuscito se…», each is checked (`successChecks`) and the first worse one makes the card
+(review 2026-10-29). A revert card is never applied by itself and its rollback is not the user undoing a decision
+(ADR 0193).
 
 ## Consequences
 

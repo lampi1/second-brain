@@ -136,10 +136,11 @@ export class ChangeLog {
     }
   }
   /** The week-after check of a change's «riuscito se…» (success-check.ts): kept once, never redone. */
-  setCheck(id: string, check: SuccessCheck): void {
+  setCheck(id: string, check: SuccessCheck, all?: SuccessCheck[]): void {
     const e = this.entries.find(c => c.id === id);
     if (!e || e.successCheck) return;
     e.successCheck = structuredClone(check);
+    if (all?.length) e.successChecks = structuredClone(all);
     this.persist();
   }
   /** Seals the entries recorded without a seed (before ADR 0109, or a dropped one) once, and keeps it. */
