@@ -89,7 +89,7 @@ export const memoryIt = {
   'mm.skillsEmpty': 'Nessuna skill nel brain ancora.',
   'mm.skillsHelp': 'Per ogni skill del brain, i run registrati che l’hanno avuta (al lancio o caricata dal motore) e come sono finiti. Un esito conta solo quando è noto: riuscito, parziale o fallito, deciso da te o da una revisione.',
   'mm.col.skill': 'Skill', 'mm.col.skillHelp': 'Il nome della skill: un clic apre il suo SKILL.md.',
-  'mm.col.verdict': 'Giudizio', 'mm.col.verdictHelp': 'Utile: almeno 10 esiti noti e il 70% riusciti. Da rivedere: almeno 10 esiti noti e meno del 50%. Incerta: tra i due. Pochi dati: meno di 10 esiti noti. Mai usata: nessun run da almeno 14 giorni. Nuova: più giovane di 14 giorni.',
+  'mm.col.verdict': 'Giudizio', 'mm.col.verdictHelp': 'Utile: almeno 5 esiti verificati e il 70% riusciti (un parziale vale mezzo). Da rivedere: almeno 5 verificati e meno del 50%. Incerta: tra i due. Pochi dati: meno di 5 esiti verificati. Mai usata: nessun run da almeno 14 giorni. Nuova: più giovane di 14 giorni.',
   'mm.col.uses': 'Run', 'mm.col.usesHelp': 'Quanti run hanno avuto la skill.',
   'mm.col.success': 'Riusciti', 'mm.col.successHelp': 'Run riusciti su run con un esito noto (riuscito, parziale o fallito).',
   'mm.col.last': 'Ultimo uso', 'mm.col.lastHelp': 'L’inizio dell’ultimo run che l’ha avuta.',

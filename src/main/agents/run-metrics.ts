@@ -3,6 +3,7 @@
 import type { DeliveryMetrics, AgentMetrics, AgentRun, AgentRunTokens, AgentRunOutcome, Metric, VersionMetrics } from '../../shared/agents';
 import { counts, countedDecision, decisionXp, earnIndex, earnedVerdict, runXp, unrated } from './standing';
 import { FACTS_SETTLE_MS, reworkStartsOf, reworkedWithin, verifiedVerdict } from '../../shared/run-verdict';
+import { VERDICT_WEIGHT } from '../../shared/success';
 import { LEGACY_XP } from './xp';
 
 /** the newest values kept per sample for medians (n counts them all) */
@@ -259,7 +260,8 @@ export function p90(values: readonly number[]): number | null {
 }
 const ratio = (num: number, den: number): number | null => den > 0 ? num / den : null;
 const metric = (value: number | null, n: number, ended: number): Metric => ({ value: n > 0 ? value : null, n, coverage: ratio(n, ended) });
-const rate = (v: Verdicts): { value: number | null; n: number } => { const n = v.success + v.partial + v.fail; return { value: ratio(v.success + 0.5 * v.partial, n), n }; };
+// the one success definition (shared/success.ts, ADR 0182): a partial counts half
+const rate = (v: Verdicts): { value: number | null; n: number } => { const n = v.success + v.partial + v.fail; return { value: ratio(v.success * VERDICT_WEIGHT.success + v.partial * VERDICT_WEIGHT.partial, n), n }; };
 
 export function finalize(t: RunTally, version: number | null, window: number | null = null): VersionMetrics {
   const e = t.ended, success = rate(t.verdicts), peak = median(t.contextPeak.values);

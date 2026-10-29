@@ -244,9 +244,9 @@ export interface SkillUse {
   name: string; rel: string | null;
   /** runs that had it (tagged at start or loaded by the engine while open) */
   uses: number;
-  /** of those, runs with a known verdict (success, partial or fail) and the successful ones */
+  /** of those, runs with a verified verdict (success, partial or fail) and the successful ones */
   known: number; ok: number;
-  /** ok / known, null with no known verdict */
+  /** the share of shared/success.ts (a partial counts half), null with no verified verdict */
   success: number | null;
   lastUse: number | null;
   /** agents that declare it */

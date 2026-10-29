@@ -34,6 +34,9 @@ export const agentsGridIt = {
   'agentsGrid.perfSources': ({ human, review, receipts, graded, orchestrator, decision, chain, quick, self }: { human: number; review: number; receipts: number; graded: number; facts: number; orchestrator: number; decision: number; chain: number; quick: number; self: number }) =>
     `Voti finora: ${human} tuoi, ${review} di revisioni indipendenti, ${receipts} dalle ricevute dei test, ${graded} revisioni giudicate dai fatti, ${chain} dal genitore verificato, ${orchestrator} dell'Orchestrator`
     + (decision ? `, ${decision} sulle sue scelte` : '') + (quick ? `, ${quick} esiti di risposte` : '') + (self ? `; ${self} solo dell'agente stesso, che non contano.` : '.'),
+  'agentsGrid.success': 'Riuscite',
+  'agentsGrid.successFew': ({ n, min }: { n: number; min: number }) => `Troppo pochi esiti verificati: ${n} su ${min}`,
+  'agentsGrid.successHelp': ({ min }: { min: number }) => `La quota dei lavori conclusi con un esito verificato, tuo o di una revisione indipendente, che sono riusciti; un parziale vale mezzo. Sotto ${min} esiti verificati nessuna percentuale: solo quanti sono su ${min}.`,
   'agentsGrid.costHelp': 'Il costo mediano di un lavoro concluso: metà dei lavori è costata meno, metà di più. Conta solo i lavori di cui il motore riporta il costo.',
   'agentsGrid.noRuns': 'Nessun lavoro riuscito verificato ancora: il primo lo porta verso il Lv 2.',
 };

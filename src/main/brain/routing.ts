@@ -19,6 +19,7 @@ import path from 'node:path';
 import type { Effort, Harness, ModelRegistry, RegistryModel, RouteAgent, RouteDecision, RoutingChange, RoutingInfo, RoutingRow, RoutingTable, TaskKind } from '../../shared/contract';
 import { TASK_KINDS } from '../../shared/contract';
 import { MODEL_TIERS } from '../../shared/roles';
+import { enoughVerdicts } from '../../shared/success';
 export { taskOf } from '../../shared/work-concepts';
 import { taskOf } from '../../shared/work-concepts';
 import { log } from '../log';
@@ -255,14 +256,12 @@ export interface AgentChoice {
   /** 'table' = the catalog took the model from the table's row (a role with no model of its own; ADR 0091) */
   modelFrom?: 'table';
 }
-/** Below this many known outcomes a success share says nothing ("100%" from one outcome, #159): only the counts. */
-export const STATS_MIN_OUTCOMES = 5;
 /** An agent version's results for its route's reason: "12 run, 9 con esito, 78% riuscite" (agents/run-metrics.ts
  *  VersionMetrics: ended runs, runs with a verdict, their success share); null = no ended run yet. */
 export function agentStatsLine(m: { ended: number; successRate: { value: number | null; n: number } } | null | undefined): string | null {
   if (!m || m.ended <= 0) return null;
   if (!m.successRate.n || m.successRate.value === null) return `${m.ended} run, nessuna con esito`;
-  if (m.successRate.n < STATS_MIN_OUTCOMES) return `${m.ended} run, ${m.successRate.n} con esito (troppo pochi per una percentuale)`;
+  if (!enoughVerdicts(m.successRate)) return `${m.ended} run, ${m.successRate.n} con esito (troppo pochi per una percentuale)`;
   return `${m.ended} run, ${m.successRate.n} con esito, ${Math.round(100 * m.successRate.value)}% riuscite`;
 }
 const CHOSEN_BY: Record<RouteAgent['chosenBy'], string> = { orchestrator: 'avviato dall’Orchestrator', parent: 'avviato dal suo genitore', app: 'avviato dall’app' };
