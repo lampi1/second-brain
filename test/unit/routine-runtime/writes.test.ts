@@ -73,8 +73,35 @@ describe('executeWrites: verify then decide', () => {
     const { devops, exec } = setup();
     devops.fault({ method: 'PATCH', path: /workitems\/9$/i, mode: 'status', status: 400 });
     const out = await exec([{ op: 'state', state: 'Nope' }]);
-    expect(out.failed).toEqual(['state → Nope']);
+    expect(out.failed).toEqual(['state → Nope: DevOps: PATCH failed (HTTP 400): fault']);
     expect(patches(devops)).toBe(1);
+  });
+
+  it('a refused write keeps DevOps\'s reason in the ledger and reports it again on a later pass', async () => {
+    const { devops, exec, store } = setup();
+    devops.fault({ method: 'PATCH', path: /workitems\/9$/i, mode: 'status', status: 400 });
+    await exec([{ op: 'state', state: 'Nope' }]);
+    expect(Object.values(store.ledger('run-1'))[0]).toMatchObject({ state: 'failed', error: 'DevOps: PATCH failed (HTTP 400): fault' });
+    const again = await exec([{ op: 'state', state: 'Nope' }]);
+    expect(again.failed).toEqual(['state → Nope: DevOps: PATCH failed (HTTP 400): fault']);
+    expect(patches(devops)).toBe(1);
+  });
+
+  it('moves the item to another project of the package with area and iteration in ONE patch', async () => {
+    const { devops, context } = setup();
+    const move = { 'System.TeamProject': 'Planning', 'System.AreaPath': 'Planning\\OrisDent Air', 'System.IterationPath': 'Planning\\2026\\Sprint 20' };
+    const moving = { ...context, grant: { ...context.grant, projects: ['Proj', 'Planning'], fields: ['System.TeamProject', 'System.AreaPath', 'System.IterationPath'] } };
+    const out = await executeWrites(moving, [{ op: 'fields', fields: move }]);
+    expect(out).toEqual({ done: ['fields System.TeamProject, System.AreaPath, System.IterationPath'], notVerified: [], failed: [] });
+    expect(patches(devops)).toBe(1);
+    expect(devops.items.get(9)).toMatchObject({ project: 'Planning', fields: { 'System.AreaPath': move['System.AreaPath'], 'System.IterationPath': move['System.IterationPath'] } });
+  });
+
+  it('refuses a move to a project outside the package\'s devops.projects, before sending anything', async () => {
+    const { devops, context } = setup();
+    const moving = { ...context, grant: { ...context.grant, fields: ['System.TeamProject'] } };
+    await expect(executeWrites(moving, [{ op: 'fields', fields: { 'System.TeamProject': 'Elsewhere' } }])).rejects.toThrow(/project Elsewhere is not in the package's devops.projects/);
+    expect(devops.writes()).toEqual([]);
   });
 
   it('after a crash mid-write (ledger "writing") it verifies before sending: present → done, nothing sent', async () => {

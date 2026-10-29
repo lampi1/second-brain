@@ -49,7 +49,12 @@ export function fakeDevOps(options: { me?: string; now?: () => number } = {}) {
       if (!item) return json({ message: 'not found' }, 404);
       if (method === 'PATCH') {
         const changed: string[] = [];
-        for (const op of body as { path: string; value: unknown }[]) { const f = op.path.replace('/fields/', ''); item.fields[f] = op.value; changed.push(f); }
+        for (const op of body as { path: string; value: unknown }[]) {
+          const f = op.path.replace('/fields/', '');
+          // a System.TeamProject write moves the item to that project
+          if (f === 'System.TeamProject') item.project = String(op.value); else item.fields[f] = op.value;
+          changed.push(f);
+        }
         item.rev += 1;
         updates.set(item.id, [...(updates.get(item.id) ?? []), { rev: item.rev, by, at: now(), fields: changed }]);
         return json({ id: item.id, rev: item.rev });

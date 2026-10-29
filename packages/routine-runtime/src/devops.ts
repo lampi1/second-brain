@@ -24,6 +24,14 @@ export class DevOpsCallError extends Error {
 const ORG = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,49}$/;
 const base = (org: string) => { if (!ORG.test(org)) throw new DevOpsCallError('DevOps: invalid organization'); return `https://dev.azure.com/${encodeURIComponent(org)}`; };
 
+/** DevOps's own words for a refused call (the "message" of its JSON error body), as ": <message>"; "" when there is none. */
+async function errorReason(response: Response): Promise<string> {
+  try {
+    const message = (JSON.parse(await response.text()) as Record<string, unknown>).message;
+    return typeof message === 'string' && message.trim() ? `: ${message.replace(/\s+/g, ' ').trim().slice(0, 300)}` : '';
+  } catch { return ''; }
+}
+
 export function createDevOpsClient(options: { authorization: TokenProvider; request?: Request; timeoutMs?: number }) {
   const call = async (method: string, url: string, body?: unknown, contentType = 'application/json'): Promise<Record<string, unknown>> => {
     const signal = AbortSignal.timeout(options.timeoutMs ?? 60_000);
@@ -33,7 +41,7 @@ export function createDevOpsClient(options: { authorization: TokenProvider; requ
       // an image upload sends its bytes as they are; everything else is JSON
       ...(body !== undefined ? { body: Buffer.isBuffer(body) ? new Uint8Array(body) : JSON.stringify(body) } : {}) });
     if (response.status === 401 || response.status === 403 || response.status === 203) throw new DevOpsCallError('DevOps: not authorised (check the PAT or az login)', true);
-    if (!response.ok) throw new DevOpsCallError(`DevOps: ${method} failed (HTTP ${response.status})`, response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429);
+    if (!response.ok) throw new DevOpsCallError(`DevOps: ${method} failed (HTTP ${response.status})${await errorReason(response)}`, response.status >= 400 && response.status < 500 && response.status !== 408 && response.status !== 429);
     const text = await response.text();
     try { return text ? JSON.parse(text) as Record<string, unknown> : {}; } catch { throw new DevOpsCallError('DevOps: invalid response'); }
   };
@@ -186,6 +194,8 @@ export function refusedWrite(grant: RoutineDevOps, write: StepWrite): string | n
     case 'fields':
       for (const f of Object.keys(write.fields)) if (!grant.fields.includes(f)) return `field ${f} is not in the package's devops.fields`;
       if (Object.keys(write.fields).some(f => f === 'System.State' || f === 'System.Tags')) return 'use the state or tags write for System.State / System.Tags';
+      // a move to another project (with its area and iteration in the same write) stays inside the package's projects
+      if ('System.TeamProject' in write.fields && !(typeof write.fields['System.TeamProject'] === 'string' && inProjects(write.fields['System.TeamProject']))) return `project ${String(write.fields['System.TeamProject'])} is not in the package's devops.projects`;
       return null;
     case 'create-test-plan': return write.project && !inProjects(write.project) ? `project ${write.project} is not in the package's devops.projects` : null;
     case 'create-pr': return inProjects(write.project) ? null : `project ${write.project} is not in the package's devops.projects`;
@@ -247,7 +257,7 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
     const entry = current();
     if (entry?.state === 'done') { out.done.push(`${plan.what} (already done)`); return 'done'; }
     if (entry?.state === 'not-verified') { out.notVerified.push(plan.what); return 'not-verified'; }
-    if (entry?.state === 'failed') { out.failed.push(plan.what); return 'failed'; }
+    if (entry?.state === 'failed') { out.failed.push(entry.error ? `${plan.what}: ${entry.error}` : plan.what); return 'failed'; }
     const save = (state: LedgerEntry['state'], extra: Partial<LedgerEntry> = {}) => {
       const prior = current();
       const resource = { ...prior?.resource, ...extra.resource };
@@ -274,7 +284,7 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
       result = await once();
     }
     if (result === 'ok') { out.done.push(label); return 'done'; }
-    if (result === 'definite') { save('failed'); out.failed.push(reason ? `${plan.what}: ${reason}` : plan.what); return 'failed'; }
+    if (result === 'definite') { save('failed', reason ? { error: reason } : {}); out.failed.push(reason ? `${plan.what}: ${reason}` : plan.what); return 'failed'; }
     save('not-verified'); out.notVerified.push(plan.what); return 'not-verified';
   };
   const classic = async (write: ClassicWrite, key: string): Promise<void> => {
@@ -282,8 +292,8 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
     const entry = store.ledger(context.runId)[key];
     if (entry?.state === 'done') { out.done.push(`${what} (already done)`); return; }
     if (entry?.state === 'not-verified') { out.notVerified.push(what); return; }
-    if (entry?.state === 'failed') { out.failed.push(what); return; }
-    const save = (state: LedgerEntry['state'], extra: Partial<LedgerEntry> = {}) => store.setLedger(context.runId, context.attempt, key, { state, what, at: Date.now(), tries: extra.tries ?? store.ledger(context.runId)[key]?.tries ?? 0, ...extra });
+    if (entry?.state === 'failed') { out.failed.push(entry.error ? `${what}: ${entry.error}` : what); return; }
+    const save =(state: LedgerEntry['state'], extra: Partial<LedgerEntry> = {}) => store.setLedger(context.runId, context.attempt, key, { state, what, at: Date.now(), tries: extra.tries ?? store.ledger(context.runId)[key]?.tries ?? 0, ...extra });
     if (!project) {
       try { project = (await client.item(grant.organization, workItem)).project; }
       // nothing was sent: no ledger entry, so a resumed run tries again
@@ -297,6 +307,8 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
       if (write.mentions?.length) before = `${await mentionTags(ectx, write.mentions)}<br/>`;
       if (write.images?.length) after = imagesHtml(await uploadImages(ectx, write.images, settle, out));
     }
+    // DevOps's reason for the last definite refusal: kept in the ledger and reported with the failure
+    let reason = '';
     const once = async (): Promise<'ok' | 'definite' | 'unknown'> => {
       try {
         if (write.op === 'comment') {
@@ -319,7 +331,10 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
         // a tags write is done only when the item really shows it (DevOps answers a no-op patch with the same rev)
         if (write.op === 'tags' && await verifyWrite(context, write, marker, project!) !== 'present') return 'unknown';
         save('done', { rev }); return 'ok';
-      } catch (e) { return e instanceof DevOpsCallError && e.definite ? 'definite' : 'unknown'; }
+      } catch (e) {
+        if (!(e instanceof DevOpsCallError && e.definite)) return 'unknown';
+        reason = masker.mask(e.message).slice(0, 300); return 'definite';
+      }
     };
     // a "writing" entry is a write whose outcome was lost (crash): verify before anything else
     let tries = entry?.tries ?? 0, label = what;
@@ -332,7 +347,7 @@ export async function executeWrites(context: WriteContext, writes: StepWrite[]):
       result = await once();
     }
     if (result === 'ok') out.done.push(label);
-    else if (result === 'definite') { save('failed'); out.failed.push(what); }
+    else if (result === 'definite') { save('failed', reason ? { error: reason } : {}); out.failed.push(reason ? `${what}: ${reason}` : what); }
     else { save('not-verified'); out.notVerified.push(what); }
   };
   for (const [index, write] of writes.entries()) {
