@@ -5,6 +5,7 @@ import { counts, countedDecision, decisionXp, earnIndex, earnedVerdict, runXp, u
 import { FACTS_SETTLE_MS, reworkStartsOf, reworkedWithin, verifiedVerdict } from '../../shared/run-verdict';
 import { VERDICT_WEIGHT } from '../../shared/success';
 import { LEGACY_XP } from './xp';
+import { roleJudges } from './judge-agreement';
 
 /** the newest values kept per sample for medians (n counts them all) */
 export const SAMPLE_MAX = 200;
@@ -305,13 +306,15 @@ export function runMetrics(runs: readonly AgentRun[], input: MetricsInput = {}):
   }
   // the retired roles and Pulse have no catalog stats (ADR 0186): their runs stay in the file, readable
   const agents = new Set([...[...tallies.values()].map(t => t.agentId), ...open.keys()].filter(id => !unrated(id)));
+  // ADR 0197: the PPI success and the Sentinel's agreement, over the kept runs the filter matches (reviews looked up in all)
+  const judges = roleJudges(runs.filter(r => r.endedAt !== undefined && (input.since === undefined || r.endedAt >= input.since) && matchesTags(r, filter)), earnIndex(runs));
   return [...agents].sort((a, b) => a.localeCompare(b, 'en')).map(agentId => {
     const own = [...tallies.values()].filter(t => t.agentId === agentId).sort((a, b) => a.version - b.version);
     const retained = runs.filter(r => r.agentId === agentId && r.endedAt !== undefined && (input.since === undefined || r.endedAt >= input.since) && matchesTags(r, filter));
     return {
       agentId, open: open.get(agentId) ?? 0,
       versions: own.map(t => ({ ...finalize(t, t.version), delivery: deliveryMetrics(retained.filter(r => r.version === t.version)) })),
-      all: own.length ? { ...finalize(own.slice(1).reduce((acc, t) => mergeTallies(acc, t, agentId, 0), own[0]!), null), delivery: deliveryMetrics(retained) } : null,
+      all: own.length ? { ...finalize(own.slice(1).reduce((acc, t) => mergeTallies(acc, t, agentId, 0), own[0]!), null), delivery: deliveryMetrics(retained), ...(judges.has(agentId) ? { judges: judges.get(agentId)! } : {}) } : null,
     };
   });
 }
