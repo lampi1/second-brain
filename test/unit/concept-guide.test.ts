@@ -56,7 +56,7 @@ describe('concept guide content', () => {
 describe('card text for a chat', () => {
   it('marks what is still in a pull request apart from today\'s behaviour', () => {
     const search = CONCEPTS.find(c => c.id === 'search')!;
-    // the hybrid search is on main (ADR 0068): the card describes it as today's behaviour
+    // the hybrid search is on main (ADR 0094): the card describes it as today's behaviour
     expect(search.coming).toBeUndefined();
     expect(search.summary.it).toContain('significato');
     const pending = { ...search, coming: [{ pr: 99, text: { it: 'In arrivo', en: 'Coming' } }] };

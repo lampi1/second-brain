@@ -164,7 +164,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   batched, a lighter tool prefix, rules hooks in process, browser reads as deltas, a review pack for the Sentinel.
 - **Evidence before a change is kept** (ADR 0104): trials and tier proposals on Wilson / Newcombe intervals at fixed
   checkpoints; honest statistics, one money format, Guide links on every "?" (ADR 0101).
-- **Your own picture for a role** (owner, 2026-10-20; ADR 0090): "Cambia immagine" under the badge on a role's page
+- **Your own picture for a role** (owner, 2026-10-20; ADR 0182): "Cambia immagine" under the badge on a role's page
   takes a PNG, JPG or WebP; its centre square replaces the character everywhere. "Immagine predefinita" brings the
   character back.
 - **The brain without the app** (owner, 2026-10-20; ADR 0088): Settings → Il mio spazio → "Condividi il brain" saves a
@@ -369,7 +369,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 - Classifiers: a bilingual (IT/EN) work lexicon for agent matching and the routing kind (a fresh brain no longer
   routes everything as "altro"); per-channel agent thresholds; a threshold calibrated on confirmed runs is proposed
-  in "Da approvare" and applies only on the user's click (ADR 0074). The Guida card explains each classifier.
+  in "Da approvare" and applies only on the user's click (ADR 0174). The Guida card explains each classifier.
 - CLI login readiness selects available engines for new chats and untouched starter agents. Codex is available on
   fresh installs without extra engine switches; explicit disabled settings remain disabled.
 - App-area chats support every enabled engine. Codex and Cursor pre-approve the same app-control and mail tools as

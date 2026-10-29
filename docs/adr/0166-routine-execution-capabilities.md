@@ -1,6 +1,6 @@
 # ADR 0166 — Composable routine execution capabilities
 
-Status: accepted. Date: 2026-10-26.
+Status: partly superseded by ADR 0179 (app-execution portions); accepted. Date: 2026-10-26.
 
 ## Problem
 

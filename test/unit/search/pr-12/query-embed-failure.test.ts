@@ -1,5 +1,5 @@
 // Proves (PR #12, hybrid search): a failure of the model while embedding the query makes Engine.query reject instead of
-// answering from BM25 (ADR 0068 / hybrid/service.ts: "until then, or if it fails, results come from BM25 only"). Only
+// answering from BM25 (ADR 0094 / hybrid/service.ts: "until then, or if it fails, results come from BM25 only"). Only
 // the background pump turns a broken model off; the query path awaits embedder.embed unguarded, so with a model that
 // fails at run time every search fails: brain_search returns an error to the agent and /api/search, Ctrl+K drop to the
 // substring search even though the words index is fine.

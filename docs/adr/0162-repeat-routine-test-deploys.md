@@ -1,5 +1,7 @@
 # ADR 0162 — Sequential test deployments within a routine run
 
+Status: partly superseded by ADR 0179 (app-execution portions); accepted.
+
 A BEFORE/AFTER routine needs two builds from its own PR on the same approved test target. The existing adapter
 retained one deployment forever and status selected the first record. Its writer also cached an omitted-build
 request by its original JSON, so fixing the coordinator alone would still replay the first receipt.

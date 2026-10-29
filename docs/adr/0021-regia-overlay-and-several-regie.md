@@ -1,6 +1,6 @@
 # ADR 0021 · The Regia as a floating overlay; several Regie in tabs; "Pulisci"
 
-Date: 2026-10-12 (written as 0016, renumbered at the merge with 0016-0020) · Status: accepted; place and top-bar button superseded by ADR 0028, "Domande alla Regia" removed by ADR 0035 · Supersedes: the fixed
+Date: 2026-10-12 (written as 0016, renumbered at the merge with 0016-0020) · Status: accepted; place and top-bar button superseded by ADR 0028, "Domande alla Regia" removed by ADR 0035, the coordinator's place superseded again by ADR 0068 (a persistent column), the chat-space portions by ADR 0071 · Supersedes: the fixed
 Regia column of ADR 0005 and the "one Regia" rule for work Regie
 
 ## Context

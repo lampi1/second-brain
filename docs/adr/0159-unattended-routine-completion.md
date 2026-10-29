@@ -1,6 +1,6 @@
 # 0159 — Unattended routine completion on shared test environments
 
-Status: implemented, 2026-10-25 (initial design committed before implementation). Builds on ADR 0158; no production access or PR merge capability.
+Status: partly superseded by ADR 0168 (the "before activation" part) and ADR 0179 (app-execution portions); implemented, 2026-10-25 (initial design committed before implementation). Builds on ADR 0158; no production access or PR merge capability.
 
 ## Evidence and boundaries
 

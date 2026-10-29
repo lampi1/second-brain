@@ -1,4 +1,6 @@
-# ADR 0090 · The user's own picture for a role
+# ADR 0182 · The user's own picture for a role
+
+Numbered 0090 until 2026-10-29, when duplicate ADR numbers were removed.
 
 Date: 2026-10-20 · Status: accepted (owner, 2026-10-20: «vorrei che si potesse caricare un'immagine custom anche per
 gli agenti con quelle attuali come predefinite») · Builds on: ADR 0083 (the nine fixed roles and their characters)

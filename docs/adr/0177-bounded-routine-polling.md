@@ -1,6 +1,6 @@
 # 0177 — Bound routine polling to the records it needs
 
-Date: 2026-10-28. Status: accepted. Issues: #254, #255, #256.
+Date: 2026-10-28. Status: partly superseded by ADR 0179 (app-execution portions); accepted. Issues: #254, #255, #256.
 
 ## Context
 

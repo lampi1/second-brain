@@ -1,7 +1,7 @@
 // Proves (PR #12, hybrid search): a brain folder that is briefly unreachable (a network or OneDrive folder offline, a USB
 // disk, a folder being replaced) is synced as an empty brain: brainFiles' git call fails (no cwd), the fallback walk finds
 // nothing, Engine.sync removes every document, and the next idle pump prunes every vector. When the folder is back, every
-// chunk of the brain is embedded again (ADR 0068: minutes of background CPU), and meanwhile the search finds nothing.
+// chunk of the brain is embedded again (ADR 0094: minutes of background CPU), and meanwhile the search finds nothing.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

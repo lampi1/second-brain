@@ -1,6 +1,6 @@
 # ADR 0169 — Proposed write reconciliation and same-run recovery
 
-Status: accepted. Date: 2026-10-26. Supersedes the terminal-only restriction in ADR 0167.
+Status: partly superseded by ADR 0179 (app-execution portions); accepted. Date: 2026-10-26. Supersedes the terminal-only restriction in ADR 0167.
 
 ## Decision
 

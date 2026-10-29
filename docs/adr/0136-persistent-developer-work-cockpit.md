@@ -1,6 +1,6 @@
 # 0136 — Persistent developer work cockpit
 
-Status: accepted for this implementation, 2026-10-23.
+Status: partly superseded by ADR 0141 (the Home board); accepted for this implementation, 2026-10-23.
 
 ## Problem and decision
 

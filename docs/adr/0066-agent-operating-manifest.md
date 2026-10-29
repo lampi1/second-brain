@@ -4,7 +4,7 @@
 > Routing parts superseded by [ADR 0078](0078-agent-first-routing.md): an agent's profile decides engine, model and
 > effort; the table only fills a model the profile leaves open, and the override rule applies only to agentless chats.
 
-Status: accepted for first-build integration.
+Status: partly superseded by ADR 0078 (routing parts) and ADR 0071 (chat-space portions); accepted for first-build integration.
 
 AgentDraft/Profile gains optional `manifest` fields: whenToUse, whenNotToUse, input, output,
 declaredTools, accessScopes and successCriteria. Main validates types, control characters, text/list limits

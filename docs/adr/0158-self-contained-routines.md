@@ -1,6 +1,6 @@
 # 0158 — Versioned routine packages, scoped effects and observable runs
 
-Status: accepted for implementation, 2026-10-25. Builds on ADR 0155. No new runtime dependency.
+Status: partly superseded by ADR 0168 (the draft/activation part) and ADR 0179 (app-execution portions); accepted for implementation, 2026-10-25. Builds on ADR 0155. No new runtime dependency.
 
 ## Decision
 
