@@ -10,6 +10,7 @@ import path from 'node:path';
 import { parseHookJson } from '../../harness/cursor/hook-input.mjs';
 import { CORRECTION, CONFUSION, isPositive } from '../../ops/tools/signals-regex.mjs';
 import { logPositive } from '../../ops/tools/feedback-log.mjs';
+import { isAppWritten, ownText } from '../../ops/tools/app-text.mjs';
 
 // Last ~400 KB of the transcript, newest line first.
 const tail = file => {
@@ -66,17 +67,19 @@ process.stdin.on('data', d => (raw += d)).on('end', async () => {
   } catch { return; }
   // Task notifications and system messages are not a task: no warning.
   if (/^\s*<task-notification/.test(prompt)) return;
-  const agentMessage = prompt.trimStart().startsWith('<') || /<agent-message|<task-notification|Another Claude session sent a message/.test(prompt);
-  const [warning, flagged] = await Promise.all([recall(prompt), agentMessage ? false : detectCorrection(prompt)]);
+  // The app's own text (agent and app labels, the role frame, its notes and hints) is never {{OWNER}}'s correction.
+  const agentMessage = isAppWritten(prompt);
+  const own = agentMessage ? '' : ownText(prompt);
+  const [warning, flagged] = await Promise.all([recall(prompt), own ? detectCorrection(own) : false]);
   const say = ctx => { if (ctx.length) console.log(JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: ctx.join('\n\n') } })); };
   // Only {{OWNER}}'s own messages: skip agent reports and task notifications (same filter as flow-signals).
   if (agentMessage) return say([warning].filter(Boolean));
-  if (isPositive(prompt)) {
+  if (own && isPositive(own)) {
     const lines = tail(input.transcript_path);
     const title = input.session_title || json(lines.find(l => l.includes('"custom-title"')))?.customTitle || path.basename(input.cwd || '?');
     const last = lines.map(l => (l.includes('"type":"assistant"') ? json(l) : null))
       .find(o => o && !o.isSidechain && (o.message?.content ?? []).some(c => c.type === 'text' && c.text.trim()));
-    logPositive({ harness: 'claude', chat: title, cwd: input.cwd, text: prompt,
+    logPositive({ harness: 'claude', chat: title, cwd: input.cwd, text: own,
       lastAssistant: (last?.message?.content ?? []).filter(c => c.type === 'text').map(c => c.text).join('\n') });
   }
   // Only the fact: how to log (format, mem.mjs, second time) lives once in the ai-errors.md header.

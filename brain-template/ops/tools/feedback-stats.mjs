@@ -220,7 +220,7 @@ const o = [`# Feedback all'IA, ${result.since} → ${result.until}`, '',
   ...group('harness:').map(([k, x]) => row(k.slice(8), x)),
   ...group('tipo:').map(([k, x]) => row(k.slice(5), x)),
   ...group('area:').map(([k, x]) => row(`area ${k.slice(5)}`, x)), '',
-  '"Negativi" = candidati della regex delle correzioni, larga (prende anche domande come "come mai"): conta la tendenza; i confermati sono in "Registri".', ''];
+  '"Negativi" = candidati della regex delle correzioni, larga (prende anche frasi che non sono correzioni): conta la tendenza; i confermati sono in "Registri".', ''];
 if (examples.pos.length) o.push(`Esempi positivi: ${examples.pos.join(' · ')}`);
 if (examples.neg.length) o.push(`Esempi negativi: ${examples.neg.join(' · ')}`, '');
 const pq = panels.rec + panels.other + panels.dismissed;

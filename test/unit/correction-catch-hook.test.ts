@@ -9,6 +9,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { McpServer } from '../../src/main/mcp/server';
 import { mountRecallTool, type Recall } from '../../src/main/search/hybrid/recall';
 import type { Correction } from '../../src/main/search/hybrid/corrections';
+import { AGENT_LABEL } from '../../src/shared/agent-label';
+import { APP_NOTE_LABEL } from '../../src/main/chats/reply-rules';
+import { roleFrame } from '../../src/main/agents/orchestrator-role';
 
 const HOOK = path.resolve(__dirname, '../../brain-template/.claude/hooks/correction-catch.mjs');
 
@@ -64,6 +67,16 @@ describe('correction-catch hook with the recall endpoint', () => {
     await mcp!.close();
     const slow = await serve(() => Promise.resolve({ ready: true, errors: [] }), () => new Promise(r => setTimeout(() => r({ ready: true, correction: false }), 1500)));
     expect(context(await runHook('no, ti ho detto di aspettare', slow))).toMatch(/^Possible correction/);
+  });
+
+  it('never flags the app text: agent and app labels, the role frame; the owner words after the frame still count', async () => {
+    const asked: string[] = [];
+    const url = await serve(() => Promise.resolve({ ready: true, errors: [] }), text => { asked.push(text); return Promise.resolve({ ready: false, correction: false }); });
+    expect(await runHook(`${AGENT_LABEL}\nfatto, ecco il report`, url)).toBe('');
+    expect(await runHook(`${APP_NOTE_LABEL}\napri tu il browser`, url)).toBe('');
+    expect(await runHook(`${roleFrame('Sentinel', 'Basta domande; non va mai fatto.')}\n\nfai il punto`, url)).toBe('');
+    expect(context(await runHook(`${roleFrame('Sentinel', 'Leggi.')}\n\nno, non così`, url))).toMatch(/^Possible correction/);
+    expect(asked).toEqual(['fai il punto', 'no, non così']);
   });
 
   it('warns with the similar errors, for the owner and for an agent task, next to the correction reminder', async () => {
