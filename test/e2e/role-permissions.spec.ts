@@ -1,6 +1,6 @@
 // UI acceptance for a role's permissions (ADR 0085, RolePermissions.tsx), demo services only, no provider requests:
 // every role starts with every permission («Tutto consentito»), the demo's Herald is narrowed; the card back shows it and
-// "Modifica permessi" lands on the card; turning a tool class off and choosing a ceiling saves a new version that
+// "Modifica permessi" lands on the card; turning a tool class off and choosing a ceiling updates the version in use in place (ADR 0182) and
 // survives a restart; each toggle and ceiling has its "?"; "Ripristina predefiniti" brings everything back. Screenshots
 // of the permissions editor dark and light.
 import { expect, test, type Locator } from '@playwright/test';
@@ -42,7 +42,7 @@ test('every role may do everything by default; the card back shows a narrowed He
   } finally { await app.close(); }
 });
 
-test('narrowing a role saves a version that survives a restart; Ripristina predefiniti brings every permission back', async () => {
+test('narrowing a role updates its version in place (ADR 0182) and survives a restart; Ripristina predefiniti brings every permission back', async () => {
   const first = await launchDemo({ scheme: 'light', config: { theme: 'light' } });
   try {
     await openAgents(first.page, 'scout');
@@ -57,7 +57,9 @@ test('narrowing a role saves a version that survives a restart; Ripristina prede
     await shot(first.page, 'role-permissions-light');
     await perms.getByTestId('perm-save').click();
     await expect(perms.getByTestId('perm-save')).toHaveCount(0);
-    await expect(first.page.getByTestId('agent-versions')).toContainText('v2');
+    // permissions are not a new version (ADR 0182): v1 says it was updated in place
+    await expect(first.page.getByTestId('agent-versions')).not.toContainText('v2');
+    await expect(first.page.getByTestId('agent-versions')).toContainText(/Aggiornata 1 volta senza nuova versione|Updated once without a new version/);
   } finally { await first.app.close(); }
   const second = await launchDemo({ userData: first.userData, scheme: 'light' });
   try {

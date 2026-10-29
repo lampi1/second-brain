@@ -9,11 +9,11 @@ import type { AgentContextSnapshot } from '../../shared/agent-context';
 import path from 'node:path';
 import { checkedKnowhow, checkedPackIdentity, packName } from '../../shared/agent-pack';
 import type { Effort, Harness, NewChat } from '../../shared/contract';
-import { MAX_CONTEXT_RANGE, PERMISSION_CEILINGS, type AgentAuthor, type AgentCatalog, type AgentDraft, type AgentModelChoice, type AgentOwnerSnapshot, type AgentProfile, type AgentToolPolicy, type AgentVersion, type PermissionCeiling } from '../../shared/agents';
+import { BEHAVIOUR_FIELDS, MAX_CONTEXT_RANGE, PERMISSION_CEILINGS, type AgentAuthor, type AgentCatalog, type AgentDraft, type AgentModelChoice, type AgentOwnerSnapshot, type AgentProfile, type AgentToolPolicy, type AgentVersion, type PermissionCeiling } from '../../shared/agents';
 import { FLASH_ID, MODEL_TIERS, PULSE_ID, ROLE_DEFAULTS, ROLE_IDS, ROLE_PREAMBLE, currentLaunches, currentRoleId, isRetiredRoleId, isRoleId, isWorkRole, roleName, tierRank, type ModelTier, type RoleId } from '../../shared/roles';
 import { characterOf, isCharacterId } from '../../shared/characters';
 import { readLocal, writeLocal } from './local-store';
-import { AgentHistory, behaviourOf, firstVersion, sameBehaviour } from './versions';
+import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, versionedChanges } from './versions';
 import { checkedTools, type AgentPolicy } from './tool-policy';
 import { cappedTier } from './model-tier';
 import { fiveRolesTextFor, fullDefaultsFor, shippedTextFor } from './role-migrate';
@@ -199,29 +199,29 @@ export class AgentCatalogService {
     for (const old of [...this.profiles]) {
       const fields = fullDefaultsFor(old);
       if (!fields) continue;
-      try { this.version(old, this.behaviour({ ...fields }, old.id, false, old), 'default', 'Permessi completi predefiniti (ADR 0085)'); }
+      try { this.version(old, this.behaviour({ ...fields }, old.id, false, old), 'default', 'Permessi completi predefiniti (ADR 0085)', 'active', true); }
       catch (e) { log.warn('agents', 'role not moved to full permissions', { cause: errText(e), hint: 'check that roles.json and role-history.json in the app data folder are writable', data: { role: old.id } }); }
     }
     // ADR 0100: a role the user never edited whose text still names Router, Judge or Scribe gets today's text
     for (const old of [...this.profiles]) {
       const fields = fiveRolesTextFor(old);
       if (!fields) continue;
-      try { this.version(old, this.behaviour({ ...fields }, old.id, false, old), 'default', 'Cinque ruoli di lavoro (ADR 0100)'); }
+      try { this.version(old, this.behaviour({ ...fields }, old.id, false, old), 'default', 'Cinque ruoli di lavoro (ADR 0100)', 'active', true); }
       catch (e) { log.warn('agents', 'role text not moved to the five work roles', { cause: errText(e), hint: 'check that roles.json and role-history.json in the app data folder are writable', data: { role: old.id } }); }
     }
     // a later shipped text replaced since (role-migrate.ts SHIPPED_BEFORE, #145)
     for (const old of [...this.profiles]) {
       const fields = shippedTextFor(old);
       if (!fields) continue;
-      try { this.version(old, this.behaviour({ ...fields }, old.id, false, old), 'default', 'Testo del ruolo aggiornato'); }
+      try { this.version(old, this.behaviour({ ...fields }, old.id, false, old), 'default', 'Testo del ruolo aggiornato', 'active', true); }
       catch (e) { log.warn('agents', 'role text not moved to the shipped one', { cause: errText(e), hint: 'check that roles.json and role-history.json in the app data folder are writable', data: { role: old.id } }); }
     }
   }
   private ordered(list: AgentProfile[]): AgentProfile[] { return [...list].sort((a, b) => CATALOG_IDS.indexOf(a.id) - CATALOG_IDS.indexOf(b.id)); }
   private writable(): void { const problem = this.problem ?? this.store.problem; if (problem) throw new Error(problem); }
   /** History first: a catalog never points to a version without its snapshot. */
-  private commit(next: AgentProfile[], versions: AgentVersion[], states: Parameters<AgentHistory['commit']>[1] = []): void {
-    if (versions.length || states.length) this.store.commit(versions, states);
+  private commit(next: AgentProfile[], versions: AgentVersion[], states: Parameters<AgentHistory['commit']>[1] = [], amends: Parameters<AgentHistory['commit']>[2] = []): void {
+    if (versions.length || states.length || amends.length) this.store.commit(versions, states, amends);
     writeLocal(this.file, { format: 1, roles: next });
     this.profiles = next;
     this.d.emit?.(this.list());
@@ -251,13 +251,14 @@ export class AgentCatalogService {
       if (engine !== preferred && current?.enabled && current.trusted && current.installed !== false && current.authenticated !== false) return p;
       // still at its defaults: its tools follow the engine (the API engine reads only, the others get the role's defaults)
       const tools = isRoleId(p.id) ? { allow: engineOf(engine)?.kind === 'api' ? ['read' as const] : [...ROLE_DEFAULTS[p.id].tools] } : p.tools;
-      const updated: AgentProfile = { ...p, engine, tools, version: p.version + 1, activeVersion: p.version + 1, updatedAt: Math.max(this.now(), p.updatedAt + 1) };
+      // in place (ADR 0182): an engine the app rebinds is not a change the role made, so no new version
+      const updated: AgentProfile = { ...p, engine, tools, updatedAt: Math.max(this.now(), p.updatedAt + 1) };
       changed.push(updated); return updated;
     });
     if (!changed.length) return;
     try {
-      this.commit(next, changed.map(p => ({ ...firstVersion(p, 'default', 'Motore disponibile', p.updatedAt), version: p.version, parentVersion: this.profiles.find(o => o.id === p.id)?.activeVersion ?? null })),
-        changed.map(p => ({ agentId: p.id, version: this.profiles.find(o => o.id === p.id)!.activeVersion, state: 'superseded' as const })));
+      this.commit(next, [], [], changed.map(p => ({ agentId: p.id, version: p.activeVersion, behaviour: behaviourOf(p), at: p.updatedAt, by: 'default' as const, reason: 'Motore disponibile' })));
+      log.info('agents', 'role engine rebound in place', { data: { roles: changed.map(p => `${p.id}@${p.activeVersion}`).join(', '), engine } });
     } catch (e) { log.warn('agents', 'role engine refresh failed', { cause: errText(e), hint: 'check that roles.json in the app data folder is writable' }); }
   }
 
@@ -307,13 +308,23 @@ export class AgentCatalogService {
     this.writable(); const old = this.find(id);
     return { ...this.face(id), ...this.behaviour(obj(value), id, true, old) };
   }
-  /** A new version when the behaviour changes; the same version otherwise. */
-  private version(old: AgentProfile, next: Behaviour, author: AgentAuthor, reason: string, state: 'active' | 'trial' = 'active'): AgentProfile {
-    const at = Math.max(this.now(), old.updatedAt + 1), version = old.version + 1;
-    const profile: AgentProfile = { ...this.face(old.id), ...next, id: old.id, scope: old.scope, createdAt: old.createdAt, updatedAt: at, version, activeVersion: version,
-      lastEditedBy: author, userLocked: author === 'default' ? false : author === 'user' ? true : old.userLocked,
+  /** A new version when the role's text, skills, model or tier change (ADR 0182), recording which; any other change, and
+   *  every migration (`migration`), updates the active version in place: its number, and so its run statistics, stay. */
+  private version(old: AgentProfile, next: Behaviour, author: AgentAuthor, reason: string, state: 'active' | 'trial' = 'active', migration = false): AgentProfile {
+    const at = Math.max(this.now(), old.updatedAt + 1), changed = migration ? [] : versionedChanges(old, next);
+    const who = { lastEditedBy: author, userLocked: author === 'default' ? false : author === 'user' ? true : old.userLocked };
+    if (!changed.length) {
+      // the profile's other fields stay; its behaviour is `next` as a whole (a field `next` leaves out is gone, as in a new version)
+      const rest = Object.fromEntries(Object.entries(old).filter(([k]) => !(BEHAVIOUR_FIELDS as readonly string[]).includes(k)));
+      const profile = { ...rest, ...next, ...who, updatedAt: at } as AgentProfile;
+      this.commit(this.profiles.map(p => p.id === old.id ? profile : p), [], [], [{ agentId: old.id, version: old.activeVersion, behaviour: behaviourOf(profile), at, by: author, reason: text(reason, 600, 'Motivo') }]);
+      this.knowhowChanged(old, profile);
+      return structuredClone(profile);
+    }
+    const version = old.version + 1;
+    const profile: AgentProfile = { ...this.face(old.id), ...next, id: old.id, scope: old.scope, createdAt: old.createdAt, updatedAt: at, version, activeVersion: version, ...who,
       ...(state === 'trial' ? { trial: { version, baseline: old.activeVersion, startedAt: at } } : {}) };
-    this.commit(this.profiles.map(p => p.id === old.id ? profile : p), [{ agentId: old.id, version, parentVersion: old.activeVersion, behaviour: behaviourOf(profile), author, reason: text(reason, 600, 'Motivo'), at, state }],
+    this.commit(this.profiles.map(p => p.id === old.id ? profile : p), [{ agentId: old.id, version, parentVersion: old.activeVersion, behaviour: behaviourOf(profile), author, reason: text(reason, 600, 'Motivo'), at, state, changed }],
       state === 'active' ? [{ agentId: old.id, version: old.activeVersion, state: 'superseded' }] : []);
     this.knowhowChanged(old, profile);
     return structuredClone(profile);

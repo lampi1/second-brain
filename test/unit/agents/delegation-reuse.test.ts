@@ -54,6 +54,10 @@ describe('parent child task continuity',()=>{
     f.catalog.profiles[1]!.activeVersion=2;
     await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/configuration changed/);
     f.catalog.profiles[1]!.activeVersion=1;
+    // a change in place (same version, ADR 0182) moves the revision: a fresh chat too
+    (f.catalog.profiles[1] as {updatedAt?:number}).updatedAt=5;
+    await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/configuration changed/);
+    delete (f.catalog.profiles[1] as {updatedAt?:number}).updatedAt;
     await expect(f.call('agent_assign_task',{...f.args(),roleId:'sentinel'})).rejects.toThrow(/Sentinel/);
     await expect(f.call('agent_assign_task',{...f.args(),cwd:path.resolve('/elsewhere')})).rejects.toThrow(/Project mismatch/);
     f.parent.permissionMode='plan';

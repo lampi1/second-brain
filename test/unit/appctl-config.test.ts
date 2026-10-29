@@ -66,12 +66,16 @@ describe('app_config: settings', () => {
 describe('app_config: roles, view, connectors, later', () => {
   it('saves a role field through the page\'s save with the whole draft, permissions included', async () => {
     let profile = role();
-    const save = vi.fn((draft, id: string) => { profile = { ...profile, ...draft, id, activeVersion: profile.activeVersion + 1 }; return profile; });
+    // like the catalog (ADR 0182): the role's text makes a new version, a permission changes the one in use
+    const save = vi.fn((draft, id: string) => { profile = { ...profile, ...draft, id, updatedAt: profile.updatedAt + 1, activeVersion: profile.activeVersion + ('instructions' in draft && draft.instructions !== profile.instructions ? 1 : 0) }; return profile; });
     const d = deps({ agents: { list: () => ({ profiles: [profile], models: [] }) as never, save, history: () => [], restore: vi.fn() } });
-    const r = await configTool(d).run({ action: 'set', area: 'agent', agentId: 'scout', key: 'permissionCeiling', value: 'plan' }) as { version: number; undo: { version: number } };
+    const r = await configTool(d).run({ action: 'set', area: 'agent', agentId: 'scout', key: 'permissionCeiling', value: 'plan' }) as { version: number; undo: { version?: number; key?: string; value?: unknown } };
     expect(save).toHaveBeenCalledWith({ ...draftOf(role()), permissionCeiling: 'plan' }, 'scout', 'Modificato dall’Orchestrator su richiesta dell’utente');
-    expect(r.version).toBe(4);
-    expect(r.undo.version).toBe(3);
+    expect(r.version).toBe(3);
+    expect(r.undo).toMatchObject({ key: 'permissionCeiling', value: role().permissionCeiling ?? null });
+    const t = await configTool(d).run({ action: 'set', area: 'agent', agentId: 'scout', key: 'instructions', value: 'Read first.' }) as { version: number; undo: { version?: number } };
+    expect(t.version).toBe(4);
+    expect(t.undo.version).toBe(3);
     await expect(Promise.resolve().then(() => configTool(d).run({ action: 'set', area: 'agent', agentId: 'scout', key: 'name', value: 'X' }))).rejects.toThrow(/key:/);
   });
 

@@ -4,7 +4,7 @@
 // the count ("troppo pochi"). Before, the Skill statistics took any verdict and wanted 10 (memory-stats.ts
 // MIN_VERDICT), the run metrics weighed a partial 0.5 with no minimum, and the routing's per-kind counts took the
 // brain's proxy too. Used by agents/run-metrics.ts, brainmodel/memory-stats.ts, brain/routing.ts agentStatsLine and
-// the Agenti card (renderer AgentCatalogCard.tsx). Pure: pinned by test/unit/shared/success.test.ts.
+// the Agenti card and the role's versions (renderer AgentCatalogCard.tsx, AgentStudio.tsx). Pure: pinned by test/unit/shared/success.test.ts.
 import type { AgentRun, AgentRunOutcome } from './agents';
 import { verifiedVerdict } from './run-verdict';
 
@@ -33,6 +33,14 @@ export function countedVerdict(run: Parameters<typeof verifiedVerdict>[0]): Verd
 /** The success of runs, verified verdicts only. */
 export function runsSuccess(runs: readonly Pick<AgentRun, 'endedAt' | 'report' | 'corrections' | 'counters' | 'outcome'>[]): SuccessShare {
   return successShare(runs.map(countedVerdict).filter((v): v is Verdict => v !== null));
+}
+
+/** The ± of a share at 90% (Wilson score interval, half its width): from 5 verdicts a share says "80% ± 26", never a
+ *  bare "80%" that reads as a fact. Null below the sample or with no share. */
+export function successMargin(s: SuccessShare, z = 1.645): number | null {
+  if (s.value === null || s.n < MIN_SUCCESS_SAMPLE) return null;
+  const p = s.value, n = s.n, z2 = z * z;
+  return (z * Math.sqrt(p * (1 - p) / n + z2 / (4 * n * n))) / (1 + z2 / n);
 }
 
 /** true = enough verdicts for a share to be shown. */

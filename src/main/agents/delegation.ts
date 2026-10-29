@@ -220,7 +220,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (!isWorkRole(a.roleId) || a.roleId === 'sentinel' || child.agent?.source !== 'catalog' || child.agent.id !== a.roleId || child.delegation.role !== a.roleId) throw new Error('Role mismatch or independent Sentinel review: delegate a fresh chat.');
     const catalog = d.roles(), own = catalog.profiles.find(p => p.id === parent.agent!.id), profile = catalog.profiles.find(p => p.id === a.roleId);
     if (!own || !canLaunch(own.launches, a.roleId)) throw new Error('Your current role may not launch this child role.');
-    if (!profile || profile.activeVersion !== child.agent.version || profile.engine !== child.harness) throw new Error('Role configuration changed: delegate a fresh chat.');
+    // the revision too: tools, permissions and limits change the version in use in place (ADR 0182)
+    if (!profile || profile.activeVersion !== child.agent.version || profile.updatedAt !== child.agent.revision || profile.engine !== child.harness) throw new Error('Role configuration changed: delegate a fresh chat.');
     if (typeof a.cwd !== 'string' || !path.isAbsolute(a.cwd) || path.resolve(a.cwd) !== path.resolve(child.cwd) || !withinParent(parent.cwd, child.cwd, trees)) throw new Error('Project mismatch: reuse only the same folder inside your scope or repository worktree.');
     if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || !Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1) throw new Error('Invalid assignment mode/version.');
     if (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0) throw new Error('Read agent_task_events and provide expectedEventSeq.');

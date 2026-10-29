@@ -4,7 +4,8 @@
 // - setting: every key of the settings schema (brain/settings-schema.ts) via config.request with `direct` (the owner
 //   chose that protected keys change at once too), logged as the agent's change with its Annulla (undo / history);
 // - view: theme, density, work profile (renderer prefs, lib/view-prefs.ts) via ui:command 'prefs';
-// - agent: a role's card (Brain → Agenti) via the same save as the page (a new version; undo = the previous version);
+// - agent: a role's card (Brain → Agenti) via the same save as the page (a new version for text, skills, model or tier,
+//   undo = the previous version; tools, permissions and limits change the version in use, undo = set the old value, ADR 0182);
 // - connector: an MCP server on/off and a role's access to it (Settings → Connettori); adding or removing a server, its
 //   tokens and the accounts' logins stay the user's, in Settings (they run commands or hold credentials);
 // - later: «Rispondi dopo»;
@@ -65,7 +66,7 @@ export function configTool(d: ConfigDeps): ToolDef {
   };
   return {
     name: 'app_config',
-    description: `Read and change the app's configuration for the user, exactly as their own click in the app would (every change is logged with its Annulla). action "get" (read, optional query), "set", "undo", "history". area: "setting" (every key of Impostazioni and more: key + value; get lists key, label, description, type, current value), "view" (theme system|light|dark, density comfortable|compact, workProfile: key + value), "agent" (a role's card in Brain → Agenti: agentId + key = one of ${AGENT_FIELDS.join('|')} + value; undo with agentId + version), "connector" (an MCP server: server + key "enabled" (boolean) or key "access" with role + value all|read|none|{tools:[...]}), "later" («Rispondi dopo»: value true|false). Change only what the user asked in their own words in the last ${CONFIG_ASK_MIN} minutes; then tell them in one line what changed and that Annulla is in the change log. Never secrets, tokens, logins or adding/removing MCP servers: those stay in Settings for the user. Where a setting is on screen: app_guide / app_ui outline.`,
+    description: `Read and change the app's configuration for the user, exactly as their own click in the app would (every change is logged with its Annulla). action "get" (read, optional query), "set", "undo", "history". area: "setting" (every key of Impostazioni and more: key + value; get lists key, label, description, type, current value), "view" (theme system|light|dark, density comfortable|compact, workProfile: key + value), "agent" (a role's card in Brain → Agenti: agentId + key = one of ${AGENT_FIELDS.join('|')} + value; undo with agentId + version when set made a new version (text, skills, model, tier), else set the "before" value back), "connector" (an MCP server: server + key "enabled" (boolean) or key "access" with role + value all|read|none|{tools:[...]}), "later" («Rispondi dopo»: value true|false). Change only what the user asked in their own words in the last ${CONFIG_ASK_MIN} minutes; then tell them in one line what changed and that Annulla is in the change log. Never secrets, tokens, logins or adding/removing MCP servers: those stay in Settings for the user. Where a setting is on screen: app_guide / app_ui outline.`,
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     inputSchema: { type: 'object', additionalProperties: false, required: ['action', 'area'], properties: {
       action: { type: 'string', enum: ['get', 'set', 'undo', 'history'] }, area: { type: 'string', enum: [...AREAS] },
@@ -121,7 +122,7 @@ export function configTool(d: ConfigDeps): ToolDef {
         case 'agent': {
           if (!d.agents) throw new Error('ruoli non disponibili');
           if (action === 'get') return (a.agentId ? [role(a.agentId)] : d.agents.list().profiles).map(roleView);
-          if (action === 'history') return d.agents.history(role(a.agentId).id).slice(-10).map(v => ({ version: v.version, at: new Date(v.at).toISOString(), author: v.author, reason: v.reason, state: v.state }));
+          if (action === 'history') return d.agents.history(role(a.agentId).id).slice(-10).map(v => ({ version: v.version, at: new Date(v.at).toISOString(), author: v.author, reason: v.reason, state: v.state, ...(v.changed ? { changed: v.changed } : {}), ...(v.amended ? { amended: v.amended.map(x => x.reason) } : {}) }));
           if (action === 'undo') {
             asked('i ruoli');
             const p = d.agents.restore(role(a.agentId).id, Number(a.version));
@@ -137,9 +138,12 @@ export function configTool(d: ConfigDeps): ToolDef {
           // must not be able to widen the Orchestrator itself
           if (old.id === 'orchestrator' && (key === 'tools' || key === 'permissionCeiling')) throw new Error('bloccato: i permessi dell’Orchestrator li cambia solo l’utente, dalla sua carta in Brain → Agenti');
           const p = d.agents.save({ ...draftOf(old), [key]: a.value } as AgentDraft, old.id, `Modificato dall’Orchestrator su richiesta dell’utente${reason ? `: ${reason}` : ''}`.slice(0, 600));
-          if (p.activeVersion === old.activeVersion) return { agentId: p.id, unchanged: true, note: 'già così' };
+          if (p.updatedAt === old.updatedAt) return { agentId: p.id, unchanged: true, note: 'già così' };
           log.info('appctl', 'Orchestrator changed a role', { chat: d.callerId, data: { role: p.id, key, version: p.activeVersion } });
-          return { agentId: p.id, changed: key, before: (old as unknown as Record<string, unknown>)[key] ?? null, after: (p as unknown as Record<string, unknown>)[key] ?? null, version: p.activeVersion, undo: { agentId: p.id, version: old.activeVersion } };
+          const before = (old as unknown as Record<string, unknown>)[key] ?? null;
+          // tools, permissions and limits change the version in use in place (ADR 0182): undo = set the old value back
+          return { agentId: p.id, changed: key, before, after: (p as unknown as Record<string, unknown>)[key] ?? null, version: p.activeVersion,
+            undo: p.activeVersion === old.activeVersion ? { agentId: p.id, key, value: before, how: 'set it back with the "before" value (same version)' } : { agentId: p.id, version: old.activeVersion } };
         }
         case 'connector': {
           if (!d.mcp) throw new Error('connettori non disponibili');

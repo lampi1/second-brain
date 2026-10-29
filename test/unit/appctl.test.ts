@@ -43,7 +43,7 @@ function deps() {
 describe('app control tools', () => {
   it('assigns a scoped follow-up with stable source identity and refuses changed scope or unauthenticated reuse', async () => {
     const catalog = roleCatalog(), scout = catalog.list().profiles.find(p => p.id === 'scout')!;
-    const target = { id: 'w', harness: 'claude', cwd: '/project', state: 'idle', agent: { id: 'scout', version: scout.activeVersion }, run: { taskVersion: 2, taskId: 'task', runId: 'run' } };
+    const target = { id: 'w', harness: 'claude', cwd: '/project', state: 'idle', agent: { id: 'scout', version: scout.activeVersion, revision: scout.updatedAt }, run: { taskVersion: 2, taskId: 'task', runId: 'run' } };
     const assignTask = vi.fn(async () => {});
     const chats = { list: () => [{ id: 'o', isOrchestrator: true, harness: 'claude' }, target], assignTask } as unknown as ChatService;
     const brain = { settings: () => ({ messaging: { crossHarness: false } }) } as unknown as BrainService;
@@ -58,6 +58,10 @@ describe('app control tools', () => {
     const wrong = await Promise.resolve().then(() => tool.run({ ...args, roleId: 'artisan' })).catch((e: unknown) => e);
     expect(wrong).toBeInstanceOf(ToolRefusal);
     expect((wrong as Error).message).toMatch(/this chat runs scout, not artisan/);
+    // a permission changed in place (same version, ADR 0182) still needs a fresh chat
+    target.agent.revision = scout.updatedAt - 1;
+    await expect(Promise.resolve().then(() => tool.run(args))).rejects.toThrow(/Role configuration changed/);
+    target.agent.revision = scout.updatedAt;
     await expect(Promise.resolve().then(() => tools().find(t => t.name === 'app_assign_task')!.run(args))).rejects.toThrow(/authenticated/);
     expect(assignTask).toHaveBeenCalledTimes(1);
   });
