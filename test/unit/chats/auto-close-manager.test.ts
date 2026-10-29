@@ -136,7 +136,7 @@ describe('main automatic archive reservations', () => {
   it('rechecks new pending after close awaits and never drops it or marks the chat archived', async () => {
     const f = fixture(), c = await f.m.create({ harness: 'anthropic', cwd: f.dir, model: 'known', prompt: 'First' });
     let finish!: () => void;
-    f.close.mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+    f.close.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; })); // once: the shutdown after the test closes at once
     const closing = f.m.archiveAutomatic(c.id, () => true);
     await vi.waitFor(() => expect(f.close).toHaveBeenCalled());
     f.sink().pending({ id: 'new-question', type: 'question', tool: 'AskUserQuestion', title: 'Question', detail: '', input: {}, at: Date.now() });

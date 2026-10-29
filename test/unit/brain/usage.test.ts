@@ -127,9 +127,9 @@ describe('usage', () => {
     expect(killed).toMatchObject({ code: null, killed: true });
     let now = 1_000_000;
     const got: Usage[] = [];
-    const m = new UsageMonitor({ root, node: plainNode, claudeConfig: null, costTimeoutMs: 3000, now: () => now, onUsage: u => got.push(u) });
+    const m = new UsageMonitor({ root, node: plainNode, claudeConfig: null, costTimeoutMs: 2000, now: () => now, onUsage: u => got.push(u) });
     const warn = vi.spyOn(log, 'warn');
-    const timeouts = () => warn.mock.calls.filter(([scope, msg]) => scope === 'brain' && /cost\.mjs timed out after 3 s/.test(msg)).length;
+    const timeouts = () => warn.mock.calls.filter(([scope, msg]) => scope === 'brain' && /cost\.mjs timed out after 2 s/.test(msg)).length;
     const before = timeouts();
     fs.writeFileSync(runs, '');
     await Promise.all([m.refresh(), m.refresh()]);
