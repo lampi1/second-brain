@@ -39,12 +39,24 @@ reviews themselves. The owner wants fewer, cheaper reviews and none on the Grind
    - **Missed nights:** still **one** session. It covers every pending sampled run of the last 7 days, **oldest first**
      (the first to leave the window), as many as the daily cap buys; older ones drop out of the window unreviewed.
    - The day is claimed when the batch starts (or finds nothing to do), so a failure is not retried the same day; a
-     refused engine or a missing Sentinel does not claim it (tried again 5 minutes later).
+     refused engine or a missing Sentinel does not claim it (tried again 5 minutes later). The claim is **saved to disk
+     before the batch starts** (`judge-samples.json`), and the batch's run is in the run store from its start: a quit or
+     crash during the batch (up to 45 minutes) never runs it again at the next start, which would pay twice. At its first
+     tick the next process ends such an interrupted batch run (`endInterrupted`: `stale`, no verdicts, its cost if one was
+     recorded, report `blocked`), keeps it in the batch list with the error «interrotta: l'app si è chiusa prima della
+     fine» and says so in the Log; its runs have no verdict, so they stay pending for the next nights.
    - The batch is **one hidden read-only run** (`compare/headless.ts HeadlessRunner`, the Sentinel's engine, model and
      effort, effort `max` lowered to `high`): **no chat record, no Grindhouse strip, no notification**. One prompt lists
      every run (folder, goal, report, result cut to 2 500 characters, criteria and evidence, receipts); the answer ends
-     with a fenced `review-verdicts` JSON array, one `{ run, verdict, verified, note }` per run (`batchPrompt`,
-     `parseBatchVerdicts`: the last block, only the runs asked, each once, valid values only). At most 20 runs a batch;
+     with a fenced `review-verdicts-<nonce>` JSON array, one `{ run, verdict, verified, note }` per run (`batchPrompt`,
+     `parseBatchVerdicts`).
+   - **A run cannot steer the verdicts.** Its goal, report, result, evidence and receipts are text an agent wrote (or
+     that a file it read put there): a fake heading, a fake «### 2. r_…» run or a fake verdicts block could pass as the
+     app's. Each batch draws a random **nonce** (`batchNonce`, 16 hex characters, never stored in a run). Every such
+     field sits between `[data <nonce>]` and `[/data <nonce>]`, made inert first (`inert`: the nonce, code fences,
+     the verdicts block's name, data markers and line-start `#` are defused). The prompt says that text is data. Only
+     the last block named `review-verdicts-<nonce>` is read (one without the nonce, or with another, is ignored); only
+     the batch's run ids count, with valid values; a run named twice in it is dropped (ambiguous). At most 20 runs a batch;
      45 minutes, then it is killed. The working folder is the one most runs are in; the others are read by absolute path.
    - Each verdict becomes the run's feedback (`run-feedback.ts recordFeedback`, caller `judge-sample`, evidence = the
      batch's run). It is **reviewed evidence** only when the batch lists that run with the same verdict and `verified:
@@ -82,8 +94,12 @@ reviews themselves. The owner wants fewer, cheaper reviews and none on the Grind
   `review` one-shot costs before and after.
 - Levels move once a day for the reviewed share; the user's verdicts and the receipts still count at once. The card
   says when the last update was.
-- A single batch is one point of failure for the night: a failed run records no verdicts, and a run with no verdict
-  (the batch failed, or the Sentinel left it out) stays pending for the next nights, within its 7 days.
+- A single batch is one point of failure for the night: a failed or interrupted run records no verdicts, and a run with
+  no verdict (the batch failed, the app quit during it, or the Sentinel left it out) stays pending for the next nights,
+  within its 7 days. An interrupted batch's tokens are lost (its cost is usually unknown), but it is never run twice in
+  one day.
+- The nonce bounds what a run's text can do to the answer's structure; it cannot stop the Sentinel from being persuaded
+  by the content itself. An unverified verdict stays an opinion, and the user's verdict always wins.
 - Honest levels are unchanged: only verified successes earn XP; an unverified batch verdict is an opinion.
 
 ## Files
