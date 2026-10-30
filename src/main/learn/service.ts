@@ -27,6 +27,9 @@ import {
   type PrepPhase, type TeacherOption, type TutorMode, type TutorTurn, subjectOf, TUTOR_KEEP, TUTOR_Q_MAX, tutorCard, tutorShown,
 } from '@shared/lesson';
 import { REVIEW_GRADES, parseCards, queueOf, subjectName, summarize, type ReviewCard, type ReviewGrade, type ReviewItem, type ReviewMode } from '@shared/review';
+import { lastGrades, masteryOf, scoreOf } from '@shared/mastery';
+import { quizValid, storedChoice } from '@shared/quiz';
+import { USER_FILES, cleanFiles, withUserFiles } from './user-files';
 import { parseTopicFacts, parseTopics, privateWords, TOPIC_WAIT_MS, type LessonTopics } from '@shared/web-topics';
 import { cutDiff, gather, INLINE_MAX, type GatherDeps, type Material } from './material';
 import { cardsPrompt, extraPrompt, filesResearchPrompt, gradePrompt, planPrompt, restPrompt, topicsResearchPrompt, tutorPrompt, verifyPrompt, webResearchPrompt } from './prompt';
@@ -144,7 +147,13 @@ export class LearnService {
     const bySubject = new Map<string, number>();
     for (const s of lessons) if (s.state !== 'failed') bySubject.set(s.subject, (bySubject.get(s.subject) ?? 0) + 1);
     let review: ImparaState['review'];
-    try { review = summarize(this.askable(), this.review.log(), bySubject, this.now()); } catch (e) { log.warn('learn', 'review summary failed', { cause: errText(e) }); }
+    try {
+      const cards = this.askable(), logs = this.review.log(), now = this.now(), last = lastGrades(logs);
+      const sum = summarize(cards, logs, bySubject, now);
+      // the overall score and each subject's level (ADR 0204, shared/mastery.ts)
+      review = { ...sum, subjects: sum.subjects.map(x => ({ ...x, mastery: masteryOf(cards.filter(c => c.subject === x.name), logs, now, last) })),
+        score: scoreOf(cards, logs, now, { streak: sum.streak, lessonsDone: lessons.filter(l => l.done).length }) };
+    } catch (e) { log.warn('learn', 'review summary failed', { cause: errText(e) }); }
     return { lessons, dir: this.d.store.root, canTeach: !why, ...(why ? { why } : {}), teachers: this.teachers(), ...(review ? { review } : {}) };
   }
   get(id: string): Lesson | null { return this.d.store.get(String(id)); }
@@ -190,6 +199,9 @@ export class LearnService {
     if (teacher) req.teacher = teacher;
     const subject = subjectName(raw.subject);
     if (subject) req.subject = subject;
+    // the user's own files as sources (ADR 0204: read by the page, checked here)
+    const files = cleanFiles(raw.files);
+    if (files.length) req.files = files;
     if (kind === 'pr' && !req.prUrl) throw new Error('Scegli una PR o incollane il link.');
     if (kind === 'text' && !req.text?.trim()) throw new Error('Incolla il testo da spiegare.');
     const now = this.now(), id = this.d.store.newId(now);
@@ -219,6 +231,8 @@ export class LearnService {
     if (pasted) files['testo.md'] = '';
     let text = pasted ? `## Testo dell'utente\n${pasted.slice(0, INLINE_MAX)}` : head;
     if (diff) { const cut = cutDiff(diff, Math.max(10_000, INLINE_MAX - head.length)); text += `\n\n## Diff${cut.cut ? ' (tagliato: quello intero è nel file diff.patch)' : ''}\n\`\`\`diff\n${cut.text}\n\`\`\``; }
+    // the user's own files (ADR 0204): named inline, read whole from their file
+    if (this.d.store.readFile(id, USER_FILES)) { files[USER_FILES] = ''; text += `\n\n## File dell'utente\nNel file ${USER_FILES}.`; }
     return { text, files, cwd: null, sources: [] };
   }
   /** What a run adds: its cost; the engine and model only for the teacher's own runs (a web run is always Claude's). */
@@ -243,7 +257,7 @@ export class LearnService {
     let more = false;
     try {
       let m: Material;
-      try { m = await gather(req, this.d); }
+      try { m = withUserFiles(await gather(req, this.d), req.files); }
       catch (e) { this.edit(id, l => ({ ...l, state: 'failed', error: errText(e).slice(0, 300) })); return; }
       if (!this.d.store.get(id)) return; // removed while its material was being read: nothing is written back
       for (const [name, content] of Object.entries(m.files)) this.d.store.writeFile(id, name, content);
@@ -566,16 +580,17 @@ export class LearnService {
     return this.edit(l.id, x => ({ ...x, at }))!;
   }
 
-  /** A check answered (zero tokens: its right answer came with it). The first answer stays. */
-  answer(id: string, checkId: string, choice: number, confidence?: LessonConfidence): Lesson {
+  /** A check answered (zero tokens: its right answer came with it). The first answer stays; a later call only adds the
+   *  «Eri sicuro?» (then `choice` is not looked at; without one it must still be valid). Order and match (ADR 0204) take a list (shared/quiz.ts). */
+  answer(id: string, checkId: string, choice: unknown, confidence?: LessonConfidence): Lesson {
     const l = this.must(id);
     const c = l.checks.find(x => x.id === checkId);
     if (!c) throw new Error('Domanda non trovata.');
-    if (!Number.isInteger(choice) || choice < 0 || choice >= c.options.length) throw new Error('Risposta non valida.');
     const conf = confidence === 0 || confidence === 1 || confidence === 2 ? confidence : undefined;
+    if (!(c.answer && conf !== undefined) && !quizValid(c, choice)) throw new Error('Risposta non valida.');
     return this.edit(l.id, x => ({ ...x, checks: x.checks.map(k => k.id !== checkId ? k
       : k.answer ? (conf !== undefined && k.answer.confidence === undefined ? { ...k, answer: { ...k.answer, confidence: conf } } : k)
-      : { ...k, answer: { choice, ...(conf !== undefined ? { confidence: conf } : {}), at: this.now() } }) }))!;
+      : { ...k, answer: { choice: storedChoice(k, choice as number | number[]), ...(Array.isArray(choice) ? { seq: [...choice] } : {}), ...(conf !== undefined ? { confidence: conf } : {}), at: this.now() } }) }))!;
   }
 
   /** The piece an item is about: a piece itself, a check's piece, the last main piece for the end. */

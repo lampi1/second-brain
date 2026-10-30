@@ -45,7 +45,7 @@ describe('LearnService', () => {
     expect(done.title).toBe('Risposte parola per parola (PR #251)');
     expect(done.pr).toMatchObject({ provider: 'github', number: 251, repo: 'lampi1/second-brain' });
     expect(done.steps.filter(s => !s.extra)).toHaveLength(5);
-    expect(done.checks.length).toBe(3);
+    expect(done.checks.length).toBe(4);
     expect(done.at).toBe(stepKey(done.steps[0]!.id));
     // a PR has no web research: its files, their check, then the plan and the rest, at the default effort
     // then the review cards, at medium effort

@@ -80,7 +80,8 @@ export function moveTo(id: string, at: string): Promise<Lesson | null> {
   return window.sb.invoke('impara:move', { id, at }).then(x => { done(); put(x); return x; }, e => { done(); return fail(e); });
 }
 export const askExtra = (id: string, kind: LessonExtraKind, at: string, text?: string) => call(window.sb.invoke('impara:ask', { id, kind, at, ...(text ? { text } : {}) }));
-export const answerCheck = (id: string, checkId: string, choice: number, confidence?: LessonConfidence) =>
+/** choice: an option, or for order and match the list (ADR 0204, shared/quiz.ts) */
+export const answerCheck = (id: string, checkId: string, choice: number | number[], confidence?: LessonConfidence) =>
   call(window.sb.invoke('impara:answer', { id, checkId, choice, ...(confidence !== undefined ? { confidence } : {}) }));
 export const explainBack = (id: string, text: string) => call(window.sb.invoke('impara:explain', { id, text }));
 export const retryLesson = (id: string) => call(window.sb.invoke('impara:retry', { id }));
