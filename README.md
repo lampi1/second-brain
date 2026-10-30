@@ -61,17 +61,20 @@ Herald) that split it into child chats you can watch and report back.
 
 The **Orchestrator** is where work starts: it plans, hands each job to the right role, answers their mail and tells you
 what is waiting. **Flash**, the tab next to it, is the "btw": a quick read-only agent on its own model that sees the
-Orchestrator's conversation and answers side questions in seconds, without touching it. When a question turns into
-real work, "Make it a job" drafts it for the Orchestrator.
+Orchestrator's conversation and answers side questions in seconds, without touching it. Use it to plan, research or
+ask for advice; when the talk turns into real work, "Make it a job" has Flash write a proper brief from the whole
+conversation (goal, context, what to do, constraints, done when) and drops it in the Orchestrator's input, unsent.
 
 <p align="center"><img src="docs/screenshots/orchestrator-flash.webp" alt="The Orchestrator's column with its subagents and a decision, and Flash beside it" width="760"></p>
 
 It also knows the app inside out. "Where is the spending limit?", "turn notifications off", "give the Scout the GitHub
-connector": it reads the app's live map and changes the setting for you, with an Undo. Secrets stay yours.
+connector", "add this MCP server": it reads the app's live map and changes the setting for you, with an Undo. Secrets
+stay yours, and a server it adds stays off until you read its command and click **Activate**.
 
 ### Plan mode
 
-Tick **Plan** and a Strategist takes the job: it asks you a few questions first, then proposes a short plan, each step
+Tick **Plan** and a Strategist takes the job: it reads the code, asks you at least three real questions (goal, scope,
+constraints, what "done" means; say "enough questions" to stop it), then proposes a short plan, each step
 with the role that will do it. You approve it in the questions window, and only then does it start the other agents,
 as the tree of thread cards at the top of this page, its steps ticking off on its strip.
 
@@ -81,14 +84,14 @@ as the tree of thread cards at the top of this page, its steps ticking off on it
 
 Everything the agents learn lands as a card: a fact, a skill, a rule, a setting. Swipe right to keep it, left to drop
 it (or ✓ / ✕, or the arrow keys, with Z to undo), and every card says who proposed it, in which chat and when. Behind
-the deck, one hub with tabs (Approved, Skills, Rules, Scripts & Queries, Ideas, Files, Learning, Statistics) under a
+the deck, one hub with tabs (Approved, Skills, Rules, Scripts & Queries, Ideas, Files, Statistics) under a
 header whose counters move while the agents work.
 
 <p align="center"><img src="docs/screenshots/memory.webp" alt="Memory: the live header with its counters, the tabs, and a proposal card swiped toward APPROVE" width="560"></p>
 
 ### Quality you can measure, a brain that tidies itself
 
-**Quality** counts the AI's mistakes instead of its compliments: errors you had to catch yourself per 100 turns, rules
+**Quality**, a tab of **Trends**, counts the AI's mistakes instead of its compliments: errors you had to catch yourself per 100 turns, rules
 that actually stopped their error (or didn't, within 14 days), PRs held by a failed build or QA, bugs that came back.
 Every number says where it comes from and how many cases it covers, and "Discuss" hands it to the Orchestrator.
 
@@ -105,16 +108,17 @@ bugs. When it found something you get a little party, and every change has a rea
 
 Every role earns its level from verified outcomes only, never from vibes: a delegated job counts when its parent's
 work checks out, and the Sentinel, the one who judges, is judged by what happens next. Each card shows the level and a
-performance %.
+performance %. Reviews are cheap: free signals first, then a sample of finished runs reviewed together in one quiet
+session on the first idle moment of the night (or after you turn the PC back on), never shown on the Grindhouse.
 
 <p align="center"><img src="docs/screenshots/agent-levels.webp" alt="Agent cards for the Orchestrator, the Artisan and the Sentinel, each with its level, verified successes and performance percentage" width="720"></p>
 
 ### Emoji instead of essays
 
-Say "thanks" and you get a 👍 on your message, not a paragraph of pleasantries. Any agent with nothing to add reacts
-instead of replying, on every engine, so those tokens go to work instead.
+Say "thanks" and you get a 🙏, a 🎉 or a 🫡 on your message (whatever fits), not a paragraph of pleasantries. Any agent
+with nothing to add reacts instead of replying, on every engine, so those tokens go to work instead.
 
-<p align="center"><img src="docs/screenshots/reactions.webp" alt="A thanks to the Orchestrator answered with a thumbs-up reaction under the message" width="520"></p>
+<p align="center"><img src="docs/screenshots/reactions.webp" alt="A thanks to the Orchestrator answered with a 🙏 reaction under the message" width="520"></p>
 
 ### Talk to it
 
@@ -156,28 +160,41 @@ Notes, chats, agents and tools as a 3D map you can spin, glowing along the links
 
 <p align="center"><img src="docs/screenshots/brain-map.webp" alt="The 3D brain map: notes, chats, agents and tools linked, the live ones glowing" width="640"></p>
 
+### Trends: the numbers in one place
+
+**Trends** puts the statistics on one page with tabs: **Costs** (where the money went, which chat's context is getting
+heavy), **Quality** (with the classifiers), **Learning** and **Usage**. Usage counts which pages and actions you really
+open, on your PC only, so deciding what to keep rests on numbers, not guesses.
+
+<p align="center"><img src="docs/screenshots/trends.webp" alt="Trends, the Usage tab: the pages and actions opened in the last 14 days, most used first" width="640"></p>
+
 ### Classifiers: small decisions, zero tokens
 
-Not everything needs a model. Small sorters on your PC decide the kind of work, the model a chat runs on, how long and
-how much a job will probably take, and which mail the Orchestrator reads now or later. The Classifiers page shows each
-one as a card: how many decisions, how often it got them right, how many of those chats succeeded (only verified ones
-count), the last 8 weeks, and what you could change.
+Not everything needs a model. Small sorters on your PC decide the kind of work, how long and how much a job will
+probably take, and which mail the Orchestrator reads now or later; the model itself is simply the one on the agent's
+card. The Classifiers section of Quality shows each sorter as a card: how many decisions, how often it got them right,
+how many of those chats succeeded (only verified ones count), the last 8 weeks, and what you could change.
 
-<p align="center"><img src="docs/screenshots/classifiers.webp" alt="The Classifiers page: decisions made, verified outcomes, and the Kind of work and Model choice cards with their 8-week trend" width="640"></p>
+<p align="center"><img src="docs/screenshots/classifiers.webp" alt="The Classifiers section: decisions made, verified outcomes, and the Kind of work card with its 8-week trend" width="640"></p>
 
 ### Learn what your agents built
 
-The agents wrote the code; now you want to understand it. **Learn** takes one of your PRs, a technical concept or a
-text you paste, and explains it piece by piece on a blackboard whose diagram grows as you go, out loud if you like.
-"Explain it better", "Give me an example" or "Show me the code" when you're lost; a quick check to see if it stuck; at
-the end you explain it back. Every lesson is saved and reopens where you left it.
+The agents wrote the code; now you want to understand it. **Learn** has one field: paste a PR link, a concept or a long
+text, drop in files or folders, and it explains it piece by piece on a blackboard: flowcharts, sequence and state
+diagrams, timelines, mind maps, highlighted code, formulas and charts that grow as you go, out loud if you like. Your
+files can drive a web search for the public standards and libraries they use (only filtered public terms leave your PC,
+shown as chips). "Explain it better", "Give me an example" or "Show me the code" when you're lost; quizzes of several
+kinds (choice, true or false, complete the code, put in order) to see if it stuck; a score that tells you honestly what
+you still remember; at the end you explain it back. A quality check rewrites weak pieces before you see them, and every
+lesson is saved and reopens where you left it.
 
 <p align="center"><img src="docs/screenshots/learn.webp" alt="A Learn lesson about a PR: the blackboard diagram, piece 2 of 3, and the buttons Got it, Explain it better, Give me an example, Show me the code" width="640"></p>
 
 ### Nothing happens off the record
 
 The **Log** shows everything the app did, live: who chose whom, what it cost, which answer was a duplicate. **Costs**
-tells you where the money went and which chat's context is getting heavy. Both read local data and spend zero tokens.
+in Trends tells you where the money went and which chat's context is getting heavy. Both read local data and spend
+zero tokens.
 
 <p align="center">
   <img src="docs/screenshots/log.webp" alt="The Log page: today's events, tasks, flags and the chain of a delegated task" width="420">
@@ -201,7 +218,13 @@ the Orchestrator to explain it your way.
   verdict after.
 - **A browser of your own.** The Browser page is your everyday browser, with bookmarks, sessions and passwords the
   agents never see; lend them one tab when you want.
-- **Connectors.** MCP servers in Settings, switched on per role.
+- **Settings that find themselves.** One page with a section list, search that highlights the matching row, instant
+  save with Undo.
+- **Connectors in one paste.** Paste a README's JSON, a command line or a URL and the MCP server is ready; switch it on
+  per role. The Orchestrator can set one up for you too.
+- **Tasks.** The Task page lists your Azure DevOps work items and PRs, with builds, votes and QA results.
+- **Copy any file.** The copy icon in the file viewer puts the file on the clipboard: its text, the image, or the file
+  itself.
 - **A brain in plain Markdown.** Notes, rules, skills and scripts live in a folder you own, readable without the app.
 - **Your own logins.** It drives the official CLIs with your account and never touches their settings. The UI speaks
   Italian, English and German.

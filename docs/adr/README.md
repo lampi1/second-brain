@@ -206,3 +206,13 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0198](0198-developer-speed-typecheck-e2e-baseline-agents-map.md) Developer speed: TypeScript 7 typecheck, an e2e baseline of known reds, AGENTS.md as a map — accepted
 - [0199](0199-agent-runs-in-sqlite.md) The agent runs move from agent-runs.json to SQLite (userData/app.db) — accepted
 - [0200](0200-split-the-shared-files-by-area.md) Split the four shared files by area; ChatManager as a chain of layer classes — accepted
+- [0201](0201-cuts-battito-compare-cloud-suggest-veloce.md) Cuts: Battito, model comparison, cloud agents, the composer's model suggestions, Veloce — accepted
+- [0202](0202-andamento-and-usage-counter.md) «Andamento»: the four statistics pages in one, and a local usage counter — accepted
+- [0203](0203-nightly-sampled-reviews.md) Agent levels: a nightly sample of reviews under a daily cap — accepted
+- [0204](0204-impara-one-field-quiz-kinds-and-score.md) Impara: one start field, more question kinds with instant feedback, an honest score — accepted
+- [0205](0205-impara-studio-visuals-and-quality.md) Impara: the «Studio» column, a visual for each piece, and a quality gate — accepted
+- [0206](0206-impara-file-driven-web-research.md) Impara: web research driven by the user's files, through a deterministic filter — accepted
+- [0207](0207-settings-redesign-and-easy-mcp.md) Settings redesign, MCP servers in one paste, the Orchestrator configures everything — accepted
+- [0208](0208-docs-keep-up-with-the-code.md) Docs keep up with the code: tool catalog, Guida coverage, README freshness — accepted
+- [0209](0209-strategist-asks-more-and-varied-reactions.md) The Strategist asks at least three questions; reactions fit the message; Flash writes the brief — accepted
+- [0210](0210-remove-model-routing.md) Remove the model-routing classifier: every agent runs on its own card's model — accepted

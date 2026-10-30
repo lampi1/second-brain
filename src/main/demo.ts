@@ -900,7 +900,9 @@ async function orchestratorReply(run: Run, text: string, d: DemoChats): Promise<
     return;
   }
   // a thanks or an ok needs no answer: one emoji, shown as a reaction (shared/reaction.ts)
-  if (/^(grazie|ok|perfetto|ottimo|thanks)\b[\s!.]*$/i.test(text.trim())) { await run.say('👍'); return; }
+  // a reaction that fits, not always 👍 (ADR 0209)
+  const thanks = /^(grazie|ok|perfetto|ottimo|thanks)\b[\s!.]*$/i.exec(text.trim());
+  if (thanks) { await run.say(/^(ok)$/i.test(thanks[1]!) ? '👌' : /^(perfetto|ottimo)$/i.test(thanks[1]!) ? '🎉' : '🙏'); return; }
   const all = d.list().filter(c => !c.isOrchestrator);
   const waiting = all.filter(c => c.state === 'waiting' || c.pending > 0).map(c => c.title);
   const working = all.filter(c => c.state === 'running' || c.state === 'starting').map(c => c.title);
