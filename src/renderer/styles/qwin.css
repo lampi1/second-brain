@@ -35,7 +35,7 @@
 }
 .qwin-rail-item > svg, .qwin-rail-item > .harness-mark, .qwin-rail-item > :first-child { flex: none; margin-top: 2px; }
 .qwin-rail-item:hover { background: var(--surface-3); }
-.qwin-rail-item:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-glow); }
+.qwin-rail-item:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
 .qwin-rail-item.cur { background: var(--surface); border-color: var(--border-2); color: var(--text); cursor: default; box-shadow: inset 3px 0 0 var(--amber); }
 .qwin-rail-t { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .qwin-rail-t b { font-size: var(--fs-m); font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -122,8 +122,8 @@
 }
 .wq-opt:hover:not(:disabled) { background: var(--surface-3); border-color: var(--border-3); }
 .wq-opt.rec:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 14%, var(--surface-2)); border-color: var(--blue); }
-.wq-opt:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-glow); }
-.wq:focus .wq-opt.cur, .wq:focus-visible .wq-opt.cur { box-shadow: 0 0 0 3px var(--focus-glow); }
+.wq-opt:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
+.wq:focus .wq-opt.cur, .wq:focus-visible .wq-opt.cur { box-shadow: 0 0 0 2px var(--focus-ring); }
 .wq-key {
   flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; margin-top: -2px;
   font: 600 13px/1 var(--mono); color: var(--text-2); background: var(--surface-3); border: 1px solid var(--border-3); border-bottom-width: 2px;
@@ -169,7 +169,7 @@
   background: var(--surface-3); overflow: hidden; cursor: zoom-in; transition: border-color var(--dur-fast);
 }
 .ask-imgs-l .ask-img-open { height: 132px; }
-.ask-img-open:hover, .ask-img-open:focus-visible { border-color: var(--blue); outline: none; box-shadow: 0 0 0 3px var(--focus-glow); }
+.ask-img-open:hover, .ask-img-open:focus-visible { border-color: var(--blue); outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
 .ask-img-open img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
 .ask-img-wait { display: block; width: 100%; height: 100%; background: linear-gradient(90deg, var(--surface-3), var(--surface-4), var(--surface-3)); background-size: 200% 100%; animation: shimmer 1.2s linear infinite; }
 .ask-img figcaption { font-size: var(--fs-s); line-height: 1.35; color: var(--text-2); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
@@ -193,7 +193,7 @@
 .ask-img-cap { font-size: var(--fs-m); font-weight: 600; color: var(--text); }
 .img-viewer-nav { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: var(--r-s); border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text); cursor: pointer; }
 .img-viewer-nav:hover { background: var(--surface-3); }
-.img-viewer-nav:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-glow); }
+.img-viewer-nav:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
 
 /* the choice cards (genui/ChoiceCard.tsx) in the window: the window's type scale, descriptions on --text-2 */
 .wq .gu-choice-copy strong { font-size: var(--fs-l); }

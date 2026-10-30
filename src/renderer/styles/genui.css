@@ -9,7 +9,7 @@
 .gu-from { color: var(--violet); background: var(--violet-bg); }
 .gu-btn { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border: 0; border-radius: var(--r-xs); background: none; color: var(--text-3); cursor: pointer; }
 .gu-btn:hover { background: var(--surface-3); color: var(--text); }
-.gu-btn:focus-visible, .gu-link:focus-visible, .gu-path:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-glow); }
+.gu-btn:focus-visible, .gu-link:focus-visible, .gu-path:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
 .gu-sum { margin: 2px 10px 6px; font-size: 12.5px; color: var(--text-2); line-height: 1.4; }
 .gu-body { position: relative; max-height: 280px; overflow: hidden; padding: 0 10px 10px; cursor: zoom-in; }
 .gu-body::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 28px; background: linear-gradient(transparent, var(--surface-2)); pointer-events: none; }
@@ -112,7 +112,7 @@
 .peek-note { font-size: 12px; color: var(--text-3); } .peek-note.warn { color: var(--amber); }
 .peek-acts { display: flex; flex-wrap: wrap; gap: 4px; padding-top: 6px; border-top: 1px solid var(--border); }
 .peek-act { display: inline-flex; align-items: center; gap: 5px; padding: 3px 8px; border: 1px solid var(--border-2); border-radius: var(--r-xs); background: var(--surface-2); color: var(--text); font: inherit; font-size: 12px; cursor: pointer; }
-.peek-act:hover, .peek-act:focus-visible { background: var(--surface-3); outline: none; box-shadow: 0 0 0 3px var(--focus-glow); }
+.peek-act:hover, .peek-act:focus-visible { background: var(--surface-3); outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
 
 /* Product hierarchy shared by light/dark themes. Keep all meaning in words as well as colour. */
 .gu-art { border-radius: 12px; }
@@ -203,7 +203,7 @@
 .gu-yn:hover:has(> .gu-yn-answer:not(:disabled)) { border-color: color-mix(in srgb, var(--yn) 70%, var(--border-2)); background: var(--surface-2); }
 /* the keyboard's place: a focus ring, also on the recommended tile it starts on */
 .gu-yn.cur { border-color: color-mix(in srgb, var(--yn) 70%, var(--border-2)); }
-:focus-visible > .gu-yn.cur, .wq:focus .gu-yn.cur, .need-card:focus .gu-yn.cur, .decision:focus .gu-yn.cur, .ask:focus .gu-yn.cur { box-shadow: 0 0 0 3px var(--focus-glow); }
+:focus-visible > .gu-yn.cur, .wq:focus .gu-yn.cur, .need-card:focus .gu-yn.cur, .decision:focus .gu-yn.cur, .ask:focus .gu-yn.cur { box-shadow: 0 0 0 2px var(--focus-ring); }
 .gu-yn-answer { position: relative; min-height: 84px; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 12px 10px 10px; text-align: center; border-radius: 12px; }
 .gu-yn-answer:hover:not(:disabled) { background: transparent; }
 .gu-yn-answer:focus-visible { outline-offset: 2px; border-radius: 12px; }

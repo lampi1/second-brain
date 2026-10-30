@@ -15,7 +15,7 @@
 }
 .cb-btn:hover:not(:disabled) { background: var(--surface-3); color: var(--text); }
 .cb-btn:disabled { opacity: 0.55; cursor: default; }
-.cb-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-glow); }
+.cb-btn:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
 .cb-run-btn { color: var(--blue); border-color: var(--blue-line); background: var(--blue-bg); }
 .cb-run-btn:hover:not(:disabled) { background: color-mix(in srgb, var(--blue) 18%, transparent); color: var(--blue); }
 .cb-run-btn.armed { color: var(--red); border-color: color-mix(in srgb, var(--red) 55%, transparent); background: var(--red-bg); }

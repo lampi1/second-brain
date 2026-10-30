@@ -46,7 +46,7 @@
   box-shadow: var(--shadow-pop); cursor: pointer; animation: dockIn var(--dur-slow) var(--ease);
 }
 .orchestrator-dock-bar:hover { background: var(--orchestrator-surface); }
-.orchestrator-dock-bar:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-glow); }
+.orchestrator-dock-bar:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
 .orchestrator-dock-bar.waits { border-color: var(--amber-line); }
 .orchestrator-dock-bar > svg:last-child { color: var(--text-3); }
 .orchestrator-unread { height: 18px; padding: 0 7px; border-radius: 99px; background: var(--violet-bg); color: var(--violet); font-size: 11px; font-weight: 600; display: inline-grid; place-items: center; white-space: nowrap; }

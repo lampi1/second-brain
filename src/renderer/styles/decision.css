@@ -65,7 +65,7 @@ span.dc-file { color: var(--text); cursor: default; }
 .dc-answer.rec { border-color: color-mix(in srgb, var(--yn) 60%, var(--border-2)); }
 .dc-answer.rec .dc-answer-icon { color: var(--surface); background: var(--yn); }
 .dc-answer:hover:not(:disabled) { border-color: color-mix(in srgb, var(--yn) 70%, var(--border-2)); background: var(--surface-2); }
-.dc-answer:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-glow); }
+.dc-answer:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
 .dc-answer:disabled { cursor: default; opacity: .55; }
 .dc-rec { font-size: 11px; padding: 1px 7px; border-radius: 999px; color: var(--text-2); background: var(--surface-3); }
 .dc-key { position: absolute; left: 9px; top: 50%; translate: 0 -50%; display: grid; place-items: center; min-width: 20px; height: 20px; padding: 0 4px; border-radius: 5px;
@@ -79,7 +79,7 @@ span.dc-file { color: var(--text); cursor: default; }
 .dc-write-open .dc-key { left: 9px; }
 .dc-write-open svg { flex: none; }
 .dc-write-open:hover:not(:disabled) { border-color: var(--blue); color: var(--text); }
-.dc-write-open:focus-visible, .dc-skip:focus-visible, .dc-later:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-glow); }
+.dc-write-open:focus-visible, .dc-skip:focus-visible, .dc-later:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus-ring); }
 .dc-skip, .dc-later { padding: 6px 10px; border: 0; border-radius: 8px; background: none; color: var(--text-2); font: inherit; font-size: 13px; cursor: pointer; white-space: nowrap; }
 .dc-skip:hover:not(:disabled), .dc-later:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
 .dc-later { display: inline-flex; align-items: center; gap: 6px; }
