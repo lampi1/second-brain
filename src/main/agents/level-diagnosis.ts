@@ -12,7 +12,7 @@ import type { RunTally } from './run-metrics';
 import { runReceiptVerdict } from './receipts';
 import { readFlashLog, settleDue, type FlashLog } from './flash-outcomes';
 import { FLASH_XP } from './xp';
-import { chainBlock, counts, decisionSignals, decisionXp, earnIndex, earnedVerdict, gradableReview, orchestratorDecision, runXp, standings, unrated, type EarnIndex } from './standing';
+import { chainBlock, counts, decisionSignals, decisionXp, earnIndex, earnedVerdict, gradableBatch, gradableReview, orchestratorDecision, runXp, standings, unrated, type EarnIndex } from './standing';
 import { samplerOffLine, type SamplerState } from '../../shared/judging';
 
 /** Why a counted run earned no XP. */
@@ -44,6 +44,7 @@ export function noXpReason(r: AgentRun, ix: EarnIndex): NoXpReason {
   if (e) return e.verdict === 'partial' ? 'verified-partial' : 'verified-fail';
   if (r.endReason !== 'completed') return 'not-completed';
   if (r.reviewOf && (r.agentId === 'sentinel' || r.agentId === 'judge')) return gradableReview(r) ? 'review-not-graded-yet' : 'review-unverified';
+  if (r.reviewBatch) return gradableBatch(r) ? 'review-not-graded-yet' : 'review-unverified';
   if (r.parentRunId) { const b = chainBlock(r, ix); return b ? `chain:${b}` : 'parent-unverified'; }
   const rc = r.receipts ? runReceiptVerdict(r) : null;
   if (rc && r.outcome?.basis !== 'orchestrator-opinion') return `receipts:${rc.result === 'pass' ? 'pass-but-report-not-done' : rc.reason}`;

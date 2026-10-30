@@ -25,7 +25,7 @@ describe('parseStudio', () => {
     expect(g).toEqual({ kind: 'glossary', terms: [{ term: 'Alfa', meaning: 'a', cites: [] }, { term: 'Zeta', meaning: 'z', cites: ['f1'] }] });
     expect(() => parseStudio('summary', { summary: 'corto' }, FACTS)).toThrow();
   });
-  it('flashcards go to the review as recall cards citing a verified fact; a quiz mixes kinds, true/false as a choice of two', () => {
+  it('flashcards go to the review as recall cards citing a verified fact; a quiz mixes kinds, true/false among them', () => {
     const fc = parseStudio('flashcards', { cards: [{ q: 'Perché A?', answer: 'Perché B.', cites: ['f1'] }, { q: 'Perché C?', answer: 'D.', cites: ['f2'] }, { q: 'Senza fonte?', answer: 'E.', cites: ['f9'] }] }, FACTS);
     expect(fc.out).toEqual({ kind: 'flashcards', n: 2, cards: [{ q: 'Perché A?', answer: 'Perché B.' }, { q: 'Perché C?', answer: 'D.' }] });
     expect(fc.cards?.every(c => c.kind === 'recall')).toBe(true);
@@ -37,7 +37,7 @@ describe('parseStudio', () => {
       { kind: 'node', q: 'Q5?', node: 'nope', answer: 'a', cites: ['f1'] },
     ] }, FACTS, ['store']).out;
     expect(quiz.kind).toBe('quiz');
-    expect(quiz.kind === 'quiz' && quiz.qs.map(q => q.kind)).toEqual(['choice', 'choice', 'recall', 'node']);
+    expect(quiz.kind === 'quiz' && quiz.qs.map(q => q.kind)).toEqual(['choice', 'truefalse', 'recall', 'node']);
     expect(() => parseStudio('quiz', { cards: [{ kind: 'recall', q: 'Q?', answer: 'a', cites: ['f1'] }] }, FACTS)).toThrow(/poche/);
   });
   it('a podcast: two voices, short lines, at least four', () => {
@@ -61,6 +61,9 @@ describe('the quality gate', () => {
     expect(checkIssues({ q: 'Cosa succede se il timer torna a 100 ms?', options: ['a', 'b', 'c'], correct: 0 })).toEqual([]);
     expect(checkIssues({ q: 'Cosa succede se il timer torna a 100 ms?', options: ['a', 'b'], correct: 0 })).toEqual(['questions']);
     expect(checkIssues({ q: 'Vero?', options: ['a', 'b', 'c'], correct: 0 })).toEqual(['questions']);
+    // a true/false has two options by design, an order question none
+    expect(checkIssues({ kind: 'truefalse', q: 'Con la finestra nascosta lo store aspetta 16 ms.', options: ['Vero', 'Falso'], correct: 1 })).toEqual([]);
+    expect(checkIssues({ kind: 'order', q: 'In che ordine nasce una lezione?', options: [], correct: 0 })).toEqual([]);
     expect(checkIssues({ q: 'Cosa succede se il timer torna a 100 ms?', options: ['Il testo torna a scatti perché una delle due attese torna lunga', 'No', 'Sì'], correct: 0 })).toEqual(['questions']);
   });
   it('reads the gate\'s verdicts: pass, fails with known rules only, a rewrite', () => {

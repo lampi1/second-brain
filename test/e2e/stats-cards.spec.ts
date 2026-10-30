@@ -79,7 +79,7 @@ async function errors(page: Page, scheme: string): Promise<void> {
   await shot(page, `stats-errors-groups-${scheme}`);
   // costs live only under Andamento → Costi (#125): no role, current or retired, on that page
   await goPage(page, 'costi');
-  const costi = page.getByTestId('brain-page-costi');
+  const costi = page.getByTestId('an-panel-costi');
   await expect(costi.getByTestId('bx-cost-kpis')).toBeVisible();
   await expect(costi.getByTestId('bx-agent-analytics')).toHaveCount(0);
   await expect(costi).not.toContainText(/Router|Judge|Scribe|Equivalente di listino|Tempi osservati/);

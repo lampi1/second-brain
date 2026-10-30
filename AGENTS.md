@@ -33,7 +33,7 @@ release vs. anything run from this repo. The rest: `docs/agents/glossary.md`.
 | Run as an agent (always) | `SB_HIDDEN=1 npm run dev` (off screen, never takes focus); look with `app_screenshot` |
 | Typecheck | `npm run typecheck` (TypeScript 7 native, ~4 s) · `npm run typecheck:ts6` (the one eslint uses) |
 | Lint | `npm run lint` |
-| Light check (branches) | `npm run check:branch`: typecheck, lint + related unit tests + guard on changed files; no e2e |
+| Light check (branches) | `npm run check:branch`: typecheck, lint + related unit tests + guard on changed files + doc freshness; no e2e |
 | All checks (main only) | `npm run check`: + full unit + e2e; e2e read against `test/e2e/known-red.json` |
 | Unit · e2e | `npm test` · `npm run test:e2e` · `node scripts/e2e.mjs <specs>` (never on branches) |
 | e2e baseline | `node scripts/e2e-baseline.mjs [--update]` (main, after a full run) |
@@ -69,7 +69,10 @@ One line each; the full text, its exceptions and ADRs: the same number in `docs/
 10. **Every file starts with a header comment** (what, why, who uses it); decisions go to `docs/adr/`.
 11. **Parallel agents**: one worktree and one module each; shared files only by the integrator.
 12. **Orchestrator capability contract**: every user-facing feature reachable through the live `app_guide`.
+13. **Docs keep up with the code**: new tools, pages and screens update the tool catalog, the Guida and the English
+    README with fresh screenshots in the same change; `check:branch` fails otherwise.
 
 Enforced by lints, each failing with its fix: file header (`sb/file-header`), file size over 800 lines
 (`sb/max-lines`, a warning), `log.error` with `cause` + `hint` (typed), process boundaries (`no-restricted-imports`),
-e2e «nuovi rossi» (`npm run check`). Table: `docs/agents/rules.md#enforced-by-lints`.
+e2e «nuovi rossi» (`npm run check`), doc freshness (`check:branch`: tool catalog, Guida coverage, README). Table:
+`docs/agents/rules.md#enforced-by-lints`.

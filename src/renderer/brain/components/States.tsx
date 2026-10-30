@@ -55,13 +55,16 @@ export function Async({ loading, error, onRetry, label, children, lines, block }
 
 /** Page head: title, the key fact in one line (bold), what the page is in small (with «Come funziona →» to its Guida
  *  card when `guide` names one, ADR 0101), last update and refresh. */
+/** The page head. Without `title` it is a tab's toolbar (Andamento, ADR 0202): the explain line on the left, the meta,
+ *  actions and refresh on the right, no lead (the page's title is above the tabs; a lead would repeat the numbers). */
 export function PageHead({ title, lead, what, at, refreshing, onRefresh, actions, live, guide }: {
-  title: string; lead?: ReactNode; what?: ReactNode; at?: number | null; refreshing?: boolean; onRefresh?: () => void; actions?: ReactNode; live?: boolean; guide?: string;
+  title?: string; lead?: ReactNode; what?: ReactNode; at?: number | null; refreshing?: boolean; onRefresh?: () => void; actions?: ReactNode; live?: boolean; guide?: string;
 }) {
+  const explain = (what || guide) ? <p className="bx-what">{what}{guide && <> <GuideLink concept={guide} /></>}</p> : null;
   return (
-    <header className="bx-head">
+    <header className={title ? 'bx-head' : 'bx-head bx-head-bar'} data-testid={title ? undefined : 'bx-tab-head'}>
       <div className="bx-head-row">
-        <h1>{title}</h1>
+        {title ? <h1>{title}</h1> : explain}
         <span className="sp" />
         <div className="bx-meta">
           {live && <span className="bx-live" aria-hidden="true" />}
@@ -70,8 +73,8 @@ export function PageHead({ title, lead, what, at, refreshing, onRefresh, actions
           {onRefresh && <button type="button" className="bx-btn s" onClick={onRefresh} title={t('costs.refreshHint')} data-testid="bx-refresh"><IconRefresh /> {t('costs.refresh')}</button>}
         </div>
       </div>
-      {lead && <p className="bx-lead" data-testid="bx-lead">{lead}</p>}
-      {(what || guide) && <p className="bx-what">{what}{guide && <> <GuideLink concept={guide} /></>}</p>}
+      {title && lead && <p className="bx-lead" data-testid="bx-lead">{lead}</p>}
+      {title && explain}
     </header>
   );
 }

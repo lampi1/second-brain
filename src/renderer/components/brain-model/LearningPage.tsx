@@ -1,16 +1,17 @@
-// «Apprendimento» (a tab of Memoria since ADR 0122, G J; ADR 0109, move 12 of the 2026-10-20 analysis): whether what the app changed by itself
+// «Apprendimento» (a tab of Andamento since ADR 0202, before of Memoria (ADR 0122), G J; ADR 0109, move 12 of the 2026-10-20 analysis): whether what the app changed by itself
 // in the brain really helped. Top: the counter (beneficio provato · senza effetto · in raccolta · peggiora · annullati),
 // each tile a filter of the list. Then the changes that made things worse, each with its Annulla (never undone silently).
 // Then per role the corrections per run of the last 12 weeks, with the changes measured on its runs as vertical marks in
 // their verdict's color: the real progress, without levels. Then the agents' lessons of the same weeks, a count with
 // no causal claim (ADR 0186: their evidence is never causal, and they are few). Then every change with its hypothesis, scope and numbers
 // (MaintenancePanel Change), and how to read it all. Zero tokens: data from BrainModelState.changes[].claim and
-// .learning. Rendered by MemoryPage.tsx for the «Apprendimento» tab; styles: styles/learning.css.
+// .learning. The counter is the list's only filter (its numbers are not repeated on chips above the list, ADR 0202).
+// Rendered by components/andamento/AndamentoPage.tsx for the «Apprendimento» tab; styles: styles/learning.css.
 import { useId, useState, type CSSProperties } from 'react';
 import type { BrainChange, ClaimVerdict, LearningLessons, LearningRole, LearningState } from '@shared/brain-model';
 import { locale, t } from '../../i18n';
 import { useBrainModel } from '../../store/brain-model';
-import { HubIntro } from './HubIntro';
+import { PageHead } from '../../brain/components/States';
 import { curve, num, VERDICTS, verdictTone } from '../../lib/learning-view';
 import { HelpTip } from '../HelpTip';
 import { Change } from './MaintenancePanel';
@@ -100,7 +101,7 @@ export function LearningPage() {
   const worse = changes.filter(c => c.claim!.verdict === 'peggiora');
   const listed = filter ? changes.filter(c => c.claim!.verdict === filter) : changes;
   return <div className="bm-page agent-overview lr-page" data-testid="learning-page">
-    <HubIntro lead={t('learn.lead')} />
+    <PageHead what={t('learn.lead')} />
     {error && <p role="alert">{error}</p>}
     {state && !state.root ? <p className="bm-empty">{t('bm.noBrain')}</p> : state && !learning ? <p className="bm-empty" data-testid="lr-unavailable">{t('learn.unavailable')}</p> : learning && <>
       <Counter counts={learning.counts} filter={filter} onFilter={v => { setFilter(v); setLimit(20); }} />
@@ -112,10 +113,10 @@ export function LearningPage() {
       {learning.lessons && <Lessons l={learning.lessons} />}
       <section className="bm-section" aria-labelledby="lr-changes-h" data-testid="lr-changes">
         <header><div><h3 id="lr-changes-h">{t('learn.changes')}</h3><p>{t('learn.changesLead')}</p></div>
-          <div className="lr-chips" role="group" aria-label={t('learn.filterLabel')}>
-            <button type="button" className="lr-chip" aria-pressed={!filter} onClick={() => setFilter(null)}>{t('learn.filterAll')} {changes.length}</button>
-            {VERDICTS.filter(v => learning.counts[v]).map(v => <button key={v} type="button" className="lr-chip" data-tone={verdictTone(v)} aria-pressed={filter === v} onClick={() => setFilter(filter === v ? null : v)}>{t(`learn.v.${v}`)} {learning.counts[v]}</button>)}
-          </div>
+          {filter && <div className="lr-chips">
+            <span className="lr-chip" data-tone={verdictTone(filter)} aria-pressed="true" data-testid="lr-filter-on">{t(`learn.v.${filter}`)}</span>
+            <button type="button" className="link-btn" onClick={() => setFilter(null)} data-testid="lr-filter-clear">{t('learn.filterAll')}</button>
+          </div>}
         </header>
         {listed.length ? <ul className="bm-changes">{listed.slice(0, limit).map(c => <Change key={c.id} c={c} busy={busy} />)}</ul>
           : <p className="bm-empty">{changes.length ? t('learn.changesNone') : t('learn.changesEmpty')}</p>}

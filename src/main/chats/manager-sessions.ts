@@ -25,6 +25,7 @@ import { initialEffort } from './effort';
 import type { Rec } from './manager-types';
 import { PREWARM_UNUSED_MS, workBehind, subagentGateFor } from './manager-helpers';
 import { ManagerPersistence } from './manager-persistence';
+import { FLASH_MCP_ROLE } from '../../shared/mcp-servers';
 
 /** Engine sessions: start, launch options, warm engines, the kill on quit, the per-chat MCP and tool visibility. */
 export abstract class ManagerSessions extends ManagerPersistence {
@@ -251,6 +252,8 @@ export abstract class ManagerSessions extends ManagerPersistence {
       if (warm?.view && (this.warmChat === chatId || this.warm.has(chatId))) return { roles: [warm.view.role, ...(warm.view.child?.ancestors ?? [])], policy: { tools: warm.toolPolicy ?? null, ceiling: warm.ceiling ?? null } };
       return this.warmChat === chatId || this.warm.has(chatId) ? { roles: [null], policy: null } : null;
     }
+    // Flash (a quick chat): its own MCP access, the servers the user turned on for it, reading tools only (ADR 0207)
+    if (r.s.quick) return { roles: [FLASH_MCP_ROLE], policy: null };
     const policy = r.policy ?? null, own = r.s.agent?.source === 'catalog' ? r.s.agent.id : null;
     if (!r.s.parentId) return { roles: [own], policy };
     // a child is bounded by its ancestors' roles: the chain frozen at its creation, else (saved before it existed) the

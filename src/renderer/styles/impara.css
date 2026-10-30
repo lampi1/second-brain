@@ -38,21 +38,10 @@
   background:radial-gradient(1200px 300px at 10% -40%,color-mix(in srgb,var(--blue) 22%,transparent),transparent 60%),radial-gradient(600px 240px at 100% 120%,color-mix(in srgb,var(--green) 10%,transparent),transparent 60%),var(--surface)}
 .ip-hero h1{margin:4px 0 0;font-family:var(--font-display);font-size:26px;font-weight:650;letter-spacing:-.01em}
 .ip-lead{margin:6px 0 0;color:var(--text-3);font-size:13.5px;max-width:760px;line-height:1.5}
-.ip-ask{margin-top:16px;display:flex;gap:10px;align-items:center;background:var(--bg);border:1px solid var(--border-3);border-radius:12px;padding:8px 8px 8px 14px;color:var(--text-3);transition:border-color var(--dur)}
-.ip-ask:focus-within{border-color:var(--blue-line)}
-.ip-ask input{flex:1;min-width:0;background:none;border:0;color:var(--text);font:15px var(--font);outline:none}
-.ip-ask .btn{padding-inline:14px}
 .ip-chips{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .ip-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-3);border-radius:999px;padding:5px 12px;color:var(--text-2);font:inherit;font-size:12.5px;background:var(--surface-2);cursor:pointer;transition:border-color var(--dur-fast),background var(--dur-fast)}
 .ip-chip:hover{border-color:var(--text-4)}
 .ip-chip.on{border-color:var(--blue-line);background:var(--blue-bg);color:var(--text)}
-.ip-source{display:flex;align-items:center;gap:10px;margin-top:10px}
-.ip-source input{flex:0 1 520px;background:var(--bg);border:1px solid var(--border-2);border-radius:9px;padding:7px 10px;color:var(--text);font:13px var(--font);outline:none}
-.ip-source input:focus{border-color:var(--blue-line)}
-.ip-source-text{display:block;width:100%;margin-top:10px;background:var(--bg);border:1px solid var(--border-2);border-radius:10px;padding:10px 12px;color:var(--text);font:13px/1.5 var(--font);resize:vertical;outline:none}
-.ip-source-text:focus{border-color:var(--blue-line)}
-.ip-opts{display:flex;align-items:center;gap:18px;margin-top:16px;flex-wrap:wrap}
-.ip-opts .sp{flex:1}
 .ip-seg{display:inline-flex;gap:3px;padding:3px;border-radius:10px;background:var(--bg);border:1px solid var(--border-2)}
 .ip-seg button{border:0;background:none;color:var(--text-3);font:inherit;font-size:12px;padding:4px 10px;border-radius:7px;cursor:pointer;white-space:nowrap}
 .ip-seg button.on{background:var(--surface-3);color:var(--text)}
@@ -228,7 +217,7 @@
 .ip-end-ask,.ip-end-sum{border:1px solid var(--border-2);border-radius:14px;background:var(--surface);padding:16px 18px;display:flex;flex-direction:column;gap:10px}
 .ip-end-ask h3{margin:0;font-size:16px;font-weight:650;line-height:1.4}
 .ip-end-ask textarea{width:100%;background:var(--bg);border:1px solid var(--border-3);border-radius:10px;padding:10px 12px;color:var(--text);font:13.5px/1.55 var(--font);resize:vertical;outline:none}
-.ip-end-ask textarea:focus{border-color:var(--blue-line)}
+.ip-end-ask textarea:focus{outline:none;border-color:var(--blue-line);box-shadow:0 0 0 3px var(--focus-glow)}
 .ip-end-ask .sp{flex:1}
 .ip-end-ask .ip-muted{font-size:12px}
 .ip-mine{margin:0;padding:10px 14px;border-radius:10px;background:var(--surface-2);color:var(--text-2);font-style:italic;line-height:1.55}
@@ -322,13 +311,7 @@
 .ip-clarify-in{background:var(--bg);border:1px solid var(--blue-line);border-radius:9px;padding:7px 10px;color:var(--text);font:13px var(--font);outline:none}
 .ip-preparing{max-width:620px}
 
-/* «Chi spiega» */
-.ip-opts-2{margin-top:10px}
-.ip-teacher{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
-.ip-teacher-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border-3);border-radius:999px;padding:4px 11px;background:var(--surface-2);color:var(--text);font:inherit;font-size:12.5px;cursor:pointer}
-.ip-teacher-chip:hover{border-color:var(--text-4)}
 .ip-caret{color:var(--text-3);font-size:10px}
-.ip-teacher-web{font-size:12px}
 
 /* a piece's sources */
 .ip-cites{margin-top:10px}
@@ -381,6 +364,24 @@ button.ip-verified:hover{text-decoration:underline}
 .ip-srcs-line{grid-column:2;justify-self:start}
 .ip-srcs-used{grid-column:2;display:flex;align-items:center;gap:4px;flex-wrap:wrap;color:var(--text-3);font-size:11.5px}
 .ip-srcs-material{font-size:12.5px;overflow-wrap:anywhere}
+.ip-fact-why{grid-column:2;color:var(--blue);font-size:11.5px}
+/* the public topics from the user's files (ADR 0206, ImparaPrep.tsx): what goes to the web, ✕ to drop, a countdown */
+.ip-topics{position:relative;overflow:hidden;align-self:stretch;text-align:left;display:flex;flex-direction:column;gap:10px;padding:12px 14px 12px;border:1px solid var(--border-2);border-radius:14px;background:var(--bg);animation:ipIn .35s var(--ease) both}
+.ip-topics.wait{border-color:var(--blue-line);background:linear-gradient(180deg,var(--blue-bg),var(--bg) 85%)}
+.ip-topics-head{display:flex;align-items:center;gap:8px;min-height:26px;color:var(--blue)}
+.ip-topics-title{font-size:12.5px;font-weight:600;color:var(--text)}
+.ip-topics-status{flex:1;display:inline-flex;align-items:center;gap:5px;color:var(--text-3);font-size:12px;font-variant-numeric:tabular-nums}
+.ip-topics-bar{position:absolute;left:0;top:0;height:2px;width:100%;background:var(--blue);transform-origin:left;animation:ipTopicsBar linear forwards}
+@keyframes ipTopicsBar{from{transform:scaleX(1)}to{transform:scaleX(0)}}
+.ip-topics-list{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
+.ip-topic{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:4px 6px 4px 11px;border:1px solid var(--border-3);border-radius:999px;background:var(--surface);color:var(--text);font-size:12.5px;line-height:1.3}
+.ip-topics:not(.wait) .ip-topic{padding-right:11px;color:var(--text-2)}
+.ip-topic-q{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ip-topic-x{display:inline-grid;place-items:center;width:18px;height:18px;flex:none;padding:0;border:0;border-radius:50%;background:none;color:var(--text-3);cursor:pointer;transition:background var(--dur-fast),color var(--dur-fast)}
+.ip-topic-x:hover{background:var(--surface-3,var(--border-2));color:var(--text)}
+.ip-topic-x:focus-visible{outline: 2px solid var(--focus);outline-offset:1px}
+.ip-topics-note{margin:0;color:var(--text-3);font-size:11.5px}
+@media (prefers-reduced-motion:reduce){.ip-topics,.ip-topics-bar{animation:none}}
 .ip-prep-srcs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:center;max-width:620px;margin:4px auto 0;font-size:12px}
 @media (prefers-reduced-motion:reduce){.ip-srcs,.ip-srcs-scrim{animation:none}}
 
@@ -405,7 +406,7 @@ button.ip-verified:hover{text-decoration:underline}
 .ip-subject:hover{color:var(--text);border-color:var(--blue-line)}
 .ip-subject-new{display:flex;gap:6px;padding:6px 8px 4px}
 .ip-subject-new input{flex:1;min-width:0;padding:5px 8px;border:1px solid var(--border-3);border-radius:8px;background:var(--bg);color:var(--text);font:inherit;font-size:12.5px;outline:none}
-.ip-subject-new input:focus{border-color:var(--blue-line)}
+.ip-subject-new input:focus{outline:none;border-color:var(--blue-line);box-shadow:0 0 0 3px var(--focus-glow)}
 .ip-filter{margin:0 0 12px}
 .ip-end-cards{display:flex;align-items:center;gap:10px;flex-wrap:wrap;width:100%;padding:10px 12px;border-radius:10px;background:var(--surface-2);font-size:12.5px}
 .ip-end-cards .ip-muted{display:inline-flex;align-items:center;gap:6px}
@@ -483,7 +484,7 @@ button.ip-verified:hover{text-decoration:underline}
 .ip-terr{font-size:12.5px;color:var(--red,var(--text-2));display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .ip-tutor-in{display:flex;flex-direction:column;gap:6px;padding:10px 12px 12px;border-top:1px solid var(--border)}
 .ip-tutor-in textarea{resize:none;width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border-3);border-radius:10px;padding:8px 10px;color:var(--text);font:13.5px/1.45 var(--font);outline:none;transition:border-color var(--dur)}
-.ip-tutor-in textarea:focus{border-color:var(--blue-line)}
+.ip-tutor-in textarea:focus{outline:none;border-color:var(--blue-line);box-shadow:0 0 0 3px var(--focus-glow)}
 .ip-tutor-row{display:flex;align-items:center;gap:6px}
 @container (max-width:1000px){
   .ip-player.with-tutor .ip-layout,.ip-full.with-tutor .ip-layout{grid-template-columns:52px minmax(0,1fr) 300px}

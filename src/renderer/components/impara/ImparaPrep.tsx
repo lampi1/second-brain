@@ -1,19 +1,22 @@
 // A lesson being prepared (ADR 0188): the research as it goes, phase by phase (the material read; the web searched,
 // seeing only the user's question; the files read: material, brain, app; each fact checked by a second model; the
 // questions; the plan), with what each found and why one was skipped, the sources found once checked, and, when the ask can mean different things, the
-// questions to answer (an option, a few words of one's own, or «Salta, decidi tu») while the facts are checked. Used by
-// ImparaPlayer.tsx; styles impara.css (.ip-prep*).
-import { useState, type ReactNode } from 'react';
+// questions to answer (an option, a few words of one's own, or «Salta, decidi tu») while the facts are checked. The
+// public topics the files research found (ADR 0206) show as chips «Dai tuoi file · cercherò sul web»: ✕ drops one,
+// «Cerca ora» starts them, else they start by themselves after 5 seconds. Used by ImparaPlayer.tsx; styles impara.css
+// (.ip-prep*, .ip-topics*).
+import { useEffect, useState, type ReactNode } from 'react';
 import { PREP_PHASES, type Lesson, type PrepPhase } from '@shared/lesson';
-import { clarifyLesson } from '../../lib/impara';
+import type { LessonTopics } from '@shared/web-topics';
+import { clarifyLesson, dropTopic, searchTopicsNow } from '../../lib/impara';
 import { t } from '../../i18n';
 import { Button } from '../ui';
 import { SourceChips } from './ImparaSources';
-import { IconCheck, IconSpinner } from '../Icons';
+import { IconCheck, IconGlobe, IconSpinner, IconX } from '../Icons';
 
 function why(code: string | undefined): string {
   if (!code) return '';
-  if (code === 'pr' || code === 'off' || code === 'none' || code === 'noask') return t(`impara.prep.why.${code}`);
+  if (code === 'pr' || code === 'off' || code === 'none' || code === 'noask' || code === 'filtered' || code === 'dropped') return t(`impara.prep.why.${code}`);
   return t('impara.prep.why.failed');
 }
 
@@ -35,12 +38,13 @@ export function ImparaPrep({ lesson }: { lesson: Lesson }) {
     if (ph[k] === 'skip') return why(p.why?.[k]);
     if (k === 'web' && p.web !== undefined) return t('impara.prep.found', { n: p.web });
     if (k === 'files' && p.files !== undefined) return t('impara.prep.found', { n: p.files });
+    if (k === 'refs' && p.refs !== undefined) return t('impara.prep.found', { n: p.refs });
     if (k === 'verify' && ph.verify === 'done') return t('impara.prep.checked', { ok: p.ok ?? 0, fixed: p.fixed ?? 0, unsure: p.unsure ?? 0, dropped: p.dropped ?? 0 });
     if (p.why?.[k]) return why(p.why[k]);
     return null;
   };
-  // the ask phase shows only when there is something to ask, or once it is settled
-  const shown = PREP_PHASES.filter(k => k !== 'ask' || ph.ask);
+  // the ask and refs phases show only when there is something to ask or search, or once it is settled
+  const shown = PREP_PHASES.filter(k => (k !== 'ask' && k !== 'refs') || ph[k]);
   return (
     <div className="ip-preparing" data-testid="impara-preparing" role="status" aria-live="polite">
       <div className="ip-sketch" aria-hidden="true"><i /><i /><i /><b /><b /></div>
@@ -48,11 +52,57 @@ export function ImparaPrep({ lesson }: { lesson: Lesson }) {
       <ol className="ip-prep-steps" data-testid="impara-prep-steps">
         {shown.map(k => <Phase key={k} state={ph[k]} label={label(k)} extra={extra(k)} />)}
       </ol>
+      {p.topics && p.topics.list.length > 0 && <Topics id={lesson.id} topics={p.topics} />}
       {lesson.facts?.length ? <SourceChips facts={lesson.facts} /> : null}
       {lesson.clarify && !lesson.clarify.answers && <Clarify lesson={lesson} />}
       <p className="ip-muted">{t('impara.preparing.hint')}</p>
     </div>
   );
+}
+
+/** The public topics from the user's files (ADR 0206): what goes to the web, each with why (from which file: the
+ *  file stays here); while they wait, ✕ drops one and a countdown says when they start. */
+function Topics({ id, topics }: { id: string; topics: LessonTopics }) {
+  const waiting = topics.state === 'wait';
+  const left = useCountdown(waiting ? topics.at : undefined);
+  const [busy, setBusy] = useState(false);
+  const act = async (fn: () => Promise<unknown>) => { if (busy) return; setBusy(true); try { await fn(); } finally { setBusy(false); } };
+  const fileName = (ref: string) => ref.replace(/:\d+(?:[-:]\d+)?$/, '').split(/[\\/]/).pop() ?? '';
+  return (
+    <div className={`ip-topics ${topics.state}`} data-testid="impara-topics" data-state={topics.state} role="group" aria-label={t('impara.topics.title')}>
+      <div className="ip-topics-head">
+        <IconGlobe size={13} />
+        <span className="ip-topics-title">{t('impara.topics.title')}</span>
+        <span className="ip-topics-status" aria-live="polite">
+          {waiting ? t('impara.topics.wait', { n: left }) : topics.state === 'go' ? <><IconSpinner size={11} /> {t('impara.topics.go')}</> : topics.state === 'done' ? t('impara.topics.done') : null}
+        </span>
+        {waiting && <Button variant="primary" size="s" onClick={() => void act(() => searchTopicsNow(id))} disabled={busy} testid="impara-topics-go">{t('impara.topics.now')}</Button>}
+      </div>
+      {waiting && topics.at && <i key={topics.at} className="ip-topics-bar" style={{ animationDuration: `${Math.max(0, topics.at - Date.now())}ms` }} aria-hidden="true" />}
+      <ul className="ip-topics-list">
+        {topics.list.map(x => (
+          <li key={x.id} className="ip-topic" data-testid="impara-topic" data-tip={[x.why, fileName(x.ref) && t('impara.topics.from', { file: fileName(x.ref) })].filter(Boolean).join(' · ') || undefined}>
+            <span className="ip-topic-q">{x.q}</span>
+            {waiting && <button type="button" className="ip-topic-x" onClick={() => void act(() => dropTopic(id, x.id))} disabled={busy} aria-label={t('impara.topics.drop', { q: x.q })} data-testid="impara-topic-drop"><IconX size={10} /></button>}
+          </li>
+        ))}
+      </ul>
+      <p className="ip-topics-note">{t('impara.topics.note')}{topics.dropped ? ` ${t('impara.topics.filtered', { n: topics.dropped })}` : ''}</p>
+    </div>
+  );
+}
+
+/** Whole seconds left until `at` (ms of the real clock), ticking; 0 once past or without a deadline. */
+function useCountdown(at: number | undefined): number {
+  const calc = () => (at ? Math.max(0, Math.ceil((at - Date.now()) / 1000)) : 0);
+  const [left, setLeft] = useState(calc);
+  useEffect(() => {
+    setLeft(calc());
+    if (!at) return;
+    const timer = setInterval(() => setLeft(calc()), 250);
+    return () => clearInterval(timer);
+  }, [at]);
+  return left;
 }
 
 function Clarify({ lesson }: { lesson: Lesson }) {

@@ -4,6 +4,8 @@
 // slots (an env variable or a header) and the renderer only ever sees a mask. Used by main/mcp-servers/* (store,
 // gateway, service), the Settings → Connettori section and the agent card's MCP section.
 
+import { FLASH_ID, ROLE_IDS } from './roles';
+
 export type McpTransport = 'stdio' | 'http';
 /** Where a server's token goes: an environment variable of its process (stdio) or a request header (http). */
 export interface McpSecretSlot { where: 'env' | 'header'; name: string; /** for a header: what precedes the token ("Bearer ") */ prefix?: string }
@@ -110,6 +112,22 @@ export function chainAllows(levels: readonly (RoleMcpAccess | undefined)[], serv
 }
 export const chainOffers = (levels: readonly (RoleMcpAccess | undefined)[], server: string): boolean =>
   levels.every(l => serverOffered(l?.servers[server]));
+
+/** Flash (ADR 0107) uses the app's MCP servers only when the user turns a server on for it, and only its reading tools
+ *  (ADR 0207: Flash stays read-only). Its access lives beside the roles' under this key. */
+export const FLASH_MCP_ROLE = FLASH_ID;
+/** Everyone whose MCP access the user sets: the Orchestrator, the five work roles, Flash. */
+export const MCP_ACCESS_ROLES: readonly string[] = [...ROLE_IDS, FLASH_MCP_ROLE];
+/** What a role gets from a server nobody set: every tool, Flash none. */
+export const defaultAccess = (role: string): McpToolAccess => (role === FLASH_MCP_ROLE ? 'none' : 'all');
+/** The access that holds for a role: the stored value or its default; Flash never more than the reading tools. */
+export function effectiveAccess(role: string, stored: McpToolAccess | undefined): McpToolAccess {
+  const v = stored ?? defaultAccess(role);
+  return role === FLASH_MCP_ROLE && v === 'all' ? 'read' : v;
+}
+/** The simple on/off a per-role toggle shows (on = at least one tool offered) and the value it sets. */
+export const accessOn = (role: string, stored: McpToolAccess | undefined): boolean => serverOffered(effectiveAccess(role, stored));
+export const toggleAccess = (role: string, on: boolean): McpToolAccess => (on ? (role === FLASH_MCP_ROLE ? 'read' : 'all') : 'none');
 
 /** Validates one access value (from the renderer); throws in Italian. */
 export function checkAccess(v: unknown): McpToolAccess {

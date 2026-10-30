@@ -69,7 +69,7 @@ at the next start.
 menu with «Spiegamelo meglio» (M), «Fammi un esempio» (E), «Mostrami il codice» (C) and «Domanda» (D). The keys work
 without the menu too.
 
-**Dependencies.** `katex` 0.16.47 (MIT, published 2026-05-16, ships its own types) becomes a direct dependency. It was
+**Dependencies.** `katex` 0.16.47 (MIT, published 2026-05-16, more than 14 days ago as rule 3 asks; it ships its own types) becomes a direct dependency. It was
 already installed as a dependency of mermaid, so `package.json` and the lock's root entry change and `node_modules`
 does not. Not added:
 

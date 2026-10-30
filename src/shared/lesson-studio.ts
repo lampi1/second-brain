@@ -81,8 +81,8 @@ export function parseStudio(kind: StudioMade, v: unknown, facts: readonly string
   }
   if (kind === 'quiz' || kind === 'flashcards') {
     const raw = (Array.isArray(o.cards) ? o.cards : Array.isArray(o.questions) ? o.questions : []).map(obj)
-      // a true/false question is a choice of two
-      .map(c => (c.kind === 'truefalse' ? { ...c, kind: 'choice' } : kind === 'flashcards' ? { ...c, kind: 'recall' } : c));
+      // a flashcard is a recall card; a quiz keeps its kinds (truefalse among them, ADR 0204)
+      .map(c => (kind === 'flashcards' ? { ...c, kind: 'recall' } : c));
     const qs = parseCards({ cards: raw }, nodes, facts);
     if (qs.length < (kind === 'quiz' ? 4 : 2)) throw new Error(kind === 'quiz' ? 'quiz con troppe poche domande valide' : 'troppe poche carte valide');
     return kind === 'quiz' ? { out: { kind, qs } } : { out: { kind, n: qs.length, cards: qs.map(c => ({ q: c.q, answer: c.answer })) }, cards: qs };
@@ -117,11 +117,14 @@ export function pieceIssues(s: Pick<LessonStep, 'cites' | 'say' | 'text' | 'beat
 
 /** What a check fails alone: a question that cannot make one think (fewer than 3 options, a very short question, an
  *  option much longer than the others: the right one shows). */
-export function checkIssues(c: Pick<LessonCheck, 'q' | 'options' | 'correct'>): QualityRule[] {
+export function checkIssues(c: Pick<LessonCheck, 'q' | 'options' | 'correct'> & { kind?: LessonCheck['kind'] }): QualityRule[] {
+  // the option checks are for a choice among 3-4 (predict, choice, cloze): a true/false has two by design, order and
+  // match have none (ADR 0204)
+  const pick = !c.kind || c.kind === 'predict' || c.kind === 'choice' || c.kind === 'cloze';
   const lens = c.options.map(o => o.length);
   const others = lens.filter((_, i) => i !== c.correct);
-  const giveaway = others.length > 0 && (lens[c.correct] ?? 0) > 2.2 * Math.max(...others) && (lens[c.correct] ?? 0) > 40;
-  return c.options.length < 3 || c.q.length < 20 || giveaway ? ['questions'] : [];
+  const giveaway = pick && others.length > 0 && (lens[c.correct] ?? 0) > 2.2 * Math.max(...others) && (lens[c.correct] ?? 0) > 40;
+  return (pick && c.options.length < 3) || c.q.length < 20 || giveaway ? ['questions'] : [];
 }
 
 /** The gate's answer: for each piece (by its number in the draft, from 1) pass or the rules it fails, with a rewrite;

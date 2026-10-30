@@ -164,4 +164,19 @@ describe('app_learn', () => {
     expect(started[1]).toMatchObject({ kind: 'pr', prUrl: 'https://github.com/a/b/pull/1', depth: 'lesson' });
     expect(tool!.run({})).toEqual({ lessons: [{ id: 'L0', title: 'Reti', subject: 'Reti', state: 'finita', page: 'impara/L0' }], reviewDue: 3, reviewNew: 1 });
   });
+
+  it('lists the score and each subject’s level once there are cards (ADR 0204)', () => {
+    const [tool] = imparaTools({
+      start: () => { throw new Error('no'); },
+      state: () => ({ lessons: [], dir: '', canTeach: true, review: {
+        due: 0, fresh: 0, streak: 2, reviewedToday: 0,
+        subjects: [{ name: 'Reti', lessons: 1, cards: 4, due: 0, fresh: 0, recall: 0.9, mastery: { level: 'familiar', cards: 4, studied: 3, solid: 1, memory: 0.9 } }],
+        score: { score: 23, memory: 0.912, solid: 1, cards: 4, studied: 3, delta: 5, streak: 2, lessonsDone: 1 },
+      } }),
+    }, () => {}, () => null);
+    expect(tool!.run({})).toMatchObject({
+      score: { value: 23, memoryPct: 91, solidCards: 1, cards: 4, weekChange: 5, daysInARow: 2, lessonsDone: 1 },
+      subjects: [{ name: 'Reti', level: 'familiar' }],
+    });
+  });
 });

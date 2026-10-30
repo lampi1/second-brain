@@ -9,6 +9,6 @@
   border-radius: var(--r-xs);
 }
 .viz-diagram img { display: block; max-width: 100%; height: auto; max-height: 560px; object-fit: contain; }
-.viz-diagram:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--focus); }
+.viz-diagram:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--focus-glow); }
 .viz-chart { position: relative; width: 100%; min-width: 0; }
 .viz-chart canvas { display: block; }

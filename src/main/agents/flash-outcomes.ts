@@ -93,6 +93,13 @@ export function flashHanded(log: FlashLog, text: string, now: number): void {
   if (o) settle(log, o, 'partial', 'handed', now);
 }
 
+/** «Fanne un lavoro» (ADR 0209): the user asked Flash for the Orchestrator's brief; its newest open answer is handed over. */
+export function flashBriefed(log: FlashLog, now: number): void {
+  settleDue(log, now);
+  const o = live(log, now)[0];
+  if (o) settle(log, o, 'partial', 'handed', now);
+}
+
 const count = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 0;
 const sigOk = (v: unknown): v is string[] => Array.isArray(v) && v.length <= SIG_MAX && v.every(w => typeof w === 'string' && /^[0-9a-z]{1,8}$/.test(w));
 const VERDICTS: readonly FlashVerdict[] = ['success', 'partial', 'fail'];

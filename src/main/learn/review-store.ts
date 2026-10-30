@@ -52,7 +52,9 @@ export class ReviewStore {
     for (const c of l.checks) {
       const id = `${l.id}:k:${c.id}`;
       if (d.cards.some(x => x.id === id)) continue;
-      d.cards.push({ id, lessonId: l.id, subject, kind: 'choice', origin: 'check', q: c.q, options: c.options, correct: c.correct, answer: c.why, createdAt: l.createdAt, mem: null });
+      // the check's own kind (ADR 0204): a 'predict' is asked again as a choice
+      d.cards.push({ id, lessonId: l.id, subject, kind: c.kind === 'predict' ? 'choice' : c.kind, origin: 'check', q: c.q, options: c.options, correct: c.correct,
+        ...(c.items ? { items: c.items } : {}), ...(c.pairs ? { pairs: c.pairs } : {}), ...(c.code ? { code: c.code } : {}), answer: c.why, createdAt: l.createdAt, mem: null });
       added = true;
     }
     if (added) this.write();

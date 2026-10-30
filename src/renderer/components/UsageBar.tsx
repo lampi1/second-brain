@@ -110,7 +110,7 @@ function Details({ usage, chats, now, close }: { usage: Usage | null; chats: Cha
       <section className="ub-sec" data-testid="usage-pop-chats">
         <div className="ub-sec-head"><span>{auditText('audit.UsageBar.todaySChatsMostExpensiveFirst')}</span><small>{auditText('audit.UsageBar.live')}</small></div>
         <LiveCostList rows={rows} limit={POP_ROWS} testid="usage-pop-list" unpricedModels={usage?.cursorUnpriced?.models}
-          onOpen={id => { close(); focusChat(id); }} onMore={() => { close(); go({ page: 'costi', arg: '1' }); }} />
+          onOpen={id => { close(); focusChat(id); }} onMore={() => { close(); go({ page: 'andamento', arg: 'costi/1' }); }} />
       </section>
     </div>
   );

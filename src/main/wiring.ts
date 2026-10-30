@@ -3,7 +3,7 @@
 // SB_DEMO=1 swaps in the demo services (demo-wiring.ts: fake chats, brain and browser tabs; SB_DEMO_FREEZE=1 = deterministic).
 // The types (Ctx, Wired) are in wiring-types.ts, the steps shared with the demo in wiring-shared.ts and two
 // self-contained builders (personal Browser, Impara) in wiring-builders.ts; this file re-exports what others import.
-import { app, powerSaveBlocker, safeStorage, shell } from 'electron';
+import { app, powerMonitor, powerSaveBlocker, safeStorage, shell } from 'electron';
 import os from 'node:os';
 import { LearningReviewService } from './brainmodel/learning-review';
 import { replayExecutor } from './brainmodel/replay-executor';
@@ -83,6 +83,7 @@ import { forcedSampler, OsLoadSampler } from './chats/admission';
 import { ProductSync } from './sync';
 import { startHealthLog } from './perf';
 import fs from 'node:fs';
+import { ProfileService } from './brain/profile';
 import { attachHeldNews } from './chats/held-news';
 import { ReplyRules } from './chats/reply-rules';
 import { TaskService } from './tasks/service';
@@ -104,7 +105,7 @@ import { OneShotService } from './agents/oneshot';
 import { CompareQueue, queueAllowed } from './compare/queue';
 import { DelegateWorktrees, gitWorktrees } from './agents/worktrees';
 import { stageDelegatedChanges, stageDelegatedChangesMany } from './agents/delegation-integration';
-import { JudgeSampler, judgeSamplingOn } from './agents/judge-sample';
+import { DEFAULT_CAP_USD, JudgeSampler, judgeSamplingOn, judgingEstimate, roleShares } from './agents/judge-sample';
 import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
 import { HybridSearch, workerFileNextTo } from './search/hybrid/service';
@@ -573,10 +574,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   addChatTools(strategyTools(manager, awayOn));
   addChatTools(workDecisionTools({ chats: manager, workflows }));
-  // the independent reviews of finished runs (agents/judge-sample.ts): they spend tokens, so they run only in the user's
-  // own app, never in tests or an agent's hidden run (judgeSamplingOn, issue #112), and only with the Agenti switch on
+  // the independent reviews of finished runs (agents/judge-sample.ts, ADR 0203): a sample, reviewed once a night by one
+  // hidden Sentinel run (no chat, no strip) under the daily cap; they spend tokens, so they run only in the user's own
+  // app, never in tests or an agent's hidden run (judgeSamplingOn, issue #112), and only with the Agenti switch on
+  const sentinel = () => agents.list().profiles.find(p => p.id === 'sentinel');
+  const judgeShares = () => roleShares(manager.runs.list(), new Map(manager.runMetrics().flatMap(m => m.standing ? [[m.agentId, m.standing] as const] : [])),
+    agents.list().profiles, id => agents.history(id));
   const judgeSampler = new JudgeSampler({ file: path.join(ctx.userData, 'judge-samples.json'), runs: () => manager.runs.list(),
-    chat: id => manager.list().find(c => c.id === id), create: req => manager.create(req, 'app'),
+    chat: id => manager.list().find(c => c.id === id),
     judging: () => {
       const st = brain.settings(), on = st.judging === true;
       let since = Number(st.judgingSince) || 0;
@@ -584,21 +589,28 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       if (on && !since) { since = Date.now(); void brain.setSettings({ judgingSince: since }).catch(e => log.warn('agents', 'judging start not saved', { cause: errText(e) })); }
       return { on, since };
     },
-    judgeEngine: () => agents.list().profiles.find(p => p.id === 'sentinel')?.engine ?? 'claude',
+    capUsd: () => Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD,
+    shares: judgeShares,
+    reviewer: () => { const p = sentinel(); return p ? { engine: p.engine, model: p.model, effort: p.effort ?? null, version: p.activeVersion, instructions: p.instructions } : null; },
     refusal: h => !engineOn(brain.settings(), h) ? 'engine switched off' : !agentsMayOpen(brain.settings(), h) ? 'agents may not use this engine' : null,
+    // a hidden read-only session (compare/headless.ts): never a chat, never on the Grindhouse (owner, 2026-10-30)
+    review: req => headless.run({ ...req, round: 'review' }),
+    store: manager.runs,
     feedback: (a, by) => runFeedback.recordFeedback(a, by),
     // a run its receipts decide is not reviewed (ADR 0130)
-    receipts: (runId, verdict, note) => runFeedback.recordReceipts(runId, verdict, note) });
+    receipts: (runId, verdict, note) => runFeedback.recordReceipts(runId, verdict, note),
+    idleMs: () => powerMonitor.getSystemIdleTime() * 1000,
+    away: awayOn,
+    startedAt: Date.now(),
+    journal: logEvent });
   const judging = judgeSamplingOn(process.env);
-  const judgeTick = () => { void judgeSampler.tick().catch(e => log.warn('agents', 'judge sample tick failed', { cause: errText(e), hint: 'tried again in 30 minutes' })); };
-  // a run that ends is reviewed soon after (every run with the switch on; a review's own end frees a slot)
+  const judgeTick = () => { void judgeSampler.tick().catch(e => log.warn('agents', 'judge sample tick failed', { cause: errText(e), hint: 'tried again in 5 minutes' })); };
+  // a run that ends gets its free receipt verdict soon after
   const judgeSoon = () => { if (judging.on && brain.settings().judging === true) setTimeout(judgeTick, 5_000).unref(); };
   loopRef.current = { ended: run => { loop.hooks.ended(run); void judgeSampler.ended(run).finally(judgeSoon); }, outcome: run => loop.hooks.outcome(run) };
-  // first a few minutes after the start (a restart within 30 minutes used to postpone it again), then every 30 minutes
+  // every 5 minutes, the first after the startup rush: the nightly batch needs the night window or an idle moment
   log.info('agents', judging.on ? 'judge samples scheduled' : 'judge samples off', { data: { why: judging.why } });
-  const judgeFirst = judging.on ? setTimeout(judgeTick, 3 * 60_000) : null;
-  judgeFirst?.unref();
-  const judgeTimer = judging.on ? setInterval(judgeTick, 30 * 60_000) : null;
+  const judgeTimer = judging.on ? setInterval(judgeTick, 5 * 60_000) : null;
   judgeTimer?.unref();
   const lifecycleTimer = prodPollers ? setInterval(() => loop.tick(), 10_000) : null;
   lifecycleTimer?.unref();
@@ -613,8 +625,15 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
       agents: { list: () => agents.list(), save: (draft, id, reason) => agentPacks.learning.save(draft, id, reason), history: id => agents.history(id), restore: (id, version) => agents.restoreVersion(id, version) },
-      mcp: { state: () => mcpServers.state(), save: a => mcpServers.save(a), setAccess: a => mcpServers.setAccess(a) },
+      mcp: { state: () => mcpServers.state(), save: a => mcpServers.save(a), setAccess: a => mcpServers.setAccess(a),
+        agentSave: (def, previousId) => mcpServers.agentSave(def, previousId), agentRemove: id => mcpServers.agentRemove(id), agentAccess: (role, server, access) => mcpServers.agentAccess(role, server, access),
+        undo: key => mcpServers.undo(key), test: id => mcpServers.test(id) },
+      // connector changes (ADR 0207): a feed card with «Annulla»; the add form opened prefilled (no secret in it)
+      announce: e => brain.publish([e]),
+      openForm: draft => ctx.emitter.emit('ui:command', { action: 'mcpDraft', value: JSON.stringify(draft) }),
       later: { get: () => later.get(), set: on => later.set(on) },
+      // Il mio profilo (ADR 0207): the page's own reader and writer of me.md (stateless: each save checks the revision)
+      profile: (() => { const p = new ProfileService({ root: () => brain.settings().brainRoot, template: (() => { try { return fs.readFileSync(path.join(app.getAppPath(), 'brain-template', 'me.template.md'), 'utf8'); } catch { return ''; } })() }); return { get: () => p.get(), save: req => p.save(req) }; })(),
     } };
   appDeps.routines = { has: id => routines.has(id), exportForTerminal: id => routines.exportForTerminal(id), snapshot: () => routines.snapshot(), archive: () => routineArchive.snapshot(), run: ref => routines.run(ref) };
   attachAppTools(mcp, appDeps, source, false, orchestratorTokens);
@@ -747,6 +766,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     workflows, routineArchive, routines, brainModel, research, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
+    judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
     cloud, chats, browser, personal, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),

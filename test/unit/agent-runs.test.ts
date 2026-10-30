@@ -28,6 +28,16 @@ describe('agent run store', () => {
     expect(s.start(start({ costKnown: false })).costUsd).toBeNull();
   });
 
+  it('keeps a nightly batch review\'s runs and verdicts (ADR 0203) and refuses malformed ones', () => {
+    const run = new AgentRunStore(tmp()).start(start({ agentId: 'sentinel', startedBy: 'app' }));
+    run.source = 'oneshot'; run.oneshot = { engine: 'claude', job: 'review', fallback: false, costBasis: 'reported' };
+    run.reviewBatch = [{ runId: 'r_000000000001', verdict: 'fail', verified: 'yes' }, { runId: 'r_000000000002' }];
+    expect(readRun(structuredClone(run))?.reviewBatch).toEqual(run.reviewBatch);
+    expect(readRun({ ...run, reviewBatch: [] })).toBeNull();
+    expect(readRun({ ...run, reviewBatch: [{ runId: 'nope' }] })).toBeNull();
+    expect(readRun({ ...run, reviewBatch: [{ runId: 'r_000000000001', verdict: 'great' }] })).toBeNull();
+  });
+
   it('preserves launch snapshots and canonical evidence, and refuses a result for a different run', () => {
     const run = new AgentRunStore(tmp()).start(start());
     run.taskId = 't1'; run.taskVersion = 1;

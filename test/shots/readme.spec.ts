@@ -332,13 +332,13 @@ test('README showcase: voice, Log, recordings, classifiers, quality, learn, cost
   await goPage(page, 'classificatori');
   await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
   await page.waitForTimeout(800);
-  await save('classifiers', await frameOf(page.getByTestId('page-classificatori').locator('h1').first()));
+  await save('classifiers', await frameOf(page.getByTestId('an-panel-classificatori').getByTestId('cls-summary')));
 
   // Quality: four measured numbers about the AI's mistakes, each with its source
   await goPage(page, 'qualita');
-  await expect(page.getByTestId('page-qualita').getByTestId('bx-q-trovati')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('an-panel-qualita').getByTestId('bx-q-trovati')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
-  await save('quality', await frameOf(page.getByTestId('page-qualita').getByTestId('bx-q-trovati')));
+  await save('quality', await frameOf(page.getByTestId('an-panel-qualita').getByTestId('bx-q-trovati')));
 
   // Learn: a saved lesson about a PR on the blackboard, its diagram growing piece by piece
   await goPage(page, 'impara');
@@ -350,7 +350,7 @@ test('README showcase: voice, Log, recordings, classifiers, quality, learn, cost
 
   // Costs: where the money goes, from the recorded chats, no tokens spent to know it
   await goPage(page, 'costi');
-  const costs = page.getByTestId('brain-page-costi');
+  const costs = page.getByTestId('an-panel-costi');
   await expect(costs).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
   await save('costs', await frameOf(costs));

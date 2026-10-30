@@ -29,7 +29,7 @@ test.afterAll(async () => { await app?.close(); });
 
 test('Qualità: four true metrics with source and dates, out-of-count rows visible, proposals in one row', async () => {
   await goPage(page, 'qualita');
-  const p = page.getByTestId('page-qualita');
+  const p = page.getByTestId('an-panel-qualita');
   await expect(p.getByTestId('bx-q-trovati')).toBeVisible({ timeout: 30000 });
   await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30000 });
 
@@ -50,7 +50,8 @@ test('Qualità: four true metrics with source and dates, out-of-count rows visib
   await expect(p.getByTestId('bx-q-pr-list')).toContainText('test case fallito: Sconto in fattura saldo');
   await expect(p.getByTestId('bx-q-riaperti')).toContainText('su 38 risolti da te (8%)');
   await expect(p.getByTestId('bx-q-riaperti-list')).toContainText('riaperto');
-  await expect(p.getByTestId('bx-lead')).toContainText('correzioni ogni 100 turni');
+  await expect(p.getByTestId('bx-lead')).toHaveCount(0); // a tab of Andamento (ADR 0202): no lead repeating the cards' numbers
+  await expect(p.getByTestId('bx-tab-head')).toBeVisible();
   // gone until they have data
   for (const gone of ['lodi', 'taccuini', 'misure']) await expect(p.getByTestId(`bx-tab-${gone}`)).toHaveCount(0);
   await shot(page, 'qualita');

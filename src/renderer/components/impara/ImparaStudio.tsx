@@ -10,6 +10,7 @@ import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'r
 import { STUDIO_KINDS, type StudioItem, type StudioKind, type StudioOut } from '@shared/lesson-studio';
 import { subjectOf, type Lesson } from '@shared/lesson';
 import type { VoiceName } from '@shared/voice';
+import type { CardKind } from '@shared/review';
 import { go } from '../../actions';
 import { makeStudio, reviewArg, studioQuizArg } from '../../lib/impara';
 import { narrateLines, stopSpeaking, useVoice } from '../../lib/voice';
@@ -107,7 +108,7 @@ function Out({ lesson, out }: { lesson: Lesson; out: StudioOut }) {
   }
   if (out.kind === 'flashcards') return <Flashcards lesson={lesson} cards={out.cards} />;
   if (out.kind === 'quiz') {
-    const kindOf = (q: (typeof out.qs)[number]): QuizKind => (q.kind === 'choice' && q.options?.length === 2 ? 'truefalse' : q.kind);
+    const kindOf = (q: (typeof out.qs)[number]): QuizKind => q.kind;
     const kinds = out.qs.reduce<Partial<Record<QuizKind, number>>>((m, q) => ({ ...m, [kindOf(q)]: (m[kindOf(q)] ?? 0) + 1 }), {});
     return (
       <div className="sd-quiz">
@@ -180,5 +181,5 @@ function Podcast({ out }: { out: Extract<StudioOut, { kind: 'podcast' }> }) {
     </div>
   );
 }
-type QuizKind = 'choice' | 'truefalse' | 'recall' | 'node';
+type QuizKind = CardKind;
 const voiceLabel = (v: VoiceName) => v.charAt(0).toUpperCase() + v.slice(1);

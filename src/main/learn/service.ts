@@ -8,7 +8,10 @@
 // (deps.changed → 'impara:changed'). Before the plan, the research (ADR 0188): a web run that sees only the user's
 // ask, a files run over the material, the user's brain and the app, both at once; then a verification run per side
 // that did not write the facts, and, while it runs, the questions the files run found worth asking (at most two). The
-// lesson is written from the verified facts and cites them. Who explains is the user's choice (LessonStart.teacher).
+// lesson is written from the verified facts and cites them. The files run also names public topics of the files
+// (standards, specs, libraries, protocols): filtered by shared/web-topics.ts, shown as chips the user may drop, they
+// start by themselves after 5 seconds (at once in «Modalità notte») and a second web run, which sees only the ask and
+// those queries, searches them; its facts are verified on the web like the others (ADR 0206). Who explains is the user's choice (LessonStart.teacher).
 // A finished lesson leaves review cards (ADR 0189, review-store.ts): its checks at once, and the cards one more short
 // run writes from the verified facts; the reviews are scheduled by FSRS (shared/review.ts). Beside the lesson, the tutor
 // (ADR 0190): a question answered in seconds, word by word, from the verified facts (no new research), on a session
@@ -28,13 +31,17 @@ import {
   type PrepPhase, type TeacherOption, type TutorMode, type TutorTurn, subjectOf, TUTOR_KEEP, TUTOR_Q_MAX, tutorCard, tutorShown,
 } from '@shared/lesson';
 import { REVIEW_GRADES, parseCards, queueOf, subjectName, summarize, type ReviewCard, type ReviewGrade, type ReviewItem, type ReviewMode } from '@shared/review';
+import { lastGrades, masteryOf, scoreOf } from '@shared/mastery';
+import { quizValid, storedChoice } from '@shared/quiz';
+import { USER_FILES, cleanFiles, withUserFiles } from './user-files';
+import { parseTopicFacts, parseTopics, privateWords, TOPIC_WAIT_MS, type LessonTopics } from '@shared/web-topics';
 import { cutDiff, gather, INLINE_MAX, type GatherDeps, type Material } from './material';
 import { checkIssues, isStudioMade, parseGate, parseStudio, pieceIssues, type LessonQuality, type QualityRule, type StudioMade } from '@shared/lesson-studio';
-import { cardsPrompt, extraPrompt, filesResearchPrompt, gatePrompt, gradePrompt, planPrompt, restPrompt, studioPrompt, tutorPrompt, verifyPrompt, webResearchPrompt } from './prompt';
+import { cardsPrompt, extraPrompt, filesResearchPrompt, gatePrompt, gradePrompt, planPrompt, restPrompt, studioPrompt, topicsResearchPrompt, tutorPrompt, verifyPrompt, webResearchPrompt } from './prompt';
 import { ReviewStore } from './review-store';
 import type { LessonStore } from './store';
 
-export type TeachRound = 'impara-web' | 'impara-files' | 'impara-verify-web' | 'impara-verify-files' | 'impara-plan' | 'impara-quality' | 'impara-rest' | 'impara-extra' | 'impara-grade' | 'impara-cards' | 'impara-tutor' | 'impara-studio';
+export type TeachRound = 'impara-web' | 'impara-files' | 'impara-refs' | 'impara-verify-web' | 'impara-verify-files' | 'impara-verify-refs' | 'impara-plan' | 'impara-quality' | 'impara-rest' | 'impara-extra' | 'impara-grade' | 'impara-cards' | 'impara-tutor' | 'impara-studio';
 /** One hidden run. teacher = the user's choice (null = the app's); effort = the one to use (null = the engine's own);
  *  web = the web-only run (Claude, no file: compare/headless.ts web mode); a prompt still to come = a warm start (the
  *  tutor: null = not needed); onText = the answer so far, as it streams. */
@@ -58,6 +65,8 @@ export interface LearnDeps extends GatherDeps {
   places?: () => { brain: string | null; appSource: string | null };
   /** the app's guide as markdown (every concept and page), written next to the material for the files research */
   guide?: (lang: Lang) => string;
+  /** «Modalità notte» on (the setting awayMode): the public topics start at once, nobody is there to look (ADR 0206) */
+  away?: () => boolean;
   /** a tutor answer so far, as it streams (ADR 0190: 'impara:tutor'); the lesson gets the whole answer when it ends */
   tutorText?: (lessonId: string, turnId: string, text: string) => void;
 }
@@ -104,6 +113,8 @@ export class LearnService {
   private readonly extras = new Set<string>();
   /** lessons waiting for the user's answers to the questions before the lesson */
   private readonly waits = new Map<string, () => void>();
+  /** lessons whose public topics wait for the user (ADR 0206): wake() starts them now, arm() moves the deadline */
+  private readonly topicWaits = new Map<string, { wake: () => void; arm: (ms: number) => void }>();
   /** lessons whose review cards are being written now (apart from extras: the user can still ask for one) */
   private readonly cardJobs = new Set<string>();
   /** the review cards (ADR 0189), next to the lessons */
@@ -155,7 +166,13 @@ export class LearnService {
     const bySubject = new Map<string, number>();
     for (const s of lessons) if (s.state !== 'failed') bySubject.set(s.subject, (bySubject.get(s.subject) ?? 0) + 1);
     let review: ImparaState['review'];
-    try { review = summarize(this.askable(), this.review.log(), bySubject, this.now()); } catch (e) { log.warn('learn', 'review summary failed', { cause: errText(e) }); }
+    try {
+      const cards = this.askable(), logs = this.review.log(), now = this.now(), last = lastGrades(logs);
+      const sum = summarize(cards, logs, bySubject, now);
+      // the overall score and each subject's level (ADR 0204, shared/mastery.ts)
+      review = { ...sum, subjects: sum.subjects.map(x => ({ ...x, mastery: masteryOf(cards.filter(c => c.subject === x.name), logs, now, last) })),
+        score: scoreOf(cards, logs, now, { streak: sum.streak, lessonsDone: lessons.filter(l => l.done).length }) };
+    } catch (e) { log.warn('learn', 'review summary failed', { cause: errText(e) }); }
     return { lessons, dir: this.d.store.root, canTeach: !why, ...(why ? { why } : {}), teachers: this.teachers(), ...(review ? { review } : {}) };
   }
   get(id: string): Lesson | null { return this.d.store.get(String(id)); }
@@ -201,6 +218,9 @@ export class LearnService {
     if (teacher) req.teacher = teacher;
     const subject = subjectName(raw.subject);
     if (subject) req.subject = subject;
+    // the user's own files as sources (ADR 0204: read by the page, checked here)
+    const files = cleanFiles(raw.files);
+    if (files.length) req.files = files;
     if (kind === 'pr' && !req.prUrl) throw new Error('Scegli una PR o incollane il link.');
     if (kind === 'text' && !req.text?.trim()) throw new Error('Incolla il testo da spiegare.');
     const now = this.now(), id = this.d.store.newId(now);
@@ -230,6 +250,8 @@ export class LearnService {
     if (pasted) files['testo.md'] = '';
     let text = pasted ? `## Testo dell'utente\n${pasted.slice(0, INLINE_MAX)}` : head;
     if (diff) { const cut = cutDiff(diff, Math.max(10_000, INLINE_MAX - head.length)); text += `\n\n## Diff${cut.cut ? ' (tagliato: quello intero è nel file diff.patch)' : ''}\n\`\`\`diff\n${cut.text}\n\`\`\``; }
+    // the user's own files (ADR 0204): named inline, read whole from their file
+    if (this.d.store.readFile(id, USER_FILES)) { files[USER_FILES] = ''; text += `\n\n## File dell'utente\nNel file ${USER_FILES}.`; }
     return { text, files, cwd: null, sources: [] };
   }
   /** What a run adds: its cost; the engine and model only for the teacher's own runs (a web run is always Claude's). */
@@ -254,7 +276,7 @@ export class LearnService {
     let more = false;
     try {
       let m: Material;
-      try { m = await gather(req, this.d); }
+      try { m = withUserFiles(await gather(req, this.d), req.files); }
       catch (e) { this.edit(id, l => ({ ...l, state: 'failed', error: errText(e).slice(0, 300) })); return; }
       if (!this.d.store.get(id)) return; // removed while its material was being read: nothing is written back
       for (const [name, content] of Object.entries(m.files)) this.d.store.writeFile(id, name, content);
@@ -313,11 +335,20 @@ export class LearnService {
     this.phase(id, { web: web ? 'now' : 'skip', files: 'now' }, {}, noWeb ? { web: noWeb } : {});
     const effort = this.effort(req);
     const material = Object.keys(m.files).map(f => path.join(this.d.store.dir(id), f));
+    // the public topics of the files (ADR 0206) need the web on, not an ask: a PR's lesson gets them too
+    const topicsOk = (() => { try { return !!this.d.webOk?.(); } catch { return false; } })();
+    if (topicsOk) fs.mkdirSync(webDir, { recursive: true });
+    const pf = this.run(req, { cwd: this.folder(l0), prompt: filesResearchPrompt(lang, req, m, { material, brain: places.brain, guide, appSource: places.appSource }, web, topicsOk), effort, round: 'impara-files', timeoutMs: 8 * MIN });
+    // the topics' web search starts as soon as the files run ends, beside the verification of the rest
+    const noRefs = { facts: [] as LessonFact[], dropped: 0 };
+    const refsDone = topicsOk
+      ? pf.then(r => this.refs(id, req, m, r, webDir)).catch(e => { log.warn('learn', 'topics research failed', { cause: errText(e) }); return noRefs; })
+      : Promise.resolve(noRefs);
     const [rw, rf] = await Promise.all([
       web ? this.run(req, { cwd: webDir, prompt: webResearchPrompt(lang, req), effort, round: 'impara-web', timeoutMs: 8 * MIN, web: true }) : Promise.resolve(null),
-      this.run(req, { cwd: this.folder(l0), prompt: filesResearchPrompt(lang, req, m, { material, brain: places.brain, guide, appSource: places.appSource }, web), effort, round: 'impara-files', timeoutMs: 8 * MIN }),
+      pf,
     ]);
-    if (!this.d.store.get(id)) return null;
+    if (!this.d.store.get(id)) { await refsDone; return null; }
     const read = (r: TeachResult | null, webSide: boolean, start: number): { facts: LessonFact[]; v: unknown; error?: string } => {
       if (!r) return { facts: [], v: null };
       if (!r.ok) return { facts: [], v: null, error: r.error };
@@ -355,7 +386,7 @@ export class LearnService {
     };
     const byId = new Map([...checked(onWeb, vw), ...checked(onFiles, vf)].map(x => [x.id, x]));
     const roots = [this.folder(l0), places.brain, places.appSource].filter((x): x is string => !!x);
-    const facts = all.map(x => byId.get(x.id)).filter((x): x is LessonFact => !!x).map(x => (x.from === 'file' ? { ...x, ref: fullRef(x.ref, roots) } : x));
+    let facts = all.map(x => byId.get(x.id)).filter((x): x is LessonFact => !!x).map(x => (x.from === 'file' ? { ...x, ref: fullRef(x.ref, roots) } : x));
     const count = (c: LessonFact['check']) => facts.filter(x => x.check === c).length;
     const verifyError = [vw, vf].map(r => (r && !r.ok ? r.error : '')).filter(Boolean).join(' · ');
     this.edit(id, l => {
@@ -366,7 +397,95 @@ export class LearnService {
         phases: { ...p.phases, verify: all.length ? 'done' : 'skip' }, ...(verifyError ? { why: { ...p.why, verify: `failed: ${verifyError}`.slice(0, 200) } } : {}) } };
     });
     log.info('learn', 'lesson facts verified', { data: { id, facts: facts.length, ok: count('ok'), fixed: count('fixed'), unsure: count('unsure'), dropped } });
+    // the standards and references, when their search ends: numbered after every other fact, counted with them
+    const refs = await refsDone;
+    if (!this.d.store.get(id)) return null;
+    if (refs.facts.length || refs.dropped) {
+      const top = all.reduce((n, x) => Math.max(n, Number(x.id.slice(1)) || 0), 0);
+      facts = [...facts, ...refs.facts.map((x, i) => ({ ...x, id: `f${top + i + 1}` }))];
+      dropped += refs.dropped;
+      this.edit(id, l => {
+        const p = l.prep ?? { phases: {} };
+        return { ...l, facts, prep: { ...p, ok: count('ok'), fixed: count('fixed'), unsure: count('unsure'), dropped } };
+      });
+    }
     return facts;
+  }
+
+  /** The public topics of the files (ADR 0206): the files run's answer names them, the app filters each query
+   *  (shared/web-topics.ts), the user sees them for 5 seconds (not in «Modalità notte»), then a web run that sees only
+   *  the ask and the queries left searches them and another web run verifies what it found. Its facts (ids from 1: the
+   *  caller numbers them after the others), and how many the verification dropped. */
+  private async refs(id: string, req: LessonStart, m: Material, rf: TeachResult, webDir: string): Promise<{ facts: LessonFact[]; dropped: number }> {
+    const none = { facts: [] as LessonFact[], dropped: 0 };
+    const skip = (why: string) => { this.phase(id, { refs: 'skip' }, {}, { refs: why }); return none; };
+    if (!rf.ok || !this.d.store.get(id)) return none;
+    let v: unknown;
+    try { v = jsonIn(rf.text); } catch { return none; }
+    const raw = v && typeof v === 'object' ? v as Record<string, unknown> : {};
+    // what the files run saw or wrote, without the queries themselves: a word met only there may be private
+    const answer = JSON.stringify({ ...raw, topics: Array.isArray(raw.topics) ? raw.topics.map(t => (t && typeof t === 'object' ? { ...(t as object), q: undefined, query: undefined } : null)) : undefined });
+    const priv = privateWords([m.text, answer, ...Object.keys(m.files), ...m.sources, req.text ?? '', req.prUrl ?? '', m.cwd ?? ''], req.ask);
+    const { topics, dropped: filtered } = parseTopics(v, priv);
+    log.info('learn', 'lesson topics', { data: { id, topics: topics.length, filtered } });
+    if (!topics.length) return filtered ? skip('filtered') : none;
+    const away = (() => { try { return !!this.d.away?.(); } catch { return false; } })();
+    const set = (t: Partial<LessonTopics>) => this.edit(id, l => { const p = l.prep ?? { phases: {} }; return { ...l, prep: { ...p, topics: { ...(p.topics ?? { list: topics, state: 'wait' as const }), ...t } } }; });
+    // the deadline on the real clock: the timer is real even when the app's clock is not (the demo's)
+    this.phase(id, { refs: 'now' }, { topics: { list: topics, state: away ? 'go' : 'wait', ...(away ? {} : { at: Date.now() + TOPIC_WAIT_MS }), ...(filtered ? { dropped: filtered } : {}) } });
+    if (!away) await this.topicWait(id);
+    const l1 = this.d.store.get(id);
+    if (!l1) return none;
+    const list = l1.prep?.topics?.list ?? [];
+    if (!list.length) { set({ state: 'skip', at: undefined }); return skip('dropped'); }
+    set({ state: 'go', at: undefined });
+    const lang = this.d.lang(), effort = this.effort(req);
+    const r = await this.run(req, { cwd: webDir, prompt: topicsResearchPrompt(lang, req, list), effort, round: 'impara-refs', timeoutMs: 8 * MIN, web: true });
+    if (!this.d.store.get(id)) return none;
+    if (!r.ok) { set({ state: 'done' }); return skip(`failed: ${r.error}`.slice(0, 200)); }
+    let found: LessonFact[];
+    try { found = parseTopicFacts(jsonIn(r.text), list, 1); } catch (e) { set({ state: 'done' }); return skip(`failed: ${errText(e)}`.slice(0, 200)); }
+    this.edit(id, l => ({ ...l, ...this.cost(l, r, false), prep: { ...(l.prep ?? { phases: {} }), refs: found.length } }));
+    if (!found.length) { set({ state: 'done' }); this.phase(id, { refs: 'done' }); return none; }
+    // the same web verification as the web research's: a run that did not write the facts re-reads each page
+    const vr = await this.run(req, { cwd: webDir, prompt: verifyPrompt(lang, found, true), effort, round: 'impara-verify-refs', timeoutMs: 6 * MIN, web: true });
+    if (!this.d.store.get(id)) return none;
+    let out = { facts: found, dropped: 0 };
+    if (vr.ok) { try { out = applyVerdicts(found, jsonIn(vr.text)); } catch { /* not checked: kept as unsure */ } }
+    this.edit(id, l => ({ ...l, ...(vr.ok ? this.cost(l, vr, false) : {}),
+      prep: { ...(l.prep ?? { phases: {} }), phases: { ...l.prep?.phases, refs: 'done' }, topics: { ...(l.prep?.topics ?? { list }), state: 'done' } } }));
+    log.info('learn', 'lesson references verified', { data: { id, facts: out.facts.length, dropped: out.dropped } });
+    return out;
+  }
+
+  /** Waits for the user on the proposed topics: until the deadline, «Cerca ora», none left, or the lesson removed. */
+  private topicWait(id: string): Promise<void> {
+    return new Promise<void>(resolve => {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const w = {
+        wake: () => { clearTimeout(timer); if (this.topicWaits.get(id) === w) this.topicWaits.delete(id); resolve(); },
+        arm: (ms: number) => { clearTimeout(timer); timer = setTimeout(w.wake, ms); timer.unref?.(); },
+      };
+      this.topicWaits.set(id, w);
+      w.arm(TOPIC_WAIT_MS);
+    });
+  }
+
+  /** The user on the proposed topics (ADR 0206): ✕ drops one (the others wait 5 more seconds; none left = no search),
+   *  «Cerca ora» starts them now. */
+  topics(id: string, act: { drop?: unknown; go?: unknown }): Lesson {
+    const l = this.must(id);
+    const tp = l.prep?.topics;
+    const w = this.topicWaits.get(l.id);
+    if (l.state !== 'preparing' || tp?.state !== 'wait' || !w) throw new Error('Nessuna ricerca in attesa.');
+    if (act?.go) { w.wake(); return this.d.store.get(l.id) ?? l; }
+    const drop = String(act?.drop ?? '');
+    if (!tp.list.some(t => t.id === drop)) throw new Error('Argomento non trovato.');
+    const list = tp.list.filter(t => t.id !== drop);
+    const next = this.edit(l.id, x => ({ ...x, prep: { ...(x.prep ?? { phases: {} }), topics: { ...tp, list, ...(list.length ? { at: Date.now() + TOPIC_WAIT_MS } : {}) } } }))!;
+    if (list.length) w.arm(TOPIC_WAIT_MS);
+    else w.wake();
+    return next;
   }
 
   /** The user's answers to the questions before the lesson ('' = skipped; none = all skipped): the plan starts. */
@@ -595,16 +714,17 @@ export class LearnService {
     return this.edit(l.id, x => ({ ...x, at }))!;
   }
 
-  /** A check answered (zero tokens: its right answer came with it). The first answer stays. */
-  answer(id: string, checkId: string, choice: number, confidence?: LessonConfidence): Lesson {
+  /** A check answered (zero tokens: its right answer came with it). The first answer stays; a later call only adds the
+   *  «Eri sicuro?» (then `choice` is not looked at; without one it must still be valid). Order and match (ADR 0204) take a list (shared/quiz.ts). */
+  answer(id: string, checkId: string, choice: unknown, confidence?: LessonConfidence): Lesson {
     const l = this.must(id);
     const c = l.checks.find(x => x.id === checkId);
     if (!c) throw new Error('Domanda non trovata.');
-    if (!Number.isInteger(choice) || choice < 0 || choice >= c.options.length) throw new Error('Risposta non valida.');
     const conf = confidence === 0 || confidence === 1 || confidence === 2 ? confidence : undefined;
+    if (!(c.answer && conf !== undefined) && !quizValid(c, choice)) throw new Error('Risposta non valida.');
     return this.edit(l.id, x => ({ ...x, checks: x.checks.map(k => k.id !== checkId ? k
       : k.answer ? (conf !== undefined && k.answer.confidence === undefined ? { ...k, answer: { ...k.answer, confidence: conf } } : k)
-      : { ...k, answer: { choice, ...(conf !== undefined ? { confidence: conf } : {}), at: this.now() } }) }))!;
+      : { ...k, answer: { choice: storedChoice(k, choice as number | number[]), ...(Array.isArray(choice) ? { seq: [...choice] } : {}), ...(conf !== undefined ? { confidence: conf } : {}), at: this.now() } }) }))!;
   }
 
   /** The piece an item is about: a piece itself, a check's piece, the last main piece for the end. */
@@ -756,6 +876,7 @@ export class LearnService {
     // a lesson waiting for the user's answers: its preparation ends (nothing is written back to a removed lesson)
     const wake = this.waits.get(id);
     this.waits.delete(id);
+    this.topicWaits.get(id)?.wake();
     // a run still working in the folder (Windows keeps it busy): the lesson is gone now, its folder when the run ends
     // the tutor's session started ahead ends unsent; its engine still has the folder until it exits
     const w = this.warm.get(id);

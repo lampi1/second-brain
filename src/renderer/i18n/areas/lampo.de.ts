@@ -10,7 +10,7 @@ export const lampoDe: typeof lampoIt = {
   'lampo.start': 'Flash öffnen',
   'lampo.empty': 'Frag etwas: Die Antwort kommt in ein paar Sekunden.',
   'lampo.toWork': 'Mach eine Aufgabe draus',
-  'lampo.toWorkTip': 'Legt deine letzte Frage und die Antwort von Flash als Entwurf beim Orchestrator ab: Du sendest ihn.',
+  'lampo.toWorkTip': 'Flash schreibt aus dem ganzen Gespräch einen vollständigen Prompt für den Orchestrator (Ziel, Kontext, Aufgaben, Grenzen, fertig wenn): Er liegt als Entwurf bereit, du sendest ihn.',
   'lampo.draft': (p: { question: string; answer: string }) => `Aus Flash. Meine Frage: «${p.question}»${p.answer ? `\nDie Antwort: «${p.answer}»` : ''}\nMach eine Aufgabe draus: `,
   'lampo.clear': 'Kontext leeren (wie /clear)',
   'lampo.cleared': 'Flash geleert: beginnt bei null.',

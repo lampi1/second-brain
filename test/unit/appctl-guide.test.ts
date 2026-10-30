@@ -98,11 +98,24 @@ it('returns the complete live description for an exact tool name, including its 
   expect(await tool.run({ topic: 'app_flow_cancel_propose' })).toContain(description);
 });
 
-it('knows the review switch (no daily limit, never a review of a review) and how completed work and levels are counted', async () => {
+it('knows the review switch (a nightly sample under a daily cap, never a review of a review) and how completed work and levels are counted', async () => {
   const tool = guideTool(deps());
   const reviews = String(await tool.run({ topic: 'revisioni automatiche' }));
-  expect(reviews).toContain('no daily limit'); expect(reviews).toContain('judging'); expect(reviews).not.toContain('Revisioni indipendenti al giorno');
+  expect(reviews).toContain('judgingCapUsd'); expect(reviews).toContain('03:00'); expect(reviews).toContain('hidden'); expect(reviews).toContain('judging'); expect(reviews).not.toContain('Revisioni indipendenti al giorno');
   const levels = String(await tool.run({ topic: 'livelli lavori conclusi' }));
   expect(levels).toMatch(/Orchestrator.*root jobs/); expect(levels).toContain('Pulse');
   expect(schema().some(x => String(x.key) === 'delegation.judgeDaily')).toBe(false);
+});
+
+describe('app_guide and the usage counter (ADR 0202)', () => {
+  it('answers «quali funzioni uso di più?» with the local counts and where they are, on the Orchestrator\'s mount only', async () => {
+    const usage = () => 'Local usage counter: Most used: page memoria/proposte 9× on 5 d.';
+    const out = String(await guideTool(deps({ usage })).run({ topic: 'quali funzioni uso di più?' }));
+    expect(out).toContain('[usage]');
+    expect(out).toContain('page memoria/proposte 9×');
+    expect(out).toContain('andamento/uso');
+    const open = String(await guideTool(deps({ usage, showValues: () => false })).run({ topic: 'funzioni usate di più' }));
+    expect(open).not.toContain('9×');
+    expect(await guideIndex(deps({ usage }), 'it')).toContain('andamento/uso');
+  });
 });

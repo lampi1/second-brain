@@ -1,16 +1,21 @@
 // The app's MCP servers (ADR 0086, issue #91): what Settings → Connettori and the agent card's MCP section call over
-// IPC (only the user's clicks: no MCP tool and no agent can add a server, read a token or widen a role), and what the
+// IPC (the user's clicks), what app_config asks for the Orchestrator on the user's own request (ADR 0207: add, edit,
+// remove, enable per role, test, each with an «Annulla»; never a token: those the user types in Settings), and what the
 // chat launch asks (launch(): the gateway endpoints a chat is given, the managed servers it may not use). It joins the
 // store (definitions, access, tokens), the gateway (the chats' calls) and the import (the engines' own configs, read
 // only). A test opens the server exactly as a chat would (its tokens included), lists its tools and records the result
-// with a clear error and fix. Created by wiring.ts (and demo-wiring.ts with a fake upstream and seeded servers).
+// with a clear error and fix. The «Annulla» journal (mcp-undo.json, no secret: a snapshot's tokens wait encrypted in
+// the secret file, store.park) survives a restart. Created by wiring.ts (and demo-wiring.ts with a fake upstream and seeded servers).
+import crypto from 'node:crypto';
+import fs from 'node:fs';
 import os from 'node:os';
+import path from 'node:path';
 import { log, errText } from '../log';
 import type { McpServer } from '../mcp/server';
 import type { SecretCipher } from '../engines/secrets';
 import type { McpImportCandidate, McpServerDef, McpServersState, McpTestResult } from '../../shared/mcp-servers';
 import { slotKey } from '../../shared/mcp-servers';
-import { McpServerStore } from './store';
+import { McpServerStore, type McpServerSnapshot } from './store';
 import { McpGateway } from './gateway';
 import { McpClientError, connect, describeError, type Endpoint, type Upstream } from './client';
 import { scanImports } from './import';
@@ -34,10 +39,18 @@ export interface McpServersOptions {
   now?: () => number;
 }
 
+/** One undoable change: the server's id before (`id`, '' for an add) and after (`now`), and how it was before. */
+interface UndoEntry { key: string; at: number; id: string; now: string; before: Omit<McpServerSnapshot, 'secrets'> | null }
+const UNDO_MAX = 30, UNDO_DAYS = 7;
+
 export class McpServersService {
   readonly store: McpServerStore;
   readonly gateway: McpGateway;
   private imports: McpImportCandidate[] = [];
+  /** «Annulla» of the changes the Orchestrator made (ADR 0207): newest last, at most UNDO_MAX, UNDO_DAYS old, in
+   *  mcp-undo.json (definitions, access, tests: no secret; the snapshot's tokens are parked in the secret file) */
+  private undos: UndoEntry[] = [];
+  private readonly undoFile: string;
 
   constructor(private readonly opts: McpServersOptions) {
     this.store = new McpServerStore(opts.userData, opts.cipher);
@@ -45,6 +58,33 @@ export class McpServersService {
       mcp: opts.mcp, servers: () => this.store.servers(), roleAccess: r => this.store.roleAccess(r),
       endpoint: id => this.endpoint(id), context: opts.context, ...(opts.connect ? { connect: opts.connect } : {}),
     });
+    this.undoFile = path.join(opts.userData, 'mcp-undo.json');
+    this.loadUndos();
+  }
+
+  private loadUndos(): void {
+    try {
+      const raw = JSON.parse(fs.readFileSync(this.undoFile, 'utf8')) as { entries?: unknown };
+      const ok = (e: Partial<UndoEntry>): e is UndoEntry => typeof e.key === 'string' && /^[0-9a-f]{12}$/.test(e.key) && typeof e.at === 'number'
+        && typeof e.id === 'string' && typeof e.now === 'string' && (e.before === null || (typeof e.before === 'object' && !!e.before?.def));
+      this.undos = (Array.isArray(raw.entries) ? raw.entries as Partial<UndoEntry>[] : []).filter(ok);
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') log.warn('mcp-servers', 'mcp-undo.json unreadable: the connector «Annulla» cards no longer undo', { cause: (e as Error).message });
+    }
+    this.pruneUndos();
+  }
+
+  /** Keeps the newest UNDO_MAX of the last UNDO_DAYS, writes the journal, drops the parked tokens of the others. */
+  private pruneUndos(): void {
+    const since = (this.opts.now?.() ?? Date.now()) - UNDO_DAYS * 86_400_000;
+    this.undos = this.undos.filter(e => e.at >= since).slice(-UNDO_MAX);
+    try {
+      fs.mkdirSync(path.dirname(this.undoFile), { recursive: true });
+      const tmp = `${this.undoFile}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+      try { fs.writeFileSync(tmp, JSON.stringify({ version: 1, entries: this.undos }, null, 2), { mode: 0o600 }); fs.renameSync(tmp, this.undoFile); }
+      finally { fs.rmSync(tmp, { force: true }); }
+    } catch (e) { log.warn('mcp-servers', 'mcp-undo.json not written: a connector «Annulla» works until the app closes', { cause: errText(e) }); }
+    this.store.keepParked(this.undos.map(e => e.key));
   }
 
   state(): McpServersState {
@@ -94,6 +134,44 @@ export class McpServersService {
     const st = this.state();
     this.opts.emit?.(st);
     return st;
+  }
+
+  /** A change to one server that can be undone (ADR 0207, app_config): its snapshot before, the change, and an undo key
+   *  (the feed card's «Annulla», mcpservers:undo). `after`: the server's id after the change (an add, a rename). */
+  change<T>(id: string, mutate: () => T, after?: (r: T) => string): { result: T; undo: string } {
+    const before: McpServerSnapshot | null = this.store.snapshot(id);
+    const result = mutate();
+    const now = after?.(result) ?? id;
+    const key = crypto.randomBytes(6).toString('hex');
+    if (before) this.store.park(key, before.secrets);
+    this.undos.push({ key, at: this.opts.now?.() ?? Date.now(), id, now, before: before ? { def: before.def, access: before.access, test: before.test } : null });
+    this.pruneUndos();
+    this.changed(now);
+    return { result, undo: key };
+  }
+
+  /** The Orchestrator's changes (app_config): add or edit (`previousId`), remove, a role's access; each with its undo key. */
+  agentSave(def: unknown, previousId?: string): { id: string; undo: string } {
+    const r = this.change(previousId ?? '', () => this.store.upsert(def, previousId), d => d.id);
+    return { id: r.result.id, undo: r.undo };
+  }
+  agentRemove(id: string): { undo: string } {
+    if (!this.store.def(id)) throw new Error(`Server MCP «${id}» sconosciuto.`);
+    return { undo: this.change(id, () => this.store.remove(id)).undo };
+  }
+  agentAccess(role: string, server: string, access: unknown): { undo: string } {
+    return { undo: this.change(server, () => this.store.setAccess(role, server, access)).undo };
+  }
+
+  /** Puts back what an undoable change changed. Once only. */
+  undo(key: unknown): McpServersState {
+    const e = typeof key === 'string' ? this.undos.find(x => x.key === key) : undefined;
+    if (!e) throw new Error(`Niente da annullare: già annullato, o il cambio ha più di ${UNDO_DAYS} giorni.`);
+    this.undos = this.undos.filter(x => x !== e);
+    if (!e.before || e.now !== e.id) this.store.remove(e.now);
+    if (e.before) this.store.restore({ ...e.before, secrets: this.store.unpark(e.key) });
+    this.pruneUndos();
+    return this.changed();
   }
 
   /** How a chat (or the test) reaches the server: its definition plus its tokens, read now, in main memory only. */

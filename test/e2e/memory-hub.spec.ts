@@ -1,6 +1,6 @@
 // E2E of the Memoria hub (ADR 0122) on the frozen demo brain: the live top (the day's sentence, the counters, the latest
 // changes, the one «Manutenzione»), the tab bar in order with counts and arrow keys, a deep link memoria/<tab>, the old
-// pages' G-keys (G S, G L, G T, G I, G J, G D) landing on their tab with the rail free of them, and the trash in
+// pages' G-keys (G S, G L, G T, G I, G D; G J opens Andamento → Apprendimento since ADR 0202) landing on their tab with the rail free of them, and the trash in
 // «Approvate» with «Annulla» that puts the rule back. Screenshots of every tab dark and light: test-results/shots/hub-*.png.
 import { expect, test, type Page } from '@playwright/test';
 import fs from 'node:fs';
@@ -18,7 +18,7 @@ function fixtureBrain(): string {
   return d;
 }
 
-const TABS = ['proposte', 'approvate', 'skill', 'regole', 'script', 'idee', 'file', 'apprendimento', 'statistiche'] as const;
+const TABS = ['proposte', 'approvate', 'skill', 'regole', 'script', 'idee', 'file', 'statistiche'] as const;
 
 async function theme(page: Page, scheme: 'dark' | 'light') {
   await page.evaluate(t => window.sb.invoke('settings:set', { theme: t }), scheme);

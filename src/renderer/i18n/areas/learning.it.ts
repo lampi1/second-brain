@@ -13,7 +13,7 @@ export const learningIt = {
   'learn.k.annullatoHelp': 'Cambiamenti che hai annullato (o che sono stati annullati) dopo che erano attivi.',
   'learn.today': 'oggi',
   'learn.unavailable': 'I dati dell’apprendimento non sono disponibili ora. Riprova tra poco: i log dicono il perché.',
-  'learn.filterAll': 'Tutti',
+  'learn.filterAll': 'Mostra tutti',
   'learn.filterTile': (p: { label: string; n: number }) => `${p.label}: ${p.n}. Mostra solo questi`,
   'learn.filterLabel': 'Filtra per verdetto',
   'learn.worse': 'Da guardare',
