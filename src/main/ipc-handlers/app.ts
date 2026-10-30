@@ -1,4 +1,4 @@
-// IPC handlers, App: info and usage, the folder pickers and the file viewer, CLI status, «Aggiorna» (source, update),
+// IPC handlers, App: info and usage (and the usage counter, ADR 0202), the folder pickers and the file viewer, CLI status, «Aggiorna» (source, update),
 // setup and profile, the global layer, the Task page, search, the Log, the headline. Registered by src/main/index.ts
 // with every other group (Handlers in ipc.ts keeps the set complete); each channel's shape is in
 // src/shared/contract/*.ts.
@@ -18,9 +18,10 @@ import { readFileDiff } from '../file-diff';
 import { readFileView } from '../file-view';
 import { showLocal } from '../open-path';
 import { systemLang } from '../lang';
+import { useCounts } from '../use-counter';
 import type { HandlerContext, HandlersOf } from './context';
 
-export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, defaultBrain, updates, headline, pulse, search, hiddenShell, bumpBrainChoice, rendererErrors }: HandlerContext): HandlersOf<'app' | 'cli' | 'source' | 'update' | 'setup' | 'profile' | 'overlay' | 'log' | 'headline' | 'search' | 'tasks' | 'feed'> {
+export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, defaultBrain, updates, headline, pulse, search, hiddenShell, bumpBrainChoice, rendererErrors }: HandlerContext): HandlersOf<'app' | 'cli' | 'source' | 'update' | 'setup' | 'profile' | 'overlay' | 'log' | 'headline' | 'search' | 'tasks' | 'feed' | 'usecount'> {
   return {
     'update:get': () => updates.state(),
     'update:apply': a => updates.apply(a?.id),
@@ -76,6 +77,9 @@ export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, 
       repos: [s.brain.settings().appRepo, fs.existsSync(path.join(outDir, '..', '.git')) ? path.dirname(outDir) : null],
     })),
     'app:usage': () => s.brain.usage(),
+    // the usage counter (ADR 0202): local only, zero tokens; the page's batch is checked in use-counter.ts
+    'usecount:add': a => useCounts.add(a),
+    'usecount:report': a => useCounts.report(a?.days),
     'cli:status': a => engineStatus(a.harness, a.checkLogin !== false),
     'cli:login': a => openLogin(a.harness),
     'feed:list': () => s.brain.feed(),
