@@ -28,18 +28,22 @@ passes only when every word of it is plainly public, else it is dropped whole:
 - no path or drive, no file name (`name.ext`, dotfiles), no URL except https on a short list of public documentation hosts
   (IETF, RFC Editor, W3C, WHATWG, OWASP, ISO, NIST, MDN, Microsoft Learn, the official docs of major runtimes and
   libraries) and never with userinfo, port, query or fragment; no e-mail;
-- no number of 6 or more digits, no hex string of 8 or more with digits, no token longer than 24 characters, no word
-  mixing letters and digits unless it is a version (`v18`, `3.11`) or a standard's id with a known prefix (`ES2022`,
-  `SHA-256`, `CWE-79`), so `PROJ-1234` or a commit hash never pass;
-- a name-like word (Capitalised, camelCase, ALLCAPS, with `-` or `'`) passes only when it is a known public term (a
-  built-in vocabulary of bodies, protocols, formats, languages and libraries), a common technical word, a standard's
-  number, or a word of the user's own ask (the web run sees the ask anyway). In doubt, dropped: an unknown brand or a
-  colleague's surname never passes, even when it is not in the material;
-- a plain word that is a name of the user's files or folders, or that is met in the private material (the material,
-  the files run's own answer without the queries, the file names, the PR link) and is neither common nor public, is
-  dropped.
+- **a positive rule for words**: every word must be a known public term (a built-in vocabulary of bodies, protocols,
+  formats, languages and libraries), a common technical word, or a word of the user's own ask (the web run sees the
+  ask anyway). Anything else, lowercase or not, is dropped with its query, whether the app saw it in the material or
+  not: the files run may read brain pages and files it never quotes, so "not seen in the material" proves nothing;
+- **numbers**: at most 2 per query, each a version (`2.0`, `v20`) or a standard's number (`6749`, `800-63B`) right after
+  a standards body or a public name of the vocabulary (`RFC 6749`, `OAuth 2.0`, `React 18`), or a standard's id with a
+  known prefix in one token (`ES2022`, `SHA-256`, `CWE-79`). Never a dotted quad (an IP address), never 6 or more
+  digits, never a number after a common word or first in the query: a PIN, a phone number or a ticket cannot ride
+  along; any other word with a digit (`PROJ-1234`, a hash, a token) is dropped;
+- an extra guard: a name of the user's files or folders is dropped even when the ask names it (unless it is a common
+  word). It is computed over every text of the material, whole (the diff, the pasted text, the user's files in
+  `fonti.md`), the files run's own answer without the queries, the file names and the PR link.
 
-The conservative rule costs some good queries; that is the intended trade. The vocabulary and the common words are
+The conservative rule costs some good queries; that is the intended trade (amended after a security review on
+2026-10-30, which found that a negative rule over the 60k-character inline material let unseen private words and up to
+8 numbers through). The vocabulary and the common words are
 reviewed like code.
 
 **The user sees what goes out.** The Preparing screen shows the queries left as chips, «Dai tuoi file · cercherò sul
@@ -66,10 +70,10 @@ The flow from the files to the web is now one narrow, visible channel: up to 8 s
 function, shown to the user before they leave (except in «Modalità notte»). The web runs still never read a file, the
 topics' reasons or refs, the material or the files facts; nothing the files run wrote reaches a web run except the
 queries that passed. A prompt injection in the material can at most make the files run propose a query; the filter
-drops anything that is not public vocabulary, common words, versions or standard ids, so the channel cannot carry a
-secret, a name or an identifier of the user's. Residual risk: a combination of public words chosen by an injected
-instruction (it reveals only that the files talk about that public topic), and lowercase words absent from what the app
-saw of the brain (the files run may read brain pages it does not quote). Prompts treat every query, page and file as
+drops anything that is not public vocabulary, common words, the ask's words, or at most two versions or standard numbers
+placed after a public name, so the channel cannot carry a secret, a name, an identifier or a number of the user's.
+Residual risk: a combination of public words chosen by an injected instruction (it reveals only that the files talk
+about that public topic), and a version-shaped number of up to 5 digits after a public name (at most two). Prompts treat every query, page and file as
 data.
 
 ## Consequences

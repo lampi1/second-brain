@@ -2,11 +2,11 @@
 // searching (standards, specifications, libraries with their version, protocols) and this file decides, at zero tokens
 // and the same way every time, which of them may ever reach the web run. The web run reads untrusted pages and has the
 // web tools: what it sees must hold nothing private ("lethal trifecta"), so a query passes only when every word of it is
-// plainly public: at most 8 words and 80 characters, an allow-list of characters, no path, no file name, no URL but a
-// well-known public documentation host, no e-mail, no long number, hex string or token, and no name-like word unless
-// it is a known public term, a standard's id, a version, or the user's own ask (which the web run sees anyway); a plain
-// word met in the user's private material and not a common technical word is left out too. In doubt, a query is
-// dropped. The topic's reason and the file it comes from stay in the app (shown to the user, never sent to the web).
+// plainly public (a positive rule): at most 8 words and 80 characters, an allow-list of characters, each word a known
+// public name, a common technical word or a word of the user's own ask (which the web run sees anyway), no URL but a
+// well-known public documentation host, and at most 2 numbers, each a version or a standard's number right after a
+// standards body or a public name (never an IP address, a long number, a PIN). Paths, file names, e-mails, hex and
+// tokens never pass; a name of the user's files never passes, even from the ask. In doubt, a query is dropped. The topic's reason and the file it comes from stay in the app (shown to the user, never sent to the web).
 // Shared by main/learn/service.ts (filter, parse) and the renderer (components/impara/ImparaPrep.tsx, ImparaSources.tsx);
 // pinned by test/unit/web-topics.test.ts.
 import { parseFacts, type LessonFact } from './lesson';
@@ -22,6 +22,8 @@ export const TOPICS_MAX = 8;
 export const TOPIC_WAIT_MS = 5000;
 const Q_MAX_CHARS = 80;
 const Q_MAX_WORDS = 8;
+/** numbers a query may carry (versions, standards' numbers): «OAuth 2.0 RFC 6749» */
+const MAX_NUMBERS = 2;
 
 /** Documentation hosts a query may name as a URL (a host or any subdomain of it). */
 export const PUBLIC_DOC_HOSTS: readonly string[] = [
@@ -66,7 +68,7 @@ data structure structures algorithm algorithms tree graph queue stack list map s
 lifecycle hooks hook state props component components render rendering virtual reconciliation context store reducer reducers selector selectors effect effects
 container containers image images volume volumes network networking port ports proxy reverse load balancing balancer dns domain domains certificate tls handshake
 accessibility keyboard focus contrast screen reader readers semantic semantics landmark landmarks label labels
-visibility automatic batching debounce debouncing throttle throttling scheduling animation frame rate refresh asynchronous synchronous messages message channel channels
+control controls compliance requirements requirement recommendations guidelines checklist visibility automatic batching debounce debouncing throttle throttling scheduling animation frame rate refresh asynchronous synchronous messages message channel channels
 new old latest stable major minor patch breaking changes change changelog upgrade upgrading deprecation deprecated support supported official documentation docs overview introduction basics advanced
 `.trim().split(/\s+/));
 
@@ -122,30 +124,30 @@ export function safeQuery(raw: unknown, priv: PrivateWords): string | null {
   if (/@/.test(q) || !ALLOWED.test(q)) return null;
   const tokens = q.split(' ').filter(t => t && t !== '·' && t !== '-');
   if (!tokens.length || tokens.length > Q_MAX_WORDS) return null;
+  let numbers = 0, prev = '';
   for (const raw0 of tokens) {
-    if (isUrl(raw0)) { if (!publicUrl(raw0)) return null; continue; }
+    if (isUrl(raw0)) { if (!publicUrl(raw0)) return null; prev = ''; continue; }
     const t = trimPunct(raw0);
     if (!t) continue;
-    const low = t.toLowerCase();
-    if (VOCAB.has(low) || isVersion(t) || isStdId(t) || isStdNum(t)) continue;
-    // a path, a drive, a scheme-less address
-    if (/[\\/:]/.test(t)) return null;
-    // a file name (name.ext), a dotfile
-    if (/^\.|\.[\p{L}]{1,6}$/u.test(t)) return null;
-    // a long number, a hex string, a token
-    if (/\d{6,}/.test(t) || (/[0-9a-f]{8,}/i.test(t) && /\d/.test(t)) || t.length > 24) return null;
-    // letters and digits mixed outside a version or a standard's id (an id, a ticket, a key)
-    if (/\d/.test(t) && /\p{L}/u.test(t)) return null;
-    if (/^\d+$/.test(t)) { if (t.length > 5) return null; continue; }
-    // the user's own ask is public; a common word is fine
-    if (priv.ask.has(low) || COMMON.has(low)) continue;
-    // a name of the user's files or folders
-    if (priv.names.has(low)) return null;
-    // a name-like word (Capitalised, camelCase, ALLCAPS, with - or ') not known as public: drop in doubt
-    if (/\p{Lu}/u.test(t) || /['-]/.test(t)) return null;
-    // a plain word met in the private material and nowhere public
-    if (priv.words.has(low)) return null;
-    for (const w of words(t)) if (priv.names.has(w)) return null;
+    const low = t.toLowerCase(), after = prev;
+    prev = low;
+    if (VOCAB.has(low)) continue;
+    // a number (a version, a standard's number) only right after a standards body or a known public name, at most
+    // MAX_NUMBERS a query: never a PIN, a phone number, an IP address, a ticket
+    if (isVersion(t) || isStdNum(t) || isStdId(t)) {
+      if (/^\d{1,3}(?:\.\d{1,3}){3}$/.test(t) || /\d{6,}/.test(t)) return null;
+      if (++numbers > MAX_NUMBERS) return null;
+      if (!isStdId(t) && !VOCAB.has(after)) return null;
+      continue;
+    }
+    // any other digit, a path, a drive, a file name, a dotfile: never
+    if (/\d/.test(t) || /[\\/:]/.test(t) || /^\.|\.[\p{L}]{1,6}$/u.test(t)) return null;
+    // a name of the user's files or folders, even when the ask names it (an extra guard over the rule below)
+    if (priv.names.has(low) && !COMMON.has(low)) return null;
+    // the positive rule: a word passes only when it is a common technical word or a word of the user's own ask (the
+    // web run sees the ask anyway); anything else, private or merely unknown, is dropped with its query
+    if (COMMON.has(low) || priv.ask.has(low)) continue;
+    return null;
   }
   return tokens.join(' ');
 }

@@ -425,7 +425,9 @@ export class LearnService {
     const raw = v && typeof v === 'object' ? v as Record<string, unknown> : {};
     // what the files run saw or wrote, without the queries themselves: a word met only there may be private
     const answer = JSON.stringify({ ...raw, topics: Array.isArray(raw.topics) ? raw.topics.map(t => (t && typeof t === 'object' ? { ...(t as object), q: undefined, query: undefined } : null)) : undefined });
-    const priv = privateWords([m.text, answer, ...Object.keys(m.files), ...m.sources, req.text ?? '', req.prUrl ?? '', m.cwd ?? ''], req.ask);
+    // every text of the material, whole (the user's files in fonti.md too), as an extra guard: the filter's own rule is
+    // positive (only public, common or the ask's words pass), so what the files run read and did not quote cannot pass
+    const priv = privateWords([m.text, answer, ...Object.keys(m.files), ...Object.values(m.files), ...m.sources, req.text ?? '', req.prUrl ?? '', m.cwd ?? ''], req.ask);
     const { topics, dropped: filtered } = parseTopics(v, priv);
     log.info('learn', 'lesson topics', { data: { id, topics: topics.length, filtered } });
     if (!topics.length) return filtered ? skip('filtered') : none;
