@@ -887,7 +887,7 @@ async function flashReply(run: Run, d: DemoChats): Promise<void> {
 
 async function orchestratorReply(run: Run, text: string, d: DemoChats): Promise<void> {
   await run.sleep(400);
-  // "Strategist" ticked, or an older "Veloce" (ADR 0034, 2026-10-20): she opens a work chat for the request, like app_create_chat
+  // "Strategist" ticked, or an older "Nuova chat" (ADR 0034, 2026-10-20): she opens a work chat for the request, like app_create_chat
   // (a Strategist one for "Strategist"), and says so in a line
   const nc = splitMode(text);
   if (nc.mode) {

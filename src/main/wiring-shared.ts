@@ -48,7 +48,7 @@ export function toMcp(out: ToolOut): ToolOutput {
 export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appControlTools>[0], 'code'>, source: AppSourceService, demo = false, orchestratorTokens?: EndpointTokens): void {
   const as = (t: ToolDef): McpTool => ({ name: t.name, description: t.description, inputSchema: t.inputSchema as Record<string, unknown>, ...(t.annotations ? { annotations: t.annotations } : {}), run: async a => toMcp(await t.run(a)) });
   const what = demo ? 'the second-brain app (demo data)' : 'the second-brain app itself: state, chats, open questions (read-only), feed, logs, screenshots, UI';
-  // SEND_MODE_RULE: what the "Strategist" choice of the Orchestrator's input means (and the older "Veloce") (ADR 0034)
+  // SEND_MODE_RULE: what the "Strategist" choice of the Orchestrator's input means (and the older "Nuova chat") (ADR 0034)
   const instructions = `Control and inspect ${what}. It can never answer questions or permissions. For a status or after a wake, call app_digest (since "last") once instead of reading chats one by one. ${CATALOG_GUIDANCE} ${SEND_MODE_RULE}`;
   const code = { repo: () => source.repo(), inRepo: (dir: string) => source.inRepo(dir) };
   // /mcp/app: test agents (acts for the Orchestrator); /mcp/app/o/<id>/<token>: the Orchestrator's own, so the tools know

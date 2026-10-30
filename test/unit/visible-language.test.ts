@@ -26,7 +26,7 @@ it('keeps Italian, English and German keys in parity, in the whole dictionary an
 });
 it('renders the reported legacy control labels in English',()=>{
  setLang('en');expect(stateInfo({state:'waiting',pending:1,isOrchestrator:true}).label).toBe('waiting for you');
- expect(t('chat.mode.quick')).toBe('Quick');expect(t('chat.menu.copyLink')).toBe('Copy link');expect(t('ui.other')).toBe('Other…');expect(t('essential.saved')).toBe('Saved');
+ expect(t('chat.mode.plan')).toBe('Plan');expect(t('chat.menu.copyLink')).toBe('Copy link');expect(t('ui.other')).toBe('Other…');expect(t('essential.saved')).toBe('Saved');
 });
 it('renders the converted component labels and messages in English',()=>{
  setLang('en');

@@ -260,7 +260,7 @@
     "src/shared/delegation.ts#resultMessage": "6d79717487aa7f0a",
     "src/shared/file-view.ts#FileReference": "fe6774d9696a5a20",
     "src/shared/mcp-servers.ts#chainAllows": "e586b8ff949d5d74",
-    "src/shared/newchat.ts": "7111fd41c9c05d65",
+    "src/shared/newchat.ts": "420ba9e1d9f86dd7",
     "src/shared/ppi.ts": "8b558d7d251bbfd4",
     "src/shared/review.ts": "2018e410ba85d9a4",
     "src/shared/roles.ts": "a1a6959ca4ab2d54",
