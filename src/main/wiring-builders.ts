@@ -53,6 +53,7 @@ export function buildLearn(ctx: Ctx, brain: BrainService, tasks: TaskService, he
     cannotTeach: () => (teacher() ? null : 'Per preparare una lezione serve un motore acceso che legge i file (Impostazioni → Motori).'),
     teachers: () => { const seen = withApiModels(brain.modelsSeen()); return teachers().map(e => teacherOption(e, seen[e.id]?.ids ?? [])); },
     webOk: () => teachers().some(e => e.kind === 'claude'),
+    away: () => brain.settings().awayMode === true,
     places: () => {
       const repo = brain.settings().appRepo || app.getAppPath();
       return { brain: brain.info().brainRoot || null, appSource: repo && fs.existsSync(path.join(repo, 'src')) ? repo : null };
