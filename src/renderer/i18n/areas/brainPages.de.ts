@@ -17,7 +17,6 @@ export const brainPagesDe: typeof brainPagesIt = {
   'brainPages.nav.apprendimento': 'Lernen',
   'brainPages.nav.script': 'Skripte',
   'brainPages.nav.log': 'Log',
-  'brainPages.nav.confronto': 'Modellvergleich',
   'brainPages.nav.agenti': 'Agenten',
   'brainPages.nav.skill': 'Skills',
   'brainPages.nav.impostazioni': 'Einstellungen',
@@ -25,27 +24,6 @@ export const brainPagesDe: typeof brainPagesIt = {
   'brainPages.nav.memoria': 'Gedächtnis',
   'brainPages.nav.classificatori': 'Klassifikatoren',
   'brainPages.nav.collegamenti': 'Karte',
-
-  // Confronto.tsx
-  'brainPages.confronto.errorRead': (p: { name: string; error: string }) => `Kann ${p.name} nicht lesen: ${p.error}`,
-  'brainPages.confronto.none': 'Noch keine Vergleiche.',
-  'brainPages.confronto.mainFolder': '(Haupt)',
-  'brainPages.confronto.colFile': 'Datei',
-  'brainPages.confronto.colFolder': 'Ordner',
-  'brainPages.confronto.colDownload': 'Download',
-  'brainPages.confronto.pageTitle': 'Modellvergleich',
-  'brainPages.confronto.reportCount': (p: { n: number }) => (p.n === 1 ? '1 Vergleichsdatei' : `${p.n} Vergleichsdateien`),
-  'brainPages.confronto.reportUpdated': 'Hauptbericht aktualisiert',
-  'brainPages.confronto.what': 'Dieselbe Aufgabe von Claude- und Cursor-Agenten erledigt, blind bewertet: wer mehr echte Probleme findet, wer Fehlalarme hat, Kosten, Zeit.',
-  'brainPages.confronto.explain': 'wer mehr echte Probleme findet, wer Fehlalarme hat, Kosten und Zeit.',
-  'brainPages.confronto.why': 'entscheiden, welches Tool für welche Arbeit, mit Zahlen statt Bauchgefühl.',
-  'brainPages.confronto.next': 'schau dir «Noch zu bewerten» an: ohne deine Bewertung (oder die der QA) bleiben die Zahlen bei null',
-  'brainPages.confronto.noReports': 'Keine Vergleichsberichte',
-  'brainPages.confronto.noReportsDesc': 'Wenn ein Modellvergleich fertig ist, erscheint sein Bericht hier.',
-  'brainPages.confronto.downloadBtn': (p: { name: string }) => `${p.name} herunterladen`,
-  'brainPages.confronto.sectionTitle': 'Alle Vergleichsdateien',
-  'brainPages.confronto.tableLabel': 'Vergleichsdateien',
-  'brainPages.confronto.updated': 'aktualisiert',
 
   // Esplora.tsx
 

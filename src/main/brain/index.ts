@@ -27,7 +27,6 @@ import { FileJobStore, Ledger } from './estimates';
 import { BrainEstimates } from './brain-estimates';
 import { Routing, routeChat } from './routing';
 import { BrainApi, type LocalApi } from './api';
-import { Compare } from './compare';
 import { touchesBrainModel } from '../brainmodel/model';
 import { Learn, learnStatusWithoutCli } from './learn';
 import { ModelsSeenStore } from './models-seen';
@@ -137,7 +136,6 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   let usage: UsageMonitor | null = null;
   let api: BrainApi | null = null;
   const localApi: LocalApi = new Map(); // paths main answers itself (serveApi), kept across brain folder changes
-  const compare = new Compare(() => cfg.get().brainRoot, node);
   const learn = new Learn(() => cfg.get().brainRoot, node);
   // the Miglioramento page of a brain without the loop's CLI: an empty status from main, never the server's stack
   localApi.set('/api/improve', () => learnStatusWithoutCli(cfg.get().brainRoot));
@@ -297,8 +295,6 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     },
     api: p => api ? api.get(p) : Promise.resolve({ ok: false as const, error: 'nessun brain configurato' }),
     serveApi: (p, fn) => { localApi.set(p, fn); },
-    compareList: () => compare.list(),
-    compareSet: (experiment, on, agent) => compare.set(experiment, on, agent),
     learnAct: a => learn.act(a),
     recordModels: (h, list) => models.record(h, list),
     modelsSeen: () => models.get(),

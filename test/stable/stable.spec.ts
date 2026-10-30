@@ -13,7 +13,7 @@ import { closeSetup, goPage } from '../e2e/helpers';
 import { demoBrain } from '../../scripts/demo-brain.mjs';
 
 const repo = path.resolve(import.meta.dirname, '..', '..');
-const SECTIONS = ['idee', 'costi', 'qualita', 'confronto'] as const;
+const SECTIONS = ['idee', 'costi', 'qualita'] as const;
 const temp = (prefix: string) => fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), prefix)));
 
 test('the packaged stable copy finds the brain by itself and every section shows data', async () => {

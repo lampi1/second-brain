@@ -1,11 +1,11 @@
-// The discussion bar of an idea or an AI suggestion (Idee), of a recurring AI error and of a number (Qualità, Costi,
-// Confronto; ADR 0037): one button, "Discuti", that opens the Orchestrator next to the page with a ready draft in its input
+// The discussion bar of an idea or an AI suggestion (Idee), of a recurring AI error and of a number (Qualità, Costi;
+// ADR 0037): one button, "Discuti", that opens the Orchestrator next to the page with a ready draft in its input
 // (quotes the topic with its source and numbers, or its file and line; ends with an opening question; the user edits it and
 // sends it with Enter). It never creates a work chat: the Orchestrator decides and delegates (owner, 2026-10-19: every
 // "Apri chat" entry point became "Discuti"). Once sent, the topic shows "Discussa" with a link to the Orchestrator.
 // The app passes the Orchestrator actions through DiscussBridge (BrainPage prop → context); without it (the standalone
 // test route) the draft is sent from an inline box. The idea's state in ideas.md is never changed here. Used by
-// pages/Idee.tsx, Qualita.tsx, Costi.tsx, Confronto.tsx, components/Charts.tsx and components/RecordDiscussButton.tsx.
+// pages/Idee.tsx, Qualita.tsx, Costi.tsx, components/Charts.tsx and components/RecordDiscussButton.tsx.
 import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { brainClient } from '../api';
 import { normFile } from '../types';

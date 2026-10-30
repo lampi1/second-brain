@@ -15,7 +15,6 @@ export const brainPagesIt = {
   'brainPages.nav.apprendimento': 'Apprendimento',
   'brainPages.nav.script': 'Script',
   'brainPages.nav.log': 'Log',
-  'brainPages.nav.confronto': 'Confronto modelli',
   'brainPages.nav.agenti': 'Agenti',
   'brainPages.nav.skill': 'Skill',
   'brainPages.nav.impostazioni': 'Impostazioni',
@@ -23,27 +22,6 @@ export const brainPagesIt = {
   'brainPages.nav.memoria': 'Memoria',
   'brainPages.nav.classificatori': 'Classificatori',
   'brainPages.nav.collegamenti': 'Mappa',
-
-  // Confronto.tsx
-  'brainPages.confronto.errorRead': (p: { name: string; error: string }) => `Non riesco a leggere ${p.name}: ${p.error}`,
-  'brainPages.confronto.none': 'Nessun confronto ancora.',
-  'brainPages.confronto.mainFolder': '(principale)',
-  'brainPages.confronto.colFile': 'File',
-  'brainPages.confronto.colFolder': 'Cartella',
-  'brainPages.confronto.colDownload': 'Scarica',
-  'brainPages.confronto.pageTitle': 'Confronto modelli',
-  'brainPages.confronto.reportCount': (p: { n: number }) => `${p.n} file di confronto`,
-  'brainPages.confronto.reportUpdated': 'il report principale è aggiornato',
-  'brainPages.confronto.what': "Lo stesso lavoro fatto dagli agenti di Cursor e di Claude, giudicato alla cieca: chi trova più problemi veri, chi dà falsi allarmi, quanto costa, quanto ci mette.",
-  'brainPages.confronto.explain': "chi trova più problemi veri, chi dà falsi allarmi, quanto costa e quanto tempo ci mette.",
-  'brainPages.confronto.why': "decide quale strumento usare per quale lavoro, con i numeri e non a sensazione.",
-  'brainPages.confronto.next': "guarda «Ancora da giudicare»: senza il tuo giudizio (o della QA) i numeri restano a zero",
-  'brainPages.confronto.noReports': 'Nessun report di confronto',
-  'brainPages.confronto.noReportsDesc': 'Quando un confronto tra modelli finisce, il suo report compare qui.',
-  'brainPages.confronto.downloadBtn': (p: { name: string }) => `Scarica ${p.name}`,
-  'brainPages.confronto.sectionTitle': 'Tutti i file del confronto',
-  'brainPages.confronto.tableLabel': 'File del confronto',
-  'brainPages.confronto.updated': 'aggiornato',
 
   // Esplora.tsx
 

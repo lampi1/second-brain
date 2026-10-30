@@ -43,27 +43,6 @@ export interface UserCorrectionDay { date: string; messages: number; tagged: num
  *  runs by the Rome day the run started (agent-runs.json), the only source before `since`. */
 export interface UserCorrections { since: string | null; byDay: UserCorrectionDay[]; runs: { date: string; tagged: number; afterReport: number }[] }
 
-/** One side of a comparison's cost so far: usd null = no round has a cost yet; missing = rounds without one (e.g. a
- *  Cursor export not imported). */
-export interface CompareCost { usd: number | null; missing: number }
-
-/** One A/B experiment of the brain (<brain>/harness/compare/experiments/*.json) with its switches (switch.json, written
- *  only by the harness's switch.mjs; ADR 0046 §4). A run is compared only when the experiment AND its agent are on.
- *  Side a is the work sampled (e.g. a Cursor subagent's run), side b re-runs the same task inside the app as a hidden
- *  read-only run (main/compare), the judge rates both blind. engine = an engine id (registry), label = its short name
- *  ("Cursor"); a model or effort the experiment does not name is null. Cost so far: the sum over its rounds. */
-export interface CompareExperiment {
-  name: string; title: string; description: string;
-  on: boolean; changedAt: string | null;   // Europe/Rome "YYYY-MM-DD HH:MM:SS"
-  a: { engine: string; label: string; agents?: string[] };
-  b: { engine: string; label: string; model: string | null; effort: string | null };
-  judge: { engine: string; label: string; model: string | null };
-  agents: { name: string; on: boolean }[];
-  rounds: number;
-  cost: { a: CompareCost; b: CompareCost };
-}
-export type CompareState = { ok: true; experiments: CompareExperiment[] } | { ok: false; error: string };
-
 /** A click on the Miglioramento page (ADR 0030), run by the brain's ops/improve/improve.mjs (the app never writes the
  *  loop's state): [Applica] / [No] on a proposal ("<policy>-<n>"), [Ripristina] a policy's previous version. */
 export type LearnAction = { action: 'apply' | 'reject'; id: string } | { action: 'rollback'; domain: string };
@@ -158,8 +137,6 @@ export interface BrainInvokeMap {
    *  the day or after 4 h away), get = the brief now (Ctrl+J's fallback), dismiss = Esc / Ok (not again that day) */
   'morning:brief': [{ op: MorningOp } | undefined, MorningState];
   'brain:api': [{ path: string }, BrainApiResult];
-  /** the brain's model comparisons (harness/compare): read through its config.mjs, switched through its switch.mjs */
-  'compare:list': [void, CompareState];
   /** the brain's self-improvement loop: a click of the Miglioramento page (brain/learn.ts) */
   'learn:act': [LearnAction, LearnResult];
 }

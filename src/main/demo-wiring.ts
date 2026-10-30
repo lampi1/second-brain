@@ -3,8 +3,7 @@
 // app-control tools are mounted (/mcp/app), so agents can drive the demo like the app. Why: one entry point for
 // wiring.ts's demo branch. Also exposes globalThis.__sbDemo for e2e tests (the last views:layout the UI sent, the
 // views' visibility, a way to open a hand-off, a new question, a tool call, a chat that finished a while ago) and, when frozen, tells the UI the fixed clock after
-// every page load (ui:command 'clock'). The comparison queue (compare/queue.ts) is not wired here: the demo runs no
-// engine, so its side b never runs (its experiments are switched in memory, demo.ts).
+// every page load (ui:command 'clock').
 import type { CanonicalResult } from '../shared/agents';
 import { newIssueUrl } from './brainmodel/issue-open';
 import { hiddenOpened } from './window';

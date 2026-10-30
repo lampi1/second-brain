@@ -17,7 +17,6 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.nav.apprendimento': 'Learning',
   'brainPages.nav.script': 'Scripts',
   'brainPages.nav.log': 'Log',
-  'brainPages.nav.confronto': 'Model comparison',
   'brainPages.nav.agenti': 'Agents',
   'brainPages.nav.skill': 'Skills',
   'brainPages.nav.impostazioni': 'Settings',
@@ -25,27 +24,6 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.nav.memoria': 'Memory',
   'brainPages.nav.classificatori': 'Classifiers',
   'brainPages.nav.collegamenti': 'Map',
-
-  // Confronto.tsx
-  'brainPages.confronto.errorRead': (p: { name: string; error: string }) => `Cannot read ${p.name}: ${p.error}`,
-  'brainPages.confronto.none': 'No comparisons yet.',
-  'brainPages.confronto.mainFolder': '(main)',
-  'brainPages.confronto.colFile': 'File',
-  'brainPages.confronto.colFolder': 'Folder',
-  'brainPages.confronto.colDownload': 'Download',
-  'brainPages.confronto.pageTitle': 'Model comparison',
-  'brainPages.confronto.reportCount': (p: { n: number }) => `${p.n} comparison files`,
-  'brainPages.confronto.reportUpdated': 'main report updated',
-  'brainPages.confronto.what': 'Same task done by Claude and Cursor agents, judged blind: which finds more real problems, which has false alarms, cost, time.',
-  'brainPages.confronto.explain': 'which finds more real problems, which has false alarms, cost and time.',
-  'brainPages.confronto.why': 'decide which tool to use for which job, with numbers not hunches.',
-  'brainPages.confronto.next': "check «To be judged»: without your judgment (or QA's) the numbers stay at zero",
-  'brainPages.confronto.noReports': 'No comparison reports',
-  'brainPages.confronto.noReportsDesc': 'When a model comparison finishes, its report shows here.',
-  'brainPages.confronto.downloadBtn': (p: { name: string }) => `Download ${p.name}`,
-  'brainPages.confronto.sectionTitle': 'All comparison files',
-  'brainPages.confronto.tableLabel': 'Comparison files',
-  'brainPages.confronto.updated': 'updated',
 
   // Esplora.tsx
 

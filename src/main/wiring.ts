@@ -101,7 +101,6 @@ import { releaseId } from './release';
 import { sharedDir } from './platform';
 import { HeadlessRunner } from './compare/headless';
 import { OneShotService } from './agents/oneshot';
-import { CompareQueue, queueAllowed } from './compare/queue';
 import { DelegateWorktrees, gitWorktrees } from './agents/worktrees';
 import { stageDelegatedChanges, stageDelegatedChangesMany } from './agents/delegation-integration';
 import { JudgeSampler, judgeSamplingOn } from './agents/judge-sample';
@@ -649,16 +648,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     trash: p => (process.env.SB_TEST ? fs.promises.rm(p, { recursive: true, force: true }) : shell.trashItem(p)),
   });
 
-  // the comparison's side b (ADR 0046 §4): the runs the brain queues (harness/compare/app-queue.mjs), each a hidden
-  // read-only session on an engine the user turned on, with the app's own logins and keys (compare/headless.ts)
+  // hidden read-only sessions on an engine the user turned on, with the app's own logins and keys (compare/headless.ts):
+  // the one-shot jobs below use them (the brain's comparison queue they were built for went, ADR 0201)
   const headless = new HeadlessRunner({
     userData: ctx.userData, settings: () => brain.settings(), keyFor: h => engines.keyFor(h), enginePaths: () => enginePathsFromEnv(), appVersion: app.getVersion(), registry: () => brain.routingInfo().registry,
     // the other side's answers and the verdicts: never read by a run, whatever the brain lists
     denyRead: () => { const root = brain.info().brainRoot; return root ? [path.join(root, 'reviews', 'compare')] : []; },
-  });
-  const compareRuns = new CompareQueue({
-    brainRoot: () => brain.info().brainRoot, node, runner: headless,
-    anyOn: async () => { const st = await brain.compareList(); return st.ok && st.experiments.some(e => e.on); },
   });
   const oneShot = new OneShotService({ userData: ctx.userData, profile: id => agents.list().profiles.find(p => p.id === id),
     settings: () => brain.settings(), registry: () => brain.routingInfo().registry,
@@ -667,8 +662,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // «Chiedi alla Guida» (ADR 0196): one light one-shot on Flash's engine; the anchors are checked only in a run from the repo
   const guide = new GuideService({ runOnce: r => oneShot.runOnce(r), repoRoot: repoRootOf(path.dirname(fileURLToPath(import.meta.url))),
     index: lang => guideIndex({ window: ctx.window, settings: { schema: () => brain.settingsSchema(), get: () => brain.settings() }, tools: () => [], showValues: () => false }, lang) });
-  // only the user's stable app spends tokens on the brain's rounds (the dev instance is run by agents and tests)
-  if (queueAllowed(!!releaseId(), process.env)) compareRuns.start();
 
   // GitHub sync outcomes + product changes in the brain (stable instance only, never in tests): src/main/sync.ts
   let sync: ProductSync | null = null;
@@ -749,13 +742,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     mcpServers,
     cloud, chats, browser, personal, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
     updateChats: {
-      problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
+      problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
     },
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { routines.stop(); mcpServers.stop(); brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
-    killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
+    shutdown: async () => { routines.stop(); mcpServers.stop(); brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
+    killNow: () => { manager.killAll(); runner.shutdown(); },
   };
 }
