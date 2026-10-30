@@ -11,9 +11,9 @@ import crypto from 'node:crypto';
 import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunPlan, AgentRunReport, AgentRunTags, AgentRunTokens } from '../../shared/agents';
 import { ONE_SHOT_PURPOSES } from '../../shared/agents';
 import { errText, log } from '../log';
-import { emptyFlashLog, flashAnswered, flashAsked, flashHanded, readFlashLog, type FlashLog } from './flash-outcomes';
+import { emptyFlashLog, flashAnswered, flashAsked, flashBriefed, flashHanded, readFlashLog, type FlashLog } from './flash-outcomes';
 import { checkResult } from '../../shared/delegation';
-import { MODEL_TIERS, type ModelTier } from '../../shared/roles';
+import { FLASH_BRIEF_TAG, MODEL_TIERS, type ModelTier } from '../../shared/roles';
 import { SUMMARY_MAX } from './run-report';
 import { rollUp, SAMPLE_MAX, type RunTally, type TagTally } from './run-metrics';
 import { cleanOrphanTmps, readLocal, renameWithRetry, writeLocalText, writeLocalTextAsync } from './local-store';
@@ -534,10 +534,12 @@ export class AgentRunStore {
 
   /** Flash's answer outcomes (flash-outcomes.ts, ADR 0131): a copy. */
   flashLog(): FlashLog { return structuredClone(this.flash); }
-  /** The user asked Flash / Flash answered / the user wrote to the Orchestrator: written with the next flush. */
+  /** The user asked Flash (a «Fanne un lavoro» brief hands its last answer over) / Flash answered / the user wrote to the
+   *  Orchestrator: written with the next flush. */
   flashEvent(e: { kind: 'asked' | 'handed'; text: string; at: number } | { kind: 'answered'; at: number }): void {
     if (this.problem) return;
-    if (e.kind === 'asked') flashAsked(this.flash, e.text, e.at);
+    if (e.kind === 'asked' && e.text.startsWith(FLASH_BRIEF_TAG)) flashBriefed(this.flash, e.at);
+    else if (e.kind === 'asked') flashAsked(this.flash, e.text, e.at);
     else if (e.kind === 'handed') { if (!this.flash.open.length) return; flashHanded(this.flash, e.text, e.at); }
     else flashAnswered(this.flash, e.at);
     this.dirty = true;

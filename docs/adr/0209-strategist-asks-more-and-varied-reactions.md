@@ -1,4 +1,4 @@
-# 0209 — The Strategist asks at least three questions; reactions fit the message
+# 0209 — The Strategist asks at least three questions; reactions fit the message; Flash writes the brief
 
 Status: accepted. Raises ADR 0121 (the Strategist really asks) and ADR 0108; amends ADR 0089 (emoji reactions).
 
@@ -23,7 +23,16 @@ said to use it also when starting on a task, so every engine answered 👍.
   confirmation, a joke, looking into it), 👍 only when nothing fits better. The Orchestrator's delegation
   acknowledgement no longer names 👍. The hidden 👍 of `WAKE_RULE` stays: the app hides it.
 
+- «Fanne un lavoro» on Flash (owner, 2026-10-30: «mi aspetto che lo crei bene il prompt per l'Orchestrator», he uses
+  Flash also to plan, research and ask advice): the tile sends Flash `BRIEF_ASK` (renderer `lib/lampo.ts`, tagged
+  `FLASH_BRIEF_TAG`), Flash writes the Orchestrator's prompt from its whole conversation (goal, context with exact names,
+  what to do, constraints, done when, open questions) between markers, and the tile drafts it into the Orchestrator's
+  input; the user still sends it. No answer within two minutes, or none usable: the old draft (last question and
+  answer). The tagged turn hands Flash's newest open answer over (`flashBriefed`, outcome `handed`), never counts as a
+  new question.
+
 ## Consequences
 
 More turns before a plan (each question is one round trip); the user can always stop them with «Basta domande».
-Tests: `test/unit/agents/strategy.test.ts`, `test/unit/reaction.test.ts`.
+Tests: `test/unit/agents/strategy.test.ts`, `test/unit/reaction.test.ts`, `test/unit/chats/lampo.test.ts`,
+`test/unit/agents/flash-outcomes.test.ts`. «Fanne un lavoro» costs one short Flash turn.
