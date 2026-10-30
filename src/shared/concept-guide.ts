@@ -1562,9 +1562,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
     summary: b('Chiedi all’Orchestrator dove sta una cosa o di cambiare un’impostazione: legge la mappa dell’app dal vivo e la cambia per te, con «Annulla».',
       'Ask the Orchestrator where something is, or to change a setting: it reads the app’s map live and changes it for you, with "Undo".'),
     points: [
-      // src/main/appctl/guide.ts app_guide
-      b('Quando gli serve, legge la mappa dell’app così come è disegnata ora: le voci della barra, le pagine, le schede di Memoria, le sezioni delle Impostazioni con i valori attuali, le scorciatoie, i testi dei «?» e queste carte della Guida.',
-        'When it needs to, it reads the app’s map as it is drawn now: the rail’s items, the pages, Memoria’s tabs, the Settings sections with their current values, the shortcuts, the "?" texts and these Guide cards.'),
+      // src/main/appctl/guide.ts app_guide; src/main/appctl/tool-catalog.ts TOOL_CATALOG (ADR 0208)
+      b('Quando gli serve, legge la mappa dell’app così come è disegnata ora: le voci della barra, le pagine, le schede di Memoria, le sezioni delle Impostazioni con i valori attuali, le scorciatoie, i testi dei «?», queste carte della Guida e ogni strumento dell’app, anche quelli che hanno solo le chat di lavoro, il browser o il brain.',
+        'When it needs to, it reads the app’s map as it is drawn now: the rail’s items, the pages, Memoria’s tabs, the Settings sections with their current values, the shortcuts, the "?" texts, these Guide cards and every tool of the app, also the ones only the work chats, the browser or the brain have.'),
       // src/main/appctl/guide.ts outline (window.__sbScreen)
       b('Sa anche cosa c’è sullo schermo adesso e dove sta ogni controllo, senza leggere il contenuto privato delle chat.',
         'It also knows what is on screen right now and where each control sits, without reading the chats’ private content.'),
@@ -1590,14 +1590,14 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'app_config only on the Orchestrator’s endpoint (app_guide and app_ui elsewhere too, without the settings’ values); no token cost in its other turns: the map is read only when needed.'),
     ],
     anchors: {
-      0: ['src/main/appctl/guide.ts#app_guide'],
-      1: ['src/main/appctl/guide.ts'],
+      0: ['src/main/appctl/guide.ts#app_guide', 'src/main/appctl/guide.ts#otherTools'],
+      1: ['src/main/appctl/guide.ts#screenOutline'],
       2: ['src/main/appctl/config.ts#app_config'],
       3: ['src/main/appctl/user-words.ts'],
       4: ['src/main/appctl/config.ts'],
       5: ['src/main/appctl/config.ts'],
     },
-    sources: ['src/main/appctl/guide.ts', 'src/main/appctl/config.ts', 'src/main/appctl/user-words.ts', 'src/renderer/lib/app-map.ts'],
+    sources: ['src/main/appctl/guide.ts', 'src/main/appctl/tool-catalog.ts', 'src/main/appctl/config.ts', 'src/main/appctl/user-words.ts', 'src/renderer/lib/app-map.ts'],
   },
   {
     id: 'voice',
@@ -1813,6 +1813,124 @@ export const CONCEPTS: readonly ConceptCard[] = [
       5: ['src/main/appctl/tools.ts#app_routine_status'],
     },
     sources: ['packages/routine-runtime/README.md', 'src/renderer/brain/pages/Routines.tsx', 'src/renderer/components/LegacyRoutineHistory.tsx', 'src/main/appctl/tools.ts', 'docs/adr/0179-terminal-only-routines.md'],
+  },
+  {
+    id: 'settings',
+    title: b('Le Impostazioni', 'Settings'),
+    summary: b('Una pagina sola per le poche scelte che contano: profilo, aggiornamenti, connettori, account, ruoli, il tuo spazio, voce, aspetto, notifiche e avanzate.',
+      'One page for the few choices that matter: profile, updates, connectors, accounts, roles, your workspace, voice, appearance, notifications and advanced.'),
+    points: [
+      // src/renderer/lib/settings-sections.ts settingsSections; src/renderer/components/SettingsPage.tsx
+      b('Si apre con Ctrl+, dal menu in alto o con G P; ogni sezione è una scheda con icona, titolo, una riga che dice a cosa serve e le righe di scelta.',
+        'It opens with Ctrl+, from the top menu or with G P; each section is a card with an icon, a title, one line on what it is for and the rows of choices.'),
+      // src/renderer/lib/settings-page.ts matchesSettingsSearch
+      b('La ricerca in cima filtra le sezioni per titolo, descrizione e parole chiave; la fila di link porta dritto a una sezione, e un link «impostazioni/<sezione>» apre la pagina lì.',
+        'The search on top filters the sections by title, description and keywords; the row of links jumps to a section, and an "impostazioni/<section>" link opens the page there.'),
+      // src/renderer/components/ProfileSettings.tsx; src/renderer/components/SettingsPage.tsx
+      b('Il mio profilo è come gli agenti ti conoscono (nome, ruolo, lavoro principale, modo di rispondere, in me.md); Account e strumenti mostra l’accesso di ogni motore e quanto può fare da solo.',
+        'My profile is how the agents know you (name, role, main work, reply style, in me.md); Accounts and tools shows each engine’s sign-in and how much it may do on its own.'),
+      // src/renderer/components/SettingsPage.tsx; src/renderer/components/AppearancePreview.tsx
+      b('Il mio spazio tiene la cartella del brain, la condivisione, la cartella dei progetti, la chiusura automatica delle chat ferme e la configurazione guidata da rifare; Aspetto e lingua cambia tema, lingua e densità con un’anteprima.',
+        'My workspace holds the brain folder, sharing, the projects folder, the auto-close of idle chats and the guided setup to run again; Appearance and language changes theme, language and density with a preview.'),
+      // src/shared/guide-coverage.ts SETTINGS_CARDS
+      b('Le altre sezioni hanno la loro carta della Guida: Aggiornamenti, Connettori e Avanzate (server MCP), Ruoli e deleghe, Voce, Notifiche.',
+        'The other sections have their own Guide card: Updates, Connectors and Advanced (MCP servers), Roles and delegation, Voice, Notifications.'),
+      // src/main/appctl/config.ts app_config
+      b('Puoi chiedere all’Orchestrator di cambiare una scelta per te: lo fa come il tuo clic, con «Annulla»; segreti e chiavi restano solo tuoi.',
+        'You can ask the Orchestrator to change a choice for you: it does it like your click, with "Undo"; secrets and keys stay yours alone.'),
+    ],
+    analogy: b('Come il quadro elettrico di casa: pochi interruttori con l’etichetta giusta, e per i lavori grossi chiami l’elettricista.',
+      'Like the fuse box at home: a few switches with the right label, and for the big jobs you call the electrician.'),
+    tech: [
+      tech(WHERE, 'Sezioni in lib/settings-sections.ts (SETTINGS_SECTION_IDS, lette anche dalla mappa dell’Orchestrator), pagina components/SettingsPage.tsx, valori in brain-settings.json tramite settings:set.',
+        'Sections in lib/settings-sections.ts (SETTINGS_SECTION_IDS, also read by the Orchestrator’s map), page components/SettingsPage.tsx, values in brain-settings.json through settings:set.'),
+    ],
+    anchors: {
+      [-1]: ['src/renderer/lib/settings-sections.ts#SETTINGS_SECTION_IDS'],
+      0: ['src/renderer/lib/settings-sections.ts#settingsSections'],
+      1: ['src/renderer/lib/settings-page.ts#matchesSettingsSearch'],
+      4: ['src/shared/guide-coverage.ts#SETTINGS_CARDS'],
+      5: ['src/main/appctl/config.ts#app_config'],
+    },
+    sources: ['src/renderer/components/SettingsPage.tsx', 'src/renderer/lib/settings-sections.ts', 'src/renderer/lib/settings-page.ts', 'src/renderer/components/ProfileSettings.tsx', 'src/renderer/components/AppearancePreview.tsx', 'src/main/appctl/config.ts'],
+  },
+  {
+    id: 'guide',
+    title: b('La Guida', 'The Guide'),
+    summary: b('Ogni concetto dell’app come una carta: come funziona, un paragone di tutti i giorni e i file da cui viene; puoi farle domande.',
+      'Every concept of the app as a card: how it works, an everyday analogy and the files it comes from; you can ask it questions.'),
+    points: [
+      // src/renderer/components/GuidePage.tsx GuidePage; src/renderer/components/GuideLink.tsx
+      b('Si apre dalla barra, con Ctrl+K o con G E; il «Come funziona →» di un «?» apre direttamente la carta giusta.',
+        'It opens from the rail, with Ctrl+K or with G E; the "How it works →" of a "?" opens the right card directly.'),
+      // src/shared/concept-guide.ts ConceptCard
+      b('Una carta mostra i punti numerati, a volte un diagramma, il paragone, i dettagli tecnici con i file e, a parte, quello che è ancora un obiettivo.',
+        'A card shows its numbered points, sometimes a diagram, the analogy, the technical details with the files and, apart, what is still a target.'),
+      // src/renderer/components/GuideAsk.tsx
+      b('«Chiedi alla Guida» manda la tua domanda a un modello leggero senza strumenti, con le carte che c’entrano: la risposta cita carte e file, con il suo costo.',
+        '"Ask the Guide" sends your question to a light model with no tools, with the cards that matter: the answer cites cards and files, with its cost.'),
+      // src/renderer/lib/guide-usage.ts forYou
+      b('«Per te» mette in cima le tre carte che ti servono di più, dai contatori locali (i «?» aperti, le carte lette, le domande, gli errori del Log), a zero token.',
+        '"For you" puts on top the three cards you need most, from local counters (the "?" opened, cards read, questions, the Log’s errors), at zero tokens.'),
+      // src/shared/concept-guide.ts orchestratorText
+      b('«Discuti» mette la carta come messaggio pronto nell’input dell’Orchestrator, senza inviarlo; «Imparalo» apre una lezione di Impara sulla carta.',
+        '"Discuss" puts the card as a ready message in the Orchestrator’s input, without sending it; "Learn it" opens an Impara lesson about the card.'),
+      // src/main/guide/anchors.ts staleInRepo; src/shared/guide-coverage.ts coverageGaps (ADR 0196, 0208)
+      b('Resta aggiornata da sola: una carta il cui codice è cambiato dopo il testo si segna «da verificare», e ogni pagina e sezione delle Impostazioni deve avere la sua carta in italiano, inglese e tedesco, o i controlli del repository falliscono.',
+        'It keeps itself current: a card whose code changed after its text is marked "to verify", and every page and Settings section must have its card in Italian, English and German, or the repository’s checks fail.'),
+    ],
+    analogy: b('Come il libretto di istruzioni di un elettrodomestico, ma che si corregge da solo quando cambia il modello e risponde alle domande.',
+      'Like an appliance’s instruction booklet, but one that corrects itself when the model changes and answers questions.'),
+    tech: [
+      tech(FILES, 'Contenuto in shared/concept-guide.ts (tedesco in concept-guide.de.ts, id in concept-ids.ts); ancore in shared/guide-anchors.json (node scripts/guide-anchors.mjs); quale carta spiega ogni pagina e sezione in shared/guide-coverage.ts.',
+        'Content in shared/concept-guide.ts (German in concept-guide.de.ts, ids in concept-ids.ts); anchors in shared/guide-anchors.json (node scripts/guide-anchors.mjs); which card explains each page and section in shared/guide-coverage.ts.'),
+    ],
+    anchors: {
+      [-1]: ['src/shared/guide-coverage.ts#PAGE_CARDS'],
+      0: ['src/renderer/components/GuidePage.tsx#GuidePage'],
+      2: ['src/renderer/components/GuideAsk.tsx'],
+      3: ['src/renderer/lib/guide-usage.ts#forYou'],
+      4: ['src/shared/concept-guide.ts#orchestratorText'],
+      5: ['src/main/guide/anchors.ts#staleInRepo', 'src/shared/guide-coverage.ts#coverageGaps'],
+    },
+    sources: ['src/renderer/components/GuidePage.tsx', 'src/renderer/components/GuideAsk.tsx', 'src/renderer/components/GuideLink.tsx', 'src/renderer/lib/guide-usage.ts', 'src/shared/concept-guide.ts', 'src/main/guide/anchors.ts', 'src/shared/guide-coverage.ts'],
+  },
+  {
+    id: 'brain-map',
+    title: b('La Mappa del brain', 'The brain map'),
+    summary: b('Chi usa cosa nel tuo brain, come un grafo: agenti, skill, regole e memoria, oppure le note, anche in 3D mentre le chat lavorano.',
+      'Who uses what in your brain, as a graph: agents, skills, rules and memory, or the notes, also in 3D while the chats work.'),
+    points: [
+      // src/renderer/components/brain-model/MapPage.tsx MapPage
+      b('La pagina Mappa (G B) ha due viste: «Agenti e skill» e «Note del brain».',
+        'The Map page (G B) has two views: "Agents and skills" and "Brain notes".'),
+      // src/renderer/lib/brain-model-view.ts linkGraph
+      b('«Agenti e skill» disegna ogni agente con le sue skill, le regole che riceve e la sua memoria; un clic apre l’ispettore, che porta alla pagina dell’agente, alla skill o al file.',
+        '"Agents and skills" draws every agent with its skills, the rules it receives and its memory; a click opens the inspector, which leads to the agent’s page, the skill or the file.'),
+      // src/renderer/dashboard/BrainNotesMap.tsx BrainNotesMap
+      b('«Note del brain» mostra note, aree, agenti e strumenti del brain con i loro collegamenti, con ricerca, ispettore e i controlli del brain.',
+        '"Brain notes" shows the brain’s notes, areas, agents and tools with their links, with search, an inspector and the brain checks.'),
+      // src/renderer/brain/map/BrainMap.tsx BrainMapView; src/renderer/brain/lib/live.ts liveGraph
+      b('«Esplora in 3D» apre la mappa che puoi far girare: si accende dove le chat lavorano adesso (una chat attiva, un file del brain letto o scritto, uno strumento, una scheda del browser) e i collegamenti pulsano finché il lavoro è in corso.',
+        '"Explore in 3D" opens the map you can spin: it lights up where the chats are working now (an active chat, a brain file read or written, a tool, a browser tab) and the links pulse while the work is in progress.'),
+      // src/renderer/brain/lib/live.ts liveGraph; src/renderer/brain/map/engine.ts webglAvailable
+      b('Contano solo i file dentro la cartella del brain: una chat che legge un repository di codice accende sé stessa, non la mappa. Senza WebGL la mappa 3D dice che non può disegnare.',
+        'Only files inside the brain folder count: a chat reading a code repository lights itself, not the map. Without WebGL the 3D map says it cannot draw.'),
+    ],
+    analogy: b('Come la cartina della metropolitana con i treni in tempo reale: vedi le linee e dove si sta muovendo qualcosa adesso.',
+      'Like a metro map with live trains: you see the lines and where something is moving right now.'),
+    tech: [
+      tech(DATA, 'Grafo agenti → skill → regole → memoria da lib/brain-model-view.ts linkGraph; note da /api/map; livello dal vivo da brain/lib/live.ts liveGraph (chat, strumenti, schede), disegnato da brain/map/engine.ts.',
+        'Agents → skills → rules → memory graph from lib/brain-model-view.ts linkGraph; notes from /api/map; live layer from brain/lib/live.ts liveGraph (chats, tools, tabs), drawn by brain/map/engine.ts.'),
+    ],
+    anchors: {
+      0: ['src/renderer/components/brain-model/MapPage.tsx#MapPage'],
+      1: ['src/renderer/lib/brain-model-view.ts#linkGraph'],
+      2: ['src/renderer/dashboard/BrainNotesMap.tsx#BrainNotesMap'],
+      3: ['src/renderer/brain/map/BrainMap.tsx#BrainMapView', 'src/renderer/brain/lib/live.ts#liveGraph'],
+      4: ['src/renderer/brain/map/engine.ts#webglAvailable'],
+    },
+    sources: ['src/renderer/components/brain-model/MapPage.tsx', 'src/renderer/lib/brain-model-view.ts', 'src/renderer/dashboard/BrainNotesMap.tsx', 'src/renderer/brain/map/BrainMap.tsx', 'src/renderer/brain/map/engine.ts', 'src/renderer/brain/lib/live.ts'],
   },
 ];
 
