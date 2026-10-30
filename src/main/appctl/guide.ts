@@ -3,8 +3,10 @@
 // hand-kept description: the map is read when asked, from the code that draws the app. The renderer gives what the UI
 // holds (window.__sbAppMap, renderer/lib/app-map.ts: the rail as drawn, pages, Memoria tabs, Settings sections,
 // palette actions with their keys, the "?" help texts, the view); main adds the settings schema with the current values,
-// the static terminal-only routine guidance (never scans run data),
-// the concepts of the Guida page (shared/concept-guide.ts) and the caller's own tools. Called on demand only, so it
+// the static terminal-only routine guidance (never scans run data), the usage counter's summary (ADR 0202: which pages and
+// actions the user used most in 14 days, local counts, on the authenticated Orchestrator's mount only),
+// the concepts of the Guida page (shared/concept-guide.ts), the caller's own tools and, from appctl/tool-catalog.ts,
+// every other tool of the app (the work chats', the browser's, the brain hooks'), so it knows the whole app (ADR 0208). Called on demand only, so it
 // costs no tokens in the Orchestrator's other turns (the token plan, ADR 0089). Without a topic: a short index; with
 // one: the matching entries in full. The outline (window.__sbScreen) is what is on screen now, private content left out
 // (lib/app-map.ts). Used by appctl/tools.ts (app_guide, app_ui "outline").
@@ -14,6 +16,8 @@ import { CONCEPTS, textOf, type GuideLang } from '../../shared/concept-guide';
 import { getAt } from '../brain/settings-schema';
 import type { ToolDef } from './tools';
 import { ROUTINE_AUTHORING_SUMMARY } from '../flows/capabilities';
+import { MOUNT_LABEL, TOOL_CATALOG, type ToolMount } from './tool-catalog';
+import { useCounts } from '../use-counter';
 
 /** What the renderer's appMap() returns (renderer/lib/app-map.ts AppMapUi). */
 interface UiMap {
@@ -35,11 +39,17 @@ export interface GuideDeps {
   personalShown?: () => boolean;
   /** false on the open /mcp/app mount: settings are listed without their current values (local paths, budgets) */
   showValues?: () => boolean;
+  /** the usage counter's summary (tests); absent = the app's own counter (use-counter.ts) */
+  usage?: () => string;
 }
 
+// ADR 0207: what the Orchestrator needs to add a connector for the user without ever handling a secret
+const CONNECTOR_ADD = 'Impostazioni › Connettori, «Aggiungi server MCP» (app_ui page impostazioni/connectors): the user pastes a README\'s JSON (mcpServers), a command line (npx …, uvx …, docker run …) or an https URL and the form fills itself, or picks a popular server (filesystem, fetch, memory, sequential-thinking, git, playwright, context7, brave-search); «Salva e prova» saves, stores typed tokens encrypted and tests. Every server card has role chips (who may use it), Orchestrator and Flash included; Flash (quick chats) starts off and gets reading tools only. You: app_config area connector — action get (servers, access per role incl. flash, token slots set or not, last test), add with snippet (the same paste) or def ({label, transport stdio|http, command, args, env, url, headers, tokens:[{name, placement env|header, header?, prefix?}]}), set key access (role incl. flash, value all|read|none) | enabled | label | purpose | command | args | env | url | headers | tokens, test, remove, undo (the key from a change), form (opens the add form prefilled for the user). Every change posts a feed card with «Annulla». Secret values: never ask for them, never repeat them; a pasted value is dropped and the user types it in the form (action form). Import from Claude/Cursor: the user\'s button «Importa da Claude e Cursor» on the same page.';
+const SETTINGS_PAGE = 'Impostazioni: a left nav by category (Tu, Lavoro, Strumenti, App) and a search on top (also Ctrl+K «Impostazioni › <sezione>») that filters rows and highlights the words. Each row: name and one line on the left, the control on the right; a shield marks protected settings (another agent can only propose them; the user\'s click or their request to you changes them, at once). Every change saves at once; a «Salvato» pill with «Annulla» appears top right («Modificato dall\'Orchestrator» for yours). Undo of your setting change: app_config action undo with its changeId.';
 /** How the Agenti page measures the roles (agents/judge-sample.ts, standing.ts), so the Orchestrator explains the counters and the
  *  review switch from the code's rules. */
-const AGENT_REVIEWS = 'Automatic reviews («Revisione · …» chats, a Sentinel in a fresh session): setting judging (Agenti page switch «Abilita controllo livello e performance»; change: app_config area setting judging). On = every finished root work chat gets one review, no daily limit (the old delegation.judgeDaily count is gone), at most two running at once; off = none. Never reviewed: a review chat itself (also a later task or a continuation of it), a delegated child (its parent judged it), a run its receipts (the repo checks after its last change) already decide. One review in ten gets a second one that grades the first. Off: the Agenti page and npm run levels say «Controllo spento dal <giorno>: nessuna revisione indipendente, contano solo i tuoi voti»; nothing turns it on but the user.';
+const AGENT_REVIEWS = 'Automatic reviews (ADR 0203): setting judging (Agenti page switch «Abilita controllo livello e performance»; change: app_config area setting judging). On = a sample of the finished root work runs is reviewed by ONE hidden read-only Sentinel run a night: no chat, no Grindhouse strip, no notification. Sample: 25% of each role\'s undecided runs, 10% when its performance spread is under 10 points with 5 verdicts on its current model, skills and rules, back to 25% after a change to them. Never sampled: a run the user judged, one its receipts decide (recorded at once, zero tokens), a reworked or reopened run, a delegated child, a review. No second review of the reviewer. Off = none.';
+const AGENT_REVIEWS_NIGHT = 'Nightly review timing and cap (ADR 0203): due once a day, at 03:00 if the app is running, else at the first idle moment after the next start (open 5 min, no keyboard/mouse for 10 min); missed nights = still one session over the last 7 days, oldest first. Daily cap: setting judgingCapUsd (default 1 $, «Tetto al giorno» beside the switch; change: app_config area setting judgingCapUsd): as many runs as it buys at the median cost of a reviewed run. The Log shows «Revisione notturna: N run, X $»; the work roles\' cards say «Aggiornato stanotte alle 03:00».';
 const AGENT_LEVELS = 'Agent cards: «Lavori conclusi» counts the ended runs; the Orchestrator\'s are the root jobs it opened, Flash\'s its answers. Level = XP from verified successes only (user verdict, verified review, receipts, verified parent, a Sentinel review graded later by the user, a second review, its parent\'s feedback or a rework of the reviewed run), by job size; Flash also earns a small low-trust XP from observed outcomes (the user did not correct or re-ask). The retired roles (Judge, Scribe, Router) have no level and no stats; their old runs stay readable. Receipts: a turn outside git knows its files from its edit tools when it ran no command that may write. Why a level is stuck: npm run levels.';
 /** A page that crashed and where interface errors go (ADR 0192), so the Orchestrator tells the user what the card means. */
 const PAGE_ERRORS = 'A page that fails to render shows «Questa pagina ha avuto un errore» in its place (each page, the focus view, the 3D map and this column\'s body have their own): «Ricarica la pagina» mounts it again; the rest of the app, the chats and the agents keep working. Every interface error (that card, an uncaught exception, an unhandled promise rejection) goes to the technical log, scope renderer, rate-limited: app_logs or npm run logs -- --scope renderer. A «Manutenzione» click sees them in its pack (ui-errors) and can propose an «Apri issue» card; the daily digest keeps the counts 90 days. Nothing to approve: reloading the page is the user\'s click.';
@@ -49,6 +59,10 @@ const MEASURES_0197: [title: string, text: string][] = [
   ['Classificatori: tipo di lavoro per esempi (kind by examples)', 'Page classificatori, wide card «Tipo di lavoro per esempi» (on trial). Nearest centroid over the local e5 embeddings of the user\'s ended runs with a verified outcome, labelled by the word rule (taskOf); «altro» below a threshold calibrated on 20% of them; tested on another 20% (agreement with the word rule and confusion matrix: agreement, not truth). Zero tokens, computed only when the page asks. Routing still uses the word rule; switching is the user\'s decision, not a setting.'],
   ['Agenti: stima con tutti i giudizi e accordo Sentinel–te (PPI, kappa)', 'Role page (Agenti › a role): beside «Successi verificati», only when at least 5 runs are judged both by the user and by an automatic judge (newest Sentinel review, else the receipts), «Stima con tutti i giudizi» = mean of the automatic judgments + mean(user − automatic) on those runs, 90% range (prediction-powered inference). «Accordo Sentinel–te» = share of equal verdicts and Cohen\'s kappa with n. Kept runs only; read only.'],
 ];
+/** Andamento's tabs (ADR 0202): the four statistics pages in one, and where their old ids land. */
+const ANDAMENTO_TABS = 'One page, rail › Andamento (G C), five tabs: Costi (app_ui page andamento/costi, period andamento/costi/1|7|30|90), Qualità (andamento/qualita), Apprendimento (andamento/apprendimento, once a Memoria tab), Classificatori (andamento/classificatori, once a Brain page), Uso (andamento/uso, the local usage counter). The old ids costi, qualita, apprendimento, classificatori and memoria/apprendimento open their tab; keys G Q, G J, G K too. Read only, nothing to approve.';
+/** The usage counter (ADR 0202): what it counts and where, before its numbers. */
+const USAGE_ABOUT = 'Andamento → Uso (app_ui page andamento/uso): page and tab opens and main actions (new request, Orchestrator, Discuti, focus mode, stop all, dictation, file opens…) counted per day on this PC, kept 90 days, zero tokens, never sent anywhere; for deciding which features to keep. Read only: nothing to approve, no setting.';
 /** How the app prepares and observes terminal routines (ADR 0179), so the Orchestrator answers from the code's rules. One
  *  entry each: app_guide cuts an entry's text at 700 characters. */
 const ROUTINE_RULES: [title: string, text: string][] = [
@@ -96,17 +110,32 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
   const s = d.settings.get(), values = d.showValues?.() ?? true;
   for (const x of d.settings.schema()) out.push({ kind: 'setting', title: `${x.label} (${x.key})`,
     text: `${x.description} · type ${x.type}${x.values ? ` ${x.values.join('|')}` : ''}${x.key.includes('*') || !values ? '' : ` · now ${show(getAt(s, x.key))}`} · change: app_config area setting` });
-  out.push({ kind: 'agents', title: 'Agenti: revisioni automatiche on/off (reviews, judging)', text: AGENT_REVIEWS });
+  out.push({ kind: 'agents', title: 'Agenti: revisioni automatiche notturne on/off, campione (reviews, judging)', text: AGENT_REVIEWS });
+  out.push({ kind: 'agents', title: 'Agenti: revisioni automatiche, quando e tetto di spesa (nightly review, judgingCapUsd)', text: AGENT_REVIEWS_NIGHT });
   out.push({ kind: 'agents', title: 'Agenti: lavori conclusi e livelli (completed counter, levels, XP)', text: AGENT_LEVELS });
   out.push({ kind: 'concept', title: 'Errore di una pagina («Questa pagina ha avuto un errore», page crash, interface errors, renderer log)', text: PAGE_ERRORS });
+  out.push({ kind: 'concept', title: 'Connettori: aggiungere un server MCP (add, paste JSON, catalog, test, Flash, Orchestrator)', text: CONNECTOR_ADD });
+  out.push({ kind: 'concept', title: 'Impostazioni: ricerca, «Salvato» e Annulla (settings search, saved, undo, protected)', text: SETTINGS_PAGE });
   out.push({ kind: 'concept', title: 'Connettori: moduli MCP elicitation nelle domande', text: 'Claude MCP forms appear in Da rispondere: up to eight flat text, enum, boolean or numeric fields; Altro accepts typed input. The user fills or refuses the form; defaults never approve it and there is no always-allow. Empty forms ask for confirmation. Nested schemas, unsupported constraints, URL requests and credential fields are cancelled with an explanation; use the connector login route for credentials. app_pending lists requests read-only; the user answers in the question panel.' });
   out.push({ kind: 'concept', title: 'Guida: Chiedi alla Guida, Per te, da verificare (ask the guide)', text: 'The Guida page (app_ui page guida) has a question box on top, «Chiedi alla Guida»: the user\'s question goes to one light model with no tools (Flash\'s engine, lightest tier) with the matching concept cards and this index; the answer cites cards (clickable) and source files, with its cost. Only the user\'s click asks; no approval (no tools). «Per te» lists the three cards this user needs most from local counters (the "?" opened, cards opened, questions to the Orchestrator, Log errors), zero tokens. A card marked «da verificare» describes code that changed after its text (only in a run from the repo). Cards about roles, delegation and the app\'s IPC show a diagram drawn from the code.' });
   for (const [title, text] of MEASURES_0197) out.push({ kind: 'measure', title, text });
+  out.push({ kind: 'page', title: 'Andamento tabs (Trends: costi, qualita, apprendimento, classificatori, uso)', text: ANDAMENTO_TABS });
+  out.push({ kind: 'usage', title: 'Uso dell\'app: funzioni e pagine usate di più (usage counter, most used features, quali funzioni uso di più, cosa uso poco)',
+    text: `${USAGE_ABOUT} ${values ? (d.usage ?? (() => useCounts.summary()))() : 'The counts are shown only on the Orchestrator\'s own endpoint.'}` });
   for (const [title, text] of ROUTINE_RULES) out.push({ kind: 'routine', title, text });
   out.push({ kind: 'routine', title: 'Routine: creare un pacchetto (author a routine package from the user need)', text: ROUTINE_AUTHORING_SUMMARY });
   for (const c of CONCEPTS) out.push({ kind: 'concept', title: textOf(c.title, lang), text: `${textOf(c.summary, lang)} ${c.points.slice(0, 3).map(p => textOf(p, lang)).join(' ')} (more: the Guida page)` });
-  for (const t of d.tools()) out.push({ kind: 'tool', title: t.name, text: t.description });
+  const own = d.tools();
+  for (const t of own) out.push({ kind: 'tool', title: t.name, text: t.description });
+  for (const [name, text] of otherTools(own)) out.push({ kind: 'tool', title: name, text });
   return out;
+}
+
+/** The app's tools the caller does not have (appctl/tool-catalog.ts), each with who has it: name → text. */
+export function otherTools(own: readonly { name: string }[]): [name: string, text: string][] {
+  const mine = new Set(own.map(t => t.name));
+  return Object.entries(TOOL_CATALOG).filter(([name]) => !mine.has(name))
+    .map(([name, info]) => [name, `${info.line} (not on your endpoint: ${info.where.map(w => MOUNT_LABEL[w]).join(', ')})`]);
 }
 
 /** A query word matches a word of the text that starts like it: the first 4 letters of a longer word, so Italian
@@ -140,8 +169,13 @@ function index(ui: UiMap | null, d: GuideDeps, lang: GuideLang): string {
     lines.push('Palette actions: ' + ui.actions.filter(a => a.group !== 'Vai a').map(a => `${a.title}${a.shortcut ? ` (${a.shortcut})` : ''}`).join(', '));
     lines.push('Help topics: ' + ui.help.map(h => h.title).join(', '));
   } else lines.push('(the window did not answer: pages and sections missing; try again)');
+  lines.push('Usage: which pages and actions the user uses most (local counter, 14 days): app_guide topic "uso", page andamento/uso.');
   lines.push('Routines: terminal execution only; open Routine for live progress and history, or ask app_routine_status explicitly.');
   lines.push('Concepts (Guida page): ' + CONCEPTS.map(c => textOf(c.title, lang)).join(', '));
+  const byMount = new Map<ToolMount, string[]>();
+  const mine = new Set(d.tools().map(t => t.name));
+  for (const [name, info] of Object.entries(TOOL_CATALOG)) if (!mine.has(name)) for (const w of info.where) { const l = byMount.get(w) ?? []; l.push(name); byMount.set(w, l); }
+  if (byMount.size) lines.push('Other tools of the app (not yours; ask app_guide with the name): ' + [...byMount].map(([w, names]) => `${MOUNT_LABEL[w]}: ${names.join(', ')}`).join(' | '));
   lines.push(`Settings: ${d.settings.schema().length} keys, read and change them with app_config (area setting).`);
   lines.push('Ask app_guide with a topic for details ("tema", "notifiche", "Memoria", "chiusura automatica", "permessi Scout"…); app_ui action "outline" = what is on screen now with positions; app_config = change any configuration.');
   return lines.join('\n');
@@ -164,6 +198,8 @@ export function guideTool(d: GuideDeps): ToolDef {
       const lang: GuideLang = ui?.lang === 'en' || ui?.lang === 'de' ? ui.lang : 'it';
       if (!topic) return index(ui, d, lang);
       const exact = d.tools().find(tool => tool.name === topic);
+      const other = exact ? undefined : otherTools(d.tools()).find(([name]) => name === topic);
+      if (other) return `[tool] ${other[0]}: ${other[1]}`;
       if (exact) return `[tool] ${exact.name}: ${exact.description.length <= 16000 ? exact.description : `${exact.description.slice(0, 15800)}… [truncated; read the mounted tool schema for the complete contract]`}`;
       const found = search(entries(ui, d, lang), topic);
       if (!found.length) return `Nothing on "${topic}". ${index(ui, d, lang)}`;

@@ -60,18 +60,13 @@ test('Impostazioni: groups, theme live, messaging always available, no model com
   await shot(page, 'settings-light');
   await choose(theme, 'dark');
   await expect(page.locator('html[data-theme="dark"]')).toHaveCount(1);
-  // the keyboard: Enter opens the list on the current choice, the arrows move, Enter picks and gives the focus back
-  await theme.focus();
-  await page.keyboard.press('Enter');
-  await expect(page.getByTestId('st-theme-select-list')).toBeVisible();
-  await page.keyboard.press('ArrowUp');
-  await page.keyboard.press('Enter');
+  // the keyboard (a segmented choice is a radio group, ADR 0207): the arrows move and choose, the focus follows
+  await theme.locator('[role="radio"][aria-checked="true"]').focus();
+  await page.keyboard.press('ArrowLeft');
   await expect(page.locator('html[data-theme="light"]')).toHaveCount(1);
   await expect(theme).toHaveAttribute('data-value', 'light');
-  await expect(theme).toBeFocused();
-  await page.keyboard.press('Enter');
-  await page.keyboard.press('ArrowDown');
-  await page.keyboard.press('Enter');
+  await expect(theme.locator('[data-value="light"]')).toBeFocused();
+  await page.keyboard.press('ArrowRight');
   await expect(page.locator('html[data-theme="dark"]')).toHaveCount(1);
 
   // Ctrl+, from the chats

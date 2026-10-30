@@ -7,7 +7,8 @@
 // "Contesto adesso": every open chat's context against its window (once the Dashboard's context tab, ADR 0122). Under the
 // KPIs, the curious facts of the period (lib/cost-facts.ts). It is the one costs page (#125, and the Dashboard is gone,
 // ADR 0122), and the per-agent costs are on the back of each agent card (AgentCatalogCard.tsx), never here: no role,
-// current or retired, is listed on this page.
+// current or retired, is listed on this page. A tab of Andamento since ADR 0202 (`embedded`: no title, no lead, whose
+// numbers the KPIs below already show).
 // Data: /api/cost?days=N (the brain's cost tool). The per-job cost/time estimate and its calculator were removed
 // (ADR 0053): measured on 178 past chats, the real cost fell inside the estimate's range only 47% of the time.
 import { lazy, Suspense, useContext, useEffect, useMemo, useState } from 'react';
@@ -79,7 +80,7 @@ function CursorToday({ u }: { u: Usage | null }) {
   return <Kpi k={t('costs.cursorToday')} help={est ? t('costs.cursorHelp',{margin:u.cursorMarginPct??20}) : undefined} v={`${est ? '≈ ' : ''}${fmt.usd(u.cursorTodayUsd)}`} s={est ? t('costs.cursorEstimate',{margin:u.cursorMarginPct??20}) : t('costs.cursorExact')} testId="bx-cursor-today" />;
 }
 
-export function Costi({ arg, nav }: { arg?: string; nav: (t: string) => void }) {
+export function Costi({ arg, nav, embedded = false }: { arg?: string; nav: (t: string) => void; embedded?: boolean }) {
   const days = (PERIODS as readonly number[]).includes(Number(arg)) ? Number(arg) : 7;
   const r = useBrain(`/api/cost?days=${days}`, normCost);
   const appUsage = useAppUsage();
@@ -118,10 +119,10 @@ export function Costi({ arg, nav }: { arg?: string; nav: (t: string) => void }) 
 
   return (
     <>
-      <PageHead title={t('costs.title')} at={r.at} refreshing={r.refreshing} onRefresh={() => r.reload(true)}
+      <PageHead title={embedded ? undefined : t('costs.title')} at={r.at} refreshing={r.refreshing} onRefresh={() => r.reload(true)}
         lead={c ? <><b>{fmt.usd(c.total)} in {days === 1 ? t('costs.oneDay') : t('costs.days',{days})}</b>, {fmt.usd(c.total / nDays)} {t('costs.perDay')}.{advice[0] ? <> {t('costs.biggestSaving')}: <b>{advice[0].text.split(':')[0]?.toLowerCase()}, {fmt.usd(advice[0].usd)}</b>.</> : null}</> : undefined}
         what={t('costs.what')} guide="costs"
-        actions={<Seg label={t('costs.period')} value={days} onChange={d => nav(d === 7 ? 'costi' : `costi/${d}`)} items={PERIODS.map(d => ({ id: d, label: d === 1 ? t('costs.today') : t('costs.days',{days:d}) }))} />} />
+        actions={<Seg label={t('costs.period')} value={days} onChange={d => nav(embedded ? (d === 7 ? 'andamento/costi' : `andamento/costi/${d}`) : d === 7 ? 'costi' : `costi/${d}`)} items={PERIODS.map(d => ({ id: d, label: d === 1 ? t('costs.today') : t('costs.days',{days:d}) }))} />} />
       <LiveNow />
       <Suspense fallback={null}><ContextNow /></Suspense>
       <Async loading={r.loading && !c} error={c ? null : r.error} onRetry={() => r.reload()} label={t('costs.loading')} lines={5} block>

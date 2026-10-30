@@ -10,7 +10,8 @@
 // Data: /api/tables (the brain: tables.errors, tables.quality, proposals) and /api/quality (main: turns, PRs, reopened
 // bugs); computations in lib/quality.ts and lib/stats.ts. Since the Dashboard left (ADR 0122), below the patterns: the
 // app's and the tools' own errors of this session (dashboard/AppErrors.tsx) and the errors grouped by meaning
-// (dashboard/Themes.tsx), the two parts of its Errori and Temi tabs Qualità did not have.
+// (dashboard/Themes.tsx), the two parts of its Errori and Temi tabs Qualità did not have. A tab of Andamento since ADR
+// 0202 (`embedded`: no title and no lead, which only repeated the four cards' numbers).
 import { lazy, Suspense, type ReactNode } from 'react';
 import { normAppQuality, normTables } from '../types';
 import { FeedbackOrigins } from '../components/FeedbackOrigins';
@@ -75,7 +76,7 @@ function CaughtFind({ c, counted }: { c: Caught; counted: boolean }) {
   </>;
 }
 
-export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
+export function Qualita({ nav, embedded = false }: { arg?: string; nav: Navigate; embedded?: boolean }) {
   const t = useBrain('/api/tables', normTables);
   const a = useBrain('/api/quality', normAppQuality);
   const d = t.data, app = a.data, q = d?.quality ?? null;
@@ -95,7 +96,7 @@ export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
 
   return (
     <>
-      <PageHead title={tr('brainText.qualita.title')} at={t.at} onRefresh={reload} refreshing={app?.reopen.refreshing}
+      <PageHead title={embedded ? undefined : tr('brainText.qualita.title')} at={t.at} onRefresh={reload} refreshing={app?.reopen.refreshing}
         lead={caught && rules && app ? <>
           {caught.per100 !== null ? <><b>{tr('brainText.qualita.leadCaught', { n: num(caught.per100) })}</b>{tr('brainText.qualita.leadCaughtRest')}</> : <>{tr('brainText.qualita.leadNotMeasured')}</>};{' '}
           <b>{tr('brainText.qualita.leadRules', { n: rules.tornato, of: rules.judged })}</b>{tr('brainText.qualita.leadRulesRest')}; {app.prs.at ? <><b>{tr('brainText.qualita.leadPrs', { n: app.prs.blocked.length })}</b></> : <>{tr('brainText.qualita.leadPrsUnread')}</>}; {app.reopen.at ? <><b>{tr('brainText.qualita.leadBugs', { n: app.reopen.bugs.length })}</b>{tr('brainText.qualita.leadBugsRest', { days: app.reopen.days })}</> : <>{tr('brainText.qualita.leadBugsUnread')}</>}.

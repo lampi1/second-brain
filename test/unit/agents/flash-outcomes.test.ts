@@ -2,7 +2,7 @@
 // five minutes, the user neither corrects it, asks it again nor hands it to the Orchestrator; questions are kept only as
 // word hashes; the log is bounded and read leniently.
 import { describe, expect, it } from 'vitest';
-import { FLASH_DONE, FLASH_OPEN, FLASH_SETTLE_MS, emptyFlashLog, flashAnswered, flashAsked, flashHanded, readFlashLog, saysWrong, settleDue, signature } from '../../../src/main/agents/flash-outcomes';
+import { FLASH_DONE, FLASH_OPEN, FLASH_SETTLE_MS, emptyFlashLog, flashAnswered, flashAsked, flashBriefed, flashHanded, readFlashLog, saysWrong, settleDue, signature } from '../../../src/main/agents/flash-outcomes';
 import { CORRECTION_TAG } from '../../../src/shared/correction';
 
 const T = Date.UTC(2026, 9, 20, 9);
@@ -72,5 +72,15 @@ describe('Flash answer outcomes', () => {
     expect(readFlashLog({ version: 2 })).toEqual(emptyFlashLog());
     const bad = readFlashLog({ version: 1, open: [{ askedAt: 1, answeredAt: 2, sig: ['<script>'] }], done: [{ at: 1, verdict: 'success', why: 'held' }, { at: -1, verdict: 'x', why: 'held' }], total: { success: 0, partial: 0, fail: 0 } });
     expect(bad).toMatchObject({ open: [], done: [{ at: 1, verdict: 'success', why: 'held' }], total: { success: 1 } });
+  });
+  it('«Fanne un lavoro» hands the newest open answer over (ADR 0209)', () => {
+    const log = emptyFlashLog();
+    flashAsked(log, 'quali file cambia la migrazione del database clienti?', 1000);
+    flashAnswered(log, 2000);
+    flashBriefed(log, 3000);
+    expect(log.done.map(d => d.why)).toEqual(['handed']);
+    expect(log.open).toEqual([]);
+    flashBriefed(log, 4000);
+    expect(log.done).toHaveLength(1);
   });
 });

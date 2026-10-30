@@ -1,236 +1,321 @@
-// The app's sampled independent reviews (src/main/agents/judge-sample.ts, ADR 0083; a Sentinel runs them since ADR
-// 0100): which finished runs are picked (reported, recent, unjudged, not a review itself, not reviewed yet), the switch
-// (on since a moment: no backlog) and the cap on reviews running at once, what the switch costs a day, the contract the reviewer gets, and the review's verdict turned into the run's
-// feedback (none without a verdict; a Judge review started before ADR 0100 still counts).
+// The app's independent reviews (src/main/agents/judge-sample.ts, ADR 0083, 0100, 0203): which finished runs no free
+// signal decides (L3), the per-role sample by the run id's hash (L1: 25%, 10% for a steady role, back to 25% after a change
+// of model, skills or rules), the nightly batch (L2: due once a day, at 03:00 when the app was running, else at the first
+// idle moment after the startup rush; one hidden run, one verdict per run, recorded as feedback), the daily cap (L4), what
+// the switch costs a day, the receipts' free verdicts (ADR 0130) and the review chats from before ADR 0203.
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { AgentRun, AgentRunReceipts } from '../../../src/shared/agents';
+import type { AgentRun, AgentRunReceipts, AgentVersion } from '../../../src/shared/agents';
 import type { AgentFeedbackArgs } from '../../../src/shared/agent-lifecycle';
-import type { ChatSummary, NewChat } from '../../../src/shared/contract';
-import { AUDIT_EVERY, auditPicked, gradeReceipt, JudgeSampler, judgeSamplingOn, judgingEstimate, MAX_RUNNING, pickAudits, pickReceiptAudits, pickSamples, RECEIPTS_WAIT_MS, reviewPrompt, REVIEW_CRITERIA, reviewRuns } from '../../../src/main/agents/judge-sample';
+import type { LogInput } from '../../../src/shared/activity-log';
+import type { ChatSummary } from '../../../src/shared/contract';
+import {
+  BATCH_MAX, batchDue, batchPrompt, batchSize, batchWhen, coreVersions, FIRST_BATCH, IDLE_MIN_MS, JudgeSampler, judgeSamplingOn, judgingEstimate, lastNight,
+  NIGHT_WINDOW_MS, parseBatchVerdicts, pickSamples, RECEIPTS_WAIT_MS, reviewCost, reviewPrompt, REVIEW_CRITERIA, reviewRuns, roleShare, roleShares,
+  samplePicked, SHARE_DEFAULT, SHARE_STEADY, undecided, UPTIME_MIN_MS, VERDICTS_FENCE, type ReviewRequest, type ReviewResult,
+} from '../../../src/main/agents/judge-sample';
 import { emptyReceipts, noteTool, noteTurnFiles, receiptVerdict } from '../../../src/main/agents/receipts';
+import type { RunStart } from '../../../src/main/agents/runs';
 
 const NOW = Date.UTC(2026, 9, 19, 12);
+const NIGHT = lastNight(NOW);
+const ALL = new Map([['scout', 1], ['artisan', 1], ['strategist', 1], ['herald', 1], ['sentinel', 1]]);
 const run = (id: string, over: Partial<AgentRun> = {}): AgentRun => ({ runId: `r_${id.padStart(12, '0')}`, chatId: `c_${id}`, agentId: 'scout', version: 1, goal: 'Trova gli errori',
-  startedBy: 'user', startedAt: NOW - 7200_000, endedAt: NOW - 3600_000, endReason: 'completed', counters: {} as AgentRun['counters'], costUsd: 0.1, tokens: null,
+  startedBy: 'user', startedAt: NOW - 7200_000, endedAt: NOW - 3600_000, endReason: 'completed', counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: 0.1, tokens: null,
   report: { at: NOW - 3600_000, outcome: 'done', verified: 'yes', summary: 'Trovati 3 errori' }, model: 'opus', ...over });
 const chat = (id: string): ChatSummary => ({ id, harness: 'claude', origin: 'app', title: `Chat ${id}`, cwd: '/w', sessionId: null, model: null, effort: null, permissionMode: null,
   state: 'idle', costUsd: 0, pending: 0, isOrchestrator: false, lastText: 'Ecco i 3 errori: a, b, c', updatedAt: 1, browserTabIds: [] });
+const ids = (rs: readonly AgentRun[]) => rs.map(r => r.runId);
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
-describe('pickSamples', () => {
-  it('never picks a review: a later task in a review chat, or a run continued from a review (no «Revisione · Revisione»)', () => {
+describe('free signals first, then the sample (L1, L3)', () => {
+  it('never picks a review: a later task in a review chat, a run continued from one, a nightly batch\'s own run', () => {
     const runs = [
       run('1'),
       run('2', { agentId: 'sentinel', chatId: 'c_rev', reviewOf: 'r_000000000099' }),
-      run('3', { agentId: 'sentinel', chatId: 'c_rev' }),                                    // a new task given to the review chat
-      run('4', { agentId: 'sentinel', chatId: 'c_next', continuedFrom: 'r_000000000003' }),  // continued in a new chat
+      run('3', { agentId: 'sentinel', chatId: 'c_rev' }),
+      run('4', { agentId: 'sentinel', chatId: 'c_next', continuedFrom: 'r_000000000003' }),
       run('5', { agentId: 'sentinel', chatId: 'c_more', continuedFrom: 'r_000000000004' }),
+      run('6', { agentId: 'sentinel', reviewBatch: [{ runId: 'r_000000000077' }] }),
     ];
-    expect([...reviewRuns(runs)].sort()).toEqual(['r_000000000002', 'r_000000000003', 'r_000000000004', 'r_000000000005']);
-    expect(pickSamples(runs, new Set(), NOW, 10).map(r => r.runId)).toEqual(['r_000000000001']);
-    expect(judgingEstimate(runs, NOW).runsPerDay).toBeCloseTo(0.1);
+    expect([...reviewRuns(runs)].sort()).toEqual(['r_000000000002', 'r_000000000003', 'r_000000000004', 'r_000000000005', 'r_000000000006']);
+    expect(ids(pickSamples(runs, new Set(), NOW, ALL))).toEqual(['r_000000000001']);
   });
-
-  it('takes reported, recent, unjudged runs that no review covered, at most n', () => {
+  it('samples only runs no free signal decides: not judged, not reworked or reopened, not covered, not decided by receipts', () => {
+    const rc = emptyReceipts();
+    noteTool(rc, { kind: 'tool', id: 'e', at: 100, name: 'Edit', summary: '', input: { file_path: 'src/a.ts' }, status: 'ok' });
+    noteTurnFiles(rc, ['src/a.ts'], 50, 150);
+    noteTool(rc, { kind: 'tool', id: 'b', at: 200, name: 'Bash', summary: '', input: { command: 'npm test' }, status: 'ok', exitCode: 0 });
+    rc.verdict = { ...receiptVerdict({ receipts: rc }), at: 300 };
     const runs = [
       run('1'), run('2'),
-      run('3', { endedAt: undefined }),                                                      // still running
+      run('3', { endedAt: undefined, endReason: undefined }),                                 // still running
       run('4', { endReason: 'stale' }),                                                      // no result
       run('5', { endedAt: NOW - 8 * 86_400_000 }),                                           // too old
-      run('6', { agentId: 'judge' }),                                                        // a retired Judge's own
-      run('14', { agentId: 'sentinel', reviewOf: 'r_000000000099' }),                        // a review itself
       run('7', { outcome: { verdict: 'success', basis: 'human', by: 'user', at: 1 } }),      // the user judged it
-      run('8', { outcome: { verdict: 'success', basis: 'orchestrator-opinion', by: 'p', at: 1 } }), // its parent did
+      run('8', { outcome: { verdict: 'success', basis: 'orchestrator-opinion', by: 'p', at: 1 } }),
       run('9', { report: undefined }),
       run('10'), run('11', { reviewOf: 'r_000000000010', agentId: 'judge' }),                // reviewed already
-      run('13', { parentRunId: 'r_000000000099' }),                                          // a delegated child's: its parent's content
+      run('12'), run('13', { reworkOf: 'r_000000000012' }),                                  // 12 was reworked (13 itself is fine)
+      run('14', { counters: { questions: 0, permissions: 0, commands: 0, reopened: 1, contextPeak: null } }),
+      run('15', { parentRunId: 'r_000000000099' }),                                          // a delegated child's
+      run('16', { receipts: rc }),                                                           // the receipts decide it
+      run('17', { source: 'oneshot' }),
+      run('18'), run('20'),                                                                    // 18 judged in a batch; 20 left out of it: pending
+      run('19', { agentId: 'sentinel', reviewBatch: [{ runId: 'r_000000000018', verdict: 'success', verified: 'yes' }, { runId: 'r_000000000020' }] }),
     ];
-    const picked = pickSamples(runs, new Set(['r_000000000002']), NOW, 5).map(r => r.runId);
-    expect(picked).toEqual(['r_000000000001']);
-    expect(pickSamples(runs, new Set(), NOW, 0)).toEqual([]);
-    expect(pickSamples([run('1'), run('2'), run('12')], new Set(), NOW, 2)).toHaveLength(2);
+    expect(ids(pickSamples(runs, new Set(['r_000000000002']), NOW, ALL))).toEqual(['r_000000000001', 'r_000000000013', 'r_000000000020']);
+    expect(ids(undecided(runs, new Set(), NOW))).toContain('r_000000000016');      // undecided by a verdict, but…
+    expect(ids(pickSamples(runs, new Set(), NOW, ALL))).not.toContain('r_000000000016'); // …never sampled: its receipts decide it
   });
-  it('gives the reviewer a self-contained contract with the goal, the report, the answer and how to answer', () => {
+  it('picks a fixed, unpredictable share per role by the run id: 25% by default, 10% for a steady role', () => {
+    const many = Array.from({ length: 4000 }, (_, i) => `r_${String(i + 1).padStart(12, '0')}`);
+    const share = (s: number) => many.filter(id => samplePicked(id, s)).length / many.length;
+    expect(share(SHARE_DEFAULT)).toBeGreaterThan(0.22); expect(share(SHARE_DEFAULT)).toBeLessThan(0.28);
+    expect(share(SHARE_STEADY)).toBeGreaterThan(0.08); expect(share(SHARE_STEADY)).toBeLessThan(0.12);
+    // the same run gives the same answer; the steady sample is inside the default one
+    expect(many.filter(id => samplePicked(id, SHARE_STEADY)).every(id => samplePicked(id, SHARE_DEFAULT))).toBe(true);
+    const runs = many.slice(0, 400).map((id, i) => run(String(i + 1), { agentId: i % 2 ? 'artisan' : 'scout' }));
+    const picked = pickSamples(runs, new Set(), NOW, new Map([['scout', SHARE_STEADY]]));
+    const scout = picked.filter(r => r.agentId === 'scout').length, artisan = picked.filter(r => r.agentId === 'artisan').length;
+    expect(scout).toBeLessThan(artisan);                       // 10% of 200 vs 25% of 200
+    expect(picked.map(r => r.endedAt)).toEqual([...picked.map(r => r.endedAt)].sort((a, b) => a! - b!)); // oldest first
+  });
+  it('a role is steady below 10 points of spread with 5 verdicts on its current model, skills and rules; a change resets it', () => {
+    expect(roleShare(0.09, 5)).toBe(SHARE_STEADY);
+    expect(roleShare(0.11, 50)).toBe(SHARE_DEFAULT);
+    expect(roleShare(0.05, 4)).toBe(SHARE_DEFAULT);
+    expect(roleShare(null, 9)).toBe(SHARE_DEFAULT);
+    const v = (version: number, over: Partial<AgentVersion['behaviour']> = {}): AgentVersion => ({ agentId: 'scout', version, parentVersion: version > 1 ? version - 1 : null, author: 'user', reason: '', at: version, state: 'superseded',
+      behaviour: { instructions: 'a', engine: 'claude', model: 'opus', tools: null, permissionCeiling: null, tier: 'mid', tierMax: 'top', launches: [], skills: ['x', 'y'], ...over } });
+    // v2 changed only the permissions (same core); v3 the model; v4 back to v1's core with the skills reordered
+    const history = [v(1), v(2, { permissionCeiling: 'read' as never }), v(3, { model: 'sonnet' }), v(4, { skills: ['y', 'x'] })];
+    expect([...coreVersions(history, 2)].sort()).toEqual([1, 2, 4]);
+    expect([...coreVersions(history, 3)]).toEqual([3]);
+    const judged = (version: number, n: number) => Array.from({ length: n }, (_, i) => run(`${version}${i}`, { version, outcome: { verdict: 'success', basis: 'human', by: 'user', at: 1 } }));
+    const runs = [...judged(1, 3), ...judged(2, 2), ...judged(3, 1)];
+    const roles = [{ id: 'scout', activeVersion: 2 }, { id: 'orchestrator', activeVersion: 1 }];
+    expect(roleShares(runs, new Map([['scout', { spread: 0.05 }]]), roles, () => history)).toEqual(new Map([['scout', SHARE_STEADY]]));
+    // the user switches Scout to another model: back to 25% until 5 verdicts on it
+    expect(roleShares(runs, new Map([['scout', { spread: 0.05 }]]), [{ id: 'scout', activeVersion: 3 }], () => history).get('scout')).toBe(SHARE_DEFAULT);
+  });
+});
+
+describe('when the nightly batch runs (L2)', () => {
+  it('is due once a day: none since the latest 03:00', () => {
+    expect(new Date(NIGHT).getHours()).toBe(3);
+    expect(NIGHT).toBeLessThanOrEqual(NOW); expect(NOW - NIGHT).toBeLessThan(86_400_000);
+    expect(batchDue(NOW, 0)).toBe(true);
+    expect(batchDue(NOW, NIGHT - 1)).toBe(true);
+    expect(batchDue(NOW, NIGHT + 60_000)).toBe(false);
+    expect(lastNight(NIGHT - 1)).toBe(lastNight(NIGHT - 86_400_000 + 1));
+  });
+  it('runs at 03:00 when the app was already running; else after the startup rush, at the first idle moment or with Modalità notte on', () => {
+    const at = NIGHT + 10 * 60_000;
+    expect(batchWhen(at, NIGHT - 3600_000, 0)).toBe('night');               // open since before 03:00
+    expect(batchWhen(NIGHT + NIGHT_WINDOW_MS + 1, NIGHT - 3600_000, 0)).toBeNull(); // asleep through the window, user active
+    expect(batchWhen(at, at - UPTIME_MIN_MS + 1, IDLE_MIN_MS)).toBeNull();  // just started: never in the startup rush
+    expect(batchWhen(at, at - UPTIME_MIN_MS, IDLE_MIN_MS - 1)).toBeNull();  // the user is working
+    expect(batchWhen(at, at - UPTIME_MIN_MS, IDLE_MIN_MS)).toBe('idle');
+    expect(batchWhen(at, at - UPTIME_MIN_MS, 0, true)).toBe('away');                 // Modalità notte: the user is away
+    expect(batchWhen(at, at - UPTIME_MIN_MS + 1, 0, true)).toBeNull();               // still never in the startup rush
+  });
+  it('takes as many runs as the cap buys at the known cost, at most BATCH_MAX; FIRST_BATCH while unknown', () => {
+    expect(batchSize(1, null)).toBe(FIRST_BATCH);
+    expect(batchSize(1, 0.15)).toBe(6);
+    expect(batchSize(1, 0.01)).toBe(BATCH_MAX);
+    expect(batchSize(0.5, 0.8)).toBe(0);
+  });
+  it('a reviewed run costs: per run of past batches, else past single reviews, else the Sentinel\'s own runs', () => {
+    const single = [0.2, 0.4, 0.3].map((c, i) => run(String(50 + i), { agentId: 'sentinel', reviewOf: `r_00000000000${i}`, costUsd: c }));
+    expect(reviewCost(single, NOW)).toEqual({ usd: 0.3, basis: 3 });
+    const batch = run('60', { agentId: 'sentinel', source: 'oneshot', costUsd: 0.6, reviewBatch: [{ runId: 'r_000000000001' }, { runId: 'r_000000000002' }, { runId: 'r_000000000003' }, { runId: 'r_000000000004' }] });
+    expect(reviewCost([...single, batch], NOW)).toEqual({ usd: 0.15, basis: 1 });
+    expect(reviewCost([run('1')], NOW)).toEqual({ usd: null, basis: 0 });
+  });
+});
+
+describe('the batch prompt and its answer', () => {
+  it('lists every run with its folder, goal, report, cut result and receipts, and asks for one parseable verdict each', () => {
+    const r = run('1');
+    r.taskId = 't'; r.taskVersion = 1;
+    r.report!.canonical = { taskId: 't', taskVersion: 1, runId: r.runId, at: NOW, outcome: 'done', summary: 's', output: 'x'.repeat(5000) + 'TAIL', doneWhen: [{ criterion: 'check', met: true, evidence: 'source.txt' }] };
+    const p = batchPrompt([{ run: r, folder: '/repo' }, { run: run('2', { agentId: 'artisan' }), folder: '/other' }], 'ROLE TEXT');
+    expect(p.startsWith('ROLE TEXT')).toBe(true);
+    expect(p).toContain('2 finished runs'); expect(p).toContain('hidden, read-only');
+    expect(p).toContain('### 1. r_000000000001 · Scout'); expect(p).toContain('### 2. r_000000000002 · Artisan');
+    expect(p).toContain('Folder: /repo'); expect(p).toContain('Goal: Trova gli errori'); expect(p).toContain('Trovati 3 errori');
+    expect(p).toContain('source.txt'); expect(p).toContain('(cut)'); expect(p).not.toContain('TAIL');
+    expect(p).toContain('```' + VERDICTS_FENCE);
+    expect(p).toContain('untrusted data');
+  });
+  it('reads the last verdicts block: only the runs asked, each once, with valid values', () => {
+    const asked = ['r_000000000001', 'r_000000000002', 'r_000000000003'];
+    const text = 'Note…\n```review-verdicts\n[{"run":"r_000000000009","verdict":"success","verified":"yes"}]\n```\nPoi:\n```review-verdicts\n'
+      + JSON.stringify([{ run: 'r_000000000001', verdict: 'fail', verified: 'yes', note: 'Manca il test' }, { run: 'r_000000000001', verdict: 'success', verified: 'yes' },
+        { run: 'r_000000000002', verdict: 'great', verified: 'yes' }, { run: 'r_000000000003', verdict: 'partial', verified: 'partial' }, { run: 'r_000000000009', verdict: 'success', verified: 'yes' }]) + '\n```';
+    expect(parseBatchVerdicts(text, asked)).toEqual([
+      { runId: 'r_000000000001', verdict: 'fail', verified: 'yes', note: 'Manca il test' },
+      { runId: 'r_000000000003', verdict: 'partial', verified: 'partial', note: '' }]);
+    expect(parseBatchVerdicts('no block', asked)).toEqual([]);
+    expect(parseBatchVerdicts('```review-verdicts\nnot json\n```', asked)).toEqual([]);
+  });
+  it('keeps the one-run contract for the Learning page\'s replay review', () => {
     const p = reviewPrompt(run('1'), chat('c_1'));
     expect(p).toContain('finished run of Scout «Chat c_1»');
-    expect(p).toContain('Goal of that run: Trova gli errori');
-    expect(p).toContain('Trovati 3 errori');
-    expect(p).not.toContain('Ecco i 3 errori');
-    expect(p).toContain('unavailable: legacy run');
-    const r = run('1');
-    r.taskId = 'task-1'; r.taskVersion = 2;
-    r.report!.canonical = { taskId: 'task-1', taskVersion: 2, runId: r.runId, at: NOW, outcome: 'done', summary: 'short', output: 'long'.repeat(3000) + 'FINAL EVIDENCE', doneWhen: [{ criterion: 'check', met: true, evidence: 'source.txt' }] };
-    const full = reviewPrompt(r, chat('c_1'));
-    expect(full).toContain(r.report!.canonical.output);
-    expect(full).toContain('source.txt');
-    expect(full).toContain('task version: 2');
-    expect(p).toContain('"verdict":"success|partial|fail"');
-    expect(p).toContain('Finish with agent_report');
-    expect(p).toContain(REVIEW_CRITERIA[0]);
+    expect(p).toContain('Finish with agent_report'); expect(p).toContain(REVIEW_CRITERIA[0]);
+  });
+});
+
+describe('judgingEstimate (L4)', () => {
+  it('the sampled runs a day times what a reviewed run cost, at most the cap; the receipts\' runs are free', () => {
+    const roots = Array.from({ length: 28 }, (_, i) => run(String(i + 1)));
+    const reviews = [0.2, 0.4, 0.3].map((c, i) => run(String(50 + i), { agentId: 'sentinel', reviewOf: roots[i]!.runId, costUsd: c }));
+    const e = judgingEstimate([...roots, ...reviews], NOW);
+    expect(e).toMatchObject({ runsPerDay: 3.6, receiptsPerDay: 0, sampledPerDay: 0.9, reviewUsd: 0.3, capUsd: 1, basis: 3, lastBatch: null });
+    expect(e.perDayUsd).toBeCloseTo(0.27, 2);
+    expect(judgingEstimate([...roots, ...reviews], NOW, { capUsd: 0.1 }).perDayUsd).toBe(0.1);
+    expect(judgingEstimate([...roots, ...reviews], NOW, { shares: new Map([['scout', SHARE_STEADY]]) }).sampledPerDay).toBeCloseTo(0.4, 1);
+    expect(judgingEstimate(roots, NOW)).toMatchObject({ reviewUsd: null, perDayUsd: null });
+    const last = { at: NIGHT, runs: 4, costUsd: 0.5 };
+    expect(judgingEstimate(roots, NOW, { lastBatch: last }).lastBatch).toEqual(last);
   });
 });
 
 describe('JudgeSampler', () => {
-  // on = the switch; since = when it was turned on
-  const make = (runs: AgentRun[], on: boolean | number = true, refusal: string | null = null, chatOf: (id: string) => ChatSummary = chat, since = 0) => {
+  interface Opts { runs: AgentRun[]; on?: boolean; since?: number; startedAt?: number; idleMs?: number; cap?: number; refusal?: string | null;
+    answer?: (req: ReviewRequest) => ReviewResult; chatOf?: (id: string) => ChatSummary | undefined; receipts?: boolean }
+  const make = (o: Opts) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-judge-')); dirs.push(dir);
-    const created: NewChat[] = [], fed: [AgentFeedbackArgs, string][] = [];
-    let now = NOW, n = 0;
-    const s = new JudgeSampler({ file: path.join(dir, 'judge-samples.json'), runs: () => runs, chat: id => chatOf(id),
-      create: async req => { created.push(req); return { ...chat(`j${++n}`), id: `j${n}` }; }, judging: () => ({ on: !!on, since }), judgeEngine: () => 'codex',
-      refusal: () => refusal, feedback: async (a, by) => { fed.push([a, by]); }, now: () => now });
-    return { s, created, fed, later: (ms: number) => { now += ms; } };
+    const asked: ReviewRequest[] = [], fed: [AgentFeedbackArgs, string][] = [], journal: LogInput[] = [], stored: AgentRun[] = [], decided: [string, string][] = [];
+    let now = NIGHT + 10 * 60_000, n = 0, saves = 0;
+    const answer = o.answer ?? (req => ({ ok: true, model: 'opus', costUsd: 0.4, tokens: null, durationMs: 1000,
+      text: 'Ok\n```review-verdicts\n' + JSON.stringify([...req.prompt.matchAll(/### \d+\. (r_\d+)/g)].map(m => ({ run: m[1], verdict: 'success', verified: 'yes', note: 'Regge' }))) + '\n```' }));
+    const s = new JudgeSampler({ file: path.join(dir, 'judge-samples.json'), runs: () => [...o.runs, ...stored], chat: o.chatOf ?? (id => chat(id)),
+      judging: () => ({ on: o.on ?? true, since: o.since ?? 0 }), capUsd: () => o.cap ?? 1, shares: () => ALL,
+      reviewer: () => ({ engine: 'claude', model: 'opus', effort: 'max', version: 3, instructions: 'Sentinel rules' }), refusal: () => o.refusal ?? null,
+      review: async req => { asked.push(req); return answer(req); },
+      store: { start: (st: RunStart) => { const r: AgentRun = { runId: `r_9${String(++n).padStart(11, '0')}`, chatId: st.chatId, agentId: st.agentId, version: st.version, goal: st.goal, startedBy: st.startedBy,
+        startedAt: st.startedAt, counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: null, tokens: null }; stored.push(r); return r; }, save: () => { saves++; } },
+      feedback: async (a, by) => { fed.push([a, by]); },
+      ...(o.receipts ? { receipts: (runId: string, verdict: 'success' | 'fail', note: string) => {
+        decided.push([runId, verdict]);
+        const r = o.runs.find(x => x.runId === runId)!;
+        r.outcome = { verdict, basis: 'receipts', by: 'receipts', at: now, note };
+        return true;
+      } } : {}),
+      idleMs: () => o.idleMs ?? 0, startedAt: o.startedAt ?? NIGHT - 3600_000, journal: e => { journal.push(e); }, now: () => now });
+    return { s, asked, fed, journal, stored, decided, saves: () => saves, later: (ms: number) => { now += ms; }, at: (t: number) => { now = t; } };
   };
-  it('reviews every finished run, as Sentinel chats linked to it, at most MAX_RUNNING at once', async () => {
-    const { s, created } = make([run('1'), run('2'), run('3')]);
-    expect(await s.tick()).toBe(MAX_RUNNING);
-    expect(created[0]).toMatchObject({ harness: 'codex', roleId: 'sentinel', cwd: '/w', doneWhen: REVIEW_CRITERIA });
-    expect(created[0]).not.toHaveProperty('independentOf'); // a new session is the review's independence (ADR 0091)
-    expect(created.map(c => c.reviewOf).every(id => id?.startsWith('r_'))).toBe(true);
-    expect(await s.tick()).toBe(0);                 // two running already
-    const [a] = s.list();
-    await s.ended(run('97', { agentId: 'sentinel', chatId: a!.chatId, reviewOf: a!.runId, report: { at: NOW, outcome: 'done', verified: 'yes', summary: 'Ok', verdict: 'success' } }));
-    expect(await s.tick()).toBe(1);                 // the one left, never one reviewed already
-    expect(new Set(created.map(c => c.reviewOf)).size).toBe(3);
+
+  it('at 03:00 reviews every sampled run in ONE hidden Sentinel run and records one verdict each, once a day', async () => {
+    const runs = [run('1'), run('2', { agentId: 'artisan' }), run('3', { endedAt: NOW - 3 * 86_400_000 })];
+    const { s, asked, fed, journal, stored } = make({ runs });
+    expect(await s.tick()).toBe(3);
+    expect(asked).toHaveLength(1);
+    expect(asked[0]).toMatchObject({ engine: 'claude', model: 'opus', effort: 'high', cwd: '/w' }); // never effort max
+    expect(asked[0]!.prompt).toContain('Sentinel rules');
+    expect(asked[0]!.prompt.indexOf('r_000000000003')).toBeLessThan(asked[0]!.prompt.indexOf('r_000000000001')); // oldest first
+    // the batch is the Sentinel's own hidden run: no chat, its cost and its verdicts kept
+    const b = stored[0]!;
+    expect(b).toMatchObject({ agentId: 'sentinel', version: 3, startedBy: 'app', source: 'oneshot', oneshot: { job: 'review', ok: true, costBasis: 'reported' }, costUsd: 0.4, endReason: 'completed',
+      report: { outcome: 'done', verified: 'yes' } });
+    expect(b.chatId.startsWith('rv_')).toBe(true);
+    expect(b.reviewBatch).toEqual(['r_000000000003', 'r_000000000001', 'r_000000000002'].map(runId => ({ runId, verdict: 'success', verified: 'yes' })));
+    expect(fed).toHaveLength(3);
+    expect(fed[0]).toEqual([{ runId: 'r_000000000003', verdict: 'success', notes: 'Sentinel (revisione notturna): Regge', evidence: [{ kind: 'run', ref: b.runId, at: NIGHT + 10 * 60_000 }] }, 'judge-sample']);
+    expect(journal).toMatchObject([{ kind: 'task', level: 'ok', title: 'Revisione notturna: 3 run, 0,40 $', costUsd: 0.4, runId: b.runId }]);
+    expect(s.lastBatch()).toEqual({ at: NIGHT + 10 * 60_000, runs: 3, costUsd: 0.4 });
+    runs.push(run('4'));
+    expect(await s.tick()).toBe(0);           // due once a day
+    expect(asked).toHaveLength(1);
   });
-  it('turning it on starts no backlog: only runs that ended since then', async () => {
-    const { s, created } = make([run('1', { endedAt: NOW - 7200_000 }), run('2', { endedAt: NOW - 60_000 })], true, null, chat, NOW - 600_000);
-    expect(await s.tick()).toBe(1);
-    expect(created.map(c => c.reviewOf)).toEqual(['r_000000000002']);
+  it('a PC that was off at 03:00: after the next start it waits for the startup rush and an idle user, then runs once', async () => {
+    const start = NIGHT + 5 * 3600_000;
+    const o: Opts = { runs: [run('1')], startedAt: start, idleMs: 0 };
+    const t = make(o);
+    t.at(start + 60_000);
+    expect(await t.s.tick()).toBe(0);         // the startup rush
+    t.at(start + UPTIME_MIN_MS + 60_000);
+    expect(await t.s.tick()).toBe(0);         // the user is working
+    expect(t.asked).toEqual([]);
+    o.idleMs = IDLE_MIN_MS;
+    expect(await t.s.tick()).toBe(1);
+    expect(await t.s.tick()).toBe(0);
   });
-  it('the daily cost of the switch: runs a day times what a review cost; unknown without data', () => {
-    const roots = Array.from({ length: 14 }, (_, i) => run(String(i + 1)));
-    const reviews = [0.2, 0.4, 0.3].map((c, i) => run(String(50 + i), { agentId: 'sentinel', reviewOf: roots[i]!.runId, costUsd: c }));
-    expect(judgingEstimate([...roots, ...reviews], NOW)).toEqual({ runsPerDay: 2, receiptsPerDay: 0, auditsPerDay: 0.2, reviewUsd: 0.3, perDayUsd: 0.66, basis: 3 });
-    expect(judgingEstimate(roots, NOW)).toMatchObject({ runsPerDay: 2, reviewUsd: null, perDayUsd: null });
+  it('after missed nights one session covers the backlog of the last 7 days, as many runs as the cap buys', async () => {
+    const backlog = Array.from({ length: 12 }, (_, i) => run(String(i + 1), { endedAt: NOW - (i + 1) * 12 * 3600_000 }));
+    const old = run('99', { endedAt: NOW - 8 * 86_400_000 });
+    const past = run('70', { agentId: 'sentinel', source: 'oneshot', costUsd: 0.5, endedAt: NOW - 86_400_000, reviewBatch: [{ runId: 'r_000000000080' }, { runId: 'r_000000000081' }] });
+    const { s, asked, stored } = make({ runs: [...backlog, old, past], cap: 1 });
+    expect(await s.tick()).toBe(4);           // 1 $ at 0,25 $ a run
+    expect(asked).toHaveLength(1);
+    expect(asked[0]!.prompt).not.toContain(old.runId);
+    expect(stored[0]!.reviewBatch!.map(e => e.runId)).toEqual(['r_000000000012', 'r_000000000011', 'r_000000000010', 'r_000000000009']);
   });
-  it('never puts a delegated child\'s answer in a root review chat (the Orchestrator would read it)', async () => {
-    const { s, created } = make([run('1')], true, null, id => ({ ...chat(id), parentId: 'c_parent' }));
+  it('a cap below one review skips the night and says so in the Log', async () => {
+    const past = run('70', { agentId: 'sentinel', source: 'oneshot', costUsd: 2, reviewBatch: [{ runId: 'r_000000000080' }] });
+    const { s, asked, journal } = make({ runs: [run('1'), past], cap: 0.5 });
     expect(await s.tick()).toBe(0);
-    expect(created).toEqual([]);
+    expect(asked).toEqual([]);
+    expect(journal[0]).toMatchObject({ level: 'warn', title: 'Revisione notturna saltata: il tetto di spesa non copre una revisione' });
+    expect(s.list().lastBatchAt).toBeGreaterThan(0);
   });
-  it('reviews a pruned root only with its canonical result and absolute saved project scope', async () => {
-    const saved = run('1');
-    saved.scope = { brainRoot: path.resolve('/brain'), projectRoot: path.resolve('/original') };
-    saved.report!.canonical = { taskId: saved.runId, taskVersion: 1, runId: saved.runId, at: NOW, outcome: 'done', summary: 'Saved', output: 'Original evidence', doneWhen: [] };
-    const missing = () => undefined as unknown as ChatSummary;
-    const good = make([saved], true, null, missing);
-    expect(await good.s.tick()).toBe(1);
-    expect(good.created[0]).toMatchObject({ cwd: saved.scope.projectRoot, doneWhen: REVIEW_CRITERIA });
-    expect(good.created[0]!.prompt).toContain('Original evidence');
-    const unsafe = { ...saved, scope: { ...saved.scope, projectRoot: 'relative' } };
-    expect(await make([unsafe], true, null, missing).s.tick()).toBe(0);
-    expect(await make([run('2', { scope: saved.scope })], true, null, missing).s.tick()).toBe(0);
+  it('a failed run or an answer with no verdicts records nothing as feedback; the batch is kept with its error', async () => {
+    const a = make({ runs: [run('1')], answer: () => ({ ok: false, error: 'motore spento', durationMs: 5 }) });
+    expect(await a.s.tick()).toBe(0);
+    expect(a.fed).toEqual([]);
+    expect(a.stored[0]).toMatchObject({ report: { outcome: 'blocked', verified: 'no' }, reviewBatch: [{ runId: 'r_000000000001' }], oneshot: { ok: false }, costUsd: null });
+    expect(a.journal[0]).toMatchObject({ level: 'warn', title: 'Revisione notturna: 0 run, costo n/d', text: 'Non riuscita: motore spento' });
+    const b = make({ runs: [run('1')], answer: () => ({ ok: true, text: 'Tutto bene', model: null, costUsd: 0.1, tokens: null, durationMs: 5 }) });
+    await b.s.tick();
+    expect(b.fed).toEqual([]);
+    expect(b.s.list().batches[0]).toMatchObject({ judged: 0, error: 'nessun verdetto leggibile nella risposta' });
   });
-  it('starts nothing when off or when the engine is refused', async () => {
-    expect(await make([run('1')], false).s.tick()).toBe(0);
-    const r = make([run('1')], true, 'engine switched off');
-    expect(await r.s.tick()).toBe(0);
-    expect(r.created).toEqual([]);
+  it('an unverified verdict is still the run\'s feedback (an opinion there); a verified one cites the batch as evidence', async () => {
+    const { s, fed, stored } = make({ runs: [run('1'), run('2')], answer: () => ({ ok: true, model: null, costUsd: 0.2, tokens: null, durationMs: 5,
+      text: '```review-verdicts\n[{"run":"r_000000000001","verdict":"fail","verified":"yes","note":"Rotto"},{"run":"r_000000000002","verdict":"success","verified":"no"}]\n```' }) });
+    expect(await s.tick()).toBe(2);
+    expect(stored[0]!.report).toMatchObject({ verified: 'partial' });
+    expect(fed.map(([a]) => [a.runId, a.verdict])).toEqual([['r_000000000001', 'fail'], ['r_000000000002', 'success']]);
   });
-  it('turns the review\'s verdict into the run\'s feedback, with the review as evidence; none without a verdict', async () => {
-    const { s, fed } = make([run('1'), run('2')]);
-    await s.tick();
-    const [a, b] = s.list();
-    const judge = (target: string, chatId: string, verdict?: 'fail', agentId = 'sentinel'): AgentRun => run('99', { agentId, chatId, reviewOf: target,
-      report: { at: NOW, outcome: 'done', verified: 'yes', summary: 'Manca il terzo errore', ...(verdict ? { verdict } : {}) } });
-    await s.ended(judge(a!.runId, a!.chatId, 'fail'));
-    expect(fed).toEqual([[{ runId: a!.runId, verdict: 'fail', notes: 'Sentinel: Manca il terzo errore', evidence: [{ kind: 'run', ref: 'r_000000000099', at: NOW - 3600_000 }] }, 'judge-sample']]);
-    await s.ended(judge(b!.runId, b!.chatId));
-    expect(fed).toHaveLength(1);
-    expect(s.list().map(r => r.state)).toEqual(['recorded', 'no-verdict']);
-    await s.ended(judge(a!.runId, 'c_other', 'fail'));  // not the chat we started: ignored
-    expect(fed).toHaveLength(1);
+  it('starts nothing when off, when the engine is refused, when no run is sampled, or for runs that ended before the switch', async () => {
+    expect(await make({ runs: [run('1')], on: false }).s.tick()).toBe(0);
+    const refused = make({ runs: [run('1')], refusal: 'engine switched off' });
+    expect(await refused.s.tick()).toBe(0);
+    expect(refused.asked).toEqual([]);
+    expect(refused.s.list().lastBatchAt).toBe(0);    // not claimed: tried again at the next tick
+    const none = make({ runs: [run('1', { endedAt: NOW - 7200_000 })], since: NOW - 3600_000 });
+    expect(await none.s.tick()).toBe(0);
+    expect(none.asked).toEqual([]);
   });
-  it('still records a Judge review started before ADR 0100 when it ends, under its successor\'s name', async () => {
-    const { s, fed } = make([run('1')]);
-    await s.tick();
-    const [a] = s.list();
-    await s.ended(run('98', { agentId: 'judge', chatId: a!.chatId, reviewOf: a!.runId, report: { at: NOW, outcome: 'done', verified: 'yes', summary: 'Ok', verdict: 'success' } }));
-    expect(fed).toMatchObject([[{ runId: a!.runId, verdict: 'success', notes: 'Sentinel: Ok' }, 'judge-sample']]);
+  it('reads a run\'s folder from its saved scope or its chat, never a relative one', async () => {
+    const saved = run('1', { scope: { brainRoot: path.resolve('/brain'), projectRoot: path.resolve('/original') } });
+    const t = make({ runs: [saved, run('2')], chatOf: id => id === 'c_2' ? { ...chat(id), cwd: 'relative' } : undefined });
+    expect(await t.s.tick()).toBe(1);
+    expect(t.asked[0]!.cwd).toBe(path.resolve('/original'));
+    expect(t.asked[0]!.prompt).not.toContain('r_000000000002');
   });
-  it('passes over a run whose chat is gone or is a delegated child\'s and still fills the day (issue #112)', async () => {
-    const { s, created } = make([run('1'), run('2'), run('3')], true, null, id => id === 'c_1' ? undefined as unknown as ChatSummary : id === 'c_2' ? { ...chat(id), parentId: 'p' } : chat(id));
-    expect(await s.tick()).toBe(1);
-    expect(created.map(c => c.reviewOf)).toEqual(['r_000000000003']);
-  });
-});
-
-describe('judgeSamplingOn (issue #112)', () => {
-  it('a root chat the Orchestrator opened (app_create_chat: no parent run, agent_report, ended completed) is a candidate', () => {
-    const opened = run('1', { startedBy: 'orchestrator', source: 'chat', report: { at: NOW - 3600_000, outcome: 'done', verified: 'partial', summary: 'Fatto' } });
-    expect(pickSamples([opened], new Set(), NOW, 3)).toEqual([opened]);
-  });
-
-  it('runs in the user\'s own app, stable or built from a clone, never in tests or an agent\'s hidden run', () => {
-    expect(judgeSamplingOn({})).toEqual({ on: true, why: "the user's app" });
-    expect(judgeSamplingOn({ SB_RELEASE: '2026.10.19' }).on).toBe(true);
-    expect(judgeSamplingOn({ SB_TEST: '1' }).on).toBe(false);
-    expect(judgeSamplingOn({ SB_HIDDEN: '1' }).on).toBe(false);
-    expect(judgeSamplingOn({ SB_TEST: '1', SB_JUDGE_SAMPLE: '1' }).on).toBe(true);
-    expect(judgeSamplingOn({ SB_JUDGE_SAMPLE: '0' }).on).toBe(false);
-  });
-});
-
-// ADR 0125: the judge is judged. One reviewed run in AUDIT_EVERY gets a second independent review that grades the first
-// (standing.ts earnedVerdict, 'graded' by 'audit'); the audit never becomes the run's feedback.
-describe('audits of the reviews (ADR 0125)', () => {
-  const ids = Array.from({ length: 400 }, (_, i) => String(i + 1));
-  const picked = ids.find(i => auditPicked(`r_${i.padStart(12, '0')}`))!, skipped = ids.find(i => !auditPicked(`r_${i.padStart(12, '0')}`))!;
-  const reviewOf = (target: AgentRun, id: string, over: Partial<AgentRun> = {}) => run(id, { agentId: 'sentinel', startedBy: 'app', reviewOf: target.runId, endedAt: NOW - 600_000,
-    report: { at: NOW - 600_000, outcome: 'done', verified: 'yes', summary: 'Ok', verdict: 'success' }, ...over });
-  it('picks a fixed share of the runs with one verified review, never one the user judged, a child\'s or one checked already', () => {
-    const share = ids.filter(i => auditPicked(`r_${i.padStart(12, '0')}`)).length / ids.length;
-    expect(share).toBeGreaterThan(0.5 / AUDIT_EVERY);
-    expect(share).toBeLessThan(2 / AUDIT_EVERY);
-    const x = run(picked), y = run(skipped);
-    expect(pickAudits([x, reviewOf(x, '900'), y, reviewOf(y, '901')], new Set(), NOW, 5)).toEqual([x]);
-    expect(pickAudits([x], new Set(), NOW, 5)).toEqual([]);                                              // not reviewed yet
-    expect(pickAudits([x, reviewOf(x, '900'), reviewOf(x, '902')], new Set(), NOW, 5)).toEqual([]);      // two reviews already
-    expect(pickAudits([x, reviewOf(x, '900')], new Set([x.runId]), NOW, 5)).toEqual([]);                 // audited
-    expect(pickAudits([x, reviewOf(x, '900', { report: { at: NOW, outcome: 'done', verified: 'partial', summary: 'Ok', verdict: 'success' } })], new Set(), NOW, 5)).toEqual([]);
-    expect(pickAudits([{ ...x, outcome: { verdict: 'success', basis: 'human', at: NOW, by: 'user' } }, reviewOf(x, '900')], new Set(), NOW, 5)).toEqual([]);
-    expect(pickAudits([{ ...x, parentRunId: 'r_000000000777' }, reviewOf(x, '900')], new Set(), NOW, 5)).toEqual([]);
-    expect(pickAudits([x, reviewOf(x, '900', { endedAt: NOW - 8 * 86_400_000 })], new Set(), NOW, 5)).toEqual([]);
-    expect(pickAudits([x, reviewOf(x, '900')], new Set(), NOW, 0)).toEqual([]);
-  });
-  it('starts the audit after the first review was recorded, in a new Sentinel chat, and never feeds it back to the run', async () => {
-    const x = run(picked), runs: AgentRun[] = [x];
+  it('still records a review chat opened before ADR 0203 when it ends', async () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-judge-')); dirs.push(dir);
-    const created: NewChat[] = [], fed: AgentFeedbackArgs[] = [];
-    let n = 0;
-    const s = new JudgeSampler({ file: path.join(dir, 'judge-samples.json'), runs: () => runs, chat, create: async req => { created.push(req); return { ...chat(`j${++n}`), id: `j${n}` }; },
-      judging: () => ({ on: true, since: 0 }), judgeEngine: () => 'claude', refusal: () => null, feedback: async a => { fed.push(a); }, now: () => NOW });
-    expect(await s.tick()).toBe(1);
-    const first = reviewOf(x, '900', { chatId: s.list()[0]!.chatId });
-    runs.push(first);
-    expect(await s.tick()).toBe(0);                 // the first review has not recorded its verdict yet
-    await s.ended(first);
-    expect(fed).toHaveLength(1);
-    expect(await s.tick()).toBe(1);
-    expect(created[1]).toMatchObject({ roleId: 'sentinel', reviewOf: x.runId });
-    expect(created[1]!.prompt).not.toContain('Ok');  // the audit never sees the first verdict
-    const audit = s.list()[1]!;
-    expect(audit).toMatchObject({ runId: x.runId, audit: true, state: 'running' });
-    const second = reviewOf(x, '901', { chatId: audit.chatId, report: { at: NOW, outcome: 'done', verified: 'yes', summary: 'No', verdict: 'fail' } });
-    runs.push(second);
-    await s.ended(second);
-    expect(fed).toHaveLength(1);                    // the run keeps the first verdict
-    expect(s.list()[1]!.state).toBe('recorded');
-    expect(await s.tick()).toBe(0);                 // audited once
+    fs.writeFileSync(path.join(dir, 'judge-samples.json'), JSON.stringify({ version: 1, day: '2026-10-19', started: 2, reviews: [
+      { runId: 'r_000000000001', chatId: 'j1', at: NOW - 60_000, state: 'running' }, { runId: 'r_000000000002', chatId: 'j2', at: NOW - 60_000, state: 'running', audit: true }] }));
+    const fed: AgentFeedbackArgs[] = [];
+    const s = new JudgeSampler({ file: path.join(dir, 'judge-samples.json'), runs: () => [], chat: () => undefined, judging: () => ({ on: true, since: 0 }), capUsd: () => 1, shares: () => ALL,
+      reviewer: () => null, refusal: () => null, review: async () => ({ ok: false, error: 'x', durationMs: 0 }), store: { start: () => { throw new Error('no'); }, save: () => {} },
+      feedback: async a => { fed.push(a); }, idleMs: () => 0, startedAt: 0, now: () => NOW });
+    expect(s.list().reviews.map(r => r.runId)).toEqual(['r_000000000001']);  // the old audits are dropped
+    await s.ended(run('98', { agentId: 'judge', chatId: 'j1', reviewOf: 'r_000000000001', report: { at: NOW, outcome: 'done', verified: 'yes', summary: 'Ok', verdict: 'success' } }));
+    expect(fed).toMatchObject([{ runId: 'r_000000000001', verdict: 'success', notes: 'Sentinel: Ok' }]);
   });
 });
 
-// ADR 0130: the receipts first. A run whose repo checks passed after its last change (and whose report agrees) is
-// decided with no review; unknown or contradicted receipts go to the Sentinel; receipt verdicts are audited too.
+// ADR 0130: the receipts decide a run for free, at any time of day; such a run never enters the sample.
 describe('receipts before reviews (ADR 0130)', () => {
-  const ids = Array.from({ length: 400 }, (_, i) => String(i + 1));
-  const picked = ids.find(i => auditPicked(`r_${i.padStart(12, '0')}`))!;
   const receipts = (exit: number | null, settled = true): AgentRunReceipts => {
     const rc = emptyReceipts();
     noteTool(rc, { kind: 'tool', id: 'e', at: 100, name: 'Edit', summary: '', input: { file_path: 'src/a.ts' }, status: 'ok' });
@@ -239,70 +324,51 @@ describe('receipts before reviews (ADR 0130)', () => {
     if (settled) rc.verdict = { ...receiptVerdict({ receipts: rc }), at: 300 };
     return rc;
   };
-  const sampler = (runs: AgentRun[], withReceipts = true) => {
+  const make2 = (runs: AgentRun[], at: number) => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-judge-')); dirs.push(dir);
-    const created: NewChat[] = [], fed: AgentFeedbackArgs[] = [], decided: [string, string][] = [];
-    let now = NOW, n = 0;
-    const s = new JudgeSampler({ file: path.join(dir, 'judge-samples.json'), runs: () => runs, chat, create: async req => { created.push(req); return { ...chat(`j${++n}`), id: `j${n}` }; },
-      judging: () => ({ on: true, since: 0 }), judgeEngine: () => 'claude', refusal: () => null, feedback: async a => { fed.push(a); }, now: () => now,
-      ...(withReceipts ? { receipts: (runId: string, verdict: 'success' | 'fail', note: string) => {
-        decided.push([runId, verdict]);
-        const r = runs.find(x => x.runId === runId)!;
-        r.outcome = { verdict, basis: 'receipts', by: 'receipts', at: now, note };
-        return true;
-      } } : {}) });
-    return { s, created, fed, decided, later: (ms: number) => { now += ms; } };
+    const decided: [string, string][] = [], asked: ReviewRequest[] = [];
+    let now = at;
+    const s = new JudgeSampler({ file: path.join(dir, 'judge-samples.json'), runs: () => runs, chat, judging: () => ({ on: true, since: 0 }), capUsd: () => 1, shares: () => ALL,
+      reviewer: () => ({ engine: 'claude', model: null, effort: null, version: 1, instructions: '' }), refusal: () => null,
+      review: async req => { asked.push(req); return { ok: true, text: '', model: null, costUsd: 0, tokens: null, durationMs: 0 }; },
+      store: { start: st => ({ runId: 'r_900000000001', chatId: st.chatId, agentId: st.agentId, version: 1, goal: '', startedBy: 'app', startedAt: 0, counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: null, tokens: null }), save: () => {} },
+      feedback: async () => {}, idleMs: () => 0, startedAt: 0, now: () => now,
+      receipts: (runId, verdict, note) => { decided.push([runId, verdict]); runs.find(x => x.runId === runId)!.outcome = { verdict, basis: 'receipts', by: 'receipts', at: now, note }; return true; } });
+    return { s, decided, asked, later: (ms: number) => { now += ms; } };
   };
-  it('a green receipt the report agrees with skips the review; unknown or contradicted receipts are reviewed, with the receipts in the prompt', async () => {
+  it('a green receipt the report agrees with, or a red one it admits, decides the run at once with no review; others go to the night', async () => {
     const green = run('1', { receipts: receipts(0) });
-    const unknown = run('2', { receipts: receipts(null) });
-    const contradicted = run('3', { receipts: receipts(0), report: { at: NOW, outcome: 'partial', verified: 'partial', summary: 'Manca un caso' } });
-    const { s, created, decided } = sampler([green, unknown, contradicted]);
-    expect(await s.tick()).toBe(2);
-    expect(decided).toEqual([[green.runId, 'success']]);
-    expect(green.outcome).toMatchObject({ verdict: 'success', basis: 'receipts' });
-    expect(created.map(c => c.reviewOf).sort()).toEqual([unknown.runId, contradicted.runId]);
-    for (const c of created) expect(c.prompt).toMatch(/What the app recorded while it ran.*receipts: (unknown \(no-check-after-change\)|pass \(checks-passed\))/);
-    expect(s.list().find(r => r.runId === green.runId)).toMatchObject({ state: 'receipts', receipt: 'success', chatId: green.chatId });
-    expect(await s.tick()).toBe(0);                 // decided once
-    expect(decided).toHaveLength(1);
-  });
-  it('a failed check the report admits is a fail with no review; without the receipts every run is reviewed', async () => {
-    const red = run('1', { receipts: receipts(1), report: { at: NOW, outcome: 'blocked', verified: 'no', summary: 'I test falliscono' } });
-    const a = sampler([red]);
-    expect(await a.s.tick()).toBe(0);
-    expect(a.decided).toEqual([[red.runId, 'fail']]);
-    const b = sampler([run('2', { receipts: receipts(0) })], false);
-    expect(await b.s.tick()).toBe(1);
+    const red = run('2', { receipts: receipts(1), report: { at: NOW, outcome: 'blocked', verified: 'no', summary: 'I test falliscono' } });
+    const unknown = run('3', { receipts: receipts(null) });
+    const contradicted = run('4', { receipts: receipts(0), report: { at: NOW, outcome: 'partial', verified: 'partial', summary: 'Manca un caso' } });
+    const { s, decided, asked } = make2([green, red, unknown, contradicted], NOW);   // midday: no batch, receipts only
+    expect(await s.tick()).toBe(0);
+    expect(decided).toEqual([[green.runId, 'success'], [red.runId, 'fail']]);
+    expect(asked).toEqual([]);
+    expect(s.list().reviews.map(r => [r.runId, r.state, r.receipt])).toEqual([[green.runId, 'receipts', 'success'], [red.runId, 'receipts', 'fail']]);
+    expect(ids(pickSamples([green, red, unknown, contradicted], new Set(), NOW, ALL))).toEqual([unknown.runId, contradicted.runId]);
+    await s.tick();
+    expect(decided).toHaveLength(2);           // decided once
   });
   it('waits for a run whose last turn\'s files are still being read, then decides it', async () => {
     const late = run('1', { endedAt: NOW - 60_000, receipts: receipts(0, false) });
-    const { s, created, decided, later } = sampler([late]);
-    expect(await s.tick()).toBe(0);
-    expect(created).toEqual([]); expect(decided).toEqual([]);
+    const { s, decided, later } = make2([late], NOW);
+    await s.tick();
+    expect(decided).toEqual([]);
+    late.receipts!.verdict = { ...receiptVerdict({ receipts: late.receipts! }), at: 300 };
     later(RECEIPTS_WAIT_MS);
     await s.tick();
     expect(decided).toEqual([[late.runId, 'success']]);
   });
-  it('audits a receipt verdict like a review: its verdict becomes the run\'s feedback and grades the receipt', async () => {
-    const x = run(picked, { receipts: receipts(0) });
-    const runs = [x];
-    const { s, created, fed } = sampler(runs);
-    expect(await s.tick()).toBe(1);                 // decided by the receipts, then audited in the free slot
-    expect(x.outcome?.basis).toBe('receipts');
-    expect(created).toHaveLength(1);
-    const audit = s.list().find(r => r.audit)!;
-    expect(audit).toMatchObject({ runId: x.runId, receipt: 'success', state: 'running' });
-    expect(pickReceiptAudits(runs, new Set([x.runId]), NOW, 5)).toEqual([]);
-    await s.ended(run('900', { agentId: 'sentinel', chatId: audit.chatId, reviewOf: x.runId, report: { at: NOW, outcome: 'done', verified: 'yes', summary: 'Manca un caso', verdict: 'partial' } }));
-    expect(fed).toMatchObject([{ runId: x.runId, verdict: 'partial' }]);
-    expect(s.list().find(r => r.audit)).toMatchObject({ state: 'recorded', graded: 'partial' });
-    expect(gradeReceipt('success', 'success')).toBe('agree');
-    expect(gradeReceipt('fail', 'success')).toBe('disagree');
-  });
-  it('the daily cost counts only the runs still reviewed; the receipts\' are free, the audits cover both', () => {
-    const roots = Array.from({ length: 14 }, (_, i) => run(String(i + 1), i < 7 ? { receipts: receipts(0) } : {}));
-    const reviews = [0.2, 0.4, 0.3].map((c, i) => run(String(50 + i), { agentId: 'sentinel', reviewOf: roots[13 - i]!.runId, costUsd: c }));
-    expect(judgingEstimate([...roots, ...reviews], NOW)).toEqual({ runsPerDay: 1, receiptsPerDay: 1, auditsPerDay: 0.2, reviewUsd: 0.3, perDayUsd: 0.36, basis: 3 });
+});
+
+describe('judgeSamplingOn (issue #112)', () => {
+  it('runs in the user\'s own app, stable or built from a clone, never in tests or an agent\'s hidden run', () => {
+    expect(judgeSamplingOn({})).toEqual({ on: true, why: "the user's app" });
+    expect(judgeSamplingOn({ SB_RELEASE: '2026.10.19' }).on).toBe(true);
+    expect(judgeSamplingOn({ SB_TEST: '1' }).on).toBe(false);
+    expect(judgeSamplingOn({ SB_HIDDEN: '1' }).on).toBe(false);
+    expect(judgeSamplingOn({ SB_TEST: '1', SB_JUDGE_SAMPLE: '1' }).on).toBe(true);
+    expect(judgeSamplingOn({ SB_JUDGE_SAMPLE: '0' }).on).toBe(false);
   });
 });

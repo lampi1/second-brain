@@ -24,6 +24,7 @@ import { genuiRequestIt } from './areas/genui-request.it';
 import { voiceIt } from './areas/voice.it';
 import { recIt } from './areas/rec.it';
 import { imparaIt } from './areas/impara.it';
+import { imparaV3It } from './areas/impara-v3.it';
 import {studioIt}from'./areas/studio.it';
 import { permissionsIt } from './areas/permissions.it';
 import { langSwitchIt } from './areas/lang-switch.it';
@@ -42,6 +43,8 @@ import { agentDetailIt } from './areas/agent-detail.it';
 import { agentImageIt } from './areas/agent-image.it';
 import { proposalsIt } from './areas/proposals.it';
 import {settingsIt}from'./areas/settings.it';
+import { settingsShellIt } from './areas/settings-shell.it';
+import { mcpAddIt } from './areas/mcp-add.it';
 import { profileIt } from './areas/profile.it';
 import { homeIt } from './areas/home.it';
 import { guideIt } from './areas/guide.it';
@@ -52,6 +55,7 @@ import { queriesIt } from './areas/queries.it';
 import { lampoIt } from './areas/lampo.it';
 import { awayIt } from './areas/away.it';
 import { learningIt } from './areas/learning.it';
+import { andamentoIt } from './areas/andamento.it';
 import { suggestIt } from './areas/suggest.it';
 import { estimateIt } from './areas/estimate.it';
 import { logIt } from './areas/log.it';
@@ -82,6 +86,7 @@ export const it = {
   ...lampoIt,
   ...awayIt,
   ...learningIt,
+  ...andamentoIt,
   ...suggestIt,
   ...estimateIt,
   ...logIt,
@@ -89,6 +94,7 @@ export const it = {
   ...voiceIt,
   ...recIt,
   ...imparaIt,
+  ...imparaV3It,
   'genui.request.question': 'Domanda',
   'genui.request.permission': 'Permesso',
   'genui.request.from': ({ kind, chat, title }: { kind: string; chat?: string; title: string }) => `${kind} da ${chat ?? 'una chat'}: ${title}`,
@@ -119,6 +125,8 @@ export const it = {
   ...agentImageIt,
   ...proposalsIt,
   ...settingsIt,
+  ...settingsShellIt,
+  ...mcpAddIt,
   ...profileIt,
   ...chatIt,
   ...visualsIt,

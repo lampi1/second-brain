@@ -19,7 +19,7 @@
 .morning-row { display:flex; align-items:center; gap:8px; min-height:30px; }
 .morning-row > button.morning-open { all:unset; box-sizing:border-box; flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:8px; padding:4px 8px; border-radius:8px; cursor:pointer; color:var(--text-2); font-size:13px; }
 .morning-row > button.morning-open:hover, .morning-row > button.morning-open:focus-visible { background:var(--surface-2); color:var(--text); }
-.morning-row > button.morning-open:focus-visible { outline:2px solid var(--accent, var(--violet)); outline-offset:1px; }
+.morning-row > button.morning-open:focus-visible { outline: 2px solid var(--focus); outline-offset:1px; }
 .morning-mark { flex:none; width:8px; height:8px; border-radius:99px; background:var(--text-3); }
 .morning-row[data-tone="warn"] .morning-mark { background:var(--amber); }
 .morning-row[data-tone="bad"] .morning-mark { background:var(--red, #e5484d); }

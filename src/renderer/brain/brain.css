@@ -80,7 +80,7 @@
 .bx [hidden] { display: none !important; }
 :where(.bx) a { color: var(--bx-blue); text-decoration: none; }
 .bx a:hover { text-decoration: underline; text-underline-offset: 2px; }
-.bx :focus-visible { outline: 2px solid var(--bx-focus); outline-offset: 2px; border-radius: 4px; }
+.bx :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; border-radius: 4px; }
 :where(.bx) button, :where(.bx) input, :where(.bx) select, :where(.bx) textarea { font: inherit; color: inherit; }
 .bx code, .bx .mono { font-family: var(--bx-mono); font-size: 0.92em; }
 :where(.bx) :is(h1, h2, h3, h4) { margin: 0; font-family: var(--bx-display); text-wrap: balance; }
@@ -556,7 +556,7 @@
 .bx-pre-copy { position: absolute; top: 6px; right: 6px; }
 .bx-md code.bx-copy { cursor: copy; }
 .bx-md code.bx-copy:hover { border-color: var(--bx-blue-line); }
-.bx-md code.bx-copy:focus-visible { border-color: var(--bx-blue-line); outline: 2px solid var(--bx-focus); outline-offset: 1px; }
+.bx-md code.bx-copy:focus-visible { border-color: var(--bx-blue-line); outline: 2px solid var(--focus); outline-offset: 1px; }
 
 /* ── Task (pages/Task.tsx): the head's lead line; the list and the detail are in pages/worklog.css ── */
 .dv-lead { font-size: var(--bx-fs-l); color: var(--bx-text-2); max-width: 82ch; line-height: 1.5; }
@@ -642,7 +642,7 @@
   transform: rotate(-45deg); transition: transform var(--bx-dur) var(--bx-ease); }
 .dv-item[open] > summary::after { transform: rotate(45deg); }
 .dv-item > summary:hover { background: var(--bx-surface-2); }
-.dv-item > summary:focus-visible { outline: 2px solid var(--bx-focus); outline-offset: -2px; }
+.dv-item > summary:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .dv-item[open] > summary { background: var(--bx-surface-2); }
 .dv-item-main { display: grid; gap: 3px; min-width: 0; flex: 1; }
 .dv-item-title { display: flex; gap: 6px; align-items: baseline; min-width: 0; }
@@ -741,7 +741,7 @@
 .bx-map-hint { top:auto; bottom:18px; max-width:calc(100% - 40px); text-align:center; }
 .bx-map-canvas { cursor:grab; }
 .bx-map-canvas:active { cursor:grabbing; }
-.bx-map-canvas:focus-visible { outline:2px solid var(--bx-blue); outline-offset:-4px; }
+.bx-map-canvas:focus-visible { outline: 2px solid var(--focus); outline-offset:-4px; }
 .bx-map-live { right:16px; bottom:16px; width:auto; max-width:280px; padding:8px 12px; display:block; }
 .bx-map-live summary { cursor:pointer; font-size:12px; color:var(--bx-text-2); }
 .bx-map-live[open] { max-height:36vh; overflow:auto; }
@@ -780,7 +780,7 @@
 .bx-pre-copy { position: absolute; top: 6px; right: 6px; }
 .bx-md code.bx-copy { cursor: copy; }
 .bx-md code.bx-copy:hover { border-color: var(--bx-blue-line); }
-.bx-md code.bx-copy:focus-visible { border-color: var(--bx-blue-line); outline: 2px solid var(--bx-focus); outline-offset: 1px; }
+.bx-md code.bx-copy:focus-visible { border-color: var(--bx-blue-line); outline: 2px solid var(--focus); outline-offset: 1px; }
 /* Regole imparate inside the Regole page (brain/pages/LearnedRules.tsx, ADR 0082) */
 .bx-learned { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin-top: 24px; min-width: 0; }
 .bx-learned-head { display: grid; gap: 6px; }

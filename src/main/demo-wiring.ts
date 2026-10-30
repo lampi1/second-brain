@@ -210,7 +210,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const appRoot = fs.existsSync(path.join(app.getAppPath(), 'src')) ? app.getAppPath() : null;
   seedDemoLessons(lessons, now(), appRoot);
   const learn = new LearnService({ store: lessons, lang: uiLang, run: demoRun, now, teach: demoTeach, cannotTeach: () => null,
-    teachers: () => engineInfos().filter(e => e.kind !== 'api' && e.caps.tools).map(e => teacherOption(e, [])), webOk: () => true, guide: appGuide,
+    teachers: () => engineInfos().filter(e => e.kind !== 'api' && e.caps.tools).map(e => teacherOption(e, [])), webOk: () => true, guide: appGuide, away: () => brain.settings().awayMode === true,
     places: () => ({ brain: demoBrainRoot, appSource: appRoot }),
     devops: () => { const t = tasks.get(); return { prs: t.prs, repoDirs: t.repoDirs }; },
     changed: (state, lesson) => ctx.emitter.emit('impara:changed', { state, ...(lesson ? { lesson } : {}) }),

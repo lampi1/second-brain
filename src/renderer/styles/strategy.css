@@ -25,7 +25,7 @@
 .sp-btn.primary:hover:not(:disabled) { background: var(--blue-strong); }
 .sp-btn:disabled { opacity: .55; cursor: default; }
 .sp-change textarea { width: 100%; box-sizing: border-box; resize: vertical; min-height: 52px; padding: 8px 10px; border-radius: var(--r-m); border: 1px solid var(--border-2); background: var(--surface); color: var(--text); font: inherit; }
-.sp-change textarea:focus { outline: none; border-color: var(--focus); }
+.sp-change textarea:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 3px var(--focus-glow); }
 .sp-list { list-style: none; margin: 0; padding: 0; }
 .sp-step { display: flex; align-items: flex-start; gap: 10px; padding: 4px 0; line-height: 1.4; font-size: 13.5px; }
 .sp-step .sp-icon { flex: none; margin-top: 2px; }

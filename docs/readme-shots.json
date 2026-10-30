@@ -1,0 +1,266 @@
+{
+  "$comment": "README freshness manifest (ADR 0208), read by scripts/readme-check.mjs in npm run check:branch. shots: each docs/screenshots/<name>.webp -> the test of test/shots/readme.spec.ts that takes it and the UI source paths it shows (globs: ** any depth, * one level, a trailing / a folder); a branch that changes one of them must take the shot again (npm run shots) or say `shots: unchanged-visually [name ...]` in a commit message. global: paths every shot shows. pages: each BRAIN_PAGES id -> English words that mention it in README.md (case-sensitive, prose or alt text). pending: known gaps by key, reported as warnings until fixed (then remove the key).",
+  "global": [
+    "src/renderer/styles/tokens.css"
+  ],
+  "shots": {
+    "grindhouse": {
+      "test": "README screenshots",
+      "sources": [
+        "src/renderer/components/AgentStrips.tsx",
+        "src/renderer/components/ChildStrips.tsx",
+        "src/renderer/components/ChatTile.tsx",
+        "src/renderer/components/StripActivity.tsx",
+        "src/renderer/components/DelegationCard.tsx",
+        "src/renderer/components/Sidebar.tsx",
+        "src/renderer/components/SidebarTree.tsx",
+        "src/renderer/components/TopBar.tsx",
+        "src/renderer/components/OrchestratorOverlay.tsx",
+        "src/renderer/styles/agent-strips.css",
+        "src/renderer/styles/tree.css",
+        "src/renderer/styles/shell.css"
+      ]
+    },
+    "agents": {
+      "test": "README screenshots",
+      "sources": [
+        "src/renderer/components/AgentCatalogPage.tsx",
+        "src/renderer/components/AgentCatalogCard.tsx",
+        "src/renderer/components/AgentAvatar.tsx",
+        "src/renderer/styles/agent-catalog.css",
+        "src/renderer/components/Sidebar.tsx",
+        "src/renderer/components/TopBar.tsx",
+        "src/renderer/styles/shell.css"
+      ]
+    },
+    "orchestrator": {
+      "test": "README screenshots",
+      "sources": [
+        "src/renderer/components/OrchestratorOverlay.tsx",
+        "src/renderer/components/OrchestratorTile.tsx",
+        "src/renderer/components/ChatItems.tsx",
+        "src/renderer/components/ChatInput.tsx",
+        "src/renderer/components/DecisionCard.tsx",
+        "src/renderer/components/StrategyPanel.tsx",
+        "src/renderer/styles/decision.css",
+        "src/renderer/styles/strategy.css"
+      ]
+    },
+    "browser": {
+      "test": "README screenshots",
+      "sources": [
+        "src/renderer/components/FocusView.tsx",
+        "src/renderer/components/BrowserTile.tsx",
+        "src/renderer/components/ChatTile.tsx",
+        "src/renderer/components/ChatItems.tsx"
+      ]
+    },
+    "brain-map": {
+      "test": "README screenshots",
+      "sources": [
+        "src/renderer/brain/map/",
+        "src/renderer/brain/lib/live.ts",
+        "src/renderer/brain/lib/map.ts",
+        "src/renderer/brain/lib/map-labels.ts",
+        "src/renderer/brain/lib/map-motion.ts"
+      ]
+    },
+    "brain-scripts": {
+      "test": "README screenshots",
+      "sources": [
+        "src/renderer/brain/pages/Script.tsx",
+        "src/renderer/components/brain-model/MemoryPage.tsx",
+        "src/renderer/components/brain-model/HubIntro.tsx",
+        "src/renderer/components/Sidebar.tsx",
+        "src/renderer/components/TopBar.tsx",
+        "src/renderer/styles/shell.css"
+      ]
+    },
+    "memory": {
+      "test": "README showcase: Memoria, agent levels, Orchestrator and Flash, reactions",
+      "sources": [
+        "src/renderer/components/brain-model/MemoryPage.tsx",
+        "src/renderer/components/brain-model/ProposalsDeck.tsx",
+        "src/renderer/components/brain-model/HubIntro.tsx",
+        "src/renderer/styles/memory-hub.css",
+        "src/renderer/styles/proposals.css"
+      ]
+    },
+    "agent-levels": {
+      "test": "README showcase: Memoria, agent levels, Orchestrator and Flash, reactions",
+      "sources": [
+        "src/renderer/components/AgentCatalogCard.tsx",
+        "src/renderer/components/AgentAvatar.tsx",
+        "src/renderer/styles/agent-catalog.css"
+      ]
+    },
+    "orchestrator-flash": {
+      "test": "README showcase: Memoria, agent levels, Orchestrator and Flash, reactions",
+      "sources": [
+        "src/renderer/components/OrchestratorOverlay.tsx",
+        "src/renderer/components/OrchestratorTile.tsx",
+        "src/renderer/components/LampoTile.tsx",
+        "src/renderer/components/ChatItems.tsx"
+      ]
+    },
+    "reactions": {
+      "test": "README showcase: Memoria, agent levels, Orchestrator and Flash, reactions",
+      "sources": [
+        "src/renderer/components/OrchestratorTile.tsx",
+        "src/renderer/components/ChatItems.tsx"
+      ]
+    },
+    "connectors": {
+      "test": "README screenshot: Connettori",
+      "sources": [
+        "src/renderer/components/ConnectorsHub.tsx",
+        "src/renderer/components/SettingsPage.tsx",
+        "src/renderer/styles/connectors-hub.css",
+        "src/renderer/styles/settings.css"
+      ]
+    },
+    "plan": {
+      "test": "README showcase: the Strategist's plan to approve in the questions window",
+      "sources": [
+        "src/renderer/components/QuestionsWindow.tsx",
+        "src/renderer/components/PlanApproval.tsx",
+        "src/renderer/styles/qwin.css",
+        "src/renderer/styles/plan-approval.css"
+      ]
+    },
+    "voice": {
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, the maintenance notice",
+      "sources": [
+        "src/renderer/components/VoiceSettings.tsx",
+        "src/renderer/components/SettingsPage.tsx",
+        "src/renderer/styles/settings.css"
+      ]
+    },
+    "voice-talk": {
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, the maintenance notice",
+      "sources": [
+        "src/renderer/components/OrchestratorOverlay.tsx",
+        "src/renderer/components/OrchestratorTile.tsx",
+        "src/renderer/components/VoiceControls.tsx",
+        "src/renderer/components/ChatItems.tsx"
+      ]
+    },
+    "log": {
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, the maintenance notice",
+      "sources": [
+        "src/renderer/components/LogPage.tsx",
+        "src/renderer/styles/log.css"
+      ]
+    },
+    "recordings": {
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, the maintenance notice",
+      "sources": [
+        "src/renderer/components/RecordingsPage.tsx",
+        "src/renderer/styles/recordings.css"
+      ]
+    },
+    "classifiers": {
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, the maintenance notice",
+      "sources": [
+        "src/renderer/components/brain-model/ClassifiersPage.tsx",
+        "src/renderer/components/brain-model/ClassifierParts.tsx",
+        "src/renderer/components/brain-model/KindModelCard.tsx",
+        "src/renderer/components/brain-model/TrendChart.tsx",
+        "src/renderer/styles/classifiers.css"
+      ]
+    },
+    "quality": {
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, the maintenance notice",
+      "sources": [
+        "src/renderer/brain/pages/Qualita.tsx",
+        "src/renderer/brain/lib/quality.ts"
+      ]
+    },
+    "learn": {
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, the maintenance notice",
+      "sources": [
+        "src/renderer/components/impara/",
+        "src/renderer/styles/impara.css"
+      ]
+    },
+    "costs": {
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, the maintenance notice",
+      "sources": [
+        "src/renderer/brain/pages/Costi.tsx",
+        "src/renderer/components/LiveCosts.tsx",
+        "src/renderer/components/ContextNow.tsx",
+        "src/renderer/brain/lib/cost-facts.ts"
+      ]
+    },
+    "maintenance": {
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, the maintenance notice",
+      "sources": [
+        "src/renderer/components/brain-model/MaintenanceButton.tsx",
+        "src/renderer/components/brain-model/MaintenancePanel.tsx",
+        "src/renderer/components/brain-model/MemoryPage.tsx",
+        "src/renderer/styles/notif.css"
+      ]
+    }
+  },
+  "pages": {
+    "home": [
+      "Grindhouse"
+    ],
+    "agenti": [
+      "Agents"
+    ],
+    "task": [
+      "Tasks",
+      "Task page"
+    ],
+    "flussi": [
+      "Routines"
+    ],
+    "idee": [
+      "Ideas"
+    ],
+    "andamento": [
+      "Trends"
+    ],
+    "script": [
+      "Scripts"
+    ],
+    "log": [
+      "Log"
+    ],
+    "skill": [
+      "Skills"
+    ],
+    "impostazioni": [
+      "Settings"
+    ],
+    "regole": [
+      "Rules"
+    ],
+    "memoria": [
+      "Memory"
+    ],
+    "collegamenti": [
+      "brain map",
+      "Map"
+    ],
+    "guida": [
+      "guide",
+      "Guide"
+    ],
+    "browser": [
+      "Browser"
+    ],
+    "registrazioni": [
+      "Recordings"
+    ],
+    "impara": [
+      "Learn"
+    ]
+  },
+  "pending": {
+    "no-test:crew": "the crew picture (agent avatars) is not taken by a README test yet: the integrator adds it to test/shots/readme.spec.ts (2026-10-30)",
+    "page:task": "the Task page (Azure DevOps work items and PRs) is not in the README yet: the integrator adds it with the README refresh (2026-10-30)",
+    "page:andamento": "the Trends page (Andamento, ADR 0202) is not in the README yet: the integrator adds it with the README refresh (2026-10-30)"
+  }
+}

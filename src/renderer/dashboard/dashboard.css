@@ -51,7 +51,7 @@
 /* the map's commands float inside its frame: a toolbar on top, the legend and the zoom group at the bottom */
 .dash-map-toolbar{position:relative;z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 12px 0;padding:6px;border:1px solid var(--border-2);border-radius:10px;background:color-mix(in srgb,var(--surface-2) 88%,transparent);backdrop-filter:blur(8px);box-shadow:var(--shadow-pop)}
 .dash-search{flex:1 1 220px;min-width:0;display:flex;align-items:center;gap:7px;height:28px;padding:0 10px;border:1px solid var(--border-2);border-radius:7px;background:var(--bg);color:var(--text-3);transition:border-color 180ms,box-shadow 180ms}
-.dash-search:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-bg)}
+.dash-search:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px var(--focus-glow)}
 .dash-search input{flex:1;min-width:0;border:0;background:transparent;color:var(--text);font:inherit;font-size:12px;outline:none}
 .dashboard .dash-search input:focus-visible{outline:none}
 .dash-map-count{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap;padding:0 4px}

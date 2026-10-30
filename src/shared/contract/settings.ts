@@ -84,10 +84,13 @@ export interface Settings {
   /** "Esito alla chat": when a run of Esegui ends, the chat that proposed the block gets the exit code and the output's
    *  tail as an app message (main/run/results.ts) */
   runResults: boolean;
-  /** the Agenti page's «Abilita controllo livello e performance» (agents/judge-sample.ts): every finished root run gets an
-   *  independent Sentinel review; judgingSince = when it was turned on (ms, 0 = never: runs ended before are skipped) */
+  /** the Agenti page's «Abilita controllo livello e performance» (agents/judge-sample.ts): a
+   *  sample of the finished root runs is reviewed by a hidden Sentinel run once a night (ADR 0203); judgingSince = when
+   *  it was turned on (ms, 0 = never: runs ended before are skipped) */
   judging: boolean;
   judgingSince: number;
+  /** the daily cap on the nightly reviews, $ (agents/judge-sample.ts batchSize, ADR 0203) */
+  judgingCapUsd: number;
   /** the folder of the app's own code (a git repo) that "Aggiorna" updates; null = the one the running release was built from */
   appRepo: string | null;
   /** the folder that holds the owner's projects (their git repos): asked by the first-run setup only when the app
@@ -135,7 +138,7 @@ export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engine
 export type SettingKey =
   | 'jobs.fallback' | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
-  | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
+  | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'judgingCapUsd' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
   | 'suggestOn' | 'voiceAsr' | 'voiceName' | 'voicePtt' | 'awayMode'
   | `delegation.${keyof DelegationSettings}` | `modelTiers.${Harness}.${ModelTier}`;
 export interface SettingDef {

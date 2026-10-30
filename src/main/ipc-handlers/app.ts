@@ -1,9 +1,9 @@
-// IPC handlers, App: info and usage, the folder pickers and the file viewer, CLI status, «Aggiorna» (source, update),
+// IPC handlers, App: info and usage (and the usage counter, ADR 0202), the folder pickers and the file viewer, CLI status, «Aggiorna» (source, update),
 // setup and profile, the global layer, the Task page, search, the Log. Registered by src/main/index.ts
 // with every other group (Handlers in ipc.ts keeps the set complete); each channel's shape is in
 // src/shared/contract/*.ts.
 import type { DiffAgainst } from '../../shared/file-diff';
-import { app, dialog, shell } from 'electron';
+import { app, clipboard, ClipboardItem, dialog, nativeImage, shell } from 'electron';
 import { askImageRoots, readAskImage } from '../ask-image';
 import { canonicalRepoRoot } from '../brain/adapters/codex-policy';
 import { detectProjectsFolder } from '../brain/projects-folder';
@@ -16,11 +16,25 @@ import { logInputLag } from '../perf';
 import path from 'node:path';
 import { readFileDiff } from '../file-diff';
 import { readFileView } from '../file-view';
+import { copyFile, type ClipboardLike } from '../file-copy';
 import { showLocal } from '../open-path';
 import { systemLang } from '../lang';
+import { useCounts } from '../use-counter';
 import type { HandlerContext, HandlersOf } from './context';
 
-export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, defaultBrain, updates, search, hiddenShell, bumpBrainChoice, rendererErrors }: HandlerContext): HandlersOf<'app' | 'cli' | 'source' | 'update' | 'setup' | 'profile' | 'overlay' | 'log' | 'search' | 'tasks' | 'feed'> {
+const CLIPBOARD: ClipboardLike = {
+  writeText: t => clipboard.writeText(t),
+  writeRaw: (f, b) => clipboard.write([new ClipboardItem({ [`electron application/osclipboard;format="${f}"`]: new Blob([new Uint8Array(b)]) })]),
+  writeImageFromPath: async p => {
+    const img = nativeImage.createFromPath(p);
+    if (img.isEmpty()) return false;
+    await clipboard.write([new ClipboardItem({ 'image/png': new Blob([new Uint8Array(img.toPNG())], { type: 'image/png' }) })]);
+    return true;
+  },
+};
+const HIDDEN_CLIPBOARD: ClipboardLike = { writeText: async () => {}, writeRaw: async () => {}, writeImageFromPath: async () => true };
+
+export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, defaultBrain, updates, search, hiddenShell, bumpBrainChoice, rendererErrors }: HandlerContext): HandlersOf<'app' | 'cli' | 'source' | 'update' | 'setup' | 'profile' | 'overlay' | 'log' | 'search' | 'tasks' | 'feed' | 'usecount'> {
   return {
     'update:get': () => updates.state(),
     'update:apply': a => updates.apply(a?.id),
@@ -57,6 +71,8 @@ export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, 
     },
     // an agent's run (SB_HIDDEN, the e2e suite) never opens Explorer: it records what it would have shown
     'app:showInFolder': a => showLocal(String(a?.path ?? '').slice(0, 4096), hiddenRun() ? hiddenShell : shell),
+    // an agent's hidden run never overwrites the user's clipboard: the copy is checked and dropped
+    'app:copyFile': a => copyFile(String(a?.path ?? '').slice(0, 4096), hiddenRun() ? HIDDEN_CLIPBOARD : CLIPBOARD),
     'app:readFile': a => {
       const chat=typeof a?.chatId==='string'?s.chats.list().find(chat=>chat.id===a.chatId):undefined;
       const brainRoot=demo?process.env.SB_BRAIN:s.brain.info().brainRoot;
@@ -76,6 +92,9 @@ export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, 
       repos: [s.brain.settings().appRepo, fs.existsSync(path.join(outDir, '..', '.git')) ? path.dirname(outDir) : null],
     })),
     'app:usage': () => s.brain.usage(),
+    // the usage counter (ADR 0202): local only, zero tokens; the page's batch is checked in use-counter.ts
+    'usecount:add': a => useCounts.add(a),
+    'usecount:report': a => useCounts.report(a?.days),
     'cli:status': a => engineStatus(a.harness, a.checkLogin !== false),
     'cli:login': a => openLogin(a.harness),
     'feed:list': () => s.brain.feed(),

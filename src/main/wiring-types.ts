@@ -3,6 +3,7 @@
 import type { BrowserWindow } from 'electron';
 import type { LearningReviewService } from './brainmodel/learning-review';
 import type { CliStatus, Harness } from '../shared/contract';
+import type { JudgingEstimate } from '../shared/agents';
 import type { AgentCatalogService } from './agents/catalog';
 import type { RunFeedback } from './agents/run-feedback';
 import type { createAgentPacks } from './agents/pack/wiring';
@@ -45,6 +46,8 @@ export interface Wired {
   agentLifecycle?: LifecycleApi;
   oneShot?: OneShotService;
   agentRuns?: AgentRunStore;
+  /** what «Abilita controllo livello e performance» costs a day and when its last nightly batch ran (ADR 0203) */
+  judging?: { estimate: (now: number) => JudgingEstimate };
   memoryReview?: MemoryService;
   learningReview?: LearningReviewService;
   /** the brain's saved queries (ADR 0124): Memoria → Script & Query, queries:* IPC */

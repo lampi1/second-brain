@@ -16,6 +16,7 @@
 // Used by ImparaPage.tsx; styles impara.css.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { beatsOf, checkKey, doneNodes, isFlowchart, parseLessonCommand, parseSpokenChoice, playlist, rootOf, stepKey, type Lesson, type LessonBeat, type LessonCheck, type LessonExtraKind, type LessonFact, type LessonStep, type PlayItem } from '@shared/lesson';
+import { quizRight, type QuizResponse } from '@shared/quiz';
 import { answerCheck, askExtra, askTutor, explainBack, impara, imparaPrefs, loadLesson, moveTo, removeLesson, retryLesson, setImparaPrefs } from '../../lib/impara';
 import { narrate, narrateBeats, onImparaHeard, stopSpeaking, stopVoice, toggleVoice, useVoice, voice } from '../../lib/voice';
 import { renderMarkdown } from '../../lib/markdown';
@@ -120,6 +121,7 @@ function Cites({ facts, onAll }: { facts: LessonFact[]; onAll: () => void }) {
               <span className={`ip-tag ${f.check === 'ok' ? 'green' : f.check === 'fixed' ? 'blue' : 'amber'}`}>{t(`impara.fact.${f.check}`)}</span>
               <span className="ip-fact-c">{f.claim}</span>
               {f.quote && <q className="ip-fact-q">{f.quote}</q>}
+              {f.topic && <span className="ip-fact-why">{t('impara.src.why', { topic: f.topic })}</span>}
               <span className="ip-fact-r">{f.from === 'web' ? <a href={f.ref} target="_blank" rel="noreferrer" className="ip-src-link">{f.ref}</a> : f.from === 'file' ? <button type="button" className="ip-link ip-fact-open" onClick={() => openFact(f.ref)} data-testid="impara-fact-open"><code>{f.ref}</code></button> : t('impara.fact.known')}</span>
             </li>
           ))}
@@ -170,10 +172,11 @@ function Board({ lesson }: { lesson: Lesson }) {
     else if (item.kind === 'check') narrate(item.check.answer ? item.check.why : spokenCheck(item.check));
     else narrate(lesson.explain?.feedback ?? lesson.explain?.q ?? t('impara.end.spokenAsk'));
   };
-  const answer = (c: LessonCheck, choice: number) => {
+  const answer = (c: LessonCheck, choice: QuizResponse) => {
     if (c.answer) return;
     void answerCheck(lesson.id, c.id, choice);
-    if (prefs.voice) narrate(`${choice === c.correct ? t('impara.check.rightSpoken') : t('impara.check.wrongSpoken', { letter: LETTERS[c.correct]! })} ${c.why}`);
+    // an order or a match has no letter to say (ADR 0204)
+    if (prefs.voice) narrate(`${quizRight(c, choice) ? t('impara.check.rightSpoken') : c.options.length ? t('impara.check.wrongSpoken', { letter: LETTERS[c.correct]! }) : t('impara.check.wrongTitle')} ${c.why}`);
   };
 
   // each new item is read aloud once (a piece beat by beat, a check; the end's question), at the user's pace: never an

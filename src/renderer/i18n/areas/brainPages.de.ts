@@ -12,9 +12,7 @@ export const brainPagesDe: typeof brainPagesIt = {
   'brainPages.nav.browser': 'Browser',
   'brainPages.nav.task': 'Tasks',
   'brainPages.nav.idee': 'Ideen',
-  'brainPages.nav.costi': 'Kosten',
-  'brainPages.nav.qualita': 'Qualität',
-  'brainPages.nav.apprendimento': 'Lernen',
+  'brainPages.nav.andamento': 'Verlauf',
   'brainPages.nav.script': 'Skripte',
   'brainPages.nav.log': 'Log',
   'brainPages.nav.agenti': 'Agenten',
@@ -22,7 +20,6 @@ export const brainPagesDe: typeof brainPagesIt = {
   'brainPages.nav.impostazioni': 'Einstellungen',
   'brainPages.nav.regole': 'Regeln',
   'brainPages.nav.memoria': 'Gedächtnis',
-  'brainPages.nav.classificatori': 'Klassifikatoren',
   'brainPages.nav.collegamenti': 'Karte',
 
   // Esplora.tsx

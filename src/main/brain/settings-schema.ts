@@ -124,7 +124,9 @@ const BASE: readonly SettingDef[] = [
   // comando dal play senza che ti scriva fatto")
   // the Agenti page's switch (agents/judge-sample.ts): protected, it spends tokens
   { key: 'judging', type: 'boolean', default: true, protected: true, label: 'Controllo livello e performance',
-    description: 'Revisioni automatiche («Revisione · …»): acceso = ogni lavoro finito viene rivisto da un Sentinel in una sessione nuova (mai una revisione); spento = nessuna. Nessun limite al giorno. Livello e performance dei ruoli si basano su verdetti veri. Spende token.' },
+    description: 'Revisioni automatiche: acceso = ogni notte un Sentinel nascosto rivede un campione dei lavori finiti che test, ricevute e tuoi voti non decidono già (25% per ruolo, 10% se il ruolo è stabile), entro il tetto di spesa; spento = nessuna. Livello e performance dei ruoli si basano su verdetti veri. Spende token.' },
+  { key: 'judgingCapUsd', type: 'usd', min: 0.1, max: 20, default: 1, protected: true, label: 'Tetto di spesa per le revisioni ($ al giorno)',
+    description: 'Quanto può costare al massimo la revisione notturna: l’app ci fa stare tanti lavori quanti ne copre, al costo medio di una revisione.' },
   { key: 'judgingSince', type: 'int', min: 0, max: 8_640_000_000_000, default: 0, protected: true, label: 'Controllo acceso dal',
     description: 'Quando il controllo è stato acceso (ms): i lavori finiti prima non vengono rivisti.' },
   { key: 'runResults', type: 'boolean', default: true, protected: true, label: 'Esito dei comandi alla chat',
@@ -245,7 +247,7 @@ export function defaults(): Settings {
     runResults: true,
     // on by default (owner, 2026-10-22: every role levels up without manual verdicts, ADR 0125); judgingSince 0 = from
     // the first sampler pass, never a backlog
-    judging: true, judgingSince: 0,
+    judging: true, judgingSince: 0, judgingCapUsd: 1,
     appRepo: null,
     projectsRoot: null,
     loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15,

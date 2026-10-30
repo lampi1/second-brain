@@ -248,6 +248,28 @@ describe('every role progresses without a manual verdict (ADR 0125)', () => {
     const a = root('artisan');
     expect(wins([a, child('sentinel', a)], 'sentinel')).toBe(1);
   });
+  it('sentinel: its nightly batch review (ADR 0203) is graded item by item by the user\'s verdicts and the reworks', () => {
+    const plain = (agentId: string) => run({ agentId, startedBy: 'orchestrator', startedAt: T, endedAt: T + 3600_000, report: report(T + 3600_000) });
+    const a = plain('artisan'), b = plain('scout'), c = plain('herald');
+    const batch = (entries: NonNullable<AgentRun['reviewBatch']>) => run({ agentId: 'sentinel', startedBy: 'app', source: 'oneshot', oneshot: { engine: 'claude', job: 'review', fallback: false, costBasis: 'reported' },
+      startedAt: T + 7200_000, endedAt: T + 7300_000, reviewBatch: entries, report: report(T + 7300_000, { via: undefined }) });
+    const said = batch([{ runId: a.runId, verdict: 'success', verified: 'yes' }, { runId: b.runId, verdict: 'fail', verified: 'yes' }, { runId: c.runId }]);
+    // nothing happened yet: no grade, no XP
+    expect(earnedVerdict(said, earnIndex([a, b, c, said]))).toBeNull();
+    // the user agrees on both judged items: a success; an item with no verdict is never graded
+    const ok = [{ ...a, outcome: human('success') }, { ...b, outcome: human('fail') }, { ...c, outcome: human('fail') }];
+    expect(earnedVerdict(said, earnIndex([...ok, said]))).toEqual({ verdict: 'success', basis: 'graded', by: 'human' });
+    expect(wins([...ok, said], 'sentinel')).toBe(1);
+    // one step off on one item: partial; the opposite on one: fail
+    expect(earnedVerdict(said, earnIndex([{ ...a, outcome: human('partial') }, b, c, said]))?.verdict).toBe('partial');
+    expect(earnedVerdict(said, earnIndex([a, { ...b, outcome: human('success') }, c, said]))?.verdict).toBe('fail');
+    // a rework grades: against the pass it gave, for the fail it gave (ADR 0186)
+    const redo = (of: AgentRun) => run({ agentId: of.agentId, reworkOf: of.runId, startedAt: T + 86_400_000, endedAt: T + 86_500_000 });
+    expect(earnedVerdict(said, earnIndex([a, b, c, said, redo(a)]))).toEqual({ verdict: 'fail', basis: 'graded', by: 'facts' });
+    expect(earnedVerdict(said, earnIndex([a, b, c, said, redo(b)]))).toEqual({ verdict: 'success', basis: 'graded', by: 'facts' });
+    // a batch that judged nothing is not gradable
+    expect(earnedVerdict(batch([{ runId: a.runId }]), earnIndex([{ ...a, outcome: human('success') }]))).toBeNull();
+  });
   it('weighs the chain and the grade in the performance below the user and a review, and keeps them through a prune', () => {
     const s = root('strategist'), kids = [...Array(5)].map(() => child('scout', s));
     const st = standings([s, ...kids], [], NOW).get('scout')!;

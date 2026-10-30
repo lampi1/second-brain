@@ -55,6 +55,8 @@ export interface AgentsInvokeMap {
   'mcpservers:test': [{ id: string }, McpServersState];
   'mcpservers:importScan': [void, McpImportCandidate[]];
   'mcpservers:importApply': [{ keys: string[] }, { state: McpServersState; added: string[]; errors: { key: string; message: string }[] }];
+  /** «Annulla» of a connector change the Orchestrator made (ADR 0207): the key on its feed card */
+  'mcpservers:undo': [{ undo: string }, McpServersState];
   'agents:list': [void, AgentCatalog];
   /** the user's Annulla on a change the app applied (feed card, change log) */
   'agents:undo': [AgentUndo, AgentProfile];

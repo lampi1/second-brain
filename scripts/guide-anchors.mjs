@@ -1,7 +1,8 @@
 // The Guida's anchors (ADR 0196): bundles src/main/guide/anchors-cli.ts with esbuild into a temporary file and runs it.
 // Writes the hash of every code symbol the concept cards point at to src/shared/guide-anchors.json (commit it). Run it
 // after re-reading a card whose code changed (the unit test test/unit/guide-anchors.test.ts names the card and point).
-// Usage: node scripts/guide-anchors.mjs [--check]   (--check: write nothing, exit 1 when a card is stale)
+// Usage: node scripts/guide-anchors.mjs [--check]   (--check: write nothing, exit 1 when a card is stale or a page or
+// Settings section has no card, ADR 0208)
 import { build } from 'esbuild';
 import fs from 'node:fs';
 import os from 'node:os';

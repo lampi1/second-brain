@@ -261,6 +261,8 @@ export interface PendingRequest {
  *  explanation right before the block, plain text (shared/command-ask.ts), shown on the card without a click. */
 export interface CommandAsk { itemId: string; code: string; lang: string; prod?: string; lead?: string }
 export type OpenPathResult = { how: 'folder' } | { how: 'missing' | 'refused'; reason: string };
+/** what the viewer's copy icon put on the clipboard (main/file-copy.ts) */
+export type CopyFileResult = { how: 'text' | 'image' | 'file' } | { how: 'missing' | 'refused'; reason: string };
 /** app:askImage: an image a question names, as a data: URL (main/ask-image.ts: allowed folders, magic bytes, size), or why not */
 export type AskImageResult =
   | { kind: 'image'; path: string; dataUrl: string }

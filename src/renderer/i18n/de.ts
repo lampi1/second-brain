@@ -23,6 +23,7 @@ import { genuiRequestDe } from './areas/genui-request.de';
 import { voiceDe } from './areas/voice.de';
 import { recDe } from './areas/rec.de';
 import { imparaDe } from './areas/impara.de';
+import { imparaV3De } from './areas/impara-v3.de';
 import { studioDe } from './areas/studio.de';
 import { permissionsDe } from './areas/permissions.de';
 import { langSwitchDe } from './areas/lang-switch.de';
@@ -42,6 +43,8 @@ import { agentDetailDe } from './areas/agent-detail.de';
 import { agentImageDe } from './areas/agent-image.de';
 import { proposalsDe } from './areas/proposals.de';
 import { settingsDe } from './areas/settings.de';
+import { settingsShellDe } from './areas/settings-shell.de';
+import { mcpAddDe } from './areas/mcp-add.de';
 import { profileDe } from './areas/profile.de';
 import { homeDe } from './areas/home.de';
 import { guideDe } from './areas/guide.de';
@@ -52,6 +55,7 @@ import { queriesDe } from './areas/queries.de';
 import { lampoDe } from './areas/lampo.de';
 import { awayDe } from './areas/away.de';
 import { learningDe } from './areas/learning.de';
+import { andamentoDe } from './areas/andamento.de';
 import { estimateDe } from './areas/estimate.de';
 import { logDe } from './areas/log.de';
 import { reviewedContextDe } from './areas/reviewed-context.de';
@@ -81,12 +85,14 @@ export const de: Dict = {
   ...lampoDe,
   ...awayDe,
   ...learningDe,
+  ...andamentoDe,
   ...estimateDe,
   ...logDe,
   ...genuiRequestDe,
   ...voiceDe,
   ...recDe,
   ...imparaDe,
+  ...imparaV3De,
   'genui.request.question': 'Frage',
   'genui.request.permission': 'Berechtigung',
   'genui.request.from': ({ kind, chat, title }) => `${kind} von ${chat ?? 'einem Chat'}: ${title}`,
@@ -117,6 +123,8 @@ export const de: Dict = {
   ...agentImageDe,
   ...proposalsDe,
   ...settingsDe,
+  ...settingsShellDe,
+  ...mcpAddDe,
   ...profileDe,
   ...chatDe,
   ...visualsDe,
