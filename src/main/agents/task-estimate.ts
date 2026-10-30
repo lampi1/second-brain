@@ -2,7 +2,7 @@
 // anche con le stime per task simile»): how long and how much a request should take, from the agent runs of similar past
 // tasks, and the path that follows: the Orchestrator answers a small question itself, starts ONE agent with no children
 // for a quick single-part job, and plans a delegation tree only for work of several parts. Similar = same agent and same
-// kind of work (shared/work-concepts.ts taskOf on the run's goal, the routing table's own kinds), else the same kind on any agent, else the same
+// kind of work (shared/work-concepts.ts taskOf on the run's goal, the one taxonomy of kinds), else the same kind on any agent, else the same
 // agent on any kind; the most recent MAX_SIMILAR of the first group with MIN_SIMILAR or more. ADR 0186 (10 days of real
 // data: held 41% of the time, actual/estimate median 2.01): a job is measured as the user lives it, the run's elapsed
 // time (start to end) and the cost of the whole tree it started (its delegated children too), not one run's execution

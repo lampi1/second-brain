@@ -9,7 +9,7 @@ import type { RunEstimateView } from '@shared/task-estimate';
 import { accuracySummary, estimateText, useRunEstimates, type AccuracySummary } from '../lib/run-estimates';
 import { minutes } from '../lib/format';
 import { locale, t } from '../i18n';
-import { getKindIt } from '../lib/routing';
+import { getKindIt } from '../lib/work-kinds';
 import { HelpTip } from './HelpTip';
 import '../styles/estimate.css';
 
@@ -36,7 +36,7 @@ export function AccuracyNote({ summary }: { summary: AccuracySummary | null }) {
   </div>;
 }
 
-/** The kind of an estimate in words, the routing table's (ADR 0186: one taxonomy); an unknown one is «altro». */
+/** The kind of an estimate in words, the chats' own (ADR 0186: one taxonomy); an unknown one is «altro». */
 export const kindWord = (k: string): string => (getKindIt() as Record<string, string>)[k] ?? getKindIt().altro;
 
 /** The "?" of an estimate: how it is computed, its range and confidence, the actual once ended, the accuracy. */

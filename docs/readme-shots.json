@@ -162,7 +162,7 @@
     "classifiers": {
       "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, the maintenance notice",
       "sources": [
-        "src/renderer/components/brain-model/ClassifiersPage.tsx",
+        "src/renderer/components/brain-model/ClassifiersSection.tsx",
         "src/renderer/components/brain-model/ClassifierParts.tsx",
         "src/renderer/components/brain-model/KindModelCard.tsx",
         "src/renderer/components/brain-model/TrendChart.tsx",

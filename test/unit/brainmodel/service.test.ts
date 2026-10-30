@@ -16,7 +16,6 @@ import { migrationReceipt } from '../../../src/main/brainmodel/migration-source'
 import { BrainModelService } from '../../../src/main/brainmodel/service';
 import { writeDemoBrain } from '../../../src/main/brainmodel/demo';
 import type { AgentModelChoice, AgentRun } from '../../../src/shared/agents';
-import type { RoutingInfo } from '../../../src/shared/contract';
 import { changeCriteria, type BrainChange, type LogScan } from '../../../src/shared/brain-model';
 import type { ResearchProposal } from '../../../src/shared/maintenance-research';
 import { maintenanceEvent } from '../../../src/main/brain/announce';
@@ -31,7 +30,6 @@ const models = (): AgentModelChoice[] => [{ engine: 'claude', label: 'Claude', e
 const NOW = Date.parse('2026-10-19T09:00:00Z');
 const DEV = 'artisan';
 const OTHER = 'scout';
-const routing: RoutingInfo = { table: null, registry: null, kinds: [], error: null, history: [] };
 
 function world(opts: { demo?: boolean; upgradeAsk?: UpgradeAsk; scripts?: { file: (id: string) => string; changed: () => void }; runs?: AgentRun[]; applied?: (c: BrainChange[]) => void; logDir?: string; findings?: (logs: LogScan) => { bugs: number; forget: number } } = {}) {
   const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-brainmodel-'))); roots.push(base);
@@ -46,7 +44,7 @@ function world(opts: { demo?: boolean; upgradeAsk?: UpgradeAsk; scripts?: { file
   catalog.onKnowhowChange((p, previous) => flows.publishCurrent(p, previous));
   const learning = new AgentPackLearning(flows, data);
   let emitted = 0;
-  const service = new BrainModelService({ userData: data, root: () => brain, home: null, catalog, packs: flows, learning, runs: () => opts.runs ?? [], routing: () => routing,
+  const service = new BrainModelService({ userData: data, root: () => brain, home: null, catalog, packs: flows, learning, runs: () => opts.runs ?? [],
     emit: () => { emitted++; }, auto: false, ...(opts.upgradeAsk ? { upgradeAsk: opts.upgradeAsk } : {}), now: () => NOW, ...(opts.applied ? { applied: opts.applied } : {}),
     ...(opts.logDir ? { logDir: () => opts.logDir! } : {}), ...(opts.findings ? { findings: opts.findings } : {}), ...(opts.scripts ? { scripts: opts.scripts } : {}) });
   const agent = (id: string) => catalog.list().profiles.find(p => p.id === id)!;
@@ -389,7 +387,7 @@ describe('repeated tasks, duplicates and the user toggle', () => {
   it('refuses an unknown job and works without a brain only to say so', async () => {
     const w = world();
     await expect(w.service.maintain('everything' as never)).rejects.toThrow(/Unknown/);
-    const none = new BrainModelService({ userData: w.data, root: () => null, home: null, catalog: w.catalog, packs: w.flows, learning: w.learning, runs: () => [], routing: () => routing, emit: () => {}, auto: false });
+    const none = new BrainModelService({ userData: w.data, root: () => null, home: null, catalog: w.catalog, packs: w.flows, learning: w.learning, runs: () => [], emit: () => {}, auto: false });
     await expect(none.maintain()).rejects.toThrow(/cartella del brain/);
     expect(none.state()).toMatchObject({ root: null, skills: [], rules: [], memory: [] });
   });

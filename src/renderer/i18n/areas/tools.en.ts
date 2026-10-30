@@ -169,8 +169,7 @@ export const toolsEn: typeof toolsIt = {
   'tools.keys.denyLabel': 'Deny',
   'tools.keys.denyHint': 'Esc',
 
-  // Routing: task kinds and routing labels
-  'tools.routing.kindAny': 'Any',
+  // The kinds of work (lib/work-kinds.ts)
   'tools.routing.kindQaRun': 'QA and testing',
   'tools.routing.kindReview': 'Review',
   'tools.routing.kindBugFix': 'Bug fix',

@@ -1,4 +1,4 @@
-// Settings (userData/config.json), budget alerts, the job ledger and the model routing table.
+// Settings (userData/config.json), budget alerts, the job ledger, the model registry and how a chat's model was chosen.
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
 import type { DelegationSettings, ModelTier } from '../roles';
@@ -188,7 +188,7 @@ export interface BudgetAlert {
   text: string;               // Italian, one line
 }
 
-// ── Job ledger: real cost and time of a job, kept for the brain's routing table (ADR 0053 dropped the estimate shown
+// ── Job ledger: real cost and time of a job, kept for the brain's estimates (ADR 0053 dropped the estimate shown
 // to the user: measured on 178 chats it held only 47% of the time with a bigger median error than the median cost) ──
 /** minutesKind 'work' = effective work time (running, never waiting for the user's answers: the app since 2026-10-11, the
  *  same figure the chat tile shows); without it the minutes are a chat's span or the CLI's turn time and only $ count. */
@@ -204,14 +204,14 @@ export interface JobRecordInput {
   actual?: JobActual | null;
 }
 
-// ── Model routing: which harness, model and effort a chat opened by an agent gets (ADR 0032) ─────────────────────────
-/** The kinds of work the routing table decides on: the one taxonomy (shared/work-concepts.ts, ADR 0186). */
+// ── Model choice: which harness, model and effort a chat gets (the role's card or the user's defaults; ADR 0210) ───────
+/** The kinds of work a chat is labelled with (the ledger, estimates): the one taxonomy (shared/work-concepts.ts, ADR 0186). */
 export { WORK_KINDS as TASK_KINDS, type TaskKind } from '../work-concepts';
 import type { TaskKind } from '../work-concepts';
 /** One row of the brain's model registry and price table (harness/models.json): USD per million tokens. */
 export interface RegistryModel {
   id: string; harness: Harness; provider: string; aliases?: string[];
-  /** auto = the routing table may pick it; manual = only when named */
+  /** auto = an everyday model (listed first for the tiers); manual = only when named */
   routing: 'auto' | 'manual'; tier?: string;
   price: { input: number; cacheWrite5m: number; cacheWrite1h: number; cacheRead: number; output: number };
   longPrompt?: { over: number; price: RegistryModel['price'] };
@@ -223,40 +223,10 @@ export interface ModelRegistry {
   defaultModel: string;
   models: RegistryModel[];
   modifiers?: { usGeo?: number; webSearchPerRequest?: number };
-  /** the only model and effort a row for the app's chats may name (the user, 2026-10-14: "i lavori sull'app sempre in
-   *  opus medio"); other models never reach them. Absent = no such rule. */
-  appChats?: { model: string; effort: Effort | null };
 }
-/** A row of the routing table: kind '*' = any; area = the title's label ("IT", "Pers · App"), one or several; no area = any. */
-export interface RoutingRow {
-  kind: TaskKind | '*'; area?: string | string[];
-  harness: Harness; model: string; effort: Effort | null;
-  why: string; since: string; evidence: string;
-  /** the user's switch for the writing rows «Sui crediti API» (ADR 0052): on = its chats run on the Anthropic API engine
-   *  with the same model, while that engine is on, has a key and may be used; else on the row's harness. Absent = off;
-   *  only the user turns it on or off */
-  onApi?: boolean;
-  /** the user's switch «L'AI può cambiarla» off: an agent may neither change nor remove this row (absent = it may) */
-  locked?: boolean;
-}
-/** The table in force: <brain>/ops/state/improve/routing/v<version>.json, current.json says which (versioned: every save
- *  is a new version + a line in audit.jsonl; old versions stay for rollback). */
-export interface RoutingTable {
-  /** exploration: the share of chats that once tried a little-sampled model; read and kept, used by nothing (ADR 0186) */
-  version: number; appliedAt: string | null; by: string | null; exploration: number; routes: RoutingRow[];
-  /** how much cost weighs against quality when the loop compares models: 0 = only quality, 10 = only cost (the user's
-   *  λ, 7 on 2026-10-14; like OpenRouter's cost_quality_tradeoff); only the user changes it */
-  costWeight: number;
-}
-/** One change of the table (a line of <brain>/ops/state/improve/audit.jsonl, domain routing): who, when, why, with what
- *  data; stored = its v<to>.json is still on disk (it can be restored). */
-export interface RoutingChange { at: string; from: number | null; to: number; by: string; reason: string | null; evidence: string | null; exploration?: { from: number; to: number }; costWeight?: { from: number; to: number }; stored: boolean }
-/** routing:get → the table (null: never applied), the registry (null: the brain has no harness/models.json) and why not;
- *  history = its last changes, newest first (the user's page and the agents both write it, ADR 0032). */
-export interface RoutingInfo { table: RoutingTable | null; registry: ModelRegistry | null; kinds: readonly TaskKind[]; error: string | null; history: RoutingChange[] }
-/** How a chat's engine was chosen: agent = the catalog agent's profile (engine, model, effort; a profile with no model
- *  takes the table row's as a default, never an override: ADR 0078); table = its row; default = no row, the user's
- *  "Chat aperte dall'Orchestrator"; override = the agent named something else, with a reason. */
+/** How a chat's engine was chosen: agent = the role's card (engine, model or its tier's, effort); default = the user's
+ *  "Chat aperte dall'Orchestrator"; override = the chat named something else. 'table' and 'explore' are only read back
+ *  from chats routed before the routing table left (ADR 0210); `version` is null since then. */
 export interface RouteDecision {
   policy: 'routing'; version: number | null; source: 'table' | 'default' | 'override' | 'explore' | 'agent';
   reason: string | null; kind: TaskKind; area: string; at: number;
@@ -269,7 +239,7 @@ export interface RouteDecision {
   handoffs?: number;
 }
 /** The role a routed chat runs: who launched it, its model tier, and where its model came from (the role's own model,
- *  its tier on the engine, or the engine's default). */
+ *  its tier on the engine, or the engine's default; 'table' only on chats from before ADR 0210). */
 export interface RouteAgent { id: string; version: number; chosenBy: 'orchestrator' | 'parent' | 'app'; tier?: ModelTier; modelFrom?: 'role' | 'tier' | 'table' | 'engine' }
 
 /** renderer → main, settings: each entry [argument, result]. Part of InvokeMap (src/shared/contract.ts). */
@@ -284,11 +254,6 @@ export interface SettingsInvokeMap {
   'settings:propose': [{ key: string; value: unknown; chatId?: string; reason?: string }, SettingRequestResult];
   'settings:pending': [void, SettingProposal[]];
   'settings:confirm': [{ proposalId: string; accept: boolean }, { change: SettingChange | null }];
-  /** the job's actual cost and time, for the brain's ledger (jobs.jsonl: routing reads it, ADR 0053) */
+  /** the job's actual cost and time, for the brain's ledger (jobs.jsonl, ADR 0053) */
   'estimate:record': [JobRecordInput, { id: string }];
-  /** the routing table and the model registry (Impostazioni → «Instradamento modelli») */
-  'routing:get': [void, RoutingInfo];
-  /** the user saves the table from the settings page: checked against the hard rules, written as a new version
-   *  (a table's stored exploration rate is kept as it is: no chat explores since ADR 0186) */
-  'routing:save': [{ routes: RoutingRow[]; reason?: string; costWeight?: number; baseVersion?: number }, RoutingInfo];
 }

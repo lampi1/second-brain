@@ -40,8 +40,6 @@ export const TOOL_CATALOG: Readonly<Record<string, ToolInfo>> = {
   app_continue_chat: t('app', '«Riprendi»: a new chat on the same engine and folder from the old chat\'s hand-off.'),
   app_set_chat_effort: t('app', 'Pick the reasoning effort of one running chat for this conversation only.'),
   app_set_chat_work: t('app', 'Declare, wait on or complete a chat\'s explicit assignment (holds the auto-close).'),
-  app_routing: t('app', 'The model routing table in force for chats without a role.'),
-  app_routing_save: t('app', 'Write a new version of the routing table for chats without a role.'),
   agent_catalog: t(['app', 'chat'], 'The roles with purpose, tools and skills, and the skills that fit a request.'),
   agent_learn_propose: t(['app', 'chat'], 'Propose a lesson for a role (its text or a skill), queued for the user.'),
   app_unblock: t('orchestrator', 'Open the questions window with everything waiting for the user, after a recap he asked for.'),

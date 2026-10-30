@@ -1,29 +1,25 @@
-// The Classificatori page's data (ADR 0077), read-only: how the app's automatic choices work today. Model routing: the
-// table in force (task kind → engine, model, effort, why), its change history, and per row the measured results of the
-// chats it routed (runs, verified success rate, average cost per chat) from the improvement loop's ledger
-// (<brain>/ops/state/improve/outcomes.jsonl, predictions joined with their actuals and the verdicts of the agent runs of
-// the same chats). The skill suggester is gone (ADR 0186: 3 hits in 4129 suggestions), and its card with it. Per kind of work: the
-// verified outcomes of the chats routed with it; per source: how many chats the table, the role (ADR 0083) or a default chose the model of. Quality over
-// time: success and cost per route, by week; a row without runs says so (null values), never zero. "Verified" = the
-// user's or a reviewed verdict, from the agent run or from the ledger (a run in both counts once; ADR 0095); the
-// brain's proxy outcomes are known but unverified and never enter it. Nothing here writes: changes go
-// through the routing save and the maintenance jobs, logged with their rollback. Used by brainmodel/service.ts;
-// unit tests: test/unit/brainmodel/classifiers.test.ts. The grid's cards (classifier-cards.ts) also read the ledger's
-// known outcomes and the job ledger (userData/jobs.jsonl, the cost ledger's kinds).
+// The Classificatori section's data (ADR 0077; a section of Qualità since ADR 0210), read-only: the small sorters that
+// decide at zero tokens. Per kind of work: the app's chats in the improvement loop's ledger
+// (<brain>/ops/state/improve/outcomes.jsonl, each routed chat's prediction line with its kind, joined with its actuals
+// and the verdicts of the agent runs of the same chats), how many have a verified outcome and how many succeeded. The
+// model-routing table, its history, its quality by route and «who chose the model» left with the table (ADR 0210); an
+// old ledger line still loads, its `source` and `version` unread. "Verified" = the user's or a reviewed verdict, from
+// the agent run or from the ledger (a run in both counts once; ADR 0095); the brain's proxy outcomes are known but
+// unverified and never enter it. Nothing here writes. Used by brainmodel/service.ts; unit tests:
+// test/unit/brainmodel/classifiers.test.ts. The grid's cards (classifier-cards.ts) also read the job ledger
+// (userData/jobs.jsonl, the cost ledger's kinds).
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
-import type { ClassifierRoute, ClassifiersState, KindModelCard, RouteResult } from '../../shared/brain-model';
-import type { RoutingInfo, RoutingRow } from '../../shared/contract';
+import type { ClassifiersState, KindModelCard } from '../../shared/brain-model';
 import { foldOutcome, type LedgerOutcome } from '../brain/routing';
-import { classifierCards, isoWeek, lastIsoWeeks, verifiedOf, type JobRow } from './classifier-cards';
+import { classifierCards, verifiedOf, type JobRow } from './classifier-cards';
 import { fromLedgerKind } from '../../shared/work-concepts';
 
-interface Prediction { id: string; at: number; kind: string; area: string; harness: string; model: string | null; source: string }
+interface Prediction { id: string; at: number; kind: string }
 interface Actual { usd: number }
 export interface ClassifierInputs {
   root: string | null;
-  routing: RoutingInfo;
   runs: AgentRun[];
   profiles: AgentProfile[];
   /** the job ledger's rows (kind and cost of each chat), for the cost-ledger kind card; absent = none */
@@ -47,7 +43,7 @@ export function readJobs(file: string): JobRow[] {
   return [...byId.values()];
 }
 
-/** The ledger's routing predictions of the app's chats (one per chat), their latest actuals and their known outcomes
+/** The ledger's prediction lines of the app's chats (one per chat), their latest actuals and their known outcomes
  *  (later line wins, a measured line never undoes one, an unverified one never replaces a verified one: foldOutcome). */
 export function readLedger(root: string | null): { predictions: Prediction[]; actuals: Map<string, Actual>; outcomes: Map<string, LedgerOutcome> } {
   const predictions = new Map<string, Prediction>(), actuals = new Map<string, Actual>(), outcomes = new Map<string, LedgerOutcome>();
@@ -57,10 +53,10 @@ export function readLedger(root: string | null): { predictions: Prediction[]; ac
   for (const line of text.split('\n')) {
     if (!line.includes('"app:')) continue;
     try {
-      const j = JSON.parse(line) as { id?: unknown; at?: unknown; domain?: unknown; item?: { kind?: string; area?: string; harness?: string; model?: string | null }; predicted?: { value?: { source?: string } }; actual?: { usd?: number }; outcome?: unknown };
+      const j = JSON.parse(line) as { id?: unknown; at?: unknown; domain?: unknown; item?: { kind?: string }; predicted?: unknown; actual?: { usd?: number }; outcome?: unknown };
       // an app: id is a routing line; the brain's settlement may leave the domain out
       if ((j.domain !== 'routing' && j.domain !== undefined) || typeof j.id !== 'string' || !j.id.startsWith('app:')) continue;
-      if (j.predicted && j.item && !predictions.has(j.id)) predictions.set(j.id, { id: j.id, at: Number(j.at) || 0, kind: String(j.item.kind ?? 'altro'), area: String(j.item.area ?? ''), harness: String(j.item.harness ?? ''), model: j.item.model ?? null, source: String(j.predicted.value?.source ?? 'table') });
+      if (j.predicted && j.item && !predictions.has(j.id)) predictions.set(j.id, { id: j.id, at: Number(j.at) || 0, kind: String(j.item.kind ?? 'altro') });
       if (j.actual && Number.isFinite(j.actual.usd)) actuals.set(j.id, { usd: Number(j.actual.usd) });
       if (j.outcome) foldOutcome(outcomes, j.id, j.outcome);
     } catch { /* a torn line */ }
@@ -68,12 +64,6 @@ export function readLedger(root: string | null): { predictions: Prediction[]; ac
   return { predictions: [...predictions.values()], actuals, outcomes };
 }
 
-const areas = (r: RoutingRow): string[] => (r.area === undefined ? [] : Array.isArray(r.area) ? r.area : [r.area]);
-/** The row of `routes` a prediction was decided by (same rule as routing.match: the first row of its kind and area). */
-export function rowOf(routes: RoutingRow[], p: Pick<Prediction, 'kind' | 'area'>): number {
-  const exact = routes.findIndex(r => r.kind === p.kind && (!areas(r).length || areas(r).includes(p.area)));
-  return exact >= 0 ? exact : routes.findIndex(r => r.kind === '*' && (!areas(r).length || areas(r).includes(p.area)));
-}
 /** Per kind of work: the routed chats, how many have a verified outcome, how many of those succeeded. Verified only, as
  *  every other success figure on the page (ADR 0186: the routing's own per-kind counts took the brain's proxy too). */
 function kindsOf(predictions: readonly { id: string; kind: string }[], runByChat: Map<string, AgentRun>, outcomes: Map<string, LedgerOutcome>): ClassifiersState['kinds'] {
@@ -87,33 +77,12 @@ function kindsOf(predictions: readonly { id: string; kind: string }[], runByChat
   return [...by.values()].sort((a, b) => b.chats - a.chats || a.kind.localeCompare(b.kind));
 }
 
-function result(ids: string[], actuals: Map<string, Actual>, runByChat: Map<string, AgentRun>, outcomes: Map<string, LedgerOutcome>): RouteResult {
-  const known = ids.map(id => verifiedOf(id, runByChat, outcomes)).filter((x): x is boolean => x !== null);
-  const costs = ids.map(id => actuals.get(id)?.usd).filter((x): x is number => typeof x === 'number');
-  return { runs: ids.length, success: { value: known.length ? known.filter(Boolean).length / known.length : null, n: known.length },
-    avgCostUsd: costs.length ? costs.reduce((a, b) => a + b, 0) / costs.length : null };
-}
-/** ISO week label "2026-W42" of a time (classifier-cards.ts isoWeek). */
-export const weekOf = isoWeek;
-
 export async function classifiersState(i: ClassifierInputs, now = Date.now()): Promise<ClassifiersState> {
-  const table = i.routing.table, routes = table?.routes ?? [];
   const { predictions, actuals, outcomes } = readLedger(i.root);
   const runByChat = new Map([...i.runs].sort((a, b) => b.startedAt - a.startedAt).map(r => [r.chatId, r]));
-  const perRow = routes.map(() => [] as string[]);
-  for (const p of predictions) { if (p.source !== 'table') continue; const k = rowOf(routes, p); if (k >= 0) perRow[k]!.push(p.id); }
-  const rows: ClassifierRoute[] = routes.map((r, k) => ({ kind: r.kind, area: areas(r).join(', ') || null, harness: r.harness, model: r.model, effort: r.effort, why: r.why, result: result(perRow[k]!, actuals, runByChat, outcomes) }));
-  // quality by week: per route (its predictions)
-  const weeks = lastIsoWeeks(now, 6);
-  const quality: ClassifiersState['quality'] = rows.map((row, k) => ({ key: `route:${k}`, label: `${row.kind}${row.area ? ` · ${row.area}` : ''} → ${row.model}`,
-    weeks: weeks.map(w => { const ids = perRow[k]!.filter(id => weekOf(predictions.find(p => p.id === id)!.at) === w), res = result(ids, actuals, runByChat, outcomes); return { week: w, runs: res.runs, success: res.success.value, avgCostUsd: res.avgCostUsd }; }) }));
   return {
-    routing: { version: table?.version ?? null, appliedAt: table?.appliedAt ?? null, by: table?.by ?? null, routes: rows, error: i.routing.error },
-    history: i.routing.history.map(h => ({ at: h.at, from: h.from, to: h.to, by: h.by, reason: h.reason, evidence: h.evidence })),
-    quality,
     cards: classifierCards({ now, predictions, actuals, outcomes, runs: i.runs, jobs: (() => { try { return i.jobs?.() ?? []; } catch { return []; } })() }),
     kinds: kindsOf(predictions, runByChat, outcomes),
     ...(i.kindModel ? { kindModel: await i.kindModel().catch(() => undefined) } : {}),
-    sources: [...predictions.reduce((m, p) => m.set(p.source, (m.get(p.source) ?? 0) + 1), new Map<string, number>())].map(([source, chats]) => ({ source, chats })).sort((a, b) => b.chats - a.chats),
   };
 }

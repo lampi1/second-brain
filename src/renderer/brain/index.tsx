@@ -79,7 +79,7 @@ export const PAGE_ALIAS: Record<string, BrainPageId> = { fatto: 'log', diario: '
 /** Their old go-to keys still work: G R (the old Regole imparate) opens Regole, where those rules live now (ADR 0082);
  *  G D (the Dashboard, gone with ADR 0122: its parts live in Memoria, Andamento and Idee) opens Memoria; G Q, G J and G K
  *  (Qualità, Apprendimento, Classificatori) open their Andamento tab (ADR 0202: go() redirects the old id; G C = Andamento
- *  itself, which opens on Costi). */
+ *  itself, which opens on Costi); G K opens Qualità, where the Classificatori section lives since ADR 0210. */
 export const GO_ALIASES: { id: string; key: string }[] = [{ id: 'regole', key: 'G R' }, { id: 'memoria', key: 'G D' }, { id: 'qualita', key: 'G Q' }, { id: 'apprendimento', key: 'G J' }, { id: 'classificatori', key: 'G K' }];
 
 /** "esplora/ops/x.md" → { id: 'esplora', arg: 'ops/x.md' }; "mappa/tutto" → { map: true, full: true }. */

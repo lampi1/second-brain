@@ -1,4 +1,4 @@
-// The Classificatori page's small shared pieces (ClassifiersPage.tsx grid, ClassifierDetail.tsx detail): the
+// The Classificatori section's small shared pieces (ClassifiersSection.tsx grid, ClassifierDetail.tsx detail; in Qualità since ADR 0210): the
 // per-classifier text lookup, the icon of each classifier, a number with its "?" HelpTip (null = "nessun dato
 // ancora", never zero) and the third number of a card. The "pronto a calibrarsi" meter is gone with the calibration
 // it measured (bb953da; ADR 0101).
@@ -14,7 +14,6 @@ export const intFmt = (v: number): string => new Intl.NumberFormat(locale()).for
 
 const PATHS: Record<CardId | 'mail' | 'cmd', ReactNode> = {
   kind: <><path d="M4 6h16M4 12h10M4 18h6" /><circle cx="18" cy="16" r="3" /></>,
-  model: <><rect x="5" y="5" width="14" height="14" rx="3" /><path d="M10 10h4v4h-4zM9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3" /></>,
   estimates: <><circle cx="12" cy="13" r="8" /><path d="M12 9v4l3 2M9 2h6" /></>,
   tasks: <><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></>,
   jobkind: <><path d="M4 7h16v12H4z" /><path d="M9 7V4h6v3M4 12h16" /></>,

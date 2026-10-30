@@ -1,11 +1,12 @@
-// The Andamento page's places (ADR 0202): its tabs in order (Costi, Qualità, Apprendimento, Classificatori, Uso), the
-// page arg that opens one ("andamento/<tab>[/<more>]", e.g. "andamento/costi/30"), and the old pages that became tabs:
-// costi, qualita and classificatori were pages of their own, apprendimento a tab of Memoria; their ids, links ("costi/30",
-// "memoria/apprendimento") and G-keys still exist and land on the matching tab. Pure: used by actions.ts go() and
-// placeOf (the redirect), brain/index.tsx parseTarget, components/andamento/AndamentoPage.tsx (the tab bar), lib/app-map.ts
-// and lib/use-counter.ts (a tab counts as its own place). Tests: test/unit/andamento.test.ts.
+// The Andamento page's places (ADR 0202): its tabs in order (Costi, Qualità, Apprendimento, Uso), the page arg that
+// opens one ("andamento/<tab>[/<more>]", e.g. "andamento/costi/30"), and the old pages that became tabs: costi, qualita
+// and classificatori were pages of their own, apprendimento a tab of Memoria; their ids, links ("costi/30",
+// "memoria/apprendimento") and G-keys still exist and land on the matching tab. Classificatori was a tab too until the
+// routing table left (ADR 0210): its cards are a section of Qualità, and its old ids open Qualità. Pure: used by
+// actions.ts go() and placeOf (the redirect), brain/index.tsx parseTarget, components/andamento/AndamentoPage.tsx (the
+// tab bar), lib/app-map.ts and lib/use-counter.ts (a tab counts as its own place). Tests: test/unit/andamento.test.ts.
 
-export const TREND_TABS = ['costi', 'qualita', 'apprendimento', 'classificatori', 'uso'] as const;
+export const TREND_TABS = ['costi', 'qualita', 'apprendimento', 'uso'] as const;
 export type TrendTab = (typeof TREND_TABS)[number];
 export const DEFAULT_TREND_TAB: TrendTab = 'costi';
 
@@ -16,7 +17,8 @@ export const TREND_PAGES: Readonly<Record<string, TrendTab>> = {
   // Confronto modelli went (ADR 0201): its old links open the agents' quality
   confronto: 'qualita',
   apprendimento: 'apprendimento', learning: 'apprendimento',
-  classificatori: 'classificatori', classifiers: 'classificatori',
+  // the Classificatori tab folded into Qualità (ADR 0210)
+  classificatori: 'qualita', classifiers: 'qualita',
   uso: 'uso', usage: 'uso', 'uso-app': 'uso',
 };
 

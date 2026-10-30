@@ -1,54 +1,31 @@
-// Model routing: which harness, model and effort a chat opened by an agent gets (the user, 2026-10-13: "l'Orchestrator sceglie
-// modello e sforzo per tipo di lavoro, tracciato e migliorato nel tempo, configurabile"; any engine of the registry,
-// engines/registry.ts, asked by its caps: ADR 0046). The brain owns the data: the model registry and price table (harness/models.json)
-// and the versioned routing table (ops/state/improve/routing/v<N>.json + current.json, every change a new version +
-// a line in ops/state/improve/audit.jsonl), the same files the brain's ops/tools/routing.mjs reads; this module mirrors
-// its rules (match, resolve, check) so app_create_chat decides at zero tokens and in-process. It also appends the
-// routing predictions and their measured actuals to the shared ledger of the improvement loop
-// (ops/state/improve/outcomes.jsonl, append-only, same id = later line wins). Routed only at chat creation: switching
-// mid-chat restarts the prompt cache. A row the user locked («L'AI può cambiarla» off) no agent may change (agentLimits).
-// ADR 0186 removed exploration (no live path rolled the dice: role chats route by their role, the user's chats and the
-// Orchestrator never explored; the stored rate is kept, used by nothing; an old 'explore' route still loads), the per-kind
-// counts appended to a row's reason and the brain's `kinds` rules for title labels. The kinds are the one taxonomy of
-// shared/work-concepts.ts. Used by brain/index.ts (routing:get/save), appctl/tools.ts and wiring.ts. ADR 0032.
-// Role first (ADR 0083): a role chat takes the engine, model (its tier's) and effort the role resolved to; the table
-// never overrides nor refuses such a chat, it only records its kind and area. The known outcomes of role runs (the user's, the Orchestrator's or a reviewed verdict, issue #72) go to the same
-// ledger.
+// Model choice of a new chat (ADR 0032, 0083; ADR 0210 removed the routing table): which harness, model and effort a chat
+// gets. A role chat takes its card's engine, model (its tier's when the card names none) and effort (routeAgent); any
+// other chat ("Nuova chat", a new Orchestrator) takes the user's "Chat aperte dall'Orchestrator" defaults, or what the
+// user named (an override). Owner, 2026-10-30 (decision «Toglierlo»): no table picks a model per kind of work any more.
+// The brain still owns the model registry and price table (harness/models.json, read here: registry()). Each routed chat
+// still carries its kind and area (the one taxonomy of shared/work-concepts.ts) and appends its prediction and measured
+// actuals to the improvement loop's shared ledger (ops/state/improve/outcomes.jsonl, append-only, same id = later line
+// wins), which the Qualità tab's «Tipo di lavoro» card and the verified outcomes read. Old files of the table
+// (ops/state/improve/routing/, userData/routing-api.json) are left on disk and never read. Used by brain/index.ts,
+// chats/routed.ts, appctl/tools.ts and wiring.ts; tests in test/unit/brain/routing.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Effort, Harness, ModelRegistry, RegistryModel, RouteAgent, RouteDecision, RoutingChange, RoutingInfo, RoutingRow, RoutingTable, TaskKind } from '../../shared/contract';
+import type { Effort, Harness, ModelRegistry, RegistryModel, RouteAgent, RouteDecision, TaskKind } from '../../shared/contract';
 import { TASK_KINDS } from '../../shared/contract';
 import { MODEL_TIERS } from '../../shared/roles';
 import { enoughVerdicts } from '../../shared/success';
 export { taskOf } from '../../shared/work-concepts';
 import { conceptOf, taskOf } from '../../shared/work-concepts';
-import { log } from '../log';
 import { engineLabel, engineOf, engines } from '../engines/registry';
 import { availableEngine } from '../../shared/engine-readiness';
 import { engineReadiness } from '../engines/readiness';
 import { brainFile } from '../rules/tools';
 
 export const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
-/** The app's areas retain their routing priority and safety scope on every engine. */
-export const APP_AREAS = ['App', 'Pers · App'];
+/** The app's own areas: their queued work waits behind the other chats' (ADR 0036). */
+const APP_AREAS = ['App', 'Pers · App'];
 
 const readJson = (f: string): unknown => { try { return JSON.parse(fs.readFileSync(f, 'utf8').replace(/^﻿/, '')) as unknown; } catch { return null; } };
-/** Temp file + rename. On Windows the rename can fail for a moment (EPERM/EBUSY while an antivirus or the indexer
- *  holds the file, seen under the full test run): retry briefly, then write the file directly (as config.ts). */
-const writeAtomic = (f: string, text: string): void => {
-  fs.mkdirSync(path.dirname(f), { recursive: true });
-  const tmp = `${f}.${process.pid}.tmp`;
-  fs.writeFileSync(tmp, text);
-  for (let i = 0; i < 5; i++) {
-    try { fs.renameSync(tmp, f); return; } catch (e) {
-      if (!['EPERM', 'EBUSY', 'EACCES'].includes((e as NodeJS.ErrnoException).code ?? '')) throw e;
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20 * (i + 1));
-    }
-  }
-  fs.writeFileSync(f, text);
-  try { fs.unlinkSync(tmp); } catch { /* left behind: harmless */ }
-};
-const areasOf = (r: Pick<RoutingRow, 'area'>): string[] | null => (r.area === undefined || r.area === null ? null : Array.isArray(r.area) ? r.area : [r.area]);
 const isApp = (area: string): boolean => APP_AREAS.includes(area);
 /** A chat titled in an app area ("App · …", "Pers · App: …").
  *  Its queued work waits behind the other chats' (ADR 0036; chats/manager.ts). */
@@ -56,7 +33,7 @@ export const isAppChat = (title: string): boolean => isApp(areaOf(title));
 
 /** The area of a chat title, as the brain's estimates.mjs reads it: "Alfa · …" → Alfa, "Pers · App: …" → "Pers · App",
  *  an Orchestrator's own; a label that names a kind of work ("Fix · …", the one taxonomy's words, ADR 0186) or no
- *  label → 'altro'. The owner's area rows keep matching their titles. */
+ *  label → 'altro'. */
 export function areaOf(title: string): string {
   const t = String(title ?? '').trim();
   if (/^orchestrator\b/i.test(t)) return 'Orchestrator';
@@ -73,138 +50,30 @@ export function modelRow(model: string | null | undefined, reg: ModelRegistry | 
   const id = bare(model);
   return reg.models.find(r => r.id === id) ?? reg.models.find(r => (r.aliases ?? []).includes(id)) ?? reg.models.find(r => r.id === `claude-${id}`) ?? null;
 }
-const harnessAuto = (h: string, reg: ModelRegistry): boolean => reg.harnesses?.[h as Harness]?.routing === 'auto';
-/** Fable: never from the table nor from exploration, whatever the registry says (the user, 2026-10-14: "non userei fable
- *  costa troppo"); only an agent's override with a reason, or the user, names it. */
+/** Fable (the user, 2026-10-14: "non userei fable costa troppo"): only a role's card or the user names it. */
 export const isFable = (m: Pick<RegistryModel, 'id'> | null | undefined): boolean => !!m && /fable/i.test(m.id);
 /** does the engine take an effort (Claude's thinking budget)? */
 const takesEffort = (h: Harness): boolean => !!engineOf(h)?.caps.effort;
 /** The user's default effort is the Claude one (orchestratorChats.claudeEffort): another engine that takes an effort
- *  (Cursor, through its thought_level) keeps its own setting (cursorReasoning) unless a row or the chat names one. */
+ *  (Cursor, through its thought_level) keeps its own setting (cursorReasoning) unless the chat names one. */
 const defaultEffort = (h: Harness, defaults: { effort: Effort | null }): Effort | null => h === 'claude' ? defaults.effort : null;
 const looksClaude = (m: string | null): boolean => /\b(claude|opus|sonnet|haiku|fable|mythos)\b/i.test(String(m ?? '').replace(/[-_.]/g, ' '));
 
-// ── the table's rules ───────────────────────────────────────────────────────────────────────────────────────────────
-/** Hard-rule errors of a table (Italian, one per broken rule); [] = valid. Same rules as routing.mjs check(). */
-export function checkTable(routes: unknown, reg: ModelRegistry | null): string[] {
-  if (!Array.isArray(routes)) return ['manca l’elenco delle righe'];
-  if (!reg) return ['il brain non ha harness/models.json: nessun modello da scegliere'];
-  const errs: string[] = [];
-  routes.forEach((x: unknown, i) => {
-    const r = (x ?? {}) as Partial<RoutingRow>;
-    const at = `riga ${i + 1}`;
-    if (r.kind !== '*' && !(TASK_KINDS as readonly string[]).includes(String(r.kind))) errs.push(`${at}: tipo «${String(r.kind)}» sconosciuto`);
-    const areas = areasOf(r as RoutingRow) ?? [];
-    if (areas.some(a => typeof a !== 'string' || !a.trim())) errs.push(`${at}: area vuota`);
-    // `area: []` matches no chat (match()) while the switches read it as "no area": never in a table
-    if (Array.isArray(r.area) && !r.area.length) errs.push(`${at}: area vuota`);
-    const m = modelRow(typeof r.model === 'string' ? r.model : null, reg);
-    if (!m) { errs.push(`${at}: modello «${String(r.model)}» non è in harness/models.json`); return; }
-    if (m.harness !== r.harness) errs.push(`${at}: ${m.id} gira solo su ${m.harness}, non su ${String(r.harness)}`);
-    if (!harnessAuto(String(r.harness), reg) || m.routing !== 'auto') errs.push(`${at}: ${m.id} su ${String(r.harness)} è solo manuale (la tabella non lo sceglie da sola)`);
-    if (isFable(m)) errs.push(`${at}: Fable mai dalla tabella (costa troppo)`);
-    if (r.onApi === true && r.kind !== 'writing') errs.push(`${at}: «Sui crediti API» solo sulle righe Scrittura (il motore API è solo testo)`);
-    else if (r.onApi === true && m.provider !== 'anthropic') errs.push(`${at}: «Sui crediti API» solo con un modello Anthropic, non ${m.id}`);
-    if (r.effort === 'max') errs.push(`${at}: sforzo max solo su richiesta, mai dalla tabella`);
-    else if (r.effort && !(m.efforts ?? []).includes(r.effort)) errs.push(`${at}: ${m.id} non ha lo sforzo «${r.effort}»`);
-  });
-  return errs;
-}
-
-/** The exploration rate's error (Italian), null = valid or omitted: a number from 0 to 0.5 (routing.mjs check()). */
-export function checkExploration(x: unknown): string | null {
-  if (x === undefined) return null;
-  return typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 0.5 ? null : 'esplorazione: da 0 a 50%';
-}
-
-/** The cost weight's error (Italian), null = valid or omitted: 0 (only quality) to 10 (only cost); routing.mjs check(). */
-export function checkCostWeight(x: unknown): string | null {
-  if (x === undefined) return null;
-  return typeof x === 'number' && Number.isFinite(x) && x >= 0 && x <= 10 ? null : 'peso del costo: da 0 a 10';
-}
-/** The user's λ until they set one (2026-10-14: 7 of 10). */
-export const COST_WEIGHT = 7;
-
-const rowKey = (r: Pick<RoutingRow, 'kind' | 'area'>): string => `${r.kind}|${[...(areasOf(r) ?? [])].sort().join(',')}`;
-const rowName = (r: Pick<RoutingRow, 'kind' | 'area'>): string => `${r.kind === '*' ? 'qualsiasi tipo' : r.kind}${areasOf(r)?.length ? ` · ${areasOf(r)!.join(', ')}` : ''}`;
-// A row the AI adds or moves must not take a locked row's chats either: a more specific row (area, kind and area) or an
-// equally specific one placed before it would win match() for some of them. A row that already won them before may stay.
-const rank = (r: RoutingRow): number => (areasOf(r)?.length ? 2 : 0) + (r.kind !== '*' ? 1 : 0);
-const overlaps = (a: RoutingRow, b: RoutingRow): boolean => (a.kind === '*' || b.kind === '*' || a.kind === b.kind)
-  && (!areasOf(a)?.length || !areasOf(b)?.length || areasOf(a)!.some(x => areasOf(b)!.includes(x)));
-const beats = (list: RoutingRow[], n: RoutingRow, p: RoutingRow): boolean => overlaps(n, p) && (rank(n) > rank(p) || (rank(n) === rank(p) && list.indexOf(n) < list.indexOf(p)));
-/** What an agent may not do to the table in force (the user, 2026-10-14: a switch per row «se lo disabilito blocca all'app
- *  la possibilità di modificare quel modello per quel task in autonomia»): change or remove a locked row, lock or unlock a
- *  row, turn a writing row «Sui crediti API» on or off or remove it (ADR 0052), change the cost weight (the user's λ);
- *  and an agent always writes each row's "perché" (the user may leave it out: "non deve essere richiesto il motivo… lo
- *  scrivi te non io", 2026-10-14; the brain's loop fills it). Italian errors; [] = allowed. Same rule as routing.mjs
- *  agentLimits(). */
-export function agentLimits(prev: (Pick<RoutingTable, 'routes'> & { costWeight?: number }) | null, routes: RoutingRow[], costWeight?: number): string[] {
-  const errs: string[] = [];
-  const was = prev?.routes ?? [];
-  for (const p of was.filter(r => r.locked === true)) {
-    const n = routes.find(r => rowKey(r) === rowKey(p));
-    if (!n) errs.push(`la riga «${rowName(p)}» è bloccata dall’utente: l’AI non la toglie`);
-    else if (n.harness !== p.harness || n.model !== p.model || (n.effort ?? null) !== (p.effort ?? null) || n.locked !== true) errs.push(`la riga «${rowName(p)}» è bloccata dall’utente: l’AI non la cambia`);
-  }
-  for (const n of routes.filter(r => r.locked === true)) if (!was.some(p => p.locked === true && rowKey(p) === rowKey(n))) errs.push(`solo l’utente blocca una riga («${rowName(n)}»)`);
-  for (const p of routes.filter(r => r.locked === true)) {
-    const old = was.find(r => r.locked === true && rowKey(r) === rowKey(p));
-    if (!old) continue;
-    for (const n of routes) {
-      // locked rows too: swapping two of them moves chats from one of the user's choices to the other
-      if (n === p || !beats(routes, n, p)) continue;
-      const o = was.find(r => rowKey(r) === rowKey(n));
-      if (o && beats(was, o, old)) continue;
-      errs.push(`la riga «${rowName(n)}» prenderebbe le chat della riga bloccata «${rowName(p)}»: l’AI non la mette`);
-    }
-  }
-  // «Sui crediti API» is the user's alone (ADR 0052): an agent keeps each row's switch as it was, and a new row has it off
-  for (const n of routes) if ((n.onApi === true) !== (was.find(p => rowKey(p) === rowKey(n))?.onApi === true)) errs.push(`«Sui crediti API» della riga «${rowName(n)}» lo cambia solo l’utente`);
-  for (const p of was.filter(r => r.onApi === true)) if (!routes.some(n => rowKey(n) === rowKey(p))) errs.push(`la riga «${rowName(p)}» è «Sui crediti API»: solo l’utente la toglie`);
-  if (costWeight !== undefined && costWeight !== (prev?.costWeight ?? COST_WEIGHT)) errs.push('il peso del costo lo decide l’utente');
-  routes.forEach((r, i) => { if (typeof r.why !== 'string' || !r.why.trim()) errs.push(`riga ${i + 1}: manca il perché (l’AI lo scrive sempre)`); });
-  return errs;
-}
-
-/** The row for a task: the most specific wins (kind and area > area > kind > '*'), ties go to the first; null = none. */
-export function match(routes: RoutingRow[] | undefined, item: { kind: TaskKind; area: string }): RoutingRow | null {
-  let best: RoutingRow | null = null, score = -1;
-  for (const r of routes ?? []) {
-    const areas = areasOf(r);
-    if (r.kind !== '*' && r.kind !== item.kind) continue;
-    if (areas && !areas.includes(item.area)) continue;
-    // an area row beats a kind-only row: "App · any" keeps every app chat on its model (the user, 2026-10-14)
-    const s = (areas ? 2 : 0) + (r.kind !== '*' ? 1 : 0);
-    if (s > score) { best = r; score = s; }
-  }
-  return best;
-}
-
-/** Explicit null selects the engine default; omission inherits routing policy. Neither grants permission. */
+/** Explicit null selects the engine default; omission takes the user's defaults. Neither grants permission. */
 export interface RouteAsk { harness?: Harness; model?: string | null; effort?: Effort | null; reason?: string }
 /** The user's "Chat aperte dall'Orchestrator": the engine, each engine's model ('' / null = the CLI's) and the Claude effort. */
 export interface RouteDefaults { harness: Harness; models: Record<Harness, string | null>; effort: Effort | null }
 export type Resolved = { harness: Harness; model: string | null; effort: Effort | null; source: RouteDecision['source']; reason: string | null } | { error: string };
 
-/** Harness, model and effort of a new chat: the table's row, else the user's defaults (for the engine named, if any).
- *  Naming something other than a row says is an override and needs a reason; with no row, naming is free as before
- *  (still recorded as an override). Hard rules hold for everything an agent names; max only when asked, with a reason. */
-export function resolve(table: Pick<RoutingTable, 'routes'> | null, item: { kind: TaskKind; area: string }, ask: RouteAsk, defaults: RouteDefaults, reg: ModelRegistry | null,
-  canRun: (h: Harness) => boolean = () => true): Resolved {
-  const row = match(table?.routes, item);
-  // a row on a harness the app cannot start (api) or may not start now (engine off, Claude <-> Cursor off for this
-  // Orchestrator) is not usable: the defaults decide, as before the table
-  const readiness = engineReadiness();
-  const fallback = availableEngine(engines().map(e => e.id).filter(canRun), defaults.harness, readiness);
-  const readyAlternative = fallback && readiness[fallback]?.loggedIn === true;
-  const usable = row && engineOf(row.harness) && canRun(row.harness)
-    && (ask.harness === row.harness || !readyAlternative || readiness[row.harness]?.loggedIn === true || engineOf(row.harness)?.kind === 'api') ? row : null;
-  if (!ask.harness && !usable && !fallback) return { error: 'Nessun motore disponibile: verifica installazione, accesso e impostazioni.' };
-  const defaultHarness = fallback ?? defaults.harness;
-  const base = usable
-    ? { harness: usable.harness as Harness, model: usable.model as string | null, effort: usable.effort ?? null }
-    : { harness: defaultHarness, model: defaults.models[defaultHarness] || null, effort: defaultEffort(defaultHarness, defaults) };
+/** Harness, model and effort of a new chat that no role decides: the user's defaults (for the engine named, if any)
+ *  on an engine this caller may start now, or what was named (an override). The hard rules hold for everything named;
+ *  max only when asked, with a reason. */
+export function resolve(ask: RouteAsk, defaults: RouteDefaults, reg: ModelRegistry | null, canRun: (h: Harness) => boolean = () => true): Resolved {
+  // the user's engine when it may run and is ready, else another ready one (engine off, Claude <-> Cursor off)
+  const fallback = availableEngine(engines().map(e => e.id).filter(canRun), defaults.harness, engineReadiness());
+  if (!ask.harness && !fallback) return { error: 'Nessun motore disponibile: verifica installazione, accesso e impostazioni.' };
+  const baseHarness = fallback ?? defaults.harness;
+  const base = { harness: baseHarness, model: defaults.models[baseHarness] || null, effort: defaultEffort(baseHarness, defaults) };
   const harness = ask.harness ?? base.harness;
   // a model belongs to its harness: switching harness takes that harness's default model, never the other one's
   const sameEngine = harness === base.harness;
@@ -220,14 +89,13 @@ export function resolve(table: Pick<RoutingTable, 'routes'> | null, item: { kind
   if (effort && !EFFORTS.includes(effort)) return { error: `sforzo «${String(effort)}»: ${EFFORTS.join(' | ')}` };
   if (effort && m && !(m.efforts ?? []).includes(effort)) return { error: `${m.id} non ha lo sforzo «${effort}»` };
   const reason = String(ask.reason ?? '').trim();
+  if (ask.effort === 'max' && !reason) return { error: 'sforzo max solo quando l’utente lo chiede, con reason' };
   const said = ask.harness !== undefined || ask.model !== undefined || ask.effort !== undefined;
-  // an alias of the row's model ("sonnet") is the same model
+  // an alias of the default model ("sonnet") is the same model
   const same = (a: string | null, b: string | null): boolean => (a ?? null) === (b ?? null) || (!!a && !!b && !!modelRow(a, reg) && modelRow(a, reg) === modelRow(b, reg));
   const changed = harness !== base.harness || !same(model, base.model) || (effort ?? null) !== (base.effort ?? null);
-  if (ask.effort === 'max' && !reason) return { error: 'sforzo max solo quando l’utente lo chiede, con reason' };
-  if (usable && said && changed && !reason) return { error: `override senza motivo: la tabella dice ${usable.model}${usable.effort ? ` (${usable.effort})` : ''} per questo lavoro; ometti harness/model/effort o dai reason` };
-  const source = said && changed ? 'override' : usable ? 'table' : 'default';
-  return { harness, model: model ?? null, effort: effort ?? null, source, reason: source === 'override' ? reason || null : usable?.why ?? null };
+  const source = said && changed ? 'override' : 'default';
+  return { harness, model: model ?? null, effort: effort ?? null, source, reason: source === 'override' ? reason || null : null };
 }
 
 export interface RouteRequest {
@@ -242,10 +110,7 @@ export interface RouteRequest {
   ask: RouteAsk; defaults: RouteDefaults;
   /** the engines this caller may start now (settings engines.*, Claude <-> Cursor messages) */
   canRun?: (h: Harness) => boolean;
-  /** the Anthropic API engine when it is on and has a key (brain/index.ts apiRoute): a writing row «Sui crediti API»
-   *  sends its chats there, if this caller may start it (canRun); null = the row's own harness (ADR 0052) */
-  api?: Harness | null;
-  /** the role the chat starts from (ADR 0083): it decides; absent = the table / the defaults */
+  /** the role the chat starts from (ADR 0083): it decides; absent = the user's defaults */
   agent?: AgentChoice;
 }
 /** The role a chat starts from, as the catalog resolved it: engine, model (null = the engine's default), effort, tier,
@@ -253,8 +118,6 @@ export interface RouteRequest {
 export interface AgentChoice {
   id: string; name: string; version: number; harness: Harness; model: string | null; effort: Effort | null;
   chosenBy: RouteAgent['chosenBy']; tier?: RouteAgent['tier']; stats?: string | null;
-  /** 'table' = the catalog took the model from the table's row (a role with no model of its own; ADR 0091) */
-  modelFrom?: 'table';
 }
 /** An agent version's results for its route's reason: "12 run, 9 con esito, 78% riuscite" (agents/run-metrics.ts
  *  VersionMetrics: ended runs, runs with a verdict, their success share); null = no ended run yet. */
@@ -266,8 +129,8 @@ export function agentStatsLine(m: { ended: number; successRate: { value: number 
 }
 const CHOSEN_BY: Record<RouteAgent['chosenBy'], string> = { orchestrator: 'avviato dall’Orchestrator', parent: 'avviato dal suo genitore', app: 'avviato dall’app' };
 
-/** The route of a role chat (ADR 0083): the resolved engine, model and effort as they are. Never 'override', never
- *  exploration, never the API switch of a writing row: nothing overrides the role. */
+/** The route of a role chat (ADR 0083): the resolved engine, model and effort as they are. Never 'override': nothing
+ *  overrides the role. */
 export function routeAgent(req: RouteRequest & { agent: AgentChoice }, reg: ModelRegistry | null,
   rules: { tasks?: [string, string, string][] } | null, now = Date.now()): RouteResult {
   const a = req.agent;
@@ -275,34 +138,28 @@ export function routeAgent(req: RouteRequest & { agent: AgentChoice }, reg: Mode
   const area = req.appCode ? 'App' : req.area?.trim().slice(0, 40) || areaOf(req.title);
   const model = a.model;
   let effort = a.effort;
-  const from: RouteAgent['modelFrom'] = !model ? 'engine' : a.modelFrom === 'table' ? 'table' : a.tier ? 'tier' : 'role';
+  const from: RouteAgent['modelFrom'] = !model ? 'engine' : a.tier ? 'tier' : 'role';
   const m = modelRow(model, reg);
   if (model && m && m.harness !== a.harness) return { error: `${m.id} gira solo su ${m.harness}, non su ${a.harness}` };
   if (a.harness !== 'claude' && looksClaude(model)) return { error: 'un modello Claude gira solo sull’harness claude' };
   if (effort && !takesEffort(a.harness)) effort = null;
-  const reason = [`ruolo ${a.name} v${a.version}`, CHOSEN_BY[a.chosenBy], from === 'table' ? 'modello dalla tabella' : a.tier ? `livello ${a.tier}` : null, a.stats ?? null].filter(Boolean).join(' · ').slice(0, 300);
+  const reason = [`ruolo ${a.name} v${a.version}`, CHOSEN_BY[a.chosenBy], a.tier ? `livello ${a.tier}` : null, a.stats ?? null].filter(Boolean).join(' · ').slice(0, 300);
   return { harness: a.harness, model, effort, route: { policy: 'routing', version: null, source: 'agent', reason, kind, area, at: now,
     agent: { id: a.id, version: a.version, chosenBy: a.chosenBy, modelFrom: from, ...(a.tier ? { tier: a.tier } : {}) } } };
 }
 export type RouteResult = { harness: Harness; model: string | null; effort: Effort | null; route: RouteDecision } | { error: string };
 
-/** Routes one chat: kind and area, then resolve() on the table in force. The brain's estimates rules travel in
- *  estimates.json (`kinds` for the area, `tasks` for the kind); without them every chat is 'altro'. */
-export function routeChat(req: RouteRequest, table: RoutingTable | null, reg: ModelRegistry | null,
-  rules: { tasks?: [string, string, string][] } | null, now = Date.now()): RouteResult {
+/** Routes one chat: its kind and area (for the ledger), then its role (routeAgent) or resolve() on the user's
+ *  defaults. The brain's estimates rules travel in estimates.json (`tasks` for the kind); without them a chat whose
+ *  words name no kind is 'altro'. */
+export function routeChat(req: RouteRequest, reg: ModelRegistry | null, rules: { tasks?: [string, string, string][] } | null, now = Date.now()): RouteResult {
   if (req.agent) return routeAgent({ ...req, agent: req.agent }, reg, rules, now);
   const kind = req.kind ?? taskOf(req.title, req.prompt, rules?.tasks);
   const area = req.appCode ? 'App' : req.area?.trim().slice(0, 40) || areaOf(req.title);
-  const r = resolve(table, { kind, area }, req.ask, req.defaults, reg, req.canRun);
+  const r = resolve(req.ask, req.defaults, reg, req.canRun);
   if ('error' in r) return r;
-  // a writing row the user set «Sui crediti API»: the same model on the user's API key, no effort (the API engine takes
-  // none from the app), when that engine may run for this caller; else the row as it is
-  const row = r.source === 'table' ? match(table?.routes, { kind, area }) : null;
-  if (row?.onApi === true && row.kind === 'writing' && req.api && (req.canRun ?? (() => true))(req.api))
-    return { harness: req.api, model: r.model, effort: null,
-      route: { policy: 'routing', version: table?.version ?? null, source: 'table', reason: `${r.reason ? `${r.reason} · ` : ''}sui crediti API`, kind, area, at: now } };
   return { harness: r.harness, model: r.model, effort: r.effort,
-    route: { policy: 'routing', version: table?.version ?? null, source: r.source, reason: r.reason, kind, area, at: now } };
+    route: { policy: 'routing', version: null, source: r.source, reason: r.reason, kind, area, at: now } };
 }
 
 /** A route read back from chats.json (chats/store.ts): kept only when well formed. */
@@ -390,29 +247,11 @@ export function predictionLine(route: RouteDecision, chat: { id: string; harness
   };
 }
 
-/** Who saves: an agent's name starts with "agente:" (app_routing_save, routing.mjs save); the rest is the user. */
-export const isAgent = (by: string): boolean => by.startsWith('agente');
-export interface SaveOptions { exploration?: number; costWeight?: number; evidence?: string | null; base?: number }
-
-// ── the files ───────────────────────────────────────────────────────────────────────────────────────────────────────
+// ── the files: the model registry and the ledger ────────────────────────────────────────────────────────────────────
 export class Routing {
   private regCache: { file: string; mtime: number; reg: ModelRegistry | null } | null = null;
 
-  /** `apiFile` (in userData, out of the agents' reach): the rows the user put «sui crediti API» at their last save. The
-   *  brain's files can be written by any agent, so a row counts as onApi only when it is listed there too (ADR 0052). */
-  constructor(private root: () => string | null, private apiFile?: string) {}
-
-  /** The table's rows with onApi only where the user set it (no apiFile: the file as is, for tests and tools). */
-  private userApi(routes: RoutingRow[]): RoutingRow[] {
-    if (!this.apiFile) return routes;
-    const j = readJson(this.apiFile) as { rows?: unknown } | null;
-    const mine = new Set(Array.isArray(j?.rows) ? j.rows.filter((k): k is string => typeof k === 'string') : []);
-    return routes.map(r => {
-      if (r?.onApi !== true || mine.has(rowKey(r))) return r;
-      const { onApi: _drop, ...rest } = r;
-      return rest;
-    });
-  }
+  constructor(private root: () => string | null) {}
 
   private dir(): string | null { const r = this.root(); return r ? path.join(r, 'ops', 'state', 'improve') : null; }
 
@@ -430,122 +269,6 @@ export class Routing {
       this.regCache = { file: f, mtime, reg: j && Array.isArray(j.models) ? j : null };
     }
     return this.regCache.reg;
-  }
-
-  /** The table current.json points at, as stored (the editor shows it even when it breaks a rule). */
-  stored(): RoutingTable | null {
-    const d = this.dir();
-    if (!d) return null;
-    const c = readJson(path.join(d, 'routing', 'current.json')) as { version?: unknown; appliedAt?: unknown; by?: unknown } | null;
-    const v = Number(c?.version);
-    if (!Number.isInteger(v) || v < 1) return null;
-    const t = readJson(path.join(d, 'routing', `v${v}.json`)) as { routes?: unknown; exploration?: unknown; costWeight?: unknown } | null;
-    if (!t || !Array.isArray(t.routes)) return null;
-    return { version: v, appliedAt: typeof c?.appliedAt === 'string' ? c.appliedAt : null, by: typeof c?.by === 'string' ? c.by : null,
-      exploration: typeof t.exploration === 'number' ? t.exploration : 0, routes: this.userApi(t.routes as RoutingRow[]),
-      costWeight: typeof t.costWeight === 'number' ? t.costWeight : COST_WEIGHT };
-  }
-
-  /** The table in force: the stored one only when it keeps the hard rules (a file written by hand or by an agent is
-   *  not trusted: max effort, a manual model…); else null and every chat gets the user's defaults. */
-  table(): RoutingTable | null {
-    const t = this.stored();
-    if (!t) return null;
-    const errors = checkTable(t.routes, this.registry());
-    if (!errors.length) return t;
-    if (this.warned !== t.version) {
-      this.warned = t.version;
-      log.warn('brain', 'routing table ignored: it breaks a hard rule', { cause: errors.join('; '), hint: 'fix it in Impostazioni → Instradamento modelli (a save writes a new valid version)' });
-    }
-    return null;
-  }
-  private warned: number | null = null;
-
-  info(): RoutingInfo {
-    const reg = this.registry();
-    const t = this.stored();
-    const broken = t ? checkTable(t.routes, reg) : [];
-    return { table: t, registry: reg, kinds: TASK_KINDS, error: !this.root() ? 'nessun brain collegato' : !reg ? 'il brain non ha harness/models.json'
-      : broken.length ? `tabella ignorata (decidono i default), infrange una regola: ${broken.join('; ')}` : null, history: this.history() };
-  }
-
-  /** The table's last changes (audit.jsonl, domain routing), newest first: who, when, why, with what data. */
-  history(limit = 30): RoutingChange[] {
-    const d = this.dir();
-    if (!d) return [];
-    let text: string;
-    try { text = fs.readFileSync(path.join(d, 'audit.jsonl'), 'utf8'); } catch { return []; }
-    const out: RoutingChange[] = [];
-    for (const line of text.split('\n')) {
-      if (!line.includes('"routing"')) continue;
-      try {
-        const j = JSON.parse(line) as Partial<RoutingChange> & { domain?: unknown };
-        if (j.domain !== 'routing' || !Number.isInteger(j.to) || typeof j.at !== 'string') continue;
-        const x = j.exploration as { from?: unknown; to?: unknown } | undefined, cw = j.costWeight as { from?: unknown; to?: unknown } | undefined;
-        out.push({ at: j.at, from: Number.isInteger(j.from) ? j.from! : null, to: j.to!, by: typeof j.by === 'string' ? j.by.slice(0, 120) : '?',
-          reason: typeof j.reason === 'string' ? j.reason.slice(0, 300) : null, evidence: typeof j.evidence === 'string' ? j.evidence.slice(0, 300) : null,
-          ...(x && typeof x.from === 'number' && typeof x.to === 'number' ? { exploration: { from: x.from, to: x.to } } : {}),
-          ...(cw && typeof cw.from === 'number' && typeof cw.to === 'number' ? { costWeight: { from: cw.from, to: cw.to } } : {}),
-          stored: fs.existsSync(path.join(d, 'routing', `v${j.to}.json`)) });
-      } catch { /* a torn line */ }
-    }
-    return out.reverse().slice(0, limit);
-  }
-
-  /** An older version back in force: a new version with its rows and exploration (and, by the user, its cost weight),
-   *  checked against today's rules (one that breaks one now, e.g. a Fable row, or an agent touching a locked row, is
-   *  refused); history stays linear. */
-  restore(version: number, by: string, now = Date.now()): RoutingInfo {
-    const d = this.dir();
-    if (!d) throw new Error('nessun brain collegato');
-    const t = Number.isInteger(version) && version > 0 ? readJson(path.join(d, 'routing', `v${version}.json`)) as { routes?: unknown; exploration?: unknown; costWeight?: unknown } | null : null;
-    if (!t || !Array.isArray(t.routes)) throw new Error(`versione ${version} non trovata`);
-    const cw = !isAgent(by) ? (typeof t.costWeight === 'number' ? t.costWeight : COST_WEIGHT) : undefined;
-    return this.save(t.routes as RoutingRow[], by, `ripristino della versione ${version}`, now, { exploration: typeof t.exploration === 'number' ? t.exploration : 0, costWeight: cw });
-  }
-
-  /** The next version: one above the highest v<N>.json on disk (a rollback moves only current.json: never overwrite). */
-  private nextVersion(d: string): number {
-    let max = 0;
-    try { for (const f of fs.readdirSync(path.join(d, 'routing'))) { const m = /^v(\d+)\.json$/.exec(f); if (m) max = Math.max(max, Number(m[1])); } } catch { /* no folder yet */ }
-    return max + 1;
-  }
-
-  /** A new version, from the user's page or an agent (`by` says who; an agent gives its reason and the data behind it,
-   *  `evidence`): refused (throws, Italian) when it breaks a hard rule; one audit line. `exploration` (0 to 0.5) is
-   *  saved the same way, and the cost weight (0 to 10, the user's only); omitted = the version in force keeps its own.
-   *  `base` = the version the edit started from: another version in force since then refuses the save (no silent
-   *  overwrite). An agent (`by` "agente: …") never touches a locked row nor the cost weight (agentLimits). */
-  save(routes: RoutingRow[], by: string, reason: string | null, now = Date.now(), o: SaveOptions = {}): RoutingInfo {
-    const { exploration, costWeight, evidence, base } = o;
-    const d = this.dir();
-    if (!d) throw new Error('nessun brain collegato');
-    // two writers (the user's page, agents) send the whole table: one built on an older version would undo the other's change
-    const inForce = this.stored()?.version ?? 0;
-    if (base !== undefined && base !== inForce) throw new Error(`tabella non salvata: è cambiata (ora versione ${inForce}, la tua modifica parte dalla ${base}): ricarica e rifai la modifica`);
-    const xErr = checkExploration(exploration) ?? checkCostWeight(costWeight);
-    if (xErr) throw new Error(`tabella non salvata: ${xErr}`);
-    const clean = Array.isArray(routes) ? routes.map(r => ({
-      kind: r.kind, ...(areasOf(r)?.length ? { area: areasOf(r)!.length === 1 ? areasOf(r)![0]! : areasOf(r)! } : {}),
-      harness: r.harness, model: String(r.model ?? '').trim(), effort: r.effort || null,
-      why: String(r.why ?? '').trim().slice(0, 300), since: String(r.since ?? '').trim().slice(0, 20) || new Date(now).toISOString().slice(0, 10),
-      evidence: String(r.evidence ?? '').trim().slice(0, 300) || evidence?.trim().slice(0, 300) || (by.startsWith('utente') ? 'scelta dell’utente (Impostazioni)' : by),
-      ...(r.onApi === true ? { onApi: true } : {}),
-      ...(r.locked === true ? { locked: true } : {}),
-    })) : routes;
-    const errors = [...checkTable(clean, this.registry()), ...(isAgent(by) && Array.isArray(clean) ? agentLimits(this.stored(), clean, costWeight) : [])];
-    if (errors.length) throw new Error(`tabella non salvata: ${errors.join('; ')}`);
-    const was = this.stored();
-    const version = this.nextVersion(d);
-    const before = was?.exploration ?? 0, x = exploration === undefined ? before : Math.round(exploration * 100) / 100;
-    const cwBefore = was?.costWeight ?? COST_WEIGHT, cw = costWeight === undefined ? cwBefore : Math.round(costWeight * 10) / 10;
-    writeAtomic(path.join(d, 'routing', `v${version}.json`), `${JSON.stringify({ version, exploration: x, costWeight: cw, routes: clean }, null, 1)}\n`);
-    writeAtomic(path.join(d, 'routing', 'current.json'), `${JSON.stringify({ version, appliedAt: new Date(now).toISOString(), by })}\n`);
-    if (this.apiFile && !isAgent(by) && Array.isArray(clean)) writeAtomic(this.apiFile, `${JSON.stringify({ rows: clean.filter(r => r.onApi === true).map(rowKey) })}\n`);
-    fs.appendFileSync(path.join(d, 'audit.jsonl'), `${JSON.stringify({ at: new Date(now).toISOString(), domain: 'routing', from: was?.version ?? null, to: version, by, reason,
-      ...(evidence ? { evidence: evidence.slice(0, 300) } : {}), ...(x !== before ? { exploration: { from: before, to: x } } : {}),
-      ...(cw !== cwBefore ? { costWeight: { from: cwBefore, to: cw } } : {}) })}\n`);
-    return this.info();
   }
 
   /** The last measured actuals of a ledger id (later line wins), to carry totals across an app restart or a hand-off. */

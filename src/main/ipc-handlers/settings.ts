@@ -1,12 +1,12 @@
 // IPC handlers, Settings and engines: settings and proposals, API keys, engine trust and spend, the job ledger, the
-// routing table, models seen, brain sync. Registered by src/main/index.ts with every other group (Handlers in ipc.ts
+// models seen, brain sync. Registered by src/main/index.ts with every other group (Handlers in ipc.ts
 // keeps the set complete); each channel's shape is in src/shared/contract/*.ts.
 import { errText, log } from '../log';
 import { uiLang } from '../locale';
 import { withApiModels } from '../engines/sessions';
 import type { HandlerContext, HandlersOf } from './context';
 
-export function settingsHandlers({ s, profile }: HandlerContext): HandlersOf<'settings' | 'secrets' | 'engines' | 'estimate' | 'routing' | 'models' | 'sync'> {
+export function settingsHandlers({ s, profile }: HandlerContext): HandlersOf<'settings' | 'secrets' | 'engines' | 'estimate' | 'models' | 'sync'> {
   return {
     'settings:get': () => s.brain.settings(),
     // API keys: write-only from the page, never returned (engines/secrets.ts); no MCP tool reaches these
@@ -30,11 +30,6 @@ export function settingsHandlers({ s, profile }: HandlerContext): HandlersOf<'se
     'settings:confirm': a => s.brain.confirmSetting(a?.proposalId, a?.accept),
     'estimate:record': a => s.brain.recordJob(a),
     'models:seen': () => withApiModels(s.brain.modelsSeen()),
-    'routing:get': () => s.brain.routingInfo(),
-    // the renderer is the user's (sender check in ipc.ts): agents never reach this write, they only propose in chat
-    'routing:save': a => s.brain.saveRouting(Array.isArray(a?.routes) ? a.routes : [], typeof a?.reason === 'string' && a.reason.trim() ? a.reason.trim().slice(0, 300) : null,
-      { ...(a?.costWeight !== undefined ? { costWeight: Number(a.costWeight) } : {}),
-        ...(Number.isInteger(a?.baseVersion) ? { base: a.baseVersion } : {}) }),
     'sync:get': () => s.brain.syncState(),
     'sync:now': a => s.brain.syncNow(a?.domain),
     'sync:resolve': a => s.brain.syncResolve(a?.domain, a?.choice),

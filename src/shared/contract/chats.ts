@@ -9,7 +9,6 @@ import type { ChatEffortStatus } from '../effort';
 import type { ModelTier } from '../roles';
 import type { StrategyPlan } from '../strategy';
 import type { SysCode, SysParams } from '../sys';
-import type { TaskKind } from '../work-concepts';
 import type { Harness } from './engines';
 import type { RouteDecision } from './settings';
 import type { AnswerLater, ChatCommand, HeldNewsState } from './ui';
@@ -117,7 +116,7 @@ export interface ChatSummary {
   /** an agent's start or turn waits for the machine's load to drop (ADR 0036): kind start = the engine is not started
    *  yet, turn = a message waits to wake it; position 1 = next; cpu/freeRam = the load last sampled, in % */
   queued?: QueuedInfo;
-  /** how its harness, model and effort were chosen when an agent opened it (app_create_chat, the routing table) */
+  /** how its harness, model and effort were chosen (its role's card or the user's defaults; app_create_chat, chat:createRouted) */
   route?: RouteDecision;
   /** ADR 0103: when the checkpoint before its last turn was taken (its files can go back to it); absent = none */
   checkpointAt?: number;
@@ -324,18 +323,15 @@ export interface NewChat {
   /** with orchestrator: the Orchestrator this one replaces; the old one goes on as a normal chat, its history kept */
   replaces?: string;
   worktree?: boolean;         // claude --worktree
-  route?: RouteDecision;      // set by app_create_chat: how the routing table (or an override) chose the engine
+  route?: RouteDecision;      // set by app_create_chat and chat:createRouted: how the engine was chosen (role, defaults, override)
   /** run tags (AGENTS-DESIGN §4.8): the skill ids the chat starts with (`^[a-z0-9][a-z0-9_-]{0,79}$`, at most 16) */
   skills?: string[];
   /** run tags: the product the work is about, up to 40 characters */
   app?: string;
-  /** set by app_create_chat (main): what the routing table matches a model-less role's row on (its explicit kind, app
-   *  code, the caller's area) besides title and prompt, so the row picked is the one the route records (ADR 0091) */
-  routeHint?: { kind?: TaskKind; appCode?: boolean; area?: string };
 }
 
 /** A chat the user starts without choosing everything ("Nuova chat", a new Orchestrator from Ricomincia / Cambia motore /
- *  Pulisci): main picks harness, model and effort through the routing table (ADR 0032)
+ *  Pulisci): main picks harness, model and effort from the user's defaults (ADR 0032, 0210)
  *  as app_create_chat does, and the choice goes to the improvement loop's ledger (chat.route). The brain pages never
  *  start one: their "Discuti" goes to the Orchestrator (2026-10-19). */
 export interface RoutedNewChat {

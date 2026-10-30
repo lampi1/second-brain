@@ -1,9 +1,9 @@
 // «Andamento» (G C, ADR 0202; report «Cosa tenere», «Da accorpare»): the four statistics pages in one, as tabs, plus the
 // app's own use. A sticky head keeps the title and the tab bar on screen while a tab scrolls; each tab starts with the
 // same toolbar (what it shows on the left, period / refresh / guide on the right, brain/components/States.tsx PageHead
-// without a title) and shows each number once. Tabs: Costi (brain/pages/Costi.tsx), Qualità (brain/pages/Qualita.tsx),
-// Apprendimento (brain-model/LearningPage.tsx, once a Memoria tab), Classificatori (brain-model/ClassifiersPage.tsx,
-// once a Brain page) and Uso (UsageTab.tsx, the local usage counter). The page arg "andamento/<tab>[/<more>]" picks the
+// without a title) and shows each number once. Tabs: Costi (brain/pages/Costi.tsx), Qualità (brain/pages/Qualita.tsx,
+// with the Classificatori section since ADR 0210, once a tab here and before that a Brain page), Apprendimento
+// (brain-model/LearningPage.tsx, once a Memoria tab) and Uso (UsageTab.tsx, the local usage counter). The page arg "andamento/<tab>[/<more>]" picks the
 // tab (lib/andamento.ts); the old ids, links and G-keys land here (actions.ts go()). Data and IPC are each tab's own,
 // unchanged. Rendered by App.tsx PageFrame for 'andamento'; styles: styles/andamento.css.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
@@ -16,13 +16,12 @@ import { Toaster } from '../../brain/components/ui';
 import { Costi } from '../../brain/pages/Costi';
 import { Qualita } from '../../brain/pages/Qualita';
 import { LearningPage } from '../brain-model/LearningPage';
-import { ClassifiersPage } from '../brain-model/ClassifiersPage';
-import { IconBranch, IconChart, IconCoins, IconGrid, IconTarget } from '../Icons';
+import { IconChart, IconCoins, IconGrid, IconTarget } from '../Icons';
 import { UsageTab } from './UsageTab';
 import '../../styles/andamento.css';
 
 const ICON: Record<TrendTab, ReactNode> = {
-  costi: <IconCoins />, qualita: <IconChart />, apprendimento: <IconTarget />, classificatori: <IconBranch />, uso: <IconGrid />,
+  costi: <IconCoins />, qualita: <IconChart />, apprendimento: <IconTarget />, uso: <IconGrid />,
 };
 
 /** The tab bar: pills with a sliding ink under the chosen one; ←/→, Home and End move between tabs (WAI-ARIA tabs). */
@@ -64,7 +63,6 @@ function TabContent({ tab, rest }: { tab: TrendTab; rest: string | null }) {
     case 'costi': return <Costi arg={rest ?? undefined} nav={goTarget} embedded />;
     case 'qualita': return <Qualita nav={goTarget} embedded />;
     case 'apprendimento': return <LearningPage />;
-    case 'classificatori': return <ClassifiersPage />;
     case 'uso': return <UsageTab />;
   }
 }

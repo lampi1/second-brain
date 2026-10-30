@@ -1,5 +1,5 @@
-// Role-first routing (ADR 0083, issue #72): a role chat takes the engine, model and effort the role resolved to and the
-// table never overrides it; a role run's verdict becomes the known
+// Role-first routing (ADR 0083, issue #72; ADR 0210 removed the table): a role chat takes the engine, model and effort
+// the role resolved to and nothing overrides it; a role run's verdict becomes the known
 // outcome of its chat's ledger line and survives the next measured line.
 import fs from 'node:fs';
 import os from 'node:os';
@@ -7,10 +7,6 @@ import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { agentStatsLine, foldOutcome, knownOutcome, predictionLine, routeChat, Routing, validRoute, type AgentChoice, type LedgerOutcome, type RouteRequest } from '../../../src/main/brain/routing';
 import { DEMO_REGISTRY as REG } from '../../../src/main/brain/routing-demo';
-import type { RoutingRow, RoutingTable } from '../../../src/shared/contract';
-
-const row = (p: Partial<RoutingRow>): RoutingRow => ({ kind: '*', harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', why: 'w', since: '2026-10-13', evidence: 'e', ...p });
-const table = (routes: RoutingRow[]): RoutingTable => ({ version: 4, appliedAt: null, by: null, exploration: 0.5, costWeight: 7, routes });
 const base: RouteRequest = { title: 'Ordini · Fix totale', prompt: 'fix the bug', kind: 'bug-fix', ask: {}, defaults: { harness: 'claude', models: { claude: null, cursor: null }, effort: 'high' } };
 const agent = (p: Partial<AgentChoice> = {}): AgentChoice => ({ id: 'artisan', name: 'Artisan', version: 3, harness: 'claude', model: 'claude-sonnet-5-5', effort: 'low', chosenBy: 'orchestrator', ...p });
 
@@ -28,39 +24,36 @@ const folded = (root: string): Map<string, LedgerOutcome> => {
 };
 
 describe('role first', () => {
-  const t = table([row({ kind: 'bug-fix', model: 'claude-opus-5-5', effort: 'high', why: 'scelta di Alex, nessun dato ancora' })]);
-
   it('takes the resolved role as it is: no override, no exploration, no reason asked', () => {
-    const r = routeChat({ ...base, agent: agent({ stats: '12 run, 9 con esito, 78% riuscite' }) }, t, REG, null);
+    const r = routeChat({ ...base, agent: agent({ stats: '12 run, 9 con esito, 78% riuscite' }) }, REG, null);
     expect(r).toMatchObject({ harness: 'claude', model: 'claude-sonnet-5-5', effort: 'low', route: { source: 'agent', version: null, agent: { id: 'artisan', version: 3, chosenBy: 'orchestrator', modelFrom: 'role' } } });
     if ('error' in r) throw new Error(r.error);
     expect(r.route.reason).toContain('ruolo Artisan v3');
     expect(r.route.reason).toContain('78% riuscite');
     // a role with max effort is the user's own choice: no reason needed
-    expect(routeChat({ ...base, agent: agent({ effort: 'max' }) }, t, REG, null)).toMatchObject({ effort: 'max', route: { source: 'agent' } });
+    expect(routeChat({ ...base, agent: agent({ effort: 'max' }) }, REG, null)).toMatchObject({ effort: 'max', route: { source: 'agent' } });
   });
 
-  it('records the tier, and never fills a missing model from the table', () => {
-    const r = routeChat({ ...base, agent: agent({ tier: 'top', chosenBy: 'parent' }) }, t, REG, null);
+  it('records the tier; a role without a model runs on the engine\'s default', () => {
+    const r = routeChat({ ...base, agent: agent({ tier: 'top', chosenBy: 'parent' }) }, REG, null);
     expect(r).toMatchObject({ model: 'claude-sonnet-5-5', route: { agent: { modelFrom: 'tier', tier: 'top', chosenBy: 'parent' } } });
     if ('error' in r) throw new Error(r.error);
     expect(r.route.reason).toMatch(/avviato dal suo genitore · livello top/);
-    expect(routeChat({ ...base, agent: agent({ model: null, effort: null }) }, t, REG, null)).toMatchObject({ harness: 'claude', model: null, route: { agent: { modelFrom: 'engine' } } });
+    expect(routeChat({ ...base, agent: agent({ model: null, effort: null }) }, REG, null)).toMatchObject({ harness: 'claude', model: null, route: { agent: { modelFrom: 'engine' } } });
   });
-  it('records a model the catalog took from the table row (issue #99)', () => {
-    const r = routeChat({ ...base, agent: agent({ model: 'claude-opus-5-5', effort: 'low', tier: 'top', modelFrom: 'table' }) }, t, REG, null);
-    expect(r).toMatchObject({ model: 'claude-opus-5-5', effort: 'low', route: { source: 'agent', agent: { modelFrom: 'table' } } });
+  it('reads back an old route whose model came from the table (before ADR 0210)', () => {
+    const r = routeChat({ ...base, agent: agent({ tier: 'top' }) }, REG, null);
     if ('error' in r) throw new Error(r.error);
-    expect(r.route.reason).toContain('modello dalla tabella');
-    expect(validRoute(r.route)?.agent?.modelFrom).toBe('table');
+    expect(r.route.reason).not.toContain('tabella');
+    expect(validRoute({ ...r.route, agent: { ...r.route.agent!, modelFrom: 'table' } })?.agent?.modelFrom).toBe('table');
   });
 
   it('refuses a role whose model belongs to another engine', () => {
-    expect(routeChat({ ...base, agent: agent({ harness: 'cursor', model: 'claude-opus-5-5', effort: null }) }, t, REG, null)).toHaveProperty('error');
+    expect(routeChat({ ...base, agent: agent({ harness: 'cursor', model: 'claude-opus-5-5', effort: null }) }, REG, null)).toHaveProperty('error');
   });
 
   it('keeps the role on the route read back from chats.json, and drops a malformed one', () => {
-    const r = routeChat({ ...base, agent: agent({ tier: 'mid' }) }, t, REG, null);
+    const r = routeChat({ ...base, agent: agent({ tier: 'mid' }) }, REG, null);
     if ('error' in r) throw new Error(r.error);
     expect(validRoute(JSON.parse(JSON.stringify(r.route)))).toEqual(r.route);
     expect(validRoute({ ...r.route, agent: { id: 'BAD ID', version: 1, chosenBy: 'orchestrator' } })).not.toHaveProperty('agent');
@@ -77,9 +70,8 @@ describe('reasons (#72)', () => {
     expect(agentStatsLine({ ended: 0, successRate: { value: null, n: 0 } })).toBeNull();
   });
 
-  it('routes a table chat with the row\'s own reason (ADR 0186: no counts appended)', () => {
-    const t = table([row({ kind: 'bug-fix', why: 'scelta di Alex' })]);
-    expect(routeChat(base, t, REG, null)).toMatchObject({ route: { source: 'table', reason: 'scelta di Alex' } });
+  it('a chat without a role carries no reason unless the user named something (ADR 0210)', () => {
+    expect(routeChat(base, REG, null)).toMatchObject({ route: { source: 'default', reason: null } });
   });
 });
 

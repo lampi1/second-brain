@@ -10,7 +10,7 @@ import { replayExecutor } from './brainmodel/replay-executor';
 import type { ChatSummary, CliStatus, Harness } from '../shared/contract';
 import { engineStatuses } from './cli';
 import { engineReadiness } from './engines/readiness';
-import { anthropicApi, engineInfos, engineOf, enginePathsFromEnv, priceEnginesOf } from './engines/registry';
+import { engineInfos, engineOf, enginePathsFromEnv, priceEnginesOf } from './engines/registry';
 import { RunFeedback } from './agents/run-feedback';
 import { qualifiedSkillsLine, runtimePluginName } from './agents/role-gate';
 import { createAgentPacks } from './agents/pack/wiring';
@@ -144,10 +144,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // Retire the legacy global quiet flag before notifications start; postponement is request-local in the renderer.
   const later = createLater(ctx);
   later.set(false);
-  // the brain's estimates run (and the sample judge it starts) gets the app's text endpoint on the user's API credits;
-  // writing rows «Sui crediti API» get the Anthropic API engine when it may run (both bound below, ADR 0052)
+  // the brain's estimates run (and the sample judge it starts) gets the app's text endpoint on the user's API credits
+  // (bound below, ADR 0052)
   let scriptEnv: () => Record<string, string> = () => ({});
-  let apiRoute: () => Harness | null = () => null;
   // the brain's scripts and changelog (ADR 0076), read from the brain folder once it is known (created first: the
   // brain's watcher reports their files)
   const brainChangelog = new BrainChangelog(() => brain.info().brainRoot);
@@ -172,7 +171,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     download: !process.env.SB_TEST, onStatus: st => ctx.emitter.emit('search:status', st),
   });
   const brain: BrainService = await createBrain({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, skipChat: id => isOwn(id), held: e => later.get().on && REQUEST_KINDS.has(e.kind),
-    scriptEnv: () => scriptEnv(), apiRoute: () => apiRoute(), onFile: f => { hybrid.fileChanged(); onScriptFile(f); } });
+    scriptEnv: () => scriptEnv(), onFile: f => { hybrid.fileChanged(); onScriptFile(f); } });
   // the brain's scripts and changelog (ADR 0076): the Script and Changelog pages, brain_scripts for every chat, the
   // Orchestrator's write tools (attachAppTools below); a change on disk reloads both pages
   brain.serveApi('/api/scripts', () => brainScripts.list());
@@ -201,7 +200,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   try { fs.rmSync(path.join(ctx.userData, 'cloud-agents.json'), { force: true }); } catch (e) { log.warn('wiring', 'old cloud-agents.json not erased', { cause: errText(e) }); }
   // live turn costs and the Claude model list at the brain's per-model list prices (harness/models.json, else the
   // release template's), re-read at most every 30 s; set before the catalog reads its models (issue #96)
-  setPriceTable(priceTableSource(() => brain.routingInfo().registry, () => { try { return path.join(templateRoot(), 'harness', 'models.json'); } catch { return null; } }));
+  setPriceTable(priceTableSource(() => brain.modelRegistry(), () => { try { return path.join(templateRoot(), 'harness', 'models.json'); } catch { return null; } }));
   const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }));
   // Probe only after registry/trust initialization; reconcile untouched seeds when readiness arrives and tell the
   // renderer (issue #96: the role editor showed the startup snapshot). Tests never run installed vendors.
@@ -221,7 +220,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     return { scope: { roleId: portableId(chat.agent.id), project: chat.cwd }, sourceRunId: chat.run.runId };
   } }));
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
-  apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
 
   // Claude chats through the user's own `claude` CLI (SB_CLAUDE_PATH: a fake CLI for e2e tests); each chat gets its own
   // browser endpoint, so it sees and drives only its tabs.
@@ -659,12 +657,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // hidden read-only sessions on an engine the user turned on, with the app's own logins and keys (compare/headless.ts):
   // the one-shot jobs below use them (the brain's comparison queue they were built for went, ADR 0201)
   const headless = new HeadlessRunner({
-    userData: ctx.userData, settings: () => brain.settings(), keyFor: h => engines.keyFor(h), enginePaths: () => enginePathsFromEnv(), appVersion: app.getVersion(), registry: () => brain.routingInfo().registry,
+    userData: ctx.userData, settings: () => brain.settings(), keyFor: h => engines.keyFor(h), enginePaths: () => enginePathsFromEnv(), appVersion: app.getVersion(), registry: () => brain.modelRegistry(),
     // the other side's answers and the verdicts: never read by a run, whatever the brain lists
     denyRead: () => { const root = brain.info().brainRoot; return root ? [path.join(root, 'reviews', 'compare')] : []; },
   });
   const oneShot = new OneShotService({ userData: ctx.userData, profile: id => agents.list().profiles.find(p => p.id === id),
-    settings: () => brain.settings(), registry: () => brain.routingInfo().registry,
+    settings: () => brain.settings(), registry: () => brain.modelRegistry(),
     hasKey: id => engines.hasKey(id), addApiSpend: (id, usd) => engines.addSpend(id, usd), fallback: () => brain.settings().jobs?.fallback ?? 'auto',
     headless, text: engines.text, runs: manager.runs });
   // «Chiedi alla Guida» (ADR 0196): one light one-shot on Flash's engine; the anchors are checked only in a run from the repo
@@ -682,7 +680,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the kind of work by examples (ADR 0197): trained on the local embeddings only when Classificatori asks
   const kindModel = new KindModel({ runs: () => manager.runs.list(), embed: texts => hybrid.embed(texts, 'query'), ready: () => hybrid.status().model.state === 'ready' });
   const brainModel = new BrainModelService({ userData: ctx.userData, root: () => brain.info().brainRoot, home: process.env.SB_SKILLS_HOME || os.homedir(), kindModel: () => kindModel.state(),
-    catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), runsRevision: () => manager.runs.revision, routing: () => brain.routingInfo(),
+    catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), runsRevision: () => manager.runs.revision,
     correctionsSince: () => userCorrections.afterReportSince(),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: !process.env.SB_TEST || process.env.SB_BRAIN_JOBS === '1',
     // the Memoria hub's trash (ADR 0122): a script's file, and the Script tab told at once

@@ -186,9 +186,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/shared/agents.ts VERSIONED_CHANGES; src/main/agents/versions.ts versionedChanges (ADR 0186)
       b('Una versione nuova nasce solo quando cambiano testo, skill, modello (motore, modello, sforzo) o livello, e dice cosa è cambiato; strumenti, permessi, limiti, le migrazioni dell’app e il cambio automatico di motore aggiornano la versione in uso. Per ogni versione la pagina mostra run, esiti verificati e la riuscita con il suo ± (sotto 5 esiti: «troppo pochi»), e ne riattiva una vecchia con un clic.',
         'A new version comes only when the text, skills, model (engine, model, effort) or tier change, and it says what changed; tools, permissions, limits, the app’s migrations and the automatic engine switch update the version in use. For each version the page shows runs, verified outcomes and the success with its ± (under 5 outcomes: "too few"), and brings an older one back with a click.'),
-      // src/main/agents/model-tier.ts tierModel; src/main/agents/role-table.ts; src/main/agents/catalog.ts resolve()
-      b('Un ruolo senza un modello suo prende quello della riga di Instradamento modelli che corrisponde al lavoro sul suo motore (e il suo sforzo, se il ruolo non ne indica uno); altrimenti il livello (leggero, medio, top) diventa un modello per ogni motore: la tua scelta in Impostazioni, altrimenti il registro dei modelli del brain. Sentinel è indipendente perché parte in una sessione nuova, senza il ragionamento del genitore, non perché cambiano modello.',
-        'A role without its own model takes the model of the Model routing row that matches the work on its engine (and its effort, when the role names none); else the tier (light, mid, top) becomes a model per engine: your choice in Settings, else the brain’s model registry. Sentinel is independent because it starts in a new session without the parent’s reasoning, not because they switch model.'),
+      // src/main/agents/model-tier.ts tierModel; src/main/agents/catalog.ts resolve() (ADR 0210: no routing table)
+      b('Ogni ruolo usa il modello scritto sulla sua card; se la card non ne indica uno, il livello (leggero, medio, top) diventa un modello per ogni motore: la tua scelta in Impostazioni, altrimenti il registro dei modelli del brain. Nessuna tabella sceglie il modello per tipo di lavoro. Sentinel è indipendente perché parte in una sessione nuova, senza il ragionamento del genitore, non perché cambia modello.',
+        'Every role uses the model written on its card; when the card names none, the tier (light, mid, top) becomes a model per engine: your choice in Settings, else the brain’s model registry. No table picks the model per kind of work. Sentinel is independent because it starts in a new session without the parent’s reasoning, not because it switches model.'),
       // src/main/agents/tool-policy.ts browserAccess, readOnlyCommand; src/main/chats/manager-requests.ts refusedCommand; src/main/agents/skill-needs.ts
       b('Strumenti a classi: un ruolo limitato ai comandi di sola lettura vede rifiutato in chat un comando che scrive (se l’ha delegato una chat che può eseguirlo, decidi tu); uno che legge, o uno script node elencato in read-only-tools.md nel brain, ti arriva come permesso senza «sempre». Se una skill passata a un ruolo usa strumenti che il ruolo non ha, l’Orchestrator lo sa subito, già quando apre o delega il lavoro.',
         'Tools come in classes: a role limited to read-only commands has a writing command refused in the chat (when a chat that may run it delegated it, you decide); one that reads, or a node script listed in read-only-tools.md in the brain, reaches you as a permission without "always". When a skill passed to a role uses tools the role lacks, the Orchestrator knows at once, as it opens or delegates the work.'),
@@ -214,11 +214,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       2: ['src/renderer/components/RolePermissions.tsx', 'src/shared/roles.ts#ALL_TOOLS', 'src/shared/roles.ts#defaultPermissions'],
       3: ['src/main/agents/catalog.ts#reset'],
       4: ['src/shared/agents.ts#VERSIONED_CHANGES', 'src/main/agents/versions.ts#versionedChanges'],
-      5: ['src/main/agents/model-tier.ts#tierModel', 'src/main/agents/role-table.ts', 'src/main/agents/catalog.ts#resolve'],
+      5: ['src/main/agents/model-tier.ts#tierModel', 'src/main/agents/catalog.ts#resolve'],
       6: ['src/main/agents/tool-policy.ts#browserAccess', 'src/main/agents/tool-policy.ts#readOnlyCommand', 'src/main/chats/manager-requests.ts#refusedCommand', 'src/main/agents/skill-needs.ts'],
       7: ['src/renderer/components/AgentAvatar.tsx', 'src/renderer/lib/character-art.ts'],
     },
-    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/versions.ts', 'src/main/agents/model-tier.ts', 'src/main/agents/role-table.ts', 'src/main/agents/tool-policy.ts', 'src/main/agents/read-tools.ts', 'src/main/agents/skill-needs.ts', 'src/renderer/components/AgentStudio.tsx', 'src/renderer/components/RolePermissions.tsx', 'src/renderer/components/AgentAvatar.tsx', 'src/renderer/lib/character-art.ts', 'src/main/chats/manager-requests.ts'],
+    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/versions.ts', 'src/main/agents/model-tier.ts', 'src/main/agents/tool-policy.ts', 'src/main/agents/read-tools.ts', 'src/main/agents/skill-needs.ts', 'src/renderer/components/AgentStudio.tsx', 'src/renderer/components/RolePermissions.tsx', 'src/renderer/components/AgentAvatar.tsx', 'src/renderer/lib/character-art.ts', 'src/main/chats/manager-requests.ts'],
   },
   {
     id: 'skills',
@@ -300,8 +300,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Like an editor-in-chief: does not write every piece, picks who writes it, knows where each one stands and reads the finished piece.'),
     diagram: { kind: 'flow', steps: [b('Tua richiesta', 'Your request'), b('Orchestrator', 'Orchestrator'), b('Ruolo e skill', 'Role and skills'), b('Chat di lavoro', 'Work chat'), b('Rapporto', 'Report')] },
     tech: [
-      tech(DATA, 'Risposta di app_create_chat: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom: role | tier | table | engine } } }.',
-        'app_create_chat result: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom: role | tier | table | engine } } }.'),
+      tech(DATA, 'Risposta di app_create_chat: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom: role | tier | engine } } }.',
+        'app_create_chat result: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom: role | tier | engine } } }.'),
       tech(LIMITS, 'Fino a 16 skill per chat delegata; un figlio non ha mai strumenti o tetto sopra quelli di chi lo avvia.', 'Up to 16 skills per delegated chat; a child never has tools or a ceiling above its launcher’s.'),
       tech(TOOLS, 'agent_catalog (i ruoli), app_create_chat con roleId e tier (apre il lavoro), task_estimate (la stima), agent_metrics (stato e numeri dei figli), agent_report (il rapporto del figlio).',
         'agent_catalog (the roles), app_create_chat with roleId and tier (opens the work), task_estimate (the estimate), agent_metrics (the children’s state and numbers), agent_report (the child’s report).'),
@@ -527,8 +527,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Italiano e inglese si incontrano: un piccolo lessico di lavori («correggi» = fix, «revisiona» = review, «fonti» = sources…) unisce le richieste in italiano e le skill scritte in inglese.',
         'Italian and English meet: a small lexicon of kinds of work ("correggi" = fix, "revisiona" = review, "fonti" = sources…) joins Italian requests and skills written in English.'),
       // src/shared/work-concepts.ts taskOf, builtinTask
-      b('Tipo di lavoro, uno solo per tutta l’app (tabella dei modelli, registro dei costi, stime): prima le regole del brain (estimates.json), poi il lessico integrato, poi «altro». Una richiesta che costruisce o corregge vince su un titolo che nomina solo un tema.',
-        'Kind of work, one taxonomy for the whole app (model table, cost ledger, estimates): the brain’s rules first (estimates.json), then the built-in lexicon, then "altro". A request that builds or fixes wins over a title that only names a topic.'),
+      b('Tipo di lavoro, uno solo per tutta l’app (registro degli esiti, registro dei costi, stime): prima le regole del brain (estimates.json), poi il lessico integrato, poi «altro». Una richiesta che costruisce o corregge vince su un titolo che nomina solo un tema. Il tipo non sceglie il modello: lo decide la card del ruolo.',
+        'Kind of work, one taxonomy for the whole app (outcome ledger, cost ledger, estimates): the brain’s rules first (estimates.json), then the built-in lexicon, then "altro". A request that builds or fixes wins over a title that only names a topic. The kind does not pick the model: the role’s card does.'),
       // src/main/chats/orchestrator-delivery.ts mailClassifier
       b('Posta per l’Orchestrator: urgente → subito; richiesta, finito o errore → raggruppata; solo avanzamento → silenziosa. Nel dubbio raggruppata: una richiesta tenuta ferma costa più di un’attesa.',
         'Mail for the Orchestrator: urgent → now; a request, done or error → grouped; progress only → quiet. When in doubt grouped: a request held back costs more than a wait.'),
@@ -539,12 +539,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/shared/roles.ts ROLE_DEFAULTS.orchestrator
       b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda per carico (CPU > 75% o RAM libera < 15%). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI. Smistare un lotto di lavoro (una inbox, una lista di ticket) lo fa invece l’Orchestrator, una chat per richiesta, quando glielo affidi.',
         'Others: messages you did not type (shown muted), "Waits for work" on the text, the load queue (CPU > 75% or free RAM < 15%). Permissions and questions are not guessed: they arrive structured from the CLI. Triaging a batch of work (an inbox, a list of tickets) is instead the Orchestrator’s, one chat per request, when you hand it one.'),
-      // src/renderer/components/brain-model/ClassifiersPage.tsx, src/main/brainmodel/classifier-cards.ts
-      b('Andamento → Classificatori ne mostra quattro come schede: decisioni, quanto spesso «prendono» (tipo riconosciuto, costo dentro la forchetta, tempo del task fra metà e doppio della stima), quante chat decise sono riuscite (verificate da te o da una revisione, dai run o dal registro del brain, mai l’autovalutazione; gli esiti automatici del brain, come «chiusa senza errori», sono contati a parte come non verificati), il costo medio, 8 settimane di andamento e i casi verificati raccolti sui 20 che servono per calibrarsi. Ogni numero ha un «?».',
-        'Trends → Classifiers shows four of them as cards: decisions, how often they "get it" (kind recognised, cost inside the range, task time between half and double the estimate), how many decided chats succeeded (verified by you or a review, never a self-report), the average cost, 8 weeks of trend and the verified cases collected of the 20 needed to calibrate. Every number has a "?".'),
+      // src/renderer/components/brain-model/ClassifiersSection.tsx, src/main/brainmodel/classifier-cards.ts
+      b('Andamento → Qualità, in fondo, ne mostra tre come schede nella sezione Classificatori (era una scheda a sé): decisioni, quanto spesso «prendono» (tipo riconosciuto, tempo del task fra metà e doppio della stima), quante chat decise sono riuscite (verificate da te o da una revisione, mai l’autovalutazione; gli esiti automatici del brain sono contati a parte come non verificati), il costo medio e 8 settimane di andamento. Ogni numero ha un «?». La scheda «Scelta del modello» non c’è più.',
+        'Trends → Quality shows three of them as cards at the bottom, in the Classifiers section (once a tab of its own): decisions, how often they "get it" (kind recognised, task time between half and double the estimate), how many decided chats succeeded (verified by you or a review, never a self-report; the brain’s automatic outcomes count apart as unverified), the average cost and 8 weeks of trend. Every number has a "?". The «Model choice» card is gone.'),
       // src/main/brainmodel/kind-model.ts, kind-centroids.ts; src/renderer/components/brain-model/KindModelCard.tsx (ADR 0197)
-      b('Tipo di lavoro per esempi (in prova): la richiesta va al tipo i cui esempi (i tuoi lavori conclusi e verificati, con il tipo dato dalle parole) le somigliano di più per significato, con il modello locale della ricerca e zero token; sotto una soglia dice «altro». La scheda mostra l’accordo con le parole sul 20% tenuto da parte e la matrice di confusione; la tabella dei modelli resta sulle parole.',
-        'Kind of work by examples (on trial): a request goes to the kind whose examples (your ended, verified runs, with the kind the words gave them) resemble it most in meaning, with the search’s local model and zero tokens; below a threshold it says «altro». Its card shows the agreement with the words on the 20% kept apart and the confusion matrix; the model table stays on the words.'),
+      b('Tipo di lavoro per esempi (in prova): la richiesta va al tipo i cui esempi (i tuoi lavori conclusi e verificati, con il tipo dato dalle parole) le somigliano di più per significato, con il modello locale della ricerca e zero token; sotto una soglia dice «altro». La scheda mostra l’accordo con le parole sul 20% tenuto da parte e la matrice di confusione; il tipo delle chat resta quello delle parole.',
+        'Kind of work by examples (on trial): a request goes to the kind whose examples (your ended, verified runs, with the kind the words gave them) resemble it most in meaning, with the search’s local model and zero tokens; below a threshold it says «altro». Its card shows the agreement with the words on the 20% kept apart and the confusion matrix; the chats’ kind stays the words’ one.'),
     ],
     analogy: b('Come lo smistamento della posta in portineria: regole scritte, una casella «varie» quando non si capisce, e per un sacco intero di posta si chiama chi smista di mestiere.',
       'Like mail sorting at the front desk: written rules, a "misc" box when it is unclear, and for a whole sack of mail you call the person whose job is sorting.'),
@@ -561,10 +561,10 @@ export const CONCEPTS: readonly ConceptCard[] = [
       3: ['src/main/chats/orchestrator-delivery.ts#mailClassifier'],
       4: ['src/shared/runnable.ts#prodRisk', 'src/main/agents/tool-policy.ts#readOnlyCommand'],
       5: ['src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'src/shared/waiting.ts', 'src/shared/roles.ts'],
-      6: ['src/renderer/components/brain-model/ClassifiersPage.tsx', 'src/main/brainmodel/classifier-cards.ts'],
+      6: ['src/renderer/components/brain-model/ClassifiersSection.tsx', 'src/main/brainmodel/classifier-cards.ts'],
       7: ['src/main/brainmodel/kind-centroids.ts'],
     },
-    sources: ['src/main/brainmodel/classifier-cards.ts', 'src/main/brainmodel/kind-model.ts', 'src/main/brainmodel/kind-centroids.ts', 'src/renderer/components/brain-model/ClassifiersPage.tsx', 'src/renderer/lib/classifier-view.ts', 'src/main/agents/discovery.ts', 'src/shared/work-concepts.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts',
+    sources: ['src/main/brainmodel/classifier-cards.ts', 'src/main/brainmodel/kind-model.ts', 'src/main/brainmodel/kind-centroids.ts', 'src/renderer/components/brain-model/ClassifiersSection.tsx', 'src/renderer/lib/classifier-view.ts', 'src/main/agents/discovery.ts', 'src/shared/work-concepts.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts',
       'src/main/agents/tool-policy.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'src/shared/waiting.ts', 'src/shared/roles.ts'],
   },
   {
@@ -940,53 +940,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
       6: ['src/main/peek-file.ts'],
     },
     sources: ['src/shared/file-view.ts', 'src/main/file-view.ts', 'src/main/peek-file.ts', 'src/main/ipc-handlers/app.ts', 'src/renderer/brain/pages/FileViewer.tsx', 'src/renderer/brain/components/ReportHtml.tsx', 'src/renderer/brain/components/ReportImages.tsx'],
-  },
-  {
-    id: 'routing',
-    title: b('Instradamento modelli', 'Model routing'),
-    summary: b('Una tabella dà motore, modello e sforzo alle chat avviate senza un ruolo; una chat di un ruolo prende il modello del livello del ruolo.',
-      'A table gives engine, model and effort to chats started without a role; a role’s chat takes its role tier’s model.'),
-    points: [
-      // src/shared/work-concepts.ts taskOf; src/main/brain/routing.ts areaOf
-      b('Il tipo di lavoro viene dal titolo e dal primo prompt, salvo un tipo esplicito; l’area dal chiamante (App per le chat sul codice dell’app); dal titolo solo «App · …», «Pers · App» e l’Orchestrator, le altre etichette non sono un’area.',
-        'Kind comes from the title and first prompt unless supplied explicitly; area comes from the caller (App for chats on the app’s code); from the title only "App · …", "Pers · App" and the Orchestrator, other labels are no area.'),
-      // src/main/brain/routing.ts match
-      b('Vince la riga più specifica: tipo + area, poi area, poi tipo, poi «qualsiasi»; a pari merito la prima.',
-        'The most specific row wins: kind + area, then area, then kind, then "any"; on a tie the first one.'),
-      // src/main/brain/routing.ts resolve
-      b('Se la riga indica un motore che non si può avviare, valgono i tuoi predefiniti «Chat aperte dall’Orchestrator».',
-        'If the row names an engine that cannot start, your "Chats opened by the Orchestrator" defaults apply.'),
-      // src/main/brain/routing.ts routeAgent (ADR 0083)
-      b('Un ruolo non viene mai scavalcato: la sua chat ha il suo modello; se il ruolo non ne ha uno, quello della riga della tabella sul suo motore (e il suo sforzo, se il ruolo non ne indica uno), altrimenti il modello del suo livello. La rotta lo registra come «agent». Senza ruolo, un modello diverso dalla tabella richiede un motivo; lo sforzo max mai dalla tabella.',
-        'A role is never overridden: its chat has its own model; when the role has none, the table row’s model on its engine (and its effort, when the role names none), else its tier’s model. The route records it as "agent". Without a role, a model other than the table’s needs a reason; max effort never from the table.'),
-      // src/main/brain/routing.ts knownOutcome; src/main/wiring.ts routingVerdict; src/main/brainmodel/classifiers.ts
-      b('Il tuo esito su una run di un ruolo (o quello di una revisione indipendente) entra nel registro come esito noto; i risultati di ogni riga, solo verificati, sono in Andamento → Classificatori.',
-        'Your verdict on a role run (or an independent review’s) enters the ledger as a known outcome; each row’s results, verified only, are in Trends → Classifiers.'),
-      // src/main/brain/routing.ts (the table's file in the brain)
-      b('La tabella è un file del brain: ogni salvataggio è una versione nuova e una riga «locked» non la cambiano gli agenti.',
-        'The table is a file in the brain: every save is a new version, and agents never change a «locked» row.'),
-      // docs/adr/0047-routing-voted-and-priced-per-work.md
-      b('Il voto dei lavori e il ciclo che aggiorna la tabella vivono negli script del brain (ADR 0047).',
-        'Work votes and the loop that updates the table live in the brain’s scripts (ADR 0047).'),
-    ],
-    analogy: b('Come il centralino di un call center: in base al motivo della chiamata ti passa al reparto giusto.',
-      'Like a call-centre switchboard: depending on why you call, it puts you through to the right department.'),
-    diagram: { kind: 'flow', steps: [b('Titolo e prompt', 'Title and prompt'), b('Tipo + area', 'Kind + area'), b('Riga della tabella', 'Table row'), b('Motore e modello', 'Engine and model')] },
-    tech: [
-      tech(DATA, 'Riga: { kind | *, area?, harness, model, effort, why, since, evidence, locked?, onApi? }; tabella con costWeight (default 7); exploration resta nel file ma non decide più nulla.',
-        'Row: { kind | *, area?, harness, model, effort, why, since, evidence, locked?, onApi? }; table with costWeight (default 7); exploration stays in the file but no longer decides anything.'),
-      tech(FILES, '<brain>/ops/state/improve/routing/v<N>.json + current.json; prezzi e modelli in <brain>/harness/models.json, o nella copia dell’app finché un brain nuovo non ne ha una sua.',
-        '<brain>/ops/state/improve/routing/v<N>.json + current.json; prices and models in <brain>/harness/models.json, or in the app’s copy until a new brain has its own.'),
-      tech(LIMITS, 'Mai Fable; le aree App usano il motore delle chat dell’app.', 'Never Fable; App areas use the app chats’ engine.'),
-    ],
-    anchors: {
-      0: ['src/shared/work-concepts.ts#taskOf', 'src/main/brain/routing.ts#areaOf'],
-      1: ['src/main/brain/routing.ts#match'],
-      2: ['src/main/brain/routing.ts#resolve'],
-      3: ['src/main/brain/routing.ts#routeAgent'],
-      4: ['src/main/brain/routing.ts#knownOutcome', 'src/main/wiring.ts#routingVerdict', 'src/main/brainmodel/classifiers.ts'],
-    },
-    sources: ['src/main/brain/routing.ts', 'src/main/brain/brain-estimates.ts', 'src/renderer/lib/routing.ts', 'docs/adr/0032-model-routing.md', 'docs/adr/0047-routing-voted-and-priced-per-work.md'],
   },
   {
     id: 'costs',
@@ -1513,15 +1466,15 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'trends',
     title: b('Andamento e uso dell’app', 'Trends and app usage'),
-    summary: b('Andamento: costi, qualità, apprendimento, classificatori e il tuo uso dell’app in una pagina a schede, ogni numero una volta sola.',
-      'Trends: costs, quality, learning, classifiers and your use of the app in one page of tabs, each number shown once.'),
+    summary: b('Andamento: costi, qualità (con i classificatori), apprendimento e il tuo uso dell’app in una pagina a schede, ogni numero una volta sola.',
+      'Trends: costs, quality (with the classifiers), learning and your use of the app in one page of tabs, each number shown once.'),
     points: [
       // src/renderer/components/andamento/AndamentoPage.tsx, src/renderer/components/Sidebar.tsx (ADR 0202)
-      b('Una voce sola nella barra (Andamento, G C) con cinque schede: Costi, Qualità, Apprendimento, Classificatori e Uso. Il titolo e le schede restano in vista mentre scorri.',
-        'One entry in the rail (Trends, G C) with five tabs: Costs, Quality, Learning, Classifiers and Usage. The title and the tabs stay on screen while you scroll.'),
+      b('Una voce sola nella barra (Andamento, G C) con quattro schede: Costi, Qualità, Apprendimento e Uso; i Classificatori sono una sezione in fondo a Qualità. Il titolo e le schede restano in vista mentre scorri.',
+        'One entry in the rail (Trends, G C) with four tabs: Costs, Quality, Learning and Usage; the Classifiers are a section at the bottom of Quality. The title and the tabs stay on screen while you scroll.'),
       // src/renderer/lib/andamento.ts, src/renderer/actions.ts go(), src/renderer/brain/index.tsx GO_ALIASES
-      b('Le vecchie pagine portano alla loro scheda: i link «costi/30», «qualita», «classificatori» e «memoria/apprendimento» e i tasti G Q, G J e G K aprono la scheda giusta.',
-        'The old pages lead to their tab: the links "costi/30", "qualita", "classificatori" and "memoria/apprendimento" and the keys G Q, G J and G K open the right tab.'),
+      b('Le vecchie pagine portano alla loro scheda: i link «costi/30», «qualita» e «memoria/apprendimento» e i tasti G Q e G J aprono la scheda giusta; «classificatori» e G K aprono Qualità.',
+        'The old pages lead to their tab: the links "costi/30", "qualita" and "memoria/apprendimento" and the keys G Q and G J open the right tab; "classificatori" and G K open Quality.'),
       // src/renderer/brain/components/States.tsx PageHead without a title
       b('Ogni scheda comincia con la stessa riga: cosa mostra a sinistra, periodo, ultimo aggiornamento e «Aggiorna» a destra. Le frasi di testa che ripetevano i numeri delle schede sono sparite.',
         'Every tab starts with the same line: what it shows on the left, period, last update and "Refresh" on the right. The lead sentences that repeated the tabs’ numbers are gone.'),
@@ -1536,7 +1489,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Like a car’s single instrument panel: speed, consumption, warning lights and odometer together, each in its place, and a logbook of where you really went.'),
     tech: [
       tech(FILES, 'userData/app.db, area use_counts: una riga per giorno e chiave («page:<id>[/<scheda>]» o «action:<nome>»), tenute 90 giorni; senza database contano in memoria.', 'userData/app.db, area use_counts: one row per day and key ("page:<id>[/<tab>]" or "action:<name>"), kept 90 days; without the database they count in memory.'),
-      tech(WHERE, 'Pagina andamento (sidebar → Andamento, G C); «andamento/<scheda>» apre una scheda (costi, qualita, apprendimento, classificatori, uso); IPC usecount:add e usecount:report; l’Orchestrator: app_guide, voce «uso».', 'Page andamento (sidebar → Trends, G C); "andamento/<tab>" opens a tab (costi, qualita, apprendimento, classificatori, uso); IPC usecount:add and usecount:report; the Orchestrator: app_guide, entry "uso".'),
+      tech(WHERE, 'Pagina andamento (sidebar → Andamento, G C); «andamento/<scheda>» apre una scheda (costi, qualita, apprendimento, uso); IPC usecount:add e usecount:report; l’Orchestrator: app_guide, voce «uso».', 'Page andamento (sidebar → Trends, G C); "andamento/<tab>" opens a tab (costi, qualita, apprendimento, uso); IPC usecount:add and usecount:report; the Orchestrator: app_guide, entry "uso".'),
     ],
     anchors: {
       0: ['src/renderer/components/andamento/AndamentoPage.tsx'],

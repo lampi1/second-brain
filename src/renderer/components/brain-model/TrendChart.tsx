@@ -2,7 +2,7 @@
 // dots with a surface ring, recessive hairline grid, palette slots in fixed order, a legend from two series up, a
 // crosshair tooltip on hover, text in text tokens). It leaves a gap for a
 // week without data (null), never a zero. compact = the card's sparkline-sized version (no axis labels, no legend).
-// Colors are the --bx-cat-* tokens (brain.css), stepped for light and dark. Used by ClassifiersPage and ClassifierDetail.
+// Colors are the --bx-cat-* tokens (brain.css), stepped for light and dark. Used by ClassifiersSection and ClassifierDetail.
 import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { catColor } from '../../brain/lib/chart';
 

@@ -224,7 +224,7 @@ export function refusal(id: Harness, settings: Pick<Settings, 'engineOn' | 'engi
   return override && /\.mjs$/i.test(override) ? null : `nei test il motore ${engine.label} reale non parte mai: serve il fake (SB_${id.toUpperCase().replace(/-/g, '_')}_PATH)`;
 }
 
-/** Why the asked model or effort may not run (null = they may), as for the routing table (brain/routing.ts): never
+/** Why the asked model or effort may not run (null = they may), as for a new chat (brain/routing.ts): never
  *  Fable (it costs too much: the user, 2026-10-14), never effort max (only when the user asks for it). */
 export function askRefusal(model: string | null, effort: string | null, reg: ModelRegistry | null): string | null {
   if (model && (/fable/i.test(model) || isFable(modelRow(model, reg)))) return `modello non ammesso nel confronto: ${model.slice(0, 40)} (Fable costa troppo)`;

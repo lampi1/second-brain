@@ -2,13 +2,12 @@
 // components/andamento/) and of the local usage counter's «Uso» tab (UsageTab.tsx). en/de follow these keys.
 type N = { n: number };
 export const andamentoIt = {
-  'brainPages.andamento.subtitle': 'Costi, qualità, apprendimento, classificatori e uso dell’app, in schede.',
+  'brainPages.andamento.subtitle': 'Costi, qualità con i classificatori, apprendimento e uso dell’app, in schede.',
   'trend.lead': 'Quanto spendi, quanto funziona, cosa impara l’app e cosa usi davvero. Calcolato sul tuo PC.',
   'trend.tabsLabel': 'Sezioni di Andamento',
   'trend.tab.costi': 'Costi',
   'trend.tab.qualita': 'Qualità',
   'trend.tab.apprendimento': 'Apprendimento',
-  'trend.tab.classificatori': 'Classificatori',
   'trend.tab.uso': 'Uso',
   'use.what': 'Quante volte hai aperto ogni pagina e usato le azioni principali negli ultimi 14 giorni. Serve a decidere cosa tenere. Zero token, resta sul tuo PC.',
   'use.kpi.total': 'Usi in 14 giorni',

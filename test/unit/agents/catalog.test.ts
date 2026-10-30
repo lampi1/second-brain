@@ -151,24 +151,19 @@ describe('role catalog', () => {
       expect(r).not.toHaveProperty('independent');
     }
   });
-  it('a role with no model takes the routing row on its engine, and its effort unless the role names one (issue #99)', () => {
+  it('a role with no model takes its tier\'s model whatever the work; its own model and effort always win (ADR 0210: no routing table)', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-catalog-')); roots.push(dir);
-    const seen: unknown[] = [];
-    const catalog = new AgentCatalogService({ userData: dir, models, tierModel: () => 'm-mid',
-      tableModel: (engine, req) => { seen.push([engine, req.title]); return req.title?.startsWith('Verifica') ? { model: 'm-top', effort: 'low' } : null; } });
+    const catalog = new AgentCatalogService({ userData: dir, models, tierModel: (_e, tier) => `m-${tier}` });
+    const own = catalog.list().profiles.find(x => x.id === 'sentinel')!;
     const sentinel = catalog.resolve({ harness: 'claude', roleId: 'sentinel', title: 'Verifica · test', prompt: 'p' } as never);
-    expect(sentinel.request).toMatchObject({ model: 'm-top', effort: 'low' });
-    expect(sentinel.modelFrom).toBe('table');
-    expect(seen).toContainEqual(['claude', 'Verifica · test']);
-    // no row: the tier decides
-    const other = catalog.resolve({ harness: 'claude', roleId: 'sentinel', title: 'Altro', prompt: 'p' } as never);
-    expect(other.request.model).toBe('m-mid'); expect(other.modelFrom).toBeUndefined();
-    // a launch that asks a tier keeps the tier
-    expect(catalog.resolve({ harness: 'claude', roleId: 'sentinel', title: 'Verifica · x', tier: 'top' } as never).request.model).toBe('m-mid');
-    // the role's own effort wins over the row's; the role's own model is never replaced
+    expect(sentinel.request.model).toBe(`m-${own.tier}`);
+    expect(sentinel).not.toHaveProperty('modelFrom');
+    // a launch that asks a tier gets that tier's model
+    expect(catalog.resolve({ harness: 'claude', roleId: 'sentinel', title: 'Verifica · x', tier: 'top' } as never).request.model).toBe('m-top');
+    // the role's own effort and model are never replaced
     const p = catalog.list().profiles.find(x => x.id === 'sentinel')!;
     catalog.save(edit(p, { effort: 'high' }), 'sentinel');
-    expect(catalog.resolve({ harness: 'claude', roleId: 'sentinel', title: 'Verifica · y' } as never).request).toMatchObject({ model: 'm-top', effort: 'high' });
+    expect(catalog.resolve({ harness: 'claude', roleId: 'sentinel', title: 'Verifica · y' } as never).request).toMatchObject({ model: `m-${own.tier}`, effort: 'high' });
     const q = catalog.list().profiles.find(x => x.id === 'sentinel')!;
     catalog.save(edit(q, { model: 'm-mid', effort: 'medium' }), 'sentinel');
     expect(catalog.resolve({ harness: 'claude', roleId: 'sentinel', title: 'Verifica · z' } as never).request).toMatchObject({ model: 'm-mid', effort: 'medium' });

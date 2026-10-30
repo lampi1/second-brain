@@ -58,13 +58,6 @@
       "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.scrollIntoViewIfNeeded: Timeout 30000ms exceeded."
     },
     {
-      "file": "api-credits.spec.ts",
-      "title": "Settings retires routing API controls while preserving a legacy writing row on API credits",
-      "since": "2026-10-21",
-      "group": "group-A",
-      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.click: Timeout 30000ms exceeded."
-    },
-    {
       "file": "brain-nav.spec.ts",
       "title": "brain pages: arguments through links and history, page-to-page links, map to a file, one toast area",
       "since": "2026-10-21",
@@ -504,13 +497,6 @@
       "since": "2026-10-21",
       "group": "group-A",
       "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; Error: expect(received).toBe(expected) // Object.is equality"
-    },
-    {
-      "file": "settings-routing.spec.ts",
-      "title": "Settings retires the routing matrix without resetting legacy routing choices or history",
-      "since": "2026-10-21",
-      "group": "group-A",
-      "reason": "Impostazioni page: settings groups, switches and search not found or not reachable; TimeoutError: locator.click: Timeout 30000ms exceeded."
     },
     {
       "file": "settings.spec.ts",

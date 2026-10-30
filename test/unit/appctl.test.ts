@@ -1,5 +1,5 @@
 // The app-control MCP tools (main/appctl/tools.ts): effort changes, messages labelled as an agent's, role delegation
-// (app_create_chat with roleId), long-chat hand-offs, the routing table tools, logs and UI steering, endpoint auth.
+// (app_create_chat with roleId), long-chat hand-offs, logs and UI steering, endpoint auth. No routing tools since ADR 0210.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,12 +12,11 @@ import { log } from '../../src/main/log';
 import type { BrainService, BrowserService, ChatService } from '../../src/main/services';
 import type { RunFeedback } from '../../src/main/agents/run-feedback';
 import { routeChat, type RouteRequest } from '../../src/main/brain/routing';
-import { DemoRouting } from '../../src/main/brain/routing-demo';
-import type { NewChat, RoutingRow, RoutingTable } from '../../src/shared/contract';
+import type { NewChat } from '../../src/shared/contract';
 import { ToolRefusal } from '../../src/main/mcp/refusal';
 
-/** a brain with no routing table and no registry (a role chat's route is its role's, brain/routing.ts routeAgent) */
-const ROUTED = { routingInfo: () => ({ registry: null }), route: (req: RouteRequest) => routeChat(req, null, null, null, 7) };
+/** a brain with no registry (a role chat's route is its role's, brain/routing.ts routeAgent) */
+const ROUTED = { modelRegistry: () => null, route: (req: RouteRequest) => routeChat(req, null, null, 7) };
 /** the real role catalog with a Claude engine whose tiers map to m-top / m-mid / m-light */
 function roleCatalog(): AgentCatalogService {
   const models = (): AgentModelChoice[] => [
@@ -206,17 +205,16 @@ describe('app control tools', () => {
     expect(made).toHaveLength(2);
   });
 
-  it('app_create_chat gives the explicit kind to the role resolution and the chat, so a model-less role meets its table row', async () => {
+  it('app_create_chat keeps the explicit kind on the route; the role resolution never sees it (ADR 0210: no table row to meet)', async () => {
     const made: Record<string, unknown>[] = [], asked: NewChat[] = [];
     const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }], create: async (req: Record<string, unknown>) => { made.push(req); return { id: 'n1', title: req.title }; } } as unknown as ChatService;
     const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true }, engines: { claude: true }, orchestratorChats: { harness: 'claude' } }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
     const catalog = roleCatalog();
     const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => { asked.push(req); return catalog.resolve(req); } }, 'r').find(x => x.name === 'app_create_chat')!;
     await t.run({ title: 'Ordini · Controllo', prompt: 'guarda il ramo', roleId: 'sentinel', kind: 'review' });
-    expect(asked[0]).toMatchObject({ routeHint: { kind: 'review' } });
-    expect(made[0]).toMatchObject({ routeHint: { kind: 'review' } });
-    await t.run({ title: 'Ordini · Controllo 2', prompt: 'guarda il ramo', roleId: 'sentinel' });
-    expect(asked[1]).not.toHaveProperty('routeHint');
+    expect(asked[0]).not.toHaveProperty('routeHint');
+    expect(made[0]).not.toHaveProperty('routeHint');
+    expect(made[0]).toMatchObject({ model: 'm-top', route: { kind: 'review', source: 'agent' } });
   });
 
   it('app_create_chat shows the prompt and title limits in its schema and names the length it refuses (#172)', async () => {
@@ -356,35 +354,10 @@ describe('app control tools', () => {
     expect(out).not.toContain('kid-secret');
   });
 
-  it('app_routing reads the table; app_routing_save writes a new version by itself, signed, with reason and data; hard rules hold', async () => {
-    const routing = new DemoRouting('2026-10-14T08:00:00.000Z');
-    const chats = { list: () => [{ id: 'r1', isOrchestrator: true, title: 'Orchestrator' }] } as unknown as ChatService;
-    const brain = {
-      routingInfo: () => routing.info(),
-      saveRouting: (routes: RoutingRow[], reason: string | null, o: { by: string; evidence?: string | null; base?: number; exploration?: number }) =>
-        routing.save(routes, '2026-10-14T09:00:00.000Z', { ...o, reason }),
-    } as unknown as BrainService;
-    const tools = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' });
-    const read = await tools.find(x => x.name === 'app_routing')!.run({}) as { table: RoutingTable; pickable: { id: string }[]; appChats: unknown };
-    expect(read.pickable.map(m => m.id)).not.toContain('claude-fable-5-1');
-    expect(read.appChats).toEqual({ model: 'claude-opus-5-5', effort: 'medium' });
-    const save = tools.find(x => x.name === 'app_routing_save')!;
-    const routes = [...read.table.routes, { kind: 'writing', harness: 'claude', model: 'claude-haiku-5-5', effort: 'medium', why: 'mail: basta Haiku' }];
-    await expect(Promise.resolve().then(() => save.run({ routes, reason: 'meno costi' }))).rejects.toThrow(/obbligatori/);
-    await expect(Promise.resolve().then(() => save.run({ routes, reason: 'r', evidence: 'e' }))).rejects.toThrow(/baseVersion/);
-    // built on an older version: refused, the newer one stays (no silent overwrite)
-    await expect(Promise.resolve().then(() => save.run({ routes, reason: 'r', evidence: 'e', baseVersion: 2 }))).rejects.toThrow(/è cambiata .ora versione 3,/);
-    expect(await save.run({ routes, exploration: 0.2, reason: 'mail su Haiku', evidence: '12 chat, 0 correzioni', baseVersion: 3 })).toEqual({ version: 4, rows: 5 });
-    // exploration is no parameter any more (ADR 0186): the stored rate stays as it was
-    expect(routing.info().history[0]).toMatchObject({ to: 4, by: 'agente: Orchestrator', reason: 'mail su Haiku', evidence: '12 chat, 0 correzioni' });
-    expect(routing.info().history[0]).not.toHaveProperty('exploration');
-    // Never Fable, and changing an app row must still preserve every locked row.
-    await expect(Promise.resolve().then(() => save.run({ routes: [{ ...routes[0], model: 'claude-sonnet-5-5' }], reason: 'r', evidence: 'e', baseVersion: 4 }))).rejects.toThrow(/bloccata dall’utente/);
-    await expect(Promise.resolve().then(() => save.run({ routes: [{ kind: 'review', harness: 'claude', model: 'claude-fable-5-1', effort: 'high', why: 'w' }], reason: 'r', evidence: 'e', baseVersion: 4 }))).rejects.toThrow(/Fable mai/);
-    expect(routing.info().table!.version).toBe(4);
-    // the demo's bug-fix row is locked by the user: the agent may not change it
-    const bug = read.table.routes.findIndex(x => x.kind === 'bug-fix');
-    await expect(Promise.resolve().then(() => save.run({ routes: routes.map((x, i) => (i === bug ? { ...x, effort: 'medium' } : x)), reason: 'r', evidence: 'e', baseVersion: 4 }))).rejects.toThrow(/bloccata dall’utente/);
+  it('has no routing tools any more (ADR 0210)', () => {
+    const names = appControlTools({ chats: { list: () => [] } as unknown as ChatService, browser: {} as BrowserService, brain: {} as BrainService, window: () => null, emitUi: () => {}, version: '0' }).map(x => x.name);
+    expect(names).not.toContain('app_routing');
+    expect(names).not.toContain('app_routing_save');
   });
 
   it('filters logs by level and text and steers the UI', async () => {

@@ -1,19 +1,17 @@
 // The brain module: implements BrainService (src/main/services.ts) for wiring.ts. It owns the settings (config.ts),
 // the live feed of the brain folder and chats (live.ts), calm Windows toasts (notify.ts), the top-bar usage
-// (usage.ts), the spending limits (budget.ts), the job ledger (estimates.ts: real cost and time, feeding the brain's
-// routing table, ADR 0053), the GET-only proxy to the brain's own data server (api.ts) and the Brain pages' live
+// (usage.ts), the spending limits (budget.ts), the job ledger (estimates.ts: real cost and time, ADR 0053), the GET-only proxy to the brain's own data server (api.ts) and the Brain pages' live
 // refresh (a markdown file changed on disk → 'brainmodel:changed') and the domains' multi-PC sync (domains.ts, sync.ts, guard.ts: ADR 0059). Why one module: they share the
 // brain folder, the Electron-node runner and the feed, and they restart together when the brain folder changes. Only
 // this file touches Electron (Notification, the window); the parts are plain Node and unit-tested apart. App state
 // lives in userData (config.json, live-state.json, budget-state.json, jobs.jsonl, jobs-meta.json). It writes into the
-// brain only the model routing (routing.ts, ADR 0032): a new table version when the user saves it from the settings
-// page, and the routed chats' lines in the improvement loop's ledger (ops/state/improve/, the brain's own state, never
-// its tracked files).
+// brain only the routed chats' lines in the improvement loop's ledger (routing.ts; ops/state/improve/, the brain's own
+// state, never its tracked files). The routing table is gone (ADR 0210).
 import { Notification, shell, type BrowserWindow } from 'electron';
 import fs from 'node:fs';
 import { migrateCrossHarness } from './brain-settings';
 import path from 'node:path';
-import type { BudgetAlert, DomainSyncStatus, FeedEvent, Harness, SettingChange, Settings, SyncChoice, Usage } from '../../shared/contract';
+import type { BudgetAlert, DomainSyncStatus, FeedEvent, SettingChange, Settings, SyncChoice, Usage } from '../../shared/contract';
 import type { Emitter } from '../ipc';
 import type { BrainService, FeedInput } from '../services';
 import { log, errText } from '../log';
@@ -46,8 +44,6 @@ export interface BrainCtx {
   /** extra environment for the brain's estimates.mjs run and what it starts (the sample judge): the app's text endpoint
    *  on the user's API credits (engines/text-mcp.ts, ADR 0052); read at each run */
   scriptEnv?: () => Record<string, string>;
-  /** the Anthropic API engine when the writing rows «Sui crediti API» may use it now (on, with a key), else null (ADR 0052) */
-  apiRoute?: () => Harness | null;
   /** a brain file changed (relative path, '/'): the hybrid search re-syncs (SPEC 23) */
   onFile?: (f: string) => void;
 }
@@ -142,7 +138,7 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
   // the brain's estimates table (ops/state/estimates.json); tests only read it, never rescan transcripts
   const estNode = { exe: node.exe, lowPriority: true, get env() { return { ...node.env, ...(ctx.scriptEnv?.() ?? {}) }; } };
   const brainEst = new BrainEstimates(() => cfg.get().brainRoot, estNode);
-  const routing = new Routing(() => cfg.get().brainRoot, file('routing-api.json'));
+  const routing = new Routing(() => cfg.get().brainRoot);
   const models = new ModelsSeenStore(file('cursor-models.json'));
   // the Brain pages (skills, rules, memory: ADR 0077) reload when a markdown file of the brain changes on disk
   let procTimer: NodeJS.Timeout | null = null;
@@ -273,19 +269,8 @@ export async function createBrain(ctx: BrainCtx): Promise<BrainService> {
     },
     onSettingChange: fn => { settingListeners.add(fn); return () => { settingListeners.delete(fn); }; },
     recordJob: job => { const r = ledger.record(job); if (!testing) brainEst.schedule(); return r; },
-    routingInfo: () => routing.info(),
-    saveRouting: (routes, reason, o = {}) => {
-      const by = o.by ?? 'utente (Impostazioni)';
-      const info = routing.save(routes, by, reason, Date.now(), { exploration: o.exploration, costWeight: o.costWeight, evidence: o.evidence ?? null, base: o.base });
-      log.info('brain', 'routing table saved', { data: { version: info.table?.version ?? null, rows: info.table?.routes.length ?? 0, exploration: info.table?.exploration ?? null, by, reason } });
-      return info;
-    },
-    restoreRouting: (version, by = 'utente (Impostazioni)') => {
-      const info = routing.restore(version, by);
-      log.info('brain', 'routing table restored', { data: { from: version, version: info.table?.version ?? null, by } });
-      return info;
-    },
-    route: req => routeChat({ api: ctx.apiRoute?.() ?? null, ...req }, routing.table(), routing.registry(), brainEst.table()),
+    modelRegistry: () => routing.registry(),
+    route: req => routeChat(req, routing.registry(), brainEst.table()),
     lastRoutingActual: id => { try { return routing.lastActual(id); } catch { return null; } },
     observeRouting: rec => {
       try { routing.observe(rec); } catch (e) { log.warn('brain', 'routing outcome not written', { cause: errText(e), hint: 'check <brain>/ops/state/improve is writable' }); }

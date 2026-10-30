@@ -86,7 +86,7 @@ export async function renewOrchestrator(chatId: string, to: Harness, summary: bo
   const old = app.get().chats[chatId];
   if (!old?.isOrchestrator) return false;
   const prompt = summary ? orchestratorHandoff(chatId) : undefined;
-  // through the routing table (ADR 0032, kind orchestrator): the engine the user picked beats the row; the model and effort
+  // through chat:createRouted (ADR 0032, kind orchestrator): the engine the user picked beats the defaults; the model and effort
   // come from the row for that engine, else the engine's default as before; main keeps the Orchestrator role on it
   const n = await createRoutedChat({
     title: old.title, cwd: old.cwd, orchestrator: true, replaces: old.id, ...(prompt ? { prompt } : {}),

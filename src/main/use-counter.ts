@@ -191,6 +191,6 @@ export function demoUseCounts(now: number): Row[] {
       if (n > 0) out.push({ day, key, n });
     }
   }
-  out.push({ day: dayBefore(now, 9), key: 'page:andamento/classificatori', n: 1 });
+  out.push({ day: dayBefore(now, 9), key: 'page:andamento/apprendimento', n: 1 });
   return out;
 }
