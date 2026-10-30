@@ -8,10 +8,10 @@ import { LEVEL_RULES, MASTERY_LEVELS, SOLID_DAYS } from '@shared/mastery';
 import { t } from '../../i18n';
 import '../../styles/impara-quiz.css';
 
-export function ScoreRing({ value, size = 84, label, tone = 'accent' }: { value: number; size?: number; label: string; tone?: 'accent' | 'good' | 'mid' | 'low' }) {
+export function ScoreRing({ value, size = 84, label, tone = 'accent', testid = 'impara-score-ring' }: { value: number; size?: number; label: string; tone?: 'accent' | 'good' | 'mid' | 'low'; testid?: string }) {
   const r = 42, c = 2 * Math.PI * r, v = Math.max(0, Math.min(100, value));
   return (
-    <svg className={`sc-ring ${tone}`} width={size} height={size} viewBox="0 0 100 100" role="img" aria-label={label} data-testid="impara-score-ring">
+    <svg className={`sc-ring ${tone}`} width={size} height={size} viewBox="0 0 100 100" role="img" aria-label={label} data-testid={testid}>
       <circle cx="50" cy="50" r={r} className="sc-ring-bg" />
       <circle cx="50" cy="50" r={r} className="sc-ring-fg" strokeDasharray={`${(c * v) / 100} ${c}`} transform="rotate(-90 50 50)" />
       <text x="50" y="50" className="sc-ring-v" dominantBaseline="central" textAnchor="middle">{label}</text>
@@ -25,13 +25,13 @@ export function ImparaScoreBand({ score }: { score: ImparaScore }) {
   if (score.score === null) return null;
   const d = score.delta;
   return (
-    <section className="sc-band" data-testid="impara-score" aria-label={t('impara.score.title')}>
+    <section className="sc-band" data-testid="impara-overall" aria-label={t('impara.score.title')}>
       <div className="sc-main">
-        <ScoreRing value={score.score} label={String(score.score)} tone={score.score >= 80 ? 'good' : 'accent'} />
+        <ScoreRing value={score.score} label={String(score.score)} testid="impara-score-value" tone={score.score >= 80 ? 'good' : 'accent'} />
         <div className="sc-main-in">
           <div className="ip-kicker">{t('impara.score.title')}</div>
           <div className="sc-line">
-            <b className="sc-num" data-testid="impara-score-value">{score.score}</b><span className="ip-muted">/100</span>
+            <b className="sc-title" data-testid="impara-score-band">{t(`impara.score.band.${score.score >= 90 ? 3 : score.score >= 70 ? 2 : score.score >= 40 ? 1 : 0}`)}</b>
             {d !== null && <span className={`sc-delta ${d > 0 ? 'up' : d < 0 ? 'down' : ''}`} data-testid="impara-score-delta">{d > 0 ? `+${d}` : d < 0 ? `−${-d}` : '±0'} {t('impara.score.week')}</span>}
           </div>
           <p className="ip-muted sc-why" data-tip={t('impara.score.how', { days: SOLID_DAYS })}>{t('impara.score.lead')}</p>

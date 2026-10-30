@@ -54,6 +54,10 @@ export const imparaV3De: typeof imparaV3It = {
   'impara.q.redo': ({ n }: { n: number }) => `Falsche wiederholen (${n})`,
 
   'impara.score.title': 'Deine Punktzahl',
+  'impara.score.band.0': 'Noch zu festigen',
+  'impara.score.band.1': 'Nimmt Form an',
+  'impara.score.band.2': 'Solide',
+  'impara.score.band.3': 'Ausgezeichnet',
   'impara.score.week': 'diese Woche',
   'impara.score.lead': 'Wie viel du heute behältst: Sie sinkt, wenn du nicht wiederholst.',
   'impara.score.how': ({ days }: { days: number }) => `Geschätztes Gedächtnis heute × Anteil fester Karten, 0 bis 100.|Fest = FSRS-Stabilität von mindestens ${days} Tagen und letzte Bewertung mindestens «Richtig». Mehr Lektionen heben die Punktzahl erst, wenn ihre Karten fest sind.`,

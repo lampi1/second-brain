@@ -27,20 +27,20 @@ export interface QuizDone { response: QuizResponse; right: boolean }
 
 /** `keys`: this component answers the pick kinds' keys itself (the lesson's player does it for its checks). `fresh`:
  *  the answer was just given here (sound and animation), not reopened. */
-export function ImparaQuiz({ body, seed, done, onAnswer, keys, fresh, testid = 'impara-quiz' }: {
-  body: QuizBody; seed: string; done: QuizDone | null; onAnswer: (r: QuizResponse) => void; keys: boolean; fresh: boolean; testid?: string;
+export function ImparaQuiz({ body, seed, done, onAnswer, keys, fresh, testid = 'impara-quiz', opt = 'impara-opt' }: {
+  body: QuizBody; seed: string; done: QuizDone | null; onAnswer: (r: QuizResponse) => void; keys: boolean; fresh: boolean; testid?: string; opt?: string;
 }) {
   const fx = done && fresh ? (done.right ? 'qz-ok' : 'qz-ko') : '';
   return (
-    <div className={`qz qz-${body.kind} ${fx}`} data-testid={testid} data-kind={body.kind} data-state={done ? (done.right ? 'right' : 'wrong') : 'open'}>
+    <div className={`qz qz-is-${body.kind} ${fx}`} data-testid={testid} data-kind={body.kind} data-state={done ? (done.right ? 'right' : 'wrong') : 'open'}>
       {body.kind === 'order' ? <Order body={body} seed={seed} done={done} onAnswer={onAnswer} />
         : body.kind === 'match' ? <Match body={body} seed={seed} done={done} onAnswer={onAnswer} />
-        : <Pick body={body} done={done} onAnswer={onAnswer} keys={keys} />}
+        : <Pick body={body} done={done} onAnswer={onAnswer} keys={keys} opt={opt} />}
     </div>
   );
 }
 
-function Pick({ body, done, onAnswer, keys }: { body: QuizBody; done: QuizDone | null; onAnswer: (r: number) => void; keys: boolean }) {
+function Pick({ body, done, onAnswer, keys, opt }: { body: QuizBody; done: QuizDone | null; onAnswer: (r: number) => void; keys: boolean; opt: string }) {
   const mine = typeof done?.response === 'number' ? done.response : null;
   const tf = body.kind === 'truefalse';
   useEffect(() => {
@@ -63,7 +63,7 @@ function Pick({ body, done, onAnswer, keys }: { body: QuizBody; done: QuizDone |
         {body.options.map((o, i) => {
           const cls = !done ? '' : i === body.correct ? 'good' : i === mine ? 'bad' : 'off';
           return (
-            <button key={i} type="button" className={`ip-opt ${tf ? 'qz-tf-opt' : ''} ${body.kind === 'cloze' ? 'qz-mono' : ''} ${cls}`} disabled={!!done} onClick={() => onAnswer(i)} data-testid={`impara-opt-${i}`} aria-pressed={i === mine}>
+            <button key={i} type="button" className={`ip-opt ${tf ? 'qz-tf-opt' : ''} ${body.kind === 'cloze' ? 'qz-mono' : ''} ${cls}`} disabled={!!done} onClick={() => onAnswer(i)} data-testid={`${opt}-${i}`} aria-pressed={i === mine}>
               <span className="ip-opt-k">{tf ? (i === 0 ? <IconCheck size={12} /> : <IconX size={12} />) : LETTERS[i]}</span>
               <span className="ip-opt-t">{o}</span>
               {done && i === mine && <span className="ip-opt-mine">{t('impara.check.yours')}</span>}
@@ -146,7 +146,8 @@ function Match({ body, seed, done, onAnswer }: { body: QuizBody; seed: string; d
   const [pick, setPick] = useState<number[]>(() => left.map(() => -1));
   const [sel, setSel] = useState<number | null>(null);
   const given = Array.isArray(done?.response) ? done.response : done ? left.map((_, i) => i) : pick;
-  const tapLeft = (i: number) => { if (done) return; if (pick[i]! >= 0) setPick(p => p.map((x, k) => (k === i ? -1 : x))); setSel(s => (s === i ? null : i)); };
+  // a click on a term selects it (a paired one is unpaired first); the next click on the right pairs it
+  const tapLeft = (i: number) => { if (done) return; if (pick[i]! >= 0) setPick(p => p.map((x, k) => (k === i ? -1 : x))); setSel(i); };
   const tapRight = (j: number) => {
     if (done) return;
     const owner = pick.indexOf(j);

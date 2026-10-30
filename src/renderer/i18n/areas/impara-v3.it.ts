@@ -53,6 +53,10 @@ export const imparaV3It = {
   'impara.q.redo': ({ n }: { n: number }) => `Rifai le sbagliate (${n})`,
 
   'impara.score.title': 'Il tuo punteggio',
+  'impara.score.band.0': 'Da consolidare',
+  'impara.score.band.1': 'Prende forma',
+  'impara.score.band.2': 'Solido',
+  'impara.score.band.3': 'Eccellente',
   'impara.score.week': 'questa settimana',
   'impara.score.lead': 'Quanto ricordi oggi: scende se non ripassi.',
   'impara.score.how': ({ days }: { days: number }) => `Memoria stimata oggi × quota di carte solide, da 0 a 100.|Solida = stabilità FSRS di almeno ${days} giorni e ultimo voto almeno «Giusto». Più lezioni non alzano il punteggio finché le loro carte non diventano solide.`,

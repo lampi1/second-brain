@@ -249,7 +249,7 @@ export function seedDemoLessons(store: LessonStore, now: number, appRoot: string
   };
   const done: Lesson = {
     id: store.newId(now - 5 * day), title: 'Cos’è la Content Security Policy', kind: 'topic', ask: 'Cos’è la CSP di Electron e perché l’app blocca le immagini esterne',
-    depth: 'quick', level: 'new', createdAt: now - 5 * day, updatedAt: now - 5 * day + 900_000, state: 'ready',
+    depth: 'quick', level: 'new', createdAt: now - 12 * day, updatedAt: now - 5 * day + 900_000, state: 'ready',
     diagram: 'flowchart LR\n  page["La pagina<br/>dell’app"] -->|"chiede"| img["Immagine<br/>esterna"]\n  csp["CSP"] -->|"blocca"| img\n  page --> local["File<br/>dell’app"]',
     outline: ['Cosa fa la CSP', 'Cosa blocca', 'Perché conviene'],
     steps: [
@@ -306,7 +306,7 @@ export function seedDemoLessons(store: LessonStore, now: number, appRoot: string
     card(app, 'c6', { kind: 'truefalse', q: 'La ricerca sul web può leggere i file del tuo PC.', options: ['Vero', 'Falso'], correct: 1, answer: 'Falso: chi legge il web vede solo la domanda, così una pagina non può portare fuori i tuoi file.', cites: ['f1'], mem: mem(3, 34, 4) }),
     card(app, 'c7', { kind: 'cloze', q: 'Quale giro parte insieme alla ricerca sul web?', code: 'const [rw, rf] = await Promise.all([\n  web ? this.run(req, { round: \'impara-web\', web: true }) : Promise.resolve(null),\n  this.run(req, { round: ___ }),\n]);', options: ["'impara-files'", "'impara-plan'", "'impara-verify-web'"], correct: 0, answer: 'Le due ricerche partono insieme: il web e i file; la verifica viene dopo.', cites: ['f1'], mem: mem(2, 26, 3) }),
   ];
-  try { fs.writeFileSync(path.join(store.root, 'review.json'), JSON.stringify({ v: 1, cards, log: [{ card: cards[1]!.id, at: now - 5 * day, grade: 3 }, { card: cards[2]!.id, at: now - 4 * day, grade: 3 }, { card: cards[0]!.id, at: now - 2 * day, grade: 2 }, { card: cards[3]!.id, at: now - day, grade: 3 }, ...[24, 12, 3].map(d => ({ card: cards[7]!.id, at: now - d * day, grade: 3 as const })), ...[20, 9, 2].map(d => ({ card: cards[8]!.id, at: now - d * day, grade: 3 as const }))] })); } catch { /* the demo goes on without reviews */ }
+  try { fs.writeFileSync(path.join(store.root, 'review.json'), JSON.stringify({ v: 1, cards, log: [{ card: cards[1]!.id, at: now - 12 * day, grade: 3 }, { card: cards[1]!.id, at: now - 9 * day, grade: 3 }, { card: cards[1]!.id, at: now - 5 * day, grade: 3 }, { card: cards[2]!.id, at: now - 4 * day, grade: 3 }, { card: cards[0]!.id, at: now - 2 * day, grade: 2 }, { card: cards[3]!.id, at: now - day, grade: 3 }, ...[24, 12, 3].map(d => ({ card: cards[7]!.id, at: now - d * day, grade: 3 as const })), ...[20, 9, 2].map(d => ({ card: cards[8]!.id, at: now - d * day, grade: 3 as const }))] })); } catch { /* the demo goes on without reviews */ }
 }
 
 /** The review cards the demo's model writes at the end of a lesson: from the PR #251 facts (one cites only the

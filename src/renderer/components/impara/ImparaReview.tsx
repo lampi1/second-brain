@@ -172,12 +172,12 @@ function Card({ item, practice, timed, onGrade }: { item: ReviewItem; practice: 
   });
 
   return (
-    <div className={`rv-card ${c.kind === 'node' || c.kind === 'match' ? 'rv-wide' : ''}`} data-testid="impara-review-card" data-kind={c.kind}>
+    <div className={`rv-card ${c.kind === 'node' ? 'rv-wide' : ''}`} data-testid="impara-review-card" data-kind={c.kind}>
       <div className="rv-meta"><span className="ip-tag">{t(`impara.rv.kind.${c.kind}`)}</span><span className="ip-muted">{item.lesson}</span></div>
       {clock && <div className="rv-clock" style={{ animationDuration: `${CHALLENGE_S}s` }} aria-hidden="true" data-testid="impara-review-clock"><i /></div>}
       <h3 className="rv-q" data-testid="impara-review-q">{c.q}</h3>
 
-      {quiz && <ImparaQuiz body={quiz} seed={c.id} done={done} onAnswer={answerQuiz} keys fresh testid="impara-review-quiz" />}
+      {quiz && <ImparaQuiz body={quiz} seed={c.id} done={done} onAnswer={answerQuiz} keys fresh testid="impara-review-quiz" opt="impara-review-opt" />}
       {c.kind === 'node' && item.diagram && (
         <>
           <div className={`rv-stage ${pick === null ? '' : pick === c.node ? 'qz-ok' : 'qz-ko'}`}>

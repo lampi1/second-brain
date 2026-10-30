@@ -54,6 +54,10 @@ export const imparaV3En: typeof imparaV3It = {
   'impara.q.redo': ({ n }: { n: number }) => `Redo the wrong ones (${n})`,
 
   'impara.score.title': 'Your score',
+  'impara.score.band.0': 'Needs work',
+  'impara.score.band.1': 'Taking shape',
+  'impara.score.band.2': 'Solid',
+  'impara.score.band.3': 'Excellent',
   'impara.score.week': 'this week',
   'impara.score.lead': 'How much you remember today: it falls if you do not review.',
   'impara.score.how': ({ days }: { days: number }) => `Estimated memory today × share of solid cards, 0 to 100.|Solid = FSRS stability of at least ${days} days and a last grade of at least «Good». More lessons do not raise the score until their cards are solid.`,
