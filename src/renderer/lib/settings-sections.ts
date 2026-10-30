@@ -24,3 +24,26 @@ export function settingsSections(engineNames: readonly string[]): Record<Setting
 }
 export const SETTINGS_SECTION_IDS = ['profile', 'update', 'connectors', 'accounts', 'roles', 'space', 'writing', 'voice', 'appearance', 'notifications', 'advanced'] as const;
 export type SettingsSectionId = (typeof SETTINGS_SECTION_IDS)[number];
+
+/** The left navigation of Settings (ADR 0207): the sections in labelled groups, like macOS System Settings, each with
+ *  the tone of its icon tile. Plain strings: a section removed elsewhere just stops showing, and one not listed here (a
+ *  section added later) joins the last group, so it never disappears from the navigation. */
+export type SettingsNavLabel = 'you' | 'work' | 'tools' | 'app';
+export const SETTINGS_NAV: readonly { label: SettingsNavLabel; ids: readonly string[] }[] = [
+  { label: 'you', ids: ['profile', 'appearance', 'notifications', 'voice', 'writing'] },
+  { label: 'work', ids: ['space', 'roles'] },
+  { label: 'tools', ids: ['connectors', 'accounts', 'advanced'] },
+  { label: 'app', ids: ['update'] },
+];
+export const SETTINGS_TONE: Readonly<Record<string, string>> = {
+  profile: 'blue', appearance: 'purple', notifications: 'red', voice: 'pink', writing: 'amber', space: 'green', roles: 'teal',
+  connectors: 'blue', accounts: 'slate', advanced: 'slate', update: 'green',
+};
+
+/** The navigation's groups holding only the sections that exist, in order; unknown ids join the last group. */
+export function navGroups(ids: readonly string[]): { label: SettingsNavLabel; ids: string[] }[] {
+  const known = new Set(SETTINGS_NAV.flatMap(g => g.ids));
+  const out = SETTINGS_NAV.map(g => ({ label: g.label, ids: g.ids.filter(id => ids.includes(id)) }));
+  out[out.length - 1]!.ids.push(...ids.filter(id => !known.has(id)));
+  return out.filter(g => g.ids.length > 0);
+}

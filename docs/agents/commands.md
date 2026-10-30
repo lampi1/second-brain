@@ -63,7 +63,7 @@ row and its line here in the same change.
 | `app_unblock` | Orchestrator only | Open the questions window with everything waiting for the user, after a recap he asked for. |
 | `app_update_code` | Orchestrator only | Update the app's code from GitHub, only when the user asked in his own words. |
 | `app_voice_diagnostics` | Orchestrator only | Content-free voice timing diagnostics (recognition, synthesis, failures). |
-| `app_config` | Orchestrator only | Read and change any configuration as the user's own click would, with Undo. |
+| `app_config` | Orchestrator only | Read and change any configuration as the user's own click would, with Undo: settings, view, role cards, MCP connectors (add, edit, test, remove, per role; never a token), profile. |
 | `app_routine_export` | Orchestrator only | Export a routine package for the terminal `routine` CLI, secrets filled in the zip. |
 | `app_routine_status` | Orchestrator only | Routine packages and run history, read only, when the user asks. |
 | `app_routine_capabilities` | Orchestrator only | What a routine package is and can do: read before writing one. |

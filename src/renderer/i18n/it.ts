@@ -44,6 +44,8 @@ import { agentDetailIt } from './areas/agent-detail.it';
 import { agentImageIt } from './areas/agent-image.it';
 import { proposalsIt } from './areas/proposals.it';
 import {settingsIt}from'./areas/settings.it';
+import { settingsShellIt } from './areas/settings-shell.it';
+import { mcpAddIt } from './areas/mcp-add.it';
 import { profileIt } from './areas/profile.it';
 import { homeIt } from './areas/home.it';
 import { guideIt } from './areas/guide.it';
@@ -125,6 +127,8 @@ export const it = {
   ...agentImageIt,
   ...proposalsIt,
   ...settingsIt,
+  ...settingsShellIt,
+  ...mcpAddIt,
   ...profileIt,
   ...chatIt,
   ...visualsIt,

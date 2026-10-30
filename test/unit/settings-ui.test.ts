@@ -1,9 +1,11 @@
 // The Settings page's pure parts: the model choices of "Chat aperte dall'Orchestrator" (lib/models.ts), the spending
-// limit amounts and the MCP port (lib/settings-page.ts) and the Ctrl+, shortcut that opens the page (lib/keys.ts).
+// limit amounts, the MCP port and the search highlight (lib/settings-page.ts), the left navigation's groups (ADR 0207,
+// lib/settings-sections.ts) and the Ctrl+, shortcut that opens the page (lib/keys.ts).
 import { describe, expect, it } from 'vitest';
 import { resolveShortcut } from '../../src/renderer/lib/keys';
 import { MODELS, modelOptions } from '../../src/renderer/lib/models';
-import { matchesSettingsSearch, parseUsd, portOf } from '../../src/renderer/lib/settings-page';
+import { hitRanges, matchesSettingsSearch, parseUsd, portOf } from '../../src/renderer/lib/settings-page';
+import { SETTINGS_SECTION_IDS, navGroups } from '../../src/renderer/lib/settings-sections';
 
 describe('model choices (lib/models.ts)', () => {
   const seen = { cursor: { at: 1, ids: [{ id: 'grok-4.7', name: 'Grok 4.7' }, { id: 'gpt-5', name: '' }] } };
@@ -56,5 +58,22 @@ describe('settings search', () => {
     expect(matchesSettingsSearch('', section)).toBe(true);
     expect(matchesSettingsSearch('  ', section)).toBe(true);
     expect(matchesSettingsSearch('[.*', section)).toBe(false);
+  });
+});
+
+describe('search highlight and navigation (ADR 0207)', () => {
+  it('finds every word, folding case and accents, in the original offsets, merged', () => {
+    expect(hitRanges('Notifiche di sistema', 'notifiche')).toEqual([[0, 9]]);
+    expect(hitRanges('Perché è così', 'perche cosi')).toEqual([[0, 6], [9, 13]]);
+    expect(hitRanges('aaaa', 'aa')).toEqual([[0, 4]]);
+    expect(hitRanges('Tema', '')).toEqual([]);
+    expect(hitRanges('Tema', 'lingua')).toEqual([]);
+  });
+  it('groups every section once, in order, and a section it does not know joins the last group', () => {
+    const g = navGroups([...SETTINGS_SECTION_IDS]);
+    expect(g.flatMap(x => x.ids).sort()).toEqual([...SETTINGS_SECTION_IDS].sort());
+    expect(g[0]).toEqual({ label: 'you', ids: ['profile', 'appearance', 'notifications', 'voice', 'writing'] });
+    expect(navGroups(['profile', 'update', 'brand-new']).map(x => x.ids)).toEqual([['profile'], ['update', 'brand-new']]);
+    expect(navGroups(['profile']).map(x => x.label)).toEqual(['you']);
   });
 });

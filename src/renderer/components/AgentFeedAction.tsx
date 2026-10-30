@@ -1,5 +1,6 @@
 // Human-click actions for role feed entries (Annulla on an applied change, the way to Memoria → Proposte, Annulla on a
-// maintenance pass the app ran by itself: brainmodel:rollback of each of its changes, newest first, ADR 0102); typed IPC
+// maintenance pass the app ran by itself: brainmodel:rollback of each of its changes, newest first, ADR 0102; Annulla on
+// a connector change the Orchestrator made: mcpservers:undo, ADR 0207); typed IPC
 // only, never agent mail as approval. Used by the feed cards (NotificationCenter.tsx) and the morning block.
 import { useState } from 'react';
 import type { FeedAction } from '@shared/contract';
@@ -22,11 +23,12 @@ export function AgentFeedAction({ action }: { action?: FeedAction }) {
     setBusy(true); setError('');
     try {
       if (action.kind === 'brain-undo') { await undoChanges(action.ids); setDone(true); }
+      else if (action.kind === 'connector-undo') { await sb.invoke('mcpservers:undo', { undo: action.undo }); setDone(true); }
       else await sb.invoke('agents:undo', action.undo);
       await refreshAgents();
     } catch (e) { setError(String(e)); }
     finally { setBusy(false); }
   };
-  const label = t(action.kind === 'agent-proposals' ? 'appText.feedAction.review' : done ? 'appText.feedAction.undone' : action.kind === 'brain-undo' ? 'appText.feedAction.undo' : 'appText.feedAction.undoChange');
+  const label = t(action.kind === 'agent-proposals' ? 'appText.feedAction.review' : done ? 'appText.feedAction.undone' : action.kind === 'brain-undo' || action.kind === 'connector-undo' ? 'appText.feedAction.undo' : 'appText.feedAction.undoChange');
   return <><button type="button" className="btn btn-ghost" disabled={busy || done} onClick={() => void click()} data-testid={`feed-action-${action.kind}`}>{label}</button>{error && <span role="alert">{error}</span>}</>;
 }

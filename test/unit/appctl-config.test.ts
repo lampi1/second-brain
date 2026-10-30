@@ -1,6 +1,6 @@
 // app_config (src/main/appctl/config.ts, ADR 0149): the Orchestrator changes the app's configuration for the user,
 // protected settings too (the owner's choice, 2026-10-24), only after the user's own recent words, logged and undoable;
-// role cards through the page's save, connectors only on/off and access, never a new server or a token.
+// role cards through the page's save, connectors (add, edit, access, test; ADR 0207) never seeing a token, the profile.
 import { describe, expect, it, vi } from 'vitest';
 import { configTool, draftOf, type ConfigDeps } from '../../src/main/appctl/config';
 import { ConfigStore } from '../../src/main/brain/config';
@@ -110,6 +110,18 @@ describe('app_config: roles, view, connectors, later', () => {
     let on = false;
     const d = deps({ later: { get: () => ({ on }), set: v => { on = v; return { on }; } } });
     expect(await configTool(d).run({ action: 'set', area: 'later', value: true })).toEqual({ before: false, after: true });
+  });
+
+  it('profile: reads and changes a managed field of me.md through the page\'s save, refuses a locked one', async () => {
+    const me = { name: 'Davide', role: 'dev', language: 'italiano', mainWork: ['app'], replyStyle: 'short', revision: 'r1', updatedAt: 1, rules: [], replyStyleDefault: '', locked: ['replyStyle'], growth: { journalDays: 0, lastJournal: null }, path: '/b/me.md' };
+    const save = vi.fn(async (req: { revision: string; fields: Record<string, unknown> }) => ({ ...me, ...req.fields, revision: 'r2' }));
+    const d = deps({ profile: { get: async () => ({ ok: true, profile: me }) as never, save: save as never } });
+    expect(await configTool(d).run({ action: 'get', area: 'profile' })).toMatchObject({ name: 'Davide', locked: ['replyStyle'] });
+    expect(await configTool(d).run({ action: 'set', area: 'profile', key: 'role', value: 'designer' })).toMatchObject({ changed: 'role', before: 'dev', after: 'designer' });
+    expect(save).toHaveBeenCalledWith({ revision: 'r1', fields: { role: 'designer' } });
+    await expect(configTool(d).run({ action: 'set', area: 'profile', key: 'replyStyle', value: 'x' })).rejects.toThrow(/brain-edit/);
+    await expect(configTool(d).run({ action: 'set', area: 'profile', key: 'mainWork', value: 'x' })).rejects.toThrow(/array/);
+    await expect(configTool({ ...d, userAsked: () => false }).run({ action: 'set', area: 'profile', key: 'role', value: 'x' })).rejects.toThrow();
   });
 });
 

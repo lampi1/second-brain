@@ -7,70 +7,22 @@
 // at 2 MB; unreadable ones are skipped. Pure apart from the reads; used by service.ts.
 import fs from 'node:fs';
 import path from 'node:path';
-import { MCP_ID, RESERVED_IDS, SECRET_NAME, TOKENISH, idFrom, secretLooking, type McpImportCandidate, type McpImportSource, type McpSecretSlot, type McpServerDef } from '../../shared/mcp-servers';
+import type { McpImportCandidate, McpImportSource, McpServerDef } from '../../shared/mcp-servers';
+import { entryToDraft } from '../../shared/mcp-paste';
 
 type Raw = Record<string, unknown>;
 const obj = (v: unknown): Raw => (v && typeof v === 'object' && !Array.isArray(v) ? v as Raw : {});
-const TOKEN_FLAG = /^--?[a-z-]*?(token|pat|api[-_]?key|apikey|secret|password|auth(orization)?|bearer)(=|$)/i;
 
 function read(file: string): string | null {
   try { const st = fs.statSync(file); if (!st.isFile() || st.size > 2 * 1024 * 1024) return null; return fs.readFileSync(file, 'utf8'); } catch { return null; }
 }
 
-/** One engine entry → a definition with no secret in it, and what was left out. */
+/** One engine entry → a definition with no secret in it, and what was left out (shared/mcp-paste.ts entryToDraft, the
+ *  same conversion as a paste in Settings, with no value kept). */
 export function convert(name: string, raw: Raw, source: McpImportSource): { def: McpServerDef; dropped: string[] } | null {
-  const dropped: string[] = [], secrets: McpSecretSlot[] = [];
-  let id = name.toLowerCase().replace(/[^a-z0-9-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
-  if (!MCP_ID.test(id) || RESERVED_IDS.includes(id)) id = idFrom(name);
-  if (RESERVED_IDS.includes(name)) return null;
-  const url = typeof raw.url === 'string' ? raw.url : typeof raw.serverUrl === 'string' ? raw.serverUrl : null;
-  const base = { id, label: name.slice(0, 80) || id, importedFrom: source, enabled: true };
-  if (url) {
-    const headers: Record<string, string> = {};
-    for (const [k, v] of Object.entries(obj(raw.headers ?? raw.http_headers))) {
-      if (typeof v !== 'string') continue;
-      if (SECRET_NAME.test(k) || k.toLowerCase() === 'authorization' || TOKENISH.test(v) || secretLooking(v) || v.includes('${')) {
-        const bearer = /^bearer\s/i.test(v);
-        secrets.push({ where: 'header', name: k, ...(bearer ? { prefix: 'Bearer ' } : {}) });
-        dropped.push(`intestazione ${k}`);
-      } else headers[k] = v;
-    }
-    if (typeof raw.bearer_token_env_var === 'string') { secrets.push({ where: 'header', name: 'Authorization', prefix: 'Bearer ' }); dropped.push(`token da ${raw.bearer_token_env_var}`); }
-    let clean = url;
-    try {
-      const u = new URL(url);
-      for (const k of [...u.searchParams.keys()]) if (SECRET_NAME.test(k)) { u.searchParams.delete(k); dropped.push(`parametro ${k}`); }
-      if (u.username || u.password) { u.username = ''; u.password = ''; dropped.push('credenziali nell’indirizzo'); }
-      clean = u.toString();
-    } catch { return null; }
-    return { def: { ...base, transport: 'http', url: clean, ...(Object.keys(headers).length ? { headers } : {}), secrets: dedupe(secrets) }, dropped };
-  }
-  if (typeof raw.command !== 'string' || !raw.command) return null;
-  const env: Record<string, string> = {};
-  for (const [k, v] of Object.entries(obj(raw.env))) {
-    if (typeof v !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(k)) continue;
-    if (SECRET_NAME.test(k) || TOKENISH.test(v) || secretLooking(v) || v.includes('${')) { secrets.push({ where: 'env', name: k }); dropped.push(`variabile ${k}`); }
-    else env[k] = v;
-  }
-  for (const k of Array.isArray(raw.env_vars) ? raw.env_vars : []) if (typeof k === 'string' && /^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(k)) { secrets.push({ where: 'env', name: k }); dropped.push(`variabile ${k}`); }
-  const args: string[] = [];
-  const list = Array.isArray(raw.args) ? raw.args.filter((a): a is string => typeof a === 'string') : [];
-  for (let i = 0; i < list.length; i++) {
-    const a = list[i]!;
-    if (TOKEN_FLAG.test(a)) { dropped.push(`argomento ${a.split('=')[0]}`); if (!a.includes('=')) i++; continue; }
-    if (secretLooking(a) || a.includes('${')) {
-      // the value of a separate flag (`--header "Authorization: Bearer …"`): the flag goes with it
-      const prev = args[args.length - 1];
-      if (!/^--?[\w-]+=/.test(a) && prev && /^--?[\w-]+$/.test(prev)) { args.pop(); dropped.push(`argomento ${prev} con il suo valore`); }
-      else dropped.push('un argomento che sembra un token');
-      continue;
-    }
-    args.push(a);
-  }
-  return { def: { ...base, transport: 'stdio', command: raw.command, args, ...(Object.keys(env).length ? { env } : {}), secrets: dedupe(secrets) }, dropped };
+  const d = entryToDraft(name, raw, { values: false });
+  return d ? { def: { ...d.def, importedFrom: source }, dropped: d.dropped } : null;
 }
-
-const dedupe = (s: McpSecretSlot[]): McpSecretSlot[] => s.filter((x, i) => s.findIndex(y => y.where === x.where && y.name === x.name) === i).slice(0, 4);
 
 /** The [mcp_servers.<name>] tables of a Codex config.toml: strings, arrays of strings and inline tables of strings. */
 export function codexServers(toml: string): Record<string, Raw> {

@@ -1048,22 +1048,25 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Una sola sezione: gli account dell’app (Azure DevOps, GitHub, Jira) e i server MCP come schede, ognuna con stato, uso, strumenti, ruoli e un solo «Prova».',
         'One section: the app’s accounts (Azure DevOps, GitHub, Jira) and the MCP servers as cards, each with state, use, tools, roles and one "Prova".'),
       // src/main/mcp-servers/store.ts
-      b('Un server è locale (un comando, es. npx) o remoto (un indirizzo https); il token si scrive una volta, viene cifrato sul computer e poi si vede solo mascherato.',
-        'A server is local (a command, e.g. npx) or remote (an https address); the token is typed once, encrypted on the computer and then shown only masked.'),
-      // src/main/mcp-servers/service.ts test()
-      b('«Prova» apre il server come farebbe una chat, elenca i suoi strumenti (lettura o scrittura) e, se non va, dice l’errore e come sistemarlo.',
-        '"Prova" opens the server as a chat would, lists its tools (read or write) and, when it fails, says the error and how to fix it.'),
+      b('Un server è locale (un comando, es. npx) o remoto (un indirizzo https); il token si scrive una volta, viene cifrato sul computer e poi si vede solo mascherato. Un token incollato nel JSON non finisce mai in un file: passa nel campo mascherato.',
+        'A server is local (a command, e.g. npx) or remote (an https address); the token is typed once, encrypted on the computer and then shown only masked. A token pasted in the JSON never lands in a file: it moves to the masked field.'),
+      // src/shared/mcp-paste.ts; src/renderer/components/McpAddPanel.tsx; src/main/mcp-servers/service.ts test()
+      b('«Aggiungi server MCP»: incolli il JSON del README (mcpServers), una riga di comando o un indirizzo e il modulo si compila da solo, oppure scegli un server tra i più usati. «Salva e prova» (e «Prova» su ogni scheda) apre il server come farebbe una chat, elenca i suoi strumenti e, se non va, dice l’errore e come sistemarlo.',
+        '"Aggiungi server MCP": paste the README’s JSON (mcpServers), a command line or an address and the form fills itself, or pick a popular server. "Salva e prova" (and "Prova" on each card) opens the server as a chat would, lists its tools and, when it fails, says the error and how to fix it.'),
       // src/main/mcp-servers/gateway.ts
       b('Le chat raggiungono i server solo attraverso l’app (127.0.0.1): il token resta nell’app, mai nei file di configurazione dei motori.',
         'Chats reach the servers only through the app (127.0.0.1): the token stays in the app, never in the engines’ config files.'),
-      // src/shared/mcp-servers.ts chainAllows; src/renderer/components/AgentMcpSection.tsx
-      b('Ogni agente può usare tutti i server; dal retro della sua scheda lo restringi per server: tutto, solo lettura, strumenti scelti o niente.',
-        'Every agent may use every server; from the back of its card you narrow it per server: everything, read only, chosen tools or nothing.'),
+      // src/shared/mcp-servers.ts chainAllows, effectiveAccess; src/renderer/components/McpAddPanel.tsx ServerRoles
+      b('Ogni scheda server ha i ruoli da accendere con un clic, Orchestrator e Flash compresi (Flash parte spento e usa solo strumenti di lettura); dal retro della scheda di un agente lo restringi per server: tutto, solo lettura, strumenti scelti o niente.',
+        'Each server card has role chips to turn on with one click, Orchestrator and Flash included (Flash starts off and gets reading tools only); from the back of an agent’s card you narrow it per server: everything, read only, chosen tools or nothing.'),
       b('Un lavoratore non ha mai più accesso della chat che l’ha avviato, e una modifica vale subito anche per le chat aperte.',
         'A worker never has more access than the chat that started it, and a change applies at once to open chats too.'),
       // src/main/mcp-servers/import.ts
       b('«Importa da Claude e Cursor» legge le loro configurazioni senza cambiarle e senza copiare i segreti: i token li reinserisci tu.',
         '"Importa da Claude e Cursor" reads their configs without changing them and without copying secrets: you type the tokens again.'),
+      // src/main/appctl/config.ts connector; src/main/mcp-servers/service.ts agentSave
+      b('All’Orchestrator basta chiedere: aggiunge, cambia, prova o toglie un server e lo dà a un ruolo, con «Annulla» nella sua scheda nel feed. I token non li vede mai: ti apre il modulo già compilato e il token lo scrivi tu.',
+        'Just ask the Orchestrator: it adds, changes, tests or removes a server and gives it to a role, with "Annulla" on its feed card. It never sees tokens: it opens the form prefilled and you type the token.'),
     ],
     analogy: b('Come un portiere d’albergo che tiene le chiavi: gli ospiti chiedono a lui di aprire, e lui apre solo le stanze del loro piano.',
       'Like a hotel concierge who keeps the keys: guests ask him to open a door, and he opens only the rooms on their floor.'),
@@ -1075,6 +1078,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         '/mcp/ext/<chat>/<server>/<token>; Claude via --mcp-config, Cursor in ACP session/new, Codex via -c mcp_servers.<id>.url.'),
       tech(DATA, 'Accesso per ruolo e server: all, read, none o un elenco di strumenti; assente = all. «Lettura» = annotations.readOnlyHint.',
         'Access per role and server: all, read, none or a list of tools; absent = all. "Read" = annotations.readOnlyHint.'),
+      tech(DATA, 'Flash = il ruolo «flash» (chat veloci): assente = none, all = read (ADR 0207).', 'Flash = the "flash" role (quick chats): absent = none, all = read (ADR 0207).'),
     ],
     target: [
       b('I server che chiedono un accesso OAuth nel browser e quelli solo SSE (vecchio trasporto) non sono ancora supportati.',
@@ -1083,12 +1087,13 @@ export const CONCEPTS: readonly ConceptCard[] = [
     anchors: {
       0: ['src/renderer/components/ConnectorsHub.tsx', 'src/modules/onboarding/AppScreen.tsx'],
       1: ['src/main/mcp-servers/store.ts'],
-      2: ['src/main/mcp-servers/service.ts#test'],
+      2: ['src/main/mcp-servers/service.ts#test', 'src/shared/mcp-paste.ts#parseMcpSnippet', 'src/renderer/components/McpAddPanel.tsx'],
       3: ['src/main/mcp-servers/gateway.ts'],
-      4: ['src/shared/mcp-servers.ts#chainAllows', 'src/renderer/components/AgentMcpSection.tsx'],
+      4: ['src/shared/mcp-servers.ts#chainAllows', 'src/shared/mcp-servers.ts#effectiveAccess', 'src/renderer/components/AgentMcpSection.tsx'],
       6: ['src/main/mcp-servers/import.ts'],
+      7: ['src/main/appctl/config.ts', 'src/main/mcp-servers/service.ts#agentSave'],
     },
-    sources: ['src/main/mcp-servers/store.ts', 'src/main/mcp-servers/gateway.ts', 'src/main/mcp-servers/service.ts', 'src/main/mcp-servers/import.ts', 'src/shared/mcp-servers.ts',
+    sources: ['src/main/mcp-servers/store.ts', 'src/shared/mcp-paste.ts', 'src/renderer/components/McpAddPanel.tsx', 'src/main/mcp-servers/gateway.ts', 'src/main/mcp-servers/service.ts', 'src/main/mcp-servers/import.ts', 'src/shared/mcp-servers.ts',
       'src/renderer/components/ConnectorsHub.tsx', 'src/renderer/components/AgentMcpSection.tsx', 'docs/adr/0086-app-managed-mcp-servers.md'],
   },
   {
@@ -1605,23 +1610,23 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Sa anche cosa c’è sullo schermo adesso e dove sta ogni controllo, senza leggere il contenuto privato delle chat.',
         'It also knows what is on screen right now and where each control sits, without reading the chats’ private content.'),
       // src/main/appctl/config.ts app_config
-      b('Cambia per te ogni configurazione: impostazioni, vista (tema, densità), la carta di un ruolo, un connettore acceso o spento, «Rispondi dopo». Anche le impostazioni protette cambiano subito.',
-        'It changes every configuration for you: settings, the view (theme, density), a role’s card, a connector on or off, "Answer later". Protected settings change at once too.'),
+      b('Cambia per te ogni configurazione: impostazioni, vista (tema, densità), la carta di un ruolo, i connettori (aggiungere, cambiare, provare, togliere, darli a un ruolo), il tuo profilo, «Rispondi dopo». Anche le impostazioni protette cambiano subito.',
+        'It changes every configuration for you: settings, the view (theme, density), a role’s card, connectors (add, change, test, remove, give to a role), your profile, "Answer later". Protected settings change at once too.'),
       // src/main/appctl/user-words.ts
       b('Cambia qualcosa solo se gliel’hai scritto tu, di recente, in un messaggio che è l’ultimo della sua chat: le notizie dell’app o la posta di un agente non bastano.',
         'It changes something only if you typed the ask yourself, recently, in a message that is the latest of its chat: the app’s news or an agent’s mail are not enough.'),
       // src/main/appctl/config.ts: logged as the agent’s change
-      b('Ogni impostazione cambiata finisce nel registro dei cambi con il suo «Annulla»; la carta di un ruolo torna alla versione di prima; vista e connettori si rimettono chiedendoglielo di nuovo.',
-        'Every setting change goes to the change log with its "Undo"; a role’s card can go back to its previous version; the view and connectors are set back by asking again.'),
+      b('Ogni impostazione cambiata finisce nel registro dei cambi con il suo «Annulla» (e la pagina Impostazioni mostra «Modificato dall’Orchestrator»); la carta di un ruolo torna alla versione di prima; un connettore cambiato ha «Annulla» nel feed; vista e profilo si rimettono chiedendoglielo di nuovo.',
+        'Every setting change goes to the change log with its "Undo" (and the Settings page shows "Modificato dall’Orchestrator"); a role’s card can go back to its previous version; a changed connector has "Annulla" in the feed; the view and profile are set back by asking again.'),
       // src/main/appctl/config.ts: secrets, own tools
-      b('Non tocca mai segreti, chiavi o password, né i suoi stessi strumenti e permessi: quelli restano un tuo clic.',
-        'It never touches secrets, keys or passwords, nor its own tools and permissions: those stay your click.'),
+      b('Non tocca mai segreti, chiavi o password, né i suoi stessi strumenti e permessi: quelli restano un tuo clic. Per un connettore con token ti apre il modulo già compilato.',
+        'It never touches secrets, keys or passwords, nor its own tools and permissions: those stay your click. For a connector with a token it opens the form prefilled for you.'),
     ],
     analogy: b('Come un assistente che conosce l’ufficio a memoria: gli dici «abbassa il riscaldamento» e lo fa, lasciando un biglietto per rimetterlo com’era.',
       'Like an assistant who knows the office by heart: you say "turn the heating down" and they do it, leaving a note so you can put it back.'),
     tech: [
-      tech(TOOLS, 'app_guide (la mappa, su richiesta), app_ui «outline» (lo schermo), app_config (setting, view, agent, connector, later).',
-        'app_guide (the map, on demand), app_ui "outline" (the screen), app_config (setting, view, agent, connector, later).'),
+      tech(TOOLS, 'app_guide (la mappa, su richiesta), app_ui «outline» (lo schermo), app_config (setting, view, agent, connector, profile, later).',
+        'app_guide (the map, on demand), app_ui "outline" (the screen), app_config (setting, view, agent, connector, profile, later).'),
       tech(LIMITS, 'app_config solo sull’endpoint dell’Orchestrator (app_guide e app_ui anche altrove, senza i valori delle impostazioni); nessun costo di token negli altri turni: la mappa si legge solo quando serve.',
         'app_config only on the Orchestrator’s endpoint (app_guide and app_ui elsewhere too, without the settings’ values); no token cost in its other turns: the map is read only when needed.'),
     ],
@@ -1857,11 +1862,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'One page for the few choices that matter: profile, updates, connectors, accounts, roles, your workspace, voice, appearance, notifications and advanced.'),
     points: [
       // src/renderer/lib/settings-sections.ts settingsSections; src/renderer/components/SettingsPage.tsx
-      b('Si apre con Ctrl+, dal menu in alto o con G P; ogni sezione è una scheda con icona, titolo, una riga che dice a cosa serve e le righe di scelta.',
-        'It opens with Ctrl+, from the top menu or with G P; each section is a card with an icon, a title, one line on what it is for and the rows of choices.'),
+      b('Si apre con Ctrl+, dal menu in alto o con G P. A sinistra le sezioni in gruppi (Tu, Lavoro, Strumenti, App); a destra ogni riga ha il nome e una riga di spiegazione, il comando a destra; uno scudo segna le scelte protette. Ogni cambio si salva subito e «Salvato» offre «Annulla».',
+        'It opens with Ctrl+, from the top menu or with G P. On the left the sections in groups (You, Work, Tools, App); on the right each row has its name and one line of explanation, the control on the right; a shield marks protected choices. Every change saves at once and "Salvato" offers "Annulla".'),
       // src/renderer/lib/settings-page.ts matchesSettingsSearch
-      b('La ricerca in cima filtra le sezioni per titolo, descrizione e parole chiave; la fila di link porta dritto a una sezione, e un link «impostazioni/<sezione>» apre la pagina lì.',
-        'The search on top filters the sections by title, description and keywords; the row of links jumps to a section, and an "impostazioni/<section>" link opens the page there.'),
+      b('La ricerca in cima filtra sezioni e singole righe ed evidenzia le parole trovate; la barra a sinistra porta dritto a una sezione, Ctrl+K ha «Impostazioni › <sezione>» e un link «impostazioni/<sezione>» apre la pagina lì.',
+        'The search on top filters sections and single rows and highlights the words found; the left bar jumps to a section, Ctrl+K has "Impostazioni › <section>" and an "impostazioni/<section>" link opens the page there.'),
       // src/renderer/components/ProfileSettings.tsx; src/renderer/components/SettingsPage.tsx
       b('Il mio profilo è come gli agenti ti conoscono (nome, ruolo, lavoro principale, modo di rispondere, in me.md); Account e strumenti mostra l’accesso di ogni motore e quanto può fare da solo.',
         'My profile is how the agents know you (name, role, main work, reply style, in me.md); Accounts and tools shows each engine’s sign-in and how much it may do on its own.'),
@@ -1884,7 +1889,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
     anchors: {
       [-1]: ['src/renderer/lib/settings-sections.ts#SETTINGS_SECTION_IDS'],
       0: ['src/renderer/lib/settings-sections.ts#settingsSections'],
-      1: ['src/renderer/lib/settings-page.ts#matchesSettingsSearch'],
+      1: ['src/renderer/lib/settings-page.ts#matchesSettingsSearch', 'src/renderer/lib/settings-page.ts#hitRanges'],
       4: ['src/shared/guide-coverage.ts#SETTINGS_CARDS'],
       5: ['src/main/appctl/config.ts#app_config'],
     },
