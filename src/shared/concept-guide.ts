@@ -1518,9 +1518,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/chats/manager.ts flashFollow (ADR 0107)
       b('Ha un modello suo, separato da quello dell’Orchestrator: lo scegli dal chip del modello nella sua testata o sulla sua carta, e vale dalla domanda dopo.',
         'It has a model of its own, separate from the Orchestrator’s: pick it from the model chip in its header or on its card, and it applies from the next question.'),
-      // src/renderer/i18n/areas/lampo.it.ts lampo.toWork
-      b('Quando la risposta diventa un lavoro vero, «Fanne un lavoro» prepara il messaggio per l’Orchestrator con la tua domanda e la risposta di Flash.',
-        'When the answer turns into real work, "Make it a job" drafts the message for the Orchestrator with your question and Flash’s answer.'),
+      // src/renderer/lib/lampo.ts BRIEF_ASK, src/renderer/lib/flash-brief.ts (ADR 0209)
+      b('Quando la risposta diventa un lavoro vero, «Fanne un lavoro» chiede a Flash di scrivere il prompt per l’Orchestrator da tutta la conversazione (obiettivo, contesto, cosa fare, vincoli, quando è fatto) e lo mette nel suo campo, senza inviarlo. Se Flash non riesce, usa la tua ultima domanda e la sua risposta.',
+        'When the answer turns into real work, "Make it a job" asks Flash to write the Orchestrator’s prompt from the whole conversation (goal, context, what to do, constraints, done when) and puts it in its input, unsent. If Flash cannot, it uses your last question and its answer.'),
       // src/renderer/components/LampoTile.tsx: the eraser in the head
       b('La gomma nella testata pulisce Flash in un clic: la conversazione ricomincia da zero, sulla sua carta.',
         'The eraser in its header clears Flash in one click: the conversation starts over, on its card.'),
