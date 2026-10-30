@@ -47,11 +47,10 @@ test('agent cards: big centred character, level and performance with their "?" f
     await expect(artisan.locator('.catalog-chip[data-kind="model"]')).toContainText('Modello:');
     const big = await artisan.locator('.catalog-hero .agent-avatar').boundingBox();
     expect(big!.width).toBeGreaterThanOrEqual(96);
-    // a new role: still warming up
+    // a new role: still warming up; the Battito's card is gone (ADR 0201)
     await expect(overview.getByTestId('catalog-perf-herald')).toContainText('In rodaggio');
     await expect(overview.getByTestId('catalog-perf-herald')).toHaveAttribute('data-band', 'warmup');
-    // Pulse is background work: no level (ADR 0186), its card stays
-    await expect(overview.getByTestId('catalog-level-pulse')).toHaveCount(0);
+    await expect(overview.getByTestId('catalog-card-pulse')).toHaveCount(0);
 
     // the "?" give the formulas, with the agent's own numbers
     await artisan.getByTestId('catalog-level-help-artisan').click();
@@ -75,7 +74,7 @@ test('agent cards: big centred character, level and performance with their "?" f
     await page.keyboard.press('Escape');
     await expect(pf).toBeHidden();
 
-    await overview.getByTestId('catalog-card-pulse').scrollIntoViewIfNeeded();
+    await overview.getByTestId('catalog-card-flash').scrollIntoViewIfNeeded();
     await page.mouse.move(2, 2);
     await page.waitForTimeout(300);
     await shot(page, 'agent-cards-new-dark');
@@ -130,8 +129,8 @@ test('agent cards: big centred character, level and performance with their "?" f
     await page.getByTestId('agent-overview').evaluate(el => { for (let e: Element | null = el; e; e = e.parentElement) e.scrollTop = 0; });
     await page.waitForTimeout(400);
     await shot(page, 'agent-cards-light');
-    // the new roles further down: warming up, and no runs at all
-    await page.getByTestId('catalog-card-pulse').scrollIntoViewIfNeeded();
+    // the new roles further down: warming up
+    await page.getByTestId('catalog-card-flash').scrollIntoViewIfNeeded();
     await page.waitForTimeout(300);
     await shot(page, 'agent-cards-new-light');
     await page.getByTestId('catalog-perf-help-scout').click();

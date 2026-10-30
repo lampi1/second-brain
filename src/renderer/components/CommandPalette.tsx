@@ -33,7 +33,6 @@ import {
   IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
 import { Keys, Modal } from './ui';
-import { ContextPulse } from './ContextPulse';
 
 interface Cmd {
   id: string; group: string; title: string; sub?: string; shortcut?: string; icon: ReactNode; run: () => void; text?: string;
@@ -45,7 +44,7 @@ const PAGE_ICON: Record<BrainPageId, ReactNode> = {
   home: <IconBrain />, flussi: <IconBranch />,
   agenti: <IconLayers />,
   idee: <IconLightbulb />,
-  andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, confronto: <IconLayers />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
+  andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
   guida: <IconQuestion />, browser: <IconGlobe />, registrazioni: <IconMic />, impara: <IconLearn />,
   regole: <IconShield />, memoria: <IconHistory />, collegamenti: <IconMap />,
 };
@@ -313,7 +312,6 @@ export function CommandPalette() {
           );
         })}
       </div>
-      {!found.busy && (!q.trim() || list.length === 0) && <ContextPulse place="search" />}
       <div className="palette-foot"><span><Keys combo="↑ ↓" />{' '}{auditText('audit.CommandPalette.select')}</span><span><Keys combo="Invio" />{' '}{auditText('audit.CommandPalette.open')}</span><span><Keys combo="Esc" />{' '}{auditText('audit.CommandPalette.close')}</span>
         {found.busy && list.length > 0 && <span className="palette-busy" data-testid="palette-busy">{auditText('audit.CommandPalette.searchingMessagesAndTheBrain')}</span>}
         <ModelNote model={model} /></div>

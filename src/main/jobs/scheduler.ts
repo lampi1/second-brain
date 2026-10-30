@@ -1,4 +1,5 @@
-// Serial, visibility-gated agent jobs for Battito and maintenance (ADR 0070).
+// Serial, visibility-gated agent jobs (ADR 0070): slots or intervals, a durable claim before each run. Its first user,
+// the Battito, was removed (ADR 0201); localDay is used by the morning block and the journal.
 // The owner supplies a durable ledger; claiming before running prevents restart catch-up bursts.
 import { timersFor } from '../timers';
 const { setTimeout, clearTimeout } = timersFor('jobs/scheduler');

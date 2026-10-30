@@ -1,14 +1,14 @@
 // The Proposte deck's data (ADR 0123): every item the app puts in front of the user to decide, gathered by main
 // (src/main/proposals/) from the sources that already own a decision (memory facts to confirm, skill candidates, the
 // brain changes the maintenance applied by itself, agents' protected settings, role trials and tier suggestions, the
-// Battito's learned rules, the improvement loop's policies) and shown one card at a time by the renderer
+// improvement loop's policies) and shown one card at a time by the renderer
 // (components/brain-model/ProposalsDeck.tsx). Data only: main rechecks every decision and runs it through the source's
 // own path. Also why a card is still asked, the cards applied by themselves and each group's policy (ADR 0193). Used by
 // the contract (proposals:*), main/proposals, main/brainmodel/research-pack.ts and renderer/lib/proposals.ts.
 import type { ResearchKind, ResearchSource } from './maintenance-research';
 
 /** Where an item comes from: each source keeps its own decide path (main/proposals/sources.ts). */
-export const PROPOSAL_SOURCES = ['memory', 'candidate', 'change', 'setting', 'trial', 'tier', 'pulse', 'policy', 'research'] as const;
+export const PROPOSAL_SOURCES = ['memory', 'candidate', 'change', 'setting', 'trial', 'tier', 'policy', 'research'] as const;
 export type ProposalSource = (typeof PROPOSAL_SOURCES)[number];
 /** The filter chips on top of the deck, in this order. */
 /** issue: a GitHub issue the maintenance wrote about the app's code, opened at once when approved (ADR 0153) */
@@ -52,8 +52,6 @@ export type ProposalAsk =
   | { kind: 'trial'; role: string; version: number; baseline: number; advice?: 'keep' | 'revert' | 'tier' }
   /** the app suggests another level (and maybe skills) for one or more roles */
   | { kind: 'tier'; roles: string[]; before?: string; tier?: string; skills: string[] }
-  /** a rule the Battito learned for an agent */
-  | { kind: 'rule'; role: string }
   /** a new version of how the app decides something by itself (routing, notifications…) */
   | { kind: 'policy'; domain: string; name: string; from?: number; to?: number; cases?: number }
   /** a finding of the maintenance (ADR 0132): the card shows what it adds and removes, why, the evidence and the sources

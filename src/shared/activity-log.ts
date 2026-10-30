@@ -1,10 +1,11 @@
 // The app's readable log (the Log page; owner, 2026-10-21: «Log leggibili e carini … in tempo reale», «deve essere TUTTO
 // visibile», «che non ingigantiscano troppo … che si pulisca anche in automatico»). One event per thing the app saw: a
 // task's chain (who chose which role and why, the role's work with cost, tools and errors, the result, the verification),
-// the classifiers' choices, the estimates, the errors and memory written to the brain, Battito's runs, the app's own
+// the classifiers' choices, the estimates, the errors and memory written to the brain, the app's own
 // warnings. Events are the app's own data: reading them never spends AI tokens. Written by main/activity/journal.ts,
 // read by renderer/components/LogPage.tsx through log:list and log:events. Shapes and limits only.
 
+/** 'pulse' = a Battito run (removed, ADR 0201): kept so the events it left still read until they age out */
 export type LogKind = 'task' | 'classifier' | 'estimate' | 'error' | 'memory' | 'pulse' | 'brain' | 'app';
 export type LogLevel = 'info' | 'ok' | 'warn' | 'error';
 /** A task event's place in the chain: opened (who chose the role and why), a work turn, a request to the user and its

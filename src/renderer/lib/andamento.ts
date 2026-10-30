@@ -13,6 +13,8 @@ export const DEFAULT_TREND_TAB: TrendTab = 'costi';
 export const TREND_PAGES: Readonly<Record<string, TrendTab>> = {
   costi: 'costi', costs: 'costi', cost: 'costi', spesa: 'costi',
   qualita: 'qualita', quality: 'qualita', errori: 'qualita',
+  // Confronto modelli went (ADR 0201): its old links open the agents' quality
+  confronto: 'qualita',
   apprendimento: 'apprendimento', learning: 'apprendimento',
   classificatori: 'classificatori', classifiers: 'classificatori',
   uso: 'uso', usage: 'uso', 'uso-app': 'uso',

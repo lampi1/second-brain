@@ -30,8 +30,6 @@ import { BrainShareSetting } from './BrainShareSetting';
 import { ConnectorsHub, McpAdvanced } from './ConnectorsHub';
 import { CodexAutonomy } from './CodexAutonomy';
 import { AppUpdateSettings } from './AppUpdateSettings';
-import { CloudKeySetting } from './CloudKeySetting';
-import { PulseSettings } from './PulseSettings';
 import { TaskReadSettings } from './TaskReadSettings';
 import { SuggestSettings } from './SuggestSettings';
 import { AwaySettings } from './AwayToggle';
@@ -92,7 +90,6 @@ function ToolConnection({engine}:{engine:EngineInfo}){
    {engine.key!=='none'&&<div className="st-key"><label>{t('essential.key')}<input className="st-input" type="password" autoComplete="off" spellCheck={false} value={key} disabled={!keys?.available||busy} onChange={event=>setKey(event.target.value)}/></label><button type="button" className="btn btn-primary btn-m" disabled={!keys?.available||busy||!key.trim()} onClick={()=>{const value=key.trim();setKey('');void run(async()=>{setKeys(await window.sb.invoke('secrets:set',{engine:engine.id,key:value}));});}}>{t('common.save')}</button>{keys?.keys[engine.id]&&<><small className="st-desc">{t('essential.keySaved')}</small><button type="button" className="btn btn-danger btn-m" disabled={busy} onClick={()=>void run(async()=>{setKeys(await window.sb.invoke('secrets:delete',{engine:engine.id}));})}>{t('essential.deleteKey')}</button></>}{keys&&!keys.available&&<p role="status" className="st-desc">{t('essential.keyUnavailable')}</p>}</div>}
   </div>}
   {engine.id==='codex'&&<CodexAutonomy roots={roots}/>}
-  {engine.id==='cursor'&&open&&<CloudKeySetting/>}
  </article>;
 }
 
@@ -165,7 +162,7 @@ export function SettingsPage() {
         <Segmented label={t('essential.toasts')} testid="st-toasts-select" value={settings.osToasts} onChange={osToasts => void setSetting({ osToasts })}
           options={(['urgent', 'normal', 'off'] as const).map(value => ({ value: choose(value), label: t(value === 'off' ? 'essential.none' : `essential.${value}`) }))} />
       </Row>
-      <PulseSettings /><TaskReadSettings />
+      <TaskReadSettings />
     </> },
     { ...meta.advanced, icon: <IconSettings size={16} />, body: <McpAdvanced /> },
   ];

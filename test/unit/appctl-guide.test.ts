@@ -103,7 +103,7 @@ it('knows the review switch (a nightly sample under a daily cap, never a review 
   const reviews = String(await tool.run({ topic: 'revisioni automatiche' }));
   expect(reviews).toContain('judgingCapUsd'); expect(reviews).toContain('03:00'); expect(reviews).toContain('hidden'); expect(reviews).toContain('judging'); expect(reviews).not.toContain('Revisioni indipendenti al giorno');
   const levels = String(await tool.run({ topic: 'livelli lavori conclusi' }));
-  expect(levels).toMatch(/Orchestrator.*root jobs/); expect(levels).toContain('Pulse');
+  expect(levels).toMatch(/Orchestrator.*root jobs/); expect(levels).not.toContain('Pulse');
   expect(schema().some(x => String(x.key) === 'delegation.judgeDaily')).toBe(false);
 });
 

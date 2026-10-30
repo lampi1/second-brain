@@ -25,7 +25,7 @@ const ICON: Record<BrainPageId, ReactNode> = {
   home: <IconGrid />, flussi: <IconBranch />,
   agenti: <IconLayers />,
   idee: <IconLightbulb />,
-  andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, confronto: <IconLayers />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
+  andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
   guida: <IconQuestion />, browser: <IconGlobe />, registrazioni: <IconMic />, impara: <IconLearn />,
   regole: <IconShield />, memoria: <IconHistory />, collegamenti: <IconMap />,
 };

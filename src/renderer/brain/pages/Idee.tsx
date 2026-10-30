@@ -6,7 +6,7 @@
 // AI's reflections on itself (ai-reflections.md) as cards with the same buttons. Data: /api/tables.
 // In the Memoria hub (`embedded`, ADR 0122) the head is a clear split «Le tue» / «Dell'IA» (who wrote it is the table's
 // `Chi` column: "IA" is the AI, anything else is the user) and «Rispolvera» brings back an old open idea at random
-// (MemoryPage.tsx adds the Battito's board and the ideas' themes around it).
+// (MemoryPage.tsx adds the ideas' themes below it).
 import { useState, type ReactNode } from 'react';
 import { normTables, type Idea, type Reflection } from '../types';
 import { useBrain } from '../api';
@@ -28,7 +28,7 @@ export const who = (i: Pick<Idea, 'chi'>): string => (i.chi === 'IA' ? tr('brain
 
 export type IdeeFilter = 'tutte' | 'mie' | 'ia';
 /** The page arg → the filter ("riflessioni", from old Spunti links, is the AI's). */
-export const filterOf = (arg?: string): IdeeFilter => (arg === 'mie' ? 'mie' : arg === 'ia' || arg === 'riflessioni' ? 'ia' : 'tutte');
+const filterOf = (arg?: string): IdeeFilter => (arg === 'mie' ? 'mie' : arg === 'ia' || arg === 'riflessioni' ? 'ia' : 'tutte');
 
 /** Whom an AI idea is for: the brain (default), the AI itself, or the owner (any other value: the owner's name). */
 export const perOf = (i: Pick<Idea, 'per'>): string => { const p = i.per.trim().toLowerCase(); return !p || p === 'second-brain' ? tr('brainPages.idee.perBrain') : p === 'ia' ? tr('brainPages.idee.perAI') : tr('brainPages.idee.perYou'); };

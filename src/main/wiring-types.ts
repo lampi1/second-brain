@@ -16,7 +16,6 @@ import type { EnginesApi } from './engines/service';
 import type { PersonalBrowser } from './personal/browser';
 import type { RecordingStore } from './recordings/store';
 import type { LearnService } from './learn/service';
-import type { CloudService } from './cloud/service';
 import type { Emitter } from './ipc';
 import type { BrainService, BrowserService, ChatService, SkillsApi, TasksApi } from './services';
 import type { BrainModelService } from './brainmodel/service';
@@ -41,8 +40,6 @@ import type { GuideService } from './guide/service';
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {
-  /** cloud agents (ADR 0080): Cursor, Codex and Claude agents that run in their vendor's cloud */
-  cloud?: CloudService;
   /** the verdicts on role runs (a parent's, a sampled Sentinel review's) and the user's Annulla on a change the app applied */
   runFeedback?: RunFeedback;
   /** the agents' "Da approvare" queue: read at /api/agents/lifecycle, decided only through agents:lifecycleDecide */

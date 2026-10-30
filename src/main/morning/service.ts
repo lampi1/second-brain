@@ -2,12 +2,11 @@
 // the block opened and the day it was dismissed), answers the one 'morning:brief' channel (presence / get / dismiss)
 // and gathers the brief's inputs from what the app already holds, with zero tokens: the chats and their run store, the
 // open requests, the "Da approvare" queue, the Task page's last read, the brain's ideas and cost report (its own data
-// server, brain.api), the cloud agents, the maintenance change log. The brain's two reads are cached (ideas 5 min,
+// server, brain.api), the maintenance change log. The brain's two reads are cached (ideas 5 min,
 // yesterday's spend for the day). Off in the test suites unless SB_MORNING=1 (the block would cover their pages).
 // Built by wiring.ts and demo-wiring.ts; IPC in index.ts; pure parts in morning/brief.ts.
 import type { AgentRun } from '../../shared/agents';
 import type { BrainChange } from '../../shared/brain-model';
-import type { CloudAgent } from '../../shared/cloud';
 import type { BrainApiResult, ChatSummary, TasksState } from '../../shared/contract';
 import type { MorningOp, MorningState } from '../../shared/morning';
 import { readLocal, writeLocal } from '../agents/local-store';
@@ -22,10 +21,9 @@ export interface MorningDeps {
   runs(): AgentRun[];
   /** open questions, permissions and commands left for the user */
   pending(): number;
-  /** entries waiting in "Da approvare" (trials, tier suggestions, the Battito's proposals) */
+  /** entries waiting in "Da approvare" (trials, tier suggestions) */
   approvals(): number;
   tasks(): TasksState | null;
-  cloud(): CloudAgent[];
   changes(): BrainChange[];
   api(path: string): Promise<BrainApiResult>;
   stallMin(): number;
@@ -41,8 +39,6 @@ export class MorningService {
   private ideas: { at: number; rows: { titolo?: string; stato?: string; scaduta?: string }[] } | null = null;
   private spend: { day: string; usd: number | null } | null = null;
   private savedAt = 0;
-  /** further approvals counted in (the Battito's proposals: index.ts, where the Battito is built) */
-  extraApprovals: () => number = () => 0;
   constructor(private readonly d: MorningDeps) {
     let st = emptyPresence();
     try {
@@ -85,8 +81,8 @@ export class MorningService {
     const safe = <T,>(fn: () => T, fallback: T): T => { try { return fn(); } catch { return fallback; } };
     return buildBrief({
       now, since, chats: safe(() => this.d.chats(), []), runs: safe(() => this.d.runs(), []),
-      pending: safe(() => this.d.pending(), 0), approvals: safe(() => this.d.approvals(), 0) + safe(() => this.extraApprovals(), 0),
-      tasks: safe(() => this.d.tasks(), null), ideas, today: romeDay(now), cloud: safe(() => this.d.cloud(), []), changes: safe(() => this.d.changes(), []),
+      pending: safe(() => this.d.pending(), 0), approvals: safe(() => this.d.approvals(), 0),
+      tasks: safe(() => this.d.tasks(), null), ideas, today: romeDay(now), changes: safe(() => this.d.changes(), []),
       spendYesterdayUsd: spend, stallMin: safe(() => this.d.stallMin(), 10), ...(this.d.lastEventAt ? { lastEventAt: (id: string) => this.d.lastEventAt?.(id) } : {}),
     });
   }

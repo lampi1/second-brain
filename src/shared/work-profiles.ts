@@ -8,7 +8,7 @@ export const WORK_PROFILES: readonly WorkProfile[] = [
   { id: 'dev', title: 'Dev', pageIds: ['agenti', 'task', 'skill'], homePageId: 'agenti' },
   { id: 'qa', title: 'QA', pageIds: ['andamento', 'agenti', 'task', 'skill'], homePageId: 'andamento' },
   { id: 'po', title: 'PO', pageIds: ['idee', 'agenti', 'task'], homePageId: 'idee' },
-  { id: 'cto', title: 'CTO', pageIds: ['andamento', 'agenti', 'confronto', 'task'], homePageId: 'andamento' },
+  { id: 'cto', title: 'CTO', pageIds: ['andamento', 'agenti', 'task'], homePageId: 'andamento' },
 ];
 
 /** The saved profile with only the pages this build has; null = none chosen, an unknown id, or a profile whose

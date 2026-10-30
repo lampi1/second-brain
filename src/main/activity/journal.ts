@@ -3,7 +3,7 @@
 // small batches (log:events) so the page follows in real time. It cleans itself: days older than LOG_KEEP_DAYS and,
 // past LOG_MAX_BYTES, the oldest days are deleted at start and every hour; each text field is cut to LOG_FIELD_MAX.
 // Secrets are redacted like the technical logs (log.ts redact). Zero tokens: nothing here calls a model.
-// One instance, `journal`, imported by the modules that record (activity/wiring.ts, mail.ts, pulse/service.ts, …);
+// One instance, `journal`, imported by the modules that record (activity/wiring.ts, mail.ts, …);
 // tests: test/unit/activity/journal.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';

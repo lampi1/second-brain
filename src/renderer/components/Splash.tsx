@@ -5,7 +5,7 @@
 // Mounted by main.tsx, with native browser views held underneath. Sound follows the existing sound/DND controls,
 // stays off while voice is active, and never retries blocked autoplay. Hidden runs are additionally muted by main.
 import { useEffect, useRef, useState } from 'react';
-import { dayLine, headlineLine, type SplashMode } from '../lib/splash';
+import { dayLine, type SplashMode } from '../lib/splash';
 import { splashEase, SPLASH_TIMING, startSplashTimeline } from '../lib/splash-timeline';
 import { playSplashSound, splashCanSound } from '../lib/splash-sound';
 import { suspendViews } from '../lib/viewports';
@@ -18,7 +18,6 @@ import '../styles/splash.css';
 
 export { SPLASH_MS } from '../lib/splash-timeline';
 export const SPLASH_WORD = 'second-brain';
-const LINE_WAIT_MS = 900;
 const NODES = [[-56, -46, 17], [58, -50, 15], [-50, 52, 15], [54, 54, 17]] as const;
 // Deterministic positions: a reload/resize never generates a new, distracting burst.
 const SPARKS = Array.from({ length: 32 }, (_, i) => ({
@@ -29,24 +28,12 @@ const SPARKS = Array.from({ length: 32 }, (_, i) => ({
 export function Splash({ mode, onDone }: { mode: SplashMode; onDone: () => void }) {
   const [reduce, setReduce] = useState(() => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches);
   const ownLine = () => t(`splash.line.${dayLine(now())}` as Key) as string;
-  const [line, setLine] = useState(ownLine);
+  const [line] = useState(ownLine);
   const root = useRef<HTMLDivElement>(null);
   const skip = useRef<() => void>(() => {});
   const complete = useRef(onDone);
   useEffect(() => { complete.current = onDone; }, [onDone]);
 
-  // A real line exists on the first render; accept a recent headline only before the sentence reveal starts.
-  useEffect(() => {
-    let alive = true;
-    const timer = setTimeout(() => { alive = false; }, LINE_WAIT_MS);
-    try {
-      void window.sb.invoke('headline:get', undefined).then(h => {
-        const headline = headlineLine(h, now());
-        if (alive && headline) setLine(headline);
-      }, () => {});
-    } catch { /* no bridge: the local sentence is already ready */ }
-    return () => { alive = false; clearTimeout(timer); };
-  }, []);
   useEffect(() => suspendViews(), []);
   useEffect(() => {
     if (typeof matchMedia !== 'function') return;

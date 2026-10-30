@@ -9,7 +9,7 @@
 import { timersFor } from './timers';
 const { setInterval, clearInterval } = timersFor('demo');
 import type {
-  AppQuality, Answer, BrainApiResult, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareExperiment, CompareState, LearnResult, EventMap,
+  AppQuality, Answer, BrainApiResult, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, LearnResult, EventMap,
   FeedEvent, FileDiff, HandoffInfo, ImageAttachment, ModelsSeen, RoutingInfo, RoutingRow, NewChat, PendingRequest, Priority, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncState, Usage,
 } from '../shared/contract';
 import type { AgentChildren, ChildObservation } from '../shared/agents';
@@ -887,7 +887,7 @@ async function flashReply(run: Run, d: DemoChats): Promise<void> {
 
 async function orchestratorReply(run: Run, text: string, d: DemoChats): Promise<void> {
   await run.sleep(400);
-  // "Strategist" ticked, or an older "Veloce" (ADR 0034, 2026-10-20): she opens a work chat for the request, like app_create_chat
+  // "Strategist" ticked, or an older "Nuova chat" (ADR 0034, 2026-10-20): she opens a work chat for the request, like app_create_chat
   // (a Strategist one for "Strategist"), and says so in a line
   const nc = splitMode(text);
   if (nc.mode) {
@@ -1000,26 +1000,6 @@ export class DemoBrain implements BrainService {
     return c.ok && this.localApi.has(new URL(c.path, 'http://localhost').pathname) ? this.ownApi.get(c.path) : { ok: false, error: 'demo: nessun server del brain' };
   }
   serveApi(p: string, fn: (query: URLSearchParams) => unknown): void { this.localApi.set(p, fn); }
-  // one experiment like the real brain's, switched in memory
-  private compare: CompareExperiment[] = [{
-    name: 'cursor-vs-claude', title: 'Review roles: Cursor vs Claude Code',
-    description: 'Every run of the listed roles on Cursor is captured; Claude repeats the same task inside the app, read-only; a judge rates both blind.',
-    on: true, changedAt: '2026-10-10 08:09:21',
-    a: { engine: 'cursor', label: 'Cursor', agents: ['sentinel', 'scout', 'artisan'] },
-    b: { engine: 'claude', label: 'Claude', model: 'opus', effort: 'medium' },
-    judge: { engine: 'claude', label: 'Claude', model: 'sonnet' },
-    agents: [{ name: 'sentinel', on: true }, { name: 'scout', on: false }, { name: 'artisan', on: false }],
-    rounds: 4, cost: { a: { usd: 1.84, missing: 1 }, b: { usd: 6.12, missing: 0 } },
-  }];
-  async compareList(): Promise<CompareState> { return { ok: true, experiments: structuredClone(this.compare) }; }
-  async compareSet(experiment: string, on: boolean, agent?: string): Promise<CompareState> {
-    const e = this.compare.find(x => x.name === experiment);
-    if (!e) return { ok: false, error: `esperimento sconosciuto: ${experiment}` };
-    if (agent == null) e.on = on;
-    else { const a = e.agents.find(x => x.name === agent); if (!a) return { ok: false, error: `agente sconosciuto: ${agent}` }; a.on = on; }
-    e.changedAt = '2026-10-11 21:00:00';
-    return this.compareList();
-  }
   // the brain's self-improvement loop (/api/improve, 'learn:act'): estimates with a proposal waiting, routing without data
   private learnRows: Record<string, unknown>[] | null = null;
   private get learn(): Record<string, unknown>[] { return (this.learnRows ??= demoLearn(this.chats.now())); }

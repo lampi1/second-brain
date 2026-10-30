@@ -1,7 +1,7 @@
 // The morning block, "Mentre eri via" (ADR 0102): a zero-token summary the app draws by itself at the first presence of
 // the day or after 4 h away (main/morning/, one 'morning:brief' channel): the runs finished since then with their
 // outcome, what waits for the user (requests, "Da approvare"), the user's PRs with a red build or waiting for a vote,
-// ideas due, cloud agents finished, what the maintenance changed (with Annulla), yesterday's spend, a stalled chat.
+// ideas due, what the maintenance changed (with Annulla), yesterday's spend, a stalled chat.
 // Each row opens its place; "Parliamone" prepares a draft for the Orchestrator and never sends it; Esc / Ok dismiss it
 // for the day. In the empty Grindhouse it is the block (GrindhouseEmpty, mounted by AgentStrips.tsx); with strips open
 // (or on another page) one compact line atop the Orchestrator column (MorningLine, OrchestratorTile.tsx) that unfolds
@@ -12,12 +12,10 @@ import { briefEmpty } from '@shared/morning';
 import { brainBridge, focusChat, go, nextThing, openMorningNext } from '../actions';
 import { dismissMorning, morning, useMorning } from '../store/morning';
 import { useApp } from '../store/store';
-import { useCloudIds } from '../store/cloud';
 import { ui } from '../store/ui';
 import { locale, t } from '../i18n';
 import { formatCost } from '../lib/format';
 import { undoChanges } from './AgentFeedAction';
-import { PulseBoard } from './ContextPulse';
 import '../styles/alive.css';
 
 const usd = (v: number) => formatCost(v);
@@ -56,7 +54,6 @@ function rows(b: MorningBrief, undo: { done: boolean; busy: boolean; run: () => 
   }
   for (const p of b.prs.filter(x => x.why === 'vote').slice(0, 2)) out.push({ key: `vote-${p.id}`, text: t('alive.m.prVote', { title: p.title }), open: () => go({ page: 'task' }) });
   for (const i of b.ideas.slice(0, 2)) out.push({ key: `idea-${i.title}`, text: t('alive.m.idea', { title: i.title }), sub: i.due, open: () => openMorningNext({ kind: 'idea', idea: i }) });
-  for (const c of b.cloud.slice(0, 2)) out.push({ key: `cloud-${c.id}`, tone: c.status === 'done' ? 'good' : c.status === 'failed' ? 'bad' : '', text: t('alive.m.cloud', { title: c.title, status: t(`alive.m.cloud.${c.status}`) }), open: () => go({ page: 'home' }) });
   if (b.changes.length) {
     const can = b.changes.some(c => c.canRollback);
     out.push({ key: 'changes', text: t('alive.m.maintenance', { n: b.changes.length }), sub: b.changes.slice(0, 2).map(c => c.summary).join(' · '), open: () => go({ page: 'log' }),
@@ -101,7 +98,7 @@ export function MorningBlock({ brief, compact }: { brief: MorningBrief; compact?
   </section>;
 }
 
-/** The empty Grindhouse: the morning block (and the Battito's board) for a user with history, the first-run text otherwise. */
+/** The empty Grindhouse: the morning block for a user with history, the first-run text otherwise. */
 export function GrindhouseEmpty() {
   const st = useMorning();
   const block = !!st?.show && !!st.brief;
@@ -110,7 +107,6 @@ export function GrindhouseEmpty() {
   if (!st.history) return <p className="home-calm" data-testid="agents-empty">{t('home.emptyAgents')}</p>;
   return <div className="grindhouse-empty" data-testid="agents-idle">
     {st.show && st.brief ? <MorningBlock brief={st.brief} /> : <p className="home-calm">{t('alive.idle')}</p>}
-    <PulseBoard />
   </div>;
 }
 
@@ -119,10 +115,9 @@ export function MorningLine() {
   const st = useMorning();
   const [open, setOpen] = useState(false);
   const strips = useApp(s => Object.values(s.chats).some(c => !!c && !c.isOrchestrator && !c.closedAt && !c.parentId));
-  const clouds = useCloudIds().length;
   const page = ui.use(s => (s.map ? 'mappa' : s.page));
   const block = morning.use(s => !!s.block);
-  if (!st?.show || !st.brief || (page === 'home' && (block || (!strips && !clouds)))) return null;
+  if (!st?.show || !st.brief || (page === 'home' && (block || !strips))) return null;
   const b = st.brief;
   const bits = [b.runs.length ? t('alive.m.runs', { n: b.runs.length }) : '', b.pending ? t('alive.m.pending', { n: b.pending }) : '', b.approvals ? t('alive.m.approvals', { n: b.approvals }) : '',
     b.prs.some(p => p.why === 'build') ? t('alive.m.prBuild', { title: b.prs.find(p => p.why === 'build')!.title }) : ''].filter(Boolean);

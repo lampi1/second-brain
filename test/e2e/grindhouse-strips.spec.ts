@@ -1,7 +1,7 @@
 // The Grindhouse is only the agents' strips (Brother, 18/10): collapsed by default with the key facts on screen, a click
 // anywhere on a strip expands it and a click on its head collapses it, a decision waiting is a "Ti aspetta" pill that
-// opens that strip's decision in the questions window (popups off too), and the headline moved to Memoria (ADR 0122).
-// Frozen demo; screenshots in test-results/shots/strips-*.png and memoria-headline.png.
+// opens that strip's decision in the questions window (popups off too), and G D lands on Memoria.
+// Frozen demo; screenshots in test-results/shots/strips-*.png.
 import { expect, test } from '@playwright/test';
 import { launchDemo, layerState, setQuestionsAside, shot } from './helpers';
 
@@ -207,17 +207,14 @@ test('a collapsed strip keeps its requests on its pill: none floats in the layer
   }
 });
 
-test('the headline sentence heads Memoria (G D, the old Dashboard key, lands there: ADR 0122)', async () => {
+test('G D (the old Dashboard key) lands on Memoria, with no day sentence (ADR 0122, 0201)', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 900 });
   try {
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.keyboard.press('g');
     await page.keyboard.press('d');
     await expect(page.getByTestId('bm-memory-page')).toBeVisible();
-    const line = page.getByTestId('mh-hero').getByTestId('dash-headline');
-    await expect(line).toHaveAttribute('data-source', 'builtin'); // the demo has no API key: the built-in line
-    await expect(line).not.toBeEmpty();
-    await shot(page, 'memoria-headline');
+    await expect(page.getByTestId('mh-hero').getByTestId('dash-headline')).toHaveCount(0);
   } finally {
     await app.close();
   }

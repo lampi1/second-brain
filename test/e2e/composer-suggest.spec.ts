@@ -1,12 +1,11 @@
 // E2E of the chat composer's inline suggestion (issue #167, ADR 0118) on the frozen demo, in the Orchestrator's input:
 // grey text after the caret from local sources (a past prompt, a role, a chat title), Tab accepts it, Esc hides it and
-// typing goes on normally; with no suggestion Tab moves the focus (accessibility). No model call ever leaves the demo
-// (suggest:state counts none after a long pause); the spend line shows in Costi and the three rows in Settings →
-// Scrittura, where turning the switch off removes the grey text. Screenshots dark.
+// typing goes on normally; with no suggestion Tab moves the focus (accessibility). Local only: no model part (ADR 0201).
+// The one row in Settings → Scrittura turns it off. Screenshots dark.
 import { expect, test } from '@playwright/test';
 import { goPage, launchDemo, shot } from './helpers';
 
-test('ghost text: local sources, Tab accepts, Esc hides, Tab moves focus without one; cost and settings in sight', async () => {
+test('ghost text: local sources, Tab accepts, Esc hides, Tab moves focus without one; the switch in Settings', async () => {
   test.setTimeout(90_000);
   const { app, page } = await launchDemo();
   try {
@@ -44,30 +43,19 @@ test('ghost text: local sources, Tab accepts, Esc hides, Tab moves focus without
     await expect(ghost).toHaveCount(0);
     await input.press('End');
 
-    // nothing local fits: no grey text, and after the pause no model call in the demo (zero network)
+    // nothing local fits: no grey text, even after a pause (there is no model part)
     await input.fill('');
     await input.pressSequentially('qualcosa di molto specifico che nessuno ha mai scritto');
     await page.waitForTimeout(900);
     await expect(ghost).toHaveCount(0);
-    const st = await page.evaluate(() => window.sb.invoke('suggest:state', undefined));
-    expect(st.calls).toBe(0);
-    expect(st.budgetUsd).toBe(0.05);
     // Tab with no suggestion moves the focus as always
     await input.press('Tab');
     await expect(input).not.toBeFocused();
 
-    // Costi: today's suggestion spend against its budget
-    await goPage(page, 'costi');
-    await expect(page.getByTestId('bx-suggest-today')).toContainText('Suggerimenti oggi');
-    await expect(page.getByTestId('bx-suggest-today')).toContainText('0,05');
-    await page.getByTestId('bx-suggest-today').scrollIntoViewIfNeeded();
-    await shot(page, 'composer-suggest-costs-dark');
-
-    // Settings → Scrittura: the switch, the model part, the budget with today's spend; off = no grey text
+    // Settings → Scrittura: the one switch, no model row nor budget; off = no grey text
     await goPage(page, 'impostazioni');
     await expect(page.getByTestId('st-suggest')).toBeVisible();
-    await expect(page.getByTestId('st-suggest-budget')).toHaveValue('0.05');
-    await expect(page.getByTestId('st-suggest-today')).toContainText('Oggi');
+    await expect(page.getByTestId('st-suggest-model')).toHaveCount(0);
     await page.getByTestId('st-suggest').scrollIntoViewIfNeeded();
     await shot(page, 'composer-suggest-settings-dark');
     await page.getByTestId('st-suggest-on').click();

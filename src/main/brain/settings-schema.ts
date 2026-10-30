@@ -11,7 +11,6 @@ import path from 'node:path';
 import type { Settings, SettingDef, SettingKey, SettingsPatch } from '../../shared/contract';
 import { ENGINE_ID, engineLabel, engineOf, engines } from '../engines/registry';
 import { canonicalRepoRoot } from './adapters/codex-policy';
-import { PULSE_TYPES } from '../pulse/cards';
 import { DELEGATION_DEFAULTS, DELEGATION_RANGE, MODEL_TIERS, type ModelTier } from '../../shared/roles';
 
 /** The compaction window of the app's Claude chats (ADR 0031): 200000 since 2026-10-14 (the user: «ripartenza a ~200k
@@ -34,13 +33,7 @@ const budgetDefs = (h: 'claude' | 'cursor'): SettingDef[] => [
 ];
 
 const BASE: readonly SettingDef[] = [
-  { key: 'pulse.on', type: 'boolean', default: true, protected: true, label: 'Battito', description: 'Carte e frase in cima a Memoria, soltanto mentre la finestra è aperta.' },
-  { key: 'pulse.dailyUsd', type: 'usd', min: 0.01, max: 2, default: 0.25, protected: true, label: 'Battito: budget giornaliero ($)', description: 'Stima di ammissione condivisa tra carte e frase. I costi non riportati restano sconosciuti.' },
-  { key: 'pulse.slots', type: 'slots', default: ['08:30', '13:00', '18:30'], protected: true, label: 'Battito: orari', description: 'Da uno a tre orari locali; nessun recupero dei giorni precedenti.' },
-  { key: 'pulse.headline.on', type: 'boolean', default: true, protected: true, label: 'Battito: frase di Memoria', description: 'Una frase al giorno, scritta nella prima chiamata del Battito della giornata, nello stesso budget.' },
-  { key: 'jobs.fallback', type: 'enum', values: ['auto', 'off'], default: 'auto', protected: true, label: 'Battito: motore alternativo', description: 'Automatico: API, poi Claude Code senza strumenti.' },
-  ...PULSE_TYPES.map((t): SettingDef => ({ key: `pulse.types.${t}`, type: 'boolean', default: true, protected: false, label: `Battito: ${t}`, description: 'Mostra questo tipo di carta.' })),
-  ...(['board', 'agent', 'search', 'file'] as const).map((p): SettingDef => ({ key: `pulse.places.${p}`, type: 'boolean', default: true, protected: false, label: `Battito: ${p}`, description: 'Mostra le carte in questa posizione.' })),
+  { key: 'jobs.fallback', type: 'enum', values: ['auto', 'off'], default: 'auto', protected: true, label: 'Lavori in background: motore alternativo', description: 'Automatico: API, poi Claude Code senza strumenti.' },
   { key: 'brainRoot', type: 'path', nullable: true, default: null, protected: true, label: 'Cartella del brain',
     description: "La cartella dei tuoi file (idee, errori, diario). L'app ne esegue gli strumenti: per questo la cambi solo tu." },
   { key: 'mcpPort', type: 'int', min: 0, max: 65535, default: 4319, protected: true, label: 'Porta MCP del browser',
@@ -76,14 +69,9 @@ const BASE: readonly SettingDef[] = [
     description: 'Sopra questa CPU (media degli ultimi secondi) le chat e i messaggi degli agenti aspettano.' },
   { key: 'loadQueueRam', type: 'int', min: 0, max: 90, default: 15, protected: true, label: 'Coda per carico: RAM libera sotto (%)',
     description: 'Sotto questa memoria libera le chat e i messaggi degli agenti aspettano. 0 = non guardare la RAM.' },
-  // the chat composer's inline suggestion (ADR 0118): local sources cost nothing; the model part spends, so it and its
-  // budget are protected like the other spending limits
+  // the chat composer's inline suggestion (ADR 0118): local sources only, zero tokens (the model part went, ADR 0201)
   { key: 'suggestOn', type: 'boolean', default: true, protected: false, label: 'Suggerimenti nella chat',
     description: 'Mentre scrivi, un testo grigio dopo il cursore: Tab lo accetta, Esc lo nasconde. Dai tuoi messaggi passati, dai comandi, dai ruoli, dalle chat e dai file, senza token.' },
-  { key: 'suggestModel', type: 'boolean', default: true, protected: true, label: 'Suggerimenti nella chat: modello',
-    description: 'Quando le fonti locali non hanno niente, dopo una pausa nella scrittura chiede al modello più piccolo sulla chiave API (ultima riga e ultimo messaggio soltanto). Spento: solo i suggerimenti locali.' },
-  { key: 'suggestDailyUsd', type: 'usd', min: 0.01, max: 1, default: 0.05, protected: true, label: 'Suggerimenti nella chat: budget giornaliero ($)',
-    description: 'Raggiunto il budget, il modello si ferma fino a domani; i suggerimenti locali restano.' },
   // voice mode (ADR 0152): local and free, so neither is protected; changing one only picks other models to download
   { key: 'voiceAsr', type: 'enum', values: ['fast', 'accurate'], default: 'fast', protected: false, label: 'Voce: trascrizione',
     description: 'Veloce = Whisper small (374 MB), risponde prima. Precisa = Whisper turbo (circa 1 GB), sbaglia meno parole ma è più lenta sul processore. Tutto in locale, gratis.' },
@@ -213,11 +201,6 @@ export function validate(key: unknown, value: unknown): Checked {
   const k = key as SettingKey;
   if (value === null && d.nullable) return { ok: true, key: k, value: null };
   switch (d.type) {
-    case 'slots': {
-      if (!Array.isArray(value) || value.length < 1 || value.length > 3 || new Set(value).size !== value.length
-        || value.some(v => typeof v !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(v))) return { ok: false, error: 'Scegli da uno a tre orari HH:MM distinti.' };
-      return { ok: true, key: k, value: [...value].sort() };
-    }
     case 'repo-paths': {
       if (!Array.isArray(value) || value.length > 32) return { ok: false, error: `${d.label}: al massimo 32 cartelle repository o worktree` };
       try { return { ok: true, key: k, value: [...new Set(value.map(canonicalRepoRoot))] }; }
@@ -250,8 +233,6 @@ export function validate(key: unknown, value: unknown): Checked {
 
 export function defaults(): Settings {
   return {
-    pulse: { on: true, dailyUsd: 0.25, slots: ['08:30', '13:00', '18:30'], headline: { on: true },
-      types: { idea: true, consiglio: true, promemoria: true, collegamento: true, curiosita: true, agente: true }, places: { board: true, agent: true, search: true, file: true } },
     jobs: { fallback: 'auto' },
     brainRoot: null, mcpPort: 4319, autoCloseMin: 2, engineIdleMin: 30, mute: {}, osToasts: 'urgent', theme: 'dark', language: 'system', dnd: false, dndUntil: null,
     contextWarnTokens: 200_000, contextHandoff: false, compactWindowTokens: COMPACT_WINDOW, orchestratorDayCompact: true, launchRulesClaude: false, launchRulesCodex: true, codexAutonomyRoots: [], coldHandoffMin: 50,
@@ -270,7 +251,7 @@ export function defaults(): Settings {
     appRepo: null,
     projectsRoot: null,
     loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15,
-    suggestOn: true, suggestModel: true, suggestDailyUsd: 0.05,
+    suggestOn: true,
     voiceAsr: 'fast', voiceName: 'paola', voicePtt: false, awayMode: false,
     delegation: { ...DELEGATION_DEFAULTS }, modelTiers: {},
   };
@@ -302,7 +283,7 @@ export function flattenPatch(patch: unknown): [string, unknown][] {
   const walk = (o: Record<string, unknown>, prefix: string) => {
     for (const [k, v] of Object.entries(o)) {
       const key = prefix ? `${prefix}.${k}` : k;
-      if ((['pulse', 'pulse.types', 'pulse.places', 'pulse.headline', 'jobs'].includes(key) || key === 'mute' || key === 'engineOn' || key === 'engines' || key === 'messaging' || key === 'orchestratorChats' || key === 'tasks' || key === 'budget' || key === 'budget.claude' || key === 'budget.cursor' || key === 'delegation' || key === 'modelTiers' || /^modelTiers\.[^.]+$/.test(key))) {
+      if ((['jobs'].includes(key) || key === 'mute' || key === 'engineOn' || key === 'engines' || key === 'messaging' || key === 'orchestratorChats' || key === 'tasks' || key === 'budget' || key === 'budget.claude' || key === 'budget.cursor' || key === 'delegation' || key === 'modelTiers' || /^modelTiers\.[^.]+$/.test(key))) {
         if (!v || typeof v !== 'object' || Array.isArray(v)) throw new Error(`${key}: oggetto atteso`);
         walk(v as Record<string, unknown>, key);
       } else if (key === 'locked') continue; // echoed back by a client: never settable

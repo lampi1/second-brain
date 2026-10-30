@@ -13,17 +13,15 @@
 // line that asks her for a Strategist's plan (shared/newchat.ts); it resets after a send. "Veloce" is gone (#124): quick
 // questions go to Flash (ADR 0105).
 // The inline suggestion (issue #167, ADR 0118): grey text after the caret, from local sources first (past prompts,
-// "/" commands, roles, skills, chat titles, the chat's files: lib/composer-suggest.ts, zero tokens), else from a small
-// model after a typing pause ('suggest:get'; every key cancels the pause and the request in flight). Tab accepts it,
-// Esc hides it, any other key goes on as usual; with no suggestion Tab moves the focus as always.
+// "/" commands, roles, skills, chat titles, the chat's files: lib/composer-suggest.ts, zero tokens; the model part was
+// removed, ADR 0201). Tab accepts it, Esc hides it, any other key goes on as usual; with no suggestion Tab moves the focus as always.
 // The Orchestrator's and Flash's inputs have the mic instead of the «Invio» hint (voice mode, ADR 0152: components/
 // VoiceControls.tsx, lib/voice.ts; owner 2026-10-24: «togli la label invio … per fare spazio al microfono»).
 // Used by ChatTile and OrchestratorTile (also the Orchestrator docked with Ctrl+R).
 import { t as auditText } from '../i18n';
 import { forwardRef, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState, type ClipboardEvent, type DragEvent } from 'react';
-import { SUGGEST_DEBOUNCE_MS, SUGGEST_MODEL_MIN_LINE, continueCached } from '@shared/composer-suggest';
 import { ROLE_DEFAULTS, ROLE_IDS } from '@shared/roles';
-import { SuggestScheduler, filesOf, localSuggestion, promptsOf, rememberPrompt, savedPrompts, type LocalSources } from '../lib/composer-suggest';
+import { continueCached, filesOf, localSuggestion, promptsOf, rememberPrompt, savedPrompts, type LocalSources } from '../lib/composer-suggest';
 import { splitMode, withMode, type SendMode } from '@shared/newchat';
 import { IMAGES_MAX_TOTAL, type ChatCommand, type ChatSummary, type ImageAttachment } from '@shared/contract';
 import { applyCommand, filterCommands, slashQuery } from '../lib/slash';
@@ -136,7 +134,7 @@ const promptsNow = (items: Parameters<typeof promptsOf>[0]): string[] => {
   if (!p) { p = promptsOf(items); promptCache.set(items, p); }
   return p;
 };
-type Ghost = { forText: string; suffix: string; from: 'local' | 'model' };
+type Ghost = { forText: string; suffix: string };
 /** Text or images not sent, also for a chat whose input is not on screen (the auto-close keeps it open). */
 export const hasDraft = (chatId: string): boolean =>
   !!drafts.get(chatId)?.trim() || !!draftImages.get(chatId)?.length || (readingN.get(chatId) ?? 0) > 0;
@@ -187,21 +185,10 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
   };
   // the inline suggestion (ADR 0118): what it is for, whether Esc hid it for this text, whether the input has the focus
   const suggestOn = useApp(s => s.settings?.suggestOn !== false);
-  const suggestModel = useApp(s => s.settings?.suggestModel !== false);
   const [ghost, setGhost] = useState<Ghost | null>(null);
   const [ghostOff, setGhostOff] = useState<string | null>(null);
   const [focused, setFocused] = useState(false);
-  const textNow = useRef(visibleText);
-  textNow.current = visibleText;
   const history = useRef<string[] | null>(null);
-  const sched = useRef<SuggestScheduler | null>(null);
-  if (!sched.current) sched.current = new SuggestScheduler({
-    delayMs: SUGGEST_DEBOUNCE_MS,
-    fetch: req => window.sb.invoke('suggest:get', req),
-    cancel: () => { void window.sb.invoke('suggest:cancel', { chatId: chat.id }).catch(() => {}); },
-    onAnswer: (forText, suffix) => { if (suffix && textNow.current === forText) setGhost({ forText, suffix, from: 'model' }); },
-  });
-  useEffect(() => () => sched.current?.dispose(), []);
   const sourcesNow = (): LocalSources => {
     const st = app.get();
     history.current ??= savedPrompts();
@@ -211,16 +198,11 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
       history: [...new Set([...history.current, ...promptsNow(st.items)])],
     };
   };
-  /** after the text or the caret changed: a local suggestion now, else the model after the pause */
+  /** after the text or the caret changed: a local suggestion, or none */
   const refreshGhost = (v: string, c: number) => {
-    sched.current!.key();
     if (!suggestOn || !v.trim() || c !== v.length) { setGhost(null); return; }
-    if (ghost?.from === 'model' && continueCached(ghost.forText, ghost.suffix, v)) return; // typing along the model's answer
     const local = localSuggestion(v, c, sourcesNow());
-    if (local) { setGhost({ forText: v, suffix: local, from: 'local' }); return; }
-    setGhost(null);
-    const line = v.slice(v.lastIndexOf('\n') + 1);
-    if (suggestModel && !v.startsWith('/') && line.trim().length >= SUGGEST_MODEL_MIN_LINE) sched.current!.schedule(v, { chatId: chat.id, line, lastMessage: chat.lastText ?? '' });
+    setGhost(local ? { forText: v, suffix: local } : null);
   };
   const ghostText = ghost && suggestOn && focused && !slashOpen && caret === visibleText.length && ghostOff !== visibleText
     ? continueCached(ghost.forText, ghost.suffix, visibleText) : null;
@@ -287,7 +269,6 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
     if (orchestrator) setMode(null);
     rememberPrompt(text);
     history.current = null;
-    sched.current?.key();
     setGhost(null);
     setText('');
     drafts.delete(chat.id);
@@ -399,7 +380,7 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
             onScroll={e => { if (mirror.current) mirror.current.scrollTop = e.currentTarget.scrollTop; }}
             aria-activedescendant={slashOpen ? `${testid}-slash-o${Math.min(sel, matches.length - 1)}` : undefined}
             onChange={e => { const next = withReviewedContext(e.target.value, context); setText(next); setCaret(e.target.selectionStart); drafts.set(chat.id, next); if (!next.trim()) onSentHooks.delete(chat.id); else prewarm(chat.id); if (!e.target.value.startsWith('/')) setSlashOff(null); refreshGhost(e.target.value, e.target.selectionStart); }}
-            onSelect={e => { const el = e.currentTarget; setCaret(el.selectionStart); if (el.selectionStart !== el.selectionEnd || el.selectionStart !== el.value.length) sched.current?.key(); }}
+            onSelect={e => setCaret(e.currentTarget.selectionStart)}
             onPaste={onPaste}
             onKeyDown={e => {
               if (slashOpen && !e.nativeEvent.isComposing) {
@@ -414,9 +395,8 @@ const ChatInputFor = forwardRef<ChatInputHandle, Props>(function ChatInputFor({ 
               // the inline suggestion: Tab takes it, Esc hides it; with none, Tab moves the focus as always
               if (ghostText && !e.nativeEvent.isComposing) {
                 if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) { e.preventDefault(); acceptGhost(ghostText); return; }
-                if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setGhostOff(visibleText); sched.current?.key(); return; }
+                if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); setGhostOff(visibleText); return; }
               }
-              if (!['Shift', 'Control', 'Alt', 'Meta', 'Tab', 'CapsLock'].includes(e.key)) sched.current?.key(); // the next key cancels the model's request
               if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) { e.preventDefault(); if (!emptyEnter()) submit(); }
             }}
           />

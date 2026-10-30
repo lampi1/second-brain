@@ -9,8 +9,6 @@
 // ADR 0122), and the per-agent costs are on the back of each agent card (AgentCatalogCard.tsx), never here: no role,
 // current or retired, is listed on this page. A tab of Andamento since ADR 0202 (`embedded`: no title, no lead, whose
 // numbers the KPIs below already show).
-// What the chat composer's model suggestions spent today against their daily budget sits beside them ('suggest:state',
-// ADR 0118).
 // Data: /api/cost?days=N (the brain's cost tool). The per-job cost/time estimate and its calculator were removed
 // (ADR 0053): measured on 178 past chats, the real cost fell inside the estimate's range only 47% of the time.
 import { lazy, Suspense, useContext, useEffect, useMemo, useState } from 'react';
@@ -35,8 +33,6 @@ import { costRows } from '../../lib/live-costs';
 import { t } from '../../i18n';
 import '../../styles/classifiers.css'; // the facts' err-fact cards
 import '../../styles/memory-hub.css'; // «Contesto adesso» (mh-ctx)
-import { useSuggestState } from '../../lib/suggest-state';
-import { formatCost } from '../../lib/format';
 // app-side parts (they read the app's live store): loaded when shown, so the brain pages stay importable alone
 const ContextNow = lazy(() => import('../../components/ContextNow'));
 
@@ -62,18 +58,6 @@ function LiveNow() {
     <Section title={t('costs.live')} count={rows.length} note={t('costs.liveNote')} testId="bx-cost-live">
       <div className="bx-card tight"><LiveCostList rows={rows} onOpen={bridge ? id => bridge.showChat(id) : undefined} unpricedModels={unpriced} testid="bx-cost-live-list" /></div>
     </Section>
-  );
-}
-
-/** The composer's suggestions today: model calls, their cost against the budget, the answers served from the cache. */
-function SuggestToday() {
-  const st = useSuggestState();
-  if (!st) return null;
-  return (
-    <div className="bx-kpis" data-testid="bx-cost-suggest">
-      <Kpi k={t('suggest.kpi')} help={t('suggest.kpiHelp')} v={formatCost(st.usd)} tone={st.usd >= st.budgetUsd ? 'warn' : undefined}
-        s={st.modelOn ? t('suggest.kpiSub', { calls: st.calls, hits: st.cacheHits, limit: formatCost(st.budgetUsd) }) : t('suggest.kpiOff')} testId="bx-suggest-today" />
-    </div>
   );
 }
 
@@ -141,7 +125,6 @@ export function Costi({ arg, nav, embedded = false }: { arg?: string; nav: (t: s
         actions={<Seg label={t('costs.period')} value={days} onChange={d => nav(embedded ? (d === 7 ? 'andamento/costi' : `andamento/costi/${d}`) : d === 7 ? 'costi' : `costi/${d}`)} items={PERIODS.map(d => ({ id: d, label: d === 1 ? t('costs.today') : t('costs.days',{days:d}) }))} />} />
       <LiveNow />
       <Suspense fallback={null}><ContextNow /></Suspense>
-      <SuggestToday />
       <Async loading={r.loading && !c} error={c ? null : r.error} onRetry={() => r.reload()} label={t('costs.loading')} lines={5} block>
         {() => c && (
           <>

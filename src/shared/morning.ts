@@ -1,6 +1,6 @@
 // The morning block ("Mentre eri via", ADR 0102): a zero-token summary the app draws by itself at the first presence
 // of the day or after an absence of 4 hours or more, from what it already holds (the run store, the open requests, the
-// "Da approvare" queue, the Task page's last read, the brain's ideas, the cloud agents, the maintenance change log,
+// "Da approvare" queue, the Task page's last read, the brain's ideas, the maintenance change log,
 // yesterday's spend). Shapes shared by main (src/main/morning/) and the renderer (MorningBlock.tsx); contract.ts
 // re-exports them with the 'morning:brief' channel. nextPriority is Ctrl+J's fallback when nothing is pending.
 
@@ -11,7 +11,6 @@ export interface MorningRun { runId: string; chatId: string; title: string; outc
 export interface MorningPr { id: number; title: string; url: string; why: 'build' | 'vote' }
 /** an idea whose "Riprendere" date has come (ideas.md, not done or dropped) */
 export interface MorningIdea { title: string; due: string }
-export interface MorningCloud { id: string; title: string; status: 'done' | 'failed' | 'stopped' }
 /** a change a maintenance pass made since then (the Skill page's change log) */
 export interface MorningChange { id: string; summary: string; canRollback: boolean }
 /** a root chat at work that produced no event for stallMin minutes */
@@ -27,7 +26,6 @@ export interface MorningBrief {
   /** the Task page's last successful read; null = never read */
   tasksAt: number | null;
   ideas: MorningIdea[];
-  cloud: MorningCloud[];
   changes: MorningChange[];
   /** yesterday's spend in $ (the brain's cost report, else the app's runs); null = unknown */
   spendYesterdayUsd: number | null;
@@ -61,4 +59,4 @@ export function nextPriority(b: MorningBrief | null): MorningNext | null {
 
 /** Nothing to say: the block then shows one calm line. */
 export const briefEmpty = (b: MorningBrief): boolean =>
-  !b.runs.length && !b.pending && !b.approvals && !b.prs.length && !b.ideas.length && !b.cloud.length && !b.changes.length && !b.stalled.length;
+  !b.runs.length && !b.pending && !b.approvals && !b.prs.length && !b.ideas.length && !b.changes.length && !b.stalled.length;

@@ -101,11 +101,7 @@
 .vw-body { flex: 1; min-height: 0; overflow: auto; padding: 20px 28px 32px; scroll-padding-top: 20px; overscroll-behavior: contain; }
 .vw-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 32px; align-items: start; max-width: 1240px; margin: 0 auto; }
 .vw-grid:has(> .vw-toc) { grid-template-columns: 208px minmax(0, 1fr); }
-.vw-grid:has(> .vw-side .context-pulse) { grid-template-columns: minmax(0, 1fr) 260px; }
-.vw-grid:has(> .vw-toc):has(> .vw-side .context-pulse) { grid-template-columns: 196px minmax(0, 1fr) 248px; }
 .vw-layer.is-full .vw-grid { max-width: 1480px; }
-.vw-side:not(:has(.context-pulse)) { display: none; }
-.vw-side { position: sticky; top: 0; }
 .vw-main { min-width: 0; display: grid; gap: 14px; align-content: start; }
 .vw-main > .bx-row, .vw-main .vw-tools { gap: 8px; }
 .vw-loading { color: var(--bx-text-3); }
@@ -276,8 +272,8 @@ mark.bx-word { color: inherit; border-radius: 3px; padding: 0 1px; background: c
 
 /* ── a narrow panel (the Orchestrator column is wide, or the window is small) ───────────────────────────────── */
 @container vw (max-width: 980px) {
-  .vw-grid, .vw-grid:has(> .vw-toc), .vw-grid:has(> .vw-side .context-pulse), .vw-grid:has(> .vw-toc):has(> .vw-side .context-pulse) { grid-template-columns: minmax(0, 1fr); }
-  .vw-toc, .vw-side { display: none; }
+  .vw-grid, .vw-grid:has(> .vw-toc) { grid-template-columns: minmax(0, 1fr); }
+  .vw-toc { display: none; }
   .vw-body { padding: 16px 18px 24px; }
 }
 @container vw (max-width: 760px) {

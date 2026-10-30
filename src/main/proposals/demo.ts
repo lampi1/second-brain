@@ -78,5 +78,5 @@ export function writeDemoProposals(userData: string, brainRoot: string, now: num
 
 /** The Orchestrator asks for a protected setting (in memory, like any agent's request): one card «Impostazioni». */
 export function requestDemoSetting(brain: Pick<BrainService, 'requestSetting'>): void {
-  brain.requestSetting('pulse.dailyUsd', 0.4, { by: 'agent', chatId: 'orchestrator', reason: tr('Con tre orari al giorno il Battito finisce il budget alle 13: con 0,40 $ arriva a sera.') });
+  brain.requestSetting('loadQueueCpu', 85, { by: 'agent', chatId: 'orchestrator', reason: tr('Con la build in corso la CPU sta sopra il 75%: le chat aspettano anche quando il PC regge.') });
 }

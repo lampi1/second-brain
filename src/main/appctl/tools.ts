@@ -48,8 +48,6 @@ import { estimateTool, estimateTask, SimilarIndex } from '../agents/task-estimat
 import { agentLearnTool, lessonReviewTool, type AgentPackLearning } from '../agents/pack/learning';
 import type { McpTool } from '../mcp/server';
 import { ToolRefusal } from '../mcp/refusal';
-import type { CloudService } from '../cloud/service';
-import { isCloudEngine } from '../../shared/cloud';
 import type { BrainScripts } from '../brain/scripts';
 import type { BrainChangelog } from '../brain/changelog';
 import { scriptWriteTools } from '../brain/scripts-tools';
@@ -75,8 +73,6 @@ export interface AppCtlDeps {
   away?: WorkAway;
   /** the routine package store (ADR 0175): app_routine_save saves there; absent = no package authoring tools */
   routinePackages?: () => RoutinePackageStore;
-  /** cloud agents (ADR 0080): app_create_chat where:'cloud' starts one, app_chats lists them */
-  cloud?: CloudService;
   agentLearning?: AgentPackLearning;
   agents?: () => AgentCatalog;
   /** the catalog's resolve (agents/catalog.ts): the engine, model and effort a role chat starts with */
@@ -293,8 +289,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         return {
           app: all.filter(c => !c.closedAt).map(c => brief(c, warn)),
           closed: recentClosed(all).map(c => ({ ...brief(c, warn), closedAt: new Date(c.closedAt!).toISOString(), closedBy: c.closedBy ?? 'auto' })),
-          // agents in the vendors' clouds (ADR 0080): status and page only; follow them on their vendor's page
-          ...(d.cloud ? { cloud: d.cloud.state().agents.slice(0, 30).map(a => ({ id: a.id, engine: a.engine, title: a.title, status: a.status, repo: a.repo, ...(a.branch ? { branch: a.branch } : {}), url: a.url, ...(a.summary ? { summary: a.summary.slice(0, 200) } : {}), ...(a.costUsd !== undefined ? { costUsd: a.costUsd } : {}), updatedAt: new Date(a.updatedAt).toISOString() })) } : {}),
         };
       },
     },
@@ -474,10 +468,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         reviewOf: str('Run being reviewed'), reworkOf: str('Run being reworked'), goal: str('Run goal, up to 2000 characters'),
         kind: str(`optional kind of task: ${TASK_KINDS.join(' | ')}; omitted: read from title and prompt`),
         cwd: str('optional absolute folder (repo or worktree); default: the brain folder'),
-        where: str('optional: "local" (default) or "cloud" = an agent in the vendor\'s cloud (harness cursor | codex | claude, default cursor; cwd must be a GitHub checkout on a branch already pushed; it pushes only its own cursor/… codex/… claude/… branch; Cursor bills at API prices and is blocked over the Cursor daily budget). Only when the user asked for a cloud agent.'),
-        harness: str('only with where "cloud": cursor | codex | claude'),
-        model: str('only with where "cloud": the cloud agent\'s model'),
-        env: str('optional, where "cloud" + harness codex: the Codex cloud environment id (remembered per repo)'),
       }, ['title', 'prompt']),
       run: async a => {
         // only the user chooses the Orchestrator (one at a time: a new one would take the role from the agent's own chat)
@@ -510,21 +500,12 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // a former Orchestrator's title is the Orchestrator's mail box: a new chat may not take its mail
         if (title.trim().toLowerCase() === ORCHESTRATOR_TITLE.toLowerCase()) throw new Error(`The title «${title}» is reserved for the Orchestrator's mail: choose another.`);
         const s = d.brain.settings();
-        if (a.where !== undefined && a.where !== 'local' && a.where !== 'cloud') throw new Error('where: local | cloud');
-        if (a.where === 'cloud') {
-          if (!d.cloud) throw new Error('agenti cloud non disponibili');
-          const engine = a.harness === undefined || a.harness === null || a.harness === '' ? 'cursor' : a.harness;
-          if (!isCloudEngine(engine)) throw new Error('where "cloud": harness cursor | codex | claude');
-          const refused = openRefusal(s, caller()?.harness ?? 'claude', engine);
-          if (refused) throw new Error(`bloccato: ${refused}`);
-          const agent = await d.cloud.start({ engine, cwd, title, prompt: `${AGENT_LABEL}\n\n${prompt}`, ...(typeof a.model === 'string' && a.model ? { model: a.model } : {}), ...(typeof a.env === 'string' ? { env: a.env } : {}) }, 'agent');
-          log.info('appctl', 'agent started a cloud agent', { data: { engine, title, id: agent.id, repo: agent.repo } });
-          return { cloudAgentId: agent.id, engine, title: agent.title, status: agent.status, repo: agent.repo, ...(agent.branch ? { branch: agent.branch } : {}), url: agent.url };
-        }
+        // the cloud agents (where "cloud", ADR 0080) were removed by ADR 0201: every chat is local
+        if (a.where !== undefined && a.where !== 'local') throw new Error('where: only "local" (the cloud agents were removed)');
         const text = (v: unknown): string | undefined => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
         const kind = text(a.kind);
         if (kind && !(TASK_KINDS as readonly string[]).includes(kind)) throw new Error(`kind sconosciuto: ${kind} (${TASK_KINDS.join(' | ')})`);
-        for (const key of ['harness', 'model', 'effort'] as const) if (a[key] !== undefined) throw new Error(`${key}: the role decides it (Brain → Agenti); only a cloud agent takes one.`);
+        for (const key of ['harness', 'model', 'effort'] as const) if (a[key] !== undefined) throw new Error(`${key}: the role decides it (Brain → Agenti).`);
         if (typeof a.roleId !== 'string' || !isWorkRole(a.roleId)) throw new Error(`roleId required: ${ROLE_IDS.filter(r => r !== 'orchestrator').join(' | ')} (agent_catalog).`);
         if (a.tier !== undefined && !(MODEL_TIERS as readonly unknown[]).includes(a.tier)) throw new Error(`tier: ${MODEL_TIERS.join(' | ')}`);
         const skills = a.skills === undefined ? [] : Array.isArray(a.skills) && a.skills.length <= 16 && a.skills.every(x => typeof x === 'string' && /^[a-z0-9][a-z0-9_-]{0,79}$/.test(x)) ? [...new Set(a.skills as string[])] : null;
@@ -755,7 +736,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   }
 
   /** app_config's proof (ADR 0149): the user typed to this very Orchestrator in the last minutes, and its latest
-   *  message is that one (not app news, an agent's mail or the Battito card, which also land as 'user' items) */
+   *  message is that one (not app news or an agent's mail, which also land as 'user' items) */
   function configAsked(orchestratorId: string): boolean {
     const at = lastTyped(orchestratorId);
     if (at === undefined || at < Date.now() - CONFIG_ASK_MIN * 60_000) return false;

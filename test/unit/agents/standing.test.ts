@@ -7,7 +7,7 @@ import { HALF_LIFE_MS, MAX_SPREAD, MIN_EVALUATED, PRIOR, TRUST, decisionSignals,
 import { emptyTally, mergeTallies, rollUp, runMetrics } from '../../../src/main/agents/run-metrics';
 import { emptyFlashLog, flashAnswered, flashAsked } from '../../../src/main/agents/flash-outcomes';
 import { FLASH_XP, PLAN_XP } from '../../../src/main/agents/xp';
-import { FLASH_ID, PULSE_ID } from '../../../src/shared/roles';
+import { FLASH_ID } from '../../../src/shared/roles';
 import { completedRuns } from '../../../src/shared/agents';
 import { readTally } from '../../../src/main/agents/runs';
 
@@ -403,8 +403,8 @@ describe('XP, decision signals and the Bayesian performance (ADR 0131)', () => {
     expect(standings([], [], NOW, emptyFlashLog()).has(FLASH_ID)).toBe(false);
     expect(TRUST.quick).toBeLessThan(TRUST.chain);
   });
-  it('Pulse and the retired roles get no standing nor catalog stats; their runs stay readable (ADR 0186)', () => {
-    const pulse = run({ agentId: PULSE_ID, source: 'oneshot', startedBy: 'orchestrator', oneshot: { engine: 'anthropic', job: 'pulse', fallback: false, costBasis: 'reported', ok: true }, outcome: human('success') });
+  it('the retired roles and the removed Battito\'s old \'pulse\' runs get no standing nor catalog stats; their runs stay readable (ADR 0186, 0201)', () => {
+    const pulse = run({ agentId: 'pulse', source: 'oneshot', startedBy: 'orchestrator', oneshot: { engine: 'anthropic', job: 'pulse', fallback: false, costBasis: 'reported', ok: true }, outcome: human('success') });
     const judge = run({ agentId: 'judge', outcome: human('success') }), scribe = run({ agentId: 'scribe', outcome: human('success') });
     const st = standings([pulse, judge, scribe], [{ ...emptyTally('judge', 1), ended: 3, verdicts: { success: 3, partial: 0, fail: 0 } }], NOW);
     expect([...st.keys()]).toEqual([]);

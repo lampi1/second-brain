@@ -58,3 +58,12 @@ describe('one page, the old ids as aliases', () => {
     expect(parseTarget('andamento/uso')).toEqual({ map: false, id: 'andamento', arg: 'uso' });
   });
 });
+
+describe('the retired Confronto page (ADR 0201)', () => {
+  it('its links and id land on Andamento → Qualità', () => {
+    expect(parseTarget('confronto')).toEqual({ map: false, id: 'andamento', arg: 'qualita' });
+    expect(placeOf('confronto')).toEqual({ page: 'andamento', arg: 'qualita' });
+    expect(trendRedirect('confronto', null)).toEqual({ page: 'andamento', arg: 'qualita' });
+    expect(BRAIN_PAGES.map(p => String(p.id))).not.toContain('confronto');
+  });
+});

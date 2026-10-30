@@ -134,14 +134,12 @@ test('Qualità: four metrics with their source (errors caught, rules, PRs, reope
   await shot(page, 'brain-qualita');
 });
 
-test('Confronto: the comparison report rendered, files to open and download', async () => {
+test('an old Confronto link opens Andamento on Qualità (the page went, ADR 0201)', async () => {
   await open('confronto');
-  const p = page.getByTestId('brain-page-confronto');
+  const p = page.getByTestId('brain-page-andamento');
   await settled();
-  await expect(p.getByTestId('bx-compare-report')).toContainText('Claude · reviewer');
-  await expect(p.getByRole('button', { name: 'Tabella in CSV' })).toBeVisible();
-  await expect(p.getByTestId('bx-table-file-confronto')).toContainText('pr-51002.md');
-  await shot(page, 'brain-confronto');
+  await expect(p.getByTestId('bx-q-tornati')).toBeVisible();
+  await expect(page.getByTestId('brain-page-confronto')).toHaveCount(0);
 });
 
 test('retired explorer links open a source file without a directory browser',async()=>{

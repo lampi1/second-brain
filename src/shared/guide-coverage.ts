@@ -18,13 +18,11 @@ export const PAGE_CARDS: Readonly<Record<string, string>> = {
 /** Settings section id → card id */
 export const SETTINGS_CARDS: Readonly<Record<string, string>> = {
   profile: 'settings', update: 'updates', connectors: 'mcp-servers', accounts: 'settings', roles: 'delegation',
-  space: 'brain', voice: 'voice', appearance: 'settings', notifications: 'notifications', advanced: 'mcp-servers',
+  space: 'brain', writing: 'settings', voice: 'voice', appearance: 'settings', notifications: 'notifications', advanced: 'mcp-servers',
 };
 
 /** "page:<id>" or "settings:<id>" → why it has no card (only for something being removed). */
 export const COVERAGE_EXEMPT: Readonly<Record<string, string>> = {
-  'page:confronto': 'Confronto modelli is being removed (owner, 2026-10-30, Impara v3 cuts); drop this line with the page',
-  'settings:writing': 'the AI typing suggestions are being removed (owner, 2026-10-30, Impara v3 cuts); drop this line with the section',
 };
 
 export interface CoverageCard { readonly id: string; readonly title: Bi; readonly summary: Bi }

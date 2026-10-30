@@ -35,7 +35,6 @@ export const chatEn: typeof chatIt = {
   'chat.input.sendNowButton': 'Send now',
   'chat.input.unqueueLabel': 'Remove from queue',
   'chat.input.readingImage': (p: { n: number }) => p.n === 1 ? 'Reading the image…' : `Reading ${p.n} images…`,
-  'chat.mode.quick': 'Quick',
   'chat.mode.plan': 'Plan',
   'chat.mode.new': 'New chat',
   'chat.input.placeholderPlan': 'What should the Strategist plan…',
@@ -58,7 +57,6 @@ export const chatEn: typeof chatIt = {
   // ChatItems
   'chat.items.userImages': (p: { n: number }) => p.n === 1 ? '1 image' : `${p.n} images`,
   'chat.items.from': (p: { source: string }) => `From «${p.source}» · not written by you`,
-  'chat.items.modeTip.quick': 'Quick path: a direct answer or one chat, no delegation',
   'chat.items.modeTip.plan': 'Handed to a Strategist chat that plans and delegates',
   'chat.items.modeTip.new': 'The Orchestrator opens a new chat for this request',
   'chat.items.typing.writing': 'is writing…',

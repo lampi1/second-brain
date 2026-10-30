@@ -6,7 +6,6 @@ import { routinesIt } from './areas/routines.it';
 import { appTextIt } from './areas/app-text.it';
 import { brainTextIt } from './areas/brain-text.it';
 import { learningReviewIt } from './areas/learning-review.it';
-import { cloudIt } from './areas/cloud.it';
 import { brainModelIt } from './areas/brain-model.it';
 import { memoryIt } from './areas/memory.it';
 import { memoryHubIt } from './areas/memory-hub.it';
@@ -79,7 +78,6 @@ export const it = {
   ...setupIt,
   ...viewerOverlayIt,
   ...homeIt,
-  ...cloudIt,
   ...guideIt,
   ...pbrowserIt,
   ...treeIt,

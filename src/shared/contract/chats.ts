@@ -4,7 +4,6 @@
 import type { AgentContextSnapshot } from '../agent-context';
 import type { AgentChildren, AgentOwnerSnapshot, AgentRun, CanonicalResult, TaskDeliveryPolicy } from '../agents';
 import type { AutoClosePresence, AutoCloseStatus } from '../auto-close';
-import type { SuggestAnswer, SuggestRequest, SuggestState } from '../composer-suggest';
 import type { ChatDelegation, DelegationLimitHit } from '../delegation';
 import type { ChatEffortStatus } from '../effort';
 import type { ModelTier } from '../roles';
@@ -415,10 +414,6 @@ export interface ChatsInvokeMap {
   'orchestrator:ensure': [{ harness: Harness; model?: string }, ChatSummary];
   /** "Rispondi dopo" (on: true) or the queue opened by the user (on: false) */
   'later:set': [{ on: boolean }, AnswerLater];
-  /** the chat composer's model suggestion (ADR 0118): get after a typing pause, cancel on the next key, today's spend */
-  'suggest:get': [SuggestRequest, SuggestAnswer];
-  'suggest:cancel': [{ chatId: string }, void];
-  'suggest:state': [void, SuggestState];
   'orchestrator:held': [void, HeldNewsState];
   /** the user opened a held news item's chat from the list: that chat's items are read, never wake the Orchestrator (#123) */
   'orchestrator:heldSeen': [{ chatId: string }, HeldNewsState];

@@ -1,7 +1,7 @@
 // The Guida's main side (ADR 0196): «Chiedi alla Guida» (IPC guide:ask) and the cards «da verificare» (IPC guide:stale).
 // ask: the question with the matching cards and the app_guide index (shared/guide-ask.ts) goes to one light model with
 // no tools through agents/oneshot.ts (Flash's engine at its lightest tier: no role text, no files, no permission
-// prompt; the run is kept like Battito's, job 'guide'); the answer comes back with its checked citations and its cost.
+// prompt; the run is kept like the other one-shot jobs', job 'guide'); the answer comes back with its checked citations and its cost.
 // stale: the anchored code of the cards hashed in the repo the app runs from (main/guide/anchors.ts), at most once a
 // minute, against the repo's own src/shared/guide-anchors.json (the bundled copy only when that one cannot be read);
 // a packaged build has no repo and answers checked: false. A runOnce that throws answers a clean reason. Built by wiring.ts; handlers in index.ts.

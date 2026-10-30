@@ -17,7 +17,7 @@ app (each CLI logs in itself) with these exceptions:
 - a login hand-off's password, read from the user's brain file only when they click Copia, never stored or logged
   (ADR 0012);
 - the API keys the user types in Settings → Motori, encrypted with safeStorage, write-only from the UI, given only to
-  their own engine's process env or HTTP header (ADR 0046; the Cursor Cloud Agents key only to api.cursor.com, ADR 0080);
+  their own engine's process env or HTTP header (ADR 0046);
 - the tokens of the MCP servers added in Settings → Connettori, the same way, given only by the app's MCP gateway to
   that server's own process env or request header, never to an engine or a chat (ADR 0086);
 - the passwords of the user's personal Browser page, encrypted with safeStorage, filled only into a page of their own
@@ -38,8 +38,7 @@ large tree.
 ## 4. Each harness spends only its own tokens
 
 The app starts `claude` only for Claude chats and `agent` only for Cursor chats and for the token-free login check
-(`agent status`), with the user's own login; a cloud agent (`claude --cloud`, `codex cloud`, Cursor's API with its own
-key) spends only its own vendor's plan or key (ADR 0080). An agent working on this repo inside Claude Code never runs
+(`agent status`), with the user's own login. An agent working on this repo inside Claude Code never runs
 the Cursor CLI.
 
 ## 5. No production from agents or routines

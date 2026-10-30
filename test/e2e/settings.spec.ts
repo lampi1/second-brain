@@ -30,10 +30,8 @@ async function keyringStandIn(app: ElectronApplication): Promise<void> {
   });
 }
 
-test('Impostazioni: groups, theme live, messaging always available, the model comparison retired with its switches kept', async () => {
+test('Impostazioni: groups, theme live, messaging always available, no model comparison', async () => {
   const { app, page } = await launchDemo();
-  const compare = () => page.evaluate(async () => window.sb.invoke('compare:list', undefined));
-  const before = await compare();
   await page.getByTestId('settings').click();
   await page.getByTestId('settings-all').click();
   const s = page.getByTestId('settings-page');
@@ -44,11 +42,10 @@ test('Impostazioni: groups, theme live, messaging always available, the model co
   await expect(s.getByTestId('st-view')).toHaveCount(0);
   await expect(s.getByTestId('st-group-routing')).toHaveCount(0);
 
-  // the model comparison is no longer on the page; its experiments and agent switches are kept as they were
+  // the model comparison is gone (ADR 0201)
   await expect(s.getByTestId('st-group-compare')).toHaveCount(0);
   await expect(s.locator('[data-testid^="st-exp-"], [data-testid^="st-agent-switch-"]')).toHaveCount(0);
   await shot(page, 'settings-dark');
-  expect(await compare()).toEqual(before);
 
   // Chat-to-chat transport has no switch; engine launch controls stay separate.
   await expect(s.getByTestId('st-cross-switch')).toHaveCount(0);

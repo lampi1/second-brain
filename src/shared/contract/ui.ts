@@ -1,4 +1,4 @@
-// Shell UI: held news, the global layer (overlay), skills and agents on disk, search, brain sync, headline and the page's own diagnostics.
+// Shell UI: held news, the global layer (overlay), skills and agents on disk, search, brain sync and the page's own diagnostics.
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
 import type { LogList } from '../activity-log';
@@ -160,21 +160,6 @@ export interface RendererErrorReport {
   where?: string;
 }
 
-/** The Grindhouse's headline (SPEC 18): a joke on the day's real events, written about once an hour by a model on the
- *  Anthropic API engine (main/headline.ts). source: model = the last answer; previous = an older answer kept after a
- *  failed refresh; builtin = none yet, a line of the app's own list. month* = what the headline spent this month. */
-export interface HeadlineState {
-  /** Battito provenance; absent in legacy caches. */
-  engine?: string | null;
-  agentId?: string;
-  text: string;
-  source: 'model' | 'previous' | 'builtin';
-  at: number | null;
-  model: string;
-  monthUsd: number;
-  monthCalls: number;
-}
-
 /** An image read from the system clipboard by main (bytes as they were; the renderer checks and scales them). */
 export interface ClipboardImage { mimeType: string; bytes: Uint8Array }
 
@@ -208,8 +193,6 @@ export interface UiInvokeMap {
   'sync:get': [void, SyncState];
   'sync:now': [{ domain?: string }, SyncState];
   'sync:resolve': [{ domain: string; choice: SyncChoice }, SyncState];
-  /** the Grindhouse's headline (SPEC 18, main/headline.ts): the line on screen now, never waiting for a model */
-  'headline:get': [void, HeadlineState];
   /** the Log page (shared/activity-log.ts): the recent events, the folder's size and its limits; zero tokens */
   'log:list': [void, LogList];
 }

@@ -92,8 +92,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'AgentProfile { id, name, purpose, instructions, engine, model | null, effort?, tools, permissionCeiling, tier, tierMax, launches, skills, version, activeVersion, trial?, userLocked }.',
         'AgentProfile { id, name, purpose, instructions, engine, model | null, effort?, tools, permissionCeiling, tier, tierMax, launches, skills, version, activeVersion, trial?, userLocked }.'),
       // src/main/agents/catalog.ts (roles.json), src/main/agents/versions.ts (role-history.json)
-      tech(FILES, 'userData/roles.json (i sei ruoli e Pulse) e role-history.json (le versioni di ogni ruolo).',
-        'userData/roles.json (the six roles and Pulse) and role-history.json (each role’s versions).'),
+      tech(FILES, 'userData/roles.json (i sei ruoli e Flash) e role-history.json (le versioni di ogni ruolo).',
+        'userData/roles.json (the six roles and Flash) and role-history.json (each role’s versions).'),
       // src/shared/roles.ts DELEGATION_DEFAULTS
       tech(LIMITS, 'Deleghe: profondità 2 e 5 figli in corso per genitore, di serie (Impostazioni → Ruoli e deleghe).', 'Delegation: depth 2 and 5 running children per parent by default (Settings → Roles and delegation).'),
       tech(TOOLS, 'agent_catalog (i ruoli e le loro skill), app_create_chat con roleId (apre il lavoro), agent_report (il rapporto finale).',
@@ -686,9 +686,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/ChatTile.tsx
       b('Una striscia chiusa mostra agente, stato, modello e l’ultima risposta; un clic ovunque su di essa la apre, ogni volta, e mostra la conversazione e l’input. Lo sforzo lo decide il profilo dell’agente: la striscia non lo mostra.',
         'A collapsed strip shows agent, state, model and the last answer; a click anywhere on it expands it, every time, showing the conversation and the input. The effort is the agent profile’s: the strip does not show it.'),
-      // src/renderer/components/CloudStrips.tsx, src/main/cloud/service.ts (ADR 0080)
-      b('Gli agenti cloud (Cursor, Codex, Claude Code che girano nel cloud del fornitore, anche a PC spento) hanno la loro striscia sotto le altre, raggruppata per repository, con l’etichetta «cloud» e il motore. Cursor mostra i messaggi, accetta messaggi e si ferma dall’app; Codex e Claude si seguono sulla loro pagina («Apri»). «Porta in locale» prende il risultato in un nuovo worktree. Li avvia l’Orchestrator quando glielo chiedi, solo su repository GitHub con il branch già pushato.',
-        'Cloud agents (Cursor, Codex, Claude Code running in the vendor’s cloud, even with the PC off) get their own strip under the others, grouped by repository, with a "cloud" label and the engine. Cursor shows its messages, takes messages and stops from the app; Codex and Claude are followed on their own page ("Open"). "Bring home" takes the result into a new worktree. The Orchestrator starts one when you ask it, only on GitHub repositories with the branch already pushed.'),
     ],
     analogy: b('Come il banco di orchestrator di uno studio: un fader per ogni canale, e il monitor di ciascuno sotto.',
       'Like a studio mixing desk: one fader per channel, and each one’s monitor below it.'),
@@ -696,7 +693,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(WHERE, 'Pagina «home» (brain/pages/Home.tsx), strisce in components/AgentStrips.tsx, ordine in lib/agent-order.ts; ADR 0068.',
         'Page "home" (brain/pages/Home.tsx), strips in components/AgentStrips.tsx, order in lib/agent-order.ts; ADR 0068.'),
       tech(DATA, 'Una striscia è aperta se prefs.chatExpanded[id], i suoi browser se anche prefs.browserOpen[id]; nessun ordine salvato, nessun trascinamento.', 'A strip is expanded if prefs.chatExpanded[id], its browsers if prefs.browserOpen[id] too; no saved order, no dragging.'),
-      tech(TOOLS, 'Un agente cloud parte da app_create_chat con where «cloud».', 'A cloud agent starts from app_create_chat with where "cloud".'),
     ],
     anchors: {
       0: ['src/renderer/brain/pages/Home.tsx'],
@@ -706,15 +702,14 @@ export const CONCEPTS: readonly ConceptCard[] = [
       4: ['src/renderer/components/RunEstimate.tsx', 'src/main/agents/task-estimate.ts'],
       5: ['src/main/chats/manager-delegation.ts#settleReport', 'src/main/chats/auto-close.ts', 'src/renderer/components/AutoCloseNotice.tsx'],
       6: ['src/renderer/components/ChatTile.tsx'],
-      7: ['src/renderer/components/CloudStrips.tsx'],
     },
-    sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/RunEstimate.tsx', 'src/renderer/components/BrowserTile.tsx', 'src/renderer/components/CloudStrips.tsx', 'src/main/cloud/service.ts', 'src/main/chats/manager-delegation.ts'],
+    sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/RunEstimate.tsx', 'src/renderer/components/BrowserTile.tsx', 'src/main/chats/manager-delegation.ts'],
   },
   {
     id: 'memory-hub',
     title: b('La Memoria, un posto solo', 'Memoria, one place'),
-    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (la frase del giorno, i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Regole, Script & Query, Idee, File e Statistiche.',
-      'Memoria is the one place for everything the brain holds: its top is alive (the day’s sentence, live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Rules, Scripts & Queries, Ideas, Files and Statistics.'),
+    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Regole, Script & Query, Idee, File e Statistiche.',
+      'Memoria is the one place for everything the brain holds: its top is alive (live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Rules, Scripts & Queries, Ideas, Files and Statistics.'),
     points: [
       // src/renderer/lib/memory-hub.ts, src/renderer/actions.ts, src/renderer/components/Sidebar.tsx
       b('Skill, Regole, Script e Idee non sono più pagine a sé nella barra: sono schede di Memoria (Apprendimento è passato in Andamento); i vecchi link, gli id e i tasti G (G S, G L, G T, G I) aprono la scheda giusta, e «memoria/<scheda>» apre una scheda da un link.',
@@ -725,10 +720,10 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('«Approvate» elenca tutto quello che è nel brain adesso (skill, regole, fatti confermati, script): il cestino lo toglie con un clic e per qualche secondo «Annulla» lo rimette; skill, regole e script passano dal registro delle modifiche, quindi restano annullabili anche in Apprendimento.',
         '\"Approved\" lists everything in the brain now (skills, rules, confirmed facts, scripts): the bin takes one out in a click and for a few seconds \"Undo\" puts it back; skills, rules and scripts go through the change log, so they stay undoable in Learning too.'),
       // src/renderer/brain/pages/Idee.tsx
-      b('«Idee» divide le tue da quelle dell’IA (la colonna «Chi» di ideas.md: «IA» è l’IA) e «Rispolvera» ti ripropone a caso un’idea vecchia ancora aperta; sotto, il Battito e i temi delle idee.',
-        '\"Ideas\" splits yours from the AI’s (the \"Chi\" column of ideas.md: \"IA\" is the AI) and \"Dust one off\" brings back an old idea still open at random; below, the Pulse and the ideas’ themes.'),
-      b('La Dashboard non c’è più: la frase e i contatori sono in cima a Memoria, il contesto delle chat in Costi, gli errori dell’app e i temi degli errori in Qualità, gli spunti dell’AI in Idee; il resto erano doppioni.',
-        'The Dashboard is gone: the sentence and the counters are at the top of Memoria, the chats’ context in Costi, the app’s errors and the errors’ themes in Quality, the AI’s tips in Ideas; the rest were duplicates.'),
+      b('«Idee» divide le tue da quelle dell’IA (la colonna «Chi» di ideas.md: «IA» è l’IA) e «Rispolvera» ti ripropone a caso un’idea vecchia ancora aperta; sotto, i temi delle idee.',
+        '\"Ideas\" splits yours from the AI’s (the \"Chi\" column of ideas.md: \"IA\" is the AI) and \"Dust one off\" brings back an old idea still open at random; below, the ideas’ themes.'),
+      b('La Dashboard non c’è più: i contatori sono in cima a Memoria, il contesto delle chat in Costi, gli errori dell’app e i temi degli errori in Qualità, gli spunti dell’AI in Idee; il resto erano doppioni.',
+        'The Dashboard is gone: the counters are at the top of Memoria, the chats’ context in Costi, the app’s errors and the errors’ themes in Quality, the AI’s tips in Ideas; the rest were duplicates.'),
       b('Ogni numero ha un «?» che dice come è calcolato; ogni pannello ha «Discuti», che prepara una bozza all’Orchestrator senza mai inviarla.',
         'Every number has a \"?\" saying how it is computed; every panel has \"Discuss\", which drafts for the Orchestrator and never sends.'),
     ],
@@ -1205,8 +1200,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Everything the app proposes and that waits for your yes is a card in a single deck: one at a time, you approve or reject.'),
     points: [
       // ADR 0123; src/main/proposals/sources.ts (SOURCES), src/main/proposals/service.ts, src/renderer/components/brain-model/ProposalsDeck.tsx, src/renderer/lib/proposals.ts
-      b('Il mazzo raccoglie fatti di memoria proposti, skill candidate, richieste di impostazioni degli agenti, livelli e prove dei ruoli, regole del Battito, politiche dell’auto-miglioramento e i cambi che la manutenzione ha già fatto negli ultimi 14 giorni.',
-        'The deck gathers proposed memory facts, skill candidates, the agents’ setting requests, the roles’ tiers and trials, the Battito’s rules, the self-improvement policies and the changes the maintenance already made in the last 14 days.'),
+      b('Il mazzo raccoglie fatti di memoria proposti, skill candidate, richieste di impostazioni degli agenti, livelli e prove dei ruoli, politiche dell’auto-miglioramento e i cambi che la manutenzione ha già fatto negli ultimi 14 giorni.',
+        'The deck gathers proposed memory facts, skill candidates, the agents’ setting requests, the roles’ tiers and trials, the self-improvement policies and the changes the maintenance already made in the last 14 days.'),
       b('Ogni carta dice chi l’ha proposta, dove (chat e run), quando e con quali prove; la più recente sta in cima, i filtri sopra la dividono per gruppo.',
         'Every card says who proposed it, where (chat and run), when and with what evidence; the newest is on top, the filters above split it by group.'),
       b('Trascina a destra o premi ✓ (→) per approvare, a sinistra o ✕ (←) per rifiutare; Z o Ctrl+Z annulla l’ultima scelta finché non è partita, dopo circa 6 secondi o alla scelta seguente.',
@@ -1326,8 +1321,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'log',
     title: b('Il Log', 'The Log'),
-    summary: b('Una pagina sola con tutto quello che l’app fa, in tempo reale e leggibile: ogni incarico passo per passo, i classificatori, le stime, gli errori e la memoria scritti nel brain, Battito.',
-      'One page with everything the app does, live and readable: each task step by step, the classifiers, the estimates, the errors and memory written to the brain, Battito.'),
+    summary: b('Una pagina sola con tutto quello che l’app fa, in tempo reale e leggibile: ogni incarico passo per passo, i classificatori, le stime, gli errori e la memoria scritti nel brain.',
+      'One page with everything the app does, live and readable: each task step by step, the classifiers, the estimates, the errors and memory written to the brain.'),
     points: [
       // src/main/activity/chat-watch.ts
       b('Ogni incarico è una catena: chi ha scelto quale agente e perché, il suo lavoro con costo, strumenti ed errori, il risultato, la verifica (o «non effettuata»).',
@@ -1581,8 +1576,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Like asking the colleague next to you "what was that?" while the boss is talking: they whisper the answer and the meeting goes on.'),
     diagram: { kind: 'flow', steps: [b('Tua domanda', 'Your question'), b('Contesto Orchestrator', 'Orchestrator context'), b('Risposta', 'Answer'), b('Lavoro, se serve', 'A job, if needed')] },
     tech: [
-      tech(LIMITS, 'Permessi: modalità plan (sola lettura); strumenti lettura e web; mai delegabile, scope background come Battito.',
-        'Permissions: plan mode (read only); read and web tools; never delegable, background scope like Pulse.'),
+      tech(LIMITS, 'Permessi: modalità plan (sola lettura); strumenti lettura e web; mai delegabile, scope background.',
+        'Permissions: plan mode (read only); read and web tools; never delegable, background scope.'),
       tech(WHERE, 'Carta «flash» in roles.json; il contesto passa da ChatManager.deliverNow.',
         'Card "flash" in roles.json; the context goes through ChatManager.deliverNow.'),
     ],
@@ -1879,6 +1874,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/appctl/config.ts app_config
       b('Puoi chiedere all’Orchestrator di cambiare una scelta per te: lo fa come il tuo clic, con «Annulla»; segreti e chiavi restano solo tuoi.',
         'You can ask the Orchestrator to change a choice for you: it does it like your click, with "Undo"; secrets and keys stay yours alone.'),
+      // src/renderer/components/SuggestSettings.tsx; src/renderer/lib/composer-suggest.ts localSuggestion (ADR 0118, 0201)
+      b('Scrittura ha un solo interruttore, «Suggerimenti mentre scrivi»: un testo grigio dopo il cursore nel campo della chat, dai tuoi messaggi passati, dai comandi «</>», dai ruoli, dalle chat e dai file, a zero token; Tab lo accetta, Esc lo nasconde.',
+        'Writing has one switch, "Suggestions while you type": grey text after the cursor in the chat input, from your past messages, the "</>" commands, the roles, the chats and the files, zero tokens; Tab takes it, Esc hides it.'),
     ],
     analogy: b('Come il quadro elettrico di casa: pochi interruttori con l’etichetta giusta, e per i lavori grossi chiami l’elettricista.',
       'Like the fuse box at home: a few switches with the right label, and for the big jobs you call the electrician.'),
@@ -1892,8 +1890,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       1: ['src/renderer/lib/settings-page.ts#matchesSettingsSearch', 'src/renderer/lib/settings-page.ts#hitRanges'],
       4: ['src/shared/guide-coverage.ts#SETTINGS_CARDS'],
       5: ['src/main/appctl/config.ts#app_config'],
+      6: ['src/renderer/components/SuggestSettings.tsx', 'src/renderer/lib/composer-suggest.ts#localSuggestion'],
     },
-    sources: ['src/renderer/components/SettingsPage.tsx', 'src/renderer/lib/settings-sections.ts', 'src/renderer/lib/settings-page.ts', 'src/renderer/components/ProfileSettings.tsx', 'src/renderer/components/AppearancePreview.tsx', 'src/main/appctl/config.ts'],
+    sources: ['src/renderer/components/SettingsPage.tsx', 'src/renderer/components/SuggestSettings.tsx', 'src/renderer/lib/settings-sections.ts', 'src/renderer/lib/settings-page.ts', 'src/renderer/components/ProfileSettings.tsx', 'src/renderer/components/AppearancePreview.tsx', 'src/main/appctl/config.ts'],
   },
   {
     id: 'guide',

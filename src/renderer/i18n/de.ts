@@ -7,7 +7,6 @@ import { suggestDe } from './areas/suggest.de';
 import { appTextDe } from './areas/app-text.de';
 import { brainTextDe } from './areas/brain-text.de';
 import { learningReviewDe } from './areas/learning-review.de';
-import { cloudDe } from './areas/cloud.de';
 import { brainModelDe } from './areas/brain-model.de';
 import { memoryDe } from './areas/memory.de';
 import { memoryHubDe } from './areas/memory-hub.de';
@@ -78,7 +77,6 @@ export const de: Dict = {
   ...setupDe,
   ...viewerOverlayDe,
   ...homeDe,
-  ...cloudDe,
   ...guideDe,
   ...pbrowserDe,
   ...treeDe,

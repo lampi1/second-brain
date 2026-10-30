@@ -17,7 +17,7 @@ const run = (p: Partial<AgentRun>): AgentRun => ({ runId: 'r1', chatId: 'c1', ag
 function make(p: Partial<MorningDeps> = {}, clock = { now: T }) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-morning-')); dirs.push(dir);
   const api = vi.fn(async (q: string) => q.startsWith('/api/tables') ? { ok: true as const, data: { ideas: [{ titolo: 'Riprendi', stato: 'aperta', scaduta: '2026-10-19' }] } } : { ok: false as const, error: 'no' });
-  const deps: MorningDeps = { file: path.join(dir, 'morning.json'), chats: () => [], runs: () => [run({})], pending: () => 1, approvals: () => 2, tasks: () => null, cloud: () => [], changes: () => [],
+  const deps: MorningDeps = { file: path.join(dir, 'morning.json'), chats: () => [], runs: () => [run({})], pending: () => 1, approvals: () => 2, tasks: () => null, changes: () => [],
     api, stallMin: () => 10, now: () => clock.now, env: {}, ...p };
   return { deps, api, clock, service: new MorningService(deps) };
 }

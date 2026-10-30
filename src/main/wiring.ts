@@ -44,9 +44,6 @@ import { checkedDelegation } from '../shared/roles';
 import { createEngines } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
 import { RecordingStore } from './recordings/store';
-import { CloudService, cloudFile } from './cloud/service';
-import { realExec, realHttp } from './cloud/exec';
-import { CURSOR_CLOUD_KEY } from './cloud/cursor';
 import { EngineSweeper } from './chats/sweep';
 import { ChatManager, workBehind } from './chats/manager';
 import type { BrainService, ChatService } from './services';
@@ -102,7 +99,6 @@ import { releaseId } from './release';
 import { sharedDir } from './platform';
 import { HeadlessRunner } from './compare/headless';
 import { OneShotService } from './agents/oneshot';
-import { CompareQueue, queueAllowed } from './compare/queue';
 import { DelegateWorktrees, gitWorktrees } from './agents/worktrees';
 import { stageDelegatedChanges, stageDelegatedChangesMany } from './agents/delegation-integration';
 import { DEFAULT_CAP_USD, JudgeSampler, judgeSamplingOn, judgingEstimate, roleShares } from './agents/judge-sample';
@@ -201,16 +197,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the brain's engines are read before the chats restore: a chat on one of them can resume (ADR 0046)
   const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => brain.info().brainRoot, settings: brain });
   const textTool = mountTextTool(mcp, engines.text);
-  // cloud agents (ADR 0080): the vendors' lists polled only while the window is on screen; tests never reach a vendor
-  const cloud = new CloudService({
-    file: cloudFile(ctx.userData), emit: st => ctx.emitter.emit('cloud:changed', st), exec: realExec,
-    http: process.env.SB_TEST || process.env.VITEST ? () => Promise.reject(new Error('i test non chiamano Cursor')) : realHttp,
-    cursorKey: () => engines.keyFor(CURSOR_CLOUD_KEY), engineOn: h => engineOn(brain.settings(), h),
-    budget: () => { const b = brain.settings().budget; return { limitUsd: b.enabled && b.cursor.mode !== 'off' ? b.cursor.dailyUsd : null, localTodayUsd: brain.usage().cursorTodayUsd ?? 0 }; },
-    addSpend: usd => engines.addSpend(CURSOR_CLOUD_KEY, usd),
-    visible: () => { const w = ctx.window(); return !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized(); },
-  });
-  cloud.startPolling();
+  // the cloud agents (ADR 0080) went with ADR 0201: the list of the ones started is erased at start (nothing once gone)
+  try { fs.rmSync(path.join(ctx.userData, 'cloud-agents.json'), { force: true }); } catch (e) { log.warn('wiring', 'old cloud-agents.json not erased', { cause: errText(e) }); }
   // live turn costs and the Claude model list at the brain's per-model list prices (harness/models.json, else the
   // release template's), re-read at most every 30 s; set before the catalog reads its models (issue #96)
   setPriceTable(priceTableSource(() => brain.routingInfo().registry, () => { try { return path.join(templateRoot(), 'harness', 'models.json'); } catch { return null; } }));
@@ -620,7 +608,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
   // routine packages the Orchestrator authors (ADR 0175): <userData>/routines/<id>/routine.json, the Routine section's store
   const routinePackageStore = createFolderPackageStore(path.join(ctx.userData, 'routines'));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, routinePackages: () => routinePackageStore, personal, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, routinePackages: () => routinePackageStore, personal, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
@@ -668,16 +656,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     trash: p => (process.env.SB_TEST ? fs.promises.rm(p, { recursive: true, force: true }) : shell.trashItem(p)),
   });
 
-  // the comparison's side b (ADR 0046 §4): the runs the brain queues (harness/compare/app-queue.mjs), each a hidden
-  // read-only session on an engine the user turned on, with the app's own logins and keys (compare/headless.ts)
+  // hidden read-only sessions on an engine the user turned on, with the app's own logins and keys (compare/headless.ts):
+  // the one-shot jobs below use them (the brain's comparison queue they were built for went, ADR 0201)
   const headless = new HeadlessRunner({
     userData: ctx.userData, settings: () => brain.settings(), keyFor: h => engines.keyFor(h), enginePaths: () => enginePathsFromEnv(), appVersion: app.getVersion(), registry: () => brain.routingInfo().registry,
     // the other side's answers and the verdicts: never read by a run, whatever the brain lists
     denyRead: () => { const root = brain.info().brainRoot; return root ? [path.join(root, 'reviews', 'compare')] : []; },
-  });
-  const compareRuns = new CompareQueue({
-    brainRoot: () => brain.info().brainRoot, node, runner: headless,
-    anyOn: async () => { const st = await brain.compareList(); return st.ok && st.experiments.some(e => e.on); },
   });
   const oneShot = new OneShotService({ userData: ctx.userData, profile: id => agents.list().profiles.find(p => p.id === id),
     settings: () => brain.settings(), registry: () => brain.routingInfo().registry,
@@ -686,8 +670,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // «Chiedi alla Guida» (ADR 0196): one light one-shot on Flash's engine; the anchors are checked only in a run from the repo
   const guide = new GuideService({ runOnce: r => oneShot.runOnce(r), repoRoot: repoRootOf(path.dirname(fileURLToPath(import.meta.url))),
     index: lang => guideIndex({ window: ctx.window, settings: { schema: () => brain.settingsSchema(), get: () => brain.settings() }, tools: () => [], showValues: () => false }, lang) });
-  // only the user's stable app spends tokens on the brain's rounds (the dev instance is run by agents and tests)
-  if (queueAllowed(!!releaseId(), process.env)) compareRuns.start();
 
   // GitHub sync outcomes + product changes in the brain (stable instance only, never in tests): src/main/sync.ts
   let sync: ProductSync | null = null;
@@ -759,7 +741,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const morning = new MorningService({ file: path.join(ctx.userData, 'morning.json'), chats: () => manager.list(), runs: () => manager.runs.list(),
     pending: () => manager.pending().length + asks.pending().length,
     approvals: () => agents.list().profiles.filter(p => p.scope === 'role' && p.trial).length + lifecycleApi.read({}).proposals.filter(p => p.kind === 'tier').length,
-    tasks: () => tasks.get(), cloud: () => cloud.state().agents, changes: () => brainModel.changes(), api: p => brain.api(p),
+    tasks: () => tasks.get(), changes: () => brainModel.changes(), api: p => brain.api(p),
     stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
@@ -767,15 +749,15 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     morning,
     mcpServers,
     judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
-    cloud, chats, browser, personal, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
+    chats, browser, personal, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
     updateChats: {
-      problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
+      problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
     },
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { routines.stop(); mcpServers.stop(); brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
-    killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
+    shutdown: async () => { routines.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
+    killNow: () => { manager.killAll(); runner.shutdown(); },
   };
 }
