@@ -152,6 +152,8 @@
 .hub-adv-list > li.hub-adv-edit { display: block; padding: 0; border: 0; background: none; }
 
 /* «Aggiungi server MCP» (McpAddPanel.tsx, ADR 0207): paste box, popular servers, the form, who uses it, the result */
+.mcp-runs { display: block; padding: 6px 8px; border-radius: var(--r-s); background: var(--surface-3); font: 12px/1.5 var(--font-mono); white-space: pre-wrap; word-break: break-all; color: var(--text); }
+.mcp-awaiting > div { display: flex; gap: 8px; }
 .mcp-add { display: grid; gap: 16px; padding: 18px; border: 1px solid var(--blue-line); border-radius: var(--r-l); background: var(--surface); box-shadow: 0 0 0 3px var(--blue-bg); }
 .mcp-add-head { display: flex; align-items: flex-start; gap: 12px; }
 .mcp-add-head > div { flex: 1; min-width: 0; }

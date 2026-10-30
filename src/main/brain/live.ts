@@ -60,7 +60,11 @@ export function feedAction(v: unknown): FeedAction | undefined {
     const ids = (a as { ids?: unknown }).ids;
     if (Array.isArray(ids) && ids.length > 0 && ids.length <= 20 && ids.every(id => typeof id === 'string' && /^[0-9a-f]{8,32}$/.test(id))) return { kind: 'brain-undo', ids: [...ids] as string[] };
   }
-  if (a?.kind === 'connector-undo') { const u = (a as { undo?: unknown }).undo; if (typeof u === 'string' && /^[0-9a-f]{12}$/.test(u)) return { kind: 'connector-undo', undo: u }; }
+  if (a?.kind === 'connector-undo') {
+    const u = (a as { undo?: unknown }).undo, act = (a as { activate?: { server?: unknown; runs?: unknown } }).activate;
+    const activate = act && typeof act.server === 'string' && /^[a-z0-9-]{1,40}$/.test(act.server) && typeof act.runs === 'string' && act.runs.length <= 8000 ? { server: act.server, runs: act.runs } : undefined;
+    if (typeof u === 'string' && /^[0-9a-f]{12}$/.test(u)) return { kind: 'connector-undo', undo: u, ...(activate ? { activate } : {}) };
+  }
   if (a?.kind === 'agent-undo') {
     const u = a.undo;
     if (u && typeof u.agentId === 'string' && /^[a-z][a-z0-9_-]{0,79}$/.test(u.agentId) && Number.isFinite(u.expectedRevision) && Number.isSafeInteger(u.version) && u.version > 0) return { kind: 'agent-undo', undo: { agentId: u.agentId, expectedRevision: u.expectedRevision, version: u.version } };

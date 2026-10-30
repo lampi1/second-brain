@@ -20,8 +20,9 @@ export interface FeedEvent {
   action?: FeedAction;
 }
 /** brain-undo: the changes a maintenance pass the app ran by itself made (brainmodel:rollback each, newest first; ADR 0102) */
-/** connector-undo: a connector change the Orchestrator made (app_config, ADR 0207): mcpservers:undo with its key */
-export type FeedAction = { kind: 'agent-undo'; undo: AgentUndo } | { kind: 'agent-proposals' } | { kind: 'brain-undo'; ids: string[] } | { kind: 'connector-undo'; undo: string };
+/** connector-undo: a connector change the Orchestrator made (app_config, ADR 0207): mcpservers:undo with its key;
+ *  `activate`: the server waits for the user's «Attiva» (mcpservers:activate), shown with exactly what it runs */
+export type FeedAction = { kind: 'agent-undo'; undo: AgentUndo } | { kind: 'agent-proposals' } | { kind: 'brain-undo'; ids: string[] } | { kind: 'connector-undo'; undo: string; activate?: { server: string; runs: string } };
 
 // ---- DevOps (src/main/tasks): the user's Azure DevOps, read by the brain's read-only scripts, never written
 

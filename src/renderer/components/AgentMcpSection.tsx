@@ -51,7 +51,7 @@ export function AgentMcpSection({ roleId, roleName, mcpClass = true, embedded = 
           </Select>
         </div>
         {mode === 'pick' && (open === s.id || picked.length > 0) && <fieldset className="agent-mcp-tools"><legend className="sr-only">{t('agentMcp.for', { name: s.label })}</legend>
-          {tools.map(x => <label key={x.name}><input type="checkbox" checked={picked.includes(x.name)} onChange={e => void save(s.id, { tools: e.target.checked ? [...picked, x.name] : picked.filter(n => n !== x.name) })} /><code>{x.name}</code><small>{x.readOnly ? t('hub.read') : t('hub.write')}</small></label>)}
+          {tools.filter(x => !flash || x.readOnly).map(x => <label key={x.name}><input type="checkbox" checked={picked.includes(x.name)} onChange={e => void save(s.id, { tools: e.target.checked ? [...picked, x.name] : picked.filter(n => n !== x.name) })} /><code>{x.name}</code><small>{x.readOnly ? t('hub.read') : t('hub.write')}</small></label>)}
         </fieldset>}
       </li>;
     })}</ul>}

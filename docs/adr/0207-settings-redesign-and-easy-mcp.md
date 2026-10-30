@@ -53,6 +53,14 @@ it could not add, edit, test or remove one, and it could not change the owner's 
   save at once, including the Orchestrator and **Flash**. Flash is the MCP role `flash` (`FLASH_MCP_ROLE`). With no
   entry it gets `none`, and `all` is capped to `read` (`effectiveAccess`). The gateway also refuses a non-read-only
   tool to a Flash chat (`access.ts`), and `manager-sessions.ts` gives quick chats that role.
+- **Flash reads only, whatever the access form** (security review, 2026-10-30): a `{tools:[...]}` list could have
+  named a writing tool. Three layers now prevent it:
+  - `toolAllowed(access, tool, role)` refuses a non-read-only tool for the `flash` role in any form.
+  - `chainAllows` passes each level's role, and `toolFor` refuses it when Flash is anywhere in the chain.
+  - The store refuses to save a Flash tool list naming a tool the last test did not see as reading (or an untested
+    server), and stores `all` as `read`.
+  
+  The agent card's tool picker shows Flash only the reading tools.
 - **Secrets** follow security baseline rule 2: they stay in the app's existing secret store, never in files or logs.
   The renderer sends a value once, through `mcpservers:setSecret`. Nothing returns it.
 
@@ -65,6 +73,22 @@ it could not add, edit, test or remove one, and it could not change the owner's 
     its token.
   - Each change also posts a feed card (`connector-changed`) whose «Annulla» calls `mcpservers:undo`.
   - The gate is unchanged: the user's own recent words, and a log line without values.
+- **Nothing the Orchestrator adds runs before the user's click «Attiva»** (security review, 2026-10-30). Without
+  this, a prompt injection plus any "ok" from the user could make the app start an arbitrary command. The owner's
+  «l'Orchestrator può fare tutto» stands, with one human click:
+  - A server the Orchestrator adds, or whose `command`, `args`, `env` or `url` it changes, is saved **off** with
+    `awaiting: { runs, at }`. `runs` (`runsOf`) is exactly what it would start: variables, command and arguments, or
+    the address. `checkDef` keeps such a server off whatever the definition says.
+  - The feed card (the `connector-undo` action with `activate`) and the server card in Settings › Connettori
+    (`ActivateBox`) show that line and an «Attiva» button.
+  - The click calls `mcpservers:activate {id, runs}`. Main switches the server on only if it still runs exactly what
+    the user was shown. app_config has no activate action.
+  - Before «Attiva», `test` refuses (app_config and the service), `set enabled true` refuses, and the card hides
+    «Prova».
+  - The user's own save (the add or edit form, where the command is in view) clears `awaiting`.
+  - An agent's `def` never carries `routineTest`, `importedFrom` or `awaiting`.
+  - app_guide, the app_config description and the `mcp-servers` card tell the Orchestrator to ask the user to read
+    the line and click «Attiva».
 - **No secret values**: the tool never reads, asks for or echoes one. `form` opens Settings › Connettori with the add
   form filled through `ui:command mcpDraft`. The draft carries no secret, and the user types the token there.
 - New `area profile`: get, or set name / role / language / mainWork / replyStyle through the page's own `ProfileService`

@@ -27,6 +27,6 @@ export function serversFor(servers: readonly McpServerDef[], ctx: ChatMcpContext
 
 export function toolFor(ctx: ChatMcpContext, access: (role: string) => RoleMcpAccess | undefined, server: string, tool: Pick<McpToolInfo, 'name' | 'readOnly'>): boolean {
   // Flash is read-only (ADR 0107): only a server's reading tools, whatever was picked (ADR 0207)
-  if (ctx.roles[0] === FLASH_MCP_ROLE && !tool.readOnly) return false;
-  return policyAllowsServer(ctx.policy, server) && chainAllows(levelsOf(ctx, access), server, tool);
+  if (ctx.roles.includes(FLASH_MCP_ROLE) && !tool.readOnly) return false;
+  return policyAllowsServer(ctx.policy, server) && chainAllows(levelsOf(ctx, access), server, tool, ctx.roles);
 }

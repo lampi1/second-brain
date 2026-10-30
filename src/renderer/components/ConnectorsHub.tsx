@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import type { ConnectorState } from '@shared/connectors';
 import type { McpImportCandidate, McpServerView, McpServersState } from '@shared/mcp-servers';
-import { slotKey } from '@shared/mcp-servers';
+import { runsOf, slotKey } from '@shared/mcp-servers';
 import { AppConnectorScreen } from '../../modules/onboarding/AppScreen';
 import { HelpTip } from './HelpTip';
 import { ToolCatalog } from './ToolCatalog';
@@ -54,6 +54,25 @@ function TokenRow({ server, slot, available, onSaved }: { server: McpServerView;
 }
 
 /** One MCP server's card. */
+/** A server the Orchestrator added or re-pointed (ADR 0207): exactly what it will start, and the user's own «Attiva». */
+export function ActivateBox({ server, onState }: { server: Pick<McpServerView, 'id' | 'label' | 'transport' | 'command' | 'args' | 'env' | 'url'>; onState?: (s: McpServersState) => void }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [done, setDone] = useState(false);
+  const runs = runsOf(server);
+  const activate = async () => {
+    setBusy(true); setError('');
+    try { const st = await window.sb.invoke('mcpservers:activate', { id: server.id, runs }); setDone(true); onState?.(st); }
+    catch (e) { setError(e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : t('hub.error')); }
+    finally { setBusy(false); }
+  };
+  return <div className="hub-problem mcp-awaiting" role="note" data-testid={`mcp-awaiting-${server.id}`}>
+    <b>{t('mcpadd.awaiting')}</b>
+    <code className="mcp-runs" data-testid={`mcp-runs-${server.id}`}>{runs}</code>
+    <p>{t('mcpadd.awaitingTip')}</p>
+    <div><button type="button" className="btn btn-primary btn-m" disabled={busy || done} onClick={() => void activate()} aria-label={t('mcpadd.activateName', { name: server.label })} data-testid={`mcp-activate-${server.id}`}>{t(done ? 'mcpadd.activated' : 'mcpadd.activate')}</button></div>
+    {error && <p role="alert">{error}</p>}
+  </div>;
+}
+
 export function ServerCard({ server, state, onEdit, onState, testing, onTest }: { server: McpServerView; state: McpServersState; onEdit?: () => void; onState: (s: McpServersState) => void; testing: boolean; onTest: () => void }) {
   const status = serverStatus(server), test = server.lastTest, tools = test?.tools ?? [];
   const reading = tools.filter(x => x.readOnly).length, roles = rolesWith(state, server.id).length;
@@ -70,13 +89,14 @@ export function ServerCard({ server, state, onEdit, onState, testing, onTest }: 
       <div><dt>{t('hub.agents')}<HelpTip title={t('hub.agents')} label={`${t('hub.agents')} ${server.label}`}>{t('hub.agentsTip')}</HelpTip></dt><dd>{server.enabled ? t('hub.agentsValue', { n: roles, total: MCP_ACCESS_ROLES.length }) : t('hub.status.off')}</dd></div>
       <div><dt>{t('hub.lastTest')}</dt><dd>{test ? <>{new Date(test.at).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}{test.ok && test.ms > 0 && <small>{t('hub.ms', { ms: test.ms })}</small>}</> : t('connector.never')}</dd></div>
     </dl>
+    {server.awaiting && <ActivateBox server={server} onState={onState} />}
     <div className="hub-who"><span>{t('mcpadd.who')}</span><ServerRoles server={server.id} state={state} onState={onState} /></div>
     {test && !test.ok && test.error && <div className="hub-problem" role="note" data-testid={`hub-problem-${server.id}`}><b>{test.error.message}</b><p><span>{t('hub.fix')}</span> {test.error.fix}</p></div>}
     {status === 'untested' && <div className="hub-hint" role="note"><p>{t('hub.untestedHint')}</p></div>}
     {server.secrets.map(slot => <TokenRow key={slotKey(slot)} server={server} slot={slot} available={state.secretsAvailable} onSaved={onState} />)}
     {tools.length > 0 && <details className="hub-details hub-tools"><summary>{t('hub.toolList', { n: tools.length })}</summary><ul>{tools.map(x => <li key={x.name} data-ro={x.readOnly}><i aria-hidden="true" /><code>{x.name}</code><span>{x.readOnly ? t('hub.read') : t('hub.write')}</span>{x.description && <small>{x.description}</small>}</li>)}</ul></details>}
     <footer className="hub-card-foot">
-      <button type="button" className="btn btn-primary btn-m" disabled={testing} onClick={onTest} aria-label={t('hub.testName', { name: server.label })}>{t('hub.test')}</button>
+      {!server.awaiting && <button type="button" className="btn btn-primary btn-m" disabled={testing} onClick={onTest} aria-label={t('hub.testName', { name: server.label })}>{t('hub.test')}</button>}
       {onEdit && <button type="button" className="btn btn-ghost btn-m" onClick={onEdit} aria-label={t('hub.editName', { name: server.label })}>{t('hub.edit')}</button>}
     </footer>
   </article>;

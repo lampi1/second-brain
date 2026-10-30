@@ -27,4 +27,7 @@ export const mcpAddDe: typeof mcpAddIt = {
   'mcpadd.works': (p: { n: number }) => (p.n === 1 ? 'Funktioniert: 1 Werkzeug' : `Funktioniert: ${p.n} Werkzeuge`),
   'mcpadd.savedNeedsToken': 'Gespeichert. Der Token fehlt', 'mcpadd.savedNeedsTokenHint': 'Gib ihn auf der Karte des Servers ein, dann «Testen».',
   'mcpadd.done': 'Fertig',
+  'mcpadd.activate': 'Aktivieren', 'mcpadd.activated': 'Aktiviert', 'mcpadd.activateName': (p: { name: string }) => `${p.name} aktivieren`,
+  'mcpadd.awaiting': 'Der Orchestrator hat ihn hinzugefügt oder geändert, was er startet: er bleibt aus, bis du «Aktivieren» drückst. Er startet genau:',
+  'mcpadd.awaitingTip': 'Aktiviere ihn nur, wenn du den Befehl oder die Adresse erkennst und darum gebeten hast. Sonst «Rückgängig» auf seiner Meldung oder Bearbeiten → Entfernen.',
 };

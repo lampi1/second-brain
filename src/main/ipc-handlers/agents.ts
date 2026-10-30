@@ -28,6 +28,7 @@ export function agentsHandlers({ s, demo, agentImages, workflows, orchestrator, 
     'mcpservers:importScan': () => mcpServers().importScan(),
     'mcpservers:importApply': a => mcpServers().importApply(a?.keys),
     'mcpservers:undo': a => mcpServers().undo(a?.undo),
+    'mcpservers:activate': a => mcpServers().activate(a),
     'agents:list': () => s.agents.list(),
     // the brain skills that fit a request (the role start dialog); the demo ranks by words only
     'agents:undo': a => { if (!s.runFeedback) throw new Error('Annulla non disponibile.'); return s.runFeedback.undo(a); },

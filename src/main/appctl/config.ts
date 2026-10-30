@@ -24,7 +24,7 @@ import type { ChangeBy, SettingChange, SettingDef, SettingRequestResult, Setting
 import type { AgentCatalog, AgentDraft, AgentProfile, AgentVersion } from '../../shared/agents';
 import type { FeedAction } from '../../shared/contract';
 import type { OwnerProfile, ProfileResult, ProfileSave } from '../../shared/profile';
-import { MCP_ACCESS_ROLES, effectiveAccess, type McpServerDef, type McpServersState, type McpServerView, type McpToolAccess } from '../../shared/mcp-servers';
+import { runsOf, MCP_ACCESS_ROLES, effectiveAccess, type McpServerDef, type McpServersState, type McpServerView, type McpToolAccess } from '../../shared/mcp-servers';
 import { parseMcpSnippet, publicDraft } from '../../shared/mcp-paste';
 import { getAt } from '../brain/settings-schema';
 import { addRedaction, log } from '../log';
@@ -94,7 +94,11 @@ export function configTool(d: ConfigDeps): ToolDef {
       return s;
     };
     const defOf = (s: McpServerView): McpServerDef => { const { secretMasks: _m, lastTest: _t, ...def } = s; void _m; void _t; return def; };
-    const tell = (title: string, detail: string, undo: string) => d.announce?.({ kind: 'connector-changed', title, detail: `${detail} · ${reason ? `richiesta: ${reason}` : 'su tua richiesta'}`, action: { kind: 'connector-undo', undo } });
+    const tell = (title: string, detail: string, undo: string, activate?: { server: string; runs: string }) => d.announce?.({ kind: 'connector-changed', title, detail: `${detail} · ${reason ? `richiesta: ${reason}` : 'su tua richiesta'}`, action: { kind: 'connector-undo', undo, ...(activate ? { activate } : {}) } });
+    // what the Orchestrator adds, or whose command, arguments, variables or address it changes, is saved off and waits for
+    // the user's own «Attiva» on its card (ADR 0207: a prompt injection plus a quick "ok" never starts a program)
+    const held = (def: McpServerDef): McpServerDef => ({ ...def, enabled: false, awaiting: { runs: runsOf(def), at: Date.now() } });
+    const ACTIVATE = 'it is saved OFF: tell the user to read what it runs on its card (feed or Impostazioni → Connettori) and click «Attiva»; only then can it be tested or used';
     // what the agent gave (a paste or a definition) as a definition without any secret value
     const draftFrom = (): { def: McpServerDef; tokens: string[]; dropped: string[] } => {
       if (typeof a.snippet === 'string' && a.snippet.trim()) {
@@ -107,7 +111,9 @@ export function configTool(d: ConfigDeps): ToolDef {
         return publicDraft(pick);
       }
       if (a.def && typeof a.def === 'object') {
-        const def = { enabled: true, secrets: [], ...(a.def as Record<string, unknown>) } as unknown as McpServerDef;
+        // never the user's own confirmations or origin: routineTest (non-production account), importedFrom, awaiting
+        const { routineTest: _r, importedFrom: _i, awaiting: _w, ...given } = a.def as Record<string, unknown>; void _r; void _i; void _w;
+        const def = { enabled: true, secrets: [], ...given } as unknown as McpServerDef;
         if (!def.id && typeof def.label === 'string') def.id = def.label.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'server';
         return { def, tokens: (def.secrets ?? []).map(x => x.name), dropped: [] };
       }
@@ -130,12 +136,13 @@ export function configTool(d: ConfigDeps): ToolDef {
         if (!m.agentSave) throw new Error('non disponibile');
         asked('i connettori');
         const draft = draftFrom();
-        const r = m.agentSave(draft.def);
+        const r = m.agentSave(held(draft.def));
         const s = m.state().servers.find(x => x.id === r.id);
-        log.info('appctl', 'Orchestrator added an MCP server', { chat: d.callerId, data: { server: r.id, transport: s?.transport } });
-        tell(`L’Orchestrator ha aggiunto il server MCP «${s?.label ?? r.id}»`, s ? view(s).runs : r.id, r.undo);
-        return { added: r.id, changeId: r.undo, tokensMissing: draft.tokens, ...(draft.dropped.length ? { leftOut: draft.dropped } : {}),
-          next: draft.tokens.length ? 'tell the user to type the token(s) in its card in Impostazioni → Connettori (app_config action form or app_ui page impostazioni/connectors), then test' : 'test it with action test', undo: 'action undo with this changeId, or Annulla on its card' };
+        const runs = s ? runsOf(s) : '';
+        log.info('appctl', 'Orchestrator added an MCP server (off until the user activates it)', { chat: d.callerId, data: { server: r.id, transport: s?.transport } });
+        tell(`L’Orchestrator ha aggiunto il server MCP «${s?.label ?? r.id}»: è spento finché non premi «Attiva»`, `avvia: ${runs}`, r.undo, { server: r.id, runs });
+        return { added: r.id, state: 'off, waiting for the user\'s «Attiva»', runs, changeId: r.undo, tokensMissing: draft.tokens, ...(draft.dropped.length ? { leftOut: draft.dropped } : {}),
+          next: `${ACTIVATE}${draft.tokens.length ? '; before that they type the token(s) in the same card (action form opens it)' : ''}`, undo: 'action undo with this changeId, or Annulla on its card' };
       }
       case 'remove': {
         if (!m.agentRemove) throw new Error('non disponibile');
@@ -156,7 +163,8 @@ export function configTool(d: ConfigDeps): ToolDef {
       case 'test': {
         if (!m.test) throw new Error('non disponibile');
         const s = find(a.server);
-        // a test starts the server's command: the user's ask, like a change
+        // a test starts the server's command: the user's ask, like a change, and never before their «Attiva»
+        if (s.awaiting) throw new Error(`«${s.label}» aspetta «Attiva»: ${ACTIVATE}`);
         asked('i connettori');
         const after = (await m.test(s.id)).servers.find(x => x.id === s.id);
         const t = after?.lastTest;
@@ -182,21 +190,27 @@ export function configTool(d: ConfigDeps): ToolDef {
         const FIELDS = ['enabled', 'label', 'purpose', 'command', 'args', 'env', 'url', 'headers', 'tokens'] as const;
         if (!(FIELDS as readonly string[]).includes(key)) throw new Error(`key: access | ${FIELDS.join(' | ')}`);
         if (key === 'enabled' && typeof a.value !== 'boolean') throw new Error('enabled: true | false');
+        if (key === 'enabled' && a.value === true && s.awaiting) throw new Error(`«${s.label}» aspetta «Attiva»: ${ACTIVATE}`);
+        const repoint = key === 'command' || key === 'args' || key === 'env' || key === 'url';
         const next: McpServerDef = key === 'tokens'
           ? { ...def, secrets: (Array.isArray(a.value) ? a.value : []).map(n => (def.transport === 'stdio' ? { where: 'env' as const, name: String(n) } : { where: 'header' as const, name: String(n), ...(String(n).toLowerCase() === 'authorization' ? { prefix: 'Bearer ' } : {}) })) }
           : { ...def, [key]: a.value } as McpServerDef;
-        if (!m.agentSave) { m.save({ def: next, previousId: s.id }); return { server: s.id, changed: key }; }
-        const r = m.agentSave(next, s.id);
-        log.info('appctl', 'Orchestrator changed an MCP server', { chat: d.callerId, data: { server: s.id, key } });
-        tell(key === 'enabled' ? `L’Orchestrator ha ${a.value ? 'acceso' : 'spento'} il server MCP «${s.label}»` : `L’Orchestrator ha modificato il server MCP «${s.label}»`, key === 'enabled' ? (a.value ? 'acceso' : 'spento') : `campo ${key}`, r.undo);
-        return { server: r.id, changed: key, changeId: r.undo, ...(key === 'command' || key === 'args' || key === 'env' || key === 'url' ? { note: 'a token saved for the old command or address is not used for the new one: the user types it again' } : {}) };
+        const saved = repoint ? held(next) : next;
+        if (!m.agentSave) { m.save({ def: saved, previousId: s.id }); return { server: s.id, changed: key, ...(repoint ? { state: 'off, waiting for the user\'s «Attiva»', next: ACTIVATE } : {}) }; }
+        const r = m.agentSave(saved, s.id);
+        const after = m.state().servers.find(x => x.id === r.id);
+        const runs = after ? runsOf(after) : runsOf(saved);
+        log.info('appctl', 'Orchestrator changed an MCP server', { chat: d.callerId, data: { server: s.id, key, held: repoint } });
+        tell(key === 'enabled' ? `L’Orchestrator ha ${a.value ? 'acceso' : 'spento'} il server MCP «${s.label}»` : repoint ? `L’Orchestrator ha cambiato cosa avvia «${s.label}»: è spento finché non premi «Attiva»` : `L’Orchestrator ha modificato il server MCP «${s.label}»`,
+          key === 'enabled' ? (a.value ? 'acceso' : 'spento') : repoint ? `avvia: ${runs}` : `campo ${key}`, r.undo, repoint || after?.awaiting ? { server: r.id, runs } : undefined);
+        return { server: r.id, changed: key, changeId: r.undo, ...(repoint ? { state: 'off, waiting for the user\'s «Attiva»', runs, next: ACTIVATE, note: 'a token saved for the old command or address is not used for the new one: the user types it again' } : {}) };
       }
     }
     throw new Error(`action ${action} non vale per l'area connector (get | add | set | remove | test | form | undo)`);
   };
   return {
     name: 'app_config',
-    description: `Read and change the app's configuration for the user, exactly as their own click in the app would (every change is logged with its Annulla). action "get" (read, optional query), "set", "undo", "history"; for connectors also "add", "remove", "test", "form". area: "setting" (every key of Impostazioni and more: key + value; get lists key, label, description, type, current value), "view" (theme system|light|dark, density comfortable|compact, workProfile: key + value), "agent" (a role's card in Brain → Agenti: agentId + key = one of ${AGENT_FIELDS.join('|')} + value; undo with agentId + version when set made a new version (text, skills, model, tier), else set the "before" value back), "connector" (the MCP servers of Impostazioni → Connettori: get = each server, how it runs, its token slots set|missing and who may use it; add = snippet (what the user pasted: a Claude Desktop/Cursor "mcpServers" JSON, a command line like "npx -y @x/server", or an http(s) URL; server = which one when the JSON has several) or def {label, transport stdio|http, command, args, env, url, headers, secrets:[{where env|header, name, prefix?}], purpose}; set = server + key enabled (boolean) | access (role ${MCP_ACCESS_ROLES.join('|')} + value all|read|none|{tools:[...]}) | label | purpose | command | args | env | url | headers | tokens (the token variable or header names); remove = server; test = server (opens it as a chat would and lists its tools); form = snippet or def: opens the add form prefilled for the user; undo = changeId from add/set/remove), "profile" (Il mio profilo, the brain's me.md: get, or set key name|role|language|mainWork (array of lines)|replyStyle + value), "later" («Rispondi dopo»: value true|false). Change only what the user asked in their own words in the last ${CONFIG_ASK_MIN} minutes; then tell them in one line what changed and that Annulla is on the change's card. Never secret values: never put a token in snippet, def, env or headers (a pasted one is dropped before anything is kept); when a server needs a token, say which one and that they type it in its card (form opens it); logins stay the user's. Where a setting is on screen: app_guide / app_ui outline.`,
+    description: `Read and change the app's configuration for the user, exactly as their own click in the app would (every change is logged with its Annulla). action "get" (read, optional query), "set", "undo", "history"; for connectors also "add", "remove", "test", "form". area: "setting" (every key of Impostazioni and more: key + value; get lists key, label, description, type, current value), "view" (theme system|light|dark, density comfortable|compact, workProfile: key + value), "agent" (a role's card in Brain → Agenti: agentId + key = one of ${AGENT_FIELDS.join('|')} + value; undo with agentId + version when set made a new version (text, skills, model, tier), else set the "before" value back), "connector" (the MCP servers of Impostazioni → Connettori: get = each server, how it runs, its token slots set|missing and who may use it; add = (saved OFF until the user's own «Attiva» on its card, which shows what it runs; so is a change of command|args|env|url; no test before it) snippet (what the user pasted: a Claude Desktop/Cursor "mcpServers" JSON, a command line like "npx -y @x/server", or an http(s) URL; server = which one when the JSON has several) or def {label, transport stdio|http, command, args, env, url, headers, secrets:[{where env|header, name, prefix?}], purpose}; set = server + key enabled (boolean) | access (role ${MCP_ACCESS_ROLES.join('|')} + value all|read|none|{tools:[...]}) | label | purpose | command | args | env | url | headers | tokens (the token variable or header names); remove = server; test = server (opens it as a chat would and lists its tools); form = snippet or def: opens the add form prefilled for the user; undo = changeId from add/set/remove), "profile" (Il mio profilo, the brain's me.md: get, or set key name|role|language|mainWork (array of lines)|replyStyle + value), "later" («Rispondi dopo»: value true|false). Change only what the user asked in their own words in the last ${CONFIG_ASK_MIN} minutes; then tell them in one line what changed and that Annulla is on the change's card. Never secret values: never put a token in snippet, def, env or headers (a pasted one is dropped before anything is kept); when a server needs a token, say which one and that they type it in its card (form opens it); logins stay the user's. Where a setting is on screen: app_guide / app_ui outline.`,
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     inputSchema: { type: 'object', additionalProperties: false, required: ['action', 'area'], properties: {
       action: { type: 'string', enum: ['get', 'set', 'undo', 'history', 'add', 'remove', 'test', 'form'] }, area: { type: 'string', enum: [...AREAS] },
