@@ -22,6 +22,9 @@ export const KEY_RE = /^(page|action):[a-z0-9][a-z0-9_.-]{0,40}(\/[a-z0-9][a-z0-
 /** At most this many keys in one batch and this many uses of one key in one batch: a broken page cannot flood the table. */
 export const MAX_KEYS = 200;
 export const MAX_N = 1000;
+/** At most this many different keys in one day: new keys past it are dropped, the known ones still count (the app has
+ *  far fewer pages and actions; a renderer inventing keys cannot grow the table without bound). */
+export const MAX_DAY_KEYS = 500;
 
 export const USE_STEPS: readonly Migration[] = [
   db => db.exec('create table use_counts(day text not null, key text not null, n integer not null, primary key(day, key))'),
@@ -95,10 +98,13 @@ export class UseCounter {
 
   /** Adds one batch to today's counts (one transaction). Bad keys and counts are dropped (cleanCounts). */
   add(a: unknown): void {
-    const counts = cleanCounts(a);
-    if (!counts.size) return;
+    const all = cleanCounts(a);
+    if (!all.size) return;
     const day = localDay(this.now());
     const db = this.open();
+    const known = this.dayKeys(day, db), counts = new Map<string, number>();
+    for (const [k, n] of all) if (known.has(k) || known.size < MAX_DAY_KEYS) { known.add(k); counts.set(k, n); }
+    if (!counts.size) return;
     if (db) {
       try {
         tx(db, () => {
@@ -113,6 +119,14 @@ export class UseCounter {
     }
     for (const [k, n] of counts) this.mem.set(`${day}\t${k}`, (this.mem.get(`${day}\t${k}`) ?? 0) + n);
     if (!db) this.prune(null);
+  }
+
+  /** The keys already counted on `day` (the database's and the memory's together). */
+  private dayKeys(day: string, db: DatabaseSync | null): Set<string> {
+    const out = new Set<string>();
+    if (db) { try { for (const r of db.prepare('select key from use_counts where day = ?').all(day) as unknown as { key: string }[]) out.add(String(r.key)); } catch { /* add() reports a broken table */ } }
+    for (const k of this.mem.keys()) if (k.startsWith(`${day}\t`)) out.add(k.slice(11));
+    return out;
   }
 
   /** Every row from `from` on (the database's and the memory's together). */

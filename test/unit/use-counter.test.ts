@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { closeAppDbs } from '../../src/main/app-db';
-import { KEEP_DAYS, MAX_KEYS, MAX_N, UseCounter, cleanCounts, demoUseCounts, localDay } from '../../src/main/use-counter';
+import { KEEP_DAYS, MAX_DAY_KEYS, MAX_KEYS, MAX_N, UseCounter, cleanCounts, demoUseCounts, localDay } from '../../src/main/use-counter';
 
 const dirs: string[] = [];
 const tmp = () => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-use-')); dirs.push(d); return d; };
@@ -22,6 +22,15 @@ describe('the batch', () => {
     expect(cleanCounts({ counts: 'x' }).size).toBe(0);
     const many = Object.fromEntries(Array.from({ length: MAX_KEYS + 50 }, (_, i) => [`page:p${i}`, 1]));
     expect(cleanCounts({ counts: many }).size).toBe(MAX_KEYS);
+  });
+  it('caps the different keys of one day; known keys keep counting', () => {
+    const c = new UseCounter();
+    c.init({ userData: null, now: () => new Date('2026-10-30T12:00:00').getTime() });
+    for (let b = 0; b < 4; b++) c.add({ counts: Object.fromEntries(Array.from({ length: MAX_KEYS }, (_, i) => [`page:p${b * MAX_KEYS + i}`, 1])) });
+    c.add({ counts: { 'page:p0': 2 } });
+    const r = c.report(1);
+    expect(r.rows.length).toBe(MAX_DAY_KEYS);
+    expect(r.rows.find(x => x.key === 'page:p0')?.n).toBe(3);
   });
   it('names the user\'s local day', () => {
     expect(localDay(NOON)).toBe('2026-10-30');

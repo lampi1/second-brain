@@ -38,6 +38,20 @@ export function fileFormat(real: string, platform: NodeJS.Platform = process.pla
   return platform === 'darwin' ? { format: 'public.file-url', buffer: Buffer.from(url, 'utf8') } : { format: 'text/uri-list', buffer: Buffer.from(`${url}\r\n`, 'utf8') };
 }
 
+/** The file's bytes through one descriptor, at most TEXT_BYTES: null when it is no longer a regular file or grew past
+ *  the cap since the check (a file swapped or appended meanwhile never fills memory). */
+export function readSmall(file: string): Buffer | null {
+  let fd: number | null = null;
+  try {
+    fd = fs.openSync(file, 'r');
+    if (!fs.fstatSync(fd).isFile()) return null;
+    const buf = Buffer.alloc(TEXT_BYTES + 1);
+    let n = 0, got = 0;
+    while (n < buf.length && (got = fs.readSync(fd, buf, n, buf.length - n, n)) > 0) n += got;
+    return n > TEXT_BYTES ? null : buf.subarray(0, n);
+  } catch { return null; } finally { if (fd !== null) fs.closeSync(fd); }
+}
+
 export async function copyFile(raw: string, clip: ClipboardLike, platform: NodeJS.Platform = process.platform): Promise<CopyFileResult> {
   const p = localPath(raw, platform);
   if (!p) return { how: 'refused', reason: 'Solo file di questo computer.' };
@@ -48,8 +62,7 @@ export async function copyFile(raw: string, clip: ClipboardLike, platform: NodeJ
   if (/^[\\/]{2}/.test(real)) return { how: 'refused', reason: 'Il percorso porta a una cartella di rete.' };
   if (IMAGE_EXT.has(path.extname(real).toLowerCase()) && await clip.writeImageFromPath(real)) return { how: 'image' };
   if (size <= TEXT_BYTES) {
-    let buf: Buffer | null = null;
-    try { buf = fs.readFileSync(real); } catch { buf = null; }
+    const buf = readSmall(real);
     if (buf && looksText(buf)) { await clip.writeText(buf.toString('utf8')); return { how: 'text' }; }
   }
   const f = fileFormat(real, platform);

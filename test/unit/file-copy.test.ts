@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { copyFile, fileFormat, looksText, TEXT_BYTES, type ClipboardLike } from '../../src/main/file-copy';
+import { copyFile, fileFormat, looksText, readSmall, TEXT_BYTES, type ClipboardLike } from '../../src/main/file-copy';
 
 function fake(image = true) {
   const got: { text?: string; raw?: { format: string; buffer: Buffer }; image?: string } = {};
@@ -50,5 +50,16 @@ describe('file copy', () => {
     expect(looksText(Buffer.from([0x61, 0, 0x62]))).toBe(false);
     expect(looksText(Buffer.from([0xff, 0xfe, 0x41]))).toBe(false);
     expect(TEXT_BYTES).toBeGreaterThan(1_000_000);
+  });
+  it('reads through one descriptor, never past the cap', () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-copy-small-'));
+    try {
+      fs.writeFileSync(path.join(d, 'a.txt'), 'ciao');
+      fs.writeFileSync(path.join(d, 'big.txt'), Buffer.alloc(TEXT_BYTES + 10, 0x61));
+      expect(readSmall(path.join(d, 'a.txt'))?.toString()).toBe('ciao');
+      expect(readSmall(path.join(d, 'big.txt'))).toBeNull();
+      expect(readSmall(d)).toBeNull();
+      expect(readSmall(path.join(d, 'none.txt'))).toBeNull();
+    } finally { fs.rmSync(d, { recursive: true, force: true }); }
   });
 });
