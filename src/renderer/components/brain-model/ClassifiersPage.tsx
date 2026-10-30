@@ -11,8 +11,9 @@
 // it is computed. A clean install shows the cards empty with what will appear. Data: 'classifiers:state'
 // (main/brainmodel/classifiers.ts + classifier-cards.ts) and agents:estimates (the task estimator's weekly backtest,
 // ADR 0087, via lib/run-estimates.ts). The kind of work by examples (ADR 0197) has its own wide card at the end of the
-// grid (KindModelCard.tsx). Rendered by App.tsx
-// PageFrame for 'classificatori'; view helpers in lib/classifier-view.ts; styles in styles/classifiers.css.
+// grid (KindModelCard.tsx). A tab of Andamento since ADR 0202 (components/andamento/AndamentoPage.tsx: the tab's
+// toolbar instead of its own title; the summary's «verified outcomes» left, the «Tipo di lavoro» card shows them).
+// View helpers in lib/classifier-view.ts; styles in styles/classifiers.css.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ClassifiersState } from '@shared/brain-model';
 import { t } from '../../i18n';
@@ -20,7 +21,7 @@ import { sb } from '../../sb';
 import { useRunEstimates } from '../../lib/run-estimates';
 import { cardViews, facts, hitSeries, kOfN, pctOf, weekLabel, type CardId, type CardView } from '../../lib/classifier-view';
 import { ClsIcon, Num, ct, intFmt, pctFmt, third } from './ClassifierParts';
-import { GuideLink } from '../GuideLink';
+import { PageHead } from '../../brain/components/States';
 import { when } from './MaintenancePanel';
 import { TrendChart } from './TrendChart';
 import { ClassifierDetail } from './ClassifierDetail';
@@ -88,7 +89,6 @@ export function ClassifiersPage() {
   const cards = useMemo(() => cardViews(state, undefined, taskEst?.accuracy), [state, taskEst]);
   const total = cards.reduce((s, c) => s + c.decisions, 0);
   const week = cards.reduce((s, c) => s + (c.weeks?.[c.weeks.length - 1]?.decisions ?? 0), 0);
-  const verified = cards.find(c => c.id === 'kind')?.success.n ?? 0, unverified = cards.find(c => c.id === 'kind')?.unverified?.n ?? 0;
   const active = open ? cards.find(c => c.id === open) : null;
   // Esc goes back from a detail to the grid
   useEffect(() => {
@@ -100,8 +100,7 @@ export function ClassifiersPage() {
   }, [open]);
 
   return <div className="dashboard bm-dash cls-page bx" data-testid="bm-classifiers-page">
-    <header className="dash-header"><div><span className="dash-eyebrow">{t('stats.cls.eyebrow')}</span><h1>{t('stats.cls.title')}</h1><p className="cls-lead">{t('stats.cls.lead')} <GuideLink concept="classifiers" /></p></div>
-      <button type="button" className="btn btn-ghost btn-s" onClick={() => { void load(); }}><span aria-hidden="true">↻</span> {t('stats.cls.refresh')}</button></header>
+    <PageHead what={t('stats.cls.lead')} guide="classifiers" onRefresh={() => { void load(); }} />
     {error && <p role="alert" className="dash-note">{error}</p>}
     {!state && !error && <p role="status">{t('bm.loading')}</p>}
     {state && active && <ClassifierDetail c={active} state={state} onBack={() => setOpen(null)} />}
@@ -109,7 +108,6 @@ export function ClassifiersPage() {
       <div className="cls-summary" data-testid="cls-summary">
         <Num label={t('stats.cls.summary.decisions')} value={intFmt(total)} help={t('stats.cls.summary.decisionsHelp')} />
         <Num label={t('stats.cls.summary.week')} value={intFmt(week)} help={t('stats.cls.summary.weekHelp')} />
-        <Num label={t('stats.cls.summary.verified')} value={intFmt(verified)} sub={unverified ? t('stats.cls.summary.unverified', { n: unverified }) : undefined} help={t('stats.cls.summary.verifiedHelp')} testId="cls-summary-verified" />
       </div>
       {total === 0 && <p className="cls-clean" role="status" data-testid="cls-clean">{t('stats.cls.empty')}</p>}
       <div className="catalog-grid cls-grid" data-testid="cls-grid">

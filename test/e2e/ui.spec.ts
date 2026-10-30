@@ -141,9 +141,9 @@ test('Ctrl+K opens the palette, hides every browser view, and jumps to a chat', 
   await expect.poll(async () => (await demoLayout(app)).find(l => l.tabId === 'tab-qa')?.rect ?? null).not.toBeNull();
   // a brain page from the palette; Esc goes back
   await page.keyboard.press('Control+K');
-  await page.getByTestId('palette-input').fill('costi');
+  await page.getByTestId('palette-input').fill('andamento'); // Costi is its first tab (ADR 0202)
   await page.keyboard.press('Enter');
-  await expect(page.getByTestId('page-costi')).toBeVisible();
+  await expect(page.getByTestId('an-panel-costi')).toBeVisible();
   await shot(page, 'ui-palette-costi');
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('view-agents')).toBeVisible();

@@ -55,7 +55,7 @@ test('the packaged stable copy finds the brain by itself and every section shows
     await expect(page.getByTestId('brain-setup')).toHaveCount(0, { timeout: 30000 }); // the brain was found by itself
     for (const id of SECTIONS) {
       await goPage(page, id);
-      const sec = page.getByTestId(id === 'idee' ? 'mh-panel-idee' : `brain-page-${id}`);
+      const sec = page.getByTestId(id === 'idee' ? 'mh-panel-idee' : id === 'costi' || id === 'qualita' ? `an-panel-${id}` : `brain-page-${id}`); // Costi, Qualità: Andamento tabs (ADR 0202)
       await expect(sec).toBeVisible({ timeout: 30000 });
       // loading finished and nothing failed
       // every block loaded (no skeleton left): slow sources (30 days of costs) get 3 minutes

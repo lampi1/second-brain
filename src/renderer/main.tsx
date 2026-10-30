@@ -27,6 +27,7 @@ import { OverlayApp } from './components/OverlayApp';
 import { BrainTestRoute, isBrainTestRoute } from './brain/testRoute';
 import { startLater } from './lib/later';
 import { installAppMap } from './lib/app-map';
+import { installUseCounter } from './lib/use-counter';
 import { LangRoot, startLang } from './i18n/LangRoot';
 import { Splash } from './components/Splash';
 import { splashMode, type SplashMode } from './lib/splash';
@@ -69,6 +70,7 @@ if (isBrainTestRoute()) {
   startFocusKeeper();
   startTypingWatch();
   installAppMap(); // the Orchestrator's app map and live screen outline (app_guide, app_ui outline)
+  installUseCounter(); // the local usage counter's data-track clicks and its flush on hide (ADR 0202)
   setInterval(() => checkDnd(now()), 60_000);
   started = true;
   for (const cmd of early.splice(0)) uiCommand(cmd);

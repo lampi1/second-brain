@@ -13,7 +13,7 @@ export const learningEn: typeof learningIt = {
   'learn.k.annullatoHelp': 'Changes that were undone after they were active.',
   'learn.today': 'today',
   'learn.unavailable': 'The learning data are not available now. Try again shortly: the logs say why.',
-  'learn.filterAll': 'All',
+  'learn.filterAll': 'Show all',
   'learn.filterTile': (p: { label: string; n: number }) => `${p.label}: ${p.n}. Show only these`,
   'learn.filterLabel': 'Filter by verdict',
   'learn.worse': 'To look at',
