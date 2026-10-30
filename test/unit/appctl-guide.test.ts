@@ -106,3 +106,16 @@ it('knows the review switch (no daily limit, never a review of a review) and how
   expect(levels).toMatch(/Orchestrator.*root jobs/); expect(levels).toContain('Pulse');
   expect(schema().some(x => String(x.key) === 'delegation.judgeDaily')).toBe(false);
 });
+
+describe('app_guide and the usage counter (ADR 0202)', () => {
+  it('answers «quali funzioni uso di più?» with the local counts and where they are, on the Orchestrator\'s mount only', async () => {
+    const usage = () => 'Local usage counter: Most used: page memoria/proposte 9× on 5 d.';
+    const out = String(await guideTool(deps({ usage })).run({ topic: 'quali funzioni uso di più?' }));
+    expect(out).toContain('[usage]');
+    expect(out).toContain('page memoria/proposte 9×');
+    expect(out).toContain('andamento/uso');
+    const open = String(await guideTool(deps({ usage, showValues: () => false })).run({ topic: 'funzioni usate di più' }));
+    expect(open).not.toContain('9×');
+    expect(await guideIndex(deps({ usage }), 'it')).toContain('andamento/uso');
+  });
+});

@@ -245,8 +245,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Regole valgono per tutti i ruoli; Memoria tiene conoscenza, quello che è successo e una memoria per ruolo, con i numeri (righe per ruolo, crescita per settimana, ricordi più richiamati, file fermi, errori ricorrenti, skill utili o mai usate, curiosità; ogni «?» dice come è calcolato) e ogni file si apre nel visore; Mappa mostra ruolo → skill → regole → memoria.',
         'Rules apply to every role; Memory holds knowledge, what happened and one memory per role, with the numbers (lines per role, weekly growth, most recalled memories, stale files, recurring errors, useful or never used skills, curious facts; each "?" says how it is computed) and every file opens in the viewer; Map shows role → skills → rules → memory.'),
       // src/main/brainmodel/classifiers.ts
-      b('Classificatori, in sola lettura: una scheda per classificatore (tipo di lavoro, modello, stima dai task simili, tipo nel registro dei costi) con cosa decide, i suoi numeri, l’andamento per settimana, quanto ha imparato e una curiosità; un clic apre il dettaglio con la storia e le tabelle (la tabella del modello).',
-        'Classifiers, read only: one card per classifier (kind of work, model, similar-task estimate, cost-ledger kind) with what it decides, its numbers, the weekly trend, how much it has learned and a curious fact; a click opens the detail with the history and the tables (the model table).'),
+      b('Classificatori (una scheda di Andamento), in sola lettura: una scheda per classificatore (tipo di lavoro, modello, stima dai task simili, tipo nel registro dei costi) con cosa decide, i suoi numeri, l’andamento per settimana, quanto ha imparato e una curiosità; un clic apre il dettaglio con la storia e le tabelle (la tabella del modello).',
+        'Classifiers (a Trends tab), read only: one card per classifier (kind of work, model, similar-task estimate, cost-ledger kind) with what it decides, its numbers, the weekly trend, how much it has learned and a curious fact; a click opens the detail with the history and the tables (the model table).'),
     ],
     analogy: b('Come una squadra con un manuale condiviso: le persone sono i ruoli, le pagine del manuale sono le skill, e qualcuno lo tiene in ordine ogni notte.',
       'Like a team with a shared manual: the people are the roles, the manual’s pages are the skills, and someone keeps it tidy every night.'),
@@ -540,8 +540,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda per carico (CPU > 75% o RAM libera < 15%). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI. Smistare un lotto di lavoro (una inbox, una lista di ticket) lo fa invece l’Orchestrator, una chat per richiesta, quando glielo affidi.',
         'Others: messages you did not type (shown muted), "Waits for work" on the text, the load queue (CPU > 75% or free RAM < 15%). Permissions and questions are not guessed: they arrive structured from the CLI. Triaging a batch of work (an inbox, a list of tickets) is instead the Orchestrator’s, one chat per request, when you hand it one.'),
       // src/renderer/components/brain-model/ClassifiersPage.tsx, src/main/brainmodel/classifier-cards.ts
-      b('Brain → Classificatori ne mostra quattro come schede: decisioni, quanto spesso «prendono» (tipo riconosciuto, costo dentro la forchetta, tempo del task fra metà e doppio della stima), quante chat decise sono riuscite (verificate da te o da una revisione, dai run o dal registro del brain, mai l’autovalutazione; gli esiti automatici del brain, come «chiusa senza errori», sono contati a parte come non verificati), il costo medio, 8 settimane di andamento e i casi verificati raccolti sui 20 che servono per calibrarsi. Ogni numero ha un «?».',
-        'Brain → Classifiers shows four of them as cards: decisions, how often they "get it" (kind recognised, cost inside the range, task time between half and double the estimate), how many decided chats succeeded (verified by you or a review, never a self-report), the average cost, 8 weeks of trend and the verified cases collected of the 20 needed to calibrate. Every number has a "?".'),
+      b('Andamento → Classificatori ne mostra quattro come schede: decisioni, quanto spesso «prendono» (tipo riconosciuto, costo dentro la forchetta, tempo del task fra metà e doppio della stima), quante chat decise sono riuscite (verificate da te o da una revisione, dai run o dal registro del brain, mai l’autovalutazione; gli esiti automatici del brain, come «chiusa senza errori», sono contati a parte come non verificati), il costo medio, 8 settimane di andamento e i casi verificati raccolti sui 20 che servono per calibrarsi. Ogni numero ha un «?».',
+        'Trends → Classifiers shows four of them as cards: decisions, how often they "get it" (kind recognised, cost inside the range, task time between half and double the estimate), how many decided chats succeeded (verified by you or a review, never a self-report), the average cost, 8 weeks of trend and the verified cases collected of the 20 needed to calibrate. Every number has a "?".'),
       // src/main/brainmodel/kind-model.ts, kind-centroids.ts; src/renderer/components/brain-model/KindModelCard.tsx (ADR 0197)
       b('Tipo di lavoro per esempi (in prova): la richiesta va al tipo i cui esempi (i tuoi lavori conclusi e verificati, con il tipo dato dalle parole) le somigliano di più per significato, con il modello locale della ricerca e zero token; sotto una soglia dice «altro». La scheda mostra l’accordo con le parole sul 20% tenuto da parte e la matrice di confusione; la tabella dei modelli resta sulle parole.',
         'Kind of work by examples (on trial): a request goes to the kind whose examples (your ended, verified runs, with the kind the words gave them) resemble it most in meaning, with the search’s local model and zero tokens; below a threshold it says «altro». Its card shows the agreement with the words on the 20% kept apart and the confusion matrix; the model table stays on the words.'),
@@ -713,12 +713,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'memory-hub',
     title: b('La Memoria, un posto solo', 'Memoria, one place'),
-    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (la frase del giorno, i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Regole, Script & Query, Idee, File, Apprendimento e Statistiche.',
-      'Memoria is the one place for everything the brain holds: its top is alive (the day’s sentence, live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Rules, Scripts & Queries, Ideas, Files, Learning and Statistics.'),
+    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (la frase del giorno, i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Regole, Script & Query, Idee, File e Statistiche.',
+      'Memoria is the one place for everything the brain holds: its top is alive (the day’s sentence, live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Rules, Scripts & Queries, Ideas, Files and Statistics.'),
     points: [
       // src/renderer/lib/memory-hub.ts, src/renderer/actions.ts, src/renderer/components/Sidebar.tsx
-      b('Skill, Regole, Script, Idee e Apprendimento non sono più pagine a sé nella barra: sono schede di Memoria; i vecchi link, gli id e i tasti G (G S, G L, G T, G I, G J) aprono la scheda giusta, e «memoria/<scheda>» apre una scheda da un link.',
-        'Skills, Rules, Scripts, Ideas and Learning are no longer pages of their own in the rail: they are Memoria tabs; old links, ids and G keys (G S, G L, G T, G I, G J) open the right tab, and \"memoria/<tab>\" opens a tab from a link.'),
+      b('Skill, Regole, Script e Idee non sono più pagine a sé nella barra: sono schede di Memoria (Apprendimento è passato in Andamento); i vecchi link, gli id e i tasti G (G S, G L, G T, G I) aprono la scheda giusta, e «memoria/<scheda>» apre una scheda da un link.',
+        'Skills, Rules, Scripts and Ideas are no longer pages of their own in the rail: they are Memoria tabs (Learning moved to Trends); old links, ids and G keys (G S, G L, G T, G I) open the right tab, and \"memoria/<tab>\" opens a tab from a link.'),
       b('La voce Memoria nella barra porta il numero delle proposte che aspettano te; la scheda Proposte le mostra una alla volta.',
         'The Memoria entry in the rail carries the number of proposals waiting for you; the Proposals tab shows them one at a time.'),
       // src/renderer/components/brain-model/ApprovedTab.tsx, src/main/brainmodel/service.ts
@@ -965,8 +965,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un ruolo non viene mai scavalcato: la sua chat ha il suo modello; se il ruolo non ne ha uno, quello della riga della tabella sul suo motore (e il suo sforzo, se il ruolo non ne indica uno), altrimenti il modello del suo livello. La rotta lo registra come «agent». Senza ruolo, un modello diverso dalla tabella richiede un motivo; lo sforzo max mai dalla tabella.',
         'A role is never overridden: its chat has its own model; when the role has none, the table row’s model on its engine (and its effort, when the role names none), else its tier’s model. The route records it as "agent". Without a role, a model other than the table’s needs a reason; max effort never from the table.'),
       // src/main/brain/routing.ts knownOutcome; src/main/wiring.ts routingVerdict; src/main/brainmodel/classifiers.ts
-      b('Il tuo esito su una run di un ruolo (o quello di una revisione indipendente) entra nel registro come esito noto; i risultati di ogni riga, solo verificati, sono in Brain → Classificatori.',
-        'Your verdict on a role run (or an independent review’s) enters the ledger as a known outcome; each row’s results, verified only, are in Brain → Classifiers.'),
+      b('Il tuo esito su una run di un ruolo (o quello di una revisione indipendente) entra nel registro come esito noto; i risultati di ogni riga, solo verificati, sono in Andamento → Classificatori.',
+        'Your verdict on a role run (or an independent review’s) enters the ledger as a known outcome; each row’s results, verified only, are in Trends → Classifiers.'),
       // src/main/brain/routing.ts (the table's file in the brain)
       b('La tabella è un file del brain: ogni salvataggio è una versione nuova e una riga «locked» non la cambiano gli agenti.',
         'The table is a file in the brain: every save is a new version, and agents never change a «locked» row.'),
@@ -1154,8 +1154,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Se tre o più lavori finiti chiedono la stessa cosa e nessuna skill la copre, scrive una skill nuova; due skill quasi uguali diventano una. Le lezioni imparate dalle tue correzioni vanno nel testo del ruolo, in una skill o nelle regole del brain.',
         'When three or more finished jobs ask the same thing and no skill covers it, it writes a new skill; two near-identical skills become one. Lessons learnt from your corrections go to the role’s text, a skill or the brain’s rules.'),
       // src/main/agents/pack/lesson-evidence.ts (causal: false), brainmodel/evidence.ts lessonCounts (ADR 0186)
-      b('Le prove di una lezione citano run con esito verificato, ma non misurano se la lezione ha aiutato: non sono mai causali. Memoria → Apprendimento dice quante lezioni sono state proposte nelle ultime 12 settimane e come sono finite, oppure «Nessun dato».',
-        'A lesson’s evidence cites runs with a verified outcome, but does not measure whether the lesson helped: it is never causal. Memory → Apprendimento says how many lessons were proposed in the last 12 weeks and how they ended, or "No data".'),
+      b('Le prove di una lezione citano run con esito verificato, ma non misurano se la lezione ha aiutato: non sono mai causali. Andamento → Apprendimento dice quante lezioni sono state proposte nelle ultime 12 settimane e come sono finite, oppure «Nessun dato».',
+        'A lesson’s evidence cites runs with a verified outcome, but does not measure whether the lesson helped: it is never causal. Trends → Learning says how many lessons were proposed in the last 12 weeks and how they ended, or "No data".'),
       // src/main/brainmodel/jobs.ts migration, src/main/brainmodel/upgrade.ts, src/shared/brain-layout.ts
       b('Una volta sola, i vecchi runbook e le sezioni «routines» del brain diventano skill, con un resoconto. Con una nuova versione, il brain si mette in pari da solo: l’app descrive dove tiene ogni tipo di contenuto e ciò che nelle note ora ha un suo posto ci viene spostato, con un rimando dove stava: uno script in scripts/, una query SQL o KQL in queries/ (Memoria → Script & Query), un’idea («Idea:», «💡», le voci sotto «## Idee») in ideas.md con la nota da cui viene, la data e se era tua o dell’IA. Un agente senza strumenti decide solo quando c’è qualcosa da spostare.',
         'Once, the brain’s old runbooks and "routines" sections become skills, with a report. With a new version the brain catches up by itself: the app describes where it keeps each kind of content, and what in the notes now has a place of its own moves there, with a pointer where it was: a script to scripts/, an SQL or KQL query to queries/ (Memory → Script & Query), an idea ("Idea:", "💡", the items under "## Ideas") to ideas.md with the note it came from, the date and whether it was yours or the AI’s. An agent with no tools decides only when there is something to move.'),
@@ -1502,13 +1502,49 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Like a workshop’s dashboard that counts the customers’ returns, not the compliments: few numbers, all checkable.'),
     tech: [
       tech(FILES, 'ai-errors.md nel brain; turni dai log dell’app (14 giorni); bug riaperti da ops/tools/bug-reopen.mjs, al massimo ogni 12 h.', 'ai-errors.md in the brain; turns from the app’s logs (14 days); reopened bugs from ops/tools/bug-reopen.mjs, at most every 12 h.'),
-      tech(WHERE, 'Pagina Qualità (sidebar → Andamento, o G Q); dati da /api/tables e /api/quality.', 'Quality page (sidebar → Trends, or G Q); data from /api/tables and /api/quality.'),
+      tech(WHERE, 'Scheda Qualità di Andamento (sidebar → Andamento, o G Q); dati da /api/tables e /api/quality.', 'Quality tab of Trends (sidebar → Trends, or G Q); data from /api/tables and /api/quality.'),
     ],
     anchors: {
       0: ['src/renderer/brain/pages/Qualita.tsx', 'src/main/brain/user-corrections.ts'],
       2: ['src/main/brain/quality.ts'],
     },
     sources: ['src/renderer/brain/pages/Qualita.tsx', 'src/main/brain/quality.ts', 'src/renderer/brain/lib/quality.ts', 'src/main/brain/user-corrections.ts', 'docs/adr/0197-corrections-kind-examples-and-ppi.md'],
+  },
+  {
+    id: 'trends',
+    title: b('Andamento e uso dell’app', 'Trends and app usage'),
+    summary: b('Andamento: costi, qualità, apprendimento, classificatori e il tuo uso dell’app in una pagina a schede, ogni numero una volta sola.',
+      'Trends: costs, quality, learning, classifiers and your use of the app in one page of tabs, each number shown once.'),
+    points: [
+      // src/renderer/components/andamento/AndamentoPage.tsx, src/renderer/components/Sidebar.tsx (ADR 0202)
+      b('Una voce sola nella barra (Andamento, G C) con cinque schede: Costi, Qualità, Apprendimento, Classificatori e Uso. Il titolo e le schede restano in vista mentre scorri.',
+        'One entry in the rail (Trends, G C) with five tabs: Costs, Quality, Learning, Classifiers and Usage. The title and the tabs stay on screen while you scroll.'),
+      // src/renderer/lib/andamento.ts, src/renderer/actions.ts go(), src/renderer/brain/index.tsx GO_ALIASES
+      b('Le vecchie pagine portano alla loro scheda: i link «costi/30», «qualita», «classificatori» e «memoria/apprendimento» e i tasti G Q, G J e G K aprono la scheda giusta.',
+        'The old pages lead to their tab: the links "costi/30", "qualita", "classificatori" and "memoria/apprendimento" and the keys G Q, G J and G K open the right tab.'),
+      // src/renderer/brain/components/States.tsx PageHead without a title
+      b('Ogni scheda comincia con la stessa riga: cosa mostra a sinistra, periodo, ultimo aggiornamento e «Aggiorna» a destra. Le frasi di testa che ripetevano i numeri delle schede sono sparite.',
+        'Every tab starts with the same line: what it shows on the left, period, last update and "Refresh" on the right. The lead sentences that repeated the tabs’ numbers are gone.'),
+      // src/renderer/components/andamento/UsageTab.tsx, src/renderer/lib/use-counter.ts
+      b('Uso conta, per giorno, le pagine e le schede che apri e le azioni principali (nuova richiesta, Orchestrator, Discuti, dettatura, Manutenzione, palette…): ultimi 14 giorni, dalla più usata, con le pagine mai aperte. Serve a decidere cosa tenere.',
+        'Usage counts, per day, the pages and tabs you open and the main actions (new request, Orchestrator, Discuss, dictation, Maintenance, palette…): the last 14 days, most used first, with the pages never opened. It is for deciding what to keep.'),
+      // src/main/use-counter.ts, src/main/appctl/guide.ts
+      b('Il contatore è locale e costa zero token: i numeri restano 90 giorni nel database dell’app sul tuo PC e non partono mai; l’Orchestrator li legge solo dalla sua guida dell’app quando chiedi «quali funzioni uso di più?».',
+        'The counter is local and costs zero tokens: the numbers stay 90 days in the app’s database on your PC and never leave it; the Orchestrator reads them only from its guide to the app when you ask "which features do I use most?".'),
+    ],
+    analogy: b('Come il cruscotto di un’auto con un solo quadro: velocità, consumi, spie e contachilometri insieme, ognuno al suo posto, e un diario di bordo di dove sei andato davvero.',
+      'Like a car’s single instrument panel: speed, consumption, warning lights and odometer together, each in its place, and a logbook of where you really went.'),
+    tech: [
+      tech(FILES, 'userData/app.db, area use_counts: una riga per giorno e chiave («page:<id>[/<scheda>]» o «action:<nome>»), tenute 90 giorni; senza database contano in memoria.', 'userData/app.db, area use_counts: one row per day and key ("page:<id>[/<tab>]" or "action:<name>"), kept 90 days; without the database they count in memory.'),
+      tech(WHERE, 'Pagina andamento (sidebar → Andamento, G C); «andamento/<scheda>» apre una scheda (costi, qualita, apprendimento, classificatori, uso); IPC usecount:add e usecount:report; l’Orchestrator: app_guide, voce «uso».', 'Page andamento (sidebar → Trends, G C); "andamento/<tab>" opens a tab (costi, qualita, apprendimento, classificatori, uso); IPC usecount:add and usecount:report; the Orchestrator: app_guide, entry "uso".'),
+    ],
+    anchors: {
+      0: ['src/renderer/components/andamento/AndamentoPage.tsx'],
+      1: ['src/renderer/lib/andamento.ts'],
+      3: ['src/renderer/lib/use-counter.ts', 'src/renderer/components/andamento/UsageTab.tsx'],
+      4: ['src/main/use-counter.ts'],
+    },
+    sources: ['src/renderer/components/andamento/AndamentoPage.tsx', 'src/renderer/components/andamento/UsageTab.tsx', 'src/renderer/lib/andamento.ts', 'src/renderer/lib/use-counter.ts', 'src/main/use-counter.ts', 'docs/adr/0202-andamento-and-usage-counter.md'],
   },
   {
     id: 'flash',
