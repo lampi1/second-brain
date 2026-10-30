@@ -35,6 +35,9 @@ said to use it also when starting on a task, so every engine answered 👍.
   anything else as the file (Windows `FileNameW`, macOS file URL, Linux `text/uri-list`), pasteable in a folder or a
   chat. Same path rules as «Mostra nella cartella» (local only, never a network share); an agent's hidden run never
   touches the user's clipboard. «Copia percorso» keeps its own icon.
+- One focus look (owner, 2026-10-30: «sistema le outline ovunque»): `styles/focus.css` gives every control one 2px ring
+  in `--focus` from the keyboard only, text fields no outline but their border lit with a soft glow (`--focus-glow`),
+  never the old double frame; the per-page violet/blue/accent/3px rings were replaced by `--focus`.
 
 ## Consequences
 

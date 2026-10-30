@@ -12,7 +12,7 @@
 .guide-header p{color:var(--text-3);font-size:13px;line-height:1.6;margin:0;max-width:680px}
 .guide-filter{display:flex;flex-direction:column;gap:6px;width:min(340px,100%)}
 .guide-filter-box{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-m);padding:0 12px;color:var(--text-3);transition:border-color 180ms,box-shadow 180ms}
-.guide-filter-box:focus-within{border-color:var(--blue-line);box-shadow:0 0 0 3px var(--blue-bg)}
+.guide-filter-box:focus-within{border-color:var(--blue-line);box-shadow:0 0 0 3px var(--focus-glow)}
 .guide-filter input{flex:1;min-width:0;background:transparent;border:0;color:var(--text);font:inherit;font-size:12px;padding:9px 0}
 .guide-filter input:focus,.guide-filter input:focus-visible{outline:none}
 .guide-filter small{font-size:10px;color:var(--text-3);text-align:right}
@@ -109,7 +109,7 @@
 /* «Chiedi alla Guida» (ADR 0196): a wide question bar under the header, the answer as a card under it */
 .guide-ask{margin:0 0 22px;display:flex;flex-direction:column;gap:10px}
 .guide-ask-box{display:flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;background:linear-gradient(135deg,color-mix(in srgb,var(--violet) 7%,var(--surface)),var(--surface) 60%);border:1px solid var(--border-2);border-radius:var(--r-l);transition:border-color 180ms,box-shadow 180ms}
-.guide-ask-box:focus-within{border-color:var(--blue-line);box-shadow:0 0 0 3px var(--blue-bg)}
+.guide-ask-box:focus-within{border-color:var(--blue-line);box-shadow:0 0 0 3px var(--focus-glow)}
 .guide-ask-icon{color:var(--violet);display:grid;place-items:center}
 .guide-ask-box input{flex:1;min-width:0;background:transparent;border:0;color:var(--text);font:inherit;font-size:13px;padding:8px 0}
 .guide-ask-box input:focus,.guide-ask-box input:focus-visible{outline:none}

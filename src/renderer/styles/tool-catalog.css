@@ -4,7 +4,7 @@
 .tc { display: flex; flex-direction: column; gap: 14px; }
 .tc-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; }
 .tc-tile { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 16px; border: 1px solid var(--border-2); border-radius: var(--r-l); background: var(--surface-2); transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
-.tc-tile.is-open { grid-column: 1 / -1; border-color: var(--blue-line); box-shadow: 0 0 0 3px var(--blue-bg); }
+.tc-tile.is-open { grid-column: 1 / -1; border-color: var(--blue-line); box-shadow: 0 0 0 3px var(--focus-glow); }
 .tc-tile.is-ok { border-color: color-mix(in srgb, var(--green) 45%, var(--border-2)); }
 .tc-tile.is-wait { border-color: var(--blue-line); }
 .tc-tile.is-bad { border-color: color-mix(in srgb, var(--red) 40%, var(--border-2)); }
