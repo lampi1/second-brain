@@ -92,8 +92,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'AgentProfile { id, name, purpose, instructions, engine, model | null, effort?, tools, permissionCeiling, tier, tierMax, launches, skills, version, activeVersion, trial?, userLocked }.',
         'AgentProfile { id, name, purpose, instructions, engine, model | null, effort?, tools, permissionCeiling, tier, tierMax, launches, skills, version, activeVersion, trial?, userLocked }.'),
       // src/main/agents/catalog.ts (roles.json), src/main/agents/versions.ts (role-history.json)
-      tech(FILES, 'userData/roles.json (i sei ruoli e Pulse) e role-history.json (le versioni di ogni ruolo).',
-        'userData/roles.json (the six roles and Pulse) and role-history.json (each role’s versions).'),
+      tech(FILES, 'userData/roles.json (i sei ruoli e Flash) e role-history.json (le versioni di ogni ruolo).',
+        'userData/roles.json (the six roles and Flash) and role-history.json (each role’s versions).'),
       // src/shared/roles.ts DELEGATION_DEFAULTS
       tech(LIMITS, 'Deleghe: profondità 2 e 5 figli in corso per genitore, di serie (Impostazioni → Ruoli e deleghe).', 'Delegation: depth 2 and 5 running children per parent by default (Settings → Roles and delegation).'),
       tech(TOOLS, 'agent_catalog (i ruoli e le loro skill), app_create_chat con roleId (apre il lavoro), agent_report (il rapporto finale).',
@@ -186,9 +186,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/shared/agents.ts VERSIONED_CHANGES; src/main/agents/versions.ts versionedChanges (ADR 0186)
       b('Una versione nuova nasce solo quando cambiano testo, skill, modello (motore, modello, sforzo) o livello, e dice cosa è cambiato; strumenti, permessi, limiti, le migrazioni dell’app e il cambio automatico di motore aggiornano la versione in uso. Per ogni versione la pagina mostra run, esiti verificati e la riuscita con il suo ± (sotto 5 esiti: «troppo pochi»), e ne riattiva una vecchia con un clic.',
         'A new version comes only when the text, skills, model (engine, model, effort) or tier change, and it says what changed; tools, permissions, limits, the app’s migrations and the automatic engine switch update the version in use. For each version the page shows runs, verified outcomes and the success with its ± (under 5 outcomes: "too few"), and brings an older one back with a click.'),
-      // src/main/agents/model-tier.ts tierModel; src/main/agents/role-table.ts; src/main/agents/catalog.ts resolve()
-      b('Un ruolo senza un modello suo prende quello della riga di Instradamento modelli che corrisponde al lavoro sul suo motore (e il suo sforzo, se il ruolo non ne indica uno); altrimenti il livello (leggero, medio, top) diventa un modello per ogni motore: la tua scelta in Impostazioni, altrimenti il registro dei modelli del brain. Sentinel è indipendente perché parte in una sessione nuova, senza il ragionamento del genitore, non perché cambiano modello.',
-        'A role without its own model takes the model of the Model routing row that matches the work on its engine (and its effort, when the role names none); else the tier (light, mid, top) becomes a model per engine: your choice in Settings, else the brain’s model registry. Sentinel is independent because it starts in a new session without the parent’s reasoning, not because they switch model.'),
+      // src/main/agents/model-tier.ts tierModel; src/main/agents/catalog.ts resolve() (ADR 0210: no routing table)
+      b('Ogni ruolo usa il modello scritto sulla sua card; se la card non ne indica uno, il livello (leggero, medio, top) diventa un modello per ogni motore: la tua scelta in Impostazioni, altrimenti il registro dei modelli del brain. Nessuna tabella sceglie il modello per tipo di lavoro. Sentinel è indipendente perché parte in una sessione nuova, senza il ragionamento del genitore, non perché cambia modello.',
+        'Every role uses the model written on its card; when the card names none, the tier (light, mid, top) becomes a model per engine: your choice in Settings, else the brain’s model registry. No table picks the model per kind of work. Sentinel is independent because it starts in a new session without the parent’s reasoning, not because it switches model.'),
       // src/main/agents/tool-policy.ts browserAccess, readOnlyCommand; src/main/chats/manager-requests.ts refusedCommand; src/main/agents/skill-needs.ts
       b('Strumenti a classi: un ruolo limitato ai comandi di sola lettura vede rifiutato in chat un comando che scrive (se l’ha delegato una chat che può eseguirlo, decidi tu); uno che legge, o uno script node elencato in read-only-tools.md nel brain, ti arriva come permesso senza «sempre». Se una skill passata a un ruolo usa strumenti che il ruolo non ha, l’Orchestrator lo sa subito, già quando apre o delega il lavoro.',
         'Tools come in classes: a role limited to read-only commands has a writing command refused in the chat (when a chat that may run it delegated it, you decide); one that reads, or a node script listed in read-only-tools.md in the brain, reaches you as a permission without "always". When a skill passed to a role uses tools the role lacks, the Orchestrator knows at once, as it opens or delegates the work.'),
@@ -214,11 +214,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       2: ['src/renderer/components/RolePermissions.tsx', 'src/shared/roles.ts#ALL_TOOLS', 'src/shared/roles.ts#defaultPermissions'],
       3: ['src/main/agents/catalog.ts#reset'],
       4: ['src/shared/agents.ts#VERSIONED_CHANGES', 'src/main/agents/versions.ts#versionedChanges'],
-      5: ['src/main/agents/model-tier.ts#tierModel', 'src/main/agents/role-table.ts', 'src/main/agents/catalog.ts#resolve'],
+      5: ['src/main/agents/model-tier.ts#tierModel', 'src/main/agents/catalog.ts#resolve'],
       6: ['src/main/agents/tool-policy.ts#browserAccess', 'src/main/agents/tool-policy.ts#readOnlyCommand', 'src/main/chats/manager-requests.ts#refusedCommand', 'src/main/agents/skill-needs.ts'],
       7: ['src/renderer/components/AgentAvatar.tsx', 'src/renderer/lib/character-art.ts'],
     },
-    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/versions.ts', 'src/main/agents/model-tier.ts', 'src/main/agents/role-table.ts', 'src/main/agents/tool-policy.ts', 'src/main/agents/read-tools.ts', 'src/main/agents/skill-needs.ts', 'src/renderer/components/AgentStudio.tsx', 'src/renderer/components/RolePermissions.tsx', 'src/renderer/components/AgentAvatar.tsx', 'src/renderer/lib/character-art.ts', 'src/main/chats/manager-requests.ts'],
+    sources: ['src/shared/roles.ts', 'src/shared/agents.ts', 'src/main/agents/catalog.ts', 'src/main/agents/versions.ts', 'src/main/agents/model-tier.ts', 'src/main/agents/tool-policy.ts', 'src/main/agents/read-tools.ts', 'src/main/agents/skill-needs.ts', 'src/renderer/components/AgentStudio.tsx', 'src/renderer/components/RolePermissions.tsx', 'src/renderer/components/AgentAvatar.tsx', 'src/renderer/lib/character-art.ts', 'src/main/chats/manager-requests.ts'],
   },
   {
     id: 'skills',
@@ -245,8 +245,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Regole valgono per tutti i ruoli; Memoria tiene conoscenza, quello che è successo e una memoria per ruolo, con i numeri (righe per ruolo, crescita per settimana, ricordi più richiamati, file fermi, errori ricorrenti, skill utili o mai usate, curiosità; ogni «?» dice come è calcolato) e ogni file si apre nel visore; Mappa mostra ruolo → skill → regole → memoria.',
         'Rules apply to every role; Memory holds knowledge, what happened and one memory per role, with the numbers (lines per role, weekly growth, most recalled memories, stale files, recurring errors, useful or never used skills, curious facts; each "?" says how it is computed) and every file opens in the viewer; Map shows role → skills → rules → memory.'),
       // src/main/brainmodel/classifiers.ts
-      b('Classificatori, in sola lettura: una scheda per classificatore (tipo di lavoro, modello, stima dai task simili, tipo nel registro dei costi) con cosa decide, i suoi numeri, l’andamento per settimana, quanto ha imparato e una curiosità; un clic apre il dettaglio con la storia e le tabelle (la tabella del modello).',
-        'Classifiers, read only: one card per classifier (kind of work, model, similar-task estimate, cost-ledger kind) with what it decides, its numbers, the weekly trend, how much it has learned and a curious fact; a click opens the detail with the history and the tables (the model table).'),
+      b('Classificatori (una scheda di Andamento), in sola lettura: una scheda per classificatore (tipo di lavoro, modello, stima dai task simili, tipo nel registro dei costi) con cosa decide, i suoi numeri, l’andamento per settimana, quanto ha imparato e una curiosità; un clic apre il dettaglio con la storia e le tabelle (la tabella del modello).',
+        'Classifiers (a Trends tab), read only: one card per classifier (kind of work, model, similar-task estimate, cost-ledger kind) with what it decides, its numbers, the weekly trend, how much it has learned and a curious fact; a click opens the detail with the history and the tables (the model table).'),
     ],
     analogy: b('Come una squadra con un manuale condiviso: le persone sono i ruoli, le pagine del manuale sono le skill, e qualcuno lo tiene in ordine ogni notte.',
       'Like a team with a shared manual: the people are the roles, the manual’s pages are the skills, and someone keeps it tidy every night.'),
@@ -300,8 +300,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Like an editor-in-chief: does not write every piece, picks who writes it, knows where each one stands and reads the finished piece.'),
     diagram: { kind: 'flow', steps: [b('Tua richiesta', 'Your request'), b('Orchestrator', 'Orchestrator'), b('Ruolo e skill', 'Role and skills'), b('Chat di lavoro', 'Work chat'), b('Rapporto', 'Report')] },
     tech: [
-      tech(DATA, 'Risposta di app_create_chat: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom: role | tier | table | engine } } }.',
-        'app_create_chat result: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom: role | tier | table | engine } } }.'),
+      tech(DATA, 'Risposta di app_create_chat: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom: role | tier | engine } } }.',
+        'app_create_chat result: { chatId, title, harness, cwd, model, effort, route { source: agent, kind, area, reason, agent { id, version, chosenBy, tier?, modelFrom: role | tier | engine } } }.'),
       tech(LIMITS, 'Fino a 16 skill per chat delegata; un figlio non ha mai strumenti o tetto sopra quelli di chi lo avvia.', 'Up to 16 skills per delegated chat; a child never has tools or a ceiling above its launcher’s.'),
       tech(TOOLS, 'agent_catalog (i ruoli), app_create_chat con roleId e tier (apre il lavoro), task_estimate (la stima), agent_metrics (stato e numeri dei figli), agent_report (il rapporto del figlio).',
         'agent_catalog (the roles), app_create_chat with roleId and tier (opens the work), task_estimate (the estimate), agent_metrics (the children’s state and numbers), agent_report (the child’s report).'),
@@ -396,12 +396,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/standing.ts decisionSignals, decisionXp; src/main/agents/flash-outcomes.ts (ADR 0131)
       b('L’Orchestrator guadagna con i lavori che ha avviato e sono riusciti verificati (gli XP del lavoro, dimezzati se il compito è passato a un altro ruolo o è stato rifatto), più 1 XP per un piano dello Strategist approvato senza modifiche; un compito passato a un altro ruolo, riaperto o rifatto pesa contro le sue scelte. Flash non apre lavori: una sua risposta regge se nei 5 minuti dopo non la correggi, non rifai la domanda e non la passi all’Orchestrator, e vale 0,25 XP. Tutto senza costo in token né nuove richieste di permesso.',
         'The Orchestrator earns with the runs it started that are verified successes (the job’s XP, halved when the task went to another role or was redone), plus 1 XP for a Strategist plan approved with no change; a task handed to another role, reopened or redone weighs against its choices. Flash opens no runs: one of its answers holds when within 5 minutes you do not correct it, ask it again or hand it to the Orchestrator, and is worth 0.25 XP. All with no token cost and no new permission prompt.'),
-      // src/main/agents/standing.ts earnedVerdict; src/main/agents/judge-sample.ts pickAudits (ADR 0125)
-      b('Ogni ruolo sale di livello anche senza i tuoi voti, se l’interruttore «Abilita controllo livello e performance» è acceso: un lavoro avviato dall’Orchestrator è verificato dalla revisione di un Sentinel; un lavoro delegato prende il verdetto del genitore verificato, se il suo resoconto aveva tutti i criteri soddisfatti, è arrivato prima che il genitore finisse e non è stato corretto, riaperto, rifatto o bocciato dal genitore; la revisione del Sentinel è giudicata da ciò che succede dopo: il tuo voto sullo stesso lavoro, una seconda revisione indipendente (1 lavoro su 10, costo in più circa un decimo) o un lavoro che aveva promosso e poi è stato riaperto o rifatto. Il silenzio non conta mai.',
-        'Every role levels up without your verdicts too, when the switch "Enable level and performance check" is on: a run the Orchestrator opened is verified by a Sentinel review; a delegated run takes its verified parent’s verdict, when its report met every criterion, arrived before the parent ended and was not corrected, reopened, redone or rejected by the parent; the Sentinel review is graded by what happens next: your verdict on the same run, a second independent review (1 run in 10, about a tenth more cost) or a run it passed that was then reopened or redone. Silence never counts.'),
+      // src/main/agents/standing.ts earnedVerdict; src/main/agents/judge-sample.ts (ADR 0125, 0203)
+      b('Ogni ruolo sale di livello anche senza i tuoi voti, se l’interruttore «Abilita controllo livello e performance» è acceso: ogni notte un Sentinel, in una sessione nascosta e in sola lettura (nessuna chat sulla Grindhouse), rivede un campione dei lavori finiti, il 25% per ruolo; il 10% quando la performance del ruolo è stabile (± sotto 10 punti, con 5 voti sul modello, le skill e le regole di oggi), di nuovo il 25% quando li cambi. La revisione è dovuta una volta al giorno: alle 3:00 se l’app è aperta, altrimenti dopo la prossima accensione, quando l’app è aperta da 5 minuti e non tocchi tastiera e mouse da 10, mai mentre l’app parte; dopo più notti saltate resta una sola sessione, sui lavori degli ultimi 7 giorni, i più vecchi prima, entro il tetto di spesa al giorno (1 $ di base, accanto all’interruttore). Le carte dicono «Aggiornato stanotte alle 3:00»; nel Log c’è «Revisione notturna: N run, X $». Un lavoro delegato prende il verdetto del genitore verificato, se il suo resoconto aveva tutti i criteri soddisfatti, è arrivato prima che il genitore finisse e non è stato corretto, riaperto, rifatto o bocciato; il Sentinel è giudicato da ciò che succede dopo: il tuo voto sugli stessi lavori o un lavoro promosso e poi riaperto o rifatto. Il silenzio non conta mai.',
+        'Every role levels up without your verdicts too, when the switch "Enable level and performance check" is on: every night a Sentinel, in a hidden read-only session (no chat on the Grindhouse), reviews a sample of the finished runs, 25% per role; 10% when the role’s performance is steady (± under 10 points, with 5 verdicts on today’s model, skills and rules), back to 25% when you change them. The review is due once a day: at 3:00 if the app is open, otherwise after the next start, once the app has been open for 5 minutes and you have not touched keyboard or mouse for 10, never while the app starts; after several missed nights it is still one session, over the runs of the last 7 days, oldest first, within the daily spending cap (1 $ by default, beside the switch). The cards say "Updated last night at 3:00"; the Log shows "Revisione notturna: N run, X $". A delegated run takes its verified parent’s verdict, when its report met every criterion, arrived before the parent ended and was not corrected, reopened, redone or rejected; the Sentinel is graded by what happens next: your verdict on the same runs or a run it passed that was then reopened or redone. Silence never counts.'),
       // src/main/agents/receipts.ts; src/main/agents/judge-sample.ts byReceipts (ADR 0130)
-      b('Prima di una revisione l’app guarda le ricevute del lavoro, registrate gratis mentre girava: i comandi con il loro codice di uscita, i file cambiati, i commit e le PR. Se i test o i controlli del progetto, non toccati dall’agente, sono passati dopo l’ultima modifica e l’agente dice di aver finito, il lavoro è riuscito senza revisione (peso × 0,7); se falliscono e l’agente lo ammette, è fallito. Se le ricevute non bastano o non concordano col resoconto, decide il Sentinel; una ricevuta su dieci viene rivista comunque.',
-        'Before a review the app reads the run’s receipts, recorded for free while it ran: the commands with their exit code, the files changed, commits and PRs. If the project’s tests or checks, untouched by the agent, passed after the last change and the agent says it finished, the run succeeded with no review (weight × 0.7); if they fail and the agent admits it, it failed. When the receipts are not enough or disagree with the report, the Sentinel decides; one receipt in ten is reviewed anyway.'),
+      b('Prima di tutto l’app guarda i segnali gratis: le ricevute del lavoro, registrate mentre girava (i comandi con il loro codice di uscita, i file cambiati, i commit e le PR). Se i test o i controlli del progetto, non toccati dall’agente, sono passati dopo l’ultima modifica e l’agente dice di aver finito, il lavoro è riuscito senza revisione (peso × 0,7); se falliscono e l’agente lo ammette, è fallito. Un lavoro che hai già votato, che le ricevute decidono, rifatto o riaperto non entra mai nel campione della notte: il Sentinel vede solo quelli che nessun segnale decide.',
+        'First the app reads the free signals: the run’s receipts, recorded while it ran (the commands with their exit code, the files changed, commits and PRs). If the project’s tests or checks, untouched by the agent, passed after the last change and the agent says it finished, the run succeeded with no review (weight × 0.7); if they fail and the agent admits it, it failed. A run you already judged, one the receipts decide, a redone or reopened run never enters the night’s sample: the Sentinel sees only the runs no signal decides.'),
       // src/shared/ppi.ts; src/main/agents/judge-agreement.ts; src/renderer/components/AgentStudio.tsx (ADR 0197)
       b('Accanto ai successi verificati, da 5 lavori giudicati sia da te sia da un giudice automatico, la «Stima con tutti i giudizi»: la media dei giudizi automatici (revisioni del Sentinel, ricevute) corretta da quanto sbagliano rispetto a te (prediction-powered inference), con la sua forchetta al 90%; e l’«Accordo Sentinel–te» (quota e kappa di Cohen, con quanti lavori).',
         'Beside the verified successes, from 5 runs judged both by you and by an automatic judge, the «Estimate with every judgment»: the mean of the automatic judgments (Sentinel reviews, receipts) corrected by how far they are from you (prediction-powered inference), with its 90% range; and the «Sentinel–you agreement» (share and Cohen’s kappa, with how many runs).'),
@@ -421,11 +421,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       2: ['src/renderer/components/AgentCatalogCard.tsx#Costs'],
       3: ['src/main/agents/standing.ts', 'src/renderer/components/AgentCatalogCard.tsx'],
       4: ['src/main/agents/standing.ts#decisionSignals', 'src/main/agents/standing.ts#decisionXp', 'src/main/agents/flash-outcomes.ts'],
-      5: ['src/main/agents/standing.ts#earnedVerdict', 'src/main/agents/judge-sample.ts#pickAudits'],
+      5: ['src/main/agents/standing.ts#earnedVerdict', 'src/main/agents/judge-sample.ts#pickSamples'],
       6: ['src/main/agents/receipts.ts', 'src/main/agents/judge-sample.ts#byReceipts'],
       7: ['src/shared/ppi.ts'],
     },
-    sources: ['src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/agents/standing.ts', 'src/main/agents/judge-sample.ts', 'src/renderer/components/AgentCatalogCard.tsx', 'src/main/ipc-handlers/agents.ts', 'src/main/agents/collector.ts', 'docs/agent-evidence.md', 'docs/adr/0125-every-role-levels-up-from-outcomes.md', 'src/main/agents/receipts.ts', 'docs/adr/0130-run-receipts-before-reviews.md', 'src/main/agents/xp.ts', 'src/main/agents/flash-outcomes.ts', 'src/main/agents/level-diagnosis.ts', 'docs/adr/0131-levels-by-job-size-and-bayesian-performance.md', 'src/shared/ppi.ts', 'src/main/agents/judge-agreement.ts'],
+    sources: ['src/main/agents/analytics.ts', 'src/main/agents/run-metrics.ts', 'src/main/agents/standing.ts', 'src/main/agents/judge-sample.ts', 'src/renderer/components/AgentCatalogCard.tsx', 'src/main/ipc-handlers/agents.ts', 'src/main/agents/collector.ts', 'docs/agent-evidence.md', 'docs/adr/0125-every-role-levels-up-from-outcomes.md', 'src/main/agents/receipts.ts', 'docs/adr/0130-run-receipts-before-reviews.md', 'src/main/agents/xp.ts', 'src/main/agents/flash-outcomes.ts', 'src/main/agents/level-diagnosis.ts', 'docs/adr/0131-levels-by-job-size-and-bayesian-performance.md', 'docs/adr/0203-nightly-sampled-reviews.md', 'src/shared/ppi.ts', 'src/main/agents/judge-agreement.ts'],
   },
   {
     id: 'errors-rules',
@@ -527,8 +527,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Italiano e inglese si incontrano: un piccolo lessico di lavori («correggi» = fix, «revisiona» = review, «fonti» = sources…) unisce le richieste in italiano e le skill scritte in inglese.',
         'Italian and English meet: a small lexicon of kinds of work ("correggi" = fix, "revisiona" = review, "fonti" = sources…) joins Italian requests and skills written in English.'),
       // src/shared/work-concepts.ts taskOf, builtinTask
-      b('Tipo di lavoro, uno solo per tutta l’app (tabella dei modelli, registro dei costi, stime): prima le regole del brain (estimates.json), poi il lessico integrato, poi «altro». Una richiesta che costruisce o corregge vince su un titolo che nomina solo un tema.',
-        'Kind of work, one taxonomy for the whole app (model table, cost ledger, estimates): the brain’s rules first (estimates.json), then the built-in lexicon, then "altro". A request that builds or fixes wins over a title that only names a topic.'),
+      b('Tipo di lavoro, uno solo per tutta l’app (registro degli esiti, registro dei costi, stime): prima le regole del brain (estimates.json), poi il lessico integrato, poi «altro». Una richiesta che costruisce o corregge vince su un titolo che nomina solo un tema. Il tipo non sceglie il modello: lo decide la card del ruolo.',
+        'Kind of work, one taxonomy for the whole app (outcome ledger, cost ledger, estimates): the brain’s rules first (estimates.json), then the built-in lexicon, then "altro". A request that builds or fixes wins over a title that only names a topic. The kind does not pick the model: the role’s card does.'),
       // src/main/chats/orchestrator-delivery.ts mailClassifier
       b('Posta per l’Orchestrator: urgente → subito; richiesta, finito o errore → raggruppata; solo avanzamento → silenziosa. Nel dubbio raggruppata: una richiesta tenuta ferma costa più di un’attesa.',
         'Mail for the Orchestrator: urgent → now; a request, done or error → grouped; progress only → quiet. When in doubt grouped: a request held back costs more than a wait.'),
@@ -539,12 +539,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/shared/roles.ts ROLE_DEFAULTS.orchestrator
       b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda per carico (CPU > 75% o RAM libera < 15%). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI. Smistare un lotto di lavoro (una inbox, una lista di ticket) lo fa invece l’Orchestrator, una chat per richiesta, quando glielo affidi.',
         'Others: messages you did not type (shown muted), "Waits for work" on the text, the load queue (CPU > 75% or free RAM < 15%). Permissions and questions are not guessed: they arrive structured from the CLI. Triaging a batch of work (an inbox, a list of tickets) is instead the Orchestrator’s, one chat per request, when you hand it one.'),
-      // src/renderer/components/brain-model/ClassifiersPage.tsx, src/main/brainmodel/classifier-cards.ts
-      b('Brain → Classificatori ne mostra quattro come schede: decisioni, quanto spesso «prendono» (tipo riconosciuto, costo dentro la forchetta, tempo del task fra metà e doppio della stima), quante chat decise sono riuscite (verificate da te o da una revisione, dai run o dal registro del brain, mai l’autovalutazione; gli esiti automatici del brain, come «chiusa senza errori», sono contati a parte come non verificati), il costo medio, 8 settimane di andamento e i casi verificati raccolti sui 20 che servono per calibrarsi. Ogni numero ha un «?».',
-        'Brain → Classifiers shows four of them as cards: decisions, how often they "get it" (kind recognised, cost inside the range, task time between half and double the estimate), how many decided chats succeeded (verified by you or a review, never a self-report), the average cost, 8 weeks of trend and the verified cases collected of the 20 needed to calibrate. Every number has a "?".'),
+      // src/renderer/components/brain-model/ClassifiersSection.tsx, src/main/brainmodel/classifier-cards.ts
+      b('Andamento → Qualità, in fondo, ne mostra tre come schede nella sezione Classificatori (era una scheda a sé): decisioni, quanto spesso «prendono» (tipo riconosciuto, tempo del task fra metà e doppio della stima), quante chat decise sono riuscite (verificate da te o da una revisione, mai l’autovalutazione; gli esiti automatici del brain sono contati a parte come non verificati), il costo medio e 8 settimane di andamento. Ogni numero ha un «?». La scheda «Scelta del modello» non c’è più.',
+        'Trends → Quality shows three of them as cards at the bottom, in the Classifiers section (once a tab of its own): decisions, how often they "get it" (kind recognised, task time between half and double the estimate), how many decided chats succeeded (verified by you or a review, never a self-report; the brain’s automatic outcomes count apart as unverified), the average cost and 8 weeks of trend. Every number has a "?". The «Model choice» card is gone.'),
       // src/main/brainmodel/kind-model.ts, kind-centroids.ts; src/renderer/components/brain-model/KindModelCard.tsx (ADR 0197)
-      b('Tipo di lavoro per esempi (in prova): la richiesta va al tipo i cui esempi (i tuoi lavori conclusi e verificati, con il tipo dato dalle parole) le somigliano di più per significato, con il modello locale della ricerca e zero token; sotto una soglia dice «altro». La scheda mostra l’accordo con le parole sul 20% tenuto da parte e la matrice di confusione; la tabella dei modelli resta sulle parole.',
-        'Kind of work by examples (on trial): a request goes to the kind whose examples (your ended, verified runs, with the kind the words gave them) resemble it most in meaning, with the search’s local model and zero tokens; below a threshold it says «altro». Its card shows the agreement with the words on the 20% kept apart and the confusion matrix; the model table stays on the words.'),
+      b('Tipo di lavoro per esempi (in prova): la richiesta va al tipo i cui esempi (i tuoi lavori conclusi e verificati, con il tipo dato dalle parole) le somigliano di più per significato, con il modello locale della ricerca e zero token; sotto una soglia dice «altro». La scheda mostra l’accordo con le parole sul 20% tenuto da parte e la matrice di confusione; il tipo delle chat resta quello delle parole.',
+        'Kind of work by examples (on trial): a request goes to the kind whose examples (your ended, verified runs, with the kind the words gave them) resemble it most in meaning, with the search’s local model and zero tokens; below a threshold it says «altro». Its card shows the agreement with the words on the 20% kept apart and the confusion matrix; the chats’ kind stays the words’ one.'),
     ],
     analogy: b('Come lo smistamento della posta in portineria: regole scritte, una casella «varie» quando non si capisce, e per un sacco intero di posta si chiama chi smista di mestiere.',
       'Like mail sorting at the front desk: written rules, a "misc" box when it is unclear, and for a whole sack of mail you call the person whose job is sorting.'),
@@ -561,10 +561,10 @@ export const CONCEPTS: readonly ConceptCard[] = [
       3: ['src/main/chats/orchestrator-delivery.ts#mailClassifier'],
       4: ['src/shared/runnable.ts#prodRisk', 'src/main/agents/tool-policy.ts#readOnlyCommand'],
       5: ['src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'src/shared/waiting.ts', 'src/shared/roles.ts'],
-      6: ['src/renderer/components/brain-model/ClassifiersPage.tsx', 'src/main/brainmodel/classifier-cards.ts'],
+      6: ['src/renderer/components/brain-model/ClassifiersSection.tsx', 'src/main/brainmodel/classifier-cards.ts'],
       7: ['src/main/brainmodel/kind-centroids.ts'],
     },
-    sources: ['src/main/brainmodel/classifier-cards.ts', 'src/main/brainmodel/kind-model.ts', 'src/main/brainmodel/kind-centroids.ts', 'src/renderer/components/brain-model/ClassifiersPage.tsx', 'src/renderer/lib/classifier-view.ts', 'src/main/agents/discovery.ts', 'src/shared/work-concepts.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts',
+    sources: ['src/main/brainmodel/classifier-cards.ts', 'src/main/brainmodel/kind-model.ts', 'src/main/brainmodel/kind-centroids.ts', 'src/renderer/components/brain-model/ClassifiersSection.tsx', 'src/renderer/lib/classifier-view.ts', 'src/main/agents/discovery.ts', 'src/shared/work-concepts.ts', 'src/main/brain/routing.ts', 'src/main/brain/estimates.ts', 'src/shared/runnable.ts',
       'src/main/agents/tool-policy.ts', 'src/main/chats/orchestrator-delivery.ts', 'src/renderer/lib/foreign.ts', 'src/main/chats/admission.ts', 'src/shared/waiting.ts', 'src/shared/roles.ts'],
   },
   {
@@ -686,9 +686,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/ChatTile.tsx
       b('Una striscia chiusa mostra agente, stato, modello e l’ultima risposta; un clic ovunque su di essa la apre, ogni volta, e mostra la conversazione e l’input. Lo sforzo lo decide il profilo dell’agente: la striscia non lo mostra.',
         'A collapsed strip shows agent, state, model and the last answer; a click anywhere on it expands it, every time, showing the conversation and the input. The effort is the agent profile’s: the strip does not show it.'),
-      // src/renderer/components/CloudStrips.tsx, src/main/cloud/service.ts (ADR 0080)
-      b('Gli agenti cloud (Cursor, Codex, Claude Code che girano nel cloud del fornitore, anche a PC spento) hanno la loro striscia sotto le altre, raggruppata per repository, con l’etichetta «cloud» e il motore. Cursor mostra i messaggi, accetta messaggi e si ferma dall’app; Codex e Claude si seguono sulla loro pagina («Apri»). «Porta in locale» prende il risultato in un nuovo worktree. Li avvia l’Orchestrator quando glielo chiedi, solo su repository GitHub con il branch già pushato.',
-        'Cloud agents (Cursor, Codex, Claude Code running in the vendor’s cloud, even with the PC off) get their own strip under the others, grouped by repository, with a "cloud" label and the engine. Cursor shows its messages, takes messages and stops from the app; Codex and Claude are followed on their own page ("Open"). "Bring home" takes the result into a new worktree. The Orchestrator starts one when you ask it, only on GitHub repositories with the branch already pushed.'),
     ],
     analogy: b('Come il banco di orchestrator di uno studio: un fader per ogni canale, e il monitor di ciascuno sotto.',
       'Like a studio mixing desk: one fader per channel, and each one’s monitor below it.'),
@@ -696,7 +693,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(WHERE, 'Pagina «home» (brain/pages/Home.tsx), strisce in components/AgentStrips.tsx, ordine in lib/agent-order.ts; ADR 0068.',
         'Page "home" (brain/pages/Home.tsx), strips in components/AgentStrips.tsx, order in lib/agent-order.ts; ADR 0068.'),
       tech(DATA, 'Una striscia è aperta se prefs.chatExpanded[id], i suoi browser se anche prefs.browserOpen[id]; nessun ordine salvato, nessun trascinamento.', 'A strip is expanded if prefs.chatExpanded[id], its browsers if prefs.browserOpen[id] too; no saved order, no dragging.'),
-      tech(TOOLS, 'Un agente cloud parte da app_create_chat con where «cloud».', 'A cloud agent starts from app_create_chat with where "cloud".'),
     ],
     anchors: {
       0: ['src/renderer/brain/pages/Home.tsx'],
@@ -706,29 +702,28 @@ export const CONCEPTS: readonly ConceptCard[] = [
       4: ['src/renderer/components/RunEstimate.tsx', 'src/main/agents/task-estimate.ts'],
       5: ['src/main/chats/manager-delegation.ts#settleReport', 'src/main/chats/auto-close.ts', 'src/renderer/components/AutoCloseNotice.tsx'],
       6: ['src/renderer/components/ChatTile.tsx'],
-      7: ['src/renderer/components/CloudStrips.tsx'],
     },
-    sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/RunEstimate.tsx', 'src/renderer/components/BrowserTile.tsx', 'src/renderer/components/CloudStrips.tsx', 'src/main/cloud/service.ts', 'src/main/chats/manager-delegation.ts'],
+    sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/RunEstimate.tsx', 'src/renderer/components/BrowserTile.tsx', 'src/main/chats/manager-delegation.ts'],
   },
   {
     id: 'memory-hub',
     title: b('La Memoria, un posto solo', 'Memoria, one place'),
-    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (la frase del giorno, i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Regole, Script & Query, Idee, File, Apprendimento e Statistiche.',
-      'Memoria is the one place for everything the brain holds: its top is alive (the day’s sentence, live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Rules, Scripts & Queries, Ideas, Files, Learning and Statistics.'),
+    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Regole, Script & Query, Idee, File e Statistiche.',
+      'Memoria is the one place for everything the brain holds: its top is alive (live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Rules, Scripts & Queries, Ideas, Files and Statistics.'),
     points: [
       // src/renderer/lib/memory-hub.ts, src/renderer/actions.ts, src/renderer/components/Sidebar.tsx
-      b('Skill, Regole, Script, Idee e Apprendimento non sono più pagine a sé nella barra: sono schede di Memoria; i vecchi link, gli id e i tasti G (G S, G L, G T, G I, G J) aprono la scheda giusta, e «memoria/<scheda>» apre una scheda da un link.',
-        'Skills, Rules, Scripts, Ideas and Learning are no longer pages of their own in the rail: they are Memoria tabs; old links, ids and G keys (G S, G L, G T, G I, G J) open the right tab, and \"memoria/<tab>\" opens a tab from a link.'),
+      b('Skill, Regole, Script e Idee non sono più pagine a sé nella barra: sono schede di Memoria (Apprendimento è passato in Andamento); i vecchi link, gli id e i tasti G (G S, G L, G T, G I) aprono la scheda giusta, e «memoria/<scheda>» apre una scheda da un link.',
+        'Skills, Rules, Scripts and Ideas are no longer pages of their own in the rail: they are Memoria tabs (Learning moved to Trends); old links, ids and G keys (G S, G L, G T, G I) open the right tab, and \"memoria/<tab>\" opens a tab from a link.'),
       b('La voce Memoria nella barra porta il numero delle proposte che aspettano te; la scheda Proposte le mostra una alla volta.',
         'The Memoria entry in the rail carries the number of proposals waiting for you; the Proposals tab shows them one at a time.'),
       // src/renderer/components/brain-model/ApprovedTab.tsx, src/main/brainmodel/service.ts
       b('«Approvate» elenca tutto quello che è nel brain adesso (skill, regole, fatti confermati, script): il cestino lo toglie con un clic e per qualche secondo «Annulla» lo rimette; skill, regole e script passano dal registro delle modifiche, quindi restano annullabili anche in Apprendimento.',
         '\"Approved\" lists everything in the brain now (skills, rules, confirmed facts, scripts): the bin takes one out in a click and for a few seconds \"Undo\" puts it back; skills, rules and scripts go through the change log, so they stay undoable in Learning too.'),
       // src/renderer/brain/pages/Idee.tsx
-      b('«Idee» divide le tue da quelle dell’IA (la colonna «Chi» di ideas.md: «IA» è l’IA) e «Rispolvera» ti ripropone a caso un’idea vecchia ancora aperta; sotto, il Battito e i temi delle idee.',
-        '\"Ideas\" splits yours from the AI’s (the \"Chi\" column of ideas.md: \"IA\" is the AI) and \"Dust one off\" brings back an old idea still open at random; below, the Pulse and the ideas’ themes.'),
-      b('La Dashboard non c’è più: la frase e i contatori sono in cima a Memoria, il contesto delle chat in Costi, gli errori dell’app e i temi degli errori in Qualità, gli spunti dell’AI in Idee; il resto erano doppioni.',
-        'The Dashboard is gone: the sentence and the counters are at the top of Memoria, the chats’ context in Costi, the app’s errors and the errors’ themes in Quality, the AI’s tips in Ideas; the rest were duplicates.'),
+      b('«Idee» divide le tue da quelle dell’IA (la colonna «Chi» di ideas.md: «IA» è l’IA) e «Rispolvera» ti ripropone a caso un’idea vecchia ancora aperta; sotto, i temi delle idee.',
+        '\"Ideas\" splits yours from the AI’s (the \"Chi\" column of ideas.md: \"IA\" is the AI) and \"Dust one off\" brings back an old idea still open at random; below, the ideas’ themes.'),
+      b('La Dashboard non c’è più: i contatori sono in cima a Memoria, il contesto delle chat in Costi, gli errori dell’app e i temi degli errori in Qualità, gli spunti dell’AI in Idee; il resto erano doppioni.',
+        'The Dashboard is gone: the counters are at the top of Memoria, the chats’ context in Costi, the app’s errors and the errors’ themes in Quality, the AI’s tips in Ideas; the rest were duplicates.'),
       b('Ogni numero ha un «?» che dice come è calcolato; ogni pannello ha «Discuti», che prepara una bozza all’Orchestrator senza mai inviarla.',
         'Every number has a \"?\" saying how it is computed; every panel has \"Discuss\", which drafts for the Orchestrator and never sends.'),
     ],
@@ -947,53 +942,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/shared/file-view.ts', 'src/main/file-view.ts', 'src/main/peek-file.ts', 'src/main/ipc-handlers/app.ts', 'src/renderer/brain/pages/FileViewer.tsx', 'src/renderer/brain/components/ReportHtml.tsx', 'src/renderer/brain/components/ReportImages.tsx'],
   },
   {
-    id: 'routing',
-    title: b('Instradamento modelli', 'Model routing'),
-    summary: b('Una tabella dà motore, modello e sforzo alle chat avviate senza un ruolo; una chat di un ruolo prende il modello del livello del ruolo.',
-      'A table gives engine, model and effort to chats started without a role; a role’s chat takes its role tier’s model.'),
-    points: [
-      // src/shared/work-concepts.ts taskOf; src/main/brain/routing.ts areaOf
-      b('Il tipo di lavoro viene dal titolo e dal primo prompt, salvo un tipo esplicito; l’area dal chiamante (App per le chat sul codice dell’app); dal titolo solo «App · …», «Pers · App» e l’Orchestrator, le altre etichette non sono un’area.',
-        'Kind comes from the title and first prompt unless supplied explicitly; area comes from the caller (App for chats on the app’s code); from the title only "App · …", "Pers · App" and the Orchestrator, other labels are no area.'),
-      // src/main/brain/routing.ts match
-      b('Vince la riga più specifica: tipo + area, poi area, poi tipo, poi «qualsiasi»; a pari merito la prima.',
-        'The most specific row wins: kind + area, then area, then kind, then "any"; on a tie the first one.'),
-      // src/main/brain/routing.ts resolve
-      b('Se la riga indica un motore che non si può avviare, valgono i tuoi predefiniti «Chat aperte dall’Orchestrator».',
-        'If the row names an engine that cannot start, your "Chats opened by the Orchestrator" defaults apply.'),
-      // src/main/brain/routing.ts routeAgent (ADR 0083)
-      b('Un ruolo non viene mai scavalcato: la sua chat ha il suo modello; se il ruolo non ne ha uno, quello della riga della tabella sul suo motore (e il suo sforzo, se il ruolo non ne indica uno), altrimenti il modello del suo livello. La rotta lo registra come «agent». Senza ruolo, un modello diverso dalla tabella richiede un motivo; lo sforzo max mai dalla tabella.',
-        'A role is never overridden: its chat has its own model; when the role has none, the table row’s model on its engine (and its effort, when the role names none), else its tier’s model. The route records it as "agent". Without a role, a model other than the table’s needs a reason; max effort never from the table.'),
-      // src/main/brain/routing.ts knownOutcome; src/main/wiring.ts routingVerdict; src/main/brainmodel/classifiers.ts
-      b('Il tuo esito su una run di un ruolo (o quello di una revisione indipendente) entra nel registro come esito noto; i risultati di ogni riga, solo verificati, sono in Brain → Classificatori.',
-        'Your verdict on a role run (or an independent review’s) enters the ledger as a known outcome; each row’s results, verified only, are in Brain → Classifiers.'),
-      // src/main/brain/routing.ts (the table's file in the brain)
-      b('La tabella è un file del brain: ogni salvataggio è una versione nuova e una riga «locked» non la cambiano gli agenti.',
-        'The table is a file in the brain: every save is a new version, and agents never change a «locked» row.'),
-      // docs/adr/0047-routing-voted-and-priced-per-work.md
-      b('Il voto dei lavori e il ciclo che aggiorna la tabella vivono negli script del brain (ADR 0047).',
-        'Work votes and the loop that updates the table live in the brain’s scripts (ADR 0047).'),
-    ],
-    analogy: b('Come il centralino di un call center: in base al motivo della chiamata ti passa al reparto giusto.',
-      'Like a call-centre switchboard: depending on why you call, it puts you through to the right department.'),
-    diagram: { kind: 'flow', steps: [b('Titolo e prompt', 'Title and prompt'), b('Tipo + area', 'Kind + area'), b('Riga della tabella', 'Table row'), b('Motore e modello', 'Engine and model')] },
-    tech: [
-      tech(DATA, 'Riga: { kind | *, area?, harness, model, effort, why, since, evidence, locked?, onApi? }; tabella con costWeight (default 7); exploration resta nel file ma non decide più nulla.',
-        'Row: { kind | *, area?, harness, model, effort, why, since, evidence, locked?, onApi? }; table with costWeight (default 7); exploration stays in the file but no longer decides anything.'),
-      tech(FILES, '<brain>/ops/state/improve/routing/v<N>.json + current.json; prezzi e modelli in <brain>/harness/models.json, o nella copia dell’app finché un brain nuovo non ne ha una sua.',
-        '<brain>/ops/state/improve/routing/v<N>.json + current.json; prices and models in <brain>/harness/models.json, or in the app’s copy until a new brain has its own.'),
-      tech(LIMITS, 'Mai Fable; le aree App usano il motore delle chat dell’app.', 'Never Fable; App areas use the app chats’ engine.'),
-    ],
-    anchors: {
-      0: ['src/shared/work-concepts.ts#taskOf', 'src/main/brain/routing.ts#areaOf'],
-      1: ['src/main/brain/routing.ts#match'],
-      2: ['src/main/brain/routing.ts#resolve'],
-      3: ['src/main/brain/routing.ts#routeAgent'],
-      4: ['src/main/brain/routing.ts#knownOutcome', 'src/main/wiring.ts#routingVerdict', 'src/main/brainmodel/classifiers.ts'],
-    },
-    sources: ['src/main/brain/routing.ts', 'src/main/brain/brain-estimates.ts', 'src/renderer/lib/routing.ts', 'docs/adr/0032-model-routing.md', 'docs/adr/0047-routing-voted-and-priced-per-work.md'],
-  },
-  {
     id: 'costs',
     title: b('Costi e limiti di utilizzo', 'Cost and usage limits'),
     summary: b('La barra in alto mostra la spesa di oggi e le finestre del piano; i limiti di spesa avvisano, non fermano.',
@@ -1048,22 +996,25 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Una sola sezione: gli account dell’app (Azure DevOps, GitHub, Jira) e i server MCP come schede, ognuna con stato, uso, strumenti, ruoli e un solo «Prova».',
         'One section: the app’s accounts (Azure DevOps, GitHub, Jira) and the MCP servers as cards, each with state, use, tools, roles and one "Prova".'),
       // src/main/mcp-servers/store.ts
-      b('Un server è locale (un comando, es. npx) o remoto (un indirizzo https); il token si scrive una volta, viene cifrato sul computer e poi si vede solo mascherato.',
-        'A server is local (a command, e.g. npx) or remote (an https address); the token is typed once, encrypted on the computer and then shown only masked.'),
-      // src/main/mcp-servers/service.ts test()
-      b('«Prova» apre il server come farebbe una chat, elenca i suoi strumenti (lettura o scrittura) e, se non va, dice l’errore e come sistemarlo.',
-        '"Prova" opens the server as a chat would, lists its tools (read or write) and, when it fails, says the error and how to fix it.'),
+      b('Un server è locale (un comando, es. npx) o remoto (un indirizzo https); il token si scrive una volta, viene cifrato sul computer e poi si vede solo mascherato. Un token incollato nel JSON non finisce mai in un file: passa nel campo mascherato.',
+        'A server is local (a command, e.g. npx) or remote (an https address); the token is typed once, encrypted on the computer and then shown only masked. A token pasted in the JSON never lands in a file: it moves to the masked field.'),
+      // src/shared/mcp-paste.ts; src/renderer/components/McpAddPanel.tsx; src/main/mcp-servers/service.ts test()
+      b('«Aggiungi server MCP»: incolli il JSON del README (mcpServers), una riga di comando o un indirizzo e il modulo si compila da solo, oppure scegli un server tra i più usati. «Salva e prova» (e «Prova» su ogni scheda) apre il server come farebbe una chat, elenca i suoi strumenti e, se non va, dice l’errore e come sistemarlo.',
+        '"Aggiungi server MCP": paste the README’s JSON (mcpServers), a command line or an address and the form fills itself, or pick a popular server. "Salva e prova" (and "Prova" on each card) opens the server as a chat would, lists its tools and, when it fails, says the error and how to fix it.'),
       // src/main/mcp-servers/gateway.ts
       b('Le chat raggiungono i server solo attraverso l’app (127.0.0.1): il token resta nell’app, mai nei file di configurazione dei motori.',
         'Chats reach the servers only through the app (127.0.0.1): the token stays in the app, never in the engines’ config files.'),
-      // src/shared/mcp-servers.ts chainAllows; src/renderer/components/AgentMcpSection.tsx
-      b('Ogni agente può usare tutti i server; dal retro della sua scheda lo restringi per server: tutto, solo lettura, strumenti scelti o niente.',
-        'Every agent may use every server; from the back of its card you narrow it per server: everything, read only, chosen tools or nothing.'),
+      // src/shared/mcp-servers.ts chainAllows, effectiveAccess; src/renderer/components/McpAddPanel.tsx ServerRoles
+      b('Ogni scheda server ha i ruoli da accendere con un clic, Orchestrator e Flash compresi (Flash parte spento e usa solo strumenti di lettura); dal retro della scheda di un agente lo restringi per server: tutto, solo lettura, strumenti scelti o niente.',
+        'Each server card has role chips to turn on with one click, Orchestrator and Flash included (Flash starts off and gets reading tools only); from the back of an agent’s card you narrow it per server: everything, read only, chosen tools or nothing.'),
       b('Un lavoratore non ha mai più accesso della chat che l’ha avviato, e una modifica vale subito anche per le chat aperte.',
         'A worker never has more access than the chat that started it, and a change applies at once to open chats too.'),
       // src/main/mcp-servers/import.ts
       b('«Importa da Claude e Cursor» legge le loro configurazioni senza cambiarle e senza copiare i segreti: i token li reinserisci tu.',
         '"Importa da Claude e Cursor" reads their configs without changing them and without copying secrets: you type the tokens again.'),
+      // src/main/appctl/config.ts connector; src/main/mcp-servers/service.ts agentSave
+      b('All’Orchestrator basta chiedere: aggiunge, cambia, prova o toglie un server e lo dà a un ruolo, con «Annulla» nel feed. Un server che aggiunge, o di cui cambia cosa avvia, resta spento finché non premi «Attiva» sulla sua scheda, che mostra esattamente il comando. I token non li vede mai: li scrivi tu.',
+        'Just ask the Orchestrator: it adds, changes, tests or removes a server and gives it to a role, with "Annulla" in the feed. A server it adds, or whose command it changes, stays off until you press "Attiva" on its card, which shows exactly the command. It never sees tokens: you type them.'),
     ],
     analogy: b('Come un portiere d’albergo che tiene le chiavi: gli ospiti chiedono a lui di aprire, e lui apre solo le stanze del loro piano.',
       'Like a hotel concierge who keeps the keys: guests ask him to open a door, and he opens only the rooms on their floor.'),
@@ -1075,6 +1026,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         '/mcp/ext/<chat>/<server>/<token>; Claude via --mcp-config, Cursor in ACP session/new, Codex via -c mcp_servers.<id>.url.'),
       tech(DATA, 'Accesso per ruolo e server: all, read, none o un elenco di strumenti; assente = all. «Lettura» = annotations.readOnlyHint.',
         'Access per role and server: all, read, none or a list of tools; absent = all. "Read" = annotations.readOnlyHint.'),
+      tech(DATA, 'Flash = il ruolo «flash» (chat veloci): assente = none, all = read (ADR 0207).', 'Flash = the "flash" role (quick chats): absent = none, all = read (ADR 0207).'),
     ],
     target: [
       b('I server che chiedono un accesso OAuth nel browser e quelli solo SSE (vecchio trasporto) non sono ancora supportati.',
@@ -1083,12 +1035,13 @@ export const CONCEPTS: readonly ConceptCard[] = [
     anchors: {
       0: ['src/renderer/components/ConnectorsHub.tsx', 'src/modules/onboarding/AppScreen.tsx'],
       1: ['src/main/mcp-servers/store.ts'],
-      2: ['src/main/mcp-servers/service.ts#test'],
+      2: ['src/main/mcp-servers/service.ts#test', 'src/shared/mcp-paste.ts#parseMcpSnippet', 'src/renderer/components/McpAddPanel.tsx'],
       3: ['src/main/mcp-servers/gateway.ts'],
-      4: ['src/shared/mcp-servers.ts#chainAllows', 'src/renderer/components/AgentMcpSection.tsx'],
+      4: ['src/shared/mcp-servers.ts#chainAllows', 'src/shared/mcp-servers.ts#effectiveAccess', 'src/renderer/components/AgentMcpSection.tsx'],
       6: ['src/main/mcp-servers/import.ts'],
+      7: ['src/main/appctl/config.ts', 'src/main/mcp-servers/service.ts#agentSave'],
     },
-    sources: ['src/main/mcp-servers/store.ts', 'src/main/mcp-servers/gateway.ts', 'src/main/mcp-servers/service.ts', 'src/main/mcp-servers/import.ts', 'src/shared/mcp-servers.ts',
+    sources: ['src/main/mcp-servers/store.ts', 'src/shared/mcp-paste.ts', 'src/renderer/components/McpAddPanel.tsx', 'src/main/mcp-servers/gateway.ts', 'src/main/mcp-servers/service.ts', 'src/main/mcp-servers/import.ts', 'src/shared/mcp-servers.ts',
       'src/renderer/components/ConnectorsHub.tsx', 'src/renderer/components/AgentMcpSection.tsx', 'docs/adr/0086-app-managed-mcp-servers.md'],
   },
   {
@@ -1154,8 +1107,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Se tre o più lavori finiti chiedono la stessa cosa e nessuna skill la copre, scrive una skill nuova; due skill quasi uguali diventano una. Le lezioni imparate dalle tue correzioni vanno nel testo del ruolo, in una skill o nelle regole del brain.',
         'When three or more finished jobs ask the same thing and no skill covers it, it writes a new skill; two near-identical skills become one. Lessons learnt from your corrections go to the role’s text, a skill or the brain’s rules.'),
       // src/main/agents/pack/lesson-evidence.ts (causal: false), brainmodel/evidence.ts lessonCounts (ADR 0186)
-      b('Le prove di una lezione citano run con esito verificato, ma non misurano se la lezione ha aiutato: non sono mai causali. Memoria → Apprendimento dice quante lezioni sono state proposte nelle ultime 12 settimane e come sono finite, oppure «Nessun dato».',
-        'A lesson’s evidence cites runs with a verified outcome, but does not measure whether the lesson helped: it is never causal. Memory → Apprendimento says how many lessons were proposed in the last 12 weeks and how they ended, or "No data".'),
+      b('Le prove di una lezione citano run con esito verificato, ma non misurano se la lezione ha aiutato: non sono mai causali. Andamento → Apprendimento dice quante lezioni sono state proposte nelle ultime 12 settimane e come sono finite, oppure «Nessun dato».',
+        'A lesson’s evidence cites runs with a verified outcome, but does not measure whether the lesson helped: it is never causal. Trends → Learning says how many lessons were proposed in the last 12 weeks and how they ended, or "No data".'),
       // src/main/brainmodel/jobs.ts migration, src/main/brainmodel/upgrade.ts, src/shared/brain-layout.ts
       b('Una volta sola, i vecchi runbook e le sezioni «routines» del brain diventano skill, con un resoconto. Con una nuova versione, il brain si mette in pari da solo: l’app descrive dove tiene ogni tipo di contenuto e ciò che nelle note ora ha un suo posto ci viene spostato, con un rimando dove stava: uno script in scripts/, una query SQL o KQL in queries/ (Memoria → Script & Query), un’idea («Idea:», «💡», le voci sotto «## Idee») in ideas.md con la nota da cui viene, la data e se era tua o dell’IA. Un agente senza strumenti decide solo quando c’è qualcosa da spostare.',
         'Once, the brain’s old runbooks and "routines" sections become skills, with a report. With a new version the brain catches up by itself: the app describes where it keeps each kind of content, and what in the notes now has a place of its own moves there, with a pointer where it was: a script to scripts/, an SQL or KQL query to queries/ (Memory → Script & Query), an idea ("Idea:", "💡", the items under "## Ideas") to ideas.md with the note it came from, the date and whether it was yours or the AI’s. An agent with no tools decides only when there is something to move.'),
@@ -1200,8 +1153,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Everything the app proposes and that waits for your yes is a card in a single deck: one at a time, you approve or reject.'),
     points: [
       // ADR 0123; src/main/proposals/sources.ts (SOURCES), src/main/proposals/service.ts, src/renderer/components/brain-model/ProposalsDeck.tsx, src/renderer/lib/proposals.ts
-      b('Il mazzo raccoglie fatti di memoria proposti, skill candidate, richieste di impostazioni degli agenti, livelli e prove dei ruoli, regole del Battito, politiche dell’auto-miglioramento e i cambi che la manutenzione ha già fatto negli ultimi 14 giorni.',
-        'The deck gathers proposed memory facts, skill candidates, the agents’ setting requests, the roles’ tiers and trials, the Battito’s rules, the self-improvement policies and the changes the maintenance already made in the last 14 days.'),
+      b('Il mazzo raccoglie fatti di memoria proposti, skill candidate, richieste di impostazioni degli agenti, livelli e prove dei ruoli, politiche dell’auto-miglioramento e i cambi che la manutenzione ha già fatto negli ultimi 14 giorni.',
+        'The deck gathers proposed memory facts, skill candidates, the agents’ setting requests, the roles’ tiers and trials, the self-improvement policies and the changes the maintenance already made in the last 14 days.'),
       b('Ogni carta dice chi l’ha proposta, dove (chat e run), quando e con quali prove; la più recente sta in cima, i filtri sopra la dividono per gruppo.',
         'Every card says who proposed it, where (chat and run), when and with what evidence; the newest is on top, the filters above split it by group.'),
       b('Trascina a destra o premi ✓ (→) per approvare, a sinistra o ✕ (←) per rifiutare; Z o Ctrl+Z annulla l’ultima scelta finché non è partita, dopo circa 6 secondi o alla scelta seguente.',
@@ -1321,8 +1274,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'log',
     title: b('Il Log', 'The Log'),
-    summary: b('Una pagina sola con tutto quello che l’app fa, in tempo reale e leggibile: ogni incarico passo per passo, i classificatori, le stime, gli errori e la memoria scritti nel brain, Battito.',
-      'One page with everything the app does, live and readable: each task step by step, the classifiers, the estimates, the errors and memory written to the brain, Battito.'),
+    summary: b('Una pagina sola con tutto quello che l’app fa, in tempo reale e leggibile: ogni incarico passo per passo, i classificatori, le stime, gli errori e la memoria scritti nel brain.',
+      'One page with everything the app does, live and readable: each task step by step, the classifiers, the estimates, the errors and memory written to the brain.'),
     points: [
       // src/main/activity/chat-watch.ts
       b('Ogni incarico è una catena: chi ha scelto quale agente e perché, il suo lavoro con costo, strumenti ed errori, il risultato, la verifica (o «non effettuata»).',
@@ -1361,45 +1314,45 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/learn/material.ts
       b('Per una PR l’app legge da sola descrizione e diff (gh per GitHub, git nella copia locale per le PR del Task), in sola lettura e con il tuo login.',
         'For a PR the app itself reads the description and the diff (gh for GitHub, git in the local clone for the Task page’s PRs), read-only, with your own login.'),
-      // src/main/learn/service.ts research
-      b('Prima di spiegare cerca le fonti: sul web (solo Claude, vede solo la tua domanda, mai i tuoi file) e nei file (il materiale, il tuo brain, la guida e il codice dell’app). Un secondo modello verifica ogni fatto sulla sua fonte: confermato, corretto o da verificare.',
-        'Before explaining it looks for sources: on the web (Claude only, it sees only your question, never your files) and in the files (the material, your brain, the app’s guide and code). A second model checks each fact against its source: confirmed, corrected or unconfirmed.'),
-      // src/renderer/components/impara/TeacherChip.tsx
-      b('Se la domanda può voler dire cose diverse, ti chiede al massimo due cose prima di iniziare. Ogni pezzo mostra le sue fonti; «Fonti» in alto le raccoglie tutte (pagine web e file del PC, apribili con un clic). «Chi spiega» sceglie motore, modello e impegno; senza scelta Claude con il modello più forte, impegno alto.',
-        'If the question can mean different things, it asks you at most two things before starting. Each piece shows its sources; «Sources» at the top gathers them all (web pages and files on your PC, opened with one click). «Who explains» picks the engine, model and effort; with no choice, Claude with its strongest model, high effort.'),
-      // src/renderer/components/impara/LessonStage.tsx
-      b('La lezione è a tutto schermo (Esc per uscire). Lo schema si muove frase per frase: si accendono i nodi di cui parla, una luce corre lungo la freccia, «Qui» indica il punto. Quelli già visti restano calmi, quelli che verranno sono sbiaditi.',
-        'The lesson is full screen (Esc to leave). The diagram moves sentence by sentence: the nodes it talks about light up, a light runs along the arrow, «Here» marks the spot. Seen ones stay calm, coming ones are faint.'),
-      b('«Spiegamelo meglio», «Fammi un esempio», «Mostrami il codice» aggiungono un pezzo subito dopo. Con «Rispondo a voce» dici «avanti», «ripeti», «non ho capito», «la b».',
-        '«Explain it better», «Give me an example», «Show me the code» add a piece right after. With «I answer by voice» you say «next», «repeat», «I don’t understand», «b».'),
-      // src/renderer/components/impara/ImparaTutor.tsx
-      b('«Domanda» (o T) apre il tutor accanto allo schema: scrivi, parli o clicchi una parte dello schema, e la risposta arriva parola per parola dai fatti verificati, con le fonti. Con «Prima provo io» per un perché ti dà prima un indizio; «Dimmelo e basta» risponde subito. Quello che spiega finisce nel ripasso.',
-        '«Question» (or T) opens the tutor beside the diagram: write, speak or click a part of the diagram, and the answer arrives word by word from the verified facts, with its sources. With «Let me try first» a why gets a hint first; «Just tell me» answers at once. What it explains goes into your reviews.'),
+      // src/main/learn/service.ts research, gate
+      b('Prima di spiegare cerca le fonti: sul web (solo Claude, vede solo la tua domanda, mai i tuoi file) e nei file (il materiale, il tuo brain, la guida e il codice dell’app). Dai file escono anche gli standard da cercare sul web (es. «OAuth 2.0 RFC 6749»): l’app toglie tutto ciò che può essere privato e te li mostra 5 secondi, «Dai tuoi file · cercherò sul web», con ✕ per toglierli; in Modalità notte partono subito. Un secondo modello verifica ogni fatto sulla sua fonte: confermato, corretto o da verificare. Poi la lezione segue sempre lo stesso filo: il problema, un esempio concreto, la regola; un esempio svolto, uno a metà, poi tocchi tu; una domanda ogni due pezzi; la mappa finale. Prima che tu la veda, un controllo rapido la confronta con una lista fissa (un’idea per pezzo, un esempio, una fonte per ogni frase, disegni piccoli, domande che fanno pensare) e riscrive una volta solo i pezzi che non passano.',
+        'Before explaining it looks for sources: on the web (Claude only, it sees only your question, never your files) and in the files (the material, your brain, the app’s guide and code). The files also give the standards to search on the web (e.g. «OAuth 2.0 RFC 6749»): the app removes anything that may be private and shows them for 5 seconds, «From your files · I will search the web», with ✕ to drop one; in Night mode they start at once. A second model checks each fact against its source: confirmed, corrected or unconfirmed. Then the lesson always follows the same thread: the problem, a concrete example, the rule; a worked example, a half-done one, then your turn; a question every two pieces; the closing mind map. Before you see it, a quick check compares it with a fixed list (one idea per piece, an example, a source for every sentence, small pictures, questions that make you think) and rewrites once only the pieces that fail.'),
+      // src/renderer/components/impara/ImparaStart.tsx, src/renderer/components/impara/ImparaOptions.tsx
+      b('Si parte da un solo campo: un argomento, il link di una PR o un testo lungo, e il tipo di lezione si capisce da solo (un clic per sceglierlo tu). File e cartelle si aggiungono con «Aggiungi fonte» o trascinandoli, letti dalla pagina senza file nascosti né binari. Una riga riassume livello, durata, chi spiega e voce: «Cambia» li apre; senza scelta Claude con il modello più forte, impegno alto. Ctrl+Invio avvia. Se la domanda può voler dire cose diverse, ti chiede al massimo due cose; «Fonti» in alto raccoglie tutte le fonti.',
+        'You start from one field: a topic, a PR link or a long text, and the kind of lesson is worked out by itself (one click to pick it yourself). Files and folders are added with «Add source» or by dragging them, read by the page without hidden files or binaries. One line sums up level, length, who explains and voice: «Change» opens them; with no choice, Claude with its strongest model, high effort. Ctrl+Enter starts. If the question can mean different things, it asks you at most two things; «Sources» at the top gathers all the sources.'),
+      // src/renderer/components/impara/LessonStage.tsx, LessonVisual.tsx
+      b('La lezione è a tutto schermo (Esc per uscire). Lo schema si muove frase per frase: si accendono i nodi di cui parla, una luce corre lungo la freccia, «Qui» indica il punto. Quelli già visti restano calmi, quelli che verranno sono sbiaditi. Un pezzo può avere un disegno suo: una sequenza di messaggi, gli stati, una linea del tempo, una mappa mentale, il codice riga per riga, una formula con i suoi simboli o un grafico, che crescono e si illuminano allo stesso modo.',
+        'The lesson is full screen (Esc to leave). The diagram moves sentence by sentence: the nodes it talks about light up, a light runs along the arrow, «Here» marks the spot. Seen ones stay calm, coming ones are faint. A piece can have a picture of its own: a sequence of messages, states, a timeline, a mind map, code line by line, a formula with its symbols or a chart, which grow and light up the same way.'),
+      b('In basso un solo pulsante, «Ho capito, avanti». «Non mi è chiaro» apre «Spiegamelo meglio» (M), «Fammi un esempio» (E), «Mostrami il codice» (C) e «Domanda» (D): i primi tre aggiungono un pezzo subito dopo. Con «Rispondo a voce» dici «avanti», «ripeti», «non ho capito», «la b».',
+        'At the bottom one button only, «Got it, next». «Not clear» opens «Explain it better» (M), «Give me an example» (E), «Show me the code» (C) and «Question» (D): the first three add a piece right after. With «I answer by voice» you say «next», «repeat», «I don’t understand», «b».'),
+      // src/renderer/components/impara/ImparaTutor.tsx, ImparaStudio.tsx
+      b('Accanto alla lezione una colonna con due schede. «Tutor» (o T): scrivi, parli o clicchi una parte dello schema, e la risposta arriva parola per parola dai fatti verificati, con le fonti; «Prima provo io» ti dà prima un indizio. «Studio» prepara, solo dai fatti verificati e con una corsa breve ciascuno, mappa mentale, riassunto, glossario, flashcard (vanno nel ripasso), quiz di 10 domande, linea del tempo, «Mettimi alla prova» e un podcast letto dalle voci dell’app; restano salvati con la lezione.',
+        'Beside the lesson, a column with two tabs. «Tutor» (or T): write, speak or click a part of the diagram, and the answer arrives word by word from the verified facts, with its sources; «Let me try first» gives you a hint first. «Studio» makes, from the verified facts only and with one short run each, a mind map, a summary, a glossary, flashcards (they go into your reviews), a 10-question quiz, a timeline, «Test me» and a podcast read by the app’s voices; they stay saved with the lesson.'),
       // src/renderer/brain/components/RecordDiscussButton.tsx, src/main/appctl/impara.ts
       b('Si impara anche da dove sei: «Capiscila» su una PR o un work item del Task, «Spiegamelo» su una regola, skill o script in Memoria (materia «Il mio brain»), «Imparalo» su un concetto della Guida. Oppure chiedi all’Orchestrator «spiegami come funziona…».',
         'You learn from where you are too: «Understand it» on a PR or work item of the Task page, «Explain it» on a rule, skill or script in Memory (subject «My brain»), «Learn it» on a Guide concept. Or ask the Orchestrator «explain how … works».'),
-      // src/main/learn/store.ts, src/shared/review.ts, src/renderer/components/impara/ImparaReview.tsx
-      b('Verifiche dopo alcuni pezzi, «Spiegalo tu» alla fine; la lezione resta salvata su questo PC e riapre dal punto in cui eri. Ogni lezione ha una materia e lascia carte di ripasso, scritte solo dai fatti verificati: «Ripassa ora» e il «Quiz» di ogni materia le ripropongono quando stai per dimenticarle (FSRS); la percentuale è una stima, non un voto.',
-        'Checks after some pieces, «Explain it yourself» at the end; the lesson stays saved on this PC and reopens where you were. Every lesson has a subject and leaves review cards, written only from the verified facts: «Review now» and each subject’s «Quiz» bring them back when you are about to forget them (FSRS); the percentage is an estimate, not a score.'),
+      // src/shared/quiz.ts, src/renderer/components/impara/ImparaReview.tsx, src/shared/mastery.ts
+      b('Verifiche dopo alcuni pezzi (scelta, vero o falso col perché, metti in ordine, completa il codice, abbina, clic sullo schema), «Spiegalo tu» alla fine. Ogni lezione lascia carte di ripasso dai fatti verificati: «Ripassa ora» e il «Quiz» di ogni materia le ripropongono quando stai per dimenticarle (FSRS), con esito subito a colori e suono, serie di giuste, «Rifai le sbagliate» e, se la accendi, «Sfida a tempo». In cima il punteggio 0-100 è memoria stimata oggi × quota di carte solide (stabilità ≥ 21 giorni): scende se non ripassi. Ogni materia ha un livello, da Iniziato a Padroneggiato.',
+        'Checks after some pieces (choice, true or false with the why, put in order, complete the code, match, click on the diagram), «Explain it yourself» at the end. Every lesson leaves review cards from the verified facts: «Review now» and each subject’s «Quiz» bring them back when you are about to forget them (FSRS), with the outcome at once in colour and sound, a streak of right answers, «Redo the wrong ones» and, if you turn it on, «Timed challenge». At the top the 0-100 score is estimated memory today × share of solid cards (stability ≥ 21 days): it falls if you do not review. Each subject has a level, from Started to Mastered.'),
     ],
     analogy: b('Come un collega che prima si documenta, poi ti spiega alla lavagna indicando il punto giusto mentre parla.',
       'Like a colleague who reads up first, then explains at the whiteboard pointing at the right spot while talking.'),
     tech: [
-      tech(FILES, 'userData/learn/<id>/: lesson.json (lezione, fatti verificati, risposte, punto in cui sei), il materiale (materiale.md, diff.patch, testo.md) e guida-app.md.', 'userData/learn/<id>/: lesson.json (lesson, verified facts, answers, where you are), the material (materiale.md, diff.patch, testo.md) and guida-app.md.'),
-      tech(WHERE, 'Pagina G X; IPC impara:* (impara:clarify per le risposte alle domande); ogni risposta del modello è una sessione nascosta in sola lettura; la ricerca web è l’unica con WebSearch/WebFetch e nessuno strumento sui file.', 'Page G X; IPC impara:* (impara:clarify for the answers to the questions); each model answer is a hidden read-only session; the web research is the only one with WebSearch/WebFetch and no file tool.'),
+      tech(FILES, 'userData/learn/<id>/: lesson.json (lezione, fatti verificati, risposte, punto in cui sei), il materiale (materiale.md, diff.patch, testo.md, fonti.md con i file che hai aggiunto) e guida-app.md.', 'userData/learn/<id>/: lesson.json (lesson, verified facts, answers, where you are), the material (materiale.md, diff.patch, testo.md, fonti.md with the files you added) and guida-app.md.'),
+      tech(WHERE, 'Pagina G X; IPC impara:* (impara:clarify per le risposte alle domande, impara:topics per togliere o avviare gli argomenti da cercare sul web); ogni risposta del modello è una sessione nascosta in sola lettura; le ricerche web sono le uniche con WebSearch/WebFetch e nessuno strumento sui file, e vedono solo la domanda e gli argomenti passati dal filtro (shared/web-topics.ts).', 'Page G X; IPC impara:* (impara:clarify for the answers to the questions, impara:topics to drop or start the topics to search on the web); each model answer is a hidden read-only session; the web research runs are the only ones with WebSearch/WebFetch and no file tool, and see only the question and the topics the filter let through (shared/web-topics.ts).'),
       tech(LIMITS, 'Al massimo 24 fatti per ricerca, 2 domande, 6 battute per pezzo; schema di 4-10 nodi; etichette mai oltre 1,2× e schema intero quando si legge almeno all’80%.', 'At most 24 facts per research, 2 questions, 6 beats per piece; a 4-10 node diagram; labels never past 1.2× and the whole diagram whenever it reads at 80% or more.'),
-      tech(TOOLS, 'app_learn (avvia e apre una lezione, o elenca lezioni e ripasso), solo sull’endpoint dell’Orchestrator.', 'app_learn (starts and opens a lesson, or lists lessons and reviews), only on the Orchestrator’s endpoint.'),
+      tech(TOOLS, 'app_learn (avvia e apre una lezione, o elenca lezioni, ripasso, punteggio e livello di ogni materia), solo sull’endpoint dell’Orchestrator.', 'app_learn (starts and opens a lesson, or lists lessons, reviews, the score and each subject’s level), only on the Orchestrator’s endpoint.'),
     ],
     anchors: {
       0: ['src/main/learn/material.ts'],
-      1: ['src/main/learn/service.ts#research'],
-      2: ['src/renderer/components/impara/TeacherChip.tsx'],
-      3: ['src/renderer/components/impara/LessonStage.tsx'],
-      5: ['src/renderer/components/impara/ImparaTutor.tsx'],
+      1: ['src/main/learn/service.ts#research', 'src/main/learn/service.ts#gate'],
+      2: ['src/renderer/components/impara/ImparaStart.tsx', 'src/renderer/components/impara/ImparaOptions.tsx'],
+      3: ['src/renderer/components/impara/LessonStage.tsx', 'src/renderer/components/impara/LessonVisual.tsx'],
+      5: ['src/renderer/components/impara/ImparaTutor.tsx', 'src/renderer/components/impara/ImparaStudio.tsx'],
       6: ['src/renderer/brain/components/RecordDiscussButton.tsx', 'src/main/appctl/impara.ts'],
-      7: ['src/main/learn/store.ts', 'src/shared/review.ts', 'src/renderer/components/impara/ImparaReview.tsx'],
+      7: ['src/shared/quiz.ts', 'src/renderer/components/impara/ImparaReview.tsx', 'src/shared/mastery.ts'],
     },
-    sources: ['src/shared/lesson.ts', 'src/main/learn/service.ts', 'src/main/learn/prompt.ts', 'src/main/compare/headless.ts', 'src/renderer/components/impara/LessonStage.tsx', 'src/renderer/components/impara/ImparaSources.tsx', 'src/renderer/components/impara/ImparaPlayer.tsx', 'docs/adr/0185-impara-lessons.md', 'docs/adr/0188-impara-research-and-animated-board.md', 'src/shared/review.ts', 'docs/adr/0189-impara-subjects-and-spaced-review.md', 'src/renderer/components/impara/ImparaTutor.tsx', 'src/main/appctl/impara.ts', 'docs/adr/0190-impara-tutor-and-entry-points.md'],
+    sources: ['src/shared/lesson.ts', 'src/main/learn/service.ts', 'src/main/learn/prompt.ts', 'src/main/compare/headless.ts', 'src/renderer/components/impara/LessonStage.tsx', 'src/renderer/components/impara/ImparaSources.tsx', 'src/renderer/components/impara/ImparaPlayer.tsx', 'docs/adr/0185-impara-lessons.md', 'docs/adr/0188-impara-research-and-animated-board.md', 'src/shared/review.ts', 'docs/adr/0189-impara-subjects-and-spaced-review.md', 'src/renderer/components/impara/ImparaTutor.tsx', 'src/main/appctl/impara.ts', 'docs/adr/0190-impara-tutor-and-entry-points.md', 'src/renderer/components/impara/ImparaStart.tsx', 'src/main/learn/user-files.ts', 'src/shared/quiz.ts', 'src/renderer/components/impara/ImparaQuiz.tsx', 'src/shared/mastery.ts', 'src/renderer/components/impara/ImparaScore.tsx', 'docs/adr/0204-impara-one-field-quiz-kinds-and-score.md', 'src/shared/web-topics.ts', 'docs/adr/0206-impara-file-driven-web-research.md', 'src/shared/lesson-visual.ts', 'src/shared/lesson-studio.ts', 'src/renderer/components/impara/ImparaStudio.tsx', 'docs/adr/0205-impara-studio-visuals-and-quality.md'],
   },
   {
     id: 'held-news',
@@ -1502,13 +1455,49 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Like a workshop’s dashboard that counts the customers’ returns, not the compliments: few numbers, all checkable.'),
     tech: [
       tech(FILES, 'ai-errors.md nel brain; turni dai log dell’app (14 giorni); bug riaperti da ops/tools/bug-reopen.mjs, al massimo ogni 12 h.', 'ai-errors.md in the brain; turns from the app’s logs (14 days); reopened bugs from ops/tools/bug-reopen.mjs, at most every 12 h.'),
-      tech(WHERE, 'Pagina Qualità (sidebar → Andamento, o G Q); dati da /api/tables e /api/quality.', 'Quality page (sidebar → Trends, or G Q); data from /api/tables and /api/quality.'),
+      tech(WHERE, 'Scheda Qualità di Andamento (sidebar → Andamento, o G Q); dati da /api/tables e /api/quality.', 'Quality tab of Trends (sidebar → Trends, or G Q); data from /api/tables and /api/quality.'),
     ],
     anchors: {
       0: ['src/renderer/brain/pages/Qualita.tsx', 'src/main/brain/user-corrections.ts'],
       2: ['src/main/brain/quality.ts'],
     },
     sources: ['src/renderer/brain/pages/Qualita.tsx', 'src/main/brain/quality.ts', 'src/renderer/brain/lib/quality.ts', 'src/main/brain/user-corrections.ts', 'docs/adr/0197-corrections-kind-examples-and-ppi.md'],
+  },
+  {
+    id: 'trends',
+    title: b('Andamento e uso dell’app', 'Trends and app usage'),
+    summary: b('Andamento: costi, qualità (con i classificatori), apprendimento e il tuo uso dell’app in una pagina a schede, ogni numero una volta sola.',
+      'Trends: costs, quality (with the classifiers), learning and your use of the app in one page of tabs, each number shown once.'),
+    points: [
+      // src/renderer/components/andamento/AndamentoPage.tsx, src/renderer/components/Sidebar.tsx (ADR 0202)
+      b('Una voce sola nella barra (Andamento, G C) con quattro schede: Costi, Qualità, Apprendimento e Uso; i Classificatori sono una sezione in fondo a Qualità. Il titolo e le schede restano in vista mentre scorri.',
+        'One entry in the rail (Trends, G C) with four tabs: Costs, Quality, Learning and Usage; the Classifiers are a section at the bottom of Quality. The title and the tabs stay on screen while you scroll.'),
+      // src/renderer/lib/andamento.ts, src/renderer/actions.ts go(), src/renderer/brain/index.tsx GO_ALIASES
+      b('Le vecchie pagine portano alla loro scheda: i link «costi/30», «qualita» e «memoria/apprendimento» e i tasti G Q e G J aprono la scheda giusta; «classificatori» e G K aprono Qualità.',
+        'The old pages lead to their tab: the links "costi/30", "qualita" and "memoria/apprendimento" and the keys G Q and G J open the right tab; "classificatori" and G K open Quality.'),
+      // src/renderer/brain/components/States.tsx PageHead without a title
+      b('Ogni scheda comincia con la stessa riga: cosa mostra a sinistra, periodo, ultimo aggiornamento e «Aggiorna» a destra. Le frasi di testa che ripetevano i numeri delle schede sono sparite.',
+        'Every tab starts with the same line: what it shows on the left, period, last update and "Refresh" on the right. The lead sentences that repeated the tabs’ numbers are gone.'),
+      // src/renderer/components/andamento/UsageTab.tsx, src/renderer/lib/use-counter.ts
+      b('Uso conta, per giorno, le pagine e le schede che apri e le azioni principali (nuova richiesta, Orchestrator, Discuti, dettatura, Manutenzione, palette…): ultimi 14 giorni, dalla più usata, con le pagine mai aperte. Serve a decidere cosa tenere.',
+        'Usage counts, per day, the pages and tabs you open and the main actions (new request, Orchestrator, Discuss, dictation, Maintenance, palette…): the last 14 days, most used first, with the pages never opened. It is for deciding what to keep.'),
+      // src/main/use-counter.ts, src/main/appctl/guide.ts
+      b('Il contatore è locale e costa zero token: i numeri restano 90 giorni nel database dell’app sul tuo PC e non partono mai; l’Orchestrator li legge solo dalla sua guida dell’app quando chiedi «quali funzioni uso di più?».',
+        'The counter is local and costs zero tokens: the numbers stay 90 days in the app’s database on your PC and never leave it; the Orchestrator reads them only from its guide to the app when you ask "which features do I use most?".'),
+    ],
+    analogy: b('Come il cruscotto di un’auto con un solo quadro: velocità, consumi, spie e contachilometri insieme, ognuno al suo posto, e un diario di bordo di dove sei andato davvero.',
+      'Like a car’s single instrument panel: speed, consumption, warning lights and odometer together, each in its place, and a logbook of where you really went.'),
+    tech: [
+      tech(FILES, 'userData/app.db, area use_counts: una riga per giorno e chiave («page:<id>[/<scheda>]» o «action:<nome>»), tenute 90 giorni; senza database contano in memoria.', 'userData/app.db, area use_counts: one row per day and key ("page:<id>[/<tab>]" or "action:<name>"), kept 90 days; without the database they count in memory.'),
+      tech(WHERE, 'Pagina andamento (sidebar → Andamento, G C); «andamento/<scheda>» apre una scheda (costi, qualita, apprendimento, uso); IPC usecount:add e usecount:report; l’Orchestrator: app_guide, voce «uso».', 'Page andamento (sidebar → Trends, G C); "andamento/<tab>" opens a tab (costi, qualita, apprendimento, uso); IPC usecount:add and usecount:report; the Orchestrator: app_guide, entry "uso".'),
+    ],
+    anchors: {
+      0: ['src/renderer/components/andamento/AndamentoPage.tsx'],
+      1: ['src/renderer/lib/andamento.ts'],
+      3: ['src/renderer/lib/use-counter.ts', 'src/renderer/components/andamento/UsageTab.tsx'],
+      4: ['src/main/use-counter.ts'],
+    },
+    sources: ['src/renderer/components/andamento/AndamentoPage.tsx', 'src/renderer/components/andamento/UsageTab.tsx', 'src/renderer/lib/andamento.ts', 'src/renderer/lib/use-counter.ts', 'src/main/use-counter.ts', 'docs/adr/0202-andamento-and-usage-counter.md'],
   },
   {
     id: 'flash',
@@ -1529,9 +1518,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/chats/manager.ts flashFollow (ADR 0107)
       b('Ha un modello suo, separato da quello dell’Orchestrator: lo scegli dal chip del modello nella sua testata o sulla sua carta, e vale dalla domanda dopo.',
         'It has a model of its own, separate from the Orchestrator’s: pick it from the model chip in its header or on its card, and it applies from the next question.'),
-      // src/renderer/i18n/areas/lampo.it.ts lampo.toWork
-      b('Quando la risposta diventa un lavoro vero, «Fanne un lavoro» prepara il messaggio per l’Orchestrator con la tua domanda e la risposta di Flash.',
-        'When the answer turns into real work, "Make it a job" drafts the message for the Orchestrator with your question and Flash’s answer.'),
+      // src/renderer/lib/lampo.ts BRIEF_ASK, src/renderer/lib/flash-brief.ts (ADR 0209)
+      b('Quando la risposta diventa un lavoro vero, «Fanne un lavoro» chiede a Flash di scrivere il prompt per l’Orchestrator da tutta la conversazione (obiettivo, contesto, cosa fare, vincoli, quando è fatto) e lo mette nel suo campo, senza inviarlo. Se Flash non riesce, usa la tua ultima domanda e la sua risposta.',
+        'When the answer turns into real work, "Make it a job" asks Flash to write the Orchestrator’s prompt from the whole conversation (goal, context, what to do, constraints, done when) and puts it in its input, unsent. If Flash cannot, it uses your last question and its answer.'),
       // src/renderer/components/LampoTile.tsx: the eraser in the head
       b('La gomma nella testata pulisce Flash in un clic: la conversazione ricomincia da zero, sulla sua carta.',
         'The eraser in its header clears Flash in one click: the conversation starts over, on its card.'),
@@ -1540,8 +1529,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Like asking the colleague next to you "what was that?" while the boss is talking: they whisper the answer and the meeting goes on.'),
     diagram: { kind: 'flow', steps: [b('Tua domanda', 'Your question'), b('Contesto Orchestrator', 'Orchestrator context'), b('Risposta', 'Answer'), b('Lavoro, se serve', 'A job, if needed')] },
     tech: [
-      tech(LIMITS, 'Permessi: modalità plan (sola lettura); strumenti lettura e web; mai delegabile, scope background come Battito.',
-        'Permissions: plan mode (read only); read and web tools; never delegable, background scope like Pulse.'),
+      tech(LIMITS, 'Permessi: modalità plan (sola lettura); strumenti lettura e web; mai delegabile, scope background.',
+        'Permissions: plan mode (read only); read and web tools; never delegable, background scope.'),
       tech(WHERE, 'Carta «flash» in roles.json; il contesto passa da ChatManager.deliverNow.',
         'Card "flash" in roles.json; the context goes through ChatManager.deliverNow.'),
     ],
@@ -1562,42 +1551,42 @@ export const CONCEPTS: readonly ConceptCard[] = [
     summary: b('Chiedi all’Orchestrator dove sta una cosa o di cambiare un’impostazione: legge la mappa dell’app dal vivo e la cambia per te, con «Annulla».',
       'Ask the Orchestrator where something is, or to change a setting: it reads the app’s map live and changes it for you, with "Undo".'),
     points: [
-      // src/main/appctl/guide.ts app_guide
-      b('Quando gli serve, legge la mappa dell’app così come è disegnata ora: le voci della barra, le pagine, le schede di Memoria, le sezioni delle Impostazioni con i valori attuali, le scorciatoie, i testi dei «?» e queste carte della Guida.',
-        'When it needs to, it reads the app’s map as it is drawn now: the rail’s items, the pages, Memoria’s tabs, the Settings sections with their current values, the shortcuts, the "?" texts and these Guide cards.'),
+      // src/main/appctl/guide.ts app_guide; src/main/appctl/tool-catalog.ts TOOL_CATALOG (ADR 0208)
+      b('Quando gli serve, legge la mappa dell’app così come è disegnata ora: le voci della barra, le pagine, le schede di Memoria, le sezioni delle Impostazioni con i valori attuali, le scorciatoie, i testi dei «?», queste carte della Guida e ogni strumento dell’app, anche quelli che hanno solo le chat di lavoro, il browser o il brain.',
+        'When it needs to, it reads the app’s map as it is drawn now: the rail’s items, the pages, Memoria’s tabs, the Settings sections with their current values, the shortcuts, the "?" texts, these Guide cards and every tool of the app, also the ones only the work chats, the browser or the brain have.'),
       // src/main/appctl/guide.ts outline (window.__sbScreen)
       b('Sa anche cosa c’è sullo schermo adesso e dove sta ogni controllo, senza leggere il contenuto privato delle chat.',
         'It also knows what is on screen right now and where each control sits, without reading the chats’ private content.'),
       // src/main/appctl/config.ts app_config
-      b('Cambia per te ogni configurazione: impostazioni, vista (tema, densità), la carta di un ruolo, un connettore acceso o spento, «Rispondi dopo». Anche le impostazioni protette cambiano subito.',
-        'It changes every configuration for you: settings, the view (theme, density), a role’s card, a connector on or off, "Answer later". Protected settings change at once too.'),
+      b('Cambia per te ogni configurazione: impostazioni, vista (tema, densità), la carta di un ruolo, i connettori (aggiungere, cambiare, provare, togliere, darli a un ruolo), il tuo profilo, «Rispondi dopo». Anche le impostazioni protette cambiano subito.',
+        'It changes every configuration for you: settings, the view (theme, density), a role’s card, connectors (add, change, test, remove, give to a role), your profile, "Answer later". Protected settings change at once too.'),
       // src/main/appctl/user-words.ts
       b('Cambia qualcosa solo se gliel’hai scritto tu, di recente, in un messaggio che è l’ultimo della sua chat: le notizie dell’app o la posta di un agente non bastano.',
         'It changes something only if you typed the ask yourself, recently, in a message that is the latest of its chat: the app’s news or an agent’s mail are not enough.'),
       // src/main/appctl/config.ts: logged as the agent’s change
-      b('Ogni impostazione cambiata finisce nel registro dei cambi con il suo «Annulla»; la carta di un ruolo torna alla versione di prima; vista e connettori si rimettono chiedendoglielo di nuovo.',
-        'Every setting change goes to the change log with its "Undo"; a role’s card can go back to its previous version; the view and connectors are set back by asking again.'),
+      b('Ogni impostazione cambiata finisce nel registro dei cambi con il suo «Annulla» (e la pagina Impostazioni mostra «Modificato dall’Orchestrator»); la carta di un ruolo torna alla versione di prima; un connettore cambiato ha «Annulla» nel feed; vista e profilo si rimettono chiedendoglielo di nuovo.',
+        'Every setting change goes to the change log with its "Undo" (and the Settings page shows "Modificato dall’Orchestrator"); a role’s card can go back to its previous version; a changed connector has "Annulla" in the feed; the view and profile are set back by asking again.'),
       // src/main/appctl/config.ts: secrets, own tools
-      b('Non tocca mai segreti, chiavi o password, né i suoi stessi strumenti e permessi: quelli restano un tuo clic.',
-        'It never touches secrets, keys or passwords, nor its own tools and permissions: those stay your click.'),
+      b('Non tocca mai segreti, chiavi o password, né i suoi stessi strumenti e permessi: quelli restano un tuo clic. Per un connettore con token ti apre il modulo già compilato.',
+        'It never touches secrets, keys or passwords, nor its own tools and permissions: those stay your click. For a connector with a token it opens the form prefilled for you.'),
     ],
     analogy: b('Come un assistente che conosce l’ufficio a memoria: gli dici «abbassa il riscaldamento» e lo fa, lasciando un biglietto per rimetterlo com’era.',
       'Like an assistant who knows the office by heart: you say "turn the heating down" and they do it, leaving a note so you can put it back.'),
     tech: [
-      tech(TOOLS, 'app_guide (la mappa, su richiesta), app_ui «outline» (lo schermo), app_config (setting, view, agent, connector, later).',
-        'app_guide (the map, on demand), app_ui "outline" (the screen), app_config (setting, view, agent, connector, later).'),
+      tech(TOOLS, 'app_guide (la mappa, su richiesta), app_ui «outline» (lo schermo), app_config (setting, view, agent, connector, profile, later).',
+        'app_guide (the map, on demand), app_ui "outline" (the screen), app_config (setting, view, agent, connector, profile, later).'),
       tech(LIMITS, 'app_config solo sull’endpoint dell’Orchestrator (app_guide e app_ui anche altrove, senza i valori delle impostazioni); nessun costo di token negli altri turni: la mappa si legge solo quando serve.',
         'app_config only on the Orchestrator’s endpoint (app_guide and app_ui elsewhere too, without the settings’ values); no token cost in its other turns: the map is read only when needed.'),
     ],
     anchors: {
-      0: ['src/main/appctl/guide.ts#app_guide'],
-      1: ['src/main/appctl/guide.ts'],
+      0: ['src/main/appctl/guide.ts#app_guide', 'src/main/appctl/guide.ts#otherTools'],
+      1: ['src/main/appctl/guide.ts#screenOutline'],
       2: ['src/main/appctl/config.ts#app_config'],
       3: ['src/main/appctl/user-words.ts'],
       4: ['src/main/appctl/config.ts'],
       5: ['src/main/appctl/config.ts'],
     },
-    sources: ['src/main/appctl/guide.ts', 'src/main/appctl/config.ts', 'src/main/appctl/user-words.ts', 'src/renderer/lib/app-map.ts'],
+    sources: ['src/main/appctl/guide.ts', 'src/main/appctl/tool-catalog.ts', 'src/main/appctl/config.ts', 'src/main/appctl/user-words.ts', 'src/renderer/lib/app-map.ts'],
   },
   {
     id: 'voice',
@@ -1813,6 +1802,128 @@ export const CONCEPTS: readonly ConceptCard[] = [
       5: ['src/main/appctl/tools.ts#app_routine_status'],
     },
     sources: ['packages/routine-runtime/README.md', 'src/renderer/brain/pages/Routines.tsx', 'src/renderer/components/LegacyRoutineHistory.tsx', 'src/main/appctl/tools.ts', 'docs/adr/0179-terminal-only-routines.md'],
+  },
+  {
+    id: 'settings',
+    title: b('Le Impostazioni', 'Settings'),
+    summary: b('Una pagina sola per le poche scelte che contano: profilo, aggiornamenti, connettori, account, ruoli, il tuo spazio, voce, aspetto, notifiche e avanzate.',
+      'One page for the few choices that matter: profile, updates, connectors, accounts, roles, your workspace, voice, appearance, notifications and advanced.'),
+    points: [
+      // src/renderer/lib/settings-sections.ts settingsSections; src/renderer/components/SettingsPage.tsx
+      b('Si apre con Ctrl+, dal menu in alto o con G P. A sinistra le sezioni in gruppi (Tu, Lavoro, Strumenti, App); a destra ogni riga ha il nome e una riga di spiegazione, il comando a destra; uno scudo segna le scelte protette. Ogni cambio si salva subito e «Salvato» offre «Annulla».',
+        'It opens with Ctrl+, from the top menu or with G P. On the left the sections in groups (You, Work, Tools, App); on the right each row has its name and one line of explanation, the control on the right; a shield marks protected choices. Every change saves at once and "Salvato" offers "Annulla".'),
+      // src/renderer/lib/settings-page.ts matchesSettingsSearch
+      b('La ricerca in cima filtra sezioni e singole righe ed evidenzia le parole trovate; la barra a sinistra porta dritto a una sezione, Ctrl+K ha «Impostazioni › <sezione>» e un link «impostazioni/<sezione>» apre la pagina lì.',
+        'The search on top filters sections and single rows and highlights the words found; the left bar jumps to a section, Ctrl+K has "Impostazioni › <section>" and an "impostazioni/<section>" link opens the page there.'),
+      // src/renderer/components/ProfileSettings.tsx; src/renderer/components/SettingsPage.tsx
+      b('Il mio profilo è come gli agenti ti conoscono (nome, ruolo, lavoro principale, modo di rispondere, in me.md); Account e strumenti mostra l’accesso di ogni motore e quanto può fare da solo.',
+        'My profile is how the agents know you (name, role, main work, reply style, in me.md); Accounts and tools shows each engine’s sign-in and how much it may do on its own.'),
+      // src/renderer/components/SettingsPage.tsx; src/renderer/components/AppearancePreview.tsx
+      b('Il mio spazio tiene la cartella del brain, la condivisione, la cartella dei progetti, la chiusura automatica delle chat ferme e la configurazione guidata da rifare; Aspetto e lingua cambia tema, lingua e densità con un’anteprima.',
+        'My workspace holds the brain folder, sharing, the projects folder, the auto-close of idle chats and the guided setup to run again; Appearance and language changes theme, language and density with a preview.'),
+      // src/shared/guide-coverage.ts SETTINGS_CARDS
+      b('Le altre sezioni hanno la loro carta della Guida: Aggiornamenti, Connettori e Avanzate (server MCP), Ruoli e deleghe, Voce, Notifiche.',
+        'The other sections have their own Guide card: Updates, Connectors and Advanced (MCP servers), Roles and delegation, Voice, Notifications.'),
+      // src/main/appctl/config.ts app_config
+      b('Puoi chiedere all’Orchestrator di cambiare una scelta per te: lo fa come il tuo clic, con «Annulla»; segreti e chiavi restano solo tuoi.',
+        'You can ask the Orchestrator to change a choice for you: it does it like your click, with "Undo"; secrets and keys stay yours alone.'),
+      // src/renderer/components/SuggestSettings.tsx; src/renderer/lib/composer-suggest.ts localSuggestion (ADR 0118, 0201)
+      b('Scrittura ha un solo interruttore, «Suggerimenti mentre scrivi»: un testo grigio dopo il cursore nel campo della chat, dai tuoi messaggi passati, dai comandi «</>», dai ruoli, dalle chat e dai file, a zero token; Tab lo accetta, Esc lo nasconde.',
+        'Writing has one switch, "Suggestions while you type": grey text after the cursor in the chat input, from your past messages, the "</>" commands, the roles, the chats and the files, zero tokens; Tab takes it, Esc hides it.'),
+    ],
+    analogy: b('Come il quadro elettrico di casa: pochi interruttori con l’etichetta giusta, e per i lavori grossi chiami l’elettricista.',
+      'Like the fuse box at home: a few switches with the right label, and for the big jobs you call the electrician.'),
+    tech: [
+      tech(WHERE, 'Sezioni in lib/settings-sections.ts (SETTINGS_SECTION_IDS, lette anche dalla mappa dell’Orchestrator), pagina components/SettingsPage.tsx, valori in brain-settings.json tramite settings:set.',
+        'Sections in lib/settings-sections.ts (SETTINGS_SECTION_IDS, also read by the Orchestrator’s map), page components/SettingsPage.tsx, values in brain-settings.json through settings:set.'),
+    ],
+    anchors: {
+      [-1]: ['src/renderer/lib/settings-sections.ts#SETTINGS_SECTION_IDS'],
+      0: ['src/renderer/lib/settings-sections.ts#settingsSections'],
+      1: ['src/renderer/lib/settings-page.ts#matchesSettingsSearch', 'src/renderer/lib/settings-page.ts#hitRanges'],
+      4: ['src/shared/guide-coverage.ts#SETTINGS_CARDS'],
+      5: ['src/main/appctl/config.ts#app_config'],
+      6: ['src/renderer/components/SuggestSettings.tsx', 'src/renderer/lib/composer-suggest.ts#localSuggestion'],
+    },
+    sources: ['src/renderer/components/SettingsPage.tsx', 'src/renderer/components/SuggestSettings.tsx', 'src/renderer/lib/settings-sections.ts', 'src/renderer/lib/settings-page.ts', 'src/renderer/components/ProfileSettings.tsx', 'src/renderer/components/AppearancePreview.tsx', 'src/main/appctl/config.ts'],
+  },
+  {
+    id: 'guide',
+    title: b('La Guida', 'The Guide'),
+    summary: b('Ogni concetto dell’app come una carta: come funziona, un paragone di tutti i giorni e i file da cui viene; puoi farle domande.',
+      'Every concept of the app as a card: how it works, an everyday analogy and the files it comes from; you can ask it questions.'),
+    points: [
+      // src/renderer/components/GuidePage.tsx GuidePage; src/renderer/components/GuideLink.tsx
+      b('Si apre dalla barra, con Ctrl+K o con G E; il «Come funziona →» di un «?» apre direttamente la carta giusta.',
+        'It opens from the rail, with Ctrl+K or with G E; the "How it works →" of a "?" opens the right card directly.'),
+      // src/shared/concept-guide.ts ConceptCard
+      b('Una carta mostra i punti numerati, a volte un diagramma, il paragone, i dettagli tecnici con i file e, a parte, quello che è ancora un obiettivo.',
+        'A card shows its numbered points, sometimes a diagram, the analogy, the technical details with the files and, apart, what is still a target.'),
+      // src/renderer/components/GuideAsk.tsx
+      b('«Chiedi alla Guida» manda la tua domanda a un modello leggero senza strumenti, con le carte che c’entrano: la risposta cita carte e file, con il suo costo.',
+        '"Ask the Guide" sends your question to a light model with no tools, with the cards that matter: the answer cites cards and files, with its cost.'),
+      // src/renderer/lib/guide-usage.ts forYou
+      b('«Per te» mette in cima le tre carte che ti servono di più, dai contatori locali (i «?» aperti, le carte lette, le domande, gli errori del Log), a zero token.',
+        '"For you" puts on top the three cards you need most, from local counters (the "?" opened, cards read, questions, the Log’s errors), at zero tokens.'),
+      // src/shared/concept-guide.ts orchestratorText
+      b('«Discuti» mette la carta come messaggio pronto nell’input dell’Orchestrator, senza inviarlo; «Imparalo» apre una lezione di Impara sulla carta.',
+        '"Discuss" puts the card as a ready message in the Orchestrator’s input, without sending it; "Learn it" opens an Impara lesson about the card.'),
+      // src/main/guide/anchors.ts staleInRepo; src/shared/guide-coverage.ts coverageGaps (ADR 0196, 0208)
+      b('Resta aggiornata da sola: una carta il cui codice è cambiato dopo il testo si segna «da verificare», e ogni pagina e sezione delle Impostazioni deve avere la sua carta in italiano, inglese e tedesco, o i controlli del repository falliscono.',
+        'It keeps itself current: a card whose code changed after its text is marked "to verify", and every page and Settings section must have its card in Italian, English and German, or the repository’s checks fail.'),
+    ],
+    analogy: b('Come il libretto di istruzioni di un elettrodomestico, ma che si corregge da solo quando cambia il modello e risponde alle domande.',
+      'Like an appliance’s instruction booklet, but one that corrects itself when the model changes and answers questions.'),
+    tech: [
+      tech(FILES, 'Contenuto in shared/concept-guide.ts (tedesco in concept-guide.de.ts, id in concept-ids.ts); ancore in shared/guide-anchors.json (node scripts/guide-anchors.mjs); quale carta spiega ogni pagina e sezione in shared/guide-coverage.ts.',
+        'Content in shared/concept-guide.ts (German in concept-guide.de.ts, ids in concept-ids.ts); anchors in shared/guide-anchors.json (node scripts/guide-anchors.mjs); which card explains each page and section in shared/guide-coverage.ts.'),
+    ],
+    anchors: {
+      [-1]: ['src/shared/guide-coverage.ts#PAGE_CARDS'],
+      0: ['src/renderer/components/GuidePage.tsx#GuidePage'],
+      2: ['src/renderer/components/GuideAsk.tsx'],
+      3: ['src/renderer/lib/guide-usage.ts#forYou'],
+      4: ['src/shared/concept-guide.ts#orchestratorText'],
+      5: ['src/main/guide/anchors.ts#staleInRepo', 'src/shared/guide-coverage.ts#coverageGaps'],
+    },
+    sources: ['src/renderer/components/GuidePage.tsx', 'src/renderer/components/GuideAsk.tsx', 'src/renderer/components/GuideLink.tsx', 'src/renderer/lib/guide-usage.ts', 'src/shared/concept-guide.ts', 'src/main/guide/anchors.ts', 'src/shared/guide-coverage.ts'],
+  },
+  {
+    id: 'brain-map',
+    title: b('La Mappa del brain', 'The brain map'),
+    summary: b('Chi usa cosa nel tuo brain, come un grafo: agenti, skill, regole e memoria, oppure le note, anche in 3D mentre le chat lavorano.',
+      'Who uses what in your brain, as a graph: agents, skills, rules and memory, or the notes, also in 3D while the chats work.'),
+    points: [
+      // src/renderer/components/brain-model/MapPage.tsx MapPage
+      b('La pagina Mappa (G B) ha due viste: «Agenti e skill» e «Note del brain».',
+        'The Map page (G B) has two views: "Agents and skills" and "Brain notes".'),
+      // src/renderer/lib/brain-model-view.ts linkGraph
+      b('«Agenti e skill» disegna ogni agente con le sue skill, le regole che riceve e la sua memoria; un clic apre l’ispettore, che porta alla pagina dell’agente, alla skill o al file.',
+        '"Agents and skills" draws every agent with its skills, the rules it receives and its memory; a click opens the inspector, which leads to the agent’s page, the skill or the file.'),
+      // src/renderer/dashboard/BrainNotesMap.tsx BrainNotesMap
+      b('«Note del brain» mostra note, aree, agenti e strumenti del brain con i loro collegamenti, con ricerca, ispettore e i controlli del brain.',
+        '"Brain notes" shows the brain’s notes, areas, agents and tools with their links, with search, an inspector and the brain checks.'),
+      // src/renderer/brain/map/BrainMap.tsx BrainMapView; src/renderer/brain/lib/live.ts liveGraph
+      b('«Esplora in 3D» apre la mappa che puoi far girare: si accende dove le chat lavorano adesso (una chat attiva, un file del brain letto o scritto, uno strumento, una scheda del browser) e i collegamenti pulsano finché il lavoro è in corso.',
+        '"Explore in 3D" opens the map you can spin: it lights up where the chats are working now (an active chat, a brain file read or written, a tool, a browser tab) and the links pulse while the work is in progress.'),
+      // src/renderer/brain/lib/live.ts liveGraph; src/renderer/brain/map/engine.ts webglAvailable
+      b('Contano solo i file dentro la cartella del brain: una chat che legge un repository di codice accende sé stessa, non la mappa. Senza WebGL la mappa 3D dice che non può disegnare.',
+        'Only files inside the brain folder count: a chat reading a code repository lights itself, not the map. Without WebGL the 3D map says it cannot draw.'),
+    ],
+    analogy: b('Come la cartina della metropolitana con i treni in tempo reale: vedi le linee e dove si sta muovendo qualcosa adesso.',
+      'Like a metro map with live trains: you see the lines and where something is moving right now.'),
+    tech: [
+      tech(DATA, 'Grafo agenti → skill → regole → memoria da lib/brain-model-view.ts linkGraph; note da /api/map; livello dal vivo da brain/lib/live.ts liveGraph (chat, strumenti, schede), disegnato da brain/map/engine.ts.',
+        'Agents → skills → rules → memory graph from lib/brain-model-view.ts linkGraph; notes from /api/map; live layer from brain/lib/live.ts liveGraph (chats, tools, tabs), drawn by brain/map/engine.ts.'),
+    ],
+    anchors: {
+      0: ['src/renderer/components/brain-model/MapPage.tsx#MapPage'],
+      1: ['src/renderer/lib/brain-model-view.ts#linkGraph'],
+      2: ['src/renderer/dashboard/BrainNotesMap.tsx#BrainNotesMap'],
+      3: ['src/renderer/brain/map/BrainMap.tsx#BrainMapView', 'src/renderer/brain/lib/live.ts#liveGraph'],
+      4: ['src/renderer/brain/map/engine.ts#webglAvailable'],
+    },
+    sources: ['src/renderer/components/brain-model/MapPage.tsx', 'src/renderer/lib/brain-model-view.ts', 'src/renderer/dashboard/BrainNotesMap.tsx', 'src/renderer/brain/map/BrainMap.tsx', 'src/renderer/brain/map/engine.ts', 'src/renderer/brain/lib/live.ts'],
   },
 ];
 

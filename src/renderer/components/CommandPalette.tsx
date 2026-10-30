@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { SearchHit, SearchIndexStatus, SearchResult } from '@shared/contract';
 import { sb } from '../sb';
 import { locale, t, type TextKey } from '../i18n';
+import { track } from '../lib/use-counter';
 import { recorder, toggleCall } from '../lib/recorder';
 import { chatName } from '@shared/orchestrator';
 import { fuzzyScore } from '../lib/fuzzy';
@@ -19,6 +20,7 @@ import { engineName, otherEngine } from '../lib/engines';
 import { app } from '../store/store';
 import { BRAIN_PAGES, closeModal, openModal, pageLabel, placeLabel, setMaximized, setPrefs, setOrchestratorOpen, ui, type BrainPageId } from '../store/ui';
 import { linkOfEvent, parseLink } from '../lib/notify';
+import { settingsSections } from '../lib/settings-sections';
 import { closedChats } from '../lib/autoclose';
 import { now } from '../lib/clock';
 import {
@@ -26,12 +28,11 @@ import {
   toggleMaximize, toggleOrchestrator, askRenewOrchestrator, askClearOrchestrator, orchestratorId, newBrowser, newRequest,
 } from '../actions';
 import {
-  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconLearn, IconBranch, IconFile, IconBrain, IconChart, IconTarget, IconCoins, IconShield, IconFocus, IconGlobe,
+  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconLearn, IconBranch, IconFile, IconBrain, IconChart, IconShield, IconFocus, IconGlobe,
   IconHistory, IconKeyboard, IconLayers, IconLightbulb, IconLink, IconList, IconLogin, IconMap, IconMaximize, IconMic, IconPlus, IconQuestion, IconSearch, IconSettings, IconStop,
   IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
 import { Keys, Modal } from './ui';
-import { ContextPulse } from './ContextPulse';
 
 interface Cmd {
   id: string; group: string; title: string; sub?: string; shortcut?: string; icon: ReactNode; run: () => void; text?: string;
@@ -43,9 +44,9 @@ const PAGE_ICON: Record<BrainPageId, ReactNode> = {
   home: <IconBrain />, flussi: <IconBranch />,
   agenti: <IconLayers />,
   idee: <IconLightbulb />,
-  costi: <IconCoins />, qualita: <IconChart />, apprendimento: <IconTarget />, script: <IconTerminal />, log: <IconList />, confronto: <IconLayers />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
+  andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
   guida: <IconQuestion />, browser: <IconGlobe />, registrazioni: <IconMic />, impara: <IconLearn />,
-  regole: <IconShield />, memoria: <IconHistory />, classificatori: <IconBranch />, collegamenti: <IconMap />,
+  regole: <IconShield />, memoria: <IconHistory />, collegamenti: <IconMap />,
 };
 
 function buildCommands(): Cmd[] {
@@ -115,6 +116,9 @@ function buildCommands(): Cmd[] {
   // the Grindhouse holds the agents (SPEC 19): Ctrl+1 and a search for "agenti" or "chat" land there
   for (const p of BRAIN_PAGES) out.push({ id: `page:${p.id}`, group: 'Vai a', title: p.label, shortcut: p.id === 'home' ? 'Ctrl+1' : p.key, icon: PAGE_ICON[p.id], run: () => go({ page: p.id }),
     ...(p.id === 'home' ? { sub: t('home.workspace'), text: `${p.label} ${t('home.agents')} chat agents home` } : p.id === 'guida' ? { sub: t('guide.title'), text: `${p.label} guida guide aiuto help concetti concepts come funziona how it works` } : {}) });
+  // every Settings section by its title, description and search words (ADR 0207): «notifiche», «tema», «MCP» land on it
+  for (const st of Object.values(settingsSections([]))) out.push({ id: `settings:${st.id}`, group: 'Vai a', title: `${t('essential.title')} › ${st.title}`, sub: st.description, icon: <IconSettings />,
+    run: () => go({ page: 'impostazioni', arg: st.id }), text: `${t('essential.title')} ${st.title} ${st.description} ${st.search}` });
   out.push({ id: 'page:mappa', group: 'Vai a', title: auditText('cmp.palette.map'), sub: auditText('cmp.palette.mapSub'), shortcut: 'Ctrl+Shift+M', icon: <IconMap />, run: () => go({ page: 'mappa' }) });
   // call recording (ADR 0154): start or stop from anywhere
   out.push({ id: 'rec:toggle', group: 'Azioni', title: recorder.get().phase === 'off' ? t('rec.start') : t('rec.stop'), sub: t('brainPages.nav.registrazioni'), icon: <IconMic />, run: () => void toggleCall() });
@@ -232,6 +236,7 @@ export function CommandPalette() {
   // the highlighted row by id: full-text results arriving reshape the list, the choice stays on its row
   const [activeId, setActiveId] = useState<string | null>(null);
   const all = useMemo(buildCommands, []);
+  useEffect(() => { track('palette'); }, []); // the local usage counter (ADR 0202): one open
   const found = useFound(q);
   const model = useSearchModel();
   const quick = useMemo(() => {
@@ -307,7 +312,6 @@ export function CommandPalette() {
           );
         })}
       </div>
-      {!found.busy && (!q.trim() || list.length === 0) && <ContextPulse place="search" />}
       <div className="palette-foot"><span><Keys combo="↑ ↓" />{' '}{auditText('audit.CommandPalette.select')}</span><span><Keys combo="Invio" />{' '}{auditText('audit.CommandPalette.open')}</span><span><Keys combo="Esc" />{' '}{auditText('audit.CommandPalette.close')}</span>
         {found.busy && list.length > 0 && <span className="palette-busy" data-testid="palette-busy">{auditText('audit.CommandPalette.searchingMessagesAndTheBrain')}</span>}
         <ModelNote model={model} /></div>

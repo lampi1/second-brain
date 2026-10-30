@@ -26,7 +26,7 @@ a screenshot that was looked at, `npm run check` is green, and the fresh-context
   - [ ] Costi: charts by day / model / chat, savings, the estimate ledger
   - [ ] Qualità: AI errors, praise, specialist notebooks, proposals, measures, bugs, recurrence
   - [ ] ~~Collaborazione: mail between chats, environment leases~~ (dropped 2026-10-13: Procedure took its place, ADR 0041)
-  - [ ] Confronto: the model comparison reports
+  - [ ] ~~Confronto: the model comparison reports~~ (removed 2026-10-30, ADR 0201)
   - [ ] Esplora: every brain file, search, preview
   - [ ] Mappa 3D: essential view, full screen from its own button, menu, weak points, flows
 - [ ] AI-driven: `npm run check`, `npm run doctor`, logs, app-control MCP (ADR 0006).

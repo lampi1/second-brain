@@ -5,7 +5,7 @@
 // agents' English prompts) and uiLang also drive the AI's reply language (ADR 0120: chats/reply-lang.ts).
 import type { Lang } from '../shared/contract';
 
-/** the language's name as the agents' (English) prompts say it: headline, pulse, the reply language of chats */
+/** the language's name as the agents' (English) prompts say it: the reply language of chats */
 export const LANG_NAME: Readonly<Record<Lang, string>> = { it: 'Italian', en: 'English', de: 'German (as written in Austria)' };
 export const LOCALE: Readonly<Record<Lang, string>> = { it: 'it-IT', en: 'en-GB', de: 'de-AT' };
 let source: () => Lang = () => 'it';

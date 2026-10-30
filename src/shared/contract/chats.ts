@@ -4,13 +4,11 @@
 import type { AgentContextSnapshot } from '../agent-context';
 import type { AgentChildren, AgentOwnerSnapshot, AgentRun, CanonicalResult, TaskDeliveryPolicy } from '../agents';
 import type { AutoClosePresence, AutoCloseStatus } from '../auto-close';
-import type { SuggestAnswer, SuggestRequest, SuggestState } from '../composer-suggest';
 import type { ChatDelegation, DelegationLimitHit } from '../delegation';
 import type { ChatEffortStatus } from '../effort';
 import type { ModelTier } from '../roles';
 import type { StrategyPlan } from '../strategy';
 import type { SysCode, SysParams } from '../sys';
-import type { TaskKind } from '../work-concepts';
 import type { Harness } from './engines';
 import type { RouteDecision } from './settings';
 import type { AnswerLater, ChatCommand, HeldNewsState } from './ui';
@@ -118,7 +116,7 @@ export interface ChatSummary {
   /** an agent's start or turn waits for the machine's load to drop (ADR 0036): kind start = the engine is not started
    *  yet, turn = a message waits to wake it; position 1 = next; cpu/freeRam = the load last sampled, in % */
   queued?: QueuedInfo;
-  /** how its harness, model and effort were chosen when an agent opened it (app_create_chat, the routing table) */
+  /** how its harness, model and effort were chosen (its role's card or the user's defaults; app_create_chat, chat:createRouted) */
   route?: RouteDecision;
   /** ADR 0103: when the checkpoint before its last turn was taken (its files can go back to it); absent = none */
   checkpointAt?: number;
@@ -262,6 +260,8 @@ export interface PendingRequest {
  *  explanation right before the block, plain text (shared/command-ask.ts), shown on the card without a click. */
 export interface CommandAsk { itemId: string; code: string; lang: string; prod?: string; lead?: string }
 export type OpenPathResult = { how: 'folder' } | { how: 'missing' | 'refused'; reason: string };
+/** what the viewer's copy icon put on the clipboard (main/file-copy.ts) */
+export type CopyFileResult = { how: 'text' | 'image' | 'file' } | { how: 'missing' | 'refused'; reason: string };
 /** app:askImage: an image a question names, as a data: URL (main/ask-image.ts: allowed folders, magic bytes, size), or why not */
 export type AskImageResult =
   | { kind: 'image'; path: string; dataUrl: string }
@@ -323,18 +323,15 @@ export interface NewChat {
   /** with orchestrator: the Orchestrator this one replaces; the old one goes on as a normal chat, its history kept */
   replaces?: string;
   worktree?: boolean;         // claude --worktree
-  route?: RouteDecision;      // set by app_create_chat: how the routing table (or an override) chose the engine
+  route?: RouteDecision;      // set by app_create_chat and chat:createRouted: how the engine was chosen (role, defaults, override)
   /** run tags (AGENTS-DESIGN §4.8): the skill ids the chat starts with (`^[a-z0-9][a-z0-9_-]{0,79}$`, at most 16) */
   skills?: string[];
   /** run tags: the product the work is about, up to 40 characters */
   app?: string;
-  /** set by app_create_chat (main): what the routing table matches a model-less role's row on (its explicit kind, app
-   *  code, the caller's area) besides title and prompt, so the row picked is the one the route records (ADR 0091) */
-  routeHint?: { kind?: TaskKind; appCode?: boolean; area?: string };
 }
 
 /** A chat the user starts without choosing everything ("Nuova chat", a new Orchestrator from Ricomincia / Cambia motore /
- *  Pulisci): main picks harness, model and effort through the routing table (ADR 0032)
+ *  Pulisci): main picks harness, model and effort from the user's defaults (ADR 0032, 0210)
  *  as app_create_chat does, and the choice goes to the improvement loop's ledger (chat.route). The brain pages never
  *  start one: their "Discuti" goes to the Orchestrator (2026-10-19). */
 export interface RoutedNewChat {
@@ -413,10 +410,6 @@ export interface ChatsInvokeMap {
   'orchestrator:ensure': [{ harness: Harness; model?: string }, ChatSummary];
   /** "Rispondi dopo" (on: true) or the queue opened by the user (on: false) */
   'later:set': [{ on: boolean }, AnswerLater];
-  /** the chat composer's model suggestion (ADR 0118): get after a typing pause, cancel on the next key, today's spend */
-  'suggest:get': [SuggestRequest, SuggestAnswer];
-  'suggest:cancel': [{ chatId: string }, void];
-  'suggest:state': [void, SuggestState];
   'orchestrator:held': [void, HeldNewsState];
   /** the user opened a held news item's chat from the list: that chat's items are read, never wake the Orchestrator (#123) */
   'orchestrator:heldSeen': [{ chatId: string }, HeldNewsState];

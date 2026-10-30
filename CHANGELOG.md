@@ -6,6 +6,15 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- Impara v3 and a leaner app (ADR 0201-0210): Battito, Confronto modelli, cloud agents, the judge audit, AI typing
+  suggestions, the Orchestrator's «Veloce» lane and the model-routing classifier are gone (every agent uses its card's
+  model); Costi, Qualità, Apprendimento and Classificatori are tabs of one «Andamento» page with a local usage counter;
+  agent reviews are sampled and run as one hidden nightly batch; Impara has one multiline field with files, new quiz
+  kinds, an honest score, a Studio, sequence/state/timeline/mind-map/code/formula/chart visuals, a quality gate and
+  file-driven web research through filtered public queries; Settings redesigned with search and instant save; MCP
+  servers from one paste, those the Orchestrator adds wait for the user's «Attiva»; README, Guide and app_guide are
+  checked against the code; the Strategist asks at least three questions; reactions fit the message; Flash's «Fanne un
+  lavoro» writes a real brief; the file viewer copies any file; one focus ring everywhere.
 - Solid app and effective maintenance (ADR 0192-0200): logs carry a run and step id, interface errors are logged and a
   page that fails shows «Ricarica la pagina» instead of emptying the app, a 90-day daily digest feeds Manutenzione;
   Proposte apply by themselves in a group after 11 yes in a row (never production, permissions, settings, hooks, scripts,

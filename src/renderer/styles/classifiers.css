@@ -1,11 +1,9 @@
-/* The Classificatori page (components/brain-model/ClassifiersPage.tsx, ClassifierDetail.tsx, TrendChart.tsx): a
+/* The Classificatori section of Qualità (components/brain-model/ClassifiersSection.tsx, ClassifierDetail.tsx, TrendChart.tsx): a
    summary strip, a grid of classifier cards in the Agenti cards' look (agent-catalog.css .catalog-card, a tone per
    classifier), each with its numbers, a compact weekly trend, the learning meter and a curious fact; the detail view
    with its explanations, charts and tables. Also Qualità's grouped app errors (dashboard/AppErrors.tsx). Theme tokens
    only (tokens.css; chart hues from brain.css --bx-cat-*): dark and light follow the app. One column when narrow. */
 
-.cls-page .dash-header{height:auto;min-height:120px}
-.cls-page .dash-header>div>p.cls-lead{white-space:normal;max-width:78ch}
 .cls-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:0 0 18px}
 .cls-summary>.cls-num{padding:14px 16px;border:1px solid var(--border);border-radius:var(--r-l);background:linear-gradient(145deg,var(--surface-2),var(--surface))}
 .cls-summary .cls-num-value{font-size:26px}
@@ -14,8 +12,6 @@
 
 /* a tone per classifier: the card's hairline, its icon, its meter */
 .cls-card[data-id=kind],.cls-detail-head[data-id=kind]{--tone:var(--bx-cat-1)}
-.cls-card[data-id=model],.cls-detail-head[data-id=model]{--tone:var(--bx-cat-7)}
-.cls-card[data-id=skills],.cls-detail-head[data-id=skills]{--tone:var(--bx-cat-3)}
 .cls-card[data-id=estimates],.cls-detail-head[data-id=estimates]{--tone:var(--bx-cat-4)}
 .cls-card[data-id=tasks],.cls-detail-head[data-id=tasks]{--tone:var(--bx-cat-5)}
 .cls-card[data-id=jobkind],.cls-detail-head[data-id=jobkind]{--tone:var(--bx-cat-2)}

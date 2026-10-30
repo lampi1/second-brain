@@ -5,7 +5,7 @@
 // several lines, line by line), `localize` does it for every string of a seed object. Anything without an entry stays
 // as written (ids, paths, code, URLs). The language is chosen once, when the demo starts (demo-wiring.ts: the
 // `language` setting, else Windows' language); German uses the Italian content. Pure apart from that one switch. Used
-// by demo.ts, demo-pages.ts, demo-wiring.ts, proposals/demo.ts, pulse/demo.ts, brainmodel/demo.ts and
+// by demo.ts, demo-pages.ts, demo-wiring.ts, proposals/demo.ts, brainmodel/demo.ts and
 // brainmodel/demo-learning.ts; pinned by test/unit/demo-text.test.ts.
 import type { Lang } from '../shared/contract';
 
@@ -181,7 +181,7 @@ const EN: Readonly<Record<string, string>> = {
   'Rileggo la richiesta e controllo i file del progetto prima di rispondere.': 'Reading the request again and checking the project files before answering.',
   '64 righe': '64 lines', 'Fatto. Il progetto è in ordine: dimmi tu da dove partire.': 'Done. The project is in order: tell me where to start.',
   'nuova richiesta': 'new request', 'Ecco il quadro:': 'Here is the picture:', 'nessuna': 'none', 'una nuova chat': 'a new chat',
-  // ── the demo brain folder (brainmodel/demo.ts), its past changes, the Proposals deck and the Pulse's cards ──
+  // ── the demo brain folder (brainmodel/demo.ts), its past changes and the Proposals deck ──
   'runbook/rilasci.md': 'runbook/releases.md',
   'runbook/funzionalita.md': 'runbook/features.md',
   'flusso-hotfix.md': 'hotfix-flow.md',
@@ -391,19 +391,7 @@ const EN: Readonly<Record<string, string>> = {
   'Lo stesso lavoro tre volte in una settimana: «cerca gli errori 500 del modulo e dimmi la causa».': 'The same job three times in a week: «find the module’s 500 errors and tell me the cause».',
   'Memoria di Sentinel: 4 righe sugli ambienti di test unite in una': 'Sentinel’s memory: 4 lines about the test environments merged into one',
   'Quattro righe dicevano la stessa cosa sull\'ambiente test-2 (accesso, dati di prova, reset notturno).': 'Four lines said the same thing about the test-2 environment (access, test data, nightly reset).',
-  'Con tre orari al giorno il Battito finisce il budget alle 13: con 0,40 $ arriva a sera.': 'With three slots a day the Pulse runs out of budget at 1 pm: with $0.40 it lasts until the evening.',
-  'Collega obiettivi e istruzioni': 'Link goals and instructions',
-  'Confronta il compito con le istruzioni del suo ruolo.': 'Compare the task with its role’s instructions.',
-  'Le istruzioni e gli obiettivi possono essere letti insieme.': 'The instructions and the goals can be read together.',
-  'Raccogli le idee della settimana': 'Gather the week’s ideas',
-  'Tre appunti parlano dello stesso progetto.': 'Three notes talk about the same project.',
-  'Un collegamento tra le ultime note.': 'A link between the latest notes.',
-  'Riprendi la revisione': 'Pick up the review',
-  'La revisione del progetto è ancora aperta.': 'The project’s review is still open.',
-  'Dal riepilogo delle attività.': 'From the activity summary.',
-  'Meno promemoria ripetuti': 'Fewer repeated reminders',
-  'Non ripetere un promemoria già visto oggi.': 'Do not repeat a reminder already seen today.',
-  'Demo: nessun modello viene avviato.': 'Demo: no model is started.',
+  'Con la build in corso la CPU sta sopra il 75%: le chat aspettano anche quando il PC regge.': 'With the build running the CPU stays above 75%: the chats wait even when the PC copes.',
   // Flash's answers (a "btw" on the Orchestrator's chat)
   'Leggo la chat dell\'Orchestrator e lo stato delle chat, senza toccare nulla.': 'Reading the Orchestrator’s chat and the chats’ state, touching nothing.',
   'Dalla chat dell\'Orchestrator, senza toccare nulla:': 'From the Orchestrator’s chat, without touching anything:',

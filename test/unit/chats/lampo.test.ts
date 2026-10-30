@@ -9,7 +9,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { ChatManager, LAMPO_TITLE } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
-import { lastExchange } from '../../../src/renderer/lib/lampo';
+import { BRIEF_ASK, BRIEF_END, BRIEF_START, briefOf, briefStep, lastExchange } from '../../../src/renderer/lib/lampo';
+import { FLASH_BRIEF_TAG } from '../../../src/shared/roles';
 import { LAMPO_CONTEXT_END, LAMPO_CONTEXT_LABEL, orchestratorContext } from '../../../src/main/chats/lampo-context';
 import type { ChatItem } from '../../../src/shared/contract';
 
@@ -196,5 +197,29 @@ describe('Flash earns from its answers (ADR 0131)', () => {
     // the agent card gets a Flash standing; no run is recorded for it
     expect(m.runs.list().some(r => r.chatId === l.id)).toBe(false);
     expect(m.runMetrics().find(x => x.agentId === 'flash')?.standing).toMatchObject({ runs: 3, wins: 0, sources: { quick: 2 } });
+  });
+});
+
+describe('«Fanne un lavoro» brief (ADR 0209)', () => {
+  const user = (id: string, text: string) => ({ id, kind: 'user', text, at: 1 }) as unknown as ChatItem;
+  const said = (id: string, text: string, streaming = false) => ({ id, kind: 'assistant', text, at: 2, streaming }) as unknown as ChatItem;
+  it('reads the brief between the markers, else the whole answer; nothing too short', () => {
+    expect(briefOf(`Ecco:\n${BRIEF_START}\nObiettivo: migrare i clienti al nuovo DB\n${BRIEF_END}\nfine`)).toBe('Obiettivo: migrare i clienti al nuovo DB');
+    expect(briefOf('Obiettivo: migrare i clienti al nuovo DB senza fermo')).toBe('Obiettivo: migrare i clienti al nuovo DB senza fermo');
+    expect(briefOf('ok')).toBeNull();
+  });
+  it('is ready only once the turn after this ask has ended, found by time not index', () => {
+    const items = [user('1', 'che db usiamo?'), said('2', 'Postgres 16'), { ...user('3', BRIEF_ASK), at: 100 } as ChatItem];
+    const answer = said('4', `${BRIEF_START}\nObiettivo: passare a Postgres 17\n${BRIEF_END}`);
+    expect(BRIEF_ASK.startsWith(FLASH_BRIEF_TAG)).toBe(true);
+    expect(briefStep(items, false, 50)).toEqual({ done: false });
+    expect(briefStep([...items, said('4', 'x', true)], false, 50)).toEqual({ done: false });
+    expect(briefStep([...items, answer], true, 50)).toEqual({ done: false });
+    expect(briefStep([...items, answer], false, 50)).toEqual({ done: true, brief: 'Obiettivo: passare a Postgres 17' });
+    // an older ask does not count; a turn that ended without a brief drafts the fallback
+    expect(briefStep([...items, answer], false, 200)).toEqual({ done: false });
+    expect(briefStep([...items, said('4', 'no')], false, 50)).toEqual({ done: true, brief: null });
+    // the item window slid: the ask is still found
+    expect(briefStep([...items.slice(2), answer], false, 50)).toEqual({ done: true, brief: 'Obiettivo: passare a Postgres 17' });
   });
 });

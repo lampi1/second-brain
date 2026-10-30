@@ -23,7 +23,7 @@ test('the splash builds second-brain with the day\'s sentence, then a key lets t
   await page.screenshot({ path: path.resolve(import.meta.dirname, '..', '..', 'test-results', 'shots', 'splash-cut.png') });
   await expect(splash).toHaveAttribute('data-phase', 'hot', { timeout: 10_000 });
   await expect(splash).toHaveAttribute('data-line', 'ready');
-  // the frozen demo has no headline from the model: the splash's own line of the day
+  // the splash's own line of the day
   await expect(splash.locator('.splash-line')).not.toBeEmpty();
   await expect(splash.locator('.splash-word')).toHaveCSS('opacity', '1');
   await expect(splash.locator('.splash-sub')).toHaveCSS('opacity', '1');

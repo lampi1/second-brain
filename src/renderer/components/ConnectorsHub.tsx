@@ -6,12 +6,13 @@
 // the token field (write-only: typed once, then only its mask) when it needs one. A tool is added from the catalog
 // (ToolCatalog.tsx: account and server together, tested at once, ADR 0119); the technical form (command, args, env,
 // headers) and "Importa da Claude e Cursor" (their configs read once, read only, imported without any secret) live in
-// Settings → Avanzate (McpAdvanced, below). Clean install: a friendly empty state saying what will appear. Styles:
-// styles/connectors-hub.css.
+// Settings → Avanzate (McpAdvanced, below). «Aggiungi server MCP» (McpAddPanel.tsx, ADR 0207): paste JSON, a command or
+// a URL, or pick a popular server; each card's «Chi lo usa» chips turn it on or off for the Orchestrator, each role and
+// Flash. Clean install: a friendly empty state saying what will appear. Styles: styles/connectors-hub.css.
 import { useCallback, useEffect, useId, useState, type ReactNode } from 'react';
 import type { ConnectorState } from '@shared/connectors';
 import type { McpImportCandidate, McpServerView, McpServersState } from '@shared/mcp-servers';
-import { slotKey } from '@shared/mcp-servers';
+import { runsOf, slotKey } from '@shared/mcp-servers';
 import { AppConnectorScreen } from '../../modules/onboarding/AppScreen';
 import { HelpTip } from './HelpTip';
 import { ToolCatalog } from './ToolCatalog';
@@ -19,8 +20,9 @@ import { IconPlus, IconRefresh } from './Icons';
 import { locale, t } from '../i18n';
 import { toast } from '../store/ui';
 import { holdUpdate } from '../lib/update-barrier';
-import { defOf, emptyForm, formOf, hubTotals, monogram, rolesWith, runsAs, serverStatus, useMcpServers, type ServerForm } from '../lib/mcp-servers';
-import { ROLE_IDS } from '@shared/roles';
+import { defOf, emptyForm, formOf, hubTotals, monogram, onMcpDraft, rolesWith, runsAs, serverStatus, takeMcpDraft, useMcpServers, type ServerForm } from '../lib/mcp-servers';
+import { MCP_ACCESS_ROLES, type McpServerDef } from '@shared/mcp-servers';
+import { McpAddPanel, ServerRoles } from './McpAddPanel';
 import '../styles/connectors-hub.css';
 
 const STATUS_KEY = { ok: 'hub.status.ok', untested: 'hub.status.untested', missing: 'hub.status.missing', failed: 'hub.status.failed', off: 'hub.status.off' } as const;
@@ -52,6 +54,25 @@ function TokenRow({ server, slot, available, onSaved }: { server: McpServerView;
 }
 
 /** One MCP server's card. */
+/** A server the Orchestrator added or re-pointed (ADR 0207): exactly what it will start, and the user's own «Attiva». */
+export function ActivateBox({ server, onState }: { server: Pick<McpServerView, 'id' | 'label' | 'transport' | 'command' | 'args' | 'env' | 'url'>; onState?: (s: McpServersState) => void }) {
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [done, setDone] = useState(false);
+  const runs = runsOf(server);
+  const activate = async () => {
+    setBusy(true); setError('');
+    try { const st = await window.sb.invoke('mcpservers:activate', { id: server.id, runs }); setDone(true); onState?.(st); }
+    catch (e) { setError(e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : t('hub.error')); }
+    finally { setBusy(false); }
+  };
+  return <div className="hub-problem mcp-awaiting" role="note" data-testid={`mcp-awaiting-${server.id}`}>
+    <b>{t('mcpadd.awaiting')}</b>
+    <code className="mcp-runs" data-testid={`mcp-runs-${server.id}`}>{runs}</code>
+    <p>{t('mcpadd.awaitingTip')}</p>
+    <div><button type="button" className="btn btn-primary btn-m" disabled={busy || done} onClick={() => void activate()} aria-label={t('mcpadd.activateName', { name: server.label })} data-testid={`mcp-activate-${server.id}`}>{t(done ? 'mcpadd.activated' : 'mcpadd.activate')}</button></div>
+    {error && <p role="alert">{error}</p>}
+  </div>;
+}
+
 export function ServerCard({ server, state, onEdit, onState, testing, onTest }: { server: McpServerView; state: McpServersState; onEdit?: () => void; onState: (s: McpServersState) => void; testing: boolean; onTest: () => void }) {
   const status = serverStatus(server), test = server.lastTest, tools = test?.tools ?? [];
   const reading = tools.filter(x => x.readOnly).length, roles = rolesWith(state, server.id).length;
@@ -65,15 +86,17 @@ export function ServerCard({ server, state, onEdit, onState, testing, onTest }: 
     <code className="hub-runs" title={runsAs(server)}>{runsAs(server)}</code>
     <dl className="hub-facts">
       <div><dt>{t('hub.tools')}<HelpTip title={t('hub.tools')} label={`${t('hub.tools')} ${server.label}`}>{t('hub.toolsTip')}</HelpTip></dt><dd>{test && (test.ok || tools.length) ? <>{tools.length}<small>{t('hub.toolsSplit', { r: reading, w: tools.length - reading })}</small></> : '—'}</dd></div>
-      <div><dt>{t('hub.agents')}<HelpTip title={t('hub.agents')} label={`${t('hub.agents')} ${server.label}`}>{t('hub.agentsTip')}</HelpTip></dt><dd>{server.enabled ? t('hub.agentsValue', { n: roles, total: ROLE_IDS.length }) : t('hub.status.off')}</dd></div>
+      <div><dt>{t('hub.agents')}<HelpTip title={t('hub.agents')} label={`${t('hub.agents')} ${server.label}`}>{t('hub.agentsTip')}</HelpTip></dt><dd>{server.enabled ? t('hub.agentsValue', { n: roles, total: MCP_ACCESS_ROLES.length }) : t('hub.status.off')}</dd></div>
       <div><dt>{t('hub.lastTest')}</dt><dd>{test ? <>{new Date(test.at).toLocaleString(locale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}{test.ok && test.ms > 0 && <small>{t('hub.ms', { ms: test.ms })}</small>}</> : t('connector.never')}</dd></div>
     </dl>
+    {server.awaiting && <ActivateBox server={server} onState={onState} />}
+    <div className="hub-who"><span>{t('mcpadd.who')}</span><ServerRoles server={server.id} state={state} onState={onState} /></div>
     {test && !test.ok && test.error && <div className="hub-problem" role="note" data-testid={`hub-problem-${server.id}`}><b>{test.error.message}</b><p><span>{t('hub.fix')}</span> {test.error.fix}</p></div>}
     {status === 'untested' && <div className="hub-hint" role="note"><p>{t('hub.untestedHint')}</p></div>}
     {server.secrets.map(slot => <TokenRow key={slotKey(slot)} server={server} slot={slot} available={state.secretsAvailable} onSaved={onState} />)}
     {tools.length > 0 && <details className="hub-details hub-tools"><summary>{t('hub.toolList', { n: tools.length })}</summary><ul>{tools.map(x => <li key={x.name} data-ro={x.readOnly}><i aria-hidden="true" /><code>{x.name}</code><span>{x.readOnly ? t('hub.read') : t('hub.write')}</span>{x.description && <small>{x.description}</small>}</li>)}</ul></details>}
     <footer className="hub-card-foot">
-      <button type="button" className="btn btn-primary btn-m" disabled={testing} onClick={onTest} aria-label={t('hub.testName', { name: server.label })}>{t('hub.test')}</button>
+      {!server.awaiting && <button type="button" className="btn btn-primary btn-m" disabled={testing} onClick={onTest} aria-label={t('hub.testName', { name: server.label })}>{t('hub.test')}</button>}
       {onEdit && <button type="button" className="btn btn-ghost btn-m" onClick={onEdit} aria-label={t('hub.editName', { name: server.label })}>{t('hub.edit')}</button>}
     </footer>
   </article>;
@@ -167,6 +190,13 @@ export function ConnectorsHub() {
   };
   const servers = state?.servers ?? [];
   const testAll = () => { for (const s of servers) if (s.enabled) void test(s.id); };
+  // «Aggiungi server MCP» (ADR 0207); a draft the Orchestrator opened (app_config form) opens it prefilled
+  const [adding, setAdding] = useState<{ n: number; initial: { def: McpServerDef; tokens: string[] } | null } | null>(null);
+  useEffect(() => {
+    const take = () => { const d = takeMcpDraft(); if (d) { setAdding(x => ({ n: (x?.n ?? 0) + 1, initial: d })); requestAnimationFrame(() => document.querySelector('[data-testid="mcp-add"]')?.scrollIntoView({ block: 'center' })); } };
+    take();
+    return onMcpDraft(take);
+  }, []);
   return <div className="hub" data-testid="connectors-hub">
     <p className="hub-lead">{t('hub.lead')}<HelpTip title={t('hub.whatTitle')} label={t('hub.whatTitle')} wide guide="mcp-servers">{t('hub.whatTip')}</HelpTip></p>
     <HubTotalsRow servers={servers} connectors={connectors} />
@@ -181,10 +211,14 @@ export function ConnectorsHub() {
     </section>
     <section className="hub-section" aria-labelledby="hub-servers" data-testid="hub-servers">
       <header className="hub-section-head"><h3 id="hub-servers">{t('hub.servers')}<HelpTip title={t('hub.servers')} label={t('hub.servers')} wide>{t('hub.serversTip')}</HelpTip></h3>
-        {servers.length > 1 && <div className="hub-actions"><button type="button" className="btn btn-ghost btn-m" onClick={testAll} disabled={testing.length > 0}><IconRefresh size={14} />{t('hub.testAll')}</button></div>}
+        <div className="hub-actions">
+          {servers.length > 1 && <button type="button" className="btn btn-ghost btn-m" onClick={testAll} disabled={testing.length > 0}><IconRefresh size={14} />{t('hub.testAll')}</button>}
+          {!adding && <button type="button" className="btn btn-primary btn-m" onClick={() => setAdding({ n: 0, initial: null })} data-testid="mcp-add-open"><IconPlus size={14} />{t('mcpadd.open')}</button>}
+        </div>
       </header>
+      {adding && <McpAddPanel key={adding.n} initial={adding.initial} onDone={s => { if (s) set(s); setAdding(null); }} />}
       {error && <p role="alert" className="hub-error">{t('hub.loadError')}</p>}
-      {state && !servers.length && <div className="hub-empty" data-testid="hub-empty"><b>{t('hub.emptyTitle')}</b><p>{t('hub.emptyBody')}</p></div>}
+      {state && !servers.length && !adding && <div className="hub-empty" data-testid="hub-empty"><b>{t('hub.emptyTitle')}</b><p>{t('hub.emptyBody')}</p></div>}
       <div className="hub-grid">
         {state && servers.map(s => <ServerCard key={s.id} server={s} state={state} testing={testing.includes(s.id)} onTest={() => void test(s.id)} onState={set} />)}
       </div>

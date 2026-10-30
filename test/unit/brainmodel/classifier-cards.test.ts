@@ -1,7 +1,8 @@
 // The Classificatori grid's numbers (src/main/brainmodel/classifier-cards.ts) and the inputs classifiers.ts reads for
 // them: per card the decisions, its hit measure, the verified success (the user's or a review's verdict, else the
 // ledger's known outcome; never a self-report), the average cost, 8 ISO weeks, the slices with their most frequent
-// role, and success when it hit versus missed. A missing value is null, never zero. Temp folders only.
+// role, and success when it hit versus missed. A missing value is null, never zero. No model card since ADR 0210 (the
+// routing table that card measured is gone). Temp folders only.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,7 +10,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { classifierCards, isoWeek, lastIsoWeeks, type CardInputs } from '../../../src/main/brainmodel/classifier-cards';
 import { classifiersState, readJobs, readLedger } from '../../../src/main/brainmodel/classifiers';
 import type { AgentRun } from '../../../src/shared/agents';
-import type { RoutingInfo } from '../../../src/shared/contract';
 
 const dirs: string[] = [];
 afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
@@ -22,9 +22,9 @@ const run = (chatId: string, agentId: string, verdict: 'success' | 'fail' | null
 const base = (o: Partial<CardInputs> = {}): CardInputs => ({ now: NOW, predictions: [], actuals: new Map(), outcomes: new Map(), runs: [], jobs: [], ...o });
 
 describe('classifier cards', () => {
-  it('has three cards with no data: nulls, never zeros, and 8 empty weeks (no skill card, ADR 0186)', () => {
+  it('has two cards with no data: nulls, never zeros, and 8 empty weeks (no skill card, ADR 0186; no model card, ADR 0210)', () => {
     const cards = classifierCards(base());
-    expect(cards.map(c => c.id)).toEqual(['kind', 'model', 'jobkind']);
+    expect(cards.map(c => c.id)).toEqual(['kind', 'jobkind']);
     for (const c of cards) {
       expect(c).toMatchObject({ decisions: 0, hit: { value: null, n: 0 }, success: { value: null, n: 0 }, avgCostUsd: null, compare: null, lastAt: null, slices: [] });
       expect(c.weeks).toHaveLength(8);
@@ -32,15 +32,15 @@ describe('classifier cards', () => {
     expect(lastIsoWeeks(NOW).at(-1)).toBe(isoWeek(NOW));
   });
 
-  it('measures the kind and model cards from the ledger, the runs and the known outcomes', () => {
-    const p = (id: string, kind: string, model: string, source: string, at = NOW - DAY) => ({ id: `app:${id}`, at, kind, model, source });
+  it('measures the kind card from the ledger, the runs and the known outcomes', () => {
+    const p = (id: string, kind: string, _model: string, _source: string, at = NOW - DAY) => ({ id: `app:${id}`, at, kind });
     const cards = classifierCards(base({
       predictions: [p('a', 'bug-fix', 'opus', 'agent'), p('b', 'bug-fix', 'opus', 'table'), p('c', 'bug-fix', 'sonnet', 'agent'), p('d', 'altro', 'sonnet', 'table', NOW - 20 * DAY)],
       actuals: new Map([['app:a', { usd: 2 }], ['app:b', { usd: 4 }], ['app:d', { usd: 1 }]]),
       outcomes: new Map([['app:c', { success: false, verified: true, source: 'human' }], ['app:d', { success: true, verified: true, source: 'agent-user' }]]),
       runs: [run('a', 'artisan', 'success'), run('b', 'artisan', 'success', 'self-report'), run('c', 'scout', null)],
     }));
-    const kind = cards[0]!, model = cards[1]!;
+    const kind = cards[0]!;
     expect(kind.decisions).toBe(4);
     expect(kind.hit).toEqual({ value: 0.75, n: 4 });
     // a: run verdict (human) ok; b: self-report does not count; c: ledger known false; d: ledger known true
@@ -50,15 +50,13 @@ describe('classifier cards', () => {
     expect(kind.compare).toEqual({ hit: { value: 0.5, n: 2 }, miss: { value: 1, n: 1 } });
     expect(kind.weeks.at(-1)!.decisions + kind.weeks.at(-2)!.decisions).toBeGreaterThanOrEqual(3);
     expect(kind.lastAt).toBe(NOW - DAY);
-    expect(model.hit).toEqual({ value: 0.5, n: 4 }); // decided by the table: b and d
-    expect(model.slices.map(s => [s.key, s.count])).toEqual([['opus', 2], ['sonnet', 2]]);
   });
 
   it('scores the cost-ledger kinds', () => {
     const cards = classifierCards(base({
       jobs: [{ at: NOW - DAY, kind: 'bug-fix', usd: 2 }, { at: NOW - DAY, kind: 'writing', usd: 0.2 }, { at: NOW - DAY, kind: 'altro', usd: null }],
     }));
-    const job = cards[2]!;
+    const job = cards[1]!;
     expect(job.hit).toEqual({ value: 2 / 3, n: 3 });
     expect(job.avgCostUsd).toBeCloseTo(1.1);
     expect(job.success).toEqual({ value: null, n: 0 });
@@ -83,11 +81,10 @@ describe('the cards’ inputs', () => {
   });
 
   it('puts the cards in the Classificatori state', async () => {
-    const routing: RoutingInfo = { table: null, registry: null, kinds: [], error: null, history: [] };
-    const s = await classifiersState({ root: null, routing, runs: [], profiles: [], jobs: () => [{ at: NOW, kind: 'fix', usd: 1 }] }, NOW);
-    expect(s.cards?.map(c => [c.id, c.decisions])).toEqual([['kind', 0], ['model', 0], ['jobkind', 1]]);
-    const broken = await classifiersState({ root: null, routing, runs: [], profiles: [], jobs: () => { throw new Error('x'); } }, NOW);
-    expect(broken.cards?.[2]!.decisions).toBe(0);
+    const s = await classifiersState({ root: null, runs: [], profiles: [], jobs: () => [{ at: NOW, kind: 'fix', usd: 1 }] }, NOW);
+    expect(s.cards?.map(c => [c.id, c.decisions])).toEqual([['kind', 0], ['jobkind', 1]]);
+    const broken = await classifiersState({ root: null, runs: [], profiles: [], jobs: () => { throw new Error('x'); } }, NOW);
+    expect(broken.cards?.[1]!.decisions).toBe(0);
   });
 });
 
@@ -120,11 +117,6 @@ describe('the ledger’s outcomes reach the cards (issue #110)', () => {
     fs.writeFileSync(path.join(d, 'ops/state/improve/outcomes.jsonl'), lines.map(l => JSON.stringify(l)).join('\n') + '\n{"id":"app:h1","dom');
     return d;
   }
-  const routing: RoutingInfo = { table: { version: 7, appliedAt: '2026-10-10T08:00:00Z', by: 'user', exploration: 0, costWeight: 7, routes: [
-    { kind: 'bug-fix', harness: 'claude', model: 'claude-opus-5-5', effort: 'high', why: 'x', since: '2026-10-01', evidence: '' },
-    { kind: '*', harness: 'claude', model: 'claude-sonnet-5-5', effort: 'medium', why: 'y', since: '2026-10-01', evidence: '' },
-  ] }, registry: null, kinds: [], error: null, history: [] };
-
   it('folds the ledger: verified human and judge, unverified proxy and opinion, measured lines change nothing', () => {
     const o = readLedger(ledger()).outcomes;
     expect(Object.fromEntries([...o].map(([k, v]) => [k, [v.success, v.verified, v.source]]))).toEqual({
@@ -138,22 +130,18 @@ describe('the ledger’s outcomes reach the cards (issue #110)', () => {
     const root = ledger();
     // the reinstall left agent-runs.json with one run, the same chat the ledger already settled
     const runs = [run('both', 'artisan', 'success', 'human', { tags: { skills: ['fix'], app: null, repo: null } })];
-    const s = await classifiersState({ root, routing, runs, profiles: [] }, NOW);
-    const kind = s.cards!.find(c => c.id === 'kind')!, model = s.cards!.find(c => c.id === 'model')!;
+    const s = await classifiersState({ root, runs, profiles: [] }, NOW);
+    const kind = s.cards!.find(c => c.id === 'kind')!;
     // verified: h1 h2 h3 p3 j1 both = 6 (4 succeeded); unverified: p1 p2 o1 = 3; none has no outcome
     expect(kind.decisions).toBe(10);
     expect(kind.success).toEqual({ value: 4 / 6, n: 6 });
     expect(kind.unverified).toEqual({ value: 1, n: 3 });
-    expect(model.success.n).toBe(6);
     expect(kind.slices.find(x => x.key === 'bug-fix')).toMatchObject({ count: 5, known: 3, ok: 2 });
-    // the table's rows: only the table's predictions (h2, p2); h2 verified failed, p2 only a proxy
-    expect(s.routing.routes[0]!.result).toMatchObject({ runs: 1, success: { value: 0, n: 1 } });
-    expect(s.routing.routes[1]!.result).toMatchObject({ runs: 1, success: { value: null, n: 0 } });
   });
 
   it('a run’s verified verdict wins over the ledger’s for the same chat', () => {
     const cards = classifierCards(base({
-      predictions: [{ id: 'app:x', at: NOW - DAY, kind: 'bug-fix', model: 'm', source: 'agent' }],
+      predictions: [{ id: 'app:x', at: NOW - DAY, kind: 'bug-fix' }],
       outcomes: new Map([['app:x', { success: true, verified: true, source: 'human' }]]),
       runs: [run('x', 'artisan', 'fail')],
     }));

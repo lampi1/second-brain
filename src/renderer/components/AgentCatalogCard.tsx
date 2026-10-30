@@ -1,6 +1,6 @@
 // Role card of the Agenti catalogue (AgentCatalogPage): on the front the character large and centred, its name and what
 // it is for, engine and model tier («Modello: alto»), a live status, its level (from the XP of its verified successful runs, ADR 0131,
-// shown beside it: «Lv 7 Praticante · 124 XP», ADR 0100) and performance % (a Bayesian estimate of the verdicts weighted by trust and
+// shown beside it: «Lv 7 Praticante · 124 XP», ADR 0100; for a work role, when the nightly review last updated it, ADR 0203) and performance % (a Bayesian estimate of the verdicts weighted by trust and
 // recency, with its ±, the agent's own word excluded, with the verdicts it rests on; main/agents/standing.ts), each with a "?" giving the formula, and four compact run metrics (the success rate among them: verified verdicts only, shared/success.ts, ADR 0186); a click anywhere on the card flips it in 3D (#81)
 // to the back: the role's instructions, the skills it loads at every launch, its memory, its permissions («Tutto consentito» or how
 // far the user narrowed it, with "Modifica permessi" to its permissions card, where its MCP servers are too, ADR 0085,
@@ -13,13 +13,14 @@
 import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { completedRuns, type AgentMetrics, type AgentProfile, type AgentStanding } from '@shared/agents';
 import { characterOf } from '@shared/characters';
-import { PULSE_ID } from '@shared/roles';
 import { MIN_SUCCESS_SAMPLE, enoughVerdicts } from '@shared/success';
 import { characterTone } from '../lib/character-art';
 import type { MemoryFile } from '@shared/brain-model';
 import { locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
 import { PERMISSIONS_ELEMENT, permissionSummary } from './RolePermissions';
+import { updatedWhen } from './JudgingSwitch';
+import { now as clockNow } from '../lib/clock';
 import { go } from '../actions';
 import { HelpTip } from './HelpTip';
 import { formatCost } from '../lib/format';
@@ -78,7 +79,7 @@ const NONE: AgentStanding = { runs: 0, wins: 0, xp: 0, level: 1, levelAt: 0, nex
   sources: { human: 0, review: 0, receipts: 0, graded: 0, facts: 0, orchestrator: 0, decision: 0, chain: 0, quick: 0, self: 0 } };
 /** the widest ± the card shows a performance with (standing.ts MAX_SPREAD), in points */
 const MAX_SPREAD_POINTS = 30;
-function Standing({ id, standing: s }: { id: string; standing: AgentStanding | null }) {
+function Standing({ id, standing: s, reviewedAt = null }: { id: string; standing: AgentStanding | null; reviewedAt?: number | null }) {
   const xp = s ? Math.floor(s.xp) : 0;
   const left = s && s.nextAt !== null ? Math.max(1, Math.ceil(s.nextAt - s.xp)) : 0;
   const perf = s?.performance ?? null, spread = s?.spread != null ? Math.round(s.spread * 100) : null;
@@ -99,6 +100,7 @@ function Standing({ id, standing: s }: { id: string; standing: AgentStanding | n
         aria-label={s && s.nextAt !== null ? t('agentsGrid.levelNext', { left, next: s.level + 1 }) : t('agentsGrid.levelTop')}>
         <i style={{ width: `${s ? Math.round(s.progress * 100) : 0}%` }} /></div>
       <small>{!s ? t('catalog.unknown') : s.wins === 0 && s.xp === 0 ? t('agentsGrid.noRuns') : s.nextAt === null ? t('agentsGrid.levelTop') : t('agentsGrid.levelNext', { left, next: s.level + 1 })}</small>
+      {reviewedAt !== null && <small className="catalog-updated" data-testid={`catalog-updated-${id}`} title={t('catalog.updated.tip')}>{t('catalog.updated', { when: updatedWhen(reviewedAt, clockNow()) })}</small>}
     </section>
     <section className="catalog-perf" aria-label={t('agentsGrid.perf')} data-testid={`catalog-perf-${id}`} data-band={perf !== null ? band(perf) : 'warmup'}>
       <svg className="catalog-gauge" viewBox="0 0 56 56" aria-hidden="true">
@@ -120,8 +122,9 @@ function Standing({ id, standing: s }: { id: string; standing: AgentStanding | n
   </div>;
 }
 
-export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, onOpen, onSkill, index = 0, memory = null }: {
+export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, onOpen, onSkill, index = 0, memory = null, reviewedAt = null }: {
   profile: AgentProfile; metrics?: AgentMetrics; loaded: boolean; engine: string; lastStart: number | null; onOpen: () => void;
+  /** when the nightly review last updated its verdicts (ADR 0203); null = not shown */ reviewedAt?: number | null;
   index?: number;
   /** its own memory file, when it has one */ memory?: MemoryFile | null;
   /** a skill chip on the back: go to that skill */ onSkill?: (name: string) => void;
@@ -139,9 +142,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
     window.addEventListener('keydown', esc, true);
     return () => window.removeEventListener('keydown', esc, true);
   }, [flipped]);
-  // Pulse (Battito) is a background job: no level nor performance (ADR 0186)
-  const rated = profile.id !== PULSE_ID;
-  const stats = metrics?.all, standing = loaded && rated ? metrics?.standing ?? NONE : null;
+  const stats = metrics?.all, standing = loaded ? metrics?.standing ?? NONE : null;
   const ended = loaded ? completedRuns(metrics) : null;
   const open = loaded ? metrics?.open ?? 0 : null;
   const unknown = t('catalog.unknown');
@@ -187,7 +188,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
           <span className="catalog-chip" data-kind="model" title={profile.model ?? tier}>{profile.model ?? tier}</span>
           <span className="catalog-chip" data-kind="skills">{t('bm.map.agentSkills', { n: skills.length })}</span>
         </div>
-        {rated && <Standing id={profile.id} standing={standing} />}
+        <Standing id={profile.id} standing={standing} reviewedAt={reviewedAt} />
         <dl className="catalog-stats">
           <Metric label={t('agentsGrid.runs')} full={t('catalog.runs')} value={values.runs} unknown={unknown} />
           <Metric label={t('agentsGrid.open')} full={t('catalog.open')} value={values.open} unknown={unknown} />

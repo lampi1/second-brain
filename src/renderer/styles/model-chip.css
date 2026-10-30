@@ -5,7 +5,7 @@
   font-size: 11.5px; font-weight: 500; white-space: nowrap; cursor: pointer; }
 .model-chip:hover:not(:disabled) { color: var(--text); border-color: var(--border-3, var(--border-2)); background: var(--surface-3); }
 .model-chip:disabled { cursor: default; opacity: 1; }
-.model-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.model-chip:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .model-chip-text { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .model-chip-caret { font-size: 9px; color: var(--text-3); }
 .model-chip-error { color: var(--danger, #e5484d); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

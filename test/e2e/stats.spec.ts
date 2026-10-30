@@ -33,7 +33,7 @@ const settled = async () => { await expect(page.getByTestId('bx-loading')).toHav
 
 test('Qualità: errors grouped by pattern with count, week comparison, chats and rule; Discuti drafts into the Orchestrator', async () => {
   await goPage(page, 'qualita');
-  const p = page.getByTestId('page-qualita');
+  const p = page.getByTestId('an-panel-qualita');
   await expect(p.getByTestId('bx-q-trovati')).toBeVisible({ timeout: 30000 });
   await settled();
 
@@ -81,7 +81,7 @@ test('Qualità: errors grouped by pattern with count, week comparison, chats and
   await expect(input).toHaveValue(/- \d+ volte dal .* al .*; ultimi 7 giorni \d+, i 7 prima \d+/);
   await expect(input).toHaveValue(/regola nata: rules\/qa\.md "verifica sempre lo screenshot" \(la regola non è bastata\)/);
   await expect(input).toHaveValue(/Why does it happen and how do we prevent it\?/);
-  await expect(page.getByTestId('page-qualita')).toBeVisible(); // the page stays
+  await expect(page.getByTestId('an-panel-qualita')).toBeVisible(); // the page stays
   await shot(page, 'stats-qualita-discutine');
   await page.keyboard.press('Enter');
   await expect(input).toHaveValue('');
@@ -91,7 +91,7 @@ test('Qualità: errors grouped by pattern with count, week comparison, chats and
 
 test('Costi: the period against the one before, Discuti on the total and on every chart', async () => {
   await goPage(page, 'costi');
-  const p = page.getByTestId('page-costi');
+  const p = page.getByTestId('an-panel-costi');
   await expect(p.getByTestId('bx-cost-kpis')).toBeVisible({ timeout: 30000 });
   await settled();
   await expect(p.getByTestId('bx-cost-reading')).toContainText(/(in calo|in aumento|stabile): .* negli ultimi 7 giorni \(oggi compreso, non finito\) contro .* nei 7 prima/, { timeout: 30000 });

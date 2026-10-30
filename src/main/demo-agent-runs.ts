@@ -1,6 +1,6 @@
 // Demo agent runs (SB_DEMO=1): a made-up, deterministic history of ended runs per role, so the Agenti cards show a level,
 // a performance % and their run metrics without any engine. Some roles are veterans, some are still "in rodaggio"
-// (too few judged runs) and Pulse has none (the card's empty state). The runs carry what sizes a job (turns, working
+// (too few judged runs). The runs carry what sizes a job (turns, working
 // time, the Artisan's changed files in its receipts, ADR 0130, 0131), so the XP differs by job; the Artisan's runs the
 // user did not judge are decided by their receipts (checks passed after the last change), also under an Orchestrator's
 // opinion; some Strategist runs carry a plan the user approved and a delegated Scout; two tasks were handed to another

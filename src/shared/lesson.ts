@@ -11,8 +11,14 @@
 // different things; then every piece cites its facts and is split into beats the board animates one at a time.
 // Each lesson belongs to a subject and leaves review cards (ADR 0189, shared/review.ts).
 // Shared by main/learn/ (generation, store) and the renderer (components/impara/); pinned by test/unit/lesson.test.ts.
+// Since ADR 0205 a piece declares its visual (shared/lesson-visual.ts) and its role in the lesson's fixed structure, the
+// draft is scored by a quality gate, and the «Studio» column makes more from the same verified facts (lesson-studio.ts).
 import type { Effort } from './contract';
 import { subjectName, type ReviewSummary } from './review';
+import { beatMark, parseVisual, type LessonVisual } from './lesson-visual';
+import type { LessonQuality, StudioItem, StudioKind } from './lesson-studio';
+import { parseQuiz, type QuizBody } from './quiz';
+import type { LessonTopics } from './web-topics';
 
 export type LessonDepth = 'quick' | 'lesson' | 'deep';
 export const LESSON_DEPTHS: readonly LessonDepth[] = ['quick', 'lesson', 'deep'];
@@ -43,17 +49,25 @@ export const TEACHER_EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhi
  *  the model knows (no source: «conoscenza del modello»). check = what the verification found: ok, fixed (the claim
  *  was corrected), unsure (not confirmed: the lesson says so). A fact found wrong is dropped, never shown. */
 export type FactFrom = 'web' | 'file' | 'known';
-export interface LessonFact { id: string; claim: string; from: FactFrom; ref: string; quote?: string; check: 'ok' | 'fixed' | 'unsure' }
+export interface LessonFact {
+  id: string; claim: string; from: FactFrom; ref: string; quote?: string; check: 'ok' | 'fixed' | 'unsure';
+  /** a web fact searched for a public topic of the user's files (ADR 0206): that topic's query («trovato perché il tuo
+   *  file usa …»), never the file */
+  topic?: string;
+}
 
 /** The research before the lesson, as the Preparing screen shows it: the phase now, the phases done or skipped (with
  *  why), and the counts so far. */
-export type PrepPhase = 'gather' | 'web' | 'files' | 'verify' | 'ask' | 'plan';
-export const PREP_PHASES: readonly PrepPhase[] = ['gather', 'web', 'files', 'verify', 'ask', 'plan'];
+export type PrepPhase = 'gather' | 'web' | 'files' | 'refs' | 'verify' | 'ask' | 'plan';
+/** refs = the web search of the public topics the files research found (ADR 0206): standards and references */
+export const PREP_PHASES: readonly PrepPhase[] = ['gather', 'web', 'files', 'refs', 'verify', 'ask', 'plan'];
 export interface LessonPrep {
   phases: Partial<Record<PrepPhase, 'now' | 'done' | 'skip'>>;
   /** why a phase was skipped (no web engine on, nothing to ask…) */
   why?: Partial<Record<PrepPhase, string>>;
   web?: number; files?: number; ok?: number; fixed?: number; dropped?: number; unsure?: number;
+  /** the public topics from the user's files that the web may search, and how many facts their search found (ADR 0206) */
+  topics?: LessonTopics; refs?: number;
 }
 
 /** Questions asked before the lesson when the ask can mean different things (at most two), and the user's answers
@@ -78,13 +92,28 @@ export interface LessonStart {
   /** the subject chosen by where the lesson starts (ADR 0190: «Il mio brain» from Memoria, «second-brain» from the
    *  Guide); absent = the plan picks one */
   subject?: string;
+  /** the user's own files and folders dropped or picked on the start form (ADR 0204), read by the page: their sources */
+  files?: LessonFile[];
 }
+/** One file of the user's as a lesson's source: its path (relative to the folder dropped) and its text. */
+export interface LessonFile { name: string; text: string }
 
 export interface LessonCode { file: string; diff: string }
 export interface LessonWord { term: string; meaning: string }
 /** One beat of a piece: a sentence said while the board shows its part (Mayer: temporal contiguity, signaling): the
  *  camera goes to `focus`, an arrow `flow` lights with a packet moving along it, `note` is the «guarda qui» callout. */
-export interface LessonBeat { say: string; focus: string[]; flow?: { from: string; to: string }; note?: string }
+export interface LessonBeat {
+  say: string; focus: string[]; flow?: { from: string; to: string }; note?: string;
+  /** a code visual: the lines (from 1) this sentence is about (ADR 0205) */
+  lines?: [number, number];
+  /** a formula's symbol or a chart's label this sentence is about (ADR 0205) */
+  mark?: string;
+}
+/** A piece's place in the lesson's fixed structure (ADR 0205): the problem first, a concrete example then the rule
+ *  (concreteness fading), a worked example, a half-done one, the learner's own go, the one common misconception a
+ *  source states, the closing recap with the whole lesson's mind map. */
+export type PieceRole = 'problem' | 'example' | 'rule' | 'worked' | 'faded' | 'practice' | 'misconception' | 'recap';
+export const PIECE_ROLES: readonly PieceRole[] = ['problem', 'example', 'rule', 'worked', 'faded', 'practice', 'misconception', 'recap'];
 export interface LessonStep {
   id: string;
   title: string;
@@ -107,17 +136,19 @@ export interface LessonStep {
   beats?: LessonBeat[];
   /** the ids of the lesson's facts this piece stands on (shown as its sources) */
   cites?: string[];
+  /** the picture that explains it (ADR 0205); absent = the lesson's flowchart */
+  visual?: LessonVisual;
+  /** its role in the lesson's structure (ADR 0205) */
+  role?: PieceRole;
 }
 
-export interface LessonAnswer { choice: number; confidence?: LessonConfidence; at: number }
-export interface LessonCheck {
+/** choice = the option picked; for order and match (ADR 0204) `correct` when right, -1 when not, and `seq` = what the
+ *  user gave (shared/quiz.ts QuizResponse) */
+export interface LessonAnswer { choice: number; seq?: number[]; confidence?: LessonConfidence; at: number }
+export interface LessonCheck extends QuizBody {
   id: string;
   /** the main piece it comes after */
   after: string;
-  kind: 'choice' | 'predict';
-  q: string;
-  options: string[];
-  correct: number;
   /** why the right answer is right (and the usual wrong turn), shown after the answer */
   why: string;
   answer?: LessonAnswer;
@@ -175,13 +206,18 @@ export interface Lesson {
   cards?: { state: 'making' | 'done' | 'failed'; n?: number; error?: string };
   /** the tutor's conversation (ADR 0190), oldest first, the last TUTOR_KEEP */
   tutor?: TutorTurn[];
+  /** what the «Studio» column made from the verified facts (ADR 0205), reopened as it was */
+  studio?: Partial<Record<StudioKind, StudioItem>>;
+  /** the quality gate's report on the written pieces (ADR 0205) */
+  quality?: LessonQuality;
 }
 
 // ── the tutor (ADR 0190) ───────────────────────────────────────────────────────────────────────────────────────────
 
 /** coach: when the learner has not tried yet, a hint or a question back first (Bastani et al. 2024: a tutor that does
- *  not hand out the answer keeps the learning); tell: the answer at once («Dimmelo e basta») */
-export type TutorMode = 'coach' | 'tell';
+ *  not hand out the answer keeps the learning); tell: the answer at once («Dimmelo e basta»); quiz: «Mettimi alla
+ *  prova» (ADR 0205), the tutor asks one question at a time and judges each answer */
+export type TutorMode = 'coach' | 'tell' | 'quiz';
 export interface TutorTurn {
   id: string;
   /** what the learner asked or tried (maybe spoken) */
@@ -402,7 +438,7 @@ function parseCode(v: unknown): LessonCode | undefined {
 const BEATS_MAX = 6;
 /** A piece's beats: each a sentence with its nodes (known ids only), an arrow between two known nodes, a short note.
  *  Beats with nothing to say are left out; at most BEATS_MAX. */
-function parseBeats(v: unknown, nodes: readonly string[]): LessonBeat[] {
+function parseBeats(v: unknown, nodes: readonly string[], visual?: LessonVisual): LessonBeat[] {
   const out: LessonBeat[] = [];
   for (const b of list(v).slice(0, BEATS_MAX)) {
     if (!b || typeof b !== 'object') continue;
@@ -412,6 +448,8 @@ function parseBeats(v: unknown, nodes: readonly string[]): LessonBeat[] {
     const f = o.flow && typeof o.flow === 'object' ? o.flow as Obj : null;
     const flow = f && typeof f.from === 'string' && typeof f.to === 'string' && nodes.includes(f.from) && nodes.includes(f.to) && f.from !== f.to ? { from: f.from, to: f.to } : undefined;
     const note = text(o.note, 140, 'beat.note', false);
+    // on a visual of its own a beat points at a line, a symbol or a label, never at the flowchart
+    if (visual && visual.kind !== 'flow') { out.push({ say, focus: [], ...beatMark(visual, o), ...(note ? { note } : {}) }); continue; }
     out.push({ say, focus, ...(flow ? { flow } : {}), ...(note ? { note } : {}) });
   }
   return out;
@@ -421,8 +459,11 @@ function parseBeats(v: unknown, nodes: readonly string[]): LessonBeat[] {
  *  the lesson's facts: a citation of another id is dropped. With beats, `say` is their sentences in order. */
 export function parseStep(v: unknown, nodes: readonly string[], id: string, facts: readonly string[] = []): LessonStep {
   const o = obj(v, 'pezzo');
-  const own = text(o.diagram, STEP_DIAGRAM_MAX, 'diagram', false);
-  const beats = own ? [] : parseBeats(o.beats, nodes);
+  const visual = parseVisual(o.visual);
+  const role = PIECE_ROLES.find(r => r === o.role);
+  // a diagram of its own (before ADR 0205) only when no visual says what to draw
+  const own = visual ? '' : text(o.diagram, STEP_DIAGRAM_MAX, 'diagram', false);
+  const beats = own ? [] : parseBeats(o.beats, nodes, visual ?? undefined);
   const focus = list(o.focus).filter((x): x is string => typeof x === 'string' && NODE_ID.test(x) && nodes.includes(x)).slice(0, 8);
   const words = list(o.words).map(w => (w && typeof w === 'object' ? w as Obj : {})).map(w => ({ term: text(w.term, 60, 'term', false), meaning: text(w.meaning, 240, 'meaning', false) }))
     .filter(w => w.term && w.meaning).slice(0, 4);
@@ -435,6 +476,7 @@ export function parseStep(v: unknown, nodes: readonly string[], id: string, fact
     id, title: text(o.title, 120, 'title'), say, text: text(o.text, 1800, 'text', false) || say,
     focus: lit, ...(note ? { note } : {}), ...(code ? { code } : {}), ...(words.length ? { words } : {}), ...(own ? { diagram: own } : {}),
     ...(beats.length > 1 ? { beats } : {}), ...(cites.length ? { cites } : {}),
+    ...(visual && visual.kind !== 'flow' ? { visual } : {}), ...(role ? { role } : {}),
   };
 }
 
@@ -446,13 +488,10 @@ export function beatsOf(s: Pick<LessonStep, 'say' | 'focus' | 'note' | 'beats'>)
   return (parts.length ? parts : [s.say]).map((say, i) => ({ say, focus: [...s.focus], ...(i === 0 && s.note ? { note: s.note } : {}) }));
 }
 
+/** A check the model wrote (any kind of shared/quiz.ts; an unknown kind is a choice). */
 export function parseCheck(v: unknown, after: string, id: string): LessonCheck {
   const o = obj(v, 'domanda');
-  const options = list(o.options).map(x => text(x, 220, 'option', false)).filter(Boolean).slice(0, 4);
-  if (options.length < 2) throw new Error('domanda: servono da 2 a 4 risposte');
-  const correct = Number(o.correct);
-  if (!Number.isInteger(correct) || correct < 0 || correct >= options.length) throw new Error('domanda: correct fuori dalle risposte');
-  return { id, after, kind: o.kind === 'predict' ? 'predict' : 'choice', q: text(o.q, 320, 'q'), options, correct, why: text(o.why, 700, 'why') };
+  return { id, after, ...parseQuiz(o), why: text(o.why, 700, 'why') };
 }
 
 export interface ParsedPlan { title: string; diagram: string; outline: string[]; steps: LessonStep[]; checks: LessonCheck[]; explainQ: string; subject: string }

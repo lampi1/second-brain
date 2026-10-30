@@ -1,6 +1,6 @@
-// One prompt run on an engine as a hidden, read-only session: the comparison's side b (ADR 0046 §4). Why: the owner,
-// 14/10, wants both sides of a comparison to run inside the app, on any engine he turned on, with the app's own logins
-// and keys, so the brain's scripts never get a key. A run has no chat record, never reaches the UI (no emitter, no
+// One prompt run on an engine as a hidden, read-only session, built for the comparison's side b (ADR 0046 §4; its queue
+// was removed by ADR 0201) and kept for the one-shot jobs (agents/oneshot.ts): it runs on any engine the user turned on,
+// with the app's own logins and keys. A run has no chat record, never reaches the UI (no emitter, no
 // item store) and gets no MCP endpoint; it starts only on an engine that is on and trusted (engines/policy.ts engineOn)
 // and goes through the one session factory (engines/sessions.ts sessionFor) with SessionOptions.readOnly, so each
 // adapter adds its own read-only means (Claude: plan mode, only the read tools, deny rules, no MCP, no hooks, no
@@ -14,7 +14,8 @@
 // start: the prompt comes later, or never) and follow the answer as it streams (onText). A run ends at its first
 // finished turn, or after 45 min (killed); its session is always closed and its process tree killed. Logs carry the
 // engine, round, duration and cost, never the prompt nor the answer. Under tests only the fakes start (SB_<ID>_PATH to
-// a .mjs). Used by compare/queue.ts and Impara (wiring.ts).
+// a .mjs). Used by agents/oneshot.ts and Impara (wiring.ts); the brain's comparison queue it was built for went (ADR
+// 0201).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -28,7 +29,7 @@ import { engineOf, type EngineDef } from '../engines/registry';
 import { readOnlyConfigDir, sessionFor } from '../engines/sessions';
 import { errText, log, redact } from '../log';
 
-/** One run asked by the brain's queue (harness/compare/app-queue.mjs `list`). */
+/** One hidden run: the engine, model and effort, its folder and prompt. */
 export interface HeadlessRequest {
   engine: Harness;
   /** the prompt; a promise = a warm start (Impara's tutor, ADR 0190): the session starts now and gets the prompt when
@@ -223,7 +224,7 @@ export function refusal(id: Harness, settings: Pick<Settings, 'engineOn' | 'engi
   return override && /\.mjs$/i.test(override) ? null : `nei test il motore ${engine.label} reale non parte mai: serve il fake (SB_${id.toUpperCase().replace(/-/g, '_')}_PATH)`;
 }
 
-/** Why the asked model or effort may not run (null = they may), as for the routing table (brain/routing.ts): never
+/** Why the asked model or effort may not run (null = they may), as for a new chat (brain/routing.ts): never
  *  Fable (it costs too much: the user, 2026-10-14), never effort max (only when the user asks for it). */
 export function askRefusal(model: string | null, effort: string | null, reg: ModelRegistry | null): string | null {
   if (model && (/fable/i.test(model) || isFable(modelRow(model, reg)))) return `modello non ammesso nel confronto: ${model.slice(0, 40)} (Fable costa troppo)`;
@@ -301,7 +302,7 @@ export class HeadlessRunner {
   get running(): number { return this.live.size; }
 
   /** Why this run may not start on this machine now (null = it may): the engine (refusal), the model and the effort.
-   *  Asked before the brain is told the run is taken (compare/queue.ts): a refused run stays queued, untouched. */
+   *  Asked before a run starts: a refused run starts nothing. */
   refuses(req: Pick<HeadlessRequest, 'engine' | 'model' | 'effort'>): string | null {
     const why = refusal(req.engine, this.d.settings(), this.d.enginePaths()[req.engine], this.d.env ?? process.env);
     if (why) return why;

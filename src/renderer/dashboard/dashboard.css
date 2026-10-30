@@ -6,9 +6,7 @@
 .dash-header>div{min-width:0}
 .dash-eyebrow{font-size:10px;letter-spacing:.16em;font-weight:650;color:var(--text-3)}
 .dash-header h1{font-size:32px;letter-spacing:-1.3px;font-weight:600;margin:7px 0 8px;display:flex;align-items:center;gap:13px}
-/* the headline (SPEC 18, HomeHeadline.tsx): its place is kept while it loads, so nothing below moves when it arrives */
-.dash-header .dash-headline{color:var(--text-2);font-size:15px;font-style:italic;line-height:1.45;min-height:1.45em;max-height:2.9em;margin:0 0 8px;max-width:72ch;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-.dash-header>div>p:not(.dash-headline){white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dash-header>div>p{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dash-header p,.dash-panel header p{color:var(--text-3);font-size:13px;line-height:1.6;margin:0}
 .dash-live-dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 14px var(--green-bg);animation:dash-beat 2.2s ease-in-out infinite}
 .dash-live-label{font-size:10px;color:var(--text-3);border:1px solid var(--border);border-radius:20px;padding:7px 12px;white-space:nowrap}
@@ -53,7 +51,7 @@
 /* the map's commands float inside its frame: a toolbar on top, the legend and the zoom group at the bottom */
 .dash-map-toolbar{position:relative;z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:12px 12px 0;padding:6px;border:1px solid var(--border-2);border-radius:10px;background:color-mix(in srgb,var(--surface-2) 88%,transparent);backdrop-filter:blur(8px);box-shadow:var(--shadow-pop)}
 .dash-search{flex:1 1 220px;min-width:0;display:flex;align-items:center;gap:7px;height:28px;padding:0 10px;border:1px solid var(--border-2);border-radius:7px;background:var(--bg);color:var(--text-3);transition:border-color 180ms,box-shadow 180ms}
-.dash-search:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px var(--blue-bg)}
+.dash-search:focus-within{border-color:var(--blue);box-shadow:0 0 0 3px var(--focus-glow)}
 .dash-search input{flex:1;min-width:0;border:0;background:transparent;color:var(--text);font:inherit;font-size:12px;outline:none}
 .dashboard .dash-search input:focus-visible{outline:none}
 .dash-map-count{font-size:11px;color:var(--text-3);font-variant-numeric:tabular-nums;white-space:nowrap;padding:0 4px}

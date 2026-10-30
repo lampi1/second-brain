@@ -1,13 +1,12 @@
-// "Memoria" (G Y, ADR 0077, 0122): the one hub of what the brain holds. On top, alive: the day's headline (SPEC 18, it
-// was the Dashboard's), the live counters (proposals waiting, agents at work, agents waiting for you, changes of the
+// "Memoria" (G Y, ADR 0077, 0122): the one hub of what the brain holds. On top, alive: the live counters (proposals waiting, agents at work, agents waiting for you, changes of the
 // last 24 hours, lines in memory; each eases to its new value) and the latest changes as they happen, then the one
 // «Manutenzione» button. Below, a tab bar (pills with a count each, arrows / Home / End, the page arg "memoria/<tab>"
 // so a link opens a tab: lib/memory-hub.ts): Proposte (ProposalsDeck.tsx), Approvate (ApprovedTab.tsx: everything in
 // the brain now, deleted in one click with Annulla), Skill (SkillsPage.tsx), Regole (RulesPage.tsx), Script & Query
 // (brain/pages/Script.tsx + QueriesTab.tsx), Idee (brain/pages/Idee.tsx: yours and the AI's, «Rispolvera»), File (the
-// memory cards below: knowledge, what happened with the error log, the agents' memories), Apprendimento
-// (LearningPage.tsx) and Statistiche (MemoryInsights.tsx). The old Skill, Regole, Script, Idee, Apprendimento and
-// Dashboard pages land here (actions.ts go()). Memory never travels with an exported agent. Rendered by App.tsx
+// memory cards below: knowledge, what happened with the error log, the agents' memories) and Statistiche
+// (MemoryInsights.tsx); Apprendimento moved to Andamento (ADR 0202). The old Skill, Regole, Script, Idee and Dashboard
+// pages land here (actions.ts go()). Memory never travels with an exported agent. Rendered by App.tsx
 // PageFrame for 'memoria'. Styles: styles/memory-hub.css (mh-*), memory.css (mm-*).
 import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import type { BrainChange, ErrorEntry, MemoryFile, MemoryStats } from '@shared/brain-model';
@@ -25,19 +24,16 @@ import { useBrain } from '../../brain/api';
 import { normScripts, normTables } from '../../brain/types';
 import { Toaster } from '../../brain/components/ui';
 import { DiscussContext } from '../../brain/components/Discuss';
-import { HeadlineLine, useHeadline } from '../../brain/pages/HomeHeadline';
-import { filterOf, Idee } from '../../brain/pages/Idee';
-import { PulseBoard } from '../ContextPulse';
+import { Idee } from '../../brain/pages/Idee';
 import { ThemesPanel } from '../../dashboard/Themes';
 import { Script } from '../../brain/pages/Script';
 import { useCountUp } from '../../dashboard/parts';
-import { IconBolt, IconCheck, IconChart, IconFile, IconLightbulb, IconShield, IconSparkle, IconTarget, IconTerminal } from '../Icons';
+import { IconBolt, IconCheck, IconChart, IconFile, IconLightbulb, IconShield, IconSparkle, IconTerminal } from '../Icons';
 import { SkillsPage } from '../SkillsPage';
 import { MaintenancePanel, when } from './MaintenancePanel';
 import { MaintenanceButton } from './MaintenanceButton';
 import { InlineMd, MemoryInsights, OpenFile } from './MemoryInsights';
 import { RulesPage } from './RulesPage';
-import { LearningPage } from './LearningPage';
 import { ApprovedTab, useApprovedCount } from './ApprovedTab';
 import { ProposalsDeck } from './ProposalsDeck';
 import { QueriesTab } from './QueriesTab';
@@ -147,14 +143,18 @@ const ago = (ms: number, nowMs: number): string => {
   if (h < 24) return t('mh.ago.hours', { n: h });
   return t('mh.ago.days', { n: Math.round(h / 24) });
 };
-const TAB_OF_KIND: Record<BrainChange['kind'], HubTab> = { skill: 'skill', rule: 'regole', memory: 'file', agent: 'apprendimento', script: 'script' };
+/** where a change is shown: its Memoria tab; a role's change (what it proved) in Andamento → Apprendimento (ADR 0202) */
+const PLACE_OF_KIND: Record<BrainChange['kind'], { page: 'memoria' | 'andamento'; arg: string }> = {
+  skill: { page: 'memoria', arg: hubArg('skill') }, rule: { page: 'memoria', arg: hubArg('regole') }, memory: { page: 'memoria', arg: hubArg('file') },
+  agent: { page: 'andamento', arg: 'apprendimento' }, script: { page: 'memoria', arg: hubArg('script') },
+};
 
 function Activity({ changes, nowMs }: { changes: BrainChange[]; nowMs: number }) {
   const recent = changes.slice(0, 4);
   return <section className="mh-activity" aria-labelledby="mh-activity-h" data-testid="mh-activity">
     <h2 id="mh-activity-h"><i className="mh-live" aria-hidden="true" />{t('mh.activity')}</h2>
     {recent.length ? <ol aria-live="polite">{recent.map((c, i) => <li key={c.id} style={{ '--i': i } as CSSProperties} data-undone={!!c.rolledBackAt}>
-      <button type="button" onClick={() => go({ page: 'memoria', arg: hubArg(TAB_OF_KIND[c.kind]) })} title={c.reason}>
+      <button type="button" onClick={() => go(PLACE_OF_KIND[c.kind])} title={c.reason}>
         <span className="bm-tag" data-kind={c.kind}>{t(`bm.kind.${c.kind}`)}</span>
         <span className="mh-activity-what">{c.summary}</span>
         <time dateTime={new Date(c.at).toISOString()}>{ago(c.at, nowMs)}</time>
@@ -164,7 +164,6 @@ function Activity({ changes, nowMs }: { changes: BrainChange[]; nowMs: number })
 }
 
 function Hero({ onTab }: { onTab: (tab: HubTab) => void }) {
-  const headline = useHeadline();
   const { state } = useBrainModel();
   const proposals = useProposalCount();
   const chats = useApp(s => s.chats);
@@ -182,7 +181,6 @@ function Hero({ onTab }: { onTab: (tab: HubTab) => void }) {
       <div className="mh-hero-text">
         <span className="mh-eyebrow"><i className="mh-live" aria-hidden="true" />{t('mh.eyebrow')}</span>
         <h1>{t('bm.mem.title')}</h1>
-        <HeadlineLine state={headline} />
         <p className="mh-lead">{t('mh.lead')}</p>
       </div>
       <div className="mh-hero-actions"><MaintenanceButton /></div>
@@ -192,7 +190,7 @@ function Hero({ onTab }: { onTab: (tab: HubTab) => void }) {
         <Pulse k="mh.pulse.proposals" help="mh.pulse.proposalsHelp" n={proposals} tone="amber" onClick={() => onTab('proposte')} testId="mh-pulse-proposals" />
         <Pulse k="mh.pulse.working" help="mh.pulse.workingHelp" n={working} tone="green" testId="mh-pulse-working" />
         <Pulse k="mh.pulse.waiting" help="mh.pulse.waitingHelp" n={waiting} tone="violet" testId="mh-pulse-waiting" />
-        <Pulse k="mh.pulse.changes" help="mh.pulse.changesHelp" n={state ? today : undefined} tone="blue" onClick={() => onTab('apprendimento')} testId="mh-pulse-changes" />
+        <Pulse k="mh.pulse.changes" help="mh.pulse.changesHelp" n={state ? today : undefined} tone="blue" onClick={() => go({ page: 'andamento', arg: 'apprendimento' })} testId="mh-pulse-changes" />
         <Pulse k="mh.pulse.lines" help="mh.pulse.linesHelp" n={lines} onClick={() => onTab('file')} testId="mh-pulse-lines" />
       </div>
       <Activity changes={changes} nowMs={nowMs} />
@@ -203,7 +201,7 @@ function Hero({ onTab }: { onTab: (tab: HubTab) => void }) {
 // ── the tab bar ─────────────────────────────────────────────────────────────────────────────────────────────────────
 const ICON: Record<HubTab, ReactNode> = {
   proposte: <IconBolt />, approvate: <IconCheck />, skill: <IconSparkle />, regole: <IconShield />, script: <IconTerminal />,
-  idee: <IconLightbulb />, file: <IconFile />, apprendimento: <IconTarget />, statistiche: <IconChart />,
+  idee: <IconLightbulb />, file: <IconFile />, statistiche: <IconChart />,
 };
 
 function useCounts(): Partial<Record<HubTab, number>> {
@@ -216,7 +214,6 @@ function useCounts(): Partial<Record<HubTab, number>> {
     proposte: proposals, approvate: approved,
     skill: state?.skills.length, regole: state?.rules.length, script: scripts.data?.scripts.filter(s => s.tested.state === 'ok').length, // only working scripts show (Script.tsx)
     idee: tables.data?.ideas.length, file: state?.memory.length,
-    apprendimento: state?.changes.filter(c => c.claim).length,
   };
 }
 
@@ -266,9 +263,7 @@ function TabBar({ tab, onTab }: { tab: HubTab; onTab: (tab: HubTab) => void }) {
 function IdeasTab({ rest }: { rest: string | null }) {
   return <div className="bx mh-bx"><DiscussContext.Provider value={brainBridge}>
     <Idee arg={rest ?? undefined} embedded nav={target => goTarget(target)} />
-    {/* the AI's side also shows the Battito's board (once the Dashboard's Spunti); the ideas' themes close the tab (once
-        its Temi, ADR 0122) */}
-    {filterOf(rest ?? undefined) === 'ia' && <PulseBoard />}
+    {/* the ideas' themes close the tab (once Dashboard → Temi) */}
     <section className="bx-section mh-idee-themes"><ThemesPanel kind="ideas" /></section>
   </DiscussContext.Provider><Toaster /></div>;
 }
@@ -284,7 +279,6 @@ function TabContent({ tab, rest }: { tab: HubTab; rest: string | null }) {
     case 'script': return <><Script arg={rest ?? undefined} /><QueriesTab /></>;
     case 'idee': return <IdeasTab rest={rest} />;
     case 'file': return <MemoryFiles />;
-    case 'apprendimento': return <LearningPage />;
     case 'statistiche': return stats ? (memoryEmpty(stats) ? <CleanStart /> : <MemoryInsights s={stats} />) : <p className="bm-empty">{t('bm.loading')}</p>;
   }
 }

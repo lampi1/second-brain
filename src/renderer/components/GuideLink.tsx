@@ -2,7 +2,7 @@
 // audit: the 62 "?" were islands, none led to the Guide). A click opens the Guida page with that card's reading panel
 // open (go({ page: 'guida', arg: <concept id> }); GuidePage reads the arg). An unknown concept id renders nothing, so a
 // renamed card never leaves a dead link (test/unit/guide-link.test.ts pins every id used in the renderer). Used by
-// HelpTip (its `guide` prop) and by page leads (ClassifiersPage, Qualità, Costi…). `actions` is imported on click, not at
+// HelpTip (its `guide` prop) and by page leads (ClassifiersSection, Qualità, Costi…). `actions` is imported on click, not at
 // load: HelpTip is in every page and in unit tests that render without the preload bridge (actions → sb → window.sb).
 import { CONCEPT_IDS } from '@shared/concept-ids';
 import { t } from '../i18n';

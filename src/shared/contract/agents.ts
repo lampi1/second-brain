@@ -1,17 +1,15 @@
-// Agents and automations: roles, avatars, work threads, routines, cloud agents, Pulse, approvals, connectors and MCP servers, the Guida.
+// Agents and automations: roles, avatars, work threads, routines, connectors and MCP servers, the Guida.
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
 import type { AgentImages } from '../agent-images';
 import type { AgentLifecycleDecide, AgentLifecycleSnapshot } from '../agent-lifecycle';
 import type { LearnedRuleProposal } from '../agent-pack';
 import type { AgentCatalog, AgentDraft, AgentMetrics, AgentMetricsFilter, AgentProfile, AgentUndo, AgentVersion, JudgingEstimate } from '../agents';
-import type { CloudAgent, CloudApplyResult, CloudState } from '../cloud';
 import type { ConnectorId, ConnectorState, ConnectorToken } from '../connectors';
 import type { FileViewResult } from '../file-view';
 import type { FlowSnapshot } from '../flows';
 import type { GuideAnswer, GuideAskRequest, GuideStaleState } from '../guide-ask';
 import type { McpImportCandidate, McpServerDef, McpServersState, McpToolAccess } from '../mcp-servers';
-import type { ApprovalDecision, ApprovalItem, PulseActResult, PulseDismissReason, PulseList, PulsePlace, PulseResult, PulseStatus } from '../pulse';
 import type { RoleId } from '../roles';
 import type { RoutineRunDetail, RoutineRunRef, RoutineTerminalExport, RoutinesSnapshot } from '../routines';
 import type { RunEstimates } from '../task-estimate';
@@ -57,6 +55,10 @@ export interface AgentsInvokeMap {
   'mcpservers:test': [{ id: string }, McpServersState];
   'mcpservers:importScan': [void, McpImportCandidate[]];
   'mcpservers:importApply': [{ keys: string[] }, { state: McpServersState; added: string[]; errors: { key: string; message: string }[] }];
+  /** «Annulla» of a connector change the Orchestrator made (ADR 0207): the key on its feed card */
+  'mcpservers:undo': [{ undo: string }, McpServersState];
+  /** «Attiva» (ADR 0207): the user's click on a server the Orchestrator added or changed, naming what it runs */
+  'mcpservers:activate': [{ id: string; runs: string }, McpServersState];
   'agents:list': [void, AgentCatalog];
   /** the user's Annulla on a change the app applied (feed card, change log) */
   'agents:undo': [AgentUndo, AgentProfile];
@@ -84,24 +86,6 @@ export interface AgentsInvokeMap {
   'avatars:get': [void, AgentImages];
   'avatars:set': [{ id: RoleId; bytes: Uint8Array }, AgentImages];
   'avatars:reset': [{ id: RoleId }, AgentImages];
-  'pulse:list': [{ place: PulsePlace }, PulseList];
-  'pulse:status': [void, PulseStatus];
-  'pulse:seen': [{ ids: string[] }, void];
-  'pulse:save': [{ id: string }, PulseResult];
-  'pulse:act': [{ id: string }, PulseActResult];
-  'pulse:dismiss': [{ id: string; reason?: PulseDismissReason }, PulseResult];
-  'approvals:list': [{ agentId?: string }, ApprovalItem[]];
-  'approvals:decide': [ApprovalDecision, PulseResult];
-  /** cloud agents (ADR 0080, main/cloud/): the known ones (refresh = ask the vendors now, at most every 30 s) */
-  'cloud:list': [{ refresh?: boolean } | void, CloudState];
-  'cloud:followUp': [{ id: string; text: string }, CloudAgent];
-  'cloud:stop': [{ id: string }, CloudAgent];
-  /** "Porta in locale": the result into a NEW worktree beside the repo (never into the checkout itself) */
-  'cloud:apply': [{ id: string }, CloudApplyResult];
-  /** the strip expanded now (its messages stream while it stays open, Cursor), or null */
-  'cloud:watch': [{ id: string | null }, void];
-  /** forget a finished agent (the vendor keeps it) */
-  'cloud:dismiss': [{ id: string }, CloudState];
   /** «Chiedi alla Guida» (ADR 0196): one light model, no tools, the Guida cards as context */
   'guide:ask': [GuideAskRequest, GuideAnswer];
   /** the Guida cards whose anchored code changed (a run from the repo; checked: false in a packaged build) */

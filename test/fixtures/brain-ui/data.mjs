@@ -433,10 +433,6 @@ export function build(now = Date.now(), opts = {}) {
     [`journal/${d(1)}.md`]: `# ${d(1)}\n\n${journal.filter(j => j.data === d(1)).map(j => `- ${j.ora} · ${j.tag} · ${j.testo}`).join('\n')}\n`,
     'measures.jsonl': measures.map(m => JSON.stringify(m)).join('\n'),
     'ops/tools/cost.mjs': '// cost.mjs: the cost of every chat, by day, model, kind and area.\nexport function cost(days) {\n  return days * 2;\n}\n',
-    'reviews/compare/report.md': '# Confronto Claude e Cursor\n\nLo stesso lavoro, giudicato alla cieca.\n\n| Agente | Problemi veri | Falsi allarmi | Costo | Minuti |\n|---|---:|---:|---:|---:|\n| Claude · reviewer | 7 | 1 | 4,20 $ | 12 |\n| Cursor · reviewer | 5 | 3 | 1,10 $ | 9 |\n\n## Ancora da giudicare\n\n- 3 review in attesa del tuo giudizio\n',
-    'reviews/compare/summary.md': '# Sintesi\n\nClaude trova più problemi veri; Cursor costa meno.\n',
-    'reviews/compare/reports/pr-51002.md': '# PR 51002\n\n- Claude: 3 problemi, 0 falsi\n- Cursor: 2 problemi, 1 falso\n',
-    'reviews/compare/reports/pr-51004.md': '# PR 51004\n\n- Claude: 1 problema\n- Cursor: nessuno\n',
     // a hostile file (an agent can write any markdown): nothing in it may run or navigate the app window
     'notes/trappola.md': '# Trappola\n\n<img src="data:image/gif;base64,R0lGODlhAQABAAAAACw=" usemap="#m"><map name="m"><area shape="default" href="../../fuori.html"></map>\n\n<a href="../fuori.html">relativo</a> · <a href="file:///C:/fuori.html">file</a> · <a href="javascript:alert(1)">js</a> · [esterno](https://example.com)\n\n<base href="https://example.com/"><script>window.__pwned = 1</script><img src="x" onerror="window.__pwned = 2">\n\n<svg><a xlink:href="../fuori.html"><text>svg</text></a></svg>\n\n<form action="../fuori.html"><button formaction="../fuori.html">invia</button></form>\n',
     'ops/runbook/review.md':'# Revisione\n\n1. Controlla i null sui campi opzionali.\n2. Un test nuovo deve fallire prima del fix.\n',

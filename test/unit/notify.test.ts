@@ -48,7 +48,8 @@ describe('notify', () => {
   it('sections of the badges', () => {
     expect(sectionOf('idea')).toBe('idee');
     expect(sectionOf('reflection')).toBe('idee');
-    expect(sectionOf('budget')).toBe('costi');
+    expect(sectionOf('budget')).toBe('andamento'); // Costi and Qualità are Andamento's tabs (ADR 0202)
+    expect(sectionOf('error')).toBe('andamento');
     expect(sectionOf('chat-done')).toBe('home');
     expect(sectionOf('mail-blocked')).toBeNull(); // Comunicazione is gone: center (and bell) only
     expect(sectionOf('sync-error')).toBeNull(); // Oggi (its badge) is gone: toast + center only
@@ -57,8 +58,8 @@ describe('notify', () => {
 
   it('badges count unread events after the last visit; reading or visiting clears them', () => {
     const feed = [ev('a', 'budget', 30), ev('b', 'budget', 20), ev('c', 'chat-failed', 10), ev('d', 'budget', 5, { away: true }), ev('e', 'mail-blocked', 40)];
-    expect(badges(feed, emptyRead)).toEqual({ costi: 2, home: 1 });
-    expect(badges(feed, visitSection(emptyRead, 'costi', 25))).toEqual({ costi: 1, home: 1 });
+    expect(badges(feed, emptyRead)).toEqual({ andamento: 2, home: 1 });
+    expect(badges(feed, visitSection(emptyRead, 'andamento', 25))).toEqual({ andamento: 1, home: 1 });
     expect(badges(feed, markRead(emptyRead, ['a', 'b']))).toEqual({ home: 1 });
     const all = markAllRead(emptyRead, 100);
     expect(feed.some(e => isUnread(e, all))).toBe(false);

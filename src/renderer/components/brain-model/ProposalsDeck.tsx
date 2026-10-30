@@ -21,6 +21,7 @@ import { app } from '../../store/store';
 import { AgentAvatar } from '../AgentAvatar';
 import { LearningEvidenceInspector } from './LearningEvidence';
 import { CandidateBody, ProposalDiffs } from './ProposalDiffs';
+import { track } from '../../lib/use-counter';
 import '../../styles/proposals.css';
 
 const reduced = (): boolean => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -36,7 +37,7 @@ export function shortWhen(iso: string): string {
 }
 export function whoName(c: Proposal): string {
   const w = c.provenance.who;
-  if (w.kind === 'role') return w.id === 'pulse' ? t('alive.pulse.title') : roleName(w.id);
+  if (w.kind === 'role') return roleName(w.id);
   if (w.kind === 'maintenance' && (w.id === 'research' || w.id === 'cleanup')) return t(`proposals.who.${w.id}`);
   if (w.kind === 'maintenance') return (['corrections', 'repeated-task', 'merge-skills', 'merge-memory', 'migration', 'upgrade'] as const).includes(w.id as never) ? t(`proposals.job.${w.id as 'corrections'}`) : t('proposals.who.maintenance');
   return w.id === 'lifecycle' ? t('proposals.who.lifecycle') : w.id === 'improve' ? t('proposals.who.improve') : t('proposals.who.agent');
@@ -277,7 +278,7 @@ export function ProposalsDeck() {
   // the card on top is reported once: the ledger keeps how long the decision took (ADR 0193)
   const topId = top?.id;
   useEffect(() => { if (topId) reportShown(topId); }, [topId]);
-  const onDecide = (card: Proposal) => (d: ProposalDecision, note?: string, keep?: ProposalKeep) => { setReturning(null); decide(card, d, note, keep); };
+  const onDecide = (card: Proposal) => (d: ProposalDecision, note?: string, keep?: ProposalKeep) => { setReturning(null); track('proposal'); decide(card, d, note, keep); };
 
   if (!s.data && s.loading) return <section className="pd pd-center" data-testid="proposals-deck"><p className="pd-muted">{t('proposals.loading')}</p></section>;
   if (!s.data && s.error) return <section className="pd pd-center" data-testid="proposals-deck"><p role="alert">{t('proposals.error', { error: s.error })}</p><button type="button" className="btn btn-s" onClick={() => void refreshProposals()}>{t('proposals.retry')}</button></section>;

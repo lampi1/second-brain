@@ -1,7 +1,7 @@
 // The brain's own table (<brain>/ops/state/estimates.json, written by ops/tools/estimates.mjs from every past
 // transcript: real work time, $, the chat title's area and kind). ADR 0053 removed the user-facing cost/time estimate
 // (measured on 178 chats it held only 47% of the time with a bigger median error than the median cost); what is left
-// here feeds the model-routing table (brain/routing.ts): the kind rules (`tasks`, read by shared/work-concepts.ts taskOf)
+// here feeds the chats' kinds (brain/routing.ts): the kind rules (`tasks`, read by shared/work-concepts.ts taskOf)
 // and the refreshed table itself (table(), schedule(), run a little after each turn ends, at most every 5 minutes, by
 // brain/index.ts's recordJob). No model is ever called: the table is refreshed by running the script (incremental,
 // < 1 s warm).
@@ -22,7 +22,7 @@ export interface BrainTable {
     range80?: { qMin: number | null; qUsd: number | null; inMin: number | null; inUsd?: number | null; covered: number };
   };
   groups: Record<string, Group>;
-  /** the brain's own kind rules for the routing table, read by taskOf */
+  /** the brain's own kind rules, read by taskOf */
   tasks?: [string, string, string][];
 }
 

@@ -63,19 +63,18 @@ test('Brain pages: skills with links and undo, rules, memory, classifiers, map; 
     await expect(page.getByTestId('topbar-maint')).toBeVisible();
     await shot(page, 'brain-memory-dark');
 
-    // ── Classificatori: read only, "nessun dato ancora" where nothing was measured
+    // ── Classificatori (a section of Qualità since ADR 0210): read only
     await goPage(page, 'classificatori');
     const cls = page.getByTestId('bm-classifiers-page');
     // a grid of cards (stats-cards.spec.ts covers them); the tables of before live in each classifier's detail
     await expect(cls.getByTestId('cls-grid')).toBeVisible();
     await expect(cls.locator('input, textarea, select')).toHaveCount(0);
     await shot(page, 'brain-classifiers-dark');
-    for (const [card, tables] of [['model', ['routing', 'quality']], ['kind', ['kinds']]] as const) {
-      await cls.getByTestId(`cls-card-${card}`).locator('h3 button').click();
-      for (const p of tables) await expect(cls.getByTestId(`bm-cls-${p}`)).toBeVisible();
-      if (card === 'model') await expect(cls.getByText('nessun dato ancora').first()).toBeVisible();
-      await cls.getByTestId('cls-back').click();
-    }
+    // no model card since ADR 0210; the kind card's detail keeps its table
+    await expect(cls.getByTestId('cls-card-model')).toHaveCount(0);
+    await cls.getByTestId('cls-card-kind').locator('h3 button').click();
+    await expect(cls.getByTestId('bm-cls-kinds')).toBeVisible();
+    await cls.getByTestId('cls-back').click();
 
     // ── Mappa: agent → skills → rules → memory, with an inspector
     await goPage(page, 'collegamenti');

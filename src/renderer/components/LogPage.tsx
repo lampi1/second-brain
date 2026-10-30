@@ -2,7 +2,7 @@
 // capire e in tempo reale … deve essere TUTTO visibile»): on the left each task as a chain (who chose which agent and
 // why → the agent's work with cost, tools and errors → the result → the verification, the delegated chats indented
 // under their parent), with automatic flags; on the right the live stream of every event (classifiers, estimates,
-// errors and memory written to the brain, Battito, the brain's changes with their history, the app's warnings). A click
+// errors and memory written to the brain, the brain's changes with their history, the app's warnings). A click
 // on a step or a line opens its details: input, result, errors, tools. Reading it spends no AI tokens (the app's own
 // events, main/activity/journal.ts); only «Fai analizzare all'IA» prepares a message for the Orchestrator, sent by
 // the user. Mounted by App.tsx's PageFrame; pure helpers in lib/log-view.ts; styles in styles/log.css.

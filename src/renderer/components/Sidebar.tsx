@@ -1,6 +1,6 @@
-// The app rail groups work, the Brain (ADR 0077: Agenti, Memoria, Classificatori and the Mappa of their links; Memoria
-// is the one hub of the brain's content since ADR 0122, with Skill, Regole, Script & Query, Idee and Apprendimento as its
-// tabs, and carries the count of proposals waiting for the user), Andamento (Costi and Qualità, ADR 0101, 0109) and app
+// The app rail groups work, the Brain (ADR 0077: Agenti, Memoria and the Mappa of their links; Memoria is the one hub of
+// the brain's content since ADR 0122, with Skill, Regole, Script & Query and Idee as its tabs, and carries the count of
+// proposals waiting for the user), Andamento (one page since ADR 0202: Costi, Qualità, Apprendimento, Classificatori, Uso) and app
 // tools (Log = everything the app did, live, ADR 0111, Guida; the Dashboard is gone, ADR 0122). Role-specific pages
 // exclude destinations already supplied by the shell. Under the Grindhouse entry, the open agents as a delegation
 // tree (SidebarTree.tsx). Used by App.tsx.
@@ -13,7 +13,7 @@ import { useTasks } from '../store/tasks';
 import { ui } from '../store/ui';
 import { go } from '../actions';
 import {
-  IconLearn, IconBrain, IconBranch, IconChart, IconTarget, IconCoins, IconGlobe, IconGrid, IconHistory, IconLayers, IconLightbulb, IconList, IconMap, IconMic, IconQuestion, IconSettings, IconShield, IconSparkle, IconTerminal, IconTicket,
+  IconLearn, IconBrain, IconBranch, IconChart, IconGlobe, IconGrid, IconHistory, IconLayers, IconLightbulb, IconList, IconMap, IconMic, IconQuestion, IconSettings, IconShield, IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
 import { t } from '../i18n';
 import {workProfile} from '../../shared/work-profiles';
@@ -25,18 +25,19 @@ const ICON: Record<BrainPageId, ReactNode> = {
   home: <IconGrid />, flussi: <IconBranch />,
   agenti: <IconLayers />,
   idee: <IconLightbulb />,
-  costi: <IconCoins />, qualita: <IconChart />, apprendimento: <IconTarget />, script: <IconTerminal />, log: <IconList />, confronto: <IconLayers />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
+  andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
   guida: <IconQuestion />, browser: <IconGlobe />, registrazioni: <IconMic />, impara: <IconLearn />,
-  regole: <IconShield />, memoria: <IconHistory />, classificatori: <IconBranch />, collegamenti: <IconMap />,
+  regole: <IconShield />, memoria: <IconHistory />, collegamenti: <IconMap />,
 };
 
 /** The pages of the two lower groups, in order (Lavoro is built by hand: Task can hide). */
 const BRAIN_GROUP: BrainPageId[] = [];
 /** The Brain section: always shown, whatever the role (ADR 0077; the owner, 2026-10-19: the brain must be visible; its
- *  changelog is on the Log page, ADR 0111). Skill, Regole, Script, Idee and Apprendimento are Memoria's tabs (ADR 0122). */
-const BRAIN_CORE: BrainPageId[] = ['agenti', 'memoria', 'classificatori', 'collegamenti'];
-/** Andamento: how the work goes, in money and in quality; always shown (ADR 0101, 0109). */
-const TRENDS: BrainPageId[] = ['costi', 'qualita'];
+ *  changelog is on the Log page, ADR 0111). Skill, Regole, Script and Idee are Memoria's tabs (ADR 0122). */
+const BRAIN_CORE: BrainPageId[] = ['agenti', 'memoria', 'collegamenti'];
+/** Andamento: how the work goes (money, quality, learning, classifiers, the app's own use) in one page; always shown
+ *  (ADR 0101, 0109, 0202). */
+const TRENDS: BrainPageId[] = ['andamento'];
 /** The pages that are Memoria's tabs now: never an entry of their own, whatever the work profile lists. */
 const IN_MEMORIA = Object.keys(HUB_PAGES);
 

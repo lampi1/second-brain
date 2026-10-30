@@ -2,7 +2,7 @@
 // last reviews, next to the lessons; only on this PC, like them. Written atomically (tmp + rename) after each change; a
 // broken file is moved aside, never overwritten. A lesson's checks become cards at zero tokens (`fromChecks`), the
 // cards run adds its own (`add`), a tutor answer one (`addOne`, ADR 0190); a removed lesson takes its cards away, a
-// lesson moved to another subject moves them. Used by learn/service.ts; tests: test/unit/review.test.ts.
+// lesson moved to another subject moves them. The «Studio» flashcards replace their own set (`replaceOwn`, ADR 0205). Used by learn/service.ts; tests: test/unit/review.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import { schedule, type CardDraft, type ReviewCard, type ReviewGrade, type ReviewLog } from '@shared/review';
@@ -52,7 +52,9 @@ export class ReviewStore {
     for (const c of l.checks) {
       const id = `${l.id}:k:${c.id}`;
       if (d.cards.some(x => x.id === id)) continue;
-      d.cards.push({ id, lessonId: l.id, subject, kind: 'choice', origin: 'check', q: c.q, options: c.options, correct: c.correct, answer: c.why, createdAt: l.createdAt, mem: null });
+      // the check's own kind (ADR 0204): a 'predict' is asked again as a choice
+      d.cards.push({ id, lessonId: l.id, subject, kind: c.kind === 'predict' ? 'choice' : c.kind, origin: 'check', q: c.q, options: c.options, correct: c.correct,
+        ...(c.items ? { items: c.items } : {}), ...(c.pairs ? { pairs: c.pairs } : {}), ...(c.code ? { code: c.code } : {}), answer: c.why, createdAt: l.createdAt, mem: null });
       added = true;
     }
     if (added) this.write();
@@ -78,6 +80,19 @@ export class ReviewStore {
     d.cards = [...d.cards.filter(c => c.id !== id), card];
     this.write();
     return card;
+  }
+
+  /** A set of cards of its own (the «Studio» flashcards, ADR 0205): ids `<lesson>:<prefix><n>`, replacing the set before
+   *  (a card asked the same way keeps its memory). */
+  replaceOwn(lessonId: string, subject: string, prefix: string, drafts: readonly CardDraft[], origin: ReviewCard['origin'], now: number): ReviewCard[] {
+    const d = this.read();
+    const mine = (c: ReviewCard) => c.lessonId === lessonId && c.id.startsWith(`${lessonId}:${prefix}`);
+    const old = new Map(d.cards.filter(mine).map(c => [c.q, c]));
+    d.cards = d.cards.filter(c => !mine(c));
+    const made = drafts.map((x, i): ReviewCard => ({ ...x, id: `${lessonId}:${prefix}${i + 1}`, lessonId, subject, origin, createdAt: now, mem: old.get(x.q)?.mem ?? null }));
+    d.cards.push(...made);
+    this.write();
+    return made;
   }
 
   grade(id: string, g: ReviewGrade, now: number): ReviewCard {

@@ -1,7 +1,7 @@
 // German (de-AT) counterparts of the "log" area (log.it.ts): the Log page.
 import type { logIt } from './log.it';
 export const logDe: typeof logIt = {
-  'log.lead': 'Alles, was in der App passiert, live: Aufgaben, Klassifikatoren, Schätzungen, Fehler, Gedächtnis, Battito. Das Lesen verbraucht keine Tokens.',
+  'log.lead': 'Alles, was in der App passiert, live: Aufgaben, Klassifikatoren, Schätzungen, Fehler, Gedächtnis. Das Lesen verbraucht keine Tokens.',
   'log.live': 'Live',
   'log.kind.task': 'Aufgaben', 'log.kind.classifier': 'Klassifikatoren', 'log.kind.estimate': 'Schätzungen', 'log.kind.error': 'Fehler',
   'log.kind.memory': 'Gedächtnis', 'log.kind.pulse': 'Battito', 'log.kind.brain': 'Brain', 'log.kind.app': 'App',

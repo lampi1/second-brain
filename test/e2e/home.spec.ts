@@ -10,7 +10,7 @@ for (const lang of ['it', 'en']) test(`Home is the default Grindhouse and keeps 
   try {
     await expect(page.getByTestId('home')).toBeVisible();
     await expect(page.getByTestId('home').getByRole('heading', { level: 1 })).toHaveCount(0); // no greeting
-    await expect(page.getByTestId('dash-headline')).toHaveCount(0); // the headline heads Memoria (ADR 0122)
+    await expect(page.getByTestId('dash-headline')).toHaveCount(0); // no day sentence anywhere (ADR 0201)
     await expect(page.getByTestId('view-agents')).toBeVisible();
     await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
     await expect(page.locator('[data-testid^="home-request-"]')).toHaveCount(0); // a decision waits as a pill on its strip
@@ -18,9 +18,10 @@ for (const lang of ['it', 'en']) test(`Home is the default Grindhouse and keeps 
     await shot(page, `home-${lang}`);
     await expect(page.getByTestId('nav-home')).toHaveAttribute('aria-label', 'Grindhouse');
     await expect(page.getByTestId('nav-workspace')).toHaveCount(0);
-    // Agenti is in the Brain group (ADR 0077), Costi and Qualità in Andamento (ADR 0101, 0109); Confronto and Idee only
-    // in a work profile that lists them
-    for (const id of ['agenti', 'costi', 'qualita']) await expect(page.getByTestId(`nav-${id}`)).toBeVisible();
+    // Agenti is in the Brain group (ADR 0077), Andamento (Costi, Qualità… as tabs, ADR 0202) in its group; Idee only in a
+    // work profile that lists it; Confronto is gone (ADR 0201)
+    for (const id of ['agenti', 'andamento']) await expect(page.getByTestId(`nav-${id}`)).toBeVisible();
+    for (const id of ['costi', 'qualita', 'classificatori']) await expect(page.getByTestId(`nav-${id}`)).toHaveCount(0);
     for (const id of ['confronto', 'idee']) await expect(page.getByTestId(`nav-${id}`)).toHaveCount(0);
     await expect(page.getByRole('button', { name: it ? 'Nuovo agente' : 'New agent', exact: true })).toHaveCount(0);
     // work starts only from the Orchestrator's column (ADR 0083): Ctrl+N gives its input the keyboard, no dialog

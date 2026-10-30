@@ -1,6 +1,6 @@
 /* ADR 0102, the app shows what it does by itself: the collapsed strips' step line, the origin line of the chats the
-   app started or resumed, the morning block ("Mentre eri via") and its line atop the Orchestrator, the Battito board.
-   Used by StripActivity.tsx, AgentStrips.tsx (Origin), MorningBlock.tsx, PulseBoard (ContextPulse.tsx). */
+   app started or resumed, the morning block ("Mentre eri via") and its line atop the Orchestrator.
+   Used by StripActivity.tsx, AgentStrips.tsx (Origin), MorningBlock.tsx. */
 .chat-strip-line .typing { max-width:100%; min-width:0; }
 .strip-step { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .strip-step-text { color:var(--text-2); }
@@ -19,7 +19,7 @@
 .morning-row { display:flex; align-items:center; gap:8px; min-height:30px; }
 .morning-row > button.morning-open { all:unset; box-sizing:border-box; flex:1 1 auto; min-width:0; display:flex; align-items:center; gap:8px; padding:4px 8px; border-radius:8px; cursor:pointer; color:var(--text-2); font-size:13px; }
 .morning-row > button.morning-open:hover, .morning-row > button.morning-open:focus-visible { background:var(--surface-2); color:var(--text); }
-.morning-row > button.morning-open:focus-visible { outline:2px solid var(--accent, var(--violet)); outline-offset:1px; }
+.morning-row > button.morning-open:focus-visible { outline: 2px solid var(--focus); outline-offset:1px; }
 .morning-mark { flex:none; width:8px; height:8px; border-radius:99px; background:var(--text-3); }
 .morning-row[data-tone="warn"] .morning-mark { background:var(--amber); }
 .morning-row[data-tone="bad"] .morning-mark { background:var(--red, #e5484d); }
@@ -31,5 +31,3 @@
 .morning-line { display:flex; align-items:center; gap:8px; margin:6px 10px 2px; padding:6px 10px; border:1px solid var(--border); border-radius:10px; background:var(--surface); font-size:12px; color:var(--text-2); }
 .morning-line .morning-line-text { flex:1 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .morning-line-open .morning { margin:6px 10px; max-width:none; padding:12px; }
-.pulse-board { max-width:720px; }
-.st-input.st-pulse-slots { width:180px; text-align:left; }

@@ -149,8 +149,14 @@ export async function showBrowsers(page: Page, ...ids: string[]): Promise<void> 
 }
 
 /** Picks `value` in a custom Select (components/Select.tsx: a trigger button and a portalled listbox, no native
- *  <select>, so no selectOption); its value is the trigger's data-value. */
+ *  <select>, so no selectOption); its value is the trigger's data-value. A segmented choice (SettingsPage.tsx Segmented,
+ *  a radiogroup with the same data-value) is picked by its radio. */
 export async function choose(select: Locator, value: string): Promise<void> {
+  if ((await select.getAttribute('role')) === 'radiogroup') {
+    await select.locator(`[role="radio"][data-value="${value}"]`).click();
+    await expect(select).toHaveAttribute('data-value', value);
+    return;
+  }
   await select.click();
   const testid = await select.getAttribute('data-testid');
   await select.page().getByTestId(`${testid}-list`).locator(`[role="option"][data-value="${value}"]`).click();
@@ -181,7 +187,7 @@ export async function demoLayout(app: ElectronApplication): Promise<Layout> {
 }
 
 /** Opens detail pages whose sidebar entries depend on the user's role (ADR 0068). */
-const GO_KEY = { home: 'h', agenti: 'a', task: 'o', dashboard: 'd', idee: 'i', costi: 'c', qualita: 'q', regole: 'l', memoria: 'y', classificatori: 'k', collegamenti: 'b', script: 't', log: 'n', confronto: 'm', skill: 's', impostazioni: 'p', guida: 'e', registrazioni: 'v', impara: 'x' } as const;
+const GO_KEY = { home: 'h', agenti: 'a', task: 'o', dashboard: 'd', idee: 'i', andamento: 'c', costi: 'c', qualita: 'q', regole: 'l', memoria: 'y', classificatori: 'k', collegamenti: 'b', script: 't', log: 'n', skill: 's', impostazioni: 'p', guida: 'e', registrazioni: 'v', impara: 'x' } as const;
 export async function goPage(page: Page, id: keyof typeof GO_KEY): Promise<void> {
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press('g');

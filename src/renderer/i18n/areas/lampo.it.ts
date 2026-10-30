@@ -10,7 +10,7 @@ export const lampoIt = {
   'lampo.start': 'Apri Flash',
   'lampo.empty': 'Chiedi qualcosa: risponde in pochi secondi.',
   'lampo.toWork': 'Fanne un lavoro',
-  'lampo.toWorkTip': 'Prepara nell’Orchestrator una bozza con la tua ultima domanda e la risposta di Flash: la mandi tu.',
+  'lampo.toWorkTip': 'Flash scrive per l’Orchestrator un prompt completo (obiettivo, contesto, cosa fare, vincoli, quando è fatto) da tutta la conversazione: lo trovi come bozza, la mandi tu.',
   'lampo.draft': (p: { question: string; answer: string }) => `Da Flash. La mia domanda: «${p.question}»${p.answer ? `\nLa sua risposta: «${p.answer}»` : ''}\nFanne un lavoro: `,
   'lampo.clear': 'Svuota il contesto (come /clear)',
   'lampo.cleared': 'Flash svuotato: riparte da zero.',

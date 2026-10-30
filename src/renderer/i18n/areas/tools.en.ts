@@ -94,8 +94,6 @@ export const toolsEn: typeof toolsIt = {
   'tools.skillsPage.theAgent': 'the agent',
   'tools.skillsPage.theSkill': 'the skill',
 
-  // Compare: model comparison labels
-
   // Foreign: item origin labels
   'tools.foreign.otherChat': "another chat",
   'tools.foreign.anAgent': 'an agent',
@@ -171,8 +169,7 @@ export const toolsEn: typeof toolsIt = {
   'tools.keys.denyLabel': 'Deny',
   'tools.keys.denyHint': 'Esc',
 
-  // Routing: task kinds and routing labels
-  'tools.routing.kindAny': 'Any',
+  // The kinds of work (lib/work-kinds.ts)
   'tools.routing.kindQaRun': 'QA and testing',
   'tools.routing.kindReview': 'Review',
   'tools.routing.kindBugFix': 'Bug fix',

@@ -8,13 +8,12 @@ vi.mock('../../src/renderer/store/workflows', () => ({ reloadWorkflows: vi.fn(),
 vi.mock('../../src/renderer/lib/later', () => ({ openQueue: vi.fn() }));
 vi.mock('../../src/renderer/store/ui', () => ({ toast: vi.fn() }));
 vi.mock('../../src/renderer/components/AgentStrips', () => ({ AgentStrips: () => createElement('section', { 'data-testid': 'agents' }), AgentStripsActions: () => createElement('nav') }));
-vi.mock('../../src/renderer/components/CloudStrips', () => ({ CloudStrips: () => createElement('section', { 'data-testid': 'cloud-agents' }) }));
 import { RecapButton, RECAP } from '../../src/renderer/components/WorkCockpit';
 import { Home } from '../../src/renderer/brain/pages/Home';
 describe('agent-only Home and actionable coordination', () => {
   it('mounts the agent workspace without a work summary board or durable approval controls', () => {
     const html = renderToStaticMarkup(createElement(Home, { nav: vi.fn() }));
-    expect(html).toContain('data-testid="agents"'); expect(html).toContain('cloud-agents');
+    expect(html).toContain('data-testid="agents"'); expect(html).not.toContain('cloud-agents');
     expect(html).not.toMatch(/work-cockpit|work-routine|work-thread/);
   });
   it('keeps the action visible but disabled before an Orchestrator is configured', () => {

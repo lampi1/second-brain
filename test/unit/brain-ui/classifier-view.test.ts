@@ -3,7 +3,7 @@
 // loop's data shape, the weekly series with gaps, k/n beside a share, and the advice: only from 20 cases up and only
 // when it ends with something to do (ADR 0101: no "Lo sapevi?" on 5 cases, no "sta imparando" trend, no calibration).
 import { describe, expect, it } from 'vitest';
-import type { ClassifierCard, ClassifierWeek, ClassifiersState } from '../../../src/shared/brain-model';
+import type { ClassifierCard, ClassifierWeek } from '../../../src/shared/brain-model';
 import { cardViews, emptyCard, facts, fromEstimates, fromMain, fromTaskAccuracy, isoWeekOf, hitSeries, hitTrend, kOfN, MIN_FACT, sliceLabel, successSeries, weekLabel } from '../../../src/renderer/lib/classifier-view';
 import type { LearnPolicy } from '../../../src/renderer/brain/lib/learn';
 
@@ -11,9 +11,9 @@ const wk = (week: string, decisions: number, hits: number, known = 0, ok = 0): C
 const card = (o: Partial<ClassifierCard>): ClassifierCard => ({ ...emptyCard('kind'), ...o });
 
 describe('classifier view', () => {
-  it('lists the five cards in order, empty when main sent nothing; no card for the retired estimator', () => {
+  it('lists the cards in order, empty when main sent nothing; no card for the retired estimator nor the model (ADR 0210)', () => {
     const v = cardViews(null, undefined);
-    expect(v.map(c => c.id)).toEqual(['kind', 'model', 'tasks', 'jobkind']);
+    expect(v.map(c => c.id)).toEqual(['kind', 'tasks', 'jobkind']);
     expect(v.every(c => c.decisions === 0 && c.hit.value === null)).toBe(true);
     expect(v[0]).not.toHaveProperty('progress');
   });
@@ -73,15 +73,12 @@ describe('classifier view', () => {
     expect(facts(fromMain(card({ decisions: 40, slices: [{ key: 'review', count: 38, known: 0, ok: 0, avgCostUsd: null }, { key: 'altro', count: 2, known: 0, ok: 0, avgCostUsd: null }] })))).toEqual([]);
   });
 
-  it('compares the cost of models and job kinds only on 10 cases a side, with the action', () => {
-    const sources: ClassifiersState['sources'] = [{ source: 'agent', chats: 7 }, { source: 'table', chats: 3 }];
-    const model = fromMain({ ...emptyCard('model'), decisions: 30, slices: [{ key: 'claude-opus-5-5', count: 16, known: 0, ok: 0, avgCostUsd: 3 }, { key: 'claude-haiku-5-5', count: 14, known: 0, ok: 0, avgCostUsd: 0.5 }] });
-    expect(facts(model, sources)).toEqual(['Una chat su Opus 5.5 costa in media 6× una su Haiku 5.5 (16 e 14 chat): se gli esiti sono simili, scegli il più leggero nel profilo del ruolo.']);
-    const few = fromMain({ ...emptyCard('model'), decisions: 10, slices: [{ key: 'claude-opus-5-5', count: 6, known: 0, ok: 0, avgCostUsd: 3 }, { key: 'claude-haiku-5-5', count: 4, known: 0, ok: 0, avgCostUsd: 0.5 }] });
-    expect(facts(few, sources)).toEqual([]);
+  it('compares the cost of job kinds only on 10 cases a side, with the action', () => {
+    const few = fromMain({ ...emptyCard('jobkind'), decisions: 10, hit: { value: 1, n: 10 }, slices: [{ key: 'app-feature', count: 6, known: 0, ok: 0, avgCostUsd: 3 }, { key: 'writing', count: 4, known: 0, ok: 0, avgCostUsd: 0.25 }] });
+    expect(facts(few)).toEqual([]);
     const job = fromMain({ ...emptyCard('jobkind'), decisions: 30, hit: { value: 1, n: 30 }, slices: [{ key: 'app-feature', count: 12, known: 0, ok: 0, avgCostUsd: 3 }, { key: 'writing', count: 18, known: 0, ok: 0, avgCostUsd: 0.25 }] });
     // one taxonomy (ADR 0186): the cost ledger's kinds read like the routing table's
     expect(facts(job)[0]).toBe('Una «Funzione nuova» costa in media 12× una «Scrittura» (12 e 18 lavori): è il primo posto dove cercare un risparmio, un modello più leggero o una skill.');
-    expect(sliceLabel('model', '—')).toBe('predefinito del motore');
+    expect(sliceLabel('jobkind', 'writing')).toBe('Scrittura');
   });
 });

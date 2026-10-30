@@ -245,7 +245,7 @@ test('README showcase: Memoria, agent levels, Orchestrator and Flash, reactions'
   await page.keyboard.type('thanks!');
   await page.keyboard.press('Enter');
   const react = page.getByTestId('tile-orchestrator').locator('.msg-user .msg-react').last();
-  await expect(react).toHaveText('👍', { timeout: 15_000 });
+  await expect(react).toHaveText('🙏', { timeout: 15_000 });
   await page.waitForTimeout(500);
   // from the question before it (a written answer) down to the thanks with its reaction
   const users = page.getByTestId('tile-orchestrator').locator('.msg-user');
@@ -257,6 +257,9 @@ test('README showcase: Memoria, agent levels, Orchestrator and Flash, reactions'
 test('README screenshot: Connettori', async () => {
   // 8. Impostazioni → Connettori: the MCP servers the app gives the agents, as cards with state, tools and fixes (ADR 0086)
   await page.keyboard.press('Control+,');
+  // the Settings page as it opens: the sections on the left, search, the essentials first (ADR 0207)
+  await expect(page.getByTestId('settings-page')).toBeVisible({ timeout: 30_000 });
+  await save('settings');
   const hub = page.getByTestId('st-group-connectors').getByTestId('connectors-hub');
   await expect(hub.getByTestId('hub-server-github')).toBeVisible({ timeout: 30_000 });
   await hub.getByTestId('hub-servers').evaluate(el => el.scrollIntoView({ block: 'start' }));
@@ -286,7 +289,7 @@ test('README showcase: the Strategist\'s plan to approve in the questions window
   await save('plan', page.getByTestId('qwin'));
 });
 
-test('README showcase: voice, Log, recordings, classifiers, quality, learn, costs, the maintenance notice', async () => {
+test('README showcase: voice, Log, recordings, classifiers, quality, learn, costs, trends, the maintenance notice', async () => {
   test.setTimeout(180_000);
   // the plan's questions window is done: every request from here on is set aside, as a user busy elsewhere would
   await keepQuestionsAside(page);
@@ -328,17 +331,20 @@ test('README showcase: voice, Log, recordings, classifiers, quality, learn, cost
   const db = (await page.getByTestId('rec-detail').boundingBox())!;
   await save('recordings', { ...column, height: Math.round(Math.min(column.height, db.y + db.height + 14 - column.y)) });
 
-  // Classifiers: the small sorters that decide by themselves at zero tokens, each card with its numbers
+  // Classifiers: the small sorters that decide by themselves at zero tokens, each card with its numbers (a section of
+  // Qualità since ADR 0210; the old id lands there)
   await goPage(page, 'classificatori');
   await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
+  const cls = page.getByTestId('an-panel-qualita').getByTestId('cls-summary');
+  await cls.scrollIntoViewIfNeeded({ timeout: 30_000 });
   await page.waitForTimeout(800);
-  await save('classifiers', await frameOf(page.getByTestId('page-classificatori').locator('h1').first()));
+  await save('classifiers', await frameOf(cls));
 
   // Quality: four measured numbers about the AI's mistakes, each with its source
   await goPage(page, 'qualita');
-  await expect(page.getByTestId('page-qualita').getByTestId('bx-q-trovati')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('an-panel-qualita').getByTestId('bx-q-trovati')).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
-  await save('quality', await frameOf(page.getByTestId('page-qualita').getByTestId('bx-q-trovati')));
+  await save('quality', await frameOf(page.getByTestId('an-panel-qualita').getByTestId('bx-q-trovati')));
 
   // Learn: a saved lesson about a PR on the blackboard, its diagram growing piece by piece
   await goPage(page, 'impara');
@@ -346,14 +352,22 @@ test('README showcase: voice, Log, recordings, classifiers, quality, learn, cost
   await page.getByTestId('impara-lessons').locator('.ip-card').first().locator('.ip-card-open').click();
   await expect(page.getByTestId('impara-player')).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(1500); // the diagram draws in
-  await save('learn', { ...column, height: 800 });
+  // the player as it is laid out now (the board, the piece and the Studio beside it), not the Log's column
+  const pb = (await page.getByTestId('impara-player').boundingBox())!;
+  await save('learn', { x: Math.round(pb.x), y: Math.round(pb.y), width: Math.round(pb.width), height: Math.round(Math.min(pb.height, H - pb.y)) });
 
   // Costs: where the money goes, from the recorded chats, no tokens spent to know it
   await goPage(page, 'costi');
-  const costs = page.getByTestId('brain-page-costi');
+  const costs = page.getByTestId('an-panel-costi');
   await expect(costs).toBeVisible({ timeout: 30_000 });
   await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
   await save('costs', await frameOf(costs));
+
+  // Trends › Usage: the local counter of the pages and actions really used, zero tokens (ADR 0202)
+  await page.getByTestId('an-tab-uso').click();
+  await expect(page.getByTestId('use-tab')).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(500);
+  await save('trends', await frameOf(page.getByTestId('use-tab')));
 
   // Maintenance: one click, then the celebrating notice over Memoria when it ends
   await page.getByTestId('nav-memoria').click();

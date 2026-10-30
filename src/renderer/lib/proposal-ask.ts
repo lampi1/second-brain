@@ -26,7 +26,7 @@ export interface CardWords {
   who?: string;
 }
 
-const who = (id: string | undefined): string => (id === 'pulse' ? t('alive.pulse.title') : id && isRoleId(id) ? roleName(id) : id || t('proposals.app'));
+const who = (id: string | undefined): string => (id && isRoleId(id) ? roleName(id) : id || t('proposals.app'));
 const level = (tier: string | undefined): string => (tier && (['light', 'mid', 'top'] as const).includes(tier as never) ? t(`proposals.tier.${tier as 'light'}`) : tier ?? '');
 const folder = (p: string): string => p.replace(/[\\/]+$/, '').split(/[\\/]/).pop() || p;
 /** A list of names in words: «a, b e c». */
@@ -72,10 +72,6 @@ export function cardWords(c: Pick<Proposal, 'ask' | 'title' | 'content' | 'appli
       const n = a.roles.length;
       const yes = [tier ? t('proposals.yes.tier', { roles, tier, n }) : '', a.skills.length ? t('proposals.yes.tierSkills', { roles, skills, n }) : ''].filter(Boolean).join(' ');
       return { question: tier ? t('proposals.ask.tier', { roles, tier }) : t('proposals.ask.tierSkills', { roles, skills }), yes, no: t('proposals.no.tier'), lead: '', bodyLabel: t('proposals.why') };
-    }
-    case 'rule': {
-      const name = who(a.role);
-      return { question: t('proposals.ask.rule', { role: name }), yes: t('proposals.yes.rule', { role: name }), no: t('proposals.no.rule'), lead: c.title };
     }
     case 'policy':
       return { question: a.domain === 'routing' || a.domain === 'notifications' ? t(`proposals.ask.policy.${a.domain}`) : t('proposals.ask.policy.other', { domain: a.domain }),

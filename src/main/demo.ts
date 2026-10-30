@@ -9,8 +9,8 @@
 import { timersFor } from './timers';
 const { setInterval, clearInterval } = timersFor('demo');
 import type {
-  AppQuality, Answer, BrainApiResult, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareExperiment, CompareState, LearnResult, EventMap,
-  FeedEvent, FileDiff, HandoffInfo, ImageAttachment, ModelsSeen, RoutingInfo, RoutingRow, NewChat, PendingRequest, Priority, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncState, Usage,
+  AppQuality, Answer, BrainApiResult, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, LearnResult, EventMap,
+  FeedEvent, FileDiff, HandoffInfo, ImageAttachment, ModelRegistry, ModelsSeen, NewChat, PendingRequest, Priority, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncState, Usage,
 } from '../shared/contract';
 import type { AgentChildren, ChildObservation } from '../shared/agents';
 import { sysEn } from '../shared/sys';
@@ -20,7 +20,8 @@ import type { BrainService, ChatService, FeedInput } from './services';
 import type { ConfigStore } from './brain/config';
 import { BrainApi, checkApiPath, type LocalApi } from './brain/api';
 import { KINDS } from './brain/live';
-import { DemoRouting } from './brain/routing-demo';
+import { DEMO_REGISTRY } from './brain/routing-demo';
+import { routeChat } from './brain/routing';
 import type { RouteRequest, RouteResult } from './brain/routing';
 import { electronNode } from './brain/node';
 import { log } from './log';
@@ -887,7 +888,7 @@ async function flashReply(run: Run, d: DemoChats): Promise<void> {
 
 async function orchestratorReply(run: Run, text: string, d: DemoChats): Promise<void> {
   await run.sleep(400);
-  // "Strategist" ticked, or an older "Veloce" (ADR 0034, 2026-10-20): she opens a work chat for the request, like app_create_chat
+  // "Strategist" ticked, or an older "Nuova chat" (ADR 0034, 2026-10-20): she opens a work chat for the request, like app_create_chat
   // (a Strategist one for "Strategist"), and says so in a line
   const nc = splitMode(text);
   if (nc.mode) {
@@ -899,7 +900,9 @@ async function orchestratorReply(run: Run, text: string, d: DemoChats): Promise<
     return;
   }
   // a thanks or an ok needs no answer: one emoji, shown as a reaction (shared/reaction.ts)
-  if (/^(grazie|ok|perfetto|ottimo|thanks)\b[\s!.]*$/i.test(text.trim())) { await run.say('👍'); return; }
+  // a reaction that fits, not always 👍 (ADR 0209)
+  const thanks = /^(grazie|ok|perfetto|ottimo|thanks)\b[\s!.]*$/i.exec(text.trim());
+  if (thanks) { await run.say(/^(ok)$/i.test(thanks[1]!) ? '👌' : /^(perfetto|ottimo)$/i.test(thanks[1]!) ? '🎉' : '🙏'); return; }
   const all = d.list().filter(c => !c.isOrchestrator);
   const waiting = all.filter(c => c.state === 'waiting' || c.pending > 0).map(c => c.title);
   const working = all.filter(c => c.state === 'running' || c.state === 'starting').map(c => c.title);
@@ -977,15 +980,9 @@ export class DemoBrain implements BrainService {
 
   // ---- brain data, plan windows, budget: honest "no data" in the demo
   recordJob(): { id: string } { return { id: `job-${++this.n}` }; }
-  // ---- model routing: a table in memory with the real rules (brain/routing-demo.ts)
-  private routing: DemoRouting | null = null;
-  private routingNow(): DemoRouting { return (this.routing ??= new DemoRouting(new Date(this.chats.now() - 2 * 3600_000).toISOString())); }
-  routingInfo(): RoutingInfo { return this.routingNow().info(); }
-  saveRouting(routes: RoutingRow[], reason: string | null, o: { exploration?: number; costWeight?: number; by?: string; evidence?: string | null; base?: number } = {}): RoutingInfo {
-    return this.routingNow().save(routes, new Date(this.chats.now()).toISOString(), { ...o, by: o.by ?? 'utente (Impostazioni)', reason });
-  }
-  restoreRouting(version: number, by?: string): RoutingInfo { return this.routingNow().restore(version, new Date(this.chats.now()).toISOString(), by); }
-  route(req: RouteRequest): RouteResult { return this.routingNow().route(req, this.chats.now()); }
+  // ---- model choice: the real resolution on the demo's registry (brain/routing-demo.ts)
+  modelRegistry(): ModelRegistry { return DEMO_REGISTRY; }
+  route(req: RouteRequest): RouteResult { return routeChat(req, DEMO_REGISTRY, null, this.chats.now()); }
   observeRouting(): void { /* the demo keeps no ledger */ }
   lastRoutingActual(): null { return null; }
   observeRoutingOutcome(): void { /* the demo keeps no ledger */ }
@@ -1000,26 +997,6 @@ export class DemoBrain implements BrainService {
     return c.ok && this.localApi.has(new URL(c.path, 'http://localhost').pathname) ? this.ownApi.get(c.path) : { ok: false, error: 'demo: nessun server del brain' };
   }
   serveApi(p: string, fn: (query: URLSearchParams) => unknown): void { this.localApi.set(p, fn); }
-  // one experiment like the real brain's, switched in memory
-  private compare: CompareExperiment[] = [{
-    name: 'cursor-vs-claude', title: 'Review roles: Cursor vs Claude Code',
-    description: 'Every run of the listed roles on Cursor is captured; Claude repeats the same task inside the app, read-only; a judge rates both blind.',
-    on: true, changedAt: '2026-10-10 08:09:21',
-    a: { engine: 'cursor', label: 'Cursor', agents: ['sentinel', 'scout', 'artisan'] },
-    b: { engine: 'claude', label: 'Claude', model: 'opus', effort: 'medium' },
-    judge: { engine: 'claude', label: 'Claude', model: 'sonnet' },
-    agents: [{ name: 'sentinel', on: true }, { name: 'scout', on: false }, { name: 'artisan', on: false }],
-    rounds: 4, cost: { a: { usd: 1.84, missing: 1 }, b: { usd: 6.12, missing: 0 } },
-  }];
-  async compareList(): Promise<CompareState> { return { ok: true, experiments: structuredClone(this.compare) }; }
-  async compareSet(experiment: string, on: boolean, agent?: string): Promise<CompareState> {
-    const e = this.compare.find(x => x.name === experiment);
-    if (!e) return { ok: false, error: `esperimento sconosciuto: ${experiment}` };
-    if (agent == null) e.on = on;
-    else { const a = e.agents.find(x => x.name === agent); if (!a) return { ok: false, error: `agente sconosciuto: ${agent}` }; a.on = on; }
-    e.changedAt = '2026-10-11 21:00:00';
-    return this.compareList();
-  }
   // the brain's self-improvement loop (/api/improve, 'learn:act'): estimates with a proposal waiting, routing without data
   private learnRows: Record<string, unknown>[] | null = null;
   private get learn(): Record<string, unknown>[] { return (this.learnRows ??= demoLearn(this.chats.now())); }

@@ -1,4 +1,4 @@
-// Italian UI texts of the Memoria hub (ADR 0122): its live head (headline, counters, latest changes), the tab bar, the
+// Italian UI texts of the Memoria hub (ADR 0122): its live head (counters, latest changes), the tab bar, the
 // «Approvate» tab with its trash and «Annulla», the «Idee» split with «Rispolvera», the Script tab's line, and the two
 // parts the Dashboard handed to Costi («Contesto adesso») and Qualità (the app's own errors). Spread into it.ts;
 // memory-hub.en.ts and memory-hub.de.ts have the same keys (typed by this object).
@@ -11,14 +11,14 @@ export const memoryHubIt = {
   'mh.pulse.proposals': 'Proposte da decidere', 'mh.pulse.proposalsHelp': 'Le proposte che aspettano un tuo sì o no: si aprono in Proposte.',
   'mh.pulse.working': 'Agenti al lavoro', 'mh.pulse.workingHelp': 'Le chat di lavoro aperte che stanno girando adesso (l’Orchestrator escluso).',
   'mh.pulse.waiting': 'Ti aspettano', 'mh.pulse.waitingHelp': 'Le chat ferme su una tua risposta: domanda o permesso.',
-  'mh.pulse.changes': 'Modifiche in 24 ore', 'mh.pulse.changesHelp': 'Quello che il brain ha cambiato nelle ultime 24 ore (skill, regole, memoria, ruoli, script), annullate escluse: i dettagli in Apprendimento.',
+  'mh.pulse.changes': 'Modifiche in 24 ore', 'mh.pulse.changesHelp': 'Quello che il brain ha cambiato nelle ultime 24 ore (skill, regole, memoria, ruoli, script), annullate escluse: i dettagli in Andamento → Apprendimento.',
   'mh.pulse.lines': 'Righe in memoria', 'mh.pulse.linesHelp': 'Le righe di elenco dei file di memoria: conoscenza, cose successe e memorie degli agenti. Si aprono in File.',
   'mh.activity': 'Ultime modifiche',
   'mh.activityEmpty': 'Ancora nessuna modifica: appariranno qui appena la manutenzione o tu cambiate qualcosa.',
   'mh.ago.now': 'adesso', 'mh.ago.min': (p: N) => `${p.n} min fa`, 'mh.ago.hours': (p: N) => (p.n === 1 ? '1 ora fa' : `${p.n} ore fa`), 'mh.ago.days': (p: N) => (p.n === 1 ? 'ieri' : `${p.n} giorni fa`),
   'mh.tabsLabel': 'Sezioni della memoria',
   'mh.tab.proposte': 'Proposte', 'mh.tab.approvate': 'Approvate', 'mh.tab.skill': 'Skill', 'mh.tab.regole': 'Regole', 'mh.tab.script': 'Script & Query',
-  'mh.tab.idee': 'Idee', 'mh.tab.file': 'File', 'mh.tab.apprendimento': 'Apprendimento', 'mh.tab.statistiche': 'Statistiche',
+  'mh.tab.idee': 'Idee', 'mh.tab.file': 'File', 'mh.tab.statistiche': 'Statistiche',
   'mh.badge': (p: N) => (p.n === 1 ? '1 proposta da decidere' : `${p.n} proposte da decidere`),
   // Approvate
   'mh.ap.lead': (p: N) => (p.n === 1 ? 'Una cosa è nel brain adesso. Un clic sul cestino la toglie; per qualche secondo puoi annullare.' : `${p.n} cose sono nel brain adesso. Un clic sul cestino ne toglie una; per qualche secondo puoi annullare.`),

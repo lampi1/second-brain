@@ -3,14 +3,14 @@
 // SB_DEMO=1 swaps in the demo services (demo-wiring.ts: fake chats, brain and browser tabs; SB_DEMO_FREEZE=1 = deterministic).
 // The types (Ctx, Wired) are in wiring-types.ts, the steps shared with the demo in wiring-shared.ts and two
 // self-contained builders (personal Browser, Impara) in wiring-builders.ts; this file re-exports what others import.
-import { app, powerSaveBlocker, safeStorage, shell } from 'electron';
+import { app, powerMonitor, powerSaveBlocker, safeStorage, shell } from 'electron';
 import os from 'node:os';
 import { LearningReviewService } from './brainmodel/learning-review';
 import { replayExecutor } from './brainmodel/replay-executor';
 import type { ChatSummary, CliStatus, Harness } from '../shared/contract';
 import { engineStatuses } from './cli';
 import { engineReadiness } from './engines/readiness';
-import { anthropicApi, engineInfos, engineOf, enginePathsFromEnv, priceEnginesOf } from './engines/registry';
+import { engineInfos, engineOf, enginePathsFromEnv, priceEnginesOf } from './engines/registry';
 import { RunFeedback } from './agents/run-feedback';
 import { qualifiedSkillsLine, runtimePluginName } from './agents/role-gate';
 import { createAgentPacks } from './agents/pack/wiring';
@@ -44,9 +44,6 @@ import { checkedDelegation } from '../shared/roles';
 import { createEngines } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
 import { RecordingStore } from './recordings/store';
-import { CloudService, cloudFile } from './cloud/service';
-import { realExec, realHttp } from './cloud/exec';
-import { CURSOR_CLOUD_KEY } from './cloud/cursor';
 import { EngineSweeper } from './chats/sweep';
 import { ChatManager, workBehind } from './chats/manager';
 import type { BrainService, ChatService } from './services';
@@ -83,6 +80,7 @@ import { forcedSampler, OsLoadSampler } from './chats/admission';
 import { ProductSync } from './sync';
 import { startHealthLog } from './perf';
 import fs from 'node:fs';
+import { ProfileService } from './brain/profile';
 import { attachHeldNews } from './chats/held-news';
 import { ReplyRules } from './chats/reply-rules';
 import { TaskService } from './tasks/service';
@@ -101,10 +99,9 @@ import { releaseId } from './release';
 import { sharedDir } from './platform';
 import { HeadlessRunner } from './compare/headless';
 import { OneShotService } from './agents/oneshot';
-import { CompareQueue, queueAllowed } from './compare/queue';
 import { DelegateWorktrees, gitWorktrees } from './agents/worktrees';
 import { stageDelegatedChanges, stageDelegatedChangesMany } from './agents/delegation-integration';
-import { JudgeSampler, judgeSamplingOn } from './agents/judge-sample';
+import { DEFAULT_CAP_USD, JudgeSampler, judgeSamplingOn, judgingEstimate, roleShares } from './agents/judge-sample';
 import { COMPACT_WINDOW } from './brain/settings-schema';
 import { setRecorder } from './chats/drift';
 import { HybridSearch, workerFileNextTo } from './search/hybrid/service';
@@ -147,10 +144,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // Retire the legacy global quiet flag before notifications start; postponement is request-local in the renderer.
   const later = createLater(ctx);
   later.set(false);
-  // the brain's estimates run (and the sample judge it starts) gets the app's text endpoint on the user's API credits;
-  // writing rows «Sui crediti API» get the Anthropic API engine when it may run (both bound below, ADR 0052)
+  // the brain's estimates run (and the sample judge it starts) gets the app's text endpoint on the user's API credits
+  // (bound below, ADR 0052)
   let scriptEnv: () => Record<string, string> = () => ({});
-  let apiRoute: () => Harness | null = () => null;
   // the brain's scripts and changelog (ADR 0076), read from the brain folder once it is known (created first: the
   // brain's watcher reports their files)
   const brainChangelog = new BrainChangelog(() => brain.info().brainRoot);
@@ -175,7 +171,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     download: !process.env.SB_TEST, onStatus: st => ctx.emitter.emit('search:status', st),
   });
   const brain: BrainService = await createBrain({ emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, skipChat: id => isOwn(id), held: e => later.get().on && REQUEST_KINDS.has(e.kind),
-    scriptEnv: () => scriptEnv(), apiRoute: () => apiRoute(), onFile: f => { hybrid.fileChanged(); onScriptFile(f); } });
+    scriptEnv: () => scriptEnv(), onFile: f => { hybrid.fileChanged(); onScriptFile(f); } });
   // the brain's scripts and changelog (ADR 0076): the Script and Changelog pages, brain_scripts for every chat, the
   // Orchestrator's write tools (attachAppTools below); a change on disk reloads both pages
   brain.serveApi('/api/scripts', () => brainScripts.list());
@@ -200,19 +196,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the brain's engines are read before the chats restore: a chat on one of them can resume (ADR 0046)
   const engines = createEngines({ userData: ctx.userData, emitter: ctx.emitter, cipher: safeStorageCipher(safeStorage), brainRoot: () => brain.info().brainRoot, settings: brain });
   const textTool = mountTextTool(mcp, engines.text);
-  // cloud agents (ADR 0080): the vendors' lists polled only while the window is on screen; tests never reach a vendor
-  const cloud = new CloudService({
-    file: cloudFile(ctx.userData), emit: st => ctx.emitter.emit('cloud:changed', st), exec: realExec,
-    http: process.env.SB_TEST || process.env.VITEST ? () => Promise.reject(new Error('i test non chiamano Cursor')) : realHttp,
-    cursorKey: () => engines.keyFor(CURSOR_CLOUD_KEY), engineOn: h => engineOn(brain.settings(), h),
-    budget: () => { const b = brain.settings().budget; return { limitUsd: b.enabled && b.cursor.mode !== 'off' ? b.cursor.dailyUsd : null, localTodayUsd: brain.usage().cursorTodayUsd ?? 0 }; },
-    addSpend: usd => engines.addSpend(CURSOR_CLOUD_KEY, usd),
-    visible: () => { const w = ctx.window(); return !!w && !w.isDestroyed() && w.isVisible() && !w.isMinimized(); },
-  });
-  cloud.startPolling();
+  // the cloud agents (ADR 0080) went with ADR 0201: the list of the ones started is erased at start (nothing once gone)
+  try { fs.rmSync(path.join(ctx.userData, 'cloud-agents.json'), { force: true }); } catch (e) { log.warn('wiring', 'old cloud-agents.json not erased', { cause: errText(e) }); }
   // live turn costs and the Claude model list at the brain's per-model list prices (harness/models.json, else the
   // release template's), re-read at most every 30 s; set before the catalog reads its models (issue #96)
-  setPriceTable(priceTableSource(() => brain.routingInfo().registry, () => { try { return path.join(templateRoot(), 'harness', 'models.json'); } catch { return null; } }));
+  setPriceTable(priceTableSource(() => brain.modelRegistry(), () => { try { return path.join(templateRoot(), 'harness', 'models.json'); } catch { return null; } }));
   const agents = createAgentCatalog(ctx, brain, engines, () => ({ ...cliCache, ...engineReadiness() }));
   // Probe only after registry/trust initialization; reconcile untouched seeds when readiness arrives and tell the
   // renderer (issue #96: the role editor showed the startup snapshot). Tests never run installed vendors.
@@ -232,7 +220,6 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     return { scope: { roleId: portableId(chat.agent.id), project: chat.cwd }, sourceRunId: chat.run.runId };
   } }));
   scriptEnv = () => ({ [TEXT_ENV]: textTool.url() });
-  apiRoute = () => { const e = anthropicApi(); return e && engineOn(brain.settings(), e.id) && engines.hasKey(e.id) ? e.id : null; };
 
   // Claude chats through the user's own `claude` CLI (SB_CLAUDE_PATH: a fake CLI for e2e tests); each chat gets its own
   // browser endpoint, so it sees and drives only its tabs.
@@ -573,10 +560,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   addChatTools(strategyTools(manager, awayOn));
   addChatTools(workDecisionTools({ chats: manager, workflows }));
-  // the independent reviews of finished runs (agents/judge-sample.ts): they spend tokens, so they run only in the user's
-  // own app, never in tests or an agent's hidden run (judgeSamplingOn, issue #112), and only with the Agenti switch on
+  // the independent reviews of finished runs (agents/judge-sample.ts, ADR 0203): a sample, reviewed once a night by one
+  // hidden Sentinel run (no chat, no strip) under the daily cap; they spend tokens, so they run only in the user's own
+  // app, never in tests or an agent's hidden run (judgeSamplingOn, issue #112), and only with the Agenti switch on
+  const sentinel = () => agents.list().profiles.find(p => p.id === 'sentinel');
+  const judgeShares = () => roleShares(manager.runs.list(), new Map(manager.runMetrics().flatMap(m => m.standing ? [[m.agentId, m.standing] as const] : [])),
+    agents.list().profiles, id => agents.history(id));
   const judgeSampler = new JudgeSampler({ file: path.join(ctx.userData, 'judge-samples.json'), runs: () => manager.runs.list(),
-    chat: id => manager.list().find(c => c.id === id), create: req => manager.create(req, 'app'),
+    chat: id => manager.list().find(c => c.id === id),
     judging: () => {
       const st = brain.settings(), on = st.judging === true;
       let since = Number(st.judgingSince) || 0;
@@ -584,21 +575,28 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       if (on && !since) { since = Date.now(); void brain.setSettings({ judgingSince: since }).catch(e => log.warn('agents', 'judging start not saved', { cause: errText(e) })); }
       return { on, since };
     },
-    judgeEngine: () => agents.list().profiles.find(p => p.id === 'sentinel')?.engine ?? 'claude',
+    capUsd: () => Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD,
+    shares: judgeShares,
+    reviewer: () => { const p = sentinel(); return p ? { engine: p.engine, model: p.model, effort: p.effort ?? null, version: p.activeVersion, instructions: p.instructions } : null; },
     refusal: h => !engineOn(brain.settings(), h) ? 'engine switched off' : !agentsMayOpen(brain.settings(), h) ? 'agents may not use this engine' : null,
+    // a hidden read-only session (compare/headless.ts): never a chat, never on the Grindhouse (owner, 2026-10-30)
+    review: req => headless.run({ ...req, round: 'review' }),
+    store: manager.runs,
     feedback: (a, by) => runFeedback.recordFeedback(a, by),
     // a run its receipts decide is not reviewed (ADR 0130)
-    receipts: (runId, verdict, note) => runFeedback.recordReceipts(runId, verdict, note) });
+    receipts: (runId, verdict, note) => runFeedback.recordReceipts(runId, verdict, note),
+    idleMs: () => powerMonitor.getSystemIdleTime() * 1000,
+    away: awayOn,
+    startedAt: Date.now(),
+    journal: logEvent });
   const judging = judgeSamplingOn(process.env);
-  const judgeTick = () => { void judgeSampler.tick().catch(e => log.warn('agents', 'judge sample tick failed', { cause: errText(e), hint: 'tried again in 30 minutes' })); };
-  // a run that ends is reviewed soon after (every run with the switch on; a review's own end frees a slot)
+  const judgeTick = () => { void judgeSampler.tick().catch(e => log.warn('agents', 'judge sample tick failed', { cause: errText(e), hint: 'tried again in 5 minutes' })); };
+  // a run that ends gets its free receipt verdict soon after
   const judgeSoon = () => { if (judging.on && brain.settings().judging === true) setTimeout(judgeTick, 5_000).unref(); };
   loopRef.current = { ended: run => { loop.hooks.ended(run); void judgeSampler.ended(run).finally(judgeSoon); }, outcome: run => loop.hooks.outcome(run) };
-  // first a few minutes after the start (a restart within 30 minutes used to postpone it again), then every 30 minutes
+  // every 5 minutes, the first after the startup rush: the nightly batch needs the night window or an idle moment
   log.info('agents', judging.on ? 'judge samples scheduled' : 'judge samples off', { data: { why: judging.why } });
-  const judgeFirst = judging.on ? setTimeout(judgeTick, 3 * 60_000) : null;
-  judgeFirst?.unref();
-  const judgeTimer = judging.on ? setInterval(judgeTick, 30 * 60_000) : null;
+  const judgeTimer = judging.on ? setInterval(judgeTick, 5 * 60_000) : null;
   judgeTimer?.unref();
   const lifecycleTimer = prodPollers ? setInterval(() => loop.tick(), 10_000) : null;
   lifecycleTimer?.unref();
@@ -608,13 +606,20 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
   // routine packages the Orchestrator authors (ADR 0175): <userData>/routines/<id>/routine.json, the Routine section's store
   const routinePackageStore = createFolderPackageStore(path.join(ctx.userData, 'routines'));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, routinePackages: () => routinePackageStore, personal, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), cloud, agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, routinePackages: () => routinePackageStore, personal, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
       agents: { list: () => agents.list(), save: (draft, id, reason) => agentPacks.learning.save(draft, id, reason), history: id => agents.history(id), restore: (id, version) => agents.restoreVersion(id, version) },
-      mcp: { state: () => mcpServers.state(), save: a => mcpServers.save(a), setAccess: a => mcpServers.setAccess(a) },
+      mcp: { state: () => mcpServers.state(), save: a => mcpServers.save(a), setAccess: a => mcpServers.setAccess(a),
+        agentSave: (def, previousId) => mcpServers.agentSave(def, previousId), agentRemove: id => mcpServers.agentRemove(id), agentAccess: (role, server, access) => mcpServers.agentAccess(role, server, access),
+        undo: key => mcpServers.undo(key), test: id => mcpServers.test(id) },
+      // connector changes (ADR 0207): a feed card with «Annulla»; the add form opened prefilled (no secret in it)
+      announce: e => brain.publish([e]),
+      openForm: draft => ctx.emitter.emit('ui:command', { action: 'mcpDraft', value: JSON.stringify(draft) }),
       later: { get: () => later.get(), set: on => later.set(on) },
+      // Il mio profilo (ADR 0207): the page's own reader and writer of me.md (stateless: each save checks the revision)
+      profile: (() => { const p = new ProfileService({ root: () => brain.settings().brainRoot, template: (() => { try { return fs.readFileSync(path.join(app.getAppPath(), 'brain-template', 'me.template.md'), 'utf8'); } catch { return ''; } })() }); return { get: () => p.get(), save: req => p.save(req) }; })(),
     } };
   appDeps.routines = { has: id => routines.has(id), exportForTerminal: id => routines.exportForTerminal(id), snapshot: () => routines.snapshot(), archive: () => routineArchive.snapshot(), run: ref => routines.run(ref) };
   attachAppTools(mcp, appDeps, source, false, orchestratorTokens);
@@ -649,26 +654,20 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     trash: p => (process.env.SB_TEST ? fs.promises.rm(p, { recursive: true, force: true }) : shell.trashItem(p)),
   });
 
-  // the comparison's side b (ADR 0046 §4): the runs the brain queues (harness/compare/app-queue.mjs), each a hidden
-  // read-only session on an engine the user turned on, with the app's own logins and keys (compare/headless.ts)
+  // hidden read-only sessions on an engine the user turned on, with the app's own logins and keys (compare/headless.ts):
+  // the one-shot jobs below use them (the brain's comparison queue they were built for went, ADR 0201)
   const headless = new HeadlessRunner({
-    userData: ctx.userData, settings: () => brain.settings(), keyFor: h => engines.keyFor(h), enginePaths: () => enginePathsFromEnv(), appVersion: app.getVersion(), registry: () => brain.routingInfo().registry,
+    userData: ctx.userData, settings: () => brain.settings(), keyFor: h => engines.keyFor(h), enginePaths: () => enginePathsFromEnv(), appVersion: app.getVersion(), registry: () => brain.modelRegistry(),
     // the other side's answers and the verdicts: never read by a run, whatever the brain lists
     denyRead: () => { const root = brain.info().brainRoot; return root ? [path.join(root, 'reviews', 'compare')] : []; },
   });
-  const compareRuns = new CompareQueue({
-    brainRoot: () => brain.info().brainRoot, node, runner: headless,
-    anyOn: async () => { const st = await brain.compareList(); return st.ok && st.experiments.some(e => e.on); },
-  });
   const oneShot = new OneShotService({ userData: ctx.userData, profile: id => agents.list().profiles.find(p => p.id === id),
-    settings: () => brain.settings(), registry: () => brain.routingInfo().registry,
+    settings: () => brain.settings(), registry: () => brain.modelRegistry(),
     hasKey: id => engines.hasKey(id), addApiSpend: (id, usd) => engines.addSpend(id, usd), fallback: () => brain.settings().jobs?.fallback ?? 'auto',
     headless, text: engines.text, runs: manager.runs });
   // «Chiedi alla Guida» (ADR 0196): one light one-shot on Flash's engine; the anchors are checked only in a run from the repo
   const guide = new GuideService({ runOnce: r => oneShot.runOnce(r), repoRoot: repoRootOf(path.dirname(fileURLToPath(import.meta.url))),
     index: lang => guideIndex({ window: ctx.window, settings: { schema: () => brain.settingsSchema(), get: () => brain.settings() }, tools: () => [], showValues: () => false }, lang) });
-  // only the user's stable app spends tokens on the brain's rounds (the dev instance is run by agents and tests)
-  if (queueAllowed(!!releaseId(), process.env)) compareRuns.start();
 
   // GitHub sync outcomes + product changes in the brain (stable instance only, never in tests): src/main/sync.ts
   let sync: ProductSync | null = null;
@@ -681,7 +680,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the kind of work by examples (ADR 0197): trained on the local embeddings only when Classificatori asks
   const kindModel = new KindModel({ runs: () => manager.runs.list(), embed: texts => hybrid.embed(texts, 'query'), ready: () => hybrid.status().model.state === 'ready' });
   const brainModel = new BrainModelService({ userData: ctx.userData, root: () => brain.info().brainRoot, home: process.env.SB_SKILLS_HOME || os.homedir(), kindModel: () => kindModel.state(),
-    catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), runsRevision: () => manager.runs.revision, routing: () => brain.routingInfo(),
+    catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), runsRevision: () => manager.runs.revision,
     correctionsSince: () => userCorrections.afterReportSince(),
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: !process.env.SB_TEST || process.env.SB_BRAIN_JOBS === '1',
     // the Memoria hub's trash (ADR 0122): a script's file, and the Script tab told at once
@@ -740,22 +739,23 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const morning = new MorningService({ file: path.join(ctx.userData, 'morning.json'), chats: () => manager.list(), runs: () => manager.runs.list(),
     pending: () => manager.pending().length + asks.pending().length,
     approvals: () => agents.list().profiles.filter(p => p.scope === 'role' && p.trial).length + lifecycleApi.read({}).proposals.filter(p => p.kind === 'tier').length,
-    tasks: () => tasks.get(), cloud: () => cloud.state().agents, changes: () => brainModel.changes(), api: p => brain.api(p),
+    tasks: () => tasks.get(), changes: () => brainModel.changes(), api: p => brain.api(p),
     stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
     workflows, routineArchive, routines, brainModel, research, memoryReview, learningReview, queries: brainQueries,
     morning,
     mcpServers,
-    cloud, chats, browser, personal, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
+    judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
+    chats, browser, personal, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
     updateChats: {
-      problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : compareRuns.working ? 'Un confronto tra modelli è ancora in corso.' : null),
+      problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
     },
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { routines.stop(); mcpServers.stop(); brainModel.stop(); cloud.shutdown(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([compareRuns.stop(), chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
-    killNow: () => { compareRuns.killNow(); manager.killAll(); runner.shutdown(); },
+    shutdown: async () => { routines.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), personal.shutdown(), brain.shutdown()]); },
+    killNow: () => { manager.killAll(); runner.shutdown(); },
   };
 }

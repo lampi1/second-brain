@@ -4,8 +4,10 @@
 // maximize, focus mode, Esc backing out one level, the floating Orchestrator and its tabs (ADR 0021), a new Orchestrator in place of
 // one ("Ricomincia da capo" on the same engine, "Cambia motore" on the other, optionally starting from a handoff of the
 // old one; "Pulisci" = the same engine, started empty), "Riprendi" of a long chat
-// in a new one, the brain pages' bridge ("Discuti") and the ui:command event from main.
+// in a new one, the brain pages' bridge ("Discuti") and the ui:command event from main. Page opens and the main actions
+// count in the local usage counter (lib/use-counter.ts, ADR 0202).
 // Used by App.tsx (keyboard), the command palette, the sidebar, the notification center, the top bar and the tiles.
+import { openMcpDraft } from './lib/mcp-servers';
 import type { EventMap, Harness, MorningNext, PendingRequest } from '@shared/contract';
 import type { RoutineRunRef } from '@shared/routines';
 import { routineChatIds, routineChatArg } from './lib/routine-chats';
@@ -21,6 +23,8 @@ import { setReporting } from './lib/viewports';
 import { makeLink, parseLink, visitSection } from './lib/notify';
 import { touch } from './lib/autoclose';
 import { hubRedirect } from './lib/memory-hub';
+import { trendRedirect } from './lib/andamento';
+import { trackPlace, track } from './lib/use-counter';
 import { isBusy } from './store/state';
 import { app, closeChat, closeTab, continueChat, createChat, createRoutedChat, dispatch, setChat, stop, stopAll } from './store/store';
 import { orchestratorIdOf } from './lib/orchestrator-route';
@@ -82,7 +86,7 @@ export async function renewOrchestrator(chatId: string, to: Harness, summary: bo
   const old = app.get().chats[chatId];
   if (!old?.isOrchestrator) return false;
   const prompt = summary ? orchestratorHandoff(chatId) : undefined;
-  // through the routing table (ADR 0032, kind orchestrator): the engine the user picked beats the row; the model and effort
+  // through chat:createRouted (ADR 0032, kind orchestrator): the engine the user picked beats the defaults; the model and effort
   // come from the row for that engine, else the engine's default as before; main keeps the Orchestrator role on it
   const n = await createRoutedChat({
     title: old.title, cwd: old.cwd, orchestrator: true, replaces: old.id, ...(prompt ? { prompt } : {}),
@@ -105,6 +109,7 @@ export async function renewOrchestrator(chatId: string, to: Harness, summary: bo
  *  work, ADR 0083): its input takes the keyboard for a new request; it plans and delegates. Without an Orchestrator yet, its
  *  column opens on "Crea l'Orchestrator". */
 export function newRequest(): void {
+  track('new-request');
   setOrchestratorOpen(true);
   const id = orchestratorId();
   if (!id) { toast(t('appText.actions.createOrchestrator'), 'info'); return; }
@@ -171,6 +176,9 @@ export function placeOf(target: string): Place | null {
   const [head = '', ...rest] = target.replace(/^#/, '').split('/');
   const page = ALIAS[head] ?? head;
   const arg = head === 'spunti' ? 'ia' : rest.join('/') || null;
+  // an old statistics page ("costi/30", "qualita") → its Andamento tab (ADR 0202)
+  const trend = trendRedirect(page, arg);
+  if (trend) return trend;
   if (page === 'home') return { page: 'home', element: arg };
   if (page === 'mappa' || isBrainPage(page)) return { page: page as Place['page'], arg };
   return null;
@@ -183,22 +191,28 @@ export function goTarget(target: string): void {
 }
 
 /** Old page names (app-control docs, links made before; the agents' workspace page is the Grindhouse since SPEC 19) → today's ids; "spunti" (the AI's ideas) opens Idee on "Dall'IA". */
-const ALIAS: Record<string, string> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', fatto: 'log', diario: 'log', workspace: 'home', grid: 'home', chat: 'home', chats: 'home', map: 'mappa', spunti: 'idee',esplora:'file', procedure: 'skill', procedura: 'skill', miglioramento: 'regole', dashboard: 'memoria' };
+const ALIAS: Record<string, string> = { oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', fatto: 'log', diario: 'log', workspace: 'home', grid: 'home', chat: 'home', chats: 'home', map: 'mappa', spunti: 'idee',esplora:'file', procedure: 'skill', procedura: 'skill', miglioramento: 'regole', dashboard: 'memoria', confronto: 'qualita' };
 
 /** Go to a place: a brain page (the Grindhouse holds the agents) or the map; `element` is highlighted for 1.5 s on arrival. */
 export function go(place: Place, opts: { push?: boolean } = {}): void {
   // Skill, Regole, Script, Idee and Apprendimento are tabs of Memoria (ADR 0122): their ids, links and G-keys land there
   const aliased = (ALIAS[place.page] ?? place.page) as string;
-  const hub = hubRedirect(aliased, (place.page as string) === 'spunti' ? 'ia' : place.arg);
+  // Costi, Qualità, Classificatori and Memoria's Apprendimento are tabs of Andamento (ADR 0202): same, before the hub
+  const trend = trendRedirect(aliased, place.arg);
+  if (trend) place = { ...place, ...trend };
+  const hub = trend ? null : hubRedirect(aliased, (place.page as string) === 'spunti' ? 'ia' : place.arg);
   if (hub) place = { ...place, ...hub };
   const page = (ALIAS[place.page] ?? place.page) as Place['page'];
   // a file opens in the viewer overlay above the page, which keeps its state; the old 'file' page route (sb://file/…,
   // sb://esplora/…, map and palette links) lands here too
-  if (page === 'file' && place.arg) { openViewer({ kind: 'file', arg: normalizeFileArg(place.arg) }); return; }
+  if (page === 'file' && place.arg) { track('file-open'); openViewer({ kind: 'file', arg: normalizeFileArg(place.arg) }); return; }
   // going to another place (the palette, a link, the sidebar, a toast) is leaving the file: the viewer closes
   closeViewer();
   if (page !== 'mappa' && !isBrainPage(page)) { toast(t('appText.actions.unknownPage', { page: place.page }), 'warn'); return; }
   const target: Place = { page:page==='file'&&!place.arg?'home':page, arg:page==='file'&&place.arg?normalizeFileArg(place.arg):(place.page as string) === 'spunti' ? 'ia' : place.arg ?? null, element: place.element ?? null };
+  // the usage counter (ADR 0202, zero tokens, local): one open per place change, never the same place again
+  const was = ui.get();
+  if (page === 'mappa' ? !was.map : (was.map || was.page !== target.page || (was.pageArg ?? null) !== (target.arg ?? null))) trackPlace(target.page, target.arg ?? null);
   if (page === 'mappa') setMap(true, target.arg ?? null);
     else { setMap(false); openPage(target.page as BrainPageId, target.arg ?? null); }
   if (page !== 'mappa') setRead(r => visitSection(visitSection(r, page, now()), page, now()));
@@ -275,6 +289,7 @@ export async function copyLink(link: string = currentLink()): Promise<void> {
 /** Ctrl+R: the Orchestrator column from anywhere, the page stays (the column is on every page, the
  *  3D map included): its input takes the keyboard. */
 export function toggleOrchestrator(): void {
+  track('orchestrator');
   setOrchestratorOpen(true);
   const r = orchestratorId();
   if (r) requestFocus(r);
@@ -290,6 +305,7 @@ export const brainBridge: DiscussBridge = {
   draftToOrchestrator(text, onSent) {
     const r = orchestratorId();
     if (!r) return false;
+    track('discuss');
     setDraft(r, text, () => onSent({ id: r, title: app.get().chats[r]?.title ?? 'Orchestrator' }));
     focusChat(r);
     return true;
@@ -352,7 +368,7 @@ export async function openInAppBrowser(url: string): Promise<void> {
 }
 
 /** Explicit user action from the toolbar/palette: an unowned blank tab, using existing native browser isolation. */
-export function newBrowser():Promise<void>{return openInAppBrowser('about:blank');}
+export function newBrowser():Promise<void>{track('new-browser');return openInAppBrowser('about:blank');}
 
 /** Opening a file is navigation only. Main resolves its scope when the viewer requests the bounded contents. */
 export function openFileViewer(raw:string,chatId?:string,routine?:RoutineRunRef):void{
@@ -455,6 +471,7 @@ export function focusRequest(req: PendingRequest): void {
 
 /** Ctrl+J: the oldest request first; pressed again, the next one. */
 export function nextThing(): void {
+  track('next-thing');
   const hidden = new Set(ui.get().hidden);
   const state = app.get(), work = workflowState.get();
   const plans = planAskKeys(state).map(planAskOf).filter((p): p is PlanAsk => !!p);
@@ -533,6 +550,7 @@ function closeFocusedTab(tabId: string): void {
 
 /** ■ Ferma tutto: no confirm for a single chat (cheap), a confirm when several are running. */
 export function stopAllAsk(): void {
+  track('stop-all');
   const busy = Object.values(app.get().chats).filter(isBusy);
   if (busy.length === 0) { toast(t('appText.actions.noneWorking'), 'info'); return; }
   if (busy.length === 1) { void stopAll(); return; }
@@ -552,6 +570,7 @@ export function toggleMaximize(key?: string | null): void {
 }
 
 export function toggleFocusMode(): void {
+  track('focus-mode');
   const u = ui.get();
   if (u.focusMode) { setFocusMode(null); return; }
   const s = app.get();
@@ -600,7 +619,8 @@ export function focusTile(index: number): void {
  *  brain page id), link (sb://…), notifications, back, forward, palette, next; and for tools/tests: clock (frozen demo
  *  time), layout off|on (stop/resume reporting browser view rects); closeTab (Ctrl+W typed inside a browser page);
  *  unblock (app_unblock: the questions window with every waiting request, the postponed ones too); prefs (app_config
- *  "view": theme, density, work profile, lib/app-map.ts). */
+ *  "view": theme, density, work profile, lib/app-map.ts); mcpDraft (app_config connector "form": Settings → Connettori with
+ *  the add form prefilled, ADR 0207). */
 export function uiCommand(cmd: EventMap['ui:command']): void {
   const v = cmd.value ?? '';
   switch (cmd.action) {
@@ -631,6 +651,7 @@ export function uiCommand(cmd: EventMap['ui:command']): void {
     case 'closeTab': closeTab(v); break;   // Ctrl+W inside a browser page (main browser/tabs.ts forwards it)
     case 'unblock': showQueue(); break; // the Orchestrator's recap (app_unblock, ADR 0135): everything waiting, «Ci penso dopo» too
     case 'prefs': applyViewPrefs(v); break;
+    case 'mcpDraft': if (openMcpDraft(v)) go({ page: 'impostazioni', arg: 'connectors' }); break; // app_config connector form (ADR 0207): the add form, prefilled, no secret in it
     case 'recImport': go({ page: 'registrazioni' }); void importFound(v); break; // app_recording_import (ADR 0154) // app_config area "view" (ADR 0149): theme, density, work profile; checked there
     default: break;
   }

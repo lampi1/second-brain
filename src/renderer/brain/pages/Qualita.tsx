@@ -10,7 +10,10 @@
 // Data: /api/tables (the brain: tables.errors, tables.quality, proposals) and /api/quality (main: turns, PRs, reopened
 // bugs); computations in lib/quality.ts and lib/stats.ts. Since the Dashboard left (ADR 0122), below the patterns: the
 // app's and the tools' own errors of this session (dashboard/AppErrors.tsx) and the errors grouped by meaning
-// (dashboard/Themes.tsx), the two parts of its Errori and Temi tabs Qualità did not have.
+// (dashboard/Themes.tsx), the two parts of its Errori and Temi tabs Qualità did not have. A tab of Andamento since ADR
+// 0202 (`embedded`: no title and no lead, which only repeated the four cards' numbers). Last, the Classificatori
+// (components/brain-model/ClassifiersSection.tsx), once a tab of their own: the routing table left and the small
+// sorters that remain measure the quality of the app's own automatic choices (ADR 0210).
 import { lazy, Suspense, type ReactNode } from 'react';
 import { normAppQuality, normTables } from '../types';
 import { FeedbackOrigins } from '../components/FeedbackOrigins';
@@ -30,6 +33,7 @@ import '../../styles/memory-hub.css';
 // app-side parts (they read the app's live store and actions): loaded when shown, so the brain pages stay importable alone
 const AppErrors = lazy(() => import('../../dashboard/AppErrors').then(m => ({ default: m.AppErrors })));
 const ThemesPanel = lazy(() => import('../../dashboard/Themes').then(m => ({ default: m.ThemesPanel })));
+const ClassifiersSection = lazy(() => import('../../components/brain-model/ClassifiersSection').then(m => ({ default: m.ClassifiersSection })));
 
 const STATUS: Record<string, { label: TextKey; tone: Tone }> = {
   tornato: { label: 'brainText.qualita.status.tornato', tone: 'bad' }, 'non-tornato': { label: 'brainText.qualita.status.nonTornato', tone: 'good' },
@@ -75,7 +79,7 @@ function CaughtFind({ c, counted }: { c: Caught; counted: boolean }) {
   </>;
 }
 
-export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
+export function Qualita({ nav, embedded = false }: { arg?: string; nav: Navigate; embedded?: boolean }) {
   const t = useBrain('/api/tables', normTables);
   const a = useBrain('/api/quality', normAppQuality);
   const d = t.data, app = a.data, q = d?.quality ?? null;
@@ -95,7 +99,7 @@ export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
 
   return (
     <>
-      <PageHead title={tr('brainText.qualita.title')} at={t.at} onRefresh={reload} refreshing={app?.reopen.refreshing}
+      <PageHead title={embedded ? undefined : tr('brainText.qualita.title')} at={t.at} onRefresh={reload} refreshing={app?.reopen.refreshing}
         lead={caught && rules && app ? <>
           {caught.per100 !== null ? <><b>{tr('brainText.qualita.leadCaught', { n: num(caught.per100) })}</b>{tr('brainText.qualita.leadCaughtRest')}</> : <>{tr('brainText.qualita.leadNotMeasured')}</>};{' '}
           <b>{tr('brainText.qualita.leadRules', { n: rules.tornato, of: rules.judged })}</b>{tr('brainText.qualita.leadRulesRest')}; {app.prs.at ? <><b>{tr('brainText.qualita.leadPrs', { n: app.prs.blocked.length })}</b></> : <>{tr('brainText.qualita.leadPrsUnread')}</>}; {app.reopen.at ? <><b>{tr('brainText.qualita.leadBugs', { n: app.reopen.bugs.length })}</b>{tr('brainText.qualita.leadBugsRest', { days: app.reopen.days })}</> : <>{tr('brainText.qualita.leadBugsUnread')}</>}.
@@ -231,6 +235,7 @@ export function Qualita({ nav }: { arg?: string; nav: Navigate }) {
       <Suspense fallback={null}>
         <Section title={tr('mh.q.appErrors')} note={tr('mh.q.appErrorsNote')} testId="bx-q-app-errors"><AppErrors /></Section>
       </Suspense>
+      <Suspense fallback={null}><ClassifiersSection /></Suspense>
     </>
   );
 }

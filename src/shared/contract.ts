@@ -8,7 +8,6 @@ import type { AgentImages } from './agent-images';
 import type { AgentCatalog } from './agents';
 import type { AppUpdateState, UpdateCheckpointRequest } from './app-update';
 import type { AutoCloseStatus } from './auto-close';
-import type { CloudState } from './cloud';
 import type { AgentsInvokeMap } from './contract/agents';
 import type { AppSourceState, CliStatus, Usage, AppInvokeMap } from './contract/app';
 import type { BrainInvokeMap } from './contract/brain';
@@ -18,7 +17,7 @@ import type { EngineInfo, Harness, EnginesInvokeMap } from './contract/engines';
 import type { FeedEvent, TasksState, FeedInvokeMap } from './contract/feed';
 import type { MediaInvokeMap } from './contract/media';
 import type { BudgetAlert, SettingChange, SettingProposal, Settings, SettingsInvokeMap } from './contract/settings';
-import type { AnswerLater, HeadlineState, HeldNewsState, OverlayAction, OverlayModel, SearchIndexStatus, SyncState, UiInvokeMap } from './contract/ui';
+import type { AnswerLater, HeldNewsState, OverlayAction, OverlayModel, SearchIndexStatus, SyncState, UiInvokeMap } from './contract/ui';
 import type { ImparaState, Lesson } from './lesson';
 import type { MaintenanceDone } from './maintenance-research';
 import type { McpServersState } from './mcp-servers';
@@ -26,8 +25,7 @@ import type { RecState } from './recordings';
 import type { RoutineRunDetail } from './routines';
 import type { VoiceHeard, VoiceSpeech, VoiceState } from './voice';
 import type { WorkThread } from './workflows';
-export type { MorningBrief, MorningChange, MorningCloud, MorningIdea, MorningNext, MorningOp, MorningOutcome, MorningPr, MorningRun, MorningStalled, MorningState } from './morning';
-export type { CloudAgent, CloudApplyResult, CloudCaps, CloudEngine, CloudMessage, CloudReady, CloudStartRequest, CloudState, CloudStatus } from './cloud';
+export type { MorningBrief, MorningChange, MorningIdea, MorningNext, MorningOp, MorningOutcome, MorningPr, MorningRun, MorningStalled, MorningState } from './morning';
 export * from './contract/engines';
 export * from './contract/chats';
 export * from './contract/browser';
@@ -101,19 +99,14 @@ export interface EventMap {
   'log:events': LogEvent[];
   /** a domain's sync status changed (ADR 0059) */
   'sync:state': SyncState;
-  /** a new headline (or the same after a failed refresh, source previous) */
-  'headline:changed': HeadlineState;
   /** what the app holds back for the Orchestrators changed (main/chats/held-news.ts, #88) */
   'orchestrator:heldChanged': HeldNewsState;
-  'pulse:changed': void;
-  'approvals:changed': void;
   /** the number of open proposals changed (Memoria's badge, ADR 0123) */
   'proposals:changed': { count: number };
   /** the maintenance started, moved (cost) or ended, or one of its cards changed (ADR 0132, 0153) */
   'maintenance:changed': void;
   /** one click's maintenance is over: what it made (the end notice, ADR 0153) */
   'maintenance:done': MaintenanceDone;
-  'cloud:changed': CloudState;
   'mcpservers:changed': McpServersState;
   /** voice mode (ADR 0152): the models or the download changed; the user said something (transcribed); speech started
    *  or stopped on the microphone */
@@ -141,22 +134,21 @@ export const INVOKE_CHANNELS = [
   'routines:image',
   'routines:archive',
   'work:lessons', 'work:lessonDecide', 'work:list', 'work:decide',
-  'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'approvals:list', 'approvals:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect', 'connectors:useToken',
-  'mcpservers:state', 'mcpservers:save', 'mcpservers:remove', 'mcpservers:setSecret', 'mcpservers:deleteSecret', 'mcpservers:setAccess', 'mcpservers:test', 'mcpservers:importScan', 'mcpservers:importApply',
+  'mcpservers:state', 'mcpservers:save', 'mcpservers:remove', 'mcpservers:setSecret', 'mcpservers:deleteSecret', 'mcpservers:setAccess', 'mcpservers:test', 'mcpservers:importScan', 'mcpservers:importApply', 'mcpservers:undo', 'mcpservers:activate',
   'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
   'app:createBrain', 'app:projectsFolder', 'app:pickProjects',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
   'chat:synthesize', 'memory:reviewList', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare', 'proposals:list', 'proposals:count', 'proposals:decide',
   'maintenance:run', 'maintenance:status', 'maintenance:stop',
   'agents:list', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'agents:judgingEstimate', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
-  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
+  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:copyFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
   'brain:share', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'queries:list', 'queries:get', 'queries:delete', 'brainmodel:noise', 'brainmodel:link', 'brainmodel:remove', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:prewarm', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'chat:undoTurn', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',
   'tasks:get', 'tasks:refresh', 'tasks:markRead', 'chat:branches',
-  'compare:list', 'learn:act', 'models:seen', 'routing:get', 'routing:save',
+  'learn:act', 'models:seen',
   'browser:handoffs', 'browser:handoffResolve', 'browser:handoffCopy', 'browser:envList',
   'personal:state', 'personal:open', 'personal:navigate', 'personal:go', 'personal:select', 'personal:close', 'personal:restore', 'personal:bookmarkAdd', 'personal:bookmarkRemove',
   'personal:sessionSave', 'personal:sessionOpen', 'personal:sessionRemove', 'personal:historyClear', 'personal:loginFill', 'personal:loginSave', 'personal:loginRemove', 'personal:loginCopy', 'personal:loginImport', 'personal:lend', 'personal:reclaim', 'personal:onScreen',
@@ -165,26 +157,24 @@ export const INVOKE_CHANNELS = [
   'clipboard:image',
   'orchestrator:ensure',
   'search:query', 'search:status', 'search:retryModel', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
-  'sync:get', 'sync:now', 'sync:resolve', 'headline:get', 'log:list',
-  'suggest:get', 'suggest:cancel', 'suggest:state',
+  'sync:get', 'sync:now', 'sync:resolve', 'log:list',
   'voice:state', 'voice:prepare', 'voice:listen', 'voice:audio', 'voice:commit', 'voice:speak', 'voice:cancelSpeech',
   'rec:state', 'rec:arm', 'rec:start', 'rec:chunk', 'rec:stop', 'rec:transcribe', 'rec:rename', 'rec:remove', 'rec:transcript', 'rec:find', 'rec:readFound', 'rec:open',
-  'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:clarify', 'impara:remove', 'impara:queue', 'impara:grade', 'impara:subject', 'impara:tutor', 'impara:tutorWarm',
+  'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:clarify', 'impara:topics', 'impara:remove', 'impara:queue', 'impara:grade', 'impara:subject', 'impara:tutor', 'impara:tutorWarm', 'impara:studio',
   'orchestrator:held', 'orchestrator:heldSeen',
-  'cloud:list', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:dismiss',
   'log:renderer',
   'proposals:shown', 'proposals:undoAuto',
   'guide:ask', 'guide:stale',
+  'usecount:add', 'usecount:report',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'routines:progress', 'work:changed',
-  'pulse:changed', 'approvals:changed', 'proposals:changed', 'maintenance:changed', 'maintenance:done',
+  'proposals:changed', 'maintenance:changed', 'maintenance:done',
   'update:state', 'update:checkpointRequest', 'update:checkpointRelease',
   'chat:autoCloseStatus',
   'agents:changed', 'agents:lifecycleChanged', 'avatars:changed',
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
-  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'tasks:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'source:state', 'later:changed', 'search:status', 'brainmodel:changed', 'queries:changed', 'sync:state', 'headline:changed',
-  'cloud:changed',
+  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'tasks:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'source:state', 'later:changed', 'search:status', 'brainmodel:changed', 'queries:changed', 'sync:state',
   'mcpservers:changed',
   'orchestrator:heldChanged',
   'scripts:changed',

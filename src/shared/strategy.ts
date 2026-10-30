@@ -43,9 +43,11 @@ export interface StrategyPlan {
   at: number;
   /** questions the user answered while it asked («Basta domande» too): none = it has not asked yet */
   asked?: number;
+  /** the user answered «Basta domande»: the plan may come now, whatever the count */
+  enough?: boolean;
 }
 
-export const STEPS_MIN = 1, STEPS_MAX = 8, STEP_TITLE_MAX = 120, STEP_DETAIL_MAX = 200, NO_QUESTION_MAX = 200, DONE_WHEN_MAX = 200, CLARIFIED_MAX = 8, CLARIFIED_TEXT_MAX = 120;
+export const STEPS_MIN = 1, STEPS_MAX = 8, STEP_TITLE_MAX = 120, STEP_DETAIL_MAX = 200, NO_QUESTION_MAX = 200, QUESTIONS_MIN = 3, QUESTIONS_MAX = 8, DONE_WHEN_MAX = 200, CLARIFIED_MAX = 8, CLARIFIED_TEXT_MAX = 120;
 /** what the user's «Approva e parti» sends to the Strategist (also how its transcript shows the click) */
 export const PLAN_APPROVED = 'Piano approvato: parti.';
 /** Only complete, unqualified approval phrases count, and only on a host-verified direct user message for a pending
@@ -64,7 +66,7 @@ export const ENOUGH_QUESTIONS = 'Basta domande: proponi ora il piano con quello 
  *  in the role's instructions: the user's edits to the role never drop the flow the strip depends on. */
 export const STRATEGY_FLOW = [
   '[app · how you work with the user here]',
-  '1. First find out what the user really wants, at a high level: ask ONE question at a time with your question tool (AskUserQuestion on Claude), in the user\'s language, as a yes/no question (ADR 0135): exactly two options "Sì" and "No", the one you recommend ending with " (consigliato)" (a choice between options is asked as yes/no on the one you recommend; the user can also type his own answer), and a short header naming the topic. Ask at least one real question whenever the request leaves anything open (goal, scope, constraints, what "done" means, a preference between reasonable options): never silently invent it. Skip what the request already says. Stop as soon as goal, scope, constraints and "done" are clear, after at most 5 questions (a «No» that needs a follow-up question does not count), or when the user answers "Basta domande". Only if the request truly settles everything may you propose without asking: then plan_propose needs `noQuestionReason`, one line saying why.',
+  `1. First find out what the user really wants, before writing any plan (owner, 2026-10-30: «spingi di più sulle domande»): ask ONE question at a time with your question tool (AskUserQuestion on Claude), in the user's language, as a yes/no question (ADR 0135): exactly two options "Sì" and "No", the one you recommend ending with " (consigliato)" (a choice between options is asked as yes/no on the one you recommend; the user can also type his own answer), and a short header naming the topic. Go through these points and ask about each one the request leaves open: the goal and why it matters; what is in and what is out; constraints (time, cost, tools, things not to touch); what "done" looks like and how it is checked; risks or side effects the user cares about; preferences between reasonable options; what comes first. Read the code, files or pages involved before asking, so each question is concrete and shows what you found (e.g. "Ho visto che X fa Y: va cambiato anche Z?"), never generic. Never silently invent an answer. Ask at least ${QUESTIONS_MIN} questions and up to ${QUESTIONS_MAX} (a «No» that needs a follow-up question does not count); stop earlier only when the user answers "Basta domande". If the request truly settles a point, skip it; if it settles nearly everything, plan_propose with fewer than ${QUESTIONS_MIN} answers needs \`noQuestionReason\`, one line saying which points the request already settles. The app refuses a plan that skips this.`,
   `2. Then propose the plan with plan_propose: 2 to 6 steps, each one short plain line in the user's language with the role that does it (and, if useful, a short \`detail\`); no jargon, no sub-steps. The user's approval is required, always: end your turn and wait; the user approves with the panel ("${PLAN_APPROVED}") or an explicit typed approval, or writes what to change, and then you propose again. The app refuses agent_delegate and agent_assign_task until the user approved.`,
   '3. Once approved, inspect agent_children and reuse a compatible child with agent_assign_task (read agent_task_events first), or delegate new work with agent_delegate, giving its number as `step` (independent steps in parallel). A step you do yourself: plan_update it to "now", then to "done". The user follows the steps on your strip. At the end, agent_report as usual.',
 ].join('\n');
@@ -93,12 +95,14 @@ export function checkProposal(a: Record<string, unknown>): { steps: PlanStep[]; 
   return { steps, ...(doneWhen ? { doneWhen } : {}) };
 }
 
-/** plan_propose on the plan as it stands: null = it may propose; else why not. The first proposal of a Strategist that
- *  has asked nothing yet needs `noQuestionReason` (one line): the user wanted a Strategist that really asks (ADR 0121). */
+/** plan_propose on the plan as it stands: null = it may propose; else why not. The first proposal of a Strategist whose
+ *  user answered fewer than QUESTIONS_MIN questions (and never «Basta domande») needs `noQuestionReason` (one line): the
+ *  user wanted a Strategist that really asks (ADR 0121, raised by ADR 0209). */
 export function proposalGate(plan: StrategyPlan, noQuestionReason: unknown): string | null {
-  if (plan.phase !== 'asking' || (plan.asked ?? 0) > 0) return null;
+  const asked = plan.asked ?? 0;
+  if (plan.phase !== 'asking' || plan.enough || asked >= QUESTIONS_MIN) return null;
   if (typeof noQuestionReason === 'string' && noQuestionReason.trim() && noQuestionReason.trim().length <= NO_QUESTION_MAX) return null;
-  return 'plan_propose refused: you have not asked the user anything yet. Ask at least one real clarifying question with your question tool (AskUserQuestion), one at a time, then propose. Only if the request truly leaves nothing open, call plan_propose again with noQuestionReason: one line saying why.';
+  return `plan_propose refused: the user answered ${asked} of at least ${QUESTIONS_MIN} questions. Ask the next real clarifying question with your question tool (AskUserQuestion), one at a time, on a point still open (goal, scope, constraints, "done", risks, preferences, priority), then propose. Only if the request truly settles the rest, call plan_propose again with noQuestionReason: one line naming what it already settles. If the user asked you to stop asking, do not ask again: call plan_propose with noQuestionReason "the user asked to stop the questions".`;
 }
 
 /** agent_delegate / agent_assign_task from a Strategist with a plan: null once the user approved it; else what to do. */
@@ -162,6 +166,15 @@ export function finishPlan(plan: StrategyPlan, now: number): StrategyPlan {
     endedAt: s.endedAt ?? now })) };
 }
 
+/** Whether the user's own words ask the Strategist to stop asking («basta domande», «niente più domande», «no more
+ *  questions», «genug Fragen»), typed in an answer or in the chat: the same as picking ENOUGH_QUESTIONS (ADR 0209). */
+export function stopsQuestions(text: string): boolean {
+  const x = text.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (x === ENOUGH_QUESTIONS.toLowerCase()) return true;
+  return x.length <= 160 && (/\b(basta|stop|smettila|niente( pi[uù])?|nessun'?altra|no more|enough|keine( weiteren)?|genug)\b[^.?!]{0,20}\b(domande|domanda|questions?|fragen?)\b/.test(x)
+    || /\b(proponi|fai|scrivi) (ora |subito |pure )?(il )?piano\b/.test(x));
+}
+
 /** The answers to the user's questions, as "already clear" lines (the latest CLARIFIED_MAX). */
 export function withClarified(plan: StrategyPlan, qs: { question: string; header?: string }[], answers: Record<string, string | string[]>): StrategyPlan {
   const cut = (s: string) => { const x = s.replace(/\s+/g, ' ').trim(); return x.length > CLARIFIED_TEXT_MAX ? `${x.slice(0, CLARIFIED_TEXT_MAX - 1)}…` : x; };
@@ -169,11 +182,12 @@ export function withClarified(plan: StrategyPlan, qs: { question: string; header
     const a = answers[q.question], text = Array.isArray(a) ? a.join(', ') : a;
     // a yes/no answer (ADR 0135) says nothing without its question: the question is the line, not its header
     const yn = typeof text === 'string' && yesNoOf(text) !== null;
-    return typeof text === 'string' && text.trim() && text !== ENOUGH_QUESTIONS ? [{ q: cut(yn ? q.question : q.header?.trim() || q.question), a: cut(yn ? text.replace(/\s*\((consigliat[oa]|recommended|empfohlen)\)\s*/i, '').trim() : text) }] : [];
+    return typeof text === 'string' && text.trim() && !stopsQuestions(text) ? [{ q: cut(yn ? q.question : q.header?.trim() || q.question), a: cut(yn ? text.replace(/\s*\((consigliat[oa]|recommended|empfohlen)\)\s*/i, '').trim() : text) }] : [];
   });
   if (!qs.length) return plan;
   const asked = (plan.asked ?? 0) + qs.length;
-  return added.length ? { ...plan, asked, clarified: [...plan.clarified, ...added].slice(-CLARIFIED_MAX) } : { ...plan, asked };
+  const enough = qs.some(q => { const a = answers[q.question]; return typeof a === 'string' && stopsQuestions(a); }) ? { enough: true } : {};
+  return added.length ? { ...plan, asked, ...enough, clarified: [...plan.clarified, ...added].slice(-CLARIFIED_MAX) } : { ...plan, asked, ...enough };
 }
 
 /** A saved plan, checked (an unreadable one is dropped, never guessed). */
@@ -190,7 +204,7 @@ export function readPlan(v: unknown): StrategyPlan | null {
   if (p.doneWhen !== undefined && !str(p.doneWhen, DONE_WHEN_MAX)) return null;
   return {
     phase: p.phase as PlanPhase, at: p.at as number, clarified: (p.clarified as Clarified[]).map(c => ({ q: c.q, a: c.a })),
-    ...(p.asked ? { asked: p.asked as number } : {}),
+    ...(p.asked ? { asked: p.asked as number } : {}), ...(p.enough === true ? { enough: true } : {}),
     steps: (p.steps as PlanStep[]).map(s => ({ title: s.title, ...(s.detail ? { detail: s.detail } : {}), ...(s.role ? { role: s.role } : {}), state: s.state, ...(s.outcome ? { outcome: s.outcome } : {}), ...(s.chatIds ? { chatIds: [...s.chatIds] } : {}),
       ...(s.startedAt ? { startedAt: s.startedAt } : {}), ...(s.endedAt ? { endedAt: s.endedAt } : {}) })),
     ...(p.doneWhen ? { doneWhen: p.doneWhen as string } : {}),

@@ -13,9 +13,11 @@
 //   reached its parent before the parent ended, and the parent run is itself verified (the user or a review accepted
 //   the result built on it) and did not judge it badly (agent_child_feedback partial or fail);
 // - graded: it is a Sentinel's verified review, and what happened later grades it: the user's verdict on the reviewed
-//   run, else a later independent second review of it (judge-sample.ts audits a fixed share), else its parent's
-//   feedback on its findings, else a rework of the reviewed run (against a pass, for a fail; ADR 0186: verified or not,
-//   a completed review with a verdict is graded). Agreement is a success, one step off partial, opposite a fail.
+//   run, else a later independent second review of it (the app no longer opens one by itself, ADR 0203), else its
+//   parent's feedback on its findings, else a rework of the reviewed run (against a pass, for a fail; ADR 0186: verified
+//   or not, a completed review with a verdict is graded). Agreement is a success, one step off partial, opposite a fail.
+//   The nightly batch review (ADR 0203: one hidden Sentinel run judging a sample of the day's runs) is graded the same
+//   way item by item (gradableBatch, gradedBatch): every graded item agrees = success, any opposite = fail, else partial.
 // The performance (ADR 0131) is a Bayesian estimate: the verdicts, each weighted by how much it is trusted (TRUST: the
 // user and a review × 1, a graded review × 0.8, the receipts × 0.7, the Orchestrator × 0.6, a decision signal and a chain
 // × 0.5, a Flash outcome × 0.3, the agent's own report × 0) and by how recent it is (half weight every 30 days), update a
@@ -28,12 +30,12 @@
 // success (and PLAN_XP), with one or two changes a partial. A decision's XP is its job's size (with its delegated chats),
 // halved when it was re-delegated or reworked. The decisions among pruned runs live on in the rollups
 // (RunTally.decisions, decisionWins, decisionXp; the chain, graded and receipts successes in earnedWins, all XP in xp).
-// Flash records no run: its answers' outcomes (flash-outcomes.ts) give it a small XP and a low-trust performance. Pulse
-// (Battito, a background job) and the retired roles get no standing (unrated, ADR 0186).
+// Flash records no run: its answers' outcomes (flash-outcomes.ts) give it a small XP and a low-trust performance. The
+// retired roles and the runs the removed Battito (Pulse, ADR 0201) left get no standing (unrated, ADR 0186).
 // Used by ChatManager.runMetrics (agents:metrics), run-metrics.ts rollUp, the levels diagnostic (level-diagnosis.ts) and
 // the demo; the card's "?" tips repeat these rules.
 import type { AgentMetrics, AgentRun, AgentStanding } from '../../shared/agents';
-import { FLASH_ID, PULSE_ID, isRetiredRoleId } from '../../shared/roles';
+import { FLASH_ID, isRetiredRoleId } from '../../shared/roles';
 import { reworkedWithin, reworkStartsOf, verifiedVerdict, type VerifiedBasis, type VerifiedVerdict } from '../../shared/run-verdict';
 import type { RunTally } from './run-metrics';
 import { receiptDecision } from './receipts';
@@ -58,11 +60,11 @@ type Source = keyof typeof TRUST;
 type Verdict = keyof typeof SCORE;
 
 /** Same exclusions as the §5 metrics (run-metrics.ts foldRun): headline and fallback one-shots are not the agent's work;
- *  a retired role's runs (Judge, Scribe, Router: ADR 0100) and Pulse's card jobs have no level (ADR 0186), their runs
- *  stay readable. */
+ *  a retired role's runs (Judge, Scribe, Router: ADR 0100) and the old runs of the removed Battito's 'pulse' entry (ADR
+ *  0201) have no level (ADR 0186), their runs stay readable. */
 export const counts = (r: AgentRun): boolean => r.endedAt !== undefined && !r.oneshot?.fallback && r.oneshot?.job !== 'headline' && r.oneshot?.job !== 'guide' && !unrated(r.agentId);
-/** Ids that get no standing: the retired roles and Pulse, a background job (ADR 0186). */
-export const unrated = (agentId: string): boolean => isRetiredRoleId(agentId) || agentId === PULSE_ID;
+/** Ids that get no standing: the retired roles and 'pulse', the removed Battito's background job (ADR 0186, 0201). */
+export const unrated = (agentId: string): boolean => isRetiredRoleId(agentId) || agentId === 'pulse';
 /** A root run the Orchestrator opened: one of its decisions (ADR 0097). */
 export const orchestratorDecision = (r: AgentRun): boolean => r.startedBy === 'orchestrator' && r.source !== 'oneshot' && !r.oneshot
   && !r.parentRunId && r.agentId !== 'orchestrator';
@@ -123,6 +125,24 @@ function graded(review: AgentRun, ix: EarnIndex): EarnedVerdict | null {
   if (reworkedWithin(target, ix.starts.get(target.runId))) return { verdict: said === 'success' ? 'fail' : 'success', basis: 'graded', by: 'facts' };
   return null;
 }
+/** The nightly batch review's own run (judge-sample.ts, ADR 0203): a hidden Sentinel run that ended completed with at
+ *  least one verdict (graded like a review, verified or not: ADR 0186). */
+export const gradableBatch = (r: AgentRun): boolean => r.agentId === 'sentinel' && r.oneshot?.job === 'review' && r.endedAt !== undefined
+  && r.endReason === 'completed' && !!r.reviewBatch?.some(e => e.verdict);
+/** Grading a batch review like a single one, item by item: the user's verdict on the run, else a rework of it (against
+ *  a pass, for a fail); every graded item agrees = success, any opposite = fail, else partial; nothing graded = null. */
+function gradedBatch(batch: AgentRun, ix: EarnIndex): EarnedVerdict | null {
+  const grades: { v: Verdict; by: 'human' | 'facts' }[] = [];
+  for (const e of batch.reviewBatch!) {
+    const target = ix.byId.get(e.runId), o = target?.outcome;
+    if (!target || !e.verdict) continue;
+    if (o && o.basis === 'human' && o.verdict !== 'unknown') grades.push({ v: agreement(e.verdict, o.verdict), by: 'human' });
+    else if (reworkedWithin(target, ix.starts.get(target.runId))) grades.push({ v: e.verdict === 'success' ? 'fail' : 'success', by: 'facts' });
+  }
+  if (!grades.length) return null;
+  const v: Verdict = grades.some(g => g.v === 'fail') ? 'fail' : grades.every(g => g.v === 'success') ? 'success' : 'partial';
+  return { verdict: v, basis: 'graded', by: grades.some(g => g.by === 'human') ? 'human' : 'facts' };
+}
 /** Why a delegated child gets no chain credit of its own (null = it qualifies, its parent permitting). Shared with the
  *  diagnostic (level-diagnosis.ts). */
 export type ChainBlock = 'no-parent' | 'not-completed' | 'no-full-report' | 'late-report' | 'corrected' | 'judged-badly';
@@ -159,7 +179,7 @@ function earned(run: AgentRun, ix: EarnIndex, seen: Set<string>): EarnedVerdict 
   const v = verifiedVerdict(run, ix.starts.get(run.runId), 0);
   const rc = run.endedAt === undefined || v ? null : receiptsVerdict(run);
   const out: EarnedVerdict | null = v ? { verdict: v.verdict, basis: v.basis }
-    : run.endedAt === undefined ? null : rc ? { verdict: rc, basis: 'receipts' } : gradableReview(run) ? graded(run, ix) : run.parentRunId ? chained(run, ix, seen) : null;
+    : run.endedAt === undefined ? null : rc ? { verdict: rc, basis: 'receipts' } : gradableReview(run) ? graded(run, ix) : gradableBatch(run) ? gradedBatch(run, ix) : run.parentRunId ? chained(run, ix, seen) : null;
   ix.memo.set(run.runId, out);
   return out;
 }

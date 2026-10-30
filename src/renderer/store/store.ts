@@ -469,7 +469,7 @@ export async function createChat(req: NewChat): Promise<ChatSummary | null> {
   } catch (e) { fail(t('appText.store.chatNotCreated'))(e); return null; }
 }
 
-/** A chat whose engine, model and effort the routing table picks in main ("Nuova chat", a new Orchestrator; ADR 0032). */
+/** A chat whose engine, model and effort main picks from the user's defaults ("Nuova chat", a new Orchestrator; ADR 0032, 0210). */
 export async function createRoutedChat(req: RoutedNewChat): Promise<ChatSummary | null> {
   try {
     const c = await sb.invoke('chat:createRouted', req);
@@ -657,7 +657,8 @@ export async function cliCheck(harness: Harness): Promise<void> {
 
 /** The user's own change of a setting from the UI (logged as the user's), reflected at once. */
 export async function setSetting(patch: SettingsPatch): Promise<void> {
-  try { dispatch({ type: 'settings', settings: await sb.invoke('settings:set', patch) }); toastKey('essential.saved', 'ok'); }
+  // on the Settings page the header's quiet «Salvato · Annulla» says it (SettingsSaved.tsx, ADR 0207), not a toast
+  try { dispatch({ type: 'settings', settings: await sb.invoke('settings:set', patch) }); if (ui.get().page !== 'impostazioni') toastKey('essential.saved', 'ok'); }
   catch (e) { fail(t('appText.store.settingNotSaved'))(e); }
 }
 

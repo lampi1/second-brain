@@ -1,7 +1,7 @@
 // Service interfaces of the main process. index.ts wires them to the IPC handlers; each module implements one.
 // Keeping them here lets the modules be built and tested apart (chats, browser + MCP, brain + feed).
 import type {
-  Answer, AppInfo, ChatCommand, BrainApiResult, CredentialEntry, BrowserEnv, BrowserHandoff, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareState, ContextStats, LearnResult, Effort, FeedAction, FeedEvent, HandoffInfo, Harness, ImageAttachment, JobRecordInput, ModelsSeen, RoutingInfo, RoutingRow,
+  Answer, AppInfo, ChatCommand, BrainApiResult, CredentialEntry, BrowserEnv, BrowserHandoff, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, ContextStats, LearnResult, Effort, FeedAction, FeedEvent, HandoffInfo, Harness, ImageAttachment, JobRecordInput, ModelRegistry, ModelsSeen,
   NewChat, PendingRequest, PermissionMode, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncChoice, SyncState, Usage, ViewLayout, TasksState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
 } from '../shared/contract';
 import type { AgentMetrics, AgentRunOutcome, UserTaskEvents } from '../shared/agents';
@@ -131,17 +131,11 @@ export interface BrainService {
   confirmSetting(proposalId: string, accept: boolean): { change: SettingChange | null };
   /** Main-process listeners (e.g. the browser module restarts its MCP server on 'mcpPort'). */
   onSettingChange(fn: (c: SettingChange, now: Settings) => void): () => void;
-  /** The job's real cost and time, for the brain's ledger (jobs.jsonl: routing reads it, ADR 0053). */
+  /** The job's real cost and time, for the brain's ledger (jobs.jsonl, ADR 0053). */
   recordJob(job: JobRecordInput): { id: string };
-  /** Model routing (brain/routing.ts, ADR 0032): the table and registry for the settings page. */
-  routingInfo(): RoutingInfo;
-  /** A new version of the table, refused (throws, Italian) on a broken hard rule: from the user's settings page, or from
-   *  an agent (`by` "agente: …" and the data behind the change, `evidence`; app_routing_save). `base` = the version the
-   *  edit started from; exploration and costWeight omitted = kept. */
-  saveRouting(routes: RoutingRow[], reason: string | null, o?: { exploration?: number; costWeight?: number; by?: string; evidence?: string | null; base?: number }): RoutingInfo;
-  /** An older version back in force, as a new version (`by` defaults to the user's page). */
-  restoreRouting(version: number, by?: string): RoutingInfo;
-  /** Harness, model and effort for a chat an agent opens: the table's row, else `defaults`; an override needs a reason. */
+  /** The brain's model registry and price table (harness/models.json; brain/routing.ts); null = none. */
+  modelRegistry(): ModelRegistry | null;
+  /** Harness, model and effort for a new chat: its role's card, else the user's `defaults` or what was named (ADR 0210). */
   route(req: RouteRequest): RouteResult;
   /** One line of the improvement loop's shared ledger (ops/state/improve/outcomes.jsonl): a routed chat's prediction or
    *  its measured actuals. */
@@ -154,9 +148,6 @@ export interface BrainService {
   api(path: string): Promise<BrainApiResult>;
   /** Answers one of the allowed /api/ paths from main itself (e.g. /api/quality: brain/quality.ts), not the brain's server. */
   serveApi(path: string, fn: (query: URLSearchParams) => unknown | Promise<unknown>): void;
-  /** The brain's model comparisons (brain/compare.ts): list, and switch an experiment or one of its agents. */
-  compareList(): Promise<CompareState>;
-  compareSet(experiment: string, on: boolean, agent?: string): Promise<CompareState>;
   /** A click of the Miglioramento page: improve.mjs apply|reject|rollback in the brain (brain/learn.ts). */
   learnAct(a: unknown): Promise<LearnResult>;
   /** The models a CLI session offered (brain/models-seen.ts): recorded by the chat manager, read by the Settings page. */

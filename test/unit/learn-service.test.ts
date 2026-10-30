@@ -5,13 +5,15 @@
 // broken lesson; extras land after the piece and the user lands on them; checks are judged at zero tokens and the first
 // answer stays; «Spiegalo tu» is graded; a lesson the app was closed during is marked, an extra or grade cut off frees
 // it; remove deletes its folder, also when a run still works in it (when that run ends) or a delete failed (next start).
+// The public topics of the files (ADR 0206): filtered, shown while they wait (✕ drops one, «Cerca ora», at once in
+// «Modalità notte»), then searched by a web run that sees only the ask and the queries, its facts verified on the web.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() }, errText: (e: unknown) => (e instanceof Error ? e.message : String(e)) }));
 import { LessonStore } from '../../src/main/learn/store';
-import { LearnService, fullRef, type TeachResult, type TeachRun } from '../../src/main/learn/service';
+import { LearnService, fullRef, mergeQuality, type TeachResult, type TeachRun } from '../../src/main/learn/service';
 import { demoRun, demoTeach } from '../../src/main/learn/demo';
 import { checkKey, playlist, stepKey, type Lesson } from '../../src/shared/lesson';
 
@@ -21,13 +23,13 @@ const until = async (fn: () => boolean, ms = 3000) => { const t0 = Date.now(); w
 const TEACHERS = [{ engine: 'claude', label: 'Claude', models: [{ id: 'opus', name: 'Opus' }, { id: 'sonnet', name: 'Sonnet' }], efforts: ['low', 'medium', 'high', 'xhigh'] as const, web: true },
   { engine: 'codex', label: 'Codex', models: [], efforts: [] as const, web: false }].map(t => ({ ...t, efforts: [...t.efforts] }));
 
-function make(teach: (r: TeachRun) => Promise<TeachResult> = demoTeach, opts: { cannot?: string; root?: string; web?: boolean; brain?: string } = {}) {
+function make(teach: (r: TeachRun) => Promise<TeachResult> = demoTeach, opts: { cannot?: string; root?: string; web?: boolean; brain?: string; away?: boolean } = {}) {
   const store = new LessonStore(opts.root ?? tmp());
   const runs: TeachRun[] = [];
   const events: (Lesson | undefined)[] = [];
   const svc = new LearnService({ store, lang: () => 'it', run: demoRun, devops: () => ({ prs: [], repoDirs: {} }), cannotTeach: () => opts.cannot ?? null,
     teach: r => { runs.push(r); return teach(r); }, changed: (_s, l) => events.push(l),
-    teachers: () => TEACHERS, webOk: () => !!opts.web, places: () => ({ brain: opts.brain ?? null, appSource: null }), guide: () => '# Guida dell’app' });
+    teachers: () => TEACHERS, webOk: () => !!opts.web, places: () => ({ brain: opts.brain ?? null, appSource: null }), guide: () => '# Guida dell’app', away: () => !!opts.away });
   return { store, svc, runs, events };
 }
 const fast = (r: TeachRun) => { vi.useFakeTimers({ toFake: ['setTimeout'] }); const p = demoTeach(r); vi.runAllTimers(); vi.useRealTimers(); return p; };
@@ -42,14 +44,16 @@ describe('LearnService', () => {
     const done = store.get(l.id)!;
     expect(done.title).toBe('Risposte parola per parola (PR #251)');
     expect(done.pr).toMatchObject({ provider: 'github', number: 251, repo: 'lampi1/second-brain' });
-    expect(done.steps.filter(s => !s.extra)).toHaveLength(5);
-    expect(done.checks.length).toBe(3);
+    expect(done.steps.filter(s => !s.extra)).toHaveLength(6);
+    expect(done.checks.length).toBe(4);
     expect(done.at).toBe(stepKey(done.steps[0]!.id));
     // a PR has no web research: its files, their check, then the plan and the rest, at the default effort
     // then the review cards, at medium effort
-    expect(runs.map(r => r.round)).toEqual(['impara-files', 'impara-verify-files', 'impara-plan', 'impara-rest', 'impara-cards']);
-    expect(runs.slice(0, 4).every(r => !r.web && r.effort === 'high' && r.teacher === null)).toBe(true);
-    expect(runs[4]!.effort).toBe('medium');
+    // each written part is checked by the quality gate (ADR 0205), at low effort, before the learner sees it
+    expect(runs.map(r => r.round)).toEqual(['impara-files', 'impara-verify-files', 'impara-plan', 'impara-quality', 'impara-rest', 'impara-quality', 'impara-cards']);
+    expect(runs.filter(r => r.round !== 'impara-quality' && r.round !== 'impara-cards').every(r => !r.web && r.effort === 'high' && r.teacher === null)).toBe(true);
+    expect(runs.filter(r => r.round === 'impara-quality').every(r => r.effort === 'low')).toBe(true);
+    expect(runs.at(-1)!.effort).toBe('medium');
     // the material is in the lesson's folder and named in the prompt; the diff is inline
     expect(store.readFile(l.id, 'diff.patch')).toContain('ITEM_FRAME_MS');
     const plan = runs[2]!;
@@ -70,8 +74,16 @@ describe('LearnService', () => {
     expect(done.prep).toMatchObject({ files: 5, ok: 3, fixed: 1, unsure: 1, dropped: 0, phases: { gather: 'done', web: 'skip', files: 'done', verify: 'done', ask: 'skip', plan: 'done' }, why: { web: 'pr' } });
     // the pieces cite the facts, their beats name known nodes
     expect(done.steps[1]!.cites).toEqual(['f1', 'f5']);
-    expect(done.steps[1]!.beats?.[1]).toMatchObject({ focus: ['manager', 'store'], flow: { from: 'manager', to: 'store' } });
-    expect(done.costUsd).toBeCloseTo(0.53);
+    expect(done.steps[0]!.beats?.[1]).toMatchObject({ focus: ['engine', 'manager'], flow: { from: 'engine', to: 'manager' } });
+    // the pieces' roles and visuals (ADR 0205): a code walkthrough's beats name lines, not nodes
+    expect(done.steps.map(s => s.role)).toEqual(['problem', 'example', 'rule', 'worked', 'faded', 'recap']);
+    expect(done.steps.map(s => s.visual?.kind ?? 'flow')).toEqual(['flow', 'code', 'sequence', 'formula', 'chart', 'mindmap']);
+    expect(done.steps[1]!.beats?.[1]).toMatchObject({ focus: [], lines: [6, 9] });
+    expect(done.steps[4]!.beats?.[2]).toMatchObject({ mark: 'Store (nascosta)' });
+    // the gate rewrote the recap, which cited no fact; the report counts what it found
+    expect(done.steps[5]!.cites).toEqual(['f4', 'f1']);
+    expect(done.quality).toMatchObject({ checked: 10, fixed: 1, fails: { cites: 1 } });
+    expect(done.costUsd).toBeCloseTo(0.57);
   });
 
   it('a topic: the web run sees only the ask and has only the web; the files run reads brain and guide; questions wait for the answers', async () => {
@@ -110,6 +122,77 @@ describe('LearnService', () => {
     const plan = runs.find(r => r.round === 'impara-plan')!;
     expect(plan.prompt).toContain('→ Dentro second-brain');
     expect(store.get(l.id)!.prep?.phases.ask).toBe('done');
+  });
+
+  it('a PR with the web on: its public topics, filtered, searched at once in «Modalità notte» by a web run that sees only the ask and the queries', async () => {
+    const { svc, store, runs } = make(fast, { web: true, away: true });
+    const l = svc.start({ kind: 'pr', ask: 'Come arrivano le risposte', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    await until(() => store.get(l.id)?.state === 'ready' || store.get(l.id)?.state === 'more');
+    // no ask-only web run for a PR, but the topics' one; each web run with the web only, in the empty web folder
+    expect(runs.map(r => r.round).slice(0, 4).sort()).toEqual(['impara-files', 'impara-refs', 'impara-verify-files', 'impara-verify-refs']);
+    const files = runs.find(r => r.round === 'impara-files')!, refs = runs.find(r => r.round === 'impara-refs')!, vrefs = runs.find(r => r.round === 'impara-verify-refs')!;
+    expect(files.prompt).toContain('public topics worth searching');
+    expect(refs.web).toBe(true);
+    expect(vrefs.web).toBe(true);
+    expect(refs.cwd).toBe(path.join(store.dir(l.id), 'web'));
+    // it sees the ask and the three queries the filter let through, nothing else of the files
+    expect(refs.prompt).toContain('Come arrivano le risposte');
+    expect(refs.prompt).toContain('t1: Electron IPC performance');
+    expect(refs.prompt).toContain('t2: W3C Page Visibility API');
+    expect(refs.prompt).toContain('t3: React 18 automatic batching');
+    for (const secret of ['ChatManager', 'ITEM_FRAME_MS', 'manager.ts', 'store.ts', 'il diff manda', store.dir(l.id), 'STREAM_MS']) {
+      expect(refs.prompt).not.toContain(secret);
+      expect(vrefs.prompt).not.toContain(secret);
+    }
+    const done = store.get(l.id)!;
+    // its facts after the others, verified, each with the topic it was searched for
+    expect(done.facts?.map(f => f.id)).toEqual(['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8']);
+    expect(done.facts!.slice(5).map(f => [f.topic, f.check, f.from])).toEqual([
+      ['Electron IPC performance', 'ok', 'web'], ['W3C Page Visibility API', 'ok', 'web'], ['React 18 automatic batching', 'ok', 'web']]);
+    expect(done.prep).toMatchObject({ refs: 3, ok: 6, fixed: 1, unsure: 1, phases: { web: 'skip', files: 'done', refs: 'done', verify: 'done' }, topics: { state: 'done', dropped: 1 } });
+    expect(done.prep!.topics!.list.map(t => t.q)).toEqual(['Electron IPC performance', 'W3C Page Visibility API', 'React 18 automatic batching']);
+    // the plan stands on them too
+    const plan = runs.find(r => r.round === 'impara-plan')!;
+    expect(plan.prompt).toContain('f8 [verified; https://react.dev/blog/2022/03/29/react-v18]');
+  });
+
+  it('the topics wait for the user: ✕ drops one (more time for the rest), «Cerca ora» starts them; none left = no search', async () => {
+    const { svc, store, runs } = make(fast, { web: true });
+    const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    await until(() => store.get(l.id)?.prep?.topics?.state === 'wait');
+    const tp = store.get(l.id)!.prep!.topics!;
+    expect(tp.list).toHaveLength(3);
+    expect(tp.at! - Date.now()).toBeGreaterThan(3000);
+    expect(store.get(l.id)!.prep!.phases.refs).toBe('now');
+    expect(() => svc.topics(l.id, { drop: 't9' })).toThrow('Argomento non trovato.');
+    svc.topics(l.id, { drop: 't2' });
+    expect(store.get(l.id)!.prep!.topics!.list.map(t => t.id)).toEqual(['t1', 't3']);
+    expect(runs.some(r => r.round === 'impara-refs')).toBe(false);
+    svc.topics(l.id, { go: true });
+    await until(() => runs.some(r => r.round === 'impara-refs'));
+    const refs = runs.find(r => r.round === 'impara-refs')!;
+    expect(refs.prompt).toContain('Electron IPC performance');
+    expect(refs.prompt).not.toContain('Page Visibility');
+    expect(() => svc.topics(l.id, { go: true })).toThrow('Nessuna ricerca in attesa.');
+    await until(() => store.get(l.id)?.state === 'ready' || store.get(l.id)?.state === 'more');
+    // the demo's run answered for t2 as well: a fact for a topic it was not given is left out
+    expect(store.get(l.id)!.facts!.filter(f => f.topic).map(f => f.topic)).toEqual(['Electron IPC performance', 'React 18 automatic batching']);
+
+    const b = make(fast, { web: true });
+    const m = b.svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    await until(() => b.store.get(m.id)?.prep?.topics?.state === 'wait');
+    for (const id of ['t1', 't2', 't3']) b.svc.topics(m.id, { drop: id });
+    await until(() => b.store.get(m.id)?.state === 'ready' || b.store.get(m.id)?.state === 'more');
+    expect(b.runs.some(r => r.round === 'impara-refs')).toBe(false);
+    expect(b.store.get(m.id)!.prep).toMatchObject({ phases: { refs: 'skip' }, why: { refs: 'dropped' }, topics: { state: 'skip' } });
+
+    // a lesson removed while its topics wait searches nothing
+    const c = make(fast, { web: true });
+    const n = c.svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    await until(() => c.store.get(n.id)?.prep?.topics?.state === 'wait');
+    c.svc.remove(n.id);
+    await new Promise(r => setTimeout(r, 30));
+    expect(c.runs.some(r => r.round === 'impara-refs' || r.round === 'impara-plan')).toBe(false);
   });
 
   it('keeps only a teacher it offers; a removed lesson stops waiting for its answers', async () => {
@@ -249,5 +332,91 @@ describe('LearnService', () => {
     fs.mkdirSync(store.dir(store.newId(4_000)), { recursive: true });
     make(fast, { root: store.root });
     expect(fs.readdirSync(store.root)).toEqual([]);
+  });
+});
+
+describe('the Studio, its quiz and the quality gate (ADR 0205)', () => {
+  const PR = { kind: 'pr' as const, ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson' as const, level: 'basics' as const };
+  async function ready(teach: (r: TeachRun) => Promise<TeachResult> = fast, root?: string) {
+    const m = make(teach, root ? { root } : {});
+    const l = m.svc.start(PR);
+    await until(() => m.store.get(l.id)?.cards?.state === 'done');
+    return { ...m, id: l.id };
+  }
+
+  it('a tile is one cheap run over the verified facts, saved with the lesson; flashcards go into the review', async () => {
+    const { svc, store, runs, id } = await ready();
+    const before = store.get(id)!.costUsd!;
+    expect(svc.studio(id, 'flashcards').studio?.flashcards?.state).toBe('making');
+    expect(() => svc.studio(id, 'flashcards')).toThrow(/già/);
+    await until(() => store.get(id)?.studio?.flashcards?.state === 'done');
+    const run = runs.at(-1)!;
+    expect(run).toMatchObject({ round: 'impara-studio', effort: 'low' });
+    expect(run.web).toBeFalsy();
+    expect(run.prompt).toContain('no search');
+    expect(run.prompt).not.toContain('NOT CONFIRMED');
+    const out = store.get(id)!.studio!.flashcards!.out!;
+    expect(out.kind === 'flashcards' && out.n).toBeGreaterThan(0);
+    const own = svc.review.ofLesson(id).filter(c => c.origin === 'studio');
+    expect(own.map(c => c.id)).toEqual(Array.from({ length: own.length }, (_, i) => `${id}:s:f${i + 1}`));
+    expect(store.get(id)!.costUsd).toBeCloseTo(before + 0.02);
+    // made again: the set is replaced, not added to
+    svc.studio(id, 'flashcards');
+    await until(() => store.get(id)?.studio?.flashcards?.state === 'done' && store.get(id)!.costUsd! > before + 0.03);
+    expect(svc.review.ofLesson(id).filter(c => c.origin === 'studio')).toHaveLength(own.length);
+    expect(() => svc.studio(id, 'challenge')).toThrow(/non valida/);
+  });
+
+  it('the quiz plays as a review session; an answered question becomes a review card', async () => {
+    const { svc, store, id } = await ready();
+    expect(svc.queue('quiz', undefined, id)).toEqual([]);
+    svc.studio(id, 'quiz');
+    await until(() => store.get(id)?.studio?.quiz?.state === 'done');
+    const q = svc.queue('quiz', undefined, id);
+    expect(q.length).toBeGreaterThanOrEqual(4);
+    expect(q[0]!.card.id).toBe(`${id}:sq1`);
+    expect(svc.review.get(`${id}:sq1`)).toBeNull();
+    const graded = svc.gradeCard(`${id}:sq1`, 3);
+    expect(graded).toMatchObject({ id: `${id}:sq1`, origin: 'studio' });
+    expect(graded.mem).not.toBeNull();
+    expect(svc.queue('quiz', undefined, id)[0]!.card.mem).not.toBeNull();
+  });
+
+  it('a tile that fails says why; one cut by a restart is marked failed; no verified fact, no Studio', async () => {
+    const root = tmp();
+    const { svc, store, id } = await ready(r => (r.round === 'impara-studio' ? Promise.resolve({ ok: false as const, error: 'tempo scaduto' }) : fast(r)), root);
+    svc.studio(id, 'summary');
+    await until(() => store.get(id)?.studio?.summary?.state === 'failed');
+    expect(store.get(id)!.studio!.summary!.error).toMatch(/tempo scaduto/);
+    store.save({ ...store.get(id)!, studio: { ...store.get(id)!.studio, glossary: { state: 'making', at: 1 } } });
+    make(fast, { root });
+    expect(store.get(id)!.studio!.glossary).toMatchObject({ state: 'failed', error: expect.stringMatching(/interrotta/) });
+    store.save({ ...store.get(id)!, facts: (store.get(id)!.facts ?? []).map(f => ({ ...f, check: 'unsure' as const })) });
+    expect(() => make(fast, { root }).svc.studio(id, 'mindmap')).toThrow(/verificati/);
+  });
+
+  it('a gate that does not answer keeps the draft and says so; a rewrite that is worse is not taken', async () => {
+    const off = await ready(r => (r.round === 'impara-quality' ? Promise.resolve({ ok: false as const, error: 'rete giù' }) : fast(r)));
+    const a = off.store.get(off.id)!;
+    expect(a.steps.find(s => s.title === 'Cosa non risolve')!.cites ?? []).toEqual([]);
+    expect(a.quality).toMatchObject({ none: true, fixed: 0, fails: { cites: 1 } });
+    // the gate "fixes" the recap with a piece far too long for one idea and still without a citation
+    const worse = await ready(async r => {
+      if (r.round !== 'impara-quality') return fast(r);
+      const n = [...(r.prompt as string).matchAll(/^\{"n":(\d+),"title":"([^"]*)"/gm)];
+      const pieces = n.map(([, k, t]) => (t === 'Cosa non risolve' ? { n: Number(k), fails: ['cites'], fix: { title: t, say: Array(120).fill('parola').join(' '), focus: ['engine'] } } : { n: Number(k) }));
+      return { ok: true, text: JSON.stringify({ pieces, checks: [] }), costUsd: 0.01, engine: 'claude', model: null };
+    });
+    const b = worse.store.get(worse.id)!;
+    expect(b.steps.find(s => s.title === 'Cosa non risolve')!.role).toBe('recap');
+    expect(b.steps.find(s => s.title === 'Cosa non risolve')!.say).not.toContain('parola parola');
+    expect(b.quality).toMatchObject({ fixed: 0 });
+    expect(b.quality!.none).toBeUndefined();
+  });
+
+  it('merges the plan\'s and the rest\'s reports', () => {
+    expect(mergeQuality(undefined, { checked: 2, fixed: 0, fails: {}, at: 1 })).toEqual({ checked: 2, fixed: 0, fails: {}, at: 1 });
+    expect(mergeQuality({ checked: 3, fixed: 1, fails: { cites: 1 }, at: 1 }, { checked: 4, fixed: 1, fails: { cites: 1, diagram: 1 }, at: 2, none: true }))
+      .toEqual({ checked: 7, fixed: 2, fails: { cites: 2, diagram: 1 }, at: 2, none: true });
   });
 });

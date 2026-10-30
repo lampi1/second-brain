@@ -8,7 +8,9 @@ import type { ModelTier } from './roles';
 import type { RoleJudges } from './ppi';
 
 /** One-shot purposes: the service and persisted run reader share this list so new jobs survive a restart. */
-export const ONE_SHOT_PURPOSES = ['pulse', 'headline', 'upgrade', 'phrases', 'guide'] as const;
+/** 'pulse' and 'headline' were the Battito's jobs (removed, ADR 0201): kept so the runs it left still load; review = the
+ *  nightly batch review (agents/judge-sample.ts, ADR 0203): a hidden run, never a chat */
+export const ONE_SHOT_PURPOSES = ['pulse', 'headline', 'upgrade', 'phrases', 'guide', 'review'] as const;
 export type OneShotPurpose = (typeof ONE_SHOT_PURPOSES)[number];
 
 /** The cartoon character a role is drawn as (renderer/lib/character-art.ts): fixed per role, never user content. */
@@ -62,7 +64,7 @@ export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 't
 export type AgentBehaviour = Pick<AgentDraft, (typeof BEHAVIOUR_FIELDS)[number]>;
 export interface AgentProfile extends AgentDraft {
   id: string; createdAt: number; updatedAt: number;
-  /** role = one of the six roles (the Orchestrator and the five work roles); background = Pulse, a catalog entry that is never offered as a delegate */
+  /** role = one of the six roles (the Orchestrator and the five work roles); background = Flash, a catalog entry that is never offered as a delegate */
   scope: 'role' | 'background';
   /** Highest version ever created. */
   version: number;
@@ -272,25 +274,34 @@ export interface AgentRun {
   /** a Strategist's plan with the user on this run (ADR 0108, 0131): plans proposed, «Cambia qualcosa» asked, when the
    *  user approved one; a decision signal for the Orchestrator */
   plan?: AgentRunPlan;
+  /** the nightly batch review's own run (agents/judge-sample.ts, ADR 0203): the runs it reviewed, each with the verdict
+   *  and verification the Sentinel gave it (absent = it gave none); written by the app from the parsed answer */
+  reviewBatch?: ReviewBatchEntry[];
 }
+export interface ReviewBatchEntry { runId: string; verdict?: 'success' | 'partial' | 'fail'; verified?: 'yes' | 'partial' | 'no' }
 export interface AgentRunPlan { proposals: number; changes: number; approvedAt?: number; /** approved by the app for the absent user (ADR 0191): no decision signal */ byApp?: boolean }
 /** skills = skill ids it started with plus the ones its engine loaded while open; app = the product it is about;
  *  repo = the name of the git top-level folder of its cwd (null outside a repository). */
 export interface AgentRunTags { skills: string[]; app: string | null; repo: string | null }
-/** What the judging switch costs a day (main/agents/judge-sample.ts judgingEstimate). */
+/** What the judging switch costs a day (main/agents/judge-sample.ts judgingEstimate, ADR 0203: a sample of the runs,
+ *  reviewed in one hidden batch a night, under a daily cap). */
 export interface JudgingEstimate {
-  /** finished root runs a day that the switch would review (last 7 days): not the ones its receipts decide */
+  /** finished root runs a day that no free signal decides (last 7 days): the ones the sample is drawn from */
   runsPerDay: number;
   /** finished root runs a day that their receipts decide with no review (ADR 0130): zero tokens */
   receiptsPerDay: number;
-  /** second reviews a day that grade the first ones or the receipts (one in AUDIT_EVERY, ADR 0125, 0130); in perDayUsd */
-  auditsPerDay: number;
-  /** the median cost of one review (past reviews, else the Sentinel's own runs); null = no data yet */
+  /** of runsPerDay, the ones a day the sample picks (25% per role, 10% for a steady one) */
+  sampledPerDay: number;
+  /** what reviewing one run has cost so far (past nightly batches per run, else past single reviews); null = no data */
   reviewUsd: number | null;
-  /** (runsPerDay + the audits) × reviewUsd; null = no data */
+  /** min(sampledPerDay × reviewUsd, capUsd); null = no data */
   perDayUsd: number | null;
-  /** how many costs the median is made of */
+  /** the daily cap on reviews (Settings.judgingCapUsd) */
+  capUsd: number;
+  /** how many costs reviewUsd is made of */
   basis: number;
+  /** the last nightly batch: when it ended, how many runs it judged, what it cost; null = none yet */
+  lastBatch: { at: number; runs: number; costUsd: number | null } | null;
 }
 /** Metric filters (all optional; together they must all match). */
 export interface AgentMetricsFilter { since?: number; skill?: string; app?: string; repo?: string }
@@ -308,7 +319,7 @@ export interface AgentModelChoice {
   modelReason: string | null;
 }
 export interface AgentCatalog {
-  /** The six roles in their fixed order, then the background entries (Pulse). */
+  /** The six roles in their fixed order, then the background entry (Flash). */
   profiles: AgentProfile[];
   models: AgentModelChoice[];
   problem: string | null;

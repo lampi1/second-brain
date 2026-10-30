@@ -1,6 +1,6 @@
 // When the user last typed a message into a chat themselves (the renderer's chat:send, a sender-checked IPC from the
 // app's own window): the one proof app_config takes that a configuration change is the user's ask (ADR 0149). A chat
-// item of kind 'user' is not enough: the app's news, the Battito card, mail and other main-side sends land as 'user'
+// item of kind 'user' is not enough: the app's news, mail and other main-side sends land as 'user'
 // items too. In memory only (a restart forgets it: the user asks again). Used by main/index.ts (note) and
 // appctl/tools.ts (lastTyped).
 const typed = new Map<string, number>();

@@ -2,12 +2,14 @@
 // stessa di Claude Code o Codex»): the quick lane in the Orchestrator's column, beside it. One always-on chat on Flash's
 // card (its engine and model, the chip above to change it) with read-only tools (main: ChatManager LAMPO_POLICY, plan
 // mode): it answers questions, explanations and quick reads in seconds, sees the Orchestrator's chat like a "btw"
-// (ADR 0106), changes nothing and starts no work. «Fanne un lavoro» drafts the last question and its answer into the Orchestrator's
-// input (never sent by itself): work still starts only from the Orchestrator (ADR 0083). The eraser on its head empties its
+// (ADR 0106), changes nothing and starts no work. «Fanne un lavoro» asks Flash to write the Orchestrator's prompt from the
+// whole conversation (ADR 0209: goal, context, what to do, constraints, done when) and drafts it into the Orchestrator's
+// input (never sent by itself; the last question and answer when Flash cannot write it): work still starts only from
+// the Orchestrator (ADR 0083). The eraser on its head empties its
 // context in one click, like /clear (clearFlash in actions.ts). Used by OrchestratorOverlay.tsx.
 import { useEffect, useRef, useState } from 'react';
 import { isBusy } from '../store/state';
-import { createChat, stop, useApp } from '../store/store';
+import { createChat, send, stop, useApp } from '../store/store';
 import { t } from '../i18n';
 import { brainBridge, clearFlash } from '../actions';
 import { ItemList, turnActivity, Typing } from './ChatItems';
@@ -17,7 +19,8 @@ import { AgentAvatar } from './AgentAvatar';
 import { ModelChip } from './ModelChip';
 import { FLASH_ID } from '@shared/roles';
 import { IconEraser, IconStop } from './Icons';
-import { lastExchange } from '../lib/lampo';
+import { BRIEF_ASK, lastExchange } from '../lib/lampo';
+import { startBrief, useBriefing } from '../lib/flash-brief';
 
 /** Lampo's tile, or the button that opens it (on the Orchestrator's engine, the user's fast model). */
 export function LampoTile({ onWork }: { onWork: () => void }) {
@@ -27,6 +30,8 @@ export function LampoTile({ onWork }: { onWork: () => void }) {
   const info = useApp(s => s.info);
   const input = useRef<ChatInputHandle>(null);
   const [opening, setOpening] = useState(false);
+  // «Fanne un lavoro» waits for Flash's brief (lib/flash-brief.ts, also after the lane switches)
+  const briefing = useBriefing();
   useEffect(() => { if (lampo) input.current?.focus(); }, [lampo?.id]);
 
   const open = async () => {
@@ -51,7 +56,10 @@ export function LampoTile({ onWork }: { onWork: () => void }) {
   const busy = isBusy(lampo), last = lastExchange(items);
   const toWork = () => {
     if (!last) return;
-    if (brainBridge.draftToOrchestrator(t('lampo.draft', last), () => {})) onWork();
+    const fallback = t('lampo.draft', last);
+    const now = Date.now();
+    if (send(lampo.id, BRIEF_ASK) === 'sent') startBrief(lampo.id, fallback, now);
+    else if (brainBridge.draftToOrchestrator(fallback, () => {})) onWork();
   };
   return <section className="tile orchestrator-tile lampo-tile" role="region" aria-label={t('lampo.title')} data-testid="tile-lampo" data-chat-id={lampo.id}>
     <header className="tile-head">
@@ -60,7 +68,7 @@ export function LampoTile({ onWork }: { onWork: () => void }) {
         <h3 className="th-title">{t('lampo.title')}</h3>
         <StatePill chat={lampo} testid="lampo-state" />
         <span className="sp" />
-        <button type="button" className="btn btn-ghost btn-s" disabled={!last || busy} title={t('lampo.toWorkTip')} onClick={toWork} data-testid="lampo-to-work">{t('lampo.toWork')}</button>
+        <button type="button" className="btn btn-ghost btn-s" disabled={!last || busy || briefing} title={t('lampo.toWorkTip')} onClick={toWork} data-testid="lampo-to-work">{t('lampo.toWork')}</button>
         {busy && <IconButton label={t('dialogs.orchestrator.stopLabel')} tone="danger" onClick={() => void stop(lampo.id)} testid="lampo-stop"><IconStop size={14} /></IconButton>}
         <IconButton label={t('lampo.clear')} disabled={busy || !items?.length} onClick={() => void clearFlash(lampo.id)} testid="lampo-clear"><IconEraser size={14} /></IconButton>
       </div>

@@ -1,11 +1,13 @@
 // The app-managed MCP servers in the UI (ADR 0086): one shared state read over IPC (mcpservers:state) and kept fresh by
 // mcpservers:changed, plus the pure readings the cards show: a server's state (works, not tried, token missing, error,
-// off), how many roles may use it, the hub's totals, and the form's text fields to a definition and back. Used by
-// ConnectorsHub (Settings → Connettori) and AgentMcpSection (the agent card's MCP section); pure parts tested in node.
+// off), how many roles may use it, the hub's totals, and the form's text fields to a definition and back; the add
+// panel's form (ADR 0207: one command line, masked tokens, who uses it) and the drafts the Orchestrator opens there
+// (app_config form → ui:command mcpDraft). Used by ConnectorsHub (Settings → Connettori), McpAddPanel and
+// AgentMcpSection (the agent card's MCP section); pure parts tested in node.
 import { useEffect, useState } from 'react';
 import type { McpServerDef, McpServerView, McpServersState, McpToolAccess } from '@shared/mcp-servers';
-import { idFrom, serverOffered, toolAllowed } from '@shared/mcp-servers';
-import { ROLE_IDS } from '@shared/roles';
+import { MCP_ACCESS_ROLES, accessOn, idFrom, toolAllowed } from '@shared/mcp-servers';
+import { shellWords, type McpDraft } from '@shared/mcp-paste';
 
 export type ServerStatus = 'ok' | 'untested' | 'missing' | 'failed' | 'off';
 
@@ -16,9 +18,9 @@ export function serverStatus(s: McpServerView): ServerStatus {
   return s.lastTest.ok ? 'ok' : 'failed';
 }
 
-/** The roles that may use at least one of the server's tools (by their card; the role's tool classes aside). */
+/** The roles (and Flash) that may use at least one of the server's tools (by their card; the role's tool classes aside). */
 export function rolesWith(state: McpServersState, id: string): string[] {
-  return ROLE_IDS.filter(r => serverOffered(state.access[r]?.servers[id]));
+  return MCP_ACCESS_ROLES.filter(r => accessOn(r, state.access[r]?.servers[id]));
 }
 
 /** Tools of the last test that this access lets through. */
@@ -106,3 +108,56 @@ export function useMcpServers(): { state: McpServersState | null; error: boolean
   }, []);
   return { state, error, set: publish };
 }
+
+/** A command and its arguments as one line, quoting what needs it ("C:\\My files" keeps its space). */
+export function commandLine(command: string, args: readonly string[]): string {
+  return [command, ...args].filter(w => w !== '').map(w => (/[\s"']/.test(w) || w === '' ? `"${w.replace(/"/g, '\\"')}"` : w)).join(' ');
+}
+
+/** The add panel's form (McpAddPanel.tsx, ADR 0207): the command as one line, tokens with their typed value (kept only
+ *  in the panel until saved to the secret store), who may use the server. */
+export interface AddForm {
+  label: string; transport: 'stdio' | 'http'; line: string; url: string; env: string; headers: string; purpose: string;
+  tokens: { name: string; prefix?: string; value: string }[]; roles: Record<string, boolean>;
+}
+export const defaultRoles = (): Record<string, boolean> => Object.fromEntries(MCP_ACCESS_ROLES.map(r => [r, accessOn(r, undefined)]));
+export const emptyAddForm = (): AddForm => ({ label: '', transport: 'stdio', line: '', url: '', env: '', headers: '', purpose: '', tokens: [], roles: defaultRoles() });
+
+export function addFormOf(d: Pick<McpDraft, 'def'> & { values?: Record<string, string> }): AddForm {
+  const f = d.def;
+  return {
+    label: f.label, transport: f.transport, line: f.transport === 'stdio' ? commandLine(f.command ?? '', f.args ?? []) : '', url: f.url ?? '',
+    env: Object.entries(f.env ?? {}).map(([k, v]) => `${k}=${v}`).join('\n'), headers: Object.entries(f.headers ?? {}).map(([k, v]) => `${k}: ${v}`).join('\n'),
+    purpose: f.purpose ?? '', tokens: f.secrets.map(s => ({ name: s.name, ...(s.prefix ? { prefix: s.prefix } : {}), value: d.values?.[`${s.where}:${s.name}`] ?? '' })), roles: defaultRoles(),
+  };
+}
+
+/** The add form → a definition for mcpservers:save (main validates it again); null when the command line cannot be read. */
+export function defOfAdd(f: AddForm, id?: string): McpServerDef | null {
+  const where = f.transport === 'stdio' ? 'env' as const : 'header' as const;
+  const secrets = f.tokens.filter(x => x.name.trim()).map(x => ({ where, name: x.name.trim(), ...(where === 'header' && x.prefix ? { prefix: x.prefix } : {}) }));
+  const common = { id: id ?? idFrom(f.label), label: f.label.trim(), transport: f.transport, secrets, enabled: true, ...(f.purpose.trim() ? { purpose: f.purpose.trim() } : {}) };
+  if (f.transport === 'stdio') {
+    const words = shellWords(f.line.trim());
+    if (!words?.length) return null;
+    const env = pairs(f.env, /=/);
+    return { ...common, command: words[0]!, args: words.slice(1), ...(Object.keys(env).length ? { env } : {}) };
+  }
+  const headers = pairs(f.headers, /:/);
+  return { ...common, url: f.url.trim(), ...(Object.keys(headers).length ? { headers } : {}) };
+}
+
+// a draft the Orchestrator opened for the user (app_config form): waits here until Settings → Connettori takes it
+let pendingDraft: { def: McpServerDef; tokens: string[] } | null = null;
+const draftListeners = new Set<() => void>();
+export function openMcpDraft(json: string): boolean {
+  try {
+    const d = JSON.parse(json) as { def?: McpServerDef; tokens?: string[] };
+    if (!d.def || typeof d.def !== 'object' || (d.def.transport !== 'stdio' && d.def.transport !== 'http')) return false;
+    pendingDraft = { def: { ...d.def, secrets: Array.isArray(d.def.secrets) ? d.def.secrets : [] }, tokens: Array.isArray(d.tokens) ? d.tokens : [] };
+    for (const l of draftListeners) l();
+    return true;
+  } catch { return false; }
+}
+export const takeMcpDraft = (): { def: McpServerDef; tokens: string[] } | null => { const d = pendingDraft; pendingDraft = null; return d; };
+export function onMcpDraft(fn: () => void): () => void { draftListeners.add(fn); return () => { draftListeners.delete(fn); }; }

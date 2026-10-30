@@ -1,8 +1,7 @@
 // The clicks of the Miglioramento page (ADR 0030): [Applica] / [No] on a proposal of the brain's shared
 // self-improvement loop and [Ripristina] of a policy's previous version. The app never writes the loop's state
 // (<brain>/ops/state/improve): each click runs the brain's own CLI, ops/improve/improve.mjs apply|reject|rollback
-// --json, as an Electron-node child in the brain folder, one at a time (the CLI appends to shared files), like the
-// model comparisons' switch.mjs (compare.ts). The page reads the loop through the brain proxy (/api/improve); a brain
+// --json, as an Electron-node child in the brain folder, one at a time (the CLI appends to shared files). The page reads the loop through the brain proxy (/api/improve); a brain
 // without the CLI (a new user's, or one whose ops/improve has no improve.mjs yet) is answered by main itself
 // (learnStatusWithoutCli, served as /api/improve by brain/index.ts): an empty status that says the loop is missing,
 // so the page shows a plain empty state instead of the server child's MODULE_NOT_FOUND stack (seen 2026-10-18).
@@ -11,8 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { LearnResult } from '../../shared/contract';
 import { log } from '../log';
-import { errLine } from './compare';
-import { runNode, type NodeRunner } from './node';
+import { errLine, runNode, type NodeRunner } from './node';
 
 /** Who the loop's audit names for a click in the app (the owner's name stays out of the app's code). */
 export const BY = 'app (clic)';

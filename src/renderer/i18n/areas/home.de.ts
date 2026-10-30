@@ -7,8 +7,6 @@ export const homeDe: typeof homeIt = {
   'home.startHere': 'Dein Ausgangspunkt',
   'home.orchestratorWidth': 'Breite des Orchestrators', 'home.orchestratorStart': 'Womit fangen wir an?',
   'home.orchestratorIntro': 'Ein Ort für deine Ideen, Agenten und den nächsten Schritt. Dein Orchestrator bleibt hier, während du arbeitest.',
-  'home.headlineBy': (p: { model: string }) => `Witz von ${p.model} zu den heutigen Ereignissen; einer pro Tag, im ersten Aufruf von Battito.`,
-  'home.headlineBuiltin': 'Ein Witz aus der eigenen Liste der App: der des Modells kommt mit der nächsten Aktualisierung.',
   'home.orchestrator': 'Orchestrator',
   'home.agents': 'Agenten', 'home.manageAgents': 'Agenten verwalten', 'home.back': 'Zurück zum Grindhouse', 'home.workspace': 'Deine Agenten bei der Arbeit und der Orchestrator',
   'home.chooseEngine': 'Engine des Orchestrators wählen', 

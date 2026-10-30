@@ -46,7 +46,7 @@ import { QuestionsWindow } from './components/QuestionsWindow';
 import { LaunchBanner } from './components/LaunchBanner';
 import { MemoryPage } from './components/brain-model/MemoryPage';
 import { hubRedirect } from './lib/memory-hub';
-import { ClassifiersPage } from './components/brain-model/ClassifiersPage';
+import { AndamentoPage } from './components/andamento/AndamentoPage';
 import { MapPage } from './components/brain-model/MapPage';
 import { LogPage } from './components/LogPage';
 // the Guida (three languages of cards) loads when it opens, not with the first screen
@@ -71,6 +71,7 @@ function onKey(e: KeyboardEvent): void {
   if (!u.modal && !u.viewer.open && !editable(e.target)) {
     const r = goSequence(gPending, e, Date.now(), [...BRAIN_PAGES, ...GO_ALIASES]);
     gPending = r.pendingAt;
+    // an old id (G Q → 'qualita') is redirected by go() to its tab (ADR 0202)
     if (r.target) { e.preventDefault(); go({ page: r.target as (typeof BRAIN_PAGES)[number]['id'] }); return; }
     if (r.handled) { e.preventDefault(); return; }
   }
@@ -194,7 +195,7 @@ function PageFrame({ id }: { id: (typeof BRAIN_PAGES)[number]['id'] }) {
           ? <div className="bx bx-page bx-scroll" role="region" aria-label={t('cmp.app.settings')}><div className="bx-inner"><SettingsPage /></div></div>
           : id === 'memoria'
             ? <div className="bx bx-page bx-scroll" role="region" aria-label={pageLabel(id)}><div className="bx-inner mh-inner"><MemoryPage /></div></div>
-            : id === 'classificatori' ? <ClassifiersPage /> : id === 'collegamenti' ? <MapPage />
+            : id === 'andamento' ? <AndamentoPage /> : id === 'collegamenti' ? <MapPage />
               : <BrainPage id={id} arg={arg ?? undefined} onNavigate={goTarget} bridge={brainBridge} />}
         </ErrorBoundary>
       </div>

@@ -4,7 +4,7 @@
 export const CONCEPT_IDS: readonly string[] = [
   'every-task-agent', 'delegation', 'agents', 'skills', 'orchestrator', 'runs', 'metrics', 'errors-rules', 'brain-scripts',
   'classifiers', 'permissions', 'questions', 'grindhouse', 'memory-hub', 'tasks', 'setup', 'brain',
-  'search', 'file-viewer', 'routing', 'costs', 'mcp-servers', 'updates', 'maintenance', 'proposals', 'trials', 'auto-close',
-  'log', 'impara', 'held-news', 'context', 'quality', 'flash', 'orchestrator-app', 'voice', 'recordings', 'personal-browser',
-  'notifications', 'routines',
+  'search', 'file-viewer', 'costs', 'mcp-servers', 'updates', 'maintenance', 'proposals', 'trials', 'auto-close',
+  'log', 'impara', 'held-news', 'context', 'quality', 'trends', 'flash', 'orchestrator-app', 'voice', 'recordings', 'personal-browser',
+  'notifications', 'routines', 'settings', 'guide', 'brain-map',
 ];

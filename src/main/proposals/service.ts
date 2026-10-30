@@ -54,9 +54,9 @@ export interface ProposalsOptions {
 /** The «Applicate da sole» list: the newest auto-applied cards of the last two weeks. */
 const AUTO_LIST = 20, AUTO_LIST_MS = 14 * 86_400_000;
 
-/** The sources whose skill and rule proposals wait for the user's «Manutenzione» (ADR 0153): the skill candidates
- *  and the Battito's learned rules. The maintenance's own cards, applied changes, settings, trials and tiers do not. */
-const HELD: readonly ProposalSource[] = ['candidate', 'pulse'];
+/** The sources whose skill and rule proposals wait for the user's «Manutenzione» (ADR 0153): the skill candidates.
+ *  The maintenance's own cards, applied changes, settings, trials and tiers do not. */
+const HELD: readonly ProposalSource[] = ['candidate'];
 /** A held card made after the last click: hidden until the next one. */
 export const heldBack = (c: Proposal, clickAt: number | null): boolean =>
   HELD.includes(c.source) && (clickAt === null || Date.parse(c.provenance.at) > clickAt);

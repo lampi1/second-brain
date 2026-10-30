@@ -12,12 +12,12 @@ it('keeps the file viewer private and removes the retired explorer from public p
  expect(BRAIN_PAGES.map(page=>page.id)).not.toContain('esplora');expect(BRAIN_PAGES.map(page=>page.id)).not.toContain('file');
 });
 it('opens old file links in the viewer overlay at the cited line, over the page, and falls back to Home only when no file was given',()=>{
- go({page:'costi'});const history=ui.get().history.length;
- goTarget('esplora/notes/report.md:12');expect(ui.get().page).toBe('costi');expect(ui.get().viewer.open).toBe(true);
+ go({page:'andamento'});const history=ui.get().history.length;
+ goTarget('esplora/notes/report.md:12');expect(ui.get().page).toBe('andamento');expect(ui.get().viewer.open).toBe(true);
  expect(shownFile()).toMatchObject({path:'notes/report.md',line:12});expect(ui.get().history).toHaveLength(history);
  const parsed=parseTarget('esplora/now.md:3');expect(parsed).toMatchObject({map:false,id:'file'});
  expect(currentLink().startsWith('sb://file/')).toBe(true);
- expect(escapeOne()).toBe(true);expect(ui.get().viewer.open).toBe(false);expect(ui.get().page).toBe('costi');
+ expect(escapeOne()).toBe(true);expect(ui.get().viewer.open).toBe(false);expect(ui.get().page).toBe('andamento');
  go({page:'esplora'});expect(ui.get().page).toBe('home');expect(ui.get().viewer.open).toBe(false);
 });
 it('retains chat scope and coordinates on canonical viewer navigation, and moves back and forward among the files',()=>{

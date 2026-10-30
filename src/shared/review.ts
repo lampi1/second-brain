@@ -8,7 +8,11 @@
 // never a made-up score. Shared by main (learn/review-store.ts, learn/service.ts) and the renderer (ImparaReview.tsx);
 // tests: test/unit/review.test.ts.
 
-export type CardKind = 'choice' | 'recall' | 'node';
+import { isPick, parseQuiz, type QuizKind } from './quiz';
+import type { ImparaScore, SubjectMastery } from './mastery';
+
+/** recall, a click on the diagram (node), or a question of shared/quiz.ts (ADR 0204; a check's 'predict' is a 'choice') */
+export type CardKind = 'recall' | 'node' | Exclude<QuizKind, 'predict'>;
 /** FSRS grades: 1 forgot, 2 hard, 3 good, 4 easy */
 export type ReviewGrade = 1 | 2 | 3 | 4;
 export const REVIEW_GRADES: readonly ReviewGrade[] = [1, 2, 3, 4];
@@ -22,12 +26,17 @@ export interface ReviewCard {
   lessonId: string;
   subject: string;
   kind: CardKind;
-  /** where it came from: one of the lesson's checks, the cards run, or a tutor answer (ADR 0190) */
-  origin: 'check' | 'cards' | 'tutor';
+  /** where it came from: one of the lesson's checks, the cards run, a tutor answer (ADR 0190), or the «Studio» column's
+   *  flashcards and quiz (ADR 0205) */
+  origin: 'check' | 'cards' | 'tutor' | 'studio';
   q: string;
-  /** choice: 2-4 options and the right one */
+  /** the pick kinds (choice, truefalse, cloze): 2-4 options and the right one */
   options?: string[];
   correct?: number;
+  /** order: the steps in order; match: the left side (and `pairs` the right side); cloze: the code with its blank */
+  items?: string[];
+  pairs?: string[];
+  code?: string;
   /** node: the diagram node that answers it */
   node?: string;
   /** recall: the answer; choice and node: why the answer is right */
@@ -42,8 +51,9 @@ export interface ReviewLog { card: string; at: number; grade: ReviewGrade }
 
 /** One subject on the start page: its lessons and cards, how many are due, and the model's estimate of recall today
  *  over the cards studied at least once (null until one is). */
-export interface ReviewSubject { name: string; lessons: number; cards: number; due: number; fresh: number; recall: number | null }
-export interface ReviewSummary { due: number; fresh: number; subjects: ReviewSubject[]; streak: number; reviewedToday: number }
+export interface ReviewSubject { name: string; lessons: number; cards: number; due: number; fresh: number; recall: number | null; mastery?: SubjectMastery }
+/** score = the overall score of the start page's top (ADR 0204, shared/mastery.ts), added by main's state */
+export interface ReviewSummary { due: number; fresh: number; subjects: ReviewSubject[]; streak: number; reviewedToday: number; score?: ImparaScore }
 
 /** A card as a review session shows it: with the lesson's title, its diagram (for a node card) and the facts it cites. */
 export interface ReviewItem { card: ReviewCard; lesson: string; diagram?: string; facts: { id: string; claim: string; ref: string; from: 'web' | 'file' | 'known' }[] }
@@ -164,18 +174,18 @@ export function parseCards(v: unknown, nodes: readonly string[], facts: readonly
     const q = str(x.q, 300), answer = str(x.answer ?? x.why, 500);
     const cites = (Array.isArray(x.cites) ? x.cites : []).filter((id): id is string => typeof id === 'string' && facts.includes(id)).slice(0, 4);
     if (!q || !answer || !cites.length) continue;
-    if (x.kind === 'choice') {
-      // an empty option is not dropped (that would shift `correct` onto another one): the card is
-      const options = (Array.isArray(x.options) ? x.options : []).map(op => str(op, 160));
-      const correct = typeof x.correct === 'number' && Number.isInteger(x.correct) ? x.correct : -1;
-      if (options.length < 2 || options.length > 4 || options.some(op => !op) || correct < 0 || correct >= options.length || new Set(options).size !== options.length) continue;
-      out.push({ kind: 'choice', q, options, correct, answer, cites });
-    } else if (x.kind === 'node') {
+    if (x.kind === 'node') {
       const node = typeof x.node === 'string' ? x.node.trim() : '';
       if (!nodes.includes(node)) continue;
       out.push({ kind: 'node', q, node, answer, cites });
     } else if (x.kind === 'recall') {
       out.push({ kind: 'recall', q, answer, cites });
+    } else if (typeof x.kind === 'string' && (isPick(x.kind) || x.kind === 'order' || x.kind === 'match')) {
+      // the question kinds of shared/quiz.ts (a 'predict' is asked as a choice)
+      let b: ReturnType<typeof parseQuiz>;
+      try { b = parseQuiz({ ...x, q }, { qMax: 300, optionMax: 160 }); } catch { continue; }
+      const { kind, ...rest } = b;
+      out.push({ ...rest, kind: kind === 'predict' ? 'choice' : kind, answer, cites });
     }
   }
   return out;

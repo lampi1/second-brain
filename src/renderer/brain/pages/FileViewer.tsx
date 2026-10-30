@@ -27,8 +27,6 @@ import {Compare} from './FileDiff';
 import type {PDFDocumentProxy,PDFPageProxy} from '../lib/pdf';
 import {pdfPagesToDraw,samePages} from '../lib/pdf-window';
 import {t} from '../../i18n';
-// Loaded on demand: the Battito card reaches the app bridge and store, which must not load with the brain pages.
-const FilePulse=lazy(()=>import('../../components/ContextPulse').then(m=>({default:m.FilePulse})));
 const ImageZoom=lazy(()=>import('../../components/ImageZoom').then(m=>({default:m.ImageZoom})));
 import {FILE_PAGE_BYTES,lineCount,lineText,readFileViewArg,type FileReference,type FileViewResult} from '@shared/file-view';
 type TextResult=Extract<FileViewResult,{kind:'text'}>;
@@ -226,6 +224,8 @@ function badgeTone(path:string,kind:FileViewResult['kind']|undefined):string{
 /** A 24-unit stroke icon (the header's actions). */
 const Ico=({d,size=15}:{d:string;size?:number})=><svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={d}/></svg>;
 const LINK_ICON='M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1';
+// a path: a slash between two dots, for «Copia percorso» (the copy icon copies the file itself)
+const PATH_ICON='M5 17.5h.01M19 6.5h.01M15.5 4.5l-7 15';
 const FOLDER_ICON='M3.5 7.5a2 2 0 0 1 2-2h4l2 2.5h7a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z';
 const COMPARE_ICON='M8 4v16M16 4v16M4 8l4-4 4 4M12 16l4 4 4-4';
 
@@ -275,6 +275,8 @@ export function CitedFile({reference,chrome}:{reference:FileReference;chrome?:Vi
   const[picked,setPicked]=useState<number|undefined>(undefined);
   const copyLine=useCallback((n:number)=>{setPicked(n);void copyText(fileLink(reference,n)).then(ok=>toast(ok?t('vw.lineLinkCopied',{n}):t('vw.copyFailed')));},[reference]);
   const copyPath=()=>void copyText(shownPath).then(ok=>toast(ok?t('vw.pathCopied'):t('vw.copyFailed')));
+  // the copy icon: the file itself on the clipboard (its text, an image, or the file to paste in a folder or a chat)
+  const copyFile=()=>void window.sb.invoke('app:copyFile',{path:shownPath}).then(r=>toast('reason'in r?r.reason:t(`vw.fileCopied.${r.how}`)),()=>toast(t('vw.copyFailed')));
   const copyFileLink=()=>void copyText(fileLink(reference,picked??reference.line)).then(ok=>toast(ok?t('vw.linkCopied'):t('vw.copyFailed')));
   const lineNote=reference.line?`:${reference.line}${reference.column?`:${reference.column}`:''}`:'';
   return <div ref={host} className="bx-viewer vw-file" tabIndex={-1} data-testid="cited-file-viewer" data-kind={kind}>
@@ -292,7 +294,8 @@ export function CitedFile({reference,chrome}:{reference:FileReference;chrome?:Vi
       </div>
       <div className="vw-actions">
         {searchable&&<button type="button" className="vw-icon-btn" aria-pressed={!!find} onClick={()=>setFind(f=>f?null:{key:1})} aria-label={t('vw.find')} data-tip={`${t('vw.find')}|Ctrl+F`} data-testid="viewer-find-open"><IconSearch/></button>}
-        <button type="button" className="vw-icon-btn" onClick={copyPath} aria-label={t('viewer.copyPath')} data-tip={t('viewer.copyPath')} data-testid="viewer-copy-path"><IconCopy/></button>
+        <button type="button" className="vw-icon-btn" onClick={copyFile} aria-label={t('vw.copyFile')} data-tip={t('vw.copyFile')} data-testid="viewer-copy-file"><IconCopy/></button>
+        <button type="button" className="vw-icon-btn" onClick={copyPath} aria-label={t('viewer.copyPath')} data-tip={t('viewer.copyPath')} data-testid="viewer-copy-path"><Ico d={PATH_ICON}/></button>
         <button type="button" className="vw-icon-btn" onClick={copyFileLink} aria-label={t('vw.copyLink')} data-tip={t('vw.copyLink')} data-testid="viewer-copy-link"><Ico d={LINK_ICON}/></button>
         {real&&<button type="button" className="vw-icon-btn" onClick={()=>void showInFolder(real)} aria-label={t('viewer.showInFolder')} data-tip={t('viewer.showInFolder')} data-testid="viewer-show-in-folder"><Ico d={FOLDER_ICON}/></button>}
         {result?.kind==='text'&&<button type="button" className="vw-btn" aria-pressed={compare} onClick={()=>setComparing(compare?null:ref)} data-testid="viewer-compare"><Ico d={COMPARE_ICON} size={14}/>{t('viewer.compare')}</button>}
@@ -312,7 +315,6 @@ export function CitedFile({reference,chrome}:{reference:FileReference;chrome?:Vi
               :result.kind==='pdf'?<Pdf key={ref} data={result.data} name={baseName(result.path)}/>
               :result.kind==='text'?<TextBody key={ref} result={result} line={page.line} go={go} picked={picked} onPick={copyLine}/>:null}</ReportReview>
           </div>
-          {real&&<aside className="vw-side"><Suspense fallback={null}><FilePulse path={real}/></Suspense></aside>}
         </div>
       </div>
     </div>

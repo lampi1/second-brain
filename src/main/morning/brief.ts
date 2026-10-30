@@ -4,7 +4,6 @@
 // Pinned by test/unit/morning/brief.test.ts.
 import type { AgentRun } from '../../shared/agents';
 import type { BrainChange } from '../../shared/brain-model';
-import type { CloudAgent } from '../../shared/cloud';
 import type { ChatSummary, TasksState } from '../../shared/contract';
 import type { MorningBrief, MorningOutcome } from '../../shared/morning';
 
@@ -45,7 +44,6 @@ export interface BriefInput {
   ideas: { titolo?: string; stato?: string; scaduta?: string }[];
   /** today in the brain's days (YYYY-MM-DD) */
   today: string;
-  cloud: CloudAgent[];
   /** the maintenance change log, newest first */
   changes: BrainChange[];
   spendYesterdayUsd: number | null;
@@ -64,7 +62,7 @@ const cut = (s: string, n: number) => { const t = s.replace(/\s+/g, ' ').trim();
 
 export function buildBrief(i: BriefInput): MorningBrief {
   const chat = new Map(i.chats.map(c => [c.id, c]));
-  // root role runs the user would call "work": not the Battito's one-shots, not a delegated child's (its parent reports)
+  // root role runs the user would call "work": not one-shot jobs, not a delegated child's (its parent reports)
   const runs = i.runs.filter(r => r.endedAt !== undefined && r.endedAt >= i.since && r.endedAt <= i.now && r.source !== 'oneshot' && !r.parentRunId)
     .sort((a, b) => b.endedAt! - a.endedAt!).slice(0, 12)
     .map(r => { const c = chat.get(r.chatId); return { runId: r.runId, chatId: r.chatId, title: cut(c?.title || r.goal || r.agentId, 90), outcome: outcomeOf(r), endedAt: r.endedAt!, open: !!c && !c.closedAt && c.state !== 'closed' }; });
@@ -75,14 +73,12 @@ export function buildBrief(i: BriefInput): MorningBrief {
   ].filter((p, k, all) => all.findIndex(x => x.id === p.id) === k).slice(0, 6);
   const ideas = i.ideas.filter(r => !!r.scaduta && /^\d{4}-\d{2}-\d{2}$/.test(r.scaduta) && r.scaduta <= i.today && !/fatta|scartata/i.test(r.stato ?? '') && !!r.titolo?.trim())
     .sort((a, b) => a.scaduta!.localeCompare(b.scaduta!)).slice(0, 4).map(r => ({ title: cut(r.titolo!, 90), due: r.scaduta! }));
-  const cloud = i.cloud.filter(a => (a.status === 'done' || a.status === 'failed' || a.status === 'stopped') && a.updatedAt >= i.since)
-    .slice(0, 4).map(a => ({ id: a.id, title: cut(a.title, 90), status: a.status as 'done' | 'failed' | 'stopped' }));
   const changes = i.changes.filter(c => c.job !== 'user' && c.at >= i.since && !c.rolledBackAt).slice(0, 20).map(c => ({ id: c.id, summary: cut(c.summary, 140), canRollback: c.canRollback }));
   const stalled = i.chats.filter(c => !c.isOrchestrator && !c.parentId && !c.closedAt && (c.state === 'running' || c.state === 'starting') && !c.queued && !c.pending)
     .map(c => ({ c, quiet: i.now - Math.max(i.lastEventAt?.(c.id) ?? 0, c.updatedAt) }))
     .filter(x => x.quiet >= Math.max(1, i.stallMin) * 60_000)
     .map(x => ({ chatId: x.c.id, title: cut(x.c.agent?.name ? `${x.c.agent.name} · ${x.c.title}` : x.c.title, 90), quietMin: Math.floor(x.quiet / 60_000) }));
-  return { since: i.since, at: i.now, runs, pending: i.pending, approvals: i.approvals, prs, tasksAt: t?.at ?? null, ideas, cloud, changes, spendYesterdayUsd: i.spendYesterdayUsd, stalled };
+  return { since: i.since, at: i.now, runs, pending: i.pending, approvals: i.approvals, prs, tasksAt: t?.at ?? null, ideas, changes, spendYesterdayUsd: i.spendYesterdayUsd, stalled };
 }
 
 /** Yesterday's $ in the brain's cost report (/api/cost: byDay and cursor.byDay, { day: { usd } }); null when absent. */
