@@ -102,7 +102,7 @@ describe('LearnService tutor', () => {
     let n = 0;
     const { svc, runs, id, lesson } = make(() => {
       n++;
-      if (n === 1) return ok('Risposta.\nCARD: {"q": "Q?", "answer": "A.", "cites": ["f5"]}'); // f5 is not confirmed
+      if (n === 1) return ok('Risposta.\nCARD: {"q": "Q?", "answer": "A.", "cites": ["f9"]}'); // f9 is no verified fact
       if (n === 2) return { ok: false, error: 'tempo scaduto' };
       if (n === 3) return { ok: false, error: 'il motore si è chiuso' };
       return ok('Di nuovo [f2].');

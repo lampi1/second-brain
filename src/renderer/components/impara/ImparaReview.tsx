@@ -40,7 +40,7 @@ export function streaks(results: readonly { right: boolean }[]): { now: number; 
   return { now, best };
 }
 
-export function ImparaReview({ subject }: { subject?: string }) {
+export function ImparaReview({ subject, lesson }: { subject?: string; lesson?: string }) {
   const full = imparaPrefs.use(p => p.full);
   const [items, setItems] = useState<ReviewItem[] | null>(null);
   const [i, setI] = useState(0);
@@ -54,14 +54,15 @@ export function ImparaReview({ subject }: { subject?: string }) {
   useEffect(() => {
     let alive = true;
     setItems(null); setI(0); setResults([]); setPractice(false); setEnded(null); started.current = Date.now();
-    void reviewQueue(subject ? 'quiz' : 'due', subject).then(x => { if (alive) { all.current = x ?? []; setItems(x ?? []); } });
+    // a lesson's «Studio» quiz (ADR 0205) plays its own questions
+    void reviewQueue(subject || lesson ? 'quiz' : 'due', subject, lesson).then(x => { if (alive) { all.current = x ?? []; setItems(x ?? []); } });
     return () => { alive = false; };
-  }, [subject, round]);
+  }, [subject, lesson, round]);
 
   const item = items?.[i] ?? null;
   const total = items?.length ?? 0;
   useEffect(() => { if (items && total && i >= total && ended === null) setEnded(Date.now()); }, [items, total, i, ended]);
-  const title = subject ? t('impara.rv.quizOf', { subject }) : t('impara.rv.today');
+  const title = lesson ? t('impara.studio.quizTitle', { lesson: items?.[0]?.lesson ?? '' }) : subject ? t('impara.rv.quizOf', { subject }) : t('impara.rv.today');
   const finish = (g: ReviewGrade, right: boolean) => {
     if (!item) return;
     const id = item.card.id, before = item.card.mem?.s ?? 0;
@@ -114,7 +115,7 @@ export function ImparaReview({ subject }: { subject?: string }) {
         </div>
       )}
       {!items ? <div className="ip-center"><IconSpinner size={18} /></div>
-        : !item ? <End results={results} empty={!total} ms={(ended ?? Date.now()) - started.current} practice={practice} onRedo={redo} onAgain={subject ? () => setRound(r => r + 1) : undefined} />
+        : !item ? <End results={results} empty={!total} ms={(ended ?? Date.now()) - started.current} practice={practice} onRedo={redo} onAgain={subject || lesson ? () => setRound(r => r + 1) : undefined} />
         : <Card key={`${item.card.id}/${i}/${round}/${practice ? 'p' : ''}`} item={item} practice={practice} timed={timed} onGrade={finish} />}
     </div>
   );

@@ -4,6 +4,7 @@
 // app's CSP, script-src 'self'). Colors: the validated categorical palette (dataviz reference, one per theme, in fixed
 // order, never cycled: at most MAX_SERIES series, at most 8 pie slices before they repeat), text and grid from the
 // app's tokens read at draw time; the block redraws when the theme changes. Motion off under prefers-reduced-motion.
+// Impara draws its chart visuals with it too (ADR 0205) and points at one label per beat (markLabel).
 import {
   ArcElement, BarController, BarElement, CategoryScale, Chart, DoughnutController, Filler, Legend, LinearScale,
   LineController, LineElement, PieController, PointElement, Title, Tooltip,
@@ -57,8 +58,9 @@ export function drawChart(canvas: HTMLCanvasElement, spec: ChartSpec): () => voi
       plugins: {
         title: { display: !!spec.title, text: spec.title ?? '', color: text2, align: 'start', font: { family: font, size: 13, weight: 600 }, padding: { bottom: 10 } },
         legend: { display: many || round, position: round ? 'right' : 'bottom', align: 'start', labels: { color: text2, boxWidth: 10, boxHeight: 10, useBorderRadius: true, borderRadius: 3, font: { family: font, size: 11 } } },
+        // dark in both themes, as the app's own tooltips: its text stays light
         tooltip: {
-          backgroundColor: css('--tooltip-bg') || '#232731', titleColor: css('--text') || '#eceef3', bodyColor: text2, borderColor: css('--border-3') || '#3a404d', borderWidth: 1,
+          backgroundColor: css('--tooltip-bg') || '#232731', titleColor: '#eef0f5', bodyColor: '#c4c9d4', borderColor: 'rgba(255,255,255,0.08)', borderWidth: 1,
           padding: 8, cornerRadius: 6, boxPadding: 4, titleFont: { family: font }, bodyFont: { family: font },
           callbacks: { label: c => `${round ? c.label : c.dataset.label ?? ''}: ${fmt(Number(c.raw))}` },
         },
@@ -70,4 +72,17 @@ export function drawChart(canvas: HTMLCanvasElement, spec: ChartSpec): () => voi
     },
   });
   return () => chart.destroy();
+}
+
+/** Impara's chart visual (ADR 0205): the label a beat points at shown with its values (its bars or points active, the
+ *  tooltip open); null clears it. Does nothing on a canvas without a chart. */
+export function markLabel(canvas: HTMLCanvasElement, label: string | null): void {
+  const chart = Chart.getChart(canvas);
+  if (!chart) return;
+  const i = label === null ? -1 : (chart.data.labels ?? []).findIndex(l => String(l) === label);
+  const active = i < 0 ? [] : chart.data.datasets.map((_, d) => ({ datasetIndex: d, index: i }));
+  chart.setActiveElements(active);
+  const el = active[0] ? chart.getDatasetMeta(0).data[i] : null;
+  chart.tooltip?.setActiveElements(active, el ? { x: el.x, y: el.y } : { x: 0, y: 0 });
+  chart.update();
 }

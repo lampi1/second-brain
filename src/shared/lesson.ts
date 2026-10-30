@@ -11,8 +11,12 @@
 // different things; then every piece cites its facts and is split into beats the board animates one at a time.
 // Each lesson belongs to a subject and leaves review cards (ADR 0189, shared/review.ts).
 // Shared by main/learn/ (generation, store) and the renderer (components/impara/); pinned by test/unit/lesson.test.ts.
+// Since ADR 0205 a piece declares its visual (shared/lesson-visual.ts) and its role in the lesson's fixed structure, the
+// draft is scored by a quality gate, and the «Studio» column makes more from the same verified facts (lesson-studio.ts).
 import type { Effort } from './contract';
 import { subjectName, type ReviewSummary } from './review';
+import { beatMark, parseVisual, type LessonVisual } from './lesson-visual';
+import type { LessonQuality, StudioItem, StudioKind } from './lesson-studio';
 import { parseQuiz, type QuizBody } from './quiz';
 import type { LessonTopics } from './web-topics';
 
@@ -98,7 +102,18 @@ export interface LessonCode { file: string; diff: string }
 export interface LessonWord { term: string; meaning: string }
 /** One beat of a piece: a sentence said while the board shows its part (Mayer: temporal contiguity, signaling): the
  *  camera goes to `focus`, an arrow `flow` lights with a packet moving along it, `note` is the «guarda qui» callout. */
-export interface LessonBeat { say: string; focus: string[]; flow?: { from: string; to: string }; note?: string }
+export interface LessonBeat {
+  say: string; focus: string[]; flow?: { from: string; to: string }; note?: string;
+  /** a code visual: the lines (from 1) this sentence is about (ADR 0205) */
+  lines?: [number, number];
+  /** a formula's symbol or a chart's label this sentence is about (ADR 0205) */
+  mark?: string;
+}
+/** A piece's place in the lesson's fixed structure (ADR 0205): the problem first, a concrete example then the rule
+ *  (concreteness fading), a worked example, a half-done one, the learner's own go, the one common misconception a
+ *  source states, the closing recap with the whole lesson's mind map. */
+export type PieceRole = 'problem' | 'example' | 'rule' | 'worked' | 'faded' | 'practice' | 'misconception' | 'recap';
+export const PIECE_ROLES: readonly PieceRole[] = ['problem', 'example', 'rule', 'worked', 'faded', 'practice', 'misconception', 'recap'];
 export interface LessonStep {
   id: string;
   title: string;
@@ -121,6 +136,10 @@ export interface LessonStep {
   beats?: LessonBeat[];
   /** the ids of the lesson's facts this piece stands on (shown as its sources) */
   cites?: string[];
+  /** the picture that explains it (ADR 0205); absent = the lesson's flowchart */
+  visual?: LessonVisual;
+  /** its role in the lesson's structure (ADR 0205) */
+  role?: PieceRole;
 }
 
 /** choice = the option picked; for order and match (ADR 0204) `correct` when right, -1 when not, and `seq` = what the
@@ -187,13 +206,18 @@ export interface Lesson {
   cards?: { state: 'making' | 'done' | 'failed'; n?: number; error?: string };
   /** the tutor's conversation (ADR 0190), oldest first, the last TUTOR_KEEP */
   tutor?: TutorTurn[];
+  /** what the «Studio» column made from the verified facts (ADR 0205), reopened as it was */
+  studio?: Partial<Record<StudioKind, StudioItem>>;
+  /** the quality gate's report on the written pieces (ADR 0205) */
+  quality?: LessonQuality;
 }
 
 // ── the tutor (ADR 0190) ───────────────────────────────────────────────────────────────────────────────────────────
 
 /** coach: when the learner has not tried yet, a hint or a question back first (Bastani et al. 2024: a tutor that does
- *  not hand out the answer keeps the learning); tell: the answer at once («Dimmelo e basta») */
-export type TutorMode = 'coach' | 'tell';
+ *  not hand out the answer keeps the learning); tell: the answer at once («Dimmelo e basta»); quiz: «Mettimi alla
+ *  prova» (ADR 0205), the tutor asks one question at a time and judges each answer */
+export type TutorMode = 'coach' | 'tell' | 'quiz';
 export interface TutorTurn {
   id: string;
   /** what the learner asked or tried (maybe spoken) */
@@ -414,7 +438,7 @@ function parseCode(v: unknown): LessonCode | undefined {
 const BEATS_MAX = 6;
 /** A piece's beats: each a sentence with its nodes (known ids only), an arrow between two known nodes, a short note.
  *  Beats with nothing to say are left out; at most BEATS_MAX. */
-function parseBeats(v: unknown, nodes: readonly string[]): LessonBeat[] {
+function parseBeats(v: unknown, nodes: readonly string[], visual?: LessonVisual): LessonBeat[] {
   const out: LessonBeat[] = [];
   for (const b of list(v).slice(0, BEATS_MAX)) {
     if (!b || typeof b !== 'object') continue;
@@ -424,6 +448,8 @@ function parseBeats(v: unknown, nodes: readonly string[]): LessonBeat[] {
     const f = o.flow && typeof o.flow === 'object' ? o.flow as Obj : null;
     const flow = f && typeof f.from === 'string' && typeof f.to === 'string' && nodes.includes(f.from) && nodes.includes(f.to) && f.from !== f.to ? { from: f.from, to: f.to } : undefined;
     const note = text(o.note, 140, 'beat.note', false);
+    // on a visual of its own a beat points at a line, a symbol or a label, never at the flowchart
+    if (visual && visual.kind !== 'flow') { out.push({ say, focus: [], ...beatMark(visual, o), ...(note ? { note } : {}) }); continue; }
     out.push({ say, focus, ...(flow ? { flow } : {}), ...(note ? { note } : {}) });
   }
   return out;
@@ -433,8 +459,11 @@ function parseBeats(v: unknown, nodes: readonly string[]): LessonBeat[] {
  *  the lesson's facts: a citation of another id is dropped. With beats, `say` is their sentences in order. */
 export function parseStep(v: unknown, nodes: readonly string[], id: string, facts: readonly string[] = []): LessonStep {
   const o = obj(v, 'pezzo');
-  const own = text(o.diagram, STEP_DIAGRAM_MAX, 'diagram', false);
-  const beats = own ? [] : parseBeats(o.beats, nodes);
+  const visual = parseVisual(o.visual);
+  const role = PIECE_ROLES.find(r => r === o.role);
+  // a diagram of its own (before ADR 0205) only when no visual says what to draw
+  const own = visual ? '' : text(o.diagram, STEP_DIAGRAM_MAX, 'diagram', false);
+  const beats = own ? [] : parseBeats(o.beats, nodes, visual ?? undefined);
   const focus = list(o.focus).filter((x): x is string => typeof x === 'string' && NODE_ID.test(x) && nodes.includes(x)).slice(0, 8);
   const words = list(o.words).map(w => (w && typeof w === 'object' ? w as Obj : {})).map(w => ({ term: text(w.term, 60, 'term', false), meaning: text(w.meaning, 240, 'meaning', false) }))
     .filter(w => w.term && w.meaning).slice(0, 4);
@@ -447,6 +476,7 @@ export function parseStep(v: unknown, nodes: readonly string[], id: string, fact
     id, title: text(o.title, 120, 'title'), say, text: text(o.text, 1800, 'text', false) || say,
     focus: lit, ...(note ? { note } : {}), ...(code ? { code } : {}), ...(words.length ? { words } : {}), ...(own ? { diagram: own } : {}),
     ...(beats.length > 1 ? { beats } : {}), ...(cites.length ? { cites } : {}),
+    ...(visual && visual.kind !== 'flow' ? { visual } : {}), ...(role ? { role } : {}),
   };
 }
 

@@ -4,6 +4,7 @@
 import type { ImparaState, Lesson, LessonConfidence, LessonExtraKind, LessonStart, TutorMode } from '../lesson';
 import type { RecFound, RecSegment, RecSource, RecState, Recording } from '../recordings';
 import type { ReviewCard, ReviewGrade, ReviewItem, ReviewMode } from '../review';
+import type { StudioKind } from '../lesson-studio';
 import type { VoiceName, VoiceState } from '../voice';
 
 /** renderer → main, media: each entry [argument, result]. Part of InvokeMap (src/shared/contract.ts). */
@@ -52,11 +53,13 @@ export interface MediaInvokeMap {
   'impara:topics': [{ id: string; drop?: string; go?: boolean }, Lesson];
   'impara:remove': [{ id: string }, void];
   /** the review (ADR 0189): a session's cards (the due ones, or a subject's quiz), a card's grade, a lesson's subject */
-  'impara:queue': [{ mode: ReviewMode; subject?: string }, ReviewItem[]];
+  'impara:queue': [{ mode: ReviewMode; subject?: string; lesson?: string }, ReviewItem[]];
   'impara:grade': [{ card: string; grade: ReviewGrade }, ReviewCard];
   'impara:subject': [{ id: string; subject: string }, Lesson];
   /** the tutor (ADR 0190): a question beside the lesson ('impara:tutor' streams the answer), and the session started
    *  ahead while the learner opens the tutor or types */
   'impara:tutor': [{ id: string; at: string; q: string; mode?: TutorMode }, Lesson];
   'impara:tutorWarm': [{ id: string }, void];
+  /** a «Studio» tile (ADR 0205): one short run over the lesson's verified facts; the output lands on the lesson */
+  'impara:studio': [{ id: string; kind: StudioKind }, Lesson];
 }

@@ -22,6 +22,7 @@ import { genuiRequestEn } from './areas/genui-request.en';
 import { voiceEn } from './areas/voice.en';
 import { recEn } from './areas/rec.en';
 import { imparaEn } from './areas/impara.en';
+import { imparaStudioEn } from './areas/impara-studio.en';
 import { imparaV3En } from './areas/impara-v3.en';
 import {studioEn}from'./areas/studio.en';
 import { permissionsEn } from './areas/permissions.en';
@@ -93,6 +94,7 @@ export const en: Dict = {
   ...voiceEn,
   ...recEn,
   ...imparaEn,
+  ...imparaStudioEn,
   ...imparaV3En,
   'genui.request.question': 'Question',
   'genui.request.permission': 'Permission',

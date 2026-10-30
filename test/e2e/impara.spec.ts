@@ -8,7 +8,8 @@
 // verified sources of a piece, its teacher picked in the options line. The review (ADR 0189, 0204): the score and
 // each subject's level on the start page, today's cards one at a time (recall, choice, a part of the diagram to click,
 // put in order, match), a subject's quiz whose wrong answer comes back with «Rifai le sbagliate», a lesson moved to
-// another subject. Screenshots dark.
+// another subject. The «Studio» (ADR 0205): a saved output reopens, a new tile is made, its quiz plays as a review.
+// Screenshots dark.
 import { expect, test } from '@playwright/test';
 import { choose, goPage, launchDemo, shot } from './helpers';
 
@@ -52,12 +53,13 @@ test('learn a PR on the blackboard: pieces, check, better explanation, explain i
     await expect(board.locator('.st-svg')).toBeVisible();
     await expect(board).toHaveAttribute('data-flow', 'engine>manager', { timeout: 10_000 });
     await expect(board.locator('.st-packet')).toHaveCount(1);
-    await expect(page.getByTestId('impara-piece-label')).toHaveText('Pezzo 1 di 5');
+    await expect(page.getByTestId('impara-piece-label')).toHaveText('Pezzo 1 di 6');
     await expect(page.getByTestId('impara-verified')).toContainText('8 fatti verificati');
 
-    // piece 2: its nodes, its real code, its new words
+    // piece 2: a code walkthrough (ADR 0205), its beats on the lines; its real code, its new words
     await page.getByTestId('impara-next').click();
-    await expect(board).toHaveAttribute('data-focus', 'manager', { timeout: 10_000 });
+    await expect(page.getByTestId('impara-visual')).toHaveAttribute('data-kind', 'code', { timeout: 10_000 });
+    await expect(page.getByTestId('impara-visual-lines')).toHaveText('riga 8', { timeout: 10_000 });
     await expect(page.getByTestId('impara-code-panel')).toContainText('ITEM_FRAME_MS');
     await expect(page.getByTestId('impara-note')).toContainText('100 ms → 16 ms');
     await page.waitForTimeout(700);
@@ -76,7 +78,9 @@ test('learn a PR on the blackboard: pieces, check, better explanation, explain i
 
     // the rest arrived meanwhile: piece 3, then «Spiegamelo meglio» adds a piece after it and lands on it
     await page.getByTestId('impara-check-next').click();
-    await expect(page.getByTestId('impara-piece-label')).toHaveText('Pezzo 3 di 5', { timeout: 15_000 });
+    await expect(page.getByTestId('impara-piece-label')).toHaveText('Pezzo 3 di 6', { timeout: 15_000 });
+    // one primary button; the others in «Non mi è chiaro» (ADR 0205)
+    await page.getByTestId('impara-unclear').click();
     await page.getByTestId('impara-better').click();
     await expect(page.getByTestId('impara-busy')).toBeVisible();
     await expect(page.getByTestId('impara-say')).toContainText('due semafori', { timeout: 10_000 });
@@ -137,7 +141,7 @@ test('a saved lesson reopens where it was, light theme, rail with numbers beside
     await expect(board).toHaveAttribute('data-nodes', '9');
     await expect(board.locator('.st-cluster')).toHaveCount(1);
     await expect(board).toHaveAttribute('data-flow', 'ask>files', { timeout: 15_000 });
-    await expect(page.getByTestId('impara-verified')).toContainText('2 fatti verificati');
+    await expect(page.getByTestId('impara-verified')).toContainText('5 fatti verificati');
     await page.waitForTimeout(1100);
     await shot(page, 'impara-tall-light');
   } finally {
@@ -223,7 +227,8 @@ test('the review: score, subjects and levels, today’s cards (recall, choice, c
     await expect(page.getByTestId('impara-overall')).toBeVisible();
     await expect(page.getByTestId('impara-score-value')).toHaveAttribute('aria-label', /^\d+$/);
     await expect(page.getByTestId('impara-score-delta')).toContainText('questa settimana');
-    await expect(page.getByTestId('impara-score-solid')).toContainText('/9');
+    // 9 cards of the lessons and checks, 3 «Studio» flashcards (ADR 0205)
+    await expect(page.getByTestId('impara-score-solid')).toContainText('/12');
     await shot(page, 'impara-review-home-dark');
 
     // today's review: the two due cards and the three new ones, each answered its own way
@@ -303,6 +308,7 @@ test('the tutor beside a lesson (ADR 0190): coach first, «Dimmelo e basta», ci
     await goPage(page, 'impara');
     await page.getByTestId('impara-lessons').locator('.ip-card', { hasText: 'Come nasce una lezione' }).locator('.ip-card-open').click();
     await expect(page.getByTestId('impara-diagram')).toHaveAttribute('data-nodes', '9');
+    await page.getByTestId('impara-unclear').click();
     await page.getByTestId('impara-ask').click();
     const tutor = page.getByTestId('impara-tutor');
     await expect(tutor).toBeVisible();
@@ -361,6 +367,38 @@ test('the tutor beside a lesson (ADR 0190): coach first, «Dimmelo e basta», ci
     await expect(page.getByTestId('impara-from')).toContainText('Il mio brain');
     await page.getByTestId('impara-start-btn').click();
     await expect(page.getByTestId('impara-preparing')).toBeVisible();
+  } finally {
+    await app.close();
+  }
+});
+
+test('the «Studio» beside a lesson (ADR 0205): saved outputs reopen, a new tile is made, its quiz plays as a review', async () => {
+  test.setTimeout(90_000);
+  const { app, page } = await launchDemo();
+  try {
+    await goPage(page, 'impara');
+    await page.getByTestId('impara-lessons').locator('.ip-card', { hasText: 'Come nasce una lezione' }).locator('.ip-card-open').click();
+    await expect(page.getByTestId('impara-player')).toBeVisible();
+    await page.getByTestId('impara-side-studio').click();
+    await expect(page.getByTestId('impara-studio')).toBeVisible();
+    // a saved output opens at once in the board's place; Esc gives the lesson back
+    await page.getByTestId('impara-studio-mindmap').locator('.sd-tile-main').click();
+    await expect(page.getByTestId('impara-studio-view')).toHaveAttribute('data-kind', 'mindmap');
+    await expect(page.getByTestId('impara-say')).toBeHidden();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('impara-studio-view')).toHaveCount(0);
+    await expect(page.getByTestId('impara-say')).toBeVisible();
+    // a new tile: one short run, then the quiz, played as a review session
+    const quiz = page.getByTestId('impara-studio-quiz');
+    await expect(quiz).toHaveAttribute('data-state', 'new');
+    await quiz.locator('.sd-tile-main').click();
+    await expect(quiz).toHaveAttribute('data-state', 'making');
+    await expect(quiz).toHaveAttribute('data-state', 'done', { timeout: 10_000 });
+    await quiz.locator('.sd-tile-main').click();
+    await expect(page.getByTestId('impara-studio-view')).toHaveAttribute('data-kind', 'quiz');
+    await page.getByTestId('impara-studio-quiz-start').click({ timeout: 10_000 });
+    await expect(page.getByTestId('impara-review-title')).toHaveText('Quiz · Come nasce una lezione di Impara');
+    await expect(page.getByTestId('impara-review-count')).toHaveText('1 di 10');
   } finally {
     await app.close();
   }

@@ -26,6 +26,8 @@ export interface VoiceState {
   ready: { vad: boolean; asr: boolean; tts: boolean };
   asr: VoiceAsr;
   voice: VoiceName;
+  /** the Italian voices already on disk and checked (ADR 0205: Impara's two-voice podcast); absent = unknown */
+  voices?: VoiceName[];
   /** a download in progress: bytes done of total (total 0 = not known yet) */
   downloading: { done: number; total: number } | null;
   /** the last failure, in Italian, for the user (download, engine start) */

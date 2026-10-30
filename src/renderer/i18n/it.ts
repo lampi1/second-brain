@@ -24,6 +24,7 @@ import { genuiRequestIt } from './areas/genui-request.it';
 import { voiceIt } from './areas/voice.it';
 import { recIt } from './areas/rec.it';
 import { imparaIt } from './areas/impara.it';
+import { imparaStudioIt } from './areas/impara-studio.it';
 import { imparaV3It } from './areas/impara-v3.it';
 import {studioIt}from'./areas/studio.it';
 import { permissionsIt } from './areas/permissions.it';
@@ -94,6 +95,7 @@ export const it = {
   ...voiceIt,
   ...recIt,
   ...imparaIt,
+  ...imparaStudioIt,
   ...imparaV3It,
   'genui.request.question': 'Domanda',
   'genui.request.permission': 'Permesso',

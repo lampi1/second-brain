@@ -26,8 +26,9 @@ export interface ReviewCard {
   lessonId: string;
   subject: string;
   kind: CardKind;
-  /** where it came from: one of the lesson's checks, the cards run, or a tutor answer (ADR 0190) */
-  origin: 'check' | 'cards' | 'tutor';
+  /** where it came from: one of the lesson's checks, the cards run, a tutor answer (ADR 0190), or the «Studio» column's
+   *  flashcards and quiz (ADR 0205) */
+  origin: 'check' | 'cards' | 'tutor' | 'studio';
   q: string;
   /** the pick kinds (choice, truefalse, cloze): 2-4 options and the right one */
   options?: string[];
