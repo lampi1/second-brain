@@ -4,7 +4,9 @@
 // opinion never overwrites a reviewed verdict. It counts as reviewed evidence only when it cites an ended review run of
 // that run (Sentinel, or a Judge before ADR 0100) whose own report says verified, in its own session (ADR 0083; on any
 // model: the review's independence is its clean context, ADR 0091). A run its receipts decided with no review
-// (recordReceipts, ADR 0130) gets basis 'receipts', which only a verified review or the user replaces. Also the user's Annulla on a change the app applied
+// (recordReceipts, ADR 0130) gets basis 'receipts', which only a verified review or the user replaces. The nightly batch
+// review (ADR 0203) is verified evidence the same way when its own hidden run lists that run with the same verdict,
+// verified yes (batchBacks). Also the user's Annulla on a change the app applied
 // (agents:undo) and agent_metrics, the numbers-only tool of the Orchestrator. Used by wiring.ts, loop.ts, index.ts.
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
@@ -108,7 +110,8 @@ export class RunFeedback {
       if (e.kind !== 'run') return false;
       const review = this.d.runs.get(e.ref);
       return !!review && review.endedAt !== undefined && review.endReason === 'completed' && review.reviewOf === run.runId && (review.agentId === 'sentinel' || review.agentId === 'judge') && review.version > 0
-        && review.report?.verified === 'yes' && review.report.verdict === a.verdict && review.chatId !== run.chatId;
+        && review.report?.verified === 'yes' && review.report.verdict === a.verdict && review.chatId !== run.chatId
+        || !!review && batchBacks(review, run.runId, a.verdict);
     });
     const outcome: AgentRunOutcome = { verdict: a.verdict as AgentRunOutcome['verdict'], basis: verified ? 'reviewed-evidence' : 'orchestrator-opinion', by: callerId, at: this.now(), note: notes };
     const f: AgentFeedback = { id: randomUUID(), at: this.now(), agentId: run.agentId, runId: run.runId, version: run.version, outcome, evidence: refs,
@@ -139,6 +142,14 @@ export class RunFeedback {
     this.setOutcome(run, { verdict, basis: 'receipts', by: 'receipts', at: this.now(), note: note.slice(0, 600) });
     return true;
   }
+}
+
+/** The nightly batch review's run (judge-sample.ts, ADR 0203) backs this verdict on this run: an app-owned Sentinel run
+ *  that ended completed, listing the run with the same verdict and verified yes. */
+export function batchBacks(review: AgentRun, runId: string, verdict: string): boolean {
+  if (review.agentId !== 'sentinel' || review.startedBy !== 'app' || review.oneshot?.job !== 'review' || review.endedAt === undefined || review.endReason !== 'completed') return false;
+  const e = review.reviewBatch?.find(x => x.runId === runId);
+  return !!e && e.verified === 'yes' && e.verdict === verdict;
 }
 
 /** agent_metrics for the Orchestrator: numbers per role and version, never a run's content. */

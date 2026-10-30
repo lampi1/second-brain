@@ -4,7 +4,7 @@
 import { FROZEN_EPOCH } from '../demo';
 import { checkRunIds, demoEstimateRuns, mergeRuns } from '../agents/run-estimates';
 import { errText, log } from '../log';
-import { judgingEstimate } from '../agents/judge-sample';
+import { judgingEstimate, lastNight } from '../agents/judge-sample';
 import { readWorker } from '../read-work';
 import type { CloudService } from '../cloud/service';
 import type { HandlerContext, HandlersOf } from './context';
@@ -56,7 +56,9 @@ export function agentsHandlers({ s, demo, agentImages, workflows, orchestrator, 
     },
     'agents:judgingEstimate': () => {
       const now = demo && process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now();
-      return judgingEstimate(mergeRuns(demo ? demoEstimateRuns(now) : s.agentRuns?.list() ?? [], s.chats.list().map(c => c.run)), now);
+      // the user's app: its sampler (shares, cap, last batch, ADR 0203); the demo: its own runs, a batch at 03:14 today
+      return !demo && s.judging ? s.judging.estimate(now) : judgingEstimate(mergeRuns(demo ? demoEstimateRuns(now) : s.agentRuns?.list() ?? [], s.chats.list().map(c => c.run)), now,
+        demo ? { lastBatch: { at: lastNight(now) + 14 * 60_000, runs: 4, costUsd: 0.62 } } : {});
     },
     'agents:restoreVersion': a => s.agents.restoreVersion(a.id, a.version),
     // the user's own picture for a role (the role's page): a PNG checked and re-encoded by main, never sent to an engine
