@@ -17,12 +17,10 @@ import { ChatInput, type ChatInputHandle } from './ChatInput';
 import { IconButton, StatePill } from './ui';
 import { AgentAvatar } from './AgentAvatar';
 import { ModelChip } from './ModelChip';
-import { FLASH_BRIEF_TAG, FLASH_ID } from '@shared/roles';
+import { FLASH_ID } from '@shared/roles';
 import { IconEraser, IconStop } from './Icons';
-import { BRIEF_ASK, briefAnswer, lastExchange } from '../lib/lampo';
-
-/** how long «Fanne un lavoro» waits for Flash's brief before drafting the last exchange */
-const BRIEF_WAIT_MS = 120_000;
+import { BRIEF_ASK, lastExchange } from '../lib/lampo';
+import { startBrief, useBriefing } from '../lib/flash-brief';
 
 /** Lampo's tile, or the button that opens it (on the Orchestrator's engine, the user's fast model). */
 export function LampoTile({ onWork }: { onWork: () => void }) {
@@ -32,22 +30,9 @@ export function LampoTile({ onWork }: { onWork: () => void }) {
   const info = useApp(s => s.info);
   const input = useRef<ChatInputHandle>(null);
   const [opening, setOpening] = useState(false);
-  // «Fanne un lavoro» waits for Flash's brief: from = the chat's length at the click, fallback = its last exchange,
-  // drafted instead when the answer brings no brief (or none comes within BRIEF_WAIT_MS)
-  const [briefing, setBriefing] = useState<{ from: number; fallback: string } | null>(null);
+  // «Fanne un lavoro» waits for Flash's brief (lib/flash-brief.ts, also after the lane switches)
+  const briefing = useBriefing();
   useEffect(() => { if (lampo) input.current?.focus(); }, [lampo?.id]);
-  useEffect(() => {
-    if (!briefing || !lampo) return;
-    const asked = (items ?? []).some((x, i) => i >= briefing.from && x.kind === 'user' && x.text.startsWith(FLASH_BRIEF_TAG));
-    if (!asked || isBusy(lampo)) return;
-    setBriefing(null);
-    if (brainBridge.draftToOrchestrator(briefAnswer(items) ?? briefing.fallback, () => {})) onWork();
-  }, [briefing, lampo, items, onWork]);
-  useEffect(() => {
-    if (!briefing) return;
-    const timer = setTimeout(() => { setBriefing(null); if (brainBridge.draftToOrchestrator(briefing.fallback, () => {})) onWork(); }, BRIEF_WAIT_MS);
-    return () => clearTimeout(timer);
-  }, [briefing, onWork]);
 
   const open = async () => {
     const harness = orchestrator?.harness ?? 'claude', cwd = info?.brainRoot ?? orchestrator?.cwd;
@@ -72,7 +57,8 @@ export function LampoTile({ onWork }: { onWork: () => void }) {
   const toWork = () => {
     if (!last) return;
     const fallback = t('lampo.draft', last);
-    if (send(lampo.id, BRIEF_ASK) === 'sent') setBriefing({ from: items?.length ?? 0, fallback });
+    const now = Date.now();
+    if (send(lampo.id, BRIEF_ASK) === 'sent') startBrief(lampo.id, fallback, now);
     else if (brainBridge.draftToOrchestrator(fallback, () => {})) onWork();
   };
   return <section className="tile orchestrator-tile lampo-tile" role="region" aria-label={t('lampo.title')} data-testid="tile-lampo" data-chat-id={lampo.id}>
@@ -82,7 +68,7 @@ export function LampoTile({ onWork }: { onWork: () => void }) {
         <h3 className="th-title">{t('lampo.title')}</h3>
         <StatePill chat={lampo} testid="lampo-state" />
         <span className="sp" />
-        <button type="button" className="btn btn-ghost btn-s" disabled={!last || busy || briefing !== null} title={t('lampo.toWorkTip')} onClick={toWork} data-testid="lampo-to-work">{t('lampo.toWork')}</button>
+        <button type="button" className="btn btn-ghost btn-s" disabled={!last || busy || briefing} title={t('lampo.toWorkTip')} onClick={toWork} data-testid="lampo-to-work">{t('lampo.toWork')}</button>
         {busy && <IconButton label={t('dialogs.orchestrator.stopLabel')} tone="danger" onClick={() => void stop(lampo.id)} testid="lampo-stop"><IconStop size={14} /></IconButton>}
         <IconButton label={t('lampo.clear')} disabled={busy || !items?.length} onClick={() => void clearFlash(lampo.id)} testid="lampo-clear"><IconEraser size={14} /></IconButton>
       </div>

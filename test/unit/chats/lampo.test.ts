@@ -9,7 +9,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { ChatManager, LAMPO_TITLE } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
-import { BRIEF_ASK, BRIEF_END, BRIEF_START, briefAnswer, briefOf, lastExchange } from '../../../src/renderer/lib/lampo';
+import { BRIEF_ASK, BRIEF_END, BRIEF_START, briefOf, briefStep, lastExchange } from '../../../src/renderer/lib/lampo';
 import { FLASH_BRIEF_TAG } from '../../../src/shared/roles';
 import { LAMPO_CONTEXT_END, LAMPO_CONTEXT_LABEL, orchestratorContext } from '../../../src/main/chats/lampo-context';
 import type { ChatItem } from '../../../src/shared/contract';
@@ -208,12 +208,18 @@ describe('«Fanne un lavoro» brief (ADR 0209)', () => {
     expect(briefOf('Obiettivo: migrare i clienti al nuovo DB senza fermo')).toBe('Obiettivo: migrare i clienti al nuovo DB senza fermo');
     expect(briefOf('ok')).toBeNull();
   });
-  it('the answer to the last brief ask, only once complete', () => {
-    const items = [user('1', 'che db usiamo?'), said('2', 'Postgres 16'), user('3', BRIEF_ASK)];
+  it('is ready only once the turn after this ask has ended, found by time not index', () => {
+    const items = [user('1', 'che db usiamo?'), said('2', 'Postgres 16'), { ...user('3', BRIEF_ASK), at: 100 } as ChatItem];
+    const answer = said('4', `${BRIEF_START}\nObiettivo: passare a Postgres 17\n${BRIEF_END}`);
     expect(BRIEF_ASK.startsWith(FLASH_BRIEF_TAG)).toBe(true);
-    expect(briefAnswer(items)).toBeNull();
-    expect(briefAnswer([...items, said('4', `${BRIEF_START}\nObiettivo: passare a Postgres 17\n${BRIEF_END}`, true)])).toBeNull();
-    expect(briefAnswer([...items, said('4', `${BRIEF_START}\nObiettivo: passare a Postgres 17\n${BRIEF_END}`)])).toBe('Obiettivo: passare a Postgres 17');
-    expect(briefAnswer([user('1', 'che db usiamo?'), said('2', 'Postgres 16, quello del server principale')])).toBeNull();
+    expect(briefStep(items, false, 50)).toEqual({ done: false });
+    expect(briefStep([...items, said('4', 'x', true)], false, 50)).toEqual({ done: false });
+    expect(briefStep([...items, answer], true, 50)).toEqual({ done: false });
+    expect(briefStep([...items, answer], false, 50)).toEqual({ done: true, brief: 'Obiettivo: passare a Postgres 17' });
+    // an older ask does not count; a turn that ended without a brief drafts the fallback
+    expect(briefStep([...items, answer], false, 200)).toEqual({ done: false });
+    expect(briefStep([...items, said('4', 'no')], false, 50)).toEqual({ done: true, brief: null });
+    // the item window slid: the ask is still found
+    expect(briefStep([...items.slice(2), answer], false, 50)).toEqual({ done: true, brief: 'Obiettivo: passare a Postgres 17' });
   });
 });

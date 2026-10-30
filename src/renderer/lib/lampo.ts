@@ -1,9 +1,9 @@
 // «Flash» (code name lampo), the quick lane (ADR 0105, 0107), pure: what «Fanne un lavoro» drafts into the Orchestrator's
 // input. Since ADR 0209 Flash itself writes a real brief from its whole conversation (owner, 2026-10-30: «mi aspetto
 // che lo crei bene il prompt per l'Orchestrator», he also uses Flash to plan, research and ask advice): BRIEF_ASK is the
-// turn the tile sends to Flash, briefOf reads the brief out of its answer; the last question and answer (lastExchange)
+// turn the tile sends to Flash, briefOf reads the brief out of its answer, briefStep says when it is ready; the last question and answer (lastExchange)
 // stay the fallback when Flash cannot answer. Kept out of LampoTile.tsx so it runs without a DOM. Used by
-// LampoTile.tsx; pinned by test/unit/chats/lampo.test.ts.
+// LampoTile.tsx and lib/flash-brief.ts; pinned by test/unit/chats/lampo.test.ts.
 import type { ChatItem } from '@shared/contract';
 import { FLASH_BRIEF_TAG } from '@shared/roles';
 
@@ -41,13 +41,23 @@ export function briefOf(answer: string): string | null {
   return body.length >= 20 ? body : null;
 }
 
-/** Flash's answer to the last BRIEF_ASK in the chat, once it is complete (null while it streams or before it exists). */
-export function briefAnswer(items: readonly ChatItem[] | undefined): string | null {
+/** Where a «Fanne un lavoro» asked at `since` stands: not done while the ask is missing, Flash is busy or its answer
+ *  streams; done (brief or null = draft the fallback) once the turn after the ask has ended. The ask is found by its tag
+ *  and time, not by index, since the chat's item window slides. */
+export type BriefStep = { done: false } | { done: true; brief: string | null };
+export function briefStep(items: readonly ChatItem[] | undefined, busy: boolean, since: number): BriefStep {
   const list = items ?? [];
   let q = -1;
-  for (let i = list.length - 1; i >= 0; i--) if (list[i]!.kind === 'user') { q = i; break; }
-  if (q < 0 || !(list[q] as Extract<ChatItem, { kind: 'user' }>).text.startsWith(FLASH_BRIEF_TAG)) return null;
-  const replies = list.slice(q + 1).filter((x): x is Extract<ChatItem, { kind: 'assistant' }> => x.kind === 'assistant');
-  if (!replies.length || replies.some(x => x.streaming)) return null;
-  return briefOf(replies.map(x => x.text).join('\n'));
+  for (let i = list.length - 1; i >= 0; i--) {
+    const x = list[i]!;
+    if (x.kind === 'user' && x.at >= since && x.text.startsWith(FLASH_BRIEF_TAG)) { q = i; break; }
+  }
+  if (q < 0 || busy) return { done: false };
+  let end = list.length;
+  for (let i = q + 1; i < list.length; i++) if (list[i]!.kind === 'user') { end = i; break; }
+  const after = list.slice(q + 1, end);
+  if (!after.length) return { done: false };
+  const replies = after.filter((x): x is Extract<ChatItem, { kind: 'assistant' }> => x.kind === 'assistant');
+  if (replies.some(x => x.streaming)) return { done: false };
+  return { done: true, brief: replies.length ? briefOf(replies.map(x => x.text).join('\n')) : null };
 }
