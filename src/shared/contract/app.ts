@@ -7,7 +7,7 @@ import type { CreateBrainRequest, CreatedBrain } from '../brain-create';
 import type { DiffAgainst, FileDiffResult } from '../file-diff';
 import type { FileViewResult } from '../file-view';
 import type { OwnerProfile, ProfileResult, ProfileSave } from '../profile';
-import type { AskImageResult, OpenPathResult } from './chats';
+import type { AskImageResult, CopyFileResult, OpenPathResult } from './chats';
 import type { EngineInfo, Harness } from './engines';
 import type { Lang } from './settings';
 import type { InputLagReport } from './ui';
@@ -140,6 +140,8 @@ export interface AppInvokeMap {
   'app:createBrain': [CreateBrainRequest, CreatedBrain | null];
   /** the viewer's "Show in folder": a local file selected in Explorer, never opened or run (main/open-path.ts) */
   'app:showInFolder': [{ path: string }, OpenPathResult];
+  /** The viewer's copy icon: the file on the clipboard (its text, an image, or the file itself), main/file-copy.ts. */
+  'app:copyFile': [{ path: string }, CopyFileResult];
   /** A user-opened file link: any local file, never a network share, read-only and bounded; text one page at a time
    *  around a cited `line`, ending at `before`, or from `offset` (`align`: at the next line start). Main renderer only. */
   'app:readFile': [{ path:string; chatId?:string; offset?:number; align?:boolean; before?:number; line?:number }, FileViewResult];

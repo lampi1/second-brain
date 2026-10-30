@@ -30,6 +30,11 @@ said to use it also when starting on a task, so every engine answered 👍.
   input; the user still sends it. No answer within two minutes, or none usable: the old draft (last question and
   answer). The tagged turn hands Flash's newest open answer over (`flashBriefed`, outcome `handed`), never counts as a
   new question.
+- The file viewer's copy icon copies the file itself (owner, 2026-10-30: «ogni file possa essere copiato dal tasto
+  copia, solo l'icona»; `main/file-copy.ts`, `app:copyFile`): a text file up to 5 MB as its text, an image as an image,
+  anything else as the file (Windows `FileNameW`, macOS file URL, Linux `text/uri-list`), pasteable in a folder or a
+  chat. Same path rules as «Mostra nella cartella» (local only, never a network share); an agent's hidden run never
+  touches the user's clipboard. «Copia percorso» keeps its own icon.
 
 ## Consequences
 
