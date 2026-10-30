@@ -399,7 +399,7 @@ function heard({ text: raw, utterance }: VoiceHeard): void {
 
 // ── speaking ──
 /** The sentences of the reply being read: synthesized one ahead of the one playing, played back to back. */
-interface Line { done?: () => void; start?: () => void; text: string; audio: Promise<{ samples: Float32Array; rate: number; error?: string } | null> | null }
+interface Line { done?: () => void; start?: () => void; text: string; voice?: VoiceName; audio: Promise<{ samples: Float32Array; rate: number; error?: string } | null> | null }
 let lines: Line[] = [];
 let speakN = 0; // each stop; a synthesis or a play that comes back to another one gives up
 let out: AudioContext | null = null, playing: AudioBufferSourceNode | null = null, pumping = false;
@@ -420,9 +420,9 @@ export function say(text: string, raw = false): void {
   for (const c of speechChunks(clean)) queueLine(c);
 }
 
-function queueLine(text: string): void {
+function queueLine(text: string, voiceName?: VoiceName): void {
   // synthesis starts now for the first two lines; the others when their turn is near (pump), so a stop wastes little
-  lines.push({ text, audio: lines.length < 2 ? synth(text) : null });
+  lines.push({ text, ...(voiceName ? { voice: voiceName } : {}), audio: lines.length < 2 ? synth(text, voiceName) : null });
   void pump();
 }
 
@@ -433,8 +433,8 @@ async function pump(): Promise<void> {
   if (!line) { endNarration(); if (voice.get().phase === 'speaking') set({ phase: 'listening' }); return; }
   pumping = true;
   if (voice.get().phase !== 'off') set({ phase: 'speaking' });
-  line.audio ??= synth(line.text);
-  if (lines[1] && !lines[1].audio) lines[1].audio = synth(lines[1].text); // the next one while this one plays
+  line.audio ??= synth(line.text, line.voice);
+  if (lines[1] && !lines[1].audio) lines[1].audio = synth(lines[1].text, lines[1].voice); // the next one while this one plays
   const r = await line.audio;
   if (n !== speakN) return; // stopped meanwhile: `pumping` belongs to whoever runs now
   pumping = false;
@@ -499,6 +499,23 @@ export function narrateBeats(texts: readonly string[], onStart: (i: number) => v
   texts.forEach((text, i) => {
     const chunks = speechChunks(speakable(text, Number.MAX_SAFE_INTEGER));
     chunks.forEach((c, k) => { queueLine(c); if (k === 0) lines.at(-1)!.start = () => onStart(i); });
+    any ||= chunks.length > 0;
+  });
+  if (!any) { done?.(); return; }
+  narrating = true;
+  set({ narrating: true });
+  const last = lines.at(-1);
+  if (last && done) last.done = done;
+}
+
+/** Impara's podcast (ADR 0205): lines read in turn, each in its own voice (absent = the chosen one); `onStart(i)` when
+ *  line i starts to sound, `done` after the last. Only voices already on disk are passed (none is downloaded here). */
+export function narrateLines(items: readonly { text: string; voice?: VoiceName }[], onStart: (i: number) => void, done?: () => void): void {
+  stopSpeaking(false);
+  let any = false;
+  items.forEach((it, i) => {
+    const chunks = speechChunks(speakable(it.text, Number.MAX_SAFE_INTEGER));
+    chunks.forEach((c, k) => { queueLine(c, it.voice); if (k === 0) lines.at(-1)!.start = () => onStart(i); });
     any ||= chunks.length > 0;
   });
   if (!any) { done?.(); return; }

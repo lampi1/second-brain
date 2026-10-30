@@ -12,7 +12,7 @@ import { ASR, TTS, VAD, partBytes } from './catalog';
 import { partReady } from './download';
 import type { VoiceIn, VoiceOut } from './protocol';
 import type { TranscribedLine } from './transcribe';
-import type { VoiceAsr, VoiceName, VoiceState, VoiceHeard, VoiceSpeech } from '@shared/voice';
+import { VOICE_NAMES, type VoiceAsr, type VoiceName, type VoiceState, type VoiceHeard, type VoiceSpeech } from '@shared/voice';
 
 interface Child { postMessage(m: VoiceIn): void; on(ev: 'message', fn: (m: VoiceOut) => void): void; on(ev: 'exit', fn: (code: number) => void): void; kill(): boolean }
 export interface VoiceDeps {
@@ -72,11 +72,13 @@ export class VoiceService {
 
   state(): VoiceState {
     const { asr, voice } = this.d.settings();
-    if (this.d.fake) return { ready: { vad: true, asr: true, tts: true }, asr, voice, downloading: null, error: null, missingMb: 0, fake: true, diagnostics: this.measurements.snapshot(true) };
+    if (this.d.fake) return { ready: { vad: true, asr: true, tts: true }, asr, voice, voices: [...VOICE_NAMES], downloading: null, error: null, missingMb: 0, fake: true, diagnostics: this.measurements.snapshot(true) };
     const parts = [VAD, ASR[asr], TTS[voice]];
     const ready = { vad: partReady(this.d.root, VAD), asr: partReady(this.d.root, ASR[asr]), tts: partReady(this.d.root, TTS[voice]) };
     const missing = parts.filter(p => !partReady(this.d.root, p)).reduce((n, p) => n + partBytes(p), 0);
-    return { ready, asr, voice, downloading: this.downloading, error: this.error, missingMb: Math.round(missing / 1e6), diagnostics: this.measurements.snapshot() };
+    // the voices on disk: Impara's podcast (ADR 0205) reads with two of them when there are two, never downloading one
+    const voices = VOICE_NAMES.filter(n => partReady(this.d.root, TTS[n]));
+    return { ready, asr, voice, voices, downloading: this.downloading, error: this.error, missingMb: Math.round(missing / 1e6), diagnostics: this.measurements.snapshot() };
   }
 
   private emit(): void { this.d.changed(this.state()); }

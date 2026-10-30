@@ -43,10 +43,11 @@ export function mediaHandlers({ s, voice, recordings, learn }: HandlerContext): 
     'impara:retry': a => learn().retry(String(a?.id ?? '')),
     'impara:clarify': a => learn().clarify(String(a?.id ?? ''), a?.answers),
     'impara:remove': a => learn().remove(String(a?.id ?? '')),
-    'impara:queue': a => learn().queue(a?.mode, typeof a?.subject === 'string' ? a.subject : undefined),
+    'impara:queue': a => learn().queue(a?.mode, typeof a?.subject === 'string' ? a.subject : undefined, typeof a?.lesson === 'string' ? a.lesson : undefined),
     'impara:grade': a => learn().gradeCard(String(a?.card ?? ''), Number(a?.grade)),
     'impara:subject': a => learn().setSubject(String(a?.id ?? ''), a?.subject),
-    'impara:tutor': a => learn().tutor(String(a?.id ?? ''), String(a?.at ?? ''), String(a?.q ?? ''), a?.mode === 'tell' ? 'tell' : 'coach'),
+    'impara:tutor': a => learn().tutor(String(a?.id ?? ''), String(a?.at ?? ''), String(a?.q ?? ''), a?.mode === 'tell' || a?.mode === 'quiz' ? a.mode : 'coach'),
     'impara:tutorWarm': a => learn().tutorWarm(String(a?.id ?? '')),
+    'impara:studio': a => learn().studio(String(a?.id ?? ''), a?.kind),
   };
 }

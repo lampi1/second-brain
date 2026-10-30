@@ -13,17 +13,23 @@
 // (ImparaSources.tsx: web pages, files of this PC, the material). A lesson being researched shows ImparaPrep.tsx.
 // «Chiedi» opens the tutor beside the board (ImparaTutor.tsx, ADR 0190): a question typed or spoken, or a click on a
 // part of the diagram, answered in seconds, word by word.
+// Since ADR 0205: each piece shows the visual it declared (LessonVisual.tsx: sequence, state, timeline, mind map, code
+// walkthrough, formula, chart; the lesson's flowchart stays on the animated board); the column beside the board has
+// two tabs, «Tutor» and «Studio» (ImparaStudio.tsx: tiles that make more from the verified facts, opened over the
+// board); the bar under the narration has ONE primary button, «Ho capito, avanti», and «Non mi è chiaro» opens the
+// rest (Spiegamelo meglio M, Fammi un esempio E, Mostrami il codice C, Domanda D), keys that work without the menu too.
 // Used by ImparaPage.tsx; styles impara.css.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { beatsOf, checkKey, doneNodes, isFlowchart, parseLessonCommand, parseSpokenChoice, playlist, rootOf, stepKey, type Lesson, type LessonBeat, type LessonCheck, type LessonExtraKind, type LessonFact, type LessonStep, type PlayItem } from '@shared/lesson';
-import { answerCheck, askExtra, askTutor, explainBack, impara, imparaPrefs, loadLesson, moveTo, removeLesson, retryLesson, setImparaPrefs } from '../../lib/impara';
+import { answerCheck, askExtra, askTutor, explainBack, impara, imparaPrefs, loadLesson, moveTo, removeLesson, retryLesson, setImparaPrefs, type ImparaSide } from '../../lib/impara';
+import type { StudioKind } from '@shared/lesson-studio';
 import { narrate, narrateBeats, onImparaHeard, stopSpeaking, stopVoice, toggleVoice, useVoice, voice } from '../../lib/voice';
 import { renderMarkdown } from '../../lib/markdown';
 import { go } from '../../actions';
 import { askConfirm, toast } from '../../store/ui';
 import { locale, t } from '../../i18n';
-import { Button, Kbd } from '../ui';
-import { IconArrowLeft, IconArrowRight, IconBook, IconCheck, IconFile, IconGlobe, IconLightbulb, IconMaximize, IconMic, IconMinimize, IconPlay, IconQuestion, IconRefresh, IconSpinner, IconTerminal, IconTrash, IconX } from '../Icons';
+import { Button, Kbd, MenuItem, Popover } from '../ui';
+import { IconArrowLeft, IconArrowRight, IconBook, IconCheck, IconChevronDown, IconFile, IconGlobe, IconGrid, IconLightbulb, IconMaximize, IconMic, IconMinimize, IconPanel, IconPlay, IconQuestion, IconRefresh, IconSparkle, IconSpinner, IconTerminal, IconTrash, IconX } from '../Icons';
 import { LessonDiagram } from './LessonDiagram';
 import { LessonStage } from './LessonStage';
 import { ImparaPrep } from './ImparaPrep';
@@ -32,9 +38,13 @@ import { ImparaEnd } from './ImparaEnd';
 import { ImparaSwitch } from './ImparaSwitch';
 import { ImparaSources, hostOf, openFact } from './ImparaSources';
 import { ImparaTutor } from './ImparaTutor';
+import { ImparaStudio, StudioView } from './ImparaStudio';
+import { LessonVisual } from './LessonVisual';
 
 const EXTRA_ICON: Record<LessonExtraKind, ReactNode> = { better: <IconLightbulb size={11} />, example: <IconBook size={11} />, code: <IconTerminal size={11} />, question: <IconQuestion size={11} /> };
 const LETTERS = ['A', 'B', 'C', 'D'];
+/** «Non mi è chiaro» (ADR 0205): what it offers, with the key that does it without the menu */
+const UNCLEAR: { kind: LessonExtraKind; key: string }[] = [{ kind: 'better', key: 'M' }, { kind: 'example', key: 'E' }, { kind: 'code', key: 'C' }, { kind: 'question', key: 'D' }];
 
 export function ImparaPlayer({ id }: { id: string }) {
   const lesson = impara.use(s => s.lessons[id] ?? null);
@@ -146,10 +156,19 @@ function Board({ lesson }: { lesson: Lesson }) {
   const [whole, setWhole] = useState(false);
   const [zoom, setZoom] = useState(false);
   const [full, setFull] = useState(false);
-  const [tutor, setTutor] = useState(false);
+  // the column beside the board: the tutor, the «Studio», or closed (remembered, ADR 0205)
+  const side = prefs.side;
+  const setSide = useCallback((s: ImparaSide) => setImparaPrefs({ side: s }), []);
+  const setTutor = useCallback((on: boolean) => setImparaPrefs({ side: on ? 'tutor' : null }), []);
   const [seed, setSeed] = useState<string | null>(null);
   const clearSeed = useCallback(() => setSeed(null), []);
-  const closeTutor = useCallback(() => setTutor(false), []);
+  const closeTutor = useCallback(() => setImparaPrefs({ side: null }), []);
+  const [studio, setStudio] = useState<StudioKind | null>(null);
+  const closeStudio = useCallback(() => setStudio(null), []);
+  const [challenge, setChallenge] = useState(0);
+  const challenged = useCallback(() => {}, []);
+  const [unclear, setUnclear] = useState(false);
+  const unclearBtn = useRef<HTMLButtonElement>(null);
   const [draft, setDraft] = useState('');
   const [heard, setHeard] = useState<string | null>(null);
   const [sources, setSources] = useState(false);
@@ -163,6 +182,13 @@ function Board({ lesson }: { lesson: Lesson }) {
   const next = () => { if (!atLast) void moveTo(lesson.id, list[idx + 1]!.key); };
   const back = () => { if (idx > 0) void moveTo(lesson.id, list[idx - 1]!.key); };
   const extra = (kind: LessonExtraKind, text?: string) => { if (!busy) { stopSpeaking(false); void askExtra(lesson.id, kind, item.key, text); } };
+  /** an entry of «Non mi è chiaro»: the three extras, or the tutor for a question of one's own */
+  const unclearDo = (kind: LessonExtraKind) => {
+    setUnclear(false);
+    if (kind !== 'question') return extra(kind);
+    setTutor(true);
+    requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-testid="impara-tutor-input"]')?.focus());
+  };
   const speakNow = () => {
     setBeat(0);
     if (!prefs.voice) { setPlaying(n => n + 1); return; }
@@ -178,7 +204,7 @@ function Board({ lesson }: { lesson: Lesson }) {
 
   // each new item is read aloud once (a piece beat by beat, a check; the end's question), at the user's pace: never an
   // auto-advance to the next piece
-  useEffect(() => { setFull(false); setZoom(false); setWhole(false); setBeat(0); if (prefs.voice) speakNow(); else stopSpeaking(false); }, [item.key, prefs.voice]);
+  useEffect(() => { setFull(false); setZoom(false); setWhole(false); setBeat(0); setStudio(null); if (prefs.voice) speakNow(); else stopSpeaking(false); }, [item.key, prefs.voice]);
   // without the voice, the beats follow each other at reading pace (once; «Rivedi l'animazione» plays them again); the
   // beats are read through a ref: a lesson that changes meanwhile (the rest arriving) does not start them over
   const beatsNow = useRef(beats);
@@ -225,6 +251,8 @@ function Board({ lesson }: { lesson: Lesson }) {
       // Space plays or stops the voice, except on a cited source chip, which it opens
       else if (e.key === ' ') { if ((e.target as HTMLElement | null)?.closest?.('.ip-tcite')) return; e.preventDefault(); if (narrating) stopSpeaking(false); else speakNow(); }
       else if (e.key === '?' || e.key.toLowerCase() === 't') { e.preventDefault(); setTutor(true); requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-testid="impara-tutor-input"]')?.focus()); }
+      // «Non mi è chiaro» without the menu (on a piece: a check takes A-D)
+      else if (item.kind === 'step' && !e.repeat && UNCLEAR.some(u => u.key === e.key.toUpperCase())) { e.preventDefault(); unclearDo(UNCLEAR.find(u => u.key === e.key.toUpperCase())!.kind); }
       else if (item.kind === 'check' && !item.check.answer) {
         const i = '1234'.indexOf(e.key) >= 0 ? '1234'.indexOf(e.key) : 'abcd'.indexOf(e.key.toLowerCase());
         if (i >= 0 && i < item.check.options.length) { e.preventDefault(); answer(item.check, i); }
@@ -237,7 +265,7 @@ function Board({ lesson }: { lesson: Lesson }) {
   useEffect(() => {
     if (!prefs.full) return;
     const esc = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented || isTyping(e.target) || document.querySelector('.modal-backdrop, .backdrop, .qwin, .vw-layer, [role=dialog], [role=menu]')) return;
+      if (e.key !== 'Escape' || e.defaultPrevented || isTyping(e.target) || document.querySelector('.modal-backdrop, .backdrop, .qwin, .vw-layer, [role=dialog], [role=menu], .sd-view')) return; // a Studio output closes first (ADR 0205)
       e.preventDefault(); e.stopPropagation();
       setImparaPrefs({ full: false });
     };
@@ -264,15 +292,18 @@ function Board({ lesson }: { lesson: Lesson }) {
   const facts = (piece?.cites ?? []).map(id => lesson.facts?.find(f => f.id === id)).filter((f): f is LessonFact => !!f);
   const label = item.kind === 'end' ? t('impara.end.kicker') : piece?.extra ? t(`impara.extra.${piece.extra.kind}`) : t('impara.pieceOf', { n: mainIndex + 1, total });
   const saved = new Date(lesson.updatedAt).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' });
-  const animated = !own && isFlowchart(lesson.diagram);
+  // the piece's own visual (ADR 0205); on a check its piece's, whole
+  const visual = piece?.visual && piece.visual.kind !== 'flow' && item.kind !== 'end' ? piece.visual : null;
+  const animated = !own && !visual && isFlowchart(lesson.diagram);
   const verified = lesson.facts?.length ?? 0;
 
   return (
-    <div className={`ip-player ${prefs.full ? 'ip-full' : ''} ${tutor ? 'with-tutor' : ''}`} data-testid="impara-player" data-at={lesson.at} data-full={prefs.full ? 'true' : 'false'}>
+    <div className={`ip-player ${prefs.full ? 'ip-full' : ''} ${side ? 'with-tutor' : ''}`} data-testid="impara-player" data-at={lesson.at} data-full={prefs.full ? 'true' : 'false'}>
       <Head lesson={lesson} fullToggle right={<>
         <Button variant="ghost" size="s" onClick={() => setSources(true)} testid="impara-sources-open" tip={t('impara.src.title')}><IconBook size={13} />{t('impara.src.open')}{verified > 0 ? <span className="ip-count">{verified}</span> : null}</Button>
         <ImparaSwitch on={prefs.voice} onChange={toggleVoiceOut} label={t('impara.voiceApp')} testid="impara-voice" />
         <ImparaSwitch on={micOn} onChange={toggleMic} label={t('impara.voiceMe')} testid="impara-mic" />
+        {!side && <Button variant="ghost" size="s" onClick={() => setSide('studio')} testid="impara-side-open" tip={t('impara.side.open')}><IconPanel size={13} />{t('impara.side.studio')}</Button>}
       </>} />
       <div className="ip-steps" aria-hidden="true">
         {Array.from({ length: total }, (_, i) => <i key={i} className={i < mainIndex || item.kind === 'end' ? 'd' : i === mainIndex ? 'c' : i >= main.length ? 'w' : ''} />)}
@@ -314,11 +345,13 @@ function Board({ lesson }: { lesson: Lesson }) {
             {lesson.sources.map(s => <div key={s}>{s}</div>)}
             {!lesson.sources.length && <div>{t(`impara.kind.${lesson.kind}`)}</div>}
             {verified > 0 && <button type="button" className="ip-verified" onClick={() => setSources(true)} data-testid="impara-verified" data-tip={t('impara.src.title')}><IconCheck size={10} /> {t('impara.facts', { n: verified })}</button>}
+            {lesson.quality && <div className={`ip-quality ${lesson.quality.none ? 'none' : ''}`} data-testid="impara-quality" data-tip={t('impara.quality.tip')}>
+              {lesson.quality.none ? t('impara.quality.none') : t('impara.quality', { checked: lesson.quality.checked, fixed: lesson.quality.fixed })}</div>}
             <div className="ip-cost" data-testid="impara-cost">{lesson.costUsd !== null ? `≈ ${lesson.costUsd.toLocaleString(locale(), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} $` : ''}{lesson.model ? ` · ${lesson.model}` : ''}</div>
           </div>
         </aside>
 
-        <section className="ip-board">
+        <section className={`ip-board ${studio ? 'studio-open' : ''}`}>
           <div className="ip-canvas" data-testid="impara-canvas">
             <div className="ip-tools">
               {item.kind === 'step' && beats.length > 1 && (
@@ -328,7 +361,9 @@ function Board({ lesson }: { lesson: Lesson }) {
               <button type="button" className={`ip-pill ${whole ? 'on' : ''}`} onClick={() => setWhole(w => !w)} aria-pressed={whole} data-testid="impara-whole">{t('impara.whole')}</button>
               {!animated && <button type="button" className="ip-pill" onClick={() => setZoom(true)} data-testid="impara-zoom">⤢ {t('impara.zoom')}</button>}
             </div>
-            {animated
+            {visual
+              ? <LessonVisual key={piece!.id} visual={visual} beats={item.kind === 'step' ? beats : []} beat={beat} whole={whole || item.kind === 'check'} caption={piece?.title ?? lesson.title} />
+              : animated
               ? <LessonStage code={lesson.diagram} beat={stageBeat} done={beatDone} whole={whole || item.kind === 'end'} onWhole={() => setWhole(w => !w)} caption={piece?.title ?? lesson.title} beatKey={`${item.key}/${beat}`}
                 onPick={(_, label) => { setTutor(true); setSeed(t('impara.tutor.aboutNode', { node: label })); }} />
               : <LessonDiagram base={lesson.diagram} own={own} focus={piece && !own ? piece.focus : []} done={done} whole={whole || item.kind === 'end'} note={item.kind === 'step' ? piece?.note : undefined}
@@ -347,6 +382,7 @@ function Board({ lesson }: { lesson: Lesson }) {
                 <div className="ip-narr-body">
                   <div className="ip-narr-head">
                     <b data-testid="impara-piece-label">{label}</b>
+                    {piece?.role && !piece.extra && <span className={`ip-role ${piece.role}`} data-testid="impara-role">{t(`impara.role.${piece.role}`)}</span>}
                     {narrating && <span className="ip-wave" aria-hidden="true">{[6, 12, 16, 9, 14, 5, 11].map((h, i) => <i key={i} style={{ height: h, animationDelay: `${i * 80}ms` }} />)}</span>}
                     <span className="ip-muted ip-narr-hint">{narrating ? <><Kbd>Spazio</Kbd> {t('impara.pause')}</> : prefs.voice ? <><Kbd>Spazio</Kbd> {t('impara.repeat')}</> : null}</span>
                   </div>
@@ -370,10 +406,16 @@ function Board({ lesson }: { lesson: Lesson }) {
                 <Button variant="primary" onClick={next} disabled={atLast} testid="impara-next">
                   {waitingRest ? <><IconSpinner size={12} />{t('impara.writingRest')}</> : <>{t('impara.next')} <IconArrowRight size={13} /><Kbd>→</Kbd></>}
                 </Button>
-                <Button onClick={() => extra('better')} disabled={busy} testid="impara-better">{t('impara.better')}</Button>
-                <Button onClick={() => extra('example')} disabled={busy} testid="impara-example">{t('impara.example')}</Button>
-                <Button onClick={() => extra('code')} disabled={busy} testid="impara-code">{t('impara.code')}</Button>
-                <Button onClick={() => setTutor(o => !o)} testid="impara-ask" aria-expanded={tutor} tip={`${t('impara.tutor.open')}|T`}><IconQuestion size={13} />{t('impara.ask')}</Button>
+                <button ref={unclearBtn} type="button" className={`btn btn-ghost ip-unclear ${unclear ? 'on' : ''}`} onClick={() => setUnclear(o => !o)} aria-haspopup="menu" aria-expanded={unclear} data-testid="impara-unclear">
+                  <IconQuestion size={13} />{t('impara.unclear')}<IconChevronDown size={12} />
+                </button>
+                <Popover anchor={unclearBtn} open={unclear} onClose={() => setUnclear(false)} align="start" testid="impara-unclear-menu" width={264} label={t('impara.unclear')}>
+                  {UNCLEAR.map(u => (
+                    <MenuItem key={u.kind} onSelect={() => unclearDo(u.kind)} shortcut={u.key} disabled={busy && u.kind !== 'question'} testid={`impara-${u.kind === 'question' ? 'ask' : u.kind}`}>
+                      <span className="ip-unclear-i">{EXTRA_ICON[u.kind]}{t(u.kind === 'question' ? 'impara.ask' : `impara.${u.kind}`)}</span>
+                    </MenuItem>
+                  ))}
+                </Popover>
                 <span className="sp" />
                 {idx > 0 && <Button variant="ghost" size="s" onClick={back} testid="impara-prev" tip={`${t('impara.prev')}|←`}><IconArrowLeft size={12} /></Button>}
                 <button type="button" className={`ip-mic ${micOn ? 'live' : ''}`} onClick={toggleMic} aria-pressed={micOn} aria-label={t('impara.voiceMe')} data-tip={`${t('impara.voiceMe')}|Ctrl M`} data-testid="impara-mic-btn"><IconMic size={14} /></button>
@@ -395,8 +437,23 @@ function Board({ lesson }: { lesson: Lesson }) {
           {/* an extra being written, or one that did not arrive: on a piece and on a check (the end shows its grade's own) */}
           {item.kind !== 'end' && busy && <div className="ip-busy" data-testid="impara-busy" role="status"><IconSpinner size={13} />{t(`impara.busy.${lesson.busy!.kind}`)}</div>}
           {item.kind !== 'end' && lesson.busyError && <div className="ip-busy err" data-testid="impara-busy-error" role="alert">{lesson.busyError}<Button size="s" onClick={() => void retryLesson(lesson.id)} testid="impara-busy-dismiss">{t('impara.ok')}</Button></div>}
+          {studio && <StudioView lesson={lesson} kind={studio} onClose={closeStudio} />}
         </section>
-        {tutor && <ImparaTutor lesson={lesson} at={item.key} seed={seed} onSeed={clearSeed} onClose={closeTutor} />}
+        {side && (
+          <aside className="ip-tutor ip-side" data-testid="impara-side" data-side={side} aria-label={t(`impara.side.${side}`)}>
+            <header className="ip-tutor-h ip-side-h">
+              <div className="ip-side-tabs" role="tablist" aria-label={t('impara.side.label')}>
+                <button type="button" role="tab" aria-selected={side === 'tutor'} className={side === 'tutor' ? 'on' : ''} onClick={() => setSide('tutor')} data-testid="impara-side-tutor" data-tip={`${t('impara.tutor.sub')}|T`}><IconSparkle size={12} />{t('impara.side.tutor')}</button>
+                <button type="button" role="tab" aria-selected={side === 'studio'} className={side === 'studio' ? 'on' : ''} onClick={() => setSide('studio')} data-testid="impara-side-studio"><IconGrid size={12} />{t('impara.side.studio')}</button>
+              </div>
+              <span className="sp" />
+              <button type="button" className="ip-tutor-x" onClick={closeTutor} aria-label={t('impara.side.close')} data-tip={t('impara.side.close')} data-testid="impara-tutor-close"><IconX size={13} /></button>
+            </header>
+            {side === 'tutor'
+              ? <ImparaTutor lesson={lesson} at={item.key} seed={seed} onSeed={clearSeed} onClose={closeTutor} challenge={challenge} onChallenged={challenged} />
+              : <ImparaStudio lesson={lesson} open={studio} onOpen={setStudio} onChallenge={() => { setChallenge(n => n + 1); setSide('tutor'); }} />}
+          </aside>
+        )}
       </div>
       {sources && <ImparaSources lesson={lesson} onClose={closeSources} />}
     </div>

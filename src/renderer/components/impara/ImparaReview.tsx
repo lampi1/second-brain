@@ -20,7 +20,7 @@ const isTyping = (el: EventTarget | null) => el instanceof HTMLElement && el.clo
 
 type Done = { id: string; grade: ReviewGrade };
 
-export function ImparaReview({ subject }: { subject?: string }) {
+export function ImparaReview({ subject, lesson }: { subject?: string; lesson?: string }) {
   const full = imparaPrefs.use(p => p.full);
   const [items, setItems] = useState<ReviewItem[] | null>(null);
   const [i, setI] = useState(0);
@@ -30,12 +30,13 @@ export function ImparaReview({ subject }: { subject?: string }) {
   useEffect(() => {
     let alive = true;
     setItems(null); setI(0); setDone([]); again.current = new Set();
-    void reviewQueue(subject ? 'quiz' : 'due', subject).then(x => { if (alive) setItems(x ?? []); });
+    // a lesson's «Studio» quiz (ADR 0205) plays its own questions
+    void reviewQueue(subject || lesson ? 'quiz' : 'due', subject, lesson).then(x => { if (alive) setItems(x ?? []); });
     return () => { alive = false; };
-  }, [subject, round]);
+  }, [subject, lesson, round]);
 
   const item = items?.[i] ?? null;
-  const title = subject ? t('impara.rv.quizOf', { subject }) : t('impara.rv.today');
+  const title = lesson ? t('impara.studio.quizTitle', { lesson: items?.[0]?.lesson ?? '' }) : subject ? t('impara.rv.quizOf', { subject }) : t('impara.rv.today');
   const finish = (g: ReviewGrade) => {
     if (!item) return;
     void gradeCard(item.card.id, g);
@@ -73,7 +74,7 @@ export function ImparaReview({ subject }: { subject?: string }) {
       </header>
       {items && total > 0 && <div className="rv-progress" aria-hidden="true"><i style={{ width: `${Math.round((Math.min(i, total) / total) * 100)}%` }} /></div>}
       {!items ? <div className="ip-center"><IconSpinner size={18} /></div>
-        : !item ? <End done={done} empty={!total} onAgain={subject ? () => setRound(r => r + 1) : undefined} />
+        : !item ? <End done={done} empty={!total} onAgain={subject || lesson ? () => setRound(r => r + 1) : undefined} />
         : <Card key={`${item.card.id}/${i}`} item={item} onGrade={finish} />}
     </div>
   );

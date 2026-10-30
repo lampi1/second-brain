@@ -15,6 +15,8 @@ let themed = '';
 
 const css = (name: string, fallback: string): string => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 
+const SCALE = ['--blue', '--violet', '--green', '--amber'];
+
 /** A bigger, tighter drawing (Impara's blackboard, ADR 0185): larger labels, less space between the nodes. */
 export interface DrawOptions { fontSize?: number; nodeSpacing?: number; rankSpacing?: number }
 
@@ -46,6 +48,10 @@ function configure(o: DrawOptions = {}): void {
     edgeLabelBackground: css('--surface', '#191a1f'),
     fontFamily: css('--font', 'system-ui, sans-serif'),
     fontSize: `${o.fontSize ?? 13}px`,
+    // the branches of a mind map and the periods of a timeline (ADR 0205): the app's accents, the page's background as
+    // their text (pastel with dark text in the dark theme, deep with light text in the light one)
+    ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`cScale${i}`, css(SCALE[i % SCALE.length]!, '#a59bff')])),
+    ...Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`cScaleLabel${i}`, css('--bg', '#0f1014')])),
   };
   const flowchart = { nodeSpacing: o.nodeSpacing ?? 50, rankSpacing: o.rankSpacing ?? 50 };
   const key = JSON.stringify([vars, flowchart]);
@@ -57,7 +63,10 @@ function configure(o: DrawOptions = {}): void {
     htmlLabels: false, flowchart: { ...flowchart, htmlLabels: false }, suppressErrorRendering: true, maxTextSize: 20_000, maxEdges: 400, deterministicIds: true,
     deterministicIDSeed: 'sb',
     // edge labels on an opaque chip (mermaid's own is half transparent: a line showed through the text), rounder boxes
-    themeCSS: `.edgeLabel rect, .labelBkg { opacity: 1 !important; fill: ${vars.background} !important; } .node rect { rx: 6px; ry: 6px; }`,
+    themeCSS: `.edgeLabel rect, .labelBkg { opacity: 1 !important; fill: ${vars.background} !important; } .node rect { rx: 6px; ry: 6px; }`
+      // a mind map's root as the app's own node (mermaid fills it with the git palette, black on the dark theme, and its
+      // label, measured before the drawing becomes an image, started at the centre)
+      + ` .section-root circle, .section-root rect, .section-root path, .section-root polygon { fill: ${vars.primaryColor} !important; stroke: ${vars.primaryBorderColor}; stroke-width: 2px; } .section-root text { fill: ${vars.primaryTextColor} !important; text-anchor: middle; }`,
   });
 }
 

@@ -13,23 +13,28 @@
 // run writes from the verified facts; the reviews are scheduled by FSRS (shared/review.ts). Beside the lesson, the tutor
 // (ADR 0190): a question answered in seconds, word by word, from the verified facts (no new research), on a session
 // started while the learner types (`tutorWarm`); it first lets the learner try (coach) unless they ask for the answer.
+// Since ADR 0205: a quality gate (one cheap run) scores the plan's pieces and the rest's on a fixed checklist and
+// rewrites only the failing ones, once, before the learner sees them; the «Studio» tiles (`studio`) are one short run
+// each over the verified facts only, saved with the lesson (flashcards go into the review, the quiz plays as a review
+// session whose answers become cards); «Mettimi alla prova» is the tutor in quiz mode.
 // Wired in wiring.ts / demo-wiring.ts, IPC impara:* in index.ts; tests: test/unit/learn-service.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import { errText, log } from '../log';
 import type { Effort, Lang } from '@shared/contract';
 import {
-  LESSON_DEPTHS, LESSON_EXTRAS, LESSON_LEVELS, TEACHER_EFFORTS, applyVerdicts, checkKey, diagramNodes, jsonIn, parseExtra, parseFacts, parseGrade, parsePlan, parseQuestions, playlist, stepKey,
-  type ImparaState, type Lesson, type LessonConfidence, type LessonExtraKind, type LessonFact, type LessonKind, type LessonPrep, type LessonStart, type LessonStep, type LessonTeacher,
+  LESSON_DEPTHS, LESSON_EXTRAS, LESSON_LEVELS, TEACHER_EFFORTS, applyVerdicts, checkKey, diagramNodes, jsonIn, parseCheck, parseExtra, parseFacts, parseGrade, parsePlan, parseQuestions, parseStep, playlist, stepKey,
+  type ImparaState, type Lesson, type LessonCheck, type LessonConfidence, type LessonExtraKind, type LessonFact, type LessonKind, type LessonPrep, type LessonStart, type LessonStep, type LessonTeacher,
   type PrepPhase, type TeacherOption, type TutorMode, type TutorTurn, subjectOf, TUTOR_KEEP, TUTOR_Q_MAX, tutorCard, tutorShown,
 } from '@shared/lesson';
 import { REVIEW_GRADES, parseCards, queueOf, subjectName, summarize, type ReviewCard, type ReviewGrade, type ReviewItem, type ReviewMode } from '@shared/review';
 import { cutDiff, gather, INLINE_MAX, type GatherDeps, type Material } from './material';
-import { cardsPrompt, extraPrompt, filesResearchPrompt, gradePrompt, planPrompt, restPrompt, tutorPrompt, verifyPrompt, webResearchPrompt } from './prompt';
+import { checkIssues, isStudioMade, parseGate, parseStudio, pieceIssues, type LessonQuality, type QualityRule, type StudioMade } from '@shared/lesson-studio';
+import { cardsPrompt, extraPrompt, filesResearchPrompt, gatePrompt, gradePrompt, planPrompt, restPrompt, studioPrompt, tutorPrompt, verifyPrompt, webResearchPrompt } from './prompt';
 import { ReviewStore } from './review-store';
 import type { LessonStore } from './store';
 
-export type TeachRound = 'impara-web' | 'impara-files' | 'impara-verify-web' | 'impara-verify-files' | 'impara-plan' | 'impara-rest' | 'impara-extra' | 'impara-grade' | 'impara-cards' | 'impara-tutor';
+export type TeachRound = 'impara-web' | 'impara-files' | 'impara-verify-web' | 'impara-verify-files' | 'impara-plan' | 'impara-quality' | 'impara-rest' | 'impara-extra' | 'impara-grade' | 'impara-cards' | 'impara-tutor' | 'impara-studio';
 /** One hidden run. teacher = the user's choice (null = the app's); effort = the one to use (null = the engine's own);
  *  web = the web-only run (Claude, no file: compare/headless.ts web mode); a prompt still to come = a warm start (the
  *  tutor: null = not needed); onText = the answer so far, as it streams. */
@@ -84,6 +89,14 @@ export function fullRef(ref: string, roots: readonly string[]): string {
   return path.join(root, file) + (m?.[2] ?? '');
 }
 
+/** Two gate reports as one (the plan's and the rest's). */
+export function mergeQuality(a: LessonQuality | undefined, b: LessonQuality): LessonQuality {
+  if (!a) return b;
+  const fails = { ...a.fails };
+  for (const [k, n] of Object.entries(b.fails) as [QualityRule, number][]) fails[k] = (fails[k] ?? 0) + n;
+  return { checked: a.checked + b.checked, fixed: a.fixed + b.fixed, fails, at: b.at, ...(a.none || b.none ? { none: true } : {}) };
+}
+
 export class LearnService {
   /** lessons whose plan or rest is being written now */
   private readonly jobs = new Set<string>();
@@ -98,6 +111,8 @@ export class LearnService {
   /** lessons whose tutor is answering now, and the tutor sessions started ahead (ADR 0190) */
   private readonly tutoring = new Set<string>();
   private readonly warm = new Map<string, Warm>();
+  /** the «Studio» tiles being made now, `<lesson>/<kind>` (ADR 0205) */
+  private readonly studioJobs = new Set<string>();
   constructor(private readonly d: LearnDeps) {
     this.review = new ReviewStore(path.join(d.store.root, 'review.json'));
     // a lesson the app was closed while it was being written never finishes by itself: «Riprova» starts it again;
@@ -108,6 +123,10 @@ export class LearnService {
       if (l && l.state !== 'preparing') { try { this.review.fromChecks(l, subjectOf(l)); } catch (e) { log.warn('learn', 'review cards not written', { cause: errText(e) }); } }
       // one lesson object for both cuts below, so the second save keeps the first
       if (l?.cards?.state === 'making') { l = { ...l, cards: { state: 'failed', error: 'interrotta: l’app si è chiusa mentre scrivevo le carte' } }; d.store.save(l); }
+      if (l?.studio && Object.values(l.studio).some(x => x?.state === 'making')) {
+        l = { ...l, studio: Object.fromEntries(Object.entries(l.studio).map(([k, x]) => [k, x?.state === 'making' ? { ...x, state: 'failed' as const, error: 'interrotta: l’app si è chiusa mentre la preparavo' } : x])) };
+        d.store.save(l);
+      }
       if (l?.tutor?.some(x => x.state === 'asking')) { l = { ...l, tutor: l.tutor.map(x => (x.state === 'asking' ? { ...x, state: 'failed' as const, error: 'interrotta: l’app si è chiusa mentre rispondevo' } : x)) }; d.store.save(l); }
       if (!l || (l.state !== 'preparing' && l.state !== 'more' && !l.busy)) continue;
       const cut = l.busy ? { busy: undefined, busyError: 'interrotta: l’app si è chiusa mentre la preparavo' } : {};
@@ -256,10 +275,17 @@ export class LearnService {
       let plan: ReturnType<typeof parsePlan>;
       try { plan = parsePlan(jsonIn(r.text), { now: this.now(), facts: facts.map(f => f.id) }); }
       catch (e) { this.edit(id, l => ({ ...l, state: 'failed', error: `La lezione scritta dal modello non era valida (${errText(e)}).`.slice(0, 300), ...this.cost(l, r) })); return; }
+      // the quality gate (ADR 0205): the first pieces are checked and fixed before the learner sees them
+      const lp = this.d.store.get(id);
+      if (!lp) return;
+      const gated = await this.gate(req, { ...lp, title: plan.title || lp.title, diagram: plan.diagram, facts }, plan.steps, plan.checks);
+      if (!this.d.store.get(id)) return;
+      plan = { ...plan, steps: gated.steps, checks: gated.checks };
       const done = this.edit(id, l => {
         const outline = plan.outline.length >= plan.steps.length ? plan.outline : plan.steps.map(s => s.title);
         more = outline.length > plan.steps.length;
-        return { ...l, ...this.cost(l, r), title: plan.title || l.title, diagram: plan.diagram, outline, steps: plan.steps, checks: plan.checks, ...(plan.subject && !l.subject ? { subject: plan.subject } : {}),
+        const paid = gated.run ? { ...l, ...this.cost(l, r) } : l;
+        return { ...l, ...this.cost(paid, gated.run ?? r), quality: gated.quality, title: plan.title || l.title, diagram: plan.diagram, outline, steps: plan.steps, checks: plan.checks, ...(plan.subject && !l.subject ? { subject: plan.subject } : {}),
           ...(plan.explainQ ? { explain: { q: plan.explainQ } } : {}), state: more ? 'more' : 'ready', at: stepKey(plan.steps[0]!.id), error: undefined,
           prep: { ...(l.prep ?? { phases: {} }), phases: { ...l.prep?.phases, plan: 'done' } } };
       });
@@ -366,13 +392,65 @@ export class LearnService {
       let part: ReturnType<typeof parsePlan>;
       try { part = parsePlan(jsonIn(r.text), { now: this.now(), base: l0.diagram, facts: (l0.facts ?? []).map(f => f.id) }); }
       catch (e) { this.edit(id, l => ({ ...l, ...this.cost(l, r), error: `Il resto della lezione non era valido (${errText(e)}).`.slice(0, 300) })); return; }
-      this.edit(id, l => ({ ...l, ...this.cost(l, r), steps: [...l.steps, ...part.steps], checks: [...l.checks, ...part.checks],
+      const gated = await this.gate(req, l0, part.steps, part.checks);
+      if (!this.d.store.get(id)) return;
+      part = { ...part, steps: gated.steps, checks: gated.checks };
+      this.edit(id, l => ({ ...l, ...this.cost(gated.run ? { ...l, ...this.cost(l, gated.run) } : l, r), quality: mergeQuality(l.quality, gated.quality), steps: [...l.steps, ...part.steps], checks: [...l.checks, ...part.checks],
         outline: [...l.outline.slice(0, l.steps.filter(s => !s.extra).length), ...part.steps.map(s => s.title)], state: 'ready', error: undefined }));
       log.info('learn', 'lesson complete', { data: { id, steps: part.steps.length, costUsd: r.costUsd } });
     } catch (e) {
       this.edit(id, l => ({ ...l, error: errText(e).slice(0, 300) }));
     } finally { this.jobs.delete(id); this.d.store.sweep(id); }
     if (this.d.store.get(id)?.state === 'ready') await this.makeCards(id);
+  }
+
+  /** The quality gate (ADR 0205): what the app sees alone (pieceIssues, checkIssues), then one cheap run that scores the
+   *  draft on the checklist and rewrites only what fails. A rewrite is kept when it parses and fails no more of the
+   *  app's own checks than the draft did; no second round. A gate that does not answer keeps the draft as it is. */
+  private async gate(req: Pick<LessonStart, 'teacher'>, l: Lesson, steps: LessonStep[], checks: LessonCheck[]): Promise<{ steps: LessonStep[]; checks: LessonCheck[]; quality: LessonQuality; run?: Extract<TeachResult, { ok: true }> }> {
+    const factIds = (l.facts ?? []).map(f => f.id);
+    const hasFacts = (l.facts ?? []).some(f => f.check !== 'unsure');
+    const found: Record<string, QualityRule[]> = {};
+    steps.forEach((s, i) => { found[`s${i + 1}`] = pieceIssues(s, hasFacts); });
+    checks.forEach((c, i) => { found[`c${i + 1}`] = checkIssues(c); });
+    const fails: Partial<Record<QualityRule, number>> = {};
+    const count = (rules: readonly QualityRule[]) => { for (const r of new Set(rules)) fails[r] = (fails[r] ?? 0) + 1; };
+    const base = { checked: steps.length + checks.length, at: this.now() };
+    const r = await this.run(req, { cwd: this.folder(l), prompt: gatePrompt(this.d.lang(), l, steps, checks, found), effort: 'low', round: 'impara-quality', timeoutMs: 4 * MIN });
+    let verdict: ReturnType<typeof parseGate> | null = null;
+    if (r.ok) { try { verdict = parseGate(jsonIn(r.text)); } catch { verdict = null; } }
+    if (!r.ok || !verdict) {
+      Object.values(found).forEach(count);
+      log.warn('learn', 'quality gate did not answer: draft kept', { data: { id: l.id, error: r.ok ? 'not valid' : r.error } });
+      return { steps, checks, quality: { ...base, fixed: 0, fails, none: true }, ...(r.ok ? { run: r } : {}) };
+    }
+    const nodes = diagramNodes(l.diagram);
+    let fixed = 0;
+    const outSteps = steps.map((s, i) => {
+      const v = verdict!.pieces.find(x => x.n === i + 1), own = found[`s${i + 1}`]!;
+      count([...own, ...(v?.fails ?? [])]);
+      if (!v?.fails.length && !own.length) return s;
+      if (!v?.fix) return s;
+      try {
+        const next = parseStep(v.fix, nodes, s.id, factIds);
+        if (pieceIssues(next, hasFacts).length > own.length) return s;
+        fixed++;
+        return { ...next, ...(s.role && !next.role ? { role: s.role } : {}) };
+      } catch { return s; }
+    });
+    const outChecks = checks.map((c, i) => {
+      const v = verdict!.checks.find(x => x.n === i + 1), own = found[`c${i + 1}`]!;
+      count([...own, ...(v?.fails ?? [])]);
+      if ((!v?.fails.length && !own.length) || !v?.fix) return c;
+      try {
+        const next = parseCheck(v.fix, c.after, c.id);
+        if (checkIssues(next).length > own.length) return c;
+        fixed++;
+        return next;
+      } catch { return c; }
+    });
+    log.info('learn', 'quality gate done', { data: { id: l.id, checked: base.checked, fixed, fails, costUsd: r.costUsd } });
+    return { steps: outSteps, checks: outChecks, quality: { ...base, fixed, fails }, run: r };
   }
 
   /** The review cards of a finished lesson (ADR 0189): one short run over its verified facts; a card that cites none,
@@ -402,9 +480,11 @@ export class LearnService {
   }
 
   /** A review session's cards (ADR 0189): «Ripassa» = the due ones and a few new; a subject's quiz = its cards, mixed. */
-  queue(mode: unknown, subject?: string): ReviewItem[] {
+  queue(mode: unknown, subject?: string, lesson?: string): ReviewItem[] {
     const m: ReviewMode = mode === 'quiz' ? 'quiz' : 'due';
-    const cards = queueOf(this.askable(), m, this.now(), subject ? { subject: subjectName(subject) } : {});
+    // a lesson's «Studio» quiz (ADR 0205): its questions in order, the ones answered before with their memory
+    const quizOf = lesson ? this.d.store.get(String(lesson)) : null;
+    const cards = quizOf ? this.studioQuiz(quizOf) : queueOf(this.askable(), m, this.now(), subject ? { subject: subjectName(subject) } : {});
     const lessons = new Map<string, Lesson | null>();
     const lessonOf = (id: string) => { if (!lessons.has(id)) lessons.set(id, this.d.store.get(id)); return lessons.get(id)!; };
     return cards.flatMap((card): ReviewItem[] => {
@@ -418,9 +498,63 @@ export class LearnService {
   /** A card's grade: its next review (FSRS). */
   gradeCard(cardId: string, grade: number): ReviewCard {
     if (!(REVIEW_GRADES as readonly number[]).includes(grade)) throw new Error('Voto non valido.');
+    // a «Studio» quiz question answered for the first time becomes a review card (ADR 0205)
+    if (!this.review.get(cardId)) {
+      const m = /^(.+):sq(\d+)$/.exec(String(cardId));
+      const l = m ? this.d.store.get(m[1]!) : null;
+      const q = l ? this.studioQuiz(l).find(c => c.id === cardId) : null;
+      if (l && q) { const { id: _id, lessonId: _l, subject: _s, createdAt: _c, mem: _m, origin: _o, ...draft } = q; this.review.addOne(l.id, subjectOf(l), draft, `sq${m![2]}`, 'studio', this.now()); }
+    }
     const card = this.review.grade(cardId, grade as ReviewGrade, this.now());
     this.emit();
     return card;
+  }
+
+  /** A lesson's «Studio» quiz as review cards, in order: `<lesson>:sq<n>`, with the memory of the ones answered before. */
+  private studioQuiz(l: Lesson): ReviewCard[] {
+    const out = l.studio?.quiz?.out;
+    if (out?.kind !== 'quiz') return [];
+    const at = l.studio?.quiz?.at ?? l.createdAt;
+    return out.qs.map((d, i): ReviewCard => this.review.get(`${l.id}:sq${i + 1}`) ?? { ...d, id: `${l.id}:sq${i + 1}`, lessonId: l.id, subject: subjectOf(l), origin: 'studio', createdAt: at, mem: null });
+  }
+
+  /** A «Studio» tile (ADR 0205): one short run over the lesson's verified facts only (no new research); the output is
+   *  saved with the lesson (a new one replaces it when it arrives). Flashcards go into the review. */
+  studio(id: string, kind: unknown): Lesson {
+    const l = this.must(id);
+    if (!isStudioMade(kind)) throw new Error('Richiesta non valida.');
+    if (l.state === 'preparing' || l.state === 'failed' || !l.diagram) throw new Error('La lezione non è ancora pronta.');
+    if (!(l.facts ?? []).some(f => f.check !== 'unsure')) throw new Error('Lo Studio lavora solo sui fatti verificati, e questa lezione non ne ha.');
+    const key = `${l.id}/${kind}`;
+    if (this.studioJobs.has(key)) throw new Error('Lo sto già preparando.');
+    const why = this.d.cannotTeach();
+    if (why) throw new Error(why);
+    const next = this.edit(l.id, x => ({ ...x, studio: { ...x.studio, [kind]: { ...x.studio?.[kind], state: 'making', at: this.now(), error: undefined } } }))!;
+    void this.makeStudio(l.id, kind);
+    return next;
+  }
+
+  private async makeStudio(id: string, kind: StudioMade): Promise<void> {
+    const l0 = this.d.store.get(id);
+    if (!l0) return;
+    const key = `${id}/${kind}`;
+    this.studioJobs.add(key);
+    const set = (patch: Partial<NonNullable<Lesson['studio']>[StudioMade]>, r?: Extract<TeachResult, { ok: true }>) =>
+      this.edit(id, l => ({ ...l, ...(r ? this.cost(l, r) : {}), studio: { ...l.studio, [kind]: { ...l.studio?.[kind], at: this.now(), ...patch } } }));
+    try {
+      const verified = (l0.facts ?? []).filter(f => f.check !== 'unsure').map(f => f.id);
+      const r = await this.run(this.teacherReq(l0), { cwd: this.folder(l0), prompt: studioPrompt(this.d.lang(), kind, l0), effort: 'low', round: 'impara-studio', timeoutMs: 4 * MIN });
+      if (!this.d.store.get(id)) return;
+      if (!r.ok) { set({ state: 'failed', error: r.error.slice(0, 300) }); return; }
+      let got: ReturnType<typeof parseStudio>;
+      try { got = parseStudio(kind, jsonIn(r.text), verified, diagramNodes(l0.diagram)); }
+      catch (e) { set({ state: 'failed', error: errText(e).slice(0, 300) }, r); return; }
+      if (got.cards) this.review.replaceOwn(id, subjectOf(this.d.store.get(id) ?? l0), 's:f', got.cards, 'studio', this.now());
+      set({ state: 'done', out: got.out, error: undefined }, r);
+      log.info('learn', 'studio ready', { data: { id, kind, costUsd: r.costUsd } });
+    } catch (e) {
+      set({ state: 'failed', error: errText(e).slice(0, 300) });
+    } finally { this.studioJobs.delete(key); this.d.store.sweep(id); }
   }
 
   /** The user moves a lesson (and its cards) to another subject. */
@@ -544,7 +678,7 @@ export class LearnService {
     const key = String(at ?? '');
     const piece = key === 'end' ? null : this.pieceAt(l, key);
     const now = this.now();
-    const turn: TutorTurn = { id: `t${now.toString(36)}${Math.random().toString(36).slice(2, 5)}`, q, at: key, mode: mode === 'tell' ? 'tell' : 'coach', a: '', state: 'asking', createdAt: now };
+    const turn: TutorTurn = { id: `t${now.toString(36)}${Math.random().toString(36).slice(2, 5)}`, q, at: key, mode: mode === 'tell' || mode === 'quiz' ? mode : 'coach', a: '', state: 'asking', createdAt: now };
     const next = this.edit(l.id, x => ({ ...x, tutor: [...(x.tutor ?? []), turn].slice(-TUTOR_KEEP) }))!;
     void this.answerTutor(l.id, turn, piece);
     return next;
@@ -572,7 +706,7 @@ export class LearnService {
       if (!a) { set({ state: 'failed', error: 'nessuna risposta' }, r); return; }
       // a full explanation the verified facts support leaves a review card (cites checked as for every card)
       let card: string | undefined;
-      const raw = tutorCard(r.text);
+      const raw = turn.mode === 'quiz' ? null : tutorCard(r.text);
       if (raw && typeof raw === 'object') {
         const verified = (l.facts ?? []).filter(f => f.check !== 'unsure').map(f => f.id);
         const [draft] = parseCards({ cards: [{ ...(raw as object), kind: 'recall' }] }, [], verified);
@@ -628,7 +762,7 @@ export class LearnService {
     w?.give(null);
     this.warm.delete(id);
     if (w) void w.result.finally(() => this.d.store.sweep(id));
-    try { this.d.store.remove(String(id), !!w || this.jobs.has(id) || this.extras.has(id) || this.cardJobs.has(id) || this.tutoring.has(id)); } finally { wake?.(); }
+    try { this.d.store.remove(String(id), !!w || this.jobs.has(id) || this.extras.has(id) || this.cardJobs.has(id) || this.tutoring.has(id) || [...this.studioJobs].some(k => k.startsWith(`${id}/`))); } finally { wake?.(); }
     try { this.review.removeLesson(String(id)); } catch (e) { log.warn('learn', 'review cards not removed', { cause: errText(e) }); }
     log.info('learn', 'lesson removed', { data: { id } });
     this.emit();

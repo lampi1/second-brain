@@ -5,7 +5,10 @@
 // piece gets on the diagram, taken from the theme's tokens as hex (mermaid's classDef cannot take rgba).
 // The tutor's answers as they stream (ADR 0190: 'impara:tutor', `tutorLive`), and the start form's draft when another
 // page sends the user here to learn something («Capiscila», «Spiegamelo», «Imparalo»: `learnAbout`).
+// The «Studio» column (ADR 0205): a tile's run (`makeStudio`), a lesson's quiz played as a review session
+// (`studioQuizArg`), and which tab of the side column is open (`side`, remembered).
 // Used by components/impara/, brain/components/RecordLearnButton.tsx, brain-model/ApprovedTab.tsx, GuidePage.tsx.
+import type { StudioKind } from '@shared/lesson-studio';
 import type { ImparaState, Lesson, LessonConfidence, LessonDepth, LessonExtraKind, LessonKind, LessonLevel, LessonStart, LessonTeacher, FocusColors, TutorMode } from '@shared/lesson';
 import type { ReviewCard, ReviewGrade, ReviewItem, ReviewMode } from '@shared/review';
 import { createStore } from '../store/createStore';
@@ -17,9 +20,11 @@ export const impara = createStore<ImparaUi>({ state: null, lessons: {} });
 
 /** teacher null = the app's choice (Claude's strongest model, high effort); full = the lesson fills the window (the
  *  owner, 2026-10-29: «di base a tutto schermo»); coach = the tutor's «Prima provo io» (ADR 0190) */
-export interface ImparaPrefs { voice: boolean; mic: boolean; depth: LessonDepth; level: LessonLevel; teacher: LessonTeacher | null; full: boolean; coach: boolean }
+export interface ImparaPrefs { voice: boolean; mic: boolean; depth: LessonDepth; level: LessonLevel; teacher: LessonTeacher | null; full: boolean; coach: boolean; side: ImparaSide }
+/** the column beside the lesson (ADR 0205): the tutor, the «Studio» tiles, or closed */
+export type ImparaSide = 'tutor' | 'studio' | null;
 const PREFS_KEY = 'sb.impara.v1';
-const DEFAULT_PREFS: ImparaPrefs = { voice: true, mic: false, depth: 'lesson', level: 'basics', teacher: null, full: true, coach: true };
+const DEFAULT_PREFS: ImparaPrefs = { voice: true, mic: false, depth: 'lesson', level: 'basics', teacher: null, full: true, coach: true, side: 'studio' };
 const teacherIn = (v: unknown): LessonTeacher | null => {
   if (!v || typeof v !== 'object') return null;
   const o = v as Record<string, unknown>;
@@ -33,6 +38,7 @@ function readPrefs(): ImparaPrefs {
       voice: typeof p.voice === 'boolean' ? p.voice : DEFAULT_PREFS.voice, mic: typeof p.mic === 'boolean' ? p.mic : DEFAULT_PREFS.mic,
       depth: p.depth === 'quick' || p.depth === 'deep' ? p.depth : 'lesson', level: p.level === 'new' || p.level === 'expert' ? p.level : 'basics',
       teacher: teacherIn(p.teacher), full: typeof p.full === 'boolean' ? p.full : DEFAULT_PREFS.full, coach: typeof p.coach === 'boolean' ? p.coach : DEFAULT_PREFS.coach,
+      side: p.side === 'tutor' || p.side === 'studio' || p.side === null ? p.side : DEFAULT_PREFS.side,
     };
   } catch { return DEFAULT_PREFS; }
 }
@@ -87,17 +93,23 @@ export const retryLesson = (id: string) => call(window.sb.invoke('impara:retry',
 /** The answers to the questions before the lesson ('' = skipped). */
 export const clarifyLesson = (id: string, answers: string[]) => call(window.sb.invoke('impara:clarify', { id, answers }));
 /** The review (ADR 0189): a session's cards, a card's grade, a lesson moved to another subject. */
-export const reviewQueue = (mode: ReviewMode, subject?: string): Promise<ReviewItem[] | null> =>
-  window.sb.invoke('impara:queue', { mode, ...(subject ? { subject } : {}) }).catch(fail);
+export const reviewQueue = (mode: ReviewMode, subject?: string, lesson?: string): Promise<ReviewItem[] | null> =>
+  window.sb.invoke('impara:queue', { mode, ...(subject ? { subject } : {}), ...(lesson ? { lesson } : {}) }).catch(fail);
 export const gradeCard = (card: string, grade: ReviewGrade): Promise<ReviewCard | null> => window.sb.invoke('impara:grade', { card, grade }).catch(fail);
 export const setLessonSubject = (id: string, subject: string) => call(window.sb.invoke('impara:subject', { id, subject }));
 /** The page argument of a review session: today's, or one subject's quiz. */
 export const reviewArg = (subject?: string): string => (subject ? `ripasso:${encodeURIComponent(subject)}` : 'ripasso');
-export function readReviewArg(arg: string | null | undefined): { subject?: string } | null {
+export function readReviewArg(arg: string | null | undefined): { subject?: string; lesson?: string } | null {
   if (arg === 'ripasso') return {};
+  if (arg?.startsWith('quiz:') && arg.length > 5) return { lesson: arg.slice(5) };
   if (!arg?.startsWith('ripasso:')) return null;
   try { return { subject: decodeURIComponent(arg.slice(8)) }; } catch { return null; }
 }
+
+/** A «Studio» tile (ADR 0205): its run starts, the lesson shows it being made, then the output. */
+export const makeStudio = (id: string, kind: StudioKind) => call(window.sb.invoke('impara:studio', { id, kind }));
+/** The page argument of a lesson's «Studio» quiz, played as a review session. */
+export const studioQuizArg = (lessonId: string): string => `quiz:${lessonId}`;
 
 export async function removeLesson(id: string): Promise<boolean> {
   try { await window.sb.invoke('impara:remove', { id }); impara.set(s => { const { [id]: _gone, ...rest } = s.lessons; return { ...s, lessons: rest }; }); toast(t('impara.removed'), 'ok'); return true; }
