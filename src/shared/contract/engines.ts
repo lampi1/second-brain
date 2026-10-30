@@ -1,7 +1,6 @@
 // Engines: the engine registry's shapes, API spend and stored API keys (ADR 0046).
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
-import type { CloudCaps } from '../cloud';
 import type { CliStatus } from './app';
 import type { ModelsSeen } from './brain';
 
@@ -36,8 +35,6 @@ export interface EngineCaps {
   preAllow: boolean;
   /** the engine works with tools (files, shell, MCP: the browser, the app's tools); false = text only (api) */
   tools: boolean;
-  /** the engine's cloud agents (ADR 0080; shared/cloud.ts CLOUD_CAPS): absent = none */
-  cloud?: CloudCaps;
 }
 /** An engine as the renderer sees it: label = short ("Claude"), name = full ("Claude Code"). */
 export interface EngineInfo {

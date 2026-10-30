@@ -35,8 +35,6 @@ export const aliveDe: typeof aliveIt = {
   'alive.m.prVote': (p: { title: string }) => `PR „${p.title}“ wartet auf deine Stimme`,
   'alive.m.tasksAt': (p: { when: string }) => `Tasks gelesen ${p.when}`,
   'alive.m.idea': (p: { title: string }) => `Zum Aufgreifen: „${p.title}“`,
-  'alive.m.cloud': (p: { title: string; status: string }) => `In der Cloud: „${p.title}“ ${p.status}`,
-  'alive.m.cloud.done': 'fertig', 'alive.m.cloud.failed': 'mit Fehler gestoppt', 'alive.m.cloud.stopped': 'wurde gestoppt',
   'alive.m.maintenance': (p: { n: number }) => p.n === 1 ? 'Die Wartung hat 1 Sache geändert' : `Die Wartung hat ${p.n} Sachen geändert`,
   'alive.m.undo': 'Rückgängig', 'alive.m.undone': 'Rückgängig gemacht',
   'alive.m.spend': (p: { usd: string }) => `Gestern: ${p.usd} ausgegeben`,

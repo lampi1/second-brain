@@ -6,7 +6,6 @@ import { routinesEn } from './areas/routines.en';
 import { appTextEn } from './areas/app-text.en';
 import { brainTextEn } from './areas/brain-text.en';
 import { learningReviewEn } from './areas/learning-review.en';
-import { cloudEn } from './areas/cloud.en';
 import { brainModelEn } from './areas/brain-model.en';
 import { memoryEn } from './areas/memory.en';
 import { memoryHubEn } from './areas/memory-hub.en';
@@ -74,7 +73,6 @@ export const en: Dict = {
   ...setupEn,
   ...viewerOverlayEn,
   ...homeEn,
-  ...cloudEn,
   ...guideEn,
   ...pbrowserEn,
   ...treeEn,

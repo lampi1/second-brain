@@ -10,7 +10,6 @@
 // login (../cli.ts) and the renderer through AppInfo.engines.
 import crypto from 'node:crypto';
 import { ANTHROPIC_API, type EngineCaps, type EngineInfo, type EngineKind, type Harness } from '../../shared/contract';
-import { CLOUD_CAPS, isCloudEngine } from '../../shared/cloud';
 
 /** How an engine starts: an ACP CLI's command, or an HTTP endpoint. Its fingerprint covers all of it. */
 export interface EngineStart {
@@ -144,8 +143,7 @@ function build(): void {
     const source = brainIds.has(e.id) ? 'brain' : 'app';
     return {
       ...e,
-      // the built-ins' cloud agents (ADR 0080): only the app's own Claude, Cursor and Codex, never a brain redefinition
-      caps: source === 'app' && BUILT_IN.has(e.id) && isCloudEngine(e.id) ? { ...CAPS[e.kind], cloud: CLOUD_CAPS[e.id] } : CAPS[e.kind],
+      caps: CAPS[e.kind],
       source,
       key: e.kind === 'api' ? 'required' : e.keyEnv ? 'optional' : 'none',
       runs: runsOf(e),

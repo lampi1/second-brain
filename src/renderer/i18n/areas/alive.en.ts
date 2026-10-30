@@ -35,8 +35,6 @@ export const aliveEn: typeof aliveIt = {
   'alive.m.prVote': (p: { title: string }) => `PR “${p.title}” waits for your vote`,
   'alive.m.tasksAt': (p: { when: string }) => `Tasks read ${p.when}`,
   'alive.m.idea': (p: { title: string }) => `To pick up: “${p.title}”`,
-  'alive.m.cloud': (p: { title: string; status: string }) => `In the cloud: “${p.title}” ${p.status}`,
-  'alive.m.cloud.done': 'finished', 'alive.m.cloud.failed': 'stopped with an error', 'alive.m.cloud.stopped': 'was stopped',
   'alive.m.maintenance': (p: { n: number }) => p.n === 1 ? 'Maintenance changed 1 thing' : `Maintenance changed ${p.n} things`,
   'alive.m.undo': 'Undo', 'alive.m.undone': 'Undone',
   'alive.m.spend': (p: { usd: string }) => `Yesterday: ${p.usd} spent`,

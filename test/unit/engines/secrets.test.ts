@@ -77,6 +77,17 @@ describe('SecretStore', () => {
     expect(Object.keys(JSON.parse(fs.readFileSync(f, 'utf8')).keys)).toEqual(['anthropic']);
     expect(s.get('anthropic', 'fp')).toBe(KEY);
   });
+
+  it('erases at load the Cursor Cloud Agents key of the removed cloud agents (ADR 0201)', () => {
+    const d = dir();
+    new SecretStore(d, fake()).set('anthropic', KEY, 'fp');
+    const f = path.join(d, 'secrets.json');
+    const j = JSON.parse(fs.readFileSync(f, 'utf8'));
+    fs.writeFileSync(f, JSON.stringify({ ...j, keys: { ...j.keys, 'cursor-cloud': { ...j.keys.anthropic, bound: 'cloud:https://api.cursor.com/v1' } } }));
+    const s = new SecretStore(d, fake());
+    expect(Object.keys(s.status(() => 'fp').keys)).toEqual(['anthropic']);
+    expect(Object.keys(JSON.parse(fs.readFileSync(f, 'utf8')).keys)).toEqual(['anthropic']);
+  });
 });
 
 describe('maskOf', () => {

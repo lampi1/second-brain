@@ -36,8 +36,6 @@ export const aliveIt = {
   'alive.m.prVote': (p: { title: string }) => `PR «${p.title}» aspetta il tuo voto`,
   'alive.m.tasksAt': (p: { when: string }) => `Task letti ${p.when}`,
   'alive.m.idea': (p: { title: string }) => `Da riprendere: «${p.title}»`,
-  'alive.m.cloud': (p: { title: string; status: string }) => `In cloud: «${p.title}» ${p.status}`,
-  'alive.m.cloud.done': 'ha finito', 'alive.m.cloud.failed': 'si è fermato con un errore', 'alive.m.cloud.stopped': 'è stato fermato',
   'alive.m.maintenance': (p: { n: number }) => p.n === 1 ? 'La manutenzione ha cambiato 1 cosa' : `La manutenzione ha cambiato ${p.n} cose`,
   'alive.m.undo': 'Annulla', 'alive.m.undone': 'Annullata',
   'alive.m.spend': (p: { usd: string }) => `Ieri: ${p.usd} spesi`,

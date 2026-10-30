@@ -8,7 +8,6 @@ import type { AgentImages } from './agent-images';
 import type { AgentCatalog } from './agents';
 import type { AppUpdateState, UpdateCheckpointRequest } from './app-update';
 import type { AutoCloseStatus } from './auto-close';
-import type { CloudState } from './cloud';
 import type { AgentsInvokeMap } from './contract/agents';
 import type { AppSourceState, CliStatus, Usage, AppInvokeMap } from './contract/app';
 import type { BrainInvokeMap } from './contract/brain';
@@ -26,8 +25,7 @@ import type { RecState } from './recordings';
 import type { RoutineRunDetail } from './routines';
 import type { VoiceHeard, VoiceSpeech, VoiceState } from './voice';
 import type { WorkThread } from './workflows';
-export type { MorningBrief, MorningChange, MorningCloud, MorningIdea, MorningNext, MorningOp, MorningOutcome, MorningPr, MorningRun, MorningStalled, MorningState } from './morning';
-export type { CloudAgent, CloudApplyResult, CloudCaps, CloudEngine, CloudMessage, CloudReady, CloudStartRequest, CloudState, CloudStatus } from './cloud';
+export type { MorningBrief, MorningChange, MorningIdea, MorningNext, MorningOp, MorningOutcome, MorningPr, MorningRun, MorningStalled, MorningState } from './morning';
 export * from './contract/engines';
 export * from './contract/chats';
 export * from './contract/browser';
@@ -109,7 +107,6 @@ export interface EventMap {
   'maintenance:changed': void;
   /** one click's maintenance is over: what it made (the end notice, ADR 0153) */
   'maintenance:done': MaintenanceDone;
-  'cloud:changed': CloudState;
   'mcpservers:changed': McpServersState;
   /** voice mode (ADR 0152): the models or the download changed; the user said something (transcribed); speech started
    *  or stopped on the microphone */
@@ -165,7 +162,6 @@ export const INVOKE_CHANNELS = [
   'rec:state', 'rec:arm', 'rec:start', 'rec:chunk', 'rec:stop', 'rec:transcribe', 'rec:rename', 'rec:remove', 'rec:transcript', 'rec:find', 'rec:readFound', 'rec:open',
   'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:clarify', 'impara:remove', 'impara:queue', 'impara:grade', 'impara:subject', 'impara:tutor', 'impara:tutorWarm',
   'orchestrator:held', 'orchestrator:heldSeen',
-  'cloud:list', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:dismiss',
   'log:renderer',
   'proposals:shown', 'proposals:undoAuto',
   'guide:ask', 'guide:stale',
@@ -178,7 +174,6 @@ export const EVENT_CHANNELS = [
   'agents:changed', 'agents:lifecycleChanged', 'avatars:changed',
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
   'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'tasks:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'source:state', 'later:changed', 'search:status', 'brainmodel:changed', 'queries:changed', 'sync:state',
-  'cloud:changed',
   'mcpservers:changed',
   'orchestrator:heldChanged',
   'scripts:changed',
