@@ -16,7 +16,6 @@
 │   tasks/   Task page (DevOps reader, read only) · run/ "Esegui" shell blocks  │
 │   search/  Ctrl+K index · skills/ Skill tab · update/ Aggiorna (Settings)     │
 │   brainmodel/ Brain section: skills, rules, memory, jobs + undo (0077, 0082)  │
-│   cloud/   cloud agents: Cursor REST v1 · codex cloud · claude --cloud (0080) │
 │   personal/ the user's own Browser page: persist:personal, vault (ADR 0133)   │
 │   overlay.ts  request layer: a top-most view for questions over browser tabs  │
 │   ipc.ts   typed handlers (sender check) + Emitter                            │
@@ -92,11 +91,6 @@ layer classes in `chats/manager-*.ts` under `chats/manager.ts` (layout: `docs/ag
   kind classifier on the local e5 embeddings of verified runs when Classificatori asks (`kind-centroids.ts`, word-rule
   labels, held-out test). `agents/judge-agreement.ts` gives each role's all-versions metrics a prediction-powered success
   estimate and the Sentinel's agreement with the user (`shared/ppi.ts`).
-- **A cloud agent** (ADR 0080): the Orchestrator's `app_create_chat where:'cloud'` →
-  CloudService checks readiness (key / sign-in, GitHub remote, pushed branch, Cursor budget) → the vendor's provider
-  starts it (`cloud/cursor.ts` REST, `codex.ts` / `claude.ts` CLIs) → `cloud:changed` → a cloud strip
-  (`CloudStrips.tsx`). The vendors' lists are polled only while the window is visible (30 s while running, back-off to
-  10 min); the strip the user opens streams its run (Cursor SSE); Cursor's usage goes to `engines/spend.ts`.
 - **Stop**: `chat:stop` → control `interrupt` (Claude) / `session/cancel` (Cursor); `chat:stopAll` = every running
   chat.
 - **A browser action by an agent**: CLI calls the MCP tool on its own endpoint → BrowserService acts on that chat's
@@ -127,8 +121,9 @@ layer classes in `chats/manager-*.ts` under `chats/manager.ts` (layout: `docs/ag
   a zero-token brain lint (`brainmodel/brain-lint.ts`: orphans, broken links, concepts without a note, facts and skill
   lines citing files that are gone) whose findings are Proposte cards; the launch memory skips a fact citing a missing
   file. Each brain proposal carries a «riuscito se…» criterion (`brainmodel/success-check.ts`), checked a week after it
-  was applied (start, hourly, click): worse → a card «Questo cambio non ha aiutato: lo annullo?». Nothing else proposes by itself: no timer, the Battito makes no idea cards, and the
-  skill candidates and the Battito's rules wait in the deck until the next click (`proposals/service.ts` heldBack).
+  was applied (start, hourly, click): worse → a card «Questo cambio non ha aiutato: lo annullo?». Nothing else proposes by itself (no timer; the Battito, which
+  made idea cards, went with ADR 0201), and the skill candidates wait in the deck until the next click
+  (`proposals/service.ts` heldBack).
   Every Proposte decision goes to a ledger (`proposals/ledger.ts`, userData `proposal-decisions.json`); a card of an
   allow-listed group (skill, rule, fact, script/query, learning) whose recent decisions are near-always yes (90% Wilson
   lower bound ≥ 0.80 over ≥ 10, i.e. 11 yes in a row, an undo counting as no) is applied by itself through its source's own decide and listed
