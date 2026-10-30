@@ -5,7 +5,7 @@ import{newBrowser,openFileViewer}from'../../src/renderer/actions';import{ui,dism
 import{readFileViewArg}from'../../src/shared/file-view';import{currentEntry}from'../../src/renderer/lib/viewer-stack';
 afterEach(()=>{invoke.mockReset();for(const item of ui.get().toasts)dismissToast(item.id);});
 it('opens an unowned blank tab and brings the Grindhouse, where it shows, on screen',async()=>{
- invoke.mockResolvedValue({id:'manual-tab'});ui.set(state=>({...state,page:'costi',map:false,focusMode:null,maximized:null}));
+ invoke.mockResolvedValue({id:'manual-tab'});ui.set(state=>({...state,page:'andamento',map:false,focusMode:null,maximized:null}));
  await newBrowser();expect(invoke).toHaveBeenCalledWith('browser:open',{url:'about:blank',ownerChatId:null});expect(ui.get().page).toBe('home');
 });
 it('keeps the page and reports an unavailable browser without making a fake tile',async()=>{

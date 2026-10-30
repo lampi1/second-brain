@@ -11,6 +11,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { SearchHit, SearchIndexStatus, SearchResult } from '@shared/contract';
 import { sb } from '../sb';
 import { locale, t, type TextKey } from '../i18n';
+import { track } from '../lib/use-counter';
 import { recorder, toggleCall } from '../lib/recorder';
 import { chatName } from '@shared/orchestrator';
 import { fuzzyScore } from '../lib/fuzzy';
@@ -26,7 +27,7 @@ import {
   toggleMaximize, toggleOrchestrator, askRenewOrchestrator, askClearOrchestrator, orchestratorId, newBrowser, newRequest,
 } from '../actions';
 import {
-  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconLearn, IconBranch, IconFile, IconBrain, IconChart, IconTarget, IconCoins, IconShield, IconFocus, IconGlobe,
+  HarnessMark, IconArrowLeft, IconArrowRight, IconBell, IconBolt, IconLearn, IconBranch, IconFile, IconBrain, IconChart, IconShield, IconFocus, IconGlobe,
   IconHistory, IconKeyboard, IconLayers, IconLightbulb, IconLink, IconList, IconLogin, IconMap, IconMaximize, IconMic, IconPlus, IconQuestion, IconSearch, IconSettings, IconStop,
   IconSparkle, IconTerminal, IconTicket,
 } from './Icons';
@@ -43,9 +44,9 @@ const PAGE_ICON: Record<BrainPageId, ReactNode> = {
   home: <IconBrain />, flussi: <IconBranch />,
   agenti: <IconLayers />,
   idee: <IconLightbulb />,
-  costi: <IconCoins />, qualita: <IconChart />, apprendimento: <IconTarget />, script: <IconTerminal />, log: <IconList />, confronto: <IconLayers />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
+  andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, confronto: <IconLayers />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
   guida: <IconQuestion />, browser: <IconGlobe />, registrazioni: <IconMic />, impara: <IconLearn />,
-  regole: <IconShield />, memoria: <IconHistory />, classificatori: <IconBranch />, collegamenti: <IconMap />,
+  regole: <IconShield />, memoria: <IconHistory />, collegamenti: <IconMap />,
 };
 
 function buildCommands(): Cmd[] {
@@ -232,6 +233,7 @@ export function CommandPalette() {
   // the highlighted row by id: full-text results arriving reshape the list, the choice stays on its row
   const [activeId, setActiveId] = useState<string | null>(null);
   const all = useMemo(buildCommands, []);
+  useEffect(() => { track('palette'); }, []); // the local usage counter (ADR 0202): one open
   const found = useFound(q);
   const model = useSearchModel();
   const quick = useMemo(() => {

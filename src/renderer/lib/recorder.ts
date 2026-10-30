@@ -9,6 +9,7 @@
 import { createStore } from '../store/createStore';
 import { toast } from '../store/ui';
 import { t } from '../i18n';
+import { track } from './use-counter';
 import { openMicStream } from './mic';
 import { blockVoiceWhile, stopVoice, voice } from './voice';
 import { REC_IMPORT_MAX_BYTES, REC_RATE, recExtensionOk, type RecState } from '@shared/recordings';
@@ -105,6 +106,7 @@ function release(r: Run): void {
 }
 
 export async function startCall(): Promise<void> {
+  track('record'); // the local usage counter (ADR 0202)
   if (recorder.get().phase !== 'off') return;
   const me: Run = { gen: ++gen, ctx: null, proc: null, streams: [], nodes: [], channels: 1 };
   run = me;

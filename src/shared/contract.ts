@@ -175,6 +175,7 @@ export const INVOKE_CHANNELS = [
   'log:renderer',
   'proposals:shown', 'proposals:undoAuto',
   'guide:ask', 'guide:stale',
+  'usecount:add', 'usecount:report',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'routines:progress', 'work:changed',
