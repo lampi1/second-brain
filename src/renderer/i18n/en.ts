@@ -42,6 +42,8 @@ import { agentDetailEn } from './areas/agent-detail.en';
 import { agentImageEn } from './areas/agent-image.en';
 import { proposalsEn } from './areas/proposals.en';
 import {settingsEn}from'./areas/settings.en';
+import { settingsShellEn } from './areas/settings-shell.en';
+import { mcpAddEn } from './areas/mcp-add.en';
 import { profileEn } from './areas/profile.en';
 import { homeEn } from './areas/home.en';
 import { guideEn } from './areas/guide.en';
@@ -120,6 +122,8 @@ export const en: Dict = {
   ...agentImageEn,
   ...proposalsEn,
   ...settingsEn,
+  ...settingsShellEn,
+  ...mcpAddEn,
   ...profileEn,
   ...chatEn,
   ...visualsEn,

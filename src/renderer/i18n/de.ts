@@ -43,6 +43,8 @@ import { agentDetailDe } from './areas/agent-detail.de';
 import { agentImageDe } from './areas/agent-image.de';
 import { proposalsDe } from './areas/proposals.de';
 import { settingsDe } from './areas/settings.de';
+import { settingsShellDe } from './areas/settings-shell.de';
+import { mcpAddDe } from './areas/mcp-add.de';
 import { profileDe } from './areas/profile.de';
 import { homeDe } from './areas/home.de';
 import { guideDe } from './areas/guide.de';
@@ -119,6 +121,8 @@ export const de: Dict = {
   ...agentImageDe,
   ...proposalsDe,
   ...settingsDe,
+  ...settingsShellDe,
+  ...mcpAddDe,
   ...profileDe,
   ...chatDe,
   ...visualsDe,

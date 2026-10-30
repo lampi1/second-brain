@@ -657,7 +657,8 @@ export async function cliCheck(harness: Harness): Promise<void> {
 
 /** The user's own change of a setting from the UI (logged as the user's), reflected at once. */
 export async function setSetting(patch: SettingsPatch): Promise<void> {
-  try { dispatch({ type: 'settings', settings: await sb.invoke('settings:set', patch) }); toastKey('essential.saved', 'ok'); }
+  // on the Settings page the header's quiet «Salvato · Annulla» says it (SettingsSaved.tsx, ADR 0207), not a toast
+  try { dispatch({ type: 'settings', settings: await sb.invoke('settings:set', patch) }); if (ui.get().page !== 'impostazioni') toastKey('essential.saved', 'ok'); }
   catch (e) { fail(t('appText.store.settingNotSaved'))(e); }
 }
 

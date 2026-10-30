@@ -12,7 +12,7 @@ import { addRedaction, log } from '../log';
 import type { SecretCipher } from '../engines/secrets';
 import { maskOf } from '../engines/secrets';
 import { isRetiredRoleId } from '../../shared/roles';
-import { MCP_ID, RESERVED_IDS, SECRET_NAME, checkAccess, secretLooking, slotKey, type McpSecretSlot, type McpServerDef, type McpTestResult, type RoleMcpAccess } from '../../shared/mcp-servers';
+import { FLASH_MCP_ROLE, MCP_ID, RESERVED_IDS, SECRET_NAME, checkAccess, defaultAccess, effectiveAccess, secretLooking, slotKey, type McpSecretSlot, type McpServerDef, type McpTestResult, type McpToolAccess, type RoleMcpAccess } from '../../shared/mcp-servers';
 
 const ENV_NAME = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
 const HEADER_NAME = /^[A-Za-z0-9-]{1,64}$/;
@@ -106,6 +106,9 @@ export function fingerprint(def: McpServerDef, slot: McpSecretSlot): string {
 }
 
 interface Saved { cipher: string; mask: string; bound: string }
+/** A server as it was, to put it back (ADR 0207: «Annulla» of a removal or a change): its definition, each role's
+ *  access, its last test and its tokens still encrypted (never decrypted to be kept). Main memory only. */
+export interface McpServerSnapshot { def: McpServerDef; access: Record<string, McpToolAccess>; test: McpTestResult | null; secrets: Record<string, Saved> }
 interface FileShape { version: 1; servers: McpServerDef[]; access: Record<string, RoleMcpAccess>; tests: Record<string, McpTestResult> }
 
 const writeAtomic = (file: string, data: unknown): void => {
@@ -171,7 +174,12 @@ export class McpServerStore {
   servers(): McpServerDef[] { return structuredClone(this.data.servers); }
   def(id: string): McpServerDef | undefined { return this.data.servers.find(s => s.id === id); }
   access(): Record<string, RoleMcpAccess> { return structuredClone(this.data.access); }
-  roleAccess(role: string): RoleMcpAccess | undefined { return this.data.access[role]; }
+  /** A role's access as the gateway applies it; Flash's spelled out for every server (its default is none, ADR 0207). */
+  roleAccess(role: string): RoleMcpAccess | undefined {
+    if (role !== FLASH_MCP_ROLE) return this.data.access[role];
+    const raw = this.data.access[role];
+    return { servers: Object.fromEntries(this.data.servers.map(s => [s.id, effectiveAccess(role, raw?.servers[s.id])])) };
+  }
   test(id: string): McpTestResult | null { return this.data.tests[id] ?? null; }
 
   /** Adds or replaces a server (`previousId`: the one being edited, which may be renamed). Tokens whose place changed are dropped. */
@@ -213,12 +221,36 @@ export class McpServerStore {
     log.info('mcp-servers', 'MCP server removed', { data: { server: id } });
   }
 
+  snapshot(id: string): McpServerSnapshot | null {
+    const def = this.def(id);
+    if (!def) return null;
+    const access: Record<string, McpToolAccess> = {};
+    for (const [role, a] of Object.entries(this.data.access)) if (a.servers[id] !== undefined) access[role] = a.servers[id]!;
+    return structuredClone({ def, access, test: this.data.tests[id] ?? null, secrets: this.secrets[id] ?? {} });
+  }
+
+  /** Puts a snapshot back: the server as it was (replacing the one now under that id), its access, test and tokens. */
+  restore(snap: McpServerSnapshot): void {
+    const def = checkDef(snap.def);
+    const at = this.data.servers.findIndex(s => s.id === def.id);
+    if (at < 0 && this.data.servers.length >= MAX_SERVERS) throw new Error('Troppi server MCP (al massimo 40).');
+    if (at >= 0) this.data.servers[at] = def; else this.data.servers.push(def);
+    for (const a of Object.values(this.data.access)) delete a.servers[def.id];
+    for (const [role, v] of Object.entries(snap.access)) (this.data.access[role] ??= { servers: {} }).servers[def.id] = checkAccess(v);
+    for (const [role, a] of Object.entries(this.data.access)) if (!Object.keys(a.servers).length) delete this.data.access[role];
+    if (snap.test) this.data.tests[def.id] = snap.test; else delete this.data.tests[def.id];
+    if (Object.keys(snap.secrets).length) this.secrets[def.id] = structuredClone(snap.secrets); else delete this.secrets[def.id];
+    this.save();
+    this.saveSecrets();
+    log.info('mcp-servers', 'MCP server restored', { data: { server: def.id } });
+  }
+
   setAccess(role: string, server: string, value: unknown): void {
     if (!/^[a-z][a-z0-9-]{0,40}$/.test(role)) throw new Error('Ruolo non valido.');
     if (!this.def(server)) throw new Error(`Server MCP «${server}» sconosciuto.`);
     const access = checkAccess(value);
     const a = this.data.access[role] ?? { servers: {} };
-    if (access === 'all') delete a.servers[server]; else a.servers[server] = access;
+    if (JSON.stringify(access) === JSON.stringify(defaultAccess(role))) delete a.servers[server]; else a.servers[server] = access;
     if (Object.keys(a.servers).length) this.data.access[role] = a; else delete this.data.access[role];
     this.save();
   }

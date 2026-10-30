@@ -143,7 +143,7 @@ export const INVOKE_CHANNELS = [
   'work:lessons', 'work:lessonDecide', 'work:list', 'work:decide',
   'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'approvals:list', 'approvals:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect', 'connectors:useToken',
-  'mcpservers:state', 'mcpservers:save', 'mcpservers:remove', 'mcpservers:setSecret', 'mcpservers:deleteSecret', 'mcpservers:setAccess', 'mcpservers:test', 'mcpservers:importScan', 'mcpservers:importApply',
+  'mcpservers:state', 'mcpservers:save', 'mcpservers:remove', 'mcpservers:setSecret', 'mcpservers:deleteSecret', 'mcpservers:setAccess', 'mcpservers:test', 'mcpservers:importScan', 'mcpservers:importApply', 'mcpservers:undo',
   'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
   'app:createBrain', 'app:projectsFolder', 'app:pickProjects',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',

@@ -49,7 +49,7 @@ describe('cards', () => {
     expect(html).toContain('ghp_…9f2c');
     expect(html).not.toContain('type="password"');
     expect(html).toContain('aria-label="Prova GitHub"');
-    expect(html).toContain('6 su 6');
+    expect(html).toContain('6 su 7'); // the Orchestrator and the five roles; Flash is off until the user turns it on (ADR 0207)
   });
   it('a working server splits its tools; the totals explain themselves; English too', () => {
     expect(card(ok)).toContain('1 lettura · 1 scrittura');

@@ -83,6 +83,7 @@ import { forcedSampler, OsLoadSampler } from './chats/admission';
 import { ProductSync } from './sync';
 import { startHealthLog } from './perf';
 import fs from 'node:fs';
+import { ProfileService } from './brain/profile';
 import { attachHeldNews } from './chats/held-news';
 import { ReplyRules } from './chats/reply-rules';
 import { TaskService } from './tasks/service';
@@ -613,8 +614,15 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },
       agents: { list: () => agents.list(), save: (draft, id, reason) => agentPacks.learning.save(draft, id, reason), history: id => agents.history(id), restore: (id, version) => agents.restoreVersion(id, version) },
-      mcp: { state: () => mcpServers.state(), save: a => mcpServers.save(a), setAccess: a => mcpServers.setAccess(a) },
+      mcp: { state: () => mcpServers.state(), save: a => mcpServers.save(a), setAccess: a => mcpServers.setAccess(a),
+        agentSave: (def, previousId) => mcpServers.agentSave(def, previousId), agentRemove: id => mcpServers.agentRemove(id), agentAccess: (role, server, access) => mcpServers.agentAccess(role, server, access),
+        undo: key => mcpServers.undo(key), test: id => mcpServers.test(id) },
+      // connector changes (ADR 0207): a feed card with «Annulla»; the add form opened prefilled (no secret in it)
+      announce: e => brain.publish([e]),
+      openForm: draft => ctx.emitter.emit('ui:command', { action: 'mcpDraft', value: JSON.stringify(draft) }),
       later: { get: () => later.get(), set: on => later.set(on) },
+      // Il mio profilo (ADR 0207): the page's own reader and writer of me.md (stateless: each save checks the revision)
+      profile: (() => { const p = new ProfileService({ root: () => brain.settings().brainRoot, template: (() => { try { return fs.readFileSync(path.join(app.getAppPath(), 'brain-template', 'me.template.md'), 'utf8'); } catch { return ''; } })() }); return { get: () => p.get(), save: req => p.save(req) }; })(),
     } };
   appDeps.routines = { has: id => routines.has(id), exportForTerminal: id => routines.exportForTerminal(id), snapshot: () => routines.snapshot(), archive: () => routineArchive.snapshot(), run: ref => routines.run(ref) };
   attachAppTools(mcp, appDeps, source, false, orchestratorTokens);

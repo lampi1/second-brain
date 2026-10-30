@@ -6,6 +6,7 @@
 // old one; "Pulisci" = the same engine, started empty), "Riprendi" of a long chat
 // in a new one, the brain pages' bridge ("Discuti") and the ui:command event from main.
 // Used by App.tsx (keyboard), the command palette, the sidebar, the notification center, the top bar and the tiles.
+import { openMcpDraft } from './lib/mcp-servers';
 import type { EventMap, Harness, MorningNext, PendingRequest } from '@shared/contract';
 import type { RoutineRunRef } from '@shared/routines';
 import { routineChatIds, routineChatArg } from './lib/routine-chats';
@@ -600,7 +601,8 @@ export function focusTile(index: number): void {
  *  brain page id), link (sb://…), notifications, back, forward, palette, next; and for tools/tests: clock (frozen demo
  *  time), layout off|on (stop/resume reporting browser view rects); closeTab (Ctrl+W typed inside a browser page);
  *  unblock (app_unblock: the questions window with every waiting request, the postponed ones too); prefs (app_config
- *  "view": theme, density, work profile, lib/app-map.ts). */
+ *  "view": theme, density, work profile, lib/app-map.ts); mcpDraft (app_config connector "form": Settings → Connettori with
+ *  the add form prefilled, ADR 0207). */
 export function uiCommand(cmd: EventMap['ui:command']): void {
   const v = cmd.value ?? '';
   switch (cmd.action) {
@@ -631,6 +633,7 @@ export function uiCommand(cmd: EventMap['ui:command']): void {
     case 'closeTab': closeTab(v); break;   // Ctrl+W inside a browser page (main browser/tabs.ts forwards it)
     case 'unblock': showQueue(); break; // the Orchestrator's recap (app_unblock, ADR 0135): everything waiting, «Ci penso dopo» too
     case 'prefs': applyViewPrefs(v); break;
+    case 'mcpDraft': if (openMcpDraft(v)) go({ page: 'impostazioni', arg: 'connectors' }); break; // app_config connector form (ADR 0207): the add form, prefilled, no secret in it
     case 'recImport': go({ page: 'registrazioni' }); void importFound(v); break; // app_recording_import (ADR 0154) // app_config area "view" (ADR 0149): theme, density, work profile; checked there
     default: break;
   }
