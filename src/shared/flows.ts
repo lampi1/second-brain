@@ -92,8 +92,8 @@ export interface FlowReceipt {
   summary: string; chatId?: string; reportId?: string; evidence: string[];
 }
 export interface FlowAgentBinding { chatId: string; chatRunId: string; taskVersion: number;
-  /** What the host read from the chat at bind (never stored): its role, the tier it launched on, whether its model came from the routing table's row instead of that tier. */
-  launched?: { roleId?: string; tier?: ModelTier; fromTable?: boolean; packageDigest?: string; promptHash?: string; engine?: string; model?: string | null; effort?: string } }
+  /** What the host read from the chat at bind (never stored): its role, the tier it launched on. */
+  launched?: { roleId?: string; tier?: ModelTier; packageDigest?: string; promptHash?: string; engine?: string; model?: string | null; effort?: string } }
 export interface FlowStepRun {
   stepId: string; status: 'pending' | 'ready' | 'running' | 'approval' | 'blocked' | 'completed' | 'cancelled';
   attempts: number; startedAt?: number; chatId?: string; chatRunId?: string; taskVersion?: number;
@@ -169,13 +169,13 @@ export interface FlowSnapshot {
   runs: FlowRun[]; storageError?: string; automation?: FlowAutomationSnapshot;
   /** The running app build: a step whose extra attempt was granted by another build may get one more. */
   appBuild?: string;
-  /** The work roles as the catalog and the routing table resolve them now, for showing each agent step's role and model. */
+  /** The work roles as the catalog resolves them now, for showing each agent step's role and model. */
   roles?: Partial<Record<WorkRoleId, FlowRoleInfo>>;
   /** The engines a step may run on and their models, for the per-step picker. */
   engines?: { id: string; name: string; models: string[] }[];
   /** The runner's state: running here, or another app holds the lock. */
   runner?: { owner: 'here' | 'other'; active: number };
 }
-/** A role's launch facts: its own fixed model (null = none) and, per tier, the model the routing table gives on its engine. */
+/** A role's launch facts: its own fixed model (null = none) and, per tier, the model that tier means on its engine. */
 export interface FlowRoleInfo { engine?: string; name: string; avatar: AgentAvatar; tier: ModelTier; tierMax: ModelTier; model: string | null; models: Partial<Record<ModelTier, string | null>> }
 export interface FlowRestart { runId: string; expectedRevision: number; mode: 'from-start' | 'from-step'; stepId?: string; acknowledgeEffects: boolean; targetVersion: number; targetDigest: string; automationRule?: { id: string; revision: number } }

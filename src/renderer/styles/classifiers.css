@@ -1,4 +1,4 @@
-/* The Classificatori page (components/brain-model/ClassifiersPage.tsx, ClassifierDetail.tsx, TrendChart.tsx): a
+/* The Classificatori section of Qualità (components/brain-model/ClassifiersSection.tsx, ClassifierDetail.tsx, TrendChart.tsx): a
    summary strip, a grid of classifier cards in the Agenti cards' look (agent-catalog.css .catalog-card, a tone per
    classifier), each with its numbers, a compact weekly trend, the learning meter and a curious fact; the detail view
    with its explanations, charts and tables. Also Qualità's grouped app errors (dashboard/AppErrors.tsx). Theme tokens
@@ -12,8 +12,6 @@
 
 /* a tone per classifier: the card's hairline, its icon, its meter */
 .cls-card[data-id=kind],.cls-detail-head[data-id=kind]{--tone:var(--bx-cat-1)}
-.cls-card[data-id=model],.cls-detail-head[data-id=model]{--tone:var(--bx-cat-7)}
-.cls-card[data-id=skills],.cls-detail-head[data-id=skills]{--tone:var(--bx-cat-3)}
 .cls-card[data-id=estimates],.cls-detail-head[data-id=estimates]{--tone:var(--bx-cat-4)}
 .cls-card[data-id=tasks],.cls-detail-head[data-id=tasks]{--tone:var(--bx-cat-5)}
 .cls-card[data-id=jobkind],.cls-detail-head[data-id=jobkind]{--tone:var(--bx-cat-2)}

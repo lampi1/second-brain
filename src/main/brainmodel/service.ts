@@ -6,7 +6,6 @@ import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { BrainChange, BrainModelState, BrainRule, BrainSkill, ClassifiersState, LogScan, MaintenanceJobId, MaintenanceRun, LessonStub, MigrationReport, KindModelCard } from '../../shared/brain-model';
 import { changeCriteria, MAINTENANCE_JOBS } from '../../shared/brain-model';
-import type { RoutingInfo } from '../../shared/contract';
 import type { AgentCatalogService } from '../agents/catalog';
 import type { AgentPackFlows } from '../agents/pack/flows';
 import type { AgentPackLearning } from '../agents/pack/learning';
@@ -50,7 +49,6 @@ export interface BrainModelDeps {
   runs: () => AgentRun[];
   /** the run store's revision (AgentRunStore.revision): the read worker keeps the runs while it holds; absent = sent each read */
   runsRevision?: () => number;
-  routing: () => RoutingInfo;
   emit: () => void;
   /** a pass the app ran by itself (the timers, a new lesson) changed something: the feed's quiet "Ruolo aggiornato" event
    *  with its Annulla (wiring.ts → brain.publish, ADR 0102); never called for a pass the user started with the button */
@@ -504,7 +502,7 @@ export class BrainModelService {
     return readSkills(this.skillDirs(root), root, []).map(s => ({ name: s.name, tools: s.tools }));
   }
   classifiers(): Promise<ClassifiersState> {
-    return classifiersState({ root: this.root(), routing: this.d.routing(), runs: (() => { try { return this.d.runs(); } catch { return []; } })(), profiles: this.profiles(),
+    return classifiersState({ root: this.root(), runs: (() => { try { return this.d.runs(); } catch { return []; } })(), profiles: this.profiles(),
       jobs: () => readJobs(path.join(this.d.userData, 'jobs.jsonl')), ...(this.d.kindModel ? { kindModel: this.d.kindModel } : {}) }, this.now());
   }
 

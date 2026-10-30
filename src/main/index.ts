@@ -180,7 +180,7 @@ app.whenReady().then(async () => {
     file: path.join(app.getPath('userData'), 'suggest.json'),
     complete: (req, signal) => s.engines.text.complete(req, signal),
     settings: () => { const c = s.brain.settings(); return { on: c.suggestOn !== false, modelOn: c.suggestModel !== false, dailyUsd: c.suggestDailyUsd ?? 0.05 }; },
-    model: () => { const c = s.brain.settings(), reg = s.brain.routingInfo().registry; return tierModel(ANTHROPIC_API, 'light', reg, c.modelTiers) ?? tierModel('claude', 'light', reg, c.modelTiers) ?? SUGGEST_FALLBACK_MODEL; },
+    model: () => { const c = s.brain.settings(), reg = s.brain.modelRegistry(); return tierModel(ANTHROPIC_API, 'light', reg, c.modelTiers) ?? tierModel('claude', 'light', reg, c.modelTiers) ?? SUGGEST_FALLBACK_MODEL; },
     calls: !demo && !process.env.SB_TEST && !process.env.VITEST,
   });
   // voice mode (ADR 0152): the local speech engine in its own utility process, started on first use

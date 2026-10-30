@@ -1,10 +1,10 @@
-// The routing ledger end to end (ADR 0032, 0083): a role chat an Orchestrator opens with app_create_chat runs on its
-// role's engine with the routing table's row there (a role without its own model takes it, ADR 0091: the fixture's
-// «Prova» row, Haiku at low effort) and, at its first turn end, writes its prediction and then
+// The routing ledger end to end (ADR 0083, 0210): a role chat an Orchestrator opens with app_create_chat runs on its
+// role's engine with its tier's model there (Herald is light: the registry's small model, Haiku; no routing table since
+// ADR 0210, an old one in the brain is ignored) and, at its first turn end, writes its prediction and then
 // its measured actuals to the shared ledger
 // (<brain>/ops/state/improve/outcomes.jsonl) that the improvement loop learns from (the user, 2026-10-14: "inizi a
-// raccogliere dati dalle sue prime scelte"). The real app with the fake Claude CLI and a fixture brain (registry +
-// table v1), hidden; no screenshot: nothing on screen changes.
+// raccogliere dati dalle sue prime scelte"). The real app with the fake Claude CLI and a fixture brain (registry + an
+// old table v1 that nothing reads), hidden; no screenshot: nothing on screen changes.
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import net from 'node:net';
@@ -19,7 +19,7 @@ const freePort = (): Promise<number> => new Promise((resolve, reject) => {
   const s = net.createServer().listen(0, '127.0.0.1', () => { const a = s.address(); s.close(() => (a && typeof a === 'object' ? resolve(a.port) : reject(new Error('no port')))); });
 });
 
-/** A brain with the model registry and a one-row table: chats of the area «Prova» → Haiku, low effort. */
+/** A brain with the model registry and an old one-row table (ignored since ADR 0210): «Prova» → Opus, high effort. */
 function fixtureBrain(): string {
   const brain = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-brain-'));
   const price = { input: 1, cacheWrite5m: 1, cacheWrite1h: 1, cacheRead: 0.1, output: 5 };
@@ -34,7 +34,7 @@ function fixtureBrain(): string {
   const dir = path.join(brain, 'ops', 'state', 'improve', 'routing');
   fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, 'v1.json'), JSON.stringify({ version: 1, exploration: 0, routes: [
-    { kind: '*', area: 'Prova', harness: 'claude', model: 'claude-haiku-5-5', effort: 'low', why: 'prova: il più economico', since: '2026-10-14', evidence: 'e2e' },
+    { kind: '*', area: 'Prova', harness: 'claude', model: 'claude-opus-5-5', effort: 'high', why: 'prova: il più economico', since: '2026-10-14', evidence: 'e2e' },
   ] }));
   fs.writeFileSync(path.join(dir, 'current.json'), JSON.stringify({ version: 1, appliedAt: '2026-10-14T08:00:00.000Z', by: 'e2e' }));
   return brain;
@@ -51,10 +51,11 @@ test('a chat opened without a model writes its routing prediction, then its meas
     await page.evaluate(dir => window.sb.invoke('chat:create', { harness: 'claude', cwd: dir, orchestrator: true }), brain);
     const agent = new McpClient(`http://127.0.0.1:${port}/mcp/app`);
     await agent.init();
-    // the role decides the engine; a role without its own model takes the table's row on it (ADR 0091); its route
-    // writes the ledger
-    const made = JSON.parse(await agent.ok('app_create_chat', { title: 'Prova · Leggi i log', prompt: 'ciao', roleId: 'herald' })) as { chatId: string; model: string; effort: string; route: { source: string; tableVersion: number } };
-    expect(made).toMatchObject({ model: 'claude-haiku-5-5', route: { source: 'agent', agent: { id: 'herald', chosenBy: 'orchestrator', modelFrom: 'table' } } });
+    // the role decides the engine; a role without its own model takes its tier's model (ADR 0210), never the old
+    // table's row; its route writes the ledger
+    const made = JSON.parse(await agent.ok('app_create_chat', { title: 'Prova · Leggi i log', prompt: 'ciao', roleId: 'herald' })) as { chatId: string; model: string; effort: string; route: { source: string } };
+    expect(made).toMatchObject({ model: 'claude-haiku-5-5', route: { source: 'agent', agent: { id: 'herald', chosenBy: 'orchestrator', modelFrom: 'tier' } } });
+    expect(made.effort).not.toBe('high');
 
     const ledger = path.join(brain, 'ops', 'state', 'improve', 'outcomes.jsonl');
     const lines = async (): Promise<Record<string, unknown>[]> => {

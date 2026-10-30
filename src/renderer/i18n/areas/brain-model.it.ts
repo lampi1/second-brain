@@ -77,24 +77,11 @@ export const brainModelIt = {
   'bm.mem.errorsNone': 'Nessun errore corrisponde alla ricerca.', 'bm.mem.errorsEmpty': 'Il registro degli errori è vuoto.',
 
   // Classificatori page
-  'bm.cls.routing': 'Scelta del modello',
-  'bm.cls.routingLead': (p: { v: number; at: string; by: string }) => `Tabella v${p.v}, applicata ${p.at} da ${p.by}. Per ogni riga: le chat che ha deciso, quante riuscite (verificate da te o da una revisione) e il costo medio.`,
-  'bm.cls.noTable': 'Nessuna tabella di instradamento applicata ancora.',
-  'bm.cls.col.kind': 'Lavoro', 'bm.cls.col.area': 'Area', 'bm.cls.col.model': 'Modello', 'bm.cls.col.effort': 'Sforzo', 'bm.cls.col.why': 'Perché',
-  'bm.cls.col.runs': 'Chat', 'bm.cls.col.success': 'Riuscite', 'bm.cls.col.cost': 'Costo medio',
-  'bm.cls.anyArea': 'tutte',
-  'bm.cls.history': 'Storico della tabella', 'bm.cls.historyEmpty': 'Nessuna modifica registrata.',
-  'bm.cls.historyRow': (p: { from: string; to: number; by: string }) => `v${p.from} → v${p.to}, da ${p.by}`,
-  'bm.cls.quality': 'Qualità nel tempo',
-  'bm.cls.qualityLead': 'Riuscite verificate e costo medio per settimana, per riga della tabella. Una settimana senza chat resta vuota, mai zero.',
-  'bm.cls.col.route': 'Classificatore',
-  'bm.cls.runsN': (p: N) => (p.n === 1 ? '1 chat' : `${p.n} chat`),
+  'bm.cls.col.kind': 'Lavoro',
   'bm.cls.kinds': 'Esiti per tipo di lavoro',
   'bm.cls.kindsLead': 'Le chat dell’app per tipo di lavoro, quante hanno un esito noto e quante sono riuscite.',
   'bm.cls.col.chats': 'Chat', 'bm.cls.col.known': 'Esito noto', 'bm.cls.col.ok': 'Riuscite',
   'bm.cls.kindsEmpty': 'Nessuna chat registrata ancora.',
-  'bm.cls.sources': 'Chi ha scelto il modello',
-  'bm.cls.source.table': 'tabella', 'bm.cls.source.agent': 'profilo dell’agente', 'bm.cls.source.default': 'predefinito', 'bm.cls.source.override': 'scelta tua', 'bm.cls.source.explore': 'esplorazione',
 
   // Mappa page
   'bm.map.eyebrow': 'IL TUO BRAIN, COLLEGATO', 'bm.map.legendLabel': 'Legenda',

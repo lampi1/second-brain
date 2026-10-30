@@ -8,7 +8,6 @@ import { engineInfos, engineOf, priceEnginesOf } from './engines/registry';
 import { withApiModels } from './engines/sessions';
 import { AgentCatalogService } from './agents/catalog';
 import { tierModel } from './agents/model-tier';
-import { roleTableModel } from './agents/role-table';
 import { CATALOG_GUIDANCE } from './agents/discovery';
 import { agentsMayOpen, engineOn } from './engines/policy';
 import type { EnginesApi } from './engines/service';
@@ -184,13 +183,12 @@ export function createAppSource(ctx: Pick<Ctx, 'emitter' | 'userData'>, appRepo:
 /** Shared by real and demo wiring. */
 export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: EnginesApi, cli: () => Record<Harness, CliStatus> | null, onCustomized?: () => void): AgentCatalogService {
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
-    tierModel: (engine, tier) => tierModel(engine, tier, brain.routingInfo().registry, brain.settings().modelTiers),
-    tableModel: (engine, req) => roleTableModel(brain, engine, req),
+    tierModel: (engine, tier) => tierModel(engine, tier, brain.modelRegistry(), brain.settings().modelTiers),
     pulsePreset: () => {
       const choices = engineInfos();
       const e = choices.find(e => e.kind === 'api' && agentsMayOpen(brain.settings(), e.id) && engines.hasKey(e.id))
         ?? choices.find(e => e.kind === 'claude');
-      const model = e ? brain.routingInfo().registry?.models.find(m => priceEnginesOf(e).includes(m.harness) && m.tier === 'mid')?.id ?? (e.kind === 'claude' ? 'sonnet' : null) : null;
+      const model = e ? brain.modelRegistry()?.models.find(m => priceEnginesOf(e).includes(m.harness) && m.tier === 'mid')?.id ?? (e.kind === 'claude' ? 'sonnet' : null) : null;
       return { engine: e?.id ?? 'claude', model, ...(e?.caps.effort ? { effort: 'low' as const } : {}) };
     },
     models: () => {

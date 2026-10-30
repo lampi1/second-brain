@@ -134,7 +134,7 @@ export interface StoredChat {
   waitsOnWork?: true;
   /** its engine ended with an error or in the middle of a turn: not finished, it never closes by itself */
   unfinished?: true;
-  /** how an agent's app_create_chat chose its engine (the routing table, ADR 0032) */
+  /** how its engine was chosen (role, defaults or override; ADR 0032, 0210) */
   route?: RouteDecision;
   /** the chat that delegated this one (agent_delegate) and the contract it got (shared/delegation.ts) */
   parentId?: string;

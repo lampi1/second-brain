@@ -17,7 +17,7 @@ import { appControlTools } from '../../../src/main/appctl/tools';
 import { routeChat, type RouteRequest } from '../../../src/main/brain/routing';
 import { DEMO_REGISTRY } from '../../../src/main/brain/routing-demo';
 import type { BrainService, BrowserService, ChatService } from '../../../src/main/services';
-import type { ChatSummary, RoutingTable } from '../../../src/shared/contract';
+import type { ChatSummary } from '../../../src/shared/contract';
 
 const roots: string[] = [], managers: ChatManager[] = [];
 afterEach(async () => {
@@ -131,26 +131,23 @@ describe('OrchestratorService', () => {
     expect(create).toHaveBeenCalledTimes(1);
   });
 
-  it('ensure routes like an Orchestrator: the row for kind orchestrator gives model and effort, a named model beats it', async () => {
-    const table = { version: 1, appliedAt: null, by: null, exploration: 0, costWeight: 7, routes: [
-      { kind: 'orchestrator', harness: 'claude', model: 'claude-sonnet-5-5', effort: 'high', why: 'Orchestrator: Sonnet', since: '2026-10-17', evidence: 'prova' },
-    ] } as RoutingTable;
+  it('ensure routes like an Orchestrator: «Chat aperte dall’Orchestrator» gives model and effort, a named model beats it (ADR 0210)', async () => {
     const make = () => {
       const made: Record<string, unknown>[] = [];
       const create = async (req: Record<string, unknown>) => { made.push(req); return summary({ id: `o${made.length}`, isOrchestrator: true }); };
       const s = new OrchestratorService({ list: () => [], create } as unknown as Pick<ChatService, 'list' | 'create'>, () => 'C:/brain', {
-        route: r => routeChat(r, table, DEMO_REGISTRY, null, 7), engineOn: () => true, agentsMayOpen: () => true,
+        route: r => routeChat(r, DEMO_REGISTRY, null, 7), engineOn: () => true, agentsMayOpen: () => true,
         orchestratorChats: () => ({ harness: 'claude', claudeModel: 'claude-opus-5-5', cursorModel: '', claudeEffort: 'medium', cursorReasoning: 'medium', cursorFast: false }),
       });
       return { made, s };
     };
     const a = make();
     await a.s.ensure({ harness: 'claude' });
-    expect(a.made[0]).toMatchObject({ harness: 'claude', model: 'claude-sonnet-5-5', effort: 'high', orchestrator: true, title: 'Orchestrator', cwd: 'C:/brain' });
-    expect(a.made[0]!.route).toMatchObject({ kind: 'orchestrator', source: 'table' });
+    expect(a.made[0]).toMatchObject({ harness: 'claude', model: 'claude-opus-5-5', effort: 'medium', orchestrator: true, title: 'Orchestrator', cwd: 'C:/brain' });
+    expect(a.made[0]!.route).toMatchObject({ kind: 'orchestrator', source: 'default' });
     const b = make();
-    await b.s.ensure({ harness: 'claude', model: 'claude-opus-5-5' });
-    expect(b.made[0]).toMatchObject({ model: 'claude-opus-5-5' });
+    await b.s.ensure({ harness: 'claude', model: 'claude-sonnet-5-5' });
+    expect(b.made[0]).toMatchObject({ model: 'claude-sonnet-5-5' });
     expect(b.made[0]!.route).toMatchObject({ kind: 'orchestrator', source: 'override' });
   });
 
@@ -163,7 +160,7 @@ describe('OrchestratorService', () => {
 });
 
 describe('app control scope', () => {
-  const ROUTED = { routingInfo: () => ({ registry: null }), route: (req: RouteRequest) => routeChat(req, null, null, null, 7) };
+  const ROUTED = { modelRegistry: () => null, route: (req: RouteRequest) => routeChat(req, null, null, 7) };
   function tools(list: ChatSummary[], caller: string) {
     const made: Record<string, unknown>[] = [];
     const chats = { list: () => list, create: async (req: Record<string, unknown>) => { made.push(req); return summary({ id: `n${made.length}`, title: String(req.title) }); } } as unknown as ChatService;

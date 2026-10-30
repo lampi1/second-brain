@@ -22,9 +22,8 @@
 // - A lesson in Impara when the user asks to understand something (app_learn, ADR 0190): the Orchestrator's mount only.
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
-import type { ChatItem, ChatSummary, TasksState, Effort, EventMap, NewChat, PendingRequest, RoutingRow, RunInfo, TaskKind } from '../../shared/contract';
+import type { ChatItem, ChatSummary, TasksState, Effort, EventMap, NewChat, PendingRequest, RunInfo, TaskKind } from '../../shared/contract';
 import { TASK_KINDS } from '../../shared/contract';
-import { isFable } from '../brain/routing';
 import { engineLabel, engineOf } from '../engines/registry';
 import { agentsMayOpen, crossRefusal, openRefusal } from '../engines/policy';
 import type { BrainService, BrowserService, ChatService } from '../services';
@@ -535,15 +534,13 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const orchestrator = caller();
         const from = orchestrator?.harness ?? 'claude';
         const roleId = a.roleId, tier = a.tier as ModelTier | undefined;
-        // the explicit kind and the app code choose the table's row for a model-less role, as they choose the route below
-        const routeHint = { ...(kind ? { kind: kind as TaskKind } : {}), ...(app ? { appCode: true } : {}) };
-        const hint = Object.keys(routeHint).length ? { routeHint } : {};
-        const resolved = d.resolveRole({ harness: from, cwd, roleId, title, prompt, ...hint, ...(tier ? { tier } : {}), ...(links.roleVersion ? { roleVersion: links.roleVersion } : {}) });
+        // the role's card decides engine, model (its tier's when it names none) and effort (ADR 0210: no routing table)
+        const resolved = d.resolveRole({ harness: from, cwd, roleId, title, prompt, ...(tier ? { tier } : {}), ...(links.roleVersion ? { roleVersion: links.roleVersion } : {}) });
         const profile = d.agents().profiles.find(p => p.id === roleId)!;
         const agent = { id: roleId, name: profile.name, version: profile.activeVersion, harness: resolved.request.harness, model: resolved.request.model ?? null, effort: resolved.request.effort ?? null,
-          chosenBy: 'orchestrator' as const, ...(resolved.tier ? { tier: resolved.tier } : {}), ...(resolved.modelFrom ? { modelFrom: resolved.modelFrom } : {}), stats: d.agentStats?.(roleId, profile.activeVersion) ?? null };
+          chosenBy: 'orchestrator' as const, ...(resolved.tier ? { tier: resolved.tier } : {}), stats: d.agentStats?.(roleId, profile.activeVersion) ?? null };
         const routed = d.brain.route({
-          api: null, agent, canRun: h => !openRefusal(s, from, h),
+          agent, canRun: h => !openRefusal(s, from, h),
           title, prompt, ...(kind ? { kind: kind as TaskKind } : {}), appCode: app, ask: {},
           defaults: { harness: s.orchestratorChats.harness, models: { claude: s.orchestratorChats.claudeModel || null, cursor: s.orchestratorChats.cursorModel || null }, effort: s.orchestratorChats.claudeEffort || null },
         });
@@ -551,11 +548,11 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const { harness, model, effort, route } = routed;
         const refused = openRefusal(s, from, harness);
         if (refused) throw new Error(`bloccato: ${refused}`);
-        const chat = await d.chats.create({ harness, cwd, title, prompt: `${AGENT_LABEL}\n\n${prompt}`, ...links, orchestrator: false, roleId, ...(tier ? { tier } : {}), ...(skills.length ? { skills } : {}), ...hint,
+        const chat = await d.chats.create({ harness, cwd, title, prompt: `${AGENT_LABEL}\n\n${prompt}`, ...links, orchestrator: false, roleId, ...(tier ? { tier } : {}), ...(skills.length ? { skills } : {}),
           ...(model ? { model } : {}), ...(effort ? { effort } : {}), route }, 'agent', undefined, undefined,
           // the plain /mcp/app mount is open to any local process: its chats run no wider than the Orchestrator
           { boundByOrchestrator: !authed() });
-        log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, version: route.version, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } });
+        log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } });
         // a skill whose tools the role lacks (issue #93): said now, so the Orchestrator can pick another role or ask the user
         const known = d.skillTools ? new Map(d.skillTools().map(x => [x.name, x.tools])) : null;
         const warnings = known ? gapLines(profile.name, skillGaps([...new Set([...resolved.skills, ...skills])], n => known.get(n), resolved.policy)) : [];
@@ -564,7 +561,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         // the estimate from similar past tasks (ADR 0087): the same figure the strip shows, so the plan is checked with data
         const estimate = d.runFeedback ? estimateTask(new SimilarIndex(d.runFeedback.runList()), { text: prompt, agentId: roleId }) : null;
         return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(warnings.length ? { warnings } : {}), ...(chat.queued ? { status: queuedLine(chat.queued) } : {}),
-          ...(estimate ? { estimate: { timeMs: estimate.timeMs, costUsd: estimate.costUsd, n: estimate.n, confidence: estimate.confidence, parts: estimate.parts, path: estimate.path } } : {}), route: { source: route.source, kind: route.kind, area: route.area, tableVersion: route.version, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } };
+          ...(estimate ? { estimate: { timeMs: estimate.timeMs, costUsd: estimate.costUsd, n: estimate.n, confidence: estimate.confidence, parts: estimate.parts, path: estimate.path } } : {}), route: { source: route.source, kind: route.kind, area: route.area, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } };
       },
     },
     {
@@ -672,38 +669,6 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const chat = await d.chats.continueChat(target.id, { allowStart, promptPrefix: AGENT_LABEL });
         log.info('appctl', 'agent continued a chat in a new one', { chat: target.id, data: { next: chat.id } });
         return { chatId: chat.id, title: chat.title, harness: chat.harness, continuedFrom: target.id };
-      },
-    },
-    {
-      name: 'app_routing',
-      description: 'The model routing table in force: the defaults for chats started without an agent (Generale) and the model a profile without one takes (ADR 0078; an agent\'s own profile always decides). Rows: kind, area, model, effort, why; the models it may pick, the rule for the app\'s chats, and its last changes (who, when, why, with what data). Read it before app_routing_save.',
-      inputSchema: obj(),
-      run: () => {
-        const i = d.brain.routingInfo();
-        const auto = (i.registry?.models ?? []).filter(m => m.routing === 'auto' && i.registry?.harnesses[m.harness]?.routing === 'auto' && !isFable(m));
-        return { table: i.table, error: i.error, kinds: i.kinds, pickable: auto.map(m => ({ id: m.id, harness: m.harness, efforts: m.efforts.filter(e => e !== 'max'), price: m.price })),
-          appChats: i.registry?.appChats ?? null, history: i.history.slice(0, 10) };
-      },
-    },
-    {
-      name: 'app_routing_save',
-      description: 'Write a new version of the model routing table by yourself, the defaults for chats without a role (a role chat keeps its role\'s engine and model; the user, 2026-10-14: the AI decides these defaults in full autonomy; he sees and edits the same table in Impostazioni → «Instradamento modelli» and restores any version with one click). Send the WHOLE table (every row, as app_routing returns it, with your changes), why you change it and the data behind it (outcomes, costs, counts). App-area chats may use any available engine under the same launch permissions as other chats. Refused when it breaks a hard rule: unknown or manual model, a model on another engine, a table changed since baseVersion, a row the user locked (locked: true; keep it as is, never lock or unlock one), Fable, max effort, a row without its why (you always write it; the user may leave it out), exploration outside 0-0.5.',
-      inputSchema: obj({
-        routes: { type: 'array', description: 'every row: { kind (task kind or "*"), area? (string or list), harness, model, effort (or null), why, since?, evidence? }', items: { type: 'object' } },
-        // the cost weight (costWeight) is the user's: not a parameter, a save keeps it
-        reason: str('why this change (shown to the user in the table\'s history)'),
-        evidence: str('the data behind it: outcomes, costs, counts, the ledger lines you read'),
-        baseVersion: num('the table version you read with app_routing: refused when another version is in force since (reload, redo the change)'),
-      }, ['routes', 'reason', 'evidence', 'baseVersion']),
-      run: a => {
-        const reason = String(a.reason ?? '').trim().slice(0, 300), evidence = String(a.evidence ?? '').trim().slice(0, 300);
-        if (!reason || !evidence) throw new Error('reason ed evidence sono obbligatori: perché cambi e con quali dati');
-        if (!Array.isArray(a.routes)) throw new Error('routes: la tabella intera (vedi app_routing)');
-        if (!Number.isInteger(a.baseVersion)) throw new Error('baseVersion: la versione letta con app_routing');
-        const who = caller()?.title ?? 'Orchestrator';
-        const i = d.brain.saveRouting(a.routes as RoutingRow[], reason, { by: `agente: ${who}`, evidence, base: a.baseVersion as number });
-        log.info('appctl', 'agent saved the routing table', { data: { version: i.table?.version ?? null, by: who, reason } });
-        return { version: i.table?.version ?? null, rows: i.table?.routes.length ?? 0 };
       },
     },
   ];

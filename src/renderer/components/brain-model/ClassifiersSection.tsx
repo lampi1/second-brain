@@ -1,19 +1,19 @@
-// "Classificatori" (G K, ADR 0077, #84; redesigned with the owner's words of 2026-10-19: "i classificatori li voglio
-// con card e statistiche per ciascuno, con spiegazione", "il progresso dei classificatori nelle stime"). Read only. A
-// summary strip (decisions, this week, verified outcomes), then one card per classifier in a grid: what it decides in
-// plain Italian, its numbers (decisions, its own measure, named for what it is: coverage, agreement, within ×2, each
-// with k/n; verified success; cost or threshold; the unverified outcomes, the brain's proxy, on a line apart, ADR 0095),
-// an 8-week trend and, from 20 cases up, one piece of advice that ends
-// with something to do (ADR 0101: no "Token spesi 0" constant, no calibration meter, no "Lo sapevi?" on 5 cases, no
-// card for the brain's retired estimator, ADR 0053). A click opens its detail (ClassifierDetail.tsx) with the history, the slices and the
-// tables of before (routing table, outcomes per kind, skill choices, quality by week). Two classifiers that keep no
-// record (the Orchestrator's mail, sensitive commands) get a small explained card. Every number has a "?" saying how
-// it is computed. A clean install shows the cards empty with what will appear. Data: 'classifiers:state'
+// "Classificatori", a section of Qualità (ADR 0210; a Brain page with ADR 0077, #84, then an Andamento tab with ADR 0202;
+// redesigned with the owner's words of 2026-10-19: "i classificatori li voglio con card e statistiche per ciascuno, con
+// spiegazione", "il progresso dei classificatori nelle stime"). Read only. A summary strip (decisions, this week), then
+// one card per classifier in a grid: what it decides in plain Italian, its numbers (decisions, its own measure, named
+// for what it is: coverage, within ×2, each with k/n; verified success; cost; the unverified outcomes, the brain's
+// proxy, on a line apart, ADR 0095), an 8-week trend and, from 20 cases up, one piece of advice that ends with
+// something to do (ADR 0101). A click opens its detail (ClassifierDetail.tsx) with the history, the slices and, for
+// «Tipo di lavoro», the outcomes per kind. Two classifiers that keep no record (the Orchestrator's mail, sensitive
+// commands) get a small explained card. Every number has a "?" saying how it is computed. A clean install shows the
+// cards empty with what will appear. The «Scelta del modello» card and the routing table left (owner, 2026-10-30,
+// decision «Toglierlo»: every agent uses the model on its card): with only these sorters left, the old tab folded
+// into Qualità, and its links ("classificatori", G K) open Qualità here (lib/andamento.ts). Data: 'classifiers:state'
 // (main/brainmodel/classifiers.ts + classifier-cards.ts) and agents:estimates (the task estimator's weekly backtest,
 // ADR 0087, via lib/run-estimates.ts). The kind of work by examples (ADR 0197) has its own wide card at the end of the
-// grid (KindModelCard.tsx). A tab of Andamento since ADR 0202 (components/andamento/AndamentoPage.tsx: the tab's
-// toolbar instead of its own title; the summary's «verified outcomes» left, the «Tipo di lavoro» card shows them).
-// View helpers in lib/classifier-view.ts; styles in styles/classifiers.css.
+// grid (KindModelCard.tsx). Rendered by brain/pages/Qualita.tsx; view helpers in lib/classifier-view.ts; styles in
+// styles/classifiers.css.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ClassifiersState } from '@shared/brain-model';
 import { t } from '../../i18n';
@@ -21,7 +21,8 @@ import { sb } from '../../sb';
 import { useRunEstimates } from '../../lib/run-estimates';
 import { cardViews, facts, hitSeries, kOfN, pctOf, weekLabel, type CardId, type CardView } from '../../lib/classifier-view';
 import { ClsIcon, Num, ct, intFmt, pctFmt, third } from './ClassifierParts';
-import { PageHead } from '../../brain/components/States';
+import { Section } from '../../brain/components/ui';
+import { GuideLink } from '../GuideLink';
 import { when } from './MaintenancePanel';
 import { TrendChart } from './TrendChart';
 import { ClassifierDetail } from './ClassifierDetail';
@@ -32,8 +33,8 @@ import '../../styles/brain-model.css';
 import '../../styles/classifiers.css';
 import { errText } from '../../lib/ipc-error';
 
-function Card({ c, sources, onOpen }: { c: CardView; sources: ClassifiersState['sources']; onOpen: () => void }) {
-  const name = ct(c.id, 'name'), fact = facts(c, sources)[0];
+function Card({ c, onOpen }: { c: CardView; onOpen: () => void }) {
+  const name = ct(c.id, 'name'), fact = facts(c)[0];
   const k3 = third(c);
   const empty = c.decisions === 0;
   return <article className="catalog-card cls-card" data-id={c.id} data-empty={empty} data-testid={`cls-card-${c.id}`}>
@@ -70,7 +71,7 @@ function Plain({ id }: { id: 'mail' | 'cmd' }) {
   </article>;
 }
 
-export function ClassifiersPage() {
+export function ClassifiersSection() {
   const [state, setState] = useState<ClassifiersState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<CardId | null>(null);
@@ -99,23 +100,24 @@ export function ClassifiersPage() {
     return () => window.removeEventListener('keydown', key, true);
   }, [open]);
 
-  return <div className="dashboard bm-dash cls-page bx" data-testid="bm-classifiers-page">
-    <PageHead what={t('stats.cls.lead')} guide="classifiers" onRefresh={() => { void load(); }} />
-    {error && <p role="alert" className="dash-note">{error}</p>}
-    {!state && !error && <p role="status">{t('bm.loading')}</p>}
-    {state && active && <ClassifierDetail c={active} state={state} onBack={() => setOpen(null)} />}
-    {state && !active && <>
-      <div className="cls-summary" data-testid="cls-summary">
-        <Num label={t('stats.cls.summary.decisions')} value={intFmt(total)} help={t('stats.cls.summary.decisionsHelp')} />
-        <Num label={t('stats.cls.summary.week')} value={intFmt(week)} help={t('stats.cls.summary.weekHelp')} />
-      </div>
-      {total === 0 && <p className="cls-clean" role="status" data-testid="cls-clean">{t('stats.cls.empty')}</p>}
-      <div className="catalog-grid cls-grid" data-testid="cls-grid">
-        {cards.map(c => <Card key={c.id} c={c} sources={state.sources} onOpen={() => setOpen(c.id)} />)}
-        {state.kindModel && <KindModelCard c={state.kindModel} />}
-      </div>
-      <section className="cls-plain-wrap"><h2>{t('stats.cls.noRecord')}</h2><p>{t('stats.cls.noRecordLead')}</p>
-        <div className="catalog-grid cls-grid">{(['mail', 'cmd'] as const).map(id => <Plain key={id} id={id} />)}</div></section>
-    </>}
-  </div>;
+  return <Section title={t('stats.cls.title')} note={t('stats.cls.lead')} testId="bx-q-classifiers" actions={<GuideLink concept="classifiers" />}>
+    <div className="dashboard bm-dash cls-page" data-testid="bm-classifiers-page">
+      {error && <p role="alert" className="dash-note">{error}</p>}
+      {!state && !error && <p role="status">{t('bm.loading')}</p>}
+      {state && active && <ClassifierDetail c={active} state={state} onBack={() => setOpen(null)} />}
+      {state && !active && <>
+        <div className="cls-summary" data-testid="cls-summary">
+          <Num label={t('stats.cls.summary.decisions')} value={intFmt(total)} help={t('stats.cls.summary.decisionsHelp')} />
+          <Num label={t('stats.cls.summary.week')} value={intFmt(week)} help={t('stats.cls.summary.weekHelp')} />
+        </div>
+        {total === 0 && <p className="cls-clean" role="status" data-testid="cls-clean">{t('stats.cls.empty')}</p>}
+        <div className="catalog-grid cls-grid" data-testid="cls-grid">
+          {cards.map(c => <Card key={c.id} c={c} onOpen={() => setOpen(c.id)} />)}
+          {state.kindModel && <KindModelCard c={state.kindModel} />}
+        </div>
+        <section className="cls-plain-wrap"><h2>{t('stats.cls.noRecord')}</h2><p>{t('stats.cls.noRecordLead')}</p>
+          <div className="catalog-grid cls-grid">{(['mail', 'cmd'] as const).map(id => <Plain key={id} id={id} />)}</div></section>
+      </>}
+    </div>
+  </Section>;
 }

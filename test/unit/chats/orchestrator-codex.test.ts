@@ -31,7 +31,7 @@ async function setup() {
   const orchestrator = await manager.create({ harness: 'codex', cwd, title: 'Orchestrator · Test isolato', orchestrator: true });
   let enabled = true;
   const brain = {
-    routingInfo: () => ({ registry: null }), route: (req: RouteRequest) => routeChat(req, null, null, null),
+    modelRegistry: () => null, route: (req: RouteRequest) => routeChat(req, null, null),
     settings: () => ({ messaging: { crossHarness: false }, engineOn: { codex: enabled }, engines: { codex: enabled },
       orchestratorChats: { harness: 'codex', claudeModel: '', cursorModel: '', claudeEffort: '' } }),
     info: () => ({ brainRoot: cwd }),

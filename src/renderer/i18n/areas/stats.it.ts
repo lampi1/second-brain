@@ -1,16 +1,16 @@
 // Italian UI texts of the statistics redesign (owner, 2026-10-19): the Classificatori grid and its detail views
-// (components/brain-model/ClassifiersPage.tsx, ClassifierDetail.tsx, lib/classifier-view.ts) and Qualità's app errors
+// (components/brain-model/ClassifiersSection.tsx, ClassifierDetail.tsx, lib/classifier-view.ts) and Qualità's app errors
 // (dashboard/AppErrors.tsx, dashboard/errors.ts; once the Dashboard's Errori view). Every "?" says exactly how its number is computed. Spread into it.ts.
 type N = { n: number };
 
 export const statsIt = {
   // ── Classificatori: page
   'stats.cls.coverage': ({ n, total }: { n: number; total: number }) => `${n} verifiche su ${total} decisioni. La conclusione e il silenzio dell’utente non provano la correttezza. Le review sono campionate: assenza di verifica non significa fallimento.`,
-  'stats.cls.modelCoverage': 'Le righe di routing contano solo decisioni della tabella; il routing per ruolo può lasciarle vuote.',
   'stats.cls.jobCoverage': 'Il registro dei costi non contiene una verifica del risultato: la riuscita non è misurabile qui.',
-  'stats.cls.lead': 'Piccoli smistatori che lavorano sul tuo PC senza spendere token: decidono il tipo di lavoro, il modello e quanto durerà. Ogni scheda dice cosa decide, quante volte e cosa puoi fare.',
+  'stats.cls.title': 'Classificatori',
+  'stats.cls.lead': 'Piccoli smistatori che lavorano sul tuo PC senza spendere token: il tipo di lavoro di una richiesta e quanto durerà. Ogni scheda dice cosa decide, quante volte e cosa puoi fare.',
   'stats.cls.summary.decisions': 'Decisioni prese',
-  'stats.cls.summary.decisionsHelp': 'La somma delle decisioni registrate da tutti i classificatori con un registro: tipi di lavoro e modelli (registro di instradamento del brain), avvii con skill (le ultime 40 chat dei ruoli), stime registrate e lavori del registro costi.',
+  'stats.cls.summary.decisionsHelp': 'La somma delle decisioni registrate dai classificatori con un registro: tipi di lavoro (registro degli esiti del brain), stime dei lavori e lavori del registro costi.',
   'stats.cls.summary.week': 'Questa settimana',
   'stats.cls.summary.weekHelp': 'Decisioni con data nella settimana ISO in corso (da lunedì), sommate su tutti i classificatori con un registro settimanale. Le stime non contano: il loro registro non ha le settimane.',
   'stats.cls.empty': 'Installazione pulita: i classificatori lavorano già, ma non hanno ancora deciso nulla. Le schede si riempiono da sole con le prime chat avviate dall’Orchestrator.',
@@ -28,7 +28,6 @@ export const statsIt = {
   'stats.cls.chartEmpty': 'Il grafico compare con le prime decisioni.',
   'stats.cls.noRecord': 'Senza registro',
   'stats.cls.noRecordLead': 'Lavorano a ogni messaggio o comando ma non tengono statistiche: qui solo cosa fanno e perché.',
-  'stats.cls.defaultModel': 'predefinito del motore',
   'stats.cls.lastAt': (p: { at: string }) => `ultima decisione ${p.at}`,
   'stats.cls.cost': 'Costo medio',
   'stats.cls.costHelp': 'La media del costo reale (equivalente API, in dollari) delle chat o dei lavori che questo classificatore ha deciso, presa dall’ultima misura di ciascuno. I casi senza costo noto non entrano nella media.',
@@ -50,22 +49,13 @@ export const statsIt = {
   // per classifier: name, what it decides, why, how, what it tells you, its hit measure, its empty state
   'stats.c.kind.name': 'Tipo di lavoro',
   'stats.c.kind.decides': 'Che lavoro è una richiesta: fix di bug, indagine, revisione, QA, scrittura, nuova funzionalità…',
-  'stats.c.kind.why': 'Il tipo sceglie il modello di riserva e mette insieme i lavori simili, così stime e statistiche confrontano mele con mele.',
+  'stats.c.kind.why': 'Mette insieme i lavori simili, così stime e statistiche confrontano mele con mele.',
   'stats.c.kind.how': 'Prima le regole del tuo brain (estimates.json), poi un lessico italiano e inglese («correggi» = fix, «revisiona» = review…); se nulla combacia, «altro».',
   'stats.c.kind.use': 'Molti «altro» vogliono dire richieste che non sa leggere: aggiungi una regola nel brain per quel tipo di lavoro.',
   'stats.c.kind.hit': 'Copertura',
-  'stats.c.kind.hitHelp': 'Copertura, non precisione: delle chat registrate nel ledger di instradamento, quante hanno ricevuto un tipo (non «altro»), su quante. Non dice se il tipo era quello giusto.',
-  'stats.c.kind.decisionsHelp': 'Le chat dell’app registrate nel ledger di instradamento del brain (ops/state/improve/outcomes.jsonl), una per chat: ognuna ha ricevuto un tipo di lavoro.',
+  'stats.c.kind.hitHelp': 'Copertura, non precisione: delle chat registrate nel registro degli esiti, quante hanno ricevuto un tipo (non «altro»), su quante. Non dice se il tipo era quello giusto.',
+  'stats.c.kind.decisionsHelp': 'Le chat dell’app registrate nel registro degli esiti del brain (ops/state/improve/outcomes.jsonl), una per chat: ognuna ha ricevuto un tipo di lavoro.',
   'stats.c.kind.empty': 'Nessuna chat registrata ancora: il primo tipo arriva con la prima chat avviata dall’Orchestrator.',
-  'stats.c.model.name': 'Scelta del modello',
-  'stats.c.model.decides': 'Quale motore, modello e sforzo usa una chat quando il ruolo non ne indica uno.',
-  'stats.c.model.why': 'Il profilo del ruolo decide per primo; la tabella di instradamento fa da riserva e riempie i modelli mancanti, così un lavoro leggero non gira sul modello più caro.',
-  'stats.c.model.how': 'Una riga per tipo di lavoro (e area): modello, sforzo e perché. La prima riga che combacia vince; senza riga decide il predefinito.',
-  'stats.c.model.use': 'Se un modello costa molto più di un altro con esiti simili, è un buon candidato da cambiare nel profilo del ruolo.',
-  'stats.c.model.hit': 'Decise dalla tabella',
-  'stats.c.model.hitHelp': 'Delle chat registrate, la quota il cui modello è venuto da una riga della tabella; le altre l’hanno preso dal profilo del ruolo, dal predefinito o da una tua scelta.',
-  'stats.c.model.decisionsHelp': 'Le chat dell’app registrate nel ledger di instradamento: per ognuna è annotato chi ha scelto il modello e quale.',
-  'stats.c.model.empty': 'Nessuna chat registrata ancora: compariranno qui i modelli usati e chi li ha scelti.',
   'stats.c.estimates.name': 'Stime di costo e tempo',
   'stats.c.estimates.decides': 'Quanto costerà e quanto durerà un lavoro, con una forchetta, prima di avviarlo.',
   'stats.c.estimates.why': 'Sapere prima se un lavoro è da 20 centesimi o da 5 dollari ti fa scegliere cosa avviare, e quando.',
@@ -92,7 +82,7 @@ export const statsIt = {
   'stats.c.tasks.specific': 'Da ruolo e tipo uguali',
   'stats.c.tasks.empty': 'Nessun lavoro stimato ancora: servono almeno 3 lavori simili finiti prima che la stima compaia.',
   'stats.c.jobkind.name': 'Tipo nel registro dei costi',
-  'stats.c.jobkind.decides': 'Che tipo di lavoro era una chat, per il registro dei costi: gli stessi tipi della scelta del modello (correzione di bug, QA, revisione, nuova funzionalità, indagine…).',
+  'stats.c.jobkind.decides': 'Che tipo di lavoro era una chat, per il registro dei costi: gli stessi tipi del «Tipo di lavoro» (correzione di bug, QA, revisione, nuova funzionalità, indagine…).',
   'stats.c.jobkind.why': 'Dice dove vanno davvero i tuoi soldi: quale tipo di lavoro costa di più e quanto dura.',
   'stats.c.jobkind.how': 'La stessa regola del «Tipo di lavoro»: parole in italiano e inglese del primo messaggio («non funziona», «aggiungi», «verifica»…). Il testo non viene mai salvato, solo il tipo e la lunghezza.',
   'stats.c.jobkind.use': 'Il tipo più caro per lavoro è il primo posto dove cercare un risparmio: un modello più leggero o una skill.',
@@ -109,7 +99,6 @@ export const statsIt = {
 
   // ── curious facts
   'stats.fact.kindOther': (p: { k: number; n: number }) => `${p.k} richieste su ${p.n} finiscono in «altro»: aggiungi una regola nel brain (Regole) per il tipo di lavoro che manca.`,
-  'stats.fact.modelCost': (p: { hi: string; lo: string; x: string; nHi: number; nLo: number }) => `Una chat su ${p.hi} costa in media ${p.x}× una su ${p.lo} (${p.nHi} e ${p.nLo} chat): se gli esiti sono simili, scegli il più leggero nel profilo del ruolo.`,
   'stats.fact.jobCost': (p: { hi: string; lo: string; x: string; nHi: number; nLo: number }) => `Una «${p.hi}» costa in media ${p.x}× una «${p.lo}» (${p.nHi} e ${p.nLo} lavori): è il primo posto dove cercare un risparmio, un modello più leggero o una skill.`,
   'stats.fact.taskLoose': (p: { k: number; n: number }) => `Solo ${p.k} stime su ${p.n} sono rimaste entro ×2: leggile come ordine di grandezza, non come scadenza.`,
 

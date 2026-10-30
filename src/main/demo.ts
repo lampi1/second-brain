@@ -10,7 +10,7 @@ import { timersFor } from './timers';
 const { setInterval, clearInterval } = timersFor('demo');
 import type {
   AppQuality, Answer, BrainApiResult, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, CompareExperiment, CompareState, LearnResult, EventMap,
-  FeedEvent, FileDiff, HandoffInfo, ImageAttachment, ModelsSeen, RoutingInfo, RoutingRow, NewChat, PendingRequest, Priority, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncState, Usage,
+  FeedEvent, FileDiff, HandoffInfo, ImageAttachment, ModelRegistry, ModelsSeen, NewChat, PendingRequest, Priority, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncState, Usage,
 } from '../shared/contract';
 import type { AgentChildren, ChildObservation } from '../shared/agents';
 import { sysEn } from '../shared/sys';
@@ -20,7 +20,8 @@ import type { BrainService, ChatService, FeedInput } from './services';
 import type { ConfigStore } from './brain/config';
 import { BrainApi, checkApiPath, type LocalApi } from './brain/api';
 import { KINDS } from './brain/live';
-import { DemoRouting } from './brain/routing-demo';
+import { DEMO_REGISTRY } from './brain/routing-demo';
+import { routeChat } from './brain/routing';
 import type { RouteRequest, RouteResult } from './brain/routing';
 import { electronNode } from './brain/node';
 import { log } from './log';
@@ -977,15 +978,9 @@ export class DemoBrain implements BrainService {
 
   // ---- brain data, plan windows, budget: honest "no data" in the demo
   recordJob(): { id: string } { return { id: `job-${++this.n}` }; }
-  // ---- model routing: a table in memory with the real rules (brain/routing-demo.ts)
-  private routing: DemoRouting | null = null;
-  private routingNow(): DemoRouting { return (this.routing ??= new DemoRouting(new Date(this.chats.now() - 2 * 3600_000).toISOString())); }
-  routingInfo(): RoutingInfo { return this.routingNow().info(); }
-  saveRouting(routes: RoutingRow[], reason: string | null, o: { exploration?: number; costWeight?: number; by?: string; evidence?: string | null; base?: number } = {}): RoutingInfo {
-    return this.routingNow().save(routes, new Date(this.chats.now()).toISOString(), { ...o, by: o.by ?? 'utente (Impostazioni)', reason });
-  }
-  restoreRouting(version: number, by?: string): RoutingInfo { return this.routingNow().restore(version, new Date(this.chats.now()).toISOString(), by); }
-  route(req: RouteRequest): RouteResult { return this.routingNow().route(req, this.chats.now()); }
+  // ---- model choice: the real resolution on the demo's registry (brain/routing-demo.ts)
+  modelRegistry(): ModelRegistry { return DEMO_REGISTRY; }
+  route(req: RouteRequest): RouteResult { return routeChat(req, DEMO_REGISTRY, null, this.chats.now()); }
   observeRouting(): void { /* the demo keeps no ledger */ }
   lastRoutingActual(): null { return null; }
   observeRoutingOutcome(): void { /* the demo keeps no ledger */ }

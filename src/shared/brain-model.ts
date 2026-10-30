@@ -303,22 +303,10 @@ export interface MemoryStats {
   skills: SkillUse[];
 }
 
-// ── Classificatori (read-only): how the app's automatic choices work today ───────────────────────────────────────
-export interface RouteResult { runs: number; success: { value: number | null; n: number }; avgCostUsd: number | null }
-export interface ClassifierRoute {
-  kind: string; area: string | null; harness: string; model: string; effort: string | null; why: string;
-  /** measured from the outcomes log of the routed chats (and the verified verdicts of their runs) */
-  result: RouteResult;
-}
+// ── Classificatori (read-only, a section of Qualità since ADR 0210): the small sorters that decide at zero tokens ───
 export interface ClassifiersState {
-  routing: { version: number | null; appliedAt: string | null; by: string | null; routes: ClassifierRoute[]; error: string | null };
-  history: { at: string; from: number | null; to: number; by: string; reason: string | null; evidence: string | null }[];
   /** per kind of work: the app's chats in the ledger, how many have a known outcome and how many succeeded */
   kinds: { kind: string; chats: number; known: number; ok: number }[];
-  /** how the model of the app's chats was chosen: by the table, by the agent's profile, by default or override */
-  sources: { source: string; chats: number }[];
-  /** success and cost per route, by week; a row without runs has no data yet */
-  quality: { key: string; label: string; weeks: { week: string; runs: number; success: number | null; avgCostUsd: number | null }[] }[];
   /** one card per classifier that keeps a record (main/brainmodel/classifier-cards.ts); the page draws them as a grid */
   cards?: ClassifierCard[];
   /** the kind of work by examples (main/brainmodel/kind-model.ts, ADR 0197); absent from an older main or the demo */
@@ -352,7 +340,7 @@ export interface ClassifierStat { value: number | null; n: number }
 export interface ClassifierWeek { week: string; decisions: number; hits: number; known: number; ok: number; avgCostUsd: number | null }
 /** One value it decided (a kind, a model): how often, with what outcome and cost, and who ran it most. */
 export interface ClassifierSlice { key: string; count: number; known: number; ok: number; avgCostUsd: number | null; top?: { key: string; count: number } }
-export type ClassifierCardId = 'kind' | 'model' | 'jobkind';
+export type ClassifierCardId = 'kind' | 'jobkind';
 export interface ClassifierCard {
   id: ClassifierCardId;
   decisions: number;

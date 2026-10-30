@@ -6,7 +6,7 @@
 // id (a run's goal is frozen at its end), at most MAX_EXAMPLES newest runs, in batches of BATCH with a pause between
 // (the embedding itself runs in the search worker thread). One computation at a time; its card is kept for CARD_TTL_MS
 // or until the runs change. `classify` answers with the classifier when it is trained, the word rule otherwise (no
-// model, too few examples). The routing table still decides on the word rule: promoting this classifier is the owner's
+// model, too few examples). The chats' kinds still come from the word rule: promoting this classifier is the owner's
 // call once the card shows it agrees. Used by brainmodel/service.ts (classifiers) and wired in wiring.ts.
 import type { AgentRun } from '../../shared/agents';
 import type { KindModelCard } from '../../shared/brain-model';

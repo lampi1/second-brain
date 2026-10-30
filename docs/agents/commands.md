@@ -56,8 +56,6 @@ row and its line here in the same change.
 | `app_continue_chat` | Orchestrator, /mcp/app | «Riprendi»: a new chat on the same engine and folder from the old chat's hand-off. |
 | `app_set_chat_effort` | Orchestrator, /mcp/app | Pick the reasoning effort of one running chat for this conversation only. |
 | `app_set_chat_work` | Orchestrator, /mcp/app | Declare, wait on or complete a chat's explicit assignment (holds the auto-close). |
-| `app_routing` | Orchestrator, /mcp/app | The model routing table in force for chats without a role. |
-| `app_routing_save` | Orchestrator, /mcp/app | Write a new version of the routing table for chats without a role. |
 | `agent_catalog` | Orchestrator, /mcp/app, work chats | The roles with purpose, tools and skills, and the skills that fit a request. |
 | `agent_learn_propose` | Orchestrator, /mcp/app, work chats | Propose a lesson for a role (its text or a skill), queued for the user. |
 | `app_unblock` | Orchestrator only | Open the questions window with everything waiting for the user, after a recap he asked for. |

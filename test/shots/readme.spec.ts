@@ -328,11 +328,14 @@ test('README showcase: voice, Log, recordings, classifiers, quality, learn, cost
   const db = (await page.getByTestId('rec-detail').boundingBox())!;
   await save('recordings', { ...column, height: Math.round(Math.min(column.height, db.y + db.height + 14 - column.y)) });
 
-  // Classifiers: the small sorters that decide by themselves at zero tokens, each card with its numbers
+  // Classifiers: the small sorters that decide by themselves at zero tokens, each card with its numbers (a section of
+  // Qualità since ADR 0210; the old id lands there)
   await goPage(page, 'classificatori');
   await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30_000 });
+  const cls = page.getByTestId('an-panel-qualita').getByTestId('cls-summary');
+  await cls.scrollIntoViewIfNeeded({ timeout: 30_000 });
   await page.waitForTimeout(800);
-  await save('classifiers', await frameOf(page.getByTestId('an-panel-classificatori').getByTestId('cls-summary')));
+  await save('classifiers', await frameOf(cls));
 
   // Quality: four measured numbers about the AI's mistakes, each with its source
   await goPage(page, 'qualita');

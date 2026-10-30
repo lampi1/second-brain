@@ -24,7 +24,8 @@ async function classifiers(page: Page, scheme: string): Promise<void> {
   await goPage(page, 'classificatori');
   const cls = page.getByTestId('bm-classifiers-page');
   await expect(cls.getByTestId('cls-grid')).toBeVisible();
-  for (const id of ['kind', 'model', 'tasks', 'jobkind', 'mail', 'cmd']) await expect(cls.getByTestId(`cls-card-${id}`)).toBeVisible();
+  for (const id of ['kind', 'tasks', 'jobkind', 'mail', 'cmd']) await expect(cls.getByTestId(`cls-card-${id}`)).toBeVisible();
+  await expect(cls.getByTestId('cls-card-model')).toHaveCount(0); // the model routing is gone (ADR 0210)
   await expect(cls.getByTestId('cls-card-estimates')).toHaveCount(0); // the brain's retired estimator (ADR 0053, 0101)
   await expect(cls.getByTestId('cls-card-skills')).toHaveCount(0); // the skill suggester is gone (ADR 0186)
   await expect(cls.getByTestId('cls-summary')).not.toContainText('Token spesi');
@@ -47,7 +48,7 @@ async function classifiers(page: Page, scheme: string): Promise<void> {
   await expect(page.locator('.help-bubble:not([hidden])')).toContainText('altro');
   await shot(page, `stats-classifiers-help-${scheme}`);
   await page.keyboard.press('Escape');
-  // the detail of "Tipo di lavoro", then "Scelta del modello" with the routing table of before
+  // the detail of "Tipo di lavoro"
   await cls.getByTestId('cls-card-kind').getByRole('button', { name: /Tipo di lavoro/ }).click();
   await expect(cls.getByTestId('cls-detail-kind')).toBeVisible();
   await expect(cls.getByTestId('cls-learning').locator('svg')).toBeVisible();
@@ -62,8 +63,8 @@ async function classifiers(page: Page, scheme: string): Promise<void> {
   await expect(cls.getByTestId('cls-learning').locator('svg')).toBeVisible();
   await shot(page, `stats-classifier-tasks-${scheme}`);
   await cls.getByTestId('cls-back').click();
-  await cls.getByTestId('cls-card-model').getByRole('button', { name: /Scelta del modello/ }).click();
-  await expect(cls.getByTestId('bm-cls-routing')).toBeVisible();
+  await cls.getByTestId('cls-card-kind').getByRole('button', { name: /Tipo di lavoro/ }).click();
+  await expect(cls.getByTestId('cls-detail-kind')).toBeVisible();
   await page.keyboard.press('Escape');
   await expect(cls.getByTestId('cls-grid')).toBeVisible();
 }

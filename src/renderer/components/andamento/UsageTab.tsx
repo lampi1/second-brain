@@ -11,7 +11,7 @@ import { t, type Key } from '../../i18n';
 import { pageLabel } from '../../store/ui';
 import { BRAIN_PAGES } from '../../brain';
 import { HUB_PAGES, HUB_TABS } from '../../lib/memory-hub';
-import { TREND_TABS } from '../../lib/andamento';
+import { TREND_TABS, parseTrendArg } from '../../lib/andamento';
 import { settingsSections } from '../../lib/settings-sections';
 import { activeDays, neverOpened, placeOfKey, useItems } from '../../lib/use-view';
 import { errText } from '../../lib/ipc-error';
@@ -41,7 +41,8 @@ function name(kind: 'page' | 'action', id: string, sub: string | null): string {
   const page = pageLabel(id);
   if (!sub) return page;
   const text = t as (k: Key) => string;
-  const tab = id === 'memoria' ? text(`mh.tab.${sub}` as Key) : id === 'andamento' ? text(`trend.tab.${sub}` as Key)
+  // an old tab's counts (andamento/classificatori, folded into Qualità by ADR 0210) are named after the tab it opens now
+  const tab = id === 'memoria' ? text(`mh.tab.${sub}` as Key) : id === 'andamento' ? text(`trend.tab.${parseTrendArg(sub).tab}` as Key)
     : id === 'impostazioni' ? (settingsSections([]) as Record<string, { title: string }>)[sub]?.title : undefined;
   return `${page} › ${typeof tab === 'string' && tab ? tab : sub}`;
 }

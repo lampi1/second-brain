@@ -137,7 +137,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   writeDemoProposals(ctx.userData, demoBrainRoot, now());
   const demoLogs = writeDemoLogs(path.join(ctx.userData, 'demo-logs'), path.join(ctx.userData, 'maintenance-noise.json'), now());
   const brainModel: BrainModelService = new BrainModelService({ userData: ctx.userData, root: () => demoBrainRoot, home: null, catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning,
-    runs: (): AgentRun[] => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...demoLearningRuns(now()), ...(demoCls ??= writeDemoClassifiers(demoBrainRoot, ctx.userData, now(), brainModel.skillList().map((x: { name: string }) => x.name).filter(n => n !== 'pulizia-ambiente'))).runs], routing: () => brain.routingInfo(), now,
+    runs: (): AgentRun[] => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...demoLearningRuns(now()), ...(demoCls ??= writeDemoClassifiers(demoBrainRoot, ctx.userData, now(), brainModel.skillList().map((x: { name: string }) => x.name).filter(n => n !== 'pulizia-ambiente'))).runs], now,
     emit: () => ctx.emitter.emit('brainmodel:changed', undefined), auto: false, kindModel: async () => demoKindModel(now()),
     scripts: { file: id => demoScripts.get(id).path, changed: () => { demoScripts.invalidate(); ctx.emitter.emit('scripts:changed', undefined); } },
     // the log step of the Manutenzione (#150): made-up logs, whose new groups become app bug cards (ADR 0132)

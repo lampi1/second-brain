@@ -52,9 +52,6 @@ export interface AgentCatalogDeps {
   /** the model a tier means on an engine (agents/model-tier.ts with the registry and Settings.modelTiers); null = the
    *  engine's own default */
   tierModel?: (engine: Harness, tier: ModelTier) => string | null;
-  /** the routing table's row for this chat (kind and area from its title and prompt), when it is on `engine` and names a
-   *  model: a role with no model of its own takes it, and its effort when the role names none (ADR 0078, 0091) */
-  tableModel?: (engine: Harness, req: NewChat) => { model: string; effort: Effort | null } | null;
   emit?: (catalog: AgentCatalog) => void;
   now?: () => number;
   onCustomized?: () => void;
@@ -67,8 +64,6 @@ export interface ResolvedRole {
   maxContext?: number; skills: string[]; launches: string[];
   /** the model tier a role chat runs on */
   tier?: ModelTier;
-  /** 'table' = the model (and effort, if the role names none) came from the routing table's row */
-  modelFrom?: 'table';
 }
 
 export function ownerOf(p: AgentProfile): AgentOwnerSnapshot {
@@ -467,18 +462,16 @@ export class AgentCatalogService {
     if (!e.enabled || !e.trusted) throw new Error(`Il motore di ${p.name} è spento o va riconfermato nelle Impostazioni.`);
     if (req.tier !== undefined && (!has(MODEL_TIERS, req.tier) || tierRank(req.tier) > tierRank(p.tierMax))) throw new Error(`${p.name} arriva al massimo al livello ${p.tierMax}.`);
     const tier = cappedTier(req.tier ?? p.tier, p.tierMax);
-    // the role's own model; else the routing table's row on its engine (unless the launch asked a tier); else its tier's
-    // model. A review's independence is its clean session (it never sees its parent's reasoning), never another model
-    // (ADR 0091)
-    const row = p.model === null && req.tier === undefined ? this.d.tableModel?.(p.engine, req) ?? null : null;
-    const picked = { model: p.model ?? row?.model ?? this.d.tierModel?.(p.engine, tier) ?? null };
-    const effort = p.effort ?? row?.effort ?? req.effort;
+    // the role's own model, else its tier's model (owner, 2026-10-30: no routing table, ADR 0210). A review's
+    // independence is its clean session (it never sees its parent's reasoning), never another model (ADR 0091)
+    const picked = { model: p.model ?? this.d.tierModel?.(p.engine, tier) ?? null };
+    const effort = p.effort ?? req.effort;
     const { model: _m, effort: _e, ...rest } = req; void _m; void _e;
     const r = ROLE_DEFAULTS[p.id as RoleId];
     const instructions = `${ROLE_PREAMBLE}\n\nRole: ${p.name}.\n${p.instructions}\nOutput: ${r.output}`;
     return { request: { ...rest, harness: p.engine, ...(picked.model ? { model: picked.model } : {}), ...(effort ? { effort } : {}) }, owner: { ...ownerOf(p), model: picked.model },
       instructions, policy: p.tools || p.permissionCeiling ? { tools: p.tools ? structuredClone(p.tools) : null, ceiling: p.permissionCeiling } : null,
       ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}), skills: [...p.skills, ...(p.knowhow?.linked ?? [])].filter((s, i, a) => a.indexOf(s) === i), launches: [...p.launches],
-      ...(row ? { modelFrom: 'table' as const } : {}), tier };
+      tier };
   }
 }

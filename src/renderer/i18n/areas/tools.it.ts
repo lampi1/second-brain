@@ -169,8 +169,7 @@ export const toolsIt = {
   'tools.keys.denyLabel': 'Rifiuta',
   'tools.keys.denyHint': 'Esc',
 
-  // Routing: task kinds and routing labels
-  'tools.routing.kindAny': 'Qualsiasi',
+  // The kinds of work (lib/work-kinds.ts)
   'tools.routing.kindQaRun': 'QA e test',
   'tools.routing.kindReview': 'Review',
   'tools.routing.kindBugFix': 'Fix di bug',

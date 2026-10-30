@@ -1,22 +1,23 @@
-// Pure view helpers of the Classificatori grid (owner, 2026-10-19: "card e statistiche per ciascuno, con spiegazione",
+// Pure view helpers of the Classificatori grid, a section of Qualità since ADR 0210 (owner, 2026-10-19: "card e statistiche per ciascuno, con spiegazione",
 // "cose curiose che catturano l'attenzione e ti facciano capire a cosa servono"). One CardView per classifier: the
-// four record-keeping ones from main (ClassifiersState.cards), the estimates one from the brain's loop
+// record-keeping ones from main (ClassifiersState.cards: kind of work, cost-ledger kind; the «Scelta del modello» card
+// left with the routing table, ADR 0210), the estimates one from the brain's loop
 // (/api/improve, LearnPolicy 'estimates') and the task estimator's weekly backtest (IPC agents:estimates → accuracy,
 // ADR 0087); the weekly hit series and the advice, built only from data, only from MIN_FACT cases up and only when it
 // ends with something the user can do (ADR 0101: the "Lo sapevi?" curiosities on 5 cases, the "sta imparando" trends
 // and the "pronto a calibrarsi" meter of a calibration removed in bb953da are gone). The brain's own estimates loop is
 // no card any more (ADR 0053 retired that estimator from the UI; ADR 0101 hid its last card). A value without data
 // stays null ("nessun dato ancora"), never zero. No React, no IPC: unit-tested in
-// test/unit/brain-ui/classifier-view.test.ts; used by components/brain-model/ClassifiersPage.tsx and ClassifierDetail.tsx.
+// test/unit/brain-ui/classifier-view.test.ts; used by components/brain-model/ClassifiersSection.tsx and ClassifierDetail.tsx.
 import type { ClassifierCard, ClassifierCardId, ClassifierStat, ClassifierWeek, ClassifiersState } from '@shared/brain-model';
 import type { EstimateAccuracy } from '@shared/task-estimate';
 import type { LearnPolicy } from '../brain/lib/learn';
 import { t, locale } from '../i18n';
-import { getKindIt } from './routing';
-import { formatCost, prettyModel } from './format';
+import { getKindIt } from './work-kinds';
+import { formatCost } from './format';
 
 export type CardId = ClassifierCardId | 'estimates' | 'tasks';
-export const CARD_ORDER: CardId[] = ['kind', 'model', 'tasks', 'jobkind'];
+export const CARD_ORDER: CardId[] = ['kind', 'tasks', 'jobkind'];
 
 export interface CardView {
   id: CardId;
@@ -51,9 +52,8 @@ export const usdOf = (v: number | null): string | null => (v === null ? null : m
 
 /** The value a slice key stands for, in words. */
 export function sliceLabel(id: CardId, key: string): string {
-  // one taxonomy (ADR 0186): the cost ledger's kinds are the routing table's
+  // one taxonomy (ADR 0186): the cost ledger's kinds are the chats' kinds
   if (id === 'kind' || id === 'jobkind') return (getKindIt() as Record<string, string>)[key] ?? key;
-  if (id === 'model') return key === '—' ? t('stats.cls.defaultModel') : prettyModel(key);
   return key;
 }
 
@@ -124,7 +124,7 @@ export function hitTrend(weeks: ClassifierWeek[]): { before: number; after: numb
 
 /** The advice a card can give, most useful first: each rests on at least MIN_FACT cases (or 10 per side of a
  *  comparison) and ends with what to do; a figure that leads to no action is not told (ADR 0101). */
-export function facts(c: CardView, _sources: ClassifiersState['sources'] = []): string[] {
+export function facts(c: CardView): string[] {
   const out: string[] = [];
   const total = c.slices.reduce((s, x) => s + x.count, 0);
   const priced = (other: string) => c.slices.filter(s => s.key !== other && s.avgCostUsd !== null && s.count >= 10).sort((a, b) => b.avgCostUsd! - a.avgCostUsd!);
@@ -132,12 +132,10 @@ export function facts(c: CardView, _sources: ClassifiersState['sources'] = []): 
     const other = c.slices.find(s => s.key === 'altro')?.count ?? 0;
     if (other / total >= 0.25) out.push(t('stats.fact.kindOther', { k: other, n: total }));
   }
-  if (c.id === 'model' || c.id === 'jobkind') {
-    const list = priced(c.id === 'model' ? '' : 'altro'), hi = list[0], lo = list[list.length - 1];
-    if (hi && lo && hi !== lo && lo.avgCostUsd! > 0 && hi.avgCostUsd! / lo.avgCostUsd! >= 1.5) {
-      const p = { hi: sliceLabel(c.id, hi.key), lo: sliceLabel(c.id, lo.key), x: num(hi.avgCostUsd! / lo.avgCostUsd!), nHi: hi.count, nLo: lo.count };
-      out.push(c.id === 'model' ? t('stats.fact.modelCost', p) : t('stats.fact.jobCost', p));
-    }
+  if (c.id === 'jobkind') {
+    const list = priced('altro'), hi = list[0], lo = list[list.length - 1];
+    if (hi && lo && hi !== lo && lo.avgCostUsd! > 0 && hi.avgCostUsd! / lo.avgCostUsd! >= 1.5)
+      out.push(t('stats.fact.jobCost', { hi: sliceLabel(c.id, hi.key), lo: sliceLabel(c.id, lo.key), x: num(hi.avgCostUsd! / lo.avgCostUsd!), nHi: hi.count, nLo: lo.count }));
   }
   if (c.id === 'tasks' && c.hit.value !== null && c.hit.n >= MIN_FACT && c.hit.value < 0.5) out.push(t('stats.fact.taskLoose', { k: Math.round(c.hit.value * c.hit.n), n: c.hit.n }));
   return out;

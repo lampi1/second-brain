@@ -3,10 +3,10 @@
 // bigger median error than the median cost). The ledger is a JSON-lines file behind a pluggable store (default
 // userData/jobs.jsonl). It starts from day one with a backfill from the brain's cost.mjs (per-chat $ and
 // first-to-last-message span of the last 30 days). The prompt text is never stored: only its length and kind of work
-// (shared/work-concepts.ts taskOf, the routing table's own kinds: ADR 0186; an older row's own kind is mapped on load).
+// (shared/work-concepts.ts taskOf, the one taxonomy: ADR 0186; an older row's own kind is mapped on load).
 // A row is appended only when it changed, and the file is compacted on load once repeats outnumber twice the ids
 // (ADR 0186). Used by brain/index.ts for 'estimate:record'; the chat manager records jobs and their actuals; the
-// brain's estimates.mjs reads jobs.jsonl for its own routing table (brain-estimates.ts).
+// brain's estimates.mjs reads jobs.jsonl for its own estimates (brain-estimates.ts).
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';

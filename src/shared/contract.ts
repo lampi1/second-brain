@@ -156,7 +156,7 @@ export const INVOKE_CHANNELS = [
   'browser:close', 'views:layout', 'feed:list', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',
   'tasks:get', 'tasks:refresh', 'tasks:markRead', 'chat:branches',
-  'compare:list', 'learn:act', 'models:seen', 'routing:get', 'routing:save',
+  'compare:list', 'learn:act', 'models:seen',
   'browser:handoffs', 'browser:handoffResolve', 'browser:handoffCopy', 'browser:envList',
   'personal:state', 'personal:open', 'personal:navigate', 'personal:go', 'personal:select', 'personal:close', 'personal:restore', 'personal:bookmarkAdd', 'personal:bookmarkRemove',
   'personal:sessionSave', 'personal:sessionOpen', 'personal:sessionRemove', 'personal:historyClear', 'personal:loginFill', 'personal:loginSave', 'personal:loginRemove', 'personal:loginCopy', 'personal:loginImport', 'personal:lend', 'personal:reclaim', 'personal:onScreen',

@@ -1,8 +1,8 @@
 // The Classificatori grid's numbers (owner, 2026-10-19: "i classificatori li voglio con card e statistiche per
-// ciascuno"): one card per classifier that keeps a record. Tipo di lavoro (routing's taskOf, from the ledger's routing
-// predictions), Scelta del modello (who chose each chat's model and with which model) and Tipo nel registro dei costi (estimates.ts classify, from
-// userData/jobs.jsonl). Per card: decisions, its own hit measure, the verified success of what it decided, the
-// average cost, the last 8 ISO weeks, the slices (per kind / model / skill, with the role that ran it most) and the
+// ciascuno"): one card per classifier that keeps a record. Tipo di lavoro (taskOf, from the ledger's prediction lines)
+// and Tipo nel registro dei costi (estimates.ts classify, from userData/jobs.jsonl); the «Scelta del modello» card left
+// with the routing table (ADR 0210). Per card: decisions, its own hit measure, the verified success of what it decided, the
+// average cost, the last 8 ISO weeks, the slices (per kind, with the role that ran it most) and the
 // success when it hit versus when it missed. Verified success = the user's or a reviewed verdict, from the agent run
 // (agent-runs.json) or from the ledger (outcomes.jsonl, which outlives a reinstall); a chat in both counts once, the
 // run's verdict first. A chat whose only outcome is unverified (the brain's proxy, the Orchestrator's opinion) counts
@@ -13,7 +13,7 @@ import type { AgentRun } from '../../shared/agents';
 import type { ClassifierCard, ClassifierSlice, ClassifierStat, ClassifierWeek } from '../../shared/brain-model';
 import type { LedgerOutcome } from '../brain/routing';
 
-export interface LedgerPrediction { id: string; at: number; kind: string; model: string | null; source: string }
+export interface LedgerPrediction { id: string; at: number; kind: string }
 export interface JobRow { at: number; kind: string; usd: number | null }
 export interface CardInputs {
   now: number;
@@ -91,7 +91,6 @@ export function classifierCards(i: CardInputs): ClassifierCard[] {
   const runByChat = new Map([...i.runs].sort((a, b) => b.startedAt - a.startedAt).map(r => [r.chatId, r]));
   const routed = i.predictions.map(p => ({ p, ok: verifiedOf(p.id, runByChat, i.outcomes), proxy: unverifiedOf(p.id, runByChat, i.outcomes), usd: i.actuals.get(p.id)?.usd ?? null, role: runByChat.get(chatOf(p.id))?.agentId ?? null }));
   const kind = card('kind', routed.map(({ p, ok, proxy, usd, role }) => ({ at: p.at, key: p.kind || 'altro', hit: !!p.kind && p.kind !== 'altro', ok, proxy, usd, role })), i.now);
-  const model = card('model', routed.map(({ p, ok, proxy, usd, role }) => ({ at: p.at, key: p.model ?? '—', hit: p.source === 'table', ok, proxy, usd, role })), i.now);
   const jobkind = card('jobkind', i.jobs.map(j => ({ at: j.at, key: j.kind, hit: j.kind !== 'altro', ok: null, usd: j.usd, role: null })), i.now);
-  return [kind, model, jobkind];
+  return [kind, jobkind];
 }

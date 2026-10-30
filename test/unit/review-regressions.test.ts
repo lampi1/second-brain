@@ -32,9 +32,9 @@ describe('general main-process findings', () => {
     try { session.start(); session.send('Synthetic request'); await done; expect(items.find(i => i.kind === 'result')).toMatchObject({ isError: true }); }
     finally { await session.close(); fs.rmSync(dir, { recursive: true, force: true }); }
   });
-  it('keeps an arbitrary registered engine default model when no task routing row applies', async () => {
+  it('keeps an arbitrary registered engine default model', async () => {
     const made: NewChat[] = [];
-    await createRoutedChat({ route: request => routeChat(request, null, null, null, 1), engineOn: () => true, agentsMayOpen: () => true, create: async req => { made.push(req); return { id: 'c1' } as ChatSummary; } },
+    await createRoutedChat({ route: request => routeChat(request, null, null, 1), engineOn: () => true, agentsMayOpen: () => true, create: async req => { made.push(req); return { id: 'c1' } as ChatSummary; } },
       { cwd: '/', title: '', prompt: 'Ordinary request', defaults: { harness: 'codex', model: 'known-model' } }, { byUser: true });
     expect(made[0]).toMatchObject({ harness: 'codex', model: 'known-model' });
   });

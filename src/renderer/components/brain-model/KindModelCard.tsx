@@ -3,11 +3,11 @@
 // the classifier, the diagonal highlighted), what it proposes where the words say «altro», and «Come funziona» with the
 // limit said plainly (the labels are the word rule's). State lines when it cannot answer: no local model, too few
 // examples, still embedding. Data: ClassifiersState.kindModel (main/brainmodel/kind-model.ts). Rendered by
-// ClassifiersPage.tsx; styles in styles/classifiers.css (.cls-km-*).
+// ClassifiersSection.tsx; styles in styles/classifiers.css (.cls-km-*).
 import type { KindModelCard as Card } from '@shared/brain-model';
 import type { TaskKind } from '@shared/contract';
 import { t } from '../../i18n';
-import { getKindIt } from '../../lib/routing';
+import { getKindIt } from '../../lib/work-kinds';
 import { Num, intFmt, pctFmt } from './ClassifierParts';
 
 const kindName = (k: string): string => getKindIt()[k as TaskKind] ?? k;

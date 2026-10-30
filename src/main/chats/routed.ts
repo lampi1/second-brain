@@ -1,9 +1,9 @@
 // A chat the user starts without choosing everything (chat:createRouted): "Nuova chat" and a new Orchestrator (Ricomincia da capo, Cambia motore, Pulisci). The brain pages never start one:
 // their "Discuti" goes to the Orchestrator, which delegates (2026-10-19).
-// Harness, model and effort come from the routing table (brain/routing.ts, ADR 0032), the same decision app_create_chat
-// makes for an Orchestrator, and the chat carries its route, so its prediction and actuals reach the improvement loop's ledger
-// (wiring.ts). What the user named (the engine of Cambia motore) beats the row, as an override with its reason; no row →
-// the user's defaults, as before. Why: the user, 2026-10-14, "quando dalla sezione devops premo fai partire chat mi
+// Harness, model and effort are the user's "Chat aperte dall'Orchestrator" defaults (brain/routing.ts resolve; the
+// routing table that once picked them per kind of work left with ADR 0210), and the chat carries its route, so its
+// prediction and actuals reach the improvement loop's ledger (wiring.ts). What the user named (the engine of Cambia
+// motore) beats the defaults, as an override with its reason. Why: the user, 2026-10-14, "quando dalla sezione devops premo fai partire chat mi
 // aspetto che comunque passi dalle configurazioni di scelta del modello", then the same for the other paths
 // (2026-10-14). Used by index.ts; test/unit/routed-chat.test.ts.
 import { type ChatSummary, type Harness, type NewChat, type RoutedNewChat, type TaskKind } from '../../shared/contract';
@@ -15,7 +15,7 @@ export interface RoutedChatDeps {
   route(req: RouteRequest): RouteResult;
   /** may a chat start on this engine now (settings engineOn.*, engines/policy.ts engineOn) */
   engineOn(h: Harness): boolean;
-  /** may the routing table, the defaults or an Orchestrator use this engine («Gli Orchestrator possono usare X», policy.ts agentsMayOpen) */
+  /** may the defaults or an Orchestrator use this engine («Gli Orchestrator possono usare X», policy.ts agentsMayOpen) */
   agentsMayOpen(h: Harness): boolean;
   create(req: NewChat): Promise<ChatSummary>;
 }
@@ -26,7 +26,7 @@ export interface RoutedSpace { appCode?: boolean; byUser?: boolean }
 const text = (v: unknown, max: number): string => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 const harnessOf = (v: unknown): Harness | undefined => (typeof v === 'string' && engineOf(v) ? v : undefined);
 
-/** The route of a request: what the user named, the table, the engines they may start now. */
+/** The route of a request: what the user named, the defaults, the engines they may start now. */
 type Decided = { error: string } | { routed: Exclude<RouteResult, { error: string }>; title: string; prompt: string; cwd: string; harness: Harness };
 function decide(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>, req: RoutedNewChat, own: RoutedSpace): Decided {
   const orchestrator = req?.orchestrator === true;
@@ -44,8 +44,8 @@ function decide(d: Pick<RoutedChatDeps, 'route' | 'engineOn' | 'agentsMayOpen'>,
   const askEffort = req.ask?.effort && (EFFORTS as readonly string[]).includes(req.ask.effort) ? req.ask.effort : undefined;
   const said = { harness: harnessOf(req.ask?.harness), model: text(req.ask?.model, 200) || undefined, effort: askEffort };
   const named = !!(said.harness || said.model || said.effort);
-  // the engine the user names for a work chat needs only to be on; a row of the table (the AI writes it), the defaults
-  // and an Orchestrator (an agent itself) need «Gli Orchestrator possono usare X» too
+  // the engine the user names for a work chat needs only to be on; the defaults and an Orchestrator (an agent itself)
+  // need «Gli Orchestrator possono usare X» too
   const userPick = (h: Harness) => !orchestrator && h === said.harness;
   const refusal = (h: Harness): string | null => !d.engineOn(h) ? `${engineLabel(h)} è spento nelle impostazioni`
     : !userPick(h) && !d.agentsMayOpen(h) ? `gli Orchestrator non possono usare ${engineLabel(h)} (impostazione «Gli Orchestrator possono usare ${engineLabel(h)}»)` : null;

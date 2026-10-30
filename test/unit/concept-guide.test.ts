@@ -23,7 +23,7 @@ describe('concept guide content', () => {
   it('covers the core concepts the guide promises', () => {
     const ids = CONCEPTS.map(c => c.id);
     for (const id of ['agents', 'orchestrator', 'runs', 'metrics', 'errors-rules', 'classifiers', 'permissions', 'questions',
-      'grindhouse', 'memory-hub', 'tasks', 'brain', 'search', 'file-viewer', 'routing', 'costs', 'updates', 'flash', 'orchestrator-app',
+      'grindhouse', 'memory-hub', 'tasks', 'brain', 'search', 'file-viewer', 'costs', 'updates', 'flash', 'orchestrator-app',
       'voice', 'recordings', 'personal-browser', 'notifications', 'routines']) expect(ids).toContain(id);
   });
 
