@@ -42,7 +42,7 @@ it could not add, edit, test or remove one, and it could not change the owner's 
 - **Paste anything** (`shared/mcp-paste.ts`, used by the form and the Orchestrator): a README JSON (with or without
   the `mcpServers` wrapper, one or more servers), a command line (`npx …`, `uvx …`, `docker run …`, `KEY=v cmd`) or an
   https URL becomes a draft. `entryToDraft` is the one converter, shared with the Claude/Cursor import. Env and header
-  values that look like secrets become token slots. In the form, their pasted value moves to the masked field. On the
+  values that look like secrets become token slots. In the form, their pasted value moves to the masked field and the paste box shows `•••` in its place. On the
   Orchestrator's path the value is dropped and only redacted.
 - **Catalog**: eight popular servers (filesystem, fetch, memory, sequential-thinking, git, playwright, context7,
   brave-search). One click fills the form, and asks for a folder or a key when the server needs one.
@@ -94,5 +94,11 @@ Still open, and not cheap:
 - `Switch`, `Segmented` and `ProtectedMark` are exported from `SettingsPage.tsx`, for sections other blocks add.
 - `settings.spec.ts` (e2e) chooses the theme through the radiogroup. `helpers.choose()` accepts a radiogroup.
 - `mcp-servers.json` may now hold a `flash` access entry. An older app ignores it, and Flash had no MCP before.
-- The MCP undo journal is in memory, so an «Annulla» card does not survive a restart (it then says the change is
-  gone).
+- The MCP undo journal survives a restart. It is `userData/mcp-undo.json`: definitions, access and tests, no secret,
+  at most 30 entries from the last 7 days. The tokens of a removed or changed server stay encrypted as they were, in
+  the `undo` section of `mcp-secrets.json` (`store.park` / `unpark`), and are dropped when their entry expires. An
+  older app version that rewrites that file drops the section, and an undo then brings the server back without its
+  token. An expired card says so.
+- The paste box never keeps a token in plain text. `maskSnippet` replaces the values the parser read, and anything
+  still shaped like a credential (Bearer/Basic, secret-named URL parameters, credentials in an address, token-shaped
+  words), with `•••`. `readPaste` keeps the value read before when the user edits the masked text.

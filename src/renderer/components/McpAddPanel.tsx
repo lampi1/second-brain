@@ -2,15 +2,15 @@
 // server's README shows (a Claude Desktop / Cursor `mcpServers` JSON, a command line like `npx -y @x/server`, or an
 // http(s) URL) and the form fills itself (shared/mcp-paste.ts), or pick a popular server with one click. The form: name,
 // local command (one line) or remote address, plain variables or headers, the tokens as masked fields (a pasted value
-// lands there, never in the definition; it goes only to the app's secret store, mcpservers:setSecret), what it is for,
+// lands there and the paste box shows ••• in its place, never in the definition; it goes only to the app's secret store, mcpservers:setSecret), what it is for,
 // and who may use it (the Orchestrator, the five roles, Flash: RoleAccessChips). «Salva e prova» saves, stores the
 // tokens, sets the roles and opens the server as a chat would: «Funziona: N strumenti» or the error and its fix. A draft
 // the Orchestrator opened (app_config action form) arrives prefilled, its tokens still to type. Shown in Settings →
 // Connettori (ConnectorsHub.tsx). Styles: styles/connectors-hub.css (.mcp-add).
-import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import type { McpServerDef, McpServersState, McpTestResult } from '@shared/mcp-servers';
 import { FLASH_MCP_ROLE, MCP_ACCESS_ROLES, accessOn, defaultAccess, toggleAccess } from '@shared/mcp-servers';
-import { MCP_CATALOG, catalogDraft, parseMcpSnippet, type McpDraft } from '@shared/mcp-paste';
+import { MCP_CATALOG, catalogDraft, maskSnippet, readPaste, type McpDraft, type McpPasteResult } from '@shared/mcp-paste';
 import { roleName } from '@shared/roles';
 import { addFormOf, defOfAdd, emptyAddForm, type AddForm } from '../lib/mcp-servers';
 import { holdUpdate } from '../lib/update-barrier';
@@ -51,7 +51,13 @@ export function McpAddPanel({ onDone, initial }: { onDone: (s?: McpServersState)
   const [f, setF] = useState<AddForm>(() => (initial ? addFormOf({ def: initial.def }) : emptyAddForm()));
   const [phase, setPhase] = useState<Phase>({ kind: 'form' }), [error, setError] = useState(''), [saved, setSaved] = useState<string | null>(null);
   const [from, setFrom] = useState<string>(initial ? 'agent' : '');
-  const parsed = useMemo(() => (paste.trim() ? parseMcpSnippet(paste) : null), [paste]);
+  const [parsed, setParsed] = useState<McpPasteResult | null>(null);
+  // the box never keeps a token in plain text: what was read goes to the masked fields, the box shows ••• (ADR 0207)
+  const onPaste = (raw: string) => {
+    const r = raw.trim() ? readPaste(raw, parsed) : null;
+    setParsed(r); setPick(0);
+    setPaste(maskSnippet(raw, r?.ok ? r.drafts : []));
+  };
   const pasteId = useId();
   const typed = f.tokens.some(x => x.value) || !!paste;
   useEffect(() => (typed ? holdUpdate(t('hub.token')) : undefined), [typed]);
@@ -71,7 +77,7 @@ export function McpAddPanel({ onDone, initial }: { onDone: (s?: McpServersState)
       for (const tok of f.tokens) if (tok.name && tok.value) st = await window.sb.invoke('mcpservers:setSecret', { id, slot: `${def.transport === 'stdio' ? 'env' : 'header'}:${tok.name}`, value: tok.value });
       // the typed tokens are in the secret store now: out of this panel's memory
       setF(x => ({ ...x, tokens: x.tokens.map(k => ({ ...k, value: '' })) }));
-      setPaste('');
+      setPaste(''); setParsed(null);
       for (const r of MCP_ACCESS_ROLES) {
         const want = f.roles[r] === true;
         if (want !== accessOn(r, st.access[r]?.servers[id]) || (want && JSON.stringify(toggleAccess(r, true)) !== JSON.stringify(st.access[r]?.servers[id] ?? defaultAccess(r)))) st = await window.sb.invoke('mcpservers:setAccess', { role: r, server: id, access: toggleAccess(r, want) });
@@ -109,7 +115,7 @@ export function McpAddPanel({ onDone, initial }: { onDone: (s?: McpServersState)
     </header>
     <div className="mcp-paste">
       <label htmlFor={pasteId}>{t('mcpadd.pasteLabel')}</label>
-      <textarea id={pasteId} className="st-input mono" rows={4} spellCheck={false} value={paste} placeholder={t('mcpadd.pastePlaceholder')} data-testid="mcp-paste" onChange={e => { setPaste(e.target.value); setPick(0); }} />
+      <textarea id={pasteId} className="st-input mono" rows={4} spellCheck={false} value={paste} placeholder={t('mcpadd.pastePlaceholder')} data-testid="mcp-paste" onChange={e => onPaste(e.target.value)} />
       {parsed && <p className={`mcp-paste-status ${parsed.ok ? 'ok' : 'bad'}`} role="status" data-testid="mcp-paste-status">
         {parsed.ok ? <><IconCheck size={12} />{t(`mcpadd.read.${parsed.kind}`, { n: parsed.drafts.length })}{Object.keys(parsed.drafts[pick]?.values ?? {}).length > 0 && <> · {t('mcpadd.tokensMoved')}</>}</> : <><IconAlert size={12} />{t(`mcpadd.err.${parsed.error}`)}</>}
       </p>}
@@ -119,7 +125,7 @@ export function McpAddPanel({ onDone, initial }: { onDone: (s?: McpServersState)
     <div className="mcp-catalog">
       <span className="mcp-catalog-label">{t('mcpadd.popular')}</span>
       <div className="mcp-catalog-list">{MCP_CATALOG.map(e => <button key={e.id} type="button" className="mcp-cat" aria-pressed={from === `cat:${e.id}`} data-testid={`mcp-cat-${e.id}`}
-        onClick={() => { const d = catalogDraft(e, e.ask?.placeholder ?? ''); if (d) { setPaste(''); fill(d, `cat:${e.id}`); } }}>
+        onClick={() => { const d = catalogDraft(e, e.ask?.placeholder ?? ''); if (d) { setPaste(''); setParsed(null); fill(d, `cat:${e.id}`); } }}>
         <b>{e.label}</b><small>{t(`mcpadd.cat.${e.id}` as 'mcpadd.cat.fetch')}</small></button>)}</div>
       {from.startsWith('cat:') && MCP_CATALOG.find(e => `cat:${e.id}` === from)?.ask && <p className="hub-muted">{t('mcpadd.askHint', { value: MCP_CATALOG.find(e => `cat:${e.id}` === from)!.ask!.placeholder })}</p>}
       {from === 'agent' && <p className="mcp-agent-note" role="note">{t('mcpadd.fromAgent')}</p>}

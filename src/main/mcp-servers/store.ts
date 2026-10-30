@@ -107,7 +107,8 @@ export function fingerprint(def: McpServerDef, slot: McpSecretSlot): string {
 
 interface Saved { cipher: string; mask: string; bound: string }
 /** A server as it was, to put it back (ADR 0207: «Annulla» of a removal or a change): its definition, each role's
- *  access, its last test and its tokens still encrypted (never decrypted to be kept). Main memory only. */
+ *  access, its last test and its tokens still encrypted (never decrypted to be kept). Its tokens wait in the secret
+ *  file's `undo` section (park / unpark), never in the undo journal (service.ts, mcp-undo.json). */
 export interface McpServerSnapshot { def: McpServerDef; access: Record<string, McpToolAccess>; test: McpTestResult | null; secrets: Record<string, Saved> }
 interface FileShape { version: 1; servers: McpServerDef[]; access: Record<string, RoleMcpAccess>; tests: Record<string, McpTestResult> }
 
@@ -123,6 +124,8 @@ export class McpServerStore {
   private readonly secretsFile: string;
   private data: FileShape = { version: 1, servers: [], access: {}, tests: {} };
   private secrets: Record<string, Record<string, Saved>> = {};
+  /** the tokens of an undoable change's snapshot, by undo key: encrypted as they were, in mcp-secrets.json (ADR 0207) */
+  private parked: Record<string, Record<string, Saved>> = {};
 
   constructor(userData: string, private readonly cipher: SecretCipher) {
     this.file = path.join(userData, 'mcp-servers.json');
@@ -156,20 +159,38 @@ export class McpServerStore {
       if ((e as NodeJS.ErrnoException).code !== 'ENOENT') log.warn('mcp-servers', 'mcp-servers.json unreadable: no MCP server loaded', { cause: (e as Error).message, hint: 'add the servers again in Impostazioni → Connettori' });
     }
     try {
-      const raw = JSON.parse(fs.readFileSync(this.secretsFile, 'utf8')) as { servers?: Record<string, Record<string, Saved>> };
-      for (const [id, slots] of Object.entries(raw.servers ?? {})) {
-        if (!this.def(id)) continue;
+      const raw = JSON.parse(fs.readFileSync(this.secretsFile, 'utf8')) as { servers?: Record<string, Record<string, Saved>>; undo?: Record<string, Record<string, Saved>> };
+      const valid = (slots: Record<string, Saved> | undefined): Record<string, Saved> => {
         const ok: Record<string, Saved> = {};
         for (const [k, s] of Object.entries(slots ?? {})) if (s && typeof s.cipher === 'string' && typeof s.mask === 'string' && typeof s.bound === 'string') ok[k] = s;
-        this.secrets[id] = ok;
-      }
+        return ok;
+      };
+      for (const [id, slots] of Object.entries(raw.servers ?? {})) if (this.def(id)) this.secrets[id] = valid(slots);
+      for (const [key, slots] of Object.entries(raw.undo ?? {})) if (/^[0-9a-f]{12}$/.test(key)) this.parked[key] = valid(slots);
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'ENOENT') log.warn('mcp-servers', 'mcp-secrets.json unreadable: no MCP token loaded', { cause: (e as Error).message, hint: 'type the tokens again in Impostazioni → Connettori' });
     }
   }
 
   private save(): void { writeAtomic(this.file, this.data); }
-  private saveSecrets(): void { writeAtomic(this.secretsFile, { version: 1, servers: this.secrets }); }
+  private saveSecrets(): void { writeAtomic(this.secretsFile, { version: 1, servers: this.secrets, ...(Object.keys(this.parked).length ? { undo: this.parked } : {}) }); }
+
+  /** Keeps a snapshot's tokens (still encrypted) for its undo key; unpark gives them back once; keep() drops the others. */
+  park(key: string, secrets: Record<string, Saved>): void {
+    if (!Object.keys(secrets).length) return;
+    this.parked[key] = structuredClone(secrets);
+    this.saveSecrets();
+  }
+  unpark(key: string): Record<string, Saved> {
+    const s = this.parked[key] ?? {};
+    if (this.parked[key]) { delete this.parked[key]; this.saveSecrets(); }
+    return s;
+  }
+  keepParked(keys: readonly string[]): void {
+    const gone = Object.keys(this.parked).filter(k => !keys.includes(k));
+    for (const k of gone) delete this.parked[k];
+    if (gone.length) this.saveSecrets();
+  }
 
   servers(): McpServerDef[] { return structuredClone(this.data.servers); }
   def(id: string): McpServerDef | undefined { return this.data.servers.find(s => s.id === id); }

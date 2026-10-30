@@ -3,8 +3,10 @@
 // catalog; Flash's access (off by default, reading tools only); undoable changes (snapshot / restore with the tokens
 // still encrypted); app_config's connector actions for the Orchestrator (add, edit, remove, undo, test, form), gated by
 // the user's words and never answering a secret; the add panel's form helpers and the Orchestrator's drafts.
+import fs from 'node:fs';
+import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { MCP_CATALOG, catalogDraft, nameFromPackage, parseMcpSnippet, publicDraft, shellWords } from '../../../src/shared/mcp-paste';
+import { MCP_CATALOG, SECRET_MASK, catalogDraft, maskSnippet, nameFromPackage, parseMcpSnippet, publicDraft, readPaste, shellWords } from '../../../src/shared/mcp-paste';
 import { FLASH_MCP_ROLE, MCP_ACCESS_ROLES, accessOn, effectiveAccess, toggleAccess } from '../../../src/shared/mcp-servers';
 import { McpServerStore, checkDef } from '../../../src/main/mcp-servers/store';
 import { McpServersService } from '../../../src/main/mcp-servers/service';
@@ -17,6 +19,42 @@ import { tmp } from '../chats/helpers';
 
 const cipher: SecretCipher = { unavailable: () => null, encrypt: s => Buffer.from([...Buffer.from(s)].map(b => b ^ 0x5a)), decrypt: b => Buffer.from([...b].map(x => x ^ 0x5a)).toString() };
 const TOKEN = ['ghp', 'x'.repeat(36)].join('_'); // built at run time: a test value, never a real token
+
+describe('the paste box never shows a token (maskSnippet, readPaste)', () => {
+  const SHORT = ['s3cr', 'et42'].join(''); // short: found only because the parser kept it apart
+  it('masks the values the parser kept apart, keeping the rest of the text as typed', () => {
+    const raw = JSON.stringify({ mcpServers: { github: { command: 'npx', args: ['-y', '@modelcontextprotocol/server-github'], env: { GITHUB_PERSONAL_ACCESS_TOKEN: TOKEN, API_KEY: SHORT, LOG: 'info' } } } });
+    const r = parseMcpSnippet(raw);
+    const shown = maskSnippet(raw, r.ok ? r.drafts : []);
+    expect(shown).not.toContain(TOKEN);
+    expect(shown).not.toContain(SHORT);
+    expect(shown).toContain(`"GITHUB_PERSONAL_ACCESS_TOKEN":"${SECRET_MASK}"`);
+    expect(shown).toContain('@modelcontextprotocol/server-github');
+    expect(shown).toContain('"LOG":"info"');
+  });
+  it('masks what still looks like a credential: Bearer, a secret URL parameter, credentials in an address, a token word', () => {
+    const word = ['Ab3', 'x'.repeat(10), 'Q9', 'z'.repeat(12)].join('');
+    const shown = maskSnippet(`npx mcp-remote https://u:${SHORT}@mcp.example.com/sse?api_key=${SHORT}&v=2 --header "Authorization: Bearer ${SHORT}" --x ${word} ${TOKEN}`);
+    for (const s of [SHORT, word, TOKEN]) expect(shown).not.toContain(s);
+    expect(shown).toContain('mcp.example.com/sse?api_key=');
+    expect(shown).toContain('&v=2');
+    // package names, hosts, paths and plain words stay readable
+    const plain = 'npx -y @modelcontextprotocol/server-filesystem /home/user/projects-2026-archive https://api.context7.com/mcp';
+    expect(maskSnippet(plain)).toBe(plain);
+  });
+  it('an edit of the masked text keeps the token read before, and a masked value never becomes a plain variable', () => {
+    const raw = `BRAVE_API_KEY=${TOKEN} npx -y @brave/brave-search-mcp-server`;
+    const first = readPaste(raw, null);
+    const shown = maskSnippet(raw, first.ok ? first.drafts : []);
+    expect(shown).toBe(`BRAVE_API_KEY=${SECRET_MASK} npx -y @brave/brave-search-mcp-server`);
+    const again = readPaste(`${shown} --verbose`, first);
+    expect(again.ok && again.drafts[0]!.values['env:BRAVE_API_KEY']).toBe(TOKEN);
+    const fresh = readPaste(`{"x":{"command":"npx","env":{"PLAIN":"${SECRET_MASK}"}}}`, null);
+    expect(fresh.ok && fresh.drafts[0]!.def.env).toBeUndefined();
+    expect(fresh.ok && fresh.drafts[0]!.def.secrets.map(x => x.name)).toEqual(['PLAIN']);
+    expect(fresh.ok && fresh.drafts[0]!.values).toEqual({});
+  });
+});
 
 describe('parseMcpSnippet', () => {
   it('reads a Claude Desktop / Cursor mcpServers JSON, a token going to a slot with its value apart', () => {
@@ -108,8 +146,8 @@ describe('Flash and the per-role toggles', () => {
   });
 });
 
-function service() {
-  const svc = new McpServersService({ userData: tmp('easy-svc'), cipher, mcp: new McpServer({ name: 't', version: '1' }), context: () => null, home: tmp('easy-home'),
+function service(userData = tmp('easy-svc')) {
+  const svc = new McpServersService({ userData, cipher, mcp: new McpServer({ name: 't', version: '1' }), context: () => null, home: tmp('easy-home'),
     connect: () => ({ serverInfo: 'fake', tools: async () => [{ name: 'read_doc', description: 'reads', readOnly: true, inputSchema: {} }, { name: 'edit_doc', description: 'writes', readOnly: false, inputSchema: {} }], call: async () => ({ content: [] }), close() {} }) });
   return svc;
 }
@@ -138,6 +176,27 @@ describe('undoable changes', () => {
     svc.undo(edit.undo);
     expect(svc.store.def('gh')).toMatchObject({ label: 'GitHub', enabled: true });
     svc.stop();
+  });
+  it('«Annulla» survives a restart: the journal holds no secret, the removed token waits encrypted in the secret file', () => {
+    const dir = tmp('easy-restart');
+    const a = service(dir);
+    a.save({ def: { id: 'gh', label: 'GitHub', transport: 'stdio', command: 'npx', args: ['-y', 'gh-mcp'], secrets: [{ where: 'env', name: 'GITHUB_TOKEN' }], enabled: true } });
+    a.setSecret({ id: 'gh', slot: 'env:GITHUB_TOKEN', value: TOKEN });
+    const r = a.agentRemove('gh');
+    a.stop();
+    const journal = fs.readFileSync(path.join(dir, 'mcp-undo.json'), 'utf8');
+    expect(journal).toContain(r.undo);
+    expect(journal).not.toContain(TOKEN);
+    expect(journal).not.toContain('cipher');
+    const secrets = fs.readFileSync(path.join(dir, 'mcp-secrets.json'), 'utf8');
+    expect(secrets).not.toContain(TOKEN); // encrypted, as every token there
+    expect(JSON.parse(secrets).undo[r.undo]['env:GITHUB_TOKEN']).toBeTruthy();
+    const b = service(dir);
+    expect(b.undo(r.undo).servers.map(s => s.id)).toEqual(['gh']);
+    expect(b.store.secret('gh', { where: 'env', name: 'GITHUB_TOKEN' })).toBe(TOKEN);
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'mcp-secrets.json'), 'utf8')).undo).toBeUndefined();
+    expect(() => service(dir).undo(r.undo)).toThrow(/Niente da annullare/);
+    b.stop();
   });
 });
 

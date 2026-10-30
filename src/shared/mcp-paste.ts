@@ -20,7 +20,28 @@ export type McpPasteKind = 'json' | 'command' | 'url';
 export type McpPasteResult = { ok: true; kind: McpPasteKind; drafts: McpDraft[] } | { ok: false; error: 'empty' | 'json' | 'nothing' | 'command' | 'url' };
 
 const isRef = (v: string) => /\$\{[^}]*\}|^\$[A-Z_]/.test(v);
-const secretish = (name: string, v: string) => SECRET_NAME.test(name) || TOKENISH.test(v) || secretLooking(v) || isRef(v);
+/** What the paste box shows in place of a secret it read (maskSnippet); a value carrying it stays a token slot. */
+export const SECRET_MASK = '•••';
+const secretish = (name: string, v: string) => SECRET_NAME.test(name) || TOKENISH.test(v) || secretLooking(v) || isRef(v) || v.includes(SECRET_MASK);
+/** A word with the shape of a credential: a known token prefix, or 24+ characters mixing upper case, lower case and digits
+ *  (a package name, a path segment or a host is lower case or has no digits). */
+const TOKEN_WORD = /[A-Za-z0-9_\-.+=]{16,}/g;
+const tokenWord = (w: string) => /^(ghp_|gho_|ghs_|ghu_|github_pat_|glpat-|sk-|xox[abpr]-|AKIA|AIza)/.test(w)
+  || (w.length >= 24 && /\d/.test(w) && /[a-z]/.test(w) && /[A-Z]/.test(w));
+
+/** The paste box's text with every secret it carries replaced by ••• (ADR 0207: a token never stays in plain text in the
+ *  UI). The values the parser kept apart (they go to the masked token fields), then whatever still looks like one: a
+ *  bearer or basic credential, a secret-named URL parameter, credentials in an address, a token-shaped word. */
+export function maskSnippet(text: string, drafts: readonly McpDraft[] = []): string {
+  let out = text;
+  const seen = drafts.flatMap(d => Object.values(d.values)).filter(v => v.length >= 4 && !v.includes(SECRET_MASK)).sort((a, b) => b.length - a.length);
+  for (const v of seen) out = out.split(v).join(SECRET_MASK);
+  return out
+    .replace(/\b(bearer|basic)(\s+)[^\s"'\\,}]+/gi, (m, k: string, s: string, i: number, all: string) => (all.startsWith(SECRET_MASK, i + k.length + s.length) ? m : `${k}${s}${SECRET_MASK}`))
+    .replace(/([?&][\w-]+=)([^&\s"']+)/g, (m, k: string, v: string) => (SECRET_NAME.test(k) && v !== SECRET_MASK ? `${k}${SECRET_MASK}` : m))
+    .replace(/(\w+:\/\/)[^\s/@"']+@/g, `$1${SECRET_MASK}@`)
+    .replace(TOKEN_WORD, w => (tokenWord(w) ? SECRET_MASK : w));
+}
 
 /** One engine entry (its name and object) → a draft. null: neither a command nor a URL. `values: false` (the import
  *  from the engines' files): no secret value is kept, every token slot is listed as left out. */
@@ -186,6 +207,21 @@ export function parseMcpSnippet(input: string): McpPasteResult {
   if (/^https?:\/\//i.test(text) && !/\s/.test(text)) { const d = fromUrl(text); return d ? { ok: true, kind: 'url', drafts: [d] } : { ok: false, error: 'url' }; }
   const d = fromCommand(text);
   return d ? { ok: true, kind: 'command', drafts: [d] } : { ok: false, error: 'command' };
+}
+
+/** The paste box after an edit: its text may carry ••• where a secret was; such a value comes from the previous reading
+ *  (same server, same slot), or is left for the user to type. */
+export function readPaste(text: string, prev: McpPasteResult | null): McpPasteResult {
+  const r = parseMcpSnippet(text);
+  if (!r.ok) return r;
+  r.drafts.forEach((d, i) => {
+    for (const [k, v] of Object.entries(d.values)) {
+      if (!v.includes(SECRET_MASK)) continue;
+      const old = prev?.ok ? prev.drafts.find(x => x.def.id === d.def.id)?.values[k] ?? prev.drafts[i]?.values[k] : undefined;
+      if (old) d.values[k] = old; else delete d.values[k];
+    }
+  });
+  return r;
 }
 
 /** A draft as an agent may see it: the definition and which tokens are still to type, never a value. */
