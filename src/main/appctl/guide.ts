@@ -4,7 +4,8 @@
 // holds (window.__sbAppMap, renderer/lib/app-map.ts: the rail as drawn, pages, Memoria tabs, Settings sections,
 // palette actions with their keys, the "?" help texts, the view); main adds the settings schema with the current values,
 // the static terminal-only routine guidance (never scans run data),
-// the concepts of the Guida page (shared/concept-guide.ts) and the caller's own tools. Called on demand only, so it
+// the concepts of the Guida page (shared/concept-guide.ts), the caller's own tools and, from appctl/tool-catalog.ts,
+// every other tool of the app (the work chats', the browser's, the brain hooks'), so it knows the whole app (ADR 0208). Called on demand only, so it
 // costs no tokens in the Orchestrator's other turns (the token plan, ADR 0089). Without a topic: a short index; with
 // one: the matching entries in full. The outline (window.__sbScreen) is what is on screen now, private content left out
 // (lib/app-map.ts). Used by appctl/tools.ts (app_guide, app_ui "outline").
@@ -14,6 +15,7 @@ import { CONCEPTS, textOf, type GuideLang } from '../../shared/concept-guide';
 import { getAt } from '../brain/settings-schema';
 import type { ToolDef } from './tools';
 import { ROUTINE_AUTHORING_SUMMARY } from '../flows/capabilities';
+import { MOUNT_LABEL, TOOL_CATALOG, type ToolMount } from './tool-catalog';
 
 /** What the renderer's appMap() returns (renderer/lib/app-map.ts AppMapUi). */
 interface UiMap {
@@ -105,8 +107,17 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
   for (const [title, text] of ROUTINE_RULES) out.push({ kind: 'routine', title, text });
   out.push({ kind: 'routine', title: 'Routine: creare un pacchetto (author a routine package from the user need)', text: ROUTINE_AUTHORING_SUMMARY });
   for (const c of CONCEPTS) out.push({ kind: 'concept', title: textOf(c.title, lang), text: `${textOf(c.summary, lang)} ${c.points.slice(0, 3).map(p => textOf(p, lang)).join(' ')} (more: the Guida page)` });
-  for (const t of d.tools()) out.push({ kind: 'tool', title: t.name, text: t.description });
+  const own = d.tools();
+  for (const t of own) out.push({ kind: 'tool', title: t.name, text: t.description });
+  for (const [name, text] of otherTools(own)) out.push({ kind: 'tool', title: name, text });
   return out;
+}
+
+/** The app's tools the caller does not have (appctl/tool-catalog.ts), each with who has it: name → text. */
+export function otherTools(own: readonly { name: string }[]): [name: string, text: string][] {
+  const mine = new Set(own.map(t => t.name));
+  return Object.entries(TOOL_CATALOG).filter(([name]) => !mine.has(name))
+    .map(([name, info]) => [name, `${info.line} (not on your endpoint: ${info.where.map(w => MOUNT_LABEL[w]).join(', ')})`]);
 }
 
 /** A query word matches a word of the text that starts like it: the first 4 letters of a longer word, so Italian
@@ -142,6 +153,10 @@ function index(ui: UiMap | null, d: GuideDeps, lang: GuideLang): string {
   } else lines.push('(the window did not answer: pages and sections missing; try again)');
   lines.push('Routines: terminal execution only; open Routine for live progress and history, or ask app_routine_status explicitly.');
   lines.push('Concepts (Guida page): ' + CONCEPTS.map(c => textOf(c.title, lang)).join(', '));
+  const byMount = new Map<ToolMount, string[]>();
+  const mine = new Set(d.tools().map(t => t.name));
+  for (const [name, info] of Object.entries(TOOL_CATALOG)) if (!mine.has(name)) for (const w of info.where) { const l = byMount.get(w) ?? []; l.push(name); byMount.set(w, l); }
+  if (byMount.size) lines.push('Other tools of the app (not yours; ask app_guide with the name): ' + [...byMount].map(([w, names]) => `${MOUNT_LABEL[w]}: ${names.join(', ')}`).join(' | '));
   lines.push(`Settings: ${d.settings.schema().length} keys, read and change them with app_config (area setting).`);
   lines.push('Ask app_guide with a topic for details ("tema", "notifiche", "Memoria", "chiusura automatica", "permessi Scout"…); app_ui action "outline" = what is on screen now with positions; app_config = change any configuration.');
   return lines.join('\n');
@@ -164,6 +179,8 @@ export function guideTool(d: GuideDeps): ToolDef {
       const lang: GuideLang = ui?.lang === 'en' || ui?.lang === 'de' ? ui.lang : 'it';
       if (!topic) return index(ui, d, lang);
       const exact = d.tools().find(tool => tool.name === topic);
+      const other = exact ? undefined : otherTools(d.tools()).find(([name]) => name === topic);
+      if (other) return `[tool] ${other[0]}: ${other[1]}`;
       if (exact) return `[tool] ${exact.name}: ${exact.description.length <= 16000 ? exact.description : `${exact.description.slice(0, 15800)}… [truncated; read the mounted tool schema for the complete contract]`}`;
       const found = search(entries(ui, d, lang), topic);
       if (!found.length) return `Nothing on "${topic}". ${index(ui, d, lang)}`;

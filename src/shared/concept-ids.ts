@@ -6,5 +6,5 @@ export const CONCEPT_IDS: readonly string[] = [
   'classifiers', 'permissions', 'questions', 'grindhouse', 'memory-hub', 'tasks', 'setup', 'brain',
   'search', 'file-viewer', 'routing', 'costs', 'mcp-servers', 'updates', 'maintenance', 'proposals', 'trials', 'auto-close',
   'log', 'impara', 'held-news', 'context', 'quality', 'flash', 'orchestrator-app', 'voice', 'recordings', 'personal-browser',
-  'notifications', 'routines',
+  'notifications', 'routines', 'settings', 'guide', 'brain-map',
 ];

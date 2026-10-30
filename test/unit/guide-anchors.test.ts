@@ -1,13 +1,19 @@
 // The Guida knows when it is stale (ADR 0196): the anchor extraction (a symbol's block, the whole file, CRLF ignored), the
 // comparison with the stored hashes, and the real check: every card has an anchor, every anchor still names code that
 // exists, and its code is the code the card's text was written against (src/shared/guide-anchors.json). A failure names
-// the card and the point to re-read; then `node scripts/guide-anchors.mjs` stores the new hash.
+// the card and the point to re-read; then `node scripts/guide-anchors.mjs` stores the new hash. Also (ADR 0208) every page
+// of BRAIN_PAGES and every Settings section names a card that exists in it, en and de (src/shared/guide-coverage.ts).
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { CONCEPTS } from '@shared/concept-guide';
 import { anchorSource, anchorUses, blockFrom, findDeclaration, normalize, parseAnchor, staleCards, type CardAnchors } from '@shared/guide-anchors';
+import { coverageGaps } from '@shared/guide-coverage';
 import { computeHashes, hashText, repoRootOf, staleInRepo, staleMessage, storedAnchors } from '../../src/main/guide/anchors';
+import { coverageInRepo, pageIdsOf, sectionIdsOf } from '../../src/main/guide/coverage';
 import { guideMaintenanceSection } from '../../src/main/guide/maintenance';
+import { BRAIN_PAGES } from '../../src/renderer/brain';
+import { SETTINGS_SECTION_IDS } from '../../src/renderer/lib/settings-sections';
 
 const root = path.resolve(import.meta.dirname, '../..');
 
@@ -105,5 +111,31 @@ describe('the Guida against this checkout', () => {
   it('gives the maintenance nothing to do when every card is current and translated', () => {
     expect(guideMaintenanceSection(root)).toBe('');
     expect(guideMaintenanceSection(null)).toBe('');
+  });
+});
+
+// ADR 0208: every page and Settings section has its card in it, en and de (src/shared/guide-coverage.ts)
+describe('the Guida covers every page and Settings section', () => {
+  const card = (id: string, de = true) => ({ id, title: { it: 'T', en: `T ${id}` }, summary: { it: 'S', en: `S ${id}` }, de });
+  const deOf = (cards: ReturnType<typeof card>[]) => Object.fromEntries(cards.filter(c => c.de).flatMap(c => [[c.title.en, 'x'], [c.summary.en, 'x']]));
+  it('reads the page ids of BRAIN_PAGES without comments or aliases, and the Settings section ids', () => {
+    const src = "export const PAGE_ALIAS = { fatto: 'log' };\nexport const BRAIN_PAGES: X[] = [\n  page('home', 'G H'),\n  // page('old', 'G O') is gone\n  page('guida', 'G E'),\n];\nconst IDS = page('nope', 'x');";
+    expect(pageIdsOf(src)).toEqual(['home', 'guida']);
+    expect(sectionIdsOf("export const SETTINGS_SECTION_IDS = ['profile', 'voice'] as const;")).toEqual(['profile', 'voice']);
+    expect(pageIdsOf('nothing')).toEqual([]);
+  });
+  it('names a page or section without a card, a missing card, a missing language and stale lines', () => {
+    const cards = [card('a'), card('b', false)];
+    const gaps = coverageGaps({ pages: ['p1', 'p2', 'p3', 'p4'], sections: ['s1'], cards, de: deOf(cards),
+      pageCards: { p1: 'a', p2: 'nope', p3: 'b', gone: 'a' }, settingsCards: { s1: 'a' }, exempt: { 'page:p4': 'going away', 'settings:old': 'x' } });
+    expect(gaps.map(g => g.key)).toEqual(['page:p2', 'page:p3', 'page:gone:stale', 'settings:old:stale']);
+    expect(gaps[1]!.message).toContain('title de, summary de');
+    expect(coverageGaps({ pages: ['p5'], sections: [], cards, de: deOf(cards), pageCards: {}, settingsCards: {}, exempt: {} })[0]!.message).toContain('has no Guida card');
+    expect(coverageGaps({ pages: ['p1'], sections: [], cards, de: deOf(cards), pageCards: { p1: 'a' }, settingsCards: {}, exempt: { 'page:p1': 'x' } })[0]!.message).toContain('both mapped and exempt');
+  });
+  it('has no gap in this checkout (else: the message says which card to write or which line to fix)', () => {
+    expect(coverageInRepo(root).map(g => g.message)).toEqual([]);
+    expect(pageIdsOf(readFileSync(path.join(root, 'src/renderer/brain/index.tsx'), 'utf8'))).toEqual(BRAIN_PAGES.map(p => p.id));
+    expect(sectionIdsOf(readFileSync(path.join(root, 'src/renderer/lib/settings-sections.ts'), 'utf8'))).toEqual([...SETTINGS_SECTION_IDS]);
   });
 });

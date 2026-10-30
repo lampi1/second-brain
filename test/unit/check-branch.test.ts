@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 // @ts-expect-error plain .mjs script without types
-import { chunks as chunksOf } from '../../scripts/check-branch.mjs';
+import { chunks as chunksOf, DOC_TESTS } from '../../scripts/check-branch.mjs';
 
 const chunks = chunksOf as (list: string[], max: number) => string[][];
 
@@ -20,6 +20,12 @@ describe('check:branch', () => {
   it('runs typecheck, lint, the related unit tests and the publish guard, then records a light check', () => {
     for (const step of ["'typecheck'", "'lint'", "'--changed'", 'publish-guard.test.ts']) expect(code).toContain(step);
     expect(code).toMatch(/check-pass\.mjs', '--kind', 'light'/);
+  });
+
+  it('always runs the doc freshness checks (ADR 0208): the README check against the base and the doc tests', () => {
+    expect(code).toContain("'scripts/readme-check.mjs', '--base', base");
+    expect(code).toContain('...DOC_TESTS');
+    for (const f of DOC_TESTS as string[]) expect(fs.existsSync(path.join(import.meta.dirname, '..', '..', f)), f).toBe(true);
   });
 
   it('splits a long lint list so every eslint call fits a Windows command line', async () => {
