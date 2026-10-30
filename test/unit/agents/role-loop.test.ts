@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { AgentCatalogService } from '../../../src/main/agents/catalog';
 import { AgentRunStore } from '../../../src/main/agents/runs';
 import { closeAppDbs } from '../../../src/main/app-db';
-import { RunFeedback } from '../../../src/main/agents/run-feedback';
+import { batchBacks, RunFeedback } from '../../../src/main/agents/run-feedback';
 import { createAgentLoop } from '../../../src/main/agents/loop';
 import { evaluateTrial, TRIAL_MAX_DAYS } from '../../../src/main/agents/trials';
 import { suggestTiers, TIER_MIN_KNOWN } from '../../../src/main/agents/suggestions';
@@ -168,6 +168,22 @@ describe('run feedback and Annulla', () => {
     const old = w.runs.start({ agentId: 'judge', chatId: 'c_old_judge', version: 1, goal: 'review', startedBy: 'app', startedAt: T0, costKnown: true, reviewOf: work.runId });
     old.endedAt = T0 + 2; old.endReason = 'completed'; old.report = { at: T0 + 2, outcome: 'done', verified: 'yes', summary: 'ok', verdict: 'success' };
     expect((await w.feedback.recordFeedback({ runId: work.runId, verdict: 'success', notes: 'old', evidence: [{ kind: 'run', ref: old.runId, at: T0 }] }, 'app:judge')).outcome.basis).toBe('reviewed-evidence');
+  });
+  it('the nightly batch review (ADR 0203) is reviewed evidence for a run it lists with the same verdict, verified yes', async () => {
+    const w = world();
+    const work = w.runs.start({ agentId: 'artisan', chatId: 'c_work', version: 1, goal: 'g', startedBy: 'orchestrator', startedAt: T0, costKnown: true });
+    const other = w.runs.start({ agentId: 'scout', chatId: 'c_other', version: 1, goal: 'g', startedBy: 'orchestrator', startedAt: T0, costKnown: true });
+    const batch = w.runs.start({ agentId: 'sentinel', chatId: 'rv_1', version: 1, goal: 'Revisione notturna: 2 run', startedBy: 'app', startedAt: T0, costKnown: false });
+    batch.source = 'oneshot'; batch.oneshot = { engine: 'claude', job: 'review', fallback: false, costBasis: 'unknown' };
+    batch.reviewBatch = [{ runId: work.runId, verdict: 'fail', verified: 'yes' }, { runId: other.runId, verdict: 'success', verified: 'partial' }];
+    batch.endedAt = T0 + 1; batch.endReason = 'completed';
+    const ev = [{ kind: 'run' as const, ref: batch.runId, at: T0 }];
+    expect((await w.feedback.recordFeedback({ runId: work.runId, verdict: 'success', notes: 'x', evidence: ev }, 'judge-sample')).outcome.basis).toBe('orchestrator-opinion'); // another verdict
+    expect((await w.feedback.recordFeedback({ runId: work.runId, verdict: 'fail', notes: 'x', evidence: ev }, 'judge-sample')).outcome.basis).toBe('reviewed-evidence');
+    expect((await w.feedback.recordFeedback({ runId: other.runId, verdict: 'success', notes: 'x', evidence: ev }, 'judge-sample')).outcome.basis).toBe('orchestrator-opinion'); // not verified
+    expect(batchBacks({ ...batch, startedBy: 'orchestrator' }, work.runId, 'fail')).toBe(false);
+    expect(batchBacks({ ...batch, endReason: 'closed' }, work.runId, 'fail')).toBe(false);
+    expect(batchBacks({ ...batch, agentId: 'artisan' }, work.runId, 'fail')).toBe(false);
   });
   it('Annulla restores the version before an applied change, and a stale button is refused', () => {
     const w = world();

@@ -2,9 +2,11 @@
 // to its instructions and skills (#81) and opens the role's own page (AgentStudio: the editor, its versions, its pulse).
 // The decisions that change a role's reach or cost (a trial to keep, a tier suggestion: ADR 0083) are cards of Memoria →
 // Proposte (ADR 0123): a line on top points there. No role is created here: the catalog is fixed, a missing know-how
-// becomes a skill. Rendered by App.tsx for page 'agenti'.
+// becomes a skill. The work roles' cards say when the nightly review last updated their levels (ADR 0203). Rendered by
+// App.tsx for page 'agenti'.
 import { useEffect, useState } from 'react';
 import type { AgentMetrics } from '@shared/agents';
+import { isWorkRole } from '@shared/roles';
 import { ProposalsPointer } from './brain-model/ProposalsPointer';
 import { go } from '../actions';
 import { t } from '../i18n';
@@ -14,7 +16,7 @@ import { useApp } from '../store/store';
 import { isBusy } from '../store/state';
 import { ui } from '../store/ui';
 import { AgentCatalogCard } from './AgentCatalogCard';
-import { JudgingSwitch } from './JudgingSwitch';
+import { JudgingSwitch, useJudgingEstimate } from './JudgingSwitch';
 import { HelpTip } from './HelpTip';
 import { AgentStudio, EDIT_ELEMENT } from './AgentStudio';
 import { ContextPulse } from './ContextPulse';
@@ -27,6 +29,7 @@ export function AgentCatalogPage() {
   const chats = useApp(s => s.chats);
   const { state: model } = useBrainModel();
   const [metrics, setMetrics] = useState<AgentMetrics[] | null>(null), [metricsError, setMetricsError] = useState(false);
+  const estimate = useJudgingEstimate(), judging = useApp(s => s.settings?.judging === true);
   useEffect(() => {
     let alive = true, pending = false;
     const read = async () => {
@@ -50,7 +53,7 @@ export function AgentCatalogPage() {
   const trial = profiles.filter(p => p.trial).length;
   return <section className="agent-overview" aria-label={t('catalog.title')} data-testid="agent-overview">
     <header className="catalog-head"><div><h2>{t('catalog.title')}</h2><p>{t('catalog.subtitle')}</p></div></header>
-    <JudgingSwitch />
+    <JudgingSwitch estimate={estimate} />
     <ProposalsPointer />
     <p className="catalog-intro">{t('catalog.intro')}</p>
     {(error || catalog?.problem) && <p role="alert">{error || catalog?.problem}<button type="button" className="link-btn" onClick={() => void refreshAgents()}>{t('studio.retry')}</button></p>}
@@ -67,7 +70,8 @@ export function AgentCatalogPage() {
       const starts = Object.values(chats).filter(c => c.run?.agentId === p.id).map(c => c.run!.startedAt);
       return <AgentCatalogCard key={p.id} profile={p} index={index} engine={catalog?.models.find(m => m.engine === p.engine)?.label ?? p.engine}
         metrics={metrics?.find(m => m.agentId === p.id)} loaded={metrics !== null} lastStart={starts.length ? Math.max(...starts) : null} onOpen={() => go({ page: 'agenti', arg: p.id, element: EDIT_ELEMENT })}
-        memory={model?.memory.find(m => m.kind === 'agent' && m.agentId === p.id) ?? null} onSkill={name => go({ page: 'skill', arg: name })} />;
+        memory={model?.memory.find(m => m.kind === 'agent' && m.agentId === p.id) ?? null}
+        reviewedAt={judging && isWorkRole(p.id) ? estimate?.lastBatch?.at ?? null : null} onSkill={name => go({ page: 'skill', arg: name })} />;
     })}</div>
   </section>;
 }

@@ -4,11 +4,11 @@
 // end (completed / closed / stale), Brother's reopen, pending requests and settled turns. A run's receipts (what it did,
 // agents/receipts.ts, ADR 0130) are bounded there and read back here; ones out of shape are dropped, never the run.
 // The same file keeps Flash's answer outcomes (`flash`, agents/flash-outcomes.ts, ADR 0131: Flash records no run) and a
-// Strategist run's plan record (`plan`, a decision signal for the Orchestrator); both read leniently.
+// Strategist run's plan record (`plan`, a decision signal for the Orchestrator); both read leniently. The nightly batch review's run keeps its reviewed runs (`reviewBatch`, ADR 0203).
 import path from 'node:path';
 import fs from 'node:fs';
 import crypto from 'node:crypto';
-import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunPlan, AgentRunReport, AgentRunTags, AgentRunTokens } from '../../shared/agents';
+import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, AgentRunPlan, AgentRunReport, AgentRunTags, AgentRunTokens, ReviewBatchEntry } from '../../shared/agents';
 import { ONE_SHOT_PURPOSES } from '../../shared/agents';
 import { errText, log } from '../log';
 import { emptyFlashLog, flashAnswered, flashAsked, flashBriefed, flashHanded, readFlashLog, type FlashLog } from './flash-outcomes';
@@ -113,6 +113,19 @@ function readCorrections(v: unknown): AgentRunCorrections | null {
   return c && typeof c === 'object' && count(c.tagged) && count(c.afterReport) ? { tagged: c.tagged, afterReport: c.afterReport } : null;
 }
 
+/** The nightly batch review's entries (judge-sample.ts, ADR 0203): run ids with an optional verdict and verification. */
+export const REVIEW_BATCH_MAX = 40;
+function readReviewBatch(v: unknown): ReviewBatchEntry[] | null {
+  if (!Array.isArray(v) || !v.length || v.length > REVIEW_BATCH_MAX) return null;
+  const out: ReviewBatchEntry[] = [];
+  for (const x of v as Partial<ReviewBatchEntry>[]) {
+    if (!x || typeof x !== 'object' || typeof x.runId !== 'string' || !RUN_ID.test(x.runId)) return null;
+    if (x.verdict !== undefined && !['success', 'partial', 'fail'].includes(x.verdict)) return null;
+    if (x.verified !== undefined && !['yes', 'partial', 'no'].includes(x.verified)) return null;
+    out.push({ runId: x.runId, ...(x.verdict ? { verdict: x.verdict } : {}), ...(x.verified ? { verified: x.verified } : {}) });
+  }
+  return out;
+}
 /** A stored run, or null when any field is out of shape (the store skips that record; chats.json drops the mirror). */
 export function readRun(v: unknown): AgentRun | null {
   const r = v as Record<string, unknown> | null;
@@ -160,6 +173,8 @@ export function readRun(v: unknown): AgentRun | null {
   if (snapshot !== undefined && (!snapshot || !time(snapshot.at) || !skillList(snapshot.suggested) || !skillList(snapshot.used))) return null;
   if (r.taskId !== undefined && !str(r.taskId, 80) || r.taskVersion !== undefined && (!count(r.taskVersion) || r.taskVersion < 1)) return null;
   if (report?.canonical && (report.canonical.runId !== r.runId || report.canonical.taskId !== r.taskId || report.canonical.taskVersion !== r.taskVersion)) return null;
+  const batch = r.reviewBatch === undefined ? undefined : readReviewBatch(r.reviewBatch);
+  if (batch === null) return null;
   return {
     ...(r.taskId ? { taskId: r.taskId as string } : {}), ...(r.taskVersion ? { taskVersion: r.taskVersion as number } : {}),
     ...(scope ? { scope: { brainRoot: scope.brainRoot, projectRoot: scope.projectRoot } } : {}),
@@ -172,6 +187,7 @@ export function readRun(v: unknown): AgentRun | null {
     ...(r.tier ? { tier: r.tier as ModelTier } : {}), ...(r.model !== undefined ? { model: r.model as string | null } : {}),
     ...(r.reviewOf ? { reviewOf: r.reviewOf as string } : {}), ...(r.reworkOf ? { reworkOf: r.reworkOf as string } : {}),
     ...(r.continuedFrom ? { continuedFrom: r.continuedFrom as string } : {}),
+    ...(batch ? { reviewBatch: batch } : {}),
     ...(r.endedAt !== undefined ? { endedAt: r.endedAt, endReason: r.endReason as AgentRunEnd } : {}),
     ...(outcome ? { outcome } : {}),
     ...(r.source ? { source: r.source as AgentRun['source'] } : {}),
