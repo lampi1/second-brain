@@ -102,7 +102,7 @@ export function proposalGate(plan: StrategyPlan, noQuestionReason: unknown): str
   const asked = plan.asked ?? 0;
   if (plan.phase !== 'asking' || plan.enough || asked >= QUESTIONS_MIN) return null;
   if (typeof noQuestionReason === 'string' && noQuestionReason.trim() && noQuestionReason.trim().length <= NO_QUESTION_MAX) return null;
-  return `plan_propose refused: the user answered ${asked} of at least ${QUESTIONS_MIN} questions. Ask the next real clarifying question with your question tool (AskUserQuestion), one at a time, on a point still open (goal, scope, constraints, "done", risks, preferences, priority), then propose. Only if the request truly settles the rest, call plan_propose again with noQuestionReason: one line naming what it already settles.`;
+  return `plan_propose refused: the user answered ${asked} of at least ${QUESTIONS_MIN} questions. Ask the next real clarifying question with your question tool (AskUserQuestion), one at a time, on a point still open (goal, scope, constraints, "done", risks, preferences, priority), then propose. Only if the request truly settles the rest, call plan_propose again with noQuestionReason: one line naming what it already settles. If the user asked you to stop asking, do not ask again: call plan_propose with noQuestionReason "the user asked to stop the questions".`;
 }
 
 /** agent_delegate / agent_assign_task from a Strategist with a plan: null once the user approved it; else what to do. */
@@ -166,6 +166,15 @@ export function finishPlan(plan: StrategyPlan, now: number): StrategyPlan {
     endedAt: s.endedAt ?? now })) };
 }
 
+/** Whether the user's own words ask the Strategist to stop asking («basta domande», «niente più domande», «no more
+ *  questions», «genug Fragen»), typed in an answer or in the chat: the same as picking ENOUGH_QUESTIONS (ADR 0209). */
+export function stopsQuestions(text: string): boolean {
+  const x = text.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (x === ENOUGH_QUESTIONS.toLowerCase()) return true;
+  return x.length <= 160 && (/\b(basta|stop|smettila|niente( pi[uù])?|nessun'?altra|no more|enough|keine( weiteren)?|genug)\b[^.?!]{0,20}\b(domande|domanda|questions?|fragen?)\b/.test(x)
+    || /\b(proponi|fai|scrivi) (ora |subito |pure )?(il )?piano\b/.test(x));
+}
+
 /** The answers to the user's questions, as "already clear" lines (the latest CLARIFIED_MAX). */
 export function withClarified(plan: StrategyPlan, qs: { question: string; header?: string }[], answers: Record<string, string | string[]>): StrategyPlan {
   const cut = (s: string) => { const x = s.replace(/\s+/g, ' ').trim(); return x.length > CLARIFIED_TEXT_MAX ? `${x.slice(0, CLARIFIED_TEXT_MAX - 1)}…` : x; };
@@ -173,11 +182,11 @@ export function withClarified(plan: StrategyPlan, qs: { question: string; header
     const a = answers[q.question], text = Array.isArray(a) ? a.join(', ') : a;
     // a yes/no answer (ADR 0135) says nothing without its question: the question is the line, not its header
     const yn = typeof text === 'string' && yesNoOf(text) !== null;
-    return typeof text === 'string' && text.trim() && text !== ENOUGH_QUESTIONS ? [{ q: cut(yn ? q.question : q.header?.trim() || q.question), a: cut(yn ? text.replace(/\s*\((consigliat[oa]|recommended|empfohlen)\)\s*/i, '').trim() : text) }] : [];
+    return typeof text === 'string' && text.trim() && !stopsQuestions(text) ? [{ q: cut(yn ? q.question : q.header?.trim() || q.question), a: cut(yn ? text.replace(/\s*\((consigliat[oa]|recommended|empfohlen)\)\s*/i, '').trim() : text) }] : [];
   });
   if (!qs.length) return plan;
   const asked = (plan.asked ?? 0) + qs.length;
-  const enough = qs.some(q => answers[q.question] === ENOUGH_QUESTIONS) ? { enough: true } : {};
+  const enough = qs.some(q => { const a = answers[q.question]; return typeof a === 'string' && stopsQuestions(a); }) ? { enough: true } : {};
   return added.length ? { ...plan, asked, ...enough, clarified: [...plan.clarified, ...added].slice(-CLARIFIED_MAX) } : { ...plan, asked, ...enough };
 }
 

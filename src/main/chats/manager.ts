@@ -48,7 +48,7 @@ import type { RunLinks } from '../agents/runs';
 import { newRequest } from '../agents/task-estimate';
 import { AWAY_BACK, AWAY_RULE } from '../../shared/away';
 import type { TaskSource } from '../../shared/delegation';
-import { isPlanApproval, STRATEGY_FLOW } from '../../shared/strategy';
+import { isPlanApproval, stopsQuestions, STRATEGY_FLOW } from '../../shared/strategy';
 import { isCorrection } from '../../shared/correction';
 import { initialEffort, selectEffort } from './effort';
 import { orchestratorRole, roleFrame } from '../agents/orchestrator-role';
@@ -346,6 +346,8 @@ export class ChatManager extends ManagerSink implements ChatService {
     // its parent's message (agent_answer_child, from = the parent's title) reached it: the answer it waited for
     if (from !== undefined && r.s.parentId && from === this.chats.get(r.s.parentId)?.s.title) delete r.askedParentAt;
     if (!resumed && from === undefined && (!source || source.kind === 'user')) this.userWrote(chatId, text);
+    // «basta domande» typed in the chat counts like the answer (ADR 0209): plan_propose stops asking for more
+    if (!resumed && from === undefined && (!source || source.kind === 'user') && r.s.plan?.phase === 'asking' && typeof text === 'string' && stopsQuestions(text)) r.s.plan = { ...r.s.plan, enough: true };
     // Flash's outcomes (ADR 0131, zero tokens): the user's question to Flash decides its last answer (a correction, the
     // same question again); the user's own message to the Orchestrator may hand one over
     if (!resumed && from === undefined && (!source || source.kind === 'user') && typeof text === 'string' && (r.s.quick || r.s.isOrchestrator)) {
