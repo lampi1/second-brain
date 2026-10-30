@@ -42,6 +42,7 @@ export function mediaHandlers({ s, voice, recordings, learn }: HandlerContext): 
     'impara:explain': a => learn().explain(String(a?.id ?? ''), String(a?.text ?? '')),
     'impara:retry': a => learn().retry(String(a?.id ?? '')),
     'impara:clarify': a => learn().clarify(String(a?.id ?? ''), a?.answers),
+    'impara:topics': a => learn().topics(String(a?.id ?? ''), { drop: a?.drop, go: a?.go === true }),
     'impara:remove': a => learn().remove(String(a?.id ?? '')),
     'impara:queue': a => learn().queue(a?.mode, typeof a?.subject === 'string' ? a.subject : undefined),
     'impara:grade': a => learn().gradeCard(String(a?.card ?? ''), Number(a?.grade)),

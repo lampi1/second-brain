@@ -86,6 +86,9 @@ export const explainBack = (id: string, text: string) => call(window.sb.invoke('
 export const retryLesson = (id: string) => call(window.sb.invoke('impara:retry', { id }));
 /** The answers to the questions before the lesson ('' = skipped). */
 export const clarifyLesson = (id: string, answers: string[]) => call(window.sb.invoke('impara:clarify', { id, answers }));
+/** The public topics waiting to be searched on the web (ADR 0206): drop one, or start them now. */
+export const dropTopic = (id: string, topic: string) => call(window.sb.invoke('impara:topics', { id, drop: topic }));
+export const searchTopicsNow = (id: string) => call(window.sb.invoke('impara:topics', { id, go: true }));
 /** The review (ADR 0189): a session's cards, a card's grade, a lesson moved to another subject. */
 export const reviewQueue = (mode: ReviewMode, subject?: string): Promise<ReviewItem[] | null> =>
   window.sb.invoke('impara:queue', { mode, ...(subject ? { subject } : {}) }).catch(fail);

@@ -2,8 +2,8 @@
 // read-only commands (gh pr view / diff, git) with the real PR #251 of second-brain («replies stream word by word»),
 // `demoTeach` answers each of the model's rounds with a lesson about it written by hand (the research and its check, with
 // one fact the check corrects; a question before a topic lesson; plan, the rest, the four extras, the grade), after a
-// short wait so the screens in between are seen. `seedDemoLessons` writes two saved lessons the
-// first time, so the page has a list. Deterministic under SB_DEMO_FREEZE. Used by demo-wiring.ts; e2e: test/e2e/impara.spec.ts.
+// short wait so the screens in between are seen; a PR lesson also proposes public topics to search (ADR 0206).
+// `seedDemoLessons` writes two saved lessons the first time, so the page has a list. Deterministic under SB_DEMO_FREEZE. Used by demo-wiring.ts; e2e: test/e2e/impara.spec.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Lesson } from '@shared/lesson';
@@ -178,6 +178,19 @@ const WEB_RESEARCH = { facts: [
   { claim: 'Un browser disegna la pagina al massimo una volta per fotogramma, di solito 60 volte al secondo.', url: 'https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame', quote: 'The frequency of calls to the callback function will generally match the display refresh rate.' },
   { claim: 'In Electron il processo main e la finestra parlano tramite IPC.', url: 'https://www.electronjs.org/docs/latest/tutorial/ipc', quote: 'Inter-process communication (IPC) is a key part of building feature-rich desktop applications in Electron.' },
 ] };
+/** The public topics of PR #251 (ADR 0206): three the filter lets through, one it drops (a name of the code). */
+const PR_TOPICS = [
+  { q: 'Electron IPC performance', why: 'il diff manda i pezzi dal main alla finestra', ref: 'src/main/chats/manager.ts:467' },
+  { q: 'W3C Page Visibility API', why: 'lo store rallenta con la finestra nascosta', ref: 'src/renderer/store/store.ts:29' },
+  { q: 'React 18 automatic batching', why: 'lo store disegna una volta per fotogramma', ref: 'src/renderer/store/store.ts:27' },
+  { q: 'ChatManager ITEM_FRAME_MS flush', why: 'il timer di ChatManager', ref: 'src/main/chats/manager.ts:467' },
+];
+/** What the topics' web run finds (it saw only the ask and the three queries left). */
+const REFS_RESEARCH = { facts: [
+  { topic: 't1', claim: 'In Electron il processo main e la finestra si parlano con messaggi IPC asincroni.', url: 'https://www.electronjs.org/docs/latest/tutorial/ipc', quote: 'processes communicate by passing messages through developer-defined "channels"' },
+  { topic: 't2', claim: 'document.hidden dice se la pagina non è visibile, ad esempio ridotta a icona.', url: 'https://www.w3.org/TR/page-visibility-2/', quote: 'The hidden getter steps are to return true if this\'s visibility state is "hidden"' },
+  { topic: 't3', claim: 'React 18 unisce più aggiornamenti di stato in un solo render (automatic batching).', url: 'https://react.dev/blog/2022/03/29/react-v18', quote: 'React groups multiple state updates into a single re-render for better performance' },
+] };
 const TOPIC_QUESTION = { q: 'Ti interessa lo streaming dentro l’app o in generale nei browser?', options: ['Dentro second-brain', 'In generale, nei browser'] };
 
 /** The model's rounds in the demo: the lesson above, a bit at a time. */
@@ -207,8 +220,11 @@ export async function demoTeach(r: TeachRun): Promise<TeachResult> {
     // the app's files as full paths, as a real run would cite them (so «Fonti» opens them)
     const root = /app's source code: (.+?) \(src\/main/.exec(prompt)?.[1] ?? null;
     const facts = FILES_RESEARCH.facts.map(f => ({ ...f, ref: inApp(f.ref ?? '', root) }));
-    return out({ ...FILES_RESEARCH, facts, ...(/wants to understand something/.test(prompt) ? { questions: [TOPIC_QUESTION] } : {}) }, 0.07);
+    return out({ ...FILES_RESEARCH, facts, ...(/wants to understand something/.test(prompt) ? { questions: [TOPIC_QUESTION] } : {}),
+      ...(/pull requests/.test(prompt) && /public topics worth searching/.test(prompt) ? { topics: PR_TOPICS.map(t => ({ ...t, ref: inApp(t.ref, root) })) } : {}) }, 0.07);
   }
+  if (r.round === 'impara-refs') { await wait(900); return out(REFS_RESEARCH, 0.05); }
+  if (r.round === 'impara-verify-refs') { await wait(700); return out({ verdicts: [...prompt.matchAll(/^\{"id":"(f\d+)"/gm)].map(([, id]) => ({ id, verdict: 'ok' })) }, 0.03); }
   if (r.round === 'impara-verify-web') { await wait(700); return out({ verdicts: [{ id: 'f1', verdict: 'ok' }, { id: 'f2', verdict: 'ok' }] }, 0.03); }
   if (r.round === 'impara-verify-files') { await wait(800); return out(filesVerdicts(prompt), 0.04); }
   if (r.round === 'impara-plan') { await wait(900); return out(PLAN, 0.21); }

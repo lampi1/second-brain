@@ -47,6 +47,8 @@ export interface MediaInvokeMap {
   'impara:retry': [{ id: string }, Lesson];
   /** the answers to the questions asked before the lesson (ADR 0188); '' = skipped */
   'impara:clarify': [{ id: string; answers: string[] }, Lesson];
+  /** the public topics from the user's files that wait to be searched on the web (ADR 0206): ✕ drops one, go = now */
+  'impara:topics': [{ id: string; drop?: string; go?: boolean }, Lesson];
   'impara:remove': [{ id: string }, void];
   /** the review (ADR 0189): a session's cards (the due ones, or a subject's quiz), a card's grade, a lesson's subject */
   'impara:queue': [{ mode: ReviewMode; subject?: string }, ReviewItem[]];

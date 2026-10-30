@@ -3,7 +3,8 @@
 // lesson (the research and its check on the Preparing screen, then the first pieces while the rest is written), the
 // lesson fills the window, the animated board plays each piece's beats (camera, the light along an arrow, «Qui»), the
 // code of the piece shows, a check marks the answer and says why, «Spiegamelo meglio» adds a piece after the current
-// one, the end grades «Spiegalo tu», and the lesson reopens where it was. A topic asks its question first and shows
+// one, the end grades «Spiegalo tu», and the lesson reopens where it was. The PR's files propose public topics to
+// search on the web (ADR 0206), shown as chips before they start. A topic asks its question first and shows
 // the verified sources of a piece. The review (ADR 0189): subjects on the start page, today's cards one at a time
 // (recall, choice, a part of the diagram to click), a subject's quiz where a forgotten card comes back, a lesson moved
 // to another subject. Screenshots dark.
@@ -32,7 +33,14 @@ test('learn a PR on the blackboard: pieces, check, better explanation, explain i
     const steps = page.getByTestId('impara-prep-steps');
     await expect(steps.locator('li[data-state="skip"]')).toContainText('una PR si spiega dai suoi file');
     await expect(steps).toContainText('5 fatti', { timeout: 10_000 });
+    // the public topics of its files (ADR 0206): the filter left three, each can be dropped, «Cerca ora» starts them
+    const topics = page.getByTestId('impara-topics');
+    await expect(topics).toHaveAttribute('data-state', 'wait', { timeout: 10_000 });
+    await expect(topics.getByTestId('impara-topic')).toHaveCount(3);
+    await expect(topics).toContainText('React 18 automatic batching');
+    await expect(topics).not.toContainText('ChatManager');
     await shot(page, 'impara-prep-dark');
+    await page.getByTestId('impara-topics-go').click();
     const player = page.getByTestId('impara-player');
     await expect(page.getByTestId('impara-say')).toContainText('a blocchi', { timeout: 15_000 });
     await expect(page.getByTestId('impara-title')).toHaveText('Risposte parola per parola (PR #251)');
@@ -44,7 +52,7 @@ test('learn a PR on the blackboard: pieces, check, better explanation, explain i
     await expect(board).toHaveAttribute('data-flow', 'engine>manager', { timeout: 10_000 });
     await expect(board.locator('.st-packet')).toHaveCount(1);
     await expect(page.getByTestId('impara-piece-label')).toHaveText('Pezzo 1 di 5');
-    await expect(page.getByTestId('impara-verified')).toContainText('5 fatti verificati');
+    await expect(page.getByTestId('impara-verified')).toContainText('8 fatti verificati');
 
     // piece 2: its nodes, its real code, its new words
     await page.getByTestId('impara-next').click();
