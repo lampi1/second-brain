@@ -143,13 +143,13 @@ describe('a Strategist\'s plan with the user', () => {
     await expect(f.call('plan_propose', s.id, PLAN)).rejects.toThrow(/approved and under way/);
   });
 
-  it('it really asks: a first proposal before any question is refused unless it says why none was needed (ADR 0121)', async () => {
+  it('it really asks: a first proposal before any question is refused unless it says why none was needed (ADR 0121, at least 3 since ADR 0209)', async () => {
     const f = fixture();
     const s = await f.root('strategist');
     const bare = { steps: STEPS3 };
-    await expect(f.call('plan_propose', s.id, bare)).rejects.toThrow(/not asked the user anything yet.*AskUserQuestion.*noQuestionReason/s);
-    await expect(f.call('plan_propose', s.id, { ...bare, noQuestionReason: '   ' })).rejects.toThrow(/not asked/);
-    await expect(f.call('plan_propose', s.id, { ...bare, noQuestionReason: 'x'.repeat(201) })).rejects.toThrow(/not asked/);
+    await expect(f.call('plan_propose', s.id, bare)).rejects.toThrow(/answered 0 of at least 3.*AskUserQuestion.*noQuestionReason/s);
+    await expect(f.call('plan_propose', s.id, { ...bare, noQuestionReason: '   ' })).rejects.toThrow(/of at least 3/);
+    await expect(f.call('plan_propose', s.id, { ...bare, noQuestionReason: 'x'.repeat(201) })).rejects.toThrow(/of at least 3/);
     expect(planOf(f, s.id).phase).toBe('asking');
     // one answered question («Basta domande» counts: the user chose to stop) opens the way
     const q = { question: 'Vale anche sulle offerte?', header: 'Offerte', multiSelect: false, options: [{ label: 'No' }, { label: 'Sì' }] };
@@ -308,9 +308,11 @@ describe('shared/strategy.ts', () => {
   });
   it('the gates, pure: proposal before any question, delegation before the ok', () => {
     const asking: StrategyPlan = { phase: 'asking', at: 1, clarified: [], steps: [] };
-    expect(proposalGate(asking, undefined)).toMatch(/not asked/);
+    expect(proposalGate(asking, undefined)).toMatch(/answered 0 of at least 3/);
     expect(proposalGate(asking, 'Dice già tutto')).toBeNull();
-    expect(proposalGate({ ...asking, asked: 2 }, undefined)).toBeNull();
+    expect(proposalGate({ ...asking, asked: 2 }, undefined)).toMatch(/answered 2 of at least 3/);
+    expect(proposalGate({ ...asking, asked: 3 }, undefined)).toBeNull();
+    expect(proposalGate({ ...asking, asked: 1, enough: true }, undefined)).toBeNull();
     expect(proposalGate({ ...asking, phase: 'revising' }, undefined)).toBeNull();
     expect(delegationGate(null, 'agent_delegate')).toBeNull();
     expect(delegationGate({ ...asking, phase: 'running' }, 'agent_delegate')).toBeNull();
@@ -326,7 +328,7 @@ describe('shared/strategy.ts', () => {
     expect(readPlan({ ...p, asked: -1 })).toBeNull();
     expect(readPlan({ ...p, steps: [{ title: 'x', state: 'todo', detail: 'y'.repeat(201) }] })).toBeNull();
     const q = { question: 'Dove?' };
-    expect(withClarified(p, [q], { 'Dove?': ENOUGH_QUESTIONS })).toMatchObject({ asked: 3, clarified: [] });
+    expect(withClarified(p, [q], { 'Dove?': ENOUGH_QUESTIONS })).toMatchObject({ asked: 3, enough: true, clarified: [] });
     expect(withClarified(p, [], {})).toBe(p);
     // a yes/no answer (ADR 0135) keeps its question, not its header
     const yn = { question: 'Tocco solo il carrello?', header: 'Ambito' };
