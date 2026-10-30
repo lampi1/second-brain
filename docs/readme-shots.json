@@ -219,14 +219,8 @@
     "idee": [
       "Ideas"
     ],
-    "costi": [
-      "Costs"
-    ],
-    "qualita": [
-      "Quality"
-    ],
-    "apprendimento": [
-      "Learning"
+    "andamento": [
+      "Trends"
     ],
     "script": [
       "Scripts"
@@ -249,9 +243,6 @@
     "memoria": [
       "Memory"
     ],
-    "classificatori": [
-      "Classifiers"
-    ],
     "collegamenti": [
       "brain map",
       "Map"
@@ -273,6 +264,7 @@
   "pending": {
     "no-test:crew": "the crew picture (agent avatars) is not taken by a README test yet: the integrator adds it to test/shots/readme.spec.ts (2026-10-30)",
     "page:task": "the Task page (Azure DevOps work items and PRs) is not in the README yet: the integrator adds it with the README refresh (2026-10-30)",
-    "page:confronto": "Confronto modelli is being removed (Impara v3 cuts): drop it from pages when the page goes"
+    "page:confronto": "Confronto modelli is being removed (Impara v3 cuts): drop it from pages when the page goes",
+    "page:andamento": "the Trends page (Andamento, ADR 0202) is not in the README yet: the integrator adds it with the README refresh (2026-10-30)"
   }
 }
