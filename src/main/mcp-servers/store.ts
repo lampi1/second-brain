@@ -52,7 +52,10 @@ export function checkDef(raw: unknown): McpServerDef {
   const purpose = str(d.purpose, 300, 'A cosa serve', true)?.trim();
   const importedFrom = d.importedFrom === 'claude' || d.importedFrom === 'cursor' || d.importedFrom === 'codex' ? d.importedFrom : undefined;
   if (d.routineTest !== undefined && d.routineTest !== true) throw new Error('routineTest: omit or explicitly confirm true');
-  const base: McpServerDef = { id, label, transport, secrets, enabled: d.enabled !== false, ...(d.routineTest === true ? { routineTest: true as const } : {}), ...(purpose ? { purpose } : {}), ...(importedFrom ? { importedFrom } : {}) };
+  const w = d.awaiting as { runs?: unknown; at?: unknown } | undefined;
+  const awaiting = w && typeof w === 'object' && typeof w.runs === 'string' && w.runs.length <= 8000 && typeof w.at === 'number' ? { runs: w.runs, at: w.at } : undefined;
+  // a server waiting for the user's «Attiva» (ADR 0207) is off whatever the definition says
+  const base: McpServerDef = { id, label, transport, secrets, enabled: d.enabled !== false && !awaiting, ...(d.routineTest === true ? { routineTest: true as const } : {}), ...(purpose ? { purpose } : {}), ...(importedFrom ? { importedFrom } : {}), ...(awaiting ? { awaiting } : {}) };
   if (transport === 'stdio') {
     const command = str(d.command, 400, 'Comando')!.trim();
     if (SHELL_CHARS.test(command)) throw new Error('Comando: un nome (npx, node) o un percorso completo, senza virgolette né caratteri della shell.');
@@ -269,7 +272,14 @@ export class McpServerStore {
   setAccess(role: string, server: string, value: unknown): void {
     if (!/^[a-z][a-z0-9-]{0,40}$/.test(role)) throw new Error('Ruolo non valido.');
     if (!this.def(server)) throw new Error(`Server MCP «${server}» sconosciuto.`);
-    const access = checkAccess(value);
+    let access = checkAccess(value);
+    // Flash reads only (ADR 0207): "all" is stored as "read", a tool list only with tools the last test saw as reading
+    if (role === FLASH_MCP_ROLE && access === 'all') access = 'read';
+    if (role === FLASH_MCP_ROLE && typeof access === 'object') {
+      const seen = this.data.tests[server]?.tools ?? [];
+      const bad = access.tools.filter(n => !seen.some(t => t.name === n && t.readOnly));
+      if (bad.length) throw new Error(`Flash usa solo strumenti di lettura: ${bad.slice(0, 5).join(', ')} ${seen.length ? 'scrive o non è tra quelli provati' : 'non è ancora stato provato (usa «Prova»)'}.`);
+    }
     const a = this.data.access[role] ?? { servers: {} };
     if (JSON.stringify(access) === JSON.stringify(defaultAccess(role))) delete a.servers[server]; else a.servers[server] = access;
     if (Object.keys(a.servers).length) this.data.access[role] = a; else delete this.data.access[role];

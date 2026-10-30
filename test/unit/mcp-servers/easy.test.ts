@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { MCP_CATALOG, SECRET_MASK, catalogDraft, maskSnippet, nameFromPackage, parseMcpSnippet, publicDraft, readPaste, shellWords } from '../../../src/shared/mcp-paste';
-import { FLASH_MCP_ROLE, MCP_ACCESS_ROLES, accessOn, effectiveAccess, toggleAccess } from '../../../src/shared/mcp-servers';
+import { FLASH_MCP_ROLE, MCP_ACCESS_ROLES, accessOn, effectiveAccess, runsOf, toggleAccess, toolAllowed } from '../../../src/shared/mcp-servers';
 import { McpServerStore, checkDef } from '../../../src/main/mcp-servers/store';
 import { McpServersService } from '../../../src/main/mcp-servers/service';
 import { serversFor, toolFor } from '../../../src/main/mcp-servers/access';
@@ -135,8 +135,19 @@ describe('Flash and the per-role toggles', () => {
     expect(serversFor(s.servers(), ctx, r => s.roleAccess(r))).toEqual(['docs']);
     expect(toolFor(ctx, r => s.roleAccess(r), 'docs', { name: 'search', readOnly: true })).toBe(true);
     expect(toolFor(ctx, r => s.roleAccess(r), 'docs', { name: 'write', readOnly: false })).toBe(false);
-    s.setAccess(FLASH_MCP_ROLE, 'docs', { tools: ['write'] });
-    expect(toolFor(ctx, r => s.roleAccess(r), 'docs', { name: 'write', readOnly: false })).toBe(false);
+    // a tool list for Flash: refused unless every tool is one the last test saw as reading
+    expect(() => s.setAccess(FLASH_MCP_ROLE, 'docs', { tools: ['write'] })).toThrow(/solo strumenti di lettura/);
+    s.recordTest('docs', { ok: true, at: 1, ms: 1, tools: [{ name: 'search', description: '', readOnly: true }, { name: 'write', description: '', readOnly: false }] } as never);
+    expect(() => s.setAccess(FLASH_MCP_ROLE, 'docs', { tools: ['search', 'write'] })).toThrow(/write/);
+    s.setAccess(FLASH_MCP_ROLE, 'docs', { tools: ['search'] });
+    s.setAccess(FLASH_MCP_ROLE, 'docs', 'all');
+    expect(s.access().flash?.servers.docs).toBe('read');
+    // and the gateway refuses a writing tool to Flash whatever is stored (an old file, a hand edit), at any level
+    const forced = () => ({ servers: { docs: { tools: ['write'] } } });
+    expect(toolFor(ctx, forced, 'docs', { name: 'write', readOnly: false })).toBe(false);
+    expect(toolFor({ roles: ['scout', FLASH_MCP_ROLE], policy: null }, () => ({ servers: { docs: 'all' } }), 'docs', { name: 'write', readOnly: false })).toBe(false);
+    expect(toolAllowed({ tools: ['write'] }, { name: 'write', readOnly: false }, FLASH_MCP_ROLE)).toBe(false);
+    expect(toolAllowed({ tools: ['write'] }, { name: 'write', readOnly: false }, 'scout')).toBe(true);
     s.setAccess(FLASH_MCP_ROLE, 'docs', 'none');
     expect(s.access().flash).toBeUndefined();
     // the Orchestrator: every tool by default, off by its toggle
@@ -218,7 +229,17 @@ describe('app_config connector actions (the Orchestrator)', () => {
     expect(r).toMatchObject({ added: 'github', tokensMissing: ['GITHUB_TOKEN'] });
     expect(JSON.stringify(r)).not.toContain(TOKEN);
     expect(JSON.stringify(svc.state())).not.toContain(TOKEN);
-    expect(announce).toHaveBeenCalledWith(expect.objectContaining({ kind: 'connector-changed', action: { kind: 'connector-undo', undo: r.changeId } }));
+    // saved off, waiting for the user's own «Attiva», with exactly what it will start on the card
+    const runs = 'npx -y @modelcontextprotocol/server-github';
+    expect(svc.store.def('github')).toMatchObject({ enabled: false, awaiting: { runs } });
+    expect(announce).toHaveBeenCalledWith(expect.objectContaining({ kind: 'connector-changed', action: { kind: 'connector-undo', undo: r.changeId, activate: { server: 'github', runs } } }));
+    await expect(Promise.resolve().then(() => tool.run({ action: 'test', area: 'connector', server: 'github' }))).rejects.toThrow(/Attiva/);
+    await expect(Promise.resolve().then(() => tool.run({ action: 'set', area: 'connector', server: 'github', key: 'enabled', value: true }))).rejects.toThrow(/Attiva/);
+    await expect(svc.test('github')).rejects.toThrow(/Attiva/);
+    expect(() => svc.activate({ id: 'github', runs: 'npx evil' })).toThrow(/cambiato/);
+    svc.activate({ id: 'github', runs });
+    expect(svc.store.def('github')).toMatchObject({ enabled: true });
+    expect(svc.store.def('github')?.awaiting).toBeUndefined();
     expect(await tool.run({ action: 'test', area: 'connector', server: 'github' })).toMatchObject({ ok: false, error: { code: 'secret' } });
     await tool.run({ action: 'set', area: 'connector', server: 'github', key: 'access', role: 'flash', value: 'all' });
     expect((await tool.run({ action: 'get', area: 'connector' }) as { servers: { roles: Record<string, unknown> }[] }).servers[0]!.roles.flash).toBe('read');
@@ -229,6 +250,33 @@ describe('app_config connector actions (the Orchestrator)', () => {
     expect(svc.state().servers).toEqual([]);
     await tool.run({ action: 'undo', area: 'connector', changeId: rm.changeId });
     expect(svc.store.def('github')?.purpose).toBe('PR e issue');
+    svc.stop();
+  });
+  it('a change of what a server starts puts it back off until «Attiva»; an agent def never carries the user\'s confirmations', async () => {
+    const { tool, svc, announce } = deps();
+    svc.save({ def: { id: 'docs', label: 'Docs', transport: 'stdio', command: 'npx', args: ['-y', 'docs-mcp'], secrets: [], enabled: true } });
+    await tool.run({ action: 'set', area: 'connector', server: 'docs', key: 'label', value: 'Documenti' });
+    expect(svc.store.def('docs')).toMatchObject({ label: 'Documenti', enabled: true });
+    expect(svc.store.def('docs')?.awaiting).toBeUndefined();
+    const r = await tool.run({ action: 'set', area: 'connector', server: 'docs', key: 'args', value: ['-y', 'other-mcp', '--flag value'] }) as { runs: string };
+    expect(r.runs).toBe('npx -y other-mcp "--flag value"');
+    expect(svc.store.def('docs')).toMatchObject({ enabled: false, awaiting: { runs: r.runs } });
+    expect(announce).toHaveBeenLastCalledWith(expect.objectContaining({ action: expect.objectContaining({ activate: { server: 'docs', runs: r.runs } }) }));
+    await tool.run({ action: 'set', area: 'connector', server: 'docs', key: 'env', value: { NODE_OPTIONS: '--require x' } });
+    expect(svc.store.def('docs')?.awaiting?.runs).toBe('NODE_OPTIONS="--require x" npx -y other-mcp "--flag value"');
+    // the user's own save of the form (they see the command there) is their approval
+    svc.save({ def: { ...svc.store.def('docs')!, enabled: true }, previousId: 'docs' });
+    expect(svc.store.def('docs')).toMatchObject({ enabled: true });
+    expect(svc.store.def('docs')?.awaiting).toBeUndefined();
+    await tool.run({ action: 'add', area: 'connector', def: { label: 'Prod', transport: 'http', url: 'https://prod.example.com/mcp', routineTest: true, importedFrom: 'claude', awaiting: null, enabled: true } });
+    expect(svc.store.def('prod')).toMatchObject({ enabled: false, awaiting: { runs: 'https://prod.example.com/mcp' } });
+    expect(svc.store.def('prod')?.routineTest).toBeUndefined();
+    expect(svc.store.def('prod')?.importedFrom).toBeUndefined();
+    expect(runsOf({ transport: 'http', url: 'https://x.example.com/' })).toBe('https://x.example.com/');
+    // the card's action is checked again in main: a script's event never names anything else
+    const { feedAction } = await import('../../../src/main/brain/live');
+    expect(feedAction({ kind: 'connector-undo', undo: 'a'.repeat(12), activate: { server: 'docs', runs: 'npx x' } })).toEqual({ kind: 'connector-undo', undo: 'a'.repeat(12), activate: { server: 'docs', runs: 'npx x' } });
+    expect(feedAction({ kind: 'connector-undo', undo: 'a'.repeat(12), activate: { server: '../x', runs: 1 } })).toEqual({ kind: 'connector-undo', undo: 'a'.repeat(12) });
     svc.stop();
   });
   it('opens the add form prefilled without the secret, and refuses changes without the user\'s words', async () => {

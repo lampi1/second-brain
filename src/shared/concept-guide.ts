@@ -1060,8 +1060,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('«Importa da Claude e Cursor» legge le loro configurazioni senza cambiarle e senza copiare i segreti: i token li reinserisci tu.',
         '"Importa da Claude e Cursor" reads their configs without changing them and without copying secrets: you type the tokens again.'),
       // src/main/appctl/config.ts connector; src/main/mcp-servers/service.ts agentSave
-      b('All’Orchestrator basta chiedere: aggiunge, cambia, prova o toglie un server e lo dà a un ruolo, con «Annulla» nella sua scheda nel feed. I token non li vede mai: ti apre il modulo già compilato e il token lo scrivi tu.',
-        'Just ask the Orchestrator: it adds, changes, tests or removes a server and gives it to a role, with "Annulla" on its feed card. It never sees tokens: it opens the form prefilled and you type the token.'),
+      b('All’Orchestrator basta chiedere: aggiunge, cambia, prova o toglie un server e lo dà a un ruolo, con «Annulla» nel feed. Un server che aggiunge, o di cui cambia cosa avvia, resta spento finché non premi «Attiva» sulla sua scheda, che mostra esattamente il comando. I token non li vede mai: li scrivi tu.',
+        'Just ask the Orchestrator: it adds, changes, tests or removes a server and gives it to a role, with "Annulla" in the feed. A server it adds, or whose command it changes, stays off until you press "Attiva" on its card, which shows exactly the command. It never sees tokens: you type them.'),
     ],
     analogy: b('Come un portiere d’albergo che tiene le chiavi: gli ospiti chiedono a lui di aprire, e lui apre solo le stanze del loro piano.',
       'Like a hotel concierge who keeps the keys: guests ask him to open a door, and he opens only the rooms on their floor.'),

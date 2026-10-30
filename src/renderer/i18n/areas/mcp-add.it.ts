@@ -27,4 +27,7 @@ export const mcpAddIt = {
   'mcpadd.works': (p: { n: number }) => (p.n === 1 ? 'Funziona: 1 strumento' : `Funziona: ${p.n} strumenti`),
   'mcpadd.savedNeedsToken': 'Salvato. Manca il token', 'mcpadd.savedNeedsTokenHint': 'Scrivilo nella scheda del server, poi «Prova».',
   'mcpadd.done': 'Fatto',
+  'mcpadd.activate': 'Attiva', 'mcpadd.activated': 'Attivato', 'mcpadd.activateName': (p: { name: string }) => `Attiva ${p.name}`,
+  'mcpadd.awaiting': 'L’Orchestrator l’ha aggiunto o ha cambiato cosa avvia: resta spento finché non premi «Attiva». Avvierà esattamente:',
+  'mcpadd.awaitingTip': 'Attivalo solo se riconosci il comando o l’indirizzo e l’avevi chiesto tu. Altrimenti «Annulla» sulla sua notizia, o Modifica → Rimuovi.',
 };

@@ -14,7 +14,7 @@ import { log, errText } from '../log';
 import type { McpServer } from '../mcp/server';
 import type { SecretCipher } from '../engines/secrets';
 import type { McpImportCandidate, McpServerDef, McpServersState, McpTestResult } from '../../shared/mcp-servers';
-import { slotKey } from '../../shared/mcp-servers';
+import { runsOf, slotKey } from '../../shared/mcp-servers';
 import { McpServerStore, type McpServerSnapshot } from './store';
 import { McpGateway } from './gateway';
 import { McpClientError, connect, describeError, type Endpoint, type Upstream } from './client';
@@ -104,7 +104,10 @@ export class McpServersService {
 
   save(a: { def?: unknown; previousId?: unknown } | undefined): McpServersState {
     const previousId = typeof a?.previousId === 'string' && a.previousId ? a.previousId : undefined;
-    const def = this.store.upsert(a?.def, previousId);
+    // the user's own save (the add form, the edit form, a card's switch): what they see is what they approve
+    const raw = a?.def && typeof a.def === 'object' ? { ...(a.def as Record<string, unknown>) } : a?.def;
+    if (raw && typeof raw === 'object') delete (raw as Record<string, unknown>).awaiting;
+    const def = this.store.upsert(raw, previousId);
     if (previousId && previousId !== def.id) this.gateway.reset(previousId);
     return this.changed(def.id);
   }
@@ -163,6 +166,19 @@ export class McpServersService {
     return { undo: this.change(server, () => this.store.setAccess(role, server, access)).undo };
   }
 
+  /** «Attiva» (ADR 0207), the user's click on a server the Orchestrator added or changed: on only if it still runs
+   *  exactly what the user was shown. Never on the agent's path (app_config has no such action). */
+  activate(a: { id?: unknown; runs?: unknown } | undefined): McpServersState {
+    const def = typeof a?.id === 'string' ? this.store.def(a.id) : undefined;
+    if (!def) throw new Error('Server MCP sconosciuto.');
+    if (!def.awaiting) throw new Error('Questo server non aspetta un’attivazione.');
+    if (typeof a?.runs !== 'string' || a.runs !== runsOf(def)) throw new Error('Il server è cambiato nel frattempo: rileggi il comando sulla sua scheda e premi di nuovo «Attiva».');
+    const { awaiting: _w, ...rest } = def; void _w;
+    this.store.upsert({ ...rest, enabled: true }, def.id);
+    log.info('mcp-servers', 'MCP server activated by the user', { data: { server: def.id } });
+    return this.changed(def.id);
+  }
+
   /** Puts back what an undoable change changed. Once only. */
   undo(key: unknown): McpServersState {
     const e = typeof key === 'string' ? this.undos.find(x => x.key === key) : undefined;
@@ -198,6 +214,8 @@ export class McpServersService {
   async test(id: unknown): Promise<McpServersState> {
     if (typeof id !== 'string' || !this.store.def(id)) throw new Error('Server MCP sconosciuto.');
     const def = this.store.def(id)!;
+    // a test starts the command: not before the user's «Attiva» (ADR 0207)
+    if (def.awaiting) throw new Error(`«${def.label}» aspetta «Attiva»: l’utente lo attiva dalla sua scheda in Impostazioni → Connettori, dopo aver letto cosa avvia.`);
     const now = this.opts.now ?? Date.now, t0 = Date.now();
     let up: Upstream | null = null;
     let result: McpTestResult;
