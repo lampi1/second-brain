@@ -489,7 +489,7 @@ export const GUIDE_DE: Readonly<Record<string, string>> = {
   "Your question": "Deine Frage",
   "Orchestrator context": "Orchestrator-Kontext",
   "A job, if needed": "Aufgabe, falls nötig",
-  "Permissions: plan mode (read only); read and web tools; never delegable, background scope like Pulse.": "Berechtigungen: Plan-Modus (nur lesen); Lese- und Web-Tools; nie delegierbar, Hintergrund-Scope wie Battito.",
+  "Permissions: plan mode (read only); read and web tools; never delegable, background scope.": "Berechtigungen: Plan-Modus (nur lesen); Lese- und Web-Tools; nie delegierbar, Hintergrund-Scope.",
   "Card \"flash\" in roles.json; the context goes through ChatManager.deliverNow.": "Karte „flash“ in roles.json; der Kontext läuft über ChatManager.deliverNow.",
   "The Orchestrator knows the app": "Der Orchestrator kennt die App",
   "Ask the Orchestrator where something is, or to change a setting: it reads the app’s map live and changes it for you, with \"Undo\".": "Frag den Orchestrator, wo etwas ist, oder lass ihn eine Einstellung ändern: er liest die Karte der App live und ändert sie für dich, mit „Rückgängig“.",

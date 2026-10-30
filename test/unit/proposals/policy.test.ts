@@ -168,10 +168,10 @@ describe('proposals policy (ADR 0193)', () => {
 
   it('a card that cannot be undone from here, or whose approve side is blocked, is asked', () => {
     const auto = groupPolicy('rule', many(60, 'rule'));
-    const setting = card({ id: 'setting:a', source: 'setting', ask: { kind: 'setting', label: 'x', before: 'a', after: 'b' } });
-    expect(reversible(setting)).toBe(false);
-    expect(autoNow(setting, auto)).toBe(false);
-    expect(whyAsked(setting, auto)).toEqual({ code: 'irreversible' });
+    const once = card({ id: 'memory:a', source: 'memory', ask: { kind: 'skill', name: 'triage' } });
+    expect(reversible(once)).toBe(false);
+    expect(autoNow(once, auto)).toBe(false);
+    expect(whyAsked(once, auto)).toEqual({ code: 'irreversible' });
     expect(reversible(card({ source: 'change', applied: true, canReject: false }))).toBe(false);
     expect(reversible(card({ source: 'change', applied: true }))).toBe(true);
     const blocked = card({ canApprove: false, blocked: ['x'] });

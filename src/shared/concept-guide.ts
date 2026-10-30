@@ -1540,8 +1540,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Like asking the colleague next to you "what was that?" while the boss is talking: they whisper the answer and the meeting goes on.'),
     diagram: { kind: 'flow', steps: [b('Tua domanda', 'Your question'), b('Contesto Orchestrator', 'Orchestrator context'), b('Risposta', 'Answer'), b('Lavoro, se serve', 'A job, if needed')] },
     tech: [
-      tech(LIMITS, 'Permessi: modalità plan (sola lettura); strumenti lettura e web; mai delegabile, scope background come Battito.',
-        'Permissions: plan mode (read only); read and web tools; never delegable, background scope like Pulse.'),
+      tech(LIMITS, 'Permessi: modalità plan (sola lettura); strumenti lettura e web; mai delegabile, scope background.',
+        'Permissions: plan mode (read only); read and web tools; never delegable, background scope.'),
       tech(WHERE, 'Carta «flash» in roles.json; il contesto passa da ChatManager.deliverNow.',
         'Card "flash" in roles.json; the context goes through ChatManager.deliverNow.'),
     ],
