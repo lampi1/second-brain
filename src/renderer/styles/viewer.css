@@ -83,7 +83,7 @@
 .vw-icon-btn:active:not(:disabled) { transform: scale(0.94); }
 .vw-icon-btn:disabled { opacity: 0.32; cursor: default; }
 .vw-icon-btn[aria-pressed="true"] { background: var(--bx-blue-bg); border-color: var(--bx-blue-line); color: var(--bx-blue); }
-.vw-icon-btn:focus-visible, .vw-btn:focus-visible, .vw-toggle:focus-visible { outline: 2px solid var(--bx-focus); outline-offset: 1px; }
+.vw-icon-btn:focus-visible, .vw-btn:focus-visible, .vw-toggle:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .vw-close:hover:not(:disabled) { background: var(--bx-red-bg); color: var(--bx-red); }
 .vw-btn {
   flex: none; height: 32px; padding: 0 12px 0 10px; margin-left: 4px; display: inline-flex; align-items: center; gap: 7px;
@@ -212,7 +212,7 @@ mark.bx-word { color: inherit; border-radius: 3px; padding: 0 1px; background: c
 }
 .vw-toc button:hover { color: var(--bx-text); background: var(--bx-surface-2); }
 .vw-toc button[aria-current] { color: var(--bx-blue); border-left-color: var(--bx-blue); background: var(--bx-blue-bg); font-weight: 600; }
-.vw-toc button:focus-visible { outline: 2px solid var(--bx-focus); outline-offset: -2px; }
+.vw-toc button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 
 /* ── footer: the keys ───────────────────────────────────────────────────────────────────────────────────────── */
 .vw-foot {

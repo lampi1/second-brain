@@ -37,10 +37,10 @@ export function MaintenanceButton({ testId = 'bm-maint-now', compact = false, ba
     {compact
       ? <IconButton label={label} onClick={() => void click()} testid={`${testId}-run`} className={`mm-maint-icon${cls}`}><IconSparkle size={14} /></IconButton>
       : bar
-        ? <button type="button" className={`btn btn-ghost btn-m mm-maint-bar${cls}`} onClick={() => void click()} data-testid={`${testId}-run`} aria-label={label} aria-busy={running} data-tip={tip}>
+        ? <button type="button" className={`btn btn-ghost btn-m mm-maint-bar${cls}`} onClick={() => void click()} data-track="maintenance" data-testid={`${testId}-run`} aria-label={label} aria-busy={running} data-tip={tip}>
           <IconSparkle size={14} /><span>{label}</span></button>
         : <>
-          <button type="button" className={`btn btn-primary btn-m mm-maint-btn${cls}`} disabled={!state?.root || running} onClick={() => void click()} data-testid={`${testId}-run`} aria-busy={running}>
+          <button type="button" className={`btn btn-primary btn-m mm-maint-btn${cls}`} disabled={!state?.root || running} onClick={() => void click()} data-track="maintenance" data-testid={`${testId}-run`} aria-busy={running}>
             <IconSparkle /> {label}
           </button>
           {running

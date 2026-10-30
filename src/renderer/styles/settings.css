@@ -18,7 +18,7 @@
 .st-search-line > .st-input { flex: 1; width: 100%; min-width: 0; height: 32px; padding: 0 28px 0 31px; text-align: left; font-size: var(--fs-s); background: var(--surface);
   border-radius: 8px; transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
 .st-search-line > .st-input::-webkit-search-cancel-button { display: none; }
-.st-search-line > .st-input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
+.st-search-line > .st-input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--focus-glow); }
 .st-search-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0;
   border-radius: 50%; background: var(--surface-4); color: var(--text-2); cursor: pointer; }
 .st-search-clear:hover { background: var(--border-3); color: var(--text); }
@@ -141,7 +141,7 @@
   font: 500 var(--fs-s) var(--font); text-align: right; font-variant-numeric: tabular-nums; }
 .st-input::placeholder { color: var(--text-4); }
 .st-input:hover { border-color: var(--border-3); }
-.st-input:focus-visible { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
+.st-input:focus-visible { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--focus-glow); }
 .st-input.st-path { width: 38ch; max-width: 100%; }
 .st-usd { display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font-size: var(--fs-s); }
 .st-value { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); font-size: var(--fs-s);

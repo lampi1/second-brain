@@ -1,0 +1,76 @@
+/* The Andamento page (ADR 0202, components/andamento/): the sticky head (title, one-line lead, the pill tab bar with its
+   sliding ink) that stays on screen while a tab scrolls, the tab panels' common rhythm (one toolbar, cards in a grid,
+   the same gap everywhere), and the «Uso» tab's ranking and chips. Theme tokens only (tokens.css, brain.css): dark and
+   light follow the app; motion stops under prefers-reduced-motion. */
+
+.bx-inner.an-inner{max-width:1320px;padding-top:0;gap:0}
+.an-page{display:grid;gap:0;min-width:0;container:an / inline-size}
+.an-page>*{min-width:0}
+
+/* ── the sticky head: the title is always visible ── */
+.an-top{position:sticky;top:0;z-index:6;display:grid;gap:10px;padding:var(--page-top,18px) 0 12px;background:var(--bx-bg,var(--bg))}
+/* a soft edge under the head, so a scrolled tab slides under it instead of being cut */
+.an-top::after{content:"";position:absolute;left:0;right:0;top:100%;height:14px;pointer-events:none;background:linear-gradient(var(--bx-bg,var(--bg)),transparent)}
+.an-head{display:flex;align-items:baseline;gap:6px 16px;flex-wrap:wrap;min-width:0}
+.an-head h1{margin:0;font:600 26px/1.15 var(--font-display);letter-spacing:-.8px;color:var(--text)}
+.an-lead{margin:0;flex:1;min-width:min(260px,100%);color:var(--text-3);font-size:var(--fs-s);line-height:1.5}
+
+.an-tabs{position:relative;display:flex;flex-wrap:wrap;gap:2px;padding:4px;width:100%;box-sizing:border-box;
+  border:1px solid var(--border);border-radius:14px;background:var(--surface);box-shadow:0 10px 30px -24px #000}
+.an-tabs>button{position:relative;z-index:1;flex:none;appearance:none;display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:7px 14px;
+  border:0;border-radius:10px;background:transparent;font:inherit;font-size:var(--fs-m);font-weight:500;color:var(--text-3);white-space:nowrap;cursor:pointer;
+  transition:color 160ms,background 160ms}
+.an-tabs>button:hover{color:var(--text)}
+.an-tabs>button:hover:not([aria-selected=true]){background:var(--surface-2)}
+.an-tabs>button:active{transform:translateY(1px)}
+.an-tabs>button:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.an-tabs>button[aria-selected=true]{color:var(--text);font-weight:600}
+.an-tab-icon{display:inline-flex;color:var(--text-4);transition:color 160ms}
+.an-tab-icon svg{width:15px;height:15px}
+.an-tabs>button[aria-selected=true] .an-tab-icon{color:var(--blue)}
+.an-ink{position:absolute;left:0;top:0;border-radius:10px;pointer-events:none;box-sizing:border-box;
+  background:var(--surface-3);border:1px solid var(--border-2);box-shadow:inset 0 1px 0 color-mix(in srgb,var(--text) 7%,transparent),inset 0 -2px 0 var(--blue);
+  transition:transform 300ms cubic-bezier(.2,.8,.2,1),width 300ms cubic-bezier(.2,.8,.2,1),height 300ms cubic-bezier(.2,.8,.2,1)}
+@container an (max-width:640px){.an-tab-icon{display:none}.an-tabs>button{padding:7px 10px}}
+
+/* ── the panel: one rhythm for every tab ── */
+.an-panel{display:grid;gap:20px;align-content:start;padding:8px 0 56px;animation:an-in 180ms var(--ease,ease-out) both}
+@keyframes an-in{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.an-panel>*{min-width:0}
+/* the tab's toolbar: the explain line, then period, last update and refresh; the same in every tab */
+.an-panel .bx-head-bar{padding:0 0 4px;border-bottom:1px solid var(--border);margin-bottom:2px}
+.an-panel .bx-head-bar .bx-head-row{align-items:center;gap:10px 16px}
+.an-panel .bx-head-bar .bx-what{flex:1 1 360px;margin:0;color:var(--text-3);font-size:var(--fs-s);line-height:1.55;max-width:96ch}
+/* the tabs that were whole pages lose their own outer padding: the page gives it */
+.an-panel .dashboard{height:auto;overflow:visible;padding:0;background:transparent;display:grid;gap:20px}
+.an-panel .dashboard>.bx-head{margin:0}
+.an-panel .bm-page.agent-overview{padding:0;max-width:none;margin:0;display:grid;gap:20px}
+.an-panel .bm-page.agent-overview>*{margin-top:0;margin-bottom:0}
+.an-panel .cls-summary{margin:0}
+
+/* ── Uso ── */
+.an-use{gap:20px}
+.an-note{margin:0}
+.an-rank{list-style:none;margin:0;padding:6px 4px;display:grid;gap:0}
+.an-rank>li{display:grid;grid-template-columns:28px minmax(0,1fr) auto minmax(150px,auto);align-items:center;gap:4px 14px;padding:9px 10px;border-radius:var(--r-s,8px)}
+.an-rank>li+li{border-top:1px solid var(--border)}
+.an-rank>li:hover{background:var(--surface-2)}
+.an-rank-i{font-size:var(--fs-xs);color:var(--text-4);font-variant-numeric:tabular-nums;text-align:right}
+.an-rank-main{display:grid;gap:6px;min-width:0}
+.an-rank-top{display:flex;align-items:center;gap:8px;min-width:0}
+.an-rank-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:var(--fs-m);font-weight:550;color:var(--text)}
+button.an-rank-name{appearance:none;border:0;background:none;padding:0;font:inherit;font-weight:550;color:var(--text);cursor:pointer;text-align:left}
+button.an-rank-name:hover{color:var(--blue);text-decoration:underline;text-underline-offset:2px}
+.an-rank-bar{display:block;height:6px;border-radius:99px;background:var(--surface-3);overflow:hidden}
+.an-rank-bar>i{display:block;height:100%;border-radius:inherit;background:var(--blue);transition:width 400ms var(--ease,ease-out)}
+.an-rank>li[data-kind=action] .an-rank-bar>i{background:var(--violet)}
+.an-rank-n{font-weight:600;font-variant-numeric:tabular-nums;color:var(--text);white-space:nowrap}
+.an-rank-meta{font-size:var(--fs-xs);color:var(--text-3);white-space:nowrap;text-align:right}
+@container an (max-width:720px){.an-rank>li{grid-template-columns:24px minmax(0,1fr) auto}.an-rank-meta{grid-column:2 / -1;text-align:left}}
+.an-chips{display:flex;flex-wrap:wrap;gap:8px}
+.an-chip{appearance:none;font:inherit;font-size:var(--fs-s);padding:6px 12px;border-radius:99px;border:1px dashed var(--border-2);background:transparent;color:var(--text-2);cursor:pointer;
+  transition:border-color 160ms,color 160ms,background 160ms}
+.an-chip:hover{border-style:solid;border-color:var(--border-3);color:var(--text);background:var(--surface-2)}
+.an-chip:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+@media (prefers-reduced-motion: reduce){.an-ink,.an-rank-bar>i,.an-tabs>button,.an-chip{transition:none}.an-panel{animation:none}}

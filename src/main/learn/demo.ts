@@ -2,8 +2,8 @@
 // read-only commands (gh pr view / diff, git) with the real PR #251 of second-brain («replies stream word by word»),
 // `demoTeach` answers each of the model's rounds with a lesson about it written by hand (the research and its check, with
 // one fact the check corrects; a question before a topic lesson; plan, the rest, the four extras, the grade), after a
-// short wait so the screens in between are seen. `seedDemoLessons` writes two saved lessons the
-// first time, so the page has a list. Deterministic under SB_DEMO_FREEZE. Used by demo-wiring.ts; e2e: test/e2e/impara.spec.ts.
+// short wait so the screens in between are seen; a PR lesson also proposes public topics to search (ADR 0206).
+// `seedDemoLessons` writes two saved lessons the first time, so the page has a list. Deterministic under SB_DEMO_FREEZE. Used by demo-wiring.ts; e2e: test/e2e/impara.spec.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Lesson } from '@shared/lesson';
@@ -135,6 +135,8 @@ const REST = {
     { afterStep: 3, kind: 'predict', q: 'Il motore manda la risposta in un solo blocco alla fine. Cosa cambia con questa PR?',
       options: ['Niente: appare tutta insieme, come prima', 'Appare parola per parola', 'Appare dopo 250 ms', 'Non appare più'],
       correct: 0, why: 'La PR toglie le attese dell’app, ma non può dividere un testo che arriva intero: lo streaming parte dal motore.' },
+    { afterStep: 2, kind: 'truefalse', q: 'Con la finestra nascosta lo store aspetta ancora un fotogramma.', options: ['Vero', 'Falso'], correct: 1,
+      why: 'Falso: nascosta, lo store aspetta 250 ms (STREAM_HIDDEN_MS), perché nessuno guarda e il computer risparmia lavoro.' },
   ],
 };
 
@@ -178,6 +180,19 @@ const WEB_RESEARCH = { facts: [
   { claim: 'Un browser disegna la pagina al massimo una volta per fotogramma, di solito 60 volte al secondo.', url: 'https://developer.mozilla.org/en-US/docs/Web/API/Window/requestAnimationFrame', quote: 'The frequency of calls to the callback function will generally match the display refresh rate.' },
   { claim: 'In Electron il processo main e la finestra parlano tramite IPC.', url: 'https://www.electronjs.org/docs/latest/tutorial/ipc', quote: 'Inter-process communication (IPC) is a key part of building feature-rich desktop applications in Electron.' },
 ] };
+/** The public topics of PR #251 (ADR 0206): three the filter lets through, one it drops (a name of the code). */
+const PR_TOPICS = [
+  { q: 'Electron IPC performance', why: 'il diff manda i pezzi dal main alla finestra', ref: 'src/main/chats/manager.ts:467' },
+  { q: 'W3C Page Visibility API', why: 'lo store rallenta con la finestra nascosta', ref: 'src/renderer/store/store.ts:29' },
+  { q: 'React 18 automatic batching', why: 'lo store disegna una volta per fotogramma', ref: 'src/renderer/store/store.ts:27' },
+  { q: 'ChatManager ITEM_FRAME_MS flush', why: 'il timer di ChatManager', ref: 'src/main/chats/manager.ts:467' },
+];
+/** What the topics' web run finds (it saw only the ask and the three queries left). */
+const REFS_RESEARCH = { facts: [
+  { topic: 't1', claim: 'In Electron il processo main e la finestra si parlano con messaggi IPC asincroni.', url: 'https://www.electronjs.org/docs/latest/tutorial/ipc', quote: 'processes communicate by passing messages through developer-defined "channels"' },
+  { topic: 't2', claim: 'document.hidden dice se la pagina non è visibile, ad esempio ridotta a icona.', url: 'https://www.w3.org/TR/page-visibility-2/', quote: 'The hidden getter steps are to return true if this\'s visibility state is "hidden"' },
+  { topic: 't3', claim: 'React 18 unisce più aggiornamenti di stato in un solo render (automatic batching).', url: 'https://react.dev/blog/2022/03/29/react-v18', quote: 'React groups multiple state updates into a single re-render for better performance' },
+] };
 const TOPIC_QUESTION = { q: 'Ti interessa lo streaming dentro l’app o in generale nei browser?', options: ['Dentro second-brain', 'In generale, nei browser'] };
 
 /** The model's rounds in the demo: the lesson above, a bit at a time. */
@@ -207,8 +222,11 @@ export async function demoTeach(r: TeachRun): Promise<TeachResult> {
     // the app's files as full paths, as a real run would cite them (so «Fonti» opens them)
     const root = /app's source code: (.+?) \(src\/main/.exec(prompt)?.[1] ?? null;
     const facts = FILES_RESEARCH.facts.map(f => ({ ...f, ref: inApp(f.ref ?? '', root) }));
-    return out({ ...FILES_RESEARCH, facts, ...(/wants to understand something/.test(prompt) ? { questions: [TOPIC_QUESTION] } : {}) }, 0.07);
+    return out({ ...FILES_RESEARCH, facts, ...(/wants to understand something/.test(prompt) ? { questions: [TOPIC_QUESTION] } : {}),
+      ...(/pull requests/.test(prompt) && /public topics worth searching/.test(prompt) ? { topics: PR_TOPICS.map(t => ({ ...t, ref: inApp(t.ref, root) })) } : {}) }, 0.07);
   }
+  if (r.round === 'impara-refs') { await wait(900); return out(REFS_RESEARCH, 0.05); }
+  if (r.round === 'impara-verify-refs') { await wait(700); return out({ verdicts: [...prompt.matchAll(/^\{"id":"(f\d+)"/gm)].map(([, id]) => ({ id, verdict: 'ok' })) }, 0.03); }
   if (r.round === 'impara-verify-web') { await wait(700); return out({ verdicts: [{ id: 'f1', verdict: 'ok' }, { id: 'f2', verdict: 'ok' }] }, 0.03); }
   if (r.round === 'impara-verify-files') { await wait(800); return out(filesVerdicts(prompt), 0.04); }
   if (r.round === 'impara-plan') { await wait(900); return out(PLAN, 0.21); }
@@ -247,7 +265,7 @@ export function seedDemoLessons(store: LessonStore, now: number, appRoot: string
   };
   const done: Lesson = {
     id: store.newId(now - 5 * day), title: 'Cos’è la Content Security Policy', kind: 'topic', ask: 'Cos’è la CSP di Electron e perché l’app blocca le immagini esterne',
-    depth: 'quick', level: 'new', createdAt: now - 5 * day, updatedAt: now - 5 * day + 900_000, state: 'ready',
+    depth: 'quick', level: 'new', createdAt: now - 12 * day, updatedAt: now - 5 * day + 900_000, state: 'ready',
     diagram: 'flowchart LR\n  page["La pagina<br/>dell’app"] -->|"chiede"| img["Immagine<br/>esterna"]\n  csp["CSP"] -->|"blocca"| img\n  page --> local["File<br/>dell’app"]',
     outline: ['Cosa fa la CSP', 'Cosa blocca', 'Perché conviene'],
     steps: [
@@ -294,12 +312,17 @@ export function seedDemoLessons(store: LessonStore, now: number, appRoot: string
   const card = (l: Lesson, k: string, extra: Partial<ReviewCard>): ReviewCard => ({ id: `${l.id}:${k}`, lessonId: l.id, subject: l.subject!, kind: 'recall', origin: 'cards', q: '', answer: '', createdAt: l.createdAt, mem: null, ...extra });
   const cards: ReviewCard[] = [
     card(half, 'k:qa1', { kind: 'choice', origin: 'check', q: half.checks[0]!.q, options: half.checks[0]!.options, correct: 0, answer: half.checks[0]!.why, mem: mem(2, 1.2) }),
-    card(done, 'k:qb1', { kind: 'choice', origin: 'check', q: done.checks[0]!.q, options: done.checks[0]!.options, correct: 0, answer: done.checks[0]!.why, mem: mem(5, 15, 2) }),
+    card(done, 'k:qb1', { kind: 'choice', origin: 'check', q: done.checks[0]!.q, options: done.checks[0]!.options, correct: 0, answer: done.checks[0]!.why, mem: mem(5, 25, 3) }),
     card(app, 'c1', { kind: 'recall', q: 'Perché Impara fa due ricerche separate, una sul web e una nei file?', answer: 'Perché chi legge il web non deve vedere i tuoi file: così un testo trovato online non può portare fuori i tuoi dati.', cites: ['f1'], mem: mem(4, 3) }),
     card(app, 'c2', { kind: 'choice', q: 'Chi controlla un fatto trovato nella ricerca?', options: ['Un secondo modello che non l’ha scritto', 'Lo stesso modello che l’ha trovato', 'Nessuno'], correct: 0, answer: 'Chain-of-Verification: chi verifica non ha scritto il fatto, così sbaglia meno.', cites: ['f2'], mem: mem(1, 2.5) }),
     card(app, 'c3', { kind: 'node', q: 'In quale parte dello schema un fatto sbagliato viene corretto?', node: 'vfiles', answer: 'Il controllo dei file rilegge ogni file alla riga citata e corregge il fatto.', cites: ['f1'] }),
+    // the question kinds of ADR 0204
+    card(app, 'c4', { kind: 'order', q: 'In che ordine Impara prepara una lezione?', items: ['Le due ricerche, web e file', 'La verifica dei fatti', 'Le domande, se la richiesta è ambigua', 'Il piano e i primi pezzi'], answer: 'Prima si cercano i fatti, poi un altro modello li verifica; solo con i fatti verificati (e le risposte alle domande) nasce il piano.', cites: ['f1', 'f2'] }),
+    card(app, 'c5', { kind: 'match', q: 'Abbina ogni parte a quello che fa', items: ['Ricerca sul web', 'Ricerca nei file', 'Verifica'], pairs: ['Legge solo la tua domanda e le pagine trovate', 'Legge materiale, brain e app, mai il web', 'Ricontrolla ogni fatto sulla sua fonte'], answer: 'Le due ricerche restano separate; la verifica la fa un modello che non ha scritto i fatti.', cites: ['f1', 'f2'] }),
+    card(app, 'c6', { kind: 'truefalse', q: 'La ricerca sul web può leggere i file del tuo PC.', options: ['Vero', 'Falso'], correct: 1, answer: 'Falso: chi legge il web vede solo la domanda, così una pagina non può portare fuori i tuoi file.', cites: ['f1'], mem: mem(3, 34, 4) }),
+    card(app, 'c7', { kind: 'cloze', q: 'Quale giro parte insieme alla ricerca sul web?', code: 'const [rw, rf] = await Promise.all([\n  web ? this.run(req, { round: \'impara-web\', web: true }) : Promise.resolve(null),\n  this.run(req, { round: ___ }),\n]);', options: ["'impara-files'", "'impara-plan'", "'impara-verify-web'"], correct: 0, answer: 'Le due ricerche partono insieme: il web e i file; la verifica viene dopo.', cites: ['f1'], mem: mem(2, 26, 3) }),
   ];
-  try { fs.writeFileSync(path.join(store.root, 'review.json'), JSON.stringify({ v: 1, cards, log: [{ card: cards[1]!.id, at: now - 5 * day, grade: 3 }, { card: cards[2]!.id, at: now - 4 * day, grade: 3 }, { card: cards[0]!.id, at: now - 2 * day, grade: 2 }, { card: cards[3]!.id, at: now - day, grade: 3 }] })); } catch { /* the demo goes on without reviews */ }
+  try { fs.writeFileSync(path.join(store.root, 'review.json'), JSON.stringify({ v: 1, cards, log: [{ card: cards[1]!.id, at: now - 12 * day, grade: 3 }, { card: cards[1]!.id, at: now - 9 * day, grade: 3 }, { card: cards[1]!.id, at: now - 5 * day, grade: 3 }, { card: cards[2]!.id, at: now - 4 * day, grade: 3 }, { card: cards[0]!.id, at: now - 2 * day, grade: 2 }, { card: cards[3]!.id, at: now - day, grade: 3 }, ...[24, 12, 3].map(d => ({ card: cards[7]!.id, at: now - d * day, grade: 3 as const })), ...[20, 9, 2].map(d => ({ card: cards[8]!.id, at: now - d * day, grade: 3 as const }))] })); } catch { /* the demo goes on without reviews */ }
 }
 
 /** The review cards the demo's model writes at the end of a lesson: from the PR #251 facts (one cites only the
@@ -310,4 +333,5 @@ const DEMO_CARDS = { cards: [
   { kind: 'node', q: 'Quale parte aspetta 250 ms quando la finestra è nascosta?', node: 'store', answer: 'Lo store della finestra: STREAM_HIDDEN_MS = 250, perché nessuno guarda.', cites: ['f3'] },
   { kind: 'choice', q: 'Se STREAM_MS tornasse a 100 ms, cosa vedresti?', options: ['Il testo di nuovo a scatti', 'Nessuna differenza', 'La chat non si aggiornerebbe più'], correct: 0, answer: 'Tornerebbe una delle due attese da 100 ms: il testo arriverebbe a scatti.', cites: ['f2'] },
   { kind: 'recall', q: 'Quanti fotogrammi al secondo mostra uno schermo a 60 Hz?', answer: '60.', cites: ['f5'] },
+  { kind: 'order', q: 'Metti in ordine il viaggio di una parola dopo la PR #251', items: ['Il motore la scrive', 'ChatManager la manda dopo un fotogramma', 'Lo store la applica', 'La finestra la disegna'], answer: 'Dal motore a main (ChatManager, 16 ms), poi lo store della finestra (16 ms), poi il disegno.', cites: ['f1', 'f2'] },
 ] };

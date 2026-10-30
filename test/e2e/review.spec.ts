@@ -47,7 +47,7 @@ test('S1: markdown from a chat cannot navigate the app window (area/map, forms, 
 test('S3: a toast action requests input handoff, dismisses its notification and leaves the app usable', async () => {
   const { app, page } = await launchDemo();
   await goPage(page, 'costi');
-  await expect(page.getByTestId('brain-page-costi')).toBeVisible();
+  await expect(page.getByTestId('an-panel-costi')).toBeVisible();
   // a chat's turn failing toasts (a logged error no longer does: lib/notify.ts TOAST_KINDS, "only what needs the user
   // interrupts"); the layer holds toasts only since 2026-10-22, requests are in the questions window
   await demo(app, (d, e) => d.event(e), { kind: 'chat-failed', title: 'Turno finito con un errore', chatId: 'mappa' });
@@ -124,7 +124,7 @@ test('C3/C4/C7: free text for Cursor questions too, with a note; long details ke
   await expect(win).toHaveCount(0);
   // C4: a permission with a very long command, on a page: the window keeps its buttons in sight
   await goPage(page, 'costi');
-  await expect(page.getByTestId('brain-page-costi')).toBeVisible();
+  await expect(page.getByTestId('an-panel-costi')).toBeVisible();
   const long = Array.from({ length: 200 }, (_, i) => `echo riga ${i}`).join('\n');
   await ask('mappa', { type: 'permission', tool: 'Bash', title: 'Bash · script lungo', detail: long, input: { command: long } });
   const allow = page.getByTestId('qwin-card-opt-1');

@@ -1,20 +1,31 @@
-// A check under the lesson's board (ADR 0185; mockup /mnt/project-files/ui-review/impara/3-A-verifica.png): the question
-// (predict or choose), its options (click, 1-4 / A-D, or said aloud: «la b»), then the right one and why, the user's
-// own marked, and «Eri sicuro?» (tirato a caso, abbastanza, sicurissimo: a wrong answer given with certainty is the one
-// to look at again). No grade: it is there to fix the piece in memory (practice testing, Dunlosky et al. 2013). The
-// first answer stays. Used by ImparaPlayer.tsx.
+// A check under the lesson's board (ADR 0185; kinds and feedback ADR 0204): the question, of any kind of shared/quiz.ts
+// (ImparaQuiz.tsx: pick one, true or false, complete the code, put in order, match the pairs; a pick also by keys 1-4 /
+// A-D, which the player handles, or said aloud: «la b»), then at once the colour, the app's sound and a short
+// animation, why, and «Eri sicuro?» (tirato a caso, abbastanza, sicurissimo: a wrong answer given with certainty is
+// the one to look at again). No grade: it is there to fix the piece in memory (practice testing, Dunlosky et al.
+// 2013). The first answer stays. Used by ImparaPlayer.tsx.
+import { useEffect, useRef } from 'react';
 import type { LessonCheck, LessonConfidence } from '@shared/lesson';
+import { isPick, type QuizResponse } from '@shared/quiz';
 import { t } from '../../i18n';
-import { Button, Kbd } from '../ui';
+import { Button } from '../ui';
 import { IconArrowRight, IconRefresh } from '../Icons';
-
-const LETTERS = ['A', 'B', 'C', 'D'];
+import { ImparaQuiz, answerSound } from './ImparaQuiz';
 
 export function ImparaCheck({ check, n, total, onAnswer, onConfidence, onNext, onReview, last }: {
-  check: LessonCheck; n: number; total: number; onAnswer: (i: number) => void; onConfidence: (c: LessonConfidence) => void; onNext: () => void; onReview: () => void; last: boolean;
+  check: LessonCheck; n: number; total: number; onAnswer: (r: QuizResponse) => void; onConfidence: (c: LessonConfidence) => void; onNext: () => void; onReview: () => void; last: boolean;
 }) {
   const a = check.answer;
   const right = a ? a.choice === check.correct : false;
+  // the answer given now (not a check reopened already answered) rings and moves once
+  const seen = useRef<{ id: string; open: boolean; rung: boolean }>({ id: check.id, open: !a, rung: !!a });
+  if (seen.current.id !== check.id) seen.current = { id: check.id, open: !a, rung: !!a };
+  const fresh = !!a && seen.current.open;
+  useEffect(() => {
+    if (!a || seen.current.rung) return;
+    seen.current.rung = true;
+    answerSound(a.choice === check.correct);
+  }, [a, check.correct]);
   return (
     <div className="ip-quiz" data-testid="impara-check" role="group" aria-label={check.q}>
       <div className="ip-row">
@@ -23,17 +34,9 @@ export function ImparaCheck({ check, n, total, onAnswer, onConfidence, onNext, o
         <span className="sp" /><span className="ip-muted">{t('impara.check.noGrade')}</span>
       </div>
       <h3 data-testid="impara-check-q">{check.q}</h3>
-      {check.options.map((o, i) => {
-        const cls = !a ? '' : i === check.correct ? 'good' : i === a.choice ? 'bad' : 'off';
-        return (
-          <button key={i} type="button" className={`ip-opt ${cls}`} disabled={!!a} onClick={() => onAnswer(i)} data-testid={`impara-opt-${i}`}>
-            <span className="ip-opt-k">{LETTERS[i]}</span><span className="ip-opt-t">{o}</span>
-            {a && i === a.choice && <span className="ip-opt-mine">{t('impara.check.yours')}</span>}
-            {a && i === check.correct && i !== a.choice && <span className="ip-opt-right">{t('impara.check.right')}</span>}
-          </button>
-        );
-      })}
-      {!a && <p className="ip-muted ip-check-hint">{t('impara.check.hint')} <Kbd>1</Kbd>–<Kbd>{String(check.options.length)}</Kbd></p>}
+      {/* the player answers a pick's keys; order and match take theirs here */}
+      <ImparaQuiz body={check} seed={check.id} done={a ? { response: a.seq ?? a.choice, right } : null} onAnswer={onAnswer} keys={false} fresh={fresh} testid="impara-check-quiz" />
+      {!a && isPick(check.kind) && <p className="ip-muted ip-check-hint">{t('impara.check.hint')} 1–{check.options.length}</p>}
       {a && <>
         <div className={`ip-fb ${right ? 'ok' : 'ko'}`} data-testid="impara-check-why"><b>{right ? t('impara.check.rightTitle') : t('impara.check.wrongTitle')}</b> {check.why}</div>
         <div className="ip-conf-l ip-muted">{t('impara.check.sure')}</div>

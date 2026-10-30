@@ -21,6 +21,7 @@ import { createStore } from '../store/createStore';
 import { app, send } from '../store/store';
 import { toast } from '../store/ui';
 import { t } from '../i18n';
+import { track } from './use-counter';
 import { micAudio, onMicChange, openMicStream } from './mic';
 import { VOICE_RATE, forEar, isNoise, parseSpokenAnswer, settledText, speakable, speechChunks, spokenQuestion, turnToSpeak, type SpokenAnswer, type SpokenQuestionInput, type VoiceName, type VoiceState, type VoiceHeard, type VoiceSpeech } from '@shared/voice';
 
@@ -130,6 +131,7 @@ export async function toggleVoice(target?: VoiceTarget): Promise<void> {
     stopVoice();
     if (s.mode === 'dictate' || !target) return; // the mic button during a conversation: from talking to dictating
   }
+  track('dictation'); // the local usage counter (ADR 0202)
   await startListening('dictate', target ?? s.target);
 }
 
@@ -138,6 +140,7 @@ export async function setTalk(on: boolean): Promise<void> {
   const s = voice.get();
   if (!on) { if (s.mode === 'talk' && s.phase !== 'off') stopVoice(); return; }
   if (s.phase !== 'off') { if (s.mode === 'talk') return; stopVoice(); }
+  track('talk');
   await startListening('talk', 'orchestrator');
 }
 

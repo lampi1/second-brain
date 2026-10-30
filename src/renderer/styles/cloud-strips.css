@@ -22,7 +22,7 @@
 .cloud-note { margin:0; font-size:var(--fs-s); color:var(--text-3); }
 .cloud-follow { display:flex; gap:6px; }
 .cloud-input { flex:1; min-width:0; height:30px; padding:0 10px; border-radius:8px; border:1px solid var(--border-2); background:var(--surface); color:var(--text); font:inherit; font-size:var(--fs-s); text-align:left; }
-.cloud-input:focus { outline:none; border-color:var(--blue); box-shadow:0 0 0 3px var(--blue-bg); }
+.cloud-input:focus { outline:none; border-color:var(--blue); box-shadow:0 0 0 3px var(--focus-glow); }
 .cloud-actions { display:flex; gap:6px; flex-wrap:wrap; }
 .cloud-actions:empty { display:none; }
 .cloud-where { display:flex; flex-direction:column; gap:8px; }

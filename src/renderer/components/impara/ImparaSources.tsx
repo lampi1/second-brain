@@ -1,8 +1,9 @@
 // «Fonti» of a lesson (ADR 0188; owner, 2026-10-29: «che siano visibili da qualche parte le fonti che ha trovato, sia
 // file del mio pc che link web»): every source the research found and the verification kept, in one drawer over the
-// lesson, grouped by where it came from: the web pages (opened in the user's browser), the files of this PC (opened in
-// the app's read-only viewer at the cited line), the model's own knowledge, and the lesson's material (the PR, the
-// pasted text). Each source lists its facts with their check and the pieces that use them (a click goes there).
+// lesson, grouped by where it came from: the standards and references searched for the public topics of the user's
+// files (ADR 0206: each fact says «trovato perché il tuo file usa …», the topic, never the file), the web pages (opened
+// in the user's browser), the files of this PC (opened in the app's read-only viewer at the cited line), the model's own
+// knowledge, and the lesson's material (the PR, the pasted text). Each source lists its facts with their check and the pieces that use them (a click goes there).
 // `SourceChips` is the short list the Preparing screen shows once the facts are checked. Used by ImparaPlayer.tsx and
 // ImparaPrep.tsx; styles impara.css (.ip-srcs*).
 import { useEffect } from 'react';
@@ -11,7 +12,7 @@ import { openFileViewer } from '../../actions';
 import { moveTo } from '../../lib/impara';
 import { t } from '../../i18n';
 import { Button } from '../ui';
-import { IconExternal, IconFile, IconGlobe, IconLightbulb, IconX } from '../Icons';
+import { IconBook, IconExternal, IconFile, IconGlobe, IconLightbulb, IconX } from '../Icons';
 
 /** A file reference as the viewer opens it: `path:line` (a range keeps its first line). */
 export const fileOf = (ref: string) => {
@@ -45,6 +46,7 @@ function Fact({ f, lesson, used, onGo }: { f: LessonFact; lesson: Lesson; used: 
       <span className={`ip-tag ${f.check === 'ok' ? 'green' : f.check === 'fixed' ? 'blue' : 'amber'}`}>{t(`impara.fact.${f.check}`)}</span>
       <span className="ip-fact-c">{f.claim}</span>
       {f.quote && <q className="ip-fact-q">{f.quote}</q>}
+      {f.topic && <span className="ip-fact-why" data-testid="impara-src-why">{t('impara.src.why', { topic: f.topic })}</span>}
       {f.from === 'file' && fileOf(f.ref).line && <button type="button" className="ip-srcs-line" onClick={() => openFact(f.ref)} data-testid="impara-src-line">{t('impara.src.line', { n: fileOf(f.ref).line! })}</button>}
       {used.length > 0 && (
         <span className="ip-srcs-used">{t('impara.src.usedIn')} {used.map(n => (
@@ -58,7 +60,8 @@ function Fact({ f, lesson, used, onGo }: { f: LessonFact; lesson: Lesson; used: 
 export function ImparaSources({ lesson, onClose }: { lesson: Lesson; onClose: () => void }) {
   const facts = lesson.facts ?? [];
   const used = usage(lesson);
-  const web = groups(facts.filter(f => f.from === 'web'), f => f.ref);
+  const refs = groups(facts.filter(f => f.from === 'web' && f.topic), f => f.ref);
+  const web = groups(facts.filter(f => f.from === 'web' && !f.topic), f => f.ref);
   const files = groups(facts.filter(f => f.from === 'file'), f => fileOf(f.ref).path);
   const known = facts.filter(f => f.from === 'known');
   // Esc closes the drawer before anything else (the full screen, the page)
@@ -78,12 +81,23 @@ export function ImparaSources({ lesson, onClose }: { lesson: Lesson; onClose: ()
         <header className="ip-srcs-head">
           <div>
             <h3>{t('impara.src.title')}</h3>
-            <p className="ip-muted">{t('impara.src.summary', { web: web.length, files: files.length, facts: facts.length })}</p>
+            <p className="ip-muted">{t('impara.src.summary', { web: web.length + refs.length, files: files.length, facts: facts.length })}</p>
           </div>
           <Button variant="ghost" size="s" onClick={onClose} testid="impara-sources-close" aria-label={t('impara.src.close')}><IconX size={13} /></Button>
         </header>
         <div className="ip-srcs-body">
           {!facts.length && <p className="ip-muted" data-testid="impara-sources-none">{t('impara.src.none')}</p>}
+          {refs.length > 0 && <section data-testid="impara-src-refs">
+            <div className="ip-label"><IconBook size={11} /> {t('impara.src.refs')}</div>
+            {refs.map(g => (
+              <div key={g.key} className="ip-srcs-item" data-testid="impara-src-ref">
+                <a href={g.key} target="_blank" rel="noreferrer" className="ip-srcs-link" data-tip={g.key}>
+                  <b>{hostOf(g.key)}</b><span>{pathOf(g.key)}</span><IconExternal size={11} />
+                </a>
+                {list(g)}
+              </div>
+            ))}
+          </section>}
           {web.length > 0 && <section>
             <div className="ip-label"><IconGlobe size={11} /> {t('impara.src.web')}</div>
             {web.map(g => (
@@ -123,21 +137,34 @@ export function ImparaSources({ lesson, onClose }: { lesson: Lesson; onClose: ()
   );
 }
 
-/** The sources found, short: one chip per page or file, on the Preparing screen once the facts are checked. */
+/** The sources found, short: one chip per page or file, on the Preparing screen once the facts are checked; the
+ *  standards and references (ADR 0206) on a line of their own, each saying which topic it was searched for. */
 export function SourceChips({ facts }: { facts: readonly LessonFact[] }) {
-  const seen = new Map<string, LessonFact>();
-  for (const f of facts) if (f.from !== 'known') { const k = f.from === 'web' ? f.ref : fileOf(f.ref).path; if (!seen.has(k)) seen.set(k, f); }
-  if (!seen.size) return null;
-  const all = [...seen];
+  const seen = new Map<string, LessonFact>(), refs = new Map<string, LessonFact>();
+  for (const f of facts) {
+    if (f.from === 'known') continue;
+    const into = f.topic ? refs : seen, k = f.from === 'web' ? f.ref : fileOf(f.ref).path;
+    if (!into.has(k)) into.set(k, f);
+  }
+  if (!seen.size && !refs.size) return null;
+  const row = (label: string, map: Map<string, LessonFact>, testid: string) => {
+    const all = [...map];
+    return (
+      <div className="ip-prep-srcs" data-testid={testid}>
+        <span className="ip-muted">{label}</span>
+        {all.slice(0, 10).map(([k, f]) => (
+          <span key={k} className={`ip-cite ${f.check}`} data-tip={f.topic ? `${t('impara.src.why', { topic: f.topic })} · ${k}` : k}>
+            {f.topic ? <IconBook size={10} /> : f.from === 'web' ? <IconGlobe size={10} /> : <IconFile size={10} />}{f.from === 'web' ? hostOf(k) : nameOf(k)}
+          </span>
+        ))}
+        {all.length > 10 && <span className="ip-muted">+{all.length - 10}</span>}
+      </div>
+    );
+  };
   return (
-    <div className="ip-prep-srcs" data-testid="impara-prep-sources">
-      <span className="ip-muted">{t('impara.src.found')}</span>
-      {all.slice(0, 10).map(([k, f]) => (
-        <span key={k} className={`ip-cite ${f.check}`} data-tip={k}>
-          {f.from === 'web' ? <IconGlobe size={10} /> : <IconFile size={10} />}{f.from === 'web' ? hostOf(k) : nameOf(k)}
-        </span>
-      ))}
-      {all.length > 10 && <span className="ip-muted">+{all.length - 10}</span>}
-    </div>
+    <>
+      {seen.size > 0 && row(t('impara.src.found'), seen, 'impara-prep-sources')}
+      {refs.size > 0 && row(t('impara.src.refs'), refs, 'impara-prep-refs')}
+    </>
   );
 }

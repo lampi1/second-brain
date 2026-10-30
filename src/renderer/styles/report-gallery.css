@@ -4,7 +4,7 @@
 .bx-md .sb-report-image img.sb-img { display: block; width: 100%; height: 190px; min-width: 0; object-fit: contain; margin: 0; border: 0; border-radius: 0; background: var(--bx-surface); }
 .bx-md .sb-report-image figcaption { padding: 9px 11px; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; color: var(--bx-text-3); }
 .bx-md .sb-report-image-side { display: block; color: var(--bx-text); margin-bottom: 3px; }
-.bx-md img.sb-img:focus-visible { outline: 3px solid var(--bx-blue); outline-offset: -3px; }
+.bx-md img.sb-img:focus-visible { outline: 2px solid var(--focus); outline-offset: -3px; }
 .bx-md .sb-report-image .sb-img-note { display: block; margin: 10px; }
 /* "Prima / Dopo": the pair of a gallery in the viewer's before/after view (components/viewer/ShotsCompare.tsx) */
 .bx-md .sb-report-compare { grid-column: 1 / -1; justify-self: start; display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px 0 10px; border-radius: 999px; border: 1px solid color-mix(in srgb, var(--bx-blue) 45%, var(--bx-border)); background: color-mix(in srgb, var(--bx-blue) 12%, var(--bx-surface)); color: var(--bx-text); font: 600 12px var(--bx-font, inherit); cursor: pointer; transition: background var(--dur-fast, 120ms) ease, border-color var(--dur-fast, 120ms) ease; }

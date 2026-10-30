@@ -100,7 +100,7 @@ export const BRAIN_LAYOUT: readonly LayoutSection[] = [
  *  content): a page missing from both lists fails test/unit/brainmodel/upgrade.test.ts, so a new page that holds
  *  content cannot ship without its layout entry. Flows keep their definitions and runs in userData/flows,
  *  scoped to the brain context, so the flussi page does not introduce a brain-folder migration. */
-export const PAGES_WITHOUT_CONTENT: readonly string[] = ['home', 'flussi', 'agenti', 'task', 'dashboard', 'costi', 'qualita', 'apprendimento', 'confronto', 'file', 'guida', 'browser', 'registrazioni', 'impara', 'classificatori', 'collegamenti'];
+export const PAGES_WITHOUT_CONTENT: readonly string[] = ['home', 'flussi', 'agenti', 'task', 'dashboard', 'andamento', 'confronto', 'file', 'guida', 'browser', 'registrazioni', 'impara', 'collegamenti'];
 
 /** A short stable hash of an entry (FNV-1a over its fields): changes when what the entry means changes. */
 export function sectionHash(s: LayoutSection): string {

@@ -23,6 +23,7 @@ import { genuiRequestEn } from './areas/genui-request.en';
 import { voiceEn } from './areas/voice.en';
 import { recEn } from './areas/rec.en';
 import { imparaEn } from './areas/impara.en';
+import { imparaV3En } from './areas/impara-v3.en';
 import {studioEn}from'./areas/studio.en';
 import { permissionsEn } from './areas/permissions.en';
 import { langSwitchEn } from './areas/lang-switch.en';
@@ -54,6 +55,7 @@ import { queriesEn } from './areas/queries.en';
 import { lampoEn } from './areas/lampo.en';
 import { awayEn } from './areas/away.en';
 import { learningEn } from './areas/learning.en';
+import { andamentoEn } from './areas/andamento.en';
 import { suggestEn } from './areas/suggest.en';
 import { estimateEn } from './areas/estimate.en';
 import { logEn } from './areas/log.en';
@@ -85,6 +87,7 @@ export const en: Dict = {
   ...lampoEn,
   ...awayEn,
   ...learningEn,
+  ...andamentoEn,
   ...suggestEn,
   ...estimateEn,
   ...logEn,
@@ -92,6 +95,7 @@ export const en: Dict = {
   ...voiceEn,
   ...recEn,
   ...imparaEn,
+  ...imparaV3En,
   'genui.request.question': 'Question',
   'genui.request.permission': 'Permission',
   'genui.request.from': ({ kind, chat, title }) => `${kind} from ${chat ?? 'a chat'}: ${title}`,

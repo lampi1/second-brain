@@ -106,7 +106,7 @@ test("Idee · Dall'IA: the AI's ideas with their reasoning in the peek, filter b
 
 test('Costi: KPIs, savings, charts by day / kind / model / area, chats table; period switch', async () => {
   await open('costi');
-  const p = page.getByTestId('brain-page-costi');
+  const p = page.getByTestId('brain-page-andamento');
   await settled();
   await expect(p.getByTestId('bx-lead')).toContainText('in 7 giorni');
   await expect(p.getByTestId('bx-advice')).toContainText('Chat lunghe');
@@ -122,7 +122,7 @@ test('Costi: KPIs, savings, charts by day / kind / model / area, chats table; pe
 
 test('Qualità: four metrics with their source (errors caught, rules, PRs, reopened bugs) and proposals in one row', async () => {
   await open('qualita');
-  const p = page.getByTestId('brain-page-qualita');
+  const p = page.getByTestId('brain-page-andamento');
   await settled();
   for (const id of ['trovati', 'tornati', 'pr', 'riaperti']) await expect(p.getByTestId(`bx-q-${id}`)).toContainText('Fonte:');
   await expect(p.getByTestId('bx-q-tornati')).toContainText('2 su 4');

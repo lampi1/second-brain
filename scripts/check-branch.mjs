@@ -4,13 +4,18 @@
 // the full `npm run check` (the test lease queued branches for hours behind e2e runs). Green on a clean tree, it
 // records the tip as "tested (light)" through scripts/check-pass.mjs --kind light. The full `npm run check` stays the
 // gate of main and of `npm run promote`: a branch needs only this one to be merged. Used by package.json
-// "check:branch"; test/unit/check-branch.test.ts checks it starts no e2e.
+// "check:branch"; test/unit/check-branch.test.ts checks it starts no e2e. Whatever the branch changed, it also runs the doc
+// freshness checks (ADR 0208): scripts/readme-check.mjs against the merge base and the DOC_TESTS (every MCP tool in
+// app_guide and docs/agents/commands.md, every page and Settings section with its Guida card, the cards' anchors).
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const git = (...a) => execFileSync('git', a, { encoding: 'utf8' }).trim();
+
+/** The doc freshness tests (ADR 0208): run on every branch, since a new tool, page or card rarely touches their imports. */
+export const DOC_TESTS = ['test/unit/tool-catalog.test.ts', 'test/unit/guide-anchors.test.ts', 'test/unit/concept-guide.test.ts', 'test/unit/guide-link.test.ts', 'test/unit/readme-check.test.ts'];
 
 /** characters of file names per eslint call: well below cmd.exe's 8191 with the command and the separators */
 const LINT_CHARS = 6000;
@@ -54,6 +59,10 @@ function main() {
   // in chunks: cmd.exe takes at most 8191 characters per command line (a large branch exceeded it on Windows, 2026-10-20)
   else for (const files of chunks(lintable, LINT_CHARS)) run('lint', 'npx', ['eslint', '--no-warn-ignored', ...files]);
   run('unit', 'npx', ['vitest', 'run', '--changed', base, '--passWithNoTests']);
+  // the docs keep up with the code (ADR 0208): the README (English, images, screenshots fresh against the base) and the
+  // tool catalog, the Guida's coverage and anchors; each failure names its fix
+  run('readme', 'node', ['scripts/readme-check.mjs', '--base', base]);
+  run('doc freshness', 'npx', ['vitest', 'run', ...DOC_TESTS]);
   // the repo is public product (ADR 0061): the guard on the changed files (seconds, same scanner and deny list as the
   // hooks), so a private name blocks the branch, not main after the merge (2026-10-14); the full scan is in `npm run check`
   const present = changed.filter(f => fs.existsSync(f));
