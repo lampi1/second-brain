@@ -45,8 +45,8 @@ export function isActionable(e: Ev & Partial<Pick<FeedEvent, 'chatId'>>, open?: 
 export function sectionOf(kind: string): string | null {
   if (kind === 'idea') return 'idee';
   if (kind === 'reflection') return 'idee';
-  if (kind === 'error' || kind === 'win' || kind === 'proposal') return 'qualita';
-  if (kind === 'budget') return 'costi';
+  // Costi and Qualità are tabs of Andamento (ADR 0202): one badge for both
+  if (kind === 'error' || kind === 'win' || kind === 'proposal' || kind === 'budget') return 'andamento';
   if (kind.startsWith('chat-')) return 'home';
   // sync-* (the brain's own sync) had Oggi's badge, mail-* had Comunicazione's; both pages are gone: center only
   if (kind === 'task' || kind === 'task-alert') return 'task';
@@ -57,7 +57,7 @@ export function sectionOf(kind: string): string | null {
 export const AI_WHO = "dell'IA";
 
 /** Sections whose badge is a warning (amber), not a plain count. */
-export const WARN_SECTIONS = new Set(['costi']);
+export const WARN_SECTIONS = new Set(['andamento']);
 
 export interface ReadState { readAllAt: number; readIds: string[]; seen: Record<string, number> }
 export const emptyRead: ReadState = { readAllAt: 0, readIds: [], seen: {} };

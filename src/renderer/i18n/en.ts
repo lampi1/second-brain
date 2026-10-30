@@ -53,6 +53,7 @@ import { queriesEn } from './areas/queries.en';
 import { lampoEn } from './areas/lampo.en';
 import { awayEn } from './areas/away.en';
 import { learningEn } from './areas/learning.en';
+import { andamentoEn } from './areas/andamento.en';
 import { suggestEn } from './areas/suggest.en';
 import { estimateEn } from './areas/estimate.en';
 import { logEn } from './areas/log.en';
@@ -84,6 +85,7 @@ export const en: Dict = {
   ...lampoEn,
   ...awayEn,
   ...learningEn,
+  ...andamentoEn,
   ...suggestEn,
   ...estimateEn,
   ...logEn,

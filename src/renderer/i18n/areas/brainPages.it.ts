@@ -10,9 +10,7 @@ export const brainPagesIt = {
   'brainPages.nav.browser': 'Browser',
   'brainPages.nav.task': 'Task',
   'brainPages.nav.idee': 'Idee',
-  'brainPages.nav.costi': 'Costi',
-  'brainPages.nav.qualita': 'Qualità',
-  'brainPages.nav.apprendimento': 'Apprendimento',
+  'brainPages.nav.andamento': 'Andamento',
   'brainPages.nav.script': 'Script',
   'brainPages.nav.log': 'Log',
   'brainPages.nav.confronto': 'Confronto modelli',
@@ -21,7 +19,6 @@ export const brainPagesIt = {
   'brainPages.nav.impostazioni': 'Impostazioni',
   'brainPages.nav.regole': 'Regole',
   'brainPages.nav.memoria': 'Memoria',
-  'brainPages.nav.classificatori': 'Classificatori',
   'brainPages.nav.collegamenti': 'Mappa',
 
   // Confronto.tsx

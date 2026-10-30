@@ -18,6 +18,7 @@ import { journal } from './activity/journal';
 import { log } from './log';
 import { startStallWatch } from './perf';
 import { RendererErrors } from './renderer-errors';
+import { demoUseCounts, useCounts } from './use-counter';
 import { APP_ID, ensureShortcuts, taskbarDetails } from './shortcuts';
 import { installAppMenu } from './app-menu';
 import { agentsMayOpen, engineOn } from './engines/policy';
@@ -95,6 +96,9 @@ app.whenReady().then(async () => {
   // engines' Job Objects (ADR 0026): the helper loads while the services start; engines started before it is ready wait
   if (process.env.SB_DEMO !== '1') jobGuard.start(path.join(app.getPath('userData'), 'jobguard'));
   const s = await createServices({ emitter, window: () => win, userData: app.getPath('userData') });
+  // the usage counter (ADR 0202): local, zero tokens; after the services, so the agent runs' store opened app.db first;
+  // the demo counts in memory only, from two fake weeks
+  useCounts.init(process.env.SB_DEMO === '1' ? { userData: null, seed: demoUseCounts(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now()), ...(process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}) } : { userData: app.getPath('userData') });
   setUiLangSource(() => { const l = s.brain.settings().language; return isLang(l) ? l : systemLang(); });
   // the Log page (ADR 0111): the app's own events, readable and live, kept 7 days at most; zero tokens
   const activity = attachActivity({ userData: app.getPath('userData'), emitter, chats: () => s.chats.list(), brainRoot: () => s.brain.info().brainRoot });
@@ -204,7 +208,7 @@ app.whenReady().then(async () => {
   const recPageGone = () => { if (s.recordings.openIds().length) recordings.abandonOpen(); };
   win?.webContents.on('did-start-navigation', d => { if (d.isMainFrame && !d.isSameDocument) recPageGone(); });
   win?.webContents.on('render-process-gone', recPageGone);
-  app.on('will-quit', () => { recordings.dispose(); voice.dispose(); });
+  app.on('will-quit', () => { recordings.dispose(); voice.dispose(); useCounts.close(); });
   const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
   // the Battito's proposals count in the morning block's "Da approvare" (ADR 0102)
   if (s.morning && pulse) s.morning.extraApprovals = () => pulse.pendingApprovals();

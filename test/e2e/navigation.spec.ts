@@ -16,14 +16,14 @@ async function openPage(page: Page, id: 'costi' | 'idee') {
   await page.keyboard.press('Control+K');
   await page.getByTestId('palette-input').fill(`sb://${id}`);
   await page.getByTestId('palette-item-link').click();
-  // Idee is a tab of Memoria (ADR 0122): its old link lands there
-  await expect(page.getByTestId(id === 'idee' ? 'page-memoria' : `page-${id}`)).toBeVisible();
+  // Idee is a tab of Memoria (ADR 0122), Costi a tab of Andamento (ADR 0202): their old links land there
+  await expect(page.getByTestId(id === 'idee' ? 'page-memoria' : 'page-andamento')).toBeVisible();
 }
 
 test('an important event shows a toast above everything; its action opens the place and highlights it', async () => {
   const { app, page } = await launchDemo();
   await openPage(page, 'costi');
-  await expect(page.getByTestId('page-costi')).toBeVisible();
+  await expect(page.getByTestId('an-panel-costi')).toBeVisible();
   await event(app, { kind: 'chat-failed', title: 'Test e2e rossi', detail: 'il turno è finito con un errore', chatId: 'mappa' });
   const layer = await layerPage(app);
   await expect(layer.getByTestId('ev-toast-chat-failed')).toContainText('Test e2e rossi');
@@ -80,21 +80,19 @@ test('section badges count new events and clear when the section is visited', as
   // a live clock: frozen, the visit and the event share one instant and the event is never newer than the visit
   const { app, page } = await launchDemo({ freeze: false });
   await expect(page.getByTestId('nav-idee')).toHaveCount(0); // a Memoria tab now (ADR 0122), never a rail entry
-  // Costi's badge is a warning mark, not a number (WARN_SECTIONS): it shows with a new budget event
-  const badge = page.getByTestId('nav-badge-costi');
-  await page.getByTestId('nav-costi').click();
+  // Andamento's badge (Costi and Qualità are its tabs, ADR 0202) is a warning mark, not a number (WARN_SECTIONS): it
+  // shows with a new budget event
+  const badge = page.getByTestId('nav-badge-andamento');
+  await page.getByTestId('nav-andamento').click();
   await expect(badge).toHaveText('');
-  await page.getByTestId('nav-qualita').click();
-  // logged-only kinds never badge (policy 2026-10-13): an idea leaves the other badges as they were; the budget event
-  // after it shows Costi's mark, so the idea was handled by then
-  const ideas = page.getByTestId('nav-badge-qualita');
-  const ideasBefore = await ideas.textContent();
+  await page.getByTestId('nav-home').click();
+  // logged-only kinds never badge (policy 2026-10-13): an idea adds nothing; the budget event after it shows the mark,
+  // so the idea was handled by then
   await event(app, { kind: 'idea', title: 'Una idea in più' });
   await event(app, { kind: 'budget', title: 'Claude al 80 % del limite di oggi' });
   await expect(badge).toHaveText('!');
-  await expect(ideas).toHaveText(ideasBefore ?? '');
-  await page.getByTestId('nav-costi').click();
-  await expect(page.getByTestId('page-costi')).toBeVisible();
+  await page.getByTestId('nav-andamento').click();
+  await expect(page.getByTestId('an-panel-costi')).toBeVisible();
   await expect(badge).toHaveText('');
   await app.close();
 });
@@ -142,11 +140,11 @@ test('back/forward, recents, Ctrl+1, G-letter keys, the persistent Orchestrator 
   await openPage(page, 'idee');
   await expect(page.getByTestId('mh-panel-idee')).toBeVisible();
   await page.keyboard.press('Alt+ArrowLeft');
-  await expect(page.getByTestId('page-costi')).toBeVisible();
+  await expect(page.getByTestId('an-panel-costi')).toBeVisible();
   await page.keyboard.press('Alt+ArrowLeft');
   await expect(page.getByTestId('view-agents')).toBeVisible();
   await page.keyboard.press('Alt+ArrowRight');
-  await expect(page.getByTestId('page-costi')).toBeVisible();
+  await expect(page.getByTestId('an-panel-costi')).toBeVisible();
   await page.getByTestId('nav-recent').click();
   await expect(page.getByTestId('nav-recent-pop')).toContainText('Idee');
   await page.keyboard.press('Escape');
@@ -156,7 +154,7 @@ test('back/forward, recents, Ctrl+1, G-letter keys, the persistent Orchestrator 
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press('g');
   await page.keyboard.press('q');
-  await expect(page.getByTestId('page-qualita')).toBeVisible();
+  await expect(page.getByTestId('an-panel-qualita')).toBeVisible();
   // the Orchestrator without leaving the page
   await page.keyboard.press('Control+R');
   await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
@@ -171,7 +169,7 @@ test('back/forward, recents, Ctrl+1, G-letter keys, the persistent Orchestrator 
   await page.keyboard.press('1');
   await expect(page.getByTestId('orchestrator-overlay')).toContainText('Ecco il quadro');
   await setQuestionsAside({ app, page }); // the queue opened by Ctrl+J shows the others next: set aside again
-  await expect(page.getByTestId('page-qualita')).toBeVisible();
+  await expect(page.getByTestId('an-panel-qualita')).toBeVisible();
   await shot(page, 'orchestrator-overlay');
   await page.keyboard.press('Control+R');
   await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
@@ -192,7 +190,7 @@ test('copy an internal link and paste it in Ctrl+K: it goes there and highlights
   await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('sb://home/chat-qa');
   const link = 'sb://workspace/chat-qa'; // a link copied before SPEC 19 still lands on the chat, in the Grindhouse
   await openPage(page, 'costi');
-  await expect(page.getByTestId('page-costi')).toBeVisible();
+  await expect(page.getByTestId('an-panel-costi')).toBeVisible();
   await page.keyboard.press('Control+K');
   await page.getByTestId('palette-input').fill(link);
   await expect(page.getByTestId('palette-item-link')).toBeVisible();

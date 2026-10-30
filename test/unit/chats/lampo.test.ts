@@ -9,7 +9,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { ChatManager, LAMPO_TITLE } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
-import { lastExchange } from '../../../src/renderer/lib/lampo';
+import { BRIEF_ASK, BRIEF_END, BRIEF_START, briefAnswer, briefOf, lastExchange } from '../../../src/renderer/lib/lampo';
+import { FLASH_BRIEF_TAG } from '../../../src/shared/roles';
 import { LAMPO_CONTEXT_END, LAMPO_CONTEXT_LABEL, orchestratorContext } from '../../../src/main/chats/lampo-context';
 import type { ChatItem } from '../../../src/shared/contract';
 
@@ -196,5 +197,23 @@ describe('Flash earns from its answers (ADR 0131)', () => {
     // the agent card gets a Flash standing; no run is recorded for it
     expect(m.runs.list().some(r => r.chatId === l.id)).toBe(false);
     expect(m.runMetrics().find(x => x.agentId === 'flash')?.standing).toMatchObject({ runs: 3, wins: 0, sources: { quick: 2 } });
+  });
+});
+
+describe('«Fanne un lavoro» brief (ADR 0209)', () => {
+  const user = (id: string, text: string) => ({ id, kind: 'user', text, at: 1 }) as unknown as ChatItem;
+  const said = (id: string, text: string, streaming = false) => ({ id, kind: 'assistant', text, at: 2, streaming }) as unknown as ChatItem;
+  it('reads the brief between the markers, else the whole answer; nothing too short', () => {
+    expect(briefOf(`Ecco:\n${BRIEF_START}\nObiettivo: migrare i clienti al nuovo DB\n${BRIEF_END}\nfine`)).toBe('Obiettivo: migrare i clienti al nuovo DB');
+    expect(briefOf('Obiettivo: migrare i clienti al nuovo DB senza fermo')).toBe('Obiettivo: migrare i clienti al nuovo DB senza fermo');
+    expect(briefOf('ok')).toBeNull();
+  });
+  it('the answer to the last brief ask, only once complete', () => {
+    const items = [user('1', 'che db usiamo?'), said('2', 'Postgres 16'), user('3', BRIEF_ASK)];
+    expect(BRIEF_ASK.startsWith(FLASH_BRIEF_TAG)).toBe(true);
+    expect(briefAnswer(items)).toBeNull();
+    expect(briefAnswer([...items, said('4', `${BRIEF_START}\nObiettivo: passare a Postgres 17\n${BRIEF_END}`, true)])).toBeNull();
+    expect(briefAnswer([...items, said('4', `${BRIEF_START}\nObiettivo: passare a Postgres 17\n${BRIEF_END}`)])).toBe('Obiettivo: passare a Postgres 17');
+    expect(briefAnswer([user('1', 'che db usiamo?'), said('2', 'Postgres 16, quello del server principale')])).toBeNull();
   });
 });

@@ -14,6 +14,7 @@
 import type { Effort } from './contract';
 import { subjectName, type ReviewSummary } from './review';
 import { parseQuiz, type QuizBody } from './quiz';
+import type { LessonTopics } from './web-topics';
 
 export type LessonDepth = 'quick' | 'lesson' | 'deep';
 export const LESSON_DEPTHS: readonly LessonDepth[] = ['quick', 'lesson', 'deep'];
@@ -44,17 +45,25 @@ export const TEACHER_EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhi
  *  the model knows (no source: «conoscenza del modello»). check = what the verification found: ok, fixed (the claim
  *  was corrected), unsure (not confirmed: the lesson says so). A fact found wrong is dropped, never shown. */
 export type FactFrom = 'web' | 'file' | 'known';
-export interface LessonFact { id: string; claim: string; from: FactFrom; ref: string; quote?: string; check: 'ok' | 'fixed' | 'unsure' }
+export interface LessonFact {
+  id: string; claim: string; from: FactFrom; ref: string; quote?: string; check: 'ok' | 'fixed' | 'unsure';
+  /** a web fact searched for a public topic of the user's files (ADR 0206): that topic's query («trovato perché il tuo
+   *  file usa …»), never the file */
+  topic?: string;
+}
 
 /** The research before the lesson, as the Preparing screen shows it: the phase now, the phases done or skipped (with
  *  why), and the counts so far. */
-export type PrepPhase = 'gather' | 'web' | 'files' | 'verify' | 'ask' | 'plan';
-export const PREP_PHASES: readonly PrepPhase[] = ['gather', 'web', 'files', 'verify', 'ask', 'plan'];
+export type PrepPhase = 'gather' | 'web' | 'files' | 'refs' | 'verify' | 'ask' | 'plan';
+/** refs = the web search of the public topics the files research found (ADR 0206): standards and references */
+export const PREP_PHASES: readonly PrepPhase[] = ['gather', 'web', 'files', 'refs', 'verify', 'ask', 'plan'];
 export interface LessonPrep {
   phases: Partial<Record<PrepPhase, 'now' | 'done' | 'skip'>>;
   /** why a phase was skipped (no web engine on, nothing to ask…) */
   why?: Partial<Record<PrepPhase, string>>;
   web?: number; files?: number; ok?: number; fixed?: number; dropped?: number; unsure?: number;
+  /** the public topics from the user's files that the web may search, and how many facts their search found (ADR 0206) */
+  topics?: LessonTopics; refs?: number;
 }
 
 /** Questions asked before the lesson when the ask can mean different things (at most two), and the user's answers

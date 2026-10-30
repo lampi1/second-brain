@@ -1,0 +1,17 @@
+/* One focus look for the whole app (owner, 2026-10-30: «sistema le outline ovunque, non sono belle»). Why: every page had
+   its own ring (violet, blue, accent, 3px, 1px) and a text field drew the browser's outline on top of its own border, a
+   double frame. Now: buttons, links, tabs and cards get one 2px ring in --focus, only from the keyboard (:focus-visible),
+   following their rounded corners; a text field never gets an outline: its border lights up with a soft glow (a field
+   with no border of its own, like the chat composer, lets its box show focus with :focus-within). Zero specificity
+   (:where), so a component's own rule still wins. Colours derive from --focus, so every appearance and both themes
+   follow. Imported by main.tsx; tokens used by the components' own focus rules too. */
+:root {
+  --focus-ring: color-mix(in srgb, var(--focus) 80%, transparent);
+  --focus-glow: color-mix(in srgb, var(--focus) 22%, transparent);
+}
+:where(*):focus { outline: none; }
+:where(*):focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+:where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]), textarea, select, [contenteditable="true"]):focus-visible { outline: none; }
+:where(input[type="checkbox"], input[type="radio"]):focus-visible { outline-offset: 1px; }
+/* a bordered field without its own focus rule: its border lights up (a borderless one shows nothing here) */
+:where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]), textarea, select):focus { border-color: var(--blue-line, var(--focus)); }

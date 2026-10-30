@@ -5,6 +5,8 @@
 // broken lesson; extras land after the piece and the user lands on them; checks are judged at zero tokens and the first
 // answer stays; «Spiegalo tu» is graded; a lesson the app was closed during is marked, an extra or grade cut off frees
 // it; remove deletes its folder, also when a run still works in it (when that run ends) or a delete failed (next start).
+// The public topics of the files (ADR 0206): filtered, shown while they wait (✕ drops one, «Cerca ora», at once in
+// «Modalità notte»), then searched by a web run that sees only the ask and the queries, its facts verified on the web.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -21,13 +23,13 @@ const until = async (fn: () => boolean, ms = 3000) => { const t0 = Date.now(); w
 const TEACHERS = [{ engine: 'claude', label: 'Claude', models: [{ id: 'opus', name: 'Opus' }, { id: 'sonnet', name: 'Sonnet' }], efforts: ['low', 'medium', 'high', 'xhigh'] as const, web: true },
   { engine: 'codex', label: 'Codex', models: [], efforts: [] as const, web: false }].map(t => ({ ...t, efforts: [...t.efforts] }));
 
-function make(teach: (r: TeachRun) => Promise<TeachResult> = demoTeach, opts: { cannot?: string; root?: string; web?: boolean; brain?: string } = {}) {
+function make(teach: (r: TeachRun) => Promise<TeachResult> = demoTeach, opts: { cannot?: string; root?: string; web?: boolean; brain?: string; away?: boolean } = {}) {
   const store = new LessonStore(opts.root ?? tmp());
   const runs: TeachRun[] = [];
   const events: (Lesson | undefined)[] = [];
   const svc = new LearnService({ store, lang: () => 'it', run: demoRun, devops: () => ({ prs: [], repoDirs: {} }), cannotTeach: () => opts.cannot ?? null,
     teach: r => { runs.push(r); return teach(r); }, changed: (_s, l) => events.push(l),
-    teachers: () => TEACHERS, webOk: () => !!opts.web, places: () => ({ brain: opts.brain ?? null, appSource: null }), guide: () => '# Guida dell’app' });
+    teachers: () => TEACHERS, webOk: () => !!opts.web, places: () => ({ brain: opts.brain ?? null, appSource: null }), guide: () => '# Guida dell’app', away: () => !!opts.away });
   return { store, svc, runs, events };
 }
 const fast = (r: TeachRun) => { vi.useFakeTimers({ toFake: ['setTimeout'] }); const p = demoTeach(r); vi.runAllTimers(); vi.useRealTimers(); return p; };
@@ -110,6 +112,77 @@ describe('LearnService', () => {
     const plan = runs.find(r => r.round === 'impara-plan')!;
     expect(plan.prompt).toContain('→ Dentro second-brain');
     expect(store.get(l.id)!.prep?.phases.ask).toBe('done');
+  });
+
+  it('a PR with the web on: its public topics, filtered, searched at once in «Modalità notte» by a web run that sees only the ask and the queries', async () => {
+    const { svc, store, runs } = make(fast, { web: true, away: true });
+    const l = svc.start({ kind: 'pr', ask: 'Come arrivano le risposte', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    await until(() => store.get(l.id)?.state === 'ready' || store.get(l.id)?.state === 'more');
+    // no ask-only web run for a PR, but the topics' one; each web run with the web only, in the empty web folder
+    expect(runs.map(r => r.round).slice(0, 4).sort()).toEqual(['impara-files', 'impara-refs', 'impara-verify-files', 'impara-verify-refs']);
+    const files = runs.find(r => r.round === 'impara-files')!, refs = runs.find(r => r.round === 'impara-refs')!, vrefs = runs.find(r => r.round === 'impara-verify-refs')!;
+    expect(files.prompt).toContain('public topics worth searching');
+    expect(refs.web).toBe(true);
+    expect(vrefs.web).toBe(true);
+    expect(refs.cwd).toBe(path.join(store.dir(l.id), 'web'));
+    // it sees the ask and the three queries the filter let through, nothing else of the files
+    expect(refs.prompt).toContain('Come arrivano le risposte');
+    expect(refs.prompt).toContain('t1: Electron IPC performance');
+    expect(refs.prompt).toContain('t2: W3C Page Visibility API');
+    expect(refs.prompt).toContain('t3: React 18 automatic batching');
+    for (const secret of ['ChatManager', 'ITEM_FRAME_MS', 'manager.ts', 'store.ts', 'il diff manda', store.dir(l.id), 'STREAM_MS']) {
+      expect(refs.prompt).not.toContain(secret);
+      expect(vrefs.prompt).not.toContain(secret);
+    }
+    const done = store.get(l.id)!;
+    // its facts after the others, verified, each with the topic it was searched for
+    expect(done.facts?.map(f => f.id)).toEqual(['f1', 'f2', 'f3', 'f4', 'f5', 'f6', 'f7', 'f8']);
+    expect(done.facts!.slice(5).map(f => [f.topic, f.check, f.from])).toEqual([
+      ['Electron IPC performance', 'ok', 'web'], ['W3C Page Visibility API', 'ok', 'web'], ['React 18 automatic batching', 'ok', 'web']]);
+    expect(done.prep).toMatchObject({ refs: 3, ok: 6, fixed: 1, unsure: 1, phases: { web: 'skip', files: 'done', refs: 'done', verify: 'done' }, topics: { state: 'done', dropped: 1 } });
+    expect(done.prep!.topics!.list.map(t => t.q)).toEqual(['Electron IPC performance', 'W3C Page Visibility API', 'React 18 automatic batching']);
+    // the plan stands on them too
+    const plan = runs.find(r => r.round === 'impara-plan')!;
+    expect(plan.prompt).toContain('f8 [verified; https://react.dev/blog/2022/03/29/react-v18]');
+  });
+
+  it('the topics wait for the user: ✕ drops one (more time for the rest), «Cerca ora» starts them; none left = no search', async () => {
+    const { svc, store, runs } = make(fast, { web: true });
+    const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    await until(() => store.get(l.id)?.prep?.topics?.state === 'wait');
+    const tp = store.get(l.id)!.prep!.topics!;
+    expect(tp.list).toHaveLength(3);
+    expect(tp.at! - Date.now()).toBeGreaterThan(3000);
+    expect(store.get(l.id)!.prep!.phases.refs).toBe('now');
+    expect(() => svc.topics(l.id, { drop: 't9' })).toThrow('Argomento non trovato.');
+    svc.topics(l.id, { drop: 't2' });
+    expect(store.get(l.id)!.prep!.topics!.list.map(t => t.id)).toEqual(['t1', 't3']);
+    expect(runs.some(r => r.round === 'impara-refs')).toBe(false);
+    svc.topics(l.id, { go: true });
+    await until(() => runs.some(r => r.round === 'impara-refs'));
+    const refs = runs.find(r => r.round === 'impara-refs')!;
+    expect(refs.prompt).toContain('Electron IPC performance');
+    expect(refs.prompt).not.toContain('Page Visibility');
+    expect(() => svc.topics(l.id, { go: true })).toThrow('Nessuna ricerca in attesa.');
+    await until(() => store.get(l.id)?.state === 'ready' || store.get(l.id)?.state === 'more');
+    // the demo's run answered for t2 as well: a fact for a topic it was not given is left out
+    expect(store.get(l.id)!.facts!.filter(f => f.topic).map(f => f.topic)).toEqual(['Electron IPC performance', 'React 18 automatic batching']);
+
+    const b = make(fast, { web: true });
+    const m = b.svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    await until(() => b.store.get(m.id)?.prep?.topics?.state === 'wait');
+    for (const id of ['t1', 't2', 't3']) b.svc.topics(m.id, { drop: id });
+    await until(() => b.store.get(m.id)?.state === 'ready' || b.store.get(m.id)?.state === 'more');
+    expect(b.runs.some(r => r.round === 'impara-refs')).toBe(false);
+    expect(b.store.get(m.id)!.prep).toMatchObject({ phases: { refs: 'skip' }, why: { refs: 'dropped' }, topics: { state: 'skip' } });
+
+    // a lesson removed while its topics wait searches nothing
+    const c = make(fast, { web: true });
+    const n = c.svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    await until(() => c.store.get(n.id)?.prep?.topics?.state === 'wait');
+    c.svc.remove(n.id);
+    await new Promise(r => setTimeout(r, 30));
+    expect(c.runs.some(r => r.round === 'impara-refs' || r.round === 'impara-plan')).toBe(false);
   });
 
   it('keeps only a teacher it offers; a removed lesson stops waiting for its answers', async () => {

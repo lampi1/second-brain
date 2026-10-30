@@ -9,7 +9,7 @@ export const lampoEn = {
   'lampo.start': 'Open Flash',
   'lampo.empty': 'Ask something: it answers in a few seconds.',
   'lampo.toWork': 'Make it a job',
-  'lampo.toWorkTip': 'Drafts your last question and Flash\'s answer in the Orchestrator: you send it.',
+  'lampo.toWorkTip': 'Flash writes a full prompt for the Orchestrator (goal, context, what to do, constraints, done when) from the whole conversation: you find it as a draft and send it yourself.',
   'lampo.draft': (p: { question: string; answer: string }) => `From Flash. My question: «${p.question}»${p.answer ? `\nIts answer: «${p.answer}»` : ''}\nMake it a job: `,
   'lampo.clear': 'Clear the context (like /clear)',
   'lampo.cleared': 'Flash cleared: it starts from zero.',

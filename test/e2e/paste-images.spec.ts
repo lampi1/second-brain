@@ -172,7 +172,7 @@ test('the Orchestrator overlay (Ctrl+R) takes pasted screenshots too (here it wa
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press('g');
   await page.keyboard.press('q');
-  await expect(page.getByTestId('page-qualita')).toBeVisible();
+  await expect(page.getByTestId('an-panel-qualita')).toBeVisible();
   await page.keyboard.press('Control+R');
   await expect(page.getByTestId('orchestrator-overlay')).toBeVisible();
   const input = page.getByTestId('orchestrator-input');

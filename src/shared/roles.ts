@@ -25,6 +25,8 @@ export const PULSE_ID = 'pulse';
 /** «Flash» (ADR 0107): the quick read-only lane beside the Orchestrator (a "btw"): a catalog entry with its own card and
  *  model, never a role nor a delegate. */
 export const FLASH_ID = 'flash';
+/** the start of the turn «Fanne un lavoro» sends Flash: it writes the Orchestrator's brief (ADR 0209) */
+export const FLASH_BRIEF_TAG = '[Fanne un lavoro]';
 export const isRoleId = (v: unknown): v is RoleId => typeof v === 'string' && (ROLE_IDS as readonly string[]).includes(v);
 export const isWorkRole = (v: unknown): v is WorkRoleId => isRoleId(v) && v !== 'orchestrator';
 

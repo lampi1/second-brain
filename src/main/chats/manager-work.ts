@@ -34,7 +34,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     // «Modalità notte» (ADR 0191): nobody will click «Approva e parti», so the plan starts as proposed (its recommended
     // choice) and the tool says so; the recap tells the user
     const away = !!this.opts.away?.();
-    r.s.plan = { phase: away ? 'running' : 'proposed', clarified: plan.clarified, ...(plan.asked ? { asked: plan.asked } : {}), steps, ...(doneWhen ? { doneWhen } : {}), at: Math.max(Date.now(), plan.at + 1) };
+    r.s.plan = { phase: away ? 'running' : 'proposed', clarified: plan.clarified, ...(plan.asked ? { asked: plan.asked } : {}), ...(plan.enough ? { enough: true } : {}), steps, ...(doneWhen ? { doneWhen } : {}), at: Math.max(Date.now(), plan.at + 1) };
     // the run keeps the plan's fate: a decision signal for the Orchestrator (standing.ts, ADR 0131)
     const run = r.s.run;
     if (run && run.endedAt === undefined) { run.plan = { ...(run.plan ?? { proposals: 0, changes: 0 }), proposals: (run.plan?.proposals ?? 0) + 1 }; this.runSave(); }

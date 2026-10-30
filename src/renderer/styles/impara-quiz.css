@@ -7,7 +7,7 @@
 /* ── start: the field ── */
 .ip-go{margin-top:18px;display:flex;flex-direction:column;gap:12px}
 .ip-field{position:relative;background:var(--bg);border:1px solid var(--border-3);border-radius:14px;transition:border-color var(--dur),box-shadow var(--dur)}
-.ip-field:focus-within{border-color:var(--blue-line);box-shadow:0 0 0 3px color-mix(in srgb,var(--blue) 14%,transparent)}
+.ip-field:focus-within{border-color:var(--blue-line);box-shadow:0 0 0 3px var(--focus-glow)}
 .ip-field.drag{border-color:var(--blue);border-style:dashed}
 .ip-field textarea{display:block;width:100%;min-height:58px;max-height:320px;resize:none;padding:14px 16px 6px;background:none;border:0;outline:none;color:var(--text);font:15px/1.5 var(--font)}
 .ip-field textarea::placeholder{color:var(--text-4)}

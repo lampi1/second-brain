@@ -150,7 +150,7 @@ export const INVOKE_CHANNELS = [
   'chat:synthesize', 'memory:reviewList', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare', 'proposals:list', 'proposals:count', 'proposals:decide',
   'maintenance:run', 'maintenance:status', 'maintenance:stop',
   'agents:list', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'agents:judgingEstimate', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
-  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
+  'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:copyFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
   'brain:share', 'brainmodel:state', 'brainmodel:maintain', 'brainmodel:rollback', 'queries:list', 'queries:get', 'queries:delete', 'brainmodel:noise', 'brainmodel:link', 'brainmodel:remove', 'classifiers:state', 'morning:brief', 'agents:trialDecide', 'agents:lifecycleDecide',
   'chat:stopAll', 'chat:close', 'chat:archive', 'chat:reopen', 'chat:admitNow', 'chat:prewarm', 'chat:set', 'chat:handoff', 'chat:handoffRead', 'chat:continue', 'chat:undoTurn', 'browser:list', 'browser:open', 'browser:navigate', 'browser:go',
   'browser:close', 'views:layout', 'feed:list', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
@@ -169,12 +169,13 @@ export const INVOKE_CHANNELS = [
   'suggest:get', 'suggest:cancel', 'suggest:state',
   'voice:state', 'voice:prepare', 'voice:listen', 'voice:audio', 'voice:commit', 'voice:speak', 'voice:cancelSpeech',
   'rec:state', 'rec:arm', 'rec:start', 'rec:chunk', 'rec:stop', 'rec:transcribe', 'rec:rename', 'rec:remove', 'rec:transcript', 'rec:find', 'rec:readFound', 'rec:open',
-  'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:clarify', 'impara:remove', 'impara:queue', 'impara:grade', 'impara:subject', 'impara:tutor', 'impara:tutorWarm',
+  'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:clarify', 'impara:topics', 'impara:remove', 'impara:queue', 'impara:grade', 'impara:subject', 'impara:tutor', 'impara:tutorWarm',
   'orchestrator:held', 'orchestrator:heldSeen',
   'cloud:list', 'cloud:followUp', 'cloud:stop', 'cloud:apply', 'cloud:watch', 'cloud:dismiss',
   'log:renderer',
   'proposals:shown', 'proposals:undoAuto',
   'guide:ask', 'guide:stale',
+  'usecount:add', 'usecount:report',
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'routines:progress', 'work:changed',

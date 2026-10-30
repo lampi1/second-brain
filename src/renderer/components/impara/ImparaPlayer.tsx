@@ -121,6 +121,7 @@ function Cites({ facts, onAll }: { facts: LessonFact[]; onAll: () => void }) {
               <span className={`ip-tag ${f.check === 'ok' ? 'green' : f.check === 'fixed' ? 'blue' : 'amber'}`}>{t(`impara.fact.${f.check}`)}</span>
               <span className="ip-fact-c">{f.claim}</span>
               {f.quote && <q className="ip-fact-q">{f.quote}</q>}
+              {f.topic && <span className="ip-fact-why">{t('impara.src.why', { topic: f.topic })}</span>}
               <span className="ip-fact-r">{f.from === 'web' ? <a href={f.ref} target="_blank" rel="noreferrer" className="ip-src-link">{f.ref}</a> : f.from === 'file' ? <button type="button" className="ip-link ip-fact-open" onClick={() => openFact(f.ref)} data-testid="impara-fact-open"><code>{f.ref}</code></button> : t('impara.fact.known')}</span>
             </li>
           ))}

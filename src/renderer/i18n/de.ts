@@ -54,6 +54,7 @@ import { queriesDe } from './areas/queries.de';
 import { lampoDe } from './areas/lampo.de';
 import { awayDe } from './areas/away.de';
 import { learningDe } from './areas/learning.de';
+import { andamentoDe } from './areas/andamento.de';
 import { estimateDe } from './areas/estimate.de';
 import { logDe } from './areas/log.de';
 import { reviewedContextDe } from './areas/reviewed-context.de';
@@ -84,6 +85,7 @@ export const de: Dict = {
   ...lampoDe,
   ...awayDe,
   ...learningDe,
+  ...andamentoDe,
   ...estimateDe,
   ...logDe,
   ...genuiRequestDe,

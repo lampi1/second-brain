@@ -7,7 +7,7 @@ import type { CreateBrainRequest, CreatedBrain } from '../brain-create';
 import type { DiffAgainst, FileDiffResult } from '../file-diff';
 import type { FileViewResult } from '../file-view';
 import type { OwnerProfile, ProfileResult, ProfileSave } from '../profile';
-import type { AskImageResult, OpenPathResult } from './chats';
+import type { AskImageResult, CopyFileResult, OpenPathResult } from './chats';
 import type { EngineInfo, Harness } from './engines';
 import type { Lang } from './settings';
 import type { InputLagReport } from './ui';
@@ -77,6 +77,13 @@ export interface AppHealth {
   jobGuard: 'off' | 'starting' | 'ready' | 'failed';
 }
 /** 'app:projectsFolder': saved = the setting projectsRoot; detected = what the app found by itself (null = it asks) */
+// ---- the usage counter (main/use-counter.ts, ADR 0202): page opens and main actions per day, local only, zero tokens
+
+/** One place or action of the usage counter: `key` = "page:<id>[/<tab>]" or "action:<name>". */
+export interface UseCountRow { key: string; n: number; days: number; last: string }
+/** The counts of the last `days` days (local dates, YYYY-MM-DD), the busiest first; `since` = the first day counted. */
+export interface UseCountReport { from: string; to: string; days: number; total: number; since: string | null; byDay: { day: string; n: number }[]; rows: UseCountRow[] }
+
 export interface ProjectsFolderInfo { saved: string | null; detected: { path: string; repos: number; source: 'cli' | 'common' } | null; newMemoryIn: string }
 export interface CliStatus { found: boolean; path: string | null; version: string | null; loggedIn: boolean | null; account?: string | null }
 
@@ -140,6 +147,8 @@ export interface AppInvokeMap {
   'app:createBrain': [CreateBrainRequest, CreatedBrain | null];
   /** the viewer's "Show in folder": a local file selected in Explorer, never opened or run (main/open-path.ts) */
   'app:showInFolder': [{ path: string }, OpenPathResult];
+  /** The viewer's copy icon: the file on the clipboard (its text, an image, or the file itself), main/file-copy.ts. */
+  'app:copyFile': [{ path: string }, CopyFileResult];
   /** A user-opened file link: any local file, never a network share, read-only and bounded; text one page at a time
    *  around a cited `line`, ending at `before`, or from `offset` (`align`: at the next line start). Main renderer only. */
   'app:readFile': [{ path:string; chatId?:string; offset?:number; align?:boolean; before?:number; line?:number }, FileViewResult];
@@ -158,4 +167,8 @@ export interface AppInvokeMap {
   'source:check': [void, AppSourceState];
   /** the user's click on "Aggiorna" (never an agent): pull, build, switch to the new version and restart, no tests */
   'source:updateNow': [void, AppSourceState];
+  /** the usage counter (ADR 0202): the renderer's batched counts since its last flush ("page:costi" → 2), local only */
+  'usecount:add': [{ counts: Record<string, number> }, void];
+  /** Andamento → Uso: the last `days` days (default 14, at most 90) */
+  'usecount:report': [{ days?: number }, UseCountReport];
 }
