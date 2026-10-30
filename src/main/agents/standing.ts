@@ -30,12 +30,12 @@
 // success (and PLAN_XP), with one or two changes a partial. A decision's XP is its job's size (with its delegated chats),
 // halved when it was re-delegated or reworked. The decisions among pruned runs live on in the rollups
 // (RunTally.decisions, decisionWins, decisionXp; the chain, graded and receipts successes in earnedWins, all XP in xp).
-// Flash records no run: its answers' outcomes (flash-outcomes.ts) give it a small XP and a low-trust performance. Pulse
-// (Battito, a background job) and the retired roles get no standing (unrated, ADR 0186).
+// Flash records no run: its answers' outcomes (flash-outcomes.ts) give it a small XP and a low-trust performance. The
+// retired roles and the runs the removed Battito (Pulse, ADR 0201) left get no standing (unrated, ADR 0186).
 // Used by ChatManager.runMetrics (agents:metrics), run-metrics.ts rollUp, the levels diagnostic (level-diagnosis.ts) and
 // the demo; the card's "?" tips repeat these rules.
 import type { AgentMetrics, AgentRun, AgentStanding } from '../../shared/agents';
-import { FLASH_ID, PULSE_ID, isRetiredRoleId } from '../../shared/roles';
+import { FLASH_ID, isRetiredRoleId } from '../../shared/roles';
 import { reworkedWithin, reworkStartsOf, verifiedVerdict, type VerifiedBasis, type VerifiedVerdict } from '../../shared/run-verdict';
 import type { RunTally } from './run-metrics';
 import { receiptDecision } from './receipts';
@@ -60,11 +60,11 @@ type Source = keyof typeof TRUST;
 type Verdict = keyof typeof SCORE;
 
 /** Same exclusions as the §5 metrics (run-metrics.ts foldRun): headline and fallback one-shots are not the agent's work;
- *  a retired role's runs (Judge, Scribe, Router: ADR 0100) and Pulse's card jobs have no level (ADR 0186), their runs
- *  stay readable. */
+ *  a retired role's runs (Judge, Scribe, Router: ADR 0100) and the old runs of the removed Battito's 'pulse' entry (ADR
+ *  0201) have no level (ADR 0186), their runs stay readable. */
 export const counts = (r: AgentRun): boolean => r.endedAt !== undefined && !r.oneshot?.fallback && r.oneshot?.job !== 'headline' && r.oneshot?.job !== 'guide' && !unrated(r.agentId);
-/** Ids that get no standing: the retired roles and Pulse, a background job (ADR 0186). */
-export const unrated = (agentId: string): boolean => isRetiredRoleId(agentId) || agentId === PULSE_ID;
+/** Ids that get no standing: the retired roles and 'pulse', the removed Battito's background job (ADR 0186, 0201). */
+export const unrated = (agentId: string): boolean => isRetiredRoleId(agentId) || agentId === 'pulse';
 /** A root run the Orchestrator opened: one of its decisions (ADR 0097). */
 export const orchestratorDecision = (r: AgentRun): boolean => r.startedBy === 'orchestrator' && r.source !== 'oneshot' && !r.oneshot
   && !r.parentRunId && r.agentId !== 'orchestrator';

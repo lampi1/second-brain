@@ -53,7 +53,7 @@ const tasks = (p: Partial<TasksState>): TasksState => ({ enabled: false, everyMi
 const pr = (id: number, result: string | null) => ({ id, title: `PR ${id}`, repo: 'r', project: 'p', author: null, createdAt: '', url: `https://dev/pr/${id}`, target: 'main', draft: false, autoComplete: false, reviewers: [], workItems: [],
   build: result === null ? null : { result, status: 'completed', number: '1', url: '', at: null } });
 const change = (id: string, at: number, p: Partial<BrainChange> = {}): BrainChange => ({ id, at, job: 'merge-skills', kind: 'skill', action: 'merge', target: 't', summary: `s ${id}`, reason: '', evidence: [], canRollback: true, ...p });
-const input = (p: Partial<BriefInput> = {}): BriefInput => ({ now: T, since: T - 14 * H, chats: [], runs: [], pending: 0, approvals: 0, tasks: null, ideas: [], today: '2026-10-20', cloud: [], changes: [], spendYesterdayUsd: null, stallMin: 10, ...p });
+const input = (p: Partial<BriefInput> = {}): BriefInput => ({ now: T, since: T - 14 * H, chats: [], runs: [], pending: 0, approvals: 0, tasks: null, ideas: [], today: '2026-10-20', changes: [], spendYesterdayUsd: null, stallMin: 10, ...p });
 
 describe('buildBrief', () => {
   it('runs ended since then, newest first, with their outcome; not the Battito\'s one-shots nor delegated children', () => {
@@ -70,14 +70,12 @@ describe('buildBrief', () => {
     expect(b.prs.map(p => [p.id, p.why])).toEqual([[1, 'build'], [9, 'vote']]);
     expect(b.tasksAt).toBe(T - 13 * H);
   });
-  it('ideas due by today, not done or dropped; cloud agents ended since then; the maintenance changes since then', () => {
+  it('ideas due by today, not done or dropped; the maintenance changes since then', () => {
     const b = buildBrief(input({
       ideas: [{ titolo: 'A', stato: 'aperta', scaduta: '2026-10-19' }, { titolo: 'B', stato: 'fatta', scaduta: '2026-10-01' }, { titolo: 'C', stato: 'aperta', scaduta: '2026-10-21' }, { titolo: 'D', stato: '', scaduta: '' }],
-      cloud: [{ id: 'x', engine: 'cursor', title: 'Checkout', status: 'done', url: null, repo: 'o/r', updatedAt: T - H, by: 'user' }, { id: 'y', engine: 'cursor', title: 'Run', status: 'running', url: null, repo: 'o/r', updatedAt: T - H, by: 'user' }],
       changes: [change('n', T - H), change('u', T - H, { job: 'user' }), change('o', T - 20 * H), change('r', T - H, { rolledBackAt: T })],
     }));
     expect(b.ideas).toEqual([{ title: 'A', due: '2026-10-19' }]);
-    expect(b.cloud).toEqual([{ id: 'x', title: 'Checkout', status: 'done' }]);
     expect(b.changes.map(c => c.id)).toEqual(['n']);
   });
   it('a root chat at work silent for stallMin is stalled; queued, waiting or delegated ones are not', () => {

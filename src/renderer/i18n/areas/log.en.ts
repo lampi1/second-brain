@@ -1,7 +1,7 @@
 // English counterparts of the "log" area (log.it.ts): the Log page.
 import type { logIt } from './log.it';
 export const logEn: typeof logIt = {
-  'log.lead': 'Everything that happens in the app, live: tasks, classifiers, estimates, errors, memory, Battito. Reading it spends no tokens.',
+  'log.lead': 'Everything that happens in the app, live: tasks, classifiers, estimates, errors, memory. Reading it spends no tokens.',
   'log.live': 'Live',
   'log.kind.task': 'Tasks', 'log.kind.classifier': 'Classifiers', 'log.kind.estimate': 'Estimates', 'log.kind.error': 'Errors',
   'log.kind.memory': 'Memory', 'log.kind.pulse': 'Battito', 'log.kind.brain': 'Brain', 'log.kind.app': 'App',

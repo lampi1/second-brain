@@ -60,32 +60,3 @@ test('a role\'s page starts nothing: work starts only from the Orchestrator\'s c
   } finally { await app.close(); }
 });
 
-test('Battito appears only in matching role/search/file contexts and dismissal propagates', async () => {
-  const { app, page } = await launchDemo();
-  try {
-    const info = await page.evaluate(() => window.sb.invoke('app:info', undefined));
-    expect(info.brainRoot).toBeTruthy();
-    await app.evaluate(({ ipcMain }, root) => {
-      ipcMain.removeHandler('app:readFile');
-      ipcMain.handle('app:readFile', () => ({ kind: 'text', path: `${root}/AGENTS.md`, size: 10, offset: 0, shown: 10, text: '# Rules', more: false, firstLine: 1 }));
-    }, info.brainRoot);
-    await visit(page, 'sb://agenti/artisan');
-    await expect(page.locator('[data-place="agent:artisan"]')).toBeVisible();
-    await expect(page.locator('[data-orchestrator-overlay]')).toBeVisible();
-    await shot(page, 'agent-context-pulse');
-    await visit(page, 'sb://esplora/AGENTS.md');
-    await expect(page.locator('[data-place="file:AGENTS.md"]')).toBeVisible();
-    await expect(page.locator('[data-orchestrator-overlay]')).toBeVisible();
-    await shot(page, 'file-context-pulse');
-    await page.keyboard.press('Control+K');
-    await page.getByTestId('palette-input').fill('zzzznoresultszzzz');
-    const pulse = page.locator('[data-place="search"]');
-    await expect(pulse).toBeVisible();
-    await expect(pulse.locator('article')).toHaveCount(1);
-    await shot(page, 'search-context-pulse');
-    await pulse.getByRole('button', { name: 'Non mi serve' }).click();
-    await expect(pulse).toHaveCount(0);
-    await page.keyboard.press('Escape');
-    await expect(page.getByTestId('context-pulse')).toHaveCount(0);
-  } finally { await app.close(); }
-});

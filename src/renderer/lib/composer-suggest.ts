@@ -1,13 +1,10 @@
 // The chat composer's inline suggestion (issue #167, ADR 0118), renderer side: the grey text after the caret that Tab
 // accepts. localSuggestion() is the zero-token part, pure: the user's past prompts (the whole message as a prefix of
 // one sent before, newest first), then the last word or words of the current line as a prefix of a slash command
-// ("/rev" → "/review "), a role, a skill, a chat title or a file name the chat touched. SuggestScheduler is the model
-// part's timing: every key cancels the pending pause and the request in flight; a request leaves only after
-// SUGGEST_DEBOUNCE_MS without keys (never while the user types fast) and its answer is used only if no key came
-// since. The past prompts live in this viewer's localStorage (a convenience: an empty or blocked store only means fewer
+// ("/rev" → "/review "), a role, a skill, a chat title or a file name the chat touched. Zero tokens: the model part
+// was removed (ADR 0201). continueCached keeps a shown suggestion while the user types along it. The past prompts live in this viewer's localStorage (a convenience: an empty or blocked store only means fewer
 // suggestions). Used by components/ChatInput.tsx; unit-tested in test/unit/composer-suggest.test.ts.
 import type { ChatItem } from '@shared/contract';
-import type { SuggestAnswer, SuggestRequest } from '@shared/composer-suggest';
 
 export interface LocalSources {
   /** the chat's "/" commands and skills (skill: true) */
@@ -99,45 +96,12 @@ export function rememberPrompt(text: string): void {
   try { localStorage.setItem(HISTORY_KEY, JSON.stringify([t, ...savedPrompts().filter(x => x !== t)].slice(0, HISTORY_MAX))); } catch { /* fewer suggestions, nothing else */ }
 }
 
-export interface SchedulerDeps {
-  delayMs: number;
-  fetch: (req: SuggestRequest) => Promise<SuggestAnswer>;
-  /** asks main to abort the request in flight */
-  cancel: () => void;
-  /** the model's suffix for the text it was asked for (null = none) */
-  onAnswer: (forText: string, suffix: string | null) => void;
-  setTimer?: (fn: () => void, ms: number) => unknown;
-  clearTimer?: (h: unknown) => void;
-}
-
-export class SuggestScheduler {
-  private timer: unknown = null;
-  private seq = 0;
-  private inflight = false;
-  constructor(private readonly d: SchedulerDeps) {}
-
-  /** A key: the pause starts over, the request in flight is cancelled and its answer will be ignored. */
-  key(): void {
-    this.seq++;
-    if (this.timer !== null) { (this.d.clearTimer ?? (h => clearTimeout(h as ReturnType<typeof setTimeout>)))(this.timer); this.timer = null; }
-    if (this.inflight) { this.inflight = false; this.d.cancel(); }
-  }
-
-  /** After the pause (and only if no key came), ask the model for `text`. */
-  schedule(text: string, req: SuggestRequest): void {
-    this.key();
-    const set = this.d.setTimer ?? ((fn, ms) => setTimeout(fn, ms));
-    this.timer = set(() => {
-      this.timer = null;
-      const my = this.seq;
-      this.inflight = true;
-      void this.d.fetch(req).then(a => a.text, () => null).then(s => {
-        if (my !== this.seq) return;
-        this.inflight = false;
-        this.d.onAnswer(text, s);
-      });
-    }, this.d.delayMs);
-  }
-
-  dispose(): void { this.key(); }
+/** A suggestion made for `line0` still fits `line` when the user typed along it: the rest of it, or null. Exact same
+ *  line → the whole suggestion; typed past it or off it → null. */
+export function continueCached(line0: string, answer: string, line: string): string | null {
+  if (!line.startsWith(line0)) return null;
+  const typed = line.slice(line0.length);
+  if (!answer.startsWith(typed)) return null;
+  const rest = answer.slice(typed.length);
+  return rest ? rest : null;
 }

@@ -155,19 +155,19 @@ describe('LearnService review', () => {
     const cardsRun = runs.find(r => r.round === 'impara-cards')!;
     expect(cardsRun.prompt).toContain('f1 [verified');
     expect(cardsRun.prompt).not.toContain('NOT CONFIRMED'); // the unconfirmed fact is not offered
-    // 4 cards from the run (the one citing only the unconfirmed fact is dropped) + the lesson's 3 checks
-    expect(done.cards).toEqual({ state: 'done', n: 4 });
+    // 5 cards from the run (the one citing only the unconfirmed fact is dropped; one is an order, ADR 0204) + the lesson's 4 checks
+    expect(done.cards).toEqual({ state: 'done', n: 5 });
     const own = svc.review.ofLesson(l.id);
-    expect(own.filter(c => c.origin === 'cards')).toHaveLength(4);
-    expect(own.filter(c => c.origin === 'check')).toHaveLength(3);
+    expect(own.filter(c => c.origin === 'cards')).toHaveLength(5);
+    expect(own.filter(c => c.origin === 'check')).toHaveLength(4);
     // not read yet: nothing to ask
     expect(svc.state().review!.subjects).toEqual([expect.objectContaining({ name: 'second-brain', lessons: 1, cards: 0, fresh: 0 })]);
     expect(svc.queue('quiz', 'second-brain')).toEqual([]);
     svc.move(l.id, 'end');
     const st = svc.state().review!;
-    expect(st.subjects).toEqual([expect.objectContaining({ name: 'second-brain', lessons: 1, cards: 7, due: 0, fresh: 7, recall: null })]);
+    expect(st.subjects).toEqual([expect.objectContaining({ name: 'second-brain', lessons: 1, cards: 9, due: 0, fresh: 9, recall: null })]);
     const items = svc.queue('quiz', 'second-brain');
-    expect(items).toHaveLength(7);
+    expect(items).toHaveLength(9);
     const node = items.find(i => i.card.kind === 'node')!;
     expect(node.diagram).toContain('flowchart');
     expect(node.facts[0]).toMatchObject({ id: 'f3', from: 'file' });

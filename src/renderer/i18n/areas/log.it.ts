@@ -1,6 +1,6 @@
 // The "log" area: the Log page (components/LogPage.tsx, ADR 0111). English counterparts in log.en.ts.
 export const logIt = {
-  'log.lead': 'Tutto quello che succede nell’app, in tempo reale: incarichi, classificatori, stime, errori, memoria, Battito. Leggerlo non consuma token.',
+  'log.lead': 'Tutto quello che succede nell’app, in tempo reale: incarichi, classificatori, stime, errori, memoria. Leggerlo non consuma token.',
   'log.live': 'In diretta',
   'log.kind.task': 'Incarichi', 'log.kind.classifier': 'Classificatori', 'log.kind.estimate': 'Stime', 'log.kind.error': 'Errori',
   'log.kind.memory': 'Memoria', 'log.kind.pulse': 'Battito', 'log.kind.brain': 'Brain', 'log.kind.app': 'App',

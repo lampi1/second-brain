@@ -6,7 +6,6 @@ import { routinesEn } from './areas/routines.en';
 import { appTextEn } from './areas/app-text.en';
 import { brainTextEn } from './areas/brain-text.en';
 import { learningReviewEn } from './areas/learning-review.en';
-import { cloudEn } from './areas/cloud.en';
 import { brainModelEn } from './areas/brain-model.en';
 import { memoryEn } from './areas/memory.en';
 import { memoryHubEn } from './areas/memory-hub.en';
@@ -23,6 +22,8 @@ import { genuiRequestEn } from './areas/genui-request.en';
 import { voiceEn } from './areas/voice.en';
 import { recEn } from './areas/rec.en';
 import { imparaEn } from './areas/impara.en';
+import { imparaStudioEn } from './areas/impara-studio.en';
+import { imparaV3En } from './areas/impara-v3.en';
 import {studioEn}from'./areas/studio.en';
 import { permissionsEn } from './areas/permissions.en';
 import { langSwitchEn } from './areas/lang-switch.en';
@@ -42,6 +43,8 @@ import { agentDetailEn } from './areas/agent-detail.en';
 import { agentImageEn } from './areas/agent-image.en';
 import { proposalsEn } from './areas/proposals.en';
 import {settingsEn}from'./areas/settings.en';
+import { settingsShellEn } from './areas/settings-shell.en';
+import { mcpAddEn } from './areas/mcp-add.en';
 import { profileEn } from './areas/profile.en';
 import { homeEn } from './areas/home.en';
 import { guideEn } from './areas/guide.en';
@@ -75,7 +78,6 @@ export const en: Dict = {
   ...setupEn,
   ...viewerOverlayEn,
   ...homeEn,
-  ...cloudEn,
   ...guideEn,
   ...pbrowserEn,
   ...treeEn,
@@ -92,6 +94,8 @@ export const en: Dict = {
   ...voiceEn,
   ...recEn,
   ...imparaEn,
+  ...imparaStudioEn,
+  ...imparaV3En,
   'genui.request.question': 'Question',
   'genui.request.permission': 'Permission',
   'genui.request.from': ({ kind, chat, title }) => `${kind} from ${chat ?? 'a chat'}: ${title}`,
@@ -122,6 +126,8 @@ export const en: Dict = {
   ...agentImageEn,
   ...proposalsEn,
   ...settingsEn,
+  ...settingsShellEn,
+  ...mcpAddEn,
   ...profileEn,
   ...chatEn,
   ...visualsEn,

@@ -82,7 +82,7 @@ export interface ResearchDeps {
   chats: { create(req: NewChat): Promise<ChatSummary>; get(id: string): ChatSummary | undefined; stop(id: string): Promise<void> };
   /** opens an approved app card's issue on GitHub (issue-open.ts); absent = app cards cannot be approved */
   issues?: { open(repo: string, issue: ResearchIssue): Promise<IssueOpened> };
-  /** writes an app idea to the brain's Idee, on the AI's side (the Battito's save path); absent = not written */
+  /** writes an app idea to the brain's Idee, on the AI's side (brain/save-idea.ts); absent = not written */
   saveIdea?: (idea: { title: string; body: string; why: string }) => Promise<void>;
   /** the button and the Proposte deck read again */
   changed: () => void;

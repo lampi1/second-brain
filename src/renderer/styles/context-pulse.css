@@ -1,6 +1,0 @@
-/* Context cards wrap inside the page; they never resize or hide the Orchestrator dock. */
-.context-pulse{min-width:0;padding:16px;display:grid;gap:12px;align-content:start}.context-pulse h3,.context-pulse h4{margin:0}
-.context-pulse-card{padding:14px;border:1px solid var(--border-2);border-radius:var(--r-m);background:var(--surface);overflow-wrap:anywhere}
-.context-pulse-card p{margin:8px 0}.context-pulse-card small{display:block;margin-top:8px;color:var(--text-2)}.context-pulse-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}
-.file-context-layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(220px,280px);gap:16px}.file-context-main{min-width:0}.file-context-layout:not(:has(.context-pulse)){grid-template-columns:minmax(0,1fr)}
-@media(max-width:1000px){.file-context-layout{grid-template-columns:minmax(0,1fr)}}

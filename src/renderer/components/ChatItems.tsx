@@ -8,7 +8,7 @@
 // chat: CodeBlock.tsx; the chat id comes from ItemList's chatId); a click on copyable inline code copies it, on a file path or a link it opens a preview (LinkPeek.tsx). Each row is memoized by its item, so a streaming
 // message re-renders only itself (at most once a frame, re-parsing only its last markdown block); tool rows show live
 // elapsed time; in an Orchestrator, an "Apri" chip under the chats she opened, wrote to or named (ChatRefChips.tsx, ADR 0034)
-// and a "Strategist" badge (or an older "Veloce") on a message sent with that mode (shared/newchat.ts); its thinking and tool rows fold
+// and a "Strategist" badge (or an older "Nuova chat") on a message sent with that mode (shared/newchat.ts); its thinking and tool rows fold
 // behind one "Ragionamento" row, and an emoji-only reply sticks to the user's bubble as a reaction (lib/chat-view.ts); a "sta scrivendo… / sta pensando…" line follows the turn; the list follows the bottom ONLY when the
 // user is already there (scrolled up to read, it never jumps: a "nuove righe" pill appears instead). Used by ChatTile
 // and OrchestratorTile.
@@ -26,7 +26,7 @@ import { VisualBlock, isVisualLang } from './VisualBlock';
 import { explainTool } from '@shared/explain';
 import { useNow } from '../lib/clock';
 import { liveLine } from '../lib/typing-line';
-import { IconAlert, IconArrowDown, IconArrowRight, IconBell, IconBolt, IconBranch, IconCheck, IconChevronDown, IconChevronRight, IconInfo, IconLink, IconPlus, IconRefresh, IconSend, IconSparkle, IconSpinner, IconTerminal, IconX } from './Icons';
+import { IconAlert, IconArrowDown, IconArrowRight, IconBell, IconBranch, IconCheck, IconChevronDown, IconChevronRight, IconInfo, IconLink, IconPlus, IconRefresh, IconSend, IconSparkle, IconSpinner, IconTerminal, IconX } from './Icons';
 import { splitNotes } from '../lib/sendable';
 import { getForeignLabel, foreignOf, showsSender, type Foreign, type ForeignKind } from '../lib/foreign';
 import { ImageStrip } from './ImageStrip';
@@ -343,7 +343,8 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
     case 'user': {
       const f = foreignOf(item);
       if (f && !item.thumbs?.length && !item.images) return <ForeignMsg item={item} f={f} />;
-      // "Strategist" (or an older "Veloce" / "Nuova chat"): the line for the Orchestrator is hidden, a badge says it
+      // "Strategist" (or an older "Nuova chat"): the line for the Orchestrator is hidden, a badge says it; an older
+      // "Veloce" line is only hidden (ADR 0201)
       const nc = item.from ? null : splitMode(item.text);
       // notes riding on the user's message (Mandato / Copiato / Non serve): a muted line under the bubble
       const own = item.from ? { text: withoutLabel(item.text), notes: [] } : splitNotes(nc?.text ?? item.text);
@@ -353,7 +354,7 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
       <div className={`msg-user ${item.id.startsWith('local:') ? 'optimistic' : ''}`} data-testid={`item-${item.id}`} data-mode={nc?.mode ?? undefined}>
         {item.thumbs?.length ? <ImageStrip images={item.thumbs.map(thumb => ({ thumb }))} testid={`item-${item.id}-images`} /> : item.images ? <span className="msg-images-count">{t('chat.items.userImages', { n: item.images })}</span> : null}
         {item.from && <div className="msg-from" data-testid={`item-${item.id}-from`}>{t('chat.items.from', { source: item.from })}</div>}
-        {nc?.mode && <div className="msg-newchat" data-testid={`item-${item.id}-mode`} data-tip={t(`chat.items.modeTip.${nc.mode}`)}>{nc.mode === 'quick' ? <IconBolt size={11} /> : nc.mode === 'plan' ? <IconBranch size={11} /> : <IconPlus size={11} />}{t(`chat.mode.${nc.mode}`)}</div>}
+        {nc?.mode && <div className="msg-newchat" data-testid={`item-${item.id}-mode`} data-tip={t(`chat.items.modeTip.${nc.mode}`)}>{nc.mode === 'plan' ? <IconBranch size={11} /> : <IconPlus size={11} />}{t(`chat.mode.${nc.mode}`)}</div>}
         {fix ? <CorrectionBubble quote={fix.quote} fix={fix.fix} /> : text && <div className="bubble">{text}</div>}
         {reaction && <div className="msg-react" data-testid={`item-${item.id}-reaction`} data-reaction="">{reaction}</div>}
         {own.notes.length > 0 && <div className="msg-notes" data-testid={`item-${item.id}-notes`} title={own.notes.join('\n')}><IconCheck size={11} /> {own.notes.join(' · ')}</div>}

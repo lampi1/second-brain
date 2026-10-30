@@ -1,6 +1,6 @@
 // Made-up Log events for the demo (npm run demo, the e2e and the README shots; no CLI, no tokens): two task chains (a
 // delegation tree with a review and a duplicate reply; a single Scout whose permission closed without the user), the
-// classifiers, an estimate, a brain error, a memory fact, Battito and an app warning. Kept in memory only (Journal.seed),
+// classifiers, an estimate, a brain error, a memory fact and an app warning. Kept in memory only (Journal.seed),
 // never written to disk. Used by main/index.ts when SB_DEMO=1.
 import type { LogEvent, LogInput } from '../../shared/activity-log';
 
@@ -11,7 +11,6 @@ export function demoLog(E: number): LogEvent[] {
   const plan = { rootId: 'tree-plan', task: 'Sconti in percentuale' };
   const pr = { rootId: 'demo-pr', task: 'Analizza la PR #212' };
   return [
-    ev(52, { kind: 'pulse', level: 'ok', title: 'Battito: 3 carte con claude', text: 'Turno 08:00', costUsd: 0.012, ms: 21_000 }),
     ev(47, { kind: 'memory', level: 'info', title: 'Memoria di scout aggiornata: Il repo alfa-shop usa dotnet 8 e xUnit', text: 'Nuovo fatto, proposta' }),
     ev(40, { kind: 'classifier', level: 'info', title: 'Classificatore stime: «review»', text: '1 parte nella richiesta', input: 'Analizza la PR #212 e dimmi se si può unire' }),
     ev(40, { kind: 'estimate', level: 'info', title: 'Stima (per la tua richiesta): ~6 min · ~$0.21 · 9 lavori simili, affidabilità media', text: 'Percorso: un solo agente. One review job, single part.', input: 'Analizza la PR #212 e dimmi se si può unire' }),

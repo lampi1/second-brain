@@ -8,6 +8,12 @@
 import { execFile } from 'node:child_process';
 import os from 'node:os';
 
+/** The line of a child's stderr that says what went wrong: the thrown error, not Node's closing "Node.js vX" line. */
+export function errLine(stderr: string): string {
+  const lines = stderr.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  return lines.filter(l => /^(\w*Error|Error)\b/.test(l)).at(-1) ?? lines.find(l => !/^Node\.js v/.test(l)) ?? '';
+}
+
 /** How to start a Node child: the executable and its environment. */
 /** lowPriority: a background poll nobody waits on, started below normal priority */
 export interface NodeRunner { exe: string; env: NodeJS.ProcessEnv; lowPriority?: boolean }

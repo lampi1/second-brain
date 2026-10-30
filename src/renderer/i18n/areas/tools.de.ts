@@ -94,8 +94,6 @@ export const toolsDe: typeof toolsIt = {
   'tools.skillsPage.theAgent': 'den Agenten',
   'tools.skillsPage.theSkill': 'den Skill',
 
-  // Compare: model comparison labels
-
   // Foreign: item origin labels
   'tools.foreign.otherChat': "ein anderer Chat",
   'tools.foreign.anAgent': 'ein Agent',

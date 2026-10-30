@@ -337,3 +337,19 @@ describe('compaction window 300k → 200k (ADR 0051)', () => {
     expect(new ConfigStore(tmpDir(), {}).get()).toMatchObject({ compactWindowTokens: 200_000, orchestratorDayCompact: true, launchRulesClaude: false, launchRulesCodex: true });
   });
 });
+
+describe('settings of removed features (ADR 0201)', () => {
+  it('drops the Battito, its headline and the composer\'s model suggestion from config.json once, keeping the rest', () => {
+    const dir = tmpDir();
+    const file = path.join(dir, 'config.json');
+    fs.writeFileSync(file, JSON.stringify({ theme: 'light', suggestOn: false, suggestModel: true, suggestDailyUsd: 0.05, headlineOn: true, headlineModel: 'x', pulse: { on: true, dailyUsd: 0.25 } }));
+    expect(new ConfigStore(dir, {}).get()).toMatchObject({ theme: 'light', suggestOn: false });
+    const migrated = fs.readFileSync(file, 'utf8');
+    const saved = JSON.parse(migrated) as Record<string, unknown>;
+    for (const k of ['pulse', 'headlineOn', 'headlineModel', 'suggestModel', 'suggestDailyUsd']) expect(saved, k).not.toHaveProperty(k);
+    expect(saved).toMatchObject({ theme: 'light', suggestOn: false });
+    // a file without them is not rewritten
+    new ConfigStore(dir, {});
+    expect(fs.readFileSync(file, 'utf8')).toBe(migrated);
+  });
+});

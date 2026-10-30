@@ -23,6 +23,7 @@ export const KINDS: Record<string, { label: string; priority: Priority }> = {
   'agent-proposal': { label: 'Proposta su un ruolo', priority: 'normal' },  // Agenti → Da approvare (agents/loop.ts → brain/announce.ts)
   'agent-updated': { label: 'Ruolo aggiornato', priority: 'quiet' },          // a maintenance pass's changes, with Annulla (brain/announce.ts)
   'agent-rolledback': { label: 'Versione ripristinata', priority: 'quiet' },
+  'connector-changed': { label: 'Connettore cambiato', priority: 'normal' }, // app_config: the Orchestrator changed an MCP server (ADR 0207), with «Annulla»
   'agent-feedback': { label: 'Giudizio su un ruolo', priority: 'quiet' },
   'chat-waiting': { label: 'Chat che ti aspetta', priority: 'urgent' },
   login: { label: 'Accesso da rifare', priority: 'urgent' },   // browser: an agent waits for the user to sign in to an environment
@@ -59,6 +60,7 @@ export function feedAction(v: unknown): FeedAction | undefined {
     const ids = (a as { ids?: unknown }).ids;
     if (Array.isArray(ids) && ids.length > 0 && ids.length <= 20 && ids.every(id => typeof id === 'string' && /^[0-9a-f]{8,32}$/.test(id))) return { kind: 'brain-undo', ids: [...ids] as string[] };
   }
+  if (a?.kind === 'connector-undo') { const u = (a as { undo?: unknown }).undo; if (typeof u === 'string' && /^[0-9a-f]{12}$/.test(u)) return { kind: 'connector-undo', undo: u }; }
   if (a?.kind === 'agent-undo') {
     const u = a.undo;
     if (u && typeof u.agentId === 'string' && /^[a-z][a-z0-9_-]{0,79}$/.test(u.agentId) && Number.isFinite(u.expectedRevision) && Number.isSafeInteger(u.version) && u.version > 0) return { kind: 'agent-undo', undo: { agentId: u.agentId, expectedRevision: u.expectedRevision, version: u.version } };

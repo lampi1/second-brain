@@ -1,12 +1,11 @@
 // E2E of ADR 0102, the app shows what it does by itself (frozen demo): a collapsed strip says its current step (the
 // demo's "Fix totale ordine" runs `dotnet test`), the morning block "Mentre eri via" is one line atop the Orchestrator
-// while strips are open, unfolds into its rows and goes away with Ok for the day; the Battito's settings sit in
-// Settings → Notifiche with today's spend; its board shows in Memoria → Idee «Dell'IA». SB_MORNING=1: the block is off in the
-// test suites otherwise.
+// while strips are open, unfolds into its rows and goes away with Ok for the day. The Battito is gone (ADR 0201): no
+// settings of its own, no board in Memoria → Idee. SB_MORNING=1: the block is off in the test suites otherwise.
 import { expect, test } from '@playwright/test';
 import { goPage, launchDemo, shot } from './helpers';
 
-test('strips say their step; the morning line unfolds and Ok dismisses it; the Battito is in sight', async () => {
+test('strips say their step; the morning line unfolds and Ok dismisses it; no Battito anywhere', async () => {
   const { app, page } = await launchDemo({ env: { SB_MORNING: '1' } });
   // a collapsed working strip: its current command, not a bare "sta lavorando…"
   await expect(page.getByTestId('strip-step-fix')).toContainText('Lancia');
@@ -21,18 +20,10 @@ test('strips say their step; the morning line unfolds and Ok dismisses it; the B
   await shot(page, 'alive-morning-line');
   await page.getByTestId('morning-line-ok').click();
   await expect(line).toHaveCount(0);
-  // Settings → Notifiche: the Battito's switch, times and budget, with today's spend
+  // the Battito is gone (ADR 0201): Settings → Notifiche has no row of its own, Memoria → Idee «Dell'AI» no board
   await goPage(page, 'impostazioni');
-  await expect(page.getByTestId('st-pulse')).toBeVisible();
-  await expect(page.getByTestId('st-pulse-slots')).toHaveValue('08:30, 13:00, 18:30');
-  await expect(page.getByTestId('st-pulse-today')).toContainText('Oggi');
-  await page.getByTestId('st-pulse').scrollIntoViewIfNeeded();
-  await shot(page, 'alive-settings-pulse');
-  // Memoria → Idee «Dell'IA»: the Battito's board, at most three cards (it was the Dashboard's Spunti, ADR 0122)
+  await expect(page.getByTestId('st-pulse')).toHaveCount(0);
   await page.keyboard.press('Control+K'); await page.getByTestId('palette-input').fill('sb://memoria/idee/ia'); await page.keyboard.press('Enter');
-  const board = page.locator('[data-testid="context-pulse"][data-place="board"]');
-  await expect(board).toBeVisible();
-  expect(await board.locator('[data-testid^="context-card-"]').count()).toBeLessThanOrEqual(3);
-  await shot(page, 'alive-idee-board');
+  await expect(page.locator('[data-testid="context-pulse"]')).toHaveCount(0);
   await app.close();
 });

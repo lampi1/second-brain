@@ -6,7 +6,6 @@ import { routinesIt } from './areas/routines.it';
 import { appTextIt } from './areas/app-text.it';
 import { brainTextIt } from './areas/brain-text.it';
 import { learningReviewIt } from './areas/learning-review.it';
-import { cloudIt } from './areas/cloud.it';
 import { brainModelIt } from './areas/brain-model.it';
 import { memoryIt } from './areas/memory.it';
 import { memoryHubIt } from './areas/memory-hub.it';
@@ -25,6 +24,8 @@ import { genuiRequestIt } from './areas/genui-request.it';
 import { voiceIt } from './areas/voice.it';
 import { recIt } from './areas/rec.it';
 import { imparaIt } from './areas/impara.it';
+import { imparaStudioIt } from './areas/impara-studio.it';
+import { imparaV3It } from './areas/impara-v3.it';
 import {studioIt}from'./areas/studio.it';
 import { permissionsIt } from './areas/permissions.it';
 import { langSwitchIt } from './areas/lang-switch.it';
@@ -43,6 +44,8 @@ import { agentDetailIt } from './areas/agent-detail.it';
 import { agentImageIt } from './areas/agent-image.it';
 import { proposalsIt } from './areas/proposals.it';
 import {settingsIt}from'./areas/settings.it';
+import { settingsShellIt } from './areas/settings-shell.it';
+import { mcpAddIt } from './areas/mcp-add.it';
 import { profileIt } from './areas/profile.it';
 import { homeIt } from './areas/home.it';
 import { guideIt } from './areas/guide.it';
@@ -76,7 +79,6 @@ export const it = {
   ...setupIt,
   ...viewerOverlayIt,
   ...homeIt,
-  ...cloudIt,
   ...guideIt,
   ...pbrowserIt,
   ...treeIt,
@@ -93,6 +95,8 @@ export const it = {
   ...voiceIt,
   ...recIt,
   ...imparaIt,
+  ...imparaStudioIt,
+  ...imparaV3It,
   'genui.request.question': 'Domanda',
   'genui.request.permission': 'Permesso',
   'genui.request.from': ({ kind, chat, title }: { kind: string; chat?: string; title: string }) => `${kind} da ${chat ?? 'una chat'}: ${title}`,
@@ -123,6 +127,8 @@ export const it = {
   ...agentImageIt,
   ...proposalsIt,
   ...settingsIt,
+  ...settingsShellIt,
+  ...mcpAddIt,
   ...profileIt,
   ...chatIt,
   ...visualsIt,

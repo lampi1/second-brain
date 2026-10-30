@@ -1,6 +1,6 @@
 // The line of a working chat (owner, 2026-10-27: «al posto delle frasi divertenti … quello che sta realmente facendo»,
 // ADR 0173): what the chat does now, read from its transcript at zero tokens, the same for every engine (Claude, Cursor,
-// Codex, cloud): the tool or command running ("Lancia `npm test`", "Sto modificando login.ts", "Delega a Artisan"),
+// Codex): the tool or command running ("Lancia `npm test`", "Sto modificando login.ts", "Delega a Artisan"),
 // else the engine's plan item in progress, else a plain "sta pensando…" / "sta lavorando…", "sta scrivendo…" while the
 // reply streams. The words come from lib/run-steps.ts (the delegated cards' lines). Pure; used by components/ChatItems.tsx
 // Typing and StripActivity.tsx, pinned by test/unit/typing-line.test.ts.

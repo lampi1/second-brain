@@ -1,5 +1,5 @@
-// Unit tests of shared/newchat.ts (the "Strategist" line: added, recognized, removed; an older "Veloce" or "Nuova chat" line
-// still recognized) and lib/chatrefs.ts (the chats an Orchestrator's app_create_chat / app_send_to_chat rows and messages
+// Unit tests of shared/newchat.ts (the "Strategist" line: added, recognized, removed; an older "Nuova chat" line still
+// recognized, an older "Veloce" line only taken off, ADR 0201) and lib/chatrefs.ts (the chats an Orchestrator's app_create_chat / app_send_to_chat rows and messages
 // point to; ADR 0034).
 import { describe, expect, it } from 'vitest';
 import type { ChatItem, ChatSummary } from '../../src/shared/contract';
@@ -23,11 +23,13 @@ describe('mode line', () => {
       expect(splitMode(t)).toEqual({ mode, text: 'Controlla i log' });
     }
     expect(Object.keys(MODE_LINES)).toEqual(['plan']); // no "Veloce" any more (#124)
+    expect(Object.keys(MODE_TAGS)).toEqual(['plan', 'new']); // nor its tag (ADR 0201)
+    expect(SEND_MODE_RULE).not.toContain('[veloce]');
     expect(MODE_LINES.plan).toContain('"strategist"');
   });
   it('still reads an older "Nuova chat" message, and leaves any other message as it is', () => {
     expect(splitMode('[nuova chat] Apri una nuova chat…\n\nfai X')).toEqual({ mode: 'new', text: 'fai X' });
-    expect(splitMode('[veloce] Via rapida…\n\nfai X')).toEqual({ mode: 'quick', text: 'fai X' });
+    expect(splitMode('[veloce] Via rapida…\n\nfai X')).toEqual({ mode: null, text: 'fai X' }); // Veloce is gone: no badge (ADR 0201)
     expect(splitMode('ciao [veloce]')).toEqual({ mode: null, text: 'ciao [veloce]' });
     expect(splitMode('[strategist]')).toEqual({ mode: 'plan', text: '' });
   });

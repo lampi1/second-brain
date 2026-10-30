@@ -4,24 +4,27 @@
 // the tutor opened (warmTutor), grounded in the lesson's verified facts, each cited as a chip that opens its source.
 // «Prima provo io» (on by default) makes the tutor give a hint and a question back before explaining a why or a how
 // (Bastani et al. 2024); «Dimmelo e basta» asks for the answer straight away. An explanation the verified facts support
-// becomes a review card (shown on the answer). Read aloud when «Voce dell'app» is on. Used by ImparaPlayer.tsx; styles
-// impara.css (.ip-tutor*).
+// becomes a review card (shown on the answer). Read aloud when «Voce dell'app» is on. Since ADR 0205 it is the «Tutor»
+// tab of the column beside the lesson (the «Studio» tab is the other; the column's head is ImparaPlayer's), and
+// «Mettimi alla prova» (a Studio tile) starts its quiz mode: it asks one question at a time and judges each answer
+// until «Basta così». Used by ImparaPlayer.tsx; styles impara.css (.ip-tutor*).
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
-import { tutorShown, type Lesson, type LessonFact, type TutorTurn } from '@shared/lesson';
+import { tutorShown, type Lesson, type LessonFact, type TutorMode, type TutorTurn } from '@shared/lesson';
 import { askTutor, imparaPrefs, setImparaPrefs, tutorLive, warmTutor } from '../../lib/impara';
 import { narrate } from '../../lib/voice';
 import { renderMarkdown } from '../../lib/markdown';
 import { t } from '../../i18n';
 import { Button } from '../ui';
-import { IconCheck, IconRefresh, IconSend, IconSparkle, IconX } from '../Icons';
+import { IconCheck, IconRefresh, IconSend, IconTarget } from '../Icons';
 import { ImparaSwitch } from './ImparaSwitch';
 import { hostOf, openFact } from './ImparaSources';
 
 const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!));
 
 /** The answer's markdown with each [f1] of a known fact as a small chip (its source on hover, opened on click); only
- *  in the text, never inside a tag. Not cached while it streams (every word is a new text). */
-function answerHtml(text: string, facts: readonly LessonFact[], streaming: boolean): string {
+ *  in the text, never inside a tag. Not cached while it streams (every word is a new text). Also the «Studio» summary's
+ *  and glossary's (ImparaStudio.tsx). */
+export function citedHtml(text: string, facts: readonly LessonFact[], streaming: boolean): string {
   const n = new Map(facts.map((f, i) => [f.id, { f, i: i + 1 }]));
   return renderMarkdown(text, !streaming).split(/(<[^>]*>)/).map(part => (part.startsWith('<') ? part : part.replace(/\[(f\d+)\]/g, (all, id: string) => {
     const hit = n.get(id);
@@ -31,22 +34,25 @@ function answerHtml(text: string, facts: readonly LessonFact[], streaming: boole
   }))).join('');
 }
 
+/** A click on a cited fact's chip opens its source (a web page, a file of this PC). */
+export function openCite(e: MouseEvent, facts: readonly LessonFact[]): void {
+  const id = (e.target as HTMLElement).closest<HTMLElement>('[data-fact]')?.dataset.fact;
+  const f = id ? facts.find(x => x.id === id) : null;
+  if (!f) return;
+  e.preventDefault();
+  if (f.from === 'web') window.open(f.ref, '_blank', 'noopener');
+  else if (f.from === 'file') openFact(f.ref);
+}
+
 function Turn({ turn, facts, last, again, onTell, onRetry }: { turn: TutorTurn; facts: readonly LessonFact[]; last: boolean; again: boolean; onTell: () => void; onRetry: () => void }) {
   const live = tutorLive.use(s => s[turn.id]);
   const text = turn.state === 'asking' ? live ?? '' : tutorShown(turn.a);
-  const html = useMemo(() => answerHtml(text, facts, turn.state === 'asking'), [text, facts, turn.state]);
-  const open = (e: MouseEvent) => {
-    const id = (e.target as HTMLElement).closest<HTMLElement>('[data-fact]')?.dataset.fact;
-    const f = id ? facts.find(x => x.id === id) : null;
-    if (!f) return;
-    e.preventDefault();
-    if (f.from === 'web') window.open(f.ref, '_blank', 'noopener');
-    else if (f.from === 'file') openFact(f.ref);
-  };
+  const html = useMemo(() => citedHtml(text, facts, turn.state === 'asking'), [text, facts, turn.state]);
+  const open = (e: MouseEvent) => openCite(e, facts);
   return (
     <div className="ip-tturn" data-testid="impara-tutor-turn" data-state={turn.state}>
       {/* «Dimmelo e basta» after a hint: the same question again, said as what the learner pressed */}
-      <div className="ip-tq">{again ? t('impara.tutor.tell') : turn.q}</div>
+      <div className={`ip-tq ${turn.mode === 'quiz' ? 'quiz' : ''}`}>{again ? t('impara.tutor.tell') : turn.q}</div>
       <div className="ip-ta" aria-live={turn.state === 'asking' ? 'polite' : undefined}>
         {turn.state === 'failed'
           ? <div className="ip-terr" role="alert">{t('impara.tutor.failed', { error: turn.error ?? '' })} <Button size="s" onClick={onRetry} testid="impara-tutor-retry"><IconRefresh size={11} />{t('impara.retry')}</Button></div>
@@ -62,7 +68,11 @@ function Turn({ turn, facts, last, again, onTell, onRetry }: { turn: TutorTurn; 
   );
 }
 
-export function ImparaTutor({ lesson, at, seed, onSeed, onClose }: { lesson: Lesson; at: string; seed: string | null; onSeed: () => void; onClose: () => void }) {
+export function ImparaTutor({ lesson, at, seed, onSeed, onClose, challenge, onChallenged }: {
+  lesson: Lesson; at: string; seed: string | null; onSeed: () => void; onClose: () => void;
+  /** «Mettimi alla prova» pressed in the Studio: the quiz starts (once per press) */
+  challenge: number; onChallenged: () => void;
+}) {
   const coach = imparaPrefs.use(p => p.coach);
   const voiceOn = imparaPrefs.use(p => p.voice);
   const turns = lesson.tutor ?? [];
@@ -72,6 +82,9 @@ export function ImparaTutor({ lesson, at, seed, onSeed, onClose }: { lesson: Les
   const input = useRef<HTMLTextAreaElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const live = tutorLive.use(s => s);
+  // «Mettimi alla prova» (ADR 0205): while the last turn is the quiz's, what the learner writes is an answer to it
+  const last = turns.at(-1);
+  const quizzing = last?.mode === 'quiz' && !(last.q === t('impara.tutor.quizStop') && last.state !== 'failed');
 
   // the engine starts as the tutor opens: by the time the question is written it is ready
   useEffect(() => { warmTutor(lesson.id); input.current?.focus(); }, [lesson.id]);
@@ -90,21 +103,18 @@ export function ImparaTutor({ lesson, at, seed, onSeed, onClose }: { lesson: Les
   }, [turns, voiceOn]);
 
   // a question from the box that did not go (no engine, an error said by a notice) comes back into the box
-  const send = (text: string, mode: 'coach' | 'tell' = coach ? 'coach' : 'tell', fromBox = false) => {
+  const send = (text: string, mode: TutorMode = quizzing ? 'quiz' : coach ? 'coach' : 'tell', fromBox = false) => {
     const v = text.trim();
     if (!v || asking) return;
     if (fromBox) setQ('');
     void askTutor(lesson.id, at, v, mode).then(l => { if (!l && fromBox) setQ(cur => cur.trim() ? cur : v); });
   };
 
+  // a press of «Mettimi alla prova»: the first question comes
+  useEffect(() => { if (challenge > 0 && !asking) { send(t('impara.tutor.quizStart'), 'quiz'); onChallenged(); } }, [challenge]);
+
   return (
-    <aside className="ip-tutor" data-testid="impara-tutor" aria-label={t('impara.tutor.title')}>
-      <header className="ip-tutor-h">
-        <span className="ip-tutor-ava" aria-hidden="true"><IconSparkle size={13} /></span>
-        <div className="ip-tutor-t"><b>{t('impara.tutor.title')}</b><small className="ip-muted">{t('impara.tutor.sub')}</small></div>
-        <span className="sp" />
-        <button type="button" className="ip-tutor-x" onClick={onClose} aria-label={t('impara.tutor.close')} data-tip={`${t('impara.tutor.close')}|Esc`} data-testid="impara-tutor-close"><IconX size={13} /></button>
-      </header>
+    <div className="ip-tutor-pane" data-testid="impara-tutor" aria-label={t('impara.tutor.title')}>
       <div className="ip-tutor-body" ref={body}>
         {!turns.length && (
           <div className="ip-tutor-empty" data-testid="impara-tutor-empty">
@@ -122,11 +132,14 @@ export function ImparaTutor({ lesson, at, seed, onSeed, onClose }: { lesson: Les
             else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); }
           }} />
         <div className="ip-tutor-row">
-          <span data-tip={t('impara.tutor.coachTip')}><ImparaSwitch on={coach} onChange={on => setImparaPrefs({ coach: on })} label={t('impara.tutor.coach')} testid="impara-tutor-coach" /></span>
+          {quizzing
+            ? <span className="ip-tquiz" data-testid="impara-tutor-quizzing"><IconTarget size={12} />{t('impara.tutor.quizzing')}
+              <button type="button" className="ip-link" onClick={() => send(t('impara.tutor.quizStop'), 'quiz')} disabled={asking} data-testid="impara-tutor-quiz-stop">{t('impara.tutor.quizEnd')}</button></span>
+            : <span data-tip={t('impara.tutor.coachTip')}><ImparaSwitch on={coach} onChange={on => setImparaPrefs({ coach: on })} label={t('impara.tutor.coach')} testid="impara-tutor-coach" /></span>}
           <span className="sp" />
           <Button variant="primary" size="s" type="submit" disabled={!q.trim() || asking} testid="impara-tutor-send">{t('impara.askSend')} <IconSend size={12} /></Button>
         </div>
       </form>
-    </aside>
+    </div>
   );
 }

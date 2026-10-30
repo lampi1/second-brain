@@ -33,7 +33,6 @@ export const chatIt = {
   'chat.input.sendNowButton': 'Invia subito',
   'chat.input.unqueueLabel': 'Togli dalla coda',
   'chat.input.readingImage': (p: { n: number }) => p.n === 1 ? 'Leggo l’immagine…' : `Leggo ${p.n} immagini…`,
-  'chat.mode.quick': 'Veloce',
   'chat.mode.plan': 'Plan',
   'chat.mode.new': 'Nuova chat',
   'chat.input.placeholderPlan': 'Cosa deve pianificare lo Strategist…',
@@ -56,7 +55,6 @@ export const chatIt = {
   // ChatItems
   'chat.items.userImages': (p: { n: number }) => p.n === 1 ? '1 immagine' : `${p.n} immagini`,
   'chat.items.from': (p: { source: string }) => `Da «${p.source}» · non scritto da te`,
-  'chat.items.modeTip.quick': 'Via rapida: risposta diretta o una sola chat, senza deleghe',
   'chat.items.modeTip.plan': 'Affidata a una chat Strategist che pianifica e delega',
   'chat.items.modeTip.new': 'L’Orchestrator apre una chat nuova per questa richiesta',
   'chat.items.typing.writing': 'sta scrivendo…',

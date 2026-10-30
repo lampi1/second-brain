@@ -3,7 +3,8 @@
 // PR of the Task page or a GitHub link, a topic, a pasted text, how deep, how much the user knows already, the two
 // voices; the saved lessons) or, with the page's argument, one lesson (ImparaPlayer.tsx). Mounted by App.tsx's
 // PageFrame; the address is impara/<lesson id>, so back and forward move between the list and a lesson; impara/ripasso
-// (today's review) and impara/ripasso:<subject> (a subject's quiz) open a review session (ImparaReview.tsx, ADR 0189).
+// (today's review) and impara/ripasso:<subject> (a subject's quiz) open a review session (ImparaReview.tsx, ADR 0189);
+// impara/quiz:<lesson id> plays that lesson's «Studio» quiz the same way (ADR 0205).
 import { ui } from '../../store/ui';
 import { readReviewArg, startImpara } from '../../lib/impara';
 import { t } from '../../i18n';
@@ -11,6 +12,7 @@ import { ImparaPlayer } from './ImparaPlayer';
 import { ImparaStart } from './ImparaStart';
 import { ImparaReview } from './ImparaReview';
 import '../../styles/impara.css';
+import '../../styles/impara-studio.css';
 
 export function ImparaPage() {
   startImpara();
@@ -18,7 +20,7 @@ export function ImparaPage() {
   const review = readReviewArg(arg);
   return (
     <div className="bx bx-page bx-scroll ip-page" data-testid="impara-page" role="region" aria-label={t('brainPages.nav.impara')}>
-      <div className="bx-inner ip-inner">{review ? <ImparaReview key={arg} subject={review.subject} /> : arg ? <ImparaPlayer key={arg} id={arg} /> : <ImparaStart />}</div>
+      <div className="bx-inner ip-inner">{review ? <ImparaReview key={arg} subject={review.subject} lesson={review.lesson} /> : arg ? <ImparaPlayer key={arg} id={arg} /> : <ImparaStart />}</div>
     </div>
   );
 }

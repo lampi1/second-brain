@@ -4,12 +4,12 @@
 import { app } from 'electron';
 import type { CliStatus, Harness, RunInfo } from '../shared/contract';
 import { SEND_MODE_RULE } from '../shared/newchat';
-import { engineInfos, engineOf, priceEnginesOf } from './engines/registry';
+import { engineInfos, engineOf } from './engines/registry';
 import { withApiModels } from './engines/sessions';
 import { AgentCatalogService } from './agents/catalog';
 import { tierModel } from './agents/model-tier';
 import { CATALOG_GUIDANCE } from './agents/discovery';
-import { agentsMayOpen, engineOn } from './engines/policy';
+import { engineOn } from './engines/policy';
 import type { EnginesApi } from './engines/service';
 import type { BrainService, ChatService } from './services';
 import type { McpServer, McpTool, ToolOutput } from './mcp/server';
@@ -47,7 +47,7 @@ export function toMcp(out: ToolOut): ToolOutput {
 export function attachAppTools(mcp: McpServer, deps: Omit<Parameters<typeof appControlTools>[0], 'code'>, source: AppSourceService, demo = false, orchestratorTokens?: EndpointTokens): void {
   const as = (t: ToolDef): McpTool => ({ name: t.name, description: t.description, inputSchema: t.inputSchema as Record<string, unknown>, ...(t.annotations ? { annotations: t.annotations } : {}), run: async a => toMcp(await t.run(a)) });
   const what = demo ? 'the second-brain app (demo data)' : 'the second-brain app itself: state, chats, open questions (read-only), feed, logs, screenshots, UI';
-  // SEND_MODE_RULE: what the "Strategist" choice of the Orchestrator's input means (and the older "Veloce") (ADR 0034)
+  // SEND_MODE_RULE: what the "Strategist" choice of the Orchestrator's input means (and the older "Nuova chat") (ADR 0034)
   const instructions = `Control and inspect ${what}. It can never answer questions or permissions. For a status or after a wake, call app_digest (since "last") once instead of reading chats one by one. ${CATALOG_GUIDANCE} ${SEND_MODE_RULE}`;
   const code = { repo: () => source.repo(), inRepo: (dir: string) => source.inRepo(dir) };
   // /mcp/app: test agents (acts for the Orchestrator); /mcp/app/o/<id>/<token>: the Orchestrator's own, so the tools know
@@ -184,13 +184,6 @@ export function createAppSource(ctx: Pick<Ctx, 'emitter' | 'userData'>, appRepo:
 export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: EnginesApi, cli: () => Record<Harness, CliStatus> | null, onCustomized?: () => void): AgentCatalogService {
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
     tierModel: (engine, tier) => tierModel(engine, tier, brain.modelRegistry(), brain.settings().modelTiers),
-    pulsePreset: () => {
-      const choices = engineInfos();
-      const e = choices.find(e => e.kind === 'api' && agentsMayOpen(brain.settings(), e.id) && engines.hasKey(e.id))
-        ?? choices.find(e => e.kind === 'claude');
-      const model = e ? brain.modelRegistry()?.models.find(m => priceEnginesOf(e).includes(m.harness) && m.tier === 'mid')?.id ?? (e.kind === 'claude' ? 'sonnet' : null) : null;
-      return { engine: e?.id ?? 'claude', model, ...(e?.caps.effort ? { effort: 'low' as const } : {}) };
-    },
     models: () => {
       const seen = withApiModels(brain.modelsSeen());
       return engineInfos().map(e => ({ engine: e.id, label: e.label, enabled: engineOn(brain.settings(), e.id), trusted: e.trusted, effort: e.caps.effort, maxContext: e.kind === 'claude',

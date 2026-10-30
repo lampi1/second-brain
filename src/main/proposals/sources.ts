@@ -3,7 +3,7 @@
 // path, the same call its old page made (memory facts have no cards since ADR 0150: the maintenance saves them itself,
 // brainmodel/memory-tidy.ts, at most MEMORY_CAP per role, in the Log with Annulla); a skill candidate → learning:promote
 // / the rollback of the change that wrote it; a change the maintenance applied → Tieni (a reviewed mark) / brainmodel:rollback; an agent's protected setting → settings:confirm; a role trial → agents:trialDecide; a tier
-// suggestion → agents:lifecycleDecide; a Battito rule → approvals:decide; an improvement-loop policy → learn:act.
+// suggestion → agents:lifecycleDecide; an improvement-loop policy → learn:act.
 // Pure over injected ports (index.ts wires them to the handlers): unit-tested in test/unit/proposals/service.test.ts.
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
@@ -12,7 +12,6 @@ import type { BrainChange } from '../../shared/brain-model';
 import type { ChatSummary, LearnAction, LearnResult, SettingProposal } from '../../shared/contract';
 import type { SkillCandidateView } from '../../shared/learning-review';
 import type { BrainCandidateView, ResearchProposal } from '../../shared/maintenance-research';
-import type { ApprovalItem as PulseApproval, PulseResult } from '../../shared/pulse';
 import { type Proposal, type ProposalAsk, type ProposalGroup, type ProposalCode, type ProposalDecision, type ProposalKeep, type ProposalFact, type ProposalNever, type ProposalProvenance, type ProposalSource, type ProposalWho } from '../../shared/proposals';
 import { isRoleId } from '../../shared/roles';
 import type { FileSnapshot, StoredChange } from '../brainmodel/changes';
@@ -33,7 +32,6 @@ export interface ProposalPorts {
   settings?: { pending(): SettingProposal[]; confirm(id: string, accept: boolean): unknown };
   roles?: { list(): AgentProfile[]; resolveTrial(id: string, decision: 'keep' | 'rollback'): unknown };
   lifecycle?: { read(): AgentLifecycleSnapshot | Promise<AgentLifecycleSnapshot>; decide(key: string, decision: 'approve' | 'dismiss'): unknown };
-  pulse?: { list(): PulseApproval[] | Promise<PulseApproval[]>; decide(id: string, decision: 'approve' | 'discard'): PulseResult | Promise<PulseResult> };
   policies?: { status(): Promise<unknown>; act(a: LearnAction): Promise<LearnResult> };
   /** the maintenance's findings for the brain (ADR 0132): open cards, applied through the change log on approval */
   research?: { list(): ResearchProposal[]; approve(id: string): unknown; reject(id: string): unknown; repo?(): string | null;
@@ -234,24 +232,6 @@ const tier: Source = {
   async decide(p, c, decision) { await p.lifecycle!.decide(native(c), decision === 'approve' ? 'approve' : 'dismiss'); },
 };
 
-// ── the Battito's learned rules ───────────────────────────────────────────────────────────────────────────────────
-const pulse: Source = {
-  id: 'pulse',
-  available: p => !!p.pulse,
-  async list(p) {
-    const rows = await p.pulse!.list();
-    return (Array.isArray(rows) ? rows : []).filter(x => x?.state === 'pending').map(x => card('pulse', x.id, {
-      group: 'rule', applied: false, title: x.title, content: x.text, facts: [{ key: 'target', value: x.agentId }], ask: { kind: 'rule', role: x.agentId },
-      provenance: prov({ who: { kind: 'role', id: 'pulse' }, at: iso(x.createdAt), evidence: x.evidence.map(e => `${e}`) }),
-      canApprove: true, canReject: true,
-    }));
-  },
-  async decide(p, c, decision) {
-    const r = await p.pulse!.decide(native(c), decision === 'approve' ? 'approve' : 'discard');
-    if (!r.ok) throw new Error(r.error);
-  },
-};
-
 // ── the improvement loop's policies (estimates, model choice, thresholds) ─────────────────────────────────────────────
 type Obj = Record<string, unknown>;
 const obj = (v: unknown): Obj => (v && typeof v === 'object' && !Array.isArray(v) ? v as Obj : {});
@@ -365,6 +345,6 @@ const research: Source = {
   },
 };
 
-export const SOURCES: readonly Source[] = [candidate, change, setting, trial, tier, pulse, policy, research];
+export const SOURCES: readonly Source[] = [candidate, change, setting, trial, tier, policy, research];
 /** A path shown short: relative to the brain when it is inside it. */
 export const shortPath = (file: string, root: string | null): string => (root && path.isAbsolute(file) && path.resolve(file).startsWith(path.resolve(root) + path.sep) ? path.relative(root, file).split(path.sep).join('/') : file);

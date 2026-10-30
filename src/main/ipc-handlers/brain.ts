@@ -41,7 +41,6 @@ export function brainHandlers({ s, emitter, research, requireReviewRoot, search,
     // the morning block (ADR 0102): the renderer's presence, Ctrl+J's fallback, the user's Esc / Ok
     'morning:brief': a => s.morning ? s.morning.handle(a) : { history: false, show: false, brief: null },
     'brain:api': a => s.brain.api(a?.path),
-    'compare:list': () => s.brain.compareList(),
     'learn:act': a => s.brain.learnAct(a),
     'skills:list': () => s.skills.list(),
     'skills:read': a => s.skills.read(String(a?.id ?? '')),

@@ -1,18 +1,14 @@
 // IPC handlers, Agents: roles and their versions, metrics and estimates, avatars, work threads and lessons, routines,
-// cloud agents, connectors and MCP servers, the Guida. Registered by src/main/index.ts with every other group (Handlers
+// connectors and MCP servers, the Guida. Registered by src/main/index.ts with every other group (Handlers
 // in ipc.ts keeps the set complete); each channel's shape is in src/shared/contract/*.ts.
 import { FROZEN_EPOCH } from '../demo';
 import { checkRunIds, demoEstimateRuns, mergeRuns } from '../agents/run-estimates';
 import { errText, log } from '../log';
 import { judgingEstimate, lastNight } from '../agents/judge-sample';
 import { readWorker } from '../read-work';
-import type { CloudService } from '../cloud/service';
 import type { HandlerContext, HandlersOf } from './context';
 
-/** The cloud agents' service (ADR 0080), or a clear error where a wiring has none. */
-const cloudOf = (w: { cloud?: CloudService }): CloudService => { if (!w.cloud) throw new Error('Agenti cloud non disponibili.'); return w.cloud; };
-
-export function agentsHandlers({ s, demo, agentImages, workflows, orchestrator, mcpServers, connectors, routinesOf }: HandlerContext): HandlersOf<'agents' | 'avatars' | 'work' | 'routines' | 'cloud' | 'connectors' | 'mcpservers' | 'guide'> {
+export function agentsHandlers({ s, demo, agentImages, workflows, orchestrator, mcpServers, connectors, routinesOf }: HandlerContext): HandlersOf<'agents' | 'avatars' | 'work' | 'routines' | 'connectors' | 'mcpservers' | 'guide'> {
   return {
     'connectors:list': () => connectors.service.list(),
     'connectors:login': a => connectors.service.login(a?.provider),
@@ -31,6 +27,7 @@ export function agentsHandlers({ s, demo, agentImages, workflows, orchestrator, 
     'mcpservers:test': a => mcpServers().test(a?.id),
     'mcpservers:importScan': () => mcpServers().importScan(),
     'mcpservers:importApply': a => mcpServers().importApply(a?.keys),
+    'mcpservers:undo': a => mcpServers().undo(a?.undo),
     'agents:list': () => s.agents.list(),
     // the brain skills that fit a request (the role start dialog); the demo ranks by words only
     'agents:undo': a => { if (!s.runFeedback) throw new Error('Annulla non disponibile.'); return s.runFeedback.undo(a); },
@@ -65,13 +62,6 @@ export function agentsHandlers({ s, demo, agentImages, workflows, orchestrator, 
     'avatars:get': () => agentImages.get(),
     'avatars:set': a => agentImages.set(a?.id, a?.bytes),
     'avatars:reset': a => agentImages.reset(a?.id),
-    // cloud agents (ADR 0080, main/cloud/): the user's clicks; agents reach them only through app_create_chat / app_chats
-    'cloud:list': a => cloudOf(s).list(a?.refresh === true),
-    'cloud:followUp': a => cloudOf(s).followUp(String(a?.id ?? ''), String(a?.text ?? '')),
-    'cloud:stop': a => cloudOf(s).stop(String(a?.id ?? '')),
-    'cloud:apply': a => cloudOf(s).apply(String(a?.id ?? '')),
-    'cloud:watch': a => cloudOf(s).watch(typeof a?.id === 'string' ? a.id : null),
-    'cloud:dismiss': a => cloudOf(s).dismiss(String(a?.id ?? '')),
     'work:lessons': () => s.agentPacks.learning.waiting(),
     'work:lessonDecide': a => {
       const lesson = s.agentPacks.learning.waiting().find(p => p.id === a.id);

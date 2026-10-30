@@ -1,9 +1,9 @@
 // The Log's mapping of the app's other events (main/activity/wiring.ts, records.ts): the brain feed's errors, notes and
 // role changes; the technical warnings; the memory store's new facts and status changes; estimates, the mail
-// classifier and Battito in readable Italian.
+// classifier in readable Italian.
 import { describe, expect, it } from 'vitest';
 import { entryToLog, feedToLog, memoryDiff } from '../../../src/main/activity/wiring';
-import { estimateRecords, mailRecord, pulseRecord } from '../../../src/main/activity/records';
+import { estimateRecords, mailRecord } from '../../../src/main/activity/records';
 import type { FeedEvent } from '../../../src/shared/contract';
 import type { TaskEstimate } from '../../../src/shared/task-estimate';
 
@@ -33,7 +33,7 @@ describe('activity mapping', () => {
     expect(out.map(e => e.title)).toEqual(['Memoria di scout: fatto confermata', 'Memoria di artisan aggiornata: Nuovo']);
   });
 
-  it('writes estimates, the mail class and Battito readably', () => {
+  it('writes estimates and the mail class readably', () => {
     const e: TaskEstimate = { kind: 'review', basis: 'agent-kind', n: 9, timeMs: 360_000, timeLowMs: 1, timeHighMs: 2, costUsd: 0.21, costLowUsd: 0.1, costHighUsd: 0.3, confidence: 'medium', parts: 1, quick: false, path: 'one-agent', why: 'One part.' } as TaskEstimate;
     const [cls, est] = estimateRecords(e, 'Analizza la PR', 'per la tua richiesta');
     expect(cls).toMatchObject({ kind: 'classifier', title: 'Classificatore stime: «review»', text: '1 parte nella richiesta' });
@@ -41,7 +41,5 @@ describe('activity mapping', () => {
     expect(est!.text).toContain('un solo agente');
     expect(estimateRecords({ ...e, basis: null, timeMs: null }, 'x', 'y')[1]!.title).toContain('nessuna cifra');
     expect(mailRecord('Scout', 'Orchestrator', 'now', 'Bloccato', 'adesso').title).toBe('Classificatore posta: Scout → Orchestrator: urgente, consegnato subito');
-    expect(pulseRecord('pulse', '08:00', { ok: true }, { cards: 3, usd: 0.01, engine: 'claude' })).toMatchObject({ kind: 'pulse', title: 'Battito: 3 carte con claude', text: 'Turno 08:00', costUsd: 0.01 });
-    expect(pulseRecord('pulse', 'manual', { ok: false, error: 'Nessuna novità nel digest.' }, {}).title).toBe('Battito non ha lavorato: Nessuna novità nel digest.');
   });
 });

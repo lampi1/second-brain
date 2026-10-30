@@ -13,7 +13,7 @@ export const visualsIt = {
   'visuals.chartAlt': (p: { title: string }) => `Grafico: ${p.title}`,
   'splash.label': 'La frase del giorno',
   'splash.skip': 'Clic o un tasto per entrare',
-  // the splash's own lines, when the day's headline is not there yet (one a day, in turn)
+  // the splash's own lines (one a day, in turn)
   'splash.line.0': 'Si macina. Il caffè è per i deboli, i token per i forti.',
   'splash.line.1': 'Oggi si affilano le idee e si limano i bug.',
   'splash.line.2': 'La mola gira, le scintille volano, i task cadono.',

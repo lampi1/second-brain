@@ -1,24 +1,29 @@
-// The start of Impara (ADR 0185; mockup /mnt/project-files/ui-review/impara/1-pagina-impara.png): «Cosa vuoi capire
-// davvero, oggi?» with what to learn (a PR: one of the Task page's, or a GitHub link; a technical topic; a pasted text),
-// how much the user knows already (the lesson adapts from the first piece), how deep, who explains (TeacherChip.tsx),
-// and the two voices; under it the
-// review (ImparaReviewHome.tsx, ADR 0189: what is due today, the subjects and their quiz), the user's PRs with how far
-// each was studied, and the saved lessons (their diagram as a thumbnail, how far they got, their subject, filtered by
-// subject), each reopening where it was left. Another page can send the user here with the form filled in (ADR 0190:
-// «Capiscila» from Task, «Spiegamelo» from Memoria, «Imparalo» from the Guide; lib/impara.ts learnAbout), with the
-// subject it belongs to; the user starts it. Used by ImparaPage.tsx.
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { LESSON_DEPTHS, LESSON_LEVELS, type LessonKind, type LessonStart, type LessonSummary } from '@shared/lesson';
-import { impara, imparaDraft, imparaPrefs, removeLesson, setImparaPrefs, startLesson } from '../../lib/impara';
+// The start of Impara (ADR 0185; one field and one line of options since ADR 0204, report «Impara v3» I1): at the top
+// the overall score (ImparaScore.tsx: a ring and four tiles), then «Cosa vuoi capire davvero, oggi?» with ONE field
+// that grows (Enter goes to a new line, Ctrl+Enter starts): what it holds decides the kind by itself
+// (shared/impara-start.ts: a GitHub or Azure DevOps PR link = a PR, a long text = a text to explain, else a topic; a
+// small chip says which and lets the user pick another); files and folders dropped on it or added with «Aggiungi
+// fonte» are the lesson's sources (lib/impara-files.ts, read here; main/learn/user-files.ts); the options in one line
+// (ImparaOptions.tsx) and one primary button. Under it the review (ImparaReviewHome.tsx, ADR 0189: what is due today,
+// the subjects with their level and quiz), the user's PRs with how far each was studied, and the saved lessons (their
+// diagram as a thumbnail, how far they got, their subject, filtered by subject), each reopening where it was left.
+// Another page can send the user here with the field filled in (ADR 0190: «Capiscila» from Task, «Spiegamelo» from
+// Memoria, «Imparalo» from the Guide; lib/impara.ts learnAbout), with the subject it belongs to; the user starts it.
+// Used by ImparaPage.tsx.
+import { useEffect, useLayoutEffect, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import type { LessonFile, LessonKind, LessonStart, LessonSummary } from '@shared/lesson';
+import { detectKind, startOf } from '@shared/impara-start';
+import { impara, imparaDraft, imparaPrefs, removeLesson, startLesson } from '../../lib/impara';
+import { dragHasFiles, mergeFiles, readDropped, readPicked } from '../../lib/impara-files';
 import { useTasks } from '../../store/tasks';
 import { go } from '../../actions';
-import { askConfirm } from '../../store/ui';
+import { askConfirm, toast } from '../../store/ui';
 import { locale, t } from '../../i18n';
-import { Button } from '../ui';
-import { IconArrowRight, IconBook, IconBranch, IconEdit, IconLightbulb, IconSparkle, IconSpinner, IconTrash } from '../Icons';
-import { ImparaSwitch } from './ImparaSwitch';
-import { TeacherChip } from './TeacherChip';
+import { Button, Kbd, MenuItem, MenuLabel, Popover } from '../ui';
+import { IconBook, IconBranch, IconChevronDown, IconEdit, IconFile, IconFolder, IconLightbulb, IconPlus, IconSparkle, IconSpinner, IconTrash, IconX } from '../Icons';
 import { ImparaReviewHome, SubjectChip } from './ImparaReviewHome';
+import { ImparaOptions } from './ImparaOptions';
+import { ImparaScoreBand } from './ImparaScore';
 
 const KIND_ICON: Record<LessonKind, ReactNode> = { pr: <IconBranch size={12} />, topic: <IconLightbulb size={12} />, text: <IconEdit size={12} /> };
 
@@ -69,24 +74,78 @@ function LessonCard({ s, subjects }: { s: LessonSummary; subjects: readonly stri
   );
 }
 
+/** The kind chip under the field: what the field will start, and a menu to pick another. */
+function KindChip({ field, force, pasted, onForce }: { field: string; force: LessonKind | null; pasted: boolean; onForce: (k: LessonKind | null) => void }) {
+  const anchor = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const d = detectKind(field);
+  const kind = force ?? (pasted ? 'text' : d.kind);
+  const label = kind === 'pr'
+    ? (d.pr ? t('impara.go.kindPr', { n: d.pr.number }) : t('impara.go.kindPrNone'))
+    : kind === 'text' ? (pasted ? t('impara.go.kindPasted') : t('impara.go.kindText', { n: field.trim().length.toLocaleString(locale()) })) : t('impara.go.kindTopic');
+  return (
+    <>
+      <button ref={anchor} type="button" className={`ip-kind ${kind}`} onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open} data-testid="impara-kind" data-kind={kind} data-tip={t('impara.go.kindTip')}>
+        {KIND_ICON[kind]}<span>{label}</span><span className="ip-kind-how">· {force ? t('impara.go.forced') : t('impara.go.detected')}</span><IconChevronDown size={11} />
+      </button>
+      <Popover anchor={anchor} open={open} onClose={() => setOpen(false)} testid="impara-kind-pop" width={240} align="start">
+        <MenuLabel>{t('impara.go.kindLabel')}</MenuLabel>
+        <MenuItem checked={!force} onSelect={() => { onForce(null); setOpen(false); }} testid="impara-kind-auto">{t('impara.go.kindAuto')}</MenuItem>
+        {(['topic', 'pr', 'text'] as LessonKind[]).map(k => <MenuItem key={k} checked={force === k} onSelect={() => { onForce(k); setOpen(false); }} testid={`impara-kind-${k}`}>{t(`impara.kindPick.${k}`)}</MenuItem>)}
+      </Popover>
+    </>
+  );
+}
+
+/** «Aggiungi fonte»: a file or a whole folder, read in the page. */
+function AddSource({ onAdd }: { onAdd: (files: LessonFile[]) => void }) {
+  const anchor = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const file = useRef<HTMLInputElement>(null), dir = useRef<HTMLInputElement>(null);
+  const read = async (list: FileList | null) => { if (list?.length) onAdd(await readPicked(list)); };
+  return (
+    <>
+      <button ref={anchor} type="button" className="ip-addsrc" onClick={() => setOpen(o => !o)} aria-haspopup="menu" aria-expanded={open} data-testid="impara-add-source"><IconPlus size={11} />{t('impara.go.addSource')}</button>
+      <Popover anchor={anchor} open={open} onClose={() => setOpen(false)} testid="impara-add-source-pop" width={220} align="start">
+        <MenuItem onSelect={() => { setOpen(false); file.current?.click(); }} testid="impara-add-file">{t('impara.go.addFile')}</MenuItem>
+        <MenuItem onSelect={() => { setOpen(false); dir.current?.click(); }} testid="impara-add-folder">{t('impara.go.addFolder')}</MenuItem>
+      </Popover>
+      <input ref={file} type="file" multiple hidden onChange={e => { void read(e.target.files); e.target.value = ''; }} data-testid="impara-file-input" />
+      <input ref={dir} type="file" hidden {...{ webkitdirectory: '' }} onChange={e => { void read(e.target.files); e.target.value = ''; }} data-testid="impara-folder-input" />
+    </>
+  );
+}
+
+const nameOf = (p: string) => p.split('/').pop() || p;
+
 export function ImparaStart() {
   const state = impara.use(s => s.state);
   const prefs = imparaPrefs.use(s => s);
   const prs = useTasks(s => s?.prs ?? []);
-  const [kind, setKind] = useState<LessonKind>('pr');
-  const [ask, setAsk] = useState('');
-  const [prUrl, setPrUrl] = useState('');
-  const [text, setText] = useState('');
+  const [field, setField] = useState('');
+  const [force, setForce] = useState<LessonKind | null>(null);
+  const [pasted, setPasted] = useState<{ text: string; from: string } | null>(null);
+  const [files, setFiles] = useState<LessonFile[]>([]);
+  const [drag, setDrag] = useState(false);
   const [busy, setBusy] = useState(false);
   const [only, setOnly] = useState<string | null>(null);
   const [subject, setSubject] = useState<{ name: string; from: string } | null>(null);
-  const input = useRef<HTMLInputElement>(null);
-  // sent here by another page: the form opens filled in, the start button ready (one click starts it)
+  const input = useRef<HTMLTextAreaElement>(null);
+  // the field grows with what it holds, up to a limit (then it scrolls)
+  useLayoutEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = `${Math.min(el.scrollHeight, 320)}px`;
+  }, [field]);
+  // sent here by another page: the field opens filled in, the start button ready (one click starts it)
   const draft = imparaDraft.use(d => d);
   useEffect(() => {
     if (!draft) return;
     imparaDraft.set(() => null);
-    setKind(draft.kind); setAsk(draft.ask); setPrUrl(draft.prUrl ?? ''); setText(draft.text ?? '');
+    setForce(null); setFiles([]);
+    if (draft.kind === 'text' && draft.text) { setPasted({ text: draft.text, from: draft.from }); setField(draft.ask); }
+    else { setPasted(null); setField([draft.ask, draft.kind === 'pr' ? draft.prUrl : ''].filter(Boolean).join('\n')); if (draft.kind === 'pr') setForce('pr'); }
     setSubject(draft.subject ? { name: draft.subject, from: draft.from } : null);
     requestAnimationFrame(() => document.querySelector<HTMLButtonElement>('[data-testid="impara-start-btn"]')?.focus());
   }, [draft]);
@@ -95,59 +154,67 @@ export function ImparaStart() {
   const shown = only && subjects.includes(only) ? lessons.filter(l => l.subject === only) : lessons;
   const byPr = new Map(lessons.filter(l => l.pr).map(l => [l.pr!.url, l]));
   const can = state?.canTeach !== false;
-  const ready = kind === 'topic' ? !!ask.trim() : kind === 'pr' ? !!prUrl.trim() : !!text.trim();
+  const req = startOf(field, force, { ...(pasted ? { pasted: pasted.text } : {}), hasFiles: files.length > 0, filesAsk: t('impara.go.filesAsk') });
+  const ready = !!req;
 
-  const begin = async (req: Partial<LessonStart> = {}) => {
-    if (busy) return;
+  const begin = async (over: Partial<LessonStart> | null = null) => {
+    const base = over ?? req;
+    if (busy || !base) return;
     setBusy(true);
-    const l = await startLesson({ kind, ask: ask.trim(), depth: prefs.depth, level: prefs.level, ...(prefs.teacher ? { teacher: prefs.teacher } : {}), ...(subject ? { subject: subject.name } : {}),
-      ...(kind === 'pr' ? { prUrl: prUrl.trim() } : {}), ...(kind === 'text' ? { text } : {}), ...req } as LessonStart);
+    const l = await startLesson({ ...base, depth: prefs.depth, level: prefs.level, ...(prefs.teacher ? { teacher: prefs.teacher } : {}), ...(subject ? { subject: subject.name } : {}),
+      ...(!over && files.length ? { files } : {}) } as LessonStart);
     setBusy(false);
     if (l) go({ page: 'impara', arg: l.id });
   };
+  const add = (more: LessonFile[]) => {
+    if (!more.length) { toast(t('impara.go.noText'), 'warn'); return; }
+    setFiles(f => mergeFiles(f, more));
+    input.current?.focus();
+  };
+  const onDragOver = (e: DragEvent) => { if (!dragHasFiles(e.dataTransfer)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDrag(true); };
+  const onDrop = (e: DragEvent) => { if (!dragHasFiles(e.dataTransfer)) return; e.preventDefault(); setDrag(false); void readDropped(e.dataTransfer).then(add); };
 
   return (
     <div className="ip-start" data-testid="impara-start">
+      {state?.review?.score && <ImparaScoreBand score={state.review.score} />}
       <section className="ip-hero">
         <div className="ip-kicker">{t('impara.kicker')}</div>
         <h1>{t('impara.hero')}</h1>
         <p className="ip-lead">{t('impara.lead')}</p>
-        <form className="ip-ask" onSubmit={e => { e.preventDefault(); if (ready && can) void begin(); }}>
-          <IconSparkle size={14} />
-          <input ref={input} value={ask} onChange={e => setAsk(e.target.value)} maxLength={600} data-testid="impara-ask-what"
-            placeholder={t(kind === 'pr' ? 'impara.askPr' : kind === 'text' ? 'impara.askText' : 'impara.askTopic')} aria-label={t('impara.askLabel')} />
-          <Button variant="primary" type="submit" disabled={!ready || !can || busy} testid="impara-start-btn">{busy ? <IconSpinner size={12} /> : null}{t('impara.start')} <IconArrowRight size={13} /></Button>
+        <form className="ip-go" onSubmit={e => { e.preventDefault(); if (ready && can) void begin(); }}>
+          <div className={`ip-field ${drag ? 'drag' : ''}`} onDragOver={onDragOver} onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDrag(false); }} onDrop={onDrop} data-testid="impara-field">
+            <textarea ref={input} value={field} onChange={e => setField(e.target.value)} rows={2} maxLength={200_000} data-testid="impara-ask-what"
+              placeholder={t(pasted ? 'impara.askText' : 'impara.go.placeholder')} aria-label={t('impara.askLabel')}
+              onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); if (ready && can) void begin(); } }} />
+            <div className="ip-field-foot">
+              <KindChip field={field} force={force} pasted={!!pasted} onForce={setForce} />
+              {pasted && <span className="ip-src-chip" data-testid="impara-pasted"><IconEdit size={11} />{t('impara.go.pastedFrom', { from: pasted.from })}<button type="button" onClick={() => setPasted(null)} aria-label={t('impara.go.remove')}><IconX size={10} /></button></span>}
+              {files.slice(0, 6).map(f => (
+                <span key={f.name} className="ip-src-chip" data-tip={f.name} data-testid="impara-source-chip">
+                  {f.name.includes('/') ? <IconFolder size={11} /> : <IconFile size={11} />}{nameOf(f.name)}
+                  <button type="button" onClick={() => setFiles(x => x.filter(y => y.name !== f.name))} aria-label={t('impara.go.remove')}><IconX size={10} /></button>
+                </span>
+              ))}
+              {files.length > 6 && <span className="ip-src-chip more" data-tip={files.slice(6).map(f => f.name).join('\n')}>+{files.length - 6}</span>}
+              {files.length > 1 && <button type="button" className="ip-link ip-src-clear" onClick={() => setFiles([])}>{t('impara.go.clearSources')}</button>}
+              <AddSource onAdd={add} />
+            </div>
+            {drag && <div className="ip-drop" aria-hidden="true"><IconFolder size={18} />{t('impara.go.drop')}</div>}
+          </div>
+          {subject && (
+            <div className="ip-from" data-testid="impara-from">
+              <span className="ip-muted">{t('impara.from', { from: subject.from })}</span>
+              <span className="ip-subject on">{subject.name}<button type="button" onClick={() => setSubject(null)} aria-label={t('impara.fromClear')} data-tip={t('impara.fromClear')}>×</button></span>
+            </div>
+          )}
+          <div className="ip-go-row">
+            {state?.teachers?.length ? <ImparaOptions teachers={state.teachers} /> : <span />}
+            <span className="sp" />
+            <Button variant="primary" type="submit" disabled={!ready || !can || busy} testid="impara-start-btn" className="ip-go-btn">
+              {busy ? <IconSpinner size={12} /> : null}{t('impara.start')} <Kbd>Ctrl ↵</Kbd>
+            </Button>
+          </div>
         </form>
-        {subject && (
-          <div className="ip-from" data-testid="impara-from">
-            <span className="ip-muted">{t('impara.from', { from: subject.from })}</span>
-            <span className="ip-subject on">{subject.name}<button type="button" onClick={() => setSubject(null)} aria-label={t('impara.fromClear')} data-tip={t('impara.fromClear')}>×</button></span>
-          </div>
-        )}
-        <div className="ip-chips" role="radiogroup" aria-label={t('impara.whatLabel')}>
-          {(['pr', 'topic', 'text'] as LessonKind[]).map(k => (
-            <button key={k} type="button" role="radio" aria-checked={kind === k} className={`ip-chip ${kind === k ? 'on' : ''}`} onClick={() => { setKind(k); input.current?.focus(); }} data-testid={`impara-kind-${k}`}>{KIND_ICON[k]}{t(`impara.kindPick.${k}`)}</button>
-          ))}
-        </div>
-        {kind === 'pr' && (
-          <div className="ip-source">
-            <input value={prUrl} onChange={e => setPrUrl(e.target.value)} placeholder={t('impara.prUrl')} maxLength={500} data-testid="impara-pr-url" aria-label={t('impara.prUrl')} />
-            {prs.length > 0 && <span className="ip-muted">{t('impara.orPick')}</span>}
-          </div>
-        )}
-        {kind === 'text' && <textarea className="ip-source-text" value={text} onChange={e => setText(e.target.value)} rows={5} placeholder={t('impara.pastePlaceholder')} data-testid="impara-text-input" aria-label={t('impara.pastePlaceholder')} />}
-        <div className="ip-opts">
-          <ImparaSwitch on={prefs.voice} onChange={on => setImparaPrefs({ voice: on })} label={t('impara.voiceApp')} testid="impara-start-voice" />
-          <ImparaSwitch on={prefs.mic} onChange={on => setImparaPrefs({ mic: on })} label={t('impara.voiceMe')} testid="impara-start-mic" />
-          <span className="sp" />
-          <span className="ip-seg" role="radiogroup" aria-label={t('impara.levelLabel')}>
-            {LESSON_LEVELS.map(l => <button key={l} type="button" role="radio" aria-checked={prefs.level === l} className={prefs.level === l ? 'on' : ''} onClick={() => setImparaPrefs({ level: l })} data-testid={`impara-level-${l}`}>{t(`impara.level.${l}`)}</button>)}
-          </span>
-          <span className="ip-seg" role="radiogroup" aria-label={t('impara.depthLabel')}>
-            {LESSON_DEPTHS.map(d => <button key={d} type="button" role="radio" aria-checked={prefs.depth === d} className={prefs.depth === d ? 'on' : ''} onClick={() => setImparaPrefs({ depth: d })} data-testid={`impara-depth-${d}`}>{t(`impara.depth.${d}.label`)}</button>)}
-          </span>
-        </div>
-        {state?.teachers?.length ? <div className="ip-opts ip-opts-2"><TeacherChip options={state.teachers} value={prefs.teacher} onChange={teacher => setImparaPrefs({ teacher })} /></div> : null}
         {!can && <p className="ip-warn" data-testid="impara-cannot">{state?.why}</p>}
       </section>
 

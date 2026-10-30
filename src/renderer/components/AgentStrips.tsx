@@ -27,7 +27,6 @@ import { go, toggleMaximize } from '../actions';
 import { GrindhouseEmpty } from './MorningBlock';
 import '../styles/alive.css';
 import { pairOf, pairStyle } from '../lib/pairs';
-import { useCloudIds } from '../store/cloud';
 import '../styles/agent-strips.css';
 
 /** Below this column width a chat and its browser stack instead of sitting side by side. */
@@ -59,7 +58,6 @@ export function AgentStrips() {
   const pairs = useApp(s => tiles.map(t => t.kind === 'browser' ? pairOf(s, s.tabs.find(tab => tab.id === t.id)?.ownerChatId) : null), sameList);
   const maximized = ui.use(s => s.maximized);
   const keep = useHandoffTabs();
-  const clouds = useCloudIds().length; // cloud agents' strips follow (CloudStrips.tsx, ADR 0080): not an empty Grindhouse
   const [column, setColumn] = useState<HTMLDivElement | null>(null); // a state, not a ref: the column mounts after hydration
   const leaveRef = useLeaveRef();
   // every strip starts collapsed (Brother, 18/10: the strips are the Grindhouse); prefs with another chatPanelsV start collapsed too
@@ -96,8 +94,8 @@ export function AgentStrips() {
       <div className="agent-pane-content">{tile.kind === 'chat' ? <ChatTile chatId={tile.id} index={chatIndices.get(key)} maximized={!!max} /> : <BrowserTile tabId={tile.id} maximized={!!max} />}</div>
     </div>;
   };
-  // no strip: the morning block and the Battito's board for a user with history, the first-run text otherwise (ADR 0102)
-  if (!shown.length) return clouds ? null : <GrindhouseEmpty />;
+  // no strip: the morning block for a user with history, the first-run text otherwise (ADR 0102)
+  if (!shown.length) return <GrindhouseEmpty />;
   return <div className={`agent-strips${narrow ? ' is-narrow' : ''}`} data-testid="view-agents" ref={setColumn}>
     <div className={`workspace-column${max ? ' workspace-max' : ''}`} {...(max ? { 'data-testid': 'maximized', 'data-key': tileKey(max) } : {})}>
       {rows.map(({ lead, side }, i) => {

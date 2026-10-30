@@ -92,8 +92,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'AgentProfile { id, name, purpose, instructions, engine, model | null, effort?, tools, permissionCeiling, tier, tierMax, launches, skills, version, activeVersion, trial?, userLocked }.',
         'AgentProfile { id, name, purpose, instructions, engine, model | null, effort?, tools, permissionCeiling, tier, tierMax, launches, skills, version, activeVersion, trial?, userLocked }.'),
       // src/main/agents/catalog.ts (roles.json), src/main/agents/versions.ts (role-history.json)
-      tech(FILES, 'userData/roles.json (i sei ruoli e Pulse) e role-history.json (le versioni di ogni ruolo).',
-        'userData/roles.json (the six roles and Pulse) and role-history.json (each role’s versions).'),
+      tech(FILES, 'userData/roles.json (i sei ruoli e Flash) e role-history.json (le versioni di ogni ruolo).',
+        'userData/roles.json (the six roles and Flash) and role-history.json (each role’s versions).'),
       // src/shared/roles.ts DELEGATION_DEFAULTS
       tech(LIMITS, 'Deleghe: profondità 2 e 5 figli in corso per genitore, di serie (Impostazioni → Ruoli e deleghe).', 'Delegation: depth 2 and 5 running children per parent by default (Settings → Roles and delegation).'),
       tech(TOOLS, 'agent_catalog (i ruoli e le loro skill), app_create_chat con roleId (apre il lavoro), agent_report (il rapporto finale).',
@@ -686,9 +686,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/ChatTile.tsx
       b('Una striscia chiusa mostra agente, stato, modello e l’ultima risposta; un clic ovunque su di essa la apre, ogni volta, e mostra la conversazione e l’input. Lo sforzo lo decide il profilo dell’agente: la striscia non lo mostra.',
         'A collapsed strip shows agent, state, model and the last answer; a click anywhere on it expands it, every time, showing the conversation and the input. The effort is the agent profile’s: the strip does not show it.'),
-      // src/renderer/components/CloudStrips.tsx, src/main/cloud/service.ts (ADR 0080)
-      b('Gli agenti cloud (Cursor, Codex, Claude Code che girano nel cloud del fornitore, anche a PC spento) hanno la loro striscia sotto le altre, raggruppata per repository, con l’etichetta «cloud» e il motore. Cursor mostra i messaggi, accetta messaggi e si ferma dall’app; Codex e Claude si seguono sulla loro pagina («Apri»). «Porta in locale» prende il risultato in un nuovo worktree. Li avvia l’Orchestrator quando glielo chiedi, solo su repository GitHub con il branch già pushato.',
-        'Cloud agents (Cursor, Codex, Claude Code running in the vendor’s cloud, even with the PC off) get their own strip under the others, grouped by repository, with a "cloud" label and the engine. Cursor shows its messages, takes messages and stops from the app; Codex and Claude are followed on their own page ("Open"). "Bring home" takes the result into a new worktree. The Orchestrator starts one when you ask it, only on GitHub repositories with the branch already pushed.'),
     ],
     analogy: b('Come il banco di orchestrator di uno studio: un fader per ogni canale, e il monitor di ciascuno sotto.',
       'Like a studio mixing desk: one fader per channel, and each one’s monitor below it.'),
@@ -696,7 +693,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(WHERE, 'Pagina «home» (brain/pages/Home.tsx), strisce in components/AgentStrips.tsx, ordine in lib/agent-order.ts; ADR 0068.',
         'Page "home" (brain/pages/Home.tsx), strips in components/AgentStrips.tsx, order in lib/agent-order.ts; ADR 0068.'),
       tech(DATA, 'Una striscia è aperta se prefs.chatExpanded[id], i suoi browser se anche prefs.browserOpen[id]; nessun ordine salvato, nessun trascinamento.', 'A strip is expanded if prefs.chatExpanded[id], its browsers if prefs.browserOpen[id] too; no saved order, no dragging.'),
-      tech(TOOLS, 'Un agente cloud parte da app_create_chat con where «cloud».', 'A cloud agent starts from app_create_chat with where "cloud".'),
     ],
     anchors: {
       0: ['src/renderer/brain/pages/Home.tsx'],
@@ -706,15 +702,14 @@ export const CONCEPTS: readonly ConceptCard[] = [
       4: ['src/renderer/components/RunEstimate.tsx', 'src/main/agents/task-estimate.ts'],
       5: ['src/main/chats/manager-delegation.ts#settleReport', 'src/main/chats/auto-close.ts', 'src/renderer/components/AutoCloseNotice.tsx'],
       6: ['src/renderer/components/ChatTile.tsx'],
-      7: ['src/renderer/components/CloudStrips.tsx'],
     },
-    sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/RunEstimate.tsx', 'src/renderer/components/BrowserTile.tsx', 'src/renderer/components/CloudStrips.tsx', 'src/main/cloud/service.ts', 'src/main/chats/manager-delegation.ts'],
+    sources: ['src/renderer/brain/pages/Home.tsx', 'src/renderer/components/AgentStrips.tsx', 'src/renderer/lib/agent-order.ts', 'src/renderer/lib/grid.ts', 'src/renderer/components/ChatTile.tsx', 'src/renderer/components/RunEstimate.tsx', 'src/renderer/components/BrowserTile.tsx', 'src/main/chats/manager-delegation.ts'],
   },
   {
     id: 'memory-hub',
     title: b('La Memoria, un posto solo', 'Memoria, one place'),
-    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (la frase del giorno, i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Regole, Script & Query, Idee, File e Statistiche.',
-      'Memoria is the one place for everything the brain holds: its top is alive (the day’s sentence, live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Rules, Scripts & Queries, Ideas, Files and Statistics.'),
+    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Regole, Script & Query, Idee, File e Statistiche.',
+      'Memoria is the one place for everything the brain holds: its top is alive (live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Rules, Scripts & Queries, Ideas, Files and Statistics.'),
     points: [
       // src/renderer/lib/memory-hub.ts, src/renderer/actions.ts, src/renderer/components/Sidebar.tsx
       b('Skill, Regole, Script e Idee non sono più pagine a sé nella barra: sono schede di Memoria (Apprendimento è passato in Andamento); i vecchi link, gli id e i tasti G (G S, G L, G T, G I) aprono la scheda giusta, e «memoria/<scheda>» apre una scheda da un link.',
@@ -725,10 +720,10 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('«Approvate» elenca tutto quello che è nel brain adesso (skill, regole, fatti confermati, script): il cestino lo toglie con un clic e per qualche secondo «Annulla» lo rimette; skill, regole e script passano dal registro delle modifiche, quindi restano annullabili anche in Apprendimento.',
         '\"Approved\" lists everything in the brain now (skills, rules, confirmed facts, scripts): the bin takes one out in a click and for a few seconds \"Undo\" puts it back; skills, rules and scripts go through the change log, so they stay undoable in Learning too.'),
       // src/renderer/brain/pages/Idee.tsx
-      b('«Idee» divide le tue da quelle dell’IA (la colonna «Chi» di ideas.md: «IA» è l’IA) e «Rispolvera» ti ripropone a caso un’idea vecchia ancora aperta; sotto, il Battito e i temi delle idee.',
-        '\"Ideas\" splits yours from the AI’s (the \"Chi\" column of ideas.md: \"IA\" is the AI) and \"Dust one off\" brings back an old idea still open at random; below, the Pulse and the ideas’ themes.'),
-      b('La Dashboard non c’è più: la frase e i contatori sono in cima a Memoria, il contesto delle chat in Costi, gli errori dell’app e i temi degli errori in Qualità, gli spunti dell’AI in Idee; il resto erano doppioni.',
-        'The Dashboard is gone: the sentence and the counters are at the top of Memoria, the chats’ context in Costi, the app’s errors and the errors’ themes in Quality, the AI’s tips in Ideas; the rest were duplicates.'),
+      b('«Idee» divide le tue da quelle dell’IA (la colonna «Chi» di ideas.md: «IA» è l’IA) e «Rispolvera» ti ripropone a caso un’idea vecchia ancora aperta; sotto, i temi delle idee.',
+        '\"Ideas\" splits yours from the AI’s (the \"Chi\" column of ideas.md: \"IA\" is the AI) and \"Dust one off\" brings back an old idea still open at random; below, the ideas’ themes.'),
+      b('La Dashboard non c’è più: i contatori sono in cima a Memoria, il contesto delle chat in Costi, gli errori dell’app e i temi degli errori in Qualità, gli spunti dell’AI in Idee; il resto erano doppioni.',
+        'The Dashboard is gone: the counters are at the top of Memoria, the chats’ context in Costi, the app’s errors and the errors’ themes in Quality, the AI’s tips in Ideas; the rest were duplicates.'),
       b('Ogni numero ha un «?» che dice come è calcolato; ogni pannello ha «Discuti», che prepara una bozza all’Orchestrator senza mai inviarla.',
         'Every number has a \"?\" saying how it is computed; every panel has \"Discuss\", which drafts for the Orchestrator and never sends.'),
     ],
@@ -1001,22 +996,25 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Una sola sezione: gli account dell’app (Azure DevOps, GitHub, Jira) e i server MCP come schede, ognuna con stato, uso, strumenti, ruoli e un solo «Prova».',
         'One section: the app’s accounts (Azure DevOps, GitHub, Jira) and the MCP servers as cards, each with state, use, tools, roles and one "Prova".'),
       // src/main/mcp-servers/store.ts
-      b('Un server è locale (un comando, es. npx) o remoto (un indirizzo https); il token si scrive una volta, viene cifrato sul computer e poi si vede solo mascherato.',
-        'A server is local (a command, e.g. npx) or remote (an https address); the token is typed once, encrypted on the computer and then shown only masked.'),
-      // src/main/mcp-servers/service.ts test()
-      b('«Prova» apre il server come farebbe una chat, elenca i suoi strumenti (lettura o scrittura) e, se non va, dice l’errore e come sistemarlo.',
-        '"Prova" opens the server as a chat would, lists its tools (read or write) and, when it fails, says the error and how to fix it.'),
+      b('Un server è locale (un comando, es. npx) o remoto (un indirizzo https); il token si scrive una volta, viene cifrato sul computer e poi si vede solo mascherato. Un token incollato nel JSON non finisce mai in un file: passa nel campo mascherato.',
+        'A server is local (a command, e.g. npx) or remote (an https address); the token is typed once, encrypted on the computer and then shown only masked. A token pasted in the JSON never lands in a file: it moves to the masked field.'),
+      // src/shared/mcp-paste.ts; src/renderer/components/McpAddPanel.tsx; src/main/mcp-servers/service.ts test()
+      b('«Aggiungi server MCP»: incolli il JSON del README (mcpServers), una riga di comando o un indirizzo e il modulo si compila da solo, oppure scegli un server tra i più usati. «Salva e prova» (e «Prova» su ogni scheda) apre il server come farebbe una chat, elenca i suoi strumenti e, se non va, dice l’errore e come sistemarlo.',
+        '"Aggiungi server MCP": paste the README’s JSON (mcpServers), a command line or an address and the form fills itself, or pick a popular server. "Salva e prova" (and "Prova" on each card) opens the server as a chat would, lists its tools and, when it fails, says the error and how to fix it.'),
       // src/main/mcp-servers/gateway.ts
       b('Le chat raggiungono i server solo attraverso l’app (127.0.0.1): il token resta nell’app, mai nei file di configurazione dei motori.',
         'Chats reach the servers only through the app (127.0.0.1): the token stays in the app, never in the engines’ config files.'),
-      // src/shared/mcp-servers.ts chainAllows; src/renderer/components/AgentMcpSection.tsx
-      b('Ogni agente può usare tutti i server; dal retro della sua scheda lo restringi per server: tutto, solo lettura, strumenti scelti o niente.',
-        'Every agent may use every server; from the back of its card you narrow it per server: everything, read only, chosen tools or nothing.'),
+      // src/shared/mcp-servers.ts chainAllows, effectiveAccess; src/renderer/components/McpAddPanel.tsx ServerRoles
+      b('Ogni scheda server ha i ruoli da accendere con un clic, Orchestrator e Flash compresi (Flash parte spento e usa solo strumenti di lettura); dal retro della scheda di un agente lo restringi per server: tutto, solo lettura, strumenti scelti o niente.',
+        'Each server card has role chips to turn on with one click, Orchestrator and Flash included (Flash starts off and gets reading tools only); from the back of an agent’s card you narrow it per server: everything, read only, chosen tools or nothing.'),
       b('Un lavoratore non ha mai più accesso della chat che l’ha avviato, e una modifica vale subito anche per le chat aperte.',
         'A worker never has more access than the chat that started it, and a change applies at once to open chats too.'),
       // src/main/mcp-servers/import.ts
       b('«Importa da Claude e Cursor» legge le loro configurazioni senza cambiarle e senza copiare i segreti: i token li reinserisci tu.',
         '"Importa da Claude e Cursor" reads their configs without changing them and without copying secrets: you type the tokens again.'),
+      // src/main/appctl/config.ts connector; src/main/mcp-servers/service.ts agentSave
+      b('All’Orchestrator basta chiedere: aggiunge, cambia, prova o toglie un server e lo dà a un ruolo, con «Annulla» nella sua scheda nel feed. I token non li vede mai: ti apre il modulo già compilato e il token lo scrivi tu.',
+        'Just ask the Orchestrator: it adds, changes, tests or removes a server and gives it to a role, with "Annulla" on its feed card. It never sees tokens: it opens the form prefilled and you type the token.'),
     ],
     analogy: b('Come un portiere d’albergo che tiene le chiavi: gli ospiti chiedono a lui di aprire, e lui apre solo le stanze del loro piano.',
       'Like a hotel concierge who keeps the keys: guests ask him to open a door, and he opens only the rooms on their floor.'),
@@ -1028,6 +1026,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         '/mcp/ext/<chat>/<server>/<token>; Claude via --mcp-config, Cursor in ACP session/new, Codex via -c mcp_servers.<id>.url.'),
       tech(DATA, 'Accesso per ruolo e server: all, read, none o un elenco di strumenti; assente = all. «Lettura» = annotations.readOnlyHint.',
         'Access per role and server: all, read, none or a list of tools; absent = all. "Read" = annotations.readOnlyHint.'),
+      tech(DATA, 'Flash = il ruolo «flash» (chat veloci): assente = none, all = read (ADR 0207).', 'Flash = the "flash" role (quick chats): absent = none, all = read (ADR 0207).'),
     ],
     target: [
       b('I server che chiedono un accesso OAuth nel browser e quelli solo SSE (vecchio trasporto) non sono ancora supportati.',
@@ -1036,12 +1035,13 @@ export const CONCEPTS: readonly ConceptCard[] = [
     anchors: {
       0: ['src/renderer/components/ConnectorsHub.tsx', 'src/modules/onboarding/AppScreen.tsx'],
       1: ['src/main/mcp-servers/store.ts'],
-      2: ['src/main/mcp-servers/service.ts#test'],
+      2: ['src/main/mcp-servers/service.ts#test', 'src/shared/mcp-paste.ts#parseMcpSnippet', 'src/renderer/components/McpAddPanel.tsx'],
       3: ['src/main/mcp-servers/gateway.ts'],
-      4: ['src/shared/mcp-servers.ts#chainAllows', 'src/renderer/components/AgentMcpSection.tsx'],
+      4: ['src/shared/mcp-servers.ts#chainAllows', 'src/shared/mcp-servers.ts#effectiveAccess', 'src/renderer/components/AgentMcpSection.tsx'],
       6: ['src/main/mcp-servers/import.ts'],
+      7: ['src/main/appctl/config.ts', 'src/main/mcp-servers/service.ts#agentSave'],
     },
-    sources: ['src/main/mcp-servers/store.ts', 'src/main/mcp-servers/gateway.ts', 'src/main/mcp-servers/service.ts', 'src/main/mcp-servers/import.ts', 'src/shared/mcp-servers.ts',
+    sources: ['src/main/mcp-servers/store.ts', 'src/shared/mcp-paste.ts', 'src/renderer/components/McpAddPanel.tsx', 'src/main/mcp-servers/gateway.ts', 'src/main/mcp-servers/service.ts', 'src/main/mcp-servers/import.ts', 'src/shared/mcp-servers.ts',
       'src/renderer/components/ConnectorsHub.tsx', 'src/renderer/components/AgentMcpSection.tsx', 'docs/adr/0086-app-managed-mcp-servers.md'],
   },
   {
@@ -1153,8 +1153,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Everything the app proposes and that waits for your yes is a card in a single deck: one at a time, you approve or reject.'),
     points: [
       // ADR 0123; src/main/proposals/sources.ts (SOURCES), src/main/proposals/service.ts, src/renderer/components/brain-model/ProposalsDeck.tsx, src/renderer/lib/proposals.ts
-      b('Il mazzo raccoglie fatti di memoria proposti, skill candidate, richieste di impostazioni degli agenti, livelli e prove dei ruoli, regole del Battito, politiche dell’auto-miglioramento e i cambi che la manutenzione ha già fatto negli ultimi 14 giorni.',
-        'The deck gathers proposed memory facts, skill candidates, the agents’ setting requests, the roles’ tiers and trials, the Battito’s rules, the self-improvement policies and the changes the maintenance already made in the last 14 days.'),
+      b('Il mazzo raccoglie fatti di memoria proposti, skill candidate, richieste di impostazioni degli agenti, livelli e prove dei ruoli, politiche dell’auto-miglioramento e i cambi che la manutenzione ha già fatto negli ultimi 14 giorni.',
+        'The deck gathers proposed memory facts, skill candidates, the agents’ setting requests, the roles’ tiers and trials, the self-improvement policies and the changes the maintenance already made in the last 14 days.'),
       b('Ogni carta dice chi l’ha proposta, dove (chat e run), quando e con quali prove; la più recente sta in cima, i filtri sopra la dividono per gruppo.',
         'Every card says who proposed it, where (chat and run), when and with what evidence; the newest is on top, the filters above split it by group.'),
       b('Trascina a destra o premi ✓ (→) per approvare, a sinistra o ✕ (←) per rifiutare; Z o Ctrl+Z annulla l’ultima scelta finché non è partita, dopo circa 6 secondi o alla scelta seguente.',
@@ -1274,8 +1274,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'log',
     title: b('Il Log', 'The Log'),
-    summary: b('Una pagina sola con tutto quello che l’app fa, in tempo reale e leggibile: ogni incarico passo per passo, i classificatori, le stime, gli errori e la memoria scritti nel brain, Battito.',
-      'One page with everything the app does, live and readable: each task step by step, the classifiers, the estimates, the errors and memory written to the brain, Battito.'),
+    summary: b('Una pagina sola con tutto quello che l’app fa, in tempo reale e leggibile: ogni incarico passo per passo, i classificatori, le stime, gli errori e la memoria scritti nel brain.',
+      'One page with everything the app does, live and readable: each task step by step, the classifiers, the estimates, the errors and memory written to the brain.'),
     points: [
       // src/main/activity/chat-watch.ts
       b('Ogni incarico è una catena: chi ha scelto quale agente e perché, il suo lavoro con costo, strumenti ed errori, il risultato, la verifica (o «non effettuata»).',
@@ -1314,45 +1314,45 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/learn/material.ts
       b('Per una PR l’app legge da sola descrizione e diff (gh per GitHub, git nella copia locale per le PR del Task), in sola lettura e con il tuo login.',
         'For a PR the app itself reads the description and the diff (gh for GitHub, git in the local clone for the Task page’s PRs), read-only, with your own login.'),
-      // src/main/learn/service.ts research
-      b('Prima di spiegare cerca le fonti: sul web (solo Claude, vede solo la tua domanda, mai i tuoi file) e nei file (il materiale, il tuo brain, la guida e il codice dell’app). Dai file escono anche gli standard da cercare sul web (es. «OAuth 2.0 RFC 6749»): l’app toglie tutto ciò che può essere privato e te li mostra 5 secondi, «Dai tuoi file · cercherò sul web», con ✕ per toglierli; in Modalità notte partono subito. Un secondo modello verifica ogni fatto sulla sua fonte: confermato, corretto o da verificare.',
-        'Before explaining it looks for sources: on the web (Claude only, it sees only your question, never your files) and in the files (the material, your brain, the app’s guide and code). The files also give the standards to search on the web (e.g. «OAuth 2.0 RFC 6749»): the app removes anything that may be private and shows them for 5 seconds, «From your files · I will search the web», with ✕ to drop one; in Night mode they start at once. A second model checks each fact against its source: confirmed, corrected or unconfirmed.'),
-      // src/renderer/components/impara/TeacherChip.tsx
-      b('Se la domanda può voler dire cose diverse, ti chiede al massimo due cose prima di iniziare. Ogni pezzo mostra le sue fonti; «Fonti» in alto le raccoglie tutte (pagine web e file del PC, apribili con un clic). «Chi spiega» sceglie motore, modello e impegno; senza scelta Claude con il modello più forte, impegno alto.',
-        'If the question can mean different things, it asks you at most two things before starting. Each piece shows its sources; «Sources» at the top gathers them all (web pages and files on your PC, opened with one click). «Who explains» picks the engine, model and effort; with no choice, Claude with its strongest model, high effort.'),
-      // src/renderer/components/impara/LessonStage.tsx
-      b('La lezione è a tutto schermo (Esc per uscire). Lo schema si muove frase per frase: si accendono i nodi di cui parla, una luce corre lungo la freccia, «Qui» indica il punto. Quelli già visti restano calmi, quelli che verranno sono sbiaditi.',
-        'The lesson is full screen (Esc to leave). The diagram moves sentence by sentence: the nodes it talks about light up, a light runs along the arrow, «Here» marks the spot. Seen ones stay calm, coming ones are faint.'),
-      b('«Spiegamelo meglio», «Fammi un esempio», «Mostrami il codice» aggiungono un pezzo subito dopo. Con «Rispondo a voce» dici «avanti», «ripeti», «non ho capito», «la b».',
-        '«Explain it better», «Give me an example», «Show me the code» add a piece right after. With «I answer by voice» you say «next», «repeat», «I don’t understand», «b».'),
-      // src/renderer/components/impara/ImparaTutor.tsx
-      b('«Domanda» (o T) apre il tutor accanto allo schema: scrivi, parli o clicchi una parte dello schema, e la risposta arriva parola per parola dai fatti verificati, con le fonti. Con «Prima provo io» per un perché ti dà prima un indizio; «Dimmelo e basta» risponde subito. Quello che spiega finisce nel ripasso.',
-        '«Question» (or T) opens the tutor beside the diagram: write, speak or click a part of the diagram, and the answer arrives word by word from the verified facts, with its sources. With «Let me try first» a why gets a hint first; «Just tell me» answers at once. What it explains goes into your reviews.'),
+      // src/main/learn/service.ts research, gate
+      b('Prima di spiegare cerca le fonti: sul web (solo Claude, vede solo la tua domanda, mai i tuoi file) e nei file (il materiale, il tuo brain, la guida e il codice dell’app). Dai file escono anche gli standard da cercare sul web (es. «OAuth 2.0 RFC 6749»): l’app toglie tutto ciò che può essere privato e te li mostra 5 secondi, «Dai tuoi file · cercherò sul web», con ✕ per toglierli; in Modalità notte partono subito. Un secondo modello verifica ogni fatto sulla sua fonte: confermato, corretto o da verificare. Poi la lezione segue sempre lo stesso filo: il problema, un esempio concreto, la regola; un esempio svolto, uno a metà, poi tocchi tu; una domanda ogni due pezzi; la mappa finale. Prima che tu la veda, un controllo rapido la confronta con una lista fissa (un’idea per pezzo, un esempio, una fonte per ogni frase, disegni piccoli, domande che fanno pensare) e riscrive una volta solo i pezzi che non passano.',
+        'Before explaining it looks for sources: on the web (Claude only, it sees only your question, never your files) and in the files (the material, your brain, the app’s guide and code). The files also give the standards to search on the web (e.g. «OAuth 2.0 RFC 6749»): the app removes anything that may be private and shows them for 5 seconds, «From your files · I will search the web», with ✕ to drop one; in Night mode they start at once. A second model checks each fact against its source: confirmed, corrected or unconfirmed. Then the lesson always follows the same thread: the problem, a concrete example, the rule; a worked example, a half-done one, then your turn; a question every two pieces; the closing mind map. Before you see it, a quick check compares it with a fixed list (one idea per piece, an example, a source for every sentence, small pictures, questions that make you think) and rewrites once only the pieces that fail.'),
+      // src/renderer/components/impara/ImparaStart.tsx, src/renderer/components/impara/ImparaOptions.tsx
+      b('Si parte da un solo campo: un argomento, il link di una PR o un testo lungo, e il tipo di lezione si capisce da solo (un clic per sceglierlo tu). File e cartelle si aggiungono con «Aggiungi fonte» o trascinandoli, letti dalla pagina senza file nascosti né binari. Una riga riassume livello, durata, chi spiega e voce: «Cambia» li apre; senza scelta Claude con il modello più forte, impegno alto. Ctrl+Invio avvia. Se la domanda può voler dire cose diverse, ti chiede al massimo due cose; «Fonti» in alto raccoglie tutte le fonti.',
+        'You start from one field: a topic, a PR link or a long text, and the kind of lesson is worked out by itself (one click to pick it yourself). Files and folders are added with «Add source» or by dragging them, read by the page without hidden files or binaries. One line sums up level, length, who explains and voice: «Change» opens them; with no choice, Claude with its strongest model, high effort. Ctrl+Enter starts. If the question can mean different things, it asks you at most two things; «Sources» at the top gathers all the sources.'),
+      // src/renderer/components/impara/LessonStage.tsx, LessonVisual.tsx
+      b('La lezione è a tutto schermo (Esc per uscire). Lo schema si muove frase per frase: si accendono i nodi di cui parla, una luce corre lungo la freccia, «Qui» indica il punto. Quelli già visti restano calmi, quelli che verranno sono sbiaditi. Un pezzo può avere un disegno suo: una sequenza di messaggi, gli stati, una linea del tempo, una mappa mentale, il codice riga per riga, una formula con i suoi simboli o un grafico, che crescono e si illuminano allo stesso modo.',
+        'The lesson is full screen (Esc to leave). The diagram moves sentence by sentence: the nodes it talks about light up, a light runs along the arrow, «Here» marks the spot. Seen ones stay calm, coming ones are faint. A piece can have a picture of its own: a sequence of messages, states, a timeline, a mind map, code line by line, a formula with its symbols or a chart, which grow and light up the same way.'),
+      b('In basso un solo pulsante, «Ho capito, avanti». «Non mi è chiaro» apre «Spiegamelo meglio» (M), «Fammi un esempio» (E), «Mostrami il codice» (C) e «Domanda» (D): i primi tre aggiungono un pezzo subito dopo. Con «Rispondo a voce» dici «avanti», «ripeti», «non ho capito», «la b».',
+        'At the bottom one button only, «Got it, next». «Not clear» opens «Explain it better» (M), «Give me an example» (E), «Show me the code» (C) and «Question» (D): the first three add a piece right after. With «I answer by voice» you say «next», «repeat», «I don’t understand», «b».'),
+      // src/renderer/components/impara/ImparaTutor.tsx, ImparaStudio.tsx
+      b('Accanto alla lezione una colonna con due schede. «Tutor» (o T): scrivi, parli o clicchi una parte dello schema, e la risposta arriva parola per parola dai fatti verificati, con le fonti; «Prima provo io» ti dà prima un indizio. «Studio» prepara, solo dai fatti verificati e con una corsa breve ciascuno, mappa mentale, riassunto, glossario, flashcard (vanno nel ripasso), quiz di 10 domande, linea del tempo, «Mettimi alla prova» e un podcast letto dalle voci dell’app; restano salvati con la lezione.',
+        'Beside the lesson, a column with two tabs. «Tutor» (or T): write, speak or click a part of the diagram, and the answer arrives word by word from the verified facts, with its sources; «Let me try first» gives you a hint first. «Studio» makes, from the verified facts only and with one short run each, a mind map, a summary, a glossary, flashcards (they go into your reviews), a 10-question quiz, a timeline, «Test me» and a podcast read by the app’s voices; they stay saved with the lesson.'),
       // src/renderer/brain/components/RecordDiscussButton.tsx, src/main/appctl/impara.ts
       b('Si impara anche da dove sei: «Capiscila» su una PR o un work item del Task, «Spiegamelo» su una regola, skill o script in Memoria (materia «Il mio brain»), «Imparalo» su un concetto della Guida. Oppure chiedi all’Orchestrator «spiegami come funziona…».',
         'You learn from where you are too: «Understand it» on a PR or work item of the Task page, «Explain it» on a rule, skill or script in Memory (subject «My brain»), «Learn it» on a Guide concept. Or ask the Orchestrator «explain how … works».'),
-      // src/main/learn/store.ts, src/shared/review.ts, src/renderer/components/impara/ImparaReview.tsx
-      b('Verifiche dopo alcuni pezzi, «Spiegalo tu» alla fine; la lezione resta salvata su questo PC e riapre dal punto in cui eri. Ogni lezione ha una materia e lascia carte di ripasso, scritte solo dai fatti verificati: «Ripassa ora» e il «Quiz» di ogni materia le ripropongono quando stai per dimenticarle (FSRS); la percentuale è una stima, non un voto.',
-        'Checks after some pieces, «Explain it yourself» at the end; the lesson stays saved on this PC and reopens where you were. Every lesson has a subject and leaves review cards, written only from the verified facts: «Review now» and each subject’s «Quiz» bring them back when you are about to forget them (FSRS); the percentage is an estimate, not a score.'),
+      // src/shared/quiz.ts, src/renderer/components/impara/ImparaReview.tsx, src/shared/mastery.ts
+      b('Verifiche dopo alcuni pezzi (scelta, vero o falso col perché, metti in ordine, completa il codice, abbina, clic sullo schema), «Spiegalo tu» alla fine. Ogni lezione lascia carte di ripasso dai fatti verificati: «Ripassa ora» e il «Quiz» di ogni materia le ripropongono quando stai per dimenticarle (FSRS), con esito subito a colori e suono, serie di giuste, «Rifai le sbagliate» e, se la accendi, «Sfida a tempo». In cima il punteggio 0-100 è memoria stimata oggi × quota di carte solide (stabilità ≥ 21 giorni): scende se non ripassi. Ogni materia ha un livello, da Iniziato a Padroneggiato.',
+        'Checks after some pieces (choice, true or false with the why, put in order, complete the code, match, click on the diagram), «Explain it yourself» at the end. Every lesson leaves review cards from the verified facts: «Review now» and each subject’s «Quiz» bring them back when you are about to forget them (FSRS), with the outcome at once in colour and sound, a streak of right answers, «Redo the wrong ones» and, if you turn it on, «Timed challenge». At the top the 0-100 score is estimated memory today × share of solid cards (stability ≥ 21 days): it falls if you do not review. Each subject has a level, from Started to Mastered.'),
     ],
     analogy: b('Come un collega che prima si documenta, poi ti spiega alla lavagna indicando il punto giusto mentre parla.',
       'Like a colleague who reads up first, then explains at the whiteboard pointing at the right spot while talking.'),
     tech: [
-      tech(FILES, 'userData/learn/<id>/: lesson.json (lezione, fatti verificati, risposte, punto in cui sei), il materiale (materiale.md, diff.patch, testo.md) e guida-app.md.', 'userData/learn/<id>/: lesson.json (lesson, verified facts, answers, where you are), the material (materiale.md, diff.patch, testo.md) and guida-app.md.'),
+      tech(FILES, 'userData/learn/<id>/: lesson.json (lezione, fatti verificati, risposte, punto in cui sei), il materiale (materiale.md, diff.patch, testo.md, fonti.md con i file che hai aggiunto) e guida-app.md.', 'userData/learn/<id>/: lesson.json (lesson, verified facts, answers, where you are), the material (materiale.md, diff.patch, testo.md, fonti.md with the files you added) and guida-app.md.'),
       tech(WHERE, 'Pagina G X; IPC impara:* (impara:clarify per le risposte alle domande, impara:topics per togliere o avviare gli argomenti da cercare sul web); ogni risposta del modello è una sessione nascosta in sola lettura; le ricerche web sono le uniche con WebSearch/WebFetch e nessuno strumento sui file, e vedono solo la domanda e gli argomenti passati dal filtro (shared/web-topics.ts).', 'Page G X; IPC impara:* (impara:clarify for the answers to the questions, impara:topics to drop or start the topics to search on the web); each model answer is a hidden read-only session; the web research runs are the only ones with WebSearch/WebFetch and no file tool, and see only the question and the topics the filter let through (shared/web-topics.ts).'),
       tech(LIMITS, 'Al massimo 24 fatti per ricerca, 2 domande, 6 battute per pezzo; schema di 4-10 nodi; etichette mai oltre 1,2× e schema intero quando si legge almeno all’80%.', 'At most 24 facts per research, 2 questions, 6 beats per piece; a 4-10 node diagram; labels never past 1.2× and the whole diagram whenever it reads at 80% or more.'),
-      tech(TOOLS, 'app_learn (avvia e apre una lezione, o elenca lezioni e ripasso), solo sull’endpoint dell’Orchestrator.', 'app_learn (starts and opens a lesson, or lists lessons and reviews), only on the Orchestrator’s endpoint.'),
+      tech(TOOLS, 'app_learn (avvia e apre una lezione, o elenca lezioni, ripasso, punteggio e livello di ogni materia), solo sull’endpoint dell’Orchestrator.', 'app_learn (starts and opens a lesson, or lists lessons, reviews, the score and each subject’s level), only on the Orchestrator’s endpoint.'),
     ],
     anchors: {
       0: ['src/main/learn/material.ts'],
-      1: ['src/main/learn/service.ts#research'],
-      2: ['src/renderer/components/impara/TeacherChip.tsx'],
-      3: ['src/renderer/components/impara/LessonStage.tsx'],
-      5: ['src/renderer/components/impara/ImparaTutor.tsx'],
+      1: ['src/main/learn/service.ts#research', 'src/main/learn/service.ts#gate'],
+      2: ['src/renderer/components/impara/ImparaStart.tsx', 'src/renderer/components/impara/ImparaOptions.tsx'],
+      3: ['src/renderer/components/impara/LessonStage.tsx', 'src/renderer/components/impara/LessonVisual.tsx'],
+      5: ['src/renderer/components/impara/ImparaTutor.tsx', 'src/renderer/components/impara/ImparaStudio.tsx'],
       6: ['src/renderer/brain/components/RecordDiscussButton.tsx', 'src/main/appctl/impara.ts'],
-      7: ['src/main/learn/store.ts', 'src/shared/review.ts', 'src/renderer/components/impara/ImparaReview.tsx'],
+      7: ['src/shared/quiz.ts', 'src/renderer/components/impara/ImparaReview.tsx', 'src/shared/mastery.ts'],
     },
-    sources: ['src/shared/lesson.ts', 'src/main/learn/service.ts', 'src/main/learn/prompt.ts', 'src/main/compare/headless.ts', 'src/renderer/components/impara/LessonStage.tsx', 'src/renderer/components/impara/ImparaSources.tsx', 'src/renderer/components/impara/ImparaPlayer.tsx', 'docs/adr/0185-impara-lessons.md', 'docs/adr/0188-impara-research-and-animated-board.md', 'src/shared/review.ts', 'docs/adr/0189-impara-subjects-and-spaced-review.md', 'src/renderer/components/impara/ImparaTutor.tsx', 'src/main/appctl/impara.ts', 'docs/adr/0190-impara-tutor-and-entry-points.md', 'src/shared/web-topics.ts', 'docs/adr/0206-impara-file-driven-web-research.md'],
+    sources: ['src/shared/lesson.ts', 'src/main/learn/service.ts', 'src/main/learn/prompt.ts', 'src/main/compare/headless.ts', 'src/renderer/components/impara/LessonStage.tsx', 'src/renderer/components/impara/ImparaSources.tsx', 'src/renderer/components/impara/ImparaPlayer.tsx', 'docs/adr/0185-impara-lessons.md', 'docs/adr/0188-impara-research-and-animated-board.md', 'src/shared/review.ts', 'docs/adr/0189-impara-subjects-and-spaced-review.md', 'src/renderer/components/impara/ImparaTutor.tsx', 'src/main/appctl/impara.ts', 'docs/adr/0190-impara-tutor-and-entry-points.md', 'src/renderer/components/impara/ImparaStart.tsx', 'src/main/learn/user-files.ts', 'src/shared/quiz.ts', 'src/renderer/components/impara/ImparaQuiz.tsx', 'src/shared/mastery.ts', 'src/renderer/components/impara/ImparaScore.tsx', 'docs/adr/0204-impara-one-field-quiz-kinds-and-score.md', 'src/shared/web-topics.ts', 'docs/adr/0206-impara-file-driven-web-research.md', 'src/shared/lesson-visual.ts', 'src/shared/lesson-studio.ts', 'src/renderer/components/impara/ImparaStudio.tsx', 'docs/adr/0205-impara-studio-visuals-and-quality.md'],
   },
   {
     id: 'held-news',
@@ -1529,8 +1529,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Like asking the colleague next to you "what was that?" while the boss is talking: they whisper the answer and the meeting goes on.'),
     diagram: { kind: 'flow', steps: [b('Tua domanda', 'Your question'), b('Contesto Orchestrator', 'Orchestrator context'), b('Risposta', 'Answer'), b('Lavoro, se serve', 'A job, if needed')] },
     tech: [
-      tech(LIMITS, 'Permessi: modalità plan (sola lettura); strumenti lettura e web; mai delegabile, scope background come Battito.',
-        'Permissions: plan mode (read only); read and web tools; never delegable, background scope like Pulse.'),
+      tech(LIMITS, 'Permessi: modalità plan (sola lettura); strumenti lettura e web; mai delegabile, scope background.',
+        'Permissions: plan mode (read only); read and web tools; never delegable, background scope.'),
       tech(WHERE, 'Carta «flash» in roles.json; il contesto passa da ChatManager.deliverNow.',
         'Card "flash" in roles.json; the context goes through ChatManager.deliverNow.'),
     ],
@@ -1558,23 +1558,23 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Sa anche cosa c’è sullo schermo adesso e dove sta ogni controllo, senza leggere il contenuto privato delle chat.',
         'It also knows what is on screen right now and where each control sits, without reading the chats’ private content.'),
       // src/main/appctl/config.ts app_config
-      b('Cambia per te ogni configurazione: impostazioni, vista (tema, densità), la carta di un ruolo, un connettore acceso o spento, «Rispondi dopo». Anche le impostazioni protette cambiano subito.',
-        'It changes every configuration for you: settings, the view (theme, density), a role’s card, a connector on or off, "Answer later". Protected settings change at once too.'),
+      b('Cambia per te ogni configurazione: impostazioni, vista (tema, densità), la carta di un ruolo, i connettori (aggiungere, cambiare, provare, togliere, darli a un ruolo), il tuo profilo, «Rispondi dopo». Anche le impostazioni protette cambiano subito.',
+        'It changes every configuration for you: settings, the view (theme, density), a role’s card, connectors (add, change, test, remove, give to a role), your profile, "Answer later". Protected settings change at once too.'),
       // src/main/appctl/user-words.ts
       b('Cambia qualcosa solo se gliel’hai scritto tu, di recente, in un messaggio che è l’ultimo della sua chat: le notizie dell’app o la posta di un agente non bastano.',
         'It changes something only if you typed the ask yourself, recently, in a message that is the latest of its chat: the app’s news or an agent’s mail are not enough.'),
       // src/main/appctl/config.ts: logged as the agent’s change
-      b('Ogni impostazione cambiata finisce nel registro dei cambi con il suo «Annulla»; la carta di un ruolo torna alla versione di prima; vista e connettori si rimettono chiedendoglielo di nuovo.',
-        'Every setting change goes to the change log with its "Undo"; a role’s card can go back to its previous version; the view and connectors are set back by asking again.'),
+      b('Ogni impostazione cambiata finisce nel registro dei cambi con il suo «Annulla» (e la pagina Impostazioni mostra «Modificato dall’Orchestrator»); la carta di un ruolo torna alla versione di prima; un connettore cambiato ha «Annulla» nel feed; vista e profilo si rimettono chiedendoglielo di nuovo.',
+        'Every setting change goes to the change log with its "Undo" (and the Settings page shows "Modificato dall’Orchestrator"); a role’s card can go back to its previous version; a changed connector has "Annulla" in the feed; the view and profile are set back by asking again.'),
       // src/main/appctl/config.ts: secrets, own tools
-      b('Non tocca mai segreti, chiavi o password, né i suoi stessi strumenti e permessi: quelli restano un tuo clic.',
-        'It never touches secrets, keys or passwords, nor its own tools and permissions: those stay your click.'),
+      b('Non tocca mai segreti, chiavi o password, né i suoi stessi strumenti e permessi: quelli restano un tuo clic. Per un connettore con token ti apre il modulo già compilato.',
+        'It never touches secrets, keys or passwords, nor its own tools and permissions: those stay your click. For a connector with a token it opens the form prefilled for you.'),
     ],
     analogy: b('Come un assistente che conosce l’ufficio a memoria: gli dici «abbassa il riscaldamento» e lo fa, lasciando un biglietto per rimetterlo com’era.',
       'Like an assistant who knows the office by heart: you say "turn the heating down" and they do it, leaving a note so you can put it back.'),
     tech: [
-      tech(TOOLS, 'app_guide (la mappa, su richiesta), app_ui «outline» (lo schermo), app_config (setting, view, agent, connector, later).',
-        'app_guide (the map, on demand), app_ui "outline" (the screen), app_config (setting, view, agent, connector, later).'),
+      tech(TOOLS, 'app_guide (la mappa, su richiesta), app_ui «outline» (lo schermo), app_config (setting, view, agent, connector, profile, later).',
+        'app_guide (the map, on demand), app_ui "outline" (the screen), app_config (setting, view, agent, connector, profile, later).'),
       tech(LIMITS, 'app_config solo sull’endpoint dell’Orchestrator (app_guide e app_ui anche altrove, senza i valori delle impostazioni); nessun costo di token negli altri turni: la mappa si legge solo quando serve.',
         'app_config only on the Orchestrator’s endpoint (app_guide and app_ui elsewhere too, without the settings’ values); no token cost in its other turns: the map is read only when needed.'),
     ],
@@ -1810,11 +1810,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'One page for the few choices that matter: profile, updates, connectors, accounts, roles, your workspace, voice, appearance, notifications and advanced.'),
     points: [
       // src/renderer/lib/settings-sections.ts settingsSections; src/renderer/components/SettingsPage.tsx
-      b('Si apre con Ctrl+, dal menu in alto o con G P; ogni sezione è una scheda con icona, titolo, una riga che dice a cosa serve e le righe di scelta.',
-        'It opens with Ctrl+, from the top menu or with G P; each section is a card with an icon, a title, one line on what it is for and the rows of choices.'),
+      b('Si apre con Ctrl+, dal menu in alto o con G P. A sinistra le sezioni in gruppi (Tu, Lavoro, Strumenti, App); a destra ogni riga ha il nome e una riga di spiegazione, il comando a destra; uno scudo segna le scelte protette. Ogni cambio si salva subito e «Salvato» offre «Annulla».',
+        'It opens with Ctrl+, from the top menu or with G P. On the left the sections in groups (You, Work, Tools, App); on the right each row has its name and one line of explanation, the control on the right; a shield marks protected choices. Every change saves at once and "Salvato" offers "Annulla".'),
       // src/renderer/lib/settings-page.ts matchesSettingsSearch
-      b('La ricerca in cima filtra le sezioni per titolo, descrizione e parole chiave; la fila di link porta dritto a una sezione, e un link «impostazioni/<sezione>» apre la pagina lì.',
-        'The search on top filters the sections by title, description and keywords; the row of links jumps to a section, and an "impostazioni/<section>" link opens the page there.'),
+      b('La ricerca in cima filtra sezioni e singole righe ed evidenzia le parole trovate; la barra a sinistra porta dritto a una sezione, Ctrl+K ha «Impostazioni › <sezione>» e un link «impostazioni/<sezione>» apre la pagina lì.',
+        'The search on top filters sections and single rows and highlights the words found; the left bar jumps to a section, Ctrl+K has "Impostazioni › <section>" and an "impostazioni/<section>" link opens the page there.'),
       // src/renderer/components/ProfileSettings.tsx; src/renderer/components/SettingsPage.tsx
       b('Il mio profilo è come gli agenti ti conoscono (nome, ruolo, lavoro principale, modo di rispondere, in me.md); Account e strumenti mostra l’accesso di ogni motore e quanto può fare da solo.',
         'My profile is how the agents know you (name, role, main work, reply style, in me.md); Accounts and tools shows each engine’s sign-in and how much it may do on its own.'),
@@ -1827,6 +1827,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/appctl/config.ts app_config
       b('Puoi chiedere all’Orchestrator di cambiare una scelta per te: lo fa come il tuo clic, con «Annulla»; segreti e chiavi restano solo tuoi.',
         'You can ask the Orchestrator to change a choice for you: it does it like your click, with "Undo"; secrets and keys stay yours alone.'),
+      // src/renderer/components/SuggestSettings.tsx; src/renderer/lib/composer-suggest.ts localSuggestion (ADR 0118, 0201)
+      b('Scrittura ha un solo interruttore, «Suggerimenti mentre scrivi»: un testo grigio dopo il cursore nel campo della chat, dai tuoi messaggi passati, dai comandi «</>», dai ruoli, dalle chat e dai file, a zero token; Tab lo accetta, Esc lo nasconde.',
+        'Writing has one switch, "Suggestions while you type": grey text after the cursor in the chat input, from your past messages, the "</>" commands, the roles, the chats and the files, zero tokens; Tab takes it, Esc hides it.'),
     ],
     analogy: b('Come il quadro elettrico di casa: pochi interruttori con l’etichetta giusta, e per i lavori grossi chiami l’elettricista.',
       'Like the fuse box at home: a few switches with the right label, and for the big jobs you call the electrician.'),
@@ -1837,11 +1840,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
     anchors: {
       [-1]: ['src/renderer/lib/settings-sections.ts#SETTINGS_SECTION_IDS'],
       0: ['src/renderer/lib/settings-sections.ts#settingsSections'],
-      1: ['src/renderer/lib/settings-page.ts#matchesSettingsSearch'],
+      1: ['src/renderer/lib/settings-page.ts#matchesSettingsSearch', 'src/renderer/lib/settings-page.ts#hitRanges'],
       4: ['src/shared/guide-coverage.ts#SETTINGS_CARDS'],
       5: ['src/main/appctl/config.ts#app_config'],
+      6: ['src/renderer/components/SuggestSettings.tsx', 'src/renderer/lib/composer-suggest.ts#localSuggestion'],
     },
-    sources: ['src/renderer/components/SettingsPage.tsx', 'src/renderer/lib/settings-sections.ts', 'src/renderer/lib/settings-page.ts', 'src/renderer/components/ProfileSettings.tsx', 'src/renderer/components/AppearancePreview.tsx', 'src/main/appctl/config.ts'],
+    sources: ['src/renderer/components/SettingsPage.tsx', 'src/renderer/components/SuggestSettings.tsx', 'src/renderer/lib/settings-sections.ts', 'src/renderer/lib/settings-page.ts', 'src/renderer/components/ProfileSettings.tsx', 'src/renderer/components/AppearancePreview.tsx', 'src/main/appctl/config.ts'],
   },
   {
     id: 'guide',

@@ -26,7 +26,7 @@ it('keeps Italian, English and German keys in parity, in the whole dictionary an
 });
 it('renders the reported legacy control labels in English',()=>{
  setLang('en');expect(stateInfo({state:'waiting',pending:1,isOrchestrator:true}).label).toBe('waiting for you');
- expect(t('chat.mode.quick')).toBe('Quick');expect(t('chat.menu.copyLink')).toBe('Copy link');expect(t('ui.other')).toBe('Other…');expect(t('essential.saved')).toBe('Saved');
+ expect(t('chat.mode.plan')).toBe('Plan');expect(t('chat.menu.copyLink')).toBe('Copy link');expect(t('ui.other')).toBe('Other…');expect(t('essential.saved')).toBe('Saved');
 });
 it('renders the converted component labels and messages in English',()=>{
  setLang('en');
@@ -83,7 +83,7 @@ it('names the map layers, the built-in agents\' purpose, Esegui outcomes and set
  setLang('en');
  const en=[...Object.keys(LAYER_COLOR).map(id=>layerLabel({id,label:'Etichetta del brain'})),...BUILT_IN_PURPOSE.map(id=>rolePurpose(id,'x')),
   runOutcome('riuscito (exit code 0) · 2 s'),runOutcome('fallito (exit code 1)'),runOutcome('fermato dall\'utente prima della fine'),runOutcome('riuscito (exit code 0) · 3 s · comando di produzione, confermato dall\'utente'),
-  proposalTitle({source:'setting',title:'Battito: budget giornaliero ($)',facts:[{key:'target',value:'pulse.dailyUsd'}]} as never)];
+  proposalTitle({source:'setting',title:'Suggerimenti nella chat',facts:[{key:'target',value:'suggestOn'}]} as never)];
  expect(en.filter(x=>ITALIAN.test(x)||x==='Etichetta del brain')).toEqual([]);
  expect(layerLabel({id:'altro',label:'Altro'})).toBe('Altro');expect(rolePurpose('custom','Mio agente')).toBe('Mio agente');
  expect(runOutcome('riuscito (exit code 0) · 2 s')).toBe('succeeded (exit code 0) · 2 s');

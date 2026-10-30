@@ -34,19 +34,12 @@ import { createDemoRoutines } from './routines/demo';
 import type { Routines } from './routines/service';
 import { readWorker } from './read-work';
 import { systemLang } from './lang';
-import { setUiLangSource, uiLang } from './locale';
+import { setUiLangSource } from './locale';
 import { isLang } from '../shared/contract';
 import { ProfileService } from './brain/profile';
 import { AgentImageStore, nativeReencode } from './agents/agent-images';
 import { createAppUpdates } from './update/wiring';
 import { OrchestratorService } from './chats/orchestrator-service';
-import { Headline } from './headline';
-import { ComposerSuggest, SUGGEST_FALLBACK_MODEL } from './suggest/service';
-import { tierModel } from './agents/model-tier';
-import { ANTHROPIC_API } from '../shared/contract';
-import { pulseStubHandlers } from './pulse/handlers';
-import { createPulse } from './pulse/wiring';
-import { pulseDemoHandlers } from './pulse/demo';
 import { ProposalsService } from './proposals/service';
 import { Workflows } from './workflows/service';
 import { VoiceService, voiceRoot } from './voice/service';
@@ -156,33 +149,6 @@ app.whenReady().then(async () => {
     route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h),
     orchestratorChats: () => s.brain.settings().orchestratorChats,
   });
-  // the Grindhouse's headline (SPEC 18): never a model call in the demo or under test
-  const readBrain = (rel: string): string => {
-    const root = demo ? null : s.brain.info().brainRoot;
-    try { return root ? fs.readFileSync(path.join(root, rel), 'utf8').slice(-20_000) : ''; } catch { return ''; }
-  };
-  const headline = new Headline({
-    file: path.join(app.getPath('userData'), 'headline.json'),
-    complete: (req, signal) => s.engines.text.complete(req, signal),
-    settings: () => ({ on: s.brain.settings().pulse?.headline.on !== false }),
-    lang: uiLang,
-    material: () => {
-      const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      return { chats: s.chats.list(), nowMd: readBrain('now.md'), journal: readBrain(path.join('journal', `${day}.md`)), aiErrors: readBrain('ai-errors.md') };
-    },
-    visible: () => !!win && !win.isDestroyed() && win.isVisible() && !win.isMinimized(),
-    emit: st => emitter.emit('headline:changed', st),
-    calls: !demo && !process.env.SB_TEST,
-    ...(demo && process.env.SB_DEMO_FREEZE === '1' ? { now: () => FROZEN_EPOCH } : {}),
-  });
-  // the chat composer's model suggestion (ADR 0118): the light tier on the API engine, never a call in the demo or under test
-  const composerSuggest = new ComposerSuggest({
-    file: path.join(app.getPath('userData'), 'suggest.json'),
-    complete: (req, signal) => s.engines.text.complete(req, signal),
-    settings: () => { const c = s.brain.settings(); return { on: c.suggestOn !== false, modelOn: c.suggestModel !== false, dailyUsd: c.suggestDailyUsd ?? 0.05 }; },
-    model: () => { const c = s.brain.settings(), reg = s.brain.modelRegistry(); return tierModel(ANTHROPIC_API, 'light', reg, c.modelTiers) ?? tierModel('claude', 'light', reg, c.modelTiers) ?? SUGGEST_FALLBACK_MODEL; },
-    calls: !demo && !process.env.SB_TEST && !process.env.VITEST,
-  });
   // voice mode (ADR 0152): the local speech engine in its own utility process, started on first use
   const voice = new VoiceService({
     root: voiceRoot(app.getPath('userData')),
@@ -209,18 +175,14 @@ app.whenReady().then(async () => {
   win?.webContents.on('did-start-navigation', d => { if (d.isMainFrame && !d.isSameDocument) recPageGone(); });
   win?.webContents.on('render-process-gone', recPageGone);
   app.on('will-quit', () => { recordings.dispose(); voice.dispose(); useCounts.close(); });
-  const pulse = createPulse(s, { emitter, window: () => win, userData: app.getPath('userData') }, () => headline.get());
-  // the Battito's proposals count in the morning block's "Da approvare" (ADR 0102)
-  if (s.morning && pulse) s.morning.extraApprovals = () => pulse.pendingApprovals();
-  const unsubscribePulse = s.brain.onSettingChange(change => { if (change.key.startsWith('pulse.') || change.key === 'jobs.fallback') pulse?.start(); });
     const mcpServers = () => { if (!s.mcpServers) throw new Error('Server MCP non disponibili.'); return s.mcpServers; };
     const connectors = createAppConnectors(app.getPath('userData'), () => s.tasks.refreshFresh(), l => s.tasks.onRead(l));
     await connectors.ready;
     const research = () => { if (!s.research) throw new Error('Manutenzione con ricerca non disponibile.'); return s.research; };
     const learn = () => { if (!s.learn) throw new Error('Impara non è disponibile.'); return s.learn; };
   const ctx: HandlerContext = {
-    s, win: () => win, emitter, demo, outDir, activity, overlay, profile, agentImages, defaultBrain, updates, workflows, orchestrator, headline,
-    composerSuggest, voice, recordings, pulse, mcpServers, connectors, research, learn, routinesOf, requireReviewRoot, search, clip, hiddenShell,
+    s, win: () => win, emitter, demo, outDir, activity, overlay, profile, agentImages, defaultBrain, updates, workflows, orchestrator,
+    voice, recordings, mcpServers, connectors, research, learn, routinesOf, requireReviewRoot, search, clip, hiddenShell,
     proposals: () => proposals, bumpBrainChoice: () => { brainChoiceRevision++; }, rendererErrors,
   };
   const handlers: Handlers = {
@@ -231,9 +193,6 @@ app.whenReady().then(async () => {
     ...brainHandlers(ctx),
     ...agentsHandlers(ctx),
     ...mediaHandlers(ctx),
-    ...(pulse?.handlers() ?? (demo ? pulseDemoHandlers(process.env.SB_DEMO_FREEZE === '1' ? FROZEN_EPOCH : Date.now(), {
-      settings: () => s.brain.settings().pulse, changed: () => emitter.emit('pulse:changed', undefined), approvalsChanged: () => emitter.emit('approvals:changed', undefined),
-    }) : pulseStubHandlers())),
   };
   // the deck's sources call the same handlers their old pages called (never a second path to the same write)
   const call = <K extends InvokeChannel>(ch: K, arg: InvokeArg<K>): Promise<InvokeResult<K>> =>
@@ -252,14 +211,13 @@ app.whenReady().then(async () => {
       settings: { pending: () => s.brain.pendingSettings(), confirm: (proposalId: string, accept: boolean) => call('settings:confirm', { proposalId, accept }) },
       roles: { list: () => s.agents.list().profiles, resolveTrial: (id: string, decision: 'keep' | 'rollback') => call('agents:trialDecide', { id, decision }) },
       ...(s.agentLifecycle ? { lifecycle: { read: () => s.agentLifecycle!.read({}), decide: (key: string, decision: 'approve' | 'dismiss') => call('agents:lifecycleDecide', { key, decision }) } } : {}),
-      pulse: { list: () => call('approvals:list', {}), decide: (id: string, decision: 'approve' | 'discard') => call('approvals:decide', { id, decision }) },
       policies: { status: async () => { const r = await call('brain:api', { path: '/api/improve' }); return r.ok ? r.data : null; }, act: a => call('learn:act', a) },
       ...(s.research ? { research: { list: () => s.research!.cards(), approve: (id: string) => s.research!.approve(id), reject: (id: string) => s.research!.reject(id), repo: () => s.research!.repo(), candidates: () => s.research!.candidateCards() } } : {}),
     },
     ...(s.research ? { clickAt: () => s.research!.clickAt() } : {}),
   });
   // the badge follows its sources' own events; settings proposals and the loop's status are read every minute too
-  const PROPOSAL_EVENTS: readonly string[] = ['maintenance:changed', 'brainmodel:changed', 'approvals:changed', 'agents:lifecycleChanged', 'agents:changed', 'settings:proposed', 'settings:changed'];
+  const PROPOSAL_EVENTS: readonly string[] = ['maintenance:changed', 'brainmodel:changed', 'agents:lifecycleChanged', 'agents:changed', 'settings:proposed', 'settings:changed'];
   emitter.tap(channel => { if (PROPOSAL_EVENTS.includes(channel)) proposals.changed(); });
   // an approved or auto-applied change rolled back from anywhere counts as a no in the Proposte ledger (ADR 0193)
   s.brainModel.log.onRolledBack(id => proposals.changeUndone(id));
@@ -270,8 +228,6 @@ app.whenReady().then(async () => {
   const prepareUpdates = setTimeout(() => { void updates.prepare(); }, 45_000); prepareUpdates.unref();
   // the hybrid brain search (SPEC 23) indexes in its worker a little after the window is up (never delaying the start)
   const startSearch = setTimeout(() => s.hybrid?.start(), 5_000); startSearch.unref();
-  // the headline's first refresh waits for the window and the start's own work (it is never on the start's path)
-  void windowReady.then(() => { if (pulse) pulse.start(); });
   // the taskbar button: what waits for the user and whether an agent works (ADR 0102; Windows only, never under SB_HIDDEN)
   let stopTaskbar = () => {};
   void windowReady.then(() => { stopTaskbar = startTaskbar({ window: () => win, chats: () => s.chats.list(), waiting: () => s.chats.pending().length + s.asks.pending().length }); });
@@ -295,8 +251,8 @@ app.whenReady().then(async () => {
     if (quitting) return;
     quitting = true;
     void connectors.service.cancelLogin();
-    headline.stop(); readWorker.stop();
-    pulse?.stop(); unsubscribePulse(); stopTaskbar(); proposals.stop();
+    readWorker.stop();
+    stopTaskbar(); proposals.stop();
     log.info('app', 'quit started');
     // the stable launcher (scripts/release.mjs) waits for a quitting app to go before starting again; an open one it leaves be
     try { fs.writeFileSync(path.join(app.getPath('userData'), 'quitting.json'), JSON.stringify({ pid: process.pid, at: new Date().toISOString() })); } catch { /* best effort */ }

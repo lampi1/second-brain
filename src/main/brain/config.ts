@@ -28,6 +28,9 @@ const newId = (p: string) => `${p}_${crypto.randomUUID().slice(0, 12)}`;
 /** Feed kinds renamed with the Task section (ADR 0079): a mute saved under the old kind keeps silencing the new one. */
 const LEGACY_MUTE: Record<string, string> = { devops: 'task', 'devops-alert': 'task-alert' };
 
+/** Top-level keys of removed features (ADR 0201): never read, dropped from config.json at the next start. */
+export const RETIRED_KEYS: readonly string[] = ['pulse', 'headlineOn', 'headlineModel', 'headlineEffort', 'suggestModel', 'suggestDailyUsd'];
+
 /** Saved file → settings. Each known key is validated on its own: a bad value falls back to its default, never a crash. */
 export function fromSaved(raw: unknown): Settings {
   let s = defaults();
@@ -44,8 +47,6 @@ export function fromSaved(raw: unknown): Settings {
     }
     if (c.ok) s = setAt(s, c.key, c.value);
   }
-  const legacy = raw as { headlineOn?: unknown; pulse?: { headline?: { on?: unknown } } };
-  if (legacy.pulse?.headline?.on === undefined && legacy.headlineOn === false && s.pulse) s.pulse.headline.on = false;
   // the Task section was DevOps before ADR 0079: its settings (devops.*) and its alerts' mute keys move to the new names
   const oldTasks = (raw as { devops?: unknown; tasks?: unknown }).devops;
   if (oldTasks && typeof oldTasks === 'object' && !Array.isArray(oldTasks) && (raw as { tasks?: unknown }).tasks === undefined) {
@@ -121,6 +122,7 @@ export class ConfigStore {
     this.domainList = domainsOfConfig(raw);
     this.loadChanges();
     this.migrateView(raw);
+    this.migrateRetired(raw);
     this.migrateTasks(raw);
     this.migrateMessaging(raw);
     this.migrateCompactWindow(raw !== undefined && raw !== null);
@@ -135,6 +137,18 @@ export class ConfigStore {
       log.info('settings', 'retired view setting removed');
     } catch (e) {
       log.warn('settings', 'view removal not saved', { cause: e instanceof Error ? e.message : String(e), hint: 'the old value is ignored; the next start retries' });
+    }
+  }
+
+  /** Settings of features removed by ADR 0201 (Battito, its headline, the composer's model suggestions): fromSaved
+   *  ignores them; drop them from the file once so it holds only live keys. */
+  private migrateRetired(raw: unknown): void {
+    if (!raw || typeof raw !== 'object' || !RETIRED_KEYS.some(k => k in raw)) return;
+    try {
+      this.save(this.saved);
+      log.info('settings', 'retired settings removed', { data: { keys: RETIRED_KEYS.filter(k => k in raw) } });
+    } catch (e) {
+      log.warn('settings', 'retired settings removal not saved', { cause: e instanceof Error ? e.message : String(e), hint: 'the old values are ignored; the next start retries' });
     }
   }
 

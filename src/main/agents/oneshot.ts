@@ -1,11 +1,11 @@
-// Digest-only agent runs for Battito (ADR 0070). Engine eligibility is checked before any transport starts.
+// Digest-only, tool-free agent runs (ADR 0070; today the role upgrade's ask, wiring.ts upgradeAsk). Engine eligibility is
+// checked before any transport starts.
 // Callers own scheduling/budgets; this service owns empty working directories, deadlines and provenance.
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { AgentProfile, AgentRunTokens, OneShotPurpose } from '../../shared/agents';
 import type { ModelRegistry, Settings } from '../../shared/contract';
-import type { PulseCostBasis } from '../../shared/pulse';
 import type { HeadlessRunner } from '../compare/headless';
 import type { TextModel } from '../engines/text';
 import { agentsMayOpen } from '../engines/policy';
@@ -20,7 +20,7 @@ export interface OneShotRequest {
 }
 export type OneShotResult = {
   ok: boolean; text: string; reason?: string; noEngine?: boolean; runId?: string;
-  engine: string | null; model: string | null; costUsd: number | null; costBasis: PulseCostBasis;
+  engine: string | null; model: string | null; costUsd: number | null; costBasis: 'reported' | 'estimated' | 'unknown';
   tokens: AgentRunTokens | null; durationMs: number;
 };
 export interface OneShotDeps {
@@ -64,7 +64,7 @@ export class OneShotService {
     });
     if (!Number.isInteger(req.maxOutputTokens) || req.maxOutputTokens < 1 || req.maxOutputTokens > (req.light ? 2400 : 1200)
       || !Number.isFinite(req.timeoutMs) || req.timeoutMs < 1 || req.timeoutMs > 120_000
-      || req.prompt.length > 12_000 || req.system.length > 12_000) return failed('Richiesta Battito non valida');
+      || req.prompt.length > 12_000 || req.system.length > 12_000) return failed('Richiesta non valida');
     const agent = this.d.profile(req.agentId);
     if (!agent) return failed('Ruolo non disponibile', true);
     const engine = this.pick(agent);
@@ -108,7 +108,7 @@ export class OneShotService {
       if (result.text.length > 8000) { result.ok = false; result.text = ''; result.reason = 'Risposta troppo lunga'; }
       if (engine.kind === 'api' && !(engine.protocol === 'anthropic' && engine.id === 'anthropic')) this.d.addApiSpend(engine.id, result.costUsd);
     } catch {
-      result.ok = false; result.reason = 'Esecuzione Battito non riuscita';
+      result.ok = false; result.reason = 'Esecuzione non riuscita';
     } finally {
       // Only remove the newly allocated directory when still empty. Never traverse model-created paths.
       if (cwd) { try { fs.rmdirSync(cwd); } catch { /* preserve unexpected content */ } }
@@ -116,7 +116,7 @@ export class OneShotService {
       run.costUsd = result.costUsd; run.tokens = result.tokens; run.executionMs = result.durationMs;
       run.oneshot.costBasis = result.costBasis;
       run.oneshot.ok = result.ok; // whether the job answered, kept on the run (stored data)
-      run.outcome = { verdict: 'unknown', basis: 'unknown', at: now(), by: 'Battito' };
+      run.outcome = { verdict: 'unknown', basis: 'unknown', at: now(), by: 'oneshot' };
       endRun(run, 'completed', now()); this.d.runs.save();
     }
     return result;

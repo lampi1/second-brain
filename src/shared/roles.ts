@@ -20,8 +20,6 @@ export type RoleId = (typeof ROLE_IDS)[number];
 export const WORK_ROLE_IDS = ROLE_IDS.filter((r): r is Exclude<RoleId, 'orchestrator'> => r !== 'orchestrator');
 export type WorkRoleId = (typeof WORK_ROLE_IDS)[number];
 export const ORCHESTRATOR_ROLE_ID = 'orchestrator' satisfies RoleId;
-/** The background job behind the Battito's cards and Memoria's headline (Pulse): a catalog entry that is never a role nor a delegate. */
-export const PULSE_ID = 'pulse';
 /** «Flash» (ADR 0107): the quick read-only lane beside the Orchestrator (a "btw"): a catalog entry with its own card and
  *  model, never a role nor a delegate. */
 export const FLASH_ID = 'flash';

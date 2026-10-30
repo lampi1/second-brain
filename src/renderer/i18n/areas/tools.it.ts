@@ -92,8 +92,6 @@ export const toolsIt = {
   'tools.skillsPage.theAgent': 'l’agente',
   'tools.skillsPage.theSkill': 'la skill',
 
-  // Compare: model comparison labels
-
   // Foreign: item origin labels
   'tools.foreign.otherChat': "un'altra chat",
   'tools.foreign.anAgent': 'un agente',

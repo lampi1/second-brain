@@ -37,7 +37,7 @@ export function shortWhen(iso: string): string {
 }
 export function whoName(c: Proposal): string {
   const w = c.provenance.who;
-  if (w.kind === 'role') return w.id === 'pulse' ? t('alive.pulse.title') : roleName(w.id);
+  if (w.kind === 'role') return roleName(w.id);
   if (w.kind === 'maintenance' && (w.id === 'research' || w.id === 'cleanup')) return t(`proposals.who.${w.id}`);
   if (w.kind === 'maintenance') return (['corrections', 'repeated-task', 'merge-skills', 'merge-memory', 'migration', 'upgrade'] as const).includes(w.id as never) ? t(`proposals.job.${w.id as 'corrections'}`) : t('proposals.who.maintenance');
   return w.id === 'lifecycle' ? t('proposals.who.lifecycle') : w.id === 'improve' ? t('proposals.who.improve') : t('proposals.who.agent');
