@@ -38,7 +38,7 @@ export function mediaHandlers({ s, voice, recordings, learn }: HandlerContext): 
     'impara:start': a => learn().start(a),
     'impara:move': a => learn().move(String(a?.id ?? ''), String(a?.at ?? '')),
     'impara:ask': a => learn().ask(String(a?.id ?? ''), a?.kind, String(a?.at ?? ''), typeof a?.text === 'string' ? a.text : undefined),
-    'impara:answer': a => learn().answer(String(a?.id ?? ''), String(a?.checkId ?? ''), Number(a?.choice), a?.confidence),
+    'impara:answer': a => learn().answer(String(a?.id ?? ''), String(a?.checkId ?? ''), Array.isArray(a?.choice) ? a.choice.map(Number) : Number(a?.choice), a?.confidence),
     'impara:explain': a => learn().explain(String(a?.id ?? ''), String(a?.text ?? '')),
     'impara:retry': a => learn().retry(String(a?.id ?? '')),
     'impara:clarify': a => learn().clarify(String(a?.id ?? ''), a?.answers),

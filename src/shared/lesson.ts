@@ -13,6 +13,7 @@
 // Shared by main/learn/ (generation, store) and the renderer (components/impara/); pinned by test/unit/lesson.test.ts.
 import type { Effort } from './contract';
 import { subjectName, type ReviewSummary } from './review';
+import { parseQuiz, type QuizBody } from './quiz';
 
 export type LessonDepth = 'quick' | 'lesson' | 'deep';
 export const LESSON_DEPTHS: readonly LessonDepth[] = ['quick', 'lesson', 'deep'];
@@ -78,7 +79,11 @@ export interface LessonStart {
   /** the subject chosen by where the lesson starts (ADR 0190: «Il mio brain» from Memoria, «second-brain» from the
    *  Guide); absent = the plan picks one */
   subject?: string;
+  /** the user's own files and folders dropped or picked on the start form (ADR 0204), read by the page: their sources */
+  files?: LessonFile[];
 }
+/** One file of the user's as a lesson's source: its path (relative to the folder dropped) and its text. */
+export interface LessonFile { name: string; text: string }
 
 export interface LessonCode { file: string; diff: string }
 export interface LessonWord { term: string; meaning: string }
@@ -109,15 +114,13 @@ export interface LessonStep {
   cites?: string[];
 }
 
-export interface LessonAnswer { choice: number; confidence?: LessonConfidence; at: number }
-export interface LessonCheck {
+/** choice = the option picked; for order and match (ADR 0204) `correct` when right, -1 when not, and `seq` = what the
+ *  user gave (shared/quiz.ts QuizResponse) */
+export interface LessonAnswer { choice: number; seq?: number[]; confidence?: LessonConfidence; at: number }
+export interface LessonCheck extends QuizBody {
   id: string;
   /** the main piece it comes after */
   after: string;
-  kind: 'choice' | 'predict';
-  q: string;
-  options: string[];
-  correct: number;
   /** why the right answer is right (and the usual wrong turn), shown after the answer */
   why: string;
   answer?: LessonAnswer;
@@ -446,13 +449,10 @@ export function beatsOf(s: Pick<LessonStep, 'say' | 'focus' | 'note' | 'beats'>)
   return (parts.length ? parts : [s.say]).map((say, i) => ({ say, focus: [...s.focus], ...(i === 0 && s.note ? { note: s.note } : {}) }));
 }
 
+/** A check the model wrote (any kind of shared/quiz.ts; an unknown kind is a choice). */
 export function parseCheck(v: unknown, after: string, id: string): LessonCheck {
   const o = obj(v, 'domanda');
-  const options = list(o.options).map(x => text(x, 220, 'option', false)).filter(Boolean).slice(0, 4);
-  if (options.length < 2) throw new Error('domanda: servono da 2 a 4 risposte');
-  const correct = Number(o.correct);
-  if (!Number.isInteger(correct) || correct < 0 || correct >= options.length) throw new Error('domanda: correct fuori dalle risposte');
-  return { id, after, kind: o.kind === 'predict' ? 'predict' : 'choice', q: text(o.q, 320, 'q'), options, correct, why: text(o.why, 700, 'why') };
+  return { id, after, ...parseQuiz(o), why: text(o.why, 700, 'why') };
 }
 
 export interface ParsedPlan { title: string; diagram: string; outline: string[]; steps: LessonStep[]; checks: LessonCheck[]; explainQ: string; subject: string }

@@ -38,21 +38,10 @@
   background:radial-gradient(1200px 300px at 10% -40%,color-mix(in srgb,var(--blue) 22%,transparent),transparent 60%),radial-gradient(600px 240px at 100% 120%,color-mix(in srgb,var(--green) 10%,transparent),transparent 60%),var(--surface)}
 .ip-hero h1{margin:4px 0 0;font-family:var(--font-display);font-size:26px;font-weight:650;letter-spacing:-.01em}
 .ip-lead{margin:6px 0 0;color:var(--text-3);font-size:13.5px;max-width:760px;line-height:1.5}
-.ip-ask{margin-top:16px;display:flex;gap:10px;align-items:center;background:var(--bg);border:1px solid var(--border-3);border-radius:12px;padding:8px 8px 8px 14px;color:var(--text-3);transition:border-color var(--dur)}
-.ip-ask:focus-within{border-color:var(--blue-line)}
-.ip-ask input{flex:1;min-width:0;background:none;border:0;color:var(--text);font:15px var(--font);outline:none}
-.ip-ask .btn{padding-inline:14px}
 .ip-chips{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .ip-chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--border-3);border-radius:999px;padding:5px 12px;color:var(--text-2);font:inherit;font-size:12.5px;background:var(--surface-2);cursor:pointer;transition:border-color var(--dur-fast),background var(--dur-fast)}
 .ip-chip:hover{border-color:var(--text-4)}
 .ip-chip.on{border-color:var(--blue-line);background:var(--blue-bg);color:var(--text)}
-.ip-source{display:flex;align-items:center;gap:10px;margin-top:10px}
-.ip-source input{flex:0 1 520px;background:var(--bg);border:1px solid var(--border-2);border-radius:9px;padding:7px 10px;color:var(--text);font:13px var(--font);outline:none}
-.ip-source input:focus{border-color:var(--blue-line)}
-.ip-source-text{display:block;width:100%;margin-top:10px;background:var(--bg);border:1px solid var(--border-2);border-radius:10px;padding:10px 12px;color:var(--text);font:13px/1.5 var(--font);resize:vertical;outline:none}
-.ip-source-text:focus{border-color:var(--blue-line)}
-.ip-opts{display:flex;align-items:center;gap:18px;margin-top:16px;flex-wrap:wrap}
-.ip-opts .sp{flex:1}
 .ip-seg{display:inline-flex;gap:3px;padding:3px;border-radius:10px;background:var(--bg);border:1px solid var(--border-2)}
 .ip-seg button{border:0;background:none;color:var(--text-3);font:inherit;font-size:12px;padding:4px 10px;border-radius:7px;cursor:pointer;white-space:nowrap}
 .ip-seg button.on{background:var(--surface-3);color:var(--text)}
@@ -322,13 +311,7 @@
 .ip-clarify-in{background:var(--bg);border:1px solid var(--blue-line);border-radius:9px;padding:7px 10px;color:var(--text);font:13px var(--font);outline:none}
 .ip-preparing{max-width:620px}
 
-/* «Chi spiega» */
-.ip-opts-2{margin-top:10px}
-.ip-teacher{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px}
-.ip-teacher-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--border-3);border-radius:999px;padding:4px 11px;background:var(--surface-2);color:var(--text);font:inherit;font-size:12.5px;cursor:pointer}
-.ip-teacher-chip:hover{border-color:var(--text-4)}
 .ip-caret{color:var(--text-3);font-size:10px}
-.ip-teacher-web{font-size:12px}
 
 /* a piece's sources */
 .ip-cites{margin-top:10px}

@@ -42,7 +42,8 @@ export interface MediaInvokeMap {
   'impara:start': [LessonStart, Lesson];
   'impara:move': [{ id: string; at: string }, Lesson];
   'impara:ask': [{ id: string; kind: LessonExtraKind; at: string; text?: string }, Lesson];
-  'impara:answer': [{ id: string; checkId: string; choice: number; confidence?: LessonConfidence }, Lesson];
+  /** choice: an option, or for order and match (ADR 0204) the list of shared/quiz.ts QuizResponse */
+  'impara:answer': [{ id: string; checkId: string; choice: number | number[]; confidence?: LessonConfidence }, Lesson];
   'impara:explain': [{ id: string; text: string }, Lesson];
   'impara:retry': [{ id: string }, Lesson];
   /** the answers to the questions asked before the lesson (ADR 0188); '' = skipped */

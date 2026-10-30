@@ -135,6 +135,8 @@ const REST = {
     { afterStep: 3, kind: 'predict', q: 'Il motore manda la risposta in un solo blocco alla fine. Cosa cambia con questa PR?',
       options: ['Niente: appare tutta insieme, come prima', 'Appare parola per parola', 'Appare dopo 250 ms', 'Non appare più'],
       correct: 0, why: 'La PR toglie le attese dell’app, ma non può dividere un testo che arriva intero: lo streaming parte dal motore.' },
+    { afterStep: 2, kind: 'truefalse', q: 'Con la finestra nascosta lo store aspetta ancora un fotogramma.', options: ['Vero', 'Falso'], correct: 1,
+      why: 'Falso: nascosta, lo store aspetta 250 ms (STREAM_HIDDEN_MS), perché nessuno guarda e il computer risparmia lavoro.' },
   ],
 };
 
@@ -294,12 +296,17 @@ export function seedDemoLessons(store: LessonStore, now: number, appRoot: string
   const card = (l: Lesson, k: string, extra: Partial<ReviewCard>): ReviewCard => ({ id: `${l.id}:${k}`, lessonId: l.id, subject: l.subject!, kind: 'recall', origin: 'cards', q: '', answer: '', createdAt: l.createdAt, mem: null, ...extra });
   const cards: ReviewCard[] = [
     card(half, 'k:qa1', { kind: 'choice', origin: 'check', q: half.checks[0]!.q, options: half.checks[0]!.options, correct: 0, answer: half.checks[0]!.why, mem: mem(2, 1.2) }),
-    card(done, 'k:qb1', { kind: 'choice', origin: 'check', q: done.checks[0]!.q, options: done.checks[0]!.options, correct: 0, answer: done.checks[0]!.why, mem: mem(5, 15, 2) }),
+    card(done, 'k:qb1', { kind: 'choice', origin: 'check', q: done.checks[0]!.q, options: done.checks[0]!.options, correct: 0, answer: done.checks[0]!.why, mem: mem(5, 25, 3) }),
     card(app, 'c1', { kind: 'recall', q: 'Perché Impara fa due ricerche separate, una sul web e una nei file?', answer: 'Perché chi legge il web non deve vedere i tuoi file: così un testo trovato online non può portare fuori i tuoi dati.', cites: ['f1'], mem: mem(4, 3) }),
     card(app, 'c2', { kind: 'choice', q: 'Chi controlla un fatto trovato nella ricerca?', options: ['Un secondo modello che non l’ha scritto', 'Lo stesso modello che l’ha trovato', 'Nessuno'], correct: 0, answer: 'Chain-of-Verification: chi verifica non ha scritto il fatto, così sbaglia meno.', cites: ['f2'], mem: mem(1, 2.5) }),
     card(app, 'c3', { kind: 'node', q: 'In quale parte dello schema un fatto sbagliato viene corretto?', node: 'vfiles', answer: 'Il controllo dei file rilegge ogni file alla riga citata e corregge il fatto.', cites: ['f1'] }),
+    // the question kinds of ADR 0204
+    card(app, 'c4', { kind: 'order', q: 'In che ordine Impara prepara una lezione?', items: ['Le due ricerche, web e file', 'La verifica dei fatti', 'Le domande, se la richiesta è ambigua', 'Il piano e i primi pezzi'], answer: 'Prima si cercano i fatti, poi un altro modello li verifica; solo con i fatti verificati (e le risposte alle domande) nasce il piano.', cites: ['f1', 'f2'] }),
+    card(app, 'c5', { kind: 'match', q: 'Abbina ogni parte a quello che fa', items: ['Ricerca sul web', 'Ricerca nei file', 'Verifica'], pairs: ['Legge solo la tua domanda e le pagine trovate', 'Legge materiale, brain e app, mai il web', 'Ricontrolla ogni fatto sulla sua fonte'], answer: 'Le due ricerche restano separate; la verifica la fa un modello che non ha scritto i fatti.', cites: ['f1', 'f2'] }),
+    card(app, 'c6', { kind: 'truefalse', q: 'La ricerca sul web può leggere i file del tuo PC.', options: ['Vero', 'Falso'], correct: 1, answer: 'Falso: chi legge il web vede solo la domanda, così una pagina non può portare fuori i tuoi file.', cites: ['f1'], mem: mem(3, 34, 4) }),
+    card(app, 'c7', { kind: 'cloze', q: 'Quale giro parte insieme alla ricerca sul web?', code: 'const [rw, rf] = await Promise.all([\n  web ? this.run(req, { round: \'impara-web\', web: true }) : Promise.resolve(null),\n  this.run(req, { round: ___ }),\n]);', options: ["'impara-files'", "'impara-plan'", "'impara-verify-web'"], correct: 0, answer: 'Le due ricerche partono insieme: il web e i file; la verifica viene dopo.', cites: ['f1'], mem: mem(2, 26, 3) }),
   ];
-  try { fs.writeFileSync(path.join(store.root, 'review.json'), JSON.stringify({ v: 1, cards, log: [{ card: cards[1]!.id, at: now - 5 * day, grade: 3 }, { card: cards[2]!.id, at: now - 4 * day, grade: 3 }, { card: cards[0]!.id, at: now - 2 * day, grade: 2 }, { card: cards[3]!.id, at: now - day, grade: 3 }] })); } catch { /* the demo goes on without reviews */ }
+  try { fs.writeFileSync(path.join(store.root, 'review.json'), JSON.stringify({ v: 1, cards, log: [{ card: cards[1]!.id, at: now - 5 * day, grade: 3 }, { card: cards[2]!.id, at: now - 4 * day, grade: 3 }, { card: cards[0]!.id, at: now - 2 * day, grade: 2 }, { card: cards[3]!.id, at: now - day, grade: 3 }, ...[24, 12, 3].map(d => ({ card: cards[7]!.id, at: now - d * day, grade: 3 as const })), ...[20, 9, 2].map(d => ({ card: cards[8]!.id, at: now - d * day, grade: 3 as const }))] })); } catch { /* the demo goes on without reviews */ }
 }
 
 /** The review cards the demo's model writes at the end of a lesson: from the PR #251 facts (one cites only the
@@ -310,4 +317,5 @@ const DEMO_CARDS = { cards: [
   { kind: 'node', q: 'Quale parte aspetta 250 ms quando la finestra è nascosta?', node: 'store', answer: 'Lo store della finestra: STREAM_HIDDEN_MS = 250, perché nessuno guarda.', cites: ['f3'] },
   { kind: 'choice', q: 'Se STREAM_MS tornasse a 100 ms, cosa vedresti?', options: ['Il testo di nuovo a scatti', 'Nessuna differenza', 'La chat non si aggiornerebbe più'], correct: 0, answer: 'Tornerebbe una delle due attese da 100 ms: il testo arriverebbe a scatti.', cites: ['f2'] },
   { kind: 'recall', q: 'Quanti fotogrammi al secondo mostra uno schermo a 60 Hz?', answer: '60.', cites: ['f5'] },
+  { kind: 'order', q: 'Metti in ordine il viaggio di una parola dopo la PR #251', items: ['Il motore la scrive', 'ChatManager la manda dopo un fotogramma', 'Lo store la applica', 'La finestra la disegna'], answer: 'Dal motore a main (ChatManager, 16 ms), poi lo store della finestra (16 ms), poi il disegno.', cites: ['f1', 'f2'] },
 ] };

@@ -1,7 +1,8 @@
 // The review on Impara's start (ADR 0189): how many cards are due today (and new ones), the days in a row, «Ripassa
 // ora»; then one tile per subject with its lessons, cards, what is due and the FSRS estimate of recall today over the
 // cards already studied (never a score made up: «mai ripassata» until one is), and its «Quiz» (the subject's lessons
-// mixed). `SubjectChip` moves a lesson to another subject. Used by ImparaStart.tsx; styles impara.css (.rv-*).
+// mixed), and its level (ADR 0204: Iniziato, Familiare, Competente, Padroneggiato, ImparaScore.tsx MasteryBadge).
+// `SubjectChip` moves a lesson to another subject. Used by ImparaStart.tsx; styles impara.css (.rv-*).
 import { useRef, useState } from 'react';
 import type { ReviewSummary } from '@shared/review';
 import { go } from '../../actions';
@@ -9,6 +10,7 @@ import { reviewArg, setLessonSubject } from '../../lib/impara';
 import { t } from '../../i18n';
 import { Button, MenuItem, MenuLabel, MenuSep, Popover } from '../ui';
 import { IconArrowRight, IconCheck } from '../Icons';
+import { MasteryBadge } from './ImparaScore';
 
 export function ImparaReviewHome({ review }: { review: ReviewSummary }) {
   if (!review.subjects.length) return null;
@@ -31,6 +33,7 @@ export function ImparaReviewHome({ review }: { review: ReviewSummary }) {
             <div key={s.name} className="rv-subj" data-testid="impara-subject" data-subject={s.name}>
               <div className="rv-subj-h"><b>{s.name}</b>{s.due ? <span className="ip-tag amber">{t('impara.rv.dueShort', { n: s.due })}</span> : s.cards && !s.fresh ? <span className="ip-tag green"><IconCheck size={10} />{t('impara.rv.upToDate')}</span> : null}</div>
               <span className="ip-muted">{t('impara.rv.counts', { lessons: s.lessons, cards: s.cards })}</span>
+              {s.mastery && <MasteryBadge m={s.mastery} />}
               <div className="rv-recall-row" data-tip={t('impara.rv.recallTip')}>
                 <span className="ip-bar"><i style={{ width: `${pct ?? 0}%` }} className={pct === null ? 'none' : pct < 70 ? 'weak' : ''} /></span>
                 <span className="rv-recall-l" data-testid="impara-subject-recall">{pct === null ? t('impara.rv.never') : t('impara.rv.recall', { pct })}</span>

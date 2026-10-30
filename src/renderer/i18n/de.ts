@@ -24,6 +24,7 @@ import { genuiRequestDe } from './areas/genui-request.de';
 import { voiceDe } from './areas/voice.de';
 import { recDe } from './areas/rec.de';
 import { imparaDe } from './areas/impara.de';
+import { imparaV3De } from './areas/impara-v3.de';
 import { studioDe } from './areas/studio.de';
 import { permissionsDe } from './areas/permissions.de';
 import { langSwitchDe } from './areas/lang-switch.de';
@@ -89,6 +90,7 @@ export const de: Dict = {
   ...voiceDe,
   ...recDe,
   ...imparaDe,
+  ...imparaV3De,
   'genui.request.question': 'Frage',
   'genui.request.permission': 'Berechtigung',
   'genui.request.from': ({ kind, chat, title }) => `${kind} von ${chat ?? 'einem Chat'}: ${title}`,
