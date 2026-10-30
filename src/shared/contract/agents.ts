@@ -1,4 +1,4 @@
-// Agents and automations: roles, avatars, work threads, routines, cloud agents, Pulse, approvals, connectors and MCP servers, the Guida.
+// Agents and automations: roles, avatars, work threads, routines, cloud agents, connectors and MCP servers, the Guida.
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
 import type { AgentImages } from '../agent-images';
@@ -11,7 +11,6 @@ import type { FileViewResult } from '../file-view';
 import type { FlowSnapshot } from '../flows';
 import type { GuideAnswer, GuideAskRequest, GuideStaleState } from '../guide-ask';
 import type { McpImportCandidate, McpServerDef, McpServersState, McpToolAccess } from '../mcp-servers';
-import type { ApprovalDecision, ApprovalItem, PulseActResult, PulseDismissReason, PulseList, PulsePlace, PulseResult, PulseStatus } from '../pulse';
 import type { RoleId } from '../roles';
 import type { RoutineRunDetail, RoutineRunRef, RoutineTerminalExport, RoutinesSnapshot } from '../routines';
 import type { RunEstimates } from '../task-estimate';
@@ -84,14 +83,6 @@ export interface AgentsInvokeMap {
   'avatars:get': [void, AgentImages];
   'avatars:set': [{ id: RoleId; bytes: Uint8Array }, AgentImages];
   'avatars:reset': [{ id: RoleId }, AgentImages];
-  'pulse:list': [{ place: PulsePlace }, PulseList];
-  'pulse:status': [void, PulseStatus];
-  'pulse:seen': [{ ids: string[] }, void];
-  'pulse:save': [{ id: string }, PulseResult];
-  'pulse:act': [{ id: string }, PulseActResult];
-  'pulse:dismiss': [{ id: string; reason?: PulseDismissReason }, PulseResult];
-  'approvals:list': [{ agentId?: string }, ApprovalItem[]];
-  'approvals:decide': [ApprovalDecision, PulseResult];
   /** cloud agents (ADR 0080, main/cloud/): the known ones (refresh = ask the vendors now, at most every 30 s) */
   'cloud:list': [{ refresh?: boolean } | void, CloudState];
   'cloud:followUp': [{ id: string; text: string }, CloudAgent];

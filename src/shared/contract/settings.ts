@@ -1,7 +1,6 @@
 // Settings (userData/config.json), budget alerts, the job ledger and the model routing table.
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
-import type { PulseSettings, PulseType } from '../pulse';
 import type { DelegationSettings, ModelTier } from '../roles';
 import type { VoiceAsr, VoiceName } from '../voice';
 import type { Effort } from './chats';
@@ -23,7 +22,6 @@ export type BudgetMode = 'warn' | 'ask' | 'off';
 export interface BudgetLimits { mode: BudgetMode; dailyUsd: number | null; perChatUsd: number | null }
 export interface BudgetSettings { enabled: boolean; claude: BudgetLimits; cursor: BudgetLimits }
 export interface Settings {
-  pulse?: PulseSettings;
   jobs?: { fallback: 'auto' | 'off' };
   brainRoot: string | null;
   mcpPort: number;
@@ -100,10 +98,8 @@ export interface Settings {
   loadQueue: boolean;
   loadQueueCpu: number;
   loadQueueRam: number;
-  /** the chat composer's inline suggestion (ADR 0118): on at all, its model part, the model part's daily budget ($) */
+  /** the chat composer's inline suggestion (ADR 0118; local sources only since ADR 0201): on or off */
   suggestOn?: boolean;
-  suggestModel?: boolean;
-  suggestDailyUsd?: number;
   /** voice mode (ADR 0152): which Whisper transcribes (fast = small, accurate = turbo) and which Italian voice speaks */
   voiceAsr?: VoiceAsr;
   voiceName?: VoiceName;
@@ -123,10 +119,9 @@ export interface OrchestratorChatDefaults {
   cursorFast: boolean;
 }
 export type CursorReasoning = 'low' | 'medium' | 'high' | 'xhigh';
-export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engineOn' | 'engines' | 'messaging' | 'orchestratorChats' | 'tasks' | 'pulse' | 'delegation' | 'modelTiers'>> & {
+export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engineOn' | 'engines' | 'messaging' | 'orchestratorChats' | 'tasks' | 'delegation' | 'modelTiers'>> & {
   delegation?: Partial<DelegationSettings>;
   modelTiers?: Partial<Record<Harness, Partial<Record<ModelTier, string>>>>;
-  pulse?: Partial<Omit<PulseSettings, 'headline' | 'types' | 'places'>> & { headline?: { on?: boolean }; types?: Partial<PulseSettings['types']>; places?: Partial<PulseSettings['places']> };
   engines?: Partial<Settings['engines']>;
   tasks?: Partial<Settings['tasks']>;
   engineOn?: Partial<Settings['engineOn']>;
@@ -138,15 +133,14 @@ export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engine
 /** Every setting is one dot key ("theme", "budget.claude.dailyUsd", "mute.idea"): the unit of validation, history,
  *  undo and agent permissions. The schema (settings:schema) gives type, default, Italian label and description. */
 export type SettingKey =
-  | 'pulse.on' | 'pulse.dailyUsd' | 'pulse.slots' | 'pulse.headline.on' | `pulse.types.${PulseType}` | `pulse.places.${'board' | 'agent' | 'search' | 'file'}` | 'jobs.fallback'
-  | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
+  | 'jobs.fallback' | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
-  | 'suggestOn' | 'suggestModel' | 'suggestDailyUsd' | 'voiceAsr' | 'voiceName' | 'voicePtt' | 'awayMode'
+  | 'suggestOn' | 'voiceAsr' | 'voiceName' | 'voicePtt' | 'awayMode'
   | `delegation.${keyof DelegationSettings}` | `modelTiers.${Harness}.${ModelTier}`;
 export interface SettingDef {
   key: SettingKey;            // 'mute.*' stands for every feed kind
-  type: 'path' | 'int' | 'boolean' | 'enum' | 'usd' | 'model' | 'repo-paths' | 'slots'; // slots: 1-3 local HH:MM times
+  type: 'path' | 'int' | 'boolean' | 'enum' | 'usd' | 'model' | 'repo-paths';
   default: unknown;
   nullable?: boolean;
   values?: readonly string[]; // enum

@@ -22,7 +22,7 @@ export interface MorningDeps {
   runs(): AgentRun[];
   /** open questions, permissions and commands left for the user */
   pending(): number;
-  /** entries waiting in "Da approvare" (trials, tier suggestions, the Battito's proposals) */
+  /** entries waiting in "Da approvare" (trials, tier suggestions) */
   approvals(): number;
   tasks(): TasksState | null;
   cloud(): CloudAgent[];
@@ -41,8 +41,6 @@ export class MorningService {
   private ideas: { at: number; rows: { titolo?: string; stato?: string; scaduta?: string }[] } | null = null;
   private spend: { day: string; usd: number | null } | null = null;
   private savedAt = 0;
-  /** further approvals counted in (the Battito's proposals: index.ts, where the Battito is built) */
-  extraApprovals: () => number = () => 0;
   constructor(private readonly d: MorningDeps) {
     let st = emptyPresence();
     try {
@@ -85,7 +83,7 @@ export class MorningService {
     const safe = <T,>(fn: () => T, fallback: T): T => { try { return fn(); } catch { return fallback; } };
     return buildBrief({
       now, since, chats: safe(() => this.d.chats(), []), runs: safe(() => this.d.runs(), []),
-      pending: safe(() => this.d.pending(), 0), approvals: safe(() => this.d.approvals(), 0) + safe(() => this.extraApprovals(), 0),
+      pending: safe(() => this.d.pending(), 0), approvals: safe(() => this.d.approvals(), 0),
       tasks: safe(() => this.d.tasks(), null), ideas, today: romeDay(now), cloud: safe(() => this.d.cloud(), []), changes: safe(() => this.d.changes(), []),
       spendYesterdayUsd: spend, stallMin: safe(() => this.d.stallMin(), 10), ...(this.d.lastEventAt ? { lastEventAt: (id: string) => this.d.lastEventAt?.(id) } : {}),
     });

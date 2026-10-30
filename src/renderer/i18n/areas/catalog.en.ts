@@ -29,9 +29,6 @@ export const catalogEn: typeof catalogIt = {
   'runs.facts.blocked': 'Agent-reported blockage, not independently verified.',
   'runs.run': 'Run', 'runs.started': 'Started, on the home', 'runs.startedShort': 'Started', 'runs.open': 'Open',
   'runs.goal': 'Goal', 'runs.folder': 'Folder', 'runs.startError': 'Could not start. Try again.',
-  'contextPulse.title': 'From Battito', 'contextPulse.error': 'Cards unavailable.', 'contextPulse.actionError': 'Action failed. Try again.',
-  'contextPulse.save': 'Save to ideas', 'contextPulse.saved': 'Saved to ideas', 'contextPulse.act': 'Do it', 'contextPulse.dismiss': 'Not useful',
-  'contextPulse.sources': 'Sources', 'contextPulse.app': 'App', 'contextPulse.cannotSave': 'Saving to ideas is unavailable.',
   'catalog.title': 'Agents',
   'catalog.intro': 'Every piece of work goes to one of these roles: the Orchestrator delegates it, and a role may delegate in turn to visible chats under its own. You can change their instructions, engine, model, tools and skills; “Restore default” goes back to the original.',
   'catalog.subtitle': 'The roles of your team, what they do and the observed results.',
@@ -68,7 +65,6 @@ export const catalogEn: typeof catalogIt = {
   'catalog.purpose.sentinel': 'Verifies: runs tests and checks, or judges the result from the evidence when there is nothing to run, and says what passes and what does not.',
   'catalog.purpose.herald': 'Prepares messages and drafts for people and outside services; you approve every send.',
   'catalog.purpose.flash': 'Quick answers beside the Orchestrator: sees its conversation, reads, changes nothing',
-  'catalog.purpose.pulse': 'Ideas, tips, reminders, links and the day’s sentence',
   // the model tier's word, on the role card and in the studio
   'roles.tier.light': 'light', 'roles.tier.mid': 'mid', 'roles.tier.top': 'top',
 };

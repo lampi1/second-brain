@@ -1,5 +1,5 @@
-// The Agenti page: the six roles (the Orchestrator first, then the five work roles) and Pulse, each a card that flips
-// to its instructions and skills (#81) and opens the role's own page (AgentStudio: the editor, its versions, its pulse).
+// The Agenti page: the six roles (the Orchestrator first, then the five work roles) and Flash, each a card that flips
+// to its instructions and skills (#81) and opens the role's own page (AgentStudio: the editor, its versions).
 // The decisions that change a role's reach or cost (a trial to keep, a tier suggestion: ADR 0083) are cards of Memoria →
 // Proposte (ADR 0123): a line on top points there. No role is created here: the catalog is fixed, a missing know-how
 // becomes a skill. Rendered by App.tsx for page 'agenti'.
@@ -17,7 +17,6 @@ import { AgentCatalogCard } from './AgentCatalogCard';
 import { JudgingSwitch } from './JudgingSwitch';
 import { HelpTip } from './HelpTip';
 import { AgentStudio, EDIT_ELEMENT } from './AgentStudio';
-import { ContextPulse } from './ContextPulse';
 import { useBrainModel } from '../store/brain-model';
 import '../styles/agent-catalog.css';
 
@@ -41,9 +40,7 @@ export function AgentCatalogPage() {
     return () => { alive = false; clearInterval(timer); };
   }, [catalog]);
   const profile = catalog?.profiles.find(p => p.id === arg);
-  if (profile) return <AgentStudio key={profile.id} profile={profile}>
-    <ContextPulse key={profile.id} place={`agent:${profile.id}`} />
-  </AgentStudio>;
+  if (profile) return <AgentStudio key={profile.id} profile={profile} />;
   const profiles = catalog?.profiles ?? [];
   // from the chats read above (a hook here, after the role page's early return, would change the hook order)
   const working = profiles.filter(p => !p.trial && Object.values(chats).some(c => c.agent?.id === p.id && !c.closedAt && isBusy(c))).length;

@@ -29,9 +29,6 @@ export const catalogIt = {
   'runs.facts.blocked': 'Blocco dichiarato dall’agente, non verificato.',
   'runs.run': 'Avvia', 'runs.started': 'Avviata, la trovi nella Grindhouse', 'runs.startedShort': 'Avviata', 'runs.open': 'Apri',
   'runs.goal': 'Obiettivo', 'runs.folder': 'Cartella', 'runs.startError': 'Avvio non riuscito. Riprova.',
-  'contextPulse.title': 'Dal Battito', 'contextPulse.error': 'Schede non disponibili.', 'contextPulse.actionError': 'Azione non riuscita. Riprova.',
-  'contextPulse.save': 'Salva nelle idee', 'contextPulse.saved': 'Salvata nelle idee', 'contextPulse.act': 'Fallo', 'contextPulse.dismiss': 'Non mi serve',
-  'contextPulse.sources': 'Fonti', 'contextPulse.app': 'App', 'contextPulse.cannotSave': 'Salvataggio nelle idee non disponibile.',
   'catalog.title': 'Agenti',
   'catalog.intro': 'Ogni lavoro va a uno di questi ruoli: l’Orchestrator lo delega, il ruolo può delegare a sua volta in chat visibili sotto la sua. Puoi cambiarne istruzioni, motore, modello, strumenti e skill; «Ripristina predefinito» torna all’originale.',
   'catalog.subtitle': 'I ruoli della tua squadra, cosa fanno e i risultati osservati.',
@@ -68,7 +65,6 @@ export const catalogIt = {
   'catalog.purpose.sentinel': 'Verifica: esegue test e controlli, o giudica il risultato dalle prove quando non c’è nulla da eseguire, e dice cosa passa e cosa no.',
   'catalog.purpose.herald': 'Prepara messaggi e bozze per persone e servizi esterni; ogni invio lo approvi tu.',
   'catalog.purpose.flash': 'Risposte al volo accanto all’Orchestrator: vede la sua chat, legge, non cambia nulla',
-  'catalog.purpose.pulse': 'Idee, consigli, promemoria, collegamenti e frase in cima a Memoria',
   // the model tier's word, on the role card and in the studio
   'roles.tier.light': 'leggero', 'roles.tier.mid': 'medio', 'roles.tier.top': 'alto',
 };

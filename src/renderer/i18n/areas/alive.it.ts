@@ -1,6 +1,6 @@
 // Italian texts of the "alive" area (ADR 0102, the app shows what it does by itself): the strips' current step and
 // silence, the origin line of the chats the app started or resumed, the morning block ("Mentre eri via") and its line
-// atop the Orchestrator, the Battito's board and settings, its proposals in "Da approvare".
+// atop the Orchestrator.
 export const aliveIt = {
   'alive.step': (p: { at: number; of: number }) => `passo ${p.at}/${p.of}`,
   'alive.quiet': (p: { min: number }) => `ferma da ${p.min} min`,
@@ -46,16 +46,6 @@ export const aliveIt = {
   'alive.m.talkMissing': 'Apri un Orchestrator per parlarne.',
   'alive.m.lineLabel': 'Mentre eri via, in breve',
   'alive.m.draft': (p: { since: string; lines: string }) => `Mentre ero via (${p.since}):\n${p.lines}\n\nDa dove ripartiamo?`,
-  'alive.pulse.board': 'Dal Battito',
-  'alive.pulse.title': 'Battito',
-  'alive.pulse.hint': 'Carte e la frase del giorno scritte da un modello, solo a finestra aperta, nel budget qui sotto. Spento: nessuna chiamata.',
-  'alive.pulse.slots': 'Battito: orari',
-  'alive.pulse.slotsHint': 'Da uno a tre orari (HH:MM) separati da virgole. La frase in cima a Memoria nasce nel primo, una volta al giorno.',
-  'alive.pulse.slotsBad': 'Da uno a tre orari HH:MM, per esempio 08:30, 13:00, 18:30.',
-  'alive.pulse.budget': 'Battito: budget giornaliero ($)',
-  'alive.pulse.budgetHint': 'Tetto di ammissione condiviso tra carte e frase, da 0,01 a 2 $. I costi che il motore non riporta restano sconosciuti.',
-  'alive.pulse.today': (p: { usd: string; limit: string; runs: number }) => `Oggi ${p.usd} su ${p.limit} · ${p.runs} ${p.runs === 1 ? 'chiamata' : 'chiamate'}`,
-  'alive.pulse.unknownCost': 'costo non riportato',
   
   'alive.next.pr': (p: { title: string }) => `Niente ti aspetta: la build di «${p.title}» è rossa`,
   'alive.next.approvals': (p: { n: number }) => `Niente ti aspetta: ${p.n === 1 ? '1 proposta' : `${p.n} proposte`} da approvare`,

@@ -55,7 +55,7 @@ test('Memoria hub: live top, tabs with keys and deep links, old G-keys, trash wi
 
     // the live top
     const hero = mem.getByTestId('mh-hero');
-    await expect(hero.getByTestId('dash-headline')).not.toBeEmpty();
+    await expect(hero.getByTestId('dash-headline')).toHaveCount(0); // the day's sentence went with the Battito (ADR 0201)
     for (const p of ['proposals', 'working', 'waiting', 'changes', 'lines']) await expect(hero.getByTestId(`mh-pulse-${p}`)).toBeVisible();
     await expect(page.getByTestId('bm-maint-now-run')).toHaveCount(1); // «Manutenzione» once, in the head
 

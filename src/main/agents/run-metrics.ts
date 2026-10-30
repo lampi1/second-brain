@@ -99,7 +99,6 @@ export function indexRuns(all: readonly AgentRun[], now = Date.now()): RunIndex 
 export function foldRun(t: RunTally, run: AgentRun, index: RunIndex): void {
   if (run.endedAt === undefined) return;
   // Headline and fallback runs are not comparable with the agent version's card/task baseline.
-  // Their complete cost ledger remains available under Battito's job budgets.
   if (run.oneshot?.fallback || run.oneshot?.job === 'headline' || run.oneshot?.job === 'guide') return;
   t.ended++;
   const o = run.outcome, starts = index.reworkStarts.get(run.runId);
@@ -304,7 +303,7 @@ export function runMetrics(runs: readonly AgentRun[], input: MetricsInput = {}):
     if (!tallies.has(k)) tallies.set(k, emptyTally(run.agentId, run.version));
     foldRun(tallies.get(k)!, run, index);
   }
-  // the retired roles and Pulse have no catalog stats (ADR 0186): their runs stay in the file, readable
+  // the retired roles and the removed Battito's 'pulse' entry have no catalog stats (ADR 0186): their runs stay in the file, readable
   const agents = new Set([...[...tallies.values()].map(t => t.agentId), ...open.keys()].filter(id => !unrated(id)));
   // ADR 0197: the PPI success and the Sentinel's agreement, over the kept runs the filter matches (reviews looked up in all)
   const judges = roleJudges(runs.filter(r => r.endedAt !== undefined && (input.since === undefined || r.endedAt >= input.since) && matchesTags(r, filter)), earnIndex(runs));

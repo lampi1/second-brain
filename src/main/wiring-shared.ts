@@ -4,13 +4,13 @@
 import { app } from 'electron';
 import type { CliStatus, Harness, RunInfo } from '../shared/contract';
 import { SEND_MODE_RULE } from '../shared/newchat';
-import { engineInfos, engineOf, priceEnginesOf } from './engines/registry';
+import { engineInfos, engineOf } from './engines/registry';
 import { withApiModels } from './engines/sessions';
 import { AgentCatalogService } from './agents/catalog';
 import { tierModel } from './agents/model-tier';
 import { roleTableModel } from './agents/role-table';
 import { CATALOG_GUIDANCE } from './agents/discovery';
-import { agentsMayOpen, engineOn } from './engines/policy';
+import { engineOn } from './engines/policy';
 import type { EnginesApi } from './engines/service';
 import type { BrainService, ChatService } from './services';
 import type { McpServer, McpTool, ToolOutput } from './mcp/server';
@@ -186,13 +186,6 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
     tierModel: (engine, tier) => tierModel(engine, tier, brain.routingInfo().registry, brain.settings().modelTiers),
     tableModel: (engine, req) => roleTableModel(brain, engine, req),
-    pulsePreset: () => {
-      const choices = engineInfos();
-      const e = choices.find(e => e.kind === 'api' && agentsMayOpen(brain.settings(), e.id) && engines.hasKey(e.id))
-        ?? choices.find(e => e.kind === 'claude');
-      const model = e ? brain.routingInfo().registry?.models.find(m => priceEnginesOf(e).includes(m.harness) && m.tier === 'mid')?.id ?? (e.kind === 'claude' ? 'sonnet' : null) : null;
-      return { engine: e?.id ?? 'claude', model, ...(e?.caps.effort ? { effort: 'low' as const } : {}) };
-    },
     models: () => {
       const seen = withApiModels(brain.modelsSeen());
       return engineInfos().map(e => ({ engine: e.id, label: e.label, enabled: engineOn(brain.settings(), e.id), trusted: e.trusted, effort: e.caps.effort, maxContext: e.kind === 'claude',

@@ -1,7 +1,7 @@
 // Readable Log lines for the app's own automatic choices (shared/activity-log.ts): an estimate with its keyword
-// classifier's kind, the mail classifier's class for a message to the Orchestrator, a Battito run. Pure formatting;
+// classifier's kind, the mail classifier's class for a message to the Orchestrator. Pure formatting;
 // the callers record them with journal.ts. Used by main/wiring.ts (the estimate under a request), agents/task-estimate.ts
-// (task_estimate), chats/mail.ts (send_to_chat) and pulse/service.ts; tests: test/unit/activity/records.test.ts.
+// (task_estimate) and chats/mail.ts (send_to_chat); tests: test/unit/activity/records.test.ts.
 import type { LogInput } from '../../shared/activity-log';
 import type { TaskEstimate } from '../../shared/task-estimate';
 
@@ -27,9 +27,3 @@ export function mailRecord(from: string, to: string, cls: string, text: string, 
   return { kind: 'classifier', level: 'info', title: `Classificatore posta: ${from} → ${to}: ${CLASS[cls] ?? cls}`, text: when, input: text };
 }
 
-/** A Battito run's end: what it did and what it cost. */
-export function pulseRecord(job: 'pulse' | 'headline', slot: string, r: { ok: boolean; error?: string }, extra: { cards?: number; usd?: number | null; engine?: string | null; ms?: number }): LogInput {
-  const what = job === 'headline' ? 'la frase del giorno' : `${extra.cards ?? 0} ${extra.cards === 1 ? 'carta' : 'carte'}`;
-  return { kind: 'pulse', level: r.ok ? 'ok' : 'info', title: r.ok ? `Battito: ${what}${extra.engine ? ` con ${extra.engine}` : ''}` : `Battito non ha lavorato: ${r.error ?? 'nessun motivo'}`,
-    text: slot === 'manual' ? 'Avviato da te' : `Turno ${slot}`, ...(typeof extra.usd === 'number' ? { costUsd: extra.usd } : {}), ...(extra.ms ? { ms: extra.ms } : {}) };
-}

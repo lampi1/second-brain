@@ -1,5 +1,4 @@
-// "Memoria" (G Y, ADR 0077, 0122): the one hub of what the brain holds. On top, alive: the day's headline (SPEC 18, it
-// was the Dashboard's), the live counters (proposals waiting, agents at work, agents waiting for you, changes of the
+// "Memoria" (G Y, ADR 0077, 0122): the one hub of what the brain holds. On top, alive: the live counters (proposals waiting, agents at work, agents waiting for you, changes of the
 // last 24 hours, lines in memory; each eases to its new value) and the latest changes as they happen, then the one
 // «Manutenzione» button. Below, a tab bar (pills with a count each, arrows / Home / End, the page arg "memoria/<tab>"
 // so a link opens a tab: lib/memory-hub.ts): Proposte (ProposalsDeck.tsx), Approvate (ApprovedTab.tsx: everything in
@@ -25,9 +24,7 @@ import { useBrain } from '../../brain/api';
 import { normScripts, normTables } from '../../brain/types';
 import { Toaster } from '../../brain/components/ui';
 import { DiscussContext } from '../../brain/components/Discuss';
-import { HeadlineLine, useHeadline } from '../../brain/pages/HomeHeadline';
-import { filterOf, Idee } from '../../brain/pages/Idee';
-import { PulseBoard } from '../ContextPulse';
+import { Idee } from '../../brain/pages/Idee';
 import { ThemesPanel } from '../../dashboard/Themes';
 import { Script } from '../../brain/pages/Script';
 import { useCountUp } from '../../dashboard/parts';
@@ -164,7 +161,6 @@ function Activity({ changes, nowMs }: { changes: BrainChange[]; nowMs: number })
 }
 
 function Hero({ onTab }: { onTab: (tab: HubTab) => void }) {
-  const headline = useHeadline();
   const { state } = useBrainModel();
   const proposals = useProposalCount();
   const chats = useApp(s => s.chats);
@@ -182,7 +178,6 @@ function Hero({ onTab }: { onTab: (tab: HubTab) => void }) {
       <div className="mh-hero-text">
         <span className="mh-eyebrow"><i className="mh-live" aria-hidden="true" />{t('mh.eyebrow')}</span>
         <h1>{t('bm.mem.title')}</h1>
-        <HeadlineLine state={headline} />
         <p className="mh-lead">{t('mh.lead')}</p>
       </div>
       <div className="mh-hero-actions"><MaintenanceButton /></div>
@@ -266,9 +261,7 @@ function TabBar({ tab, onTab }: { tab: HubTab; onTab: (tab: HubTab) => void }) {
 function IdeasTab({ rest }: { rest: string | null }) {
   return <div className="bx mh-bx"><DiscussContext.Provider value={brainBridge}>
     <Idee arg={rest ?? undefined} embedded nav={target => goTarget(target)} />
-    {/* the AI's side also shows the Battito's board (once the Dashboard's Spunti); the ideas' themes close the tab (once
-        its Temi, ADR 0122) */}
-    {filterOf(rest ?? undefined) === 'ia' && <PulseBoard />}
+    {/* the ideas' themes close the tab (once Dashboard → Temi) */}
     <section className="bx-section mh-idee-themes"><ThemesPanel kind="ideas" /></section>
   </DiscussContext.Provider><Toaster /></div>;
 }

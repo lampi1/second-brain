@@ -1,4 +1,4 @@
-// The role catalog: the Orchestrator and the five work roles (shared/roles.ts), plus Pulse in the background, kept in
+// The role catalog: the Orchestrator and the five work roles (shared/roles.ts), plus Flash in the background, kept in
 // <userData>/roles.json with every behaviour change as a version (role-history.json). The user edits a role's tools,
 // ceiling, engine, model tier, launches, skills and instructions (Brain → Agenti); "Ripristina predefinito" goes back to
 // the shipped role. No role is ever created or removed by the user; a retired role's stored entry (Router, Judge, Scribe,
@@ -10,7 +10,7 @@ import path from 'node:path';
 import { checkedKnowhow, checkedPackIdentity, packName } from '../../shared/agent-pack';
 import type { Effort, Harness, NewChat } from '../../shared/contract';
 import { BEHAVIOUR_FIELDS, MAX_CONTEXT_RANGE, PERMISSION_CEILINGS, type AgentAuthor, type AgentCatalog, type AgentDraft, type AgentModelChoice, type AgentOwnerSnapshot, type AgentProfile, type AgentToolPolicy, type AgentVersion, type PermissionCeiling } from '../../shared/agents';
-import { FLASH_ID, MODEL_TIERS, PULSE_ID, ROLE_DEFAULTS, ROLE_IDS, ROLE_PREAMBLE, currentLaunches, currentRoleId, isRetiredRoleId, isRoleId, isWorkRole, roleName, tierRank, type ModelTier, type RoleId } from '../../shared/roles';
+import { FLASH_ID, MODEL_TIERS, ROLE_DEFAULTS, ROLE_IDS, ROLE_PREAMBLE, currentLaunches, currentRoleId, isRetiredRoleId, isRoleId, isWorkRole, roleName, tierRank, type ModelTier, type RoleId } from '../../shared/roles';
 import { characterOf, isCharacterId } from '../../shared/characters';
 import { readLocal, writeLocal } from './local-store';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, versionedChanges } from './versions';
@@ -27,15 +27,14 @@ const AUTHORS: readonly AgentAuthor[] = ['default', 'user', 'maintenance'];
 const obj = (v: unknown): Record<string, unknown> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
 const count = (n: unknown): n is number => Number.isSafeInteger(n) && (n as number) >= 1;
 const has = <T>(list: readonly T[], v: unknown): v is T => (list as readonly unknown[]).includes(v);
-const CATALOG_IDS: readonly string[] = [...ROLE_IDS, PULSE_ID, FLASH_ID];
+// Pulse (Battito) was a background entry until ADR 0201: a stored one is an unknown id, left out on load
+const CATALOG_IDS: readonly string[] = [...ROLE_IDS, FLASH_ID];
 /** the entries that are not roles: never delegated, never in the role count */
-const isBackground = (id: string): boolean => id === PULSE_ID || id === FLASH_ID;
+const isBackground = (id: string): boolean => id === FLASH_ID;
 /** «Flash» (ADR 0107): its face and default instructions; its read-only tools and plan ceiling are fixed (behaviour) */
 const FLASH = { name: 'Flash', purpose: 'Risposte al volo accanto all’Orchestrator: vede la sua chat, legge, non cambia nulla',
   instructions: 'Answer fast and briefly, in the user\'s language. Lead with the answer.' };
 const FLASH_TOOLS: AgentToolPolicy = { allow: ['read', 'web'] };
-const PULSE = { name: 'Pulse', purpose: 'Idee, consigli, promemoria, collegamenti e frase in cima a Memoria',
-  instructions: 'Use only the digest you are given. Cite the sources. Propose a few concrete cards without inventing facts. Take no action.' };
 
 function text(v: unknown, max: number, label: string, empty = false): string {
   if (typeof v !== 'string' || v.length > max || /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(v) || (!empty && !v.trim())) throw new Error(`${label}: testo ${empty ? 'fino a' : 'da 1 a'} ${max} caratteri.`);
@@ -47,8 +46,6 @@ export interface AgentCatalogDeps {
   models: () => AgentModelChoice[];
   /** the engine the user chose at setup (Settings.orchestratorChats.harness): untouched roles follow it while it is usable */
   preferredEngine?: () => string | null;
-  /** Pulse's engine, model and effort (Impostazioni → Pulse) */
-  pulsePreset?: () => { engine: string; model: string | null; effort?: Effort };
   /** the model a tier means on an engine (agents/model-tier.ts with the registry and Settings.modelTiers); null = the
    *  engine's own default */
   tierModel?: (engine: Harness, tier: ModelTier) => string | null;
@@ -156,7 +153,7 @@ export class AgentCatalogService {
   private face(id: string): Pick<AgentProfile, 'name' | 'purpose' | 'avatar'> {
     if (isRoleId(id)) { const r = ROLE_DEFAULTS[id]; return { name: r.name, purpose: r.summary, avatar: { kind: 'character', value: id } }; }
     if (id === FLASH_ID) return { name: FLASH.name, purpose: FLASH.purpose, avatar: { kind: 'character', value: FLASH_ID } };
-    return { name: PULSE.name, purpose: PULSE.purpose, avatar: { kind: 'character', value: 'pulse' } };
+    throw new Error('Ruolo non trovato.');
   }
   /** The engine a new or reset role starts on: the user's chosen engine (onboarding, Settings.orchestratorChats.harness)
    *  while it is usable, else a ready one, else any enabled and trusted one, else Claude (issue #96). */
@@ -169,11 +166,6 @@ export class AgentCatalogService {
     return preferred ? usable.find(x => x.engine === preferred) : undefined;
   }
   private defaults(id: string): Behaviour {
-    if (id === PULSE_ID) {
-      const p = this.d.pulsePreset?.() ?? { engine: this.defaultEngine(), model: null };
-      return { instructions: PULSE.instructions, engine: p.engine, model: p.model, ...(p.effort ? { effort: p.effort } : {}), tools: { allow: [] }, permissionCeiling: 'plan',
-        tier: 'light', tierMax: 'light', launches: [], skills: [] };
-    }
     // Flash starts on the user's engine with the mid tier's model (as Lampo did, ADR 0105), reading only
     if (id === FLASH_ID) return { instructions: FLASH.instructions, engine: this.defaultEngine(), model: null, tools: structuredClone(FLASH_TOOLS), permissionCeiling: 'plan',
       tier: 'mid', tierMax: 'mid', launches: [], skills: [] };
@@ -181,7 +173,7 @@ export class AgentCatalogService {
     return { instructions: r.instructions, engine, model: null, tools: { allow: engineOf(engine)?.kind === 'api' ? ['read'] : [...r.tools] }, permissionCeiling: r.ceiling,
       tier: r.tier, tierMax: r.tierMax, launches: [...r.launches], skills: [...r.skills] };
   }
-  /** Every role and Pulse are always there: a missing entry is added with its defaults (never overwriting one). */
+  /** Every role and Flash are always there: a missing entry is added with its defaults (never overwriting one). */
   private seed(): void {
     const missing = CATALOG_IDS.filter(id => !this.profiles.some(p => p.id === id));
     if (!missing.length) return;
@@ -246,7 +238,7 @@ export class AgentCatalogService {
     const models = this.d.models(), engine = this.defaultEngine(), preferred = this.preferredUsable()?.engine ?? null;
     const changed: AgentProfile[] = [];
     const next = this.profiles.map(p => {
-      if (p.userLocked || p.lastEditedBy !== 'default' || p.trial || p.id === PULSE_ID || p.engine === engine) return p;
+      if (p.userLocked || p.lastEditedBy !== 'default' || p.trial || p.engine === engine) return p;
       const current = models.find(e => e.engine === p.engine);
       if (engine !== preferred && current?.enabled && current.trusted && current.installed !== false && current.authenticated !== false) return p;
       // still at its defaults: its tools follow the engine (the API engine reads only, the others get the role's defaults)
@@ -276,7 +268,7 @@ export class AgentCatalogService {
       if (!e) throw new Error('Il motore selezionato non è disponibile.');
       if (model !== null && !e.modelSelectable) throw new Error(e.modelReason ?? 'La scelta del modello non è supportata da questo motore. Usa il modello del livello.');
       // a model the role already runs with is kept as it is: only a new choice must be one the engine is known to have
-      // (#128: Pulse's preset alias 'sonnet' is not in the observed list, and refused every rule its proposals added)
+      // (#128: a preset alias such as 'sonnet' is not in the observed list)
       const kept = keep && !!base && base.engine === engine && (base.model ?? null) === model;
       if (model !== null && !kept && !e.models.some(m => m.id === model)) throw new Error('Il modello non è tra quelli noti del motore. Aggiorna le disponibilità o usa il modello del livello.');
       if (p.effort && !e.effort) throw new Error('Questo motore non supporta la scelta dell’effort.');
@@ -290,7 +282,6 @@ export class AgentCatalogService {
     // a role ADR 0100 retired, named by a stored profile or version, is dropped from the list (never an error on load)
     if (Array.isArray(p.launches)) p.launches = currentLaunches(p.launches as string[]);
     if (!Array.isArray(p.launches) || !p.launches.every(isWorkRole) || new Set(p.launches).size !== p.launches.length || (p.launches as string[]).includes(id)) throw new Error('Ruoli avviabili non validi: solo ruoli di lavoro, mai sé stesso.');
-    if (id === PULSE_ID && (p.launches as unknown[]).length) throw new Error('Pulse non avvia ruoli.');
     if (id === FLASH_ID && (p.launches as unknown[]).length) throw new Error('Flash non avvia ruoli.');
     // Flash reads and answers, whatever is stored (ADR 0105, 0107): read and web tools, plan ceiling
     if (id === FLASH_ID) { p.tools = structuredClone(FLASH_TOOLS); p.permissionCeiling = 'plan'; }

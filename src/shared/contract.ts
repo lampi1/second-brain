@@ -18,7 +18,7 @@ import type { EngineInfo, Harness, EnginesInvokeMap } from './contract/engines';
 import type { FeedEvent, TasksState, FeedInvokeMap } from './contract/feed';
 import type { MediaInvokeMap } from './contract/media';
 import type { BudgetAlert, SettingChange, SettingProposal, Settings, SettingsInvokeMap } from './contract/settings';
-import type { AnswerLater, HeadlineState, HeldNewsState, OverlayAction, OverlayModel, SearchIndexStatus, SyncState, UiInvokeMap } from './contract/ui';
+import type { AnswerLater, HeldNewsState, OverlayAction, OverlayModel, SearchIndexStatus, SyncState, UiInvokeMap } from './contract/ui';
 import type { ImparaState, Lesson } from './lesson';
 import type { MaintenanceDone } from './maintenance-research';
 import type { McpServersState } from './mcp-servers';
@@ -101,12 +101,8 @@ export interface EventMap {
   'log:events': LogEvent[];
   /** a domain's sync status changed (ADR 0059) */
   'sync:state': SyncState;
-  /** a new headline (or the same after a failed refresh, source previous) */
-  'headline:changed': HeadlineState;
   /** what the app holds back for the Orchestrators changed (main/chats/held-news.ts, #88) */
   'orchestrator:heldChanged': HeldNewsState;
-  'pulse:changed': void;
-  'approvals:changed': void;
   /** the number of open proposals changed (Memoria's badge, ADR 0123) */
   'proposals:changed': { count: number };
   /** the maintenance started, moved (cost) or ended, or one of its cards changed (ADR 0132, 0153) */
@@ -141,7 +137,6 @@ export const INVOKE_CHANNELS = [
   'routines:image',
   'routines:archive',
   'work:lessons', 'work:lessonDecide', 'work:list', 'work:decide',
-  'pulse:list', 'pulse:status', 'pulse:seen', 'pulse:save', 'pulse:act', 'pulse:dismiss', 'approvals:list', 'approvals:decide',
   'connectors:list', 'connectors:login', 'connectors:cancelLogin', 'connectors:probe', 'connectors:select', 'connectors:disconnect', 'connectors:useToken',
   'mcpservers:state', 'mcpservers:save', 'mcpservers:remove', 'mcpservers:setSecret', 'mcpservers:deleteSecret', 'mcpservers:setAccess', 'mcpservers:test', 'mcpservers:importScan', 'mcpservers:importApply',
   'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
@@ -165,8 +160,7 @@ export const INVOKE_CHANNELS = [
   'clipboard:image',
   'orchestrator:ensure',
   'search:query', 'search:status', 'search:retryModel', 'later:set', 'secrets:status', 'secrets:set', 'secrets:delete', 'engines:trust', 'engines:spend',
-  'sync:get', 'sync:now', 'sync:resolve', 'headline:get', 'log:list',
-  'suggest:get', 'suggest:cancel', 'suggest:state',
+  'sync:get', 'sync:now', 'sync:resolve', 'log:list',
   'voice:state', 'voice:prepare', 'voice:listen', 'voice:audio', 'voice:commit', 'voice:speak', 'voice:cancelSpeech',
   'rec:state', 'rec:arm', 'rec:start', 'rec:chunk', 'rec:stop', 'rec:transcribe', 'rec:rename', 'rec:remove', 'rec:transcript', 'rec:find', 'rec:readFound', 'rec:open',
   'impara:state', 'impara:get', 'impara:start', 'impara:move', 'impara:ask', 'impara:answer', 'impara:explain', 'impara:retry', 'impara:clarify', 'impara:remove', 'impara:queue', 'impara:grade', 'impara:subject', 'impara:tutor', 'impara:tutorWarm',
@@ -178,12 +172,12 @@ export const INVOKE_CHANNELS = [
 ] as const satisfies readonly InvokeChannel[];
 export const EVENT_CHANNELS = [
   'routines:progress', 'work:changed',
-  'pulse:changed', 'approvals:changed', 'proposals:changed', 'maintenance:changed', 'maintenance:done',
+  'proposals:changed', 'maintenance:changed', 'maintenance:done',
   'update:state', 'update:checkpointRequest', 'update:checkpointRelease',
   'chat:autoCloseStatus',
   'agents:changed', 'agents:lifecycleChanged', 'avatars:changed',
   'chat:updated', 'chat:removed', 'chat:item', 'pending:added', 'pending:resolved', 'browser:tabs', 'feed:events', 'usage', 'cli:ready', 'focus:next', 'ui:command',
-  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'tasks:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'source:state', 'later:changed', 'search:status', 'brainmodel:changed', 'queries:changed', 'sync:state', 'headline:changed',
+  'settings:changed', 'engines:changed', 'settings:proposed', 'budget:alert', 'tasks:state', 'browser:handoff', 'browser:envs', 'browser:pointer', 'overlay:model', 'overlay:action', 'run:updated', 'source:state', 'later:changed', 'search:status', 'brainmodel:changed', 'queries:changed', 'sync:state',
   'cloud:changed',
   'mcpservers:changed',
   'orchestrator:heldChanged',

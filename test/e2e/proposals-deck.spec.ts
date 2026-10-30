@@ -1,5 +1,5 @@
 // Memoria → Proposte (ADR 0123) in the frozen demo: the demo's skill candidate, applied changes (never memory ones, ADR 0150), the
-// Orchestrator's setting request, the Battito's rule and the improvement loop's policy are one deck, newest first, with
+// Orchestrator's setting request and the improvement loop's policy are one deck, newest first, with
 // who / where / when / evidence. Swipe by mouse drag (a short drag springs back, a long one decides), the round
 // buttons, ← / →, Z and Ctrl+Z (undo of the held decision), a blocked side, the end state with its counts and the
 // sidebar badge. Decisions reach main and its sources (settings:confirm, brainmodel:rollback …).
@@ -51,7 +51,7 @@ test('the deck: every source in one stack, swipe / buttons / keys, undo, the end
     await openDeck(page);
     const first = await list(page);
     const sources = new Set(first.items.map(c => c.source));
-    for (const s of ['candidate', 'change', 'setting', 'pulse', 'policy'] as const) expect(sources).toContain(s);
+    for (const s of ['candidate', 'change', 'setting', 'policy'] as const) expect(sources).toContain(s);
     // memory facts and memory tidy-ups are never cards (ADR 0150): only skills, rules and the rest
     expect(sources.has('memory')).toBe(false);
     expect(first.items.some(c => c.id === 'change:demo-p2')).toBe(false);
@@ -96,7 +96,7 @@ test('the deck: every source in one stack, swipe / buttons / keys, undo, the end
     await page.keyboard.press('Control+z');
     await expect(top(page)).toHaveAttribute('data-card', second!);
     // the setting went to main when the next decision was made; Ctrl+Z left it applied
-    await expect.poll(async () => (await page.evaluate(() => window.sb.invoke('settings:get', undefined))).pulse?.dailyUsd, { timeout: 10_000 }).toBe(0.4);
+    await expect.poll(async () => (await page.evaluate(() => window.sb.invoke('settings:get', undefined))).loadQueueCpu, { timeout: 10_000 }).toBe(85);
 
     // the rest, each by another way: drag, keys, buttons; a skill candidate without its evidence can only be rejected
     const decided: Record<string, 'approve' | 'reject'> = {}, snapped = new Set<string>();

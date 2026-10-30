@@ -17,7 +17,6 @@ import { ui } from '../store/ui';
 import { locale, t } from '../i18n';
 import { formatCost } from '../lib/format';
 import { undoChanges } from './AgentFeedAction';
-import { PulseBoard } from './ContextPulse';
 import '../styles/alive.css';
 
 const usd = (v: number) => formatCost(v);
@@ -101,7 +100,7 @@ export function MorningBlock({ brief, compact }: { brief: MorningBrief; compact?
   </section>;
 }
 
-/** The empty Grindhouse: the morning block (and the Battito's board) for a user with history, the first-run text otherwise. */
+/** The empty Grindhouse: the morning block for a user with history, the first-run text otherwise. */
 export function GrindhouseEmpty() {
   const st = useMorning();
   const block = !!st?.show && !!st.brief;
@@ -110,7 +109,6 @@ export function GrindhouseEmpty() {
   if (!st.history) return <p className="home-calm" data-testid="agents-empty">{t('home.emptyAgents')}</p>;
   return <div className="grindhouse-empty" data-testid="agents-idle">
     {st.show && st.brief ? <MorningBlock brief={st.brief} /> : <p className="home-calm">{t('alive.idle')}</p>}
-    <PulseBoard />
   </div>;
 }
 

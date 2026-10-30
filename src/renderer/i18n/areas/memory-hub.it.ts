@@ -1,4 +1,4 @@
-// Italian UI texts of the Memoria hub (ADR 0122): its live head (headline, counters, latest changes), the tab bar, the
+// Italian UI texts of the Memoria hub (ADR 0122): its live head (counters, latest changes), the tab bar, the
 // «Approvate» tab with its trash and «Annulla», the «Idee» split with «Rispolvera», the Script tab's line, and the two
 // parts the Dashboard handed to Costi («Contesto adesso») and Qualità (the app's own errors). Spread into it.ts;
 // memory-hub.en.ts and memory-hub.de.ts have the same keys (typed by this object).

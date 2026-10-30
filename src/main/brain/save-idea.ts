@@ -1,6 +1,7 @@
 // Writes one idea the AI had to the brain's Idee (its «IA» side) through the brain's own tool, ops/tools/mem.mjs
-// `idea`, so the page reads it like every other idea: the Battito's «Salva» and the maintenance's app ideas (ADR 0153).
-// The text goes through a temporary file (never a command line), removed after. Used by pulse/wiring.ts and wiring.ts.
+// `idea`, so the page reads it like every other idea: the maintenance's app ideas (ADR 0153). The text goes through a
+// temporary file (never a command line), removed after (its folder keeps the name «pulse-ideas» from the retired
+// Battito, ADR 0201). Used by wiring.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import { electronNode, runNode } from './node';
@@ -12,7 +13,7 @@ export const ideaTool = (root: string | null): string | null => {
   return fs.existsSync(file) ? file : null;
 };
 
-/** `source`: where it was born, after «IA ·» (e.g. «Battito», «Manutenzione»). */
+/** `source`: where it was born, after «IA ·» (e.g. «Manutenzione»). */
 export async function saveAiIdea(o: { root: string | null; userData: string; title: string; body: string; why: string; source: string }): Promise<void> {
   const script = ideaTool(o.root);
   if (!script || !o.root) throw new Error('mem.mjs non disponibile');

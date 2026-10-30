@@ -92,8 +92,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       tech(DATA, 'AgentProfile { id, name, purpose, instructions, engine, model | null, effort?, tools, permissionCeiling, tier, tierMax, launches, skills, version, activeVersion, trial?, userLocked }.',
         'AgentProfile { id, name, purpose, instructions, engine, model | null, effort?, tools, permissionCeiling, tier, tierMax, launches, skills, version, activeVersion, trial?, userLocked }.'),
       // src/main/agents/catalog.ts (roles.json), src/main/agents/versions.ts (role-history.json)
-      tech(FILES, 'userData/roles.json (i sei ruoli e Pulse) e role-history.json (le versioni di ogni ruolo).',
-        'userData/roles.json (the six roles and Pulse) and role-history.json (each role’s versions).'),
+      tech(FILES, 'userData/roles.json (i sei ruoli e Flash) e role-history.json (le versioni di ogni ruolo).',
+        'userData/roles.json (the six roles and Flash) and role-history.json (each role’s versions).'),
       // src/shared/roles.ts DELEGATION_DEFAULTS
       tech(LIMITS, 'Deleghe: profondità 2 e 5 figli in corso per genitore, di serie (Impostazioni → Ruoli e deleghe).', 'Delegation: depth 2 and 5 running children per parent by default (Settings → Roles and delegation).'),
       tech(TOOLS, 'agent_catalog (i ruoli e le loro skill), app_create_chat con roleId (apre il lavoro), agent_report (il rapporto finale).',
@@ -713,8 +713,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'memory-hub',
     title: b('La Memoria, un posto solo', 'Memoria, one place'),
-    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (la frase del giorno, i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Regole, Script & Query, Idee, File, Apprendimento e Statistiche.',
-      'Memoria is the one place for everything the brain holds: its top is alive (the day’s sentence, live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Rules, Scripts & Queries, Ideas, Files, Learning and Statistics.'),
+    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Regole, Script & Query, Idee, File, Apprendimento e Statistiche.',
+      'Memoria is the one place for everything the brain holds: its top is alive (live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Rules, Scripts & Queries, Ideas, Files, Learning and Statistics.'),
     points: [
       // src/renderer/lib/memory-hub.ts, src/renderer/actions.ts, src/renderer/components/Sidebar.tsx
       b('Skill, Regole, Script, Idee e Apprendimento non sono più pagine a sé nella barra: sono schede di Memoria; i vecchi link, gli id e i tasti G (G S, G L, G T, G I, G J) aprono la scheda giusta, e «memoria/<scheda>» apre una scheda da un link.',
@@ -725,10 +725,10 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('«Approvate» elenca tutto quello che è nel brain adesso (skill, regole, fatti confermati, script): il cestino lo toglie con un clic e per qualche secondo «Annulla» lo rimette; skill, regole e script passano dal registro delle modifiche, quindi restano annullabili anche in Apprendimento.',
         '\"Approved\" lists everything in the brain now (skills, rules, confirmed facts, scripts): the bin takes one out in a click and for a few seconds \"Undo\" puts it back; skills, rules and scripts go through the change log, so they stay undoable in Learning too.'),
       // src/renderer/brain/pages/Idee.tsx
-      b('«Idee» divide le tue da quelle dell’IA (la colonna «Chi» di ideas.md: «IA» è l’IA) e «Rispolvera» ti ripropone a caso un’idea vecchia ancora aperta; sotto, il Battito e i temi delle idee.',
-        '\"Ideas\" splits yours from the AI’s (the \"Chi\" column of ideas.md: \"IA\" is the AI) and \"Dust one off\" brings back an old idea still open at random; below, the Pulse and the ideas’ themes.'),
-      b('La Dashboard non c’è più: la frase e i contatori sono in cima a Memoria, il contesto delle chat in Costi, gli errori dell’app e i temi degli errori in Qualità, gli spunti dell’AI in Idee; il resto erano doppioni.',
-        'The Dashboard is gone: the sentence and the counters are at the top of Memoria, the chats’ context in Costi, the app’s errors and the errors’ themes in Quality, the AI’s tips in Ideas; the rest were duplicates.'),
+      b('«Idee» divide le tue da quelle dell’IA (la colonna «Chi» di ideas.md: «IA» è l’IA) e «Rispolvera» ti ripropone a caso un’idea vecchia ancora aperta; sotto, i temi delle idee.',
+        '\"Ideas\" splits yours from the AI’s (the \"Chi\" column of ideas.md: \"IA\" is the AI) and \"Dust one off\" brings back an old idea still open at random; below, the ideas’ themes.'),
+      b('La Dashboard non c’è più: i contatori sono in cima a Memoria, il contesto delle chat in Costi, gli errori dell’app e i temi degli errori in Qualità, gli spunti dell’AI in Idee; il resto erano doppioni.',
+        'The Dashboard is gone: the counters are at the top of Memoria, the chats’ context in Costi, the app’s errors and the errors’ themes in Quality, the AI’s tips in Ideas; the rest were duplicates.'),
       b('Ogni numero ha un «?» che dice come è calcolato; ogni pannello ha «Discuti», che prepara una bozza all’Orchestrator senza mai inviarla.',
         'Every number has a \"?\" saying how it is computed; every panel has \"Discuss\", which drafts for the Orchestrator and never sends.'),
     ],
@@ -1200,8 +1200,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Everything the app proposes and that waits for your yes is a card in a single deck: one at a time, you approve or reject.'),
     points: [
       // ADR 0123; src/main/proposals/sources.ts (SOURCES), src/main/proposals/service.ts, src/renderer/components/brain-model/ProposalsDeck.tsx, src/renderer/lib/proposals.ts
-      b('Il mazzo raccoglie fatti di memoria proposti, skill candidate, richieste di impostazioni degli agenti, livelli e prove dei ruoli, regole del Battito, politiche dell’auto-miglioramento e i cambi che la manutenzione ha già fatto negli ultimi 14 giorni.',
-        'The deck gathers proposed memory facts, skill candidates, the agents’ setting requests, the roles’ tiers and trials, the Battito’s rules, the self-improvement policies and the changes the maintenance already made in the last 14 days.'),
+      b('Il mazzo raccoglie fatti di memoria proposti, skill candidate, richieste di impostazioni degli agenti, livelli e prove dei ruoli, politiche dell’auto-miglioramento e i cambi che la manutenzione ha già fatto negli ultimi 14 giorni.',
+        'The deck gathers proposed memory facts, skill candidates, the agents’ setting requests, the roles’ tiers and trials, the self-improvement policies and the changes the maintenance already made in the last 14 days.'),
       b('Ogni carta dice chi l’ha proposta, dove (chat e run), quando e con quali prove; la più recente sta in cima, i filtri sopra la dividono per gruppo.',
         'Every card says who proposed it, where (chat and run), when and with what evidence; the newest is on top, the filters above split it by group.'),
       b('Trascina a destra o premi ✓ (→) per approvare, a sinistra o ✕ (←) per rifiutare; Z o Ctrl+Z annulla l’ultima scelta finché non è partita, dopo circa 6 secondi o alla scelta seguente.',
@@ -1321,8 +1321,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'log',
     title: b('Il Log', 'The Log'),
-    summary: b('Una pagina sola con tutto quello che l’app fa, in tempo reale e leggibile: ogni incarico passo per passo, i classificatori, le stime, gli errori e la memoria scritti nel brain, Battito.',
-      'One page with everything the app does, live and readable: each task step by step, the classifiers, the estimates, the errors and memory written to the brain, Battito.'),
+    summary: b('Una pagina sola con tutto quello che l’app fa, in tempo reale e leggibile: ogni incarico passo per passo, i classificatori, le stime, gli errori e la memoria scritti nel brain.',
+      'One page with everything the app does, live and readable: each task step by step, the classifiers, the estimates, the errors and memory written to the brain.'),
     points: [
       // src/main/activity/chat-watch.ts
       b('Ogni incarico è una catena: chi ha scelto quale agente e perché, il suo lavoro con costo, strumenti ed errori, il risultato, la verifica (o «non effettuata»).',

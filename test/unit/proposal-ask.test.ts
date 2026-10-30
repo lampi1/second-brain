@@ -38,10 +38,9 @@ describe('cardWords', () => {
       card({ ask: { kind: 'skill', name: 'triage' } }),
       card({ applied: true, title: 'Memoria di Sentinel: 4 righe unite', ask: { kind: 'applied', what: 'memory', action: 'merge', name: 'memory', role: 'sentinel' } }),
       card({ applied: true, ask: { kind: 'applied', what: 'script', action: 'create', name: 'conta.mjs' } }),
-      card({ source: 'setting', title: 'Battito: budget giornaliero ($)', facts: [{ key: 'target', value: 'pulse.dailyUsd' }], ask: { kind: 'setting', label: 'x', before: '0.25', after: '0.4' } }),
+      card({ source: 'setting', title: 'Coda per carico: CPU sopra (%)', facts: [{ key: 'target', value: 'loadQueueCpu' }], ask: { kind: 'setting', label: 'x', before: '0.25', after: '0.4' } }),
       card({ ask: { kind: 'trial', role: 'scout', version: 4, baseline: 3, advice: 'keep' } }),
       card({ ask: { kind: 'tier', roles: ['scout', 'judge'], tier: 'top', skills: [] } }),
-      card({ ask: { kind: 'rule', role: 'artisan' } }),
       card({ ask: { kind: 'policy', domain: 'routing', name: 'stessa area', cases: 24 } }),
     ].map(c => cardWords(c));
     for (const w of qs) { expect(w.question).toMatch(/\?$/); expect(w.yes).toBeTruthy(); expect(w.no).toBeTruthy(); }
@@ -52,7 +51,6 @@ describe('cardWords', () => {
       expect.stringMatching(/^Cambio «.+» da 0.25 a 0.4\?$/),
       'Tieni la nuova versione di Scout?',
       expect.stringMatching(/^Porto Scout e .+ al livello alto\?$/),
-      'Artisan deve seguire questa regola?',
       'Cambio il modo in cui l’app sceglie modello e motore per ogni lavoro?',
     ]);
     expect(qs[4]!.no).toBe('Scout torna alla versione 3, quella di prima.');

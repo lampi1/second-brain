@@ -4,7 +4,7 @@
 // AgentCatalogCard.tsx, AgentStudio.tsx, AgentIdentity.tsx and ChatTile.tsx; pinned by test/unit/visible-language.test.ts.
 import { t, type Key } from '../i18n';
 
-export const BUILT_IN_PURPOSE = ['orchestrator', 'strategist', 'scout', 'artisan', 'sentinel', 'herald', 'flash', 'pulse'] as const;
+export const BUILT_IN_PURPOSE = ['orchestrator', 'strategist', 'scout', 'artisan', 'sentinel', 'herald', 'flash'] as const;
 
 /** The purpose to show for this agent: the built-in one in the UI language, else its own. */
 export function rolePurpose(id: string | undefined, purpose: string): string {

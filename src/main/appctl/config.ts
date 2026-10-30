@@ -11,7 +11,7 @@
 // - later: «Rispondi dopo»;
 //   and the global pause: the Routine page's own calls (ADR 0155), never approving a trigger, a DevOps write or «Esegui».
 // Every change needs the user's own typed message to this Orchestrator in the last minutes, and that message must be
-// its latest (userAsked: appctl/user-words.ts), so neither app news, an agent's mail, the Battito card nor a turn they
+// its latest (userAsked: appctl/user-words.ts), so neither app news, an agent's mail nor a turn they
 // woke can change a setting; the Orchestrator's own tools and permission ceiling stay the user's click. Secrets are never read or written.
 // Mounted only on the authenticated Orchestrator endpoint by appctl/tools.ts.
 import type { ChangeBy, SettingChange, SettingDef, SettingRequestResult, Settings } from '../../shared/contract';

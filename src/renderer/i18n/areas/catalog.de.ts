@@ -29,9 +29,6 @@ export const catalogDe: typeof catalogIt = {
   'runs.facts.blocked': 'Vom Agenten gemeldete Blockade, nicht unabhängig geprüft.',
   'runs.run': 'Starten', 'runs.started': 'Gestartet, auf der Startseite', 'runs.startedShort': 'Gestartet', 'runs.open': 'Öffnen',
   'runs.goal': 'Ziel', 'runs.folder': 'Ordner', 'runs.startError': 'Start nicht möglich. Versuch es noch einmal.',
-  'contextPulse.title': 'Aus Battito', 'contextPulse.error': 'Karten nicht verfügbar.', 'contextPulse.actionError': 'Aktion fehlgeschlagen. Versuch es noch einmal.',
-  'contextPulse.save': 'In Ideen speichern', 'contextPulse.saved': 'In Ideen gespeichert', 'contextPulse.act': 'Erledigen', 'contextPulse.dismiss': 'Nicht hilfreich',
-  'contextPulse.sources': 'Quellen', 'contextPulse.app': 'App', 'contextPulse.cannotSave': 'Speichern in Ideen ist nicht verfügbar.',
   'catalog.title': 'Agenten',
   'catalog.intro': 'Jede Arbeit geht an eine dieser Rollen: Der Orchestrator delegiert sie, und eine Rolle kann ihrerseits an sichtbare Chats unter ihrem eigenen delegieren. Du kannst Anweisungen, Engine, Modell, Tools und Skills ändern; „Standard wiederherstellen“ stellt das Original her.',
   'catalog.subtitle': 'Die Rollen deines Teams, was sie tun und die beobachteten Ergebnisse.',
@@ -68,7 +65,6 @@ export const catalogDe: typeof catalogIt = {
   'catalog.purpose.sentinel': 'Prüft: führt Tests und Kontrollen aus oder beurteilt das Ergebnis anhand der Belege, wenn nichts auszuführen ist, und sagt, was besteht und was nicht.',
   'catalog.purpose.herald': 'Bereitet Nachrichten und Entwürfe für Personen und externe Dienste vor; jeden Versand genehmigst du.',
   'catalog.purpose.flash': 'Schnelle Antworten neben dem Orchestrator: sieht seinen Chat, liest, ändert nichts',
-  'catalog.purpose.pulse': 'Ideen, Tipps, Erinnerungen, Verknüpfungen und der Satz des Tages',
   // the model tier's word, on the role card and in the studio
   'roles.tier.light': 'leicht', 'roles.tier.mid': 'mittel', 'roles.tier.top': 'hoch',
 };

@@ -64,7 +64,7 @@ const cut = (s: string, n: number) => { const t = s.replace(/\s+/g, ' ').trim();
 
 export function buildBrief(i: BriefInput): MorningBrief {
   const chat = new Map(i.chats.map(c => [c.id, c]));
-  // root role runs the user would call "work": not the Battito's one-shots, not a delegated child's (its parent reports)
+  // root role runs the user would call "work": not one-shot jobs, not a delegated child's (its parent reports)
   const runs = i.runs.filter(r => r.endedAt !== undefined && r.endedAt >= i.since && r.endedAt <= i.now && r.source !== 'oneshot' && !r.parentRunId)
     .sort((a, b) => b.endedAt! - a.endedAt!).slice(0, 12)
     .map(r => { const c = chat.get(r.chatId); return { runId: r.runId, chatId: r.chatId, title: cut(c?.title || r.goal || r.agentId, 90), outcome: outcomeOf(r), endedAt: r.endedAt!, open: !!c && !c.closedAt && c.state !== 'closed' }; });

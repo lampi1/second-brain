@@ -25,7 +25,6 @@ import { ConnectorsHub, McpAdvanced } from './ConnectorsHub';
 import { CodexAutonomy } from './CodexAutonomy';
 import { AppUpdateSettings } from './AppUpdateSettings';
 import { CloudKeySetting } from './CloudKeySetting';
-import { PulseSettings } from './PulseSettings';
 import { TaskReadSettings } from './TaskReadSettings';
 import { SuggestSettings } from './SuggestSettings';
 import { AwaySettings } from './AwayToggle';
@@ -86,7 +85,7 @@ export function SettingsPage(){
    <Row title={t('essential.density')}><Select aria-label={t('essential.density')} data-testid="st-density-select" value={prefs.density} onChange={event=>{const density=event.target.value;if(density==='compact'||density==='comfortable')setPrefs({density});}}>{(['comfortable','compact']as const).map(value=><option key={value} value={value}>{t(`essential.${value}`)}</option>)}</Select></Row>
    <div className="st-row st-row-block"><AppearancePreview/></div>
   </>},
-  {...meta.notifications,icon:<IconBell size={18}/>,body:<><Row title={t('essential.toasts')} description={t('essential.notificationsHint')} help={<HelpTip title={t('explain.toasts.title')} testid="st-toasts-help"><p>{t('explain.toasts.p1')}</p></HelpTip>}><Select aria-label={t('essential.toasts')} data-testid="st-toasts-select" value={settings.osToasts} onChange={event=>{const osToasts=event.target.value;if(osToasts==='urgent'||osToasts==='normal'||osToasts==='off')void setSetting({osToasts});}}>{(['urgent','normal','off']as const).map(value=><option key={value} value={value}>{t(value==='off'?'essential.none':`essential.${value}`)}</option>)}</Select></Row><PulseSettings/><TaskReadSettings/></>},
+  {...meta.notifications,icon:<IconBell size={18}/>,body:<><Row title={t('essential.toasts')} description={t('essential.notificationsHint')} help={<HelpTip title={t('explain.toasts.title')} testid="st-toasts-help"><p>{t('explain.toasts.p1')}</p></HelpTip>}><Select aria-label={t('essential.toasts')} data-testid="st-toasts-select" value={settings.osToasts} onChange={event=>{const osToasts=event.target.value;if(osToasts==='urgent'||osToasts==='normal'||osToasts==='off')void setSetting({osToasts});}}>{(['urgent','normal','off']as const).map(value=><option key={value} value={value}>{t(value==='off'?'essential.none':`essential.${value}`)}</option>)}</Select></Row><TaskReadSettings/></>},
   {...meta.advanced,icon:<IconSettings size={18}/>,body:<McpAdvanced/>},
  ];
  const matched=groups.filter(group=>matchesSettingsSearch(query,group.title+' '+group.description+' '+group.search));

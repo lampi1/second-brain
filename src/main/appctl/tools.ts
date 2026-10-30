@@ -755,7 +755,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   }
 
   /** app_config's proof (ADR 0149): the user typed to this very Orchestrator in the last minutes, and its latest
-   *  message is that one (not app news, an agent's mail or the Battito card, which also land as 'user' items) */
+   *  message is that one (not app news or an agent's mail, which also land as 'user' items) */
   function configAsked(orchestratorId: string): boolean {
     const at = lastTyped(orchestratorId);
     if (at === undefined || at < Date.now() - CONFIG_ASK_MIN * 60_000) return false;

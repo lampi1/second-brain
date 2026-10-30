@@ -103,6 +103,7 @@ it('knows the review switch (no daily limit, never a review of a review) and how
   const reviews = String(await tool.run({ topic: 'revisioni automatiche' }));
   expect(reviews).toContain('no daily limit'); expect(reviews).toContain('judging'); expect(reviews).not.toContain('Revisioni indipendenti al giorno');
   const levels = String(await tool.run({ topic: 'livelli lavori conclusi' }));
-  expect(levels).toMatch(/Orchestrator.*root jobs/); expect(levels).toContain('Pulse');
+  expect(levels).toMatch(/Orchestrator.*root jobs/); expect(levels).not.toContain('Pulse');
+  expect(reviews).toContain('never by a second review');
   expect(schema().some(x => String(x.key) === 'delegation.judgeDaily')).toBe(false);
 });

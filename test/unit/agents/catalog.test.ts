@@ -1,4 +1,4 @@
-// The role catalog (main/agents/catalog.ts): exactly the Orchestrator, the five work roles and Pulse; every shipped
+// The role catalog (main/agents/catalog.ts): exactly the Orchestrator, the five work roles and Flash; every shipped
 // role survives a restart; edits are versions; "Ripristina predefinito"; a tolerant read of roles.json (an id this
 // build does not know is left out, a broken file is kept and blocks writes); a roles.json of the nine-role catalog still
 // loads (ADR 0100); resolve() for role, Orchestrator and plain chats.
@@ -44,10 +44,10 @@ describe('Flash and the Orchestrator have their own model (ADR 0107)', () => {
 });
 
 describe('role catalog', () => {
-  it('holds exactly the Orchestrator, the five work roles, Pulse and Flash, with English names', () => {
+  it('holds exactly the Orchestrator, the five work roles and Flash, with English names', () => {
     const { catalog } = setup(), list = catalog.list();
     expect(list.problem).toBeNull();
-    expect(list.profiles.map(p => p.id)).toEqual([...ROLE_IDS, 'pulse', 'flash']);
+    expect(list.profiles.map(p => p.id)).toEqual([...ROLE_IDS, 'flash']);
     expect(list.profiles.find(p => p.id === 'flash')).toMatchObject({ name: 'Flash', scope: 'background', tier: 'mid', launches: [], tools: { allow: ['read', 'web'] }, permissionCeiling: 'plan' });
     expect(list.profiles.filter(p => p.scope === 'role').map(p => p.name)).toEqual(['Orchestrator', 'Strategist', 'Scout', 'Artisan', 'Sentinel', 'Herald']);
     expect(list.profiles.every(p => p.avatar.kind === 'character')).toBe(true);
@@ -76,15 +76,8 @@ describe('role catalog', () => {
     expect(() => catalog.save(edit(artisan, { tier: 'top', tierMax: 'light' }), 'artisan')).toThrow();
     expect(() => catalog.save(edit(artisan, { model: 'nope' }), 'artisan')).toThrow('modello');
   });
-  it('keeps the model a role already runs with when only its text changes: Pulse on the preset alias (#128)', () => {
+  it('keeps the model a role already runs with when only its text changes (#128)', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-catalog-')); roots.push(dir);
-    const catalog = new AgentCatalogService({ userData: dir, models, pulsePreset: () => ({ engine: 'claude', model: 'sonnet' }) });
-    const pulse = catalog.list().profiles.find(p => p.id === 'pulse')!;
-    expect(pulse.model).toBe('sonnet'); // not among the engine's known models (m-top, m-mid)
-    const saved = catalog.save({ ...pulse, instructions: `${pulse.instructions}\nRiduci le carte idea.` }, 'pulse');
-    expect(saved).toMatchObject({ model: 'sonnet', version: 2 });
-    expect(saved.instructions.endsWith('Riduci le carte idea.')).toBe(true);
-    expect(() => catalog.save({ ...saved, model: 'haiku' }, 'pulse')).toThrow('modello'); // a new unknown choice is still refused
     // a launch still checks the model it would run with: a role whose model left the engine's list is not started
     let known = [{ id: 'm-top', name: 'Top' }, { id: 'm-mid', name: 'Mid' }];
     const live = new AgentCatalogService({ userData: dir, models: () => models().map(m => ({ ...m, models: known })) });
@@ -97,7 +90,7 @@ describe('role catalog', () => {
   it('reads roles.json tolerantly: an unknown id is left out, a broken file is kept and blocks writes', () => {
     const { dir, make, catalog } = setup(), file = path.join(dir, 'roles.json');
     const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
-    raw.roles.push({ ...raw.roles[1], id: 'future-role' });
+    raw.roles.push({ ...raw.roles[1], id: 'future-role' }, { ...raw.roles[1], id: 'pulse' }); // Pulse: removed by ADR 0201
     fs.writeFileSync(file, JSON.stringify(raw));
     expect(make().list().profiles.map(p => p.id)).toEqual(catalog.list().profiles.map(p => p.id));
     fs.writeFileSync(file, '{"format":1,"roles":"x"}');

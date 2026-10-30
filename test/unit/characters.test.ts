@@ -1,4 +1,4 @@
-// The role characters (src/renderer/lib/character-art.ts, src/shared/characters.ts): one per role and Pulse, each with
+// The role characters (src/renderer/lib/character-art.ts, src/shared/characters.ts): one per role and Flash, each with
 // its own badge colour and silhouette, trusted shapes only (no links, images or external references) that stay inside
 // the 64 × 64 badge, and a small variant without the prop.
 import { describe, expect, it } from 'vitest';
@@ -30,7 +30,7 @@ const box = (id: keyof typeof CHARACTERS) => {
 };
 
 describe('role characters', () => {
-  it('draws every role and Pulse, each described for its label', () => {
+  it('draws every role and Flash, each described for its label', () => {
     for (const id of ROLE_IDS) expect(CHARACTER_IDS).toContain(id);
     expect(Object.keys(CHARACTERS).sort()).toEqual([...CHARACTER_IDS].sort());
     for (const id of CHARACTER_IDS) expect(CHARACTER_LOOKS[id].length).toBeGreaterThan(10);

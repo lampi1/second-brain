@@ -1,5 +1,5 @@
 // IPC handlers, App: info and usage, the folder pickers and the file viewer, CLI status, «Aggiorna» (source, update),
-// setup and profile, the global layer, the Task page, search, the Log, the headline. Registered by src/main/index.ts
+// setup and profile, the global layer, the Task page, search, the Log. Registered by src/main/index.ts
 // with every other group (Handlers in ipc.ts keeps the set complete); each channel's shape is in
 // src/shared/contract/*.ts.
 import type { DiffAgainst } from '../../shared/file-diff';
@@ -20,7 +20,7 @@ import { showLocal } from '../open-path';
 import { systemLang } from '../lang';
 import type { HandlerContext, HandlersOf } from './context';
 
-export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, defaultBrain, updates, headline, pulse, search, hiddenShell, bumpBrainChoice, rendererErrors }: HandlerContext): HandlersOf<'app' | 'cli' | 'source' | 'update' | 'setup' | 'profile' | 'overlay' | 'log' | 'headline' | 'search' | 'tasks' | 'feed'> {
+export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, defaultBrain, updates, search, hiddenShell, bumpBrainChoice, rendererErrors }: HandlerContext): HandlersOf<'app' | 'cli' | 'source' | 'update' | 'setup' | 'profile' | 'overlay' | 'log' | 'search' | 'tasks' | 'feed'> {
   return {
     'update:get': () => updates.state(),
     'update:apply': a => updates.apply(a?.id),
@@ -96,7 +96,6 @@ export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, 
     'search:query': async a => { await s.memoryReview?.retryInvalidations(); return search.query(String(a?.q ?? '')); },
     'search:status': async () => s.hybrid?.status() ?? { model: { state: 'missing' }, docs: 0, chunks: 0, vectors: 0, vec: false },
     'search:retryModel': async () => s.hybrid ? s.hybrid.retryModel() : { model: { state: 'missing' }, docs: 0, chunks: 0, vectors: 0, vec: false },
-    'headline:get': () => pulse?.headline() ?? headline.get(),
     'log:list': () => activity.list(),
   };
 }

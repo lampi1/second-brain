@@ -1,11 +1,10 @@
 // The chat composer's inline suggestion, renderer side (lib/composer-suggest.ts, ADR 0118): local matching (past
 // prompts, "/" commands, roles, skills, chat titles, files; only with the caret at the end), the files and prompts read
-// from the chats, the debounce (no request while keys keep coming) and the cancel of a request in flight on the next
-// key (its late answer ignored), and the shared rule that serves the rest of a cached answer.
-import { describe, expect, it, vi } from 'vitest';
+// from the chats, and the rule that keeps the rest of a shown suggestion while the user types along it (zero tokens: the
+// model part was removed, ADR 0201).
+import { describe, expect, it } from 'vitest';
 import type { ChatItem } from '../../src/shared/contract';
-import { continueCached, type SuggestAnswer, type SuggestRequest } from '../../src/shared/composer-suggest';
-import { SuggestScheduler, filesOf, localSuggestion, promptsOf, type LocalSources } from '../../src/renderer/lib/composer-suggest';
+import { continueCached, filesOf, localSuggestion, promptsOf, type LocalSources } from '../../src/renderer/lib/composer-suggest';
 
 const src = (o: Partial<LocalSources> = {}): LocalSources => ({
   commands: [{ name: 'review' }, { name: 'rivedi-pr', skill: true }, { name: 'compact' }],
@@ -70,56 +69,5 @@ describe('continueCached', () => {
     expect(continueCached('fai il ', 'merge su main', 'fai il x')).toBeNull();
     expect(continueCached('fai il ', 'merge', 'fai il merge')).toBeNull();
     expect(continueCached('fai il ', 'merge', 'fai')).toBeNull();
-  });
-});
-
-describe('SuggestScheduler', () => {
-  const req = (line: string): SuggestRequest => ({ chatId: 'c1', line, lastMessage: '' });
-  function setup() {
-    vi.useFakeTimers();
-    const pending: { req: SuggestRequest; resolve: (a: SuggestAnswer) => void }[] = [];
-    const answers: [string, string | null][] = [];
-    const cancel = vi.fn();
-    const s = new SuggestScheduler({
-      delayMs: 600,
-      fetch: r => new Promise(resolve => pending.push({ req: r, resolve })),
-      cancel, onAnswer: (t, x) => answers.push([t, x]),
-    });
-    return { s, pending, answers, cancel };
-  }
-  it('asks only after a pause: fast typing sends nothing', async () => {
-    const { s, pending } = setup();
-    try {
-      for (const t of ['scrivi', 'scrivi un', 'scrivi un test']) { s.schedule(t, req(t)); vi.advanceTimersByTime(200); }
-      expect(pending).toHaveLength(0);
-      vi.advanceTimersByTime(400);
-      expect(pending.map(p => p.req.line)).toEqual(['scrivi un test']);
-    } finally { vi.useRealTimers(); }
-  });
-  it('the next key cancels the request in flight and its late answer is ignored', async () => {
-    const { s, pending, answers, cancel } = setup();
-    try {
-      s.schedule('scrivi un test', req('scrivi un test'));
-      vi.advanceTimersByTime(600);
-      expect(pending).toHaveLength(1);
-      s.key();
-      expect(cancel).toHaveBeenCalledTimes(1);
-      pending[0]!.resolve({ text: ' per il login', cached: false });
-      await vi.runAllTimersAsync();
-      expect(answers).toEqual([]);
-      // a key with nothing in flight cancels nothing
-      s.key();
-      expect(cancel).toHaveBeenCalledTimes(1);
-    } finally { vi.useRealTimers(); }
-  });
-  it('an answer with no key since reaches the input', async () => {
-    const { s, pending, answers } = setup();
-    try {
-      s.schedule('scrivi un test', req('scrivi un test'));
-      vi.advanceTimersByTime(600);
-      pending[0]!.resolve({ text: ' per il login', cached: false });
-      await vi.runAllTimersAsync();
-      expect(answers).toEqual([['scrivi un test', ' per il login']]);
-    } finally { vi.useRealTimers(); }
   });
 });

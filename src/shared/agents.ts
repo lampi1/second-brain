@@ -8,6 +8,7 @@ import type { ModelTier } from './roles';
 import type { RoleJudges } from './ppi';
 
 /** One-shot purposes: the service and persisted run reader share this list so new jobs survive a restart. */
+/** 'pulse' and 'headline' were the Battito's jobs (removed, ADR 0201): kept so the runs it left still load */
 export const ONE_SHOT_PURPOSES = ['pulse', 'headline', 'upgrade', 'phrases', 'guide'] as const;
 export type OneShotPurpose = (typeof ONE_SHOT_PURPOSES)[number];
 
@@ -62,7 +63,7 @@ export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 't
 export type AgentBehaviour = Pick<AgentDraft, (typeof BEHAVIOUR_FIELDS)[number]>;
 export interface AgentProfile extends AgentDraft {
   id: string; createdAt: number; updatedAt: number;
-  /** role = one of the six roles (the Orchestrator and the five work roles); background = Pulse, a catalog entry that is never offered as a delegate */
+  /** role = one of the six roles (the Orchestrator and the five work roles); background = Flash, a catalog entry that is never offered as a delegate */
   scope: 'role' | 'background';
   /** Highest version ever created. */
   version: number;
@@ -308,7 +309,7 @@ export interface AgentModelChoice {
   modelReason: string | null;
 }
 export interface AgentCatalog {
-  /** The six roles in their fixed order, then the background entries (Pulse). */
+  /** The six roles in their fixed order, then the background entry (Flash). */
   profiles: AgentProfile[];
   models: AgentModelChoice[];
   problem: string | null;

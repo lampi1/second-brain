@@ -27,8 +27,6 @@ import {Compare} from './FileDiff';
 import type {PDFDocumentProxy,PDFPageProxy} from '../lib/pdf';
 import {pdfPagesToDraw,samePages} from '../lib/pdf-window';
 import {t} from '../../i18n';
-// Loaded on demand: the Battito card reaches the app bridge and store, which must not load with the brain pages.
-const FilePulse=lazy(()=>import('../../components/ContextPulse').then(m=>({default:m.FilePulse})));
 const ImageZoom=lazy(()=>import('../../components/ImageZoom').then(m=>({default:m.ImageZoom})));
 import {FILE_PAGE_BYTES,lineCount,lineText,readFileViewArg,type FileReference,type FileViewResult} from '@shared/file-view';
 type TextResult=Extract<FileViewResult,{kind:'text'}>;
@@ -312,7 +310,6 @@ export function CitedFile({reference,chrome}:{reference:FileReference;chrome?:Vi
               :result.kind==='pdf'?<Pdf key={ref} data={result.data} name={baseName(result.path)}/>
               :result.kind==='text'?<TextBody key={ref} result={result} line={page.line} go={go} picked={picked} onPick={copyLine}/>:null}</ReportReview>
           </div>
-          {real&&<aside className="vw-side"><Suspense fallback={null}><FilePulse path={real}/></Suspense></aside>}
         </div>
       </div>
     </div>
