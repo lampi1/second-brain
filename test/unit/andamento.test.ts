@@ -59,6 +59,8 @@ describe('one page, the old ids as aliases', () => {
     expect(parseTarget('andamento/classificatori')).toEqual({ map: false, id: 'andamento', arg: 'classificatori' });
     expect(parseTarget('costi/90')).toEqual({ map: false, id: 'andamento', arg: 'costi/90' });
     expect(parseTarget('andamento/uso')).toEqual({ map: false, id: 'andamento', arg: 'uso' });
+    expect(parseTarget('memoria/apprendimento')).toEqual({ map: false, id: 'andamento', arg: 'apprendimento' });
+    expect(parseTarget('memoria')).toEqual({ map: false, id: 'memoria' });
   });
 });
 

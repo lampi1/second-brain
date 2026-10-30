@@ -23,7 +23,7 @@ import { preloadEngine } from './map/engine';
 import { brainClient } from './api';
 import { DiscussContext, type DiscussBridge } from './components/Discuss';
 import { t } from '../i18n';
-import { TREND_PAGES, parseTrendArg, trendArg } from '../lib/andamento';
+import { parseTrendArg, trendRedirect } from '../lib/andamento';
 const Routines = lazy(() => import('./pages/Routines').then(module => ({ default: module.Routines })));
 const Home = lazy(() => import('./pages/Home').then(module => ({ default: module.Home })));
 export type { DiscussBridge };
@@ -85,9 +85,10 @@ export const GO_ALIASES: { id: string; key: string }[] = [{ id: 'regole', key: '
 /** "esplora/ops/x.md" → { id: 'esplora', arg: 'ops/x.md' }; "mappa/tutto" → { map: true, full: true }. */
 export function parseTarget(t: string): { map: true; full: boolean; focus?: string } | { map: false; id: BrainPageId; arg?: string } | null {
   const [first = '', ...rest] = String(t ?? '').replace(/^#/, '').split('/');
-  // an old statistics page keeps its tab: "costi/30" → Andamento's Costi on 30 days (ADR 0202)
-  const trend = first === 'andamento' ? undefined : TREND_PAGES[first];
-  if (trend) return { map: false, id: 'andamento', arg: trendArg(trend, rest.join('/') || null) };
+  // an old statistics page keeps its tab: "costi/30" → Andamento's Costi on 30 days, "memoria/apprendimento" → its
+  // Apprendimento tab (ADR 0202, the same redirect as go())
+  const trend = trendRedirect(first, rest.join('/') || null);
+  if (trend) return { map: false, id: 'andamento', arg: trend.arg };
   const raw = PAGE_ALIAS[first] ?? first;
   const head = raw === 'spunti' ? 'idee' : raw;
   const arg = raw === 'spunti' ? 'ia' : rest.join('/') || undefined;
