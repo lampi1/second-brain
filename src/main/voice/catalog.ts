@@ -21,7 +21,18 @@ export const VAD: VoicePart = { id: 'vad', files: [
 
 const SMALL = { repo: 'csukuangfj/sherpa-onnx-whisper-small', rev: '8f3c18b358db4d1f2fc1eae49d75cd20989e4309' };
 const TURBO = { repo: 'csukuangfj/sherpa-onnx-whisper-turbo', rev: '2ca6ff69fc878651b770880507669577ac41c2ff' };
+
+// NVIDIA Parakeet TDT 0.6B v3 (CC-BY-4.0), int8, exported for sherpa-onnx by its author (ADR 0214): a transducer, no
+// language to set (it finds it among 25 European ones, Italian included), punctuation and capitals in its output.
+const PARAKEET = { repo: 'csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8', rev: '2bda32ec70b097a55adaa07d9a7173915b43cc78' };
+const PARAKEET_PART: VoicePart = { id: 'parakeet-tdt-v3', files: [
+  { name: 'encoder.onnx', url: HF(PARAKEET.repo, PARAKEET.rev, 'encoder.int8.onnx'), check: { sha256: 'acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247' }, bytes: 652_184_281 },
+  { name: 'decoder.onnx', url: HF(PARAKEET.repo, PARAKEET.rev, 'decoder.int8.onnx'), check: { sha256: '179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e' }, bytes: 11_845_275 },
+  { name: 'joiner.onnx', url: HF(PARAKEET.repo, PARAKEET.rev, 'joiner.int8.onnx'), check: { sha256: '3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3' }, bytes: 6_355_277 },
+  { name: 'tokens.txt', url: HF(PARAKEET.repo, PARAKEET.rev, 'tokens.txt'), check: { gitBlob: 'fc43e1c723e262df60b70e1919614417162d1fe2', size: 93_939 }, bytes: 93_939 },
+] };
 export const ASR: Record<VoiceAsr, VoicePart> = {
+  parakeet: PARAKEET_PART,
   fast: { id: 'whisper-small', files: [
     { name: 'encoder.onnx', url: HF(SMALL.repo, SMALL.rev, 'small-encoder.int8.onnx'), check: { sha256: '4cbe7b22fa9026b843b60a68640c747de05bafb1a11b57edc0e66c232d9f33a9' }, bytes: 112_442_483 },
     { name: 'decoder.onnx', url: HF(SMALL.repo, SMALL.rev, 'small-decoder.int8.onnx'), check: { sha256: 'acad50b5c782696e91b55914cc5ab4f756f1532f76e22aa6fc615f39fb69a8ee' }, bytes: 262_226_114 },

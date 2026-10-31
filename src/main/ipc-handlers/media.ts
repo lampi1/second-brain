@@ -4,12 +4,13 @@
 import { armLoopback } from '../window';
 import { shell } from 'electron';
 import { tutorModeOf } from '@shared/lesson';
+import { VOICE_NAMES, type VoiceName } from '@shared/voice';
 import type { HandlerContext, HandlersOf } from './context';
 
 export function mediaHandlers({ s, voice, recordings, learn }: HandlerContext): HandlersOf<'voice' | 'rec' | 'impara'> {
   return {
     'voice:state': () => voice.state(),
-    'voice:prepare': () => voice.prepare(),
+    'voice:prepare': a => voice.prepare(a && VOICE_NAMES.includes(a.voice as VoiceName) ? a.voice : undefined),
     'voice:listen': a => voice.listen(a?.on === true, a?.session, a?.talk === true),
     'voice:audio': a => voice.audio(a?.samples, a?.session),
     'voice:commit': a => voice.commit(a?.session),

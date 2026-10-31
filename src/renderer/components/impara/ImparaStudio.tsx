@@ -10,11 +10,13 @@
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { STUDIO_KINDS, isStudioLive, type StudioItem, type StudioKind, type StudioLive, type StudioOut } from '@shared/lesson-studio';
 import { subjectOf, type Lesson } from '@shared/lesson';
-import type { VoiceName } from '@shared/voice';
+import { SPEED_OF, VOICE_NAMES, VOICE_SPEEDS, type VoiceName, type VoiceSpeed, type VoiceState } from '@shared/voice';
+import { createStore } from '../../store/createStore';
+import { setSetting, useApp } from '../../store/store';
 import type { CardKind } from '@shared/review';
 import { go } from '../../actions';
 import { makeStudio, reviewArg, studioQuizArg } from '../../lib/impara';
-import { narrateLines, stopSpeaking, useVoice } from '../../lib/voice';
+import { narrateLines, stopSpeaking, useVoice, voice } from '../../lib/voice';
 import { locale, t } from '../../i18n';
 import { Button } from '../ui';
 import { IconBook, IconBranch, IconCheck, IconEdit, IconFile, IconHistory, IconLayers, IconMic, IconPlay, IconQuestion, IconRefresh, IconSpinner, IconStop, IconTarget, IconX } from '../Icons';
@@ -31,6 +33,9 @@ const ICON: Record<StudioKind, ReactNode> = {
  *  sessions where the learner does something (quiz, oral exam, exercises). */
 export function ImparaStudio({ lesson, open, onOpen, onChallenge }: { lesson: Lesson; open: StudioKind | null; onOpen: (k: StudioKind) => void; onChallenge: (k: StudioLive) => void }) {
   const verified = (lesson.facts ?? []).filter(f => f.check !== 'unsure').length;
+  const podcastOn = podcastNow.use(p => p?.lesson === lesson.id);
+  const narrating = useVoice(s => s.narrating);
+  useEffect(() => { if (!narrating && podcastNow.get()) podcastNow.set(null); }, [narrating]);
   const ready = lesson.state !== 'preparing' && lesson.state !== 'failed';
   const click = (k: StudioKind) => {
     if (isStudioLive(k)) return onChallenge(k);
@@ -53,7 +58,10 @@ export function ImparaStudio({ lesson, open, onOpen, onChallenge }: { lesson: Le
                 <span className="sd-tile-t"><b>{t(`impara.studio.${k}.t`)}</b><small>{state === 'making' ? t('impara.studio.making') : state === 'failed' ? t('impara.studio.failed') : t(`impara.studio.${k}.d`)}</small></span>
                 <span className="sd-state" aria-hidden="true">{state === 'making' ? <IconSpinner size={12} /> : state === 'done' ? <IconCheck size={12} /> : null}</span>
               </button>
-              {(state === 'done' || state === 'failed') && (
+              {k === 'podcast' && podcastOn && (
+                <button type="button" className="sd-redo sd-pod-stop" onClick={stopPodcast} data-tip={t('impara.studio.podcast.stop')} aria-label={t('impara.studio.podcast.stop')} data-testid="impara-studio-podcast-tile-stop"><IconStop size={11} /></button>
+              )}
+              {(state === 'done' || state === 'failed') && !(k === 'podcast' && podcastOn) && (
                 <button type="button" className="sd-redo" onClick={() => void makeStudio(lesson.id, k)} data-tip={t('impara.studio.redo')} aria-label={`${t('impara.studio.redo')}: ${t(`impara.studio.${k}.t`)}`} data-testid={`impara-studio-redo-${k}`}><IconRefresh size={11} /></button>
               )}
             </div>
@@ -122,7 +130,7 @@ function Out({ lesson, out }: { lesson: Lesson; out: StudioOut }) {
       </div>
     );
   }
-  return <Podcast out={out} />;
+  return <Podcast lesson={lesson} out={out} />;
 }
 
 function Flashcards({ lesson, cards }: { lesson: Lesson; cards: { q: string; answer: string }[] }) {
@@ -143,40 +151,62 @@ function Flashcards({ lesson, cards }: { lesson: Lesson; cards: { q: string; ans
   );
 }
 
-/** Two local voices when two Italian voices are on disk (never downloading one), else the chosen one for both. */
-function Podcast({ out }: { out: Extract<StudioOut, { kind: 'podcast' }> }) {
-  const [voices, setVoices] = useState<[VoiceName | undefined, VoiceName | undefined]>([undefined, undefined]);
-  const [at, setAt] = useState<number | null>(null);
+/** The podcast now playing (ADR 0214: it keeps playing when its view closes, and its tile shows a stop): which lesson,
+ *  which line. */
+export const podcastNow = createStore<{ lesson: string; at: number } | null>(null);
+/** Stops the podcast, if one plays. */
+export function stopPodcast(): void { if (podcastNow.get()) { podcastNow.set(null); stopSpeaking(false); } }
+
+/** Two different local voices, the host and the expert (ADR 0214): the chosen one and another on disk; when only one is
+ *  on disk, a button downloads a second (64 MB, once). The speed chip sets the app's voice speed. */
+function Podcast({ lesson, out }: { lesson: Lesson; out: Extract<StudioOut, { kind: 'podcast' }> }) {
+  const [st, setSt] = useState<VoiceState | null>(null);
+  const now = podcastNow.use(p => (p?.lesson === lesson.id ? p.at : null));
   const narrating = useVoice(s => s.narrating);
+  const speed: VoiceSpeed = useApp(s => s.settings?.voiceSpeed) ?? 'normal';
+  const engine = useVoice(s => s.engine);
   useEffect(() => {
     let live = true;
-    void window.sb.invoke('voice:state', undefined).then(st => {
-      if (!live) return;
-      const other = (st.voices ?? []).find(v => v !== st.voice);
-      setVoices([st.voice, other ?? st.voice]);
-    }, () => {});
-    return () => { live = false; stopSpeaking(false); };
-  }, []);
-  useEffect(() => { if (!narrating) setAt(null); }, [narrating]);
-  const two = !!voices[0] && !!voices[1] && voices[0] !== voices[1];
+    void window.sb.invoke('voice:state', undefined).then(x => { if (live) setSt(x); }, () => {});
+    return () => { live = false; };
+  }, [engine?.downloading === null, engine?.voices?.length]);
+  useEffect(() => { if (!narrating && podcastNow.get()) podcastNow.set(null); }, [narrating]);
+  const first = st?.voice, other = st && (st.voices ?? []).find(v => v !== st.voice);
+  const missing = st && !other ? VOICE_NAMES.find(v => v !== st.voice) : undefined;
+  const voices: [VoiceName | undefined, VoiceName | undefined] = [first, other ?? first];
+  const two = !!other;
+  const dl = engine?.downloading ?? st?.downloading;
   const play = (from = 0) => {
     const rest = out.lines.slice(from);
-    narrateLines(rest.map(l => ({ text: l.say, ...(voices[l.who] ? { voice: voices[l.who] } : {}) })), i => setAt(from + i), () => setAt(null));
-    setAt(from);
+    narrateLines(rest.map(l => ({ text: l.say, ...(voices[l.who] ? { voice: voices[l.who] } : {}) })),
+      i => podcastNow.set({ lesson: lesson.id, at: from + i }), () => podcastNow.set(null));
+    podcastNow.set({ lesson: lesson.id, at: from });
   };
-  const playing = narrating && at !== null;
+  const playing = narrating && now !== null;
+  const nextSpeed = VOICE_SPEEDS[(VOICE_SPEEDS.indexOf(speed) + 1) % VOICE_SPEEDS.length]!;
+  const fetchVoice = (v: VoiceName) => void window.sb.invoke('voice:prepare', { voice: v }).then(x => { setSt(x); voice.set(s => ({ ...s, engine: x })); }, () => {});
   return (
     <div className="sd-pod" data-testid="impara-studio-podcast">
       <div className="sd-pod-h">
-        <button type="button" className={`sd-pod-play ${playing ? 'on' : ''}`} onClick={() => (playing ? stopSpeaking(false) : play(0))} aria-label={playing ? t('impara.studio.podcast.stop') : t('impara.studio.podcast.play')} data-testid="impara-studio-podcast-play">
+        <button type="button" className={`sd-pod-play ${playing ? 'on' : ''}`} onClick={() => (playing ? stopPodcast() : play(0))} aria-label={playing ? t('impara.studio.podcast.stop') : t('impara.studio.podcast.play')} data-testid="impara-studio-podcast-play">
           {playing ? <IconStop size={16} /> : <IconPlay size={16} />}
         </button>
         <div className="sd-pod-t"><b>{out.title || t('impara.studio.podcast.t')}</b>
           <small className="ip-muted">{two ? t('impara.studio.podcast.two', { a: voiceLabel(voices[0]!), b: voiceLabel(voices[1]!) }) : t('impara.studio.podcast.one')} · {t('impara.studio.podcast.lines', { n: out.lines.length })}</small></div>
+        <span className="sp" />
+        <button type="button" className="sd-pod-speed" onClick={() => void setSetting({ voiceSpeed: nextSpeed })} data-tip={`${t('voice.speedTitle')}|${t(`voice.speed.${nextSpeed}`)}`} aria-label={`${t('voice.speedTitle')}: ${t(`voice.speed.${speed}`)}`} data-testid="impara-studio-podcast-speed">{SPEED_OF[speed].toLocaleString(locale())}×</button>
       </div>
+      {missing && (
+        <div className="sd-pod-more" data-testid="impara-studio-podcast-more">
+          <span className="ip-muted">{t('impara.studio.podcast.oneWhy')}</span>
+          <Button size="s" onClick={() => fetchVoice(missing)} disabled={!!dl} testid="impara-studio-podcast-fetch">
+            {dl ? <><IconSpinner size={12} />{t('impara.studio.podcast.fetching', { pct: dl.total ? Math.round(dl.done / dl.total * 100) : 0 })}</> : t('impara.studio.podcast.fetch', { name: voiceLabel(missing) })}</Button>
+        </div>
+      )}
+      <p className="sd-pod-note ip-muted">{t('impara.studio.podcast.keeps')}</p>
       <ol className="sd-pod-lines">
         {out.lines.map((l, i) => (
-          <li key={i} className={`who${l.who} ${at === i ? 'on' : ''}`}>
+          <li key={i} className={`who${l.who} ${now === i ? 'on' : ''}`}>
             <button type="button" onClick={() => play(i)} data-tip={t('impara.studio.podcast.from')}><span className="sd-pod-who">{l.who === 0 ? t('impara.studio.podcast.host') : t('impara.studio.podcast.expert')}</span><span>{l.say}</span></button>
           </li>
         ))}

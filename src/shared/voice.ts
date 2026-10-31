@@ -5,12 +5,17 @@
 
 import type { ChatItem } from './contract';
 
-/** Whisper size: fast = small int8 (~374 MB), accurate = turbo int8 (~1 GB) */
-export type VoiceAsr = 'fast' | 'accurate';
+/** The speech-to-text model: fast = Whisper small int8 (~374 MB), accurate = Whisper turbo int8 (~1 GB), parakeet =
+ *  NVIDIA Parakeet TDT 0.6B v3 int8 (~670 MB, 25 European languages, ADR 0214: faster on CPU than Whisper) */
+export type VoiceAsr = 'fast' | 'accurate' | 'parakeet';
 /** the Italian Piper voices offered (k2-fsa sherpa-onnx tts-models) */
 export type VoiceName = 'paola' | 'miro' | 'dii';
-export const VOICE_ASRS: readonly VoiceAsr[] = ['fast', 'accurate'];
+export const VOICE_ASRS: readonly VoiceAsr[] = ['parakeet', 'fast', 'accurate'];
 export const VOICE_NAMES: readonly VoiceName[] = ['paola', 'miro', 'dii'];
+/** How fast the voice speaks (ADR 0214): Piper's speed, read at every sentence, so a change is heard at the next one */
+export type VoiceSpeed = 'slow' | 'normal' | 'quick' | 'quicker';
+export const VOICE_SPEEDS: readonly VoiceSpeed[] = ['slow', 'normal', 'quick', 'quicker'];
+export const SPEED_OF: Record<VoiceSpeed, number> = { slow: 0.85, normal: 1, quick: 1.15, quicker: 1.3 };
 /** the microphone's sample rate: Whisper and Silero both want 16 kHz mono */
 export const VOICE_RATE = 16_000;
 
@@ -116,6 +121,24 @@ const SAY_AS: [RegExp, string][] = ([
   ['scripts', 'scrìpt'], ['query', 'quèri'], ['backend', 'bècchend'], ['frontend', 'fròntend'], ['plugin', 'plàghin'], ['token', 'tòken'],
   ['tokens', 'tòken'], ['prompt', 'pròmpt'], ['claude', 'clòd'], ['cursor', 'kèrsor'], ['flash', 'flèsh'], ['scout', 'scàut'],
   ['windows', 'uìndous'], ['jira', 'gìra'], ['whisper', 'uìsper'], ['ok', 'okèi'], ['okay', 'okèi'], ['json', 'gèison'], ['online', 'onlàin'],
+  // ADR 0214 (owner: «quando usa termini inglesi li legge male»): the English words an Italian lesson, podcast or reply
+  // uses most, spelled as an Italian speaker says them
+  ['machine learning', 'mascìn lèrning'], ['deep learning', 'dìp lèrning'], ['open source', 'òupen sòrs'], ['know how', 'nòu àu'],
+  ['learning', 'lèrning'], ['computer', 'compiùter'], ['software', 'sòftuer'], ['hardware', 'àrduer'], ['smartphone', 'smàrtfon'],
+  ['offline', 'offlàin'], ['cloud', 'clàud'], ['web', 'uèb'], ['website', 'uèbsait'], ['download', 'daunlòd'], ['upload', 'aplòd'],
+  ['design', 'disàin'], ['designer', 'disàiner'], ['marketing', 'màrketing'], ['manager', 'mènager'], ['management', 'mènagment'],
+  ['business', 'bìsnes'], ['deadline', 'dèdlain'], ['feedback', 'fìdbec'], ['performance', 'perfòrmans'], ['framework', 'frèimuorc'],
+  ['database', 'dàtabeis'], ['smart', 'smàrt'], ['social', 'sòscial'], ['network', 'nètuorc'], ['startup', 'stàrtap'],
+  ['leader', 'lìder'], ['check', 'cèk'], ['checklist', 'cèklist'], ['output', 'àutput'], ['layout', 'lèiaut'], ['mouse', 'màus'],
+  ['keyboard', 'kìbord'], ['cache', 'chèsc'], ['cookie', 'cùchi'], ['cookies', 'cùchis'], ['user', 'iùser'],
+  ['username', 'iùsernèim'], ['account', 'accàunt'], ['privacy', 'pràivasi'], ['security', 'sechiùriti'], ['storage', 'stòrig'],
+  ['streaming', 'strìming'], ['podcast', 'pòdcast'], ['playlist', 'plèilist'], ['speaker', 'spìker'], ['quiz', 'cuìz'],
+  ['training', 'trèining'], ['weekend', 'uìchend'], ['stack', 'stèc'], ['agent', 'èigent'], ['agents', 'èigents'],
+  ['benchmark', 'bènchmarc'], ['debug', 'dibàg'], ['request', 'ricuèst'], ['response', 'rispòns'],
+  ['client', 'clàient'], ['container', 'contèiner'], ['pipeline', 'pàiplain'],
+  ['repository', 'ripòsitori'], ['repo', 'rìpo'], ['coding', 'còding'], ['tool', 'tùl'], ['tools', 'tùls'],
+  ['skill', 'schìl'], ['skills', 'schìls'], ['context', 'còntest'], ['window', 'uìndou'], ['thread', 'trèd'], ['threads', 'trèds'],
+  ['open', 'òupen'], ['google', 'gùgol'], ['microsoft', 'màicrosoft'], ['apple', 'èpol'], ['youtube', 'iùtiub'], ['linux', 'lìnux'],
 ] as const).map(([w, say]) => [new RegExp(`(?<![\\p{L}\\p{N}])${w}(?![\\p{L}\\p{N}])`, 'giu'), say]);
 const LETTER: Record<string, string> = { A: 'a', B: 'bi', C: 'ci', D: 'di', E: 'e', F: 'effe', G: 'gi', H: 'acca', I: 'i', J: 'i lunga', K: 'cappa', L: 'elle', M: 'emme',
   N: 'enne', O: 'o', P: 'pi', Q: 'cu', R: 'erre', S: 'esse', T: 'ti', U: 'u', V: 'vu', W: 'doppia vu', X: 'ics', Y: 'ipsilon', Z: 'zeta' };

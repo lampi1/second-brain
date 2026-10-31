@@ -43,6 +43,7 @@ import { OrchestratorService } from './chats/orchestrator-service';
 import { ProposalsService } from './proposals/service';
 import { Workflows } from './workflows/service';
 import { VoiceService, voiceRoot } from './voice/service';
+import { SPEED_OF } from '@shared/voice';
 import { RecordingService } from './recordings/service';
 import type { InvokeArg, InvokeChannel, InvokeResult } from '../shared/contract';
 import type { HandlerContext } from './ipc-handlers/context';
@@ -153,7 +154,7 @@ app.whenReady().then(async () => {
   const voice = new VoiceService({
     root: voiceRoot(app.getPath('userData')),
     script: path.join(outDir, 'main', 'voice-worker.js'),
-    settings: () => { const c = s.brain.settings(); return { asr: c.voiceAsr ?? 'fast', voice: c.voiceName ?? 'paola' }; },
+    settings: () => { const c = s.brain.settings(); return { asr: c.voiceAsr ?? 'fast', voice: c.voiceName ?? 'paola', speed: SPEED_OF[c.voiceSpeed ?? 'normal'] ?? 1 }; },
     fork: script => utilityProcess.fork(script, [], { serviceName: 'second-brain voice', stdio: 'ignore' }) as never,
     changed: st => emitter.emit('voice:changed', st),
     heard: event => emitter.emit('voice:heard', event),

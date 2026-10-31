@@ -20,7 +20,7 @@ export interface VoiceDeps {
   root: string;
   /** the worker script (out/main/voice-worker.js) */
   script: string;
-  settings: () => { asr: VoiceAsr; voice: VoiceName };
+  settings: () => { asr: VoiceAsr; voice: VoiceName; speed?: number };
   fork: (script: string) => Child;
   changed: (s: VoiceState) => void;
   heard: (event: VoiceHeard) => void;
@@ -141,13 +141,14 @@ export class VoiceService {
     }
   }
 
-  /** Downloads what the chosen models still miss (the user's click, or the first Ctrl+M). */
-  prepare(): VoiceState {
+  /** Downloads what the chosen models still miss (the user's click, or the first Ctrl+M); with `only`, just that voice
+   *  (the podcast's second one, ADR 0214). */
+  prepare(only?: VoiceName): VoiceState {
     if (this.d.fake || this.downloading) return this.state();
     const { asr, voice } = this.d.settings();
     this.error = null;
     this.downloading = { done: 0, total: 0 };
-    this.proc().postMessage({ type: 'prepare', asr, voice });
+    this.proc().postMessage({ type: 'prepare', asr, voice: only ?? voice, ...(only ? { only: 'voice' as const } : {}) });
     this.emit();
     return this.state();
   }
@@ -216,7 +217,7 @@ export class VoiceService {
         this.failListening('Il motore voce non ha risposto: riattiva la voce per riprovare.');
       }, SPEAK_TIMEOUT_MS);
       this.speaks.set(id, r => { clearTimeout(timer); if (!r.error && r.samples.length) measured(); else if (r.error) this.measurements.count('errors'); res(r); this.emit(); });
-      this.proc().postMessage({ type: 'speak', id, text: clean, voice: voice ?? this.d.settings().voice });
+      this.proc().postMessage({ type: 'speak', id, text: clean, voice: voice ?? this.d.settings().voice, speed: this.d.settings().speed ?? 1 });
     });
   }
 

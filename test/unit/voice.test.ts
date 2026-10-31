@@ -113,6 +113,9 @@ describe('forEar', () => {
   it('a word that only contains a dictionary word stays as it is', () => {
     expect(forEar('Il bugiardo ha un profilo.')).toBe('Il bugiardo ha un profilo.');
     expect(forEar('Ci sono le file alla cassa.')).toBe('Ci sono le file alla cassa.');
+    // ADR 0214: the English words of lessons and podcasts, said as an Italian speaker says them; Italian homographs kept
+    expect(forEar('Il machine learning gira sul computer, il software nel cloud.')).toBe('Il mascìn lèrning gira sul compiùter, il sòftuer nel clàud.');
+    expect(forEar('Le code alla posta.')).toBe('Le code alla posta.');
   });
   it('text in capitals and Roman numerals are words, not acronyms; km/h and e/o stay readable', () => {
     expect(forEar('NON FARLO ADESSO.')).toBe('NON FARLO ADESSO.');

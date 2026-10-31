@@ -43,8 +43,12 @@ function vadNow(): any {
 function recNow(asr: VoiceAsr): any {
   if (rec && recFor === asr) return rec;
   const d = partDir(root, ASR[asr]);
+  // Parakeet (ADR 0214) is a NeMo transducer: encoder, decoder and joiner, greedy search, the language found by itself
+  const model = asr === 'parakeet'
+    ? { transducer: { encoder: path.join(d, 'encoder.onnx'), decoder: path.join(d, 'decoder.onnx'), joiner: path.join(d, 'joiner.onnx') }, modelType: 'nemo_transducer' }
+    : { whisper: { encoder: path.join(d, 'encoder.onnx'), decoder: path.join(d, 'decoder.onnx'), language: 'it', task: 'transcribe', tailPaddings: -1 } };
   rec = new (lib().OfflineRecognizer)({ featConfig: { sampleRate: VOICE_RATE, featureDim: 80 },
-    modelConfig: { whisper: { encoder: path.join(d, 'encoder.onnx'), decoder: path.join(d, 'decoder.onnx'), language: 'it', task: 'transcribe', tailPaddings: -1 }, tokens: path.join(d, 'tokens.txt'), numThreads: asrThreads(), provider: 'cpu', debug: 0 } });
+    modelConfig: { ...model, tokens: path.join(d, 'tokens.txt'), numThreads: asrThreads(), provider: 'cpu', debug: 0 } });
   recFor = asr;
   return rec;
 }
@@ -76,7 +80,7 @@ const queued = <T>(fn: () => Promise<T>) => new Promise<T>((res, rej) => later(a
 /** a recording's transcription (ADR 0154): its own VADs, Whisper shared with voice mode through the queue */
 const cancelled = new Set<number>();
 async function transcribe(job: number, wav: string, asr: VoiceAsr): Promise<void> {
-  if (!partReady(root, VAD) || !partReady(root, ASR[asr])) throw new Error('Whisper non è ancora scaricato: Impostazioni → Voce → Scarica.');
+  if (!partReady(root, VAD) || !partReady(root, ASR[asr])) throw new Error('Il modello di trascrizione non è ancora scaricato: Impostazioni → Voce → Scarica.');
   const s = lib();
   let last = 0;
   const lines = await transcribeWav(wav, {
@@ -144,7 +148,7 @@ function drain(): void {
       let text = '';
       try {
         if (session !== listening) return;
-        if (!partReady(root, ASR[asr])) throw new Error('Whisper non è ancora scaricato: Impostazioni → Voce.');
+        if (!partReady(root, ASR[asr])) throw new Error('Il modello di trascrizione non è ancora scaricato: Impostazioni → Voce.');
         const r = recNow(asr);
         const stream = r.createStream();
         stream.acceptWaveform({ samples, sampleRate: VOICE_RATE });
@@ -166,7 +170,7 @@ port.on('message', ({ data: m }) => {
       case 'init': root = m.root; asrNow = m.asr; return;
       case 'state': send({ type: 'state', ready: { vad: partReady(root, VAD), asr: partReady(root, ASR[m.asr]), tts: partReady(root, TTS[m.voice]) } }); return;
       case 'prepare': if (preparing) return; preparing = true; void (async () => {
-        const parts = partsFor(m.asr, m.voice).filter(p => !partReady(root, p));
+        const parts = (m.only === 'voice' ? [TTS[m.voice]] : partsFor(m.asr, m.voice)).filter(p => !partReady(root, p));
         const total = parts.reduce((n, p) => n + partBytes(p), 0);
         let before = 0;
         for (const p of parts) {
@@ -220,7 +224,7 @@ port.on('message', ({ data: m }) => {
       case 'speak': laterSpeak(async () => {
         if (m.id <= speechCancelledThrough) return;
         try {
-          const audio = await ttsNow(m.voice).generateAsync({ text: m.text, sid: 0, speed: 1, enableExternalBuffer: false, onProgress: () => m.id > speechCancelledThrough }) // Electron's memory cage refuses external buffers;
+          const audio = await ttsNow(m.voice).generateAsync({ text: m.text, sid: 0, speed: Math.min(1.5, Math.max(0.7, m.speed ?? 1)), enableExternalBuffer: false, onProgress: () => m.id > speechCancelledThrough }) // Electron's memory cage refuses external buffers;
           if (m.id > speechCancelledThrough) send({ type: 'spoken', id: m.id, samples: audio.samples, rate: audio.sampleRate });
         } catch (e) { send({ type: 'spoken', id: m.id, samples: new Float32Array(0), rate: 22050, error: msg(e) }); }
       }); return;

@@ -2,7 +2,7 @@
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
 import type { DelegationSettings, ModelTier } from '../roles';
-import type { VoiceAsr, VoiceName } from '../voice';
+import type { VoiceAsr, VoiceName, VoiceSpeed } from '../voice';
 import type { Effort } from './chats';
 import type { Harness } from './engines';
 
@@ -108,6 +108,8 @@ export interface Settings {
   voiceName?: VoiceName;
   /** the voice conversation is push to talk: the microphone counts only while Ctrl+Space or the bar's button is held */
   voicePtt?: boolean;
+  /** how fast the app's voice speaks (ADR 0214) */
+  voiceSpeed?: VoiceSpeed;
   /** «Modalità notte» (ADR 0191): the user is away; no questions reach them, every agent goes on with the recommended
    *  choice until the job is done; production, secrets, permissions and messages to people wait for their return */
   awayMode?: boolean;
@@ -139,7 +141,7 @@ export type SettingKey =
   | 'jobs.fallback' | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'judgingCapUsd' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
-  | 'suggestOn' | 'voiceAsr' | 'voiceName' | 'voicePtt' | 'awayMode'
+  | 'suggestOn' | 'voiceAsr' | 'voiceName' | 'voicePtt' | 'voiceSpeed' | 'awayMode'
   | `delegation.${keyof DelegationSettings}` | `modelTiers.${Harness}.${ModelTier}`;
 export interface SettingDef {
   key: SettingKey;            // 'mute.*' stands for every feed kind

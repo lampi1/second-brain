@@ -13,7 +13,8 @@ export interface MediaInvokeMap {
    *  click or first Ctrl+M); listen = the microphone opened or closed; audio = a 16 kHz mono chunk of it (never stored);
    *  speak = Italian speech for a text (the renderer plays it) */
   'voice:state': [void, VoiceState];
-  'voice:prepare': [void, VoiceState];
+  /** voice: only that Italian voice (Impara's podcast, ADR 0214), else everything the chosen models miss */
+  'voice:prepare': [{ voice?: VoiceName } | void, VoiceState];
   'voice:listen': [{ on: boolean; session: string; talk?: boolean }, void];
   'voice:cancelSpeech': [void, void];
   'voice:audio': [{ session: string; samples: Float32Array }, void];

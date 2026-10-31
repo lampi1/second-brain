@@ -130,5 +130,6 @@ describe('catalog', () => {
   it('the small VAD first, the voice before the big Whisper', () => {
     expect(partsFor('fast', 'paola').map(p => p.id)).toEqual(['vad', 'piper-paola-medium', 'whisper-small']);
     expect(partsFor('accurate', 'dii').map(p => p.id)).toEqual(['vad', 'piper-dii-high', 'whisper-turbo']);
+    expect(partsFor('parakeet', 'miro').map(p => p.id)).toEqual(['vad', 'piper-miro-high', 'parakeet-tdt-v3']);
   });
 });
