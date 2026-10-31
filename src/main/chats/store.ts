@@ -11,7 +11,7 @@ import { randomUUID } from 'node:crypto';
 import { isLang, type ChatLink, type ChatSummary, type Effort, type HandoffSource, type Harness, type Lang, type PermissionMode, type RouteDecision } from '../../shared/contract';
 import { validRoute } from '../brain/routing';
 import { errText, log } from '../log';
-import { isUuid } from './session';
+import { isSessionId, isUuid } from './session';
 import { ENGINE_ID } from '../engines/registry';
 import type { AgentOwnerSnapshot, AgentChildren, AgentRun, UserTaskEvents } from '../../shared/agents';
 import { RUN_ID, readRun } from '../agents/runs';
@@ -250,8 +250,8 @@ function valid(x: unknown): StoredChat | null {
   const orchestrator = c.isOrchestrator === true || (c.isRegia === true && c.orchestrator === true);
   return {
     id: c.id, harness: c.harness as Harness, cwd: c.cwd,
-    // only UUIDs ever reach --resume / --session-id: anything else in the file is dropped
-    sessionId: isUuid(c.sessionId) ? c.sessionId : null,
+    // only a plain session token survives (a UUID for Claude, else startSession replaces it): anything else is dropped
+    sessionId: isSessionId(c.sessionId) ? c.sessionId : null,
     ...(isUuid(c.forkFrom) ? { forkFrom: c.forkFrom } : {}),
     title: typeof c.title === 'string' ? c.title : 'Chat',
     model: typeof c.model === 'string' && c.model ? c.model : null,

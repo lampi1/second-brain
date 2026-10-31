@@ -9,7 +9,7 @@ import { cliVersion, killTrees, killTreesWithin, resolveClaude } from './cli';
 import { reapAfterQuit } from './proctree';
 import { jobGuard } from './jobguard';
 import { coldArmed, coldRoute, type ColdView } from './continuity';
-import { isUuid, type HarnessSession, type SessionOptions, type SessionSink } from './session';
+import { isSessionId, isUuid, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 import { updateActivity } from '../update/activity';
 import { BufferedSink, PLAIN_LAUNCH, type WarmEngine, type WarmLaunch } from './warm';
 import { AgentMayNotWake } from '../engines/policy';
@@ -130,7 +130,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
       this.startSession(r);
       // a resumed chat on an engine that replays its past while it opens (ACP): let it land before this message, in order
       const started = r.session as HarnessSession | null;
-      if (started?.ready && engineOf(r.s.harness)?.caps.transcript === false && isUuid(r.s.sessionId)) r.opening = started.ready;
+      if (started?.ready && engineOf(r.s.harness)?.caps.transcript === false && isSessionId(r.s.sessionId)) r.opening = started.ready;
     }
     if (r.opening) { await r.opening; r.opening = undefined; }
   }
@@ -280,7 +280,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
     let resume = false, fork = false;
     const engine = engineOrThrow(r.s.harness);
 
-    if (!engine.caps.transcript) resume = isUuid(sessionId); // session/load; a new one gets its id from session/new
+    if (!engine.caps.transcript) resume = isSessionId(sessionId); // session/load (OpenCode: ses_…); a new one gets its id from session/new
     else if (!sessionId && r.forkFrom) { sessionId = r.forkFrom; resume = true; fork = true; }
     else if (isUuid(sessionId) && findTranscript(sessionId, r.s.cwd, this.home)) resume = true;
     else if (!isUuid(sessionId)) { sessionId = crypto.randomUUID(); r.s.sessionId = sessionId; this.persist(); }

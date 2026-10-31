@@ -460,6 +460,26 @@ describe('ChatManager', () => {
     expect(m.items(c.id).some(i => i.kind === 'assistant' && i.text === 'Ciao dal motore')).toBe(true);
   });
 
+  // OpenCode session ids are ses_…, not UUIDs (real run 2026-10-31): a restored chat must still resume with session/load
+  it('restored OpenCode chats resume their ses_ session with session/load after a restart', async () => {
+    const e = env();
+    const ocLog = path.join(e.userData, 'opencode.jsonl');
+    const opts = { enginePaths: { claude: FAKE, opencode: FAKE_CURSOR }, env: { FAKE_CURSOR_LOG: ocLog, FAKE_ACP_OPENCODE: '1' } };
+    const first = manager(e, opts);
+    const c = await first.m.create({ harness: 'opencode', cwd: e.cwd, prompt: 'hello' });
+    await waitFor(() => results(first.m, c.id).length === 1 && first.m.list()[0]?.state === 'idle', 'turn');
+    const sid = first.m.list()[0]?.sessionId;
+    expect(sid).toMatch(/^ses_[0-9a-f]+$/);
+    await first.m.shutdown();
+
+    const { m } = manager(e, opts);
+    expect(m.list()[0]).toMatchObject({ id: c.id, harness: 'opencode', state: 'closed', sessionId: sid });
+    await m.send(c.id, 'again');
+    await waitFor(() => results(m, c.id).length === 1, 'resumed turn');
+    expect(cursorLog(ocLog).filter(l => l.method === 'session/load').map(l => l.params?.sessionId)).toEqual([sid]);
+    expect(cursorLog(ocLog).filter(l => l.method === 'session/new')).toHaveLength(1); // the first start only
+  });
+
   // Cursor model change: never session/set_model (it writes the user's global Cursor config); the session is reopened
   // with the new --model and session/load, inside the app's own config folder
   it('changes a Cursor chat\'s model by reopening its session, never with session/set_model', async () => {

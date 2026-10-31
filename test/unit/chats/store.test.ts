@@ -39,3 +39,11 @@ it('persists the launch manifest without recomputing it or restoring raw context
   store.save(loaded); expect(new ChatStore(root).load()[0]!.launchContext).toEqual(context);
   expect(fs.readFileSync(path.join(root, 'chats.json'), 'utf8')).not.toContain('private-context');
 });
+
+it('keeps an engine session token (OpenCode ses_…) and drops anything that could be a path', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-store-sid-')); roots.push(root);
+  const rows = [['a', 'ses_0123456789abcdefABCDEF'], ['b', '../../etc/passwd'], ['c', 'x.y'], ['d', ''], ['e', 'a'.repeat(129)]]
+    .map(([id, sessionId]) => ({ id, harness: 'opencode', cwd: '/w', sessionId }));
+  fs.writeFileSync(path.join(root, 'chats.json'), JSON.stringify({ version: 2, chats: rows }));
+  expect(new ChatStore(root).load().map(c => c.sessionId)).toEqual(['ses_0123456789abcdefABCDEF', null, null, null, null]);
+});

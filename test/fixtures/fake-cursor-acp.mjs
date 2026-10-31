@@ -310,7 +310,8 @@ function request(id, method, p) {
     case 'authenticate': return out({ id, error: { code: -32602, message: 'fake: authenticate must never be called by second-brain' } });
     case 'session/new': {
       if (process.env.FAKE_CURSOR_NO_AUTH === '1') return out({ id, error: { code: -32000, message: "Authentication required. Please run 'agent login' first, then call authenticate() with methodId 'cursor_login'." } });
-      const sessionId = crypto.randomUUID();
+      // OpenCode's own ids are not UUIDs (ses_ + 26 base62 chars, OpenCode 1.19.5)
+      const sessionId = OPENCODE ? `ses_${crypto.randomBytes(13).toString('hex')}` : crypto.randomUUID();
       sessions.add(sessionId);
       mcpBySession.set(sessionId, p.mcpServers ?? []);
       if (OPENCODE) return out({ id, result: { sessionId, configOptions: configOptions() } });

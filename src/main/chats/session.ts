@@ -220,6 +220,9 @@ export interface HarnessSession {
 
 /** CLI session ids are UUIDs; only those are ever passed to --resume / --session-id or used in a path. */
 export const isUuid = (s: unknown): s is string => typeof s === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s);
+/** An engine's opaque session id (ACP session/load, Codex thread/resume): OpenCode's are `ses_…`, not UUIDs. A UUID or
+ *  one plain token (letters, digits, _ and -, never a dot or a slash): it is only ever sent back to that engine. */
+export const isSessionId = (s: unknown): s is string => isUuid(s) || (typeof s === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/.test(s));
 
 let seq = 0;
 /** Unique item id inside this app run (prefix = item kind). */
