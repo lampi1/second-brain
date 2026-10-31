@@ -91,6 +91,7 @@ row and its line here in the same change.
 | `agent_integrate_children` | work chats | Combine several finished children's commits in one staging worktree. |
 | `agent_child_feedback` | work chats | Your verdict on a delegated child's run, with evidence. |
 | `agent_work_decisions` | work chats | The user's recorded decisions for your current assignment. |
+| `ask_user` | work chats | Ask the user one Sì/No question as a panel (engines with no question tool of their own: OpenCode). |
 | `plan_propose` | work chats | Show the user your short plan for approval (Strategist). |
 | `plan_update` | work chats | Move a step of your approved plan: now, done, blocked or todo. |
 | `list_chats` | work chats | The user's chats you can write to with send_to_chat. |

@@ -61,7 +61,7 @@ import { reapEnabled, reapEngine, type Root } from './proctree';
 import { costOf, type AcpUsage } from './cursor-prices';
 import { estimateTokens } from './handoff';
 import { writeImageFiles } from './images';
-import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
+import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, type AppAsk, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 import { AgentChildrenReporter } from './agent-children';
 import type { ChildObservation } from '../../shared/agents';
 import { BRIEF_GRACE_MS, BRIEF_REFUSAL, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
@@ -120,6 +120,9 @@ export interface AcpOptions extends SessionOptions {
    *  open. Only for an engine whose session/new answers no `models` and keeps the choice in the session (never for
    *  Cursor, whose model change writes its global config) */
   modelOption?: boolean;
+  /** the engine has no question tool that reaches the app (engines/registry.ts appAsks: OpenCode): the app's ask_user
+   *  MCP tool asks for it (askUser), the answer goes back as the user's next message */
+  appAsk?: boolean;
 }
 
 /** The prompt that resumes a turn the engine's network error cut. */
@@ -265,10 +268,12 @@ interface AcpOption { optionId: string; name: string; kind: string }
 interface AcpQuestion { text: string; id: string; byLabel: Map<string, string> }
 interface Ask {
   rpcId: number | string;
-  method: 'session/request_permission' | 'cursor/ask_question' | 'cursor/create_plan';
+  method: 'session/request_permission' | 'cursor/ask_question' | 'cursor/create_plan' | 'app/ask_user';
   options?: AcpOption[];
   questions?: AcpQuestion[];
 }
+/** the yes/no labels of an app question (askUser), the recommended one marked as QUESTION_RULE asks */
+const ASK_YES = 'Sì', ASK_NO = 'No', ASK_MARK = ' (consigliato)';
 
 /** ACP tool kinds → the tool name a row and a permission panel show (PendingRequest.tool). */
 export const KIND_NAME: Record<string, string> = {
@@ -862,6 +867,7 @@ export class AcpSession implements HarnessSession {
   answer(requestId: string, answer: Answer): boolean {
     const ask = this.asks.get(requestId);
     if (!ask) return false;
+    if (ask.method === 'app/ask_user') return this.answerAppAsk(requestId, ask, answer);
     let result: Obj;
     if (ask.method === 'session/request_permission') {
       if (answer.kind !== 'permission') throw new Error('Questa è una richiesta di permesso: rispondi consenti o rifiuta.');
@@ -901,6 +907,56 @@ export class AcpSession implements HarnessSession {
     return true;
   }
 
+  /** The app's ask_user tool (appAsk engines: OpenCode has no question tool over ACP): one yes/no question panel, with
+   *  the same brief gate as cursor/ask_question (ADR 0150: a moment for a show_ui sent in parallel, then sent back at
+   *  most YESNO_RETRIES times in a row). null = shown; a string = refused, with how to ask. */
+  async askUser(q: AppAsk): Promise<string | null> {
+    if (!this.opts.appAsk) return 'ask_user: this engine has its own question tool; use it.';
+    if (this.exited || !this.proc) throw new Error(NOT_ACTIVE);
+    const text = q.question.trim().slice(0, 1000);
+    if (!text) return 'ask_user: write the question.';
+    const gate = this.opts.yesNo ?? yesNoGateOn(process.env);
+    const briefMissing = () => gate && !this.briefOff && !!this.opts.briefReady && !this.opts.briefReady();
+    if (briefMissing() && this.yesNoRefused < YESNO_RETRIES) await new Promise(r => setTimeout(r, BRIEF_GRACE_MS));
+    if (this.exited || !this.proc) throw new Error(NOT_ACTIVE);
+    const noBrief = briefMissing();
+    if (noBrief && this.yesNoRefused >= YESNO_RETRIES) this.briefOff = true;
+    if (noBrief && this.yesNoRefused < YESNO_RETRIES) {
+      this.yesNoRefused++;
+      log.info('chats', 'question sent back: no brief', { chat: this.opts.chatId, data: { engine: this.engine, attempt: this.yesNoRefused, via: 'ask_user' } });
+      return BRIEF_REFUSAL.replace('ask the same yes/no question again', 'call ask_user again');
+    }
+    this.yesNoRefused = 0;
+    const yes = q.recommended === 'no' ? ASK_YES : ASK_YES + ASK_MARK, no = q.recommended === 'no' ? ASK_NO + ASK_MARK : ASK_NO;
+    const header = q.header?.trim() ? cut(q.header.trim(), 30) : undefined;
+    const questions: Question[] = [{ question: text, ...(header ? { header } : {}), options: [{ label: yes }, { label: no }], multiSelect: false }];
+    const rid = nextId('ask');
+    this.asks.set(rid, { rpcId: '', method: 'app/ask_user', questions: [{ text, id: rid, byLabel: new Map([[yes, ASK_YES], [no, ASK_NO]]) }] });
+    this.flushAll(true);
+    this.pending({ id: rid, type: 'question', tool: 'AskUser', title: cut(text, 140), detail: text, input: { question: text, recommended: q.recommended }, questions, at: Date.now() });
+    log.info('chats', 'acp app question shown', { chat: this.opts.chatId, data: { engine: this.engine, requestId: rid } });
+    return null;
+  }
+
+  /** The user's answer to an app question: no engine request to answer, it goes to the model as the user's next message
+   *  (queued after a turn still running). "Altro…" carries the user's own words; «Ci penso dopo» / a refusal says skipped. */
+  private answerAppAsk(requestId: string, ask: Ask, answer: Answer): boolean {
+    const q = ask.questions?.[0];
+    let said: string;
+    if (answer.kind === 'question') {
+      const v = q ? answer.answers[q.text] : undefined;
+      const labels = (Array.isArray(v) ? v : typeof v === 'string' ? [v] : []).map(l => q?.byLabel.get(l) ?? l.trim()).filter(Boolean);
+      said = labels.length ? labels.join(', ') : '(nessuna risposta)';
+    } else if (!answer.allow) said = answer.message?.trim() ? `nessuna scelta; ha scritto: «${answer.message.trim()}»` : 'saltata, nessuna scelta';
+    else throw new Error('Questa è una domanda: rispondi scegliendo le opzioni.');
+    this.asks.delete(requestId);
+    log.info('chats', 'acp app question answered', { chat: this.opts.chatId, data: { engine: this.engine, requestId } });
+    this.sink.resolved(requestId);
+    this.setState(this.asks.size ? 'waiting' : 'running');
+    this.send(`Risposta dell'utente alla tua domanda «${cut(q?.text ?? '', 300)}»: ${said}`);
+    return true;
+  }
+
   /** Stop: session/cancel; every open panel is answered "cancelled" (ACP requires it) and queued messages are dropped,
    *  unless keepQueued ("Invia subito"): then they were already sent by the user and run next, as drain goes on. */
   async interrupt(opts?: { keepQueued?: boolean; byUser?: boolean }): Promise<void> {
@@ -915,7 +971,8 @@ export class AcpSession implements HarnessSession {
     // a question still waiting for its brief was never shown: it is answered cancelled too
     for (const [id, w] of [...this.briefWaited]) { if (w.timer) clearTimeout(w.timer); this.briefWaited.delete(id); this.respond(w.rpcId, { outcome: { outcome: 'cancelled' } }); }
     for (const [id, ask] of [...this.asks]) {
-      this.respond(ask.rpcId, { outcome: { outcome: 'cancelled' } });
+      // an app question (askUser) has no engine request to answer: the stop only takes it away
+      if (ask.method !== 'app/ask_user') this.respond(ask.rpcId, { outcome: { outcome: 'cancelled' } });
       this.asks.delete(id);
       this.sink.resolved(id);
     }

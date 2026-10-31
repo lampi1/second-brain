@@ -14,6 +14,7 @@ import { isCorrection } from '../../shared/correction';
 import type { SubmissionReceipt, Rec, CleanReportNote, UserWroteNote } from './manager-types';
 import { sysItem, userNoteLine } from './manager-helpers';
 import { ManagerLifecycle } from './manager-lifecycle';
+import type { AppAsk } from './session';
 
 /** The work on a chat: assignments, the user's own messages and corrections, run verdicts and metrics, the Strategist's plan. */
 export abstract class ManagerWork extends ManagerLifecycle {
@@ -24,6 +25,14 @@ export abstract class ManagerWork extends ManagerLifecycle {
     if (ledger.latestSeq === Number.MAX_SAFE_INTEGER) throw new Error('The persisted user event ledger is invalid; restore it before assigning work.');
     if (!Number.isSafeInteger(afterSeq) || afterSeq < 0 || afterSeq > ledger.latestSeq) throw new Error('Invalid event cursor.');
     return structuredClone({ ...ledger, events: ledger.events.filter(event => event.seq > afterSeq) });
+  }
+
+  /** ask_user (chats/ask-tool.ts): a yes/no question on a chat whose engine has no question tool of its own (OpenCode).
+   *  null = shown; a string = refused, with how to ask. */
+  async askUser(chatId: string, q: AppAsk): Promise<string | null> {
+    const r = this.need(chatId);
+    if (!r.session?.askUser) return 'ask_user: this chat\'s engine asks with its own question tool (AskUserQuestion on Claude, AskQuestion on Cursor).';
+    return r.session.askUser(q);
   }
 
   /** plan_propose (agents/strategy-tools.ts): the Strategist's plan waits for the user's ok on its strip. */

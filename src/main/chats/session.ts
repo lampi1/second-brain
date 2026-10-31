@@ -166,6 +166,9 @@ export interface PreToolHook {
   turnEnded(): void;
 }
 
+/** A yes/no question asked through the app's ask_user tool (askUser): the option marked «(consigliato)» is the one recommended. */
+export interface AppAsk { question: string; header?: string; recommended: 'yes' | 'no' }
+
 export interface HarnessSession {
   readonly harness: Harness;
   readonly state: ChatState;
@@ -193,6 +196,9 @@ export interface HarnessSession {
   interrupt(opts?: { keepQueued?: boolean; byUser?: boolean }): Promise<void>;
   /** the running turn is not retried by itself after a network error (Cursor only: a failed hand-off turn) */
   noRetry?(): void;
+  /** An engine with no question tool of its own (OpenCode over ACP): the app's ask_user MCP tool puts a yes/no question
+   *  on this chat; the user's answer comes back as the user's next message. A string = refused, with how to ask. */
+  askUser?(q: AppAsk): Promise<string | null>;
   setModel(model: string | null): Promise<void>;
   setPermissionMode(mode: PermissionMode): Promise<void>;
   setEffort(effort: Effort | null): Promise<void>;

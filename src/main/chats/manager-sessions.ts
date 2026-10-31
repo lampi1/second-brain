@@ -13,7 +13,7 @@ import { isUuid, type HarnessSession, type SessionOptions, type SessionSink } fr
 import { updateActivity } from '../update/activity';
 import { BufferedSink, PLAIN_LAUNCH, type WarmEngine, type WarmLaunch } from './warm';
 import { AgentMayNotWake } from '../engines/policy';
-import { engineOf, engineOrThrow } from '../engines/registry';
+import { appAsks, engineOf, engineOrThrow } from '../engines/registry';
 import { sessionFor } from '../engines/sessions';
 import { findTranscript } from './transcript';
 import { aboveCeiling, browserAccess, claudeDefaultMode, type AgentPolicy, type BrowserAccess } from '../agents/tool-policy';
@@ -225,7 +225,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
    *  endpoint (second-brain-app); a chat with no parent has no one to ask. */
   chatToolShown(chatId: string, tool: string): boolean {
     const r = this.chats.get(chatId);
-    if (r) return toolShownToChat(r.s, r.launches, tool);
+    if (r) return toolShownToChat(r.s, r.launches, tool, appAsks(engineOf(r.s.harness)));
     const warm = this.warmViews.get(chatId)?.view;
     return warm ? toolShownToWarm(warm, tool) : toolShownToUnknown(tool);
   }

@@ -213,4 +213,55 @@ describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
     expect(sink.modelLists).toEqual([]);
     expect(sets(logFile).some(([id]) => id === 'model')).toBe(false);
   });
+
+  // OpenCode has no question tool over ACP (its `question` tool is for its app/cli/desktop clients only): the app's
+  // ask_user tool asks for it, with the same yes/no panel and brief gate, and the answer is the user's next message
+  const prompts = (logFile: string) => cursorLog(logFile).filter(l => l.method === 'session/prompt').map(l => (l.params?.prompt as { text?: string }[] | undefined)?.map(p => p.text ?? '').join(''));
+
+  it('ask_user: a Sì/No panel with the recommended option marked; the answer goes back as the next message', async () => {
+    const { s, sink, logFile } = start({ ...OPENCODE, appAsk: true, briefReady: () => true, yesNo: true, env: { FAKE_ACP_OPENCODE: '1' } });
+    await waitFor(() => s.state === 'idle', 'ready');
+    expect(await s.askUser({ question: 'Parto con la correzione?', recommended: 'yes', header: 'Correzione' })).toBeNull();
+    const q = await waitFor(() => sink.pendings[0], 'question');
+    expect(q).toMatchObject({ type: 'question', tool: 'AskUser', questions: [{ question: 'Parto con la correzione?', header: 'Correzione', options: [{ label: 'Sì (consigliato)' }, { label: 'No' }], multiSelect: false }] });
+    expect(s.state).toBe('waiting');
+    expect(s.answer(q.id, { kind: 'question', answers: { 'Parto con la correzione?': 'Sì (consigliato)' } })).toBe(true);
+    await waitFor(() => prompts(logFile).length === 1 && s.state === 'idle', 'answer prompted');
+    expect(prompts(logFile)[0]).toContain('«Parto con la correzione?»: Sì');
+    expect(sink.resolvedIds).toContain(q.id);
+    // answered once: a second click finds nothing
+    expect(s.answer(q.id, { kind: 'question', answers: { 'Parto con la correzione?': 'No' } })).toBe(false);
+  });
+
+  it('ask_user: "Altro…" carries the user\'s words; a stop takes the panel away without a message', async () => {
+    const { s, sink, logFile } = start({ ...OPENCODE, appAsk: true, briefReady: () => true, yesNo: true, env: { FAKE_ACP_OPENCODE: '1' } });
+    await waitFor(() => s.state === 'idle', 'ready');
+    await s.askUser({ question: 'Uso il modello economico?', recommended: 'no' });
+    const q = await waitFor(() => sink.pendings[0], 'question');
+    expect(q.questions?.[0]?.options.map(o => o.label)).toEqual(['Sì', 'No (consigliato)']);
+    s.answer(q.id, { kind: 'question', answers: { 'Uso il modello economico?': 'solo per i test' } });
+    await waitFor(() => prompts(logFile).length === 1 && s.state === 'idle', 'answer prompted');
+    expect(prompts(logFile)[0]).toContain(': solo per i test');
+    await s.askUser({ question: 'Riprovo?', recommended: 'yes' });
+    const q2 = await waitFor(() => sink.pendings[1], 'second question');
+    await s.interrupt({ byUser: true });
+    expect(sink.resolvedIds).toContain(q2.id);
+    expect(s.state).toBe('idle');
+    expect(prompts(logFile)).toHaveLength(1);
+  });
+
+  it('ask_user without its brief is sent back (with how to ask) at most twice, then shown; never on an engine with its own tool', async () => {
+    const { s, sink } = start({ ...OPENCODE, appAsk: true, briefReady: () => false, yesNo: true, env: { FAKE_ACP_OPENCODE: '1' } });
+    await waitFor(() => s.state === 'idle', 'ready');
+    const ask = { question: 'Procedo?', recommended: 'yes' } as const;
+    expect(await s.askUser(ask)).toMatch(/show_ui with component "brief" and target "next-ask".*call ask_user again/s);
+    expect(await s.askUser(ask)).toMatch(/brief/);
+    expect(sink.pendings).toHaveLength(0);
+    expect(await s.askUser(ask)).toBeNull();
+    expect(sink.pendings).toHaveLength(1);
+    const cursorLike = start({ engineId: 'cursor', env: { FAKE_ACP_OPENCODE: '1' } });
+    await waitFor(() => cursorLike.s.state === 'idle', 'ready');
+    expect(await cursorLike.s.askUser(ask)).toMatch(/own question tool/);
+    expect(cursorLike.sink.pendings).toHaveLength(0);
+  });
 });

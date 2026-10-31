@@ -17,7 +17,7 @@ import { ClaudeSession } from '../chats/claude';
 import { CodexSession } from '../chats/codex';
 import { listPrice, registryModels } from '../chats/live-cost';
 import type { HarnessSession, SessionOptions, SessionSink } from '../chats/session';
-import { engineOf, engines, fingerprint, priceEnginesOf, type EngineDef } from './registry';
+import { appAsks, engineOf, engines, fingerprint, priceEnginesOf, type EngineDef } from './registry';
 
 /** What the app gives a session beyond the chat's own options. */
 export interface EngineContext {
@@ -82,6 +82,7 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
         engineId: engine.id, label: engine.label, args: engine.args ?? [], acpCommand: command,
         ...(engine.modelFlag ? { modelFlag: engine.modelFlag } : {}),
         ...(engine.modelOption ? { modelOption: true } : {}),
+        ...(appAsks(engine) ? { appAsk: true } : {}),
         loginCommand: engine.login.length ? [command, ...engine.login].join(' ') : null,
         ...(key && engine.keyEnv ? { env: { ...opts.env, [engine.keyEnv]: key } } : {}),
         ...(engine.cursorExtras ? cursorOptions(engine, ctx, opts.readOnly ? opts.chatId : null) : {}),

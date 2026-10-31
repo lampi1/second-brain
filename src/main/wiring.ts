@@ -33,6 +33,7 @@ import { childFeedbackTools } from './agents/child-feedback';
 import { delegationTools } from './agents/delegation';
 import { workDecisionTools } from './agents/work-decisions';
 import { strategyTools } from './agents/strategy-tools';
+import { askTools } from './chats/ask-tool';
 import { portableId } from './agents/pack/flows';
 import { memoryTools } from './rules/memory-tool';
 import { MemoryService } from './rules/memory-service';
@@ -559,6 +560,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     remember: (roleId, line, chat) => writeAgentMemory(agentPacks.packs.root(), portableId(roleId), line, { scope: { roleId: portableId(roleId), project: chat.cwd }, sourceRunId: chat.run?.runId ?? `chat:${chat.id}`, sourceEventId: `report:${chat.run?.runId ?? chat.id}` }) }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   addChatTools(strategyTools(manager, awayOn));
+  // the yes/no question of a chat whose engine has no question tool of its own (OpenCode over ACP)
+  addChatTools(askTools(manager));
   addChatTools(workDecisionTools({ chats: manager, workflows }));
   // the independent reviews of finished runs (agents/judge-sample.ts, ADR 0203): a sample, reviewed once a night by one
   // hidden Sentinel run (no chat, no strip) under the daily cap; they spend tokens, so they run only in the user's own
