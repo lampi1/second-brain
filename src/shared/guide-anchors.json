@@ -53,7 +53,7 @@
     "src/main/agents/trials.ts#safe": "560835ed3d7591b8",
     "src/main/agents/versions.ts": "f9fb9c0b39dc89b9",
     "src/main/agents/versions.ts#versionedChanges": "71563d20bff8ba1a",
-    "src/main/agents/worktrees.ts": "00c952b0627eeb16",
+    "src/main/agents/worktrees.ts": "1338e1efbfae53c8",
     "src/main/appctl/config.ts": "94ed0398c1ff4517",
     "src/main/appctl/config.ts#app_config": "963d3c3ece8e5139",
     "src/main/appctl/guide.ts#app_guide": "ad3608df52ef7447",
