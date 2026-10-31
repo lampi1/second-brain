@@ -30,24 +30,6 @@ function fixture() {
 }
 
 describe('delegation isolation', () => {
-  it('finds only the requested authentic allocation and preserves ownership and repository boundaries', async () => {
-    const f = fixture();
-    const a = f.child((await f.prepare(path.join(f.repo, 'pkg'), 'a')).cwd, 'a');
-    // a sibling worktree of the same repository the host never allocated
-    const loose = path.join(f.root, '.second-brain-delegate-loose'); git(f.repo, 'worktree', 'add', '-q', '--detach', loose);
-    const b = f.child(loose, 'b');
-    const trees = await gitWorktrees(f.parent.cwd, a.cwd);
-    expect(trees).toHaveLength(1);
-    expect(withinParent(f.parent.cwd, a.cwd, trees)).toBe(true);
-    expect(withinParent(f.parent.cwd, b.cwd, trees)).toBe(false);
-    expect(f.service.allocation(f.parent, a).childId).toBe('a');
-    expect(() => f.service.allocation(f.parent, { ...a, id: b.id })).toThrow(/host-owned/);
-    expect(() => f.service.allocation(f.parent, b)).toThrow(/host-owned/);
-    expect(() => f.service.allocation({ ...f.parent, id: 'other' }, a)).toThrow(/host-owned/);
-    expect(() => f.service.allocation(f.parent, { ...a, cwd: f.repo })).toThrow(/host-owned/);
-    const foreign = path.join(f.root, 'foreign'); fs.mkdirSync(foreign); git(foreign, 'init', '-q');
-    expect(await gitWorktrees(f.parent.cwd, foreign)).toEqual([]);
-  });
   it('routes integration only for the active owning parent under its current write permission', async () => {
     const parent = { id: 'parent', cwd: '/repo', state: 'idle', agent: { source: 'catalog', id: 'strategist' } } as ChatSummary;
     const child = { id: 'child', parentId: 'parent', cwd: '/worktree' } as ChatSummary;
@@ -180,6 +162,14 @@ describe('delegation isolation', () => {
     expect(() => f.service.allocation({ ...f.parent, run: { ...f.parent.run!, taskVersion: 2 } }, child)).toThrow(/host-owned/);
     expect(() => new DelegateWorktrees().allocation(f.parent, child)).toThrow(/host-owned/);
     expect(() => f.service.allocation(f.parent, { ...child, id: 'different-child' })).toThrow(/host-owned/);
+    expect(() => f.service.allocation({ ...f.parent, id: 'other' }, { ...child, parentId: 'other' })).toThrow(/host-owned/);
+    // reuse looks up only the allocated worktree; a sibling worktree the host never allocated owns nothing
+    const trees = await gitWorktrees(f.parent.cwd, child.cwd);
+    expect(trees).toHaveLength(1); expect(withinParent(f.parent.cwd, child.cwd, trees)).toBe(true);
+    const loose = path.join(f.root, '.second-brain-delegate-loose'); git(f.repo, 'worktree', 'add', '-q', '--detach', loose);
+    expect(() => f.service.allocation(f.parent, { ...child, cwd: loose })).toThrow(/host-owned/);
+    const foreign = path.join(f.root, 'foreign'); fs.mkdirSync(foreign); git(foreign, 'init', '-q');
+    expect(await gitWorktrees(f.parent.cwd, foreign)).toEqual([]);
   });
 
   it('persists only host-bound ownership across restart and refuses corrupt provenance', async () => {
