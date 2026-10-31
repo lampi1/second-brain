@@ -144,6 +144,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     if (!prompt.trim()) throw new Error('Task prompt is required.');
     if (options.expectedVersion !== undefined && options.expectedVersion !== (r.s.run?.taskVersion ?? 1)) throw new Error('Task version changed; refresh before assigning.');
     const source = options.source ?? { kind: 'user' as const };
+    if (source.kind !== 'user' && this.closedByUser(r)) throw new Error('The user closed this chat and cancelled its work: only the user can reopen it. Start a new chat for new work.');
     if (source.kind === 'chat') {
       if (source.chatId !== this.openOrchestrator()?.s.id && source.chatId !== r.s.parentId) throw new Error('Only the owning Orchestrator or parent can assign this chat.');
       if (source.chatId === r.s.parentId) {

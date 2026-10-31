@@ -276,6 +276,10 @@ export interface Rec {
   opening?: Promise<void> | undefined;
   /** an archive closing the session (a send waits for it, then reopens the chat on a new session) */
   archiving?: Promise<void> | undefined;
+  /** the user's close (✕) of this chat or of an ancestor started: set before its first await, so a late report, mail
+   *  or child result never reopens it while its engine is still closing; cleared only by a reopen (persisted as
+   *  closedBy 'user' once closed). Never persisted. */
+  userClosing?: true;
   /** a turn is running (persisted): set when the CLI reports running/waiting, cleared by its result, a CLI exit
    *  while the app runs, or an archive; still set after a quit or crash = resume it on the next start */
   working?: boolean;

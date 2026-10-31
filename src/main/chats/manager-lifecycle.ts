@@ -169,9 +169,12 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     return busy;
   }
 
-  /** Removes the chat from the app (its process ends; the transcript stays where the CLI keeps it). */
+  /** Removes the chat from the app (its process ends; the transcript stays where the CLI keeps it). Its delegation tree
+   *  is cancelled first, like the ✕'s archive (cancelTree), and stays among the closed chats. */
   async close(chatId: string): Promise<void> {
     const r = this.need(chatId);
+    r.userClosing = true;
+    const tree = this.cancelTree(chatId);
     this.admission?.drop(chatId); // its waiting work goes with it
     const sess = r.session;
     if (sess) await sess.close();
@@ -181,8 +184,54 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     this.endRunOf(r, 'closed');
     this.chats.delete(chatId);
     this.persist();
+    await tree;
     log.info('chats', 'chat closed', { chat: chatId });
     this.opts.emitter.emit('chat:removed', { chatId });
+  }
+
+  /** Every chat under this one (children, grandchildren… by parentId), deepest first. */
+  private descendantsOf(chatId: string): Rec[] {
+    const out: Rec[] = [], seen = new Set([chatId]);
+    let frontier = new Set([chatId]);
+    while (frontier.size) {
+      const next = new Set<string>();
+      for (const r of this.chats.values()) if (r.s.parentId && frontier.has(r.s.parentId) && !seen.has(r.s.id)) { seen.add(r.s.id); next.add(r.s.id); out.push(r); }
+      frontier = next;
+    }
+    return out.reverse();
+  }
+
+  /** The user's ✕ cancels the chat's whole delegation tree (owner, 2026-10-31: «se chiudo lo stratega dalla X si
+   *  chiudono anche tutte le chat figlie, e quando chiudo dalla x interrompo anche ovviamente l'agente e il suo
+   *  lavoro»): every descendant's turn stops, its engine and the processes it owns end (its own tree only, never a
+   *  shared process), its queued and pending work is dropped, its open questions and permissions are withdrawn
+   *  unanswered, its run ends; it stays among the closed chats with closedBy 'user', so nothing but the user reopens it
+   *  (closedByUser). Transcripts, worktrees and diffs stay. Idempotent. Never for the auto-close or a report. */
+  private async cancelTree(chatId: string): Promise<void> {
+    const tree = this.descendantsOf(chatId).filter(r => !r.s.routineArchived);
+    for (const r of tree) r.userClosing = true; // before any await: a late report or result finds them closing
+    if (!tree.length) return;
+    const results = await Promise.allSettled(tree.map(r => this.cancelOne(r)));
+    const failed = results.filter(x => x.status === 'rejected').length;
+    if (failed) log.warn('chats', 'delegation tree not fully cancelled', { chat: chatId, cause: errText((results.find(x => x.status === 'rejected') as PromiseRejectedResult).reason), hint: 'close the remaining child chats by hand; npm run logs -- --chat <id> shows why', data: { tree: tree.length, failed } });
+    log.info('chats', 'delegation tree cancelled with its chat', { chat: chatId, data: { chats: tree.length, failed } });
+  }
+
+  private async cancelOne(r: Rec): Promise<void> {
+    const id = r.s.id, q = this.childResults.get(id);
+    if (q?.timer) clearTimeout(q.timer);
+    this.childResults.delete(id);
+    if (this.chats.get(id) !== r) return;
+    if (!r.s.closedAt) { await this.archiveOne(id, {}); return; }
+    // already closed (by itself): an engine still kept (its cold note) and what it left behind go too
+    if (r.archiving) await r.archiving.catch(() => {});
+    this.admission?.drop(id);
+    const sess = r.session;
+    r.closeAfterCold = false;
+    if (sess) await sess.close();
+    this.reapKept(r);
+    for (const p of [...r.pending.keys()]) this.dropPending(r, p);
+    if (r.s.closedBy !== 'user') { r.s.closedBy = 'user'; this.persist(); this.updated(r); }
   }
 
   /** The chat goes on in a new process: the old one ends, but a dev server it started stays for the next turn
@@ -211,6 +260,15 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
    *  user's ✕ with its «Annulla» (#168): the run ends only when the close is final (chat:close, or 15 s with no reopen),
    *  so an Annulla gets the chat back with its run still open. */
   async archive(chatId: string, opts: { auto?: boolean; undoable?: boolean } = {}): Promise<ChatSummary> {
+    const r = this.need(chatId);
+    if (opts.auto || r.s.isOrchestrator) return this.archiveOne(chatId, opts);
+    // the user's close: the chat and its whole delegation tree, at once (an «Annulla» brings back this chat only)
+    r.userClosing = true;
+    const [summary] = await Promise.all([this.archiveOne(chatId, opts), this.cancelTree(chatId)]);
+    return summary;
+  }
+
+  private async archiveOne(chatId: string, opts: { auto?: boolean; undoable?: boolean }): Promise<ChatSummary> {
     const r = this.need(chatId);
     // the Orchestrator never closes (its title is the mail address the brain's rules and the chats write to)
     if (r.s.isOrchestrator) throw new Error('L’Orchestrator non si chiude: per ripartire usa Pulisci.');
