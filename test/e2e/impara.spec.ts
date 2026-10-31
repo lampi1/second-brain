@@ -403,3 +403,35 @@ test('the «Studio» beside a lesson (ADR 0205): saved outputs reopen, a new til
     await app.close();
   }
 });
+
+test('the «do something» tiles (ADR 0213): «Esercitati» gives an exercise and corrects the answer; «Interrogazione a voce» counts the questions and gives a mark', async () => {
+  test.setTimeout(90_000);
+  const { app, page } = await launchDemo();
+  try {
+    await goPage(page, 'impara');
+    await page.getByTestId('impara-lessons').locator('.ip-card', { hasText: 'Come nasce una lezione' }).locator('.ip-card-open').click();
+    await expect(page.getByTestId('impara-player')).toBeVisible();
+    await page.getByTestId('impara-side-studio').click();
+    // the three tiles where the learner does something come first
+    await expect(page.getByTestId('impara-studio').locator('.sd-tile').first()).toHaveAttribute('data-testid', 'impara-studio-practice');
+    await page.getByTestId('impara-studio-practice').locator('.sd-tile-main').click();
+    const tutor = page.getByTestId('impara-tutor');
+    await expect(tutor.getByTestId('impara-tutor-answer').last()).toContainText('Esercizio:', { timeout: 10_000 });
+    await expect(page.getByTestId('impara-tutor-quizzing')).toHaveAttribute('data-mode', 'practice');
+    await page.getByTestId('impara-tutor-input').fill('Separo la ricerca web da quella nei file.');
+    await page.getByTestId('impara-tutor-send').click();
+    await expect(tutor.getByTestId('impara-tutor-answer').last()).toContainText('Soluzione:', { timeout: 10_000 });
+    await expect(page.getByTestId('impara-tutor-quizzing')).toContainText('Esercizio 2');
+    await page.getByTestId('impara-tutor-quiz-stop').click();
+    await expect(page.getByTestId('impara-tutor-quizzing')).toHaveCount(0, { timeout: 10_000 });
+    // the oral exam: the questions in the tutor, a mark at the end
+    await page.getByTestId('impara-side-studio').click();
+    await page.getByTestId('impara-studio-oral').locator('.sd-tile-main').click();
+    await expect(tutor.getByTestId('impara-tutor-answer').last()).toContainText('Domanda:', { timeout: 10_000 });
+    await expect(page.getByTestId('impara-tutor-quizzing')).toContainText('Domanda 1 di 5');
+    await page.getByTestId('impara-tutor-quiz-stop').click();
+    await expect(tutor.getByTestId('impara-tutor-answer').last()).toContainText('Voto: 7 su 10', { timeout: 10_000 });
+  } finally {
+    await app.close();
+  }
+});

@@ -217,7 +217,13 @@ export interface Lesson {
 /** coach: when the learner has not tried yet, a hint or a question back first (Bastani et al. 2024: a tutor that does
  *  not hand out the answer keeps the learning); tell: the answer at once («Dimmelo e basta»); quiz: «Mettimi alla
  *  prova» (ADR 0205), the tutor asks one question at a time and judges each answer */
-export type TutorMode = 'coach' | 'tell' | 'quiz';
+/** coach: a hint first; tell: the answer; quiz: «Mettimi alla prova»; oral: «Interrogazione a voce» (ADR 0213, said
+ *  aloud, a mark out of 10 at the end); practice: «Esercitati» (an exercise to solve, then its correction). */
+export type TutorMode = 'coach' | 'tell' | 'quiz' | 'oral' | 'practice';
+export const TUTOR_MODES: readonly TutorMode[] = ['coach', 'tell', 'quiz', 'oral', 'practice'];
+export const tutorModeOf = (v: unknown): TutorMode => (TUTOR_MODES as readonly unknown[]).includes(v) ? v as TutorMode : 'coach';
+/** the modes that ask the learner one question (or exercise) after another, until «Basta così» */
+export const isAskingMode = (m: TutorMode | undefined): boolean => m === 'quiz' || m === 'oral' || m === 'practice';
 export interface TutorTurn {
   id: string;
   /** what the learner asked or tried (maybe spoken) */

@@ -224,9 +224,18 @@ ${mode === 'coach'
     : mode === 'quiz'
       ? `- «Mettimi alla prova»: you are quizzing the learner on this lesson, one question at a time. If your last message (above) asked a question and the learner now answers it: say first whether it is right, partly right or wrong and why, in 1-3 sentences citing the fact. Then (or at once, when nothing was asked yet) ask ONE new question from a different verified fact: a why, a how, a «what happens if», never trivia or a phrase to recognise. End with the question; do not give its answer.
 - If the learner says to stop, close with one sentence on what they know well and what to review.`
-      : '- The learner asked for the answer straight away: explain it clearly in 2-6 sentences, no question back.'}
-- Plain markdown, at most 150 words, no headings. Cite the facts you use as [f1]. Say only what the facts, the lesson or the files support; when they do not say it, say you do not know.
-- ${mode === 'quiz' ? 'No card line: the quiz leaves none.' : 'When (and only when) you gave a full explanation that verified facts support, end with ONE last line, exactly: CARD: {"q": "the question, clear on its own without the lesson", "answer": "the answer in 1-3 sentences", "cites": ["f1"]}'}`;
+      : mode === 'oral'
+        ? `- «Interrogazione a voce»: an oral exam, like a teacher at school. Everything you write is READ ALOUD by a voice and the learner answers by speaking (the text is transcribed: ignore small word errors, never the meaning). So: short spoken sentences, no lists, no code, no symbols, no headings.
+- If your last message asked a question and the learner now answers it: say whether it is right, partly right or wrong and why, in 1-2 sentences, like a fair teacher. Then ask ONE new question from a different verified fact that asks to explain a why or a how in their own words (never a yes or no, never a word to recall).
+- Count the questions you asked above. After the learner's fifth answer, or when they say to stop: do not ask again; give the mark as «Voto: N su 10» (N from how right the answers were, honestly), one sentence on what they know well and one on what to review.`
+        : mode === 'practice'
+          ? `- «Esercitati»: hands-on exercises on this lesson, one at a time, that make the learner DO something: solve a small problem, apply the idea to a new concrete case, compute a value, find the mistake in an example, or (only when the lesson is about code) write or fix a few lines of code. Never a question of definition.
+- If your last message gave an exercise and the learner now answers it: correct it first (what is right, what is wrong and why, citing the fact), then show a short model solution. Then give the next exercise, a little harder if they got it right, simpler if not.
+- When nothing was given yet: give the first exercise, easy, with everything needed to solve it. End with the exercise; do not give its solution.
+- If the learner says to stop, close with one sentence on what they can already do and what to practise.`
+          : '- The learner asked for the answer straight away: explain it clearly in 2-6 sentences, no question back.'}
+- ${mode === 'oral' ? 'Plain sentences, at most 90 words.' : `Plain markdown, at most ${mode === 'practice' ? 220 : 150} words, no headings.`} Cite the facts you use as [f1]. Say only what the facts, the lesson or the files support; when they do not say it, say you do not know.
+- ${mode === 'quiz' || mode === 'oral' || mode === 'practice' ? 'No card line: these sessions leave none.' : 'When (and only when) you gave a full explanation that verified facts support, end with ONE last line, exactly: CARD: {"q": "the question, clear on its own without the lesson", "answer": "the answer in 1-3 sentences", "cites": ["f1"]}'}`;
 }
 
 // ── the quality gate (ADR 0205) ─────────────────────────────────────────────────────────────────────────────────────
