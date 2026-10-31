@@ -5,6 +5,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ## [Unreleased]
 
+### Added
+- OpenCode as an engine (`opencode acp`, off until turned on in Settings → Motori): any provider set up in
+  OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
+
 ### Changed
 - Recordings transcribe faster: close sentences of the same speaker go to Whisper as one piece of up to 19 s,
   instead of each sentence padded with 10 s of silence (ADR 0215).
