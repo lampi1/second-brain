@@ -20,7 +20,7 @@
 // rest (Spiegamelo meglio M, Fammi un esempio E, Mostrami il codice C, Domanda D), keys that work without the menu too.
 // Used by ImparaPage.tsx; styles impara.css.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { beatsOf, checkKey, doneNodes, isFlowchart, parseLessonCommand, parseSpokenChoice, playlist, rootOf, stepKey, type Lesson, type LessonBeat, type LessonCheck, type LessonExtraKind, type LessonFact, type LessonStep, type PlayItem, type PrepPhase, degradedCause } from '@shared/lesson';
+import { beatsOf, checkKey, doneNodes, isFlowchart, parseLessonCommand, parseSpokenChoice, playlist, rootOf, stepKey, type Lesson, type LessonBeat, type LessonCheck, type LessonExtraKind, type LessonFact, type LessonStep, type PlayItem, type PrepPhase, degradedCause, refusedModel } from '@shared/lesson';
 import { answerCheck, askExtra, askTutor, explainBack, impara, imparaPrefs, loadLesson, moveTo, removeLesson, retryLesson, setImparaPrefs, type ImparaSide } from '../../lib/impara';
 import type { StudioKind, StudioLive } from '@shared/lesson-studio';
 import { quizRight, type QuizResponse } from '@shared/quiz';
@@ -99,12 +99,16 @@ function Preparing({ lesson }: { lesson: Lesson }) {
 }
 
 function Failed({ lesson }: { lesson: Lesson }) {
+  // a refused model says why in the user's language, never the engine's raw words
+  const refused = refusedModel(lesson.error);
   return (
     <div className="ip-player" data-testid="impara-player">
       <Head lesson={lesson} />
       <div className="ip-failed" data-testid="impara-failed" role="alert">
         <h3>{t('impara.failed.title')}</h3>
-        <p>{lesson.error ?? t('impara.failed.unknown')}</p>
+        {refused !== null
+          ? <p data-testid="impara-failed-why">{t('impara.degraded.model', { model: refused })}</p>
+          : <p>{lesson.error ?? t('impara.failed.unknown')}</p>}
         <div className="ip-row">
           <Button variant="primary" onClick={() => void retryLesson(lesson.id)} testid="impara-retry"><IconRefresh size={13} />{t('impara.retry')}</Button>
           <Button onClick={() => askConfirm({ title: t('impara.removeTitle'), body: t('impara.removeBody', { title: lesson.title }), confirmLabel: t('impara.remove'), danger: true, onConfirm: () => void removeLesson(lesson.id).then(ok => { if (ok) go({ page: 'impara' }); }) })} testid="impara-remove"><IconTrash size={13} />{t('impara.remove')}</Button>

@@ -8,7 +8,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { teacherOption } from '../../src/main/learn/sources';
 import { AcceptedModels, PROBE_MODEL, parseModelRefusal, probeAccepted } from '../../src/main/learn/accepted-models';
-import { degradedCause, MODEL_REFUSED, TOOLS_REFUSED } from '../../src/shared/lesson';
+import { degradedCause, MODEL_REFUSED, refusedModel, TOOLS_REFUSED } from '../../src/shared/lesson';
 import { teacherModels } from '../../src/renderer/components/impara/ImparaOptions';
 
 const opencode = { id: 'opencode', label: 'OpenCode', kind: 'acp', caps: { effort: false } };
@@ -58,12 +58,13 @@ describe('parseModelRefusal', () => {
 describe('AcceptedModels', () => {
   const store = () => new AcceptedModels(path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-acc-')), 'learn', 'accepted-models.json'));
 
-  it('keeps the list per engine on disk; a cut copy of it never replaces the whole', () => {
+  it('keeps the list per engine on disk; a model the CLI dropped leaves it with the next refusal', () => {
     const s = store();
     expect(s.get('cursor')).toBeNull();
     s.learn('cursor', ['auto', 'gpt-5.2', 'composer-2.5']);
-    s.learn('cursor', ['auto', 'gpt-5.2']);
     expect(s.get('cursor')).toEqual(['auto', 'gpt-5.2', 'composer-2.5']);
+    s.learn('cursor', ['auto', 'gpt-5.2']);
+    expect(s.get('cursor')).toEqual(['auto', 'gpt-5.2']);
     s.learn('cursor', ['auto', 'kimi-k3-low']);
     expect(s.get('cursor')).toEqual(['auto', 'kimi-k3-low']);
     s.learn('../x', ['auto']);
@@ -88,6 +89,13 @@ describe('degradedCause', () => {
     expect(degradedCause(`failed: ${REFUSAL}`)).toEqual({ kind: 'model', model: 'auto-smart' });
     expect(degradedCause(`failed: ${TOOLS_REFUSED}Read, Grep`)).toEqual({ kind: 'tools', tools: 'Read, Grep' });
     expect(degradedCause('failed: tempo scaduto (45 min): fermato')).toEqual({ kind: 'other', text: 'tempo scaduto (45 min): fermato' });
+  });
+
+  it('finds the refused model inside a failed lesson’s error too, so it is said in the user’s language', () => {
+    expect(refusedModel(`Il modello non ha preparato la lezione: ${MODEL_REFUSED}auto-smart`)).toBe('auto-smart');
+    expect(refusedModel(`Il modello non ha preparato la lezione: ${REFUSAL}`)).toBe('auto-smart');
+    expect(refusedModel('Il modello non ha preparato la lezione: tempo scaduto')).toBeNull();
+    expect(refusedModel(undefined)).toBeNull();
   });
 });
 

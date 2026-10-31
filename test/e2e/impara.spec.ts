@@ -502,4 +502,16 @@ test('who explains: every model of an engine, searched; a failed research says i
   } finally {
     await l.app.close();
   }
+  // a lesson whose plan the engine refused for its model: the cause in the user's language, never the raw error
+  fs.writeFileSync(file, JSON.stringify({ ...lesson, state: 'failed', error: 'Il modello non ha preparato la lezione: model refused: auto-smart' }));
+  l = await launchDemo({ userData });
+  try {
+    await goPage(l.page, 'impara');
+    await l.page.getByTestId(`impara-lesson-${id}`).locator('.ip-card-open').click();
+    await expect(l.page.getByTestId('impara-failed-why')).toContainText('non accetta il modello «auto-smart»');
+    await expect(l.page.getByTestId('impara-failed')).not.toContainText('model refused');
+    await shot(l.page, 'impara-failed-model-dark');
+  } finally {
+    await l.app.close();
+  }
 });

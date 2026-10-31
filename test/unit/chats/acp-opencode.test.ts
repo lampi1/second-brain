@@ -147,6 +147,16 @@ describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
     expect(permissionView({ title, content: text('```json\n[1, 2]\n```') }, undefined, 'Tool').detail).toBe('[1,2]');
   });
 
+  it('a fenced payload never hides or merges what will run: multi-line commands, inline, nested and unclosed fences', () => {
+    const text = (t: string) => [{ type: 'content', content: { type: 'text', text: t } }];
+    const view = (t: string) => permissionView({ title: 'Shell', content: text(t) }, undefined, 'Tool').detail;
+    expect(view('```json\n{"command":"git status\\ngit push --force"}\n```')).toBe('command: git status\ngit push --force');
+    expect(view('Run ```rm -rf /tmp/x```')).toBe('Run\nrm -rf /tmp/x');
+    expect(view('```whoami```')).toBe('whoami');
+    expect(view('````md\nPlan\n```json\n{"limit": 5}\n```\n````')).toBe('Plan\nlimit: 5');
+    expect(view('```json\n{"query": "x"')).toBe('{"query": "x"');
+  });
+
   it('a multi-line command keeps one line per command in the panel, never one flattened line', () => {
     const v = permissionView({ title: 'bash', rawInput: { command: 'git status\r\ngit push   --force origin main', description: 'two steps' } }, undefined, 'Execute');
     expect(v.detail.split('\n').slice(0, 2)).toEqual(['git status', 'git push --force origin main']);

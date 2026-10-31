@@ -77,13 +77,21 @@ export const MODEL_REFUSED = 'model refused: ';
 /** Why a failed research phase failed, as the lesson's banner says it: the engine took no such model (pick another),
  *  it refused the run its tools, or another error in its own words (cut). */
 export type DegradedCause = { kind: 'model'; model: string } | { kind: 'tools'; tools: string } | { kind: 'other'; text: string };
+/** The model an engine refused, anywhere in an error («model refused: X», or the CLI's own «Cannot use this model: X.» of
+ *  a lesson made before the app read the refusal), or null: a failed lesson and a failed research say it the same way. */
+export function refusedModel(text: string | undefined): string | null {
+  const t = text ?? '';
+  const at = t.indexOf(MODEL_REFUSED);
+  if (at >= 0) return t.slice(at + MODEL_REFUSED.length).split(/\s/)[0] ?? '';
+  const cli = /Cannot use this model: (\S+?)\.(?:\s|$)/.exec(t);
+  return cli ? cli[1]! : null;
+}
+
 export function degradedCause(why: string | undefined): DegradedCause {
   const t = (why ?? '').replace(/^failed:\s*/, '').trim();
-  if (t.startsWith(MODEL_REFUSED)) return { kind: 'model', model: t.slice(MODEL_REFUSED.length).split(/\s/)[0] ?? '' };
+  const model = refusedModel(t);
+  if (model !== null) return { kind: 'model', model };
   if (t.startsWith(TOOLS_REFUSED)) return { kind: 'tools', tools: t.slice(TOOLS_REFUSED.length) };
-  // a lesson made before the app read the refusal: the CLI's own words (Cursor's `--model`)
-  const cli = /Cannot use this model: (\S+?)\.(?:\s|$)/.exec(t);
-  if (cli) return { kind: 'model', model: cli[1]! };
   return { kind: 'other', text: t.length > 160 ? `${t.slice(0, 159)}…` : t };
 }
 

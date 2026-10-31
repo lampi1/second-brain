@@ -9,6 +9,7 @@ import { runRead } from './learn/material';
 import { appGuide, teacherOption } from './learn/sources';
 import { AcceptedModels, parseModelRefusal, probeAccepted } from './learn/accepted-models';
 import { MODEL_REFUSED } from '@shared/lesson';
+import { errText, log } from './log';
 import { uiLang } from './locale';
 import { engineInfos } from './engines/registry';
 import { withApiModels } from './engines/sessions';
@@ -64,7 +65,8 @@ export function buildLearn(ctx: Ctx, brain: BrainService, tasks: TaskService, he
       const out = await headless.run({ engine: e.id, model, effort: e.caps.effort ? r.effort : null, cwd: r.cwd, prompt: r.prompt, round: r.round, timeoutMs: r.timeoutMs, ...(r.web ? { web: true } : {}), ...(r.onText ? { onText: r.onText } : {}) });
       if (out.ok) return { ok: true, text: out.text, costUsd: out.costUsd, engine: e.id, model: out.model, ...(out.deniedTools ? { deniedTools: out.deniedTools } : {}) };
       // the engine took no such model: its list is kept (the form offers only those now) and the lesson says why
-      if (out.acceptedModels) accepted.learn(e.id, out.acceptedModels);
+      // a file that cannot be written (locked by an antivirus) never hides the refusal itself
+      if (out.acceptedModels) try { accepted.learn(e.id, out.acceptedModels); } catch (err) { log.warn('learn', 'accepted models not saved', { cause: errText(err), data: { engine: e.id } }); }
       const refused = parseModelRefusal(out.error);
       return { ok: false, error: refused ? `${MODEL_REFUSED}${refused.model}` : out.error };
     },

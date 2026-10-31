@@ -4,7 +4,7 @@
 // "Cannot use this model: X. Available models: a, b, …" (real run 2026-10-31). That refusal is the only list the CLI
 // gives without a prompt: it is read here and kept per engine in userData/learn/accepted-models.json, so the start form
 // offers only those (learn/sources.ts teacherOption). Used by wiring-builders.ts buildLearn and compare/headless.ts;
-// tests: test/unit/learn-accepted-models.test.ts.
+// tests: test/unit/learn-teachers.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -39,9 +39,15 @@ export async function probeAccepted(engine: string, store: AcceptedModels,
 
 /** The ids an engine accepts once one refusal listed them, on disk (written atomically: tmp + rename). */
 export class AcceptedModels {
+  /** the file as last read or written (teachers() asks at every state(): one disk read per process) */
+  private cache: Record<string, string[]> | null = null;
   constructor(private readonly file: string) {}
 
   private read(): Record<string, string[]> {
+    return this.cache ??= this.load();
+  }
+
+  private load(): Record<string, string[]> {
     try {
       const raw: unknown = JSON.parse(fs.readFileSync(this.file, 'utf8'));
       if (!raw || typeof raw !== 'object') return {};
@@ -58,16 +64,16 @@ export class AcceptedModels {
     return ids?.length ? ids : null;
   }
 
-  /** Keeps the list a refusal gave (a shorter one, e.g. a cut text, never replaces a longer one it is part of). */
+  /** Keeps the list the latest refusal gave, whole (it is read from the full error, never a cut one): a model the CLI
+   *  dropped leaves the offer at once. */
   learn(engine: string, accepted: readonly string[]): void {
     const ids = accepted.filter(x => ID.test(x)).slice(0, MAX);
     if (!ENGINE.test(engine) || !ids.length) return;
-    const all = this.read(), had = all[engine] ?? [];
-    if (had.length > ids.length && ids.every(x => had.includes(x))) return;
-    all[engine] = ids;
+    const all = { ...this.read(), [engine]: ids };
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = `${this.file}.${process.pid}.tmp`;
     fs.writeFileSync(tmp, JSON.stringify(all));
     fs.renameSync(tmp, this.file);
+    this.cache = all;
   }
 }
