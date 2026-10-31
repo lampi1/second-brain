@@ -1249,8 +1249,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un albero di deleghe si chiude tutto insieme: le chat che hanno finito aspettano le altre, e il tempo parte quando ha finito l’ultima.',
         'A delegation tree closes as one: the chats that finished wait for the others, and the time starts when the last one finished.'),
       // src/renderer/components/SidebarTree.tsx
-      b('Puoi chiudere una chat anche dalla barra laterale: passa sopra la sua riga e premi ✕ (6 secondi per Annulla).',
-        'You can also close a chat from the sidebar: hover its row and press ✕ (6 seconds to undo).'),
+      b('Puoi chiudere una chat anche dalla barra laterale: passa sopra la sua riga e premi ✕ (6 secondi per Annulla). Chiudere con ✕ ferma la chat e tutte le sue figlie: lavoro, domande e processi finiscono e non ripartono da soli; Annulla riapre solo quella chat.',
+        'You can also close a chat from the sidebar: hover its row and press ✕ (6 seconds to undo). Closing with ✕ stops the chat and all its children: their work, questions and processes end and they do not restart by themselves; Undo brings back only that chat.'),
     ],
     analogy: b('Come un collega che, consegnato il lavoro, sgombra la scrivania: ma se aspetta una tua firma resta lì, con il foglio in mano.',
       'Like a colleague who clears the desk after handing in the work: but when waiting for your signature, stays there, paper in hand.'),
