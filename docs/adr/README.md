@@ -216,3 +216,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0208](0208-docs-keep-up-with-the-code.md) Docs keep up with the code: tool catalog, Guida coverage, README freshness — accepted
 - [0209](0209-strategist-asks-more-and-varied-reactions.md) The Strategist asks at least three questions; reactions fit the message; Flash writes the brief — accepted
 - [0210](0210-remove-model-routing.md) Remove the model-routing classifier: every agent runs on its own card's model — accepted
+- [0211](0211-small-fixes-and-real-effort.md) Agent card picks model, effort and context; real effort names; owner's small fixes of 2026-10-31 — accepted

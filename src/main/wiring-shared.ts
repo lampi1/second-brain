@@ -2,7 +2,10 @@
 // tools, «Rispondi dopo», the «Esegui» runner and its requests, the emitter taps (Orchestrator wake, run results,
 // show_ui visuals), «Aggiorna» from GitHub and the role catalog. Each takes what it needs; none keeps state here.
 import { app } from 'electron';
-import type { CliStatus, Harness, RunInfo } from '../shared/contract';
+import type { CliStatus, Harness, ModelRegistry, RunInfo } from '../shared/contract';
+import type { AgentModelChoice } from '../shared/agents';
+import { modelRow } from './brain/routing';
+import { templateRoot } from './rules/tools';
 import { SEND_MODE_RULE } from '../shared/newchat';
 import { engineInfos, engineOf } from './engines/registry';
 import { withApiModels } from './engines/sessions';
@@ -180,14 +183,32 @@ export function createAppSource(ctx: Pick<Ctx, 'emitter' | 'userData'>, appRepo:
   });
 }
 
+/** A model of the catalog with what its registry row knows (the card's back offers only these, ADR 0211): the efforts
+ *  it takes by their real names, its default effort and its context window. */
+function withModelFacts(m: { id: string; name: string }, reg: ModelRegistry | null): AgentModelChoice['models'][number] {
+  const row = modelRow(m.id, reg);
+  if (!row) return m;
+  // a brain made before the registry knew context windows: the release template's row says it
+  const window = row.contextWindow ?? modelRow(m.id, templateRegistry())?.contextWindow;
+  return { ...m, efforts: [...row.efforts], defaultEffort: row.defaultEffort, ...(window ? { contextWindow: window } : {}) };
+}
+let template: ModelRegistry | null | undefined;
+/** The release template's harness/models.json, read once. */
+function templateRegistry(): ModelRegistry | null {
+  if (template === undefined) {
+    try { const j = JSON.parse(fs.readFileSync(path.join(templateRoot(), 'harness', 'models.json'), 'utf8')) as ModelRegistry; template = j && Array.isArray(j.models) ? j : null; } catch { template = null; }
+  }
+  return template;
+}
+
 /** Shared by real and demo wiring. */
 export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: EnginesApi, cli: () => Record<Harness, CliStatus> | null, onCustomized?: () => void): AgentCatalogService {
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
     tierModel: (engine, tier) => tierModel(engine, tier, brain.modelRegistry(), brain.settings().modelTiers),
     models: () => {
-      const seen = withApiModels(brain.modelsSeen());
+      const seen = withApiModels(brain.modelsSeen()), reg = brain.modelRegistry();
       return engineInfos().map(e => ({ engine: e.id, label: e.label, enabled: engineOn(brain.settings(), e.id), trusted: e.trusted, effort: e.caps.effort, maxContext: e.kind === 'claude',
-        models: seen[e.id]?.ids ?? [], source: seen[e.id]?.ids.length ? seen[e.id]!.at > 0 ? 'observed' as const : 'registry' as const : 'unknown' as const,
+        models: (seen[e.id]?.ids ?? []).map(m => withModelFacts(m, reg)), source: seen[e.id]?.ids.length ? seen[e.id]!.at > 0 ? 'observed' as const : 'registry' as const : 'unknown' as const,
         installed: e.kind === 'api' ? null : cli()?.[e.id]?.found ?? null, authenticated: e.kind === 'api' ? engines.hasKey(e.id) : cli()?.[e.id]?.loggedIn ?? null,
         defaultModel: e.kind !== 'api', modelSelectable: e.kind !== 'acp' || !!engineOf(e.id)?.modelFlag,
         modelReason: e.kind === 'acp' && !engineOf(e.id)?.modelFlag ? 'Questo adattatore non può applicare una scelta di modello. È disponibile il default CLI.' : null }));

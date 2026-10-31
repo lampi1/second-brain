@@ -2,7 +2,7 @@
 // it is for, engine and model tier («Modello: alto»), a live status, its level (from the XP of its verified successful runs, ADR 0131,
 // shown beside it: «Lv 7 Praticante · 124 XP», ADR 0100; for a work role, when the nightly review last updated it, ADR 0203) and performance % (a Bayesian estimate of the verdicts weighted by trust and
 // recency, with its ±, the agent's own word excluded, with the verdicts it rests on; main/agents/standing.ts), each with a "?" giving the formula, and four compact run metrics (the success rate among them: verified verdicts only, shared/success.ts, ADR 0186); a click anywhere on the card flips it in 3D (#81)
-// to the back: the role's instructions, the skills it loads at every launch, its memory, its permissions («Tutto consentito» or how
+// to the back: the model, effort and context window pickers (AgentCardModel.tsx, ADR 0211), the role's instructions, the skills it loads at every launch, its memory, its permissions («Tutto consentito» or how
 // far the user narrowed it, with "Modifica permessi" to its permissions card, where its MCP servers are too, ADR 0085,
 // 0086), the run facts, its costs (median per run, per verified success, over how many runs: the only per-agent costs in
 // the app since Costi dropped its per-agent blocks, #125) and "Apri". A second click, or Esc, flips it back; the hidden face is inert, so
@@ -18,6 +18,7 @@ import { characterTone } from '../lib/character-art';
 import type { MemoryFile } from '@shared/brain-model';
 import { locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
+import { AgentCardModel } from './AgentCardModel';
 import { PERMISSIONS_ELEMENT, permissionSummary } from './RolePermissions';
 import { updatedWhen } from './JudgingSwitch';
 import { now as clockNow } from '../lib/clock';
@@ -138,7 +139,8 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
   useEffect(() => {
     if (!flipped) return;
     // capture, and stopped: Esc flips the card back instead of leaving the page (the app's global Esc)
-    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); flip(false); } };
+    // an open picker on the back (AgentCardModel's Select lists) takes its own Esc first
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape' && !document.querySelector('.ui-select-list[role="listbox"]')) { e.preventDefault(); e.stopImmediatePropagation(); flip(false); } };
     window.addEventListener('keydown', esc, true);
     return () => window.removeEventListener('keydown', esc, true);
   }, [flipped]);
@@ -204,6 +206,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
           <h3><button ref={back} type="button" onClick={() => flip(false)} aria-describedby={`${backId}-b`} data-testid={`catalog-unflip-${profile.id}`}>{profile.name}</button></h3>
           <span id={`${backId}-b`} className="sr-only">{t('bm.card.flipBack', { name: profile.name })}</span>
         </header>
+        <AgentCardModel profile={profile} />
         <section className="catalog-prompt" aria-label={t('agentDetail.prompt')}>
           <h4>{t('agentDetail.prompt')}{prompt && <small>{t('agentDetail.promptSize', { n: prompt.length })}</small>}</h4>
           {prompt ? <pre tabIndex={0} data-testid={`catalog-prompt-${profile.id}`}>{prompt}</pre> : <p>{t('agentDetail.promptEmpty')}</p>}

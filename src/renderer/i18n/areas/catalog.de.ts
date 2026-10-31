@@ -3,7 +3,7 @@ import type { catalogIt } from './catalog.it';
 export const catalogDe: typeof catalogIt = {
   // the Agenti page's review switch (JudgingSwitch.tsx)
   'catalog.judging.title': 'Prüfung von Level und Leistung aktivieren',
-  'catalog.judging.onDesc': 'Ein: Jede Nacht prüft ein verborgener Sentinel eine Stichprobe der erledigten Aufgaben, die Tests und deine Bewertungen nicht schon entscheiden (25 % pro Rolle, 10 %, wenn die Rolle stabil ist). Kein Chat im Grindhouse. Level und Leistung beruhen auf echten Urteilen.',
+  'catalog.judging.onDesc': 'Ein: Einmal am Tag prüft ein verborgener Sentinel (kein Chat im Grindhouse) eine Stichprobe der erledigten Aufgaben, die Tests und deine Bewertungen nicht schon entscheiden: 25 % pro Rolle, 10 %, wenn die Rolle stabil ist. Wann: um 3:00 Uhr nur, wenn PC und App laufen; sonst bei der ersten Pause nach dem nächsten Start (App seit 5 Minuten offen, 10 Minuten keine Taste und keine Maus) oder sofort im Nachtmodus. Nach mehreren verpassten Nächten bleibt es eine Prüfung über die Aufgaben der letzten 7 Tage, innerhalb des Ausgabenlimits.',
   'catalog.judging.receipts': (p: { runs: string }) => `Weitere ${p.runs} Aufgaben pro Tag entscheiden ihre Belege (die nach der letzten Änderung ausgeführten Tests und Prüfungen): keine Prüfung, keine Kosten.`,
   'catalog.judging.offDesc': 'Aus: keine Prüfungen. Level und Leistung zählen nur deine Bewertungen, die des Orchestrators und die Fakten.',
   'catalog.judging.offSince': (p: { day: string }) => `Prüfung aus seit ${p.day}: keine unabhängige Prüfung, nur deine eigenen Stimmen zählen.`,
@@ -17,7 +17,7 @@ export const catalogDe: typeof catalogIt = {
   'catalog.when.yesterday': (p: { time: string }) => `gestern um ${p.time}`,
   'catalog.when.date': (p: { date: string; time: string }) => `am ${p.date} um ${p.time}`,
   'catalog.updated': (p: { when: string }) => `Aktualisiert ${p.when}`,
-  'catalog.updated.tip': 'Die Prüfungen des Sentinels kommen einmal am Tag, nachts; deine Bewertungen und die Belege zählen sofort.',
+  'catalog.updated.tip': 'Die Prüfungen des Sentinels kommen einmal am Tag: um 3:00 Uhr, wenn der PC an ist, sonst bei der ersten Pause nach dem Start; deine Bewertungen und die Belege zählen sofort.',
   'catalog.judging.costNone': 'Geschätzte Kosten: noch keine Daten (keine Aufgabe in den letzten 7 Tagen erledigt).',
   'catalog.deliveryCoverage': "Zustellungsabdeckung",
   'catalog.deliveryScope': "Aufbewahrte kanonische Ergebnisse beendeter Runs; bereinigte Aggregate ausgenommen.",

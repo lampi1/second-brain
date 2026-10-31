@@ -9,10 +9,11 @@ export const DEMO_REGISTRY: ModelRegistry = {
   harnesses: { claude: { routing: 'auto' }, cursor: { routing: 'manual' }, api: { routing: 'manual' } },
   defaultModel: 'claude-opus-5-5', modifiers: { usGeo: 1.1, webSearchPerRequest: 0.01 },
   models: [
-    { id: 'claude-fable-5-1', harness: 'claude', provider: 'anthropic', aliases: ['fable'], routing: 'auto', tier: 'top', price: p(10, 12.5, 20, 0.25, 50), efforts: [...ALL], defaultEffort: 'high' },
-    { id: 'claude-opus-5-5', harness: 'claude', provider: 'anthropic', aliases: ['opus'], routing: 'auto', tier: 'strong', fastFactor: 2, price: p(4, 5, 8, 0.2, 20), efforts: [...ALL], defaultEffort: 'medium' },
-    { id: 'claude-sonnet-5-5', harness: 'claude', provider: 'anthropic', aliases: ['sonnet'], routing: 'auto', tier: 'mid', price: p(2, 2.5, 4, 0.1, 10), efforts: [...ALL], defaultEffort: 'high' },
-    { id: 'claude-haiku-5-5', harness: 'claude', provider: 'anthropic', aliases: ['haiku'], routing: 'auto', tier: 'fast', price: p(0.1, 0.125, 0.2, 0.01, 0.5), efforts: [...ALL], defaultEffort: 'medium' },
+    { id: 'claude-fable-5-1', harness: 'claude', provider: 'anthropic', aliases: ['fable'], routing: 'auto', tier: 'top', price: p(10, 12.5, 20, 0.25, 50), efforts: [...ALL], defaultEffort: 'high', contextWindow: 1_000_000 },
+    { id: 'claude-opus-5-5', harness: 'claude', provider: 'anthropic', aliases: ['opus'], routing: 'auto', tier: 'strong', fastFactor: 2, price: p(4, 5, 8, 0.2, 20), efforts: [...ALL], defaultEffort: 'medium', contextWindow: 1_000_000 },
+    { id: 'claude-sonnet-5-5', harness: 'claude', provider: 'anthropic', aliases: ['sonnet'], routing: 'auto', tier: 'mid', price: p(2, 2.5, 4, 0.1, 10), efforts: [...ALL], defaultEffort: 'high', contextWindow: 1_000_000 },
+    { id: 'claude-haiku-5-5', harness: 'claude', provider: 'anthropic', aliases: ['haiku'], routing: 'auto', tier: 'fast', price: p(0.1, 0.125, 0.2, 0.01, 0.5), efforts: [...ALL], defaultEffort: 'medium', contextWindow: 1_000_000 },
+    { id: 'claude-sonnet-4-6', harness: 'claude', provider: 'anthropic', routing: 'manual', tier: 'mid', price: p(3, 3.75, 6, 0.3, 15), efforts: ['low', 'medium', 'high', 'max'], defaultEffort: 'high', contextWindow: 1_000_000 },
     { id: 'grok-4.7', harness: 'cursor', provider: 'xai', routing: 'manual', price: p(3, 3, 3, 0.75, 15), efforts: [], defaultEffort: null },
   ],
 };

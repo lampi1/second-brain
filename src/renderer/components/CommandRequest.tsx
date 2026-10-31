@@ -3,7 +3,8 @@
 // compact). It shows
 // who proposed it, the chat's explanation right before the block (`command.lead`, in sight; the turn's prose under
 // "Contesto", one click away, AskContext.tsx) and the command (first lines, the rest one click away), with Esegui /
-// Copia / Vai alla chat / "Rispondi dopo" / Non serve.
+// Copia / Vai alla chat / "Rispondi dopo" / Non serve, and a free text field (like the other questions) whose words go
+// to the chat instead of the run.
 // Esegui runs the block in the chat that proposed it (run:start with that chat and message: the run, its output and
 // "Manda l'esito alla chat" stay under the block in that chat); a block that looks like production asks a second click
 // that says why, like under the block. Keys on the focused card: Enter = Esegui, Esc = what the host says (the window:
@@ -35,9 +36,11 @@ export interface CommandHandlers {
   onEscape?: () => void;
   /** "Rispondi dopo": sets the request aside without answering (shown only when given) */
   onLater?: () => void;
+  /** the user's own words instead of running it (default: dismissCommand with the text, sent to the chat at once) */
+  onReply?: (text: string) => void;
 }
 
-export function CommandRequest({ req, variant, chatTitle, harness = 'claude', testid, withContext, onRun, onDismiss, onOpen, onEscape, onLater }: {
+export function CommandRequest({ req, variant, chatTitle, harness = 'claude', testid, withContext, onRun, onDismiss, onOpen, onEscape, onLater, onReply }: {
   req: PendingRequest; variant: CommandVariant; chatTitle?: string; harness?: Harness; testid?: string;
   /** the "Contesto" toggle with the turn's prose (not in the global layer: its page can not read the chat) */
   withContext?: boolean;
@@ -49,6 +52,7 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
+  const [reply, setReply] = useState('');
   const ref = useRef<HTMLDivElement>(null);
   // Ctrl+J asked for this card before it was drawn: the keyboard comes here as it mounts (actions.ts claimFocus)
   useLayoutEffect(() => { if (claimFocus(reqKey(req))) ref.current?.focus({ preventScroll: true }); }, [req]);
@@ -79,6 +83,13 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
   };
   const dismiss = () => { setBusy(true); if (onDismiss) onDismiss(); else void dismissCommand(req); };
   const copy = () => { void copyText(code).then(ok => setCopied(ok)); };
+  const answer = () => { const text = reply.trim(); if (!text || busy) return; setBusy(true); if (onReply) onReply(text); else void dismissCommand(req, text); };
+  // free text, like the other questions: the chat gets the user's words instead of the run (not in the one-line lane card)
+  const replyField = (big: boolean) => !onDismiss || onReply ? <form className={`cmd-reply ${big ? 'big' : ''}`} onSubmit={e => { e.preventDefault(); answer(); }}>
+    <input type="text" value={reply} maxLength={4000} onChange={e => setReply(e.target.value)} disabled={busy} placeholder={t('chat.command.replyHint')}
+      aria-label={t('chat.command.replyLabel')} data-testid={`${testBase}-reply`} onKeyDown={e => e.stopPropagation()} />
+    <button type="submit" className={`btn btn-ghost ${big ? 'btn-l' : 'btn-m'}`} disabled={busy || !reply.trim()} data-testid={`${testBase}-reply-send`}>{t('chat.command.replySend')}</button>
+  </form> : null;
   const onKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget) return; // a focused button handles its own Enter
     if (e.key === 'Enter' && !e.ctrlKey && !e.altKey && !e.shiftKey) { e.preventDefault(); e.stopPropagation(); if (!e.repeat) void run(true); }
@@ -108,6 +119,7 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
           <pre className="ask-cmd cmd-code" data-testid={`${testBase}-code`}>{code}</pre>
         </div>
         {withContext && <AskContext req={req} defaultOpen testBase={testBase} layout="window" />}
+        {replyField(true)}
         <div className="wq-perm">
           <button type="button" className={`btn btn-primary btn-l ${armed ? 'armed' : ''}`} onClick={() => { void run(); }} disabled={busy} data-testid={`${testBase}-run`}
             data-tip={armed ? undefined : t('chat.command.helpWindow')}>
@@ -152,6 +164,7 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
         )}
       </div>
       {withContext && <AskContext req={req} defaultOpen={false} testBase={testBase} onToggle={() => requestAnimationFrame(() => ref.current?.focus())} />}
+      {!small && replyField(false)}
       <div className="cmd-actions">
         <button type="button" className={`btn btn-primary ${small ? 'btn-s' : 'btn-m'} ${armed ? 'armed' : ''}`} onClick={() => { void run(); }} disabled={busy} data-testid={`${testBase}-run`}
           data-tip={armed ? undefined : t('chat.command.help')}>

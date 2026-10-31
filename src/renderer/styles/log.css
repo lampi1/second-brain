@@ -3,8 +3,8 @@
    and the live stream of every event, grouped by day; a click opens the details in a side panel. One colour per kind of
    event, shared by the chips, the badges and the stream. Motion off for reduced-motion users. */
 .lg-page { --k-task: var(--blue); --k-classifier: var(--violet); --k-estimate: #4fb8d1; --k-error: var(--red); --k-memory: var(--green);
-  --k-pulse: #ff8fb1; --k-brain: var(--amber); --k-app: var(--text-3); }
-:root[data-theme="light"] .lg-page { --k-estimate: #1f8aa3; --k-pulse: #c2416b; }
+  --k-brain: var(--amber); --k-app: var(--text-3); }
+:root[data-theme="light"] .lg-page { --k-estimate: #1f8aa3; }
 .lg-page .lg-live { display: inline-flex; align-items: center; gap: 8px; align-self: flex-end; margin-bottom: 8px; }
 .lg-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .lg-stat-warn { border-color: var(--amber-line); background: linear-gradient(145deg, color-mix(in srgb, var(--amber) 9%, var(--surface-2)), var(--surface)); }
@@ -13,7 +13,7 @@
 .lg-chip { display: inline-flex; align-items: center; gap: 6px; }
 .lg-chip > i { width: 7px; height: 7px; border-radius: 50%; background: var(--k); }
 .lg-k-task { --k: var(--k-task); } .lg-k-classifier { --k: var(--k-classifier); } .lg-k-estimate { --k: var(--k-estimate); } .lg-k-error { --k: var(--k-error); }
-.lg-k-memory { --k: var(--k-memory); } .lg-k-pulse { --k: var(--k-pulse); } .lg-k-brain { --k: var(--k-brain); } .lg-k-app { --k: var(--k-app); }
+.lg-k-memory { --k: var(--k-memory); } .lg-k-brain { --k: var(--k-brain); } .lg-k-app { --k: var(--k-app); }
 .lg-flag-toggle { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; }
 .lg-flag-toggle.on { background: var(--amber-bg); border-color: var(--amber-line); color: var(--amber); }
 .lg-flag-toggle:disabled { opacity: .5; cursor: default; }

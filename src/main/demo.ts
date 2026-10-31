@@ -174,7 +174,7 @@ export function seed(E: number): Seed {
     return { coverage: 'partial', active: null, total: null, observedActive: agents.filter(c => c.state === 'running' || c.state === 'waiting').length, observedTotal: agents.length, observedAt: Math.max(...list.map(c => c.observedAt)), children: list };
   };
   const chats: ChatSummary[] = [
-    chat({ id: 'orchestrator', title: 'Orchestrator', isOrchestrator: true, state: 'waiting', pending: 1, costUsd: 4.12, contextTokens: 64_000, contextMaxTokens: 1_000_000, updatedAt: E - 8 * MIN, lastText: 'Prima la QA bloccata: la QA dei rimborsi aspetta te.',
+    chat({ id: 'orchestrator', title: 'Orchestrator', isOrchestrator: true, availableResultIds: ['r_000000000004'], state: 'waiting', pending: 1, costUsd: 4.12, contextTokens: 64_000, contextMaxTokens: 1_000_000, updatedAt: E - 8 * MIN, lastText: 'Prima la QA bloccata: la QA dei rimborsi aspetta te.',
       agentChildren: children(
         child({ key: 'claude:task:a1', task: 'Rileggi la PR del fix totale ordine', agentType: 'general-purpose', state: 'running', startedAt: E - 6 * MIN }),
         child({ key: 'claude:task:a2', task: 'Cerca nel journal i bug simili ai rimborsi', agentType: 'scout', state: 'running', startedAt: E - 3 * MIN }),
@@ -221,6 +221,12 @@ export function seed(E: number): Seed {
         '', 'Rispondi solo se porti qualcosa di nuovo (mai un "ricevuto"): tool send_to_chat del server second-brain, to "QA rimborsi", reply_to "m-demo1".',
       ].join('\n') },
       { kind: 'user', id: 'orchestrator-run1', at: E - 10 * MIN, text: runResultMessage([{ id: 'run-demo1', chatId: 'orchestrator', itemId: 'orchestrator-a0', code: 'git -C C:\\progetti\\shop pull --ff-only', cwd: 'C:\\progetti\\shop', state: 'ok', exitCode: 0, output: 'Already up to date.', startedAt: E - 10 * MIN - 2000, endedAt: E - 10 * MIN }]) },
+      // an agent's result waiting in the Orchestrator: the row with its ✦ summarize and → agent icons (ADR 0211)
+      { kind: 'system', id: 'orchestrator-res1', at: E - 9 * MIN - 30_000, level: 'info', code: 'resultReady',
+        text: sysEn('resultReady', { role: 'Scout', title: 'App · Feedback', summary: tr('3 errori 500 nel modulo feedback, tutti dallo stesso endpoint.') }),
+        params: { chatId: 'feedback', title: 'App · Feedback', role: 'Scout', summary: tr('3 errori 500 nel modulo feedback, tutti dallo stesso endpoint.') },
+        result: { at: E - 9 * MIN - 30_000, taskId: 'feedback', runId: 'r_000000000004', taskVersion: 1, outcome: 'done', summary: tr('3 errori 500 nel modulo feedback, tutti dallo stesso endpoint.'),
+          output: tr('Oggi 3 errori 500, tutti da POST /api/feedback quando il testo supera 2000 caratteri.'), doneWhen: [{ criterion: tr('Errori di oggi trovati'), met: true, evidence: tr('3 righe nel log delle 9:12, 9:40, 10:05') }] } },
       { kind: 'user', id: 'orchestrator-u1', at: E - 9 * MIN, text: 'Che si fa adesso?' },
       { kind: 'assistant', id: 'orchestrator-a1', at: E - 9 * MIN, text: '**Prima la QA bloccata**: la QA dei rimborsi aspetta te (1 decisione). Poi la PR del totale ordine, poi il bug SMS.' },
     ],
@@ -1020,7 +1026,8 @@ export class DemoBrain implements BrainService {
   }
   recordModels(): void { /* the demo's Cursor list is fixed */ }
   modelsSeen(): ModelsSeen {
-    return { cursor: { at: this.chats.now(), ids: [
+    // Claude: the demo registry's rows, so a card's back lists real models with their efforts and window (ADR 0211)
+    return { claude: { at: 0, ids: DEMO_REGISTRY.models.filter(m => m.harness === 'claude').map(m => ({ id: m.id, name: m.id })) }, cursor: { at: this.chats.now(), ids: [
       { id: 'auto', name: 'Auto' }, { id: 'gpt-5', name: 'GPT-5' }, { id: 'grok-4.7', name: 'Grok 4.7' }, { id: 'grok-4.7-fast', name: 'Grok 4.7 Fast' }, { id: 'sonnet-4.5', name: 'Sonnet 4.5' },
     ] } };
   }

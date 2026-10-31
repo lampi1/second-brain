@@ -5,8 +5,8 @@
 // warnings. Events are the app's own data: reading them never spends AI tokens. Written by main/activity/journal.ts,
 // read by renderer/components/LogPage.tsx through log:list and log:events. Shapes and limits only.
 
-/** 'pulse' = a Battito run (removed, ADR 0201): kept so the events it left still read until they age out */
-export type LogKind = 'task' | 'classifier' | 'estimate' | 'error' | 'memory' | 'pulse' | 'brain' | 'app';
+/** The Battito's old 'pulse' events (removed, ADR 0201) are skipped when the journal reads its files. */
+export type LogKind = 'task' | 'classifier' | 'estimate' | 'error' | 'memory' | 'brain' | 'app';
 export type LogLevel = 'info' | 'ok' | 'warn' | 'error';
 /** A task event's place in the chain: opened (who chose the role and why), a work turn, a request to the user and its
  *  end, the delivered result, a review opened on it, a verdict, the chat closed. */
@@ -48,7 +48,7 @@ export const LOG_RECENT = 3000;
 /** Longest text field kept (input, output, error, text). */
 export const LOG_FIELD_MAX = 2000;
 
-export const LOG_KINDS: readonly LogKind[] = ['task', 'classifier', 'estimate', 'error', 'memory', 'pulse', 'brain', 'app'];
+export const LOG_KINDS: readonly LogKind[] = ['task', 'classifier', 'estimate', 'error', 'memory', 'brain', 'app'];
 
 /** A text field cut to the limit, with an ellipsis. */
 export function clip(s: unknown, max = LOG_FIELD_MAX): string | undefined {

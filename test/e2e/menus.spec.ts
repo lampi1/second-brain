@@ -49,10 +49,10 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     await shot(page, 'menus-chat');
     await page.keyboard.press('Escape');
 
-    // the sidebar: four groups (Andamento holds Costi and Qualità, ADR 0101), Regole in Brain (its learned rules inside, ADR 0082), Task (once DevOps, ADR 0079) in Lavoro
+    // the sidebar: three groups, Andamento the last entry of Brain (owner, 2026-10-31; it holds Costi and Qualità, ADR 0101), Regole in Brain (its learned rules inside, ADR 0082), Task (once DevOps, ADR 0079) in Lavoro
     const nav = page.getByTestId('sidebar');
     await expect(page.getByTestId('nav-collapse')).toHaveCount(0); // always expanded: no toggle
-    await expect(nav.locator('.nav-title')).toHaveCount(4);
+    await expect(nav.locator('.nav-title')).toHaveCount(3);
     await expect(page.getByTestId('nav-miglioramento')).toHaveCount(0);
     const navOrder = await nav.locator('.nav-title, .nav-item').evaluateAll(els => els.map(e => e.getAttribute('data-testid')));
     const ix = (id: string) => navOrder.indexOf(id);
@@ -60,11 +60,10 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     expect(ix('nav-workspace')).toBe(-1); // SPEC 19: the agents live in the Grindhouse, no separate entry
     // Memoria holds Skill, Regole, Script, Idee and Apprendimento as tabs, and the Dashboard is gone (ADR 0122)
     expect(ix('nav-group-brain')).toBeLessThan(ix('nav-memoria'));
-    expect(ix('nav-memoria')).toBeLessThan(ix('nav-group-trends'));
+    expect(ix('nav-group-trends')).toBe(-1);
     for (const gone of ['nav-dashboard', 'nav-skill', 'nav-regole', 'nav-script', 'nav-idee', 'nav-apprendimento']) expect(ix(gone)).toBe(-1);
-    expect(ix('nav-group-trends')).toBeGreaterThan(ix('nav-memoria'));
-    // one Andamento entry (ADR 0202): Costi, Qualità, Apprendimento, Classificatori and Uso are its tabs
-    expect(ix('nav-andamento')).toBeGreaterThan(ix('nav-group-trends'));
+    // one Andamento entry (ADR 0202), under Brain: Costi, Qualità, Apprendimento, Classificatori and Uso are its tabs
+    expect(ix('nav-andamento')).toBeGreaterThan(ix('nav-memoria'));
     expect(ix('nav-andamento')).toBeLessThan(ix('nav-group-app'));
     for (const gone of ['nav-costi', 'nav-qualita', 'nav-classificatori']) expect(ix(gone)).toBe(-1);
     await expect(page.getByTestId('nav-migliora')).toHaveCount(0);

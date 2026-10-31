@@ -20,15 +20,18 @@
 .bs-card-main{appearance:none;display:flex;flex-direction:column;align-items:flex-start;gap:9px;width:100%;min-height:196px;box-sizing:border-box;padding:18px 18px 15px;background:none;border:0;border-radius:12px;color:inherit;font:inherit;text-align:left;cursor:pointer}
 .bs-card.open .bs-card-main{min-height:0}
 .bs-card-top{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%}
-.bs-card h3{margin:2px 0 0;font-size:15px;font-weight:600;letter-spacing:-.2px;line-height:1.35}
-.bs-desc{margin:0;color:var(--text-2);font-size:12.5px;line-height:1.55;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.bs-card.open .bs-desc{-webkit-line-clamp:unset}
+/* every block keeps its own height (flex-shrink 0) and long paths or commands wrap anywhere: a long title or description
+   no longer spills under the tags, and the language badge never breaks into pieces (owner's screenshot, 2026-10-31) */
+.bs-card-main>*{flex-shrink:0;max-width:100%}
+.bs-card h3{margin:2px 0 0;font-size:15px;font-weight:600;letter-spacing:-.2px;line-height:1.35;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;max-height:calc(3 * 1.35em)}
+.bs-desc{margin:0;color:var(--text-2);font-size:12.5px;line-height:1.55;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;max-height:calc(3 * 1.55em)}
+.bs-card.open h3,.bs-card.open .bs-desc{-webkit-line-clamp:unset;max-height:none}
 .bs-tags{display:flex;flex-wrap:wrap;gap:5px}
 .bs-tags>span{font-size:10.5px;color:var(--text-3);background:var(--surface-3);border-radius:5px;padding:2px 7px}
 .bs-card-foot{margin-top:auto;display:flex;align-items:center;gap:8px;width:100%;padding-top:6px;color:var(--text-3)}
-.bs-card-foot code{font-family:var(--mono);font-size:10.5px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
-.bs-card-foot small{margin-left:auto;font-size:10.5px;white-space:nowrap;color:var(--green)}
-.bs-lang{font-size:10px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:6px;background:var(--surface-3);color:var(--text-2)}
+.bs-card-foot code{flex:1 1 auto;font-family:var(--mono);font-size:10.5px;color:var(--text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.bs-card-foot small{flex-shrink:0;margin-left:auto;font-size:10.5px;white-space:nowrap;color:var(--green)}
+.bs-lang{flex-shrink:0;white-space:nowrap;font-size:10px;font-weight:650;letter-spacing:.06em;text-transform:uppercase;padding:3px 8px;border-radius:6px;background:var(--surface-3);color:var(--text-2)}
 .bs-lang-python{background:var(--blue-bg);color:var(--blue)}
 .bs-lang-javascript,.bs-lang-typescript{background:var(--amber-bg);color:var(--amber)}
 .bs-lang-powershell,.bs-lang-batch{background:var(--violet-bg);color:var(--violet)}

@@ -3,7 +3,7 @@ import type { catalogIt } from './catalog.it';
 export const catalogEn: typeof catalogIt = {
   // the Agenti page's review switch (JudgingSwitch.tsx)
   'catalog.judging.title': 'Enable level and performance check',
-  'catalog.judging.onDesc': 'On: every night a hidden Sentinel reviews a sample of the finished tasks that tests and your votes do not already decide (25% per role, 10% when the role is steady). No chat on the Grindhouse. Level and performance rest on real verdicts.',
+  'catalog.judging.onDesc': 'On: once a day a hidden Sentinel (no chat on the Grindhouse) reviews a sample of the finished tasks that tests and your votes do not already decide: 25% per role, 10% when the role is steady. When: at 3:00 only if the PC and the app are on; otherwise at the first pause after the next start (app open for 5 minutes, no key or mouse for 10 minutes), or at once with Night mode. After several missed nights it is still one review, over the last 7 days of tasks, within the spending cap.',
   'catalog.judging.receipts': (p: { runs: string }) => `Another ${p.runs} tasks a day are decided by their receipts (the tests and checks run after the last change): no review, no cost.`,
   'catalog.judging.offDesc': 'Off: no reviews. Level and performance count only your votes, the Orchestrator’s and the facts.',
   'catalog.judging.offSince': (p: { day: string }) => `Check off since ${p.day}: no independent review, only your own votes count.`,
@@ -17,7 +17,7 @@ export const catalogEn: typeof catalogIt = {
   'catalog.when.yesterday': (p: { time: string }) => `yesterday at ${p.time}`,
   'catalog.when.date': (p: { date: string; time: string }) => `on ${p.date} at ${p.time}`,
   'catalog.updated': (p: { when: string }) => `Updated ${p.when}`,
-  'catalog.updated.tip': 'The Sentinel’s reviews come once a day, at night; your votes and the receipts count at once.',
+  'catalog.updated.tip': 'The Sentinel’s reviews come once a day: at 3:00 if the PC is on, otherwise at the first pause after the next start; your votes and the receipts count at once.',
   'catalog.judging.costNone': 'Estimated cost: no data yet (no task finished in the last 7 days).',
   'catalog.deliveryCoverage': "Delivery coverage",
   'catalog.deliveryScope': "Retained canonical results from ended runs; pruned aggregates excluded.",

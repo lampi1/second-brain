@@ -9,7 +9,7 @@ import type { AgentContextSnapshot } from '../../shared/agent-context';
 import path from 'node:path';
 import { checkedKnowhow, checkedPackIdentity, packName } from '../../shared/agent-pack';
 import type { Effort, Harness, NewChat } from '../../shared/contract';
-import { BEHAVIOUR_FIELDS, MAX_CONTEXT_RANGE, PERMISSION_CEILINGS, type AgentAuthor, type AgentCatalog, type AgentDraft, type AgentModelChoice, type AgentOwnerSnapshot, type AgentProfile, type AgentToolPolicy, type AgentVersion, type PermissionCeiling } from '../../shared/agents';
+import { BEHAVIOUR_FIELDS, MAX_CONTEXT_RANGE, PERMISSION_CEILINGS, effortOn, type AgentAuthor, type AgentCatalog, type AgentDraft, type AgentModelChoice, type AgentOwnerSnapshot, type AgentProfile, type AgentToolPolicy, type AgentVersion, type PermissionCeiling } from '../../shared/agents';
 import { FLASH_ID, MODEL_TIERS, ROLE_DEFAULTS, ROLE_IDS, ROLE_PREAMBLE, currentLaunches, currentRoleId, isRetiredRoleId, isRoleId, isWorkRole, roleName, tierRank, type ModelTier, type RoleId } from '../../shared/roles';
 import { characterOf, isCharacterId } from '../../shared/characters';
 import { readLocal, writeLocal } from './local-store';
@@ -456,7 +456,8 @@ export class AgentCatalogService {
     // the role's own model, else its tier's model (owner, 2026-10-30: no routing table, ADR 0210). A review's
     // independence is its clean session (it never sees its parent's reasoning), never another model (ADR 0091)
     const picked = { model: p.model ?? this.d.tierModel?.(p.engine, tier) ?? null };
-    const effort = p.effort ?? req.effort;
+    // the effort the model really takes (ADR 0211): a level it lacks becomes the nearest lower one, none when it takes none
+    const effort = effortOn(p.effort ?? req.effort, picked.model ? e.models.find(m => m.id === picked.model)?.efforts : undefined) ?? undefined;
     const { model: _m, effort: _e, ...rest } = req; void _m; void _e;
     const r = ROLE_DEFAULTS[p.id as RoleId];
     const instructions = `${ROLE_PREAMBLE}\n\nRole: ${p.name}.\n${p.instructions}\nOutput: ${r.output}`;

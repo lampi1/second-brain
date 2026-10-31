@@ -152,7 +152,6 @@ export const dialogsIt = {
   'dialogs.sidebar.label': 'Sezioni',
   'dialogs.sidebar.work': 'Lavoro',
   'dialogs.sidebar.brain': 'Brain',
-  'dialogs.sidebar.trends': 'Andamento',
   'dialogs.sidebar.app': 'App',
   'dialogs.sidebar.waiting': (p: { count: number }) => `${p.count} ti aspettano`,
   'dialogs.sidebar.new': (p: { count: number }) => `${p.count} nuove`,

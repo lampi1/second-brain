@@ -433,12 +433,15 @@ export async function runCommand(req: PendingRequest, confirmProd = false): Prom
 }
 
 /** "Non serve" on a command request: gone at once; back if main refuses for another reason than "no longer open". */
-export async function dismissCommand(req: PendingRequest): Promise<void> {
+/** "Non serve", or the user's own words instead of running it (owner, 2026-10-31: «un campo di testo libero oltre a Non
+ *  serve, come per le altre domande»): the request closes and the text goes to the chat at once, the note riding on it. */
+export async function dismissCommand(req: PendingRequest, reply?: string): Promise<void> {
   dispatch({ type: 'pending:resolved', chatId: req.chatId, requestId: req.id });
   try {
     await sb.invoke('run:dismiss', { chatId: req.chatId, requestId: req.id });
     // the chat learns the user will not run it (the user, 2026-10-13: "devi capire meglio da sola quando finisco")
     if (req.command) addNote(req.chatId, { key: `cmd:${req.chatId}/${req.id}`, kind: 'dismissed', line: noteLine('dismissed', req.command.code) });
+    if (reply?.trim()) send(req.chatId, reply.trim());
   } catch (e) {
     if (/non è più aperta/i.test(errText(e))) return;
     const key = `${req.chatId}/${req.id}`;
