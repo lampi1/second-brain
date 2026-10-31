@@ -28,7 +28,7 @@ import type { Effort, Lang } from '@shared/contract';
 import {
   LESSON_DEPTHS, LESSON_EXTRAS, LESSON_LEVELS, TEACHER_EFFORTS, applyVerdicts, checkKey, diagramNodes, jsonIn, parseCheck, parseExtra, parseFacts, parseGrade, parsePlan, parseQuestions, parseStep, playlist, stepKey,
   type ImparaState, type Lesson, type LessonCheck, type LessonConfidence, type LessonExtraKind, type LessonFact, type LessonKind, type LessonPrep, type LessonStart, type LessonStep, type LessonTeacher,
-  type PrepPhase, type TeacherOption, type TutorMode, type TutorTurn, subjectOf, TUTOR_KEEP, TUTOR_Q_MAX, tutorCard, tutorShown,
+  type PrepPhase, type TeacherOption, type TutorMode, type TutorTurn, isAskingMode, subjectOf, TUTOR_KEEP, TUTOR_Q_MAX, tutorCard, tutorModeOf, tutorShown,
 } from '@shared/lesson';
 import { REVIEW_GRADES, parseCards, queueOf, subjectName, summarize, type ReviewCard, type ReviewGrade, type ReviewItem, type ReviewMode } from '@shared/review';
 import { lastGrades, masteryOf, scoreOf } from '@shared/mastery';
@@ -800,7 +800,7 @@ export class LearnService {
     const key = String(at ?? '');
     const piece = key === 'end' ? null : this.pieceAt(l, key);
     const now = this.now();
-    const turn: TutorTurn = { id: `t${now.toString(36)}${Math.random().toString(36).slice(2, 5)}`, q, at: key, mode: mode === 'tell' || mode === 'quiz' ? mode : 'coach', a: '', state: 'asking', createdAt: now };
+    const turn: TutorTurn = { id: `t${now.toString(36)}${Math.random().toString(36).slice(2, 5)}`, q, at: key, mode: tutorModeOf(mode), a: '', state: 'asking', createdAt: now };
     const next = this.edit(l.id, x => ({ ...x, tutor: [...(x.tutor ?? []), turn].slice(-TUTOR_KEEP) }))!;
     void this.answerTutor(l.id, turn, piece);
     return next;
@@ -828,7 +828,7 @@ export class LearnService {
       if (!a) { set({ state: 'failed', error: 'nessuna risposta' }, r); return; }
       // a full explanation the verified facts support leaves a review card (cites checked as for every card)
       let card: string | undefined;
-      const raw = turn.mode === 'quiz' ? null : tutorCard(r.text);
+      const raw = isAskingMode(turn.mode) ? null : tutorCard(r.text);
       if (raw && typeof raw === 'object') {
         const verified = (l.facts ?? []).filter(f => f.check !== 'unsure').map(f => f.id);
         const [draft] = parseCards({ cards: [{ ...(raw as object), kind: 'recall' }] }, [], verified);

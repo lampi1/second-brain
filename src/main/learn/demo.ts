@@ -254,7 +254,13 @@ async function demoTutor(r: TeachRun): Promise<TeachResult> {
   if (prompt === null) return { ok: false, error: 'non usata' };
   const now = /The learner now \(data[^)]*\): «([^»]*)»/.exec(prompt)?.[1] ?? '';
   const tried = /Learner: «/.test(prompt) && !/\?\s*$/.test(now);
-  const text = /do NOT explain yet/.test(prompt) && !tried
+  const asked = (prompt.match(/^Learner: «/gm) ?? []).length;
+  const text = /«Interrogazione a voce»/.test(prompt)
+    ? (asked >= 5 || /basta/i.test(now) ? 'Hai risposto bene sul perché delle due ricerche, meno sul controllo dei fatti. Voto: 7 su 10. Sai bene perché web e file restano separati; ripassa come viene verificato ogni fatto.'
+      : `${asked ? 'Quasi giusto: il punto è che una pagina web può contenere istruzioni nascoste. ' : ''}Domanda: spiegami con parole tue perché Impara fa due ricerche separate, una sul web e una nei tuoi file.`)
+    : /«Esercitati»/.test(prompt)
+      ? `${asked ? 'Corretto a metà: hai separato le ricerche, ma la verifica dei fatti va fatta da un controllo a parte [f2]. Soluzione: ricerca web con la sola domanda, ricerca nei file senza web, poi un controllo separato. ' : ''}Esercizio: un collega vuole un assistente che legga le email e cerchi sul web le risposte. Disegna in tre passi come divideresti il lavoro perché una pagina web non possa far uscire le email.`
+    : /do NOT explain yet/.test(prompt) && !tried
     ? 'Guarda lo schema: le due ricerche partono dalla stessa domanda ma vanno in due posti diversi [f1]. Secondo te, cosa potrebbe succedere se chi legge il web potesse leggere anche i tuoi file?'
     : `${tried ? 'Giusto, è proprio quello il rischio. ' : ''}Chi legge il web legge pagine scritte da chiunque, e una pagina può contenere istruzioni nascoste. Se quella stessa esecuzione vedesse anche i tuoi file, potrebbe essere convinta a copiarli fuori [f1]. Per questo Impara fa due ricerche separate: quella sul web vede solo la tua domanda, quella nei file non va mai sul web, e un controllo separato verifica ogni fatto prima della lezione [f2].\nCARD: {"q": "Perché Impara tiene separate la ricerca sul web e quella nei file?", "answer": "Perché una pagina web può contenere istruzioni nascoste: se la stessa esecuzione vedesse anche i file, potrebbe portarli fuori.", "cites": ["f1"]}`;
   const words = text.split(/(?<= )/);

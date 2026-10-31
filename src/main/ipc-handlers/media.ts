@@ -3,6 +3,7 @@
 // src/shared/contract/*.ts.
 import { armLoopback } from '../window';
 import { shell } from 'electron';
+import { tutorModeOf } from '@shared/lesson';
 import type { HandlerContext, HandlersOf } from './context';
 
 export function mediaHandlers({ s, voice, recordings, learn }: HandlerContext): HandlersOf<'voice' | 'rec' | 'impara'> {
@@ -47,7 +48,7 @@ export function mediaHandlers({ s, voice, recordings, learn }: HandlerContext): 
     'impara:queue': a => learn().queue(a?.mode, typeof a?.subject === 'string' ? a.subject : undefined, typeof a?.lesson === 'string' ? a.lesson : undefined),
     'impara:grade': a => learn().gradeCard(String(a?.card ?? ''), Number(a?.grade)),
     'impara:subject': a => learn().setSubject(String(a?.id ?? ''), a?.subject),
-    'impara:tutor': a => learn().tutor(String(a?.id ?? ''), String(a?.at ?? ''), String(a?.q ?? ''), a?.mode === 'tell' || a?.mode === 'quiz' ? a.mode : 'coach'),
+    'impara:tutor': a => learn().tutor(String(a?.id ?? ''), String(a?.at ?? ''), String(a?.q ?? ''), tutorModeOf(a?.mode)),
     'impara:tutorWarm': a => learn().tutorWarm(String(a?.id ?? '')),
     'impara:studio': a => learn().studio(String(a?.id ?? ''), a?.kind),
   };

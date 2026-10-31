@@ -22,7 +22,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { beatsOf, checkKey, doneNodes, isFlowchart, parseLessonCommand, parseSpokenChoice, playlist, rootOf, stepKey, type Lesson, type LessonBeat, type LessonCheck, type LessonExtraKind, type LessonFact, type LessonStep, type PlayItem } from '@shared/lesson';
 import { answerCheck, askExtra, askTutor, explainBack, impara, imparaPrefs, loadLesson, moveTo, removeLesson, retryLesson, setImparaPrefs, type ImparaSide } from '../../lib/impara';
-import type { StudioKind } from '@shared/lesson-studio';
+import type { StudioKind, StudioLive } from '@shared/lesson-studio';
 import { quizRight, type QuizResponse } from '@shared/quiz';
 import { narrate, narrateBeats, onImparaHeard, stopSpeaking, stopVoice, toggleVoice, useVoice, voice } from '../../lib/voice';
 import { renderMarkdown } from '../../lib/markdown';
@@ -38,7 +38,7 @@ import { ImparaCheck } from './ImparaCheck';
 import { ImparaEnd } from './ImparaEnd';
 import { ImparaSwitch } from './ImparaSwitch';
 import { ImparaSources, hostOf, openFact } from './ImparaSources';
-import { ImparaTutor } from './ImparaTutor';
+import { ImparaTutor, askingNow, type AskingMode } from './ImparaTutor';
 import { ImparaStudio, StudioView } from './ImparaStudio';
 import { LessonVisual } from './LessonVisual';
 
@@ -167,8 +167,8 @@ function Board({ lesson }: { lesson: Lesson }) {
   const closeTutor = useCallback(() => setImparaPrefs({ side: null }), []);
   const [studio, setStudio] = useState<StudioKind | null>(null);
   const closeStudio = useCallback(() => setStudio(null), []);
-  const [challenge, setChallenge] = useState(0);
-  const challenged = useCallback(() => {}, []);
+  const [challenge, setChallenge] = useState<AskingMode | null>(null);
+  const challenged = useCallback(() => setChallenge(null), []);
   const [unclear, setUnclear] = useState(false);
   const unclearBtn = useRef<HTMLButtonElement>(null);
   const [draft, setDraft] = useState('');
@@ -234,6 +234,13 @@ function Board({ lesson }: { lesson: Lesson }) {
       const i = parseSpokenChoice(text, item.check.options.length);
       if (i !== null) { answer(item.check, i); return; }
     }
+    // in an asking session of the tutor (ADR 0213: the oral exam above all) what is heard is the answer, short too
+    const session = askingNow(lesson.tutor);
+    if (session && parseLessonCommand(text) !== 'pause') {
+      setTutor(true);
+      if (lesson.tutor?.some(x => x.state === 'asking')) setSeed(text); else void askTutor(lesson.id, item.key, text, session.mode);
+      return;
+    }
     const cmd = parseLessonCommand(text);
     if (cmd === 'next') return next();
     if (cmd === 'back') return back();
@@ -276,6 +283,13 @@ function Board({ lesson }: { lesson: Lesson }) {
     return () => window.removeEventListener('keydown', esc, true);
   }, [prefs.full]);
 
+  /** a «do something» tile of the Studio: its session starts in the tutor; the oral exam turns on both voices */
+  const startSession = (k: StudioLive) => {
+    const mode: AskingMode = k === 'challenge' ? 'quiz' : k;
+    if (mode === 'oral') { setImparaPrefs({ voice: true, mic: true }); if (!micOn) void toggleVoice('impara'); }
+    setChallenge(mode);
+    setSide('tutor');
+  };
   const toggleMic = () => { const on = !micOn; setImparaPrefs({ mic: on }); if (on) void toggleVoice('impara'); else stopVoice(); };
   const toggleVoiceOut = () => {
     const on = !prefs.voice;
@@ -454,7 +468,7 @@ function Board({ lesson }: { lesson: Lesson }) {
             </header>
             {side === 'tutor'
               ? <ImparaTutor lesson={lesson} at={item.key} seed={seed} onSeed={clearSeed} onClose={closeTutor} challenge={challenge} onChallenged={challenged} />
-              : <ImparaStudio lesson={lesson} open={studio} onOpen={setStudio} onChallenge={() => { setChallenge(n => n + 1); setSide('tutor'); }} />}
+              : <ImparaStudio lesson={lesson} open={studio} onOpen={setStudio} onChallenge={startSession} />}
           </aside>
         )}
       </div>

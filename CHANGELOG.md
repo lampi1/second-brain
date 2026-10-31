@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- Impara has «Esercitati» (exercises to solve, each corrected) and «Interrogazione a voce» (five questions read
+  aloud, answered by speaking, then a mark out of 10) at the top of the Studio (ADR 0213).
 - The personal Browser page is gone (owner: «inutile»; ADR 0212). Its password vault stays for the agents' sign-ins.
 - Agent cards pick model, effort and context window on their back; efforts use the model's real names (low, medium,
   high, xhigh, max) and a run gets the level the model really takes (ADR 0211). Script cards no longer spill text;

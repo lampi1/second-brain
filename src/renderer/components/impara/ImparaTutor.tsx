@@ -9,13 +9,13 @@
 // «Mettimi alla prova» (a Studio tile) starts its quiz mode: it asks one question at a time and judges each answer
 // until «Basta così». Used by ImparaPlayer.tsx; styles impara.css (.ip-tutor*).
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
-import { tutorShown, type Lesson, type LessonFact, type TutorMode, type TutorTurn } from '@shared/lesson';
+import { isAskingMode, tutorShown, type Lesson, type LessonFact, type TutorMode, type TutorTurn } from '@shared/lesson';
 import { askTutor, imparaPrefs, setImparaPrefs, tutorLive, warmTutor } from '../../lib/impara';
 import { narrate } from '../../lib/voice';
 import { renderMarkdown } from '../../lib/markdown';
 import { t } from '../../i18n';
 import { Button } from '../ui';
-import { IconCheck, IconRefresh, IconSend, IconTarget } from '../Icons';
+import { IconCheck, IconMic, IconRefresh, IconSend, IconTarget, IconEdit } from '../Icons';
 import { ImparaSwitch } from './ImparaSwitch';
 import { hostOf, openFact } from './ImparaSources';
 
@@ -24,6 +24,21 @@ const esc = (s: string) => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;
 /** The answer's markdown with each [f1] of a known fact as a small chip (its source on hover, opened on click); only
  *  in the text, never inside a tag. Not cached while it streams (every word is a new text). Also the «Studio» summary's
  *  and glossary's (ImparaStudio.tsx). */
+/** The sessions where the tutor asks one thing after another (ADR 0205, 0213): what starts them, what ends them. */
+export type AskingMode = Extract<TutorMode, 'quiz' | 'oral' | 'practice'>;
+export const startText = (m: AskingMode) => t(m === 'quiz' ? 'impara.tutor.quizStart' : `impara.tutor.${m}Start`);
+export const stopText = (m: AskingMode) => t(m === 'quiz' ? 'impara.tutor.quizStop' : `impara.tutor.${m}Stop`);
+/** the asking session the tutor is in, if any: its mode and how many questions (or exercises) it asked */
+export function askingNow(turns: readonly TutorTurn[] | undefined): { mode: AskingMode; n: number } | null {
+  const last = turns?.at(-1);
+  if (!last || !isAskingMode(last.mode)) return null;
+  const mode = last.mode as AskingMode;
+  if (last.q === stopText(mode) && last.state !== 'failed') return null;
+  let n = 0;
+  for (let i = turns!.length - 1; i >= 0 && turns![i]!.mode === mode; i--) { n++; if (turns![i]!.q === startText(mode)) break; }
+  return { mode, n };
+}
+
 export function citedHtml(text: string, facts: readonly LessonFact[], streaming: boolean): string {
   const n = new Map(facts.map((f, i) => [f.id, { f, i: i + 1 }]));
   return renderMarkdown(text, !streaming).split(/(<[^>]*>)/).map(part => (part.startsWith('<') ? part : part.replace(/\[(f\d+)\]/g, (all, id: string) => {
@@ -52,7 +67,7 @@ function Turn({ turn, facts, last, again, onTell, onRetry }: { turn: TutorTurn; 
   return (
     <div className="ip-tturn" data-testid="impara-tutor-turn" data-state={turn.state}>
       {/* «Dimmelo e basta» after a hint: the same question again, said as what the learner pressed */}
-      <div className={`ip-tq ${turn.mode === 'quiz' ? 'quiz' : ''}`}>{again ? t('impara.tutor.tell') : turn.q}</div>
+      <div className={`ip-tq ${isAskingMode(turn.mode) ? 'quiz' : ''}`}>{again ? t('impara.tutor.tell') : turn.q}</div>
       <div className="ip-ta" aria-live={turn.state === 'asking' ? 'polite' : undefined}>
         {turn.state === 'failed'
           ? <div className="ip-terr" role="alert">{t('impara.tutor.failed', { error: turn.error ?? '' })} <Button size="s" onClick={onRetry} testid="impara-tutor-retry"><IconRefresh size={11} />{t('impara.retry')}</Button></div>
@@ -70,8 +85,9 @@ function Turn({ turn, facts, last, again, onTell, onRetry }: { turn: TutorTurn; 
 
 export function ImparaTutor({ lesson, at, seed, onSeed, onClose, challenge, onChallenged }: {
   lesson: Lesson; at: string; seed: string | null; onSeed: () => void; onClose: () => void;
-  /** «Mettimi alla prova» pressed in the Studio: the quiz starts (once per press) */
-  challenge: number; onChallenged: () => void;
+  /** «Mettimi alla prova», «Interrogazione a voce» or «Esercitati» pressed in the Studio: that session starts, and
+   *  onChallenged clears it */
+  challenge: AskingMode | null; onChallenged: () => void;
 }) {
   const coach = imparaPrefs.use(p => p.coach);
   const voiceOn = imparaPrefs.use(p => p.voice);
@@ -83,8 +99,7 @@ export function ImparaTutor({ lesson, at, seed, onSeed, onClose, challenge, onCh
   const body = useRef<HTMLDivElement>(null);
   const live = tutorLive.use(s => s);
   // «Mettimi alla prova» (ADR 0205): while the last turn is the quiz's, what the learner writes is an answer to it
-  const last = turns.at(-1);
-  const quizzing = last?.mode === 'quiz' && !(last.q === t('impara.tutor.quizStop') && last.state !== 'failed');
+  const session = askingNow(turns);
 
   // the engine starts as the tutor opens: by the time the question is written it is ready
   useEffect(() => { warmTutor(lesson.id); input.current?.focus(); }, [lesson.id]);
@@ -98,12 +113,12 @@ export function ImparaTutor({ lesson, at, seed, onSeed, onClose, challenge, onCh
     for (const x of turns) {
       if (x.state === 'asking' || said.current.has(x.id)) continue;
       said.current.add(x.id);
-      if (voiceOn && x.state === 'done') narrate(tutorShown(x.a).replace(/\[f\d+\]/g, ''));
+      if ((voiceOn || x.mode === 'oral') && x.state === 'done') narrate(tutorShown(x.a).replace(/\[f\d+\]/g, ''));
     }
   }, [turns, voiceOn]);
 
   // a question from the box that did not go (no engine, an error said by a notice) comes back into the box
-  const send = (text: string, mode: TutorMode = quizzing ? 'quiz' : coach ? 'coach' : 'tell', fromBox = false) => {
+  const send = (text: string, mode: TutorMode = session ? session.mode : coach ? 'coach' : 'tell', fromBox = false) => {
     const v = text.trim();
     if (!v || asking) return;
     if (fromBox) setQ('');
@@ -111,7 +126,8 @@ export function ImparaTutor({ lesson, at, seed, onSeed, onClose, challenge, onCh
   };
 
   // a press of «Mettimi alla prova»: the first question comes
-  useEffect(() => { if (challenge > 0 && !asking) { send(t('impara.tutor.quizStart'), 'quiz'); onChallenged(); } }, [challenge]);
+  // (a press while an answer still streams starts it once that answer ends; once started it is never sent again)
+  useEffect(() => { if (challenge && !asking) { onChallenged(); send(startText(challenge), challenge); } }, [challenge, asking]);
 
   return (
     <div className="ip-tutor-pane" data-testid="impara-tutor" aria-label={t('impara.tutor.title')}>
@@ -132,9 +148,11 @@ export function ImparaTutor({ lesson, at, seed, onSeed, onClose, challenge, onCh
             else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); onClose(); }
           }} />
         <div className="ip-tutor-row">
-          {quizzing
-            ? <span className="ip-tquiz" data-testid="impara-tutor-quizzing"><IconTarget size={12} />{t('impara.tutor.quizzing')}
-              <button type="button" className="ip-link" onClick={() => send(t('impara.tutor.quizStop'), 'quiz')} disabled={asking} data-testid="impara-tutor-quiz-stop">{t('impara.tutor.quizEnd')}</button></span>
+          {session
+            ? <span className="ip-tquiz" data-testid="impara-tutor-quizzing" data-mode={session.mode}>
+              {session.mode === 'oral' ? <IconMic size={12} /> : session.mode === 'practice' ? <IconEdit size={12} /> : <IconTarget size={12} />}
+              {session.mode === 'quiz' ? t('impara.tutor.quizzing') : t(`impara.tutor.${session.mode}Now`, { n: Math.min(session.n, session.mode === 'oral' ? 5 : 99) })}
+              <button type="button" className="ip-link" onClick={() => send(stopText(session.mode), session.mode)} disabled={asking} data-testid="impara-tutor-quiz-stop">{t(session.mode === 'oral' ? 'impara.tutor.oralEnd' : 'impara.tutor.quizEnd')}</button></span>
             : <span data-tip={t('impara.tutor.coachTip')}><ImparaSwitch on={coach} onChange={on => setImparaPrefs({ coach: on })} label={t('impara.tutor.coach')} testid="impara-tutor-coach" /></span>}
           <span className="sp" />
           <Button variant="primary" size="s" type="submit" disabled={!q.trim() || asking} testid="impara-tutor-send">{t('impara.askSend')} <IconSend size={12} /></Button>

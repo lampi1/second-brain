@@ -1,13 +1,14 @@
 // The «Studio» column beside a lesson (ADR 0205; owner's report I3, NotebookLM's Studio as the reference): a tile for
 // each thing the app can make from the lesson's VERIFIED facts only (one short hidden run each, no new research):
-// Mappa mentale, Riassunto, Quiz, Flashcard, Glossario, Podcast, Linea del tempo, Mettimi alla prova. A tile that has
+// Mappa mentale, Riassunto, Quiz, Flashcard, Glossario, Podcast, Linea del tempo; first, three tiles where the learner
+// does the work with the tutor, no run of their own (ADR 0213): Esercitati, Interrogazione a voce, Mettimi alla prova. A tile that has
 // nothing yet makes it on click; while it runs it says so; once made it opens over the board (StudioView), as it was
 // saved with the lesson, with «Rifai» to make it again. The quiz plays as a review session (its answers become review
 // cards), the flashcards are already in the review, «Mettimi alla prova» hands over to the tutor in quiz mode, the
 // podcast is read by the app's local voices (two when two Italian voices are on disk, else one). Used by
 // ImparaPlayer.tsx (the side column's «Studio» tab and the board's overlay); styles impara.css (.sd-*).
 import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
-import { STUDIO_KINDS, type StudioItem, type StudioKind, type StudioOut } from '@shared/lesson-studio';
+import { STUDIO_KINDS, isStudioLive, type StudioItem, type StudioKind, type StudioLive, type StudioOut } from '@shared/lesson-studio';
 import { subjectOf, type Lesson } from '@shared/lesson';
 import type { VoiceName } from '@shared/voice';
 import type { CardKind } from '@shared/review';
@@ -16,21 +17,23 @@ import { makeStudio, reviewArg, studioQuizArg } from '../../lib/impara';
 import { narrateLines, stopSpeaking, useVoice } from '../../lib/voice';
 import { locale, t } from '../../i18n';
 import { Button } from '../ui';
-import { IconBook, IconBranch, IconCheck, IconFile, IconHistory, IconLayers, IconMic, IconPlay, IconQuestion, IconRefresh, IconSpinner, IconStop, IconTarget, IconX } from '../Icons';
+import { IconBook, IconBranch, IconCheck, IconEdit, IconFile, IconHistory, IconLayers, IconMic, IconPlay, IconQuestion, IconRefresh, IconSpinner, IconStop, IconTarget, IconX } from '../Icons';
 import { LessonDiagram } from './LessonDiagram';
 import { citedHtml, openCite } from './ImparaTutor';
 
 const ICON: Record<StudioKind, ReactNode> = {
   mindmap: <IconBranch size={16} />, summary: <IconFile size={16} />, quiz: <IconQuestion size={16} />, flashcards: <IconLayers size={16} />,
   glossary: <IconBook size={16} />, podcast: <IconMic size={16} />, timeline: <IconHistory size={16} />, challenge: <IconTarget size={16} />,
+  oral: <IconMic size={16} />, practice: <IconEdit size={16} />,
 };
 
-/** The tiles, in the column. `onOpen` shows a made output over the board; `onChallenge` starts the tutor's quiz. */
-export function ImparaStudio({ lesson, open, onOpen, onChallenge }: { lesson: Lesson; open: StudioKind | null; onOpen: (k: StudioKind) => void; onChallenge: () => void }) {
+/** The tiles, in the column. `onOpen` shows a made output over the board; `onChallenge` starts one of the tutor's
+ *  sessions where the learner does something (quiz, oral exam, exercises). */
+export function ImparaStudio({ lesson, open, onOpen, onChallenge }: { lesson: Lesson; open: StudioKind | null; onOpen: (k: StudioKind) => void; onChallenge: (k: StudioLive) => void }) {
   const verified = (lesson.facts ?? []).filter(f => f.check !== 'unsure').length;
   const ready = lesson.state !== 'preparing' && lesson.state !== 'failed';
   const click = (k: StudioKind) => {
-    if (k === 'challenge') return onChallenge();
+    if (isStudioLive(k)) return onChallenge(k);
     const it = lesson.studio?.[k];
     if (it?.out) return onOpen(k);
     if (it?.state !== 'making') void makeStudio(lesson.id, k);
@@ -41,10 +44,10 @@ export function ImparaStudio({ lesson, open, onOpen, onChallenge }: { lesson: Le
       <div className="sd-grid">
         {STUDIO_KINDS.map(k => {
           const it: StudioItem | undefined = lesson.studio?.[k];
-          const state = k === 'challenge' ? 'live' : it?.state === 'making' ? 'making' : it?.out ? 'done' : it?.state === 'failed' ? 'failed' : 'new';
+          const state = isStudioLive(k) ? 'live' : it?.state === 'making' ? 'making' : it?.out ? 'done' : it?.state === 'failed' ? 'failed' : 'new';
           return (
             <div key={k} className={`sd-tile ${state} ${open === k ? 'on' : ''}`} data-testid={`impara-studio-${k}`} data-state={state}>
-              <button type="button" className="sd-tile-main" onClick={() => click(k)} disabled={!ready || (!verified && k !== 'challenge') || state === 'making'}
+              <button type="button" className="sd-tile-main" onClick={() => click(k)} disabled={!ready || (!verified && !isStudioLive(k)) || state === 'making'}
                 aria-label={`${t(`impara.studio.${k}.t`)}: ${t(`impara.studio.${k}.d`)}`}>
                 <span className={`sd-ico sd-ico-${k}`}>{ICON[k]}</span>
                 <span className="sd-tile-t"><b>{t(`impara.studio.${k}.t`)}</b><small>{state === 'making' ? t('impara.studio.making') : state === 'failed' ? t('impara.studio.failed') : t(`impara.studio.${k}.d`)}</small></span>

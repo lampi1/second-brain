@@ -12,12 +12,17 @@ import { parseCards, type CardDraft } from './review';
 import { contentLines, visualParts, VISUAL_PARTS_MAX } from './lesson-visual';
 import type { LessonCheck, LessonStep } from './lesson';
 
-export type StudioKind = 'mindmap' | 'summary' | 'glossary' | 'flashcards' | 'quiz' | 'timeline' | 'challenge' | 'podcast';
-/** In the column's order (owner's report, I3). */
-export const STUDIO_KINDS: readonly StudioKind[] = ['mindmap', 'summary', 'quiz', 'flashcards', 'glossary', 'podcast', 'timeline', 'challenge'];
-/** The tiles a run makes («Mettimi alla prova» is the tutor). */
-export type StudioMade = Exclude<StudioKind, 'challenge'>;
-export const isStudioMade = (k: unknown): k is StudioMade => typeof k === 'string' && k !== 'challenge' && (STUDIO_KINDS as readonly string[]).includes(k);
+export type StudioKind = 'mindmap' | 'summary' | 'glossary' | 'flashcards' | 'quiz' | 'timeline' | 'challenge' | 'oral' | 'practice' | 'podcast';
+/** In the column's order (owner's report, I3; the three «do something» tiles first since ADR 0213). */
+export const STUDIO_KINDS: readonly StudioKind[] = ['practice', 'oral', 'challenge', 'mindmap', 'summary', 'quiz', 'flashcards', 'glossary', 'podcast', 'timeline'];
+/** The tiles where the learner does something with the tutor, no run of their own (ADR 0213): «Mettimi alla prova»
+ *  (written questions), «Interrogazione a voce» (asked and answered aloud, a mark at the end), «Esercitati» (exercises
+ *  to solve, each corrected). */
+export type StudioLive = 'challenge' | 'oral' | 'practice';
+export const isStudioLive = (k: unknown): k is StudioLive => k === 'challenge' || k === 'oral' || k === 'practice';
+/** The tiles a run makes. */
+export type StudioMade = Exclude<StudioKind, StudioLive>;
+export const isStudioMade = (k: unknown): k is StudioMade => typeof k === 'string' && !isStudioLive(k) && (STUDIO_KINDS as readonly string[]).includes(k);
 
 export interface GlossaryTerm { term: string; meaning: string; cites: string[] }
 /** who: 0 = the host who asks, 1 = the expert who explains */
