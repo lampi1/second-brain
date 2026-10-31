@@ -576,8 +576,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/chats/claude.ts onControlRequest; src/main/chats/acp.ts
       b('La richiesta arriva dal motore (Claude, Cursor, o Codex per comandi e modifiche) e diventa un pannello con le risposte disponibili.',
         'The request comes from the engine (Claude, Cursor, or Codex for commands and file changes) and becomes a panel with the available responses.'),
-      b('«Consenti sempre» vale solo per questa sessione: l’app non scrive mai i file di impostazioni di Claude o Cursor.',
-        '"Allow always" lasts for this session only: the app never writes Claude’s or Cursor’s settings files.'),
+      b('«Consenti sempre», dove disponibile, vale solo per questa sessione. OpenCode e Cursor restano su una sola esecuzione: i consensi memorizzati dal motore potrebbero saltare i controlli successivi dell’app. In OpenCode i prompt ripetuti restano un limite noto. Nessun file di impostazioni viene modificato.',
+        '"Allow always", where available, lasts for this session only. OpenCode and Cursor stay once-only: remembered engine grants could skip later app checks. Repeated OpenCode prompts remain a known limitation. No settings file is changed.'),
       // src/shared/contract/chats.ts PermissionMode; src/renderer/lib/format.ts labels
       b('Modalità: Chiedi ogni volta, Accetta le modifiche, Automatico, Solo piano, Senza permessi; si sceglie all’avvio o dal menu ⋯ (solo Claude).',
         'Modes: Ask every time, Accept edits, Automatic, Plan only, No permissions; chosen at start or from the ⋯ menu (Claude only).'),

@@ -22,8 +22,8 @@
 //     A model change = the manager closes the session and reopens it with the new --model + session/load.
 //   ← session/update: agent_message_chunk (streamed text, replace events), agent_thought_chunk (thinking), tool_call /
 //     tool_call_update (tool rows, diff counts), plan, current_mode_update, usage_update
-//   ← session/request_permission → a permission panel answered allow-once / reject-once only: Cursor's allow-always
-//     would write a permanent rule into the user's Cursor config, which the app never changes
+//   ← session/request_permission → allow-once / reject-once only: remembered upstream grants skip later app gates;
+//     Cursor's allow-always also writes permanent global CLI rules.
 //   ← cursor/ask_question → a question panel (ids ↔ labels); a free-text "Altro…" answer goes back as outcome skipped;
 //     a question that is not yes/no goes back skipped with how to ask (shared/yes-no.ts, ADR 0135)
 //     with the text as its reason (the CLI's answered outcome keeps only option ids: acp ask-question-handler)
@@ -819,9 +819,9 @@ export class AcpSession implements HarnessSession {
       if (answer.kind !== 'permission') throw new Error('Questa è una richiesta di permesso: rispondi consenti o rifiuta.');
       const opts = ask.options ?? [];
       const pick = (kinds: string[]): AcpOption | undefined => kinds.map(k => opts.find(x => x.kind === k)).find(Boolean);
-      // allow-always / reject-always would be written into the engine's own config (Cursor's permissions): only the once
-      // options are used
-      if (answer.allow && answer.always) log.warn('chats', '"always" ignored for an ACP engine: it would change the engine\'s own config', { chat: this.opts.chatId, data: { engine: this.engine, requestId } });
+      // Even session-scoped upstream grants can cover later operations without asking the app again.
+      // ACP does not expose their patterns or a per-execution veto, so keep every answer once-only.
+      if (answer.allow && answer.always) log.warn('chats', '"always" ignored for an ACP engine: remembered upstream grants can bypass later app permission checks', { chat: this.opts.chatId, data: { engine: this.engine, requestId } });
       const chosen = answer.allow ? pick(['allow_once']) : pick(['reject_once']);
       result = chosen ? { outcome: { outcome: 'selected', optionId: chosen.optionId } } : { outcome: { outcome: 'cancelled' } };
     } else if (ask.method === 'cursor/ask_question') {
@@ -1061,9 +1061,10 @@ export class AcpSession implements HarnessSession {
       this.asks.set(rid, { rpcId: id, method, options });
       this.pending({
         id: rid, type: 'permission', tool: kindName, title: cut(stripAnsi(s(tc.title)) || known?.summary || `${kindName}: permesso`, 140), detail: cut(detail, 8000),
-        // never "always": Cursor's allow-always writes a permanent rule into the user's Cursor config (permissions.allow),
-        // valid for every Cursor session outside the app too; the app never changes another tool's config (AGENTS.md)
-        input: trimInput(tc.rawInput ?? known?.input ?? tc), at, noAlways: true,
+        // Never grant opaque upstream patterns: even unrestricted roles still have app hard-deny gates.
+        // An earlier tool update may have no rawInput (stored as {}): its empty input must not hide
+        // the permission's locations from the path/role gates. Keep all locations even with raw input.
+        input: trimInput({ ...o(tc.rawInput ?? known?.input ?? tc), ...(tc.locations !== undefined ? { locations: tc.locations } : {}) }), at, noAlways: true,
       });
       return;
     }
