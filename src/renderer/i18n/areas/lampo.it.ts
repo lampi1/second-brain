@@ -16,6 +16,4 @@ export const lampoIt = {
   'lampo.cleared': 'Flash svuotato: riparte da zero.',
   'lampo.clearFailed': (p: { error: string }) => `Flash non svuotato: ${p.error}`,
   'modelChip.tip': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}: clicca per cambiare modello`,
-  'modelChip.label': (p: { name: string }) => `Modello di ${p.name}`,
-  'modelChip.tier': 'Predefinito',
 };

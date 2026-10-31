@@ -110,6 +110,9 @@ Every role earns its level from verified outcomes only, never from vibes: a dele
 work checks out, and the Sentinel, the one who judges, is judged by what happens next. Each card shows the level and a
 performance %. Reviews are cheap: free signals first, then a sample of finished runs reviewed together in one quiet
 session on the first idle moment of the night (or after you turn the PC back on), never shown on the Grindhouse.
+Engine, model and effort come from one picker, the same on the back of a card, on the Orchestrator's model chip and in
+a strip's menu: search the four engines, see each model's context and effort, then say what changes: just this chat,
+or the default for new chats.
 
 <p align="center"><img src="docs/screenshots/agent-levels.webp" alt="Agent cards for the Orchestrator, the Artisan and the Sentinel, each with its level, verified successes and performance percentage" width="720"></p>
 

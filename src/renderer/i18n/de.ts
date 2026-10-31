@@ -53,6 +53,7 @@ import { treeDe } from './areas/tree.de';
 import { aliveDe } from './areas/alive.de';
 import { queriesDe } from './areas/queries.de';
 import { lampoDe } from './areas/lampo.de';
+import { modelPickerDe } from './areas/model-picker.de';
 import { awayDe } from './areas/away.de';
 import { learningDe } from './areas/learning.de';
 import { andamentoDe } from './areas/andamento.de';
@@ -82,6 +83,7 @@ export const de: Dict = {
   ...aliveDe,
   ...queriesDe,
   ...lampoDe,
+  ...modelPickerDe,
   ...awayDe,
   ...learningDe,
   ...andamentoDe,

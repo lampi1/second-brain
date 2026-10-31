@@ -52,6 +52,7 @@ import { treeEn } from './areas/tree.en';
 import { aliveEn } from './areas/alive.en';
 import { queriesEn } from './areas/queries.en';
 import { lampoEn } from './areas/lampo.en';
+import { modelPickerEn } from './areas/model-picker.en';
 import { awayEn } from './areas/away.en';
 import { learningEn } from './areas/learning.en';
 import { andamentoEn } from './areas/andamento.en';
@@ -82,6 +83,7 @@ export const en: Dict = {
   ...aliveEn,
   ...queriesEn,
   ...lampoEn,
+  ...modelPickerEn,
   ...awayEn,
   ...learningEn,
   ...andamentoEn,

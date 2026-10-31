@@ -29,6 +29,12 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 
 /* the grid of cards */
 .catalog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:14px;align-items:start}
+/* the role cards (owner, 2026-10-31: «le card degli agenti non sono simmetriche»): a flip card is as tall as its longer
+   face, the back, whose prompt and skills differ per role, so cards side by side ended at different heights. Every card
+   of a row takes the row's height and the front keeps its numbers on the bottom line; nothing is cut */
+.catalog-roles{align-items:stretch}
+.catalog-roles>.catalog-card>.bm-flip-inner{flex:1}
+.catalog-roles .bm-face-front>.catalog-stats{margin-top:auto}
 .catalog-card{--tone:var(--blue);position:relative;min-width:0;display:flex;flex-direction:column;gap:14px;padding:18px 18px 14px;border:1px solid var(--border);border-radius:var(--r-l);background:linear-gradient(160deg,var(--surface-2),var(--surface) 62%);container-type:inline-size;transition:border-color var(--dur-slow),transform var(--dur-slow) var(--ease),box-shadow var(--dur-slow)}
 .catalog-card::before{content:"";position:absolute;inset:0 0 auto;height:2px;border-radius:var(--r-l) var(--r-l) 0 0;background:linear-gradient(90deg,var(--tone),transparent 85%);opacity:.75;pointer-events:none}
 .catalog-card:hover,.catalog-card:focus-within{border-color:var(--border-3);transform:translateY(-2px);box-shadow:0 16px 36px -22px var(--tone)}
@@ -193,3 +199,6 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .catalog-model-row{display:grid;grid-template-columns:110px minmax(0,1fr);align-items:center;gap:10px;font-size:12px;color:var(--text-2)}
 .catalog-model-row>button{min-width:0;width:100%}
 .catalog-model-note{margin:0;font-size:11px;color:var(--amber)}
+/* the role's engine, model and effort on one line: a button that opens the shared picker (AgentCardModel.tsx) */
+.catalog-model-button{justify-content:flex-start;gap:6px}
+.catalog-model-button-text{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:left}

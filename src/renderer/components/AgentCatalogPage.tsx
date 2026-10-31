@@ -63,7 +63,7 @@ export function AgentCatalogPage() {
         <HelpTip title={t('explain.team.title')} guide="agents" testid="catalog-summary-help"><p>{t('explain.team.p1')}</p><p>{t('explain.team.p2')}</p></HelpTip></p>
       <p className="catalog-note">{t('catalog.note')}</p>
     </div>
-    <div className="catalog-grid">{profiles.map((p, index) => {
+    <div className="catalog-grid catalog-roles" data-testid="catalog-roles">{profiles.map((p, index) => {
       const starts = Object.values(chats).filter(c => c.run?.agentId === p.id).map(c => c.run!.startedAt);
       return <AgentCatalogCard key={p.id} profile={p} index={index} engine={catalog?.models.find(m => m.engine === p.engine)?.label ?? p.engine}
         metrics={metrics?.find(m => m.agentId === p.id)} loaded={metrics !== null} lastStart={starts.length ? Math.max(...starts) : null} onOpen={() => go({ page: 'agenti', arg: p.id, element: EDIT_ELEMENT })}

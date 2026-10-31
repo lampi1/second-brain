@@ -1,16 +1,15 @@
-// The ⋯ menu of a chat tile, the everyday actions first (2026-10-15): rename, copy link, focus mode; then model, effort
-// and permissions (engines that take them); "Passaggio di consegne" with the context size, the note and "Riprendi in chat
+// The ⋯ menu of a chat tile, the everyday actions first (2026-10-15): rename, copy link, focus mode; then model (the shared
+// picker, ModelPicker.tsx), effort and permissions (engines that take them); "Passaggio di consegne" with the context size, the note and "Riprendi in chat
 // nuova" (not on the Orchestrator: it renews instead); close last. The same menu serves an Orchestrator, which adds, after the
 // everyday actions, "Pulisci" (a confirm, then the same engine started empty), "Ricomincia da capo" and
 // "Cambia motore" (to the first other engine): both open the "Nuovo Orchestrator" confirm (OrchestratorRenewDialog); the old Orchestrator goes on as
 // a normal chat, history kept; the overlay's opacity (setting orchestratorOpacity, ADR 0021).
 // TitleInput is the inline rename field the menu's "Rinomina…" opens. Used by ChatTile and OrchestratorTile.
-import { useState, type RefObject } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 import { AgentContextInspector } from './AgentContextInspector';
 import type { AppInfo, ChatSummary, Harness, Settings } from '@shared/contract';
 import { EFFORTS, effortLabel, permissionLabel, PERMISSION_MODES, tokensShort } from '../lib/format';
 import { engineCan, engineName, otherEngine } from '../lib/engines';
-import { modelOptions, useModelsSeen } from '../lib/models';
 import { makeLink } from '../lib/notify';
 import { isBusy } from '../store/state';
 import { closeChat, setChat, setSetting, undoTurn, useApp } from '../store/store';
@@ -18,6 +17,9 @@ import { askConfirm, openHandoff, setFocused } from '../store/ui';
 import { askClearOrchestrator, askRenewOrchestrator, copyLink, resumeChat, toggleFocusMode } from '../actions';
 import { openNextLabel, resumeLabel, useContinuedBy } from './ContextBar';
 import { MenuItem, MenuLabel, MenuSep, Popover } from './ui';
+import { ModelPicker } from './ModelPicker';
+import { useAgents } from '../store/agents';
+import { ORCHESTRATOR_ROLE_ID } from '@shared/roles';
 import { t } from '../i18n';
 
 /** Why the Orchestrator cannot move to an engine now (null = it can): switched off in the settings, the Orchestrators may not use it
@@ -46,11 +48,17 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, orchestrator }
   const blockOf = useEngineBlocks();
   const block = to ? blockOf(to) : null;
   const next = useContinuedBy(chat);
-  const seen = useModelsSeen(open);
+  const [picker, setPicker] = useState(false);
+  // the picker shares the ⋯ anchor: opening the menu again closes it, never both on screen
+  useEffect(() => { if (open) setPicker(false); }, [open]);
+  const { catalog } = useAgents();
   const pick = (fn: () => void) => () => { fn(); onClose(); };
   const opacity = useApp(s => s.settings?.orchestratorOpacity ?? 100);
   return (<>
     {inspectContext && <AgentContextInspector chat={chat} onClose={() => setInspectContext(false)} />}
+    {/* the shared picker (ModelPicker.tsx) over the same ⋯ button: this chat only; the Orchestrator's also its card's default */}
+    <ModelPicker scope={{ kind: 'chat', chat, card: orchestrator ? catalog?.profiles.find(p => p.id === ORCHESTRATOR_ROLE_ID) ?? null : null }}
+      anchor={anchor} open={picker} onClose={() => setPicker(false)} testid={`chat-picker-${id}`} />
     <Popover anchor={anchor} open={open} onClose={onClose} testid={`chat-menu-pop-${id}`} width={orchestrator ? 290 : 270}>
       <MenuItem onSelect={pick(onRename)} testid={`chat-rename-${id}`}>{t('chat.menu.rename')}</MenuItem>
       <MenuItem onSelect={pick(() => void copyLink(makeLink('home', orchestrator ? 'orchestrator' : `chat-${id}`)))} testid={`chat-link-${id}`}>{t('chat.menu.copyLink')}</MenuItem>
@@ -81,9 +89,7 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, orchestrator }
       <MenuLabel>{t('chat.menu.modelLabel')}</MenuLabel>
       {/* an agent's lasting model and effort live in its profile (ADR 0078): the menu only changes this chat */}
       {chat.agent?.source === 'catalog' && !orchestrator && <p className="menu-note" data-testid={`chat-profile-note-${id}`}>{t('chat.menu.profileNote', { name: chat.agent.name })}</p>}
-      {modelOptions(chat.harness, seen, chat.model ?? '').map(m => (
-        <MenuItem key={m.id || 'default'} checked={(chat.model ?? '') === m.id} onSelect={pick(() => void setChat(id, { model: m.id }))} testid={`chat-model-${id}-${m.id || 'default'}`}>{m.label}</MenuItem>
-      ))}
+      <MenuItem onSelect={pick(() => setPicker(true))} testid={`chat-model-${id}`}>{chat.model || t('mp.cliDefault')} · {t('mp.chatMenu')}</MenuItem>
       {engineCan(chat.harness, 'effort') && (
         <>
           <MenuSep />

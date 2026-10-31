@@ -1,25 +1,10 @@
-// The Settings page's pure parts: the model choices of "Chat aperte dall'Orchestrator" (lib/models.ts), the spending
-// limit amounts, the MCP port and the search highlight (lib/settings-page.ts), the left navigation's groups (ADR 0207,
-// lib/settings-sections.ts) and the Ctrl+, shortcut that opens the page (lib/keys.ts).
+// The Settings page's pure parts: the spending limit amounts, the MCP port and the search highlight
+// (lib/settings-page.ts), the left navigation's groups (ADR 0207, lib/settings-sections.ts) and the Ctrl+, shortcut that
+// opens the page (lib/keys.ts).
 import { describe, expect, it } from 'vitest';
 import { resolveShortcut } from '../../src/renderer/lib/keys';
-import { MODELS, modelOptions } from '../../src/renderer/lib/models';
 import { hitRanges, matchesSettingsSearch, parseUsd, portOf } from '../../src/renderer/lib/settings-page';
 import { SETTINGS_SECTION_IDS, navGroups } from '../../src/renderer/lib/settings-sections';
-
-describe('model choices (lib/models.ts)', () => {
-  const seen = { cursor: { at: 1, ids: [{ id: 'grok-4.7', name: 'Grok 4.7' }, { id: 'gpt-5', name: '' }] } };
-  it('Cursor: the list its CLI offered when there is one, else the built-in list; always the CLI default first', () => {
-    expect(modelOptions('cursor', seen).map(m => m.id)).toEqual(['', 'grok-4.7', 'gpt-5']);
-    expect(modelOptions('cursor', seen)[2]!.label).toBe('gpt-5');
-    expect(modelOptions('cursor', null)).toEqual(MODELS.cursor);
-    expect(modelOptions('claude', seen)).toEqual(MODELS.claude);
-  });
-  it('keeps an id already chosen even when the list does not have it', () => {
-    expect(modelOptions('cursor', seen, 'grok-4.7-fast').at(-1)).toEqual({ id: 'grok-4.7-fast', label: 'grok-4.7-fast' });
-    expect(modelOptions('cursor', seen, 'grok-4.7')).toHaveLength(3);
-  });
-});
 
 describe('spending limit amounts and the MCP port (lib/settings-page.ts)', () => {
   it('reads $ amounts like the main process checks them; thousands separators are refused, never read as 1 $', () => {
