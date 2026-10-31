@@ -321,7 +321,7 @@ export class LearnService {
           prep: { ...(l.prep ?? { phases: {} }), phases: { ...l.prep?.phases, plan: 'done' } } };
       });
       log.info('learn', 'lesson plan ready', { data: { id, steps: plan.steps.length, planned: done?.outline.length, facts: facts.length, costUsd: r.costUsd, degraded: done?.degraded ?? [] } });
-      if (done?.degraded) log.warn('learn', 'lesson ready with a failed research', { cause: (done.degraded.map(k => `${k}: ${done.prep?.why?.[k] ?? ''}`).join(' · ')).slice(0, 400), hint: 'the lesson says so on its page; Riprova once the engine can read (a read-only run refused its tools)', data: { id, degraded: done.degraded } });
+      if (done?.degraded) log.warn('learn', 'lesson ready with a failed research', { cause: (done.degraded.map(k => `${k}: ${done.prep?.why?.[k] ?? ''}`).join(' · ')).slice(0, 400), hint: 'the lesson says so on its page; a refused tool means the engine denied the read-only run its tools: allow them for that engine and start the lesson again', data: { id, degraded: done.degraded } });
     } catch (e) {
       log.warn('learn', 'lesson preparation failed', { cause: errText(e), hint: 'Riprova from the lesson' });
       this.edit(id, l => ({ ...l, state: 'failed', error: errText(e).slice(0, 300) }));
