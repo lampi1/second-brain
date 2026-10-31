@@ -198,8 +198,12 @@ describe('ChatManager with the CPU queue', () => {
     const mine = await m.create({ harness: 'claude', cwd, prompt: 'mine' });
     expect(mine.queued).toBeUndefined();
     await waitFor(() => m.list().find(x => x.id === mine.id)?.state === 'idle', 'my turn done');
-    // an agent reopening it once closed (archived) waits for the load (a new engine)
+    // an agent reopening it once closed (archived) waits for the load (a new engine). Closed by itself here: one the user
+    // closed with ✕ an agent never reopens by writing to it (ADR 0217, close-tree.test.ts), and a chat without a role
+    // never closes by itself, so the record says auto
     await m.archive(mine.id);
+    const rec = (m as unknown as { chats: Map<string, { s: { closedBy?: string }; userClosing?: true }> }).chats.get(mine.id)!;
+    rec.s.closedBy = 'auto'; delete rec.userClosing;
     await m.send(mine.id, 'from the orchestrator', undefined, false, 'Orchestrator');
     expect(m.list().find(x => x.id === mine.id)?.queued?.kind).toBe('start');
     expect(users(mine.id)).toEqual(['mine']);

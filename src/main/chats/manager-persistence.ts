@@ -38,6 +38,7 @@ export abstract class ManagerPersistence extends ManagerCore {
     // an engine the auto-close kept for its cold note is live again: idle release and the cold timer see it
     if (r.closeAfterCold && r.session?.alive && r.s.state === 'closed') r.s.state = r.session.busy ? 'running' : 'idle';
     r.closeAfterCold = false;
+    delete r.userClosing;
     delete r.s.closedAt;
     delete r.s.closedBy;
     this.persist();

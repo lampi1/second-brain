@@ -308,7 +308,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       },
     },
     {
-      name: 'app_reopen_chat', description: 'Reopen a closed (archived) chat listed under "closed" by app_chats: it goes back on the grid with its whole history and its session resumes (--resume) on the next message. Sending it a message with app_send_to_chat reopens it too.',
+      name: 'app_reopen_chat', description: 'Reopen a closed (archived) chat listed under "closed" by app_chats: it goes back on the grid with its whole history and its session resumes (--resume) on the next message. Sending it a message with app_send_to_chat reopens it too, except a chat the user closed with ✕ (its work was cancelled): only this tool reopens that one, and only when the user asks.',
       inputSchema: obj({ chatId: str('chat id from app_chats "closed"') }, ['chatId']),
       run: async a => {
         const id = String(a.chatId ?? '');
@@ -319,7 +319,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       },
     },
     {
-      name: 'app_close_chat', description: 'Close an app chat for the user, like his ✕ / Ctrl+W: it leaves the grid and its engine ends with every tool it started (MCP servers, shells, dev servers); the transcript stays. Never an Orchestrator; refused while the chat waits for the user (his open questions are his).',
+      name: 'app_close_chat', description: 'Close an app chat for the user, like his ✕ / Ctrl+W: it leaves the grid and its engine ends with every tool it started (MCP servers, shells, dev servers); the transcript stays. Its delegation tree stops with it (ADR 0217). Never an Orchestrator; refused while the chat or an open descendant waits for the user (his open questions are his).',
       inputSchema: obj({ chatId: str('chat id from app_chats "app"') }, ['chatId']),
       run: async a => {
         const id = String(a.chatId ?? '');
@@ -327,6 +327,11 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (!c || !mine(c)) throw new Error(`chat non trovata: ${id} (vedi app_chats)`);
         if (c.isOrchestrator) throw new Error('L’Orchestrator non si chiude da uno strumento: solo l’utente, dal suo menu ⋯');
         if (c.pending > 0) throw new Error(`«${c.title}» aspetta una risposta dell’utente: chiudila solo lui`);
+        // the close cancels the whole tree (ADR 0217): a descendant's open question would be withdrawn unanswered
+        const all = d.chats.list(), under = new Set([id]);
+        for (let grew = true; grew;) { grew = false; for (const x of all) if (x.parentId && under.has(x.parentId) && !under.has(x.id)) { under.add(x.id); grew = true; } }
+        const asking = all.find(x => x.id !== id && under.has(x.id) && !x.closedAt && x.pending > 0);
+        if (asking) throw new Error(`«${asking.title}», sotto «${c.title}», aspetta una risposta dell’utente: chiudile solo lui`);
         await d.chats.close(id);
         log.info('appctl', 'agent closed a chat', { chat: id, data: { title: c.title, state: c.state } });
         d.brain.publish([{ kind: 'chat-closed', title: c.title, detail: 'chiusa dall’Orchestrator', chatId: id, who: c.harness }]);

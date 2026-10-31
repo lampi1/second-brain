@@ -62,6 +62,9 @@ import { ManagerSink } from './manager-sink';
 export { RESUME_TEXT, turnReply, workBehind, WAITING_REASON, lastAnswer, LAMPO_TITLE, RESEARCH_TITLE, RUN_SAVE_MS, USER_NOTES_LABEL, userNoteLine, restoredOwner, startTags, repoOf } from './manager-helpers';
 export type { ChatManagerOptions, HandoffOptions, TurnEndInfo, CleanReportNote, UserWroteNote } from './manager-types';
 
+/** The refusal of anything but the user's own message (or an explicit app_reopen_chat) on a chat the user closed (ADR 0217). */
+const CLOSED_BY_USER = 'La chat è stata chiusa dall’utente: il suo lavoro è annullato e non riparte da sola. Solo l’utente può riaprirla (un agente, se l’utente lo chiede: app_reopen_chat).';
+
 export class ChatManager extends ManagerSink implements ChatService {
 
   // ---- ChatService ----
@@ -160,11 +163,11 @@ export class ChatManager extends ManagerSink implements ChatService {
     if (delegator && this.opts.prepareDelegation) {
       const parentPermissions = JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) });
       const prepared = await this.opts.prepareDelegation(structuredClone(delegator.s), req, policy, opts.continuationOf);
-      if (delegator.s.closedAt || delegator.s.run?.endedAt !== undefined || delegator.s.run?.report?.via === 'agent_report' || delegator.s.delegation?.result || delegator.s.run?.runId !== prepared.parentRunId || delegator.s.run?.taskVersion !== prepared.parentTaskVersion) throw new Error('Parent assignment changed while preparing isolation.');
+      if (delegator.s.closedAt || this.closedByUser(delegator) || this.chats.get(delegator.s.id) !== delegator || delegator.s.run?.endedAt !== undefined || delegator.s.run?.report?.via === 'agent_report' || delegator.s.delegation?.result || delegator.s.run?.runId !== prepared.parentRunId || delegator.s.run?.taskVersion !== prepared.parentTaskVersion) throw new Error('Parent assignment changed while preparing isolation.');
       if (parentPermissions !== JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) })) throw new Error('Parent permissions changed while preparing isolation.');
       req = { ...req, cwd: prepared.cwd };
       bindDelegation = id => {
-        if (delegator.s.closedAt || delegator.s.run?.endedAt !== undefined || delegator.s.run?.report?.via === 'agent_report' || delegator.s.delegation?.result || delegator.s.run?.runId !== prepared.parentRunId || delegator.s.run?.taskVersion !== prepared.parentTaskVersion
+        if (delegator.s.closedAt || this.closedByUser(delegator) || this.chats.get(delegator.s.id) !== delegator || delegator.s.run?.endedAt !== undefined || delegator.s.run?.report?.via === 'agent_report' || delegator.s.delegation?.result || delegator.s.run?.runId !== prepared.parentRunId || delegator.s.run?.taskVersion !== prepared.parentTaskVersion
           || parentPermissions !== JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) })) throw new Error('Parent assignment or permissions changed before delegation started.');
         prepared.bind?.(id);
       };
@@ -302,14 +305,14 @@ export class ChatManager extends ManagerSink implements ChatService {
   /** continuation: "Riprendi" of a delegated chat, by whoever clicks it: the successor is the same child of the same parent */
   private async delegator(req: NewChat, by: 'user' | 'agent' | 'app', continuation = false): Promise<Rec> {
     const parent = req.parentId ? this.chats.get(req.parentId) : undefined;
-    if ((by !== 'agent' && !continuation) || !parent || parent.s.closedAt || parent.s.isOrchestrator) throw new Error('Delega rifiutata: la chat che delega non è una chat di lavoro aperta.');
+    if ((by !== 'agent' && !continuation) || !parent || parent.s.closedAt || this.closedByUser(parent) || parent.s.isOrchestrator) throw new Error('Delega rifiutata: la chat che delega non è una chat di lavoro aperta.');
     const cwd = typeof req.cwd === 'string' ? req.cwd.trim() : '';
     // the parent's folder, or a worktree of its repository (agents/worktrees.ts); git is asked only when it matters, and
     // the parent may have closed meanwhile
     if (!within(parent.s.cwd, cwd) && !withinParent(parent.s.cwd, cwd, this.opts.worktrees ? await this.opts.worktrees(parent.s.cwd) : [])) {
       throw new Error(`Delega rifiutata: la cartella deve stare dentro quella del genitore (${parent.s.cwd}) o in un worktree del suo repository.`);
     }
-    if (parent.s.closedAt) throw new Error('Delega rifiutata: la chat che delega non è una chat di lavoro aperta.');
+    if (parent.s.closedAt || this.closedByUser(parent) || this.chats.get(parent.s.id) !== parent) throw new Error('Delega rifiutata: la chat che delega non è una chat di lavoro aperta.');
     return parent;
   }
 
@@ -321,6 +324,8 @@ export class ChatManager extends ManagerSink implements ChatService {
     updateActivity.assertOpen();
     const r = this.need(chatId);
     if (r.s.routineArchived || r.s.routine || r.s.routinePackage) throw new Error('Archived routine chat: use the terminal routine CLI.');
+    // the user's ✕ cancelled it (or its tree): only the user's own message reopens it, never an agent, mail or the app
+    if (this.closedByUser(r) && (resumed || from !== undefined || (source !== undefined && source.kind !== 'user'))) throw new Error(CLOSED_BY_USER);
     // Flash follows its card (ADR 0107): the user's question goes to a Flash on the card's engine and model
     if (r.s.quick && from === undefined && !resumed && (!source || source.kind === 'user')) {
       const next = await this.flashFollow(r);
@@ -466,6 +471,7 @@ export class ChatManager extends ManagerSink implements ChatService {
     if (this.quitting || this.chats.get(chatId) !== r) throw new Error('La chat non è attiva.');
     if (liveOnly && ((!r.session && r.s.state !== 'idle') || r.archiving || r.s.closedAt)) throw new Error('La chat non è attiva: la posta resta da leggere.');
     if (r.archiving) await r.archiving; // never into a session that is closing: the archive ends first, then this reopens
+    if (this.closedByUser(r) && (resumed || from !== undefined)) throw new Error(CLOSED_BY_USER);
     this.needAgentMay(r, from); // again: the engine may have been released while the message waited in the queue
     if (r.s.closedAt) this.unarchive(r); // a message (the user's, or an agent's through app_send_to_chat) reopens it
     // a cold chat (ADR 0031): after the cache expired the message goes on in a fresh session from its note

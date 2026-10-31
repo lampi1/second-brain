@@ -170,9 +170,9 @@ export interface Rec {
   createdAt: number;
   /** Result receipts bind delayed engine accounting to the run that produced them. */
   turnAccounting?: { seen: Set<string>; pending: (AgentRun | null)[] };
-  /** its latest report to its Orchestrator (send_to_chat, or a run-report block): a clean idle after it completes the
-   *  assignment (#86, ADR 0084); never persisted */
-  report?: { text: string; at: number; blocked?: boolean };
+  /** Latest waiting hints or explicit final report. Only agent_report/run-report set final and may complete
+   *  the assignment at a clean turn end (#86, ADR 0084); never persisted. */
+  report?: { text: string; at: number; final?: true; blocked?: boolean };
   /** a delegated child asked its parent (agent_ask_parent) and no agent message reached it since: its turn ending
    *  without agent_report waits for the answer, it does not owe the report yet (#152) */
   askedParentAt?: number;
@@ -276,6 +276,10 @@ export interface Rec {
   opening?: Promise<void> | undefined;
   /** an archive closing the session (a send waits for it, then reopens the chat on a new session) */
   archiving?: Promise<void> | undefined;
+  /** the user's close (✕) of this chat or of an ancestor started: set before its first await, so a late report, mail
+   *  or child result never reopens it while its engine is still closing; cleared only by a reopen (persisted as
+   *  closedBy 'user' once closed). Never persisted. */
+  userClosing?: true;
   /** a turn is running (persisted): set when the CLI reports running/waiting, cleared by its result, a CLI exit
    *  while the app runs, or an archive; still set after a quit or crash = resume it on the next start */
   working?: boolean;

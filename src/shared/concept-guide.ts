@@ -681,8 +681,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Una striscia di un agente mostra una stima tratteggiata, «stima ~4 min · ~0,12 $ · su 12 task simili»: la mediana dei task simili già finiti (stesso agente e stesso tipo, poi stesso tipo, poi stesso agente; almeno 3), mai il tempo né il costo di questa esecuzione. Finito il lavoro diventa «~4 min → 6 min» con ✓ se il reale sta tra la metà e il doppio. Il «?» spiega il calcolo e quanto sono state precise le stime.',
         'An agent strip shows a dashed estimate, "estimate ~4 min · ~0,12 $ · from 12 similar tasks": the median of similar finished tasks (same agent and kind, then same kind, then same agent; at least 3), never this run’s own time or cost. Once done it becomes "~4 min → 6 min" with ✓ when the actual is between half and double. The "?" explains the computation and how accurate the estimates have been.'),
       // src/main/chats/manager-delegation.ts settleReport; src/main/chats/auto-close.ts; src/renderer/components/AutoCloseNotice.tsx (ADR 0084)
-      b('Un agente che ha mandato il report finale all’Orchestrator e non lavora più chiude il suo incarico e si chiude da solo dopo il tempo scelto in Impostazioni (lo ritrovi con Ctrl+K). Se aspetta te, un permesso, i colleghi o task in background resta aperto e la striscia dice «In attesa di…».',
-        'An agent that sent its final report to the Orchestrator and is idle completes its assignment and closes by itself after the delay set in Settings (Ctrl+K finds it). If it waits for you, a permission, colleagues or background tasks it stays open and the strip says "Waiting for…".'),
+      b('Un agente conclude l’incarico con un report finale esplicito, non con una mail di avanzamento. Quando non lavora più si chiude dopo il tempo scelto in Impostazioni (lo ritrovi con Ctrl+K). Se aspetta te, un permesso, i colleghi, figli o task in background resta aperto. Un piano non concluso lo tiene aperto fino al report finale, che chiude il piano (i passi rimasti diventano parziali).',
+        'An agent completes its assignment with an explicit final report, not progress mail. Once idle it closes after the delay set in Settings (Ctrl+K finds it). It stays open while waiting for you, a permission, colleagues, children or background tasks. An unfinished plan keeps it open until its final report, which closes the plan (steps left become partial).'),
       // src/renderer/components/ChatTile.tsx
       b('Una striscia chiusa mostra agente, stato, modello e l’ultima risposta; un clic ovunque su di essa la apre, ogni volta, e mostra la conversazione e l’input. Lo sforzo lo decide il profilo dell’agente: la striscia non lo mostra.',
         'A collapsed strip shows agent, state, model and the last answer; a click anywhere on it expands it, every time, showing the conversation and the input. The effort is the agent profile’s: the strip does not show it.'),
@@ -1249,8 +1249,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un albero di deleghe si chiude tutto insieme: le chat che hanno finito aspettano le altre, e il tempo parte quando ha finito l’ultima.',
         'A delegation tree closes as one: the chats that finished wait for the others, and the time starts when the last one finished.'),
       // src/renderer/components/SidebarTree.tsx
-      b('Puoi chiudere una chat anche dalla barra laterale: passa sopra la sua riga e premi ✕ (6 secondi per Annulla).',
-        'You can also close a chat from the sidebar: hover its row and press ✕ (6 seconds to undo).'),
+      b('Puoi chiudere una chat anche dalla barra laterale: passa sopra la sua riga e premi ✕ (6 secondi per Annulla). Chiudere con ✕ ferma la chat e tutte le sue figlie: lavoro, domande e processi finiscono e non ripartono da soli; Annulla riapre solo quella chat.',
+        'You can also close a chat from the sidebar: hover its row and press ✕ (6 seconds to undo). Closing with ✕ stops the chat and all its children: their work, questions and processes end and they do not restart by themselves; Undo brings back only that chat.'),
     ],
     analogy: b('Come un collega che, consegnato il lavoro, sgombra la scrivania: ma se aspetta una tua firma resta lì, con il foglio in mano.',
       'Like a colleague who clears the desk after handing in the work: but when waiting for your signature, stays there, paper in hand.'),

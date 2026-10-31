@@ -1,4 +1,4 @@
-// Finished workers close by themselves (#86, ADR 0084): a worker that mails its final report to its Orchestrator (or ends
+// Finished workers close by themselves (#86, ADR 0084): a worker that submits agent_report (or ends
 // with a run-report block) and goes idle gets its assignment completed and its agent run ended "completed", then the
 // main scheduler archives it with closedBy "auto". A worker that waits for the user (question, permission, its report's
 // words), for colleagues or for background work stays open, and the scheduler names what it waits for ("In attesa di…").
@@ -10,25 +10,32 @@ import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import { AutoCloseService, autoCloseNow } from '../../../src/main/chats/auto-close';
 import { plainOwner } from '../../../src/main/agents/catalog';
+import type { StrategyPlan } from '../../../src/shared/strategy';
+import type { Harness } from '../../../src/shared/contract';
+
+class TestManager extends ChatManager {
+  seedPlan(id: string, plan: StrategyPlan) { this.chats.get(id)!.s.plan = plan; }
+}
 
 const roots: string[] = [], managers: ChatManager[] = [];
 afterEach(async () => { for (const m of managers.splice(0)) await m.shutdown(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
 
 /** A turn of the fake engine: what it mails to its Orchestrator mid-turn, and its final answer. */
-interface Turn { mail?: string; answer: string; background?: boolean; question?: boolean }
+interface Turn { mail?: string; report?: string; outcome?: 'done' | 'blocked'; answer: string; background?: boolean; question?: boolean }
 
-function fixture() {
+function fixture(harness: Harness = 'claude') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-auto-report-')); roots.push(dir);
   const sinks = new Map<string, SessionSink>(), script = new Map<string, Turn[]>();
   let creating: SessionSink | null = null, seq = 0;
-  const m: ChatManager = new ChatManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, env: { CLAUDE_CONFIG_DIR: path.join(dir, 'home') }, sessionFactory: (_h, _o, s) => {
+  const m = new TestManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, env: { CLAUDE_CONFIG_DIR: path.join(dir, 'home') }, sessionFactory: (_h, _o, s) => {
     creating = s; let state = 'idle';
-    const self = { harness: 'claude', sessionId: null, pid: null, root: null, alive: true, get busy() { return state === 'running'; },
+    const self = { harness, sessionId: null, pid: null, root: null, alive: true, get busy() { return state === 'running'; },
       start() { s.childrenCoverage?.('complete'); s.changed({ state: 'idle' }); },
       send(text: string) {
         const id = [...sinks.entries()].find(([, v]) => v === s)?.[0];
         const turn: Turn = (id ? script.get(id)?.shift() : undefined) ?? { answer: `Ricevuto: ${text.slice(0, 20)}` };
         state = 'running'; s.changed({ state: 'running' });
+        if (turn.report && id) m.reportRoot(id, { outcome: turn.outcome ?? 'done', summary: turn.report, output: turn.report, doneWhen: [] });
         if (turn.mail && id) {
           const orchestrator = m.list().find(c => c.isOrchestrator);
           m.noteMail(id, orchestrator?.id ?? null, turn.mail);
@@ -49,8 +56,8 @@ function fixture() {
   /** A worker its Orchestrator opened (by 'agent'), from a catalog agent (a run), whose first turn follows `turns`. */
   const worker = async (orchestratorId: string, ...turns: Turn[]) => {
     const pending: Turn[] = [...turns];
-    const c = await m.create({ harness: 'claude', cwd: dir }, 'agent',
-      { owner: { ...plainOwner('claude', null), source: 'catalog', id: 'researcher', version: 1 }, instructions: 'Ricerca.', policy: null });
+    const c = await m.create({ harness, cwd: dir }, 'agent',
+      { owner: { ...plainOwner(harness, null), source: 'catalog', id: 'researcher', version: 1 }, instructions: 'Ricerca.', policy: null });
     sinks.set(c.id, creating!); script.set(c.id, pending);
     await m.send(c.id, 'Cerca tre fonti sul tema e mandami il report.', undefined, false, 'Orchestrator');
     return c;
@@ -73,9 +80,39 @@ async function runScheduler(m: ChatManager, ids: string[]) {
 }
 
 describe('a worker that delivered its final report closes by itself (#86)', () => {
-  it('completes the assignment and the run on the report, then the scheduler archives it with closedBy auto', async () => {
+  it('progress mail with an active child and unfinished plan does not complete the assignment', async () => {
     const f = fixture(), r = await f.orchestrator();
-    const w = await f.worker(r.id, { mail: 'Report finale: tre fonti trovate, sintesi nel file notes.md.', answer: 'Report inviato all’Orchestrator.' });
+    const w = await f.worker(r.id, { answer: 'Lavoro avviato.' });
+    f.m.seedPlan(w.id, { phase: 'running', clarified: [], steps: [{ title: 'Implement', state: 'now' }, { title: 'Review', state: 'todo' }], at: Date.now() });
+    await f.m.create({ harness: 'claude', cwd: f.dir, parentId: w.id, delegation: { role: 'artisan', goal: 'Implement', doneWhen: ['Tests pass'], at: Date.now() } }, 'agent');
+    f.m.noteMail(w.id, r.id, 'Analisi conclusa, correzione avviata e verifica predisposta.');
+    expect(f.chat(w.id).work?.status).toBe('assigned');
+    expect(f.chat(w.id).run?.endedAt).toBeUndefined();
+    expect(f.chat(w.id).plan?.phase).toBe('running');
+  });
+
+  it.each(['claude', 'cursor', 'opencode', 'codex'] as const)('%s: plain progress mail alone is not a final report, including on later clean turns', async harness => {
+    const f = fixture(harness), r = await f.orchestrator();
+    const w = await f.worker(r.id, { mail: 'Prima parte verificata.', answer: 'Proseguo.' });
+    expect(f.chat(w.id).work?.status).toBe('assigned');
+    await f.m.send(w.id, 'Aggiornamento', undefined, false, 'Orchestrator');
+    expect(f.chat(w.id).run?.endedAt).toBeUndefined();
+  });
+
+  it.each(['plan', 'child'] as const)('a legacy final block cannot finish with unfinished %s work', async pending => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { answer: 'Avviato.' });
+    if (pending === 'plan') f.m.seedPlan(w.id, { phase: 'running', clarified: [], steps: [{ title: 'Review', state: 'todo' }], at: Date.now() });
+    else await f.m.create({ harness: 'claude', cwd: f.dir, parentId: w.id, delegation: { role: 'artisan', goal: 'Implement', doneWhen: ['Tests pass'], at: Date.now() } }, 'agent');
+    f.script.get(w.id)!.push({ answer: '```run-report\n{"outcome":"done","verified":"yes","summary":"Done"}\n```' });
+    await f.m.send(w.id, 'Stato', undefined, false, 'Orchestrator');
+    expect(f.chat(w.id).work?.status).toBe('assigned');
+    expect(f.chat(w.id).run?.endedAt).toBeUndefined();
+  });
+
+  it.each(['claude', 'cursor', 'opencode', 'codex'] as const)('%s: completes an explicit report and archives it with closedBy auto', async harness => {
+    const f = fixture(harness), r = await f.orchestrator();
+    const w = await f.worker(r.id, { report: 'Tre fonti trovate, sintesi nel file notes.md.', mail: 'Report finale disponibile.', answer: 'Report inviato all’Orchestrator.' });
     expect(f.chat(w.id).work?.status).toBe('completed');
     expect(f.chat(w.id).run).toMatchObject({ endReason: 'completed' });
     expect(f.chat(w.id).waitsOn).toBeUndefined();
@@ -83,6 +120,16 @@ describe('a worker that delivered its final report closes by itself (#86)', () =
     expect(f.chat(w.id)).toMatchObject({ state: 'closed', closedBy: 'auto' });
     expect(f.chat(w.id).run?.endReason).toBe('completed');
     expect(f.chat(r.id).closedAt).toBeUndefined();
+  });
+
+  it('a completed plan can finish with an explicit final report', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { answer: 'Avviato.' });
+    f.m.seedPlan(w.id, { phase: 'done', clarified: [], steps: [{ title: 'Review', state: 'done' }], at: Date.now() });
+    f.script.get(w.id)!.push({ report: 'Verifica conclusa.', answer: 'Fatto.' });
+    await f.m.send(w.id, 'Risultato', undefined, false, 'Orchestrator');
+    expect(f.chat(w.id).work?.status).toBe('completed');
+    expect(f.chat(w.id).run?.endReason).toBe('completed');
   });
 
   it('takes a run-report block as the final report too', async () => {
@@ -139,11 +186,74 @@ describe('a worker that delivered its final report closes by itself (#86)', () =
     expect(s.state().find(x => x.chatId === w.id)?.waitingFor).toBe('work');
   });
 
+  // The guards below hold an explicit agent_report too, not only mail (which never completes on its own).
+  it('an explicit report that waits for the user keeps it assigned with "In attesa dell’utente"', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { report: 'Bozza pronta in docs/x.md. Aspetto il tuo ok, poi la pubblico.', answer: 'Report inviato.' });
+    expect(f.chat(w.id)).toMatchObject({ waitsOn: 'user', work: { status: 'assigned' } });
+    expect(f.chat(w.id).run?.endedAt).toBeUndefined();
+  });
+
+  it('an explicit report with an open question keeps it assigned', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { report: 'Fatto quasi tutto.', answer: 'Una domanda prima di chiudere.', question: true });
+    expect(f.chat(w.id).work?.status).toBe('assigned');
+    const s = await runScheduler(f.m, [w.id]);
+    expect(s.state().find(x => x.chatId === w.id)?.waitingFor).toBe('answer');
+  });
+
+  it('an explicit report with background work still running keeps it assigned', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { report: 'Analisi conclusa.', answer: 'Report inviato.', background: true });
+    expect(f.chat(w.id).work?.status).toBe('assigned');
+    expect(f.chat(w.id).run?.endedAt).toBeUndefined();
+  });
+
+  it('an explicit report with a delegated child still owing its result keeps it assigned', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { answer: 'Avviato.' });
+    await f.m.create({ harness: 'claude', cwd: f.dir, parentId: w.id, delegation: { role: 'artisan', goal: 'Implement', doneWhen: ['Tests pass'], at: Date.now() } }, 'agent');
+    f.script.get(w.id)!.push({ report: 'Tutto fatto.', answer: 'Fatto.' });
+    await f.m.send(w.id, 'Risultato', undefined, false, 'Orchestrator');
+    expect(f.chat(w.id).work?.status).toBe('assigned');
+    expect(f.chat(w.id).run?.endedAt).toBeUndefined();
+  });
+
+  it('a blocked explicit report keeps it assigned', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { report: 'Manca l’accesso al repository.', outcome: 'blocked', answer: 'Bloccato.' });
+    expect(f.chat(w.id).work?.status).toBe('assigned');
+    expect(f.chat(w.id).run?.endedAt).toBeUndefined();
+  });
+
+  it('a blocked agent_report wins over a later contradictory run-report done block', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { report: 'Manca l’accesso al repository.', outcome: 'blocked', answer: 'Bloccato.\n\n```run-report\n{"outcome":"done","verified":"yes","summary":"Done"}\n```' });
+    expect(f.chat(w.id).work?.status).toBe('assigned');
+    expect(f.chat(w.id).run?.report).toMatchObject({ via: 'agent_report', outcome: 'blocked' });
+  });
+
+  it('progress mail after an accepted final report does not replace it', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { report: 'Verifica conclusa.', mail: 'Prima parte verificata, proseguo.', answer: 'Fatto.' });
+    expect(f.chat(w.id).work?.status).toBe('completed');
+  });
+
+  it('an explicit non-blocked report finalizes a running plan before the plan guard, then completes', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { answer: 'Avviato.' });
+    f.m.seedPlan(w.id, { phase: 'running', clarified: [], steps: [{ title: 'Review', state: 'todo' }], at: Date.now() });
+    f.script.get(w.id)!.push({ report: 'Chiuso con quello che c’è.', answer: 'Fatto.' });
+    await f.m.send(w.id, 'Risultato', undefined, false, 'Orchestrator');
+    expect(f.chat(w.id).plan?.phase).toBe('done');
+    expect(f.chat(w.id).work?.status).toBe('completed');
+  });
+
   it('a later clean report after a waiting one completes it', async () => {
     const f = fixture(), r = await f.orchestrator();
     const w = await f.worker(r.id, { mail: 'Aspetto la risposta di «QA rimborsi».', answer: 'Inviato.' });
     expect(f.chat(w.id).waitsOn).toBe('colleagues');
-    f.script.get(w.id)!.push({ mail: 'Report finale: QA ok, tutto chiuso.', answer: 'Fatto.' });
+    f.script.get(w.id)!.push({ report: 'QA ok, tutto chiuso.', answer: 'Fatto.' });
     await f.m.send(w.id, 'QA ok.', undefined, false, 'QA rimborsi');
     expect(f.chat(w.id).waitsOn).toBeUndefined();
     expect(f.chat(w.id).work?.status).toBe('completed');
@@ -151,7 +261,7 @@ describe('a worker that delivered its final report closes by itself (#86)', () =
 
   it('a new message from its Orchestrator assigns it again; mail to someone else is no report', async () => {
     const f = fixture(), r = await f.orchestrator();
-    const w = await f.worker(r.id, { mail: 'Report finale: fatto.', answer: 'Fatto.' });
+    const w = await f.worker(r.id, { report: 'Fatto.', answer: 'Fatto.' });
     expect(f.chat(w.id).work?.status).toBe('completed');
     await f.m.assignTask(w.id, 'Ora una seconda ricerca.', { mode: 'continue', source: { kind: 'chat', chatId: r.id } });
     expect(f.chat(w.id).work?.status).toBe('assigned');
@@ -168,7 +278,7 @@ describe('a worker that delivered its final report closes by itself (#86)', () =
 
   it('wiring holds name their wait: a command left to the user, a browser hand-off', async () => {
     const f = fixture(), r = await f.orchestrator();
-    const w = await f.worker(r.id, { mail: 'Report finale: fatto.', answer: 'Fatto.' });
+    const w = await f.worker(r.id, { report: 'Fatto.', answer: 'Fatto.' });
     expect(f.m.autoCloseCandidates(() => 'command').find(c => c.id === w.id)).toMatchObject({ eligible: false, waitingFor: 'command' });
     expect(f.m.autoCloseCandidates(() => 'browser').find(c => c.id === w.id)).toMatchObject({ eligible: false, waitingFor: 'browser' });
     expect(f.m.autoCloseCandidates(() => false).find(c => c.id === w.id)).toMatchObject({ eligible: true });
