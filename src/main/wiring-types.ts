@@ -13,7 +13,6 @@ import type { LifecycleApi } from './agents/lifecycle-api';
 import type { MorningService } from './morning/service';
 import type { MemoryService } from './rules/memory-service';
 import type { EnginesApi } from './engines/service';
-import type { PersonalBrowser } from './personal/browser';
 import type { RecordingStore } from './recordings/store';
 import type { LearnService } from './learn/service';
 import type { Emitter } from './ipc';
@@ -72,8 +71,6 @@ export interface Wired {
   morning?: MorningService;
   setup: SetupService;
   chats: ChatService; browser: BrowserService; brain: BrainService; tasks: TasksApi;
-  /** the user's own everyday browser, the Browser page (personal/browser.ts, ADR 0133) */
-  personal: PersonalBrowser;
   /** the call recordings on disk (ADR 0154, recordings/store.ts): main/index.ts records and transcribes, app_recordings reads */
   recordings: RecordingStore;
   /** Impara (ADR 0185, learn/service.ts): the user's lessons; absent = the impara:* channels say it is not available */

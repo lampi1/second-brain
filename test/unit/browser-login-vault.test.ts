@@ -1,4 +1,4 @@
-// The personal browser's passwords (personal/vault.ts, ADR 0133): encrypted at rest, given back only for a page of their
+// Saved passwords (browser/login-vault.ts, ADR 0133, 0212): encrypted at rest, given back only for a page of their
 // own site, refused without OS encryption, and imported from the CSV that Google Password Manager, Chrome, Edge and
 // Firefox export.
 import { describe, expect, it } from 'vitest';
@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { SecretCipher } from '../../src/main/engines/secrets';
-import { LoginVault, loginsFromCsv, parseCsv, siteOf } from '../../src/main/personal/vault';
+import { LoginVault, loginsFromCsv, parseCsv, siteOf } from '../../src/main/browser/login-vault';
 
 const tmp = () => path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-vault-')), 'personal-passwords.json');
 /** a reversible fake: what is on disk is never the password itself */

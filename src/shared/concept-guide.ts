@@ -1682,45 +1682,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/renderer/lib/recorder.ts', 'src/main/recordings/service.ts', 'src/main/recordings/store.ts', 'src/main/recordings/find.ts', 'src/main/appctl/recordings.ts', 'src/renderer/components/RecordingsPage.tsx'],
   },
   {
-    id: 'personal-browser',
-    title: b('Il tuo Browser personale',
-      'Your personal Browser'),
-    summary: b('Un browser di tutti i giorni dentro l’app, con preferiti, sessioni e password, separato da quelli degli agenti: loro non lo vedono mai.',
-      'An everyday browser inside the app, with bookmarks, sessions and passwords, apart from the agents’ ones: they never see it.'),
-    points: [
-      // src/main/personal/browser.ts (persist:personal)
-      b('Le sue schede vivono in una partizione tutta loro: nessuno strumento degli agenti le elenca, le legge o le fotografa, e loro non vedono le sessioni degli agenti.',
-        'Its tabs live in a partition of their own: no agent tool lists, reads or screenshots them, and they never see the agents’ sessions.'),
-      // src/renderer/components/BrowserPage.tsx
-      b('Barra degli indirizzi con suggerimenti da preferiti e cronologia, stella per i preferiti, sessioni salvate (un gruppo di schede con un nome) e «Riapri le ultime schede».',
-        'An address bar with suggestions from bookmarks and history, a star for bookmarks, saved sessions (a named set of tabs) and "Reopen the last tabs".'),
-      // src/main/personal/vault.ts
-      b('Le password sono cifrate dal sistema (DPAPI su Windows) e si riempiono solo in una pagina del loro sito, al tuo clic; puoi importare il CSV di Google Password Manager, Chrome, Edge o Firefox.',
-        'Passwords are encrypted by the system (DPAPI on Windows) and filled only into a page of their own site, at your click; you can import the CSV from Google Password Manager, Chrome, Edge or Firefox.'),
-      // src/main/browser/tabs.ts lend (ADR 0133)
-      b('«Affida a un agente» presta una sola scheda a una chat finché non premi «Riprendi la scheda»: solo il tuo clic la presta, e torna indietro viva.',
-        '"Give to an agent" lends one tab to a chat until you press "Take the tab back": only your click lends it, and it comes back alive.'),
-      // src/main/personal/browser.ts: tabs keep running
-      b('Una scheda che non è sullo schermo continua a girare: la musica o una call vanno avanti mentre cambi pagina.',
-        'A tab that is off screen keeps running: music or a call go on while you change page.'),
-    ],
-    analogy: b('Come la tua scrivania personale nello stesso ufficio della squadra: è nella stanza, ma i cassetti sono tuoi e nessuno ci guarda.',
-      'Like your own desk in the team’s office: it is in the room, but the drawers are yours and nobody looks inside.'),
-    target: [b('Google a volte rifiuta l’accesso dai browser dentro le app («browser non sicuro»): per quel sito serve Chrome.',
-        'Google sometimes refuses sign-in from browsers inside apps ("browser not secure"): that site needs Chrome.')],
-    tech: [
-      tech(FILES, 'userData/personal-browser.json (preferiti, sessioni, cronologia, ultime schede); userData/personal-passwords.json (cifrate).',
-        'userData/personal-browser.json (bookmarks, sessions, history, last tabs); userData/personal-passwords.json (encrypted).'),
-      tech(WHERE, 'Pagina Browser (barra a sinistra, o G W).',
-        'Browser page (left rail, or G W).'),
-    ],
-    anchors: {
-      2: ['src/main/personal/vault.ts'],
-      3: ['src/main/browser/tabs.ts#lend'],
-    },
-    sources: ['src/main/personal/browser.ts', 'src/main/personal/vault.ts', 'src/main/personal/store.ts', 'src/main/browser/tabs.ts', 'src/renderer/components/BrowserPage.tsx'],
-  },
-  {
     id: 'notifications',
     title: b('Avvisi e suoni',
       'Notices and sounds'),

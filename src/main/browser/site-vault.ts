@@ -1,6 +1,6 @@
 // Read-only adapter of the historical encrypted site vault, used lazily when exporting a terminal package.
 // Existing credentials remain intact; new package credentials are entered in the package form, never by an agent.
-import { LoginVault } from '../personal/vault';
+import { LoginVault } from './login-vault';
 import type { SecretCipher } from '../engines/secrets';
 import { browserOrigins } from '../../shared/flow-browser';
 const exactOrigin = (url: unknown): string | null => {

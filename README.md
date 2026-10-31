@@ -216,8 +216,6 @@ the Orchestrator to explain it your way.
 
 - **Answer with one key.** Questions and permissions show up as cards in one window, with an estimate before and a
   verdict after.
-- **A browser of your own.** The Browser page is your everyday browser, with bookmarks, sessions and passwords the
-  agents never see; lend them one tab when you want.
 - **Settings that find themselves.** One page with a section list, search that highlights the matching row, instant
   save with Undo.
 - **Connectors in one paste.** Paste a README's JSON, a command line or a URL and the MCP server is ready; switch it on

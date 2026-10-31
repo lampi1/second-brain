@@ -180,7 +180,6 @@ ${SCREENSHOT_HINT}`;
       else if (dir === 'reload') t.wc.reload();
     },
     close: tabId => tabs.close(tabId, 'user'),       // the app's ✕ / Ctrl+W: the tab's agent is told at its next call
-    lend: (chatId, view, back) => tabs.toBrowserTab(tabs.lend(chatId, view, () => back())),
     layout: views => tabs.layout(views),
     mcpUrlFor: chatId => (chatId ? mcp.url(`/mcp/chat/${encodeURIComponent(chatId)}/${tokens.tokenFor(chatId)}`) : mcp.url('/mcp')),
     handoffs: () => tabs.handoffs.list(),

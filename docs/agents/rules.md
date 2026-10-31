@@ -20,10 +20,6 @@ app (each CLI logs in itself) with these exceptions:
   their own engine's process env or HTTP header (ADR 0046);
 - the tokens of the MCP servers added in Settings → Connettori, the same way, given only by the app's MCP gateway to
   that server's own process env or request header, never to an engine or a chat (ADR 0086);
-- the passwords of the user's personal Browser page, encrypted with safeStorage, filled only into a page of their own
-  site at the user's click, never shown to the renderer, an agent, the app MCP or a log; its tabs in
-  `persist:personal`, out of every agent tool and screenshot, except one tab the user gives to a chat with «Affida a un
-  agente» until «Riprendi» (ADR 0133);
 - historical routine site passwords stay encrypted in the app profile and are read only during explicit package
   preparation/export for the terminal, never printed in transcripts, evidence or logs (ADR 0179).
 

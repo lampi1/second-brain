@@ -45,7 +45,7 @@ const PAGE_ICON: Record<BrainPageId, ReactNode> = {
   agenti: <IconLayers />,
   idee: <IconLightbulb />,
   andamento: <IconChart />, script: <IconTerminal />, log: <IconList />, file: <IconBrain />, task: <IconTicket />, skill: <IconSparkle />, impostazioni: <IconSettings />,
-  guida: <IconQuestion />, browser: <IconGlobe />, registrazioni: <IconMic />, impara: <IconLearn />,
+  guida: <IconQuestion />, registrazioni: <IconMic />, impara: <IconLearn />,
   regole: <IconShield />, memoria: <IconHistory />, collegamenti: <IconMap />,
 };
 

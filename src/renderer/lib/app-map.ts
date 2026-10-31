@@ -3,8 +3,8 @@
 // rail as it is rendered now (groups, pages, shortcuts), every page with its shortcut and subtitle, Memoria's tabs, the
 // Settings sections (lib/settings-sections.ts), the palette's actions with their keys, the "?" help texts (explain.*),
 // and the view preferences (theme, density, work profile). screenOutline() is the live screen: headings, tabs and
-// controls with their state and where they sit, never what a chat, a question or the personal browser says (ADR 0083,
-// 0133: the Orchestrator sees a chat's state, not its content; the user's own browsing never reaches an agent). Main
+// controls with their state and where they sit, never what a chat or a question says (ADR 0083: the
+// Orchestrator sees a chat's state, not its content). Main
 // calls them with executeJavaScript on window.__sbAppMap / __sbScreen / __sbView (installAppMap, from main.tsx); the
 // view change goes through ui:command 'prefs' (lib/view-prefs.ts). Pure DOM reads: no state is changed here.
 import { BRAIN_PAGES, PAGE_ALIAS } from '../brain';
@@ -82,7 +82,7 @@ export function appMap(): AppMapUi {
  *  and the lane of waiting requests, the notifications and toasts that may quote a chat) or to the user (the personal
  *  browser): never read. A chat strip is one line with its title and state; the
  *  Orchestrator column shows only its bar's controls. */
-const PRIVATE = '.chat-tile, [data-testid="orchestrator-overlay"], [data-testid="qwin"], [data-testid="needs-lane"], [data-testid="nc-list"], [data-testid="toasts"], [data-testid="personal-browser"], [data-testid="rec-lines"]';
+const PRIVATE = '.chat-tile, [data-testid="orchestrator-overlay"], [data-testid="qwin"], [data-testid="needs-lane"], [data-testid="nc-list"], [data-testid="toasts"], [data-testid="rec-lines"]';
 const HEADER = '.orchestrator-bar';
 const CONTROLS = 'h1, h2, h3, [role="tab"], button, a[href], input, select, textarea, [role="switch"], [role="checkbox"], [role="menuitem"], [role="dialog"]';
 const MAX_LINES = 220;

@@ -11,7 +11,7 @@ import type { AutoCloseStatus } from './auto-close';
 import type { AgentsInvokeMap } from './contract/agents';
 import type { AppSourceState, CliStatus, Usage, AppInvokeMap } from './contract/app';
 import type { BrainInvokeMap } from './contract/brain';
-import type { BrowserEnv, BrowserHandoff, BrowserTab, PersonalState, BrowserInvokeMap } from './contract/browser';
+import type { BrowserEnv, BrowserHandoff, BrowserTab, BrowserInvokeMap } from './contract/browser';
 import type { ChatItem, ChatSummary, PendingRequest, RunInfo, ChatsInvokeMap } from './contract/chats';
 import type { EngineInfo, Harness, EnginesInvokeMap } from './contract/engines';
 import type { FeedEvent, TasksState, FeedInvokeMap } from './contract/feed';
@@ -64,7 +64,6 @@ export interface EventMap {
   'browser:handoff': BrowserHandoff;   // opened or changed state
   'browser:envs': BrowserEnv[];        // the known environments changed (tabs, session status, last login)
   'browser:pointer': { tabId: string; inside: boolean };   // the mouse entered/left a tab's page (a native view the UI cannot see)
-  'personal:changed': PersonalState;
   'feed:events': FeedEvent[];
   'usage': Usage;
   /** the background CLI check at start finished (app:info had cli null until now) */
@@ -150,8 +149,6 @@ export const INVOKE_CHANNELS = [
   'tasks:get', 'tasks:refresh', 'tasks:markRead', 'chat:branches',
   'learn:act', 'models:seen',
   'browser:handoffs', 'browser:handoffResolve', 'browser:handoffCopy', 'browser:envList',
-  'personal:state', 'personal:open', 'personal:navigate', 'personal:go', 'personal:select', 'personal:close', 'personal:restore', 'personal:bookmarkAdd', 'personal:bookmarkRemove',
-  'personal:sessionSave', 'personal:sessionOpen', 'personal:sessionRemove', 'personal:historyClear', 'personal:loginFill', 'personal:loginSave', 'personal:loginRemove', 'personal:loginCopy', 'personal:loginImport', 'personal:lend', 'personal:reclaim', 'personal:onScreen',
   'credentials:list', 'credentials:copy', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
   'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'chat:commands', 'source:get', 'source:dismissLaunch', 'source:check', 'source:updateNow',
   'clipboard:image',
@@ -179,7 +176,6 @@ export const EVENT_CHANNELS = [
   'orchestrator:heldChanged',
   'scripts:changed',
   'log:events',
-  'personal:changed',
   'voice:changed', 'voice:heard', 'voice:speech', 'voice:committed',
   'rec:changed',
   'impara:changed', 'impara:tutor',
