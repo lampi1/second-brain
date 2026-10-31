@@ -137,6 +137,16 @@ describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
     expect(cursorLog(logFile).find(l => l.answer)?.answer?.outcome?.optionId).toBe('once');
   });
 
+  it('a Cursor MCP permission whose content is a ```json block shows its arguments, never the fences (real run 2026-10-31)', () => {
+    const text = (t: string) => [{ type: 'content', content: { type: 'text', text: t } }];
+    const title = 'Second-brain-agent_catalog: agent_catalog';
+    expect(permissionView({ title, content: text('```json\n{}\n```') }, undefined, 'Tool').detail).toBe('');
+    expect(permissionView({ title, content: text('```json\n{\n  "query": "acp cancel",\n  "limit": 5\n}\n```') }, undefined, 'Tool').detail).toBe('query: acp cancel\nlimit: 5');
+    const mixed = permissionView({ title, content: text('Reads two files\n```\nmarker.txt\nnotes.md\n```') }, undefined, 'Tool').detail;
+    expect(mixed).toBe('Reads two files\nmarker.txt\nnotes.md');
+    expect(permissionView({ title, content: text('```json\n[1, 2]\n```') }, undefined, 'Tool').detail).toBe('[1,2]');
+  });
+
   it('a multi-line command keeps one line per command in the panel, never one flattened line', () => {
     const v = permissionView({ title: 'bash', rawInput: { command: 'git status\r\ngit push   --force origin main', description: 'two steps' } }, undefined, 'Execute');
     expect(v.detail.split('\n').slice(0, 2)).toEqual(['git status', 'git push --force origin main']);

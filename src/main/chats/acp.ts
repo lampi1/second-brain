@@ -324,6 +324,26 @@ const PERMISSION_LABEL: Record<string, string> = {
 };
 const argLine = (k: string, v: unknown): string => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`;
 
+/** A permission's content as panel lines, its markdown code blocks unwrapped (Cursor sends an MCP tool's arguments as
+ *  "```json {…} ```", real run 2026-10-31): a JSON object one argument per line (empty: nothing), other JSON on one
+ *  line, any other block its own lines; never the fences. */
+export function contentLines(text: string): string[] {
+  const out: string[] = [];
+  const fence = /```[\w+-]*[^\S\n]*\n?([\s\S]*?)\n?```/g;
+  let at = 0;
+  for (const m of text.matchAll(fence)) {
+    out.push(...text.slice(at, m.index).split(/\r?\n/));
+    at = m.index + m[0].length;
+    const inner = m[1]!.trim();
+    let parsed: unknown;
+    try { parsed = JSON.parse(inner); } catch { out.push(...inner.split(/\r?\n/)); continue; }
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) out.push(...Object.entries(parsed as Obj).filter(([, v]) => v !== undefined && v !== '').map(([k, v]) => argLine(k, v)));
+    else out.push(JSON.stringify(parsed));
+  }
+  out.push(...text.slice(at).split(/\r?\n/));
+  return out;
+}
+
 /** Title and detail of a permission panel from what the engine sent (display only: the gates read the input). OpenCode
  *  sends kind "other", its permission name as title and an often empty rawInput for MCP tools, skills and outside
  *  folders; the tool_call that came first with the same id carries the real arguments, so both are shown. */
@@ -342,7 +362,7 @@ export function permissionView(tc: Obj, known: { name?: string; summary?: string
   const lines = [
     // a multi-line command keeps one line each: flattened, «git status» + «git push --force» would read as one
     ...s(args.command).split(/\r?\n/),
-    contentText(tc.content),
+    ...contentLines(contentText(tc.content)),
     ...Object.entries(args).filter(([k, v]) => k !== 'command' && v !== undefined && v !== '').map(([k, v]) => argLine(k, v)),
     ...arr(tc.locations).map(l => s(o(l).path)),
   ];
