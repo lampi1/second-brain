@@ -203,12 +203,11 @@ export const appTextEn: typeof appTextIt = {
   'appText.agentSetup.language': 'Write only the language, for example: English.',
   'appText.agentSetup.areas': (p: { n: number }) => `At most ${p.n} areas: group the closest ones.`,
   'appText.agentSetup.area': (p: { n: number }) => `Each area at most ${p.n} characters.`,
-  // lib/images.ts, lib/models.ts
+  // lib/images.ts
   'appText.images.noCanvas': 'canvas not available',
   'appText.images.readFailed': 'read failed',
   'appText.images.unreadable': 'Image not readable.',
   'appText.images.tooBig': 'Image too large even when scaled down.',
-  'appText.models.cliDefault': 'CLI default',
   // components: AgentFeedAction, DelegationCard, CodexAutonomy, RoutingGroup
   'appText.feedAction.review': 'Review proposal',
   'appText.feedAction.undone': 'Undone',

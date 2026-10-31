@@ -15,6 +15,4 @@ export const lampoEn = {
   'lampo.cleared': 'Flash cleared: it starts from zero.',
   'lampo.clearFailed': (p: { error: string }) => `Flash not cleared: ${p.error}`,
   'modelChip.tip': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}: click to change the model`,
-  'modelChip.label': (p: { name: string }) => `${p.name}'s model`,
-  'modelChip.tier': 'Default',
 };

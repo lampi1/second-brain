@@ -203,12 +203,11 @@ export const appTextDe: typeof appTextIt = {
   'appText.agentSetup.language': 'Schreib nur die Sprache, zum Beispiel: Deutsch.',
   'appText.agentSetup.areas': (p: { n: number }) => `Höchstens ${p.n} Bereiche: Fass die ähnlichsten zusammen.`,
   'appText.agentSetup.area': (p: { n: number }) => `Jeder Bereich höchstens ${p.n} Zeichen.`,
-  // lib/images.ts, lib/models.ts
+  // lib/images.ts
   'appText.images.noCanvas': 'Canvas nicht verfügbar',
   'appText.images.readFailed': 'Lesen fehlgeschlagen',
   'appText.images.unreadable': 'Bild nicht lesbar.',
   'appText.images.tooBig': 'Bild auch verkleinert zu groß.',
-  'appText.models.cliDefault': 'Standard der CLI',
   // components: AgentFeedAction, DelegationCard, CodexAutonomy, RoutingGroup
   'appText.feedAction.review': 'Vorschlag prüfen',
   'appText.feedAction.undone': 'Rückgängig gemacht',

@@ -1,5 +1,5 @@
 // UI acceptance for the owner's fixes of 2026-10-31 (ADR 0211), demo services only, no provider requests: the back of an
-// agent card picks model, effort (the model's own levels by their real names) and context window, and says when the
+// agent card picks model and effort in the shared picker (the model's own levels by their real names) and the context window, and says when the
 // chosen effort is not the model's; an agent's result row in the Orchestrator carries the ✦ summarize and → agent
 // icons; Andamento sits under Brain; a command left for the user takes free text instead of running it. Screenshots of
 // the card back, the result row and the command card with its text field.
@@ -17,14 +17,19 @@ test('the card back picks model, effort and context; the result row has icons; A
     await page.getByTestId('catalog-flip-scout').click();
     const block = page.getByTestId('catalog-model-scout');
     await expect(block).toBeVisible();
-    await choose(page.getByTestId('catalog-model-pick-scout'), 'claude-sonnet-4-6');
-    await choose(page.getByTestId('catalog-effort-pick-scout'), 'max');
-    // Sonnet 4.6 has no xhigh in the registry: the list is the model's own
-    await page.getByTestId('catalog-effort-pick-scout').click();
-    await expect(page.getByRole('option', { name: 'xhigh' })).toHaveCount(0);
-    // Esc closes the list, not the card
+    // model and effort in the shared picker (ModelPicker.tsx), saved to the role with «Salva nel ruolo»
+    await page.getByTestId('catalog-model-pick-scout').click();
+    await page.getByTestId('catalog-picker-scout-row-claude-claude-sonnet-4-6').click();
+    // Sonnet 4.6 has no xhigh in the registry: the levels are the model's own
+    await expect(page.getByTestId('catalog-picker-scout-effort-xhigh')).toHaveCount(0);
+    await page.getByTestId('catalog-picker-scout-effort-max').click();
+    await page.getByTestId('catalog-picker-scout-apply-role').click();
+    await expect(page.getByTestId('catalog-picker-scout-pop')).toHaveCount(0);
+    await expect(page.getByTestId('catalog-model-pick-scout')).toContainText(/sonnet[- ]4[.-]6 · max/i);
+    // Esc closes the picker, not the card
+    await page.getByTestId('catalog-model-pick-scout').click();
     await page.keyboard.press('Escape');
-    await expect(page.getByTestId('catalog-effort-pick-scout-list')).toHaveCount(0);
+    await expect(page.getByTestId('catalog-picker-scout-pop')).toHaveCount(0);
     await expect(block).toBeVisible();
     await choose(page.getByTestId('catalog-context-pick-scout'), '400000');
     await expect(page.getByTestId('catalog-context-pick-scout')).toContainText('400k');

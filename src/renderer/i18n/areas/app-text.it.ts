@@ -202,12 +202,11 @@ export const appTextIt = {
   'appText.agentSetup.language': 'Scrivi solo la lingua, per esempio: italiano.',
   'appText.agentSetup.areas': (p: { n: number }) => `Al massimo ${p.n} aree: raggruppa le più vicine.`,
   'appText.agentSetup.area': (p: { n: number }) => `Ogni area al massimo ${p.n} caratteri.`,
-  // lib/images.ts, lib/models.ts
+  // lib/images.ts
   'appText.images.noCanvas': 'canvas non disponibile',
   'appText.images.readFailed': 'lettura non riuscita',
   'appText.images.unreadable': 'Immagine non leggibile.',
   'appText.images.tooBig': 'Immagine troppo grande anche ridotta.',
-  'appText.models.cliDefault': 'Predefinito della CLI',
   // components: AgentFeedAction, DelegationCard (the deny message the chat gets), CodexAutonomy, RoutingGroup
   'appText.feedAction.review': 'Esamina proposta',
   'appText.feedAction.undone': 'Annullata',

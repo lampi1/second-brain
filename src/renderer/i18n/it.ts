@@ -53,6 +53,7 @@ import { treeIt } from './areas/tree.it';
 import { aliveIt } from './areas/alive.it';
 import { queriesIt } from './areas/queries.it';
 import { lampoIt } from './areas/lampo.it';
+import { modelPickerIt } from './areas/model-picker.it';
 import { awayIt } from './areas/away.it';
 import { learningIt } from './areas/learning.it';
 import { andamentoIt } from './areas/andamento.it';
@@ -83,6 +84,7 @@ export const it = {
   ...aliveIt,
   ...queriesIt,
   ...lampoIt,
+  ...modelPickerIt,
   ...awayIt,
   ...learningIt,
   ...andamentoIt,

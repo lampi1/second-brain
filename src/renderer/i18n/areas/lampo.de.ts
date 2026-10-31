@@ -16,6 +16,4 @@ export const lampoDe: typeof lampoIt = {
   'lampo.cleared': 'Flash geleert: beginnt bei null.',
   'lampo.clearFailed': (p: { error: string }) => `Flash nicht geleert: ${p.error}`,
   'modelChip.tip': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}: klicken, um das Modell zu ändern`,
-  'modelChip.label': (p: { name: string }) => `Modell von ${p.name}`,
-  'modelChip.tier': 'Standard',
 };
