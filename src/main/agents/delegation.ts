@@ -125,7 +125,10 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (!Array.isArray(raw) || !raw.length || raw.length > TASKS_MAX) throw new Error(`agent_delegate: tasks = 1 to ${TASKS_MAX} parts.`);
     // read before the limits: from here to the reservation nothing waits, so two calls cannot both take the last slot
     const parentCwd = parent.cwd, parentRunId = parent.run?.runId;
-    const trees = d.worktrees ? await d.worktrees(parentCwd) : [];
+    // only folders outside the parent's need Git, each looked up alone: a full listing verifies every worktree
+    const outside = [...new Set(raw.map(t => t && typeof t === 'object' && typeof (t as { cwd?: unknown }).cwd === 'string' ? ((t as { cwd: string }).cwd).trim() : '')
+      .filter(c => c && !withinParent(parentCwd, c, [])))];
+    const trees = d.worktrees ? (await Promise.all(outside.map(c => d.worktrees!(parentCwd, c)))).flat() : [];
     parent = activeParent(callerId, 'agent_delegate');
     if (parent.cwd !== parentCwd || parent.run?.runId !== parentRunId) throw new Error('Parent assignment or project changed; discard this stale delegation request.');
     const limits = d.settings(), all = d.chats.list();
