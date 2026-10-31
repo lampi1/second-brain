@@ -3,7 +3,8 @@
 // `demoTeach` answers each of the model's rounds with a lesson about it written by hand (the research and its check, with
 // one fact the check corrects; a question before a topic lesson; plan, the rest, the four extras, the grade), after a
 // short wait so the screens in between are seen; a PR lesson also proposes public topics to search (ADR 0206).
-// `seedDemoLessons` writes two saved lessons the first time, so the page has a list. Since ADR 0205 the lessons show
+// `seedDemoLessons` writes two saved lessons the first time, so the page has a list. `DEMO_TEACHER_SEEN`: the models the
+// start form's «Chi spiega» lists per engine, OpenCode's as long as a real one (its free models last). Since ADR 0205 the lessons show
 // every kind of visual (flow, code walkthrough, sequence, formula, chart, mind map), the pieces' roles, the quality gate
 // (it rewrites the one piece of the rest that cites nothing) and the «Studio» outputs (the lesson about Impara has most
 // of them made already). Deterministic under SB_DEMO_FREEZE. Used by demo-wiring.ts; e2e: test/e2e/impara.spec.ts.
@@ -13,6 +14,16 @@ import type { Lesson } from '@shared/lesson';
 import type { ReviewCard } from '@shared/review';
 import { stepKey } from '@shared/lesson';
 import type { Run } from './material';
+
+/** The models a teacher may pick in the demo, per engine: OpenCode's paid ones first and its free ones last, as its real
+ *  list comes (the start form shows them all and searches them). */
+export const DEMO_TEACHER_SEEN: Record<string, { id: string; name: string }[]> = {
+  opencode: [
+    ...['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano', 'gpt-5.3-codex', 'gpt-5.2', 'gpt-5.1', 'gpt-5', 'gpt-5-mini',
+      'o4', 'o4-mini', 'o3', 'o3-mini', 'gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini', 'codex-mini'].map(m => ({ id: `openai/${m}`, name: `openai/${m}` })),
+    ...['deepseek-v4.1-flash-free', 'qwen-4-coder-free', 'kimi-k3-free'].map(m => ({ id: `opencode/${m}`, name: `opencode/${m}` })),
+  ],
+};
 import type { TeachResult, TeachRun } from './service';
 import type { LessonStore } from './store';
 

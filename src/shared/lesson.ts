@@ -70,6 +70,23 @@ export interface LessonPrep {
   topics?: LessonTopics; refs?: number;
 }
 
+/** How a failed phase's why starts after its "failed: " (LessonPrep.why): the engine refused the read-only run its
+ *  tools, or the model asked (learn/service.ts, wiring-builders.ts teach). */
+export const TOOLS_REFUSED = 'tools refused: ';
+export const MODEL_REFUSED = 'model refused: ';
+/** Why a failed research phase failed, as the lesson's banner says it: the engine took no such model (pick another),
+ *  it refused the run its tools, or another error in its own words (cut). */
+export type DegradedCause = { kind: 'model'; model: string } | { kind: 'tools'; tools: string } | { kind: 'other'; text: string };
+export function degradedCause(why: string | undefined): DegradedCause {
+  const t = (why ?? '').replace(/^failed:\s*/, '').trim();
+  if (t.startsWith(MODEL_REFUSED)) return { kind: 'model', model: t.slice(MODEL_REFUSED.length).split(/\s/)[0] ?? '' };
+  if (t.startsWith(TOOLS_REFUSED)) return { kind: 'tools', tools: t.slice(TOOLS_REFUSED.length) };
+  // a lesson made before the app read the refusal: the CLI's own words (Cursor's `--model`)
+  const cli = /Cannot use this model: (\S+?)\.(?:\s|$)/.exec(t);
+  if (cli) return { kind: 'model', model: cli[1]! };
+  return { kind: 'other', text: t.length > 160 ? `${t.slice(0, 159)}…` : t };
+}
+
 /** Questions asked before the lesson when the ask can mean different things (at most two), and the user's answers
  *  ('' = skipped). */
 export interface LessonClarify { qs: { q: string; options: string[] }[]; answers?: string[] }

@@ -24,6 +24,7 @@ import { KIND_NAME } from '../chats/acp';
 import { READ_ONLY_TOOLS, WEB_ONLY_TOOLS } from '../chats/claude';
 import type { HarnessSession, SessionPatch, SessionSink, TokenUsage } from '../chats/session';
 import { modelRow, isFable } from '../brain/routing';
+import { parseModelRefusal } from '../learn/accepted-models';
 import { agentsMayOpen, engineOn } from '../engines/policy';
 import { engineOf, type EngineDef } from '../engines/registry';
 import { readOnlyConfigDir, sessionFor } from '../engines/sessions';
@@ -59,7 +60,9 @@ export type HeadlessResult =
   // deniedTools: the tools this run asked for and was refused (at most 8 names), so a caller can tell an answer that
   // found nothing from one that could not look
   | { ok: true; text: string; model: string | null; effort: Effort | null; costUsd: number | null; tokens: TokenUsage | null; turns: number | null; durationMs: number; deniedTools?: string[] }
-  | { ok: false; error: string; durationMs: number; refused?: true };
+  // acceptedModels: the CLI refused the model and listed the ones it takes (learn/accepted-models.ts), read from the
+  // whole error before it is cut
+  | { ok: false; error: string; durationMs: number; refused?: true; acceptedModels?: string[] };
 
 export interface HeadlessDeps {
   userData: string;
@@ -288,6 +291,12 @@ export class RunCollector {
 }
 
 /** A short, safe error for the brain and the logs: one line, no key (log.ts redact), at most 300 characters. */
+/** The models the CLI listed when it refused the asked one (Cursor's `--model`), as a result field. */
+const acceptedOf = (error: string): { acceptedModels?: string[] } => {
+  const r = parseModelRefusal(error);
+  return r?.accepted.length ? { acceptedModels: r.accepted } : {};
+};
+
 export const shortError = (s: string): string => {
   const one = redact(s).replace(/\s+/g, ' ').trim();
   return one.length > 300 ? `${one.slice(0, 299)}…` : one;
@@ -383,7 +392,7 @@ export class HeadlessRunner {
       const out = end.error ? { ok: false as const, error: end.error } : c.outcome();
       const result: HeadlessResult = out.ok
         ? { ok: true, text: out.text, model: c.model ?? m.model, effort, costUsd: out.costUsd, tokens: c.tokens, turns: out.turns, durationMs, ...(denied.size ? { deniedTools: [...denied] } : {}) }
-        : { ok: false, error: shortError(out.error), durationMs };
+        : { ok: false, error: shortError(out.error), durationMs, ...acceptedOf(out.error) };
       log.info('compare', 'headless run end', { chat: chatId, data: { ...where, ok: result.ok, durationMs, costUsd: result.ok ? result.costUsd : null, turns: result.ok ? result.turns : null, error: result.ok ? null : result.error, deniedTools: [...denied] } });
       return result;
     } catch (e) {

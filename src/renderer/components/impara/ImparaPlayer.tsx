@@ -20,7 +20,7 @@
 // rest (Spiegamelo meglio M, Fammi un esempio E, Mostrami il codice C, Domanda D), keys that work without the menu too.
 // Used by ImparaPage.tsx; styles impara.css.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { beatsOf, checkKey, doneNodes, isFlowchart, parseLessonCommand, parseSpokenChoice, playlist, rootOf, stepKey, type Lesson, type LessonBeat, type LessonCheck, type LessonExtraKind, type LessonFact, type LessonStep, type PlayItem, type PrepPhase } from '@shared/lesson';
+import { beatsOf, checkKey, doneNodes, isFlowchart, parseLessonCommand, parseSpokenChoice, playlist, rootOf, stepKey, type Lesson, type LessonBeat, type LessonCheck, type LessonExtraKind, type LessonFact, type LessonStep, type PlayItem, type PrepPhase, degradedCause } from '@shared/lesson';
 import { answerCheck, askExtra, askTutor, explainBack, impara, imparaPrefs, loadLesson, moveTo, removeLesson, retryLesson, setImparaPrefs, type ImparaSide } from '../../lib/impara';
 import type { StudioKind, StudioLive } from '@shared/lesson-studio';
 import { quizRight, type QuizResponse } from '@shared/quiz';
@@ -46,6 +46,16 @@ const EXTRA_ICON: Record<LessonExtraKind, ReactNode> = { better: <IconLightbulb 
 const LETTERS = ['A', 'B', 'C', 'D'];
 /** The research phases a ready lesson can carry as failed (`Lesson.degraded`), by their spoken name */
 const DEGRADED_LABEL: Partial<Record<PrepPhase, TextKey>> = { web: 'impara.degraded.web', files: 'impara.degraded.files', refs: 'impara.degraded.refs', verify: 'impara.degraded.verify' };
+/** Why the failed phases failed, each cause once (shared/lesson.ts degradedCause): a refused model, refused tools, or
+ *  the engine's own words */
+function degradedWhy(lesson: Lesson): string {
+  const out = new Set<string>();
+  for (const k of lesson.degraded ?? []) {
+    const c = degradedCause(lesson.prep?.why?.[k]);
+    out.add(c.kind === 'model' ? t('impara.degraded.model', { model: c.model }) : c.kind === 'tools' ? t('impara.degraded.tools', { tools: c.tools }) : c.text ? t('impara.degraded.other', { text: c.text }) : '');
+  }
+  return [...out].filter(Boolean).join(' ');
+}
 /** «Non mi è chiaro» (ADR 0205): what it offers, with the key that does it without the menu */
 const UNCLEAR: { kind: LessonExtraKind; key: string }[] = [{ kind: 'better', key: 'M' }, { kind: 'example', key: 'E' }, { kind: 'code', key: 'C' }, { kind: 'question', key: 'D' }];
 
@@ -324,7 +334,10 @@ function Board({ lesson }: { lesson: Lesson }) {
         <ImparaSwitch on={micOn} onChange={toggleMic} label={t('impara.voiceMe')} testid="impara-mic" />
         {!side && <Button variant="ghost" size="s" onClick={() => setSide('studio')} testid="impara-side-open" tip={t('impara.side.open')}><IconPanel size={13} />{t('impara.side.studio')}</Button>}
       </>} />
-      {lesson.degraded?.length ? <div className="ip-busy err" role="alert" data-testid="impara-degraded">{t('impara.degraded', { phases: lesson.degraded.map(k => { const key = DEGRADED_LABEL[k]; return key ? t(key) : k; }).join(', ') })}</div> : null}
+      {lesson.degraded?.length ? <div className="ip-busy err" role="alert" data-testid="impara-degraded"><div>
+        {t('impara.degraded', { phases: lesson.degraded.map(k => { const key = DEGRADED_LABEL[k]; return key ? t(key) : k; }).join(', ') })}
+        {degradedWhy(lesson) ? <div data-testid="impara-degraded-why">{degradedWhy(lesson)}</div> : null}
+      </div></div> : null}
       <div className="ip-steps" aria-hidden="true">
         {Array.from({ length: total }, (_, i) => <i key={i} className={i < mainIndex || item.kind === 'end' ? 'd' : i === mainIndex ? 'c' : i >= main.length ? 'w' : ''} />)}
       </div>

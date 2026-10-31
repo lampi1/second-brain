@@ -29,6 +29,7 @@ import {
   LESSON_DEPTHS, LESSON_EXTRAS, LESSON_LEVELS, TEACHER_EFFORTS, applyVerdicts, checkKey, diagramNodes, jsonIn, parseCheck, parseExtra, parseFacts, parseGrade, parsePlan, parseQuestions, parseStep, playlist, stepKey,
   type ImparaState, type Lesson, type LessonCheck, type LessonConfidence, type LessonExtraKind, type LessonFact, type LessonKind, type LessonPrep, type LessonStart, type LessonStep, type LessonTeacher,
   type PrepPhase, type TeacherOption, type TutorMode, type TutorTurn, isAskingMode, subjectOf, TUTOR_KEEP, TUTOR_Q_MAX, tutorCard, tutorModeOf, tutorShown,
+  TOOLS_REFUSED,
 } from '@shared/lesson';
 import { REVIEW_GRADES, parseCards, queueOf, subjectName, summarize, type ReviewCard, type ReviewGrade, type ReviewItem, type ReviewMode } from '@shared/review';
 import { lastGrades, masteryOf, scoreOf } from '@shared/mastery';
@@ -75,8 +76,6 @@ export interface LearnDeps extends GatherDeps {
 
 const KINDS: readonly LessonKind[] = ['pr', 'topic', 'text'];
 const MIN = 60_000;
-/** the start of a research phase's why when it could not look (read() in research) */
-const DENIED_PREFIX = 'tools refused: ';
 /** The research phases asked for that failed: their why starts with "failed:" (research, refs). */
 export function degradedPhases(prep: LessonPrep | undefined): PrepPhase[] {
   return (['web', 'files', 'refs', 'verify'] as const).filter(k => prep?.why?.[k]?.startsWith('failed'));
@@ -365,7 +364,7 @@ export class LearnService {
       try {
         const v = jsonIn(r.text), facts = parseFacts(v, webSide, start);
         // nothing found because it could not look (an engine whose read tools the read-only run refuses): a failure
-        if (!facts.length && r.deniedTools?.length) return { facts, v, error: `${DENIED_PREFIX}${r.deniedTools.join(', ')}` };
+        if (!facts.length && r.deniedTools?.length) return { facts, v, error: `${TOOLS_REFUSED}${r.deniedTools.join(', ')}` };
         return { facts, v };
       } catch (e) { return { facts: [], v: null, error: errText(e) }; }
     };
@@ -464,7 +463,7 @@ export class LearnService {
     try { found = parseTopicFacts(jsonIn(r.text), list, 1); } catch (e) { set({ state: 'done' }); return skip(`failed: ${errText(e)}`.slice(0, 200)); }
     this.edit(id, l => ({ ...l, ...this.cost(l, r, false), prep: { ...(l.prep ?? { phases: {} }), refs: found.length } }));
     // nothing found because its tools were refused is a failed search, never a quiet "none" (as in research)
-    if (!found.length && r.deniedTools?.length) { set({ state: 'done' }); return skip(`failed: ${DENIED_PREFIX}${r.deniedTools.join(', ')}`.slice(0, 200)); }
+    if (!found.length && r.deniedTools?.length) { set({ state: 'done' }); return skip(`failed: ${TOOLS_REFUSED}${r.deniedTools.join(', ')}`.slice(0, 200)); }
     if (!found.length) { set({ state: 'done' }); this.phase(id, { refs: 'done' }); return none; }
     // the same web verification as the web research's: a run that did not write the facts re-reads each page
     const vr = await this.run(req, { cwd: webDir, prompt: verifyPrompt(lang, found, true), effort, round: 'impara-verify-refs', timeoutMs: 6 * MIN, web: true });

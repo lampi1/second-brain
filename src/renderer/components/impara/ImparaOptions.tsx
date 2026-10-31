@@ -3,6 +3,7 @@
 // attiva» and «Cambia», which opens one panel with how much the user knows already, how deep, who explains (ADR 0188:
 // the engine, its model and its effort, from main's ImparaState.teachers; no choice = the app's: Claude's strongest
 // model at high effort; the web research is always Claude's, and picking another engine says so) and the two voices.
+// Every model the engine offers, searched by a field once the list is long (OpenCode lists hundreds, its free ones last).
 // Remembered in Impara's prefs (lib/impara.ts). Used by ImparaStart.tsx; styles impara-quiz.css (.op-*).
 import { useRef, useState } from 'react';
 import { LESSON_DEPTHS, LESSON_LEVELS, type LessonTeacher, type TeacherOption } from '@shared/lesson';
@@ -26,6 +27,17 @@ export function teacherNow(prefs: LessonTeacher | null, options: readonly Teache
   return { opt: first, model: first?.models[0]?.id ?? null, effort: first?.efforts.length ? 'high' : null, auto: true };
 }
 
+/** a model list this long gets a search field */
+export const TEACHER_SEARCH_FROM = 9;
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+/** The models matching the search (id or name, any case or accent), the one chosen always kept so the field reads. */
+export function teacherModels(models: readonly { id: string; name: string }[], query: string, current: string | null): { id: string; name: string }[] {
+  const q = norm(query.trim());
+  if (!q) return [...models];
+  return models.filter(m => m.id === current || norm(m.name).includes(q) || norm(m.id).includes(q));
+}
+
 /** «Claude Opus alto»: the engine, its model and effort, short. */
 export function teacherLabel(now: ReturnType<typeof teacherNow>): string {
   if (!now.opt) return '';
@@ -37,6 +49,7 @@ export function ImparaOptions({ teachers }: { teachers: readonly TeacherOption[]
   const prefs = imparaPrefs.use(s => s);
   const anchor = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const now = teacherNow(prefs.teacher, teachers);
   const voice = prefs.voice ? (prefs.mic ? t('impara.go.voiceBoth') : t('impara.go.voiceOn')) : t('impara.go.voiceOff');
   const parts = [t(`impara.level.${prefs.level}`), t(`impara.depth.${prefs.depth}.short`), teacherLabel(now), voice].filter(Boolean);
@@ -48,7 +61,9 @@ export function ImparaOptions({ teachers }: { teachers: readonly TeacherOption[]
     if (engine === '') { setImparaPrefs({ teacher: null }); return; }
     const o = teachers.find(x => x.engine === engine);
     if (o) setImparaPrefs({ teacher: { engine: o.engine, model: o.models[0]?.id ?? null, effort: o.efforts.length ? 'high' : null } });
+    setQuery('');
   };
+  const shown = now.opt ? teacherModels(now.opt.models, query, now.model) : [];
   return (
     <div className="op-line" data-testid="impara-options">
       <button ref={anchor} type="button" className="op-sum" onClick={() => setOpen(o => !o)} aria-haspopup="dialog" aria-expanded={open} data-testid="impara-options-open">
@@ -78,9 +93,13 @@ export function ImparaOptions({ teachers }: { teachers: readonly TeacherOption[]
                   <option value="">{t('impara.teacher.auto')}</option>
                   {teachers.map(o => <option key={o.engine} value={o.engine}>{o.label}</option>)}
                 </Select>
+                {now.opt.models.length >= TEACHER_SEARCH_FROM && (
+                  <input type="search" className="op-search" value={query} onChange={e => setQuery(e.target.value)} placeholder={t('impara.teacher.search', { n: now.opt.models.length })}
+                    aria-label={t('impara.teacher.searchLabel')} data-testid="impara-teacher-search" />
+                )}
                 {now.opt.models.length > 0 && (
                   <Select value={now.model ?? ''} onChange={e => setTeacher({ model: e.target.value })} data-testid="impara-teacher-model" aria-label={t('impara.teacher.model')}>
-                    {now.opt.models.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    {shown.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
                   </Select>
                 )}
                 {now.opt.efforts.length > 0 && (

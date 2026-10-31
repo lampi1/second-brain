@@ -9,13 +9,24 @@ import { TEACHER_EFFORTS, type TeacherOption } from '@shared/lesson';
 /** Claude's CLI aliases, always valid whatever its version: the strongest first (the default of a lesson). */
 const CLAUDE_ALIASES = [{ id: 'opus', name: 'Opus' }, { id: 'sonnet', name: 'Sonnet' }, { id: 'haiku', name: 'Haiku' }];
 
+/** Cursor's `auto` on its command line, the model its ACP sessions list as `auto-smart` («Auto»). */
+const CURSOR_AUTO = { acp: 'auto-smart', cli: 'auto' };
+
 /** One engine as the start form offers it: its models (Claude: its aliases, then the ids seen; Fable never: a lesson
  *  is many runs and the hidden runs refuse it, compare/headless.ts askRefusal), its efforts when it takes one, and
- *  whether it can run the web research (Claude only). */
-export function teacherOption(e: { id: string; label: string; kind: string; caps: { effort: boolean } }, seen: readonly { id: string; name?: string }[]): TeacherOption {
-  const own = seen.filter(m => !/fable/i.test(m.id)).map(m => ({ id: m.id, name: m.name || m.id }));
-  const models = e.kind === 'claude' ? [...CLAUDE_ALIASES, ...own.filter(m => !CLAUDE_ALIASES.some(a => a.id === m.id))] : own;
-  return { engine: e.id, label: e.label, models: models.slice(0, 20), efforts: e.caps.effort ? [...TEACHER_EFFORTS] : [], web: e.kind === 'claude' };
+ *  whether it can run the web research (Claude only). A lesson runs hidden with the model on the command line, which
+ *  may not take the ids a chat lists (learn/accepted-models.ts): once the engine listed what it accepts, only those;
+ *  until then Cursor offers only `auto` (the one id both name), any other engine the ids seen. Every model, however
+ *  many: the form searches them. */
+export function teacherOption(e: { id: string; label: string; kind: string; caps: { effort: boolean } }, seen: readonly { id: string; name?: string }[], accepted: readonly string[] | null = null): TeacherOption {
+  const noFable = (id: string) => !/fable/i.test(id);
+  const own = seen.filter(m => noFable(m.id)).map(m => ({ id: m.id, name: m.name || m.id }));
+  const auto = { id: CURSOR_AUTO.cli, name: own.find(m => m.id === CURSOR_AUTO.acp)?.name ?? 'Auto' };
+  const nameOf = (id: string) => own.find(m => m.id === id)?.name ?? (e.id === 'cursor' && id === auto.id ? auto.name : id);
+  const listed = accepted?.length ? accepted.filter(noFable).map(id => ({ id, name: nameOf(id) })) : null;
+  const models = e.kind === 'claude' ? [...CLAUDE_ALIASES, ...(listed ?? own).filter(m => !CLAUDE_ALIASES.some(a => a.id === m.id))]
+    : listed ?? (e.id === 'cursor' ? [auto] : own);
+  return { engine: e.id, label: e.label, models, efforts: e.caps.effort ? [...TEACHER_EFFORTS] : [], web: e.kind === 'claude' };
 }
 
 /** The app's guide: every concept card of the Guida page, in the user's language. */

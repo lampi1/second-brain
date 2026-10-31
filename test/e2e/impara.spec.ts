@@ -9,7 +9,11 @@
 // each subject's level on the start page, today's cards one at a time (recall, choice, a part of the diagram to click,
 // put in order, match), a subject's quiz whose wrong answer comes back with «Rifai le sbagliate», a lesson moved to
 // another subject. The «Studio» (ADR 0205): a saved output reopens, a new tile is made, its quiz plays as a review.
-// Screenshots dark.
+// «Chi spiega» lists every model of an engine and searches them (OpenCode's free ones come last in its list), and a
+// lesson whose research failed says why (a model the engine refused). Screenshots dark.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { expect, test } from '@playwright/test';
 import { choose, goPage, launchDemo, shot } from './helpers';
 
@@ -460,5 +464,42 @@ test('the podcast (ADR 0214): two voices, a speed chip that sets the voice speed
     await expect(stop).toHaveCount(0);
   } finally {
     await app.close();
+  }
+});
+
+test('who explains: every model of an engine, searched; a failed research says its cause', async () => {
+  test.setTimeout(120_000);
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-'));
+  let l = await launchDemo({ userData });
+  try {
+    await goPage(l.page, 'impara');
+    await l.page.getByTestId('impara-options-open').click();
+    await choose(l.page.getByTestId('impara-teacher'), 'opencode');
+    // the demo's OpenCode list: 22 paid models, then 3 free ones (the form cut it at 20 before)
+    await l.page.getByTestId('impara-teacher-model').click();
+    await expect(l.page.getByTestId('impara-teacher-model-list').locator('[role="option"]')).toHaveCount(25);
+    await l.page.keyboard.press('Escape');
+    await l.page.getByTestId('impara-teacher-search').fill('FREE');
+    await choose(l.page.getByTestId('impara-teacher-model'), 'opencode/deepseek-v4.1-flash-free');
+    await expect(l.page.getByTestId('impara-options-summary')).toContainText('opencode/deepseek-v4.1-flash-free');
+    await shot(l.page, 'impara-teacher-search-dark');
+  } finally {
+    await l.app.close();
+  }
+  // a saved lesson whose files research Cursor refused (its `--model` takes other ids than its chats list)
+  const root = path.join(userData, 'learn');
+  const id = fs.readdirSync(root).filter(n => /^\d{8}-/.test(n)).sort()[0]!;
+  const file = path.join(root, id, 'lesson.json');
+  const lesson = JSON.parse(fs.readFileSync(file, 'utf8'));
+  fs.writeFileSync(file, JSON.stringify({ ...lesson, degraded: ['files'], prep: { ...(lesson.prep ?? { phases: {} }), why: { files: 'failed: model refused: auto-smart' } } }));
+  l = await launchDemo({ userData });
+  try {
+    await goPage(l.page, 'impara');
+    await l.page.getByTestId(`impara-lesson-${id}`).locator('.ip-card-open').click();
+    await expect(l.page.getByTestId('impara-degraded')).toContainText('lettura dei file');
+    await expect(l.page.getByTestId('impara-degraded-why')).toContainText('non accetta il modello «auto-smart»');
+    await shot(l.page, 'impara-degraded-cause-dark');
+  } finally {
+    await l.app.close();
   }
 });
