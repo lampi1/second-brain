@@ -187,6 +187,8 @@ describe('hidden read-only runs on the fakes', { timeout: 60e3 }, () => {
     const r = await runner().run(req('claude', 'ask bash readgate SEGRETO-PROMPT', { cwd, model: 'opus', effort: 'medium' }));
     // tokens: the turn's total from the result's usage (the fake's), never a context size
     expect(r).toMatchObject({ ok: true, text: 'Letto a.txt', model: 'opus', effort: 'medium', costUsd: 0.01, turns: 1, tokens: { input: 10, cacheRead: 3000, cacheWrite: 200, output: 40 } });
+    // the refused tools come back by name (a question is not a tool), so Impara can tell «could not look» from «found nothing»
+    expect(r.ok && r.deniedTools).toEqual(['Bash']);
     expect(answered()).toEqual([
       expect.objectContaining({ tool: 'AskUserQuestion', allow: false }), expect.objectContaining({ tool: 'Bash', allow: false }), expect.objectContaining({ tool: 'Read', allow: true }),
     ]);

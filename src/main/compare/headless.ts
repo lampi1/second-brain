@@ -56,7 +56,9 @@ export interface HeadlessRequest {
 
 /** What a run gives back: the answer and what it cost, or why it failed (short, never a key). */
 export type HeadlessResult =
-  | { ok: true; text: string; model: string | null; effort: Effort | null; costUsd: number | null; tokens: TokenUsage | null; turns: number | null; durationMs: number }
+  // deniedTools: the tools this run asked for and was refused (at most 8 names), so a caller can tell an answer that
+  // found nothing from one that could not look
+  | { ok: true; text: string; model: string | null; effort: Effort | null; costUsd: number | null; tokens: TokenUsage | null; turns: number | null; durationMs: number; deniedTools?: string[] }
   | { ok: false; error: string; durationMs: number; refused?: true };
 
 export interface HeadlessDeps {
@@ -332,6 +334,7 @@ export class HeadlessRunner {
     log.info('compare', 'headless run start', { chat: chatId, data: { engine: engine.id, round: req.round, model: m.model, effort, web: !!req.web } });
 
     const c = new RunCollector();
+    const denied = new Set<string>();
     let session: HarnessSession | null = null;
     let settle!: (r: { error: string | null }) => void;
     const ended = new Promise<{ error: string | null }>(r => { settle = r; });
@@ -346,6 +349,7 @@ export class HeadlessRunner {
           ? { kind: 'permission', allow: false, message: 'Questo job usa solo il digest ricevuto. Nessuno strumento è consentito.' }
           : readOnlyAnswer(engine.kind, req2, { cwd: req.cwd, deny }, !!req.web);
         log.info('compare', 'headless permission answered', { chat: chatId, data: { engine: engine.id, type: req2.type, tool: req2.tool, allow: answer.kind === 'permission' && answer.allow } });
+        if (req2.type === 'permission' && answer.kind === 'permission' && !answer.allow && denied.size < 8) denied.add(req2.tool || 'Tool');
         // answered right after the session finished reporting the request
         queueMicrotask(() => {
           try { session?.answer(req2.id, answer); } catch (e) { log.warn('compare', 'headless answer refused by the session', { chat: chatId, data: { ...where, error: errText(e) } }); }
@@ -378,9 +382,9 @@ export class HeadlessRunner {
       const durationMs = Date.now() - t0;
       const out = end.error ? { ok: false as const, error: end.error } : c.outcome();
       const result: HeadlessResult = out.ok
-        ? { ok: true, text: out.text, model: c.model ?? m.model, effort, costUsd: out.costUsd, tokens: c.tokens, turns: out.turns, durationMs }
+        ? { ok: true, text: out.text, model: c.model ?? m.model, effort, costUsd: out.costUsd, tokens: c.tokens, turns: out.turns, durationMs, ...(denied.size ? { deniedTools: [...denied] } : {}) }
         : { ok: false, error: shortError(out.error), durationMs };
-      log.info('compare', 'headless run end', { chat: chatId, data: { ...where, ok: result.ok, durationMs, costUsd: result.ok ? result.costUsd : null, turns: result.ok ? result.turns : null, error: result.ok ? null : result.error } });
+      log.info('compare', 'headless run end', { chat: chatId, data: { ...where, ok: result.ok, durationMs, costUsd: result.ok ? result.costUsd : null, turns: result.ok ? result.turns : null, error: result.ok ? null : result.error, deniedTools: [...denied] } });
       return result;
     } catch (e) {
       log.warn('compare', 'headless run failed', { chat: chatId, data: { ...where, error: errText(e) } });

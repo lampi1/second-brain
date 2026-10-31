@@ -20,7 +20,7 @@
 // rest (Spiegamelo meglio M, Fammi un esempio E, Mostrami il codice C, Domanda D), keys that work without the menu too.
 // Used by ImparaPage.tsx; styles impara.css.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { beatsOf, checkKey, doneNodes, isFlowchart, parseLessonCommand, parseSpokenChoice, playlist, rootOf, stepKey, type Lesson, type LessonBeat, type LessonCheck, type LessonExtraKind, type LessonFact, type LessonStep, type PlayItem } from '@shared/lesson';
+import { beatsOf, checkKey, doneNodes, isFlowchart, parseLessonCommand, parseSpokenChoice, playlist, rootOf, stepKey, type Lesson, type LessonBeat, type LessonCheck, type LessonExtraKind, type LessonFact, type LessonStep, type PlayItem, type PrepPhase } from '@shared/lesson';
 import { answerCheck, askExtra, askTutor, explainBack, impara, imparaPrefs, loadLesson, moveTo, removeLesson, retryLesson, setImparaPrefs, type ImparaSide } from '../../lib/impara';
 import type { StudioKind, StudioLive } from '@shared/lesson-studio';
 import { quizRight, type QuizResponse } from '@shared/quiz';
@@ -28,7 +28,7 @@ import { narrate, narrateBeats, onImparaHeard, stopSpeaking, stopVoice, toggleVo
 import { renderMarkdown } from '../../lib/markdown';
 import { go } from '../../actions';
 import { askConfirm, toast } from '../../store/ui';
-import { locale, t } from '../../i18n';
+import { locale, t, type TextKey } from '../../i18n';
 import { Button, Kbd, MenuItem, Popover } from '../ui';
 import { IconArrowLeft, IconArrowRight, IconBook, IconCheck, IconChevronDown, IconFile, IconGlobe, IconGrid, IconLightbulb, IconMaximize, IconMic, IconMinimize, IconPanel, IconPlay, IconQuestion, IconRefresh, IconSparkle, IconSpinner, IconTerminal, IconTrash, IconX } from '../Icons';
 import { LessonDiagram } from './LessonDiagram';
@@ -44,6 +44,8 @@ import { LessonVisual } from './LessonVisual';
 
 const EXTRA_ICON: Record<LessonExtraKind, ReactNode> = { better: <IconLightbulb size={11} />, example: <IconBook size={11} />, code: <IconTerminal size={11} />, question: <IconQuestion size={11} /> };
 const LETTERS = ['A', 'B', 'C', 'D'];
+/** The research phases a ready lesson can carry as failed (`Lesson.degraded`), by their spoken name */
+const DEGRADED_LABEL: Partial<Record<PrepPhase, TextKey>> = { web: 'impara.degraded.web', files: 'impara.degraded.files', refs: 'impara.degraded.refs', verify: 'impara.degraded.verify' };
 /** «Non mi è chiaro» (ADR 0205): what it offers, with the key that does it without the menu */
 const UNCLEAR: { kind: LessonExtraKind; key: string }[] = [{ kind: 'better', key: 'M' }, { kind: 'example', key: 'E' }, { kind: 'code', key: 'C' }, { kind: 'question', key: 'D' }];
 
@@ -322,6 +324,7 @@ function Board({ lesson }: { lesson: Lesson }) {
         <ImparaSwitch on={micOn} onChange={toggleMic} label={t('impara.voiceMe')} testid="impara-mic" />
         {!side && <Button variant="ghost" size="s" onClick={() => setSide('studio')} testid="impara-side-open" tip={t('impara.side.open')}><IconPanel size={13} />{t('impara.side.studio')}</Button>}
       </>} />
+      {lesson.degraded?.length ? <div className="ip-busy err" role="alert" data-testid="impara-degraded">{t('impara.degraded', { phases: lesson.degraded.map(k => { const key = DEGRADED_LABEL[k]; return key ? t(key) : k; }).join(', ') })}</div> : null}
       <div className="ip-steps" aria-hidden="true">
         {Array.from({ length: total }, (_, i) => <i key={i} className={i < mainIndex || item.kind === 'end' ? 'd' : i === mainIndex ? 'c' : i >= main.length ? 'w' : ''} />)}
       </div>

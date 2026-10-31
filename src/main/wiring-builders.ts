@@ -44,7 +44,7 @@ export function buildLearn(ctx: Ctx, brain: BrainService, tasks: TaskService, he
       // the user's model on the engine they picked; Claude's strongest otherwise
       const model = r.teacher?.engine === e.id && r.teacher.model ? r.teacher.model : e.kind === 'claude' ? 'opus' : null;
       const out = await headless.run({ engine: e.id, model, effort: e.caps.effort ? r.effort : null, cwd: r.cwd, prompt: r.prompt, round: r.round, timeoutMs: r.timeoutMs, ...(r.web ? { web: true } : {}), ...(r.onText ? { onText: r.onText } : {}) });
-      return out.ok ? { ok: true, text: out.text, costUsd: out.costUsd, engine: e.id, model: out.model } : { ok: false, error: out.error };
+      return out.ok ? { ok: true, text: out.text, costUsd: out.costUsd, engine: e.id, model: out.model, ...(out.deniedTools ? { deniedTools: out.deniedTools } : {}) } : { ok: false, error: out.error };
     },
     changed: (state, lesson) => ctx.emitter.emit('impara:changed', { state, ...(lesson ? { lesson } : {}) }),
     tutorText: (lesson, turn, text) => ctx.emitter.emit('impara:tutor', { lesson, turn, text }),

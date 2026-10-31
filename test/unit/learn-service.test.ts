@@ -221,6 +221,25 @@ describe('LearnService', () => {
     await until(() => store.get(l.id)?.state === 'ready');
     expect(store.get(l.id)!.prep).toMatchObject({ phases: { files: 'skip' }, why: { files: expect.stringMatching(/^failed: rete giù/) } });
     expect(store.get(l.id)!.facts).toEqual([]);
+    // ready, but never silently: the lesson carries the failed phase, its page says so
+    expect(store.get(l.id)!.degraded).toEqual(['files']);
+  });
+
+  it('a research that found nothing because its tools were refused is a failure the lesson shows, never a silent ready', async () => {
+    const { svc, store } = make(async r => (r.round === 'impara-files' ? { ok: true, text: '{"facts":[]}', costUsd: 0, engine: 'opencode', model: 'cheap', deniedTools: ['Tool'] } : fast(r)));
+    const l = svc.start({ kind: 'text', ask: 'Come funziona lo streaming', text: 'Due attese da 100 ms.', depth: 'quick', level: 'new' });
+    await until(() => store.get(l.id)?.state === 'ready');
+    const done = store.get(l.id)!;
+    expect(done.prep).toMatchObject({ phases: { files: 'skip' }, why: { files: 'failed: tools refused: Tool' } });
+    expect(done.degraded).toEqual(['files']);
+  });
+
+  it('a research that read and found nothing, with no tool refused, stays a plain ready', async () => {
+    const { svc, store } = make(async r => (r.round === 'impara-files' ? { ok: true, text: '{"facts":[]}', costUsd: 0, engine: 'claude', model: null } : fast(r)));
+    const l = svc.start({ kind: 'text', ask: 'Come funziona lo streaming', text: 'Due attese da 100 ms.', depth: 'quick', level: 'new' });
+    await until(() => store.get(l.id)?.state === 'ready');
+    expect(store.get(l.id)!.degraded).toBeUndefined();
+    expect(store.get(l.id)!.prep?.phases.files).toBe('done');
   });
 
   it('keeps a file reference openable: relative ones under the root that has the file, absolute ones as they are', () => {
