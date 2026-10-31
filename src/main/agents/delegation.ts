@@ -58,7 +58,7 @@ export interface DelegationDeps {
   /** the label every agent-written first message starts with (appctl AGENT_LABEL) */
   label: string;
   /** the git worktrees of the repository at a folder (agents/worktrees.ts); a child may work in one of its parent's */
-  worktrees?: (cwd: string) => Promise<string[]>;
+  worktrees?: (cwd: string, target?: string) => Promise<string[]>;
   /** Host-owned staging only: no parent checkout mutation, branch merge, push or arbitrary command. */
   integrateMany?: (parent: ChatSummary, children: ChatSummary[]) => Promise<DelegationIntegration>;
   integrate?: (parent: ChatSummary, child: ChatSummary) => Promise<DelegationIntegration>;
@@ -125,7 +125,10 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (!Array.isArray(raw) || !raw.length || raw.length > TASKS_MAX) throw new Error(`agent_delegate: tasks = 1 to ${TASKS_MAX} parts.`);
     // read before the limits: from here to the reservation nothing waits, so two calls cannot both take the last slot
     const parentCwd = parent.cwd, parentRunId = parent.run?.runId;
-    const trees = d.worktrees ? await d.worktrees(parentCwd) : [];
+    // only folders outside the parent's need Git, each looked up alone: a full listing verifies every worktree
+    const outside = [...new Set(raw.map(t => t && typeof t === 'object' && typeof (t as { cwd?: unknown }).cwd === 'string' ? ((t as { cwd: string }).cwd).trim() : '')
+      .filter(c => c && !withinParent(parentCwd, c, [])))];
+    const trees = d.worktrees ? (await Promise.all(outside.map(c => d.worktrees!(parentCwd, c)))).flat() : [];
     parent = activeParent(callerId, 'agent_delegate');
     if (parent.cwd !== parentCwd || parent.run?.runId !== parentRunId) throw new Error('Parent assignment or project changed; discard this stale delegation request.');
     const limits = d.settings(), all = d.chats.list();
@@ -212,10 +215,14 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (!d.chats.assignTask || !d.chats.userEvents) throw new Error('agent_assign_task is unavailable.');
     const extra = Object.keys(a).find(k => !['chatId', 'roleId', 'cwd', 'mode', 'expectedVersion', 'expectedEventSeq', 'contract', 'step'].includes(k));
     if (extra) throw new Error(`agent_assign_task: unknown field ${extra}.`);
-    const trees = d.worktrees ? await d.worktrees(initialCwd) : [];
+    const initialChild = typeof a.chatId === 'string' ? chat(a.chatId) : undefined;
+    if (!initialChild || initialChild.parentId !== callerId) throw new Error('agent_assign_task: chatId must be one of YOUR direct children (agent_children).');
+    const childCwd = initialChild.cwd;
+    const trees = d.worktrees ? await d.worktrees(initialCwd, childCwd) : [];
     const parent = activeParent(callerId, 'agent_assign_task'), child = typeof a.chatId === 'string' ? chat(a.chatId) : undefined;
     if (parent.cwd !== initialCwd || parent.run?.runId !== initialRunId) throw new Error('Parent assignment or project changed; discard this stale assignment request.');
     if (!child || child.parentId !== callerId || !child.delegation || !child.run || child.isOrchestrator) throw new Error('agent_assign_task: chatId must be one of YOUR direct children (agent_children).');
+    if (child.cwd !== childCwd) throw new Error('Child project changed; discard this stale assignment request.');
     if (assigning.has(child.id)) throw new Error('agent_assign_task: this child already has an assignment in progress.');
     if (!isWorkRole(a.roleId) || a.roleId === 'sentinel' || child.agent?.source !== 'catalog' || child.agent.id !== a.roleId || child.delegation.role !== a.roleId) throw new Error('Role mismatch or independent Sentinel review: delegate a fresh chat.');
     const catalog = d.roles(), own = catalog.profiles.find(p => p.id === parent.agent!.id), profile = catalog.profiles.find(p => p.id === a.roleId);

@@ -23,6 +23,10 @@ describe('worktrees', () => {
     fs.mkdirSync(path.join(wt, 'src'));
     const trees = await gitWorktrees(repo);
     expect(trees.map(p => fs.realpathSync(p)).sort()).toEqual([repo, wt].sort());
+    // Exact-child reuse never probes unrelated listed checkouts (large repositories otherwise time out).
+    expect((await gitWorktrees(repo, path.join(wt, 'src'))).map(p => fs.realpathSync(p))).toEqual([wt]);
+    expect(await gitWorktrees(repo, other)).toEqual([]);
+    expect(await gitWorktrees(repo, `${wt}-unallocated`)).toEqual([]);
     // from the main checkout: its worktree is fine, a folder outside the repository is not
     expect(withinParent(repo, path.join(wt, 'src'), trees)).toBe(true);
     expect(withinParent(repo, other, trees)).toBe(false);
@@ -52,6 +56,8 @@ describe('worktrees', () => {
     expect(trees).not.toContain(process.cwd());
     expect(withinParent(parent, plain, trees)).toBe(false);
     expect(withinParent(parent, foreign, trees)).toBe(false);
+    expect(await gitWorktrees(parent, foreign)).toEqual([]);
+    expect(await gitWorktrees(parent, plain)).toEqual([]);
     expect(withinParent(parent, path.join(foreign, 'x'), trees)).toBe(false);
     // the repository root stays reachable from a subfolder (its main checkout is a worktree); a missing folder is not
     expect(withinParent(parent, repo, trees)).toBe(true);

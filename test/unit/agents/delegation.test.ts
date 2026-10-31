@@ -44,7 +44,7 @@ const catalog = (n: Narrowed = {}): AgentCatalog => ({ problem: null, archived: 
     launches: [...x.launches], skills: r.skills, tools: { allow: [...x.tools] }, permissionCeiling: x.ceiling, activeVersion: 1, updatedAt: 1, instructions: r.instructions };
 }) } as unknown as AgentCatalog);
 
-function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: string) => Promise<string[]>, roles?: () => AgentCatalog, onSend?: (chatId: string) => void, narrowed: Narrowed = {}, remembered: [string, string][] = [], extra: Partial<ChatManagerOptions> = {}) {
+function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: string, target?: string) => Promise<string[]>, roles?: () => AgentCatalog, onSend?: (chatId: string) => void, narrowed: Narrowed = {}, remembered: [string, string][] = [], extra: Partial<ChatManagerOptions> = {}) {
   roles ??= () => catalog(narrowed);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-delegation-'));
   roots.push(dir);
@@ -255,12 +255,17 @@ describe('agent_delegate', () => {
     const outer = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-delegation-wt-')); roots.push(outer);
     const repo = path.join(outer, 'repo'), wt = path.join(outer, 'repo-wt'), elsewhere = path.join(outer, 'elsewhere');
     for (const d of [repo, wt, elsewhere]) fs.mkdirSync(d);
-    const asked: string[] = [];
-    const f = fixture({}, async cwd => { asked.push(cwd); return cwd === repo ? [repo, wt] : []; });
+    const asked: [string, string | undefined][] = [];
+    const f = fixture({}, async (cwd, target) => { asked.push([cwd, target]); return cwd === repo ? [repo, wt] : []; });
     const parent = await f.root('strategist', repo);
+    // a folder inside the parent's needs no Git; one outside is looked up alone, never the whole listing
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Nel repo')] });
+    expect(asked).toEqual([]);
+    asked.length = 0;
     const out = await f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Nel worktree'), cwd: wt }] });
     expect(f.m.list().find(c => c.id === out.children[0].chatId)?.cwd).toBe(wt);
-    expect(asked).toContain(repo);
+    expect(asked).toContainEqual([repo, wt]);
+    expect(asked.every(([, t]) => t !== undefined)).toBe(true);
     await expect(f.call('agent_delegate', parent.id, { tasks: [{ ...f.task('scout', 'Fuori'), cwd: elsewhere }] })).rejects.toThrow(/worktrees/);
     // the manager checks again at create, the check that counts
     await expect(f.m.create({ harness: 'claude', cwd: elsewhere, roleId: 'scout', parentId: parent.id, prompt: 'x' }, 'agent')).rejects.toThrow(/worktree/);

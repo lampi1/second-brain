@@ -6,12 +6,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChatSummary, NewChat } from '../../../src/shared/contract';
-import { DelegateWorktrees, needsIsolatedWorktree } from '../../../src/main/agents/worktrees';
+import { DelegateWorktrees, gitWorktrees, withinParent, needsIsolatedWorktree } from '../../../src/main/agents/worktrees';
 import { delegationTools, type DelegationDeps } from '../../../src/main/agents/delegation';
 import { stageDelegatedChanges, stageDelegatedChangesMany } from '../../../src/main/agents/delegation-integration';
 
 const roots: string[] = [];
-afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
+// Windows keeps a just-used checkout locked briefly (antivirus, git's index): retry instead of failing with EBUSY.
+afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); });
 const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: 'pipe' }).trim();
 const commit = (cwd: string, message: string) => { git(cwd, 'add', '.'); git(cwd, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', message); };
 const writer = { tools: { allow: ['edit' as const, 'shell' as const] }, ceiling: null };
@@ -161,6 +162,14 @@ describe('delegation isolation', () => {
     expect(() => f.service.allocation({ ...f.parent, run: { ...f.parent.run!, taskVersion: 2 } }, child)).toThrow(/host-owned/);
     expect(() => new DelegateWorktrees().allocation(f.parent, child)).toThrow(/host-owned/);
     expect(() => f.service.allocation(f.parent, { ...child, id: 'different-child' })).toThrow(/host-owned/);
+    expect(() => f.service.allocation({ ...f.parent, id: 'other' }, { ...child, parentId: 'other' })).toThrow(/host-owned/);
+    // reuse looks up only the allocated worktree; a sibling worktree the host never allocated owns nothing
+    const trees = await gitWorktrees(f.parent.cwd, child.cwd);
+    expect(trees).toHaveLength(1); expect(withinParent(f.parent.cwd, child.cwd, trees)).toBe(true);
+    const loose = path.join(f.root, '.second-brain-delegate-loose'); git(f.repo, 'worktree', 'add', '-q', '--detach', loose);
+    expect(() => f.service.allocation(f.parent, { ...child, cwd: loose })).toThrow(/host-owned/);
+    const foreign = path.join(f.root, 'foreign'); fs.mkdirSync(foreign); git(foreign, 'init', '-q');
+    expect(await gitWorktrees(f.parent.cwd, foreign)).toEqual([]);
   });
 
   it('persists only host-bound ownership across restart and refuses corrupt provenance', async () => {
@@ -195,8 +204,8 @@ describe('delegation isolation', () => {
     expect(git(f.repo, 'status', '--porcelain')).toBe('');
   });
 
-  // Two host-owned writers plus a detached union require repeated real Git safety/identity checks. Windows CI
-  // exceeded the unit default (15 s); bound this integration scenario separately without dropping those checks.
+  // Two host-owned writers plus a detached union require repeated real Git safety/identity checks. Its old 30 s budget
+  // predates the suite-wide 120 s one and became the lowest: its twin below (same two writers) needs ~40 s here.
   it('combines parallel siblings in one union stage and keeps both pinned sources', async () => {
     const f = fixture();
     const a = f.child((await f.prepare(f.repo, 'a')).cwd, 'a'), b = f.child((await f.prepare(f.repo, 'b')).cwd, 'b');
@@ -210,7 +219,7 @@ describe('delegation isolation', () => {
     expect(git(result.cwd!, 'write-tree')).toBe(result.tree);
     expect(git(f.repo, 'status', '--porcelain')).toBe('');
     expect(await stageDelegatedChangesMany([requested[0]!, requested[0]!], f.parent)).toMatchObject({ status: 'blocked' });
-  }, 30_000);
+  });
 
   it('reports sibling overlaps and refuses custom merge drivers without executing them', async () => {
     const f = fixture();

@@ -1,13 +1,17 @@
 // Parent-owned child reuse: guards are checked before mutation; assignment and creation share reserved slots.
 import {describe,expect,it,vi} from 'vitest';
 import path from 'node:path';
-import {delegationTools, type DelegationChats} from '../../../src/main/agents/delegation';
+import fs from 'node:fs';
+import os from 'node:os';
+import {execFileSync} from 'node:child_process';
+import {gitWorktrees} from '../../../src/main/agents/worktrees';
+import {delegationTools, type DelegationChats, type DelegationDeps} from '../../../src/main/agents/delegation';
 import type {ChatSummary} from '../../../src/shared/contract';
 import type {AgentCatalog, UserTaskEvents} from '../../../src/shared/agents';
 import type {TaskAssignmentOptions} from '../../../src/shared/delegation';
 import {DELEGATION_DEFAULTS} from '../../../src/shared/roles';
 
-function fixture() {
+function fixture(worktrees: DelegationDeps['worktrees'] = async()=>[]) {
   const cwd=path.resolve('/repo');
   const parent={id:'parent',title:'Parent',cwd,harness:'claude',state:'idle',permissionMode:null,pending:0,agent:{id:'strategist',source:'catalog',version:1},run:{runId:'p',taskVersion:1}} as ChatSummary;
   const child={id:'child',title:'Child',cwd,harness:'claude',state:'closed',closedAt:1,permissionMode:null,pending:0,parentId:'parent',agent:{id:'scout',source:'catalog',version:1},run:{runId:'old',taskId:'task',taskVersion:1},delegation:{role:'scout',goal:'Old',doneWhen:['Old criterion'],at:1,result:{outcome:'done',summary:'Old result',at:2}}} as ChatSummary;
@@ -17,12 +21,28 @@ function fixture() {
   const assign=vi.fn(async (_id:string,_prompt:string,_options:TaskAssignmentOptions)=>{ child.run={...child.run!,runId:'new',taskVersion:2}; });
   const create=vi.fn(async()=>child);
   const chats:DelegationChats={list:()=>all,create,assignTask:assign,userEvents:()=>structuredClone(ledger),agentPolicy:()=>({tools:{allow:['read']},ceiling:null}),reportDelegation:()=>({parentId:'parent',delivered:true}),limitNotice:vi.fn(),send:async()=>{}};
-  const tools=delegationTools({chats,roles:()=>catalog,settings:()=>({...DELEGATION_DEFAULTS,maxParallel:1}),engineRefusal:()=>null,label:'[agent]',runs:()=>[],worktrees:async()=>[]});
+  const tools=delegationTools({chats,roles:()=>catalog,settings:()=>({...DELEGATION_DEFAULTS,maxParallel:1}),engineRefusal:()=>null,label:'[agent]',runs:()=>[],worktrees});
   const call=async(name:string,args:Record<string,unknown>,caller='parent')=>JSON.parse(await tools.find(t=>t.name===name)!.run(args,{params:{chatId:caller}} as never) as string);
   const args=()=>({chatId:'child',roleId:'scout',cwd,mode:'continue',expectedVersion:1,expectedEventSeq:1,contract:{goal:'Follow up',output:'Evidence',context:'User constraints',doneWhen:['New criterion']}});
   return {parent,child,catalog,ledger,chats,assign,create,call,args};
 }
 describe('parent child task continuity',()=>{
+  it('looks up only the owned child folder and rejects ownership before Git discovery',async()=>{
+    const lookup=vi.fn(async()=>[] as string[]), f=fixture(lookup);
+    await f.call('agent_assign_task',f.args());
+    expect(lookup).toHaveBeenCalledExactlyOnceWith(f.parent.cwd,f.child.cwd);
+    lookup.mockClear();f.child.parentId='other';
+    await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/YOUR direct children/);
+    expect(lookup).not.toHaveBeenCalled();
+  });
+  it('refuses a child folder change during targeted discovery before assigning',async()=>{
+    let finish!:(trees:string[])=>void;
+    const f=fixture(()=>new Promise(resolve=>{finish=resolve;}));
+    const pending=f.call('agent_assign_task',f.args());
+    f.child.cwd=path.resolve('/changed');finish([]);
+    await expect(pending).rejects.toThrow(/Child project changed/);
+    expect(f.assign).not.toHaveBeenCalled();
+  });
   it('reads full user decisions and reassigns the same child with explicit provenance and cursors',async()=>{
     const f=fixture();
     expect(await f.call('agent_task_events',{chatId:'child'})).toEqual(f.ledger);
@@ -81,5 +101,24 @@ describe('parent child task continuity',()=>{
     f.chats.planOf=()=>({phase:'running',steps:[{title:'Read',state:'todo',chatIds:[]}],at:1} as never);
     await f.call('agent_assign_task',{...f.args(),step:1});
     expect(f.assign).toHaveBeenCalledWith('child',expect.any(String),expect.objectContaining({planStep:0}));
+  });
+  it('reassigns an own child in a sibling worktree of the same real repository, never another repo or an unlisted folder',async()=>{
+    const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'sb-reuse-')));
+    try {
+      const git=(cwd:string,...a:string[])=>execFileSync('git',['-C',cwd,...a],{encoding:'utf8',stdio:'pipe'});
+      const init=(dir:string)=>{fs.mkdirSync(dir);git(dir,'init','-q','-b','main');fs.writeFileSync(path.join(dir,'a.txt'),'a\n');git(dir,'add','.');git(dir,'-c','user.name=T','-c','user.email=t@example.com','commit','-qm','init');};
+      const repo=path.join(root,'repo'),foreign=path.join(root,'foreign'),loose=path.join(root,'.second-brain-delegate-loose');
+      init(repo);init(foreign);fs.mkdirSync(loose);
+      // the host allocates delegate worktrees as siblings of the checkout (agents/worktrees.ts createIsolatedWorktree)
+      const wt=path.join(root,'.second-brain-delegate-x');git(repo,'worktree','add','-q','-b','sb/x',wt);
+      const f=fixture(gitWorktrees);f.parent.cwd=repo;
+      const at=(cwd:string)=>{f.child.cwd=cwd;return f.call('agent_assign_task',{...f.args(),cwd,expectedVersion:f.child.run!.taskVersion});};
+      for(const cwd of [foreign,loose]) await expect(at(cwd)).rejects.toThrow(/Project mismatch/);
+      expect(f.assign).not.toHaveBeenCalled();
+      await expect(at(wt)).resolves.toMatchObject({chatId:'child'});
+      f.child.parentId='other';
+      await expect(at(wt)).rejects.toThrow(/YOUR direct children/);
+      expect(f.assign).toHaveBeenCalledOnce();
+    } finally { fs.rmSync(root,{recursive:true,force:true}); }
   });
 });

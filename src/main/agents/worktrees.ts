@@ -52,13 +52,16 @@ export function listedWorktrees(porcelain: string): string[] {
 }
 
 /** The git worktrees of the repository at `cwd`, main checkout included, each verified: an existing folder whose git
- *  common dir is `cwd`'s; none when `cwd` is no repository. */
-export async function gitWorktrees(cwd: string): Promise<string[]> {
+ *  common dir is `cwd`'s; none when `cwd` is no repository. With `target`, only the listed worktrees containing it. */
+export async function gitWorktrees(cwd: string, target?: string): Promise<string[]> {
   const common = await gitCommonDir(cwd);
   if (!common) return [];
   const out = await run(cwd, ['worktree', 'list', '--porcelain']);
   if (out === null) return [];
-  const checked = await Promise.all(listedWorktrees(out).map(async w => {
+  // Reuse knows the exact child folder. Verify only its containing listed worktree rather than spawning a Git
+  // process per unrelated checkout: that fan-out can time out valid allocations on repositories with many trees.
+  const candidates = listedWorktrees(out).filter(w => target === undefined || within(w, target));
+  const checked = await Promise.all(candidates.map(async w => {
     if (!isDir(w)) return null;
     const own = await gitCommonDir(w);
     return own && samePath(own, common) ? w : null;
@@ -173,7 +176,8 @@ export class DelegateWorktrees {
     const provenance = { parentRunId: parent.run?.runId, parentTaskVersion: parent.run?.taskVersion };
     const cwd = req.cwd;
     if (!needsIsolatedWorktree(policy)) return { cwd, ...provenance };
-    const parentRepo = await cleanRepository(parent.cwd), source = await cleanRepository(cwd);
+    // One checkout is verified once: each Git spawn costs up to seconds on Windows with real-time antivirus scanning.
+    const parentRepo = await cleanRepository(parent.cwd), source = samePath(parent.cwd, cwd) ? parentRepo : await cleanRepository(cwd);
     if (!samePath(parentRepo.common, source.common)) throw new Error('Writing delegation cannot leave its parent repository.');
     let base = source.head;
     if (continuationOf !== undefined) {
@@ -189,7 +193,8 @@ export class DelegateWorktrees {
     const childCwd = path.join(isolated.root, relative);
     if (!isDir(childCwd) || !within(isolated.root, childCwd)) throw new Error('Requested project folder is absent from the committed isolated worktree.');
     // Detect source edits made during checkout; do not launch on a stale baseline.
-    const after = await cleanRepository(source.root), parentAfter = await cleanRepository(parent.cwd);
+    // status and HEAD are checkout-wide: the parent's folder in the same checkout needs no second probe
+    const after = await cleanRepository(source.root), parentAfter = samePath(parentRepo.root, source.root) ? after : await cleanRepository(parent.cwd);
     if (after.head !== source.head || parentAfter.head !== parentRepo.head) throw new Error('Repository changed while preparing isolation; retry delegation.');
     return { cwd: childCwd, ...provenance, bind: childId => {
       const owned: IsolatedDelegation = { childId, parentId: parent.id, ...provenance, parentCwd: parent.cwd,
