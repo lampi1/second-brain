@@ -16,8 +16,10 @@ export interface SessionSink {
   resolved(requestId: string): void;
   /** Session facts changed (only the fields present). */
   changed(patch: SessionPatch): void;
-  /** The process is gone. error = null for a normal end (stdin closed, close() asked); otherwise why, in Italian. */
-  exit(info: { code: number | null; error: string | null }): void;
+  /** The process is gone. error = null for a normal end (stdin closed, close() asked); otherwise why, in Italian.
+   *  refusal: the CLI's whole «Cannot use this model: X. Available models: …» line when it refused the model (error
+   *  keeps 600 characters, too few for Cursor's 190 ids: learn/accepted-models.ts reads the list from here). */
+  exit(info: { code: number | null; error: string | null; refusal?: string }): void;
   /** Plan rate-limit info as the CLI sent it (Claude: a stream-json `rate_limit_event`), for the brain's usage meter. */
   rateLimit?(msg: unknown): void;
   /** The models the CLI offers (Cursor: models.availableModels of session/new or session/load), for the Settings page. */

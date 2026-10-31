@@ -341,10 +341,11 @@ const FENCE_OPEN = /^\s*`{3,}/;
  *  line, any other block its own lines (nested blocks unwrapped too); never the fences, never a word of what runs. */
 export function contentLines(text: string): string[] {
   const out: string[] = [];
-  const plain = (t: string) => out.push(...t.split(/\r?\n/).map(l => {
+  // a language word is dropped only when lines follow it: «```python» alone is a command (a REPL), shown
+  const plain = (t: string) => out.push(...t.split(/\r?\n/).map((l, i, all) => {
     if (!FENCE_OPEN.test(l)) return l;
     const rest = l.replace(FENCE_OPEN, '').trim();
-    return LANGS.has(rest.toLowerCase()) ? '' : rest;
+    return LANGS.has(rest.toLowerCase()) && all.slice(i + 1).some(x => x.trim()) ? '' : rest;
   }));
   let at = 0;
   for (const m of text.matchAll(FENCE)) {
@@ -555,7 +556,8 @@ export class AcpSession implements HarnessSession {
     p.stdout.setEncoding('utf8');
     p.stdout.on('data', (d: string) => timedStep('engine acp output', () => this.onStdout(d)));
     p.stderr.setEncoding('utf8');
-    p.stderr.on('data', (d: string) => { this.errTail = (this.errTail + d).slice(-4000); log.debug('chats', 'acp stderr', { chat, data: { engine, text: cut(d, 500) } }); });
+    // 16000: room for a whole model refusal (Cursor lists 190 ids, onClose refusal)
+    p.stderr.on('data', (d: string) => { this.errTail = (this.errTail + d).slice(-16000); log.debug('chats', 'acp stderr', { chat, data: { engine, text: cut(d, 500) } }); });
     p.stdin.on('error', e => log.warn('chats', 'acp stdin error', { chat, data: { engine, error: errText(e) } }));
     p.on('error', e => this.fail(`Avvio di ${label} non riuscito: ${errText(e)}`, errText(e), `check that \`${this.cliName} --version\` works in a terminal`));
     p.on('close', (code: number | null) => this.onClose(code));
@@ -1536,7 +1538,9 @@ export class AcpSession implements HarnessSession {
     const error = clean ? null : cut(tail || `${this.label} è uscito con codice ${code ?? '?'}`, 600);
     if (error) log.error('chats', 'acp engine exited with an error', { chat: this.opts.chatId, data: { engine: this.engine }, cause: `exit ${code}: ${tail || 'no stderr'}`, hint: `run \`${this.cliName} --version\` in a terminal; resume with a new message` });
     else log.info('chats', 'acp session exit', { chat: this.opts.chatId, data: { engine: this.engine, code } });
-    this.end(clean ? 'closed' : 'error', code, error);
+    // the CLI refused the model: its whole list goes on beside the cut error (SessionSink.exit refusal)
+    const refusal = error ? /Cannot use this model: [^\r\n]+/.exec(stripAnsi(this.errTail))?.[0] : undefined;
+    this.end(clean ? 'closed' : 'error', code, error, refusal);
   }
 
   private fail(error: string, cause: string, hint: string): void {
@@ -1552,7 +1556,7 @@ export class AcpSession implements HarnessSession {
     if (p) { try { p.stdin.end(); } catch { /* gone */ } killEngineTree(p.pid, this.job, () => p.kill(), this.opts.chatId); }
   }
 
-  private end(state: ChatState, code: number | null, error: string | null): void {
+  private end(state: ChatState, code: number | null, error: string | null, refusal?: string): void {
     if (this.exited) return;
     this.markExited();
     for (const r of this.rpcs.values()) { if (r.timer) clearTimeout(r.timer); r.reject(new Error('La sessione è terminata.')); }
@@ -1564,7 +1568,7 @@ export class AcpSession implements HarnessSession {
     this.queue = [];
     this.prompting = false;
     this.setState(state);
-    this.sink.exit({ code, error });
+    this.sink.exit({ code, error, ...(refusal ? { refusal } : {}) });
   }
 
   private markExited(): void {

@@ -346,8 +346,8 @@ export class HeadlessRunner {
     const c = new RunCollector();
     const denied = new Set<string>();
     let session: HarnessSession | null = null;
-    let settle!: (r: { error: string | null }) => void;
-    const ended = new Promise<{ error: string | null }>(r => { settle = r; });
+    let settle!: (r: { error: string | null; refusal?: string }) => void;
+    const ended = new Promise<{ error: string | null; refusal?: string }>(r => { settle = r; });
     const sink: SessionSink = {
       item: item => {
         c.item(item);
@@ -366,7 +366,7 @@ export class HeadlessRunner {
         });
       },
       resolved: () => { /* nothing waits on it */ },
-      exit: info => settle({ error: info.error ?? 'il motore si è chiuso prima di finire' }),
+      exit: info => settle({ error: info.error ?? 'il motore si è chiuso prima di finire', ...(info.refusal ? { refusal: info.refusal } : {}) }),
     };
     const timeoutMs = req.timeoutMs ?? this.d.timeoutMs ?? RUN_TIMEOUT_MS;
     const timer = setTimeout(() => settle({ error: `tempo scaduto (${Math.round(timeoutMs / 60_000) || '<1'} min): fermato` }), timeoutMs);
@@ -393,7 +393,8 @@ export class HeadlessRunner {
       const out = end.error ? { ok: false as const, error: end.error } : c.outcome();
       const result: HeadlessResult = out.ok
         ? { ok: true, text: out.text, model: c.model ?? m.model, effort, costUsd: out.costUsd, tokens: c.tokens, turns: out.turns, durationMs, ...(denied.size ? { deniedTools: [...denied] } : {}) }
-        : { ok: false, error: shortError(out.error), durationMs, ...acceptedOf(out.error) };
+        // the whole refusal line when the session kept it (its exit error is cut at 600 characters)
+        : { ok: false, error: shortError(out.error), durationMs, ...acceptedOf(end.refusal ?? out.error) };
       log.info('compare', 'headless run end', { chat: chatId, data: { ...where, ok: result.ok, durationMs, costUsd: result.ok ? result.costUsd : null, turns: result.ok ? result.turns : null, error: result.ok ? null : result.error, deniedTools: [...denied] } });
       return result;
     } catch (e) {

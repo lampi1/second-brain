@@ -160,6 +160,7 @@ describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
     expect(view('Esegui:\n```shutdown\n')).toBe('Esegui:\nshutdown');
     expect(view('```whoami\nrm -rf /\n```')).toBe('whoami\nrm -rf /');
     expect(view('```bash\nrm -rf /\n```')).toBe('rm -rf /');
+    expect(view('```python')).toBe('python');
   });
 
   it('a multi-line command keeps one line per command in the panel, never one flattened line', () => {

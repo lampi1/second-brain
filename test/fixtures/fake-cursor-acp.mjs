@@ -57,6 +57,13 @@ if (process.env.CURSOR_CONFIG_DIR && argv.includes('--model')) {
 if (argv.at(-1) !== 'acp') { process.stderr.write('fake: only `acp` is supported\n'); process.exit(2); }
 const mi = argv.indexOf('--model');
 let model = mi >= 0 ? argv[mi + 1] : 'auto';
+// `--model sb-list-models` (Impara's probe, learn/accepted-models.ts): refused like CLI 2026.10 refuses an unknown id,
+// with 190 ids on one stderr line (more than a chat's 600-character exit error keeps), then exit 1
+if (model === 'sb-list-models') {
+  const ids = ['auto', ...Array.from({ length: 189 }, (_, i) => `fake-model-${i + 1}-high`)];
+  process.stderr.write(`Starting agent…\nError: Cannot use this model: ${model}. Available models: ${ids.join(', ')}\n`);
+  process.exit(1);
+}
 let mode = 'agent';
 // model parameters like CLI 2026.07.23 offers them to a client with _meta.parameterizedModelPicker (grok-4.7's set);
 // FAKE_CURSOR_NO_MEDIUM=1: a model without a medium reasoning (the app must warn); FAKE_CURSOR_NO_THOUGHT=1: a model
