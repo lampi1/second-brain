@@ -8,7 +8,7 @@
 // What a prompt does is chosen by words in it:
 //   perm → a shell tool call that asks permission (allow-always offered) · locked → the same without allow-always
 //   ask → cursor/ask_question (one single-choice and one multi-choice question; asksn: one yes/no question) · plan → cursor/create_plan
-//   edit → an edit tool call with a diff · todo → a plan update · slow → streams until cancelled
+//   edit → an edit tool call with a diff · todo → a plan update · slow → streams until cancelled · deafcancel → ignores cancel (FAKE_ACP_DEAF_MS)
 //   think → streams reasoning ("Penso di usare la libreria vecchia. Passo 1. …", FAKE_CURSOR_THINK_TICKS) until cancelled
 //   readgate[=<path>] → a read tool call (of a.txt, or that path relative to the cwd) that asks permission, its
 //   location in the request too: "Letto a.txt" when allowed · writegate[=<path>] → an edit tool call that
@@ -128,6 +128,14 @@ async function prompt(id, p) {
     turn = null;
     return out({ id, result: { stopReason: 'end_turn' } });
   }
+  if (/deafcancel/.test(text)) {
+    // an engine that ignores session/cancel (OpenCode answered a cancelled prompt after 55 s, 2026-10-31)
+    update(sid, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'lavoro sordo' } });
+    await sleep(Number(process.env.FAKE_ACP_DEAF_MS ?? 60000));
+    update(sid, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: ' in ritardo' } });
+    turn = null;
+    return out({ id, result: { stopReason: 'cancelled' } });
+  }
   const netRetry = text.startsWith('Il turno si è interrotto per un errore di rete');
   if (/neterr/.test(text) || netRetry) {
     const fail = netErrLeft > 0;
@@ -152,6 +160,18 @@ async function prompt(id, p) {
         ? { toolCallId: 'opaque', title: 'Read a safe file', locations: [{ path: 'safe.txt' }] }
         : { toolCallId: 'read', kind: 'read', rawInput: { path: 'local.txt' }, locations: [{ path: '../outside.txt' }] },
       options: [...(opaque ? [opt('once', 'Allow once', 'allow_once')] : []), opt('always', 'Always', 'allow_always')],
+    }) });
+  }
+  if (text === 'mcpgate' || text === 'outsidegate') {
+    // OpenCode 1.19.5 (acp/agent.ts): the tool_call carries the real input; the permission then sends kind "other",
+    // the permission name as title, its (often empty) metadata as rawInput and the once/always/reject options.
+    const mcp = text === 'mcpgate';
+    const tcId = mcp ? 'call_mcp' : 'call_ext';
+    const title = mcp ? 'github_search_issues' : 'external_directory';
+    update(sid, { sessionUpdate: 'tool_call', toolCallId: tcId, title, kind: 'other', status: 'pending', rawInput: mcp ? { query: 'acp cancel', repo: 'lampi1/second-brain-app' } : {} });
+    log({ answer: await ask('session/request_permission', { sessionId: sid,
+      toolCall: { toolCallId: tcId, title: mcp ? title : '/home/u/other', kind: 'other', status: 'pending', rawInput: mcp ? {} : { filepath: '/home/u/other/a.txt', parentDir: '/home/u/other' }, locations: mcp ? [] : [{ path: '/home/u/other/a.txt' }] },
+      options: [opt('once', 'Allow once', 'allow_once'), opt('always', 'Always allow', 'allow_always'), opt('reject', 'Reject', 'reject_once')],
     }) });
   }
   if (/perm|locked/.test(text)) {

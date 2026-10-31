@@ -113,6 +113,8 @@ export interface AcpOptions extends SessionOptions {
   priceFallback?: boolean;
   /** waits before each automatic retry after a network error (default 5 s, 20 s: two retries); tests: short */
   netRetryDelaysMs?: readonly number[];
+  /** how long a user's stop waits for session/prompt to end before the engine is restarted (tests: shorter) */
+  cancelGraceMs?: number;
   /** the model is the session's configOptions entry of category "model" (OpenCode `opencode acp`): its options are the
    *  models offered and the chat's model is set there (session/set_config_option, session-only) once the session is
    *  open. Only for an engine whose session/new answers no `models` and keeps the choice in the session (never for
@@ -124,6 +126,8 @@ export interface AcpOptions extends SessionOptions {
 export const netRetryPrompt = (label: string): string =>
   `Il turno si è interrotto per un errore di rete di ${label}: continua da dove eri, senza rifare quello già fatto.`;
 const NET_RETRY_DELAYS = [5000, 20000];
+/** a user's stop waits this long for the engine to end its prompt, then the engine is restarted (watchCancel) */
+const CANCEL_GRACE_MS = 5000;
 
 /** Whether a turn's last assistant text is the engine's transport error, not the model's words. Cursor's ACP handler
  *  appends "\n\nError: " + String(error) (CLI 2026.07.23): the text ends with its own paragraph "Error: RetriableError: …"
@@ -307,6 +311,40 @@ function contentText(content: unknown): string {
   return parts.filter(Boolean).join('\n');
 }
 
+// OpenCode permission names (its tool call has kind "other" and the bare name as title) → what the panel says
+const PERMISSION_LABEL: Record<string, string> = {
+  external_directory: 'Accesso fuori dalla cartella', websearch: 'Ricerca web', codesearch: 'Ricerca codice', skill: 'Skill',
+  todowrite: 'Lista attività', todoread: 'Lista attività', list: 'Elenco cartella', task: 'Sottoagente',
+  doom_loop: 'Stesso strumento ripetuto', question: 'Domanda',
+};
+const argLine = (k: string, v: unknown): string => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`;
+
+/** Title and detail of a permission panel from what the engine sent (display only: the gates read the input). OpenCode
+ *  sends kind "other", its permission name as title and an often empty rawInput for MCP tools, skills and outside
+ *  folders; the tool_call that came first with the same id carries the real arguments, so both are shown. */
+export function permissionView(tc: Obj, known: { name?: string; summary?: string; input?: unknown } | undefined, kindName: string): { title: string; detail: string } {
+  const raw = o(tc.rawInput), prior = o(known?.input);
+  const args: Obj = { ...prior, ...raw };
+  const title = stripAnsi(s(tc.title)).trim();
+  const bare = kindName === 'Tool' && /^[\w.:-]+$/.test(title);
+  const first = Object.entries(args).find(([k, v]) => k !== 'command' && typeof v === 'string' && v.trim());
+  const label = bare ? PERMISSION_LABEL[title] ?? `Strumento ${title}` : '';
+  // external_directory titles itself with the folder (or the command) instead of its name
+  const outside = kindName === 'Tool' && !bare && typeof args.parentDir === 'string';
+  const shown = bare ? (first ? `${label}: ${s(first[1])}` : label)
+    : outside ? `${PERMISSION_LABEL.external_directory}: ${title || s(args.parentDir)}`
+    : title || known?.summary || `${kindName}: permesso`;
+  const lines = [
+    s(args.command),
+    contentText(tc.content),
+    ...Object.entries(args).filter(([k, v]) => k !== 'command' && v !== undefined && v !== '').map(([k, v]) => argLine(k, v)),
+    ...arr(tc.locations).map(l => s(o(l).path)),
+  ];
+  // one line per argument (the panel splits the detail on newlines), each one flattened
+  const detail = lines.map(x => x.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n');
+  return { title: cut(shown, 140), detail: detail.length > 8000 ? `${detail.slice(0, 7999)}…` : detail };
+}
+
 /** The skip reason that carries a free-text answer to cursor/ask_question: every question with what the user chose or
  *  wrote, so the model reads the whole answer even though ACP's "answered" outcome has room only for option ids. */
 export function freeTextReason(answers: { question: string; answers: string[] }[]): string {
@@ -333,6 +371,10 @@ export class AcpSession implements HarnessSession {
   private queue: { text: string; images: readonly ImageAttachment[]; retry?: boolean }[] = [];
   /** the user stopped the running turn (Stop, or "Invia subito" = sendNow): "cancelled" is then no error */
   private stopping: { sendNow: boolean } | null = null;
+  private cancelWatch: NodeJS.Timeout | null = null;
+  private cancelAt = 0;          // when the user's stop sent session/cancel (its answer time goes to the log)
+  private turnSeq = 0;           // the prompt in flight: an answer to an abandoned one is ignored
+  private wedged = false;        // the engine ignored a stop: it is being restarted, nothing more goes to it
   private turnFiles: string[] = [];   // screenshots saved for this turn (no image support): deleted when it ends
   private open = false;          // session/new or session/load done
   private yesNoRefused = 0;      // questions sent back in a row for not being yes/no (ADR 0135)
@@ -686,7 +728,7 @@ export class AcpSession implements HarnessSession {
 
   /** One prompt at a time per session: the next queued message goes when the previous turn ends. */
   private drain(): void {
-    if (!this.open || this.prompting || this.exited || this.retryTimer) return;
+    if (!this.open || this.prompting || this.exited || this.retryTimer || this.wedged) return;
     const next = this.queue.shift();
     if (next === undefined) return;
     if (!next.retry) { this.netRetries = 0; this.retryOff = false; }
@@ -702,9 +744,10 @@ export class AcpSession implements HarnessSession {
     this.planItemId = null;
     this.chars += next.text.length;
     this.setState(this.asks.size ? 'waiting' : 'running');
+    const turn = ++this.turnSeq;
     this.request('session/prompt', { sessionId: this.sessionId, prompt }, 0)
-      .then(r => this.turnDone(r, null))
-      .catch(e => this.turnDone({}, e as Error));
+      .then(r => { if (turn === this.turnSeq) this.turnDone(r, null); })
+      .catch(e => { if (turn === this.turnSeq) this.turnDone({}, e as Error); });
   }
 
   /** ACP prompt blocks: images as image blocks when the agent takes them, else saved in the app's temp folder for this
@@ -732,7 +775,12 @@ export class AcpSession implements HarnessSession {
   private turnDone(r: Obj, err: Error | null): void {
     // the turn that read them is over: screenshots may hold private data, they do not stay in the temp folder
     for (const f of this.turnFiles.splice(0)) fs.rm(f, { force: true }, () => {});
+    if (this.cancelWatch) { clearTimeout(this.cancelWatch); this.cancelWatch = null; }
     if (this.exited) return;
+    if (this.cancelAt) {
+      log.info('chats', 'acp cancel settled', { chat: this.opts.chatId, data: { engine: this.engine, ms: Date.now() - this.cancelAt, stopReason: s(r.stopReason) || null, restarted: this.wedged } });
+      this.cancelAt = 0;
+    }
     this.flushAll(true);
     for (const t of this.tools.values()) if (t.status === 'running') this.sink.item({ ...t, status: 'error', output: t.output ?? 'interrotto' }, true);
     for (const id of [...this.subagents.keys()]) this.subagentHooks(id, {}, 'error'); // interrupted: its stop hook too
@@ -863,6 +911,7 @@ export class AcpSession implements HarnessSession {
     if (this.prompting && opts?.byUser) this.stopping = { sendNow: !!opts.keepQueued }; // only a prompt in flight ends with a result
     // cancel first, so the agent knows its turn is over when its waits resolve
     if (this.sessionId) this.notify('session/cancel', { sessionId: this.sessionId });
+    if (this.prompting && opts?.byUser && !this.cancelWatch) this.watchCancel();
     // a question still waiting for its brief was never shown: it is answered cancelled too
     for (const [id, w] of [...this.briefWaited]) { if (w.timer) clearTimeout(w.timer); this.briefWaited.delete(id); this.respond(w.rpcId, { outcome: { outcome: 'cancelled' } }); }
     for (const [id, ask] of [...this.asks]) {
@@ -872,6 +921,25 @@ export class AcpSession implements HarnessSession {
     }
     // "Invia subito" during a retry wait: no turn runs, so the kept messages go now (drain waited for the retry)
     if (!this.prompting) { this.setState(this.queue.length ? 'running' : 'idle'); this.drain(); }
+  }
+
+  /** A stop the engine does not answer (OpenCode took 55 s to end a cancelled prompt, 2026-10-31): after the grace the
+   *  turn ends here as stopped, the engine is left behind and the manager resumes the same session on a new one, where
+   *  the messages still queued go (SessionPatch.restart). The old prompt's late answer is ignored (turnSeq). */
+  private watchCancel(): void {
+    const turn = this.turnSeq, ms = this.opts.cancelGraceMs ?? CANCEL_GRACE_MS;
+    this.cancelAt = Date.now();
+    this.cancelWatch = setTimeout(() => {
+      this.cancelWatch = null;
+      if (this.exited || !this.prompting || turn !== this.turnSeq) return;
+      log.warn('chats', 'acp cancel unanswered: restarting the engine', { chat: this.opts.chatId, cause: `session/prompt still open ${ms} ms after session/cancel`, hint: 'the engine ignores or delays cancel; the chat resumes its session on a new engine', data: { engine: this.engine, waitedMs: Date.now() - this.cancelAt } });
+      this.wedged = true;
+      this.turnSeq++;
+      const carry = this.queue.splice(0).filter(q => !q.retry).map(q => ({ text: q.text, images: q.images }));
+      this.sink.changed({ restart: carry });
+      this.turnDone({ stopReason: 'cancelled' }, null);
+    }, ms);
+    this.cancelWatch.unref();
   }
 
   /** Never live: in Cursor, ACP session/set_model writes the user's global CLI config (cli-config.json: model,
@@ -919,6 +987,7 @@ export class AcpSession implements HarnessSession {
     // a real close already asked wins over a later keeping one (a reopen after the turn while ✕ waits)
     this.keepChildren = this.closing ? this.keepChildren && keepChildren : keepChildren;
     this.closing = true;
+    if (this.wedged) graceMs = 0; // it already ignored a stop: no grace to finish a turn it will not end
     try { this.proc.stdin.end(); } catch { /* gone */ }
     if (this.killed) return this.exitPromise; // already being killed (app quit): no grace, no false "did not exit"
     const pid = this.proc.pid, t0 = Date.now();
@@ -1049,6 +1118,8 @@ export class AcpSession implements HarnessSession {
   }
 
   private onAgentRequest(id: number | string, method: string, p: Obj): void {
+    // an engine being restarted after an ignored stop asks nobody: its turn is already over on screen
+    if (this.wedged) return this.respond(id, { outcome: { outcome: 'cancelled' } });
     const at = Date.now();
     const rid = nextId('ask');
     if (method === 'session/request_permission') {
@@ -1056,11 +1127,10 @@ export class AcpSession implements HarnessSession {
       const options: AcpOption[] = arr(p.options).map(x => ({ optionId: s(o(x).optionId), name: s(o(x).name), kind: s(o(x).kind) })).filter(x => x.optionId);
       const known = this.tools.get(s(tc.toolCallId)); // the tool_call that came first carries the input (command, path)
       const kindName = KIND_NAME[s(tc.kind)] ?? known?.name ?? 'Tool';
-      const raw = o(tc.rawInput ?? known?.input);
-      const detail = [s(raw.command), contentText(tc.content), ...arr(tc.locations).map(l => s(o(l).path))].map(x => x.trim()).filter(Boolean).join('\n');
+      const view = permissionView(tc, known, kindName);
       this.asks.set(rid, { rpcId: id, method, options });
       this.pending({
-        id: rid, type: 'permission', tool: kindName, title: cut(stripAnsi(s(tc.title)) || known?.summary || `${kindName}: permesso`, 140), detail: cut(detail, 8000),
+        id: rid, type: 'permission', tool: kindName, title: view.title, detail: view.detail,
         // Never grant opaque upstream patterns: even unrestricted roles still have app hard-deny gates.
         // An earlier tool update may have no rawInput (stored as {}): its empty input must not hide
         // the permission's locations from the path/role gates. Keep all locations even with raw input.
@@ -1154,6 +1224,8 @@ export class AcpSession implements HarnessSession {
   }
 
   private onNotification(method: string, p: Obj): void {
+    if (this.wedged) return; // the abandoned turn's late updates
+
     if (method === 'session/update') return this.onUpdate(o(p.update));
     if (method === 'cursor/update_todos' || method === 'cursor/task') this.showExt(method, p); // older CLIs: as notifications
     else this.drift('notification', method, p);

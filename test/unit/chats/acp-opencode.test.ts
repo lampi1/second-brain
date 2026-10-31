@@ -137,6 +137,31 @@ describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
     expect(cursorLog(logFile).find(l => l.answer)?.answer?.outcome?.optionId).toBe('once');
   });
 
+  it('shows an OpenCode MCP permission by its name and real arguments, still asking once', async () => {
+    const { s, sink, logFile } = start({ ...OPENCODE, env: { FAKE_ACP_OPENCODE: '1' } });
+    await waitFor(() => s.state === 'idle', 'ready');
+    s.send('mcpgate');
+    const request = await waitFor(() => sink.pendings[0], 'mcp permission');
+    expect(request.tool).toBe('Tool');
+    expect(request.title).toBe('Strumento github_search_issues: acp cancel');
+    expect(request.detail).toBe('query: acp cancel\nrepo: lampi1/second-brain-app');
+    expect(request.noAlways).toBe(true);
+    expect(autoPermit(request, { cwd: tmp('mcp'), ceiling: null, undoable: false }).kind).toBe('ask');
+    s.answer(request.id, { kind: 'permission', allow: true, always: true });
+    await waitFor(() => cursorLog(logFile).some(l => l.answer), 'answer');
+    expect(cursorLog(logFile).find(l => l.answer)?.answer?.outcome?.optionId).toBe('once');
+  });
+
+  it('shows an OpenCode outside-folder permission with its folder and asks', async () => {
+    const { s, sink } = start({ ...OPENCODE, env: { FAKE_ACP_OPENCODE: '1' } });
+    await waitFor(() => s.state === 'idle', 'ready');
+    s.send('outsidegate');
+    const request = await waitFor(() => sink.pendings[0], 'outside permission');
+    expect(request.title).toBe('Accesso fuori dalla cartella: /home/u/other');
+    expect(request.detail).toContain('filepath: /home/u/other/a.txt');
+    expect(autoPermit(request, { cwd: tmp('outside'), ceiling: null, undoable: false }).kind).toBe('ask');
+  });
+
   it('retains both raw input and locations and cancels when only remembered grants are offered', async () => {
     const { s, sink, logFile } = start({ ...OPENCODE, env: { FAKE_ACP_OPENCODE: '1' } });
     await waitFor(() => s.state === 'idle', 'ready');

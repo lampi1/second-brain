@@ -486,6 +486,31 @@ describe('ChatManager', () => {
     expect(m.items(c.id).filter(i => i.kind === 'user').map(i => (i as { text: string }).text)).toEqual(['hello', 'again']); // history kept, no replay twice
   });
 
+  // «Invia subito» on an engine that ignores session/cancel (OpenCode took 55 s, 2026-10-31): the turn ends within the
+  // grace, the stuck engine is killed and the next message resumes the same session on a new one
+  it('restarts an ACP engine that ignores the stop and resumes its session for the next message', async () => {
+    const e = env();
+    const curLog = path.join(e.userData, 'cursor.jsonl');
+    const { m } = manager(e, { enginePaths: { claude: FAKE, cursor: FAKE_CURSOR }, env: { FAKE_CURSOR_LOG: curLog, CURSOR_CONFIG_DIR: tmp('cursor-user') } });
+    const c = await m.create({ harness: 'cursor', cwd: e.cwd, prompt: 'deafcancel' });
+    await waitFor(() => m.items(c.id).some(i => i.kind === 'assistant' && i.text.includes('lavoro sordo')), 'the deaf turn');
+    const sid = m.list()[0]?.sessionId;
+    const t0 = Date.now();
+    await m.stop(c.id, true);
+    await waitFor(() => results(m, c.id).length === 1 && m.list()[0]?.state === 'idle', 'the stopped turn', 15000);
+    const stoppedMs = Date.now() - t0;
+    await m.send(c.id, 'dopo');
+    await waitFor(() => results(m, c.id).length === 2 && m.list()[0]?.state === 'idle', 'the next turn on a new engine', 15000);
+    const resentMs = Date.now() - t0;
+    expect(stoppedMs).toBeLessThan(8000); // 5 s grace, not the engine's 60 s
+    expect(resentMs).toBeLessThan(12000);
+    expect(results(m, c.id).map(r => r.kind === 'result' && [r.isError, !!r.interrupted])).toEqual([[false, true], [false, false]]);
+    expect(cursorLog(curLog).filter(l => l.argv)).toHaveLength(2); // a new engine
+    expect(cursorLog(curLog).filter(l => l.method === 'session/load').map(l => l.params?.sessionId)).toEqual([sid]);
+    expect(m.items(c.id).some(i => i.kind === 'assistant' && i.text.includes('in ritardo'))).toBe(false); // the old turn's late text never lands
+    console.log(`[timing] deaf cancel: turn stopped in ${stoppedMs} ms, next message answered at ${resentMs} ms`);
+  }, 60000);
+
   // brain hooks (wiring.ts connects them to BrainService)
   it('calls the brain hooks: waiting, turn end with the first prompt, done, rate limits', async () => {
     const e = env();

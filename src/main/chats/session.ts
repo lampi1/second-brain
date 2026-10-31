@@ -57,6 +57,9 @@ export interface SessionPatch {
   effortSubmitted?: string | null;
   /** Resolved by a supported thread/start or thread/resume response; not the current turn. */
   effortSessionDefault?: string | null;
+  /** The engine never answered the user's stop: end it now and resume the same session on a new one; these messages
+   *  had not reached it yet and go to the new one (ACP: acp.ts interrupt). */
+  restart?: { text: string; images: readonly ImageAttachment[] }[];
   state?: ChatState;
   sessionId?: string;          // the CLI's own session id (learned at init, or new after a fork)
   model?: string;              // the model actually in use (from init)
