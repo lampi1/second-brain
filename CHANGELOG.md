@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- Recordings transcribe faster: close sentences of the same speaker go to Whisper as one piece of up to 19 s,
+  instead of each sentence padded with 10 s of silence (ADR 0215).
 - Voice: Parakeet TDT v3 as a faster transcription choice beside Whisper, a voice speed setting, a two-voice podcast
   that downloads its second voice on request and keeps playing when its view closes, more English words read right
   (ADR 0214).

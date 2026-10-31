@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
 import { RecordingStore } from '../../src/main/recordings/store';
 import { RecordingService } from '../../src/main/recordings/service';
-import { transcribeWav, type VadLike } from '../../src/main/voice/transcribe';
+import { mergeSpans, transcribeWav, type VadLike } from '../../src/main/voice/transcribe';
 import { wavHeader, type RecState } from '../../src/shared/recordings';
 import type { TranscribedLine } from '../../src/main/voice/transcribe';
 
@@ -144,6 +144,28 @@ describe('transcribeWav', () => {
     });
     expect(lines).toEqual([{ start: 1000, end: 2000, ch: 0, text: 'parola' }, { start: 2000, end: 3000, ch: 1, text: 'parola' }]);
     expect(seen).toEqual([16_000, 16_000]);
+  });
+});
+
+describe('mergeSpans (ADR 0215)', () => {
+  const R = 16_000;
+  it('joins close pieces of one speaker up to the cap, never across the other speaker or a long pause', () => {
+    const spans = [
+      { ch: 0, start: 0, n: 2 * R }, { ch: 0, start: 3 * R, n: 2 * R }, // gap 1 s: joined
+      { ch: 0, start: 8 * R, n: R }, // gap 3 s: new piece
+      { ch: 1, start: 10 * R, n: R }, // the other speaker
+      { ch: 0, start: 11.5 * R, n: R }, // after the other speaker: new piece
+    ];
+    expect(mergeSpans(spans)).toEqual([
+      { ch: 0, start: 0, n: 5 * R }, { ch: 0, start: 8 * R, n: R }, { ch: 1, start: 10 * R, n: R }, { ch: 0, start: 11.5 * R, n: R },
+    ]);
+  });
+  it('a long monologue becomes pieces of at most 19 s', () => {
+    const spans = Array.from({ length: 20 }, (_, i) => ({ ch: 0, start: i * 3 * R, n: 2 * R }));
+    const out = mergeSpans(spans);
+    expect(out.every(s => s.n <= 19 * R)).toBe(true);
+    expect(out.length).toBe(4);
+    expect(out.reduce((n, s) => n + s.n, 0)).toBeGreaterThanOrEqual(20 * 2 * R);
   });
 });
 
