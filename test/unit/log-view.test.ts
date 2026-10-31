@@ -44,11 +44,11 @@ describe('log view', () => {
   });
 
   it('filters, groups by day and formats', () => {
-    const list = [ev(Date.UTC(2026, 9, 20, 10), { kind: 'pulse', title: 'Battito: 3 carte', rootId: undefined }), ev(Date.UTC(2026, 9, 21, 10), { kind: 'error', title: 'Errore registrato', tools: ['Bash'] })];
+    const list = [ev(Date.UTC(2026, 9, 20, 10), { kind: 'memory', title: 'Memoria: 3 carte', rootId: undefined }), ev(Date.UTC(2026, 9, 21, 10), { kind: 'error', title: 'Errore registrato', tools: ['Bash'] })];
     expect(filterEvents(list, 'bash', 'all').map(e => e.kind)).toEqual(['error']);
-    expect(filterEvents(list, '', 'pulse')).toHaveLength(1);
+    expect(filterEvents(list, '', 'memory')).toHaveLength(1);
     expect(filterEvents(list, 'càrte', 'all')).toHaveLength(1);
-    expect(byDay(list).map(([, l]) => l[0]!.kind)).toEqual(['error', 'pulse']);
+    expect(byDay(list).map(([, l]) => l[0]!.kind)).toEqual(['error', 'memory']);
     expect(money(0.004)).toBe('$0,004');
     expect(money(1.5)).toBe('$1,50');
     expect(span(125_000)).toBe('2 min 5 s');

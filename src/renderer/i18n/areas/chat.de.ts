@@ -77,6 +77,7 @@ export const chatDe: typeof chatIt = {
   'chat.resultFrom': (p: { role: string }) => `${p.role} · Ergebnis bereit`,
   'chat.resultReady': 'Ergebnis bereit',
   'chat.resultGoAgent': 'Agent',
+  'chat.resultGoAgentTip': 'Chat des Agenten öffnen',
   'chat.resultShow': 'Ergebnis anzeigen',
   'chat.resultHide': 'Ausblenden',
   'chat.resultSynthesize': 'Mit dem Orchestrator zusammenfassen',
@@ -185,6 +186,9 @@ export const chatDe: typeof chatIt = {
   'chat.command.later': 'Später überlegen',
   'chat.command.dismiss': 'Nicht nötig',
   'chat.command.dismissTip': 'Schließt die Anfrage; der Block bleibt im Chat',
+  'chat.command.replyHint': 'Oder schreib dem Chat, was er stattdessen tun soll…',
+  'chat.command.replyLabel': 'Freie Antwort an den Chat',
+  'chat.command.replySend': 'Senden',
   // FocusView
   'chat.focus.title': 'Fokusmodus',
   'chat.focus.waiting': (p: { n: number }) => `${p.n} warten auf dich`,

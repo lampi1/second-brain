@@ -69,16 +69,16 @@ function ResultReady({ item }: { item: Extract<ChatItem, { kind: 'system' }> }) 
   return <div className={`notice result-ready${open ? ' is-open' : ''}`} data-testid="result-ready">
     <AgentAvatar avatar={avatar} name={role} size={24} />
     <span className="result-ready-text" role="status"><span className="result-ready-name" title={name}>{name}</span><small>{role ? t('chat.resultFrom', { role }) : t('chat.resultReady')}</small></span>
+    <span className="result-ready-actions">{item.result && <ResultSynthesis runId={item.result.runId} />}
     {sourceId && <button type="button" className="result-ready-go" data-testid="chatref-open" data-chat-id={sourceId}
-      aria-label={t('chat.chatref.ariaOpen', { verb: t('chat.resultGoAgent'), name })} onClick={() => openChatRef(sourceId)}>
-      {t('chat.resultGoAgent')}<IconArrowRight size={12} />
-    </button>}
+      aria-label={t('chat.chatref.ariaOpen', { verb: t('chat.resultGoAgent'), name })} title={t('chat.resultGoAgentTip')} onClick={() => openChatRef(sourceId)}>
+      <IconArrowRight size={13} />
+    </button>}</span>
     {open && !item.result && <div className="result-ready-full"><Markdown text={legacyOutput} /></div>}
     {open && item.result && <div className="result-ready-full" data-testid="canonical-result">
       <Markdown text={item.result.output} />
       {!!item.result.questions?.length && <ul>{item.result.questions.map((question, i) => <li key={i}>{question}</li>)}</ul>}
       {!!item.result.doneWhen.length && <ul className="result-criteria">{item.result.doneWhen.map((criterion, i) => <li key={i} className={criterion.met ? 'met' : ''}><span aria-hidden="true">{criterion.met ? '✓' : '—'}</span><span className="sr-only">{t(criterion.met ? 'chat.criterionMet' : 'chat.criterionNotMet')}</span> <b>{criterion.criterion}</b> {criterion.evidence}</li>)}</ul>}
-      <ResultSynthesis runId={item.result.runId} />
     </div>}
     <button type="button" className="result-ready-tab" aria-expanded={open} data-testid="result-ready-toggle" onClick={() => setOpen(!open)}>
       <IconChevronDown size={12} />{t(open ? 'chat.resultHide' : 'chat.resultShow')}
@@ -86,6 +86,8 @@ function ResultReady({ item }: { item: Extract<ChatItem, { kind: 'system' }> }) 
   </div>;
 }
 
+/** An icon on the row itself: the Orchestrator summarizes this result in one AI turn (owner, 2026-10-31: «un'iconcina che
+ *  lo fa riassumere dall'orchestratore», icons instead of words to save room); its cost is said in the tooltip. */
 function ResultSynthesis({ runId }: { runId: string }) {
   const chatId = useContext(ChatIdCtx);
   const readOnly = useContext(ReadOnlyCtx);
@@ -93,12 +95,12 @@ function ResultSynthesis({ runId }: { runId: string }) {
   const pending = useApp(s => !!chatId && !!s.chats[chatId]?.pendingResultIds?.includes(runId));
   const [busy, setBusy] = useState(false);
   if (readOnly || !available && !pending) return null;
-  return <div className="result-synthesis">
-    <button type="button" className="result-synth-btn" disabled={busy || pending} onClick={async () => { setBusy(true); try { await synthesizeResult(runId); } finally { setBusy(false); } }}>
-      <IconSparkle size={13} />{t(pending || busy ? 'chat.resultDeliveryPending' : 'chat.resultSynthesize')}
-    </button>
-    <small>{t('chat.resultSynthesizeCost')}</small>
-  </div>;
+  const label = t(pending || busy ? 'chat.resultDeliveryPending' : 'chat.resultSynthesize');
+  return <button type="button" className="result-ready-icon result-synth-btn" data-testid="result-synthesize" disabled={busy || pending}
+    aria-label={label} title={`${label} · ${t('chat.resultSynthesizeCost')}`}
+    onClick={async () => { setBusy(true); try { await synthesizeResult(runId); } finally { setBusy(false); } }}>
+    {pending || busy ? <IconSpinner size={13} /> : <IconSparkle size={13} />}
+  </button>;
 }
 
 /** One block of a streaming message: a finished block is parsed once and its DOM is never touched again. */

@@ -154,7 +154,6 @@ export const dialogsDe: typeof dialogsIt = {
   'dialogs.sidebar.label': 'Bereiche',
   'dialogs.sidebar.work': 'Arbeit',
   'dialogs.sidebar.brain': 'Brain',
-  'dialogs.sidebar.trends': 'Verlauf',
   'dialogs.sidebar.app': 'App',
   'dialogs.sidebar.waiting': (p: { count: number }) => p.count === 1 ? '1 wartet auf dich' : `${p.count} warten auf dich`,
   'dialogs.sidebar.new': (p: { count: number }) => `${p.count} neu`,

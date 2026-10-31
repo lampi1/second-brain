@@ -87,6 +87,10 @@ const EN: Readonly<Record<string, string>> = {
   '**Prima la QA bloccata**: la QA dei rimborsi aspetta te (1 decisione). Poi la PR del totale ordine, poi il bug SMS.':
     '**Blocked QA first**: the refunds QA is waiting for you (1 decision). Then the order total PR, then the SMS bug.',
   // the QA chat
+  '3 errori 500 nel modulo feedback, tutti dallo stesso endpoint.': '3 errors 500 in the feedback module, all from the same endpoint.',
+  'Oggi 3 errori 500, tutti da POST /api/feedback quando il testo supera 2000 caratteri.': 'Today 3 errors 500, all from POST /api/feedback when the text is over 2000 characters.',
+  'Errori di oggi trovati': 'Today’s errors found',
+  '3 righe nel log delle 9:12, 9:40, 10:05': '3 log lines at 9:12, 9:40, 10:05',
   '6 test case su 9 passati in ambiente di test, il 7 fallisce anche su master.': '6 of 9 test cases passed in the test environment; 7 fails on master too.',
   '9 test case': '9 test cases',
   '14 azioni · 2 screenshot': '14 actions · 2 screenshots',

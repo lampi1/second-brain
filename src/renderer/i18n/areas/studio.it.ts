@@ -16,7 +16,7 @@ export const studioIt = {
   'studio.model': 'Modello',
   'studio.tierModel': 'Modello del livello',
   'studio.tierModelHint': 'Il modello che Impostazioni → Ruoli e deleghe assegna al livello del ruolo su questo motore.',
-  'studio.effort': 'Approfondimento',
+  'studio.effort': 'Effort',
   'studio.defaultModel': 'Default del modello',
   'studio.tier': 'Livello del modello',
   'studio.tierMax': 'Livello massimo in delega',
@@ -77,4 +77,13 @@ export const studioIt = {
   'studio.versionsError': 'Versioni non disponibili.',
   'studio.background': 'Lavoro di sfondo: non si avvia da qui e non riceve deleghe.',
   'studio.flash': 'Sta nella colonna dell’Orchestrator, vede la sua chat e risponde al volo: solo lettura, non cambia nulla e non riceve deleghe.',
+  // the «Modello» block on the back of an agent card (AgentCardModel.tsx, ADR 0211)
+  'agentCard.modelTitle': 'Modello, effort, contesto',
+  'agentCard.tierModel': ({ tier }: { tier: string }) => `Modello del livello (${tier})`,
+  'agentCard.effortDefault': 'Default del modello',
+  'agentCard.effortDefaultIs': ({ effort }: { effort: string }) => `Default del modello (${effort})`,
+  'agentCard.effortClamped': ({ asked, real }: { asked: string; real: string }) => `Questo modello non ha ${asked}: i lavori partono con ${real}.`,
+  'agentCard.effortNone': 'Questo modello non prende un effort: i lavori partono senza.',
+  'agentCard.context': 'Context window',
+  'agentCard.contextDefault': ({ max }: { max: string }) => `Default dell’app (fino a ${max})`,
 };

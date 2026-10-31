@@ -59,6 +59,18 @@ export interface AgentDraft {
 }
 /** The bounds of a role's "Contesto massimo" (the Claude engine accepts 100k..1M as its compaction window). */
 export const MAX_CONTEXT_RANGE = { min: 100_000, max: 1_000_000 } as const;
+/** The effort a run really gets on a model (owner, 2026-10-31: «il funzionamento deve essere reale»): the asked effort
+ *  when the model takes it, else the nearest lower level it takes (else its lowest); none when the model takes no
+ *  effort at all. An unknown model (efforts undefined) passes the asked effort through. */
+export function effortOn(asked: Effort | null | undefined, efforts: readonly Effort[] | undefined): Effort | null {
+  if (!asked) return null;
+  if (!efforts) return asked;
+  if (!efforts.length) return null;
+  if (efforts.includes(asked)) return asked;
+  const order: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
+  const lower = efforts.filter(e => order.indexOf(e) < order.indexOf(asked));
+  return lower.length ? lower.reduce((a, b) => order.indexOf(b) > order.indexOf(a) ? b : a) : efforts[0]!;
+}
 /** Fields that change what a run does. Saving a change to any of them creates a new version. */
 export const BEHAVIOUR_FIELDS = ['instructions', 'engine', 'model', 'effort', 'tools', 'permissionCeiling', 'knowhow', 'maxContext', 'tier', 'tierMax', 'launches', 'skills'] as const;
 export type AgentBehaviour = Pick<AgentDraft, (typeof BEHAVIOUR_FIELDS)[number]>;
@@ -309,7 +321,9 @@ export interface AgentModelChoice {
   engine: Harness; label: string; enabled: boolean; trusted: boolean; effort: boolean;
   /** the engine honours a role's maxContext ("Contesto massimo"); absent = no */
   maxContext?: boolean;
-  models: { id: string; name: string }[];
+  /** efforts = the effort levels the model takes, by their real names (the registry's; empty = none, absent = unknown);
+   *  defaultEffort = what the engine uses when the card names none; contextWindow = the model's window in tokens */
+  models: { id: string; name: string; efforts?: Effort[]; defaultEffort?: Effort | null; contextWindow?: number }[];
   source: 'observed' | 'registry' | 'unknown';
   /** Model discovery does not prove installation or login. */
   installed: boolean | null; authenticated: boolean | null;

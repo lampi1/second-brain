@@ -36,7 +36,7 @@ const BRAIN_GROUP: BrainPageId[] = [];
  *  changelog is on the Log page, ADR 0111). Skill, Regole, Script and Idee are Memoria's tabs (ADR 0122). */
 const BRAIN_CORE: BrainPageId[] = ['agenti', 'memoria', 'collegamenti'];
 /** Andamento: how the work goes (money, quality, learning, classifiers, the app's own use) in one page; always shown
- *  (ADR 0101, 0109, 0202). */
+ *  (ADR 0101, 0109, 0202), last entry of the Brain group (owner, 2026-10-31: no group of its own for one entry). */
 const TRENDS: BrainPageId[] = ['andamento'];
 /** The pages that are Memoria's tabs now: never an entry of their own, whatever the work profile lists. */
 const IN_MEMORIA = Object.keys(HUB_PAGES);
@@ -92,7 +92,6 @@ export function Sidebar() {
         {title(t('dialogs.sidebar.brain'), 'brain')}
         {BRAIN_CORE.map(page1)}
         {brainPages.map(page1)}
-        {title(t('dialogs.sidebar.trends'), 'trends')}
         {TRENDS.map(page1)}
         {title(t('dialogs.sidebar.app'), 'app')}
         {page1('browser')}

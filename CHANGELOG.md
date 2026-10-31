@@ -6,6 +6,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- Agent cards pick model, effort and context window on their back; efforts use the model's real names (low, medium,
+  high, xhigh, max) and a run gets the level the model really takes (ADR 0211). Script cards no longer spill text;
+  Andamento sits under Brain; the review switch says when it really runs; no Battito in the Log; a result row has
+  summarize and open-agent icons; an Esegui request takes free text instead of running it.
 - Impara v3 and a leaner app (ADR 0201-0210): Battito, Confronto modelli, cloud agents, the judge audit, AI typing
   suggestions, the Orchestrator's «Veloce» lane and the model-routing classifier are gone (every agent uses its card's
   model); Costi, Qualità, Apprendimento and Classificatori are tabs of one «Andamento» page with a local usage counter;

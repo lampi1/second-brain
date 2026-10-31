@@ -2,7 +2,7 @@
 export const catalogIt = {
   // the Agenti page's review switch (JudgingSwitch.tsx)
   'catalog.judging.title': 'Abilita controllo livello e performance',
-  'catalog.judging.onDesc': 'Acceso: ogni notte un Sentinel nascosto rivede un campione dei lavori finiti che test e tuoi voti non decidono già (25% per ruolo, 10% se il ruolo è stabile). Niente chat sulla Grindhouse. Livello e performance si basano su verdetti veri.',
+  'catalog.judging.onDesc': 'Acceso: una volta al giorno un Sentinel nascosto (nessuna chat sulla Grindhouse) rivede un campione dei lavori finiti che test e tuoi voti non decidono già: 25% per ruolo, 10% se il ruolo è stabile. Quando: alle 3:00 solo se il PC e l’app sono accesi; altrimenti alla prima pausa dopo il riavvio (app aperta da 5 minuti, nessun tasto o mouse da 10 minuti), oppure subito con la Modalità notte. Se salti più notti resta una sola revisione sui lavori degli ultimi 7 giorni, entro il tetto di spesa.',
   'catalog.judging.receipts': (p: { runs: string }) => `Altri ${p.runs} lavori al giorno li decidono le ricevute (i test e i controlli eseguiti dopo l’ultima modifica): nessuna revisione, nessun costo.`,
   'catalog.judging.offDesc': 'Spento: nessuna revisione. Livello e performance contano solo i voti tuoi, dell’Orchestrator e i fatti.',
   'catalog.judging.offSince': (p: { day: string }) => `Controllo spento dal ${p.day}: nessuna revisione indipendente, contano solo i tuoi voti.`,
@@ -16,7 +16,7 @@ export const catalogIt = {
   'catalog.when.yesterday': (p: { time: string }) => `ieri alle ${p.time}`,
   'catalog.when.date': (p: { date: string; time: string }) => `il ${p.date} alle ${p.time}`,
   'catalog.updated': (p: { when: string }) => `Aggiornato ${p.when}`,
-  'catalog.updated.tip': 'Le revisioni del Sentinel arrivano una volta al giorno, di notte; i tuoi voti e le ricevute contano subito.',
+  'catalog.updated.tip': 'Le revisioni del Sentinel arrivano una volta al giorno: alle 3:00 se il PC è acceso, altrimenti alla prima pausa dopo l’avvio; i tuoi voti e le ricevute contano subito.',
   'catalog.judging.costNone': 'Costo stimato: ancora nessun dato (nessun lavoro finito negli ultimi 7 giorni).',
   'catalog.deliveryCoverage': "Copertura consegne",
   'catalog.deliveryScope': "Risultati canonici conservati di esecuzioni concluse; storico aggregato escluso.",

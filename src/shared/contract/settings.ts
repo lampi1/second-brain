@@ -217,6 +217,8 @@ export interface RegistryModel {
   longPrompt?: { over: number; price: RegistryModel['price'] };
   fastFactor?: number; noGeo?: boolean;
   efforts: Effort[]; defaultEffort: Effort | null;
+  /** the model's context window in tokens (the Models API's max_input_tokens); absent = unknown */
+  contextWindow?: number;
 }
 export interface ModelRegistry {
   harnesses: Partial<Record<Harness, { routing: 'auto' | 'manual'; note?: string }>>;

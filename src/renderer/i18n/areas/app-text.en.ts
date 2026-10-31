@@ -86,7 +86,7 @@ export const appTextEn: typeof appTextIt = {
   'appText.format.effort.low': 'low',
   'appText.format.effort.medium': 'medium',
   'appText.format.effort.high': 'high',
-  'appText.format.effort.xhigh': 'very high',
+  'appText.format.effort.xhigh': 'xhigh',
   'appText.format.effort.max': 'max',
   'appText.format.perm.default': 'Ask every time',
   'appText.format.perm.acceptEdits': 'Accept edits',

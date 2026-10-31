@@ -30,6 +30,18 @@ describe('journal', () => {
     expect(again.list().bytes).toBeGreaterThan(0);
   });
 
+  it('skips the removed Battito\'s old pulse events when it reloads (ADR 0201)', () => {
+    const dir = tmp(), act = path.join(dir, 'activity');
+    fs.mkdirSync(act, { recursive: true });
+    const d = new Date(), day = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    fs.writeFileSync(path.join(act, `log-${day}.jsonl`), [
+      JSON.stringify({ id: 'a', at: 1, kind: 'pulse', level: 'info', title: 'Battito: 3 carte' }),
+      JSON.stringify({ id: 'b', at: 2, kind: 'app', level: 'info', title: 'App avviata' }),
+    ].join('\n') + '\n');
+    const j = new Journal(); j.init(dir); j.stop();
+    expect(j.list().events.map(x => x.title)).toEqual(['App avviata']);
+  });
+
   it('redacts a known key that straddles the cut', () => {
     const dir = tmp(), j = new Journal(); j.init(dir);
     const key = 'K3y-' + 'q'.repeat(40);
@@ -74,7 +86,7 @@ describe('journal', () => {
 
   it('keeps demo events in memory only', () => {
     const dir = tmp(), j = new Journal(); j.init(dir);
-    j.seed([{ id: 'd1', at: 1, kind: 'pulse', level: 'ok', title: 'Battito' }]);
+    j.seed([{ id: 'd1', at: 1, kind: 'memory', level: 'ok', title: 'Memoria' }]);
     j.stop();
     expect(j.list().events.map(e => e.id)).toEqual(['d1']);
     expect(fs.readdirSync(path.join(dir, 'activity'))).toEqual([]);

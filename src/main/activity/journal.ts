@@ -138,7 +138,8 @@ export class Journal {
 
   private drop(name: string): void { try { fs.unlinkSync(path.join(this.dir!, name)); } catch { /* in use or gone */ } }
 
-  /** The newest LOG_RECENT events on disk, oldest first; a broken line is skipped. */
+  /** The newest LOG_RECENT events on disk, oldest first; a broken line is skipped, and so are the removed Battito's
+   *  'pulse' events (ADR 0201: owner, 2026-10-31, «I log mostrano ancora battito»). */
   private load(): LogEvent[] {
     const out: LogEvent[] = [];
     for (const f of this.files().reverse()) {
@@ -147,7 +148,7 @@ export class Journal {
       const rows: LogEvent[] = [];
       for (const line of text.split('\n')) {
         if (!line) continue;
-        try { const e = JSON.parse(line) as LogEvent; if (e && typeof e.id === 'string' && typeof e.at === 'number' && typeof e.title === 'string') rows.push(e); } catch { /* cut line */ }
+        try { const e = JSON.parse(line) as LogEvent; if (e && typeof e.id === 'string' && typeof e.at === 'number' && typeof e.title === 'string' && (e.kind as string) !== 'pulse') rows.push(e); } catch { /* cut line */ }
       }
       out.unshift(...rows);
       if (out.length >= LOG_RECENT) break;
