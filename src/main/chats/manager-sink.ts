@@ -115,14 +115,22 @@ export abstract class ManagerSink extends ManagerWork {
     r.releasing = this.closeKeeping(r, sess).finally(() => { r.releasing = undefined; });
     if (!carry.length) return;
     void r.releasing.then(async () => {
-      if (this.chats.get(chatId) !== r || this.quitting) return;
+      if (this.chats.get(chatId) !== r || this.quitting || this.resendDropped(r, carry.length)) return;
       await this.ensureSession(r);
+      if (this.resendDropped(r, carry.length)) return;
       for (const m of carry) r.session?.send(m.text, m.images);
     }).catch(e => {
       log.warn('chats', 'queued messages not resent after an engine restart', { chat: chatId, cause: errText(e), hint: 'the user sends them again', data: { carried: carry.length } });
       // their rows already look sent: the chat says they were not
       if (this.chats.get(chatId) === r) this.addItem(r, sysItem('restartResendFailed', { n: carry.length }, 'warn'), false);
     });
+  }
+
+  /** The user's ✕ came while the engine restarted (ADR 0217): the chat stays closed, its queued messages go with its work. */
+  private resendDropped(r: Rec, carried: number): boolean {
+    if (!this.closedByUser(r)) return false;
+    log.info('chats', 'queued messages dropped: the user closed the chat during an engine restart', { chat: r.s.id, data: { carried } });
+    return true;
   }
 
   private applyPatch(r: Rec, p: SessionPatch): void {

@@ -548,6 +548,25 @@ describe('ChatManager', () => {
     expect((warn as { params?: { n?: number } }).params?.n).toBe(2);
   }, 60000);
 
+  // the user's ✕ while the deaf engine restarts (ADR 0217): the chat stays closed, its queued message is never resent
+  it('a chat the user closes while its engine restarts gets no new engine and no resent message', async () => {
+    const e = env();
+    const curLog = path.join(e.userData, 'cursor.jsonl');
+    const { m } = manager(e, { enginePaths: { claude: FAKE, cursor: FAKE_CURSOR }, env: { FAKE_CURSOR_LOG: curLog, CURSOR_CONFIG_DIR: tmp('cursor-user') } });
+    const c = await m.create({ harness: 'cursor', cwd: e.cwd, prompt: 'deafcancel' });
+    await waitFor(() => m.items(c.id).some(i => i.kind === 'assistant' && i.text.includes('lavoro sordo')), 'the deaf turn');
+    await m.send(c.id, 'subito');
+    await m.stop(c.id, true);
+    // the ✕ starts while the stop waits for the deaf engine (the close sets it before its first await)
+    const rec = (m as unknown as { chats: Map<string, { userClosing?: true; releasing?: Promise<void> }> }).chats.get(c.id)!;
+    rec.userClosing = true;
+    await waitFor(() => results(m, c.id).length === 1, 'the stopped turn', 15000);
+    await waitFor(() => rec.releasing === undefined || null, 'the old engine released', 15000);
+    await new Promise(res => setTimeout(res, 2000)); // a resend would spawn a second engine by now
+    expect(cursorLog(curLog).filter(l => l.argv)).toHaveLength(1);
+    expect(cursorLog(curLog).filter(l => l.method === 'session/prompt').map(l => JSON.stringify(l.params?.prompt ?? '')).filter(p => p.includes('subito'))).toHaveLength(0);
+  }, 60000);
+
   // brain hooks (wiring.ts connects them to BrainService)
   it('calls the brain hooks: waiting, turn end with the first prompt, done, rate limits', async () => {
     const e = env();
