@@ -21,7 +21,7 @@ const roots: string[] = [], managers: ChatManager[] = [];
 afterEach(async () => { for (const m of managers.splice(0)) await m.shutdown(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
 
 /** A turn of the fake engine: what it mails to its Orchestrator mid-turn, and its final answer. */
-interface Turn { mail?: string; report?: string; answer: string; background?: boolean; question?: boolean }
+interface Turn { mail?: string; report?: string; outcome?: 'done' | 'blocked'; answer: string; background?: boolean; question?: boolean }
 
 function fixture(harness: Harness = 'claude') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-auto-report-')); roots.push(dir);
@@ -35,7 +35,7 @@ function fixture(harness: Harness = 'claude') {
         const id = [...sinks.entries()].find(([, v]) => v === s)?.[0];
         const turn: Turn = (id ? script.get(id)?.shift() : undefined) ?? { answer: `Ricevuto: ${text.slice(0, 20)}` };
         state = 'running'; s.changed({ state: 'running' });
-        if (turn.report && id) m.reportRoot(id, { outcome: 'done', summary: turn.report, output: turn.report, doneWhen: [] });
+        if (turn.report && id) m.reportRoot(id, { outcome: turn.outcome ?? 'done', summary: turn.report, output: turn.report, doneWhen: [] });
         if (turn.mail && id) {
           const orchestrator = m.list().find(c => c.isOrchestrator);
           m.noteMail(id, orchestrator?.id ?? null, turn.mail);
@@ -184,6 +184,69 @@ describe('a worker that delivered its final report closes by itself (#86)', () =
     const s = await runScheduler(f.m, [w.id]);
     expect(f.chat(w.id).closedAt).toBeUndefined();
     expect(s.state().find(x => x.chatId === w.id)?.waitingFor).toBe('work');
+  });
+
+  // The guards below hold an explicit agent_report too, not only mail (which never completes on its own).
+  it('an explicit report that waits for the user keeps it assigned with "In attesa dell’utente"', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { report: 'Bozza pronta in docs/x.md. Aspetto il tuo ok, poi la pubblico.', answer: 'Report inviato.' });
+    expect(f.chat(w.id)).toMatchObject({ waitsOn: 'user', work: { status: 'assigned' } });
+    expect(f.chat(w.id).run?.endedAt).toBeUndefined();
+  });
+
+  it('an explicit report with an open question keeps it assigned', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { report: 'Fatto quasi tutto.', answer: 'Una domanda prima di chiudere.', question: true });
+    expect(f.chat(w.id).work?.status).toBe('assigned');
+    const s = await runScheduler(f.m, [w.id]);
+    expect(s.state().find(x => x.chatId === w.id)?.waitingFor).toBe('answer');
+  });
+
+  it('an explicit report with background work still running keeps it assigned', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { report: 'Analisi conclusa.', answer: 'Report inviato.', background: true });
+    expect(f.chat(w.id).work?.status).toBe('assigned');
+    expect(f.chat(w.id).run?.endedAt).toBeUndefined();
+  });
+
+  it('an explicit report with a delegated child still owing its result keeps it assigned', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { answer: 'Avviato.' });
+    await f.m.create({ harness: 'claude', cwd: f.dir, parentId: w.id, delegation: { role: 'artisan', goal: 'Implement', doneWhen: ['Tests pass'], at: Date.now() } }, 'agent');
+    f.script.get(w.id)!.push({ report: 'Tutto fatto.', answer: 'Fatto.' });
+    await f.m.send(w.id, 'Risultato', undefined, false, 'Orchestrator');
+    expect(f.chat(w.id).work?.status).toBe('assigned');
+    expect(f.chat(w.id).run?.endedAt).toBeUndefined();
+  });
+
+  it('a blocked explicit report keeps it assigned', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { report: 'Manca l’accesso al repository.', outcome: 'blocked', answer: 'Bloccato.' });
+    expect(f.chat(w.id).work?.status).toBe('assigned');
+    expect(f.chat(w.id).run?.endedAt).toBeUndefined();
+  });
+
+  it('a blocked agent_report wins over a later contradictory run-report done block', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { report: 'Manca l’accesso al repository.', outcome: 'blocked', answer: 'Bloccato.\n\n```run-report\n{"outcome":"done","verified":"yes","summary":"Done"}\n```' });
+    expect(f.chat(w.id).work?.status).toBe('assigned');
+    expect(f.chat(w.id).run?.report).toMatchObject({ via: 'agent_report', outcome: 'blocked' });
+  });
+
+  it('progress mail after an accepted final report does not replace it', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { report: 'Verifica conclusa.', mail: 'Prima parte verificata, proseguo.', answer: 'Fatto.' });
+    expect(f.chat(w.id).work?.status).toBe('completed');
+  });
+
+  it('an explicit non-blocked report finalizes a running plan before the plan guard, then completes', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { answer: 'Avviato.' });
+    f.m.seedPlan(w.id, { phase: 'running', clarified: [], steps: [{ title: 'Review', state: 'todo' }], at: Date.now() });
+    f.script.get(w.id)!.push({ report: 'Chiuso con quello che c’è.', answer: 'Fatto.' });
+    await f.m.send(w.id, 'Risultato', undefined, false, 'Orchestrator');
+    expect(f.chat(w.id).plan?.phase).toBe('done');
+    expect(f.chat(w.id).work?.status).toBe('completed');
   });
 
   it('a later clean report after a waiting one completes it', async () => {

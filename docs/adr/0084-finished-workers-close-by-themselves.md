@@ -20,7 +20,9 @@ owned a browser tab, even an idle one. A held chat gave no hint of why it stayed
      colleague: another chat, a quoted name, the Orchestrator) → `ChatSummary.waitsOn` = `user` / `colleagues`;
    - it waits for running work (`waitsForWork`, background tasks), a question or permission is open, or the report says
      `blocked`. `waiting-mail` (set by the Orchestrator) is never overridden;
-   - an observed native child is active, a delegated child still owes a result, or its plan is not done.
+   - an observed native child is active, a delegated child still owes a result, or its plan is not done. A
+     non-blocked explicit report first finalizes its plan (`finishPlan`: unfinished steps become partial), so this
+     plan guard holds only legacy `run-report` blocks and turns without a report.
    Mail cannot replace an accepted final report. A new explicit assignment can reuse a completed worker; an ordinary
    message does not grant that authority. The scheduler then archives it as before (delay, two-minute acknowledged warning, `closedBy: 'auto'`).
 2. **`waitsOn` holds every chat**, worker or not: an answer like "Aspetto il tuo ok" never auto-closes.
