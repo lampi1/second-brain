@@ -16,7 +16,6 @@
 │   tasks/   Task page (DevOps reader, read only) · run/ "Esegui" shell blocks  │
 │   search/  Ctrl+K index · skills/ Skill tab · update/ Aggiorna (Settings)     │
 │   brainmodel/ Brain section: skills, rules, memory, jobs + undo (0077, 0082)  │
-│   personal/ the user's own Browser page: persist:personal, vault (ADR 0133)   │
 │   overlay.ts  request layer: a top-most view for questions over browser tabs  │
 │   ipc.ts   typed handlers (sender check) + Emitter                            │
 └───────────────▲──────────────────────────────────────────┬────────────────────┘

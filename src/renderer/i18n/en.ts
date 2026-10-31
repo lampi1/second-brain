@@ -48,7 +48,6 @@ import { mcpAddEn } from './areas/mcp-add.en';
 import { profileEn } from './areas/profile.en';
 import { homeEn } from './areas/home.en';
 import { guideEn } from './areas/guide.en';
-import { pbrowserEn } from './areas/pbrowser.en';
 import { treeEn } from './areas/tree.en';
 import { aliveEn } from './areas/alive.en';
 import { queriesEn } from './areas/queries.en';
@@ -79,7 +78,6 @@ export const en: Dict = {
   ...viewerOverlayEn,
   ...homeEn,
   ...guideEn,
-  ...pbrowserEn,
   ...treeEn,
   ...aliveEn,
   ...queriesEn,

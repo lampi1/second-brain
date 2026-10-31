@@ -47,7 +47,7 @@ test/unit/proposals.test.ts email sha256:2f375d787fe797df16643e8faeba511d710e2a8
 # Same two public GitHub SSH clone literals after reviewed publication regression additions; no private email.
 test/unit/proposals.test.ts email sha256:62c51e8ad51e3e2f4332a47438bf33467c5e194fa5c378f05f90f7e3103c6423
 docs/screenshots/mosaic.webp binary-media sha256:64488cc4a941c5203a4285044ebf7769934ddb848c5a79e1a7b572ac667e3058
-docs/screenshots/agents.webp binary-media sha256:a66f5f137445ff00c711c7905d89a32b4a5a0f227aca484835aab6519744e2b7
+docs/screenshots/agents.webp binary-media sha256:69f4bfc53ceef2efc8a9b2b36596ca97e5880a142b83dc484008adbd27acc0e7
 docs/screenshots/regia.webp binary-media sha256:466bdd32763b936b6c86a52e9104529c8e82b6ee7074c301b126ca2515db364e
 docs/screenshots/browser.webp binary-media sha256:4bfacd4cbed7b501f48647d62cda84b458528d603bf0f0ad01c8615a902433ed
 docs/screenshots/devops.webp binary-media sha256:4d1542b862694104f8ab72df150849a88900206e450fc13589355c3f88dbeee8
@@ -56,12 +56,12 @@ docs/screenshots/task.webp binary-media sha256:856458e036b9e613d52738bca0fd66532
 test/fixtures/cloud/remotes.txt email sha256:af86953a27a80122223b02780563b5e78f933a6358b561cc11aad083fec41721
 test/fixtures/cloud/remotes.txt internal-host sha256:af86953a27a80122223b02780563b5e78f933a6358b561cc11aad083fec41721
 # README screenshots renamed to today's words (ADR 0082): the Grindhouse and the Orchestrator, same bytes as mosaic/regia.webp
-docs/screenshots/grindhouse.webp binary-media sha256:4be97ae17dabc7ed361fbca8812a1395371386e92c9726a8babdb5af6f5849c3
+docs/screenshots/grindhouse.webp binary-media sha256:74a358add7fb091323db21104564c99673cb6a565103a5200c909a39d379753a
 docs/screenshots/orchestrator.webp binary-media sha256:2d91755c9d5655b7e32377bffb4f2d447bef9e3f50ed68aaa14f07a3f3665a4d
-docs/screenshots/brain-scripts.webp binary-media sha256:74c68c0d459f177955faa30b1d178c0e45cb91627debc4a03dd0be1896cae982
+docs/screenshots/brain-scripts.webp binary-media sha256:a690bb6467ea9b5988fca0b7cdba5121dc7742ae35bb1224ced741478e7d8e4d
 docs/screenshots/agent-avatars/dark.png binary-media sha256:179f08ef10ed1ef6940e5b4b4c73d55177f7f73e72362ab75f7d65fa769872f6
 docs/screenshots/agent-avatars/light.png binary-media sha256:a9d836f58877f6e6017a4f61b1ee8ab1ddd4fd0b40648338b06ea12174537386
-docs/screenshots/connectors.webp binary-media sha256:033e24ddd7a442c0543eff69487aaaf4d878e311740405c3693bd9ce4114ce0b
+docs/screenshots/connectors.webp binary-media sha256:374fe4d1533fbe1f0836b33036c0f8de358c39f83c1f8537bcc550b279e38a7e
 # The Task page's own DevOps reader (ADR 0093): the public Azure DevOps profile/accounts API host (app.vssps), the
 # documented endpoint that lists the signed-in user's organizations; no customer host (checked 2026-10-20). Re-pinned 2026-10-29: only the PR's source branch added (ADR 0185).
 src/main/tasks/devops-me.mjs internal-host sha256:33ae30909b6e62ece6dc4ada9b65c7f3524b3d1a9dc108bc541ec987a6ffc8af
@@ -83,9 +83,9 @@ docs/screenshots/crew.webp binary-media sha256:f6ce7ecb9397e0fb8fd85e0250c408a13
 docs/screenshots/browser.webp binary-media sha256:e337b76dec59f24e83c126dddac37edb8ae1104947bd6fbdf369eeb3147f9e3d
 docs/screenshots/task.webp binary-media sha256:6fa147958ed07c21780a97bba0340d6e4d13ce6f06284664b72ceae45d5d9193
 docs/screenshots/quality.webp binary-media sha256:f8c8594a9609bf8c2f7c79182f948734b912a05fcc3ecc493f9073bbe8e265ce
-docs/screenshots/memory.webp binary-media sha256:9324043d31ddff08150d592f7241d75cc534a03272b38e62834e4dc572da3a5b
+docs/screenshots/memory.webp binary-media sha256:9729674b75f23ee900a040151d58e4a02c5708b87253b8360faf0547e7dd0600
 docs/screenshots/agent-levels.webp binary-media sha256:78ac2b2b774d4bcc511fb9e7dfd42a3643ae1cf42394a264829e4c890ed17cd0
-docs/screenshots/orchestrator-flash.webp binary-media sha256:6cbbd9097d7b7d4db3032ab32935c3c4a6a15c9618b1704aa35928d0a159e98e
+docs/screenshots/orchestrator-flash.webp binary-media sha256:630f4ee4a832d2a46d7b9402a79e3dbeddc2bfbdad5b75ea18285bb829fe47df
 docs/screenshots/reactions.webp binary-media sha256:746e27b608b3d8ae397693cc6a3d0c6c00bc4b1301ad0071ca35f66f3e2759d9
 docs/screenshots/plan.webp binary-media sha256:a31190a798094041a01284792f72f231f1afc36707cf3e782394ac96b8ed025e
 # README screenshots regenerated again 2026-10-22, fully in English, dark: English demo content and UI labels (map legend, role purposes, Flash btw answer); looked at before pinning. The block above stays: commit b706f88f carries those blobs and the pre-push scan checks them
@@ -185,9 +185,9 @@ packages/routine-runtime/src/devops-host/pr-validation.ts guid sha256:d5b439c4cd
 docs/screenshots/browser.webp binary-media sha256:5ac0906fa5ed67bb9a4deb199551c7cf20a7e8e0b2a37bf409cdf666c2a5ec82
 docs/screenshots/plan.webp binary-media sha256:c3a2737eb6c09195f6f3c84f32903f4e2670119b33526509424b62af229fb1d5
 docs/screenshots/costs.webp binary-media sha256:5ee3d8f00691ceb36b95a7b07c90171fa5c62e2bbcd3c865b46b4ef8da8f5ec6
-docs/screenshots/log.webp binary-media sha256:c8c4a18db8abab402de95bbed531fb2889b472aae4a8a721ea6f17184f3ca355
+docs/screenshots/log.webp binary-media sha256:3dd48ced6db57bb8321da8ba2c64151f4146acc9a7e7b97303218fa7dcc973ff
 docs/screenshots/maintenance.webp binary-media sha256:66a65875bab0d49175b0b7ce5eb45ee4cada1c1b8981b4e7371f892a7dfba3b8
-docs/screenshots/recordings.webp binary-media sha256:5e3097ad690e8a435c7ed2c8b9d2f4407ee45ccfbcd6ec4433f7e2638b63ba83
+docs/screenshots/recordings.webp binary-media sha256:78ce822901ee69147556607fc00bdda7bc72afab7e42499c2d42ea6509430013
 docs/screenshots/voice.webp binary-media sha256:63c724762c87fafefa8c08e45585450c9fa47be15d0eb37f0d440e0cbf1a85b1
 docs/screenshots/browser.webp binary-media sha256:5eaff58a351e5ac3c99c37c116111c3d312d9446a0eccbf39ebb50b7285f049f
 docs/screenshots/quality.webp binary-media sha256:84d7c0e4556c286c007a96e6ea20a464dff969fa2f3cae4cd7e6f2f29c55ef67
@@ -199,5 +199,5 @@ docs/screenshots/costs.webp binary-media sha256:2da424a34ded09107c96ad25ae2ab87e
 docs/screenshots/learn.webp binary-media sha256:97196be669dbc367cb5b4d3418f1f9ccfe8f3faf6f4a597066a8c308c9159a8f
 docs/screenshots/plan.webp binary-media sha256:44f62f43c8475cb3ce56083475d6f683736df7cf8af957a81ef8f532b449bda1
 docs/screenshots/quality.webp binary-media sha256:193a6b6456bb7face63726135e53ba0b2cd050ecba130d5aa471c5383ccb69ca
-docs/screenshots/settings.webp binary-media sha256:26c7e4728ca64606dec9a085966ae52426b7e516fa27d30f0d3cc5e5bba047ba
-docs/screenshots/trends.webp binary-media sha256:1856e746f05fe50f4ade4e3fa77eb407c05ac518a4e6002d5f47a1728d930e4c
+docs/screenshots/settings.webp binary-media sha256:5c40b9865aaf4dcc90d13da075f957bd29da31fa6c43f073fd4a8c2b45700138
+docs/screenshots/trends.webp binary-media sha256:22647d387d134c1c062554bf3ec3f44846750de62ab7f2f24bbc02c7dfc4803c

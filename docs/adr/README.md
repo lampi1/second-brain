@@ -138,7 +138,7 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0130](0130-run-receipts-before-reviews.md) Run receipts: deterministic checks before a Sentinel review — accepted
 - [0131](0131-levels-by-job-size-and-bayesian-performance.md) Levels by job size, a Bayesian performance, the Orchestrator's choices and Flash's answers — accepted
 - [0132](0132-maintenance-with-research-and-app-ideas.md) The maintenance with research, the «Idee dell'app» tab and the phrases of the day — accepted, partly superseded by 0153, 0173
-- [0133](0133-personal-browser.md) A personal browser for the user, apart from the agents' browsers — accepted
+- [0133](0133-personal-browser.md) A personal browser for the user, apart from the agents' browsers — superseded by 0212
 - [0134](0134-finished-chats-close-by-default.md) Finished chats close by default, reliably — accepted
 - [0135](0135-yes-no-questions-and-the-recap.md) Yes/no questions only, «Ci penso dopo», and a recap that unblocks everything — accepted
 - [0136](0136-persistent-developer-work-cockpit.md) Persistent developer work cockpit — accepted, partly superseded by 0141
@@ -217,3 +217,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0209](0209-strategist-asks-more-and-varied-reactions.md) The Strategist asks at least three questions; reactions fit the message; Flash writes the brief — accepted
 - [0210](0210-remove-model-routing.md) Remove the model-routing classifier: every agent runs on its own card's model — accepted
 - [0211](0211-small-fixes-and-real-effort.md) Agent card picks model, effort and context; real effort names; owner's small fixes of 2026-10-31 — accepted
+- [0212](0212-remove-personal-browser.md) Remove the personal Browser page — accepted

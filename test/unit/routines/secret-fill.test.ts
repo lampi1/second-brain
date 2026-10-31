@@ -14,7 +14,7 @@ import { log } from '../../../src/main/log';
 import type { McpServerDef } from '../../../src/shared/mcp-servers';
 import { appControlTools } from '../../../src/main/appctl/tools';
 import type { BrainService, BrowserService, ChatService } from '../../../src/main/services';
-import { LoginVault } from '../../../src/main/personal/vault';
+import { LoginVault } from '../../../src/main/browser/login-vault';
 import { SiteVault } from '../../../src/main/browser/site-vault';
 import type { SecretCipher } from '../../../src/main/engines/secrets';
 import { done, fakeDevOps, folderText, routinePackage, scriptedEngine, tempDir } from '../routine-runtime/fakes';

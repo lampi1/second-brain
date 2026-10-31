@@ -86,8 +86,6 @@ export interface Tab {
   openedBy: string | null;
   createdAt: number;
   closedByUser?: { url: string };             // the user closed it in the app (✕ / Ctrl+W on its tile): its agent is told so
-  /** a tab of the user's personal browser lent to this chat (ADR 0133): closing it gives it back, never destroys it */
-  lentBack?: (view: WebContentsView) => void;
   agentInput?: number;                        // CDP input of an agent running on it (actions.ts): its keys are not the user's
 }
 
@@ -288,7 +286,7 @@ export class BrowserTabs {
     const env = envExplicit ? envSlug(opts.env) : envForUrl(url);
     if (env.startsWith('routine-')) throw new Error('Archived routine browser sessions cannot be reopened');
     const id = opts.id ?? `t${++this.seq}`;
-    if (!opts.view) this.sessionFor(env);             // a lent personal view keeps its own session (ADR 0133)
+    if (!opts.view) this.sessionFor(env);
     const view = opts.view ?? (opts.webContents
       ? new WebContentsView({ webContents: opts.webContents })
       : new WebContentsView({
@@ -321,18 +319,6 @@ export class BrowserTabs {
     this.emitTabs();
     this.emitEnvs();
     return tab;
-  }
-
-  /** A tab of the user's personal browser, lent to a chat on the user's click (personal/browser.ts, ADR 0133): its
-   *  view joins the chat's group as an agent tab (CDP, its tools) in the environment "personal"; closing it (the agent,
-   *  the user's ✕ or «Riprendi», the chat gone) gives the view back through `back` instead of destroying the page. */
-  lend(chatId: string, view: WebContentsView, back: (view: WebContentsView) => void): Tab {
-    const t = this.create(`chat:${chatId}`, chatId, undefined, { view, env: 'personal' });
-    t.committed = true;                                // the page is already there: emulation may start now
-    t.lentBack = back;
-    this.emulate(t);
-    log.info('browser', 'personal tab lent to a chat', { chat: chatId, data: { tab: t.id } });
-    return t;
   }
 
   /** A tab that has not loaded a real page yet moves to another environment (same id, same place on screen). */
@@ -381,14 +367,6 @@ export class BrowserTabs {
     if (!t) return;
     if (by === 'user' && t.agent) t.closedByUser = { url: t.wc.isDestroyed() ? '' : redact(t.wc.getURL()) };   // before wc.close: its 'destroyed' may run remove() first
     this.dropDialog(t, 'dismissed (tab closed)');      // answered while the page is still alive
-    if (t.lentBack && !t.wc.isDestroyed()) {           // a lent personal tab goes back to the user, alive
-      const back = t.lentBack;
-      this.closePopupsOf(t.id);                        // what the agent opened from it is signed in as the user: closed
-
-      this.remove(t);
-      back(t.view);
-      return;
-    }
     if (!t.wc.isDestroyed()) t.wc.close({ waitForBeforeUnload: false });
     this.remove(t);
   }
@@ -455,7 +433,6 @@ export class BrowserTabs {
 
   private wire(tab: Tab): void {
     const wc = tab.wc;
-    // a lent personal tab outlives this record (ADR 0133): once given back, none of these listeners acts on it
     const live = () => this.tabs.get(tab.id) === tab;
     const changed = () => { if (live()) this.emitTabs(); };
     for (const ev of ['did-start-loading', 'did-stop-loading', 'did-navigate-in-page', 'page-title-updated'] as const) wc.on(ev as 'did-stop-loading', changed);

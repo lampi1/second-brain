@@ -1,5 +1,7 @@
 # ADR 0133 · A personal browser for the user, apart from the agents' browsers
 
+Superseded by ADR 0212 (2026-10-31: the owner had the page removed).
+
 Date: 2026-10-23 · Status: accepted (owner, 2026-10-23: «una sezione per far usare all'utente il browser proprio per
 tutti i giorni … con la possibilità di salvare sessioni e preferiti, avere le google password manager ecc, ma slegato
 dai browser che aprono gli agenti»; he chose the browser inside the app over a Chrome profile launched by it) ·

@@ -1,4 +1,4 @@
-// Browsers: the agents' internal browser tabs, environments and sign-in hand-offs, and the user's personal browser (ADR 0133).
+// Browsers: the agents' internal browser tabs, environments and sign-in hand-offs (the user's personal browser left with ADR 0212).
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
 
@@ -79,41 +79,6 @@ export interface CredentialEntry {
   note?: string;              // one line: "holding with module X enabled"
 }
 
-// ---------- the user's personal browser (Browser page, ADR 0133) ----------
-// The user's own everyday browser, apart from every agent browser: its own partition, never seen by agents or the app
-// MCP. Bookmarks, saved sessions and history in <userData>/personal-browser.json; passwords encrypted with safeStorage
-// in <userData>/personal-passwords.json (only site and user name ever reach the renderer).
-export interface PersonalTab {
-  id: string;
-  url: string;
-  title: string;
-  loading: boolean;
-  canBack: boolean;
-  canForward: boolean;
-  active: boolean;
-  /** the page shows a password field (the key button offers to fill or save) */
-  login: boolean;
-  /** lent to this chat («Affida a un agente»): its agent drives it until the user takes it back */
-  lentTo: string | null;
-}
-export interface PersonalBookmark { id: string; url: string; title: string; at: number }
-export interface PersonalSession { id: string; name: string; at: number; tabs: { url: string; title: string }[] }
-export interface PersonalVisit { url: string; title: string; at: number }
-/** a saved password as the renderer sees it: never the password */
-export interface PersonalLogin { id: string; site: string; user: string; at: number }
-export interface PersonalState {
-  tabs: PersonalTab[];
-  bookmarks: PersonalBookmark[];
-  sessions: PersonalSession[];
-  /** newest first, at most 300 */
-  history: PersonalVisit[];
-  logins: PersonalLogin[];
-  /** null = passwords can be saved; else why not (no OS encryption), in the UI language */
-  vault: string | null;
-  /** the tabs that were open when the app last closed, offered once on the start page */
-  lastTabs: number;
-}
-
 export interface Rect { x: number; y: number; width: number; height: number }
 /** Where each visible browser tab is drawn (tiles report their rects; hidden = not on screen or under an overlay).
  *  `views:layout` carries the COMPLETE set of visible tabs: a tab missing from the list (or with rect null) is hidden. */
@@ -133,34 +98,6 @@ export interface BrowserInvokeMap {
    *  password is cleared from the clipboard after 30 s if still there. Returns false when it could not (no entry). */
   'browser:handoffCopy': [{ id: string; field: 'user' | 'password' }, boolean];
   'browser:envList': [void, BrowserEnv[]];
-  'personal:state': [void, PersonalState];
-  'personal:open': [{ url?: string }, PersonalTab];
-  'personal:navigate': [{ tabId: string; input: string }, void];
-  'personal:go': [{ tabId: string; dir: 'back' | 'forward' | 'reload' | 'stop' }, void];
-  'personal:select': [{ tabId: string }, void];
-  'personal:close': [{ tabId: string }, void];
-  /** the tabs of the last run, open again (once; false = nothing to restore) */
-  'personal:restore': [void, boolean];
-  'personal:bookmarkAdd': [{ url: string; title: string }, PersonalBookmark];
-  'personal:bookmarkRemove': [{ id: string }, void];
-  'personal:sessionSave': [{ name: string }, PersonalSession];
-  'personal:sessionOpen': [{ id: string }, void];
-  'personal:sessionRemove': [{ id: string }, void];
-  'personal:historyClear': [void, void];
-  /** fills the tab's sign-in form with a saved login of the same site */
-  'personal:loginFill': [{ tabId: string; id: string }, boolean];
-  /** saves the user name and password typed in the tab's form (encrypted); reason = why not */
-  'personal:loginSave': [{ tabId: string }, { ok: boolean; reason?: string; login?: PersonalLogin }];
-  'personal:loginRemove': [{ id: string }, void];
-  'personal:loginCopy': [{ id: string; field: 'user' | 'password' }, boolean];
-  /** a passwords CSV exported from Google Password Manager, Chrome, Edge or Firefox, chosen in a file dialog */
-  'personal:loginImport': [void, { added: number; updated: number; skipped: number; cancelled?: boolean; reason?: string }];
-  /** «Affida a un agente»: the tab goes to that chat (only from the user's click); note = what it should do */
-  'personal:lend': [{ tabId: string; chatId: string; note?: string }, void];
-  /** «Riprendi»: the lent tab comes back to the user */
-  'personal:reclaim': [{ tabId: string }, void];
-  /** the Browser page is mounted or not (app_screenshot withholds the window while it is) */
-  'personal:onScreen': [{ on: boolean }, void];
   /** the "Credenziali" panel: the entries of the user's credentials file, without passwords */
   'credentials:list': [void, CredentialEntry[]];
   /** main copies an entry's user name or password (read from the file now); a password is cleared from the clipboard

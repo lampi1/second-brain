@@ -1,43 +1,20 @@
-// Two self-contained steps of createServices (wiring.ts), each building one service from what is already wired and
-// called at the same point of the start as before: the user's personal Browser page (ADR 0133) and Impara (ADR 0185,
-// 0188). Kept apart so wiring.ts stays readable; the construction order is wiring.ts's.
+// A self-contained step of createServices (wiring.ts), building one service from what is already wired and called at
+// the same point of the start as before: Impara (ADR 0185, 0188; the personal Browser page left with ADR 0212). Kept apart so wiring.ts stays readable; the construction order is wiring.ts's.
 import fs from 'node:fs';
 import path from 'node:path';
-import { app, safeStorage } from 'electron';
-import { PersonalBrowser } from './personal/browser';
+import { app } from 'electron';
 import { LessonStore } from './learn/store';
 import { LearnService, type TeachRun } from './learn/service';
 import { runRead } from './learn/material';
 import { appGuide, teacherOption } from './learn/sources';
-import { systemLang } from './lang';
 import { uiLang } from './locale';
-import { safeStorageCipher } from './engines/secrets';
 import { engineInfos } from './engines/registry';
 import { withApiModels } from './engines/sessions';
 import { engineOn } from './engines/policy';
-import type { BrainService, ChatService } from './services';
-import type { ChatManager } from './chats/manager';
+import type { BrainService } from './services';
 import type { TaskService } from './tasks/service';
 import type { HeadlessRunner } from './compare/headless';
-import type { Ctx, Wired } from './wiring-types';
-
-/** The user's own everyday browser, the Browser page (personal/browser.ts, ADR 0133). */
-export function buildPersonal(ctx: Ctx, brain: BrainService, browser: Wired['browser'], chats: ChatService, manager: ChatManager): PersonalBrowser {
-  const personalLang = () => { const l = brain.settings().language; return l === 'it' || l === 'en' ? l : systemLang(); };
-  return new PersonalBrowser({
-    emitter: ctx.emitter, window: ctx.window, userData: ctx.userData, cipher: safeStorageCipher(safeStorage), appName: app.getName(), lang: personalLang,
-    // «Affida a un agente» (ADR 0133): only a live chat whose role drives a browser gets the tab, told by an app message
-    lend: (chatId, view, back) => ({ tabId: browser.lend!(chatId, view, back).id }),
-    reclaim: agentTab => browser.close(agentTab),
-    canLend: chatId => {
-      const it = personalLang() === 'it';
-      const c = chats.list().find(x => x.id === chatId);
-      if (!c || c.closedAt || c.quick) return it ? 'Chat non trovata o chiusa.' : 'Chat not found or closed.';
-      return manager.browserAccess(chatId) === 'all' ? null : it ? 'Questo agente non usa il browser: scegline un altro.' : 'This agent does not drive a browser: pick another one.';
-    },
-    tell: (chatId, text) => chats.send(chatId, text),
-  });
-}
+import type { Ctx } from './wiring-types';
 
 /** Impara (learn/service.ts): lessons researched and written by hidden read-only runs on the engines that are on. */
 export function buildLearn(ctx: Ctx, brain: BrainService, tasks: TaskService, headless: HeadlessRunner): LearnService {

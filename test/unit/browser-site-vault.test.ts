@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { expect, it } from 'vitest';
 import path from 'node:path';
 import { SiteVault } from '../../src/main/browser/site-vault';
-import { LoginVault } from '../../src/main/personal/vault';
+import { LoginVault } from '../../src/main/browser/login-vault';
 import { tempDir } from './routine-runtime/fakes';
 const cipher = { unavailable: () => null, encrypt: (s: string) => Buffer.from(s.split('').reverse().join('')), decrypt: (b: Buffer) => b.toString().split('').reverse().join('') };
 it('reads an old encrypted account by exact origin without changing it or exposing a login executor', () => {

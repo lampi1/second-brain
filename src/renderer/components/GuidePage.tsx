@@ -61,7 +61,6 @@ const GLYPHS: Record<string, ReactNode> = {
   'orchestrator-app': <><path d="M4 7h10M18 7h2M4 17h4M12 17h8" /><circle cx="16" cy="7" r="2" /><circle cx="10" cy="17" r="2" /></>,
   voice: <><rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" /></>,
   recordings: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3.5" /></>,
-  'personal-browser': <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></>,
   notifications: <><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z" /><path d="M10 20.5a2 2 0 0 0 4 0" /></>,
   routines: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M7 10l3 2.5L7 15M12.5 15h4.5" /></>,
 };

@@ -1,15 +1,15 @@
-// The personal browser's saved passwords (Browser page, ADR 0133). Why: the owner, 2026-10-23, wants his passwords in
-// the everyday browser («avere le google password manager»); Google Password Manager lives only in Chrome, so the app
-// keeps its own: each password encrypted with Electron's safeStorage (DPAPI on Windows, Keychain, the system keyring;
-// the same SecretCipher as the engines' API keys, engines/secrets.ts) in <userData>/personal-passwords.json, and an
-// import of the CSV that Google Password Manager, Chrome, Edge and Firefox export. The renderer sees only site and user
-// name; a password is decrypted only to fill a form of its own site (personal/browser.ts) or for «Copia password»,
-// never logged, never given to an agent or the app MCP. Pure apart from the JSON file; unit-tested
-// (test/unit/personal-vault.test.ts); used by personal/browser.ts.
+// Saved passwords, encrypted at rest (moved from the removed personal Browser page, ADR 0133 → 0212): each password
+// encrypted with Electron's safeStorage (DPAPI on Windows, Keychain, the system keyring; the same SecretCipher as the
+// engines' API keys, engines/secrets.ts) in a JSON file, and an import of the CSV that Google Password Manager, Chrome,
+// Edge and Firefox export. Callers see only site and user name; a password is decrypted only to fill a form of its own
+// site or for «Copia», never logged. Pure apart from the JSON file; unit-tested (test/unit/browser-login-vault.test.ts);
+// used by browser/site-vault.ts (the agents' sign-ins) and the routines' secret fill.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { PersonalLogin } from '../../shared/contract';
 import type { SecretCipher } from '../engines/secrets';
+
+/** a saved password as callers see it: never the password */
+export interface SavedLogin { id: string; site: string; user: string; at: number }
 
 export const MAX_LOGINS = 5000;
 const MAX_FIELD = 1000;
@@ -93,12 +93,12 @@ export class LoginVault {
   /** null = passwords can be saved; else why not (no OS encryption on this PC). */
   unavailable(): string | null { return this.cipher.unavailable(); }
 
-  list(): PersonalLogin[] {
+  list(): SavedLogin[] {
     return this.saved.map(({ id, site, user, at }) => ({ id, site, user, at })).sort((a, b) => a.site.localeCompare(b.site) || a.user.localeCompare(b.user));
   }
 
   /** The logins of the page's site (its address, www. ignored). */
-  forUrl(url: string): PersonalLogin[] {
+  forUrl(url: string): SavedLogin[] {
     const site = this.normalize(url);
     return site ? this.list().filter(l => l.site === site) : [];
   }
@@ -111,13 +111,13 @@ export class LoginVault {
   }
 
   /** Saves (or updates: same site and user) a login. */
-  save(url: string, user: string, password: string): { login: PersonalLogin; updated: boolean } {
+  save(url: string, user: string, password: string): { login: SavedLogin; updated: boolean } {
     const before = this.saved.map(x => ({ ...x }));
     try { const r = this.put(url, user, password); this.flush(); return r; } catch (e) { this.saved = before; throw e; }
   }
 
   /** Exact user edit, including changed origin/account, with rollback on persistence failure. */
-  update(id: string, url: string, user: string, password: string): PersonalLogin {
+  update(id: string, url: string, user: string, password: string): SavedLogin {
     const before = this.saved.map(x => ({ ...x }));
     if (!before.some(x => x.id === id)) throw new Error('Credential not found');
     try {
@@ -138,7 +138,7 @@ export class LoginVault {
     return { added, updated };
   }
 
-  private put(url: string, user: string, password: string): { login: PersonalLogin; updated: boolean } {
+  private put(url: string, user: string, password: string): { login: SavedLogin; updated: boolean } {
     const why = this.cipher.unavailable();
     if (why) throw new Error(`Password non salvata: ${why}.`);
     const site = this.normalize(url);

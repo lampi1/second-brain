@@ -6,6 +6,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- The personal Browser page is gone (owner: «inutile»; ADR 0212). Its password vault stays for the agents' sign-ins.
 - Agent cards pick model, effort and context window on their back; efforts use the model's real names (low, medium,
   high, xhigh, max) and a run gets the level the model really takes (ADR 0211). Script cards no longer spill text;
   Andamento sits under Brain; the review switch says when it really runs; no Battito in the Log; a result row has

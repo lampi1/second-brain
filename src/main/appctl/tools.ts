@@ -83,9 +83,6 @@ export interface AppCtlDeps {
   contextSince?: (chatId: string) => number | undefined;
   chats: ChatService; browser: BrowserService; brain: BrainService;
   window: () => BrowserWindow | null;
-  /** the user's personal browser (ADR 0133): its pages never reach an agent; while one is on screen app_screenshot
-   *  withholds the window */
-  personal?: { owns(wc: Electron.WebContents): boolean; anyShown(): boolean };
   emitUi: (cmd: EventMap['ui:command']) => void;
   version: string;
   /** the code blocks the user ran with "Esegui" (read-only: no tool starts a run) */
@@ -213,7 +210,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   const contentOf = (chatId: string) => { guard(chatId); if (delegated(chatId)) throw new Error('chat delegata da un altro ruolo: il suo contenuto lo legge il genitore; tu ne vedi lo stato (app_chats, app_digest)'); return chatId; };
   // app_guide's own list of the caller's tools is read when asked, so it names exactly what this endpoint offers
   const guideDeps = { window: d.window, settings: { schema: () => d.brain.settingsSchema(), get: () => d.brain.settings() },
-    tools: () => tools.map(t => ({ name: t.name, description: t.description })), personalShown: () => !!d.personal?.anyShown(), showValues: authed };
+    tools: () => tools.map(t => ({ name: t.name, description: t.description })), showValues: authed };
   const tools: ToolDef[] = [
     guideTool(guideDeps),
     ...(authed() ? [{ name: 'app_voice_diagnostics', description: 'Read local content-free voice diagnostics: rolling recognition/synthesis timing samples, stale events, cancellations and failures. No audio or transcript content. Coverage explicitly excludes end-to-end latency and accuracy. Unknown values stay null; small-sample p95 is not a reliability claim.', inputSchema: obj(), annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }, run: () => { if (!authed()) throw new Error('Authenticated Orchestrator required'); return { diagnostics: voiceDiagnostics() }; } }] : []),
@@ -413,15 +410,13 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       run: async () => {
         const win = d.window();
         if (!win) return 'no window';
-        // the user's own browsing (ADR 0133) is never shown to an agent: not the page, not the address bar above it
-        if (d.personal?.anyShown()) return 'The user is on their personal Browser page: its screenshot is private. Try app_state, or ask the user to switch page.';
         const images: { data: string; mimeType: string; caption: string }[] = [];
         const ui = await win.webContents.capturePage();
         const p = previewOf(ui);
         images.push({ data: p.data, mimeType: p.mimeType, caption: `app UI ${ui.getSize().width}x${ui.getSize().height}, image ${p.width}x${p.height} (UI px = image px × ${fmtFactor(p.factor)})` });
         for (const v of win.contentView.children) {
           const wc = (v as { webContents?: Electron.WebContents }).webContents;
-          if (!wc || d.personal?.owns(wc)) continue;
+          if (!wc) continue;
           const b = v.getBounds();
           let img = await wc.capturePage();
           // an agent tab drawn scaled (browser/tabs.ts emulate) captures a desktop-size surface with the view in its corner

@@ -35,8 +35,6 @@ export interface GuideDeps {
   settings: { schema(): SettingDef[]; get(): Settings };
   /** the caller's own tools (name + description) */
   tools: () => { name: string; description: string }[];
-  /** the user's personal browser is on screen (ADR 0133): the outline says only that */
-  personalShown?: () => boolean;
   /** false on the open /mcp/app mount: settings are listed without their current values (local paths, budgets) */
   showValues?: () => boolean;
   /** the usage counter's summary (tests); absent = the app's own counter (use-counter.ts) */
@@ -87,7 +85,7 @@ export async function screenOutline(d: GuideDeps, filter = ''): Promise<string> 
   // the filter travels as a JSON string literal: data, never code
   const text = await readUi<string>(d.window(), `typeof window.__sbScreen === "function" ? window.__sbScreen(${JSON.stringify(String(filter).slice(0, 200))}) : null`);
   if (!text) return 'The window did not answer (closed or still loading): try again in a moment, or app_screenshot.';
-  return d.personalShown?.() ? `${text}\n(the user's personal Browser page is on screen: its content is private)` : text;
+  return text;
 }
 
 interface Entry { kind: string; title: string; text: string }

@@ -85,9 +85,8 @@ describe('app_guide', () => {
 });
 
 describe('screen outline', () => {
-  it('returns the renderer\'s outline, and says when the personal browser is shown', async () => {
+  it('returns the renderer\'s outline', async () => {
     expect(await screenOutline(deps())).toContain('page: memoria');
-    expect(await screenOutline(deps({ personalShown: () => true }))).toMatch(/personal Browser page .* private/);
     expect(await screenOutline(deps({ window: () => null }))).toMatch(/did not answer/);
   });
 });
