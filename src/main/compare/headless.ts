@@ -61,8 +61,8 @@ export type HeadlessResult =
   // found nothing from one that could not look
   | { ok: true; text: string; model: string | null; effort: Effort | null; costUsd: number | null; tokens: TokenUsage | null; turns: number | null; durationMs: number; deniedTools?: string[] }
   // acceptedModels: the CLI refused the model and listed the ones it takes (learn/accepted-models.ts), read from the
-  // whole error before it is cut
-  | { ok: false; error: string; durationMs: number; refused?: true; acceptedModels?: string[] };
+  // whole error before it is cut (acceptedPartial: a chat's exit error had already cut that list, only its first ids)
+  | { ok: false; error: string; durationMs: number; refused?: true; acceptedModels?: string[]; acceptedPartial?: true };
 
 export interface HeadlessDeps {
   userData: string;
@@ -290,12 +290,13 @@ export class RunCollector {
   }
 }
 
-/** A short, safe error for the brain and the logs: one line, no key (log.ts redact), at most 300 characters. */
-/** The models the CLI listed when it refused the asked one (Cursor's `--model`), as a result field. */
-const acceptedOf = (error: string): { acceptedModels?: string[] } => {
+/** The models the CLI listed when it refused the asked one (Cursor's `--model`), as result fields. */
+const acceptedOf = (error: string): { acceptedModels?: string[]; acceptedPartial?: true } => {
   const r = parseModelRefusal(error);
-  return r?.accepted.length ? { acceptedModels: r.accepted } : {};
+  return r?.accepted.length ? { acceptedModels: r.accepted, ...(r.partial ? { acceptedPartial: true as const } : {}) } : {};
 };
+
+/** A short, safe error for the brain and the logs: one line, no key (log.ts redact), at most 300 characters. */
 
 export const shortError = (s: string): string => {
   const one = redact(s).replace(/\s+/g, ' ').trim();

@@ -66,7 +66,7 @@ export function buildLearn(ctx: Ctx, brain: BrainService, tasks: TaskService, he
       if (out.ok) return { ok: true, text: out.text, costUsd: out.costUsd, engine: e.id, model: out.model, ...(out.deniedTools ? { deniedTools: out.deniedTools } : {}) };
       // the engine took no such model: its list is kept (the form offers only those now) and the lesson says why
       // a file that cannot be written (locked by an antivirus) never hides the refusal itself
-      if (out.acceptedModels) try { accepted.learn(e.id, out.acceptedModels); } catch (err) { log.warn('learn', 'accepted models not saved', { cause: errText(err), data: { engine: e.id } }); }
+      if (out.acceptedModels) try { accepted.learn(e.id, out.acceptedModels, out.acceptedPartial === true); } catch (err) { log.warn('learn', 'accepted models not saved', { cause: errText(err), data: { engine: e.id } }); }
       const refused = parseModelRefusal(out.error);
       return { ok: false, error: refused ? `${MODEL_REFUSED}${refused.model}` : out.error };
     },

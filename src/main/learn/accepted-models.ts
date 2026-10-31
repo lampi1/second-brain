@@ -15,12 +15,15 @@ const ENGINE = /^[a-z][a-z0-9-]{0,40}$/;
 /** at most this many ids per engine (Cursor listed 190 on 2026-10-31) */
 const MAX = 400;
 
-/** The model a CLI refused and the ones it says it accepts, or null when the text is not such a refusal. */
-export function parseModelRefusal(text: string): { model: string; accepted: string[] } | null {
-  const m = /Cannot use this model: (\S+?)\.\s+Available models: ([^\n]+)/.exec(text);
+/** The model a CLI refused and the ones it says it accepts, or null when the text is not such a refusal. partial: the
+ *  list was cut (a chat's exit error keeps 600 characters of stderr, chats/acp.ts onClose: it ends with «…»), so it
+ *  holds only the first ids. The list stops at a « · » (the next stderr line in that error). */
+export function parseModelRefusal(text: string): { model: string; accepted: string[]; partial: boolean } | null {
+  const m = /Cannot use this model: (\S+?)\.\s+Available models: ([^\n·]+)/.exec(text);
   if (!m) return null;
+  const partial = /…\s*$/.test(m[2]!);
   const accepted = [...new Set(m[2]!.split(',').map(s => s.trim()).filter(s => ID.test(s)))].slice(0, MAX);
-  return { model: m[1]!, accepted };
+  return { model: m[1]!, accepted, partial };
 }
 
 /** A model id no CLI has: a hidden run asked for it is refused before any model runs, and the refusal lists the
@@ -30,10 +33,10 @@ export const PROBE_MODEL = 'sb-list-models';
 /** Asks the engine once for its list: one hidden run with PROBE_MODEL and no tools; true when it listed some. A run that
  *  answers instead (a CLI that took the id) only says it cannot tell. */
 export async function probeAccepted(engine: string, store: AcceptedModels,
-  run: (model: string) => Promise<{ ok: boolean; acceptedModels?: string[] }>): Promise<boolean> {
+  run: (model: string) => Promise<{ ok: boolean; acceptedModels?: string[]; acceptedPartial?: true }>): Promise<boolean> {
   const r = await run(PROBE_MODEL);
   if (r.ok || !r.acceptedModels?.length) return false;
-  store.learn(engine, r.acceptedModels);
+  store.learn(engine, r.acceptedModels, r.acceptedPartial === true);
   return true;
 }
 
@@ -64,11 +67,16 @@ export class AcceptedModels {
     return ids?.length ? ids : null;
   }
 
-  /** Keeps the list the latest refusal gave, whole (it is read from the full error, never a cut one): a model the CLI
-   *  dropped leaves the offer at once. */
-  learn(engine: string, accepted: readonly string[]): void {
-    const ids = accepted.filter(x => ID.test(x)).slice(0, MAX);
+  /** Keeps the list the latest refusal gave: a whole one replaces the stored list (a model the CLI dropped leaves the
+   *  offer at once); a cut one (partial) only adds its ids, never shrinks the list to its first few. */
+  learn(engine: string, accepted: readonly string[], partial = false): void {
+    let ids = accepted.filter(x => ID.test(x)).slice(0, MAX);
     if (!ENGINE.test(engine) || !ids.length) return;
+    const had = this.read()[engine] ?? [];
+    if (partial) {
+      if (ids.every(x => had.includes(x))) return;
+      ids = [...new Set([...had, ...ids])].slice(0, MAX);
+    }
     const all = { ...this.read(), [engine]: ids };
     fs.mkdirSync(path.dirname(this.file), { recursive: true });
     const tmp = `${this.file}.${process.pid}.tmp`;

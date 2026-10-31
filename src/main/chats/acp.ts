@@ -328,23 +328,37 @@ const argLines = (k: string, v: unknown): string[] => argLine(k, v).split(/\r?\n
 
 /** A code fence: 3+ backticks (an outer ```` may hold ``` blocks), a language tag only when a newline follows it (an
  *  inline «```rm -rf x```» keeps its first word), up to the same run of backticks. */
-const FENCE = /(`{3,})(?:[\w+-]*[^\S\n]*\r?\n)?([\s\S]*?)\r?\n?\1(?!`)/g;
-/** a fence line left over (an unclosed block): dropped, never shown as text */
-const FENCE_LINE = /^\s*`{3,}[\w+-]*\s*$/;
+const FENCE = /(`{3,})(?:([\w+-]*)[^\S\n]*\r?\n)?([\s\S]*?)\r?\n?\1(?!`)/g;
+/** the language tags a block's first line is read as (anything else there is shown: it may be what runs) */
+const LANGS = new Set(['', 'json', 'jsonc', 'bash', 'sh', 'shell', 'zsh', 'powershell', 'ps1', 'pwsh', 'cmd', 'bat', 'console',
+  'js', 'javascript', 'ts', 'typescript', 'tsx', 'jsx', 'py', 'python', 'md', 'markdown', 'text', 'txt', 'plaintext', 'diff',
+  'yaml', 'yml', 'xml', 'html', 'css', 'sql', 'toml', 'ini', 'csharp', 'cs', 'go', 'rust', 'java']);
+/** a fence line left over (an unclosed block): its backticks dropped, a word after them kept (it may be a command) */
+const FENCE_OPEN = /^\s*`{3,}/;
 
 /** A permission's content as panel lines, its markdown code blocks unwrapped (Cursor sends an MCP tool's arguments as
  *  "```json {…} ```", real run 2026-10-31): a JSON object one argument per line (empty: nothing), other JSON on one
- *  line, any other block its own lines (nested blocks unwrapped too); never the fences. */
+ *  line, any other block its own lines (nested blocks unwrapped too); never the fences, never a word of what runs. */
 export function contentLines(text: string): string[] {
   const out: string[] = [];
-  const plain = (t: string) => out.push(...t.split(/\r?\n/).filter(l => !FENCE_LINE.test(l)));
+  const plain = (t: string) => out.push(...t.split(/\r?\n/).map(l => {
+    if (!FENCE_OPEN.test(l)) return l;
+    const rest = l.replace(FENCE_OPEN, '').trim();
+    return LANGS.has(rest.toLowerCase()) ? '' : rest;
+  }));
   let at = 0;
   for (const m of text.matchAll(FENCE)) {
     plain(text.slice(at, m.index));
     at = m.index + m[0].length;
-    const inner = m[2]!.trim();
+    const tag = m[2] ?? '';
+    const inner = m[3]!.trim();
     let parsed: unknown;
-    try { parsed = JSON.parse(inner); } catch { out.push(...contentLines(inner)); continue; }
+    try { parsed = JSON.parse(inner); } catch {
+      // «```whoami\nrm -rf /\n```»: a first line that is no language is part of what runs
+      if (!LANGS.has(tag.toLowerCase())) out.push(tag);
+      out.push(...contentLines(inner));
+      continue;
+    }
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) out.push(...Object.entries(parsed as Obj).filter(([, v]) => v !== undefined && v !== '').flatMap(([k, v]) => argLines(k, v)));
     else out.push(JSON.stringify(parsed));
   }

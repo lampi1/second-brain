@@ -155,6 +155,11 @@ describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
     expect(view('```whoami```')).toBe('whoami');
     expect(view('````md\nPlan\n```json\n{"limit": 5}\n```\n````')).toBe('Plan\nlimit: 5');
     expect(view('```json\n{"query": "x"')).toBe('{"query": "x"');
+    // an unclosed fence or a first line that is no language never hides a word of what runs
+    expect(view('```reboot')).toBe('reboot');
+    expect(view('Esegui:\n```shutdown\n')).toBe('Esegui:\nshutdown');
+    expect(view('```whoami\nrm -rf /\n```')).toBe('whoami\nrm -rf /');
+    expect(view('```bash\nrm -rf /\n```')).toBe('rm -rf /');
   });
 
   it('a multi-line command keeps one line per command in the panel, never one flattened line', () => {

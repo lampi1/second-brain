@@ -49,9 +49,14 @@ describe('teacherOption', () => {
 
 describe('parseModelRefusal', () => {
   it('reads the refused model and the accepted ones (ids with dots), and nothing else', () => {
-    expect(parseModelRefusal(`Error: ${REFUSAL}`)).toEqual({ model: 'auto-smart', accepted: ['auto', 'gpt-5.3-codex', 'gpt-5.2', 'composer-2.5', 'claude-opus-5-5-high', 'gpt-5.6-sol-high', 'gemini-3.1-pro'] });
+    expect(parseModelRefusal(`Error: ${REFUSAL}`)).toEqual({ model: 'auto-smart', accepted: ['auto', 'gpt-5.3-codex', 'gpt-5.2', 'composer-2.5', 'claude-opus-5-5-high', 'gpt-5.6-sol-high', 'gemini-3.1-pro'], partial: false });
     expect(parseModelRefusal('Cannot use this model: gpt-5.6-sol. Available models: auto, rm -rf /, $(x)')?.accepted).toEqual(['auto']);
     expect(parseModelRefusal('il motore si è chiuso prima di finire')).toBeNull();
+  });
+
+  it('a chat exit error cut at 600 characters (acp.ts onClose) gives a partial list, stopped at the next stderr line', () => {
+    expect(parseModelRefusal('Cannot use this model: x. Available models: auto, gpt-5.2, composer-2…')).toEqual({ model: 'x', accepted: ['auto', 'gpt-5.2'], partial: true });
+    expect(parseModelRefusal('Cannot use this model: x. Available models: auto, gpt-5.2 · exit 1')).toEqual({ model: 'x', accepted: ['auto', 'gpt-5.2'], partial: false });
   });
 });
 
@@ -63,6 +68,11 @@ describe('AcceptedModels', () => {
     expect(s.get('cursor')).toBeNull();
     s.learn('cursor', ['auto', 'gpt-5.2', 'composer-2.5']);
     expect(s.get('cursor')).toEqual(['auto', 'gpt-5.2', 'composer-2.5']);
+    // a cut list (partial) never shrinks it, only adds
+    s.learn('cursor', ['auto'], true);
+    expect(s.get('cursor')).toEqual(['auto', 'gpt-5.2', 'composer-2.5']);
+    s.learn('cursor', ['auto', 'gpt-6'], true);
+    expect(s.get('cursor')).toEqual(['auto', 'gpt-5.2', 'composer-2.5', 'gpt-6']);
     s.learn('cursor', ['auto', 'gpt-5.2']);
     expect(s.get('cursor')).toEqual(['auto', 'gpt-5.2']);
     s.learn('cursor', ['auto', 'kimi-k3-low']);
