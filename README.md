@@ -130,8 +130,8 @@ Two ways to use your voice:
   it shuts up and listens (we wish people did that). Question cards are read to you, and a spoken "yes" or "no" counts
   as the click.
 
-Whisper hears you and Piper speaks (a choice of Italian voices), both on your PC: no audio leaves it, and it costs
-nothing. The app never starts talking on its own.
+Parakeet or Whisper hears you and Piper speaks (a choice of Italian voices, at the speed you pick), all on your PC: no
+audio leaves it, and it costs nothing. The app never starts talking on its own.
 
 <p align="center">
   <img src="docs/screenshots/voice-talk.webp" alt="The Orchestrator in a voice conversation: the spoken question, its answer, the red Listening bar" width="400">

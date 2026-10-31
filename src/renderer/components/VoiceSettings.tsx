@@ -1,9 +1,9 @@
 // Settings → Voce (ADR 0152): the spoken conversation with the Orchestrator, on or off (the mic button in the inputs
-// only dictates, owner 2026-10-24), push-to-talk for it (owner 2026-10-29), which Whisper transcribes (Veloce / Precisa), which Italian voice answers (with «Prova»),
+// only dictates, owner 2026-10-24), push-to-talk for it (owner 2026-10-29), which model transcribes (Parakeet, Whisper veloce / preciso: ADR 0214), which Italian voice answers (with «Prova»), how fast it speaks,
 // which microphone listens (lib/mic.ts: the list follows what is plugged in), and the local models: what is on disk, what is missing, the one-time download with its progress. Writes go through
 // settings:set like every other row of the page. Mounted by SettingsPage.tsx.
 import { useEffect, useState } from 'react';
-import { VOICE_ASRS, VOICE_NAMES, type VoiceAsr, type VoiceName } from '@shared/voice';
+import { VOICE_ASRS, VOICE_NAMES, VOICE_SPEEDS, type VoiceAsr, type VoiceName, type VoiceSpeed } from '@shared/voice';
 import { setSetting, useApp } from '../store/store';
 import { previewVoice, setTalk, startVoice, useVoice, voice } from '../lib/voice';
 import { Switch } from './SettingsPage';
@@ -24,7 +24,7 @@ export function VoiceSettings() {
   const talking = useVoice(v => v.mode === 'talk' && v.phase !== 'off');
   useEffect(() => { refreshMics(); }, []);
   if (!settings) return null;
-  const asr: VoiceAsr = settings.voiceAsr ?? 'fast', name: VoiceName = settings.voiceName ?? 'paola';
+  const asr: VoiceAsr = settings.voiceAsr ?? 'fast', name: VoiceName = settings.voiceName ?? 'paola', speed: VoiceSpeed = settings.voiceSpeed ?? 'normal';
   const dl = engine?.downloading, pct = dl && dl.total ? Math.round((dl.done / dl.total) * 100) : 0;
   const ready = !!engine && engine.ready.vad && engine.ready.asr && engine.ready.tts;
   const tryIt = async () => {
@@ -56,6 +56,12 @@ export function VoiceSettings() {
         </div>
         <button type="button" className="btn btn-ghost btn-s" disabled={trying || !engine?.ready.tts} onClick={() => void tryIt()} data-tip={engine?.ready.tts ? undefined : t('voice.tryNeedsDownload')} data-testid="st-voice-try"><IconPlay size={12} /> {t('voice.try')}</button>
       </div>
+    </div>
+    <div className="st-row" data-testid="st-voice-speed">
+      <div className="st-text"><span className="st-title">{t('voice.speedTitle')}</span><p className="st-desc">{t('voice.speedHint')}</p></div>
+      <div className="st-ctl"><div className="segmented" role="radiogroup" aria-label={t('voice.speedTitle')}>
+        {VOICE_SPEEDS.map(v => <button key={v} type="button" role="radio" aria-checked={speed === v} className={speed === v ? 'on' : ''} onClick={() => void setSetting({ voiceSpeed: v })} data-testid={`st-voice-speed-${v}`}>{t(`voice.speed.${v}`)}</button>)}
+      </div></div>
     </div>
     <div className="st-row" data-testid="st-voice-mic">
       <div className="st-text"><span className="st-title">{t('mic.title')}</span>

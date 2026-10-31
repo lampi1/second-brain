@@ -435,3 +435,30 @@ test('the «do something» tiles (ADR 0213): «Esercitati» gives an exercise an
     await app.close();
   }
 });
+
+test('the podcast (ADR 0214): two voices, a speed chip that sets the voice speed, it keeps playing when its view closes', async () => {
+  test.setTimeout(90_000);
+  const { app, page } = await launchDemo();
+  try {
+    await goPage(page, 'impara');
+    await page.getByTestId('impara-lessons').locator('.ip-card', { hasText: 'Come nasce una lezione' }).locator('.ip-card-open').click();
+    await page.getByTestId('impara-side-studio').click();
+    await page.getByTestId('impara-studio-podcast').locator('.sd-tile-main').click();
+    const pod = page.getByTestId('impara-studio-podcast').filter({ has: page.getByTestId('impara-studio-podcast-play') });
+    await expect(pod).toContainText('Voci Paola e');
+    await expect(page.getByTestId('impara-studio-podcast-more')).toHaveCount(0);
+    const speed = page.getByTestId('impara-studio-podcast-speed');
+    await expect(speed).toHaveText('1×');
+    await speed.click();
+    await expect(speed).toHaveText('1,15×');
+    await page.getByTestId('impara-studio-podcast-play').click();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('impara-studio-view')).toHaveCount(0);
+    const stop = page.getByTestId('impara-studio-podcast-tile-stop');
+    await expect(stop).toBeVisible();
+    await stop.click();
+    await expect(stop).toHaveCount(0);
+  } finally {
+    await app.close();
+  }
+});

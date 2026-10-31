@@ -6,6 +6,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Changed
+- Voice: Parakeet TDT v3 as a faster transcription choice beside Whisper, a voice speed setting, a two-voice podcast
+  that downloads its second voice on request and keeps playing when its view closes, more English words read right
+  (ADR 0214).
 - Impara has «Esercitati» (exercises to solve, each corrected) and «Interrogazione a voce» (five questions read
   aloud, answered by speaking, then a mark out of 10) at the top of the Studio (ADR 0213).
 - The personal Browser page is gone (owner: «inutile»; ADR 0212). Its password vault stays for the agents' sign-ins.

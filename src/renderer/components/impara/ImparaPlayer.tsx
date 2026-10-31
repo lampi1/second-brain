@@ -39,7 +39,7 @@ import { ImparaEnd } from './ImparaEnd';
 import { ImparaSwitch } from './ImparaSwitch';
 import { ImparaSources, hostOf, openFact } from './ImparaSources';
 import { ImparaTutor, askingNow, type AskingMode } from './ImparaTutor';
-import { ImparaStudio, StudioView } from './ImparaStudio';
+import { ImparaStudio, podcastNow, StudioView } from './ImparaStudio';
 import { LessonVisual } from './LessonVisual';
 
 const EXTRA_ICON: Record<LessonExtraKind, ReactNode> = { better: <IconLightbulb size={11} />, example: <IconBook size={11} />, code: <IconTerminal size={11} />, question: <IconQuestion size={11} /> };
@@ -52,7 +52,7 @@ export function ImparaPlayer({ id }: { id: string }) {
   const [missing, setMissing] = useState(false);
   useEffect(() => { let alive = true; void loadLesson(id).then(l => { if (alive && !l) setMissing(true); }); return () => { alive = false; }; }, [id]);
   // leaving the lesson: the voice stops, the microphone it opened closes
-  useEffect(() => () => { stopSpeaking(false); const v = voice.get(); if (v.phase !== 'off' && v.target === 'impara') stopVoice(); }, []);
+  useEffect(() => () => { podcastNow.set(null); stopSpeaking(false); const v = voice.get(); if (v.phase !== 'off' && v.target === 'impara') stopVoice(); }, []);
   if (!lesson) return <div className="ip-player ip-center" data-testid="impara-player">{missing ? <p className="ip-muted">{t('impara.notFound')}</p> : <IconSpinner size={18} />}</div>;
   if (lesson.state === 'preparing') return <Preparing lesson={lesson} />;
   if (lesson.state === 'failed' || !lesson.steps.length) return <Failed lesson={lesson} />;

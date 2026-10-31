@@ -1608,11 +1608,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Con la conversazione accesa, le carte di domanda si leggono ad alta voce: un «sì», un «no» o «non voglio rispondere» detti valgono come il clic; qualsiasi altra frase va come tua risposta scritta, mai come un sì.',
         'With the conversation on, question cards are read aloud: a spoken "yes", "no" or "I don’t want to answer" counts as the click; any other sentence goes as your written answer, never as a yes.'),
       // src/main/voice/service.ts; src/main/voice/catalog.ts
-      b('Trascrizione con Whisper e voce italiana con Piper, sul tuo PC: niente esce dal computer, a parte lo scarico una tantum dei modelli, controllati con la loro impronta.',
-        'Transcription with Whisper and an Italian voice with Piper, on your PC: nothing leaves the computer except the one-time model downloads, checked against their hash.'),
+      b('Trascrizione con Parakeet o Whisper e voce italiana con Piper, sul tuo PC: niente esce dal computer, a parte lo scarico una tantum dei modelli, controllati con la loro impronta.',
+        'Transcription with Parakeet or Whisper and an Italian voice with Piper, on your PC: nothing leaves the computer except the one-time model downloads, checked against their hash.'),
       // src/renderer/lib/mic.ts
-      b('In Impostazioni → Voce scegli trascrizione Veloce o Precisa, la voce (Paola, Miro, Dii) e il microfono; uno USB collegato mentre l’app è aperta si usa subito.',
-        'In Settings → Voice you pick Fast or Accurate transcription, the voice (Paola, Miro, Dii) and the microphone; a USB one plugged in while the app runs is used at once.'),
+      b('In Impostazioni → Voce scegli la trascrizione (Parakeet, il più rapido; Whisper veloce; Whisper preciso), la voce (Paola, Miro, Dii), quanto veloce parla e il microfono; uno USB collegato mentre l’app è aperta si usa subito.',
+        'In Settings → Voice you pick the transcription (Parakeet, the quickest; Whisper fast; Whisper accurate), the voice (Paola, Miro, Dii), how fast it speaks and the microphone; a USB one plugged in while the app runs is used at once.'),
       // src/renderer/lib/voice.ts header
       b('L’app non parla mai di sua iniziativa: solo per rispondere a te.',
         'The app never speaks on its own initiative: only to answer you.'),
