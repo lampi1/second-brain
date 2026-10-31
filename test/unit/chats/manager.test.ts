@@ -534,6 +534,20 @@ describe('ChatManager', () => {
     console.log(`[timing] deaf cancel + Invia subito: queued message answered at ${answeredMs} ms`);
   }, 60000);
 
+  it('a queued message that cannot be resent after the restart is said in the chat, never shown as sent', async () => {
+    const e = env();
+    const { m } = manager(e, { enginePaths: { claude: FAKE, cursor: FAKE_CURSOR }, env: { CURSOR_CONFIG_DIR: tmp('cursor-user') } });
+    const c = await m.create({ harness: 'cursor', cwd: e.cwd, prompt: 'deafcancel' });
+    await waitFor(() => m.items(c.id).some(i => i.kind === 'assistant' && i.text.includes('lavoro sordo')), 'the deaf turn');
+    await m.send(c.id, 'uno');
+    await m.send(c.id, 'due');
+    await m.stop(c.id, true);
+    // the new engine cannot start: ensureSession refuses (an archived routine chat is read-only)
+    (m as unknown as { chats: Map<string, { s: { routineArchived?: boolean } }> }).chats.get(c.id)!.s.routineArchived = true;
+    const warn = await waitFor(() => m.items(c.id).find(i => i.kind === 'system' && (i as { code?: string }).code === 'restartResendFailed'), 'the resend failure line', 15000);
+    expect((warn as { params?: { n?: number } }).params?.n).toBe(2);
+  }, 60000);
+
   // brain hooks (wiring.ts connects them to BrainService)
   it('calls the brain hooks: waiting, turn end with the first prompt, done, rate limits', async () => {
     const e = env();
