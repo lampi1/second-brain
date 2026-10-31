@@ -59,7 +59,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       run.report = { at, outcome: result.outcome, verified: met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', summary: cut(result.summary, 140), via: 'agent_report', canonical: { ...structuredClone(result), at, taskId: run.taskId ?? run.runId, runId: run.runId, taskVersion: run.taskVersion ?? 1 } };
       this.runSave();
     }
-    r.report = { text: result.summary, at, ...(result.outcome === 'blocked' ? { blocked: true } : {}) };
+    r.report = { text: result.summary, at, final: true, ...(result.outcome === 'blocked' ? { blocked: true } : {}) };
     // the deliverable is written only in the report now: its summary is the chat's last line (strip, digest, notices)
     r.s.lastText = cut(result.summary, 300);
     this.persist();
@@ -203,7 +203,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
 
   /** agent_report from a root role chat the Orchestrator opened (app_create_chat, issue #93): its result is kept on its run
    *  like a delegated chat's and reaches the open Orchestrator as a message (its own chats report to it, ADR 0083 §6);
-   *  the turn's end then settles the assignment as a mailed report does. At most one per assignment. */
+   *  the turn's end then settles the assignment. At most one per assignment. */
   reportRoot(chatId: string, result: DelegationResult): { orchestratorId: string | null; delivered: boolean } {
     const r = this.need(chatId), run = r.s.run;
     if (r.s.isOrchestrator || r.s.parentId || r.s.delegation || !run || !(['orchestrator', 'user'].includes(run.startedBy) || run.startedBy === 'app' && run.taskContract?.reportExpected)) throw new Error('agent_report: only a role task with an explicit report contract may report.');
@@ -221,7 +221,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       run.report = { at, outcome: result.outcome, verified: review ? result.verified! : !result.doneWhen.length ? 'no' : met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', ...(review ? { verdict: result.verdict! } : {}), summary: cut(result.summary, 140), via: 'agent_report', canonical: { ...structuredClone(result), at, taskId: run.taskId ?? run.runId, runId: run.runId, taskVersion: run.taskVersion ?? 1 } };
       this.runSave();
     }
-    r.report = { text: result.summary, at, ...(result.outcome === 'blocked' ? { blocked: true } : {}) };
+    r.report = { text: result.summary, at, final: true, ...(result.outcome === 'blocked' ? { blocked: true } : {}) };
     // the deliverable is written only in the report now: its summary is the chat's last line (strip, digest, notices)
     r.s.lastText = cut(result.summary, 300);
     r.rootReportAt = at;
@@ -385,10 +385,11 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     this.updated(r);
   }
 
-  /** A chat sent mail (send_to_chat): to the Orchestrator it is its report (#86, ADR 0084), read at its turn's end. */
+  /** Mail may describe a wait, but is never completion evidence. Only explicit report channels finish an assignment. */
   noteMail(chatId: string, toChatId: string | null, text: string): void {
     const r = this.chats.get(chatId), to = toChatId ? this.chats.get(toChatId) : undefined;
     if (!r || !to || r.s.isOrchestrator || !to.s.isOrchestrator) return;
+    if (r.report?.final) return; // progress mail cannot replace an accepted final report
     r.report = { text, at: Date.now() };
     // mailed while idle (a tool call never runs outside a turn, but a late hook might): settle it now
     if (r.s.state === 'idle' && !r.session?.busy && r.s.lastResult) { this.settleReport(r); this.updated(r); }
@@ -404,7 +405,8 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     if (who) r.s.waitsOn = who; else delete r.s.waitsOn;
     if (fresh && !r.s.waitsOnWork && waitsForWork(report.text)) r.s.waitsOnWork = true;
     const clean = item ? !item.isError && !item.interrupted : !!r.s.lastResult && !r.s.lastResult.isError && !r.s.lastResult.interrupted;
-    if (!fresh || !clean || report.blocked || who || r.s.waitsOnWork || r.s.work?.status !== 'assigned' || r.pending.size > 0 || (r.s.background ?? 0) > 0) return;
+    if (!fresh || !report.final || !clean || report.blocked || who || r.s.waitsOnWork || r.s.work?.status !== 'assigned' || r.pending.size > 0 || (r.s.background ?? 0) > 0) return;
+    if (this.observedChildrenBusy(r) || r.s.plan && r.s.plan.phase !== 'done') return;
     r.s.work = { status: 'completed', updatedAt: Date.now() };
     r.autoCompleted = true;
     this.autoActivity(r);
@@ -447,7 +449,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       if (runReport && run.report?.via !== 'agent_report') { run.report = runReport; this.runSave(); }
     }
     // a run-report block is a final report too (the Orchestrator reads it with the turn's end): "blocked" waits on it
-    if (runReport) r.report = { text: runReport.summary, at: item.at, ...(runReport.outcome === 'blocked' ? { blocked: true } : {}) };
+    if (runReport && run?.report?.via !== 'agent_report') r.report = { text: runReport.summary, at: item.at, final: true, ...(runReport.outcome === 'blocked' ? { blocked: true } : {}) };
     this.settleReport(r, item);
     const first = r.firstPrompt;
     r.firstPrompt = null;

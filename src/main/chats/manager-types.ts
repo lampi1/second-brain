@@ -170,9 +170,9 @@ export interface Rec {
   createdAt: number;
   /** Result receipts bind delayed engine accounting to the run that produced them. */
   turnAccounting?: { seen: Set<string>; pending: (AgentRun | null)[] };
-  /** its latest report to its Orchestrator (send_to_chat, or a run-report block): a clean idle after it completes the
-   *  assignment (#86, ADR 0084); never persisted */
-  report?: { text: string; at: number; blocked?: boolean };
+  /** Latest waiting hints or explicit final report. Only agent_report/run-report set final and may complete
+   *  the assignment at a clean turn end (#86, ADR 0084); never persisted. */
+  report?: { text: string; at: number; final?: true; blocked?: boolean };
   /** a delegated child asked its parent (agent_ask_parent) and no agent message reached it since: its turn ending
    *  without agent_report waits for the answer, it does not owe the report yet (#152) */
   askedParentAt?: number;
