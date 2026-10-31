@@ -306,7 +306,7 @@ export class ChatManager extends ManagerSink implements ChatService {
     const cwd = typeof req.cwd === 'string' ? req.cwd.trim() : '';
     // the parent's folder, or a worktree of its repository (agents/worktrees.ts); git is asked only when it matters, and
     // the parent may have closed meanwhile
-    if (!within(parent.s.cwd, cwd) && !withinParent(parent.s.cwd, cwd, this.opts.worktrees ? await this.opts.worktrees(parent.s.cwd) : [])) {
+    if (!within(parent.s.cwd, cwd) && !withinParent(parent.s.cwd, cwd, this.opts.worktrees ? await this.opts.worktrees(parent.s.cwd, cwd) : [])) {
       throw new Error(`Delega rifiutata: la cartella deve stare dentro quella del genitore (${parent.s.cwd}) o in un worktree del suo repository.`);
     }
     if (parent.s.closedAt) throw new Error('Delega rifiutata: la chat che delega non è una chat di lavoro aperta.');

@@ -6,12 +6,13 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ChatSummary, NewChat } from '../../../src/shared/contract';
-import { DelegateWorktrees, needsIsolatedWorktree } from '../../../src/main/agents/worktrees';
+import { DelegateWorktrees, gitWorktrees, withinParent, needsIsolatedWorktree } from '../../../src/main/agents/worktrees';
 import { delegationTools, type DelegationDeps } from '../../../src/main/agents/delegation';
 import { stageDelegatedChanges, stageDelegatedChangesMany } from '../../../src/main/agents/delegation-integration';
 
 const roots: string[] = [];
-afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
+// Windows keeps a just-used checkout locked briefly (antivirus, git's index): retry instead of failing with EBUSY.
+afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); });
 const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: 'pipe' }).trim();
 const commit = (cwd: string, message: string) => { git(cwd, 'add', '.'); git(cwd, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', message); };
 const writer = { tools: { allow: ['edit' as const, 'shell' as const] }, ceiling: null };
@@ -29,6 +30,24 @@ function fixture() {
 }
 
 describe('delegation isolation', () => {
+  it('finds only the requested authentic allocation and preserves ownership and repository boundaries', async () => {
+    const f = fixture();
+    const a = f.child((await f.prepare(path.join(f.repo, 'pkg'), 'a')).cwd, 'a');
+    // a sibling worktree of the same repository the host never allocated
+    const loose = path.join(f.root, '.second-brain-delegate-loose'); git(f.repo, 'worktree', 'add', '-q', '--detach', loose);
+    const b = f.child(loose, 'b');
+    const trees = await gitWorktrees(f.parent.cwd, a.cwd);
+    expect(trees).toHaveLength(1);
+    expect(withinParent(f.parent.cwd, a.cwd, trees)).toBe(true);
+    expect(withinParent(f.parent.cwd, b.cwd, trees)).toBe(false);
+    expect(f.service.allocation(f.parent, a).childId).toBe('a');
+    expect(() => f.service.allocation(f.parent, { ...a, id: b.id })).toThrow(/host-owned/);
+    expect(() => f.service.allocation(f.parent, b)).toThrow(/host-owned/);
+    expect(() => f.service.allocation({ ...f.parent, id: 'other' }, a)).toThrow(/host-owned/);
+    expect(() => f.service.allocation(f.parent, { ...a, cwd: f.repo })).toThrow(/host-owned/);
+    const foreign = path.join(f.root, 'foreign'); fs.mkdirSync(foreign); git(foreign, 'init', '-q');
+    expect(await gitWorktrees(f.parent.cwd, foreign)).toEqual([]);
+  });
   it('routes integration only for the active owning parent under its current write permission', async () => {
     const parent = { id: 'parent', cwd: '/repo', state: 'idle', agent: { source: 'catalog', id: 'strategist' } } as ChatSummary;
     const child = { id: 'child', parentId: 'parent', cwd: '/worktree' } as ChatSummary;
@@ -195,8 +214,8 @@ describe('delegation isolation', () => {
     expect(git(f.repo, 'status', '--porcelain')).toBe('');
   });
 
-  // Two host-owned writers plus a detached union require repeated real Git safety/identity checks. Windows CI
-  // exceeded the unit default (15 s); bound this integration scenario separately without dropping those checks.
+  // Two host-owned writers plus a detached union require repeated real Git safety/identity checks. Its old 30 s budget
+  // predates the suite-wide 120 s one and became the lowest: its twin below (same two writers) needs ~40 s here.
   it('combines parallel siblings in one union stage and keeps both pinned sources', async () => {
     const f = fixture();
     const a = f.child((await f.prepare(f.repo, 'a')).cwd, 'a'), b = f.child((await f.prepare(f.repo, 'b')).cwd, 'b');
@@ -210,7 +229,7 @@ describe('delegation isolation', () => {
     expect(git(result.cwd!, 'write-tree')).toBe(result.tree);
     expect(git(f.repo, 'status', '--porcelain')).toBe('');
     expect(await stageDelegatedChangesMany([requested[0]!, requested[0]!], f.parent)).toMatchObject({ status: 'blocked' });
-  }, 30_000);
+  });
 
   it('reports sibling overlaps and refuses custom merge drivers without executing them', async () => {
     const f = fixture();

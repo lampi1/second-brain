@@ -48,7 +48,7 @@ export interface ChatManagerOptions {
   /** the role a new chat runs (catalog.resolve), with the plugin of its launch (only the skills it was given) */
   resolveAgent?: (req: NewChat) => ResolvedRole & { assets?: { pluginDir: string; skillRoot: string } };
   /** the git worktrees of the repository at a folder (agents/worktrees.ts): a delegated chat may work in its parent's */
-  worktrees?: (cwd: string) => Promise<string[]>;
+  worktrees?: (cwd: string, target?: string) => Promise<string[]>;
   onAutoCloseActivity?: (chatId: string) => void;
   emitter: Pick<Emitter, 'emit'>;
   userData: string;
