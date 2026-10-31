@@ -73,7 +73,8 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
     return { engine: g.engine, id: r.id, effort: g.effort ? p.effort : null };
   });
   // a chat's effort cannot go back to nothing (chat:set): «Predefinito» only where it can mean something
-  const effortDefault = scope.kind === 'role' || flash || !(scope.kind === 'chat' && scope.chat.effort);
+  // Flash too: its open chat keeps an effort it has, a card without one does not reset it (flashFollow)
+  const effortDefault = scope.kind === 'role' || !(scope.kind === 'chat' && scope.chat.effort);
   const real = realEffort(pick.effort, row);
 
   const run = async (fn: () => Promise<unknown>) => {
@@ -103,16 +104,25 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
     const i = items.indexOf(document.activeElement as HTMLElement);
     items[(i + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus();
   };
-
-  const title = scope.kind === 'role' ? t('mp.scope.role', { name: scope.profile.name })
-    : flash ? t('mp.scope.role', { name: card!.name }) : t('mp.scope.chat', { title: scope.chat.title });
+  // the list's one Tab stop: the picked row when shown and enabled, else the first enabled one (a search can hide the pick)
   const rowBlocked = (g: EngineGroup, r: CatalogRow) =>
     g.block === 'off' || g.block === 'untrusted' || (g.block === 'not-selectable' && r.id !== null) || (!engineFree && g.engine !== chatEngine);
+  const enabled = shown.flatMap(g => g.rows.filter(r => !rowBlocked(g, r)).map(r => ({ engine: g.engine, id: r.id })));
+  const stop = enabled.find(r => r.engine === pick.engine && r.id === pick.id) ?? enabled[0];
+  // ↓ from the search goes into the list
+  const intoList = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'ArrowDown') return;
+    const first = e.currentTarget.parentElement?.querySelector<HTMLElement>('.mp-list [role="radio"][tabindex="0"]');
+    if (first) { e.preventDefault(); first.focus(); }
+  };
+
+  const title = scope.kind === 'role' ? t('mp.scope.role', { name: scope.profile.name })
+    : flash ? t('mp.scope.flash') : t('mp.scope.chat', { title: scope.chat.title });
   return <Popover anchor={anchor} open={open} onClose={onClose} testid={`${testid}-pop`} width={380} kind="dialog" label={t('studio.model')}>
     <div className="mp" data-testid={`${testid}-picker`}>
       <p className="mp-scope" data-testid={`${testid}-scope`}>{title}</p>
       <input className="mp-search" type="search" value={query} placeholder={t('mp.search')} aria-label={t('mp.search')}
-        onChange={e => setQuery(e.target.value)} data-testid={`${testid}-search`} />
+        onChange={e => setQuery(e.target.value)} onKeyDown={intoList} data-testid={`${testid}-search`} />
       {loadError && <div className="mp-state mp-error" role="alert" data-testid={`${testid}-load-error`}>
         <span>{t('mp.error', { error: loadError })}</span>
         <button type="button" className="mp-retry" onClick={() => void refreshAgents()} data-testid={`${testid}-retry`}>{t('mp.retry')}</button>
@@ -136,7 +146,7 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
               : [r.contextWindow ? t('mp.context', { size: kTokens(r.contextWindow) }) : '',
                  r.efforts ? (r.efforts.length ? t('mp.efforts', { list: r.efforts.join(' · ') }) : t('mp.noEffort')) : '',
                  r.missing ? t('mp.missing') : ''].filter(Boolean).join(' · ');
-            return <button key={r.id ?? ''} type="button" role="radio" aria-checked={on} tabIndex={on ? 0 : -1}
+            return <button key={r.id ?? ''} type="button" role="radio" aria-checked={on} tabIndex={stop && stop.engine === g.engine && stop.id === r.id ? 0 : -1}
               className={`mp-row${on ? ' on' : ''}${r.missing ? ' missing' : ''}`} disabled={busy || rowBlocked(g, r)}
               onClick={() => choose(g, r)} data-testid={`${testid}-row-${g.engine}-${r.id ?? 'default'}`}>
               <span className="mp-dot" aria-hidden="true" /><span className="mp-name">{r.name}</span>

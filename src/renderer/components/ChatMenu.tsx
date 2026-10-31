@@ -5,7 +5,7 @@
 // "Cambia motore" (to the first other engine): both open the "Nuovo Orchestrator" confirm (OrchestratorRenewDialog); the old Orchestrator goes on as
 // a normal chat, history kept; the overlay's opacity (setting orchestratorOpacity, ADR 0021).
 // TitleInput is the inline rename field the menu's "Rinomina…" opens. Used by ChatTile and OrchestratorTile.
-import { useState, type RefObject } from 'react';
+import { useEffect, useState, type RefObject } from 'react';
 import { AgentContextInspector } from './AgentContextInspector';
 import type { AppInfo, ChatSummary, Harness, Settings } from '@shared/contract';
 import { EFFORTS, effortLabel, permissionLabel, PERMISSION_MODES, tokensShort } from '../lib/format';
@@ -49,6 +49,8 @@ export function ChatMenu({ chat, anchor, open, onClose, onRename, orchestrator }
   const block = to ? blockOf(to) : null;
   const next = useContinuedBy(chat);
   const [picker, setPicker] = useState(false);
+  // the picker shares the ⋯ anchor: opening the menu again closes it, never both on screen
+  useEffect(() => { if (open) setPicker(false); }, [open]);
   const { catalog } = useAgents();
   const pick = (fn: () => void) => () => { fn(); onClose(); };
   const opacity = useApp(s => s.settings?.orchestratorOpacity ?? 100);

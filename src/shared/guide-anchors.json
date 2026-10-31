@@ -209,7 +209,7 @@
     "src/renderer/components/LegacyRoutineHistory.tsx": "5bb7d5af75b485f8",
     "src/renderer/components/LogPage.tsx": "46d7f74f7f300ee6",
     "src/renderer/components/McpAddPanel.tsx": "857a131e6ca7ef03",
-    "src/renderer/components/ModelPicker.tsx#ModelPicker": "bbfa362ec4edee9b",
+    "src/renderer/components/ModelPicker.tsx#ModelPicker": "a8e40b35c8af9795",
     "src/renderer/components/Notice.tsx": "fc393ed92aad44c1",
     "src/renderer/components/QuestionsWindow.tsx": "c2ae263ec00422b4",
     "src/renderer/components/RolePermissions.tsx": "976634466b3c5cfd",

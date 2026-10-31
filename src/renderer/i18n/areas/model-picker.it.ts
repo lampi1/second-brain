@@ -26,6 +26,7 @@ export const modelPickerIt = {
   'mp.effort': 'Effort',
   'mp.otherEngine': (p: { engine: string }) => `Questa chat resta su ${p.engine}: un altro motore vale solo come predefinito.`,
   'mp.scope.chat': (p: { title: string }) => `Cambia solo la chat «${p.title}».`,
+  'mp.scope.flash': 'Cambia la card di Flash: vale dalla sua prossima domanda, anche in questa chat.',
   'mp.scope.role': (p: { name: string }) => `Predefinito delle nuove chat di ${p.name}: le chat aperte non cambiano.`,
   'mp.apply.chat': 'Solo questa chat',
   'mp.apply.orchestrator': 'Predefinito dell’Orchestrator',

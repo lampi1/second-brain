@@ -25,6 +25,7 @@ export const modelPickerDe: typeof modelPickerIt = {
   'mp.effort': 'Effort',
   'mp.otherEngine': (p: { engine: string }) => `Dieser Chat bleibt auf ${p.engine}: eine andere Engine gilt nur als Standard.`,
   'mp.scope.chat': (p: { title: string }) => `Ändert nur den Chat «${p.title}».`,
+  'mp.scope.flash': 'Ändert die Karte von Flash: gilt ab seiner nächsten Frage, auch in diesem Chat.',
   'mp.scope.role': (p: { name: string }) => `Standard für neue Chats von ${p.name}: offene Chats ändern sich nicht.`,
   'mp.apply.chat': 'Nur dieser Chat',
   'mp.apply.orchestrator': 'Standard des Orchestrators',

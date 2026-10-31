@@ -41,7 +41,13 @@ test('one picker for strip, Orchestrator and role card; chat-only vs default act
     // ↓ moves between the rows like a list
     await page.getByTestId('chat-picker-qa-row-claude-default').focus();
     await page.keyboard.press('ArrowDown');
+    await expect(page.getByTestId('chat-picker-qa-row-claude-default')).not.toBeFocused();
     await expect(page.locator('[data-testid^="chat-picker-qa-row-claude-"]:focus')).toHaveCount(1);
+    // a search that hides the pick still leaves a row to Tab or ↓ into
+    await page.getByTestId('chat-picker-qa-search').fill('sonnet');
+    await page.getByTestId('chat-picker-qa-search').press('ArrowDown');
+    await expect(page.locator('[data-testid^="chat-picker-qa-row-claude-claude-sonnet"]:focus')).toHaveCount(1);
+    await page.getByTestId('chat-picker-qa-search').fill('');
     await page.getByTestId('chat-picker-qa-row-claude-claude-sonnet-4-6').click();
     await page.getByTestId('chat-picker-qa-effort-medium').click();
     await page.getByTestId('chat-picker-qa-apply-chat').click();
