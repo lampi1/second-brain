@@ -480,6 +480,27 @@ describe('ChatManager', () => {
     expect(cursorLog(ocLog).filter(l => l.method === 'session/new')).toHaveLength(1); // the first start only
   });
 
+  // Cursor's ACP sessions do not offer the model AskQuestion (real run 2026-10-31): a Cursor chat asks with ask_user, the
+  // panel waits for the user and only the user's answer reaches the engine, as the next message
+  it('a Cursor chat asks a Sì/No question with ask_user; only the user\'s answer reaches the engine', async () => {
+    const e = env();
+    const curLog = path.join(e.userData, 'cursor.jsonl');
+    const { m } = manager(e, { enginePaths: { claude: FAKE, cursor: FAKE_CURSOR }, env: { FAKE_CURSOR_LOG: curLog, CURSOR_CONFIG_DIR: tmp('cursor-user') } });
+    const c = await m.create({ harness: 'cursor', cwd: e.cwd, prompt: 'hello' });
+    await waitFor(() => results(m, c.id).length === 1 && m.list()[0]?.state === 'idle', 'first turn');
+    expect(m.chatToolShown(c.id, 'ask_user')).toBe(true);
+    expect(await m.askUser(c.id, { question: 'Uso due passi?', recommended: 'yes' })).toBeNull();
+    const q = await waitFor(() => m.pending().find(p => p.type === 'question'), 'the question panel');
+    expect(q.questions?.[0]?.options.map(o => o.label)).toEqual(['Sì (consigliato)', 'No']);
+    await new Promise(r => setTimeout(r, 300));
+    expect(m.pending().some(p => p.id === q.id)).toBe(true); // nobody answers it but the user
+    const asked = () => cursorLog(curLog).filter(l => l.method === 'session/prompt').length;
+    expect(asked()).toBe(1);
+    await m.answer(c.id, q.id, { kind: 'question', answers: { 'Uso due passi?': 'No' } });
+    await waitFor(() => asked() === 2, 'the answer sent as the next message');
+    expect(JSON.stringify(cursorLog(curLog).filter(l => l.method === 'session/prompt')[1]?.params?.prompt)).toContain('«Uso due passi?»: No');
+  });
+
   // Cursor model change: never session/set_model (it writes the user's global Cursor config); the session is reopened
   // with the new --model and session/load, inside the app's own config folder
   it('changes a Cursor chat\'s model by reopening its session, never with session/set_model', async () => {

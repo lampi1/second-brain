@@ -27,11 +27,11 @@ export abstract class ManagerWork extends ManagerLifecycle {
     return structuredClone({ ...ledger, events: ledger.events.filter(event => event.seq > afterSeq) });
   }
 
-  /** ask_user (chats/ask-tool.ts): a yes/no question on a chat whose engine has no question tool of its own (OpenCode).
+  /** ask_user (chats/ask-tool.ts): a yes/no question on a chat whose engine's question tool may not reach the model (ACP).
    *  null = shown; a string = refused, with how to ask. */
   async askUser(chatId: string, q: AppAsk): Promise<string | null> {
     const r = this.need(chatId);
-    if (!r.session?.askUser) return 'ask_user: this chat\'s engine asks with its own question tool (AskUserQuestion on Claude, AskQuestion on Cursor).';
+    if (!r.session?.askUser) return 'ask_user: this chat\'s engine asks with its own question tool (AskUserQuestion on Claude).';
     return r.session.askUser(q);
   }
 

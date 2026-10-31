@@ -23,7 +23,7 @@ describe('tool visibility', () => {
     expect(toolShownToChat(chat(), undefined, 'agent_delegate')).toBe(true);
     expect(toolShownToChat(chat(), undefined, 'plan_propose')).toBe(false);
   });
-  it('ask_user only for a chat whose engine has no question tool of its own (OpenCode), Orchestrator and Lampo included', () => {
+  it('ask_user only for a chat on an ACP engine (OpenCode, Cursor), Orchestrator and Lampo included', () => {
     expect(toolShownToChat(chat(), undefined, 'ask_user')).toBe(false);
     expect(toolShownToChat(chat(), undefined, 'ask_user', true)).toBe(true);
     expect(toolShownToChat(chat({ isOrchestrator: true }), undefined, 'ask_user', true)).toBe(true);
@@ -31,8 +31,9 @@ describe('tool visibility', () => {
     expect(toolShownToChat(chat({ research: true }), undefined, 'ask_user', true)).toBe(false);
     expect(toolShownToUnknown('ask_user')).toBe(false);
     expect(toolShownToWarm({ role: 'strategist', launches: ['scout'] }, 'ask_user')).toBe(false);
-    // which engines: an ACP engine but Cursor (its cursor/ask_question reaches the app); never Claude or Codex
-    expect([appAsks({ kind: 'acp' }), appAsks({ kind: 'acp', cursorExtras: true }), appAsks({ kind: 'claude' }), appAsks({ kind: 'codex' }), appAsks(null)]).toEqual([true, false, false, false, false]);
+    // which engines: every ACP engine; Cursor too, whose AskQuestion its ACP sessions do not offer the model (real
+    // run 2026-10-31: «The AskQuestion tool is unavailable»); never Claude or Codex
+    expect([appAsks({ kind: 'acp' }), appAsks({ kind: 'acp', cursorExtras: true }), appAsks({ kind: 'claude' }), appAsks({ kind: 'codex' }), appAsks(null)]).toEqual([true, true, false, false, false]);
   });
   it('a waiting engine sees what its role\'s root chat would', () => {
     expect(toolShownToWarm({ role: 'scout', launches: [] }, 'agent_delegate')).toBe(false);

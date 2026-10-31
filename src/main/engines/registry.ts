@@ -173,10 +173,11 @@ export const engines = (): readonly EngineDef[] => list;
 
 /** The engine with this id, or null. */
 export const engineOf = (id: Harness): EngineDef | null => list.find(e => e.id === id) ?? null;
-/** An engine with no question tool that reaches the app (an ACP engine but Cursor's cursor/ask_question: OpenCode's own
- *  `question` tool exists only for its app/cli/desktop clients, never `opencode acp`): its chats ask with the app's
- *  ask_user MCP tool (chats/acp.ts askUser). */
-export const appAsks = (e: Pick<EngineDef, 'kind' | 'cursorExtras'> | null | undefined): boolean => e?.kind === 'acp' && !e.cursorExtras;
+/** An engine whose question tool may not reach the model (every ACP engine): OpenCode's own `question` tool exists only
+ *  for its app/cli/desktop clients, never `opencode acp`, and Cursor's ACP sessions did not offer the model AskQuestion
+ *  (real run 2026-10-31, «The AskQuestion tool is unavailable»; its cursor/ask_question still works when it is offered).
+ *  Their chats can ask with the app's ask_user MCP tool (chats/acp.ts askUser). */
+export const appAsks = (e: Pick<EngineDef, 'kind' | 'cursorExtras'> | null | undefined): boolean => e?.kind === 'acp';
 
 /** The engine with this id; an unknown id is an error the user reads. */
 export function engineOrThrow(id: Harness): EngineDef {

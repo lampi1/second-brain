@@ -1,5 +1,6 @@
-// ask_user: the yes/no question for a chat whose engine has no question tool that reaches the app (engines/registry.ts
-// appAsks: OpenCode over ACP, whose own `question` tool exists only for its app/cli/desktop clients). On the chat's own
+// ask_user: the yes/no question for a chat whose engine's question tool may not reach the model (engines/registry.ts
+// appAsks: OpenCode over ACP, whose own `question` tool exists only for its app/cli/desktop clients; Cursor, whose ACP
+// sessions may not offer AskQuestion). On the chat's own
 // MCP endpoint (the caller is the token's chat, never an argument), shown only to those chats (tool-visibility.ts):
 // the question becomes the same Sì/No panel as AskUserQuestion / Cursor's AskQuestion, with the same brief gate (ADR
 // 0135, 0150), and the user's answer comes back as the user's next message (chats/acp.ts askUser). A Strategist's
@@ -16,7 +17,7 @@ export const ASK_USER_SHOWN = 'Shown to the user as a Sì/No panel. End your tur
 export function askTools(chats: AskChats): McpTool[] {
   return [{
     name: 'ask_user',
-    description: 'Ask the user ONE yes/no decision as a Sì/No panel (your engine has no question tool of its own; this is it). '
+    description: 'Ask the user ONE yes/no decision as a Sì/No panel (use it when your engine has no question tool available to you). '
       + 'Before it call show_ui with component "brief" and target "next-ask" (what you did, its evidence, what Sì and No do). '
       + 'The answer arrives as the user\'s next message: end your turn after calling it.',
     inputSchema: { type: 'object', required: ['question', 'recommended'], additionalProperties: false, properties: {
