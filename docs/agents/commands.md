@@ -50,7 +50,7 @@ row and its line here in the same change.
 | `app_assign_task` | Orchestrator, /mcp/app | Give a finished work chat a new measured task in the same role and project. |
 | `app_task_events` | Orchestrator, /mcp/app | The ordered user decisions of a root task, read before assigning it again. |
 | `app_send_to_chat` | Orchestrator, /mcp/app | Send a message to an active app chat, labelled as not the user's approval. |
-| `app_close_chat` | Orchestrator, /mcp/app | Close a chat for the user, like ✕: its engine and the tools it started end. |
+| `app_close_chat` | Orchestrator, /mcp/app | Close a chat for the user, like ✕: its engine, the tools it started and its delegation tree end; refused while it or an open descendant waits for the user. |
 | `app_reopen_chat` | Orchestrator, /mcp/app | Reopen a closed chat with its whole history. |
 | `app_handoff_chat` | Orchestrator, /mcp/app | Have a chat write its hand-off note now. |
 | `app_continue_chat` | Orchestrator, /mcp/app | «Riprendi»: a new chat on the same engine and folder from the old chat's hand-off. |

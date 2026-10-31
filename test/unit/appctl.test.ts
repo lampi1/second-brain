@@ -482,6 +482,21 @@ describe('app control tools', () => {
     expect(closed).toEqual(['w']);
   });
 
+  it('app_close_chat refuses a chat whose open descendant waits for the user: the close would withdraw that question (ADR 0217)', async () => {
+    const base = { harness: 'claude', state: 'idle', pending: 0, model: null, costUsd: 0, isOrchestrator: false, lastText: '' };
+    const list = [{ ...base, id: 's', title: 'Stratega' }, { ...base, id: 'a', title: 'Artisan', parentId: 's' },
+      { ...base, id: 'g', title: 'Nipote', parentId: 'a', state: 'waiting', pending: 1 },
+      { ...base, id: 'o', title: 'Altro' }, { ...base, id: 'oc', title: 'Figlio chiuso', parentId: 'o', pending: 1, closedAt: 1 }];
+    const closed: string[] = [];
+    const chats = { list: () => list, close: async (id: string) => { closed.push(id); } } as unknown as ChatService;
+    const brain = { settings: () => ({ contextWarnTokens: 200_000 }), publish: () => {} } as unknown as BrainService;
+    const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0' }).find(x => x.name === 'app_close_chat')!;
+    await expect(Promise.resolve(t.run({ chatId: 's' }))).rejects.toThrow(/Nipote.*aspetta/);
+    expect(closed).toEqual([]);
+    expect(await t.run({ chatId: 'o' })).toBe('closed'); // a closed descendant's stale count does not block
+    expect(closed).toEqual(['o']);
+  });
+
   it('the Orchestrator\'s messages carry its title, on its own endpoint and on /mcp/app', async () => {
     const sent: (string | undefined)[] = [];
     const list = [{ id: 'r1', title: 'Orchestrator', harness: 'cursor', isOrchestrator: true, state: 'idle' }, { id: 'w', title: 'W', harness: 'cursor', state: 'idle' }];

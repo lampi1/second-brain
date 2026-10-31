@@ -116,7 +116,7 @@
     "src/main/chats/manager-requests.ts#countRequest": "15311c69cfea369d",
     "src/main/chats/manager-requests.ts#refusedCommand": "fa89e65c35274b90",
     "src/main/chats/manager-work.ts#userWrote": "a5cc00fe71811930",
-    "src/main/chats/manager.ts#create": "cd2f7632d3f72052",
+    "src/main/chats/manager.ts#create": "cb5fa7d2c52ed7a5",
     "src/main/chats/manager.ts#flashAgent": "00336b3749f8aeb1",
     "src/main/chats/manager.ts#flashFollow": "d774f327309f1a39",
     "src/main/chats/orchestrator-delivery.ts": "ba1255dad7314cce",

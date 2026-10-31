@@ -24,8 +24,12 @@ went on working, queued turns still started, and a late child result, mail or re
   user's own message reopens a chat, and it reopens only that chat; an agent reopens one only explicitly, with
   `app_reopen_chat` when the user asks (the refusal names it).
 - «Annulla» after ✕ reopens the closed chat only; its descendants stay closed, because their work was already stopped.
-- Not a cascade: auto-close (`archive({auto: true})`, ADR 0084), reports and progress mail; the Orchestrator's own
-  archive. Routine-archived chats are skipped.
+- Not a cascade: auto-close (`archiveAutomatic`, ADR 0084), reports and progress mail; the Orchestrator's own
+  archive. Routine-archived chats are skipped. A ✕ that waits for an auto-close in progress still records `closedBy:
+  'user'`.
+- No orphan: a closing chat delegates nothing (`delegator`, `bindDelegation` refuse it), and the close scans the tree
+  again after its awaits, so a child bound in that window is cancelled too.
+- `app_close_chat` cascades like the ✕, so it is refused while the chat or an open descendant waits for the user.
 - Transcripts and worktrees are kept (descendants are archived, not deleted); only processes owned by the closed
   chats end, shared processes and other chats are untouched. Running the close again changes nothing more.
 

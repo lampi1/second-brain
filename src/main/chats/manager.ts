@@ -163,11 +163,11 @@ export class ChatManager extends ManagerSink implements ChatService {
     if (delegator && this.opts.prepareDelegation) {
       const parentPermissions = JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) });
       const prepared = await this.opts.prepareDelegation(structuredClone(delegator.s), req, policy, opts.continuationOf);
-      if (delegator.s.closedAt || delegator.s.run?.endedAt !== undefined || delegator.s.run?.report?.via === 'agent_report' || delegator.s.delegation?.result || delegator.s.run?.runId !== prepared.parentRunId || delegator.s.run?.taskVersion !== prepared.parentTaskVersion) throw new Error('Parent assignment changed while preparing isolation.');
+      if (delegator.s.closedAt || this.closedByUser(delegator) || this.chats.get(delegator.s.id) !== delegator || delegator.s.run?.endedAt !== undefined || delegator.s.run?.report?.via === 'agent_report' || delegator.s.delegation?.result || delegator.s.run?.runId !== prepared.parentRunId || delegator.s.run?.taskVersion !== prepared.parentTaskVersion) throw new Error('Parent assignment changed while preparing isolation.');
       if (parentPermissions !== JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) })) throw new Error('Parent permissions changed while preparing isolation.');
       req = { ...req, cwd: prepared.cwd };
       bindDelegation = id => {
-        if (delegator.s.closedAt || delegator.s.run?.endedAt !== undefined || delegator.s.run?.report?.via === 'agent_report' || delegator.s.delegation?.result || delegator.s.run?.runId !== prepared.parentRunId || delegator.s.run?.taskVersion !== prepared.parentTaskVersion
+        if (delegator.s.closedAt || this.closedByUser(delegator) || this.chats.get(delegator.s.id) !== delegator || delegator.s.run?.endedAt !== undefined || delegator.s.run?.report?.via === 'agent_report' || delegator.s.delegation?.result || delegator.s.run?.runId !== prepared.parentRunId || delegator.s.run?.taskVersion !== prepared.parentTaskVersion
           || parentPermissions !== JSON.stringify({ policy: delegator.policy, mode: this.modeFor(delegator) })) throw new Error('Parent assignment or permissions changed before delegation started.');
         prepared.bind?.(id);
       };
@@ -305,14 +305,14 @@ export class ChatManager extends ManagerSink implements ChatService {
   /** continuation: "Riprendi" of a delegated chat, by whoever clicks it: the successor is the same child of the same parent */
   private async delegator(req: NewChat, by: 'user' | 'agent' | 'app', continuation = false): Promise<Rec> {
     const parent = req.parentId ? this.chats.get(req.parentId) : undefined;
-    if ((by !== 'agent' && !continuation) || !parent || parent.s.closedAt || parent.s.isOrchestrator) throw new Error('Delega rifiutata: la chat che delega non è una chat di lavoro aperta.');
+    if ((by !== 'agent' && !continuation) || !parent || parent.s.closedAt || this.closedByUser(parent) || parent.s.isOrchestrator) throw new Error('Delega rifiutata: la chat che delega non è una chat di lavoro aperta.');
     const cwd = typeof req.cwd === 'string' ? req.cwd.trim() : '';
     // the parent's folder, or a worktree of its repository (agents/worktrees.ts); git is asked only when it matters, and
     // the parent may have closed meanwhile
     if (!within(parent.s.cwd, cwd) && !withinParent(parent.s.cwd, cwd, this.opts.worktrees ? await this.opts.worktrees(parent.s.cwd) : [])) {
       throw new Error(`Delega rifiutata: la cartella deve stare dentro quella del genitore (${parent.s.cwd}) o in un worktree del suo repository.`);
     }
-    if (parent.s.closedAt) throw new Error('Delega rifiutata: la chat che delega non è una chat di lavoro aperta.');
+    if (parent.s.closedAt || this.closedByUser(parent) || this.chats.get(parent.s.id) !== parent) throw new Error('Delega rifiutata: la chat che delega non è una chat di lavoro aperta.');
     return parent;
   }
 

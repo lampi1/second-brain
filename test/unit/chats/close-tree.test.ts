@@ -2,6 +2,8 @@
 // for an answer or wait in the CPU queue are stopped, their engines closed with their own processes, their open
 // questions withdrawn unanswered, their runs ended; nothing but the user's own message reopens them (no late report,
 // mail, child result or app resume), the cleanup is idempotent, and chats outside the tree are never touched.
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
@@ -20,7 +22,7 @@ interface Calls { interrupts: number; closes: { keepChildren: boolean }[]; sent:
 function fixture() {
   const dir = tmp('close-tree'), em = recEmitter();
   const load: LoadSample = { cpu: 10, freeRam: 80 };
-  const calls = new Map<string, Calls>(), sinks = new Map<string, SessionSink>(), busy = new Map<string, boolean>();
+  const calls = new Map<string, Calls>(), sinks = new Map<string, SessionSink>(), busy = new Map<string, boolean>(), slowClose = new Set<string>();
   const of = (id: string) => { let c = calls.get(id); if (!c) calls.set(id, c = { interrupts: 0, closes: [], sent: [], answered: 0 }); return c; };
   const m = new ChatManager({ userData: dir, emitter: em, coldEveryMs: 0, runEveryMs: 0, env: { CLAUDE_CONFIG_DIR: `${dir}/home` },
     admission: { sampler: { sample: () => ({ ...load }) }, limits: () => ON, autoTick: false },
@@ -45,6 +47,7 @@ function fixture() {
         close: async (_grace?: number, keepChildren = false) => {
           of(id).closes.push({ keepChildren });
           if (closed) return;
+          if (slowClose.has(id)) await new Promise(r => setTimeout(r, 150)); // an engine slow to exit (Windows: seconds)
           closed = true; busy.set(id, false); s.changed({ state: 'closed' }); s.exit({ code: 0, error: null });
         },
         killNow() {}, answer: () => { of(id).answered++; return true; },
@@ -76,7 +79,12 @@ function fixture() {
     await waitFor(() => busy.get(u.id), 'U at work', 5000);
     return { o, s, c1, c2, g, u };
   };
-  return { m, em, dir, calls, of, busy, chat, tree, load };
+  /** A delegated child of parentId, as agent_delegate creates it. */
+  const delegate = (parentId: string, prompt: string) => m.create({ harness: 'claude', cwd: dir, parentId, prompt,
+    delegation: { role: 'artisan', goal: 'Late', doneWhen: ['Fatto'], at: Date.now() } }, 'agent', { owner: { ...owner, id: 'artisan' }, instructions: 'Fai.', policy: null });
+  /** The manager's record of a chat (the close's in-memory flag, the archive in progress). */
+  const rec = (id: string) => (m as unknown as { chats: Map<string, { s: { closedAt?: number; closedBy?: string; state?: string }; userClosing?: true; archiving?: Promise<void> }> }).chats.get(id)!;
+  return { m, em, dir, calls, of, busy, chat, tree, load, slowClose, delegate, rec };
 }
 
 describe('the user\'s ✕ cancels the chat\'s whole delegation tree', () => {
@@ -166,6 +174,42 @@ describe('the user\'s ✕ cancels the chat\'s whole delegation tree', () => {
     // the cancelled child's late report never reaches its parent
     expect(() => f.m.reportDelegation(t.c1.id, { outcome: 'done', summary: 'Fatto tardi', output: 'x', doneWhen: [] })).toThrow(/closed this chat/);
     expect(f.m.items(t.s.id).some(i => i.kind === 'user' && i.text.includes('Fatto tardi'))).toBe(false);
+  });
+
+  it('a delegation that races the close never leaves a child at work: refused while closing, cancelled if already past its checks', async () => {
+    const f = fixture(), t = await f.tree();
+    f.load.cpu = 10; // the late child starts at once (not in the CPU queue)
+    f.slowClose.add(t.s.id); f.slowClose.add(t.c1.id); // the close awaits slow engine exits, the window of the race
+    const closing = f.m.archive(t.s.id, { undoable: true });
+    // a new agent_delegate of the closing parent is refused
+    await expect(f.delegate(t.s.id, 'keep-busy: tardi')).rejects.toThrow(/Delega rifiutata/);
+    // one already past its checks (simulated: the flag hidden while it binds) is found and cancelled by the close
+    const parent = f.rec(t.s.id); delete parent.userClosing;
+    const late = await f.delegate(t.s.id, 'keep-busy: tardi');
+    parent.userClosing = true;
+    await waitFor(() => f.busy.get(late.id), 'the late child at work', 5000);
+    await closing;
+    expect(f.chat(late.id)).toMatchObject({ state: 'closed', closedBy: 'user' });
+    expect(f.of(late.id).interrupts).toBe(1);
+    expect(f.of(late.id).closes).toEqual([{ keepChildren: false }]);
+    // closed, it delegates nothing either
+    await expect(f.delegate(t.s.id, 'keep-busy: dopo')).rejects.toThrow(/Delega rifiutata/);
+  });
+
+  it('a ✕ that waits for an automatic close in progress records the close as the user\'s (it survives a restart)', async () => {
+    const f = fixture(), t = await f.tree();
+    // C1 is inside an automatic close (archiveAutomatic) when the user closes its parent: that close ends as 'auto'
+    const c1 = f.rec(t.c1.id);
+    let finish!: () => void;
+    c1.archiving = new Promise<void>(r => { finish = r; }).then(() => { c1.s.closedAt = Date.now(); c1.s.closedBy = 'auto'; c1.s.state = 'closed'; c1.archiving = undefined; });
+    const closing = f.m.archive(t.s.id, { undoable: true });
+    finish();
+    await closing;
+    expect(f.chat(t.c1.id)).toMatchObject({ closedBy: 'user' });
+    // persisted: the next start reads the user's close (closedByUser without the in-memory flag)
+    await f.m.shutdown();
+    const saved = JSON.parse(readFileSync(join(f.dir, 'chats.json'), 'utf8')) as { chats: { id: string; closedBy?: string }[] };
+    expect(saved.chats.find(c => c.id === t.c1.id)?.closedBy).toBe('user');
   });
 
   it('the automatic close and a progress mail never cascade', async () => {

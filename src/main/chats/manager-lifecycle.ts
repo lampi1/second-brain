@@ -208,13 +208,18 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
    *  unanswered, its run ends; it stays among the closed chats with closedBy 'user', so nothing but the user reopens it
    *  (closedByUser). Transcripts, worktrees and diffs stay. Idempotent. Never for the auto-close or a report. */
   private async cancelTree(chatId: string): Promise<void> {
-    const tree = this.descendantsOf(chatId).filter(r => !r.s.routineArchived);
-    for (const r of tree) r.userClosing = true; // before any await: a late report or result finds them closing
-    if (!tree.length) return;
-    const results = await Promise.allSettled(tree.map(r => this.cancelOne(r)));
+    const done = new Set<Rec>(), results: PromiseSettledResult<void>[] = [];
+    // a child bound while the close awaited (a delegation already past its checks) is found by the next pass
+    for (let pass = 0; pass < 8; pass++) {
+      const tree = this.descendantsOf(chatId).filter(r => !r.s.routineArchived && !done.has(r));
+      for (const r of tree) { r.userClosing = true; done.add(r); } // before any await: a late report or result finds them closing
+      if (!tree.length) break;
+      results.push(...await Promise.allSettled(tree.map(r => this.cancelOne(r))));
+    }
+    if (!done.size) return;
     const failed = results.filter(x => x.status === 'rejected').length;
-    if (failed) log.warn('chats', 'delegation tree not fully cancelled', { chat: chatId, cause: errText((results.find(x => x.status === 'rejected') as PromiseRejectedResult).reason), hint: 'close the remaining child chats by hand; npm run logs -- --chat <id> shows why', data: { tree: tree.length, failed } });
-    log.info('chats', 'delegation tree cancelled with its chat', { chat: chatId, data: { chats: tree.length, failed } });
+    if (failed) log.warn('chats', 'delegation tree not fully cancelled', { chat: chatId, cause: errText((results.find(x => x.status === 'rejected') as PromiseRejectedResult).reason), hint: 'close the remaining child chats by hand; npm run logs -- --chat <id> shows why', data: { tree: done.size, failed } });
+    log.info('chats', 'delegation tree cancelled with its chat', { chat: chatId, data: { chats: done.size, failed } });
   }
 
   private async cancelOne(r: Rec): Promise<void> {
@@ -273,6 +278,8 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     // the Orchestrator never closes (its title is the mail address the brain's rules and the chats write to)
     if (r.s.isOrchestrator) throw new Error('L’Orchestrator non si chiude: per ripartire usa Pulisci.');
     if (r.archiving) await r.archiving;
+    // an auto-close that ended while the user's ✕ waited for it: the close is the user's (closedBy survives a restart)
+    if (r.s.closedAt && r.userClosing && !opts.auto && r.s.closedBy !== 'user') { r.s.closedBy = 'user'; this.persist(); this.updated(r); }
     if (r.s.closedAt) return { ...r.s };
     if (opts.auto && (r.session?.busy || r.pending.size > 0 || workBehind(r.s) || r.s.queued)) throw new Error('La chat è tornata al lavoro: resta aperta.');
     if (opts.auto) throw new Error('La chiusura automatica richiede il timer verificato dal processo principale.');
