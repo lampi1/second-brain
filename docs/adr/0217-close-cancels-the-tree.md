@@ -20,7 +20,9 @@ went on working, queued turns still started, and a late child result, mail or re
   `closedBy === 'user'` carries the same meaning across restarts.
 - No resurrection: on a chat the user closed, `agent_report` (root and delegated) throws a "stop here" error, mail is
   ignored, child results are dropped, `assignTask` from anyone but the user throws, and `send` refuses a resumed turn,
-  a mail (`from`) or a non-user source. Only the user's own message reopens a chat, and it reopens only that chat.
+  a mail (`from`) or a non-user source, `app_send_to_chat` included (before, it reopened any closed chat). Only the
+  user's own message reopens a chat, and it reopens only that chat; an agent reopens one only explicitly, with
+  `app_reopen_chat` when the user asks (the refusal names it).
 - «Annulla» after ✕ reopens the closed chat only; its descendants stay closed, because their work was already stopped.
 - Not a cascade: auto-close (`archive({auto: true})`, ADR 0084), reports and progress mail; the Orchestrator's own
   archive. Routine-archived chats are skipped.

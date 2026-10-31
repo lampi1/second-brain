@@ -142,6 +142,19 @@ describe('the user\'s ✕ cancels the chat\'s whole delegation tree', () => {
     for (const id of [t.c1.id, t.c2.id, t.g.id]) expect(f.chat(id)?.closedAt).toBeDefined();
   });
 
+  it('an agent never reopens a cancelled chat by writing to it (app_send_to_chat); an explicit reopen does, that chat only', async () => {
+    const f = fixture(), t = await f.tree();
+    await f.m.archive(t.s.id);
+    // exactly what app_send_to_chat sends (appctl/tools.ts): the Orchestrator's title and its chat as the source
+    await expect(f.m.send(t.c1.id, 'Continua', undefined, false, 'Orchestrator', false, { kind: 'chat', chatId: t.o.id })).rejects.toThrow(/app_reopen_chat/);
+    expect(f.chat(t.c1.id)?.closedAt).toBeDefined();
+    await f.m.reopen(t.c1.id); // app_reopen_chat, when the user asks
+    expect(f.chat(t.c1.id)?.closedAt).toBeUndefined();
+    // reopened, the usual rules apply again: a role chat's follow-up goes through app_assign_task
+    await expect(f.m.send(t.c1.id, 'Continua', undefined, false, 'Orchestrator', false, { kind: 'chat', chatId: t.o.id })).rejects.toThrow(/app_assign_task/);
+    for (const id of [t.s.id, t.c2.id, t.g.id]) expect(f.chat(id)?.closedAt).toBeDefined();
+  });
+
   it('closing one child cancels its subtree only: the parent and the siblings go on', async () => {
     const f = fixture(), t = await f.tree();
     await f.m.archive(t.c1.id, { undoable: true });

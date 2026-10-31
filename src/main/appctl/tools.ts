@@ -308,7 +308,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       },
     },
     {
-      name: 'app_reopen_chat', description: 'Reopen a closed (archived) chat listed under "closed" by app_chats: it goes back on the grid with its whole history and its session resumes (--resume) on the next message. Sending it a message with app_send_to_chat reopens it too.',
+      name: 'app_reopen_chat', description: 'Reopen a closed (archived) chat listed under "closed" by app_chats: it goes back on the grid with its whole history and its session resumes (--resume) on the next message. Sending it a message with app_send_to_chat reopens it too, except a chat the user closed with ✕ (its work was cancelled): only this tool reopens that one, and only when the user asks.',
       inputSchema: obj({ chatId: str('chat id from app_chats "closed"') }, ['chatId']),
       run: async a => {
         const id = String(a.chatId ?? '');

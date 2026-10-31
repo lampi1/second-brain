@@ -62,6 +62,9 @@ import { ManagerSink } from './manager-sink';
 export { RESUME_TEXT, turnReply, workBehind, WAITING_REASON, lastAnswer, LAMPO_TITLE, RESEARCH_TITLE, RUN_SAVE_MS, USER_NOTES_LABEL, userNoteLine, restoredOwner, startTags, repoOf } from './manager-helpers';
 export type { ChatManagerOptions, HandoffOptions, TurnEndInfo, CleanReportNote, UserWroteNote } from './manager-types';
 
+/** The refusal of anything but the user's own message (or an explicit app_reopen_chat) on a chat the user closed (ADR 0217). */
+const CLOSED_BY_USER = 'La chat è stata chiusa dall’utente: il suo lavoro è annullato e non riparte da sola. Solo l’utente può riaprirla (un agente, se l’utente lo chiede: app_reopen_chat).';
+
 export class ChatManager extends ManagerSink implements ChatService {
 
   // ---- ChatService ----
@@ -322,7 +325,7 @@ export class ChatManager extends ManagerSink implements ChatService {
     const r = this.need(chatId);
     if (r.s.routineArchived || r.s.routine || r.s.routinePackage) throw new Error('Archived routine chat: use the terminal routine CLI.');
     // the user's ✕ cancelled it (or its tree): only the user's own message reopens it, never an agent, mail or the app
-    if (this.closedByUser(r) && (resumed || from !== undefined || (source !== undefined && source.kind !== 'user'))) throw new Error('La chat è stata chiusa dall’utente: il suo lavoro è annullato e non riparte da sola. Solo l’utente può riaprirla.');
+    if (this.closedByUser(r) && (resumed || from !== undefined || (source !== undefined && source.kind !== 'user'))) throw new Error(CLOSED_BY_USER);
     // Flash follows its card (ADR 0107): the user's question goes to a Flash on the card's engine and model
     if (r.s.quick && from === undefined && !resumed && (!source || source.kind === 'user')) {
       const next = await this.flashFollow(r);
@@ -468,7 +471,7 @@ export class ChatManager extends ManagerSink implements ChatService {
     if (this.quitting || this.chats.get(chatId) !== r) throw new Error('La chat non è attiva.');
     if (liveOnly && ((!r.session && r.s.state !== 'idle') || r.archiving || r.s.closedAt)) throw new Error('La chat non è attiva: la posta resta da leggere.');
     if (r.archiving) await r.archiving; // never into a session that is closing: the archive ends first, then this reopens
-    if (this.closedByUser(r) && (resumed || from !== undefined)) throw new Error('La chat è stata chiusa dall’utente: il suo lavoro è annullato e non riparte da sola. Solo l’utente può riaprirla.');
+    if (this.closedByUser(r) && (resumed || from !== undefined)) throw new Error(CLOSED_BY_USER);
     this.needAgentMay(r, from); // again: the engine may have been released while the message waited in the queue
     if (r.s.closedAt) this.unarchive(r); // a message (the user's, or an agent's through app_send_to_chat) reopens it
     // a cold chat (ADR 0031): after the cache expired the message goes on in a fresh session from its note
