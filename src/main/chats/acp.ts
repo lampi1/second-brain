@@ -1536,7 +1536,7 @@ export class AcpSession implements HarnessSession {
     const clean = this.closing || code === 0;
     const tail = stripAnsi(this.errTail).trim().split(/\r?\n/).slice(-4).join(' · ');
     const error = clean ? null : cut(tail || `${this.label} è uscito con codice ${code ?? '?'}`, 600);
-    if (error) log.error('chats', 'acp engine exited with an error', { chat: this.opts.chatId, data: { engine: this.engine }, cause: `exit ${code}: ${tail || 'no stderr'}`, hint: `run \`${this.cliName} --version\` in a terminal; resume with a new message` });
+    if (error) log.error('chats', 'acp engine exited with an error', { chat: this.opts.chatId, data: { engine: this.engine }, cause: `exit ${code}: ${cut(tail, 2000) || 'no stderr'}`, hint: `run \`${this.cliName} --version\` in a terminal; resume with a new message` });
     else log.info('chats', 'acp session exit', { chat: this.opts.chatId, data: { engine: this.engine, code } });
     // the CLI refused the model: its whole list goes on beside the cut error (SessionSink.exit refusal)
     const refusal = error ? /Cannot use this model: [^\r\n]+/.exec(stripAnsi(this.errTail))?.[0] : undefined;

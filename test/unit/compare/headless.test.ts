@@ -38,7 +38,6 @@ function runner(o: Partial<HeadlessDeps> = {}): HeadlessRunner {
 }
 const req = (engine: string, prompt: string | Promise<string | null>, o: Partial<{ model: string | null; effort: string | null; cwd: string }> = {}) =>
   ({ engine, prompt, cwd: o.cwd ?? tmp('hl-cwd'), model: o.model ?? null, effort: o.effort ?? null, round: 'r1' });
-/** the answers this module gave in a run, from its own log lines */
 describe('a model the CLI refuses at start (Impara probe)', () => {
   it('gives back the whole list of accepted ids, not the 600-character cut of the exit error', async () => {
     const out = await runner().run(req('cursor', 'ok', { model: 'sb-list-models' }));
@@ -50,6 +49,7 @@ describe('a model the CLI refuses at start (Impara probe)', () => {
   }, 30_000);
 });
 
+/** the answers this module gave in a run, from its own log lines */
 const answered = () => log.recent.filter(e => e.msg === 'headless permission answered').map(e => e.data as { tool: string; allow: boolean });
 
 describe('read-only answers (pure)', () => {
