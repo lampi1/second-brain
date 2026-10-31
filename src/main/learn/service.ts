@@ -463,6 +463,8 @@ export class LearnService {
     let found: LessonFact[];
     try { found = parseTopicFacts(jsonIn(r.text), list, 1); } catch (e) { set({ state: 'done' }); return skip(`failed: ${errText(e)}`.slice(0, 200)); }
     this.edit(id, l => ({ ...l, ...this.cost(l, r, false), prep: { ...(l.prep ?? { phases: {} }), refs: found.length } }));
+    // nothing found because its tools were refused is a failed search, never a quiet "none" (as in research)
+    if (!found.length && r.deniedTools?.length) { set({ state: 'done' }); return skip(`failed: ${DENIED_PREFIX}${r.deniedTools.join(', ')}`.slice(0, 200)); }
     if (!found.length) { set({ state: 'done' }); this.phase(id, { refs: 'done' }); return none; }
     // the same web verification as the web research's: a run that did not write the facts re-reads each page
     const vr = await this.run(req, { cwd: webDir, prompt: verifyPrompt(lang, found, true), effort, round: 'impara-verify-refs', timeoutMs: 6 * MIN, web: true });

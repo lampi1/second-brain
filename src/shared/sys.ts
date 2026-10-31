@@ -14,6 +14,7 @@ export const SYS_IT = {
   'sys.stoppedByYouResend': 'Interrotto da te: riparto col tuo messaggio.',
   'sys.interrupted': 'Interrotto.',
   'sys.queueCancelled': (p: { n: number }) => `Messaggi in coda annullati: ${p.n}.`,
+  'sys.restartResendFailed': (p: { n: number }) => `Il motore è ripartito dopo uno stop ignorato, ma ${p.n === 1 ? 'il messaggio in coda non è stato inviato' : `${p.n} messaggi in coda non sono stati inviati`}: rimandalo.`,
 
   // ---- claude.ts: API_ERRORS (onAssistant m.error) ----
   'sys.api.authentication_failed': 'Login di Claude non valido: esegui `claude` nel terminale e fai /login, poi riprova.',
@@ -161,6 +162,7 @@ export const SYS_EN: typeof SYS_IT = {
   'sys.stoppedByYouResend': 'Stopped by you: restarting with your message.',
   'sys.interrupted': 'Interrupted.',
   'sys.queueCancelled': (p: { n: number }) => `Queued messages cancelled: ${p.n}.`,
+  'sys.restartResendFailed': (p: { n: number }) => `The engine restarted after an ignored stop, but ${p.n === 1 ? 'the queued message was not sent' : `${p.n} queued messages were not sent`}: send it again.`,
 
   'sys.api.authentication_failed': 'Claude login not valid: run `claude` in a terminal and `/login`, then retry.',
   'sys.api.oauth_org_not_allowed': 'This account cannot use Claude Code: check the login (`claude /login`).',
@@ -271,6 +273,7 @@ export const SYS_DE: typeof SYS_IT = {
   'sys.stoppedByYouResend': 'Von dir gestoppt: startet mit deiner Nachricht neu.',
   'sys.interrupted': 'Unterbrochen.',
   'sys.queueCancelled': (p: { n: number }) => `Nachrichten in der Warteschlange verworfen: ${p.n}.`,
+  'sys.restartResendFailed': (p: { n: number }) => `Die Engine wurde nach einem ignorierten Stopp neu gestartet, aber ${p.n === 1 ? 'die wartende Nachricht wurde nicht gesendet' : `${p.n} wartende Nachrichten wurden nicht gesendet`}: sende sie erneut.`,
 
   'sys.api.authentication_failed': 'Claude-Anmeldung ungültig: führ `claude` in einem Terminal aus und dann `/login`, danach erneut versuchen.',
   'sys.api.oauth_org_not_allowed': 'Dieses Konto kann Claude Code nicht nutzen: prüf die Anmeldung (`claude /login`).',

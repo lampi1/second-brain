@@ -234,6 +234,16 @@ describe('LearnService', () => {
     expect(done.degraded).toEqual(['files']);
   });
 
+  it('a topics web search that found nothing because its tools were refused is a failed phase too', async () => {
+    const { svc, store } = make(async r => (r.round === 'impara-refs' ? { ok: true, text: '{"facts":[]}', costUsd: 0, engine: 'opencode', model: 'cheap', deniedTools: ['webfetch'] } : fast(r)), { web: true, away: true });
+    const l = svc.start({ kind: 'pr', ask: 'Come arrivano le risposte', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    await until(() => store.get(l.id)?.state === 'ready' || store.get(l.id)?.state === 'more');
+    const done = store.get(l.id)!;
+    expect(done.prep).toMatchObject({ phases: { refs: 'skip' }, why: { refs: 'failed: tools refused: webfetch' } });
+    expect(done.state).toBe('ready');
+    expect(done.degraded).toEqual(['refs']);
+  });
+
   it('a research that read and found nothing, with no tool refused, stays a plain ready', async () => {
     const { svc, store } = make(async r => (r.round === 'impara-files' ? { ok: true, text: '{"facts":[]}', costUsd: 0, engine: 'claude', model: null } : fast(r)));
     const l = svc.start({ kind: 'text', ask: 'Come funziona lo streaming', text: 'Due attese da 100 ms.', depth: 'quick', level: 'new' });

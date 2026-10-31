@@ -340,7 +340,8 @@ export function permissionView(tc: Obj, known: { name?: string; summary?: string
     : outside ? `${PERMISSION_LABEL.external_directory}: ${title || s(args.parentDir)}`
     : title || known?.summary || `${kindName}: permesso`;
   const lines = [
-    s(args.command),
+    // a multi-line command keeps one line each: flattened, «git status» + «git push --force» would read as one
+    ...s(args.command).split(/\r?\n/),
     contentText(tc.content),
     ...Object.entries(args).filter(([k, v]) => k !== 'command' && v !== undefined && v !== '').map(([k, v]) => argLine(k, v)),
     ...arr(tc.locations).map(l => s(o(l).path)),
@@ -912,13 +913,15 @@ export class AcpSession implements HarnessSession {
    *  most YESNO_RETRIES times in a row). null = shown; a string = refused, with how to ask. */
   async askUser(q: AppAsk): Promise<string | null> {
     if (!this.opts.appAsk) return 'ask_user: this engine has its own question tool; use it.';
-    if (this.exited || !this.proc) throw new Error(NOT_ACTIVE);
+    // an engine being restarted (it ignored a stop) or closed asks nothing: its answer would go nowhere
+    const gone = () => this.exited || !this.proc || this.wedged || this.closing;
+    if (gone()) throw new Error(NOT_ACTIVE);
     const text = q.question.trim().slice(0, 1000);
     if (!text) return 'ask_user: write the question.';
     const gate = this.opts.yesNo ?? yesNoGateOn(process.env);
     const briefMissing = () => gate && !this.briefOff && !!this.opts.briefReady && !this.opts.briefReady();
     if (briefMissing() && this.yesNoRefused < YESNO_RETRIES) await new Promise(r => setTimeout(r, BRIEF_GRACE_MS));
-    if (this.exited || !this.proc) throw new Error(NOT_ACTIVE);
+    if (gone()) throw new Error(NOT_ACTIVE);
     const noBrief = briefMissing();
     if (noBrief && this.yesNoRefused >= YESNO_RETRIES) this.briefOff = true;
     if (noBrief && this.yesNoRefused < YESNO_RETRIES) {
@@ -949,6 +952,8 @@ export class AcpSession implements HarnessSession {
       said = labels.length ? labels.join(', ') : '(nessuna risposta)';
     } else if (!answer.allow) said = answer.message?.trim() ? `nessuna scelta; ha scritto: «${answer.message.trim()}»` : 'saltata, nessuna scelta';
     else throw new Error('Questa è una domanda: rispondi scegliendo le opzioni.');
+    // an engine being restarted or closed would drop the answer in a queue nobody drains: say so, never a lost answer
+    if (this.exited || !this.proc || this.wedged || this.closing) throw new Error(NOT_ACTIVE);
     this.asks.delete(requestId);
     log.info('chats', 'acp app question answered', { chat: this.opts.chatId, data: { engine: this.engine, requestId } });
     this.sink.resolved(requestId);

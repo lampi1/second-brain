@@ -511,6 +511,29 @@ describe('ChatManager', () => {
     console.log(`[timing] deaf cancel: turn stopped in ${stoppedMs} ms, next message answered at ${resentMs} ms`);
   }, 60000);
 
+  // the «Invia subito» case itself: the message queued behind the deaf turn goes to the new engine, sent once
+  it('«Invia subito» on an engine that ignores the stop: the queued message runs on the new engine', async () => {
+    const e = env();
+    const curLog = path.join(e.userData, 'cursor.jsonl');
+    const { m } = manager(e, { enginePaths: { claude: FAKE, cursor: FAKE_CURSOR }, env: { FAKE_CURSOR_LOG: curLog, CURSOR_CONFIG_DIR: tmp('cursor-user') } });
+    const c = await m.create({ harness: 'cursor', cwd: e.cwd, prompt: 'deafcancel' });
+    await waitFor(() => m.items(c.id).some(i => i.kind === 'assistant' && i.text.includes('lavoro sordo')), 'the deaf turn');
+    const sid = m.list()[0]?.sessionId;
+    const t0 = Date.now();
+    await m.send(c.id, 'subito');
+    await m.stop(c.id, true);
+    await waitFor(() => results(m, c.id).length === 2 && m.list()[0]?.state === 'idle', 'the queued message answered on a new engine', 20000);
+    const answeredMs = Date.now() - t0;
+    expect(answeredMs).toBeLessThan(12000); // 5 s grace, not the engine's 60 s
+    expect(results(m, c.id).map(r => r.kind === 'result' && [r.isError, !!r.interrupted])).toEqual([[false, true], [false, false]]);
+    expect(cursorLog(curLog).filter(l => l.argv)).toHaveLength(2);
+    expect(cursorLog(curLog).filter(l => l.method === 'session/load').map(l => l.params?.sessionId)).toEqual([sid]);
+    const prompts = cursorLog(curLog).filter(l => l.method === 'session/prompt').map(l => JSON.stringify(l.params?.prompt ?? ''));
+    expect(prompts.filter(p => p.includes('subito'))).toHaveLength(1); // sent once, on the new engine
+    expect(m.items(c.id).filter(i => i.kind === 'user').map(i => (i as { text: string }).text)).toEqual(['deafcancel', 'subito']);
+    console.log(`[timing] deaf cancel + Invia subito: queued message answered at ${answeredMs} ms`);
+  }, 60000);
+
   // brain hooks (wiring.ts connects them to BrainService)
   it('calls the brain hooks: waiting, turn end with the first prompt, done, rate limits', async () => {
     const e = env();

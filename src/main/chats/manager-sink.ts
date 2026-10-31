@@ -13,6 +13,7 @@ import { AgentChildrenReducer } from './agent-children';
 import { effortValue, initialEffort, observeEffort, submitEffort } from './effort';
 import type { Rec } from './manager-types';
 import { ManagerWork } from './manager-work';
+import { sysItem } from './manager-helpers';
 
 /** What a session reports (items, requests, state patches) turned into the chat record and contract events. */
 export abstract class ManagerSink extends ManagerWork {
@@ -117,7 +118,11 @@ export abstract class ManagerSink extends ManagerWork {
       if (this.chats.get(chatId) !== r || this.quitting) return;
       await this.ensureSession(r);
       for (const m of carry) r.session?.send(m.text, m.images);
-    }).catch(e => log.warn('chats', 'queued messages not resent after an engine restart', { chat: chatId, cause: errText(e), hint: 'the user sends them again', data: { carried: carry.length } }));
+    }).catch(e => {
+      log.warn('chats', 'queued messages not resent after an engine restart', { chat: chatId, cause: errText(e), hint: 'the user sends them again', data: { carried: carry.length } });
+      // their rows already look sent: the chat says they were not
+      if (this.chats.get(chatId) === r) this.addItem(r, sysItem('restartResendFailed', { n: carry.length }, 'warn'), false);
+    });
   }
 
   private applyPatch(r: Rec, p: SessionPatch): void {

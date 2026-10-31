@@ -3,7 +3,7 @@
 // after every open; without modelOption the same answers give no model choice. No real engine ever runs here.
 import { afterEach, describe, expect, it } from 'vitest';
 import path from 'node:path';
-import { AcpSession, type AcpOptions } from '../../../src/main/chats/acp';
+import { AcpSession, permissionView, type AcpOptions } from '../../../src/main/chats/acp';
 import { autoPermit } from '../../../src/main/chats/auto-permit';
 import { TOOL_CLASSES } from '../../../src/shared/agents';
 import { FAKE_CURSOR, cursorLog, recSink, tmp, waitFor, type RecSink } from './helpers';
@@ -137,6 +137,12 @@ describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
     expect(cursorLog(logFile).find(l => l.answer)?.answer?.outcome?.optionId).toBe('once');
   });
 
+  it('a multi-line command keeps one line per command in the panel, never one flattened line', () => {
+    const v = permissionView({ title: 'bash', rawInput: { command: 'git status\r\ngit push   --force origin main', description: 'two steps' } }, undefined, 'Execute');
+    expect(v.detail.split('\n').slice(0, 2)).toEqual(['git status', 'git push --force origin main']);
+    expect(v.detail).toContain('description: two steps');
+  });
+
   it('shows an OpenCode MCP permission by its name and real arguments, still asking once', async () => {
     const { s, sink, logFile } = start({ ...OPENCODE, env: { FAKE_ACP_OPENCODE: '1' } });
     await waitFor(() => s.state === 'idle', 'ready');
@@ -248,6 +254,17 @@ describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
     expect(sink.resolvedIds).toContain(q2.id);
     expect(s.state).toBe('idle');
     expect(prompts(logFile)).toHaveLength(1);
+  });
+
+  it('ask_user on an engine being restarted after an ignored stop is refused, never a panel whose answer goes nowhere', async () => {
+    const { s, sink } = start({ ...OPENCODE, appAsk: true, briefReady: () => true, yesNo: true, cancelGraceMs: 200, env: { FAKE_ACP_OPENCODE: '1' } });
+    await waitFor(() => s.state === 'idle', 'ready');
+    s.send('deafcancel');
+    await waitFor(() => [...sink.items.values()].some(i => i.kind === 'assistant' && i.text.includes('lavoro sordo')), 'the deaf turn');
+    await s.interrupt({ byUser: true });
+    await waitFor(() => sink.patches.some(p => p.restart), 'the restart');
+    await expect(s.askUser({ question: 'Procedo?', recommended: 'yes' })).rejects.toThrow();
+    expect(sink.pendings.filter(p => p.type === 'question')).toHaveLength(0);
   });
 
   it('ask_user without its brief is sent back (with how to ask) at most twice, then shown; never on an engine with its own tool', async () => {
