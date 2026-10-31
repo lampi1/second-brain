@@ -87,7 +87,7 @@ export class Artifacts {
     };
     this.put(owner, item);
     if (target === 'next-ask') {
-      where = 'sulla tua prossima domanda (AskUserQuestion)';
+      where = 'sulla tua prossima domanda (AskUserQuestion o il tool domande del tuo motore)';
       this.arm(owner, item.id);
     }
     log.info('genui', 'visual shown', { chat: caller.id, data: { key, component: ui.spec.component, target, owner } });

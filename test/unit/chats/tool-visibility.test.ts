@@ -2,6 +2,7 @@
 // two tools only for the research, nothing of delegation for Lampo, the Orchestrator's own endpoint tools hidden.
 import { describe, expect, it } from 'vitest';
 import { toolShownToChat, toolShownToUnknown, toolShownToWarm } from '../../../src/main/chats/tool-visibility';
+import { appAsks } from '../../../src/main/engines/registry';
 
 const chat = (o: Record<string, unknown> = {}): Parameters<typeof toolShownToChat>[0] => ({ isOrchestrator: false, parentId: null, ...o }) as never;
 
@@ -21,6 +22,17 @@ describe('tool visibility', () => {
     expect(toolShownToChat(chat(), [], 'agent_delegate')).toBe(false);
     expect(toolShownToChat(chat(), undefined, 'agent_delegate')).toBe(true);
     expect(toolShownToChat(chat(), undefined, 'plan_propose')).toBe(false);
+  });
+  it('ask_user only for a chat whose engine has no question tool of its own (OpenCode), Orchestrator and Lampo included', () => {
+    expect(toolShownToChat(chat(), undefined, 'ask_user')).toBe(false);
+    expect(toolShownToChat(chat(), undefined, 'ask_user', true)).toBe(true);
+    expect(toolShownToChat(chat({ isOrchestrator: true }), undefined, 'ask_user', true)).toBe(true);
+    expect(toolShownToChat(chat({ quick: true }), undefined, 'ask_user', true)).toBe(true);
+    expect(toolShownToChat(chat({ research: true }), undefined, 'ask_user', true)).toBe(false);
+    expect(toolShownToUnknown('ask_user')).toBe(false);
+    expect(toolShownToWarm({ role: 'strategist', launches: ['scout'] }, 'ask_user')).toBe(false);
+    // which engines: an ACP engine but Cursor (its cursor/ask_question reaches the app); never Claude or Codex
+    expect([appAsks({ kind: 'acp' }), appAsks({ kind: 'acp', cursorExtras: true }), appAsks({ kind: 'claude' }), appAsks({ kind: 'codex' }), appAsks(null)]).toEqual([true, false, false, false, false]);
   });
   it('a waiting engine sees what its role\'s root chat would', () => {
     expect(toolShownToWarm({ role: 'scout', launches: [] }, 'agent_delegate')).toBe(false);

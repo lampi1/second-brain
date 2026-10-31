@@ -171,6 +171,9 @@ export interface Lesson {
   /** preparing = nothing yet; more = the first pieces are here, the rest is being written; ready; failed (error) */
   state: LessonState;
   error?: string;
+  /** research phases the lesson asked for that failed (an error, or tools refused so it could not look): the lesson
+   *  stands on less than it should and says so, never a silent «ready» */
+  degraded?: PrepPhase[];
   diagram: string;
   /** the planned main pieces' titles (the rail shows the ones still to come) */
   outline: string[];

@@ -46,7 +46,9 @@ export type TeachRound = 'impara-web' | 'impara-files' | 'impara-refs' | 'impara
  *  web = the web-only run (Claude, no file: compare/headless.ts web mode); a prompt still to come = a warm start (the
  *  tutor: null = not needed); onText = the answer so far, as it streams. */
 export interface TeachRun { cwd: string; prompt: string | Promise<string | null>; effort: Effort | null; round: TeachRound; timeoutMs: number; teacher: LessonTeacher | null; web?: boolean; onText?: (text: string) => void }
-export type TeachResult = { ok: true; text: string; costUsd: number | null; engine: string | null; model: string | null } | { ok: false; error: string };
+/** deniedTools: tools the read-only run asked for and was refused (headless.ts): a research with no fact and refused
+ *  tools could not look, it did not find nothing */
+export type TeachResult = { ok: true; text: string; costUsd: number | null; engine: string | null; model: string | null; deniedTools?: string[] } | { ok: false; error: string };
 
 export interface LearnDeps extends GatherDeps {
   store: LessonStore;
@@ -73,6 +75,12 @@ export interface LearnDeps extends GatherDeps {
 
 const KINDS: readonly LessonKind[] = ['pr', 'topic', 'text'];
 const MIN = 60_000;
+/** the start of a research phase's why when it could not look (read() in research) */
+const DENIED_PREFIX = 'tools refused: ';
+/** The research phases asked for that failed: their why starts with "failed:" (research, refs). */
+export function degradedPhases(prep: LessonPrep | undefined): PrepPhase[] {
+  return (['web', 'files', 'refs', 'verify'] as const).filter(k => prep?.why?.[k]?.startsWith('failed'));
+}
 const START_FILE = 'richiesta.json';
 const GUIDE_FILE = 'guida-app.md';
 /** the empty folder a web run starts in (it reads no file anyway) */
@@ -281,7 +289,7 @@ export class LearnService {
       if (!this.d.store.get(id)) return; // removed while its material was being read: nothing is written back
       for (const [name, content] of Object.entries(m.files)) this.d.store.writeFile(id, name, content);
       const set = this.edit(id, l => ({ ...l, sources: m.sources, ...(m.pr ? { pr: m.pr } : {}), ...(m.title ? { title: m.title.slice(0, 120) } : {}), ...(m.cwd ? { readDir: m.cwd } : {}),
-        prep: { phases: { gather: 'done' } }, facts: undefined, clarify: undefined }));
+        prep: { phases: { gather: 'done' } }, facts: undefined, clarify: undefined, degraded: undefined }));
       if (!set) return;
       const facts = await this.research(id, req, m, set);
       if (!facts || !this.d.store.get(id)) return;
@@ -307,11 +315,13 @@ export class LearnService {
         const outline = plan.outline.length >= plan.steps.length ? plan.outline : plan.steps.map(s => s.title);
         more = outline.length > plan.steps.length;
         const paid = gated.run ? { ...l, ...this.cost(l, r) } : l;
-        return { ...l, ...this.cost(paid, gated.run ?? r), quality: gated.quality, title: plan.title || l.title, diagram: plan.diagram, outline, steps: plan.steps, checks: plan.checks, ...(plan.subject && !l.subject ? { subject: plan.subject } : {}),
+        const degraded = degradedPhases(l.prep);
+        return { ...l, ...this.cost(paid, gated.run ?? r), degraded: degraded.length ? degraded : undefined, quality: gated.quality, title: plan.title || l.title, diagram: plan.diagram, outline, steps: plan.steps, checks: plan.checks, ...(plan.subject && !l.subject ? { subject: plan.subject } : {}),
           ...(plan.explainQ ? { explain: { q: plan.explainQ } } : {}), state: more ? 'more' : 'ready', at: stepKey(plan.steps[0]!.id), error: undefined,
           prep: { ...(l.prep ?? { phases: {} }), phases: { ...l.prep?.phases, plan: 'done' } } };
       });
-      log.info('learn', 'lesson plan ready', { data: { id, steps: plan.steps.length, planned: done?.outline.length, facts: facts.length, costUsd: r.costUsd } });
+      log.info('learn', 'lesson plan ready', { data: { id, steps: plan.steps.length, planned: done?.outline.length, facts: facts.length, costUsd: r.costUsd, degraded: done?.degraded ?? [] } });
+      if (done?.degraded) log.warn('learn', 'lesson ready with a failed research', { cause: (done.degraded.map(k => `${k}: ${done.prep?.why?.[k] ?? ''}`).join(' · ')).slice(0, 400), hint: 'the lesson says so on its page; a refused tool means the engine denied the read-only run its tools: allow them for that engine and start the lesson again', data: { id, degraded: done.degraded } });
     } catch (e) {
       log.warn('learn', 'lesson preparation failed', { cause: errText(e), hint: 'Riprova from the lesson' });
       this.edit(id, l => ({ ...l, state: 'failed', error: errText(e).slice(0, 300) }));
@@ -352,7 +362,12 @@ export class LearnService {
     const read = (r: TeachResult | null, webSide: boolean, start: number): { facts: LessonFact[]; v: unknown; error?: string } => {
       if (!r) return { facts: [], v: null };
       if (!r.ok) return { facts: [], v: null, error: r.error };
-      try { const v = jsonIn(r.text); return { facts: parseFacts(v, webSide, start), v }; } catch (e) { return { facts: [], v: null, error: errText(e) }; }
+      try {
+        const v = jsonIn(r.text), facts = parseFacts(v, webSide, start);
+        // nothing found because it could not look (an engine whose read tools the read-only run refuses): a failure
+        if (!facts.length && r.deniedTools?.length) return { facts, v, error: `${DENIED_PREFIX}${r.deniedTools.join(', ')}` };
+        return { facts, v };
+      } catch (e) { return { facts: [], v: null, error: errText(e) }; }
     };
     const w = read(rw, true, 1), f = read(rf, false, w.facts.length + 1);
     // with the web on, the files run was told to cite files only: a fact without one is left out
@@ -448,6 +463,8 @@ export class LearnService {
     let found: LessonFact[];
     try { found = parseTopicFacts(jsonIn(r.text), list, 1); } catch (e) { set({ state: 'done' }); return skip(`failed: ${errText(e)}`.slice(0, 200)); }
     this.edit(id, l => ({ ...l, ...this.cost(l, r, false), prep: { ...(l.prep ?? { phases: {} }), refs: found.length } }));
+    // nothing found because its tools were refused is a failed search, never a quiet "none" (as in research)
+    if (!found.length && r.deniedTools?.length) { set({ state: 'done' }); return skip(`failed: ${DENIED_PREFIX}${r.deniedTools.join(', ')}`.slice(0, 200)); }
     if (!found.length) { set({ state: 'done' }); this.phase(id, { refs: 'done' }); return none; }
     // the same web verification as the web research's: a run that did not write the facts re-reads each page
     const vr = await this.run(req, { cwd: webDir, prompt: verifyPrompt(lang, found, true), effort, round: 'impara-verify-refs', timeoutMs: 6 * MIN, web: true });

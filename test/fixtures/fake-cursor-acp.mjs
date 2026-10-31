@@ -8,7 +8,7 @@
 // What a prompt does is chosen by words in it:
 //   perm → a shell tool call that asks permission (allow-always offered) · locked → the same without allow-always
 //   ask → cursor/ask_question (one single-choice and one multi-choice question; asksn: one yes/no question) · plan → cursor/create_plan
-//   edit → an edit tool call with a diff · todo → a plan update · slow → streams until cancelled
+//   edit → an edit tool call with a diff · todo → a plan update · slow → streams until cancelled · deafcancel → ignores cancel (FAKE_ACP_DEAF_MS)
 //   think → streams reasoning ("Penso di usare la libreria vecchia. Passo 1. …", FAKE_CURSOR_THINK_TICKS) until cancelled
 //   readgate[=<path>] → a read tool call (of a.txt, or that path relative to the cwd) that asks permission, its
 //   location in the request too: "Letto a.txt" when allowed · writegate[=<path>] → an edit tool call that
@@ -85,6 +85,9 @@ const out = obj => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...o
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const delay = () => sleep(Number(process.env.FAKE_CURSOR_DELAY ?? 5));
 const sessions = new Set();
+// OpenCode 1.19.5 permission/index.ts keeps approved rules at instance scope; matching rules suppress Asked.
+// Only the trailing-wildcard shell case needed by these tests is modelled; no shell command is executed.
+const rememberedPermissions = new Set(process.env.FAKE_ACP_APPROVED_PATTERN ? [process.env.FAKE_ACP_APPROVED_PATTERN] : []);
 const mcpBySession = new Map(); // sessionId → the mcpServers list it was opened with
 const waiting = new Map(); // our request id → resolve(result)
 let seq = 1000;
@@ -125,6 +128,14 @@ async function prompt(id, p) {
     turn = null;
     return out({ id, result: { stopReason: 'end_turn' } });
   }
+  if (/deafcancel/.test(text)) {
+    // an engine that ignores session/cancel (OpenCode answered a cancelled prompt after 55 s, 2026-10-31)
+    update(sid, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'lavoro sordo' } });
+    await sleep(Number(process.env.FAKE_ACP_DEAF_MS ?? 60000));
+    update(sid, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: ' in ritardo' } });
+    turn = null;
+    return out({ id, result: { stopReason: 'cancelled' } });
+  }
   const netRetry = text.startsWith('Il turno si è interrotto per un errore di rete');
   if (/neterr/.test(text) || netRetry) {
     const fail = netErrLeft > 0;
@@ -142,13 +153,42 @@ async function prompt(id, p) {
   if (/crash/.test(text)) { process.stderr.write('fatal: fake cursor crash\n'); process.exit(3); }
   if (/garbage/.test(text)) process.stdout.write('not json at all\n{"jsonrpc":\n');
   let final = 'Ciao dal motore';
+  if (text === 'opaquegate' || text === 'rawlocationsgate') {
+    const opaque = text === 'opaquegate';
+    log({ answer: await ask('session/request_permission', { sessionId: sid,
+      toolCall: opaque
+        ? { toolCallId: 'opaque', title: 'Read a safe file', locations: [{ path: 'safe.txt' }] }
+        : { toolCallId: 'read', kind: 'read', rawInput: { path: 'local.txt' }, locations: [{ path: '../outside.txt' }] },
+      options: [...(opaque ? [opt('once', 'Allow once', 'allow_once')] : []), opt('always', 'Always', 'allow_always')],
+    }) });
+  }
+  if (text === 'mcpgate' || text === 'outsidegate') {
+    // OpenCode 1.19.5 (acp/agent.ts): the tool_call carries the real input; the permission then sends kind "other",
+    // the permission name as title, its (often empty) metadata as rawInput and the once/always/reject options.
+    const mcp = text === 'mcpgate';
+    const tcId = mcp ? 'call_mcp' : 'call_ext';
+    const title = mcp ? 'github_search_issues' : 'external_directory';
+    update(sid, { sessionUpdate: 'tool_call', toolCallId: tcId, title, kind: 'other', status: 'pending', rawInput: mcp ? { query: 'acp cancel', repo: 'lampi1/second-brain-app' } : {} });
+    log({ answer: await ask('session/request_permission', { sessionId: sid,
+      toolCall: { toolCallId: tcId, title: mcp ? title : '/home/u/other', kind: 'other', status: 'pending', rawInput: mcp ? {} : { filepath: '/home/u/other/a.txt', parentDir: '/home/u/other' }, locations: mcp ? [] : [{ path: '/home/u/other/a.txt' }] },
+      options: [opt('once', 'Allow once', 'allow_once'), opt('always', 'Always allow', 'allow_always'), opt('reject', 'Reject', 'reject_once')],
+    }) });
+  }
   if (/perm|locked/.test(text)) {
-    const tc = { toolCallId: 'tc_shell', title: '`npm test`', kind: 'execute', status: 'pending', rawInput: { command: 'npm test' } };
+    const command = text.includes('push-perm') ? (text.includes('force') ? 'git push --force origin topic' : 'git push origin topic') : 'npm test';
+    // tool/shell.ts collect + permission/arity.ts: git has arity 2, so BOTH pushes match git push *.
+    const alwaysPattern = command.split(' ').slice(0, 2).join(' ') + ' *';
+    const tc = { toolCallId: 'tc_shell', title: `\`${command}\``, kind: 'execute', status: 'pending', rawInput: { command } };
     update(sid, { sessionUpdate: 'tool_call', ...tc });
     const options = [opt('allow-once', 'Allow once', 'allow_once'), ...(/locked/.test(text) ? [] : [opt('allow-always', 'Allow `npm test` always', 'allow_always')]), opt('reject-once', 'Reject', 'reject_once')];
-    const r = await ask('session/request_permission', { sessionId: sid, toolCall: { toolCallId: tc.toolCallId, title: 'Run `npm test`', kind: 'execute', status: 'pending', content: [{ type: 'content', content: { type: 'text', text: 'Esegue i test' } }] }, options });
+    const cached = process.env.FAKE_ACP_OPENCODE && [...rememberedPermissions].some(pattern => command.startsWith(pattern.slice(0, -1)));
+    const r = cached
+      ? { outcome: { outcome: 'selected', optionId: 'allow-always' } }
+      : await ask('session/request_permission', { sessionId: sid, toolCall: { toolCallId: tc.toolCallId, title: `Run \`${command}\``, kind: 'execute', status: 'pending', content: [{ type: 'content', content: { type: 'text', text: 'Esegue i test' } }] }, options });
     log({ answer: r });
     const o = r?.outcome ?? {};
+    if (process.env.FAKE_ACP_OPENCODE && o.outcome === 'selected' && o.optionId === 'allow-always') rememberedPermissions.add(alwaysPattern);
+    log({ method: 'fake/permission-result', params: { command, alwaysPattern, cached: !!cached, allowed: o.outcome === 'selected' && o.optionId.startsWith('allow') } });
     if (o.outcome === 'selected' && o.optionId.startsWith('allow')) {
       update(sid, { sessionUpdate: 'tool_call_update', toolCallId: tc.toolCallId, status: 'in_progress' });
       update(sid, { sessionUpdate: 'tool_call_update', toolCallId: tc.toolCallId, status: 'completed', content: [{ type: 'content', content: { type: 'text', text: `3 passed (${o.optionId})` } }] });

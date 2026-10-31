@@ -57,6 +57,9 @@ export interface SessionPatch {
   effortSubmitted?: string | null;
   /** Resolved by a supported thread/start or thread/resume response; not the current turn. */
   effortSessionDefault?: string | null;
+  /** The engine never answered the user's stop: end it now and resume the same session on a new one; these messages
+   *  had not reached it yet and go to the new one (ACP: acp.ts interrupt). */
+  restart?: { text: string; images: readonly ImageAttachment[] }[];
   state?: ChatState;
   sessionId?: string;          // the CLI's own session id (learned at init, or new after a fork)
   model?: string;              // the model actually in use (from init)
@@ -163,6 +166,9 @@ export interface PreToolHook {
   turnEnded(): void;
 }
 
+/** A yes/no question asked through the app's ask_user tool (askUser): the option marked «(consigliato)» is the one recommended. */
+export interface AppAsk { question: string; header?: string; recommended: 'yes' | 'no' }
+
 export interface HarnessSession {
   readonly harness: Harness;
   readonly state: ChatState;
@@ -190,6 +196,9 @@ export interface HarnessSession {
   interrupt(opts?: { keepQueued?: boolean; byUser?: boolean }): Promise<void>;
   /** the running turn is not retried by itself after a network error (Cursor only: a failed hand-off turn) */
   noRetry?(): void;
+  /** An engine with no question tool of its own (OpenCode over ACP): the app's ask_user MCP tool puts a yes/no question
+   *  on this chat; the user's answer comes back as the user's next message. A string = refused, with how to ask. */
+  askUser?(q: AppAsk): Promise<string | null>;
   setModel(model: string | null): Promise<void>;
   setPermissionMode(mode: PermissionMode): Promise<void>;
   setEffort(effort: Effort | null): Promise<void>;

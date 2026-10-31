@@ -23,16 +23,21 @@ const LAMPO_HIDDEN: ReadonlySet<string> = new Set([...APP_CHAT_TOOLS, 'brain_scr
 /** the maintenance research's tools (ADR 0132, 0195, brainmodel/research-tools.ts) */
 const RESEARCH_TOOLS: ReadonlySet<string> = new Set(['maintenance_pack', 'maintenance_propose', 'maintenance_role_trial']);
 
+/** the app's yes/no question (chats/ask-tool.ts): only for a chat whose engine has no question tool of its own */
+const ASK_TOOL = 'ask_user';
+
 /** No chat and no waiting engine: every tool but the research's. */
-export const toolShownToUnknown = (tool: string): boolean => !RESEARCH_TOOLS.has(tool);
+export const toolShownToUnknown = (tool: string): boolean => !RESEARCH_TOOLS.has(tool) && tool !== ASK_TOOL;
 
 /** A waiting engine launched for a role: what that role's root chat would see (it lists tools once, at start). */
 export function toolShownToWarm(warm: NonNullable<WarmLaunch['view']>, tool: string): boolean {
-  return !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && (tool !== 'agent_ask_parent' || !!warm.child) && !PLAN_TOOLS.has(tool) && !RESEARCH_TOOLS.has(tool);
+  return !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && (tool !== 'agent_ask_parent' || !!warm.child) && !PLAN_TOOLS.has(tool) && !RESEARCH_TOOLS.has(tool) && tool !== ASK_TOOL;
 }
 
-/** A chat of the app: `launches` = the roles it may launch (undefined = unknown). */
-export function toolShownToChat(s: Pick<ChatSummary, 'research' | 'isOrchestrator' | 'quick' | 'parentId' | 'plan' | 'run'>, launches: readonly string[] | undefined, tool: string): boolean {
+/** A chat of the app: `launches` = the roles it may launch (undefined = unknown); `appAsks` = its engine has no
+ *  question tool of its own (engines/registry.ts appAsks), so it asks with ask_user. */
+export function toolShownToChat(s: Pick<ChatSummary, 'research' | 'isOrchestrator' | 'quick' | 'parentId' | 'plan' | 'run'>, launches: readonly string[] | undefined, tool: string, appAsks = false): boolean {
+  if (tool === ASK_TOOL) return appAsks && !s.research;
   // the maintenance research (ADR 0132): its two tools and nothing of the app's mail, delegation or plans
   if (s.research) return RESEARCH_TOOLS.has(tool) || (!LAMPO_HIDDEN.has(tool) && !tool.startsWith('agent_'));
   if (RESEARCH_TOOLS.has(tool)) return false;

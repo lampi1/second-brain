@@ -31,6 +31,24 @@ Checked against OpenCode 1.19.5 on a real `opencode acp`:
   option; read-only runs and agents capped at plan use it the same way.
 - A model change still reopens the session (ACP engines have `liveModel: false`); the reopen sets the model again.
 - The first-run setup still offers only Claude, Codex and Cursor; OpenCode is turned on from Settings.
+- All ACP engines remain once-only, including unrestricted OpenCode roles: they still have app hard-deny gates.
+  OpenCode 1.19.5's [ACP handler](https://github.com/anomalyco/opencode/blob/v1.19.5/packages/opencode/src/acp/permission.ts)
+  does not forward the upstream `always` patterns to the client or offer a per-execution veto after a cached grant.
+  Its [shell collector](https://github.com/anomalyco/opencode/blob/v1.19.5/packages/opencode/src/tool/shell.ts) and
+  [arity table](https://github.com/anomalyco/opencode/blob/v1.19.5/packages/opencode/src/permission/arity.ts) turn a normal
+  push into `git push *`; [permission reply/evaluation](https://github.com/anomalyco/opencode/blob/v1.19.5/packages/opencode/src/permission/index.ts)
+  stores that allow in instance state and skips `Asked` for matching later commands, including force push. Session
+  scoping alone would not make this safe. Never send `allow_always`, even for a stale client's explicit always answer;
+  the warning explains skipped app checks, not an OpenCode global-config write. Cursor also stays once-only.
+  This prevents the app from creating bypassing grants; it cannot intercept operations a user's existing upstream
+  configuration already allows. No CLI configuration file is written and build/plan remains a working-mode picker.
+- Permission requests retain their ACP `locations` even when an earlier tool update supplied no `rawInput`.
+  Otherwise its cached empty input hides the paths from the existing local-work permission gate, prompting for
+  reads inside the workspace. Locations supplement raw input; role ceilings and outside-workspace checks still apply.
+  This does not introduce an OpenCode permission mode or automatically accept arbitrary engine permission requests.
+  Repeated approval prompts beyond this locations fix remain unresolved: disabling unsafe upstream grants is a safety
+  boundary, not a complete solution to repeated prompts. Tests simulate the upstream wildcard cache without executing
+  shell commands; real-engine end-to-end behavior and low-tier model reliability still need live verification.
 
 ## Consequences
 
