@@ -36,7 +36,8 @@ interface Pick { engine: ChatSummary['harness']; id: string | null; effort: Effo
 /** Where the picker starts: what the scope runs on now (Flash: its card, which it follows). */
 export function startOf(scope: PickerScope): Pick {
   if (scope.kind === 'role') return { engine: scope.profile.engine, id: scope.profile.model, effort: scope.profile.effort ?? null };
-  if (scope.card?.id === FLASH_ID) return { engine: scope.card.engine, id: scope.card.model, effort: scope.card.effort ?? null };
+  // a card without an effort leaves the chat's (flashFollow): show what runs now
+  if (scope.card?.id === FLASH_ID) return { engine: scope.card.engine, id: scope.card.model, effort: scope.card.effort ?? scope.chat.effort ?? null };
   return { engine: scope.chat.harness, id: scope.chat.model || null, effort: scope.chat.effort ?? null };
 }
 
