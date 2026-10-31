@@ -38,7 +38,14 @@ export function chatView(items: readonly ChatItem[], { foldProcess }: { foldProc
   // the turn just dropped: its "Turno finito" line goes too
   let dropResult = false;
   for (const item of items) {
-    if (dropResult && item.kind === 'result') { dropResult = false; continue; }
+    // An emoji prefix may still grow into prose. Wait for finalization rather than flashing an assistant bubble
+    // that will move to the user (or disappear for app news). Keep the eligible target intact in the meantime.
+    if (item.kind === 'assistant' && item.streaming && isReaction(item.text)) continue;
+    if (dropResult && item.kind === 'result') {
+      dropResult = false;
+      // Only successful acknowledgements are silent; failures and interruptions still need the user's attention.
+      if (!item.isError && !item.interrupted) continue;
+    }
     if (foldProcess && (item.kind === 'thinking' || item.kind === 'tool')) {
       const prev = out[out.length - 1];
       if (prev?.kind === 'process') prev.items.push(item);

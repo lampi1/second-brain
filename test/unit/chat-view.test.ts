@@ -15,11 +15,37 @@ describe('chatView', () => {
     expect(v).toEqual([{ kind: 'item', item: user('u1', 'grazie'), reaction: '👍' }]);
   });
 
-  it('keeps a reply with words and a streaming emoji as rows; a second emoji is not drawn', () => {
+  it('keeps a reply with words as a row; a second emoji is not drawn', () => {
     expect(chatView([user('u1', 'x'), said('a1', 'Fatto.')], { foldProcess: false })).toHaveLength(2);
-    expect(chatView([user('u1', 'x'), said('a1', '👍', true)], { foldProcess: false })).toHaveLength(2);
     const v = chatView([user('u1', 'x'), said('a1', '👍'), said('a2', '🎉')], { foldProcess: false });
     expect(v.map(r => r.kind === 'item' && r.item.id)).toEqual(['u1']);
+  });
+
+  it('waits for emoji finalization without flashing a bubble or losing its user target', () => {
+    const prefix = [user('u1', 'grazie'), think('t1'), tool('k1')];
+    for (const text of ['🙏', '🙏 ']) {
+      const pending = chatView([...prefix, said('a1', text, true)], { foldProcess: true });
+      expect(pending.map(r => r.kind === 'item' && r.item.id)).toEqual(['u1', false]);
+      expect(pending[0]).not.toHaveProperty('reaction');
+    }
+    const final = chatView([...prefix, said('a1', '🙏')], { foldProcess: true });
+    expect(final[0]).toMatchObject({ item: { id: 'u1' }, reaction: '🙏' });
+    expect(final).toHaveLength(2);
+    const words = chatView([...prefix, said('a1', '🙏 Grazie!', true)], { foldProcess: true });
+    expect(words[2]).toMatchObject({ item: { id: 'a1', text: '🙏 Grazie!' } });
+  });
+
+  it('never flashes event acknowledgements or attaches them to an earlier user', () => {
+    for (const news of [
+      user('n1', '[evento app] Novità dalle chat di lavoro: ha finito il turno.'),
+      user('n1', 'Task complete', { from: 'another-chat' }),
+    ]) {
+      for (const streaming of [true, false]) {
+        const view = chatView([user('u1', 'grazie'), news, said('a1', '🙏', streaming)], { foldProcess: true });
+        expect(view.some(r => r.kind === 'item' && r.item.id === 'a1')).toBe(false);
+        expect(view.every(r => r.kind !== 'item' || !r.reaction)).toBe(true);
+      }
+    }
   });
 
   it('draws no emoji that is not a reaction to the user', () => {
@@ -38,6 +64,19 @@ describe('chatView', () => {
     const news = user('n1', '[evento app] Novità dalle chat di lavoro: ha finito il turno.');
     const v = chatView([news, said('a1', 'Export pronto.')], { foldProcess: true });
     expect(v).toHaveLength(2);
+  });
+
+  it.each([
+    { isError: true },
+    { isError: false, interrupted: true },
+  ])('keeps an unsuccessful result after a silent acknowledgement: %j', flags => {
+    for (const foldProcess of [true, false]) {
+      const news = user('n1', '[evento app] Novità dalle chat di lavoro: ha finito il turno.');
+      const result: ChatItem = { kind: 'result', id: 'r1', at: 0, costUsd: 0, durationMs: 1000, turns: 1, ...flags };
+      const view = chatView([news, think('t1'), said('a1', '✅'), result], { foldProcess });
+      expect(view).toContainEqual({ kind: 'item', item: result });
+      expect(view.some(row => row.kind === 'item' && row.item.id === 'a1')).toBe(false);
+    }
   });
 
   it('folds an Orchestrator\'s thinking and tool runs into one group and still attaches across it', () => {
