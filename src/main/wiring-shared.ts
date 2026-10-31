@@ -210,8 +210,8 @@ export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: Engin
       return engineInfos().map(e => ({ engine: e.id, label: e.label, enabled: engineOn(brain.settings(), e.id), trusted: e.trusted, effort: e.caps.effort, maxContext: e.kind === 'claude',
         models: (seen[e.id]?.ids ?? []).map(m => withModelFacts(m, reg)), source: seen[e.id]?.ids.length ? seen[e.id]!.at > 0 ? 'observed' as const : 'registry' as const : 'unknown' as const,
         installed: e.kind === 'api' ? null : cli()?.[e.id]?.found ?? null, authenticated: e.kind === 'api' ? engines.hasKey(e.id) : cli()?.[e.id]?.loggedIn ?? null,
-        defaultModel: e.kind !== 'api', modelSelectable: e.kind !== 'acp' || !!engineOf(e.id)?.modelFlag,
-        modelReason: e.kind === 'acp' && !engineOf(e.id)?.modelFlag ? 'Questo adattatore non può applicare una scelta di modello. È disponibile il default CLI.' : null }));
+        defaultModel: e.kind !== 'api', modelSelectable: e.kind !== 'acp' || !!engineOf(e.id)?.modelFlag || !!engineOf(e.id)?.modelOption,
+        modelReason: e.kind === 'acp' && !engineOf(e.id)?.modelFlag && !engineOf(e.id)?.modelOption ? 'Questo adattatore non può applicare una scelta di modello. È disponibile il default CLI.' : null }));
     },
     preferredEngine: () => brain.settings().orchestratorChats.harness ?? null,
     emit: catalog => ctx.emitter.emit('agents:changed', catalog),

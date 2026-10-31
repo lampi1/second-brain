@@ -31,7 +31,10 @@
 // FAKE_CURSOR_NO_AUTH=1 (not logged in: session/new fails -32000), FAKE_CURSOR_NO_LOAD=1 (no loadSession),
 // FAKE_CURSOR_DELAY (ms between chunks), FAKE_CURSOR_NO_IMAGE=1 (promptCapabilities.image false),
 // FAKE_CURSOR_NETERR_HANDOFF=1 (the hand-off turn ends with Cursor's network error), FAKE_CURSOR_MODES=agent (no
-// read-only mode offered), FAKE_CURSOR_SET_MODE_FAILS=1 (session/set_mode answers an error).
+// read-only mode offered), FAKE_CURSOR_SET_MODE_FAILS=1 (session/set_mode answers an error),
+// FAKE_ACP_OPENCODE=1 (OpenCode 1.19.5's shapes: session/new|load answer only configOptions, a model picker of category
+// model, a mode picker build|plan and an effort of category thought_level only on a model that has one; a load goes
+// back to the default model; session/set_mode is refused so the app must use the mode option).
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -65,7 +68,17 @@ const paramDefs = () => [
   { id: 'reasoning_effort', name: 'Effort', category: 'thought_level', values: process.env.FAKE_CURSOR_NO_MEDIUM === '1' ? ['low', 'high'] : ['low', 'medium', 'high', 'xhigh'] },
   { id: 'fast', name: 'Fast', category: 'model_config', values: ['false', 'true'] },
 ].filter(d => process.env.FAKE_CURSOR_NO_THOUGHT !== '1' || d.category !== 'thought_level');
-const configOptions = () => picker ? paramDefs().map(d => ({ id: d.id, name: d.name, category: d.category, type: 'select', currentValue: params[d.id], options: d.values.map(value => ({ value, name: value })) })) : undefined;
+// OpenCode's shape (FAKE_ACP_OPENCODE=1): everything is a config option
+const OPENCODE = process.env.FAKE_ACP_OPENCODE === '1';
+const OC_DEFAULT = 'opencode/big-pickle';
+const ocModels = [OC_DEFAULT, 'openrouter/qwen/qwen3-coder', 'anthropic/claude-sonnet-5-5'];
+const ocState = { model: OC_DEFAULT, mode: 'build', effort: 'medium' };
+const ocOptions = () => [
+  { id: 'model', name: 'Model', category: 'model', type: 'select', currentValue: ocState.model, options: ocModels.map(value => ({ value, name: `Name of ${value}` })) },
+  ...(ocState.model === OC_DEFAULT ? [] : [{ id: 'effort', name: 'Effort', category: 'thought_level', type: 'select', currentValue: ocState.effort, options: ['low', 'medium', 'high', 'max'].map(value => ({ value, name: value })) }]),
+  { id: 'mode', name: 'Session Mode', category: 'mode', type: 'select', currentValue: ocState.mode, options: ['build', 'plan'].map(value => ({ value, name: value })) },
+];
+const configOptions = () => OPENCODE ? ocOptions() : picker ? paramDefs().map(d => ({ id: d.id, name: d.name, category: d.category, type: 'select', currentValue: params[d.id], options: d.values.map(value => ({ value, name: value })) })) : undefined;
 
 process.stdout.on('error', () => {});
 const out = obj => process.stdout.write(`${JSON.stringify({ jsonrpc: '2.0', ...obj })}\n`);
@@ -260,6 +273,7 @@ function request(id, method, p) {
       const sessionId = crypto.randomUUID();
       sessions.add(sessionId);
       mcpBySession.set(sessionId, p.mcpServers ?? []);
+      if (OPENCODE) return out({ id, result: { sessionId, configOptions: configOptions() } });
       return out({ id, result: { sessionId, modes: modesState(), models: modelsState(), configOptions: configOptions() } });
     }
     case 'session/load': {
@@ -268,13 +282,20 @@ function request(id, method, p) {
       // like the real agent: the past is replayed as updates before the answer
       update(p.sessionId, { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: 'vecchia domanda' } });
       update(p.sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'vecchia risposta' } });
+      if (OPENCODE) { ocState.model = OC_DEFAULT; ocState.mode = 'build'; return out({ id, result: { configOptions: configOptions() } }); }
       return out({ id, result: { modes: modesState(), models: modelsState(), configOptions: configOptions() } });
     }
     // the real one writes the user's global CLI config (cli-config.json): second-brain must never call it
     case 'session/set_model': return out({ id, error: { code: -32602, message: 'fake: session/set_model must never be called by second-brain' } });
-    case 'session/set_mode': if (process.env.FAKE_CURSOR_SET_MODE_FAILS === '1') return out({ id, error: { code: -32603, message: 'fake: mode not available' } });
+    case 'session/set_mode': if (OPENCODE || process.env.FAKE_CURSOR_SET_MODE_FAILS === '1') return out({ id, error: { code: -32603, message: 'fake: mode not available' } });
       mode = p.modeId; update(p.sessionId, { sessionUpdate: 'current_mode_update', currentModeId: mode }); return out({ id, result: {} });
     case 'session/set_config_option': {
+      if (OPENCODE) {
+        const o = ocOptions().find(x => x.id === p.configId);
+        if (!o || !o.options.some(x => x.value === p.value)) return out({ id, error: { code: -32602, message: `Invalid params: ${p.configId} not found: ${p.value}` } });
+        ocState[p.configId] = p.value;
+        return out({ id, result: { configOptions: configOptions() } });
+      }
       const d = paramDefs().find(x => x.id === p.configId);
       if (!picker || !d || !d.values.includes(p.value)) return out({ id, error: { code: -32602, message: `Invalid value for ${p.configId}: ${p.value}` } });
       params[d.id] = p.value;

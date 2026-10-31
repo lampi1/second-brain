@@ -1,7 +1,7 @@
 // The engine registry (ADR 0046): every engine the app can run a chat on, with the protocol it speaks (its kind: one
 // adapter per kind, sessions.ts), how it starts and what it can do (caps). The app asks an engine's caps, never its
-// name, so a new engine is one entry. Three sources, in order: the built-in Claude Code (stream-json) and Cursor
-// (ACP), whose start is app code; the app's presets (Anthropic API: the Messages API on the
+// name, so a new engine is one entry. Three sources, in order: the built-in Claude Code (stream-json), Codex, Cursor and
+// OpenCode (ACP), whose start is app code; the app's presets (Anthropic API: the Messages API on the
 // user's key, ADR 0052; all off until the user turns them on); the
 // brain's harness/models.json `engines` entries (an ACP CLI or an HTTP endpoint), which may add engines or change a
 // preset (an id the app removed, REMOVED_ENGINES, is left out). Every engine's start definition has a fingerprint: an engine that is not built in starts only while its
@@ -33,11 +33,13 @@ export interface EngineDef extends EngineInfo, EngineStart {
   defaultOn: boolean;
   /** Cursor's own extras: its config folder snapshot, subagent hooks, price fallback (chats/acp.ts options) */
   cursorExtras?: boolean;
+  /** ACP: the model is chosen on the session's "model" config option (OpenCode), not with a flag (chats/acp.ts) */
+  modelOption?: boolean;
 }
 
 /** The shape of an engine id: a chat saved on an engine since removed stays readable (it cannot start). */
 export const ENGINE_ID = /^[a-z][a-z0-9-]{0,30}$/;
-const BUILT_IN = new Set(['claude', 'cursor', 'codex']);
+const BUILT_IN = new Set(['claude', 'cursor', 'codex', 'opencode']);
 /** Engines the app no longer runs (ADR 0046: Gemini CLI, 15/10): a brain entry with their id is left out and logged once,
  *  the settings saved for them are dropped on load (brain/config.ts fromSaved). */
 export const REMOVED_ENGINES: ReadonlySet<string> = new Set(['gemini', 'kimi']);
@@ -66,6 +68,9 @@ const APP_ENGINES: readonly EngineEntry[] = [
   { id: 'claude', label: 'Claude', name: 'Claude Code', kind: 'claude', login: ['auth', 'login'], defaultOn: true },
   { id: 'cursor', label: 'Cursor', name: 'Cursor', kind: 'acp', command: 'agent', args: ['acp'], modelFlag: '--model', login: ['login'], defaultOn: true, cursorExtras: true },
   { id: 'codex', label: 'Codex', name: 'Codex CLI', kind: 'codex', command: 'codex', args: ['app-server'], keyEnv: 'CODEX_API_KEY', login: ['login'], defaultOn: true },
+  // OpenCode (ADR 0216): any provider the user set up in it (OpenRouter included), through `opencode acp`; login is its
+  // own `opencode auth login`; off until the user turns it on (unlike the three above, few users have it)
+  { id: 'opencode', label: 'OpenCode', name: 'OpenCode', kind: 'acp', command: 'opencode', args: ['acp'], login: ['auth', 'login'], defaultOn: false, modelOption: true },
   { id: ANTHROPIC_API, label: 'Anthropic API', name: 'Anthropic API', kind: 'api', baseUrl: 'https://api.anthropic.com/v1', protocol: 'anthropic', login: [], defaultOn: false },
 ];
 
@@ -192,7 +197,7 @@ export function priceEnginesOf(e: Pick<EngineDef, 'id' | 'kind' | 'protocol'>): 
 export const engineLabel = (id: Harness): string => engineOf(id)?.label ?? id;
 
 /** The engines as the renderer sees them (of the start, only what Settings shows). */
-export const engineInfos = (): EngineInfo[] => list.filter(e => ['claude', 'codex', 'cursor'].includes(e.id)).map(({ id, label, name, kind, caps, source, key, runs, trusted }) => ({ id, label, name, kind, caps, source, key, runs, trusted }));
+export const engineInfos = (): EngineInfo[] => list.filter(e => ['claude', 'codex', 'cursor', 'opencode'].includes(e.id)).map(({ id, label, name, kind, caps, source, key, runs, trusted }) => ({ id, label, name, kind, caps, source, key, runs, trusted }));
 
 /** Per engine, the command override in the environment: SB_<ID>_PATH (SB_CLAUDE_PATH, SB_CURSOR_PATH: the tests'
  *  fakes; a dash in the id becomes an underscore). */

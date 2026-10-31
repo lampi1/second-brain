@@ -14,7 +14,7 @@ const opts: SessionOptions = { chatId: 'c_x', cwd: process.cwd(), model: null, e
 
 describe('engine registry', () => {
   it('knows Claude, Cursor and the presets, in display order, by caps', () => {
-    expect(engines().map(e => e.id)).toEqual(['claude', 'cursor', 'codex', 'anthropic']);
+    expect(engines().map(e => e.id)).toEqual(['claude', 'cursor', 'codex', 'opencode', 'anthropic']);
     expect(engineOf('claude')?.caps.effort).toBe(true);
     expect(engineOf('cursor')?.caps.effort).toBe(true); // the model's thought_level option (issue #97)
     expect(engineOf('anthropic')?.caps.effort).toBe(false);

@@ -34,6 +34,10 @@
 // assistant text ("Error: RetriableError: [aborted] read ECONNRESET", "[unavailable] PING timed out"; seen 2026-10-12 on
 // every Cursor chat at once, hourly). The session sends "continue" by itself, at most twice per user message (5 s,
 // then 20 s), with a visible line; still failing → it stops with a clear warning (isNetError, retryNet).
+// OpenCode (`opencode acp`, checked against 1.19.5): session/new|load answer no `models` and no `modes`, only configOptions
+// (category model with every provider/model id, mode build|plan, thought_level "effort" once a model has one); a load
+// goes back to the default model. With modelOption the chat's model is set there after every open (session-only: its
+// global config is not written), and the mode goes through the mode option.
 // Login: the CLI's own login (cli:login; loginCommand, e.g. `agent login`). No login → session/new fails with auth
 // required (-32000) and the chat shows "Accedi a <label>"; the app never calls `authenticate` (it would start a browser
 // login from a hidden process). Never auto-answers anything. Under tests only a .mjs fake may start (cli.ts
@@ -109,6 +113,11 @@ export interface AcpOptions extends SessionOptions {
   priceFallback?: boolean;
   /** waits before each automatic retry after a network error (default 5 s, 20 s: two retries); tests: short */
   netRetryDelaysMs?: readonly number[];
+  /** the model is the session's configOptions entry of category "model" (OpenCode `opencode acp`): its options are the
+   *  models offered and the chat's model is set there (session/set_config_option, session-only) once the session is
+   *  open. Only for an engine whose session/new answers no `models` and keeps the choice in the session (never for
+   *  Cursor, whose model change writes its global config) */
+  modelOption?: boolean;
 }
 
 /** The prompt that resumes a turn the engine's network error cut. */
@@ -335,6 +344,10 @@ export class AcpSession implements HarnessSession {
   private loading = false;
   private caps: Obj = {};
   private models: { current: string | null; available: string[] } | null = null;
+  /** the configOptions id of the model picker (modelOption engines) and of the mode picker (an engine that answers no
+   *  `modes`): set through session/set_config_option */
+  private modelOption: string | null = null;
+  private modeOption: string | null = null;
   private params: ModelParam[] = [];
   /** the chat's effort (start option, then setEffort): wins over the settings' reasoning */
   private effort: Effort | null;
@@ -539,19 +552,65 @@ export class AcpSession implements HarnessSession {
     this.readState(r);
   }
 
-  /** Models and modes from session/new or session/load. */
+  /** Models and modes from session/new or session/load: the `models` and `modes` fields, else (OpenCode) the
+   *  configOptions entries of category model (modelOption engines only) and mode. */
   private readState(r: Obj): void {
-    const m = o(r.models);
+    const m = o(r.models), cfg = arr(r.configOptions).map(o);
+    const picker = this.opts.modelOption ? cfg.find(c => c.category === 'model' && s(c.id)) : undefined;
+    let list: { id: string; name: string }[] = [];
     if (Object.keys(m).length) {
-      const list = arr(m.availableModels).map(x => ({ id: s(o(x).modelId), name: s(o(x).name) })).filter(x => x.id);
+      list = arr(m.availableModels).map(x => ({ id: s(o(x).modelId), name: s(o(x).name) })).filter(x => x.id);
       this.models = { current: s(m.currentModelId) || null, available: list.map(x => x.id) };
+    } else if (picker) {
+      list = arr(picker.options).map(x => ({ id: s(o(x).value), name: s(o(x).name) || s(o(x).value) })).filter(x => x.id);
+      this.modelOption = s(picker.id);
+      this.models = { current: s(picker.currentValue) || null, available: list.map(x => x.id) };
+    }
+    if (this.models) {
       this.params = modelParams(r.configOptions);
       if (this.models.current) this.variantChanged(this.models.current);
       if (list.length) this.sink.models?.(list);
     }
-    const md = o(r.modes);
+    const md = o(r.modes), modeCfg = cfg.find(c => c.category === 'mode' && s(c.id));
+    if (!Object.keys(md).length && modeCfg) {
+      this.modeOption = s(modeCfg.id);
+      this.modes = arr(modeCfg.options).map(x => s(o(x).value)).filter(Boolean);
+      if (s(modeCfg.currentValue) === 'plan') this.sink.changed({ permissionMode: 'plan' });
+      return;
+    }
     this.modes = arr(md.availableModes).map(x => s(o(x).id)).filter(Boolean);
     if (s(md.currentModeId) === 'plan') this.sink.changed({ permissionMode: 'plan' });
+  }
+
+  /** A session mode: session/set_mode, or its configOptions entry for an engine that offers modes only there. */
+  private async setModeId(modeId: string): Promise<void> {
+    if (this.modeOption) await this.request('session/set_config_option', { sessionId: this.sessionId, configId: this.modeOption, value: modeId });
+    else await this.request('session/set_mode', { sessionId: this.sessionId, modeId });
+  }
+
+  /** modelOption engines: the chat's model, set on the session's model option (session-only); a model the engine does
+   *  not offer, or one it refuses, is a miss the user reads. The model parameters follow the new model. */
+  private async applyModel(misses: string[]): Promise<void> {
+    const asked = this.opts.model?.replace(/\[.*\]$/, '');
+    if (!this.modelOption || !this.models || !asked || asked === this.models.current) return;
+    if (!this.models.available.includes(asked)) { misses.push(missFragment.askedModel(asked)); return; }
+    try {
+      const r = await this.request('session/set_config_option', { sessionId: this.sessionId, configId: this.modelOption, value: asked });
+      this.readModelOption(r.configOptions);
+      if (this.models.current !== asked) misses.push(missFragment.askedModel(asked));
+    } catch (e) {
+      misses.push(missFragment.askedModel(asked));
+      log.warn('chats', 'acp model refused', { chat: this.opts.chatId, data: { engine: this.engine, model: asked, error: errText(e) } });
+    }
+  }
+
+  /** modelOption engines: the model running and its parameters from a configOptions list (a set_config_option answer, a
+   *  config_option_update); a list without the model picker changes nothing. */
+  private readModelOption(list: unknown): void {
+    const picker = arr(list).map(o).find(c => c.category === 'model' && s(c.id) === this.modelOption);
+    if (!picker || !this.models) return;
+    this.models.current = s(picker.currentValue) || this.models.current;
+    this.params = modelParams(list);
   }
 
   /** The user's mode for this chat (session-only in ACP). The model came with the model flag at spawn. A read-only run
@@ -566,9 +625,9 @@ export class AcpSession implements HarnessSession {
       const modeId = ['ask', 'plan'].find(m => this.modes.includes(m));
       if (!modeId) throw new ReadOnlyModeMissing(`${this.label} non offre una modalità in sola lettura (ask o plan): ${who} non la avvia`, `modes offered: ${this.modes.join(', ') || 'none'}`);
       try {
-        await this.request('session/set_mode', { sessionId: this.sessionId, modeId });
+        await this.setModeId(modeId);
       } catch (e) {
-        throw new ReadOnlyModeMissing(`${this.label} non ha accettato la modalità in sola lettura (${modeId}): ${who} non la avvia`, `session/set_mode ${modeId} failed: ${errText(e)}`);
+        throw new ReadOnlyModeMissing(`${this.label} non ha accettato la modalità in sola lettura (${modeId}): ${who} non la avvia`, `session mode ${modeId} failed: ${errText(e)}`);
       }
       if (modeId === 'plan') this.sink.changed({ permissionMode: 'plan' });
       return;
@@ -581,10 +640,12 @@ export class AcpSession implements HarnessSession {
   /** The user's reasoning and fast (session/set_config_option), then the variant really running goes to the chat's
    *  info; anything not as asked (another model, a value the model lacks, a refused option) is a visible warning. */
   private async applyModelConfig(): Promise<void> {
+    const misses: string[] = [];
+    await this.applyModel(misses);
     const chat = this.opts.chatId, current = this.models?.current;
     if (!current) return;
-    const misses: string[] = [];
-    // the model asked at spawn (no model flag: the engine was not told, so a different model is no surprise)
+    // the model asked at spawn (no model flag: the engine was not told, so a different model is no surprise; a model
+    // option engine reported its own miss in applyModel)
     const asked = this.opts.modelFlag ? this.opts.model?.replace(/\[.*\]$/, '') : undefined;
     if (asked && asked !== current) misses.push(missFragment.askedModel(asked));
     const mc = this.opts.modelConfig, pinned = pinnedParams(this.opts.model);
@@ -820,9 +881,10 @@ export class AcpSession implements HarnessSession {
   }
 
   async setPermissionMode(mode: PermissionMode): Promise<void> {
-    const modeId = mode === 'plan' ? 'plan' : 'agent';
+    // the working mode: Cursor's "agent", else the first one that is not read-only (OpenCode's "build")
+    const modeId = mode === 'plan' ? 'plan' : this.modes.includes('agent') ? 'agent' : this.modes.find(m => m !== 'plan' && m !== 'ask') ?? 'agent';
     if (!this.modes.includes(modeId)) throw new Error(`${this.label} non ha la modalità ${modeId}.`);
-    await this.request('session/set_mode', { sessionId: this.sessionId, modeId });
+    await this.setModeId(modeId);
     this.sink.changed({ permissionMode: mode });
   }
 
@@ -1151,6 +1213,7 @@ export class AcpSession implements HarnessSession {
       // Cursor's read-only "ask" is shown as plan where it was asked for as one (read-only run, agent capped at plan)
       case 'current_mode_update': this.sink.changed({ permissionMode: s(u.currentModeId) === 'plan' || (s(u.currentModeId) === 'ask' && (this.opts.readOnly || this.opts.ceiling === 'plan')) ? 'plan' : 'default' }); return;
       case 'config_option_update': { // the CLI changed a model parameter by itself: the chat's info follows it
+        if (this.modelOption) { this.readModelOption(u.configOptions); if (this.models?.current) this.variantChanged(this.models.current); return; }
         const next = modelParams(u.configOptions);
         if (next.length && this.models?.current) { this.params = next; this.variantChanged(this.models.current); }
         return;
