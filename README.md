@@ -3,7 +3,7 @@
 <h1 align="center">second-brain</h1>
 
 <p align="center">
-  <b>A cockpit for your AI coding agents: Claude Code, Codex and Cursor on one screen, with a brain that gets better every week.</b>
+  <b>A cockpit for your AI coding agents: Claude Code, Codex, Cursor and OpenCode on one screen, with a brain that gets better every week.</b>
 </p>
 
 <p align="center">

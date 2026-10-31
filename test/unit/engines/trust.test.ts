@@ -113,7 +113,7 @@ describe('BrainEngines', () => {
     fs.writeFileSync(f, JSON.stringify({ harnesses: {}, engines: { qwen: { kind: 'acp', label: 'Qwen', command: 'qwen', args: ['--acp'] }, bad: { kind: 'acp', label: 'B', command: 'a|b' } } }));
     const b = new BrainEngines(() => root);
     b.refresh();
-    expect(engines().map(e => e.id)).toEqual(['claude', 'cursor', 'codex', 'anthropic', 'qwen']);
+    expect(engines().map(e => e.id)).toEqual(['claude', 'cursor', 'codex', 'opencode', 'anthropic', 'qwen']);
     expect(engineOf('qwen')).toMatchObject({ source: 'brain', runs: 'qwen --acp', key: 'none', trusted: false });
     fs.writeFileSync(f, JSON.stringify({ engines: {} }));
     fs.utimesSync(f, new Date(), new Date(Date.now() + 5000));
@@ -142,12 +142,12 @@ describe('BrainEngines', () => {
 
   it('no brain, no file or bad JSON: only the app engines', () => {
     new BrainEngines(() => null).refresh();
-    expect(engines()).toHaveLength(4);
+    expect(engines()).toHaveLength(5);
     const root = tmp();
     fs.mkdirSync(path.join(root, 'harness'));
     fs.writeFileSync(path.join(root, 'harness', 'models.json'), '{');
     new BrainEngines(() => root).refresh();
-    expect(engines()).toHaveLength(4);
+    expect(engines()).toHaveLength(5);
   });
 });
 

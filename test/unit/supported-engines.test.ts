@@ -5,8 +5,10 @@ import { checkSetup } from '../../src/main/agents/setup';
 import { brainEngine, engineInfos, engineOf } from '../../src/main/engines/registry';
 import { engines } from '../../src/modules/ai-first/model';
 
-it('shows only the three supported platforms in setup and account choices', () => {
-  expect(engineInfos().map(e => e.id).sort()).toEqual(['claude', 'codex', 'cursor']);
+it('shows the supported engines in Settings (OpenCode too, ADR 0216) and only the three main ones in setup', () => {
+  expect(engineInfos().map(e => e.id).sort()).toEqual(['claude', 'codex', 'cursor', 'opencode']);
+  expect(engineOf('opencode')).toMatchObject({ kind: 'acp', command: 'opencode', args: ['acp'], login: ['auth', 'login'], defaultOn: false, modelOption: true, trusted: true });
+  expect(brainEngine('opencode', { kind: 'acp', label: 'Altro', command: 'evil' })).toMatch(/incorporato/);
   expect([...engines].sort()).toEqual(['claude', 'codex', 'cursor']);
   expect(engineOf('kimi')).toBeNull();
   expect(brainEngine('kimi', { kind: 'acp', label: 'Kimi', command: 'kimi' })).toMatch(/ignorata/);

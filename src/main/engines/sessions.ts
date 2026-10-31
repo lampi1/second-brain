@@ -81,6 +81,7 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
         ...opts, mcpConfig: null, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, extMcp: opts.readOnly ? [] : ctx.extMcp ?? [], showReplay: ctx.showReplay,
         engineId: engine.id, label: engine.label, args: engine.args ?? [], acpCommand: command,
         ...(engine.modelFlag ? { modelFlag: engine.modelFlag } : {}),
+        ...(engine.modelOption ? { modelOption: true } : {}),
         loginCommand: engine.login.length ? [command, ...engine.login].join(' ') : null,
         ...(key && engine.keyEnv ? { env: { ...opts.env, [engine.keyEnv]: key } } : {}),
         ...(engine.cursorExtras ? cursorOptions(engine, ctx, opts.readOnly ? opts.chatId : null) : {}),
