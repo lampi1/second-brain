@@ -7,9 +7,9 @@ import type { PendingRequest } from '../../src/shared/contract';
 
 const MIN = 60_000, now = 1_000 * MIN;
 const ask = (p: Partial<AskProof>) => userAsked({ now, freshMs: 10 * MIN, turnMs: 120 * MIN, ...p });
-const q = (labels: string[]): Pick<PendingRequest, 'type' | 'questions'> => ({ type: 'question', questions: [{ question: 'Imposto Cursor sullo Strategist?', multiSelect: false, options: labels.map(label => ({ label })) }] });
+const q = (labels: string[], tool = 'AskUserQuestion'): Pick<PendingRequest, 'type' | 'tool' | 'questions'> => ({ type: 'question', tool, questions: [{ question: 'Imposto Cursor sullo Strategist?', multiSelect: false, options: labels.map(label => ({ label })) }] });
 
-describe('saysYes: only a click on an option that is not a no', () => {
+describe('saysYes: only «Sì» on a native Sì/No question', () => {
   it('a «Sì» option, with or without (consigliato), is a yes', () => {
     expect(saysYes(q(['Sì (consigliato)', 'No']), { kind: 'question', answers: { a: 'Sì (consigliato)' } })).toBe(true);
     expect(saysYes(q(['Sì', 'No']), { kind: 'question', answers: { a: 'Sì' } })).toBe(true);
@@ -18,8 +18,22 @@ describe('saysYes: only a click on an option that is not a no', () => {
     expect(saysYes(q(['Sì', 'No (consigliato)']), { kind: 'question', answers: { a: 'No (consigliato)' } })).toBe(false);
     expect(saysYes(q(['Sì', 'No']), { kind: 'question', answers: { a: 'sì ma cambia anche il Scout' } })).toBe(false);
     expect(saysYes(q(['Sì', 'No']), { kind: 'question', answers: {} })).toBe(false);
-    expect(saysYes({ type: 'permission' }, { kind: 'permission', allow: true })).toBe(false);
+    expect(saysYes({ type: 'permission', tool: 'Bash' }, { kind: 'permission', allow: true })).toBe(false);
     expect(saysYes(undefined, { kind: 'question', answers: { a: 'Sì' } })).toBe(false);
+  });
+  it("the native question tools of every engine count (Claude, Cursor/Codex, the app's ask_user)", () => {
+    for (const tool of ['AskUserQuestion', 'AskQuestion', 'AskUser']) expect(saysYes(q(['Sì (consigliato)', 'No'], tool), { kind: 'question', answers: { a: 'Sì (consigliato)' } })).toBe(true);
+  });
+  it('a Cursor plan («Approva» / «Rifiuta») is never a yes, whatever the click', () => {
+    expect(saysYes(q(['Approva', 'Rifiuta'], 'CreatePlan'), { kind: 'question', answers: { a: 'Rifiuta' } })).toBe(false);
+    expect(saysYes(q(['Approva', 'Rifiuta'], 'CreatePlan'), { kind: 'question', answers: { a: 'Approva' } })).toBe(false);
+  });
+  it("an MCP server's form (elicitation) is never a yes, even with Sì/No options", () => {
+    expect(saysYes(q(['Sì', 'No'], 'mcp__jira'), { kind: 'question', answers: { a: 'Sì' } })).toBe(false);
+  });
+  it('a native question whose options are not exactly Sì / No is not a yes', () => {
+    expect(saysYes(q(['opencode', 'cursor']), { kind: 'question', answers: { a: 'cursor' } })).toBe(false);
+    expect(saysYes(q(['Sì', 'No', 'Forse']), { kind: 'question', answers: { a: 'Sì' } })).toBe(false);
   });
 });
 

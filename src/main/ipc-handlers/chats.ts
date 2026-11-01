@@ -36,8 +36,8 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
       activity.answered(a.chatId, a.requestId);
       const req = s.chats.pending().find(r => r.chatId === a.chatId && r.id === a.requestId);
       try { await s.chats.answer(a.chatId, a.requestId, a.answer); } catch (e) { activity.notAnswered(a.chatId, a.requestId); throw e; }
-      // the user's own «Sì» to a chat's native question: app_config takes it as their ask (appctl/user-words.ts)
-      if (saysYes(req, a.answer)) noteUserAnswered(a.chatId);
+      // the user's own «Sì» to an Orchestrator's native Sì/No question: app_config takes it as their ask (appctl/user-words.ts)
+      if (saysYes(req, a.answer) && s.chats.list().some(c => c.id === a.chatId && c.isOrchestrator)) noteUserAnswered(a.chatId);
     },
     'chat:plan': a => s.chats.planDecide(a.chatId, a.decision, a.at, a.text),
     'chat:stop': a => { activity.stopped(a.chatId); return s.chats.stop(a.chatId, a.keepQueued === true); },

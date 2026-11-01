@@ -18,17 +18,18 @@ export function noteUserTyped(chatId: string, at = Date.now()): void { remember(
 /** When the user last typed into this chat, or undefined. */
 export const lastTyped = (chatId: string): number | undefined => typed.get(chatId);
 
-/** A choice that says no (or stop): never an ask. */
-const NEGATIVE = /^(no|non|annulla|stop|cancel|lascia|aspetta)\b/i;
+/** The engines' own question tools: Claude AskUserQuestion, Cursor/Codex AskQuestion, the app's ask_user (AskUser).
+ *  Never a Cursor plan (CreatePlan: Approva / Rifiuta) nor an MCP server's form (elicitation, tool mcp__<server>). */
+const NATIVE_QUESTIONS = new Set(['AskUserQuestion', 'AskQuestion', 'AskUser']);
 const label = (s: string) => s.replace(/\(consigliat[oa]\)/gi, '').trim().toLowerCase();
-/** The user's answer to a native question is a yes: every answer is one of the question's own options (free text is a
- *  clarification, never an ok) and none of them is a no. */
-export function saysYes(req: Pick<PendingRequest, 'type' | 'questions'> | undefined, answer: Answer): boolean {
-  if (!req || req.type !== 'question' || answer.kind !== 'question' || !req.questions?.length) return false;
+const YES = 'sì', NO = 'no';
+/** The user's answer is a yes: a native question whose options are exactly «Sì» and «No» (with or without
+ *  «(consigliato)»), every question answered «Sì». Free text is a clarification, never an ok. */
+export function saysYes(req: Pick<PendingRequest, 'type' | 'tool' | 'questions'> | undefined, answer: Answer): boolean {
+  if (!req || req.type !== 'question' || !NATIVE_QUESTIONS.has(req.tool) || answer.kind !== 'question' || !req.questions?.length) return false;
+  const yesNo = req.questions.every(q => q.options.length === 2 && q.options.some(o => label(o.label) === YES) && q.options.some(o => label(o.label) === NO));
   const given = Object.values(answer.answers).flatMap(v => (Array.isArray(v) ? v : [v]));
-  if (!given.length) return false;
-  const options = new Set(req.questions.flatMap(q => q.options.map(o => label(o.label))));
-  return given.every(v => typeof v === 'string' && options.has(label(v)) && !NEGATIVE.test(label(v)));
+  return yesNo && given.length > 0 && given.length >= req.questions.length && given.every(v => typeof v === 'string' && label(v) === YES);
 }
 /** The user clicked yes on a native question of this chat now. */
 export function noteUserAnswered(chatId: string, at = Date.now()): void { remember(answered, chatId, at); }
