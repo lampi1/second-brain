@@ -152,9 +152,9 @@ export function streamErrorOf(line: string, sessionId: string | null): { error: 
   return { error, credits: /usage limit|quota|credit|insufficient.?balance|billing|payment required/i.test(error) };
 }
 
-/** An engine's own routine log line on stderr (OpenCode --print-logs: `timestamp=… level=INFO|DEBUG …`): kept out of the
- *  stderr tail a failed exit shows, which is for the engine's real error. */
-const engineLogNoise = (line: string): boolean => /^timestamp=\S+ level=(?:INFO|DEBUG)\b/.test(line);
+/** An engine's own routine log line on stderr (OpenCode --print-logs: `timestamp=… level=INFO|DEBUG|WARN …`, e.g. its
+ *  "duplicate skill name" warnings): kept out of the stderr tail a failed exit shows, which is for the real error. */
+const engineLogNoise = (line: string): boolean => /^timestamp=\S+ level=(?:INFO|DEBUG|WARN)\b/.test(line);
 
 /** Whether a turn's last assistant text is the engine's transport error, not the model's words. Cursor's ACP handler
  *  appends "\n\nError: " + String(error) (CLI 2026.07.23): the text ends with its own paragraph "Error: RetriableError: …"
@@ -893,7 +893,7 @@ export class AcpSession implements HarnessSession {
   private turnDone(r: Obj, err: Error | null): void {
     if (this.streamErrorTimer) { clearTimeout(this.streamErrorTimer); this.streamErrorTimer = null; }
     // a provider error the turn was stopped for, or that ended it without a word from the model
-    const provider = this.streamError && (this.streamError.failed || (!err && !this.lastAnswer.trim())) ? this.streamError : null;
+    const provider = this.streamError && (this.streamError.failed || (!err && !this.stopping && !this.lastAnswer.trim())) ? this.streamError : null;
     this.streamError = null;
     // the turn that read them is over: screenshots may hold private data, they do not stay in the temp folder
     for (const f of this.turnFiles.splice(0)) fs.rm(f, { force: true }, () => {});
