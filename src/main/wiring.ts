@@ -242,7 +242,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // trial evaluated again
   const loopRef: { current?: { ended(run: AgentRun): void; outcome(run: AgentRun): void } } = {};
   const runFeedbackRef: { current?: { runList(): readonly AgentRun[] } } = {};
-  const delegateWorktrees = new DelegateWorktrees(path.join(ctx.userData, 'delegation-worktrees.json'));
+  const delegateWorktrees = new DelegateWorktrees(path.join(ctx.userData, 'delegation-worktrees.json'), () => brain.info().brainRoot);
   // the question gates ask for a brief before a yes/no question (ADR 0150): the visuals' store exists further down
   const briefRef: { current?: Artifacts } = {};
   // «Modalità notte» (ADR 0191): the user is away; what the app chooses or parks for them waits for the recap

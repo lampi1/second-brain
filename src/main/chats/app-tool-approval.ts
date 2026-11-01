@@ -15,9 +15,19 @@ export function appEndpoint(raw: string | null | undefined): boolean {
 
 export const APP_CHAT_TOOLS = ['send_to_chat', 'list_chats', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_work_decisions', 'agent_integrate_child', 'agent_integrate_children', 'agent_report', 'agent_children', 'agent_ask_parent', 'agent_answer_child', 'plan_propose', 'plan_update', 'maintenance_pack', 'maintenance_propose', 'maintenance_role_trial'] as const;
 
-export function cursorAppPermissions(mcpUrl?: string | null, appMcpUrl?: string | null): string[] {
+/** The app's own question surfaces: they only show a card or a question to the user and write nothing, so a native
+ *  permission prompt before them is noise (Cursor asked twice before every real question). Kept apart from
+ *  APP_CHAT_TOOLS, which also feeds Claude's --allowedTools, Codex's approval_mode and tool-visibility. */
+export const APP_UI_TOOLS = ['show_ui', 'ask_user'] as const;
+
+/** Cursor's allow rules for the app's endpoints; uiOnly (read-only chats, whose user allow rules are stripped): only
+ *  the question surfaces, never the delegation or mail tools. */
+export function cursorAppPermissions(mcpUrl?: string | null, appMcpUrl?: string | null, uiOnly = false): string[] {
+  const ui = appEndpoint(mcpUrl) ? APP_UI_TOOLS.map(t => `Mcp(second-brain:${t})`) : [];
+  if (uiOnly) return ui;
   return [
     ...(appEndpoint(mcpUrl) ? APP_CHAT_TOOLS.map(t => `Mcp(second-brain:${t})`) : []),
+    ...ui,
     ...(appEndpoint(appMcpUrl) ? ['Mcp(second-brain-app:*)'] : []),
   ];
 }

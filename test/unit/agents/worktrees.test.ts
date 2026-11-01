@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { gitWorktrees, listedWorktrees, withinParent } from '../../../src/main/agents/worktrees';
+import { blockingChanges, gitWorktrees, listedWorktrees, withinParent } from '../../../src/main/agents/worktrees';
 
 const roots: string[] = [];
 afterEach(() => { for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
@@ -72,5 +72,13 @@ describe('worktrees', () => {
       'prunable gitdir file points to non-existent location', '', `worktree ${other}`, 'bare', '', 'worktree rel/x', '',
       `worktree ${path.resolve('/d')}`, 'HEAD 0', 'prunable', ''].join('\n');
     expect(listedWorktrees(out)).toEqual([abs]);
+  });
+
+  it('lets only a modified app-owned brain file through a brain baseline', () => {
+    const status = [' M memory/records.json', 'M  memory/shared.md', 'MM agents/scout/memory.md', ''].join('\n');
+    expect(blockingChanges(status, true)).toEqual([]);
+    expect(blockingChanges(status, false)).toHaveLength(3);
+    for (const line of [' M notes.md', '?? memory/records.json', ' D memory/records.json', 'R  a -> memory/records.json', 'UU memory/records.json', ' M agents/a/b/memory.md'])
+      expect(blockingChanges([' M memory/records.json', line].join('\n'), true)).toEqual([line]);
   });
 });

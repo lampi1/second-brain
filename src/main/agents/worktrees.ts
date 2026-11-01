@@ -114,15 +114,33 @@ export async function requiredGit(cwd: string, args: string[]): Promise<string> 
   return result.out.trim();
 }
 
-/** Real repository identity, pinned commit and clean state. A dirty baseline is never silently omitted. */
-export async function cleanRepository(cwd: string): Promise<{ root: string; common: string; head: string }> {
+/** The brain files the app itself rewrites at any moment (the memory store and the notes derived from it), never the
+ *  user's work: a pending edit to them alone does not block a delegation started in the brain folder (a Cursor Scout
+ *  was refused on memory/records.json). The child's worktree holds their committed version; agents read memory
+ *  through the app's tools, not these files. */
+const APP_OWNED_BRAIN = /^(?:memory\/records\.json|memory\/shared\.md|agents\/[^/]+\/memory\.md)$/;
+
+/** The `git status --porcelain=v1` lines that block a baseline. With appOwned (the checkout is the brain folder), a
+ *  tracked app-owned file that is only modified is left out; additions, deletions, renames, conflicts, untracked and
+ *  quoted paths always block. Exported for the tests. */
+export function blockingChanges(porcelain: string, appOwned: boolean): string[] {
+  return porcelain.split(/\r?\n/).filter(l => l.length > 3)
+    .filter(l => !(appOwned && /^(?: M|M |MM) /.test(l) && APP_OWNED_BRAIN.test(l.slice(3))));
+}
+
+/** Real repository identity, pinned commit and clean state. A dirty baseline is never silently omitted, except the
+ *  app-owned brain files when the checkout is `brainRoot` (see APP_OWNED_BRAIN). */
+export async function cleanRepository(cwd: string, brainRoot?: string | null): Promise<{ root: string; common: string; head: string }> {
   const common = await gitCommonDir(cwd);
   if (!common) throw new Error('Writing delegation requires a Git repository with a commit; no shared-folder fallback.');
   const root = await requiredGit(cwd, ['rev-parse', '--show-toplevel']);
   if (!path.isAbsolute(root) || !samePath(await requiredGit(root, ['rev-parse', '--path-format=absolute', '--git-common-dir']), common)) throw new Error('Repository identity could not be verified.');
   const head = await requiredGit(root, ['rev-parse', '--verify', 'HEAD^{commit}']);
   if (!/^[a-f0-9]{40,64}$/.test(head)) throw new Error('Repository has no valid committed baseline.');
-  if (await requiredGit(root, ['status', '--porcelain=v1', '--untracked-files=all'])) throw new Error('Repository has uncommitted or untracked changes. Commit or preserve them before delegating; the app will not discard or silently omit them.');
+  // untrimmed: requiredGit's trim would eat the first line's leading status column
+  const status = await worktreeGit(root, ['status', '--porcelain=v1', '--untracked-files=all']);
+  if (status.exit !== 0) throw new Error(status.error ?? 'Git could not verify or prepare the isolated worktree; no child was started.');
+  if (blockingChanges(status.out, !!brainRoot && samePath(root, brainRoot)).length) throw new Error('Repository has uncommitted or untracked changes. Commit or preserve them before delegating; the app will not discard or silently omit them.');
   return { root: real(root), common: real(common), head };
 }
 
@@ -156,7 +174,7 @@ export async function createIsolatedWorktree(source: { root: string; common: str
 export class DelegateWorktrees {
   private readonly allocations = new Map<string, IsolatedDelegation>();
 
-  constructor(private readonly file?: string) {
+  constructor(private readonly file?: string, private readonly brainRoot: () => string | null = () => null) {
     const stored = file ? readLocal(file) : undefined;
     if (stored === undefined) return;
     if (!Array.isArray(stored) || stored.length > 10_000 || stored.some(v => !this.valid(v))) throw new Error('Invalid delegation isolation provenance; original file preserved.');
@@ -177,7 +195,8 @@ export class DelegateWorktrees {
     const cwd = req.cwd;
     if (!needsIsolatedWorktree(policy)) return { cwd, ...provenance };
     // One checkout is verified once: each Git spawn costs up to seconds on Windows with real-time antivirus scanning.
-    const parentRepo = await cleanRepository(parent.cwd), source = samePath(parent.cwd, cwd) ? parentRepo : await cleanRepository(cwd);
+    const brain = this.brainRoot();
+    const parentRepo = await cleanRepository(parent.cwd, brain), source = samePath(parent.cwd, cwd) ? parentRepo : await cleanRepository(cwd, brain);
     if (!samePath(parentRepo.common, source.common)) throw new Error('Writing delegation cannot leave its parent repository.');
     let base = source.head;
     if (continuationOf !== undefined) {
@@ -194,7 +213,7 @@ export class DelegateWorktrees {
     if (!isDir(childCwd) || !within(isolated.root, childCwd)) throw new Error('Requested project folder is absent from the committed isolated worktree.');
     // Detect source edits made during checkout; do not launch on a stale baseline.
     // status and HEAD are checkout-wide: the parent's folder in the same checkout needs no second probe
-    const after = await cleanRepository(source.root), parentAfter = samePath(parentRepo.root, source.root) ? after : await cleanRepository(parent.cwd);
+    const after = await cleanRepository(source.root, brain), parentAfter = samePath(parentRepo.root, source.root) ? after : await cleanRepository(parent.cwd, brain);
     if (after.head !== source.head || parentAfter.head !== parentRepo.head) throw new Error('Repository changed while preparing isolation; retry delegation.');
     return { cwd: childCwd, ...provenance, bind: childId => {
       const owned: IsolatedDelegation = { childId, parentId: parent.id, ...provenance, parentCwd: parent.cwd,
