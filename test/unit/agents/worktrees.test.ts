@@ -81,4 +81,13 @@ describe('worktrees', () => {
     for (const line of [' M notes.md', '?? memory/records.json', ' D memory/records.json', 'R  a -> memory/records.json', 'UU memory/records.json', ' M agents/a/b/memory.md'])
       expect(blockingChanges([' M memory/records.json', line].join('\n'), true)).toEqual([line]);
   });
+
+  it('lets the changelog and a command the app saved by itself through a brain baseline', () => {
+    const status = [' M changelog.md', '?? changelog.md', '?? scripts/cmd-git-603c1ec1.ps1', '?? scripts/cmd-npm-0123abcd.sh', ''].join('\n');
+    expect(blockingChanges(status, true)).toEqual([]);
+    expect(blockingChanges(status, false)).toHaveLength(4);
+    for (const line of ['?? scripts/backup.ps1', '?? scripts/cmd-git-603c1ec.ps1', '?? scripts/sub/cmd-git-603c1ec1.ps1', '?? scripts/cmd-git-603c1ec1.mjs',
+      ' M scripts/cmd-git-603c1ec1.ps1', ' D changelog.md', '?? notes/changelog.md'])
+      expect(blockingChanges([' M changelog.md', line].join('\n'), true)).toEqual([line]);
+  });
 });

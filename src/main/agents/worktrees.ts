@@ -114,18 +114,23 @@ export async function requiredGit(cwd: string, args: string[]): Promise<string> 
   return result.out.trim();
 }
 
-/** The brain files the app itself rewrites at any moment (the memory store and the notes derived from it), never the
- *  user's work: a pending edit to them alone does not block a delegation started in the brain folder (a Cursor Scout
- *  was refused on memory/records.json). The child's worktree holds their committed version; agents read memory
- *  through the app's tools, not these files. */
-const APP_OWNED_BRAIN = /^(?:memory\/records\.json|memory\/shared\.md|agents\/[^/]+\/memory\.md)$/;
+/** The brain files the app itself rewrites at any moment (the memory store and the notes derived from it, the brain's
+ *  changelog), never the user's work: a pending edit to them alone does not block a delegation started in the brain
+ *  folder (a Cursor Scout was refused on memory/records.json, then Cursor and OpenCode on changelog.md). The child's
+ *  worktree holds their committed version; agents read memory and the changelog through the app's tools. */
+const APP_OWNED_BRAIN = /^(?:memory\/records\.json|memory\/shared\.md|agents\/[^/]+\/memory\.md|changelog\.md)$/;
+/** New files only the app creates in the brain: the changelog on its first entry, and a command saved by itself after
+ *  an «Esegui» run (auto-scripts.ts scriptNameOf: cmd-<command name>-<8 hex>.ps1|sh, directly in scripts/). The parent
+ *  keeps them untouched; the child simply does not see them. Any other untracked file still blocks. */
+const APP_CREATED_BRAIN = /^(?:changelog\.md|scripts\/cmd-[a-z0-9-]{1,24}-[a-f0-9]{8}\.(?:ps1|sh))$/;
 
 /** The `git status --porcelain=v1` lines that block a baseline. With appOwned (the checkout is the brain folder), a
- *  tracked app-owned file that is only modified is left out; additions, deletions, renames, conflicts, untracked and
- *  quoted paths always block. Exported for the tests. */
+ *  tracked app-owned file that is only modified, and an untracked app-created file, are left out; other additions,
+ *  deletions, renames, conflicts, untracked and quoted paths always block. Exported for the tests. */
 export function blockingChanges(porcelain: string, appOwned: boolean): string[] {
   return porcelain.split(/\r?\n/).filter(l => l.length > 3)
-    .filter(l => !(appOwned && /^(?: M|M |MM) /.test(l) && APP_OWNED_BRAIN.test(l.slice(3))));
+    .filter(l => !(appOwned && ((/^(?: M|M |MM) /.test(l) && APP_OWNED_BRAIN.test(l.slice(3)))
+      || (l.startsWith('?? ') && APP_CREATED_BRAIN.test(l.slice(3))))));
 }
 
 /** Real repository identity, pinned commit and clean state. A dirty baseline is never silently omitted, except the
@@ -140,7 +145,9 @@ export async function cleanRepository(cwd: string, brainRoot?: string | null): P
   // untrimmed: requiredGit's trim would eat the first line's leading status column
   const status = await worktreeGit(root, ['status', '--porcelain=v1', '--untracked-files=all']);
   if (status.exit !== 0) throw new Error(status.error ?? 'Git could not verify or prepare the isolated worktree; no child was started.');
-  if (blockingChanges(status.out, !!brainRoot && samePath(root, brainRoot)).length) throw new Error('Repository has uncommitted or untracked changes. Commit or preserve them before delegating; the app will not discard or silently omit them.');
+  const blocking = blockingChanges(status.out, !!brainRoot && samePath(root, brainRoot));
+  // the first paths name what to commit or preserve: the agent cannot tell an app-written file from the user's otherwise
+  if (blocking.length) throw new Error(`Repository has uncommitted or untracked changes. Commit or preserve them before delegating; the app will not discard or silently omit them. Blocking: ${blocking.slice(0, 5).map(l => l.slice(3)).join(', ')}${blocking.length > 5 ? ', …' : ''}`);
   return { root: real(root), common: real(common), head };
 }
 
