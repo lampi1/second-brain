@@ -9,6 +9,8 @@
 //   perm → a shell tool call that asks permission (allow-always offered) · locked → the same without allow-always
 //   ask → cursor/ask_question (one single-choice and one multi-choice question; asksn: one yes/no question) · plan → cursor/create_plan
 //   edit → an edit tool call with a diff · todo → a plan update · slow → streams until cancelled · deafcancel → ignores cancel (FAKE_ACP_DEAF_MS)
+//   nocredit → OpenCode's provider refusal: an ERROR log line on stderr, no ACP output until cancelled · streamhiccup →
+//   the same line, then the turn goes on
 //   think → streams reasoning ("Penso di usare la libreria vecchia. Passo 1. …", FAKE_CURSOR_THINK_TICKS) until cancelled
 //   readgate[=<path>] → a read tool call (of a.txt, or that path relative to the cwd) that asks permission, its
 //   location in the request too: "Letto a.txt" when allowed · writegate[=<path>] → an edit tool call that
@@ -54,7 +56,8 @@ if (process.env.CURSOR_CONFIG_DIR && argv.includes('--model')) {
   try { cfg = JSON.parse(fs.readFileSync(f, 'utf8')); } catch { /* none yet */ }
   fs.writeFileSync(f, JSON.stringify({ ...cfg, model: { modelId: argv[argv.indexOf('--model') + 1] }, hasChangedDefaultModel: true }));
 }
-if (argv.at(-1) !== 'acp') { process.stderr.write('fake: only `acp` is supported\n'); process.exit(2); }
+// OpenCode's start (engines/registry.ts) adds its flags after `acp` (`acp --print-logs`)
+if (argv.at(-1) !== 'acp' && !(argv.at(-2) === 'acp' && argv.at(-1) === '--print-logs')) { process.stderr.write('fake: only `acp` is supported\n'); process.exit(2); }
 const mi = argv.indexOf('--model');
 let model = mi >= 0 ? argv[mi + 1] : 'auto';
 // `--model sb-list-models` (Impara's probe, learn/accepted-models.ts): refused like CLI 2026.10 refuses an unknown id,
@@ -142,6 +145,26 @@ async function prompt(id, p) {
     update(sid, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: ' in ritardo' } });
     turn = null;
     return out({ id, result: { stopReason: 'cancelled' } });
+  }
+  if (/nocredit|streamhiccup/.test(text)) {
+    // OpenCode 1.19.5 (`opencode acp --print-logs`, real run 2026-11-01): the provider refuses, the error goes only to its
+    // log on stderr, nothing comes over ACP and session/prompt stays open until session/cancel (then end_turn, no text).
+    // streamhiccup: the same error line, then the turn goes on (a retry that worked)
+    const line = (small, error) => `timestamp=2026-11-01T10:27:56.898Z level=ERROR run=a1c27bd8 message="stream error" providerID=opencode modelID=deepseek-v4.1-flash-free session.id=${sid} small=${small} agent=${small ? 'title' : 'build'} mode=primary error.error="${error}"\n`;
+    process.stderr.write('timestamp=2026-11-01T10:27:56.800Z level=INFO run=a1c27bd8 message=stream providerID=opencode\n');
+    if (/streamhiccup/.test(text)) {
+      process.stderr.write(line(false, 'AI_APICallError: Service Unavailable'));
+      await sleep(20);
+      await say(sid, 'agent_message_chunk', ['Ripreso ', 'dopo il riprovo']);
+      turn = null;
+      return out({ id, result: { stopReason: 'end_turn' } });
+    }
+    process.stderr.write(line(false, 'AI_APICallError: Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go'));
+    process.stderr.write(line(true, 'AI_RetryError: Failed after 3 attempts. Last error: Free usage limit reached.'));
+    while (!turn.cancelled) await sleep(10);
+    update(sid, { sessionUpdate: 'usage_update', used: 0, size: 200000, cost: { amount: 0, currency: 'USD' } });
+    turn = null;
+    return out({ id, result: { stopReason: 'end_turn', usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } } });
   }
   const netRetry = text.startsWith('Il turno si è interrotto per un errore di rete');
   if (/neterr/.test(text) || netRetry) {

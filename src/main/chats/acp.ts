@@ -37,7 +37,9 @@
 // OpenCode (`opencode acp`, checked against 1.19.5): session/new|load answer no `models` and no `modes`, only configOptions
 // (category model with every provider/model id, mode build|plan, thought_level "effort" once a model has one); a load
 // goes back to the default model. With modelOption the chat's model is set there after every open (session-only: its
-// global config is not written), and the mode goes through the mode option.
+// global config is not written), and the mode goes through the mode option. A provider refusal (free limit reached, no
+// credits) reaches nothing over ACP and leaves session/prompt open: OpenCode runs with --print-logs, its stderr log line
+// "stream error" ends the turn as failed with the error (streamErrorOf, onStderr).
 // Login: the CLI's own login (cli:login; loginCommand, e.g. `agent login`). No login → session/new fails with auth
 // required (-32000) and the chat shows "Accedi a <label>"; the app never calls `authenticate` (it would start a browser
 // login from a hidden process). Never auto-answers anything. Under tests only a .mjs fake may start (cli.ts
@@ -115,6 +117,9 @@ export interface AcpOptions extends SessionOptions {
   netRetryDelaysMs?: readonly number[];
   /** how long a user's stop waits for session/prompt to end before the engine is restarted (tests: shorter) */
   cancelGraceMs?: number;
+  /** after the engine logs a provider stream error on stderr (streamErrorOf), how long the turn waits for any sign of
+   *  life before it is stopped as failed (default 10 s; an out-of-credits error stops it at once) */
+  streamErrorGraceMs?: number;
   /** the model is the session's configOptions entry of category "model" (OpenCode `opencode acp`): its options are the
    *  models offered and the chat's model is set there (session/set_config_option, session-only) once the session is
    *  open. Only for an engine whose session/new answers no `models` and keeps the choice in the session (never for
@@ -131,6 +136,25 @@ export const netRetryPrompt = (label: string): string =>
 const NET_RETRY_DELAYS = [5000, 20000];
 /** a user's stop waits this long for the engine to end its prompt, then the engine is restarted (watchCancel) */
 const CANCEL_GRACE_MS = 5000;
+
+const STREAM_ERROR_GRACE_MS = 10000;
+
+/** A provider error the engine wrote only to its log on stderr. OpenCode 1.19.5 (`opencode acp --print-logs`, real run
+ *  2026-11-01: free model over its limit, OpenAI credits gone) logs `level=ERROR … message="stream error" …
+ *  session.id=<id> small=false … error.error="AI_APICallError: Free usage limit reached. …"` and sends nothing over
+ *  ACP: session/prompt stays open until session/cancel. small=true is its title agent, not the turn. Null: not one,
+ *  or another session's. */
+export function streamErrorOf(line: string, sessionId: string | null): { error: string; credits: boolean } | null {
+  if (!sessionId || !/\blevel=ERROR\b/.test(line) || !line.includes('message="stream error"')) return null;
+  if (/\bsmall=true\b/.test(line) || !line.includes(` session.id=${sessionId} `)) return null;
+  const raw = /\berror\.error="((?:[^"\\]|\\.)*)"/.exec(line)?.[1]?.replace(/\\(.)/g, '$1') ?? 'stream error';
+  const error = raw.replace(/^(?:AI_\w+|\w*Error): /, '').trim() || raw;
+  return { error, credits: /usage limit|quota|credit|insufficient.?balance|billing|payment required/i.test(error) };
+}
+
+/** An engine's own routine log line on stderr (OpenCode --print-logs: `timestamp=… level=INFO|DEBUG …`): kept out of the
+ *  stderr tail a failed exit shows, which is for the engine's real error. */
+const engineLogNoise = (line: string): boolean => /^timestamp=\S+ level=(?:INFO|DEBUG)\b/.test(line);
 
 /** Whether a turn's last assistant text is the engine's transport error, not the model's words. Cursor's ACP handler
  *  appends "\n\nError: " + String(error) (CLI 2026.07.23): the text ends with its own paragraph "Error: RetriableError: …"
@@ -417,6 +441,10 @@ export class AcpSession implements HarnessSession {
   private proc: ChildProcessWithoutNullStreams | null = null;
   private out = '';
   private errTail = '';
+  private errLine = '';          // stderr's unfinished last line
+  /** the provider error the engine logged during this turn (streamErrorOf); failed = the turn was stopped for it */
+  private streamError: { error: string; credits: boolean; failed: boolean } | null = null;
+  private streamErrorTimer: NodeJS.Timeout | null = null;
   private rpcSeq = 1;
   private rpcs = new Map<number, Rpc>();
   private asks = new Map<string, Ask>();
@@ -560,7 +588,7 @@ export class AcpSession implements HarnessSession {
     p.stdout.on('data', (d: string) => timedStep('engine acp output', () => this.onStdout(d)));
     p.stderr.setEncoding('utf8');
     // 16000: room for a whole model refusal (Cursor lists 190 ids, onClose refusal)
-    p.stderr.on('data', (d: string) => { this.errTail = (this.errTail + d).slice(-16000); log.debug('chats', 'acp stderr', { chat, data: { engine, text: cut(d, 500) } }); });
+    p.stderr.on('data', (d: string) => { this.onStderr(d); log.debug('chats', 'acp stderr', { chat, data: { engine, text: cut(d, 500) } }); });
     p.stdin.on('error', e => log.warn('chats', 'acp stdin error', { chat, data: { engine, error: errText(e) } }));
     p.on('error', e => this.fail(`Avvio di ${label} non riuscito: ${errText(e)}`, errText(e), `check that \`${this.cliName} --version\` works in a terminal`));
     p.on('close', (code: number | null) => this.onClose(code));
@@ -825,7 +853,48 @@ export class AcpSession implements HarnessSession {
     return [{ type: 'text', text: `[App-supplied brain context; not a user message or authorization]\n${this.opts.brainInstructions}` }];
   }
 
+  /** stderr by lines: the engine's routine log lines stay out of errTail; a provider stream error of this session's
+   *  running turn (streamErrorOf) ends the turn as failed when the engine shows no sign of life (it sends nothing over
+   *  ACP for it: OpenCode 1.19.5), at once for out-of-credits. */
+  private onStderr(d: string): void {
+    const lines = (this.errLine + d).split(/\r?\n/);
+    this.errLine = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!engineLogNoise(line)) this.errTail = (this.errTail + line + '\n').slice(-16000); // 16000: a whole model refusal (onClose)
+      const found = this.prompting && !this.streamError ? streamErrorOf(line, this.sessionId) : null;
+      if (!found) continue;
+      this.streamError = { ...found, failed: false };
+      log.warn('chats', 'acp provider stream error', { chat: this.opts.chatId, data: { engine: this.engine, error: cut(found.error, 300), credits: found.credits } });
+      const turn = this.turnSeq;
+      const wait = found.credits ? 0 : this.opts.streamErrorGraceMs ?? STREAM_ERROR_GRACE_MS;
+      this.streamErrorTimer = setTimeout(() => { this.streamErrorTimer = null; if (turn === this.turnSeq) this.failStreamTurn(); }, wait);
+      this.streamErrorTimer.unref();
+    }
+  }
+
+  /** The engine shows life after its stream error (a retry that worked): the turn goes on. */
+  private streamRecovered(): void {
+    if (!this.streamError || this.streamError.failed) return;
+    if (this.streamErrorTimer) { clearTimeout(this.streamErrorTimer); this.streamErrorTimer = null; }
+    log.info('chats', 'acp provider stream error recovered', { chat: this.opts.chatId, data: { engine: this.engine } });
+    this.streamError = null;
+  }
+
+  /** The turn the provider refused: session/cancel ends the open session/prompt (OpenCode answers end_turn), and
+   *  turnDone shows the error; an engine that ignores the cancel is restarted as after a user's stop (watchCancel). */
+  private failStreamTurn(): void {
+    if (this.exited || !this.prompting || !this.streamError || this.streamError.failed) return;
+    this.streamError.failed = true;
+    log.warn('chats', 'acp turn stopped after a provider stream error', { chat: this.opts.chatId, data: { engine: this.engine, error: cut(this.streamError.error, 300) } });
+    if (this.sessionId) this.notify('session/cancel', { sessionId: this.sessionId });
+    if (!this.cancelWatch) this.watchCancel();
+  }
+
   private turnDone(r: Obj, err: Error | null): void {
+    if (this.streamErrorTimer) { clearTimeout(this.streamErrorTimer); this.streamErrorTimer = null; }
+    // a provider error the turn was stopped for, or that ended it without a word from the model
+    const provider = this.streamError && (this.streamError.failed || (!err && !this.lastAnswer.trim())) ? this.streamError : null;
+    this.streamError = null;
     // the turn that read them is over: screenshots may hold private data, they do not stay in the temp folder
     for (const f of this.turnFiles.splice(0)) fs.rm(f, { force: true }, () => {});
     if (this.cancelWatch) { clearTimeout(this.cancelWatch); this.cancelWatch = null; }
@@ -844,7 +913,8 @@ export class AcpSession implements HarnessSession {
     const stopped = this.stopping;
     this.stopping = null;
     const interrupted = !err && stop === 'cancelled' && !!stopped;
-    if (err) this.sysCode('engineError', { label: this.label, error: cut(stripAnsi(errText(err)), 400) }, 'error');
+    if (provider) this.sysCode(provider.credits ? 'outOfCredits' : 'engineError', { label: this.label, error: cut(stripAnsi(provider.error), 400) }, 'error');
+    else if (err) this.sysCode('engineError', { label: this.label, error: cut(stripAnsi(errText(err)), 400) }, 'error');
     else if (stop === 'refusal') this.sysCode('modelRefusal', undefined, 'warn');
     else if (stop === 'max_tokens' || stop === 'max_turn_requests') this.sysCode('turnCut', { label: this.label, stop }, 'warn');
     else if (interrupted) this.sysCode(stopped.sendNow ? 'stoppedByYouResend' : 'stoppedByYou', undefined, 'info');
@@ -856,7 +926,7 @@ export class AcpSession implements HarnessSession {
     const listed = this.opts.priceFallback ? costOf(this.models?.current ?? this.opts.model ?? null, usage) : null;
     const cost = listed ?? live;
     // the user's own interrupt (12/10: "quando faccio Invia subito vedo sempre un errore") is no error
-    const isError = !!err || net || (stop === 'cancelled' && !interrupted) || stop === 'refusal';
+    const isError = !!provider || !!err || net || (stop === 'cancelled' && !interrupted) || stop === 'refusal';
     this.sink.item({ kind: 'result', id: nextId('r'), at: Date.now(), costUsd: cost ?? 0, durationMs: Date.now() - this.turnStart, turns: 1, isError, ...(interrupted ? { interrupted } : {}) }, false);
     const turnTokens = usage ? tokenUsage(usage.inputTokens, usage.cachedReadTokens, usage.cachedWriteTokens, usage.outputTokens) : undefined;
     this.sink.changed({ turnCostUsd: cost ?? 0, costKnown: cost !== null, liveCostUsd: 0, ...(turnTokens ? { turnTokens } : {}) });
@@ -1363,6 +1433,8 @@ export class AcpSession implements HarnessSession {
 
   private onUpdate(u: Obj): void {
     this.count(u);
+    // words or tools after a provider stream error: the engine retried and goes on (usage_update also follows a cancel)
+    if (this.streamError && u.sessionUpdate !== 'usage_update' && u.sessionUpdate !== 'available_commands_update' && u.sessionUpdate !== 'config_option_update') this.streamRecovered();
     // Child observations must survive a hidden replay and must never depend on external subagent hooks.
     if (u.sessionUpdate === 'tool_call' || u.sessionUpdate === 'tool_call_update') this.childTask(u);
     // the input's "/" list, also while a resumed session loads
@@ -1537,7 +1609,8 @@ export class AcpSession implements HarnessSession {
     if (this.exited) return;
     this.flushAll(true);
     const clean = this.closing || code === 0;
-    const tail = stripAnsi(this.errTail).trim().split(/\r?\n/).slice(-4).join(' · ');
+    if (this.errLine) { this.errTail = (this.errTail + this.errLine).slice(-16000); this.errLine = ''; } // a last line with no newline
+    const tail =stripAnsi(this.errTail).trim().split(/\r?\n/).slice(-4).join(' · ');
     const error = clean ? null : cut(tail || `${this.label} è uscito con codice ${code ?? '?'}`, 600);
     if (error) log.error('chats', 'acp engine exited with an error', { chat: this.opts.chatId, data: { engine: this.engine }, cause: `exit ${code}: ${cut(tail, 2000) || 'no stderr'}`, hint: `run \`${this.cliName} --version\` in a terminal; resume with a new message` });
     else log.info('chats', 'acp session exit', { chat: this.opts.chatId, data: { engine: this.engine, code } });
@@ -1582,6 +1655,7 @@ export class AcpSession implements HarnessSession {
     this.childTelemetry.end();
     this.cancelRetry('netRetryCancelledClosed');
     if (this.flushTimer) { clearTimeout(this.flushTimer); this.flushTimer = null; }
+    if (this.streamErrorTimer) { clearTimeout(this.streamErrorTimer); this.streamErrorTimer = null; }
     this.exitDone();
   }
 

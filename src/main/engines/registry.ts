@@ -69,8 +69,9 @@ const APP_ENGINES: readonly EngineEntry[] = [
   { id: 'cursor', label: 'Cursor', name: 'Cursor', kind: 'acp', command: 'agent', args: ['acp'], modelFlag: '--model', login: ['login'], defaultOn: true, cursorExtras: true },
   { id: 'codex', label: 'Codex', name: 'Codex CLI', kind: 'codex', command: 'codex', args: ['app-server'], keyEnv: 'CODEX_API_KEY', login: ['login'], defaultOn: true },
   // OpenCode (ADR 0216): any provider the user set up in it (OpenRouter included), through `opencode acp`; login is its
-  // own `opencode auth login`; off until the user turns it on (unlike the three above, few users have it)
-  { id: 'opencode', label: 'OpenCode', name: 'OpenCode', kind: 'acp', command: 'opencode', args: ['acp'], login: ['auth', 'login'], defaultOn: false, modelOption: true },
+  // own `opencode auth login`; off until the user turns it on (unlike the three above, few users have it). --print-logs:
+  // its log also on stderr, the only place a provider error shows up (chats/acp.ts streamErrorOf)
+  { id: 'opencode', label: 'OpenCode', name: 'OpenCode', kind: 'acp', command: 'opencode', args: ['acp', '--print-logs'], login: ['auth', 'login'], defaultOn: false, modelOption: true },
   { id: ANTHROPIC_API, label: 'Anthropic API', name: 'Anthropic API', kind: 'api', baseUrl: 'https://api.anthropic.com/v1', protocol: 'anthropic', login: [], defaultOn: false },
 ];
 

@@ -3,8 +3,9 @@
 // after every open; without modelOption the same answers give no model choice. No real engine ever runs here.
 import { afterEach, describe, expect, it } from 'vitest';
 import path from 'node:path';
-import { AcpSession, permissionView, type AcpOptions } from '../../../src/main/chats/acp';
+import { AcpSession, permissionView, streamErrorOf, type AcpOptions } from '../../../src/main/chats/acp';
 import { autoPermit } from '../../../src/main/chats/auto-permit';
+import { SYS_IT } from '../../../src/shared/sys';
 import { TOOL_CLASSES } from '../../../src/shared/agents';
 import { FAKE_CURSOR, cursorLog, recSink, tmp, waitFor, type RecSink } from './helpers';
 
@@ -20,7 +21,7 @@ function start(extra: Partial<AcpOptions> = {}): { s: AcpSession; sink: RecSink;
   return { s, sink, logFile };
 }
 describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
-  const OPENCODE = { engineId: 'opencode', label: 'OpenCode', args: ['acp'], acpCommand: 'opencode', loginCommand: 'opencode auth login', modelOption: true } satisfies Partial<AcpOptions>;
+  const OPENCODE = { engineId: 'opencode', label: 'OpenCode', args: ['acp', '--print-logs'], acpCommand: 'opencode', loginCommand: 'opencode auth login', modelOption: true } satisfies Partial<AcpOptions>;
   const sets = (logFile: string) => cursorLog(logFile).filter(l => l.method === 'session/set_config_option').map(l => [l.params?.configId, l.params?.value]);
 
   it.each([
@@ -208,7 +209,7 @@ describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
   it('lists the model option\'s models and sets the chat\'s model there, no model flag, then its effort', async () => {
     const { s, sink, logFile } = start({ ...OPENCODE, model: 'openrouter/qwen/qwen3-coder', effort: 'high', env: { FAKE_ACP_OPENCODE: '1' } });
     await waitFor(() => s.state === 'idle', 'ready');
-    expect(cursorLog(logFile).find(l => l.argv)?.argv).toEqual(['acp']);
+    expect(cursorLog(logFile).find(l => l.argv)?.argv).toEqual(['acp', '--print-logs']);
     expect(sink.modelLists.at(-1)?.map(m => m.id)).toEqual(['opencode/big-pickle', 'openrouter/qwen/qwen3-coder', 'anthropic/claude-sonnet-5-5']);
     expect(sets(logFile)).toEqual([['model', 'openrouter/qwen/qwen3-coder'], ['effort', 'high']]);
     expect(sink.patch).toMatchObject({ model: 'openrouter/qwen/qwen3-coder[effort=high]', effortObserved: 'high' });
@@ -291,6 +292,45 @@ describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
     await waitFor(() => sink.patches.some(p => p.restart), 'the restart');
     await expect(s.askUser({ question: 'Procedo?', recommended: 'yes' })).rejects.toThrow();
     expect(sink.pendings.filter(p => p.type === 'question')).toHaveLength(0);
+  });
+
+  it('a provider refusal only on stderr (free limit reached) ends the turn as failed with a readable error, never hangs', async () => {
+    const { s, sink, logFile } = start({ ...OPENCODE, streamErrorGraceMs: 50, env: { FAKE_ACP_OPENCODE: '1' } });
+    await waitFor(() => s.state === 'idle', 'ready');
+    s.send('nocredit');
+    await waitFor(() => sink.trace.includes('result') && s.state === 'idle', 'the failed turn', 8000);
+    expect(cursorLog(logFile).some(l => l.method === 'session/cancel')).toBe(true);
+    expect([...sink.items.values()].filter(i => i.kind === 'result').map(i => (i as { isError: boolean }).isError)).toEqual([true]);
+    const sys = [...sink.items.values()].filter(i => i.kind === 'system');
+    expect(sys.map(i => i.code)).toEqual(['outOfCredits']);
+    const params = sys[0]?.params as { label: string; error: string };
+    expect(SYS_IT['sys.outOfCredits'](params)).toBe('OpenCode: crediti esauriti (Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go).');
+    // the next message runs as usual
+    s.send('ciao');
+    await waitFor(() => sink.trace.filter(t => t === 'result').length === 2, 'the next turn');
+    expect(sink.last('assistant')?.text).toBe('Ciao dal motore');
+  });
+
+  it('streamErrorOf reads only the running session\'s main stream errors', () => {
+    const line = (extra: string) => `timestamp=2026-11-01T10:18:29.000Z level=ERROR run=x message="stream error" providerID=opencode modelID=m session.id=ses_a ${extra}`;
+    expect(streamErrorOf(line('small=false agent=build mode=primary error.error="AI_APICallError: Free usage limit reached."'), 'ses_a')).toEqual({ error: 'Free usage limit reached.', credits: true });
+    expect(streamErrorOf(line('small=false agent=build error.error="AI_APICallError: Bad \\"gateway\\""'), 'ses_a')).toEqual({ error: 'Bad "gateway"', credits: false });
+    expect(streamErrorOf(line('small=false error.error="insufficient_quota: You exceeded your current quota"'), 'ses_a')?.credits).toBe(true);
+    expect(streamErrorOf(line('small=true agent=title error.error="AI_RetryError: x"'), 'ses_a')).toBeNull();
+    expect(streamErrorOf(line('small=false error.error="x"'), 'ses_b')).toBeNull();
+    expect(streamErrorOf(line('small=false error.error="x"'), null)).toBeNull();
+    expect(streamErrorOf(line('small=false error.error="x"').replace('level=ERROR', 'level=WARN'), 'ses_a')).toBeNull();
+  });
+
+  it('a stream error the engine recovers from (the turn goes on) is not a failure', async () => {
+    const { s, sink, logFile } = start({ ...OPENCODE, streamErrorGraceMs: 2000, env: { FAKE_ACP_OPENCODE: '1' } });
+    await waitFor(() => s.state === 'idle', 'ready');
+    s.send('streamhiccup');
+    await waitFor(() => sink.trace.includes('result') && s.state === 'idle', 'the turn', 8000);
+    expect(cursorLog(logFile).some(l => l.method === 'session/cancel')).toBe(false);
+    expect([...sink.items.values()].filter(i => i.kind === 'result').map(i => (i as { isError: boolean }).isError)).toEqual([false]);
+    expect([...sink.items.values()].filter(i => i.kind === 'system')).toHaveLength(0);
+    expect(sink.last('assistant')?.text).toBe('Ripreso dopo il riprovo');
   });
 
   it('ask_user without its brief is sent back (with how to ask) at most twice, then shown; never on an engine with its own tool', async () => {
