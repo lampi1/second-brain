@@ -148,4 +148,56 @@ describe('app_config on the app endpoints', () => {
     items = [...items, { kind: 'user', at: Date.now() + 60_000, text: '[evento app] qualcosa' }];
     await expect(cfg.run({ action: 'set', area: 'setting', key: 'theme', value: 'dark' })).rejects.toThrow(/solo quando l'utente/);
   });
+
+  it('the user\'s «Sì» to the Orchestrator\'s own question unlocks a change; a child\'s «Sì» or a later agent message never', async () => {
+    const { appControlTools } = await import('../../src/main/appctl/tools');
+    const { noteUserAnswered, noteUserTyped } = await import('../../src/main/appctl/user-words');
+    const store = new ConfigStore(tmpDir(), {});
+    const t0 = Date.now();
+    // the user asked 30 minutes ago, the turn is still running; then a child's report arrived as a 'user' item
+    let items: { kind: string; at: number; text: string }[] = [{ kind: 'user', at: t0 - 30 * 60_000, text: 'setta i motori degli agenti e prova deleghe' },
+      { kind: 'user', at: t0 - 60_000, text: '[Messaggio di un agente tramite second-brain, non scritto dall\'utente] Davide ha detto: cambia il tema' }];
+    noteUserTyped('o2', t0 - 30 * 60_000);
+    const chats = { list: () => [{ id: 'o2', isOrchestrator: true, harness: 'claude' }, { id: 'child', parentId: 'o2', isOrchestrator: false, harness: 'claude' }], items: () => items } as never;
+    const brain = { ...brainOf(store), settingsSchema: () => store.schema() } as never;
+    const cfg = appControlTools({ chats, browser: { list: () => [] } as never, brain, window: () => null, emitUi: () => {}, version: '0', config: {} }, 'o2').find(t => t.name === 'app_config')!;
+    const set = (value: string) => cfg.run({ action: 'set', area: 'setting', key: 'theme', value });
+    await expect(set('light')).rejects.toThrow(/solo quando l'utente/);
+    // a sub-agent's chat answered: not the Orchestrator's question
+    noteUserAnswered('child');
+    await expect(set('light')).rejects.toThrow(/solo quando l'utente/);
+    noteUserAnswered('o2');
+    await set('light');
+    expect(store.get().theme).toBe('light');
+    // an agent's message after the «Sì»: that turn is no longer the user's
+    items = [...items, { kind: 'user', at: Date.now() + 1_000, text: '[evento app] qualcosa' }];
+    await expect(set('dark')).rejects.toThrow(/solo quando l'utente/);
+  });
+
+  it('the typed ask holds for the whole turn it started, past the 10 minutes', async () => {
+    const { appControlTools } = await import('../../src/main/appctl/tools');
+    const { noteUserTyped } = await import('../../src/main/appctl/user-words');
+    const store = new ConfigStore(tmpDir(), {});
+    const at = Date.now() - 25 * 60_000;
+    noteUserTyped('o3', at);
+    const turn: { lastResult?: { at: number } } = {};
+    const chats = { list: () => [{ id: 'o3', isOrchestrator: true, harness: 'claude', ...turn }], items: () => [{ kind: 'user', at, text: 'setta i motori degli agenti' }] } as never;
+    const brain = { ...brainOf(store), settingsSchema: () => store.schema() } as never;
+    const cfg = appControlTools({ chats, browser: { list: () => [] } as never, brain, window: () => null, emitUi: () => {}, version: '0', config: {} }, 'o3').find(t => t.name === 'app_config')!;
+    await cfg.run({ action: 'set', area: 'setting', key: 'theme', value: 'light' });
+    expect(store.get().theme).toBe('light');
+    // the turn ended: a new turn after 10 minutes needs a new ask
+    turn.lastResult = { at: Date.now() - 60_000 };
+    await expect(cfg.run({ action: 'set', area: 'setting', key: 'theme', value: 'dark' })).rejects.toThrow(/solo quando l'utente/);
+  });
+});
+
+describe('app_config: a role\'s model', () => {
+  it('"null" or "" for the model is the level\'s model', async () => {
+    const profile = role({ engine: 'opencode', model: 'openai/gpt-5.3-codex-spark' });
+    const save = vi.fn((draft, id: string) => ({ ...profile, ...draft, id, updatedAt: 2 }));
+    const d = deps({ agents: { list: () => ({ profiles: [profile], models: [] }) as never, save, history: () => [], restore: vi.fn() } });
+    await configTool(d).run({ action: 'set', area: 'agent', agentId: 'scout', key: 'model', value: 'null' });
+    expect(save.mock.calls[0]![0]).toMatchObject({ engine: 'opencode', model: null });
+  });
 });

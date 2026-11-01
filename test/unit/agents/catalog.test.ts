@@ -87,6 +87,23 @@ describe('role catalog', () => {
     expect(live.save(edit(live.list().profiles.find(p => p.id === 'scout')!, { instructions: 'Altro testo.' }), 'scout').model).toBe('m-mid');
     expect(() => live.resolve({ harness: 'claude', roleId: 'scout' } as never)).toThrow('modello');
   });
+  it('moves a role to another engine: the old engine\'s model falls back to the level\'s, a new one is checked (no deadlock)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-catalog-')); roots.push(dir);
+    const two = (): AgentModelChoice[] => [
+      { ...models()[0]!, engine: 'opencode', label: 'OpenCode', models: [{ id: 'openai/gpt-5.3-codex-spark', name: 'Spark' }] },
+      { ...models()[0]!, engine: 'cursor', label: 'Cursor', models: [{ id: 'gpt-5.4-nano', name: 'Nano' }] }];
+    const live = new AgentCatalogService({ userData: dir, models: two });
+    const start = live.list().profiles.find(p => p.id === 'strategist')!;
+    const onOpencode = live.save(edit(start, { engine: 'opencode', model: 'openai/gpt-5.3-codex-spark', effort: 'high' } as never), 'strategist');
+    // what app_config sends for key=engine: the whole card with the old model and effort carried along
+    const onCursor = live.save(edit(onOpencode, { engine: 'cursor', effort: 'high' } as never), 'strategist');
+    expect(onCursor).toMatchObject({ engine: 'cursor', model: null, effort: 'high' });
+    expect(live.save(edit(onCursor, { model: 'gpt-5.4-nano' }), 'strategist')).toMatchObject({ engine: 'cursor', model: 'gpt-5.4-nano' });
+    // the panel's picker saves engine and model together; a model the new engine does not know is still refused
+    const back = live.save(edit(live.list().profiles.find(p => p.id === 'strategist')!, { engine: 'opencode', model: 'openai/gpt-5.3-codex-spark' }), 'strategist');
+    expect(back).toMatchObject({ engine: 'opencode', model: 'openai/gpt-5.3-codex-spark' });
+    expect(() => live.save(edit(back, { engine: 'cursor', model: 'nope' }), 'strategist')).toThrow('modello');
+  });
   it('reads roles.json tolerantly: an unknown id is left out, a broken file is kept and blocks writes', () => {
     const { dir, make, catalog } = setup(), file = path.join(dir, 'roles.json');
     const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
