@@ -10,7 +10,7 @@ import { SEND_MODE_RULE } from '../shared/newchat';
 import { engineInfos, engineOf } from './engines/registry';
 import { withApiModels } from './engines/sessions';
 import { AgentCatalogService } from './agents/catalog';
-import { tierModel } from './agents/model-tier';
+import { tierCandidates, tierModel } from './agents/model-tier';
 import { CATALOG_GUIDANCE } from './agents/discovery';
 import { engineOn } from './engines/policy';
 import type { EnginesApi } from './engines/service';
@@ -205,6 +205,7 @@ function templateRegistry(): ModelRegistry | null {
 export function createAgentCatalog(ctx: Ctx, brain: BrainService, engines: EnginesApi, cli: () => Record<Harness, CliStatus> | null, onCustomized?: () => void): AgentCatalogService {
   return new AgentCatalogService({ userData: ctx.userData, ...(onCustomized ? { onCustomized } : {}),
     tierModel: (engine, tier) => tierModel(engine, tier, brain.modelRegistry(), brain.settings().modelTiers),
+    tierModels: (engine, tier) => tierCandidates(engine, tier, brain.modelRegistry(), brain.settings().modelTiers),
     models: () => {
       const seen = withApiModels(brain.modelsSeen()), reg = brain.modelRegistry();
       return engineInfos().map(e => ({ engine: e.id, label: e.label, enabled: engineOn(brain.settings(), e.id), trusted: e.trusted, effort: e.caps.effort, maxContext: e.kind === 'claude',

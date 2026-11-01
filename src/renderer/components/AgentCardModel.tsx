@@ -7,6 +7,7 @@
 // styles/agent-catalog.css (.catalog-model). With «Balanced mode» on the button reads «Balanced» (ADR 0218).
 import { useRef, useState } from 'react';
 import { MAX_CONTEXT_RANGE, effortOn, type AgentProfile } from '@shared/agents';
+import { isWorkRole } from '@shared/roles';
 import { agentDraftOf } from '../lib/agent-drafts';
 import { saveAgent, useAgents } from '../store/agents';
 import { useApp } from '../store/store';
@@ -36,8 +37,9 @@ export function AgentCardModel({ profile }: { profile: AgentProfile }) {
     finally { setBusy(false); }
   };
   const id = profile.id;
-  // «Balanced mode» on (ADR 0218): the delegating agent picks; the card's own choice is kept for when it goes off
-  const balanced = useApp(s => s.settings?.balancedMode === true);
+  // «Balanced mode» on (ADR 0218): the delegating agent picks; the card's own choice is kept for when it goes off. Only
+  // work roles: the Orchestrator and Flash always run on their card
+  const balanced = useApp(s => s.settings?.balancedMode === true) && isWorkRole(profile.id);
   return <section className="catalog-model" aria-label={t('studio.model')} data-testid={`catalog-model-${id}`}>
     <h4>{t('agentCard.modelTitle')}</h4>
     {/* engine, model and effort in the shared picker (ModelPicker.tsx): the default of the role's new chats */}

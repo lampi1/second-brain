@@ -51,9 +51,12 @@ A **pool** is one source of credit: an engine, and for OpenCode the provider pre
 | `codex` | **not yet read** | Codex app-server sends `account/rateLimits/updated` (chats/codex.ts ignores it today): a follow-up can feed it like Claude's. Until then: signals | 7 d |
 | `anthropic-api` | not read here | the month's API spend is in engines/spend.ts; the plan's credit is not known to the app. Signals only | 30 d |
 
-Every pool also learns from **signals**: a turn that ends in error whose text says the limit is reached (`usage
-limit`, `limit reached`, `quota`, `insufficient_quota`, `credit balance`, `402`, `429`, `rate limit` …; `limitSignal`)
-marks the pool exhausted at once, without any check. This is how Cursor, Codex and the API engines are known, and why
+Every pool also learns from **signals**: a turn that ends in error whose engine error notice (never the agent's prose:
+`TurnEndInfo.errorText`) uses a provider's own words for a gone limit (`usage limit reached`, `Free usage limit
+reached`, `hit your limit`, `insufficient_quota`, `exceeded your current quota`, `credit balance is too low`, `out of
+credits`; `limitSignal`) marks the pool exhausted at once, without any check. Generic words (`billing`, `quota`, `429`,
+`rate limit`) are not signals: a short throttle the engine retries is not a credit gone, and a task about invoices is
+not a limit. This is how Cursor, Codex and the API engines are known, and why
 a stopped OpenCode chat counts as soon as its error reaches the app (the OpenCode chat fix surfaces it; the log probe
 covers the gap).
 
@@ -109,9 +112,11 @@ Scout, plan/design → Strategist, writing/communication → Herald, code → Ar
 `balanced_status` (MCP, read-only, no network, on the app mount and on the chat mount for the roles that delegate)
 returns: on/off; each pool with status, left, renewal, target and real share; the stats per role × model × kind of
 work (runs, success, mean cost); the formula's proposal for a role; and a short how-to. The agent then passes
-`balanced: { harness, model?, effort?, why }` to `app_create_chat` or to each task of `agent_delegate`. The app only
-checks hard limits, in this order, and refuses with the reason: the engine is enabled and trusted; the caller may start
-it; the model is not above the role's tierMax; the model is known on that engine; its pool is not exhausted. `balanced`
+`balanced: { engine, model, effort?, why }` (engine, model and why required) to `app_create_chat` or to each task of
+`agent_delegate`. The app only checks hard limits, in this order, and refuses with the reason: the engine is enabled and
+trusted and can apply a model choice (`modelSelectable`); the caller may start it; the model is the card's own or one of
+the models (any, not only the first) of a tier up to the role's tierMax on that engine, so a model in no tier is
+refused; its pool is not exhausted. `catalog.resolve` checks tierMax and `modelSelectable` again on the route. `balanced`
 with the mode off is refused. `route.balanced.by` is `agent` or `formula`; the reason starts with «Balanced mode,
 scelta dell'agente: <why> …» (plus what the formula proposed) or «Balanced mode, scelta della formula: …».
 

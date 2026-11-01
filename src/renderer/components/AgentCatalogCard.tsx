@@ -28,6 +28,7 @@ import { formatCost } from '../lib/format';
 import { useApp } from '../store/store';
 import { isBusy } from '../store/state';
 import { rolePurpose } from '../lib/role-text';
+import { isWorkRole } from '@shared/roles';
 
 /** How many open chats of this role are working right now (a turn running or starting), from the live chat list: «Al
  *  lavoro» says what is true now, never an open run whose chat waits, closed or went away (2026-10-22). */
@@ -164,7 +165,10 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
   const working = !trial && busy > 0;
   const state = trial ? 'trial' : working ? 'working' : 'active';
   const origin = t(profile.userLocked ? 'studio.customized' : 'studio.builtIn');
+  // «Balanced mode» on (ADR 0218): a work role's engine and model are picked per delegation, so the card names no fixed one
+  const balanced = useApp(s => s.settings?.balancedMode === true) && isWorkRole(profile.id);
   const tier = t('studio.tierChip', { tier: t(`roles.tier.${profile.tier}`) });
+  const engineModel = balanced ? t('mp.balanced.card') : `${engine} · ${profile.model ?? tier}`;
   const skills = profile.skills;
   const last = lastStart === null ? unknown : new Date(lastStart).toLocaleString(locale());
   const prompt = profile.instructions.trim();
@@ -186,8 +190,9 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
           <p className="catalog-purpose" title={rolePurpose(profile.id, profile.purpose) || undefined}>{rolePurpose(profile.id, profile.purpose)}</p>
         </header>
         <div className="catalog-chips">
-          <span className="catalog-chip" data-kind="engine">{engine}</span>
-          <span className="catalog-chip" data-kind="model" title={profile.model ?? tier}>{profile.model ?? tier}</span>
+          {balanced ? <span className="catalog-chip" data-kind="engine" data-balanced="true">{t('mp.balanced.card')}</span> : <>
+            <span className="catalog-chip" data-kind="engine">{engine}</span>
+            <span className="catalog-chip" data-kind="model" title={profile.model ?? tier}>{profile.model ?? tier}</span></>}
           <span className="catalog-chip" data-kind="skills">{t('bm.map.agentSkills', { n: skills.length })}</span>
         </div>
         <Standing id={profile.id} standing={standing} reviewedAt={reviewedAt} />
@@ -222,7 +227,7 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
           {profile.scope === 'role' && <div data-testid={`catalog-perms-${profile.id}`}><dt>{t('perm.card')}</dt><dd><span className="catalog-perms" data-full={perms.full}>{perms.text}</span>
             <button type="button" className="link-btn" onClick={() => go({ page: 'agenti', arg: profile.id, element: PERMISSIONS_ELEMENT })} data-testid={`catalog-perms-edit-${profile.id}`}>{t('perm.card.edit')}</button></dd></div>}
           <div><dt>{t('bm.card.memory')}</dt><dd>{memory?.entries ? t('bm.mem.entries', { n: memory.entries }) : t('bm.card.memoryNone')}</dd></div>
-          <div><dt>{t('catalog.engine')}</dt><dd>{engine} · {profile.model ?? tier}</dd></div>
+          <div><dt>{t('catalog.engine')}</dt><dd data-testid={`catalog-engine-${profile.id}`}>{engineModel}</dd></div>
           <div><dt>{t('agentDetail.version')}</dt><dd>{origin} · v{profile.activeVersion}</dd></div>
           <div><dt>{t('catalog.last')}</dt><dd>{last}</dd></div>
         </dl>

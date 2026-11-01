@@ -15,7 +15,7 @@ import { characterOf, isCharacterId } from '../../shared/characters';
 import { readLocal, writeLocal } from './local-store';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, versionedChanges } from './versions';
 import { checkedTools, type AgentPolicy } from './tool-policy';
-import { cappedTier } from './model-tier';
+import { cappedTier, withinTierMax } from './model-tier';
 import { fiveRolesTextFor, fullDefaultsFor, shippedTextFor } from './role-migrate';
 import { engineOf } from '../engines/registry';
 import { log, errText } from '../log';
@@ -49,6 +49,8 @@ export interface AgentCatalogDeps {
   /** the model a tier means on an engine (agents/model-tier.ts with the registry and Settings.modelTiers); null = the
    *  engine's own default */
   tierModel?: (engine: Harness, tier: ModelTier) => string | null;
+  /** every model of a tier on an engine (tierCandidates): a Balanced mode pick must be one of a tier up to tierMax */
+  tierModels?: (engine: Harness, tier: ModelTier) => readonly string[];
   emit?: (catalog: AgentCatalog) => void;
   now?: () => number;
   onCustomized?: () => void;
@@ -212,6 +214,11 @@ export class AgentCatalogService {
     writeLocal(this.file, { format: 1, roles: next });
     this.profiles = next;
     this.d.emit?.(this.list());
+  }
+  private tierModels(engine: Harness, tier: ModelTier): readonly string[] {
+    if (this.d.tierModels) return this.d.tierModels(engine, tier);
+    const m = this.d.tierModel?.(engine, tier);
+    return m ? [m] : [];
   }
   private find(id: string): AgentProfile {
     const p = this.profiles.find(x => x.id === id);
@@ -455,9 +462,14 @@ export class AgentCatalogService {
     // may run now; the card's tools, ceiling, skills and tierMax still hold
     const balancedEngine = req.balancedRoute ? this.d.models().find(x => x.engine === req.balancedRoute!.engine) : undefined;
     const chosen = req.balancedRoute && balancedEngine?.enabled && balancedEngine.trusted ? req.balancedRoute : null;
+    // tierMax again (ADR 0218): the card's own model, else a model of a tier up to tierMax on that engine
+    if (chosen && !(chosen.engine === p.engine && chosen.model === p.model) && !withinTierMax(t => this.tierModels(chosen.engine, t), chosen.model, p.tierMax)) {
+      throw new Error(`${p.name} arriva al massimo al livello ${p.tierMax}: ${chosen.model} su ${chosen.engine} non è un modello di quei livelli.`);
+    }
     const engine = chosen ? chosen.engine : p.engine;
     const e = this.d.models().find(x => x.engine === engine)!;
     if (!e.enabled || !e.trusted) throw new Error(`Il motore di ${p.name} è spento o va riconfermato nelle Impostazioni.`);
+    if (chosen && !e.modelSelectable) throw new Error(e.modelReason ?? `${e.label} non può applicare una scelta di modello: Balanced mode non lo usa.`);
     // the role's own model, else its tier's model (owner, 2026-10-30: no routing table, ADR 0210). A review's
     // independence is its clean session (it never sees its parent's reasoning), never another model (ADR 0091)
     const picked = { model: chosen ? chosen.model : p.model ?? this.d.tierModel?.(p.engine, tier) ?? null };

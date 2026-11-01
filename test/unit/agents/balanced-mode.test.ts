@@ -139,10 +139,12 @@ describe('BalancedMode', () => {
 
 describe('BalancedMode: the agent picks (ADR 0218 §4)', () => {
   const engines = () => [
-    { engine: 'claude' as Harness, enabled: true, trusted: true, models: [{ id: 'sonnet', name: 'S', efforts: ['low', 'medium', 'high'] as never }] },
+    { engine: 'claude' as Harness, enabled: true, trusted: true, models: [{ id: 'sonnet', name: 'S', efforts: ['low', 'medium', 'high'] as never }, { id: 'opus', name: 'O' }, { id: 'fable', name: 'F' }] },
     { engine: 'cursor' as Harness, enabled: true, trusted: true, models: [{ id: 'gpt-5', name: 'G' }] },
     { engine: 'codex' as Harness, enabled: false, trusted: true, models: [] },
   ];
+  // every model of a tier, the first is the tier's model: a second «top» model (opus) and one in no tier (fable)
+  const TIERS: Record<string, Record<string, string[]>> = { claude: { light: ['claude-light'], mid: ['claude-mid', 'sonnet'], top: ['claude-top', 'opus'] }, cursor: { mid: ['cursor-mid', 'gpt-5'] } };
   const rows = [
     { agentId: 'artisan', goal: 'Fix del totale ordini', startedAt: NOW - 30 * 60e3, ...run('sonnet', 'success', 2) },
     { agentId: 'artisan', goal: 'Fix del totale ordini', startedAt: NOW - 90 * 60e3, ...run('sonnet', 'fail', 4) },
@@ -150,7 +152,7 @@ describe('BalancedMode: the agent picks (ADR 0218 §4)', () => {
   ].map(r => ({ ...r, endedAt: NOW }));
   const make = (book: CreditBook, on = true) => new BalancedMode({ on: () => on, book,
     role: () => ({ engine: 'claude', model: null, effort: null, tier: 'mid', tierMax: 'mid' }),
-    engines, tierModel: (e, t) => `${e}-${t}`, runs: () => rows as never, now: () => NOW });
+    engines, tierModel: (e, t) => `${e}-${t}`, tierModels: (e, t) => TIERS[e]?.[t] ?? [], runs: () => rows as never, now: () => NOW });
   const base = { roleId: 'artisan', title: 't', prompt: 'p', canRun: (h: Harness) => h !== 'opencode' };
 
   it('takes the agent\'s pick within the limits: by agent, its why and the formula\'s proposal in the reason', async () => {
@@ -171,7 +173,9 @@ describe('BalancedMode: the agent picks (ADR 0218 §4)', () => {
     await expect(ask('codex', 'codex-mid')).rejects.toThrow(/switched off/);
     await expect(ask('opencode', 'openai/gpt-5')).rejects.toThrow(/switched off|may not open/);
     await expect(ask('claude', 'claude-top')).rejects.toThrow(/above the role's tierMax/);
-    await expect(ask('claude', 'mystery')).rejects.toThrow(/not a known model/);
+    await expect(ask('claude', 'opus')).rejects.toThrow(/above the role's tierMax/);
+    await expect(ask('claude', 'fable')).rejects.toThrow(/in no tier up to/);
+    await expect(ask('claude', 'mystery')).rejects.toThrow(/in no tier up to/);
     await expect(ask('cursor', 'gpt-5')).rejects.toThrow(/credit is exhausted/);
   });
 

@@ -196,7 +196,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
         const c = d.balancedMode?.enabled ? await d.balancedMode.choose({ roleId: p.role, ...(p.contract.tier ? { tier: p.contract.tier } : {}), title: p.title, prompt: p.contract.goal,
           canRun: h => !d.engineRefusal(parent.harness, h), pending, ...(p.asked ? { asked: p.asked } : {}) }) : null;
         if (c?.balancedRoute) pending.push(c.balancedRoute.pool);
-        else if (c) {
+        else {
+          // the card's own engine (the mode chose it, or was turned off since the check above): its refusal stands
           const refused = d.engineRefusal(parent.harness, p.profile.engine);
           if (refused) throw new Error(`tasks[${i}]: ${p.profile.name} runs on ${p.profile.engine}: ${refused}`);
         }

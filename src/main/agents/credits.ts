@@ -57,8 +57,11 @@ export function poolOf(engine: Harness, model: string | null | undefined): strin
   return `opencode:${prefix === 'opencode' ? 'zen' : prefix}`;
 }
 
-const LIMIT_TEXT = /(usage limit|limit (?:has been )?reached|limit exceeded|quota|insufficient[_ ]quota|credit balance|out of credits|no credits|billing|payment required|\b402\b|\b429\b|rate[_ -]?limit|too many requests|hit your (?:usage )?limit|subscribe to .* to keep going)/i;
-/** Does an error text say the provider's credit or quota is gone? Network and model refusals are not limits. */
+// Only the providers' own words for a plan or credit that is gone: generic words (billing, quota, 429, rate limit) also
+// fit a short throttle the engine retries, or a task about invoices (review of 2026-11-01).
+const LIMIT_TEXT = /(usage limit (?:has been |was )?reached|free usage limit|hit your (?:usage )?limit|insufficient[_ ]quota|exceeded your current quota|credit balance is too low|out of credits|subscribe to .{1,80} to keep going)/i;
+/** Does an engine's error text say the provider's credit or plan limit is gone? Network errors, throttles and model
+ *  refusals are not limits. */
 export function limitSignal(text: string | null | undefined): boolean {
   const t = String(text ?? '');
   return !!t && LIMIT_TEXT.test(t) && !/ECONNRESET|ETIMEDOUT|socket|PING timed out/i.test(t.slice(0, 400));
@@ -180,20 +183,24 @@ export class CreditBook {
   }
 
   /** A turn's end on an engine: a limit error is a signal, a clean end a proof that the pool works. */
-  observe(engine: Harness, model: string | null, reply: string | null | undefined, isError: boolean): void {
+  observe(engine: Harness, model: string | null, errorText: string | null | undefined, isError: boolean): void {
     const pool = poolOf(engine, model);
-    // only a turn that ended in error counts: a reply that merely talks about limits is not one
-    if (isError && limitSignal(reply)) this.signal(pool, String(reply));
+    // only the engine's own error notices of a failed turn count, never the agent's prose (TurnEndInfo.errorText)
+    if (isError && limitSignal(errorText)) this.signal(pool, String(errorText));
     else if (!isError) this.worked(pool);
   }
 
   /** Runs the local checks of the pools that need one (one check at a time; never throws). */
   async refresh(pools: readonly string[], opts: { costly?: boolean } = {}): Promise<void> {
-    const due = pools.filter(p => this.needsCheck(p, opts));
-    if (!due.length) return;
-    if (this.checking) { await this.checking; return; }
-    this.checking = this.check(due).finally(() => { this.checking = null; });
-    await this.checking;
+    // a check already running covers other pools: wait for it, then check what of ours is still due (one at a time)
+    for (;;) {
+      if (this.checking) { await this.checking; continue; }
+      const due = pools.filter(p => this.needsCheck(p, opts));
+      if (!due.length) return;
+      this.checking = this.check(due).finally(() => { this.checking = null; });
+      await this.checking;
+      return;
+    }
   }
 
   private async check(due: readonly string[]): Promise<void> {

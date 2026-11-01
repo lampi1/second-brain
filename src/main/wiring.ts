@@ -33,7 +33,7 @@ import { childFeedbackTools } from './agents/child-feedback';
 import { delegationTools } from './agents/delegation';
 import { BalancedMode } from './agents/balanced-mode';
 import { CreditBook, opencodeLogTail } from './agents/credits';
-import { tierModel } from './agents/model-tier';
+import { tierCandidates, tierModel } from './agents/model-tier';
 import { workDecisionTools } from './agents/work-decisions';
 import { strategyTools } from './agents/strategy-tools';
 import { askTools } from './chats/ask-tool';
@@ -258,6 +258,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const balancedMode = new BalancedMode({ on: () => brain.settings().balancedMode === true, book: credits,
     role: id => { const p = agents.list().profiles.find(x => x.id === id); return p ? { engine: p.engine, model: p.model, effort: p.effort ?? null, tier: p.tier, tierMax: p.tierMax } : null; },
     engines: () => agents.list().models, tierModel: (e, t) => tierModel(e, t, brain.modelRegistry(), brain.settings().modelTiers),
+    tierModels: (e, t) => tierCandidates(e, t, brain.modelRegistry(), brain.settings().modelTiers),
     runs: () => manager.runs.list() });
   const manager = new ChatManager({
     writeDelayMs: 250, // chats.json and agent-runs.json: one asynchronous write per burst (the main-process freezes, 2026-10-27)
@@ -329,7 +330,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     acpModelConfig: () => { const r = brain.settings().orchestratorChats; return { reasoning: r.cursorReasoning, fast: r.cursorFast }; },
     onTurnEnd: info => {
       replyRules.turnEnded(info.chatId, info.reply, info.isError);
-      credits.observe(info.harness, info.model, info.reply, info.isError); // a limit error or a clean turn (ADR 0218)
+      credits.observe(info.harness, info.model, info.errorText, info.isError); // the engine's limit error or a clean turn (ADR 0218)
       // an API engine's turn spends the user's API credits: this month's figure in Settings → Motori (engines/spend.ts)
       const api = engineOf(info.harness);
       if (api?.kind === 'api') engines.addSpend(info.harness, info.model && listPrice(priceEnginesOf(api), info.model) ? info.costUsd : null);

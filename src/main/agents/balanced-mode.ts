@@ -11,12 +11,12 @@ import type { BalancedAsk, BalancedRoute, Effort, Harness, RouteBalanced, RouteD
 import { areaOf, EFFORTS } from '../brain/routing';
 import type { AgentModelChoice, AgentRun } from '../../shared/agents';
 import { effortOn } from '../../shared/agents';
-import { MODEL_TIERS, tierRank, WORK_ROLE_IDS, type ModelTier, type RoleId } from '../../shared/roles';
+import { MODEL_TIERS, WORK_ROLE_IDS, type ModelTier, type RoleId } from '../../shared/roles';
 import type { CallCtx, McpTool } from '../mcp/server';
 import { MIN_SUCCESS_SAMPLE, runsSuccess } from '../../shared/success';
 import { taskOf, type TaskKind } from '../../shared/work-concepts';
 import { poolOf, type CreditBook, type PoolState } from './credits';
-import { cappedTier } from './model-tier';
+import { cappedTier, withinTierMax } from './model-tier';
 
 /** One engine the caller may start, with the tier's model on it. */
 export interface BalancedCandidate {
@@ -141,8 +141,10 @@ export interface BalancedModeDeps {
   /** the role's card: engine, own model and effort, tier and tierMax */
   role: (id: string) => { engine: Harness; model: string | null; effort: Effort | null; tier: ModelTier; tierMax: ModelTier } | null;
   /** every engine with its state and models (catalog.models) */
-  engines: () => readonly Pick<AgentModelChoice, 'engine' | 'enabled' | 'trusted' | 'models'>[];
+  engines: () => readonly (Pick<AgentModelChoice, 'engine' | 'enabled' | 'trusted' | 'models'> & { modelSelectable?: boolean })[];
   tierModel: (engine: Harness, tier: ModelTier) => string | null;
+  /** every model of a tier on an engine (tierCandidates); missing = the tier's model only */
+  tierModels?: (engine: Harness, tier: ModelTier) => readonly string[];
   /** every run the app keeps (any role) */
   runs: () => readonly BalancedRunRow[];
   now?: () => number;
@@ -169,7 +171,7 @@ interface LaunchArgs { roleId: string; tier?: ModelTier; title: string; prompt: 
 type Role = NonNullable<ReturnType<BalancedModeDeps['role']>>;
 
 const STATS_MAX = 40;
-const HOW_TO = 'Balanced mode on: pick engine, model and effort yourself from these data and pass them as balanced {engine, model, effort?, why} in app_create_chat / agent_delegate. Prefer the proposal unless the stats say otherwise (e.g. a model that does badly on this kind of work). Pass nothing and the formula decides. The app refuses only an exhausted pool, an engine you may not open, a model above the role\'s tierMax or unknown.';
+const HOW_TO = 'Balanced mode on: pick engine, model and effort yourself from these data and pass them as balanced {engine, model, effort?, why} in app_create_chat / agent_delegate. Prefer the proposal unless the stats say otherwise (e.g. a model that does badly on this kind of work). Pass nothing and the formula decides. The app refuses only an exhausted pool, an engine you may not open, a model that is neither the card\'s own nor one of a tier up to the role\'s tierMax.';
 
 /** «Balanced mode» for one launch: the setting, the credit book and the role's stats together. */
 export class BalancedMode {
@@ -179,10 +181,16 @@ export class BalancedMode {
 
   private now(): number { return this.d.now?.() ?? Date.now(); }
 
+  private tierModels(engine: Harness, tier: ModelTier): readonly string[] {
+    if (this.d.tierModels) return this.d.tierModels(engine, tier);
+    const m = this.d.tierModel(engine, tier);
+    return m ? [m] : [];
+  }
+
   private candidates(role: Role, tier: ModelTier, canRun: (h: Harness) => boolean): BalancedCandidate[] {
     const out: BalancedCandidate[] = [];
     for (const e of this.d.engines()) {
-      if (!e.enabled || !e.trusted || !canRun(e.engine)) continue;
+      if (!e.enabled || !e.trusted || e.modelSelectable === false || !canRun(e.engine)) continue;
       const model = (e.engine === role.engine ? role.model : null) ?? this.d.tierModel(e.engine, tier);
       if (!model) continue;
       const efforts = e.models.find(m => m.id === model)?.efforts;
@@ -236,12 +244,15 @@ export class BalancedMode {
   private agentPick(ask: BalancedAsk, role: Role, tier: ModelTier, canRun: (h: Harness) => boolean, r: BalancedResult, pools: readonly string[], pending: readonly string[], suggestedRole: RoleId | null, hint: string): BalancedChoice {
     const e = this.d.engines().find(x => x.engine === ask.engine);
     if (!e || !e.enabled || !e.trusted) throw new Error(`balanced.engine ${ask.engine}: switched off or to confirm again in Settings → Engines.`);
+    if (e.modelSelectable === false) throw new Error(`balanced.engine ${ask.engine}: it cannot apply a model choice, so its tier cannot be held; pick another engine or pass nothing.`);
     if (!canRun(ask.engine)) throw new Error(`balanced.engine ${ask.engine}: you may not open chats on this engine (Settings → Engines).`);
-    const within = MODEL_TIERS.filter(t => tierRank(t) <= tierRank(role.tierMax)).map(t => this.d.tierModel(ask.engine, t));
-    const above = MODEL_TIERS.filter(t => tierRank(t) > tierRank(role.tierMax)).map(t => this.d.tierModel(ask.engine, t));
+    // only the card's own model or a model of a tier up to tierMax (any of the tier's models): never one in no tier
     const own = ask.engine === role.engine && role.model === ask.model;
-    if (!own && !within.includes(ask.model) && above.includes(ask.model)) throw new Error(`balanced.model ${ask.model}: above the role's tierMax (${role.tierMax}).`);
-    if (!own && !within.includes(ask.model) && !e.models.some(m => m.id === ask.model)) throw new Error(`balanced.model ${ask.model}: not a known model of ${ask.engine} (balanced_status, agent_catalog).`);
+    const models = (t: ModelTier) => this.tierModels(ask.engine, t);
+    if (!own && !withinTierMax(models, ask.model, role.tierMax)) {
+      if (MODEL_TIERS.some(t => models(t).includes(ask.model))) throw new Error(`balanced.model ${ask.model}: above the role's tierMax (${role.tierMax}).`);
+      throw new Error(`balanced.model ${ask.model}: in no tier up to the role's tierMax (${role.tierMax}) on ${ask.engine}: pick a model of balanced_status or Settings → Roles → tiers.`);
+    }
     const pool = poolOf(ask.engine, ask.model);
     const state = this.d.book.state(pool);
     if (state?.status === 'exhausted') throw new Error(`balanced: the ${pool} credit is exhausted (${state.note ?? 'limit reached'}); pick another engine or pass nothing.`);

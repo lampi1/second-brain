@@ -163,6 +163,8 @@ export interface TurnEndInfo {
   isError: boolean;
   /** the assistant's texts of this turn, joined (reply rules: chats/reply-rules.ts) */
   reply?: string;
+  /** the engine's error notices of this turn, joined (never the assistant's prose) */
+  errorText?: string;
 }
 
 export interface Rec {

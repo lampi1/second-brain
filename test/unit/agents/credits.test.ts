@@ -24,8 +24,16 @@ describe('pools', () => {
   });
   it('a limit text is a signal; a network error is not', () => {
     expect(limitSignal('You have hit your usage limit')).toBe(true);
-    expect(limitSignal('Error 429 Too Many Requests')).toBe(true);
     expect(limitSignal('insufficient_quota')).toBe(true);
+    expect(limitSignal('Free usage limit reached. Add credits to continue')).toBe(true);
+    expect(limitSignal('Your credit balance is too low to access the Anthropic API')).toBe(true);
+    expect(limitSignal('You exceeded your current quota, please check your plan and billing details')).toBe(true);
+  });
+  it('generic words and a short throttle are no signal (review 2026-11-01)', () => {
+    expect(limitSignal('Ho aggiornato la logica di billing e la quota fatture; poi il test è fallito')).toBe(false);
+    expect(limitSignal('rate limit per minute exceeded, retry in 20s')).toBe(false);
+    expect(limitSignal('Error 429 Too Many Requests')).toBe(false);
+    expect(limitSignal('402 payment of the invoice failed in the test')).toBe(false);
     expect(limitSignal('ECONNRESET while rate limit check')).toBe(false);
     expect(limitSignal('the model refused')).toBe(false);
     expect(limitSignal(null)).toBe(false);
@@ -105,6 +113,21 @@ describe('CreditBook', () => {
       // fresh by the turn: no check
       expect(book.state('claude')!.source).toBe('turn');
     });
+  });
+
+  it('a concurrent refresh still checks its own pools', async () => {
+    const now = Date.parse('2026-11-01T12:00:00.000Z');
+    let release!: () => void;
+    const gate = new Promise<void>(r => { release = r; });
+    const opencodeLog = vi.fn(async () => { await gate; return ''; });
+    const claudeLimits = vi.fn(() => ({ fiveHourPct: 10, fiveHourResetsAt: now + HOUR, weekPct: 30, weekResetsAt: now + 24 * HOUR, at: now }));
+    const book = new CreditBook(null, { claudeLimits, opencodeLog }, () => now);
+    const first = book.refresh(['opencode:zen']);
+    const second = book.refresh(['claude']);
+    release();
+    await Promise.all([first, second]);
+    expect(claudeLimits).toHaveBeenCalled();
+    expect(book.state('claude')).toMatchObject({ status: 'ok', source: 'limits' });
   });
 
   it('reads Claude and OpenCode locally; a fresh cache calls no probe', async () => {
