@@ -48,6 +48,10 @@ test/unit/proposals.test.ts email sha256:2f375d787fe797df16643e8faeba511d710e2a8
 test/unit/proposals.test.ts email sha256:62c51e8ad51e3e2f4332a47438bf33467c5e194fa5c378f05f90f7e3103c6423
 docs/screenshots/mosaic.webp binary-media sha256:64488cc4a941c5203a4285044ebf7769934ddb848c5a79e1a7b572ac667e3058
 docs/screenshots/agents.webp binary-media sha256:c2a472fe7d7700e9e05d976b84b0d8b294b97bfd9c6fc047b1678c3c9f2b87fe
+# The previous agents.webp and agent-levels.webp, already published and pinned: merge commits pushed after the
+# model-picker change still carry them, and the push guard scans every pushed commit.
+docs/screenshots/agents.webp binary-media sha256:69f4bfc53ceef2efc8a9b2b36596ca97e5880a142b83dc484008adbd27acc0e7
+docs/screenshots/agent-levels.webp binary-media sha256:78ac2b2b774d4bcc511fb9e7dfd42a3643ae1cf42394a264829e4c890ed17cd0
 docs/screenshots/regia.webp binary-media sha256:466bdd32763b936b6c86a52e9104529c8e82b6ee7074c301b126ca2515db364e
 docs/screenshots/browser.webp binary-media sha256:4bfacd4cbed7b501f48647d62cda84b458528d603bf0f0ad01c8615a902433ed
 docs/screenshots/devops.webp binary-media sha256:4d1542b862694104f8ab72df150849a88900206e450fc13589355c3f88dbeee8
