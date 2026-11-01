@@ -44,6 +44,18 @@ export function turnReply(items: readonly ChatItem[]): string {
   return out.join('\n\n');
 }
 
+/** The engine's error notices since the last user message, joined: what the engine said went wrong, never the agent's
+ *  prose (the Balanced mode's limit signal reads only these, ADR 0218). */
+export function turnErrors(items: readonly ChatItem[]): string {
+  const out: string[] = [];
+  for (let i = items.length - 1; i >= 0; i--) {
+    const it = items[i]!;
+    if (it.kind === 'user') break;
+    if (it.kind === 'system' && it.level === 'error') out.unshift(it.text);
+  }
+  return out.join('\n');
+}
+
 /** Work still runs behind an idle prompt: background tasks the engine counts, or a final answer that says it waits
  *  for them (the engine's count missed a resumed agent on 2026-10-16). Such a chat is never closed nor released. */
 export const workBehind = (s: Pick<ChatSummary, 'background' | 'waitsOnWork' | 'work'>): boolean => (s.background ?? 0) > 0 || !!s.waitsOnWork || !!s.work && s.work.status !== 'completed';

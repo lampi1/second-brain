@@ -288,6 +288,11 @@ export interface RunInfo {
   prod?: string;
 }
 
+/** The engine, model and effort «Balanced mode» picked for one role chat, and the credit pool it spends (ADR 0218). */
+export interface BalancedRoute { engine: Harness; model: string; effort?: Effort; pool: string }
+/** What a delegating agent passes in «Balanced mode» (app_create_chat, agent_delegate): its own pick after reading
+ *  balanced_status, and why in a few words. The app checks only the hard limits (ADR 0218 §4). */
+export interface BalancedAsk { engine: Harness; model: string; effort?: Effort; why: string }
 export interface NewChat {
   deliveryPolicy?: TaskDeliveryPolicy;
   doneWhen?: string[];
@@ -324,6 +329,9 @@ export interface NewChat {
   replaces?: string;
   worktree?: boolean;         // claude --worktree
   route?: RouteDecision;      // set by app_create_chat and chat:createRouted: how the engine was chosen (role, defaults, override)
+  /** main only («Balanced mode», ADR 0218): the engine, model and effort picked from the credits left; the role's resolve
+   *  uses them instead of its card's engine when that engine is on and trusted. chat:create drops it */
+  balancedRoute?: BalancedRoute;
   /** run tags (AGENTS-DESIGN §4.8): the skill ids the chat starts with (`^[a-z0-9][a-z0-9_-]{0,79}$`, at most 16) */
   skills?: string[];
   /** run tags: the product the work is about, up to 40 characters */

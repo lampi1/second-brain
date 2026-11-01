@@ -35,4 +35,8 @@ export const modelPickerEn: typeof modelPickerIt = {
   'mp.apply.role': 'Save to the role',
   'mp.chatMenu': 'Model and effort…',
   'mp.cardButton': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}`,
+  'mp.balanced': 'Balanced mode',
+  'mp.balanced.hint': 'All roles: the agent that delegates picks engine, model and effort from the credit left and the stats. Off: each role uses its card.',
+  'mp.balanced.card': 'Balanced',
+  'mp.balanced.cardNote': 'Balanced mode on: the agent that delegates picks engine, model and effort. This choice applies again when you switch it off.',
 };

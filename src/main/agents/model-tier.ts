@@ -4,7 +4,7 @@
 // review's independence is its new session with a clean context, never another model (ADR 0091). Pure: used by
 // agents/catalog.ts resolve() through wiring.ts.
 import type { Harness, ModelRegistry } from '../../shared/contract';
-import { tierRank, type ModelTier } from '../../shared/roles';
+import { MODEL_TIERS, tierRank, type ModelTier } from '../../shared/roles';
 
 export type ModelTiers = Partial<Record<Harness, Partial<Record<ModelTier, string>>>>;
 const REGISTRY_TIER: Record<ModelTier, string> = { top: 'high', mid: 'mid', light: 'small' };
@@ -20,6 +20,12 @@ export function tierCandidates(engine: Harness, tier: ModelTier, registry: Model
 /** The model a tier means on an engine; null = the engine's own default. */
 export function tierModel(engine: Harness, tier: ModelTier, registry: ModelRegistry | null, overrides: ModelTiers | undefined): string | null {
   return tierCandidates(engine, tier, registry, overrides)[0] ?? null;
+}
+
+/** Whether `model` is one of the models (any, not only the first) of a tier no higher than `max` (ADR 0218): a model in
+ *  no tier is never within. `models(t)` = tierCandidates of that engine. */
+export function withinTierMax(models: (tier: ModelTier) => readonly string[], model: string, max: ModelTier): boolean {
+  return MODEL_TIERS.some(t => tierRank(t) <= tierRank(max) && models(t).includes(model));
 }
 
 /** A tier no higher than `max`. */

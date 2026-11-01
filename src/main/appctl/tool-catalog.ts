@@ -41,6 +41,7 @@ export const TOOL_CATALOG: Readonly<Record<string, ToolInfo>> = {
   app_set_chat_effort: t('app', 'Pick the reasoning effort of one running chat for this conversation only.'),
   app_set_chat_work: t('app', 'Declare, wait on or complete a chat\'s explicit assignment (holds the auto-close).'),
   agent_catalog: t(['app', 'chat'], 'The roles with purpose, tools and skills, and the skills that fit a request.'),
+  balanced_status: t(['app', 'chat'], 'Balanced mode data: each credit pool (left, renewal, target and real share), stats per role and model, the proposal of the formula.'),
   agent_learn_propose: t(['app', 'chat'], 'Propose a lesson for a role (its text or a skill), queued for the user.'),
   app_unblock: t('orchestrator', 'Open the questions window with everything waiting for the user, after a recap he asked for.'),
   app_update_code: t('orchestrator', 'Update the app\'s code from GitHub, only when the user asked in his own words.'),

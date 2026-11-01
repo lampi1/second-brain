@@ -14,7 +14,7 @@ import { RESULT_OUTPUT_MAX, checkResult, resultMessage, type DelegationLimitHit,
 import { finishPlan, afterReport } from '../../shared/strategy';
 import { APP_EVENT_LABEL } from './orchestrator-wake';
 import type { SubmissionReceipt, TurnEndInfo, Rec } from './manager-types';
-import { clearTimeout, sameChildResult, uniqueChildResults, turnReply, lastAnswer, sysItem, ORCHESTRATOR_OUTPUT_MAX, CHILD_RESULTS_MS } from './manager-helpers';
+import { clearTimeout, sameChildResult, uniqueChildResults, turnReply, turnErrors, lastAnswer, sysItem, ORCHESTRATOR_OUTPUT_MAX, CHILD_RESULTS_MS } from './manager-helpers';
 import { ManagerContinuity } from './manager-continuity';
 
 /** Delegation and reports: a child's agent_report to its parent, a root chat's to the Orchestrator, turn ends that settle them. */
@@ -471,6 +471,8 @@ export abstract class ManagerDelegation extends ManagerContinuity {
         costUsd: item.costUsd, durationMs: item.durationMs, turns: item.turns, isError: item.isError,
         reply: turnReply(r.items),
       };
+      const errorText = turnErrors(r.items);
+      if (errorText) info.errorText = errorText;
       this.hook('onTurnEnd', () => on(info));
     }
     this.askUsage(r);

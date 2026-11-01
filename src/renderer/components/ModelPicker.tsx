@@ -10,6 +10,8 @@
 // - a role (the back of an Agenti card): «Salva nel ruolo», the default of the role's new chats.
 // The default row says which default it is: «Predefinito della CLI» on a chat (the engine picks), «Modello del livello»
 // on a role (resolved at launch from the tier). Loading, error (with «Riprova»), no engine and no match are always said.
+// On the Orchestrator's chip the top row is «Balanced mode»'s main switch (ADR 0218): every role then follows the
+// delegating agent's pick from the credits left, until it goes off.
 // Used by ModelChip, ChatMenu (through ChatTile) and AgentCardModel. Styles: styles/model-picker.css.
 import { useEffect, useMemo, useState, type KeyboardEvent, type RefObject } from 'react';
 import type { ChatSummary, Effort } from '@shared/contract';
@@ -20,7 +22,7 @@ import { engineName } from '../lib/engines';
 import { agentDraftOf } from '../lib/agent-drafts';
 import { catalogGroups, findRow, kTokens, realEffort, rowEfforts, searchGroups, type CatalogRow, type EngineGroup } from '../lib/model-catalog';
 import { refreshAgents, saveAgent, useAgents } from '../store/agents';
-import { setChat } from '../store/store';
+import { setChat, setSetting, useApp } from '../store/store';
 import { HarnessMark } from './Icons';
 import { Popover } from './ui';
 import { t } from '../i18n';
@@ -55,6 +57,7 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
   const card = scope.kind === 'chat' ? scope.card ?? null : null;
   const flash = card?.id === FLASH_ID;
   const orchestrator = card?.id === ORCHESTRATOR_ROLE_ID;
+  const balanced = useApp(s => s.settings?.balancedMode === true);
   // a chat can be changed by itself everywhere but on Flash (it follows its card)
   const chatApply = scope.kind === 'chat' && !flash;
   // only a card may move engine: a strip without one keeps its engine
@@ -121,6 +124,12 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
     : flash ? t('mp.scope.flash') : t('mp.scope.chat', { title: scope.chat.title });
   return <Popover anchor={anchor} open={open} onClose={onClose} testid={`${testid}-pop`} width={380} kind="dialog" label={t('studio.model')}>
     <div className="mp" data-testid={`${testid}-picker`}>
+      {/* «Balanced mode» (ADR 0218): its main switch, one click, for every role (Settings → Ruoli e deleghe mirrors it) */}
+      {orchestrator && <div className="mp-balanced">
+        <span className="mp-balanced-text"><b>{t('mp.balanced')}</b><small>{t('mp.balanced.hint')}</small></span>
+        <button type="button" role="switch" aria-checked={balanced} aria-label={t('mp.balanced')} className={`mp-switch${balanced ? ' on' : ''}`}
+          onClick={() => void setSetting({ balancedMode: !balanced })} data-testid={`${testid}-balanced`}><span aria-hidden="true" /></button>
+      </div>}
       <p className="mp-scope" data-testid={`${testid}-scope`}>{title}</p>
       <input className="mp-search" type="search" value={query} placeholder={t('mp.search')} aria-label={t('mp.search')}
         onChange={e => setQuery(e.target.value)} onKeyDown={intoList} data-testid={`${testid}-search`} />

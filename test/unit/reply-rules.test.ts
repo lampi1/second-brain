@@ -1,9 +1,11 @@
 // Reply rules checked by the app at turn end (chats/reply-rules.ts, ADR 0063): a reply that asks the user to open
 // the browser, a local URL or to sign in by hand gets one note from the app; the agent's own steps, commands in code
-// and ordinary links do not; one note per chat per NOTE_EVERY_MS. And turnReply (manager.ts): the turn's texts.
+// and ordinary links do not; one note per chat per NOTE_EVERY_MS. And turnReply (manager.ts): the turn's texts;
+// turnErrors: only the engine's error notices of the turn (the Balanced mode's limit signal, ADR 0218).
 import { describe, expect, it } from 'vitest';
 import { APP_NOTE_LABEL, NOTE_EVERY_MS, ReplyRules, asksUserToBrowse } from '../../src/main/chats/reply-rules';
 import { turnReply } from '../../src/main/chats/manager';
+import { turnErrors } from '../../src/main/chats/manager-helpers';
 import type { ChatItem } from '../../src/shared/contract';
 
 describe('asksUserToBrowse', () => {
@@ -84,5 +86,19 @@ describe('turnReply', () => {
     ] as ChatItem[];
     expect(turnReply(items)).toBe('uno\n\ndue');
     expect(turnReply([])).toBe('');
+  });
+});
+
+describe('turnErrors', () => {
+  it('keeps only the engine error notices of the last turn, never the agent prose', () => {
+    const items = [
+      { kind: 'system', id: 's0', at: 1, text: 'usage limit reached', level: 'error' },
+      { kind: 'user', id: 'u1', at: 2, text: 'ora' },
+      { kind: 'assistant', id: 'a1', at: 3, text: 'You have hit your usage limit in the invoice module' },
+      { kind: 'system', id: 's1', at: 4, text: 'a warning', level: 'warn' },
+      { kind: 'system', id: 's2', at: 5, text: 'Free usage limit reached', level: 'error' },
+    ] as ChatItem[];
+    expect(turnErrors(items)).toBe('Free usage limit reached');
+    expect(turnErrors(items.slice(0, 4))).toBe('');
   });
 });

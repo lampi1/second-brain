@@ -31,6 +31,9 @@ import { MorningService } from './morning/service';
 import { createAgentLoop } from './agents/loop';
 import { childFeedbackTools } from './agents/child-feedback';
 import { delegationTools } from './agents/delegation';
+import { BalancedMode } from './agents/balanced-mode';
+import { CreditBook, opencodeLogTail } from './agents/credits';
+import { tierCandidates, tierModel } from './agents/model-tier';
 import { workDecisionTools } from './agents/work-decisions';
 import { strategyTools } from './agents/strategy-tools';
 import { askTools } from './chats/ask-tool';
@@ -248,6 +251,15 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // «Modalità notte» (ADR 0191): the user is away; what the app chooses or parks for them waits for the recap
   const awayLog = new AwayLog(path.join(ctx.userData, 'away-log.json'));
   const awayOn = () => brain.settings().awayMode === true;
+  // «Balanced mode» (ADR 0218): the cached credit of each provider (local reads only) and the pick a launch uses when on
+  const credits = new CreditBook(path.join(ctx.userData, 'credits.json'), {
+    claudeLimits: () => { const u = brain.usage(); return u.limitsAt ? { fiveHourPct: u.fiveHourPct, fiveHourResetsAt: u.fiveHourResetsAt, weekPct: u.weekPct, weekResetsAt: u.weekResetsAt ?? null, at: u.limitsAt } : null; },
+    opencodeLog: () => opencodeLogTail(os.homedir()) });
+  const balancedMode = new BalancedMode({ on: () => brain.settings().balancedMode === true, book: credits,
+    role: id => { const p = agents.list().profiles.find(x => x.id === id); return p ? { engine: p.engine, model: p.model, effort: p.effort ?? null, tier: p.tier, tierMax: p.tierMax } : null; },
+    engines: () => agents.list().models, tierModel: (e, t) => tierModel(e, t, brain.modelRegistry(), brain.settings().modelTiers),
+    tierModels: (e, t) => tierCandidates(e, t, brain.modelRegistry(), brain.settings().modelTiers),
+    runs: () => manager.runs.list() });
   const manager = new ChatManager({
     writeDelayMs: 250, // chats.json and agent-runs.json: one asynchronous write per burst (the main-process freezes, 2026-10-27)
     briefReady: chatId => briefRef.current?.hasBrief(chatId) ?? true,
@@ -318,6 +330,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     acpModelConfig: () => { const r = brain.settings().orchestratorChats; return { reasoning: r.cursorReasoning, fast: r.cursorFast }; },
     onTurnEnd: info => {
       replyRules.turnEnded(info.chatId, info.reply, info.isError);
+      credits.observe(info.harness, info.model, info.errorText, info.isError); // the engine's limit error or a clean turn (ADR 0218)
       // an API engine's turn spends the user's API credits: this month's figure in Settings → Motori (engines/spend.ts)
       const api = engineOf(info.harness);
       if (api?.kind === 'api') engines.addSpend(info.harness, info.model && listPrice(priceEnginesOf(api), info.model) ? info.costUsd : null);
@@ -556,7 +569,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools(delegationTools({
     integrate: async (parent, child) => stageDelegatedChanges(delegateWorktrees.allocation(parent, child), parent, child, brain.info().brainRoot),
     integrateMany: async (parent, children) => stageDelegatedChangesMany(children.map(child => ({ owned: delegateWorktrees.allocation(parent, child), child })), parent, brain.info().brainRoot), chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
-    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
+    engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), balancedMode, label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
     remember: (roleId, line, chat) => writeAgentMemory(agentPacks.packs.root(), portableId(roleId), line, { scope: { roleId: portableId(roleId), project: chat.cwd }, sourceRunId: chat.run?.runId ?? `chat:${chat.id}`, sourceEventId: `report:${chat.run?.runId ?? chat.id}` }) }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   addChatTools(strategyTools(manager, awayOn));
@@ -608,7 +621,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
   // routine packages the Orchestrator authors (ADR 0175): <userData>/routines/<id>/routine.json, the Routine section's store
   const routinePackageStore = createFolderPackageStore(path.join(ctx.userData, 'routines'));
-  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, away: { on: awayOn, log: e => awayLog.add(e) }, routinePackages: () => routinePackageStore, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
+  const appDeps: Parameters<typeof attachAppTools>[1] = { workflows, balancedMode, away: { on: awayOn, log: e => awayLog.add(e) }, routinePackages: () => routinePackageStore, recordings, impara: { start: r => learn.start(r), state: () => learn.state() }, runFeedback, contextSince: id => manager.contextSince(id), resolveRole: req => agents.resolve(req), agentLearning: agentPacks.learning, chats, browser, brain, agents: () => agents.list(), window: ctx.window, version: app.getVersion(), runs: chatId => runner.list(chatId), commandAsks: () => asks.pending(), emitUi: cmd => ctx.emitter.emit('ui:command', cmd), tasks: () => tasks.get(), agentStats, skillTools, brainScripts: { scripts: brainScripts, changelog: brainChangelog },
     // app_config (ADR 0149): each area through the module the app's own page uses
     config: {
       view: { read: () => readUi(ctx.window(), 'typeof window.__sbView === "function" ? window.__sbView() : null'), apply: patch => readUi(ctx.window(), `typeof window.__sbSetView === "function" ? window.__sbSetView(${JSON.stringify(JSON.stringify(patch))}) : null`) },

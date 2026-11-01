@@ -62,6 +62,8 @@ export const treeDe: typeof treeIt = {
   'tree.sidebar': 'Agenten bei der Arbeit',
   'delegation.group': 'Rollen und Delegation',
   'delegation.desc': 'Wie weit Rollen delegieren dürfen und auf welchen Modellen ihre Stufen laufen.',
+  'delegation.balanced': 'Balanced mode',
+  'delegation.balanced.hint': 'Alle Rollen: der delegierende Agent wählt Engine, Modell und Aufwand nach dem verbleibenden Guthaben jedes Anbieters und den Statistiken der Rolle (die Formel schlägt vor), damit das Guthaben gleichmäßig aufgebraucht wird. Hauptschalter: das Modellmenü des Orchestrators. Aus: jede Rollenkarte entscheidet.',
   'delegation.maxDepth': 'Maximale Tiefe',
   'delegation.maxDepth.hint': 'Wie viele Ebenen unter einem Haupt-Chat: bei 2 darf ein Kind delegieren, ein Enkel nicht.',
   'delegation.maxParallel': 'Kinder gleichzeitig',
