@@ -120,6 +120,9 @@ const BASE: readonly SettingDef[] = [
   // the user goes away (the owner, 2026-10-29: «non faccia domande e prosegua tutta la notte», ADR 0191)
   { key: 'awayMode', type: 'boolean', default: false, protected: false, label: 'Modalità notte',
     description: 'Sei via: nessuna domanda ti raggiunge. Ogni agente e l’Orchestrator vanno avanti con la scelta consigliata finché il lavoro è finito, e il PC non va in sospensione. Produzione, segreti, permessi e messaggi a persone restano per il tuo ritorno. Quando la spegni trovi il riepilogo nella chat dell’Orchestrator.' },
+  // whose credits a delegation spends (the owner, 2026-11-01: «Balanced mode», ADR 0218): protected, an agent only proposes it
+  { key: 'balancedMode', type: 'boolean', default: false, protected: true, label: 'Balanced mode',
+    description: 'Le chat che un agente delega scelgono motore, modello ed effort in base ai crediti rimasti di ogni provider e ai risultati del ruolo, così i crediti finiscono insieme. Spenta: decide la scheda del ruolo.' },
   { key: 'orchestratorEvents', type: 'boolean', default: true, protected: true, label: 'Eventi all’Orchestrator',
     description: "Quando una chat di lavoro finisce, si ferma su un errore, aspetta una tua risposta o ti lascia un comando, l'app lo scrive all’Orchestrator (una riga per chat, al massimo una volta ogni 2 minuti per chat) e lo sveglia se è fermo: decide lui se dirtelo. Ogni risveglio è un turno dell’Orchestrator." },
   // the chat learns how its command went (the user, 2026-10-12: "vorrei che ti accorgessi da sola quando eseguo un
@@ -254,7 +257,7 @@ export function defaults(): Settings {
     projectsRoot: null,
     loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15,
     suggestOn: true,
-    voiceAsr: 'fast', voiceName: 'paola', voicePtt: false, awayMode: false,
+    voiceAsr: 'fast', voiceName: 'paola', voicePtt: false, awayMode: false, balancedMode: false,
     delegation: { ...DELEGATION_DEFAULTS }, modelTiers: {},
   };
 }

@@ -35,4 +35,8 @@ export const modelPickerDe: typeof modelPickerIt = {
   'mp.apply.role': 'In der Rolle speichern',
   'mp.chatMenu': 'Modell und Effort…',
   'mp.cardButton': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}`,
+  'mp.balanced': 'Balanced mode',
+  'mp.balanced.hint': 'Alle Rollen: der delegierende Agent wählt Engine, Modell und Aufwand nach dem verbleibenden Guthaben und den Statistiken. Aus: jede Rolle nutzt ihre Karte.',
+  'mp.balanced.card': 'Balanced',
+  'mp.balanced.cardNote': 'Balanced mode an: der delegierende Agent wählt Engine, Modell und Aufwand. Diese Wahl gilt wieder, wenn du ihn ausschaltest.',
 };

@@ -62,6 +62,8 @@ export const treeIt = {
   'tree.sidebar': 'Agenti al lavoro',
   'delegation.group': 'Ruoli e deleghe',
   'delegation.desc': 'Quanto possono delegare i ruoli e su quali modelli girano i loro livelli.',
+  'delegation.balanced': 'Balanced mode',
+  'delegation.balanced.hint': 'Tutti i ruoli: l’agente che delega sceglie motore, modello ed effort in base ai crediti rimasti di ogni provider e alle statistiche del ruolo (la formula propone), così i crediti finiscono insieme. Interruttore principale: il menu modelli dell’Orchestrator. Spenta: decide la card di ogni ruolo.',
   'delegation.maxDepth': 'Profondità massima',
   'delegation.maxDepth.hint': 'Quanti livelli sotto una chat principale: con 2 una chat figlia può delegare, una nipote no.',
   'delegation.maxParallel': 'Figlie in parallelo',

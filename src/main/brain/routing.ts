@@ -10,7 +10,7 @@
 // chats/routed.ts, appctl/tools.ts and wiring.ts; tests in test/unit/brain/routing.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Effort, Harness, ModelRegistry, RegistryModel, RouteAgent, RouteDecision, TaskKind } from '../../shared/contract';
+import type { Effort, Harness, ModelRegistry, RegistryModel, RouteAgent, RouteBalanced, RouteDecision, TaskKind } from '../../shared/contract';
 import { TASK_KINDS } from '../../shared/contract';
 import { MODEL_TIERS } from '../../shared/roles';
 import { enoughVerdicts } from '../../shared/success';
@@ -171,7 +171,16 @@ export function validRoute(v: unknown): RouteDecision | null {
     reason: typeof r.reason === 'string' ? r.reason.slice(0, 300) : null, kind: r.kind as TaskKind, area: r.area.slice(0, 40), at: r.at,
     ...(typeof r.ledgerId === 'string' && /^app:[\w-]{1,80}$/.test(r.ledgerId) ? { ledgerId: r.ledgerId } : {}),
     ...(Number.isInteger(r.handoffs) && (r.handoffs as number) > 0 ? { handoffs: Math.min(r.handoffs as number, 1000) } : {}),
-    ...(validAgent(r.agent) ? { agent: validAgent(r.agent)! } : {}) };
+    ...(validAgent(r.agent) ? { agent: validAgent(r.agent)! } : {}), ...(validBalanced(r.balanced) ? { balanced: validBalanced(r.balanced)! } : {}) };
+}
+const POOL = /^[a-z][\w:.-]{0,60}$/;
+const share = (x: unknown): number | null => typeof x === 'number' && Number.isFinite(x) ? Math.min(1, Math.max(0, x)) : null;
+/** «Balanced mode»'s weights on a route (ADR 0218), read back. */
+function validBalanced(v: unknown): RouteBalanced | null {
+  const a = v as Partial<RouteBalanced> | null;
+  if (!a || typeof a !== 'object' || typeof a.pool !== 'string' || !POOL.test(a.pool) || share(a.share) === null || share(a.target) === null) return null;
+  const skipped = (Array.isArray(a.skipped) ? a.skipped : []).slice(0, 10).filter(s => s && typeof s.pool === 'string' && POOL.test(s.pool) && typeof s.why === 'string').map(s => ({ pool: s.pool, why: s.why.slice(0, 200) }));
+  return { by: a.by === 'agent' ? 'agent' : 'formula', pool: a.pool, share: share(a.share)!, target: share(a.target)!, skipped, ...(typeof a.suggestedRole === 'string' && /^[a-z][a-z0-9_-]{0,79}$/.test(a.suggestedRole) ? { suggestedRole: a.suggestedRole } : {}) };
 }
 function validAgent(v: unknown): RouteAgent | null {
   const a = v as Partial<RouteAgent> | null;

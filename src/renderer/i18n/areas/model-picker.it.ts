@@ -36,4 +36,8 @@ export const modelPickerIt = {
   'mp.apply.role': 'Salva nel ruolo',
   'mp.chatMenu': 'Modello ed effort…',
   'mp.cardButton': (p: { engine: string; model: string }) => `${p.engine} · ${p.model}`,
+  'mp.balanced': 'Balanced mode',
+  'mp.balanced.hint': 'Tutti i ruoli: chi delega sceglie motore, modello ed effort in base ai crediti rimasti e alle statistiche. Spenta: ogni ruolo usa la sua card.',
+  'mp.balanced.card': 'Balanced',
+  'mp.balanced.cardNote': 'Balanced mode attiva: motore, modello ed effort li sceglie chi delega. Questa scelta torna a valere quando la spegni.',
 };

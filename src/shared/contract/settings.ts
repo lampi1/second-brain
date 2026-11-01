@@ -113,6 +113,9 @@ export interface Settings {
   /** «Modalità notte» (ADR 0191): the user is away; no questions reach them, every agent goes on with the recommended
    *  choice until the job is done; production, secrets, permissions and messages to people wait for their return */
   awayMode?: boolean;
+  /** «Balanced mode» (ADR 0218): a role chat started by an agent gets its engine, model and effort from the credits left in
+   *  each provider and the role's stats, instead of its card's engine; off = the card decides, as before */
+  balancedMode?: boolean;
   /** fields forced by the environment (SB_BRAIN, SB_MCP_PORT): shown read-only, never saved */
   locked?: ('brainRoot' | 'mcpPort')[];
 }
@@ -141,7 +144,7 @@ export type SettingKey =
   | 'jobs.fallback' | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
   | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'judgingCapUsd' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
-  | 'suggestOn' | 'voiceAsr' | 'voiceName' | 'voicePtt' | 'voiceSpeed' | 'awayMode'
+  | 'suggestOn' | 'voiceAsr' | 'voiceName' | 'voicePtt' | 'voiceSpeed' | 'awayMode' | 'balancedMode'
   | `delegation.${keyof DelegationSettings}` | `modelTiers.${Harness}.${ModelTier}`;
 export interface SettingDef {
   key: SettingKey;            // 'mute.*' stands for every feed kind
@@ -241,7 +244,13 @@ export interface RouteDecision {
   ledgerId?: string;
   /** how many hand-offs led to this chat */
   handoffs?: number;
+  /** «Balanced mode» chose the engine (ADR 0218): the credit pool, its share of the recent balanced picks and its target */
+  balanced?: RouteBalanced;
 }
+/** What «Balanced mode» weighed: who chose (the delegating agent from balanced_status, or the formula when the agent
+ *  passed nothing), the pool picked, its share of the last 24 h's balanced picks before this one and the share its credit
+ *  left asks for (0..1), the pools left out and why, and the role the work fits when it is not the one asked. */
+export interface RouteBalanced { by: 'agent' | 'formula'; pool: string; share: number; target: number; skipped: { pool: string; why: string }[]; suggestedRole?: string }
 /** The role a routed chat runs: who launched it, its model tier, and where its model came from (the role's own model,
  *  its tier on the engine, or the engine's default; 'table' only on chats from before ADR 0210). */
 export interface RouteAgent { id: string; version: number; chosenBy: 'orchestrator' | 'parent' | 'app'; tier?: ModelTier; modelFrom?: 'role' | 'tier' | 'table' | 'engine' }

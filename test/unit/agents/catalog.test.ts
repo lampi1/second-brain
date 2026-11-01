@@ -228,3 +228,25 @@ describe('default engine (issue #96)', () => {
     expect(w.emitted.length).toBe(before + 1);
   });
 });
+
+describe('«Balanced mode» (ADR 0218)', () => {
+  const two = (): AgentModelChoice[] => [...models(), { ...models()[0]!, engine: 'cursor', label: 'Cursor', models: [{ id: 'gpt-5', name: 'GPT-5', efforts: ['low', 'medium'] }] }];
+  const mk = (list: () => AgentModelChoice[]) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-catalog-')); roots.push(dir);
+    return new AgentCatalogService({ userData: dir, models: list, tierModel: (_e, tier) => (tier === 'top' ? 'm-top' : 'm-mid') });
+  };
+  it('a pick on an engine that may run replaces the card\'s engine, model and effort; the card\'s tools stay', () => {
+    const catalog = mk(two);
+    const plain = catalog.resolve({ harness: 'claude', roleId: 'scout' } as never);
+    const r = catalog.resolve({ harness: 'claude', roleId: 'scout', balancedRoute: { engine: 'cursor', model: 'gpt-5', effort: 'high', pool: 'cursor' } } as never);
+    expect(r.request).toMatchObject({ harness: 'cursor', model: 'gpt-5', effort: 'medium' });
+    expect('balancedRoute' in r.request).toBe(false);
+    expect(r.owner).toMatchObject({ engine: 'cursor', model: 'gpt-5' });
+    expect(r.policy).toEqual(plain.policy);
+  });
+  it('a pick on an engine switched off is ignored: the card decides', () => {
+    const catalog = mk(() => two().map(m => m.engine === 'cursor' ? { ...m, enabled: false } : m));
+    const r = catalog.resolve({ harness: 'claude', roleId: 'scout', balancedRoute: { engine: 'cursor', model: 'gpt-5', pool: 'cursor' } } as never);
+    expect(r.request).toMatchObject({ harness: 'claude', model: 'm-mid' });
+  });
+});

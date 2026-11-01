@@ -449,19 +449,24 @@ export class AgentCatalogService {
     if (req.roleVersion !== undefined && req.roleVersion !== p.activeVersion) throw new Error('Il ruolo è cambiato: rileggilo prima di avviarlo.');
     // known availability again at launch, never falling back to another engine or model
     this.behaviour({}, p.id, true, p, false);
-    const e = this.d.models().find(x => x.engine === p.engine)!;
-    if (!e.enabled || !e.trusted) throw new Error(`Il motore di ${p.name} è spento o va riconfermato nelle Impostazioni.`);
     if (req.tier !== undefined && (!has(MODEL_TIERS, req.tier) || tierRank(req.tier) > tierRank(p.tierMax))) throw new Error(`${p.name} arriva al massimo al livello ${p.tierMax}.`);
     const tier = cappedTier(req.tier ?? p.tier, p.tierMax);
+    // «Balanced mode» (ADR 0218): the engine, model and effort the caller picked from the credits left, when that engine
+    // may run now; the card's tools, ceiling, skills and tierMax still hold
+    const balancedEngine = req.balancedRoute ? this.d.models().find(x => x.engine === req.balancedRoute!.engine) : undefined;
+    const chosen = req.balancedRoute && balancedEngine?.enabled && balancedEngine.trusted ? req.balancedRoute : null;
+    const engine = chosen ? chosen.engine : p.engine;
+    const e = this.d.models().find(x => x.engine === engine)!;
+    if (!e.enabled || !e.trusted) throw new Error(`Il motore di ${p.name} è spento o va riconfermato nelle Impostazioni.`);
     // the role's own model, else its tier's model (owner, 2026-10-30: no routing table, ADR 0210). A review's
     // independence is its clean session (it never sees its parent's reasoning), never another model (ADR 0091)
-    const picked = { model: p.model ?? this.d.tierModel?.(p.engine, tier) ?? null };
+    const picked = { model: chosen ? chosen.model : p.model ?? this.d.tierModel?.(p.engine, tier) ?? null };
     // the effort the model really takes (ADR 0211): a level it lacks becomes the nearest lower one, none when it takes none
-    const effort = effortOn(p.effort ?? req.effort, picked.model ? e.models.find(m => m.id === picked.model)?.efforts : undefined) ?? undefined;
-    const { model: _m, effort: _e, ...rest } = req; void _m; void _e;
+    const effort = effortOn(chosen ? chosen.effort ?? null : p.effort ?? req.effort, picked.model ? e.models.find(m => m.id === picked.model)?.efforts : undefined) ?? undefined;
+    const { model: _m, effort: _e, balancedRoute: _a, ...rest } = req; void _m; void _e; void _a;
     const r = ROLE_DEFAULTS[p.id as RoleId];
     const instructions = `${ROLE_PREAMBLE}\n\nRole: ${p.name}.\n${p.instructions}\nOutput: ${r.output}`;
-    return { request: { ...rest, harness: p.engine, ...(picked.model ? { model: picked.model } : {}), ...(effort ? { effort } : {}) }, owner: { ...ownerOf(p), model: picked.model },
+    return { request: { ...rest, harness: engine, ...(picked.model ? { model: picked.model } : {}), ...(effort ? { effort } : {}) }, owner: { ...ownerOf(p), engine, model: picked.model },
       instructions, policy: p.tools || p.permissionCeiling ? { tools: p.tools ? structuredClone(p.tools) : null, ceiling: p.permissionCeiling } : null,
       ...(typeof p.maxContext === 'number' ? { maxContext: p.maxContext } : {}), skills: [...p.skills, ...(p.knowhow?.linked ?? [])].filter((s, i, a) => a.indexOf(s) === i), launches: [...p.launches],
       tier };

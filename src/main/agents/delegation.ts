@@ -24,6 +24,7 @@ import { callerOf } from '../mcp/caller';
 import { allowsClass, belowParent, type AgentPolicy } from './tool-policy';
 import { withinParent } from './worktrees';
 import { gapLines, skillGaps } from './skill-needs';
+import { BALANCED_ASK_SCHEMA, balancedAskOf, balancedDecision, balancedStatusTool, type BalancedChoice, type BalancedMode } from './balanced-mode';
 import type { SkillToolsSource } from './discovery';
 import { log } from '../log';
 import { checkMemoryWorth } from '../rules/memory-worth';
@@ -68,6 +69,8 @@ export interface DelegationDeps {
   /** adds one line to a role's own memory (agents/<id>/memory.md, rules/memory.ts writeAgentMemory): agent_report's
    *  `remember`; absent = the field is refused */
   remember?: (roleId: string, line: string, chat: ChatSummary) => void;
+  /** «Balanced mode» (agents/balanced-mode.ts, ADR 0218): each child's engine from the credits left; absent or off = the card */
+  balancedMode?: Pick<BalancedMode, 'enabled' | 'choose' | 'record' | 'status'>;
   /** the clock (tests) */
   now?: () => number;
 }
@@ -173,17 +176,36 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       if (outside.length) throw new Error(`tasks[${i}].contract.tools: ${outside.join(', ')} is not among ${profile.name}'s tools; contract.tools only narrows them.`);
       const cwd = typeof t.cwd === 'string' && t.cwd.trim() ? t.cwd.trim() : parent.cwd;
       if (!withinParent(parent.cwd, cwd, trees)) throw new Error(`tasks[${i}].cwd: ${cwd} is outside your folder (${parent.cwd}) and its repository's worktrees; a child never leaves its parent's repository. For work in another repository: leave this part out and report it with agent_report (outcome blocked or partial) as a ready contract (role, goal, done-criteria, the folder): the Orchestrator opens that chat there (app_create_chat with cwd).`);
-      const refused = d.engineRefusal(parent.harness, profile.engine);
+      // with «Balanced mode» on the engine is picked below, among the ones this parent may open
+      const refused = d.balancedMode?.enabled ? null : d.engineRefusal(parent.harness, profile.engine);
       if (refused) throw new Error(`tasks[${i}]: ${profile.name} runs on ${profile.engine}: ${refused}`);
       if (t.step !== undefined && !plan) throw new Error(`tasks[${i}].step: only a plan approved by the user has steps; leave it out.`);
       const step = t.step !== undefined && plan ? stepIndex(plan, t.step, `tasks[${i}].step`) : null;
-      return { role, title, contract, cwd, profile, step };
+      const asked = balancedAskOf(t.balanced, `tasks[${i}].balanced`);
+      if (asked && !d.balancedMode?.enabled) throw new Error(`tasks[${i}].balanced: only with Balanced mode on; otherwise the role's card decides (Brain → Agenti).`);
+      return { role, title, contract, cwd, profile, step, asked };
     });
     reserved.set(parent.id, (reserved.get(parent.id) ?? 0) + plans.length);
     try {
       const at = Date.now();
-      const settled = await Promise.allSettled(plans.map(p => d.chats.create({
-        harness: p.profile.engine, cwd: p.cwd, title: p.title, roleId: p.role, parentId: parent.id, goal: p.contract.goal,
+      // «Balanced mode» (ADR 0218): one pick per part, in order, each counting the ones before it so a batch spreads
+      // over the pools too; still before any chat starts, so a refused engine refuses the whole call
+      const choices: (BalancedChoice | null)[] = [];
+      const pending: string[] = [];
+      for (const [i, p] of plans.entries()) {
+        const c = d.balancedMode?.enabled ? await d.balancedMode.choose({ roleId: p.role, ...(p.contract.tier ? { tier: p.contract.tier } : {}), title: p.title, prompt: p.contract.goal,
+          canRun: h => !d.engineRefusal(parent.harness, h), pending, ...(p.asked ? { asked: p.asked } : {}) }) : null;
+        if (c?.balancedRoute) pending.push(c.balancedRoute.pool);
+        else if (c) {
+          const refused = d.engineRefusal(parent.harness, p.profile.engine);
+          if (refused) throw new Error(`tasks[${i}]: ${p.profile.name} runs on ${p.profile.engine}: ${refused}`);
+        }
+        choices.push(c);
+      }
+      const settled = await Promise.allSettled(plans.map((p, i) => d.chats.create({
+        harness: choices[i]?.balancedRoute?.engine ?? p.profile.engine, cwd: p.cwd, title: p.title, roleId: p.role, parentId: parent.id, goal: p.contract.goal,
+        ...(choices[i]?.balancedRoute ? { balancedRoute: choices[i]!.balancedRoute! } : {}),
+        ...(choices[i] ? { route: balancedDecision(choices[i]!, { roleId: p.role, version: p.profile.activeVersion, ...(p.contract.tier ? { tier: p.contract.tier } : {}), title: p.title, prompt: p.contract.goal, now: at }) } : {}),
         ...(p.contract.tier ? { tier: p.contract.tier } : {}), ...(p.contract.skills ? { skills: p.contract.skills } : {}),
         delegation: { role: p.role, goal: p.contract.goal, doneWhen: p.contract.doneWhen, at, ...(p.contract.tools ? { tools: p.contract.tools } : {}) },
         prompt: `${d.label}\n\n${delegationPrompt(p.contract, { role: p.role, parentTitle: parent.title, title: p.title, skills: p.contract.skills ?? [] })}`,
@@ -194,8 +216,13 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
         const p = plans[i]!, lines = known ? gapLines(p.profile.name, skillGaps([...new Set([...p.profile.skills, ...(p.contract.skills ?? [])])], n => known.get(n), d.chats.agentPolicy(chatId))) : [];
         return lines.length ? { warnings: lines } : {};
       };
+      settled.forEach((s, i) => { if (s.status === 'fulfilled') d.balancedMode?.record(choices[i] ?? null); });
+      const balancedOf = (i: number) => {
+        const c = choices[i];
+        return c ? { route: { reason: c.reason, ...(c.balanced ? { balanced: c.balanced } : {}) }, ...(c.suggestedRole ? { suggestedRole: c.suggestedRole } : {}) } : {};
+      };
       const children = settled.map((s, i) => s.status === 'fulfilled'
-        ? { role: plans[i]!.role, title: s.value.title, chatId: s.value.id, cwd: s.value.cwd, harness: s.value.harness, model: s.value.model, state: s.value.queued ? 'queued' : s.value.state, ...warnings(i, s.value.id) }
+        ? { role: plans[i]!.role, title: s.value.title, chatId: s.value.id, cwd: s.value.cwd, harness: s.value.harness, model: s.value.model, state: s.value.queued ? 'queued' : s.value.state, ...warnings(i, s.value.id), ...balancedOf(i) }
         : { role: plans[i]!.role, title: plans[i]!.title, error: s.reason instanceof Error ? s.reason.message : String(s.reason) });
       // each step of the plan with its started children: the strip shows it under way
       const steps = new Map<number, string[]>();
@@ -228,7 +255,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     const catalog = d.roles(), own = catalog.profiles.find(p => p.id === parent.agent!.id), profile = catalog.profiles.find(p => p.id === a.roleId);
     if (!own || !canLaunch(own.launches, a.roleId)) throw new Error('Your current role may not launch this child role.');
     // the revision too: tools, permissions and limits change the version in use in place (ADR 0186)
-    if (!profile || profile.activeVersion !== child.agent.version || profile.updatedAt !== child.agent.revision || profile.engine !== child.harness) throw new Error('Role configuration changed: delegate a fresh chat.');
+    if (!profile || profile.activeVersion !== child.agent.version || profile.updatedAt !== child.agent.revision || (profile.engine !== child.harness && !child.route?.balanced)) throw new Error('Role configuration changed: delegate a fresh chat.');
     if (typeof a.cwd !== 'string' || !path.isAbsolute(a.cwd) || path.resolve(a.cwd) !== path.resolve(child.cwd) || !withinParent(parent.cwd, child.cwd, trees)) throw new Error('Project mismatch: reuse only the same folder inside your scope or repository worktree.');
     if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || !Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1) throw new Error('Invalid assignment mode/version.');
     if (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0) throw new Error('Read agent_task_events and provide expectedEventSeq.');
@@ -431,12 +458,13 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     } };
   return [{
     name: 'agent_delegate',
-    description: 'Delegate parts of your task to other roles, only when it has several independent parts: a quick single-part task you do yourself (a child costs more tokens and time than it saves; task_estimate on the Orchestrator says which). each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel). It never gets more permissions than you, uses an isolated Git worktree when it can write (a clean committed baseline is required), and returns one result with agent_report that reaches you as a message. Limits (depth, children running at once) are the user\'s.',
+    description: 'Delegate parts of your task to other roles, only when it has several independent parts: a quick single-part task you do yourself (a child costs more tokens and time than it saves; task_estimate on the Orchestrator says which). each part starts a visible chat under yours, running the role you name (only roles your role may launch: agent_catalog). The child sees only its contract, never this conversation: write it self-contained. Several parts start at once (parallel). It never gets more permissions than you, uses an isolated Git worktree when it can write (a clean committed baseline is required), and returns one result with agent_report that reaches you as a message. Limits (depth, children running at once) are the user\'s. With the user\'s «Balanced mode» on: read balanced_status, then pass each part\'s `balanced` {engine, model, effort?, why} (prefer the proposal unless its data say otherwise) or omit it and the formula picks.',
     inputSchema: { type: 'object', required: ['tasks'], additionalProperties: false, properties: {
       tasks: { type: 'array', minItems: 1, maxItems: TASKS_MAX, items: { type: 'object', required: ['role', 'title', 'contract'], additionalProperties: false, properties: {
         role: { type: 'string', enum: [...WORK_ROLE_IDS] }, title: { ...str, description: '"Area · what", e.g. "Ordini · Log degli errori"' },
         cwd: { ...str, description: 'optional absolute folder inside yours or one of your repository\'s worktrees; default: your folder; writing children receive a new isolated worktree from that committed baseline. Never another repository: for that, report the part with agent_report as a ready contract (outcome blocked, with the folder) so the Orchestrator opens the chat there (app_create_chat with cwd)' },
         step: { type: 'integer', minimum: 1, description: 'with a plan approved by the user (plan_propose): the step number this part does' },
+        balanced: BALANCED_ASK_SCHEMA,
         contract: { type: 'object', required: ['goal', 'doneWhen'], additionalProperties: false, properties: {
           goal: str, output: { ...str, description: 'what to give back; default: the role\'s output' },
           doneWhen: { type: 'array', items: str, minItems: 1, maxItems: 12, description: 'checkable criteria' },
@@ -510,5 +538,10 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     inputSchema: { type: 'object', additionalProperties: false, properties: {} },
     annotations: { readOnlyHint: true, openWorldHint: false },
     run: (_a, ctx) => JSON.stringify(children(callerOf(ctx.params))),
-  }];
+  },
+  // Balanced mode's data for this parent's own pick (ADR 0218): only the engines it may open
+  ...(d.balancedMode ? [balancedStatusTool(d.balancedMode, ctx => {
+    const parent = chat(callerOf(ctx.params));
+    return h => !!parent && !d.engineRefusal(parent.harness, h);
+  })] : [])];
 }

@@ -220,3 +220,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0212](0212-remove-personal-browser.md) Remove the personal Browser page — accepted
 - [0216](0216-opencode-engine.md) OpenCode as a built-in ACP engine (model and mode through ACP config options) — accepted
 - [0217](0217-close-cancels-the-tree.md) Closing a chat with ✕ cancels its whole descendant tree; nothing late reopens it — accepted
+- [0218](0218-balanced-mode.md) «Balanced mode»: a delegation's engine, model and effort follow the credits left per provider — proposed
