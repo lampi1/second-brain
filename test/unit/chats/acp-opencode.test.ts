@@ -3,7 +3,7 @@
 // after every open; without modelOption the same answers give no model choice. No real engine ever runs here.
 import { afterEach, describe, expect, it } from 'vitest';
 import path from 'node:path';
-import { AcpSession, permissionView, streamErrorOf, type AcpOptions } from '../../../src/main/chats/acp';
+import { AcpSession, permissionView, streamErrorOf, streamRetryOf, type AcpOptions } from '../../../src/main/chats/acp';
 import { autoPermit } from '../../../src/main/chats/auto-permit';
 import { SYS_IT } from '../../../src/shared/sys';
 import { TOOL_CLASSES } from '../../../src/shared/agents';
@@ -313,9 +313,17 @@ describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
 
   it('streamErrorOf reads only the running session\'s main stream errors', () => {
     const line = (extra: string) => `timestamp=2026-11-01T10:18:29.000Z level=ERROR run=x message="stream error" providerID=opencode modelID=m session.id=ses_a ${extra}`;
-    expect(streamErrorOf(line('small=false agent=build mode=primary error.error="AI_APICallError: Free usage limit reached."'), 'ses_a')).toEqual({ error: 'Free usage limit reached.', credits: true });
-    expect(streamErrorOf(line('small=false agent=build error.error="AI_APICallError: Bad \\"gateway\\""'), 'ses_a')).toEqual({ error: 'Bad "gateway"', credits: false });
+    expect(streamErrorOf(line('small=false agent=build mode=primary error.error="AI_APICallError: Free usage limit reached."'), 'ses_a')).toMatchObject({ error: 'Free usage limit reached.', credits: true, final: false });
+    expect(streamErrorOf(line('small=false agent=build error.error="AI_APICallError: Bad \\"gateway\\""'), 'ses_a')).toMatchObject({ error: 'Bad "gateway"', credits: false });
     expect(streamErrorOf(line('small=false error.error="insufficient_quota: You exceeded your current quota"'), 'ses_a')?.credits).toBe(true);
+    expect(streamErrorOf(line('small=false error.error="AI_APICallError: The usage limit has been reached"'), 'ses_a')?.credits).toBe(true);
+    // a per-minute rate limit worded as quota and billing (Gemini free) is retried by OpenCode: not out of credits
+    expect(streamErrorOf(line('small=false error.error="AI_APICallError: You exceeded your current quota, please check your plan and billing details."'), 'ses_a')?.credits).toBe(false);
+    // OpenCode's give-up after its retries (real log 2026-11-01 08:46)
+    const gaveUp = 'timestamp=2026-11-01T08:46:04.930Z level=ERROR run=x message=process session.id=ses_a messageID=msg_1 error="The usage limit has been reached" stack="AI_APICallError: x"';
+    expect(streamErrorOf(gaveUp, 'ses_a')).toEqual({ error: 'The usage limit has been reached', credits: true, final: true });
+    expect(streamRetryOf('timestamp=t level=INFO run=x message=stream providerID=openai session.id=ses_a small=false agent=build', 'ses_a')).toBe(true);
+    expect(streamRetryOf('timestamp=t level=INFO run=x message=stream providerID=openai session.id=ses_a small=true agent=title', 'ses_a')).toBe(false);
     expect(streamErrorOf(line('small=true agent=title error.error="AI_RetryError: x"'), 'ses_a')).toBeNull();
     expect(streamErrorOf(line('small=false error.error="x"'), 'ses_b')).toBeNull();
     expect(streamErrorOf(line('small=false error.error="x"'), null)).toBeNull();
@@ -331,6 +339,42 @@ describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
     expect([...sink.items.values()].filter(i => i.kind === 'result').map(i => (i as { isError: boolean }).isError)).toEqual([false]);
     expect([...sink.items.values()].filter(i => i.kind === 'system')).toHaveLength(0);
     expect(sink.last('assistant')?.text).toBe('Ripreso dopo il riprovo');
+  });
+
+  const results = (sink: RecSink) => [...sink.items.values()].filter(i => i.kind === 'result').map(i => (i as { isError: boolean }).isError);
+  const sysCodes = (sink: RecSink) => [...sink.items.values()].filter(i => i.kind === 'system').map(i => i.code);
+
+  it.each(['quotahiccup', 'retryslow'])('%s: a rate limit worded as quota, or a retry slower than the grace, waits for the engine; the turn goes on', async word => {
+    const { s, sink, logFile } = start({ ...OPENCODE, streamErrorGraceMs: 150, env: { FAKE_ACP_OPENCODE: '1', FAKE_ACP_STALL_MS: '400' } });
+    await waitFor(() => s.state === 'idle', 'ready');
+    s.send(word);
+    await waitFor(() => sink.trace.includes('result') && s.state === 'idle', 'the turn', 8000);
+    expect(cursorLog(logFile).some(l => l.method === 'session/cancel')).toBe(false);
+    expect(results(sink)).toEqual([false]);
+    expect(sysCodes(sink)).toEqual([]);
+    expect(sink.last('assistant')?.text).toBe('Ripreso dopo il riprovo');
+  });
+
+  it('OpenCode giving up after its retries ends the turn at once with its last error', async () => {
+    const { s, sink, logFile } = start({ ...OPENCODE, streamErrorGraceMs: 60000, env: { FAKE_ACP_OPENCODE: '1' } });
+    await waitFor(() => s.state === 'idle', 'ready');
+    s.send('retrygiveup');
+    await waitFor(() => sink.trace.includes('result') && s.state === 'idle', 'the failed turn', 8000);
+    expect(cursorLog(logFile).some(l => l.method === 'session/cancel')).toBe(true);
+    expect(results(sink)).toEqual([true]);
+    expect(sysCodes(sink)).toEqual(['engineError']);
+    expect((sink.last('system')?.params as { error: string }).error).toBe('Service Unavailable');
+  });
+
+  it('the user\'s stop during the wait after a stream error is a stop, never the provider\'s error', async () => {
+    const { s, sink } = start({ ...OPENCODE, streamErrorGraceMs: 150, env: { FAKE_ACP_OPENCODE: '1', FAKE_ACP_STALL_MS: '400' } });
+    await waitFor(() => s.state === 'idle', 'ready');
+    s.send('stallstop');
+    await waitFor(() => (s as unknown as { streamError: unknown }).streamError, 'the stream error');
+    await s.interrupt({ byUser: true });
+    await waitFor(() => sink.trace.includes('result') && s.state === 'idle', 'the stopped turn', 8000);
+    expect(results(sink)).toEqual([false]);
+    expect(sysCodes(sink)).toEqual(['stoppedByYou']);
   });
 
   it('ask_user without its brief is sent back (with how to ask) at most twice, then shown; never on an engine with its own tool', async () => {

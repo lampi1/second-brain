@@ -142,14 +142,25 @@ const STREAM_ERROR_GRACE_MS = 10000;
 /** A provider error the engine wrote only to its log on stderr. OpenCode 1.19.5 (`opencode acp --print-logs`, real run
  *  2026-11-01: free model over its limit, OpenAI credits gone) logs `level=ERROR … message="stream error" …
  *  session.id=<id> small=false … error.error="AI_APICallError: Free usage limit reached. …"` and sends nothing over
- *  ACP: session/prompt stays open until session/cancel. small=true is its title agent, not the turn. Null: not one,
- *  or another session's. */
-export function streamErrorOf(line: string, sessionId: string | null): { error: string; credits: boolean } | null {
-  if (!sessionId || !/\blevel=ERROR\b/.test(line) || !line.includes('message="stream error"')) return null;
-  if (/\bsmall=true\b/.test(line) || !line.includes(` session.id=${sessionId} `)) return null;
-  const raw = /\berror\.error="((?:[^"\\]|\\.)*)"/.exec(line)?.[1]?.replace(/\\(.)/g, '$1') ?? 'stream error';
-  const error = raw.replace(/^(?:AI_\w+|\w*Error): /, '').trim() || raw;
-  return { error, credits: /usage limit|quota|credit|insufficient.?balance|billing|payment required/i.test(error) };
+ *  ACP: session/prompt stays open until session/cancel. small=true is its title agent, not the turn. A retryable error
+ *  is logged again at each of its retries (backoff 2-37 s, real log 2026-11-01), then `level=ERROR message=process
+ *  session.id=<id> … error="…"` once it gives up: final. credits only for wording that is sure (a free limit, a used-up
+ *  plan, insufficient_quota): "exceeded your current quota… billing" is also a per-minute rate limit (Gemini free) that
+ *  OpenCode retries. Null: not one, or another session's. */
+export function streamErrorOf(line: string, sessionId: string | null): { error: string; credits: boolean; final: boolean } | null {
+  if (!sessionId || !/\blevel=ERROR\b/.test(line) || !line.includes(` session.id=${sessionId} `)) return null;
+  const final = /\bmessage=process\b/.test(line);
+  if (!final && (!line.includes('message="stream error"') || /\bsmall=true\b/.test(line))) return null;
+  const raw = (final ? / error="((?:[^"\\]|\\.)*)"/ : /\berror\.error="((?:[^"\\]|\\.)*)"/).exec(line)?.[1]?.replace(/\\(.)/g, '$1');
+  if (raw === undefined && final) return null;
+  const error = (raw ?? 'stream error').replace(/^(?:AI_\w+|\w*Error): /, '').trim() || raw || 'stream error';
+  return { error, credits: /free usage limit reached|usage limit has been reached|insufficient_quota|insufficient.?balance|credit balance is too low|out of credits/i.test(error), final };
+}
+
+/** OpenCode starts another attempt at the running session's main stream (`level=INFO message=stream … session.id=<id>
+ *  small=false`): after a stream error, a retry. */
+export function streamRetryOf(line: string, sessionId: string | null): boolean {
+  return !!sessionId && /\blevel=INFO\b/.test(line) && /\bmessage=stream\b/.test(line) && /\bsmall=false\b/.test(line) && line.includes(` session.id=${sessionId} `);
 }
 
 /** An engine's own routine log line on stderr (OpenCode --print-logs: `timestamp=… level=INFO|DEBUG|WARN …`, e.g. its
@@ -443,7 +454,7 @@ export class AcpSession implements HarnessSession {
   private errTail = '';
   private errLine = '';          // stderr's unfinished last line
   /** the provider error the engine logged during this turn (streamErrorOf); failed = the turn was stopped for it */
-  private streamError: { error: string; credits: boolean; failed: boolean } | null = null;
+  private streamError: { error: string; credits: boolean; failed: boolean; retrying: boolean } | null = null;
   private streamErrorTimer: NodeJS.Timeout | null = null;
   private rpcSeq = 1;
   private rpcs = new Map<number, Rpc>();
@@ -855,18 +866,29 @@ export class AcpSession implements HarnessSession {
 
   /** stderr by lines: the engine's routine log lines stay out of errTail; a provider stream error of this session's
    *  running turn (streamErrorOf) ends the turn as failed when the engine shows no sign of life (it sends nothing over
-   *  ACP for it: OpenCode 1.19.5), at once for out-of-credits. */
+   *  ACP for it: OpenCode 1.19.5): at once for out-of-credits or its give-up; once it retries, only its give-up does
+   *  (its backoff outlasts the grace). */
   private onStderr(d: string): void {
     const lines = (this.errLine + d).split(/\r?\n/);
     this.errLine = lines.pop() ?? '';
     for (const line of lines) {
       if (!engineLogNoise(line)) this.errTail = (this.errTail + line + '\n').slice(-16000); // 16000: a whole model refusal (onClose)
-      const found = this.prompting && !this.streamError ? streamErrorOf(line, this.sessionId) : null;
-      if (!found) continue;
-      this.streamError = { ...found, failed: false };
-      log.warn('chats', 'acp provider stream error', { chat: this.opts.chatId, data: { engine: this.engine, error: cut(found.error, 300), credits: found.credits } });
+      const was = this.streamError;
+      if (!this.prompting || this.stopping || was?.failed) continue;
+      if (was && streamRetryOf(line, this.sessionId)) {
+        if (this.streamErrorTimer) { clearTimeout(this.streamErrorTimer); this.streamErrorTimer = null; }
+        was.retrying = true;
+        continue;
+      }
+      const found = streamErrorOf(line, this.sessionId);
+      if (!found || (found.final && !was)) continue;
+      const retrying = was?.retrying ?? false;
+      this.streamError = { error: found.error, credits: found.credits, failed: false, retrying };
+      log.warn('chats', 'acp provider stream error', { chat: this.opts.chatId, data: { engine: this.engine, error: cut(found.error, 300), credits: found.credits, final: found.final, retrying } });
+      if (this.streamErrorTimer) { clearTimeout(this.streamErrorTimer); this.streamErrorTimer = null; }
+      if (retrying && !found.credits && !found.final) continue;
       const turn = this.turnSeq;
-      const wait = found.credits ? 0 : this.opts.streamErrorGraceMs ?? STREAM_ERROR_GRACE_MS;
+      const wait = found.credits || found.final ? 0 : this.opts.streamErrorGraceMs ?? STREAM_ERROR_GRACE_MS;
       this.streamErrorTimer = setTimeout(() => { this.streamErrorTimer = null; if (turn === this.turnSeq) this.failStreamTurn(); }, wait);
       this.streamErrorTimer.unref();
     }
@@ -883,7 +905,8 @@ export class AcpSession implements HarnessSession {
   /** The turn the provider refused: session/cancel ends the open session/prompt (OpenCode answers end_turn), and
    *  turnDone shows the error; an engine that ignores the cancel is restarted as after a user's stop (watchCancel). */
   private failStreamTurn(): void {
-    if (this.exited || !this.prompting || !this.streamError || this.streamError.failed) return;
+    // the user's own stop came first: its outcome is a stop (turnDone), never the provider's error
+    if (this.exited || !this.prompting || this.stopping || !this.streamError || this.streamError.failed) return;
     this.streamError.failed = true;
     log.warn('chats', 'acp turn stopped after a provider stream error', { chat: this.opts.chatId, data: { engine: this.engine, error: cut(this.streamError.error, 300) } });
     if (this.sessionId) this.notify('session/cancel', { sessionId: this.sessionId });
@@ -894,6 +917,8 @@ export class AcpSession implements HarnessSession {
     if (this.streamErrorTimer) { clearTimeout(this.streamErrorTimer); this.streamErrorTimer = null; }
     // a provider error the turn was stopped for, or that ended it without a word from the model
     const provider = this.streamError && (this.streamError.failed || (!err && !this.stopping && !this.lastAnswer.trim())) ? this.streamError : null;
+    // OpenCode answers a cancel during its stream error with end_turn: a stop by the user there is still a stop
+    const stalled = !!this.streamError && !this.streamError.failed;
     this.streamError = null;
     // the turn that read them is over: screenshots may hold private data, they do not stay in the temp folder
     for (const f of this.turnFiles.splice(0)) fs.rm(f, { force: true }, () => {});
@@ -912,7 +937,7 @@ export class AcpSession implements HarnessSession {
     const net = (!err && stop === 'end_turn' && isNetError(this.lastAnswer)) || (!!err && isNetError(errText(err)));
     const stopped = this.stopping;
     this.stopping = null;
-    const interrupted = !err && stop === 'cancelled' && !!stopped;
+    const interrupted = !err && !!stopped && (stop === 'cancelled' || (stalled && stop === 'end_turn'));
     if (provider) this.sysCode(provider.credits ? 'outOfCredits' : 'engineError', { label: this.label, error: cut(stripAnsi(provider.error), 400) }, 'error');
     else if (err) this.sysCode('engineError', { label: this.label, error: cut(stripAnsi(errText(err)), 400) }, 'error');
     else if (stop === 'refusal') this.sysCode('modelRefusal', undefined, 'warn');

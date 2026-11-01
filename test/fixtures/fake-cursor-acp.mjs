@@ -10,7 +10,7 @@
 //   ask → cursor/ask_question (one single-choice and one multi-choice question; asksn: one yes/no question) · plan → cursor/create_plan
 //   edit → an edit tool call with a diff · todo → a plan update · slow → streams until cancelled · deafcancel → ignores cancel (FAKE_ACP_DEAF_MS)
 //   nocredit → OpenCode's provider refusal: an ERROR log line on stderr, no ACP output until cancelled · streamhiccup →
-//   the same line, then the turn goes on
+//   the same line, then the turn goes on (quotahiccup, stallstop, retryslow, retrygiveup: variants, at the branch)
 //   think → streams reasoning ("Penso di usare la libreria vecchia. Passo 1. …", FAKE_CURSOR_THINK_TICKS) until cancelled
 //   readgate[=<path>] → a read tool call (of a.txt, or that path relative to the cwd) that asks permission, its
 //   location in the request too: "Letto a.txt" when allowed · writegate[=<path>] → an edit tool call that
@@ -146,21 +146,52 @@ async function prompt(id, p) {
     turn = null;
     return out({ id, result: { stopReason: 'cancelled' } });
   }
-  if (/nocredit|streamhiccup/.test(text)) {
+  if (/nocredit|streamhiccup|quotahiccup|stallstop|retryslow|retrygiveup/.test(text)) {
     // OpenCode 1.19.5 (`opencode acp --print-logs`, real run 2026-11-01): the provider refuses, the error goes only to its
     // log on stderr, nothing comes over ACP and session/prompt stays open until session/cancel (then end_turn, no text).
-    // streamhiccup: the same error line, then the turn goes on (a retry that worked)
+    // streamhiccup: the same error line, then the turn goes on (a retry that worked) · quotahiccup: the same with a
+    // rate limit worded as quota/billing (Gemini free) · stallstop: an error, then end_turn only FAKE_ACP_STALL_MS after
+    // the cancel · retryslow: an error, a retry, another error, a retry after FAKE_ACP_STALL_MS, then the turn goes on ·
+    // retrygiveup: an error, a retry, another error, then OpenCode's give-up line (real log 2026-11-01 08:46)
     const line = (small, error) => `timestamp=2026-11-01T10:27:56.898Z level=ERROR run=a1c27bd8 message="stream error" providerID=opencode modelID=deepseek-v4.1-flash-free session.id=${sid} small=${small} agent=${small ? 'title' : 'build'} mode=primary error.error="${error}"\n`;
+    const retry = () => process.stderr.write(`timestamp=2026-11-01T08:44:48.731Z level=INFO run=7c96a4af message=stream providerID=openai modelID=gpt-6-astra-fast session.id=${sid} small=false agent=build mode=primary\n`);
+    const stall = Number(process.env.FAKE_ACP_STALL_MS ?? 300);
     process.stderr.write('timestamp=2026-11-01T10:27:56.800Z level=INFO run=a1c27bd8 message=stream providerID=opencode\n');
-    if (/streamhiccup/.test(text)) {
-      process.stderr.write(line(false, 'AI_APICallError: Service Unavailable'));
+    if (/streamhiccup|quotahiccup|retryslow/.test(text)) {
+      process.stderr.write(line(false, /quotahiccup/.test(text) ? 'AI_APICallError: You exceeded your current quota, please check your plan and billing details.' : 'AI_APICallError: Service Unavailable'));
       await sleep(20);
+      if (/retryslow/.test(text)) {
+        retry();
+        await sleep(20);
+        process.stderr.write(line(false, 'AI_APICallError: Service Unavailable'));
+        await sleep(stall);
+        retry();
+      }
       await say(sid, 'agent_message_chunk', ['Ripreso ', 'dopo il riprovo']);
       turn = null;
       return out({ id, result: { stopReason: 'end_turn' } });
     }
-    process.stderr.write(line(false, 'AI_APICallError: Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go'));
-    process.stderr.write(line(true, 'AI_RetryError: Failed after 3 attempts. Last error: Free usage limit reached.'));
+    if (/retrygiveup/.test(text)) {
+      process.stderr.write(line(false, 'AI_APICallError: Service Unavailable'));
+      await sleep(20);
+      retry();
+      await sleep(20);
+      process.stderr.write(line(false, 'AI_APICallError: Service Unavailable'));
+      await sleep(20);
+      process.stderr.write(`timestamp=2026-11-01T08:46:04.930Z level=ERROR run=7c96a4af message=process session.id=${sid} messageID=msg_1 error="Service Unavailable" stack="AI_APICallError: Service Unavailable\\n  at x"\n`);
+    }
+    if (/stallstop/.test(text)) {
+      process.stderr.write(line(false, 'AI_APICallError: Service Unavailable'));
+      while (!turn.cancelled) await sleep(10);
+      await sleep(stall);
+      update(sid, { sessionUpdate: 'usage_update', used: 0, size: 200000, cost: { amount: 0, currency: 'USD' } });
+      turn = null;
+      return out({ id, result: { stopReason: 'end_turn' } });
+    }
+    if (/nocredit/.test(text)) {
+      process.stderr.write(line(false, 'AI_APICallError: Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go'));
+      process.stderr.write(line(true, 'AI_RetryError: Failed after 3 attempts. Last error: Free usage limit reached.'));
+    }
     while (!turn.cancelled) await sleep(10);
     update(sid, { sessionUpdate: 'usage_update', used: 0, size: 200000, cost: { amount: 0, currency: 'USD' } });
     turn = null;
