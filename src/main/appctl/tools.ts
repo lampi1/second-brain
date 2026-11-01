@@ -57,8 +57,8 @@ import type { RoutinePackageStore } from '../flows/package-authoring';
 import { workflowTools, type WorkAway } from '../workflows/tools';
 import type { Workflows } from '../workflows/service';
 import { guideTool, screenOutline } from './guide';
-import { CONFIG_ASK_MIN, configTool, type ConfigDeps } from './config';
-import { lastTyped } from './user-words';
+import { CONFIG_ASK_MIN, CONFIG_TURN_MIN, configTool, type ConfigDeps } from './config';
+import { lastAnswered, lastTyped, userAsked } from './user-words';
 import { recordingTools, type RecordingsRead } from './recordings';
 import { imparaTools, type ImparaControl } from './impara';
 import type { RoutineTerminalExport, RoutineRunRef } from '../../shared/routines';
@@ -703,11 +703,11 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   /** app_config's proof (ADR 0149): the user typed to this very Orchestrator in the last minutes, and its latest
    *  message is that one (not app news or an agent's mail, which also land as 'user' items) */
   function configAsked(orchestratorId: string): boolean {
-    const at = lastTyped(orchestratorId);
-    if (at === undefined || at < Date.now() - CONFIG_ASK_MIN * 60_000) return false;
+    const typed = lastTyped(orchestratorId), answered = lastAnswered(orchestratorId);
+    if (typed === undefined && answered === undefined) return false;
     const last = d.chats.items(orchestratorId).filter(i => i.kind === 'user').at(-1);
-    // the item the send added carries (about) the time it was typed; any later 'user' item came from elsewhere
-    return !!last && Math.abs(last.at - at) <= 5_000;
+    const chat = d.chats.list().find(c => c.id === orchestratorId);
+    return userAsked({ typed, answered, lastUserItem: last?.at, lastResult: chat?.lastResult?.at, now: Date.now(), freshMs: CONFIG_ASK_MIN * 60_000, turnMs: CONFIG_TURN_MIN * 60_000 });
   }
 
   /** app_learn's proof (ADR 0190): the time of the user's own latest message when this turn is his, else null */

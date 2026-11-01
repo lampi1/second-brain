@@ -256,11 +256,18 @@ export class AgentCatalogService {
     const engine = text(p.engine, 60, 'Motore');
     if (!/^[a-z][a-z0-9_-]*$/.test(engine)) throw new Error('Motore non valido.');
     if (!(p.model === null || p.model === undefined || typeof p.model === 'string' && MODEL.test(p.model))) throw new Error('Modello non valido.');
-    const model = (p.model ?? null) as string | null;
+    let model = (p.model ?? null) as string | null;
     if (p.effort !== undefined && p.effort !== null && !has(EFFORTS, p.effort)) throw new Error('Effort non valido.');
     if (current) {
       const e = this.d.models().find(x => x.engine === engine);
       if (!e) throw new Error('Il motore selezionato non è disponibile.');
+      // a new engine with the old engine's model or effort carried along unchanged (an edit that only sets the engine):
+      // what the new engine does not know falls back to the level's model / no effort, never a refusal that leaves the
+      // role stuck on its old engine (owner, 2026-11-01: opencode → cursor refused whatever the model)
+      if (base && base.engine !== engine) {
+        if (model !== null && model === (base.model ?? null) && !(e.modelSelectable && e.models.some(m => m.id === model))) { model = null; p.model = null; }
+        if (p.effort && p.effort === base.effort && !e.effort) delete p.effort;
+      }
       if (model !== null && !e.modelSelectable) throw new Error(e.modelReason ?? 'La scelta del modello non è supportata da questo motore. Usa il modello del livello.');
       // a model the role already runs with is kept as it is: only a new choice must be one the engine is known to have
       // (#128: a preset alias such as 'sonnet' is not in the observed list)

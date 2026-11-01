@@ -6,7 +6,7 @@ import { chatItemsReply } from '../../shared/chat-window';
 import { createRoutedChat } from '../chats/routed';
 import { gitBranches } from '../chats/branch';
 import { markRunOutcome } from '../run/outcome';
-import { noteUserTyped } from '../appctl/user-words';
+import { noteUserAnswered, noteUserTyped, saysYes } from '../appctl/user-words';
 import { readClipboardImage } from '../clipboard-image';
 import type { HandlerContext, HandlersOf } from './context';
 
@@ -32,7 +32,13 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
       if (said) void s.userCorrections!.note(a.text, said, runId => s.chats.correctedAfterReport?.(runId));
     },
     'chat:synthesize': a => { if (!s.chats.synthesizeResult) throw new Error('Result synthesis unavailable.'); return s.chats.synthesizeResult(a.runId, { kind: 'user' }); },
-    'chat:answer': async a => { activity.answered(a.chatId, a.requestId); try { await s.chats.answer(a.chatId, a.requestId, a.answer); } catch (e) { activity.notAnswered(a.chatId, a.requestId); throw e; } },
+    'chat:answer': async a => {
+      activity.answered(a.chatId, a.requestId);
+      const req = s.chats.pending().find(r => r.chatId === a.chatId && r.id === a.requestId);
+      try { await s.chats.answer(a.chatId, a.requestId, a.answer); } catch (e) { activity.notAnswered(a.chatId, a.requestId); throw e; }
+      // the user's own «Sì» to a chat's native question: app_config takes it as their ask (appctl/user-words.ts)
+      if (saysYes(req, a.answer)) noteUserAnswered(a.chatId);
+    },
     'chat:plan': a => s.chats.planDecide(a.chatId, a.decision, a.at, a.text),
     'chat:stop': a => { activity.stopped(a.chatId); return s.chats.stop(a.chatId, a.keepQueued === true); },
     'chat:stopAll': () => { activity.stopped(); return s.chats.stopAll(); },

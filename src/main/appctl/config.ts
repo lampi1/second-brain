@@ -16,9 +16,10 @@
 //   style) via the same save as the page (ADR 0207), its revision checked; undo = set the "before" value back;
 // - later: «Rispondi dopo»;
 //   and the global pause: the Routine page's own calls (ADR 0155), never approving a trigger, a DevOps write or «Esegui».
-// Every change needs the user's own typed message to this Orchestrator in the last minutes, and that message must be
-// its latest (userAsked: appctl/user-words.ts), so neither app news, an agent's mail nor a turn they
-// woke can change a setting; the Orchestrator's own tools and permission ceiling stay the user's click. Secrets are never read or written.
+// Every change needs the user's own typed message to this Orchestrator, or their «Sì» to one of its native questions,
+// with nothing else written to it since (userAsked: appctl/user-words.ts), in the last minutes or still in the turn it
+// started (the owner, 2026-11-01: «ti devo sempre scrivere in chat le parole esatte»), so neither app news, an agent's
+// mail, quoted text nor a turn they woke can change a setting; the Orchestrator's own tools and permission ceiling stay the user's click. Secrets are never read or written.
 // Mounted only on the authenticated Orchestrator endpoint by appctl/tools.ts.
 import type { ChangeBy, SettingChange, SettingDef, SettingRequestResult, Settings } from '../../shared/contract';
 import type { AgentCatalog, AgentDraft, AgentProfile, AgentVersion } from '../../shared/agents';
@@ -57,6 +58,8 @@ export interface ConfigDeps {
 }
 
 export const CONFIG_ASK_MIN = 10;
+/** a turn the user's ask started (or their «Sì» answered) keeps that ask this long while it runs */
+export const CONFIG_TURN_MIN = 120;
 const AREAS = ['setting', 'view', 'agent', 'connector', 'profile', 'later'] as const;
 const PROFILE_FIELDS = ['name', 'role', 'language', 'mainWork', 'replyStyle'] as const;
 /** The role card's fields an edit may set (name, summary and character are the role's own, fixed) */
@@ -77,7 +80,7 @@ const roleView = (p: AgentProfile) => ({ id: p.id, name: p.name, activeVersion: 
   instructions: p.instructions.length > 400 ? `${p.instructions.slice(0, 400)}… (${p.instructions.length} chars)` : p.instructions });
 
 export function configTool(d: ConfigDeps): ToolDef {
-  const asked = (what: string) => { if (!d.userAsked()) throw new Error(`bloccato: cambia ${what} solo quando l'utente te lo chiede, con parole sue, negli ultimi ${CONFIG_ASK_MIN} minuti`); };
+  const asked = (what: string) => { if (!d.userAsked()) throw new Error(`bloccato: cambia ${what} solo quando l'utente te lo chiede: un suo messaggio o un suo «Sì» a una tua domanda, senza altri messaggi dopo, negli ultimi ${CONFIG_ASK_MIN} minuti o nello stesso turno; chiediglielo con una domanda Sì/No`); };
   const role = (id: unknown): AgentProfile => {
     const p = d.agents?.list().profiles.find(x => x.id === id);
     if (!p) throw new Error(`ruolo sconosciuto: ${String(id)} (ruoli: ${d.agents?.list().profiles.map(x => x.id).join(', ') ?? 'nessuno'})`);
@@ -210,7 +213,7 @@ export function configTool(d: ConfigDeps): ToolDef {
   };
   return {
     name: 'app_config',
-    description: `Read and change the app's configuration for the user, exactly as their own click in the app would (every change is logged with its Annulla). action "get" (read, optional query), "set", "undo", "history"; for connectors also "add", "remove", "test", "form". area: "setting" (every key of Impostazioni and more: key + value; get lists key, label, description, type, current value), "view" (theme system|light|dark, density comfortable|compact, workProfile: key + value), "agent" (a role's card in Brain → Agenti: agentId + key = one of ${AGENT_FIELDS.join('|')} + value; undo with agentId + version when set made a new version (text, skills, model, tier), else set the "before" value back), "connector" (the MCP servers of Impostazioni → Connettori: get = each server, how it runs, its token slots set|missing and who may use it; add = (saved OFF until the user's own «Attiva» on its card, which shows what it runs; so is a change of command|args|env|url; no test before it) snippet (what the user pasted: a Claude Desktop/Cursor "mcpServers" JSON, a command line like "npx -y @x/server", or an http(s) URL; server = which one when the JSON has several) or def {label, transport stdio|http, command, args, env, url, headers, secrets:[{where env|header, name, prefix?}], purpose}; set = server + key enabled (boolean) | access (role ${MCP_ACCESS_ROLES.join('|')} + value all|read|none|{tools:[...]}) | label | purpose | command | args | env | url | headers | tokens (the token variable or header names); remove = server; test = server (opens it as a chat would and lists its tools); form = snippet or def: opens the add form prefilled for the user; undo = changeId from add/set/remove), "profile" (Il mio profilo, the brain's me.md: get, or set key name|role|language|mainWork (array of lines)|replyStyle + value), "later" («Rispondi dopo»: value true|false). Change only what the user asked in their own words in the last ${CONFIG_ASK_MIN} minutes; then tell them in one line what changed and that Annulla is on the change's card. Never secret values: never put a token in snippet, def, env or headers (a pasted one is dropped before anything is kept); when a server needs a token, say which one and that they type it in its card (form opens it); logins stay the user's. Where a setting is on screen: app_guide / app_ui outline.`,
+    description: `Read and change the app's configuration for the user, exactly as their own click in the app would (every change is logged with its Annulla). action "get" (read, optional query), "set", "undo", "history"; for connectors also "add", "remove", "test", "form". area: "setting" (every key of Impostazioni and more: key + value; get lists key, label, description, type, current value), "view" (theme system|light|dark, density comfortable|compact, workProfile: key + value), "agent" (a role's card in Brain → Agenti: agentId + key = one of ${AGENT_FIELDS.join('|')} + value; undo with agentId + version when set made a new version (text, skills, model, tier), else set the "before" value back), "connector" (the MCP servers of Impostazioni → Connettori: get = each server, how it runs, its token slots set|missing and who may use it; add = (saved OFF until the user's own «Attiva» on its card, which shows what it runs; so is a change of command|args|env|url; no test before it) snippet (what the user pasted: a Claude Desktop/Cursor "mcpServers" JSON, a command line like "npx -y @x/server", or an http(s) URL; server = which one when the JSON has several) or def {label, transport stdio|http, command, args, env, url, headers, secrets:[{where env|header, name, prefix?}], purpose}; set = server + key enabled (boolean) | access (role ${MCP_ACCESS_ROLES.join('|')} + value all|read|none|{tools:[...]}) | label | purpose | command | args | env | url | headers | tokens (the token variable or header names); remove = server; test = server (opens it as a chat would and lists its tools); form = snippet or def: opens the add form prefilled for the user; undo = changeId from add/set/remove), "profile" (Il mio profilo, the brain's me.md: get, or set key name|role|language|mainWork (array of lines)|replyStyle + value), "later" («Rispondi dopo»: value true|false). Change only what the user asked: their own message, or their «Sì» to your native yes/no question naming the exact change (to ask, use that question), in the last ${CONFIG_ASK_MIN} minutes or the turn it started; then tell them in one line what changed and that Annulla is on the change's card. Never secret values: never put a token in snippet, def, env or headers (a pasted one is dropped before anything is kept); when a server needs a token, say which one and that they type it in its card (form opens it); logins stay the user's. Where a setting is on screen: app_guide / app_ui outline.`,
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     inputSchema: { type: 'object', additionalProperties: false, required: ['action', 'area'], properties: {
       action: { type: 'string', enum: ['get', 'set', 'undo', 'history', 'add', 'remove', 'test', 'form'] }, area: { type: 'string', enum: [...AREAS] },
@@ -282,7 +285,9 @@ export function configTool(d: ConfigDeps): ToolDef {
           // its own tools and permission ceiling stay the user's click on its card: a turn that read untrusted text
           // must not be able to widen the Orchestrator itself
           if (old.id === 'orchestrator' && (key === 'tools' || key === 'permissionCeiling')) throw new Error('bloccato: i permessi dell’Orchestrator li cambia solo l’utente, dalla sua carta in Brain → Agenti');
-          const p = d.agents.save({ ...draftOf(old), [key]: a.value } as AgentDraft, old.id, `Modificato dall’Orchestrator su richiesta dell’utente${reason ? `: ${reason}` : ''}`.slice(0, 600));
+          // "null" or "" for the model: the level's model (an agent that cannot send a JSON null)
+          const value = key === 'model' && (a.value === '' || a.value === 'null') ? null : a.value;
+          const p = d.agents.save({ ...draftOf(old), [key]: value } as AgentDraft, old.id, `Modificato dall’Orchestrator su richiesta dell’utente${reason ? `: ${reason}` : ''}`.slice(0, 600));
           if (p.updatedAt === old.updatedAt) return { agentId: p.id, unchanged: true, note: 'già così' };
           log.info('appctl', 'Orchestrator changed a role', { chat: d.callerId, data: { role: p.id, key, version: p.activeVersion } });
           const before = (old as unknown as Record<string, unknown>)[key] ?? null;
