@@ -112,6 +112,10 @@ export class BrainModelService {
     return out.join(',');
   }
   private restorer(profiles?: readonly AgentProfile[]): AgentRestorer {
+    // one read of the memory store per restorer: a list of 120 changes asked it once per tidy-up entry (owner's CPU
+    // profile 2026-11-02: changes() 1.7 s of a 2.6 s freeze, readMemoryRecords 0.4 s of it)
+    let records: { root: string; rows: ReturnType<typeof readMemoryRecords> } | null = null;
+    const memoryOf = (root: string) => { if (records?.root !== root) records = { root, rows: readMemoryRecords(root) }; return records.rows; };
     return {
       activeVersion: id => (profiles ?? this.profiles()).find(p => p.id === id)?.activeVersion ?? null,
       // a change that opened a trial: undoing it rejects the trial, as the feed's undo does
@@ -122,7 +126,7 @@ export class BrainModelService {
       },
       // a memory tidy-up (ADR 0129): undone in the store of the brain it was made in, only while its facts are unchanged
       memory: {
-        canUndo: u => { const root = this.root(); return !!root && canUndoMemoryTidy(root, u); },
+        canUndo: u => { const root = this.root(); return !!root && canUndoMemoryTidy(root, u, () => memoryOf(root)); },
         undo: u => { const root = this.root(); if (!root) throw new Error('Scegli prima la cartella del brain.'); undoMemoryTidy(root, u); },
       },
     };
@@ -225,7 +229,8 @@ export class BrainModelService {
   }
 
   /** The change log alone, newest first, with what can still be undone (the morning block, ADR 0102): no skill or memory read. */
-  changes(): BrainChange[] { return this.log.list(this.restorer()); }
+  /** The Log's view; the roles read once for the whole list (each role change asked the catalog again). */
+  changes(): BrainChange[] { return this.log.list(this.restorer(this.profiles())); }
 
   /** Runs every job (or one) once; a second call while one runs waits for it. `auto`: the app started it by itself (its
    *  changes are announced in the feed, `applied`). */

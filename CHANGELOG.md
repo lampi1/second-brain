@@ -65,6 +65,9 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   terminal routines.
 
 ### Fixed
+- An agent writing in the brain no longer freezes the window every ~2 s: the undoable-changes list rereads a file
+  only once it changed, reads the memory store once per list, and the Proposte recount runs at most every 5 s.
+- A main-process hang of 5 s or more logs its JS stack from a worker thread (`perf` «main process hung»).
 - The "/" list of a chat no longer reads every skill folder synchronously (up to 650 ms frozen per chat switch).
 - The two-voice podcast no longer reloads a voice model on every line (+165 MB RAM per line).
 - Routines compose existing browser, pinned script/query and registered MCP connector capabilities, with preflight
