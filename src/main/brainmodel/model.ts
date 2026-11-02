@@ -15,8 +15,13 @@ import { portableId } from '../agents/pack/flows';
 
 const MAX_BYTES = 256 * 1024;
 const NAME = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
-/** A change that may move a Brain page: a markdown file, or a folder (Windows names only the folder on a move). */
+/** A change that may move a Brain page: a markdown file, or a folder (Windows names only the folder on a move). Never
+ *  under ops/state/ (the app's and the agents' state, logs and inbox, no Brain page reads it; ops/runbook is a procedure
+ *  source and stays): a working agent writes there every few seconds, and each event recounted the Brain views and
+ *  Proposte (owner's freeze, 2026-11-02). */
 export const touchesBrainModel = (rel: string): boolean => {
+  const norm = rel.replace(/\\/g, '/').replace(/^\.\//, '');
+  if (norm === 'ops/state' || norm.startsWith('ops/state/')) return false;
   const base = path.posix.basename(rel.replace(/\\/g, '/'));
   return !base.includes('.') || /\.md$/i.test(base);
 };
