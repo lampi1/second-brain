@@ -12,6 +12,10 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
 ### Changed
+- A delegation from the brain folder is no longer refused for pending edits to now.md, ai-errors.md or ai-wins.md,
+  the notes the app and the brain rules keep writing (#324).
+- The model-list probe's expected refusal is logged as info, not as an engine error (#328); a role set to a model the
+  engine does not know is refused with the known ids, so an agent picks one instead of retrying (#327).
 - Recordings transcribe faster: close sentences of the same speaker go to Whisper as one piece of up to 19 s,
   instead of each sentence padded with 10 s of silence (ADR 0215).
 - Voice: Parakeet TDT v3 as a faster transcription choice beside Whisper, a voice speed setting, a two-voice podcast
