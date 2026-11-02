@@ -129,11 +129,20 @@ describe('SkillsService save and delete', () => {
     expect(await svc.remove(path.join(home, '.claude/agents/tester.md'))).toEqual({ ok: true });
     expect(trashed).toEqual([path.join(home, '.claude/skills/rivedi'), path.join(home, '.claude/agents/tester.md')]);
   });
-  it('gives the "/" fallback: the engine\'s valid skills for the chat folder', () => {
+  it('gives the "/" fallback: the engine\'s valid skills for the chat folder', async () => {
     const { svc, proj, home } = fixture();
-    expect(svc.commandsFor('claude', path.join(proj, 'sub')).map(c => c.name).sort()).toEqual(['locale', 'rivedi']);
-    expect(svc.commandsFor('claude', home).map(c => c.name)).toEqual(['rivedi']);
-    expect(svc.commandsFor('cursor', proj).map(c => c.name)).toEqual(['spiega']);
+    expect((await svc.commandsFor('claude', path.join(proj, 'sub'))).map(c => c.name).sort()).toEqual(['locale', 'rivedi']);
+    expect((await svc.commandsFor('claude', home)).map(c => c.name)).toEqual(['rivedi']);
+    expect((await svc.commandsFor('cursor', proj)).map(c => c.name)).toEqual(['spiega']);
+  });
+  it('keeps the "/" scan until a save or delete here drops it', async () => {
+    const { svc, home } = fixture();
+    const before = (await svc.commandsFor('claude', home)).map(c => c.name);
+    fs.mkdirSync(path.join(home, '.claude/skills/fuori'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.claude/skills/fuori/SKILL.md'), '---\nname: fuori\ndescription: scritta fuori dall\'app\n---\n\nCorpo.\n');
+    expect((await svc.commandsFor('claude', home)).map(c => c.name)).toEqual(before);
+    expect(await svc.remove(path.join(home, '.claude/agents/tester.md'))).toEqual({ ok: true });
+    expect((await svc.commandsFor('claude', home)).map(c => c.name).sort()).toEqual([...before, 'fuori'].sort());
   });
 });
 

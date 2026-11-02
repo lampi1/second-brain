@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- A freeze of the window records a CPU profile of the main process by itself (`<logs>/profiles`, at most 3 per run;
+  `node scripts/profile-top.mjs` lists what ran; `SB_PROFILE_ON_STALL=0` turns it off).
 - OpenCode as an engine (`opencode acp`, off until turned on in Settings → Motori): any provider set up in
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
@@ -63,6 +65,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   terminal routines.
 
 ### Fixed
+- The "/" list of a chat no longer reads every skill folder synchronously (up to 650 ms frozen per chat switch).
+- The two-voice podcast no longer reloads a voice model on every line (+165 MB RAM per line).
 - Routines compose existing browser, pinned script/query and registered MCP connector capabilities, with preflight
   before activation and on-demand grants independent of scheduling. Durable receipts prevent duplicate unknown
   effects; analysis mentions are opt-in and limited to one comment per run (ADR 0166).

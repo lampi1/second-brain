@@ -28,6 +28,8 @@ const HOME_DIR: Partial<Record<Harness, string>> = { claude: '.claude', cursor: 
 const SUB: Record<SkillKind, string> = { skill: 'skills', agent: 'agents' };
 /** plugin and built-in skill folders: not the user's to edit */
 const SKIP_DIRS = new Set(['synced', 'skills-cursor']);
+/** how long the \"/\" list's skill scan is reused (commandsFor) */
+const SKILL_TTL_MS = 30_000;
 const norm = (p: string) => path.resolve(p).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
 
 export class SkillsService {
@@ -120,6 +122,7 @@ export class SkillsService {
   }
 
   async save(req: SkillSave): Promise<SkillSaveResult> {
+    this.skillCache = null;
     const text = typeof req?.text === 'string' ? req.text : '';
     const kind: SkillKind = req?.kind === 'agent' ? 'agent' : 'skill';
     const issues = checkMd(kind, text);
@@ -183,6 +186,7 @@ export class SkillsService {
   }
 
   async remove(id: string): Promise<{ ok: boolean; error?: string }> {
+    this.skillCache = null;
     const pl = this.placeOf(id);
     if (!pl) return { ok: false, error: 'Non è un file di skill o di agente di una cartella conosciuta.' };
     const what = pl.kind === 'skill' ? path.dirname(id) : id;
@@ -196,15 +200,63 @@ export class SkillsService {
     }
   }
 
-  /** "/" before the engine listed its commands: the skills of this engine for the chat's folder (user + project). */
-  commandsFor(harness: Harness, cwd: string): ChatCommand[] {
+  /** "/" before the engine listed its commands: the skills of this engine for the chat's folder (user + project).
+   *  Read with async fs and kept 30 s (owner's perf log 2026-11-02: the sync scan of 60 skill folders blocked the main
+   *  process up to 648 ms on every chat switch); a save or delete here drops the copy, an edit elsewhere shows within 30 s. */
+  async commandsFor(harness: Harness, cwd: string): Promise<ChatCommand[]> {
     const c = norm(cwd);
     const out = new Map<string, ChatCommand>();
-    for (const e of this.list().entries) {
-      if (e.kind !== 'skill' || e.harness !== harness || e.errors) continue;
+    for (const e of await this.skillEntries()) {
+      if (e.harness !== harness || e.errors) continue;
       if (e.scope === 'project' && !(e.root && (c === norm(e.root) || c.startsWith(`${norm(e.root)}/`)))) continue;
       if (!out.has(e.name)) out.set(e.name, { name: e.name, description: e.description, skill: true });
     }
     return [...out.values()];
+  }
+
+  private skillCache: { at: number; entries: Promise<SkillEntry[]> } | null = null;
+  /** every skill (not agent) entry, scanned without blocking the main process; one scan at a time, kept SKILL_TTL_MS */
+  private skillEntries(): Promise<SkillEntry[]> {
+    const now = Date.now();
+    if (this.skillCache && now - this.skillCache.at < SKILL_TTL_MS) return this.skillCache.entries;
+    const entries = this.scanSkills().catch(e => { log.warn('skills', 'skill scan failed', { cause: errText(e) }); this.skillCache = null; return [] as SkillEntry[]; });
+    this.skillCache = { at: now, entries };
+    return entries;
+  }
+  private async scanSkills(): Promise<SkillEntry[]> {
+    const fsp = fs.promises;
+    const home = norm(this.o.home), roots = new Map<string, string>();
+    for (const r of this.o.roots()) {
+      if (!r || !path.isAbsolute(r)) continue;
+      const k = norm(r);
+      if (k === home || roots.has(k)) continue;
+      try {
+        if (!(await fsp.stat(r)).isDirectory()) continue;
+        const git = await fsp.stat(path.join(r, '.git')).catch(() => null);
+        if (git?.isFile()) continue;
+      } catch { continue; }
+      roots.set(k, path.resolve(r));
+    }
+    const places: SkillPlace[] = [];
+    for (const [harness, dir] of Object.entries(HOME_DIR)) {
+      if (!dir) continue;
+      const engine = engineOrThrow(harness).label;
+      places.push({ kind: 'skill', harness: harness as Harness, scope: 'user', root: null, dir: path.join(this.o.home, dir, SUB.skill), label: `${engine} · tutti i progetti (~/${dir})` });
+      for (const root of roots.values()) places.push({ kind: 'skill', harness: harness as Harness, scope: 'project', root, dir: path.join(root, dir, SUB.skill), label: `${engine} · progetto ${path.basename(root)}` });
+    }
+    const out: SkillEntry[] = [];
+    for (const pl of places) {
+      let names: string[];
+      try { names = await fsp.readdir(pl.dir); } catch { continue; }
+      for (const n of names.sort()) {
+        if (SKIP_DIRS.has(n)) continue;
+        const file = path.join(pl.dir, n, 'SKILL.md');
+        let text: string;
+        try { if (!(await fsp.stat(file)).isFile()) continue; text = await fsp.readFile(file, 'utf8'); } catch { continue; }
+        const e = this.entry(pl, file, text);
+        if (e) out.push(e);
+      }
+    }
+    return out;
   }
 }

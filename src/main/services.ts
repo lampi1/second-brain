@@ -184,6 +184,6 @@ export interface SkillsApi {
   read(id: string): SkillDoc;
   save(req: SkillSave): Promise<SkillSaveResult>;
   remove(id: string): Promise<{ ok: boolean; error?: string }>;
-  commandsFor(harness: Harness, cwd: string): ChatCommand[];
+  commandsFor(harness: Harness, cwd: string): Promise<ChatCommand[]>;
 }
 
