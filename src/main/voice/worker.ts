@@ -25,7 +25,11 @@ const lib = () => {
   catch (e) { loadError = new Error(`motore voce non caricato: ${msg(e)}`); throw loadError; }
 };
 let root = '';
-let vad: any = null, rec: any = null, recFor = '', tts: any = null, ttsFor = '';
+let vad: any = null, rec: any = null, recFor = '';
+/** one Piper engine per voice, built once: the two-voice podcast (ADR 0214) alternates voices every line, and a single
+ *  slot rebuilt each switch cost ~1.4 s of CPU and ~165 MB of native memory per line that the GC never gave back
+ *  (measured: 20 lines, 3.4 GB); at most the catalog's three voices, ~250 MB each (measured) */
+const ttsByVoice = new Map<VoiceName, any>();
 const cores = () => globalThis.navigator?.hardwareConcurrency ?? 4;
 const threads = () => Math.max(1, Math.min(4, Math.floor(cores() / 2)));
 /** Whisper is the wait between the end of a sentence and its text: it gets most of the cores (the voice runs beside it) */
@@ -53,13 +57,14 @@ function recNow(asr: VoiceAsr): any {
   return rec;
 }
 function ttsNow(voice: VoiceName): any {
-  if (tts && ttsFor === voice) return tts;
+  const have = ttsByVoice.get(voice);
+  if (have) return have;
   const d = partDir(root, TTS[voice]);
   if (!partReady(root, TTS[voice])) throw new Error('La voce non è ancora scaricata: Impostazioni → Voce.');
   const model = fs.readdirSync(d).find(f => f.endsWith('.onnx'));
   if (!model) throw new Error('voce non trovata sul disco');
-  tts = new (lib().OfflineTts)({ model: { vits: { model: path.join(d, model), tokens: path.join(d, 'tokens.txt'), dataDir: path.join(d, 'espeak-ng-data') }, numThreads: threads(), provider: 'cpu', debug: 0 }, maxNumSentences: 1 });
-  ttsFor = voice;
+  const tts = new (lib().OfflineTts)({ model: { vits: { model: path.join(d, model), tokens: path.join(d, 'tokens.txt'), dataDir: path.join(d, 'espeak-ng-data') }, numThreads: threads(), provider: 'cpu', debug: 0 }, maxNumSentences: 1 });
+  ttsByVoice.set(voice, tts);
   return tts;
 }
 
@@ -230,7 +235,7 @@ port.on('message', ({ data: m }) => {
       }); return;
       case 'transcribe': void transcribe(m.job, m.wav, m.asr).catch(e => { cancelled.delete(m.job); send({ type: 'transcribed', job: m.job, lines: [], error: msg(e) }); }); return;
       case 'tcancel': cancelled.add(m.job); return;
-      case 'unload': asrNow = m.asr; rec = null; tts = null; recFor = ''; ttsFor = ''; return;
+      case 'unload': asrNow = m.asr; rec = null; recFor = ''; ttsByVoice.clear(); return;
     }
   } catch (e) { send({ type: 'error', message: msg(e) }); }
 });
