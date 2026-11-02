@@ -279,7 +279,11 @@ export class AgentCatalogService {
       // a model the role already runs with is kept as it is: only a new choice must be one the engine is known to have
       // (#128: a preset alias such as 'sonnet' is not in the observed list)
       const kept = keep && !!base && base.engine === engine && (base.model ?? null) === model;
-      if (model !== null && !kept && !e.models.some(m => m.id === model)) throw new Error('Il modello non è tra quelli noti del motore. Aggiorna le disponibilità o usa il modello del livello.');
+      // the known ids go in the refusal: an agent setting a role without them retried blind (20 times, #327)
+      if (model !== null && !kept && !e.models.some(m => m.id === model)) {
+        const ids = e.models.map(m => m.id), shown = ids.slice(0, 30).join(', ') + (ids.length > 30 ? ', …' : '');
+        throw new Error(`Il modello «${model}» non è tra quelli noti del motore ${engine}. ${ids.length ? `Modelli noti: ${shown}.` : 'Nessun modello noto.'} Usa uno di questi, oppure nessun modello (quello del livello).`);
+      }
       if (p.effort && !e.effort) throw new Error('Questo motore non supporta la scelta dell’effort.');
     }
     // the API engine has no tools: a role on it reads only (every class allowed by default, ADR 0085, means nothing there)

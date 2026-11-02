@@ -115,14 +115,17 @@ export async function requiredGit(cwd: string, args: string[]): Promise<string> 
 }
 
 /** The brain files the app itself rewrites at any moment (the memory store and the notes derived from it, the brain's
- *  changelog), never the user's work: a pending edit to them alone does not block a delegation started in the brain
- *  folder (a Cursor Scout was refused on memory/records.json, then Cursor and OpenCode on changelog.md). The child's
- *  worktree holds their committed version; agents read memory and the changelog through the app's tools. */
-const APP_OWNED_BRAIN = /^(?:memory\/records\.json|memory\/shared\.md|agents\/[^/]+\/memory\.md|changelog\.md)$/;
-/** New files only the app creates in the brain: the changelog on its first entry, and a command saved by itself after
+ *  changelog, the open-threads note and the AI error/win logs the brain rules make agents update at once through the
+ *  app's CLI, rules/memory.ts), never the user's work: a pending edit to them alone does not block a delegation started
+ *  in the brain folder (a Cursor Scout was refused on memory/records.json, then Cursor and OpenCode on changelog.md, then
+ *  Strategist and Sentinel on now.md and ai-errors.md, #324). The child's worktree holds their committed version; agents
+ *  read memory and the changelog through the app's tools. */
+const APP_OWNED_BRAIN = /^(?:memory\/records\.json|memory\/shared\.md|agents\/[^/]+\/memory\.md|changelog\.md|now\.md|ai-errors\.md|ai-wins\.md)$/;
+/** New files only the app creates in the brain: the changelog, the open-threads note and the AI error/win logs on their
+ *  first entry, and a command saved by itself after
  *  an «Esegui» run (auto-scripts.ts scriptNameOf: cmd-<command name>-<8 hex>.ps1|sh, directly in scripts/). The parent
  *  keeps them untouched; the child simply does not see them. Any other untracked file still blocks. */
-const APP_CREATED_BRAIN = /^(?:changelog\.md|scripts\/cmd-[a-z0-9-]{1,24}-[a-f0-9]{8}\.(?:ps1|sh))$/;
+const APP_CREATED_BRAIN = /^(?:changelog\.md|now\.md|ai-errors\.md|ai-wins\.md|scripts\/cmd-[a-z0-9-]{1,24}-[a-f0-9]{8}\.(?:ps1|sh))$/;
 
 /** The `git status --porcelain=v1` lines that block a baseline. With appOwned (the checkout is the brain folder), a
  *  tracked app-owned file that is only modified, and an untracked app-created file, are left out; other additions,

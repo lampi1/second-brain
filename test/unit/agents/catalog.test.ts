@@ -75,6 +75,8 @@ describe('role catalog', () => {
     expect(() => catalog.save(edit(artisan, { launches: ['orchestrator'] }), 'artisan')).toThrow();
     expect(() => catalog.save(edit(artisan, { tier: 'top', tierMax: 'light' }), 'artisan')).toThrow();
     expect(() => catalog.save(edit(artisan, { model: 'nope' }), 'artisan')).toThrow('modello');
+    // the refusal names the ids the engine knows, so an agent can pick one instead of retrying (#327)
+    expect(() => catalog.save(edit(artisan, { model: 'nope' }), 'artisan')).toThrow('Modelli noti: m-top, m-mid.');
   });
   it('keeps the model a role already runs with when only its text changes (#128)', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-catalog-')); roots.push(dir);
