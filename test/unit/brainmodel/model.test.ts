@@ -75,6 +75,7 @@ describe('readMemory', () => {
 describe('helpers', () => {
   it('touchesBrainModel, firstProse, skillTools', () => {
     expect(touchesBrainModel('rules/x.md')).toBe(true); expect(touchesBrainModel('ops/state/x.json')).toBe(false); expect(touchesBrainModel('agents')).toBe(true);
+    expect(touchesBrainModel('ops/state/runs')).toBe(false); expect(touchesBrainModel('ops\\state\\now.md')).toBe(false); expect(touchesBrainModel('ops/state')).toBe(false); expect(touchesBrainModel('ops/runbook/x.md')).toBe(true);
     expect(firstProse('# T\n\n```\ncode\n```\n| a |\n- **Primo** passo')).toBe('Primo passo');
     expect(skillTools('---\nname: x\nallowed-tools: [Read, "Grep"]\n---\n', null)).toEqual(['Grep', 'Read']);
   });
