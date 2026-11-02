@@ -12,6 +12,7 @@
 import os from 'node:os';
 import type { InputLagReport } from '../shared/contract';
 import { log } from './log';
+import { stallSeen } from './perf-profile';
 
 /** p95 above this (ms) is a lag the user feels while typing. */
 export const SLOW_P95_MS = 100;
@@ -116,6 +117,7 @@ export function startStallWatch(now: () => number = () => performance.now(), usa
     const seen = tally;
     tally = new Map(); outer = 0;
     if (!stall) return;
+    stallSeen(stall.ms); // a long one starts a CPU profile of the next freezes (perf-profile.ts)
     if (t - lastLog < 60_000) {
       missed++; worst = Math.max(worst, stall.ms);
       for (const [label, v] of seen) add(minute, label, v.ms, v.n);
