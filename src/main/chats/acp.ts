@@ -63,7 +63,7 @@ import { reapEnabled, reapEngine, type Root } from './proctree';
 import { costOf, type AcpUsage } from './cursor-prices';
 import { estimateTokens } from './handoff';
 import { writeImageFiles } from './images';
-import { STREAM_FLUSH_MS, cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, type AppAsk, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
+import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, type AppAsk, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 import { AgentChildrenReporter } from './agent-children';
 import type { ChildObservation } from '../../shared/agents';
 import { BRIEF_GRACE_MS, BRIEF_REFUSAL, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
@@ -1533,7 +1533,7 @@ export class AcpSession implements HarnessSession {
     }
     st.item = { ...st.item, text: st.item.text + text };
     st.dirty = true;
-    if (!this.flushTimer) { this.flushTimer = setTimeout(() => { this.flushTimer = null; this.flushAll(false); }, STREAM_FLUSH_MS); this.flushTimer.unref(); }
+    if (!this.flushTimer) { this.flushTimer = setTimeout(() => { this.flushTimer = null; this.flushAll(false); }, 16); this.flushTimer.unref(); }
   }
 
   private flushOne(st: Stream): void {

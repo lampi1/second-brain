@@ -33,7 +33,7 @@ import { closePipes, engineKills, jobGuard, killEngineTree, lowerEnginePriority 
 import { reapEnabled, reapEngine, type Root } from './proctree';
 import { LiveCost, priceUsage } from './live-cost';
 import { describeSuggestions, diffFor, diffFromResult, flattenAnswers, permissionText, questionsFrom, resultText, resumedAgent, shellExit, toolSummary } from './claude-map';
-import { STREAM_FLUSH_MS, cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, type AnswerPatch, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
+import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, type AnswerPatch, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 import { releaseId } from '../release';
 import { drift, record } from './drift';
 import { ownProcessGroup, sharedDir } from '../platform';
@@ -916,7 +916,7 @@ export class ClaudeSession implements HarnessSession {
         else if (d.type === 'thinking_delta') st.item = { ...st.item, text: st.item.text + s(d.thinking) };
         else { if (!QUIET_DELTAS.has(s(d.type))) this.drift('stream delta', s(d.type), e); return; }
         this.dirty.add(st);
-        if (!this.flushTimer) { this.flushTimer = setTimeout(() => { this.flushTimer = null; this.flushStreams(false); }, STREAM_FLUSH_MS); this.flushTimer.unref(); }
+        if (!this.flushTimer) { this.flushTimer = setTimeout(() => { this.flushTimer = null; this.flushStreams(false); }, 16); this.flushTimer.unref(); }
         return;
       }
       case 'content_block_stop': this.flushStreams(false); return;

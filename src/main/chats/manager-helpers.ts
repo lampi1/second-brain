@@ -92,10 +92,8 @@ export function sysItem<C extends SysCode>(code: C, params: SysParams | undefine
 }
 
 export const MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
-/** How long newer versions of a streamed item are collapsed before they go to the window (emitItem): 50 ms, 20 updates a
- *  second (owner, 2026-11-02: the app stuttered while any agent worked; one frame, 16 ms since 2026-10-27, sent the whole
- *  item and re-rendered it up to 60 times a second per chat). Words still show in small groups as they come. */
-export const ITEM_FRAME_MS = 50;
+/** One screen frame: how long newer versions of a streamed item are collapsed before they go to the window (emitItem). */
+export const ITEM_FRAME_MS = 16;
 /** a root chat's deliverable longer than this reaches the Orchestrator as where to read it, not whole (it is the chat's answer
  *  there; the Orchestrator re-reads every message in each later turn) */
 export const ORCHESTRATOR_OUTPUT_MAX = 800;
