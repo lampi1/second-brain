@@ -6,6 +6,10 @@ import { RESULT_OUTPUT_MAX } from '../../shared/delegation';
 import type { AgentChildren, AgentToolPolicy, ChildObservation, PermissionCeiling } from '../../shared/agents';
 import type { Answer, ChatCommand, ChatItem, ChatState, Effort, Harness, ImageAttachment, PendingRequest, PermissionMode } from '../../shared/contract';
 
+/** How often an engine's streamed text is flushed to the chat (50 ms; owner 2026-11-02: one frame, 16 ms, made the app
+ *  stutter while an agent worked). Main's ITEM_FRAME_MS and the renderer's STREAM_MS use the same pace. */
+export const STREAM_FLUSH_MS = 50;
+
 /** What a harness tells its owner. The owner (ChatManager) turns these into contract events. */
 export interface SessionSink {
   /** A new item (replace = false) or a newer version of an item already sent with the same id (replace = true). */
