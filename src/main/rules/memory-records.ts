@@ -229,9 +229,9 @@ export function tidyMemory(root: string, tidy: MemoryTidy, tag: string, now = ne
   });
 }
 /** The tidy-up can still be undone: every fact it retired is still retired by it, every fact it wrote still untouched. */
-export function canUndoMemoryTidy(root: string, undo: MemoryTidyUndo): boolean {
+export function canUndoMemoryTidy(root: string, undo: MemoryTidyUndo, read: () => MemoryRecord[] = () => readMemoryRecords(root)): boolean {
   let records: MemoryRecord[];
-  try { records = readMemoryRecords(root); } catch { return false; }
+  try { records = read(); } catch { return false; }
   return undo.retired.every(id => { const r = records.find(x => x.memoryId === id); return r?.status === 'retracted' && !!r.transitions?.at(-1)?.reason?.startsWith(`${undo.tag}:`); })
     && undo.added.every(id => { const r = records.find(x => x.memoryId === id); return !!r && r.validTo === null && r.transitions?.length === 1; })
     && (undo.confirmed ?? []).every(id => { const r = records.find(x => x.memoryId === id); return r?.status === 'confirmed' && !r.validTo && !!r.transitions?.at(-1)?.reason?.startsWith(`${undo.tag}:`); });

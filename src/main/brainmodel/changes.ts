@@ -163,11 +163,25 @@ export class ChangeLog {
     if (c.memory && !agents.memory?.canUndo(c.memory)) return false;
     return true;
   }
+  /** each file's text by its size and mtime: list() is asked on every brain event (the Proposte recount, the Log) and
+   *  read up to 120 files synchronously each time (owner's CPU profile 2026-11-02: 1.7 s of a 2.6 s freeze) */
+  private texts = new Map<string, { sig: string; text: string | null }>();
+  private textOf(file: string): string | null {
+    let sig: string;
+    try { const st = fs.statSync(file); sig = `${st.size}:${st.mtimeMs}`; } catch { sig = 'none'; }
+    const had = this.texts.get(file);
+    if (had?.sig === sig) return had.text;
+    const text = sig === 'none' ? null : read(file);
+    this.texts.set(file, { sig, text });
+    if (this.texts.size > 2000) this.texts.delete(this.texts.keys().next().value!);
+    return text;
+  }
   /** The renderer's view, newest first. */
   list(agents: AgentRestorer, limit = 120): BrainChange[] {
-    // Many changes refer to the same file. Read it once per view; an actual rollback always rechecks fresh bytes.
+    // Many changes refer to the same file. Read it once per view, and again only once it changed on disk (size or
+    // mtime); an actual rollback always rechecks fresh bytes.
     const files = new Map<string, string | null>();
-    const current = (file: string) => { if (!files.has(file)) files.set(file, read(file)); return files.get(file)!; };
+    const current = (file: string) => { if (!files.has(file)) files.set(file, this.textOf(file)); return files.get(file)!; };
     return [...this.entries].reverse().slice(0, limit).map(entry => {
       const { files: _f, agent: _a, seed: _s, memory: _m, migrationIgnored: _i, ...c } = entry;
       void _f; void _a; void _s; void _m; void _i;

@@ -16,6 +16,7 @@ import { attachActivity } from './activity/wiring';
 import { demoLog } from './activity/demo';
 import { journal } from './activity/journal';
 import { log } from './log';
+import { startHangWatch } from './hang-watch';
 import { startStallWatch } from './perf';
 import { RendererErrors } from './renderer-errors';
 import { demoUseCounts, useCounts } from './use-counter';
@@ -75,6 +76,7 @@ const rendererErrors = new RendererErrors();
 app.whenReady().then(async () => {
   log.init(app.getPath('userData'));
   startStallWatch(); // a frozen window (main thread blocked) is logged with its cause, scope perf
+  startHangWatch(); // a hang of seconds or more: a worker logs the main thread's JS stack (hang-watch.ts)
   ensureShortcuts(outDir);
   installAppMenu();
   // macOS: the Dock shows the shared Electron bundle's icon unless told otherwise (no app bundle of our own, ADR 0054)

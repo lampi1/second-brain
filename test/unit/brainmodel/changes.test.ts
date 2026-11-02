@@ -29,6 +29,16 @@ describe('ChangeLog', () => {
     expect(() => log.rollback(rows[0]!.id, agents({}))).toThrow('non si può');
     expect(log.list(agents({})).every(row => !row.canRollback)).toBe(true);
   });
+  it('reads a file again only once it changed on disk, across views', () => {
+    const d = fs.realpathSync(tmp()), log = new ChangeLog(d), file = path.join(d, 'kept.md');
+    log.apply(base, [{ file, text: 'one' }]);
+    const read = vi.spyOn(fs, 'readFileSync');
+    for (let i = 0; i < 5; i++) expect(log.list(agents({}))[0]!.canRollback).toBe(true);
+    expect(read.mock.calls.filter(([p]) => p === file)).toHaveLength(1);
+    fs.writeFileSync(file, 'edited by hand');
+    expect(log.list(agents({}))[0]!.canRollback).toBe(false);
+    expect(read.mock.calls.filter(([p]) => p === file)).toHaveLength(2);
+  });
   it('writes all or none: a write that fails puts back the files it already wrote and leaves no temp file', () => {
     const d = tmp(), log = new ChangeLog(d, () => 5), a = path.join(d, 'brain', 'a.md'), b = path.join(d, 'brain', 'b.md');
     writeText(a, 'old'); fs.mkdirSync(b);

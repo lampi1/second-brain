@@ -17,6 +17,9 @@ import { DecisionLedger, type DecisionEntry } from './ledger';
 import { autoNow, cardSize, groupPolicy, hasEvidence, policyLine, reversible, savedThisWeek, whyAsked } from './policy';
 import { SOURCES, shortPath, type ProposalPorts, type Source } from './sources';
 
+/** the least time between two recounts of the badge on events (changed()) */
+const RECOUNT_GAP_MS = 5_000;
+
 const KEEP_MS = 60 * 86_400_000;
 
 /** The Tieni marks: change id → when the user kept it. */
@@ -68,6 +71,9 @@ export class ProposalsService {
   private deciding = new Set<string>();
   private timer: NodeJS.Timeout | null = null;
   private soon: NodeJS.Timeout | null = null;
+  /** when the last event-driven recount started: an agent writing in the brain sends events every ~0.5 s, and each
+   *  recount reads every source (owner's CPU profile 2026-11-02), so they are at least RECOUNT_GAP_MS apart */
+  private lastRecount = -Infinity;
   readonly ledger: DecisionLedger;
   /** when each card was first on top of the deck (proposals:shown), for the ledger's decision time */
   private readonly shownAt = new Map<string, number>();
@@ -259,7 +265,8 @@ export class ProposalsService {
   /** A source said something changed: count again a moment later (several events in a row count once). */
   changed(): void {
     if (this.soon) return;
-    this.soon = setTimeout(() => { this.soon = null; void this.list().catch(() => {}); }, 400);
+    const wait = Math.max(400, this.lastRecount + RECOUNT_GAP_MS - Date.now());
+    this.soon = setTimeout(() => { this.soon = null; this.lastRecount = Date.now(); void this.list().catch(() => {}); }, wait);
     this.soon.unref?.();
   }
   /** The minute's check (settings proposals and the loop's status have no event of their own here). */
