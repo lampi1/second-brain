@@ -25,8 +25,9 @@ import { errText } from '../lib/ipc-error';
 import { noteOrchestratorText } from '../lib/guide-usage';
 
 export const app = createStore<AppState>(initialState, { batch: true });
-/** How often streamed text reaches the screen (startStore): one frame, so words show as they come. */
-export const STREAM_MS = 16;
+/** How often streamed text reaches the screen (startStore): 50 ms, like main's ITEM_FRAME_MS (owner, 2026-11-02: 16 ms
+ *  made the app stutter while an agent worked). */
+export const STREAM_MS = 50;
 /** The same while the window is hidden: nobody sees those renders ("Lag nell'app", 2026-10-12). */
 export const STREAM_HIDDEN_MS = 250;
 export const useApp = app.use;

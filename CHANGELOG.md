@@ -12,6 +12,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
   OpenCode, OpenRouter included; the chat's model and plan mode go through OpenCode's session options (ADR 0216).
 
 ### Changed
+- Streamed answers reach the window every 50 ms instead of every 16 ms: words show in small groups, a third of the
+  redraws (owner, 2026-11-02: the window stuttered while an agent worked on a screen behind a DisplayLink dock).
 - Recordings transcribe faster: close sentences of the same speaker go to Whisper as one piece of up to 19 s,
   instead of each sentence padded with 10 s of silence (ADR 0215).
 - Voice: Parakeet TDT v3 as a faster transcription choice beside Whisper, a voice speed setting, a two-voice podcast

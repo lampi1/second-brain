@@ -47,7 +47,7 @@ import { closePipes, engineKills, jobGuard, killEngineTree, lowerEnginePriority 
 import { reapEnabled, reapEngine, type Root } from './proctree';
 import { AgentChildrenReporter } from './agent-children';
 import { codexChildren } from './codex-children';
-import { cut, lastLine, nextId, stripAnsi, tokenUsage, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink, type TokenUsage } from './session';
+import { STREAM_FLUSH_MS, cut, lastLine, nextId, stripAnsi, tokenUsage, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink, type TokenUsage } from './session';
 
 export type CodexApproval = 'untrusted' | 'on-request' | 'never';
 export type CodexSandbox = 'read-only' | 'workspace-write' | 'danger-full-access';
@@ -949,7 +949,7 @@ export class CodexSession implements HarnessSession {
     st.item = { ...st.item, text: st.item.text + text };
     st.dirty = true;
     this.chars += text.length;
-    if (!this.flushTimer) { this.flushTimer = setTimeout(() => { this.flushTimer = null; this.flushAll(false); }, 16); this.flushTimer.unref(); }
+    if (!this.flushTimer) { this.flushTimer = setTimeout(() => { this.flushTimer = null; this.flushAll(false); }, STREAM_FLUSH_MS); this.flushTimer.unref(); }
   }
 
   private flushOne(st: Stream): void {
