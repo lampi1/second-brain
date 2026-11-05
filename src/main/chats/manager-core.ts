@@ -18,7 +18,7 @@ import type { AgentRun } from '../../shared/agents';
 import { AgentRunStore } from '../agents/runs';
 import { AgentAnalyticsCollector } from '../agents/collector';
 import { slug as slugTitle } from './mail';
-import type { ResultIndex, ChatManagerOptions, Rec, CleanReportNote, UserWroteNote } from './manager-types';
+import type { ResultIndex, ChatManagerOptions, Rec, CleanReportNote, UserWroteNote, TurnEndInfo } from './manager-types';
 import { setInterval, clearTimeout, ITEM_FRAME_MS } from './manager-helpers';
 
 /** The chat manager's state (every field, the constructor) and the chat record basics: find, update, items, hooks. */
@@ -38,6 +38,8 @@ export abstract class ManagerCore {
   protected notesFor = new Map<string, string[]>();
   protected userWroteListeners: ((n: UserWroteNote) => void)[] = [];
   protected cleanReportListeners: ((n: CleanReportNote) => boolean)[] = [];
+  /** told of every turn's end, after opts.onTurnEnd (the phone bridge: chats/phone-port.ts) */
+  protected turnEndListeners: ((info: TurnEndInfo) => void)[] = [];
   /** children's results waiting for their siblings', per parent (queueChildResult) */
   protected childResults = new Map<string, { items: HeldChildResult[]; timer: NodeJS.Timeout | null }>();
   /** "Riprendi" in flight per old chat: a double click or two agents get the same new chat, never two. */
@@ -260,7 +262,7 @@ export abstract class ManagerCore {
     if (!r.pending.size && !r.commandsOpen?.size) this.idleAgain(r);
     this.hook('analytics', () => this.analytics.resolved(r.s, requestId));
     r.s.pending = r.pending.size;
-    this.opts.emitter.emit('pending:resolved', { chatId: r.s.id, requestId });
+    this.opts.emitter.emit('pending:resolved', { chatId: r.s.id, requestId, ...(r.answeringFromPhone === requestId ? { by: 'phone' as const } : {}) });
     this.updated(r);
   }
 

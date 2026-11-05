@@ -58,6 +58,16 @@ describe('chat watch', () => {
     expect(w.pendingResolved('c', 'q3', c)[0]).toMatchObject({ by: 'ended', level: 'info' });
   });
 
+  it('says when the user decided from the paired phone (a question, a plan)', () => {
+    const w = new ChatWatch(), c = chat('c', { agent: scout });
+    w.seed([c]);
+    w.pendingAdded({ id: 'q1', chatId: 'c', type: 'question', tool: 'AskUserQuestion', title: 'Apro la PR?', detail: '', input: {}, at: 1 }, c);
+    expect(w.pendingResolved('c', 'q1', c, 'phone')[0]).toMatchObject({ by: 'phone', level: 'ok', title: 'Hai risposto dal telefono a Scout', reqType: 'question' });
+    const [plan] = w.item('c', { kind: 'system', id: 's', at: 2, level: 'info', text: 'Risposto dal telefono, 09:41', code: 'phoneDecided', params: { time: '09:41', what: 'plan' } }, c);
+    expect(plan).toMatchObject({ by: 'phone', step: 'resolved', title: 'Hai deciso dal telefono il piano di Scout' });
+    expect(w.item('c', { kind: 'system', id: 't', at: 3, level: 'info', text: 'Risposto dal telefono, 09:42', code: 'phoneDecided', params: { time: '09:42', what: 'question' } }, c)).toEqual([]);
+  });
+
   it('keeps the Orchestrator out of the tasks and does not replay the chats open at start', () => {
     const w = new ChatWatch(), o = chat('o', { isOrchestrator: true });
     expect(w.updated(o)).toEqual([]);

@@ -6,13 +6,13 @@
 // «Annulla» when the change has an undo (settings history, settings:undo). Protected settings (an agent can only propose them) carry a shield.
 // Connettori: ConnectorsHub.tsx (accounts and MCP servers, ADR 0086; the catalog, ADR 0119; the paste-to-add flow, McpAddPanel.tsx, ADR 0207). Avanzate: the technical MCP form and
 // import (ConnectorsHub.tsx McpAdvanced). Ruoli e deleghe: DelegationSettings.tsx (ADR 0083). Aggiornamenti: AppUpdateSettings.tsx (ADR 0075; "impostazioni/update" opens on it).
-// Scrittura: SuggestSettings.tsx (ADR 0118). Voce: VoiceSettings.tsx (ADR 0152). Stored technical policies and engine denials are preserved, never enabled by rendering.
+// Scrittura: SuggestSettings.tsx (ADR 0118). Voce: VoiceSettings.tsx (ADR 0152). Telefono: PhoneSettings.tsx (ADR 0219). Stored technical policies and engine denials are preserved, never enabled by rendering.
 // Account actions use existing typed login/secure-storage/trust boundaries; no provider routing matrix or policy wall.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Select } from './Select';
 import type { CliStatus, EngineInfo, SecretsStatus } from '@shared/contract';
 import { isLang, LANGS } from '@shared/contract';
-import { IconBell, IconBranch, IconEdit, IconFolder, IconLink, IconMic, IconMoon, IconRefresh, IconSearch, IconSettings, IconShield, IconTerminal, IconUser, IconX } from './Icons';
+import { IconBell, IconBranch, IconEdit, IconFolder, IconLink, IconMic, IconMoon, IconPhone, IconRefresh, IconSearch, IconSettings, IconShield, IconTerminal, IconUser, IconX } from './Icons';
 import { DelegationSettings } from './DelegationSettings';
 import { useEngines } from '../lib/engines';
 import { hitRanges, matchesSettingsSearch } from '../lib/settings-page';
@@ -34,6 +34,7 @@ import { TaskReadSettings } from './TaskReadSettings';
 import { SuggestSettings } from './SuggestSettings';
 import { AwaySettings } from './AwayToggle';
 import { VoiceSettings } from './VoiceSettings';
+import { PhoneSettings } from './PhoneSettings';
 import { SavedPill, savedLocally } from './SettingsSaved';
 import '../styles/settings.css';
 
@@ -149,6 +150,7 @@ export function SettingsPage() {
     </> },
     { ...meta.writing, icon: <IconEdit size={16} />, body: <SuggestSettings /> },
     { ...meta.voice, icon: <IconMic size={16} />, body: <VoiceSettings /> },
+    { ...meta.phone, icon: <IconPhone size={16} />, body: <PhoneSettings /> },
     { ...meta.appearance, icon: <IconMoon size={16} />, body: <>
       <Row title={t('essential.theme')} description={t('stx.themeHint')}><Segmented label={t('essential.theme')} testid="st-theme-select" value={prefs.theme} onChange={theme => { setPrefs({ theme }); savedLocally(); }}
         options={(['system', 'light', 'dark'] as const).map(value => ({ value: choose(value), label: t(`essential.${value}`) }))} /></Row>

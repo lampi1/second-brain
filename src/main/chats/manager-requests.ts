@@ -12,20 +12,27 @@ import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers } from '../../shared/aw
 import { PLAN_APPROVED, withClarified } from '../../shared/strategy';
 import type { SubmissionReceipt, Rec } from './manager-types';
 import { sysItem } from './manager-helpers';
+import { phoneTime } from './phone-reply';
 import { ManagerCheckpoints } from './manager-checkpoints';
 
 /** Questions and permissions: the user's answer, the role gate, auto-permit, «Modalità notte», counted requests. */
 export abstract class ManagerRequests extends ManagerCheckpoints {
 
-  async answer(chatId: string, requestId: string, answer: Answer): Promise<void> {
+  /** The user's answer. by = where they gave it: the PC (the panel) or the paired phone (phone bridge: only a question,
+   *  never a permission or a command; chats/phone-port.ts checks the rest before it calls this) */
+  async answer(chatId: string, requestId: string, answer: Answer, by: 'pc' | 'phone' = 'pc'): Promise<void> {
     const r = this.need(chatId);
     if (!r.pending.has(requestId)) throw new Error('Questa richiesta non è più aperta.');
     if (!r.session) { this.dropPending(r, requestId); throw new Error('La chat non è più attiva: la richiesta è scaduta.'); }
     const req = r.pending.get(requestId)!;
-    const ok = r.session.answer(requestId, answer);
+    if (by === 'phone' && (req.type !== 'question' || answer.kind !== 'question')) throw new Error('Dal telefono si risponde solo a una domanda Sì/No.');
+    if (by === 'phone') r.answeringFromPhone = requestId; // the engine resolves it now: pending:resolved carries by 'phone'
+    let ok: boolean;
+    try { ok = r.session.answer(requestId, answer); } finally { delete r.answeringFromPhone; }
     if (!ok) { this.dropPending(r, requestId); return; }
+    if (by === 'phone') { this.addItem(r, sysItem('phoneDecided', { time: phoneTime(Date.now()), what: 'question' }, 'info'), false); this.updated(r); }
     // Full request scope stays private (ADR 0083); shared user events carry only the user's own choices/words.
-    const decision = JSON.stringify({ requestId, title: req.title, detail: req.detail, questions: req.questions ?? [], answer });
+    const decision = JSON.stringify({ requestId, title: req.title, detail: req.detail, questions: req.questions ?? [], answer, ...(by === 'phone' ? { by } : {}) });
     r.continuationDecisions = r.continuationDecisions ? `${r.continuationDecisions}\n${decision}` : decision;
     // one checkpoint carries the decision and the user's event: two synchronous checkpoints per click froze the window (#294)
     let saved = false;
@@ -210,6 +217,6 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
 
   // ---- implemented in a later layer (ADR 0200: manager.ts and its manager-*.ts layers)
   abstract userWrote(chatId: string, text: string): boolean;
-  protected abstract decidePlan(chatId: string, decision: 'approve' | 'change', at: number, text?: string, message?: string, receipt?: SubmissionReceipt, byApp?: boolean): Promise<void>;
+  protected abstract decidePlan(chatId: string, decision: 'approve' | 'change', at: number, text?: string, message?: string, receipt?: SubmissionReceipt, byApp?: boolean, by?: 'pc' | 'phone'): Promise<void>;
   protected abstract openOrchestrator(): Rec | undefined;
 }

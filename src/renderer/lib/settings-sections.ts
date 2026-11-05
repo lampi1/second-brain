@@ -17,12 +17,13 @@ export function settingsSections(engineNames: readonly string[]): Record<Setting
     space: { id: 'space', description:t('essential.desc.space'),title:t('essential.space'),search:[t('essential.memory'),t('share.title'),'zip esporta export colleghi condividi share',t('essential.archive'),t('setup.settings.projects'),'ruolo role Dev QA PO CTO progetti projects repository'].join(' ') },
     writing: { id: 'writing', description:t('suggest.groupDesc'),title:t('suggest.group'),search:[t('suggest.title'),'tab autocomplete suggerimenti suggestions'].join(' ') },
     voice: { id: 'voice', description:t('voice.groupDesc'),title:t('voice.group'),search:[t('voice.asrTitle'),t('voice.nameTitle'),t('voice.modelsTitle'),'voce microfono whisper piper parla ascolta voice mic speech Ctrl+M'].join(' ') },
+    phone: { id: 'phone', description:t('phone.groupDesc'),title:t('phone.group'),search:[t('phone.tokenTitle'),t('phone.pairTitle'),t('phone.quietTitle'),'telefono phone Telegram bot BotFather cellulare mobile token associa pair'].join(' ') },
     appearance: { id: 'appearance', description:t('essential.desc.appearance'),title:t('essential.appearance'),search:[t('essential.theme'),t('settings.language'),t('essential.density')].join(' ') },
     notifications: { id: 'notifications', description:t('essential.desc.notifications'),title:t('essential.notifications'),search:`${t('essential.toasts')} ${t('brainPages.task.autoLabel')} ${t('brainPages.task.sound')} Task` },
     advanced: { id: 'advanced', description:t('hub.adv.groupDesc'),title:t('hub.adv.group'),search:'MCP server stdio http comando command argomenti args env variabili headers intestazioni importa import Claude Cursor Codex avanzate advanced' },
   };
 }
-export const SETTINGS_SECTION_IDS = ['profile', 'update', 'connectors', 'accounts', 'roles', 'space', 'writing', 'voice', 'appearance', 'notifications', 'advanced'] as const;
+export const SETTINGS_SECTION_IDS = ['profile', 'update', 'connectors', 'accounts', 'roles', 'space', 'writing', 'voice', 'phone', 'appearance', 'notifications', 'advanced'] as const;
 export type SettingsSectionId = (typeof SETTINGS_SECTION_IDS)[number];
 
 /** The left navigation of Settings (ADR 0207): the sections in labelled groups, like macOS System Settings, each with
@@ -32,12 +33,12 @@ export type SettingsNavLabel = 'you' | 'work' | 'tools' | 'app';
 export const SETTINGS_NAV: readonly { label: SettingsNavLabel; ids: readonly string[] }[] = [
   { label: 'you', ids: ['profile', 'appearance', 'notifications', 'voice', 'writing'] },
   { label: 'work', ids: ['space', 'roles'] },
-  { label: 'tools', ids: ['connectors', 'accounts', 'advanced'] },
+  { label: 'tools', ids: ['connectors', 'phone', 'accounts', 'advanced'] },
   { label: 'app', ids: ['update'] },
 ];
 export const SETTINGS_TONE: Readonly<Record<string, string>> = {
   profile: 'blue', appearance: 'purple', notifications: 'red', voice: 'pink', writing: 'amber', space: 'green', roles: 'teal',
-  connectors: 'blue', accounts: 'slate', advanced: 'slate', update: 'green',
+  connectors: 'blue', phone: 'teal', accounts: 'slate', advanced: 'slate', update: 'green',
 };
 
 /** The navigation's groups holding only the sections that exist, in order; unknown ids join the last group. */

@@ -20,6 +20,7 @@ import { connectorsEn } from './areas/connectors.en';
 // English, short like the Italian. Used through t() (i18n/index.ts).
 import { genuiRequestEn } from './areas/genui-request.en';
 import { voiceEn } from './areas/voice.en';
+import { phoneEn } from './areas/phone.en';
 import { recEn } from './areas/rec.en';
 import { imparaEn } from './areas/impara.en';
 import { imparaStudioEn } from './areas/impara-studio.en';
@@ -92,6 +93,7 @@ export const en: Dict = {
   ...logEn,
   ...genuiRequestEn,
   ...voiceEn,
+  ...phoneEn,
   ...recEn,
   ...imparaEn,
   ...imparaStudioEn,

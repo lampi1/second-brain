@@ -57,6 +57,8 @@ export const chatDe: typeof chatIt = {
   // ChatItems
   'chat.items.userImages': (p: { n: number }) => p.n === 1 ? '1 Bild' : `${p.n} Bilder`,
   'chat.items.from': (p: { source: string }) => `Aus «${p.source}» · nicht von dir geschrieben`,
+  'chat.items.fromPhone': 'vom Telefon',
+  'chat.items.fromPhoneVoice': 'Sprachnachricht vom Telefon',
   'chat.items.modeTip.plan': 'An einen Strategist-Chat übergeben, der plant und delegiert',
   'chat.items.modeTip.new': 'Der Orchestrator öffnet für diese Anfrage einen neuen Chat',
   'chat.items.typing.writing': 'schreibt…',

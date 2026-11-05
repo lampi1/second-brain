@@ -18,7 +18,7 @@ export const PAGE_CARDS: Readonly<Record<string, string>> = {
 /** Settings section id → card id */
 export const SETTINGS_CARDS: Readonly<Record<string, string>> = {
   profile: 'settings', update: 'updates', connectors: 'mcp-servers', accounts: 'settings', roles: 'delegation',
-  space: 'brain', writing: 'settings', voice: 'voice', appearance: 'settings', notifications: 'notifications', advanced: 'mcp-servers',
+  space: 'brain', writing: 'settings', voice: 'voice', phone: 'phone', appearance: 'settings', notifications: 'notifications', advanced: 'mcp-servers',
 };
 
 /** "page:<id>" or "settings:<id>" → why it has no card (only for something being removed). */

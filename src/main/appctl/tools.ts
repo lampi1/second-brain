@@ -711,10 +711,16 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   }
   return tools;
 
-  /** did the user write to the Orchestrator, or answer one of its questions, at or after `at`? (his decision, not the agent's) */
+  /** did the user write to the Orchestrator, or answer one of its questions, at or after `at`? (his decision, not the agent's;
+   *  text from the paired phone is never a decision: phone bridge, design §5.5) */
   function decidedSince(orchestratorId: string, at: number): boolean {
-    return d.chats.items(orchestratorId).some(i => i.at >= at && (
-      i.kind === 'user' ? !labelled(i.text) : i.kind === 'tool' && /question/i.test(i.name) && i.status === 'ok'));
+    const items = d.chats.items(orchestratorId);
+    // a question answered with the phone's buttons leaves its «Risposto dal telefono» line after the question's tool
+    // item (manager-requests.ts answer): any question asked before the latest such line never counts (engines do not
+    // share ids between the request and the tool item, so this errs on refusing)
+    const phoneAt = items.reduce((m, i) => i.kind === 'system' && i.code === 'phoneDecided' && i.params?.what === 'question' ? Math.max(m, i.at) : m, -Infinity);
+    return items.some(i => i.at >= at && (
+      i.kind === 'user' ? !labelled(i.text) && i.via !== 'phone' : i.kind === 'tool' && /question/i.test(i.name) && i.status === 'ok' && i.at > phoneAt));
   }
 
   /** app_config's proof (ADR 0149): the user typed to this very Orchestrator in the last minutes, and its latest
@@ -737,7 +743,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
    *  or after `at`? (app_unblock: a turn woken by an agent can never open the requests) */
   function userTurn(orchestratorId: string, at: number): boolean {
     const last = d.chats.items(orchestratorId).filter(i => i.kind === 'user').at(-1);
-    return !!last && last.kind === 'user' && last.at >= at && !labelled(last.text);
+    return !!last && last.kind === 'user' && last.at >= at && !labelled(last.text) && last.via !== 'phone';
   }
 
   function need(chatId: string): ChatSummary {

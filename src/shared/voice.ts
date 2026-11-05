@@ -176,7 +176,7 @@ export function turnToSpeak(items: readonly ChatItem[] | undefined, since: numbe
   let u = items.length - 1;
   while (u >= 0 && items[u]!.kind !== 'user') u--;
   const user = items[u];
-  if (!user || user.kind !== 'user' || user.from || user.at < since) return null;
+  if (!user || user.kind !== 'user' || user.from || user.via === 'phone' || user.at < since) return null; // a phone turn's reply goes to the phone, never aloud on the PC
   const after = items.slice(u + 1);
   const text = after.filter((i): i is Extract<ChatItem, { kind: 'assistant' }> => i.kind === 'assistant').map(i => i.text).join('\n\n');
   return { key: user.id, text, done: after.some(i => i.kind === 'result') };

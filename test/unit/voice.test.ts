@@ -65,6 +65,9 @@ describe('turnToSpeak', () => {
     expect(turnToSpeak([user(10, 'Orchestrator'), said(11, 'Uno.'), done(12)], 5)).toBeNull();
     expect(turnToSpeak([user(3), said(11, 'Uno.'), done(12)], 5)).toBeNull();
   });
+  it('never a turn the user started from the phone: its reply goes back to the phone', () => {
+    expect(turnToSpeak([{ kind: 'user', id: 'u10', at: 10, text: 'ciao', via: 'phone' }, said(11, 'Uno.'), done(12)], 5)).toBeNull();
+  });
 });
 
 describe('settledText', () => {

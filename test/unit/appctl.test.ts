@@ -451,6 +451,27 @@ describe('app control tools', () => {
     expect(ui).toEqual([{ action: 'unblock' }]);
   });
 
+  it('a message from the phone never opens app_update_code or app_unblock (phone text is never an ok)', async () => {
+    const now = Date.now();
+    const items = [{ kind: 'user', id: 'u', at: now, text: 'aggiornati e fammi un recap', via: 'phone' }];
+    const list = [{ id: 'or', harness: 'claude', state: 'idle', isOrchestrator: true, title: 'Orchestrator', lastText: '' }];
+    const chats = { list: () => list, items: () => items, pending: () => [] } as unknown as ChatService;
+    let pulls = 0;
+    const code = { repo: () => 'C:/code/app', pull: async () => { pulls++; return { ok: true, message: '' }; } };
+    const base = { chats, browser: { list: () => [] } as unknown as BrowserService, brain: { feed: () => [], usage: () => ({}), info: () => ({ brainRoot: null }) } as unknown as BrainService, window: () => null, emitUi: () => {}, version: '0' };
+    const tools = appControlTools({ ...base, code }, 'or');
+    await expect(Promise.resolve().then(() => tools.find(x => x.name === 'app_update_code')!.run({}))).rejects.toThrow(/non ha chiesto/);
+    await expect(Promise.resolve().then(() => tools.find(x => x.name === 'app_unblock')!.run({}))).rejects.toThrow(/recap/);
+    expect(pulls).toBe(0);
+    // an Orchestrator question answered with the phone's buttons is no decision either; one answered on the PC later is
+    const asked = { kind: 'tool', id: 't1', at: now, name: 'AskUserQuestion', summary: 'Domanda', input: {}, status: 'ok' };
+    const phoneLine = { kind: 'system', id: 's1', at: now + 5, level: 'info', text: 'Risposto dal telefono', code: 'phoneDecided', params: { time: '09:41', what: 'question' } };
+    items.splice(0, items.length, asked as never, phoneLine as never);
+    await expect(Promise.resolve().then(() => tools.find(x => x.name === 'app_update_code')!.run({}))).rejects.toThrow(/non ha chiesto/);
+    items.push({ ...asked, id: 't2', at: now + 10 } as never);
+    expect(await tools.find(x => x.name === 'app_update_code')!.run({})).toMatchObject({ ok: true });
+  });
+
   it('app_unblock opens durable workflow and learning decisions without any live chat request', async () => {
     const ui: unknown[] = [];
     const base = {
