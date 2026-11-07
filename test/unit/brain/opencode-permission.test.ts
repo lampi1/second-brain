@@ -124,7 +124,10 @@ describe('OpenCode permission config', () => {
 
   it('keeps the user\'s own OpenCode config, replacing only the permissions', () => {
     const own = JSON.stringify({ model: 'openrouter/x', permission: { bash: 'allow' }, agent: { build: { temperature: 0.2, permission: { bash: 'ask' } } } });
-    const cfg = JSON.parse(openCodeConfigContent(artisan, NO_CLAUDE_RULES, own)) as Record<string, any>;
+    const cfg = JSON.parse(openCodeConfigContent(artisan, NO_CLAUDE_RULES, own)) as {
+      model: string; permission: { bash: Record<string, string> };
+      agent: { build: { temperature: number; permission: unknown } };
+    };
     expect(cfg.model).toBe('openrouter/x');
     expect(cfg.permission.bash['git push*']).toBe('ask');
     expect(cfg.agent.build.temperature).toBe(0.2);
