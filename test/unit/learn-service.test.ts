@@ -415,7 +415,8 @@ describe('LearnService', () => {
 });
 
 describe('the Studio, its quiz and the quality gate (ADR 0205)', () => {
-  const PR = { kind: 'pr' as const, ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson' as const, level: 'basics' as const };
+  // a quiz lesson: `ready` waits for its review cards, which an explain lesson never writes (ADR 0219)
+  const PR = { mode: 'quiz' as const, kind: 'pr' as const, ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson' as const, level: 'basics' as const };
   async function ready(teach: (r: TeachRun) => Promise<TeachResult> = fast, root?: string) {
     const m = make(teach, root ? { root } : {});
     const l = m.svc.start(PR);
