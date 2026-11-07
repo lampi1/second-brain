@@ -128,7 +128,11 @@ export class ChatWatch {
         if (item.status === 'running') { if (!t.tools.includes(item.name)) t.tools.push(item.name); }
         else if (item.status === 'error') { t.toolErrors++; if (!t.tools.includes(item.name)) t.tools.push(item.name); t.error ??= `${item.name}: ${item.output ?? item.summary}`; }
         return [];
-      case 'system': if (item.level === 'error') t.error = item.text; return [];
+      case 'system':
+        if (item.level === 'error') t.error = item.text;
+        // a plan decided with a button on the paired phone (phone bridge; questions come through pendingResolved)
+        if (item.code === 'phoneDecided' && item.params?.what === 'plan' && chat) return [{ ...this.base(chat), kind: 'task', step: 'resolved', level: 'ok', title: `Hai deciso dal telefono il piano di ${this.who(chat)}`, by: 'phone' }];
+        return [];
       case 'result': {
         this.turns.delete(chatId);
         if (!chat) return [];
@@ -161,11 +165,16 @@ export class ChatWatch {
       text: p.title, input: p.detail, reqId: p.id, reqType: p.type }];
   }
 
-  pendingResolved(chatId: string, requestId: string, chat: ChatSummary | undefined): LogInput[] {
+  /** by 'phone' = the user answered with a button on the paired phone (pending:resolved, phone bridge) */
+  pendingResolved(chatId: string, requestId: string, chat: ChatSummary | undefined, by?: 'phone'): LogInput[] {
     const key = `${chatId}/${requestId}`, p = this.requests.get(key);
     this.requests.delete(key);
     if (!p || !chat) return [];
     const byUser = this.userAnswered.delete(key);
+    if (by === 'phone') {
+      this.endedByUser.delete(key);
+      return [{ ...this.base(chat), kind: 'task', step: 'resolved', level: 'ok', title: `Hai risposto dal telefono a ${this.who(chat)}`, text: p.title, reqId: p.id, reqType: p.type === 'permission' ? 'permission' : 'question', by: 'phone' }];
+    }
     // ended with its chat (the user's Stop, close or archive, or the chat already gone): nobody approved it
     const ended = !byUser && (this.endedByUser.delete(key) || !!chat.closedAt || chat.state === 'closed');
     this.endedByUser.delete(key);

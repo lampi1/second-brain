@@ -464,16 +464,20 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     const first = r.firstPrompt;
     r.firstPrompt = null;
     const on = this.opts.onTurnEnd;
-    if (on) {
+    // a phone message started or joined this turn: its reply goes back to the phone (deliverNow sets it again)
+    const fromPhone = !!r.turnFromPhone;
+    delete r.turnFromPhone;
+    if (on || this.turnEndListeners.length) {
       const info: TurnEndInfo = {
         chatId: r.s.id, sessionId: r.s.sessionId, harness: r.s.harness, model: r.s.model, effort: r.s.effort,
         ...(first ? { firstPrompt: first } : {}),
         costUsd: item.costUsd, durationMs: item.durationMs, turns: item.turns, isError: item.isError,
-        reply: turnReply(r.items),
+        reply: turnReply(r.items), ...(fromPhone ? { fromPhone: true } : {}),
       };
       const errorText = turnErrors(r.items);
       if (errorText) info.errorText = errorText;
-      this.hook('onTurnEnd', () => on(info));
+      if (on) this.hook('onTurnEnd', () => on(info));
+      for (const fn of this.turnEndListeners) this.hook('onTurnEnd', () => fn({ ...info }));
     }
     this.askUsage(r);
   }

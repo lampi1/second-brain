@@ -8,6 +8,9 @@ import { fileURLToPath } from 'node:url';
 import { INVOKE_CHANNELS, type EventChannel, type EventMap, type InvokeArg, type InvokeChannel, type InvokeResult } from '../shared/contract';
 import { updateActivity } from './update/activity';
 import { timedStep } from './perf';
+import { PHONE_IPC } from '../shared/contract/phone';
+import { PHONE_INVOKE_CHANNELS } from '../shared/contract/phone-ipc';
+import { phoneHandlers, phoneHub, type PhoneHandlers, type PhoneIpcHub } from './ipc-handlers/phone';
 
 type Handler<K extends InvokeChannel> = (arg: InvokeArg<K>, e: IpcMainInvokeEvent) => InvokeResult<K> | Promise<InvokeResult<K>>;
 export type Handlers = { [K in InvokeChannel]: Handler<K> };
@@ -50,6 +53,21 @@ export function registerHandlers(handlers: Handlers, appContents: () => WebConte
       return timedStep(`ipc ${ch}`, () => updateActivity.tracks(ch) ? updateActivity.run(invoke) : invoke());
     });
   }
+  // the phone bridge's own channels (ADR 0219): a disabled controller answers until the wiring sets the bridge
+  registerPhoneHandlers(phoneHandlers(phoneHub.controller), appContents);
+}
+
+/** The phone bridge's channels (ADR 0219, src/shared/contract/phone-ipc.ts), apart from the main InvokeMap: the same
+ *  sender check, the handlers of ipc-handlers/phone.ts, and the bridge's status changes forwarded to the app window. */
+export function registerPhoneHandlers(handlers: PhoneHandlers, appContents: () => WebContents | null, hub: PhoneIpcHub = phoneHub): void {
+  for (const ch of PHONE_INVOKE_CHANNELS) {
+    ipcMain.removeHandler(ch);
+    ipcMain.handle(ch, async (e, arg) => {
+      if (!isAppSender(e, appContents())) throw new Error('forbidden sender');
+      return timedStep(`ipc ${ch}`, () => (handlers[ch] as (a: unknown, ev: IpcMainInvokeEvent) => unknown)(arg, e));
+    });
+  }
+  hub.forwardTo(status => { const wc = appContents(); if (wc && !wc.isDestroyed()) wc.send(PHONE_IPC.changed, status); });
 }
 
 /** A main-side listener of every event sent to a window (the Log's journal, main/activity/wiring.ts). */

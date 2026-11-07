@@ -57,6 +57,8 @@ export const chatEn: typeof chatIt = {
   // ChatItems
   'chat.items.userImages': (p: { n: number }) => p.n === 1 ? '1 image' : `${p.n} images`,
   'chat.items.from': (p: { source: string }) => `From «${p.source}» · not written by you`,
+  'chat.items.fromPhone': 'from the phone',
+  'chat.items.fromPhoneVoice': 'voice note from the phone',
   'chat.items.modeTip.plan': 'Handed to a Strategist chat that plans and delegates',
   'chat.items.modeTip.new': 'The Orchestrator opens a new chat for this request',
   'chat.items.typing.writing': 'is writing…',

@@ -3,7 +3,7 @@
 // silence is said plainly.
 import { describe, expect, it } from 'vitest';
 import type { BrowserWindow } from 'electron';
-import { entries, guideIndex, guideTool, screenOutline, search, type GuideDeps } from '../../src/main/appctl/guide';
+import { entries, guideIndex, guideTool, phoneNow, screenOutline, search, type GuideDeps } from '../../src/main/appctl/guide';
 import { DEFAULTS, schema } from '../../src/main/brain/config';
 
 const UI = {
@@ -116,5 +116,14 @@ describe('app_guide and the usage counter (ADR 0202)', () => {
     const open = String(await guideTool(deps({ usage, showValues: () => false })).run({ topic: 'funzioni usate di più' }));
     expect(open).not.toContain('9×');
     expect(await guideIndex(deps({ usage }), 'it')).toContain('andamento/uso');
+  });
+});
+
+describe('app_guide and the phone bridge (rule 12)', () => {
+  it('the Telefono concept reads the live status, never the token', async () => {
+    const phone = () => ({ hasToken: true, enabled: true, paired: true, pairing: null, state: 'running' as const, error: null, dropped: 2, quietHours: { from: 23, to: 7 }, recent: [] });
+    const out = String(await guideTool(deps({ phone })).run({ topic: 'telefono telegram' }));
+    expect(out).toContain('Now: state running · token set · enabled · phone paired · quiet hours 23-7 · dropped updates 2.');
+    expect(phoneNow({ phone: () => { throw new Error('x'); } })).toBe('Now: status unreadable.');
   });
 });

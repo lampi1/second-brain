@@ -36,6 +36,8 @@ export * from './contract/brain';
 export * from './contract/ui';
 export * from './contract/agents';
 export * from './contract/media';
+export * from './contract/phone';
+export * from './contract/phone-ipc';
 
 /** renderer → main. Each entry: [argument, result]. One interface per area (src/shared/contract/*.ts). */
 export interface InvokeMap extends
@@ -59,7 +61,8 @@ export interface EventMap {
   'chat:removed': { chatId: string };
   'chat:item': { chatId: string; item: ChatItem; replace?: boolean };
   'pending:added': PendingRequest;
-  'pending:resolved': { chatId: string; requestId: string };
+  /** by phone = answered from the paired phone (src/main/chats/phone-port.ts); absent = anything else */
+  'pending:resolved': { chatId: string; requestId: string; by?: 'phone' };
   'browser:tabs': BrowserTab[];
   'browser:handoff': BrowserHandoff;   // opened or changed state
   'browser:envs': BrowserEnv[];        // the known environments changed (tabs, session status, last login)

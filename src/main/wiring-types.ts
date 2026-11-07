@@ -36,6 +36,7 @@ import type { UserCorrectionStore } from './brain/user-corrections';
 import type { BrainQueries } from './brain/queries';
 import type { LegacyArchive } from './routines/legacy';
 import type { GuideService } from './guide/service';
+import type { PhonePort } from '../shared/contract/phone';
 
 export interface Ctx { emitter: Emitter; window: () => BrowserWindow | null; userData: string }
 export interface Wired {
@@ -99,6 +100,8 @@ export interface Wired {
   source: AppSourceService;
   /** "Rispondi dopo" (main/later.ts, ADR 0035) */
   later: AnswerLaterStore;
+  /** what the Telegram phone bridge may see and decide in the chats (chats/phone-port.ts, ADR 0219); none in the demo */
+  phonePort?: PhonePort;
   cli(): Record<Harness, CliStatus> | null;
   shutdown(): Promise<void>;
   /** synchronous: kills every child process tree now (app quit, belt and braces after shutdown) */
