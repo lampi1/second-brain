@@ -1,13 +1,16 @@
-// scripts/check-quick.mjs (`npm run check:quick`): picks only the tests that import a changed file directly or share
-// its name, never the transitive graph, and runs the doc freshness tests only when the change touches what they read.
+// scripts/check-quick.mjs (`npm run check:quick`): picks only the tests that import a changed file, name it in a code
+// string or a node -e program, or reach it through a test helper or a git hook, never the transitive graph; warns WITHOUT
+// tests for what no test reaches, and runs the doc freshness tests only when the change touches what they read.
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 // @ts-expect-error plain .mjs script without types
-import { changedPaths as changedPathsOf, needsDocTests as needsDocTestsOf, pickTests as pickTestsOf, relatedTests as relatedTestsOf, resolveSpecifier as resolveOf, specifiers as specifiersOf, verdict as verdictOf } from '../../scripts/check-quick.mjs';
+import { changedPaths as changedPathsOf, hookPaths as hookPathsOf, needsDocTests as needsDocTestsOf, pickTests as pickTestsOf, relatedTests as relatedTestsOf, resolveSpecifier as resolveOf, specifiers as specifiersOf, verdict as verdictOf } from '../../scripts/check-quick.mjs';
 
 const relatedTests = relatedTestsOf as (changed: string[], tests: string[], read: (f: string) => string) => string[];
-const pickTests = pickTestsOf as (changed: string[], tests: string[], read: (f: string) => string) => { tests: string[]; uncovered: string[] };
+type Opts = { helpers?: string[]; hooks?: Map<string, string[]> };
+const pickTests = pickTestsOf as (changed: string[], tests: string[], read: (f: string) => string, opts?: Opts) => { tests: string[]; uncovered: string[] };
+const hookPaths = hookPathsOf as (text: string) => string[];
 const changedPaths = changedPathsOf as (nameStatus: string, untracked: string) => { all: string[]; present: string[] };
 const resolveSpecifier = resolveOf as (testFile: string, spec: string) => string | null;
 const specifiers = specifiersOf as (text: string) => string[];
@@ -51,7 +54,7 @@ describe('check:quick', () => {
     const files: Record<string, string> = {
       'test/unit/hook.test.ts': "spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'fake-hooks.mjs')]);",
       'test/unit/log.test.ts': "execFileSync(process.execPath, ['scripts/fake-logs.mjs', '--json']);",
-      'test/unit/readme.test.ts': "import * as rc from '../../scripts/readme-check.mjs';",
+      'test/unit/readme.test.ts': "import * as rc from '../../scripts/fake-other.mjs';",
       'test/unit/adapters.test.ts': "write(b.personal, '.claude/hooks/check.mjs', '');",
     };
     const changed = ['scripts/fake-hooks.mjs', 'scripts/fake-logs.mjs', 'scripts/untested.mjs', 'docs/x.md', 'eslint.config.mjs', 'src/shared/x.d.ts'];
@@ -75,6 +78,43 @@ describe('check:quick', () => {
       .toEqual({ tests: ['test/unit/template.test.ts'], uncovered: [] });
     const self = fs.readFileSync(path.join(import.meta.dirname, 'check-quick.test.ts'), 'utf8');
     expect(pickTests([LOGS], ['test/unit/check-quick.test.ts'], () => self).tests).toEqual([]);
+  });
+
+  it('picks the tests that import a file inside a program string run with node -e or String.raw', () => {
+    const files: Record<string, string> = {
+      'test/unit/origin.test.ts': "const program = `import {logPositive} from './brain-template/ops/tools/fake-feedback.mjs'; logPositive({});`;\nexecFileSync(process.execPath, ['--input-type=module', '-e', program]);",
+      'test/unit/raw.test.ts': "const program = String.raw`\n  import { parse } from './brain-template/ops/tools/fake-recurrence.mjs';\n  parse('');\n`;",
+      'test/unit/text.test.ts': "const note = 'from now on: tools/fake-feedback.mjs';",
+    };
+    const changed = ['brain-template/ops/tools/fake-feedback.mjs', 'brain-template/ops/tools/fake-recurrence.mjs'];
+    expect(pickTests(changed, Object.keys(files), f => files[f] ?? '')).toEqual({ tests: ['test/unit/origin.test.ts', 'test/unit/raw.test.ts'], uncovered: [] });
+  });
+
+  it('picks a test that commits through the git hooks for the scripts the hooks exec', () => {
+    expect(hookPaths('#!/bin/sh\n# scripts/fake-not-run.mjs does the work\nexec node "$(dirname "$0")/../scripts/fake-commit.mjs" "$@"\n'))
+      .toEqual(['../scripts/fake-commit.mjs']);
+    const files: Record<string, string> = {
+      'test/unit/commit-hook.test.ts': "import { repo } from './hook-helpers';\nrepo().commit('x');",
+      'test/unit/hook-helpers.ts': "export const HOOKS = path.join(ROOT, '.fake-hooks');",
+      'test/unit/other.test.ts': "// .fake-hooks are not used here",
+    };
+    const hooks = new Map([['.fake-hooks', ['../scripts/fake-commit.mjs']]]);
+    const opts = { helpers: ['test/unit/hook-helpers.ts'], hooks };
+    expect(pickTests(['scripts/fake-commit.mjs'], ['test/unit/commit-hook.test.ts', 'test/unit/other.test.ts'], f => files[f] ?? '', opts))
+      .toEqual({ tests: ['test/unit/commit-hook.test.ts'], uncovered: [] });
+  });
+
+  it('picks the tests that reach a changed fixture through a helper, and warns for a fixture no test reaches', () => {
+    const files: Record<string, string> = {
+      'test/unit/chats/claude.test.ts': "import { FAKE } from './helpers';\nspawn(process.execPath, [FAKE]);",
+      'test/unit/chats/helpers.ts': "export const FAKE = path.resolve(import.meta.dirname, '..', '..', 'fixtures', 'fake-cli.mjs');",
+      'test/unit/chats/other.test.ts': "import { x } from '../../../src/main/x';",
+    };
+    const tests = ['test/unit/chats/claude.test.ts', 'test/unit/chats/other.test.ts'];
+    const opts = { helpers: ['test/unit/chats/helpers.ts'] };
+    expect(pickTests(['test/fixtures/fake-cli.mjs'], tests, f => files[f] ?? '', opts)).toEqual({ tests: ['test/unit/chats/claude.test.ts'], uncovered: [] });
+    expect(pickTests(['test/fixtures/fake-orphan.mjs'], tests, f => files[f] ?? '', opts)).toEqual({ tests: [], uncovered: ['test/fixtures/fake-orphan.mjs'] });
+    expect(pickTests(['test/e2e/fake.spec.ts'], tests, f => files[f] ?? '', opts).uncovered).toEqual([]);
   });
 
   it('says "green WITHOUT tests" for uncovered sources (exit 0), plain green only when every source has a test', () => {

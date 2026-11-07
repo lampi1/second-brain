@@ -79,36 +79,71 @@ export function codeStrings(text) {
   visit(t.createSourceFile('test.ts', text, t.ScriptTarget.Latest, false, t.ScriptKind.TS));
   return out;
 }
-/** A changed source a unit test must cover: not a root config file, not a declaration, not test code (e2e, fixtures). */
-const needsCover = f => f.includes('/') && !f.startsWith('test/') && !/\.d\.[cm]?ts$/.test(f);
+/**
+ * A changed source a unit test must cover: not a root config file, not a declaration, not test code of another kind
+ * (e2e, shots, live); unit test helpers and fixtures count, a test reaches them through its helpers.
+ */
+const needsCover = f => f.includes('/') && !/\.d\.[cm]?ts$/.test(f) && (!f.startsWith('test/') || /^test\/(unit|fixtures)\//.test(f));
 const groupBy = (list, key) => list.reduce((m, f) => m.set(key(f), [...(m.get(key(f)) ?? []), f]), new Map());
+/** 'scripts/logs.mjs' for scripts/logs.mjs: the folder and the name, a bare 'check.mjs' is too loose */
+const relOf = f => { const dir = path.posix.basename(path.posix.dirname(f)); return dir === '.' ? path.posix.basename(f) : `${dir}/${path.posix.basename(f)}`; };
+/** Whether `p` (a path a test uses, maybe '../..'-relative) ends with `rel`; `loose` compares without the extension. */
+const endsWith = (p, rel, loose) => {
+  const [a, b] = loose ? [stem(p), stem(rel)] : [p, rel];
+  return a === b || a.endsWith(`/${b}`);
+};
+/** The paths shell hook files run ('exec node "$(dirname "$0")/../scripts/guard-commit.mjs"'), comment lines skipped. */
+export const hookPaths = text => text.split('\n').filter(l => !l.trimStart().startsWith('#'))
+  .flatMap(l => l.match(/(?:[\w.-]+\/)+[\w.-]+\.(?:mjs|cjs|js)\b/g) ?? []);
 
 /**
  * The tests to run for `changed` (repo-relative paths): changed test files, tests importing a changed file directly,
- * tests with the same name as a changed file (foo.ts -> foo.test.ts), tests naming it as a string ('scripts/logs.mjs',
- * path.join(…, 'setup-hooks.mjs')). `uncovered`: the changed sources no test reaches that way. `read(file)` returns a
- * test file's text.
+ * tests with the same name as a changed file (foo.ts -> foo.test.ts), tests naming it in a code string by folder and
+ * name ('scripts/logs.mjs', path.join(ROOT, 'scripts', 'logs.mjs'), an import in a program run with node -e). A test
+ * also reaches what the helpers it imports reach (`helpers`: non-test files under test/, e.g. the fake CLI fixtures),
+ * and what a hook folder runs when its code names that folder (`hooks`: '.githooks' -> the scripts its hooks exec).
+ * `uncovered`: the changed sources no test reaches that way. `read(file)` returns a file's text.
  */
-export function pickTests(changed, testFiles, read) {
+export function pickTests(changed, testFiles, read, { helpers = [], hooks = new Map() } = {}) {
   const sources = changed.filter(f => SOURCE_EXT.test(f) && !TEST_FILE.test(f));
   const byStem = groupBy(sources, stem);
   const byName = groupBy(sources, f => path.posix.basename(stem(f)));
-  // the folder and the name ('scripts/logs.mjs'): a bare 'check.mjs' is too loose
-  const byString = sources.filter(f => !/^index\./.test(path.posix.basename(f))).map(f => {
-    const dir = path.posix.basename(path.posix.dirname(f)), base = path.posix.basename(f);
-    return [f, base, dir === '.' ? base : `${dir}/${base}`];
-  });
+  const named = sources.filter(f => !/^index\./.test(path.posix.basename(f)))
+    .map(f => ({ f, rel: relOf(f), key: path.posix.basename(stem(f)) }));
+  const helperByStem = new Map(helpers.map(h => [stem(h), h]));
+  const memo = new Map();
+  /** the changed sources `file` reaches: its imports, the paths in its code strings, its helpers' and hooks' */
+  const reach = (file, seen = new Set()) => {
+    if (memo.has(file)) return memo.get(file);
+    if (seen.has(file)) return [];
+    seen.add(file);
+    const text = read(file), hits = [];
+    for (const s of specifiers(text)) {
+      const target = resolveSpecifier(file, s);
+      hits.push(...(byStem.get(target) ?? []));
+      if (helperByStem.has(target)) hits.push(...reach(helperByStem.get(target), seen));
+    }
+    const candidates = named.filter(n => text.includes(n.key));
+    const dirs = [...hooks.keys()].filter(d => text.includes(d));
+    if (candidates.length || dirs.length) {
+      const strings = codeStrings(text);
+      // a program in a string (node -e, String.raw): its imports are paths the test runs
+      const programs = strings.filter(s => /\b(?:import|from)\b/.test(s)).flatMap(specifiers);
+      for (const n of candidates) {
+        if (strings.some(s => endsWith(s, n.rel)) || programs.some(s => endsWith(s, n.rel, true))) hits.push(n.f);
+      }
+      for (const d of dirs.filter(d => strings.some(s => endsWith(s, d)))) {
+        for (const n of named) if (hooks.get(d).some(p => endsWith(p, n.rel))) hits.push(n.f);
+      }
+    }
+    memo.set(file, hits);
+    return hits;
+  };
   const picked = new Set(changed.filter(f => TEST_FILE.test(f) && testFiles.includes(f)));
   const covered = new Set();
   for (const t of testFiles) {
     const hits = [...(byName.get(path.posix.basename(t).replace(TEST_FILE, '')) ?? [])];
-    if (sources.length) {
-      const text = read(t);
-      for (const s of specifiers(text)) hits.push(...(byStem.get(resolveSpecifier(t, s)) ?? []));
-      const named = byString.filter(([, base]) => text.includes(base));
-      const strings = named.length ? codeStrings(text) : [];
-      for (const [f, , rel] of named) if (strings.some(s => s === rel || s.endsWith(`/${rel}`))) hits.push(f);
-    }
+    if (sources.length) hits.push(...reach(t));
     if (hits.length) picked.add(t);
     for (const f of hits) covered.add(f);
   }
@@ -116,7 +151,7 @@ export function pickTests(changed, testFiles, read) {
 }
 
 /** The tests to run for `changed`: see pickTests. */
-export const relatedTests = (changed, testFiles, read) => pickTests(changed, testFiles, read).tests;
+export const relatedTests = (changed, testFiles, read, opts) => pickTests(changed, testFiles, read, opts).tests;
 
 /** Whether the change touches something the doc freshness tests (ADR 0208) read. */
 export const needsDocTests = changed => changed.some(f => DOC_INPUTS.test(f));
@@ -147,7 +182,13 @@ function main() {
 
   const testFiles = git('ls-files', '--cached', '--others', '--exclude-standard', '--', 'test/unit', 'src')
     .split('\n').filter(f => TEST_FILE.test(f) && fs.existsSync(f));
-  const picked = pickTests(changed, testFiles, f => fs.readFileSync(f, 'utf8'));
+  const helpers = git('ls-files', '--cached', '--others', '--exclude-standard', '--', 'test/unit', 'test/fixtures')
+    .split('\n').filter(f => SOURCE_EXT.test(f) && !TEST_FILE.test(f) && fs.existsSync(f));
+  // git hooks are the one place tests run scripts from a non-JS file (guard-commit-hook.test.ts commits through them)
+  const hookDir = '.githooks';
+  const hooks = new Map(fs.existsSync(hookDir)
+    ? [[hookDir, fs.readdirSync(hookDir).flatMap(f => hookPaths(fs.readFileSync(path.join(hookDir, f), 'utf8')))]] : []);
+  const picked = pickTests(changed, testFiles, f => fs.readFileSync(f, 'utf8'), { helpers, hooks });
   const { tests } = picked;
   const uncovered = picked.uncovered.filter(f => present.includes(f));
   const docs = needsDocTests(changed) ? DOC_TESTS.filter(f => !tests.includes(f)) : [];
