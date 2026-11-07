@@ -1,7 +1,8 @@
 // `npm run check:quick`, the "ready to try" check of a branch (owner, 2026-11-07: "rifai i test mille volte"):
 // typecheck, lint of the changed files, only the tests that import a changed file directly, share its name or name it
 // as a string (no transitive graph, unlike `vitest --changed`), and the doc freshness tests when the change touches
-// what they read. Deleted and renamed files pick the tests of their old path; a changed source no test reaches fails.
+// what they read. Deleted and renamed files pick the tests of their old path; a changed source no test reaches turns
+// the closing line into "green WITHOUT tests" (owner, 2026-11-07: restyles touch mostly untested renderer files).
 // Records nothing: `npm run check:branch` stays the gate before a merge, run once. Used by package.json "check:quick";
 // test/unit/check-quick.test.ts checks how it picks the tests.
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -130,12 +131,15 @@ function main() {
   console.log(`\n${tests.length} related test files${docs.length ? ` + ${docs.length} doc freshness tests` : ''}`);
   for (const files of chunks([...tests, ...docs], ARG_CHARS)) run('unit', 'npx', ['vitest', 'run', ...files]);
   if (docs.length) run('readme', 'node', ['scripts/readme-check.mjs', '--base', base]);
-  // a changed source no test reaches is not "green": 0 tests run proves nothing about it
-  if (uncovered.length) {
-    console.log(`\ncheck:quick not green: no test covers ${uncovered.join(', ')}. Add a test that imports it, or run npm run check:branch`);
-    process.exit(1);
-  }
-  console.log(`\ncheck:quick green in ${Math.round((Date.now() - started) / 1000)} s: ready to try. Before the merge, once: npm run check:branch`);
+  console.log(`\n${verdict(uncovered, Math.round((Date.now() - started) / 1000))}`);
+}
+
+/** The closing line: plain green only when every changed source has a test; else green for typecheck and lint only. */
+export function verdict(uncovered, seconds) {
+  const merge = 'Before the merge, once: npm run check:branch';
+  if (!uncovered.length) return `check:quick green in ${seconds} s: ready to try. ${merge}`;
+  const more = uncovered.length > 10 ? ` and ${uncovered.length - 10} more` : '';
+  return `check:quick green WITHOUT tests: ${uncovered.slice(0, 10).join(', ')}${more} (typecheck and lint only), in ${seconds} s. ${merge}`;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) main();

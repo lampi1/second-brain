@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 // @ts-expect-error plain .mjs script without types
-import { changedPaths as changedPathsOf, needsDocTests as needsDocTestsOf, pickTests as pickTestsOf, relatedTests as relatedTestsOf, resolveSpecifier as resolveOf, specifiers as specifiersOf } from '../../scripts/check-quick.mjs';
+import { changedPaths as changedPathsOf, needsDocTests as needsDocTestsOf, pickTests as pickTestsOf, relatedTests as relatedTestsOf, resolveSpecifier as resolveOf, specifiers as specifiersOf, verdict as verdictOf } from '../../scripts/check-quick.mjs';
 
 const relatedTests = relatedTestsOf as (changed: string[], tests: string[], read: (f: string) => string) => string[];
 const pickTests = pickTestsOf as (changed: string[], tests: string[], read: (f: string) => string) => { tests: string[]; uncovered: string[] };
@@ -12,6 +12,7 @@ const changedPaths = changedPathsOf as (nameStatus: string, untracked: string) =
 const resolveSpecifier = resolveOf as (testFile: string, spec: string) => string | null;
 const specifiers = specifiersOf as (text: string) => string[];
 const needsDocTests = needsDocTestsOf as (changed: string[]) => boolean;
+const verdict = verdictOf as (uncovered: string[], seconds: number) => string;
 
 const code = fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'scripts', 'check-quick.mjs'), 'utf8')
   .split('\n').filter(l => !l.trimStart().startsWith('//')).join('\n');
@@ -58,7 +59,21 @@ describe('check:quick', () => {
     expect(tests).toEqual(['test/unit/hook.test.ts', 'test/unit/log.test.ts']);
     expect(uncovered).toEqual(['scripts/untested.mjs']);
     expect(pickTests(['docs/x.md', 'package.json'], Object.keys(files), f => files[f] ?? '').uncovered).toEqual([]);
-    expect(code).toMatch(/uncovered\.length[^]*process\.exit\(1\)[^]*check:quick green/);
+  });
+
+  it('says "green WITHOUT tests" for uncovered sources (exit 0), plain green only when every source has a test', () => {
+    expect(verdict([], 12)).toBe('check:quick green in 12 s: ready to try. Before the merge, once: npm run check:branch');
+    const few = verdict(['src/renderer/a.tsx', 'scripts/b.mjs'], 12);
+    expect(few).toMatch(/^check:quick green WITHOUT tests: src\/renderer\/a\.tsx, scripts\/b\.mjs \(typecheck and lint only\)/);
+    expect(few).not.toContain('ready to try');
+    expect(few).toContain('npm run check:branch');
+    const many = verdict(Array.from({ length: 13 }, (_, i) => `src/renderer/f${i}.tsx`), 12);
+    expect(many).toContain('src/renderer/f9.tsx and 3 more (typecheck and lint only)');
+    expect(many).not.toContain('f10.tsx');
+    // no exit for uncovered files; a failed typecheck, lint or test still exits with its status before the verdict
+    expect(code).not.toMatch(/uncovered\.length\)\s*\{[^}]*process\.exit/);
+    expect(code).toContain('process.exit(r.status ?? 1)');
+    expect(code).toMatch(/run\('unit'[^]*console\.log\(`\\n\$\{verdict\(uncovered/);
   });
 
   it('picks the importers of deleted files and of the old name of renamed ones; lints only the files still there', () => {
