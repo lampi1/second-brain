@@ -1,10 +1,12 @@
 // Impara's shared rules (ADR 0185, src/shared/lesson.ts): the node ids a flowchart declares (labels and edge text left
 // out), the lit piece added by the app only on known ids, the play order (a piece, its extras, its checks, the end),
 // progress and how each piece went, the model's answers checked and capped, the spoken commands and choices; the
-// research (ADR 0188): facts with a source, the questions, the check's verdicts, a piece's beats and citations.
+// research (ADR 0188): facts with a source, the questions, the check's verdicts, a piece's beats and citations; the kind
+// of lesson (ADR 0219): explain by default for a new one, quiz for an old one, no checks and no graded end in explain.
 import { describe, expect, it } from 'vitest';
 import {
   applyVerdicts, beatsOf, diagramNodes, doneNodes, factLines, jsonIn, parseExtra, parseFacts, parseGrade, parseLessonCommand, parsePlan, parseQuestions, parseSpokenChoice, parseStep, pieceScores, playlist, progressOf, rootOf, summaryOf, withFocus,
+  DEFAULT_LESSON_MODE, LESSON_MODES, modeOf, withoutAsking,
   type FocusColors, type Lesson, type LessonCheck, type LessonFact, type LessonStep,
 } from '../../src/shared/lesson';
 
@@ -185,5 +187,35 @@ describe('what the user says', () => {
     expect(parseSpokenChoice('ultima', 3)).toBe(2);
     expect(parseSpokenChoice('d', 2)).toBeNull();
     expect(parseSpokenChoice('non lo so proprio davvero', 4)).toBeNull();
+  });
+});
+
+describe('the kind of lesson (ADR 0219)', () => {
+  it('a new lesson explains by default; one saved before the modes is a quiz', () => {
+    expect(DEFAULT_LESSON_MODE).toBe('explain');
+    expect(LESSON_MODES).toEqual(['explain', 'quiz']);
+    expect(modeOf({})).toBe('quiz');
+    expect(modeOf({ mode: 'explain' })).toBe('explain');
+    expect(modeOf({ mode: 'quiz' })).toBe('quiz');
+  });
+  it('an explanation drops the plan's checks and its «Spiegalo tu»; a quiz keeps them', () => {
+    const p = { steps: [step('p1')], checks: [check('q1', 'p1')], explainQ: 'Explain it' };
+    expect(withoutAsking(p, { mode: 'explain' })).toMatchObject({ checks: [], explainQ: '' });
+    expect(withoutAsking(p, { mode: 'quiz' })).toBe(p);
+    expect(withoutAsking(p, {})).toBe(p);
+    // the rest has no explainQ: none is added
+    expect('explainQ' in withoutAsking({ checks: [check('q1', 'p1')] }, { mode: 'explain' })).toBe(false);
+  });
+  it('an explanation has no graded end until «Spiegalo tu» is opened; a quiz always has it', () => {
+    const l = lesson({ steps: [step('p1'), step('p2')], checks: [] });
+    expect(playlist({ ...l, mode: 'explain' }).map(p => p.key)).toEqual(['s:p1', 's:p2']);
+    expect(playlist({ ...l, mode: 'explain', explain: { q: '' } }).map(p => p.key).at(-1)).toBe('end');
+    expect(playlist({ ...l, mode: 'quiz' }).map(p => p.key).at(-1)).toBe('end');
+    expect(playlist(l).map(p => p.key).at(-1)).toBe('end');
+  });
+  it('an explanation asks at most one question before it starts', () => {
+    const qs = { questions: [{ q: 'A?', options: ['x', 'y'] }, { q: 'B?', options: ['a', 'b'] }] };
+    expect(parseQuestions(qs, 1)).toEqual([{ q: 'A?', options: ['x', 'y'] }]);
+    expect(parseQuestions(qs)).toHaveLength(2);
   });
 });

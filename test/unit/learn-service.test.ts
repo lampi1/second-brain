@@ -5,6 +5,7 @@
 // broken lesson; extras land after the piece and the user lands on them; checks are judged at zero tokens and the first
 // answer stays; «Spiegalo tu» is graded; a lesson the app was closed during is marked, an extra or grade cut off frees
 // it; remove deletes its folder, also when a run still works in it (when that run ends) or a delete failed (next start).
+// «Spiegazione» (ADR 0219, the default; the other tests ask for «Quiz»): no check, no review card, one question at most.
 // The public topics of the files (ADR 0206): filtered, shown while they wait (✕ drops one, «Cerca ora», at once in
 // «Modalità notte»), then searched by a web run that sees only the ask and the queries, its facts verified on the web.
 import fs from 'node:fs';
@@ -37,7 +38,7 @@ const fast = (r: TeachRun) => { vi.useFakeTimers({ toFake: ['setTimeout'] }); co
 describe('LearnService', () => {
   it('starts a PR lesson: saved at once, the first pieces, then the rest in the background', async () => {
     const { svc, store, runs } = make(fast);
-    const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    const l = svc.start({ mode: 'quiz', kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
     expect(l.state).toBe('preparing');
     expect(store.get(l.id)?.state).toBe('preparing');
     await until(() => store.get(l.id)?.cards?.state === 'done');
@@ -88,7 +89,7 @@ describe('LearnService', () => {
 
   it('a topic: the web run sees only the ask and has only the web; the files run reads brain and guide; questions wait for the answers', async () => {
     const { svc, store, runs } = make(fast, { web: true, brain: '/home/me/brain' });
-    const l = svc.start({ kind: 'topic', ask: 'Come funziona lo streaming nella mia app', depth: 'quick', level: 'new', teacher: { engine: 'claude', model: 'sonnet', effort: 'xhigh' } });
+    const l = svc.start({ mode: 'quiz', kind: 'topic', ask: 'Come funziona lo streaming nella mia app', depth: 'quick', level: 'new', teacher: { engine: 'claude', model: 'sonnet', effort: 'xhigh' } });
     expect(l.teacher).toEqual({ engine: 'claude', model: 'sonnet', effort: 'xhigh' });
     await until(() => !!store.get(l.id)?.clarify);
     const web = runs.find(r => r.round === 'impara-web')!, files = runs.find(r => r.round === 'impara-files')!;
@@ -126,7 +127,7 @@ describe('LearnService', () => {
 
   it('a PR with the web on: its public topics, filtered, searched at once in «Modalità notte» by a web run that sees only the ask and the queries', async () => {
     const { svc, store, runs } = make(fast, { web: true, away: true });
-    const l = svc.start({ kind: 'pr', ask: 'Come arrivano le risposte', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    const l = svc.start({ mode: 'quiz', kind: 'pr', ask: 'Come arrivano le risposte', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
     await until(() => store.get(l.id)?.state === 'ready' || store.get(l.id)?.state === 'more');
     // no ask-only web run for a PR, but the topics' one; each web run with the web only, in the empty web folder
     expect(runs.map(r => r.round).slice(0, 4).sort()).toEqual(['impara-files', 'impara-refs', 'impara-verify-files', 'impara-verify-refs']);
@@ -158,7 +159,7 @@ describe('LearnService', () => {
 
   it('the topics wait for the user: ✕ drops one (more time for the rest), «Cerca ora» starts them; none left = no search', async () => {
     const { svc, store, runs } = make(fast, { web: true });
-    const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    const l = svc.start({ mode: 'quiz', kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
     await until(() => store.get(l.id)?.prep?.topics?.state === 'wait');
     const tp = store.get(l.id)!.prep!.topics!;
     expect(tp.list).toHaveLength(3);
@@ -179,7 +180,7 @@ describe('LearnService', () => {
     expect(store.get(l.id)!.facts!.filter(f => f.topic).map(f => f.topic)).toEqual(['Electron IPC performance', 'React 18 automatic batching']);
 
     const b = make(fast, { web: true });
-    const m = b.svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    const m = b.svc.start({ mode: 'quiz', kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
     await until(() => b.store.get(m.id)?.prep?.topics?.state === 'wait');
     for (const id of ['t1', 't2', 't3']) b.svc.topics(m.id, { drop: id });
     await until(() => b.store.get(m.id)?.state === 'ready' || b.store.get(m.id)?.state === 'more');
@@ -188,7 +189,7 @@ describe('LearnService', () => {
 
     // a lesson removed while its topics wait searches nothing
     const c = make(fast, { web: true });
-    const n = c.svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    const n = c.svc.start({ mode: 'quiz', kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
     await until(() => c.store.get(n.id)?.prep?.topics?.state === 'wait');
     c.svc.remove(n.id);
     await new Promise(r => setTimeout(r, 30));
@@ -198,9 +199,9 @@ describe('LearnService', () => {
   it('keeps only a teacher it offers; a removed lesson stops waiting for its answers', async () => {
     const { svc, store, runs } = make(fast, { web: true });
     expect(svc.state().teachers?.map(t => t.engine)).toEqual(['claude', 'codex']);
-    const a = svc.start({ kind: 'topic', ask: 'x', depth: 'quick', level: 'new', teacher: { engine: 'gemini', model: 'x', effort: 'high' } });
+    const a = svc.start({ mode: 'quiz', kind: 'topic', ask: 'x', depth: 'quick', level: 'new', teacher: { engine: 'gemini', model: 'x', effort: 'high' } });
     expect(a.teacher).toBeUndefined();
-    const b = svc.start({ kind: 'topic', ask: 'y', depth: 'quick', level: 'new', teacher: { engine: 'claude', model: 'fable', effort: 'max' } });
+    const b = svc.start({ mode: 'quiz', kind: 'topic', ask: 'y', depth: 'quick', level: 'new', teacher: { engine: 'claude', model: 'fable', effort: 'max' } });
     expect(b.teacher).toEqual({ engine: 'claude', model: null, effort: null });
     await until(() => !!store.get(a.id)?.clarify && store.get(a.id)?.prep?.phases.verify === 'done');
     svc.remove(a.id);
@@ -212,7 +213,7 @@ describe('LearnService', () => {
     let n = 0;
     const { svc, store } = make(async r => (r.round === 'impara-files' ? { ok: false, error: 'rete giù' } : r.round !== 'impara-plan' ? fast(r)
       : n++ === 0 ? { ok: false, error: 'tempo scaduto' } : n === 2 ? { ok: true, text: 'not json', costUsd: null, engine: 'claude', model: null } : fast(r)));
-    const l = svc.start({ kind: 'text', ask: 'Come funziona lo streaming', text: 'Due attese da 100 ms.', depth: 'quick', level: 'new' });
+    const l = svc.start({ mode: 'quiz', kind: 'text', ask: 'Come funziona lo streaming', text: 'Due attese da 100 ms.', depth: 'quick', level: 'new' });
     await until(() => store.get(l.id)?.state === 'failed');
     expect(store.get(l.id)!.error).toMatch(/tempo scaduto/);
     svc.retry(l.id);
@@ -227,7 +228,7 @@ describe('LearnService', () => {
 
   it('a research that found nothing because its tools were refused is a failure the lesson shows, never a silent ready', async () => {
     const { svc, store } = make(async r => (r.round === 'impara-files' ? { ok: true, text: '{"facts":[]}', costUsd: 0, engine: 'opencode', model: 'cheap', deniedTools: ['Tool'] } : fast(r)));
-    const l = svc.start({ kind: 'text', ask: 'Come funziona lo streaming', text: 'Due attese da 100 ms.', depth: 'quick', level: 'new' });
+    const l = svc.start({ mode: 'quiz', kind: 'text', ask: 'Come funziona lo streaming', text: 'Due attese da 100 ms.', depth: 'quick', level: 'new' });
     await until(() => store.get(l.id)?.state === 'ready');
     const done = store.get(l.id)!;
     expect(done.prep).toMatchObject({ phases: { files: 'skip' }, why: { files: 'failed: tools refused: Tool' } });
@@ -236,7 +237,7 @@ describe('LearnService', () => {
 
   it('a topics web search that found nothing because its tools were refused is a failed phase too', async () => {
     const { svc, store } = make(async r => (r.round === 'impara-refs' ? { ok: true, text: '{"facts":[]}', costUsd: 0, engine: 'opencode', model: 'cheap', deniedTools: ['webfetch'] } : fast(r)), { web: true, away: true });
-    const l = svc.start({ kind: 'pr', ask: 'Come arrivano le risposte', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    const l = svc.start({ mode: 'quiz', kind: 'pr', ask: 'Come arrivano le risposte', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
     await until(() => store.get(l.id)?.state === 'ready' || store.get(l.id)?.state === 'more');
     const done = store.get(l.id)!;
     expect(done.prep).toMatchObject({ phases: { refs: 'skip' }, why: { refs: 'failed: tools refused: webfetch' } });
@@ -246,7 +247,7 @@ describe('LearnService', () => {
 
   it('a research that read and found nothing, with no tool refused, stays a plain ready', async () => {
     const { svc, store } = make(async r => (r.round === 'impara-files' ? { ok: true, text: '{"facts":[]}', costUsd: 0, engine: 'claude', model: null } : fast(r)));
-    const l = svc.start({ kind: 'text', ask: 'Come funziona lo streaming', text: 'Due attese da 100 ms.', depth: 'quick', level: 'new' });
+    const l = svc.start({ mode: 'quiz', kind: 'text', ask: 'Come funziona lo streaming', text: 'Due attese da 100 ms.', depth: 'quick', level: 'new' });
     await until(() => store.get(l.id)?.state === 'ready');
     expect(store.get(l.id)!.degraded).toBeUndefined();
     expect(store.get(l.id)!.prep?.phases.files).toBe('done');
@@ -263,16 +264,16 @@ describe('LearnService', () => {
   });
 
   it('refuses a start it cannot serve, with the reason', () => {
-    expect(() => make(fast, { cannot: 'nessun motore' }).svc.start({ kind: 'topic', ask: 'x', depth: 'quick', level: 'new' })).toThrow('nessun motore');
+    expect(() => make(fast, { cannot: 'nessun motore' }).svc.start({ mode: 'quiz', kind: 'topic', ask: 'x', depth: 'quick', level: 'new' })).toThrow('nessun motore');
     const { svc } = make(fast);
-    expect(() => svc.start({ kind: 'topic', ask: '  ', depth: 'quick', level: 'new' })).toThrow();
-    expect(() => svc.start({ kind: 'pr', ask: '', depth: 'quick', level: 'new' })).toThrow(/PR/);
-    expect(() => svc.start({ kind: 'text', ask: '', text: ' ', depth: 'quick', level: 'new' })).toThrow(/testo/);
+    expect(() => svc.start({ mode: 'quiz', kind: 'topic', ask: '  ', depth: 'quick', level: 'new' })).toThrow();
+    expect(() => svc.start({ mode: 'quiz', kind: 'pr', ask: '', depth: 'quick', level: 'new' })).toThrow(/PR/);
+    expect(() => svc.start({ mode: 'quiz', kind: 'text', ask: '', text: ' ', depth: 'quick', level: 'new' })).toThrow(/testo/);
   });
 
   it('moves, judges a check at zero tokens (first answer stays), adds an extra after the piece', async () => {
     const { svc, store, runs } = make(fast);
-    const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    const l = svc.start({ mode: 'quiz', kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
     await until(() => store.get(l.id)?.state === 'ready');
     const ready = store.get(l.id)!;
     const c = ready.checks[0]!;
@@ -302,7 +303,7 @@ describe('LearnService', () => {
 
   it('grades «Spiegalo tu»; an empty one ends the lesson without a grade', async () => {
     const { svc, store } = make(fast);
-    const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    const l = svc.start({ mode: 'quiz', kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
     await until(() => store.get(l.id)?.state === 'ready');
     svc.explain(l.id, 'Due attese da 100 ms, ora un fotogramma.');
     await until(() => !!store.get(l.id)!.explain?.grade);
@@ -311,13 +312,44 @@ describe('LearnService', () => {
     expect(store.get(l.id)!.at).toBe('end');
 
     const m = make(fast);
-    const l2 = m.svc.start({ kind: 'topic', ask: 'x', depth: 'quick', level: 'new' });
+    const l2 = m.svc.start({ mode: 'quiz', kind: 'topic', ask: 'x', depth: 'quick', level: 'new' });
     await until(() => !!m.store.get(l2.id)?.clarify);
     m.svc.clarify(l2.id, ['']);
     await until(() => m.store.get(l2.id)?.state === 'ready');
     const ended = m.svc.explain(l2.id, '');
     expect(ended.doneAt).toBeTruthy();
     expect(ended.explain?.grade).toBeUndefined();
+  });
+
+  it('«Spiegazione» (ADR 0219), the default: no check, no review card, the last piece ends it; one question at most', async () => {
+    const { svc, store, runs } = make(fast);
+    const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    expect(l.mode).toBe('explain');
+    await until(() => runs.filter(r => r.round === 'impara-quality').length === 2 && store.get(l.id)!.steps.filter(s => !s.extra).length === 6);
+    await new Promise(r => setTimeout(r, 30));
+    const done = store.get(l.id)!;
+    expect(done.checks).toEqual([]);
+    expect(done.explain).toBeUndefined();
+    expect(done.cards).toBeUndefined();
+    expect(runs.some(r => r.round === 'impara-cards')).toBe(false);
+    // the plan was asked for pictures, not questions
+    expect(runs.find(r => r.round === 'impara-plan')!.prompt).toContain('ASKS NOTHING');
+    // no graded end: the play-list stops at the recap, and reaching it finishes the lesson
+    const keys = playlist(done).map(p => p.key);
+    expect(keys).not.toContain('end');
+    expect(svc.move(l.id, keys[1]!).doneAt).toBeUndefined();
+    expect(svc.move(l.id, keys.at(-1)!).doneAt).toBeTruthy();
+    // «Spiegamelo meglio» adds a piece, never a check
+    svc.ask(l.id, 'better', stepKey(done.steps[1]!.id));
+    await until(() => !store.get(l.id)!.busy);
+    expect(store.get(l.id)!.steps.some(s => s.extra)).toBe(true);
+    expect(store.get(l.id)!.checks).toEqual([]);
+
+    // a topic: one question at most before the lesson
+    const m = make(fast);
+    const t = m.svc.start({ kind: 'topic', ask: 'Come funziona lo streaming', depth: 'quick', level: 'new' });
+    await until(() => !!m.store.get(t.id)?.clarify);
+    expect(m.store.get(t.id)!.clarify!.qs.length).toBeLessThanOrEqual(1);
   });
 
   it('marks a lesson the app was closed during, lists by last change, removes the folder', () => {
@@ -351,7 +383,7 @@ describe('LearnService', () => {
     let release!: () => void;
     const gate = new Promise<void>(r => { release = r; });
     const { svc, store } = make(async r => { await gate; return fast(r); });
-    const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    const l = svc.start({ mode: 'quiz', kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
     await until(() => !!store.readFile(l.id, 'diff.patch'));
     svc.remove(l.id);
     expect(svc.state().lessons).toHaveLength(0);

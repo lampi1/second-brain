@@ -147,7 +147,7 @@ describe('LearnService review', () => {
 
   it('a finished lesson gets a subject and verified cards; sessions, grades and subjects work; removing it takes them away', async () => {
     const { store, svc, runs } = make();
-    const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    const l = svc.start({ mode: 'quiz', kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
     await until(() => store.get(l.id)?.cards?.state === 'done');
     const done = store.get(l.id)!;
     expect(done.subject).toBe('second-brain');
@@ -186,7 +186,7 @@ describe('LearnService review', () => {
   it('cards and an extra both cut by a close: both freed on the next start, so «Riprova» makes the cards', async () => {
     const root = tmp();
     const { store, svc } = make(root);
-    const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    const l = svc.start({ mode: 'quiz', kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
     await until(() => store.get(l.id)?.cards?.state === 'done');
     store.save({ ...store.get(l.id)!, cards: { state: 'making' }, busy: { kind: 'grade', of: 'end', since: T0 } });
     make(root);

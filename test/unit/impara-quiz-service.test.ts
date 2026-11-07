@@ -52,7 +52,7 @@ describe('cards of the new kinds', () => {
 describe('LearnService', () => {
   it('judges a true/false check by its option and keeps «Eri sicuro?» afterwards', async () => {
     const { store, svc } = make();
-    const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    const l = svc.start({ mode: 'quiz', kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
     await until(() => store.get(l.id)?.state === 'ready');
     const tf = store.get(l.id)!.checks.find(c => c.kind === 'truefalse')!;
     svc.move(l.id, checkKey(tf.id));
@@ -76,7 +76,7 @@ describe('LearnService', () => {
 
   it('the user’s files become the material: one file read whole, listed in the sources', async () => {
     const { store, svc, runs } = make();
-    const l = svc.start({ kind: 'topic', ask: 'Come funziona il login?', depth: 'quick', level: 'basics', files: [{ name: 'auth/login.ts', text: 'export function login() {}' }, { name: 'logo.bin', text: '\u0000' }] });
+    const l = svc.start({ mode: 'quiz', kind: 'topic', ask: 'Come funziona il login?', depth: 'quick', level: 'basics', files: [{ name: 'auth/login.ts', text: 'export function login() {}' }, { name: 'logo.bin', text: '\u0000' }] });
     await until(() => (store.get(l.id)?.prep?.phases.gather ?? '') === 'done' && runs.some(r => r.round === 'impara-files'));
     expect(store.readFile(l.id, 'fonti.md')).toContain('export function login() {}');
     expect(store.get(l.id)!.sources).toEqual(['file: auth/login.ts']);

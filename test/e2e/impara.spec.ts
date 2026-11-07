@@ -10,7 +10,8 @@
 // put in order, match), a subject's quiz whose wrong answer comes back with «Rifai le sbagliate», a lesson moved to
 // another subject. The «Studio» (ADR 0205): a saved output reopens, a new tile is made, its quiz plays as a review.
 // «Chi spiega» lists every model of an engine and searches them (OpenCode's free ones come last in its list), and a
-// lesson whose research failed says why (a model the engine refused). Screenshots dark.
+// lesson whose research failed says why (a model the engine refused). The lessons started here are quiz lessons (ADR
+// 0219, picked in the options); the default «Spiegazione» is in impara-explain.spec.ts. Screenshots dark.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -30,6 +31,12 @@ test('learn a PR on the blackboard: pieces, check, better explanation, explain i
     await expect(page.locator('.ip-thumb img')).toHaveCount(3, { timeout: 15_000 });
     await shot(page, 'impara-start-dark');
 
+    // a quiz lesson (ADR 0219: «Spiegazione» is the default, it has no checks; impara-explain.spec.ts plays it)
+    await page.getByTestId('impara-options-open').click();
+    await page.getByTestId('impara-mode-quiz').click();
+    await expect(page.getByTestId('impara-mode-quiz')).toHaveAttribute('aria-checked', 'true');
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('impara-options-summary')).toContainText('Quiz');
     // a GitHub PR by its link: preparing, then the first piece
     await page.getByTestId('impara-ask-what').fill(PR);
     await expect(page.getByTestId('impara-kind')).toHaveAttribute('data-kind', 'pr');
@@ -163,6 +170,7 @@ test('a topic: who explains in the options line, the web and the files researche
     await expect(summary).toContainText('Claude Opus alto');
     await page.getByTestId('impara-options-open').click();
     await choose(page.getByTestId('impara-teacher-effort'), 'xhigh');
+    await page.getByTestId('impara-mode-quiz').click();
     await page.keyboard.press('Escape');
     await expect(page.getByTestId('impara-options-pop')).toHaveCount(0);
     await expect(summary).toContainText('molto alto');

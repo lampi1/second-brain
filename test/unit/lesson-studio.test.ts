@@ -1,9 +1,10 @@
 // Impara's «Studio» and quality gate (ADR 0205, src/shared/lesson-studio.ts, main/learn/prompt.ts): each tile's output
 // checked and capped (mermaid headers, citations kept only for known facts, cards that cite a verified fact, a true/false
 // as a choice of two, a podcast's two voices); the checks the app makes alone (citations, size, giveaway questions) and
-// the gate's verdicts; the prompts give the Studio only the verified facts and tell the gate what the app found.
+// the gate's verdicts; the prompts give the Studio only the verified facts and tell the gate what the app found. In
+// «Spiegazione» (ADR 0219) a piece needs a picture and a short caption, and the gate drops the question rule.
 import { describe, expect, it } from 'vitest';
-import { checkIssues, keepCites, parseGate, parseStudio, pieceIssues } from '../../src/shared/lesson-studio';
+import { checkIssues, gateRules, keepCites, parseGate, parseStudio, pieceIssues, QUALITY_RULES } from '../../src/shared/lesson-studio';
 import { gatePrompt, planPrompt, studioPrompt, tutorPrompt } from '../../src/main/learn/prompt';
 import type { Lesson, LessonStep } from '../../src/shared/lesson';
 
@@ -56,6 +57,25 @@ describe('the quality gate', () => {
     expect(pieceIssues(step({ cites: ['f1'], beats: Array(5).fill({ say: 'x', focus: [] }) }), true)).toEqual(['one-idea']);
     const big = `mindmap\n  root((A))\n${Array.from({ length: 13 }, (_, i) => `    n${i}`).join('\n')}`;
     expect(pieceIssues(step({ cites: ['f1'], visual: { kind: 'mindmap', src: big } }), true)).toEqual(['diagram']);
+  });
+  it('in «Spiegazione» a piece needs a picture (its own visual, its own diagram or lit nodes) and a short caption', () => {
+    expect(pieceIssues(step({ cites: ['f1'] }), true, true)).toEqual(['visual']);
+    expect(pieceIssues(step({ cites: ['f1'] }), true)).toEqual([]);
+    expect(pieceIssues(step({ cites: ['f1'], focus: ['a'] }), true, true)).toEqual([]);
+    expect(pieceIssues(step({ cites: ['f1'], diagram: 'flowchart LR
+ a --> b' }), true, true)).toEqual([]);
+    expect(pieceIssues(step({ cites: ['f1'], visual: { kind: 'compare', before: 'flowchart LR
+ a --> b', after: 'flowchart LR
+ a --> c' } }), true, true)).toEqual([]);
+    const long = Array(70).fill('parola').join(' ');
+    expect(pieceIssues(step({ cites: ['f1'], focus: ['a'], text: long }), true, true)).toEqual(['one-idea']);
+    expect(pieceIssues(step({ cites: ['f1'], focus: ['a'], text: long }), true)).toEqual([]);
+  });
+  it('the gate's rules: a quiz checks the questions, an explanation the picture', () => {
+    expect(gateRules(false)).toEqual(['one-idea', 'example', 'cites', 'diagram', 'questions']);
+    expect(gateRules(true)).toEqual(['one-idea', 'example', 'cites', 'diagram', 'visual']);
+    expect(QUALITY_RULES).toContain('visual');
+    expect(parseGate({ pieces: [{ n: 1, fails: ['visual'] }] }).pieces).toEqual([{ n: 1, fails: ['visual'] }]);
   });
   it('a question that cannot make one think: two options, too short, the right one a giveaway', () => {
     expect(checkIssues({ q: 'Cosa succede se il timer torna a 100 ms?', options: ['a', 'b', 'c'], correct: 0 })).toEqual([]);
