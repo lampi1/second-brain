@@ -13,8 +13,8 @@
 .est-acc-k { font-weight: 600; color: var(--text-2); }
 .est-acc-none { margin: 4px 0 0; color: var(--text-3); font-size: 11.5px; }
 .est-bars { flex: none; overflow: visible; }
-.est-bars .est-bar { fill: color-mix(in srgb, var(--blue) 45%, transparent); }
-.est-bars .est-bar-last { fill: var(--blue); }
+.est-bars .est-bar { fill: color-mix(in srgb, var(--accent) 45%, transparent); }
+.est-bars .est-bar-last { fill: var(--accent); }
 .est-bars .est-bar-none { fill: var(--border-3); }
 .help-bubble .est-tip-acc { margin-top: 8px !important; padding-top: 7px; border-top: 1px solid var(--border); }
 .help-bubble .est-tip-specific { color: var(--text-3); font-size: 11.5px; }

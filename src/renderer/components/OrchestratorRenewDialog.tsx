@@ -41,7 +41,7 @@ export function OrchestratorRenewDialog() {
       aside={<Keys combo={t('dialogs.orchestratorRenew.shortcutCombo')} />}
       footer={<>
         <button type="button" className="btn btn-ghost btn-m" onClick={closeModal} data-testid="orchestrator-renew-cancel">{t('dialogs.orchestratorRenew.cancelButton')} <Keys combo="Esc" /></button>
-        <button type="submit" className="btn btn-orchestrator btn-m" autoFocus data-autofocus disabled={busy || !!block} data-testid="orchestrator-renew-go">{busy ? t('dialogs.orchestratorRenew.restarting') : action}</button>
+        <button type="submit" className="btn btn-primary btn-m" autoFocus data-autofocus disabled={busy || !!block} data-testid="orchestrator-renew-go">{busy ? t('dialogs.orchestratorRenew.restarting') : action}</button>
       </>}>
       <div className="harness-pick" role="radiogroup" aria-label={t('dialogs.orchestratorRenew.engineLabel')}>
         {engines.map(({ id: h, name }) => (

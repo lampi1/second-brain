@@ -33,10 +33,10 @@
 .pa-chip b { font-weight: 600; color: var(--text); margin-right: 3px; }
 
 .pa-actions { margin-top: 2px; }
-.pa-change { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: var(--r-m); border: 1px solid var(--blue-line); background: var(--surface-2); }
+.pa-change { display: flex; flex-direction: column; gap: 4px; padding: 12px; border-radius: var(--r-m); border: 1px solid var(--accent-line); background: var(--surface-2); }
 .pa-change textarea {
   width: 100%; box-sizing: border-box; resize: vertical; min-height: 64px; padding: 9px 11px; border-radius: var(--r-s);
-  border: 1px solid var(--border-2); background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-l); line-height: 1.5;
+  border: 1px solid var(--border-control); background: var(--surface); color: var(--text); font: inherit; font-size: var(--fs-l); line-height: 1.5;
 }
 .pa-change textarea:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 3px var(--focus-glow); }
 .pa-change-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }

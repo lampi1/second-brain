@@ -12,7 +12,7 @@
 .guide-header p{color:var(--text-3);font-size:13px;line-height:1.6;margin:0;max-width:680px}
 .guide-filter{display:flex;flex-direction:column;gap:6px;width:min(340px,100%)}
 .guide-filter-box{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-m);padding:0 12px;color:var(--text-3);transition:border-color 180ms,box-shadow 180ms}
-.guide-filter-box:focus-within{border-color:var(--blue-line);box-shadow:0 0 0 3px var(--focus-glow)}
+.guide-filter-box:focus-within{border-color:var(--accent-line);box-shadow:0 0 0 3px var(--focus-glow)}
 .guide-filter input{flex:1;min-width:0;background:transparent;border:0;color:var(--text);font:inherit;font-size:12px;padding:9px 0}
 .guide-filter input:focus,.guide-filter input:focus-visible{outline:none}
 .guide-filter small{font-size:10px;color:var(--text-3);text-align:right}
@@ -20,7 +20,7 @@
 
 /* the grid: as many columns as fit, never a full-width strip except the hero */
 .guide-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
-.guide-card{--guide-accent:var(--blue);position:relative;isolation:isolate;display:flex;flex-direction:column;gap:9px;min-width:0;padding:18px 18px 12px;background:linear-gradient(160deg,var(--surface-2),var(--surface) 62%);border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden;transition:border-color 180ms,transform 180ms,box-shadow 180ms;animation:guide-enter 380ms var(--ease) both}
+.guide-card{--guide-accent:var(--accent);position:relative;isolation:isolate;display:flex;flex-direction:column;gap:9px;min-width:0;padding:18px 18px 12px;background:linear-gradient(160deg,var(--surface-2),var(--surface) 62%);border:1px solid var(--border);border-radius:var(--r-xl);overflow:hidden;transition:border-color 180ms,transform 180ms,box-shadow 180ms;animation:guide-enter 380ms var(--ease) both}
 .guide-card::before{content:'';position:absolute;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(120% 70% at 0% 0%,color-mix(in srgb,var(--guide-accent) 13%,transparent),transparent 62%);opacity:.55;transition:opacity 220ms}
 .guide-card:hover,.guide-card:focus-within{border-color:var(--border-3);transform:translateY(-2px);box-shadow:0 14px 34px -22px var(--guide-accent)}
 .guide-card:hover::before,.guide-card.open::before{opacity:1}
@@ -30,12 +30,12 @@
 .guide-grid>.guide-card:nth-child(4){animation-delay:120ms}
 .guide-grid>.guide-card:nth-child(n+5){animation-delay:160ms}
 .guide-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:3px}
-.guide-glyph{flex:none;display:grid;place-items:center;width:38px;height:38px;border-radius:var(--r-m);color:var(--guide-accent,var(--blue));background:color-mix(in srgb,var(--guide-accent,var(--blue)) 14%,transparent);border:1px solid color-mix(in srgb,var(--guide-accent,var(--blue)) 30%,transparent)}
+.guide-glyph{flex:none;display:grid;place-items:center;width:38px;height:38px;border-radius:var(--r-m);color:var(--guide-accent,var(--accent));background:color-mix(in srgb,var(--guide-accent,var(--accent)) 14%,transparent);border:1px solid color-mix(in srgb,var(--guide-accent,var(--accent)) 30%,transparent)}
 .guide-card h3{font-size:14.5px;font-weight:600;margin:0;letter-spacing:-.2px;line-height:1.35}
 .guide-summary{margin:0;font-size:12.5px;line-height:1.6;color:var(--text-2);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .guide-badges{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:5px}
 .guide-badge{font-size:10px;color:var(--amber);background:var(--amber-bg);border:1px solid var(--amber-line);border-radius:20px;padding:2px 8px;white-space:nowrap}
-.guide-badge-coming{color:var(--blue);background:var(--blue-bg);border-color:var(--blue-line)}
+.guide-badge-coming{color:var(--accent);background:var(--accent-bg);border-color:var(--accent-line)}
 .guide-card-foot{display:flex;align-items:center;gap:10px;padding-top:10px;border-top:1px solid var(--border)}
 .guide-meta{margin-top:auto;font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
 /* the whole card is the toggle's hit area; «Discuti» stays above it */
@@ -46,14 +46,14 @@
 .guide .guide-toggle:focus-visible{outline:none}
 .guide .guide-toggle:focus-visible::after{outline:2px solid var(--focus);outline-offset:-2px;border-radius:var(--r-xl)}
 .guide-discuss{position:relative;z-index:1;font-size:11px!important;white-space:nowrap;color:var(--text-2)}
-.guide-discuss>span{color:var(--blue);display:inline-block;transition:transform 180ms}
+.guide-discuss>span{color:var(--accent);display:inline-block;transition:transform 180ms}
 .guide-discuss:hover>span{transform:translate(2px,-2px)}
 .guide-learn{position:relative;z-index:1;font-size:11px!important;white-space:nowrap;color:var(--text-2)}
-.guide-learn:hover{color:var(--blue)}
+.guide-learn:hover{color:var(--accent)}
 
 /* the hero: the prominent card, wide, its diagram always visible */
-.guide-prominent{grid-column:1/-1;padding:24px 26px 14px;gap:10px;background:linear-gradient(135deg,color-mix(in srgb,var(--guide-accent) 9%,var(--surface-2)),var(--surface) 70%);border-color:var(--blue-line);box-shadow:0 18px 44px -32px var(--blue)}
-.guide-prominent::before{background:radial-gradient(60% 120% at 100% 0%,color-mix(in srgb,var(--violet) 16%,transparent),transparent 60%),radial-gradient(50% 90% at 0% 100%,color-mix(in srgb,var(--blue) 12%,transparent),transparent 60%);opacity:1}
+.guide-prominent{grid-column:1/-1;padding:24px 26px 14px;gap:10px;background:linear-gradient(135deg,color-mix(in srgb,var(--guide-accent) 9%,var(--surface-2)),var(--surface) 70%);border-color:var(--accent-line);box-shadow:0 18px 44px -32px var(--accent)}
+.guide-prominent::before{background:radial-gradient(60% 120% at 100% 0%,color-mix(in srgb,var(--violet) 16%,transparent),transparent 60%),radial-gradient(50% 90% at 0% 100%,color-mix(in srgb,var(--accent) 12%,transparent),transparent 60%);opacity:1}
 .guide-prominent .guide-glyph{width:46px;height:46px;border-radius:var(--r-l)}
 .guide-hero-eyebrow{font-size:10px;letter-spacing:.14em;font-weight:650;color:var(--guide-accent);text-transform:uppercase}
 .guide-prominent h3{font-size:20px;letter-spacing:-.5px}
@@ -61,7 +61,7 @@
 .guide-prominent .guide-diagram{margin:6px 0 6px}
 
 /* the reading panel: the shared side panel (app.css .modal-side) in the card's accent */
-.guide-panel{--guide-accent:var(--blue);position:relative}
+.guide-panel{--guide-accent:var(--accent);position:relative}
 .guide-panel::before{content:'';position:absolute;inset:0 0 auto;height:160px;pointer-events:none;background:radial-gradient(90% 100% at 0% 0%,color-mix(in srgb,var(--guide-accent) 14%,transparent),transparent 70%)}
 .guide-panel .modal-head{position:relative}
 .guide-panel .modal-icon{width:auto;height:auto;background:none}
@@ -83,8 +83,8 @@
 .guide-tech dd{margin:0;font-size:11.5px;line-height:1.55;font-family:var(--mono);color:var(--text-2);overflow-wrap:anywhere}
 .guide-sources{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:6px}
 .guide-sources code{font-family:var(--mono);font-size:10.5px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-s);padding:2px 7px}
-.guide-coming{background:var(--blue-bg);border:1px solid var(--blue-line);border-radius:var(--r-m);padding:12px 14px}
-.guide-coming h4{color:var(--blue)}
+.guide-coming{background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:var(--r-m);padding:12px 14px}
+.guide-coming h4{color:var(--accent)}
 .guide-coming ul{margin:0;padding-left:18px;font-size:12.5px;line-height:1.5;color:var(--text-2)}
 .guide-target{background:var(--amber-bg);border:1px solid var(--amber-line);border-radius:var(--r-m);padding:12px 14px}
 .guide-target h4{color:var(--amber)}
@@ -94,11 +94,11 @@
 .guide-diagram{margin:2px 0}
 .guide-diagram ol{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;align-items:center;gap:8px 26px}
 .guide-diagram li{position:relative;display:flex;align-items:center;gap:7px;font-size:11.5px;color:var(--text);background:var(--surface-2);border:1px solid var(--border-2);border-radius:var(--r-m);padding:7px 11px;white-space:nowrap}
-.guide-diagram li+li::before{content:'';position:absolute;left:-21px;top:50%;width:14px;height:1px;background:var(--blue)}
-.guide-diagram li+li::after{content:'';position:absolute;left:-10px;top:calc(50% - 3px);border:3px solid transparent;border-left:4px solid var(--blue)}
-.guide-step-n{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;background:var(--blue-bg);color:var(--blue);font-size:9.5px;font-weight:650;flex:none}
+.guide-diagram li+li::before{content:'';position:absolute;left:-21px;top:50%;width:14px;height:1px;background:var(--accent)}
+.guide-diagram li+li::after{content:'';position:absolute;left:-10px;top:calc(50% - 3px);border:3px solid transparent;border-left:4px solid var(--accent)}
+.guide-step-n{display:inline-grid;place-items:center;width:16px;height:16px;border-radius:50%;background:var(--accent-bg);color:var(--accent);font-size:9.5px;font-weight:650;flex:none}
 .guide-diagram-back{margin-top:8px;font-size:10.5px;color:var(--text-3);display:flex;align-items:center;gap:6px}
-.guide-diagram-back span{color:var(--blue);font-size:13px}
+.guide-diagram-back span{color:var(--accent);font-size:13px}
 /* in the panel the diagram is a vertical timeline */
 .guide-panel .guide-diagram ol{flex-direction:column;align-items:stretch;gap:14px}
 .guide-panel .guide-diagram li{white-space:normal;background:var(--bg-2)}
@@ -109,7 +109,7 @@
 /* «Chiedi alla Guida» (ADR 0196): a wide question bar under the header, the answer as a card under it */
 .guide-ask{margin:0 0 22px;display:flex;flex-direction:column;gap:10px}
 .guide-ask-box{display:flex;align-items:center;gap:10px;padding:6px 6px 6px 14px;background:linear-gradient(135deg,color-mix(in srgb,var(--violet) 7%,var(--surface)),var(--surface) 60%);border:1px solid var(--border-2);border-radius:var(--r-l);transition:border-color 180ms,box-shadow 180ms}
-.guide-ask-box:focus-within{border-color:var(--blue-line);box-shadow:0 0 0 3px var(--focus-glow)}
+.guide-ask-box:focus-within{border-color:var(--accent-line);box-shadow:0 0 0 3px var(--focus-glow)}
 .guide-ask-icon{color:var(--violet);display:grid;place-items:center}
 .guide-ask-box input{flex:1;min-width:0;background:transparent;border:0;color:var(--text);font:inherit;font-size:13px;padding:8px 0}
 .guide-ask-box input:focus,.guide-ask-box input:focus-visible{outline:none}
@@ -124,8 +124,8 @@
 .guide-ask-text p{margin:0}
 .guide-ask-text ul{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px}
 .guide-ask-text code{font-family:var(--mono);font-size:11px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r-s);padding:1px 5px}
-.guide-ask-cite{appearance:none;font:inherit;font-size:11px;font-weight:550;color:var(--blue);background:var(--blue-bg);border:1px solid var(--blue-line);border-radius:20px;padding:0 8px;margin:0 2px;cursor:pointer;vertical-align:1px;transition:background 150ms}
-.guide-ask-cite:hover{background:color-mix(in srgb,var(--blue) 18%,transparent)}
+.guide-ask-cite{appearance:none;font:inherit;font-size:11px;font-weight:550;color:var(--accent);background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:20px;padding:0 8px;margin:0 2px;cursor:pointer;vertical-align:1px;transition:background 150ms}
+.guide-ask-cite:hover{background:color-mix(in srgb,var(--accent) 18%,transparent)}
 .guide-ask-foot{display:flex;flex-wrap:wrap;gap:6px 14px;padding-top:8px;border-top:1px solid var(--border);font-size:10.5px;color:var(--text-3);font-variant-numeric:tabular-nums}
 .guide-ask-skel{display:block;height:10px;width:92%;border-radius:6px;background:linear-gradient(90deg,var(--surface-2),var(--surface-3),var(--surface-2));background-size:200% 100%;animation:guide-shimmer 1.2s linear infinite}
 .guide-ask-skel.short{width:60%}
@@ -136,7 +136,7 @@
 .guide-foryou h2{display:flex;align-items:baseline;gap:10px;margin:0 0 10px;font-size:12px;font-weight:650;letter-spacing:.08em;text-transform:uppercase;color:var(--text-2)}
 .guide-foryou h2 small{font-size:11px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--text-3)}
 .guide-foryou-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
-.guide-foryou-item{--guide-accent:var(--blue);appearance:none;font:inherit;text-align:left;display:flex;align-items:center;gap:12px;padding:10px 12px;color:var(--text);background:linear-gradient(160deg,color-mix(in srgb,var(--guide-accent) 8%,var(--surface-2)),var(--surface) 70%);border:1px solid var(--border);border-radius:var(--r-l);cursor:pointer;transition:border-color 180ms,transform 180ms}
+.guide-foryou-item{--guide-accent:var(--accent);appearance:none;font:inherit;text-align:left;display:flex;align-items:center;gap:12px;padding:10px 12px;color:var(--text);background:linear-gradient(160deg,color-mix(in srgb,var(--guide-accent) 8%,var(--surface-2)),var(--surface) 70%);border:1px solid var(--border);border-radius:var(--r-l);cursor:pointer;transition:border-color 180ms,transform 180ms}
 .guide-foryou-item:hover{border-color:color-mix(in srgb,var(--guide-accent) 55%,var(--border-2));transform:translateY(-1px)}
 .guide-foryou-item .guide-glyph{width:32px;height:32px}
 .guide-foryou-item>span:last-child{display:flex;flex-direction:column;gap:2px;min-width:0}

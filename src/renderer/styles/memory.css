@@ -10,14 +10,14 @@ div.bm-page.agent-overview{display:block;min-width:0;padding:28px 32px 48px;font
 
 /* ── the Manutenzione button (top bar, Orchestrator head, Memoria hero) ── */
 .mm-maint{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}
-.mm-maint-btn{position:relative;display:inline-flex;align-items:center;gap:7px;font-weight:600;box-shadow:0 0 0 3px color-mix(in srgb,var(--blue) 20%,transparent)}
+.mm-maint-btn{position:relative;display:inline-flex;align-items:center;gap:7px;font-weight:600;box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 20%,transparent)}
 .mm-maint-btn svg{width:15px;height:15px}
 .mm-maint-last{font-size:var(--fs-xs);color:var(--text-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:min(52ch,60vw)}
 @keyframes mm-pulse{50%{opacity:.35}}
 /* working (ADR 0153): the sparkle turns slowly and breathes; the hero's button wears a soft moving sheen */
 @keyframes mm-spin{to{transform:rotate(360deg)}}
 @keyframes mm-sheen{from{background-position:-160% 0}to{background-position:260% 0}}
-.mm-maint .busy svg{color:var(--blue);animation:mm-spin 2.4s linear infinite,mm-pulse 1.4s ease-in-out infinite}
+.mm-maint .busy svg{color:var(--accent);animation:mm-spin 2.4s linear infinite,mm-pulse 1.4s ease-in-out infinite}
 .mm-maint-btn.busy{background-image:linear-gradient(100deg,transparent 30%,color-mix(in srgb,#fff 28%,transparent) 50%,transparent 70%);background-size:60% 100%;background-repeat:no-repeat;animation:mm-sheen 1.8s ease-in-out infinite}
 /* done: one burst of light around the sparkle, then calm */
 @keyframes mm-burst{0%{box-shadow:0 0 0 0 color-mix(in srgb,var(--green) 55%,transparent)}70%{box-shadow:0 0 0 12px transparent}100%{box-shadow:0 0 0 0 transparent}}
@@ -45,12 +45,12 @@ div.bm-page.agent-overview{display:block;min-width:0;padding:28px 32px 48px;font
 .mm-head p{margin:0;font-size:var(--fs-s);color:var(--text-3)}
 .mm-md code{font-family:var(--mono);font-size:.92em;padding:0 4px;border-radius:4px;background:var(--surface-3);border:1px solid var(--border)}
 .mm-md strong{color:var(--text);font-weight:650}
-.mm-md a{color:var(--blue)}
+.mm-md a{color:var(--accent)}
 .mm-md p{display:inline;margin:0}
 
 /* Lo sapevi? */
 .mm-facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px}
-.mm-fact{--tone:var(--blue);position:relative;display:flex;flex-direction:column;gap:8px;min-width:0;padding:14px 16px 12px;border:1px solid var(--border);border-radius:var(--r-l);
+.mm-fact{--tone:var(--accent);position:relative;display:flex;flex-direction:column;gap:8px;min-width:0;padding:14px 16px 12px;border:1px solid var(--border);border-radius:var(--r-l);
   background:radial-gradient(120% 90% at 100% 0,color-mix(in srgb,var(--tone) 13%,transparent),transparent 60%),linear-gradient(160deg,var(--surface-2),var(--surface) 70%);overflow:hidden;
   animation:mm-in .32s var(--ease,ease) both;animation-delay:calc(var(--row-index,0) * 40ms)}
 .mm-fact::before{content:"";position:absolute;inset:0 auto 0 0;width:3px;background:var(--tone)}
@@ -127,7 +127,7 @@ div.bm-page.agent-overview{display:block;min-width:0;padding:28px 32px 48px;font
 
 /* ── memory cards: rendered lines, date chips, a visible "Apri il file" ── */
 .mm-card-title{all:unset;cursor:pointer;border-radius:4px}
-.mm-card-title:hover{color:var(--blue);text-decoration:underline;text-underline-offset:3px}
+.mm-card-title:hover{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
 .mm-card-title:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .mm-lines{margin:0;padding:8px 10px;list-style:none;display:grid;gap:6px;border:1px solid var(--border);border-left:2px solid var(--tone);border-radius:var(--r-s);background:color-mix(in srgb,var(--bg) 45%,transparent);font-size:var(--fs-s);line-height:1.5;color:var(--text-2)}
 .mm-lines li{display:flex;align-items:baseline;gap:8px;min-width:0;overflow-wrap:anywhere}

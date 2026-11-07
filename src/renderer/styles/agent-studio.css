@@ -3,7 +3,7 @@
    Gradient surfaces, 12px radii, one hairline in the character's colour (--tone, set inline); only theme tokens
    (tokens.css), so dark and light follow the app; motion off under reduced motion; one column on narrow windows. The
    readiness and interview rules at the end are shared with the rest of the app. */
-.agent-detail{--tone:var(--blue);max-width:1240px;margin:auto;padding:22px 32px 56px;box-sizing:border-box;width:100%;color:var(--text);overflow-wrap:anywhere;container:agent-detail/inline-size}
+.agent-detail{--tone:var(--accent);max-width:1240px;margin:auto;padding:22px 32px 56px;box-sizing:border-box;width:100%;color:var(--text);overflow-wrap:anywhere;container:agent-detail/inline-size}
 .ad-back{display:inline-flex;align-items:center;gap:6px;margin:0 0 14px;padding:4px 8px 4px 4px;border:0;border-radius:var(--r-s);background:none;color:var(--text-3);font:inherit;font-size:var(--fs-s);cursor:pointer}
 .ad-back:hover{color:var(--text);background:var(--surface-2)}.ad-back:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .ad-body{display:grid;gap:16px;min-width:0}
@@ -33,7 +33,7 @@
 .ad-actions .catalog-run form{order:5;flex-basis:100%;display:grid;gap:10px;margin-top:6px;padding:12px;border:1px solid var(--border-2);border-radius:var(--r-m);background:var(--surface)}
 .ad-actions .catalog-run input,.ad-actions .catalog-run textarea{width:100%}
 
-.ad-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 14px;border:1px solid var(--blue-line);border-radius:var(--r-m);background:var(--blue-bg);color:var(--text);font-size:var(--fs-s)}
+.ad-banner{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:10px 14px;border:1px solid var(--accent-line);border-radius:var(--r-m);background:var(--accent-bg);color:var(--text);font-size:var(--fs-s)}
 .studio-alert{margin:0;padding:10px 14px;border:1px solid var(--amber-line);border-radius:var(--r-m);background:var(--amber-bg);font-size:var(--fs-s);color:var(--text)}
 .studio-alert p{margin:0 0 8px}.studio-alert-actions{display:flex;gap:8px;flex-wrap:wrap}
 

@@ -68,7 +68,7 @@ export function Graph({ nodes, edges, selected, onSelect, label, toolbar, legend
   return <div className={`dash-graph ${dense ? 'dense' : ''} ${selected ? 'focused' : ''}`} data-testid={testId}>
     {toolbar && <div className="dash-map-toolbar" data-testid="dash-map-toolbar" role="toolbar" aria-label={t('brainText.graph.commands')}>{toolbar}</div>}
     {nodes.length ? <div className="dash-graph-canvas" ref={canvas}><svg viewBox={`${x} ${y} ${width} ${height}`} role="group" aria-label={label} data-size={`${size.w}x${size.h}`}>
-      <defs><radialGradient id="dash-aura"><stop stopColor="var(--blue)" stopOpacity=".13" /><stop offset="1" stopColor="var(--blue)" stopOpacity="0" /></radialGradient></defs>
+      <defs><radialGradient id="dash-aura"><stop stopColor="var(--accent)" stopOpacity=".13" /><stop offset="1" stopColor="var(--accent)" stopOpacity="0" /></radialGradient></defs>
       <circle cx={size.w / 2} cy={size.h / 2} r={Math.min(size.w, size.h) * .48} fill="url(#dash-aura)" />
       <g aria-hidden="true">{edges.map((edge, i) => {
         const a = points.get(edge.from), b = points.get(edge.to);

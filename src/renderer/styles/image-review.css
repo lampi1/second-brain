@@ -8,4 +8,4 @@
 .report-image-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px; max-width: min(720px, calc(100vw - 64px)); }
 .report-image-hint { flex-basis: 100%; color: var(--text-2); font-size: 12px; }
 
-.report-image-tools .btn[aria-pressed="true"] { background: var(--blue-bg); color: var(--blue); border-color: var(--blue); }
+.report-image-tools .btn[aria-pressed="true"] { background: var(--accent-bg); color: var(--accent); border-color: var(--accent); }

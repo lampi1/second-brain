@@ -12,7 +12,7 @@
 .help-tip::after { content: ""; position: absolute; inset: -5px; } /* a larger hit area than the 15 px mark */
 .help-tip.with-text { margin-left: 0; }
 .help-tip:hover, .help-tip[aria-expanded="true"] { color: var(--text-2); }
-.help-tip:hover .help-tip-mark, .help-tip[aria-expanded="true"] .help-tip-mark { color: var(--blue); border-color: var(--blue-line); background: var(--blue-bg); }
+.help-tip:hover .help-tip-mark, .help-tip[aria-expanded="true"] .help-tip-mark { color: var(--accent); border-color: var(--accent-line); background: var(--accent-bg); }
 .help-tip:focus-visible { outline: none; }
 .help-tip:focus-visible .help-tip-mark { outline: 2px solid var(--focus); outline-offset: 2px; }
 

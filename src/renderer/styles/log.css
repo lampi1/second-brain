@@ -2,7 +2,7 @@
    numbers, the filters, then two columns: the tasks as chains (a card each, steps on a thread, delegated chats indented)
    and the live stream of every event, grouped by day; a click opens the details in a side panel. One colour per kind of
    event, shared by the chips, the badges and the stream. Motion off for reduced-motion users. */
-.lg-page { --k-task: var(--blue); --k-classifier: var(--violet); --k-estimate: #4fb8d1; --k-error: var(--red); --k-memory: var(--green);
+.lg-page { --k-task: var(--accent); --k-classifier: var(--violet); --k-estimate: #4fb8d1; --k-error: var(--red); --k-memory: var(--green);
   --k-brain: var(--amber); --k-app: var(--text-3); }
 :root[data-theme="light"] .lg-page { --k-estimate: #1f8aa3; }
 .lg-page .lg-live { display: inline-flex; align-items: center; gap: 8px; align-self: flex-end; margin-bottom: 8px; }
@@ -34,8 +34,8 @@
 /* a task: its chain of steps */
 .lg-task { position: relative; background: linear-gradient(150deg, var(--surface-2), var(--surface)); border: 1px solid var(--border); border-radius: 14px; padding: 14px 14px 10px;
   animation: dash-enter 360ms cubic-bezier(.2, .8, .2, 1) both; transition: border-color 180ms, box-shadow 180ms; }
-.lg-task:hover { border-color: var(--border-3); box-shadow: 0 14px 34px -26px var(--blue); }
-.lg-task.tone-run { border-color: var(--blue-line); }
+.lg-task:hover { border-color: var(--border-3); box-shadow: 0 14px 34px -26px var(--accent); }
+.lg-task.tone-run { border-color: var(--accent-line); }
 .lg-task.tone-wait { border-color: var(--amber-line); }
 .lg-task > header { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 10px; align-items: center; }
 .lg-task-title { min-width: 0; }
@@ -43,8 +43,8 @@
 .lg-task-title small { color: var(--text-3); font-size: 11.5px; font-variant-numeric: tabular-nums; }
 .lg-state { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 99px; font-size: 11px; font-weight: 600; background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
 .lg-state > i { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
-.lg-state-run { background: var(--blue-bg); color: var(--blue); }
-.lg-state-run > i { animation: dash-beat 1.6s ease-in-out infinite; box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 22%, transparent); }
+.lg-state-run { background: var(--accent-bg); color: var(--accent); }
+.lg-state-run > i { animation: dash-beat 1.6s ease-in-out infinite; box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
 .lg-state-wait { background: var(--amber-bg); color: var(--amber); }
 .lg-state-err { background: var(--red-bg); color: var(--red); }
 .lg-state-done { background: var(--green-bg); color: var(--green); }
@@ -62,7 +62,7 @@
   background: var(--surface); border: 2px solid var(--border-3); color: var(--text-3); box-sizing: border-box; }
 .lg-step.k-open .lg-step-ico { border-color: var(--violet); color: var(--violet); }
 .lg-step.k-classifier .lg-step-ico { width: 18px; height: 18px; margin: 4px; border-width: 1.5px; font-size: 9px; border-color: var(--k-classifier); color: var(--k-classifier); }
-.lg-step.k-work .lg-step-ico { border-color: var(--blue); color: var(--blue); }
+.lg-step.k-work .lg-step-ico { border-color: var(--accent); color: var(--accent); }
 .lg-step.k-request .lg-step-ico { border-color: var(--amber); color: var(--amber); }
 .lg-step.k-result .lg-step-ico, .lg-step.k-verdict.lv-ok .lg-step-ico { border-color: var(--green); background: var(--green-bg); color: var(--green); }
 .lg-step.k-review .lg-step-ico, .lg-step.k-verdict .lg-step-ico { border-color: var(--violet); color: var(--violet); }

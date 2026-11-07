@@ -2,7 +2,7 @@
    comes from the tone: --tone tints the icon square, the label, the border, the action and the time bar. «celebrate»
    is the bigger card for the end of the maintenance, with a soft violet/green glow and a one-shot sparkle burst. */
 .notif {
-  --tone: var(--blue);
+  --tone: var(--accent);
   pointer-events: auto; position: relative; overflow: hidden; display: flex; align-items: center; gap: 11px; min-width: 0;
   padding: 10px 8px 10px 10px; border-radius: var(--r-xl);
   background: color-mix(in srgb, var(--surface-2) 93%, var(--tone));
@@ -46,8 +46,8 @@
 .tone-celebrate .notif-badge { width: 42px; height: 42px; border-radius: 13px;
   background: linear-gradient(135deg, color-mix(in srgb, var(--violet) 34%, transparent), color-mix(in srgb, var(--green) 24%, transparent)); }
 .tone-celebrate .notif-title { font-size: 14.5px; }
-.tone-celebrate .notif-act { background: var(--violet); color: var(--on-accent); }
-.tone-celebrate .notif-act:hover { background: color-mix(in srgb, var(--violet) 86%, var(--text)); }
+.tone-celebrate .notif-act { background: var(--accent); color: var(--on-accent); }
+.tone-celebrate .notif-act:hover { background: var(--accent-strong); }
 .notif-sparks { position: absolute; left: 35px; top: 50%; width: 0; height: 0; pointer-events: none; }
 .notif-sparks i { position: absolute; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: var(--violet); opacity: 0;
   animation: notifSpark 900ms ease-out forwards; }

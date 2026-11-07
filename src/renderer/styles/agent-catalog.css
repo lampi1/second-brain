@@ -35,7 +35,7 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .catalog-roles{align-items:stretch}
 .catalog-roles>.catalog-card>.bm-flip-inner{flex:1}
 .catalog-roles .bm-face-front>.catalog-stats{margin-top:auto}
-.catalog-card{--tone:var(--blue);position:relative;min-width:0;display:flex;flex-direction:column;gap:14px;padding:18px 18px 14px;border:1px solid var(--border);border-radius:var(--r-l);background:linear-gradient(160deg,var(--surface-2),var(--surface) 62%);container-type:inline-size;transition:border-color var(--dur-slow),transform var(--dur-slow) var(--ease),box-shadow var(--dur-slow)}
+.catalog-card{--tone:var(--accent);position:relative;min-width:0;display:flex;flex-direction:column;gap:14px;padding:18px 18px 14px;border:1px solid var(--border);border-radius:var(--r-l);background:linear-gradient(160deg,var(--surface-2),var(--surface) 62%);container-type:inline-size;transition:border-color var(--dur-slow),transform var(--dur-slow) var(--ease),box-shadow var(--dur-slow)}
 .catalog-card::before{content:"";position:absolute;inset:0 0 auto;height:2px;border-radius:var(--r-l) var(--r-l) 0 0;background:linear-gradient(90deg,var(--tone),transparent 85%);opacity:.75;pointer-events:none}
 .catalog-card:hover,.catalog-card:focus-within{border-color:var(--border-3);transform:translateY(-2px);box-shadow:0 16px 36px -22px var(--tone)}
 
@@ -100,7 +100,7 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .catalog-gauge circle{fill:none;stroke-width:6}
 .catalog-gauge .track{stroke:var(--surface-3)}
 .catalog-gauge .fill{stroke:var(--perf,var(--text-4));stroke-linecap:round;transition:stroke-dasharray 600ms var(--ease)}
-.catalog-perf[data-band=top]{--perf:var(--green)}.catalog-perf[data-band=good]{--perf:var(--blue)}
+.catalog-perf[data-band=top]{--perf:var(--green)}.catalog-perf[data-band=good]{--perf:var(--accent)}
 .catalog-perf[data-band=fair]{--perf:var(--amber)}.catalog-perf[data-band=low]{--perf:var(--red)}
 .catalog-perf[data-band=warmup] .fill{stroke:var(--text-3)}
 .catalog-perf[data-band] p span{color:var(--perf,var(--text-2));font-weight:550}
@@ -168,7 +168,7 @@ section.agent-overview p{white-space:normal;overflow:visible;text-overflow:clip}
 .judging-cost { margin: 0; color: var(--text-3); font-size: var(--fs-s); font-variant-numeric: tabular-nums; }
 .judging-off { margin: 0; padding: 4px 8px; border-left: 2px solid var(--amber-line); background: var(--amber-bg); color: var(--amber); font-size: var(--fs-s); border-radius: 4px; }
 .judging-switch[data-on="true"] .judging-cost { color: var(--text-2); }
-.judging-toggle { flex: none; position: relative; width: 42px; height: 24px; border-radius: 12px; border: 1px solid var(--border-3); background: var(--surface-4); cursor: pointer; padding: 0; transition: background var(--dur-fast) var(--ease); }
+.judging-toggle { flex: none; position: relative; width: 42px; height: 24px; border-radius: 12px; border: 1px solid var(--border-control); background: var(--surface-4); cursor: pointer; padding: 0; transition: background var(--dur-fast) var(--ease); }
 .judging-toggle .judging-knob { position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--text-2); transition: transform var(--dur-fast) var(--ease); }
 .judging-toggle.on { background: var(--green); border-color: var(--green); }
 .judging-toggle.on .judging-knob { transform: translateX(18px); background: #fff; }

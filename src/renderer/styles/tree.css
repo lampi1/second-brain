@@ -13,7 +13,7 @@
 .tree-rails { position: absolute; inset: 0 auto 0 0; width: 0; pointer-events: none; }
 .tree-rail { position: absolute; top: 0; bottom: 0; left: calc((var(--level) - var(--depth) + 1) * var(--tree-step)); width: 2px; border-radius: 1px; background: var(--thread); }
 .tree-elbow { position: absolute; left: 0; top: 0; width: calc(var(--tree-step) - var(--tree-in) - 4px); height: 27px; border-left: 2px solid var(--thread); border-bottom: 2px solid var(--thread); border-bottom-left-radius: 10px; }
-.tree-elbow.line-run { border-color: color-mix(in srgb, var(--blue) 55%, var(--thread)); }
+.tree-elbow.line-run { border-color: color-mix(in srgb, var(--accent) 55%, var(--thread)); }
 .tree-elbow.line-wait { border-color: color-mix(in srgb, var(--amber) 60%, var(--thread)); }
 .tree-elbow.line-done { border-color: color-mix(in srgb, var(--green) 45%, var(--thread)); }
 .tree-elbow.line-err { border-color: color-mix(in srgb, var(--red) 50%, var(--thread)); }
@@ -25,20 +25,20 @@
 /* Compact (owner, 2026-10-22): one head row (face, task, role, skills, model, time, state, ↗), a quiet line with the
    parent and the cost, then every step on a dense line; the boxes (ask, error, note, result) sit under the steps. */
 .delegation-card { --dc-pad: 12px; --dc-text: 28px; position: relative; isolation: isolate; overflow: hidden; min-width: 0; padding: 8px var(--dc-pad) 9px; border: 1px solid var(--border); border-radius: var(--r-l, 12px);
-  background: linear-gradient(160deg, var(--surface-2), var(--surface) 62%); cursor: pointer; --accent: var(--text-4);
+  background: linear-gradient(160deg, var(--surface-2), var(--surface) 62%); cursor: pointer; --dc-tone: var(--text-4);
   transition: border-color var(--dur-fast), box-shadow var(--dur-fast); }
-.delegation-card::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(90% 70% at 0% 0%, color-mix(in srgb, var(--accent) 10%, transparent), transparent 60%); }
+.delegation-card::before { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(90% 70% at 0% 0%, color-mix(in srgb, var(--dc-tone) 10%, transparent), transparent 60%); }
 .delegation-card:hover { border-color: var(--border-3); }
 .delegation-card.is-open { cursor: default; }
 .delegation-card.is-open .dc-summary { cursor: pointer; }
-.delegation-card.flash { box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 40%, transparent); }
-.delegation-card.s-run, .delegation-card.s-start { --accent: var(--blue); border-color: color-mix(in srgb, var(--blue) 26%, var(--border)); }
+.delegation-card.flash { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 40%, transparent); }
+.delegation-card.s-run, .delegation-card.s-start { --dc-tone: var(--accent); border-color: color-mix(in srgb, var(--accent) 26%, var(--border)); }
 .delegation-card.s-start { border-color: var(--border); }
-.delegation-card.s-wait { --accent: var(--amber); border-color: var(--amber-line); box-shadow: 0 0 0 3px var(--amber-bg); }
-.delegation-card.s-done, .delegation-card.s-partial { --accent: var(--green); }
-.delegation-card.s-err, .delegation-card.s-refused, .delegation-card.s-blocked { --accent: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--border)); }
-.delegation-card.s-stall { --accent: var(--amber); }
-.delegation-card.s-queued { --accent: var(--text-4); border-style: dashed; border-color: var(--border-3); background: transparent; }
+.delegation-card.s-wait { --dc-tone: var(--amber); border-color: var(--amber-line); box-shadow: 0 0 0 3px var(--amber-bg); }
+.delegation-card.s-done, .delegation-card.s-partial { --dc-tone: var(--green); }
+.delegation-card.s-err, .delegation-card.s-refused, .delegation-card.s-blocked { --dc-tone: var(--red); border-color: color-mix(in srgb, var(--red) 40%, var(--border)); }
+.delegation-card.s-stall { --dc-tone: var(--amber); }
+.delegation-card.s-queued { --dc-tone: var(--text-4); border-style: dashed; border-color: var(--border-3); background: transparent; }
 /* a finished child folded by itself: quieter, its result in view */
 .delegation-card.is-folded { background: color-mix(in srgb, var(--surface) 70%, transparent); }
 .delegation-card.is-folded .dc-title { font-weight: 500; color: var(--text-2); }
@@ -63,13 +63,13 @@
 .dc-step.is-done { color: var(--text-3); }
 .dc-step.is-done .mk { color: var(--green); }
 .dc-step.is-cur { color: var(--text); font-weight: 500; }
-.dc-step.is-cur .mk { color: var(--blue); }
+.dc-step.is-cur .mk { color: var(--accent); }
 .dc-step.is-todo, .dc-step.is-todo .mk { color: var(--text-4); }
 .dc-step.is-bad .mk { color: var(--red); }
 .dc-step.is-todo .mk { font-weight: 400; }
 .dc-step .at { color: var(--text-4); font-size: 10.5px; font-weight: 400; font-variant-numeric: tabular-nums; }
 .dc-more { display: block; margin: 1px 0 0 calc(var(--dc-text) + 18px); padding: 0; border: 0; background: none; font: 500 11px var(--font); color: var(--text-3); cursor: pointer; }
-.dc-more:hover { color: var(--blue); text-decoration: underline; text-underline-offset: 2px; }
+.dc-more:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
 .dc-fold-steps { margin-top: 4px; margin-left: var(--dc-text); }
 .dc-k { display: block; font: 700 9.5px var(--font); letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); margin-bottom: 1px; }
 .dc-k-sub { font: 400 11px var(--font); letter-spacing: 0; text-transform: none; color: var(--text-4); }
@@ -80,13 +80,13 @@
 .dc-ask-why { font-size: 12px; color: var(--text-2); }
 .dc-act { display: inline-flex; gap: 6px; }
 .dc-ask .dc-act { display: flex; margin-top: 7px; }
-.dc-btn-amber { background: var(--amber); border-color: var(--amber); color: #1b1304; font-weight: 600; }
+.dc-btn-amber { background: var(--amber); border-color: var(--amber); color: var(--on-amber); font-weight: 600; }
 .dc-btn-amber:hover:not(:disabled) { background: color-mix(in srgb, var(--amber) 88%, #fff); }
 :root[data-theme="light"] .dc-btn-amber { color: #fff; }
 .dc-btn-quiet { background: transparent; border-color: transparent; color: var(--text-2); }
 .dc-btn-quiet:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
 /* the result: a line on the state's colour rather than a second box */
-.dc-res { padding: 2px 0 2px 10px; border-radius: 0; border-left: 2px solid color-mix(in srgb, var(--accent) 55%, var(--border)); }
+.dc-res { padding: 2px 0 2px 10px; border-radius: 0; border-left: 2px solid color-mix(in srgb, var(--dc-tone) 55%, var(--border)); }
 .dc-res-out { margin: 1px 0 0; font-size: 12.5px; color: var(--text); line-height: 1.5; white-space: pre-line; }
 .dc-crit { list-style: none; margin: 4px 0 0; padding: 0; display: flex; flex-direction: column; gap: 0; font-size: 12px; line-height: 1.5; color: var(--text-2); }
 .dc-crit li { display: grid; grid-template-columns: 14px 1fr; gap: 4px; }
@@ -98,8 +98,8 @@
 .dc-note b { color: var(--text); }
 .dc-foot { display: flex; align-items: center; gap: 10px; margin: 7px 0 0 var(--dc-text); font-size: 11.5px; color: var(--text-3); }
 .dc-cost { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dc-open { flex: none; display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--r-s); background: none; color: var(--blue); font: 600 13px var(--font); cursor: pointer; }
-.dc-open:hover { background: var(--blue-bg); }
+.dc-open { flex: none; display: inline-grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: var(--r-s); background: none; color: var(--accent); font: 600 13px var(--font); cursor: pointer; }
+.dc-open:hover { background: var(--accent-bg); }
 .dc-open:focus-visible, .delegation-card button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 /* expanded in place: the whole chat under the card's summary */
 .dc-chat { margin: 9px calc(-1 * var(--dc-pad)) -9px; border-top: 1px solid var(--border); cursor: auto; }
@@ -124,7 +124,7 @@
 .kids-sep { color: var(--text-4); }
 .kid-sum { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .kid-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-4); }
-.kid-dot.run { background: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 20%, transparent); }
+.kid-dot.run { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
 .kid-dot.wait { background: var(--amber); box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 22%, transparent); }
 .kid-dot.done { background: var(--green); }
 .kid-dot.err { background: var(--red); }
@@ -133,7 +133,7 @@
 .kids-stack > * + * { margin-left: -5px; }
 .kids-segs { display: inline-flex; gap: 2px; }
 .kids-segs i { width: 14px; height: 4px; border-radius: 2px; background: var(--surface-4); }
-.kids-segs .seg-run { background: var(--blue); }
+.kids-segs .seg-run { background: var(--accent); }
 .kids-segs .seg-wait { background: var(--amber); }
 .kids-segs .seg-done { background: var(--green); }
 .kids-segs .seg-err { background: var(--red); }
@@ -155,7 +155,7 @@
 .tn-list { display: flex; flex-direction: column; gap: 1px; margin: 0; padding: 0; list-style: none; }
 .tn { position: relative; display: grid; grid-template-columns: 14px minmax(0, 1fr); column-gap: 6px; padding: 4px 8px 4px calc(6px + var(--d, 0) * 16px); border-radius: var(--r-s); }
 .tn.on { background: var(--surface-3); }
-.tn.on::before { content: ""; position: absolute; left: -6px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: var(--blue); }
+.tn.on::before { content: ""; position: absolute; left: -6px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
 :root[data-theme="light"] .tn.on { background: var(--surface); box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgba(20, 24, 33, .05); }
 .tn-guide { position: absolute; top: -1px; bottom: -1px; left: calc(13px + var(--g) * 16px); width: 1px; background: var(--border-3); }
 .tn-chev { grid-column: 1; align-self: start; display: grid; place-items: center; width: 14px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--text-4); cursor: pointer; }
@@ -168,7 +168,7 @@
 .tn.ended .tn-task { color: var(--text-3); font-weight: 400; }
 .tn-main:hover .tn-task { color: var(--text); text-decoration: underline; text-decoration-color: var(--border-3); text-underline-offset: 2px; }
 .tn-dot { align-self: center; width: 7px; height: 7px; border-radius: 50%; background: var(--text-4); }
-.tn-dot.dot-run { background: var(--blue); box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 20%, transparent); }
+.tn-dot.dot-run { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
 .tn-dot.dot-wait { background: var(--amber); box-shadow: 0 0 0 3px color-mix(in srgb, var(--amber) 22%, transparent); }
 .tn-dot.dot-done { background: var(--green); }
 .tn-dot.dot-err { background: var(--red); }

@@ -2,7 +2,7 @@
    visual's card in a chat's list, the ones attached to a question and the full-width view. Only design tokens
    (tokens.css), so dark and light follow the theme; status colors always come with their word, never color alone. */
 .gu-art { flex: none; margin: 6px 0; border: 1px solid var(--border-2); border-radius: var(--r-m); background: var(--surface-2); overflow: hidden; }
-.gu-art.attached { margin: 0 0 6px; border-color: var(--blue-line); }
+.gu-art.attached { margin: 0 0 6px; border-color: var(--accent-line); }
 .gu-head { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 7px 8px 0 10px; color: var(--text-3); }
 .gu-title { font: 600 13px var(--font-display); color: var(--text); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gu-kind, .gu-from { flex: none; font-size: 11px; color: var(--text-3); padding: 0 6px; border-radius: 99px; background: var(--surface-3); }
@@ -29,8 +29,8 @@
 .gu-status { display: inline-flex; align-items: center; gap: 5px; flex: none; font-size: 11.5px; font-weight: 600; white-space: nowrap; }
 .gu-status i, .gu-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: none; }
 .gu-ok { color: var(--green); } .gu-fail { color: var(--red); } .gu-blocked { color: var(--amber); } .gu-warn { color: var(--amber); }
-.gu-running { color: var(--blue-strong); } .gu-todo { color: var(--text-3); } .gu-info { color: var(--text-2); }
-.gu-link { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 1px 7px; border-radius: 99px; border: 1px solid var(--blue-line); background: var(--blue-bg); color: var(--blue-strong); font: inherit; font-size: 11.5px; text-decoration: none; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gu-running { color: var(--accent-strong); } .gu-todo { color: var(--text-3); } .gu-info { color: var(--text-2); }
+.gu-link { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; padding: 1px 7px; border-radius: 99px; border: 1px solid var(--accent-line); background: var(--accent-bg); color: var(--accent-strong); font: inherit; font-size: 11.5px; text-decoration: none; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gu-link:hover { text-decoration: underline; }
 .gu-link.off { border-color: var(--border-2); background: none; color: var(--text-3); cursor: default; }
 .gu-count { flex: none; font-size: 11px; color: var(--text-3); padding: 0 6px; border-radius: 99px; background: var(--surface-3); }
@@ -62,7 +62,7 @@
 .gu-board { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: thin; align-items: flex-start; }
 .gu-lane { flex: 1 0 180px; max-width: 320px; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: var(--r-s); background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--border-3); }
 .gu-lane-ok { border-top-color: var(--green); } .gu-lane-fail { border-top-color: var(--red); } .gu-lane-blocked, .gu-lane-warn { border-top-color: var(--amber); }
-.gu-lane-running { border-top-color: var(--blue); }
+.gu-lane-running { border-top-color: var(--accent); }
 .gu-lane-head { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text); }
 .gu-lane-head b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gu-item { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-radius: var(--r-xs); background: var(--surface-2); border: 1px solid var(--border); font-size: 12.5px; color: var(--text); }
@@ -75,7 +75,7 @@
 .gu-diff { display: flex; flex-direction: column; gap: 8px; }
 .gu-diff-area { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--text); margin-bottom: 2px; }
 .gu-diff-file { display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 8px; padding: 3px 0 3px 10px; border-left: 2px solid var(--border-2); font-size: 12.5px; }
-.gu-path { padding: 0; border: 0; background: none; font: inherit; color: var(--blue-strong); cursor: pointer; text-decoration: none; text-align: left; overflow-wrap: anywhere; }
+.gu-path { padding: 0; border: 0; background: none; font: inherit; color: var(--accent-strong); cursor: pointer; text-decoration: none; text-align: left; overflow-wrap: anywhere; }
 .gu-path:hover { text-decoration: underline; }
 .gu-path.off { color: var(--text); cursor: default; }
 .gu-path .mono { font-family: var(--mono); font-size: 12px; }
@@ -86,10 +86,10 @@
 /* barChart: one series, recessive axis, text in text inks */
 .gu-bars { display: block; max-width: 760px; }
 .gu-bars .gu-axis { stroke: var(--border-3); stroke-width: 1; }
-.gu-bars .gu-fill { fill: var(--blue); }
+.gu-bars .gu-fill { fill: var(--accent); }
 .gu-bars .gu-hit { fill: transparent; }
 .gu-bars .gu-bar:hover .gu-hit { fill: var(--surface-3); }
-.gu-bars .gu-bar:hover .gu-fill { fill: var(--blue-strong); }
+.gu-bars .gu-bar:hover .gu-fill { fill: var(--accent-strong); }
 .gu-bars .gu-label { fill: var(--text-2); font: 12px var(--font); }
 .gu-bars .gu-value { fill: var(--text); font: 600 12px var(--font); }
 
@@ -100,7 +100,7 @@
 /* inline code you can copy (lib/copyable.ts) and the preview of a clicked link or file (LinkPeek.tsx) */
 .items .md code[data-copy] { cursor: copy; border-bottom: 1px dotted var(--border-3); }
 .items .md code[data-copy]:hover { background: var(--surface-3); }
-.items .md code[data-copy="path"] { cursor: pointer; color: var(--blue-strong); }
+.items .md code[data-copy="path"] { cursor: pointer; color: var(--accent-strong); }
 .items .md code.copied::after { content: " ✓"; color: var(--green); font-family: var(--font-ui, inherit); }
 .peek { display: flex; flex-direction: column; gap: 6px; padding: 8px; min-width: 0; }
 .peek-head { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--text-3); font-size: 12.5px; }
@@ -130,9 +130,9 @@
 .gu-link { min-height: 28px; white-space: normal; overflow-wrap: anywhere; }
 .gu-cards { grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 12px; }
 .gu-card { padding: 16px; gap: 12px; border-radius: 10px; }
-.gu-card.rec { border-color: var(--blue-line); box-shadow: inset 3px 0 var(--blue); }
+.gu-card.rec { border-color: var(--accent-line); box-shadow: inset 3px 0 var(--accent); }
 .gu-card-head { flex-wrap: wrap; font-size: 14px; line-height: 1.4; }
-.gu-rec { color: var(--blue-strong); background: var(--blue-bg); padding: 3px 8px; white-space: normal; }
+.gu-rec { color: var(--accent-strong); background: var(--accent-bg); padding: 3px 8px; white-space: normal; }
 .gu-card-sum, .gu-pros, .gu-cons { line-height: 1.55; overflow-wrap: anywhere; }
 .gu-tradeoffs > b { display: block; margin-bottom: 5px; font-size: 11px; color: var(--text-3); }
 .gu-card-foot { padding-top: 10px; }
@@ -153,9 +153,9 @@
 
 /* Choice body submits; its sibling disclosure only inspects. Every RequestPanel host uses this module. */
 .gu-choice { container-type: inline-size; min-width: 0; width: 100%; border: 1px solid var(--border-2); border-radius: 10px; background: var(--surface); overflow: hidden; }
-.gu-choice.rec { border-color: var(--blue-line); box-shadow: inset 3px 0 var(--blue); }
-.gu-choice.picked { background: var(--blue-bg); border-color: var(--blue); }
-.gu-choice.cur { border-color: var(--blue-line); }
+.gu-choice.rec { border-color: var(--accent-line); box-shadow: inset 3px 0 var(--accent); }
+.gu-choice.picked { background: var(--accent-bg); border-color: var(--accent); }
+.gu-choice.cur { border-color: var(--accent-line); }
 .gu-choice-answer { width: 100%; min-height: 68px; display: flex; align-items: flex-start; gap: 12px; padding: 14px; color: var(--text); text-align: left; border: 0; background: transparent; font: inherit; cursor: pointer; }
 .gu-choice-answer:hover:not(:disabled) { background: var(--surface-3); }
 .gu-choice-answer:disabled { opacity: .55; cursor: default; }
@@ -166,7 +166,7 @@
 .gu-choice-description { font-size: 12.5px; color: var(--text-2); line-height: 1.55; }
 .gu-choice.deny .gu-choice-key { color: var(--red); border-color: var(--red); }
 .gu-choice-preview { border-top: 1px solid var(--border); }
-.gu-choice-preview summary { padding: 10px 14px; color: var(--blue-strong); font-size: 12px; cursor: pointer; min-height: 36px; }
+.gu-choice-preview summary { padding: 10px 14px; color: var(--accent-strong); font-size: 12px; cursor: pointer; min-height: 36px; }
 .gu-choice-preview-body { padding: 0 14px 14px; overflow: auto; max-height: 440px; user-select: text; }
 .gu-choice-preview .gu-preview { margin-top: 8px; }
 .need-opts:has(> .gu-choice), .ask-actions:has(> .gu-choice), .wq-perm:has(> .gu-choice) { display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%; }
@@ -181,7 +181,7 @@
 .gu-chart-caption strong { color: var(--text); font-variant-numeric: tabular-nums; }
 .gu-chart-track { position: relative; height: 10px; margin-top: 6px; border-radius: 3px; background: var(--surface-3); }
 .gu-chart-zero { position: absolute; height: 16px; top: -3px; width: 1px; background: var(--border-3); }
-.gu-chart-fill { position: absolute; height: 100%; background: var(--blue); border-radius: 3px; transition: width 180ms ease, left 180ms ease; }
+.gu-chart-fill { position: absolute; height: 100%; background: var(--accent); border-radius: 3px; transition: width 180ms ease, left 180ms ease; }
 .gu-chart-fill.negative { background: var(--violet); }
 .gu-chart-note { color: var(--text-3); font-size: 11.5px; margin-top: 5px; }
 @media (prefers-reduced-motion: reduce) { .gu-chart-fill { transition: none; } }
