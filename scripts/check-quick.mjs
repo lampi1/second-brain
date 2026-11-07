@@ -21,10 +21,13 @@ const DOC_INPUTS = /^(src\/|docs\/|README\.md$|scripts\/readme-check\.mjs$)/;
 const posix = p => p.split(path.sep).join('/');
 const stem = p => posix(p).replace(SOURCE_EXT, '').replace(/\/index$/, '');
 
-/** The module specifiers a test file imports or mocks (static, dynamic, vi.mock). */
+/** type-only imports (`import type …`, `import { type A, type B } …`): erased at run time, the typecheck covers them */
+const TYPE_ONLY = /\bimport\s+type\s[^;]*?\bfrom\s*['"][^'"]+['"]|\bimport\s*\{\s*(?:type\s+[\w$]+(?:\s+as\s+[\w$]+)?\s*,?\s*)+\}\s*from\s*['"][^'"]+['"]/g;
+
+/** The module specifiers a test file imports or mocks at run time (static, dynamic, vi.mock; type-only ones skipped). */
 export function specifiers(text) {
   const out = [];
-  for (const m of text.matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\bvi\.(?:mock|doMock)\s*\(\s*)['"]([^'"]+)['"]/g)) out.push(m[1]);
+  for (const m of text.replace(TYPE_ONLY, '').matchAll(/(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+|\bvi\.(?:mock|doMock)\s*\(\s*)['"]([^'"]+)['"]/g)) out.push(m[1]);
   return out;
 }
 

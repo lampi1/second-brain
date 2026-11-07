@@ -17,7 +17,12 @@ const code = fs.readFileSync(path.join(import.meta.dirname, '..', '..', 'scripts
 describe('check:quick', () => {
   it('reads static, dynamic and mocked imports', () => {
     const text = "import { a } from '../../src/main/a';\nimport type { B } from '@shared/b';\nconst c = await import('../../src/main/c.js');\nvi.mock('../../src/main/d', () => ({}));\nimport 'node:fs';";
-    expect(specifiers(text)).toEqual(['../../src/main/a', '@shared/b', '../../src/main/c.js', '../../src/main/d', 'node:fs']);
+    expect(specifiers(text)).toEqual(['../../src/main/a', '../../src/main/c.js', '../../src/main/d', 'node:fs']);
+  });
+
+  it('skips type-only imports, which the typecheck covers', () => {
+    const text = "import type { A } from '@shared/contract';\nimport { type B, type C as D } from '../../src/main/b';\nimport { type E, f } from '../../src/main/e';";
+    expect(specifiers(text)).toEqual(['../../src/main/e']);
   });
 
   it('resolves relative, @shared and index specifiers; packages resolve to null', () => {
