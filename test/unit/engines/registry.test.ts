@@ -73,4 +73,15 @@ describe('engine registry', () => {
     setBrainEngines([api]);
     try { expect(sessionFor(engineOrThrow('local'), opts, sink, ctx)).toBeInstanceOf(ApiSession); } finally { setBrainEngines([]); }
   });
+
+  it('starts OpenCode, and only OpenCode, with the app\'s permission config (ADR 0221)', () => {
+    const ctx = { userData: process.cwd(), mcpUrl: null, appMcpUrl: null, showReplay: false, acpModelConfig: null, key: () => null, brainRoot: null };
+    const envOf = (s: unknown): NodeJS.ProcessEnv | undefined => (s as { opts: { env?: NodeJS.ProcessEnv } }).opts.env;
+    const oc = envOf(sessionFor(engineOrThrow('opencode'), { ...opts, toolPolicy: { allow: ['read', 'shell-read'] }, env: { SB_X: '1' } }, sink, ctx));
+    expect(oc?.SB_X).toBe('1');
+    const cfg = JSON.parse(oc?.OPENCODE_CONFIG_CONTENT ?? '{}') as { permission: { bash: Record<string, string>; edit: Record<string, string> } };
+    expect(cfg.permission.bash['*']).toBe('ask');
+    expect(cfg.permission.edit).toEqual({ '*': 'deny' });
+    expect(envOf(sessionFor(engineOrThrow('cursor'), opts, sink, ctx))?.OPENCODE_CONFIG_CONTENT).toBeUndefined();
+  });
 });

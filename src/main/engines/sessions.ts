@@ -13,6 +13,7 @@ import { claudeLaunch } from '../brain/adapters/claude-plugin';
 import { codexLaunch } from '../brain/adapters/codex';
 import { acpRules } from '../brain/adapters/acp-rules';
 import { codexPolicyFor } from '../brain/adapters/codex-policy';
+import { openCodeEnv } from '../brain/adapters/opencode-permission';
 import { ClaudeSession } from '../chats/claude';
 import { CodexSession } from '../chats/codex';
 import { listPrice, registryModels } from '../chats/live-cost';
@@ -36,6 +37,8 @@ export interface EngineContext {
   acpModelConfig: { reasoning: CursorReasoning | ''; fast: boolean } | null;
   /** the user's API key for this engine, read when needed; null = none (the engine uses its own login) */
   key: () => string | null;
+  /** the brain folder: its Claude deny rules hold on engines given their permission rules (ADR 0221) */
+  brainRoot?: string | null;
 }
 
 export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: SessionSink, ctx: EngineContext): HarnessSession {
@@ -76,6 +79,10 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
     case 'acp': {
       const command = engine.command ?? engine.id;
       const key = engine.keyEnv ? boundKey() : null;
+      const perms = engine.permissionConfig === 'opencode'
+        ? openCodeEnv({ tools: opts.toolPolicy ?? null, ceiling: opts.ceiling ?? null, readOnly: opts.readOnly }, opts.cwd, ctx.brainRoot ?? null, { ...process.env, ...opts.env })
+        : null;
+      const env = key && engine.keyEnv || perms ? { ...opts.env, ...perms, ...(key && engine.keyEnv ? { [engine.keyEnv]: key } : {}) } : null;
       return new AcpSession({
         brainInstructions: opts.env?.SB_ROUTINE_PACKAGE ? null : acpRules(opts.readOnly),
         ...opts, mcpConfig: null, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, extMcp: opts.readOnly ? [] : ctx.extMcp ?? [], showReplay: ctx.showReplay,
@@ -84,7 +91,7 @@ export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: Sessio
         ...(engine.modelOption ? { modelOption: true } : {}),
         ...(appAsks(engine) ? { appAsk: true } : {}),
         loginCommand: engine.login.length ? [command, ...engine.login].join(' ') : null,
-        ...(key && engine.keyEnv ? { env: { ...opts.env, [engine.keyEnv]: key } } : {}),
+        ...(env ? { env } : {}),
         ...(engine.cursorExtras ? cursorOptions(engine, ctx, opts.readOnly ? opts.chatId : null) : {}),
         ...(ctx.path ? { pathOverride: ctx.path } : {}), ...(ctx.appVersion ? { appVersion: ctx.appVersion } : {}),
       }, sink);

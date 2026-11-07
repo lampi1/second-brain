@@ -355,7 +355,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
     return sessionFor(engineOrThrow(harness), opts, sink, {
       userData: this.opts.userData, mcpUrl: this.opts.mcpUrlFor?.(opts.chatId) ?? null, appMcpUrl: this.appMcpFor(r),
       extMcp: this.opts.extMcp?.(opts.chatId).servers ?? [],
-      showReplay: !r?.items.length, acpModelConfig: this.acpModelConfig(), key: () => this.opts.keyFor?.(harness) ?? null,
+      showReplay: !r?.items.length, acpModelConfig: this.acpModelConfig(), key: () => this.opts.keyFor?.(harness) ?? null, brainRoot: this.opts.brainRoot?.() ?? null,
       ...(override ? { path: override } : {}), ...(this.opts.appVersion ? { appVersion: this.opts.appVersion } : {}),
     });
   }
