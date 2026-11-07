@@ -6,7 +6,9 @@
 //   env    CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS=1 → system/session_state_changed running/idle (authoritative)
 //   stdin  ← {"type":"user",…} turns (content: image blocks {type:image,source:{type:base64}} then the text) and {"type":"control_request",request_id,request:{subtype}} (initialize,
 //            interrupt, set_model, set_permission_mode, apply_flag_settings {effortLevel}, get_context_usage,
-//            rename_session)
+//            rename_session, remote_control: Claude Code Remote Control, ADR 0222 and remote-control.ts)
+//   remoteControl (the Orchestrator) adds --replay-user-messages: every user message the engine queues comes back with
+//            isReplay; ours carry the uuid send() gave them, the rest were typed on the phone and show as such
 //   stdout → SDK messages (system/init, stream_event deltas, assistant, user tool results, result with cost) and the
 //            CLI's own control requests: can_use_tool (permissions and AskUserQuestion), answered with
 //            {"type":"control_response","response":{"subtype":"success",request_id,response:{behavior,…}}}.
@@ -38,6 +40,7 @@ import { releaseId } from '../release';
 import { drift, record } from './drift';
 import { ownProcessGroup, sharedDir } from '../platform';
 import { AgentChildrenReporter } from './agent-children';
+import { bridgePatch, phoneText, readRemoteControlReply, type RemoteControlReply } from './remote-control';
 import type { ChildObservation } from '../../shared/agents';
 import { claudeMcp, claudeTools, suggestedAbove } from '../agents/tool-policy';
 import { BRIEF_GRACE_MS, BRIEF_REFUSAL, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
@@ -243,6 +246,8 @@ export class ClaudeSession implements HarnessSession {
   private badLines = 0;
   private cliVersion: string | null = null; // what the CLI says it is (initialize, system/init): drift reports name it
   private recording = false;          // a real CLI (not a test's .mjs fake): its message shapes go to drift.ts record
+  private readonly sentUuids = new Set<string>(); // our own messages' uuids: their replay is not the phone's
+  private remoteOn = false;           // Remote Control is on in this process: a replayed message not ours is the phone's
   private tasks = new Set<string>();  // background tasks started and not yet ended (task_started / task_notification)
   private readonly childTelemetry: AgentChildrenReporter;
   private readonly childTools = new Map<string, unknown>();
@@ -312,6 +317,7 @@ export class ClaudeSession implements HarnessSession {
     if (op.effort) a.push('--effort', op.effort);
     if (op.title && (!op.resume || op.fork)) a.push('--name', op.title);
     if (op.worktree && !op.resume) a.push('--worktree');
+    if (op.remoteControl && !op.readOnly) a.push('--replay-user-messages');
     const stable = op.stable ?? !!releaseId();
     const settings = mergeSettings(op.settings, compactSettings(op.compactWindowTokens), op.readOnly ? (op.webOnly ? WEB_ONLY_SETTINGS : READ_ONLY_SETTINGS) : null, op.readOnly && op.denyRead?.length ? { permissions: { deny: op.denyRead.map(claudeReadRule) } } : null, agentMcp && !agentMcp.connectors ? { disableClaudeAiConnectors: true } : null, roleSkills ? { permissions: { ask: ['Skill'] } } : null, stable ? stableGuards(op.localAppData ? path.join(op.localAppData, 'second-brain') : sharedDir()) : null);
     if (settings) a.push('--settings', JSON.stringify(settings)); // inline: session-only, no file is written
@@ -391,7 +397,9 @@ export class ClaudeSession implements HarnessSession {
     // images first, then the text (the Messages API order recommended for image questions)
     const content: Obj[] = images.map(im => ({ type: 'image', source: { type: 'base64', media_type: im.mimeType, data: im.data } }));
     if (text || !content.length) content.push({ type: 'text', text });
-    this.write({ type: 'user', message: { role: 'user', content }, parent_tool_use_id: null, session_id: this.sessionId ?? '' });
+    const uuid = crypto.randomUUID();
+    if (this.opts.remoteControl) this.sentUuids.add(uuid);
+    this.write({ type: 'user', message: { role: 'user', content }, parent_tool_use_id: null, session_id: this.sessionId ?? '', uuid });
     // a message queued behind a running turn is not timed (its wait is the other turn's)
     if (!this.turnOpen) this.turnT = { sent: Date.now(), warm: !!this.readyAt, n: ++this.turnsSent };
     if (!this.turnOpen) this.sink.changed({ effortSubmitted: this.selectedEffort });
@@ -464,6 +472,24 @@ export class ClaudeSession implements HarnessSession {
     // a fork before init does not know its own id yet: rename it once init names it (never the original session)
     if (!this.sessionId) { this.pendingTitle = title; return; }
     await this.control({ subtype: 'rename_session', title, source: 'host', session_id: this.sessionId });
+  }
+
+  async setRemoteControl(enabled: boolean, opts: { name?: string; reattach?: string | null } = {}): Promise<RemoteControlReply | null> {
+    if (!enabled) {
+      await this.control({ subtype: 'remote_control', enabled: false });
+      this.remoteOn = false;
+      return null;
+    }
+    // the engine registers with claude.ai before it answers: a longer wait than a local control
+    const r = await this.control({ subtype: 'remote_control', enabled: true, ...(opts.name ? { name: opts.name } : {}), ...(opts.reattach ? { reattach_session_id: opts.reattach } : {}) }, 60000);
+    const reply = readRemoteControlReply(r);
+    if (!reply) {
+      this.drift('remote_control reply', 'session_url', r);
+      throw new Error('Remote Control: il motore non ha dato il link della sessione.');
+    }
+    this.remoteOn = true;
+    log.info('chats', 'remote control on', { chat: this.opts.chatId, data: { reattached: !!opts.reattach, bridge: !!reply.bridgeSessionId } });
+    return reply;
   }
 
   async contextUsage(): Promise<ContextUsage | null> {
@@ -1000,6 +1026,7 @@ export class ClaudeSession implements HarnessSession {
   }
 
   private onUser(m: Obj): void {
+    if (m.isReplay === true) return this.onReplay(m);
     const content = o(m.message).content;
     // the user's own interrupt is told once, by its result (onResult); one the CLI reports by itself shows here
     if (typeof content === 'string') { if (/^\[Request interrupted/.test(content) && !this.stopping) this.sysCode('interrupted', undefined, 'info'); return; }
@@ -1022,6 +1049,16 @@ export class ClaudeSession implements HarnessSession {
         }
       } else if (b.type === 'text' && /^\[Request interrupted/.test(s(b.text)) && !this.stopping) this.sysCode('interrupted', undefined, 'info');
     }
+  }
+
+  /** A user message the engine queued, echoed (--replay-user-messages): ours are already shown; one typed on the phone
+   *  while Remote Control is on shows now, marked as the phone's. */
+  private onReplay(m: Obj): void {
+    const uuid = s(m.uuid);
+    if (uuid && this.sentUuids.delete(uuid)) return;
+    if (!this.remoteOn) return;
+    const text = phoneText(m, this.sentUuids);
+    if (text) this.sink.item({ kind: 'user', id: nextId('u'), at: Date.now(), text, via: 'phone' }, false);
   }
 
   private onResult(m: Obj): void {
@@ -1169,6 +1206,14 @@ export class ClaudeSession implements HarnessSession {
         const meta = o(m.compact_metadata);
         this.sink.changed({ compacted: { pre: num(meta.pre_tokens) ?? null, post: num(meta.post_tokens) ?? null } });
         this.sysCode('compacted', { pre: num(meta.pre_tokens) ?? '?', post: num(meta.post_tokens) ?? '?' }, 'info');
+        return;
+      }
+      case 'bridge_state': {
+        const st = s(m.state);
+        const p = bridgePatch(st, s(m.detail) ? cut(stripAnsi(s(m.detail)), 300) : undefined);
+        if (!p) { this.drift('bridge state', st, m); return; }
+        if (p.status === 'failed') this.remoteOn = false;
+        this.sink.changed({ remote: p });
         return;
       }
       case 'api_retry': this.sysCode('apiRetry', { attempt: num(m.attempt) ?? '?', max: num(m.max_retries) ?? '?', error: s(m.error) || num(m.error_status) || '' }, 'warn'); return;

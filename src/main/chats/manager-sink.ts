@@ -15,6 +15,7 @@ import { effortValue, initialEffort, observeEffort, submitEffort } from './effor
 import type { Rec } from './manager-types';
 import { ManagerWork } from './manager-work';
 import { sysItem } from './manager-helpers';
+import { pausedState } from './remote-control';
 
 /** What a session reports (items, requests, state patches) turned into the chat record and contract events. */
 export abstract class ManagerSink extends ManagerWork {
@@ -90,6 +91,8 @@ export abstract class ManagerSink extends ManagerWork {
         delete r.turnAt; // its turn is over, result or not
         r.handoffTurn?.done(null);
         delete r.s.background; // its background tasks died with it
+        // its Remote Control bridge went with it: on, it comes back with the next engine (manager-remote.ts)
+        if (r.s.remoteControl) r.s.remoteControl = pausedState(r.s.remoteControl);
         // died mid-turn with an error while the app runs: no result will come, so no onDone either; tell the brain now
         const crashed = !!error && r.working && !this.quitting;
         // gone with an error, or by itself in the middle of a turn: its work is not finished (no auto-close, ADR 0134)
@@ -223,6 +226,13 @@ export abstract class ManagerSink extends ManagerWork {
       else if (r.s.background) { delete r.s.background; r.s.backgroundEndedAt = r.activeAt = Date.now(); }
     }
     if (p.version) this.version = p.version;
+    if (p.remote && r.s.remoteControl?.on) {
+      // a lost bridge is off for good: the user turns it on again (a new link)
+      r.s.remoteControl = p.remote.status === 'failed'
+        ? { on: false, url: null, bridgeSessionId: null, status: 'failed', ...(p.remote.error ? { error: p.remote.error } : {}) }
+        : { ...r.s.remoteControl, status: p.remote.status };
+      if (p.remote.status === 'failed') save = true;
+    }
     if (p.call) {
       const a = r.after;
       if (a) { a.left--; if (a.left <= 0) r.after = undefined; }

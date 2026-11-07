@@ -306,6 +306,8 @@ export abstract class ManagerSessions extends ManagerPersistence {
       compactWindowTokens: r.maxContext ?? this.compactWindow(),
       // Native subagents inherit this environment: a per-chat model cannot prove a memory event's producer.
       env: { ...this.opts.env, SB_EVENT_CONTEXT: '' }, ...(extraArgs ? { extraArgs } : {}),
+      // the Orchestrator may turn on Remote Control (ADR 0222): its engine echoes queued messages, the phone's included
+      ...(r.s.isOrchestrator && engine.kind === 'claude' ? { remoteControl: true } : {}),
     };
     r.worktree = false; // created once; a resume re-enters it
     let sess: HarnessSession | null = null;
@@ -317,6 +319,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
     r.session = sess;
     this.updated(r);
     sess.start();
+    this.remoteAfterStart(r, sess);
   }
 
   /** pre-allowed on Claude: the Orchestrator's app-control tools (/mcp/app), and every chat's mail to other chats and
@@ -451,4 +454,6 @@ export abstract class ManagerSessions extends ManagerPersistence {
   protected abstract coldView(r: Rec): ColdView;
   protected abstract ttl(): number;
   protected abstract sinkFor(r: Rec, current: () => HarnessSession | null): SessionSink;
+  /** a new engine of r started: Remote Control comes back if it was on (manager-remote.ts, ADR 0222) */
+  protected abstract remoteAfterStart(r: Rec, sess: HarnessSession): void;
 }

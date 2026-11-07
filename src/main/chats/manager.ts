@@ -20,7 +20,7 @@
 // The class is built in layers, one concern per file (ADR 0200), each an abstract class extending the one before:
 // manager-core.ts (state, items) → -persistence (chats.json, runs) → -sessions (engines) → -checkpoints → -requests
 // (questions, permissions) → -continuity (hand-offs, cold notes) → -delegation (reports) → -lifecycle (stop, archive,
-// auto-close) → -work (assignments, user events, plans) → -sink (session reports) → this file: the ChatService entry
+// auto-close) → -work (assignments, user events, plans) → -sink (session reports) → -remote (Remote Control) → this file: the ChatService entry
 // points (list, create, send and deliver, Flash, set). Shapes in manager-types.ts, constants in manager-helpers.ts.
 import crypto from 'node:crypto';
 import type { ModelTier } from '../../shared/roles';
@@ -59,14 +59,14 @@ import { orchestratorContext } from './lampo-context';
 import { recallWarning } from '../search/hybrid/recall';
 import type { SubmissionReceipt, Rec } from './manager-types';
 import { sysItem, MODES, LAMPO_TITLE, LAMPO_POLICY, RESEARCH_TITLE, RESEARCH_FRAME, LAMPO_FRAME, FOLLOW_UP_WINDOW_MS, USER_NOTES_LABEL, EFFORTS, MODEL_ID, startTags, repoOf } from './manager-helpers';
-import { ManagerSink } from './manager-sink';
+import { ManagerRemote } from './manager-remote';
 export { RESUME_TEXT, turnReply, workBehind, WAITING_REASON, lastAnswer, LAMPO_TITLE, RESEARCH_TITLE, RUN_SAVE_MS, USER_NOTES_LABEL, userNoteLine, restoredOwner, startTags, repoOf } from './manager-helpers';
 export type { ChatManagerOptions, HandoffOptions, TurnEndInfo, CleanReportNote, UserWroteNote } from './manager-types';
 
 /** The refusal of anything but the user's own message (or an explicit app_reopen_chat) on a chat the user closed (ADR 0217). */
 const CLOSED_BY_USER = 'La chat è stata chiusa dall’utente: il suo lavoro è annullato e non riparte da sola. Solo l’utente può riaprirla (un agente, se l’utente lo chiede: app_reopen_chat).';
 
-export class ChatManager extends ManagerSink implements ChatService {
+export class ChatManager extends ManagerRemote implements ChatService {
 
   // ---- ChatService ----
 
