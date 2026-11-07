@@ -204,7 +204,7 @@
     "src/renderer/components/impara/ImparaStudio.tsx": "53761ca821b6f25f",
     "src/renderer/components/impara/ImparaTutor.tsx": "48dab71f7a4dd1b1",
     "src/renderer/components/impara/LessonStage.tsx": "efcaa1eb35c32c06",
-    "src/renderer/components/impara/LessonVisual.tsx": "ca8298b02bb9dcbf",
+    "src/renderer/components/impara/LessonVisual.tsx": "8f0e6f13582474e2",
     "src/renderer/components/LampoTile.tsx": "7432cccff9087a9d",
     "src/renderer/components/LegacyRoutineHistory.tsx": "5bb7d5af75b485f8",
     "src/renderer/components/LogPage.tsx": "46d7f74f7f300ee6",
