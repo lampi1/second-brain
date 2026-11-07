@@ -69,6 +69,17 @@ describe('AdmissionQueue', () => {
     expect(q.list()).toEqual([]);
   });
 
+  it('a key started again while its slot is held keeps one slot, and the new run can free it', () => {
+    const f = fakeLoad(10, 60);
+    const q = new AdmissionQueue({ sampler: f.sampler, limits: () => ({ ...ON, slots: 2 }), autoTick: false });
+    const done: (() => void)[] = [];
+    q.request('a', 'start', d => { done.push(d); });
+    q.request('a', 'start', d => { done.push(d); });
+    expect(q.slots()).toEqual({ starting: 1, slots: 2 });
+    done[1]!();                           // the later run's first answer: no wait for the 120 s cap
+    expect(q.slots()).toEqual({ starting: 0, slots: 2 });
+  });
+
   it('a slot whose run never reports back frees itself after slotMaxMs', async () => {
     const f = fakeLoad(10, 60);
     const q = new AdmissionQueue({ sampler: f.sampler, limits: () => ({ ...ON, slots: 1 }), autoTick: false, slotMaxMs: 30 });

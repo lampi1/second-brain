@@ -96,7 +96,7 @@
     "src/main/brainmodel/research-candidate.ts": "67ed5aa9bc4819a5",
     "src/main/brainmodel/service.ts#link": "e648e822d8c83765",
     "src/main/brainmodel/service.ts#start": "cb130d0a267d642f",
-    "src/main/chats/admission.ts": "2137838498ff01d1",
+    "src/main/chats/admission.ts": "371225a49ecd77da",
     "src/main/chats/auto-close.ts": "8c949a8fa61f5d5a",
     "src/main/chats/auto-close.ts#AUTO_CLOSE_WARNING_MS": "3b011c5d4c27f85d",
     "src/main/chats/claude.ts#onControlRequest": "fed84a5e4ff15464",

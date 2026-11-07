@@ -61,6 +61,8 @@ engine ready (~9-10 s) is the same in both builds: it measures the PC, not the q
 ## Consequences
 - More chats run at once on a busy PC (up to 7 cold starts plus every running one); the brake still protects a PC at
   its limit. Tests force the load with `SB_LOAD_FORCE` ("99,40" is over the brake) and the cap with `SB_COLD_SLOTS`.
+- Known limit of the migration (as `migrateCompactWindow`): "never chosen" reads the kept change log (its last 1000
+  lines), so a 75 / 15 chosen long ago and gone from it moves to 95 / 10 too; the marker keeps it to one run.
 - The queue e2e (`test/e2e/admission.spec.ts`) was rewritten for the brake and the slots; it runs first on main.
 - Rejected: copying cloudroom's VM pool, its bypassed permissions or its Agent SDK; a slot per running chat (a
   running chat never waits, the stage 1 brief).

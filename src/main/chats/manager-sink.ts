@@ -81,7 +81,8 @@ export abstract class ManagerSink extends ManagerWork {
       changed: p => { if (live()) this.applyPatch(r, p); },
       exit: ({ error }) => {
         const sess = current();
-        if (this.chats.get(chatId) === r) this.coldStarted(r);
+        // only the current engine's exit ends its cold start: an old, replaced engine exiting late must not free the slot
+        if (this.chats.get(chatId) === r && (!r.session || r.session === sess)) this.coldStarted(r);
         if (!sess || this.chats.get(chatId) !== r || r.session !== sess) return;
         this.hook('analytics', () => this.analytics.end(r.s));
         r.session = null;

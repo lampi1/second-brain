@@ -247,7 +247,8 @@ export class AdmissionQueue {
       t.unref?.();
       this.starting.set(e.key, t);
     }
-    const done = cold ? once(() => this.release(e.key)) : noop;
+    // every start gets a real release (by key, idempotent): a noop would leave the slot to the 120 s cap
+    const done = e.kind === 'start' ? once(() => this.release(e.key)) : noop;
     for (const f of e.runs) {
       try { f(done); } catch { /* each run reports its own failure (manager.ts) */ }
     }
@@ -260,7 +261,7 @@ export class AdmissionQueue {
     clearTimeout(t);
     this.starting.delete(key);
     if (!this.q.length) return;
-    if (this.over(this.refresh())) this.braked = true;
+    if (this.over(this.refresh())) { this.braked = true; this.under = 0; }
     this.pump();
     this.changed();
   }
