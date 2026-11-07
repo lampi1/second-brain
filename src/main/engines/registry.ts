@@ -2,14 +2,16 @@
 // adapter per kind, sessions.ts), how it starts and what it can do (caps). The app asks an engine's caps, never its
 // name, so a new engine is one entry. Three sources, in order: the built-in Claude Code (stream-json), Codex, Cursor and
 // OpenCode (ACP), whose start is app code; the app's presets (Anthropic API: the Messages API on the
-// user's key, ADR 0052; all off until the user turns them on); the
+// user's key, ADR 0052; all off until the user turns them on); the ACP catalog (acp-catalog/catalog.ts, ADR 0221:
+// known ACP CLIs, proposed, off and untrusted until the user turns one on); the
 // brain's harness/models.json `engines` entries (an ACP CLI or an HTTP endpoint), which may add engines or change a
 // preset (an id the app removed, REMOVED_ENGINES, is left out). Every engine's start definition has a fingerprint: an engine that is not built in starts only while its
 // fingerprint is the one the user turned on (trust.ts), so an agent editing models.json can never make the app run
 // another program or send a key to another host. Used by the chat manager, the settings schema, the CLI status and
 // login (../cli.ts) and the renderer through AppInfo.engines.
 import crypto from 'node:crypto';
-import { ANTHROPIC_API, type EngineCaps, type EngineInfo, type EngineKind, type Harness } from '../../shared/contract';
+import { ACP_CATALOG } from './acp-catalog/catalog';
+import { ANTHROPIC_API, type EngineCatalogInfo, type EngineCaps, type EngineInfo, type EngineKind, type Harness } from '../../shared/contract';
 
 /** How an engine starts: an ACP CLI's command, or an HTTP endpoint. Its fingerprint covers all of it. */
 export interface EngineStart {
@@ -35,6 +37,8 @@ export interface EngineDef extends EngineInfo, EngineStart {
   cursorExtras?: boolean;
   /** ACP: the model is chosen on the session's "model" config option (OpenCode), not with a flag (chats/acp.ts) */
   modelOption?: boolean;
+  /** a catalog entry (ADR 0221): its install page and sign-in, for Settings */
+  catalog?: EngineCatalogInfo;
 }
 
 /** The shape of an engine id: a chat saved on an engine since removed stays readable (it cannot start). */
@@ -73,6 +77,8 @@ const APP_ENGINES: readonly EngineEntry[] = [
   // its log also on stderr, the only place a provider error shows up (chats/acp.ts streamErrorOf)
   { id: 'opencode', label: 'OpenCode', name: 'OpenCode', kind: 'acp', command: 'opencode', args: ['acp', '--print-logs'], login: ['auth', 'login'], defaultOn: false, modelOption: true },
   { id: ANTHROPIC_API, label: 'Anthropic API', name: 'Anthropic API', kind: 'api', baseUrl: 'https://api.anthropic.com/v1', protocol: 'anthropic', login: [], defaultOn: false },
+  // the ACP catalog (ADR 0221): proposals, never on by default and never trusted until the user's click (trust.ts)
+  ...ACP_CATALOG.map((c): EngineEntry => ({ ...c, kind: 'acp', defaultOn: false })),
 ];
 
 /** The fingerprint of an engine's start definition, its login command included (16 hex). */
@@ -146,7 +152,7 @@ const listeners = new Set<() => void>();
 function build(): void {
   const brainIds = new Set(fromBrain.map(e => e.id));
   list = [...APP_ENGINES.filter(e => !brainIds.has(e.id)), ...fromBrain].map(e => {
-    const source = brainIds.has(e.id) ? 'brain' : 'app';
+    const source = brainIds.has(e.id) ? 'brain' : e.catalog ? 'catalog' : 'app';
     return {
       ...e,
       caps: CAPS[e.kind],
@@ -203,7 +209,8 @@ export function priceEnginesOf(e: Pick<EngineDef, 'id' | 'kind' | 'protocol'>): 
 export const engineLabel = (id: Harness): string => engineOf(id)?.label ?? id;
 
 /** The engines as the renderer sees them (of the start, only what Settings shows). */
-export const engineInfos = (): EngineInfo[] => list.filter(e => ['claude', 'codex', 'cursor', 'opencode'].includes(e.id)).map(({ id, label, name, kind, caps, source, key, runs, trusted }) => ({ id, label, name, kind, caps, source, key, runs, trusted }));
+export const engineInfos = (): EngineInfo[] => list.filter(e => ['claude', 'codex', 'cursor', 'opencode'].includes(e.id) || e.source === 'catalog')
+  .map(({ id, label, name, kind, caps, source, key, runs, trusted, catalog }) => ({ id, label, name, kind, caps, source, key, runs, trusted, ...(catalog ? { catalog } : {}) }));
 
 /** Per engine, the command override in the environment: SB_<ID>_PATH (SB_CLAUDE_PATH, SB_CURSOR_PATH: the tests'
  *  fakes; a dash in the id becomes an underscore). */

@@ -224,6 +224,9 @@ the Orchestrator to explain it your way.
   save with Undo.
 - **Connectors in one paste.** Paste a README's JSON, a command line or a URL and the MCP server is ready; switch it on
   per role. The Orchestrator can set one up for you too.
+- **More ACP agents, your call.** Settings → Accounts and tools proposes known ACP CLIs (Grok Build, Devin, Droid,
+  Kilo Code, Cline and more), all off. Install one and sign in yourself, then "Turn on" makes it an engine like the
+  others; the app never installs or signs in.
 - **The Orchestrator on your phone.** Settings → Phone links a private Telegram bot of yours: write or send a voice
   note from the phone and answer simple yes/no questions with a button. Permissions and commands still wait for the
   PC, and the bot token is encrypted and never shown again.

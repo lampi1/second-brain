@@ -7,13 +7,15 @@
 // Connettori: ConnectorsHub.tsx (accounts and MCP servers, ADR 0086; the catalog, ADR 0119; the paste-to-add flow, McpAddPanel.tsx, ADR 0207). Avanzate: the technical MCP form and
 // import (ConnectorsHub.tsx McpAdvanced). Ruoli e deleghe: DelegationSettings.tsx (ADR 0083). Aggiornamenti: AppUpdateSettings.tsx (ADR 0075; "impostazioni/update" opens on it).
 // Scrittura: SuggestSettings.tsx (ADR 0118). Voce: VoiceSettings.tsx (ADR 0152). Telefono: PhoneSettings.tsx (ADR 0219). Stored technical policies and engine denials are preserved, never enabled by rendering.
-// Account actions use existing typed login/secure-storage/trust boundaries; no provider routing matrix or policy wall.
+// Account actions use existing typed login/secure-storage/trust boundaries; no provider routing matrix or policy wall. Below the engines, the ACP
+// catalog's proposals (AcpCatalogSettings.tsx, ADR 0221).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Select } from './Select';
 import type { CliStatus, EngineInfo, SecretsStatus } from '@shared/contract';
 import { isLang, LANGS } from '@shared/contract';
 import { IconBell, IconBranch, IconEdit, IconFolder, IconLink, IconMic, IconMoon, IconPhone, IconRefresh, IconSearch, IconSettings, IconShield, IconTerminal, IconUser, IconX } from './Icons';
 import { DelegationSettings } from './DelegationSettings';
+import { AcpCatalogSettings } from './AcpCatalogSettings';
 import { useEngines } from '../lib/engines';
 import { hitRanges, matchesSettingsSearch } from '../lib/settings-page';
 import { SETTINGS_TONE, navGroups, settingsSections } from '../lib/settings-sections';
@@ -138,7 +140,7 @@ export function SettingsPage() {
     { ...meta.profile, icon: <IconUser size={16} />, body: <ProfileSettings /> },
     { ...meta.update, icon: <IconRefresh size={16} />, body: <AppUpdateSettings /> },
     { ...meta.connectors, icon: <IconLink size={16} />, body: <ConnectorsHub /> },
-    { ...meta.accounts, icon: <IconTerminal size={16} />, body: <>{engines.map(engine => <ToolConnection key={engine.id} engine={engine} />)}</> },
+    { ...meta.accounts, icon: <IconTerminal size={16} />, body: <>{engines.map(engine => <ToolConnection key={engine.id} engine={engine} />)}<AcpCatalogSettings /></> },
     { ...meta.roles, icon: <IconBranch size={16} />, body: <><AwaySettings /><DelegationSettings /></> },
     { ...meta.space, icon: <IconFolder size={16} />, body: <>
       <WorkProfilePreferences />
