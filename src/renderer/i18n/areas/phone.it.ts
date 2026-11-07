@@ -30,6 +30,8 @@ export const phoneIt = {
   'phone.pairCode': ({ code }: { code: string }) => `Codice: ${code}`,
   'phone.pairSend': ({ code }: { code: string }) => `Manda /start ${code} al tuo bot`,
   'phone.pairLeft': ({ left }: { left: string }) => `scade tra ${left}`,
+  'phone.pairExpired': 'Codice scaduto',
+  'phone.pairNew': 'Nuovo codice',
   'phone.paired': 'Associato',
   'phone.notPaired': 'Nessun telefono associato',
   'phone.unpair': 'Disassocia',

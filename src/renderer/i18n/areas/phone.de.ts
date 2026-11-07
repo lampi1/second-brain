@@ -30,6 +30,8 @@ export const phoneDe: typeof phoneIt = {
   'phone.pairCode': ({ code }: { code: string }) => `Code: ${code}`,
   'phone.pairSend': ({ code }: { code: string }) => `Schick /start ${code} an deinen Bot`,
   'phone.pairLeft': ({ left }: { left: string }) => `läuft ab in ${left}`,
+  'phone.pairExpired': 'Code abgelaufen',
+  'phone.pairNew': 'Neuer Code',
   'phone.paired': 'Gekoppelt',
   'phone.notPaired': 'Kein Handy gekoppelt',
   'phone.unpair': 'Entkoppeln',

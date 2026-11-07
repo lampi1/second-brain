@@ -28,6 +28,15 @@ export function pairLeft(expiresAt: number, now: number): string {
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 }
 
+/** What the Telefono associato row shows: the live code, 'Codice scaduto' once it ran out, paired or not; its button
+ *  (Dissocia, Associa telefono, Nuovo codice after an expired code); no pairing button in a dev instance. */
+export function pairView(s: Pick<PhoneStatus, 'state' | 'paired' | 'pairing'>, now: number): { line: 'code' | 'expired' | 'paired' | 'none'; button: 'unpair' | 'start' | 'new' | null } {
+  const expired = !!s.pairing && s.pairing.expiresAt <= now;
+  const line = expired ? 'expired' : s.pairing ? 'code' : s.paired ? 'paired' : 'none';
+  const button = s.paired ? 'unpair' : s.state === 'dev-disabled' ? null : expired ? 'new' : 'start';
+  return { line, button };
+}
+
 /** The 24 hours of the quiet-hours pickers, and the default window when the user turns them on (22 → 7). */
 export const PHONE_HOURS = Array.from({ length: 24 }, (_, h) => h);
 export const PHONE_QUIET_DEFAULT = { from: 22, to: 7 } as const;

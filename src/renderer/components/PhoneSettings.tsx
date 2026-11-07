@@ -1,13 +1,13 @@
 // Settings → Telefono (ADR 0219): the private Telegram bot that brings the phone's messages to the Orchestrator. The bot
 // token is write-only (typed once, sent to main on phone:set-token, never shown or read back), the on/off switch, the
-// pairing code with its countdown, quiet hours, the state with its error line, the dropped counter, the last phone
-// actions and the user's own setup checklist. Reads lib/phone.ts (window.sbPhone, the live status). Mounted by
-// SettingsPage.tsx.
+// pairing code with its countdown ('Codice scaduto' and 'Nuovo codice' once it runs out; no pairing in a dev
+// instance), quiet hours, the state with its error line, the dropped counter, the last phone actions and the user's own
+// setup checklist. Reads lib/phone.ts (window.sbPhone, the live status). Mounted by SettingsPage.tsx.
 import { useEffect, useState } from 'react';
 import type { PhoneSettingsPatch, PhoneStatus } from '@shared/contract/phone';
 import { Switch } from './SettingsPage';
 import { Select } from './Select';
-import { PHONE_HOURS, PHONE_QUIET_DEFAULT, pairLeft, phoneApi, phoneStatus, startPhone } from '../lib/phone';
+import { PHONE_HOURS, PHONE_QUIET_DEFAULT, pairLeft, pairView, phoneApi, phoneStatus, startPhone } from '../lib/phone';
 import { errText } from '../lib/ipc-error';
 import { toast } from '../store/ui';
 import { t } from '../i18n';
@@ -38,6 +38,7 @@ export function PhoneSettings() {
   const update = (patch: PhoneSettingsPatch) => void run(() => api.update(patch));
   const saveToken = async () => { if (await run(() => api.setToken(token), t('phone.tokenSaved'))) setToken(''); };
   const devOnly = status.state === 'dev-disabled';
+  const pv = pairView(status, now);
   const quiet = status.quietHours;
   const stateLine = status.state === 'error' && status.error ? `${t(`phone.state.${status.state}`)}: ${status.error}` : t(`phone.state.${status.state}`);
 
@@ -66,13 +67,15 @@ export function PhoneSettings() {
     </div>
     <div className="st-row" data-testid="st-phone-pair">
       <div className="st-text"><span className="st-title">{t('phone.pairTitle')}</span>
-        <p className="st-desc">{pairing
+        <p className="st-desc">{pv.line === 'expired'
+          ? <span data-testid="st-phone-pair-expired">{t('phone.pairExpired')}</span>
+          : pairing
           ? <span data-testid="st-phone-pair-code"><b>{t('phone.pairCode', { code: pairing.code })}</b> · {t('phone.pairSend', { code: pairing.code })} · {t('phone.pairLeft', { left: pairLeft(pairing.expiresAt, now) })}</span>
           : status.paired ? t('phone.paired') : `${t('phone.notPaired')}. ${t('phone.pairHint')}`}</p></div>
       <div className="st-ctl">
-        {status.paired
+        {pv.button === 'unpair'
           ? <button type="button" className="btn btn-ghost btn-s" disabled={busy} onClick={() => void run(() => api.unpair())} data-testid="st-phone-unpair">{t('phone.unpair')}</button>
-          : <button type="button" className="btn btn-primary btn-s" disabled={busy || !status.hasToken} onClick={() => void run(() => api.startPairing())} data-testid="st-phone-pair-start">{t('phone.pairStart')}</button>}
+          : pv.button && <button type="button" className="btn btn-primary btn-s" disabled={busy || !status.hasToken} onClick={() => void run(() => api.startPairing())} data-testid="st-phone-pair-start">{pv.button === 'new' ? t('phone.pairNew') : t('phone.pairStart')}</button>}
       </div>
     </div>
     <div className="st-row" data-testid="st-phone-quiet">
