@@ -21,6 +21,7 @@ import { connectorsDe } from './areas/connectors.de';
 // German with "du", short like the Italian. Used through t() (i18n/index.ts).
 import { genuiRequestDe } from './areas/genui-request.de';
 import { voiceDe } from './areas/voice.de';
+import { phoneDe } from './areas/phone.de';
 import { recDe } from './areas/rec.de';
 import { imparaDe } from './areas/impara.de';
 import { imparaStudioDe } from './areas/impara-studio.de';
@@ -91,6 +92,7 @@ export const de: Dict = {
   ...logDe,
   ...genuiRequestDe,
   ...voiceDe,
+  ...phoneDe,
   ...recDe,
   ...imparaDe,
   ...imparaStudioDe,

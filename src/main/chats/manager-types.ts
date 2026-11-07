@@ -163,6 +163,8 @@ export interface TurnEndInfo {
   isError: boolean;
   /** the assistant's texts of this turn, joined (reply rules: chats/reply-rules.ts) */
   reply?: string;
+  /** a message from the paired phone started or joined this turn (the phone bridge sends the reply back) */
+  fromPhone?: boolean;
   /** the engine's error notices of this turn, joined (never the assistant's prose) */
   errorText?: string;
 }
@@ -192,6 +194,13 @@ export interface Rec {
   userWaits?: boolean;
   /** the Orchestrator: its current (or last) turn was started by the user's own message, not by app news or mail */
   turnFromUser?: boolean;
+  /** the Orchestrator: a message from the paired phone started or joined its current turn (the reply goes back to it) */
+  turnFromPhone?: boolean;
+  /** the user's message being sent came from the paired phone (sendFromPhone): its text, so only that delivery is marked
+   *  📱 and takes the phone reply line; voice = a transcribed voice note */
+  phoneNext?: { text: string; voice: boolean };
+  /** the request being answered from the phone right now: its pending:resolved says by 'phone' */
+  answeringFromPhone?: string;
   /** the app completed its assignment from that report: a new message from its Orchestrator assigns it again */
   autoCompleted?: boolean;
   agentInstructions?: string;
@@ -306,6 +315,8 @@ export interface Rec {
   freshDeferred?: string | undefined;
   /** Exact request scope and user decisions, private to this chat; never shared through user-event tools. */
   continuationDecisions?: string | undefined;
+  intakeKey?: string;
+  intakePanelId?: string;
   /** A text note cannot preserve an evicted history item or an image input; persist this conservative blocker. */
   continuityUnsafe?: true;
   /** Only this newly assigned run may cross a previously checked idle boundary before its first submission. */

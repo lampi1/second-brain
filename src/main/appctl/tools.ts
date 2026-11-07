@@ -202,8 +202,15 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   // Flash (ADR 0105) is the user's own quick lane: never in the Orchestrator's picture
   const mine = (c: ChatSummary) => !c.quick;
   /** the Orchestrator this endpoint acts for */
-  const caller = (): ChatSummary | undefined => {
-    return d.chats.list().find(c => c.isOrchestrator && !c.closedAt);
+  const caller = (): ChatSummary | undefined => d.chats.list().find(c => c.isOrchestrator && !c.closedAt && (!callerId || c.id === callerId));
+  const intakeField = str('For a new Strategist plan only: the exact question from your latest answered intake panel for this task. The host supplies the answer.');
+  const intakeOf = (a: Record<string, unknown>, newPlan: boolean) => {
+    if (a.intakeQuestion === undefined) return {};
+    const source = caller();
+    if (!authed() || !source || !newPlan || typeof a.intakeQuestion !== 'string' || !a.intakeQuestion.trim() || !d.chats.bindPlanIntake) {
+      throw new Error('intakeQuestion requires an authenticated Orchestrator starting a new Strategist plan.');
+    }
+    return { intake: d.chats.bindPlanIntake(source.id, a.intakeQuestion) };
   };
   const balanced = d.balancedMode;
   /** Chat visibility is shared; ownership checks remain on operations that require an owner. */
@@ -393,7 +400,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         }
         const note = String(a.note ?? '').replace(/\s+/g, ' ').trim();
         const answers = Object.fromEntries(asked.map((q, i) => [q, `${RESOLVED_LABEL} ${text(given[q])}${note && i === 0 ? ` (nota: ${note})` : ''}`]));
-        await d.chats.answer(chatId, requestId, { kind: 'question', answers });
+        await d.chats.answer(chatId, requestId, { kind: 'question', answers }, 'relay');
         log.info('appctl', 'question answered from the Orchestrator', { chat: chatId, data: { requestId, questions: asked.length } });
         return { ok: true, chatId, requestId, answers };
       },
@@ -468,13 +475,14 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         deliveryPolicy: { type: 'string', enum: ['display', 'notify', 'synthesize'], description: 'display expands the full result without AI; notify also adds quiet news; synthesize requests an AI integration turn' },
         tier: { type: 'string', enum: [...MODEL_TIERS], description: 'optional model tier, at most the role\'s tierMax; omitted = the role\'s own' },
         skills: { type: 'array', items: { type: 'string' }, maxItems: 16, description: 'the brain skills this chat may use (their SKILL.md names)' },
-        reviewOf: str('Run being reviewed'), reworkOf: str('Run being reworked'), goal: str('Run goal, up to 2000 characters'),
+        intakeQuestion: intakeField, reviewOf: str('Run being reviewed'), reworkOf: str('Run being reworked'), goal: str('Run goal, up to 2000 characters'),
         kind: str(`optional kind of task: ${TASK_KINDS.join(' | ')}; omitted: read from title and prompt`),
         cwd: str('optional absolute folder (repo or worktree); default: the brain folder'),
         balanced: BALANCED_ASK_SCHEMA,
       }, ['title', 'prompt']),
       run: async a => {
         // only the user chooses the Orchestrator (one at a time: a new one would take the role from the agent's own chat)
+        const intake = intakeOf(a, a.roleId === 'strategist');
         const links: { reviewOf?: string; reworkOf?: string; goal?: string; roleVersion?: number; doneWhen?: string[]; deliveryPolicy?: 'display' | 'notify' | 'synthesize' } = {};
         if (a.doneWhen !== undefined) {
           if (!Array.isArray(a.doneWhen) || a.doneWhen.length > 12 || !a.doneWhen.every(c => typeof c === 'string' && c.trim() && c.length <= 300)) throw new Error('Invalid doneWhen criteria.');
@@ -544,7 +552,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const chat = await d.chats.create({ harness, cwd, title, prompt: `${AGENT_LABEL}\n\n${prompt}`, ...links, orchestrator: false, roleId, ...(tier ? { tier } : {}), ...(skills.length ? { skills } : {}),
           ...(model ? { model } : {}), ...(effort ? { effort } : {}), route, ...(balancedRoute ? { balancedRoute } : {}) }, 'agent', undefined, undefined,
           // the plain /mcp/app mount is open to any local process: its chats run no wider than the Orchestrator
-          { boundByOrchestrator: !authed() });
+          { boundByOrchestrator: !authed(), ...intake });
         d.balancedMode?.record(choice);
         log.info('appctl', 'agent created a chat', { chat: chat.id, data: { harness, title, model: model || null, effort, route: route.source, kind: route.kind, area: route.area, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}) } });
         // a skill whose tools the role lacks (issue #93): said now, so the Orchestrator can pick another role or ask the user
@@ -565,7 +573,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     {
       name: 'app_assign_task',
       description: 'Continue a compatible work conversation with a distinct measured run. Use continue for related follow-ups, new-task for a distinct assignment in the same scope, rework only for an explicit correction. Requires the current task version from app_chats, the same role and project folder. Independent Sentinel reviews always need a fresh chat. Does not change tools or permissions.',
-      inputSchema: obj({ chatId: str('Existing conversation ID'), prompt: { ...str(`Self-contained assignment, up to ${CHAT_PROMPT_MAX} characters`), maxLength: CHAT_PROMPT_MAX },
+      inputSchema: obj({ intakeQuestion: intakeField, chatId: str('Existing conversation ID'), prompt: { ...str(`Self-contained assignment, up to ${CHAT_PROMPT_MAX} characters`), maxLength: CHAT_PROMPT_MAX },
         doneWhen: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 300 }, description: 'Checkable criteria for this assignment' },
         mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] }, roleId: str('Existing work role'), cwd: str('Same absolute project folder'),
         expectedVersion: { type: 'integer', minimum: 1, description: 'Current taskVersion from app_chats' },
@@ -599,7 +607,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (target.harness !== orchestrator.harness && !['running', 'waiting', 'idle'].includes(target.state)) throw new Error('A stopped engine of another kind requires the user.');
         if (a.expectedEventSeq !== undefined && (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0)) throw new Error('Invalid user event cursor.');
         if (a.deliveryPolicy !== undefined && !['display', 'notify', 'synthesize'].includes(String(a.deliveryPolicy))) throw new Error('Invalid delivery policy.');
-        await d.chats.assignTask(target.id, `${AGENT_LABEL}\n\n${prompt}`, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
+        await d.chats.assignTask(target.id, `${AGENT_LABEL}\n\n${prompt}`, { ...intakeOf(a, a.roleId === 'strategist' && a.mode === 'new-task' && !!target.plan), mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
         const assigned = d.chats.list().find(c => c.id === target.id);
         return { chatId: target.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId };
       },
@@ -711,10 +719,32 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
   }
   return tools;
 
-  /** did the user write to the Orchestrator, or answer one of its questions, at or after `at`? (his decision, not the agent's) */
+  /** did the user write to the Orchestrator, or answer one of its questions, at or after `at`? (his decision, not the agent's;
+   *  text from the paired phone is never a decision: phone bridge, design §5.5) */
   function decidedSince(orchestratorId: string, at: number): boolean {
-    return d.chats.items(orchestratorId).some(i => i.at >= at && (
-      i.kind === 'user' ? !labelled(i.text) : i.kind === 'tool' && /question/i.test(i.name) && i.status === 'ok'));
+    const items = d.chats.items(orchestratorId);
+    const phone = phoneAnswered(items);
+    return items.some(i => i.at >= at && (
+      i.kind === 'user' ? !labelled(i.text) && i.via !== 'phone' : i.kind === 'tool' && /question/i.test(i.name) && i.status === 'ok' && !phone.has(i.id)));
+  }
+
+  /** the question tool items answered with the phone's buttons, bound by id, never by time (an ACP tool item can be
+   *  stamped after the answer). Each «Risposto dal telefono» line (manager-requests.ts answer) names its tool item when
+   *  the engine shares the id (Claude: t-<toolUseId>); otherwise it claims the unclaimed answered question nearest to
+   *  the time the request was asked (a line without that time: its own time) */
+  function phoneAnswered(items: ChatItem[]): Set<string> {
+    const asks = items.filter(i => i.kind === 'tool' && /question/i.test(i.name) && i.status === 'ok');
+    const claimed = new Set<string>();
+    for (const l of items) {
+      if (l.kind !== 'system' || l.code !== 'phoneDecided' || l.params?.what !== 'question') continue;
+      const tool = l.params.tool;
+      if (typeof tool === 'string' && tool) { claimed.add(tool); continue; }
+      const asked = typeof l.params.asked === 'number' ? l.params.asked : l.at;
+      let best: ChatItem | undefined;
+      for (const q of asks) if (!claimed.has(q.id) && (!best || Math.abs(q.at - asked) < Math.abs(best.at - asked))) best = q;
+      if (best) claimed.add(best.id);
+    }
+    return claimed;
   }
 
   /** app_config's proof (ADR 0149): the user typed to this very Orchestrator in the last minutes, and its latest
@@ -737,7 +767,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
    *  or after `at`? (app_unblock: a turn woken by an agent can never open the requests) */
   function userTurn(orchestratorId: string, at: number): boolean {
     const last = d.chats.items(orchestratorId).filter(i => i.kind === 'user').at(-1);
-    return !!last && last.kind === 'user' && last.at >= at && !labelled(last.text);
+    return !!last && last.kind === 'user' && last.at >= at && !labelled(last.text) && last.via !== 'phone';
   }
 
   function need(chatId: string): ChatSummary {

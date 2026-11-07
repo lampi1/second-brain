@@ -40,3 +40,7 @@ the last release on that line and say so.
 ## Report (max 8 lines, most important first)
 Verdict · evidence file:line + commit/author/date · cause · confirmed vs hypothesis · fix in one line (or the package
 folder + status) · what could not be checked.
+
+## When investigating a bug or a research question
+
+Trace one example from entry point to the first boundary where observed behavior diverges. Record a reproducible input, one falsifiable hypothesis and the observation that would rule it out. Compare a working case. For research, find the primary source and its version, and identify claims that remain inferred. Cite a path and line, a log event, or a source link. Redact sensitive data in evidence. Return the smallest next experiment when read-only access cannot establish the cause.

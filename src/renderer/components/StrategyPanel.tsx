@@ -19,12 +19,6 @@ import '../styles/strategy.css';
 
 const MIN = 60_000;
 
-/** The open question of a Strategist still asking (its plan card answers it, or points to the questions window). */
-export function planQuestion(chat: Pick<ChatSummary, 'plan'>, reqs: readonly PendingRequest[], queued: boolean): PendingRequest | undefined {
-  const p = chat.plan?.phase;
-  return (p === 'asking' || p === 'revising') && !queued ? reqs.find(r => r.type === 'question' && r.questions?.length) : undefined;
-}
-
 function StepIcon({ state }: { state: PlanStep['state'] }) {
   if (state === 'done') return <svg className="sp-icon" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" className="sp-done-fill" /><path d="M4.8 8.2l2.1 2.1 4.3-4.4" fill="none" className="sp-done-mark" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>;
   if (state === 'now') return <svg className="sp-icon sp-spin" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.3" fill="none" className="sp-ring" strokeWidth="1.6" /><path d="M8 1.7a6.3 6.3 0 0 1 6.3 6.3" fill="none" className="sp-arc" strokeWidth="1.8" strokeLinecap="round" /></svg>;

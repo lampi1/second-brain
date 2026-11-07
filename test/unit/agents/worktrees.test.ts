@@ -90,4 +90,12 @@ describe('worktrees', () => {
       ' M scripts/cmd-git-603c1ec1.ps1', ' D changelog.md', '?? notes/changelog.md'])
       expect(blockingChanges([' M changelog.md', line].join('\n'), true)).toEqual([line]);
   });
+
+  it('lets the open-threads note and the AI error/win logs through a brain baseline (#324)', () => {
+    const status = [' M now.md', ' M ai-errors.md', 'M  ai-wins.md', '?? now.md', '?? ai-errors.md', ''].join('\n');
+    expect(blockingChanges(status, true)).toEqual([]);
+    expect(blockingChanges(status, false)).toHaveLength(5);
+    for (const line of [' M notes/now.md', ' D now.md', ' M ai-errors.md.bak', 'R  x -> ai-errors.md', ' M ideas.md'])
+      expect(blockingChanges([' M now.md', line].join('\n'), true)).toEqual([line]);
+  });
 });

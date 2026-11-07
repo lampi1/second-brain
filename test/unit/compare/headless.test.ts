@@ -46,6 +46,9 @@ describe('a model the CLI refuses at start (Impara probe)', () => {
     expect(out.acceptedModels).toHaveLength(190);
     expect(out.acceptedModels?.at(-1)).toBe('fake-model-189-high');
     expect(out.acceptedPartial).toBeUndefined();
+    // the probe's refusal is its expected answer: logged as info, never as an engine error (#328)
+    expect(log.recent.some(e => e.msg === 'acp model list probe answered')).toBe(true);
+    expect(log.recent.some(e => e.msg === 'acp engine exited with an error')).toBe(false);
   }, 30_000);
 });
 

@@ -58,7 +58,7 @@ test('a Strategist asks, proposes a short plan to approve and shows its steps on
     await shot(page, 'strategist-plan-asking-dark');
     await page.getByTestId('qwin-card-opt-1').click();
     await expect.poll(() => demo<{ answer: { answers: Record<string, string> } }[]>(app, 'answers').then(a => a.at(-1)?.answer.answers[QUESTION])).toBe('No, solo a prezzo pieno (consigliato)');
-    await expect(page.getByTestId('plan-known')).toContainText('Offerte');
+    await expect(page.getByTestId('plan-known')).toContainText('Lo sconto vale anche sui prodotti già in offerta?');
     await expect(page.getByTestId(`plan-enough-${LEAD}`)).toHaveCount(0);
 
     // «Basta domande» on the strip answers the open question for the user (the window set aside first)

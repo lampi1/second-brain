@@ -105,6 +105,7 @@ export interface StoredChat {
   continuationPending?: string;
   /** Exact completed question/permission context belongs only to this chat, not the shared user-event ledger. */
   continuationDecisions?: string;
+  intakeKey?: string;
   /** A history eviction or image input makes an automatic text-only continuation unsafe. */
   continuityUnsafe?: true;
   /** when the context in force began (first turn since the session start or the last compaction): an Orchestrator's day
@@ -194,6 +195,7 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(ctx && typeof ctx === 'object' && num(ctx.tokens) ? { context: { tokens: ctx.tokens, ...(num(ctx.max) ? { max: ctx.max } : {}), ...(ctx.estimated === true ? { estimated: true } : {}) } } : {}),
     ...(num(c.coldNoteAt) ? { coldNoteAt: c.coldNoteAt } : {}),
     ...(isUuid(c.continuationPending) ? { continuationPending: c.continuationPending } : {}),
+    ...(typeof c.intakeKey === 'string' && c.intakeKey ? { intakeKey: c.intakeKey } : {}),
     ...(typeof c.continuationDecisions === 'string' ? { continuationDecisions: c.continuationDecisions } : {}),
     ...(c.continuityUnsafe === true || (c.continuationDecisions !== undefined && typeof c.continuationDecisions !== 'string') ? { continuityUnsafe: true as const } : {}),
     ...(num(c.ctxSince) ? { ctxSince: c.ctxSince } : {}),

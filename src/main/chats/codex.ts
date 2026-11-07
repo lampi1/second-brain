@@ -731,6 +731,10 @@ export class CodexSession implements HarnessSession {
     }
     if (method === 'item/tool/requestUserInput') {
       const raw = arr(p.questions).map(o);
+      if (raw.length !== 1) {
+        this.respondError(id, -32602, 'Ask one question at a time. Submit exactly one question.');
+        return;
+      }
       const questions: Question[] = [];
       const ids: { id: string; text: string }[] = [];
       const seen = new Map<string, number>();

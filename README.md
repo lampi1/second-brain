@@ -73,10 +73,9 @@ stay yours, and a server it adds stays off until you read its command and click 
 
 ### Plan mode
 
-Tick **Plan** and a Strategist takes the job: it reads the code, asks you at least three real questions (goal, scope,
-constraints, what "done" means; say "enough questions" to stop it), then proposes a short plan, each step
-with the role that will do it. You approve it in the questions window, and only then does it start the other agents,
-as the tree of thread cards at the top of this page, its steps ticking off on its strip.
+On new work the Orchestrator checks for a choice that affects the outcome. The role that finds a later choice asks you directly, one yes/no panel at a time. You can type your own answer. If your choice has a concrete drawback, the role can suggest one alternative and proceeds when you confirm.
+
+Tick **Plan** to have a Strategist turn the job into steps. The first answered intake question can travel with the assignment and counts toward the three answers. **Basta domande** ends the interview early. Approve the proposed plan in the existing panel to start delegation. The six roles’ default skills, sources and prompt costs are listed in [Skill alignment](docs/design/skills-alignment.md).
 
 <p align="center"><img src="docs/screenshots/plan.webp" alt="The questions window: a Strategist's four-step plan to approve, each step with its role" width="560"></p>
 
@@ -227,6 +226,9 @@ the Orchestrator to explain it your way.
   save with Undo.
 - **Connectors in one paste.** Paste a README's JSON, a command line or a URL and the MCP server is ready; switch it on
   per role. The Orchestrator can set one up for you too.
+- **The Orchestrator on your phone.** Settings → Phone links a private Telegram bot of yours: write or send a voice
+  note from the phone and answer simple yes/no questions with a button. Permissions and commands still wait for the
+  PC, and the bot token is encrypted and never shown again.
 - **Tasks.** The Task page lists your Azure DevOps work items and PRs, with builds, votes and QA results.
 - **Copy any file.** The copy icon in the file viewer puts the file on the clipboard: its text, the image, or the file
   itself.

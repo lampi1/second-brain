@@ -130,6 +130,7 @@ const { setInterval, clearInterval } = timersFor('wiring/auto-close');
 import { attachAppTools, createLater, commandRunner, attachCommandAsks, attachOrchestratorWake, attachRunResults, attachArtifacts, createAppSource, createAgentCatalog } from './wiring-shared';
 import type { Ctx, Wired } from './wiring-types';
 import { buildLearn } from './wiring-builders';
+import { createPhonePort } from './chats/phone-port';
 export { toMcp, attachAppTools, createLater, commandRunner, attachCommandAsks, attachOrchestratorWake, attachRunResults, attachArtifacts, createAppSource, createAgentCatalog } from './wiring-shared';
 export type { Ctx, Wired } from './wiring-types';
 
@@ -270,13 +271,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     worktrees: gitWorktrees,
     resolveAgent: req => {
       const resolved = agents.resolve(req);
-      if (req.roleId === undefined || req.orchestrator) return resolved;
+      const roleId = req.orchestrator ? 'orchestrator' : req.roleId;
+      if (!roleId || (req.orchestrator && !brain.info().brainRoot)) return resolved;
       // only the skills this launch gives exist in its plugin (the role gate refuses the others)
-      const runtime = agentPacks.packs.runtime(req.roleId, req.skills ?? [], { query: req.goal ?? req.prompt ?? '', project: req.cwd });
+      const runtime = agentPacks.packs.runtime(roleId, req.skills ?? [], { query: req.goal ?? req.prompt ?? '', project: req.cwd });
       const resolvedHarness = resolved.request.harness;
       return { ...resolved, launchContext: runtime.context, skills: runtime.skills, assets: { pluginDir: runtime.pluginDir, skillRoot: runtime.skillRoot },
         // Claude loads the plugin itself: its instructions only need the skills' qualified names (issue #101)
-        instructions: resolvedHarness === 'cursor' ? `${resolved.instructions}\n\n${runtime.instructions}`
+        instructions: engineOf(resolvedHarness)?.kind !== 'claude' ? `${resolved.instructions}\n\n${runtime.instructions}`
           // and its memory: the plugin carries the skills, not the memory (before, a Claude role never saw it nor its id)
           : [resolved.instructions, qualifiedSkillsLine(runtimePluginName(runtime.pluginDir), runtime.skills), runtime.memory].filter(Boolean).join('\n\n') };
     },
@@ -762,6 +764,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     morning,
     mcpServers,
     judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
+    phonePort: createPhonePort(manager, ctx.emitter),
     chats, browser, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : null),

@@ -63,6 +63,7 @@ import { reapEnabled, reapEngine, type Root } from './proctree';
 import { costOf, type AcpUsage } from './cursor-prices';
 import { estimateTokens } from './handoff';
 import { writeImageFiles } from './images';
+import { PROBE_MODEL } from '../learn/accepted-models';
 import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, type AppAsk, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 import { AgentChildrenReporter } from './agent-children';
 import type { ChildObservation } from '../../shared/agents';
@@ -1372,7 +1373,7 @@ export class AcpSession implements HarnessSession {
         return;
       }
       if (noBrief && this.yesNoRefused >= YESNO_RETRIES) this.briefOff = true;
-      if (gate && (!yesNo || noBrief) && this.yesNoRefused < YESNO_RETRIES) {
+      if (gate && (!yesNo || noBrief) && (questions.length > 1 || this.yesNoRefused < YESNO_RETRIES)) {
         this.yesNoRefused++;
         log.info('chats', noBrief ? 'question sent back: no brief' : 'question sent back: not yes/no', { chat: this.opts.chatId, data: { engine: this.engine, attempt: this.yesNoRefused } });
         this.respond(id, { outcome: { outcome: 'skipped', reason: noBrief ? BRIEF_REFUSAL : YESNO_REFUSAL } });
@@ -1637,10 +1638,13 @@ export class AcpSession implements HarnessSession {
     if (this.errLine) { this.errTail = (this.errTail + this.errLine).slice(-16000); this.errLine = ''; } // a last line with no newline
     const tail =stripAnsi(this.errTail).trim().split(/\r?\n/).slice(-4).join(' · ');
     const error = clean ? null : cut(tail || `${this.label} è uscito con codice ${code ?? '?'}`, 600);
-    if (error) log.error('chats', 'acp engine exited with an error', { chat: this.opts.chatId, data: { engine: this.engine }, cause: `exit ${code}: ${cut(tail, 2000) || 'no stderr'}`, hint: `run \`${this.cliName} --version\` in a terminal; resume with a new message` });
-    else log.info('chats', 'acp session exit', { chat: this.opts.chatId, data: { engine: this.engine, code } });
     // the CLI refused the model: its whole list goes on beside the cut error (SessionSink.exit refusal)
     const refusal = error ? /Cannot use this model: [^\r\n]+/.exec(stripAnsi(this.errTail))?.[0] : undefined;
+    // the app's own model-list probe (learn/accepted-models.ts) asks for a model no CLI has on purpose: its refusal is
+    // the expected answer, not an engine error (#328)
+    if (refusal?.startsWith(`Cannot use this model: ${PROBE_MODEL}.`)) log.info('chats', 'acp model list probe answered', { chat: this.opts.chatId, data: { engine: this.engine, code } });
+    else if (error) log.error('chats', 'acp engine exited with an error', { chat: this.opts.chatId, data: { engine: this.engine }, cause: `exit ${code}: ${cut(tail, 2000) || 'no stderr'}`, hint: `run \`${this.cliName} --version\` in a terminal; resume with a new message` });
+    else log.info('chats', 'acp session exit', { chat: this.opts.chatId, data: { engine: this.engine, code } });
     this.end(clean ? 'closed' : 'error', code, error, refusal);
   }
 

@@ -16,7 +16,7 @@ import { readLocal, writeLocal } from './local-store';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, versionedChanges } from './versions';
 import { checkedTools, type AgentPolicy } from './tool-policy';
 import { cappedTier, withinTierMax } from './model-tier';
-import { fiveRolesTextFor, fullDefaultsFor, shippedTextFor } from './role-migrate';
+import { fiveRolesTextFor, fullDefaultsFor, shippedTextFor, skillAlignmentFor } from './role-migrate';
 import { engineOf } from '../engines/registry';
 import { log, errText } from '../log';
 
@@ -200,9 +200,9 @@ export class AgentCatalogService {
     }
     // a later shipped text replaced since (role-migrate.ts SHIPPED_BEFORE, #145)
     for (const old of [...this.profiles]) {
-      const fields = shippedTextFor(old);
+      const fields = skillAlignmentFor(old) ?? shippedTextFor(old);
       if (!fields) continue;
-      try { this.version(old, this.behaviour({ ...fields }, old.id, false, old), 'default', 'Testo del ruolo aggiornato', 'active', true); }
+      try { this.version(old, this.behaviour({ ...fields }, old.id, false, old), 'default', 'Istruzioni e skill del ruolo aggiornate', 'active', true); }
       catch (e) { log.warn('agents', 'role text not moved to the shipped one', { cause: errText(e), hint: 'check that roles.json and role-history.json in the app data folder are writable', data: { role: old.id } }); }
     }
   }
@@ -279,7 +279,11 @@ export class AgentCatalogService {
       // a model the role already runs with is kept as it is: only a new choice must be one the engine is known to have
       // (#128: a preset alias such as 'sonnet' is not in the observed list)
       const kept = keep && !!base && base.engine === engine && (base.model ?? null) === model;
-      if (model !== null && !kept && !e.models.some(m => m.id === model)) throw new Error('Il modello non è tra quelli noti del motore. Aggiorna le disponibilità o usa il modello del livello.');
+      // the known ids go in the refusal: an agent setting a role without them retried blind (20 times, #327)
+      if (model !== null && !kept && !e.models.some(m => m.id === model)) {
+        const ids = e.models.map(m => m.id), shown = ids.slice(0, 30).join(', ') + (ids.length > 30 ? ', …' : '');
+        throw new Error(`Il modello «${model}» non è tra quelli noti del motore ${engine}. ${ids.length ? `Modelli noti: ${shown}.` : 'Nessun modello noto.'} Usa uno di questi, oppure nessun modello (quello del livello).`);
+      }
       if (p.effort && !e.effort) throw new Error('Questo motore non supporta la scelta dell’effort.');
     }
     // the API engine has no tools: a role on it reads only (every class allowed by default, ADR 0085, means nothing there)
@@ -443,7 +447,7 @@ export class AgentCatalogService {
       if (p?.model && p.engine === req.harness) req = { ...req, model: p.model };
       return { request: req, owner: orchestratorOwner(req.harness, req.model ?? null, p), instructions: p?.instructions ?? ROLE_DEFAULTS.orchestrator.instructions,
         policy: p && (p.tools || p.permissionCeiling) ? { tools: p.tools ? structuredClone(p.tools) : null, ceiling: p.permissionCeiling } : null,
-        skills: [], launches: p?.launches ?? [...ROLE_DEFAULTS.orchestrator.launches] };
+        skills: [...new Set([...(p?.skills ?? ROLE_DEFAULTS.orchestrator.skills), ...(p?.knowhow?.linked ?? [])])], launches: p?.launches ?? [...ROLE_DEFAULTS.orchestrator.launches] };
     }
     // Flash (ADR 0107): its card's engine and model (else its tier's), its instructions; a plain owner (no run, no role
     // gate); ChatManager adds the fixed read-only frame and policy

@@ -4,6 +4,7 @@
 // the app's news, mail and other main-side sends land as 'user' items too; an answer given by the app («Modalità
 // notte»), by the Orchestrator for a work chat or by a parent for its child never passes here. In memory only (a
 // restart forgets it: the user asks again). Used by main/ipc-handlers/chats.ts (note) and appctl/tools.ts (configAsk).
+import { isNativeQuestion } from '../../shared/yes-no';
 import type { Answer, PendingRequest } from '../../shared/contract';
 
 const typed = new Map<string, number>();
@@ -18,15 +19,12 @@ export function noteUserTyped(chatId: string, at = Date.now()): void { remember(
 /** When the user last typed into this chat, or undefined. */
 export const lastTyped = (chatId: string): number | undefined => typed.get(chatId);
 
-/** The engines' own question tools: Claude AskUserQuestion, Cursor/Codex AskQuestion, the app's ask_user (AskUser).
- *  Never a Cursor plan (CreatePlan: Approva / Rifiuta) nor an MCP server's form (elicitation, tool mcp__<server>). */
-const NATIVE_QUESTIONS = new Set(['AskUserQuestion', 'AskQuestion', 'AskUser']);
 const label = (s: string) => s.replace(/\(consigliat[oa]\)/gi, '').trim().toLowerCase();
 const YES = 'sì', NO = 'no';
 /** The user's answer is a yes: a native question whose options are exactly «Sì» and «No» (with or without
  *  «(consigliato)»), every question answered «Sì». Free text is a clarification, never an ok. */
 export function saysYes(req: Pick<PendingRequest, 'type' | 'tool' | 'questions'> | undefined, answer: Answer): boolean {
-  if (!req || req.type !== 'question' || !NATIVE_QUESTIONS.has(req.tool) || answer.kind !== 'question' || !req.questions?.length) return false;
+  if (!req || !isNativeQuestion(req) || answer.kind !== 'question' || !req.questions?.length) return false;
   const yesNo = req.questions.every(q => q.options.length === 2 && q.options.some(o => label(o.label) === YES) && q.options.some(o => label(o.label) === NO));
   const given = Object.values(answer.answers).flatMap(v => (Array.isArray(v) ? v : [v]));
   return yesNo && given.length > 0 && given.length >= req.questions.length && given.every(v => typeof v === 'string' && label(v) === YES);

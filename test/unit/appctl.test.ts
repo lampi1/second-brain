@@ -40,6 +40,25 @@ function deps() {
 }
 
 describe('app control tools', () => {
+  it('only the authenticated caller can hand its selected answer to a new or reused Strategist plan', async () => {
+    const catalog = roleCatalog(), strategist = catalog.list().profiles.find(p => p.id === 'strategist')!;
+    const target = { id: 's', harness: 'claude', cwd: '/project', state: 'idle', plan: { phase: 'done' }, agent: { id: 'strategist', version: strategist.activeVersion, revision: strategist.updatedAt } };
+    const intake = { chatId: 'o', question: 'Solo desktop?', key: 'host-key' };
+    const create = vi.fn(async () => target), assignTask = vi.fn(async () => {});
+    const chats = { list: () => [{ id: 'o', isOrchestrator: true, harness: 'claude' }, target], bindPlanIntake: () => intake, create, assignTask } as unknown as ChatService;
+    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: false }, engineOn: { claude: true }, engines: { claude: true }, orchestratorChats: { harness: 'claude' } }), info: () => ({ brainRoot: '/project' }) } as unknown as BrainService;
+    const tool = (name: string, caller?: string) => appControlTools({ chats, brain, browser: {} as BrowserService, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => catalog.resolve(req) }, caller).find(t => t.name === name)!;
+    const args = { prompt: 'Disegna il flusso', title: 'Design', roleId: 'strategist', intakeQuestion: intake.question };
+    await expect(tool('app_create_chat').run(args)).rejects.toThrow(/authenticated/);
+    expect(create).not.toHaveBeenCalled();
+    await tool('app_create_chat', 'o').run(args);
+    expect(create).toHaveBeenCalledWith(expect.anything(), 'agent', undefined, undefined, { boundByOrchestrator: false, intake });
+    const reuse = { ...args, chatId: 's', cwd: '/project', expectedVersion: 1, mode: 'new-task' };
+    await tool('app_assign_task', 'o').run(reuse);
+    expect(assignTask).toHaveBeenCalledWith('s', expect.any(String), expect.objectContaining({ intake, mode: 'new-task' }));
+    await expect(tool('app_assign_task', 'o').run({ ...reuse, mode: 'continue' })).rejects.toThrow(/new Strategist plan/);
+  });
+
   it('assigns a scoped follow-up with stable source identity and refuses changed scope or unauthenticated reuse', async () => {
     const catalog = roleCatalog(), scout = catalog.list().profiles.find(p => p.id === 'scout')!;
     const target = { id: 'w', harness: 'claude', cwd: '/project', state: 'idle', agent: { id: 'scout', version: scout.activeVersion, revision: scout.updatedAt }, run: { taskVersion: 2, taskId: 'task', runId: 'run' } };
@@ -449,6 +468,38 @@ describe('app control tools', () => {
     list.push({ id: 's', harness: 'claude', state: 'idle', title: 'Piano', lastText: '', plan: { phase: 'proposed', at: 1 } });
     expect(await tool.run({})).toMatchObject({ waiting: 2, questionsAndPermissions: 1, plans: 1 });
     expect(ui).toEqual([{ action: 'unblock' }]);
+  });
+
+  it('a message from the phone never opens app_update_code or app_unblock (phone text is never an ok)', async () => {
+    const now = Date.now();
+    const items = [{ kind: 'user', id: 'u', at: now, text: 'aggiornati e fammi un recap', via: 'phone' }];
+    const list = [{ id: 'or', harness: 'claude', state: 'idle', isOrchestrator: true, title: 'Orchestrator', lastText: '' }];
+    const chats = { list: () => list, items: () => items, pending: () => [] } as unknown as ChatService;
+    let pulls = 0;
+    const code = { repo: () => 'C:/code/app', pull: async () => { pulls++; return { ok: true, message: '' }; } };
+    const base = { chats, browser: { list: () => [] } as unknown as BrowserService, brain: { feed: () => [], usage: () => ({}), info: () => ({ brainRoot: null }) } as unknown as BrainService, window: () => null, emitUi: () => {}, version: '0' };
+    const tools = appControlTools({ ...base, code }, 'or');
+    await expect(Promise.resolve().then(() => tools.find(x => x.name === 'app_update_code')!.run({}))).rejects.toThrow(/non ha chiesto/);
+    await expect(Promise.resolve().then(() => tools.find(x => x.name === 'app_unblock')!.run({}))).rejects.toThrow(/recap/);
+    expect(pulls).toBe(0);
+    // an Orchestrator question answered with the phone's buttons is no decision either; one answered on the PC later is
+    const asked = { kind: 'tool', id: 't1', at: now, name: 'AskUserQuestion', summary: 'Domanda', input: {}, status: 'ok' };
+    const phoneLine = { kind: 'system', id: 's1', at: now + 5, level: 'info', text: 'Risposto dal telefono', code: 'phoneDecided', params: { time: '09:41', what: 'question' } };
+    items.splice(0, items.length, asked as never, phoneLine as never);
+    await expect(Promise.resolve().then(() => tools.find(x => x.name === 'app_update_code')!.run({}))).rejects.toThrow(/non ha chiesto/);
+    items.push({ ...asked, id: 't2', at: now + 10 } as never);
+    expect(await tools.find(x => x.name === 'app_update_code')!.run({})).toMatchObject({ ok: true });
+    // bound by id, not time: a phone answer whose tool item is stamped after the answer line (ACP) is still no decision
+    const late = { ...asked, id: 't-ask', at: now + 20 };
+    const bound = { ...phoneLine, id: 's2', at: now + 15, params: { time: '09:42', what: 'question', request: 'r9', tool: 't-ask', asked: now + 12 } };
+    items.splice(0, items.length, bound as never, late as never);
+    await expect(Promise.resolve().then(() => tools.find(x => x.name === 'app_update_code')!.run({}))).rejects.toThrow(/non ha chiesto/);
+    // no shared id (ACP): the line claims the answered question nearest to when it was asked, even one stamped later
+    const unbound = { ...bound, params: { time: '09:42', what: 'question', request: 'r9', tool: '', asked: now + 12 } };
+    items.splice(0, items.length, unbound as never, late as never);
+    await expect(Promise.resolve().then(() => tools.find(x => x.name === 'app_update_code')!.run({}))).rejects.toThrow(/non ha chiesto/);
+    items.push({ ...asked, id: 't-pc', at: now + 40 } as never);
+    expect(await tools.find(x => x.name === 'app_update_code')!.run({})).toMatchObject({ ok: true });
   });
 
   it('app_unblock opens durable workflow and learning decisions without any live chat request', async () => {

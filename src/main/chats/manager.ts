@@ -47,8 +47,9 @@ import type { AgentOwnerSnapshot } from '../../shared/agents';
 import type { RunLinks } from '../agents/runs';
 import { newRequest } from '../agents/task-estimate';
 import { AWAY_BACK, AWAY_RULE } from '../../shared/away';
-import type { TaskSource } from '../../shared/delegation';
-import { isPlanApproval, stopsQuestions, STRATEGY_FLOW } from '../../shared/strategy';
+import { ownerSource, type TaskSource } from '../../shared/delegation';
+import { PHONE_REPLY_HINT } from './phone-reply';
+import { isPlanApproval, stopsQuestions, askingPlan, strategyPrompt, type IntakeSource } from '../../shared/strategy';
 import { isCorrection } from '../../shared/correction';
 import { initialEffort, selectEffort } from './effort';
 import { orchestratorRole, roleFrame } from '../agents/orchestrator-role';
@@ -104,7 +105,7 @@ export class ChatManager extends ManagerSink implements ChatService {
 
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
   /** by: who asks; 'app' = one of the app's own jobs (the sampled Sentinel reviews, agents/judge-sample.ts): like an agent, its run says startedBy 'app' */
-  override async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; routinePackage?: string; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { routine?: ChatSummary['routine']; boundByOrchestrator?: boolean; continuation?: boolean; continuationOf?: string } = {}): Promise<ChatSummary> {
+  override async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; routinePackage?: string; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { routine?: ChatSummary['routine']; boundByOrchestrator?: boolean; intake?: IntakeSource; continuation?: boolean; continuationOf?: string } = {}): Promise<ChatSummary> {
     if (opts.routine || inherited?.routinePackage) throw new Error('Routine execution is terminal-only.');
     const createdT0 = Date.now();
     this.deliveryPolicy(req.deliveryPolicy, !!req.parentId);
@@ -202,8 +203,6 @@ export class ChatManager extends ManagerSink implements ChatService {
       : policy ? { role, launches: agent.launches ?? null } : undefined);
     // a child whose parent has no known role chain starts cold, as before (fail closed: no managed server)
     const childOk = !delegator || !!ancestors;
-    const warm = warmable && childOk ? this.warm.take(cwd, launch.sig) : null;
-    const id = warm?.chatId ?? `c_${crypto.randomBytes(5).toString('hex')}`;
     const now = Date.now();
     // `replaces`: the new Orchestrator takes the role, the old one goes on as a normal chat (history kept, never deleted)
     const old = req.orchestrator && req.replaces ? this.chats.get(req.replaces) : undefined;
@@ -222,11 +221,14 @@ export class ChatManager extends ManagerSink implements ChatService {
     // a Strategist the Orchestrator opens for the user (its «Strategist» send mode) asks the user, proposes a plan and
     // shows its progress on its strip (ADR 0108): the app's fixed flow follows the request, the plan starts asking
     const strategist = by === 'agent' && agent.owner.source === 'catalog' && agent.owner.id === 'strategist' && !delegator && !req.orchestrator;
-    const prompt = given && pack ? `${given}\n\n${pack}` : given && strategist ? `${given}\n\n${STRATEGY_FLOW}` : given;
+    const plan = strategist && given ? askingPlan(now, opts.intake && this.planIntake(opts.intake)) : undefined;
+    const prompt = given && pack ? `${given}\n\n${pack}` : given && plan ? `${given}\n\n${strategyPrompt(plan)}` : given;
     // a root chat the Orchestrator opens while answering the user's own message is the user's request: like his own
     // messages (ADR 0036) it never waits for the CPU queue (a start of 10-25 s was then followed by the queue's wait)
     const forUser = by === 'agent' && !delegator && !req.orchestrator && this.orchestratorAnswering();
     const viaQueue = by !== 'user' && !forUser && !!prompt && !!this.admission;
+    const warm = warmable && childOk ? this.warm.take(cwd, launch.sig) : null;
+    const id = warm?.chatId ?? `c_${crypto.randomBytes(5).toString('hex')}`;
     const observedContext = agent.launchContext;
     const r: Rec = {
       s: {
@@ -244,7 +246,7 @@ export class ChatManager extends ManagerSink implements ChatService {
         ...(caps.cost ? {} : { costKnown: false as const }),
         ...(req.route ? { route: req.route } : {}),
         ...(delegator ? { parentId: delegator.s.id, ...(req.delegation ? { delegation: req.delegation } : {}) } : {}),
-        ...(strategist && given ? { plan: { phase: 'asking' as const, clarified: [], steps: [], at: now } } : {}),
+        ...(plan ? { plan } : {}),
       },
       createdAt: now,
       agentInstructions: agent.instructions,
@@ -275,6 +277,7 @@ export class ChatManager extends ManagerSink implements ChatService {
     // checked again where the chat joins the list: chats created at once (agent_delegate's children) awaited in between
     if (uniqueOk) r.s.title = this.uniqueTitle(r.s.title);
     this.chats.set(id, r);
+    if (plan && opts.intake) delete this.need(opts.intake.chatId).intakeKey;
     if (r.s.isOrchestrator) { this.restoreRootNotices(); this.resumeRootSyntheses(); for (const worker of this.chats.values()) if (worker.heldResult && !this.midTurn(worker)) this.releaseResult(worker); }
     if (old) {
       this.demoteOrchestrator(old);
@@ -316,6 +319,17 @@ export class ChatManager extends ManagerSink implements ChatService {
     return parent;
   }
 
+  /** The user's message from the paired phone (chats/phone-port.ts): the owner's, so it may reopen the chat, but its
+   *  text never approves anything; its bubble shows 📱 (🎙️ 📱 for a voice note) and its turn's reply goes back. */
+  async sendFromPhone(chatId: string, text: string, voice = false): Promise<void> {
+    const r = this.need(chatId);
+    r.phoneNext = { text, voice };
+    try { await this.send(chatId, text, undefined, false, undefined, false, { kind: 'phone' }); } catch (e) {
+      if (r.phoneNext?.text === text) r.phoneNext = undefined;
+      throw e;
+    }
+  }
+
   /** A message, optionally with images (pasted screenshots; checked here: images.ts). Text may be empty with images.
    *  resumed = the app's own "riprendi" after a restart (keeps the tile's mark; any other message clears it);
    *  from = not the user's: the sender shown above the bubble (another chat's title, the Orchestrator);
@@ -325,48 +339,61 @@ export class ChatManager extends ManagerSink implements ChatService {
     const r = this.need(chatId);
     if (r.s.routineArchived || r.s.routine || r.s.routinePackage) throw new Error('Archived routine chat: use the terminal routine CLI.');
     // the user's ✕ cancelled it (or its tree): only the user's own message reopens it, never an agent, mail or the app
-    if (this.closedByUser(r) && (resumed || from !== undefined || (source !== undefined && source.kind !== 'user'))) throw new Error(CLOSED_BY_USER);
+    if (this.closedByUser(r) && (resumed || from !== undefined || !ownerSource(source))) throw new Error(CLOSED_BY_USER);
+    // the paired phone (phone bridge) is the owner too, but its text only informs: it never approves (below)
+    const phone = source?.kind === 'phone';
+    // read in the same tick sendFromPhone set it, then carried by this delivery: two quick phone messages never trade
+    // or lose their mark (a phone message without it would count as typed on the PC)
+    const phoneVia = phone ? { voice: r.phoneNext?.text === text && !!r.phoneNext.voice } : undefined;
+    if (phone) r.phoneNext = undefined;
     // Flash follows its card (ADR 0107): the user's question goes to a Flash on the card's engine and model
-    if (r.s.quick && from === undefined && !resumed && (!source || source.kind === 'user')) {
+    if (r.s.quick && from === undefined && !resumed && ownerSource(source)) {
       const next = await this.flashFollow(r);
       if (next !== chatId) {
         if (r.voiceText === text) { this.spokenNext(next, text); r.voiceText = undefined; } // the spoken message moves with it
+        if (phoneVia) this.need(next).phoneNext = { text, voice: phoneVia.voice };
         return this.send(next, text, images, resumed, from, liveOnly, source, receipt);
       }
     }
     if (!(typeof text === 'string' && text.trim()) && !checkImages(images).length) throw new Error('Messaggio vuoto.');
     this.autoActivity(r);
     this.needAgentMay(r, from);
-    if (!resumed && !liveOnly && r.s.run?.report?.via === 'agent_report' && this.midTurn(r) && (from === undefined && (!source || source.kind === 'user') || source?.kind === 'chat')) throw new Error('Il risultato è in fase di consegna: attendi la fine del turno e riprova.');
+    if (!resumed && !liveOnly && r.s.run?.report?.via === 'agent_report' && this.midTurn(r) && (from === undefined && ownerSource(source) || source?.kind === 'chat')) throw new Error('Il risultato è in fase di consegna: attendi la fine del turno e riprova.');
     if (!resumed && !liveOnly && r.s.run && (r.s.run.endedAt !== undefined || r.s.run.report?.via === 'agent_report' && !this.midTurn(r)) &&
-      (from === undefined && (!source || source.kind === 'user') || source?.kind === 'chat' && (source.chatId === this.openOrchestrator()?.s.id || source.chatId === r.s.parentId))) {
+      (from === undefined && ownerSource(source) || source?.kind === 'chat' && (source.chatId === this.openOrchestrator()?.s.id || source.chatId === r.s.parentId))) {
       if (source?.kind === 'chat' && (source.chatId === this.openOrchestrator()?.s.id || (r.userTaskEvents?.latestSeq ?? 0) > (r.userTaskEvents?.acknowledgedSeq ?? 0))) throw new Error('Use app_assign_task for a follow-up; it checks role, project and current task version.');
       this.beginAssignment(r, text, { mode: isCorrection(text) ? 'rework' : 'continue', source: source ?? { kind: 'user' } });
     }
-    // Typed consent uses the same host transition as the panel; agent mail, replay and app text never approve.
-    if (!resumed && !liveOnly && from === undefined && (!source || source.kind === 'user') && r.s.plan?.phase === 'proposed'
+    // Typed consent uses the same host transition as the panel; agent mail, replay, app text and the phone's text never
+    // approve (phone bridge, design §5.5: free text from the phone is a clarification, never an ok)
+    if (!resumed && !liveOnly && from === undefined && (!source || source.kind === 'user') && !phone && r.s.plan?.phase === 'proposed'
       && !checkImages(images).length && isPlanApproval(text)) {
       return this.decidePlan(chatId, 'approve', r.s.plan.at, undefined, text, receipt);
     }
     // its parent's message (agent_answer_child, from = the parent's title) reached it: the answer it waited for
     if (from !== undefined && r.s.parentId && from === this.chats.get(r.s.parentId)?.s.title) delete r.askedParentAt;
-    if (!resumed && from === undefined && (!source || source.kind === 'user')) this.userWrote(chatId, text);
-    // «basta domande» typed in the chat counts like the answer (ADR 0209): plan_propose stops asking for more
-    if (!resumed && from === undefined && (!source || source.kind === 'user') && r.s.plan?.phase === 'asking' && typeof text === 'string' && stopsQuestions(text)) r.s.plan = { ...r.s.plan, enough: true };
+    if (!resumed && from === undefined && ownerSource(source)) {
+      // A new direct request cannot inherit a prior private answer, even from a postponed panel.
+      if (r.s.isOrchestrator) { delete r.intakePanelId; delete r.intakeKey; }
+      this.userWrote(chatId, text);
+    }
+    // «basta domande» typed in the chat counts like the answer (ADR 0209): plan_propose stops asking for more; never
+    // from the phone (an answer is a decision, and the phone's text decides nothing)
+    if (!resumed && from === undefined && (!source || source.kind === 'user') && !phone && r.s.plan?.phase === 'asking' && typeof text === 'string' && stopsQuestions(text)) r.s.plan = { ...r.s.plan, enough: true };
     // Flash's outcomes (ADR 0131, zero tokens): the user's question to Flash decides its last answer (a correction, the
     // same question again); the user's own message to the Orchestrator may hand one over
-    if (!resumed && from === undefined && (!source || source.kind === 'user') && typeof text === 'string' && (r.s.quick || r.s.isOrchestrator)) {
+    if (!resumed && from === undefined && ownerSource(source) && typeof text === 'string' && (r.s.quick || r.s.isOrchestrator)) {
       this.runs.flashEvent({ kind: r.s.quick ? 'asked' : 'handed', text, at: Date.now() });
     }
     // what the engine must know for agent_report goes to the engine only, never into the user's bubble (#158, #170)
     const hint = !resumed && !liveOnly ? this.taskHint(r, text, source) : '';
     // a new assignment from the Orchestrator: whether the user waits for it is decided again (#123)
     if (from !== undefined && !r.s.parentId && !r.s.isOrchestrator && r.s.run?.startedBy === 'orchestrator' && source?.kind === 'chat' && source.chatId === this.openOrchestrator()?.s.id) r.userWaits = this.orchestratorAnswering();
-    if (!this.admission) return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint);
+    if (!this.admission) return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia);
     // the user's own message never waits (ADR 0036): what waited for this chat goes first, now, then this one
     if (!resumed && from === undefined) {
       this.admission.admitNow(chatId);
-      return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint);
+      return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia);
     }
     // an agent's message (another chat, the Orchestrator, the app's own resume): checked now
     if (liveOnly && ((!r.session && r.s.state !== 'idle') || r.archiving || r.s.closedAt)) throw new Error('La chat non è attiva: la posta resta da leggere.');
@@ -376,11 +403,11 @@ export class ChatManager extends ManagerSink implements ChatService {
     // hours, and reached the chat only when the user wrote): what waited for this chat goes first, then this one
     if (!resumed && !r.s.closedAt) {
       this.admission.admitNow(chatId);
-      return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint);
+      return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia);
     }
     // the app's own resume, or an agent reopening a closed chat (a new engine): it may wait for the load
     if (r.s.closedAt && !r.archiving) this.unarchive(r); // back on the grid now: its tile shows that it waits
-    return this.gate(r, () => this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint));
+    return this.gate(r, () => this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia));
   }
 
   /** Agent work through the CPU queue (ADR 0036): runs now (the promise is the delivery's) or waits, and then resolves
@@ -443,8 +470,8 @@ export class ChatManager extends ManagerSink implements ChatService {
     return lines.length ? `\n\n[${lines.join('\n')}]` : '';
   }
 
-  private deliver(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, receipt?: SubmissionReceipt, hint = ''): Promise<void> {
-    const run = () => this.deliverNow(chatId, text, images, resumed, from, liveOnly, receipt, hint).catch(error => { receipt?.failed(error); throw error; });
+  private deliver(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, receipt?: SubmissionReceipt, hint = '', phoneVia?: { voice: boolean }): Promise<void> {
+    const run = () => this.deliverNow(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia).catch(error => { receipt?.failed(error); throw error; });
     const previous = this.deliveries.get(chatId);
     const delivery = previous ? previous.catch(() => {}).then(run) : run();
     this.deliveries.set(chatId, delivery);
@@ -453,7 +480,7 @@ export class ChatManager extends ManagerSink implements ChatService {
     return delivery;
   }
 
-  private async deliverNow(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, receipt?: SubmissionReceipt, hint = ''): Promise<void> {
+  private async deliverNow(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, receipt?: SubmissionReceipt, hint = '', phoneVia?: { voice: boolean }): Promise<void> {
     updateActivity.assertOpen();
     const r = this.need(chatId);
     const releaseDelivery = this.holdActivity(chatId);
@@ -496,7 +523,11 @@ export class ChatManager extends ManagerSink implements ChatService {
     // who started the Orchestrator's turn: the user's own words (never the app's news, labelled "[…"), or the app; a
     // message into a running turn joins it, and only the user's own makes it his (#123)
     if (r.s.isOrchestrator) { const own = !from && !resumed && !!t && (!t.startsWith('[') || splitMode(t).mode !== null); if (own) r.turnFromUser = true; else if (!this.midTurn(r)) r.turnFromUser = false; }
-    this.addItem(r, { kind: 'user', id: nextId('u'), at: Date.now(), text: t, ...(imgs.length ? { images: imgs.length } : {}), ...(thumbs.length ? { thumbs } : {}), ...(from ? { from: from.slice(0, 80) } : {}) }, false);
+    // a message from the paired phone (sendFromPhone): its bubble shows 📱, its turn's reply goes back to the phone
+    const fromPhone = !!phoneVia && from === undefined && !resumed;
+    const phoneVoice = fromPhone && !!phoneVia?.voice;
+    if (fromPhone) r.turnFromPhone = true; else if (!this.midTurn(r)) delete r.turnFromPhone;
+    this.addItem(r, { kind: 'user', id: nextId('u'), at: Date.now(), text: t, ...(imgs.length ? { images: imgs.length } : {}), ...(thumbs.length ? { thumbs } : {}), ...(from ? { from: from.slice(0, 80) } : {}), ...(fromPhone ? { via: 'phone' as const, ...(phoneVoice ? { voice: true } : {}) } : {}) }, false);
     r.activeAt = Date.now();
     if (r.jobNew) this.startJob(r, t || `[${imgs.length} immagini]`);
     const continuation = cold?.h ?? (r.continuationPending ? this.handoffs.read(r.s.id, r.continuationPending) : null);
@@ -537,6 +568,7 @@ export class ChatManager extends ManagerSink implements ChatService {
     const awayHint = awayOn ? (role || !told ? `\n\n${AWAY_RULE}` : '') : r.awayTold !== undefined ? `\n\n${AWAY_BACK}` : '';
     const spoken = r.voiceText !== undefined && r.voiceText === text && from === undefined && !resumed;
     const voiceHint = spoken ? voiceReplyHint(!role && r.voiceTold === (r.s.sessionId ?? '')) : '';
+    const phoneHint = fromPhone ? PHONE_REPLY_HINT : '';
     if (spoken) { r.voiceText = undefined; r.voiceTold = r.s.sessionId ?? ''; }
     // the files as they are before this turn (ADR 0103): what the user can put back with «Annulla l'ultimo turno»
     if (!this.midTurn(r)) r.turnCheckpoint = false;
@@ -545,7 +577,7 @@ export class ChatManager extends ManagerSink implements ChatService {
     lap.checkpointMs = Date.now() - lapT;
     try {
       receipt?.beforeSubmit();
-      r.session.send(`${role}${warning}${body}${hint}${langHint}${voiceHint}${awayHint}`, imgs);
+      r.session.send(`${role}${warning}${body}${hint}${langHint}${voiceHint}${phoneHint}${awayHint}`, imgs);
       if (awayHint) { if (awayOn) r.awayTold = session; else delete r.awayTold; }
       receipt?.submitted();
       if (r.continuationPending) { r.continuationPending = undefined; this.persist(true); }

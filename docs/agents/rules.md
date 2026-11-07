@@ -20,6 +20,9 @@ app (each CLI logs in itself) with these exceptions:
   their own engine's process env or HTTP header (ADR 0046);
 - the tokens of the MCP servers added in Settings → Connettori, the same way, given only by the app's MCP gateway to
   that server's own process env or request header, never to an engine or a chat (ADR 0086);
+- the Telegram bot token the user types in Settings → Telefono, encrypted with safeStorage in its own slot, write-only
+  from the UI, used only by the main process in its calls to `api.telegram.org`, redacted from logs (`addRedaction`,
+  `src/main/log.ts`), never given to an engine, a chat, an agent or a file (ADR 0219);
 - historical routine site passwords stay encrypted in the app profile and are read only during explicit package
   preparation/export for the terminal, never printed in transcripts, evidence or logs (ADR 0179).
 

@@ -23,8 +23,9 @@ describe('yes/no questions', () => {
     expect(isYesNo(q('Sì', 'No', 'Forse'))).toBe(false);
     expect(isYesNo({ ...q('Sì', 'No'), multiSelect: true })).toBe(false);
   });
-  it('a request is yes/no when every question is, and it has one', () => {
-    expect(yesNoShape([q('Sì', 'No'), q('Yes', 'No')])).toBe(true);
+  it('a request has one yes/no question at a time', () => {
+    expect(yesNoShape([q('Sì', 'No')])).toBe(true);
+    expect(yesNoShape([q('Sì', 'No'), q('Yes', 'No')])).toBe(false);
     expect(yesNoShape([q('Sì', 'No'), q('A', 'B')])).toBe(false);
     expect(yesNoShape([])).toBe(false);
   });

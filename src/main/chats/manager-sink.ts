@@ -1,6 +1,7 @@
 // ChatManager layer (ADR 0200): the session sink. Each engine session reports items, questions and permissions and
 // state patches; sinkFor turns them into the chat record and the contract events (chat:item, pending:added, chat:updated)
 // and applyPatch applies a state change (turn start and end, the Orchestrator's own turn, held results).
+import { isNativeQuestion } from '../../shared/yes-no';
 import type { PendingRequest } from '../../shared/contract';
 import { errText, log } from '../log';
 import { AFTER_CALLS } from './continuity';
@@ -50,6 +51,7 @@ export abstract class ManagerSink extends ManagerWork {
         this.autoActivity(r);
         const full: PendingRequest = { ...req, chatId };
         this.countRequest(r, req);
+        if (r.s.isOrchestrator && isNativeQuestion(req) && req.questions?.length === 1) r.intakePanelId = req.id;
         r.pending.set(req.id, full);
         r.s.pending = r.pending.size;
         this.opts.emitter.emit('pending:added', full);

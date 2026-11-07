@@ -230,3 +230,10 @@
 .st-tiers-head { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--text-3); }
 .st-tiers-engine { font-weight:600; color:var(--text-2); }
 .st-tier-input { width:100%; min-width:0; font-family:var(--mono); font-size:12px; }
+
+/* Settings → Telefono (components/PhoneSettings.tsx, ADR 0219) */
+.st-phone-token { display: flex; gap: 6px; align-items: center; min-width: 0; }
+.st-phone-token input { flex: 1; min-width: 180px; text-align: left; }
+.st-phone-quiet { display: flex; gap: 8px; align-items: center; }
+.st-phone-recent, .st-phone-checks { margin: 6px 0 0; padding-left: 20px; color: var(--text-2); font-size: 12.5px; line-height: 1.6; }
+.st-phone-recent time { font-variant-numeric: tabular-nums; }

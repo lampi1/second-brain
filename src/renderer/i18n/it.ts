@@ -22,6 +22,7 @@ import { connectorsIt } from './areas/connectors.it';
 // areas/ (<area>.it.ts, <area>.en.ts), spread here. Used through t() (i18n/index.ts).
 import { genuiRequestIt } from './areas/genui-request.it';
 import { voiceIt } from './areas/voice.it';
+import { phoneIt } from './areas/phone.it';
 import { recIt } from './areas/rec.it';
 import { imparaIt } from './areas/impara.it';
 import { imparaStudioIt } from './areas/impara-studio.it';
@@ -93,6 +94,7 @@ export const it = {
   ...logIt,
   ...genuiRequestIt,
   ...voiceIt,
+  ...phoneIt,
   ...recIt,
   ...imparaIt,
   ...imparaStudioIt,

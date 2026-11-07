@@ -3,14 +3,21 @@
 // sides need: the checks of a contract and of a result, the child's first message (the contract only, never the
 // parent's history), the message that brings a result back, and the depth of a chat in the tree. Pure: used by
 // main/agents/delegation.ts (the tools), main/chats/manager.ts (the result delivery) and the renderer (the child cards).
+import type { IntakeSource } from './strategy';
 import { browserWriteResult, type BrowserWriteResult } from './flow-browser';
 import { TOOL_CLASSES, type ToolClass, type TaskDeliveryPolicy } from './agents';
 import { MODEL_TIERS, ROLE_DEFAULTS, currentRoleId, isWorkRole, type ModelTier, type WorkRoleId } from './roles';
 import { AGENT_LABEL, oneLine } from './agent-label';
 
 /** Stable provenance for task assignment; display titles never authorize lifecycle changes. */
-export type TaskSource = { kind: 'user' } | { kind: 'chat'; chatId: string } | { kind: 'app' };
+/** phone = the user's own words from the paired phone (Telegram bridge, ADR phone bridge): the user's like a typed message
+ *  everywhere except consent: typed phone text never approves a plan, a question or anything else (ownerSource). */
+export type TaskSource = { kind: 'user' } | { kind: 'chat'; chatId: string } | { kind: 'app' } | { kind: 'phone' };
+/** The message is the user's own (typed in the app, or from the paired phone): reopening, assignments and user notes. */
+export const ownerSource = (s: TaskSource | undefined): boolean => !s || s.kind === 'user' || s.kind === 'phone';
 export interface TaskAssignmentOptions {
+  /** An answer verified by the host for a new root Plan. */
+  intake?: IntakeSource;
   mode?: 'continue' | 'new-task' | 'rework';
   source?: TaskSource;
   expectedVersion?: number;

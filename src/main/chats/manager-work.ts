@@ -6,13 +6,14 @@ import path from 'node:path';
 import type { ChatSummary } from '../../shared/contract';
 import { errText, log } from '../log';
 import type { UserTaskEvents, AgentRun, AgentRunOutcome } from '../../shared/agents';
-import type { TaskAssignmentOptions } from '../../shared/delegation';
-import { PLAN_APPROVED, planChange, STRATEGY_FLOW, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
+import { ownerSource, type TaskAssignmentOptions } from '../../shared/delegation';
+import { PLAN_APPROVED, planChange, askingPlan, strategyPrompt, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
 import { runMetrics } from '../agents/run-metrics';
 import { standings, withStandings } from '../agents/standing';
 import { isCorrection } from '../../shared/correction';
-import type { SubmissionReceipt, Rec, CleanReportNote, UserWroteNote } from './manager-types';
+import type { SubmissionReceipt, Rec, CleanReportNote, UserWroteNote, TurnEndInfo } from './manager-types';
 import { sysItem, userNoteLine } from './manager-helpers';
+import { phoneTime } from './phone-reply';
 import { ManagerLifecycle } from './manager-lifecycle';
 import type { AppAsk } from './session';
 
@@ -43,7 +44,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     // «Modalità notte» (ADR 0191): nobody will click «Approva e parti», so the plan starts as proposed (its recommended
     // choice) and the tool says so; the recap tells the user
     const away = !!this.opts.away?.();
-    r.s.plan = { phase: away ? 'running' : 'proposed', clarified: plan.clarified, ...(plan.asked ? { asked: plan.asked } : {}), ...(plan.enough ? { enough: true } : {}), steps, ...(doneWhen ? { doneWhen } : {}), at: Math.max(Date.now(), plan.at + 1) };
+    r.s.plan = { phase: away ? 'running' : 'proposed', clarified: plan.clarified, ...(plan.pcOnly ? { pcOnly: true } : {}), ...(plan.asked ? { asked: plan.asked } : {}), ...(plan.enough ? { enough: true } : {}), steps, ...(doneWhen ? { doneWhen } : {}), at: Math.max(Date.now(), plan.at + 1) };
     // the run keeps the plan's fate: a decision signal for the Orchestrator (standing.ts, ADR 0131)
     const run = r.s.run;
     if (run && run.endedAt === undefined) { run.plan = { ...(run.plan ?? { proposals: 0, changes: 0 }), proposals: (run.plan?.proposals ?? 0) + 1 }; this.runSave(); }
@@ -83,13 +84,14 @@ export abstract class ManagerWork extends ManagerLifecycle {
   }
 
   /** The user's click on a proposed plan (chat:plan): «Approva e parti» or «Cambia qualcosa» with what to change; the
-   *  Strategist gets it as the user's message. «Basta domande» is an answer to its open question (renderer). */
-  async planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string): Promise<void> {
-    return this.decidePlan(chatId, decision, at, text);
+   *  Strategist gets it as the user's message. «Basta domande» is an answer to its open question (renderer).
+   *  by 'phone' = a button on the paired phone (chats/phone-port.ts): the same checks, a «Risposto dal telefono» line. */
+  async planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string, by: 'pc' | 'phone' = 'pc'): Promise<void> {
+    return this.decidePlan(chatId, decision, at, text, undefined, undefined, false, by);
   }
 
   /** Common panel/typed decision path; keep the user's original wording in the transcript and roll back failed delivery. */
-  protected override async decidePlan(chatId: string, decision: 'approve' | 'change', at: number, text?: string, message?: string, receipt?: SubmissionReceipt, byApp = false): Promise<void> {
+  protected override async decidePlan(chatId: string, decision: 'approve' | 'change', at: number, text?: string, message?: string, receipt?: SubmissionReceipt, byApp = false, by: 'pc' | 'phone' = 'pc'): Promise<void> {
     const r = this.need(chatId), plan = r.s.plan;
     if (!plan || plan.phase !== 'proposed') throw new Error('Questo piano non aspetta più una risposta.');
     if (plan.at !== at) throw new Error('Il piano è cambiato nel frattempo: rileggilo.');
@@ -104,6 +106,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
       if (r.s.plan?.phase === (decision === 'approve' ? 'running' : 'revising')) { r.s.plan = plan; this.persist(); this.updated(r); }
       throw e;
     }
+    if (by === 'phone') { this.addItem(r, sysItem('phoneDecided', { time: phoneTime(Date.now()), what: 'plan' }, 'info'), false); this.updated(r); }
     // the user's click on the run's plan: approved as proposed, or a change asked (standing.ts decisionSignals, ADR 0131)
     const run = r.s.run;
     if (run && run.endedAt === undefined) {
@@ -111,7 +114,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
       run.plan = decision === 'approve' ? { ...p, approvedAt: p.approvedAt ?? Date.now(), ...(byApp ? { byApp: true } : {}) } : { ...p, changes: p.changes + 1 };
       this.runSave();
     }
-    log.info('chats', 'plan decided', { chat: chatId, data: { decision } });
+    log.info('chats', 'plan decided', { chat: chatId, data: { decision, ...(by === 'phone' ? { by } : {}) } });
   }
 
   /** The user typed in this chat himself (chat:send only, ADR 0083): so that nothing conflicts, the Orchestrator learns it
@@ -143,6 +146,11 @@ export abstract class ManagerWork extends ManagerLifecycle {
   /** A root chat's clean result (done, every criterion met, no question): a listener that returns true took it as quiet
    *  news for the Orchestrator (orchestrator-wake.ts cleanReport); else it goes as a message, as any other result. */
   onCleanReport(fn: (n: CleanReportNote) => boolean): void { this.cleanReportListeners.push(fn); }
+  /** chats/phone-port.ts: told of every turn's end (fromPhone = a phone message started or joined it); returns the unsubscribe */
+  onTurnEnded(fn: (info: TurnEndInfo) => void): () => void {
+    this.turnEndListeners.push(fn);
+    return () => { const i = this.turnEndListeners.indexOf(fn); if (i >= 0) this.turnEndListeners.splice(i, 1); };
+  }
   /** the notes waiting for this chat's next message (tests, diagnostics) */
   notesWaiting(chatId: string): readonly string[] { return this.notesFor.get(chatId) ?? []; }
 
@@ -153,7 +161,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     if (!prompt.trim()) throw new Error('Task prompt is required.');
     if (options.expectedVersion !== undefined && options.expectedVersion !== (r.s.run?.taskVersion ?? 1)) throw new Error('Task version changed; refresh before assigning.');
     const source = options.source ?? { kind: 'user' as const };
-    if (source.kind !== 'user' && this.closedByUser(r)) throw new Error('The user closed this chat and cancelled its work: only the user can reopen it. Start a new chat for new work.');
+    if (!ownerSource(source) && this.closedByUser(r)) throw new Error('The user closed this chat and cancelled its work: only the user can reopen it. Start a new chat for new work.');
     if (source.kind === 'chat') {
       if (source.chatId !== this.openOrchestrator()?.s.id && source.chatId !== r.s.parentId) throw new Error('Only the owning Orchestrator or parent can assign this chat.');
       if (source.chatId === r.s.parentId) {
@@ -171,7 +179,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     const freshBoundary = this.freshReady(r, Date.now());
     this.beginAssignment(r, prompt, options);
     if (freshBoundary) r.freshAssignmentRun = r.s.run?.runId;
-    if (options.mode === 'new-task' && r.s.plan) prompt += `\n\n${STRATEGY_FLOW}`;
+    if (options.mode === 'new-task' && r.s.plan) prompt += `\n\n${strategyPrompt(r.s.plan)}`;
     if (options.planStep !== undefined && r.s.parentId) this.planDelegated(r.s.parentId, options.planStep, [chatId]);
     if (source.kind === 'chat' && r.userTaskEvents) { r.userTaskEvents.acknowledgedSeq = r.userTaskEvents.latestSeq; this.persist(true); this.updated(r); }
     const from = source.kind === 'chat' ? this.need(source.chatId).s.title : source.kind === 'app' ? 'App' : undefined;
@@ -187,6 +195,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     const mode = options.mode ?? 'continue', at = Date.now();
     this.deliveryPolicy(options.deliveryPolicy, !!r.s.parentId);
     if (options.doneWhen && (options.doneWhen.length > 12 || options.doneWhen.some(x => typeof x !== 'string' || !x.trim() || x.length > 300))) throw new Error('Invalid task criteria.');
+    const newPlan = mode === 'new-task' && r.s.plan ? askingPlan(at, options.intake && this.planIntake(options.intake)) : undefined;
     this.finishRun(previous, previous.report ? 'completed' : 'closed', at);
     const next = this.runs.start({ chatId: r.s.id, agentId: previous.agentId, version: previous.version,
       goal: prompt, startedBy: previous.startedBy, startedAt: at, costKnown: previous.costUsd !== null,
@@ -201,7 +210,10 @@ export abstract class ManagerWork extends ManagerLifecycle {
     next.taskContract = { ...(previous.taskContract?.reportExpected ? { reportExpected: true } : {}), deliveryPolicy: this.deliveryPolicy(options.deliveryPolicy ?? previous.taskContract?.deliveryPolicy, !!r.s.parentId), goal: prompt, doneWhen: options.doneWhen ?? (mode === 'new-task' ? [] : previous.taskContract?.doneWhen ?? r.s.delegation?.doneWhen ?? []) };
     if (mode === 'continue') next.continuedFrom = previous.runId;
     r.s.run = next;
-    if (mode === 'new-task' && r.s.plan) r.s.plan = { phase: 'asking', clarified: [], steps: [], at };
+    if (newPlan) {
+      r.s.plan = newPlan;
+      if (options.intake) delete this.need(options.intake.chatId).intakeKey;
+    }
     r.s.work = { status: 'assigned', updatedAt: at };
     if (r.s.delegation) r.s.delegation = { ...r.s.delegation, goal: prompt, doneWhen: next.taskContract.doneWhen, at, result: undefined };
     delete r.rootReportAt; delete r.report; delete r.autoCompleted; delete r.runSeen;
