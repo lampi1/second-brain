@@ -6,6 +6,7 @@
 // are built in parallel. SB_DEMO_FREEZE=1 = deterministic: fixed clock (FROZEN_EPOCH), no randomness, no timers; the
 // demo sits at one rich state and every action completes instantly. Used by wiring.ts (with demo-browser.ts for tabs)
 // and test/unit/demo.test.ts. The data is fictional: no real people, customers or paths.
+import { withClarified } from './chats/plan-interview';
 import { timersFor } from './timers';
 const { setInterval, clearInterval } = timersFor('demo');
 import type {
@@ -15,7 +16,7 @@ import type {
 import type { AgentChildren, ChildObservation } from '../shared/agents';
 import { sysEn } from '../shared/sys';
 import { ROLE_DEFAULTS, type WorkRoleId } from '../shared/roles';
-import { PLAN_APPROVED, planChange, withClarified } from '../shared/strategy';
+import { PLAN_APPROVED, planChange } from '../shared/strategy';
 import type { BrainService, ChatService, FeedInput } from './services';
 import type { ConfigStore } from './brain/config';
 import { BrainApi, checkApiPath, type LocalApi } from './brain/api';

@@ -9,7 +9,10 @@ import type { AgentPolicy } from './agents/tool-policy';
 import type { TaskAssignmentOptions, TaskSource } from '../shared/delegation';
 import type { KnownOutcome, RouteRequest, RouteResult, RoutingActual, RoutingPrediction } from './brain/routing';
 
+import type { IntakeSource } from '../shared/strategy';
+
 export interface ChatService {
+  bindPlanIntake?(chatId: string, question: string): IntakeSource;
   /** Real engine receipts; demos and mocks acknowledge their simulated sends by promise. */
   readonly submissionReceipts?: boolean;
   list(): ChatSummary[];
@@ -20,7 +23,7 @@ export interface ChatService {
   /** by agent = an agent's chat (app_create_chat): its first turn may wait in the CPU queue (ADR 0036).
    *  opts.boundByOrchestrator: a call from the unauthenticated /mcp/app mount: the chat runs no wider than the open
    *  Orchestrator (refused without one), since any local process can reach that mount */
-  create(req: NewChat, by?: 'user' | 'agent', inherited?: undefined, links?: undefined, opts?: { boundByOrchestrator?: boolean }): Promise<ChatSummary>;
+  create(req: NewChat, by?: 'user' | 'agent', inherited?: undefined, links?: undefined, opts?: { boundByOrchestrator?: boolean; intake?: IntakeSource }): Promise<ChatSummary>;
   /** images: the chat:send attachments, checked by the service (main/chats/images.ts) */
   /** from = not the user's message: who sent it (another chat, the Orchestrator), shown above the bubble */
   /** liveOnly = mail: fails instead of starting or reopening the chat (main/chats/mail.ts) */
@@ -30,7 +33,7 @@ export interface ChatService {
   assignTask?(chatId: string, text: string, options?: TaskAssignmentOptions): Promise<void>;
   userEvents?(chatId: string, afterSeq?: number): UserTaskEvents;
   synthesizeResult?(runId: string, source: TaskSource): Promise<void>;
-  answer(chatId: string, requestId: string, answer: Answer): Promise<void>;
+  answer(chatId: string, requestId: string, answer: Answer, by?: 'pc' | 'phone' | 'relay'): Promise<void>;
   /** a Strategist's proposed plan: the user's «Approva e parti» or «Cambia qualcosa» (ADR 0108) */
   planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string): Promise<void>;
   stop(chatId: string, keepQueued?: boolean): Promise<void>;

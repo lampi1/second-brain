@@ -795,7 +795,7 @@ export class ClaudeSession implements HarnessSession {
       return true;
     }
     if (yesNo && !noBrief) { this.yesNoRefused = 0; return false; }
-    if (this.yesNoRefused >= YESNO_RETRIES) { if (noBrief) this.briefOff = true; this.yesNoRefused = 0; return false; }
+    if (qs.length === 1 && this.yesNoRefused >= YESNO_RETRIES) { if (noBrief) this.briefOff = true; this.yesNoRefused = 0; return false; }
     this.yesNoRefused++;
     log.info('chats', noBrief ? 'question sent back: no brief' : 'question sent back: not yes/no', { chat: this.opts.chatId, data: { requestId: id, attempt: this.yesNoRefused } });
     try { this.write({ type: 'control_response', response: { subtype: 'success', request_id: id, response: { behavior: 'deny', message: noBrief ? BRIEF_REFUSAL : YESNO_REFUSAL, toolUseID: toolUseId } } }); } catch { /* gone */ }

@@ -1,6 +1,9 @@
 // ChatManager layer (ADR 0200): questions and permissions. The user's answer, the gates a request passes before
 // it reaches the user (role gate, read-only commands, auto-permit, «Modalità notte» ADR 0191), the away recap and
 // the count of a run's requests and «Comando da eseguire» asks.
+import { phoneQuestionReserved } from './phone-port';
+import { withClarified } from './plan-interview';
+import { randomUUID } from 'node:crypto';
 import type { Answer, PendingRequest } from '../../shared/contract';
 import { errText, log } from '../log';
 import { engineOf } from '../engines/registry';
@@ -9,8 +12,9 @@ import { readOnlyTools } from '../agents/read-tools';
 import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { autoPermit } from './auto-permit';
 import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers } from '../../shared/away';
-import { PLAN_APPROVED, withClarified } from '../../shared/strategy';
+import { askingPlan, PLAN_APPROVED, type IntakeSource, type PlanIntake } from '../../shared/strategy';
 import type { SubmissionReceipt, Rec } from './manager-types';
+import { isNativeQuestion } from '../../shared/yes-no';
 import { sysItem } from './manager-helpers';
 import { phoneTime } from './phone-reply';
 import { ManagerCheckpoints } from './manager-checkpoints';
@@ -20,12 +24,14 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
 
   /** The user's answer. by = where they gave it: the PC (the panel) or the paired phone (phone bridge: only a question,
    *  never a permission or a command; chats/phone-port.ts checks the rest before it calls this) */
-  async answer(chatId: string, requestId: string, answer: Answer, by: 'pc' | 'phone' = 'pc'): Promise<void> {
+  async answer(chatId: string, requestId: string, answer: Answer, by: 'pc' | 'phone' | 'relay' = 'pc'): Promise<void> {
     const r = this.need(chatId);
     if (!r.pending.has(requestId)) throw new Error('Questa richiesta non è più aperta.');
     if (!r.session) { this.dropPending(r, requestId); throw new Error('La chat non è più attiva: la richiesta è scaduta.'); }
     const req = r.pending.get(requestId)!;
     if (by === 'phone' && (req.type !== 'question' || answer.kind !== 'question')) throw new Error('Dal telefono si risponde solo a una domanda Sì/No.');
+    const interview = by !== 'relay' && (r.s.plan || r.s.isOrchestrator) && isNativeQuestion(req) && answer.kind === 'question';
+    const pcOnly = interview ? phoneQuestionReserved(req, () => { this.ensureHistory(r); return r.items; }) : false;
     if (by === 'phone') r.answeringFromPhone = requestId; // the engine resolves it now: pending:resolved carries by 'phone'
     let ok: boolean;
     try { ok = r.session.answer(requestId, answer); } finally { delete r.answeringFromPhone; }
@@ -33,20 +39,49 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     // request/tool/asked bind the line to this question (appctl/tools.ts decidedSince): its tool item never counts as a PC answer
     if (by === 'phone') { this.addItem(r, sysItem('phoneDecided', { time: phoneTime(Date.now()), what: 'question', request: requestId, tool: req.toolUseId ? `t-${req.toolUseId}` : '', asked: req.at }, 'info'), false); this.updated(r); }
     // Full request scope stays private (ADR 0083); shared user events carry only the user's own choices/words.
-    const decision = JSON.stringify({ requestId, title: req.title, detail: req.detail, questions: req.questions ?? [], answer, ...(by === 'phone' ? { by } : {}) });
+    if (r.s.isOrchestrator) {
+      delete r.intakeKey;
+      if (by !== 'relay' && r.intakePanelId === requestId && isNativeQuestion(req) && answer.kind === 'question') r.intakeKey = randomUUID();
+      if (r.intakePanelId === requestId) delete r.intakePanelId;
+    }
+    const decision = JSON.stringify({ requestId, pcOnly, ...(by !== 'pc' ? { by } : {}), ...(r.intakeKey ? { intakeKey: r.intakeKey } : {}), nativeQuestion: isNativeQuestion(req), title: req.title, detail: req.detail, questions: req.questions ?? [], answer });
     r.continuationDecisions = r.continuationDecisions ? `${r.continuationDecisions}\n${decision}` : decision;
     // one checkpoint carries the decision and the user's event: two synchronous checkpoints per click froze the window (#294)
     let saved = false;
     try {
-      saved = answer.kind === 'question' ? this.userWrote(chatId, JSON.stringify({ requestId, answers: Object.values(answer.answers) }))
+      if (by !== 'relay') saved = answer.kind === 'question' ? this.userWrote(chatId, JSON.stringify({ requestId, answers: Object.values(answer.answers) }))
         : this.userWrote(chatId, JSON.stringify({ requestId, allow: answer.allow, ...(answer.message ? { message: answer.message } : {}) }));
     } finally { if (!saved) this.persist(true); } // the decision is on disk even when the event could not be recorded
     // a Strategist still asking: the answer is one more thing its strip shows as already clear (ADR 0108)
     const plan = r.s.plan;
-    if (plan && (plan.phase === 'asking' || plan.phase === 'revising') && answer.kind === 'question' && req.questions?.length) {
-      const next = withClarified(plan, req.questions, answer.answers);
+    if (by !== 'relay' && plan && (plan.phase === 'asking' || plan.phase === 'revising') && isNativeQuestion(req) && answer.kind === 'question' && req.questions?.length) {
+      const next = withClarified(plan, req.questions, answer.answers, pcOnly);
       if (next !== plan) { r.s.plan = next; this.persist(); this.updated(r); }
     }
+  }
+
+  /** Pin the answer before routing or model choice yields to another user request. */
+  bindPlanIntake(chatId: string, question: string): IntakeSource {
+    const key = this.need(chatId).intakeKey;
+    if (!key) throw new Error('Use the exact question from your latest answered intake panel, or omit intakeQuestion.');
+    return { chatId, question, key };
+  }
+
+  /** Recheck the pinned answer immediately before the synchronous plan registration. */
+  protected planIntake({ chatId, question, key }: IntakeSource): PlanIntake {
+    const r = this.need(chatId);
+    if (r.s.isOrchestrator && !r.s.closedAt && r.intakeKey && r.continuationDecisions) {
+      const records = r.continuationDecisions;
+      const decision = JSON.parse(records.slice(records.lastIndexOf('\n') + 1));
+      const qs = decision.questions;
+      if (key === r.intakeKey && decision.intakeKey === key && decision.nativeQuestion === true && decision.answer?.kind === 'question' && Array.isArray(qs) && qs.length === 1 && qs[0]?.question === question) {
+        const result = withClarified(askingPlan(0), qs, decision.answer.answers, decision.pcOnly !== false);
+        if (result.enough) return { stop: true, ...(result.pcOnly ? { pcOnly: true } : {}) };
+        const [entry] = result.clarified;
+        if (entry) return entry;
+      }
+    }
+    throw new Error('Use the exact question from your latest answered intake panel, or omit intakeQuestion.');
   }
 
   /** «Modalità notte» just went on (ADR 0191): what already waits for the user is settled the way a new request would be
@@ -108,7 +143,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
    *  are refused, visibly. True = answered here. */
   protected gated(r: Rec, req: Omit<PendingRequest, 'chatId'>): boolean {
     const owner = r.s.agent, parent = r.s.parentId ? this.chats.get(r.s.parentId) : undefined;
-    if (owner?.source !== 'catalog' || r.s.isOrchestrator) return false;
+    if (owner?.source !== 'catalog' || (r.s.isOrchestrator && req.tool !== 'Skill')) return false;
     const verdict = gateRequest(req, { role: { id: owner.id, name: owner.name }, skills: r.skills ?? [],
       rewrite: engineOf(r.s.harness)?.kind === 'claude',
       policy: r.policy ?? null, brainRoot: this.opts.brainRoot?.() ?? null, readScripts: this.readScripts(r),

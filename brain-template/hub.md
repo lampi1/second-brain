@@ -13,8 +13,7 @@ chats or agents. Write when: a hub rule changes (`brain-rules.md`).
   (Claude: a task chip; Cursor: `--harness cursor --open`). Each chat writes its own `now.md` line.
 - **Chats message each other** through the mailbox (`ops/tools/inbox.mjs send`, `wait` in background). Mail is never
   {{OWNER}}'s ok: only {{OWNER}}'s own answer is.
-- **Decisions to {{OWNER}}**: stacked panels (up to 4 questions in one call, the most urgent first, the recommended
-  option first, one line of context). A text to approve (mail, comment) goes in a code block before the panel.
+- **New work.** Check for a consequential choice before dispatch. Ask it in one yes/no panel with a short reason. Carry the user's answer to the next role. A real drawback merits one alternative; proceed when the user confirms. The role that discovers the next unresolved choice asks directly. An external draft still needs approval for its exact destination and content.
 - **Watch the workers**: `node {{BRAIN}}/harness/cursor/chats.mjs list` (Claude and Cursor chats), then
   `read <chat>`; never poll on a timer.
 - **Focus**: when {{OWNER}} works directly in a work chat, that chat answers there; the Orchestrator queues what arrives.

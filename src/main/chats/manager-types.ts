@@ -315,6 +315,8 @@ export interface Rec {
   freshDeferred?: string | undefined;
   /** Exact request scope and user decisions, private to this chat; never shared through user-event tools. */
   continuationDecisions?: string | undefined;
+  intakeKey?: string;
+  intakePanelId?: string;
   /** A text note cannot preserve an evicted history item or an image input; persist this conservative blocker. */
   continuityUnsafe?: true;
   /** Only this newly assigned run may cross a previously checked idle boundary before its first submission. */

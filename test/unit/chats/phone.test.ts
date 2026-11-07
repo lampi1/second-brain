@@ -56,9 +56,10 @@ function fixture() {
   const port = createPhonePort(m, bus);
   const decided: { type: string; item: PhoneDecidable; by?: string }[] = [];
   port.onDecidable(ev => decided.push(ev));
-  const strategist = async () => {
+  const strategist = async (steps: { title: string; role?: string }[] = PLAN.steps) => {
     const s = await m.create({ harness: 'claude', cwd: dir, roleId: 'strategist', title: 'Piano', prompt: 'Porta gli sconti in percentuale' }, 'agent');
-    await call('plan_propose', s.id, PLAN);
+    await m.send(s.id, 'Basta domande');
+    await call('plan_propose', s.id, { ...PLAN, steps });
     return s;
   };
   const resolvedEvents = () => events.filter(e => e.ch === 'pending:resolved').map(e => e.p as EventMap['pending:resolved']);
@@ -67,7 +68,7 @@ function fixture() {
   return { m, dir, sinks, sent, answers, port, decided, strategist, resolvedEvents, items, chat, events };
 }
 
-const PLAN = { steps: [{ title: 'Trovo dove si calcola lo sconto', role: 'scout' }, { title: 'Applico lo sconto', role: 'artisan' }], doneWhen: 'I test passano', noQuestionReason: 'La richiesta dice già cosa, dove e quando è finito' };
+const PLAN = { steps: [{ title: 'Trovo dove si calcola lo sconto', role: 'scout' }, { title: 'Applico lo sconto', role: 'artisan' }], doneWhen: 'I test passano' };
 const yesNo = (id: string, question = 'Apro la PR?', extra: Partial<PendingRequest> = {}): Omit<PendingRequest, 'chatId'> => ({ id, type: 'question', tool: 'AskUserQuestion', title: question, detail: '', input: {}, at: Date.now(),
   questions: [{ question, multiSelect: false, options: [{ label: 'Sì (consigliato)' }, { label: 'No' }] }], ...extra });
 const permission = (id: string): Omit<PendingRequest, 'chatId'> => ({ id, type: 'permission', tool: 'Bash', title: 'Bash · ls', detail: 'ls', input: {}, at: Date.now() });
@@ -292,18 +293,60 @@ describe('the phone port', () => {
 
   it('a plan that touches something reserved has no buttons', async () => {
     const f = fixture();
-    const s = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'strategist', title: 'Piano', prompt: 'Rilascio' }, 'agent');
-    await (strategyTools(f.m).find(t => t.name === 'plan_propose') as McpTool).run({ ...PLAN, steps: [{ title: 'Faccio il deploy in produzione' }] }, { mount: 'chat', params: { chatId: s.id }, sessionId: '', signal: new AbortController().signal } as never);
+    const s = await f.strategist([{ title: 'Faccio il deploy in produzione' }]);
     const d = f.port.listDecidable().find(x => x.chatId === s.id)!;
     expect(d).toMatchObject({ simple: true, reserved: true });
     expect(await f.port.decidePlanFromPhone(s.id, (d.ref as { at: string }).at, true)).toBe('gone');
     expect(f.chat(s.id).plan!.phase).toBe('proposed');
   });
 
+  it('reserves a plan when only its local intake mentions production', async () => {
+    const f = fixture();
+    const q = 'Confermi il dettaglio discusso per questo progetto? '.repeat(3) + 'La modifica va applicata in produzione?';
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true, prompt: 'Pianifica' });
+    f.sinks.get(o.id)!.pending(yesNo('first', q));
+    await f.m.answer(o.id, 'first', { kind: 'question', answers: { [q]: 'Sì' } });
+    const intake = f.m.bindPlanIntake(o.id, q);
+    const plan = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'strategist', prompt: 'Pianifica' }, 'agent', undefined, {}, { intake });
+    expect(plan.plan?.clarified[0]).toMatchObject({ pcOnly: true });
+    expect(plan.plan?.clarified[0]?.q).not.toContain('produzione');
+    const other = q.replace('La modifica va applicata in produzione?', 'Serve un test locale?');
+    f.sinks.get(plan.id)!.pending(yesNo('local', other));
+    await f.m.answer(plan.id, 'local', { kind: 'question', answers: { [other]: 'Sì' } });
+    const after = f.chat(plan.id).plan!;
+    expect(after.clarified).toHaveLength(2);
+    expect(after.clarified[0]!.q).toBe(after.clarified[1]!.q);
+    expect(after.pcOnly).toBe(true);
+    await f.m.send(plan.id, 'Basta domande');
+    await strategyTools(f.m).find(t => t.name === 'plan_propose')!.run(PLAN, { mount: 'chat', params: { chatId: plan.id }, sessionId: '', signal: new AbortController().signal } as never);
+    const item = f.port.listDecidable().find(x => x.chatId === plan.id)!;
+    expect(item.reserved).toBe(true);
+    expect(item.text).not.toContain(q);
+    expect(await f.port.decidePlanFromPhone(plan.id, (item.ref as { at: string }).at, true)).toBe('gone');
+    expect(f.chat(plan.id).plan!.phase).toBe('proposed');
+  });
+
+  it.each(['Sì', 'Basta domande'])('preserves a PC-only option through an intake response of %s', async reply => {
+    const f = fixture(), q = 'Procedo?';
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true, prompt: 'Pianifica' });
+    const req = yesNo('scope', q);
+    req.questions![0]!.options[0]!.description = 'Eseguo il deploy in produzione';
+    f.sinks.get(o.id)!.pending(req);
+    await f.m.answer(o.id, 'scope', { kind: 'question', answers: { [q]: reply } });
+    const intake = f.m.bindPlanIntake(o.id, q);
+    const plan = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'strategist', prompt: 'Pianifica' }, 'agent', undefined, {}, { intake });
+    expect(plan.plan?.pcOnly).toBe(true);
+    if (reply === 'Sì') await f.m.send(plan.id, 'Basta domande');
+    await strategyTools(f.m).find(t => t.name === 'plan_propose')!.run(PLAN, { mount: 'chat', params: { chatId: plan.id }, sessionId: '', signal: new AbortController().signal } as never);
+    const item = f.port.listDecidable().find(x => x.chatId === plan.id)!;
+    expect(item.reserved).toBe(true);
+    expect(item.text).not.toContain('produzione');
+    expect(await f.port.decidePlanFromPhone(plan.id, (item.ref as { at: string }).at, true)).toBe('gone');
+  });
+
   it('a plan with a Herald step (it sends or publishes) is reserved, whatever its words (review S5)', async () => {
     const f = fixture();
-    const s = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'strategist', title: 'Piano', prompt: 'Riassunto' }, 'agent');
-    await (strategyTools(f.m).find(t => t.name === 'plan_propose') as McpTool).run({ ...PLAN, steps: [{ title: 'Scrivo il riassunto' }, { title: 'Lo giro al team', role: 'herald' }] }, { mount: 'chat', params: { chatId: s.id }, sessionId: '', signal: new AbortController().signal } as never);
+    const s = await f.strategist([{ title: 'Scrivo il riassunto' }, { title: 'Lo giro al team', role: 'herald' }]);
     const d = f.port.listDecidable().find(x => x.chatId === s.id)!;
     expect(d).toMatchObject({ simple: true, reserved: true });
     expect(await f.port.decidePlanFromPhone(s.id, (d.ref as { at: string }).at, true)).toBe('gone');

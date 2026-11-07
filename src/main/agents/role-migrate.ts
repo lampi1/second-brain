@@ -7,7 +7,7 @@
 // shipped text replaced since (SHIPPED_BEFORE, #145). Anything else is left alone; the retired
 // roles' own profiles are dropped by the catalog. Pure; used by agents/catalog.ts at start, pinned by test/unit/agents/role-migrate.test.ts.
 import type { AgentProfile, PermissionCeiling, ToolClass } from '../../shared/agents';
-import { ROLE_DEFAULTS, currentLaunches, isRoleId, type RetiredRoleId, type RoleId } from '../../shared/roles';
+import { ROLE_DEFAULTS, previousRoleDefaults, currentLaunches, isRoleId, type RetiredRoleId, type RoleId } from '../../shared/roles';
 
 interface Old { tools: ToolClass[]; ceiling: PermissionCeiling; launches: string[]; instructions?: string }
 /** The eight work roles of ADR 0083, frozen (ADR 0100 retired three of them). */
@@ -63,6 +63,15 @@ export const SHIPPED_BEFORE: Partial<Record<RoleId, readonly string[]>> = {
 export function shippedTextFor(p: Pick<AgentProfile, 'id' | 'userLocked' | 'lastEditedBy' | 'trial' | 'instructions'>): Pick<AgentProfile, 'instructions'> | null {
   if (!isRoleId(p.id) || p.userLocked || p.lastEditedBy === 'user' || p.trial) return null;
   return SHIPPED_BEFORE[p.id]?.includes(p.instructions) ? { instructions: ROLE_DEFAULTS[p.id].instructions } : null;
+}
+
+export function skillAlignmentFor(p: AgentProfile): Partial<Pick<AgentProfile, 'instructions' | 'skills'>> | null {
+  if (!isRoleId(p.id) || p.userLocked || p.lastEditedBy !== 'default' || p.trial || p.activeVersion !== p.version || p.pack || p.knowhow) return null;
+  const old = previousRoleDefaults(p.id), next = ROLE_DEFAULTS[p.id];
+  const fields: Partial<Pick<AgentProfile, 'instructions' | 'skills'>> = {};
+  if (p.instructions === old.instructions) fields.instructions = next.instructions;
+  if (sameSet(p.skills, old.skills) && !sameSet(p.skills, next.skills)) fields.skills = [...next.skills];
+  return Object.keys(fields).length ? fields : null;
 }
 
 const sameSet = (a: readonly string[], b: readonly string[]): boolean => a.length === b.length && a.every(x => b.includes(x));

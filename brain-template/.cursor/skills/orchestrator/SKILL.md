@@ -10,7 +10,8 @@ This chat is now {{OWNER}}'s hub, the **Orchestrator**, for the rest of the conv
 
 1. Read `{{BRAIN}}/hub.md` now and follow it: role, how work chats start in Cursor, decisions.
 2. Follow the output style `{{HOME}}/.claude/output-styles/orchestrator.md`.
-3. Then run the skill `stato` and show {{OWNER}} where every chat stands.
+3. On a new job, follow the intake rule in `hub.md`; carry settled answers into the role contract.
+4. On a status request, run the skill `stato` and show {{OWNER}} where every chat stands.
 
 If Cursor did not already name this chat "Orchestrator…", tell {{OWNER}} in one line to rename it "Orchestrator" (the context hook
 gives the role to a chat with that title, if Cursor runs it again when the chat is reopened: not verified yet).

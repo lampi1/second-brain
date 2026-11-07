@@ -7,7 +7,7 @@ import type { ChatSummary } from '../../shared/contract';
 import { errText, log } from '../log';
 import type { UserTaskEvents, AgentRun, AgentRunOutcome } from '../../shared/agents';
 import { ownerSource, type TaskAssignmentOptions } from '../../shared/delegation';
-import { PLAN_APPROVED, planChange, STRATEGY_FLOW, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
+import { PLAN_APPROVED, planChange, askingPlan, strategyPrompt, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
 import { runMetrics } from '../agents/run-metrics';
 import { standings, withStandings } from '../agents/standing';
 import { isCorrection } from '../../shared/correction';
@@ -44,7 +44,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     // «Modalità notte» (ADR 0191): nobody will click «Approva e parti», so the plan starts as proposed (its recommended
     // choice) and the tool says so; the recap tells the user
     const away = !!this.opts.away?.();
-    r.s.plan = { phase: away ? 'running' : 'proposed', clarified: plan.clarified, ...(plan.asked ? { asked: plan.asked } : {}), ...(plan.enough ? { enough: true } : {}), steps, ...(doneWhen ? { doneWhen } : {}), at: Math.max(Date.now(), plan.at + 1) };
+    r.s.plan = { phase: away ? 'running' : 'proposed', clarified: plan.clarified, ...(plan.pcOnly ? { pcOnly: true } : {}), ...(plan.asked ? { asked: plan.asked } : {}), ...(plan.enough ? { enough: true } : {}), steps, ...(doneWhen ? { doneWhen } : {}), at: Math.max(Date.now(), plan.at + 1) };
     // the run keeps the plan's fate: a decision signal for the Orchestrator (standing.ts, ADR 0131)
     const run = r.s.run;
     if (run && run.endedAt === undefined) { run.plan = { ...(run.plan ?? { proposals: 0, changes: 0 }), proposals: (run.plan?.proposals ?? 0) + 1 }; this.runSave(); }
@@ -179,7 +179,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     const freshBoundary = this.freshReady(r, Date.now());
     this.beginAssignment(r, prompt, options);
     if (freshBoundary) r.freshAssignmentRun = r.s.run?.runId;
-    if (options.mode === 'new-task' && r.s.plan) prompt += `\n\n${STRATEGY_FLOW}`;
+    if (options.mode === 'new-task' && r.s.plan) prompt += `\n\n${strategyPrompt(r.s.plan)}`;
     if (options.planStep !== undefined && r.s.parentId) this.planDelegated(r.s.parentId, options.planStep, [chatId]);
     if (source.kind === 'chat' && r.userTaskEvents) { r.userTaskEvents.acknowledgedSeq = r.userTaskEvents.latestSeq; this.persist(true); this.updated(r); }
     const from = source.kind === 'chat' ? this.need(source.chatId).s.title : source.kind === 'app' ? 'App' : undefined;
@@ -195,6 +195,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     const mode = options.mode ?? 'continue', at = Date.now();
     this.deliveryPolicy(options.deliveryPolicy, !!r.s.parentId);
     if (options.doneWhen && (options.doneWhen.length > 12 || options.doneWhen.some(x => typeof x !== 'string' || !x.trim() || x.length > 300))) throw new Error('Invalid task criteria.');
+    const newPlan = mode === 'new-task' && r.s.plan ? askingPlan(at, options.intake && this.planIntake(options.intake)) : undefined;
     this.finishRun(previous, previous.report ? 'completed' : 'closed', at);
     const next = this.runs.start({ chatId: r.s.id, agentId: previous.agentId, version: previous.version,
       goal: prompt, startedBy: previous.startedBy, startedAt: at, costKnown: previous.costUsd !== null,
@@ -209,7 +210,10 @@ export abstract class ManagerWork extends ManagerLifecycle {
     next.taskContract = { ...(previous.taskContract?.reportExpected ? { reportExpected: true } : {}), deliveryPolicy: this.deliveryPolicy(options.deliveryPolicy ?? previous.taskContract?.deliveryPolicy, !!r.s.parentId), goal: prompt, doneWhen: options.doneWhen ?? (mode === 'new-task' ? [] : previous.taskContract?.doneWhen ?? r.s.delegation?.doneWhen ?? []) };
     if (mode === 'continue') next.continuedFrom = previous.runId;
     r.s.run = next;
-    if (mode === 'new-task' && r.s.plan) r.s.plan = { phase: 'asking', clarified: [], steps: [], at };
+    if (newPlan) {
+      r.s.plan = newPlan;
+      if (options.intake) delete this.need(options.intake.chatId).intakeKey;
+    }
     r.s.work = { status: 'assigned', updatedAt: at };
     if (r.s.delegation) r.s.delegation = { ...r.s.delegation, goal: prompt, doneWhen: next.taskContract.doneWhen, at, result: undefined };
     delete r.rootReportAt; delete r.report; delete r.autoCompleted; delete r.runSeen;
