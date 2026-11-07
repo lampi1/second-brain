@@ -3,6 +3,9 @@
 // command is quiet and rides along with its next turn (2026-11-07); a chat at most once every perChatMs; into the
 // Orchestrator's running turn, never while it waits for the user (a failure only); off with the setting; the Orchestrator's
 // own turns never.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
 import { APP_EVENT_LABEL, OrchestratorWake, wakeLine, type WakeSubmissionReceipt } from '../../src/main/chats/orchestrator-wake';
@@ -298,6 +301,30 @@ describe('OrchestratorWake', () => {
     expect(sent[0]!.text).not.toContain('«mano»');
     expect(sent[0]!.text).not.toContain('chiusa a mano');
     expect(w.queued()).toEqual([]);
+  });
+
+  it('after a restart a closed chat\'s quiet "finished" from the outbox goes: its closedBy may be a legacy default', async () => {
+    const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-wake-'));
+    try {
+      const orch = chat({ id: 'orchestrator', isOrchestrator: true, title: 'Orchestrator', state: 'idle' });
+      const first = new OrchestratorWake({ send: async () => {}, enabled: () => true, groupMs: 1000, perChatMs: 0, userData, list: () => [orch] });
+      first.observe('chat:updated', chat({ id: 'old', state: 'running' }));
+      first.observe('chat:updated', chat({ id: 'old', state: 'idle', lastText: 'finito prima del riavvio' }));
+      first.observe('chat:updated', chat({ id: 'old', state: 'closed', closedAt: 1, closedBy: 'auto' }));
+      expect(first.queued().map(e => e.kind)).toEqual(['done']); // kept in this run, and in the outbox
+      first.stop();
+      const sent: string[] = [];
+      let o = orch;
+      const closed = chat({ id: 'old', state: 'closed', closedAt: 1, closedBy: 'auto' }); // store.ts: a missing closedBy loads as 'auto'
+      const next = new OrchestratorWake({ send: async (_id, text) => { sent.push(text); }, enabled: () => true, groupMs: 1000, perChatMs: 0, userData, list: () => [o, closed] });
+      expect(next.queued().map(e => e.kind)).toEqual(['done']);
+      o = { ...orch, state: 'running' };
+      next.observe('chat:updated', o);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(sent.join('\n')).not.toContain('finito prima del riavvio');
+      expect(next.queued()).toEqual([]);
+      next.stop();
+    } finally { fs.rmSync(userData, { recursive: true, force: true }); }
   });
 
   it('nothing when off, without an Orchestrator, for the Orchestrator itself, a hand-off turn or an archived chat', async () => {

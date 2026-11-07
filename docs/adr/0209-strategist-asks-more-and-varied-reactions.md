@@ -21,7 +21,7 @@ said to use it also when starting on a task, so every engine answered 👍.
   what the request already settles. Away mode is unchanged (no gate).
 - `REACTION_RULE` asks for the emoji that fits the message, with examples per kind (thanks, good news, starting a task,
   confirmation, a joke, looking into it), 👍 only when nothing fits better. The Orchestrator's delegation
-  acknowledgement no longer names 👍. The hidden 👍 of `WAKE_RULE` stays: the app hides it. (Superseded by ADR 0221: plain turn ends no longer wake the Orchestrator, so `WAKE_RULE` no longer asks for a 👍.)
+  acknowledgement no longer names 👍. The hidden 👍 of `WAKE_RULE` stays: the app hides it. (Superseded by ADR 0223: plain turn ends no longer wake the Orchestrator, so `WAKE_RULE` no longer asks for a 👍.)
 
 - «Fanne un lavoro» on Flash (owner, 2026-10-30: «mi aspetto che lo crei bene il prompt per l'Orchestrator», he uses
   Flash also to plan, research and ask advice): the tile sends Flash `BRIEF_ASK` (renderer `lib/lampo.ts`, tagged

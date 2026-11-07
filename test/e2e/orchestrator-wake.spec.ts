@@ -1,5 +1,5 @@
 // End-to-end: "Eventi all'Orchestrator" (main/chats/orchestrator-wake.ts) on the demo. A work chat ends its turn leaving a
-// command for the user (through the real wiring): a plain turn end is quiet news (2026-11-07, ADR 0221), so even once the
+// command for the user (through the real wiring): a plain turn end is quiet news (2026-11-07, ADR 0223), so even once the
 // Orchestrator is free (here after the user answered its open question) it opens no turn of its own; it rides along with
 // the Orchestrator's next turn (here a user message) as one message labelled as the app's, with the chat's title and what
 // it left. While the Orchestrator waits for the user nothing is sent. The demo turns the news on only with SB_ORCHESTRATOR_EVENTS=1; SB_ORCHESTRATOR_EVENTS_MS shortens the grouping window.

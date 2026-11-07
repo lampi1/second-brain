@@ -118,6 +118,8 @@ export class OrchestratorWake {
   private toldEmpty = true;
   /** Flash chats (ADR 0105): their requests are the user's own, never news */
   private quick = new Set<string>();
+  /** chats seen closing by the app's auto-close in this run (kept()) */
+  private autoClosed = new Set<string>();
 
   constructor(private readonly d: OrchestratorWakeDeps) {
     if (!d.userData) return;
@@ -146,7 +148,7 @@ export class OrchestratorWake {
     if (channel === 'chat:updated') this.updated(payload as ChatSummary);
     else if (channel === 'pending:added') this.pending(payload as PendingRequest);
     else if (channel === 'pending:resolved') this.resolved(payload as EventMap['pending:resolved']);
-    else if (channel === 'chat:removed') { const { chatId } = payload as EventMap['chat:removed']; this.chats.delete(chatId); this.buffer.delete(chatId); for (const [key, event] of this.buffer) if (event.chatId === chatId) this.buffer.delete(key); this.buffer.delete(`${chatId}#report`); }
+    else if (channel === 'chat:removed') { const { chatId } = payload as EventMap['chat:removed']; this.chats.delete(chatId); this.autoClosed.delete(chatId); this.buffer.delete(chatId); for (const [key, event] of this.buffer) if (event.chatId === chatId) this.buffer.delete(key); this.buffer.delete(`${chatId}#report`); }
     else return;
     this.changed();
   }
@@ -195,8 +197,14 @@ export class OrchestratorWake {
     // the hand-off turn ends (handoffBusy goes before idle): not a turn of the chat
     if (this.handoff.has(c.id)) { if (!BUSY.has(c.state)) this.handoff.delete(c.id); return; }
     if (!was) { if (c.parentId && !c.closedAt) this.add(c, 'started', ''); return; }
-    // closed: what it left waits for nothing any more (kept: the auto-closed chat's quiet "finished")
-    if (c.closedAt) { for (const [k, e] of this.buffer) if (e.chatId === c.id && !this.kept(e)) this.buffer.delete(k); return; }
+    // closed: what it left waits for nothing any more (kept: the quiet "finished" of a chat seen auto-closing now)
+    if (c.closedAt) {
+      if (!was.closedAt && c.closedBy === 'auto') this.autoClosed.add(c.id);
+      else if (c.closedBy !== 'auto') this.autoClosed.delete(c.id);
+      for (const [k, e] of this.buffer) if (e.chatId === c.id && !this.kept(e)) this.buffer.delete(k);
+      return;
+    }
+    this.autoClosed.delete(c.id);
     if (c.state === 'error' && was.state !== 'error') this.add(c, 'error', c.lastError ?? c.lastText);
     else if (c.state === 'idle' && IN_TURN.has(was.state) && c.pending === 0) {
       // the user stopped it himself (Stop, "Invia subito"): he is on it, nothing to tell
@@ -356,10 +364,12 @@ export class OrchestratorWake {
   }
 
   /** a closed chat's news is void, except the quiet "finished" of a chat the app closed itself after its turn
-   *  (autoCloseMin): it waits for the Orchestrator's next turn longer than the chat stays open (2026-11-07) */
+   *  (autoCloseMin): it waits for the Orchestrator's next turn longer than the chat stays open (2026-11-07). Only a close
+   *  seen in this run counts: after a restart a closed chat's closedBy may be a legacy default ('auto' when it was
+   *  never recorded, store.ts), so its news from the outbox goes; app_digest still lists it as closed and finished. */
   private kept(e: WakeEvent): boolean {
     const c = this.chats.get(e.chatId);
-    return !!c && (!c.closedAt || (c.closedBy === 'auto' && e.kind === 'done'));
+    return !!c && (!c.closedAt || (this.autoClosed.has(e.chatId) && c.closedBy === 'auto' && e.kind === 'done'));
   }
 
   private flush(): void {
