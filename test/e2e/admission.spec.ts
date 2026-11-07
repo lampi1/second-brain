@@ -2,8 +2,9 @@
 // (SB_LOAD_FORCE="99,40": CPU 99%, RAM 40% free, over the 95% emergency brake). A chat whose turn the last quit cut
 // resumes by itself (the app's own message, not the user's): with the brake on that resume waits, its tile
 // (ChatTile.tsx) shows "In coda · CPU 99%"
-// and "Avvia ora", the top bar (TopBar.tsx) counts it; "Avvia ora" starts it at once. Its three settings are technical
-// (docs/settings-surface.md): not on the Impostazioni page (SettingsPage.tsx), kept at their values. A work chat waits ahead of a chat on the app that was queued first (the user,
+// and "Avvia ora", the top bar (TopBar.tsx) counts it; "Avvia ora" starts it at once. Its brake and slot settings sit in
+// Impostazioni → Avanzate «Coda e avvii» (QueueSettings.tsx, docs/settings-surface.md) at their values; the on/off switch
+// is not on the page. A work chat waits ahead of a chat on the app that was queued first (the user,
 // 2026-10-14). Screenshots: test-results/shots/admission-1-queued.png, -2-started.png, -3-settings.png, -4-work-first.png,
 // -5-slots-full.png (SB_COLD_SLOTS=1 on a calm machine: the second resume waits for the first one's slot).
 import { test, expect } from '@playwright/test';
@@ -51,6 +52,11 @@ test('a resume after a restart waits while the machine is busy; "Avvia ora" star
   await page.keyboard.press('Control+,');
   await expect(page.getByTestId('settings-page')).toBeVisible();
   await expect(page.locator('[data-testid^="st-load-queue"]')).toHaveCount(0);
+  await page.getByTestId('st-nav-advanced').click();
+  await expect(page.getByTestId('st-queue')).toBeVisible();
+  await expect(page.getByTestId('st-queue-cpu-select')).toContainText('95%');
+  await expect(page.getByTestId('st-queue-ram-select')).toContainText('10%');
+  await expect(page.getByTestId('st-queue-slots-select')).toContainText(/d/);
   expect(await page.evaluate(async () => window.sb.invoke('settings:get', undefined))).toMatchObject({ loadQueue: true, loadQueueCpu: 95, loadQueueRam: 10 });
   await shot(page, 'admission-3-settings');
   await app.close();

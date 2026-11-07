@@ -124,10 +124,12 @@ describe('AdmissionQueue', () => {
     for (const k of ['a', 'b', 'c']) q.request(k, 'start', d => { ran.push(k); done[k] = d; });
     f.load.cpu = 50;
     q.tick(); expect(ran).toEqual([]);           // one sample under: not yet
+    expect(q.held()).toBe(true);                 // the tile says the brake, not «dietro altre»
     f.load.cpu = 99;
     q.tick(); expect(ran).toEqual([]);           // back over: the count restarts
     f.load.cpu = 50;
     q.tick(); q.tick(); expect(ran).toEqual(['a', 'b']);
+    expect(q.held()).toBe(false);
     expect(q.list().map(e => [e.key, e.position])).toEqual([['c', 1]]);
     f.load.cpu = 99;
     done.a!();                                   // a slot frees with the brake on: c still waits

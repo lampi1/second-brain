@@ -156,14 +156,14 @@ export abstract class ManagerCore {
     const adm = this.admission;
     if (!adm) return;
     const load = adm.load();
-    const { starting, slots } = adm.slots();
+    const { starting, slots } = adm.slots(), braked = adm.held();
     const waiting = new Map(adm.list().map(e => [e.key, e]));
     for (const r of this.chats.values()) {
       const e = waiting.get(r.s.id);
       const was = r.s.queued;
       if (!e) { if (was) { delete r.s.queued; this.updated(r); } continue; }
-      if (was && was.position === e.position && was.kind === e.kind && was.cpu === load.cpu && was.freeRam === load.freeRam && was.starting === starting && was.slots === slots) continue;
-      r.s.queued = { kind: e.kind, position: e.position, since: e.since, cpu: load.cpu, freeRam: load.freeRam, starting, slots };
+      if (was && was.position === e.position && was.kind === e.kind && was.cpu === load.cpu && was.freeRam === load.freeRam && was.starting === starting && was.slots === slots && was.braked === braked) continue;
+      r.s.queued = { kind: e.kind, position: e.position, since: e.since, cpu: load.cpu, freeRam: load.freeRam, starting, slots, braked };
       this.updated(r);
     }
   }

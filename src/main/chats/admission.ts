@@ -12,6 +12,7 @@
 import { timersFor } from '../timers';
 const { setInterval, clearInterval, setTimeout, clearTimeout } = timersFor('chats/admission');
 import os from 'node:os';
+import { autoColdSlots } from '../../shared/cold-slots';
 
 /** percent, 0-100 */
 export interface LoadSample { cpu: number; freeRam: number }
@@ -28,7 +29,7 @@ export interface AdmissionLimits { enabled: boolean; cpu: number; ram: number; s
 /** cloudroom's bound (core/src/session/mod.rs: available_parallelism()/2): cold-start CPU contention, never the number
  *  of running chats; 7 on a 14-core PC. */
 export function coldStartSlots(cores = os.availableParallelism?.() ?? os.cpus().length): number {
-  return Math.max(1, Math.floor(cores / 2));
+  return autoColdSlots(cores);
 }
 
 /** CPU busy % from os.cpus() snapshots every tickMs, averaged over the last `window` intervals; free RAM from os. */
@@ -134,6 +135,11 @@ export class AdmissionQueue {
 
   /** the load last sampled (refreshed by request() and every tick while something waits) */
   load(): LoadSample { return { ...this.lastLoad }; }
+
+  /** the brake still held: over now, or not yet the samples in a row under it needs to let go (tile text, QueuedInfo) */
+  held(): boolean {
+    return this.braked;
+  }
 
   /** cold starts in flight and the cap */
   slots(): { starting: number; slots: number } {

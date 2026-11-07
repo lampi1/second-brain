@@ -4,6 +4,8 @@ The renderer exposes four essential groups. This is a presentation change, not a
 
 Appearance/theme/density and panel expansion use the existing sb.prefs.v1 namespace. Both IT and EN essential surfaces and packaged appearance controls use dictionaries. Account actions call existing typed secure-storage/login/trust handlers only on explicit clicks. No paid API admin credit panel is loaded by opening Settings.
 
+`settings-advanced` = Settings → Avanzate, «Coda e avvii» (components/QueueSettings.tsx, ADR 0222): the cold-start slots and the emergency brake, protected, changed only by the user's pick or an approved proposal.
+
 | Setting | Presentation | Destination | Protected |
 |---|---|---|---|
 | brainRoot | essential | settings | yes |
@@ -22,8 +24,9 @@ Appearance/theme/density and panel expansion use the existing sb.prefs.v1 namesp
 | autoCloseMin | essential | settings | no |
 | engineIdleMin | technical | diagnostics-or-feature-context | no |
 | loadQueue | technical | diagnostics-or-feature-context | yes |
-| loadQueueCpu | technical | diagnostics-or-feature-context | yes |
-| loadQueueRam | technical | diagnostics-or-feature-context | yes |
+| loadQueueCpu | technical | settings-advanced | yes |
+| loadQueueRam | technical | settings-advanced | yes |
+| coldStartSlots | technical | settings-advanced | yes |
 | osToasts | essential | settings | yes |
 | dndUntil | technical | diagnostics-or-feature-context | yes |
 | dnd | technical | diagnostics-or-feature-context | yes |

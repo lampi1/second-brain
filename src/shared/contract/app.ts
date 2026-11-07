@@ -67,6 +67,8 @@ export interface AppInfo {
   engines: EngineInfo[];
   /** Windows' language as the UI uses it (ADR 0057): 'it' when it is Italian, else 'en'; SB_LANG forces it (tests) */
   systemLang: Lang;
+  /** the PC's logical cores (os.availableParallelism): Settings → Avanzate shows the cold-start slots against them */
+  cores?: number;
 }
 /** Since the app started: the MCP port (fallback = the configured one was taken, external clients lose the browser),
  *  main-window renderer crashes/hangs (each reloads it; chats keep running), engines killed by force, Job Object guard. */

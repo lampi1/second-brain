@@ -60,6 +60,8 @@ describe('format', () => {
     expect(queueReason(q, limits)).toBe('CPU 99%');
     expect(queueReason({ ...q, cpu: 50 }, limits)).toBe('7/7 avvii a freddo pieni');
     expect(queueReason({ ...q, cpu: 50, starting: 3 }, limits)).toBe('dietro altre');
+    // the load fell under the brake but not for enough samples yet: the brake still holds, not «dietro altre»
+    expect(queueReason({ ...q, cpu: 50, starting: 3, braked: true }, limits)).toBe('freno, il carico sta scendendo');
     expect(queueReason({ kind: 'start', position: 2, since: 0, cpu: 50, freeRam: 40 }, limits)).toBe('dietro altre');
   });
   it('costs, models, folders', () => {

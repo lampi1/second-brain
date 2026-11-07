@@ -99,6 +99,7 @@ export const appTextDe: typeof appTextIt = {
   'appText.format.permShort.bypassPermissions': 'ohne Berechtigungen',
   'appText.format.freeRam': (p: { pct: number }) => `freier RAM ${p.pct}%`,
   'appText.format.behindOthers': 'hinter anderen',
+  'appText.format.brakeEasing': 'Bremse, die Last sinkt',
   'appText.format.coldStarts': 'Kaltstarts voll',
   'appText.format.now': 'jetzt',
   'appText.format.days': (p: { n: number }) => `${p.n} T`,

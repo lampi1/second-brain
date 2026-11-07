@@ -10,6 +10,7 @@ import { detectProjectsFolder } from '../brain/projects-folder';
 import { engineInfos } from '../engines/registry';
 import { engineStatus, openLogin } from '../cli';
 import fs from 'node:fs';
+import os from 'node:os';
 import { healthSnapshot } from '../health';
 import { hiddenRun } from '../window';
 import { logInputLag } from '../perf';
@@ -55,7 +56,7 @@ export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, 
     'setup:save': a => s.setup.save(a.preferences, a.status),
     'profile:get': () => profile.get(),
     'profile:save': a => profile.save(a),
-    'app:info': () => ({ version: app.getVersion(), ...s.brain.info(), mcpUrl: s.browser.mcpUrlFor(null), cli: s.cli(), engines: engineInfos(), health: healthSnapshot(), systemLang: systemLang() }),
+    'app:info': () => ({ version: app.getVersion(), ...s.brain.info(), mcpUrl: s.browser.mcpUrlFor(null), cli: s.cli(), engines: engineInfos(), health: healthSnapshot(), systemLang: systemLang(), cores: os.availableParallelism?.() ?? os.cpus().length }),
     'app:pickRepo': async () => {
       const w = win(), result = w ? await dialog.showOpenDialog(w, { title: 'Scegli un repository per Codex', properties: ['openDirectory'] }) : null;
       const selected = result && !result.canceled ? result.filePaths[0] : null;

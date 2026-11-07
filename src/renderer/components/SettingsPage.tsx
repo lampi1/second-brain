@@ -33,6 +33,7 @@ import { AppUpdateSettings } from './AppUpdateSettings';
 import { TaskReadSettings } from './TaskReadSettings';
 import { SuggestSettings } from './SuggestSettings';
 import { AwaySettings } from './AwayToggle';
+import { QueueSettings } from './QueueSettings';
 import { VoiceSettings } from './VoiceSettings';
 import { PhoneSettings } from './PhoneSettings';
 import { SavedPill, savedLocally } from './SettingsSaved';
@@ -166,7 +167,7 @@ export function SettingsPage() {
       </Row>
       <TaskReadSettings />
     </> },
-    { ...meta.advanced, icon: <IconSettings size={16} />, body: <McpAdvanced /> },
+    { ...meta.advanced, icon: <IconSettings size={16} />, body: <><QueueSettings /><McpAdvanced /></> },
   ];
   // the page's order follows the navigation's groups
   const nav2 = navGroups(groups.map(g => g.id));

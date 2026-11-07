@@ -98,11 +98,13 @@ export function stateInfo(c: Pick<ChatSummary, 'state' | 'isOrchestrator' | 'pen
   return c.isOrchestrator ? { label:t('ui.state.orchestrator'), tone: 'orchestrator' } : { label:t('ui.state.done'), tone: 'done' };
 }
 
-/** Why a chat waits in the cold-start queue (ADR 0222): the emergency brake's figure over its limit, every slot taken
- *  ("7/7 avvii a freddo pieni"), or the chats ahead of it. */
+/** Why a chat waits in the cold-start queue (ADR 0222): the emergency brake's figure over its limit, the brake still
+ *  holding while the load eases (braked, its hysteresis), every slot taken ("7/7 avvii a freddo pieni"), or the chats
+ *  ahead of it. */
 export function queueReason(q: NonNullable<ChatSummary['queued']>, limits: { cpu: number; ram: number }): string {
   if (q.cpu > limits.cpu) return `CPU ${q.cpu}%`;
   if (q.freeRam < limits.ram) return t('appText.format.freeRam', { pct: q.freeRam });
+  if (q.braked) return t('appText.format.brakeEasing');
   if (q.slots && (q.starting ?? 0) >= q.slots) return `${q.starting}/${q.slots} ${t('appText.format.coldStarts')}`;
   return t('appText.format.behindOthers');
 }

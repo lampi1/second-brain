@@ -354,6 +354,16 @@ describe('load queue 75/15 → emergency brake 95/10 (ADR 0222)', () => {
     expect(new ConfigStore(other, {}).get()).toMatchObject({ loadQueueCpu: 75, loadQueueRam: 10 });
     expect(new ConfigStore(tmpDir(), {}).get()).toMatchObject({ loadQueue: true, loadQueueCpu: 95, loadQueueRam: 10 });
   });
+
+  it('cold-start slots: 0 (automatic) on a new install, protected, 0..64, kept once set', () => {
+    expect(new ConfigStore(tmpDir(), {}).get().coldStartSlots).toBe(0);
+    expect(defOf('coldStartSlots')).toMatchObject({ type: 'int', min: 0, max: 64, protected: true });
+    expect(validate('coldStartSlots', 65).ok).toBe(false);
+    expect(validate('coldStartSlots', 3).ok).toBe(true);
+    const dir = tmpDir();
+    new ConfigStore(dir, {}).set({ coldStartSlots: 3 });
+    expect(new ConfigStore(dir, {}).get().coldStartSlots).toBe(3);
+  });
 });
 
 describe('settings of removed features (ADR 0201)', () => {

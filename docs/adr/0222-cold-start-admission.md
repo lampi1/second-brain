@@ -19,13 +19,17 @@ cloudroom bounds only its launches (`startups` semaphore, `available_parallelism
   `coldStarted`), and frees itself after 120 s at most, so a slot never leaks. A chat whose engine is up (`'turn'`)
   never waits; neither do the user's messages nor messages between open chats (ADR 0064).
 - **CPU and RAM are only an emergency brake**: CPU over 95 % or free RAM under 10 % (the settings `loadQueueCpu` /
-  `loadQueueRam`, still protected: changed through the Orchestrator's `app_config` or a proposal card; the basic
-  Impostazioni page shows no technical control, `docs/settings-surface.md`) holds the queue; after it, two samples in a row under are needed, then the heads go
+  `loadQueueRam`, still protected: the user's pick in Impostazioni → Avanzate «Coda e avvii», `QueueSettings.tsx`, or an approved
+  `app_config` / proposal card; `docs/settings-surface.md` `settings-advanced`) holds the queue; after it, two samples in a row under are needed, then the heads go
   up to the free slots. A saved 75 / 15 nobody chose (no change in the log) moves to 95 / 10 once
   (`brain/config.ts` `migrateLoadBrake`).
+- **The slot count is a setting too**: `coldStartSlots` (protected, 0..64, 0 = automatic = `autoColdSlots(cores)` in
+  `shared/cold-slots.ts`, which main and the Settings block share); `app:info` gives the renderer the core count to show
+  beside it. `SB_COLD_SLOTS` still wins (tests).
 - **The warm pool refills under load** (proposal 2): `ChatManager` starts the next warm engine unless the brake is
   on; chats waiting for a slot are no reason to stop, since the next one adopts that engine.
-- **The queue shows why** (`QueuedInfo.starting/slots`): the tile reads "In coda · 7/7 avvii a freddo pieni", the
+- **The queue shows why** (`QueuedInfo.starting/slots/braked`; `braked` = the brake still holds while the load eases,
+  so the tile says «freno, il carico sta scendendo», not «dietro altre»): the tile reads "In coda · 7/7 avvii a freddo pieni", the
   tooltip counts the slots and the load; `app_state` and the queue log lines carry `coldStarts`/`slots`.
 - **Every engine**: the queue sits in `ChatManager`, before any harness, so Claude, Codex, OpenCode and Cursor (both
   over ACP) are all covered; the warm pool stays Claude-only (warm.ts, unchanged in this stage).

@@ -537,8 +537,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'Commands: production ones (az, sqlcmd, ops scripts) ask for a second click and main checks again; for a read-only role a command counts as reading only if it is a known reader, with no chaining, redirection, subexpression or option that writes or runs (sort and uniq only after a pipe).'),
       // src/renderer/lib/foreign.ts; src/main/chats/admission.ts; src/shared/waiting.ts
       // src/shared/roles.ts ROLE_DEFAULTS.orchestrator
-      b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda degli avvii a freddo (metà dei core alla volta; freno d’emergenza con CPU > 95% o RAM libera < 10%). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI. Smistare un lotto di lavoro (una inbox, una lista di ticket) lo fa invece l’Orchestrator, una chat per richiesta, quando glielo affidi.',
-        'Others: messages you did not type (shown muted), "Waits for work" on the text, the cold-start queue (half the cores at once; emergency brake at CPU > 95% or free RAM < 10%). Permissions and questions are not guessed: they arrive structured from the CLI. Triaging a batch of work (an inbox, a list of tickets) is instead the Orchestrator’s, one chat per request, when you hand it one.'),
+      b('Altri: messaggi non scritti da te (mostrati attenuati), «Aspetta un lavoro» sul testo, la coda degli avvii a freddo (di base metà dei core alla volta; freno d’emergenza con CPU > 95% o RAM libera < 10%; tutti e tre in Impostazioni → Avanzate). Permessi e domande non sono indovinati: arrivano strutturati dalla CLI. Smistare un lotto di lavoro (una inbox, una lista di ticket) lo fa invece l’Orchestrator, una chat per richiesta, quando glielo affidi.',
+        'Others: messages you did not type (shown muted), "Waits for work" on the text, the cold-start queue (by default half the cores at once; emergency brake at CPU > 95% or free RAM < 10%; all three in Settings → Advanced). Permissions and questions are not guessed: they arrive structured from the CLI. Triaging a batch of work (an inbox, a list of tickets) is instead the Orchestrator’s, one chat per request, when you hand it one.'),
       // src/renderer/components/brain-model/ClassifiersSection.tsx, src/main/brainmodel/classifier-cards.ts
       b('Andamento → Qualità, in fondo, ne mostra tre come schede nella sezione Classificatori (era una scheda a sé): decisioni, quanto spesso «prendono» (tipo riconosciuto, tempo del task fra metà e doppio della stima), quante chat decise sono riuscite (verificate da te o da una revisione, mai l’autovalutazione; gli esiti automatici del brain sono contati a parte come non verificati), il costo medio e 8 settimane di andamento. Ogni numero ha un «?». La scheda «Scelta del modello» non c’è più.',
         'Trends → Quality shows three of them as cards at the bottom, in the Classifiers section (once a tab of its own): decisions, how often they "get it" (kind recognised, task time between half and double the estimate), how many decided chats succeeded (verified by you or a review, never a self-report; the brain’s automatic outcomes count apart as unverified), the average cost and 8 weeks of trend. Every number has a "?". The «Model choice» card is gone.'),
@@ -1834,6 +1834,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/SuggestSettings.tsx; src/renderer/lib/composer-suggest.ts localSuggestion (ADR 0118, 0201)
       b('Scrittura ha un solo interruttore, «Suggerimenti mentre scrivi»: un testo grigio dopo il cursore nel campo della chat, dai tuoi messaggi passati, dai comandi «</>», dai ruoli, dalle chat e dai file, a zero token; Tab lo accetta, Esc lo nasconde.',
         'Writing has one switch, "Suggestions while you type": grey text after the cursor in the chat input, from your past messages, the "</>" commands, the roles, the chats and the files, zero tokens; Tab takes it, Esc hides it.'),
+      // src/renderer/components/QueueSettings.tsx QueueSettings; src/renderer/lib/queue-settings.ts (ADR 0222)
+      b('Avanzate → «Coda e avvii» regola la coda delle chat nuove aperte dagli agenti: quanti avvii a freddo insieme (automatico = metà dei core del PC, il numero dei core è scritto accanto) e il freno d’emergenza, CPU oltre e RAM libera sotto, che ferma anche la coda. Sono scelte protette: un agente può solo proporle.',
+        'Advanced → "Coda e avvii" sets the queue of new chats opened by agents: how many cold starts at once (automatic = half the PC’s cores, the core count is written next to it) and the emergency brake, CPU above and free RAM below, which holds the queue too. They are protected choices: an agent can only propose them.'),
     ],
     analogy: b('Come il quadro elettrico di casa: pochi interruttori con l’etichetta giusta, e per i lavori grossi chiami l’elettricista.',
       'Like the fuse box at home: a few switches with the right label, and for the big jobs you call the electrician.'),
@@ -1848,8 +1851,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       4: ['src/shared/guide-coverage.ts#SETTINGS_CARDS'],
       5: ['src/main/appctl/config.ts#app_config'],
       6: ['src/renderer/components/SuggestSettings.tsx', 'src/renderer/lib/composer-suggest.ts#localSuggestion'],
+      7: ['src/renderer/components/QueueSettings.tsx#QueueSettings', 'src/renderer/lib/queue-settings.ts'],
     },
-    sources: ['src/renderer/components/SettingsPage.tsx', 'src/renderer/components/SuggestSettings.tsx', 'src/renderer/lib/settings-sections.ts', 'src/renderer/lib/settings-page.ts', 'src/renderer/components/ProfileSettings.tsx', 'src/renderer/components/AppearancePreview.tsx', 'src/main/appctl/config.ts'],
+    sources: ['src/renderer/components/SettingsPage.tsx', 'src/renderer/components/QueueSettings.tsx', 'src/renderer/components/SuggestSettings.tsx', 'src/renderer/lib/settings-sections.ts', 'src/renderer/lib/settings-page.ts', 'src/renderer/components/ProfileSettings.tsx', 'src/renderer/components/AppearancePreview.tsx', 'src/main/appctl/config.ts'],
   },
   {
     id: 'guide',

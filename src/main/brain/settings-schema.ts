@@ -75,6 +75,8 @@ const BASE: readonly SettingDef[] = [
     description: 'Sopra questa CPU (media degli ultimi secondi) anche gli avvii a freddo in coda aspettano, e non si prepara il motore caldo.' },
   { key: 'loadQueueRam', type: 'int', min: 0, max: 90, default: LOAD_BRAKE_RAM, protected: true, label: 'Freno d’emergenza: RAM libera sotto (%)',
     description: 'Sotto questa memoria libera anche gli avvii a freddo in coda aspettano, e non si prepara il motore caldo. 0 = non guardare la RAM.' },
+  { key: 'coldStartSlots', type: 'int', min: 0, max: 64, default: 0, protected: true, label: 'Avvii a freddo insieme',
+    description: 'Quante chat nuove si avviano insieme; le altre aspettano in coda. 0 = automatico, metà dei core del PC (almeno 1).' },
   // the chat composer's inline suggestion (ADR 0118): local sources only, zero tokens (the model part went, ADR 0201)
   { key: 'suggestOn', type: 'boolean', default: true, protected: false, label: 'Suggerimenti nella chat',
     description: 'Mentre scrivi, un testo grigio dopo il cursore: Tab lo accetta, Esc lo nasconde. Dai tuoi messaggi passati, dai comandi, dai ruoli, dalle chat e dai file, senza token.' },
@@ -261,7 +263,7 @@ export function defaults(): Settings {
     judging: true, judgingSince: 0, judgingCapUsd: 1,
     appRepo: null,
     projectsRoot: null,
-    loadQueue: true, loadQueueCpu: LOAD_BRAKE_CPU, loadQueueRam: LOAD_BRAKE_RAM,
+    loadQueue: true, loadQueueCpu: LOAD_BRAKE_CPU, loadQueueRam: LOAD_BRAKE_RAM, coldStartSlots: 0,
     suggestOn: true,
     voiceAsr: 'fast', voiceName: 'paola', voicePtt: false, awayMode: false, balancedMode: false,
     delegation: { ...DELEGATION_DEFAULTS }, modelTiers: {},

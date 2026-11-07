@@ -23,7 +23,9 @@ export type ChatOrigin = 'app';
 /** a chat waiting in the cold-start queue (ADR 0222) */
 /** A chat waiting in the cold-start queue (ADR 0222): its place, the load, and the cold starts in flight against the cap
  *  (starting >= slots: it waits for a slot; otherwise for the emergency brake, CPU or RAM) */
-export interface QueuedInfo { kind: 'start' | 'turn'; position: number; since: number; cpu: number; freeRam: number; starting?: number; slots?: number }
+export interface QueuedInfo { kind: 'start' | 'turn'; position: number; since: number; cpu: number; freeRam: number; starting?: number; slots?: number;
+  /** the emergency brake still holds the queue (ADR 0222): over now, or the load fell but not for long enough yet */
+  braked?: boolean }
 
 export interface ChatSummary {
   launchContext?: AgentContextSnapshot;

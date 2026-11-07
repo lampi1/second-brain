@@ -323,7 +323,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
         return priority;
       },
       sampler: forcedSampler(process.env.SB_LOAD_FORCE) ?? new OsLoadSampler(),
-      limits: () => { const st = brain.settings(); return { enabled: st.loadQueue !== false, cpu: st.loadQueueCpu ?? 95, ram: st.loadQueueRam ?? 10, slots: Number(process.env.SB_COLD_SLOTS) || coldStartSlots() }; },
+      limits: () => { const st = brain.settings(); return { enabled: st.loadQueue !== false, cpu: st.loadQueueCpu ?? 95, ram: st.loadQueueRam ?? 10, slots: Number(process.env.SB_COLD_SLOTS) || (st.coldStartSlots > 0 ? st.coldStartSlots : coldStartSlots()) }; },
     },
     // the Orchestrator also gets the app-control tools (create work chats, read the app): /mcp/app on the same server
     appMcpUrl: orchestratorId => browser.mcpUrlFor(null).replace(/\/mcp$/, `/mcp/app/o/${orchestratorId}/${orchestratorTokens.tokenFor(orchestratorId)}`),
