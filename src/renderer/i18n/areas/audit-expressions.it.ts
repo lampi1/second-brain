@@ -12,7 +12,7 @@ export const auditExpressionsIt = {
   "auditExpression.ChatItems.text17": "Torna agli ultimi",
   "auditExpression.ChatLinkChips.text18": (p: { v0: string | number }) => `Altri ${p.v0} link`,
   "auditExpression.ChatTile.text20": (p: { v0: string | number; v1: string | number }) => `Chat ${p.v0}, ${p.v1}`,
-  "auditExpression.ChatTile.text23": (p: { v0: string | number; v1: string | number; v2: string | number }) => `Il PC è sotto sforzo (CPU ${p.v0}%, RAM libera ${p.v1}%): ${p.v2} quando il carico scende, una alla volta: prima le chat di lavoro, poi quelle sull’app. I tuoi messaggi partono sempre subito.`,
+  "auditExpression.ChatTile.text23": (p: { v0: string | number; v1: string | number; v2: string | number; v3: string | number; v4: string | number }) => `Avvii a freddo in corso: ${p.v3} su ${p.v4} (metà dei core). ${p.v2} appena si libera un posto, in ordine: prima le chat di lavoro, poi quelle sull’app. Il freno d’emergenza la ferma solo con il PC al limite (ora CPU ${p.v0}%, RAM libera ${p.v1}%). I tuoi messaggi partono sempre subito.`,
   "auditExpression.ChatTile.text24": "questa chat parte",
   "auditExpression.ChatTile.text25": "il messaggio dell’Orchestrator o di un’altra chat parte",
   "auditExpression.ChatTile.text26": "la prossima",

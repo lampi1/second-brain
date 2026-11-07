@@ -96,8 +96,9 @@ export interface Settings {
   /** the folder that holds the owner's projects (their git repos): asked by the first-run setup only when the app
    *  cannot find it by itself (main/brain/projects-folder.ts); null = not known yet */
   projectsRoot?: string | null;
-  /** "Coda per carico" (ADR 0036): an agent's new chat or turn waits while CPU is over loadQueueCpu % or free RAM under
-   *  loadQueueRam %; the user's own messages never wait */
+  /** "Coda avvii a freddo" (ADR 0221, superseding 0036): an agent's cold start waits for one of cores/2 slots; the
+   *  emergency brake (CPU over loadQueueCpu % or free RAM under loadQueueRam %) holds the queue; a running chat and the
+   *  user's own messages never wait */
   loadQueue: boolean;
   loadQueueCpu: number;
   loadQueueRam: number;

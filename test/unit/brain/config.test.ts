@@ -338,6 +338,24 @@ describe('compaction window 300k → 200k (ADR 0051)', () => {
   });
 });
 
+describe('load queue 75/15 → emergency brake 95/10 (ADR 0221)', () => {
+  it('a saved 75 / 15 nobody set follows the brake, each on its own; a value set stays; a new install gets 95 / 10', () => {
+    const dir = tmpDir();
+    fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ ...DEFAULTS, loadQueueCpu: 75, loadQueueRam: 15 }));
+    expect(new ConfigStore(dir, {}).get()).toMatchObject({ loadQueueCpu: 95, loadQueueRam: 10 });
+    expect(JSON.parse(fs.readFileSync(path.join(dir, 'config.json'), 'utf8'))).toMatchObject({ loadQueueCpu: 95, loadQueueRam: 10 });
+    // the user sets 75 again: it stays across restarts
+    new ConfigStore(dir, {}).set({ loadQueueCpu: 75 });
+    expect(new ConfigStore(dir, {}).get().loadQueueCpu).toBe(75);
+    // a CPU the user chose stays while the RAM nobody set moves
+    const other = tmpDir();
+    fs.writeFileSync(path.join(other, 'config.json'), JSON.stringify({ ...DEFAULTS, loadQueueCpu: 75, loadQueueRam: 15 }));
+    fs.writeFileSync(path.join(other, 'changes.jsonl'), `${JSON.stringify({ id: 'x', key: 'loadQueueCpu', before: 60, after: 75, by: 'user', at: 1 })}\n`);
+    expect(new ConfigStore(other, {}).get()).toMatchObject({ loadQueueCpu: 75, loadQueueRam: 10 });
+    expect(new ConfigStore(tmpDir(), {}).get()).toMatchObject({ loadQueue: true, loadQueueCpu: 95, loadQueueRam: 10 });
+  });
+});
+
 describe('settings of removed features (ADR 0201)', () => {
   it('drops the Battito, its headline and the composer\'s model suggestion from config.json once, keeping the rest', () => {
     const dir = tmpDir();

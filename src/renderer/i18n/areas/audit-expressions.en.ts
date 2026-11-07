@@ -14,7 +14,7 @@ export const auditExpressionsEn: typeof auditExpressionsIt = {
   "auditExpression.ChatItems.text17": "Back to latest",
   "auditExpression.ChatLinkChips.text18": (p: { v0: string | number }) => `${p.v0} more links`,
   "auditExpression.ChatTile.text20": (p: { v0: string | number; v1: string | number }) => `Chat ${p.v0}, ${p.v1}`,
-  "auditExpression.ChatTile.text23": (p: { v0: string | number; v1: string | number; v2: string | number }) => `The PC is under load (CPU ${p.v0}%, free RAM ${p.v1}%): ${p.v2} when the load drops, one at a time: work chats first, then app chats. Your messages always go through immediately.`,
+  "auditExpression.ChatTile.text23": (p: { v0: string | number; v1: string | number; v2: string | number; v3: string | number; v4: string | number }) => `Cold starts running: ${p.v3} of ${p.v4} (half the cores). ${p.v2} as soon as a place frees up, in order: work chats first, then app chats. The emergency brake holds it only with the PC at its limit (now CPU ${p.v0}%, free RAM ${p.v1}%). Your messages always go through immediately.`,
   "auditExpression.ChatTile.text24": "this chat starts",
   "auditExpression.ChatTile.text25": "the message from the Orchestrator or another chat is sent",
   "auditExpression.ChatTile.text26": "next",

@@ -20,7 +20,7 @@ export interface ChatService {
   pending(): PendingRequest[];
   /** the "/" commands the chat's engine reported; null = none yet (ADR 0018) */
   commands(chatId: string): ChatCommand[] | null;
-  /** by agent = an agent's chat (app_create_chat): its first turn may wait in the CPU queue (ADR 0036).
+  /** by agent = an agent's chat (app_create_chat): its first turn may wait in the cold-start queue (ADR 0221).
    *  opts.boundByOrchestrator: a call from the unauthenticated /mcp/app mount: the chat runs no wider than the open
    *  Orchestrator (refused without one), since any local process can reach that mount */
   create(req: NewChat, by?: 'user' | 'agent', inherited?: undefined, links?: undefined, opts?: { boundByOrchestrator?: boolean; intake?: IntakeSource }): Promise<ChatSummary>;
@@ -67,7 +67,7 @@ export interface ChatService {
   /** the user is typing: an engine released for idleness starts ahead of the message (ChatManager.prewarm) */
   prewarm?(chatId: string): boolean;
   /** the CPU queue: the load last sampled and the waiting chats, in order (null = no queue wired) */
-  queueState(): { cpu: number; freeRam: number; enabled: boolean; waiting: { chatId: string; kind: 'start' | 'turn'; position: number; since: number }[] } | null;
+  queueState(): { cpu: number; freeRam: number; starting?: number; slots?: number; enabled: boolean; waiting: { chatId: string; kind: 'start' | 'turn'; position: number; since: number }[] } | null;
   set(chatId: string, patch: { model?: string; effort?: Effort; permissionMode?: PermissionMode; title?: string; workStatus?: 'assigned'|'waiting-mail'|'completed' }): Promise<ChatSummary>;
   /** long chats: the hand-off note (asked to the chat, or built by the app) and "Riprendi" in a new chat */
   readHandoff(chatId: string, session?: string): HandoffInfo | null;

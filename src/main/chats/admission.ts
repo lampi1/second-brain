@@ -1,16 +1,16 @@
-// CPU-aware admission of chats and turns (ADR 0036; the user, 2026-10-13: CPU at 100% with many chats, "l'Orchestrator decide
-// in base alla CPU, a costo zero, con una coda"). Before an agent (the Orchestrator's new chat, a closed chat reopened by an
-// agent, the app's own resume after a restart) starts a chat's engine or wakes a chat with a new turn, ChatManager asks
-// this queue (a message between chats to an open chat never does, ADR 0064): with the
-// machine under the thresholds (CPU averaged over a few seconds, free RAM) and nobody waiting, it goes at once; else it
-// waits here, FIFO within its priority, and is admitted when the load drops (two samples in a row under, one admission per sample, so the
-// queue never starts all together). The user's own messages never wait (manager.ts bypasses), nothing running is ever
-// paused or killed. Work for the app's own chats (`app`) waits behind every other chat's work (the user, 2026-10-14:
-// "hanno sempre la precedenza le chat di lavoro rispetto a quelle dell'app"); only the order changes, and only while
-// something waits. Zero tokens and no dependency: the load is os.cpus() deltas and os.freemem(). Who: wiring.ts builds
-// it (OsLoadSampler, or a forced one from SB_LOAD_FORCE for tests/demo), ChatManager uses it.
+// Cold-start admission of agents' chats (ADR 0221, superseding the CPU queue of ADR 0036; idea from cloudroom's
+// startups semaphore). Before an agent (the Orchestrator's new chat, a closed chat reopened by an agent, the app's own
+// resume after a restart) starts a chat's engine, ChatManager asks this queue: at most `slots` cold starts run at once
+// (default max(1, floor(cores/2))), each holding its slot from the spawn until the engine's first answer, its exit or
+// slotMaxMs; the CPU/RAM thresholds are only an emergency brake (default CPU over 95 % or free RAM under 10 %). A
+// chat whose engine is already up ('turn') never waits; neither do the user's own messages nor messages between open
+// chats (manager.ts bypasses, ADR 0064); nothing running is ever paused or killed. What waits goes FIFO within its
+// priority, the app's own chats (`app`) behind every other chat's work (the user, 2026-10-14). After the brake a few
+// samples in a row under are needed again, so the queue never starts all together. Zero tokens and no dependency: the
+// load is os.cpus() deltas and os.freemem(). Who: wiring.ts builds it (OsLoadSampler, or a forced one from
+// SB_LOAD_FORCE for tests/demo), ChatManager uses it.
 import { timersFor } from '../timers';
-const { setInterval, clearInterval } = timersFor('chats/admission');
+const { setInterval, clearInterval, setTimeout, clearTimeout } = timersFor('chats/admission');
 import os from 'node:os';
 
 /** percent, 0-100 */
@@ -22,7 +22,14 @@ export interface LoadSampler {
   stop?(): void;
 }
 
-export interface AdmissionLimits { enabled: boolean; cpu: number; ram: number }
+/** enabled = the queue on; cpu/ram = the emergency brake; slots = cold starts at once (default coldStartSlots()) */
+export interface AdmissionLimits { enabled: boolean; cpu: number; ram: number; slots?: number }
+
+/** cloudroom's bound (core/src/session/mod.rs: available_parallelism()/2): cold-start CPU contention, never the number
+ *  of running chats; 7 on a 14-core PC. */
+export function coldStartSlots(cores = os.availableParallelism?.() ?? os.cpus().length): number {
+  return Math.max(1, Math.floor(cores / 2));
+}
 
 /** CPU busy % from os.cpus() snapshots every tickMs, averaged over the last `window` intervals; free RAM from os. */
 export class OsLoadSampler implements LoadSampler {
@@ -90,8 +97,10 @@ export interface AdmissionOptions {
   limits: () => AdmissionLimits;
   /** ms between two samples while something waits (default 2 s) */
   tickMs?: number;
-  /** samples in a row under the thresholds before an admission (default 2) */
+  /** samples in a row under the brake before admissions resume after it (default 2) */
   underNeeded?: number;
+  /** a cold start that never reported back frees its slot after this (default 120 s): a slot never leaks */
+  slotMaxMs?: number;
   /** false = no timer (tests call tick()) */
   autoTick?: boolean;
   /** the queue or the load it shows changed (the manager refreshes the queued chats) */
@@ -99,19 +108,26 @@ export interface AdmissionOptions {
   now?: () => number;
 }
 
-interface Entry { key: string; kind: 'start' | 'turn'; since: number; app: boolean; runs: (() => void)[] }
+/** The work admitted: a cold start gets `done`, called once its engine answered (or failed); a turn's is a no-op. */
+export type AdmittedRun = (done: () => void) => void;
+
+interface Entry { key: string; kind: 'start' | 'turn'; since: number; app: boolean; runs: AdmittedRun[] }
 
 export class AdmissionQueue {
   private q: Entry[] = [];
   private under = 0;
+  /** the emergency brake fired: admissions wait for `underNeeded` samples in a row under it */
+  private braked = false;
   private timer: NodeJS.Timeout | null = null;
   private lastLoad: LoadSample;
+  /** cold starts in flight, by key: each frees its slot once (done, or slotMaxMs) */
+  private readonly starting = new Map<string, NodeJS.Timeout>();
 
   constructor(private readonly o: AdmissionOptions) {
     this.lastLoad = o.sampler.sample();
   }
 
-  /** the thresholds say "too busy" for this load */
+  /** the emergency brake says "too busy" for this load */
   over(s: LoadSample, l = this.o.limits()): boolean {
     return l.enabled && (s.cpu > l.cpu || s.freeRam < l.ram);
   }
@@ -119,19 +135,29 @@ export class AdmissionQueue {
   /** the load last sampled (refreshed by request() and every tick while something waits) */
   load(): LoadSample { return { ...this.lastLoad }; }
 
-  /** too busy now, or someone already waits: a new engine (the warm one, warm.ts) should not start */
-  busy(): boolean {
-    if (!this.o.limits().enabled) return false;
-    return this.q.length > 0 || this.over(this.refresh());
+  /** cold starts in flight and the cap */
+  slots(): { starting: number; slots: number } {
+    return { starting: this.starting.size, slots: this.cap() };
   }
 
-  /** run now (returns null) or queue it (returns its place). A key already waiting queues behind its own entry,
-   *  in order; with the queue switched off everything runs at once. app = a chat on the app itself: it goes behind
-   *  every other chat's work, which goes ahead of all the app's (each in order of arrival). */
-  request(key: string, kind: 'start' | 'turn', run: () => void, app = false): QueuedEntry | null {
+  /** over the emergency brake now: no engine is started ahead (the warm one, warm.ts). A full queue alone is no
+   *  reason: a warm engine is what the next waiting chat would adopt (proposal 2 of the cloudroom plan). */
+  braking(): boolean {
+    if (!this.o.limits().enabled) return false;
+    return this.over(this.refresh());
+  }
+
+  /** run now (returns null) or queue it (returns its place). A key already waiting queues behind its own entry, in
+   *  order. A 'turn' (its engine is up) never waits; a 'start' waits for a free slot, under the brake, behind nobody.
+   *  With the queue switched off everything runs at once. app = a chat on the app itself: it goes behind every other
+   *  chat's work, which goes ahead of all the app's (each in order of arrival). */
+  request(key: string, kind: 'start' | 'turn', run: AdmittedRun, app = false): QueuedEntry | null {
     const mine = this.q.find(e => e.key === key);
     if (mine) { mine.runs.push(run); return this.entry(key); }
-    if (!this.o.limits().enabled || (!this.q.length && !this.over(this.refresh()))) { run(); return null; }
+    if (!this.o.limits().enabled || kind === 'turn') { run(noop); return null; }
+    // over the brake now: what comes next waits for `underNeeded` samples under it, like after a tick
+    if (this.over(this.refresh())) { this.braked = true; this.under = 0; }
+    if (!this.q.length && this.free() && !this.braked) { this.admit({ key, kind, since: 0, app, runs: [run] }); return null; }
     const e: Entry = { key, kind, since: this.o.now?.() ?? Date.now(), app, runs: [run] };
     const firstApp = app ? -1 : this.q.findIndex(x => x.app);
     if (firstApp < 0) this.q.push(e); else this.q.splice(firstApp, 0, e);
@@ -140,18 +166,19 @@ export class AdmissionQueue {
     return this.entry(key);
   }
 
-  /** the user's "Avvia ora" (or their own message): runs that key's waiting work now; false = nothing waited */
+  /** the user's "Avvia ora" (or their own message): runs that key's waiting work now, past the cap; false = nothing waited */
   admitNow(key: string): boolean {
     const i = this.q.findIndex(e => e.key === key);
     if (i < 0) return false;
     const [e] = this.q.splice(i, 1);
-    this.run(e!);
+    this.admit(e!);
     this.changed();
     return true;
   }
 
-  /** forget a key (its chat closed): its waiting work never runs */
+  /** forget a key (its chat closed): its waiting work never runs, a start in flight frees its slot */
   drop(key: string): boolean {
+    this.release(key);
     const i = this.q.findIndex(e => e.key === key);
     if (i < 0) return false;
     this.q.splice(i, 1);
@@ -177,38 +204,69 @@ export class AdmissionQueue {
     return this.q.map((e, i) => ({ key: e.key, kind: e.kind, since: e.since, ...(e.app ? { app: true } : {}), position: i + 1 }));
   }
 
-  /** One sample: under the thresholds `underNeeded` times in a row admits the head (one per sample). The switch
-   *  turned off empties the queue in order. */
+  /** One sample: over the brake stops admissions until `underNeeded` samples in a row under it; otherwise the head
+   *  goes while a slot is free. The switch turned off empties the queue in order. */
   tick(): void {
     this.prioritize();
     if (!this.q.length) { this.disarm(); return; }
     const l = this.o.limits();
     if (!l.enabled) {
-      for (const e of this.q.splice(0)) this.run(e);
+      for (const e of this.q.splice(0)) this.admit(e);
       this.changed();
       return;
     }
     const s = this.refresh();
-    this.under = this.over(s, l) ? 0 : this.under + 1;
-    if (this.under >= (this.o.underNeeded ?? 2)) {
-      this.under = 0; // the one just admitted needs a few seconds to show in the load: count again from zero
-      this.run(this.q.shift()!);
-    }
+    if (this.over(s, l)) { this.braked = true; this.under = 0; }
+    else if (this.braked && ++this.under >= (this.o.underNeeded ?? 2)) { this.braked = false; this.under = 0; }
+    this.pump();
     this.changed();
   }
 
-  stop(): void { this.disarm(); this.o.sampler.stop?.(); }
+  stop(): void {
+    this.disarm();
+    for (const t of this.starting.values()) clearTimeout(t);
+    this.starting.clear();
+    this.o.sampler.stop?.();
+  }
+
+  private cap(): number { return Math.max(1, this.o.limits().slots ?? coldStartSlots()); }
+  private free(): boolean { return this.starting.size < this.cap(); }
+
+  /** heads while a slot is free and the brake is off (a 'turn' entry takes no slot) */
+  private pump(): void {
+    while (this.q.length && !this.braked && this.free()) this.admit(this.q.shift()!);
+  }
 
   private refresh(): LoadSample { this.lastLoad = this.o.sampler.sample(); return this.lastLoad; }
 
-  private run(e: Entry): void {
+  private admit(e: Entry): void {
+    // a key admitted again while its earlier start still holds a slot keeps that one slot
+    const cold = e.kind === 'start' && !this.starting.has(e.key);
+    if (cold) {
+      const t = setTimeout(() => this.release(e.key), this.o.slotMaxMs ?? 120000);
+      t.unref?.();
+      this.starting.set(e.key, t);
+    }
+    const done = cold ? once(() => this.release(e.key)) : noop;
     for (const f of e.runs) {
-      try { f(); } catch { /* each run reports its own failure (manager.ts) */ }
+      try { f(done); } catch { /* each run reports its own failure (manager.ts) */ }
     }
   }
 
+  /** a cold start is over (its engine answered, failed or exited): the next waiting one may go */
+  private release(key: string): void {
+    const t = this.starting.get(key);
+    if (!t) return;
+    clearTimeout(t);
+    this.starting.delete(key);
+    if (!this.q.length) return;
+    if (this.over(this.refresh())) this.braked = true;
+    this.pump();
+    this.changed();
+  }
+
   private changed(): void {
-    if (!this.q.length) { this.disarm(); this.under = 0; }
+    if (!this.q.length) { this.disarm(); this.under = 0; this.braked = false; }
     this.o.onChange?.();
   }
 
@@ -221,4 +279,10 @@ export class AdmissionQueue {
   private disarm(): void {
     if (this.timer) { clearInterval(this.timer); this.timer = null; }
   }
+}
+
+const noop = (): void => {};
+function once(f: () => void): () => void {
+  let called = false;
+  return () => { if (!called) { called = true; f(); } };
 }

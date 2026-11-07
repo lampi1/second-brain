@@ -96,7 +96,7 @@ test('the deck: every source in one stack, swipe / buttons / keys, undo, the end
     await page.keyboard.press('Control+z');
     await expect(top(page)).toHaveAttribute('data-card', second!);
     // the setting went to main when the next decision was made; Ctrl+Z left it applied
-    await expect.poll(async () => (await page.evaluate(() => window.sb.invoke('settings:get', undefined))).loadQueueCpu, { timeout: 10_000 }).toBe(85);
+    await expect.poll(async () => (await page.evaluate(() => window.sb.invoke('settings:get', undefined))).loadQueueCpu, { timeout: 10_000 }).toBe(98);
 
     // the rest, each by another way: drag, keys, buttons; a skill candidate without its evidence can only be rejected
     const decided: Record<string, 'approve' | 'reject'> = {}, snapped = new Set<string>();

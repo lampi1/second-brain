@@ -26,6 +26,7 @@ export abstract class ManagerSink extends ManagerWork {
     return {
       item: (item, replace) => {
         if (!live()) return;
+        if (item.kind !== 'user' && item.kind !== 'system') this.coldStarted(r);
         this.hook('analytics', () => this.analytics.item(r.s, item, replace));
         this.autoActivity(r);
         if (r.handoffTurn && item.kind === 'assistant') {
@@ -46,6 +47,7 @@ export abstract class ManagerSink extends ManagerWork {
       },
       pending: req => {
         if (!live()) return;
+        this.coldStarted(r);
         if (this.gated(r, req) || this.refusedCommand(r, req) || this.autoPermitted(r, req) || this.awayAnswered(r, req)) return;
         this.hook('analytics', () => this.analytics.pending(r.s, req));
         this.autoActivity(r);
@@ -79,6 +81,7 @@ export abstract class ManagerSink extends ManagerWork {
       changed: p => { if (live()) this.applyPatch(r, p); },
       exit: ({ error }) => {
         const sess = current();
+        if (this.chats.get(chatId) === r) this.coldStarted(r);
         if (!sess || this.chats.get(chatId) !== r || r.session !== sess) return;
         this.hook('analytics', () => this.analytics.end(r.s));
         r.session = null;

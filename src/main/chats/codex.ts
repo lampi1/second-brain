@@ -270,6 +270,10 @@ export class CodexSession implements HarnessSession {
   }
 
   private async boot(): Promise<void> {
+    // the cold start's steps after the spawn (ADR 0221, proposal 6): one `timing: engine ready` line with each lap
+    const lap: Record<string, number> = {};
+    let t = this.spawnedAt;
+    const step = (k: string) => { const now = Date.now(); lap[k] = now - t; t = now; };
     try {
       const init = await this.request('initialize', {
         clientInfo: { name: 'second_brain', title: 'second-brain', version: this.opts.appVersion ?? '0' },
@@ -280,11 +284,16 @@ export class CodexSession implements HarnessSession {
       if (this.cliVersion) this.sink.changed({ version: this.cliVersion });
       this.notify('initialized', {});
       log.info('chats', 'codex initialized', { chat: this.opts.chatId, data: { engine: this.engine, version: this.cliVersion, platform: s(init.platformOs) || null } });
+      step('initializeMs');
       await this.checkLogin();
+      step('loginMs');
       void this.listModels();
       await this.giveSkills();
+      step('skillsMs');
       await this.openThread();
+      step('threadMs');
       this.open = true;
+      log.info('chats', 'timing: engine ready', { chat: this.opts.chatId, data: { engine: this.engine, readyMs: Date.now() - this.spawnedAt, ...lap } });
       if (this.state === 'starting') this.setState(this.queue.length ? 'running' : 'idle');
       this.drain();
     } catch (e) {

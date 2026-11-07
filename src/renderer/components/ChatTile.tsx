@@ -108,8 +108,8 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   useEffect(()=>{const release=suspendViews();schedule();const timer=setTimeout(()=>{release();schedule();},window.matchMedia('(prefers-reduced-motion: reduce)').matches?0:220);return()=>{clearTimeout(timer);release();};},[expanded]);
   // the long-chat notice, hidden by the user until the context grows by another quarter of the threshold
   const warn = useWarnTokens();
-  const lqCpu = useApp(s => s.settings?.loadQueueCpu ?? 75);
-  const lqRam = useApp(s => s.settings?.loadQueueRam ?? 15);
+  const lqCpu = useApp(s => s.settings?.loadQueueCpu ?? 95);
+  const lqRam = useApp(s => s.settings?.loadQueueRam ?? 10);
   const size = useSize(ref);
   const pair = usePair(chatId);
   const browsers = useApp(s => s.tabs.filter(tab => tab.ownerChatId === chatId).length);
@@ -202,7 +202,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       {expanded && activeChildren.length > 0 && <InWindowLine reqs={activeChildren.map(c => c.req)} testid={`chat-child-in-window-${chatId}`} />}
       {chat.queued && !chat.closedAt && (
         <div className="queued-bar" data-testid={`chat-queued-${chatId}`}>
-          <span className="queued-text" data-tip={auditText('auditExpression.ChatTile.text23', { v0: chat.queued.cpu, v1: chat.queued.freeRam, v2: chat.queued.kind === 'start' ? auditText('auditExpression.ChatTile.text24') : auditText('auditExpression.ChatTile.text25') })}>{auditText('audit.ChatTile.queued')}{' '}{queueReason(chat.queued, queueLimits)} · {chat.queued.position === 1 ? auditText('auditExpression.ChatTile.text26') : auditText('auditExpression.ChatTile.text27', { v0: chat.queued.position })}
+          <span className="queued-text" data-tip={auditText('auditExpression.ChatTile.text23', { v0: chat.queued.cpu, v1: chat.queued.freeRam, v3: chat.queued.starting ?? 0, v4: chat.queued.slots ?? '?', v2: chat.queued.kind === 'start' ? auditText('auditExpression.ChatTile.text24') : auditText('auditExpression.ChatTile.text25') })}>{auditText('audit.ChatTile.queued')}{' '}{queueReason(chat.queued, queueLimits)} · {chat.queued.position === 1 ? auditText('auditExpression.ChatTile.text26') : auditText('auditExpression.ChatTile.text27', { v0: chat.queued.position })}
           </span>
           <button type="button" className="btn btn-ghost btn-s" onClick={() => void admitNow(chatId)} data-testid={`chat-admit-${chatId}`}>{auditText('audit.ChatTile.startNow')}</button>
         </div>

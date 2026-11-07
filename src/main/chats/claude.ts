@@ -250,6 +250,9 @@ export class ClaudeSession implements HarnessSession {
   /** start-up and per-turn timings (logged, scope chats): where a slow first answer spends its time */
   private spawnedAt = 0;
   private readyAt = 0;                // the initialize reply: the engine is up and takes messages
+  private firstStateAt = 0;           // the first session_state_changed: the CLI's own setup is done (ADR 0221)
+  private initAt = 0;                 // system/init: MCP servers, plugins and hooks loaded
+  private initMcp: Record<string, unknown> = {};
   private turnT: { sent: number; first?: number; text?: number; warm: boolean; n: number } | null = null;
   private turnsSent = 0;
   private readyDone!: () => void;
@@ -1091,8 +1094,16 @@ export class ClaudeSession implements HarnessSession {
     log.info('chats', 'timing: turn', { chat: this.opts.chatId, data: {
       turn: t.n, firstEventMs: rel(t.first), firstTextMs: rel(t.text), resultMs: now - t.sent, apiMs: num(m.duration_api_ms) ?? null,
       // the first turn of a process: was the engine already up when it was sent (warm), and how long since the spawn
-      ...(t.n === 1 ? { warm: t.warm, sentAfterSpawnMs: t.sent - this.spawnedAt, readyMs: this.readyAt ? this.readyAt - this.spawnedAt : null } : {}),
+      ...(t.n === 1 ? { warm: t.warm, sentAfterSpawnMs: t.sent - this.spawnedAt, readyMs: this.readyAt ? this.readyAt - this.spawnedAt : null, ...this.initTiming(t.first) } : {}),
     } });
+  }
+
+  /** The cold first turn's steps after the spawn (ADR 0221, proposal 6): the first session_state_changed (the CLI's
+   *  setup done), system/init (its MCP servers, plugins and hooks loaded) and the first stream event; plus the MCP
+   *  servers still connecting at init (they connect in the background and do not hold the turn). */
+  private initTiming(first: number | undefined): Record<string, unknown> {
+    const at = (x: number | undefined) => (x ? x - this.spawnedAt : null);
+    return { stateAfterSpawnMs: at(this.firstStateAt), initAfterSpawnMs: at(this.initAt), firstEventAfterSpawnMs: at(first), ...this.initMcp };
   }
 
   private reportCommands(): void {
@@ -1126,7 +1137,11 @@ export class ClaudeSession implements HarnessSession {
         if (this.cmdList) this.reportCommands();
         if (!this.sawInit) {
           this.sawInit = true;
-          for (const srv of arr(m.mcp_servers).map(o)) {
+          this.initAt = Date.now();
+          const servers = arr(m.mcp_servers).map(o);
+          const pending = servers.filter(x => s(x.status) === 'pending').map(x => s(x.name));
+          this.initMcp = { mcpAtInit: servers.length, ...(pending.length ? { mcpPendingAtInit: pending.slice(0, 10) } : {}), plugins: arr(m.plugins).length };
+          for (const srv of servers) {
             if (s(srv.status) && !['connected', 'pending', 'needs-auth', 'disabled'].includes(s(srv.status))) this.sys(`MCP ${s(srv.name)}: ${s(srv.status)}`, 'warn');
           }
         }
@@ -1142,6 +1157,7 @@ export class ClaudeSession implements HarnessSession {
       case 'commands_changed': if (Array.isArray(m.commands)) { this.cmdList = m.commands; this.reportCommands(); } return;
       case 'session_state_changed': {
         this.stateEvents = true;
+        if (!this.firstStateAt) this.firstStateAt = Date.now();
         const st = s(m.state);
         if (st === 'running') { this.activity(); this.setState(this.calls.size ? 'waiting' : 'running'); }
         else if (st === 'requires_action') this.setState('waiting');

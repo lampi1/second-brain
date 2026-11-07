@@ -1236,7 +1236,7 @@ html.overlay body:focus-within .layer-hint { display: none; }
 .chatref-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .chatref-go { flex: none; display: inline-flex; align-items: center; gap: 3px; height: 16px; padding: 0 6px; border-radius: 99px; background: var(--violet-bg); color: var(--violet); font-weight: 600; font-size: 10.5px; }
 .chatref-btn:disabled .chatref-go { display: none; }
-/* the CPU queue (ADR 0036): a tile whose agent start or turn waits for the load to drop, and the top-bar counter */
+/* the cold-start queue (ADR 0221): a tile whose agent start or turn waits for the load to drop, and the top-bar counter */
 .queued-bar { flex: none; display: flex; align-items: center; gap: 8px; margin: 0 10px 6px; padding: 4px 6px 4px 9px; border-radius: var(--r-s); background: var(--amber-bg); color: var(--amber); font-size: 12px; }
 .queued-bar .queued-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .queued-bar .btn { flex: none; }

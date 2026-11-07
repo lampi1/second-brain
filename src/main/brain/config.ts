@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import type { ChangeBy, Settings, SettingChange, SettingDef, SettingKey, SettingProposal, SettingRequestResult, SettingsPatch } from '../../shared/contract';
-import { COMPACT_WINDOW, OLD_COMPACT_WINDOW, schema, defOf, defaults, flattenPatch, getAt, setAt, validate } from './settings-schema';
+import { COMPACT_WINDOW, LOAD_BRAKE_CPU, LOAD_BRAKE_RAM, OLD_COMPACT_WINDOW, OLD_LOAD_QUEUE, schema, defOf, defaults, flattenPatch, getAt, setAt, validate } from './settings-schema';
 import { ENGINE_ID, REMOVED_ENGINES } from '../engines/registry';
 import { domainsOfConfig } from './domains';
 import { samePolicyPath } from './adapters/codex-policy';
@@ -126,6 +126,7 @@ export class ConfigStore {
     this.migrateTasks(raw);
     this.migrateMessaging(raw);
     this.migrateCompactWindow(raw !== undefined && raw !== null);
+    this.migrateLoadBrake(raw !== undefined && raw !== null);
   }
 
   /** The view setting was retired (Mosaico and Corsie are gone): fromSaved ignores an old `view`; drop it from the
@@ -193,6 +194,29 @@ export class ConfigStore {
       fs.writeFileSync(mark, `${new Date().toISOString()}\n`);
     } catch (e) {
       log.warn('settings', 'compaction window migration not saved', { cause: e instanceof Error ? e.message : String(e), hint: 'it applies for this run; the next start tries again' });
+    }
+  }
+
+  /** The load queue's thresholds became an emergency brake (ADR 0221): a saved 75 % CPU / 15 % free RAM nobody set
+   *  (no change in the log) follows the new 95 / 10, each on its own; a value chosen stays. Once per userData. */
+  private migrateLoadBrake(hadFile: boolean): void {
+    const mark = path.join(this.userData, 'migrated-load-brake-95');
+    if (fs.existsSync(mark)) return;
+    try {
+      const unset = (k: SettingKey) => !this.changes.some(c => c.key === k);
+      const next = { ...this.saved };
+      if (hadFile && next.loadQueueCpu === OLD_LOAD_QUEUE.cpu && unset('loadQueueCpu')) next.loadQueueCpu = LOAD_BRAKE_CPU;
+      if (hadFile && next.loadQueueRam === OLD_LOAD_QUEUE.ram && unset('loadQueueRam')) next.loadQueueRam = LOAD_BRAKE_RAM;
+      if (next.loadQueueCpu !== this.saved.loadQueueCpu || next.loadQueueRam !== this.saved.loadQueueRam) {
+        const from = { cpu: this.saved.loadQueueCpu, ram: this.saved.loadQueueRam };
+        this.saved = next;
+        this.save(this.saved);
+        log.info('settings', 'load queue thresholds moved to the emergency brake', { data: { from, to: { cpu: next.loadQueueCpu, ram: next.loadQueueRam } } });
+      }
+      fs.mkdirSync(this.userData, { recursive: true });
+      fs.writeFileSync(mark, `${new Date().toISOString()}\n`);
+    } catch (e) {
+      log.warn('settings', 'load brake migration not saved', { cause: e instanceof Error ? e.message : String(e), hint: 'the old thresholds apply for this run; the next start tries again' });
     }
   }
 

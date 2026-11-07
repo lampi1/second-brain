@@ -14,7 +14,7 @@ export const auditExpressionsDe: typeof auditExpressionsIt = {
   "auditExpression.ChatItems.text17": "Zurück zu den neuesten",
   "auditExpression.ChatLinkChips.text18": (p: { v0: string | number }) => `${p.v0} weitere Links`,
   "auditExpression.ChatTile.text20": (p: { v0: string | number; v1: string | number }) => `Chat ${p.v0}, ${p.v1}`,
-  "auditExpression.ChatTile.text23": (p: { v0: string | number; v1: string | number; v2: string | number }) => `Der PC ist ausgelastet (CPU ${p.v0}%, freier RAM ${p.v1}%): ${p.v2}, sobald die Last sinkt, einer nach dem anderen: zuerst Arbeits-Chats, dann App-Chats. Deine Nachrichten gehen immer sofort raus.`,
+  "auditExpression.ChatTile.text23": (p: { v0: string | number; v1: string | number; v2: string | number; v3: string | number; v4: string | number }) => `Kaltstarts laufen: ${p.v3} von ${p.v4} (die Hälfte der Kerne). ${p.v2}, sobald ein Platz frei wird, der Reihe nach: zuerst Arbeits-Chats, dann App-Chats. Die Notbremse hält ihn nur an, wenn der PC am Limit ist (jetzt CPU ${p.v0}%, freier RAM ${p.v1}%). Deine Nachrichten gehen immer sofort raus.`,
   "auditExpression.ChatTile.text24": "dieser Chat startet",
   "auditExpression.ChatTile.text25": "die Nachricht vom Orchestrator oder einem anderen Chat wird gesendet",
   "auditExpression.ChatTile.text26": "als Nächstes",

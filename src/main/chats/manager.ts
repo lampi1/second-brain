@@ -212,7 +212,7 @@ export class ChatManager extends ManagerSink implements ChatService {
     // «Fork») is checked when the session's own title replaces it; the Orchestrator's below, Flash is one of a kind
     const uniqueOk = !req.orchestrator && !req.quick && (!!req.title?.trim() || !!req.prompt?.trim());
     const title = uniqueOk ? this.uniqueTitle(typedTitle) : typedTitle;
-    // an agent's chat with a prompt starts with its first message, through the CPU queue (ADR 0036); a warm engine is
+    // an agent's chat with a prompt starts with its first message, through the cold-start queue (ADR 0221); a warm engine is
     // already running: adopting it is no new start (its first turn still asks the queue)
     const given = req.prompt?.trim() ? req.prompt : null;
     // a Sentinel checks a change: the app gathers it (branch, base, commits, files, diff) instead of 5-15 git calls
@@ -410,23 +410,31 @@ export class ChatManager extends ManagerSink implements ChatService {
     return this.gate(r, () => this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia));
   }
 
-  /** Agent work through the CPU queue (ADR 0036): runs now (the promise is the delivery's) or waits, and then resolves
-   *  at once; a later failure lands on the chat (lastError). A chat in the middle of a turn never waits: the message
-   *  joins its running work. */
+  /** Agent work through the cold-start queue (ADR 0221): runs now (the promise is the delivery's) or waits, and then
+   *  resolves at once; a later failure lands on the chat (lastError). A chat in the middle of a turn never waits: the
+   *  message joins its running work; one with a live engine never waits either. A cold start holds its slot until the
+   *  engine's first answer, a question or its exit (coldStarted), or until its delivery fails. */
   private gate(r: Rec, deliver: () => Promise<void>): Promise<void> {
     const adm = this.admission;
     // a chat mid-turn takes the message at once, unless earlier work of its own still waits (never overtaken)
     if (!adm || (this.midTurn(r) && !adm.entry(r.s.id))) return deliver();
     let now: Promise<void> | undefined;
     let late = false;
+    const since = Date.now();
     // a chat on the app itself waits behind the work chats' (the user, 2026-10-14)
-    const q = adm.request(r.s.id, r.session ? 'turn' : 'start', () => {
+    const kind = r.session ? 'turn' : 'start';
+    const q = adm.request(r.s.id, kind, done => {
+      if (kind === 'start') {
+        r.coldDone = done;
+        log.info('chats', 'cold start admitted', { chat: r.s.id, data: { waitedMs: late ? Date.now() - since : 0, ...adm.slots(), ...adm.load() } });
+      }
       const p = deliver();
+      p.catch(() => this.coldStarted(r));
       if (late) p.catch(e => this.lateFailed(r, e)); else now = p;
     }, isAppChat(r.s.title) || r.s.route?.area === 'App');
     if (!q) return now ?? Promise.resolve();
     late = true;
-    log.info('chats', 'agent work queued: the machine is busy', { chat: r.s.id, data: { kind: q.kind, position: q.position, app: !!q.app, ...adm.load() } });
+    log.info('chats', 'agent work queued: the machine is busy', { chat: r.s.id, data: { kind: q.kind, position: q.position, app: !!q.app, ...adm.slots(), ...adm.load() } });
     return Promise.resolve();
   }
 
@@ -449,7 +457,7 @@ export class ChatManager extends ManagerSink implements ChatService {
   queueState(): ReturnType<ChatService['queueState']> {
     const adm = this.admission;
     if (!adm) return null;
-    return { ...adm.load(), enabled: this.opts.admission!.limits().enabled, waiting: adm.list().map(e => ({ chatId: e.key, kind: e.kind, position: e.position, since: e.since })) };
+    return { ...adm.load(), ...adm.slots(), enabled: this.opts.admission!.limits().enabled, waiting: adm.list().map(e => ({ chatId: e.key, kind: e.kind, position: e.position, since: e.since })) };
   }
 
   /** The delivery of a message (send() decided it goes now). One at a time per chat, on every engine: a later message

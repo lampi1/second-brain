@@ -80,8 +80,8 @@ export interface ChatManagerOptions {
   prewarm?: boolean;
   /** ms after a new Claude chat (or the app's start) before the next waiting engine starts (default 5 s / 20 s) */
   prewarmDelayMs?: number;
-  /** the CPU-aware queue (ADR 0036): agents' starts and turns wait while the machine is busy; absent = never wait */
-  admission?: { priority?: (key: string) => number; sampler: LoadSampler; limits: () => AdmissionLimits; tickMs?: number; autoTick?: boolean };
+  /** the cold-start queue (ADR 0221): agents' cold starts wait for a slot (cores/2) or the emergency brake; absent = never wait */
+  admission?: { priority?: (key: string) => number; sampler: LoadSampler; limits: () => AdmissionLimits; tickMs?: number; autoTick?: boolean; slotMaxMs?: number };
   /** custom session factory (tests, future engines) */
   sessionFactory?: (harness: Harness, opts: SessionOptions, sink: SessionSink) => HarnessSession;
 
@@ -285,6 +285,8 @@ export interface Rec {
   turnSinceDone: boolean;
   /** a resumed session still opening (sends wait for it) */
   opening?: Promise<void> | undefined;
+  /** its cold start holds a slot of the admission queue (ADR 0221): called at the engine's first answer, a question, or its exit */
+  coldDone?: (() => void) | undefined;
   /** an archive closing the session (a send waits for it, then reopens the chat on a new session) */
   archiving?: Promise<void> | undefined;
   /** the user's close (✕) of this chat or of an ancestor started: set before its first await, so a late report, mail

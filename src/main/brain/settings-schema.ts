@@ -18,6 +18,11 @@ import { DELEGATION_DEFAULTS, DELEGATION_RANGE, MODEL_TIERS, type ModelTier } fr
 export const COMPACT_WINDOW = 200_000;
 /** the default before 2026-10-14: a saved value equal to it that the user never set follows the new one (config.ts) */
 export const OLD_COMPACT_WINDOW = 300_000;
+/** The cold-start queue's emergency brake (ADR 0221): CPU over 95 % or free RAM under 10 %; before 2026-11-07 these
+ *  were the queue's own thresholds, 75 / 15 (ADR 0036): a saved old value the user never set follows the new one. */
+export const LOAD_BRAKE_CPU = 95;
+export const LOAD_BRAKE_RAM = 10;
+export const OLD_LOAD_QUEUE = { cpu: 75, ram: 15 } as const;
 
 const H = { claude: 'Claude', cursor: 'Cursor' } as const;
 const budgetDefs = (h: 'claude' | 'cursor'): SettingDef[] => [
@@ -62,13 +67,14 @@ const BASE: readonly SettingDef[] = [
     description: 'Una chat di lavoro che ha finito bene, senza domande, coda o lavori in background, e che non tocchi da tanti minuti si chiude da sola e libera spazio; la ritrovi con Ctrl+K e la riapri con Invio. 0 = mai.' },
   { key: 'engineIdleMin', type: 'int', min: 0, max: 1440, default: 30, protected: false, label: 'Libera il motore delle chat ferme dopo (minuti)',
     description: 'Una chat ferma da tanti minuti, senza domande, coda o lavori in background, chiude il suo processo (con server MCP e shell) e resta sulla griglia; al prossimo messaggio riparte da sola dalla sua storia. L’Orchestrator non viene mai liberato. 0 = mai.' },
-  // protected: an agent turning the queue off, or raising its limits, would start its own chats ahead of the machine
-  { key: 'loadQueue', type: 'boolean', default: true, protected: true, label: 'Coda per carico',
-    description: 'Con il PC sotto sforzo, le chat e i messaggi aperti dall’Orchestrator o da altre chat aspettano in coda e partono uno alla volta quando il carico scende. I tuoi messaggi partono sempre subito; niente viene fermato.' },
-  { key: 'loadQueueCpu', type: 'int', min: 30, max: 100, default: 75, protected: true, label: 'Coda per carico: CPU oltre (%)',
-    description: 'Sopra questa CPU (media degli ultimi secondi) le chat e i messaggi degli agenti aspettano.' },
-  { key: 'loadQueueRam', type: 'int', min: 0, max: 90, default: 15, protected: true, label: 'Coda per carico: RAM libera sotto (%)',
-    description: 'Sotto questa memoria libera le chat e i messaggi degli agenti aspettano. 0 = non guardare la RAM.' },
+  // protected: an agent turning the queue off, or raising its brake, would start its own chats ahead of the machine.
+  // ADR 0221: the queue limits cold starts (cores/2 at once); CPU/RAM are only the emergency brake (95 % / 10 %).
+  { key: 'loadQueue', type: 'boolean', default: true, protected: true, label: 'Coda avvii a freddo',
+    description: 'Le chat nuove aperte dall’Orchestrator o da altre chat partono al massimo metà dei core del PC alla volta (7 su 14 core); le altre aspettano in coda il loro turno. Una chat già avviata non aspetta mai; i tuoi messaggi partono sempre subito; niente viene fermato.' },
+  { key: 'loadQueueCpu', type: 'int', min: 30, max: 100, default: LOAD_BRAKE_CPU, protected: true, label: 'Freno d’emergenza: CPU oltre (%)',
+    description: 'Sopra questa CPU (media degli ultimi secondi) anche gli avvii a freddo in coda aspettano, e non si prepara il motore caldo.' },
+  { key: 'loadQueueRam', type: 'int', min: 0, max: 90, default: LOAD_BRAKE_RAM, protected: true, label: 'Freno d’emergenza: RAM libera sotto (%)',
+    description: 'Sotto questa memoria libera anche gli avvii a freddo in coda aspettano, e non si prepara il motore caldo. 0 = non guardare la RAM.' },
   // the chat composer's inline suggestion (ADR 0118): local sources only, zero tokens (the model part went, ADR 0201)
   { key: 'suggestOn', type: 'boolean', default: true, protected: false, label: 'Suggerimenti nella chat',
     description: 'Mentre scrivi, un testo grigio dopo il cursore: Tab lo accetta, Esc lo nasconde. Dai tuoi messaggi passati, dai comandi, dai ruoli, dalle chat e dai file, senza token.' },
@@ -255,7 +261,7 @@ export function defaults(): Settings {
     judging: true, judgingSince: 0, judgingCapUsd: 1,
     appRepo: null,
     projectsRoot: null,
-    loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15,
+    loadQueue: true, loadQueueCpu: LOAD_BRAKE_CPU, loadQueueRam: LOAD_BRAKE_RAM,
     suggestOn: true,
     voiceAsr: 'fast', voiceName: 'paola', voicePtt: false, awayMode: false, balancedMode: false,
     delegation: { ...DELEGATION_DEFAULTS }, modelTiers: {},

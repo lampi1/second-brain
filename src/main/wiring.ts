@@ -80,7 +80,7 @@ import { EndpointTokens } from './mcp/tokens';
 import { McpServersService } from './mcp-servers/service';
 import type { ChatMcpContext } from './mcp-servers/access';
 import { createDemoServices } from './demo-wiring';
-import { forcedSampler, OsLoadSampler } from './chats/admission';
+import { coldStartSlots, forcedSampler, OsLoadSampler } from './chats/admission';
 import { ProductSync } from './sync';
 import { startHealthLog } from './perf';
 import fs from 'node:fs';
@@ -312,7 +312,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     prewarm: !process.env.SB_CLAUDE_PATH && process.env.SB_PREWARM !== '0',
     mcpUrlFor: chatId => browser.mcpUrlFor(chatId),
     extMcp: chatId => mcpServers.launch(chatId, browser.mcpUrlFor(null).replace(/\/mcp$/, '')),
-    // agents' new chats and turns wait while the machine is busy (ADR 0036); SB_LOAD_FORCE="cpu,freeRam" fixes the load
+    // agents' cold starts wait for one of cores/2 slots, or the emergency brake (ADR 0221); SB_LOAD_FORCE="cpu,freeRam" fixes the load
+    // and SB_COLD_SLOTS the slots
     // for the e2e suite
     admission: {
       priority: key => {
@@ -322,7 +323,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
         return priority;
       },
       sampler: forcedSampler(process.env.SB_LOAD_FORCE) ?? new OsLoadSampler(),
-      limits: () => { const st = brain.settings(); return { enabled: st.loadQueue !== false, cpu: st.loadQueueCpu ?? 75, ram: st.loadQueueRam ?? 15 }; },
+      limits: () => { const st = brain.settings(); return { enabled: st.loadQueue !== false, cpu: st.loadQueueCpu ?? 95, ram: st.loadQueueRam ?? 10, slots: Number(process.env.SB_COLD_SLOTS) || coldStartSlots() }; },
     },
     // the Orchestrator also gets the app-control tools (create work chats, read the app): /mcp/app on the same server
     appMcpUrl: orchestratorId => browser.mcpUrlFor(null).replace(/\/mcp$/, `/mcp/app/o/${orchestratorId}/${orchestratorTokens.tokenFor(orchestratorId)}`),

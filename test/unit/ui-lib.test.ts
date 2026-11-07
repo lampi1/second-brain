@@ -2,7 +2,7 @@
 // workspace tiles (lib/grid.ts) and the remembered preferences parser (store/ui.ts loadPrefs).
 import { describe, expect, it } from 'vitest';
 import type { BrowserTab, ChatSummary } from '@shared/contract';
-import { ago, chatCost, diffTotals, duration, folderName, formatCost, minutes, modelWithEffort, prettyModel, stateInfo, toolLabel, until, workTime } from '../../src/renderer/lib/format';
+import { ago, chatCost, diffTotals, duration, folderName, formatCost, minutes, modelWithEffort, prettyModel, queueReason, stateInfo, toolLabel, until, workTime } from '../../src/renderer/lib/format';
 import { fuzzyFilter, fuzzyScore } from '../../src/renderer/lib/fuzzy';
 import { pairIndex, pairSlots, PAIR_COLORS, tileKey, workspaceTiles } from '../../src/renderer/lib/grid';
 import { defaultPrefs, loadPrefs } from '../../src/renderer/store/ui';
@@ -54,6 +54,14 @@ describe('chat ↔ browser pairs', () => {
 });
 
 describe('format', () => {
+  it('why a chat waits: the brake figure, every cold-start slot taken, or the chats ahead (ADR 0221)', () => {
+    const q = { kind: 'start' as const, position: 1, since: 0, cpu: 99, freeRam: 40, starting: 7, slots: 7 };
+    const limits = { cpu: 95, ram: 10 };
+    expect(queueReason(q, limits)).toBe('CPU 99%');
+    expect(queueReason({ ...q, cpu: 50 }, limits)).toBe('7/7 avvii a freddo pieni');
+    expect(queueReason({ ...q, cpu: 50, starting: 3 }, limits)).toBe('dietro altre');
+    expect(queueReason({ kind: 'start', position: 2, since: 0, cpu: 50, freeRam: 40 }, limits)).toBe('dietro altre');
+  });
   it('costs, models, folders', () => {
     expect(formatCost(1.84)).toBe('1,84 $');
     expect(formatCost(38.2)).toBe('38,20 $');

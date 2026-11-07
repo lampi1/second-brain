@@ -233,7 +233,7 @@ export function runningCount(s: Pick<AppState, 'chats'>): number {
   return n;
 }
 
-/** Chats waiting in the CPU queue (ADR 0036), archived ones aside. */
+/** Chats waiting in the cold-start queue (ADR 0221), archived ones aside. */
 export function queuedCount(s: Pick<AppState, 'chats'>): number {
   let n = 0;
   for (const c of Object.values(s.chats)) if (c.queued && !c.closedAt) n++;

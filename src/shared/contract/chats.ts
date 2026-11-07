@@ -20,8 +20,10 @@ export type ChatState = 'starting' | 'running' | 'waiting' | 'idle' | 'error' | 
 /** app = runs inside the app (we own the process). The only origin in v1 (ADR 0010: no coexistence with other apps). */
 export type ChatOrigin = 'app';
 
-/** a chat waiting in the CPU-aware queue (ADR 0036) */
-export interface QueuedInfo { kind: 'start' | 'turn'; position: number; since: number; cpu: number; freeRam: number }
+/** a chat waiting in the cold-start queue (ADR 0221) */
+/** A chat waiting in the cold-start queue (ADR 0221): its place, the load, and the cold starts in flight against the cap
+ *  (starting >= slots: it waits for a slot; otherwise for the emergency brake, CPU or RAM) */
+export interface QueuedInfo { kind: 'start' | 'turn'; position: number; since: number; cpu: number; freeRam: number; starting?: number; slots?: number }
 
 export interface ChatSummary {
   launchContext?: AgentContextSnapshot;
@@ -113,7 +115,7 @@ export interface ChatSummary {
   /** its turn was cut by an app restart and the app resumed it by itself at this time ("ripresa dopo il riavvio";
    *  cleared by the user's next message) */
   resumedAt?: number;
-  /** an agent's start or turn waits for the machine's load to drop (ADR 0036): kind start = the engine is not started
+  /** an agent's cold start waits for a slot or the emergency brake (ADR 0221): kind start = the engine is not started
    *  yet, turn = a message waits to wake it; position 1 = next; cpu/freeRam = the load last sampled, in % */
   queued?: QueuedInfo;
   /** how its harness, model and effort were chosen (its role's card or the user's defaults; app_create_chat, chat:createRouted) */

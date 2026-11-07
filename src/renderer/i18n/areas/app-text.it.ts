@@ -98,6 +98,7 @@ export const appTextIt = {
   'appText.format.permShort.bypassPermissions': 'senza permessi',
   'appText.format.freeRam': (p: { pct: number }) => `RAM libera ${p.pct}%`,
   'appText.format.behindOthers': 'dietro altre',
+  'appText.format.coldStarts': 'avvii a freddo pieni',
   'appText.format.now': 'ora',
   'appText.format.days': (p: { n: number }) => `${p.n} g`,
   'appText.format.in': (p: { time: string }) => `tra ${p.time}`,

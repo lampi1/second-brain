@@ -59,14 +59,15 @@ export abstract class ManagerCore {
   protected coldTimer: NodeJS.Timeout | null = null;
   protected readonly counters: ContextCounters;
   protected readonly onExit = (): void => { this.killAll(true); this.flushWrites(); };
-  /** the CPU queue (ADR 0036); null = not wired: everything runs at once */
+  /** the cold-start queue (ADR 0221); null = not wired: everything runs at once */
   protected readonly admission: AdmissionQueue | null;
-  // no engine is started ahead while the machine is busy or chats wait in the CPU queue (ADR 0036)
+  // engines are started ahead even while chats wait for a cold-start slot (the next one adopts it); only the
+  // emergency brake (CPU or RAM, ADR 0221) stops them
   /** the chat id of the warm engine being spawned now (spawnWarm), before the pool holds it */
   protected warmChat: string | null = null;
   /** the launch of each waiting engine by its chat id, until a chat adopts it */
   protected readonly warmViews = new Map<string, WarmLaunch>();
-  protected readonly warm = new WarmPool({ spawn: (cwd, launch) => this.spawnWarm(cwd, launch), enabled: () => !!this.opts.prewarm && !this.quitting && !updateActivity.frozen && !this.admission?.busy() && this.opts.engineOn?.('claude') !== false });
+  protected readonly warm = new WarmPool({ spawn: (cwd, launch) => this.spawnWarm(cwd, launch), enabled: () => !!this.opts.prewarm && !this.quitting && !updateActivity.frozen && !this.admission?.braking() && this.opts.engineOn?.('claude') !== false });
 
   constructor(protected readonly opts: ChatManagerOptions) {
     this.analytics = new AgentAnalyticsCollector(opts.userData, Date.now, opts.writeDelayMs ? Math.max(1000, opts.writeDelayMs) : 0);
@@ -137,6 +138,14 @@ export abstract class ManagerCore {
     r.s.pendingResultIds = runs.filter(run => !run.delivery?.displayedAt || run.delivery?.synthesisPending).map(run => run.runId);
   }
 
+  /** the chat's cold start is over (its first answer, a question, its exit): its admission slot goes to the next one */
+  protected coldStarted(r: Rec): void {
+    const done = r.coldDone;
+    if (!done) return;
+    r.coldDone = undefined;
+    done();
+  }
+
   /** a turn runs in a live engine: a message joins it (a chat cut by a restart has working set but no engine) */
   protected midTurn(r: Rec): boolean {
     return !!r.session && (r.working === true || r.session.busy);
@@ -147,13 +156,14 @@ export abstract class ManagerCore {
     const adm = this.admission;
     if (!adm) return;
     const load = adm.load();
+    const { starting, slots } = adm.slots();
     const waiting = new Map(adm.list().map(e => [e.key, e]));
     for (const r of this.chats.values()) {
       const e = waiting.get(r.s.id);
       const was = r.s.queued;
       if (!e) { if (was) { delete r.s.queued; this.updated(r); } continue; }
-      if (was && was.position === e.position && was.kind === e.kind && was.cpu === load.cpu && was.freeRam === load.freeRam) continue;
-      r.s.queued = { kind: e.kind, position: e.position, since: e.since, cpu: load.cpu, freeRam: load.freeRam };
+      if (was && was.position === e.position && was.kind === e.kind && was.cpu === load.cpu && was.freeRam === load.freeRam && was.starting === starting && was.slots === slots) continue;
+      r.s.queued = { kind: e.kind, position: e.position, since: e.since, cpu: load.cpu, freeRam: load.freeRam, starting, slots };
       this.updated(r);
     }
   }

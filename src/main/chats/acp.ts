@@ -621,6 +621,10 @@ export class AcpSession implements HarnessSession {
   }
 
   private async boot(): Promise<void> {
+    // the cold start's steps after the spawn (ADR 0221, proposal 6): one `timing: engine ready` line with each lap
+    const lap: Record<string, number> = {};
+    let t = this.spawnedAt;
+    const step = (k: string) => { const now = Date.now(); lap[k] = now - t; t = now; };
     try {
       const init = await this.request('initialize', {
         protocolVersion: 1,
@@ -632,9 +636,13 @@ export class AcpSession implements HarnessSession {
       if (v && !this.cliVersion) this.cliVersion = v; // Cursor: its version folder, the name doctor checks
       if (init.protocolVersion !== ACP_VERSION) this.drift('protocol version', String(init.protocolVersion), init);
       log.info('chats', 'acp initialized', { chat: this.opts.chatId, data: { engine: this.engine, protocolVersion: init.protocolVersion, loadSession: this.caps.loadSession === true, mcp: this.caps.mcpCapabilities, agent: init.agentInfo } });
+      step('initializeMs');
       await this.openSession();
+      step('sessionMs');
       await this.applyChoices();
+      step('choicesMs');
       this.open = true;
+      log.info('chats', 'timing: engine ready', { chat: this.opts.chatId, data: { engine: this.engine, readyMs: Date.now() - this.spawnedAt, ...lap } });
       if (this.state === 'starting') this.setState(this.queue.length ? 'running' : 'idle');
       this.drain();
     } catch (e) {

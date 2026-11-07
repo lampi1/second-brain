@@ -42,7 +42,7 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0033](0033-generative-ui-catalog.md) Generative UI, step 1: a catalog of trusted components (show_ui) — accepted
 - [0034](0034-regia-new-chat-and-open-anywhere.md) "Nuova chat" from the Regia's input, "Apri" on the chats she opens — accepted
 - [0035](0035-one-question-popup-not-in-the-regia.md) One request popup at a time, never in the Regia; "Rispondi dopo" and the "Da rispondere" queue — accepted, partly superseded by 0044
-- [0036](0036-cpu-aware-admission.md) CPU-aware admission of agents' chats and turns — accepted, partly superseded by 0071
+- [0036](0036-cpu-aware-admission.md) CPU-aware admission of agents' chats and turns — superseded by 0221, partly by 0071
 - [0037](0037-useful-errors-and-stats.md) Useful errors and stats: patterns, the period before, a discussion bar on every number — accepted
 - [0038](0038-mandato-and-done-notes.md) "Mandato" on texts to send, and the chat learns by itself when the user is done — accepted
 - [0039](0039-fluid-brain-map.md) Fluid brain map: one rAF loop that stops, neurons and axons drawn by shaders — accepted
@@ -223,3 +223,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0218](0218-balanced-mode.md) «Balanced mode»: a delegation's engine, model and effort follow the credits left per provider — proposed
 - [0219](0219-phone-bridge-telegram.md) Phone bridge: the Orchestrator through a private Telegram bot (stable only, write-only token, yes/no only) — accepted
 - [0220](0220-role-skill-alignment.md) Scoped role skills and verified Plan intake
+- [0221](0221-cold-start-admission.md) Cold-start admission: cores/2 slots, CPU/RAM only an emergency brake, warm pool under load, cold first turn timed — accepted

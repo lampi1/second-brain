@@ -180,8 +180,9 @@ const brief = (c: ChatSummary, warn: number) => c.parentId ? statusOnly(c) : ({
   // a role chat's run: its runId is what agent_metrics and agent_children show (never the chat id)
   ...(c.run ? { run: { runId: c.run.runId, taskId: c.run.taskId ?? c.run.runId, taskVersion: c.run.taskVersion ?? 1, agentId: c.run.agentId, version: c.run.version, state: c.run.endedAt === undefined ? 'running' : 'ended' } } : {}),
 });
-/** "queued (CPU 92%, RAM 40% free, position 1)": an agent's start or turn waiting for the machine's load (ADR 0036) */
-export const queuedLine = (q: NonNullable<ChatSummary['queued']>): string => `queued (CPU ${q.cpu}%, RAM ${q.freeRam}% free, position ${q.position})`;
+/** "queued (CPU 92%, RAM 40% free, 7/7 cold starts, position 1)": an agent's cold start waiting for a slot or for the
+ *  emergency brake (ADR 0221) */
+export const queuedLine = (q: NonNullable<ChatSummary['queued']>): string => `queued (CPU ${q.cpu}%, RAM ${q.freeRam}% free${q.slots ? `, ${q.starting ?? 0}/${q.slots} cold starts` : ''}, position ${q.position})`;
 /** closed (archived) chats the Orchestrator may reopen: the last 7 days, newest first, at most 20 */
 const RECENT_CLOSED_MS = 7 * 24 * 3600_000;
 export function recentClosed(list: ChatSummary[], now = Date.now()): ChatSummary[] {
@@ -283,7 +284,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const by: Record<string, number> = {};
         for (const c of chats) if (!c.closedAt) by[c.state] = (by[c.state] ?? 0) + 1;
         const q = d.chats.queueState();
-        const queue = q && { enabled: q.enabled, cpu: q.cpu, freeRam: q.freeRam, waiting: q.waiting.filter(w => !other(w.chatId)).map(w => ({ chatId: w.chatId, kind: w.kind, position: w.position })) };
+        const queue = q && { enabled: q.enabled, cpu: q.cpu, freeRam: q.freeRam, ...(q.slots ? { coldStarts: q.starting ?? 0, coldStartSlots: q.slots } : {}), waiting: q.waiting.filter(w => !other(w.chatId)).map(w => ({ chatId: w.chatId, kind: w.kind, position: w.position })) };
         return { version: d.version, brainRoot: d.brain.info().brainRoot, chats: by, ...(queue ? { queue } : {}), closedChats: chats.filter(c => c.closedAt).length, pending: d.chats.pending().filter(r => !other(r.chatId)).length, tabs: d.browser.list().length, usage: d.brain.usage(), ...(d.chats.contextStats ? { context: d.chats.contextStats() } : {}), logs: log.folder, health: healthSnapshot(), timers: timerSnapshot() };
       },
     },
@@ -559,7 +560,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const known = d.skillTools ? new Map(d.skillTools().map(x => [x.name, x.tools])) : null;
         const warnings = known ? gapLines(profile.name, skillGaps([...new Set([...resolved.skills, ...skills])], n => known.get(n), resolved.policy)) : [];
         if (warnings.length) log.info('appctl', 'chat started with a skill its role lacks tools for', { chat: chat.id, data: { role: roleId, warnings: warnings.length } });
-        // the machine is busy: the chat exists, its first turn waits in the CPU queue (ADR 0036)
+        // the machine is busy: the chat exists, its first turn waits in the cold-start queue (ADR 0221)
         // the estimate from similar past tasks (ADR 0087): the same figure the strip shows, so the plan is checked with data
         const estimate = d.runFeedback ? estimateTask(new SimilarIndex(d.runFeedback.runList()), { text: prompt, agentId: roleId }) : null;
         return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(warnings.length ? { warnings } : {}), ...(chat.queued ? { status: queuedLine(chat.queued) } : {}),

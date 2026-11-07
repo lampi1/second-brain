@@ -78,5 +78,5 @@ export function writeDemoProposals(userData: string, brainRoot: string, now: num
 
 /** The Orchestrator asks for a protected setting (in memory, like any agent's request): one card «Impostazioni». */
 export function requestDemoSetting(brain: Pick<BrainService, 'requestSetting'>): void {
-  brain.requestSetting('loadQueueCpu', 85, { by: 'agent', chatId: 'orchestrator', reason: tr('Con la build in corso la CPU sta sopra il 75%: le chat aspettano anche quando il PC regge.') });
+  brain.requestSetting('loadQueueCpu', 98, { by: 'agent', chatId: 'orchestrator', reason: tr('Con la build in corso la CPU sta sopra il 95%: il freno d’emergenza ferma gli avvii anche quando il PC regge.') });
 }

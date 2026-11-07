@@ -395,7 +395,7 @@ const EN: Readonly<Record<string, string>> = {
   'Lo stesso lavoro tre volte in una settimana: «cerca gli errori 500 del modulo e dimmi la causa».': 'The same job three times in a week: «find the module’s 500 errors and tell me the cause».',
   'Memoria di Sentinel: 4 righe sugli ambienti di test unite in una': 'Sentinel’s memory: 4 lines about the test environments merged into one',
   'Quattro righe dicevano la stessa cosa sull\'ambiente test-2 (accesso, dati di prova, reset notturno).': 'Four lines said the same thing about the test-2 environment (access, test data, nightly reset).',
-  'Con la build in corso la CPU sta sopra il 75%: le chat aspettano anche quando il PC regge.': 'With the build running the CPU stays above 75%: the chats wait even when the PC copes.',
+  'Con la build in corso la CPU sta sopra il 95%: il freno d’emergenza ferma gli avvii anche quando il PC regge.': 'With the build running the CPU stays above 95%: the emergency brake holds the starts even when the PC copes.',
   // Flash's answers (a "btw" on the Orchestrator's chat)
   'Leggo la chat dell\'Orchestrator e lo stato delle chat, senza toccare nulla.': 'Reading the Orchestrator’s chat and the chats’ state, touching nothing.',
   'Dalla chat dell\'Orchestrator, senza toccare nulla:': 'From the Orchestrator’s chat, without touching anything:',
