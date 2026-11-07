@@ -49,16 +49,32 @@ describe('check:quick', () => {
 
   it('picks tests that name a changed file as a string and reports the changed sources no test covers', () => {
     const files: Record<string, string> = {
-      'test/unit/hook.test.ts': "spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'setup-hooks.mjs')]);",
-      'test/unit/log.test.ts': "execFileSync(process.execPath, ['scripts/logs.mjs', '--json']);",
+      'test/unit/hook.test.ts': "spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'fake-hooks.mjs')]);",
+      'test/unit/log.test.ts': "execFileSync(process.execPath, ['scripts/fake-logs.mjs', '--json']);",
       'test/unit/readme.test.ts': "import * as rc from '../../scripts/readme-check.mjs';",
       'test/unit/adapters.test.ts': "write(b.personal, '.claude/hooks/check.mjs', '');",
     };
-    const changed = ['scripts/setup-hooks.mjs', 'scripts/logs.mjs', 'scripts/untested.mjs', 'docs/x.md', 'eslint.config.mjs', 'src/shared/x.d.ts'];
+    const changed = ['scripts/fake-hooks.mjs', 'scripts/fake-logs.mjs', 'scripts/untested.mjs', 'docs/x.md', 'eslint.config.mjs', 'src/shared/x.d.ts'];
     const { tests, uncovered } = pickTests(changed, Object.keys(files), f => files[f] ?? '');
     expect(tests).toEqual(['test/unit/hook.test.ts', 'test/unit/log.test.ts']);
     expect(uncovered).toEqual(['scripts/untested.mjs']);
     expect(pickTests(['docs/x.md', 'package.json'], Object.keys(files), f => files[f] ?? '').uncovered).toEqual([]);
+  });
+
+  it('never counts a path named in a comment or quoted inside a fixture string as coverage', () => {
+    const LOGS = ['scripts', 'logs.mjs'].join('/'); // built, not a literal: this file must not select itself
+    expect(pickTests([LOGS], ['test/unit/unrelated.test.ts'], () => '// scripts/logs.mjs is not tested here'))
+      .toEqual({ tests: [], uncovered: [LOGS] });
+    const files: Record<string, string> = {
+      'test/unit/block.test.ts': "/* runs scripts/logs.mjs */\nit('x', () => {});",
+      'test/unit/fixture.test.ts': "const text = \"execFileSync(process.execPath, ['scripts/logs.mjs']);\";",
+      'test/unit/title.test.ts': "it('records them: node scripts/logs.mjs', () => {});",
+      'test/unit/template.test.ts': 'spawnSync(process.execPath, [`${ROOT}/scripts/logs.mjs`]);',
+    };
+    expect(pickTests([LOGS], Object.keys(files), f => files[f] ?? ''))
+      .toEqual({ tests: ['test/unit/template.test.ts'], uncovered: [] });
+    const self = fs.readFileSync(path.join(import.meta.dirname, 'check-quick.test.ts'), 'utf8');
+    expect(pickTests([LOGS], ['test/unit/check-quick.test.ts'], () => self).tests).toEqual([]);
   });
 
   it('says "green WITHOUT tests" for uncovered sources (exit 0), plain green only when every source has a test', () => {

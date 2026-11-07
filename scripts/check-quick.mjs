@@ -7,6 +7,7 @@
 // test/unit/check-quick.test.ts checks how it picks the tests.
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chunks, DOC_TESTS } from './check-branch.mjs';
@@ -56,7 +57,28 @@ export function changedPaths(nameStatus, untracked) {
   return { all: [...new Set([...all, ...extra])], present: [...new Set([...present, ...extra])] };
 }
 
-const escape = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+let tsLib;
+const ts = () => (tsLib ??= createRequire(import.meta.url)('typescript'));
+
+/**
+ * The string literals a test's code holds (comments and strings quoted inside strings, like fixtures, never count),
+ * plus each call's consecutive string arguments joined by '/' (path.join(ROOT, 'scripts', 'logs.mjs') ->
+ * 'scripts/logs.mjs'): the paths a test really passes to spawn, exec, readFile or import.
+ */
+export function codeStrings(text) {
+  const t = ts();
+  const out = [];
+  const isLit = n => t.isStringLiteral(n) || t.isNoSubstitutionTemplateLiteral(n);
+  const visit = n => {
+    if (isLit(n)) out.push(n.text);
+    else if (t.isTemplateExpression(n)) out.push(n.head.text, ...n.templateSpans.map(s => s.literal.text));
+    const args = (t.isCallExpression(n) || t.isNewExpression(n)) ? [...(n.arguments ?? [])] : [];
+    for (let i = 0; i + 1 < args.length; i++) if (isLit(args[i]) && isLit(args[i + 1])) out.push(`${args[i].text}/${args[i + 1].text}`);
+    t.forEachChild(n, visit);
+  };
+  visit(t.createSourceFile('test.ts', text, t.ScriptTarget.Latest, false, t.ScriptKind.TS));
+  return out;
+}
 /** A changed source a unit test must cover: not a root config file, not a declaration, not test code (e2e, fixtures). */
 const needsCover = f => f.includes('/') && !f.startsWith('test/') && !/\.d\.[cm]?ts$/.test(f);
 const groupBy = (list, key) => list.reduce((m, f) => m.set(key(f), [...(m.get(key(f)) ?? []), f]), new Map());
@@ -71,11 +93,10 @@ export function pickTests(changed, testFiles, read) {
   const sources = changed.filter(f => SOURCE_EXT.test(f) && !TEST_FILE.test(f));
   const byStem = groupBy(sources, stem);
   const byName = groupBy(sources, f => path.posix.basename(stem(f)));
-  // the folder and the name, as 'scripts/logs.mjs' or path.join(…, 'scripts', 'logs.mjs'): a bare 'check.mjs' is too loose
+  // the folder and the name ('scripts/logs.mjs'): a bare 'check.mjs' is too loose
   const byString = sources.filter(f => !/^index\./.test(path.posix.basename(f))).map(f => {
-    const dir = path.posix.basename(path.posix.dirname(f)), base = escape(path.posix.basename(f));
-    const named = dir === '.' ? base : `${escape(dir)}(?:/|['"]\\s*,\\s*['"])${base}`;
-    return [f, new RegExp(`(?<![\\w.-])${named}(?![\\w.-])`)];
+    const dir = path.posix.basename(path.posix.dirname(f)), base = path.posix.basename(f);
+    return [f, base, dir === '.' ? base : `${dir}/${base}`];
   });
   const picked = new Set(changed.filter(f => TEST_FILE.test(f) && testFiles.includes(f)));
   const covered = new Set();
@@ -84,7 +105,9 @@ export function pickTests(changed, testFiles, read) {
     if (sources.length) {
       const text = read(t);
       for (const s of specifiers(text)) hits.push(...(byStem.get(resolveSpecifier(t, s)) ?? []));
-      for (const [f, re] of byString) if (re.test(text)) hits.push(f);
+      const named = byString.filter(([, base]) => text.includes(base));
+      const strings = named.length ? codeStrings(text) : [];
+      for (const [f, , rel] of named) if (strings.some(s => s === rel || s.endsWith(`/${rel}`))) hits.push(f);
     }
     if (hits.length) picked.add(t);
     for (const f of hits) covered.add(f);
