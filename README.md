@@ -186,10 +186,12 @@ The agents wrote the code; now you want to understand it. **Learn** has one fiel
 text, drop in files or folders, and it explains it piece by piece on a blackboard: flowcharts, sequence and state
 diagrams, timelines, mind maps, highlighted code, formulas and charts that grow as you go, out loud if you like. Your
 files can drive a web search for the public standards and libraries they use (only filtered public terms leave your PC,
-shown as chips). "Explain it better", "Give me an example" or "Show me the code" when you're lost; quizzes of several
-kinds (choice, true or false, complete the code, put in order) to see if it stuck; a score that tells you honestly what
-you still remember; at the end you explain it back. A quality check rewrites weak pieces before you see them, and every
-lesson is saved and reopens where you left it.
+shown as chips). By default a lesson is an **Explanation**: a picture for every piece, a short caption (the full text
+one click away), before/after diagrams side by side, and no questions at all; explaining it back at the end is a button
+you may press, never a test. Pick **Quiz** to be tested instead: quizzes of several kinds (choice, true or false,
+complete the code, put in order) to see if it stuck, a score that tells you honestly what you still remember, review
+cards. "Explain it better", "Give me an example" or "Show me the code" when you're lost. A quality check rewrites weak
+pieces before you see them, and every lesson is saved and reopens where you left it.
 
 <p align="center"><img src="docs/screenshots/learn.webp" alt="A Learn lesson about a PR: the blackboard diagram, piece 2 of 3, and the buttons Got it, Explain it better, Give me an example, Show me the code" width="640"></p>
 
