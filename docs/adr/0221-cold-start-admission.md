@@ -18,8 +18,9 @@ cloudroom bounds only its launches (`startups` semaphore, `available_parallelism
   (any item but the user's or a system line, a pending question, the exit, a failed send; `manager-sink.ts`
   `coldStarted`), and frees itself after 120 s at most, so a slot never leaks. A chat whose engine is up (`'turn'`)
   never waits; neither do the user's messages nor messages between open chats (ADR 0064).
-- **CPU and RAM are only an emergency brake**: CPU over 95 % or free RAM under 10 % (Impostazioni, `loadQueueCpu` /
-  `loadQueueRam`, still protected) holds the queue; after it, two samples in a row under are needed, then the heads go
+- **CPU and RAM are only an emergency brake**: CPU over 95 % or free RAM under 10 % (the settings `loadQueueCpu` /
+  `loadQueueRam`, still protected: changed through the Orchestrator's `app_config` or a proposal card; the basic
+  Impostazioni page shows no technical control, `docs/settings-surface.md`) holds the queue; after it, two samples in a row under are needed, then the heads go
   up to the free slots. A saved 75 / 15 nobody chose (no change in the log) moves to 95 / 10 once
   (`brain/config.ts` `migrateLoadBrake`).
 - **The warm pool refills under load** (proposal 2): `ChatManager` starts the next warm engine unless the brake is
@@ -41,6 +42,21 @@ event-loop stalls of 1.7 s. User and claude.ai MCP servers connect in the backgr
 Variants run one after the other (message_start, two runs each): base 22.8 / 32.2 s; `CLAUDE_CODE_GIT_BASH_PATH` set
 69.1 / 46.8 s; also `ENABLE_CLAUDEAI_MCP_SERVERS=0` 39.8 / 51.2 s. The CPU contention's noise dwarfs any flag: nothing
 under our control is cut; the lever is fewer concurrent cold starts (the slots) and the warm pool.
+
+## Before / after (2026-11-07, a reproducible bench, same PC, main 225a0ce5 against this change)
+A `ChatManager` with the fake Claude CLI (initialize answered after 8.2 s, the real engine-ready p50), prewarm on: a
+user's chat, then 10 agent chats created at once in one folder, the load forced with `SB_LOAD_FORCE`; 120 s window.
+Queue wait = create → `timing: before send`; first token = create → first assistant item.
+
+| Load | Build | Sent in 120 s | Queue wait p50 / p90 | First token p50 / p90 | Warm adoptions |
+|------|-------|---------------|----------------------|-----------------------|----------------|
+| CPU 90 %, RAM 24 % free (the PC's usual state) | main (75 / 15) | 0 / 10 | > 120 s | > 120 s | 0 |
+| CPU 90 %, RAM 24 % free | this change (95 / 10, 7 slots) | 10 / 10 | 2.6 / 9.5 s | 5.9 / 9.6 s | 1 |
+| CPU 60 %, RAM 40 % free | main | 10 / 10 | 2.2 / 8.1 s | 3.9 / 8.2 s | 1 |
+| CPU 60 %, RAM 40 % free | this change | 10 / 10 | 1.0 / 7.8 s | 2.9 / 8.0 s | 0 |
+
+The chats created one after the other at CPU 90 % adopted a warm engine 4 times in 10 (main: none sent). The fake's
+engine ready (~9-10 s) is the same in both builds: it measures the PC, not the queue.
 
 ## Consequences
 - More chats run at once on a busy PC (up to 7 cold starts plus every running one); the brake still protects a PC at
