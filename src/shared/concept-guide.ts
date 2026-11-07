@@ -1645,8 +1645,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('In Impostazioni → Telefono incolli il token che ti dà BotFather: viene cifrato su questo PC e non si rilegge più, né da te né dagli agenti.',
         'In Settings → Phone you paste the token BotFather gives you: it is encrypted on this PC and never read back, by you or by the agents.'),
       // src/renderer/components/PhoneSettings.tsx pairing
-      b('«Associa telefono» mostra un codice di 6 cifre che scade: lo mandi al bot con /start e da quel momento risponde solo al tuo account Telegram.',
-        '"Pair phone" shows a 6-digit code that expires: you send it to the bot with /start, and from then on it answers only your Telegram account.'),
+      b('«Associa telefono» mostra un codice di 6 cifre che scade (poi «Nuovo codice» ne dà un altro): lo mandi al bot con /start e da quel momento risponde solo al tuo account Telegram. I tentativi sbagliati di altri account restano tra i messaggi scartati.',
+        '"Pair phone" shows a 6-digit code that expires ("New code" then gives another): you send it to the bot with /start, and from then on it answers only your Telegram account. Wrong tries from other accounts show among the dropped messages.'),
       // src/main/ipc-handlers/phone.ts
       b('Dal telefono rispondi solo alle domande Sì/No semplici e ai piani dello Strategist, con i pulsanti. Permessi, comandi, produzione e messaggi a persone restano sul PC; un testo scritto dal telefono non approva mai niente.',
         'From the phone you answer only simple yes/no questions and the Strategist’s plans, with the buttons. Permissions, commands, production and messages to people stay on the PC; text typed on the phone never approves anything.'),
@@ -1657,8 +1657,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Con Focus attivo, al telefono arriva solo quello che Focus lascerebbe passare sul PC; fuori orario i messaggi non urgenti arrivano senza suono.',
         'With Focus on, the phone gets only what Focus would let through on the PC; in quiet hours non-urgent messages arrive without sound.'),
       // src/renderer/components/PhoneSettings.tsx state
-      b('Il bot gira solo nell’istanza stable dell’app. Da Telegram /pausa lo mette in pausa e /stop lo ferma finché non lo riaccendi da qui.',
-        'The bot runs only in the stable instance of the app. From Telegram /pausa pauses it and /stop stops it until you turn it on again here.'),
+      b('Il bot gira solo nell’istanza stable dell’app. Da Telegram /pausa lo mette in pausa e /stop lo ferma e spegne l’interruttore Collegamento finché non lo riaccendi da qui.',
+        'The bot runs only in the stable instance of the app. From Telegram /pausa pauses it and /stop stops it and turns the Connection switch off until you turn it on again here.'),
     ],
     analogy: b('Come un citofono con un solo inquilino: suona solo per te, e dalla strada puoi dire sì o no, ma per aprire la cassaforte devi salire.',
       'Like an intercom with a single tenant: it rings only for you, and from the street you can say yes or no, but to open the safe you have to go upstairs.'),
