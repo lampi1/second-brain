@@ -36,6 +36,8 @@ export * from './contract/brain';
 export * from './contract/ui';
 export * from './contract/agents';
 export * from './contract/media';
+export * from './contract/phone';
+export * from './contract/phone-ipc';
 
 /** renderer → main. Each entry: [argument, result]. One interface per area (src/shared/contract/*.ts). */
 export interface InvokeMap extends

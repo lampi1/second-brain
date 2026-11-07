@@ -18,6 +18,8 @@ import type { ToolDef } from './tools';
 import { ROUTINE_AUTHORING_SUMMARY } from '../flows/capabilities';
 import { MOUNT_LABEL, TOOL_CATALOG, type ToolMount } from './tool-catalog';
 import { useCounts } from '../use-counter';
+import type { PhoneStatus } from '../../shared/contract/phone';
+import { phoneHub } from '../ipc-handlers/phone';
 
 /** What the renderer's appMap() returns (renderer/lib/app-map.ts AppMapUi). */
 interface UiMap {
@@ -39,6 +41,8 @@ export interface GuideDeps {
   showValues?: () => boolean;
   /** the usage counter's summary (tests); absent = the app's own counter (use-counter.ts) */
   usage?: () => string;
+  /** the phone bridge's live status (tests); absent = the controller the IPC hub holds (ipc-handlers/phone.ts). Never the token. */
+  phone?: () => PhoneStatus;
 }
 
 // ADR 0207: what the Orchestrator needs to add a connector for the user without ever handling a secret
@@ -126,6 +130,7 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
   out.push({ kind: 'concept', title: 'Modello di un agente: chi lo sceglie (model choice, no routing table)', text: MODEL_CHOICE });
   out.push({ kind: 'concept', title: 'Balanced mode: crediti in equilibrio tra i provider (auto model choice, credits)', text: BALANCED_MODE });
   out.push({ kind: 'concept', title: 'Telefono: l\'Orchestrator su Telegram (phone bridge, bot, token, pairing, approval boundary)', text: PHONE_BRIDGE });
+  out.push({ kind: 'concept', title: 'Telefono: stato adesso (phone bridge status, Telegram, pairing)', text: phoneNow(d) });
   out.push({ kind: 'usage', title: 'Uso dell\'app: funzioni e pagine usate di più (usage counter, most used features, quali funzioni uso di più, cosa uso poco)',
     text: `${USAGE_ABOUT} ${values ? (d.usage ?? (() => useCounts.summary()))() : 'The counts are shown only on the Orchestrator\'s own endpoint.'}` });
   for (const [title, text] of ROUTINE_RULES) out.push({ kind: 'routine', title, text });
@@ -135,6 +140,15 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
   for (const t of own) out.push({ kind: 'tool', title: t.name, text: t.description });
   for (const [name, text] of otherTools(own)) out.push({ kind: 'tool', title: name, text });
   return out;
+}
+
+/** The phone bridge now, as Impostazioni › Telefono shows it: state, token set or not (never its value), pairing. */
+export function phoneNow(d: Pick<GuideDeps, 'phone'>): string {
+  let st: PhoneStatus;
+  try { st = (d.phone ?? (() => phoneHub.controller().status()))(); } catch { return 'Now: status unreadable.'; }
+  const pairing = st.paired ? 'phone paired' : st.pairing ? 'pairing code shown' : 'no phone paired';
+  const quiet = st.quietHours ? ` · quiet hours ${st.quietHours.from}-${st.quietHours.to}` : '';
+  return `Now: state ${st.state}${st.error ? ` (${st.error})` : ''} · token ${st.hasToken ? 'set' : 'not set'} · ${st.enabled ? 'enabled' : 'disabled'} · ${pairing}${quiet} · dropped updates ${st.dropped}.`;
 }
 
 /** The app's tools the caller does not have (appctl/tool-catalog.ts), each with who has it: name → text. */
