@@ -310,6 +310,13 @@ describe('the phone port', () => {
     const plan = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'strategist', prompt: 'Pianifica' }, 'agent', undefined, {}, { intake });
     expect(plan.plan?.clarified[0]).toMatchObject({ pcOnly: true });
     expect(plan.plan?.clarified[0]?.q).not.toContain('produzione');
+    const other = q.replace('La modifica va applicata in produzione?', 'Serve un test locale?');
+    f.sinks.get(plan.id)!.pending(yesNo('local', other));
+    await f.m.answer(plan.id, 'local', { kind: 'question', answers: { [other]: 'Sì' } });
+    const after = f.chat(plan.id).plan!;
+    expect(after.clarified).toHaveLength(2);
+    expect(after.clarified[0]!.q).toBe(after.clarified[1]!.q);
+    expect(after.pcOnly).toBe(true);
     await f.m.send(plan.id, 'Basta domande');
     await strategyTools(f.m).find(t => t.name === 'plan_propose')!.run(PLAN, { mount: 'chat', params: { chatId: plan.id }, sessionId: '', signal: new AbortController().signal } as never);
     const item = f.port.listDecidable().find(x => x.chatId === plan.id)!;
@@ -317,6 +324,24 @@ describe('the phone port', () => {
     expect(item.text).not.toContain(q);
     expect(await f.port.decidePlanFromPhone(plan.id, (item.ref as { at: string }).at, true)).toBe('gone');
     expect(f.chat(plan.id).plan!.phase).toBe('proposed');
+  });
+
+  it.each(['Sì', 'Basta domande'])('preserves a PC-only option through an intake response of %s', async reply => {
+    const f = fixture(), q = 'Procedo?';
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true, prompt: 'Pianifica' });
+    const req = yesNo('scope', q);
+    req.questions![0]!.options[0]!.description = 'Eseguo il deploy in produzione';
+    f.sinks.get(o.id)!.pending(req);
+    await f.m.answer(o.id, 'scope', { kind: 'question', answers: { [q]: reply } });
+    const intake = f.m.bindPlanIntake(o.id, q);
+    const plan = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'strategist', prompt: 'Pianifica' }, 'agent', undefined, {}, { intake });
+    expect(plan.plan?.pcOnly).toBe(true);
+    if (reply === 'Sì') await f.m.send(plan.id, 'Basta domande');
+    await strategyTools(f.m).find(t => t.name === 'plan_propose')!.run(PLAN, { mount: 'chat', params: { chatId: plan.id }, sessionId: '', signal: new AbortController().signal } as never);
+    const item = f.port.listDecidable().find(x => x.chatId === plan.id)!;
+    expect(item.reserved).toBe(true);
+    expect(item.text).not.toContain('produzione');
+    expect(await f.port.decidePlanFromPhone(plan.id, (item.ref as { at: string }).at, true)).toBe('gone');
   });
 
   it('a plan with a Herald step (it sends or publishes) is reserved, whatever its words (review S5)', async () => {

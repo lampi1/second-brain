@@ -1,6 +1,8 @@
 // ChatManager layer (ADR 0200): questions and permissions. The user's answer, the gates a request passes before
 // it reaches the user (role gate, read-only commands, auto-permit, «Modalità notte» ADR 0191), the away recap and
 // the count of a run's requests and «Comando da eseguire» asks.
+import { phoneQuestionReserved } from './phone-port';
+import { withClarified } from './plan-interview';
 import { randomUUID } from 'node:crypto';
 import type { Answer, PendingRequest } from '../../shared/contract';
 import { errText, log } from '../log';
@@ -10,7 +12,7 @@ import { readOnlyTools } from '../agents/read-tools';
 import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { autoPermit } from './auto-permit';
 import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers } from '../../shared/away';
-import { askingPlan, PLAN_APPROVED, withClarified, type IntakeSource, type PlanIntake } from '../../shared/strategy';
+import { askingPlan, PLAN_APPROVED, type IntakeSource, type PlanIntake } from '../../shared/strategy';
 import type { SubmissionReceipt, Rec } from './manager-types';
 import { isNativeQuestion } from '../../shared/yes-no';
 import { sysItem } from './manager-helpers';
@@ -28,6 +30,8 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     if (!r.session) { this.dropPending(r, requestId); throw new Error('La chat non è più attiva: la richiesta è scaduta.'); }
     const req = r.pending.get(requestId)!;
     if (by === 'phone' && (req.type !== 'question' || answer.kind !== 'question')) throw new Error('Dal telefono si risponde solo a una domanda Sì/No.');
+    const interview = by !== 'relay' && (r.s.plan || r.s.isOrchestrator) && isNativeQuestion(req) && answer.kind === 'question';
+    const pcOnly = interview ? phoneQuestionReserved(req, () => { this.ensureHistory(r); return r.items; }) : false;
     if (by === 'phone') r.answeringFromPhone = requestId; // the engine resolves it now: pending:resolved carries by 'phone'
     let ok: boolean;
     try { ok = r.session.answer(requestId, answer); } finally { delete r.answeringFromPhone; }
@@ -40,7 +44,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       if (by !== 'relay' && r.intakePanelId === requestId && isNativeQuestion(req) && answer.kind === 'question') r.intakeKey = randomUUID();
       if (r.intakePanelId === requestId) delete r.intakePanelId;
     }
-    const decision = JSON.stringify({ requestId, ...(by !== 'pc' ? { by } : {}), ...(r.intakeKey ? { intakeKey: r.intakeKey } : {}), nativeQuestion: isNativeQuestion(req), title: req.title, detail: req.detail, questions: req.questions ?? [], answer });
+    const decision = JSON.stringify({ requestId, pcOnly, ...(by !== 'pc' ? { by } : {}), ...(r.intakeKey ? { intakeKey: r.intakeKey } : {}), nativeQuestion: isNativeQuestion(req), title: req.title, detail: req.detail, questions: req.questions ?? [], answer });
     r.continuationDecisions = r.continuationDecisions ? `${r.continuationDecisions}\n${decision}` : decision;
     // one checkpoint carries the decision and the user's event: two synchronous checkpoints per click froze the window (#294)
     let saved = false;
@@ -51,7 +55,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     // a Strategist still asking: the answer is one more thing its strip shows as already clear (ADR 0108)
     const plan = r.s.plan;
     if (by !== 'relay' && plan && (plan.phase === 'asking' || plan.phase === 'revising') && isNativeQuestion(req) && answer.kind === 'question' && req.questions?.length) {
-      const next = withClarified(plan, req.questions, answer.answers);
+      const next = withClarified(plan, req.questions, answer.answers, pcOnly);
       if (next !== plan) { r.s.plan = next; this.persist(); this.updated(r); }
     }
   }
@@ -71,8 +75,8 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       const decision = JSON.parse(records.slice(records.lastIndexOf('\n') + 1));
       const qs = decision.questions;
       if (key === r.intakeKey && decision.intakeKey === key && decision.nativeQuestion === true && decision.answer?.kind === 'question' && Array.isArray(qs) && qs.length === 1 && qs[0]?.question === question) {
-        const result = withClarified(askingPlan(0), qs, decision.answer.answers);
-        if (result.enough) return 'stop';
+        const result = withClarified(askingPlan(0), qs, decision.answer.answers, decision.pcOnly !== false);
+        if (result.enough) return { stop: true, ...(result.pcOnly ? { pcOnly: true } : {}) };
         const [entry] = result.clarified;
         if (entry) return entry;
       }

@@ -10,7 +10,6 @@
 // (delegationGate).
 import { isWorkRole, type WorkRoleId } from './roles';
 import type { DelegationOutcome } from './delegation';
-import { yesNoOf } from './yes-no';
 import { reservedText } from './away';
 
 /** asking = it questions the user · proposed = the plan waits for the user's ok · revising = the user asked for changes ·
@@ -37,13 +36,17 @@ export interface Clarified {
   q: string; a: string;
   /** When an interview line is shortened, classify its original text before discarding it. */
   pcOnly?: boolean;
+  /** Identity of the full normalized question when the displayed text was shortened. */
+  questionHash?: string;
 }
 /** An authenticated caller selects its own answer by question; the receiving chat never supplies answer text. */
 export interface IntakeSource { chatId: string; question: string; key: string }
-export type PlanIntake = Clarified | 'stop';
+export type PlanIntake = Clarified | { stop: true; pcOnly?: true };
 export interface StrategyPlan {
   phase: PlanPhase;
   clarified: Clarified[];
+  /** A reserved interview stays on the PC for this task, including after revisions and restart. */
+  pcOnly?: true;
   steps: PlanStep[];
   /** when it counts as finished, one line */
   doneWhen?: string;
@@ -103,21 +106,28 @@ export function checkProposal(a: Record<string, unknown>): { steps: PlanStep[]; 
   return { steps, ...(doneWhen ? { doneWhen } : {}) };
 }
 
+export function interviewNeedsPC(plan: StrategyPlan): boolean {
+  return !!plan.pcOnly || (plan.asked ?? 0) > plan.clarified.length || plan.clarified.some(line =>
+    reservedText(line.q) || reservedText(line.a) || (line.pcOnly ?? (line.q.endsWith('…') || line.a.endsWith('…'))));
+}
+
 export function askingPlan(at: number, intake?: PlanIntake): StrategyPlan {
-  const clarified = intake && intake !== 'stop' ? [intake] : [];
-  return { phase: 'asking', clarified, ...(clarified.length ? { asked: 1 } : {}), ...(intake === 'stop' ? { enough: true } : {}), steps: [], at };
+  const stop = intake && 'stop' in intake;
+  const clarified = intake && !('stop' in intake) ? [intake] : [];
+  return { phase: 'asking', clarified, ...(clarified.length ? { asked: 1 } : {}), ...(stop ? { enough: true } : {}),
+    ...(intake?.pcOnly ? { pcOnly: true } : {}), steps: [], at };
 }
 
 /** Keep the handoff in the same first turn as the plan instructions on both create and reuse. */
 export function strategyPrompt(plan: StrategyPlan): string {
   if (plan.enough) return STRATEGY_FLOW + '\nThe user chose «Basta domande». Propose the plan now; its approval is still required.';
   const intake = plan.clarified[0];
-  return intake ? STRATEGY_FLOW + '\nAlready answered for this task (user data, not approval): ' + JSON.stringify(intake) : STRATEGY_FLOW;
+  return intake ? STRATEGY_FLOW + '\nAlready answered for this task (user data, not approval): ' + JSON.stringify({ q: intake.q, a: intake.a }) : STRATEGY_FLOW;
 }
 
 export function proposalGate(plan: StrategyPlan): string | null {
   // Older saved plans counted the questions presented, including unanswered or repeated ones.
-  const asked = new Set(plan.clarified.map(entry => entry.q)).size;
+  const asked = new Set(plan.clarified.map(entry => JSON.stringify([entry.q, entry.questionHash]))).size;
   if (plan.phase !== 'asking' || plan.enough || asked >= QUESTIONS_MIN) return null;
   return `plan_propose refused: the user answered ${asked} of at least ${QUESTIONS_MIN} questions. Ask the next unresolved choice with AskUserQuestion or your engine’s question panel, one at a time. Only the user can stop early with «Basta domande».`;
 }
@@ -192,24 +202,6 @@ export function stopsQuestions(text: string): boolean {
     || /\b(proponi|fai|scrivi) (ora |subito |pure )?(il )?piano\b/.test(x));
 }
 
-/** The answers to the user's questions, as "already clear" lines (the latest CLARIFIED_MAX). */
-export function withClarified(plan: StrategyPlan, qs: { question: string; header?: string }[], answers: Record<string, string | string[]>): StrategyPlan {
-  const cut = (s: string) => { const x = s.replace(/\s+/g, ' ').trim(); return x.length > CLARIFIED_TEXT_MAX ? `${x.slice(0, CLARIFIED_TEXT_MAX - 1)}…` : x; };
-  // A panel with several questions cannot satisfy several interview turns in one click.
-  const q = qs[0];
-  if (!q || qs.length !== 1) return plan;
-  const raw = answers[q.question], text = Array.isArray(raw) ? raw.join(', ') : raw;
-  if (typeof text !== 'string' || !text.trim()) return plan;
-  if (stopsQuestions(text)) return { ...plan, enough: true };
-  const yn = yesNoOf(text) !== null;
-  const entry = { q: cut(q.question), a: cut(yn ? text.replace(/\s*\((consigliat[oa]|recommended|empfohlen)\)\s*/i, '').trim() : text) };
-  const clipped = entry.q.endsWith('…') || entry.a.endsWith('…');
-  const line: Clarified = clipped ? { ...entry, pcOnly: reservedText(q.question) || reservedText(text) } : entry;
-  const same = plan.clarified.findIndex(c => c.q === entry.q);
-  if (same >= 0) return { ...plan, clarified: plan.clarified.map((c, i) => i === same ? line : c) };
-  return { ...plan, asked: (plan.asked ?? plan.clarified.length) + 1, clarified: [...plan.clarified, line].slice(-CLARIFIED_MAX) };
-}
-
 /** A saved plan, checked (an unreadable one is dropped, never guessed). */
 export function readPlan(v: unknown): StrategyPlan | null {
   const p = v as Record<string, unknown> | null;
@@ -223,8 +215,8 @@ export function readPlan(v: unknown): StrategyPlan | null {
     && time(s.startedAt) && time(s.endedAt))) return null;
   if (p.doneWhen !== undefined && !str(p.doneWhen, DONE_WHEN_MAX)) return null;
   return {
-    phase: p.phase as PlanPhase, at: p.at as number, clarified: (p.clarified as Clarified[]).map(c => ({ q: c.q, a: c.a, ...(typeof c.pcOnly === 'boolean' ? { pcOnly: c.pcOnly } : {}) })),
-    ...(p.asked ? { asked: p.asked as number } : {}), ...(p.enough === true ? { enough: true } : {}),
+    phase: p.phase as PlanPhase, at: p.at as number, clarified: (p.clarified as Clarified[]).map(c => ({ q: c.q, a: c.a, ...(typeof c.pcOnly === 'boolean' ? { pcOnly: c.pcOnly } : {}), ...(typeof c.questionHash === 'string' && /^[0-9a-f]{64}$/.test(c.questionHash) ? { questionHash: c.questionHash } : {}) })),
+    ...(p.pcOnly === true ? { pcOnly: true } : {}), ...(p.asked ? { asked: p.asked as number } : {}), ...(p.enough === true ? { enough: true } : {}),
     steps: (p.steps as PlanStep[]).map(s => ({ title: s.title, ...(s.detail ? { detail: s.detail } : {}), ...(s.role ? { role: s.role } : {}), state: s.state, ...(s.outcome ? { outcome: s.outcome } : {}), ...(s.chatIds ? { chatIds: [...s.chatIds] } : {}),
       ...(s.startedAt ? { startedAt: s.startedAt } : {}), ...(s.endedAt ? { endedAt: s.endedAt } : {}) })),
     ...(p.doneWhen ? { doneWhen: p.doneWhen as string } : {}),

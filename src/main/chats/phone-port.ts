@@ -7,6 +7,7 @@
 import type { Answer, ChatItem, ChatSummary, EventChannel, EventMap, PendingRequest } from '../../shared/contract';
 import type { PhoneDecidable, PhoneDecideResult, PhonePort } from '../../shared/contract/phone';
 import { reservedText } from '../../shared/away';
+import { interviewNeedsPC } from '../../shared/strategy';
 import type { WorkRoleId } from '../../shared/roles';
 import { isYesNo, yesNoOf } from '../../shared/yes-no';
 import { errText, log } from '../log';
@@ -42,6 +43,20 @@ const qKey = (chatId: string, requestId: string) => `${chatId}/q/${requestId}`;
 const pKey = (chatId: string, at: string) => `${chatId}/p/${at}`;
 const closed = (c: ChatSummary) => !!c.closedAt || c.state === 'closed';
 
+export function phoneQuestionReserved(p: PendingRequest, readItems: () => ChatItem[]): boolean {
+  const qs = p.questions ?? [];
+  let items: ChatItem[];
+  try { items = readItems(); } catch { return true; }
+  const brief = items.flatMap(i => {
+    if (i.kind !== 'artifact' || i.askId !== p.id || i.ui.component !== 'brief') return [];
+    const b = i.ui.props;
+    return [i.title, i.summary, ...b.done, b.ifYes, b.ifNo, ...(b.checks ?? []).flatMap(c => [c.label, c.detail ?? '']),
+      ...(b.files ?? []).flatMap(x => [x.path, x.why ?? '']), ...(b.images ?? []).map(x => x.caption ?? '')];
+  });
+  const words = [p.title, p.detail, ...qs.flatMap(x => [x.question, x.header ?? '', ...x.options.flatMap(o => [o.label, o.description ?? ''])]), ...brief];
+  return p.type !== 'question' || !NATIVE_QUESTIONS.has(p.tool) || reservedText(words.join('\n'));
+}
+
 export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePort {
   const labels = new Map<string, string>();
   let nextLabel = 0;
@@ -60,26 +75,11 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePo
   const role = (c: ChatSummary): string => c.agent?.name ?? (c.isOrchestrator ? 'Orchestrator' : 'Chat');
   const chatOf = (chatId: string) => chats.list().find(c => c.id === chatId);
 
-  /** the brief attached to the question (ADR 0150): agents keep the question short and put what Sì does there, so a
-   *  reserved action named only in the brief still needs the PC (its text is not sent to the phone); unreadable = reserved */
-  function briefWords(p: PendingRequest): string[] | null {
-    let items: ChatItem[];
-    try { items = chats.items(p.chatId); } catch { return null; }
-    return items.flatMap(i => {
-      if (i.kind !== 'artifact' || i.askId !== p.id || i.ui.component !== 'brief') return [];
-      const b = i.ui.props;
-      return [i.title, i.summary, ...b.done, b.ifYes, b.ifNo, ...(b.checks ?? []).flatMap(c => [c.label, c.detail ?? '']),
-        ...(b.files ?? []).flatMap(x => [x.path, x.why ?? '']), ...(b.images ?? []).map(x => x.caption ?? '')];
-    });
-  }
-
   function ofRequest(p: PendingRequest, c: ChatSummary): PhoneDecidable {
     const qs = p.questions ?? [];
     const q = qs[0];
     const simple = p.type === 'question' && NATIVE_QUESTIONS.has(p.tool) && qs.length === 1 && !!q && isYesNo(q);
-    const brief = briefWords(p);
-    const words = [p.title, p.detail, ...qs.flatMap(x => [x.question, x.header ?? '', ...x.options.flatMap(o => [o.label, o.description ?? ''])]), ...(brief ?? [])].join('\n');
-    const reserved = p.type !== 'question' || !NATIVE_QUESTIONS.has(p.tool) || brief === null || reservedText(words);
+    const reserved = phoneQuestionReserved(p, () => chats.items(p.chatId));
     const pick = simple ? q!.options.find(o => MARK.test(o.label)) : undefined;
     const recommended = pick ? yesNoOf(pick.label) ?? undefined : undefined;
     return { chatId: c.id, ref: { kind: 'question', requestId: p.id }, role: role(c), neutralLabel: neutral(c),
@@ -92,12 +92,9 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePo
     const text = [...plan.steps.map((s, i) => `${i + 1}. ${s.title}${s.detail ? ` · ${s.detail}` : ''}`), ...(plan.doneWhen ? [`Fatto quando: ${plan.doneWhen}`] : [])].join('\n');
     // a step given to a role that sends or publishes outside (Herald: mail, Teams, comments) needs the PC, whatever it says
     // Classify the local interview as well; only the step summary is sent to the phone.
-    const incomplete = (plan.asked ?? 0) > plan.clarified.length;
-    const reservedIntake = incomplete || plan.clarified.some(line =>
-      reservedText(line.q) || reservedText(line.a) || (line.pcOnly ?? (line.q.endsWith('…') || line.a.endsWith('…'))));
     const publishes = plan.steps.some(s => s.role !== undefined && PUBLISHING_ROLES.has(s.role));
     return { chatId: c.id, ref: { kind: 'plan', at: String(plan.at) }, role: role(c), neutralLabel: neutral(c), text,
-      simple: true, reserved: publishes || reservedIntake || reservedText(text), orchestrator: c.isOrchestrator };
+      simple: true, reserved: publishes || interviewNeedsPC(plan) || reservedText(text), orchestrator: c.isOrchestrator };
   }
 
   const keyOf = (d: PhoneDecidable) => d.ref.kind === 'question' ? qKey(d.chatId, d.ref.requestId) : pKey(d.chatId, d.ref.at);
