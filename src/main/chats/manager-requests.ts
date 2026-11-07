@@ -30,7 +30,8 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     let ok: boolean;
     try { ok = r.session.answer(requestId, answer); } finally { delete r.answeringFromPhone; }
     if (!ok) { this.dropPending(r, requestId); return; }
-    if (by === 'phone') { this.addItem(r, sysItem('phoneDecided', { time: phoneTime(Date.now()), what: 'question' }, 'info'), false); this.updated(r); }
+    // request/tool/asked bind the line to this question (appctl/tools.ts decidedSince): its tool item never counts as a PC answer
+    if (by === 'phone') { this.addItem(r, sysItem('phoneDecided', { time: phoneTime(Date.now()), what: 'question', request: requestId, tool: req.toolUseId ? `t-${req.toolUseId}` : '', asked: req.at }, 'info'), false); this.updated(r); }
     // Full request scope stays private (ADR 0083); shared user events carry only the user's own choices/words.
     const decision = JSON.stringify({ requestId, title: req.title, detail: req.detail, questions: req.questions ?? [], answer, ...(by === 'phone' ? { by } : {}) });
     r.continuationDecisions = r.continuationDecisions ? `${r.continuationDecisions}\n${decision}` : decision;

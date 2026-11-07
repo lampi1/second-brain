@@ -715,12 +715,28 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
    *  text from the paired phone is never a decision: phone bridge, design §5.5) */
   function decidedSince(orchestratorId: string, at: number): boolean {
     const items = d.chats.items(orchestratorId);
-    // a question answered with the phone's buttons leaves its «Risposto dal telefono» line after the question's tool
-    // item (manager-requests.ts answer): any question asked before the latest such line never counts (engines do not
-    // share ids between the request and the tool item, so this errs on refusing)
-    const phoneAt = items.reduce((m, i) => i.kind === 'system' && i.code === 'phoneDecided' && i.params?.what === 'question' ? Math.max(m, i.at) : m, -Infinity);
+    const phone = phoneAnswered(items);
     return items.some(i => i.at >= at && (
-      i.kind === 'user' ? !labelled(i.text) && i.via !== 'phone' : i.kind === 'tool' && /question/i.test(i.name) && i.status === 'ok' && i.at > phoneAt));
+      i.kind === 'user' ? !labelled(i.text) && i.via !== 'phone' : i.kind === 'tool' && /question/i.test(i.name) && i.status === 'ok' && !phone.has(i.id)));
+  }
+
+  /** the question tool items answered with the phone's buttons, bound by id, never by time (an ACP tool item can be
+   *  stamped after the answer). Each «Risposto dal telefono» line (manager-requests.ts answer) names its tool item when
+   *  the engine shares the id (Claude: t-<toolUseId>); otherwise it claims the unclaimed answered question nearest to
+   *  the time the request was asked (a line without that time: its own time) */
+  function phoneAnswered(items: ChatItem[]): Set<string> {
+    const asks = items.filter(i => i.kind === 'tool' && /question/i.test(i.name) && i.status === 'ok');
+    const claimed = new Set<string>();
+    for (const l of items) {
+      if (l.kind !== 'system' || l.code !== 'phoneDecided' || l.params?.what !== 'question') continue;
+      const tool = l.params.tool;
+      if (typeof tool === 'string' && tool) { claimed.add(tool); continue; }
+      const asked = typeof l.params.asked === 'number' ? l.params.asked : l.at;
+      let best: ChatItem | undefined;
+      for (const q of asks) if (!claimed.has(q.id) && (!best || Math.abs(q.at - asked) < Math.abs(best.at - asked))) best = q;
+      if (best) claimed.add(best.id);
+    }
+    return claimed;
   }
 
   /** app_config's proof (ADR 0149): the user typed to this very Orchestrator in the last minutes, and its latest

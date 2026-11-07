@@ -175,7 +175,7 @@ describe('the actor phone on answers and plans', () => {
     expect(f.resolvedEvents()).toEqual([{ chatId: c.id, requestId: 'q1', by: 'phone' }, { chatId: c.id, requestId: 'q2' }]);
     const lines = f.items(c.id).filter(i => i.kind === 'system' && i.code === 'phoneDecided');
     expect(lines).toHaveLength(1);
-    expect(lines[0]).toMatchObject({ params: { what: 'question', time: expect.stringMatching(/^\d\d:\d\d$/) } });
+    expect(lines[0]).toMatchObject({ params: { what: 'question', request: 'q1', time: expect.stringMatching(/^\d\d:\d\d$/) } });
   });
 
   it('a permission is never answered from the phone, even called directly', async () => {
@@ -294,6 +294,16 @@ describe('the phone port', () => {
     const f = fixture();
     const s = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'strategist', title: 'Piano', prompt: 'Rilascio' }, 'agent');
     await (strategyTools(f.m).find(t => t.name === 'plan_propose') as McpTool).run({ ...PLAN, steps: [{ title: 'Faccio il deploy in produzione' }] }, { mount: 'chat', params: { chatId: s.id }, sessionId: '', signal: new AbortController().signal } as never);
+    const d = f.port.listDecidable().find(x => x.chatId === s.id)!;
+    expect(d).toMatchObject({ simple: true, reserved: true });
+    expect(await f.port.decidePlanFromPhone(s.id, (d.ref as { at: string }).at, true)).toBe('gone');
+    expect(f.chat(s.id).plan!.phase).toBe('proposed');
+  });
+
+  it('a plan with a Herald step (it sends or publishes) is reserved, whatever its words (review S5)', async () => {
+    const f = fixture();
+    const s = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'strategist', title: 'Piano', prompt: 'Riassunto' }, 'agent');
+    await (strategyTools(f.m).find(t => t.name === 'plan_propose') as McpTool).run({ ...PLAN, steps: [{ title: 'Scrivo il riassunto' }, { title: 'Lo giro al team', role: 'herald' }] }, { mount: 'chat', params: { chatId: s.id }, sessionId: '', signal: new AbortController().signal } as never);
     const d = f.port.listDecidable().find(x => x.chatId === s.id)!;
     expect(d).toMatchObject({ simple: true, reserved: true });
     expect(await f.port.decidePlanFromPhone(s.id, (d.ref as { at: string }).at, true)).toBe('gone');

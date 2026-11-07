@@ -7,6 +7,7 @@
 import type { Answer, ChatItem, ChatSummary, EventChannel, EventMap, PendingRequest } from '../../shared/contract';
 import type { PhoneDecidable, PhoneDecideResult, PhonePort } from '../../shared/contract/phone';
 import { reservedText } from '../../shared/away';
+import type { WorkRoleId } from '../../shared/roles';
 import { isYesNo, yesNoOf } from '../../shared/yes-no';
 import { errText, log } from '../log';
 import type { TurnEndInfo } from './manager-types';
@@ -30,6 +31,8 @@ export interface PhoneEvents { tap(fn: <K extends EventChannel>(channel: K, payl
  *  anything an agent built) is never decided from the phone. */
 const NATIVE_QUESTIONS = new Set(['AskUserQuestion', 'AskQuestion', 'AskUser']);
 const MARK = /\((consigliat[oa]|recommended|empfohlen)\)/i;
+/** the roles whose work leaves the PC (sends or publishes to people): a plan with one of their steps is reserved */
+const PUBLISHING_ROLES: ReadonlySet<WorkRoleId> = new Set<WorkRoleId>(['herald']);
 /** what the Strategist gets when the phone says No to its plan: nothing to change yet, the user looks at it on the PC */
 export const PHONE_PLAN_NO = 'Non approvato dal telefono: l\'utente rivede il piano al PC. Non partire e non riproporlo finché non ti scrive.';
 /** answers remembered so a late button says «già risposto» ('already') instead of «non c'è più» */
@@ -87,8 +90,10 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePo
     const plan = c.plan;
     if (!plan || plan.phase !== 'proposed') return null;
     const text = [...plan.steps.map((s, i) => `${i + 1}. ${s.title}${s.detail ? ` · ${s.detail}` : ''}`), ...(plan.doneWhen ? [`Fatto quando: ${plan.doneWhen}`] : [])].join('\n');
+    // a step given to a role that sends or publishes outside (Herald: mail, Teams, comments) needs the PC, whatever it says
+    const publishes = plan.steps.some(s => s.role !== undefined && PUBLISHING_ROLES.has(s.role));
     return { chatId: c.id, ref: { kind: 'plan', at: String(plan.at) }, role: role(c), neutralLabel: neutral(c), text,
-      simple: true, reserved: reservedText(text), orchestrator: c.isOrchestrator };
+      simple: true, reserved: publishes || reservedText(text), orchestrator: c.isOrchestrator };
   }
 
   const keyOf = (d: PhoneDecidable) => d.ref.kind === 'question' ? qKey(d.chatId, d.ref.requestId) : pKey(d.chatId, d.ref.at);
