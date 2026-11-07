@@ -462,6 +462,19 @@ describe('the Studio, its quiz and the quality gate (ADR 0205)', () => {
     expect(svc.queue('quiz', undefined, id)[0]!.card.mem).not.toBeNull();
   });
 
+  it('an explain lesson has the Studio too: its flashcards go into the review (the Studio-tile exception, ADR 0219)', async () => {
+    const { svc, store } = make(fast);
+    const { id } = svc.start({ ...PR, mode: 'explain' });
+    // ready, not the cards: an explain lesson writes no review cards of its own
+    await until(() => store.get(id)?.state === 'ready');
+    expect(svc.review.ofLesson(id)).toEqual([]);
+    svc.studio(id, 'flashcards');
+    await until(() => store.get(id)?.studio?.flashcards?.state === 'done');
+    const own = svc.review.ofLesson(id);
+    expect(own.length).toBeGreaterThan(0);
+    expect(own.every(c => c.origin === 'studio')).toBe(true);
+  });
+
   it('a tile that fails says why; one cut by a restart is marked failed; no verified fact, no Studio', async () => {
     const root = tmp();
     const { svc, store, id } = await ready(r => (r.round === 'impara-studio' ? Promise.resolve({ ok: false as const, error: 'tempo scaduto' }) : fast(r)), root);
