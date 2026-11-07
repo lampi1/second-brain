@@ -154,7 +154,8 @@ export class OrchestratorWake {
   /** held-news.ts listens: called when the buffer or the Orchestrator's state may have changed (never twice for "nothing") */
   onHeldChange(fn: () => void): void { this.listener = fn; }
 
-  /** What waits to be told, for the user's eyes (the Orchestrator's tile, #88): every queued news of an open chat, with why it
+  /** What waits to be told, for the user's eyes (the Orchestrator's tile, #88): every queued news of an open chat (and the quiet
+   *  "finished" of one the app closed itself, kept()), with why it
    *  waits at the Orchestrator's gate now. Reading it sends nothing. */
   heldNews(): HeldNewsItem[] {
     const id = this.orchestratorId(), r = id ? this.chats.get(id) : undefined;

@@ -285,6 +285,10 @@ describe('OrchestratorWake', () => {
     up({ id: 'auto', state: 'closed', closedAt: 1, closedBy: 'auto' });
     finish('mano', 'fatto');
     up({ id: 'mano', state: 'closed', closedAt: 1, closedBy: 'user' });
+    // auto-closed, then closed again by the user (✕): the user saw it, the news goes
+    finish('poi', 'chiusa a mano');
+    up({ id: 'poi', state: 'closed', closedAt: 1, closedBy: 'auto' });
+    up({ id: 'poi', state: 'closed', closedAt: 2, closedBy: 'user' });
     await vi.advanceTimersByTimeAsync(5 * 60_000);
     expect(sent).toEqual([]);
     turn();
@@ -292,6 +296,7 @@ describe('OrchestratorWake', () => {
     expect(sent).toHaveLength(1);
     expect(sent[0]!.text).toContain('PR pronta');
     expect(sent[0]!.text).not.toContain('«mano»');
+    expect(sent[0]!.text).not.toContain('chiusa a mano');
     expect(w.queued()).toEqual([]);
   });
 
