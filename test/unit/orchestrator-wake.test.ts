@@ -538,6 +538,25 @@ describe('OrchestratorWake: quiet results and app-started chats (token plan 2026
     expect(w.queued()).toEqual([]);
   });
 
+  it('a root chat\'s correction (ADR 0224) replaces its quiet result and stays quiet, its turn end included (ADR 0223)', async () => {
+    const { w, sent, up, turn } = make();
+    up({ id: 'fix', title: 'App · fix', state: 'running' });
+    w.cleanReport({ chatId: 'fix', title: 'App · fix', role: 'Artisan', summary: 'Fix su main' });
+    up({ id: 'fix', title: 'App · fix', state: 'idle', lastText: 'fatto' });
+    // the correcting turn: manager-delegation.ts marks the summary «Correzione n/2»
+    up({ id: 'fix', title: 'App · fix', state: 'running' });
+    w.cleanReport({ chatId: 'fix', title: 'App · fix', role: 'Artisan', summary: 'Correzione 1/2: Fix su main, 2 test in più' });
+    up({ id: 'fix', title: 'App · fix', state: 'idle', lastText: 'corretto' });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(sent).toEqual([]);
+    expect(w.queued().filter(e => e.chatId === 'fix')).toHaveLength(1);
+    turn();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain('«Correzione 1/2: Fix su main, 2 test in più»');
+    expect(sent[0]!.text).not.toContain('«Fix su main»');
+  });
+
   it('off or without an Orchestrator it is not taken: the caller sends the result as before', () => {
     const { w, setOn } = make();
     setOn(false);
