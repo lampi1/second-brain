@@ -90,7 +90,6 @@ export function domainOnly(raw: string): string {
 
 const RULES: [RegExp, string | ((m: string, ...g: string[]) => string)][] = [
   [BOT_TOKEN_IN_TEXT, '[redacted]'],                                                             // a bot token
-  [/\bsig=[^\s&"'<>]+/gi, 'sig=[redacted]'],                                                     // an Azure SAS signature
   [/\bmailto:[^\s<>"')\]]+/gi, '[email]'],
   [/[\w.+%-]+@[\w-]+(?:\.[\w-]+)+/g, '[email]'],
   [/!?\[([^\]\n]*)\]\(\s*([^)\s]+)[^)\n]*\)/g, (_m: string, _t: string, url: string) => domainOnly(url)], // [title](url): title dropped
@@ -99,8 +98,10 @@ const RULES: [RegExp, string | ((m: string, ...g: string[]) => string)][] = [
   [/\bwww\.[^\s<>"')\]]+/gi, m => domainOnly(m)],
   [/(?:\b[A-Za-z]:[\\/]|\\\\[\w.$-]+\\)[^\s"'<>|]*/g, '[percorso]'],                             // C:\…, C:/…, \\server\…
   [/(?:^|(?<=\s))(?:~|\/(?:Users|home|var|etc|opt|mnt|srv|[A-Za-z](?=\/)))\/[^\s"'<>]*/g, '[percorso]'], // also Git Bash /c/…
-  // a host with a path and no scheme (portal.azure.com/subscriptions/…): its domain, like a link
-  [/(?<![\w@./-])(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,24}\/[^\s<>"')\]]*/g, m => domainOnly(`https://${m}`)],
+  // a host or IPv4 with a path and no scheme (portal.azure.com/subscriptions/…): its domain, like a link
+  [/(?<![\w@./-])(?:(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,24}|\d{1,3}(?:\.\d{1,3}){3})(?::\d{1,5})?\/[^\s<>"')\]]*/g, m => domainOnly(`https://${m}`)],
+  // after the links (a SAS URL goes whole to its domain): a signature left outside any URL
+  [/\bsig=[^\s&"'<>]+/gi, 'sig=[redacted]'],
   // a relative path of 3 or more segments ending in a file name (clienti/rossi/fattura.pdf)
   [/(?<![\w/.-])(?:[\w.-]+\/){2,}[\w.-]*\.(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{1,8}\b/g, '[percorso]'],
   [/(?:ODENTAIR|PDENTAIR|ORISDENTAIR|POWERDENTAIR)[A-Z0-9_-]*/gi, '[codice]'],

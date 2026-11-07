@@ -102,6 +102,14 @@ describe('filterOutgoing', () => {
     expect(f('apri portal.azure.com/subscriptions/0e50/resourceGroups/rossi')).toBe('apri portal.azure.com/...');
     expect(f(`vedi ${FX.devops}/org/proj/_workitems/edit/123`)).toBe(`vedi ${FX.devops}/...`);
     expect(f('dominio portal.azure.com e basta')).toBe('dominio portal.azure.com e basta');
+    expect(f('pannello 203.0.113.10/admin/x')).toBe('pannello 203.0.113.10/...');
+  });
+
+  it('a SAS URL goes whole to its domain: nothing after sig= leaks (Sentinel review)', () => {
+    const q = 'f.pdf?sv=2022&sig=AbC%2Fd&rscd=attachment%3Bfilename%3DRossi_Mario.pdf';
+    expect(f(`scarica https://files.example.com/c/${q}`)).toBe('scarica files.example.com/...');
+    expect(f(`scarica files.example.com/c/${q}`)).toBe('scarica files.example.com/...');
+    expect(f('firma sig=AbC%2Fd&x=1')).toBe('firma sig=[redacted]&x=1');
   });
 
   it('masks bot tokens of 5 to 16 digits (review S3)', () => {
