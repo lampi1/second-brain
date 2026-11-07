@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { AgentCatalogService } from '../../../src/main/agents/catalog';
 import { ADR0083_DEFAULTS, PRE_ADR0100_INSTRUCTIONS, SHIPPED_BEFORE, fiveRolesTextFor, fullDefaultsFor, shippedTextFor } from '../../../src/main/agents/role-migrate';
 import { TOOL_CLASSES, type AgentModelChoice, type AgentProfile } from '../../../src/shared/agents';
-import { ROLE_DEFAULTS, ROLE_IDS, defaultPermissions, launchGap, isRoleId } from '../../../src/shared/roles';
+import { previousRoleDefaults, ROLE_DEFAULTS, ROLE_IDS, defaultPermissions, launchGap, isRoleId } from '../../../src/shared/roles';
 
 const roots: string[] = [];
 afterEach(() => { for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true }); });
@@ -27,6 +27,29 @@ function asBefore(dir: string, patch: (p: Record<string, unknown>) => void = () 
   }
   fs.writeFileSync(file, JSON.stringify(raw));
 }
+
+it('updates old shipped instructions and skills once, preserving user and maintenance profiles', () => {
+  const { dir, make } = setup();
+  make();
+  const file = path.join(dir, 'roles.json'), raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+  for (const p of raw.roles) {
+    if (!isRoleId(p.id)) continue;
+    const old = previousRoleDefaults(p.id);
+    Object.assign(p, { instructions: old.instructions, skills: [...old.skills] });
+    if (p.id === 'artisan') Object.assign(p, { skills: ['mine'], userLocked: true, lastEditedBy: 'user' });
+    if (p.id === 'herald') Object.assign(p, { instructions: 'Learned from a review.', lastEditedBy: 'maintenance' });
+  }
+  fs.writeFileSync(file, JSON.stringify(raw));
+  const updated = make();
+  for (const id of ['orchestrator', 'strategist', 'scout', 'sentinel'] as const) {
+    const p = updated.list().profiles.find(p => p.id === id)!;
+    expect(p.skills).toEqual(ROLE_DEFAULTS[id].skills);
+    expect(p.instructions).toBe(ROLE_DEFAULTS[id].instructions);
+  }
+  expect(updated.list().profiles.find(p => p.id === 'artisan')?.skills).toEqual(['mine']);
+  expect(updated.list().profiles.find(p => p.id === 'herald')?.instructions).toBe('Learned from a review.');
+  expect(make().list().profiles).toEqual(updated.list().profiles);
+});
 
 describe('full default permissions (ADR 0085)', () => {
   it('a fresh install: every role has every tool class and no ceiling, and every default launch fits', () => {

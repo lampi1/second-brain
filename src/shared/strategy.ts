@@ -6,7 +6,7 @@
 // results make, and the app's fixed text that tells the Strategist this flow. Pure: used by main/chats/manager.ts,
 // main/agents/strategy-tools.ts, main/agents/delegation.ts and the renderer (StrategyPanel.tsx, and with "Popup" on the
 // questions window's plan card, PlanApproval.tsx). The app enforces the flow, not only the text (ADR 0121): a first
-// proposal before any question needs a stated reason (proposalGate), and no delegation before the user's ok
+// proposal needs three answers or the user’s stop (proposalGate), and no delegation before the user's ok
 // (delegationGate).
 import { isWorkRole, type WorkRoleId } from './roles';
 import type { DelegationOutcome } from './delegation';
@@ -33,6 +33,9 @@ export interface PlanStep {
 }
 /** One answer the user gave while it asked: what was asked (the question's short header, else the question) and the answer. */
 export interface Clarified { q: string; a: string }
+/** An authenticated caller selects its own answer by question; the receiving chat never supplies answer text. */
+export interface IntakeSource { chatId: string; question: string; key: string }
+export type PlanIntake = Clarified | 'stop';
 export interface StrategyPlan {
   phase: PlanPhase;
   clarified: Clarified[];
@@ -41,13 +44,13 @@ export interface StrategyPlan {
   doneWhen?: string;
   /** the last change of phase */
   at: number;
-  /** questions the user answered while it asked («Basta domande» too): none = it has not asked yet */
+  /** Historical interview count. Proposal reads the recorded distinct answers; the early stop is tracked separately. */
   asked?: number;
   /** the user answered «Basta domande»: the plan may come now, whatever the count */
   enough?: boolean;
 }
 
-export const STEPS_MIN = 1, STEPS_MAX = 8, STEP_TITLE_MAX = 120, STEP_DETAIL_MAX = 200, NO_QUESTION_MAX = 200, QUESTIONS_MIN = 3, QUESTIONS_MAX = 8, DONE_WHEN_MAX = 200, CLARIFIED_MAX = 8, CLARIFIED_TEXT_MAX = 120;
+export const STEPS_MIN = 1, STEPS_MAX = 8, STEP_TITLE_MAX = 120, STEP_DETAIL_MAX = 200, QUESTIONS_MIN = 3, QUESTIONS_MAX = 8, DONE_WHEN_MAX = 200, CLARIFIED_MAX = 8, CLARIFIED_TEXT_MAX = 120;
 /** what the user's «Approva e parti» sends to the Strategist (also how its transcript shows the click) */
 export const PLAN_APPROVED = 'Piano approvato: parti.';
 /** Only complete, unqualified approval phrases count, and only on a host-verified direct user message for a pending
@@ -66,7 +69,7 @@ export const ENOUGH_QUESTIONS = 'Basta domande: proponi ora il piano con quello 
  *  in the role's instructions: the user's edits to the role never drop the flow the strip depends on. */
 export const STRATEGY_FLOW = [
   '[app · how you work with the user here]',
-  `1. First find out what the user really wants, before writing any plan (owner, 2026-10-30: «spingi di più sulle domande»): ask ONE question at a time with your question tool (AskUserQuestion on Claude, ask_user on OpenCode and on Cursor when AskQuestion is not available), in the user's language, as a yes/no question (ADR 0135): exactly two options "Sì" and "No", the one you recommend ending with " (consigliato)" (a choice between options is asked as yes/no on the one you recommend; the user can also type his own answer), and a short header naming the topic. Go through these points and ask about each one the request leaves open: the goal and why it matters; what is in and what is out; constraints (time, cost, tools, things not to touch); what "done" looks like and how it is checked; risks or side effects the user cares about; preferences between reasonable options; what comes first. Read the code, files or pages involved before asking, so each question is concrete and shows what you found (e.g. "Ho visto che X fa Y: va cambiato anche Z?"), never generic. Never silently invent an answer. Ask at least ${QUESTIONS_MIN} questions and up to ${QUESTIONS_MAX} (a «No» that needs a follow-up question does not count); stop earlier only when the user answers "Basta domande". If the request truly settles a point, skip it; if it settles nearly everything, plan_propose with fewer than ${QUESTIONS_MIN} answers needs \`noQuestionReason\`, one line saying which points the request already settles. The app refuses a plan that skips this.`,
+  `1. Use the existing question panel, one concrete yes/no question at a time. Check the evidence before asking; cover the goal, scope, constraints or acceptance criteria that still matter. Offer Sì / No with a short reason for the recommended choice and accept a typed answer. Count at least ${QUESTIONS_MIN} answered questions, including the intake answer when supplied. Never repeat a settled choice. Stop at ${QUESTIONS_MAX}, or sooner when the user says «Basta domande». A concrete drawback warrants one counterproposal; if the user confirms their choice, proceed with it.`,
   `2. Then propose the plan with plan_propose: 2 to 6 steps, each one short plain line in the user's language with the role that does it (and, if useful, a short \`detail\`); no jargon, no sub-steps. The user's approval is required, always: end your turn and wait; the user approves with the panel ("${PLAN_APPROVED}") or an explicit typed approval, or writes what to change, and then you propose again. The app refuses agent_delegate and agent_assign_task until the user approved.`,
   '3. Once approved, inspect agent_children and reuse a compatible child with agent_assign_task (read agent_task_events first), or delegate new work with agent_delegate, giving its number as `step` (independent steps in parallel). A step you do yourself: plan_update it to "now", then to "done". The user follows the steps on your strip. At the end, agent_report as usual.',
 ].join('\n');
@@ -95,14 +98,23 @@ export function checkProposal(a: Record<string, unknown>): { steps: PlanStep[]; 
   return { steps, ...(doneWhen ? { doneWhen } : {}) };
 }
 
-/** plan_propose on the plan as it stands: null = it may propose; else why not. The first proposal of a Strategist whose
- *  user answered fewer than QUESTIONS_MIN questions (and never «Basta domande») needs `noQuestionReason` (one line): the
- *  user wanted a Strategist that really asks (ADR 0121, raised by ADR 0209). */
-export function proposalGate(plan: StrategyPlan, noQuestionReason: unknown): string | null {
-  const asked = plan.asked ?? 0;
+export function askingPlan(at: number, intake?: PlanIntake): StrategyPlan {
+  const clarified = intake && intake !== 'stop' ? [intake] : [];
+  return { phase: 'asking', clarified, ...(clarified.length ? { asked: 1 } : {}), ...(intake === 'stop' ? { enough: true } : {}), steps: [], at };
+}
+
+/** Keep the handoff in the same first turn as the plan instructions on both create and reuse. */
+export function strategyPrompt(plan: StrategyPlan): string {
+  if (plan.enough) return STRATEGY_FLOW + '\nThe user chose «Basta domande». Propose the plan now; its approval is still required.';
+  const intake = plan.clarified[0];
+  return intake ? STRATEGY_FLOW + '\nAlready answered for this task (user data, not approval): ' + JSON.stringify(intake) : STRATEGY_FLOW;
+}
+
+export function proposalGate(plan: StrategyPlan): string | null {
+  // Older saved plans counted the questions presented, including unanswered or repeated ones.
+  const asked = new Set(plan.clarified.map(entry => entry.q)).size;
   if (plan.phase !== 'asking' || plan.enough || asked >= QUESTIONS_MIN) return null;
-  if (typeof noQuestionReason === 'string' && noQuestionReason.trim() && noQuestionReason.trim().length <= NO_QUESTION_MAX) return null;
-  return `plan_propose refused: the user answered ${asked} of at least ${QUESTIONS_MIN} questions. Ask the next real clarifying question with your question tool (AskUserQuestion on Claude, ask_user on OpenCode and on Cursor when AskQuestion is not available), one at a time, on a point still open (goal, scope, constraints, "done", risks, preferences, priority), then propose. Only if the request truly settles the rest, call plan_propose again with noQuestionReason: one line naming what it already settles. If the user asked you to stop asking, do not ask again: call plan_propose with noQuestionReason "the user asked to stop the questions".`;
+  return `plan_propose refused: the user answered ${asked} of at least ${QUESTIONS_MIN} questions. Ask the next unresolved choice with AskUserQuestion or your engine’s question panel, one at a time. Only the user can stop early with «Basta domande».`;
 }
 
 /** agent_delegate / agent_assign_task from a Strategist with a plan: null once the user approved it; else what to do. */
@@ -178,16 +190,17 @@ export function stopsQuestions(text: string): boolean {
 /** The answers to the user's questions, as "already clear" lines (the latest CLARIFIED_MAX). */
 export function withClarified(plan: StrategyPlan, qs: { question: string; header?: string }[], answers: Record<string, string | string[]>): StrategyPlan {
   const cut = (s: string) => { const x = s.replace(/\s+/g, ' ').trim(); return x.length > CLARIFIED_TEXT_MAX ? `${x.slice(0, CLARIFIED_TEXT_MAX - 1)}…` : x; };
-  const added = qs.flatMap(q => {
-    const a = answers[q.question], text = Array.isArray(a) ? a.join(', ') : a;
-    // a yes/no answer (ADR 0135) says nothing without its question: the question is the line, not its header
-    const yn = typeof text === 'string' && yesNoOf(text) !== null;
-    return typeof text === 'string' && text.trim() && !stopsQuestions(text) ? [{ q: cut(yn ? q.question : q.header?.trim() || q.question), a: cut(yn ? text.replace(/\s*\((consigliat[oa]|recommended|empfohlen)\)\s*/i, '').trim() : text) }] : [];
-  });
-  if (!qs.length) return plan;
-  const asked = (plan.asked ?? 0) + qs.length;
-  const enough = qs.some(q => { const a = answers[q.question]; return typeof a === 'string' && stopsQuestions(a); }) ? { enough: true } : {};
-  return added.length ? { ...plan, asked, ...enough, clarified: [...plan.clarified, ...added].slice(-CLARIFIED_MAX) } : { ...plan, asked, ...enough };
+  // A panel with several questions cannot satisfy several interview turns in one click.
+  const q = qs[0];
+  if (!q || qs.length !== 1) return plan;
+  const raw = answers[q.question], text = Array.isArray(raw) ? raw.join(', ') : raw;
+  if (typeof text !== 'string' || !text.trim()) return plan;
+  if (stopsQuestions(text)) return { ...plan, enough: true };
+  const yn = yesNoOf(text) !== null;
+  const entry = { q: cut(q.question), a: cut(yn ? text.replace(/\s*\((consigliat[oa]|recommended|empfohlen)\)\s*/i, '').trim() : text) };
+  const same = plan.clarified.findIndex(c => c.q === entry.q);
+  if (same >= 0) return { ...plan, clarified: plan.clarified.map((c, i) => i === same ? entry : c) };
+  return { ...plan, asked: (plan.asked ?? plan.clarified.length) + 1, clarified: [...plan.clarified, entry].slice(-CLARIFIED_MAX) };
 }
 
 /** A saved plan, checked (an unreadable one is dropped, never guessed). */

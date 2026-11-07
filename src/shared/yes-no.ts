@@ -10,6 +10,13 @@
 // without a brief is sent back once with BRIEF_REFUSAL (the same retry counter).
 // Pure, no Node or DOM: used by main and renderer. Unit tests: test/unit/yes-no.test.ts.
 
+import type { PendingRequest } from './contract';
+
+/** The engines' own question tools: Claude AskUserQuestion, Cursor/Codex AskQuestion, the app's ask_user (AskUser).
+ *  Never a Cursor plan (CreatePlan: Approva / Rifiuta) nor an MCP server's form (elicitation, tool mcp__<server>). */
+const NATIVE_QUESTIONS = new Set(['AskUserQuestion', 'AskQuestion', 'AskUser']);
+export const isNativeQuestion = (req: Pick<PendingRequest, 'type' | 'tool'>): boolean =>
+  req.type === 'question' && NATIVE_QUESTIONS.has(req.tool);
 /** What the role frame tells every chat about asking the user. */
 export const QUESTION_RULE = 'Ask only genuine yes/no decisions with AskUserQuestion (or your engine\'s question tool; with none, the app\'s ask_user tool): one question, exactly two options "Sì" and "No", recommended one marked "(consigliato)". Recommend the option that moves the task forward; stopping needs a concrete reason. Do not re-ask for host-approved routine writes. Before asking, show_ui component "brief" target "next-ask": done (1-5 short lines), ifYes, ifNo, evidence (images, checks, files). The user reads only this card: plain language, self-contained context, never "come sopra". Free text and postponement remain available.';
 
@@ -43,8 +50,8 @@ export function isYesNo(q: { options: readonly { label: string }[]; multiSelect?
   return kinds.includes('yes') && kinds.includes('no');
 }
 
-/** Every question of a request is yes/no (an empty list is not: there is nothing to answer with Sì / No). */
-export const yesNoShape = (qs: readonly { options: readonly { label: string }[]; multiSelect?: boolean }[]): boolean => qs.length > 0 && qs.every(isYesNo);
+/** Exactly one answerable yes/no question per panel. */
+export const yesNoShape = (qs: readonly { options: readonly { label: string }[]; multiSelect?: boolean }[]): boolean => qs.length === 1 && isYesNo(qs[0]!);
 
 /** The gate is on in a real profile; off in the test suites (their fake CLIs ask with free options) unless SB_YESNO=1;
  *  SB_YESNO=0 turns it off anywhere. */

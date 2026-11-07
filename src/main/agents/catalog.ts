@@ -16,7 +16,7 @@ import { readLocal, writeLocal } from './local-store';
 import { AgentHistory, behaviourOf, firstVersion, sameBehaviour, versionedChanges } from './versions';
 import { checkedTools, type AgentPolicy } from './tool-policy';
 import { cappedTier, withinTierMax } from './model-tier';
-import { fiveRolesTextFor, fullDefaultsFor, shippedTextFor } from './role-migrate';
+import { fiveRolesTextFor, fullDefaultsFor, shippedTextFor, skillAlignmentFor } from './role-migrate';
 import { engineOf } from '../engines/registry';
 import { log, errText } from '../log';
 
@@ -200,9 +200,9 @@ export class AgentCatalogService {
     }
     // a later shipped text replaced since (role-migrate.ts SHIPPED_BEFORE, #145)
     for (const old of [...this.profiles]) {
-      const fields = shippedTextFor(old);
+      const fields = skillAlignmentFor(old) ?? shippedTextFor(old);
       if (!fields) continue;
-      try { this.version(old, this.behaviour({ ...fields }, old.id, false, old), 'default', 'Testo del ruolo aggiornato', 'active', true); }
+      try { this.version(old, this.behaviour({ ...fields }, old.id, false, old), 'default', 'Istruzioni e skill del ruolo aggiornate', 'active', true); }
       catch (e) { log.warn('agents', 'role text not moved to the shipped one', { cause: errText(e), hint: 'check that roles.json and role-history.json in the app data folder are writable', data: { role: old.id } }); }
     }
   }
@@ -447,7 +447,7 @@ export class AgentCatalogService {
       if (p?.model && p.engine === req.harness) req = { ...req, model: p.model };
       return { request: req, owner: orchestratorOwner(req.harness, req.model ?? null, p), instructions: p?.instructions ?? ROLE_DEFAULTS.orchestrator.instructions,
         policy: p && (p.tools || p.permissionCeiling) ? { tools: p.tools ? structuredClone(p.tools) : null, ceiling: p.permissionCeiling } : null,
-        skills: [], launches: p?.launches ?? [...ROLE_DEFAULTS.orchestrator.launches] };
+        skills: [...new Set([...(p?.skills ?? ROLE_DEFAULTS.orchestrator.skills), ...(p?.knowhow?.linked ?? [])])], launches: p?.launches ?? [...ROLE_DEFAULTS.orchestrator.launches] };
     }
     // Flash (ADR 0107): its card's engine and model (else its tier's), its instructions; a plain owner (no run, no role
     // gate); ChatManager adds the fixed read-only frame and policy

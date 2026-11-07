@@ -202,16 +202,17 @@ describe('AcpSession as Cursor', () => {
     expect(answerOf(logFile)).toEqual({ outcome: 'selected', optionId: 'allow-once' });
   });
 
-  it('cursor/ask_question that is not yes/no: skipped with how to ask, twice in a row, then shown (ADR 0135)', async () => {
+  it('cursor/ask_question keeps grouped questions out of the panel even after repeated attempts', async () => {
     const { s, sink, logFile } = start({ yesNo: true });
-    for (const n of [1, 2]) {
+    for (const n of [1, 2, 3]) {
       s.send('ask');
       await waitFor(() => results(sink).length === n, `turn ${n}`);
       expect(sink.pendings).toHaveLength(0);
       expect(answerOf(logFile)).toMatchObject({ outcome: 'skipped', reason: expect.stringContaining('only yes/no questions') });
     }
-    s.send('ask');
-    await waitFor(() => sink.pendings[0], 'the third ask is shown');
+    s.send('asksn');
+    const panel = await waitFor(() => sink.pendings[0], 'the single yes/no question is shown');
+    expect(panel.questions).toHaveLength(1);
   });
 
   it('cursor/ask_question yes/no without its brief: skipped after a moment with how to send one (ADR 0150)', async () => {

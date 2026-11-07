@@ -133,8 +133,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Profondità e figli in corso sono limiti tuoi (Impostazioni → Ruoli e deleghe); una delega oltre il limite è rifiutata e il genitore mostra «Limite».',
         'Depth and running children are your limits (Settings → Roles and delegation); a delegation over the limit is refused and the parent shows "Limit".'),
       // src/main/agents/delegation.ts agent_ask_parent, agent_answer_child; src/renderer/lib/child-requests.ts requestHost
-      b('Un dubbio del figlio va prima al genitore; a te arriva solo ciò che serve a una persona (un permesso, un’azione irreversibile o esterna, una scelta che cambia l’obiettivo), una volta sola, nella chat che stai guardando.',
-        'A child’s doubt goes to its parent first; only what needs a person reaches you (a permission, an irreversible or external action, a choice that changes the goal), once, in the chat you are looking at.'),
+      b('Il figlio chiede al genitore i fatti mancanti. Se serve una tua scelta, te la chiede direttamente nel pannello, una domanda alla volta.',
+        'A child asks its parent for missing facts. When it needs your choice, it asks you directly in its panel, one question at a time.'),
       // src/renderer/components/DelegationCard.tsx; src/renderer/lib/run-steps.ts
       b('Nella Grindhouse ogni figlio è una scheda sul filo del genitore: compito, personaggio, skill, modello, i passi veri (il piano del motore e le sue azioni), lo stato. Un clic la apre nella chat intera; «Vai alla chat» la mette a fuoco.',
         'In the Grindhouse each child is a card on its parent’s thread: task, character, skills, model, its real steps (the engine’s plan and its actions), its state. A click opens it into the whole chat; "Vai alla chat" puts it in focus.'),
@@ -145,8 +145,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Il figlio chiude con un rapporto: il risultato arriva al genitore come messaggio; l’Orchestrator vede solo lo stato. Una chat che l’Orchestrator ha aperto lui stesso gli riporta allo stesso modo.',
         'The child closes with a report: the result reaches the parent as a message; the Orchestrator sees only the state. A chat the Orchestrator opened itself reports to it the same way.'),
     ],
-    analogy: b('Come un capo cantiere che affida i lavori ai suoi: ognuno ha la sua scheda di lavoro, nessuno ha chiavi che il capo non ha, e i dubbi passano prima da lui.',
-      'Like a site foreman handing jobs to his crew: each has a job sheet, nobody holds keys the foreman lacks, and questions go through him first.'),
+    analogy: b('Come un capo cantiere che affida i lavori ai suoi: ognuno ha la sua scheda di lavoro, nessuno ha chiavi che il capo non ha, e ciascuno chiede direttamente la decisione che gli serve.',
+      'Like a site foreman handing jobs to his crew: each has a job sheet, nobody holds keys the foreman lacks, and each worker asks for the decision they need.'),
     diagram: { kind: 'flow', steps: [b('Genitore', 'Parent'), b('Delega', 'Delegation'), b('Figli visibili', 'Visible children'), b('Rapporto', 'Report'), b('Genitore', 'Parent')] },
     tech: [
       // src/shared/delegation.ts

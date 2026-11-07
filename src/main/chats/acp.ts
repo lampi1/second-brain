@@ -1373,7 +1373,7 @@ export class AcpSession implements HarnessSession {
         return;
       }
       if (noBrief && this.yesNoRefused >= YESNO_RETRIES) this.briefOff = true;
-      if (gate && (!yesNo || noBrief) && this.yesNoRefused < YESNO_RETRIES) {
+      if (gate && (!yesNo || noBrief) && (questions.length > 1 || this.yesNoRefused < YESNO_RETRIES)) {
         this.yesNoRefused++;
         log.info('chats', noBrief ? 'question sent back: no brief' : 'question sent back: not yes/no', { chat: this.opts.chatId, data: { engine: this.engine, attempt: this.yesNoRefused } });
         this.respond(id, { outcome: { outcome: 'skipped', reason: noBrief ? BRIEF_REFUSAL : YESNO_REFUSAL } });

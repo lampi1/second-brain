@@ -521,7 +521,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: (a, ctx) => JSON.stringify(report(a, callerOf(ctx.params))),
   }, {
     name: 'agent_ask_parent',
-    description: 'Ask the chat that delegated you, before the user: an ambiguity of your contract (which file, which option, what "done" means here). It reaches your parent as a message; the answer comes back as a message. Ask the user directly only for a permission, an irreversible or external action, a choice that changes the goal, or what your parent sent on to the user.',
+    description: 'Ask your parent for a missing fact about the assignment. When a consequential choice belongs to the user, ask it directly in your own question panel; reuse decisions already in the contract.',
     inputSchema: { type: 'object', required: ['question'], additionalProperties: false, properties: {
       question: str, options: { type: 'array', items: str, maxItems: OPTIONS_MAX }, why: { ...str, description: 'what depends on it' },
     } },

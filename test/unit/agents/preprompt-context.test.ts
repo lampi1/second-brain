@@ -36,6 +36,14 @@ describe('Orchestrator context ownership', () => {
     ]) expect(frame).toContain(rule);
   });
 
+  it('keeps intake and challenge guidance in the frame even with a customized role', () => {
+    const frame = orchestratorRole('Coordinate my work');
+    expect(frame).toContain('Start new work by checking for a consequential choice');
+    expect(frame).toContain('outside Plan proceed when clear');
+    expect(frame).toContain('The role finding a material user choice asks one question directly');
+    expect(frame).toContain('one alternative with a reason, then proceed on confirmation');
+  });
+
   it('requires independent review for every development completion, with thresholds only for other reports', () => {
     expect(ORCHESTRATOR_ROLE).toContain('After implementation, arrange an independent Sentinel review');
     expect(ORCHESTRATOR_ROLE).toContain('Development always requires the independent Sentinel review above. For other reports');

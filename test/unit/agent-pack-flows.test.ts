@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgentCatalogService } from '../../src/main/agents/catalog';
+import { ROLE_DEFAULTS, ROLE_IDS } from '../../src/shared/roles';
+import { skillsIn } from '../../src/main/agents/pack/shared-skills';
 import { AgentPackFlows } from '../../src/main/agents/pack/flows';
 import { log } from '../../src/main/log';
 import { confirmMemory, proposeMemory } from '../../src/main/rules/memory-records';
@@ -36,6 +38,20 @@ function evidenceRun(brain: string, agentId: string, runId: string): AgentRun {
     scope: { brainRoot: brain, projectRoot: brain }, outcome: { verdict: 'fail', basis: 'human', at: 3, by: 'user' },
     counters: { questions: 0, permissions: 0, commands: 0, reopened: 0, contextPeak: null }, costUsd: null, tokens: null };
 }
+it('packages the shipped defaults for all six real profiles, with no unrelated default or Orchestrator memory', () => {
+  const { catalog, brain, root } = setup();
+  const inventory = skillsIn([path.resolve('brain-template/harness/claude/skills')]);
+  const packs = new AgentPackFlows({ catalog, brainRoot: () => brain, tempRoot: root, sharedSkills: () => inventory });
+  for (const id of ROLE_IDS) {
+    const pack = packs.runtime(id);
+    expect(pack.skills).toEqual([id, ...ROLE_DEFAULTS[id].skills]);
+    for (const skill of ROLE_DEFAULTS[id].skills) {
+      expect(fs.readFileSync(path.join(pack.skillRoot, skill, 'SKILL.md'), 'utf8')).toContain('name: ' + skill);
+    }
+    if (id === 'orchestrator') expect(pack.memory).toBe('');
+  }
+});
+
 describe('role know-how at launch', () => {
   it('builds a hook-free native skill package with the requested skills and names their files', () => {
     const f = setup();

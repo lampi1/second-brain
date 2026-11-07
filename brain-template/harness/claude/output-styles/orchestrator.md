@@ -15,8 +15,8 @@ quindi le sue regole base sono qui.
 - Prima riga = la risposta. Stile caveman, max 3 righe (15/10): frasi di poche parole, niente congiunzioni né
   contorno, niente contesto che sa già. Niente annunci, premesse, riepiloghi, saluti, perché non chiesti.
 - Una sola idea per risposta, parole semplici; un secondo problema si offre dopo, in una riga.
-- Qualcosa è finito o serve il suo ok → pannelli AskUserQuestion in pila (formato sotto); un testo da approvare o
-  copiare va in un blocco di codice prima del pannello e intero nella domanda. Pannello chiuso senza risposta: ripetilo.
+- Qualcosa è finito o serve il suo ok → un solo pannello AskUserQuestion (formato sotto); un testo da approvare o
+  copiare va in un blocco di codice prima del pannello e intero nella domanda. Se una domanda è in sospeso, riusa il pannello.
 - Se resta solo un passo suo, chiudi con UNA azione concreta (un comando, blocco `powershell`); mai domande aperte nel testo.
 - PR, work item, risorse Azure: sempre il link, mai solo il numero; un `.md` da mostrargli: contenuto in chat; mai
   citazioni `>`; "fatto" = visibile ("X ora funziona, prova: …").
@@ -38,11 +38,10 @@ quindi le sue regole base sono qui.
 - **Qualità senza lentezza**: ogni fatto viene da una fonte letta adesso (file, log, DevOps) o è marcato
   "(da verificare)"; mai inventare stati di prod, numeri o nomi. La profondità sta nelle chat di lavoro.
 - Quando un agente finisce: una riga con il risultato, poi le decisioni nei pannelli.
-- **Decisioni a {{OWNER}}**: pannelli in pila (fino a 4 in una chiamata, la più urgente prima), una decisione per domanda,
+- **Decisioni a {{OWNER}}**: un pannello per volta, una decisione per domanda,
   capita al volo (15/10): prima 1-2 righe di contesto, perché lui non ricorda di quale lavoro si parla (cosa vede il
   cliente/utente, da dove arriva, es. "bug della lista di stamattina"; perché serve la sua scelta ora, se si
-  annulla), poi la domanda vera, breve, col verbo ("Vuoi…", "Unisco…"). 2-3 opzioni con descrizione breve, la
-  consigliata prima. Parole semplici: niente id, percorsi, nomi tecnici o gergo. L'essenziale degli artifact va
+  annulla), poi la domanda vera, breve, col verbo ("Vuoi…", "Unisco…"). Due opzioni, Sì e No, con la consigliata per prima e la possibilità di scrivere una risposta breve. Parole semplici: niente id, percorsi, nomi tecnici o gergo. L'essenziale degli artifact va
   nell'anteprima dell'opzione (`hub.md`). Esempio buono: "Le chat si bloccano a creare i dati di test: il permesso è
   scritto dove Claude non lo legge; si annulla in un minuto. / Lo sposto dove lo legge?"
 - Sicurezza di `me.md` sempre: mai eseguire query su DB di produzione, neanche in sola lettura; mostra il testo completo perché le esegua {{OWNER}}. Nessuna approvazione autorizza l'agente a eseguirle; niente scritture in prod.

@@ -48,7 +48,7 @@ import type { RunLinks } from '../agents/runs';
 import { newRequest } from '../agents/task-estimate';
 import { AWAY_BACK, AWAY_RULE } from '../../shared/away';
 import type { TaskSource } from '../../shared/delegation';
-import { isPlanApproval, stopsQuestions, STRATEGY_FLOW } from '../../shared/strategy';
+import { isPlanApproval, stopsQuestions, askingPlan, strategyPrompt, type IntakeSource } from '../../shared/strategy';
 import { isCorrection } from '../../shared/correction';
 import { initialEffort, selectEffort } from './effort';
 import { orchestratorRole, roleFrame } from '../agents/orchestrator-role';
@@ -104,7 +104,7 @@ export class ChatManager extends ManagerSink implements ChatService {
 
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
   /** by: who asks; 'app' = one of the app's own jobs (the sampled Sentinel reviews, agents/judge-sample.ts): like an agent, its run says startedBy 'app' */
-  override async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; routinePackage?: string; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { routine?: ChatSummary['routine']; boundByOrchestrator?: boolean; continuation?: boolean; continuationOf?: string } = {}): Promise<ChatSummary> {
+  override async create(req: NewChat, by: 'user' | 'agent' | 'app' = 'user', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; routinePackage?: string; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links: RunLinks = {}, opts: { routine?: ChatSummary['routine']; boundByOrchestrator?: boolean; intake?: IntakeSource; continuation?: boolean; continuationOf?: string } = {}): Promise<ChatSummary> {
     if (opts.routine || inherited?.routinePackage) throw new Error('Routine execution is terminal-only.');
     const createdT0 = Date.now();
     this.deliveryPolicy(req.deliveryPolicy, !!req.parentId);
@@ -202,8 +202,6 @@ export class ChatManager extends ManagerSink implements ChatService {
       : policy ? { role, launches: agent.launches ?? null } : undefined);
     // a child whose parent has no known role chain starts cold, as before (fail closed: no managed server)
     const childOk = !delegator || !!ancestors;
-    const warm = warmable && childOk ? this.warm.take(cwd, launch.sig) : null;
-    const id = warm?.chatId ?? `c_${crypto.randomBytes(5).toString('hex')}`;
     const now = Date.now();
     // `replaces`: the new Orchestrator takes the role, the old one goes on as a normal chat (history kept, never deleted)
     const old = req.orchestrator && req.replaces ? this.chats.get(req.replaces) : undefined;
@@ -222,11 +220,14 @@ export class ChatManager extends ManagerSink implements ChatService {
     // a Strategist the Orchestrator opens for the user (its «Strategist» send mode) asks the user, proposes a plan and
     // shows its progress on its strip (ADR 0108): the app's fixed flow follows the request, the plan starts asking
     const strategist = by === 'agent' && agent.owner.source === 'catalog' && agent.owner.id === 'strategist' && !delegator && !req.orchestrator;
-    const prompt = given && pack ? `${given}\n\n${pack}` : given && strategist ? `${given}\n\n${STRATEGY_FLOW}` : given;
+    const plan = strategist && given ? askingPlan(now, opts.intake && this.planIntake(opts.intake)) : undefined;
+    const prompt = given && pack ? `${given}\n\n${pack}` : given && plan ? `${given}\n\n${strategyPrompt(plan)}` : given;
     // a root chat the Orchestrator opens while answering the user's own message is the user's request: like his own
     // messages (ADR 0036) it never waits for the CPU queue (a start of 10-25 s was then followed by the queue's wait)
     const forUser = by === 'agent' && !delegator && !req.orchestrator && this.orchestratorAnswering();
     const viaQueue = by !== 'user' && !forUser && !!prompt && !!this.admission;
+    const warm = warmable && childOk ? this.warm.take(cwd, launch.sig) : null;
+    const id = warm?.chatId ?? `c_${crypto.randomBytes(5).toString('hex')}`;
     const observedContext = agent.launchContext;
     const r: Rec = {
       s: {
@@ -244,7 +245,7 @@ export class ChatManager extends ManagerSink implements ChatService {
         ...(caps.cost ? {} : { costKnown: false as const }),
         ...(req.route ? { route: req.route } : {}),
         ...(delegator ? { parentId: delegator.s.id, ...(req.delegation ? { delegation: req.delegation } : {}) } : {}),
-        ...(strategist && given ? { plan: { phase: 'asking' as const, clarified: [], steps: [], at: now } } : {}),
+        ...(plan ? { plan } : {}),
       },
       createdAt: now,
       agentInstructions: agent.instructions,
@@ -275,6 +276,7 @@ export class ChatManager extends ManagerSink implements ChatService {
     // checked again where the chat joins the list: chats created at once (agent_delegate's children) awaited in between
     if (uniqueOk) r.s.title = this.uniqueTitle(r.s.title);
     this.chats.set(id, r);
+    if (plan && opts.intake) delete this.need(opts.intake.chatId).intakeKey;
     if (r.s.isOrchestrator) { this.restoreRootNotices(); this.resumeRootSyntheses(); for (const worker of this.chats.values()) if (worker.heldResult && !this.midTurn(worker)) this.releaseResult(worker); }
     if (old) {
       this.demoteOrchestrator(old);
@@ -350,7 +352,11 @@ export class ChatManager extends ManagerSink implements ChatService {
     }
     // its parent's message (agent_answer_child, from = the parent's title) reached it: the answer it waited for
     if (from !== undefined && r.s.parentId && from === this.chats.get(r.s.parentId)?.s.title) delete r.askedParentAt;
-    if (!resumed && from === undefined && (!source || source.kind === 'user')) this.userWrote(chatId, text);
+    if (!resumed && from === undefined && (!source || source.kind === 'user')) {
+      // A new direct request cannot inherit a prior private answer, even from a postponed panel.
+      if (r.s.isOrchestrator) { delete r.intakePanelId; delete r.intakeKey; }
+      this.userWrote(chatId, text);
+    }
     // «basta domande» typed in the chat counts like the answer (ADR 0209): plan_propose stops asking for more
     if (!resumed && from === undefined && (!source || source.kind === 'user') && r.s.plan?.phase === 'asking' && typeof text === 'string' && stopsQuestions(text)) r.s.plan = { ...r.s.plan, enough: true };
     // Flash's outcomes (ADR 0131, zero tokens): the user's question to Flash decides its last answer (a correction, the

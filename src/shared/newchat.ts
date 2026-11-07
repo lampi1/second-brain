@@ -16,11 +16,11 @@ export const MODE_TAGS: Readonly<Record<SentMode, string>> = { plan: '[strategis
 
 /** the whole first line the Orchestrator reads, per mode */
 export const MODE_LINES: Readonly<Record<SendMode, string>> = {
-  plan: `${MODE_TAGS.plan} Affida questa richiesta allo Strategist: apri con app_create_chat una chat con roleId "strategist" che la pianifica e delega le parti con agent_delegate. Non farla tu; poi rispondimi con una riga.`,
+  plan: `${MODE_TAGS.plan} Verifica la prima scelta importante, riusa ciò che ho già chiarito e affida il lavoro con app_create_chat e roleId "strategist". Passa la domanda già risposta come intakeQuestion.`,
 };
 
 /** the same rules for the Orchestrator's MCP instructions */
-export const SEND_MODE_RULE = `A user message whose first line starts with "${MODE_TAGS.plan}" asks you to hand the request to a Strategist chat (app_create_chat, roleId "strategist") that plans and delegates; do not do it yourself; then answer in one line. Older messages may start with "${MODE_TAGS.new}" (one new work chat).`;
+export const SEND_MODE_RULE = `A user message whose first line starts with "${MODE_TAGS.plan}" asks you to hand the request to a Strategist chat (app_create_chat, roleId "strategist") that plans and delegates. Resolve the first material choice in your panel and pass the answered question as intakeQuestion. If it is already clear, hand off directly. Older messages may start with "${MODE_TAGS.new}" (one new work chat).`;
 
 const LINE = /^\[(veloce|strategist|nuova chat)\][^\n]*(?:\n+|$)/;
 /** the retired "[veloce]" line is still taken off an old message, with no mode */

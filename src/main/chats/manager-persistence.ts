@@ -217,6 +217,7 @@ export abstract class ManagerPersistence extends ManagerCore {
       ...(c.run && c.runIdleSince ? { idleSince: c.runIdleSince } : {}),
       ...(c.coldNoteAt ? { coldNoteAt: c.coldNoteAt } : {}),
       ...(c.continuationPending ? { continuationPending: c.continuationPending } : {}),
+      ...(c.intakeKey ? { intakeKey: c.intakeKey } : {}),
       ...(c.continuationDecisions ? { continuationDecisions: c.continuationDecisions } : {}),
       ...(c.continuityUnsafe ? { continuityUnsafe: true as const } : {}),
       // saved before ctxSince existed: its last turn is the latest its context can have begun
@@ -260,6 +261,7 @@ export abstract class ManagerPersistence extends ManagerCore {
       ...(r.lastTurnAt ? { lastTurnAt: r.lastTurnAt } : {}),
       ...(r.coldNoteAt ? { coldNoteAt: r.coldNoteAt } : {}),
       ...(r.continuationPending ? { continuationPending: r.continuationPending } : {}),
+      ...(r.intakeKey ? { intakeKey: r.intakeKey } : {}),
       ...(r.continuationDecisions ? { continuationDecisions: r.continuationDecisions } : {}),
       ...(r.continuityUnsafe ? { continuityUnsafe: true as const } : {}),
       ...(r.ctxSince ? { ctxSince: r.ctxSince } : {}),

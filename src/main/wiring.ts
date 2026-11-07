@@ -270,13 +270,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     worktrees: gitWorktrees,
     resolveAgent: req => {
       const resolved = agents.resolve(req);
-      if (req.roleId === undefined || req.orchestrator) return resolved;
+      const roleId = req.orchestrator ? 'orchestrator' : req.roleId;
+      if (!roleId || (req.orchestrator && !brain.info().brainRoot)) return resolved;
       // only the skills this launch gives exist in its plugin (the role gate refuses the others)
-      const runtime = agentPacks.packs.runtime(req.roleId, req.skills ?? [], { query: req.goal ?? req.prompt ?? '', project: req.cwd });
+      const runtime = agentPacks.packs.runtime(roleId, req.skills ?? [], { query: req.goal ?? req.prompt ?? '', project: req.cwd });
       const resolvedHarness = resolved.request.harness;
       return { ...resolved, launchContext: runtime.context, skills: runtime.skills, assets: { pluginDir: runtime.pluginDir, skillRoot: runtime.skillRoot },
         // Claude loads the plugin itself: its instructions only need the skills' qualified names (issue #101)
-        instructions: resolvedHarness === 'cursor' ? `${resolved.instructions}\n\n${runtime.instructions}`
+        instructions: engineOf(resolvedHarness)?.kind !== 'claude' ? `${resolved.instructions}\n\n${runtime.instructions}`
           // and its memory: the plugin carries the skills, not the memory (before, a Claude role never saw it nor its id)
           : [resolved.instructions, qualifiedSkillsLine(runtimePluginName(runtime.pluginDir), runtime.skills), runtime.memory].filter(Boolean).join('\n\n') };
     },

@@ -4,7 +4,7 @@
 // nothing for a plan that no longer waits or a newer proposal than the one asked. Rendered without a browser.
 import { createElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ChatSummary } from '../../src/shared/contract';
+import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
 import type { StrategyPlan } from '../../src/shared/strategy';
 vi.mock('../../src/renderer/components/GenUi', () => ({ openFile: async () => {} }));
 vi.mock('../../src/renderer/sb', () => ({ sb: {} }));
@@ -12,7 +12,7 @@ vi.mock('../../src/renderer/actions', () => ({ claimFocus: () => false }));
 let chats: Record<string, Partial<ChatSummary>> = {};
 vi.mock('../../src/renderer/store/store', () => ({ useApp: <T,>(pick: (s: { chats: typeof chats }) => T) => pick({ chats }), planDecide: async () => true }));
 import { renderToStaticMarkup } from 'react-dom/server';
-import { planAskKey, planAskKeys, planAskOf, planWaits, withPlans } from '../../src/renderer/lib/plan-ask';
+import { planQuestion, planAskKey, planAskKeys, planAskOf, planWaits, withPlans } from '../../src/renderer/lib/plan-ask';
 import { PlanApproval } from '../../src/renderer/components/PlanApproval';
 import { setLang } from '../../src/renderer/i18n';
 
@@ -22,6 +22,13 @@ const plan = (p: Partial<StrategyPlan> = {}): StrategyPlan => ({ phase: 'propose
 const html = (at = 42) => renderToStaticMarkup(createElement(PlanApproval, { ask: { type: 'plan', id: `plan@${at}`, chatId: 's/1', at }, chatTitle: 'Sconti', onEscape: () => {}, testid: 'qp' }));
 
 describe('lib/plan-ask.ts', () => {
+  it('targets only the native single Plan question when a connector form also waits', () => {
+    const chat = { plan: plan({ phase: 'asking' }) };
+    const ask = (tool: string, n: number) => ({ type: 'question', tool, questions: Array.from({ length: n }, () => ({ question: 'Test?' })) }) as PendingRequest;
+    const form = ask('mcp__connector', 1), group = ask('AskQuestion', 2), native = ask('AskUserQuestion', 1);
+    expect(planQuestion(chat, [form, group], false)).toBeUndefined();
+    expect(planQuestion(chat, [form, group, native], false)).toBe(native);
+  });
   it('lists the plans waiting for the user, oldest first, as keys that read back', () => {
     const s = { chats: {
       b: { id: 'b', plan: plan({ at: 20 }) }, a: { id: 'a', plan: plan({ at: 10 }) },

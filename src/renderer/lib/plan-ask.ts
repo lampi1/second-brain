@@ -4,7 +4,8 @@
 // stays ChatSummary.plan (shared/strategy.ts): no request is made in main, so an answer anywhere (the window, a restart) moves the plan's phase and the card leaves by itself, never twice. Its key carries the
 // plan's `at`, the proposal the user reads (chat:plan refuses a newer one). Used by QuestionsWindow.tsx, lib/later.ts
 // and StrategyPanel.tsx.
-import type { ChatSummary } from '@shared/contract';
+import { isNativeQuestion } from '@shared/yes-no';
+import type { ChatSummary, PendingRequest } from '@shared/contract';
 import type { AppState } from '../store/state';
 
 /** The window's view of a plan to approve: shaped like a PendingRequest where the window reads one (key, chat, age). */
@@ -37,4 +38,10 @@ export function withPlans<T extends { type: string; at: number }>(reqs: readonly
   const out: (T | PlanAsk)[] = [...reqs];
   for (const p of plans) { const i = out.findIndex(r => r.type !== 'plan' && r.at > p.at); out.splice(i < 0 ? out.length : i, 0, p); }
   return out;
+}
+
+/** The open question of a Strategist still asking (its plan card answers it, or points to the questions window). */
+export function planQuestion(chat: Pick<ChatSummary, 'plan'>, reqs: readonly PendingRequest[], queued: boolean): PendingRequest | undefined {
+  const p = chat.plan?.phase;
+  return (p === 'asking' || p === 'revising') && !queued ? reqs.find(r => isNativeQuestion(r) && r.questions?.length === 1) : undefined;
 }

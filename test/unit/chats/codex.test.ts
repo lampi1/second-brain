@@ -187,6 +187,15 @@ describe('CodexSession', () => {
     expect(cwd).toBeTruthy();
   });
 
+  it('asks the engine to retry a grouped interview without presenting a panel', async () => {
+    const { s, sink, logFile } = start();
+    await s.ready;
+    s.line(JSON.stringify({ id: 8899, method: 'item/tool/requestUserInput', params: { threadId: s.sessionId, questions: [{ id: 'a', question: 'Prima?' }, { id: 'b', question: 'Seconda?' }] } }));
+    await waitFor(() => readLog(logFile).some(l => l.msg?.id === 8899), 'single question refusal');
+    expect(sink.pendings).toHaveLength(0);
+    expect(readLog(logFile).find(l => l.msg?.id === 8899)?.msg).toMatchObject({ error: { code: -32602, message: expect.stringContaining('one question') } });
+  });
+
   it('question: the answer goes back by question id', async () => {
     const { s, sink, logFile } = start();
     s.send('ask');
