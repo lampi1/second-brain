@@ -33,7 +33,8 @@ release vs. anything run from this repo. The rest: `docs/agents/glossary.md`.
 | Run as an agent (always) | `SB_HIDDEN=1 npm run dev` (off screen, never takes focus); look with `app_screenshot` |
 | Typecheck | `npm run typecheck` (TypeScript 7 native, ~4 s) · `npm run typecheck:ts6` (the one eslint uses) |
 | Lint | `npm run lint` |
-| Light check (branches) | `npm run check:branch`: typecheck, lint + related unit tests + guard on changed files + doc freshness; no e2e |
+| Quick check ("ready to try") | `npm run check:quick`: typecheck, lint of changed files, only the tests importing them directly or named like them, doc tests if needed |
+| Light check (before merge, once) | `npm run check:branch`: typecheck, lint + related unit tests + guard on changed files + doc freshness; no e2e |
 | All checks (main only) | `npm run check`: + full unit + e2e; e2e read against `test/e2e/known-red.json` |
 | Unit · e2e | `npm test` · `npm run test:e2e` · `node scripts/e2e.mjs <specs>` (never on branches) |
 | e2e baseline | `node scripts/e2e-baseline.mjs [--update]` (main, after a full run) |
@@ -47,8 +48,10 @@ Details, flags and ADR references of each: `docs/agents/commands.md`.
 
 ## Verify a change
 
-`npm run check:branch` on the branch → look at a visible change in the dev app → on a runtime failure `npm run logs --
---level warn --since 15m`, then `npm run doctor`. A new or changed e2e spec first runs on main: say so in the hand-off.
+While working, only the targeted tests → "ready to try" = `npm run check:quick` green → look at a visible change in
+the dev app → `npm run check:branch` ONCE, before the merge (a timeout red: rerun that file alone once; green alone =
+report "rosso di carico, verde da solo" and stop) → on a runtime failure `npm run logs -- --level warn --since 15m`,
+then `npm run doctor`. A new or changed e2e spec first runs on main: say so in the hand-off.
 Never start, test or kill the stable instance (`docs/agents/stable-dev.md`).
 
 ## Rules
@@ -62,8 +65,9 @@ One line each; the full text, its exceptions and ADRs: the same number in `docs/
 4. **Each harness spends only its own tokens**; an agent on this repo never runs the Cursor CLI.
 5. **No production from agents or routines**: no prod command, ever.
 6. **Coexistence**: never change Claude desktop / Cursor config, hooks or settings; external sessions only as a fork.
-7. **Tests**: unit tests for every module, an e2e with a screenshot for every visible feature; "done" =
-   `check:branch` green + looked at in the dev app; load tests only at night.
+7. **Tests**: unit tests for every module, an e2e with a screenshot for every visible feature; "ready to try" =
+   `check:quick` green; "done" = `check:branch` green, run once before the merge, + looked at in the dev app; never
+   repeated suites; load tests only at night.
 8. **Commits local only for agents**: conventional English messages; push and PRs are the human's.
 9. **Review**: a fresh-context reviewer per touched dimension before a merge.
 10. **Every file starts with a header comment** (what, why, who uses it); decisions go to `docs/adr/`.

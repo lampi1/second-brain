@@ -46,7 +46,8 @@ shows whether the hooks are on and the config is readable.
 1. Branch from `main` (`feat/<topic>`, `fix/<topic>`). Several people or agents at once: one git worktree each
    (`git worktree add ../second-brain-wt/<topic> -b feat/<topic>`).
 2. Make the change with its tests (below).
-3. `npm run check:branch`: typecheck, lint of the changed files, the unit tests related to them and the guard on them.
+3. `npm run check:quick` while working (only the tests importing the changed files); `npm run check:branch` once, before
+   the merge: typecheck, lint of the changed files, the unit tests related to them and the guard on them.
    No e2e: the e2e suite runs only on `main` (ADR 0027). This is what a branch needs.
 4. Look at the change in the running app (`SB_HIDDEN=1 npm run dev`, a screenshot): a green check on a broken-looking
    screen is not done.

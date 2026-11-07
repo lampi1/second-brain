@@ -13,8 +13,9 @@ a clean tree and a green `npm run check`) from a terminal; `npm run rollback` fr
 
 ## How an agent verifies a change by itself
 
-1. On its branch `npm run check:branch` (no e2e there; the e2e runs only in the full `npm run check`, the
-   Orchestrator's, on main after the merge).
+1. While working, only the targeted tests; "ready to try" = `npm run check:quick` green; `npm run check:branch` once,
+   before the merge (no e2e there; the e2e runs only in the full `npm run check`, the Orchestrator's, on main after
+   the merge). Reruns and timeouts: `docs/agents/rules.md` §7.
 2. A visible change: see it in the dev app (`SB_HIDDEN=1 npm run dev`, `app_screenshot`).
 3. If something fails at runtime, `npm run logs -- --level warn --since 15m`, then `npm run doctor`.
 

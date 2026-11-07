@@ -53,8 +53,12 @@ read-only; an external session is resumed only as a fork (never two writers).
 
 ## 7. Tests
 
-Every module has unit tests; every user-visible feature has an e2e test with a screenshot; "done" =
-`npm run check:branch` green on the branch's commit (no e2e) + the change looked at in the dev app; the e2e specs and
+Every module has unit tests; every user-visible feature has an e2e test with a screenshot. While working an agent runs
+only the targeted tests (`npx vitest run <files>`); "ready to try" = `npm run check:quick` green, then the owner can
+update and try it; "done" = `npm run check:branch` green on the branch's commit (no e2e), run ONCE, before the merge,
++ the change looked at in the dev app (owner, 2026-11-07: "rifai i test mille volte"). A red by timeout: rerun that
+file alone, once; green alone = report "rosso di carico, verde da solo" and stop. Never repeated suites, never
+Sentinels only to compare main and the branch; whether to merge is the owner's call. The e2e specs and
 their screenshots run only on main, in `npm run check` after the merge (owner, 2026-10-15; ADR 0027). On main the e2e
 verdict is read against `test/e2e/known-red.json`: only «nuovi rossi» fail it; no test is ever skipped or quarantined
 (ADR 0198).
