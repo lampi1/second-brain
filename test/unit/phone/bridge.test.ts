@@ -201,6 +201,22 @@ describe('phone bridge', () => {
     expect(r.texts()[before]).toBe('🚨 PRODUZIONE\nAir giù per [db]');
   });
 
+  it('a failed chat reaches the phone when away, never while at the PC', async () => {
+    let atPc = true;
+    const r = rig();
+    r.deps.presence = () => ({ atPc, nightMode: false });
+    await r.b.start();
+    await waitFor(() => r.b.status().state === 'running');
+    const before = r.texts().length;
+    r.port.emitChatFailed({ chatId: 'c1', role: 'Scout', neutralLabel: 'lavoro 1' });
+    await new Promise(res => setTimeout(res, 50));
+    expect(r.texts().length).toBe(before);
+    atPc = false;
+    r.port.emitChatFailed({ chatId: 'c1', role: 'Scout', neutralLabel: 'lavoro 1' });
+    await waitFor(() => r.texts().length === before + 1);
+    expect(r.texts()[before]).toBe('⚠️ Scout · lavoro 1 si è fermata con un errore: guarda sul PC.');
+  });
+
   it('setToken refuses a malformed token and never stores it', async () => {
     const r = rig({ token: null, enabled: false });
     await expect(r.b.setToken('not-a-token')).rejects.toThrow();

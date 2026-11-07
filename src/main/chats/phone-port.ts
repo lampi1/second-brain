@@ -199,6 +199,14 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePo
         cb({ reply: info.reply ?? '', fromPhone: !!info.fromPhone, failed: !!info.isError });
       });
     },
+    onChatFailed(cb) {
+      return chats.onTurnEnded(info => {
+        if (!info.isError) return;
+        const c = chatOf(info.chatId);
+        if (!c || c.isOrchestrator) return;
+        cb({ chatId: c.id, role: role(c), neutralLabel: neutral(c) });
+      });
+    },
     waitingSummary() {
       const open = chats.list().filter(c => !closed(c));
       const waiting = open.filter(c => c.pending > 0 || c.plan?.phase === 'proposed');

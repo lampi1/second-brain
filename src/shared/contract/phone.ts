@@ -1,6 +1,7 @@
 // Phone bridge contract: the types shared by the Telegram phone bridge (src/main/phone), its Settings page
 // (Impostazioni → Telefono) and the chats port that lets the bridge talk to the Orchestrator.
-// Why: the bridge was built in parallel parts; this file is the one fixed interface between them (ADR "phone bridge").
+// Why: the bridge was built in parallel parts; this file is the one interface between them (ADR "phone bridge");
+// the integrator added PhonePort.onChatFailed (failed non-Orchestrator chats, design §8).
 // Who uses it: src/main/phone/*, src/main/ipc-handlers/phone.ts, src/preload, the renderer Settings page, src/main/chats/phone-port.ts.
 
 /** One action that arrived from the phone, as shown in Settings (last 20). label is neutral: never message text. */
@@ -110,5 +111,7 @@ export interface PhonePort {
   decidePlanFromPhone(chatId: string, at: string, approve: boolean): Promise<PhoneDecideResult>;
   onDecidable(cb: (ev: { type: 'added' | 'resolved'; item: PhoneDecidable; by?: 'phone' | 'pc' }) => void): () => void;
   onOrchestratorTurnEnd(cb: (ev: { reply: string; fromPhone: boolean; failed: boolean }) => void): () => void;
+  /** a chat other than the Orchestrator ended its turn with an error (design §8 «chat fallite»): role + neutral label only */
+  onChatFailed(cb: (ev: { chatId: string; role: string; neutralLabel: string }) => void): () => void;
   waitingSummary(): { waiting: number; orchestratorBusy: boolean; labels: string[] };
 }

@@ -132,11 +132,13 @@ export interface FakePort extends PhonePort {
   queued: boolean;
   emitDecidable(ev: { type: 'added' | 'resolved'; item: PhoneDecidable; by?: 'phone' | 'pc' }): void;
   emitTurnEnd(ev: { reply: string; fromPhone: boolean; failed: boolean }): void;
+  emitChatFailed(ev: { chatId: string; role: string; neutralLabel: string }): void;
 }
 
 export function fakePort(): FakePort {
   const dec = new Set<(ev: { type: 'added' | 'resolved'; item: PhoneDecidable; by?: 'phone' | 'pc' }) => void>();
   const turn = new Set<(ev: { reply: string; fromPhone: boolean; failed: boolean }) => void>();
+  const failed = new Set<(ev: { chatId: string; role: string; neutralLabel: string }) => void>();
   const p: FakePort = {
     texts: [], answers: [], open: [], result: 'ok', queued: false,
     async sendFromPhone(text, opts) { p.texts.push({ text, voice: opts.voice }); return { queued: p.queued }; },
@@ -145,9 +147,11 @@ export function fakePort(): FakePort {
     async decidePlanFromPhone(chatId, at, yes) { p.answers.push({ chatId, id: at, yes }); return p.result; },
     onDecidable(cb) { dec.add(cb); return () => { dec.delete(cb); }; },
     onOrchestratorTurnEnd(cb) { turn.add(cb); return () => { turn.delete(cb); }; },
+    onChatFailed(cb) { failed.add(cb); return () => { failed.delete(cb); }; },
     waitingSummary: () => ({ waiting: p.open.length, orchestratorBusy: false, labels: p.open.map(d => `${d.role} · ${d.neutralLabel}`) }),
     emitDecidable(ev) { for (const cb of dec) cb(ev); },
     emitTurnEnd(ev) { for (const cb of turn) cb(ev); },
+    emitChatFailed(ev) { for (const cb of failed) cb(ev); },
   };
   return p;
 }

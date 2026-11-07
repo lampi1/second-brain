@@ -5,7 +5,8 @@
 // is never run twice). Every update passes the guard (guard.ts); pairing, commands, text, voice, button presses and the
 // backlog of messages older than the start are handled here; replies, questions and notices leave only through
 // outbound.ts (the one filter). Phone text goes to the Orchestrator through PhonePort.sendFromPhone and never approves
-// anything; only button presses checked by buttons.ts answer simple questions and plans. Notifications follow policy.ts.
+// anything; only button presses checked by buttons.ts answer simple questions and plans. Notifications follow policy.ts
+// (questions, the Orchestrator's replies, failed chats from PhonePort.onChatFailed, urgent notices from main).
 // Used by main (wiring.ts, by the integrator); tests: test/unit/phone/bridge.test.ts against a fake Telegram server.
 import type { PhoneController, PhoneDecidable, PhoneSettingsPatch, PhoneStatus, PhoneBridgeState } from '../../shared/contract/phone';
 import { createBacklog, isBacklog, START_NOTICE, STOP_NOTICE, type BacklogPayload } from './backlog';
@@ -112,6 +113,12 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
     if (!d.send) return;
     const text = ev.failed ? '⚠️ L\'Orchestrator non ha finito il turno: guarda sul PC.' : condense(ev.reply);
     if (text) await out.send(text, { silent: d.silent });
+  }
+
+  async function onChatFailed(ev: { chatId: string; role: string; neutralLabel: string }): Promise<void> {
+    if (!s.paired || runState !== 'running' && runState !== 'paused') return;
+    const d = decide({ kind: 'failed', chatId: ev.chatId, orchestrator: false }, ctx());
+    if (d.send) await out.send(`⚠️ ${ev.role} · ${ev.neutralLabel} si è fermata con un errore: guarda sul PC.`, { silent: d.silent });
   }
 
   // ── incoming ──────────────────────────────────────────────────────────────────────────────────────────────────
@@ -298,6 +305,7 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
     abort = new AbortController();
     const port = deps.phonePort;
     unsubs.push(port.onOrchestratorTurnEnd(ev => { void onTurnEnd(ev).catch(() => undefined); }));
+    unsubs.push(port.onChatFailed(ev => { void onChatFailed(ev).catch(() => undefined); }));
     unsubs.push(port.onDecidable(ev => {
       const key = refKey(ev.item);
       if (ev.type === 'resolved') { waiting.delete(key); void buttons.resolved(ev.item, ev.by).catch(() => undefined); return; }

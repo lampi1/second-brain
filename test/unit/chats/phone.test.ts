@@ -313,6 +313,22 @@ describe('the phone port', () => {
     const w = f.port.waitingSummary();
     expect(w).toEqual({ waiting: 1, orchestratorBusy: true, labels: ['Scout · lavoro 1'] });
   });
+
+  it('onChatFailed: a chat other than the Orchestrator ending in error, with role and neutral label only', async () => {
+    const f = fixture();
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true });
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Cliente Rossi' });
+    const failed: { chatId: string; role: string; neutralLabel: string }[] = [];
+    const off = f.port.onChatFailed(ev => failed.push(ev));
+    const end = (id: string, rid: string, isError: boolean) => f.sinks.get(id)!.item({ kind: 'result', id: rid, at: Date.now(), costUsd: 0, durationMs: 1, turns: 1, isError }, false);
+    end(o.id, 'r1', true);
+    end(c.id, 'r2', false);
+    end(c.id, 'r3', true);
+    await tick();
+    expect(failed).toEqual([{ chatId: c.id, role: 'Scout', neutralLabel: 'lavoro 1' }]);
+    expect(JSON.stringify(failed)).not.toContain('Rossi');
+    off();
+  });
 });
 
 describe('reservedText', () => {
