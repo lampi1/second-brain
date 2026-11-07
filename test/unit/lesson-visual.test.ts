@@ -4,7 +4,7 @@
 // The compare (ADR 0219): two diagrams of the same kind, «Dopo» from the second half of the beats, each side with its
 // own SVG id prefix.
 import { describe, expect, it } from 'vitest';
-import { beatMark, compareAfterShown, compareIds, parseVisual, revealAt, revealMermaid, revealSteps, visualParts, type LessonVisual } from '../../src/shared/lesson-visual';
+import { beatMark, compareAfterShown, compareIds, compareLayout, parseVisual, revealAt, revealMermaid, revealSteps, visualParts, type LessonVisual } from '../../src/shared/lesson-visual';
 import { parseStep } from '../../src/shared/lesson';
 
 const SEQ = 'sequenceDiagram\n  participant A as Motore\n  participant B as Store\n  A->>B: pezzo\n  loop ogni fotogramma\n    B->>B: held\n    B-->>A: ok\n  end\n  B->>A: fine';
@@ -122,6 +122,14 @@ describe('compare (ADR 0219)', () => {
     expect(new Set([a.before, a.after, b.before, b.after]).size).toBe(4);
     expect(compareIds('x"><script>')).toEqual({ before: 'sb-cmp-xscript-before', after: 'sb-cmp-xscript-after' });
     expect(compareIds('').before).toBe('sb-cmp-x-before');
+  });
+  it('wide sides stack, tall ones stand side by side', () => {
+    expect(compareLayout('flowchart LR\n  A --> B', 'flowchart LR\n  A --> C')).toBe('stack');
+    expect(compareLayout('graph RL\n  A --> B', 'graph TD\n  A --> B')).toBe('stack');
+    expect(compareLayout('stateDiagram-v2\n  direction LR\n  A --> B', 'stateDiagram-v2\n  A --> C')).toBe('stack');
+    expect(compareLayout('flowchart TD\n  A --> B', 'flowchart TB\n  A --> C')).toBe('side');
+    expect(compareLayout('sequenceDiagram\n  A->>B: x', 'sequenceDiagram\n  A->>B: y')).toBe('side');
+    expect(compareLayout('stateDiagram-v2\n  A --> B', 'stateDiagram-v2\n  A --> C')).toBe('side');
   });
   it('parseStep keeps a compare', () => {
     const st = parseStep({ title: 'T', say: 'S.', visual: { type: 'compare', before: BEFORE, after: AFTER }, beats: [{ say: 'prima' }, { say: 'dopo' }] }, ['x'], 'p5');

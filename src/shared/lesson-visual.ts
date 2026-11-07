@@ -10,6 +10,7 @@
 // Since ADR 0219: compare = before and after side by side (diagram-design's architecture delta), two mermaid diagrams of
 // the same kind (flowchart, sequence, state); the first half of the beats speaks about «before», then «after» appears.
 // Each side is drawn with its own SVG id prefix (compareIds): two diagrams sharing ids once hid each other's arrows.
+// Wide sides (left-to-right) stack one above the other, tall ones stand side by side (compareLayout).
 
 export type MermaidKind = 'sequence' | 'state' | 'timeline' | 'mindmap';
 export type VisualKind = 'flow' | MermaidKind | 'code' | 'formula' | 'chart' | 'compare';
@@ -122,6 +123,12 @@ function compareSide(v: unknown): string | null {
 /** Whether «after» shows at beat `i` of `n`: the first half of the beats is about «before», then both stand side by
  *  side; with one beat (or «Tutto lo schema») both at once. */
 export const compareAfterShown = (i: number, n: number, whole = false): boolean => whole || n < 2 || i >= Math.ceil(n / 2);
+
+/** A side drawn wider than tall: a left-to-right flowchart, or a state diagram set to `direction LR|RL`. */
+const wideSide = (src: string): boolean => /^(?:flowchart|graph)\s+(?:LR|RL)\b/.test(src) || (sideKind(src) === 'state' && /^\s*direction\s+(?:LR|RL)\b/m.test(src));
+/** How a compare's two sides stand: stacked («Prima» above «Dopo») when either is wider than tall, since two wide
+ *  diagrams squeezed side by side shrink to unreadable (the explain-mode shots, 2026-11); side by side otherwise. */
+export const compareLayout = (before: string, after: string): 'stack' | 'side' => (wideSide(before) || wideSide(after) ? 'stack' : 'side');
 
 /** The SVG id prefixes of a compare's two diagrams, unique per piece and per side: mermaid names its arrowheads and
  *  markers after the render id, and two drawings with the same ids made each other's arrows invisible (the clinical

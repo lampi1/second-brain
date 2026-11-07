@@ -42,4 +42,4 @@ export const DIAGRAM_RULES = `How to draw (every visual):
 - Straight, orthogonal flow: one main direction, few crossings, short labels (2 to 4 words).`;
 
 /** The before/after picture (diagram-design's architecture delta, MIT): one more visual type, in both modes. */
-export const COMPARE_VISUAL = `  - {"type": "compare", "before": "<mermaid>", "after": "<mermaid>"}: before and after side by side (a change, a fix, a migration, a PR): the same kind of diagram twice (flowchart, sequenceDiagram, stateDiagram-v2), the same names for what stays, only what changed is new. The first beats speak about "before", the last about "after".`;
+export const COMPARE_VISUAL = `  - {"type": "compare", "before": "<mermaid>", "after": "<mermaid>"}: before and after side by side (a change, a fix, a migration, a PR): the same kind of diagram twice (flowchart, sequenceDiagram, stateDiagram-v2), the same names for what stays, only what changed is new. Each side is a small diagram (at most 5 nodes), top-down ("flowchart TD") unless the change reads only left to right. The first beats speak about "before", the last about "after".`;

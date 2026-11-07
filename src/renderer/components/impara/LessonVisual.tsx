@@ -7,12 +7,12 @@
 // by DOMPurify's MathML profile) lights the legend row of the symbol the beat explains; a chart (Chart.js, the same
 // drawing as the chat's charts) shows the tooltip of the label the beat points at. «Tutto lo schema» shows it whole. The
 // model's text is untrusted throughout: plain text, a sanitized highlight, a sanitized MathML, a canvas. Motion is off
-// for reduced-motion users (impara.css). A compare (ADR 0219) shows before and after side by side: «Prima» from the
-// first beat, «Dopo» from the second half of the beats, each side drawn with its own SVG id prefix (compareIds, keyed by
-// the piece). Used by ImparaPlayer.tsx; styles impara.css (.lv-*).
+// for reduced-motion users (impara.css). A compare (ADR 0219) shows before and after side by side, or stacked when the
+// diagrams are wide (compareLayout): «Prima» from the first beat, «Dopo» from the second half of the beats, each side
+// drawn with its own SVG id prefix (compareIds, keyed by the piece); its beat note sits under both, never over them. Used by ImparaPlayer.tsx; styles impara.css (.lv-*).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
-import { compareAfterShown, compareIds, revealAt, revealMermaid, revealSteps, type LessonVisual as Visual } from '@shared/lesson-visual';
+import { compareAfterShown, compareIds, compareLayout, revealAt, revealMermaid, revealSteps, type LessonVisual as Visual } from '@shared/lesson-visual';
 import type { LessonBeat } from '@shared/lesson';
 import { parseChartSpec } from '../../lib/chart-spec';
 import { highlightLines } from '../../brain/lib/file-format';
@@ -62,7 +62,7 @@ function Compare({ before, after, idKey, after2, whole, caption }: { before: str
   const [zoom, setZoom] = useState<'before' | 'after' | null>(null);
   const ids = compareIds(idKey);
   return (
-    <div className="lv-compare" data-testid="impara-compare" data-after={after2 ? '1' : '0'}>
+    <div className="lv-compare" data-testid="impara-compare" data-after={after2 ? '1' : '0'} data-layout={compareLayout(before, after)}>
       <figure className="lv-side" data-side="before">
         <figcaption>{t('impara.visual.before')}</figcaption>
         <LessonDiagram base="" own={before} focus={[]} done={[]} whole={whole} caption={`${caption} · ${t('impara.visual.before')}`} zoom={zoom === 'before'} onZoom={on => setZoom(on ? 'before' : null)} idPrefix={ids.before} />
