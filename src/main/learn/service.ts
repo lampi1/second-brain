@@ -28,7 +28,7 @@ import path from 'node:path';
 import { errText, log } from '../log';
 import type { Effort, Lang } from '@shared/contract';
 import {
-  DEFAULT_LESSON_MODE, LESSON_DEPTHS, LESSON_EXTRAS, LESSON_LEVELS, LESSON_MODES, TEACHER_EFFORTS, modeOf, withoutAsking, type LessonMode, applyVerdicts, checkKey, diagramNodes, jsonIn, parseCheck, parseExtra, parseFacts, parseGrade, parsePlan, parseQuestions, parseStep, playlist, stepKey,
+  DEFAULT_LESSON_MODE, LESSON_DEPTHS, LESSON_EXTRAS, LESSON_LEVELS, LESSON_MODES, TEACHER_EFFORTS, endsHere, modeOf, toldRole, withoutAsking, type LessonMode, applyVerdicts, checkKey, diagramNodes, jsonIn, parseCheck, parseExtra, parseFacts, parseGrade, parsePlan, parseQuestions, parseStep, playlist, stepKey,
   type ImparaState, type Lesson, type LessonCheck, type LessonConfidence, type LessonExtraKind, type LessonFact, type LessonKind, type LessonPrep, type LessonStart, type LessonStep, type LessonTeacher,
   type PrepPhase, type TeacherOption, type TutorMode, type TutorTurn, isAskingMode, subjectOf, TUTOR_KEEP, TUTOR_Q_MAX, tutorCard, tutorModeOf, tutorShown,
   TOOLS_REFUSED,
@@ -193,11 +193,14 @@ export class LearnService {
   }
 
   private emit(l?: Lesson): void { try { this.d.changed(this.state(), l); } catch (e) { log.warn('learn', 'lesson change not sent', { cause: errText(e) }); } }
-  /** Reads the lesson now, changes it, writes it: no await in between, so two runs that end together never lose a change. */
-  private edit(id: string, fn: (l: Lesson) => Lesson | void): Lesson | null {
+  /** Reads the lesson now, changes it, writes it: no await in between, so two runs that end together never lose a change.
+   *  `moved` = the change can put the learner on the last item: a «Spiegazione» lesson standing there is finished
+   *  (endsHere, ADR 0219: the recap reached, an extra on it, a one-piece lesson). */
+  private edit(id: string, fn: (l: Lesson) => Lesson | void, moved = false): Lesson | null {
     const l = this.d.store.get(id);
     if (!l) return null;
-    const next = { ...(fn(l) ?? l), updatedAt: this.now() };
+    const changed = fn(l) ?? l;
+    const next = { ...changed, ...(moved && !changed.doneAt && endsHere(changed) ? { doneAt: this.now() } : {}), updatedAt: this.now() };
     this.d.store.save(next);
     // every check of a lesson the user can open is also a review card (at zero tokens)
     if (next.state !== 'preparing' && next.state !== 'failed') { try { this.review.fromChecks(next, subjectOf(next)); } catch (e) { log.warn('learn', 'review cards not written', { cause: errText(e) }); } }
@@ -321,7 +324,7 @@ export class LearnService {
         return { ...l, ...this.cost(paid, gated.run ?? r), degraded: degraded.length ? degraded : undefined, quality: gated.quality, title: plan.title || l.title, diagram: plan.diagram, outline, steps: plan.steps, checks: plan.checks, ...(plan.subject && !l.subject ? { subject: plan.subject } : {}),
           ...(plan.explainQ ? { explain: { q: plan.explainQ } } : {}), state: more ? 'more' : 'ready', at: stepKey(plan.steps[0]!.id), error: undefined,
           prep: { ...(l.prep ?? { phases: {} }), phases: { ...l.prep?.phases, plan: 'done' } } };
-      });
+      }, true);
       log.info('learn', 'lesson plan ready', { data: { id, steps: plan.steps.length, planned: done?.outline.length, facts: facts.length, costUsd: r.costUsd, degraded: done?.degraded ?? [] } });
       if (done?.degraded) log.warn('learn', 'lesson ready with a failed research', { cause: (done.degraded.map(k => `${k}: ${done.prep?.why?.[k] ?? ''}`).join(' · ')).slice(0, 400), hint: 'the lesson says so on its page; a refused tool means the engine denied the read-only run its tools: allow them for that engine and start the lesson again', data: { id, degraded: done.degraded } });
     } catch (e) {
@@ -537,7 +540,7 @@ export class LearnService {
       if (!this.d.store.get(id)) return;
       part = { ...part, steps: gated.steps, checks: gated.checks };
       this.edit(id, l => ({ ...l, ...this.cost(gated.run ? { ...l, ...this.cost(l, gated.run) } : l, r), quality: mergeQuality(l.quality, gated.quality), steps: [...l.steps, ...part.steps], checks: [...l.checks, ...part.checks],
-        outline: [...l.outline.slice(0, l.steps.filter(s => !s.extra).length), ...part.steps.map(s => s.title)], state: 'ready', error: undefined }));
+        outline: [...l.outline.slice(0, l.steps.filter(s => !s.extra).length), ...part.steps.map(s => s.title)], state: 'ready', error: undefined }), true);
       log.info('learn', 'lesson complete', { data: { id, steps: part.steps.length, costUsd: r.costUsd } });
     } catch (e) {
       this.edit(id, l => ({ ...l, error: errText(e).slice(0, 300) }));
@@ -577,7 +580,8 @@ export class LearnService {
         const next = parseStep(v.fix, nodes, s.id, factIds);
         if (pieceIssues(next, hasFacts, explain).length > own.length) return s;
         fixed++;
-        return { ...next, ...(s.role && !next.role ? { role: s.role } : {}) };
+        const out = { ...next, ...(s.role && !next.role ? { role: s.role } : {}) };
+        return explain ? toldRole(out) : out;
       } catch { return s; }
     });
     const outChecks = checks.map((c, i) => {
@@ -734,11 +738,9 @@ export class LearnService {
   /** Where the user is now (the rail, Avanti, Indietro): any key of the play-list. */
   move(id: string, at: string): Lesson {
     const l = this.must(id);
-    const list = playlist(l);
-    if (!list.some(p => p.key === at)) throw new Error('Pezzo non trovato.');
+    if (!playlist(l).some(p => p.key === at)) throw new Error('Pezzo non trovato.');
     // «Spiegazione» ends on its recap (ADR 0219): reaching it is finishing the lesson
-    const last = modeOf(l) === 'explain' && l.state === 'ready' && list[list.length - 1]?.key === at;
-    return this.edit(l.id, x => ({ ...x, at, ...(last && !x.doneAt ? { doneAt: this.now() } : {}) }))!;
+    return this.edit(l.id, x => ({ ...x, at }), true)!;
   }
 
   /** A check answered (zero tokens: its right answer came with it). The first answer stays; a later call only adds the
@@ -789,8 +791,9 @@ export class LearnService {
       let got: ReturnType<typeof parseExtra>;
       try { got = parseExtra(jsonIn(r.text), diagramNodes(l0.diagram), piece.id, kind, ask, this.now(), (l0.facts ?? []).map(f => f.id)); }
       catch (e) { this.edit(id, l => ({ ...l, ...this.cost(l, r), busy: undefined, busyError: `La risposta non era valida (${errText(e)}).`.slice(0, 300) })); return; }
-      this.edit(id, l => ({ ...l, ...this.cost(l, r), steps: [...l.steps, got.step], checks: got.check && modeOf(l) !== 'explain' ? [...l.checks, { ...got.check, after: got.step.id }] : l.checks,
-        busy: undefined, at: stepKey(got.step.id) }));
+      const told = modeOf(l0) === 'explain';
+      this.edit(id, l => ({ ...l, ...this.cost(l, r), steps: [...l.steps, told ? toldRole(got.step) : got.step], checks: got.check && !told ? [...l.checks, { ...got.check, after: got.step.id }] : l.checks,
+        busy: undefined, at: stepKey(got.step.id) }), true);
       log.info('learn', 'extra piece ready', { data: { id, kind, costUsd: r.costUsd } });
     } catch (e) {
       this.edit(id, l => ({ ...l, busy: undefined, busyError: errText(e).slice(0, 300) }));

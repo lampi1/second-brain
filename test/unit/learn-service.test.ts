@@ -352,6 +352,24 @@ describe('LearnService', () => {
     expect(m.store.get(t.id)!.clarify!.qs.length).toBeLessThanOrEqual(1);
   });
 
+  it('«Spiegazione» (ADR 0219): an extra asked on the recap finishes the lesson, one asked in the middle does not', async () => {
+    const { svc, store, runs } = make(fast);
+    const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
+    await until(() => runs.filter(r => r.round === 'impara-quality').length === 2 && store.get(l.id)!.steps.filter(s => !s.extra).length === 6);
+    await new Promise(r => setTimeout(r, 30));
+    const mains = store.get(l.id)!.steps.filter(s => !s.extra);
+    svc.ask(l.id, 'better', stepKey(mains[1]!.id));
+    await until(() => !store.get(l.id)!.busy);
+    expect(store.get(l.id)!.doneAt).toBeUndefined();
+    svc.ask(l.id, 'better', stepKey(mains.at(-1)!.id));
+    await until(() => !store.get(l.id)!.busy);
+    const done = store.get(l.id)!;
+    expect(done.at).toBe(playlist(done).at(-1)!.key);
+    expect(done.doneAt).toBeTruthy();
+    // an extra in «Spiegazione» never leaves work to the learner
+    expect(done.steps.filter(s => s.extra).every(s => s.role !== 'faded' && s.role !== 'practice')).toBe(true);
+  });
+
   it('marks a lesson the app was closed during, lists by last change, removes the folder', () => {
     const root = tmp(), store = new LessonStore(root);
     const base = { title: 't', kind: 'topic' as const, ask: 'x', depth: 'quick' as const, level: 'new' as const, diagram: '', outline: [], steps: [], checks: [], at: '', costUsd: null, engine: null, model: null, sources: [] };

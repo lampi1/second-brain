@@ -23,7 +23,7 @@
 // rest (Spiegamelo meglio M, Fammi un esempio E, Mostrami il codice C, Domanda D), keys that work without the menu too.
 // Used by ImparaPage.tsx; styles impara.css.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { beatsOf, checkKey, doneNodes, isFlowchart, modeOf, parseLessonCommand, parseSpokenChoice, playlist, rootOf, stepKey, type Lesson, type LessonBeat, type LessonCheck, type LessonExtraKind, type LessonFact, type LessonStep, type PlayItem, type PrepPhase, degradedCause, refusedModel } from '@shared/lesson';
+import { beatsOf, checkKey, doneNodes, heardIsExplainBack, isFlowchart, modeOf, parseLessonCommand, parseSpokenChoice, playlist, rootOf, stepKey, type Lesson, type LessonBeat, type LessonCheck, type LessonExtraKind, type LessonFact, type LessonStep, type PlayItem, type PrepPhase, degradedCause, refusedModel } from '@shared/lesson';
 import { answerCheck, askExtra, askTutor, explainBack, impara, imparaPrefs, loadLesson, moveTo, removeLesson, retryLesson, setImparaPrefs, type ImparaSide } from '../../lib/impara';
 import type { StudioKind, StudioLive } from '@shared/lesson-studio';
 import { quizRight, type QuizResponse } from '@shared/quiz';
@@ -271,7 +271,8 @@ function Board({ lesson }: { lesson: Lesson }) {
     if (cmd === 'repeat') return speakNow();
     if (cmd === 'pause') return stopSpeaking(false);
     if (cmd === 'better' || cmd === 'example' || cmd === 'code') return extra(cmd);
-    if (item.kind === 'end' && !lesson.explain?.answer) { setDraft(d => (d.trim() ? `${d} ${text}` : text)); return; }
+    // the «Spiegalo tu» panel, also when opened from an explain lesson's recap (ADR 0219): what is heard is the answer
+    if (heardIsExplainBack(item.kind === 'end', teach && canTeach, lesson)) { setDraft(d => (d.trim() ? `${d} ${text}` : text)); return; }
     // anything else of three words or more is a question for the tutor (ADR 0190), sent at once
     if (text.trim().split(/\s+/).length >= 3) { setTutor(true); if (lesson.tutor?.some(x => x.state === 'asking')) setSeed(text); else void askTutor(lesson.id, item.key, text, prefs.coach && !explainMode ? 'coach' : 'tell'); }
   };
@@ -390,7 +391,7 @@ function Board({ lesson }: { lesson: Lesson }) {
             {lesson.sources.map(s => <div key={s}>{s}</div>)}
             {!lesson.sources.length && <div>{t(`impara.kind.${lesson.kind}`)}</div>}
             {verified > 0 && <button type="button" className="ip-verified" onClick={() => setSources(true)} data-testid="impara-verified" data-tip={t('impara.src.title')}><IconCheck size={10} /> {t('impara.facts', { n: verified })}</button>}
-            {lesson.quality && <div className={`ip-quality ${lesson.quality.none ? 'none' : ''}`} data-testid="impara-quality" data-tip={t('impara.quality.tip')}>
+            {lesson.quality && <div className={`ip-quality ${lesson.quality.none ? 'none' : ''}`} data-testid="impara-quality" data-tip={t(explainMode ? 'impara.quality.tipExplain' : 'impara.quality.tip')}>
               {lesson.quality.none ? t('impara.quality.none') : t('impara.quality', { checked: lesson.quality.checked, fixed: lesson.quality.fixed })}</div>}
             <div className="ip-cost" data-testid="impara-cost">{lesson.costUsd !== null ? `≈ ${lesson.costUsd.toLocaleString(locale(), { maximumFractionDigits: 2, minimumFractionDigits: 2 })} $` : ''}{lesson.model ? ` · ${lesson.model}` : ''}</div>
           </div>

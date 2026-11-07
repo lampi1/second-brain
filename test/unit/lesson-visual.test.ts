@@ -93,35 +93,21 @@ describe('beat marks and parseStep', () => {
 });
 
 describe('compare (ADR 0219)', () => {
-  const BEFORE = 'flowchart LR
-  a["Motore"] -->|"100 ms"| b["Store"]
-  b --> c["Schermo"]';
-  const AFTER = 'flowchart LR
-  a["Motore"] -->|"16 ms"| b["Store"]
-  b --> c["Schermo"]';
+  const BEFORE = 'flowchart LR\n  a["Motore"] -->|"100 ms"| b["Store"]\n  b --> c["Schermo"]';
+  const AFTER = 'flowchart LR\n  a["Motore"] -->|"16 ms"| b["Store"]\n  b --> c["Schermo"]';
   it('keeps two diagrams of the same kind that differ', () => {
     expect(parseVisual({ type: 'compare', before: BEFORE, after: AFTER })).toEqual({ kind: 'compare', before: BEFORE, after: AFTER });
     expect(visualParts({ kind: 'compare', before: BEFORE, after: AFTER })).toBe(2);
-    const seq = 'sequenceDiagram
-  A->>B: x';
-    expect(parseVisual({ kind: 'compare', before: seq, after: 'sequenceDiagram
-  A->>B: y' })?.kind).toBe('compare');
+    const seq = 'sequenceDiagram\n  A->>B: x';
+    expect(parseVisual({ kind: 'compare', before: seq, after: 'sequenceDiagram\n  A->>B: y' })?.kind).toBe('compare');
   });
   it('refuses two different kinds, the same picture twice, a missing side, a directive or a link', () => {
-    expect(parseVisual({ type: 'compare', before: BEFORE, after: 'sequenceDiagram
-  A->>B: x' })).toBeNull();
+    expect(parseVisual({ type: 'compare', before: BEFORE, after: 'sequenceDiagram\n  A->>B: x' })).toBeNull();
     expect(parseVisual({ type: 'compare', before: BEFORE, after: BEFORE })).toBeNull();
     expect(parseVisual({ type: 'compare', before: BEFORE })).toBeNull();
-    expect(parseVisual({ type: 'compare', before: BEFORE, after: `${AFTER}
-  click a "https://x.dev"` })).toBeNull();
-    expect(parseVisual({ type: 'compare', before: '%%{init: {}}%%
-flowchart LR
- a --> b', after: AFTER })).toBeNull();
-    expect(parseVisual({ type: 'compare', before: 'mindmap
-  root((A))
-    b', after: 'mindmap
-  root((A))
-    c' })).toBeNull();
+    expect(parseVisual({ type: 'compare', before: BEFORE, after: `${AFTER}\n  click a "https://x.dev"` })).toBeNull();
+    expect(parseVisual({ type: 'compare', before: '%%{init: {}}%%\nflowchart LR\n a --> b', after: AFTER })).toBeNull();
+    expect(parseVisual({ type: 'compare', before: 'mindmap\n  root((A))\n    b', after: 'mindmap\n  root((A))\n    c' })).toBeNull();
   });
   it('«Dopo» joins in the second half of the beats; with one beat or the whole picture both at once', () => {
     expect([0, 1, 2, 3].map(i => compareAfterShown(i, 4))).toEqual([false, false, true, true]);

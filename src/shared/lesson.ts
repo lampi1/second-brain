@@ -571,11 +571,30 @@ export function parsePlan(v: unknown, opts: { now?: number; base?: string; facts
   return { title: text(o.title, 120, 'title', !opts.base) || '', diagram, outline, steps, checks, explainQ: text(o.explain, 320, 'explain', false), subject: subjectName(o.subject) };
 }
 
+/** «Spiegazione» (ADR 0219): a half-done or practice piece («Tocca a te», «Completa tu») leaves work to the learner;
+ *  it is shown as a worked one. Other roles stay. */
+export const toldRole = <S extends Pick<LessonStep, 'role'>>(s: S): S => (s.role === 'faded' || s.role === 'practice' ? { ...s, role: 'worked' } : s);
+
 /** «Spiegazione» (ADR 0219): whatever the model wrote that asks the learner is dropped, whatever the prompt said: no
- *  check (so no review card from them either) and no final question; a quiz lesson keeps them. */
-export function withoutAsking<P extends { checks: LessonCheck[]; explainQ?: string }>(p: P, l: { mode?: LessonMode }): P {
-  return modeOf(l) === 'explain' ? { ...p, checks: [], ...('explainQ' in p ? { explainQ: '' } : {}) } : p;
+ *  check (so no review card from them either), no final question, no half-done or practice piece (told as worked); a
+ *  quiz lesson keeps them. */
+export function withoutAsking<P extends { checks: LessonCheck[]; explainQ?: string; steps?: LessonStep[] }>(p: P, l: { mode?: LessonMode }): P {
+  if (modeOf(l) !== 'explain') return p;
+  return { ...p, checks: [], ...('explainQ' in p ? { explainQ: '' } : {}), ...(p.steps ? { steps: p.steps.map(toldRole) } : {}) };
 }
+
+/** «Spiegazione» ends on its recap (ADR 0219): a ready lesson whose learner stands on the last item of the play-list
+ *  (the recap, or an extra asked on it, or the only piece) is finished. Always false for a quiz lesson. */
+export function endsHere(l: Pick<Lesson, 'steps' | 'checks' | 'state' | 'at'> & Partial<Pick<Lesson, 'mode' | 'explain'>>): boolean {
+  if (modeOf(l) !== 'explain' || l.state !== 'ready') return false;
+  const list = playlist(l);
+  return list.length > 0 && list[list.length - 1]!.key === l.at;
+}
+
+/** Whether a dictation goes into the «Spiegalo tu» answer: on the graded end, or in the panel an explain lesson opens
+ *  from its recap (ADR 0219), until an answer is given. Used by ImparaPlayer's voice routing. */
+export const heardIsExplainBack = (onEnd: boolean, teachOpen: boolean, l: Partial<Pick<Lesson, 'explain'>>): boolean =>
+  (onEnd || teachOpen) && !l.explain?.answer;
 
 /** An extra piece the user asked for: one piece, maybe with one check. */
 export function parseExtra(v: unknown, nodes: readonly string[], of: string, kind: LessonExtraKind, ask: string | undefined, now = Date.now(), facts: readonly string[] = []): { step: LessonStep; check: LessonCheck | null } {

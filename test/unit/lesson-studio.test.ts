@@ -62,16 +62,15 @@ describe('the quality gate', () => {
     expect(pieceIssues(step({ cites: ['f1'] }), true, true)).toEqual(['visual']);
     expect(pieceIssues(step({ cites: ['f1'] }), true)).toEqual([]);
     expect(pieceIssues(step({ cites: ['f1'], focus: ['a'] }), true, true)).toEqual([]);
-    expect(pieceIssues(step({ cites: ['f1'], diagram: 'flowchart LR
- a --> b' }), true, true)).toEqual([]);
-    expect(pieceIssues(step({ cites: ['f1'], visual: { kind: 'compare', before: 'flowchart LR
- a --> b', after: 'flowchart LR
- a --> c' } }), true, true)).toEqual([]);
+    expect(pieceIssues(step({ cites: ['f1'], diagram: 'flowchart LR\n a --> b' }), true, true)).toEqual([]);
+    expect(pieceIssues(step({ cites: ['f1'], visual: { kind: 'compare', before: 'flowchart LR\n a --> b', after: 'flowchart LR\n a --> c' } }), true, true)).toEqual([]);
     const long = Array(70).fill('parola').join(' ');
     expect(pieceIssues(step({ cites: ['f1'], focus: ['a'], text: long }), true, true)).toEqual(['one-idea']);
     expect(pieceIssues(step({ cites: ['f1'], focus: ['a'], text: long }), true)).toEqual([]);
+    // no caption of its own: parseStep copied the narration in, the 60 words do not apply (the 80 of the voice do)
+    expect(pieceIssues(step({ cites: ['f1'], focus: ['a'], say: long, text: long }), true, true)).toEqual([]);
   });
-  it('the gate's rules: a quiz checks the questions, an explanation the picture', () => {
+  it('the gate rules: a quiz checks the questions, an explanation the picture', () => {
     expect(gateRules(false)).toEqual(['one-idea', 'example', 'cites', 'diagram', 'questions']);
     expect(gateRules(true)).toEqual(['one-idea', 'example', 'cites', 'diagram', 'visual']);
     expect(QUALITY_RULES).toContain('visual');

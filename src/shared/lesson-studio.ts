@@ -119,7 +119,9 @@ const words = (s: string) => s.split(/\s+/).filter(Boolean).length;
 export function pieceIssues(s: Pick<LessonStep, 'cites' | 'say' | 'text' | 'beats' | 'visual'> & Partial<Pick<LessonStep, 'focus' | 'diagram'>>, hasFacts: boolean, explain = false): QualityRule[] {
   const out: QualityRule[] = [];
   if (hasFacts && !s.cites?.length) out.push('cites');
-  if ((s.beats?.length ?? 0) > 4 || words(s.say) > 80 || words(s.text) > (explain ? 60 : 170)) out.push('one-idea');
+  // a piece with no text of its own has the narration copied in (parseStep): the 60 words are for a caption it wrote
+  const own = explain && s.text !== s.say;
+  if ((s.beats?.length ?? 0) > 4 || words(s.say) > 80 || words(s.text) > (own ? 60 : 170)) out.push('one-idea');
   if (s.visual && visualParts(s.visual) > VISUAL_PARTS_MAX) out.push('diagram');
   if (explain && !s.visual && !s.diagram && !s.focus?.length) out.push('visual');
   return out;

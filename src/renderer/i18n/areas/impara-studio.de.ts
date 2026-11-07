@@ -20,6 +20,8 @@ export const imparaStudioDe: typeof imparaStudioIt = {
   'impara.role.recap': 'Zusammenfassung',
   'impara.quality': ({ checked, fixed }: { checked: number; fixed: number }) => (fixed ? `Qualitätsprüfung: ${fixed} von ${checked} neu geschrieben` : `Qualitätsprüfung: ${checked} von ${checked} ok`),
   'impara.quality.tip': 'Bevor du die Teile siehst, prüft ein kurzer Lauf sie: eine Idee pro Teil, ein konkretes Beispiel, jeder Satz mit seiner Quelle, Diagramme mit höchstens 12 Teilen, Fragen, die zum Nachdenken bringen. Er schreibt nur die durchgefallenen neu.',
+  // «Spiegazione» (ADR 0219): no question to check, a picture for every piece instead
+  'impara.quality.tipExplain': 'Bevor du die Teile siehst, prüft ein kurzer Lauf sie: eine Idee pro Teil, ein konkretes Beispiel, jeder Satz mit seiner Quelle, Diagramme mit höchstens 12 Teilen, ein Bild für jeden Teil. Er schreibt nur die durchgefallenen neu.',
   'impara.quality.none': 'Qualitätsprüfung fehlgeschlagen: Teile wie geschrieben',
   'impara.studio.lead': ({ n }: { n: number }) => (n === 1 ? 'Aus dem einen geprüften Fakt der Lektion. Keine neue Recherche.' : `Aus den ${n} geprüften Fakten der Lektion. Keine neue Recherche.`),
   'impara.studio.noFacts': 'Das Studio arbeitet nur mit geprüften Fakten, und diese Lektion hat keine.',
