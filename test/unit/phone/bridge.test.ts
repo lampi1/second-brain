@@ -2,13 +2,14 @@
 // the token is registered for redaction before the first call and never appears in a log line; pairing with the
 // 6-digit code; foreign ids silent and counted; text to the Orchestrator and the condensed reply back; buttons from
 // the paired chat only; 409 → the conflict error; old messages asked back; /stop halts until re-enabled on the PC;
-// the offset survives a restart; urgent messages pass /pausa.
+// the offset survives a restart; urgent messages pass /pausa; the review fixes (S6, C1-C3, C5-C7).
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createPhoneBridge, ERR_CONFLICT, PAIRED_TEXT, type PhoneBridge } from '../../../src/main/phone/bridge';
 import { loadState } from '../../../src/main/phone/state';
+import { PHONE_TOKEN_SHAPE } from '../../../src/main/phone/token-store';
 import type { PhoneBridgeDeps } from '../../../src/main/phone/types';
 import { callbackUpdate, capLog, fakePort, FX, ME, question, startFakeTelegram, textUpdate, TOKEN, waitFor, type CapLog, type FakePort, type FakeTelegram } from './fakes';
 
@@ -103,6 +104,24 @@ describe('phone bridge', () => {
     expect(r.texts()).toEqual([PAIRED_TEXT]);
     expect(tg.sent()[0]!.body.chat_id).toBe(77);
     expect(loadState(r.deps.statePath).paired).toEqual({ userId: 77, chatId: 77 });
+  });
+
+  it('a stranger guessing the code cannot burn it; the PC sees the attempts (review S6)', async () => {
+    const r = rig({ paired: false });
+    const code = r.b.startPairing().pairing!.code;
+    const wrong = code === '000000' ? '000001' : '000000';
+    await waitFor(() => r.b.status().state === 'running');
+    tg.push(...Array.from({ length: 6 }, () => textUpdate(`/start ${wrong}`, { from: 666 })));
+    await waitFor(() => r.b.status().dropped === 6);
+    expect(r.b.status().recent.map(a => a.label)).toEqual(['associazione: codice errato', 'associazione: troppi tentativi da un account']);
+    expect(r.b.status().pairing?.code).toBe(code);
+    tg.push(textUpdate(`/start ${code}`, { from: 666 }));
+    await waitFor(() => r.b.status().dropped === 7);
+    expect(r.b.status().paired).toBe(false);
+    tg.push(textUpdate(`/start ${code}`, { from: 77 }));
+    await waitFor(() => r.texts().length === 1);
+    expect(r.b.status().paired).toBe(true);
+    expect(r.texts()).toEqual([PAIRED_TEXT]);
   });
 
   it('foreign ids are dropped silently and counted', async () => {
@@ -247,6 +266,75 @@ describe('phone bridge', () => {
     expect(r.texts()[before]).toBe('⚠️ Scout · lavoro 1 si è fermata con un errore: guarda sul PC.');
   });
 
+  it('repeated 409s back off longer each time and log the conflict once (review C1)', async () => {
+    const r = rig();
+    const real = r.deps.fetch;
+    const polls: number[] = [];
+    r.deps.fetch = (async (u: string | URL | Request, i?: RequestInit) => { if (String(u).endsWith('/getUpdates')) polls.push(Date.now()); return real(u, i); }) as typeof fetch;
+    for (let n = 0; n < 5; n++) tg.failNext('getUpdates', 409, { ok: false, error_code: 409, description: 'Conflict' });
+    await r.b.start();
+    await waitFor(() => polls.length >= 6);
+    // backoff 5 ms base, 20 ms cap: 10 + 20 + 20 + 20 + 20 after the five 409s (a fixed 5 ms before the fix: 25 ms)
+    expect(polls[5]! - polls[0]!).toBeGreaterThanOrEqual(80);
+    expect(r.log.lines.filter(l => l.includes('telegram polling conflict'))).toHaveLength(1);
+    await waitFor(() => r.b.status().state === 'running');
+  });
+
+  it('after /stop the PC switch shows off; turning it on clears the stop (review C2)', async () => {
+    const r = rig();
+    await r.b.start();
+    expect(r.b.status().enabled).toBe(true);
+    tg.push(textUpdate('/stop'));
+    await waitFor(() => r.b.status().state === 'stopped-from-phone');
+    expect(r.b.status().enabled).toBe(false);
+    r.b.update({ enabled: true });
+    expect(r.b.status().enabled).toBe(true);
+  });
+
+  it('a stop that ends after a new start leaves the new loop running (review C3)', async () => {
+    const r = rig();
+    const real = r.deps.fetch;
+    // getUpdates ignores the abort and, once the gate closes, holds its answer: the stopped loop outlives the stop
+    let gate: Promise<void> = Promise.resolve(), open = () => {};
+    r.deps.fetch = (async (u: string | URL | Request, i?: RequestInit) => {
+      if (!String(u).endsWith('/getUpdates')) return real(u, i);
+      const res = await real(u, { ...i, signal: undefined });
+      await gate;
+      return res;
+    }) as typeof fetch;
+    await r.b.start();
+    await waitFor(() => tg.calls.some(c => c.method === 'getUpdates'));
+    gate = new Promise(res => { open = res; });
+    const sent = r.texts().length;
+    const stopping = r.b.stop();
+    // past the stop notice the halt waits for the old loop; a start now begins a new one
+    await waitFor(() => r.texts().length > sent);
+    await new Promise(res => setTimeout(res, 20));
+    await r.b.start();
+    expect(r.b.status().state).toBe('running');
+    open();
+    await stopping;
+    expect(r.b.status().state).toBe('running');
+  });
+
+  it('a dev build never shows a pairing code (review C5)', async () => {
+    const r = rig({ testApiBase: null, paired: false });
+    await r.b.start();
+    expect(r.b.startPairing().pairing).toBeNull();
+    expect(r.fetches).toEqual([]);
+  });
+
+  it('voice temp files left by a crash are removed at start; nothing else (review C6)', async () => {
+    const r = rig();
+    const left = path.join(r.deps.tempDir, `phone-${'a1'.repeat(12)}.wav`), other = path.join(r.deps.tempDir, 'phone-notes.wav');
+    fs.writeFileSync(left, 'x');
+    fs.writeFileSync(other, 'x');
+    await r.b.start();
+    expect(fs.existsSync(left)).toBe(false);
+    expect(fs.existsSync(other)).toBe(true);
+    expect(fs.existsSync(r.deps.statePath)).toBe(true);
+  });
+
   it('setToken refuses a malformed token and never stores it', async () => {
     const r = rig({ token: null, enabled: false });
     await expect(r.b.setToken('not-a-token')).rejects.toThrow();
@@ -255,5 +343,9 @@ describe('phone bridge', () => {
     expect(st.hasToken).toBe(true);
     expect(st.enabled).toBe(true);
     expect(r.redactions[0]).toBe(TOKEN);
+    // one shape with the token store and the filter (review C7): BotFather ids now reach 16 digits
+    const long = `1234567890123456:${TOKEN.split(':')[1]}`;
+    expect(PHONE_TOKEN_SHAPE.test(long)).toBe(true);
+    expect((await r.b.setToken(long)).hasToken).toBe(true);
   });
 });

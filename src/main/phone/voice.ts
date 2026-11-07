@@ -4,8 +4,10 @@
 // any step fails. Never a recording, never an external speech service. The text goes to the Orchestrator as a voice
 // message and comes back as an echo "🎙️ Ho capito: «…»" (filtered), so a wrong transcription shows at once. No voice
 // models → "Attiva la voce nell'app, scrivimi in testo".
-// Used by bridge.ts; tests: test/unit/phone/voice.test.ts (temp file deleted on success and on error).
+// Leftovers of a crash or a kill are removed at the bridge start (clearVoiceTemp).
+// Used by bridge.ts; tests: test/unit/phone/client-voice.test.ts (temp file deleted on success and on error).
 import crypto from 'node:crypto';
+import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { PhonePort } from '../../shared/contract/phone';
@@ -28,6 +30,23 @@ export interface VoiceDeps {
 }
 
 export type VoiceOutcome = 'sent' | 'too-long' | 'too-large' | 'no-models' | 'empty' | 'error';
+
+/** the temp files handleVoice writes: phone-<24 hex>.wav */
+const VOICE_TEMP = /^phone-[0-9a-f]{24}\.wav$/;
+
+/** Removes voice temp files a crash or a kill left behind (the bridge calls it at start); only handleVoice's own names. */
+export function clearVoiceTemp(tempDir: string, log: Pick<PhoneLog, 'warn'>): number {
+  let names: string[];
+  try { names = fsSync.readdirSync(tempDir); } catch { return 0; }
+  let n = 0;
+  for (const name of names) {
+    if (!VOICE_TEMP.test(name)) continue;
+    try { fsSync.rmSync(path.join(tempDir, name), { force: true }); n++; } catch (e) {
+      log.warn('phone', 'voice temp file not removed', { cause: e instanceof Error ? e.message : String(e), hint: 'it is removed at the next start' });
+    }
+  }
+  return n;
+}
 
 export async function handleVoice(v: TgVoice, d: VoiceDeps): Promise<VoiceOutcome> {
   if (!Number.isFinite(v.duration) || v.duration > MAX_VOICE_SECONDS) {

@@ -19,14 +19,13 @@ import { createOutbound } from './outbound';
 import { createPairing } from './pairing';
 import { decide, type PolicyEvent } from './policy';
 import { loadState, pushAction, saveState, validQuiet, type PhoneState } from './state';
-import { DEFAULT_TIMING, type PhoneBridgeDeps, type TgMessage, type TgUpdate, type UrgentKind } from './types';
-import { handleVoice } from './voice';
+import { BOT_TOKEN_SHAPE, DEFAULT_TIMING, type PhoneBridgeDeps, type TgMessage, type TgUpdate, type UrgentKind } from './types';
+import { clearVoiceTemp, handleVoice } from './voice';
 
 export const ERR_CONFLICT = 'Un\'altra istanza sta leggendo questo bot (altra istanza in polling): chiudila o rigenera il token.';
 export const ERR_TOKEN = 'Token non valido: incollane uno nuovo da BotFather.';
 export const ERR_NETWORK = 'Telegram non raggiungibile (rete, proxy o firewall): riprovo da solo.';
 export const PAIRED_TEXT = '✅ Collegato al PC. Solo questo account può usarmi.\nComandi: /stato /pausa /riprendi /stop';
-const TOKEN_SHAPE = /^\d{5,15}:[A-Za-z0-9_-]{30,64}$/;
 const URGENT_ICON: Record<UrgentKind, string> = { production: '🚨 PRODUZIONE', urgente: '🚨 URGENTE', budget: '💸 BUDGET 100%' };
 
 export interface PhoneBridge extends PhoneController {
@@ -54,6 +53,8 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
   // no start notice after «App chiusa»)
   let starting: Promise<void> | null = null;
   let gen = 0;
+  /** starts begun: a halt that finishes after a newer start leaves the state to it */
+  let starts = 0;
   let timer: ReturnType<typeof setInterval> | null = null;
   let unsubs: (() => void)[] = [];
   let startedAt = 0;
@@ -79,7 +80,8 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
   };
   const status = (): PhoneStatus => ({
     hasToken: !!deps.getToken(),
-    enabled: s.enabled,
+    // after /stop the PC switch shows off: one click turns it back on (update enabled: true clears stoppedFromPhone)
+    enabled: s.enabled && !s.stoppedFromPhone,
     paired: s.paired !== null,
     pairing: pairing.current(),
     state: runState,
@@ -184,8 +186,15 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
         else changed();
         return;
       case 'pair': {
-        const r = pairing.attempt(v.code);
-        if (r !== 'ok') { changed(); return; }
+        const r = pairing.attempt(v.code, v.userId);
+        if (r !== 'ok') {
+          // no reply to the sender; the PC shows it: the dropped counter and one line in the recent actions per series
+          s.counters.dropped++;
+          const label = r === 'blocked' ? 'associazione: troppi tentativi da un account' : r === 'none' ? 'associazione senza codice attivo' : 'associazione: codice errato';
+          if (s.recent[s.recent.length - 1]?.label !== label) act('dropped', label);
+          else { persist(); changed(); }
+          return;
+        }
         s.paired = { userId: v.userId, chatId: v.chatId };
         persist();
         log.info('phone', 'phone paired');
@@ -213,12 +222,14 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
 
   async function poll(signal: AbortSignal): Promise<void> {
     let fails = 0;
+    let conflicts = 0;
     const wait = (ms: number) => new Promise<void>(r => { const t = setTimeout(r, ms); signal.addEventListener('abort', () => { clearTimeout(t); r(); }, { once: true }); });
     while (!signal.aborted && client) {
       let updates: TgUpdate[];
       try {
         updates = await client.getUpdates(s.offset, signal);
         fails = 0;
+        conflicts = 0;
         if (runState === 'error') setRun(s.paused ? 'paused' : 'running');
       } catch (e) {
         if (signal.aborted) return;
@@ -230,7 +241,9 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
           return;
         }
         if (code === 409) {
-          log.error('phone', 'telegram polling conflict', { cause: 'getUpdates 409: another getUpdates or a webhook uses this token', hint: 'close the other instance (dev or another PC) or regenerate the token' });
+          // the other reader stays until someone closes it: back off like a network failure, log once per series
+          if (++conflicts === 1) log.error('phone', 'telegram polling conflict', { cause: 'getUpdates 409: another getUpdates or a webhook uses this token', hint: 'close the other instance (dev or another PC) or regenerate the token' });
+          fails++;
           setRun('error', ERR_CONFLICT);
         } else if (code === 429 && e instanceof TelegramError && e.retryAfterS) {
           await wait(Math.min(timing.maxRetryAfterMs, e.retryAfterS * 1000));
@@ -260,7 +273,7 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
   }
 
   async function halt(next: PhoneBridgeState, notice = false): Promise<void> {
-    gen++;
+    const my = ++gen, startsAtHalt = starts;
     const wasLive = runState === 'running' || runState === 'paused';
     if (notice && wasLive && s.paired) {
       await Promise.race([out.send(STOP_NOTICE, { silent: true }), new Promise(r => { const t = setTimeout(r, 3000); t.unref?.(); })]);
@@ -278,12 +291,15 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
     backlog.clear();
     waiting.clear();
     await l?.catch(() => undefined);
+    // a start (or another halt) since this one began owns the state now: never write 'off' over a new running loop
+    if (my !== gen || starts !== startsAtHalt) return;
     setRun(next, next === 'error' ? error : null);
   }
 
   function start(): Promise<void> {
     if (loop) return Promise.resolve();
     if (starting) return starting;
+    starts++;
     const p = startOnce(gen).finally(() => { if (starting === p) starting = null; });
     starting = p;
     return p;
@@ -300,6 +316,7 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
       return;
     }
     deps.addRedaction(token); // before the first call: the token is in every URL
+    clearVoiceTemp(deps.tempDir, log);
     setRun('starting');
     const c = createTelegramClient({ fetch: deps.fetch, token, base, log, timing });
     try {
@@ -368,7 +385,7 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
     },
     async setToken(token) {
       const t = String(token ?? '').trim();
-      if (!TOKEN_SHAPE.test(t)) throw new Error('Token non valido: copia quello che ti dà BotFather (numeri:lettere).');
+      if (!BOT_TOKEN_SHAPE.test(t)) throw new Error('Token non valido: copia quello che ti dà BotFather (numeri:lettere).');
       deps.addRedaction(t);
       await deps.saveToken(t);
       s.enabled = true;
@@ -386,7 +403,8 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
       return status();
     },
     startPairing() {
-      if (s.paired || !deps.getToken()) return status();
+      // a dev build never polls: a code it showed could never be used
+      if (devDisabled || s.paired || !deps.getToken()) return status();
       pairing.start();
       if (!loop && s.enabled && !s.stoppedFromPhone) void start();
       changed();
