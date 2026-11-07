@@ -35,6 +35,14 @@ const NARROW: Narrowed = ADR0083_DEFAULTS;
 const shape = (id: RoleId, n: Narrowed = {}) => { const r = ROLE_DEFAULTS[id]; return n[id] ?? { tools: r.tools, ceiling: r.ceiling, launches: r.launches }; };
 
 const roots: string[] = [], managers: ChatManager[] = [];
+/** Waits (up to 10 s) until a parent got more messages than `before`; returns when it saw them. */
+async function sentAfter(sent: Map<string, string[]>, id: string, before: number): Promise<number> {
+  for (const t0 = Date.now(); Date.now() - t0 < 10_000;) {
+    if ((sent.get(id)?.length ?? 0) > before) return Date.now();
+    await new Promise(res => setTimeout(res, 10));
+  }
+  throw new Error(`no new message for ${id}`);
+}
 /** the delegation tools' clock (the stall check); undefined = Date.now */
 let clock: (() => number) | undefined;
 afterEach(async () => { clock = undefined; for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
@@ -188,7 +196,8 @@ describe('agent_delegate', () => {
     expect(CHILD_RESULTS_MS).toBeGreaterThanOrEqual(2000);
     expect(CHILD_RESULTS_MS * CHILD_RESULTS_CAP).toBeLessThanOrEqual(5000);
     const f = fixture();
-    (f.m as unknown as { opts: { childResultsMs: number } }).opts.childResultsMs = 40;
+    // a debounce long enough that a loaded machine finishes the three reports inside it
+    (f.m as unknown as { opts: { childResultsMs: number } }).opts.childResultsMs = 1000;
     const parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'B · uno'), f.task('scout', 'B · due'), f.task('scout', 'B · tre')] });
     const kids = f.m.list().filter(c => c.parentId === parent.id);
@@ -197,9 +206,8 @@ describe('agent_delegate', () => {
     await rep(0, 'Uno vecchio');
     await rep(0, 'Uno nuovo', { amends: true });
     await rep(1, 'Due fatto');
-    await new Promise(res => setTimeout(res, 15));
-    expect(f.sent.get(parent.id)!.length).toBe(before); // still inside the debounce
-    await new Promise(res => setTimeout(res, 90));
+    expect(f.sent.get(parent.id)!.length).toBe(before); // the last result restarted the debounce
+    await sentAfter(f.sent, parent.id, before);
     // the third sibling still works: the batch went anyway, one entry per child, only the newest of the first
     const sent = f.sent.get(parent.id)!.slice(before);
     expect(sent).toHaveLength(1);
@@ -211,20 +219,24 @@ describe('agent_delegate', () => {
 
   it('a result that keeps being followed by siblings\' still goes within the cap of the debounce', async () => {
     const f = fixture();
-    (f.m as unknown as { opts: { childResultsMs: number } }).opts.childResultsMs = 40;
+    const ms = 400;
+    (f.m as unknown as { opts: { childResultsMs: number } }).opts.childResultsMs = ms;
     const parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [1, 2, 3, 4].map(n => f.task('scout', `C · ${n}`)) });
     const kids = f.m.list().filter(c => c.parentId === parent.id);
-    const before = f.sent.get(parent.id)!.length, start = Date.now();
-    for (let i = 0; i < 3; i++) {
+    const before = f.sent.get(parent.id)!.length;
+    let first = 0, last = 0;
+    // each result comes just before the debounce would end: without the cap it would be restarted every time
+    for (let i = 0; i < 3 && f.sent.get(parent.id)!.length === before; i++) {
       await f.call('agent_report', kids[i]!.id, { outcome: 'done', summary: `Fatto ${i}`, output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }] });
-      await new Promise(res => setTimeout(res, 35));
+      last = Date.now(); first ||= last;
+      if (i < 2) await new Promise(res => setTimeout(res, ms * 0.9));
     }
-    await new Promise(res => setTimeout(res, 60));
-    const sent = f.sent.get(parent.id)!.slice(before);
-    expect(sent.length).toBeGreaterThanOrEqual(1);
-    expect(sent[0]).toContain('Fatto 0');
-    expect(Date.now() - start).toBeGreaterThan(40 * CHILD_RESULTS_CAP);
+    const at = await sentAfter(f.sent, parent.id, before);
+    expect(f.sent.get(parent.id)![before]).toContain('Fatto 0');
+    expect(at - first).toBeGreaterThanOrEqual(ms * 0.9);
+    // the cap is reached before the debounce restarted by the last result would end
+    if (last - first + ms > ms * CHILD_RESULTS_CAP) expect(at).toBeLessThan(last + ms);
   });
 
   it('an over-long summary and remember line are cut with the marker, not refused; the full summary stays in output', async () => {
