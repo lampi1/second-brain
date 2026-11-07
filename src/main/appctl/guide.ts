@@ -18,6 +18,8 @@ import type { ToolDef } from './tools';
 import { ROUTINE_AUTHORING_SUMMARY } from '../flows/capabilities';
 import { MOUNT_LABEL, TOOL_CATALOG, type ToolMount } from './tool-catalog';
 import { useCounts } from '../use-counter';
+import type { PhoneStatus } from '../../shared/contract/phone';
+import { phoneHub } from '../ipc-handlers/phone';
 
 /** What the renderer's appMap() returns (renderer/lib/app-map.ts AppMapUi). */
 interface UiMap {
@@ -39,6 +41,8 @@ export interface GuideDeps {
   showValues?: () => boolean;
   /** the usage counter's summary (tests); absent = the app's own counter (use-counter.ts) */
   usage?: () => string;
+  /** the phone bridge's live status (tests); absent = the controller the IPC hub holds (ipc-handlers/phone.ts). Never the token. */
+  phone?: () => PhoneStatus;
 }
 
 // ADR 0207: what the Orchestrator needs to add a connector for the user without ever handling a secret
@@ -63,6 +67,7 @@ const ANDAMENTO_TABS = 'One page, rail › Andamento (G C), four tabs: Costi (ap
 const MODEL_CHOICE = 'Every agent runs on the engine, model and effort on its card, unless Balanced mode is on (its own card) (Agenti › role: engine, model; no model = the model of its tier on that engine, Impostazioni › Ruoli › livelli; a launch may ask a higher tier up to the role\'s max). No table picks a model per kind of work any more (owner, 2026-10-30): app_routing and app_routing_save are gone, old routing files in the brain are ignored. A chat without a role (Nuova chat, a new Orchestrator) takes the user\'s «Chat aperte dall\'Orchestrator» defaults or what the user names. To change a role\'s model: Agenti › the role (the back of its card: the shared picker, «Salva nel ruolo» = default of its new chats), or app_config. One picker everywhere (ModelPicker): the four engines with search, each engine\'s state and why it cannot take a model, context and effort per model, loading/error/empty said. On the Orchestrator\'s chip and a strip\'s ⋯ «Modello ed effort…»: «Solo questa chat» changes that chat only (its own engine); on the Orchestrator «Predefinito dell\'Orchestrator» saves engine and model on its card (next Orchestrator on that engine); Flash\'s chip saves its card (it follows the card at every question). «Predefinito della CLI» (the engine picks) is a model row, distinct from the effort. Each chat still records its kind of work for the ledger.';
 /** Balanced mode (ADR 0218): who picks the engine, model and effort of a delegation while it is on. */
 const BALANCED_MODE = 'Balanced mode (setting balancedMode, off by default, protected; ADR 0218): its switch is the first row of the Orchestrator\'s model menu, mirrored in Impostazioni › Ruoli e deleghe. On: every role card\'s model button reads «Balanced» and the agent that delegates (Orchestrator, Strategist) picks engine, model and effort of each role chat so that credits are spent evenly, in proportion to what each provider has left. It reads balanced_status (read-only, no network: each credit pool with left, renewal, target and real share; stats per role and model; the formula\'s proposal), then passes balanced: {engine, model, effort?, why} (engine, model and why required) to app_create_chat or to each agent_delegate task. The app checks only hard limits (engine enabled and trusted, it can apply a model choice, the caller may start it, the model is the card\'s own or one of a tier up to the role\'s max tier, pool not exhausted); no choice = the formula picks. route.reason says who chose and why. Credits: Claude read from its plan windows; OpenCode only «finished» from its log; Cursor and Codex learn from limit errors. Off: each role goes back to its card.';
+const PHONE_BRIDGE = 'Telefono (ADR 0219, Impostazioni › Telefono): the user\'s own private Telegram bot brings messages and voice notes from the phone to the Orchestrator; it runs only in the stable instance (dev shows «Solo istanza stable»). The user pastes the BotFather token once: it is encrypted with safeStorage, write-only, used only by the main process towards api.telegram.org and redacted from logs; no agent, chat, tool or file ever gets it, so never ask the user for it or for its value (send them to Impostazioni › Telefono). Pairing: «Associa telefono» shows a 6-digit code that expires; /start <code> from Telegram binds one Telegram user, everyone else is dropped silently (the counter in Settings). Approval boundary: from the phone the user answers only simple yes/no questions and Strategist plans, with buttons; permissions, commands, production and messages to people stay «Serve il PC»; text typed on the phone never approves anything. Voice notes are decoded in the page and transcribed locally (max 5 min, 20 MB), no recording is created. Focus: the phone gets only what Focus lets through; quiet hours (default 22-7, optional) mute non-urgent messages. /pausa and /stop from the phone pause or stop the bot until the user turns it on again in Settings.';
 /** The usage counter (ADR 0202): what it counts and where, before its numbers. */
 const USAGE_ABOUT = 'Andamento → Uso (app_ui page andamento/uso): page and tab opens and main actions (new request, Orchestrator, Discuti, focus mode, stop all, dictation, file opens…) counted per day on this PC, kept 90 days, zero tokens, never sent anywhere; for deciding which features to keep. Read only: nothing to approve, no setting.';
 /** How the app prepares and observes terminal routines (ADR 0179), so the Orchestrator answers from the code's rules. One
@@ -125,6 +130,8 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
   out.push({ kind: 'page', title: 'Andamento tabs (Trends: costi, qualita with the classifiers, apprendimento, uso)', text: ANDAMENTO_TABS });
   out.push({ kind: 'concept', title: 'Modello di un agente: chi lo sceglie (model choice, no routing table)', text: MODEL_CHOICE });
   out.push({ kind: 'concept', title: 'Balanced mode: crediti in equilibrio tra i provider (auto model choice, credits)', text: BALANCED_MODE });
+  out.push({ kind: 'concept', title: 'Telefono: l\'Orchestrator su Telegram (phone bridge, bot, token, pairing, approval boundary)', text: PHONE_BRIDGE });
+  out.push({ kind: 'concept', title: 'Telefono: stato adesso (phone bridge status, Telegram, pairing)', text: phoneNow(d) });
   out.push({ kind: 'usage', title: 'Uso dell\'app: funzioni e pagine usate di più (usage counter, most used features, quali funzioni uso di più, cosa uso poco)',
     text: `${USAGE_ABOUT} ${values ? (d.usage ?? (() => useCounts.summary()))() : 'The counts are shown only on the Orchestrator\'s own endpoint.'}` });
   for (const [title, text] of ROUTINE_RULES) out.push({ kind: 'routine', title, text });
@@ -134,6 +141,15 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
   for (const t of own) out.push({ kind: 'tool', title: t.name, text: t.description });
   for (const [name, text] of otherTools(own)) out.push({ kind: 'tool', title: name, text });
   return out;
+}
+
+/** The phone bridge now, as Impostazioni › Telefono shows it: state, token set or not (never its value), pairing. */
+export function phoneNow(d: Pick<GuideDeps, 'phone'>): string {
+  let st: PhoneStatus;
+  try { st = (d.phone ?? (() => phoneHub.controller().status()))(); } catch { return 'Now: status unreadable.'; }
+  const pairing = st.paired ? 'phone paired' : st.pairing ? (st.pairing.expiresAt > Date.now() ? 'pairing code shown' : 'pairing code expired') : 'no phone paired';
+  const quiet = st.quietHours ? ` · quiet hours ${st.quietHours.from}-${st.quietHours.to}` : '';
+  return `Now: state ${st.state}${st.error ? ` (${st.error})` : ''} · token ${st.hasToken ? 'set' : 'not set'} · ${st.enabled ? 'enabled' : 'disabled'} · ${pairing}${quiet} · dropped updates ${st.dropped}.`;
 }
 
 /** The app's tools the caller does not have (appctl/tool-catalog.ts), each with who has it: name → text. */

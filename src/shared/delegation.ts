@@ -10,7 +10,11 @@ import { MODEL_TIERS, ROLE_DEFAULTS, currentRoleId, isWorkRole, type ModelTier, 
 import { AGENT_LABEL, oneLine } from './agent-label';
 
 /** Stable provenance for task assignment; display titles never authorize lifecycle changes. */
-export type TaskSource = { kind: 'user' } | { kind: 'chat'; chatId: string } | { kind: 'app' };
+/** phone = the user's own words from the paired phone (Telegram bridge, ADR phone bridge): the user's like a typed message
+ *  everywhere except consent: typed phone text never approves a plan, a question or anything else (ownerSource). */
+export type TaskSource = { kind: 'user' } | { kind: 'chat'; chatId: string } | { kind: 'app' } | { kind: 'phone' };
+/** The message is the user's own (typed in the app, or from the paired phone): reopening, assignments and user notes. */
+export const ownerSource = (s: TaskSource | undefined): boolean => !s || s.kind === 'user' || s.kind === 'phone';
 export interface TaskAssignmentOptions {
   /** An answer verified by the host for a new root Plan. */
   intake?: IntakeSource;

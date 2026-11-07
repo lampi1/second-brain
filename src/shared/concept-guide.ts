@@ -1635,6 +1635,49 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/renderer/lib/voice.ts', 'src/main/voice/service.ts', 'src/main/voice/catalog.ts', 'src/renderer/lib/mic.ts', 'src/renderer/components/VoiceSettings.tsx'],
   },
   {
+    id: 'phone',
+    title: b('Il telefono: l’Orchestrator su Telegram',
+      'The phone: the Orchestrator on Telegram'),
+    summary: b('Un tuo bot Telegram privato porta all’Orchestrator i messaggi e i vocali che scrivi dal telefono; tu rispondi Sì/No alle domande semplici. Il resto aspetta il PC.',
+      'A private Telegram bot of yours brings the messages and voice notes you send from the phone to the Orchestrator; you answer simple yes/no questions. The rest waits for the PC.'),
+    points: [
+      // src/renderer/components/PhoneSettings.tsx; src/main/phone/token-store.ts
+      b('In Impostazioni → Telefono incolli il token che ti dà BotFather: viene cifrato su questo PC e non si rilegge più, né da te né dagli agenti.',
+        'In Settings → Phone you paste the token BotFather gives you: it is encrypted on this PC and never read back, by you or by the agents.'),
+      // src/renderer/components/PhoneSettings.tsx pairing
+      b('«Associa telefono» mostra un codice di 6 cifre che scade (poi «Nuovo codice» ne dà un altro): lo mandi al bot con /start e da quel momento risponde solo al tuo account Telegram. I tentativi sbagliati di altri account restano tra i messaggi scartati.',
+        '"Pair phone" shows a 6-digit code that expires ("New code" then gives another): you send it to the bot with /start, and from then on it answers only your Telegram account. Wrong tries from other accounts show among the dropped messages.'),
+      // src/main/ipc-handlers/phone.ts
+      b('Dal telefono rispondi solo alle domande Sì/No semplici e ai piani dello Strategist, con i pulsanti. Permessi, comandi, produzione e messaggi a persone restano sul PC; un testo scritto dal telefono non approva mai niente.',
+        'From the phone you answer only simple yes/no questions and the Strategist’s plans, with the buttons. Permissions, commands, production and messages to people stay on the PC; text typed on the phone never approves anything.'),
+      // src/renderer/lib/phone-voice.ts
+      b('Un vocale dal telefono viene trascritto sul tuo PC come la voce dell’app, senza creare una registrazione.',
+        'A voice note from the phone is transcribed on your PC like the app’s voice, without creating a recording.'),
+      // src/renderer/lib/phone.ts watchFocus
+      b('Con Focus attivo, al telefono arriva solo quello che Focus lascerebbe passare sul PC; fuori orario i messaggi non urgenti arrivano senza suono.',
+        'With Focus on, the phone gets only what Focus would let through on the PC; in quiet hours non-urgent messages arrive without sound.'),
+      // src/renderer/components/PhoneSettings.tsx state
+      b('Il bot gira solo nell’istanza stable dell’app. Da Telegram /pausa lo mette in pausa e /stop lo ferma e spegne l’interruttore Collegamento finché non lo riaccendi da qui.',
+        'The bot runs only in the stable instance of the app. From Telegram /pausa pauses it and /stop stops it and turns the Link switch off until you turn it on again here.'),
+    ],
+    analogy: b('Come un citofono con un solo inquilino: suona solo per te, e dalla strada puoi dire sì o no, ma per aprire la cassaforte devi salire.',
+      'Like an intercom with a single tenant: it rings only for you, and from the street you can say yes or no, but to open the safe you have to go upstairs.'),
+    diagram: { kind: 'flow', steps: [b('Telefono', 'Phone'), b('Bot Telegram', 'Telegram bot'), b('App sul PC', 'App on the PC'), b('Orchestrator', 'Orchestrator')] },
+    tech: [
+      tech(WHERE, 'Il processo principale chiede i messaggi a api.telegram.org (long polling); il token cifrato con safeStorage resta nel processo principale.',
+        'The main process asks api.telegram.org for messages (long polling); the token, encrypted with safeStorage, stays in the main process.'),
+      tech(LIMITS, 'Telegram non cifra end-to-end le chat con i bot. Vocali fino a 5 minuti e 20 MB.',
+        'Telegram does not encrypt bot chats end to end. Voice notes up to 5 minutes and 20 MB.'),
+    ],
+    anchors: {
+      0: ['src/renderer/components/PhoneSettings.tsx', 'src/main/phone/token-store.ts'],
+      2: ['src/main/ipc-handlers/phone.ts'],
+      3: ['src/renderer/lib/phone-voice.ts'],
+      4: ['src/renderer/lib/phone.ts#watchFocus'],
+    },
+    sources: ['src/renderer/components/PhoneSettings.tsx', 'src/main/phone/token-store.ts', 'src/main/ipc-handlers/phone.ts', 'src/renderer/lib/phone-voice.ts', 'src/renderer/lib/phone.ts'],
+  },
+  {
     id: 'recordings',
     title: b('Le registrazioni delle call',
       'Call recordings'),

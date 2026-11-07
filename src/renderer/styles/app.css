@@ -398,6 +398,8 @@ button.lc-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1
 }
 .msg-user.optimistic .bubble { opacity: 0.7; }
 .msg-from { font-size: 11px; color: var(--text-3); margin: 0 4px 2px; }
+/* a message the user sent from the paired phone (phone bridge) */
+.msg-phone { font-size: 11px; color: var(--text-3); margin: 0 4px 2px; }
 /* a user-role item the user did not type (mail, agents, app news, Esegui results): one muted line, not a bubble */
 .msg-foreign { display: flex; flex-direction: column; align-items: stretch; min-width: 0; }
 .foreign-row {

@@ -178,8 +178,9 @@ export const THUMB_MAX_CHARS = 120_000;
 
 export type ChatItem =
   /** images = how many were attached; thumbs = their previews (live messages; a transcript gives only the count);
-   *  from = not the user's: who sent it (another chat's title, "Orchestrator"), shown above the bubble */
-  | { kind: 'user'; id: string; at: number; text: string; images?: number; thumbs?: string[]; from?: string }
+   *  from = not the user's: who sent it (another chat's title, "Orchestrator"), shown above the bubble;
+   *  via phone = the user wrote it from the paired phone (voice = a voice note, transcribed on the PC): a 📱 badge */
+  | { kind: 'user'; id: string; at: number; text: string; images?: number; thumbs?: string[]; from?: string; via?: 'phone'; voice?: boolean }
   | { kind: 'assistant'; id: string; at: number; text: string; streaming?: boolean }
   | { kind: 'thinking'; id: string; at: number; text: string }
   /** exitCode: a shell command's exit code, only when its engine said it (Claude's Bash result, Codex's exitCode, an ACP

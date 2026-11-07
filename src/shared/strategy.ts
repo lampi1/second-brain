@@ -11,6 +11,7 @@
 import { isWorkRole, type WorkRoleId } from './roles';
 import type { DelegationOutcome } from './delegation';
 import { yesNoOf } from './yes-no';
+import { reservedText } from './away';
 
 /** asking = it questions the user · proposed = the plan waits for the user's ok · revising = the user asked for changes ·
  *  running = approved, steps under way · done = every step done */
@@ -32,7 +33,11 @@ export interface PlanStep {
   endedAt?: number;
 }
 /** One answer the user gave while it asked: what was asked (the question's short header, else the question) and the answer. */
-export interface Clarified { q: string; a: string }
+export interface Clarified {
+  q: string; a: string;
+  /** When an interview line is shortened, classify its original text before discarding it. */
+  pcOnly?: boolean;
+}
 /** An authenticated caller selects its own answer by question; the receiving chat never supplies answer text. */
 export interface IntakeSource { chatId: string; question: string; key: string }
 export type PlanIntake = Clarified | 'stop';
@@ -198,9 +203,11 @@ export function withClarified(plan: StrategyPlan, qs: { question: string; header
   if (stopsQuestions(text)) return { ...plan, enough: true };
   const yn = yesNoOf(text) !== null;
   const entry = { q: cut(q.question), a: cut(yn ? text.replace(/\s*\((consigliat[oa]|recommended|empfohlen)\)\s*/i, '').trim() : text) };
+  const clipped = entry.q.endsWith('…') || entry.a.endsWith('…');
+  const line: Clarified = clipped ? { ...entry, pcOnly: reservedText(q.question) || reservedText(text) } : entry;
   const same = plan.clarified.findIndex(c => c.q === entry.q);
-  if (same >= 0) return { ...plan, clarified: plan.clarified.map((c, i) => i === same ? entry : c) };
-  return { ...plan, asked: (plan.asked ?? plan.clarified.length) + 1, clarified: [...plan.clarified, entry].slice(-CLARIFIED_MAX) };
+  if (same >= 0) return { ...plan, clarified: plan.clarified.map((c, i) => i === same ? line : c) };
+  return { ...plan, asked: (plan.asked ?? plan.clarified.length) + 1, clarified: [...plan.clarified, line].slice(-CLARIFIED_MAX) };
 }
 
 /** A saved plan, checked (an unreadable one is dropped, never guessed). */
@@ -216,7 +223,7 @@ export function readPlan(v: unknown): StrategyPlan | null {
     && time(s.startedAt) && time(s.endedAt))) return null;
   if (p.doneWhen !== undefined && !str(p.doneWhen, DONE_WHEN_MAX)) return null;
   return {
-    phase: p.phase as PlanPhase, at: p.at as number, clarified: (p.clarified as Clarified[]).map(c => ({ q: c.q, a: c.a })),
+    phase: p.phase as PlanPhase, at: p.at as number, clarified: (p.clarified as Clarified[]).map(c => ({ q: c.q, a: c.a, ...(typeof c.pcOnly === 'boolean' ? { pcOnly: c.pcOnly } : {}) })),
     ...(p.asked ? { asked: p.asked as number } : {}), ...(p.enough === true ? { enough: true } : {}),
     steps: (p.steps as PlanStep[]).map(s => ({ title: s.title, ...(s.detail ? { detail: s.detail } : {}), ...(s.role ? { role: s.role } : {}), state: s.state, ...(s.outcome ? { outcome: s.outcome } : {}), ...(s.chatIds ? { chatIds: [...s.chatIds] } : {}),
       ...(s.startedAt ? { startedAt: s.startedAt } : {}), ...(s.endedAt ? { endedAt: s.endedAt } : {}) })),

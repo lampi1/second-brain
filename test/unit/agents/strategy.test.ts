@@ -77,7 +77,7 @@ const planOf = (f: ReturnType<typeof fixture>, id: string) => f.m.list().find(c 
 /** the user's click on the plan they see now */
 const decide = (f: ReturnType<typeof fixture>, id: string, d: 'approve' | 'change', text?: string) => f.m.planDecide(id, d, planOf(f, id).at, text);
 
-async function answerPanel(f: ReturnType<typeof fixture>, chatId: string, question: string, value: string, tool = 'AskUserQuestion', source: 'user' | 'relay' = 'user') {
+async function answerPanel(f: ReturnType<typeof fixture>, chatId: string, question: string, value: string, tool = 'AskUserQuestion', source: 'pc' | 'phone' | 'relay' = 'pc') {
   const q = { question, options: [{ label: 'Sì' }, { label: 'No' }], multiSelect: false };
   f.sinks.get(chatId)!.pending({ id: question, type: 'question', tool, title: question, detail: '', input: {}, questions: [q], at: Date.now() });
   await f.m.answer(chatId, question, { kind: 'question', answers: { [question]: value } }, source);
@@ -120,7 +120,7 @@ describe('a Strategist\'s plan with the user', () => {
     const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true, prompt: 'Pianifica uno sconto' });
     const start = async (chatId: string, question: string) => f.m.create({ harness: 'claude', roleId: 'strategist', cwd: f.dir, prompt: 'Sconto' }, 'agent', undefined, {}, { intake: f.m.bindPlanIntake(chatId, question) });
     const first = 'Vale anche sulle offerte?';
-    await answerPanel(f, o.id, first, 'No');
+    await answerPanel(f, o.id, first, 'No', 'AskUserQuestion', 'phone');
     await expect(start(o.id, 'Altra domanda?')).rejects.toThrow(/exact question/);
     const s = await start(o.id, first);
     expect(s.plan?.clarified).toEqual([{ q: first, a: 'No' }]);

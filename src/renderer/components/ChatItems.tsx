@@ -356,6 +356,8 @@ export const Item = memo(function Item({ item, beforeAsk, refs, marks, reaction 
       <div className={`msg-user ${item.id.startsWith('local:') ? 'optimistic' : ''}`} data-testid={`item-${item.id}`} data-mode={nc?.mode ?? undefined}>
         {item.thumbs?.length ? <ImageStrip images={item.thumbs.map(thumb => ({ thumb }))} testid={`item-${item.id}-images`} /> : item.images ? <span className="msg-images-count">{t('chat.items.userImages', { n: item.images })}</span> : null}
         {item.from && <div className="msg-from" data-testid={`item-${item.id}-from`}>{t('chat.items.from', { source: item.from })}</div>}
+        {/* sent from the paired phone (phone bridge): 📱, 🎙️ 📱 for a voice note */}
+        {item.via === 'phone' && <div className="msg-phone" data-testid={`item-${item.id}-phone`} data-voice={item.voice ? '' : undefined}>{item.voice ? '🎙️ 📱' : '📱'} {t(item.voice ? 'chat.items.fromPhoneVoice' : 'chat.items.fromPhone')}</div>}
         {nc?.mode && <div className="msg-newchat" data-testid={`item-${item.id}-mode`} data-tip={t(`chat.items.modeTip.${nc.mode}`)}>{nc.mode === 'plan' ? <IconBranch size={11} /> : <IconPlus size={11} />}{t(`chat.mode.${nc.mode}`)}</div>}
         {fix ? <CorrectionBubble quote={fix.quote} fix={fix.fix} /> : text && <div className="bubble">{text}</div>}
         {reaction && <div className="msg-react" data-testid={`item-${item.id}-reaction`} data-reaction="">{reaction}</div>}

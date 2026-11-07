@@ -2,7 +2,8 @@
 // finché non ci sono ... ogni agente sappia che io sono afk e deve andare avanti con i consigliati»). The words the
 // agents get while the user is away, the line that tells them the user is back, and the one pure choice the app makes for a
 // question nobody will answer: the option marked recommended. Used by main/chats/manager.ts (turn hint, questions,
-// permissions, plans), main/workflows/tools.ts (proposals) and main/chats/away-log.ts (the recap). Pinned by
+// permissions, plans), main/workflows/tools.ts (proposals), main/chats/away-log.ts (the recap) and main/chats/phone-port.ts
+// (what the phone may decide). Pinned by
 // test/unit/away.test.ts.
 import type { Question } from './contract';
 
@@ -22,6 +23,10 @@ const MARK = /\((consigliat[oa]|recommended|empfohlen)\)/i;
 /** A question about something the app never decides for the user (ADR 0191: production, secrets, permissions, merges
  *  and publishing, messages to people or services): left for their return whatever the agent recommends. */
 const RESERVED = /\b(deploy\w*|produzion\w*|production|prod|rilasci\w*|release|publish\w*|pubblic\w*|merge|push|segret\w*|secret\w*|password|token|credenzial\w*|api.?key|chiav\w*|permess\w*|permission\w*|hook\w*|invi\w*|mand\w*|send|mail|e-?mail|messaggi\w*|message|teams|slack|cliente|collegh\w*)\b/i;
+
+/** Does this text touch something reserved to the user (RESERVED above)? The phone bridge shows such a question or
+ *  plan with no buttons (src/main/chats/phone-port.ts). */
+export const reservedText = (text: string): boolean => RESERVED.test(text);
 
 /** The option the app picks for an absent user: only the one the agent marked «(consigliato)» (the question rule asks
  *  for it); none marked, or a question about something reserved to the user, stays for the user (null). */

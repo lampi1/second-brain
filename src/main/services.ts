@@ -33,7 +33,7 @@ export interface ChatService {
   assignTask?(chatId: string, text: string, options?: TaskAssignmentOptions): Promise<void>;
   userEvents?(chatId: string, afterSeq?: number): UserTaskEvents;
   synthesizeResult?(runId: string, source: TaskSource): Promise<void>;
-  answer(chatId: string, requestId: string, answer: Answer, source?: 'user' | 'relay'): Promise<void>;
+  answer(chatId: string, requestId: string, answer: Answer, by?: 'pc' | 'phone' | 'relay'): Promise<void>;
   /** a Strategist's proposed plan: the user's «Approva e parti» or «Cambia qualcosa» (ADR 0108) */
   planDecide(chatId: string, decision: 'approve' | 'change', at: number, text?: string): Promise<void>;
   stop(chatId: string, keepQueued?: boolean): Promise<void>;

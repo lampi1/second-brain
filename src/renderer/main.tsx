@@ -17,6 +17,8 @@ import { nextThing, openLink, uiCommand } from './actions';
 import { checkDnd, startStore } from './store/store';
 import { startVoice } from './lib/voice';
 import { startRecs } from './lib/recorder';
+import { startPhone } from './lib/phone';
+import { startPhoneVoice } from './lib/phone-voice';
 import { startMics } from './lib/mic';
 import { now } from './lib/clock';
 import { startLayer } from './lib/layer';
@@ -64,6 +66,8 @@ if (isBrainTestRoute()) {
   startMics();
   startVoice();
   startRecs();
+  startPhone(); // the phone bridge's status and the Focus signal (ADR 0219)
+  startPhoneVoice(); // voice notes from the phone, decoded here for main
   startViewports();
   startLater(); // "Rispondi dopo": main's flag, before the first popup can show
   startLayer(() => nextThing(), link => { openLink(link); });

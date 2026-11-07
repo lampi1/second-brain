@@ -69,7 +69,7 @@ export function attachActivity(d: ActivityDeps): { list: () => ReturnType<typeof
     if (ch === 'chat:updated') { const c = payload as ChatSummary; last.set(c.id, c); put(watch.updated(c)); }
     else if (ch === 'chat:item') { const p = payload as EventMap['chat:item']; if (!p.replace || p.item.kind !== 'assistant' || !p.item.streaming) put(watch.item(p.chatId, p.item, last.get(p.chatId))); }
     else if (ch === 'pending:added') { const p = payload as EventMap['pending:added']; put(watch.pendingAdded(p, last.get(p.chatId))); }
-    else if (ch === 'pending:resolved') { const p = payload as EventMap['pending:resolved']; put(watch.pendingResolved(p.chatId, p.requestId, last.get(p.chatId))); }
+    else if (ch === 'pending:resolved') { const p = payload as EventMap['pending:resolved']; put(watch.pendingResolved(p.chatId, p.requestId, last.get(p.chatId), p.by)); }
     else if (ch === 'chat:removed') { const p = payload as EventMap['chat:removed']; watch.removed(p.chatId); last.delete(p.chatId); }
     else if (ch === 'feed:events') for (const e of payload as FeedEvent[]) { if (e.away) continue; const r = feedToLog(e); if (r) journal.record({ ...r, at: e.at }); }
   });

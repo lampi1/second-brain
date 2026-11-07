@@ -1,7 +1,7 @@
 // second-brain main process: one window, the services (chats, browser + MCP, brain + feed) and the typed IPC. The
 // handlers of each area live in src/main/ipc-handlers/*.ts; this file builds what they need (HandlerContext) and
 // registers them all.
-import { app, nativeImage, session, utilityProcess, type BrowserWindow } from 'electron';
+import { app, nativeImage, powerMonitor, safeStorage, session, utilityProcess, type BrowserWindow } from 'electron';
 import { DefaultBrain } from '../modules/ai-first/default-brain';
 import { createAppConnectors } from '../modules/onboarding/app-host';
 import fs from 'node:fs';
@@ -55,6 +55,14 @@ import { settingsHandlers } from './ipc-handlers/settings';
 import { brainHandlers } from './ipc-handlers/brain';
 import { agentsHandlers } from './ipc-handlers/agents';
 import { mediaHandlers } from './ipc-handlers/media';
+import { disabledPhoneController, setPhoneController } from './ipc-handlers/phone';
+import { safeStorageCipher } from './engines/secrets';
+import { initPhoneTokenStore } from './phone/token-store';
+import { requestVoiceDecode } from './phone/decode-request';
+import { createAppPhone, urgentSources } from './phone/wiring';
+import { lastTyped } from './appctl/user-words';
+import type { PhoneBridge } from './phone/bridge';
+import { addRedaction } from './log';
 
 const outDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 if (process.platform === 'win32') app.setAppUserModelId(APP_ID); // Windows toasts and taskbar grouping only
@@ -178,6 +186,23 @@ app.whenReady().then(async () => {
   win?.webContents.on('did-start-navigation', d => { if (d.isMainFrame && !d.isSameDocument) recPageGone(); });
   win?.webContents.on('render-process-gone', recPageGone);
   app.on('will-quit', () => { recordings.dispose(); voice.dispose(); useCounts.close(); });
+  // the phone bridge (ADR 0219): only the stable instance polls Telegram; dev gets a fake server from SB_PHONE_TEST_API
+  // (loopback only) or stays 'dev-disabled'; the demo has no chats port, so its page shows a disabled controller
+  const phoneTokens = initPhoneTokenStore(app.getPath('userData'), safeStorageCipher(safeStorage));
+  let phone: PhoneBridge | null = null;
+  if (s.phonePort) {
+    phone = createAppPhone({
+      userData: app.getPath('userData'), isStable, env: process.env, port: s.phonePort, token: phoneTokens,
+      decodeVoice: bytes => requestVoiceDecode(win && !win.isDestroyed() ? win.webContents : null, bytes),
+      voice,
+      windowActive: () => !!win && !win.isDestroyed() && win.isFocused() && win.isVisible() && !win.isMinimized(),
+      idleSeconds: () => powerMonitor.getSystemIdleTime(),
+      nightMode: () => s.brain.settings().awayMode === true,
+      addRedaction, log,
+    });
+    setPhoneController(phone);
+    emitter.tap(urgentSources(phone, () => s.chats.list(), lastTyped));
+  } else setPhoneController(disabledPhoneController(isStable ? 'off' : 'dev-disabled', () => phoneTokens.has()));
     const mcpServers = () => { if (!s.mcpServers) throw new Error('Server MCP non disponibili.'); return s.mcpServers; };
     const connectors = createAppConnectors(app.getPath('userData'), () => s.tasks.refreshFresh(), l => s.tasks.onRead(l));
     await connectors.ready;
@@ -225,6 +250,8 @@ app.whenReady().then(async () => {
   // an approved or auto-applied change rolled back from anywhere counts as a no in the Proposte ledger (ADR 0193)
   s.brainModel.log.onRolledBack(id => proposals.changeUndone(id));
   void windowReady.then(() => proposals.start());
+  // the phone bridge starts once the page can decode voice notes; its errors stay in its status (Impostazioni → Telefono)
+  void windowReady.then(() => phone?.start()).catch(e => log.warn('phone', 'phone bridge start failed', { cause: String(e), hint: 'see Impostazioni → Telefono' }));
   registerHandlers(handlers, () => win?.webContents ?? null, { contents: () => overlay.contents, channels: ['overlay:size', 'overlay:action', 'overlay:focus'] });
   // Recovery starts before the renderer store: its IPC must already be registered on the first navigation.
   void win.loadURL(appPageUrl(outDir));
@@ -260,7 +287,8 @@ app.whenReady().then(async () => {
     // the stable launcher (scripts/release.mjs) waits for a quitting app to go before starting again; an open one it leaves be
     try { fs.writeFileSync(path.join(app.getPath('userData'), 'quitting.json'), JSON.stringify({ pid: process.pid, at: new Date().toISOString() })); } catch { /* best effort */ }
     const cap = new Promise<void>(r => setTimeout(r, 6000));
-    void Promise.race([s.shutdown(), cap])
+    // the phone gets its silent «🔴 App chiusa» (at most 3 s, bridge.stop) while the services shut down
+    void Promise.race([Promise.all([phone?.stop().catch(() => undefined), s.shutdown()]), cap])
       .catch(err => log.warn('app', 'shutdown failed', { data: String(err) }))
       .finally(async () => {
         s.killNow();
