@@ -338,7 +338,7 @@ describe('compaction window 300k → 200k (ADR 0051)', () => {
   });
 });
 
-describe('load queue 75/15 → emergency brake 95/10 (ADR 0221)', () => {
+describe('load queue 75/15 → emergency brake 95/10 (ADR 0222)', () => {
   it('a saved 75 / 15 nobody set follows the brake, each on its own; a value set stays; a new install gets 95 / 10', () => {
     const dir = tmpDir();
     fs.writeFileSync(path.join(dir, 'config.json'), JSON.stringify({ ...DEFAULTS, loadQueueCpu: 75, loadQueueRam: 15 }));

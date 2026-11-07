@@ -197,7 +197,7 @@ export class ConfigStore {
     }
   }
 
-  /** The load queue's thresholds became an emergency brake (ADR 0221): a saved 75 % CPU / 15 % free RAM nobody set
+  /** The load queue's thresholds became an emergency brake (ADR 0222): a saved 75 % CPU / 15 % free RAM nobody set
    *  (no change in the log) follows the new 95 / 10, each on its own; a value chosen stays. Once per userData. */
   private migrateLoadBrake(hadFile: boolean): void {
     const mark = path.join(this.userData, 'migrated-load-brake-95');

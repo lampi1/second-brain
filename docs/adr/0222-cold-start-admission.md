@@ -1,4 +1,4 @@
-# ADR 0221 · Cold-start admission: a slot semaphore, CPU/RAM only as an emergency brake
+# ADR 0222 · Cold-start admission: a slot semaphore, CPU/RAM only as an emergency brake
 
 Date: 2026-11-07 · Status: accepted · Supersedes: ADR 0036 (its CPU thresholds as the queue's rule; the queue itself,
 its priorities, "Avvia ora" and ADR 0064's bypasses stay)

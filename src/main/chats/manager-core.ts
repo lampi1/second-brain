@@ -59,10 +59,10 @@ export abstract class ManagerCore {
   protected coldTimer: NodeJS.Timeout | null = null;
   protected readonly counters: ContextCounters;
   protected readonly onExit = (): void => { this.killAll(true); this.flushWrites(); };
-  /** the cold-start queue (ADR 0221); null = not wired: everything runs at once */
+  /** the cold-start queue (ADR 0222); null = not wired: everything runs at once */
   protected readonly admission: AdmissionQueue | null;
   // engines are started ahead even while chats wait for a cold-start slot (the next one adopts it); only the
-  // emergency brake (CPU or RAM, ADR 0221) stops them
+  // emergency brake (CPU or RAM, ADR 0222) stops them
   /** the chat id of the warm engine being spawned now (spawnWarm), before the pool holds it */
   protected warmChat: string | null = null;
   /** the launch of each waiting engine by its chat id, until a chat adopts it */

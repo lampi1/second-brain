@@ -54,7 +54,7 @@ describe('chat ↔ browser pairs', () => {
 });
 
 describe('format', () => {
-  it('why a chat waits: the brake figure, every cold-start slot taken, or the chats ahead (ADR 0221)', () => {
+  it('why a chat waits: the brake figure, every cold-start slot taken, or the chats ahead (ADR 0222)', () => {
     const q = { kind: 'start' as const, position: 1, since: 0, cpu: 99, freeRam: 40, starting: 7, slots: 7 };
     const limits = { cpu: 95, ram: 10 };
     expect(queueReason(q, limits)).toBe('CPU 99%');

@@ -1,4 +1,4 @@
-// Cold-start admission of agents' chats (ADR 0221, superseding the CPU queue of ADR 0036; idea from cloudroom's
+// Cold-start admission of agents' chats (ADR 0222, superseding the CPU queue of ADR 0036; idea from cloudroom's
 // startups semaphore). Before an agent (the Orchestrator's new chat, a closed chat reopened by an agent, the app's own
 // resume after a restart) starts a chat's engine, ChatManager asks this queue: at most `slots` cold starts run at once
 // (default max(1, floor(cores/2))), each holding its slot from the spawn until the engine's first answer, its exit or

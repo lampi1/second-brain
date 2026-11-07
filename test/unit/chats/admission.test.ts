@@ -1,4 +1,4 @@
-// The cold-start queue (admission.ts, ADR 0221, superseding ADR 0036) with a fake load sampler: at most `slots` cold
+// The cold-start queue (admission.ts, ADR 0222, superseding ADR 0036) with a fake load sampler: at most `slots` cold
 // starts at once (cores/2), a slot held until its run calls done (or slotMaxMs, or drop), a 'turn' never waiting; the
 // emergency brake (95 % CPU / 10 % free RAM) with hysteresis (two samples under); FIFO, the app's chats behind the
 // work chats, "Avvia ora" past the cap, the switch; then ChatManager against the fake CLI: an agent's new chat and an

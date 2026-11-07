@@ -1,6 +1,6 @@
 # ADR 0036 · CPU-aware admission of agents' chats and turns
 
-Date: 2026-10-13 · Status: superseded by ADR 0221 (cold-start slots; CPU/RAM only an emergency brake); partly superseded by ADR 0071 (chat-space portions) · Amended by: ADR 0064 (messages between chats never wait)
+Date: 2026-10-13 · Status: superseded by ADR 0222 (cold-start slots; CPU/RAM only an emergency brake); partly superseded by ADR 0071 (chat-space portions) · Amended by: ADR 0064 (messages between chats never wait)
 
 ## Context
 With many chats the PC sits at 100 % CPU: the Regia opens work chats, chats write to each other, a restart resumes

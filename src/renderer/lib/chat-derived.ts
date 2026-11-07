@@ -52,7 +52,7 @@ const tallyMemo = memoLast((chats: Chats, day: number): OrchestratorTally => orc
 /** The Orchestrator's tally of today's chats (lib/orchestrator-tally.ts); a new day counts again. */
 export const tallyOf = (chats: Chats, now = Date.now()): OrchestratorTally => tallyMemo(chats, dayOf(now));
 
-/** The first chat in the cold-start queue (ADR 0221), archived ones aside. */
+/** The first chat in the cold-start queue (ADR 0222), archived ones aside. */
 export const firstQueuedOf = memoLast((chats: Chats): string | null =>
   chatList(chats).filter(c => c.queued && !c.closedAt).sort((a, b) => a.queued!.position - b.queued!.position)[0]?.id ?? null);
 /** Chats at work now (state.ts runningCount). */

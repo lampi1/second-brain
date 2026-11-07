@@ -212,7 +212,7 @@ export class ChatManager extends ManagerSink implements ChatService {
     // «Fork») is checked when the session's own title replaces it; the Orchestrator's below, Flash is one of a kind
     const uniqueOk = !req.orchestrator && !req.quick && (!!req.title?.trim() || !!req.prompt?.trim());
     const title = uniqueOk ? this.uniqueTitle(typedTitle) : typedTitle;
-    // an agent's chat with a prompt starts with its first message, through the cold-start queue (ADR 0221); a warm engine is
+    // an agent's chat with a prompt starts with its first message, through the cold-start queue (ADR 0222); a warm engine is
     // already running: adopting it is no new start (its first turn still asks the queue)
     const given = req.prompt?.trim() ? req.prompt : null;
     // a Sentinel checks a change: the app gathers it (branch, base, commits, files, diff) instead of 5-15 git calls
@@ -410,7 +410,7 @@ export class ChatManager extends ManagerSink implements ChatService {
     return this.gate(r, () => this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia));
   }
 
-  /** Agent work through the cold-start queue (ADR 0221): runs now (the promise is the delivery's) or waits, and then
+  /** Agent work through the cold-start queue (ADR 0222): runs now (the promise is the delivery's) or waits, and then
    *  resolves at once; a later failure lands on the chat (lastError). A chat in the middle of a turn never waits: the
    *  message joins its running work; one with a live engine never waits either. A cold start holds its slot until the
    *  engine's first answer, a question or its exit (coldStarted), or until its delivery fails. */

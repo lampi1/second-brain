@@ -18,7 +18,7 @@ import { DELEGATION_DEFAULTS, DELEGATION_RANGE, MODEL_TIERS, type ModelTier } fr
 export const COMPACT_WINDOW = 200_000;
 /** the default before 2026-10-14: a saved value equal to it that the user never set follows the new one (config.ts) */
 export const OLD_COMPACT_WINDOW = 300_000;
-/** The cold-start queue's emergency brake (ADR 0221): CPU over 95 % or free RAM under 10 %; before 2026-11-07 these
+/** The cold-start queue's emergency brake (ADR 0222): CPU over 95 % or free RAM under 10 %; before 2026-11-07 these
  *  were the queue's own thresholds, 75 / 15 (ADR 0036): a saved old value the user never set follows the new one. */
 export const LOAD_BRAKE_CPU = 95;
 export const LOAD_BRAKE_RAM = 10;
@@ -68,7 +68,7 @@ const BASE: readonly SettingDef[] = [
   { key: 'engineIdleMin', type: 'int', min: 0, max: 1440, default: 30, protected: false, label: 'Libera il motore delle chat ferme dopo (minuti)',
     description: 'Una chat ferma da tanti minuti, senza domande, coda o lavori in background, chiude il suo processo (con server MCP e shell) e resta sulla griglia; al prossimo messaggio riparte da sola dalla sua storia. L’Orchestrator non viene mai liberato. 0 = mai.' },
   // protected: an agent turning the queue off, or raising its brake, would start its own chats ahead of the machine.
-  // ADR 0221: the queue limits cold starts (cores/2 at once); CPU/RAM are only the emergency brake (95 % / 10 %).
+  // ADR 0222: the queue limits cold starts (cores/2 at once); CPU/RAM are only the emergency brake (95 % / 10 %).
   { key: 'loadQueue', type: 'boolean', default: true, protected: true, label: 'Coda avvii a freddo',
     description: 'Le chat nuove aperte dall’Orchestrator o da altre chat partono al massimo metà dei core del PC alla volta (7 su 14 core); le altre aspettano in coda il loro turno. Una chat già avviata non aspetta mai; i tuoi messaggi partono sempre subito; niente viene fermato.' },
   { key: 'loadQueueCpu', type: 'int', min: 30, max: 100, default: LOAD_BRAKE_CPU, protected: true, label: 'Freno d’emergenza: CPU oltre (%)',

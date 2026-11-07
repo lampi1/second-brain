@@ -1,4 +1,4 @@
-// E2E of the cold-start queue (main/chats/admission.ts, ADR 0221) with the fake Claude engine and a forced load
+// E2E of the cold-start queue (main/chats/admission.ts, ADR 0222) with the fake Claude engine and a forced load
 // (SB_LOAD_FORCE="99,40": CPU 99%, RAM 40% free, over the 95% emergency brake). A chat whose turn the last quit cut
 // resumes by itself (the app's own message, not the user's): with the brake on that resume waits, its tile
 // (ChatTile.tsx) shows "In coda · CPU 99%"

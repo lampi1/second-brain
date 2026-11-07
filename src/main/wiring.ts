@@ -312,7 +312,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     prewarm: !process.env.SB_CLAUDE_PATH && process.env.SB_PREWARM !== '0',
     mcpUrlFor: chatId => browser.mcpUrlFor(chatId),
     extMcp: chatId => mcpServers.launch(chatId, browser.mcpUrlFor(null).replace(/\/mcp$/, '')),
-    // agents' cold starts wait for one of cores/2 slots, or the emergency brake (ADR 0221); SB_LOAD_FORCE="cpu,freeRam" fixes the load
+    // agents' cold starts wait for one of cores/2 slots, or the emergency brake (ADR 0222); SB_LOAD_FORCE="cpu,freeRam" fixes the load
     // and SB_COLD_SLOTS the slots
     // for the e2e suite
     admission: {

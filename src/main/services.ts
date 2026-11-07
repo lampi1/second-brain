@@ -20,7 +20,7 @@ export interface ChatService {
   pending(): PendingRequest[];
   /** the "/" commands the chat's engine reported; null = none yet (ADR 0018) */
   commands(chatId: string): ChatCommand[] | null;
-  /** by agent = an agent's chat (app_create_chat): its first turn may wait in the cold-start queue (ADR 0221).
+  /** by agent = an agent's chat (app_create_chat): its first turn may wait in the cold-start queue (ADR 0222).
    *  opts.boundByOrchestrator: a call from the unauthenticated /mcp/app mount: the chat runs no wider than the open
    *  Orchestrator (refused without one), since any local process can reach that mount */
   create(req: NewChat, by?: 'user' | 'agent', inherited?: undefined, links?: undefined, opts?: { boundByOrchestrator?: boolean; intake?: IntakeSource }): Promise<ChatSummary>;

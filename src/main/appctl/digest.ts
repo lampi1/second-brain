@@ -100,7 +100,7 @@ export function digest(inp: DigestInput): string {
     }
     if (c.state === 'error') { if (since !== null && !changed(c)) { told.push(`«${c.title}» (errore)`); toldErr++; } else err.push(line(c, `ferma su un errore: ${one(c.lastError ?? c.lastText, 240)}`, false)); continue; }
     if (!changed(c)) { same.push(`«${c.title}»`); continue; }
-    // waiting in the cold-start queue (ADR 0221): no turn ran yet, so never "turno finito"
+    // waiting in the cold-start queue (ADR 0222): no turn ran yet, so never "turno finito"
     if (c.queued) run.push(line(c, `in coda per il carico della macchina (posizione ${c.queued.position}, da ${ago(now - c.queued.since)})`, false));
     else if (c.state === 'running' || c.state === 'starting' || c.state === 'waiting') run.push(line(c, `al lavoro (aggiornata ${ago(now - c.updatedAt)} fa)`));
     else {

@@ -443,7 +443,7 @@ export async function reopenChat(chatId: string): Promise<void> {
   } catch (e) { toast(t('appText.actions.notReopened', { error: errText(e) }), 'err'); }
 }
 
-/** "Avvia ora": a chat waiting in the cold-start queue (ADR 0221) starts now, whatever the load. */
+/** "Avvia ora": a chat waiting in the cold-start queue (ADR 0222) starts now, whatever the load. */
 export async function admitNow(chatId: string): Promise<void> {
   try {
     if (!(await sb.invoke('chat:admitNow', { chatId }))) toast(t('appText.actions.notQueued'), 'info');

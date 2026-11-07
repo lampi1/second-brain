@@ -621,7 +621,7 @@ export class AcpSession implements HarnessSession {
   }
 
   private async boot(): Promise<void> {
-    // the cold start's steps after the spawn (ADR 0221, proposal 6): one `timing: engine ready` line with each lap
+    // the cold start's steps after the spawn (ADR 0222, proposal 6): one `timing: engine ready` line with each lap
     const lap: Record<string, number> = {};
     let t = this.spawnedAt;
     const step = (k: string) => { const now = Date.now(); lap[k] = now - t; t = now; };

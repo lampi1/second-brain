@@ -250,7 +250,7 @@ export class ClaudeSession implements HarnessSession {
   /** start-up and per-turn timings (logged, scope chats): where a slow first answer spends its time */
   private spawnedAt = 0;
   private readyAt = 0;                // the initialize reply: the engine is up and takes messages
-  private firstStateAt = 0;           // the first session_state_changed: the CLI's own setup is done (ADR 0221)
+  private firstStateAt = 0;           // the first session_state_changed: the CLI's own setup is done (ADR 0222)
   private initAt = 0;                 // system/init: MCP servers, plugins and hooks loaded
   private initMcp: Record<string, unknown> = {};
   private turnT: { sent: number; first?: number; text?: number; warm: boolean; n: number } | null = null;
@@ -1098,7 +1098,7 @@ export class ClaudeSession implements HarnessSession {
     } });
   }
 
-  /** The cold first turn's steps after the spawn (ADR 0221, proposal 6): the first session_state_changed (the CLI's
+  /** The cold first turn's steps after the spawn (ADR 0222, proposal 6): the first session_state_changed (the CLI's
    *  setup done), system/init (its MCP servers, plugins and hooks loaded) and the first stream event; plus the MCP
    *  servers still connecting at init (they connect in the background and do not hold the turn). */
   private initTiming(first: number | undefined): Record<string, unknown> {
