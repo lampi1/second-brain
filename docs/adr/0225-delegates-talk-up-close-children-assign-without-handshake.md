@@ -1,4 +1,4 @@
-# 0221. Delegates write up their tree, parents close their children, assignments without a handshake
+# 0225. Delegates write up their tree, parents close their children, assignments without a handshake
 
 Date: 2026-11-07. Status: accepted.
 
