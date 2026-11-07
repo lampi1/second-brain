@@ -13,6 +13,8 @@
 // Shared by main/learn/ (generation, store) and the renderer (components/impara/); pinned by test/unit/lesson.test.ts.
 // Since ADR 0205 a piece declares its visual (shared/lesson-visual.ts) and its role in the lesson's fixed structure, the
 // draft is scored by a quality gate, and the «Studio» column makes more from the same verified facts (lesson-studio.ts).
+// Since ADR 0219 a lesson has a kind (LessonMode): «Spiegazione», the default, asks nothing (withoutAsking drops the
+// checks and «Spiegalo tu» is only offered) and leaves no review card; «Quiz» is the lesson above.
 import type { Effort } from './contract';
 import { subjectName, type ReviewSummary } from './review';
 import { beatMark, parseVisual, type LessonVisual } from './lesson-visual';
@@ -31,6 +33,15 @@ export const LESSON_EXTRAS: readonly LessonExtraKind[] = ['better', 'example', '
 export type LessonGrade = 'ok' | 'partial' | 'miss';
 /** «Eri sicuro?» after an answer: tirato a caso, abbastanza, sicurissimo (metacognition, LearnLM) */
 export type LessonConfidence = 0 | 1 | 2;
+/** How a lesson teaches (ADR 0219): explain = «Spiegazione», pictures and a voice that comments them, no question during
+ *  the lesson, no review card; quiz = the lesson with checks, «Spiegalo tu» and review cards (ADR 0185, 0205). A lesson
+ *  without one (made before ADR 0219) is a quiz lesson. */
+export type LessonMode = 'explain' | 'quiz';
+export const LESSON_MODES: readonly LessonMode[] = ['explain', 'quiz'];
+/** The mode the start form sends when none is chosen. */
+export const DEFAULT_LESSON_MODE: LessonMode = 'explain';
+/** A stored lesson's mode: an old one without a mode was made as a quiz lesson. */
+export const modeOf = (l: { mode?: LessonMode }): LessonMode => (l.mode === 'explain' ? 'explain' : 'quiz');
 
 /** How many main pieces a depth asks for (the model may write fewer). */
 export const DEPTH_STEPS: Record<LessonDepth, { min: number; max: number; minutes: number }> = {
@@ -119,6 +130,8 @@ export interface LessonStart {
   subject?: string;
   /** the user's own files and folders dropped or picked on the start form (ADR 0204), read by the page: their sources */
   files?: LessonFile[];
+  /** «Spiegazione» or «Quiz» (ADR 0219); absent = DEFAULT_LESSON_MODE */
+  mode?: LessonMode;
 }
 /** One file of the user's as a lesson's source: its path (relative to the folder dropped) and its text. */
 export interface LessonFile { name: string; text: string }
@@ -191,6 +204,8 @@ export interface Lesson {
   pr?: LessonPr;
   depth: LessonDepth;
   level: LessonLevel;
+  /** «Spiegazione» or «Quiz» (ADR 0219); absent = a lesson made before it, a quiz one (modeOf) */
+  mode?: LessonMode;
   createdAt: number;
   updatedAt: number;
   /** preparing = nothing yet; more = the first pieces are here, the rest is being written; ready; failed (error) */
@@ -310,8 +325,10 @@ export const stepKey = (id: string): string => `s:${id}`;
 export const checkKey = (id: string): string => `c:${id}`;
 
 /** The order the user goes through: each main piece, then its extra pieces (each followed by its own extras and
- *  checks), then its checks; then the end («Spiegalo tu»), there only once every planned piece arrived (state ready). */
-export function playlist(l: Pick<Lesson, 'steps' | 'checks' | 'state'>): PlayItem[] {
+ *  checks), then its checks; then the end («Spiegalo tu»), there only once every planned piece arrived (state ready).
+ *  In «Spiegazione» (ADR 0219) the lesson ends on its recap: the end is there only once the learner chose «Spiegalo tu»
+ *  (an explain lesson has no `explain` before that: never asked unprompted). */
+export function playlist(l: Pick<Lesson, 'steps' | 'checks' | 'state'> & Partial<Pick<Lesson, 'mode' | 'explain'>>): PlayItem[] {
   const out: PlayItem[] = [];
   const visit = (s: LessonStep, depth: number) => {
     out.push({ key: stepKey(s.id), kind: 'step', step: s });
@@ -319,7 +336,7 @@ export function playlist(l: Pick<Lesson, 'steps' | 'checks' | 'state'>): PlayIte
     for (const c of l.checks.filter(x => x.after === s.id)) out.push({ key: checkKey(c.id), kind: 'check', check: c });
   };
   for (const s of l.steps.filter(x => !x.extra)) visit(s, 0);
-  if (l.state === 'ready' && out.length) out.push({ key: 'end', kind: 'end' });
+  if (l.state === 'ready' && out.length && (modeOf(l) === 'quiz' || l.explain !== undefined)) out.push({ key: 'end', kind: 'end' });
   return out;
 }
 
@@ -554,6 +571,12 @@ export function parsePlan(v: unknown, opts: { now?: number; base?: string; facts
   return { title: text(o.title, 120, 'title', !opts.base) || '', diagram, outline, steps, checks, explainQ: text(o.explain, 320, 'explain', false), subject: subjectName(o.subject) };
 }
 
+/** «Spiegazione» (ADR 0219): whatever the model wrote that asks the learner is dropped, whatever the prompt said: no
+ *  check (so no review card from them either) and no final question; a quiz lesson keeps them. */
+export function withoutAsking<P extends { checks: LessonCheck[]; explainQ?: string }>(p: P, l: { mode?: LessonMode }): P {
+  return modeOf(l) === 'explain' ? { ...p, checks: [], ...('explainQ' in p ? { explainQ: '' } : {}) } : p;
+}
+
 /** An extra piece the user asked for: one piece, maybe with one check. */
 export function parseExtra(v: unknown, nodes: readonly string[], of: string, kind: LessonExtraKind, ask: string | undefined, now = Date.now(), facts: readonly string[] = []): { step: LessonStep; check: LessonCheck | null } {
   const o = obj(v, 'pezzo extra');
@@ -599,11 +622,13 @@ export function parseFacts(v: unknown, web: boolean, start = 1): LessonFact[] {
   return out;
 }
 
-/** The questions a research run asks before the lesson: at most two, each with 2 to 4 short options. */
-export function parseQuestions(v: unknown): LessonClarify['qs'] {
+/** The questions a research run asks before the lesson: at most `max` (two; one in «Spiegazione», ADR 0219), each with
+ *  2 to 4 short options. */
+export function parseQuestions(v: unknown, max = 2): LessonClarify['qs'] {
   const o = obj(v, 'ricerca');
   const out: LessonClarify['qs'] = [];
   for (const q of list(o.questions).slice(0, 2)) {
+    if (out.length >= max) break;
     if (!q || typeof q !== 'object') continue;
     const x = q as Obj, ask = text(x.q, 240, 'q', false);
     const options = list(x.options).map(y => text(y, 120, 'option', false)).filter(Boolean).slice(0, 4);

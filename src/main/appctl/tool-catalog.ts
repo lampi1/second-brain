@@ -62,7 +62,7 @@ export const TOOL_CATALOG: Readonly<Record<string, ToolInfo>> = {
   brain_changelog_add: t('orchestrator', 'Log a brain change made outside the script tools in the brain\'s changelog.'),
   app_recordings: t('orchestrator', 'The call recordings and their local transcripts, or the audio files found on the PC.'),
   app_recording_import: t('orchestrator', 'Import an audio or video file from the PC to be transcribed locally.'),
-  app_learn: t('orchestrator', 'Start an Impara lesson the user asked for, or list the lessons.'),
+  app_learn: t('orchestrator', 'Start an Impara lesson the user asked for (an explanation or a quiz), or list the lessons.'),
   agent_metrics: t('orchestrator', 'Success rate, cost, time and corrections per role and version (numbers only).'),
   task_estimate: t('orchestrator', 'Estimate a request: kind of work, size, role, time and cost.'),
 

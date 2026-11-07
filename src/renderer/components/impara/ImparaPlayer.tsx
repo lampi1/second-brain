@@ -13,6 +13,9 @@
 // (ImparaSources.tsx: web pages, files of this PC, the material). A lesson being researched shows ImparaPrep.tsx.
 // «Chiedi» opens the tutor beside the board (ImparaTutor.tsx, ADR 0190): a question typed or spoken, or a click on a
 // part of the diagram, answered in seconds, word by word.
+// Since ADR 0219, a lesson in «Spiegazione» (explain) asks nothing: its pieces show the short spoken text by the picture
+// even with the voice off (the full text behind «Testo completo»), the tutor always answers (no «Prima provo io»), and
+// it ends on the recap, where «Spiegalo tu» is a button the learner may press (never opened by itself).
 // Since ADR 0205: each piece shows the visual it declared (LessonVisual.tsx: sequence, state, timeline, mind map, code
 // walkthrough, formula, chart; the lesson's flowchart stays on the animated board); the column beside the board has
 // two tabs, «Tutor» and «Studio» (ImparaStudio.tsx: tiles that make more from the verified facts, opened over the
@@ -20,7 +23,7 @@
 // rest (Spiegamelo meglio M, Fammi un esempio E, Mostrami il codice C, Domanda D), keys that work without the menu too.
 // Used by ImparaPage.tsx; styles impara.css.
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { beatsOf, checkKey, doneNodes, isFlowchart, parseLessonCommand, parseSpokenChoice, playlist, rootOf, stepKey, type Lesson, type LessonBeat, type LessonCheck, type LessonExtraKind, type LessonFact, type LessonStep, type PlayItem, type PrepPhase, degradedCause, refusedModel } from '@shared/lesson';
+import { beatsOf, checkKey, doneNodes, isFlowchart, modeOf, parseLessonCommand, parseSpokenChoice, playlist, rootOf, stepKey, type Lesson, type LessonBeat, type LessonCheck, type LessonExtraKind, type LessonFact, type LessonStep, type PlayItem, type PrepPhase, degradedCause, refusedModel } from '@shared/lesson';
 import { answerCheck, askExtra, askTutor, explainBack, impara, imparaPrefs, loadLesson, moveTo, removeLesson, retryLesson, setImparaPrefs, type ImparaSide } from '../../lib/impara';
 import type { StudioKind, StudioLive } from '@shared/lesson-studio';
 import { quizRight, type QuizResponse } from '@shared/quiz';
@@ -170,6 +173,11 @@ function Board({ lesson }: { lesson: Lesson }) {
   const mainIndex = root ? main.findIndex(s => s.id === root.id) : main.length - 1;
   const total = Math.max(main.length, lesson.outline.length);
   const atLast = idx >= list.length - 1;
+  // «Spiegazione» (ADR 0219): the short spoken text even without the voice; «Spiegalo tu» only when asked for
+  const explainMode = modeOf(lesson) === 'explain';
+  const spoken = prefs.voice || explainMode;
+  const [teach, setTeach] = useState(false);
+  const canTeach = explainMode && atLast && lesson.state === 'ready' && item.kind === 'step';
   const waitingRest = atLast && lesson.state === 'more';
   const [whole, setWhole] = useState(false);
   const [zoom, setZoom] = useState(false);
@@ -223,7 +231,7 @@ function Board({ lesson }: { lesson: Lesson }) {
 
   // each new item is read aloud once (a piece beat by beat, a check; the end's question), at the user's pace: never an
   // auto-advance to the next piece
-  useEffect(() => { setFull(false); setZoom(false); setWhole(false); setBeat(0); setStudio(null); if (prefs.voice) speakNow(); else stopSpeaking(false); }, [item.key, prefs.voice]);
+  useEffect(() => { setFull(false); setZoom(false); setWhole(false); setBeat(0); setStudio(null); setTeach(false); if (prefs.voice) speakNow(); else stopSpeaking(false); }, [item.key, prefs.voice]);
   // without the voice, the beats follow each other at reading pace (once; «Rivedi l'animazione» plays them again); the
   // beats are read through a ref: a lesson that changes meanwhile (the rest arriving) does not start them over
   const beatsNow = useRef(beats);
@@ -265,7 +273,7 @@ function Board({ lesson }: { lesson: Lesson }) {
     if (cmd === 'better' || cmd === 'example' || cmd === 'code') return extra(cmd);
     if (item.kind === 'end' && !lesson.explain?.answer) { setDraft(d => (d.trim() ? `${d} ${text}` : text)); return; }
     // anything else of three words or more is a question for the tutor (ADR 0190), sent at once
-    if (text.trim().split(/\s+/).length >= 3) { setTutor(true); if (lesson.tutor?.some(x => x.state === 'asking')) setSeed(text); else void askTutor(lesson.id, item.key, text, prefs.coach ? 'coach' : 'tell'); }
+    if (text.trim().split(/\s+/).length >= 3) { setTutor(true); if (lesson.tutor?.some(x => x.state === 'asking')) setSeed(text); else void askTutor(lesson.id, item.key, text, prefs.coach && !explainMode ? 'coach' : 'tell'); }
   };
   useEffect(() => { onImparaHeard(text => onHeard.current(text)); return () => onImparaHeard(null); }, []);
 
@@ -373,9 +381,9 @@ function Board({ lesson }: { lesson: Lesson }) {
           {lesson.outline.slice(main.length).map((title, i) => (
             <div key={`o${i}`} className="ip-st w" data-testid="impara-rail-coming" data-tip={title}><span className="ip-st-dot">{lesson.state === 'more' && i === 0 ? <IconSpinner size={10} /> : main.length + i + 1}</span><span className="ip-st-t">{title}</span></div>
           ))}
-          <button type="button" className={`ip-st ip-st-end ${item.kind === 'end' ? 'c' : ''}`} disabled={lesson.state !== 'ready'} onClick={() => void moveTo(lesson.id, 'end')} data-testid="impara-rail-end" data-tip={t('impara.end.rail')}>
+          {(!explainMode || list.some(p => p.kind === 'end')) && <button type="button" className={`ip-st ip-st-end ${item.kind === 'end' ? 'c' : ''}`} disabled={lesson.state !== 'ready'} onClick={() => void moveTo(lesson.id, 'end')} data-testid="impara-rail-end" data-tip={t('impara.end.rail')}>
             <span className="ip-st-dot">★</span><span className="ip-st-t">{t('impara.end.rail')}</span>
-          </button>
+          </button>}
           <div className="ip-sources">
             <div className="ip-label">{t('impara.sources')}</div>
             {lesson.pr && <a href={lesson.pr.url} target="_blank" rel="noreferrer" className="ip-src-link">{lesson.pr.repo} #{lesson.pr.number}</a>}
@@ -399,7 +407,7 @@ function Board({ lesson }: { lesson: Lesson }) {
               {!animated && <button type="button" className="ip-pill" onClick={() => setZoom(true)} data-testid="impara-zoom">⤢ {t('impara.zoom')}</button>}
             </div>
             {visual
-              ? <LessonVisual key={piece!.id} visual={visual} beats={item.kind === 'step' ? beats : []} beat={beat} whole={whole || item.kind === 'check'} caption={piece?.title ?? lesson.title} />
+              ? <LessonVisual key={piece!.id} idKey={piece!.id} visual={visual} beats={item.kind === 'step' ? beats : []} beat={beat} whole={whole || item.kind === 'check'} caption={piece?.title ?? lesson.title} />
               : animated
               ? <LessonStage code={lesson.diagram} beat={stageBeat} done={beatDone} whole={whole || item.kind === 'end'} onWhole={() => setWhole(w => !w)} caption={piece?.title ?? lesson.title} beatKey={`${item.key}/${beat}`}
                 onPick={(_, label) => { setTutor(true); setSeed(t('impara.tutor.aboutNode', { node: label })); }} />
@@ -411,8 +419,9 @@ function Board({ lesson }: { lesson: Lesson }) {
             ? <ImparaCheck check={item.check} n={lesson.checks.filter(c => posOf(checkKey(c.id)) <= idx).length} total={lesson.checks.length}
               onAnswer={i => answer(item.check, i)} onConfidence={c => void answerCheck(lesson.id, item.check.id, item.check.answer!.choice, c)}
               onNext={next} onReview={() => piece && void moveTo(lesson.id, stepKey(piece.id))} last={atLast} />
-            : item.kind === 'end'
-            ? <ImparaEnd lesson={lesson} draft={draft} setDraft={setDraft} onSend={text => { void explainBack(lesson.id, text); }} onReview={key => void moveTo(lesson.id, key)} />
+            : item.kind === 'end' || (teach && canTeach)
+            ? <ImparaEnd lesson={lesson} draft={draft} setDraft={setDraft} onSend={text => { void explainBack(lesson.id, text); }} onReview={key => void moveTo(lesson.id, key)}
+              {...(item.kind !== 'end' ? { onSkip: () => setTeach(false) } : {})} />
             : <>
               <div className={`ip-narr ${narrating ? 'is-speaking' : ''}`} data-testid="impara-narration">
                 <div className={`ip-ava ${narrating ? 'on' : ''}`} aria-hidden="true" />
@@ -424,7 +433,7 @@ function Board({ lesson }: { lesson: Lesson }) {
                     <span className="ip-muted ip-narr-hint">{narrating ? <><Kbd>Spazio</Kbd> {t('impara.pause')}</> : prefs.voice ? <><Kbd>Spazio</Kbd> {t('impara.repeat')}</> : null}</span>
                   </div>
                   {piece?.extra?.ask && <p className="ip-asked">«{piece.extra.ask}»</p>}
-                  {item.kind === 'step' && (prefs.voice
+                  {item.kind === 'step' && (spoken
                     ? <>
                       <p className="ip-say" data-testid="impara-say">
                         {beats.map((b, i) => <span key={i} className={beats.length > 1 ? (i === beat ? 'on' : i < beat ? 'past' : 'next') : ''} onClick={() => setBeat(i)}>{b.say}{i < beats.length - 1 ? ' ' : ''}</span>)}
@@ -454,6 +463,7 @@ function Board({ lesson }: { lesson: Lesson }) {
                   ))}
                 </Popover>
                 <span className="sp" />
+                {canTeach && <Button onClick={() => { stopSpeaking(false); setTeach(true); }} testid="impara-teach-back" tip={t('impara.teachBack.tip')}><IconSparkle size={12} />{t('impara.teachBack')}</Button>}
                 {idx > 0 && <Button variant="ghost" size="s" onClick={back} testid="impara-prev" tip={`${t('impara.prev')}|←`}><IconArrowLeft size={12} /></Button>}
                 <button type="button" className={`ip-mic ${micOn ? 'live' : ''}`} onClick={toggleMic} aria-pressed={micOn} aria-label={t('impara.voiceMe')} data-tip={`${t('impara.voiceMe')}|Ctrl M`} data-testid="impara-mic-btn"><IconMic size={14} /></button>
                 {micOn && <span className="ip-heard" data-testid="impara-heard">{phase === 'preparing' ? t('impara.micPreparing') : phase === 'hearing' || phase === 'transcribing' ? t('impara.hearing') : heard ? `«${heard}»` : t('impara.listening')}</span>}

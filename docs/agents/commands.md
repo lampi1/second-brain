@@ -78,7 +78,7 @@ row and its line here in the same change.
 | `brain_changelog_add` | Orchestrator only | Log a brain change made outside the script tools in the brain's changelog. |
 | `app_recordings` | Orchestrator only | The call recordings and their local transcripts, or the audio files found on the PC. |
 | `app_recording_import` | Orchestrator only | Import an audio or video file from the PC to be transcribed locally. |
-| `app_learn` | Orchestrator only | Start an Impara lesson the user asked for, or list the lessons. |
+| `app_learn` | Orchestrator only | Start an Impara lesson the user asked for (an explanation or a quiz), or list the lessons. |
 | `agent_metrics` | Orchestrator only | Success rate, cost, time and corrections per role and version (numbers only). |
 | `task_estimate` | Orchestrator only | Estimate a request: kind of work, size, role, time and cost. |
 | `agent_delegate` | work chats | Delegate independent parts of the task to other roles as visible child chats. |

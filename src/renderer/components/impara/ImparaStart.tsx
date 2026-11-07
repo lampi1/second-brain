@@ -161,7 +161,7 @@ export function ImparaStart() {
     const base = over ?? req;
     if (busy || !base) return;
     setBusy(true);
-    const l = await startLesson({ ...base, depth: prefs.depth, level: prefs.level, ...(prefs.teacher ? { teacher: prefs.teacher } : {}), ...(subject ? { subject: subject.name } : {}),
+    const l = await startLesson({ ...base, depth: prefs.depth, level: prefs.level, mode: prefs.mode, ...(prefs.teacher ? { teacher: prefs.teacher } : {}), ...(subject ? { subject: subject.name } : {}),
       ...(!over && files.length ? { files } : {}) } as LessonStart);
     setBusy(false);
     if (l) go({ page: 'impara', arg: l.id });

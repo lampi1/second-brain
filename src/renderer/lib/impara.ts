@@ -1,7 +1,7 @@
 // Impara in the renderer (ADR 0185): main's list and the open lesson (impara:changed keeps both current), the actions
 // of the page and the player (each an impara:* call, a failure said in a toast), the user's choices that outlive a
-// restart (voice of the app, «Rispondo a voce», depth, level, who explains, full screen: localStorage, a convenience
-// only) and the colours a lit
+// restart (voice of the app, «Rispondo a voce», depth, level, who explains, full screen, «Spiegazione» or «Quiz» (ADR
+// 0219): localStorage, a convenience only) and the colours a lit
 // piece gets on the diagram, taken from the theme's tokens as hex (mermaid's classDef cannot take rgba).
 // The tutor's answers as they stream (ADR 0190: 'impara:tutor', `tutorLive`), and the start form's draft when another
 // page sends the user here to learn something («Capiscila», «Spiegamelo», «Imparalo»: `learnAbout`).
@@ -9,7 +9,7 @@
 // (`studioQuizArg`), and which tab of the side column is open (`side`, remembered).
 // Used by components/impara/, brain/components/RecordLearnButton.tsx, brain-model/ApprovedTab.tsx, GuidePage.tsx.
 import type { StudioKind } from '@shared/lesson-studio';
-import type { ImparaState, Lesson, LessonConfidence, LessonDepth, LessonExtraKind, LessonKind, LessonLevel, LessonStart, LessonTeacher, FocusColors, TutorMode } from '@shared/lesson';
+import { DEFAULT_LESSON_MODE, type ImparaState, type Lesson, type LessonConfidence, type LessonDepth, type LessonExtraKind, type LessonKind, type LessonLevel, type LessonMode, type LessonStart, type LessonTeacher, type FocusColors, type TutorMode } from '@shared/lesson';
 import type { ReviewCard, ReviewGrade, ReviewItem, ReviewMode } from '@shared/review';
 import { createStore } from '../store/createStore';
 import { toast } from '../store/ui';
@@ -19,12 +19,13 @@ export interface ImparaUi { state: ImparaState | null; lessons: Record<string, L
 export const impara = createStore<ImparaUi>({ state: null, lessons: {} });
 
 /** teacher null = the app's choice (Claude's strongest model, high effort); full = the lesson fills the window (the
- *  owner, 2026-10-29: «di base a tutto schermo»); coach = the tutor's «Prima provo io» (ADR 0190) */
-export interface ImparaPrefs { voice: boolean; mic: boolean; depth: LessonDepth; level: LessonLevel; teacher: LessonTeacher | null; full: boolean; coach: boolean; side: ImparaSide }
+ *  owner, 2026-10-29: «di base a tutto schermo»); coach = the tutor's «Prima provo io» (ADR 0190, off in «Spiegazione»);
+ *  mode = a new lesson's «Spiegazione» (explains, asks nothing: the default) or «Quiz» (ADR 0219) */
+export interface ImparaPrefs { voice: boolean; mic: boolean; depth: LessonDepth; level: LessonLevel; teacher: LessonTeacher | null; full: boolean; coach: boolean; side: ImparaSide; mode: LessonMode }
 /** the column beside the lesson (ADR 0205): the tutor, the «Studio» tiles, or closed */
 export type ImparaSide = 'tutor' | 'studio' | null;
 const PREFS_KEY = 'sb.impara.v1';
-const DEFAULT_PREFS: ImparaPrefs = { voice: true, mic: false, depth: 'lesson', level: 'basics', teacher: null, full: true, coach: true, side: 'studio' };
+const DEFAULT_PREFS: ImparaPrefs = { voice: true, mic: false, depth: 'lesson', level: 'basics', teacher: null, full: true, coach: true, side: 'studio', mode: DEFAULT_LESSON_MODE };
 const teacherIn = (v: unknown): LessonTeacher | null => {
   if (!v || typeof v !== 'object') return null;
   const o = v as Record<string, unknown>;
@@ -39,6 +40,7 @@ function readPrefs(): ImparaPrefs {
       depth: p.depth === 'quick' || p.depth === 'deep' ? p.depth : 'lesson', level: p.level === 'new' || p.level === 'expert' ? p.level : 'basics',
       teacher: teacherIn(p.teacher), full: typeof p.full === 'boolean' ? p.full : DEFAULT_PREFS.full, coach: typeof p.coach === 'boolean' ? p.coach : DEFAULT_PREFS.coach,
       side: p.side === 'tutor' || p.side === 'studio' || p.side === null ? p.side : DEFAULT_PREFS.side,
+      mode: p.mode === 'explain' || p.mode === 'quiz' ? p.mode : DEFAULT_PREFS.mode,
     };
   } catch { return DEFAULT_PREFS; }
 }

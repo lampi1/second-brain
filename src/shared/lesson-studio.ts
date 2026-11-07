@@ -8,6 +8,7 @@
 // and rewrites only the failing pieces, once; the checks it can make alone (citations, size) are made here at zero
 // tokens. Everything the model writes is untrusted: parsed and capped here. Shared by main/learn (service.ts,
 // prompt.ts) and the renderer (components/impara/ImparaStudio.tsx); pinned by test/unit/lesson-studio.test.ts.
+// ADR 0219: a «Spiegazione» lesson's gate checks a picture per piece (visual) instead of the questions (gateRules).
 import { parseCards, type CardDraft } from './review';
 import { contentLines, visualParts, VISUAL_PARTS_MAX } from './lesson-visual';
 import type { LessonCheck, LessonStep } from './lesson';
@@ -101,9 +102,11 @@ export function parseStudio(kind: StudioMade, v: unknown, facts: readonly string
 
 // ── the quality gate ───────────────────────────────────────────────────────────────────────────────────────────────
 
-/** The checklist (owner's report, I7). */
-export type QualityRule = 'one-idea' | 'example' | 'cites' | 'diagram' | 'questions';
-export const QUALITY_RULES: readonly QualityRule[] = ['one-idea', 'example', 'cites', 'diagram', 'questions'];
+/** The checklist (owner's report, I7); visual = «Spiegazione» only (ADR 0219): every piece shows a picture. */
+export type QualityRule = 'one-idea' | 'example' | 'cites' | 'diagram' | 'questions' | 'visual';
+export const QUALITY_RULES: readonly QualityRule[] = ['one-idea', 'example', 'cites', 'diagram', 'questions', 'visual'];
+/** The rules a lesson's gate checks: a quiz lesson the first five, an explain one no question rule and the visual one. */
+export const gateRules = (explain: boolean): QualityRule[] => QUALITY_RULES.filter(r => (explain ? r !== 'questions' : r !== 'visual'));
 /** What the gate found: pieces and checks looked at, how many were rewritten, the failures by rule (before the
  *  rewrite); none = the gate's run did not answer (the draft was kept). */
 export interface LessonQuality { checked: number; fixed: number; fails: Partial<Record<QualityRule, number>>; at: number; none?: boolean }
@@ -111,12 +114,14 @@ export interface LessonQuality { checked: number; fixed: number; fails: Partial<
 const words = (s: string) => s.split(/\s+/).filter(Boolean).length;
 
 /** What a piece fails that the app can see alone: no citation while there are facts, too long for one idea, a visual of
- *  more than 12 parts. */
-export function pieceIssues(s: Pick<LessonStep, 'cites' | 'say' | 'text' | 'beats' | 'visual'>, hasFacts: boolean): QualityRule[] {
+ *  more than 12 parts. In «Spiegazione» (explain, ADR 0219) also: no picture (no visual of its own, no diagram of its
+ *  own and no node of the flowchart lit), and a caption over 60 words (the prompt asks about 40; the voice carries it). */
+export function pieceIssues(s: Pick<LessonStep, 'cites' | 'say' | 'text' | 'beats' | 'visual'> & Partial<Pick<LessonStep, 'focus' | 'diagram'>>, hasFacts: boolean, explain = false): QualityRule[] {
   const out: QualityRule[] = [];
   if (hasFacts && !s.cites?.length) out.push('cites');
-  if ((s.beats?.length ?? 0) > 4 || words(s.say) > 80 || words(s.text) > 170) out.push('one-idea');
+  if ((s.beats?.length ?? 0) > 4 || words(s.say) > 80 || words(s.text) > (explain ? 60 : 170)) out.push('one-idea');
   if (s.visual && visualParts(s.visual) > VISUAL_PARTS_MAX) out.push('diagram');
+  if (explain && !s.visual && !s.diagram && !s.focus?.length) out.push('visual');
   return out;
 }
 
