@@ -227,6 +227,9 @@ the Orchestrator to explain it your way.
 - **The Orchestrator on your phone.** Settings → Phone links a private Telegram bot of yours: write or send a voice
   note from the phone and answer simple yes/no questions with a button. Permissions and commands still wait for the
   PC, and the bot token is encrypted and never shown again.
+- **Continue the Orchestrator at claude.ai.** The phone icon on the Orchestrator turns on Claude Code Remote Control:
+  open the link it shows in the Claude app or a browser and keep going from there. What you type on the phone shows in
+  the app marked «dal telefono», and the link survives an app restart.
 - **Tasks.** The Task page lists your Azure DevOps work items and PRs, with builds, votes and QA results.
 - **Copy any file.** The copy icon in the file viewer puts the file on the clipboard: its text, the image, or the file
   itself.
