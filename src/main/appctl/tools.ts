@@ -20,6 +20,7 @@
 //   for him (app_unblock, ADR 0135); it never answers any of it.
 // - The user's call recordings and their local transcripts (app_recordings, ADR 0154): the Orchestrator's mount only.
 // - A lesson in Impara when the user asks to understand something (app_learn, ADR 0190): the Orchestrator's mount only.
+// - The latest report of any chat in its tree, delegates included, without a turn of theirs (app_child_output, ADR 0222).
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { ChatItem, ChatSummary, TasksState, Effort, EventMap, NewChat, PendingRequest, RunInfo, TaskKind } from '../../shared/contract';
@@ -64,6 +65,7 @@ import { CONFIG_ASK_MIN, CONFIG_TURN_MIN, configTool, type ConfigDeps } from './
 import { lastAnswered, lastTyped, userAsked } from './user-words';
 import { recordingTools, type RecordingsRead } from './recordings';
 import { imparaTools, type ImparaControl } from './impara';
+import { childOutputTool } from './child-output';
 import type { RoutineTerminalExport, RoutineRunRef } from '../../shared/routines';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
@@ -249,6 +251,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.agents ? [toolDef(agentCatalogTool(d.agents, d.skillTools))] : []),
     ...(d.recordings && authed() ? recordingTools(d.recordings, d.emitUi) : []),
     ...(d.impara && authed() ? imparaTools(d.impara, d.emitUi, () => imparaAsked(callerId!)) : []),
+    ...(authed() ? [childOutputTool({ chats: () => d.chats.list().filter(mine), runs: () => d.runFeedback?.runList() ?? [] })] : []),
     ...(d.runFeedback && authed() ? [metricsTool(d.runFeedback)] : []),
     ...(d.runFeedback && authed() ? [estimateTool(() => d.runFeedback!.runList())] : []),
     {

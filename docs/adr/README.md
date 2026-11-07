@@ -226,3 +226,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0223](0223-quiet-turn-ends.md) Plain turn ends and starts are quiet news for the Orchestrator; `WAKE_RULE` drops the 👍 — accepted
 - [0224](0224-report-corrections-batching-caps.md) Report corrections (amends, max 2), a 2-5 s child-result debounce, caps instead of refusals — accepted
 - [0221](0221-delegates-talk-up-close-children-assign-without-handshake.md) Delegates write up their tree, parents close their children, assignments without a handshake
+- [0222](0222-orchestrator-reads-child-reports.md) The Orchestrator reads any report in its tree (app_child_output); amends ADR 0083 §6 — accepted

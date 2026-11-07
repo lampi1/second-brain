@@ -63,6 +63,7 @@ export const TOOL_CATALOG: Readonly<Record<string, ToolInfo>> = {
   app_recordings: t('orchestrator', 'The call recordings and their local transcripts, or the audio files found on the PC.'),
   app_recording_import: t('orchestrator', 'Import an audio or video file from the PC to be transcribed locally.'),
   app_learn: t('orchestrator', 'Start an Impara lesson the user asked for, or list the lessons.'),
+  app_child_output: t('orchestrator', 'The latest report of a chat in its tree, delegates included: summary and criteria; full: the output, max 4,000 chars.'),
   agent_metrics: t('orchestrator', 'Success rate, cost, time and corrections per role and version (numbers only).'),
   task_estimate: t('orchestrator', 'Estimate a request: kind of work, size, role, time and cost.'),
 

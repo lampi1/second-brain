@@ -54,6 +54,7 @@
     "src/main/agents/versions.ts": "f9fb9c0b39dc89b9",
     "src/main/agents/versions.ts#versionedChanges": "71563d20bff8ba1a",
     "src/main/agents/worktrees.ts": "ba12f05c0498a8d1",
+    "src/main/appctl/child-output.ts#childOutputTool": "1b7c6d9e96136711",
     "src/main/appctl/config.ts": "9f13b6ec1a4205ba",
     "src/main/appctl/config.ts#app_config": "fd02e68998a2f099",
     "src/main/appctl/guide.ts#app_guide": "ad3608df52ef7447",

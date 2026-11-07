@@ -79,6 +79,7 @@ row and its line here in the same change.
 | `app_recordings` | Orchestrator only | The call recordings and their local transcripts, or the audio files found on the PC. |
 | `app_recording_import` | Orchestrator only | Import an audio or video file from the PC to be transcribed locally. |
 | `app_learn` | Orchestrator only | Start an Impara lesson the user asked for, or list the lessons. |
+| `app_child_output` | Orchestrator only | The latest report of a chat in its tree, delegates included: summary and criteria; full: the output, max 4,000 chars. |
 | `agent_metrics` | Orchestrator only | Success rate, cost, time and corrections per role and version (numbers only). |
 | `task_estimate` | Orchestrator only | Estimate a request: kind of work, size, role, time and cost. |
 | `agent_delegate` | work chats | Delegate independent parts of the task to other roles as visible child chats. |

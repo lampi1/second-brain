@@ -141,9 +141,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/chats/manager-work.ts userWrote; src/main/chats/orchestrator-wake.ts user-message
       b('Puoi scrivere in qualunque figlio: l’Orchestrator e il genitore lo vengono a sapere con le tue parole, così nessuno disfa ciò che hai chiesto; se cambi l’obiettivo, il figlio lo dice nel suo risultato.',
         'You can write in any child: the Orchestrator and the parent learn it in your words, so nobody undoes what you asked; if you change the goal, the child says so in its result.'),
-      // src/main/chats/manager-delegation.ts reportDelegation; src/shared/delegation.ts resultMessage
-      b('Il figlio chiude con un rapporto: il risultato arriva al genitore come messaggio (i risultati dei fratelli arrivati entro pochi secondi insieme); l’Orchestrator vede solo lo stato. Un risultato sbagliato si corregge al massimo due volte, segnato «correzione». Una chat che l’Orchestrator ha aperto lui stesso gli riporta allo stesso modo.',
-        'The child closes with a report: the result reaches the parent as a message (siblings’ results arriving within a few seconds together); the Orchestrator sees only the state. A wrong result can be corrected at most twice, marked "correction". A chat the Orchestrator opened itself reports to it the same way.'),
+      // src/main/chats/manager-delegation.ts reportDelegation; src/shared/delegation.ts resultMessage; src/main/appctl/child-output.ts
+      b('Il figlio chiude con un rapporto: il risultato arriva al genitore come messaggio (i risultati dei fratelli arrivati entro pochi secondi insieme); l’Orchestrator vede lo stato e, quando gli serve, legge l’ultimo rapporto di qualunque chat del suo albero (riepilogo e criteri; l’output solo se lo chiede, al massimo 4.000 caratteri) senza far lavorare quella chat. Un risultato sbagliato si corregge al massimo due volte, segnato «correzione». Una chat che l’Orchestrator ha aperto lui stesso gli riporta allo stesso modo.',
+        'The child closes with a report: the result reaches the parent as a message (siblings’ results arriving within a few seconds together); the Orchestrator sees the state and, when it needs to, reads the latest report of any chat in its tree (summary and criteria; the output only on request, at most 4,000 characters) without spending a turn of that chat. A wrong result can be corrected at most twice, marked "correction". A chat the Orchestrator opened itself reports to it the same way.'),
     ],
     analogy: b('Come un capo cantiere che affida i lavori ai suoi: ognuno ha la sua scheda di lavoro, nessuno ha chiavi che il capo non ha, e ciascuno chiede direttamente la decisione che gli serve.',
       'Like a site foreman handing jobs to his crew: each has a job sheet, nobody holds keys the foreman lacks, and each worker asks for the decision they need.'),
@@ -161,9 +161,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       3: ['src/main/agents/delegation.ts#agent_ask_parent', 'src/main/agents/delegation.ts#agent_answer_child', 'src/renderer/lib/child-requests.ts#requestHost'],
       4: ['src/renderer/components/DelegationCard.tsx', 'src/renderer/lib/run-steps.ts'],
       5: ['src/main/chats/manager-work.ts#userWrote'],
-      6: ['src/main/chats/manager-delegation.ts#reportDelegation', 'src/shared/delegation.ts#resultMessage'],
+      6: ['src/main/chats/manager-delegation.ts#reportDelegation', 'src/shared/delegation.ts#resultMessage', 'src/main/appctl/child-output.ts#childOutputTool'],
     },
-    sources: ['src/main/agents/delegation.ts', 'src/shared/delegation.ts', 'src/main/agents/role-gate.ts', 'src/main/chats/manager.ts', 'src/main/chats/orchestrator-wake.ts', 'src/renderer/components/DelegationCard.tsx', 'src/renderer/components/SidebarTree.tsx', 'src/renderer/lib/run-steps.ts', 'src/renderer/lib/child-requests.ts', 'src/main/chats/manager-delegation.ts', 'src/main/chats/manager-work.ts'],
+    sources: ['src/main/agents/delegation.ts', 'src/shared/delegation.ts', 'src/main/agents/role-gate.ts', 'src/main/chats/manager.ts', 'src/main/chats/orchestrator-wake.ts', 'src/renderer/components/DelegationCard.tsx', 'src/renderer/components/SidebarTree.tsx', 'src/renderer/lib/run-steps.ts', 'src/renderer/lib/child-requests.ts', 'src/main/chats/manager-delegation.ts', 'src/main/chats/manager-work.ts', 'src/main/appctl/child-output.ts'],
   },
   {
     id: 'agents',
