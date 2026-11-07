@@ -224,4 +224,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0219](0219-phone-bridge-telegram.md) Phone bridge: the Orchestrator through a private Telegram bot (stable only, write-only token, yes/no only) — accepted
 - [0220](0220-role-skill-alignment.md) Scoped role skills and verified Plan intake
 - [0223](0223-quiet-turn-ends.md) Plain turn ends and starts are quiet news for the Orchestrator; `WAKE_RULE` drops the 👍 — accepted
-- [0221](0221-report-corrections-batching-caps.md) Report corrections (amends, max 2), a 2-5 s child-result debounce, caps instead of refusals — accepted
+- [0224](0224-report-corrections-batching-caps.md) Report corrections (amends, max 2), a 2-5 s child-result debounce, caps instead of refusals — accepted

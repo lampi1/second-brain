@@ -1,4 +1,4 @@
-# 0221: Report corrections, a short child-result debounce, caps instead of refusals
+# 0224: Report corrections, a short child-result debounce, caps instead of refusals
 
 Status: accepted (owner, 2026-11-07: «Sì», max 2 corrections). Amends ADR 0083 (one report per delegation) and ADR 0099
 (a child's result waits up to 60 s for its siblings').

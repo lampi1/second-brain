@@ -819,7 +819,7 @@ describe('the pure parts', () => {
     const f = fixture();
     const report = delegationTools({ chats: f.m, roles: () => catalog(), settings: () => DELEGATION_DEFAULTS, engineRefusal: () => null, label: '[agente]', runs: () => [] }).find(t => t.name === 'agent_report')!;
     const props = (report.inputSchema as { properties: Record<string, { maxLength?: number; description?: string; items?: { maxLength?: number; properties?: Record<string, { maxLength?: number }> } }> }).properties;
-    // summary and remember lines are cut, not refused (ADR 0221): the schema says the limit without enforcing it
+    // summary and remember lines are cut, not refused (ADR 0224): the schema says the limit without enforcing it
     expect(props.summary!.maxLength).toBeUndefined();
     expect(props.summary!.description).toContain('300');
     expect(props.remember!.items!.maxLength).toBeUndefined();
@@ -1035,6 +1035,24 @@ describe('versioned task continuity and canonical results', () => {
     expect(f.sent.get(o.id)).toHaveLength(1);
   });
 
+  it('a root correction reported while the first synthesis is submitting gets its own synthesis once that one went', async () => {
+    let correct: (() => void) | undefined;
+    const f = fixture({}, undefined, undefined, () => { const go = correct; correct = undefined; go?.(); });
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'synthesize', deliveryPolicy: 'synthesize' }, 'agent');
+    f.sinks.get(c.id)!.changed({ state: 'running' });
+    await f.call('agent_report', c.id, result);
+    // the correction lands inside the engine's submit of the first synthesis: before its acknowledgment
+    correct = () => { f.m.reportRoot(c.id, { ...result, summary: 'Sintesi corretta', amends: true } as never); };
+    f.sinks.get(c.id)!.changed({ state: 'idle' });
+    await sentAfter(f.sent, o.id, 1);
+    const sent = f.sent.get(o.id)!;
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).not.toContain('correzione');
+    expect(sent[1]).toContain('correzione 1/2');
+    expect(sent[1]).toContain('Sintesi corretta');
+    expect(f.m.runs.get(c.run!.runId)!.delivery).toMatchObject({ synthesisPending: false });
+  });
   it('restored in-flight batch never acknowledges a concurrent child twice', async () => {
     const f = fixture();
     const p = await f.root('strategist');

@@ -85,7 +85,7 @@ row and its line here in the same change.
 | `agent_children` | work chats | The chats you delegated: role, state, goal, result, open requests, cost. |
 | `agent_ask_parent` | work chats | Ask the chat that delegated you, before the user. |
 | `agent_answer_child` | work chats | Answer a question one of your delegated chats asked you. |
-| `agent_report` | work chats | Your one final result for the chat that started you; `amends: true` corrects it (at most 2 corrections, ADR 0221). |
+| `agent_report` | work chats | Your one final result for the chat that started you; `amends: true` corrects it (at most 2 corrections, ADR 0224). |
 | `agent_assign_task` | work chats | Continue your direct child with a separate task run. |
 | `agent_task_events` | work chats | The ordered user instructions for your direct child, read before reassigning it. |
 | `agent_integrate_child` | work chats | Stage one finished child's commits in a fresh detached worktree. |
