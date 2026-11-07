@@ -1,7 +1,7 @@
 // Impara's tutor and its entry points (ADR 0190): the answer streamed and then saved, the session started ahead and
 // the question sent into it, coach and «Dimmelo e basta», the review card only from verified facts, one question at a
 // time, a failed or cut answer, and app_learn starting and opening a lesson (in «Spiegazione» unless asked a quiz,
-// ADR 0219).
+// ADR 0221).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -99,7 +99,7 @@ describe('LearnService tutor', () => {
     expect(last(lesson()).mode).toBe('tell');
   });
 
-  it('in «Spiegazione» (ADR 0219) the tutor tells at once and leaves no review card', async () => {
+  it('in «Spiegazione» (ADR 0221) the tutor tells at once and leaves no review card', async () => {
     const { svc, store, id, lesson } = make(() => ok(`Perché sì [f1].
 ${CARD}`));
     store.save({ ...lesson(), mode: 'explain' });
@@ -165,7 +165,7 @@ describe('app_learn', () => {
     }, cmd => ui.push(cmd), () => turn);
     expect(tool!.name).toBe('app_learn');
     expect(tool!.run({ ask: 'come funziona il DNS', depth: 'quick' })).toMatchObject({ id: 'L1', page: 'impara/L1' });
-    expect(started[0]).toMatchObject({ kind: 'topic', ask: 'come funziona il DNS', depth: 'quick', level: 'basics', mode: 'explain' }); // «Spiegazione» by default (ADR 0219)
+    expect(started[0]).toMatchObject({ kind: 'topic', ask: 'come funziona il DNS', depth: 'quick', level: 'basics', mode: 'explain' }); // «Spiegazione» by default (ADR 0221)
     expect(ui).toEqual([{ action: 'page', value: 'impara/L1' }]);
     expect(() => tool!.run({ ask: 'e anche il TCP' })).toThrow(/già partita/);
     turn = null; // app news or an agent's mail woke the Orchestrator

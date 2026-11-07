@@ -7,7 +7,7 @@
 // by DOMPurify's MathML profile) lights the legend row of the symbol the beat explains; a chart (Chart.js, the same
 // drawing as the chat's charts) shows the tooltip of the label the beat points at. «Tutto lo schema» shows it whole. The
 // model's text is untrusted throughout: plain text, a sanitized highlight, a sanitized MathML, a canvas. Motion is off
-// for reduced-motion users (impara.css). A compare (ADR 0219) shows before and after side by side, or stacked when the
+// for reduced-motion users (impara.css). A compare (ADR 0221) shows before and after side by side, or stacked when the
 // diagrams are wide (compareLayout): «Prima» from the first beat, «Dopo» from the second half of the beats, each side
 // drawn with its own SVG id prefix (compareIds, keyed by the piece); its beat note sits under both, never over them. Used by ImparaPlayer.tsx; styles impara.css (.lv-*).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -57,7 +57,7 @@ function Grows({ kind, src, beats, beat, whole, caption, note }: { kind: 'sequen
   );
 }
 
-/** Before and after side by side (ADR 0219): «Dopo» joins in the second half of the beats; the beat's note under both. */
+/** Before and after side by side (ADR 0221): «Dopo» joins in the second half of the beats; the beat's note under both. */
 function Compare({ before, after, idKey, after2, whole, caption }: { before: string; after: string; idKey: string; after2: boolean; whole: boolean; caption: string }) {
   const [zoom, setZoom] = useState<'before' | 'after' | null>(null);
   const ids = compareIds(idKey);

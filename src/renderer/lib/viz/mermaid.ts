@@ -20,7 +20,7 @@ const SCALE = ['--blue', '--violet', '--green', '--amber'];
 /** A bigger, tighter drawing (Impara's blackboard, ADR 0185): larger labels, less space between the nodes. */
 export interface DrawOptions {
   fontSize?: number; nodeSpacing?: number; rankSpacing?: number;
-  /** the SVG's id prefix (ADR 0219): a compare's two sides each their own, so their arrowheads never collide */
+  /** the SVG's id prefix (ADR 0221): a compare's two sides each their own, so their arrowheads never collide */
   idPrefix?: string;
 }
 

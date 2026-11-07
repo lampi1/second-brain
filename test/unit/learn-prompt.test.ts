@@ -1,4 +1,4 @@
-// Impara's prompts by kind of lesson (ADR 0219, src/main/learn/prompt.ts, explain-rules.ts): «Spiegazione» asks
+// Impara's prompts by kind of lesson (ADR 0221, src/main/learn/prompt.ts, explain-rules.ts): «Spiegazione» asks
 // nothing (no checks, no half-done or practice piece, no «Spiegalo tu», no review card from the tutor, at most one
 // question before the lesson), puts a picture on every piece with a short caption and offers the before/after compare;
 // «Quiz» (and a lesson saved before the modes) keeps the checks, the practice pieces and the cards.

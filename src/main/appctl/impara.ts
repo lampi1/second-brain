@@ -4,7 +4,7 @@
 // what Impara holds (the lessons, the cards due today, the score and each subject's level, ADR 0204). Only on the Orchestrator's own endpoint, and a start only on a
 // turn the user wrote (`userTurn`: the latest message is his, typed in the last minutes; never app news or an agent's
 // mail), at most one lesson per message: a lesson spends the user's tokens, so only his own words start one. `mode`
-// (ADR 0219): explain (default, no questions, a picture on every piece) or quiz (checks, coach and review cards).
+// (ADR 0221): explain (default, no questions, a picture on every piece) or quiz (checks, coach and review cards).
 import type { ImparaState, Lesson, LessonDepth, LessonKind, LessonMode, LessonStart } from '../../shared/lesson';
 import { DEFAULT_LESSON_MODE, LESSON_DEPTHS, LESSON_LEVELS, LESSON_MODES } from '../../shared/lesson';
 import type { EventMap } from '../../shared/contract';

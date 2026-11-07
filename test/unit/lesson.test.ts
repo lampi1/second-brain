@@ -2,7 +2,7 @@
 // out), the lit piece added by the app only on known ids, the play order (a piece, its extras, its checks, the end),
 // progress and how each piece went, the model's answers checked and capped, the spoken commands and choices; the
 // research (ADR 0188): facts with a source, the questions, the check's verdicts, a piece's beats and citations; the kind
-// of lesson (ADR 0219): explain by default for a new one, quiz for an old one, no checks and no graded end in explain.
+// of lesson (ADR 0221): explain by default for a new one, quiz for an old one, no checks and no graded end in explain.
 import { describe, expect, it } from 'vitest';
 import {
   applyVerdicts, beatsOf, diagramNodes, doneNodes, factLines, jsonIn, parseExtra, parseFacts, parseGrade, parseLessonCommand, parsePlan, parseQuestions, parseSpokenChoice, parseStep, pieceScores, playlist, progressOf, rootOf, summaryOf, withFocus,
@@ -190,7 +190,7 @@ describe('what the user says', () => {
   });
 });
 
-describe('the kind of lesson (ADR 0219)', () => {
+describe('the kind of lesson (ADR 0221)', () => {
   it('a new lesson explains by default; one saved before the modes is a quiz', () => {
     expect(DEFAULT_LESSON_MODE).toBe('explain');
     expect(LESSON_MODES).toEqual(['explain', 'quiz']);

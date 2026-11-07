@@ -2,7 +2,7 @@
 // checked and capped (mermaid headers, citations kept only for known facts, cards that cite a verified fact, a true/false
 // as a choice of two, a podcast's two voices); the checks the app makes alone (citations, size, giveaway questions) and
 // the gate's verdicts; the prompts give the Studio only the verified facts and tell the gate what the app found. In
-// «Spiegazione» (ADR 0219) a piece needs a picture and a short caption, and the gate drops the question rule.
+// «Spiegazione» (ADR 0221) a piece needs a picture and a short caption, and the gate drops the question rule.
 import { describe, expect, it } from 'vitest';
 import { checkIssues, gateRules, keepCites, parseGate, parseStudio, pieceIssues, QUALITY_RULES } from '../../src/shared/lesson-studio';
 import { gatePrompt, planPrompt, studioPrompt, tutorPrompt } from '../../src/main/learn/prompt';

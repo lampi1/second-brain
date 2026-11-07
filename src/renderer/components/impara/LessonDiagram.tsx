@@ -2,7 +2,7 @@
 // strict, an image, never DOM) with the piece's nodes lit, the ones seen before calm and the rest dimmed (shared/lesson.ts
 // withFocus: the app adds the classes, the model only names node ids), or the piece's own diagram. A new piece fades in
 // over the old one, so the picture grows instead of jumping. «Tutto lo schema» shows it without focus, «Ingrandisci»
-// opens it in the app's image viewer (ImageZoom). A diagram that cannot be drawn shows its code. idPrefix (ADR 0219): a
+// opens it in the app's image viewer (ImageZoom). A diagram that cannot be drawn shows its code. idPrefix (ADR 0221): a
 // compare's sides draw with their own SVG ids. Used by ImparaPlayer.tsx and LessonVisual.tsx.
 import { useEffect, useRef, useState } from 'react';
 import { withFocus } from '@shared/lesson';

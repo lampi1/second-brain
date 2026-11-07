@@ -1,4 +1,4 @@
-// The words Impara adds to a lesson's prompt in «Spiegazione» (ADR 0219): a lesson that explains with pictures and asks
+// The words Impara adds to a lesson's prompt in «Spiegazione» (ADR 0221): a lesson that explains with pictures and asks
 // nothing (the owner, 2026-11-07: «spiegazioni senza quiz», visual learner), and the drawing rules every lesson's
 // visuals follow. Imported by prompt.ts (RULES, planPrompt, restPrompt, extraPrompt, gatePrompt); pinned by
 // test/unit/learn-prompt.test.ts.

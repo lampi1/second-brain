@@ -7,7 +7,7 @@
 // the model and untrusted: this file checks and caps it (no mermaid directive, click or link; sizes capped; a beat may
 // only name a known line, symbol or label). Pure; shared by shared/lesson.ts (parseStep), main/learn (quality gate)
 // and the renderer (components/impara/LessonVisual.tsx); pinned by test/unit/lesson-visual.test.ts.
-// Since ADR 0219: compare = before and after side by side (diagram-design's architecture delta), two mermaid diagrams of
+// Since ADR 0221: compare = before and after side by side (diagram-design's architecture delta), two mermaid diagrams of
 // the same kind (flowchart, sequence, state); the first half of the beats speaks about «before», then «after» appears.
 // Each side is drawn with its own SVG id prefix (compareIds): two diagrams sharing ids once hid each other's arrows.
 // Wide sides (left-to-right) stack one above the other, tall ones stand side by side (compareLayout).
@@ -24,7 +24,7 @@ export type LessonVisual =
   | { kind: 'formula'; tex: string; where: { sym: string; meaning: string }[] }
   /** chart: the spec as JSON text, read again by the renderer's parseChartSpec */
   | { kind: 'chart'; chart: string; labels: string[] }
-  /** before and after: two mermaid sources of the same kind (ADR 0219) */
+  /** before and after: two mermaid sources of the same kind (ADR 0221) */
   | { kind: 'compare'; before: string; after: string };
 
 /** A diagram the learner reads at a glance: at most this many parts (nodes, messages, branches, events). */
@@ -101,7 +101,7 @@ export function revealMermaid(kind: MermaidKind, src: string, upto: number): str
 export const revealAt = (parts: number, i: number, n: number): number => (n <= 1 ? parts : Math.max(1, Math.ceil((parts * (i + 1)) / n)));
 export const revealSteps = (kind: MermaidKind, src: string): number => revealable(kind, contentLines(src)).length;
 
-// ── compare: before and after (ADR 0219) ───────────────────────────────────────────────────────────────────────────
+// ── compare: before and after (ADR 0221) ───────────────────────────────────────────────────────────────────────────
 
 /** The diagram kinds a compare side may be: the ones whose «what changed» reads at a glance. */
 const COMPARE_HEAD = /^(?:flowchart|graph)\s+(?:LR|RL|TB|TD|BT)\b|^sequenceDiagram\b|^stateDiagram(?:-v2)?\b/;

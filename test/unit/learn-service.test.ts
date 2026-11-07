@@ -5,7 +5,7 @@
 // broken lesson; extras land after the piece and the user lands on them; checks are judged at zero tokens and the first
 // answer stays; «Spiegalo tu» is graded; a lesson the app was closed during is marked, an extra or grade cut off frees
 // it; remove deletes its folder, also when a run still works in it (when that run ends) or a delete failed (next start).
-// «Spiegazione» (ADR 0219, the default; the other tests ask for «Quiz»): no check, no review card, one question at most.
+// «Spiegazione» (ADR 0221, the default; the other tests ask for «Quiz»): no check, no review card, one question at most.
 // The public topics of the files (ADR 0206): filtered, shown while they wait (✕ drops one, «Cerca ora», at once in
 // «Modalità notte»), then searched by a web run that sees only the ask and the queries, its facts verified on the web.
 import fs from 'node:fs';
@@ -321,7 +321,7 @@ describe('LearnService', () => {
     expect(ended.explain?.grade).toBeUndefined();
   });
 
-  it('«Spiegazione» (ADR 0219), the default: no check, no review card, the last piece ends it; one question at most', async () => {
+  it('«Spiegazione» (ADR 0221), the default: no check, no review card, the last piece ends it; one question at most', async () => {
     const { svc, store, runs } = make(fast);
     const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
     expect(l.mode).toBe('explain');
@@ -352,7 +352,7 @@ describe('LearnService', () => {
     expect(m.store.get(t.id)!.clarify!.qs.length).toBeLessThanOrEqual(1);
   });
 
-  it('«Spiegazione» (ADR 0219): an extra asked on the recap finishes the lesson, one asked in the middle does not', async () => {
+  it('«Spiegazione» (ADR 0221): an extra asked on the recap finishes the lesson, one asked in the middle does not', async () => {
     const { svc, store, runs } = make(fast);
     const l = svc.start({ kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
     await until(() => runs.filter(r => r.round === 'impara-quality').length === 2 && store.get(l.id)!.steps.filter(s => !s.extra).length === 6);
@@ -415,7 +415,7 @@ describe('LearnService', () => {
 });
 
 describe('the Studio, its quiz and the quality gate (ADR 0205)', () => {
-  // a quiz lesson: `ready` waits for its review cards, which an explain lesson never writes (ADR 0219)
+  // a quiz lesson: `ready` waits for its review cards, which an explain lesson never writes (ADR 0221)
   const PR = { mode: 'quiz' as const, kind: 'pr' as const, ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson' as const, level: 'basics' as const };
   async function ready(teach: (r: TeachRun) => Promise<TeachResult> = fast, root?: string) {
     const m = make(teach, root ? { root } : {});
@@ -462,7 +462,7 @@ describe('the Studio, its quiz and the quality gate (ADR 0205)', () => {
     expect(svc.queue('quiz', undefined, id)[0]!.card.mem).not.toBeNull();
   });
 
-  it('an explain lesson has the Studio too: its flashcards go into the review (the Studio-tile exception, ADR 0219)', async () => {
+  it('an explain lesson has the Studio too: its flashcards go into the review (the Studio-tile exception, ADR 0221)', async () => {
     const { svc, store } = make(fast);
     const { id } = svc.start({ ...PR, mode: 'explain' });
     // ready, not the cards: an explain lesson writes no review cards of its own

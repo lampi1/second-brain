@@ -3,7 +3,7 @@
 // each piece went (its checks, the extras it needed) with «Rivedi» on the weak ones, and the checks as «2/3 domande
 // giuste» (a count, not a percentage: «0%» next to «quasi» read as a contradiction, ADR 0188). Skipping
 // the explanation ends the lesson without a grade. Then its review cards (ADR 0189): being written, ready in its subject
-// with «Ripassa la materia», or failed with «Riprova». Under the whole diagram. In «Spiegazione» (ADR 0219) the end is
+// with «Ripassa la materia», or failed with «Riprova». Under the whole diagram. In «Spiegazione» (ADR 0221) the end is
 // opened only by the learner's own «Spiegalo tu»: no checks, so no score, no pieces' bars and no review cards; skipping
 // goes back to the recap. Used by ImparaPlayer.tsx.
 import { modeOf, pieceScores, progressOf, stepKey, subjectOf, type Lesson } from '@shared/lesson';

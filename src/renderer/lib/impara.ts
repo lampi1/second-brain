@@ -1,7 +1,7 @@
 // Impara in the renderer (ADR 0185): main's list and the open lesson (impara:changed keeps both current), the actions
 // of the page and the player (each an impara:* call, a failure said in a toast), the user's choices that outlive a
 // restart (voice of the app, «Rispondo a voce», depth, level, who explains, full screen, «Spiegazione» or «Quiz» (ADR
-// 0219): localStorage, a convenience only) and the colours a lit
+// 0221): localStorage, a convenience only) and the colours a lit
 // piece gets on the diagram, taken from the theme's tokens as hex (mermaid's classDef cannot take rgba).
 // The tutor's answers as they stream (ADR 0190: 'impara:tutor', `tutorLive`), and the start form's draft when another
 // page sends the user here to learn something («Capiscila», «Spiegamelo», «Imparalo»: `learnAbout`).
@@ -20,7 +20,7 @@ export const impara = createStore<ImparaUi>({ state: null, lessons: {} });
 
 /** teacher null = the app's choice (Claude's strongest model, high effort); full = the lesson fills the window (the
  *  owner, 2026-10-29: «di base a tutto schermo»); coach = the tutor's «Prima provo io» (ADR 0190, off in «Spiegazione»);
- *  mode = a new lesson's «Spiegazione» (explains, asks nothing: the default) or «Quiz» (ADR 0219) */
+ *  mode = a new lesson's «Spiegazione» (explains, asks nothing: the default) or «Quiz» (ADR 0221) */
 export interface ImparaPrefs { voice: boolean; mic: boolean; depth: LessonDepth; level: LessonLevel; teacher: LessonTeacher | null; full: boolean; coach: boolean; side: ImparaSide; mode: LessonMode }
 /** the column beside the lesson (ADR 0205): the tutor, the «Studio» tiles, or closed */
 export type ImparaSide = 'tutor' | 'studio' | null;

@@ -168,7 +168,7 @@
 .lv-where dd{margin:0;font-size:13px;line-height:1.45;color:var(--text-2)}
 /* chart */
 .lv-chart{position:relative;width:min(820px,100%);height:100%;max-height:420px;animation:ipIn .5s var(--ease) both}
-/* compare: before and after side by side, stacked when the diagrams are wide (ADR 0219); the note below, never over */
+/* compare: before and after side by side, stacked when the diagrams are wide (ADR 0221); the note below, never over */
 .lv[data-kind="compare"]{flex-direction:column;align-items:stretch;gap:10px}
 .lv-compare{position:relative;flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .lv-compare[data-layout="stack"]{grid-template-columns:1fr;grid-template-rows:1fr 1fr;gap:10px}

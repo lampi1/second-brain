@@ -4,7 +4,7 @@
 // the engine, its model and its effort, from main's ImparaState.teachers; no choice = the app's: Claude's strongest
 // model at high effort; the web research is always Claude's, and picking another engine says so) and the two voices.
 // Every model the engine offers, searched by a field once the list is long (OpenCode lists hundreds, its free ones last).
-// First the kind of lesson (ADR 0219): «Spiegazione» (explains with pictures, asks nothing; the default) or «Quiz».
+// First the kind of lesson (ADR 0221): «Spiegazione» (explains with pictures, asks nothing; the default) or «Quiz».
 // Remembered in Impara's prefs (lib/impara.ts). Used by ImparaStart.tsx; styles impara-quiz.css (.op-*).
 import { useRef, useState } from 'react';
 import { LESSON_DEPTHS, LESSON_LEVELS, LESSON_MODES, type LessonTeacher, type TeacherOption } from '@shared/lesson';

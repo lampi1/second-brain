@@ -7,7 +7,7 @@
 // becomes a review card (shown on the answer). Read aloud when «Voce dell'app» is on. Since ADR 0205 it is the «Tutor»
 // tab of the column beside the lesson (the «Studio» tab is the other; the column's head is ImparaPlayer's), and
 // «Mettimi alla prova» (a Studio tile) starts its quiz mode: it asks one question at a time and judges each answer
-// until «Basta così». In a «Spiegazione» lesson (ADR 0219) «Prima provo io» is off and hidden: the tutor answers.
+// until «Basta così». In a «Spiegazione» lesson (ADR 0221) «Prima provo io» is off and hidden: the tutor answers.
 // Used by ImparaPlayer.tsx; styles impara.css (.ip-tutor*).
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
 import { isAskingMode, modeOf, tutorShown, type Lesson, type LessonFact, type TutorMode, type TutorTurn } from '@shared/lesson';

@@ -1,7 +1,7 @@
 // Impara's visuals (ADR 0205, src/shared/lesson-visual.ts): what the model declares is checked and capped (the right
 // mermaid header, no directive, link or styling, sizes), a mermaid visual grows one part per beat and still draws when
 // cut inside a block, a beat may point only at a known line, symbol or label; parseStep keeps the visual and the role.
-// The compare (ADR 0219): two diagrams of the same kind, «Dopo» from the second half of the beats, each side with its
+// The compare (ADR 0221): two diagrams of the same kind, «Dopo» from the second half of the beats, each side with its
 // own SVG id prefix.
 import { describe, expect, it } from 'vitest';
 import { beatMark, compareAfterShown, compareIds, compareLayout, parseVisual, revealAt, revealMermaid, revealSteps, visualParts, type LessonVisual } from '../../src/shared/lesson-visual';
@@ -92,7 +92,7 @@ describe('beat marks and parseStep', () => {
   });
 });
 
-describe('compare (ADR 0219)', () => {
+describe('compare (ADR 0221)', () => {
   const BEFORE = 'flowchart LR\n  a["Motore"] -->|"100 ms"| b["Store"]\n  b --> c["Schermo"]';
   const AFTER = 'flowchart LR\n  a["Motore"] -->|"16 ms"| b["Store"]\n  b --> c["Schermo"]';
   it('keeps two diagrams of the same kind that differ', () => {

@@ -18,7 +18,7 @@
 // question every two pieces (Quantum Country's in-text recall), one common misconception only when a source states it,
 // and a closing mind map before «Spiegalo tu»; each piece picks the visual that explains it (shared/lesson-visual.ts).
 // A cheap quality-gate run then scores the draft on a fixed checklist and rewrites only the failing pieces (gatePrompt),
-// and the «Studio» tiles are one short run each over the verified facts only (studioPrompt). Since ADR 0219 a lesson has
+// and the «Studio» tiles are one short run each over the verified facts only (studioPrompt). Since ADR 0221 a lesson has
 // a mode: «Spiegazione» (explain, the default) keeps the structure but asks nothing (no checks, no half-done or practice
 // piece, no «Spiegalo tu» question, at most one clarification before it), and every piece shows a picture the voice
 // comments (rules in explain-rules.ts); «Quiz» is the lesson above. Used by learn/service.ts.
@@ -45,7 +45,7 @@ const QUIZ_STRUCTURE = `The lesson's structure (always, in this order; "role" na
 5. "misconception": ONE common misconception, only if a verified fact states it (cite it); otherwise no such piece.
 6. "recap": the last piece sums up what matters most with a "mindmap" visual of the whole lesson; the final «explain it yourself» follows.`;
 
-/** The teacher's rules; explain = «Spiegazione» (ADR 0219): the structure without anything that asks, a picture for
+/** The teacher's rules; explain = «Spiegazione» (ADR 0221): the structure without anything that asks, a picture for
  *  every piece that the voice comments (explain-rules.ts), a short caption, no check kinds. */
 const RULES = (lang: Lang, explain = false) => `You are the teacher of «Impara», the learning section of the user's second-brain desktop app. The app draws each piece's visual, moves to the part each beat names while a text-to-speech voice reads its sentence, sends a light along the arrows you name, and shows the rest. The user goes piece by piece at their own pace and can ask for a better explanation, an example, the code, or ask a question.
 
@@ -86,7 +86,7 @@ The lesson's flowchart (mermaid):
 Answer with ONE JSON object only, no text before or after it.`;
 
 const STEP_SHAPE = '{"title": "...", "role": "problem" | "example" | "rule" | "worked" | "faded" | "practice" | "misconception" | "recap", "visual": {"type": "flow"}, "beats": [{"say": "...", "focus": ["nodeId"], "flow": {"from": "nodeId", "to": "nodeId"}, "lines": [1, 3], "mark": "...", "note": "..."}], "text": "...", "cites": ["f1"], "words": [{"term": "...", "meaning": "..."}], "code": {"file": "path", "diff": "..."}}';
-/** A piece in «Spiegazione»: no half-done or practice role (ADR 0219). */
+/** A piece in «Spiegazione»: no half-done or practice role (ADR 0221). */
 const EXPLAIN_STEP_SHAPE = STEP_SHAPE.replace(' | "faded" | "practice"', '');
 const stepShape = (explain: boolean): string => (explain ? EXPLAIN_STEP_SHAPE : STEP_SHAPE);
 const CHECK_SHAPE = '{"afterStep": 1, "kind": "predict" | "choice" | "truefalse" | "cloze" | "order" | "match", "q": "...", "options": ["...", "...", "..."], "correct": 0, "items": ["..."], "pairs": ["..."], "code": "...", "why": "..."}';
@@ -194,7 +194,7 @@ const EXTRA: Record<LessonExtraKind, string> = {
 
 /** An extra piece the user asked for at a piece. */
 export function extraPrompt(lang: Lang, l: Lesson, at: LessonStep, kind: LessonExtraKind, ask: string | undefined, m: Pick<Material, 'text' | 'files'>, folder: string): string {
-  // «Spiegazione» (ADR 0219): an extra explains, it never adds a check
+  // «Spiegazione» (ADR 0221): an extra explains, it never adds a check
   const explain = modeOf(l) === 'explain', check = kind === 'better' && !explain;
   return `${RULES(lang, explain)}
 
@@ -268,7 +268,7 @@ const RULE_TEXT: Record<QualityRule, string> = {
 
 /** The quality gate: a cheap run scores the draft pieces and checks on the fixed checklist and rewrites only the failing
  *  ones, once (ADR 0205). `found` = what the app already saw alone (citations, size), told to the gate. In «Spiegazione»
- *  (ADR 0219) the checklist has the visual rule instead of the questions one, and there are no checks. */
+ *  (ADR 0221) the checklist has the visual rule instead of the questions one, and there are no checks. */
 export function gatePrompt(lang: Lang, l: Pick<Lesson, 'title' | 'diagram' | 'facts' | 'level'> & Partial<Pick<Lesson, 'mode'>>, steps: readonly LessonStep[], checks: readonly LessonCheck[], found: Readonly<Record<string, readonly QualityRule[]>>): string {
   const n = (s: LessonStep) => steps.indexOf(s) + 1;
   const explain = modeOf(l) === 'explain';
@@ -369,7 +369,7 @@ export interface Places { material: string[]; brain: string | null; guide: strin
 
 /** The files research: the material, the user's brain, the app; no web. Also asks the questions when the ask is unclear. */
 export function filesResearchPrompt(lang: Lang, req: Pick<LessonStart, 'kind' | 'ask' | 'level' | 'depth'> & Partial<Pick<LessonStart, 'mode'>>, m: Pick<Material, 'text'>, places: Places, web: boolean, topics = false): string {
-  // «Spiegazione» (ADR 0219, D6): at most one question before the lesson, only when the ask is ambiguous
+  // «Spiegazione» (ADR 0221, D6): at most one question before the lesson, only when the ask is ambiguous
   const one = modeOf(req) === 'explain';
   const where = [
     places.material.length ? `- The lesson's material: ${places.material.join(', ')}` : '',

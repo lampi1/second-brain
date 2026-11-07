@@ -7,7 +7,7 @@
 // start form's «Chi spiega» lists per engine, OpenCode's as long as a real one (its free models last). Since ADR 0205 the lessons show
 // every kind of visual (flow, code walkthrough, sequence, formula, chart, mind map), the pieces' roles, the quality gate
 // (it rewrites the one piece of the rest that cites nothing) and the «Studio» outputs (the lesson about Impara has most
-// of them made already). Since ADR 0219 a new lesson starts as «Spiegazione» (the service drops the checks below) and
+// of them made already). Since ADR 0221 a new lesson starts as «Spiegazione» (the service drops the checks below) and
 // «Fammi un esempio» answers with a before/after compare; the seeded lessons have no mode, so they stay quiz lessons.
 // Deterministic under SB_DEMO_FREEZE. Used by demo-wiring.ts; e2e: test/e2e/impara.spec.ts.
 import fs from 'node:fs';
@@ -213,7 +213,7 @@ const EXTRA: Record<string, unknown> = {
     why: 'ChatManager vive nel processo main; lo store vive nel renderer, cioè nella finestra.' } },
   example: { step: { title: 'Esempio: «Ciao, come stai?»', focus: ['engine', 'manager', 'store'],
     say: 'Il motore manda tre pezzi a pochi millisecondi l’uno dall’altro. Prima li vedevi comparire tutti insieme dopo circa duecento millisecondi; ora ognuno compare nel fotogramma dopo.',
-    // a before/after (ADR 0219): the two waits in a row, then the two frames
+    // a before/after (ADR 0221): the two waits in a row, then the two frames
     visual: { type: 'compare',
       before: 'flowchart LR\n  e["Motore"] -->|"Ciao, come stai?"| m["ChatManager"]\n  m -->|"dopo 100 ms"| s["Store"]\n  s -->|"dopo 100 ms"| v["Schermo: tutto insieme"]',
       after: 'flowchart LR\n  e["Motore"] -->|"Ciao,"| m["ChatManager"]\n  m -->|"dopo 16 ms"| s["Store"]\n  s -->|"dopo 16 ms"| v["Schermo: parola per parola"]' },

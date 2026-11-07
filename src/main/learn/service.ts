@@ -19,7 +19,7 @@
 // Since ADR 0205: a quality gate (one cheap run) scores the plan's pieces and the rest's on a fixed checklist and
 // rewrites only the failing ones, once, before the learner sees them; the «Studio» tiles (`studio`) are one short run
 // each over the verified facts only, saved with the lesson (flashcards go into the review, the quiz plays as a review
-// session whose answers become cards); «Mettimi alla prova» is the tutor in quiz mode. ADR 0219: a lesson in
+// session whose answers become cards); «Mettimi alla prova» is the tutor in quiz mode. ADR 0221: a lesson in
 // «Spiegazione» (the default mode) asks nothing: no check, no final question, one clarification at most, no review
 // card, the tutor always answers (tell); its pieces are gated on having a picture.
 // Wired in wiring.ts / demo-wiring.ts, IPC impara:* in index.ts; tests: test/unit/learn-service.test.ts.
@@ -195,7 +195,7 @@ export class LearnService {
   private emit(l?: Lesson): void { try { this.d.changed(this.state(), l); } catch (e) { log.warn('learn', 'lesson change not sent', { cause: errText(e) }); } }
   /** Reads the lesson now, changes it, writes it: no await in between, so two runs that end together never lose a change.
    *  `moved` = the change can put the learner on the last item: a «Spiegazione» lesson standing there is finished
-   *  (endsHere, ADR 0219: the recap reached, an extra on it, a one-piece lesson). */
+   *  (endsHere, ADR 0221: the recap reached, an extra on it, a one-piece lesson). */
   private edit(id: string, fn: (l: Lesson) => Lesson | void, moved = false): Lesson | null {
     const l = this.d.store.get(id);
     if (!l) return null;
@@ -378,7 +378,7 @@ export class LearnService {
     // with the web on, the files run was told to cite files only: a fact without one is left out
     if (web) f.facts = f.facts.filter(x => x.from === 'file');
     let qs: ReturnType<typeof parseQuestions> = [];
-    // «Spiegazione» (ADR 0219, D6): one question at most, only when the files run found the ask ambiguous
+    // «Spiegazione» (ADR 0221, D6): one question at most, only when the files run found the ask ambiguous
     try { if (f.v) qs = parseQuestions(f.v, modeOf(req) === 'explain' ? 1 : 2); } catch { qs = []; }
     this.edit(id, l => {
       let next = l;
@@ -605,7 +605,7 @@ export class LearnService {
   private async makeCards(id: string): Promise<void> {
     const l0 = this.d.store.get(id);
     const verified = (l0?.facts ?? []).filter(f => f.check !== 'unsure').map(f => f.id);
-    // «Spiegazione» leaves no review card (ADR 0219, D8)
+    // «Spiegazione» leaves no review card (ADR 0221, D8)
     if (!l0 || l0.state !== 'ready' || modeOf(l0) === 'explain' || !verified.length || l0.cards?.state === 'making' || l0.cards?.state === 'done' || this.cardJobs.has(id)) return;
     this.cardJobs.add(id);
     try {
@@ -739,7 +739,7 @@ export class LearnService {
   move(id: string, at: string): Lesson {
     const l = this.must(id);
     if (!playlist(l).some(p => p.key === at)) throw new Error('Pezzo non trovato.');
-    // «Spiegazione» ends on its recap (ADR 0219): reaching it is finishing the lesson
+    // «Spiegazione» ends on its recap (ADR 0221): reaching it is finishing the lesson
     return this.edit(l.id, x => ({ ...x, at }), true)!;
   }
 
@@ -828,7 +828,7 @@ export class LearnService {
     const key = String(at ?? '');
     const piece = key === 'end' ? null : this.pieceAt(l, key);
     const now = this.now();
-    // «Spiegazione» asks nothing (ADR 0219): the tutor answers at once, never a question back
+    // «Spiegazione» asks nothing (ADR 0221): the tutor answers at once, never a question back
     const asked = tutorModeOf(mode), use = modeOf(l) === 'explain' && asked === 'coach' ? 'tell' : asked;
     const turn: TutorTurn = { id: `t${now.toString(36)}${Math.random().toString(36).slice(2, 5)}`, q, at: key, mode: use, a: '', state: 'asking', createdAt: now };
     const next = this.edit(l.id, x => ({ ...x, tutor: [...(x.tutor ?? []), turn].slice(-TUTOR_KEEP) }))!;

@@ -13,7 +13,7 @@
 // Shared by main/learn/ (generation, store) and the renderer (components/impara/); pinned by test/unit/lesson.test.ts.
 // Since ADR 0205 a piece declares its visual (shared/lesson-visual.ts) and its role in the lesson's fixed structure, the
 // draft is scored by a quality gate, and the «Studio» column makes more from the same verified facts (lesson-studio.ts).
-// Since ADR 0219 a lesson has a kind (LessonMode): «Spiegazione», the default, asks nothing (withoutAsking drops the
+// Since ADR 0221 a lesson has a kind (LessonMode): «Spiegazione», the default, asks nothing (withoutAsking drops the
 // checks and «Spiegalo tu» is only offered) and leaves no review card; «Quiz» is the lesson above.
 import type { Effort } from './contract';
 import { subjectName, type ReviewSummary } from './review';
@@ -33,9 +33,9 @@ export const LESSON_EXTRAS: readonly LessonExtraKind[] = ['better', 'example', '
 export type LessonGrade = 'ok' | 'partial' | 'miss';
 /** «Eri sicuro?» after an answer: tirato a caso, abbastanza, sicurissimo (metacognition, LearnLM) */
 export type LessonConfidence = 0 | 1 | 2;
-/** How a lesson teaches (ADR 0219): explain = «Spiegazione», pictures and a voice that comments them, no question during
+/** How a lesson teaches (ADR 0221): explain = «Spiegazione», pictures and a voice that comments them, no question during
  *  the lesson, no review card; quiz = the lesson with checks, «Spiegalo tu» and review cards (ADR 0185, 0205). A lesson
- *  without one (made before ADR 0219) is a quiz lesson. */
+ *  without one (made before ADR 0221) is a quiz lesson. */
 export type LessonMode = 'explain' | 'quiz';
 export const LESSON_MODES: readonly LessonMode[] = ['explain', 'quiz'];
 /** The mode the start form sends when none is chosen. */
@@ -130,7 +130,7 @@ export interface LessonStart {
   subject?: string;
   /** the user's own files and folders dropped or picked on the start form (ADR 0204), read by the page: their sources */
   files?: LessonFile[];
-  /** «Spiegazione» or «Quiz» (ADR 0219); absent = DEFAULT_LESSON_MODE */
+  /** «Spiegazione» or «Quiz» (ADR 0221); absent = DEFAULT_LESSON_MODE */
   mode?: LessonMode;
 }
 /** One file of the user's as a lesson's source: its path (relative to the folder dropped) and its text. */
@@ -204,7 +204,7 @@ export interface Lesson {
   pr?: LessonPr;
   depth: LessonDepth;
   level: LessonLevel;
-  /** «Spiegazione» or «Quiz» (ADR 0219); absent = a lesson made before it, a quiz one (modeOf) */
+  /** «Spiegazione» or «Quiz» (ADR 0221); absent = a lesson made before it, a quiz one (modeOf) */
   mode?: LessonMode;
   createdAt: number;
   updatedAt: number;
@@ -326,7 +326,7 @@ export const checkKey = (id: string): string => `c:${id}`;
 
 /** The order the user goes through: each main piece, then its extra pieces (each followed by its own extras and
  *  checks), then its checks; then the end («Spiegalo tu»), there only once every planned piece arrived (state ready).
- *  In «Spiegazione» (ADR 0219) the lesson ends on its recap: the end is there only once the learner chose «Spiegalo tu»
+ *  In «Spiegazione» (ADR 0221) the lesson ends on its recap: the end is there only once the learner chose «Spiegalo tu»
  *  (an explain lesson has no `explain` before that: never asked unprompted). */
 export function playlist(l: Pick<Lesson, 'steps' | 'checks' | 'state'> & Partial<Pick<Lesson, 'mode' | 'explain'>>): PlayItem[] {
   const out: PlayItem[] = [];
@@ -571,11 +571,11 @@ export function parsePlan(v: unknown, opts: { now?: number; base?: string; facts
   return { title: text(o.title, 120, 'title', !opts.base) || '', diagram, outline, steps, checks, explainQ: text(o.explain, 320, 'explain', false), subject: subjectName(o.subject) };
 }
 
-/** «Spiegazione» (ADR 0219): a half-done or practice piece («Tocca a te», «Completa tu») leaves work to the learner;
+/** «Spiegazione» (ADR 0221): a half-done or practice piece («Tocca a te», «Completa tu») leaves work to the learner;
  *  it is shown as a worked one. Other roles stay. */
 export const toldRole = <S extends Pick<LessonStep, 'role'>>(s: S): S => (s.role === 'faded' || s.role === 'practice' ? { ...s, role: 'worked' } : s);
 
-/** «Spiegazione» (ADR 0219): whatever the model wrote that asks the learner is dropped, whatever the prompt said: no
+/** «Spiegazione» (ADR 0221): whatever the model wrote that asks the learner is dropped, whatever the prompt said: no
  *  check (so no review card from them either), no final question, no half-done or practice piece (told as worked); a
  *  quiz lesson keeps them. */
 export function withoutAsking<P extends { checks: LessonCheck[]; explainQ?: string; steps?: LessonStep[] }>(p: P, l: { mode?: LessonMode }): P {
@@ -583,7 +583,7 @@ export function withoutAsking<P extends { checks: LessonCheck[]; explainQ?: stri
   return { ...p, checks: [], ...('explainQ' in p ? { explainQ: '' } : {}), ...(p.steps ? { steps: p.steps.map(toldRole) } : {}) };
 }
 
-/** «Spiegazione» ends on its recap (ADR 0219): a ready lesson whose learner stands on the last item of the play-list
+/** «Spiegazione» ends on its recap (ADR 0221): a ready lesson whose learner stands on the last item of the play-list
  *  (the recap, or an extra asked on it, or the only piece) is finished. Always false for a quiz lesson. */
 export function endsHere(l: Pick<Lesson, 'steps' | 'checks' | 'state' | 'at'> & Partial<Pick<Lesson, 'mode' | 'explain'>>): boolean {
   if (modeOf(l) !== 'explain' || l.state !== 'ready') return false;
@@ -592,7 +592,7 @@ export function endsHere(l: Pick<Lesson, 'steps' | 'checks' | 'state' | 'at'> & 
 }
 
 /** Whether a dictation goes into the «Spiegalo tu» answer: on the graded end, or in the panel an explain lesson opens
- *  from its recap (ADR 0219), until an answer is given. Used by ImparaPlayer's voice routing. */
+ *  from its recap (ADR 0221), until an answer is given. Used by ImparaPlayer's voice routing. */
 export const heardIsExplainBack = (onEnd: boolean, teachOpen: boolean, l: Partial<Pick<Lesson, 'explain'>>): boolean =>
   (onEnd || teachOpen) && !l.explain?.answer;
 
@@ -641,7 +641,7 @@ export function parseFacts(v: unknown, web: boolean, start = 1): LessonFact[] {
   return out;
 }
 
-/** The questions a research run asks before the lesson: at most `max` (two; one in «Spiegazione», ADR 0219), each with
+/** The questions a research run asks before the lesson: at most `max` (two; one in «Spiegazione», ADR 0221), each with
  *  2 to 4 short options. */
 export function parseQuestions(v: unknown, max = 2): LessonClarify['qs'] {
   const o = obj(v, 'ricerca');

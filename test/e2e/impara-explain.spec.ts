@@ -1,4 +1,4 @@
-// E2E of Impara's «Spiegazione» (ADR 0219) on the frozen demo (main/learn/demo.ts): the default kind of lesson, shown
+// E2E of Impara's «Spiegazione» (ADR 0221) on the frozen demo (main/learn/demo.ts): the default kind of lesson, shown
 // first in the options line and picked in the options' «Tipo di lezione». A PR lesson started in it plays its pieces
 // with no check between them (the service drops the plan's checks), the narration short with «Testo completo», the
 // tutor without the coach switch; «Fammi un esempio» answers with a before/after compare whose «Dopo» joins at the
@@ -9,7 +9,7 @@ import { goPage, launchDemo, shot } from './helpers';
 
 const PR = 'https://github.com/lampi1/second-brain/pull/251';
 
-test('an explanation lesson (ADR 0219): the default, no checks, a before/after compare, an optional «Spiegalo tu» with no score', async () => {
+test('an explanation lesson (ADR 0221): the default, no checks, a before/after compare, an optional «Spiegalo tu» with no score', async () => {
   test.setTimeout(120_000);
   const { app, page } = await launchDemo();
   try {

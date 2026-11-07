@@ -13,7 +13,7 @@
 // (ImparaSources.tsx: web pages, files of this PC, the material). A lesson being researched shows ImparaPrep.tsx.
 // «Chiedi» opens the tutor beside the board (ImparaTutor.tsx, ADR 0190): a question typed or spoken, or a click on a
 // part of the diagram, answered in seconds, word by word.
-// Since ADR 0219, a lesson in «Spiegazione» (explain) asks nothing: its pieces show the short spoken text by the picture
+// Since ADR 0221, a lesson in «Spiegazione» (explain) asks nothing: its pieces show the short spoken text by the picture
 // even with the voice off (the full text behind «Testo completo»), the tutor always answers (no «Prima provo io»), and
 // it ends on the recap, where «Spiegalo tu» is a button the learner may press (never opened by itself).
 // Since ADR 0205: each piece shows the visual it declared (LessonVisual.tsx: sequence, state, timeline, mind map, code
@@ -173,7 +173,7 @@ function Board({ lesson }: { lesson: Lesson }) {
   const mainIndex = root ? main.findIndex(s => s.id === root.id) : main.length - 1;
   const total = Math.max(main.length, lesson.outline.length);
   const atLast = idx >= list.length - 1;
-  // «Spiegazione» (ADR 0219): the short spoken text even without the voice; «Spiegalo tu» only when asked for
+  // «Spiegazione» (ADR 0221): the short spoken text even without the voice; «Spiegalo tu» only when asked for
   const explainMode = modeOf(lesson) === 'explain';
   const spoken = prefs.voice || explainMode;
   const [teach, setTeach] = useState(false);
@@ -271,7 +271,7 @@ function Board({ lesson }: { lesson: Lesson }) {
     if (cmd === 'repeat') return speakNow();
     if (cmd === 'pause') return stopSpeaking(false);
     if (cmd === 'better' || cmd === 'example' || cmd === 'code') return extra(cmd);
-    // the «Spiegalo tu» panel, also when opened from an explain lesson's recap (ADR 0219): what is heard is the answer
+    // the «Spiegalo tu» panel, also when opened from an explain lesson's recap (ADR 0221): what is heard is the answer
     if (heardIsExplainBack(item.kind === 'end', teach && canTeach, lesson)) { setDraft(d => (d.trim() ? `${d} ${text}` : text)); return; }
     // anything else of three words or more is a question for the tutor (ADR 0190), sent at once
     if (text.trim().split(/\s+/).length >= 3) { setTutor(true); if (lesson.tutor?.some(x => x.state === 'asking')) setSeed(text); else void askTutor(lesson.id, item.key, text, prefs.coach && !explainMode ? 'coach' : 'tell'); }

@@ -1,4 +1,4 @@
-# 0219. Impara: «Spiegazione», a lesson with pictures and no quiz
+# 0221. Impara: «Spiegazione», a lesson with pictures and no quiz
 
 Date: 2026-11-07. Status: proposed. Amends 0185, 0205 and 0213.
 
