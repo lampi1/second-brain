@@ -35,6 +35,13 @@ export interface PhoneLog {
   error(scope: string, msg: string, extra: LogExtra & { cause: string; hint: string }): void;
 }
 
+// ── bot token shape: the one definition (token-store.ts and bridge.ts check it, filter.ts masks it in text) ─────────
+const BOT_ID = '\\d{5,16}';
+/** A whole BotFather token: "<bot id>:<secret>". */
+export const BOT_TOKEN_SHAPE = new RegExp(`^${BOT_ID}:[A-Za-z0-9_-]{30,64}$`);
+/** A bot token inside a text (global: use with replace). */
+export const BOT_TOKEN_IN_TEXT = new RegExp(`\\b${BOT_ID}:[A-Za-z0-9_-]{30,}`, 'g');
+
 /** What the urgent channel carries: always sent, with sound, also at night and in Focus (design §8). */
 export type UrgentKind = 'production' | 'urgente' | 'budget';
 

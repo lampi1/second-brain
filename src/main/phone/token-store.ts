@@ -9,9 +9,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { addRedaction, log } from '../log';
 import type { SecretCipher } from '../engines/secrets';
+import { BOT_TOKEN_SHAPE } from './types';
 
-/** A BotFather token: "<bot id>:<secret>". */
-export const PHONE_TOKEN_SHAPE = /^\d{5,16}:[A-Za-z0-9_-]{30,64}$/;
+/** A BotFather token: "<bot id>:<secret>" (types.ts: the one shape the bridge checks too). */
+export const PHONE_TOKEN_SHAPE = BOT_TOKEN_SHAPE;
 
 interface Saved { version: 1; cipher: string }
 

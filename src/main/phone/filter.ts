@@ -1,15 +1,17 @@
 // The ONE filter on every text that leaves the PC for Telegram (design §9): replies, questions, options, the voice echo,
 // /stato, notices, button labels. outbound.ts is the only sender and calls it on every text, so no path skips it.
-// What it does, in order: invisible and control characters removed (and NFKC, so look-alike wide letters become plain);
-// fenced code blocks, inline code and command lines → "[comando: eseguilo dal PC]"; markdown tables and query-result-like
-// rows dropped (one placeholder); credentials masked (maskSecrets of src/main/brain/mask.ts, then redact of
-// src/main/log.ts); bot tokens; links reduced to their domain (paths and titles can name a customer); local paths;
-// license-like codes (ODENTAIRC…, PDENTAIR…, XXXX-XXXX-XXXX keys), emails, Italian codici fiscali, IBANs, GUIDs, Db_…
-// names and long digit runs masked. Chat titles never reach it: callers pass role + neutral label.
+// What it does, in order: invisible, tag and control characters removed (and NFKC, so look-alike wide letters become
+// plain; Cyrillic/Greek look-alikes folded inside mixed words); fenced code blocks, inline code and command lines →
+// "[comando: eseguilo dal PC]"; markdown tables and query-result-like rows dropped (one placeholder); credentials masked
+// (maskSecrets of src/main/brain/mask.ts, then redact of src/main/log.ts); bot tokens, SAS signatures; links and
+// scheme-less host/path reduced to their domain (paths and titles can name a customer); local and relative file paths;
+// license-like codes (ODENTAIRC…, PDENTAIR…, XXXX-XXXX-XXXX keys), emails, Italian codici fiscali (spaces too), IBANs,
+// GUIDs (with or without dashes), Db_… names and long digit runs masked. Chat titles never reach it: callers pass role + neutral label.
 // Known limit (design §9): a customer or patient name in plain prose passes. Idempotent.
 // Used by outbound.ts, condense.ts, buttons.ts, commands.ts, voice.ts; adversarial tests: test/unit/phone/filter.test.ts.
 import { maskSecrets } from '../brain/mask';
 import { redact } from '../log';
+import { BOT_TOKEN_IN_TEXT } from './types';
 
 export const CODE_PLACEHOLDER = '[comando: eseguilo dal PC]';
 export const TABLE_PLACEHOLDER = '[tabella: vedila sul PC]';
@@ -21,6 +23,25 @@ const INVISIBLE = /[\u00AD\u034F\u061C\u115F\u1160\u17B4\u17B5\u180E\u200B-\u200
 /** U+FE0F (emoji presentation) is kept only right after a pictograph, so the warning sign stays an emoji on the phone */
 const STRAY_VS16 = /(?<!\p{Extended_Pictographic})\uFE0F/gu;
 const CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
+/** Unicode tag characters (invisible, used to smuggle text) */
+const TAGS = /[\u{E0000}-\u{E007F}]/gu;
+
+/** Cyrillic and Greek letters that look Latin: folded inside a word that mixes them with Latin letters or digits
+ *  ("ОDENTAIR" with a Cyrillic О), so the rules below see the Latin word; a word in one script stays as it is */
+const HOMOGLYPHS: Record<string, string> = {
+  А: 'A', В: 'B', Е: 'E', К: 'K', М: 'M', Н: 'H', О: 'O', Р: 'P', С: 'C', Т: 'T', Х: 'X', У: 'Y', І: 'I', Ј: 'J', Ѕ: 'S',
+  а: 'a', е: 'e', о: 'o', р: 'p', с: 'c', у: 'y', х: 'x', і: 'i', ј: 'j', ѕ: 's', һ: 'h', ԁ: 'd', ԛ: 'q', ԝ: 'w',
+  Α: 'A', Β: 'B', Ε: 'E', Ζ: 'Z', Η: 'H', Ι: 'I', Κ: 'K', Μ: 'M', Ν: 'N', Ο: 'O', Ρ: 'P', Τ: 'T', Υ: 'Y', Χ: 'X',
+  ο: 'o', ν: 'v', ρ: 'p',
+};
+const NON_LATIN = /[Ͱ-ϿЀ-ԯ]/;
+const foldMixed = (t: string) => t.replace(/\S+/g, w =>
+  NON_LATIN.test(w) && /[A-Za-z0-9]/.test(w) ? w.replace(/[Ͱ-ϿЀ-ԯ]/g, c => HOMOGLYPHS[c] ?? c) : w);
+
+/** a codice fiscale, with an optional space between its parts (surname, name, year, month, day, town, check:
+ *  "RSS MRA 80A01 H501U" too) */
+const D = '[0-9LMNPQRSTUV]';
+const CF = new RegExp(`\\b${['[A-Z]{3}', '[A-Z]{3}', `${D}{2}`, '[A-EHLMPRST]', `${D}{2}`, '[A-Z]', `${D}{3}`, '[A-Z]'].join(' ?')}\\b`, 'gi');
 
 const FENCE = /^\s*(`{3,}|~{3,})/;
 /** a line that is a shell or PowerShell command (a prompt, or a known command word first) */
@@ -68,27 +89,33 @@ export function domainOnly(raw: string): string {
 }
 
 const RULES: [RegExp, string | ((m: string, ...g: string[]) => string)][] = [
-  [/\b\d{6,12}:[A-Za-z0-9_-]{30,}/g, '[redacted]'],                                             // a bot token
+  [BOT_TOKEN_IN_TEXT, '[redacted]'],                                                             // a bot token
+  [/\bsig=[^\s&"'<>]+/gi, 'sig=[redacted]'],                                                     // an Azure SAS signature
   [/\bmailto:[^\s<>"')\]]+/gi, '[email]'],
   [/[\w.+%-]+@[\w-]+(?:\.[\w-]+)+/g, '[email]'],
   [/!?\[([^\]\n]*)\]\(\s*([^)\s]+)[^)\n]*\)/g, (_m: string, _t: string, url: string) => domainOnly(url)], // [title](url): title dropped
   [/\b(?:https?|ftp|wss?):\/\/[^\s<>"'`)\]]+/gi, m => domainOnly(m)],
   [/\bfile:\/\/[^\s<>"')\]]+/gi, '[percorso]'],
   [/\bwww\.[^\s<>"')\]]+/gi, m => domainOnly(m)],
-  [/(?:\b[A-Za-z]:\\|\\\\[\w.$-]+\\)[^\s"'<>|]*/g, '[percorso]'],                                // C:\…, \\server\…
-  [/(?:^|(?<=\s))(?:~|\/(?:Users|home|var|etc|opt|mnt|srv))\/[^\s"'<>]*/g, '[percorso]'],
-  [/\b(?:ODENTAIR|PDENTAIR|ORISDENTAIR|POWERDENTAIR)[A-Z0-9_-]*/gi, '[codice]'],
+  [/(?:\b[A-Za-z]:[\\/]|\\\\[\w.$-]+\\)[^\s"'<>|]*/g, '[percorso]'],                             // C:\…, C:/…, \\server\…
+  [/(?:^|(?<=\s))(?:~|\/(?:Users|home|var|etc|opt|mnt|srv|[A-Za-z](?=\/)))\/[^\s"'<>]*/g, '[percorso]'], // also Git Bash /c/…
+  // a host with a path and no scheme (portal.azure.com/subscriptions/…): its domain, like a link
+  [/(?<![\w@./-])(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,24}\/[^\s<>"')\]]*/g, m => domainOnly(`https://${m}`)],
+  // a relative path of 3 or more segments ending in a file name (clienti/rossi/fattura.pdf)
+  [/(?<![\w/.-])(?:[\w.-]+\/){2,}[\w.-]*\.(?=[A-Za-z0-9]*[A-Za-z])[A-Za-z0-9]{1,8}\b/g, '[percorso]'],
+  [/(?:ODENTAIR|PDENTAIR|ORISDENTAIR|POWERDENTAIR)[A-Z0-9_-]*/gi, '[codice]'],
   [/\b(?=[A-Z0-9]*\d)(?=[A-Z0-9]*[A-Z])[A-Z0-9]{4,}(?:-[A-Z0-9]{4,}){2,}\b/g, '[codice]'],        // XXXX-XXXX-XXXX keys
   [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, '[guid]'],
-  [/\b[A-Z]{6}[0-9LMNPQRSTUV]{2}[A-EHLMPRST][0-9LMNPQRSTUV]{2}[A-Z][0-9LMNPQRSTUV]{3}[A-Z]\b/gi, '[codice fiscale]'],
+  [/\b[0-9a-f]{32}\b/gi, '[guid]'],                                                              // a GUID without dashes
+  [CF, '[codice fiscale]'],
   [/\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,4})?\b/g, '[iban]'],
-  [/\bDb_[\w.-]+/gi, '[db]'],
+  [/Db[ \t]*_[\w.-]+/gi, '[db]'],
   [/\b\d{11,}\b/g, '[numero]'],
 ];
 
 /** The outgoing filter: every text sent to Telegram goes through it, once or more (it is idempotent). */
 export function filterOutgoing(input: string): string {
-  let t = String(input ?? '').slice(0, FILTER_INPUT_MAX).replace(/\r\n?/g, '\n').normalize('NFKC').replace(INVISIBLE, '').replace(STRAY_VS16, '').replace(CONTROL, '');
+  let t = foldMixed(String(input ?? '').slice(0, FILTER_INPUT_MAX).replace(/\r\n?/g, '\n').normalize('NFKC').replace(INVISIBLE, '').replace(TAGS, '').replace(STRAY_VS16, '').replace(CONTROL, ''));
   t = dropFences(t);
   t = t.replace(/`+[^`\n]*`+/g, CODE_PLACEHOLDER).replace(/`/g, '');
   t = dropBlocks(t);

@@ -89,6 +89,46 @@ describe('filterOutgoing', () => {
     expect(f(f(messy))).toBe(f(messy));
   });
 
+  it('masks forward-slash Windows paths and relative file paths (review S1)', () => {
+    const home = ['Us', 'ers'].join('') + '/someone'; // built at run time: no user path in the source
+    expect(f(`apri C:/${home}/Documents/fattura.pdf ora`)).toBe('apri [percorso] ora');
+    expect(f(`in /c/${home}/x`)).toBe('in [percorso]');
+    expect(f('vedi clienti/rossi/fattura-2026.pdf')).toBe('vedi [percorso]');
+    expect(f('cambiato src/main/phone/filter.ts.')).toBe('cambiato [percorso].');
+    expect(f('e/o, 3/4 delle volte, 07/11/2026')).toBe('e/o, 3/4 delle volte, 07/11/2026');
+  });
+
+  it('reduces a scheme-less host with a path to its domain (review S2)', () => {
+    expect(f('apri portal.azure.com/subscriptions/0e50/resourceGroups/rossi')).toBe('apri portal.azure.com/...');
+    expect(f(`vedi ${FX.devops}/org/proj/_workitems/edit/123`)).toBe(`vedi ${FX.devops}/...`);
+    expect(f('dominio portal.azure.com e basta')).toBe('dominio portal.azure.com e basta');
+  });
+
+  it('masks bot tokens of 5 to 16 digits (review S3)', () => {
+    const secret = TOKEN.split(':')[1]!;
+    for (const id of ['12345', '1234567890123456']) expect(f(`token ${id}:${secret}`)).toBe('token [redacted]');
+  });
+
+  it('defeats tag characters and Cyrillic/Greek look-alikes (review S4)', () => {
+    expect(f('ODENTAIR\u{E0041}C00123')).toBe('[codice]');
+    expect(f('ok\u{E0001}\u{E007F}')).toBe('ok');
+    expect(f('licenza \u041EDENTAIRC00123')).toBe('licenza [codice]');            // Cyrillic О
+    expect(f('db \u0405\u0435rv Db_\u0430')).not.toMatch(/Db_/i);
+    expect(f('Привет, мир')).toBe('Привет, мир');                                   // one script: kept
+  });
+
+  it('masks codes glued to a word, GUIDs without dashes, spaced codici fiscali, Db _X and SAS signatures (review S4)', () => {
+    expect(f('licenzaODENTAIRC00123')).toBe('licenza[codice]');
+    expect(f('nome myDb_Rossi')).toBe('nome my[db]');
+    expect(f('db Db _Studio_Rossi fermo')).toBe('db [db] fermo');
+    expect(f('id 3f2504e04f8911d39a0c0305e82c3301')).toBe('id [guid]');
+    expect(f('CF RSS MRA 80A01 H501U')).toBe('CF [codice fiscale]');
+    expect(f('CF RSSMRA 80A01 H501U')).toBe('CF [codice fiscale]');
+    expect(f('firma sig=abc%2Bdef%3D&se=2026')).toBe('firma sig=[redacted]&se=2026');
+    const prose = 'Per far partire la build devi solo aspettare che i test siano verdi, poi ci pensa la pipeline.';
+    expect(f(prose)).toBe(prose);
+  });
+
   it('caps a huge input', () => {
     expect(f('a'.repeat(100_000)).length).toBeLessThanOrEqual(20_000);
   });
