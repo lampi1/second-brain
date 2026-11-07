@@ -12,7 +12,7 @@ import type { AgentRun, AgentRunCorrections, AgentRunEnd, AgentRunOutcome, Agent
 import { ONE_SHOT_PURPOSES } from '../../shared/agents';
 import { errText, log } from '../log';
 import { emptyFlashLog, flashAnswered, flashAsked, flashBriefed, flashHanded, readFlashLog, type FlashLog } from './flash-outcomes';
-import { checkResult } from '../../shared/delegation';
+import { MAX_CORRECTIONS, checkResult } from '../../shared/delegation';
 import { FLASH_BRIEF_TAG, MODEL_TIERS, type ModelTier } from '../../shared/roles';
 import { SUMMARY_MAX } from './run-report';
 import { rollUp, SAMPLE_MAX, type RunTally, type TagTally } from './run-metrics';
@@ -106,7 +106,8 @@ function readReport(v: unknown): AgentRunReport | null {
   }
   return { ...(canonical ? { canonical } : {}), at: r.at, outcome: r.outcome as 'done', verified: r.verified as 'yes', summary: r.summary,
     ...(r.findings !== undefined ? { findings: r.findings as number } : {}), ...(r.blocking !== undefined ? { blocking: r.blocking as number } : {}),
-    ...(['success', 'partial', 'fail'].includes(r.verdict as string) ? { verdict: r.verdict as 'success' } : {}), ...(r.via === 'agent_report' ? { via: 'agent_report' as const } : {}) };
+    ...(['success', 'partial', 'fail'].includes(r.verdict as string) ? { verdict: r.verdict as 'success' } : {}), ...(r.via === 'agent_report' ? { via: 'agent_report' as const } : {}),
+    ...(count(r.corrections) && r.corrections > 0 ? { corrections: Math.min(r.corrections, MAX_CORRECTIONS) } : {}) };
 }
 function readCorrections(v: unknown): AgentRunCorrections | null {
   const c = v as Partial<AgentRunCorrections> | null;

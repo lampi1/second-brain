@@ -16,7 +16,7 @@ import type { ChatSummary, Harness, NewChat } from '../../shared/contract';
 import type { AgentCatalog, AgentRun, UserTaskEvents } from '../../shared/agents';
 import { canLaunch, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
 import { oneLine } from '../../shared/agent-label';
-import { CRITERION_MAX, EVIDENCE_MAX, RESULT_OUTPUT_MAX, SUMMARY_MAX, checkContract, checkResult, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult, type DelegationIntegration, type TaskAssignmentOptions } from '../../shared/delegation';
+import { CRITERION_MAX, EVIDENCE_MAX, MAX_CORRECTIONS, RESULT_OUTPUT_MAX, SUMMARY_MAX, capText, checkContract, checkResult, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult, type DelegationIntegration, type TaskAssignmentOptions } from '../../shared/delegation';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { delegationGate, stepIndex, type StrategyPlan } from '../../shared/strategy';
 import type { McpTool } from '../mcp/server';
@@ -311,12 +311,14 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
 
   /** agent_report's `remember`: up to 3 short lines for the reporting chat's role memory, checked before the report and
    *  written once it is accepted (a refused report writes nothing, so a retry does not count twice) */
-  function rememberLines(a: Record<string, unknown>, self: ChatSummary | undefined): (() => number) {
+  function rememberLines(a: Record<string, unknown>, self: ChatSummary | undefined, warnings: string[]): (() => number) {
     if (a.remember === undefined) return () => 0;
     if (self?.routine || self?.routinePackage) throw new Error('Archived routine chats cannot submit new work; use the terminal CLI.');
-    const lines = Array.isArray(a.remember) && a.remember.length <= REMEMBER_MAX && a.remember.every(l => typeof l === 'string' && l.trim() && l.length <= REMEMBER_LINE && !/[\x00-\x1f\x7f]/.test(l))
+    const lines = Array.isArray(a.remember) && a.remember.length <= REMEMBER_MAX && a.remember.every(l => typeof l === 'string' && l.trim() && !/[\x00-\x1f\x7f]/.test(l))
       ? (a.remember as string[]).map(l => l.trim()) : null;
     if (!lines) throw new Error(`agent_report: remember = up to ${REMEMBER_MAX} single lines of at most ${REMEMBER_LINE} characters.`);
+    // a line over REMEMBER_LINE is cut with the marker «…», never refused (P8)
+    lines.forEach((line, i) => { if (line.length > REMEMBER_LINE) { lines[i] = capText(line, REMEMBER_LINE); warnings.push(`remember line ${i + 1} cut to ${REMEMBER_LINE} characters (marker …).`); } });
     if (!lines.length) return () => 0;
     // the worth gate (ADR 0129) before the report is accepted: the agent generalizes the line or leaves it out
     lines.forEach((line, i) => {
@@ -338,13 +340,16 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
   function report(all: Record<string, unknown>, callerId: string): unknown {
     const self = chat(callerId);
     // `remember` is the role memory's, not the result's: the result keeps its exact shape (shared/delegation.ts checkResult)
-    const { remember: _remember, ...a } = all, write = rememberLines(all, self);
     const warnings: string[] = [];
+    const { remember: _remember, ...a } = all, write = rememberLines(all, self, warnings);
     // Small cosmetic overflows must not require another model turn. Full evidence stays in output/doneWhen;
     // neither outcome nor the host's completion criteria are repaired or relaxed.
-    if (typeof a.summary === 'string' && a.summary.trim().length > SUMMARY_MAX && a.summary.trim().length <= Math.floor(SUMMARY_MAX * 1.1)) {
-      const prefix = a.summary.trim().slice(0, SUMMARY_MAX - 1), boundary = prefix.search(/\s+\S*$/);
-      if (boundary > 0) { a.summary = `${prefix.slice(0, boundary)}…`; warnings.push(`summary shortened at a word boundary to ${SUMMARY_MAX} characters.`); }
+    // A longer summary is cut with the marker «…», never refused; its full text stays in output (P8, cloudroom comms).
+    if (typeof a.summary === 'string' && a.summary.trim().length > SUMMARY_MAX) {
+      const full = a.summary.trim();
+      a.summary = capText(full, SUMMARY_MAX);
+      if (typeof a.output === 'string' && !a.output.includes(full) && a.output.length + full.length + 20 <= RESULT_OUTPUT_MAX) a.output = `${a.output}\n\nSintesi completa: ${full}`;
+      warnings.push(`summary cut to ${SUMMARY_MAX} characters (marker …); its full text is in output.`);
     }
     // Agents commonly attach top-level evidence. It is not canonical verification; explicitly discard it, never
     // merge it into doneWhen or a review verdict. Other unknown keys still report likely misspellings.
@@ -447,7 +452,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
 
   const str = { type: 'string' };
   const reportSchema: Record<string, unknown> = { type: 'object', required: ['outcome', 'summary', 'output', 'doneWhen'], additionalProperties: false, properties: {
-      outcome: { type: 'string', enum: ['done', 'partial', 'blocked'] }, summary: { ...str, maxLength: SUMMARY_MAX }, output: { ...str, maxLength: RESULT_OUTPUT_MAX },
+      outcome: { type: 'string', enum: ['done', 'partial', 'blocked'] }, summary: { ...str, description: `one or two sentences, up to ${SUMMARY_MAX} characters (a longer one is cut with …)` }, output: { ...str, maxLength: RESULT_OUTPUT_MAX },
+      amends: { type: 'boolean', description: `true only to correct the result you already reported for this assignment: the new version replaces it and reaches the same reader, marked as a correction; at most ${MAX_CORRECTIONS} corrections` },
       verdict: { type: 'string', enum: ['success', 'partial', 'fail'], description: 'Only app-owned independent reviews: assessment of the reviewed work, separate from completion of your review.' },
       verified: { type: 'string', enum: ['yes', 'partial', 'no'], description: 'Only with verdict: yes only when you independently checked the evidence; never inferred from completing the review.' },
       taskVersion: { type: 'integer', minimum: 1, description: 'Current task version supplied with the assignment; required after a follow-up. Stale reports are refused.' },
@@ -455,7 +461,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       questions: { type: 'array', items: { ...str, maxLength: 500 }, maxItems: 8 },
       goalChangedByUser: { type: 'boolean', description: 'true when the user wrote to you directly and changed your goal (you followed the user)' },
       newGoal: { ...str, description: 'with goalChangedByUser: the goal the user gave you' },
-      remember: { type: 'array', items: { ...str, maxLength: REMEMBER_LINE }, maxItems: REMEMBER_MAX, description: 'optional, up to 3 short lines for YOUR role\'s memory (read at every launch of your role): general, reusable knowledge a future run would otherwise rediscover or ask again (a procedure, a convention, a how-to, where things are kept). Generalize a specific finding first (no URLs with ports, ticket / PR / commit ids, user paths, dates, branch names): a case-specific line refuses the report. Never the task result' },
+      remember: { type: 'array', items: str, maxItems: REMEMBER_MAX, description: 'optional, up to 3 short lines (at most 300 characters each, a longer one is cut with …) for YOUR role\'s memory (read at every launch of your role): general, reusable knowledge a future run would otherwise rediscover or ask again (a procedure, a convention, a how-to, where things are kept). Generalize a specific finding first (no URLs with ports, ticket / PR / commit ids, user paths, dates, branch names): a case-specific line refuses the report. Never the task result' },
     } };
   return [{
     name: 'agent_delegate',
@@ -512,7 +518,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: (a, ctx) => JSON.stringify(taskEvents(a, callerOf(ctx.params))),
   }, {
     name: 'agent_report',
-    description: 'Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened): outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions, optional remember (lines for your role\'s memory). It reaches your parent at once; call it once, at the end. The app shows output in your chat as your answer: do not write it in the chat too.',
+    description: 'Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened): outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions, optional remember (lines for your role\'s memory). It reaches your parent at once; call it once, at the end; to correct a result already given, call it again with amends: true (at most 2 corrections). The app shows output in your chat as your answer: do not write it in the chat too.',
     inputSchema: reportSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     // verdict / verified only where the report check accepts them: an app-owned independent review (#183); an engine

@@ -110,8 +110,10 @@ export const LAMPO_FRAME = 'You are Flash, the quick lane of the user\'s second-
  *  PreToolUse hook: Claude starts a sub-agent without a permission request (role-gate.ts SubagentGate). */
 export const subagentGateFor = (tools: AgentPolicy['tools'] | null | undefined): Pick<SessionOptions, 'preToolUse'> =>
   tools && claudeTools(tools).includes('Agent') ? { preToolUse: new SubagentGate() } : {};
-/** how long a child's result waits for its siblings' before it goes to the parent alone */
-export const CHILD_RESULTS_MS = 60_000;
+/** the debounce of child results while siblings still work: each new result restarts it (cloudroom's 2 s per parent) */
+export const CHILD_RESULTS_MS = 2_000;
+/** the longest the first result of a batch waits, however many siblings keep reporting (a multiple of the debounce) */
+export const CHILD_RESULTS_CAP = 2.5;
 /** archived chats kept (the oldest beyond this leave the app; their transcripts stay where the CLI keeps them) */
 export const MAX_ARCHIVED = 60;
 /** run changes are written at most this often (runSave) */

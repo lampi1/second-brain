@@ -142,15 +142,15 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Puoi scrivere in qualunque figlio: l’Orchestrator e il genitore lo vengono a sapere con le tue parole, così nessuno disfa ciò che hai chiesto; se cambi l’obiettivo, il figlio lo dice nel suo risultato.',
         'You can write in any child: the Orchestrator and the parent learn it in your words, so nobody undoes what you asked; if you change the goal, the child says so in its result.'),
       // src/main/chats/manager-delegation.ts reportDelegation; src/shared/delegation.ts resultMessage
-      b('Il figlio chiude con un rapporto: il risultato arriva al genitore come messaggio; l’Orchestrator vede solo lo stato. Una chat che l’Orchestrator ha aperto lui stesso gli riporta allo stesso modo.',
-        'The child closes with a report: the result reaches the parent as a message; the Orchestrator sees only the state. A chat the Orchestrator opened itself reports to it the same way.'),
+      b('Il figlio chiude con un rapporto: il risultato arriva al genitore come messaggio (i risultati dei fratelli arrivati entro pochi secondi insieme); l’Orchestrator vede solo lo stato. Un risultato sbagliato si corregge al massimo due volte, segnato «correzione». Una chat che l’Orchestrator ha aperto lui stesso gli riporta allo stesso modo.',
+        'The child closes with a report: the result reaches the parent as a message (siblings’ results arriving within a few seconds together); the Orchestrator sees only the state. A wrong result can be corrected at most twice, marked "correction". A chat the Orchestrator opened itself reports to it the same way.'),
     ],
     analogy: b('Come un capo cantiere che affida i lavori ai suoi: ognuno ha la sua scheda di lavoro, nessuno ha chiavi che il capo non ha, e ciascuno chiede direttamente la decisione che gli serve.',
       'Like a site foreman handing jobs to his crew: each has a job sheet, nobody holds keys the foreman lacks, and each worker asks for the decision they need.'),
     diagram: { kind: 'flow', steps: [b('Genitore', 'Parent'), b('Delega', 'Delegation'), b('Figli visibili', 'Visible children'), b('Rapporto', 'Report'), b('Genitore', 'Parent')] },
     tech: [
       // src/shared/delegation.ts
-      tech(DATA, 'ChatSummary.parentId e delegation { role, goal, doneWhen, at, tools?, result?, originalGoal? }.', 'ChatSummary.parentId and delegation { role, goal, doneWhen, at, tools?, result?, originalGoal? }.'),
+      tech(DATA, 'ChatSummary.parentId e delegation { role, goal, doneWhen, at, tools?, result? (corrections?), originalGoal? }.', 'ChatSummary.parentId and delegation { role, goal, doneWhen, at, tools?, result? (corrections?), originalGoal? }.'),
       tech(WHERE, 'Strumenti MCP della chat: agent_delegate, agent_report, agent_children, agent_ask_parent, agent_answer_child (pre-approvati).', 'Chat MCP tools: agent_delegate, agent_report, agent_children, agent_ask_parent, agent_answer_child (pre-approved).'),
     ],
     anchors: {
