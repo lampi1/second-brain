@@ -219,24 +219,29 @@ describe('agent_delegate', () => {
 
   it('a result that keeps being followed by siblings\' still goes within the cap of the debounce', async () => {
     const f = fixture();
-    const ms = 400;
+    const ms = 1000;
     (f.m as unknown as { opts: { childResultsMs: number } }).opts.childResultsMs = ms;
     const parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [1, 2, 3, 4].map(n => f.task('scout', `C · ${n}`)) });
     const kids = f.m.list().filter(c => c.parentId === parent.id);
     const before = f.sent.get(parent.id)!.length;
-    let first = 0, last = 0;
+    // time the flush itself: the delivery after it is asynchronous and slow on a loaded machine
+    const flushes: number[] = [], m = f.m as unknown as { flushChildResults(id: string): void };
+    const flush = m.flushChildResults.bind(f.m);
+    m.flushChildResults = (id: string) => { if (id === parent.id) flushes.push(Date.now()); flush(id); };
+    let firstBefore = 0, firstAfter = 0, lastBefore = 0;
     // each result comes just before the debounce would end: without the cap it would be restarted every time
-    for (let i = 0; i < 3 && f.sent.get(parent.id)!.length === before; i++) {
+    for (let i = 0; i < 3 && !flushes.length; i++) {
+      lastBefore = Date.now(); firstBefore ||= lastBefore;
       await f.call('agent_report', kids[i]!.id, { outcome: 'done', summary: `Fatto ${i}`, output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }] });
-      last = Date.now(); first ||= last;
-      if (i < 2) await new Promise(res => setTimeout(res, ms * 0.9));
+      firstAfter ||= Date.now();
+      if (i < 2) await new Promise(res => setTimeout(res, ms * 0.95));
     }
-    const at = await sentAfter(f.sent, parent.id, before);
+    await sentAfter(f.sent, parent.id, before);
     expect(f.sent.get(parent.id)![before]).toContain('Fatto 0');
-    expect(at - first).toBeGreaterThanOrEqual(ms * 0.9);
+    expect(flushes[0]! - firstBefore).toBeGreaterThanOrEqual(ms - 5);
     // the cap is reached before the debounce restarted by the last result would end
-    if (last - first + ms > ms * CHILD_RESULTS_CAP) expect(at).toBeLessThan(last + ms);
+    if (firstAfter + ms * CHILD_RESULTS_CAP < lastBefore + ms) expect(flushes[0]!).toBeLessThan(lastBefore + ms);
   });
 
   it('an over-long summary and remember line are cut with the marker, not refused; the full summary stays in output', async () => {
