@@ -223,3 +223,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0218](0218-balanced-mode.md) «Balanced mode»: a delegation's engine, model and effort follow the credits left per provider — proposed
 - [0219](0219-phone-bridge-telegram.md) Phone bridge: the Orchestrator through a private Telegram bot (stable only, write-only token, yes/no only) — accepted
 - [0220](0220-role-skill-alignment.md) Scoped role skills and verified Plan intake
+- [0221](0221-acp-catalog-wire-replay.md) ACP agent catalog (proposals, off until the user turns one on), NDJSON record/replay of the engine wires, turn-start watchdog — accepted
