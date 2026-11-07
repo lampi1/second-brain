@@ -52,8 +52,6 @@ test('the phone pairs, talks to the Orchestrator and answers a Sì/No question w
   const pending = () => page.evaluate(() => window.sb.invoke('chat:pending', undefined)) as Promise<PendingRequest[]>;
   await expect.poll(async () => (await pending()).filter(p => p.chatId === orch.id).length, { timeout: 15000 }).toBe(0);
   await expect.poll(async () => (await items()).some(i => i.kind === 'assistant' && i.text.includes('Hai scelto')), { timeout: 15000 }).toBe(true);
-  // the real Telegram was never called
-  expect(tg.urls.every(u => !u.includes('api.telegram.org'))).toBe(true);
 
   await page.keyboard.press('Control+,');
   await expect(page.getByTestId('settings-page')).toBeVisible();

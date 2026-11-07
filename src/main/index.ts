@@ -60,6 +60,7 @@ import { safeStorageCipher } from './engines/secrets';
 import { initPhoneTokenStore } from './phone/token-store';
 import { requestVoiceDecode } from './phone/decode-request';
 import { createAppPhone, urgentSources } from './phone/wiring';
+import { lastTyped } from './appctl/user-words';
 import type { PhoneBridge } from './phone/bridge';
 import { addRedaction } from './log';
 
@@ -200,7 +201,7 @@ app.whenReady().then(async () => {
       addRedaction, log,
     });
     setPhoneController(phone);
-    emitter.tap(urgentSources(phone, () => s.chats.list()));
+    emitter.tap(urgentSources(phone, () => s.chats.list(), lastTyped));
   } else setPhoneController(disabledPhoneController(isStable ? 'off' : 'dev-disabled', () => phoneTokens.has()));
     const mcpServers = () => { if (!s.mcpServers) throw new Error('Server MCP non disponibili.'); return s.mcpServers; };
     const connectors = createAppConnectors(app.getPath('userData'), () => s.tasks.refreshFresh(), l => s.tasks.onRead(l));

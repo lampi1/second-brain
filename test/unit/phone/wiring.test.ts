@@ -1,10 +1,11 @@
 // Main's wiring of the phone bridge (src/main/phone/wiring.ts): the fake Telegram base is read only in a dev instance and
 // only on loopback; the voice engine transcribes only with its models on disk; «at the PC» = the window active or input
-// in the last 5 minutes; the urgent sources send neutral text for a budget at 100 % and a /urgente typed on the PC only.
+// in the last 5 minutes; the urgent sources send neutral text for a budget at 100 % and a /urgente the user just typed on
+// the PC (never one an engine replays from an old chat's history).
 import { describe, expect, it } from 'vitest';
 import os from 'node:os';
 import path from 'node:path';
-import { AT_PC_IDLE_S, createAppPhone, phonePresence, phoneTestApi, transcribeForPhone, urgentSources, type PhoneVoice } from '../../../src/main/phone/wiring';
+import { AT_PC_IDLE_S, createAppPhone, phonePresence, phoneTestApi, transcribeForPhone, TYPED_WINDOW_MS, urgentSources, type PhoneVoice } from '../../../src/main/phone/wiring';
 import { capLog, fakePort } from './fakes';
 import type { EventChannel, EventMap } from '../../../src/shared/contract';
 
@@ -65,10 +66,10 @@ describe('createAppPhone', () => {
 });
 
 describe('urgentSources', () => {
-  const rig = () => {
+  const rig = (typed: Record<string, number> = { o: 1_000, c: 1_000 }) => {
     const sent: [string, string][] = [];
     const tap = urgentSources({ notifyUrgent: async (k, t) => { sent.push([k, t]); } },
-      () => [{ id: 'o', isOrchestrator: true }, { id: 'c', isOrchestrator: false, agent: { name: 'Scout' } }]);
+      () => [{ id: 'o', isOrchestrator: true }, { id: 'c', isOrchestrator: false, agent: { name: 'Scout' } }], id => typed[id], () => 5_000);
     const emit = <K extends EventChannel>(ch: K, p: EventMap[K]) => tap(ch, p);
     return { sent, emit };
   };
@@ -90,5 +91,12 @@ describe('urgentSources', () => {
     r.emit('chat:item', { chatId: 'c', item: user('niente /urgente qui') });
     r.emit('chat:item', { chatId: 'c', item: user('/urgente') });
     expect(r.sent).toEqual([['urgente', 'Triage /urgente avviato al PC (Orchestrator).'], ['urgente', 'Triage /urgente avviato al PC (Scout).']]);
+  });
+
+  it('an old /urgente an engine replays from history is not one: the user did not just type in that chat', () => {
+    const r = rig({ c: 5_000 - TYPED_WINDOW_MS - 1 });
+    r.emit('chat:item', { chatId: 'o', item: user('/urgente') });
+    r.emit('chat:item', { chatId: 'c', item: user('/urgente') });
+    expect(r.sent).toEqual([]);
   });
 });

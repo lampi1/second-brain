@@ -93,10 +93,13 @@ export function createAppPhone(d: AppPhoneDeps): PhoneBridge {
 
 const SCOPE: Record<BudgetAlert['scope'], string> = { day: 'oggi', chat: 'una chat', fiveHour: 'finestra di 5 ore', week: 'settimana' };
 const URGENTE = /^\s*\/urgente\b/i;
+/** the user typed into the chat (chat:send) this recently: an engine replaying an old chat's history is not a new /urgente */
+export const TYPED_WINDOW_MS = 15_000;
 
 /** The urgent sources (design §8: always sent, with sound): a budget alert at 100 % and a /urgente the user typed in a
  *  chat. Texts are neutral (never a chat title, never the message): the phone learns that, not what. */
-export function urgentSources(bridge: Pick<PhoneBridge, 'notifyUrgent'>, chats: () => { id: string; isOrchestrator: boolean; agent?: { name?: string } | null }[]) {
+export function urgentSources(bridge: Pick<PhoneBridge, 'notifyUrgent'>, chats: () => { id: string; isOrchestrator: boolean; agent?: { name?: string } | null }[],
+  typedAt: (chatId: string) => number | undefined, now: () => number = Date.now) {
   return <K extends EventChannel>(channel: K, payload: EventMap[K]): void => {
     if (channel === 'budget:alert') {
       const a = payload as BudgetAlert;
@@ -105,8 +108,11 @@ export function urgentSources(bridge: Pick<PhoneBridge, 'notifyUrgent'>, chats: 
     } else if (channel === 'chat:item') {
       const p = payload as EventMap['chat:item'];
       const item = p.item as ChatItem;
-      // only a fresh message the user typed on the PC (a replace is a repaint; a phone one the phone already knows)
+      // only a fresh message the user just typed on the PC (a replace is a repaint; a phone one the phone already knows;
+      // an engine replaying an old chat's history comes without a recent chat:send)
       if (p.replace || item.kind !== 'user' || item.from || item.via === 'phone' || !URGENTE.test(item.text)) return;
+      const typed = typedAt(p.chatId);
+      if (typed === undefined || now() - typed > TYPED_WINDOW_MS) return;
       const c = chats().find(x => x.id === p.chatId);
       const who = c?.isOrchestrator ? 'Orchestrator' : c?.agent?.name ?? 'una chat';
       void bridge.notifyUrgent('urgente', `Triage /urgente avviato al PC (${who}).`).catch(() => undefined);
