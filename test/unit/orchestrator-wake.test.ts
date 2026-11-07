@@ -279,6 +279,22 @@ describe('OrchestratorWake', () => {
     expect(sent).toHaveLength(1);
   });
 
+  it('a finished chat the app closed itself keeps its quiet news for the next Orchestrator turn; one the user closed does not', async () => {
+    const { w, sent, up, finish, turn } = make();
+    finish('auto', 'PR pronta');
+    up({ id: 'auto', state: 'closed', closedAt: 1, closedBy: 'auto' });
+    finish('mano', 'fatto');
+    up({ id: 'mano', state: 'closed', closedAt: 1, closedBy: 'user' });
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(sent).toEqual([]);
+    turn();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain('PR pronta');
+    expect(sent[0]!.text).not.toContain('«mano»');
+    expect(w.queued()).toEqual([]);
+  });
+
   it('nothing when off, without an Orchestrator, for the Orchestrator itself, a hand-off turn or an archived chat', async () => {
     const off = make({ enabled: false });
     off.finish('qa', 'fatto');

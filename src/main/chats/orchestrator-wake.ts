@@ -77,7 +77,7 @@ export interface OrchestratorWakeDeps {
   perChatMs?: number;
 }
 
-type Seen = Pick<ChatSummary, 'state' | 'title' | 'harness' | 'isOrchestrator' | 'closedAt' | 'handoffBusy' | 'lastText' | 'lastError' | 'lastResult' | 'pending' | 'parentId' | 'agent'> & { turnResultAt: number; reportedTurn: boolean };
+type Seen = Pick<ChatSummary, 'state' | 'title' | 'harness' | 'isOrchestrator' | 'closedAt' | 'closedBy' | 'handoffBusy' | 'lastText' | 'lastError' | 'lastResult' | 'pending' | 'parentId' | 'agent'> & { turnResultAt: number; reportedTurn: boolean };
 const BUSY: ReadonlySet<ChatState> = new Set(['running', 'waiting', 'starting']);
 /** a turn ran: 'starting' alone is an engine booting (a new chat with no prompt, a reopen), and its idle is no turn end */
 const IN_TURN: ReadonlySet<ChatState> = new Set(['running', 'waiting']);
@@ -160,7 +160,7 @@ export class OrchestratorWake {
     const id = this.orchestratorId(), r = id ? this.chats.get(id) : undefined;
     if (!id || !r || !this.buffer.size || !this.d.enabled()) return [];
     const gate = gateOf(r);
-    return this.queued().filter(e => { const c = this.chats.get(e.chatId); return !!c && !c.closedAt; })
+    return this.queued().filter(e => this.kept(e))
       .map(e => ({ orchestratorId: id, chatId: e.chatId, title: e.title, kind: e.kind, at: e.at, why: heldWhy(gate, classOf(e), r) }));
   }
 
@@ -194,8 +194,8 @@ export class OrchestratorWake {
     // the hand-off turn ends (handoffBusy goes before idle): not a turn of the chat
     if (this.handoff.has(c.id)) { if (!BUSY.has(c.state)) this.handoff.delete(c.id); return; }
     if (!was) { if (c.parentId && !c.closedAt) this.add(c, 'started', ''); return; }
-    // closed: its quiet news would wait for a delivery that drops it anyway (flush skips closed chats)
-    if (c.closedAt) { for (const [k, e] of this.buffer) if (e.chatId === c.id) this.buffer.delete(k); return; }
+    // closed: what it left waits for nothing any more (kept: the auto-closed chat's quiet "finished")
+    if (c.closedAt) { for (const [k, e] of this.buffer) if (e.chatId === c.id && !this.kept(e)) this.buffer.delete(k); return; }
     if (c.state === 'error' && was.state !== 'error') this.add(c, 'error', c.lastError ?? c.lastText);
     else if (c.state === 'idle' && IN_TURN.has(was.state) && c.pending === 0) {
       // the user stopped it himself (Stop, "Invia subito"): he is on it, nothing to tell
@@ -330,7 +330,7 @@ export class OrchestratorWake {
     // A delayed report supersedes only this turn's generic completion, never errors, requests or user decisions.
     const queued = this.buffer.get(c.id);
     if (reportedTurn && queued?.kind === 'done' && !queued.report && queued.at >= report.at) this.buffer.delete(c.id);
-    this.chats.set(c.id, { state: c.state, title: c.title, harness: c.harness, isOrchestrator: c.isOrchestrator, closedAt: c.closedAt, handoffBusy: c.handoffBusy, lastText: c.lastText, lastError: c.lastError, lastResult: c.lastResult, pending: c.pending, parentId: c.parentId, agent: c.agent, turnResultAt, reportedTurn });
+    this.chats.set(c.id, { state: c.state, title: c.title, harness: c.harness, isOrchestrator: c.isOrchestrator, closedAt: c.closedAt, closedBy: c.closedBy, handoffBusy: c.handoffBusy, lastText: c.lastText, lastError: c.lastError, lastResult: c.lastResult, pending: c.pending, parentId: c.parentId, agent: c.agent, turnResultAt, reportedTurn });
   }
 
   /** the Orchestrator, which every work chat's news go to; without the list, the one seen */
@@ -354,11 +354,18 @@ export class OrchestratorWake {
     this.timer.unref?.();
   }
 
+  /** a closed chat's news is void, except the quiet "finished" of a chat the app closed itself after its turn
+   *  (autoCloseMin): it waits for the Orchestrator's next turn longer than the chat stays open (2026-11-07) */
+  private kept(e: WakeEvent): boolean {
+    const c = this.chats.get(e.chatId);
+    return !!c && (!c.closedAt || (c.closedBy === 'auto' && e.kind === 'done'));
+  }
+
   private flush(): void {
     if (this.sending || !this.buffer.size) return;
     const id = this.orchestratorId();
     if (!this.d.enabled() || !id) { this.buffer.clear(); this.changed(); return; }
-    for (const [k, e] of this.buffer) if (!this.chats.get(e.chatId) || this.chats.get(e.chatId)?.closedAt) this.buffer.delete(k);
+    for (const [k, e] of this.buffer) if (!this.kept(e)) this.buffer.delete(k);
     const gate = gateOf(this.orchestrator()!);
     const now = this.now();
     // due: something that may go through the gate now; then everything ready that the gate lets through goes with it
