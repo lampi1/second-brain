@@ -314,9 +314,11 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
   function rememberLines(a: Record<string, unknown>, self: ChatSummary | undefined, warnings: string[]): (() => number) {
     if (a.remember === undefined) return () => 0;
     if (self?.routine || self?.routinePackage) throw new Error('Archived routine chats cannot submit new work; use the terminal CLI.');
-    const lines = Array.isArray(a.remember) && a.remember.length <= REMEMBER_MAX && a.remember.every(l => typeof l === 'string' && l.trim() && !/[\x00-\x1f\x7f]/.test(l))
-      ? (a.remember as string[]).map(l => l.trim()) : null;
-    if (!lines) throw new Error(`agent_report: remember = up to ${REMEMBER_MAX} single lines of at most ${REMEMBER_LINE} characters.`);
+    // each refusal says its own reason: the length is never one (a long line is cut below)
+    if (!Array.isArray(a.remember) || a.remember.length > REMEMBER_MAX) throw new Error(`agent_report: remember = a list of up to ${REMEMBER_MAX} lines.`);
+    if (!a.remember.every(l => typeof l === 'string' && l.trim())) throw new Error('agent_report: remember lines must be non-empty text.');
+    if (a.remember.some(l => /[\x00-\x1f\x7f]/.test(l as string))) throw new Error('agent_report: each remember line must be a single line, without line breaks or control characters.');
+    const lines = (a.remember as string[]).map(l => l.trim());
     // a line over REMEMBER_LINE is cut with the marker «…», never refused (P8)
     lines.forEach((line, i) => { if (line.length > REMEMBER_LINE) { lines[i] = capText(line, REMEMBER_LINE); warnings.push(`remember line ${i + 1} cut to ${REMEMBER_LINE} characters (marker …).`); } });
     if (!lines.length) return () => 0;
@@ -348,8 +350,15 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (typeof a.summary === 'string' && a.summary.trim().length > SUMMARY_MAX) {
       const full = a.summary.trim();
       a.summary = capText(full, SUMMARY_MAX);
-      if (typeof a.output === 'string' && !a.output.includes(full) && a.output.length + full.length + 20 <= RESULT_OUTPUT_MAX) a.output = `${a.output}\n\nSintesi completa: ${full}`;
-      warnings.push(`summary cut to ${SUMMARY_MAX} characters (marker …); its full text is in output.`);
+      const tail = `\n\nSintesi completa: ${full}`;
+      if (typeof a.output !== 'string' || a.output.includes(full)) warnings.push(`summary cut to ${SUMMARY_MAX} characters (marker …); its full text is in output.`);
+      else if (a.output.length + tail.length <= RESULT_OUTPUT_MAX) { a.output += tail; warnings.push(`summary cut to ${SUMMARY_MAX} characters (marker …); its full text is in output.`); }
+      else if (a.output.length <= RESULT_OUTPUT_MAX && tail.length <= RESULT_OUTPUT_MAX / 2) {
+        // no room left: the output's tail makes room (marker …), so the full summary is never lost
+        const head = capText(a.output, RESULT_OUTPUT_MAX - tail.length);
+        warnings.push(`summary cut to ${SUMMARY_MAX} characters (marker …); its full text is at the end of output, whose last ${a.output.length - (head.length - 1)} characters were cut to make room (marker …).`);
+        a.output = head + tail;
+      } else warnings.push(`summary cut to ${SUMMARY_MAX} characters (marker …); its full text was too long to keep in output: put what matters in output.`);
     }
     // Agents commonly attach top-level evidence. It is not canonical verification; explicitly discard it, never
     // merge it into doneWhen or a review verdict. Other unknown keys still report likely misspellings.

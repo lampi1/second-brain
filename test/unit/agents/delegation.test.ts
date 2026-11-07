@@ -264,6 +264,22 @@ describe('agent_delegate', () => {
     expect(remembered[0]![1]).toMatch(/…$/);
   });
 
+  it('an output near its limit makes room for the full summary: its tail is cut with the marker, and the warning says so', async () => {
+    const f = fixture();
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Quasi pieno')] });
+    const kid = f.m.list().find(c => c.parentId === parent.id)!;
+    const summary = 'Sintesi lunga che continua '.repeat(15).trim(), output = 'deliverable '.repeat(992).trim();
+    expect(summary.length).toBeGreaterThan(300);
+    expect(output.length).toBeGreaterThan(11_900);
+    const r = await f.call('agent_report', kid.id, { outcome: 'done', summary, output, doneWhen: [{ criterion: 'criterion A', met: true }] });
+    expect(r.warnings).toEqual([expect.stringMatching(/full text is at the end of output, whose last \d+ characters were cut/)]);
+    const stored = f.m.runs.get(kid.run!.runId)!.report!.canonical!;
+    expect(stored.output.length).toBeLessThanOrEqual(12_000);
+    expect(stored.output.endsWith(`…\n\nSintesi completa: ${summary}`)).toBe(true);
+    expect(stored.output.startsWith('deliverable deliverable')).toBe(true);
+  });
+
   it('agent_report remember writes to the reporting role\'s memory, only once the report is accepted', async () => {
     const remembered: [string, string][] = [];
     const f = fixture({}, undefined, undefined, undefined, {}, remembered);
@@ -271,7 +287,8 @@ describe('agent_delegate', () => {
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log')] });
     const scout = f.m.list().find(c => c.parentId === parent.id)!;
     await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [], remember: ['Logs are in D:/logs'] })).rejects.toThrow(/criterion A/);
-    await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], remember: ['a\nb'] })).rejects.toThrow(/remember/);
+    await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], remember: ['a\nb'] })).rejects.toThrow(/single line, without line breaks/);
+    await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], remember: ['a', 'b', 'c', 'd'] })).rejects.toThrow(/a list of up to 3 lines/);
     // a case-specific line (ADR 0129) refuses the report with what to save instead
     await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], remember: ['Logs are in D:/logs', 'Stats at https://localhost:44309/stats'] }))
       .rejects.toThrow(/remember line 2: This fact is tied to one case.*launch profile/);
@@ -1083,6 +1100,49 @@ describe('versioned task continuity and canonical results', () => {
     expect(sent).toContain('Uno nuovo');
     expect(sent).toContain('correzione 1/2');
     expect(sent).not.toContain('Uno vecchio');
+  });
+  it('a correction reported while the first batch is inside its submit survives that batch\'s acknowledgment and a restart', async () => {
+    let correct: (() => void) | undefined, pid = '';
+    const f = fixture({}, undefined, undefined, (id: string) => { if (id !== pid) return; const go = correct; correct = undefined; go?.(); }, {}, [], { childResultsMs: 10 });
+    const p = await f.root('strategist');
+    pid = p.id;
+    const kids = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'One'), f.task('sentinel', 'Two')] })).children;
+    f.sinks.get(kids[1].chatId)!.changed({ state: 'running' });
+    const opts = (f.m as unknown as { opts: { childResultsMs: number } }).opts;
+    // inside the engine's submit of the first batch, before its acknowledgment: the correction waits (the sibling works)
+    correct = () => { opts.childResultsMs = 3_600_000; f.m.reportDelegation(kids[0].chatId, { ...result, summary: 'Uno nuovo', amends: true } as never); };
+    const before = f.sent.get(p.id)?.length ?? 0;
+    await f.call('agent_report', kids[0].chatId, { ...result, summary: 'Uno vecchio' });
+    await sentAfter(f.sent, p.id, before);
+    expect(f.sent.get(p.id)!.at(-1)).toContain('Uno vecchio');
+    // the app quits before the correction goes: the restart still sends it
+    const restart = f.sent.get(p.id)!.length;
+    f.m.resumeInterrupted();
+    await sentAfter(f.sent, p.id, restart);
+    expect(f.sent.get(p.id)!.at(-1)).toContain('correzione 1/2');
+    expect(f.sent.get(p.id)!.at(-1)).toContain('Uno nuovo');
+  });
+  it('a batch whose submit fails after its result was corrected is not sent again: only the correction goes', async () => {
+    let correct: (() => void) | undefined, pid = '';
+    const f = fixture({}, undefined, undefined, (id: string) => { if (id !== pid) return; const go = correct; correct = undefined; if (go) { go(); throw new Error('engine submission failed'); } }, {}, [], { childResultsMs: 10 });
+    const p = await f.root('strategist');
+    pid = p.id;
+    const kids = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'One'), f.task('sentinel', 'Two')] })).children;
+    f.sinks.get(kids[1].chatId)!.changed({ state: 'running' });
+    const opts = (f.m as unknown as { opts: { childResultsMs: number } }).opts;
+    correct = () => { opts.childResultsMs = 3_600_000; f.m.reportDelegation(kids[0].chatId, { ...result, summary: 'Uno nuovo', amends: true } as never); };
+    const before = f.sent.get(p.id)?.length ?? 0;
+    await f.call('agent_report', kids[0].chatId, { ...result, summary: 'Uno vecchio' });
+    await sentAfter(f.sent, p.id, before); // the failed submit of the original
+    await new Promise(res => setTimeout(res, 20));
+    // the sibling finishes: the batch goes at once, with the correction and without the failed original
+    const next = f.sent.get(p.id)!.length;
+    await f.call('agent_report', kids[1].chatId, { ...result, summary: 'Due fatto' });
+    await sentAfter(f.sent, p.id, next);
+    const last = f.sent.get(p.id)!.slice(next).join('\n');
+    expect(last).toContain('Uno nuovo');
+    expect(last).toContain('Due fatto');
+    expect(last).not.toContain('Uno vecchio');
   });
   it('quitting with a waiting sibling preserves each outbox id once', async () => {
     const f = fixture();
