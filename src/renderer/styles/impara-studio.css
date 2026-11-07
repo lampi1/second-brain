@@ -168,13 +168,20 @@
 .lv-where dd{margin:0;font-size:13px;line-height:1.45;color:var(--text-2)}
 /* chart */
 .lv-chart{position:relative;width:min(820px,100%);height:100%;max-height:420px;animation:ipIn .5s var(--ease) both}
+/* compare: before and after side by side (ADR 0219) */
+.lv-compare{position:absolute;inset:0;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.lv-side{position:relative;margin:0;min-width:0;border:1px solid var(--border-2);border-radius:12px;background:var(--surface-2);animation:ipIn .45s var(--ease) both}
+.lv-side figcaption{position:absolute;top:8px;left:12px;font-size:11.5px;font-weight:650;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3)}
+.lv-side[data-side="after"] figcaption{color:var(--green)}
+.lv-side.wait{border-style:dashed;background:transparent;opacity:.55}
+.lv-side .ip-diagram{inset:30px 10px 10px}
 .lv .ip-note{left:0;bottom:0}
 
 @container (max-width:1000px){
   .ip-player.with-tutor .ip-layout,.ip-full.with-tutor .ip-layout{grid-template-columns:52px minmax(0,1fr) 320px}
 }
 @media (prefers-reduced-motion:reduce){
-  .sd-view,.lv-code,.lv-formula,.lv-chart,.sd-card-a{animation:none}
+  .sd-view,.lv-code,.lv-formula,.lv-chart,.lv-side,.sd-card-a{animation:none}
   .sd-tile.making .sd-tile-main{animation:none}
   .lv-band,.lv-line,.lv-where>div{transition:none}
 }

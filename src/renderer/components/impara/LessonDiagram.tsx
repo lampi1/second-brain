@@ -2,7 +2,8 @@
 // strict, an image, never DOM) with the piece's nodes lit, the ones seen before calm and the rest dimmed (shared/lesson.ts
 // withFocus: the app adds the classes, the model only names node ids), or the piece's own diagram. A new piece fades in
 // over the old one, so the picture grows instead of jumping. «Tutto lo schema» shows it without focus, «Ingrandisci»
-// opens it in the app's image viewer (ImageZoom). A diagram that cannot be drawn shows its code. Used by ImparaPlayer.tsx.
+// opens it in the app's image viewer (ImageZoom). A diagram that cannot be drawn shows its code. idPrefix (ADR 0219): a
+// compare's sides draw with their own SVG ids. Used by ImparaPlayer.tsx and LessonVisual.tsx.
 import { useEffect, useRef, useState } from 'react';
 import { withFocus } from '@shared/lesson';
 import { focusColors } from '../../lib/impara';
@@ -14,8 +15,8 @@ interface Drawn { key: number; src: string; width: number; height: number }
 /** big labels, tight spacing: the board is small and the words must read from a step back */
 const BOARD = { fontSize: 18, nodeSpacing: 34, rankSpacing: 42 };
 
-export function LessonDiagram({ base, own, focus, done, whole, note, caption, zoom, onZoom }: {
-  base: string; own?: string; focus: readonly string[]; done: readonly string[]; whole: boolean; note?: string; caption: string;
+export function LessonDiagram({ base, own, focus, done, whole, note, caption, zoom, onZoom, idPrefix }: {
+  base: string; own?: string; idPrefix?: string; focus: readonly string[]; done: readonly string[]; whole: boolean; note?: string; caption: string;
   /** «Ingrandisci» (the board's tool) or a double click: the drawing in the image viewer */
   zoom: boolean; onZoom: (on: boolean) => void;
 }) {
@@ -28,13 +29,13 @@ export function LessonDiagram({ base, own, focus, done, whole, note, caption, zo
     if (!code.trim()) return;
     let alive = true;
     const key = ++seq.current;
-    import('../../lib/viz/mermaid').then(m => m.drawMermaid(code, BOARD)).then(d => {
+    import('../../lib/viz/mermaid').then(m => m.drawMermaid(code, idPrefix ? { ...BOARD, idPrefix } : BOARD)).then(d => {
       if (!alive) return;
       setBroken(false);
       setLayers(prev => [...prev.slice(-1), { key, ...d }]);
     }, () => { if (alive) setBroken(true); });
     return () => { alive = false; };
-  }, [code, theme]);
+  }, [code, theme, idPrefix]);
   // the old layer leaves once the new one has faded in
   useEffect(() => {
     if (layers.length < 2) return;

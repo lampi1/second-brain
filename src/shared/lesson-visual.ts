@@ -7,10 +7,13 @@
 // the model and untrusted: this file checks and caps it (no mermaid directive, click or link; sizes capped; a beat may
 // only name a known line, symbol or label). Pure; shared by shared/lesson.ts (parseStep), main/learn (quality gate)
 // and the renderer (components/impara/LessonVisual.tsx); pinned by test/unit/lesson-visual.test.ts.
+// Since ADR 0219: compare = before and after side by side (diagram-design's architecture delta), two mermaid diagrams of
+// the same kind (flowchart, sequence, state); the first half of the beats speaks about «before», then «after» appears.
+// Each side is drawn with its own SVG id prefix (compareIds): two diagrams sharing ids once hid each other's arrows.
 
 export type MermaidKind = 'sequence' | 'state' | 'timeline' | 'mindmap';
-export type VisualKind = 'flow' | MermaidKind | 'code' | 'formula' | 'chart';
-export const VISUAL_KINDS: readonly VisualKind[] = ['flow', 'sequence', 'state', 'timeline', 'mindmap', 'code', 'formula', 'chart'];
+export type VisualKind = 'flow' | MermaidKind | 'code' | 'formula' | 'chart' | 'compare';
+export const VISUAL_KINDS: readonly VisualKind[] = ['flow', 'sequence', 'state', 'timeline', 'mindmap', 'code', 'formula', 'chart', 'compare'];
 export const MERMAID_KINDS: readonly MermaidKind[] = ['sequence', 'state', 'timeline', 'mindmap'];
 
 export type LessonVisual =
@@ -19,7 +22,9 @@ export type LessonVisual =
   | { kind: 'code'; file: string; code: string }
   | { kind: 'formula'; tex: string; where: { sym: string; meaning: string }[] }
   /** chart: the spec as JSON text, read again by the renderer's parseChartSpec */
-  | { kind: 'chart'; chart: string; labels: string[] };
+  | { kind: 'chart'; chart: string; labels: string[] }
+  /** before and after: two mermaid sources of the same kind (ADR 0219) */
+  | { kind: 'compare'; before: string; after: string };
 
 /** A diagram the learner reads at a glance: at most this many parts (nodes, messages, branches, events). */
 export const VISUAL_PARTS_MAX = 12;
@@ -51,6 +56,7 @@ export function visualParts(v: LessonVisual): number {
   if (v.kind === 'code') return 0;
   if (v.kind === 'formula') return v.where.length;
   if (v.kind === 'chart') return v.labels.length;
+  if (v.kind === 'compare') return Math.max(compareParts(v.before), compareParts(v.after));
   const lines = contentLines(v.src);
   if (v.kind === 'sequence') return lines.filter(isMessage).length;
   if (v.kind === 'timeline') return lines.filter(l => !/^\s*title\b/.test(l)).length;
@@ -94,6 +100,37 @@ export function revealMermaid(kind: MermaidKind, src: string, upto: number): str
 export const revealAt = (parts: number, i: number, n: number): number => (n <= 1 ? parts : Math.max(1, Math.ceil((parts * (i + 1)) / n)));
 export const revealSteps = (kind: MermaidKind, src: string): number => revealable(kind, contentLines(src)).length;
 
+// ── compare: before and after (ADR 0219) ───────────────────────────────────────────────────────────────────────────
+
+/** The diagram kinds a compare side may be: the ones whose «what changed» reads at a glance. */
+const COMPARE_HEAD = /^(?:flowchart|graph)\s+(?:LR|RL|TB|TD|BT)\b|^sequenceDiagram\b|^stateDiagram(?:-v2)?\b/;
+const sideKind = (src: string): 'flow' | 'sequence' | 'state' => (/^sequenceDiagram\b/.test(src) ? 'sequence' : /^stateDiagram/.test(src) ? 'state' : 'flow');
+/** A compare side's parts: a flowchart's arrows, a sequence's messages, a state diagram's transitions. */
+function compareParts(src: string): number {
+  const lines = contentLines(src), k = sideKind(src);
+  if (k === 'sequence') return lines.filter(isMessage).length;
+  if (k === 'state') return lines.filter(l => /-->/.test(l)).length;
+  return lines.filter(l => /--|==|-\./.test(l)).length;
+}
+function compareSide(v: unknown): string | null {
+  const src = clean(v, SRC_MAX + 1);
+  if (!src || src.length > SRC_MAX || !COMPARE_HEAD.test(src) || FORBIDDEN.test(src)) return null;
+  const parts = compareParts(src);
+  return parts >= 1 && parts <= VISUAL_PARTS_MAX + 4 ? src : null;
+}
+
+/** Whether «after» shows at beat `i` of `n`: the first half of the beats is about «before», then both stand side by
+ *  side; with one beat (or «Tutto lo schema») both at once. */
+export const compareAfterShown = (i: number, n: number, whole = false): boolean => whole || n < 2 || i >= Math.ceil(n / 2);
+
+/** The SVG id prefixes of a compare's two diagrams, unique per piece and per side: mermaid names its arrowheads and
+ *  markers after the render id, and two drawings with the same ids made each other's arrows invisible (the clinical
+ *  chart video, 2026-11). `key` = the piece's id; anything but letters, digits, _ and - is left out. */
+export function compareIds(key: string): { before: string; after: string } {
+  const k = key.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 40) || 'x';
+  return { before: `sb-cmp-${k}-before`, after: `sb-cmp-${k}-after` };
+}
+
 /** A visual the model declared, checked; null when it does not hold (the piece then shows the lesson's flowchart). */
 export function parseVisual(v: unknown): LessonVisual | null {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
@@ -131,6 +168,11 @@ export function parseVisual(v: unknown): LessonVisual | null {
     if (!series.every(s => s && typeof s === 'object' && Array.isArray((s as Record<string, unknown>).data) && ((s as Record<string, unknown>).data as unknown[]).every(n => typeof n === 'number' && Number.isFinite(n)))) return null;
     const chart = JSON.stringify({ type: spec.type, title: spec.title, labels, series, unit: spec.unit, horizontal: spec.horizontal, stacked: spec.stacked });
     return chart.length <= 4000 ? { kind: 'chart', chart, labels } : null;
+  }
+  if (kind === 'compare') {
+    const before = compareSide(o.before), after = compareSide(o.after);
+    // both sides of the same kind, else the eye compares two different pictures
+    return before && after && sideKind(before) === sideKind(after) && before !== after ? { kind: 'compare', before, after } : null;
   }
   return null;
 }
