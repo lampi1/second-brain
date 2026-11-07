@@ -28,6 +28,8 @@ import { BALANCED_ASK_SCHEMA, balancedAskOf, balancedDecision, balancedStatusToo
 import type { SkillToolsSource } from './discovery';
 import { log } from '../log';
 import { checkMemoryWorth } from '../rules/memory-worth';
+import { closeRefusal, descendantIds } from '../chats/close-rules';
+import { unreadEvents } from '../../shared/user-events';
 
 /** What delegation needs from the chats (ChatManager). */
 export interface DelegationChats {
@@ -49,6 +51,8 @@ export interface DelegationChats {
   planDelegated?(chatId: string, i: number, chatIds: string[]): void;
   /** the child now waits for its parent's answer, not on its own report (#152) */
   askedParent?(chatId: string): void;
+  /** closes a chat and cancels its tree (ChatManager.close, ADR 0217): agent_close_child; absent = the tool refuses */
+  close?(chatId: string): Promise<void>;
 }
 export interface DelegationDeps {
   chats: DelegationChats;
@@ -258,8 +262,9 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     // the revision too: tools, permissions and limits change the version in use in place (ADR 0186)
     if (!profile || profile.activeVersion !== child.agent.version || profile.updatedAt !== child.agent.revision || (profile.engine !== child.harness && !child.route?.balanced)) throw new Error('Role configuration changed: delegate a fresh chat.');
     if (typeof a.cwd !== 'string' || !path.isAbsolute(a.cwd) || path.resolve(a.cwd) !== path.resolve(child.cwd) || !withinParent(parent.cwd, child.cwd, trees)) throw new Error('Project mismatch: reuse only the same folder inside your scope or repository worktree.');
-    if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || !Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1) throw new Error('Invalid assignment mode/version.');
-    if (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0) throw new Error('Read agent_task_events and provide expectedEventSeq.');
+    // expectedVersion and expectedEventSeq are optional (cloudroom P6): honoured when given, else the current version
+    if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || (a.expectedVersion !== undefined && (!Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1))) throw new Error('Invalid assignment mode/version.');
+    if (a.expectedEventSeq !== undefined && (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0)) throw new Error('Invalid user event cursor.');
     const contractRaw = a.contract;
     if (!contractRaw || typeof contractRaw !== 'object' || Array.isArray(contractRaw) || Object.keys(contractRaw).some(k => !['goal', 'output', 'context', 'doneWhen'].includes(k))) throw new Error('Reuse contract allows only goal, output, context and doneWhen; tools, skills and tier require a fresh chat.');
     const contract = checkContract(contractRaw, a.roleId);
@@ -284,21 +289,37 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (running + 1 > limits.maxParallel) {
       d.chats.limitNotice(parent.id, 'parallel', limits.maxParallel); throw new Error('Delegation parallel limit reached; wait for a child result.');
     }
-    // Validate cursors again in ChatManager, immediately before it mutates the task ledger.
-    const events = d.chats.userEvents(child.id);
-    if (a.expectedEventSeq !== events.latestSeq) throw new Error(`Read agent_task_events and pass expectedEventSeq ${events.latestSeq}.`);
-    if (a.expectedVersion !== (child.run.taskVersion ?? 1)) throw new Error('Task version changed; refresh agent_children.');
+    // ChatManager checks the version again and attaches the user's unread instructions to the prompt; they come back here
+    const userInstructions = unreadEvents(d.chats.userEvents(child.id)).map(e => ({ seq: e.seq, text: e.text }));
+    const version = a.expectedVersion === undefined ? child.run.taskVersion ?? 1 : Number(a.expectedVersion);
+    if (version !== (child.run.taskVersion ?? 1)) throw new Error('Task version changed; refresh agent_children.');
     reserved.set(parent.id, (reserved.get(parent.id) ?? 0) + 1); assigning.add(child.id);
     try {
       const prompt = `${d.label}\n\n${delegationPrompt(contract, { role: a.roleId, parentTitle: parent.title, title: child.title, skills: [] })}`;
-      await d.chats.assignTask(child.id, prompt, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: Number(a.expectedVersion), expectedEventSeq: Number(a.expectedEventSeq), doneWhen: contract.doneWhen, ...(step !== null ? { planStep: step } : {}), source: { kind: 'chat', chatId: parent.id } });
+      await d.chats.assignTask(child.id, prompt, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: version, ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), doneWhen: contract.doneWhen, ...(step !== null ? { planStep: step } : {}), source: { kind: 'chat', chatId: parent.id } });
       const assigned = chat(child.id);
-      return { chatId: child.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId };
+      return { chatId: child.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions, note: 'The user wrote these in the child; the app attached them to its prompt, where they win over your contract.' } : {}) };
     } finally {
       assigning.delete(child.id);
       const left = (reserved.get(parent.id) ?? 0) - 1;
       if (left > 0) reserved.set(parent.id, left); else reserved.delete(parent.id);
     }
+  }
+
+  /** agent_close_child: a parent closes one of its own descendants with app_close_chat's rules (chats/close-rules.ts) */
+  async function closeChild(a: Record<string, unknown>, callerId: string): Promise<unknown> {
+    const parent = chat(callerId);
+    if (!parent || parent.closedAt || parent.isOrchestrator) throw new Error('agent_close_child: only an open delegating chat closes its own children.');
+    if (!d.chats.close) throw new Error('agent_close_child is unavailable.');
+    const all = d.chats.list(), id = typeof a.chatId === 'string' ? a.chatId : '';
+    const child = all.find(c => c.id === id);
+    if (!child || !descendantIds(parent.id, all).has(id)) throw new Error('agent_close_child: chatId must be one of YOUR children or their descendants (agent_children).');
+    if (child.closedAt) return { closed: child.title, already: true };
+    const refused = closeRefusal(child, all);
+    if (refused) throw new Error(`agent_close_child: ${refused}`);
+    await d.chats.close(id);
+    log.info('agents', 'parent closed a child', { chat: parent.id, data: { child: id, state: child.state } });
+    return { closed: child.title };
   }
 
   function taskEvents(a: Record<string, unknown>, callerId: string): UserTaskEvents {
@@ -495,8 +516,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await delegate(a, callerOf(ctx.params))),
   }, {
     name: 'agent_assign_task',
-    description: 'Continue YOUR direct child in the same role and project with a separate task run. Read agent_task_events first and pass its latestSeq plus taskVersion from agent_children. Keeps the session, tools and skills; changed role settings or Sentinel reviews require a fresh child. Use rework only for explicit corrections. With an approved plan, step is required. Closed parents must first receive a new assignment from their own parent or Orchestrator.',
-    inputSchema: { type: 'object', required: ['chatId', 'roleId', 'cwd', 'mode', 'expectedVersion', 'expectedEventSeq', 'contract'], additionalProperties: false, properties: {
+    description: 'Continue YOUR direct child in the same role and project with a separate task run. The app attaches the user\'s unread instructions in that chat to the prompt and returns them to you (userInstructions); expectedVersion (taskVersion from agent_children) and expectedEventSeq are optional and honoured when given. Refused only while the child works or has queued work. Keeps the session, tools and skills; changed role settings or Sentinel reviews require a fresh child. Use rework only for explicit corrections. With an approved plan, step is required. Closed parents must first receive a new assignment from their own parent or Orchestrator.',
+    inputSchema: { type: 'object', required: ['chatId', 'roleId', 'cwd', 'mode', 'contract'],additionalProperties: false, properties: {
       chatId: str, roleId: { type: 'string', enum: [...WORK_ROLE_IDS] }, cwd: str,
       mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] },
       expectedVersion: { type: 'integer', minimum: 1 }, expectedEventSeq: { type: 'integer', minimum: 0 },
@@ -521,7 +542,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await integrateChildren(a, callerOf(ctx.params), true)),
   }, {
     name: 'agent_task_events',
-    description: 'Read the complete ordered user instruction ledger for YOUR direct child before reassigning it. Pass latestSeq as expectedEventSeq to agent_assign_task; no model turn is started.',
+    description: 'Read the complete ordered user instruction ledger for YOUR direct child. Optional before agent_assign_task, which attaches the unread ones itself; no model turn is started.',
     inputSchema: { type: 'object', required: ['chatId'], additionalProperties: false, properties: { chatId: str } },
     annotations: { readOnlyHint: true, openWorldHint: false },
     run: (a, ctx) => JSON.stringify(taskEvents(a, callerOf(ctx.params))),
@@ -548,6 +569,12 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     inputSchema: { type: 'object', required: ['chatId'], additionalProperties: false, properties: { chatId: str, answer: str, askUser: { type: 'boolean' } } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: async (a, ctx) => JSON.stringify(await answerChild(a, callerOf(ctx.params))),
+  }, {
+    name: 'agent_close_child',
+    description: 'Close one of YOUR delegated chats (a child or a descendant of it), e.g. a stalled one or one whose part is no longer needed: its engine stops and its own delegation tree closes with it (ADR 0217); the transcript stays. Refused while it or an open descendant waits for the user (a question or a permission is his). Never your parent, a sibling or another tree.',
+    inputSchema: { type: 'object', required: ['chatId'], additionalProperties: false, properties: { chatId: str } },
+    annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    run: async (a, ctx) => JSON.stringify(await closeChild(a, callerOf(ctx.params))),
   }, {
     name: 'agent_children',
     description: 'The chats you delegated (agent_delegate): role, title, state, goal, their result once reported, open requests and cost; runId is what agent_child_feedback takes. stalled: true (with quietMin) = a working child silent for longer than the user\'s "Ferma dopo" limit: nudge it with a message or close it.',

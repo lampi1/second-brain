@@ -46,17 +46,25 @@ describe('parent child task continuity',()=>{
   it('reads full user decisions and reassigns the same child with explicit provenance and cursors',async()=>{
     const f=fixture();
     expect(await f.call('agent_task_events',{chatId:'child'})).toEqual(f.ledger);
-    expect(await f.call('agent_assign_task',f.args())).toEqual({chatId:'child',taskId:'task',taskVersion:2,runId:'new'});
+    expect(await f.call('agent_assign_task',f.args())).toEqual({chatId:'child',taskId:'task',taskVersion:2,runId:'new',userInstructions:[{seq:1,text:'Keep the user requirement'}],note:expect.stringContaining('attached')});
     expect(f.assign).toHaveBeenCalledWith('child',expect.stringContaining('Context: User constraints'),expect.objectContaining({mode:'continue',expectedVersion:1,expectedEventSeq:1,doneWhen:['New criterion'],source:{kind:'chat',chatId:'parent'}}));
     expect(f.create).not.toHaveBeenCalled();
   });
-  it('refuses other parents, stale cursors and changing a reused contract policy',async()=>{
+  it('assigns without expectedVersion or expectedEventSeq: the current version, the user\'s words returned to the parent',async()=>{
+    const f=fixture();
+    const {expectedVersion:_v,expectedEventSeq:_e,...bare}=f.args();
+    expect(await f.call('agent_assign_task',bare)).toMatchObject({taskVersion:2,userInstructions:[{seq:1,text:'Keep the user requirement'}]});
+    const options=f.assign.mock.calls[0]![2];
+    expect(options.expectedVersion).toBe(1);
+    expect(options).not.toHaveProperty('expectedEventSeq');
+  });
+  it('refuses other parents, bad cursors and changing a reused contract policy',async()=>{
     const f=fixture();
     f.child.parentId='other';
     await expect(f.call('agent_task_events',{chatId:'child'})).rejects.toThrow(/YOUR direct children/);
     await expect(f.call('agent_assign_task',f.args())).rejects.toThrow(/YOUR direct children/);
     f.child.parentId='parent';
-    await expect(f.call('agent_assign_task',{...f.args(),expectedEventSeq:0})).rejects.toThrow(/agent_task_events/);
+    await expect(f.call('agent_assign_task',{...f.args(),expectedEventSeq:-1})).rejects.toThrow(/event cursor/);
     await expect(f.call('agent_assign_task',{...f.args(),expectedVersion:2})).rejects.toThrow(/version/);
     for(const field of ['tools','skills','tier']) await expect(f.call('agent_assign_task',{...f.args(),contract:{...f.args().contract,[field]:[]}})).rejects.toThrow(/fresh chat/);
     expect(f.assign).not.toHaveBeenCalled();

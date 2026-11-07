@@ -8,7 +8,7 @@
 // Orchestrator opened reports to it with agent_report (issue #93), quietly when the result is clean; a child's result
 // waits for its siblings' so the parent reads them in one turn. Pins agents/delegation.ts, agents/role-gate.ts and
 // the delegation part of chats/manager.ts.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -985,7 +985,7 @@ describe('versioned task continuity and canonical results', () => {
     expect(f.m.list().find(row => row.id === c.id)?.run?.scope).toEqual({ brainRoot: path.resolve(brain), projectRoot: path.resolve(f.dir) });
   });
 
-  it('persists full ordered user instructions and refuses assignment against a stale read cursor', async () => {
+  it('persists full ordered user instructions and attaches the unread ones to the next assignment (no cursor needed)', async () => {
     const f = fixture();
     const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'initial task' }, 'agent');
@@ -998,10 +998,20 @@ describe('versioned task continuity and canonical results', () => {
     expect(new Set(read.events.map(e => e.id)).size).toBe(2);
     expect(f.m.list().find(row => row.id === c.id)?.run?.taskVersion).toBe(1);
     await f.call('agent_report', c.id, result);
-    await expect(f.m.assignTask(c.id, 'follow up', { source: { kind: 'chat', chatId: o.id } })).rejects.toThrow(/Unread user/);
     f.m.userWrote(c.id, 'A newer constraint');
-    await expect(f.m.assignTask(c.id, 'follow up', { expectedEventSeq: read.latestSeq, source: { kind: 'chat', chatId: o.id } })).rejects.toThrow(/Unread user/);
-    await f.m.assignTask(c.id, 'follow up', { expectedEventSeq: 3, source: { kind: 'chat', chatId: o.id } });
+    await expect(f.m.assignTask(c.id, 'follow up', { expectedEventSeq: 4, source: { kind: 'chat', chatId: o.id } })).rejects.toThrow(/Invalid user event cursor/);
+    // the one refusal left: the child is working
+    f.sinks.get(c.id)!.changed({ state: 'running' });
+    await expect(f.m.assignTask(c.id, 'follow up', { source: { kind: 'chat', chatId: o.id } })).rejects.toThrow(/busy/);
+    f.sinks.get(c.id)!.changed({ state: 'idle' });
+    const sent = vi.spyOn(f.m, 'send');
+    // a stale cursor is no longer a refusal: the app attaches every unread instruction itself
+    await f.m.assignTask(c.id, 'follow up', { expectedEventSeq: read.latestSeq, source: { kind: 'chat', chatId: o.id } });
+    const prompt = String(sent.mock.calls[0]?.[1]);
+    expect(prompt.startsWith("follow up\n\n[Istruzioni che l'utente ti ha scritto")).toBe(true);
+    expect(prompt).toContain('- A newer constraint');
+    expect(prompt).toContain('Second instruction, preserve the first.');
+    expect(prompt).not.toContain('IMPORTANT final constraint'); // cut at USER_EVENT_TEXT_MAX
     expect(f.m.userEvents(c.id).acknowledgedSeq).toBe(3);
     expect(f.m.list().find(row => row.id === c.id)?.run?.taskVersion).toBe(2);
     await f.m.shutdown();

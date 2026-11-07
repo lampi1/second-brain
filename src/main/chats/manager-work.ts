@@ -7,6 +7,7 @@ import type { ChatSummary } from '../../shared/contract';
 import { errText, log } from '../log';
 import type { UserTaskEvents, AgentRun, AgentRunOutcome } from '../../shared/agents';
 import { ownerSource, type TaskAssignmentOptions } from '../../shared/delegation';
+import { unreadNote } from '../../shared/user-events';
 import { PLAN_APPROVED, planChange, askingPlan, strategyPrompt, withDelegated, withStep, type PlanStep, type StepState, type StrategyPlan } from '../../shared/strategy';
 import { runMetrics } from '../agents/run-metrics';
 import { standings, withStandings } from '../agents/standing';
@@ -161,6 +162,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     if (!prompt.trim()) throw new Error('Task prompt is required.');
     if (options.expectedVersion !== undefined && options.expectedVersion !== (r.s.run?.taskVersion ?? 1)) throw new Error('Task version changed; refresh before assigning.');
     const source = options.source ?? { kind: 'user' as const };
+    let unread = '';
     if (!ownerSource(source) && this.closedByUser(r)) throw new Error('The user closed this chat and cancelled its work: only the user can reopen it. Start a new chat for new work.');
     if (source.kind === 'chat') {
       if (source.chatId !== this.openOrchestrator()?.s.id && source.chatId !== r.s.parentId) throw new Error('Only the owning Orchestrator or parent can assign this chat.');
@@ -168,8 +170,10 @@ export abstract class ManagerWork extends ManagerLifecycle {
         const parent = this.need(source.chatId);
         if (parent.s.closedAt || !parent.s.run || parent.s.run.endedAt !== undefined || parent.s.run.report?.via === 'agent_report') throw new Error('The parent assignment is over; its owner must explicitly continue it before it can assign children.');
       }
+      // the user's words the assigner has not acknowledged go with the prompt (unreadNote): no handshake to fail
       const events = this.userEvents(chatId);
-      if ((events.latestSeq > events.acknowledgedSeq || options.expectedEventSeq !== undefined) && options.expectedEventSeq !== events.latestSeq) throw new Error(`Unread user instructions: read ${source.chatId === r.s.parentId ? 'agent_task_events' : 'app_task_events'} and pass expectedEventSeq ${events.latestSeq} before assigning.`);
+      if (options.expectedEventSeq !== undefined && (!Number.isSafeInteger(options.expectedEventSeq) || options.expectedEventSeq < 0 || options.expectedEventSeq > events.latestSeq)) throw new Error(`Invalid user event cursor: the latest is ${events.latestSeq}.`);
+      unread = unreadNote(events);
     }
     if (options.planStep !== undefined) {
       const plan = r.s.parentId ? this.chats.get(r.s.parentId)?.s.plan : undefined;
@@ -179,6 +183,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     const freshBoundary = this.freshReady(r, Date.now());
     this.beginAssignment(r, prompt, options);
     if (freshBoundary) r.freshAssignmentRun = r.s.run?.runId;
+    if (unread) prompt += `\n\n${unread}`;
     if (options.mode === 'new-task' && r.s.plan) prompt += `\n\n${strategyPrompt(r.s.plan)}`;
     if (options.planStep !== undefined && r.s.parentId) this.planDelegated(r.s.parentId, options.planStep, [chatId]);
     if (source.kind === 'chat' && r.userTaskEvents) { r.userTaskEvents.acknowledgedSeq = r.userTaskEvents.latestSeq; this.persist(true); this.updated(r); }
