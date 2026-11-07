@@ -1,0 +1,32 @@
+{
+  "items": [
+    {
+      "kind": "tool",
+      "name": "Shell",
+      "summary": "Shell: npm test",
+      "input": {
+        "command": "npm test",
+        "cwd": "<machine>"
+      },
+      "status": "ok",
+      "output": "tutti i test passano",
+      "exitCode": 0
+    },
+    {
+      "kind": "assistant",
+      "text": "Comando eseguito",
+      "streaming": false
+    },
+    {
+      "kind": "result",
+      "costUsd": 0,
+      "turns": 1,
+      "isError": false
+    }
+  ],
+  "pendings": [
+    {
+      "tool": "Shell"
+    }
+  ]
+}

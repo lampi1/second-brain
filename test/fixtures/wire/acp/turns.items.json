@@ -1,0 +1,44 @@
+{
+  "items": [
+    {
+      "kind": "thinking",
+      "text": "Penso un attimo"
+    },
+    {
+      "kind": "assistant",
+      "text": "Ciao dal motore",
+      "streaming": false
+    },
+    {
+      "kind": "result",
+      "costUsd": 0,
+      "turns": 1,
+      "isError": false
+    },
+    {
+      "kind": "system",
+      "text": "Plan:\n✓ Leggi\n▸ Scrivi",
+      "code": "plan",
+      "params": {
+        "list": "✓ Leggi\n▸ Scrivi"
+      },
+      "level": "info"
+    },
+    {
+      "kind": "thinking",
+      "text": "Penso un attimo"
+    },
+    {
+      "kind": "assistant",
+      "text": "Ciao dal motore",
+      "streaming": false
+    },
+    {
+      "kind": "result",
+      "costUsd": 0,
+      "turns": 1,
+      "isError": false
+    }
+  ],
+  "pendings": []
+}

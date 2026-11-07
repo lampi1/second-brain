@@ -1,0 +1,34 @@
+{
+  "items": [
+    {
+      "kind": "tool",
+      "name": "Shell",
+      "summary": "Shell: npm test",
+      "input": {
+        "command": "npm test"
+      },
+      "status": "ok",
+      "output": "3 passed (allow-once)"
+    },
+    {
+      "kind": "thinking",
+      "text": "Penso un attimo"
+    },
+    {
+      "kind": "assistant",
+      "text": "Test verdi.",
+      "streaming": false
+    },
+    {
+      "kind": "result",
+      "costUsd": 0,
+      "turns": 1,
+      "isError": false
+    }
+  ],
+  "pendings": [
+    {
+      "tool": "Shell"
+    }
+  ]
+}

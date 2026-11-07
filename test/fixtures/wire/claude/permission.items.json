@@ -1,0 +1,37 @@
+{
+  "items": [
+    {
+      "kind": "system",
+      "text": "MCP broken: failed",
+      "level": "warn"
+    },
+    {
+      "kind": "tool",
+      "name": "Bash",
+      "summary": "Bash: npm test",
+      "input": {
+        "command": "npm test",
+        "description": "Run the tests"
+      },
+      "status": "ok",
+      "output": "3 passed {\"behavior\":\"allow\",\"updatedInput\":{\"command\":\"npm test\",\"description\":\"Run the tests\"},\"toolUseID\":\"toolu_bash\"}",
+      "exitCode": 0
+    },
+    {
+      "kind": "assistant",
+      "text": "Test verdi.",
+      "streaming": false
+    },
+    {
+      "kind": "result",
+      "costUsd": 0.01,
+      "turns": 1,
+      "isError": false
+    }
+  ],
+  "pendings": [
+    {
+      "tool": "Bash"
+    }
+  ]
+}
