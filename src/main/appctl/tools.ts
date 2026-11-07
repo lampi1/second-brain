@@ -37,7 +37,7 @@ import { describeUi } from '../../shared/genui';
 import { digest } from './digest';
 import { gitBranch } from '../chats/branch';
 import { closeRefusal } from '../chats/close-rules';
-import { unreadEvents } from '../../shared/user-events';
+import { unreadInstructions } from '../../shared/user-events';
 import type { PullResult } from '../update/source';
 import type { AgentCatalog } from '../../shared/agents';
 import { isWorkRole, MODEL_TIERS, ROLE_IDS, type ModelTier } from '../../shared/roles';
@@ -570,7 +570,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       run: (a: Record<string, unknown>) => balancedStatusRun(balanced, a, h => !openRefusal(d.brain.settings(), caller()?.harness ?? 'claude', h)) }] : []),
     {
       name: 'app_assign_task',
-      description: 'Continue a compatible work conversation with a distinct measured run. Use continue for related follow-ups, new-task for a distinct assignment in the same scope, rework only for an explicit correction. Requires the same role and project folder; the current task version (app_chats) is used when expectedVersion is omitted. The app attaches the user\'s unread instructions in that chat to the prompt and returns them (userInstructions): expectedEventSeq is optional. Refused only while the chat works or has queued work. Independent Sentinel reviews always need a fresh chat. Does not change tools or permissions.',
+      description: 'Continue a compatible work conversation with a distinct measured run. Use continue for related follow-ups, new-task for a distinct assignment in the same scope, rework only for an explicit correction. Requires the same role and project folder; the current task version (app_chats) is used when expectedVersion is omitted. The user\'s messages and answers in that chat you have not seen come back readable (userInstructions): the chat already has them, so they are not repeated in its prompt; account for them, and correct it or ask the user where your prompt disagrees. expectedEventSeq is optional. Refused only while the chat works or has queued work. Independent Sentinel reviews always need a fresh chat. Does not change tools or permissions.',
       inputSchema: obj({ intakeQuestion: intakeField, chatId: str('Existing conversation ID'), prompt: { ...str(`Self-contained assignment, up to ${CHAT_PROMPT_MAX} characters`), maxLength: CHAT_PROMPT_MAX },
         doneWhen: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 300 }, description: 'Checkable criteria for this assignment' },
         mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] }, roleId: str('Existing work role'), cwd: str('Same absolute project folder'),
@@ -605,14 +605,14 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (target.harness !== orchestrator.harness && !['running', 'waiting', 'idle'].includes(target.state)) throw new Error('A stopped engine of another kind requires the user.');
         if (a.expectedEventSeq !== undefined && (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0)) throw new Error('Invalid user event cursor.');
         if (a.deliveryPolicy !== undefined && !['display', 'notify', 'synthesize'].includes(String(a.deliveryPolicy))) throw new Error('Invalid delivery policy.');
-        const userInstructions = d.chats.userEvents ? unreadEvents(d.chats.userEvents(target.id)).map(e => ({ seq: e.seq, text: e.text })) : [];
+        const userInstructions = d.chats.userEvents ? unreadInstructions(d.chats.userEvents(target.id)) : [];
         await d.chats.assignTask(target.id, `${AGENT_LABEL}\n\n${prompt}`, { ...intakeOf(a, a.roleId === 'strategist' && a.mode === 'new-task' && !!target.plan), mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: a.expectedVersion === undefined ? target.run?.taskVersion ?? 1 : Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
         const assigned = d.chats.list().find(c => c.id === target.id);
         return { chatId: target.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions } : {}) };
       },
     },
     {
-      name: 'app_task_events', description: 'Read the complete ordered user decisions for a root work task. Optional before app_assign_task, which attaches the unread ones itself. No model turn is started.',
+      name: 'app_task_events', description: 'Read the complete ordered user decisions for a root work task. Optional before app_assign_task, which returns the unread ones itself. No model turn is started.',
       inputSchema: obj({ chatId: str('Root work chat ID'), afterSeq: { type: 'integer', minimum: 0 } }, ['chatId']),
       run: a => {
         if (!authed() || !caller() || !d.chats.userEvents) throw new Error('An authenticated Orchestrator is required.');

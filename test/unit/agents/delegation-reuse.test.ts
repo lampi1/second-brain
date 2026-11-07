@@ -46,7 +46,7 @@ describe('parent child task continuity',()=>{
   it('reads full user decisions and reassigns the same child with explicit provenance and cursors',async()=>{
     const f=fixture();
     expect(await f.call('agent_task_events',{chatId:'child'})).toEqual(f.ledger);
-    expect(await f.call('agent_assign_task',f.args())).toEqual({chatId:'child',taskId:'task',taskVersion:2,runId:'new',userInstructions:[{seq:1,text:'Keep the user requirement'}],note:expect.stringContaining('attached')});
+    expect(await f.call('agent_assign_task',f.args())).toEqual({chatId:'child',taskId:'task',taskVersion:2,runId:'new',userInstructions:[{seq:1,text:'Keep the user requirement'}],note:expect.stringContaining('not repeated in its prompt')});
     expect(f.assign).toHaveBeenCalledWith('child',expect.stringContaining('Context: User constraints'),expect.objectContaining({mode:'continue',expectedVersion:1,expectedEventSeq:1,doneWhen:['New criterion'],source:{kind:'chat',chatId:'parent'}}));
     expect(f.create).not.toHaveBeenCalled();
   });
@@ -57,6 +57,15 @@ describe('parent child task continuity',()=>{
     const options=f.assign.mock.calls[0]![2];
     expect(options.expectedVersion).toBe(1);
     expect(options).not.toHaveProperty('expectedEventSeq');
+  });
+  it('returns the user\'s panel answers readable, never as JSON, and keeps them out of the child\'s prompt',async()=>{
+    const f=fixture();
+    f.ledger.events.push({id:'answer',seq:2,at:3,text:JSON.stringify({requestId:'q1',answers:['ultimi 7 giorni']})});f.ledger.latestSeq=2;
+    const out=await f.call('agent_assign_task',f.args());
+    expect(out.userInstructions).toEqual([{seq:1,text:'Keep the user requirement'},{seq:2,text:'Answer to a question: ultimi 7 giorni'}]);
+    const prompt=f.assign.mock.calls[0]![1];
+    expect(prompt).not.toContain('Keep the user requirement');
+    expect(prompt).not.toContain('ultimi 7 giorni');
   });
   it('refuses other parents, bad cursors and changing a reused contract policy',async()=>{
     const f=fixture();

@@ -985,7 +985,7 @@ describe('versioned task continuity and canonical results', () => {
     expect(f.m.list().find(row => row.id === c.id)?.run?.scope).toEqual({ brainRoot: path.resolve(brain), projectRoot: path.resolve(f.dir) });
   });
 
-  it('persists full ordered user instructions and attaches the unread ones to the next assignment (no cursor needed)', async () => {
+  it('persists full ordered user instructions; the next assignment needs no cursor and does not repeat them in the prompt', async () => {
     const f = fixture();
     const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'initial task' }, 'agent');
@@ -1005,13 +1005,12 @@ describe('versioned task continuity and canonical results', () => {
     await expect(f.m.assignTask(c.id, 'follow up', { source: { kind: 'chat', chatId: o.id } })).rejects.toThrow(/busy/);
     f.sinks.get(c.id)!.changed({ state: 'idle' });
     const sent = vi.spyOn(f.m, 'send');
-    // a stale cursor is no longer a refusal: the app attaches every unread instruction itself
+    // a stale cursor is no longer a refusal; the child already has the user's entries: its prompt is the assignment only
     await f.m.assignTask(c.id, 'follow up', { expectedEventSeq: read.latestSeq, source: { kind: 'chat', chatId: o.id } });
     const prompt = String(sent.mock.calls[0]?.[1]);
-    expect(prompt.startsWith("follow up\n\n[Istruzioni che l'utente ti ha scritto")).toBe(true);
-    expect(prompt).toContain('- A newer constraint');
-    expect(prompt).toContain('Second instruction, preserve the first.');
-    expect(prompt).not.toContain('IMPORTANT final constraint'); // cut at USER_EVENT_TEXT_MAX
+    expect(prompt).toBe('follow up');
+    expect(prompt).not.toContain('A newer constraint');
+    expect(prompt).not.toContain('Second instruction');
     expect(f.m.userEvents(c.id).acknowledgedSeq).toBe(3);
     expect(f.m.list().find(row => row.id === c.id)?.run?.taskVersion).toBe(2);
     await f.m.shutdown();

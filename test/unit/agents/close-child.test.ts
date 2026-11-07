@@ -7,7 +7,9 @@ import type { ChatSummary } from '../../../src/shared/contract';
 import type { AgentCatalog } from '../../../src/shared/agents';
 import { DELEGATION_DEFAULTS } from '../../../src/shared/roles';
 
-const chat = (id: string, p: Partial<ChatSummary> = {}): ChatSummary => ({ id, title: `T-${id}`, cwd: '.', harness: 'claude', state: 'idle', pending: 0, isOrchestrator: false, ...p } as ChatSummary);
+// every chat but the Orchestrator is a live role chat (an Artisan run not yet reported)
+const chat = (id: string, p: Partial<ChatSummary> = {}): ChatSummary => ({ id, title: `T-${id}`, cwd: '.', harness: 'claude', state: 'idle', pending: 0, isOrchestrator: false,
+  agent: { source: 'catalog', id: 'artisan' }, run: { runId: `r-${id}`, agentId: 'artisan', taskVersion: 1 }, ...p } as unknown as ChatSummary);
 
 // o (Orchestrator) · root → p → c → g ; p → s (sibling of c) ; x (another tree)
 const tree = () => [chat('o', { isOrchestrator: true }), chat('root'), chat('p', { parentId: 'root' }), chat('c', { parentId: 'p' }), chat('g', { parentId: 'c' }), chat('s', { parentId: 'p' }), chat('x')];
@@ -36,6 +38,14 @@ describe('close rules', () => {
     by('c').pending = 1;
     expect(closeRefusal(by('c'), all)).toMatch(/aspetta una risposta dell’utente/);
   });
+  it('a plan waiting for «Approva e parti» waits for the user too, with no pending ask', () => {
+    const all = tree(), by = (id: string) => all.find(c => c.id === id)!;
+    by('g').plan = { phase: 'proposed' } as ChatSummary['plan'];
+    expect(closeRefusal(by('c'), all)).toMatch(/«T-g», sotto «T-c»/);
+    expect(closeRefusal(by('g'), all)).toMatch(/chiudila solo lui/);
+    by('g').plan = { phase: 'running' } as ChatSummary['plan'];
+    expect(closeRefusal(by('c'), all)).toBeNull();
+  });
 });
 
 describe('agent_close_child', () => {
@@ -59,10 +69,25 @@ describe('agent_close_child', () => {
     await expect(f.call('p', 'g')).rejects.toThrow(/chiudila solo lui/);
     expect(f.close).not.toHaveBeenCalled();
   });
+  it('refuses while a descendant Strategist waits for the user to approve its plan', async () => {
+    const f = fixture();
+    f.all.find(c => c.id === 'g')!.plan = { phase: 'proposed' } as ChatSummary['plan'];
+    await expect(f.call('p', 'c')).rejects.toThrow(/«T-g», sotto «T-c»/);
+    expect(f.close).not.toHaveBeenCalled();
+  });
   it('a closed caller or an Orchestrator caller is refused', async () => {
     const f = fixture();
     f.all.find(c => c.id === 'p')!.closedAt = 1;
-    await expect(f.call('p', 'c')).rejects.toThrow(/only an open delegating chat/);
-    await expect(f.call('o', 'root')).rejects.toThrow(/only an open delegating chat/);
+    await expect(f.call('p', 'c')).rejects.toThrow(/your chat is not open/);
+    await expect(f.call('o', 'root')).rejects.toThrow(/only a role chat/);
+    expect(f.close).not.toHaveBeenCalled();
+  });
+  it('a parent that already reported cannot close its tree on a late wake', async () => {
+    const f = fixture(), p = f.all.find(c => c.id === 'p')!;
+    p.run = { ...p.run!, report: { via: 'agent_report' } } as ChatSummary['run'];
+    await expect(f.call('p', 'c')).rejects.toThrow(/your assignment is over/);
+    p.run = { ...p.run!, report: undefined, endedAt: 2 } as ChatSummary['run'];
+    await expect(f.call('p', 'c')).rejects.toThrow(/your assignment is over/);
+    expect(f.close).not.toHaveBeenCalled();
   });
 });

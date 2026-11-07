@@ -48,7 +48,7 @@ row and its line here in the same change.
 | `app_ui` | Orchestrator, /mcp/app | Steer the UI without taking focus: open a page, maximize a chat, or read the screen outline. |
 | `app_create_chat` | Orchestrator, /mcp/app | Open a work chat that runs one role, started with a self-contained prompt. |
 | `app_assign_task` | Orchestrator, /mcp/app | Give a finished work chat a new measured task in the same role and project. |
-| `app_task_events` | Orchestrator, /mcp/app | The ordered user decisions of a root task (optional: app_assign_task attaches the unread ones). |
+| `app_task_events` | Orchestrator, /mcp/app | The ordered user decisions of a root task (optional: app_assign_task returns the unread ones). |
 | `app_send_to_chat` | Orchestrator, /mcp/app | Send a message to an active app chat, labelled as not the user's approval. |
 | `app_close_chat` | Orchestrator, /mcp/app | Close a chat for the user, like ✕: its engine, the tools it started and its delegation tree end; refused while it or an open descendant waits for the user. |
 | `app_reopen_chat` | Orchestrator, /mcp/app | Reopen a closed chat with its whole history. |
@@ -87,7 +87,7 @@ row and its line here in the same change.
 | `agent_answer_child` | work chats | Answer a question one of your delegated chats asked you. |
 | `agent_report` | work chats | Your one final result for the chat that started you; `amends: true` corrects it (at most 2 corrections, ADR 0224). |
 | `agent_close_child` | work chats | Close one of your delegated chats and its tree, never while it waits for the user. |
-| `agent_assign_task` | work chats | Continue your direct child with a separate task run; the user's unread instructions go with it. |
+| `agent_assign_task` | work chats | Continue your direct child with a separate task run; the user's entries there you have not seen come back to you. |
 | `agent_task_events` | work chats | The ordered user instructions for your direct child (optional before reassigning it). |
 | `agent_integrate_child` | work chats | Stage one finished child's commits in a fresh detached worktree. |
 | `agent_integrate_children` | work chats | Combine several finished children's commits in one staging worktree. |

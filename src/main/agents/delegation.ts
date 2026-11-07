@@ -29,7 +29,10 @@ import type { SkillToolsSource } from './discovery';
 import { log } from '../log';
 import { checkMemoryWorth } from '../rules/memory-worth';
 import { closeRefusal, descendantIds } from '../chats/close-rules';
-import { unreadEvents } from '../../shared/user-events';
+import { unreadInstructions } from '../../shared/user-events';
+
+/** With agent_assign_task's userInstructions: what the parent does with the user's entries it had not seen. */
+const USER_INSTRUCTIONS_NOTE = 'The user wrote or answered these in the child since your last assignment; the child already has them and they are not repeated in its prompt. Check your new contract agrees with them; where it does not, correct the child with a new assignment or ask the user.';
 
 /** What delegation needs from the chats (ChatManager). */
 export interface DelegationChats {
@@ -289,8 +292,9 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (running + 1 > limits.maxParallel) {
       d.chats.limitNotice(parent.id, 'parallel', limits.maxParallel); throw new Error('Delegation parallel limit reached; wait for a child result.');
     }
-    // ChatManager checks the version again and attaches the user's unread instructions to the prompt; they come back here
-    const userInstructions = unreadEvents(d.chats.userEvents(child.id)).map(e => ({ seq: e.seq, text: e.text }));
+    // ChatManager checks the version again; the user's entries in the child you have not seen come back here, readable
+    // (the child already has them: they are not repeated in its prompt)
+    const userInstructions = unreadInstructions(d.chats.userEvents(child.id));
     const version = a.expectedVersion === undefined ? child.run.taskVersion ?? 1 : Number(a.expectedVersion);
     if (version !== (child.run.taskVersion ?? 1)) throw new Error('Task version changed; refresh agent_children.');
     reserved.set(parent.id, (reserved.get(parent.id) ?? 0) + 1); assigning.add(child.id);
@@ -298,7 +302,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       const prompt = `${d.label}\n\n${delegationPrompt(contract, { role: a.roleId, parentTitle: parent.title, title: child.title, skills: [] })}`;
       await d.chats.assignTask(child.id, prompt, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: version, ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), doneWhen: contract.doneWhen, ...(step !== null ? { planStep: step } : {}), source: { kind: 'chat', chatId: parent.id } });
       const assigned = chat(child.id);
-      return { chatId: child.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions, note: 'The user wrote these in the child; the app attached them to its prompt, where they win over your contract.' } : {}) };
+      return { chatId: child.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions, note: USER_INSTRUCTIONS_NOTE } : {}) };
     } finally {
       assigning.delete(child.id);
       const left = (reserved.get(parent.id) ?? 0) - 1;
@@ -308,8 +312,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
 
   /** agent_close_child: a parent closes one of its own descendants with app_close_chat's rules (chats/close-rules.ts) */
   async function closeChild(a: Record<string, unknown>, callerId: string): Promise<unknown> {
-    const parent = chat(callerId);
-    if (!parent || parent.closedAt || parent.isOrchestrator) throw new Error('agent_close_child: only an open delegating chat closes its own children.');
+    // an open role chat whose assignment is still live: a parent that reported cannot close its tree on a late wake
+    const parent = activeParent(callerId, 'agent_close_child');
     if (!d.chats.close) throw new Error('agent_close_child is unavailable.');
     const all = d.chats.list(), id = typeof a.chatId === 'string' ? a.chatId : '';
     const child = all.find(c => c.id === id);
@@ -516,7 +520,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await delegate(a, callerOf(ctx.params))),
   }, {
     name: 'agent_assign_task',
-    description: 'Continue YOUR direct child in the same role and project with a separate task run. The app attaches the user\'s unread instructions in that chat to the prompt and returns them to you (userInstructions); expectedVersion (taskVersion from agent_children) and expectedEventSeq are optional and honoured when given. Refused only while the child works or has queued work. Keeps the session, tools and skills; changed role settings or Sentinel reviews require a fresh child. Use rework only for explicit corrections. With an approved plan, step is required. Closed parents must first receive a new assignment from their own parent or Orchestrator.',
+    description: 'Continue YOUR direct child in the same role and project with a separate task run. The user\'s messages and answers in that chat you have not seen come back to you readable (userInstructions): the child already has them, so they are not repeated in its prompt; account for them, and correct the child or ask the user where your contract disagrees. expectedVersion (taskVersion from agent_children) and expectedEventSeq are optional and honoured when given. Refused only while the child works or has queued work. Keeps the session, tools and skills; changed role settings or Sentinel reviews require a fresh child. Use rework only for explicit corrections. With an approved plan, step is required. Closed parents must first receive a new assignment from their own parent or Orchestrator.',
     inputSchema: { type: 'object', required: ['chatId', 'roleId', 'cwd', 'mode', 'contract'],additionalProperties: false, properties: {
       chatId: str, roleId: { type: 'string', enum: [...WORK_ROLE_IDS] }, cwd: str,
       mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] },
@@ -542,7 +546,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await integrateChildren(a, callerOf(ctx.params), true)),
   }, {
     name: 'agent_task_events',
-    description: 'Read the complete ordered user instruction ledger for YOUR direct child. Optional before agent_assign_task, which attaches the unread ones itself; no model turn is started.',
+    description: 'Read the complete ordered user instruction ledger for YOUR direct child. Optional before agent_assign_task, which returns the unread ones itself; no model turn is started.',
     inputSchema: { type: 'object', required: ['chatId'], additionalProperties: false, properties: { chatId: str } },
     annotations: { readOnlyHint: true, openWorldHint: false },
     run: (a, ctx) => JSON.stringify(taskEvents(a, callerOf(ctx.params))),
