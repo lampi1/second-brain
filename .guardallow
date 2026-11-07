@@ -210,3 +210,8 @@ docs/screenshots/orchestrator-flash.webp binary-media sha256:e0ca9ac3115b7d51698
 docs/screenshots/reactions.webp binary-media sha256:33be0c39021249d06e49b44ada583d9bed2a2dc9d05d6b0c2fd6c0b55969a143
 docs/screenshots/voice.webp binary-media sha256:a55d6cb78bc29942028674bc8c4fc55c747440326555c505252284a8a89a6f67
 docs/screenshots/voice-talk.webp binary-media sha256:4fdb22c888c83c2d065e89c7c82c30f1c94557ae1c81a9ff0d50102038d2cc2a
+# The previous connectors.webp, settings.webp and learn.webp, already published on main: the Impara explain-mode
+# branch commits made before its merge of main still carry them, and the push guard scans every pushed commit.
+docs/screenshots/connectors.webp binary-media sha256:374fe4d1533fbe1f0836b33036c0f8de358c39f83c1f8537bcc550b279e38a7e
+docs/screenshots/settings.webp binary-media sha256:5c40b9865aaf4dcc90d13da075f957bd29da31fa6c43f073fd4a8c2b45700138
+docs/screenshots/learn.webp binary-media sha256:33fa3921352e4b8e35de5cc881d03ca3cd230d935537ffc01fbaad9a5e10e0de
