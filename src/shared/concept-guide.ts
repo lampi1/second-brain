@@ -1364,8 +1364,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un lavoro che finisce, fallisce, chiede qualcosa o scrive all’Orchestrator produce una notizia; l’app la consegna all’Orchestrator, ma non sempre subito.',
         'A job that finishes, fails, asks something or writes to the Orchestrator makes a piece of news; the app delivers it to the Orchestrator, but not always at once.'),
       // src/main/chats/orchestrator-delivery.ts ORCHESTRATOR_GROUP_MS
-      b('La trattiene mentre l’Orchestrator aspetta te, la raggruppa per 30 secondi con le altre in arrivo, o fa viaggiare le notizie tranquille con la prossima consegna: così l’Orchestrator non viene svegliato a ogni riga.',
-        'It holds it while the Orchestrator waits for you, groups it for 30 seconds with the others arriving, or lets quiet news ride along with the next delivery: so the Orchestrator is not woken at every line.'),
+      b('La trattiene mentre l’Orchestrator aspetta te, la raggruppa per 30 secondi con le altre in arrivo, o fa viaggiare le notizie tranquille con la prossima consegna: così l’Orchestrator non viene svegliato a ogni riga. Un lavoro che finisce o parte e basta è tranquillo: lo sveglia solo un errore o un risultato da smistare.',
+        'It holds it while the Orchestrator waits for you, groups it for 30 seconds with the others arriving, or lets quiet news ride along with the next delivery: so the Orchestrator is not woken at every line. A job that just finishes or starts is quiet: only a failure or a result to route wakes it.'),
       // src/renderer/components/HeldNews.tsx
       b('Sulla colonna dell’Orchestrator vedi quante sono; un clic le elenca (chat, tipo, da quando, perché aspetta) e una riga apre la sua chat.',
         'On the Orchestrator’s column you see how many there are; a click lists them (chat, kind, since when, why it waits) and a row opens its chat.'),

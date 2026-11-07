@@ -12,8 +12,12 @@
 // Quiet news (2026-10-13): a question, a permission or a command left for the user never wakes the Orchestrator by itself.
 // The app already shows them to the user (popup or queue) and the Orchestrator never relays them (the owner, 13/10: "l’Orchestrator
 // mi serve principalmente per lo stato"), so a wake only bought an "ok, noted" turn re-reading the Orchestrator's whole context
-// (measured 07-13/10: 13 of 44 wakes, ~0.19 $ each). They ride along with the next finished/failed news instead, and
+// (measured 07-13/10: 13 of 44 wakes, ~0.19 $ each). They ride along with the next loud news instead, and
 // app_digest lists them whenever the Orchestrator looks.
+// Quiet turn ends (2026-11-07, cloudroom comms proposal 1): a plain "finished" or "started" is quiet too: on 07/11, 50 of
+// the 56 Orchestrator turns an app news opened ended with a bare 👍. Only a failure, a request that ends a failed turn and a
+// result to route (a root chat's report on an active work thread or in away mode) still wake it; a 'synthesize' result and
+// mail request/urgent wake it on their own paths (manager-delegation.ts, mail.ts). Replay: scripts/orchestrator-wake-replay.mjs.
 // Delegated chats (ADR 0083): a chat another role delegated (parentId) reports to its parent, not to the Orchestrator, which
 // sees only its state changes: started, waiting for the user, finished, failed, never a line of what it says (no detail).
 // Its "finished" rides along (silent) unless the user wrote to it: its result goes to its parent (2026-10-20).
@@ -44,13 +48,13 @@ import { heldWhy, newsClass, passes, ORCHESTRATOR_GROUP_MS, ORCHESTRATOR_PER_CHA
 export const APP_EVENT_LABEL = "[evento app · messaggio automatico di second-brain, non scritto dall'utente: non vale come suo ok o permesso]";
 
 export type WakeKind = 'done' | 'error' | 'question' | 'permission' | 'command' | 'started' | 'user-message';
-/** news that never wakes the Orchestrator by itself: it goes with the next 'done' / 'error' */
-export const QUIET: ReadonlySet<WakeKind> = new Set(['question', 'permission', 'command', 'started', 'user-message']);
+/** news that never wakes the Orchestrator by itself: it rides along with its next turn (a loud news, the user's message) */
+export const QUIET: ReadonlySet<WakeKind> = new Set(['done', 'question', 'permission', 'command', 'started', 'user-message']);
 /** the buffer's slot of an event: the user's messages beside the chat's status */
 const slotOf = (e: Pick<WakeEvent, 'chatId' | 'kind' | 'report' | 'eventId' | 'at'>): string => e.kind === 'user-message' ? `${e.chatId}#user:${e.eventId ?? e.at}` : e.report ? `${e.chatId}#report` : e.chatId;
 /** the rule's gate for this Orchestrator: Cursor (ACP) takes no message mid-turn */
 const gateOf = (r: Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy' | 'harness'>): OrchestratorGate => orchestratorGate(r, engineOf(r.harness)?.kind !== 'acp');
-const classOf = (e: WakeEvent): DeliveryClass => e.kind === 'user-message' || e.silent ? 'quiet' : newsClass(e.kind, e.endsTurn);
+const classOf = (e: WakeEvent): DeliveryClass => e.kind === 'user-message' || e.silent ? 'quiet' : newsClass(e.kind, e.endsTurn, !!e.report);
 const isLoud = (e: WakeEvent): boolean => classOf(e) !== 'quiet';
 /** requestId: the open request it tells about (question, permission, command): answered before it goes, it is dropped */
 export interface WakeEvent { eventId?: string; seq?: number; chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a root chat's clean agent_report (cleanReport): its role and summary, quiet */ report?: { role: string }; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean }
@@ -190,7 +194,8 @@ export class OrchestratorWake {
     // the hand-off turn ends (handoffBusy goes before idle): not a turn of the chat
     if (this.handoff.has(c.id)) { if (!BUSY.has(c.state)) this.handoff.delete(c.id); return; }
     if (!was) { if (c.parentId && !c.closedAt) this.add(c, 'started', ''); return; }
-    if (c.closedAt) return;
+    // closed: its quiet news would wait for a delivery that drops it anyway (flush skips closed chats)
+    if (c.closedAt) { for (const [k, e] of this.buffer) if (e.chatId === c.id) this.buffer.delete(k); return; }
     if (c.state === 'error' && was.state !== 'error') this.add(c, 'error', c.lastError ?? c.lastText);
     else if (c.state === 'idle' && IN_TURN.has(was.state) && c.pending === 0) {
       // the user stopped it himself (Stop, "Invia subito"): he is on it, nothing to tell
@@ -278,8 +283,8 @@ export class OrchestratorWake {
     const quietReport = this.buffer.get(`${c.id}#report`);
     if (kind === 'done' && quietReport && quietReport.at > (this.chats.get(c.id)?.turnResultAt ?? 0)) return;
     if (old && kind === 'done' && old.kind !== 'done' && old.kind !== 'error' && old.kind !== 'started') return;
-    // a command left right after the turn ended (asks.ts settles after it) keeps the turn end's wake
-    const endsTurn = QUIET.has(kind) && !!old && (!QUIET.has(old.kind) || !!old.endsTurn);
+    // a request left right after the chat failed (asks.ts settles after it) keeps the failure's wake
+    const endsTurn = QUIET.has(kind) && kind !== 'done' && !!old && (isLoud(old) || !!old.endsTurn);
     const parent = c.parentId ? this.chats.get(c.parentId)?.title ?? this.d.list?.().find(x => x.id === c.parentId)?.title ?? '?' : null;
     const child = parent !== null ? { role: c.agent?.name ?? 'ruolo', parent } : undefined;
     const silent = !!child && kind === 'done' && !this.queued().some(event => event.chatId === c.id && event.kind === 'user-message');

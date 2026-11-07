@@ -9,7 +9,7 @@ import { ADR0083_DEFAULTS, PRE_ADR0100_INSTRUCTIONS } from './role-migrate';
 
 /** What to do with the app's news and other chats' messages (orchestrator-wake.ts wakeMessage carries only the news;
  *  the owner, 2026-10-20). */
-export const WAKE_RULE = 'App news and messages from other chats (starting "[evento app" or "[Messaggio di un agente"): write to the user only when they need it: an error requiring attention or a decision that is theirs, presented through the existing decision modal or your native question tool; do not send routine completion prose. Otherwise reply 👍 and nothing else: the app hides it and the news. For the whole picture, one app_digest with since "last", never the chats one by one.';
+export const WAKE_RULE = 'App news and messages from other chats (starting "[evento app" or "[Messaggio di un agente"): write to the user only when they need it: an error requiring attention or a decision that is theirs, presented through the existing decision modal or your native question tool; do not send routine completion prose. Plain completions and starts never wake you: they ride along with your next turn. For the whole picture, one app_digest with since "last", never the chats one by one.';
 
 /** The rules every Orchestrator session gets whatever its role text says. */
 const ORCHESTRATOR_RULES = [
