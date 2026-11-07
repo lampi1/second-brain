@@ -55,6 +55,7 @@ import { queriesEn } from './areas/queries.en';
 import { lampoEn } from './areas/lampo.en';
 import { modelPickerEn } from './areas/model-picker.en';
 import { awayEn } from './areas/away.en';
+import { remoteEn } from './areas/remote.en';
 import { learningEn } from './areas/learning.en';
 import { andamentoEn } from './areas/andamento.en';
 import { suggestEn } from './areas/suggest.en';
@@ -86,6 +87,7 @@ export const en: Dict = {
   ...lampoEn,
   ...modelPickerEn,
   ...awayEn,
+  ...remoteEn,
   ...learningEn,
   ...andamentoEn,
   ...suggestEn,
