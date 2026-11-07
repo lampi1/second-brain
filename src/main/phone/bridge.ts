@@ -50,6 +50,10 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
   let error: string | null = null;
   let abort: AbortController | null = null;
   let loop: Promise<void> | null = null;
+  // one start at a time; halt() bumps the generation so a start still awaiting Telegram gives up (no double polling,
+  // no start notice after «App chiusa»)
+  let starting: Promise<void> | null = null;
+  let gen = 0;
   let timer: ReturnType<typeof setInterval> | null = null;
   let unsubs: (() => void)[] = [];
   let startedAt = 0;
@@ -256,6 +260,7 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
   }
 
   async function halt(next: PhoneBridgeState, notice = false): Promise<void> {
+    gen++;
     const wasLive = runState === 'running' || runState === 'paused';
     if (notice && wasLive && s.paired) {
       await Promise.race([out.send(STOP_NOTICE, { silent: true }), new Promise(r => { const t = setTimeout(r, 3000); t.unref?.(); })]);
@@ -276,9 +281,16 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
     setRun(next, next === 'error' ? error : null);
   }
 
-  async function start(): Promise<void> {
+  function start(): Promise<void> {
+    if (loop) return Promise.resolve();
+    if (starting) return starting;
+    const p = startOnce(gen).finally(() => { if (starting === p) starting = null; });
+    starting = p;
+    return p;
+  }
+
+  async function startOnce(my: number): Promise<void> {
     if (devDisabled) { setRun('dev-disabled'); return; }
-    if (loop) return;
     const token = deps.getToken();
     if (!token || !s.enabled || s.stoppedFromPhone) { setRun(idleState()); return; }
     let base: string;
@@ -296,9 +308,10 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
       const code = e instanceof TelegramError ? e.code : 'network';
       const msg = code === 401 || code === 404 ? ERR_TOKEN : ERR_NETWORK;
       log.error('phone', 'phone bridge did not start', { cause: `deleteWebhook ${String(code)}`, hint: code === 401 || code === 404 ? 'paste a new bot token in Impostazioni → Telefono' : 'check that api.telegram.org is reachable (proxy, firewall)' });
-      setRun('error', msg);
+      if (my === gen) setRun('error', msg);
       return;
     }
+    if (my !== gen) return; // halted while Telegram answered
     client = c;
     startedAt = deps.now();
     wasNight = deps.presence().nightMode;
@@ -319,6 +332,7 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
     setRun(s.paused ? 'paused' : 'running');
     log.info('phone', 'phone bridge started');
     if (s.paired) await out.send(START_NOTICE, { silent: true });
+    if (my !== gen || !abort) return; // halted during the notice: halt() already undid the subscriptions
     loop = poll(abort.signal);
   }
 

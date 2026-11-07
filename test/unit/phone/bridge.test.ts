@@ -201,6 +201,36 @@ describe('phone bridge', () => {
     expect(r.texts()[before]).toBe('🚨 PRODUZIONE\nAir giù per [db]');
   });
 
+  it('start while starting: one client, one poll; stop while Telegram answers: no start notice, no polling', async () => {
+    const r = rig();
+    const real = r.deps.fetch;
+    let release!: () => void;
+    const gate = new Promise<void>(res => { release = res; });
+    r.deps.fetch = (async (u: string | URL | Request, i?: RequestInit) => { if (String(u).endsWith('/deleteWebhook')) await gate; return real(u, i); }) as typeof fetch;
+    const a = r.b.start(), b = r.b.start();
+    release();
+    await Promise.all([a, b]);
+    await waitFor(() => tg.calls.some(c => c.method === 'getUpdates'));
+    expect(tg.calls.filter(c => c.method === 'deleteWebhook')).toHaveLength(1);
+    expect(r.texts()).toEqual(['🟢 PC collegato']);
+    await r.b.stop();
+
+    const r2 = rig();
+    let release2!: () => void;
+    const gate2 = new Promise<void>(res => { release2 = res; });
+    r2.deps.fetch = (async (u: string | URL | Request, i?: RequestInit) => { if (String(u).endsWith('/deleteWebhook')) await gate2; return real(u, i); }) as typeof fetch;
+    const before = tg.calls.length;
+    const s = r2.b.start();
+    await r2.b.stop();
+    release2();
+    await s;
+    await new Promise(res => setTimeout(res, 100));
+    const after = tg.calls.slice(before).map(c => c.method);
+    expect(after).not.toContain('getUpdates');
+    expect(after).not.toContain('sendMessage');
+    expect(r2.b.status().state).not.toBe('running');
+  });
+
   it('a failed chat reaches the phone when away, never while at the PC', async () => {
     let atPc = true;
     const r = rig();
