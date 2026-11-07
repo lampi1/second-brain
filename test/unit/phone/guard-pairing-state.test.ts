@@ -73,8 +73,8 @@ describe('pairing', () => {
     const p = createPairing(() => t, () => 4821);
     const { code } = p.start();
     expect(code).toBe('004821');
-    expect(p.attempt('004821')).toBe('ok');
-    expect(p.attempt('004821')).toBe('none');
+    expect(p.attempt('004821', 77)).toBe('ok');
+    expect(p.attempt('004821', 77)).toBe('none');
     expect(p.current()).toBeNull();
   });
 
@@ -90,22 +90,34 @@ describe('pairing', () => {
     const p = createPairing(() => t, () => 111111);
     p.start();
     t = PAIRING_TTL_MS;
-    expect(p.attempt('111111')).toBe('none');
+    expect(p.attempt('111111', 77)).toBe('none');
   });
 
-  it('5 wrong attempts invalidate the code', () => {
+  it('5 wrong attempts block that account only: a stranger cannot burn the owner’s code (review S6)', () => {
     const p = createPairing(() => 0, () => 222222);
     p.start();
-    for (let i = 0; i < 5; i++) expect(p.attempt('000000')).toBe('wrong');
-    expect(p.attempt('222222')).toBe('none');
+    for (let i = 0; i < 5; i++) expect(p.attempt('000000', 666)).toBe('wrong');
+    expect(p.attempt('222222', 666)).toBe('blocked');
+    expect(p.current()).not.toBeNull();
+    expect(p.attempt('222222', 77)).toBe('ok');
+  });
+
+  it('a new code gives every account its attempts back; many accounts guessing still invalidate it', () => {
+    const p = createPairing(() => 0, () => 222222);
+    p.start();
+    for (let i = 0; i < 5; i++) p.attempt('000000', 666);
+    p.start();
+    expect(p.attempt('000001', 666)).toBe('wrong');
+    for (let id = 1; p.current(); id++) p.attempt('000000', id);
+    expect(p.attempt('222222', 77)).toBe('none');
   });
 
   it('a different length or a non-digit code is wrong', () => {
     const p = createPairing(() => 0, () => 333333);
     p.start();
-    expect(p.attempt('3333333')).toBe('wrong');
-    expect(p.attempt('')).toBe('wrong');
-    expect(p.attempt('333333')).toBe('ok');
+    expect(p.attempt('3333333', 77)).toBe('wrong');
+    expect(p.attempt('', 77)).toBe('wrong');
+    expect(p.attempt('333333', 77)).toBe('ok');
   });
 });
 
