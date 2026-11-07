@@ -6,8 +6,8 @@
 // the parity harness). The idea, not the code, comes from cloudroom's record mode (gui/docs/provider-bridge-protocol.md).
 // Safety (rule 2): off unless the variable is set (tests, or the user's own dev run); secrets are never written: keys
 // whose name says token/key/secret/password/authorization/cookie, bearer/API-key/JWT-shaped strings and the app's MCP
-// urls (their path carries a token) are replaced; the user's own words sent to the engine (prompt text) are replaced by
-// their length unless SB_WIRE_RECORD_PROMPTS=1 says the user chose to keep them. Used by the three adapters right after
+// urls (their path carries a token) are replaced; the user's own words (prompt text), sent to the engine or echoed back
+// by it (a resume, a session/load replay), are replaced by their length unless SB_WIRE_RECORD_PROMPTS=1 says the user chose to keep them. Used by the three adapters right after
 // spawn().
 import fs from 'node:fs';
 import path from 'node:path';
@@ -40,17 +40,25 @@ export function redactText(s: string): string {
   return out;
 }
 
-/** A parsed wire message, redacted: secret keys and values; prompt text in app>engine lines unless kept. */
-export function redactValue(v: unknown, opts: { prompts: boolean; dir: WireDir }, key = ''): unknown {
+/** an object that echoes the user's words back from the engine: Codex's userMessage item (live and in thread/resume),
+ *  ACP's user_message_chunk (session/load replay), Claude's user message; a tool result inside one is not the user's */
+const isUserEcho = (o: Record<string, unknown>): boolean =>
+  o.type === 'userMessage' || o.sessionUpdate === 'user_message_chunk' || o.role === 'user' || o.type === 'user';
+
+/** A parsed wire message, redacted: secret keys and values; prompt text unless kept, in every app>engine line and in
+ *  what the engine echoes of the user's words. */
+export function redactValue(v: unknown, opts: { prompts: boolean; dir: WireDir }, key = '', user = false): unknown {
   if (typeof v === 'string') return redactText(v);
-  if (Array.isArray(v)) return v.map(x => redactValue(x, opts, key)); // an array's items keep the array's key
+  if (Array.isArray(v)) return v.map(x => redactValue(x, opts, key, user)); // an array's items keep the array's key
   if (!v || typeof v !== 'object') return v;
-  const hidePrompt = !opts.prompts && opts.dir === 'app>engine';
+  const o = v as Record<string, unknown>;
+  const inUser = o.type === 'tool_result' ? false : user || isUserEcho(o);
+  const hidePrompt = !opts.prompts && (opts.dir === 'app>engine' || inUser);
   const out: Record<string, unknown> = {};
-  for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+  for (const [k, x] of Object.entries(o)) {
     if (SECRET_KEY.test(k) && typeof x === 'string' && x) out[k] = '<redacted>';
     else if (hidePrompt && typeof x === 'string' && ((k === 'text' && PROMPT_PARENTS.has(key)) || (k === 'content' && key === 'message'))) out[k] = `<prompt ${x.length} chars>`;
-    else out[k] = redactValue(x, opts, k);
+    else out[k] = redactValue(x, opts, k, inUser);
   }
   return out;
 }

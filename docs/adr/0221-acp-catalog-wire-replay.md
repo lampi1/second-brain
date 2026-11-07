@@ -37,7 +37,8 @@ provider protocols with a replay/parity check and a watchdog on a turn's first e
   - keys named like credentials (`apiKey`, `*token`, `*secret`, `password`, `authorization`, `cookie`);
   - key-, JWT- and bearer-shaped values;
   - the app's MCP url paths (they carry a token);
-  - the user's prompt text, replaced by its length unless `SB_WIRE_RECORD_PROMPTS=1`.
+  - the user's prompt text, sent to the engine or echoed back by it (Codex `userMessage`, ACP `user_message_chunk`,
+    Claude's user message; tool results excepted), replaced by its length unless `SB_WIRE_RECORD_PROMPTS=1`.
 - One line after spawn in each adapter (claude.ts, codex.ts, acp.ts). Its stdout listener goes first, so a line is
   recorded before what the adapter writes in answer to it.
 

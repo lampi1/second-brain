@@ -64,6 +64,18 @@ describe('wire record', () => {
     // what the engine says is kept (it is what the replay plays back), and prompts when the user keeps them
     expect(JSON.parse(out({ method: 'session/update', params: { content: [{ text: 'risposta' }] } }, 'engine>app')).params.content[0].text).toBe('risposta');
     expect(JSON.parse(out({ method: 'session/prompt', params: { prompt: [{ text: 'ciao' }] } }, 'app>engine', true)).params.prompt[0].text).toBe('ciao');
+    // the user's words echoed back by the engine go too: Codex's thread/resume and live userMessage, ACP's session/load
+    // replay, Claude's user echo; a tool result inside a user message is the tool's, kept
+    const resume = JSON.parse(out({ id: 2, result: { thread: { turns: [{ items: [{ type: 'userMessage', content: [{ type: 'text', text: 'il mio segreto' }] }, { type: 'agentMessage', text: 'ok' }] }] } } }, 'engine>app'));
+    expect(resume.result.thread.turns[0].items[0].content[0].text).toBe('<prompt 14 chars>');
+    expect(resume.result.thread.turns[0].items[1].text).toBe('ok');
+    expect(JSON.parse(out({ method: 'item/started', params: { item: { type: 'userMessage', content: [{ type: 'text', text: 'ciao' }] } } }, 'engine>app')).params.item.content[0].text).toBe('<prompt 4 chars>');
+    expect(JSON.parse(out({ method: 'session/update', params: { update: { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: 'ciao' } } } }, 'engine>app')).params.update.content.text).toBe('<prompt 4 chars>');
+    expect(JSON.parse(out({ method: 'session/update', params: { update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'risposta' } } } }, 'engine>app')).params.update.content.text).toBe('risposta');
+    const echo = JSON.parse(out({ type: 'user', message: { role: 'user', content: [{ type: 'text', text: 'ciao' }, { type: 'tool_result', content: [{ type: 'text', text: 'output' }] }] } }, 'engine>app'));
+    expect(echo.message.content[0].text).toBe('<prompt 4 chars>');
+    expect(echo.message.content[1].content[0].text).toBe('output');
+    expect(JSON.parse(out({ method: 'item/started', params: { item: { type: 'userMessage', content: [{ type: 'text', text: 'ciao' }] } } }, 'engine>app', true)).params.item.content[0].text).toBe('ciao');
     expect(redactLine(`not json ${KEY}`, { prompts: false, dir: 'engine>app' })).toBe('not json <redacted>');
   });
 
