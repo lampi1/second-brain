@@ -21,11 +21,12 @@ export function PhoneSettings() {
   const [token, setToken] = useState(''), [busy, setBusy] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const pairing = status?.pairing ?? null;
+  const ticking = !!pairing && pairing.expiresAt > now;
   useEffect(() => {
-    if (!pairing) return;
+    if (!ticking) return;
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
-  }, [pairing]);
+  }, [ticking]);
   if (!api) return <p className="st-desc" data-testid="st-phone-unavailable">{t('phone.unavailable')}</p>;
   if (!status) return null;
 

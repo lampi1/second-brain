@@ -83,7 +83,7 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
     // after /stop the PC switch shows off: one click turns it back on (update enabled: true clears stoppedFromPhone)
     enabled: s.enabled && !s.stoppedFromPhone,
     paired: s.paired !== null,
-    pairing: pairing.current(),
+    pairing: pairing.shown(),
     state: runState,
     error,
     dropped: s.counters.dropped + guard.dropped - droppedSaved,

@@ -93,6 +93,23 @@ describe('pairing', () => {
     expect(p.attempt('111111', 77)).toBe('none');
   });
 
+  it('a code that ran out stays shown as expired, without its digits, until a new code or a cancel (Sentinel review)', () => {
+    let t = 0;
+    const p = createPairing(() => t, () => 111111);
+    expect(p.shown()).toBeNull();
+    p.start();
+    expect(p.shown()).toEqual({ code: '111111', expiresAt: PAIRING_TTL_MS });
+    t = PAIRING_TTL_MS;
+    expect(p.current()).toBeNull();
+    expect(p.shown()).toEqual({ code: '', expiresAt: PAIRING_TTL_MS });
+    expect(p.shown()).toEqual({ code: '', expiresAt: PAIRING_TTL_MS });
+    p.start();
+    expect(p.shown()!.code).toBe('111111');
+    t = 2 * PAIRING_TTL_MS + 1;
+    p.cancel();
+    expect(p.shown()).toBeNull();
+  });
+
   it('5 wrong attempts block that account only: a stranger cannot burn the owner’s code (review S6)', () => {
     const p = createPairing(() => 0, () => 222222);
     p.start();
