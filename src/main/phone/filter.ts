@@ -6,7 +6,7 @@
 // (maskSecrets of src/main/brain/mask.ts, then redact of src/main/log.ts); bot tokens, SAS signatures; links and
 // scheme-less host/path reduced to their domain (paths and titles can name a customer); local and relative file paths;
 // license-like codes (ODENTAIRC…, PDENTAIR…, XXXX-XXXX-XXXX keys), emails, Italian codici fiscali (spaces too), IBANs,
-// GUIDs (with or without dashes), Db_… names and long digit runs masked. Chat titles never reach it: callers pass role + neutral label.
+// GUIDs (with or without dashes), Db_… names, long digit runs and IP addresses masked. Chat titles never reach it: callers pass role + neutral label.
 // Known limit (design §9): a customer or patient name in plain prose passes. Idempotent.
 // Used by outbound.ts, condense.ts, buttons.ts, commands.ts, voice.ts; adversarial tests: test/unit/phone/filter.test.ts.
 import { maskSecrets } from '../brain/mask';
@@ -78,11 +78,17 @@ function dropBlocks(text: string): string {
   return out.join('\n');
 }
 
+/** an IPv4 or bracketed IPv6 host: names a server, so it is masked whole */
+const IP_HOST = /^(?:\d{1,3}(?:\.\d{1,3}){3}|\[[\da-f:.]+\])$/i;
+/** the rest of a word after a link cut at ( or " that still carries a query (?, & or =): swallowed with the link */
+const QUERY_TAIL = '(?:\\S*[?&=]\\S*)?';
+
 /** A URL → its host, with "/…" when it had a path or query; unparseable → "[link]". */
 export function domainOnly(raw: string): string {
   try {
     const u = new URL(/^www\./i.test(raw) ? `https://${raw}` : raw);
     if (!u.hostname) return '[link]';
+    if (IP_HOST.test(u.hostname)) return '[ip]';
     const more = (u.pathname && u.pathname !== '/') || u.search || u.hash;
     return `${u.hostname}${more ? '/...' : ''}`;
   } catch { return '[link]'; }
@@ -93,13 +99,14 @@ const RULES: [RegExp, string | ((m: string, ...g: string[]) => string)][] = [
   [/\bmailto:[^\s<>"')\]]+/gi, '[email]'],
   [/[\w.+%-]+@[\w-]+(?:\.[\w-]+)+/g, '[email]'],
   [/!?\[([^\]\n]*)\]\(\s*([^)\s]+)[^)\n]*\)/g, (_m: string, _t: string, url: string) => domainOnly(url)], // [title](url): title dropped
-  [/\b(?:https?|ftp|wss?):\/\/[^\s<>"'`)\]]+/gi, m => domainOnly(m)],
+  [new RegExp(`\\b((?:https?|ftp|wss?):\\/\\/[^\\s<>"'\`)\\]]+)${QUERY_TAIL}`, 'gi'), (_m: string, url: string) => domainOnly(url)],
   [/\bfile:\/\/[^\s<>"')\]]+/gi, '[percorso]'],
-  [/\bwww\.[^\s<>"')\]]+/gi, m => domainOnly(m)],
+  [new RegExp(`\\b(www\\.[^\\s<>"')\\]]+)${QUERY_TAIL}`, 'gi'), (_m: string, url: string) => domainOnly(url)],
   [/(?:\b[A-Za-z]:[\\/]|\\\\[\w.$-]+\\)[^\s"'<>|]*/g, '[percorso]'],                             // C:\…, C:/…, \\server\…
   [/(?:^|(?<=\s))(?:~|\/(?:Users|home|var|etc|opt|mnt|srv|[A-Za-z](?=\/)))\/[^\s"'<>]*/g, '[percorso]'], // also Git Bash /c/…
-  // a host or IPv4 with a path and no scheme (portal.azure.com/subscriptions/…): its domain, like a link
-  [/(?<![\w@./-])(?:(?:[A-Za-z0-9-]+\.)+[A-Za-z]{2,24}|\d{1,3}(?:\.\d{1,3}){3})(?::\d{1,5})?\/[^\s<>"')\]]*/g, m => domainOnly(`https://${m}`)],
+  // a host or IPv4 with a path, query or hash and no scheme (portal.azure.com/subscriptions/…): its domain, like a link
+  [new RegExp(`(?<![\\w@./-])((?:(?:[A-Za-z0-9-]+\\.)+[A-Za-z]{2,24}|\\d{1,3}(?:\\.\\d{1,3}){3})(?::\\d{1,5})?(?:\\/|[?#](?=\\S))[^\\s<>"')\\]]*)${QUERY_TAIL}`, 'g'),
+    (_m: string, url: string) => domainOnly(`https://${url}`)],
   // after the links (a SAS URL goes whole to its domain): a signature left outside any URL
   [/\bsig=[^\s&"'<>]+/gi, 'sig=[redacted]'],
   // a relative path of 3 or more segments ending in a file name (clienti/rossi/fattura.pdf)
@@ -112,6 +119,7 @@ const RULES: [RegExp, string | ((m: string, ...g: string[]) => string)][] = [
   [/\b[A-Z]{2}\d{2}(?: ?[A-Z0-9]{4}){2,7}(?: ?[A-Z0-9]{1,4})?\b/g, '[iban]'],
   [/Db[ \t]*_[\w.-]+/gi, '[db]'],
   [/\b\d{11,}\b/g, '[numero]'],
+  [/\b\d{1,3}(?:\.\d{1,3}){3}(?::\d{1,5})?\b/g, '[ip]'],                                         // a bare IPv4 (server 198.51.100.7:1433)
 ];
 
 /** The outgoing filter: every text sent to Telegram goes through it, once or more (it is idempotent). */

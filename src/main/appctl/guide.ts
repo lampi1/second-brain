@@ -146,7 +146,7 @@ export function entries(ui: UiMap | null, d: GuideDeps, lang: GuideLang): Entry[
 export function phoneNow(d: Pick<GuideDeps, 'phone'>): string {
   let st: PhoneStatus;
   try { st = (d.phone ?? (() => phoneHub.controller().status()))(); } catch { return 'Now: status unreadable.'; }
-  const pairing = st.paired ? 'phone paired' : st.pairing ? 'pairing code shown' : 'no phone paired';
+  const pairing = st.paired ? 'phone paired' : st.pairing ? (st.pairing.expiresAt > Date.now() ? 'pairing code shown' : 'pairing code expired') : 'no phone paired';
   const quiet = st.quietHours ? ` · quiet hours ${st.quietHours.from}-${st.quietHours.to}` : '';
   return `Now: state ${st.state}${st.error ? ` (${st.error})` : ''} · token ${st.hasToken ? 'set' : 'not set'} · ${st.enabled ? 'enabled' : 'disabled'} · ${pairing}${quiet} · dropped updates ${st.dropped}.`;
 }

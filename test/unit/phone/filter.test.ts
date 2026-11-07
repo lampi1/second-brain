@@ -102,7 +102,14 @@ describe('filterOutgoing', () => {
     expect(f('apri portal.azure.com/subscriptions/0e50/resourceGroups/rossi')).toBe('apri portal.azure.com/...');
     expect(f(`vedi ${FX.devops}/org/proj/_workitems/edit/123`)).toBe(`vedi ${FX.devops}/...`);
     expect(f('dominio portal.azure.com e basta')).toBe('dominio portal.azure.com e basta');
-    expect(f('pannello 203.0.113.10/admin/x')).toBe('pannello 203.0.113.10/...');
+    expect(f('pannello 203.0.113.10/admin/x')).toBe('pannello [ip]');
+  });
+
+  it('masks IP addresses, bare, with a port or inside a link (review)', () => {
+    expect(f('server 203.0.113.10 fermo')).toBe('server [ip] fermo');
+    expect(f('host 203.0.113.10:1433')).toBe('host [ip]');
+    expect(f('apri http://203.0.113.10:8080/admin')).toBe('apri [ip]');
+    expect(f('versione 1.2.3 ok')).toBe('versione 1.2.3 ok');
   });
 
   it('a SAS URL goes whole to its domain: nothing after sig= leaks (Sentinel review)', () => {
@@ -110,6 +117,14 @@ describe('filterOutgoing', () => {
     expect(f(`scarica https://files.example.com/c/${q}`)).toBe('scarica files.example.com/...');
     expect(f(`scarica files.example.com/c/${q}`)).toBe('scarica files.example.com/...');
     expect(f('firma sig=AbC%2Fd&x=1')).toBe('firma sig=[redacted]&x=1');
+  });
+
+  it('a link cut at ( or " and a scheme-less host with only a query leak no query tail (review)', () => {
+    const tail = '?sv=1&sig=AbC&rscd=Rossi_Mario.pdf';
+    expect(f(`scarica https://files.example.com/c/a(1).pdf${tail} ora`)).toBe('scarica files.example.com/... ora');
+    expect(f(`scarica https://files.example.com/c/a"b.pdf${tail}`)).toBe('scarica files.example.com/...');
+    expect(f(`scarica files.example.com${tail}`)).toBe('scarica files.example.com/...');
+    expect(f('hai aperto example.com? sì')).toBe('hai aperto example.com? sì');
   });
 
   it('masks bot tokens of 5 to 16 digits (review S3)', () => {

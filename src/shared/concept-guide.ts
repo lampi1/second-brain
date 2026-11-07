@@ -1658,7 +1658,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
         'With Focus on, the phone gets only what Focus would let through on the PC; in quiet hours non-urgent messages arrive without sound.'),
       // src/renderer/components/PhoneSettings.tsx state
       b('Il bot gira solo nell’istanza stable dell’app. Da Telegram /pausa lo mette in pausa e /stop lo ferma e spegne l’interruttore Collegamento finché non lo riaccendi da qui.',
-        'The bot runs only in the stable instance of the app. From Telegram /pausa pauses it and /stop stops it and turns the Connection switch off until you turn it on again here.'),
+        'The bot runs only in the stable instance of the app. From Telegram /pausa pauses it and /stop stops it and turns the Link switch off until you turn it on again here.'),
     ],
     analogy: b('Come un citofono con un solo inquilino: suona solo per te, e dalla strada puoi dire sì o no, ma per aprire la cassaforte devi salire.',
       'Like an intercom with a single tenant: it rings only for you, and from the street you can say yes or no, but to open the safe you have to go upstairs.'),
