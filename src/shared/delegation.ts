@@ -104,7 +104,9 @@ export const MAX_CORRECTIONS = 2;
 /** Text cut to max characters, at a word boundary when one is near, ending with the visible marker «…». */
 export function capText(v: string, max: number): string {
   if (v.length <= max) return v;
-  const prefix = v.slice(0, max - 1), boundary = prefix.search(/\s+\S*$/);
+  // never split a surrogate pair (an emoji): a lone half would persist as a broken character
+  const end = /[\uD800-\uDBFF]/.test(v.charAt(max - 2)) ? max - 2 : max - 1;
+  const prefix = v.slice(0, end), boundary = prefix.search(/\s+\S*$/);
   return `${boundary > max * 0.8 ? prefix.slice(0, boundary) : prefix.trimEnd()}…`;
 }
 const SKILL = /^[a-z0-9][a-z0-9_-]{0,79}$/;

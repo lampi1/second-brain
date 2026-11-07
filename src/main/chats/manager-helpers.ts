@@ -24,6 +24,12 @@ export const RESUME_TEXT = "[second-brain] L'app è stata riavviata mentre lavor
 export function sameChildResult(a: HeldChildResult, b: HeldChildResult): boolean {
   return a.id && b.id ? a.id === b.id : a.title === b.title && a.message === b.message;
 }
+/** A child's result its own run has since corrected (agent_report amends): its id is result-<run>[-c<n>] and the run's
+ *  report counts more corrections than n. Such an entry is never delivered after the newer one. */
+export function supersededResult(item: HeldChildResult, corrections: number | undefined): boolean {
+  if (!item.runId || item.id === undefined || !item.id.startsWith(`result-${item.runId}`)) return false;
+  return (corrections ?? 0) > Number(/-c(\d+)$/.exec(item.id)?.[1] ?? 0);
+}
 export function uniqueChildResults(items: readonly HeldChildResult[]): HeldChildResult[] {
   const unique: HeldChildResult[] = [];
   for (const item of items) if (!unique.some(other => sameChildResult(item, other))) unique.push(item);

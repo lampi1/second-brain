@@ -14,7 +14,7 @@ import { MAX_CORRECTIONS, RESULT_OUTPUT_MAX, checkResult, resultMessage, type De
 import { finishPlan, afterReport } from '../../shared/strategy';
 import { APP_EVENT_LABEL } from './orchestrator-wake';
 import type { SubmissionReceipt, TurnEndInfo, Rec } from './manager-types';
-import { clearTimeout, sameChildResult, uniqueChildResults, turnReply, turnErrors, lastAnswer, sysItem, ORCHESTRATOR_OUTPUT_MAX, CHILD_RESULTS_MS, CHILD_RESULTS_CAP } from './manager-helpers';
+import { clearTimeout, sameChildResult, uniqueChildResults, turnReply, turnErrors, lastAnswer, sysItem, ORCHESTRATOR_OUTPUT_MAX, CHILD_RESULTS_MS, CHILD_RESULTS_CAP, supersededResult } from './manager-helpers';
 import { ManagerContinuity } from './manager-continuity';
 
 /** Delegation and reports: a child's agent_report to its parent, a root chat's to the Orchestrator, turn ends that settle them. */
@@ -189,6 +189,9 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     const from = [...new Set(batch.map(x => x.title))].join(', ');
     this.persist(true);
     const batchId = crypto.randomUUID();
+    // each run's delivery as it is now: a correction reported while this batch submits replaces it, and this batch's
+    // acknowledgment must not mark the correction's delivery as submitted (a restart would drop the correction)
+    const deliveries = new Map(batch.map(item => [item.id, item.runId ? this.runs.get(item.runId)?.delivery : undefined]));
     let acknowledged = false, retrying = false;
     const failed = (e: unknown) => {
       if (acknowledged || retrying) return;
@@ -196,21 +199,24 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       const parent = this.chats.get(parentId);
       if (parent && !parent.s.routineArchived && !this.quitting) {
         const retry = this.childResults.get(parentId) ?? { items: [], timer: null };
-        for (const item of batch) if (!retry.items.some(x => x.id === item.id)) retry.items.push(item);
-        if (!retry.timer) { retry.timer = setTimeout(() => this.flushChildResults(parentId), this.opts.childResultsMs ?? CHILD_RESULTS_MS); retry.timer.unref?.(); }
-        this.childResults.set(parentId, retry);
+        // a result corrected meanwhile is not sent again after its correction
+        const old = batch.filter(item => supersededResult(item, item.runId ? this.runs.get(item.runId)?.report?.corrections : 0));
+        if (old.length) { parent.heldResults = parent.heldResults?.filter(x => !old.some(o => sameChildResult(o, x))); this.persist(true); }
+        for (const item of batch) if (!old.includes(item) && !retry.items.some(x => x.id === item.id)) retry.items.push(item);
+        if (retry.items.length && !retry.timer) { retry.timer = setTimeout(() => this.flushChildResults(parentId), this.opts.childResultsMs ?? CHILD_RESULTS_MS); retry.timer.unref?.(); }
+        if (retry.items.length) this.childResults.set(parentId, retry);
       }
       log.warn('chats', 'delegation result not delivered', { chat: parentId, cause: errText(e), hint: 'the durable outbox retries delivery' });
     };
     const receipt: SubmissionReceipt = {
       beforeSubmit: () => {
-        for (const item of batch) { const run = item.runId ? this.runs.get(item.runId) : undefined; if (run?.delivery) run.delivery.attempts++; }
+        for (const item of batch) { const delivery = deliveries.get(item.id); if (delivery) delivery.attempts++; }
         this.runSave();
       },
       submitted: () => {
         acknowledged = true;
         const at = Date.now();
-        for (const item of batch) { const run = item.runId ? this.runs.get(item.runId) : undefined; if (run?.delivery) Object.assign(run.delivery, { deliveredAt: at, synthesisSubmittedAt: at, synthesisBatchId: batchId }); }
+        for (const item of batch) { const delivery = deliveries.get(item.id); if (delivery) Object.assign(delivery, { deliveredAt: at, synthesisSubmittedAt: at, synthesisBatchId: batchId }); }
         this.runSave();
         const parent = this.chats.get(parentId);
         if (parent) { parent.heldResults = parent.heldResults?.filter(item => !batch.some(sent => sent.id === item.id)); this.persist(true); }
@@ -314,6 +320,8 @@ export abstract class ManagerDelegation extends ManagerContinuity {
         submitted = true; this.synthesizing.delete(runId);
         Object.assign(delivery, { synthesisPending: false, synthesisSubmittedAt: Date.now(), synthesisBatchId: `root-${runId}`, deliveredAt: Date.now() });
         this.runSave(); this.persist(true); this.updated(orchestrator); if (worker) this.updated(worker);
+        // a correction reported while this synthesis was submitting has its own pending delivery: ask for it now
+        if (run.delivery !== delivery && run.delivery?.synthesisPending) this.resumeRootSyntheses();
       },
       failed,
     };

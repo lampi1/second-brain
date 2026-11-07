@@ -18,13 +18,13 @@ import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/m
 import { delegationTools, stalledMin } from '../../../src/main/agents/delegation';
 import { gateRequest } from '../../../src/main/agents/role-gate';
 import { ROLE_DEFAULTS, ROLE_PREAMBLE, ROLE_IDS, WORK_ROLE_IDS, DELEGATION_DEFAULTS, isWorkRole, launchGap, type DelegationSettings, type RoleId } from '../../../src/shared/roles';
-import { checkContract, checkResult, delegationPrompt, depthOf, readDelegation, resultMessage } from '../../../src/shared/delegation';
+import { capText, checkContract, checkResult, delegationPrompt, depthOf, readDelegation, resultMessage } from '../../../src/shared/delegation';
 import { AGENT_LABEL, oneLine } from '../../../src/shared/agent-label';
 import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
 import type { McpTool } from '../../../src/main/mcp/server';
 import { ChatMail } from '../../../src/main/chats/mail';
-import { CHILD_RESULTS_CAP, CHILD_RESULTS_MS } from '../../../src/main/chats/manager-helpers';
+import { CHILD_RESULTS_CAP, CHILD_RESULTS_MS, supersededResult } from '../../../src/main/chats/manager-helpers';
 import { ADR0083_DEFAULTS } from '../../../src/main/agents/role-migrate';
 import type { PermissionCeiling, ToolClass } from '../../../src/shared/agents';
 
@@ -1046,6 +1046,26 @@ describe('versioned task continuity and canonical results', () => {
     await new Promise(resolve => setTimeout(resolve, 10));
     expect(f.m.list().find(c => c.id === kids[1].chatId)!.run!.delivery!.attempts).toBe(1);
   });
+  it('a restart never sends a result its correction replaced: only the newest of the child goes', async () => {
+    const f = fixture();
+    const p = await f.root('strategist');
+    const kids = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'One'), f.task('sentinel', 'Two')] })).children;
+    f.sinks.get(kids[1].chatId)!.changed({ state: 'running' });
+    const rep = (summary: string, extra: Record<string, unknown> = {}) => f.call('agent_report', kids[0].chatId, { ...result, summary, ...extra });
+    await rep('Uno vecchio');
+    const chats = (f.m as unknown as { chats: Map<string, { heldResults?: { id?: string }[] }> }).chats;
+    const original = { ...chats.get(p.id)!.heldResults![0]! };
+    await rep('Uno nuovo', { amends: true });
+    // the original survives as if its batch were still submitting when the app quit
+    chats.get(p.id)!.heldResults = [original, ...chats.get(p.id)!.heldResults!];
+    const before = f.sent.get(p.id)?.length ?? 0;
+    f.m.resumeInterrupted();
+    await sentAfter(f.sent, p.id, before);
+    const sent = f.sent.get(p.id)!.slice(before).join('\n');
+    expect(sent).toContain('Uno nuovo');
+    expect(sent).toContain('correzione 1/2');
+    expect(sent).not.toContain('Uno vecchio');
+  });
   it('quitting with a waiting sibling preserves each outbox id once', async () => {
     const f = fixture();
     const p = await f.root('strategist');
@@ -1249,5 +1269,20 @@ describe('two open chats with the same title (#187)', () => {
     const parent = await f.root('strategist');
     const out = await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log'), f.task('scout', 'Ordini · Log')] });
     expect(out.children.map((c: { title: string }) => c.title).sort()).toEqual(['Ordini · Log', 'Ordini · Log · 2']);
+  });
+});
+
+describe('corrections and caps, the pure parts', () => {
+  it('capText never splits an emoji; supersededResult knows an entry its run corrected since', () => {
+    const cut = capText('x'.repeat(298) + '😀😀', 300);
+    expect(cut.length).toBeLessThanOrEqual(300);
+    expect(cut.endsWith('…')).toBe(true);
+    expect(cut).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+    const item = (id: string) => ({ id, runId: 'r1', title: 't', message: 'm', chatId: 'c' });
+    expect(supersededResult(item('result-r1'), 1)).toBe(true);
+    expect(supersededResult(item('result-r1-c1'), 1)).toBe(false);
+    expect(supersededResult(item('result-r1-c1'), 2)).toBe(true);
+    expect(supersededResult(item('result-r1'), undefined)).toBe(false);
+    expect(supersededResult(item('a-random-uuid'), 2)).toBe(false);
   });
 });
