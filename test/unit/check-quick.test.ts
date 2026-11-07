@@ -4,9 +4,11 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 // @ts-expect-error plain .mjs script without types
-import { needsDocTests as needsDocTestsOf, relatedTests as relatedTestsOf, resolveSpecifier as resolveOf, specifiers as specifiersOf } from '../../scripts/check-quick.mjs';
+import { changedPaths as changedPathsOf, needsDocTests as needsDocTestsOf, pickTests as pickTestsOf, relatedTests as relatedTestsOf, resolveSpecifier as resolveOf, specifiers as specifiersOf } from '../../scripts/check-quick.mjs';
 
 const relatedTests = relatedTestsOf as (changed: string[], tests: string[], read: (f: string) => string) => string[];
+const pickTests = pickTestsOf as (changed: string[], tests: string[], read: (f: string) => string) => { tests: string[]; uncovered: string[] };
+const changedPaths = changedPathsOf as (nameStatus: string, untracked: string) => { all: string[]; present: string[] };
 const resolveSpecifier = resolveOf as (testFile: string, spec: string) => string | null;
 const specifiers = specifiersOf as (text: string) => string[];
 const needsDocTests = needsDocTestsOf as (changed: string[]) => boolean;
@@ -42,6 +44,34 @@ describe('check:quick', () => {
     };
     const picked = relatedTests(['src/main/a.ts', 'test/unit/edited.test.ts', 'docs/x.md'], Object.keys(files), f => files[f] ?? '');
     expect(picked).toEqual(['test/unit/a.test.ts', 'test/unit/direct.test.ts', 'test/unit/edited.test.ts']);
+  });
+
+  it('picks tests that name a changed file as a string and reports the changed sources no test covers', () => {
+    const files: Record<string, string> = {
+      'test/unit/hook.test.ts': "spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'setup-hooks.mjs')]);",
+      'test/unit/log.test.ts': "execFileSync(process.execPath, ['scripts/logs.mjs', '--json']);",
+      'test/unit/readme.test.ts': "import * as rc from '../../scripts/readme-check.mjs';",
+      'test/unit/adapters.test.ts': "write(b.personal, '.claude/hooks/check.mjs', '');",
+    };
+    const changed = ['scripts/setup-hooks.mjs', 'scripts/logs.mjs', 'scripts/untested.mjs', 'docs/x.md', 'eslint.config.mjs', 'src/shared/x.d.ts'];
+    const { tests, uncovered } = pickTests(changed, Object.keys(files), f => files[f] ?? '');
+    expect(tests).toEqual(['test/unit/hook.test.ts', 'test/unit/log.test.ts']);
+    expect(uncovered).toEqual(['scripts/untested.mjs']);
+    expect(pickTests(['docs/x.md', 'package.json'], Object.keys(files), f => files[f] ?? '').uncovered).toEqual([]);
+    expect(code).toMatch(/uncovered\.length[^]*process\.exit\(1\)[^]*check:quick green/);
+  });
+
+  it('picks the importers of deleted files and of the old name of renamed ones; lints only the files still there', () => {
+    const status = 'M\tsrc/main/a.ts\nD\tscripts/gone.mjs\nR087\tsrc/main/old.ts\tsrc/main/new.ts\nA\tdocs/x.md\n';
+    const { all, present } = changedPaths(status, '');
+    expect(all).toEqual(['src/main/a.ts', 'scripts/gone.mjs', 'src/main/old.ts', 'src/main/new.ts', 'docs/x.md']);
+    expect(present).toEqual(['src/main/a.ts', 'src/main/new.ts', 'docs/x.md']);
+    const files: Record<string, string> = {
+      'test/unit/gone.test.ts': "// @ts-expect-error plain .mjs\nimport { g } from '../../scripts/gone.mjs';",
+      'test/unit/mocked.test.ts': "vi.mock('../../src/main/old', () => ({}));",
+    };
+    expect(pickTests(all, Object.keys(files), f => files[f] ?? '').tests).toEqual(['test/unit/gone.test.ts', 'test/unit/mocked.test.ts']);
+    expect(code).toContain("'--name-status', '-M'");
   });
 
   it('runs the doc freshness tests only for the inputs they read', () => {
