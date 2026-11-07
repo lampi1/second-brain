@@ -63,10 +63,20 @@ Load tests, stress tests, synthetic CPU/RAM load generators, benchmarks under lo
 machine run only at night, outside the owner's working hours; never during the day on their work PC (owner,
 2026-10-15).
 
-## 8. Commits: local only for agents
+## 8. Commits and merge to main
 
-Agents commit on their branch/worktree; pushing, adding remotes and opening pull requests are the human's steps.
-Conventional messages (`feat(chats): …`), English.
+Agents commit on their branch/worktree. Conventional messages (`feat(chats): …`), English. An agent of the app may
+merge its verified branch into `main` and push it, without asking the owner each time (owner, 2026-11-07), only when
+all three hold:
+
+1. the repository checks are green by their exit code (`npm run check:branch` on the branch, see "Verify a change");
+2. an independent Sentinel review of the branch has no open findings;
+3. `node tools/guard/scan.mjs . --allow .guardallow` passes, and the pre-push hook passes on every pushed commit.
+
+The method is local: `git merge` of the verified branch into `main`, then `git push origin main`. Never a force push,
+a token, a pull request opened on the owner's behalf or another remote. «Aggiorna», `npm run promote`, publishing a
+release and restarting the app stay the owner's clicks. The rule covers only this repository: other repositories keep
+their own rules.
 
 ## 9. Review
 
