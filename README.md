@@ -190,7 +190,7 @@ shown as chips). By default a lesson is an **Explanation**: a picture for every 
 one click away), before/after diagrams side by side, and no questions at all; explaining it back at the end is a button
 you may press, never a test. Pick **Quiz** to be tested instead: quizzes of several kinds (choice, true or false,
 complete the code, put in order) to see if it stuck, a score that tells you honestly what you still remember, review
-cards. "Explain it better", "Give me an example" or "Show me the code" when you're lost. A quality check rewrites weak
+cards (an Explanation leaves none, unless you open the Studio's flashcards or quiz yourself). "Explain it better", "Give me an example" or "Show me the code" when you're lost. A quality check rewrites weak
 pieces before you see them, and every lesson is saved and reopens where you left it.
 
 <p align="center"><img src="docs/screenshots/learn.webp" alt="A Learn lesson about a PR: the blackboard diagram, piece 2 of 3, and the buttons Got it, Explain it better, Give me an example, Show me the code" width="640"></p>

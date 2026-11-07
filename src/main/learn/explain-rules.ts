@@ -7,14 +7,15 @@
 // - The drawing rules (delete before adding, a density of about 4 out of 10, at most 9 nodes and 12 arrows, one or two
 //   accent colours, orthogonal connectors, «would a paragraph do?» before any diagram, the before/after picture as an
 //   architecture delta) from diagram-design v2.6 by Cathryn Lavery, https://github.com/cathrynlavery/diagram-design
-//   (SKILL.md, read 2026-11-07 on the default branch; the commit was not recorded: to verify). MIT License; its
-//   copyright notice and permission notice are the ones in that repository's LICENSE file, reproduced in NOTICE.
+//   (skills/diagram-design/SKILL.md, version 2.6, and skills/diagram-design/references/type-architecture-delta.md, at
+//   commit e57eda6102a19444538ebd611d39534fad65b663, read 2026-11-07). MIT License, Copyright (c) 2025 Cathryn Lavery;
+//   its permission notice is reproduced in NOTICE.
 // - The visual-first narration (the voice comments what is on screen and never reads it, each part appears when the
-//   voice names it, one idea and one picture that grows) from HyperFrames' explainer guidance (types/explainer.md and
-//   story.md) by HeyGen, https://github.com/heygen-com/hyperframes (read 2026-11-07 on the default branch; the commit
-//   was not recorded: to verify). Licensed under the Apache License, Version 2.0
-//   (http://www.apache.org/licenses/LICENSE-2.0); modified: rewritten as prompt rules for a lesson, not a video. See
-//   the NOTICE file at the repository's root.
+//   voice names it, one idea and one picture that grows) from HyperFrames' explainer guidance
+//   (skills/hyperframes/references/types/explainer.md and skills/hyperframes/references/story.md) by HeyGen,
+//   https://github.com/heygen-com/hyperframes (at commit 688229314fb219c4317351c25483ecc3c56a519b, read 2026-11-07).
+//   Licensed under the Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0); modified: rewritten
+//   as prompt rules for a lesson, not a video. See the NOTICE file at the repository's root.
 
 /** The lesson's structure in «Spiegazione»: the quiz mode's, without anything that asks (no recall check, no
  *  worked → faded → practice trio with its «predict», no final question). */
