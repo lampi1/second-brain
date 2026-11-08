@@ -150,60 +150,66 @@ describe('OrchestratorWake', () => {
     expect(sent).toHaveLength(1);
     const t = sent[0]!.text;
     expect(t).toContain('«sms» (Cursor): si è fermata su un errore: ECONNRESET');
-    expect(t).toContain('«qa» (Claude): aspetta una risposta dell\'utente: Apro il bug?');
-    expect(t).toContain('«fb» (Claude): aspetta un permesso dell\'utente: Bash · npm test');
-    // the command arrives after the turn's end: it takes the place of "finished"
-    expect(t).toContain('«map» (Claude): ha lasciato all\'utente un comando da eseguire: npm run check');
-    expect(t).not.toContain('«map» (Claude): ha finito');
+    expect(t).toContain('«qa» (Claude): aspetta una risposta dell\'utente:');
+    expect(t).toContain('"question":"Apro il bug?"');
+    expect(t).toContain('«fb» (Claude): aspetta un permesso dell\'utente:');
+    expect(t).toContain('Bash · npm test');
+    // Requests have their own identity and cannot replace another event from the same worker.
+    expect(t).toContain('«map» (Claude): ha lasciato all\'utente un comando da eseguire:');
+    expect(t).toContain('Richiesta originale cmd-a-0');
+    expect(t).toContain('Remote Control non supporta questa ricevuta');
   });
 
-  it('a question, a permission or a command alone never wakes the Orchestrator: it goes with the next loud news', async () => {
+  it('original requests wake the Orchestrator in one group without needing another failure', async () => {
     const { w, sent, up, fail } = make();
     up({ id: 'qa', state: 'running' });
     w.observe('pending:added', { id: 'q1', chatId: 'qa', type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: 1, questions: [{ question: 'Apro il bug?', options: [], multiSelect: false }] } satisfies PendingRequest);
     up({ id: 'fb', state: 'running' });
     w.observe('pending:added', { id: 'p1', chatId: 'fb', type: 'permission', tool: 'Bash', title: 'Bash · npm test', detail: 'npm test', input: {}, at: 1 } satisfies PendingRequest);
-    // the Orchestrator going idle again does not send quiet news either
+    // Returning to idle still delivers the original pending requests.
     up({ id: 'orchestrator', isOrchestrator: true, state: 'running' });
     up({ id: 'orchestrator', isOrchestrator: true, state: 'idle' });
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(sent).toEqual([]);
-    expect(w.queued().map(e => e.kind).sort()).toEqual(['permission', 'question']);
+    expect(sent).toHaveLength(1);
+    expect(w.queued()).toEqual([]);
+    expect(sent[0]!.text).toContain('Richiesta originale q1');
+    expect(sent[0]!.text).toContain('Richiesta originale p1');
     fail('map', 'ECONNRESET');
     await vi.advanceTimersByTimeAsync(0);
-    expect(sent).toHaveLength(1);
-    expect(sent[0]!.text).toContain('«map» (Claude): si è fermata su un errore: ECONNRESET');
-    expect(sent[0]!.text).toContain('«qa» (Claude): aspetta una risposta dell\'utente: Apro il bug?');
+    expect(sent).toHaveLength(2);
+    expect(sent[1]!.text).toContain('«map» (Claude): si è fermata su un errore: ECONNRESET');
+    expect(sent[0]!.text).toContain('"question":"Apro il bug?"');
     expect(sent[0]!.text).toContain('«fb» (Claude): aspetta un permesso');
     expect(sent[0]!.text).not.toContain('app_digest'); // what to do with the news is in its rules (WAKE_RULE), once per session
   });
 
-  it('a turn that ends leaving a command stays quiet; a request left after a failure keeps its wake; an answered question becomes a quiet "finished"', async () => {
+  it('commands wake once; a question answered before delivery becomes a quiet finished event', async () => {
     const { w, sent, up, finish, turn } = make();
     finish('map', 'Fatto. Ora lancia:');
     w.observe('pending:added', { id: 'cmd-a-0', chatId: 'map', type: 'command', tool: 'Esegui', title: 'Comando da eseguire', detail: 'npm run check', input: {}, at: 1, command: { itemId: 'a', code: 'npm run check', lang: 'powershell' } } satisfies PendingRequest);
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(sent).toEqual([]);
-    expect(w.queued().map(e => `${e.chatId}:${e.kind}`)).toEqual(['map:command']);
-    // a question alone stays quiet; answered and the chat idle, it turns into "finished", quiet too
+    expect(sent).toHaveLength(1);
+    expect(w.queued()).toEqual([]);
+    // Answered before its group is sent, the question becomes a quiet "finished".
     up({ id: 'qa', state: 'running' });
     w.observe('pending:added', { id: 'q1', chatId: 'qa', type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: 1, questions: [{ question: 'Apro il bug?', options: [], multiSelect: false }] } satisfies PendingRequest);
     up({ id: 'qa', state: 'idle', lastText: 'Bug aperto.' });
     w.observe('pending:resolved', { chatId: 'qa', requestId: 'q1' });
     await vi.advanceTimersByTimeAsync(60_000);
-    expect(sent).toEqual([]);
+    expect(sent).toHaveLength(1);
     // a chat that fails and leaves a command (asks.ts settles after the failure) still wakes, after the group window
     up({ id: 'sms', state: 'running' });
     up({ id: 'sms', state: 'error', lastError: 'ECONNRESET' });
     w.observe('pending:added', { id: 'cmd-b-0', chatId: 'sms', type: 'command', tool: 'Esegui', title: 'Comando da eseguire', detail: 'npm ci', input: {}, at: 1, command: { itemId: 'b', code: 'npm ci', lang: 'powershell' } } satisfies PendingRequest);
     await vi.advanceTimersByTimeAsync(1000);
-    expect(sent).toHaveLength(1);
-    expect(sent[0]!.text).toContain('«sms» (Claude): ha lasciato all\'utente un comando da eseguire: npm ci');
-    expect(sent[0]!.text).toContain('«map» (Claude): ha lasciato all\'utente un comando da eseguire: npm run check');
-    expect(sent[0]!.text).toContain('«qa» (Claude): ha finito il turno. Ultima riga: «Bug aperto.»');
+    expect(sent).toHaveLength(2);
+    expect(sent[1]!.text).toContain('Richiesta originale cmd-b-0');
+    expect(sent[0]!.text).toContain('Richiesta originale cmd-a-0');
+    expect(sent[1]!.text).not.toContain('Richiesta originale q1');
+    expect(sent[1]!.text).toContain('«qa» (Claude): ha finito il turno. Ultima riga: «Bug aperto.»');
     turn();
     await vi.advanceTimersByTimeAsync(0);
-    expect(sent).toHaveLength(1);
+    expect(sent).toHaveLength(2);
   });
 
   it('a chat on the app\'s code reports to the shared coordinator like any other', async () => {

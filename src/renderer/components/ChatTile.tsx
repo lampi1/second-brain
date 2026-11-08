@@ -85,7 +85,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
   const treeCollapsed = ui.use(s => s.prefs.treeCollapsed);
   const view = { expanded: expandedAll, focusMode: focusModeId, maximized: maxKey, treeCollapsed };
   const childReqs = useApp(s => childRequestsFor(chatId, s.chats, s.pending).filter(c => requestHost(c.req.chatId, s.chats, view) === chatId), sameAsks);
-  const hostsOwn = useApp(s => requestHost(chatId, s.chats, view) === chatId || !!focus);
+  const hostsOwn = useApp(s => !!s.chats[chatId]?.quick);
   const postponedOwn = ui.use(() => reqs.filter(r => requestPostponed(reqKey(r))), sameList);
   const postponedChildren = ui.use(() => childReqs.filter(c => requestPostponed(reqKey(c.req))), sameAsks);
   const activeOwn = reqs.filter(r => !postponedOwn.includes(r));
@@ -187,13 +187,13 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       </header>}
       <AutoCloseNotice chatId={chatId} />
       {!expanded&&<div className="chat-strip-line">{busy?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</div>}
-      {chat.plan && <StrategyPanel chat={chat} question={planAsk} />}
+      {chat.plan && !['asking', 'revising', 'proposed'].includes(chat.plan.phase) && <StrategyPanel chat={chat} question={planAsk} />}
       <div className={`chat-work${expanded?' expanded':''}`} id={`chat-work-${chatId}`} inert={!expanded} aria-hidden={!expanded}><div className="chat-work-inner">
       {!compact && <ChatLinks chat={chat} />}
       {expanded && <TaskContext chat={chat} onContinue={() => reveal(true)} />}
       {!compact && chat.handoffBusy && <ContextNotice chat={chat} />}
       <ChatTranscript key={chatId} chatId={chatId} busy={busy} expanded={expanded} />
-      <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />
+      {chat.quick && <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />}
       {expanded && chat.run && <RunOutcomeControl key={`${chat.run.runId}:${chat.run.counters.reopened}`} run={chat.run} disabled={busy || reqs.length > 0 || chat.state === 'waiting' || !!chat.queued} />}
       </div></div>
       {expanded && hostsOwn && postponedOwn.length > 0 && <InWindowLine reqs={postponedOwn} queued testid={`chat-queued-${chatId}`} />}

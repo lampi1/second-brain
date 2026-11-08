@@ -400,7 +400,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     // Root contracts are host-owned. Direct-user and explicit app replay roots retain their results locally.
     if (self && !self.delegation && !self.parentId && !self.isOrchestrator && self.run && (self.run.startedBy === 'orchestrator' || self.run.startedBy === 'user' || self.run.taskContract?.reportExpected) && d.chats.reportRoot) {
       const done = d.chats.reportRoot(callerId, checkResult(a, self.run.taskContract?.doneWhen ?? [])), remembered = write();
-      return { reported: true, to: self.run.startedBy === 'orchestrator' ? 'orchestrator' : 'this-chat', delivered: done.delivered, ...(warnings.length ? { warnings } : {}), ...(remembered ? { remembered } : {}), ...(done.delivered ? {} : { note: 'The canonical result is retained on its run; pending delivery retries.' }) };
+      return { reported: true, to: self.run.startedBy === 'app' ? 'this-chat' : 'orchestrator', delivered: done.delivered, ...(warnings.length ? { warnings } : {}), ...(remembered ? { remembered } : {}), ...(done.delivered ? {} : { note: 'The canonical result is retained on its run; pending delivery retries.' }) };
     }
     if (!self?.delegation || !self.parentId) throw new Error('agent_report: only a chat the Orchestrator or a parent started reports with it (agent_delegate or app_create_chat). Answer in this chat instead.');
     const result = checkResult(a, self.delegation.doneWhen);

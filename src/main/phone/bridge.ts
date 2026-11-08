@@ -8,7 +8,7 @@
 // anything; only button presses checked by buttons.ts answer simple questions and plans. Notifications follow policy.ts
 // (questions, the Orchestrator's replies, failed chats from PhonePort.onChatFailed, urgent notices from main).
 // Used by main (wiring.ts, by the integrator); tests: test/unit/phone/bridge.test.ts against a fake Telegram server.
-import type { PhoneController, PhoneDecidable, PhoneSettingsPatch, PhoneStatus, PhoneBridgeState } from '../../shared/contract/phone';
+import type { PhoneController, PhoneDecidable, PhoneSettingsPatch, PhoneStatus, PhoneBridgeState, PhoneOutcome } from '../../shared/contract/phone';
 import { createBacklog, isBacklog, START_NOTICE, STOP_NOTICE, type BacklogPayload } from './backlog';
 import { createButtons, refKey } from './buttons';
 import { backoff, createTelegramClient, resolveApiBase, TelegramError, type TelegramClient } from './client';
@@ -62,6 +62,7 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
   let focus: string | null = null;
   let wasNight = false;
   let voiceChain: Promise<unknown> = Promise.resolve();
+  let outcomeChain: Promise<void> = Promise.resolve();
   let droppedSaved = guard.dropped;
   /** decidables seen and not yet sent: first-seen time, for the "waiting > 2 min" rule */
   const waiting = new Map<string, { item: PhoneDecidable; since: number }>();
@@ -102,6 +103,26 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
   };
 
   // ── outgoing: Orchestrator replies, decidables, urgent ────────────────────────────────────────────────────────
+  async function onOutcome(ev: PhoneOutcome): Promise<void> {
+    if (!s.paired || runState !== 'running' && runState !== 'paused' || s.paused) return;
+    const records = s.outcomes ??= [];
+    const old = records.find(x => x.runId === ev.runId && x.chatId === s.paired!.chatId);
+    if (old && (old.revision >= ev.revision || old.messageId === null)) return;
+    const text = condense(ev.text);
+    if (!text) return;
+    if (old) {
+      await out.edit(old.messageId!, text);
+      old.revision = ev.revision; persist();
+      return;
+    }
+    const record = { runId: ev.runId, revision: ev.revision, chatId: s.paired.chatId, messageId: null as number | null };
+    records.push(record);
+    if (records.length > 500) records.shift();
+    // An unknown network result must not become a duplicate completion after a restart.
+    persist();
+    record.messageId = await out.send(text, { silent: true });
+    persist();
+  }
   async function offerIfAllowed(item: PhoneDecidable, since: number): Promise<void> {
     if (!s.paired || runState !== 'running' && runState !== 'paused') return;
     const key = refKey(item);
@@ -335,6 +356,7 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
     abort = new AbortController();
     const port = deps.phonePort;
     unsubs.push(port.onOrchestratorTurnEnd(ev => { void onTurnEnd(ev).catch(() => undefined); }));
+    if (port.onOutcome) unsubs.push(port.onOutcome(ev => { outcomeChain = outcomeChain.then(() => onOutcome(ev)).catch(e => log.warn('phone', 'outcome delivery failed', { cause: String(e), hint: 'the canonical outcome remains in the Orchestrator' })); }));
     unsubs.push(port.onChatFailed(ev => { void onChatFailed(ev).catch(() => undefined); }));
     unsubs.push(port.onDecidable(ev => {
       const key = refKey(ev.item);

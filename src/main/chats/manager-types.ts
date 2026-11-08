@@ -174,6 +174,8 @@ export interface TurnEndInfo {
   reply?: string;
   /** a message from the paired phone started or joined this turn (the phone bridge sends the reply back) */
   fromPhone?: boolean;
+  /** This turn already has a host-authored canonical outcome delivered to the phone. */
+  outcomeDelivery?: boolean;
   /** the engine's error notices of this turn, joined (never the assistant's prose) */
   errorText?: string;
 }
@@ -205,6 +207,7 @@ export interface Rec {
   turnFromUser?: boolean;
   /** the Orchestrator: a message from the paired phone started or joined its current turn (the reply goes back to it) */
   turnFromPhone?: boolean;
+  turnOutcomeDelivery?: boolean;
   /** the user's message being sent came from the paired phone (sendFromPhone): its text, so only that delivery is marked
    *  📱 and takes the phone reply line; voice = a transcribed voice note */
   phoneNext?: { text: string; voice: boolean };

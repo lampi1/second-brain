@@ -50,17 +50,9 @@ export function isOpenChat(id: string, v: OpenView): boolean {
   return v.expanded[id] === true;
 }
 /** The one chat whose view shows the requests of `chatId` as panels (see the header). */
-export function requestHost(chatId: string, chats: Readonly<Record<string, Pick<ChatSummary, 'parentId' | 'isOrchestrator'> | undefined>>, v: OpenView): string {
-  const visible = (id:string):boolean => {
-    if (v.focusMode || v.maximized && v.maximized !== 'orchestrator') return isOpenChat(id,v);
-    for (let p=chats[id]?.parentId,n=0;p&&n<16;p=chats[p]?.parentId,n++) if(v.treeCollapsed?.[p]) return false;
-    return true;
-  };
-  if (visible(chatId) && isOpenChat(chatId, v)) return chatId;
-  for (let p = chats[chatId]?.parentId, n = 0; p && n < 16; p = chats[p]?.parentId, n++) {
-    const c = chats[p];
-    if (!c || c.isOrchestrator) break;
-    if (visible(p) && isOpenChat(p, v)) return p;
-  }
-  return chatId;
+export function requestHost(chatId: string, chats: Readonly<Record<string, Pick<ChatSummary, 'parentId' | 'isOrchestrator' | 'closedAt' | 'quick'> | undefined>>, _v: OpenView): string {
+  if (chats[chatId]?.quick) return chatId;
+  // Inspection, focus and tree expansion never create another decision surface. With no coordinator
+  // open the host queue keeps the request; it must not silently fall back to a worker conversation.
+  return Object.entries(chats).find(([, c]) => c?.isOrchestrator && !c.closedAt)?.[0] ?? 'orchestrator';
 }

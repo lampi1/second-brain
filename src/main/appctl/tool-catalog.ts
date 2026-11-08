@@ -25,7 +25,7 @@ export const TOOL_CATALOG: Readonly<Record<string, ToolInfo>> = {
   app_agent_context: t('app', 'The frozen launch context of one work chat: memories chosen, omissions, skill hashes.'),
   app_command_runs: t('app', 'The commands the user ran from a chat code block with «Esegui», read only.'),
   app_pending: t('app', 'Open questions, permissions and commands waiting for the user, read only.'),
-  app_resolve_question: t('app', 'Close a work chat\'s open question with the answer the user gave the Orchestrator.'),
+  app_resolve_question: t('app', 'Compatibility endpoint: refuses agent-authored consent; the owner answers the original Orchestrator panel or supported paired phone button.'),
   app_feed: t('app', 'Recent live feed events (ideas, errors, chats done or waiting).'),
   app_logs: t('app', 'Recent structured log entries (redacted), filtered by level, scope, chat or text.'),
   app_screenshot: t('app', 'A screenshot of the app window and of each browser tab on screen.'),

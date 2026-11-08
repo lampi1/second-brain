@@ -32,7 +32,7 @@ import { getForeignLabel, foreignOf, showsSender, type Foreign, type ForeignKind
 import { ImageStrip } from './ImageStrip';
 import {MessageImages} from './MessageImages';
 import { thinkingBeforeAsk } from '../lib/askContext';
-import { useApp, synthesizeResult } from '../store/store';
+import { useApp } from '../store/store';
 import { chatRefsOf, reportOutput, toolChatRef } from '../lib/chatrefs';
 import { titlesKeyOf } from '../lib/chat-derived';
 import { splitMode } from '@shared/newchat';
@@ -58,7 +58,7 @@ type Tool = Extract<ChatItem, { kind: 'tool' }>;
 function ResultReady({ item }: { item: Extract<ChatItem, { kind: 'system' }> }) {
   const sourceId = typeof item.params?.chatId === 'string' ? item.params.chatId : undefined;
   const source = useApp(s => sourceId ? s.chats[sourceId] : undefined);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const name = source?.title ?? String(item.params?.title ?? item.params?.role ?? 'Chat');
   const role = source?.agent?.name ?? String(item.params?.role ?? '');
   const recordedRole = String(item.params?.role ?? '').trim().toLowerCase();
@@ -69,7 +69,7 @@ function ResultReady({ item }: { item: Extract<ChatItem, { kind: 'system' }> }) 
   return <div className={`notice result-ready${open ? ' is-open' : ''}`} data-testid="result-ready">
     <AgentAvatar avatar={avatar} name={role} size={24} />
     <span className="result-ready-text" role="status"><span className="result-ready-name" title={name}>{name}</span><small>{role ? t('chat.resultFrom', { role }) : t('chat.resultReady')}</small></span>
-    <span className="result-ready-actions">{item.result && <ResultSynthesis runId={item.result.runId} />}
+    <span className="result-ready-actions">
     {sourceId && <button type="button" className="result-ready-go" data-testid="chatref-open" data-chat-id={sourceId}
       aria-label={t('chat.chatref.ariaOpen', { verb: t('chat.resultGoAgent'), name })} title={t('chat.resultGoAgentTip')} onClick={() => openChatRef(sourceId)}>
       <IconArrowRight size={13} />
@@ -84,23 +84,6 @@ function ResultReady({ item }: { item: Extract<ChatItem, { kind: 'system' }> }) 
       <IconChevronDown size={12} />{t(open ? 'chat.resultHide' : 'chat.resultShow')}
     </button>
   </div>;
-}
-
-/** An icon on the row itself: the Orchestrator summarizes this result in one AI turn (owner, 2026-10-31: «un'iconcina che
- *  lo fa riassumere dall'orchestratore», icons instead of words to save room); its cost is said in the tooltip. */
-function ResultSynthesis({ runId }: { runId: string }) {
-  const chatId = useContext(ChatIdCtx);
-  const readOnly = useContext(ReadOnlyCtx);
-  const available = useApp(s => !!chatId && !!s.chats[chatId]?.availableResultIds?.includes(runId));
-  const pending = useApp(s => !!chatId && !!s.chats[chatId]?.pendingResultIds?.includes(runId));
-  const [busy, setBusy] = useState(false);
-  if (readOnly || !available && !pending) return null;
-  const label = t(pending || busy ? 'chat.resultDeliveryPending' : 'chat.resultSynthesize');
-  return <button type="button" className="result-ready-icon result-synth-btn" data-testid="result-synthesize" disabled={busy || pending}
-    aria-label={label} title={`${label} · ${t('chat.resultSynthesizeCost')}`}
-    onClick={async () => { setBusy(true); try { await synthesizeResult(runId); } finally { setBusy(false); } }}>
-    {pending || busy ? <IconSpinner size={13} /> : <IconSparkle size={13} />}
-  </button>;
 }
 
 /** One block of a streaming message: a finished block is parsed once and its DOM is never touched again. */

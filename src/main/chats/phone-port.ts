@@ -5,7 +5,7 @@
 // anything else stay for the PC («Serve il PC»). Every decision is checked again against the live chat when it arrives.
 // Built by the integrator in main's wiring with the ChatManager and the main Emitter; tests: test/unit/chats/phone.test.ts.
 import type { Answer, ChatItem, ChatSummary, EventChannel, EventMap, PendingRequest } from '../../shared/contract';
-import type { PhoneDecidable, PhoneDecideResult, PhonePort } from '../../shared/contract/phone';
+import type { PhoneDecidable, PhoneDecideResult, PhonePort, PhoneOutcome } from '../../shared/contract/phone';
 import { reservedText } from '../../shared/away';
 import { interviewNeedsPC } from '../../shared/strategy';
 import type { WorkRoleId } from '../../shared/roles';
@@ -65,6 +65,7 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePo
   /** plans decided from the phone: their resolved event (chat:updated, maybe later) says by 'phone' */
   const deciding = new Set<string>();
   const listeners: ((ev: { type: 'added' | 'resolved'; item: PhoneDecidable; by?: 'phone' | 'pc' }) => void)[] = [];
+  const outcomes = new Set<(outcome: PhoneOutcome) => void>();
 
   const neutral = (c: ChatSummary): string => {
     if (c.isOrchestrator) return 'Orchestrator';
@@ -83,7 +84,7 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePo
     const pick = simple ? q!.options.find(o => MARK.test(o.label)) : undefined;
     const recommended = pick ? yesNoOf(pick.label) ?? undefined : undefined;
     return { chatId: c.id, ref: { kind: 'question', requestId: p.id }, role: role(c), neutralLabel: neutral(c),
-      text: q ? q.question : p.title, ...(recommended ? { recommended } : {}), simple, reserved, orchestrator: c.isOrchestrator };
+      text: [p.title, p.detail, ...qs.map(q => [q.question, ...q.options.map(o => `${o.label}${o.description ? `: ${o.description}` : ''}`)].join('\n'))].filter(Boolean).join('\n'), ...(recommended ? { recommended } : {}), simple, reserved, orchestrator: true };
   }
 
   function ofPlan(c: ChatSummary): PhoneDecidable | null {
@@ -94,7 +95,7 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePo
     // Classify the local interview as well; only the step summary is sent to the phone.
     const publishes = plan.steps.some(s => s.role !== undefined && PUBLISHING_ROLES.has(s.role));
     return { chatId: c.id, ref: { kind: 'plan', at: String(plan.at) }, role: role(c), neutralLabel: neutral(c), text,
-      simple: true, reserved: publishes || interviewNeedsPC(plan) || reservedText(text), orchestrator: c.isOrchestrator };
+      simple: true, reserved: publishes || interviewNeedsPC(plan) || reservedText(text), orchestrator: true };
   }
 
   const keyOf = (d: PhoneDecidable) => d.ref.kind === 'question' ? qKey(d.chatId, d.ref.requestId) : pKey(d.chatId, d.ref.at);
@@ -112,7 +113,13 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePo
   };
 
   events.tap((ch, payload) => {
-    if (ch === 'pending:added') {
+    if (ch === 'chat:item') {
+      const p = payload as EventMap['chat:item'];
+      if (p.item.kind === 'system' && p.item.code === 'resultReady' && p.item.result && chatOf(p.chatId)?.isOrchestrator) {
+        const r = p.item.result;
+        for (const listener of outcomes) listener({ runId: r.runId, revision: r.at, text: `Orchestrator · Risultato di ${String(p.item.params?.role ?? '')} (testo dell’agente)\n${r.summary}\n\n${r.output}` });
+      }
+    } else if (ch === 'pending:added') {
       const p = payload as EventMap['pending:added'], c = chatOf(p.chatId);
       if (c && !closed(c)) add(ofRequest(p, c));
     } else if (ch === 'pending:resolved') {
@@ -194,6 +201,7 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePo
   }
 
   return {
+    onOutcome(cb) { outcomes.add(cb); return () => { outcomes.delete(cb); }; },
     sendFromPhone,
     listDecidable,
     answerFromPhone,
@@ -201,7 +209,7 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePo
     onDecidable(cb) { listeners.push(cb); return () => { const i = listeners.indexOf(cb); if (i >= 0) listeners.splice(i, 1); }; },
     onOrchestratorTurnEnd(cb) {
       return chats.onTurnEnded(info => {
-        if (!chatOf(info.chatId)?.isOrchestrator) return;
+        if (!chatOf(info.chatId)?.isOrchestrator || info.outcomeDelivery && !info.fromPhone) return;
         cb({ reply: info.reply ?? '', fromPhone: !!info.fromPhone, failed: !!info.isError });
       });
     },

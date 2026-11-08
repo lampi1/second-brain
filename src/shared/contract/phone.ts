@@ -100,8 +100,12 @@ export interface PhoneDecidable {
 
 export type PhoneDecideResult = 'ok' | 'already' | 'gone';
 
+/** Host-authored canonical outcome projection, never parsed from an agent message. */
+export interface PhoneOutcome { runId: string; revision: number; text: string }
+
 /** What the bridge needs from the chats; implemented by src/main/chats/phone-port.ts. */
 export interface PhonePort {
+  onOutcome?(cb: (outcome: PhoneOutcome) => void): () => void;
   /** sends text as the user's message to the Orchestrator with source {kind:'phone'}; never approves anything */
   sendFromPhone(text: string, opts: { voice: boolean }): Promise<{ queued: boolean }>;
   listDecidable(): PhoneDecidable[];

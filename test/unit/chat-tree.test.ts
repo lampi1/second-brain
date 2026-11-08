@@ -54,25 +54,24 @@ describe('childRequestsFor', () => {
 describe('requestHost: each request renders once', () => {
   const chats = { o: { isOrchestrator: true }, r: { parentId: 'o', isOrchestrator: false }, s: { parentId: 'r', isOrchestrator: false }, g: { parentId: 's', isOrchestrator: false } } as const;
   const v = (expanded: Record<string, boolean>, focusMode: string | null = null, maximized: string | null = null) => ({ expanded, focusMode, maximized });
-  it('the asker when its own chat is open, else its nearest open ancestor, else its own card; never the Orchestrator', () => {
+  it('only the Orchestrator hosts a deep descendant request, independently of the inspected view', () => {
     const all = ['o', 'r', 's', 'g'];
     const hosts = (view: ReturnType<typeof v>) => all.filter(id => requestHost('g', chats, view) === id);
-    expect(hosts(v({}))).toEqual(['g']);
-    expect(hosts(v({ r: true }))).toEqual(['r']);
-    expect(hosts(v({ r: true, s: true }))).toEqual(['s']);
-    expect(hosts(v({ r: true, s: true, g: true }))).toEqual(['g']);
-    expect(hosts(v({ o: true }))).toEqual(['g']);
+    expect(hosts(v({}))).toEqual(['o']);
+    expect(hosts(v({ r: true }))).toEqual(['o']);
+    expect(hosts(v({ r: true, s: true }))).toEqual(['o']);
+    expect(hosts(v({ r: true, s: true, g: true }))).toEqual(['o']);
+    expect(hosts(v({ o: true }))).toEqual(['o']);
     // focus mode and a maximized chat: only that chat is on screen
-    expect(hosts(v({ s: true }, 'r'))).toEqual(['r']);
-    expect(hosts(v({ s: true }, null, 'chat:r'))).toEqual(['r']);
-    expect(hosts(v({ s: true }, null, 'orchestrator'))).toEqual(['s']);
+    expect(hosts(v({ s: true }, 'r'))).toEqual(['o']);
+    expect(hosts(v({ s: true }, null, 'chat:r'))).toEqual(['o']);
+    expect(hosts(v({ s: true }, null, 'orchestrator'))).toEqual(['o']);
   });
   it('does not assign a hidden expanded descendant as host, but respects explicit focus', () => {
     const folded = { ...v({ r: true, s: true, g: true }), treeCollapsed: { s: true } };
-    expect(requestHost('g', chats, folded)).toBe('s');
-    expect(requestHost('g', chats, { ...folded, treeCollapsed: { r: true } })).toBe('r');
-    expect(requestHost('g', chats, { ...folded, focusMode: 'g' })).toBe('g');
+    expect(requestHost('g', chats, folded)).toBe('o');
+    expect(requestHost('g', chats, { ...folded, treeCollapsed: { r: true } })).toBe('o');
+    expect(requestHost('g', chats, { ...folded, focusMode: 'g' })).toBe('o');
   });
 
 });
-

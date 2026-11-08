@@ -33,6 +33,15 @@ child replacing the older one.
 
 ## Consequences
 
+### Sole-conversation amendment (2026-11-08)
+
+The canonical user-facing notice is keyed by run, not report timestamp. A correction replaces that notice instead
+of adding another completion. Descendants still deliver to their execution parent and also expose their canonical
+outcome in the Orchestrator. Root results default to automatic channel synthesis; the user never needs a
+`Sintetizza` click. Telegram receives host-authored canonical notices and edits a previously acknowledged message
+for a correction. Its bounded delivery identities survive restart; an uncertain send is retained rather than
+blindly duplicated. No result or correction is authorization to start new work.
+
 A wrong result is fixed in one call instead of a trip through the user; a corrected child result can still reach the
 parent in the same batch, newest only. A parent may read a batch before every sibling is done (more parent turns in
 a long fan-out, each shorter to wait for). Two corrections bound the loop of a child that keeps «fixing».

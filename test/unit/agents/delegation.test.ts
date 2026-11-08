@@ -177,7 +177,7 @@ describe('agent_delegate', () => {
   it('a root chat corrects its result: a marked notice for the Orchestrator, still no turn for a display delivery', async () => {
     const f = fixture();
     const orchestrator = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
-    const herald = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'herald', title: 'Issue · Bozza', prompt: 'prepara la issue' }, 'agent');
+    const herald = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'herald', title: 'Issue · Bozza', prompt: 'prepara la issue', deliveryPolicy: 'display' }, 'agent');
     const rep = (summary: string, extra: Record<string, unknown> = {}) => f.call('agent_report', herald.id, { outcome: 'done', summary, output: 'issue.md', doneWhen: [{ criterion: 'bozza scritta', met: true }], ...extra });
     await rep('Bozza pronta');
     await new Promise(res => setTimeout(res, 20));
@@ -185,7 +185,7 @@ describe('agent_delegate', () => {
     await expect(rep('Bozza corretta', { amends: true })).resolves.toMatchObject({ reported: true, to: 'orchestrator', delivered: true });
     await new Promise(res => setTimeout(res, 20));
     const notices = f.m.items(orchestrator.id).filter(i => i.kind === 'system' && i.code === 'resultReady') as { params?: { summary?: string } }[];
-    expect(notices.map(n => n.params?.summary)).toEqual(['Bozza pronta', 'Correzione 1/2: Bozza corretta']);
+    expect(notices.map(n => n.params?.summary)).toEqual(['Correzione 1/2: Bozza corretta']);
     expect(f.sent.get(orchestrator.id)?.length ?? 0).toBe(0);
     expect(f.m.runs.get(herald.run!.runId)!.report).toMatchObject({ summary: 'Bozza corretta', corrections: 1 });
     await rep('Bozza corretta ancora', { amends: true });
@@ -518,7 +518,7 @@ describe('agent_delegate', () => {
     const r = await f.call('agent_report', herald.id, { outcome: 'done', summary: 'Bozza pronta', output: 'issue.md', doneWhen: [{ criterion: 'bozza scritta', met: true, evidence: 'issue.md' }] });
     expect(r).toMatchObject({ reported: true, to: 'orchestrator', delivered: true });
     await new Promise(res => setTimeout(res, 20));
-    expect(f.sent.get(orchestrator.id)?.length ?? 0).toBe(0);
+    expect(f.sent.get(orchestrator.id)?.length ?? 0).toBe(1);
     expect(f.m.items(orchestrator.id)).toContainEqual(expect.objectContaining({ code: 'resultReady', result: expect.objectContaining({ output: 'issue.md' }) }));
     expect(f.m.runs.get(herald.run!.runId)?.report).toMatchObject({ outcome: 'done', verified: 'yes', summary: 'Bozza pronta' });
     await expect(f.call('agent_report', herald.id, { outcome: 'done', summary: 'again', output: 'x', doneWhen: [] })).rejects.toThrow(/already/);
@@ -526,7 +526,7 @@ describe('agent_delegate', () => {
     const scout = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Fatti', prompt: 'x' }, 'agent');
     await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'c', met: false }] })).rejects.toThrow(/partial/);
     const mine = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Mia', prompt: 'x' }, 'user');
-    await expect(f.call('agent_report', mine.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [] })).resolves.toMatchObject({ reported: true, to: 'this-chat' });
+    await expect(f.call('agent_report', mine.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [] })).resolves.toMatchObject({ reported: true, to: 'orchestrator' });
   });
 
   it('a root chat\'s clean result goes to the quiet news when they take it; a partial one is also displayed without a model call', async () => {
@@ -908,7 +908,7 @@ describe('stalled children ("Ferma dopo", delegation.stallMin)', () => {
 
 describe('versioned task continuity and canonical results', () => {
   const result = { outcome: 'done', summary: 'Full summary', output: 'FULL DELIVERABLE', doneWhen: [{ criterion: 'criterion A', met: true, evidence: 'artifact.txt' }] };
-  it('user roots and explicit app replay tasks report locally; app outputs cannot be synthesized', async () => {
+  it('user roots report to the Orchestrator; explicit app replay outputs stay local and cannot be synthesized', async () => {
     const f = fixture();
     const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
     const local = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'user task' }, 'user');
@@ -917,19 +917,19 @@ describe('versioned task continuity and canonical results', () => {
     expect(() => f.m.reportRoot(background.id, checkResult(result, []))).toThrow(/explicit report contract/);
     f.m.reportRoot(local.id, checkResult(result, []));
     f.m.reportRoot(replay.id, checkResult(result, []));
-    expect(f.m.items(o.id).filter(item => item.kind === 'system' && item.code === 'resultReady')).toHaveLength(0);
-    expect(f.m.items(local.id).filter(item => item.kind === 'system' && item.code === 'resultReady')).toHaveLength(1);
+    expect(f.m.items(o.id).filter(item => item.kind === 'system' && item.code === 'resultReady')).toHaveLength(1);
+    expect(f.m.items(local.id).filter(item => item.kind === 'system' && item.code === 'resultReady')).toHaveLength(0);
     expect(f.m.items(replay.id).filter(item => item.kind === 'system' && item.code === 'resultReady')).toHaveLength(1);
     expect(f.m.list().find(row => row.id === replay.id)?.availableResultIds).toEqual([]);
     f.sinks.get(replay.id)!.item({ kind: 'result', id: 'finished-replay', at: Date.now(), costUsd: 0, durationMs: 1, turns: 1, isError: false }, false);
     expect(f.m.runs.get(replay.run!.runId)?.endReason).toBe('completed');
     await expect(f.m.synthesizeResult(replay.run!.runId, { kind: 'user' })).rejects.toThrow(/root task/);
-    await expect(f.m.synthesizeResult(local.run!.runId, { kind: 'chat', chatId: o.id })).rejects.toThrow(/root task/);
+    await f.m.synthesizeResult(local.run!.runId, { kind: 'chat', chatId: o.id });
     await f.m.synthesizeResult(local.run!.runId, { kind: 'user' });
     expect(f.sent.get(o.id)).toHaveLength(1);
   });
 
-  it('rebuilds local user and app replay results on restart without forwarding private output', async () => {
+  it('does not redeliver an automatically synthesized user result and keeps app replay output local on restart', async () => {
     const f = fixture();
     const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
     const local = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'local' }, 'user');
@@ -940,9 +940,12 @@ describe('versioned task continuity and canonical results', () => {
     const again = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0 }); managers.push(again);
     again.resumeInterrupted(); again.resumeInterrupted();
     expect(again.items(o.id).filter(i => i.kind === 'system' && i.code === 'resultReady')).toHaveLength(0);
-    for (const id of [local.id, app.id]) expect(again.items(id).filter(i => i.kind === 'system' && i.code === 'resultReady')).toHaveLength(1);
+    expect(again.items(local.id).filter(i => i.kind === 'system' && i.code === 'resultReady')).toHaveLength(0);
+    expect(again.items(app.id).filter(i => i.kind === 'system' && i.code === 'resultReady')).toHaveLength(1);
     expect(again.list().find(row => row.id === app.id)?.availableResultIds).toEqual([]);
-    expect(again.list().find(row => row.id === local.id)?.availableResultIds).toEqual([local.run!.runId]);
+    expect(again.list().find(row => row.id === local.id)?.availableResultIds).toEqual([]);
+    expect(again.runs.get(local.run!.runId)?.delivery?.synthesisSubmittedAt).toEqual(expect.any(Number));
+    expect(again.runs.get(local.run!.runId)?.report?.canonical?.output).toBe('FULL DELIVERABLE');
   });
 
   it('attributes delayed final accounting exactly once to the completed run after reassignment', async () => {
@@ -964,6 +967,7 @@ describe('versioned task continuity and canonical results', () => {
 
   it('app messages cannot become user instructions or silently create a follow-up assignment', async () => {
     const f = fixture();
+    await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'initial user request' }, 'user');
     expect(f.m.userEvents(c.id).events.map(e => e.text)).toEqual(['initial user request']);
     f.m.reportRoot(c.id, checkResult(result, []));
@@ -1074,7 +1078,7 @@ describe('versioned task continuity and canonical results', () => {
     await sentAfter(f.sent, o.id, 1);
     const sent = f.sent.get(o.id)!;
     expect(sent).toHaveLength(2);
-    expect(sent[0]).not.toContain('correzione');
+    expect(sent[0]).not.toContain('[correzione 1/2');
     expect(sent[1]).toContain('correzione 1/2');
     expect(sent[1]).toContain('Sintesi corretta');
     expect(f.m.runs.get(c.run!.runId)!.delivery).toMatchObject({ synthesisPending: false });
@@ -1200,6 +1204,7 @@ describe('versioned task continuity and canonical results', () => {
   });
   it('accepts a second child report on a new run, and rejects duplicate reports within one run', async () => {
     const f = fixture(), p = await f.root('strategist');
+    await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
     const id = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'Topic')] })).children[0].chatId;
     await f.call('agent_report', id, result);
     await f.m.send(id, 'expand this point');
@@ -1250,7 +1255,8 @@ describe('versioned task continuity and canonical results', () => {
     const child = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'Private child')] })).children[0].chatId;
     await f.call('agent_report', child, { ...result, output: 'PRIVATE CHILD OUTPUT' });
     const shown = () => f.m.items(o.id).filter(i => i.kind === 'system' && i.code === 'resultReady');
-    expect(shown()).toHaveLength(2);
+    expect(shown()).toHaveLength(3);
+    expect(shown()).toContainEqual(expect.objectContaining({ result: expect.objectContaining({ output: 'PRIVATE CHILD OUTPUT' }) }));
     // a third root result whose notice the quit cut before it was shown
     const unseen = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', title: 'Unseen', prompt: 'three' }, 'agent');
     await f.call('agent_report', unseen.id, { ...result, output: 'UNSEEN DELIVERABLE' });
@@ -1271,6 +1277,7 @@ describe('versioned task continuity and canonical results', () => {
   });
   it('records the current requester on reused chats and preserves it across continuation', async () => {
     const f = fixture();
+    await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'initial user work' }, 'user');
     await f.call('agent_report', c.id, result);
     await f.m.set(c.id, { workStatus: 'completed' });
