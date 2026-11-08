@@ -13,11 +13,12 @@ a clean tree and a green `npm run check`) from a terminal; `npm run rollback` fr
 
 ## How an agent verifies a change by itself
 
-1. On its branch `npm run check:branch` (no e2e there; the e2e runs only in the full `npm run check`, the
-   Orchestrator's, on main after the merge).
+1. While working, only the targeted tests; the branch's gate = `npm run check:quick` green + a clean Sentinel + the
+   guard, no e2e and no lock (owner, 2026-11-08); the non-e2e parts of `npm run check` run once on main after a batch
+   of merges. Details: `docs/agents/rules.md` §7.
 2. A visible change: see it in the dev app (`SB_HIDDEN=1 npm run dev`, `app_screenshot`).
 3. If something fails at runtime, `npm run logs -- --level warn --since 15m`, then `npm run doctor`.
 
-A new or changed e2e spec is written on the branch but first runs on main: say so in the hand-off, so the Orchestrator
-knows which branch to look at if it goes red. On main, a failure of a test listed in `test/e2e/known-red.json` is a
+A new or changed e2e spec is not run before the merge; name it in the hand-off, so the Orchestrator knows which
+branch to look at if a later e2e run the owner asks for goes red. On main, a failure of a test listed in `test/e2e/known-red.json` is a
 «rosso noto» and does not fail the check; any other failure is a «nuovo rosso» (ADR 0198).

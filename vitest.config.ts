@@ -7,6 +7,8 @@ export default defineConfig({
   test: { include: ['test/unit/**/*.test.ts', 'src/**/*.test.ts', 'test/live/**/*.test.ts' /* skipped unless SB_LIVE=1 */], environment: 'node',
     // Git- and process-heavy tests take up to ~1 min on a Windows PC with real-time antivirus scanning (owner's work PC)
     testTimeout: 120000,
+    // half the cores per run (default: all but one): parallel agent chats each ran 13 workers on 14 cores (2026-11-07)
+    pool: 'forks', maxWorkers: '50%',
     // the fake CLIs' children left suspended by this run are ended at its end
     globalSetup: ['test/fixtures/sweep-suspended.mjs'],
     // both lazy dictionaries, for tests that switch the language synchronously

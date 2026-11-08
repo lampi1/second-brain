@@ -53,11 +53,16 @@ read-only; an external session is resumed only as a fork (never two writers).
 
 ## 7. Tests
 
-Every module has unit tests; every user-visible feature has an e2e test with a screenshot; "done" =
-`npm run check:branch` green on the branch's commit (no e2e) + the change looked at in the dev app; the e2e specs and
-their screenshots run only on main, in `npm run check` after the merge (owner, 2026-10-15; ADR 0027). On main the e2e
-verdict is read against `test/e2e/known-red.json`: only «nuovi rossi» fail it; no test is ever skipped or quarantined
-(ADR 0198).
+Every module has unit tests; every user-visible feature has an e2e test with a screenshot. While working an agent runs
+only the targeted tests (`npx vitest run <files>`; owner, 2026-11-07: "rifai i test mille volte"). A branch's gate
+before the merge, with no e2e (owner, 2026-11-08: "fai finire tutto, fanculo i test e2e"): `npm run check:quick` green
+on the branch's commit + a clean independent Sentinel review (rule 9) + the guard scan + a rebase on `main` right
+before the merge, then a plain `git push origin main` by the owner (rule 8; never a force push). A visible change is still looked at in the
+dev app. No e2e run and no machine lock gate a branch; `npm run check:branch` is no longer needed per branch. Never
+repeated suites, never Sentinels only to compare main and the branch. After a batch of merges one dedicated chat runs
+the non-e2e parts of `npm run check` once on main (typecheck, lint, all unit tests); whoever breaks main fixes it on
+main. A unit test red only under machine load is not rerun: it is removed (owner, 2026-11-08). The e2e suite stays in
+the repo and runs only when the owner asks; its verdict is read against `test/e2e/known-red.json` (ADR 0198).
 
 Load tests, stress tests, synthetic CPU/RAM load generators, benchmarks under load and e2e runs repeated to load the
 machine run only at night, outside the owner's working hours; never during the day on their work PC (owner,
