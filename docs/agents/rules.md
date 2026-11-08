@@ -69,14 +69,23 @@ Agents commit on their branch/worktree. Conventional messages (`feat(chats): …
 merge its verified branch into `main` and push it, without asking the owner each time (owner, 2026-11-07; ADR 0221),
 only when all three hold on the exact commit that is pushed:
 
-1. the change is done per rule 7: `npm run check:branch` green by its exit code, and a visible change looked at in
-   the dev app (see "Verify a change");
+1. the branch gate, green by its exit code (owner, 2026-11-08: it replaces rule 7's `check:branch` before a merge):
+   `npm run check:quick` (typecheck, lint and the tests of the touched files) and the e2e specs of the touched part
+   only (the specs it changed or the ones its contract names; `node scripts/e2e.mjs <specs>`); a visible change is
+   also looked at in the dev app;
 2. the reviews of rule 9 (an independent Sentinel per touched dimension) have no open findings;
 3. `node tools/guard/scan.mjs . --allow .guardallow` passes, and the pre-push hook passes on every pushed commit.
 
+Only one e2e run at a time on the machine: take the lock first in Git Bash, `( set -o noclobber; echo "<chatId>
+$(date -Iseconds)" > "$TEMP/sb-check-branch.lock" )`; if it fails, wait and retry every 5 minutes; a lock older than
+90 minutes is orphaned and may be deleted; remove it as soon as the run ends, red too. While another chat holds it,
+no e2e or heavy vitest runs.
+
 The method is local and fast-forward only: `git merge --ff-only` of the verified branch into `main`, then
 `git push origin main`. If `main` moved, rebase the branch on it and run 1-3 again, so what is pushed is what was
-checked. The full `npm run check` (e2e) stays the Orchestrator's, on `main` after the merge ("Verify a change").
+checked. The full `npm run check:branch` runs on `main` once after a batch of merges, by one dedicated chat when all
+the branches are in; whoever's change breaks it fixes it on `main`. The full `npm run check` (e2e) stays the
+Orchestrator's, on `main` ("Verify a change").
 Never a force push, a token, a pull request opened on the owner's behalf, a new remote or another remote. «Aggiorna»,
 `npm run promote`, publishing a release and restarting the app stay the owner's clicks. The app's own permission
 layer still asks before `git push` (ADR 0103); allowing it is the owner's setting. The rule covers only this

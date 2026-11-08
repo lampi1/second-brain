@@ -35,7 +35,7 @@ release vs. anything run from this repo. The rest: `docs/agents/glossary.md`.
 | Lint | `npm run lint` |
 | Light check (branches) | `npm run check:branch`: typecheck, lint + related unit tests + guard on changed files + doc freshness; no e2e |
 | All checks (main only) | `npm run check`: + full unit + e2e; e2e read against `test/e2e/known-red.json` |
-| Unit · e2e | `npm test` · `npm run test:e2e` · `node scripts/e2e.mjs <specs>` (never on branches) |
+| Unit · e2e | `npm test` · `npm run test:e2e` · `node scripts/e2e.mjs <specs>` (on branches only the touched specs, under the lock: rule 8) |
 | e2e baseline | `node scripts/e2e-baseline.mjs [--update]` (main, after a full run) |
 | Live tests (real tokens) | `SB_LIVE=1 npx vitest run test/live` (Claude only) |
 | Machine ready? · logs | `npm run doctor -- --json` · `npm run logs -- --level warn --since 1h [--run <id>] [--scope renderer] [--dev]` |
@@ -65,8 +65,9 @@ One line each; the full text, its exceptions and ADRs: the same number in `docs/
 7. **Tests**: unit tests for every module, an e2e with a screenshot for every visible feature; "done" =
    `check:branch` green + looked at in the dev app; load tests only at night.
 8. **Agents merge to `main` only when verified**: conventional English messages; fast-forward and `git push origin
-   main` only when done (rule 7), rule 9 reviews clean, guard passing on every pushed commit; no force; «Aggiorna» is
-   the human's.
+   main` only with `check:quick` + the touched e2e specs green (one e2e at a time, the lock), rule 9 reviews clean,
+   guard passing on every pushed commit; full `check:branch` on main after a batch, the breaker fixes it on main; no
+   force; «Aggiorna» is the human's.
 9. **Review**: a fresh-context reviewer per touched dimension before a merge.
 10. **Every file starts with a header comment** (what, why, who uses it); decisions go to `docs/adr/`.
 11. **Parallel agents**: one worktree and one module each; shared files only by the integrator.

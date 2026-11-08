@@ -1,4 +1,4 @@
-# 0221. Agents merge verified branches into main
+# 0221 — Agents merge verified branches into main
 
 Date: 2026-11-07. Status: accepted (the owner, yes in a decision panel, 2026-11-07). Partly supersedes ADR 0061
 ("Agents still never push"), ADR 0074 (push in "Agents still never promote, roll back, push or publish") and the
@@ -14,10 +14,14 @@ approvazione».
 ## Decision
 
 - An app chat may merge its branch into `main` of this repository and run `git push origin main` without asking, only
-  when, on the exact commit pushed: the change is done per rule 7 (`npm run check:branch` green, a visible change
-  looked at in the dev app); the rule 9 reviews (an independent Sentinel per touched dimension) have no open
-  findings; the guard scan and the pre-push hook pass on every pushed commit.
+  when, on the exact commit pushed: `npm run check:quick` and the e2e specs of the touched part are green, a visible
+  change looked at in the dev app (owner, 2026-11-08: this branch gate replaces `check:branch` before a merge); the
+  rule 9 reviews (an independent Sentinel per touched dimension) have no open findings; the guard scan and the
+  pre-push hook pass on every pushed commit.
+- One e2e run at a time on the machine, behind a shared lock file in the temp folder.
 - Fast-forward only: if `main` moved, the branch is rebased and checked again.
+- The full `npm run check:branch` runs on `main` once after a batch of merges, by one dedicated chat; whoever's
+  change breaks it fixes it on `main`.
 - The full `npm run check` (e2e) stays the Orchestrator's on `main` after the merge.
 - Never a force push, a token, a pull request on the owner's behalf or another remote; other repositories keep their
   own rules.
