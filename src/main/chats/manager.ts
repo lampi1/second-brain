@@ -290,7 +290,7 @@ export class ChatManager extends ManagerSink implements ChatService {
     this.updated(r);
     if (warm) this.adoptWarm(r, warm); else if (!viaQueue) this.startSession(r);
     // the next chat like this one finds an engine waiting (a role's own launch; an Orchestrator, fork or bypass chat: a plain one)
-    if (caps.warm) this.warm.schedule(cwd, this.opts.prewarmDelayMs ?? 5000, warmable && childOk ? launch : PLAIN_LAUNCH);
+    if (caps.warm) this.warm.schedule(cwd, this.opts.prewarmDelayMs ?? 5000, warmable && childOk ? launch : PLAIN_LAUNCH, (delegator && this.opts.nextDelegationCwd?.(cwd)) || cwd);
     // the chat exists from here on: a failed first send shows as state 'error' + lastError, not as a lost chat
     if (prompt) {
       // a delegated chat's contract says who sent it (the parent's title), like mail between chats

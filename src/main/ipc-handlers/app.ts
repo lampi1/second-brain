@@ -34,7 +34,7 @@ const CLIPBOARD: ClipboardLike = {
 };
 const HIDDEN_CLIPBOARD: ClipboardLike = { writeText: async () => {}, writeRaw: async () => {}, writeImageFromPath: async () => true };
 
-export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, defaultBrain, updates, search, hiddenShell, bumpBrainChoice, rendererErrors }: HandlerContext): HandlersOf<'app' | 'cli' | 'source' | 'update' | 'setup' | 'profile' | 'overlay' | 'log' | 'search' | 'tasks' | 'feed' | 'usecount'> {
+export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, defaultBrain, updates, search, hiddenShell, bumpBrainChoice, rendererErrors }: HandlerContext): HandlersOf<'app' | 'cli' | 'source' | 'update' | 'setup' | 'profile' | 'overlay' | 'log' | 'search' | 'tasks' | 'feed' | 'usecount' | 'worktrees'> {
   return {
     'update:get': () => updates.state(),
     'update:apply': a => updates.apply(a?.id),
@@ -42,6 +42,9 @@ export function appHandlers({ s, win, demo, outDir, activity, overlay, profile, 
     'update:recovery': () => updates.recovery(),
     'update:recoveryAck': a => updates.acknowledge(a?.id),
     // read only: folder names and .git presence (projects-folder.ts); SB_HOME isolates it in trials, like the candidates
+    // Settings → Ruoli e deleghe: the app's worktrees per repository (ADR 0227); the cleanup only on the user's click
+    'worktrees:usage': a => s.worktreePool.usage(!!a?.refresh),
+    'worktrees:cleanup': () => s.worktreePool.cleanup(),
     'app:projectsFolder': () => ({ saved: s.brain.settings().projectsRoot ?? null, detected: detectProjectsFolder({ home: process.env.SB_HOME, exclude: [s.brain.settings().brainRoot, app.getPath('userData')] }), newMemoryIn: app.getPath('userData') }),
     'app:pickProjects': async () => {
       const w = win(), r = w ? await dialog.showOpenDialog(w, { title: 'Scegli la cartella dei tuoi progetti', properties: ['openDirectory'] }) : null;

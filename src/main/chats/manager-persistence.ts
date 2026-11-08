@@ -35,6 +35,9 @@ export abstract class ManagerPersistence extends ManagerCore {
   }
 
   protected unarchive(r: Rec): void {
+    // a delegated child whose pooled worktree went to another child, or was cleaned up, stays archived (ADR 0227)
+    const blocked = r.s.closedAt ? this.opts.reopenBlocked?.(r.s) : null;
+    if (blocked) throw new Error(blocked);
     // an engine the auto-close kept for its cold note is live again: idle release and the cold timer see it
     if (r.closeAfterCold && r.session?.alive && r.s.state === 'closed') r.s.state = r.session.busy ? 'running' : 'idle';
     r.closeAfterCold = false;

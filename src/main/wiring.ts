@@ -104,6 +104,9 @@ import { sharedDir } from './platform';
 import { HeadlessRunner } from './compare/headless';
 import { OneShotService } from './agents/oneshot';
 import { DelegateWorktrees, gitWorktrees } from './agents/worktrees';
+import { WorktreePool } from './agents/worktree-pool';
+import { within } from './agents/tool-policy';
+import { worktreeLimits } from './brain/settings-schema';
 import { stageDelegatedChanges, stageDelegatedChangesMany } from './agents/delegation-integration';
 import { DEFAULT_CAP_USD, JudgeSampler, judgeSamplingOn, judgingEstimate, roleShares } from './agents/judge-sample';
 import { COMPACT_WINDOW } from './brain/settings-schema';
@@ -246,7 +249,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // trial evaluated again
   const loopRef: { current?: { ended(run: AgentRun): void; outcome(run: AgentRun): void } } = {};
   const runFeedbackRef: { current?: { runList(): readonly AgentRun[] } } = {};
-  const delegateWorktrees = new DelegateWorktrees(path.join(ctx.userData, 'delegation-worktrees.json'), () => brain.info().brainRoot);
+  // the worktree pool (ADR 0227): writing children reuse a worktree of their repository; inUse = an open chat or a live
+  // engine works in it (an archived chat whose engine ended leaves it free)
+  const worktreePool = new WorktreePool({ file: path.join(ctx.userData, 'worktree-pool.json'),
+    limits: () => worktreeLimits(brain.settings()),
+    inUse: root => manager.list().some(c => within(root, c.cwd) && (!c.closedAt || c.state !== 'closed')),
+    knownCwds: () => manager.list().map(c => c.cwd),
+    allocated: () => delegateWorktrees.allocatedRoots() });
+  const delegateWorktrees = new DelegateWorktrees(path.join(ctx.userData, 'delegation-worktrees.json'), () => brain.info().brainRoot, worktreePool);
   // the question gates ask for a brief before a yes/no question (ADR 0150): the visuals' store exists further down
   const briefRef: { current?: Artifacts } = {};
   // «Modalità notte» (ADR 0191): the user is away; what the app chooses or parks for them waits for the recap
@@ -265,6 +275,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     writeDelayMs: 250, // chats.json and agent-runs.json: one asynchronous write per burst (the main-process freezes, 2026-10-27)
     briefReady: chatId => briefRef.current?.hasBrief(chatId) ?? true,
     prepareDelegation: delegateWorktrees.prepare,
+    reopenBlocked: delegateWorktrees.reopenBlocked,
+    nextDelegationCwd: cwd => worktreePool.nextCwd(cwd),
     freshSessions: () => true,
     continuationContext: chatId => workflowsRef ? JSON.stringify(workflowsRef.list().filter(row => row.chatIds.includes(chatId))) : null,
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
@@ -530,6 +542,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // Poll without model calls; relevant events and canonical reports wake the owning Orchestrator.
   // SB_BENCH_TIMERS=1: scripts/bench-stalls.mjs measures an idle app with these production pollers on (fake engines only)
   const prodPollers = !process.env.SB_TEST || process.env.SB_BENCH_TIMERS === '1';
+  // the app's leftover worktrees, 5 min after start (not in the start's rush), then every 6 h: only measured until the
+  // user's first «Pulisci ora» in Settings → Avanzate, cleaned after it (ADR 0227)
+  const worktreeCleanup = () => { void worktreePool.autoCleanup().catch(e => log.warn('agents', 'worktree cleanup failed', { cause: errText(e), hint: 'the next run tries again; Settings → Avanzate has «Pulisci ora»' })); };
+  const worktreeFirst = prodPollers ? setTimeout(worktreeCleanup, 5 * 60_000) : null, worktreeTimer = prodPollers ? setInterval(worktreeCleanup, 6 * 3600_000) : null;
   const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && (!process.env.SB_TEST || process.env.SB_ORCHESTRATOR_EVENTS === '1'));
   manager.onUserWrote(n => wake.userMessage(n)); // the user typed in a work chat: quiet news (ADR 0083)
   // a root chat's clean result wakes the Orchestrator during an active workflow, or while the user is away (ADR 0191): the
@@ -765,6 +781,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     mcpServers,
     judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
     phonePort: createPhonePort(manager, ctx.emitter),
+    worktreePool,
     chats, browser, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : null),
@@ -773,7 +790,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { routines.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { routines.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { manager.killAll(); runner.shutdown(); },
   };
 }

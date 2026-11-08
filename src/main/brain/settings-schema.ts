@@ -8,7 +8,7 @@
 // valid for any engine id, like `mute.<kind>`. Used by config.ts (store, history, undo, proposals) and served to the UI
 // by 'settings:schema'.
 import path from 'node:path';
-import type { Settings, SettingDef, SettingKey, SettingsPatch } from '../../shared/contract';
+import type { Settings, SettingDef, SettingKey, SettingsPatch, WorktreeLimits } from '../../shared/contract';
 import { ENGINE_ID, engineLabel, engineOf, engines } from '../engines/registry';
 import { canonicalRepoRoot } from './adapters/codex-policy';
 import { DELEGATION_DEFAULTS, DELEGATION_RANGE, MODEL_TIERS, type ModelTier } from '../../shared/roles';
@@ -16,6 +16,13 @@ import { DELEGATION_DEFAULTS, DELEGATION_RANGE, MODEL_TIERS, type ModelTier } fr
 /** The compaction window of the app's Claude chats (ADR 0031): 200000 since 2026-10-14 (the user: «ripartenza a ~200k
  *  token di contesto»; 300000 before, ADR 0051). */
 export const COMPACT_WINDOW = 200_000;
+/** The worktree pool's limits (ADR 0227) when the user set none. */
+export const WORKTREE_DEFAULTS: WorktreeLimits = { perRepo: 6, total: 20, diskGb: 40 };
+/** The pool's limits from the settings, each within its schema range (an old settings file has none: the defaults). */
+export function worktreeLimits(s: Partial<Settings>): WorktreeLimits {
+  const n = (v: unknown, d: number, max: number): number => typeof v === 'number' && Number.isInteger(v) && v >= 1 && v <= max ? v : d;
+  return { perRepo: n(s.worktreePoolPerRepo, WORKTREE_DEFAULTS.perRepo, 50), total: n(s.worktreePoolTotal, WORKTREE_DEFAULTS.total, 200), diskGb: n(s.worktreeDiskCapGb, WORKTREE_DEFAULTS.diskGb, 2000) };
+}
 /** the default before 2026-10-14: a saved value equal to it that the user never set follows the new one (config.ts) */
 export const OLD_COMPACT_WINDOW = 300_000;
 
@@ -69,6 +76,13 @@ const BASE: readonly SettingDef[] = [
     description: 'Sopra questa CPU (media degli ultimi secondi) le chat e i messaggi degli agenti aspettano.' },
   { key: 'loadQueueRam', type: 'int', min: 0, max: 90, default: 15, protected: true, label: 'Coda per carico: RAM libera sotto (%)',
     description: 'Sotto questa memoria libera le chat e i messaggi degli agenti aspettano. 0 = non guardare la RAM.' },
+  // the worktree pool (ADR 0227): the app removes only its own clean worktrees with no commit of their own
+  { key: 'worktreePoolPerRepo', type: 'int', min: 1, max: 50, default: WORKTREE_DEFAULTS.perRepo, protected: true, label: 'Worktree riusati per repository',
+    description: 'Quante copie di lavoro (worktree) l’app tiene pronte per ogni repository, da riusare per le deleghe che scrivono. Oltre, la pulizia toglie le meno usate che non hanno lavoro.' },
+  { key: 'worktreePoolTotal', type: 'int', min: 1, max: 200, default: WORKTREE_DEFAULTS.total, protected: true, label: 'Worktree riusati in tutto',
+    description: 'Il massimo di worktree dell’app in tutti i repository insieme.' },
+  { key: 'worktreeDiskCapGb', type: 'int', min: 1, max: 2000, default: WORKTREE_DEFAULTS.diskGb, protected: true, label: 'Disco massimo dei worktree (GB)',
+    description: 'Oltre questo spazio la pulizia toglie i worktree liberi meno usati. Quelli con modifiche o commit non pubblicati non li tocca mai: li segnala.' },
   // the chat composer's inline suggestion (ADR 0118): local sources only, zero tokens (the model part went, ADR 0201)
   { key: 'suggestOn', type: 'boolean', default: true, protected: false, label: 'Suggerimenti nella chat',
     description: 'Mentre scrivi, un testo grigio dopo il cursore: Tab lo accetta, Esc lo nasconde. Dai tuoi messaggi passati, dai comandi, dai ruoli, dalle chat e dai file, senza token.' },
@@ -256,6 +270,7 @@ export function defaults(): Settings {
     appRepo: null,
     projectsRoot: null,
     loadQueue: true, loadQueueCpu: 75, loadQueueRam: 15,
+    worktreePoolPerRepo: WORKTREE_DEFAULTS.perRepo, worktreePoolTotal: WORKTREE_DEFAULTS.total, worktreeDiskCapGb: WORKTREE_DEFAULTS.diskGb,
     suggestOn: true,
     voiceAsr: 'fast', voiceName: 'paola', voicePtt: false, awayMode: false, balancedMode: false,
     delegation: { ...DELEGATION_DEFAULTS }, modelTiers: {},

@@ -84,6 +84,44 @@ export interface UseCountRow { key: string; n: number; days: number; last: strin
 /** The counts of the last `days` days (local dates, YYYY-MM-DD), the busiest first; `since` = the first day counted. */
 export interface UseCountReport { from: string; to: string; days: number; total: number; since: string | null; byDay: { day: string; n: number }[]; rows: UseCountRow[] }
 
+// ---- the worktree pool (main/agents/worktree-pool.ts, ADR 0227): the git worktrees the app made for writing
+// delegations, reused per repository, cleaned and capped; Settings → Ruoli e deleghe shows them per repository
+
+/** An app worktree kept because removing it could lose work: uncommitted changes, or commits on no remote branch and
+ *  not on the base branch. The app never removes it; the user decides. */
+export interface WorktreeReported { path: string; why: 'changes' | 'unpushed' }
+export interface WorktreeRepoUsage {
+  /** the main checkout of the repository */
+  repo: string;
+  name: string;
+  /** every linked worktree of the repository (the user's own included) */
+  worktrees: number;
+  /** of those, the ones the app made */
+  app: number;
+  /** of the app's, the reusable pool slots */
+  pool: number;
+  /** app worktrees an open chat is working in */
+  inUse: number;
+  reported: WorktreeReported[];
+  /** disk used by the app's worktrees of this repository; null = not measured yet */
+  bytes: number | null;
+}
+export interface WorktreeLimits { perRepo: number; total: number; diskGb: number }
+export interface WorktreeUsage {
+  repos: WorktreeRepoUsage[];
+  /** null while any repository is not measured yet */
+  totalBytes: number | null;
+  limits: WorktreeLimits;
+  /** when this report was made (ms); 0 = never */
+  at: number;
+  /** the last cleanup that removed something: how many worktrees it removed, when */
+  lastCleanup: { removed: number; at: number } | null;
+  /** the automatic cleanup runs (the user pressed «Pulisci ora» once); false = the timer only measures */
+  auto: boolean;
+  /** a scan or cleanup is running now */
+  running: boolean;
+}
+
 export interface ProjectsFolderInfo { saved: string | null; detected: { path: string; repos: number; source: 'cli' | 'common' } | null; newMemoryIn: string }
 export interface CliStatus { found: boolean; path: string | null; version: string | null; loggedIn: boolean | null; account?: string | null }
 
@@ -171,4 +209,8 @@ export interface AppInvokeMap {
   'usecount:add': [{ counts: Record<string, number> }, void];
   /** Andamento → Uso: the last `days` days (default 14, at most 90) */
   'usecount:report': [{ days?: number }, UseCountReport];
+  /** Settings → Ruoli e deleghe: the app's worktrees per repository (refresh = scan again now, removes nothing) */
+  'worktrees:usage': [{ refresh?: boolean }, WorktreeUsage];
+  /** the user's «Pulisci ora»: removes the app's clean, unused worktrees beyond the limits and the orphans */
+  'worktrees:cleanup': [void, WorktreeUsage];
 }

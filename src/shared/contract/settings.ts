@@ -101,6 +101,11 @@ export interface Settings {
   loadQueue: boolean;
   loadQueueCpu: number;
   loadQueueRam: number;
+  /** the worktree pool (ADR 0227): reusable worktrees kept per repository and in all, and the disk the app's worktrees
+   *  may use (GB) before the cleanup removes the least used free ones; never one with work of its own */
+  worktreePoolPerRepo: number;
+  worktreePoolTotal: number;
+  worktreeDiskCapGb: number;
   /** the chat composer's inline suggestion (ADR 0118; local sources only since ADR 0201): on or off */
   suggestOn?: boolean;
   /** voice mode (ADR 0152): which Whisper transcribes (fast = small, accurate = turbo) and which Italian voice speaks */
@@ -143,7 +148,7 @@ export type SettingsPatch = Partial<Omit<Settings, 'budget' | 'locked' | 'engine
 export type SettingKey =
   | 'jobs.fallback' | 'brainRoot' | 'mcpPort' | 'theme' | 'language' | 'autoCloseMin' | 'engineIdleMin' | 'contextWarnTokens' | 'contextHandoff' | 'compactWindowTokens' | 'orchestratorDayCompact' | 'launchRulesClaude' | 'launchRulesCodex' | 'coldHandoffMin' | 'osToasts' | 'dnd' | 'dndUntil' | `engineOn.${Harness}` | `engines.${Harness}` | 'messaging.crossHarness' | 'tasks.enabled' | 'tasks.everyMin' | 'tasks.sound' | 'budget.enabled'
   | `budget.${Harness}.${'mode' | 'dailyUsd' | 'perChatUsd'}` | `mute.${string}`
-  | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'judgingCapUsd' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'codexAutonomyRoots'
+  | `orchestratorChats.${keyof OrchestratorChatDefaults}` | 'orchestratorOpacity' | 'orchestratorEvents' | 'runResults' | 'judging' | 'judgingSince' | 'judgingCapUsd' | 'appRepo' | 'projectsRoot' | 'loadQueue' | 'loadQueueCpu' | 'loadQueueRam' | 'worktreePoolPerRepo' | 'worktreePoolTotal' | 'worktreeDiskCapGb' | 'codexAutonomyRoots'
   | 'suggestOn' | 'voiceAsr' | 'voiceName' | 'voicePtt' | 'voiceSpeed' | 'awayMode' | 'balancedMode'
   | `delegation.${keyof DelegationSettings}` | `modelTiers.${Harness}.${ModelTier}`;
 export interface SettingDef {
