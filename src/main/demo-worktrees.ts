@@ -18,7 +18,7 @@ export function demoWorktreeUsage(cleaned: boolean, now = Date.now()): WorktreeU
   ];
   return {
     repos, totalBytes: repos.reduce((n, r) => n + r.bytes, 0), limits: WORKTREE_DEFAULTS, at: now,
-    lastCleanup: cleaned ? { removed: 33, at: now } : { removed: 0, at: now - 6 * 3600_000 }, auto: cleaned, running: false,
+    lastCleanup: cleaned ? { removed: 33, at: now } : null, auto: cleaned, running: false,
   };
 }
 

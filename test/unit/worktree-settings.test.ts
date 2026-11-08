@@ -23,6 +23,8 @@ describe('worktree pool settings', () => {
   it('the demo pool answers made-up repositories; its cleanup keeps the worktrees that hold work', async () => {
     const before = demoWorktreeUsage(false, 0);
     expect(fmtSize(before.totalBytes)).toBe('45.6 GB');
+    // no cleanup before the user's first «Pulisci ora» (ADR 0227): the demo shows none either
+    expect(before).toMatchObject({ lastCleanup: null, auto: false });
     expect(before.repos.flatMap(r => r.reported.map(x => x.why)).sort()).toEqual(['changes', 'unpushed']);
     const pool = demoWorktreePool();
     const after = await pool.cleanup();
