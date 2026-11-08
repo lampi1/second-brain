@@ -6,9 +6,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { recommendedAnswers, recommendedOption } from '../../src/shared/away';
 import { attachAway, AwayLog, recapOf } from '../../src/main/chats/away-log';
+import { closeAppDbs } from '../../src/main/app-db';
 
 const roots: string[] = [];
-afterEach(() => { for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+afterEach(() => { closeAppDbs(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 const file = (): string => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-awaylog-')); roots.push(d); return path.join(d, 'away-log.json'); };
 
 describe('recommendedOption', () => {

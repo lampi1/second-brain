@@ -16,9 +16,20 @@ import { sysItem, userNoteLine } from './manager-helpers';
 import { phoneTime } from './phone-reply';
 import { ManagerLifecycle } from './manager-lifecycle';
 import type { AppAsk } from './session';
+import { proposalHash } from '../coordination/store';
+import type { RequestKey } from '../coordination/model';
 
 /** The work on a chat: assignments, the user's own messages and corrections, run verdicts and metrics, the Strategist's plan. */
 export abstract class ManagerWork extends ManagerLifecycle {
+  override async shutdown(graceMs?: number, capMs?: number): Promise<void> {
+    try { await super.shutdown(graceMs, capMs); } finally { this.closeCoordination(); }
+  }
+
+  private planRequestKey(r: Rec, plan: StrategyPlan): RequestKey {
+    return { originalRequestId: `plan:${plan.at}`, jobId: this.coordination.jobFor(r.s.id) ?? r.s.run?.taskId ?? `chat:${r.s.id}`, chatId: r.s.id,
+      runId: r.s.run?.runId ?? null, taskVersion: r.s.run?.taskVersion ?? 1, proposalRevision: plan.at,
+      proposalHash: proposalHash({ steps: plan.steps, clarified: plan.clarified, doneWhen: plan.doneWhen, pcOnly: plan.pcOnly }) };
+  }
 
   /** Full instructions plus an optimistic cursor; reading never marks them acknowledged. */
   userEvents(chatId: string, afterSeq = 0): UserTaskEvents {
@@ -44,7 +55,14 @@ export abstract class ManagerWork extends ManagerLifecycle {
     // «Modalità notte» (ADR 0191): nobody will click «Approva e parti», so the plan starts as proposed (its recommended
     // choice) and the tool says so; the recap tells the user
     const away = !!this.opts.away?.();
-    r.s.plan = { phase: away ? 'running' : 'proposed', clarified: plan.clarified, ...(plan.pcOnly ? { pcOnly: true } : {}), ...(plan.asked ? { asked: plan.asked } : {}), ...(plan.enough ? { enough: true } : {}), steps, ...(doneWhen ? { doneWhen } : {}), at: Math.max(Date.now(), plan.at + 1) };
+    const proposed: StrategyPlan = { phase: away ? 'running' : 'proposed', clarified: plan.clarified, ...(plan.pcOnly ? { pcOnly: true } : {}), ...(plan.asked ? { asked: plan.asked } : {}), ...(plan.enough ? { enough: true } : {}), steps, ...(doneWhen ? { doneWhen } : {}), at: Math.max(Date.now(), plan.at + 1) };
+    const store = this.coordination;
+    const key = this.planRequestKey(r, proposed);
+    const prior = store.original(r.s.id, key.originalRequestId);
+    if (prior && proposalHash(prior.key) !== proposalHash(key)) throw new Error('Plan revision reused with changed scope; propose a fresh revision.');
+    store.register({ key, kind: 'plan', at: proposed.at, payload: proposed });
+    if (away) store.resolve(key, { kind: 'policy', policy: 'away-plan' }, { decision: 'approve' });
+    r.s.plan = proposed;
     // the run keeps the plan's fate: a decision signal for the Orchestrator (standing.ts, ADR 0131)
     const run = r.s.run;
     if (run && run.endedAt === undefined) { run.plan = { ...(run.plan ?? { proposals: 0, changes: 0 }), proposals: (run.plan?.proposals ?? 0) + 1 }; this.runSave(); }
@@ -90,7 +108,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     return this.decidePlan(chatId, decision, at, text, undefined, undefined, false, by);
   }
 
-  /** Common panel/typed decision path; keep the user's original wording in the transcript and roll back failed delivery. */
+  /** Decision commits before delivery. A delivery failure never rolls accepted consent back into a fresh question. */
   protected override async decidePlan(chatId: string, decision: 'approve' | 'change', at: number, text?: string, message?: string, receipt?: SubmissionReceipt, byApp = false, by: 'pc' | 'phone' = 'pc'): Promise<void> {
     const r = this.need(chatId), plan = r.s.plan;
     if (!plan || plan.phase !== 'proposed') throw new Error('Questo piano non aspetta più una risposta.');
@@ -98,14 +116,24 @@ export abstract class ManagerWork extends ManagerLifecycle {
     const change = typeof text === 'string' ? text.trim() : '';
     if (decision === 'change' && (!change || change.length > 2000)) throw new Error('Scrivi cosa cambiare (al massimo 2000 caratteri).');
     if (decision !== 'approve' && decision !== 'change') throw new Error('Scelta non valida.');
-    // the phase moves first (a second click finds it decided) and comes back if the message does not reach the Strategist
+    const store = this.coordination;
+    const key = this.planRequestKey(r, plan);
+    // One-time migration for a proposed plan restored from pre-journal chats.json. Existing receipts are never rebound.
+    if (!store.original(r.s.id, key.originalRequestId)) store.register({ key, kind: 'plan', at: plan.at, payload: plan });
+    const accepted = store.resolve(key, byApp ? { kind: 'policy', policy: 'away-plan' } : { kind: 'user', channel: by }, { decision, text: change });
+    const delivery = store.beginDelivery(accepted.id);
+    // The phase is a chat mirror, not the decision journal. A crash here leaves an accepted, unconfirmed delivery.
     r.s.plan = { ...plan, phase: decision === 'approve' ? 'running' : 'revising', at: Math.max(Date.now(), plan.at + 1) };
     this.persist();
     this.updated(r);
-    try { await this.send(chatId, message ?? (decision === 'approve' ? PLAN_APPROVED : planChange(change)), undefined, false, undefined, false, { kind: byApp ? 'app' : 'user' }, receipt); } catch (e) {
-      if (r.s.plan?.phase === (decision === 'approve' ? 'running' : 'revising')) { r.s.plan = plan; this.persist(); this.updated(r); }
-      throw e;
-    }
+    let settled = false;
+    const finishDelivery = (state: 'delivered' | 'uncertain') => { if (!settled) { store.finishDelivery(delivery.id, state); settled = true; } };
+    const tracked: SubmissionReceipt = {
+      beforeSubmit: () => receipt?.beforeSubmit(),
+      submitted: () => { finishDelivery('delivered'); receipt?.submitted(); },
+      failed: error => { finishDelivery('uncertain'); receipt?.failed(error); },
+    };
+    await this.send(chatId, message ?? (decision === 'approve' ? PLAN_APPROVED : planChange(change)), undefined, false, undefined, false, { kind: byApp ? 'app' : 'user' }, tracked);
     if (by === 'phone') { this.addItem(r, sysItem('phoneDecided', { time: phoneTime(Date.now()), what: 'plan' }, 'info'), false); this.updated(r); }
     // the user's click on the run's plan: approved as proposed, or a change asked (standing.ts decisionSignals, ADR 0131)
     const run = r.s.run;

@@ -75,7 +75,7 @@ describe('app_digest', () => {
       chats: [chat('done', { closedAt: NOW - 20 * MIN, closedBy: 'auto', lastText: 'Merge fatto.' }), chat('ancient', { closedAt: NOW - 48 * 3600_000 })],
       runs: [{ id: 'r', chatId: 'done', itemId: 'i', code: 'npm run check\nmore', cwd: 'C:/x', state: 'ok', exitCode: 0, output: '', startedAt: NOW - 25 * MIN, endedAt: NOW - 22 * MIN }],
     });
-    expect(t).toContain('- «Web · done» chiusa 20 min fa (da sola, finita) · ultima riga «Merge fatto.»');
+    expect(t).toContain('- «Web · done» chiusa 20 min fa (automaticamente; chiusura ≠ lavoro completato) · ultima riga «Merge fatto.»');
     expect(t).not.toContain('ancient');
     expect(t).toContain('- «Web · done»: `npm run check` ok, uscita 0');
     // a secret in the command line never reaches the Orchestrator's context

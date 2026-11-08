@@ -4,6 +4,7 @@
 import { phoneQuestionReserved } from './phone-port';
 import { withClarified } from './plan-interview';
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import type { Answer, PendingRequest } from '../../shared/contract';
 import { errText, log } from '../log';
 import { engineOf } from '../engines/registry';
@@ -18,9 +19,50 @@ import { isNativeQuestion } from '../../shared/yes-no';
 import { sysItem } from './manager-helpers';
 import { phoneTime } from './phone-reply';
 import { ManagerCheckpoints } from './manager-checkpoints';
+import { requestKey, registerRequest } from '../coordination/requests';
+import type { DecisionActor } from '../coordination/model';
+import type { AnswerPatch } from './session';
+import { CoordinationStore } from '../coordination/store';
 
 /** Questions and permissions: the user's answer, the role gate, auto-permit, «Modalità notte», counted requests. */
 export abstract class ManagerRequests extends ManagerCheckpoints {
+  private coordinationStore?: CoordinationStore;
+  /** Same SQLite journal as Workflows, opened lazily. No function-valued or Electron dependency crosses the boundary. */
+  protected get coordination(): CoordinationStore {
+    return this.coordinationStore ??= new CoordinationStore(path.join(this.opts.userData, 'app.db'));
+  }
+  protected closeCoordination(): void { this.coordinationStore?.close(); }
+
+  /** Called before exposing a request. Throws on persistence failure: never publish an unjournaled approval. */
+  protected registerRequest(r: Rec, req: Omit<PendingRequest, 'chatId'>): void {
+    registerRequest(this.coordination, r.s, req);
+  }
+
+  private deliverAnswer(r: Rec, req: Omit<PendingRequest, 'chatId'>, answer: Answer, actor: DecisionActor, patch?: AnswerPatch): boolean {
+    if (answer.kind !== req.type || (answer.kind === 'permission' && (typeof answer.allow !== 'boolean' || (req.noAlways && answer.always)))) throw new Error('Risposta non valida per questa richiesta.');
+    if (answer.kind === 'question') {
+      const asked = req.questions?.map(q => q.question) ?? [];
+      if (!asked.length || !answer.answers || Object.keys(answer.answers).some(q => !asked.includes(q)) || asked.some(q => {
+        const v = answer.answers[q]; return typeof v !== 'string' && !(Array.isArray(v) && v.every(x => typeof x === 'string'));
+      })) throw new Error('Rispondi alle domande della richiesta originale.');
+    }
+    const store = this.coordination;
+    const decision = store.resolve(requestKey(store, r.s, req), actor, answer);
+    const delivery = store.beginDelivery(decision.id);
+    try {
+      const ok = r.session?.answer(req.id, answer, patch) ?? false;
+      store.finishDelivery(delivery.id, ok ? 'delivered' : 'failed');
+      return ok;
+    } catch (e) {
+      store.finishDelivery(delivery.id, 'uncertain');
+      throw e;
+    }
+  }
+
+  private policyAnswer(r: Rec, req: Omit<PendingRequest, 'chatId'>, answer: Answer, policy: string, patch?: AnswerPatch): boolean {
+    this.registerRequest(r, req);
+    return this.deliverAnswer(r, req, answer, { kind: 'policy', policy }, patch);
+  }
 
   /** The user's answer. by = where they gave it: the PC (the panel) or the paired phone (phone bridge: only a question,
    *  never a permission or a command; chats/phone-port.ts checks the rest before it calls this) */
@@ -29,19 +71,20 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     if (!r.pending.has(requestId)) throw new Error('Questa richiesta non è più aperta.');
     if (!r.session) { this.dropPending(r, requestId); throw new Error('La chat non è più attiva: la richiesta è scaduta.'); }
     const req = r.pending.get(requestId)!;
+    if (by === 'relay') throw new Error('Una risposta inoltrata da un agente non è una decisione dell’utente.');
     if (by === 'phone' && (req.type !== 'question' || answer.kind !== 'question')) throw new Error('Dal telefono si risponde solo a una domanda Sì/No.');
-    const interview = by !== 'relay' && (r.s.plan || r.s.isOrchestrator) && isNativeQuestion(req) && answer.kind === 'question';
+    const interview = (r.s.plan || r.s.isOrchestrator) && isNativeQuestion(req) && answer.kind === 'question';
     const pcOnly = interview ? phoneQuestionReserved(req, () => { this.ensureHistory(r); return r.items; }) : false;
     if (by === 'phone') r.answeringFromPhone = requestId; // the engine resolves it now: pending:resolved carries by 'phone'
     let ok: boolean;
-    try { ok = r.session.answer(requestId, answer); } finally { delete r.answeringFromPhone; }
+    try { ok = this.deliverAnswer(r, req, answer, { kind: 'user', channel: by }); } finally { delete r.answeringFromPhone; }
     if (!ok) { this.dropPending(r, requestId); return; }
     // request/tool/asked bind the line to this question (appctl/tools.ts decidedSince): its tool item never counts as a PC answer
     if (by === 'phone') { this.addItem(r, sysItem('phoneDecided', { time: phoneTime(Date.now()), what: 'question', request: requestId, tool: req.toolUseId ? `t-${req.toolUseId}` : '', asked: req.at }, 'info'), false); this.updated(r); }
     // Full request scope stays private (ADR 0083); shared user events carry only the user's own choices/words.
     if (r.s.isOrchestrator) {
       delete r.intakeKey;
-      if (by !== 'relay' && r.intakePanelId === requestId && isNativeQuestion(req) && answer.kind === 'question') r.intakeKey = randomUUID();
+      if (r.intakePanelId === requestId && isNativeQuestion(req) && answer.kind === 'question') r.intakeKey = randomUUID();
       if (r.intakePanelId === requestId) delete r.intakePanelId;
     }
     const decision = JSON.stringify({ requestId, pcOnly, ...(by !== 'pc' ? { by } : {}), ...(r.intakeKey ? { intakeKey: r.intakeKey } : {}), nativeQuestion: isNativeQuestion(req), title: req.title, detail: req.detail, questions: req.questions ?? [], answer });
@@ -49,12 +92,12 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     // one checkpoint carries the decision and the user's event: two synchronous checkpoints per click froze the window (#294)
     let saved = false;
     try {
-      if (by !== 'relay') saved = answer.kind === 'question' ? this.userWrote(chatId, JSON.stringify({ requestId, answers: Object.values(answer.answers) }))
+      saved = answer.kind === 'question' ? this.userWrote(chatId, JSON.stringify({ requestId, answers: Object.values(answer.answers) }))
         : this.userWrote(chatId, JSON.stringify({ requestId, allow: answer.allow, ...(answer.message ? { message: answer.message } : {}) }));
     } finally { if (!saved) this.persist(true); } // the decision is on disk even when the event could not be recorded
     // a Strategist still asking: the answer is one more thing its strip shows as already clear (ADR 0108)
     const plan = r.s.plan;
-    if (by !== 'relay' && plan && (plan.phase === 'asking' || plan.phase === 'revising') && isNativeQuestion(req) && answer.kind === 'question' && req.questions?.length) {
+    if (plan && (plan.phase === 'asking' || plan.phase === 'revising') && isNativeQuestion(req) && answer.kind === 'question' && req.questions?.length) {
       const next = withClarified(plan, req.questions, answer.answers, pcOnly);
       if (next !== plan) { r.s.plan = next; this.persist(); this.updated(r); }
     }
@@ -151,12 +194,12 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       ...(r.s.parentId ? { parent: { policy: parent ? parent.policy ?? null : r.policy ?? null, title: parent?.s.title ?? r.s.parentId } } : {}) });
     if (verdict.kind === 'pass') return false;
     if (verdict.kind === 'allow') {
-      r.session?.answer(req.id, { kind: 'permission', allow: true }, verdict.patch);
+      this.policyAnswer(r, req, { kind: 'permission', allow: true }, 'role-gate', verdict.patch);
       log.info('chats', 'role gate allowed', { chat: r.s.id, data: { tool: req.tool, qualified: !!verdict.patch } });
       return true;
     }
     this.addItem(r, sysItem(verdict.code, verdict.params, 'warn'), false);
-    r.session?.answer(req.id, { kind: 'permission', allow: false, message: verdict.message });
+    this.policyAnswer(r, req, { kind: 'permission', allow: false, message: verdict.message }, 'role-gate');
     log.info('chats', 'role gate refused', { chat: r.s.id, data: { tool: req.tool, code: verdict.code } });
     return true;
   }
@@ -174,7 +217,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const shown = typeof command === 'string' ? command.slice(0, 120) : req.tool;
     log.info('chats', 'command refused: read-only role', { chat: r.s.id, data: { tool: req.tool } });
     this.addItem(r, sysItem('commandReadOnly', { command: shown }, 'warn'), false);
-    r.session?.answer(req.id, { kind: 'permission', allow: false, message: `This role may only run commands that read (shell-read): ${shown} was refused. Use a reading command, or report what you need to your parent.` });
+    this.policyAnswer(r, req, { kind: 'permission', allow: false, message: `This role may only run commands that read (shell-read): ${shown} was refused. Use a reading command, or report what you need to your parent.` }, 'read-only-role');
     return true;
   }
 
@@ -190,12 +233,12 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const v = autoPermit(req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, undoable: !!r.turnCheckpoint, readScripts: this.readScripts(r) });
     if (v.kind === 'ask') return false;
     if (v.kind === 'allow') {
-      r.session?.answer(req.id, { kind: 'permission', allow: true });
+      this.policyAnswer(r, req, { kind: 'permission', allow: true }, 'auto-permit');
       log.info('chats', 'auto-permit allowed', { chat: r.s.id, data: { tool: req.tool } });
       return true;
     }
     this.addItem(r, sysItem('commandDestructive', { command: v.shown, reason: v.reason }, 'warn'), false);
-    r.session?.answer(req.id, { kind: 'permission', allow: false, message: v.message });
+    this.policyAnswer(r, req, { kind: 'permission', allow: false, message: v.message }, 'auto-permit');
     log.info('chats', 'auto-permit refused', { chat: r.s.id, data: { tool: req.tool } });
     return true;
   }
@@ -212,7 +255,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       const answers = plan ?? recommendedAnswers(req.questions ?? []);
       if (!answers) return false;
       const choice = Object.values(answers).flat().join(', ');
-      if (!r.session?.answer(req.id, { kind: 'question', answers })) return false;
+      if (!this.policyAnswer(r, req, { kind: 'question', answers }, 'away')) return false;
       this.addItem(r, sysItem('awayPicked', { choice }, 'info'), false);
       this.hook('onAway', () => this.opts.onAway?.({ kind: 'picked', chatId: r.s.id, title, text: `${req.questions?.[0]?.question ?? req.title} → ${choice}` }));
       log.info('chats', 'away: recommended answer', { chat: r.s.id, data: { questions: req.questions?.length ?? 0 } });
@@ -221,12 +264,12 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     // a plan mode's «plan ready» is a plan to approve, not a permission: it starts like a Strategist's plan, and every
     // permission the work then asks for still goes through the checks above or is parked here
     if (req.tool === 'ExitPlanMode') {
-      if (!r.session?.answer(req.id, { kind: 'permission', allow: true })) return false;
+      if (!this.policyAnswer(r, req, { kind: 'permission', allow: true }, 'away-plan')) return false;
       this.addItem(r, sysItem('awayPicked', { choice: 'Approva il piano' }, 'info'), false);
       this.hook('onAway', () => this.opts.onAway?.({ kind: 'plan', chatId: r.s.id, title, text: req.title || 'piano' }));
       return true;
     }
-    if (!r.session?.answer(req.id, { kind: 'permission', allow: false, message: AWAY_PARKED })) return false;
+    if (!this.policyAnswer(r, req, { kind: 'permission', allow: false, message: AWAY_PARKED }, 'away-parked')) return false;
     const what = `${req.tool}${req.detail ? `: ${req.detail}` : req.title ? `: ${req.title}` : ''}`;
     this.addItem(r, sysItem('awayParked', { what: what.slice(0, 160) }, 'warn'), false);
     this.hook('onAway', () => this.opts.onAway?.({ kind: 'parked', chatId: r.s.id, title, text: `permesso non concesso, ${what}` }));
@@ -240,7 +283,9 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   }
 
   /** Each request once per run, by its id: question, permission or command. */
-  protected countRequest(r: Rec, req: Pick<PendingRequest, 'id' | 'type'>): void {
+  protected countRequest(r: Rec, req: Pick<PendingRequest, 'id' | 'type'> | Omit<PendingRequest, 'chatId'>): void {
+    // sink.pending calls here after policy mutations and before exposing the request, including plain chats without runs.
+    if ('tool' in req) this.registerRequest(r, req);
     const run = r.s.run;
     if (!run || run.endedAt !== undefined || r.pending.has(req.id)) return;
     const seen = r.runSeen ??= new Set();

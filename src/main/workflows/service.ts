@@ -1,8 +1,13 @@
 // Durable work threads independent of chat lifetime. Gates are decided only through renderer IPC.
 // Stage reports are agent evidence, not execution authority: this service never runs a command or grants permissions.
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import { decisionFeedback } from '../../shared/decision-feedback';
-import { readLocal, writeLocal } from '../agents/local-store';
+import { readLocal } from '../agents/local-store';
+import type { ChatSummary, PendingRequest } from '../../shared/contract';
+import { CoordinationStore, proposalHash } from '../coordination/store';
+import { projectAssignment, projectWork, type ProjectedWork } from '../coordination/projection';
+import type { RequestKey, RequestRecord } from '../coordination/model';
 import { WORK_ROUTES, WORK_STAGES, WORK_PRIORITY, orderWork, type WorkCreate, type WorkDecision, type WorkReport, type WorkThread, type WorkEvent } from '../../shared/workflows';
 const gates = new Set(['mockup', 'plan', 'deploy']);
 function text(value: unknown, max = 2000): string {
@@ -28,19 +33,40 @@ function validThread(x: unknown): x is WorkThread {
 }
 export class Workflows {
   private records: WorkThread[];
-  constructor(private file: string, private changed: (rows: WorkThread[]) => void = () => {}, private now = Date.now, private planState?: (row: WorkThread) => { pending: boolean; approved: string }) {
-    const raw = readLocal(file);
-    if (raw !== undefined && (!Array.isArray(raw) || raw.length > 2000 || raw.some(x => !validThread(x)))) throw new Error('Archivio dei fili non valido: originale conservato.');
-    this.records = (raw ?? []) as WorkThread[];
+  readonly coordination: CoordinationStore;
+  constructor(file: string, private changed: (rows: WorkThread[]) => void = () => {}, private now = Date.now, private planState?: (row: WorkThread) => { pending: boolean; approved: string }, private live?: { store: CoordinationStore; chats: () => ChatSummary[]; pending: () => PendingRequest[] }) {
+    this.coordination = live?.store ?? new CoordinationStore(path.join(path.dirname(file), 'app.db'), now);
+    if (!this.coordination.imported(file)) {
+      const raw = readLocal(file);
+      if (raw !== undefined && (!Array.isArray(raw) || raw.length > 2000 || raw.some(x => !validThread(x)))) throw new Error('Archivio dei fili non valido: originale conservato.');
+      this.coordination.importJobs(file, (raw ?? []) as WorkThread[]);
+    }
+    this.records = this.coordination.works();
+    // A pre-migration proposal remains pending. Past approvals stay historical; no synthetic consent is minted.
+    for (const row of this.records) if (row.proposal && !this.coordination.original(`work:${row.id}`, row.proposal.id)) this.coordination.register(this.proposalRequest(row));
   }
   priorityFor(chatId: string): number { return Math.min(2, ...this.records.filter(r => r.status !== 'done' && r.chatIds.includes(chatId)).map(r => WORK_PRIORITY[r.priority])); }
-  list(): WorkThread[] { return structuredClone(this.records).sort(orderWork); }
+  list(): WorkThread[] { return this.projection(); }
+  projection(): ProjectedWork[] {
+    const chats = this.live?.chats() ?? [], pending = this.live?.pending() ?? [], requests = this.coordination.requests(undefined, 2000);
+    const linked = new Set(this.records.flatMap(row => row.chatIds));
+    const assignments = this.coordination.assignments().filter(a => !a.parentRunId && !linked.has(a.chatId));
+    return [...this.records.map(row => projectWork(row, chats, pending, requests)), ...assignments.map(a => projectAssignment(a, chats, pending, requests))].sort(orderWork);
+  }
+  private proposalRequest(row: WorkThread): Omit<RequestRecord, 'id' | 'state'> {
+    const assignments = (this.live?.chats() ?? []).filter(c => row.chatIds.includes(c.id)).map(c => ({ chatId: c.id, runId: c.run?.runId ?? null, taskVersion: c.run?.taskVersion ?? 1 })).sort((a, b) => a.chatId.localeCompare(b.chatId));
+    const first = assignments[0];
+    const key: RequestKey = { originalRequestId: row.proposal!.id, jobId: row.id, chatId: `work:${row.id}`, runId: first?.runId ?? null, taskVersion: first?.taskVersion ?? 1,
+      proposalRevision: row.version, proposalHash: proposalHash({ proposal: row.proposal, assignments, stage: row.stage }) };
+    return { key, kind: 'workflow', at: row.updatedAt, payload: row.proposal };
+  }
   private save(row: WorkThread): WorkThread {
     const next = [...this.records.filter(x => x.id !== row.id), row];
-    writeLocal(this.file, next); // commit disk before memory or notifications
+    this.coordination.saveWork(row, this.records.find(x => x.id === row.id)?.version ?? null, row.proposal ? this.proposalRequest(row) : undefined);
     this.records = next;
-    this.changed(this.list());
-    return structuredClone(row);
+    const projection = this.list();
+    this.changed(projection);
+    return projection.find(x => x.id === row.id)!;
   }
   create(input: WorkCreate): WorkThread {
     if (!Object.hasOwn(WORK_ROUTES, input.profile) || !Object.hasOwn(WORK_PRIORITY, input.priority)) throw new Error('Profilo o priorità non valido.');
@@ -53,7 +79,8 @@ export class Workflows {
       createdAt: at, updatedAt: at, events: [{ at, stage: 'analysis', kind: 'created', text: title }] });
   }
   private current(id: string, version: number): WorkThread {
-    const row = this.records.find(r => r.id === id);
+    const row = this.coordination.work(id);
+    if (!row && this.coordination.assignments().some(a => a.taskId === id)) throw new Error('Questo è un incarico, non un filo a fasi: usa app_work_create per collegarne la chat a un filo.');
     if (!row || row.version !== version) throw new Error('Il filo è cambiato: rileggi lo stato prima di agire.');
     return structuredClone(row);
   }
@@ -126,6 +153,7 @@ export class Workflows {
     const feedback = decisionFeedback(input.feedback, input.approve);
     const row = this.current(input.id, input.expectedVersion);
     if (!row.proposal || row.proposal.id !== input.proposalId) throw new Error('Proposta scaduta: rileggi il filo.');
+    const request = this.proposalRequest(row);
     const proposal = row.proposal.text;
     if (input.approve) row.approvedProposal = { ...row.proposal };
     else delete row.approvedProposal;
@@ -133,7 +161,14 @@ export class Workflows {
     row.status = input.approve ? 'active' : 'blocked'; row.waitingOn = input.approve ? '' : 'Nuova proposta';
     if (input.approve && row.cycles >= 3 && ['review', 'test', 'qa'].includes(row.stage)) { row.stage = 'develop'; row.cycles = 0; row.evidence = ''; }
     row.nextAction = input.approve ? 'Eseguire la proposta approvata e verificarne l’esito' : 'Preparare una proposta alternativa';
-    return this.event(row, input.approve ? 'approved' : 'rejected', feedback
-      ? `${proposal}\nRisposta libera dell’utente (${input.proposalId}, versione ${input.expectedVersion}): ${feedback}` : appNote ? `${proposal}\n${appNote}` : proposal, appNote ? 'app-away' : undefined);
+    row.version++; row.updatedAt = this.now();
+    row.events = [...row.events, { at: row.updatedAt, stage: row.stage, kind: input.approve ? 'approved' as const : 'rejected' as const, text: feedback
+      ? `${proposal}\nRisposta libera dell’utente (${input.proposalId}, versione ${input.expectedVersion}): ${feedback}` : appNote ? `${proposal}\n${appNote}` : proposal, ...(appNote ? { by: 'app-away' as const } : {}) }].slice(-200);
+    this.coordination.resolve(request.key, appNote ? { kind: 'policy', policy: 'away' } : { kind: 'user', channel: 'pc' }, input,
+      { row, expected: input.expectedVersion });
+    this.records = [...this.records.filter(x => x.id !== row.id), row];
+    const projection = this.list();
+    this.changed(projection);
+    return projection.find(x => x.id === row.id)!;
   }
 }

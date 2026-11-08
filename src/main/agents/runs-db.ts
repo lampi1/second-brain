@@ -7,6 +7,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { DatabaseSync } from 'node:sqlite';
 import { APP_DB, migrate, openAppDbReadOnly, areaVersion, reopenAppDb, tx, type Migration } from '../app-db';
+import { coordinationSchema } from '../coordination/store';
+import { writeAssignment } from '../coordination/assignments';
+import type { AgentRun } from '../../shared/agents';
 
 export const AREA = 'agent_runs';
 /** The area's forward migrations: index i takes it from version i to i + 1. Never edit a shipped step; add one. */
@@ -28,7 +31,17 @@ export interface RunsWrite { upsert: readonly RunRow[]; remove: readonly string[
 export class RunsDb {
   private handle: DatabaseSync | null;
   /** `db`: the connection openAppDb gave for `file`; closed (close, closeAppDbs), it is opened again at the next use. */
-  constructor(db: DatabaseSync, readonly file: string) { this.handle = db; migrate(db, AREA, RUNS_STEPS); }
+  constructor(db: DatabaseSync, readonly file: string) {
+    this.handle = db; migrate(db, AREA, RUNS_STEPS); coordinationSchema(db);
+    tx(db, () => {
+      if (db.prepare("select 1 from coordination_meta where key = 'assignments-v1'").get()) return;
+      for (const row of db.prepare('select json from agent_runs').all() as { json: string }[]) {
+        let run: AgentRun; try { run = JSON.parse(row.json) as AgentRun; } catch { continue; }
+        writeAssignment(db, run);
+      }
+      db.prepare("insert into coordination_meta(key,value) values('assignments-v1','imported')").run();
+    });
+  }
   private get db(): DatabaseSync {
     if (!this.handle?.isOpen) this.handle = reopenAppDb(this.file);
     return this.handle;
@@ -81,7 +94,11 @@ export class RunsDb {
   private apply(w: RunsWrite): void {
     const put = this.db.prepare(`insert into agent_runs(id, agent_id, started_at, ended_at, json) values(?, ?, ?, ?, ?)
       on conflict(id) do update set agent_id = excluded.agent_id, started_at = excluded.started_at, ended_at = excluded.ended_at, json = excluded.json`);
-    for (const r of w.upsert) put.run(r.id, r.agentId, r.startedAt, r.endedAt, r.json);
+    for (const r of w.upsert) {
+      put.run(r.id, r.agentId, r.startedAt, r.endedAt, r.json);
+      let run: AgentRun; try { run = JSON.parse(r.json) as AgentRun; } catch { continue; }
+      writeAssignment(this.db, run);
+    }
     const del = this.db.prepare('delete from agent_runs where id = ?');
     for (const id of w.remove) del.run(id);
     const set = this.db.prepare('insert into agent_runs_meta(key, value) values(?, ?) on conflict(key) do update set value = excluded.value');

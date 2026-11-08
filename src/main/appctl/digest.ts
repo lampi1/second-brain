@@ -12,6 +12,7 @@ import { redact } from '../log';
 import { engineLabel } from '../engines/registry';
 import { uiLocale } from '../locale';
 import { workRecap } from '../../shared/work-recap';
+import type { ProjectedWork } from '../coordination/projection';
 
 export interface DigestInput {
   chats: ChatSummary[];
@@ -26,6 +27,8 @@ export interface DigestInput {
   selfId?: string;
   warnTokens: number;
   branch?: (cwd: string) => string | null;
+  /** Exactly Workflows.list(): no second chat-derived job state. */
+  works?: ProjectedWork[];
 }
 
 const one = (s: string | undefined, n: number): string => { const t = (s ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
@@ -66,7 +69,8 @@ export function prLines(d: TasksState): string[] {
 
 export function digest(inp: DigestInput): string {
   const { now, since } = inp;
-  const open = inp.chats.filter(c => !c.closedAt && c.state !== 'closed' && c.id !== inp.selfId);
+  const linked = new Set(inp.works?.flatMap(w => w.chatIds) ?? []);
+  const open = inp.chats.filter(c => !c.closedAt && c.state !== 'closed' && c.id !== inp.selfId && !linked.has(c.id));
   const asks = new Map<string, PendingRequest[]>();
   for (const r of inp.pending) asks.set(r.chatId, [...(asks.get(r.chatId) ?? []), r]);
   const changed = (c: ChatSummary) => since === null || c.updatedAt >= since;
@@ -112,7 +116,7 @@ export function digest(inp: DigestInput): string {
 
   const from = since ?? now - 24 * 3600_000;
   const closed = inp.chats.filter(c => c.closedAt && c.closedAt >= from && c.id !== inp.selfId)
-    .map(c => `- «${c.title}» chiusa ${ago(now - c.closedAt!)} fa (${c.closedBy === 'user' ? 'a mano' : 'da sola, finita'})${c.lastText ? ` · ultima riga «${one(c.lastText, 160)}»` : ''}`);
+    .map(c => `- «${c.title}» chiusa ${ago(now - c.closedAt!)} fa (${c.closedBy === 'user' ? 'a mano' : 'automaticamente'}; chiusura ≠ lavoro completato)${c.lastText ? ` · ultima riga «${one(c.lastText, 160)}»` : ''}`);
   const titleOf = (id: string) => inp.chats.find(c => c.id === id)?.title ?? id;
   const runs = inp.runs.filter(r => (r.endedAt ?? r.startedAt) >= (since ?? now - 2 * 3600_000))
     .map(r => `- «${titleOf(r.chatId)}»: \`${one(redact(r.code.split('\n')[0] ?? ''), 120)}\` ${r.state === 'running' ? 'in corso' : `${r.state}, uscita ${r.exitCode ?? '-'}`}`);
@@ -120,6 +124,10 @@ export function digest(inp: DigestInput): string {
   const counts = [`${open.filter(c => !c.isOrchestrator).length} chat aperte`, wait.length + toldWait && `${wait.length + toldWait} richieste per l'utente`, err.length + toldErr && `${err.length + toldErr} in errore`, run.length && `${run.length} al lavoro`].filter(Boolean).join(', ');
   const out = [`Stato alle ${hhmm(now)}${since !== null ? ` (novità dalle ${hhmm(since)})` : ''}: ${counts}.`];
   const section = (title: string, rows: string[]) => { if (rows.length) out.push('', `${title}:`, ...rows); };
+  section('Lavori (stessa proiezione di app_work_list)', (inp.works ?? []).filter(w => since === null || w.updatedAt >= since || w.coordination.state !== 'done').map(w => {
+    const p = w.coordination;
+    return `- «${w.title}» (${w.id}, v${w.version}): ${p.state} · fase ${w.stage}${p.waitingOn ? ` · attesa: ${one(p.waitingOn, 300)}` : ''}${p.nextAction ? ` · prossima azione: ${one(p.nextAction, 300)}` : ''}\n  Prove: ${p.evidence.map(e => `${e.source}:${e.id} ${one(e.detail, 240)}`).join(' · ')}`;
+  }));
   section('Aspettano l\'utente (l\'app glielo mostra già: nello stato basta dire quale chat e su cosa)', wait);
   section('In errore', err);
   section('Al lavoro', run);

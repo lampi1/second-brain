@@ -318,6 +318,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (since !== null && Number.isNaN(since)) throw new Error('since: "last" oppure un orario ISO (es. 2026-10-13T18:00:00Z)');
         lastDigest.set(key, now);
         return digest({
+          works: d.workflows?.projection(),
           chats: d.chats.list().filter(mine).map(muted), pending: [...d.chats.pending(), ...(d.commandAsks?.() ?? [])].filter(r => !other(r.chatId)).map(r => mutedRequest(r, delegated(r.chatId))),
           runs: (d.runs?.() ?? []).filter(r => !other(r.chatId) && !delegated(r.chatId)), tasks: d.tasks?.() ?? null,
           now, since, selfId: caller()?.id, warnTokens: d.brain.settings().contextWarnTokens, branch: gitBranch,

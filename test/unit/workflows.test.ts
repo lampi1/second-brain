@@ -1,5 +1,5 @@
 // Persistent workflow invariants: receipts, recovery loops, stale decisions and atomic corruption refusal.
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -7,8 +7,9 @@ import { Workflows } from '../../src/main/workflows/service';
 import { workflowTools } from '../../src/main/workflows/tools';
 import type { ChatSummary } from '../../src/shared/contract';
 import type { WorkReport, WorkThread } from '../../src/shared/workflows';
+import { closeAppDbs } from '../../src/main/app-db';
 const dirs: string[] = [];
-afterEach(() => { for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+afterEach(() => { closeAppDbs(); for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 function setup(profile: 'feature' | 'bugfix' | 'investigation' = 'feature') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-work-')); dirs.push(dir);
   const file = path.join(dir, 'work.json'), service = new Workflows(file);
@@ -86,11 +87,12 @@ describe('work threads', () => {
     expect(f.service.list().map(r => r.priority)).toEqual(['production', 'support', 'normal']);
   });
   it.each([{ profile: 'constructor' }, { status: 'invented' }, { events: [null] }, { stage: 'deploy', profile: 'investigation' }])('preserves invalid persistent data %j', patch => {
-    const f = setup(); fs.writeFileSync(f.file, JSON.stringify([{ ...f.row, ...patch }])); const raw = fs.readFileSync(f.file, 'utf8');
-    expect(() => new Workflows(f.file)).toThrow(/conservato/); expect(fs.readFileSync(f.file, 'utf8')).toBe(raw);
+    const f = setup(), legacy = path.join(path.dirname(f.file), 'invalid-legacy.json'); fs.writeFileSync(legacy, JSON.stringify([{ ...f.row, ...patch }])); const raw = fs.readFileSync(legacy, 'utf8');
+    expect(() => new Workflows(legacy)).toThrow(/conservato/); expect(fs.readFileSync(legacy, 'utf8')).toBe(raw);
   });
   it('does not mutate memory if persistence fails', () => {
-    const f = setup(); const before: WorkThread[] = f.service.list(); fs.unlinkSync(f.file); fs.mkdirSync(f.file);
+    const f = setup(); const before: WorkThread[] = f.service.list();
+    vi.spyOn(f.service.coordination, 'saveWork').mockImplementationOnce(() => { throw new Error('Disk unavailable'); });
     expect(() => f.report('update')).toThrow(); expect(f.service.list()).toEqual(before);
   });
 });
