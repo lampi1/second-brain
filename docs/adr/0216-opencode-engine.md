@@ -46,7 +46,7 @@ Checked against OpenCode 1.19.5 on a real `opencode acp`:
   Otherwise its cached empty input hides the paths from the existing local-work permission gate, prompting for
   reads inside the workspace. Locations supplement raw input; role ceilings and outside-workspace checks still apply.
   This does not introduce an OpenCode permission mode or automatically accept arbitrary engine permission requests.
-  Repeated approval prompts beyond this locations fix remain unresolved: disabling unsafe upstream grants is a safety
+  Repeated approval prompts beyond this locations fix remained unresolved here (now: [ADR 0232](0232-opencode-auto-permissions.md)): disabling unsafe upstream grants is a safety
   boundary, not a complete solution to repeated prompts. Tests simulate the upstream wildcard cache without executing
   shell commands; real-engine end-to-end behavior and low-tier model reliability still need live verification.
 

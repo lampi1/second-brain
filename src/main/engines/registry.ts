@@ -39,6 +39,8 @@ export interface EngineDef extends EngineInfo, EngineStart {
   modelOption?: boolean;
   /** a catalog entry (ADR 0221): its install page and sign-in, for Settings */
   catalog?: EngineCatalogInfo;
+  /** ACP: the app passes the engine its permission rules at every start (OpenCode: OPENCODE_CONFIG_CONTENT, ADR 0232) */
+  permissionConfig?: 'opencode';
 }
 
 /** The shape of an engine id: a chat saved on an engine since removed stays readable (it cannot start). */
@@ -75,7 +77,7 @@ const APP_ENGINES: readonly EngineEntry[] = [
   // OpenCode (ADR 0216): any provider the user set up in it (OpenRouter included), through `opencode acp`; login is its
   // own `opencode auth login`; off until the user turns it on (unlike the three above, few users have it). --print-logs:
   // its log also on stderr, the only place a provider error shows up (chats/acp.ts streamErrorOf)
-  { id: 'opencode', label: 'OpenCode', name: 'OpenCode', kind: 'acp', command: 'opencode', args: ['acp', '--print-logs'], login: ['auth', 'login'], defaultOn: false, modelOption: true },
+  { id: 'opencode', label: 'OpenCode', name: 'OpenCode', kind: 'acp', command: 'opencode', args: ['acp', '--print-logs'], login: ['auth', 'login'], defaultOn: false, modelOption: true, permissionConfig: 'opencode' },
   { id: ANTHROPIC_API, label: 'Anthropic API', name: 'Anthropic API', kind: 'api', baseUrl: 'https://api.anthropic.com/v1', protocol: 'anthropic', login: [], defaultOn: false },
   // the ACP catalog (ADR 0221): proposals, never on by default and never trusted until the user's click (trust.ts)
   ...ACP_CATALOG.map((c): EngineEntry => ({ ...c, kind: 'acp', defaultOn: false })),

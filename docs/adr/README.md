@@ -234,3 +234,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0229](0229-orchestrator-remote-control.md) «Controllo remoto»: Claude Code Remote Control of the Orchestrator (same engine, reattach, phone messages shown) — proposed
 - [0230](0230-impara-explain-mode.md) Impara: «Spiegazione», a lesson with pictures and no quiz — proposed
 - [0231](0231-agents-merge-verified-branches-to-main.md) Agents merge verified branches into main (check:quick, a clean Sentinel and the guard; no e2e since 2026-11-08) — accepted
+- [0232](0232-opencode-auto-permissions.md) OpenCode chats start with the app's permission rules (role ceiling, Claude's deny list) — accepted

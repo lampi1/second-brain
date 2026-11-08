@@ -579,8 +579,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/chats/claude.ts onControlRequest; src/main/chats/acp.ts
       b('La richiesta arriva dal motore (Claude, Cursor, o Codex per comandi e modifiche) e diventa un pannello con le risposte disponibili.',
         'The request comes from the engine (Claude, Cursor, or Codex for commands and file changes) and becomes a panel with the available responses.'),
-      b('«Consenti sempre», dove disponibile, vale solo per questa sessione. OpenCode e Cursor restano su una sola esecuzione: i consensi memorizzati dal motore potrebbero saltare i controlli successivi dell’app. In OpenCode i prompt ripetuti restano un limite noto. Nessun file di impostazioni viene modificato.',
-        '"Allow always", where available, lasts for this session only. OpenCode and Cursor stay once-only: remembered engine grants could skip later app checks. Repeated OpenCode prompts remain a known limitation. No settings file is changed.'),
+      b('«Consenti sempre», dove disponibile, vale solo per questa sessione. OpenCode e Cursor restano su una sola esecuzione: i consensi memorizzati dal motore potrebbero saltare i controlli successivi dell’app. Nessun file di impostazioni viene modificato.',
+        '"Allow always", where available, lasts for this session only. OpenCode and Cursor stay once-only: remembered engine grants could skip later app checks. No settings file is changed.'),
+      // src/main/brain/adapters/opencode-permission.ts (ADR 0232)
+      b('OpenCode parte ogni volta con le regole dell’app: ciò che il ruolo può già fare (comandi, letture anche nel cervello, modifiche) va senza pannello; ciò che Claude ti blocca resta bloccato, qualunque cosa dica la configurazione di OpenCode; push, cancellazioni, file protetti e codice passato a una shell (bash -c, python -c) chiedono ancora. Mai più poteri del ruolo.',
+        'OpenCode starts every time with the app’s rules: what the role may already do (commands, reads in the brain too, edits) runs without a panel; what Claude blocks for you stays blocked, whatever OpenCode’s own config says; pushes, deletions, protected files and code handed to a shell (bash -c, python -c) still ask. Never more than the role.'),
       // src/shared/contract/chats.ts PermissionMode; src/renderer/lib/format.ts labels
       b('Modalità: Chiedi ogni volta, Accetta le modifiche, Automatico, Solo piano, Senza permessi; si sceglie all’avvio o dal menu ⋯ (solo Claude).',
         'Modes: Ask every time, Accept edits, Automatic, Plan only, No permissions; chosen at start or from the ⋯ menu (Claude only).'),
