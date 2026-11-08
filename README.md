@@ -219,7 +219,8 @@ the Orchestrator to explain it your way.
 - **Answer with one key.** Questions and permissions show up as cards in one window, with an estimate before and a
   verdict after. OpenCode and Cursor stay once-only: remembered upstream grants could skip later app permission
   checks. OpenCode starts with the app's permission rules instead: what the role may already do runs without a card,
-  what your Claude settings deny stays denied, pushes and deletions still ask. No global CLI settings are changed.
+  what your Claude settings deny stays denied whatever OpenCode's own config says, pushes, deletions and code handed to
+  a shell still ask. No global CLI settings are changed.
 - **Settings that find themselves.** One page with a section list, search that highlights the matching row, instant
   save with Undo.
 - **Connectors in one paste.** Paste a README's JSON, a command line or a URL and the MCP server is ready; switch it on

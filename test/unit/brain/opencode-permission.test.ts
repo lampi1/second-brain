@@ -1,6 +1,7 @@
 // OpenCode's permissions for an app chat (brain/adapters/opencode-permission.ts, ADR 0221): the config passed at every
-// start, judged with OpenCode's own matching (ordered rules, last match wins), so a role's normal work runs without a
-// panel, what Claude denies stays denied, and no role gets more than it has.
+// start, judged with OpenCode's own merge and matching (a user's keys keep their place, ordered rules, last match wins)
+// on every agent, so a role's normal work runs without a panel, what Claude denies stays denied whatever the user's
+// OpenCode config says, and no role gets more than it has.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -42,22 +43,53 @@ function match(str: string, pat: string): boolean {
   if (re.endsWith(' .*')) re = `${re.slice(0, -3)}( .*)?`;
   return new RegExp(`^${re}$`, 'si').test(s);
 }
-/** The build agent's ruleset as OpenCode builds it: its defaults first, the config's permission next, the agent's own
- *  last; then the last matching rule decides (no rule: ask). */
-function judge(role: OpenCodeRole, permission: string, pattern: string, rules: ClaudeRules = claude): Action {
-  const cfg = JSON.parse(openCodeConfigContent(role, rules)) as { permission: Record<string, Action | Record<string, Action>>; agent?: { build?: { permission?: { edit?: Record<string, Action> } } } };
-  const flat: Rule[] = [{ permission: '*', pattern: '*', action: 'allow' }, { permission: 'external_directory', pattern: '*', action: 'ask' }];
-  const add = (perm: string, v: Action | Record<string, Action>): void => {
-    if (typeof v === 'string') flat.push({ permission: perm, pattern: '*', action: v });
-    else for (const [p, a] of Object.entries(v)) flat.push({ permission: perm, pattern: p, action: a });
-  };
-  for (const [perm, v] of Object.entries(cfg.permission)) add(perm, v);
-  const edit = cfg.agent?.build?.permission?.edit;
-  if (edit) add('edit', edit);
+type Perm = Record<string, Action | Record<string, Action>>;
+type Json = Record<string, unknown>;
+const isObj = (v: unknown): v is Json => !!v && typeof v === 'object' && !Array.isArray(v);
+/** OpenCode's config merge (remeda mergeDeep): objects key by key, a key already there keeps its place, new ones last. */
+function mergeDeep(a: unknown, b: unknown): unknown {
+  if (!isObj(a) || !isObj(b)) return b;
+  const out: Json = { ...a };
+  for (const [k, v] of Object.entries(b)) out[k] = k in out ? mergeDeep(out[k], v) : v;
+  return out;
+}
+/** An agent's `tools` (true/false) become permissions placed before its own `permission` (AgentConfig decode). */
+const agentPerm = (a: unknown): Perm => {
+  const o = isObj(a) ? a : {};
+  const perm = typeof o.permission === 'string' ? { '*': o.permission as Action } : (o.permission ?? {}) as Perm;
+  const out: Perm = {};
+  for (const [t, on] of Object.entries((o.tools ?? {}) as Record<string, boolean>)) out[t === 'write' || t === 'patch' ? 'edit' : t] = on ? 'allow' : 'deny';
+  return Object.assign(out, perm);
+};
+const ruleset = (p: Perm): Rule[] => Object.entries(p).flatMap(([perm, v]) =>
+  typeof v === 'string' ? [{ permission: perm, pattern: '*', action: v }] : Object.entries(v).map(([pattern, action]) => ({ permission: perm, pattern, action })));
+/** OpenCode 1.19.5's native agents: its defaults, then each agent's own (agent/agent.ts). */
+const DEFAULTS: Perm = { '*': 'allow', doom_loop: 'ask', external_directory: { '*': 'ask' }, question: 'deny', plan_enter: 'deny', plan_exit: 'deny', read: { '*': 'allow', '*.env': 'ask', '*.env.*': 'ask', '*.env.example': 'allow' } };
+const NATIVE: Record<string, Perm> = {
+  build: { question: 'allow', plan_enter: 'allow' },
+  plan: { question: 'allow', plan_exit: 'allow', task: { general: 'deny' }, edit: { '*': 'deny', '.opencode/plans/*.md': 'allow' } },
+  general: { todowrite: 'deny' },
+  explore: { '*': 'deny', grep: 'allow', glob: 'allow', list: 'allow', bash: 'allow', webfetch: 'allow', websearch: 'allow', read: 'allow', external_directory: { '*': 'ask' } },
+};
+/** One agent's ruleset as OpenCode builds it from the user's configs then the app's (merged last): defaults, the agent's
+ *  own native rules, the shared `permission`, the agent's configured `permission` (the legacy `mode` merged into it);
+ *  then the last matching rule decides (no rule: ask). */
+function judge(role: OpenCodeRole, permission: string, pattern: string, o: { rules?: ClaudeRules; agent?: string; user?: Json } = {}): Action {
+  const s = mergeDeep(o.user ?? {}, JSON.parse(openCodeConfigContent(role, o.rules ?? claude)) as unknown) as Json;
+  let agents = (s.agent ?? {}) as Json;
+  for (const [k, v] of Object.entries((s.mode ?? {}) as Json)) agents = mergeDeep(agents, { [k]: { ...(v as Json), mode: 'primary' } }) as Json;
+  const name = o.agent ?? 'build';
+  const flat = [...ruleset(DEFAULTS), ...ruleset(NATIVE[name] ?? {}), ...ruleset(agentPerm({ permission: s.permission })), ...ruleset(agentPerm(agents[name]))];
   let out: Action = 'ask';
   for (const r of flat) if (match(permission, r.permission) && match(pattern, r.pattern)) out = r.action;
   return out;
 }
+/** A user's OpenCode config that tries to open everything: shared, per agent, legacy mode and tools. */
+const OPEN: Json = {
+  permission: { '*': 'ask', bash: { '*': 'ask', 'git *': 'allow' }, edit: 'allow', task: 'allow' },
+  agent: Object.fromEntries(['build', 'plan', 'general', 'explore'].map(a => [a, { tools: { bash: true, write: true }, permission: { bash: 'allow', edit: 'allow', read: 'allow', task: 'allow', external_directory: 'allow' } }])),
+  mode: { build: { permission: { bash: 'allow', read: 'allow' } }, plan: { permission: { edit: 'allow' } } },
+};
 
 const artisan: OpenCodeRole = { tools: null, ceiling: null };
 const scout: OpenCodeRole = { tools: { allow: ['read', 'shell-read', 'web'] }, ceiling: null };
@@ -122,26 +154,67 @@ describe('OpenCode permission config', () => {
     expect(openCodePermission(artisan, claude).edit).toEqual(expect.not.objectContaining({ '*': 'allow' }));
   });
 
-  it('keeps the user\'s own OpenCode config, replacing only the permissions', () => {
-    const own = JSON.stringify({ model: 'openrouter/x', permission: { bash: 'allow' }, agent: { build: { temperature: 0.2, permission: { bash: 'ask' } } } });
+  it('keeps the user\'s own OpenCode config, the app\'s rules after its own; the chat starts on build', () => {
+    const own = JSON.stringify({ model: 'openrouter/x', default_agent: 'mine', permission: { bash: 'allow' }, agent: { build: { temperature: 0.2, permission: { bash: 'ask' } } } });
     const cfg = JSON.parse(openCodeConfigContent(artisan, NO_CLAUDE_RULES, own)) as {
-      model: string; permission: { bash: Record<string, string> };
-      agent: { build: { temperature: number; permission: unknown } };
+      model: string; default_agent: string; permission: Record<string, unknown>;
+      agent: { build: { temperature: number; permission: Record<string, unknown> } };
     };
     expect(cfg.model).toBe('openrouter/x');
-    expect(cfg.permission.bash['git push*']).toBe('ask');
+    expect(cfg.default_agent).toBe('build');
     expect(cfg.agent.build.temperature).toBe(0.2);
-    expect(cfg.agent.build.permission).toEqual({ bash: 'ask', edit: expect.objectContaining({ '*': 'allow' }) });
+    expect(Object.keys(cfg.permission)[0]).toBe('bash');
+    expect(Object.keys(cfg.agent.build.permission)[0]).toBe('bash');
+    expect(cfg.agent.build.permission.bash).toBe('ask');
+    expect((cfg.agent.build.permission.bAsH as Record<string, string>)['git push*']).toBe('ask');
+    expect(cfg.agent.build.permission.eDiT).toEqual(expect.objectContaining({ '*': 'allow' }));
     expect(() => JSON.parse(openCodeConfigContent(artisan, NO_CLAUDE_RULES, 'not json'))).not.toThrow();
+  });
+
+  it('keeps its rules last over a user\'s OpenCode config that opens everything: shared, per agent, mode, tools', () => {
+    const modeOnly: Json = { mode: { build: { permission: { bash: 'allow', read: 'allow' } }, plan: { permission: { edit: 'allow' } } } };
+    for (const user of [OPEN, modeOnly]) {
+      for (const agent of ['build', 'general', 'explore', 'plan']) {
+        const o = { user, agent };
+        for (const c of [`bash ops/${SCRIPT} status`, `sqlcmd -S srv.${AZURE_SQL} -Q "select 1"`, 'git push --force', `cat ~/${SECRET}`]) expect(judge(artisan, 'bash', c, o), `${agent} ${c}`).toBe('deny');
+        expect(judge(artisan, 'read', `${home}/${SECRET}`, o), agent).toBe('deny');
+        expect(judge(scout, 'bash', 'git status', o), agent).toBe('ask');
+        expect(judge(scout, 'edit', 'src/x.ts', o), agent).toBe('deny');
+        expect(judge(artisan, 'bash', 'git push origin feat', o), agent).toBe('ask');
+      }
+      expect(judge(artisan, 'edit', 'src/x.ts', { user, agent: 'plan' })).toBe('deny');
+      expect(judge(artisan, 'edit', '.opencode/plans/p.md', { user, agent: 'plan' })).toBe('allow');
+      expect(judge(artisan, 'edit', 'src/x.ts', { user, agent: 'explore' })).toBe('deny');
+      expect(judge(artisan, 'edit', 'src/x.ts', { user, agent: 'general' })).toBe('allow');
+      // the task tool starts only the native subagents: a user's own agent carries permissions the app cannot see
+      expect(judge(artisan, 'task', 'mine', { user })).toBe('deny');
+      expect(judge(artisan, 'task', 'general', { user })).toBe('allow');
+      expect(judge(artisan, 'task', 'general', { user, agent: 'plan' })).toBe('deny');
+    }
+    // a user's deny on what the app allows is kept only where the app has no rule of its own: Claude's list is what holds
+    expect(judge(artisan, 'bash', 'git status', { user: { permission: { bash: { 'git status': 'deny' } } } })).toBe('allow');
+  });
+
+  it('asks, never allows, an interpreter given code on the command line: a deny rule cannot see inside it', () => {
+    for (const c of ['bash -c "x"', 'sh -c x', 'pwsh -c Remove-AzResource -Id x', 'powershell -Command "Invoke-Sqlcmd x"', 'powershell.exe -c x', 'cmd /c x',
+      'C:\\Windows\\System32\\cmd.exe /c x', 'python -c "import os"', 'python3 -c x', 'py -c x', `node -e "require('child_process').execSync('x')"`,
+      'node -e "eval(atob(\'eA==\'))"', 'node -p "require(\'child_process\')"', 'node --require ./x.js app.js', 'env X=1 bash', 'xargs rm', 'bash script.sh']) {
+      expect(judge(artisan, 'bash', c), c).toBe('ask');
+    }
+    for (const c of ['node -e "console.log(1)"', 'node scripts/build.mjs', 'python scripts/x.py']) expect(judge(artisan, 'bash', c), c).toBe('allow');
   });
 
   it('reads the user\'s, the brain\'s and the folder\'s Claude settings, in that order, into the environment', () => {
     const cwd = path.join(tmp, 'repo');
     const files = claudeSettingsFiles(cwd, brain, { CLAUDE_CONFIG_DIR: path.join(home, '.claude') });
     expect(files).toEqual([userFile, brainFile, path.join(cwd, '.claude', 'settings.json'), path.join(cwd, '.claude', 'settings.local.json')].map(f => path.resolve(f)));
-    const env = openCodeEnv(artisan, cwd, brain, { CLAUDE_CONFIG_DIR: path.join(home, '.claude') });
-    const cfg = JSON.parse(env.OPENCODE_CONFIG_CONTENT ?? '{}') as { permission: { bash: Record<string, string> } };
-    expect(cfg.permission.bash['*brain-wipe*']).toBe('deny');
-    expect(cfg.permission.bash[`*${SCRIPT}*`]).toBe('deny');
+    const env = openCodeEnv(artisan, cwd, brain, { CLAUDE_CONFIG_DIR: path.join(home, '.claude'), OPENCODE_PERMISSION: '{"bash":"allow"}', opencode_permission: '{}', OPENCODE_CONFIG_CONTENT: '{"model":"m"}' });
+    const cfg = JSON.parse(env.OPENCODE_CONFIG_CONTENT ?? '{}') as { model: string; permission: { bAsH: Record<string, string> } };
+    expect(cfg.permission.bAsH['*brain-wipe*']).toBe('deny');
+    expect(cfg.permission.bAsH[`*${SCRIPT}*`]).toBe('deny');
+    expect(cfg.model).toBe('m');
+    // OpenCode merges OPENCODE_PERMISSION after every config: the spawn leaves it out (undefined), in any spelling
+    expect(env).toHaveProperty('OPENCODE_PERMISSION', undefined);
+    expect(env).toHaveProperty('opencode_permission', undefined);
   });
 });

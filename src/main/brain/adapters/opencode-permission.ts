@@ -1,12 +1,15 @@
-// OpenCode's permissions for one app chat (ADR 0221): its own config, passed at every start as OPENCODE_CONFIG_CONTENT
-// (read by `opencode acp` 1.19.5 after the user's global and project configs, so its rules come last and win), never a
-// file. Normal work within the role's limits runs without a panel, the way a Claude chat in auto mode does; what Claude
-// is denied stays denied (the user's and the brain's Claude deny rules, read here, never written: AGENTS.md rule 6);
-// what the app's own gates must judge (destructive or outward commands, edits of a narrowed role) still asks, and its
-// request goes through role-gate.ts and auto-permit.ts as before. Never more than the role: a class the role lacks is
-// denied, a narrowed ceiling asks. OpenCode's rules: an ordered list per permission, the last match wins; `*` matches
-// any text (slashes too), `?` one character, case-insensitive, backslashes read as slashes, a trailing " *" optional.
-// Used by engines/sessions.ts for the engines whose registry entry says permissionConfig: 'opencode'.
+// OpenCode's permissions for one app chat (ADR 0221): its own config, passed at every start as OPENCODE_CONFIG_CONTENT,
+// never a file. Normal work within the role's limits runs without a panel, the way a Claude chat in auto mode does; what
+// Claude is denied stays denied (the user's and the brain's Claude deny rules, read here, never written: AGENTS.md rule
+// 6); what the app's own gates must judge (destructive, outward or opaque commands, edits of a narrowed role) still
+// asks, and its request goes through role-gate.ts and auto-permit.ts as before. Never more than the role: a class the
+// role lacks is denied, a narrowed ceiling asks. OpenCode's rules: an ordered list per permission, the last match wins;
+// `*` matches any text (slashes too), `?` one character, case-insensitive (names too), backslashes read as slashes, a
+// trailing " *" optional. `opencode acp` 1.19.5 merges this config after the user's global and project configs, but its
+// merge keeps a key the user already has in the user's place, and an agent's own `permission` comes after the shared
+// one: so the app's rules go on every agent the chat can run, under permission names spelled as no config spells them
+// (`bAsH`), new keys that land after the user's. Used by engines/sessions.ts for the engines whose registry entry says
+// permissionConfig: 'opencode'.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -40,8 +43,16 @@ export const ASK_COMMANDS: readonly string[] = [
   '*drop database*', '*drop schema*', '*drop table*', '*truncate table*',
   '* publish*', '* unpublish*',
   'curl *', 'wget *', 'iwr *', 'irm *', 'Invoke-WebRequest*', 'Invoke-RestMethod*', 'scp *', 'sftp *', 'ssh *', 'rsync *', 'ftp *',
-  // a shell that reads its script from a pipe (`curl … | sh`): the app reads the whole command line and refuses it
-  'sh', 'bash', 'zsh', 'pwsh', 'powershell', 'iex', 'Invoke-Expression*', 'sh -s*', 'bash -s*', '*| sh*', '*| bash*', '*|sh*', '*|bash*', '*| iex*',
+  // a shell, or a script it reads from a pipe (`curl … | sh`): what it runs is a string no deny rule sees (`bash -c`,
+  // `pwsh -c Remove-Az…`); the app reads the whole command line and asks or refuses
+  ...['sh', 'bash', 'zsh', 'dash', 'ksh', 'fish', 'pwsh', 'powershell', 'cmd'].flatMap(n => [`${n} *`, `${n}.exe *`, `*/${n} *`, `*/${n}.exe *`]),
+  'iex *', 'Invoke-Expression*', 'Invoke-Command*', 'Invoke-Sqlcmd*', 'Start-Process*', '*| sh*', '*| bash*', '*|sh*', '*|bash*', '*| iex*',
+  // an interpreter given code on the command line; node -e stays normal work unless it can start a program or hide what
+  // it runs
+  ...['python', 'python3', 'py', 'perl', 'ruby', 'php'].flatMap(n => [`${n} -*`, `${n}.exe -*`, `*/${n} -*`, `*/${n}.exe -*`]),
+  ...['child_process', 'spawn', 'exec', 'fork(', 'process.binding', 'process.dlopen', 'worker_threads', 'fromCharCode', 'base64', 'eval(', 'Function(',
+    'import(', '--require', ' -r ', '--import', '--loader'].map(m => `*node* *${m}*`),
+  'deno *', 'bun -e*', 'bun --eval*', 'env *', 'xargs *', 'nohup *', 'exec *', 'eval *', 'source *',
   // a shell script runs code the app does not read
   '*.sh', '*.sh *', 'sudo *', 'doas *',
 ];
@@ -135,8 +146,8 @@ export interface OpenCodeRole {
   readOnly?: boolean;
 }
 
-/** The `permission` block of OpenCode's config for one chat: shared by its build and plan agents (plan keeps its own
- *  edit refusal: no edit rule is set here when edits are allowed, they come from `agentEdit`). */
+/** The app's rules shared by every agent of one chat (plan keeps its own edit refusal: no edit rule is set here when
+ *  edits are allowed, they come from `agentEdit`). */
 export function openCodePermission(role: OpenCodeRole, claude: ClaudeRules): OpenCodePermission {
   const allow = role.tools?.allow;
   const has = (c: string): boolean => !allow || (allow as readonly string[]).includes(c);
@@ -171,22 +182,69 @@ export function agentEdit(role: OpenCodeRole, claude: ClaudeRules): Rules | null
   return rules(may ? 'allow' : 'ask', [may ? [...ASK_EDITS, ...claude.edit.ask] : [], 'ask'], [claude.edit.deny, 'deny']);
 }
 
-/** OPENCODE_CONFIG_CONTENT for one chat: the user's own value (an object) kept, its permission and build agent's
- *  permission replaced by the app's. */
+/** Plan's own files (OpenCode's plan agent writes its plan there, in the project or in its data folder): the only edit
+ *  plan mode makes. */
+const PLAN_FILES: readonly string[] = ['.opencode/plans/*.md', '*/.opencode/plans/*.md', '*/opencode/plans/*.md'];
+
+/** Every agent an app chat can run, with the app's whole ruleset: build (work), plan (the plan ceiling, read-only runs),
+ *  the subagents its task tool may start (general works like build, explore only reads), the hidden ones (no tools).
+ *  The task tool starts no other agent: a user's own agent carries its own permissions, which the app cannot see. */
+export function agentPermissions(role: OpenCodeRole, claude: ClaudeRules): Record<string, OpenCodePermission> {
+  const shared = openCodePermission(role, claude);
+  const { edit: sharedEdit, ...noEdit } = shared;
+  const work = agentEdit(role, claude) ?? sharedEdit ?? rules('deny');
+  const denied = [claude.edit.deny, 'deny'] as [readonly string[], Action];
+  const planEdit = agentEdit(role, claude) ? rules('deny', [PLAN_FILES, 'allow'], denied) : sharedEdit ?? rules('deny');
+  const subagents = (...names: string[]): Rules => rules('deny', [names, 'allow']);
+  return {
+    build: { ...noEdit, edit: work, task: subagents('general', 'explore') },
+    general: { ...noEdit, edit: work, task: subagents() },
+    plan: { ...noEdit, edit: planEdit, task: subagents('explore') },
+    explore: { ...noEdit, edit: rules('deny'), task: subagents() },
+    ...Object.fromEntries(['compaction', 'title', 'summary'].map(a => [a, { '*': 'deny' as const }])),
+  };
+}
+
+/** A permission name as no config spells it (`bAsH`, or `BaSh` for the second place): OpenCode matches names without
+ *  case, and its config merge appends a key the user's object lacks after the user's keys. `*` has no case: `**` and
+ *  `***` (the same pattern). */
+export const spelled = (name: string, second = false): string => /[a-z]/i.test(name)
+  ? [...name].map((c, i) => (i % 2 === 1) !== second ? c.toUpperCase() : c.toLowerCase()).join('')
+  : '*'.repeat(second ? 3 : 2);
+const spell = (perm: OpenCodePermission, second = false): OpenCodePermission =>
+  Object.fromEntries(Object.entries(perm).map(([k, v]) => [spelled(k, second), v]));
+
+/** OPENCODE_CONFIG_CONTENT for one chat: the user's own value (an object) kept, the app's rules added after its own on
+ *  the shared block and on every agent; the legacy `mode.build` / `mode.plan` (merged into the agent after `agent`) get
+ *  them under the second spelling. The chat starts on build, whatever the user's default agent. */
 export function openCodeConfigContent(role: OpenCodeRole, claude: ClaudeRules, existing?: string): string {
   let base: Record<string, unknown> = {};
   try { if (existing) base = obj(JSON.parse(existing) as unknown); } catch { /* not JSON: the app's own config only */ }
-  const edit = agentEdit(role, claude);
-  const agent = obj(base.agent), build = obj(agent.build);
+  const perms = agentPermissions(role, claude);
+  const add = (own: unknown, perm: OpenCodePermission, second = false): Record<string, unknown> =>
+    ({ ...obj(own), permission: { ...obj(obj(own).permission), ...spell(perm, second) } });
+  const agent: Record<string, unknown> = { ...obj(base.agent) }, mode: Record<string, unknown> = { ...obj(base.mode) };
+  for (const [name, perm] of Object.entries(perms)) agent[name] = add(agent[name], perm);
+  for (const name of ['build', 'plan']) mode[name] = add(mode[name], perms[name]!, true);
   return JSON.stringify({
     ...base,
-    permission: openCodePermission(role, claude),
-    ...(edit ? { agent: { ...agent, build: { ...build, permission: { ...obj(build.permission), edit } } } } : {}),
+    default_agent: 'build',
+    permission: { ...obj(base.permission), ...spell(openCodePermission(role, claude)) },
+    agent,
+    mode,
   });
 }
 
-/** The environment one OpenCode chat starts with: its config, built from its role and the Claude rules of its folders. */
+/** The environment one OpenCode chat starts with: its config, built from its role and the Claude rules of its folders.
+ *  OPENCODE_PERMISSION (merged by OpenCode after every config) is dropped from the app's own environment (undefined: the
+ *  spawn leaves it out), in any spelling (Windows names have no case). */
 export function openCodeEnv(role: OpenCodeRole, cwd: string, brainRoot: string | null, env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const claude = readClaudeRules(claudeSettingsFiles(cwd, brainRoot, env));
-  return { OPENCODE_CONFIG_CONTENT: openCodeConfigContent(role, claude, env.OPENCODE_CONFIG_CONTENT) };
+  const named = (n: string): string[] => Object.keys(env).filter(k => k.toUpperCase() === n);
+  const own = named('OPENCODE_CONFIG_CONTENT').map(k => env[k]).find(v => v);
+  return {
+    ...Object.fromEntries([...named('OPENCODE_PERMISSION'), ...named('OPENCODE_CONFIG_CONTENT')].map(k => [k, undefined])),
+    OPENCODE_CONFIG_CONTENT: openCodeConfigContent(role, claude, own),
+    OPENCODE_PERMISSION: undefined,
+  };
 }

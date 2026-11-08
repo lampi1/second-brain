@@ -79,9 +79,10 @@ describe('engine registry', () => {
     const envOf = (s: unknown): NodeJS.ProcessEnv | undefined => (s as { opts: { env?: NodeJS.ProcessEnv } }).opts.env;
     const oc = envOf(sessionFor(engineOrThrow('opencode'), { ...opts, toolPolicy: { allow: ['read', 'shell-read'] }, env: { SB_X: '1' } }, sink, ctx));
     expect(oc?.SB_X).toBe('1');
-    const cfg = JSON.parse(oc?.OPENCODE_CONFIG_CONTENT ?? '{}') as { permission: { bash: Record<string, string>; edit: Record<string, string> } };
-    expect(cfg.permission.bash['*']).toBe('ask');
-    expect(cfg.permission.edit).toEqual({ '*': 'deny' });
+    const cfg = JSON.parse(oc?.OPENCODE_CONFIG_CONTENT ?? '{}') as { agent: { build: { permission: { bAsH: Record<string, string>; eDiT: Record<string, string> } } } };
+    expect(cfg.agent.build.permission.bAsH['*']).toBe('ask');
+    expect(cfg.agent.build.permission.eDiT).toEqual({ '*': 'deny' });
+    expect(oc).toHaveProperty('OPENCODE_PERMISSION', undefined);
     expect(envOf(sessionFor(engineOrThrow('cursor'), opts, sink, ctx))?.OPENCODE_CONFIG_CONTENT).toBeUndefined();
   });
 });
