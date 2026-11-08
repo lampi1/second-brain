@@ -103,7 +103,7 @@
     "src/main/chats/admission.ts": "5ff45b4ca752b4fe",
     "src/main/chats/auto-close.ts": "8c949a8fa61f5d5a",
     "src/main/chats/auto-close.ts#AUTO_CLOSE_WARNING_MS": "3b011c5d4c27f85d",
-    "src/main/chats/claude.ts#onControlRequest": "e91f710d7fa031d2",
+    "src/main/chats/claude.ts#onControlRequest": "8f00be5eb3b41e6a",
     "src/main/chats/continuity.ts": "47dbb8e9771028dc",
     "src/main/chats/handoff.ts": "1be748faea322abc",
     "src/main/chats/handoff.ts#handoffRequest": "01e73fb6afe12b7b",
