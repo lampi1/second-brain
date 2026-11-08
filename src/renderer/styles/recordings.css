@@ -51,17 +51,17 @@
 .rec-detail-empty{align-items:center;justify-content:center;min-height:200px;color:var(--text-3)}
 .rec-detail-head{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center}
 .rec-detail-title{flex:1 1 220px;margin:0;font-size:17px;font-weight:650;cursor:text;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rec-rename{font:inherit;font-size:16px;font-weight:600;padding:3px 8px;border-radius:8px;border:1px solid var(--blue-line);background:var(--bg-2);color:var(--text)}
+.rec-rename{font:inherit;font-size:16px;font-weight:600;padding:3px 8px;border-radius:8px;border:1px solid var(--accent-line);background:var(--bg-2);color:var(--text)}
 .rec-detail-meta{order:3;flex-basis:100%;color:var(--text-3);font-size:12px}
 .rec-detail-actions{display:flex;gap:6px;flex-wrap:wrap}
 .rec-progress{display:flex;align-items:center;gap:12px;font-size:13px;color:var(--text-2)}
 .rec-bar{flex:1;height:6px;border-radius:3px;background:var(--surface-3);overflow:hidden}
-.rec-bar i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--violet),var(--blue));transition:width 400ms var(--ease)}
+.rec-bar i{display:block;height:100%;border-radius:3px;background:linear-gradient(90deg,var(--violet),var(--accent));transition:width 400ms var(--ease)}
 .rec-err{color:var(--red)}
 .rec-note{margin:0;color:var(--text-3);font-size:12.5px;line-height:1.5}
 .rec-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.rec-search{flex:1 1 200px;display:flex;align-items:center;gap:7px;height:30px;padding:0 10px;border-radius:9px;border:1px solid var(--border-2);background:var(--bg-2);color:var(--text-3)}
-.rec-search:focus-within{border-color:var(--blue-line)}
+.rec-search{flex:1 1 200px;display:flex;align-items:center;gap:7px;height:30px;padding:0 10px;border-radius:9px;border:1px solid var(--border-control);background:var(--bg-2);color:var(--text-3)}
+.rec-search:focus-within{border-color:var(--accent-line)}
 .rec-search input{flex:1;min-width:0;border:0;background:transparent;color:var(--text);font:inherit;font-size:13px}
 .rec-search input:focus{outline:none}
 .rec-lines{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;max-height:calc(100vh - 330px);overflow:auto}
@@ -70,7 +70,7 @@
 .rec-time{color:var(--text-4);font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;padding-top:2px}
 .rec-who{font-weight:650;font-size:12.5px;padding-top:1px}
 .rec-line.me .rec-who{color:var(--violet)}
-.rec-line.others .rec-who{color:var(--blue)}
+.rec-line.others .rec-who{color:var(--accent)}
 .rec-text{min-width:0;overflow-wrap:anywhere}
 
 /* found on the PC */

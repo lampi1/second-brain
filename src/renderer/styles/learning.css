@@ -9,8 +9,8 @@
 .lr-kpi button.v:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .lr-kpi[data-tone=green] .v{color:var(--green)}
 .lr-kpi[data-tone=amber] .v{color:var(--amber)}
-.lr-kpi[data-tone=blue] .v{color:var(--blue)}
-.lr-kpi.on{border-color:var(--border-2);box-shadow:inset 0 -2px 0 var(--blue)}
+.lr-kpi[data-tone=blue] .v{color:var(--accent)}
+.lr-kpi.on{border-color:var(--border-2);box-shadow:inset 0 -2px 0 var(--accent)}
 .lr-worse{border-color:var(--amber-line);background:linear-gradient(160deg,var(--amber-bg),var(--surface) 70%)}
 
 .lr-legend{display:flex;gap:12px;flex-wrap:wrap;list-style:none;margin:0;padding:0;font-size:var(--fs-xs);color:var(--text-3)}
@@ -32,7 +32,7 @@
 
 .lr-chips{display:flex;gap:6px;flex-wrap:wrap}
 .lr-chip{font:inherit;font-size:var(--fs-xs);color:var(--text-2);border:1px solid var(--border-2);background:var(--surface-2);border-radius:20px;padding:3px 10px;cursor:pointer;font-variant-numeric:tabular-nums}
-.lr-chip[aria-pressed=true]{color:var(--text);border-color:var(--blue);background:color-mix(in srgb,var(--blue) 14%,var(--surface-2))}
+.lr-chip[aria-pressed=true]{color:var(--text);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,var(--surface-2))}
 .lr-chip:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 .lr-note{max-width:90ch;margin-top:22px}
 .lr-worse .bm-changes{background:var(--surface)}.lr-worse .bm-change{background:var(--surface)}

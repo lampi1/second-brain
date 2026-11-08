@@ -18,7 +18,7 @@
 .st-search-line > .st-input { flex: 1; width: 100%; min-width: 0; height: 32px; padding: 0 28px 0 31px; text-align: left; font-size: var(--fs-s); background: var(--surface);
   border-radius: 8px; transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease); }
 .st-search-line > .st-input::-webkit-search-cancel-button { display: none; }
-.st-search-line > .st-input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--focus-glow); }
+.st-search-line > .st-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-glow); }
 .st-search-clear { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); display: grid; place-items: center; width: 18px; height: 18px; padding: 0; border: 0;
   border-radius: 50%; background: var(--surface-4); color: var(--text-2); cursor: pointer; }
 .st-search-clear:hover { background: var(--border-3); color: var(--text); }
@@ -37,9 +37,9 @@
 .st-nav-icon { flex: none; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: var(--tone); color: #fff;
   box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.18), 0 1px 2px rgba(0, 0, 0, 0.18); }
 .st-nav-icon svg { width: 13px; height: 13px; }
-.st-nav-count { flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--blue-bg); color: var(--blue); font-size: 10.5px; font-weight: 650;
+.st-nav-count { flex: none; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--accent-bg); color: var(--accent); font-size: 10.5px; font-weight: 650;
   display: grid; place-items: center; font-variant-numeric: tabular-nums; }
-[data-tone] { --tone: var(--blue); }
+[data-tone] { --tone: var(--accent); }
 [data-tone="purple"] { --tone: var(--violet); }
 [data-tone="red"] { --tone: var(--red); }
 [data-tone="amber"] { --tone: var(--amber); }
@@ -108,11 +108,11 @@
 .st-sub .mono { font-family: var(--mono); font-size: 0.92em; }
 
 /* switch */
-.st-switch { position: relative; width: 38px; height: 22px; border-radius: 11px; border: 1px solid var(--border-3); background: var(--surface-4); cursor: pointer; padding: 0;
+.st-switch { position: relative; width: 38px; height: 22px; border-radius: 11px; border: 1px solid var(--border-control); background: var(--surface-4); cursor: pointer; padding: 0;
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease); }
 .st-switch .st-knob { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--text-2); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   transition: transform var(--dur) var(--ease), background var(--dur) var(--ease); }
-.st-switch.on { background: var(--blue); border-color: var(--blue); }
+.st-switch.on { background: var(--accent); border-color: var(--accent); }
 .st-switch.on .st-knob { transform: translateX(16px); background: var(--on-accent); }
 .st-switch[aria-busy="true"] { opacity: 0.6; cursor: progress; }
 .st-switch:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -126,9 +126,9 @@
 .st-seg button:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 
 /* a list of choices (models, effort) */
-.st-select { min-width: 220px; max-width: 320px; height: 30px; padding: 0 8px; border-radius: var(--r-s); border: 1px solid var(--border-2); background: var(--surface-2);
+.st-select { min-width: 220px; max-width: 320px; height: 30px; padding: 0 8px; border-radius: var(--r-s); border: 1px solid var(--border-control); background: var(--surface-2);
   color: var(--text); font: 500 var(--fs-s) var(--font); cursor: pointer; }
-.st-select:hover { border-color: var(--border-3); }
+.st-select:hover { border-color: var(--text-3); }
 .st-select:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
 .st-select option { background: var(--surface); color: var(--text); }
 
@@ -137,11 +137,11 @@
 
 
 /* inputs, selects and read-only values */
-.st-input { width: 110px; height: 32px; padding: 0 10px; border-radius: var(--r-s); border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text);
+.st-input { width: 110px; height: 32px; padding: 0 10px; border-radius: var(--r-s); border: 1px solid var(--border-control); background: var(--surface-2); color: var(--text);
   font: 500 var(--fs-s) var(--font); text-align: right; font-variant-numeric: tabular-nums; }
 .st-input::placeholder { color: var(--text-4); }
-.st-input:hover { border-color: var(--border-3); }
-.st-input:focus-visible { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--focus-glow); }
+.st-input:hover { border-color: var(--text-3); }
+.st-input:focus-visible { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--focus-glow); }
 .st-input.st-path { width: 38ch; max-width: 100%; }
 .st-usd { display: inline-flex; align-items: center; gap: 6px; color: var(--text-3); font-size: var(--fs-s); }
 .st-value { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); font-size: var(--fs-s);
@@ -149,7 +149,7 @@
 .st-value.mono { font-family: var(--mono); }
 .st-essential select { max-width: 100%; min-height: 32px; }
 /* a plain .btn inside the page (hosted parts) reads as secondary, never as the browser's grey button */
-.st-essential .btn:not(.btn-primary):not(.btn-ghost):not(.btn-subtle):not(.btn-danger):not(.btn-danger-solid):not(.btn-amber):not(.btn-orchestrator) {
+.st-essential .btn:not(.btn-primary):not(.btn-ghost):not(.btn-subtle):not(.btn-danger):not(.btn-danger-solid):not(.btn-amber) {
   background: var(--surface-2); border-color: var(--border-2); color: var(--text); }
 .st-essential .btn:not(.btn-s):not(.btn-m):not(.btn-l) { min-height: 32px; padding: 0 12px; font-size: var(--fs-m); }
 .st-essential .btn:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
@@ -189,7 +189,7 @@
 .st-autonomy ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; width: 100%; }
 .st-autonomy li { display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 10px; border: 1px solid var(--border); border-radius: var(--r-s); background: var(--surface-2); overflow-wrap: anywhere; }
 .st-autonomy li code { flex: 1; min-width: 0; font-family: var(--mono); font-size: var(--fs-s); }
-.st-autonomy-confirm { display: grid; gap: 10px; width: 100%; padding: 12px 14px; border: 1px solid var(--blue-line); border-radius: var(--r-m); background: var(--blue-bg); }
+.st-autonomy-confirm { display: grid; gap: 10px; width: 100%; padding: 12px 14px; border: 1px solid var(--accent-line); border-radius: var(--r-m); background: var(--accent-bg); }
 .st-autonomy-confirm .btn { justify-self: start; }
 
 /* Connettori: the hub (ConnectorsHub.tsx) has its own styles, styles/connectors-hub.css */

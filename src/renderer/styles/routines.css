@@ -10,7 +10,7 @@
 .rs-red { color: var(--red); font-style: normal; }
 .rs-dir { font-family: var(--mono); overflow-wrap: anywhere; margin: 0; }
 .rs-section { font: 600 10.5px var(--font-small); letter-spacing: .08em; text-transform: uppercase; color: var(--text-4); margin: 6px 0 0; }
-.rs-link { color: var(--blue); }
+.rs-link { color: var(--accent); }
 .rs-error { color: var(--red); font-size: var(--fs-s); margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .rs-warn { margin: 0; padding: 8px 12px; border-radius: var(--r-m); background: var(--amber-bg); color: var(--amber); font-size: var(--fs-s); }
 .rs-warn ul { margin: 4px 0 0; padding-left: 18px; }
@@ -18,7 +18,7 @@
 .rs-badge { display: inline-flex; align-items: center; min-height: 22px; padding: 0 8px; border-radius: 11px; font: 600 11px var(--font-small); background: var(--surface-3); color: var(--text-2); white-space: nowrap; }
 .rs-badge[data-tone="green"] { background: var(--green-bg); color: var(--green); }
 .rs-badge[data-tone="red"] { background: var(--red-bg); color: var(--red); }
-.rs-badge[data-tone="blue"] { background: var(--blue-bg); color: var(--blue); }
+.rs-badge[data-tone="blue"] { background: var(--accent-bg); color: var(--accent); }
 .rs-badges { display: flex; gap: 4px; flex-wrap: wrap; }
 
 .rs-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
@@ -37,7 +37,7 @@
 .rs-card-head h3 { margin: 0; font: 600 var(--fs-m) var(--font); }
 .rs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 12px; }
 .rs-grid label { display: flex; flex-direction: column; gap: 4px; font-size: var(--fs-s); color: var(--text-2); }
-.rs-grid input, .rs-inline input { padding: 6px 8px; border-radius: var(--r-m); border: 1px solid var(--border-2); background: var(--bg-2); color: var(--text); font: inherit; }
+.rs-grid input, .rs-inline input { padding: 6px 8px; border-radius: var(--r-m); border: 1px solid var(--border-control); background: var(--bg-2); color: var(--text); font: inherit; }
 .rs-inline { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .rs-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .rs-switch { display: inline-flex; align-items: center; gap: 6px; font-size: var(--fs-s); cursor: pointer; }

@@ -12,7 +12,7 @@
 .tk-page .catalog-head .dv-lead { margin-top: 8px; color: var(--text-2); }
 .tk-head-side .when { color: var(--text-3); font-size: var(--fs-s); white-space: nowrap; }
 .tk-dot { display: inline-block; width: 9px; height: 9px; margin-left: 12px; border-radius: 50%; vertical-align: 6px; background: var(--text-4); }
-.tk-dot.good { background: var(--green); } .tk-dot.bad { background: var(--red); } .tk-dot.run { background: var(--blue); animation: catalog-beat 2.2s ease-in-out infinite; }
+.tk-dot.good { background: var(--green); } .tk-dot.bad { background: var(--red); } .tk-dot.run { background: var(--accent); animation: catalog-beat 2.2s ease-in-out infinite; }
 .tk-page .tk-auto-state { margin: -10px 0 18px; }
 
 .tk-split { display: grid; grid-template-columns: minmax(300px, 420px) minmax(0, 1fr); gap: 20px; align-items: start; }
@@ -26,7 +26,7 @@
 .tk-tabs > button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
 .tk-tabs .n { min-width: 18px; height: 18px; padding: 0 5px; display: inline-grid; place-items: center; border-radius: 999px; font-size: var(--fs-xs); font-weight: 700;
   font-variant-numeric: tabular-nums; color: var(--text-2); background: var(--surface-2); }
-.tk-tabs > button.on .n { color: var(--bg); background: var(--blue); }
+.tk-tabs > button.on .n { color: var(--bg); background: var(--accent); }
 
 /* one strip per record: the kind's glyph in its tone, kind and time, the title, one line of what it says */
 .tk-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; outline: none; }
@@ -44,7 +44,7 @@
 .tk-strip-when { flex: none; font-size: var(--fs-xs); color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .tk-strip-title { font-size: var(--fs-m); font-weight: 550; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tk-strip.unread .tk-strip-title, .tk-strip.on .tk-strip-title { color: var(--text); font-weight: 650; }
-.tk-strip.unread .tk-strip-title::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--blue); vertical-align: 2px; }
+.tk-strip.unread .tk-strip-title::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 7px; border-radius: 50%; background: var(--accent); vertical-align: 2px; }
 .tk-strip-sub { font-size: var(--fs-s); color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tk-sep { height: 1px; margin: 8px 12px; background: var(--border); }
 .tk-side-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 4px 2px; }

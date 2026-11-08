@@ -2,13 +2,13 @@
    across the existing app and embedded brain pages without changing their data flows. */
 .orchestrator-column.orchestrator-ov { border-radius: 0; border: 0; border-left: 1px solid var(--border-2); box-shadow: -12px 0 40px #00000012; background: var(--orchestrator-bg); opacity: 1; animation: panel-enter var(--dur-slow) var(--ease); }
 .orchestrator-column .orchestrator-bar { min-height: 48px; padding: 0 20px; background: transparent; border-bottom: 1px solid var(--border); gap: 10px; }
-.orchestrator-column-mark { color: var(--blue); font-size: 20px; }
+.orchestrator-column-mark { color: var(--accent); font-size: 20px; }
 .orchestrator-column-hint { color: var(--text-3); font-size: 11px; }
 .orchestrator-column .orchestrator-tile { border: 0; border-radius: 0; box-shadow: none; }
 .orchestrator-column .tile-head { padding: 16px 20px 10px; }
 .orchestrator-column .chat-input { margin: 12px; border-radius: 12px; }
 .orchestrator-column-resize { position: absolute; left: -4px; top: 0; bottom: 0; width: 8px; cursor: col-resize; touch-action: none; z-index: 2; transition: background var(--dur-fast); }
-.orchestrator-column-resize:hover, .orchestrator-column-resize:focus-visible { background: var(--blue-line); outline: none; }
+.orchestrator-column-resize:hover, .orchestrator-column-resize:focus-visible { background: var(--accent-line); outline: none; }
 .orchestrator-setup { display: flex; flex-direction: column; gap: 16px; padding: 32px 24px; margin: auto 0; }
 .orchestrator-setup h2 { font-size: 26px; letter-spacing: -.8px; margin: 0; }
 .orchestrator-setup p { color: var(--text-3); line-height: 1.7; margin: 0; }
@@ -24,8 +24,8 @@
 .btn-primary { box-shadow: inset 0 1px 0 #ffffff20, 0 3px 8px #00000025; }
 .popover { border-color: var(--border-2); background: var(--surface-2); border-radius: 10px; padding: 5px; box-shadow: var(--shadow-pop); animation: picker-enter var(--dur-fast) var(--ease); }
 .menu-item { border-radius: 6px; min-height: 32px; }
-.ui-select { display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 34px; max-width: 100%; min-width: 0; border: 1px solid var(--border-2); border-radius: 7px; padding: 6px 9px 6px 10px; background: var(--surface-2); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--dur-fast), background var(--dur-fast), box-shadow var(--dur-fast); }
-.ui-select:hover:not(:disabled), .ui-select.open { border-color: var(--border-3); background: var(--surface-3); }
+.ui-select { display: inline-flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 34px; max-width: 100%; min-width: 0; border: 1px solid var(--border-control); border-radius: 7px; padding: 6px 9px 6px 10px; background: var(--surface-2); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color var(--dur-fast), background var(--dur-fast), box-shadow var(--dur-fast); }
+.ui-select:hover:not(:disabled), .ui-select.open { border-color: var(--text-3); background: var(--surface-3); }
 .ui-select:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
 .ui-select:disabled { opacity: .45; cursor: default; }
 .ui-select-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -36,16 +36,16 @@
 .ui-select-group { padding: 8px 10px 4px; color: var(--text-3); font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
 .ui-select-option { display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 6px 8px 6px 10px; border-radius: 6px; cursor: pointer; outline: none; white-space: nowrap; }
 .ui-select-option.active { background: var(--surface-4); }
-.ui-select-option[aria-selected="true"] { color: var(--blue-strong); }
+.ui-select-option[aria-selected="true"] { color: var(--accent-strong); }
 .ui-select-option[aria-disabled] { opacity: .4; cursor: default; }
 .ui-select-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ui-select-check { flex: none; display: inline-flex; width: 13px; color: var(--blue); }
+.ui-select-check { flex: none; display: inline-flex; width: 13px; color: var(--accent); }
 @keyframes panel-enter { from { opacity: .6; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes picker-enter { from { opacity: 0; transform: translateY(-4px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes picker-enter-up { from { opacity: 0; transform: translateY(4px) scale(.985); } to { opacity: 1; transform: translateY(0) scale(1); } }
 /* the running dot breathes in steps from lib/beat.ts ([data-blink] on the dot), never as an infinite CSS animation ("Lag nell'app") */
-.pill-run .pill-dot { box-shadow: 0 0 0 4px var(--blue-bg); }
-.pill-run .pill-dot[data-blink="1"] { box-shadow: 0 0 0 0 var(--blue-bg); }
+.pill-run .pill-dot { box-shadow: 0 0 0 4px var(--accent-bg); }
+.pill-run .pill-dot[data-blink="1"] { box-shadow: 0 0 0 0 var(--accent-bg); }
 @media (prefers-reduced-motion: reduce) {
   .orchestrator-column.orchestrator-ov, .page-body, .popover, .ui-select-list { animation: none; }
   .btn, .bx-btn, .icon-btn, .ui-select, .ui-select-chevron, .orchestrator-column-resize, .th-ctx-bar b, .ub-meter b { transition: none; }

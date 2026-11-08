@@ -12,4 +12,4 @@
 .agent-last-block{color:var(--red)}
 .compact .agent-last-answer{display:none}
 .compact .agent-owner-purpose{-webkit-line-clamp:1}
-.agent-identity{position:relative;overflow:visible;padding:0}.agent-team-details{max-height:none;overflow:visible}.agent-team-details>button{font-size:var(--fs-xs);white-space:nowrap}.agent-detail-content{max-height:65vh;overflow:auto;padding:var(--pad);background:var(--surface);color:var(--text)}.agent-detail-content label{display:grid;gap:6px;margin:8px 0}.agent-detail-content select{width:100%;color:var(--text);background:var(--surface-2);border:1px solid var(--border-2);padding:6px}
+.agent-identity{position:relative;overflow:visible;padding:0}.agent-team-details{max-height:none;overflow:visible}.agent-team-details>button{font-size:var(--fs-xs);white-space:nowrap}.agent-detail-content{max-height:65vh;overflow:auto;padding:var(--pad);background:var(--surface);color:var(--text)}.agent-detail-content label{display:grid;gap:6px;margin:8px 0}.agent-detail-content select{width:100%;color:var(--text);background:var(--surface-2);border:1px solid var(--border-control);padding:6px}

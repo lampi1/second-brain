@@ -14,9 +14,9 @@
   --bx-text-3: var(--text-3, var(--dim, #8b93a7));
   --bx-text-4: var(--text-4, var(--faint, #7b8293));
   --bx-md: var(--md-text, var(--bx-text-2));
-  --bx-blue: var(--blue, #7b93ff);
-  --bx-blue-bg: var(--blue-bg, rgba(123, 147, 255, 0.13));
-  --bx-blue-line: var(--blue-line, rgba(123, 147, 255, 0.5));
+  --bx-blue: var(--accent, #8fa3ff);
+  --bx-blue-bg: var(--accent-bg, rgba(143, 163, 255, 0.14));
+  --bx-blue-line: var(--accent-line, rgba(143, 163, 255, 0.5));
   --bx-amber: var(--amber, #f2b64c);
   --bx-amber-bg: var(--amber-bg, rgba(242, 182, 76, 0.1));
   --bx-amber-line: var(--amber-line, rgba(242, 182, 76, 0.5));
@@ -26,7 +26,7 @@
   --bx-red-bg: var(--red-bg, rgba(255, 107, 122, 0.11));
   --bx-violet: var(--violet, var(--orchestrator, #b892ff));
   --bx-violet-bg: var(--violet-bg, rgba(184, 146, 255, 0.12));
-  --bx-focus: var(--focus, #93a8ff);
+  --bx-focus: var(--focus, #8fa3ff);
   --bx-on-accent: var(--on-accent, #0b0d14);
   --bx-font: var(--font, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif);
   --bx-display: var(--font-display, "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif);
@@ -51,17 +51,17 @@
   font: var(--bx-fs-m)/1.5 var(--bx-font);
   color: var(--bx-text);
 }
-/* light: the palette, plus accents readable on white (≥ 4.5:1) — the same values as the app's light tokens, set here
-   too because an older token sheet keeps the dark accents in light mode. The map keeps its night world. */
+/* light: the palette, plus status colours readable on white (≥ 4.5:1) — the same values as the app's light tokens, set here
+   too because an older token sheet keeps the dark ones in light mode; the accent and focus follow the app tokens (--accent,
+   --focus) through the aliases above. The map keeps its night world. */
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) .bx:not(.bx-map) {
     --bx-cat-1: #2a78d6; --bx-cat-2: #eb6834; --bx-cat-3: #1baf7a; --bx-cat-4: #eda100;
     --bx-cat-5: #e87ba4; --bx-cat-6: #008300; --bx-cat-7: #4a3aa7; --bx-cat-8: #e34948; --bx-cat-other: #9b9a93;
     --bx-surface-3: var(--surface-3, #eceef2); --bx-text-2: var(--text-2, #3a4050);
-    --bx-blue: #3a5ce0; --bx-blue-bg: rgba(58, 92, 224, 0.09); --bx-blue-line: rgba(58, 92, 224, 0.45);
     --bx-amber: #93580a; --bx-amber-bg: rgba(214, 140, 22, 0.1); --bx-amber-line: rgba(196, 126, 14, 0.5);
     --bx-green: #157a45; --bx-green-bg: rgba(21, 122, 69, 0.09); --bx-red: #cc3343; --bx-red-bg: rgba(204, 51, 67, 0.08);
-    --bx-violet: #7246d0; --bx-violet-bg: rgba(114, 70, 208, 0.09); --bx-focus: #3a5ce0; --bx-on-accent: #ffffff;
+    --bx-violet: #7246d0; --bx-violet-bg: rgba(114, 70, 208, 0.09); --bx-on-accent: #ffffff;
     --bx-scroll: rgba(0, 0, 0, 0.14); --bx-shadow: 0 18px 44px -12px rgba(20, 24, 33, 0.28), 0 2px 8px rgba(20, 24, 33, 0.08);
   }
 }
@@ -69,10 +69,9 @@
   --bx-cat-1: #2a78d6; --bx-cat-2: #eb6834; --bx-cat-3: #1baf7a; --bx-cat-4: #eda100;
   --bx-cat-5: #e87ba4; --bx-cat-6: #008300; --bx-cat-7: #4a3aa7; --bx-cat-8: #e34948; --bx-cat-other: #9b9a93;
   --bx-surface-3: var(--surface-3, #eceef2); --bx-text-2: var(--text-2, #3a4050);
-  --bx-blue: #3a5ce0; --bx-blue-bg: rgba(58, 92, 224, 0.09); --bx-blue-line: rgba(58, 92, 224, 0.45);
   --bx-amber: #93580a; --bx-amber-bg: rgba(214, 140, 22, 0.1); --bx-amber-line: rgba(196, 126, 14, 0.5);
   --bx-green: #157a45; --bx-green-bg: rgba(21, 122, 69, 0.09); --bx-red: #cc3343; --bx-red-bg: rgba(204, 51, 67, 0.08);
-  --bx-violet: #7246d0; --bx-violet-bg: rgba(114, 70, 208, 0.09); --bx-focus: #3a5ce0; --bx-on-accent: #ffffff;
+  --bx-violet: #7246d0; --bx-violet-bg: rgba(114, 70, 208, 0.09); --bx-on-accent: #ffffff;
   --bx-scroll: rgba(0, 0, 0, 0.14);
 }
 

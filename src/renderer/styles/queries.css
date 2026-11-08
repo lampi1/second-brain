@@ -6,7 +6,7 @@
 .qy-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;flex-wrap:wrap}
 .qy-head h2{display:flex;align-items:center;gap:10px;margin:4px 0 6px;font-size:20px;font-weight:620;letter-spacing:-.3px}
 .qy-head p{margin:0;max-width:78ch;color:var(--text-3);font-size:12.5px;line-height:1.6}
-.qy-count{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 7px;border-radius:11px;background:var(--blue-bg);color:var(--blue);font-size:11.5px;font-weight:650;letter-spacing:0}
+.qy-count{display:inline-grid;place-items:center;min-width:22px;height:22px;padding:0 7px;border-radius:11px;background:var(--accent-bg);color:var(--accent);font-size:11.5px;font-weight:650;letter-spacing:0}
 .qy-chip{display:inline-flex;align-items:center;gap:6px}
 .qy-chip>b{font-weight:600;color:var(--text-3);font-variant-numeric:tabular-nums}
 .qy-swatch{width:8px;height:8px;padding:0!important;border-radius:50%;background:currentColor!important}
@@ -24,7 +24,7 @@
 .qy-card{animation-delay:calc(var(--row-index, 0) * 45ms);overflow:hidden}
 .qy-card::before{content:'';position:absolute;left:0;top:14px;bottom:14px;width:3px;border-radius:0 3px 3px 0;background:var(--qy-accent, var(--border-3));opacity:.75;transition:opacity 180ms,top 180ms,bottom 180ms}
 .qy-card:hover::before,.qy-card.open::before{opacity:1;top:0;bottom:0}
-.qy-card[data-tone=blue]{--qy-accent:var(--blue)}
+.qy-card[data-tone=blue]{--qy-accent:var(--accent)}
 .qy-card[data-tone=violet]{--qy-accent:var(--violet)}
 .qy-card[data-tone=pink]{--qy-accent:var(--red)}
 .qy-card[data-tone=amber]{--qy-accent:var(--amber)}
@@ -48,7 +48,7 @@
 .qy-from>span{font-weight:600;text-transform:uppercase;font-size:10px;letter-spacing:.06em;margin-right:4px}
 .qy-card.leaving{animation:qy-leave 200ms ease-in forwards;pointer-events:none}
 @keyframes qy-leave{to{opacity:0;transform:scale(.96) translateY(4px)}}
-.qy-empty-icon{display:grid;place-items:center;width:46px;height:46px;margin-bottom:14px;border-radius:14px;background:var(--blue-bg);color:var(--blue)}
+.qy-empty-icon{display:grid;place-items:center;width:46px;height:46px;margin-bottom:14px;border-radius:14px;background:var(--accent-bg);color:var(--accent)}
 .qy-empty-icon>svg{width:22px;height:22px}
 
 @media (prefers-reduced-motion: reduce){

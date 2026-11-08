@@ -14,4 +14,4 @@
 :where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]), textarea, select, [contenteditable="true"]):focus-visible { outline: none; }
 :where(input[type="checkbox"], input[type="radio"]):focus-visible { outline-offset: 1px; }
 /* a bordered field without its own focus rule: its border lights up (a borderless one shows nothing here) */
-:where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]), textarea, select):focus { border-color: var(--blue-line, var(--focus)); }
+:where(input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]), textarea, select):focus { border-color: var(--accent-line, var(--focus)); }
