@@ -5,16 +5,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ChatManager } from '../../../src/main/chats/manager';
-import { ClaudeSession } from '../../../src/main/chats/claude';
 import { FAKE, recEmitter, tmp, waitFor } from './helpers';
 
 const managers: ChatManager[] = [];
-function setup(userData = tmp('ud'), home = tmp('home'), cwd = tmp('cwd'), env: Record<string, string> = {}, completeCensus = false) {
+function setup(userData = tmp('ud'), home = tmp('home'), cwd = tmp('cwd'), env: Record<string, string> = {}) {
   const em = recEmitter();
-  const m = new ChatManager({ emitter: em, userData, enginePaths: { claude: FAKE }, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, ...env },
-    // Positive release coverage explicitly simulates a complete provider census; real Claude stays partial.
-    ...(completeCensus ? { sessionFactory: (_h, options, sink) => new ClaudeSession({ ...options, claudePath: FAKE }, { ...sink, childrenCoverage: (coverage, reason) => sink.childrenCoverage?.(coverage === 'partial' ? 'complete' : coverage, reason) }) } : {}),
-  });
+  const m = new ChatManager({ emitter: em, userData, enginePaths: { claude: FAKE }, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, ...env } });
   managers.push(m);
   return { m, em, userData, home, cwd };
 }

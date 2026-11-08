@@ -155,6 +155,14 @@ describe('ClaudeSession', () => {
     expect(sink.last('tool')?.output).toContain('only yes/no questions');
   });
 
+  it('a yes/no question without its brief goes back with how to send one (ADR 0150)', async () => {
+    const { s, sink } = start({ yesNo: true, briefReady: () => false });
+    s.send('asksn');
+    await waitFor(() => sink.trace.filter(t => t === 'result').length === 1, 'turn 1');
+    expect(sink.pendings).toHaveLength(0);
+    expect(sink.last('tool')?.output).toContain('show_ui with component "brief"');
+  });
+
   it('a yes/no question with its brief is shown (ADR 0150)', async () => {
     const { s, sink } = start({ yesNo: true, briefReady: () => true });
     s.send('asksn');
