@@ -261,6 +261,19 @@ describe('ChatManager Remote Control', () => {
     expect(f.calls.map(c => c.enabled)).toEqual([true, false, false]);
     expect(chat(f.m, 'o1')?.remoteControl).toEqual({ on: false, url: null, bridgeSessionId: null, status: 'off' });
   });
+  it('on, «Spegni», on again while the first ask is out: it ends on, with a bridge', async () => {
+    const releases: (() => void)[] = [];
+    const f = fixture([ORCH], { hold: c => (c.enabled && releases.length === 0 ? new Promise<void>(res => { releases.push(res); }) : undefined) });
+    const first = f.m.remoteControl('o1', true);
+    await waitFor(() => f.calls.length === 1, 'asked');
+    await f.m.remoteControl('o1', false);
+    const again = f.m.remoteControl('o1', true);
+    releases[0]!();
+    await first;
+    const c = await again;
+    expect(f.calls.map(x => x.enabled)).toEqual([true, false, false, true]);
+    expect(c.remoteControl).toMatchObject({ on: true, bridgeSessionId: 'cse_2', status: 'ready' });
+  });
   it('an engine that dies while reattaching: the next engine still asks for its bridge', async () => {
     let fail!: (e: Error) => void;
     const f = fixture([{ ...ORCH, remoteControl: { on: true, url: 'https://claude.ai/code/session_cse_9', bridgeSessionId: 'cse_9', status: 'paused' } }], {
@@ -268,11 +281,13 @@ describe('ChatManager Remote Control', () => {
     });
     const on = f.m.remoteControl('o1', true);
     await waitFor(() => f.calls.length === 1, 'engine A asked');
+    // the real order (claude.ts finish): the pending ask is rejected, then the exit, in one go
+    fail(new Error('La sessione è terminata.'));
     f.sinks[0]!.exit({ code: 1, error: 'crash' });
+    await on;
+    expect(chat(f.m, 'o1')?.remoteControl).toEqual({ on: true, url: 'https://claude.ai/code/session_cse_9', bridgeSessionId: 'cse_9', status: 'paused' });
     await f.startEngine('o1');
     expect(f.sinks).toHaveLength(2);
-    fail(new Error('La sessione non è attiva.'));
-    await on;
     await waitFor(() => chat(f.m, 'o1')?.remoteControl?.status === 'ready', 'engine B ready');
     expect(f.calls).toEqual([{ enabled: true, name: 'Orchestrator', reattach: 'cse_9' }, { enabled: true, name: 'Orchestrator', reattach: 'cse_9' }]);
     expect(chat(f.m, 'o1')?.remoteControl).toEqual({ on: true, url: 'https://claude.ai/code/session_cse_9', bridgeSessionId: 'cse_9', status: 'ready' });

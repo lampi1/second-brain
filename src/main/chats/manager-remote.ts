@@ -22,9 +22,13 @@ export abstract class ManagerRemote extends ManagerSink {
     if (r.s.harness !== 'claude') throw new Error('Il controllo remoto funziona solo con Claude Code: passa l’Orchestrator a Claude.');
     if (r.s.closedAt) throw new Error('L’Orchestrator è chiuso: riaprilo, poi accendi il controllo remoto.');
     if (!enabled) return this.remoteOff(r);
+    // an ask in flight: on, it is this click's too; turned off meanwhile («Spegni»), it ends first and this one asks anew
+    for (let busy = this.remoteBusy.get(chatId); busy; busy = this.remoteBusy.get(chatId)) {
+      const wanted = r.s.remoteControl?.on;
+      await busy.job;
+      if (wanted) return { ...r.s };
+    }
     const rc = r.s.remoteControl;
-    const busy = this.remoteBusy.get(chatId);
-    if (busy) { await busy.job; return { ...r.s }; }
     if (rc?.on && r.session?.alive && (rc.status === 'ready' || rc.status === 'connected')) return { ...r.s };
     const hadEngine = !!r.session;
     r.s.remoteControl = { on: true, url: rc?.url ?? null, bridgeSessionId: rc?.bridgeSessionId ?? null, status: 'starting' };
@@ -98,7 +102,9 @@ export abstract class ManagerRemote extends ManagerSink {
       const now = r.s.remoteControl.status;
       r.s.remoteControl = { on: true, url: reply.url, bridgeSessionId: reply.bridgeSessionId ?? reattach, status: now === 'connected' ? 'connected' : 'ready' };
     } catch (e) {
-      if ((r.session !== sess && r.session) || !r.s.remoteControl?.on) return;
+      // its engine went (a crash rejects the ask before its exit: r.session is null, the state paused): the next engine
+      // reattaches; another engine's or the user's state wins
+      if (r.session !== sess || !r.s.remoteControl?.on) return;
       log.warn('chats', 'remote control not turned on', { chat: chatId, cause: errText(e), hint: 'the chat shows the engine\'s words; the user tries again or turns it off' });
       r.s.remoteControl = { on: false, url: null, bridgeSessionId: null, status: 'failed', error: errText(e) };
     } finally {
