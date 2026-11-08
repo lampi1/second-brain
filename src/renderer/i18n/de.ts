@@ -57,6 +57,7 @@ import { lampoDe } from './areas/lampo.de';
 import { modelPickerDe } from './areas/model-picker.de';
 import { awayDe } from './areas/away.de';
 import { queueSettingsDe } from './areas/queue-settings.de';
+import { remoteDe } from './areas/remote.de';
 import { learningDe } from './areas/learning.de';
 import { andamentoDe } from './areas/andamento.de';
 import { estimateDe } from './areas/estimate.de';
@@ -88,6 +89,7 @@ export const de: Dict = {
   ...modelPickerDe,
   ...awayDe,
   ...queueSettingsDe,
+  ...remoteDe,
   ...learningDe,
   ...andamentoDe,
   ...estimateDe,

@@ -500,6 +500,13 @@ export async function setChat(chatId: string, patch: { model?: string; effort?: 
   catch (e) { if (c) dispatch({ type: 'chat:updated', chat: c }); fail(t('appText.store.settingNotSaved'))(e); }
 }
 
+/** «Controllo remoto» on the Orchestrator (ADR 0229): main turns the engine's claude.ai bridge on or off and answers
+ *  with the chat, its link included; a refusal comes back as its status 'failed' with the engine's words. */
+export async function setRemoteControl(chatId: string, enabled: boolean): Promise<void> {
+  try { dispatch({ type: 'chat:updated', chat: await sb.invoke('chat:remoteControl', { chatId, enabled }) }); }
+  catch (e) { fail(t('appText.store.settingNotSaved'))(e); }
+}
+
 // ---- long chats: the hand-off note and "Riprendi" (a new chat that starts from it)
 
 /** The chat writes its hand-off now (one short turn; the app builds one itself when the chat cannot). */

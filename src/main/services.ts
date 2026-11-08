@@ -69,6 +69,8 @@ export interface ChatService {
   /** the CPU queue: the load last sampled and the waiting chats, in order (null = no queue wired) */
   queueState(): { cpu: number; freeRam: number; starting?: number; slots?: number; enabled: boolean; waiting: { chatId: string; kind: 'start' | 'turn'; position: number; since: number }[] } | null;
   set(chatId: string, patch: { model?: string; effort?: Effort; permissionMode?: PermissionMode; title?: string; workStatus?: 'assigned'|'waiting-mail'|'completed' }): Promise<ChatSummary>;
+  /** «Controllo remoto» of the Orchestrator on or off (ADR 0222); absent = this service has none (demo, mocks) */
+  remoteControl?(chatId: string, enabled: boolean): Promise<ChatSummary>;
   /** long chats: the hand-off note (asked to the chat, or built by the app) and "Riprendi" in a new chat */
   readHandoff(chatId: string, session?: string): HandoffInfo | null;
   handoff(chatId: string, opts?: { reason?: 'manual' | 'threshold' | 'finished' | 'continue'; allowStart?: boolean }): Promise<HandoffInfo>;

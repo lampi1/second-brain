@@ -42,6 +42,12 @@
 // and logs to $FAKE_CLAUDE_LOG one JSON line per start ({argv}), per control request ({control}) and per user
 // message ({user: session_id, blocks: content block types, images as image:<source type>:<media type>:<base64 length>}). `--version` and `auth status` answer at once. Every turn emits a `rate_limit_event`;
 // the get_usage control answers with plan windows (rate_limits.five_hour / seven_day).
+// Remote Control (ADR 0229, like 2.1.283): remote_control on emits system/bridge_state ready, answers with a claude.ai
+// session_url and bridge_session_id (the reattach_session_id when given), then bridge_state connected; off answers
+// success. FAKE_CLAUDE_RC=refuse answers an error; a reattach to "cse_gone" is refused; FAKE_CLAUDE_RC=badurl answers a
+// non-claude.ai link; FAKE_CLAUDE_RC_PHONE=<text> types <text> "from the phone" once connected (a replayed user message
+// with no uuid of the app's, then a turn). With --replay-user-messages every user message comes back with isReplay and
+// its uuid.
 import { spawn } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -477,6 +483,26 @@ function control(id, req) {
     case 'set_permission_mode': permissionMode = req.mode; out({ type: 'system', subtype: 'status', status: null, permissionMode, session_id: sessionId }); return ok({ mode: req.mode });
     case 'apply_flag_settings': return ok();
     case 'rename_session': record({ type: 'custom-title', customTitle: req.title }); return ok();
+    case 'remote_control': {
+      const fail = error => out({ type: 'control_response', response: { subtype: 'error', request_id: id, error } });
+      if (!req.enabled) return ok();
+      if (process.env.FAKE_CLAUDE_RC === 'refuse') return fail('Remote Control initialization failed');
+      if (req.reattach_session_id === 'cse_gone') return fail('Remote Control initialization failed');
+      out({ type: 'system', subtype: 'bridge_state', state: 'ready', session_id: sessionId });
+      const bridge = req.reattach_session_id ?? `cse_fake${++n}`;
+      const url = process.env.FAKE_CLAUDE_RC === 'badurl' ? 'https://example.com/x' : `https://claude.ai/code/session_${bridge}`;
+      ok({ session_url: url, connect_url: url, environment_id: 'env_fake', bridge_epoch: 1, bridge_session_id: bridge });
+      setTimeout(() => {
+        out({ type: 'system', subtype: 'bridge_state', state: 'connected', session_id: sessionId });
+        const phone = process.env.FAKE_CLAUDE_RC_PHONE;
+        if (phone) {
+          out({ type: 'user', message: { role: 'user', content: phone }, parent_tool_use_id: null, session_id: sessionId, uuid: crypto.randomUUID(), isReplay: true });
+          queue.push(phone);
+          void pump();
+        }
+      }, 50);
+      return;
+    }
     case 'get_context_usage': {
       const max = compactWindow ?? (ctxTokens > 200000 ? 1000000 : 200000);
       return ok({ categories: [], totalTokens: ctxTokens, maxTokens: max, rawMaxTokens: max, percentage: Math.round((ctxTokens / max) * 100000) / 1000 });
@@ -508,6 +534,7 @@ rl.on('line', line => {
     const c = m.message?.content;
     // the content block types and image media types, so tests see what a message carried (pasted screenshots)
     logLine({ user: m.session_id, blocks: Array.isArray(c) ? c.map(b => (b.type === 'image' ? `image:${b.source?.type}:${b.source?.media_type}:${(b.source?.data ?? '').length}` : b.type)) : ['string'] });
+    if (argv.includes('--replay-user-messages')) out({ type: 'user', message: m.message, parent_tool_use_id: null, session_id: sessionId, ...(m.uuid ? { uuid: m.uuid } : {}), isReplay: true });
     queue.push(Array.isArray(c) ? c.map(b => b.text ?? '').join('\n') : String(c ?? ''));
     void pump();
   }

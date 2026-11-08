@@ -57,6 +57,7 @@ import { lampoIt } from './areas/lampo.it';
 import { modelPickerIt } from './areas/model-picker.it';
 import { awayIt } from './areas/away.it';
 import { queueSettingsIt } from './areas/queue-settings.it';
+import { remoteIt } from './areas/remote.it';
 import { learningIt } from './areas/learning.it';
 import { andamentoIt } from './areas/andamento.it';
 import { suggestIt } from './areas/suggest.it';
@@ -89,6 +90,7 @@ export const it = {
   ...modelPickerIt,
   ...awayIt,
   ...queueSettingsIt,
+  ...remoteIt,
   ...learningIt,
   ...andamentoIt,
   ...suggestIt,

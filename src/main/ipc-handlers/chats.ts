@@ -49,6 +49,11 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
     'chat:admitNow': a => s.chats.admitNow(a.chatId),
     'chat:prewarm': a => s.chats.prewarm?.(a.chatId) ?? false,
     'chat:set': ({ chatId, ...patch }) => s.chats.set(chatId, patch),
+    'chat:remoteControl': a => {
+      if (typeof a?.chatId !== 'string' || typeof a.enabled !== 'boolean') throw new Error('Richiesta non valida.');
+      if (!s.chats.remoteControl) throw new Error('Il controllo remoto non è disponibile qui.');
+      return s.chats.remoteControl(a.chatId, a.enabled);
+    },
     'chat:handoff': a => s.chats.handoff(a.chatId, { reason: 'manual' }),
     'chat:handoffRead': a => s.chats.readHandoff(a.chatId, typeof a.session === 'string' ? a.session : undefined),
     'chat:continue': a => s.chats.continueChat(a.chatId),

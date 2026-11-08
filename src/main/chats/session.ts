@@ -2,6 +2,7 @@
 // Why: the manager must not know which engine a chat runs on (Claude Code: claude.ts, stream-json control protocol; an
 // ACP engine: acp.ts, JSON-RPC); each adapter implements HarnessSession and reports through a SessionSink. Used by manager.ts (creates sessions, owns items/pending/persistence) and by every harness module.
 import type { Root } from './proctree';
+import type { RemoteControlReply } from './remote-control';
 import { RESULT_OUTPUT_MAX } from '../../shared/delegation';
 import type { AgentChildren, AgentToolPolicy, ChildObservation, PermissionCeiling } from '../../shared/agents';
 import type { Answer, ChatCommand, ChatItem, ChatState, Effort, Harness, ImageAttachment, PendingRequest, PermissionMode } from '../../shared/contract';
@@ -88,6 +89,8 @@ export interface SessionPatch {
   /** the tokens of the turn that just ended, when the engine reports them (Claude's result usage, ACP's prompt usage,
    *  an HTTP model's usage); absent = unknown. Read by compare/headless.ts for a run's total. */
   turnTokens?: TokenUsage;
+  /** Remote Control's bridge changed (system/bridge_state, ADR 0229) */
+  remote?: { status: 'ready' | 'connected' | 'failed'; error?: string };
   /** the engine compacted the context (compact_boundary) */
   compacted?: { pre: number | null; post: number | null };
 }
@@ -153,6 +156,9 @@ export interface SessionOptions {
   /** Claude only: a product brain's hooks the session answers in process (rules/runtime.ts runHook) instead of a node
    *  process per call: UserPromptSubmit, PreToolUse, PostToolUse (Stop stays in the plugin's hooks.json, ADR 0103) */
   productHooks?: { root: string; state: string; launch: { tools?: string; correctionHook?: boolean } } | null;
+  /** Claude only: the chat may turn on Remote Control (the Orchestrator, ADR 0229): the engine echoes every user message
+   *  it queues (--replay-user-messages), so the ones typed on the phone show in the chat */
+  remoteControl?: boolean;
 }
 
 /** Main-only, never from the renderer: string fields set on the asked call's own input when it is allowed (the role
@@ -205,6 +211,9 @@ export interface HarnessSession {
   setPermissionMode(mode: PermissionMode): Promise<void>;
   setEffort(effort: Effort | null): Promise<void>;
   rename(title: string): Promise<void>;
+  /** Claude only (ADR 0229): Remote Control on (the claude.ai link and bridge id; reattach = the bridge of an earlier
+   *  engine of the same chat) or off (null). Throws with the engine's own words when it refuses. */
+  setRemoteControl?(enabled: boolean, opts?: { name?: string; reattach?: string | null }): Promise<RemoteControlReply | null>;
   contextUsage(): Promise<ContextUsage | null>;
   /** The CLI's own usage report (Claude: get_usage, plan windows included), raw; null when not supported. */
   usage(): Promise<unknown>;

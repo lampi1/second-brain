@@ -15,6 +15,7 @@ import type { AgentRunStore} from '../agents/runs';
 import { endRun } from '../agents/runs';
 import { AgentChildrenReducer } from './agent-children';
 import { initialEffort } from './effort';
+import { pausedState } from './remote-control';
 import type { Rec } from './manager-types';
 import { clearTimeout, workBehind, storedResult, coldDivider, LAMPO_TITLE, MAX_ARCHIVED, RUN_SAVE_MS, restoredOwner } from './manager-helpers';
 import { ManagerCore } from './manager-core';
@@ -191,6 +192,7 @@ export abstract class ManagerPersistence extends ManagerCore {
         ...(c.delegation ? { delegation: c.delegation } : {}),
         ...(c.plan ? { plan: c.plan } : {}),
         ...(c.waitsOn ? { waitsOn: c.waitsOn } : {}), ...(c.waitsOnWork ? { waitsOnWork: true } : {}),
+        ...(c.remoteControl ? { remoteControl: pausedState(c.remoteControl)! } : {}),
       },
       createdAt: c.createdAt,
       agentInstructions: c.agentInstructions ?? '',
@@ -287,6 +289,7 @@ export abstract class ManagerPersistence extends ManagerCore {
       ...(r.s.delegation ? { delegation: r.s.delegation } : {}),
       ...(r.s.plan ? { plan: r.s.plan } : {}),
       ...(r.mcpAncestors ? { mcpAncestors: r.mcpAncestors } : {}),
+      ...(r.s.remoteControl?.on ? { remoteControl: pausedState(r.s.remoteControl)! } : {}),
     }));
   }
 

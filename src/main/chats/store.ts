@@ -8,7 +8,8 @@ import { readAgentContext, type AgentContextSnapshot } from '../../shared/agent-
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { isLang, type ChatLink, type ChatSummary, type Effort, type HandoffSource, type Harness, type Lang, type PermissionMode, type RouteDecision } from '../../shared/contract';
+import { isLang, type ChatLink, type ChatSummary, type Effort, type HandoffSource, type Harness, type Lang, type PermissionMode, type RemoteControlState, type RouteDecision } from '../../shared/contract';
+import { readStoredRemote } from './remote-control';
 import { validRoute } from '../brain/routing';
 import { errText, log } from '../log';
 import { isSessionId, isUuid } from './session';
@@ -123,6 +124,8 @@ export interface StoredChat {
   continuedBy?: ChatLink;
   /** created with "Worktree separato" (the CLI made the worktree; "Riprendi" tells the new chat to work there) */
   inWorktree?: boolean;
+  /** Remote Control was on (ADR 0229): the next engine reattaches this bridge; only status 'paused' is ever stored */
+  remoteControl?: RemoteControlState;
   /** archived (out of the grid, in the palette's "Chiuse" group) at this time, by the auto-close or by hand */
   closedAt?: number;
   closedBy?: 'auto' | 'user';
@@ -205,6 +208,7 @@ function extras(c: Record<string, unknown>): Partial<StoredChat> {
     ...(num(c.handoffAt) ? { handoffAt: c.handoffAt, handoffSource: c.handoffSource === 'auto' ? 'auto' as const : 'chat' as const } : {}),
     ...(from ? { continuedFrom: from } : {}), ...(by ? { continuedBy: by } : {}),
     ...(c.inWorktree === true ? { inWorktree: true } : {}),
+    ...(readStoredRemote(c.remoteControl) ? { remoteControl: readStoredRemote(c.remoteControl)! } : {}),
     ...(typeof c.parentId === 'string' && /^[\w-]{1,80}$/.test(c.parentId) && c.parentId !== c.id ? { parentId: c.parentId } : {}),
     ...(readDelegation(c.delegation) ? { delegation: readDelegation(c.delegation)! } : {}),
     ...(readPlan(c.plan) ? { plan: readPlan(c.plan)! } : {}),

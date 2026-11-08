@@ -129,6 +129,23 @@ export interface ChatSummary {
   quick?: true;
   /** the maintenance research chat (ADR 0132): reads and proposes cards, changes nothing */
   research?: true;
+  /** Claude Code Remote Control of the Orchestrator (ADR 0229); absent = never turned on */
+  remoteControl?: RemoteControlState;
+}
+
+/** Claude Code Remote Control of a chat (ADR 0229): the user's phone continues it at claude.ai/code. */
+export interface RemoteControlState {
+  /** the user wants it on: kept across restarts, the next engine of the chat reattaches the same bridge */
+  on: boolean;
+  /** the claude.ai link a phone opens; null until the engine gave one */
+  url: string | null;
+  /** the bridge's session (cse_…), sent back as reattach_session_id when the engine starts again */
+  bridgeSessionId: string | null;
+  /** starting = asked, no answer yet · ready / connected = the engine's bridge_state · paused = on, but the engine is
+   *  not running (it reattaches when it starts) · failed = refused or lost (see error) · off */
+  status: 'starting' | 'ready' | 'connected' | 'paused' | 'failed' | 'off';
+  /** why it failed: the engine's own words, or an Italian default */
+  error?: string;
 }
 
 
@@ -400,6 +417,8 @@ export interface ChatsInvokeMap {
   /** the user is typing in this chat: an engine released for idleness starts now (no message, no tokens); false = nothing to start */
   'chat:prewarm': [{ chatId: string }, boolean];
   'chat:set': [{ chatId: string; model?: string; effort?: Effort; permissionMode?: PermissionMode; title?: string; workStatus?: 'assigned'|'waiting-mail'|'completed' }, ChatSummary];
+  /** «Controllo remoto» on or off (ADR 0222): the Orchestrator on Claude only; its engine starts if it is not running */
+  'chat:remoteControl': [{ chatId: string; enabled: boolean }, ChatSummary];
   /** the chat writes its hand-off now (one turn; a token-free one when it cannot answer) */
   'chat:handoff': [{ chatId: string }, HandoffInfo];
   /** the saved hand-off, null if none */
