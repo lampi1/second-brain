@@ -1,7 +1,8 @@
 // Claude Code Remote Control of the Orchestrator (ADR 0222): the reply and bridge_state readers, the request the engine
 // gets (claude.ts against the fake CLI: on, off, reattach, refusal, drift), the phone's messages shown in the chat
-// (--replay-user-messages), and the manager's state: saved, paused when the engine goes, reattached by the next one.
-import { afterEach, describe, expect, it } from 'vitest';
+// (--replay-user-messages), and the manager's state: saved, paused when the engine goes, reattached by the next one,
+// «Spegni» while it starts, and an engine that dies while reattaching.
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -111,6 +112,23 @@ describe('ClaudeSession Remote Control', () => {
     const users = [...sink.items.values()].filter(i => i.kind === 'user');
     expect(users).toEqual([expect.objectContaining({ kind: 'user', text: 'scrivo dal telefono', via: 'phone' })]);
   });
+  it('keeps our uuids only when the engine echoes them, at most 500', () => {
+    const fake = (o: { remoteControl?: boolean; readOnly?: boolean }) => {
+      const s = new ClaudeSession({ chatId: 'c', cwd: '.', sessionId: 'abc12345', ...o }, recSink());
+      Object.assign(s as unknown as Record<string, unknown>, { proc: {}, write: () => {} });
+      for (let i = 0; i < 600; i++) s.send(`m${i}`);
+      return (s as unknown as { sentUuids: Set<string> }).sentUuids;
+    };
+    expect(fake({}).size).toBe(0);
+    expect(fake({ remoteControl: true, readOnly: true }).size).toBe(0);
+    expect(fake({ remoteControl: true }).size).toBe(500);
+  });
+  it('waits 60 s for the bridge (it registers with claude.ai first) and rejects with the timeout', async () => {
+    const s = new ClaudeSession({ chatId: 'c', cwd: '.', sessionId: 'abc12345', remoteControl: true }, recSink());
+    const spy = vi.spyOn(s as unknown as { control(r: unknown, ms?: number): Promise<unknown> }, 'control').mockRejectedValue(new Error('remote_control: nessuna risposta dal CLI'));
+    await expect(s.setRemoteControl(true, { name: 'O', reattach: 'cse_1' })).rejects.toThrow(/nessuna risposta/);
+    expect(spy).toHaveBeenCalledWith({ subtype: 'remote_control', enabled: true, name: 'O', reattach_session_id: 'cse_1' }, 60000);
+  });
   it('without Remote Control on, an echoed message is never shown', async () => {
     const { s, sink } = start();
     await waitFor(() => s.state === 'idle', 'idle');
@@ -131,7 +149,7 @@ afterEach(async () => {
 const row = (p: Partial<StoredChat> & { id: string }): StoredChat => ({
   harness: 'claude', cwd: 'C:/brain', sessionId: null, title: p.id, model: null, effort: null, permissionMode: null, isOrchestrator: false, createdAt: 1, ...p,
 });
-function fixture(stored: StoredChat[], opts: { refuse?: (c: RcCall) => string | null; dir?: string } = {}) {
+function fixture(stored: StoredChat[], opts: { refuse?: (c: RcCall) => string | null; hold?: (c: RcCall) => Promise<void> | undefined; dir?: string } = {}) {
   const dir = opts.dir ?? fs.mkdtempSync(path.join(os.tmpdir(), 'sb-rc-'));
   if (!opts.dir) roots.push(dir);
   fs.writeFileSync(path.join(dir, 'chats.json'), JSON.stringify({ version: 2, chats: stored }));
@@ -146,6 +164,7 @@ function fixture(stored: StoredChat[], opts: { refuse?: (c: RcCall) => string | 
     async setRemoteControl(enabled: boolean, x: { name?: string; reattach?: string | null } = {}) {
       const call = { enabled, ...x };
       calls.push(call);
+      await opts.hold?.(call);
       const refused = opts.refuse?.(call);
       if (refused) throw new Error(refused);
       if (!enabled) return null;
@@ -155,7 +174,9 @@ function fixture(stored: StoredChat[], opts: { refuse?: (c: RcCall) => string | 
   } as unknown as HarnessSession) });
   managers.push(m);
   const file = () => (JSON.parse(fs.readFileSync(path.join(dir, 'chats.json'), 'utf8')) as { chats: StoredChat[] }).chats;
-  return { m, dir, calls, sinks, file };
+  const rec = (id: string) => (m as unknown as { need(id: string): unknown }).need(id);
+  const startEngine = (id: string) => (m as unknown as { ensureSession(r: unknown): Promise<void> }).ensureSession(rec(id));
+  return { m, dir, calls, sinks, file, startEngine };
 }
 const chat = (m: ChatManager, id: string) => m.list().find(c => c.id === id);
 const ORCH = row({ id: 'o1', title: 'Orchestrator', isOrchestrator: true });
@@ -209,8 +230,51 @@ describe('ChatManager Remote Control', () => {
     expect(chat(f.m, 'o1')?.remoteControl).toEqual({ on: true, url: 'https://claude.ai/code/session_cse_1', bridgeSessionId: 'cse_1', status: 'paused' });
   });
   it('only for the Orchestrator on Claude', async () => {
-    const f = fixture([ORCH, row({ id: 'w1' }), row({ id: 'o2', harness: 'cursor' })]);
+    const f = fixture([ORCH, row({ id: 'w1' }), row({ id: 'o2', harness: 'cursor', isOrchestrator: true })]);
     await expect(f.m.remoteControl('w1', true)).rejects.toThrow(/solo per l’Orchestrator/);
+    await expect(f.m.remoteControl('o2', true)).rejects.toThrow(/solo con Claude Code/);
     expect(f.calls).toEqual([]);
+  });
+  it('a reattach with no answer in time (60 s) asks once more without the id', async () => {
+    const f = fixture([{ ...ORCH, remoteControl: { on: true, url: null, bridgeSessionId: 'cse_slow', status: 'paused' } }], { refuse: c => (c.reattach ? 'remote_control: nessuna risposta dal CLI' : null) });
+    const c = await f.m.remoteControl('o1', true);
+    expect(f.calls).toEqual([{ enabled: true, name: 'Orchestrator', reattach: 'cse_slow' }, { enabled: true, name: 'Orchestrator' }]);
+    expect(c.remoteControl).toMatchObject({ on: true, bridgeSessionId: 'cse_1', status: 'ready' });
+  });
+  it('a double click asks the engine once', async () => {
+    const f = fixture([ORCH]);
+    const [a, b] = await Promise.all([f.m.remoteControl('o1', true), f.m.remoteControl('o1', true)]);
+    expect(f.calls).toEqual([{ enabled: true, name: 'Orchestrator', reattach: null }]);
+    expect(a.remoteControl?.status).toBe('ready');
+    expect(b.remoteControl?.status).toBe('ready');
+  });
+  it('«Spegni» while it starts is off at once, and the late bridge is turned off', async () => {
+    let release!: () => void;
+    const f = fixture([ORCH], { hold: c => (c.enabled ? new Promise<void>(res => { release = res; }) : undefined) });
+    const on = f.m.remoteControl('o1', true);
+    await waitFor(() => f.calls.length === 1, 'asked');
+    expect(chat(f.m, 'o1')?.remoteControl?.status).toBe('starting');
+    const off = await f.m.remoteControl('o1', false);
+    expect(off.remoteControl).toEqual({ on: false, url: null, bridgeSessionId: null, status: 'off' });
+    release();
+    await on;
+    expect(f.calls.map(c => c.enabled)).toEqual([true, false, false]);
+    expect(chat(f.m, 'o1')?.remoteControl).toEqual({ on: false, url: null, bridgeSessionId: null, status: 'off' });
+  });
+  it('an engine that dies while reattaching: the next engine still asks for its bridge', async () => {
+    let fail!: (e: Error) => void;
+    const f = fixture([{ ...ORCH, remoteControl: { on: true, url: 'https://claude.ai/code/session_cse_9', bridgeSessionId: 'cse_9', status: 'paused' } }], {
+      hold: c => (c.enabled && f.calls.length === 1 ? new Promise<void>((_res, rej) => { fail = rej; }) : undefined),
+    });
+    const on = f.m.remoteControl('o1', true);
+    await waitFor(() => f.calls.length === 1, 'engine A asked');
+    f.sinks[0]!.exit({ code: 1, error: 'crash' });
+    await f.startEngine('o1');
+    expect(f.sinks).toHaveLength(2);
+    fail(new Error('La sessione non è attiva.'));
+    await on;
+    await waitFor(() => chat(f.m, 'o1')?.remoteControl?.status === 'ready', 'engine B ready');
+    expect(f.calls).toEqual([{ enabled: true, name: 'Orchestrator', reattach: 'cse_9' }, { enabled: true, name: 'Orchestrator', reattach: 'cse_9' }]);
+    expect(chat(f.m, 'o1')?.remoteControl).toEqual({ on: true, url: 'https://claude.ai/code/session_cse_9', bridgeSessionId: 'cse_9', status: 'ready' });
   });
 });

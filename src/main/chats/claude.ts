@@ -46,6 +46,9 @@ import { claudeMcp, claudeTools, suggestedAbove } from '../agents/tool-policy';
 import { BRIEF_GRACE_MS, BRIEF_REFUSAL, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
 import { mcpForm, mcpFormAnswer, type McpForm } from '../../shared/mcp-form';
 
+/** our own messages' uuids kept for their echo: a few hundred turns at most are ever waiting */
+const SENT_UUIDS_MAX = 500;
+
 export interface ClaudeOptions extends SessionOptions {
   /** claude binary or a .mjs fake (tests); default: `claude` resolved on PATH */
   claudePath?: string;
@@ -398,7 +401,11 @@ export class ClaudeSession implements HarnessSession {
     const content: Obj[] = images.map(im => ({ type: 'image', source: { type: 'base64', media_type: im.mimeType, data: im.data } }));
     if (text || !content.length) content.push({ type: 'text', text });
     const uuid = crypto.randomUUID();
-    if (this.opts.remoteControl) this.sentUuids.add(uuid);
+    // only when the engine echoes them (args: --replay-user-messages); an echo never seen leaves its uuid, so the oldest go
+    if (this.opts.remoteControl && !this.opts.readOnly) {
+      this.sentUuids.add(uuid);
+      for (const old of this.sentUuids) { if (this.sentUuids.size <= SENT_UUIDS_MAX) break; this.sentUuids.delete(old); }
+    }
     this.write({ type: 'user', message: { role: 'user', content }, parent_tool_use_id: null, session_id: this.sessionId ?? '', uuid });
     // a message queued behind a running turn is not timed (its wait is the other turn's)
     if (!this.turnOpen) this.turnT = { sent: Date.now(), warm: !!this.readyAt, n: ++this.turnsSent };

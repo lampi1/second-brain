@@ -10,8 +10,9 @@ import { ManagerSink } from './manager-sink';
 
 /** Remote Control on the Orchestrator: on, off, and the reattach when its engine starts. */
 export abstract class ManagerRemote extends ManagerSink {
-  /** a turn-on in flight per chat: a second click or the start-up reattach waits for it instead of asking twice */
-  private readonly remoteBusy = new Map<string, Promise<void>>();
+  /** a turn-on in flight per chat, with the engine it asks: a second click or that engine's start-up reattach waits for
+   *  it instead of asking twice; a newer engine asks after it */
+  private readonly remoteBusy = new Map<string, { sess: HarnessSession; job: Promise<void> }>();
 
   /** «Controllo remoto»: on (its engine starts if it is not running) or off. The state, the link included, is in the
    *  returned summary; a refusal is its status 'failed' with the engine's words. */
@@ -23,19 +24,21 @@ export abstract class ManagerRemote extends ManagerSink {
     if (!enabled) return this.remoteOff(r);
     const rc = r.s.remoteControl;
     const busy = this.remoteBusy.get(chatId);
-    if (busy) { await busy; return { ...r.s }; }
+    if (busy) { await busy.job; return { ...r.s }; }
     if (rc?.on && r.session?.alive && (rc.status === 'ready' || rc.status === 'connected')) return { ...r.s };
     const hadEngine = !!r.session;
     r.s.remoteControl = { on: true, url: rc?.url ?? null, bridgeSessionId: rc?.bridgeSessionId ?? null, status: 'starting' };
     this.updated(r);
     try { await this.ensureSession(r); } catch (e) {
+      if (!r.s.remoteControl?.on) return { ...r.s }; // «Spegni» while the engine was starting
       r.s.remoteControl = { on: false, url: null, bridgeSessionId: null, status: 'failed', error: errText(e) };
       this.persist(); this.updated(r);
       return { ...r.s };
     }
+    if (!r.s.remoteControl?.on) return { ...r.s };
     // a new engine is already reattaching (remoteAfterStart); a running one is asked now
     const running = this.remoteBusy.get(chatId);
-    if (running) await running;
+    if (running) await running.job;
     else if (r.session) await this.remoteOn(r, r.session, hadEngine && rc?.on ? rc.bridgeSessionId : null);
     return { ...r.s };
   }
@@ -47,52 +50,80 @@ export abstract class ManagerRemote extends ManagerSink {
     void this.remoteOn(r, sess, rc.bridgeSessionId);
   }
 
+  /** One ask per engine: the same engine's second ask shares it; an ask still out to an engine that went (a crash while
+   *  reattaching) is waited for, then this engine asks, so the new engine always gets its bridge. */
   private remoteOn(r: Rec, sess: HarnessSession, reattach: string | null): Promise<void> {
     const chatId = r.s.id;
-    const running = this.remoteBusy.get(chatId);
-    if (running) return running;
-    const job = (async () => {
-      const prev = r.s.remoteControl;
-      r.s.remoteControl = { on: true, url: prev?.url ?? null, bridgeSessionId: reattach, status: 'starting' };
-      this.updated(r);
-      try {
-        await sess.ready;
-        let reply;
-        try { reply = await sess.setRemoteControl!(true, { name: r.s.title, reattach }); } catch (e) {
-          if (!reattach || r.session !== sess) throw e;
-          // the old bridge is gone (expired, closed on claude.ai) or the engine did not answer in time: one more ask without
-          // the id (a slow engine may still hand back the same link; a gone bridge gives a new one)
-          log.warn('chats', 'remote control reattach failed: asking for a bridge again', { chat: chatId, cause: errText(e), hint: 'compare the link: a new one must be opened again on the phone' });
-          reply = await sess.setRemoteControl!(true, { name: r.s.title });
-        }
-        // turned off, or another engine, while it was asked: that one's state wins
-        if (r.session !== sess || !r.s.remoteControl?.on || !reply) return;
-        const now = r.s.remoteControl.status;
-        r.s.remoteControl = { on: true, url: reply.url, bridgeSessionId: reply.bridgeSessionId ?? reattach, status: now === 'connected' ? 'connected' : 'ready' };
-      } catch (e) {
-        if (r.session !== sess && r.session) return;
-        log.warn('chats', 'remote control not turned on', { chat: chatId, cause: errText(e), hint: 'the chat shows the engine\'s words; the user tries again or turns it off' });
-        r.s.remoteControl = { on: false, url: null, bridgeSessionId: null, status: 'failed', error: errText(e) };
-      } finally {
-        this.remoteBusy.delete(chatId);
-        this.persist();
-        this.updated(r);
+    const prior = this.remoteBusy.get(chatId);
+    if (prior?.sess === sess) return prior.job;
+    const entry = { sess, job: Promise.resolve() };
+    entry.job = (async () => {
+      let id = reattach;
+      if (prior) {
+        await prior.job;
+        if (r.session !== sess || !r.s.remoteControl?.on) return;
+        id = r.s.remoteControl.bridgeSessionId ?? reattach;
       }
-    })();
-    this.remoteBusy.set(chatId, job);
-    return job;
+      await this.askRemote(r, sess, id);
+    })().finally(() => { if (this.remoteBusy.get(chatId) === entry) this.remoteBusy.delete(chatId); });
+    this.remoteBusy.set(chatId, entry);
+    return entry.job;
   }
 
+  /** Asks one engine for its bridge and writes the answer into the chat; never rejects. */
+  private async askRemote(r: Rec, sess: HarnessSession, reattach: string | null): Promise<void> {
+    const chatId = r.s.id;
+    if (!r.s.remoteControl?.on) return;
+    const prev = r.s.remoteControl;
+    r.s.remoteControl = { on: true, url: prev.url, bridgeSessionId: reattach, status: 'starting' };
+    this.updated(r);
+    try {
+      await sess.ready;
+      if (!r.s.remoteControl?.on) return;
+      let reply;
+      try { reply = await sess.setRemoteControl!(true, { name: r.s.title, reattach }); } catch (e) {
+        if (!reattach || r.session !== sess || !r.s.remoteControl?.on) throw e;
+        // the old bridge is gone (expired, closed on claude.ai) or the engine did not answer in time: one more ask without
+        // the id (a slow engine may still hand back the same link; a gone bridge gives a new one)
+        log.warn('chats', 'remote control reattach failed: asking for a bridge again', { chat: chatId, cause: errText(e), hint: 'compare the link: a new one must be opened again on the phone' });
+        reply = await sess.setRemoteControl!(true, { name: r.s.title });
+      }
+      // turned off while it was asked: the engine's bridge, just made, goes too
+      if (!r.s.remoteControl?.on && reply && r.session === sess && sess.alive) {
+        await sess.setRemoteControl!(false).catch((e: unknown) => log.warn('chats', 'remote control not turned off after a late reply', { chat: chatId, cause: errText(e), hint: 'the bridge ends with the engine; the user can restart the Orchestrator' }));
+        return;
+      }
+      // turned off, or another engine, while it was asked: that one's state wins
+      if (r.session !== sess || !r.s.remoteControl?.on || !reply) return;
+      const now = r.s.remoteControl.status;
+      r.s.remoteControl = { on: true, url: reply.url, bridgeSessionId: reply.bridgeSessionId ?? reattach, status: now === 'connected' ? 'connected' : 'ready' };
+    } catch (e) {
+      if ((r.session !== sess && r.session) || !r.s.remoteControl?.on) return;
+      log.warn('chats', 'remote control not turned on', { chat: chatId, cause: errText(e), hint: 'the chat shows the engine\'s words; the user tries again or turns it off' });
+      r.s.remoteControl = { on: false, url: null, bridgeSessionId: null, status: 'failed', error: errText(e) };
+    } finally {
+      this.persist();
+      this.updated(r);
+    }
+  }
+
+  /** «Spegni», also while it is starting: the state is off at once (a late reply turns the bridge off, askRemote), and
+   *  the engine is told now. */
   private async remoteOff(r: Rec): Promise<ChatSummary> {
-    const busy = this.remoteBusy.get(r.s.id);
-    if (busy) await busy;
     const sess = r.session;
-    // the engine's bridge goes first: if it refuses, the chat still says it is on
-    if (sess?.alive && sess.setRemoteControl && r.s.remoteControl?.on && r.s.remoteControl.status !== 'paused') await sess.setRemoteControl(false);
+    const was = r.s.remoteControl;
+    const starting = this.remoteBusy.has(r.s.id) || was?.status === 'starting';
     r.s.remoteControl = { on: false, url: null, bridgeSessionId: null, status: 'off' };
-    log.info('chats', 'remote control off', { chat: r.s.id });
     this.persist();
     this.updated(r);
+    if (sess?.alive && sess.setRemoteControl && was?.on && was.status !== 'paused') {
+      try { await sess.setRemoteControl(false); } catch (e) {
+        // a bridge still being made may refuse an off: its late reply turns it off (askRemote)
+        if (!starting) { r.s.remoteControl = was; this.persist(); this.updated(r); throw e; }
+        log.warn('chats', 'remote control off refused while starting', { chat: r.s.id, cause: errText(e), hint: 'the late reply turns the bridge off' });
+      }
+    }
+    log.info('chats', 'remote control off', { chat: r.s.id });
     return { ...r.s };
   }
 }

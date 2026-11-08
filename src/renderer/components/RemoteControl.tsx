@@ -1,6 +1,6 @@
 // «Controllo remoto» (ADR 0222): the phone on the Orchestrator's head turns Claude Code Remote Control on and off
 // (chat:remoteControl), and while it is on a line under the head shows the claude.ai link to open on the phone, with
-// «Copia link» and «Spegni». No QR code: the app has no QR library (ADR 0222), so the line says to copy the link. The
+// «Copia link» and «Spegni» (also while it starts: it cancels the bridge being made). No QR code: the app has no QR library (ADR 0222), so the line says to copy the link. The
 // bridge itself lives in main (chats/manager-remote.ts, chats/claude.ts). Used by OrchestratorTile.tsx.
 import '../styles/remote.css';
 import type { ChatSummary } from '@shared/contract';
@@ -19,7 +19,6 @@ export function RemoteButton({ chat }: { chat: ChatSummary }) {
   if (!offered(chat)) return null;
   const on = chat.remoteControl?.on === true;
   return <IconButton label={on ? t('remote.turnOff') : t('remote.turnOn')} aria-pressed={on} className={on ? 'remote-on' : ''}
-    disabled={chat.remoteControl?.status === 'starting'}
     onClick={() => void setRemoteControl(chat.id, !on)} testid="orchestrator-remote"><IconPhone size={14} /></IconButton>;
 }
 
@@ -43,6 +42,6 @@ export function RemoteLine({ chat }: { chat: ChatSummary }) {
       {url && rc.status !== 'starting' && <span className="remote-noqr">{t('remote.noQr')}</span>}
     </div>
     {url && <button type="button" className="btn btn-subtle btn-s" onClick={() => void copyLink(url)} data-testid="remote-copy">{t('remote.copy')}</button>}
-    <button type="button" className="btn btn-subtle btn-s" disabled={rc.status === 'starting'} onClick={() => void setRemoteControl(chat.id, false)} data-testid="remote-off">{t('remote.off')}</button>
+    <button type="button" className="btn btn-subtle btn-s" onClick={() => void setRemoteControl(chat.id, false)} data-testid="remote-off">{t('remote.off')}</button>
   </div>;
 }
