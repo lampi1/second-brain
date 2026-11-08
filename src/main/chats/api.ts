@@ -147,7 +147,12 @@ export class ApiSession implements HarnessSession {
     this.host = checked.url.host;
     this.sessionId = this.opts.sessionId ?? crypto.randomUUID();
     if (this.opts.resume) this.messages = readHistory(this.opts.historyFile);
-    if (this.opts.resume && this.opts.showReplay) for (const it of historyItems(this.opts.historyFile)) this.sink.item(it, false);
+    if (this.opts.resume && this.opts.showReplay) {
+      // the replayed past does not end the cold start (ADR 0222)
+      this.sink.changed({ replaying: true });
+      for (const it of historyItems(this.opts.historyFile)) this.sink.item(it, false);
+      this.sink.changed({ replaying: false });
+    }
     log.info('chats', 'api session start', { chat: this.opts.chatId, data: { engine: this.harness, protocol: this.opts.protocol, host: this.host, model: this.model, resumed: this.messages.length } });
     this.sink.changed({ sessionId: this.sessionId, ...(this.model ? { model: this.model } : {}) });
     this.setState('idle');

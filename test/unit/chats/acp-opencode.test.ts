@@ -185,6 +185,50 @@ describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
     expect(cursorLog(logFile).find(l => l.answer)?.answer?.outcome?.optionId).toBe('once');
   });
 
+  // the app's own tools on its own endpoints go without a panel on every ACP (OpenCode and the catalog's), as Claude's
+  // --allowedTools, Codex's approval_mode and Cursor's allow rules do: agent_* stalled on a permission otherwise
+  const APP = { mcpUrl: 'http://127.0.0.1:4555/mcp/chat/c_oc', appMcpUrl: 'http://127.0.0.1:4555/mcp/app' } satisfies Partial<AcpOptions>;
+  const answered = async (logFile: string) => (await waitFor(() => cursorLog(logFile).find(l => l.answer), 'answer')).answer?.outcome;
+  it.each([
+    ['opencode', 'second-brain_agent_report'],
+    ['opencode', 'second-brain_agent_delegate'],
+    ['opencode', 'second-brain_send_to_chat'],
+    ['opencode', 'second-brain_show_ui'],
+    ['opencode', 'second-brain-app_app_state'],
+    ['kimi', 'second-brain_agent_report'],
+  ])('%s: the app tool %s is allowed once without a panel', async (engine, name) => {
+    const { s, sink, logFile } = start({ ...(engine === 'opencode' ? OPENCODE : {}), ...APP, env: { FAKE_ACP_OPENCODE: engine === 'opencode' ? '1' : '' } });
+    await waitFor(() => s.state === 'idle', 'ready');
+    s.send(`appgate=${name}`);
+    expect(await answered(logFile)).toEqual({ outcome: 'selected', optionId: 'once' });
+    await waitFor(() => [...sink.items.values()].some(i => i.kind === 'assistant' && i.text.includes(`${name} eseguito`)), 'the tool ran');
+    expect(sink.pendings).toEqual([]);
+  });
+
+  it.each([
+    ['a browser tool of the app', 'second-brain_navigate', APP],
+    ['another server', 'github_agent_report', APP],
+    ['a look-alike server', 'second-brain-evil_agent_report', APP],
+    ['a chat without the app endpoint', 'second-brain_agent_report', { mcpUrl: null, appMcpUrl: null }],
+    ['an endpoint off loopback', 'second-brain_agent_report', { mcpUrl: 'http://example.com:4555/mcp/chat/c_oc', appMcpUrl: null }],
+    ['a read-only run (only the question surfaces)', 'second-brain_agent_report', { ...APP, readOnly: true }],
+    ['a read-only run, app control', 'second-brain-app_app_state', { ...APP, readOnly: true }],
+  ] as const)('still asks for %s (%s)', async (_what, name, extra) => {
+    const { s, sink } = start({ ...OPENCODE, ...extra, env: { FAKE_ACP_OPENCODE: '1' } });
+    await waitFor(() => s.state === 'idle', 'ready');
+    s.send(`appgate=${name}`);
+    const request = await waitFor(() => sink.pendings[0], 'permission');
+    expect(request.tool).toBe('Tool');
+  });
+
+  it('a read-only run still answers the question surfaces without a panel', async () => {
+    const { s, sink, logFile } = start({ ...OPENCODE, ...APP, readOnly: true, env: { FAKE_ACP_OPENCODE: '1' } });
+    await waitFor(() => s.state === 'idle', 'ready');
+    s.send('appgate=second-brain_show_ui');
+    expect(await answered(logFile)).toEqual({ outcome: 'selected', optionId: 'once' });
+    expect(sink.pendings).toEqual([]);
+  });
+
   it('shows an OpenCode outside-folder permission with its folder and asks', async () => {
     const { s, sink } = start({ ...OPENCODE, env: { FAKE_ACP_OPENCODE: '1' } });
     await waitFor(() => s.state === 'idle', 'ready');

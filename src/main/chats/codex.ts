@@ -356,7 +356,11 @@ export class CodexSession implements HarnessSession {
         this.sessionId = this.opts.sessionId;
         this.readThread(r);
         for (const turn of arr(o(r.thread).turns).map(o)) for (const item of arr(turn.items)) this.observeChildren(item, 'replay');
-        if (this.opts.showReplay) this.replay(arr(o(r.thread).turns));
+        if (this.opts.showReplay) {
+          // the replayed past does not end the cold start (ADR 0222)
+          this.sink.changed({ replaying: true });
+          try { this.replay(arr(o(r.thread).turns)); } finally { this.sink.changed({ replaying: false }); }
+        }
         return;
       } catch (e) {
         this.sys(`${this.label} non ha ripreso la conversazione precedente (${cut(errText(e), 120)}): ne apro una nuova.`, 'warn');

@@ -62,6 +62,9 @@ export interface SessionPatch {
   /** The engine never answered the user's stop: end it now and resume the same session on a new one; these messages
    *  had not reached it yet and go to the new one (ACP: acp.ts interrupt). */
   restart?: { text: string; images: readonly ImageAttachment[] }[];
+  /** true while a resume replays the session's past as items (ACP session/load, Codex thread/resume, an HTTP model's
+   *  history), false after: those items are no answer of the engine, so they never end its cold start. Sent alone. */
+  replaying?: boolean;
   state?: ChatState;
   sessionId?: string;          // the CLI's own session id (learned at init, or new after a fork)
   model?: string;              // the model actually in use (from init)

@@ -42,11 +42,12 @@
 // "stream error" ends the turn as failed with the error (streamErrorOf, onStderr).
 // Login: the CLI's own login (cli:login; loginCommand, e.g. `agent login`). No login → session/new fails with auth
 // required (-32000) and the chat shows "Accedi a <label>"; the app never calls `authenticate` (it would start a browser
-// login from a hidden process). Never auto-answers anything. Under tests only a .mjs fake may start (cli.ts
+// login from a hidden process). Auto-answers only the app's own tools on its loopback endpoints (acpAppTool), never
+// anything else. Under tests only a .mjs fake may start (cli.ts
 // engineAllowed). Used by manager.ts through the HarnessSession interface (built by engines/sessions.ts).
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import fs from 'node:fs';
-import { APP_UI_TOOLS, cursorAppPermissions } from './app-tool-approval';
+import { acpAppTool, APP_UI_TOOLS, cursorAppPermissions } from './app-tool-approval';
 import os from 'node:os';
 import path from 'node:path';
 import type { Answer, ChatItem, ChatState, CursorReasoning, Effort, ImageAttachment, PendingRequest, PermissionMode, Question } from '../../shared/contract';
@@ -670,6 +671,7 @@ export class AcpSession implements HarnessSession {
         // the agent replays the past as updates before it answers: shown only when the chat has no items yet (restored
         // after an app restart); otherwise they are already on screen
         this.loading = true;
+        this.sink.changed({ replaying: true }); // the replayed past does not end the cold start (ADR 0222)
         try {
           const r = await this.request('session/load', { sessionId: this.opts.sessionId, ...base }, 120000);
           this.sessionId = this.opts.sessionId;
@@ -682,6 +684,7 @@ export class AcpSession implements HarnessSession {
           this.loading = false;
           this.reportEstimate();
           this.flushAll(true);
+          this.sink.changed({ replaying: false });
           this.replayUser = null;
           this.tools.clear(); // replayed tool rows keep the status they were replayed with
         }
@@ -1340,6 +1343,14 @@ export class AcpSession implements HarnessSession {
       const options: AcpOption[] = arr(p.options).map(x => ({ optionId: s(o(x).optionId), name: s(o(x).name), kind: s(o(x).kind) })).filter(x => x.optionId);
       const known = this.tools.get(s(tc.toolCallId)); // the tool_call that came first carries the input (command, path)
       const kindName = KIND_NAME[s(tc.kind)] ?? known?.name ?? 'Tool';
+      // the app's own tools (agent_*, its MCP) on its own loopback endpoints are already granted to the chat, as Claude's
+      // --allowedTools and Cursor's Mcp(...) rules do: answered once, no panel. OpenCode names an MCP tool <server>_<tool>.
+      const tool = stripAnsi(s(tc.title)).trim();
+      const once = options.find(x => x.kind === 'allow_once');
+      if (kindName === 'Tool' && once && acpAppTool(tool, this.opts.mcpUrl, this.opts.appMcpUrl, !!this.opts.readOnly)) {
+        log.info('chats', 'acp app tool allowed', { chat: this.opts.chatId, data: { engine: this.engine, tool } });
+        return this.respond(id, { outcome: { outcome: 'selected', optionId: once.optionId } });
+      }
       const view = permissionView(tc, known, kindName);
       this.asks.set(rid, { rpcId: id, method, options });
       this.pending({
