@@ -136,7 +136,7 @@ export class MailError extends Error {}
 /** `inbox.mjs send` for the app's send_to_chat tool. refusal = engines/policy.ts crossRefusal on the user's settings. */
 /** chain = the thread of the mail the sender received just before (ChatMail.chainOf): a send without reply_to
  *  continues it, so "forward this to everyone" cannot restart the hop count at 1 forever. */
-export function sendMail(dir: string, o: { from: string; fromHarness: Harness; to: string; toHarness: string | null; text: string; kind?: MailKind; replyTo?: string; chain?: { thread: string; hop: number } | null; refusal: (from: Harness, to: Harness) => string | null; now?: Date }): MailMsg | null {
+export function sendMail(dir: string, o: { from: string; fromHarness: Harness; to: string; toHarness: string | null; text: string; kind?: MailKind; replyTo?: string; chain?: { thread: string; hop: number } | null; ownerDelivery?: boolean; refusal: (from: Harness, to: Harness) => string | null; now?: Date }): MailMsg | null {
   const text = o.text.trim();
   if (!text) throw new MailError('messaggio vuoto');
   if (/^NO_REPLY$/.test(text)) { appendLog(dir, { action: 'no-reply', from: o.from, to: o.to, replyTo: o.replyTo ?? null }); return null; }
@@ -154,7 +154,7 @@ export function sendMail(dir: string, o: { from: string; fromHarness: Harness; t
   } else if (o.chain) {
     thread = o.chain.thread; hop = o.chain.hop + 1;
   }
-  if (hop > MAX_HOPS) { throw new MailError(`il filo è a ${MAX_HOPS} risposte: basta ping-pong, dillo all’Orchestrator o all’utente`);
+  if (hop > MAX_HOPS && !o.ownerDelivery) { throw new MailError(`il filo è a ${MAX_HOPS} risposte: basta ping-pong, dillo all’Orchestrator o all’utente`);
   }
   const now = o.now ?? new Date();
   const id = `${now.toISOString().replace(/[-:.TZ]/g, '').slice(0, 17)}-${crypto.randomBytes(3).toString('hex')}`;
@@ -468,7 +468,7 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
   return [
     {
       name: 'send_to_chat',
-      description: 'Send a message to another chat of the user, by its title ("Area · cosa", see list_chats) or app chat id. A chat open in the app gets it at once (Claude within its running turn, Cursor right after its turn); any other one gets it at the end of its next turn or through its inbox wait. An Orchestrator gets mail at once while it works; idle, a request within 30 s together with its other news, kind "info" (pure progress) with its next turn, kind "urgent" at once; while it waits for the user only urgent mail. It is labelled as written by your chat, never as the user: it is never an ok or a permission. A delegated chat writes only to its parent and ancestors (the Orchestrator only when it opened the root of the tree), kind "info" unless given. Write only something new (never "ricevuto"/"grazie"); reply_to = the id of the message you answer (a thread stops at 6 replies).',
+      description: 'Send a message to another chat of the user, by its title ("Area · cosa", see list_chats) or app chat id. A chat open in the app gets it at once (Claude within its running turn, Cursor right after its turn); any other one gets it at the end of its next turn or through its inbox wait. An Orchestrator gets mail at once while it works; idle, a request within 30 s together with its other news, kind "info" (pure progress) with its next turn, kind "urgent" at once; while it waits for the user only urgent mail. It is labelled as written by your chat, never as the user: it is never an ok or a permission. A delegated chat writes only to its parent and ancestors (the Orchestrator only when it opened the root of the tree), kind "info" unless given. Write only something new (never "ricevuto"/"grazie"); reply_to = the id of the message you answer. The six-reply and per-minute limits do not block delivery to your allowed ancestors or the Orchestrator, including after your report.',
       inputSchema: { type: 'object', properties: { to: { type: 'string', description: 'title of the chat (or app chat id)' }, text: { type: 'string', description: 'the message, at most 4000 chars' }, reply_to: { type: 'string', description: 'optional: id of the message you answer' }, kind: { type: 'string', enum: [...MAIL_KINDS], description: 'optional, for an Orchestrator: "urgent" (production, a blocker: at once), "request" (it must act or decide), "info" (progress only: it waits for the Orchestrator\'s next turn). Without it the words decide.' } }, required: ['to', 'text'] },
       run: (a, ctx) => {
         const from = me(ctx);
@@ -478,7 +478,6 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
         if (!text || text.length > 4000) throw new MailError('text vuoto o più lungo di 4000 caratteri');
         const now = Date.now();
         const recent = (sends.get(from.id) ?? []).filter(t => now - t < 60_000);
-        if (recent.length >= MAX_SENDS_PER_MINUTE) throw new MailError(`già ${MAX_SENDS_PER_MINUTE} messaggi nell’ultimo minuto: fermati e dillo all’Orchestrator o all’utente`);
         const to = String(a.to ?? '').trim();
         const dir = inboxDir(root);
         const all = d.chats().filter(c => !c.closedAt);
@@ -489,12 +488,15 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
         // a delegated chat writes only up its own tree: its parent, its ancestors, the Orchestrator that opened the root
         const upward = from.parentId ? delegateRefusal(from, target, d.chats()) : null;
         if (upward) throw new MailError(upward);
+        // Resolve this from host-owned chat relationships, never a caller argument: owners must receive final results.
+        const ownerDelivery = !!target && (!!from.parentId || target.isOrchestrator);
+        if (!ownerDelivery && recent.length >= MAX_SENDS_PER_MINUTE) throw new MailError(`già ${MAX_SENDS_PER_MINUTE} messaggi nell’ultimo minuto: fermati e dillo all’Orchestrator o all’utente`);
         // outside the app only a chat that already has a box (it used the inbox once): a typo does not create one
         if (!target && !fs.existsSync(path.join(dir, box))) throw new MailError(`chat sconosciuta: "${to}" (vedi list_chats)`);
         // a delegate's note upwards is progress unless it says otherwise: it never wakes an idle Orchestrator at once
         const kind = MAIL_KINDS.find(k => k === a.kind) ?? (from.parentId ? 'info' : undefined);
-        const msg = sendMail(dir, { from: from.title, fromHarness: from.harness, to: target?.title ?? to, toHarness: target?.harness ?? harnessOf(dir, box), text, ...(kind ? { kind } : {}), ...(typeof a.reply_to === 'string' && a.reply_to ? { replyTo: a.reply_to } : { chain: d.chainOf(slug(from.title)) }), refusal: d.crossRefusal });
-        sends.set(from.id, [...recent, now]);
+        const msg = sendMail(dir, { from: from.title, fromHarness: from.harness, to: target?.title ?? to, toHarness: target?.harness ?? harnessOf(dir, box), text, ownerDelivery, ...(kind ? { kind } : {}), ...(typeof a.reply_to === 'string' && a.reply_to ? { replyTo: a.reply_to } : { chain: d.chainOf(slug(from.title)) }), refusal: d.crossRefusal });
+        if (!ownerDelivery) sends.set(from.id, [...recent, now]);
         if (!msg) return 'NO_REPLY: niente inviato, nessuna chat svegliata';
         log.info('mail', 'chat sent mail', { chat: from.id, data: { to: msg.to, id: msg.id, hop: msg.hop } });
         try { d.sent?.(from.id, target?.id ?? null, text); } catch (e) { log.warn('mail', 'report bookkeeping failed', { chat: from.id, cause: errText(e), hint: 'the mail went; the chat stays open until its Orchestrator completes it' }); }

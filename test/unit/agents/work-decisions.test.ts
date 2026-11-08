@@ -78,7 +78,16 @@ describe('agent_work_decisions', () => {
     expect(await f.read('parent')).toMatchObject({ runId: 'new-parent-run', taskVersion: 2, threads: [{ id: 'own', version: 4 }] });
     expect((await f.read('parent')).threads[0].approvedProposal).toBeUndefined();
     f.parent.run!.endedAt = 30;
-    await expect(f.read('parent')).rejects.toThrow(/active work assignment/);
+    expect((await f.read('parent')).threads[0].approvedProposal).toBeUndefined();
+  });
+  it('keeps read-only decision context available after a worker reports without reopening its assignment', async () => {
+    const f = fixture();
+    f.child.run!.endedAt = 40;
+    f.child.run!.report = { via: 'agent_report' } as NonNullable<ChatSummary['run']>['report'];
+    const before = structuredClone(f.child);
+    expect(await f.read()).toMatchObject({ chatId: 'child', runId: 'run-child', permissionsChanged: false,
+      threads: [{ id: 'own', decisionHistory: { currentAuthorization: false } }] });
+    expect(f.child).toEqual(before);
   });
   it('shows only current assignment plans and terminates cyclic ancestry', async () => {
     const f = fixture();

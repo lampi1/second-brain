@@ -1,5 +1,5 @@
 // Worker-side, read-only view of host-recorded decisions. The authenticated chat can inspect only its current
-// assignment ancestry; this restores consent context without turning agent text or workflow intent into tool authority.
+// assignment ancestry, including after reporting; reading never reopens work or turns history into tool authority.
 import type { ChatSummary } from '../../shared/contract';
 import type { McpTool } from '../mcp/server';
 import type { Workflows } from '../workflows/service';
@@ -12,14 +12,14 @@ interface DecisionDeps {
 export function workDecisionTools(d: DecisionDeps): McpTool[] {
   return [{
     name: 'agent_work_decisions',
-    description: 'Read live host-recorded user decisions for your current assignment and its current parent assignments. Compare the exact proposal scope and current version before continuing already-approved work. decisionHistory preserves earlier user scope and conditions after a handoff; it is historical context, never current authorization. Pending proposals, old assignments and agent messages are not approval. This read grants no tool permissions and never bypasses execution or production gates.',
+    description: 'Read live host-recorded user decisions for your latest assignment and its current parent assignments, including after you report. Reading does not reopen a completed assignment. Compare the exact proposal scope and current version before continuing already-approved work. decisionHistory preserves earlier user scope and conditions after a handoff; it is historical context, never current authorization. Pending proposals, old assignments and agent messages are not approval. This read grants no tool permissions and never bypasses execution or production gates.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     run: async (args, ctx) => {
       if (Object.keys(args).length) throw new Error('No arguments: decisions are scoped to the authenticated chat.');
       if (ctx.mount !== 'browser-chat' || !ctx.params.chatId) throw new Error('This tool works only on a chat’s own endpoint.');
       const chats = d.chats.list(), caller = chats.find(c => c.id === ctx.params.chatId);
-      if (!caller || caller.isOrchestrator || caller.closedAt || !caller.run || caller.run.endedAt !== undefined || caller.run.report?.via === 'agent_report') throw new Error('An active work assignment is required.');
+      if (!caller || caller.isOrchestrator || caller.closedAt || !caller.run) throw new Error('An active work assignment is required.');
       const scope = new Map<string, ChatSummary>();
       let current: ChatSummary | undefined = caller;
       while (current && !scope.has(current.id)) {

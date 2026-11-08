@@ -1,9 +1,9 @@
 // Mail from delegated chats (src/main/chats/mail.ts delegateRefusal, send_to_chat): a delegate writes up its own tree
-// only (parent, ancestors, the Orchestrator that opened the root), kind "info" by default, with the same per-minute limit.
+// only (parent, ancestors, the Orchestrator that opened the root), kind "info" by default; reports always reach owners.
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import type { ChatSummary } from '../../../src/shared/contract';
-import { delegateRefusal, inboxDir, mailTools, MAX_SENDS_PER_MINUTE, unread } from '../../../src/main/chats/mail';
+import { delegateRefusal, inboxDir, mailTools, MAX_HOPS, MAX_SENDS_PER_MINUTE, unread } from '../../../src/main/chats/mail';
 import { tmp } from './helpers';
 
 const chat = (id: string, title: string, p: Partial<ChatSummary> = {}): ChatSummary => ({
@@ -62,12 +62,26 @@ describe('send_to_chat from a delegated chat', () => {
     expect(toOrchestrator?.msg).toMatchObject({ from: 'App · Figlio', kind: 'info' });
     expect(call('c', { to: 'Orchestrator', text: 'build rotta in produzione', kind: 'urgent' })).toMatch(/adesso/);
   });
-  it('is refused towards a sibling or another tree, and keeps the per-minute limit', () => {
+  it('is refused towards a sibling or another tree', () => {
     const { call } = setup(tree());
     expect(() => call('c', { to: 'App · Fratello', text: 'x' })).toThrow(/genitore o ai suoi antenati/);
     expect(() => call('c', { to: 'Altro · Albero', text: 'x' })).toThrow(/genitore/);
-    for (let i = 0; i < MAX_SENDS_PER_MINUTE; i++) call('c', { to: 'App · Padre', text: `nota ${i}` });
-    expect(() => call('c', { to: 'App · Padre', text: 'troppo' })).toThrow(/ultimo minuto/);
+  });
+  it.each(['p', 'o'])('delivers more than six replies to owner %s even after reporting', target => {
+    const list = tree();
+    list.find(c => c.id === 'c')!.run = { endedAt: 1, report: { via: 'agent_report' } } as ChatSummary['run'];
+    const { dir, call } = setup(list);
+    let replyTo: string | undefined;
+    for (let i = 0; i < Math.max(MAX_HOPS, MAX_SENDS_PER_MINUTE) + 2; i++) {
+      expect(call('c', { to: target, text: `verified result ${i}`, ...(replyTo ? { reply_to: replyTo } : {}) })).toMatch(/^inviato/);
+      replyTo = unread(dir, target === 'p' ? 'app-padre' : 'orchestrator').at(-1)!.msg.id;
+    }
+    expect(unread(dir, target === 'p' ? 'app-padre' : 'orchestrator').at(-1)!.msg.hop).toBeGreaterThan(MAX_HOPS);
+  });
+  it('keeps the per-minute limit for unrelated root-chat traffic', () => {
+    const { call } = setup(tree());
+    for (let i = 0; i < MAX_SENDS_PER_MINUTE; i++) call('root', { to: 'x', text: `note ${i}` });
+    expect(() => call('root', { to: 'x', text: 'too many' })).toThrow(/ultimo minuto/);
   });
   it('a root chat is not limited to a tree', () => {
     const { call } = setup(tree());
