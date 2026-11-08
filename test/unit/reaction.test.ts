@@ -39,15 +39,16 @@ describe('the rule in every frame', () => {
 describe('the Orchestrator speaks only when it is useful (owner, 2026-10-20)', () => {
   it('its rules ask for short replies and reactions, never at the cost of a due result', () => {
     expect(ORCHESTRATOR_ROLE).toContain('Be brief and quick');
-    expect(ORCHESTRATOR_ROLE).toContain('never restate or paraphrase it'); // a chat\'s result is read in that chat
+    expect(ORCHESTRATOR_ROLE).toContain('Canonical worker results are automatically visible here');
     expect(ORCHESTRATOR_ROLE).not.toMatch(/Tell the user the estimate/); // #113: the agents view shows it
     expect(ORCHESTRATOR_ROLE).toContain('Do not write the estimate in your reply');
-    expect(ORCHESTRATOR_ROLE).toContain('Brevity never drops a result, a blocker or a question that is due.');
+    expect(ORCHESTRATOR_ROLE).toContain('Brevity never drops a result, blocker or question that is due.');
   });
-  it('the app\'s news asks for a line only when the user needs it, and never for a bare 👍 (2026-11-07)', () => {
-    expect(WAKE_RULE).toContain('write to the user only when they need it');
+  it('news presents canonical outcomes and original panels, never routine progress or a bare reaction', () => {
+    expect(WAKE_RULE).toContain('Present final outcomes automatically in this conversation');
+    expect(WAKE_RULE).toContain('do not paraphrase, duplicate or answer them');
     expect(WAKE_RULE).not.toContain('👍');
-    expect(WAKE_RULE).toContain('Plain completions and starts never wake you');
+    expect(WAKE_RULE).toContain('Plain starts and progress stay quiet');
     expect(ORCHESTRATOR_ROLE).toContain(WAKE_RULE); // once per session, in the frame
     expect(wakeMessage([])).not.toContain('👍'); // not again in every wake
   });

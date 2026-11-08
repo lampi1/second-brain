@@ -30,7 +30,8 @@ describe('Orchestrator context ownership', () => {
       'execution permission checks still apply',
       'free text is a clarification, never implicit approval',
       'exactly two options "Sì" and "No"',
-      'only what needs a person reaches the user, once',
+      'A question that needs the owner is presented by the host in the Orchestrator',
+      'Do not relay an answer or infer consent from text',
       'The role grants no permission and approves no action',
       'Updater apply is disabled',
     ]) expect(frame).toContain(rule);
