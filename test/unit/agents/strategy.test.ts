@@ -12,6 +12,10 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { ChatManager } from '../../../src/main/chats/manager';
+import { ChatStore } from '../../../src/main/chats/store';
+import { CoordinationStore } from '../../../src/main/coordination/store';
+import { Workflows } from '../../../src/main/workflows/service';
+import { digest } from '../../../src/main/appctl/digest';
 import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/main/chats/session';
 import { delegationTools } from '../../../src/main/agents/delegation';
 import { strategyTools } from '../../../src/main/agents/strategy-tools';
@@ -38,12 +42,12 @@ const catalog = (n: Narrowed = {}): AgentCatalog => ({ problem: null, archived: 
     launches: [...x.launches], skills: r.skills, tools: { allow: [...x.tools] }, permissionCeiling: x.ceiling, activeVersion: 1, updatedAt: 1, instructions: r.instructions };
 }) } as unknown as AgentCatalog);
 
-function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: string) => Promise<string[]>, roles?: () => AgentCatalog, onSend?: (chatId: string) => void, narrowed: Narrowed = {}, remembered: [string, string][] = []) {
+function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: string) => Promise<string[]>, roles?: () => AgentCatalog, onSend?: (chatId: string) => void, narrowed: Narrowed = {}, remembered: [string, string][] = [], away = false) {
   roles ??= () => catalog(narrowed);
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-delegation-'));
   roots.push(dir);
   const starts = new Map<string, SessionOptions>(), sinks = new Map<string, SessionSink>(), sent = new Map<string, string[]>(), answers: { chat: string; id: string; answer: { allow?: boolean; message?: string }; patch?: Record<string, string> }[] = [];
-  const m = new ChatManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, ...(worktrees ? { worktrees } : {}),
+  const m = new ChatManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0, away: () => away, ...(worktrees ? { worktrees } : {}),
     resolveAgent: (req: NewChat) => {
       const id = req.orchestrator ? 'orchestrator' : req.roleId as RoleId | undefined;
       if (!id || (!isWorkRole(id) && id !== 'orchestrator')) return { request: req, owner: { id: 'plain', name: 'Chat', purpose: '', engine: req.harness, model: null, revision: 0, source: 'plain' as const }, instructions: '', policy: null, skills: [], launches: [] };
@@ -85,6 +89,46 @@ async function answerPanel(f: ReturnType<typeof fixture>, chatId: string, questi
 }
 
 describe('a Strategist\'s plan with the user', () => {
+  it('cancels superseded plan A after B approval and a database restart', async () => {
+    const f = fixture(), s = await f.root('strategist');
+    const a = f.m.planPropose(s.id, [{ title: 'Plan A', state: 'todo' }]);
+    const b = f.m.planPropose(s.id, [{ title: 'Plan B', state: 'todo' }]);
+    await f.m.planDecide(s.id, 'approve', b.at);
+    await f.m.shutdown();
+    const store = new CoordinationStore(path.join(f.dir, 'app.db'));
+    try {
+      expect(store.original(s.id, `plan:${a.at}`)).toMatchObject({ state: 'cancelled', payload: a });
+      expect(store.original(s.id, `plan:${b.at}`)).toMatchObject({ state: 'accepted' });
+      expect(store.projectionRequests().filter(r => r.state === 'pending')).toEqual([]);
+    } finally { store.close(); }
+  });
+  it('records night plan synchronous completion without a transport acknowledgement in list and digest', async () => {
+    const f = fixture({}, undefined, undefined, undefined, {}, [], true), s = await f.root('strategist');
+    const plan = f.m.planPropose(s.id, [{ title: 'Night plan', state: 'todo' }]);
+    const store = new CoordinationStore(path.join(f.dir, 'app.db'));
+    try {
+      const request = store.original(s.id, `plan:${plan.at}`)!;
+      expect(request).toMatchObject({ state: 'accepted', decision: { actor: { kind: 'policy', policy: 'away-plan' } }, delivery: { state: 'applied' } });
+      const works = new Workflows(path.join(f.dir, 'work.json'), undefined, undefined, undefined, { store, chats: () => f.m.list(), pending: () => f.m.pending() }).projection();
+      expect(works.some(w => w.waitingOn.includes('Consegna da verificare'))).toBe(false);
+      expect(digest({ works, chats: f.m.list(), pending: [], runs: [], tasks: null, now: Date.now(), since: null, warnTokens: 1000 })).not.toContain('Consegna da verificare');
+    } finally { store.close(); }
+  });
+  it('never confirms night application when the chat checkpoint fails', async () => {
+    const f = fixture({}, undefined, undefined, undefined, {}, [], true), s = await f.root('strategist');
+    const checkpoint = vi.spyOn(ChatStore.prototype, 'checkpoint').mockImplementationOnce(() => { throw new Error('Checkpoint failed'); });
+    const store = new CoordinationStore(path.join(f.dir, 'app.db'));
+    try {
+      expect(() => f.m.planPropose(s.id, [{ title: 'Night plan', state: 'todo' }])).toThrow('Checkpoint failed');
+      const request = store.requests().find(r => r.kind === 'plan')!;
+      expect(request.state).toBe('accepted');
+      expect(request.delivery).toBeUndefined();
+      store.close();
+      const restarted = new Workflows(path.join(f.dir, 'work.json'));
+      try { expect(restarted.list().some(w => w.waitingOn === 'Consegna da verificare')).toBe(true); }
+      finally { restarted.coordination.close(); }
+    } finally { checkpoint.mockRestore(); store.close(); }
+  });
   it('the Orchestrator\'s Strategist starts asking, with the app\'s flow after the request; a user\'s or a child\'s does not', async () => {
     const f = fixture();
     const s = await f.root('strategist');

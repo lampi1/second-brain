@@ -60,8 +60,8 @@ export abstract class ManagerWork extends ManagerLifecycle {
     const key = this.planRequestKey(r, proposed);
     const prior = store.original(r.s.id, key.originalRequestId);
     if (prior && proposalHash(prior.key) !== proposalHash(key)) throw new Error('Plan revision reused with changed scope; propose a fresh revision.');
-    store.register({ key, kind: 'plan', at: proposed.at, payload: proposed });
-    if (away) store.resolve(key, { kind: 'policy', policy: 'away-plan' }, { decision: 'approve' });
+    store.register({ key, kind: 'plan', at: proposed.at, payload: proposed }, `plan:${plan.at}`);
+    const accepted = away ? store.resolve(key, { kind: 'policy', policy: 'away-plan' }, { decision: 'approve' }) : undefined;
     r.s.plan = proposed;
     // the run keeps the plan's fate: a decision signal for the Orchestrator (standing.ts, ADR 0131)
     const run = r.s.run;
@@ -71,7 +71,8 @@ export abstract class ManagerWork extends ManagerLifecycle {
       this.addItem(r, sysItem('awayPlan', { steps: steps.length }, 'info'), false);
       this.hook('onAway', () => this.opts.onAway?.({ kind: 'plan', chatId, title: r.s.title || 'Strategist', text: steps.map(x => x.title).join(' · ') }));
     }
-    this.persist();
+    this.persist(away);
+    if (accepted) store.recordApplication(accepted.id);
     this.updated(r);
     log.info('chats', 'plan proposed', { chat: chatId, data: { steps: steps.length } });
     return structuredClone(r.s.plan);

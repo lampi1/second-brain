@@ -5,6 +5,10 @@ import type { RequestRecord, WorkProjection } from './model';
 import type { AssignmentProjection } from './assignments';
 
 export type ProjectedWork = WorkThread & { coordination: WorkProjection };
+/** Synchronous host application and an engine ACK settle different paths; neither proves execution completion. */
+export function needsDeliveryReview(r: RequestRecord): boolean {
+  return r.state === 'accepted' && r.kind !== 'workflow' && r.delivery?.state !== 'delivered' && r.delivery?.state !== 'applied';
+}
 /** Plain/Orchestrator chats have requests without role runs. Recovery still makes those requests visible as a job. */
 export function projectRequestJob(requests: RequestRecord[], chats: readonly ChatSummary[], pending: readonly PendingRequest[]): ProjectedWork {
   const first = requests[0]!;
@@ -35,7 +39,7 @@ export function projectWork(row: WorkThread, chats: readonly ChatSummary[], pend
   const waiting = asks.map(p => `${p.type}: ${p.title}`);
   for (const r of durable) {
     if (r.state === 'pending' && !asks.some(a => a.id === r.key.originalRequestId)) waiting.push(`Richiesta conservata: ${r.kind} (${r.key.originalRequestId})`);
-    if (r.state === 'accepted' && r.kind !== 'workflow' && r.delivery?.state !== 'delivered') {
+    if (needsDeliveryReview(r)) {
       evidence.push({ source: 'request', id: r.id, detail: `Decisione registrata; consegna ${r.delivery?.state ?? 'non iniziata'}. Nessuna riesecuzione automatica.` });
     }
   }
@@ -43,7 +47,7 @@ export function projectWork(row: WorkThread, chats: readonly ChatSummary[], pend
     if (c.run) evidence.push({ source: 'run', id: c.run.runId, detail: c.run.report ? `Report agente: ${c.run.report.outcome}; ${c.run.report.summary}` : `Incarico v${c.run.taskVersion ?? 1}; ${c.run.endedAt === undefined ? 'aperto' : 'terminato'}` });
     if (c.closedAt || c.state === 'closed') evidence.push({ source: 'chat', id: c.id, detail: 'Chat chiusa: non prova il completamento del lavoro.' });
   }
-  const uncertain = durable.some(r => r.state === 'accepted' && r.kind !== 'workflow' && r.delivery?.state !== 'delivered');
+  const uncertain = durable.some(needsDeliveryReview);
   const allClosed = linked.length > 0 && linked.length === row.chatIds.length && linked.every(c => !!c.closedAt || c.state === 'closed');
   const state: WorkProjection['state'] = waiting.length || row.status === 'approval' ? 'waiting-user'
     : row.status === 'done' ? 'done'

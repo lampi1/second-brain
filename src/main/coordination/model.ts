@@ -14,7 +14,8 @@ export interface DecisionReceipt {
   id: string; key: RequestKey; at: number; actor: DecisionActor; answer: unknown;
 }
 export interface DeliveryReceipt {
-  id: string; decisionId: string; at: number; state: 'dispatching' | 'delivered' | 'failed' | 'uncertain'; detail?: string;
+  // Applied is a synchronous host result, not an engine transport acknowledgement.
+  id: string; decisionId: string; at: number; state: 'dispatching' | 'delivered' | 'applied' | 'failed' | 'uncertain'; detail?: string;
 }
 export interface ExecutionEvidence {
   id: string; decisionId: string; at: number; source: 'runtime' | 'agent-report'; reference: string;

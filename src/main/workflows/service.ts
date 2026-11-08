@@ -6,7 +6,7 @@ import { decisionFeedback } from '../../shared/decision-feedback';
 import { readLocal } from '../agents/local-store';
 import type { ChatSummary, PendingRequest } from '../../shared/contract';
 import { CoordinationStore, proposalHash } from '../coordination/store';
-import { projectAssignment, projectRequestJob, projectWork, type ProjectedWork } from '../coordination/projection';
+import { needsDeliveryReview, projectAssignment, projectRequestJob, projectWork, type ProjectedWork } from '../coordination/projection';
 import type { RequestKey, RequestRecord } from '../coordination/model';
 import { WORK_ROUTES, WORK_STAGES, WORK_PRIORITY, orderWork, type WorkCreate, type WorkDecision, type WorkReport, type WorkThread, type WorkEvent } from '../../shared/workflows';
 const gates = new Set(['mockup', 'plan', 'deploy']);
@@ -32,7 +32,7 @@ function validThread(x: unknown): x is WorkThread {
   return (r.status === 'approval') === !!r.proposal;
 }
 export class Workflows {
-  private records: WorkThread[];
+  private get records(): WorkThread[] { return this.coordination.works(); }
   readonly coordination: CoordinationStore;
   constructor(file: string, private changed: (rows: WorkThread[]) => void = () => {}, private now = Date.now, private planState?: (row: WorkThread) => { pending: boolean; approved: string }, private live?: { store: CoordinationStore; chats: () => ChatSummary[]; pending: () => PendingRequest[] }) {
     this.coordination = live?.store ?? new CoordinationStore(path.join(path.dirname(file), 'app.db'), now);
@@ -41,19 +41,19 @@ export class Workflows {
       if (raw !== undefined && (!Array.isArray(raw) || raw.length > 2000 || raw.some(x => !validThread(x)))) throw new Error('Archivio dei fili non valido: originale conservato.');
       this.coordination.importJobs(file, (raw ?? []) as WorkThread[]);
     }
-    this.records = this.coordination.works();
     // A pre-migration proposal remains pending. Past approvals stay historical; no synthetic consent is minted.
     for (const row of this.records) if (row.proposal && !this.coordination.original(`work:${row.id}`, row.proposal.id)) this.coordination.register(this.proposalRequest(row));
   }
   priorityFor(chatId: string): number { return Math.min(2, ...this.records.filter(r => r.status !== 'done' && r.chatIds.includes(chatId)).map(r => WORK_PRIORITY[r.priority])); }
   list(): WorkThread[] { return this.projection(); }
   projection(): ProjectedWork[] {
+    const records = this.records;
     const chats = this.live?.chats() ?? [], pending = this.live?.pending() ?? [], requests = this.coordination.projectionRequests();
-    const linked = new Set(this.records.flatMap(row => row.chatIds));
+    const linked = new Set(records.flatMap(row => row.chatIds));
     const assignments = this.coordination.assignments().filter(a => !a.parentRunId && !linked.has(a.chatId));
-    const jobs = [...this.records.map(row => projectWork(row, chats, pending, requests)), ...assignments.map(a => projectAssignment(a, chats, pending, requests))];
+    const jobs = [...records.map(row => projectWork(row, chats, pending, requests)), ...assignments.map(a => projectAssignment(a, chats, pending, requests))];
     const known = new Set(jobs.map(j => j.id)), unlinked = new Map<string, RequestRecord[]>();
-    for (const request of requests) if (!known.has(request.key.jobId) && (request.state === 'pending' || (request.state === 'accepted' && request.delivery?.state !== 'delivered'))) {
+    for (const request of requests) if (!known.has(request.key.jobId) && (request.state === 'pending' || needsDeliveryReview(request))) {
       const group = unlinked.get(request.key.jobId) ?? []; group.push(request); unlinked.set(request.key.jobId, group);
     }
     return [...jobs, ...[...unlinked.values()].map(rs => projectRequestJob(rs, chats, pending))].sort(orderWork);
@@ -65,10 +65,8 @@ export class Workflows {
       proposalRevision: row.version, proposalHash: proposalHash({ proposal: row.proposal, assignments, stage: row.stage }) };
     return { key, kind: 'workflow', at: row.updatedAt, payload: row.proposal };
   }
-  private save(row: WorkThread): WorkThread {
-    const next = [...this.records.filter(x => x.id !== row.id), row];
-    this.coordination.saveWork(row, this.records.find(x => x.id === row.id)?.version ?? null, row.proposal ? this.proposalRequest(row) : undefined);
-    this.records = next;
+  private save(row: WorkThread, expected: number | null): WorkThread {
+    this.coordination.saveWork(row, expected, row.proposal ? this.proposalRequest(row) : undefined);
     const projection = this.list();
     this.changed(projection);
     return projection.find(x => x.id === row.id)!;
@@ -81,7 +79,7 @@ export class Workflows {
     const at = this.now();
     return this.save({ id: randomUUID(), version: 1, title, profile: input.profile, priority: input.priority, chatIds,
       stage: 'analysis', status: 'active', summary: title, waitingOn: '', nextAction: 'Analizzare requisiti e repository', evidence: '', cycles: 0,
-      createdAt: at, updatedAt: at, events: [{ at, stage: 'analysis', kind: 'created', text: title }] });
+      createdAt: at, updatedAt: at, events: [{ at, stage: 'analysis', kind: 'created', text: title }] }, null);
   }
   private current(id: string, version: number): WorkThread {
     const row = this.coordination.work(id);
@@ -90,9 +88,10 @@ export class Workflows {
     return structuredClone(row);
   }
   private event(row: WorkThread, kind: WorkEvent['kind'], summary: string, by?: WorkEvent['by']): WorkThread {
+    const expected = row.version;
     row.version++; row.updatedAt = this.now();
     row.events = [...row.events, { at: row.updatedAt, stage: row.stage, kind, text: summary, ...(by ? { by } : {}) }].slice(-200);
-    return this.save(row);
+    return this.save(row, expected);
   }
   private advance(row: WorkThread): void {
     const route = WORK_ROUTES[row.profile], next = route[route.indexOf(row.stage) + 1];
@@ -171,7 +170,6 @@ export class Workflows {
       ? `${proposal}\nRisposta libera dell’utente (${input.proposalId}, versione ${input.expectedVersion}): ${feedback}` : appNote ? `${proposal}\n${appNote}` : proposal, ...(appNote ? { by: 'app-away' as const } : {}) }].slice(-200);
     this.coordination.resolve(request.key, appNote ? { kind: 'policy', policy: 'away' } : { kind: 'user', channel: 'pc' }, input,
       { row, expected: input.expectedVersion });
-    this.records = [...this.records.filter(x => x.id !== row.id), row];
     const projection = this.list();
     this.changed(projection);
     return projection.find(x => x.id === row.id)!;

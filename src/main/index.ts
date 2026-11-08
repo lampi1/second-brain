@@ -43,6 +43,7 @@ import { createAppUpdates } from './update/wiring';
 import { OrchestratorService } from './chats/orchestrator-service';
 import { ProposalsService } from './proposals/service';
 import { Workflows } from './workflows/service';
+import { CoordinationStore } from './coordination/store';
 import { VoiceService, voiceRoot } from './voice/service';
 import { SPEED_OF } from '@shared/voice';
 import { RecordingService } from './recordings/service';
@@ -155,7 +156,8 @@ app.whenReady().then(async () => {
       emitter, problem: () => s.updateChats?.problem() ?? null, saveChats: () => { if (!s.updateChats) throw new Error('Salvataggio chat non disponibile.'); s.updateChats.checkpoint(); },
       flush: () => win?.webContents.session.flushStorageData(), quit: () => app.quit(),
     });
-  const workflows = s.workflows ?? new Workflows(path.join(app.getPath('userData'), 'work-threads.json'), rows => emitter.emit('work:changed', rows));
+  const workflows = s.workflows ?? new Workflows(path.join(app.getPath('userData'), 'work-threads.json'), rows => emitter.emit('work:changed', rows), Date.now, undefined,
+    { store: new CoordinationStore(path.join(app.getPath('userData'), 'app.db')), chats: () => s.chats.list(), pending: () => s.chats.pending() });
   const orchestrator = new OrchestratorService(s.chats, () => s.brain.info().brainRoot, {
     route: r => s.brain.route(r), engineOn: h => engineOn(s.brain.settings(), h), agentsMayOpen: h => agentsMayOpen(s.brain.settings(), h),
     orchestratorChats: () => s.brain.settings().orchestratorChats,

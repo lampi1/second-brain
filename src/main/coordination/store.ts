@@ -97,7 +97,12 @@ export class CoordinationStore {
     this.db.prepare('insert into coordination_open_requests(request_id) values(?)').run(id);
     return row;
   }
-  register(input: Omit<RequestRecord, 'id' | 'state'>): RequestRecord { return tx(this.db, () => this.insertRequest(input)); }
+  register(input: Omit<RequestRecord, 'id' | 'state'>, supersededOriginalId?: string): RequestRecord {
+    return tx(this.db, () => {
+      if (supersededOriginalId && supersededOriginalId !== input.key.originalRequestId) this.cancelPending(input.key.chatId, supersededOriginalId);
+      return this.insertRequest(input);
+    });
+  }
   request(id: string): RequestRecord | undefined {
     const row = parse<RequestRecord>(this.db.prepare('select json from coordination_requests where id = ?').get(id));
     if (!row) return undefined;
@@ -166,6 +171,16 @@ export class CoordinationStore {
       const row: DeliveryReceipt = { id: randomUUID(), decisionId, at: this.now(), state: 'dispatching' };
       const result = this.db.prepare('insert into coordination_deliveries(id,decision_id,json) values(?,?,?) on conflict(decision_id) do nothing').run(row.id, decisionId, JSON.stringify(row));
       if (Number(result.changes) !== 1) throw new Error('Delivery already attempted; inspect its receipt instead of replaying it.');
+      return row;
+    });
+  }
+  /** Called only after the host's strict checkpoint succeeds; no engine dispatch or execution ACK is implied. */
+  recordApplication(decisionId: string): DeliveryReceipt {
+    return tx(this.db, () => {
+      if (!this.db.prepare('select 1 from coordination_decisions where id = ?').get(decisionId)) throw new Error('Decision receipt required.');
+      const row: DeliveryReceipt = { id: randomUUID(), decisionId, at: this.now(), state: 'applied' };
+      this.db.prepare('insert into coordination_deliveries(id,decision_id,json) values(?,?,?)').run(row.id, decisionId, JSON.stringify(row));
+      this.db.prepare('delete from coordination_open_requests where request_id = (select request_id from coordination_decisions where id = ?)').run(decisionId);
       return row;
     });
   }

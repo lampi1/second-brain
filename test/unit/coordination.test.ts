@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { Worker } from 'node:worker_threads';
+import { buildSync } from 'esbuild';
 import { CoordinationStore, proposalHash } from '../../src/main/coordination/store';
 import { registerRequest, requestKey } from '../../src/main/coordination/requests';
 import { projectWork } from '../../src/main/coordination/projection';
@@ -13,6 +15,7 @@ import { Workflows } from '../../src/main/workflows/service';
 import { digest } from '../../src/main/appctl/digest';
 import type { RequestKey } from '../../src/main/coordination/model';
 import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
+import type { WorkThread } from '../../src/shared/workflows';
 
 const dirs: string[] = [];
 const key: RequestKey = { originalRequestId: 'ask-1', jobId: 'job-1', chatId: 'chat-1', runId: 'run-1', taskVersion: 1, proposalRevision: 10, proposalHash: proposalHash({ question: 'Proceed?' }) };
@@ -26,13 +29,35 @@ function fixture(withRequest = true) {
 }
 
 describe('coordination decision journal', () => {
-  it('commits exactly once across competing connections and preserves the winning phone source', () => {
-    const { store, file } = fixture(), other = new CoordinationStore(file);
-    const receipt = store.resolve(key, actor, { yes: true });
-    expect(() => other.resolve(key, { kind: 'user', channel: 'pc' }, { yes: false })).toThrow(/already answered/);
-    expect(other.requests()[0]).toMatchObject({ state: 'accepted', decision: receipt });
-    expect(other.requests()[0]!.delivery).toBeUndefined();
-    expect(other.execution(receipt.id)).toEqual([]);
+  it('commits exactly once across concurrently released connections and preserves the winning source', async () => {
+    const { store, file } = fixture();
+    const bundled = buildSync({ entryPoints: ['src/main/coordination/store.ts'], bundle: true, write: false, platform: 'node', format: 'cjs' }).outputFiles[0]!.text;
+    const barrier = new SharedArrayBuffer(4);
+    const workers = ['phone', 'pc'].map(channel => new Worker(`${bundled}
+      const { parentPort, workerData } = require('node:worker_threads');
+      const store = new module.exports.CoordinationStore(workerData.file);
+      parentPort.postMessage({ ready: true });
+      Atomics.wait(new Int32Array(workerData.barrier), 0, 0);
+      try { const receipt = store.resolve(workerData.key, { kind: 'user', channel: workerData.channel }, true); parentPort.postMessage({ receipt }); }
+      catch (error) { parentPort.postMessage({ error: error.message }); }
+      finally { store.close(); }
+    `, { eval: true, workerData: { file, key, channel, barrier } }));
+    try {
+      const ready = workers.map(worker => new Promise<void>((resolve, reject) => {
+        worker.on('message', message => { if (message.ready) resolve(); }); worker.once('error', reject);
+      }));
+      const results = workers.map(worker => new Promise<{ receipt?: { id: string; actor: { channel: string } }; error?: string }>((resolve, reject) => {
+        worker.on('message', message => { if (!message.ready) resolve(message); }); worker.once('error', reject);
+      }));
+      await Promise.all(ready);
+      Atomics.store(new Int32Array(barrier), 0, 1); Atomics.notify(new Int32Array(barrier), 0);
+      const outcomes = await Promise.all(results), wins = outcomes.filter(o => o.receipt), losses = outcomes.filter(o => o.error);
+      expect(wins).toHaveLength(1); expect(losses).toHaveLength(1);
+      expect(losses[0]!.error).toMatch(/already answered/);
+      expect(store.requests()[0]).toMatchObject({ state: 'accepted', decision: wins[0]!.receipt });
+      expect(store.requests()[0]!.delivery).toBeUndefined();
+      expect(store.execution(wins[0]!.receipt!.id)).toEqual([]);
+    } finally { await Promise.all(workers.map(worker => worker.terminate())); }
   });
   it.each([{ jobId: 'job-other' }, { chatId: 'chat-other' }, { runId: 'run-new' }, { taskVersion: 2 }, { proposalRevision: 11 }, { proposalHash: proposalHash('changed') }])('rejects a changed binding %j without consuming the pending question', patch => {
     const { store } = fixture();
@@ -79,6 +104,11 @@ describe('coordination decision journal', () => {
     store.resolve(next, actor, false);
     expect(store.requests().map(r => r.state)).toEqual(['accepted', 'cancelled']);
   });
+  it('rolls back cancellation if replacement registration fails', () => {
+    const { store } = fixture();
+    expect(() => store.register({ key: { ...key, originalRequestId: 'replacement', taskVersion: 0 }, kind: 'plan', at: 11, payload: {} }, key.originalRequestId)).toThrow(/Invalid request identity/);
+    expect(store.original(key.chatId, key.originalRequestId)!.state).toBe('pending');
+  });
   it('an explicit new assignment cancels old pending callbacks, retaining accepted decisions', () => {
     const { store } = fixture();
     const accepted = { ...key, originalRequestId: 'accepted-old' }, current = { ...key, originalRequestId: 'current', runId: 'run-new', taskVersion: 2 };
@@ -103,6 +133,35 @@ describe('coordination decision journal', () => {
 });
 
 describe('authoritative work projection', () => {
+  it('wires live bindings in both application composition roots', () => {
+    for (const file of ['wiring.ts', 'index.ts']) {
+      const source = fs.readFileSync(path.resolve('src/main', file), 'utf8');
+      expect(/store: new CoordinationStore\(path.join\([^\n]+, 'app.db'\)\), chats: \(\) => [\w.]+\.list\(\), pending: \(\) => [\w.]+\.pending\(\)/.test(source), file).toBe(true);
+    }
+  });
+  it('blocks a workflow after all linked chats close and rejects a gate after reassignment', () => {
+    const { store, dir } = fixture(false);
+    let chats = [{ id: 'worker', state: 'idle', run: { runId: 'run-one', taskVersion: 1 } }] as ChatSummary[];
+    const service = new Workflows(path.join(dir, 'work.json'), undefined, undefined, undefined, { store, chats: () => chats, pending: () => [] });
+    const row = service.create({ title: 'Live workflow', profile: 'investigation', priority: 'normal', chatIds: ['worker'] });
+    chats = [{ ...chats[0]!, closedAt: 20, state: 'closed' }];
+    expect(service.list()[0]!.status).toBe('blocked');
+    chats = [{ ...chats[0]!, closedAt: undefined, state: 'idle' }];
+    const proposed = service.report({ id: row.id, expectedVersion: row.version, action: 'propose', summary: 'Approve exact assignment' });
+    chats = [{ ...chats[0]!, run: { ...chats[0]!.run!, runId: 'run-two', taskVersion: 2 } }];
+    expect(() => service.decide({ id: row.id, expectedVersion: proposed.version, proposalId: proposed.proposal!.id, approve: true })).toThrow(/stale/);
+    expect(store.requests(row.id)[0]!.state).toBe('pending');
+  });
+  it('refreshes both instances from SQLite and accepts the version actually read', () => {
+    const { dir } = fixture(false), file = path.join(dir, 'work.json');
+    const first = new Workflows(file), second = new Workflows(file);
+    const row = first.create({ title: 'Shared work', profile: 'investigation', priority: 'normal', chatIds: [] });
+    expect(second.list()).toEqual(first.list());
+    const updated = second.report({ id: row.id, expectedVersion: row.version, action: 'update', summary: 'Second writer' });
+    expect(first.list()).toEqual(second.list());
+    expect(first.report({ id: row.id, expectedVersion: updated.version, action: 'update', summary: 'First writer' }).version).toBe(updated.version + 1);
+    expect(() => second.report({ id: row.id, expectedVersion: updated.version, action: 'update', summary: 'Stale writer' })).toThrow(/cambiato/);
+  });
   it('recovers plain-chat questions and accepted-undelivered answers in the same list and digest', () => {
     const { store, dir } = fixture();
     const service = new Workflows(path.join(dir, 'work.json'));
@@ -143,7 +202,29 @@ describe('authoritative work projection', () => {
     run.costUsd = 2; write();
     expect((db.prepare('select total_changes() n').get() as { n: number }).n - before).toBe(1); // agent_runs only
   });
-  it('preserves historical jobs and pending proposals on migration; chat closure is not completion', () => {
+  it('imports valid legacy JSON once with original bytes and history unchanged', () => {
+    const { store, dir } = fixture(false), file = path.join(dir, 'legacy.json');
+    const legacy: WorkThread = { id: 'legacy-job', version: 4, title: 'Legacy investigation', profile: 'investigation', priority: 'normal', chatIds: ['legacy-worker'],
+      stage: 'analysis', status: 'approval', summary: 'Scoped request', waitingOn: 'Te', nextAction: 'Review scope', evidence: 'Original evidence', cycles: 0,
+      createdAt: 1, updatedAt: 4, proposal: { id: 'legacy-proposal', text: 'Read original scope' }, events: [
+        { at: 1, stage: 'analysis', kind: 'created', text: 'Original title' },
+        { at: 2, stage: 'analysis', kind: 'approved', text: 'Historical consent only' },
+        { at: 4, stage: 'analysis', kind: 'proposed', text: 'Read original scope' },
+      ] };
+    const original = JSON.stringify([legacy], null, 2) + '\n'; fs.writeFileSync(file, original);
+    const service = new Workflows(file);
+    expect(store.work(legacy.id)).toEqual(legacy);
+    expect(service.list()[0]!.events).toEqual(legacy.events);
+    expect(store.history(legacy.id).map(h => h.event)).toEqual(legacy.events);
+    expect(store.requests(legacy.id)[0]!.state).toBe('pending');
+    expect(store.requests(legacy.id)[0]!.decision).toBeUndefined();
+    store.close();
+    const restarted = new Workflows(file);
+    expect(restarted.coordination.history(legacy.id).map(h => h.event)).toEqual(legacy.events);
+    expect(restarted.coordination.requests(legacy.id)).toHaveLength(1);
+    expect(fs.readFileSync(file, 'utf8')).toBe(original);
+  });
+  it('preserves pending proposals on restart; chat closure is not completion', () => {
     const { store, dir } = fixture(false);
     const file = path.join(dir, 'legacy.json');
     const service = new Workflows(file, undefined, () => 100);

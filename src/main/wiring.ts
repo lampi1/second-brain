@@ -68,6 +68,7 @@ import { runMetrics } from './agents/run-metrics';
 import { listPrice, priceTableSource, setPriceTable } from './chats/live-cost';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { Workflows } from './workflows/service';
+import { CoordinationStore } from './coordination/store';
 import { createRoutines } from './routines/service';
 import { devopsPatFromConnectors, devopsPatFromCursorConfig } from './routines/secret-fill';
 import { testDbCredential } from './flows/test-db-env';
@@ -543,7 +544,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     const linked = chats.list().filter(c => row.chatIds.includes(c.id) && c.plan);
     const approved = linked.filter(c => ['running', 'done'].includes(c.plan!.phase) && (c.run?.plan?.approvedAt ?? 0) > 0);
     return { pending: linked.some(c => !['running', 'done'].includes(c.plan!.phase)), approved: approved.length === linked.length ? approved.map(c => `${c.id} / task ${c.run?.taskVersion ?? 1}: ${c.plan!.steps.map(s => s.title).join('; ')}`).join('\n') : '' };
-  });
+  }, { store: new CoordinationStore(path.join(ctx.userData, 'app.db')), chats: () => manager.list(), pending: () => manager.pending() });
   // Poll without model calls; relevant events and canonical reports wake the owning Orchestrator.
   // SB_BENCH_TIMERS=1: scripts/bench-stalls.mjs measures an idle app with these production pollers on (fake engines only)
   const prodPollers = !process.env.SB_TEST || process.env.SB_BENCH_TIMERS === '1';
