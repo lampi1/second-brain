@@ -266,6 +266,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     briefReady: chatId => briefRef.current?.hasBrief(chatId) ?? true,
     prepareDelegation: delegateWorktrees.prepare,
     freshSessions: () => true,
+    // after a start only chats active within engineIdleMin resume by themselves (ADR 0228)
+    resumeWithinMs: () => (brain.settings().engineIdleMin ?? 30) * 60_000,
     continuationContext: chatId => workflowsRef ? JSON.stringify(workflowsRef.list().filter(row => row.chatIds.includes(chatId))) : null,
     onAutoCloseActivity: id => autoCloseRef.current?.invalidate(id),
     worktrees: gitWorktrees,
