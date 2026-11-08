@@ -244,11 +244,40 @@ describe('ClaudeSession', () => {
     expect(fs.readdirSync(state).some(f => f.endsWith('.feed.json'))).toBe(true);
   });
 
-  it('registers no hook when the chat has none', async () => {
+  it('registers no hook on a read-only run, only the write barrier on a chat with no hook of its own', async () => {
+    const ro = start({ readOnly: true });
+    ro.s.send('pretool Read');
+    await resultOf(ro.sink);
+    expect(ro.sink.last('assistant')?.text).toBe('Ciao dal motore');
+    expect(ro.s.holdWrites(new Promise(() => {}))).toBe(false); // nothing to hold: the caller waits for the snapshot
     const { s, sink } = start();
     s.send('pretool Read');
     await resultOf(sink);
-    expect(sink.last('assistant')?.text).toBe('Ciao dal motore');
+    expect(sink.last('assistant')?.text).toBe('Hook: Read=ok');
+  });
+
+  it('holds a writing tool until the turn\'s checkpoint settles; reads pass at once (ADR 0228)', async () => {
+    const { s, sink, cwd } = start();
+    expect(s.holdWrites(Promise.resolve())).toBe(false); // the initialize that registers the hook has not answered yet
+    s.send('ciao');
+    await resultOf(sink);
+    let settle!: () => void;
+    expect(s.holdWrites(new Promise<void>(resolve => { settle = resolve; }))).toBe(true);
+    s.send('pretool Read Grep');
+    await waitFor(() => sink.trace.filter(t => t === 'result').length === 2, 'reads while held');
+    expect(sink.last('assistant')?.text).toBe('Hook: Read=ok; Grep=ok');
+    s.send('scrivifile nuovo.txt dal turno');
+    await waitFor(() => sink.last('tool')?.name === 'Write', 'the write tool row');
+    await new Promise(resolve => setTimeout(resolve, 150));
+    expect(fs.existsSync(path.join(cwd, 'nuovo.txt'))).toBe(false); // held: the snapshot is still being recorded
+    settle();
+    await waitFor(() => sink.trace.filter(t => t === 'result').length === 3, 'write after the snapshot');
+    expect(fs.readFileSync(path.join(cwd, 'nuovo.txt'), 'utf8')).toBe('dal turno');
+    // a failed snapshot releases the barrier too: that turn just cannot be undone, as before
+    expect(s.holdWrites(Promise.reject(new Error('git failed')))).toBe(true);
+    s.send('scrivifile altro.txt ok');
+    await waitFor(() => sink.trace.filter(t => t === 'result').length === 4, 'write after a failed snapshot');
+    expect(fs.readFileSync(path.join(cwd, 'altro.txt'), 'utf8')).toBe('ok');
   });
 
   it('denies a permission with the user\'s message', async () => {

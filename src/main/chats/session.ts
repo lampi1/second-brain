@@ -197,6 +197,10 @@ export interface HarnessSession {
   start(): void;
   /** text may be empty when images are attached (already checked by the manager: images.ts checkImages) */
   send(text: string, images?: readonly ImageAttachment[]): void;
+  /** ADR 0228: the turn's checkpoint is being recorded; the session holds every call that may write until `until`
+   *  settles and returns true. Absent or false: it cannot stop a tool before it runs (Codex and ACP engines write
+   *  without asking), so the manager waits for the snapshot before send. */
+  holdWrites?(until: Promise<unknown>): boolean;
   /** false when the request is unknown (already answered or withdrawn). Throws on an answer of the wrong kind. */
   answer(requestId: string, answer: Answer, patch?: AnswerPatch): boolean;
   /** keepQueued: only the running turn stops; messages the session already queued still go after it; byUser: the

@@ -17,6 +17,8 @@
 //            hook_callback before each tool call (answered with the hook's JSON output: {} or a deny with its reason).
 //            With opts.productHooks (a product brain), the brain's rules hooks for UserPromptSubmit, PreToolUse and
 //            PostToolUse are answered the same way, in process (rules/runtime.ts runHook), not by a node process each.
+//            A writing session also registers the write barrier's PreToolUse hook (write-barrier.ts, ADR 0228): a call
+//            that may write is answered only once the turn's checkpoint settled (holdWrites).
 // Messages become contract ChatItems (streamed text as replace events, tool rows with a one-line summary, diff counts,
 // results with cost). Robust by design: a bad line is logged and skipped, a dead process becomes state closed/error
 // with the reason, and nothing here can throw into the app. Used by manager.ts through the HarnessSession interface.
@@ -45,6 +47,7 @@ import type { ChildObservation } from '../../shared/agents';
 import { claudeMcp, claudeTools, suggestedAbove } from '../agents/tool-policy';
 import { BRIEF_GRACE_MS, BRIEF_REFUSAL, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
 import { mcpForm, mcpFormAnswer, type McpForm } from '../../shared/mcp-form';
+import { WriteBarrier } from './write-barrier';
 
 /** our own messages' uuids kept for their echo: a few hundred turns at most are ever waiting */
 const SENT_UUIDS_MAX = 500;
@@ -157,6 +160,10 @@ const PRE_TOOL_HOOK = 'sb_pre_tool_use';
 /** The callback ids of a product brain's hooks answered in process (opts.productHooks), per event. */
 const PRODUCT_HOOKS: Readonly<Record<string, string>> = { UserPromptSubmit: 'sb_product_prompt', PreToolUse: 'sb_product_pre', PostToolUse: 'sb_product_post' };
 const PRODUCT_IDS: ReadonlySet<string> = new Set(Object.values(PRODUCT_HOOKS));
+/** The write barrier's PreToolUse hook (ADR 0228) and its CLI timeout in seconds: above the manager's snapshot deadline
+ *  (manager-checkpoints.ts), so the CLI never gives up on the hook and runs a write before the snapshot settled. */
+const WRITE_BARRIER_HOOK = 'sb_write_barrier';
+const WRITE_BARRIER_TIMEOUT_S = 120;
 
 const PERMISSION_MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
@@ -261,6 +268,7 @@ export class ClaudeSession implements HarnessSession {
   private firstStateAt = 0;           // the first session_state_changed: the CLI's own setup is done (ADR 0222)
   private initAt = 0;                 // system/init: MCP servers, plugins and hooks loaded
   private initMcp: Record<string, unknown> = {};
+  private readonly writeBarrier = new WriteBarrier(); // ADR 0228: writing calls wait for the turn's checkpoint
   private turnT: { sent: number; first?: number; text?: number; warm: boolean; n: number } | null = null;
   private turnsSent = 0;
   private readyDone!: () => void;
@@ -779,6 +787,7 @@ export class ClaudeSession implements HarnessSession {
   private onControlRequest(m: Obj): void {
     const id = s(m.request_id);
     const r = o(m.request);
+    if (r.subtype === 'hook_callback' && s(r.callback_id) === WRITE_BARRIER_HOOK) return this.onWriteBarrier(id, o(r.input));
     if (r.subtype === 'hook_callback' && s(r.callback_id) === PRE_TOOL_HOOK && this.opts.preToolUse) return this.onPreToolUse(id, o(r.input));
     if (r.subtype === 'hook_callback' && PRODUCT_IDS.has(s(r.callback_id)) && this.opts.productHooks) return this.onProductHook(id, o(r.input));
     if (r.subtype === 'elicitation') return this.onElicitation(id, r);
@@ -867,10 +876,12 @@ export class ClaudeSession implements HarnessSession {
   }
 
   /** The hooks registered at initialize: the Orchestrator's turn budget, a product brain's rules (in process). */
-  private initHooks(): Record<string, { matcher?: string; hookCallbackIds: string[] }[]> | null {
+  private initHooks(): Record<string, { matcher?: string; hookCallbackIds: string[]; timeout?: number }[]> | null {
     const pre = [...(this.opts.preToolUse ? [PRE_TOOL_HOOK] : []), ...(this.opts.productHooks ? [PRODUCT_HOOKS.PreToolUse!] : [])];
-    const hooks: Record<string, { matcher?: string; hookCallbackIds: string[] }[]> = {};
+    const hooks: Record<string, { matcher?: string; hookCallbackIds: string[]; timeout?: number }[]> = {};
     if (pre.length) hooks.PreToolUse = [{ matcher: '*', hookCallbackIds: pre }];
+    // its own matcher: its own timeout, and a slow snapshot never delays the other hooks' answers
+    if (!this.opts.readOnly) (hooks.PreToolUse ??= []).push({ matcher: '*', hookCallbackIds: [WRITE_BARRIER_HOOK], timeout: WRITE_BARRIER_TIMEOUT_S });
     if (this.opts.productHooks) {
       hooks.UserPromptSubmit = [{ hookCallbackIds: [PRODUCT_HOOKS.UserPromptSubmit!] }];
       hooks.PostToolUse = [{ matcher: '*', hookCallbackIds: [PRODUCT_HOOKS.PostToolUse!] }];
@@ -897,6 +908,28 @@ export class ClaudeSession implements HarnessSession {
 
   /** The app's in-process PreToolUse hook (opts.preToolUse): no say = an empty output (the engine goes on as without
    *  it); a refusal = permissionDecision deny with the reason the model reads. A failing hook never blocks a call. */
+  /** ADR 0228: the turn's checkpoint is being recorded (until); a call that may write waits for it before it runs. False
+   *  when this session cannot hold writes (a read-only run, or the initialize that registers the hook has not
+   *  succeeded): the caller must wait for the snapshot before sending. */
+  holdWrites(until: Promise<unknown>): boolean {
+    if (this.opts.readOnly || this.exited || !this.readyAt) return false;
+    this.writeBarrier.hold(until);
+    return true;
+  }
+
+  /** The write barrier's hook (ADR 0228): {} at once for a read, or once the turn's checkpoint settled. */
+  private onWriteBarrier(id: string, input: Obj): void {
+    const tool = s(input.tool_name);
+    const wait = this.writeBarrier.pass(tool);
+    const answer = (): void => { try { this.write({ type: 'control_response', response: { subtype: 'success', request_id: id, response: {} } }); } catch { /* gone */ } };
+    if (!wait) return answer();
+    const t0 = Date.now();
+    void wait.then(() => {
+      log.info('chats', 'write barrier: tool waited for the checkpoint', { chat: this.opts.chatId, data: { tool, waitMs: Date.now() - t0 } });
+      answer();
+    });
+  }
+
   private onPreToolUse(id: string, input: Obj): void {
     let response: Obj = {};
     try {

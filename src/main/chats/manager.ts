@@ -85,6 +85,25 @@ export class ChatManager extends ManagerRemote implements ChatService {
     return { ...r.s };
   }
 
+  /** After a start (ADR 0228): a cut turn whose chat did nothing for longer than resumeWithinMs (engineIdleMin) is not
+   *  resumed by itself; it stays unfinished, keeps its session and resumes with --resume on the next message. */
+  override resumeInterrupted(): number {
+    const within = this.opts.resumeWithinMs?.() ?? 0;
+    const now = Date.now();
+    let asleep = 0;
+    if (within > 0) for (const r of this.chats.values()) {
+      if (!r.working || r.s.closedAt) continue;
+      const last = Math.max(r.lastTurnAt, this.items(r.s.id).at(-1)?.at ?? 0);
+      if (now - last <= within) continue;
+      r.working = false;
+      r.unfinished = true;
+      asleep++;
+      log.info('chats', 'cut turn left asleep after the restart: idle too long', { chat: r.s.id, data: { idleMin: Math.round((now - last) / 60_000) } });
+    }
+    if (asleep) this.persist();
+    return super.resumeInterrupted();
+  }
+
   items(chatId: string): ChatItem[] {
     const r = this.chats.get(chatId);
     if (!r) return [];
@@ -581,7 +600,12 @@ export class ChatManager extends ManagerRemote implements ChatService {
     // the files as they are before this turn (ADR 0103): what the user can put back with «Annulla l'ultimo turno»
     if (!this.midTurn(r)) r.turnCheckpoint = false;
     lapT = Date.now();
-    if (this.opts.checkpoints?.() && !r.s.isOrchestrator && !r.s.quick && !this.midTurn(r)) await this.checkpoint(r);
+    // ADR 0228: an engine that can hold its writing tools gets the message now and the snapshot runs alongside it; any
+    // other engine waits for the snapshot first, as before
+    if (this.opts.checkpoints?.() && !r.s.isOrchestrator && !r.s.quick && !this.midTurn(r)) {
+      const taking = this.checkpoint(r);
+      if (r.session?.holdWrites?.(taking)) lap.checkpointParallel = 1; else await taking;
+    }
     lap.checkpointMs = Date.now() - lapT;
     try {
       receipt?.beforeSubmit();

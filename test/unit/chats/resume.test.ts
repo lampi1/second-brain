@@ -1,6 +1,7 @@
 // Resume after a restart (ChatManager.resumeInterrupted) against the fake CLI: a turn cut by the quit is saved as
 // "working" and resumes by itself on the next start with RESUME_TEXT and the resumedAt mark (cleared by the user's next
-// message); a chat that had finished, or whose CLI crashed while the app ran, stays closed.
+// message); a chat that had finished, or whose CLI crashed while the app ran, stays closed; a cut turn idle for longer
+// than engineIdleMin sleeps until the user's next message (ADR 0228).
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -8,8 +9,8 @@ import { ChatManager, RESUME_TEXT } from '../../../src/main/chats/manager';
 import { FAKE, alive, fakeLog, recEmitter, tmp, waitFor } from './helpers';
 
 const managers: ChatManager[] = [];
-function setup(userData: string, home: string, argLog: string, delayMs = 50) {
-  const m = new ChatManager({ emitter: recEmitter(), userData, enginePaths: { claude: FAKE }, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: argLog, FAKE_CLAUDE_DELAY: String(delayMs) } });
+function setup(userData: string, home: string, argLog: string, delayMs = 50, resumeWithinMs?: () => number) {
+  const m = new ChatManager({ ...(resumeWithinMs ? { resumeWithinMs } : {}), emitter: recEmitter(), userData, enginePaths: { claude: FAKE }, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: argLog, FAKE_CLAUDE_DELAY: String(delayMs) } });
   managers.push(m);
   return m;
 }
@@ -41,6 +42,36 @@ describe('ChatManager resume after a restart', () => {
     expect(summary(again, c.id).resumedAt).toBeGreaterThan(0); // the mark stays until the user writes
     await again.send(c.id, 'grazie');
     expect(summary(again, c.id).resumedAt).toBeUndefined();
+  }, 60000);
+
+  it('a cut turn idle longer than engineIdleMin is not resumed: it sleeps, and the next message resumes its session (ADR 0228)', async () => {
+    const d = dirs();
+    const m = setup(d.userData, d.home, d.argLog);
+    const c = await m.create({ harness: 'claude', cwd: d.cwd, prompt: 'slow' });
+    await waitFor(() => saved(d.userData)[0]?.working === true, 'saved as working while the turn runs');
+    await waitFor(() => fakeLog(d.argLog).some(l => l.grandchild), 'the fake CLI persisted the slow turn');
+    await m.shutdown(200);
+    await new Promise(r => setTimeout(r, 50));
+
+    const again = setup(d.userData, d.home, d.argLog, 50, () => 20); // its last activity is older than 20 ms
+    expect(again.resumeInterrupted()).toBe(0);
+    expect(summary(again, c.id).resumedAt).toBeUndefined();
+    expect(again.items(c.id).some(i => i.kind === 'user' && i.text === RESUME_TEXT)).toBe(false);
+    await waitFor(() => saved(d.userData)[0]?.working === undefined, 'no longer working on disk: the next start leaves it alone too');
+    await again.send(c.id, 'hello');
+    await waitFor(() => fakeLog(d.argLog).some(l => l.argv?.some(a => a.startsWith('--resume='))), 'the same session resumed on the message', 30000);
+  }, 60000);
+
+  it('a cut turn active within engineIdleMin still resumes by itself', async () => {
+    const d = dirs();
+    const m = setup(d.userData, d.home, d.argLog);
+    const c = await m.create({ harness: 'claude', cwd: d.cwd, prompt: 'slow' });
+    await waitFor(() => saved(d.userData)[0]?.working === true, 'saved as working while the turn runs');
+    await waitFor(() => fakeLog(d.argLog).some(l => l.grandchild), 'the fake CLI persisted the slow turn');
+    await m.shutdown(200);
+    const again = setup(d.userData, d.home, d.argLog, 50, () => 30 * 60_000);
+    expect(again.resumeInterrupted()).toBe(1);
+    expect(summary(again, c.id).resumedAt).toBeGreaterThan(0);
   }, 60000);
 
   it('a queued turn cut by the quit resumes too (the first turn\'s result does not clear "working")', async () => {
