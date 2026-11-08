@@ -50,6 +50,12 @@ adopted a warm engine: its worktree did not exist when the engine would have sta
 - A reused slot blocks reopening the earlier child that ran there (its allocation is gone): `ChatManager.unarchive`
   asks `reopenBlocked` first.
 
+**A child that cannot write takes no slot** (proposal 3c): `DelegateWorktrees.prepare` returns the parent's folder
+untouched when the child's effective tools hold none of `edit`, `shell`, `brain-write`, `mcp` (`needsIsolatedWorktree`,
+ADR 0083, unchanged here): a Scout (`read`, `web`, `browser-read`, `shell-read`), a Judge, a Strategist, or a Sentinel
+whose contract narrows it to `read` / `shell-read`, starts with no git run at all. A default Sentinel keeps `shell`
+(its builds and tests write files) and so keeps its own worktree; the pool makes that one cheap.
+
 **Cleanup**, «Pulisci ora» in Impostazioni → Avanzate (its own block, anchor `#st-worktree-pool`, a separate component
 from the other blocks of that section), then automatic 5 minutes after start and every 6 hours:
 

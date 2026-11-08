@@ -73,6 +73,17 @@ describe('delegation isolation', () => {
     for (const c of ['edit', 'shell', 'brain-write', 'mcp'] as const) expect(needsIsolatedWorktree({ tools: { allow: [c] }, ceiling: 'plan' })).toBe(true);
   });
 
+  it('a child that cannot write (a Scout, a read-only Sentinel) works in its parent\'s folder: no worktree, no git run', async () => {
+    const f = fixture();
+    // a dirty parent would block any writing delegation: a reading child neither checks nor minds it
+    fs.writeFileSync(path.join(f.repo, 'pkg', 'code.txt'), 'parent edit\n');
+    for (const allow of [['read', 'web', 'browser-read', 'shell-read'], ['read', 'shell-read']] as const) {
+      const prepared = await f.service.prepare(f.parent, { cwd: path.join(f.repo, 'pkg') } as NewChat, { tools: { allow: [...allow] }, ceiling: 'default' });
+      expect(prepared).toEqual({ cwd: path.join(f.repo, 'pkg'), parentRunId: 'parent-run', parentTaskVersion: 1 });
+    }
+    expect(git(f.repo, 'worktree', 'list').split('\n')).toHaveLength(1);
+  });
+
   it('gives concurrent writers distinct worktrees at the same baseline and preserves project subfolders', async () => {
     const f = fixture(), head = git(f.repo, 'rev-parse', 'HEAD');
     const [a, b] = await Promise.all([f.prepare(path.join(f.repo, 'pkg')), f.prepare()]);
