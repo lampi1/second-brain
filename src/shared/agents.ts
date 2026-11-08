@@ -239,6 +239,8 @@ export interface UserTaskEvents { events: UserTaskEvent[]; latestSeq: number; ac
 export interface AgentRunDelivery {
   policy: TaskDeliveryPolicy; reportedAt: number; attempts: number;
   deliveredAt?: number; displayedAt?: number;
+  /** Child reports created with owner-conversation delivery; absent on historical parent-only reports. */
+  ownerNotice?: true;
   synthesisBatchId?: string; synthesisSubmittedAt?: number;
   synthesisRequestedAt?: number; synthesisPending?: boolean;
 }

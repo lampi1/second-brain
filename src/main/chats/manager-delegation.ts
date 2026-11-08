@@ -65,7 +65,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     r.s.delegation = { ...d, ...goal, result: { outcome: result.outcome, summary: result.summary, at, doneWhen: result.doneWhen.map(x => ({ criterion: x.criterion, met: x.met })), ...(correction ? { corrections: correction } : {}) } };
     const run = r.s.run;
     if (run) {
-      run.delivery = { policy: 'synthesize', reportedAt: at, attempts: 0 };
+      run.delivery = { policy: 'synthesize', reportedAt: at, attempts: 0, ownerNotice: true };
       run.report = { at, outcome: result.outcome, verified: met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', summary: cut(result.summary, 140), via: 'agent_report', ...(correction ? { corrections: correction } : {}), canonical: { ...structuredClone(result), at, taskId: run.taskId ?? run.runId, runId: run.runId, taskVersion: run.taskVersion ?? 1 } };
       this.runSave();
     }
@@ -369,7 +369,8 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     if (r.s.run?.taskContract) checkResult(result, r.s.run.taskContract.doneWhen);
   }
 
-  /** App notices are rebuilt from every retained root run, never from a delegated/private result. The Orchestrator gets
+  /** App notices are rebuilt from retained root runs and children explicitly marked for owner delivery. Legacy child
+   *  reports were parent-only, so missing displayedAt on those runs is not a pending owner notice. The Orchestrator gets
    *  only the ones not shown yet: one already shown (delivery.displayedAt) never comes back after a restart or in a new
    *  Orchestrator (owner, 2026-10-24: «ogni volta che riavvio l'app mi trovo tutte le box degli agenti»). A local result
    *  stays in its own chat. */
@@ -378,6 +379,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     for (const run of this.runs.list().slice().sort((a, b) => a.startedAt - b.startedAt)) {
       const result = run.report?.canonical, worker = this.chats.get(run.chatId);
       if (worker?.s.routineArchived || !result || worker?.s.isOrchestrator) continue;
+      if (run.startedBy === 'parent' && !run.delivery?.ownerNotice) continue;
       const local = run.startedBy === 'user' || run.startedBy === 'app' && run.taskContract?.reportExpected;
       const target = run.startedBy === 'orchestrator' || run.startedBy === 'parent' || run.startedBy === 'user' ? orchestrator : local ? worker : undefined;
       if (!target || worker?.s.run?.runId === run.runId && (worker.working || this.midTurn(worker))) continue;
@@ -407,7 +409,15 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     const held = r.heldResult;
     if (!held) return;
     const orchestrator = held.local ? r : this.openOrchestrator();
-    if (!orchestrator) return; // durable outbox retries when an Orchestrator is available
+    if (!orchestrator) {
+      // Child outcomes also live in the run ledger, independently of this chat's next assignment. Releasing the
+      // per-chat hold lets its parent continue it; restoreRootNotices delivers the retained run when an owner opens.
+      if (r.s.parentId && r.s.run?.delivery?.ownerNotice && r.s.run.report?.canonical) {
+        delete r.heldResult; delete r.userWaits;
+        this.persist(true);
+      }
+      return;
+    }
     const canonical = r.s.run?.report?.canonical;
     const previous = orchestrator.items.find(item => item.kind === 'system' && item.code === 'resultReady' && item.result?.runId === canonical?.runId);
     const id = previous?.id ?? `result-${canonical?.runId ?? r.s.id}`;

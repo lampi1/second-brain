@@ -145,8 +145,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Scrivi all’Orchestrator: le cronologie dei figli restano consultabili, senza un altro campo di conversazione. Le istruzioni storiche scritte nei figli restano conservate.',
         'Write to the Orchestrator: child histories remain inspectable without another conversation input. Historical instructions written in children remain preserved.'),
       // src/main/chats/manager-delegation.ts reportDelegation; src/shared/delegation.ts resultMessage; src/main/appctl/child-output.ts
-      b('Il rapporto finale arriva al genitore per continuare il lavoro e compare automaticamente nell’Orchestrator. Una correzione aggiorna lo stesso risultato; non è un secondo lavoro completato e non autorizza nuove azioni.',
-        'The final report reaches the parent to continue the work and appears automatically in the Orchestrator. A correction updates the same result; it is not a second completed job and authorizes no new actions.'),
+      b('Il rapporto finale arriva al genitore per continuare il lavoro e compare automaticamente nell’Orchestrator. Se è chiuso, il risultato resta salvato e il genitore può comunque riassegnare il figlio. I vecchi rapporti destinati solo al genitore non ricompaiono dopo un aggiornamento. Una correzione aggiorna lo stesso risultato e non autorizza nuove azioni.',
+        'The final report reaches the parent and appears automatically in the Orchestrator. If it is closed, the result stays saved and the parent can still reassign the child. Historic parent-only reports are not replayed after an upgrade. A correction updates the same result and authorizes no new actions.'),
     ],
     analogy: b('Come un capo cantiere che affida i lavori ai suoi: ognuno ha la sua scheda di lavoro, nessuno ha chiavi che il capo non ha, e ciascuno chiede direttamente la decisione che gli serve.',
       'Like a site foreman handing jobs to his crew: each has a job sheet, nobody holds keys the foreman lacks, and each worker asks for the decision they need.'),
@@ -691,8 +691,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un agente conclude l’incarico con un report finale esplicito, non con una mail di avanzamento. Quando non lavora più si chiude dopo il tempo scelto in Impostazioni (lo ritrovi con Ctrl+K). Se aspetta te, un permesso, i colleghi, figli o task in background resta aperto. Un piano non concluso lo tiene aperto fino al report finale, che chiude il piano (i passi rimasti diventano parziali).',
         'An agent completes its assignment with an explicit final report, not progress mail. Once idle it closes after the delay set in Settings (Ctrl+K finds it). It stays open while waiting for you, a permission, colleagues, children or background tasks. An unfinished plan keeps it open until its final report, which closes the plan (steps left become partial).'),
       // src/renderer/components/ChatTile.tsx
-      b('Una striscia chiusa mostra agente, stato, modello e ultima risposta; aprendola consulti la cronologia. Scrivi all’Orchestrator: solo Flash mantiene un input separato.',
-        'A collapsed strip shows agent, state, model and last answer; expand it to inspect the history. Write to the Orchestrator: only Flash keeps a separate input.'),
+      b('Una striscia chiusa mostra agente, stato, modello e ultima risposta; aprendola consulti la cronologia. Per i lavori delegati scrivi all’Orchestrator. Flash, la guida iniziale e le chat avviate da te mantengono il campo di risposta; «Continua» compare solo dove puoi scrivere.',
+        'A collapsed strip shows agent, state, model and last answer; expand it to inspect the history. For delegated work, write to the Orchestrator. Flash, the first-run guide and user-started chats keep their reply field; Continue appears only where you can write.'),
     ],
     analogy: b('Come il banco di orchestrator di uno studio: un fader per ogni canale, e il monitor di ciascuno sotto.',
       'Like a studio mixing desk: one fader per channel, and each one’s monitor below it.'),

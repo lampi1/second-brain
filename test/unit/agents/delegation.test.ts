@@ -864,6 +864,49 @@ describe('versioned task continuity and canonical results', () => {
     expect(f.m.list().find(c => c.id === id)?.run?.corrections).toEqual({ tagged: 0, afterReport: 0 });
   });
 
+  it('does not replay historic child reports on upgrade, but restores new child reports once', async () => {
+    const f = fixture(), p = await f.root('strategist');
+    const old = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'Historic child')] })).children[0].chatId;
+    await f.call('agent_report', old, result);
+    const historic = f.m.runs.get(f.m.list().find(c => c.id === old)!.run!.runId)!;
+    // Exactly the delivery shape written before child notices were introduced (no displayedAt).
+    historic.delivery = { policy: 'synthesize', reportedAt: historic.report!.at, attempts: 1,
+      synthesisSubmittedAt: historic.report!.at, synthesisBatchId: 'historic-parent-batch' };
+    const fresh = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'Fresh child')] })).children[0].chatId;
+    await f.call('agent_report', fresh, { ...result, output: 'NEW CHILD OUTPUT' });
+    f.m.runs.save();
+    await f.m.shutdown();
+    // A pre-upgrade child has no held root result either.
+    const file = path.join(f.dir, 'chats.json'), saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+    delete saved.chats.find((c: { id: string }) => c.id === old).heldResult;
+    fs.writeFileSync(file, JSON.stringify(saved));
+    const again = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0 });
+    managers.push(again);
+    const o = await again.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    again.resumeInterrupted(); again.resumeInterrupted();
+    const notices = again.items(o.id).filter(i => i.kind === 'system' && i.code === 'resultReady');
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ result: { output: 'NEW CHILD OUTPUT' } });
+    expect(again.runs.get(historic.runId)?.report?.canonical?.output).toBe('FULL DELIVERABLE');
+  });
+
+  it('a parent reassigns its child without an Orchestrator and the previous outcome survives restart', async () => {
+    const f = fixture(), p = await f.root('strategist');
+    const child = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'Reusable child')] })).children[0].chatId;
+    await f.call('agent_report', child, result);
+    const previous = f.m.list().find(c => c.id === child)!.run!.runId;
+    await f.m.assignTask(child, 'Continue investigation', { source: { kind: 'chat', chatId: p.id }, expectedVersion: 1 });
+    expect(f.m.list().find(c => c.id === child)!.run!.taskVersion).toBe(2);
+    await f.m.shutdown();
+    const again = new ChatManager({ userData: f.dir, emitter: { emit() {} }, coldEveryMs: 0, runEveryMs: 0 });
+    managers.push(again);
+    const o = await again.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    again.resumeInterrupted(); again.resumeInterrupted();
+    const notices = again.items(o.id).filter(i => i.kind === 'system' && i.code === 'resultReady');
+    expect(notices).toHaveLength(1);
+    expect(notices[0]).toMatchObject({ result: { runId: previous, output: 'FULL DELIVERABLE' } });
+  });
+
   it('backfills legacy identity; after a restart the Orchestrator gets back only the results it never showed', async () => {
     const f = fixture();
     const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
