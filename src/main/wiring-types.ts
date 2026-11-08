@@ -9,6 +9,7 @@ import type { RunFeedback } from './agents/run-feedback';
 import type { createAgentPacks } from './agents/pack/wiring';
 import type { SetupService } from './agents/setup';
 import type { AutoCloseService } from './chats/auto-close';
+import type { WorktreePool } from './agents/worktree-pool';
 import type { LifecycleApi } from './agents/lifecycle-api';
 import type { MorningService } from './morning/service';
 import type { MemoryService } from './rules/memory-service';
@@ -62,6 +63,8 @@ export interface Wired {
   routines?: Routines;
   updateChats?: { problem: () => string | null; checkpoint: () => void };
   autoClose: AutoCloseService;
+  /** the writing delegations' reused worktrees and their cleanup (ADR 0227); the demo's knows no repository */
+  worktreePool: WorktreePool;
   agents: AgentCatalogService;
   agentPacks: ReturnType<typeof createAgentPacks>;
   /** the Brain pages and their maintenance jobs (ADR 0077) */

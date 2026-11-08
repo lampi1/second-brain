@@ -2,8 +2,9 @@
 // a new Claude chat waits 10-25 s before the first token, almost all of it the CLI's own start-up (settings, CLAUDE.md
 // / AGENTS.md, MCP servers and claude.ai connectors), the same with `claude -p` in a terminal; on an engine already up
 // the first token comes after ~1 s of engine work plus the model's own latency. So a plain engine and one launched like
-// the last role chat (its tools, skills plugin, context window) wait, idle, in the folder of the last new chat; the next
-// new Claude chat in that folder launched the same way adopts one (its id, session id and MCP endpoint were chosen for
+// the last role chat (its tools, skills plugin, context window) wait, idle, in the folders where new chats are made most
+// (up to MAX_FOLDERS, ADR 0227; before it only the last folder); the next new Claude chat in such a folder launched the
+// same way adopts one (its id, session id and MCP endpoint were chosen for
 // it at spawn) and only sends its model / effort / permission mode / title as control requests.
 // No model call happens before the user's message: a waiting engine spends no tokens. Who: ChatManager (create,
 // shutdown); BufferedSink holds what the engine reports before a chat owns it, then replays it in order.
@@ -82,28 +83,37 @@ export interface WarmPoolOptions {
   enabled(): boolean;
   /** an engine older than this is replaced, so settings and CLAUDE.md edits reach the next chat (default 30 min) */
   maxAgeMs?: number;
-  /** engines waiting at once, all in one folder (default 3, e.g. a plain one, a role's and a delegated child's; the least
-   *  recently used leaves first) */
+  /** engines waiting at once over all folders (default 4, e.g. a plain one, a role's and a delegated child's in the main
+   *  folder and one in the second); the least used folder's leave first, then the least recently used */
   maxSlots?: number;
+  /** folders with waiting engines at once (default MAX_FOLDERS) */
+  maxFolders?: number;
 }
 
+/** The folders the pool keeps engines in: the 2-3 where new chats are made most (ADR 0227 proposal 5). */
+export const MAX_FOLDERS = 3;
+/** How fast an old folder's use fades: each new chat multiplies every folder's score by this, then adds 1 to its own. */
+const FADE = 0.9;
+
+/** A folder as the pool compares it: Windows paths case-insensitively, trailing separators ignored. */
+const dirKey = (p: string): string => {
+  const r = path.resolve(p).replace(/[\\/]+$/, '');
+  return process.platform === 'win32' ? r.toLowerCase() : r;
+};
 /** Same folder? Windows paths compare case-insensitively, trailing separators ignored. */
-export function sameDir(a: string, b: string): boolean {
-  const n = (p: string): string => {
-    const r = path.resolve(p).replace(/[\\/]+$/, '');
-    return process.platform === 'win32' ? r.toLowerCase() : r;
-  };
-  return n(a) === n(b);
-}
+export function sameDir(a: string, b: string): boolean { return dirKey(a) === dirKey(b); }
 
 interface Slot { engine: WarmEngine; recycle: NodeJS.Timeout | null; usedAt: number }
 
-/** A few waiting engines in the folder of the last new chat, one per launch (memory: each is an idle claude.exe and its
+/** A few waiting engines in the folders used most, one per folder and launch (memory: each is an idle claude.exe and its
  *  MCP servers). Before 2026-10-20 the pool held one plain engine, which no role chat could take (every role has a tool
- *  policy since ADR 0085), so every delegated job paid the 10-25 s cold start. */
+ *  policy since ADR 0085), so every delegated job paid the 10-25 s cold start; before ADR 0227 a chat in a second folder
+ *  closed the first folder's engines, so switching between two repositories always started cold. */
 export class WarmPool {
   private slots: Slot[] = [];
-  private timer: NodeJS.Timeout | null = null;
+  private readonly timers = new Map<string, NodeJS.Timeout>();
+  /** per folder (sameDir key): how much new chats use it, fading (FADE) */
+  private readonly scores = new Map<string, number>();
 
   constructor(private readonly o: WarmPoolOptions) {}
 
@@ -114,21 +124,45 @@ export class WarmPool {
   /** Is chatId a waiting engine's chat (its chat does not exist yet)? */
   has(chatId: string): boolean { return this.slots.some(x => x.engine.chatId === chatId); }
 
-  /** A waiting engine in cwd launched as `launch`, after delayMs (a new chat's own start-up runs first, undisturbed). */
-  schedule(cwd: string, delayMs = 5000, launch: WarmLaunch = PLAIN_LAUNCH): void {
-    if (this.timer) clearTimeout(this.timer);
-    this.timer = setTimeout(() => { this.timer = null; this.fill(cwd, launch); }, delayMs);
-    this.timer.unref?.();
+  /** A new chat was made in cwd: its folder's use counts (the top MAX_FOLDERS keep engines), and a waiting engine
+   *  launched as `launch` starts there after delayMs (a new chat's own start-up runs first, undisturbed). `warmIn`: the
+   *  engine waits in that folder instead (a delegated child's: the next free worktree of its repository's pool). */
+  schedule(cwd: string, delayMs = 5000, launch: WarmLaunch = PLAIN_LAUNCH, warmIn: string = cwd): void {
+    this.use(warmIn);
+    const key = `${dirKey(warmIn)}|${launch.sig}`;
+    const old = this.timers.get(key);
+    if (old) clearTimeout(old);
+    const t = setTimeout(() => { this.timers.delete(key); this.fill(warmIn, launch); }, delayMs);
+    t.unref?.();
+    this.timers.set(key, t);
   }
 
-  /** Starts one in cwd now, unless one alive launched the same way already waits there. A new folder closes the others. */
+  /** The folders kept, most used first (tests, the log). */
+  folders(): string[] {
+    return [...this.scores].sort((a, b) => b[1] - a[1]).slice(0, Math.max(1, this.o.maxFolders ?? MAX_FOLDERS)).map(([k]) => k);
+  }
+
+  private use(cwd: string): void {
+    for (const [k, v] of this.scores) this.scores.set(k, v * FADE);
+    const k = dirKey(cwd);
+    this.scores.set(k, (this.scores.get(k) ?? 0) + 1);
+    // the scores stay bounded: a folder below 1 % of a new chat's weight is forgotten
+    for (const [k2, v] of this.scores) if (v < 0.01) this.scores.delete(k2);
+  }
+  private score(cwd: string): number { return this.scores.get(dirKey(cwd)) ?? 0; }
+
+  /** Starts one in cwd now, unless one alive launched the same way already waits there. Folders out of the most used
+   *  ones lose their engines; a full pool closes the least used folder's, then the least recently used. */
   fill(cwd: string, launch: WarmLaunch = PLAIN_LAUNCH): void {
     if (!this.o.enabled()) return;
     const same = this.slots.find(x => sameDir(x.engine.cwd, cwd) && (x.engine.launch?.sig ?? '') === launch.sig);
     if (same && same.engine.session.alive) { same.usedAt = Date.now(); return; }
     if (same) this.drop(same, 'dead');
-    for (const x of this.slots.filter(x => !sameDir(x.engine.cwd, cwd))) this.drop(x, 'another folder');
-    while (this.slots.length >= Math.max(1, this.o.maxSlots ?? 3)) this.drop([...this.slots].sort((a, b) => a.usedAt - b.usedAt)[0]!, 'pool full');
+    if (!this.scores.has(dirKey(cwd))) this.use(cwd);
+    const kept = new Set(this.folders());
+    for (const x of this.slots.filter(x => !kept.has(dirKey(x.engine.cwd)) && !sameDir(x.engine.cwd, cwd))) this.drop(x, 'folder used less');
+    const evict = (): Slot => [...this.slots].sort((a, b) => this.score(a.engine.cwd) - this.score(b.engine.cwd) || a.usedAt - b.usedAt)[0]!;
+    while (this.slots.length >= Math.max(1, this.o.maxSlots ?? 4)) this.drop(evict(), 'pool full');
     let next: WarmEngine | null = null;
     try { next = this.o.spawn(cwd, launch); } catch (e) { log.warn('chats', 'warm engine not started', { data: { cwd, error: String(e) } }); }
     // a start that failed at once (folder gone, no engine) already reported its exit: never kept, never recycled
@@ -162,7 +196,8 @@ export class WarmPool {
 
   /** Quit: nothing new starts; the caller kills `engines` with the chats. */
   stop(): void {
-    if (this.timer) { clearTimeout(this.timer); this.timer = null; }
+    for (const t of this.timers.values()) clearTimeout(t);
+    this.timers.clear();
     for (const x of this.slots) if (x.recycle) { clearTimeout(x.recycle); x.recycle = null; }
   }
 

@@ -266,6 +266,17 @@ test('README screenshot: Connettori', async () => {
   await save('connectors');
 });
 
+test('README screenshot: worktree pool', async () => {
+  // Impostazioni → Avanzate: the delegated chats' reused worktrees, their limits, the space per repository
+  // and the ones holding work, never removed (ADR 0227; the demo pool's made-up repositories, demo-worktrees.ts)
+  if (!(await page.getByTestId('settings-page').isVisible())) await page.keyboard.press('Control+,');
+  await expect(page.getByTestId('settings-page')).toBeVisible({ timeout: 30_000 });
+  const box = page.getByTestId('st-worktrees');
+  await expect(box.getByTestId('st-worktrees-repos')).toContainText('shop-api', { timeout: 30_000 });
+  await box.evaluate(el => el.scrollIntoView({ block: 'start' }));
+  await save('worktrees');
+});
+
 test('README showcase: the Strategist\'s plan to approve in the questions window', async () => {
   // Popup on: the plan to approve is one more card of the questions window, its steps numbered with their role
   await page.keyboard.press('Escape');

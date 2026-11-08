@@ -120,6 +120,11 @@ export interface ChatManagerOptions {
   freshSessions?: () => boolean;
   /** Host-owned preparation sees the final narrowed policy before any delegated engine can start. */
   prepareDelegation?: (parent: ChatSummary, req: NewChat, policy: AgentPolicy | null, continuationOf?: string) => Promise<{ cwd: string; parentRunId: string | undefined; parentTaskVersion: number | undefined; bind?: (childId: string) => void }>;
+  /** A delegated child was made in `cwd`: the folder where the next child of the same repository will work (the
+   *  worktree pool's next free slot, ADR 0227), so its warm engine waits there; null = `cwd` itself */
+  nextDelegationCwd?: (cwd: string) => string | null;
+  /** Why an archived chat may not reopen (worktree-pool.ts, ADR 0227: its worktree went to another child); null = it may */
+  reopenBlocked?: (chat: ChatSummary) => string | null;
   /** Unabridged authoritative workflow state, including decisions and unanswered context. Empty = no linked
    *  workflow; null or an exception = unsafe to continue, so retain the current engine. */
   continuationContext?: (chatId: string) => string | null;

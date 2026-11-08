@@ -132,6 +132,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/shared/roles.ts DELEGATION_DEFAULTS; src/main/chats/manager-delegation.ts limitNotice
       b('Profondità e figli in corso sono limiti tuoi (Impostazioni → Ruoli e deleghe); una delega oltre il limite è rifiutata e il genitore mostra «Limite».',
         'Depth and running children are your limits (Settings → Roles and delegation); a delegation over the limit is refused and the parent shows "Limit".'),
+      // src/main/agents/worktree-pool.ts WorktreePool; src/renderer/components/WorktreeSettings.tsx (ADR 0227)
+      b('Un figlio che scrive lavora in una copia del repository (worktree) su un branch suo. L’app riusa le copie libere e pulite, con i file di build già fatti, e cancella quelle oltre i limiti di Impostazioni → Avanzate (copie per repository, in tutto, spazio massimo): la prima volta con il tuo «Pulisci ora», poi da sola ogni 6 ore. Una copia con modifiche o commit non pubblicati non si cancella mai: la vedi elencata lì.',
+        'A child that writes works in a copy of the repository (worktree) on its own branch. The app reuses free, clean copies, their build outputs already there, and deletes the ones over the limits in Settings → Advanced (copies per repository, in total, disk cap): the first time with your "Clean up now", then by itself every 6 hours. A copy with changes or unpushed commits is never deleted: you see it listed there.'),
       // src/main/agents/delegation.ts agent_ask_parent, agent_answer_child; src/renderer/lib/child-requests.ts requestHost
       b('Il figlio chiede al genitore i fatti mancanti. Se serve una tua scelta, te la chiede direttamente nel pannello, una domanda alla volta.',
         'A child asks its parent for missing facts. When it needs your choice, it asks you directly in its panel, one question at a time.'),

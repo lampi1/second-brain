@@ -121,6 +121,8 @@ export class ChatManager extends ManagerRemote implements ChatService {
   pending(): PendingRequest[] {
     return [...this.chats.values()].flatMap(r => [...r.pending.values()]).sort((a, b) => a.at - b.at);
   }
+  /** The folders warm engines wait in (warm.ts): the worktree pool's cleanup never removes one (ADR 0227). */
+  warmCwds(): string[] { return this.warm.engines.map(e => e.cwd); }
 
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
   /** by: who asks; 'app' = one of the app's own jobs (the sampled Sentinel reviews, agents/judge-sample.ts): like an agent, its run says startedBy 'app' */
@@ -309,7 +311,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     this.updated(r);
     if (warm) this.adoptWarm(r, warm); else if (!viaQueue) this.startSession(r);
     // the next chat like this one finds an engine waiting (a role's own launch; an Orchestrator, fork or bypass chat: a plain one)
-    if (caps.warm) this.warm.schedule(cwd, this.opts.prewarmDelayMs ?? 5000, warmable && childOk ? launch : PLAIN_LAUNCH);
+    if (caps.warm) this.warm.schedule(cwd, this.opts.prewarmDelayMs ?? 5000, warmable && childOk ? launch : PLAIN_LAUNCH, (delegator && this.opts.nextDelegationCwd?.(cwd)) || cwd);
     // the chat exists from here on: a failed first send shows as state 'error' + lastError, not as a lost chat
     if (prompt) {
       // a delegated chat's contract says who sent it (the parent's title), like mail between chats

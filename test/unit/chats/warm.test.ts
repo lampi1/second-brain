@@ -1,6 +1,6 @@
 // The Claude engines started ahead (warm.ts + ChatManager.create), against the fake CLI: the next chat in the same folder
 // launched the same way (plain, or a role's tools) adopts one (its id and session id, choices sent as control requests,
-// no new spawn), other folders and special chats start cold, the open Orchestrator resumes ahead after a restart, the
+// no new spawn), other folders start cold and then keep their own (the most used ones, ADR 0227), special chats start cold, the open Orchestrator resumes ahead after a restart, the
 // waiting engines die with the app (live engines for the orphan sweep), BufferedSink replays in order.
 import { afterEach, describe, expect, it } from 'vitest';
 import path from 'node:path';
@@ -55,7 +55,7 @@ describe('warm Claude engine', () => {
     await waitFor(() => starts(e).length === 3, 'the next waiting engine');
   });
 
-  it('a chat in another folder starts cold, and the waiting engine moves to that folder', async () => {
+  it('a chat in another folder starts cold and gets its own waiting engine; the first folder keeps its one (ADR 0227)', async () => {
     const e = env();
     const other = tmp('cwd2');
     const m = manager(e);
@@ -67,7 +67,30 @@ describe('warm Claude engine', () => {
     expect(cold.cwd && sameDir(cold.cwd, other)).toBe(true);
     expect(cold.argv?.join(' ')).toContain(`--session-id=${c2.sessionId}`);
     await waitFor(() => starts(e).filter(l => sameDir(l.cwd ?? '', other)).length === 2, 'a waiting engine in the new folder');
-    await waitFor(() => !alive(warmPid), 'the old waiting engine closed');
+    expect(alive(warmPid)).toBe(true);
+    // back in the first folder: the engine that waited there is adopted, no cold start
+    const c3 = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'again' });
+    expect(warmStart(e, c1.sessionId).argv?.join(' ')).toContain(`--session-id=${c3.sessionId}`);
+  });
+
+  it('keeps engines in the most used folders only; a full pool closes the least used folder\'s first', () => {
+    let n = 0;
+    const closed: string[] = [];
+    const spawn = (cwd: string) => {
+      const chatId = `w${++n}`;
+      return { chatId, sessionId: chatId, cwd, at: 0, sink: new BufferedSink(), session: { alive: true, pid: n, close: async () => { closed.push(cwd); } } as unknown as HarnessSession };
+    };
+    const pool = new WarmPool({ spawn, enabled: () => true, maxSlots: 3, maxFolders: 2 });
+    const [a, b, c] = ['A', 'B', 'C'].map(x => path.resolve(x));
+    pool.schedule(a!, 60_000); pool.schedule(a!, 60_000); pool.schedule(b!, 60_000);
+    pool.fill(a!); pool.fill(b!);
+    expect(pool.engines.map(x => x.cwd)).toEqual([a, b]);
+    // B and C were each used once, but B's use is older (faded): C takes the second folder, B's engine closes
+    pool.schedule(c!, 60_000); pool.fill(c!);
+    expect(pool.folders()).toHaveLength(2);
+    expect(closed).toEqual([b]);
+    expect(pool.engines.map(x => x.cwd).sort()).toEqual([a, c].sort());
+    pool.stop();
   });
 
   it('Orchestrators, worktrees and bypass chats never take it', async () => {
