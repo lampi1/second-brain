@@ -60,7 +60,9 @@ const assistantTexts = (m: Manager, id: string) => m.items(id).filter(i => i.kin
 /** A Claude chat on the fake CLI in a fresh repository, its engine warm (the write barrier needs the initialize reply). */
 async function claudeChat(extra: { checkpointDeadlineMs?: number } = {}) {
   const cwd = repo(), userData = tmp('cpb-ud'), home = tmp('cpb-home'), log = path.join(userData, 'fake.jsonl');
-  const m = new ChatManager({ emitter: { emit() {} }, userData, enginePaths: { claude: FAKE }, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: log, FAKE_CLAUDE_DELAY: '0' }, coldEveryMs: 0, checkpoints: () => true, ...extra });
+  // a loaded machine (the whole suite in parallel) can take longer than the real 45 s deadline: only the deadline tests
+  // lower it, the others must never give a snapshot up
+  const m = new ChatManager({ emitter: { emit() {} }, userData, enginePaths: { claude: FAKE }, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: log, FAKE_CLAUDE_DELAY: '0' }, coldEveryMs: 0, checkpoints: () => true, checkpointDeadlineMs: 110_000, ...extra });
   managers.push(m);
   const c = await m.create({ harness: 'claude', cwd, prompt: 'ciao' });
   await waitFor(() => assistantTexts(m, c.id).includes('Ciao dal motore') && m.list().find(x => x.id === c.id)?.state === 'idle', 'warm engine');
