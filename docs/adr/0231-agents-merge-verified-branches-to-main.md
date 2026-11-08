@@ -41,4 +41,6 @@ Full text: `docs/agents/rules.md` section 8.
 
 The owner: «fai finire tutto, fanculo i test e2e». The gate loses the e2e specs and the machine lock: `npm run
 check:quick`, a clean Sentinel and the guard (docs/agents/rules.md rules 7 and 8). The e2e suite runs only when the
-owner asks.
+owner asks. The Orchestrator's runtime frame now references section 7 rather than repeating the superseded gate;
+the post-batch main check is the non-e2e part of `npm run check`, not `check:branch`. A narrower current assignment
+(for example, owner-only pushes) still takes precedence over this repository default.
