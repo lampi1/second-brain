@@ -2,6 +2,18 @@
 
 The compact table in `AGENTS.md` names each command; this page holds the details (moved from `AGENTS.md`, ADR 0198).
 
+`check:quick` serializes worktrees using `check-quick.lock.json` in Git's common directory. The file records the
+owner PID; a Windows named pipe (Linux: abstract socket), derived from that path, is the actual mutex, automatically
+released by the kernel on process death. A stale owner file is overwritten only after acquiring the mutex, never
+deleted based on PID alone. A waiter prints the shared path and waits up to `SB_CHECK_LOCK_WAIT_MS` (default 600000).
+This is a queue timeout, separate from the caller's execution timeout: allow 600 seconds for an uncontended gate,
+and additional queue time if waiting. The gate does not kill another check's children. macOS is not supported by
+this lock backend. Older worktrees without this lock and other test commands do not participate.
+The lock serializes only live checks. It does not fix the killed runs: their cause is the caller's 200 s tool timeout
+(see the "Light check" row below), not concurrency, and the lock can add up to 600 s of queue on top. On Windows, when
+the parent is killed, the `spawnSync` children (cmd → npm → tsc/vitest) stay alive as orphans outside the lock, so a
+next check can run beside them. `SB_CHECK_LOCK_WAIT_MS=''` counts as 0: the wait times out at once.
+
 | What | Command |
 |------|---------|
 | Install (pinned, scripts off) | `npm run setup` = `npm ci` then `node node_modules/electron/install.js` (`.npmrc` turns `ignore-scripts` on: Electron's binary comes from the second step) then `node scripts/setup-hooks.mjs` (sets `core.hooksPath .githooks`, prints the optional guard config, never sets it) |

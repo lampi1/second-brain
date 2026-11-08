@@ -78,11 +78,17 @@ describe('engine registry', () => {
   it('starts OpenCode, and only OpenCode, with the app\'s permission config (ADR 0232)', () => {
     const ctx = { userData: process.cwd(), mcpUrl: null, appMcpUrl: null, showReplay: false, acpModelConfig: null, key: () => null, brainRoot: null };
     const envOf = (s: unknown): NodeJS.ProcessEnv | undefined => (s as { opts: { env?: NodeJS.ProcessEnv } }).opts.env;
-    const oc = envOf(sessionFor(engineOrThrow('opencode'), { ...opts, toolPolicy: { allow: ['read', 'shell-read'] }, env: { SB_X: '1' } }, sink, ctx));
+    const oc = envOf(sessionFor(engineOrThrow('opencode'), { ...opts, toolPolicy: { allow: ['read', 'shell-read'] }, env: {
+      SB_X: '1',
+      OPENCODE_CONFIG_CONTENT: JSON.stringify({ agent: { build: { permission: { bAsH: { '*': 'allow' }, eDiT: { '*': 'allow' } } } } }),
+    } }, sink, ctx));
     expect(oc?.SB_X).toBe('1');
     const cfg = JSON.parse(oc?.OPENCODE_CONFIG_CONTENT ?? '{}') as { agent: { build: { permission: { bAsH: Record<string, string>; eDiT: Record<string, string> } } } };
-    expect(cfg.agent.build.permission.bAsH['*']).toBe('ask');
-    expect(cfg.agent.build.permission.eDiT).toEqual({ '*': 'deny' });
+    // Existing OpenCode rules retain their spelling; the app appends a fresh spelling last (ADR 0232).
+    const effective = (name: string) => Object.entries(cfg.agent.build.permission)
+      .filter(([key]) => key.toLowerCase() === name).at(-1)?.[1];
+    expect(effective('bash')?.['*']).toBe('ask');
+    expect(effective('edit')).toEqual({ '*': 'deny' });
     expect(oc).toHaveProperty('OPENCODE_PERMISSION', undefined);
     expect(envOf(sessionFor(engineOrThrow('cursor'), opts, sink, ctx))?.OPENCODE_CONFIG_CONTENT).toBeUndefined();
   });

@@ -12,6 +12,7 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chunks, DOC_TESTS } from './check-branch.mjs';
+import { acquireCheckLock, checkLockFile } from './check-lock.mjs';
 
 const git = (...a) => execFileSync('git', a, { encoding: 'utf8' }).trim();
 
@@ -228,7 +229,7 @@ export const needsDocTests = changed => changed.some(f => DOC_INPUTS.test(f));
 function run(label, cmd, args) {
   console.log(`\n> ${label}: ${[cmd, ...args].join(' ')}`);
   const r = spawnSync(cmd, args, { stdio: 'inherit', shell: process.platform === 'win32' });
-  if (r.status !== 0) { console.log(`\ncheck:quick failed at ${label}`); process.exit(r.status ?? 1); }
+  if (r.status !== 0) { console.log(`\ncheck:quick failed at ${label}: exit=${r.status}, signal=${r.signal}, error=${r.error?.message ?? 'none'}`); throw Object.assign(new Error(label), { exitCode: r.status ?? 1 }); }
 }
 
 function main() {
@@ -237,7 +238,7 @@ function main() {
   process.chdir(repo);
   const branch = git('rev-parse', '--abbrev-ref', 'HEAD');
   const mainRef = ['main', 'master'].find(b => { try { git('rev-parse', '--verify', '--quiet', `refs/heads/${b}`); return true; } catch { return false; } });
-  if (!mainRef) { console.log('check:quick: no main branch here'); process.exit(1); }
+  if (!mainRef) throw new Error('check:quick: no main branch here');
   const base = git('merge-base', 'HEAD', mainRef);
   // deleted paths and old names of renamed files stay in `all`: the tests importing them must run (and fail)
   const { all: changed, present } = changedPaths(
@@ -275,4 +276,15 @@ export function verdict(uncovered, seconds) {
   return `check:quick green WITHOUT tests: ${uncovered.slice(0, 10).join(', ')}${more} (typecheck and lint only), in ${seconds} s. ${merge}`;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  let release;
+  try {
+    release = await acquireCheckLock(checkLockFile(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')), {
+      waitMs: Number(process.env.SB_CHECK_LOCK_WAIT_MS ?? 600_000),
+    });
+    main();
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = error.exitCode ?? 1;
+  } finally { release?.(); }
+}

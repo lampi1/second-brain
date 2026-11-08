@@ -187,7 +187,10 @@ describe('check:quick', () => {
     expect(many).not.toContain('f10.tsx');
     // no exit for uncovered files; a failed typecheck, lint or test still exits with its status before the verdict
     expect(code).not.toMatch(/uncovered\.length\)\s*\{[^}]*process\.exit/);
-    expect(code).toContain('process.exit(r.status ?? 1)');
+    // Failure propagates its exit code after the shared mutex is released, rather than exiting inside run().
+    expect(code).toContain('exitCode: r.status ?? 1');
+    expect(code).toContain('process.exitCode = error.exitCode ?? 1');
+    expect(code).toContain('finally { release?.(); }');
     expect(code).toMatch(/run\('unit'[^]*console\.log\(`\\n\$\{verdict\(uncovered/);
   });
 
