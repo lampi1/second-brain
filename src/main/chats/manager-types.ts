@@ -40,6 +40,10 @@ export interface ChatManagerOptions {
   reviewPack?: (cwd: string) => Promise<string>;
   /** ADR 0103: record the files before each turn of a work chat in a git repository (checkpoints.ts); absent = off */
   checkpoints?: () => boolean;
+  /** ADR 0228: a snapshot still running after this is given up (default CHECKPOINT_DEADLINE_MS; tests shorten it) */
+  checkpointDeadlineMs?: number;
+  /** ADR 0228: after a start only a turn cut within this resumes by itself (setting engineIdleMin; 0 or absent = all) */
+  resumeWithinMs?: () => number;
   /** how long a child's result waits for its siblings' (default CHILD_RESULTS_MS) */
   childResultsMs?: number;
   /** the estimate line under a user's message to the Orchestrator (shared/task-estimate.ts estimateLine): its first model
@@ -219,6 +223,10 @@ export interface Rec {
   heldResults?: HeldChildResult[];
   /** the end-of-turn record of the last checkpoint, while git writes it (recordTurnEnd) */
   afterPending?: Promise<void> | undefined;
+  /** ADR 0228: the turn's checkpoint while git records it (it may run alongside the turn); its sequence number, so a late
+   *  snapshot never marks a newer turn as undoable */
+  checkpointPending?: Promise<void> | undefined;
+  checkpointSeq?: number;
   /** the run's receipts (ADR 0130): tool rows already noted, the checkpoint whose turn files are in, a turn's files
    *  still being read (the verdict waits for them) */
   receiptRows?: Set<string>;

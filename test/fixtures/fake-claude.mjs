@@ -30,7 +30,10 @@
 //   mcpcall <server> <tool> <json> (anywhere on a line, JSON to its end) → a real MCP tools/call to that --mcp-config server,
 //     asked for with can_use_tool unless --allowedTools has mcp__<server>__<tool>; the answer is "Fatto: <tool>" or "Errore: …"
 //   skillgate <name> → a Skill permission for <name> (the answer's JSON, updatedInput included, is the tool's output)
-//   pretool <Tool>… [@agent] → asks the PreToolUse hook callback the app registered at initialize, once per tool
+//   pretool <Tool>… [@agent] → asks every PreToolUse hook callback the app registered at initialize (all at once, like
+//     the real CLI), once per tool; a deny from any of them wins
+//   scrivifile <relpath> <text> → a Write: asks the PreToolUse hooks first, then writes <text> to <relpath> in the cwd
+//     (FAKE_CLAUDE_LOG gets {wrote, at}); a deny leaves the file alone (the write barrier's test, ADR 0228)
 //   orphan → starts a child with its own child that outlive this process (FAKE_CLAUDE_LOG gets {orphan: pid} twice)
 // FAKE_CLAUDE_INIT_DELAY=<ms> delays the initialize reply (a slow start-up); every FAKE_CLAUDE_LOG line has at: Date.now().
 //   anything else → streams "Ciao dal motore".
@@ -117,7 +120,7 @@ const state = s => { if (stateEvents) out({ type: 'system', subtype: 'session_st
 const waiters = new Map(); // request_id → resolve(response)
 let turn = null; // { aborted, waitingId }
 let inited = false;
-let preToolHook = null; // the callback id the app registered for PreToolUse at initialize (hooks), like the Agent SDK
+let preToolHooks = []; // the callback ids the app registered for PreToolUse at initialize (every matcher), like the Agent SDK
 let n = 0;
 const queue = [];
 let busy = false;
@@ -126,6 +129,16 @@ let spent = 0; // the running turn's cost so far, as the real CLI's tracker has 
 let ctxTokens = 1234; // get_context_usage; "big" in a message → 250000 (over the default 200k threshold)
 const FAKE_HANDOFF = 'Ecco il passaggio.\n<<<PASSAGGIO\n## Stato\nFatto il fix finto, test verdi.\n## File e worktree\n- a.txt\n## Decisioni prese\n- niente refactor\n## Provato e scartato\n- la cache: inutile\n## Prossimo passo\nAprire la PR.\nPASSAGGIO>>>';
 
+/** Asks every registered PreToolUse hook about one call, all at once; the first deny's reason, or null. */
+async function askPreToolHooks(tool, toolInput, agent) {
+  const answers = await Promise.all(preToolHooks.map(callback_id => {
+    const request_id = `req_${++n}`, tool_use_id = `toolu_pre_${n}`;
+    out({ type: 'control_request', request_id, request: { subtype: 'hook_callback', callback_id, tool_use_id, input: { session_id: sessionId, transcript_path: '', cwd: process.cwd(), permission_mode: permissionMode, hook_event_name: 'PreToolUse', tool_name: tool, tool_input: toolInput, tool_use_id, ...(agent ? { agent_id: 'a_sub' } : {}) } } });
+    return new Promise(resolve => waiters.set(request_id, resolve));
+  }));
+  const deny = answers.map(r => r?.hookSpecificOutput).find(h => h?.permissionDecision === 'deny');
+  return deny ? deny.permissionDecisionReason : null;
+}
 function assistant(content, id = `msg_${++n}`) {
   out({ type: 'assistant', message: { id, role: 'assistant', content }, parent_tool_use_id: null, session_id: sessionId, uuid: crypto.randomUUID() });
   record({ type: 'assistant', message: { id, role: 'assistant', content } });
@@ -262,17 +275,23 @@ async function runTurn(text) {
   // pretool <Tool> [<Tool>…] [@agent] → asks the app's PreToolUse hook callback for each tool (like the real CLI before a
   // tool runs; @agent = from a sub-agent, agent_id set) and answers "Hook: <tool>=ok|deny:<reason>; …"
   const pre = text.match(/pretool ((?:\S+ ?)+)/);
-  if (pre && preToolHook && !turn.aborted) {
+  if (pre && preToolHooks.length && !turn.aborted) {
     const words = (pre[1] ?? '').trim().split(/\s+/), agent = words.includes('@agent');
     const said = [];
     for (const tool of words.filter(w => w !== '@agent')) {
-      const request_id = `req_${++n}`, tool_use_id = `toolu_pre_${n}`;
-      out({ type: 'control_request', request_id, request: { subtype: 'hook_callback', callback_id: preToolHook, tool_use_id, input: { session_id: sessionId, transcript_path: '', cwd: process.cwd(), permission_mode: permissionMode, hook_event_name: 'PreToolUse', tool_name: tool, tool_input: {}, tool_use_id, ...(agent ? { agent_id: 'a_sub' } : {}) } } });
-      const r = await new Promise(resolve => waiters.set(request_id, resolve));
-      const h = r?.hookSpecificOutput;
-      said.push(`${tool}=${h?.permissionDecision === 'deny' ? `deny:${h.permissionDecisionReason}` : 'ok'}`);
+      const denied = await askPreToolHooks(tool, {}, agent);
+      said.push(`${tool}=${denied ? `deny:${denied}` : 'ok'}`);
     }
     final = `Hook: ${said.join('; ')}`;
+  }
+  // scrivifile <relpath> <text> → a Write that asks the PreToolUse hooks first, like the real CLI (ADR 0228)
+  const wr = text.match(/scrivifile (\S+) (.+)/);
+  if (wr && !turn.aborted) {
+    const file = path.resolve(process.cwd(), wr[1]), input = { file_path: file, content: wr[2] };
+    assistant([{ type: 'tool_use', id: 'toolu_write', name: 'Write', input }]);
+    const denied = preToolHooks.length ? await askPreToolHooks('Write', input, false) : null;
+    if (denied) { toolResult('toolu_write', `Hook denied: ${denied}`, true); final = 'Non scritto.'; }
+    else { fs.writeFileSync(file, wr[2]); logLine({ wrote: wr[1] }); toolResult('toolu_write', `File written: ${file}`); final = 'Scritto.'; }
   }
   // skillgate <name> → a Skill permission for that name: "Skill caricata <response JSON>" when allowed (the app may patch its input)
   const sk = text.match(/skillgate (\S+)/);
@@ -452,7 +471,7 @@ function control(id, req) {
   const ok = (response, envelope = {}) => out({ type: 'control_response', response: { subtype: 'success', request_id: id, ...(response ? { response } : {}), ...envelope } });
   switch (req.subtype) {
     case 'initialize': {
-      preToolHook = req.hooks?.PreToolUse?.[0]?.hookCallbackIds?.[0] ?? null;
+      preToolHooks = (req.hooks?.PreToolUse ?? []).flatMap(m => m.hookCallbackIds ?? []);
       const pending = process.env.FAKE_CLAUDE_INHERITED === '1' ? [inherited] : [];
       if (pending.length) waiters.set('req_inherited', r => { out({ type: 'assistant', message: { id: `msg_${++n}`, role: 'assistant', content: [{ type: 'text', text: `inherited: ${r?.behavior}` }] }, parent_tool_use_id: null, session_id: sessionId }); });
       // like Claude Code 2.1.282: the pending lists ride on the envelope, beside `response`
