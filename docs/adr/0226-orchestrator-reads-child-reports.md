@@ -1,4 +1,4 @@
-# ADR 0222 · The Orchestrator reads any report in its tree (app_child_output)
+# ADR 0226 · The Orchestrator reads any report in its tree (app_child_output)
 
 Date: 2026-11-07 · Status: accepted (owner, 2026-11-07: «sì», change ADR 0083; «summary + doneWhen di default, output
 completo solo su richiesta, max 4.000 caratteri») · Amends: ADR 0083 §6 ("The Orchestrator sees state, not content")

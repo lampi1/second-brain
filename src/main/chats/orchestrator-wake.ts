@@ -21,7 +21,7 @@
 // Delegated chats (ADR 0083): a chat another role delegated (parentId) reports to its parent, not to the Orchestrator, which
 // sees only its state changes: started, waiting for the user, finished, failed, never a line of what it says (no detail).
 // Its "finished" rides along (silent) unless the user wrote to it: its result goes to its parent (2026-10-20).
-// Pull exception: app_child_output (ADR 0222) reads a delegate's latest report on request.
+// Pull exception: app_child_output (ADR 0226) reads a delegate's latest report on request.
 // A turn that gave its result with agent_report adds no "finished": the result already reached its parent or the
 // Orchestrator as a message, and a second wake for it was a turn for nothing (the owner, 2026-10-20).
 // What the Orchestrator does with the news is in its rules (orchestrator-role.ts WAKE_RULE), sent once per session: a

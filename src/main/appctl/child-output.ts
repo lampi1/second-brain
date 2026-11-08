@@ -1,4 +1,4 @@
-// app_child_output (ADR 0222): the Orchestrator reads the latest agent_report of any chat in its tree, delegated chats of
+// app_child_output (ADR 0226): the Orchestrator reads the latest agent_report of any chat in its tree, delegated chats of
 // other roles included, without spending a turn of that chat (the owner, 2026-11-07: «summary + doneWhen di default,
 // output completo solo su richiesta, max 4.000 caratteri»). Why: ADR 0083 kept a delegate's content private to its
 // parent, so the Orchestrator had to wake the parent (a paid turn) to learn what a grandchild found. It reads the

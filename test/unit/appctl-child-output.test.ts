@@ -1,4 +1,4 @@
-// app_child_output (ADR 0222, src/main/appctl/child-output.ts): the Orchestrator reads the latest agent_report of a chat in
+// app_child_output (ADR 0226, src/main/appctl/child-output.ts): the Orchestrator reads the latest agent_report of a chat in
 // its tree, delegates of other roles included: summary + doneWhen by default, the output only with full: true and cut at
 // 4,000 characters with a visible marker; never a Flash chat, an Orchestrator or a chat whose ancestry is unknown; read
 // only (it never touches the chats or runs it is given).

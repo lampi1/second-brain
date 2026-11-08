@@ -5,7 +5,7 @@ the questions rule and "the Orchestrator column is the only way to start work" c
 · Amended by ADR 0085 (2026-10-19 evening: every role has every permission by default and the user narrows it from
 its card; the planners launch the writing roles again; §1's default tools and ceilings and §3's "planners launch only
 Scout and Judge" no longer hold, the narrowing rules do) · Amended by ADR 0091 (2026-10-20, issue #99: no `independent` field and no model switch; a
-review's independence is its clean new session, §9's Judge reviews on any model) · Amended by ADR 0222 (2026-11-07: the Orchestrator reads the latest agent_report of any chat in its tree with `app_child_output`; §6 holds for everything else) · Replaces: the editable agent catalog with Italian presets and routed `legacy-*` profiles (ADR 0077, 0078), the
+review's independence is its clean new session, §9's Judge reviews on any model) · Amended by ADR 0226 (2026-11-07: the Orchestrator reads the latest agent_report of any chat in its tree with `app_child_output`; §6 holds for everything else) · Replaces: the editable agent catalog with Italian presets and routed `legacy-*` profiles (ADR 0077, 0078), the
 Orchestrator-only sub-agent launch (`agent_start_subagent`), the brain's agent pointers, playbooks and specialist
 notebooks · Builds on: ADR 0006 (app MCP), 0021 (per-chat endpoints), 0068 (Grindhouse), 0082 (agent changes)
 
@@ -55,7 +55,7 @@ text. Permissions of a sub-agent were narrowed against the Orchestrator, not aga
    the child's card; the questions window shows it instead while it is on; the Orchestrator never gets an answerable
    panel of another chat, only a status-only "waiting" event.
 6. **The Orchestrator sees state, not content**: started, waiting, finished, failed, never a child's text
-   (`chats/orchestrator-wake.ts`). Amended by ADR 0222: the Orchestrator may pull a delegate's latest agent_report
+   (`chats/orchestrator-wake.ts`). Amended by ADR 0226: the Orchestrator may pull a delegate's latest agent_report
    (summary and criteria, the output only on request, capped at 4,000 characters) with `app_child_output`. The one exception is the user's own words: a message the user types in any work
    chat is quiet news `user-message` (chat, role, parent, time, the text cut at ~300 characters) that rides with the
    next delivery and counts in the held news; the chat's parent gets the same note with its next message. The

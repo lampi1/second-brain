@@ -20,7 +20,7 @@
 //   for him (app_unblock, ADR 0135); it never answers any of it.
 // - The user's call recordings and their local transcripts (app_recordings, ADR 0154): the Orchestrator's mount only.
 // - A lesson in Impara when the user asks to understand something (app_learn, ADR 0190): the Orchestrator's mount only.
-// - The latest report of any chat in its tree, delegates included, without a turn of theirs (app_child_output, ADR 0222).
+// - The latest report of any chat in its tree, delegates included, without a turn of theirs (app_child_output, ADR 0226).
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { ChatItem, ChatSummary, TasksState, Effort, EventMap, NewChat, PendingRequest, RunInfo, TaskKind } from '../../shared/contract';
