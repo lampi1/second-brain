@@ -44,9 +44,10 @@ describe('the Orchestrator speaks only when it is useful (owner, 2026-10-20)', (
     expect(ORCHESTRATOR_ROLE).toContain('Do not write the estimate in your reply');
     expect(ORCHESTRATOR_ROLE).toContain('Brevity never drops a result, a blocker or a question that is due.');
   });
-  it('the app\'s news asks for a line only when the user needs it, else one emoji', () => {
+  it('the app\'s news asks for a line only when the user needs it, and never for a bare 👍 (2026-11-07)', () => {
     expect(WAKE_RULE).toContain('write to the user only when they need it');
-    expect(WAKE_RULE).toContain('reply 👍 and nothing else');
+    expect(WAKE_RULE).not.toContain('👍');
+    expect(WAKE_RULE).toContain('Plain completions and starts never wake you');
     expect(ORCHESTRATOR_ROLE).toContain(WAKE_RULE); // once per session, in the frame
     expect(wakeMessage([])).not.toContain('👍'); // not again in every wake
   });

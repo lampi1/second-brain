@@ -40,8 +40,8 @@ export abstract class ManagerCore {
   protected cleanReportListeners: ((n: CleanReportNote) => boolean)[] = [];
   /** told of every turn's end, after opts.onTurnEnd (the phone bridge: chats/phone-port.ts) */
   protected turnEndListeners: ((info: TurnEndInfo) => void)[] = [];
-  /** children's results waiting for their siblings', per parent (queueChildResult) */
-  protected childResults = new Map<string, { items: HeldChildResult[]; timer: NodeJS.Timeout | null }>();
+  /** children's results waiting for their siblings', per parent (queueChildResult); first = when the batch's first came */
+  protected childResults = new Map<string, { items: HeldChildResult[]; timer: NodeJS.Timeout | null; first?: number }>();
   /** "Riprendi" in flight per old chat: a double click or two agents get the same new chat, never two. */
   protected continuing = new Map<string, Promise<ChatSummary>>();
   protected store: ChatStore;

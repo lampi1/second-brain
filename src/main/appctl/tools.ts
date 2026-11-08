@@ -20,6 +20,7 @@
 //   for him (app_unblock, ADR 0135); it never answers any of it.
 // - The user's call recordings and their local transcripts (app_recordings, ADR 0154): the Orchestrator's mount only.
 // - A lesson in Impara when the user asks to understand something (app_learn, ADR 0190): the Orchestrator's mount only.
+// - The latest report of any chat in its tree, delegates included, without a turn of theirs (app_child_output, ADR 0226).
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
 import type { ChatItem, ChatSummary, TasksState, Effort, EventMap, NewChat, PendingRequest, RunInfo, TaskKind } from '../../shared/contract';
@@ -36,6 +37,8 @@ import { isLongChat } from '../../shared/context';
 import { describeUi } from '../../shared/genui';
 import { digest } from './digest';
 import { gitBranch } from '../chats/branch';
+import { closeRefusal } from '../chats/close-rules';
+import { unreadInstructions } from '../../shared/user-events';
 import type { PullResult } from '../update/source';
 import type { AgentCatalog } from '../../shared/agents';
 import { isWorkRole, MODEL_TIERS, ROLE_IDS, type ModelTier } from '../../shared/roles';
@@ -62,6 +65,7 @@ import { CONFIG_ASK_MIN, CONFIG_TURN_MIN, configTool, type ConfigDeps } from './
 import { lastAnswered, lastTyped, userAsked } from './user-words';
 import { recordingTools, type RecordingsRead } from './recordings';
 import { imparaTools, type ImparaControl } from './impara';
+import { childOutputTool } from './child-output';
 import type { RoutineTerminalExport, RoutineRunRef } from '../../shared/routines';
 
 export type ToolOut = string | { text?: string; images?: { data: string; mimeType: string; caption?: string }[] } | object;
@@ -248,6 +252,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.agents ? [toolDef(agentCatalogTool(d.agents, d.skillTools))] : []),
     ...(d.recordings && authed() ? recordingTools(d.recordings, d.emitUi) : []),
     ...(d.impara && authed() ? imparaTools(d.impara, d.emitUi, () => imparaAsked(callerId!)) : []),
+    ...(authed() ? [childOutputTool({ chats: () => d.chats.list().filter(mine), runs: () => d.runFeedback?.runList() ?? [] })] : []),
     ...(d.runFeedback && authed() ? [metricsTool(d.runFeedback)] : []),
     ...(d.runFeedback && authed() ? [estimateTool(() => d.runFeedback!.runList())] : []),
     {
@@ -337,13 +342,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const id = String(a.chatId ?? '');
         const c = d.chats.list().find(x => x.id === id);
         if (!c || !mine(c)) throw new Error(`chat non trovata: ${id} (vedi app_chats)`);
-        if (c.isOrchestrator) throw new Error('L’Orchestrator non si chiude da uno strumento: solo l’utente, dal suo menu ⋯');
-        if (c.pending > 0) throw new Error(`«${c.title}» aspetta una risposta dell’utente: chiudila solo lui`);
         // the close cancels the whole tree (ADR 0217): a descendant's open question would be withdrawn unanswered
-        const all = d.chats.list(), under = new Set([id]);
-        for (let grew = true; grew;) { grew = false; for (const x of all) if (x.parentId && under.has(x.parentId) && !under.has(x.id)) { under.add(x.id); grew = true; } }
-        const asking = all.find(x => x.id !== id && under.has(x.id) && !x.closedAt && x.pending > 0);
-        if (asking) throw new Error(`«${asking.title}», sotto «${c.title}», aspetta una risposta dell’utente: chiudile solo lui`);
+        const refused = closeRefusal(c, d.chats.list());
+        if (refused) throw new Error(refused);
         await d.chats.close(id);
         log.info('appctl', 'agent closed a chat', { chat: id, data: { title: c.title, state: c.state } });
         d.brain.publish([{ kind: 'chat-closed', title: c.title, detail: 'chiusa dall’Orchestrator', chatId: id, who: c.harness }]);
@@ -573,14 +574,14 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       run: (a: Record<string, unknown>) => balancedStatusRun(balanced, a, h => !openRefusal(d.brain.settings(), caller()?.harness ?? 'claude', h)) }] : []),
     {
       name: 'app_assign_task',
-      description: 'Continue a compatible work conversation with a distinct measured run. Use continue for related follow-ups, new-task for a distinct assignment in the same scope, rework only for an explicit correction. Requires the current task version from app_chats, the same role and project folder. Independent Sentinel reviews always need a fresh chat. Does not change tools or permissions.',
+      description: 'Continue a compatible work conversation with a distinct measured run. Use continue for related follow-ups, new-task for a distinct assignment in the same scope, rework only for an explicit correction. Requires the same role and project folder; the current task version (app_chats) is used when expectedVersion is omitted. The user\'s messages and answers in that chat you have not seen come back readable (userInstructions): the chat already has them, so they are not repeated in its prompt; account for them, and correct it or ask the user where your prompt disagrees. expectedEventSeq is optional. Refused only while the chat works or has queued work. Independent Sentinel reviews always need a fresh chat. Does not change tools or permissions.',
       inputSchema: obj({ intakeQuestion: intakeField, chatId: str('Existing conversation ID'), prompt: { ...str(`Self-contained assignment, up to ${CHAT_PROMPT_MAX} characters`), maxLength: CHAT_PROMPT_MAX },
         doneWhen: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 300 }, description: 'Checkable criteria for this assignment' },
         mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] }, roleId: str('Existing work role'), cwd: str('Same absolute project folder'),
         expectedVersion: { type: 'integer', minimum: 1, description: 'Current taskVersion from app_chats' },
-        expectedEventSeq: { type: 'integer', minimum: 0, description: 'latestSeq from app_task_events: read all user decisions before assigning' },
+        expectedEventSeq: { type: 'integer', minimum: 0, description: 'optional: latestSeq from app_task_events you have read' },
         deliveryPolicy: { type: 'string', enum: ['display', 'notify', 'synthesize'] },
-      }, ['chatId', 'prompt', 'mode', 'roleId', 'cwd', 'expectedVersion']),
+      }, ['chatId', 'prompt', 'mode', 'roleId', 'cwd']),
       run: async a => {
         const orchestrator = caller();
         if (!authed() || !orchestrator || !d.chats.assignTask) throw new Error('app_assign_task requires an authenticated Orchestrator.');
@@ -597,7 +598,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const profile = d.agents().profiles.find(p => p.id === a.roleId);
         // the revision too: tools, permissions and limits change the version in use in place (ADR 0186)
         if (!profile || profile.activeVersion !== target.agent.version || profile.updatedAt !== target.agent.revision) throw new ToolRefusal('Role configuration changed: create a fresh chat.');
-        if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || !Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1) throw new ToolRefusal('Invalid assignment mode/version.');
+        if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || (a.expectedVersion !== undefined && (!Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1))) throw new ToolRefusal('Invalid assignment mode/version.');
         const prompt = typeof a.prompt === 'string' ? a.prompt.trim() : '';
         if (!prompt) throw new Error('prompt: required');
         if (prompt.length > CHAT_PROMPT_MAX) throw new Error(`prompt: at most ${CHAT_PROMPT_MAX} characters (this one has ${prompt.length})`);
@@ -608,13 +609,14 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (target.harness !== orchestrator.harness && !['running', 'waiting', 'idle'].includes(target.state)) throw new Error('A stopped engine of another kind requires the user.');
         if (a.expectedEventSeq !== undefined && (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0)) throw new Error('Invalid user event cursor.');
         if (a.deliveryPolicy !== undefined && !['display', 'notify', 'synthesize'].includes(String(a.deliveryPolicy))) throw new Error('Invalid delivery policy.');
-        await d.chats.assignTask(target.id, `${AGENT_LABEL}\n\n${prompt}`, { ...intakeOf(a, a.roleId === 'strategist' && a.mode === 'new-task' && !!target.plan), mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
+        const userInstructions = d.chats.userEvents ? unreadInstructions(d.chats.userEvents(target.id)) : [];
+        await d.chats.assignTask(target.id, `${AGENT_LABEL}\n\n${prompt}`, { ...intakeOf(a, a.roleId === 'strategist' && a.mode === 'new-task' && !!target.plan), mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: a.expectedVersion === undefined ? target.run?.taskVersion ?? 1 : Number(a.expectedVersion), ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), ...(a.deliveryPolicy ? { deliveryPolicy: a.deliveryPolicy as 'display' | 'notify' | 'synthesize' } : {}), ...(doneWhen ? { doneWhen } : {}), source: { kind: 'chat', chatId: orchestrator.id } });
         const assigned = d.chats.list().find(c => c.id === target.id);
-        return { chatId: target.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId };
+        return { chatId: target.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions } : {}) };
       },
     },
     {
-      name: 'app_task_events', description: 'Read the complete ordered user decisions for a root work task. Before assigning another task, read through latestSeq and pass expectedEventSeq to app_assign_task. No model turn is started.',
+      name: 'app_task_events', description: 'Read the complete ordered user decisions for a root work task. Optional before app_assign_task, which returns the unread ones itself. No model turn is started.',
       inputSchema: obj({ chatId: str('Root work chat ID'), afterSeq: { type: 'integer', minimum: 0 } }, ['chatId']),
       run: a => {
         if (!authed() || !caller() || !d.chats.userEvents) throw new Error('An authenticated Orchestrator is required.');

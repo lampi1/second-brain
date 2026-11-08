@@ -144,16 +144,16 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/chats/manager-work.ts userWrote; src/main/chats/orchestrator-wake.ts user-message
       b('Puoi scrivere in qualunque figlio: l’Orchestrator e il genitore lo vengono a sapere con le tue parole, così nessuno disfa ciò che hai chiesto; se cambi l’obiettivo, il figlio lo dice nel suo risultato.',
         'You can write in any child: the Orchestrator and the parent learn it in your words, so nobody undoes what you asked; if you change the goal, the child says so in its result.'),
-      // src/main/chats/manager-delegation.ts reportDelegation; src/shared/delegation.ts resultMessage
-      b('Il figlio chiude con un rapporto: il risultato arriva al genitore come messaggio; l’Orchestrator vede solo lo stato. Una chat che l’Orchestrator ha aperto lui stesso gli riporta allo stesso modo.',
-        'The child closes with a report: the result reaches the parent as a message; the Orchestrator sees only the state. A chat the Orchestrator opened itself reports to it the same way.'),
+      // src/main/chats/manager-delegation.ts reportDelegation; src/shared/delegation.ts resultMessage; src/main/appctl/child-output.ts
+      b('Il figlio chiude con un rapporto: il risultato arriva al genitore come messaggio (i risultati dei fratelli arrivati entro pochi secondi insieme); l’Orchestrator vede lo stato e, quando gli serve, legge l’ultimo rapporto di qualunque chat del suo albero (riepilogo e criteri; l’output solo se lo chiede, al massimo 4.000 caratteri) senza far lavorare quella chat. Un risultato sbagliato si corregge al massimo due volte, segnato «correzione». Una chat che l’Orchestrator ha aperto lui stesso gli riporta allo stesso modo.',
+        'The child closes with a report: the result reaches the parent as a message (siblings’ results arriving within a few seconds together); the Orchestrator sees the state and, when it needs to, reads the latest report of any chat in its tree (summary and criteria; the output only on request, at most 4,000 characters) without spending a turn of that chat. A wrong result can be corrected at most twice, marked "correction". A chat the Orchestrator opened itself reports to it the same way.'),
     ],
     analogy: b('Come un capo cantiere che affida i lavori ai suoi: ognuno ha la sua scheda di lavoro, nessuno ha chiavi che il capo non ha, e ciascuno chiede direttamente la decisione che gli serve.',
       'Like a site foreman handing jobs to his crew: each has a job sheet, nobody holds keys the foreman lacks, and each worker asks for the decision they need.'),
     diagram: { kind: 'flow', steps: [b('Genitore', 'Parent'), b('Delega', 'Delegation'), b('Figli visibili', 'Visible children'), b('Rapporto', 'Report'), b('Genitore', 'Parent')] },
     tech: [
       // src/shared/delegation.ts
-      tech(DATA, 'ChatSummary.parentId e delegation { role, goal, doneWhen, at, tools?, result?, originalGoal? }.', 'ChatSummary.parentId and delegation { role, goal, doneWhen, at, tools?, result?, originalGoal? }.'),
+      tech(DATA, 'ChatSummary.parentId e delegation { role, goal, doneWhen, at, tools?, result? (corrections?), originalGoal? }.', 'ChatSummary.parentId and delegation { role, goal, doneWhen, at, tools?, result? (corrections?), originalGoal? }.'),
       tech(WHERE, 'Strumenti MCP della chat: agent_delegate, agent_report, agent_children, agent_ask_parent, agent_answer_child (pre-approvati).', 'Chat MCP tools: agent_delegate, agent_report, agent_children, agent_ask_parent, agent_answer_child (pre-approved).'),
     ],
     anchors: {
@@ -164,9 +164,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       3: ['src/main/agents/delegation.ts#agent_ask_parent', 'src/main/agents/delegation.ts#agent_answer_child', 'src/renderer/lib/child-requests.ts#requestHost'],
       4: ['src/renderer/components/DelegationCard.tsx', 'src/renderer/lib/run-steps.ts'],
       5: ['src/main/chats/manager-work.ts#userWrote'],
-      6: ['src/main/chats/manager-delegation.ts#reportDelegation', 'src/shared/delegation.ts#resultMessage'],
+      6: ['src/main/chats/manager-delegation.ts#reportDelegation', 'src/shared/delegation.ts#resultMessage', 'src/main/appctl/child-output.ts#childOutputTool'],
     },
-    sources: ['src/main/agents/delegation.ts', 'src/shared/delegation.ts', 'src/main/agents/role-gate.ts', 'src/main/chats/manager.ts', 'src/main/chats/orchestrator-wake.ts', 'src/renderer/components/DelegationCard.tsx', 'src/renderer/components/SidebarTree.tsx', 'src/renderer/lib/run-steps.ts', 'src/renderer/lib/child-requests.ts', 'src/main/chats/manager-delegation.ts', 'src/main/chats/manager-work.ts'],
+    sources: ['src/main/agents/delegation.ts', 'src/shared/delegation.ts', 'src/main/agents/role-gate.ts', 'src/main/chats/manager.ts', 'src/main/chats/orchestrator-wake.ts', 'src/renderer/components/DelegationCard.tsx', 'src/renderer/components/SidebarTree.tsx', 'src/renderer/lib/run-steps.ts', 'src/renderer/lib/child-requests.ts', 'src/main/chats/manager-delegation.ts', 'src/main/chats/manager-work.ts', 'src/main/appctl/child-output.ts'],
   },
   {
     id: 'agents',
@@ -1367,8 +1367,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un lavoro che finisce, fallisce, chiede qualcosa o scrive all’Orchestrator produce una notizia; l’app la consegna all’Orchestrator, ma non sempre subito.',
         'A job that finishes, fails, asks something or writes to the Orchestrator makes a piece of news; the app delivers it to the Orchestrator, but not always at once.'),
       // src/main/chats/orchestrator-delivery.ts ORCHESTRATOR_GROUP_MS
-      b('La trattiene mentre l’Orchestrator aspetta te, la raggruppa per 30 secondi con le altre in arrivo, o fa viaggiare le notizie tranquille con la prossima consegna: così l’Orchestrator non viene svegliato a ogni riga.',
-        'It holds it while the Orchestrator waits for you, groups it for 30 seconds with the others arriving, or lets quiet news ride along with the next delivery: so the Orchestrator is not woken at every line.'),
+      b('La trattiene mentre l’Orchestrator aspetta te, la raggruppa per 30 secondi con le altre in arrivo, o fa viaggiare le notizie tranquille con la prossima consegna: così l’Orchestrator non viene svegliato a ogni riga. Un lavoro che finisce o parte e basta è tranquillo: lo sveglia solo un errore o un risultato da smistare.',
+        'It holds it while the Orchestrator waits for you, groups it for 30 seconds with the others arriving, or lets quiet news ride along with the next delivery: so the Orchestrator is not woken at every line. A job that just finishes or starts is quiet: only a failure or a result to route wakes it.'),
       // src/renderer/components/HeldNews.tsx
       b('Sulla colonna dell’Orchestrator vedi quante sono; un clic le elenca (chat, tipo, da quando, perché aspetta) e una riga apre la sua chat.',
         'On the Orchestrator’s column you see how many there are; a click lists them (chat, kind, since when, why it waits) and a row opens its chat.'),

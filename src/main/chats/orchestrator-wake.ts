@@ -12,11 +12,16 @@
 // Quiet news (2026-10-13): a question, a permission or a command left for the user never wakes the Orchestrator by itself.
 // The app already shows them to the user (popup or queue) and the Orchestrator never relays them (the owner, 13/10: "l’Orchestrator
 // mi serve principalmente per lo stato"), so a wake only bought an "ok, noted" turn re-reading the Orchestrator's whole context
-// (measured 07-13/10: 13 of 44 wakes, ~0.19 $ each). They ride along with the next finished/failed news instead, and
+// (measured 07-13/10: 13 of 44 wakes, ~0.19 $ each). They ride along with the next loud news instead, and
 // app_digest lists them whenever the Orchestrator looks.
+// Quiet turn ends (2026-11-07, cloudroom comms proposal 1): a plain "finished" or "started" is quiet too: on 07/11, 50 of
+// the 56 Orchestrator turns an app news opened ended with a bare 👍. Only a failure, a request that ends a failed turn and a
+// result to route (a root chat's report on an active work thread or in away mode) still wake it; a 'synthesize' result and
+// mail request/urgent wake it on their own paths (manager-delegation.ts, mail.ts). Replay: scripts/orchestrator-wake-replay.mjs.
 // Delegated chats (ADR 0083): a chat another role delegated (parentId) reports to its parent, not to the Orchestrator, which
 // sees only its state changes: started, waiting for the user, finished, failed, never a line of what it says (no detail).
 // Its "finished" rides along (silent) unless the user wrote to it: its result goes to its parent (2026-10-20).
+// Pull exception: app_child_output (ADR 0226) reads a delegate's latest report on request.
 // A turn that gave its result with agent_report adds no "finished": the result already reached its parent or the
 // Orchestrator as a message, and a second wake for it was a turn for nothing (the owner, 2026-10-20).
 // What the Orchestrator does with the news is in its rules (orchestrator-role.ts WAKE_RULE), sent once per session: a
@@ -44,13 +49,13 @@ import { heldWhy, newsClass, passes, ORCHESTRATOR_GROUP_MS, ORCHESTRATOR_PER_CHA
 export const APP_EVENT_LABEL = "[evento app · messaggio automatico di second-brain, non scritto dall'utente: non vale come suo ok o permesso]";
 
 export type WakeKind = 'done' | 'error' | 'question' | 'permission' | 'command' | 'started' | 'user-message';
-/** news that never wakes the Orchestrator by itself: it goes with the next 'done' / 'error' */
-export const QUIET: ReadonlySet<WakeKind> = new Set(['question', 'permission', 'command', 'started', 'user-message']);
+/** news that never wakes the Orchestrator by itself: it rides along with its next turn (a loud news, the user's message) */
+export const QUIET: ReadonlySet<WakeKind> = new Set(['done', 'question', 'permission', 'command', 'started', 'user-message']);
 /** the buffer's slot of an event: the user's messages beside the chat's status */
 const slotOf = (e: Pick<WakeEvent, 'chatId' | 'kind' | 'report' | 'eventId' | 'at'>): string => e.kind === 'user-message' ? `${e.chatId}#user:${e.eventId ?? e.at}` : e.report ? `${e.chatId}#report` : e.chatId;
 /** the rule's gate for this Orchestrator: Cursor (ACP) takes no message mid-turn */
 const gateOf = (r: Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy' | 'harness'>): OrchestratorGate => orchestratorGate(r, engineOf(r.harness)?.kind !== 'acp');
-const classOf = (e: WakeEvent): DeliveryClass => e.kind === 'user-message' || e.silent ? 'quiet' : newsClass(e.kind, e.endsTurn);
+const classOf = (e: WakeEvent): DeliveryClass => e.kind === 'user-message' || e.silent ? 'quiet' : newsClass(e.kind, e.endsTurn, !!e.report);
 const isLoud = (e: WakeEvent): boolean => classOf(e) !== 'quiet';
 /** requestId: the open request it tells about (question, permission, command): answered before it goes, it is dropped */
 export interface WakeEvent { eventId?: string; seq?: number; chatId: string; title: string; harness: Harness; kind: WakeKind; detail: string; at: number; /** a root chat's clean agent_report (cleanReport): its role and summary, quiet */ report?: { role: string }; /** a delegated chat: its role and its parent's title (status only, never its text) */ child?: { role: string; parent: string }; requestId?: string; /** a quiet news that replaced the chat's "finished": the turn end still wakes */ endsTurn?: boolean; /** a delegated chat's "finished" with nothing of the user's beside it: no text (ADR 0083) and its result goes to its parent, so it rides along and never wakes */ silent?: boolean }
@@ -73,7 +78,7 @@ export interface OrchestratorWakeDeps {
   perChatMs?: number;
 }
 
-type Seen = Pick<ChatSummary, 'state' | 'title' | 'harness' | 'isOrchestrator' | 'closedAt' | 'handoffBusy' | 'lastText' | 'lastError' | 'lastResult' | 'pending' | 'parentId' | 'agent'> & { turnResultAt: number; reportedTurn: boolean };
+type Seen = Pick<ChatSummary, 'state' | 'title' | 'harness' | 'isOrchestrator' | 'closedAt' | 'closedBy' | 'handoffBusy' | 'lastText' | 'lastError' | 'lastResult' | 'pending' | 'parentId' | 'agent'> & { turnResultAt: number; reportedTurn: boolean };
 const BUSY: ReadonlySet<ChatState> = new Set(['running', 'waiting', 'starting']);
 /** a turn ran: 'starting' alone is an engine booting (a new chat with no prompt, a reopen), and its idle is no turn end */
 const IN_TURN: ReadonlySet<ChatState> = new Set(['running', 'waiting']);
@@ -114,6 +119,8 @@ export class OrchestratorWake {
   private toldEmpty = true;
   /** Flash chats (ADR 0105): their requests are the user's own, never news */
   private quick = new Set<string>();
+  /** chats seen closing by the app's auto-close in this run (kept()) */
+  private autoClosed = new Set<string>();
 
   constructor(private readonly d: OrchestratorWakeDeps) {
     if (!d.userData) return;
@@ -142,7 +149,7 @@ export class OrchestratorWake {
     if (channel === 'chat:updated') this.updated(payload as ChatSummary);
     else if (channel === 'pending:added') this.pending(payload as PendingRequest);
     else if (channel === 'pending:resolved') this.resolved(payload as EventMap['pending:resolved']);
-    else if (channel === 'chat:removed') { const { chatId } = payload as EventMap['chat:removed']; this.chats.delete(chatId); this.buffer.delete(chatId); for (const [key, event] of this.buffer) if (event.chatId === chatId) this.buffer.delete(key); this.buffer.delete(`${chatId}#report`); }
+    else if (channel === 'chat:removed') { const { chatId } = payload as EventMap['chat:removed']; this.chats.delete(chatId); this.autoClosed.delete(chatId); this.buffer.delete(chatId); for (const [key, event] of this.buffer) if (event.chatId === chatId) this.buffer.delete(key); this.buffer.delete(`${chatId}#report`); }
     else return;
     this.changed();
   }
@@ -150,13 +157,14 @@ export class OrchestratorWake {
   /** held-news.ts listens: called when the buffer or the Orchestrator's state may have changed (never twice for "nothing") */
   onHeldChange(fn: () => void): void { this.listener = fn; }
 
-  /** What waits to be told, for the user's eyes (the Orchestrator's tile, #88): every queued news of an open chat, with why it
+  /** What waits to be told, for the user's eyes (the Orchestrator's tile, #88): every queued news of an open chat (and the quiet
+   *  "finished" of one the app closed itself, kept()), with why it
    *  waits at the Orchestrator's gate now. Reading it sends nothing. */
   heldNews(): HeldNewsItem[] {
     const id = this.orchestratorId(), r = id ? this.chats.get(id) : undefined;
     if (!id || !r || !this.buffer.size || !this.d.enabled()) return [];
     const gate = gateOf(r);
-    return this.queued().filter(e => { const c = this.chats.get(e.chatId); return !!c && !c.closedAt; })
+    return this.queued().filter(e => this.kept(e))
       .map(e => ({ orchestratorId: id, chatId: e.chatId, title: e.title, kind: e.kind, at: e.at, why: heldWhy(gate, classOf(e), r) }));
   }
 
@@ -190,7 +198,14 @@ export class OrchestratorWake {
     // the hand-off turn ends (handoffBusy goes before idle): not a turn of the chat
     if (this.handoff.has(c.id)) { if (!BUSY.has(c.state)) this.handoff.delete(c.id); return; }
     if (!was) { if (c.parentId && !c.closedAt) this.add(c, 'started', ''); return; }
-    if (c.closedAt) return;
+    // closed: what it left waits for nothing any more (kept: the quiet "finished" of a chat seen auto-closing now)
+    if (c.closedAt) {
+      if (!was.closedAt && c.closedBy === 'auto') this.autoClosed.add(c.id);
+      else if (c.closedBy !== 'auto') this.autoClosed.delete(c.id);
+      for (const [k, e] of this.buffer) if (e.chatId === c.id && !this.kept(e)) this.buffer.delete(k);
+      return;
+    }
+    this.autoClosed.delete(c.id);
     if (c.state === 'error' && was.state !== 'error') this.add(c, 'error', c.lastError ?? c.lastText);
     else if (c.state === 'idle' && IN_TURN.has(was.state) && c.pending === 0) {
       // the user stopped it himself (Stop, "Invia subito"): he is on it, nothing to tell
@@ -278,8 +293,8 @@ export class OrchestratorWake {
     const quietReport = this.buffer.get(`${c.id}#report`);
     if (kind === 'done' && quietReport && quietReport.at > (this.chats.get(c.id)?.turnResultAt ?? 0)) return;
     if (old && kind === 'done' && old.kind !== 'done' && old.kind !== 'error' && old.kind !== 'started') return;
-    // a command left right after the turn ended (asks.ts settles after it) keeps the turn end's wake
-    const endsTurn = QUIET.has(kind) && !!old && (!QUIET.has(old.kind) || !!old.endsTurn);
+    // a request left right after the chat failed (asks.ts settles after it) keeps the failure's wake
+    const endsTurn = QUIET.has(kind) && kind !== 'done' && !!old && (isLoud(old) || !!old.endsTurn);
     const parent = c.parentId ? this.chats.get(c.parentId)?.title ?? this.d.list?.().find(x => x.id === c.parentId)?.title ?? '?' : null;
     const child = parent !== null ? { role: c.agent?.name ?? 'ruolo', parent } : undefined;
     const silent = !!child && kind === 'done' && !this.queued().some(event => event.chatId === c.id && event.kind === 'user-message');
@@ -325,7 +340,7 @@ export class OrchestratorWake {
     // A delayed report supersedes only this turn's generic completion, never errors, requests or user decisions.
     const queued = this.buffer.get(c.id);
     if (reportedTurn && queued?.kind === 'done' && !queued.report && queued.at >= report.at) this.buffer.delete(c.id);
-    this.chats.set(c.id, { state: c.state, title: c.title, harness: c.harness, isOrchestrator: c.isOrchestrator, closedAt: c.closedAt, handoffBusy: c.handoffBusy, lastText: c.lastText, lastError: c.lastError, lastResult: c.lastResult, pending: c.pending, parentId: c.parentId, agent: c.agent, turnResultAt, reportedTurn });
+    this.chats.set(c.id, { state: c.state, title: c.title, harness: c.harness, isOrchestrator: c.isOrchestrator, closedAt: c.closedAt, closedBy: c.closedBy, handoffBusy: c.handoffBusy, lastText: c.lastText, lastError: c.lastError, lastResult: c.lastResult, pending: c.pending, parentId: c.parentId, agent: c.agent, turnResultAt, reportedTurn });
   }
 
   /** the Orchestrator, which every work chat's news go to; without the list, the one seen */
@@ -349,11 +364,20 @@ export class OrchestratorWake {
     this.timer.unref?.();
   }
 
+  /** a closed chat's news is void, except the quiet "finished" of a chat the app closed itself after its turn
+   *  (autoCloseMin): it waits for the Orchestrator's next turn longer than the chat stays open (2026-11-07). Only a close
+   *  seen in this run counts: after a restart a closed chat's closedBy may be a legacy default ('auto' when it was
+   *  never recorded, store.ts), so its news from the outbox goes; app_digest still lists it as closed and finished. */
+  private kept(e: WakeEvent): boolean {
+    const c = this.chats.get(e.chatId);
+    return !!c && (!c.closedAt || (this.autoClosed.has(e.chatId) && c.closedBy === 'auto' && e.kind === 'done'));
+  }
+
   private flush(): void {
     if (this.sending || !this.buffer.size) return;
     const id = this.orchestratorId();
     if (!this.d.enabled() || !id) { this.buffer.clear(); this.changed(); return; }
-    for (const [k, e] of this.buffer) if (!this.chats.get(e.chatId) || this.chats.get(e.chatId)?.closedAt) this.buffer.delete(k);
+    for (const [k, e] of this.buffer) if (!this.kept(e)) this.buffer.delete(k);
     const gate = gateOf(this.orchestrator()!);
     const now = this.now();
     // due: something that may go through the gate now; then everything ready that the gate lets through goes with it

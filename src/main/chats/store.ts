@@ -33,7 +33,7 @@ function validAssets(value: unknown): value is NonNullable<StoredChat['agentAsse
 }
 
 /** Stable child result identity survives admission, retries and restarts; old records may lack IDs. */
-export interface HeldChildResult { id?: string; runId?: string; title: string; message: string }
+export interface HeldChildResult { id?: string; runId?: string; title: string; message: string; /** the child that sent it: its newer result replaces it */ chatId?: string }
 /** Durable root result delivery state, saved before the engine can finish its turn. */
 export interface HeldRootResult {
   local?: boolean;
@@ -225,7 +225,7 @@ function heldResults(x: unknown): HeldChildResult[] | null {
   if (!Array.isArray(x) || !x.length || x.length > 32) return null;
   const ok = x.every(i => !!i && typeof i === 'object' && typeof (i as { title?: unknown }).title === 'string' && typeof (i as { message?: unknown }).message === 'string'
     && (i as { message: string }).message.length <= 64 * 1024 && (i as { title: string }).title.length <= 500);
-  return ok ? (x as HeldChildResult[]).map(i => ({ title: i.title, message: i.message, ...(typeof i.id === 'string' && i.id.length <= 100 ? { id: i.id } : {}), ...(typeof i.runId === 'string' && RUN_ID.test(i.runId) ? { runId: i.runId } : {}) })) : null;
+  return ok ? (x as HeldChildResult[]).map(i => ({ title: i.title, message: i.message, ...(typeof i.id === 'string' && i.id.length <= 100 ? { id: i.id } : {}), ...(typeof i.runId === 'string' && RUN_ID.test(i.runId) ? { runId: i.runId } : {}), ...(typeof i.chatId === 'string' && i.chatId.length <= 100 ? { chatId: i.chatId } : {}) })) : null;
 }
 
 /** Malformed authoritative events fail closed rather than silently making a stale assignment appear safe. */

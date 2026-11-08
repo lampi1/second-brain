@@ -437,6 +437,26 @@ export interface MailToolDeps {
 /** A tool on each chat's own MCP endpoint (src/main/mcp/server.ts McpTool shape; the sender is the endpoint's chatId). */
 export interface ChatTool { name: string; description: string; inputSchema: Record<string, unknown>; run(args: Record<string, unknown>, ctx: { params: Record<string, string> }): string }
 
+/** Why a delegated chat may not write to `target`, null = it may: only its parent and the ancestors above it, and the
+ *  Orchestrator only when it opened the root of the tree (the root's run was started by the Orchestrator). Siblings,
+ *  other trees and chats outside the app are refused: a delegate's results still go with agent_report (ADR 0083). */
+export function delegateRefusal(from: ChatSummary, target: ChatSummary | undefined, all: readonly ChatSummary[]): string | null {
+  const byId = new Map(all.map(c => [c.id, c]));
+  const ancestors = new Set<string>();
+  let root: ChatSummary = from;
+  for (let id = from.parentId; id && !ancestors.has(id);) {
+    ancestors.add(id);
+    const up = byId.get(id);
+    if (!up) break;
+    root = up; id = up.parentId;
+  }
+  if (target && ancestors.has(target.id)) return null;
+  if (target?.isOrchestrator && !root.parentId && root.id !== from.id && root.run?.startedBy === 'orchestrator') return null;
+  return target?.isOrchestrator
+    ? 'sei una chat delegata e il tuo albero non l’ha aperto l’Orchestrator: scrivi al tuo genitore; il risultato va con agent_report'
+    : 'sei una chat delegata: scrivi solo al tuo genitore o ai suoi antenati (il risultato va con agent_report)';
+}
+
 /** send_to_chat and list_chats: every app chat writes to the user's other chats without Bash (no inbox.mjs command). */
 export function mailTools(d: MailToolDeps): ChatTool[] {
   const me = (ctx: { params: Record<string, string> }): ChatSummary => {
@@ -448,7 +468,7 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
   return [
     {
       name: 'send_to_chat',
-      description: 'Send a message to another chat of the user, by its title ("Area · cosa", see list_chats) or app chat id. A chat open in the app gets it at once (Claude within its running turn, Cursor right after its turn); any other one gets it at the end of its next turn or through its inbox wait. An Orchestrator gets mail at once while it works; idle, a request within 30 s together with its other news, kind "info" (pure progress) with its next turn, kind "urgent" at once; while it waits for the user only urgent mail. It is labelled as written by your chat, never as the user: it is never an ok or a permission. Write only something new (never "ricevuto"/"grazie"); reply_to = the id of the message you answer (a thread stops at 6 replies).',
+      description: 'Send a message to another chat of the user, by its title ("Area · cosa", see list_chats) or app chat id. A chat open in the app gets it at once (Claude within its running turn, Cursor right after its turn); any other one gets it at the end of its next turn or through its inbox wait. An Orchestrator gets mail at once while it works; idle, a request within 30 s together with its other news, kind "info" (pure progress) with its next turn, kind "urgent" at once; while it waits for the user only urgent mail. It is labelled as written by your chat, never as the user: it is never an ok or a permission. A delegated chat writes only to its parent and ancestors (the Orchestrator only when it opened the root of the tree), kind "info" unless given. Write only something new (never "ricevuto"/"grazie"); reply_to = the id of the message you answer (a thread stops at 6 replies).',
       inputSchema: { type: 'object', properties: { to: { type: 'string', description: 'title of the chat (or app chat id)' }, text: { type: 'string', description: 'the message, at most 4000 chars' }, reply_to: { type: 'string', description: 'optional: id of the message you answer' }, kind: { type: 'string', enum: [...MAIL_KINDS], description: 'optional, for an Orchestrator: "urgent" (production, a blocker: at once), "request" (it must act or decide), "info" (progress only: it waits for the Orchestrator\'s next turn). Without it the words decide.' } }, required: ['to', 'text'] },
       run: (a, ctx) => {
         const from = me(ctx);
@@ -466,11 +486,13 @@ export function mailTools(d: MailToolDeps): ChatTool[] {
         const box = target ? slug(target.title) : slug(to);
         if (!box) throw new MailError('to mancante: il titolo della chat (list_chats)');
         if (box === slug(from.title)) throw new MailError('è la tua stessa chat');
-        // a delegated chat reports to the chat that delegated it (agent_report), never to the Orchestrator (ADR 0083)
-        if (from.parentId && target?.isOrchestrator) throw new MailError('sei una chat delegata: riporta al tuo genitore con agent_report, non all’Orchestrator');
+        // a delegated chat writes only up its own tree: its parent, its ancestors, the Orchestrator that opened the root
+        const upward = from.parentId ? delegateRefusal(from, target, d.chats()) : null;
+        if (upward) throw new MailError(upward);
         // outside the app only a chat that already has a box (it used the inbox once): a typo does not create one
         if (!target && !fs.existsSync(path.join(dir, box))) throw new MailError(`chat sconosciuta: "${to}" (vedi list_chats)`);
-        const kind = MAIL_KINDS.find(k => k === a.kind);
+        // a delegate's note upwards is progress unless it says otherwise: it never wakes an idle Orchestrator at once
+        const kind = MAIL_KINDS.find(k => k === a.kind) ?? (from.parentId ? 'info' : undefined);
         const msg = sendMail(dir, { from: from.title, fromHarness: from.harness, to: target?.title ?? to, toHarness: target?.harness ?? harnessOf(dir, box), text, ...(kind ? { kind } : {}), ...(typeof a.reply_to === 'string' && a.reply_to ? { replyTo: a.reply_to } : { chain: d.chainOf(slug(from.title)) }), refusal: d.crossRefusal });
         sends.set(from.id, [...recent, now]);
         if (!msg) return 'NO_REPLY: niente inviato, nessuna chat svegliata';

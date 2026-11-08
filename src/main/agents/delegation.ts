@@ -16,7 +16,7 @@ import type { ChatSummary, Harness, NewChat } from '../../shared/contract';
 import type { AgentCatalog, AgentRun, UserTaskEvents } from '../../shared/agents';
 import { canLaunch, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
 import { oneLine } from '../../shared/agent-label';
-import { CRITERION_MAX, EVIDENCE_MAX, RESULT_OUTPUT_MAX, SUMMARY_MAX, checkContract, checkResult, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult, type DelegationIntegration, type TaskAssignmentOptions } from '../../shared/delegation';
+import { CRITERION_MAX, EVIDENCE_MAX, MAX_CORRECTIONS, RESULT_OUTPUT_MAX, SUMMARY_MAX, capText, checkContract, checkResult, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult, type DelegationIntegration, type TaskAssignmentOptions } from '../../shared/delegation';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { delegationGate, stepIndex, type StrategyPlan } from '../../shared/strategy';
 import type { McpTool } from '../mcp/server';
@@ -28,6 +28,11 @@ import { BALANCED_ASK_SCHEMA, balancedAskOf, balancedDecision, balancedStatusToo
 import type { SkillToolsSource } from './discovery';
 import { log } from '../log';
 import { checkMemoryWorth } from '../rules/memory-worth';
+import { closeRefusal, descendantIds } from '../chats/close-rules';
+import { unreadInstructions } from '../../shared/user-events';
+
+/** With agent_assign_task's userInstructions: what the parent does with the user's entries it had not seen. */
+const USER_INSTRUCTIONS_NOTE = 'The user wrote or answered these in the child since your last assignment; the child already has them and they are not repeated in its prompt. Check your new contract agrees with them; where it does not, correct the child with a new assignment or ask the user.';
 
 /** What delegation needs from the chats (ChatManager). */
 export interface DelegationChats {
@@ -49,6 +54,8 @@ export interface DelegationChats {
   planDelegated?(chatId: string, i: number, chatIds: string[]): void;
   /** the child now waits for its parent's answer, not on its own report (#152) */
   askedParent?(chatId: string): void;
+  /** closes a chat and cancels its tree (ChatManager.close, ADR 0217): agent_close_child; absent = the tool refuses */
+  close?(chatId: string): Promise<void>;
 }
 export interface DelegationDeps {
   chats: DelegationChats;
@@ -258,8 +265,9 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     // the revision too: tools, permissions and limits change the version in use in place (ADR 0186)
     if (!profile || profile.activeVersion !== child.agent.version || profile.updatedAt !== child.agent.revision || (profile.engine !== child.harness && !child.route?.balanced)) throw new Error('Role configuration changed: delegate a fresh chat.');
     if (typeof a.cwd !== 'string' || !path.isAbsolute(a.cwd) || path.resolve(a.cwd) !== path.resolve(child.cwd) || !withinParent(parent.cwd, child.cwd, trees)) throw new Error('Project mismatch: reuse only the same folder inside your scope or repository worktree.');
-    if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || !Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1) throw new Error('Invalid assignment mode/version.');
-    if (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0) throw new Error('Read agent_task_events and provide expectedEventSeq.');
+    // expectedVersion and expectedEventSeq are optional (cloudroom P6): honoured when given, else the current version
+    if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || (a.expectedVersion !== undefined && (!Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1))) throw new Error('Invalid assignment mode/version.');
+    if (a.expectedEventSeq !== undefined && (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0)) throw new Error('Invalid user event cursor.');
     const contractRaw = a.contract;
     if (!contractRaw || typeof contractRaw !== 'object' || Array.isArray(contractRaw) || Object.keys(contractRaw).some(k => !['goal', 'output', 'context', 'doneWhen'].includes(k))) throw new Error('Reuse contract allows only goal, output, context and doneWhen; tools, skills and tier require a fresh chat.');
     const contract = checkContract(contractRaw, a.roleId);
@@ -284,21 +292,38 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (running + 1 > limits.maxParallel) {
       d.chats.limitNotice(parent.id, 'parallel', limits.maxParallel); throw new Error('Delegation parallel limit reached; wait for a child result.');
     }
-    // Validate cursors again in ChatManager, immediately before it mutates the task ledger.
-    const events = d.chats.userEvents(child.id);
-    if (a.expectedEventSeq !== events.latestSeq) throw new Error(`Read agent_task_events and pass expectedEventSeq ${events.latestSeq}.`);
-    if (a.expectedVersion !== (child.run.taskVersion ?? 1)) throw new Error('Task version changed; refresh agent_children.');
+    // ChatManager checks the version again; the user's entries in the child you have not seen come back here, readable
+    // (the child already has them: they are not repeated in its prompt)
+    const userInstructions = unreadInstructions(d.chats.userEvents(child.id));
+    const version = a.expectedVersion === undefined ? child.run.taskVersion ?? 1 : Number(a.expectedVersion);
+    if (version !== (child.run.taskVersion ?? 1)) throw new Error('Task version changed; refresh agent_children.');
     reserved.set(parent.id, (reserved.get(parent.id) ?? 0) + 1); assigning.add(child.id);
     try {
       const prompt = `${d.label}\n\n${delegationPrompt(contract, { role: a.roleId, parentTitle: parent.title, title: child.title, skills: [] })}`;
-      await d.chats.assignTask(child.id, prompt, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: Number(a.expectedVersion), expectedEventSeq: Number(a.expectedEventSeq), doneWhen: contract.doneWhen, ...(step !== null ? { planStep: step } : {}), source: { kind: 'chat', chatId: parent.id } });
+      await d.chats.assignTask(child.id, prompt, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: version, ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), doneWhen: contract.doneWhen, ...(step !== null ? { planStep: step } : {}), source: { kind: 'chat', chatId: parent.id } });
       const assigned = chat(child.id);
-      return { chatId: child.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId };
+      return { chatId: child.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions, note: USER_INSTRUCTIONS_NOTE } : {}) };
     } finally {
       assigning.delete(child.id);
       const left = (reserved.get(parent.id) ?? 0) - 1;
       if (left > 0) reserved.set(parent.id, left); else reserved.delete(parent.id);
     }
+  }
+
+  /** agent_close_child: a parent closes one of its own descendants with app_close_chat's rules (chats/close-rules.ts) */
+  async function closeChild(a: Record<string, unknown>, callerId: string): Promise<unknown> {
+    // an open role chat whose assignment is still live: a parent that reported cannot close its tree on a late wake
+    const parent = activeParent(callerId, 'agent_close_child');
+    if (!d.chats.close) throw new Error('agent_close_child is unavailable.');
+    const all = d.chats.list(), id = typeof a.chatId === 'string' ? a.chatId : '';
+    const child = all.find(c => c.id === id);
+    if (!child || !descendantIds(parent.id, all).has(id)) throw new Error('agent_close_child: chatId must be one of YOUR children or their descendants (agent_children).');
+    if (child.closedAt) return { closed: child.title, already: true };
+    const refused = closeRefusal(child, all);
+    if (refused) throw new Error(`agent_close_child: ${refused}`);
+    await d.chats.close(id);
+    log.info('agents', 'parent closed a child', { chat: parent.id, data: { child: id, state: child.state } });
+    return { closed: child.title };
   }
 
   function taskEvents(a: Record<string, unknown>, callerId: string): UserTaskEvents {
@@ -311,12 +336,16 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
 
   /** agent_report's `remember`: up to 3 short lines for the reporting chat's role memory, checked before the report and
    *  written once it is accepted (a refused report writes nothing, so a retry does not count twice) */
-  function rememberLines(a: Record<string, unknown>, self: ChatSummary | undefined): (() => number) {
+  function rememberLines(a: Record<string, unknown>, self: ChatSummary | undefined, warnings: string[]): (() => number) {
     if (a.remember === undefined) return () => 0;
     if (self?.routine || self?.routinePackage) throw new Error('Archived routine chats cannot submit new work; use the terminal CLI.');
-    const lines = Array.isArray(a.remember) && a.remember.length <= REMEMBER_MAX && a.remember.every(l => typeof l === 'string' && l.trim() && l.length <= REMEMBER_LINE && !/[\x00-\x1f\x7f]/.test(l))
-      ? (a.remember as string[]).map(l => l.trim()) : null;
-    if (!lines) throw new Error(`agent_report: remember = up to ${REMEMBER_MAX} single lines of at most ${REMEMBER_LINE} characters.`);
+    // each refusal says its own reason: the length is never one (a long line is cut below)
+    if (!Array.isArray(a.remember) || a.remember.length > REMEMBER_MAX) throw new Error(`agent_report: remember = a list of up to ${REMEMBER_MAX} lines.`);
+    if (!a.remember.every(l => typeof l === 'string' && l.trim())) throw new Error('agent_report: remember lines must be non-empty text.');
+    if (a.remember.some(l => /[\x00-\x1f\x7f]/.test(l as string))) throw new Error('agent_report: each remember line must be a single line, without line breaks or control characters.');
+    const lines = (a.remember as string[]).map(l => l.trim());
+    // a line over REMEMBER_LINE is cut with the marker «…», never refused (P8)
+    lines.forEach((line, i) => { if (line.length > REMEMBER_LINE) { lines[i] = capText(line, REMEMBER_LINE); warnings.push(`remember line ${i + 1} cut to ${REMEMBER_LINE} characters (marker …).`); } });
     if (!lines.length) return () => 0;
     // the worth gate (ADR 0129) before the report is accepted: the agent generalizes the line or leaves it out
     lines.forEach((line, i) => {
@@ -338,13 +367,23 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
   function report(all: Record<string, unknown>, callerId: string): unknown {
     const self = chat(callerId);
     // `remember` is the role memory's, not the result's: the result keeps its exact shape (shared/delegation.ts checkResult)
-    const { remember: _remember, ...a } = all, write = rememberLines(all, self);
     const warnings: string[] = [];
+    const { remember: _remember, ...a } = all, write = rememberLines(all, self, warnings);
     // Small cosmetic overflows must not require another model turn. Full evidence stays in output/doneWhen;
     // neither outcome nor the host's completion criteria are repaired or relaxed.
-    if (typeof a.summary === 'string' && a.summary.trim().length > SUMMARY_MAX && a.summary.trim().length <= Math.floor(SUMMARY_MAX * 1.1)) {
-      const prefix = a.summary.trim().slice(0, SUMMARY_MAX - 1), boundary = prefix.search(/\s+\S*$/);
-      if (boundary > 0) { a.summary = `${prefix.slice(0, boundary)}…`; warnings.push(`summary shortened at a word boundary to ${SUMMARY_MAX} characters.`); }
+    // A longer summary is cut with the marker «…», never refused; its full text stays in output (P8, cloudroom comms).
+    if (typeof a.summary === 'string' && a.summary.trim().length > SUMMARY_MAX) {
+      const full = a.summary.trim();
+      a.summary = capText(full, SUMMARY_MAX);
+      const tail = `\n\nSintesi completa: ${full}`;
+      if (typeof a.output !== 'string' || a.output.includes(full)) warnings.push(`summary cut to ${SUMMARY_MAX} characters (marker …); its full text is in output.`);
+      else if (a.output.length + tail.length <= RESULT_OUTPUT_MAX) { a.output += tail; warnings.push(`summary cut to ${SUMMARY_MAX} characters (marker …); its full text is in output.`); }
+      else if (a.output.length <= RESULT_OUTPUT_MAX && tail.length <= RESULT_OUTPUT_MAX / 2) {
+        // no room left: the output's tail makes room (marker …), so the full summary is never lost
+        const head = capText(a.output, RESULT_OUTPUT_MAX - tail.length);
+        warnings.push(`summary cut to ${SUMMARY_MAX} characters (marker …); its full text is at the end of output, whose last ${a.output.length - (head.length - 1)} characters were cut to make room (marker …).`);
+        a.output = head + tail;
+      } else warnings.push(`summary cut to ${SUMMARY_MAX} characters (marker …); its full text was too long to keep in output: put what matters in output.`);
     }
     // Agents commonly attach top-level evidence. It is not canonical verification; explicitly discard it, never
     // merge it into doneWhen or a review verdict. Other unknown keys still report likely misspellings.
@@ -447,7 +486,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
 
   const str = { type: 'string' };
   const reportSchema: Record<string, unknown> = { type: 'object', required: ['outcome', 'summary', 'output', 'doneWhen'], additionalProperties: false, properties: {
-      outcome: { type: 'string', enum: ['done', 'partial', 'blocked'] }, summary: { ...str, maxLength: SUMMARY_MAX }, output: { ...str, maxLength: RESULT_OUTPUT_MAX },
+      outcome: { type: 'string', enum: ['done', 'partial', 'blocked'] }, summary: { ...str, description: `one or two sentences, up to ${SUMMARY_MAX} characters (a longer one is cut with …)` }, output: { ...str, maxLength: RESULT_OUTPUT_MAX },
+      amends: { type: 'boolean', description: `true only to correct the result you already reported for this assignment: the new version replaces it and reaches the same reader, marked as a correction; at most ${MAX_CORRECTIONS} corrections` },
       verdict: { type: 'string', enum: ['success', 'partial', 'fail'], description: 'Only app-owned independent reviews: assessment of the reviewed work, separate from completion of your review.' },
       verified: { type: 'string', enum: ['yes', 'partial', 'no'], description: 'Only with verdict: yes only when you independently checked the evidence; never inferred from completing the review.' },
       taskVersion: { type: 'integer', minimum: 1, description: 'Current task version supplied with the assignment; required after a follow-up. Stale reports are refused.' },
@@ -455,7 +495,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       questions: { type: 'array', items: { ...str, maxLength: 500 }, maxItems: 8 },
       goalChangedByUser: { type: 'boolean', description: 'true when the user wrote to you directly and changed your goal (you followed the user)' },
       newGoal: { ...str, description: 'with goalChangedByUser: the goal the user gave you' },
-      remember: { type: 'array', items: { ...str, maxLength: REMEMBER_LINE }, maxItems: REMEMBER_MAX, description: 'optional, up to 3 short lines for YOUR role\'s memory (read at every launch of your role): general, reusable knowledge a future run would otherwise rediscover or ask again (a procedure, a convention, a how-to, where things are kept). Generalize a specific finding first (no URLs with ports, ticket / PR / commit ids, user paths, dates, branch names): a case-specific line refuses the report. Never the task result' },
+      remember: { type: 'array', items: str, maxItems: REMEMBER_MAX, description: 'optional, up to 3 short lines (at most 300 characters each, a longer one is cut with …) for YOUR role\'s memory (read at every launch of your role): general, reusable knowledge a future run would otherwise rediscover or ask again (a procedure, a convention, a how-to, where things are kept). Generalize a specific finding first (no URLs with ports, ticket / PR / commit ids, user paths, dates, branch names): a case-specific line refuses the report. Never the task result' },
     } };
   return [{
     name: 'agent_delegate',
@@ -480,8 +520,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await delegate(a, callerOf(ctx.params))),
   }, {
     name: 'agent_assign_task',
-    description: 'Continue YOUR direct child in the same role and project with a separate task run. Read agent_task_events first and pass its latestSeq plus taskVersion from agent_children. Keeps the session, tools and skills; changed role settings or Sentinel reviews require a fresh child. Use rework only for explicit corrections. With an approved plan, step is required. Closed parents must first receive a new assignment from their own parent or Orchestrator.',
-    inputSchema: { type: 'object', required: ['chatId', 'roleId', 'cwd', 'mode', 'expectedVersion', 'expectedEventSeq', 'contract'], additionalProperties: false, properties: {
+    description: 'Continue YOUR direct child in the same role and project with a separate task run. The user\'s messages and answers in that chat you have not seen come back to you readable (userInstructions): the child already has them, so they are not repeated in its prompt; account for them, and correct the child or ask the user where your contract disagrees. expectedVersion (taskVersion from agent_children) and expectedEventSeq are optional and honoured when given. Refused only while the child works or has queued work. Keeps the session, tools and skills; changed role settings or Sentinel reviews require a fresh child. Use rework only for explicit corrections. With an approved plan, step is required. Closed parents must first receive a new assignment from their own parent or Orchestrator.',
+    inputSchema: { type: 'object', required: ['chatId', 'roleId', 'cwd', 'mode', 'contract'],additionalProperties: false, properties: {
       chatId: str, roleId: { type: 'string', enum: [...WORK_ROLE_IDS] }, cwd: str,
       mode: { type: 'string', enum: ['continue', 'new-task', 'rework'] },
       expectedVersion: { type: 'integer', minimum: 1 }, expectedEventSeq: { type: 'integer', minimum: 0 },
@@ -506,13 +546,13 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: async (a, ctx) => JSON.stringify(await integrateChildren(a, callerOf(ctx.params), true)),
   }, {
     name: 'agent_task_events',
-    description: 'Read the complete ordered user instruction ledger for YOUR direct child before reassigning it. Pass latestSeq as expectedEventSeq to agent_assign_task; no model turn is started.',
+    description: 'Read the complete ordered user instruction ledger for YOUR direct child. Optional before agent_assign_task, which returns the unread ones itself; no model turn is started.',
     inputSchema: { type: 'object', required: ['chatId'], additionalProperties: false, properties: { chatId: str } },
     annotations: { readOnlyHint: true, openWorldHint: false },
     run: (a, ctx) => JSON.stringify(taskEvents(a, callerOf(ctx.params))),
   }, {
     name: 'agent_report',
-    description: 'Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened): outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions, optional remember (lines for your role\'s memory). It reaches your parent at once; call it once, at the end. The app shows output in your chat as your answer: do not write it in the chat too.',
+    description: 'Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened): outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions, optional remember (lines for your role\'s memory). It reaches your parent at once; call it once, at the end; to correct a result already given, call it again with amends: true (at most 2 corrections). The app shows output in your chat as your answer: do not write it in the chat too.',
     inputSchema: reportSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     // verdict / verified only where the report check accepts them: an app-owned independent review (#183); an engine
@@ -533,6 +573,12 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     inputSchema: { type: 'object', required: ['chatId'], additionalProperties: false, properties: { chatId: str, answer: str, askUser: { type: 'boolean' } } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: async (a, ctx) => JSON.stringify(await answerChild(a, callerOf(ctx.params))),
+  }, {
+    name: 'agent_close_child',
+    description: 'Close one of YOUR delegated chats (a child or a descendant of it), e.g. a stalled one or one whose part is no longer needed: its engine stops and its own delegation tree closes with it (ADR 0217); the transcript stays. Refused while it or an open descendant waits for the user (a question or a permission is his). Never your parent, a sibling or another tree.',
+    inputSchema: { type: 'object', required: ['chatId'], additionalProperties: false, properties: { chatId: str } },
+    annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
+    run: async (a, ctx) => JSON.stringify(await closeChild(a, callerOf(ctx.params))),
   }, {
     name: 'agent_children',
     description: 'The chats you delegated (agent_delegate): role, title, state, goal, their result once reported, open requests and cost; runId is what agent_child_feedback takes. stalled: true (with quietMin) = a working child silent for longer than the user\'s "Ferma dopo" limit: nudge it with a message or close it.',

@@ -215,16 +215,24 @@ describe('app control scope', () => {
 });
 
 describe('news and mail reach the Orchestrator', () => {
-  it('a work chat\'s finished turn wakes the Orchestrator', async () => {
+  it('a work chat\'s failed turn wakes the Orchestrator; a finished one rides along with its next turn (2026-11-07)', async () => {
     vi.useFakeTimers();
     try {
       const sent: string[] = [];
-      const orchestrator = summary({ id: 'r', isOrchestrator: true, title: 'Orchestrator' });
+      let orchestrator = summary({ id: 'r', isOrchestrator: true, title: 'Orchestrator' });
       const w = new OrchestratorWake({ send: async (_id, text) => { sent.push(text); }, enabled: () => true, list: () => [orchestrator], groupMs: 10, perChatMs: 0, now: () => Date.now() });
       w.observe('chat:updated', summary({ id: 'fix', state: 'running' }));
-      w.observe('chat:updated', summary({ id: 'fix', state: 'idle', lastText: 'PR pronta' }));
+      w.observe('chat:updated', summary({ id: 'fix', state: 'error', lastError: 'ECONNRESET' }));
       await vi.advanceTimersByTimeAsync(20);
       expect(sent.some(t => t.includes('«fix»'))).toBe(true);
+      w.observe('chat:updated', summary({ id: 'pr', state: 'running' }));
+      w.observe('chat:updated', summary({ id: 'pr', state: 'idle', lastText: 'PR pronta' }));
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(sent.some(t => t.includes('«pr»'))).toBe(false);
+      orchestrator = summary({ id: 'r', isOrchestrator: true, title: 'Orchestrator', state: 'running' });
+      w.observe('chat:updated', orchestrator);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(sent.some(t => t.includes('«pr»'))).toBe(true);
       w.stop();
     } finally { vi.useRealTimers(); }
   });

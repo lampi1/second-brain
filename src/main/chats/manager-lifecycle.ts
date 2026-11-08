@@ -12,7 +12,7 @@ import { staleDue } from '../agents/runs';
 import { autoCloseNow, type AutoCloseCandidate } from './auto-close';
 import type { AutoCloseWaiting } from '../../shared/auto-close';
 import type { Rec } from './manager-types';
-import { clearInterval, clearTimeout, RESUME_TEXT, uniqueChildResults, workBehind, WAITING_REASON } from './manager-helpers';
+import { clearInterval, clearTimeout, RESUME_TEXT, supersededResult, uniqueChildResults, workBehind, WAITING_REASON } from './manager-helpers';
 import { ManagerDelegation } from './manager-delegation';
 
 /** A chat's life: stop, close, archive and reopen, the automatic close's candidates, stale runs, resume after a restart, shutdown. */
@@ -361,7 +361,8 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     // child results the last quit held back reach their parent now, as one batch
     for (const r of this.chats.values()) {
       if (r.s.routineArchived) continue;
-      const held = r.heldResults?.filter(item => !item.runId || !this.runs.get(item.runId)?.delivery?.synthesisSubmittedAt);
+      // an entry its own run corrected since (agent_report amends) is dropped: only the newest result goes
+      const held = r.heldResults?.filter(item => !item.runId || !this.runs.get(item.runId)?.delivery?.synthesisSubmittedAt && !supersededResult(item, this.runs.get(item.runId)?.report?.corrections));
       const removed = (r.heldResults?.length ?? 0) !== (held?.length ?? 0);
       r.heldResults = held;
       if (removed) this.persist(true);

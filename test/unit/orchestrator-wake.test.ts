@@ -1,7 +1,11 @@
-// Unit tests of main/chats/orchestrator-wake.ts ("Eventi all'Orchestrator"): a work chat that finishes, fails, waits for an answer
-// or leaves a command is told to the Orchestrator in one grouped message labelled as the app's; a chat at most once every
-// perChatMs; into the Orchestrator's running turn, never while it waits for the user (a failure only); off with the setting;
-// the Orchestrator's own turns never.
+// Unit tests of main/chats/orchestrator-wake.ts ("Eventi all'Orchestrator"): a work chat that fails, or a result to route,
+// wakes the Orchestrator in one grouped message labelled as the app's; a plain turn end, a start, a question, a permission or a
+// command is quiet and rides along with its next turn (2026-11-07); a chat at most once every perChatMs; into the
+// Orchestrator's running turn, never while it waits for the user (a failure only); off with the setting; the Orchestrator's
+// own turns never.
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
 import { APP_EVENT_LABEL, OrchestratorWake, wakeLine, type WakeSubmissionReceipt } from '../../src/main/chats/orchestrator-wake';
@@ -19,7 +23,11 @@ function make(opts: { enabled?: boolean } = {}) {
   up({ id: 'orchestrator', isOrchestrator: true, title: 'Orchestrator', state: 'idle' });
   /** a work chat's whole turn */
   const finish = (id: string, lastText: string, extra: Partial<ChatSummary> = {}) => { up({ id, state: 'running' }); up({ id, state: 'idle', lastText, ...extra }); };
-  return { w, sent, up, finish, setOn: (v: boolean) => { on = v; } };
+  /** a work chat's turn that stops on an error (loud: it wakes the Orchestrator) */
+  const fail = (id: string, lastError: string) => { up({ id, state: 'running' }); up({ id, state: 'error', lastError }); };
+  /** the Orchestrator's next turn (the user writes to it): quiet news goes into it */
+  const turn = () => up({ id: 'orchestrator', isOrchestrator: true, title: 'Orchestrator', state: 'running' });
+  return { w, sent, up, finish, fail, turn, setOn: (v: boolean) => { on = v; } };
 }
 
 describe('OrchestratorWake', () => {
@@ -81,7 +89,7 @@ describe('OrchestratorWake', () => {
     w.observe('chat:updated', chat({ id: 'c', state: 'running' }));
     for (const text of ['first instruction', 'second instruction']) w.userMessage({ chatId: 'c', title: 'C', role: null, parentTitle: null, text });
     expect(new Set(w.queued().map(event => event.eventId)).size).toBe(2);
-    w.observe('chat:updated', chat({ id: 'c', state: 'idle' }));
+    w.observe('chat:updated', chat({ id: 'c', state: 'error', lastError: 'boom' }));
     await vi.advanceTimersByTimeAsync(10);
     expect(attempts).toBe(1);
     expect(w.queued()).toHaveLength(3);
@@ -99,7 +107,7 @@ describe('OrchestratorWake', () => {
     w.observe('chat:updated', chat({ id: 'c', state: 'running' }));
     const full = `${'x'.repeat(2500)} IMPORTANT FINAL CONSTRAINT`;
     w.userMessage({ eventId: 'event-1', seq: 1, chatId: 'c', title: 'C', role: null, parentTitle: null, text: full });
-    w.observe('chat:updated', chat({ id: 'c', state: 'idle' }));
+    w.observe('chat:updated', chat({ id: 'c', state: 'error', lastError: 'boom' }));
     await vi.advanceTimersByTimeAsync(100);
     expect(sent).toHaveLength(1);
     expect(sent[0]).toContain(full);
@@ -113,11 +121,15 @@ describe('OrchestratorWake', () => {
     w.stop();
   });
 
-  it('a finished chat wakes the Orchestrator with one labelled line, after the grouping window', async () => {
-    const { sent, finish } = make();
+  it('a finished or started chat never opens an Orchestrator turn: one labelled line rides into its next turn (2026-11-07)', async () => {
+    const { w, sent, up, finish, turn } = make();
     finish('qa', 'Report pronto: 8 test su 9.');
+    up({ id: 'kid', state: 'running', parentId: 'qa', agent: { id: 'scout', name: 'Scout' } as ChatSummary['agent'] });
+    await vi.advanceTimersByTimeAsync(60_000);
     expect(sent).toEqual([]);
-    await vi.advanceTimersByTimeAsync(1000);
+    expect(w.queued().map(e => e.kind).sort()).toEqual(['done', 'started']);
+    turn();
+    await vi.advanceTimersByTimeAsync(0);
     expect(sent).toHaveLength(1);
     expect(sent[0]!.chatId).toBe('orchestrator');
     expect(sent[0]!.text.startsWith(APP_EVENT_LABEL)).toBe(true);
@@ -145,8 +157,8 @@ describe('OrchestratorWake', () => {
     expect(t).not.toContain('«map» (Claude): ha finito');
   });
 
-  it('a question, a permission or a command alone never wakes the Orchestrator: it goes with the next finished news', async () => {
-    const { w, sent, up, finish } = make();
+  it('a question, a permission or a command alone never wakes the Orchestrator: it goes with the next loud news', async () => {
+    const { w, sent, up, fail } = make();
     up({ id: 'qa', state: 'running' });
     w.observe('pending:added', { id: 'q1', chatId: 'qa', type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: 1, questions: [{ question: 'Apro il bug?', options: [], multiSelect: false }] } satisfies PendingRequest);
     up({ id: 'fb', state: 'running' });
@@ -157,39 +169,48 @@ describe('OrchestratorWake', () => {
     await vi.advanceTimersByTimeAsync(60_000);
     expect(sent).toEqual([]);
     expect(w.queued().map(e => e.kind).sort()).toEqual(['permission', 'question']);
-    finish('map', 'Mappa pronta.');
-    await vi.advanceTimersByTimeAsync(1000);
+    fail('map', 'ECONNRESET');
+    await vi.advanceTimersByTimeAsync(0);
     expect(sent).toHaveLength(1);
-    expect(sent[0]!.text).toContain('«map» (Claude): ha finito il turno');
+    expect(sent[0]!.text).toContain('«map» (Claude): si è fermata su un errore: ECONNRESET');
     expect(sent[0]!.text).toContain('«qa» (Claude): aspetta una risposta dell\'utente: Apro il bug?');
     expect(sent[0]!.text).toContain('«fb» (Claude): aspetta un permesso');
     expect(sent[0]!.text).not.toContain('app_digest'); // what to do with the news is in its rules (WAKE_RULE), once per session
   });
 
-  it('a turn that ends leaving a command still wakes the Orchestrator; a quiet news answered at idle becomes a wake', async () => {
-    const { w, sent, up, finish } = make();
+  it('a turn that ends leaving a command stays quiet; a request left after a failure keeps its wake; an answered question becomes a quiet "finished"', async () => {
+    const { w, sent, up, finish, turn } = make();
     finish('map', 'Fatto. Ora lancia:');
     w.observe('pending:added', { id: 'cmd-a-0', chatId: 'map', type: 'command', tool: 'Esegui', title: 'Comando da eseguire', detail: 'npm run check', input: {}, at: 1, command: { itemId: 'a', code: 'npm run check', lang: 'powershell' } } satisfies PendingRequest);
-    await vi.advanceTimersByTimeAsync(1000);
-    expect(sent).toHaveLength(1);
-    expect(sent[0]!.text).toContain('«map» (Claude): ha lasciato all\'utente un comando da eseguire: npm run check');
-    // a question alone stays quiet; answered and the chat idle, it turns into "finished" and goes by itself
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(sent).toEqual([]);
+    expect(w.queued().map(e => `${e.chatId}:${e.kind}`)).toEqual(['map:command']);
+    // a question alone stays quiet; answered and the chat idle, it turns into "finished", quiet too
     up({ id: 'qa', state: 'running' });
     w.observe('pending:added', { id: 'q1', chatId: 'qa', type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: 1, questions: [{ question: 'Apro il bug?', options: [], multiSelect: false }] } satisfies PendingRequest);
     up({ id: 'qa', state: 'idle', lastText: 'Bug aperto.' });
-    await vi.advanceTimersByTimeAsync(5000);
-    expect(sent).toHaveLength(1);
     w.observe('pending:resolved', { chatId: 'qa', requestId: 'q1' });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(sent).toEqual([]);
+    // a chat that fails and leaves a command (asks.ts settles after the failure) still wakes, after the group window
+    up({ id: 'sms', state: 'running' });
+    up({ id: 'sms', state: 'error', lastError: 'ECONNRESET' });
+    w.observe('pending:added', { id: 'cmd-b-0', chatId: 'sms', type: 'command', tool: 'Esegui', title: 'Comando da eseguire', detail: 'npm ci', input: {}, at: 1, command: { itemId: 'b', code: 'npm ci', lang: 'powershell' } } satisfies PendingRequest);
     await vi.advanceTimersByTimeAsync(1000);
-    expect(sent).toHaveLength(2);
-    expect(sent[1]!.text).toContain('«qa» (Claude): ha finito il turno. Ultima riga: «Bug aperto.»');
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain('«sms» (Claude): ha lasciato all\'utente un comando da eseguire: npm ci');
+    expect(sent[0]!.text).toContain('«map» (Claude): ha lasciato all\'utente un comando da eseguire: npm run check');
+    expect(sent[0]!.text).toContain('«qa» (Claude): ha finito il turno. Ultima riga: «Bug aperto.»');
+    turn();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent).toHaveLength(1);
   });
 
   it('a chat on the app\'s code reports to the shared coordinator like any other', async () => {
-    const { w, sent, up, finish } = make();
-    finish('fix', 'Ramo pronto.', { cwd: 'C:/repo' });
+    const { w, sent, up, turn } = make();
     up({ id: 'fix', cwd: 'C:/repo', state: 'running' });
     w.observe('pending:added', { id: 'q1', chatId: 'fix', type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: 1, questions: [{ question: 'Unisco?', options: [], multiSelect: false }] } satisfies PendingRequest);
+    turn();
     await vi.advanceTimersByTimeAsync(5000);
     expect(sent).toHaveLength(1);
     expect(sent[0]!.text).toContain('Unisco?');
@@ -203,16 +224,16 @@ describe('OrchestratorWake', () => {
   });
 
   it('at most one message per chat in perChatMs: later news waits, then goes', async () => {
-    const { sent, finish } = make();
-    finish('qa', 'uno');
+    const { sent, fail } = make();
+    fail('qa', 'uno');
     await vi.advanceTimersByTimeAsync(1000);
-    finish('qa', 'due');
-    finish('qa', 'tre');
+    fail('qa', 'due');
+    fail('qa', 'tre');
     await vi.advanceTimersByTimeAsync(5000);
     expect(sent).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(6000);
     expect(sent).toHaveLength(2);
-    expect(sent[1]!.text).toContain('Ultima riga: «tre»');
+    expect(sent[1]!.text).toContain('si è fermata su un errore: tre');
     expect(sent[1]!.text).not.toContain('«due»');
   });
 
@@ -233,8 +254,12 @@ describe('OrchestratorWake', () => {
     expect(sent[1]!.text).toContain('ECONNRESET');
     expect(sent[1]!.text).not.toContain('fatto anche io');
     up({ id: 'orchestrator', isOrchestrator: true, state: 'idle', pending: 0 });
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(sent).toHaveLength(2); // free again: a plain "finished" is quiet, it waits for its next turn
+    up({ id: 'orchestrator', isOrchestrator: true, state: 'running' });
     await vi.advanceTimersByTimeAsync(10);
     expect(sent).toHaveLength(3);
+    expect(sent[2]!.text).toContain('fatto anche io');
   });
 
   it('a Cursor Orchestrator (no message mid-turn) gets nothing while it works', async () => {
@@ -250,11 +275,56 @@ describe('OrchestratorWake', () => {
   });
 
   it('a closed Orchestrator is woken (the message resumes it)', async () => {
-    const { sent, up, finish } = make();
+    const { sent, up, fail } = make();
     up({ id: 'orchestrator', isOrchestrator: true, state: 'closed' });
-    finish('qa', 'fatto');
+    fail('qa', 'boom');
     await vi.advanceTimersByTimeAsync(1000);
     expect(sent).toHaveLength(1);
+  });
+
+  it('a finished chat the app closed itself keeps its quiet news for the next Orchestrator turn; one the user closed does not', async () => {
+    const { w, sent, up, finish, turn } = make();
+    finish('auto', 'PR pronta');
+    up({ id: 'auto', state: 'closed', closedAt: 1, closedBy: 'auto' });
+    finish('mano', 'fatto');
+    up({ id: 'mano', state: 'closed', closedAt: 1, closedBy: 'user' });
+    // auto-closed, then closed again by the user (✕): the user saw it, the news goes
+    finish('poi', 'chiusa a mano');
+    up({ id: 'poi', state: 'closed', closedAt: 1, closedBy: 'auto' });
+    up({ id: 'poi', state: 'closed', closedAt: 2, closedBy: 'user' });
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(sent).toEqual([]);
+    turn();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain('PR pronta');
+    expect(sent[0]!.text).not.toContain('«mano»');
+    expect(sent[0]!.text).not.toContain('chiusa a mano');
+    expect(w.queued()).toEqual([]);
+  });
+
+  it('after a restart a closed chat\'s quiet "finished" from the outbox goes: its closedBy may be a legacy default', async () => {
+    const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-wake-'));
+    try {
+      const orch = chat({ id: 'orchestrator', isOrchestrator: true, title: 'Orchestrator', state: 'idle' });
+      const first = new OrchestratorWake({ send: async () => {}, enabled: () => true, groupMs: 1000, perChatMs: 0, userData, list: () => [orch] });
+      first.observe('chat:updated', chat({ id: 'old', state: 'running' }));
+      first.observe('chat:updated', chat({ id: 'old', state: 'idle', lastText: 'finito prima del riavvio' }));
+      first.observe('chat:updated', chat({ id: 'old', state: 'closed', closedAt: 1, closedBy: 'auto' }));
+      expect(first.queued().map(e => e.kind)).toEqual(['done']); // kept in this run, and in the outbox
+      first.stop();
+      const sent: string[] = [];
+      let o = orch;
+      const closed = chat({ id: 'old', state: 'closed', closedAt: 1, closedBy: 'auto' }); // store.ts: a missing closedBy loads as 'auto'
+      const next = new OrchestratorWake({ send: async (_id, text) => { sent.push(text); }, enabled: () => true, groupMs: 1000, perChatMs: 0, userData, list: () => [o, closed] });
+      expect(next.queued().map(e => e.kind)).toEqual(['done']);
+      o = { ...orch, state: 'running' };
+      next.observe('chat:updated', o);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(sent.join('\n')).not.toContain('finito prima del riavvio');
+      expect(next.queued()).toEqual([]);
+      next.stop();
+    } finally { fs.rmSync(userData, { recursive: true, force: true }); }
   });
 
   it('nothing when off, without an Orchestrator, for the Orchestrator itself, a hand-off turn or an archived chat', async () => {
@@ -283,7 +353,7 @@ describe('OrchestratorWake', () => {
     const sent: string[] = [];
     const w = new OrchestratorWake({ send: async id => { sent.push(id); }, enabled: () => true, groupMs: 10, list: () => [chat({ id: 'orchestrator', isOrchestrator: true, state: 'idle' })] });
     w.observe('chat:updated', chat({ id: 'qa', state: 'running' }));
-    w.observe('chat:updated', chat({ id: 'qa', state: 'idle', lastText: 'fatto' }));
+    w.observe('chat:updated', chat({ id: 'qa', state: 'error', lastError: 'boom' }));
     await vi.advanceTimersByTimeAsync(10);
     expect(sent).toEqual(['orchestrator']);
   });
@@ -296,15 +366,15 @@ describe('OrchestratorWake', () => {
   });
 
   it('an engine that boots and goes idle ran no turn: nothing told (a new chat, a reopen, a chat leaving for the CPU queue)', async () => {
-    const { sent, up, finish } = make();
+    const { w, sent, up, finish } = make();
     up({ id: 'os', state: 'starting' });
     up({ id: 'os', state: 'idle' });
     await vi.advanceTimersByTimeAsync(2000);
     expect(sent).toEqual([]);
-    // its first real turn still is
+    expect(w.queued()).toEqual([]);
+    // its first real turn still is (quiet news)
     finish('os', 'Fatto.');
-    await vi.advanceTimersByTimeAsync(2000);
-    expect(sent).toHaveLength(1);
+    expect(w.queued().map(e => e.kind)).toEqual(['done']);
   });
 
   it('a hand-off turn is not a turn of the chat', async () => {
@@ -325,7 +395,6 @@ describe('OrchestratorWake', () => {
     w.observe('pending:added', { id: 'q1', chatId: 'qa', type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: 1, questions: [{ question: 'Apro il bug?', options: [], multiSelect: false }] } satisfies PendingRequest);
     w.observe('pending:resolved', { chatId: 'qa', requestId: 'q1' });
     up({ id: 'qa', state: 'idle', lastText: 'Bug aperto.' });
-    up({ id: 'orchestrator', isOrchestrator: true, state: 'idle' });
     await vi.advanceTimersByTimeAsync(1000);
     expect(sent).toHaveLength(1);
     expect(sent[0]!.text).toContain('«qa» (Claude): ha finito il turno. Ultima riga: «Bug aperto.»');
@@ -333,12 +402,13 @@ describe('OrchestratorWake', () => {
   });
 
   it('an update of an idle Orchestrator does not cut the grouping window short', async () => {
-    const { sent, up, finish } = make();
-    finish('a', 'uno');
+    const { w, sent, up } = make();
+    up({ id: 'a', state: 'idle' }); up({ id: 'b', state: 'idle' });
+    w.cleanReport({ chatId: 'a', title: 'a', role: 'Artisan', summary: 'uno', workflow: true });
     await vi.advanceTimersByTimeAsync(300);
     up({ id: 'orchestrator', isOrchestrator: true, state: 'idle', contextTokens: 5000 });
     await vi.advanceTimersByTimeAsync(300);
-    finish('b', 'due');
+    w.cleanReport({ chatId: 'b', title: 'b', role: 'Artisan', summary: 'due', workflow: true });
     await vi.advanceTimersByTimeAsync(1000);
     expect(sent).toHaveLength(1);
     expect(sent[0]!.text).toContain('«a»');
@@ -356,7 +426,7 @@ describe('OrchestratorWake', () => {
     const w = new OrchestratorWake({ send: async id => { sent.push(id); }, enabled: () => true, groupMs: 10, list: () => list });
     w.observe('chat:updated', list[0]!);
     w.observe('chat:updated', chat({ id: 'w', state: 'running' }));
-    w.observe('chat:updated', chat({ id: 'w', state: 'idle', lastText: 'fatto' }));
+    w.observe('chat:updated', chat({ id: 'w', state: 'error', lastError: 'boom' }));
     await vi.advanceTimersByTimeAsync(10);
     expect(sent).toEqual(['nuova']);
   });
@@ -379,7 +449,10 @@ describe('the user writes in a work chat (ADR 0083)', () => {
     const kidRow = { title: 'Log', parentId: 'strat', agent: { id: 'scout', name: 'Scout' } as ChatSummary['agent'] };
     up({ id: 'kid', state: 'running', ...kidRow });
     up({ id: 'kid', state: 'idle', lastText: 'testo del figlio che non deve passare', ...kidRow });
-    await vi.advanceTimersByTimeAsync(1000);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(sent).toEqual([]); // its "finished" is quiet too (2026-11-07)
+    up({ id: 'orchestrator', isOrchestrator: true, state: 'running' });
+    await vi.advanceTimersByTimeAsync(0);
     expect(sent).toHaveLength(1);
     const t = sent[0]!.text;
     expect(t).toContain("«Log» (Scout, delegata da «Piano»): l'utente ci ha scritto direttamente");
@@ -419,7 +492,7 @@ describe('the user writes in a work chat (ADR 0083)', () => {
     up({ id: 'a', state: 'running' });
     up({ id: 'a', state: 'idle', lastText: 'run-report', lastResult: { at: Date.now() } as ChatSummary['lastResult'], run: { report: { at: Date.now() + 1, outcome: 'done', verified: 'yes', summary: 's' } } as unknown as ChatSummary['run'] });
     await vi.advanceTimersByTimeAsync(5000);
-    expect(sent).toHaveLength(1);
+    expect(w.queued().map(e => e.kind)).toEqual(['done']); // reached no one: its quiet "finished" still waits
   });
 
   it('nothing for the Orchestrator\'s own chat, nor with the events off', async () => {
@@ -463,6 +536,25 @@ describe('OrchestratorWake: quiet results and app-started chats (token plan 2026
     expect(sent[0]!.text).toContain('ha consegnato: «Fix su main»');
     expect(sent[0]!.text).toContain('si è fermata su un errore: boom');
     expect(w.queued()).toEqual([]);
+  });
+
+  it('a root chat\'s correction (ADR 0224) replaces its quiet result and stays quiet, its turn end included (ADR 0223)', async () => {
+    const { w, sent, up, turn } = make();
+    up({ id: 'fix', title: 'App · fix', state: 'running' });
+    w.cleanReport({ chatId: 'fix', title: 'App · fix', role: 'Artisan', summary: 'Fix su main' });
+    up({ id: 'fix', title: 'App · fix', state: 'idle', lastText: 'fatto' });
+    // the correcting turn: manager-delegation.ts marks the summary «Correzione n/2»
+    up({ id: 'fix', title: 'App · fix', state: 'running' });
+    w.cleanReport({ chatId: 'fix', title: 'App · fix', role: 'Artisan', summary: 'Correzione 1/2: Fix su main, 2 test in più' });
+    up({ id: 'fix', title: 'App · fix', state: 'idle', lastText: 'corretto' });
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(sent).toEqual([]);
+    expect(w.queued().filter(e => e.chatId === 'fix')).toHaveLength(1);
+    turn();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain('«Correzione 1/2: Fix su main, 2 test in più»');
+    expect(sent[0]!.text).not.toContain('«Fix su main»');
   });
 
   it('off or without an Orchestrator it is not taken: the caller sends the result as before', () => {

@@ -6,8 +6,8 @@
 // re-reading its whole context (measured 07-13/10: median ~0.18 $), so news arriving together goes in one turn.
 //
 // The rule:
-// - three classes: 'now' (urgent mail, a work chat stopped on an error), 'group' (a turn finished, a request: within
-//   ORCHESTRATOR_GROUP_MS, all together), 'quiet' (a question/permission/command left to the user, a progress note: they ride
+// - three classes: 'now' (urgent mail, a work chat stopped on an error), 'group' (a request, a result to route: within
+//   ORCHESTRATOR_GROUP_MS, all together), 'quiet' (a plain turn end or start, a question/permission/command left to the user, a progress note: they ride
 //   along with the next delivery; progress mail at the latest after ORCHESTRATOR_HOLD_MS, the quiet news never wake alone);
 // - the Orchestrator's state decides (orchestratorGate): it works → everything goes into its running turn (no new turn); it waits
 //   for the user, is in a hand-off or failed → only 'now'; it is idle or closed → by class. An engine that cannot take
@@ -110,9 +110,12 @@ export function wordsFrom(raw: unknown): OrchestratorWords {
   return { urgent: list('urgent'), progress: list('progress'), action: list('action') };
 }
 
-/** The class of an app news (orchestrator-wake.ts): a failure at once, a turn end grouped, what waits for the user quiet. */
-export const newsClass = (kind: 'done' | 'error' | 'question' | 'permission' | 'command' | 'started', endsTurn?: boolean): DeliveryClass =>
-  kind === 'error' ? 'now' : kind === 'done' || endsTurn ? 'group' : 'quiet';
+/** The class of an app news (orchestrator-wake.ts): a failure at once; a result the Orchestrator must route (a root chat's
+ *  report on an active work thread or in away mode) or a request that ends a failed turn grouped; everything else quiet.
+ *  A plain turn end ('done') and a start are quiet (2026-11-07, cloudroom comms proposal 1): on 07/11, 50 of the 56
+ *  Orchestrator turns opened by an app news ended with a bare 👍; they ride along with its next turn and app_digest. */
+export const newsClass = (kind: 'done' | 'error' | 'question' | 'permission' | 'command' | 'started', endsTurn?: boolean, result?: boolean): DeliveryClass =>
+  kind === 'error' ? 'now' : (kind === 'done' && result) || endsTurn ? 'group' : 'quiet';
 
 /** A classifier that follows the brain's `orchestratorMail` as it changes (rebuilt only when the lists change). */
 export function brainClassifier(read: () => unknown): () => MailClassifier {

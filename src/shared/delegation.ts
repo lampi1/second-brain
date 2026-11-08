@@ -62,6 +62,8 @@ export interface DelegationResult {
   /** the user wrote to the child directly and changed its goal: the child followed the user, newGoal is that goal */
   goalChangedByUser?: true;
   newGoal?: string;
+  /** a correction of the result this assignment already reported (at most MAX_CORRECTIONS): it replaces the previous one */
+  amends?: true;
 }
 /** What a child chat carries about its delegation (persisted with the chat; shown on its card and in the tree). */
 export interface ChatDelegation {
@@ -72,7 +74,7 @@ export interface ChatDelegation {
   /** the tool classes the contract narrowed it to (absent = its role's, bounded by the parent's) */
   tools?: ToolClass[];
   /** its agent_report, once given */
-  result?: { outcome: DelegationOutcome; summary: string; at: number; doneWhen?: { criterion: string; met: boolean }[]; noReport?: true };
+  result?: { outcome: DelegationOutcome; summary: string; at: number; doneWhen?: { criterion: string; met: boolean }[]; noReport?: true; corrections?: number };
   /** the goal as the contract gave it, kept when the user changed it in the child's chat (goal is then the user's) */
   originalGoal?: string;
 }
@@ -97,6 +99,16 @@ export interface DelegationIntegration {
 export interface DelegationLimitHit { kind: 'depth' | 'parallel'; limit: number; at: number }
 
 export const GOAL_MAX = 2000, OUTPUT_MAX = 2000, CONTEXT_MAX = 6000, CRITERION_MAX = 300, CRITERIA_MAX = 12, SUMMARY_MAX = 300, RESULT_OUTPUT_MAX = 12000, EVIDENCE_MAX = 1000;
+/** corrections (agent_report amends: true) one assignment may send after its first report; the next one is refused */
+export const MAX_CORRECTIONS = 2;
+/** Text cut to max characters, at a word boundary when one is near, ending with the visible marker «…». */
+export function capText(v: string, max: number): string {
+  if (v.length <= max) return v;
+  // never split a surrogate pair (an emoji): a lone half would persist as a broken character
+  const end = /[\uD800-\uDBFF]/.test(v.charAt(max - 2)) ? max - 2 : max - 1;
+  const prefix = v.slice(0, end), boundary = prefix.search(/\s+\S*$/);
+  return `${boundary > max * 0.8 ? prefix.slice(0, boundary) : prefix.trimEnd()}…`;
+}
 const SKILL = /^[a-z0-9][a-z0-9_-]{0,79}$/;
 const text = (v: unknown, max: number, what: string): string => {
   if (typeof v !== 'string' || !v.trim()) throw new Error(`${what}: required text.`);
@@ -139,7 +151,8 @@ export function checkResult(v: unknown, doneWhen: readonly string[]): Delegation
   // the names agents invent for doneWhen (app logs 2026-10-20/21, #147): the error says which field to use
   const misnamed = ['criteria', 'criteriaResults'].find(k => k in o);
   if (misnamed && !('doneWhen' in o)) throw new Error(`agent_report: use doneWhen, not ${misnamed}: one { criterion, met, evidence } per criterion of your contract.`);
-  only(o, ['outcome', 'summary', 'output', 'doneWhen', 'questions', 'goalChangedByUser', 'newGoal', 'taskVersion', 'verdict', 'verified', 'browserWrite'], 'agent_report');
+  only(o, ['outcome', 'summary', 'output', 'doneWhen', 'questions', 'goalChangedByUser', 'newGoal', 'taskVersion', 'verdict', 'verified', 'browserWrite', 'amends'], 'agent_report');
+  if (o.amends !== undefined && typeof o.amends !== 'boolean') throw new Error('amends: true or false.');
   if ((o.verdict !== undefined) !== (o.verified !== undefined)) throw new Error('Review verdict and verified must be supplied together.');
   if (o.verdict !== undefined && !['success', 'partial', 'fail'].includes(o.verdict as string)) throw new Error('Invalid review verdict.');
   if (o.verified !== undefined && !['yes', 'partial', 'no'].includes(o.verified as string)) throw new Error('Invalid review verification.');
@@ -164,8 +177,9 @@ export function checkResult(v: unknown, doneWhen: readonly string[]): Delegation
   const questions = o.questions === undefined ? undefined : Array.isArray(o.questions) && o.questions.length <= 8 ? o.questions.map((q, i) => text(q, 500, `questions[${i}]`)) : null;
   if (questions === null) throw new Error('questions: up to 8.');
   const browserWrite = o.browserWrite === undefined ? undefined : browserWriteResult(o.browserWrite);
+  // a summary over SUMMARY_MAX is cut with the marker, never refused (agents/delegation.ts keeps the full text in output)
   if (browserWrite && ((o.outcome === 'done') !== (browserWrite.outcome === 'done'))) throw new Error('browserWrite outcome must agree with agent_report outcome');
-  return { ...(browserWrite ? { browserWrite } : {}), ...(o.verdict !== undefined ? { verdict: o.verdict as DelegationResult['verdict'], verified: o.verified as DelegationResult['verified'] } : {}), ...(o.taskVersion !== undefined ? { taskVersion: o.taskVersion as number } : {}), outcome: o.outcome as DelegationOutcome, summary: text(o.summary, SUMMARY_MAX, 'summary'), output: text(o.output, RESULT_OUTPUT_MAX, 'output'), doneWhen: answers, ...(questions?.length ? { questions } : {}), ...(newGoal ? { goalChangedByUser: true as const, newGoal } : {}) };
+  return { ...(browserWrite ? { browserWrite } : {}), ...(o.verdict !== undefined ? { verdict: o.verdict as DelegationResult['verdict'], verified: o.verified as DelegationResult['verified'] } : {}), ...(o.taskVersion !== undefined ? { taskVersion: o.taskVersion as number } : {}), outcome: o.outcome as DelegationOutcome, summary: capText(text(o.summary, Number.MAX_SAFE_INTEGER, 'summary'), SUMMARY_MAX), output: text(o.output, RESULT_OUTPUT_MAX, 'output'), doneWhen: answers, ...(questions?.length ? { questions } : {}), ...(newGoal ? { goalChangedByUser: true as const, newGoal } : {}), ...(o.amends === true ? { amends: true as const } : {}) };
 }
 
 /** The child's first message: who delegates and the contract (the rules on reporting and asking are its role frame's,
@@ -193,7 +207,7 @@ const safeJson = (v: unknown): string => JSON.stringify(v).replace(/[\u0085\u202
  * flattened to one line, so it cannot forge a line of the app or the user), then the result as JSON (escaped). A summary
  * the line already shows whole (one line) is not repeated in the JSON; one with line breaks stays there exact. With
  * outputMax (the Orchestrator's copy), a longer output is replaced by where to read it. */
-export function resultMessage(role: WorkRoleId, title: string, r: DelegationResult, opts: { outputMax?: number } = {}): string {
+export function resultMessage(role: WorkRoleId, title: string, r: DelegationResult, opts: { outputMax?: number; correction?: number } = {}): string {
   const changed = r.goalChangedByUser ? ` (obiettivo cambiato dall'utente nella chat figlia: «${oneLine(r.newGoal ?? '')}». Non disfare ciò che l'utente le ha chiesto.)` : '';
   // a long deliverable stays in the chat that wrote it (shown there as its answer): the Orchestrator gets where it is,
   // and reads it with app_chat_items only when it needs it, instead of carrying it in every later turn
@@ -201,7 +215,10 @@ export function resultMessage(role: WorkRoleId, title: string, r: DelegationResu
   const full = long ? { ...r, output: `(${r.output.length} caratteri, nella chat «${oneLine(title)}» come sua risposta: leggilo con app_chat_items solo se ti serve)` } : r;
   const { summary, ...rest } = full;
   const json = oneLine(summary) === summary ? rest : full;
-  return `${AGENT_LABEL}\n\n[risultato · ${ROLE_DEFAULTS[role].name} «${oneLine(title)}»] ${oneLine(summary)}${changed}\n\`\`\`json\n${safeJson(json)}\n\`\`\``;
+  // a correction (agent_report amends: true) says so: it replaces the result this chat reported before
+  const head = opts.correction ? `correzione ${opts.correction}/${MAX_CORRECTIONS} del risultato · ` : 'risultato · ';
+  const replaces = opts.correction ? ' (sostituisce il risultato precedente di questa chat)' : '';
+  return `${AGENT_LABEL}\n\n[${head}${ROLE_DEFAULTS[role].name} «${oneLine(title)}»]${replaces} ${oneLine(summary)}${changed}\n\`\`\`json\n${safeJson(json)}\n\`\`\``;
 }
 
 /** Levels above a chat: 0 for a root (no parent). A broken or cyclic chain counts as too deep. */
@@ -226,7 +243,7 @@ export function readDelegation(v: unknown): ChatDelegation | null {
   const crit = Array.isArray(r?.doneWhen) ? (r!.doneWhen as unknown[]).filter((x): x is { criterion: string; met: boolean } => !!x && typeof (x as { criterion?: unknown }).criterion === 'string' && typeof (x as { met?: unknown }).met === 'boolean')
     .slice(0, CRITERIA_MAX).map(x => ({ criterion: x.criterion.slice(0, CRITERION_MAX), met: x.met })) : [];
   const result = r && (RESULT_OUTCOMES as readonly unknown[]).includes(r.outcome) && typeof r.summary === 'string' && typeof r.at === 'number'
-    ? { outcome: r.outcome as DelegationOutcome, summary: r.summary, at: r.at, ...(crit.length ? { doneWhen: crit } : {}), ...(r.noReport === true ? { noReport: true as const } : {}) } : undefined;
+    ? { outcome: r.outcome as DelegationOutcome, summary: r.summary, at: r.at, ...(crit.length ? { doneWhen: crit } : {}), ...(r.noReport === true ? { noReport: true as const } : {}), ...(Number.isSafeInteger(r.corrections) && (r.corrections as number) > 0 ? { corrections: Math.min(r.corrections as number, MAX_CORRECTIONS) } : {}) } : undefined;
   const tools = Array.isArray(d.tools) && d.tools.every(c => (TOOL_CLASSES as readonly unknown[]).includes(c)) ? d.tools as ToolClass[] : undefined;
   return { role, goal: d.goal.slice(0, GOAL_MAX), doneWhen: (d.doneWhen as string[]).slice(0, CRITERIA_MAX), at: d.at, ...(tools ? { tools } : {}), ...(result ? { result } : {}), ...(typeof d.originalGoal === 'string' ? { originalGoal: d.originalGoal.slice(0, GOAL_MAX) } : {}) };
 }

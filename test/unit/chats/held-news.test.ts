@@ -56,10 +56,14 @@ describe('OrchestratorWake.heldNews and the hub', () => {
     expect(hub.get().items).toEqual([expect.objectContaining({ orchestratorId: 'orchestrator', chatId: 'App · Mappa', title: 'App · Mappa', kind: 'done', why: 'user' })]);
     expect(emitted.at(-1)?.items).toHaveLength(1);
     expect(w.held()).toBe(1);
-    // the user answers: the news goes after the group window, and the list empties
+    // the user answers: a plain turn end is quiet (2026-11-07), it waits for the Orchestrator's next turn
     up({ id: 'orchestrator', isOrchestrator: true, title: 'Orchestrator', state: 'idle', pending: 0 });
-    expect(hub.get().items[0]?.why).toBe('group');
+    expect(hub.get().items[0]?.why).toBe('quiet');
     await vi.advanceTimersByTimeAsync(1000);
+    expect(sent).toEqual([]);
+    // its next turn (the user writes to it): the news goes into it, and the list empties
+    up({ id: 'orchestrator', isOrchestrator: true, title: 'Orchestrator', state: 'running', pending: 0 });
+    await vi.advanceTimersByTimeAsync(0);
     expect(sent).toHaveLength(1);
     expect(hub.get().items).toEqual([]);
     expect(emitted.at(-1)).toEqual({ items: [] });

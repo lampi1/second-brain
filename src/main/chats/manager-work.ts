@@ -168,8 +168,10 @@ export abstract class ManagerWork extends ManagerLifecycle {
         const parent = this.need(source.chatId);
         if (parent.s.closedAt || !parent.s.run || parent.s.run.endedAt !== undefined || parent.s.run.report?.via === 'agent_report') throw new Error('The parent assignment is over; its owner must explicitly continue it before it can assign children.');
       }
+      // no handshake: the assign tools hand the unread user entries to the assigner (shared/user-events.ts); the child
+      // already has them, so they are not repeated in its prompt. A cursor, when given, must still be a valid one.
       const events = this.userEvents(chatId);
-      if ((events.latestSeq > events.acknowledgedSeq || options.expectedEventSeq !== undefined) && options.expectedEventSeq !== events.latestSeq) throw new Error(`Unread user instructions: read ${source.chatId === r.s.parentId ? 'agent_task_events' : 'app_task_events'} and pass expectedEventSeq ${events.latestSeq} before assigning.`);
+      if (options.expectedEventSeq !== undefined && (!Number.isSafeInteger(options.expectedEventSeq) || options.expectedEventSeq < 0 || options.expectedEventSeq > events.latestSeq)) throw new Error(`Invalid user event cursor: the latest is ${events.latestSeq}.`);
     }
     if (options.planStep !== undefined) {
       const plan = r.s.parentId ? this.chats.get(r.s.parentId)?.s.plan : undefined;

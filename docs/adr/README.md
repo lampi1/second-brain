@@ -225,8 +225,12 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0220](0220-role-skill-alignment.md) Scoped role skills and verified Plan intake
 - [0221](0221-acp-catalog-wire-replay.md) ACP agent catalog (proposals, off until the user turns one on), NDJSON record/replay of the engine wires, turn-start watchdog — accepted
 - [0222](0222-cold-start-admission.md) Cold-start admission: cores/2 slots, CPU/RAM only an emergency brake, warm pool under load, cold first turn timed — accepted
+- [0223](0223-quiet-turn-ends.md) Plain turn ends and starts are quiet news for the Orchestrator; `WAKE_RULE` drops the 👍 — accepted
+- [0224](0224-report-corrections-batching-caps.md) Report corrections (amends, max 2), a 2-5 s child-result debounce, caps instead of refusals — accepted
+- [0225](0225-delegates-talk-up-close-children-assign-without-handshake.md) Delegates write up their tree, parents close their children, assignments without a handshake — accepted
+- [0226](0226-orchestrator-reads-child-reports.md) The Orchestrator reads any report in its tree (app_child_output); amends ADR 0083 §6 — accepted
 - [0227](0227-worktree-pool.md) Reused worktree pool per repository (cleanup, disk cap) and warm engines in the most used folders — proposed
 - [0228](0228-parallel-checkpoint.md) The checkpoint runs while the message goes; the first write waits for it; a restart resumes only recent turns — accepted
 - [0229](0229-orchestrator-remote-control.md) «Controllo remoto»: Claude Code Remote Control of the Orchestrator (same engine, reattach, phone messages shown) — proposed
 - [0230](0230-impara-explain-mode.md) Impara: «Spiegazione», a lesson with pictures and no quiz — proposed
-- [0231](0231-agents-merge-verified-branches-to-main.md) Agents merge verified branches into main (check:quick + touched e2e per branch, check:branch on main after a batch) — accepted
+- [0231](0231-agents-merge-verified-branches-to-main.md) Agents merge verified branches into main (check:quick, a clean Sentinel and the guard; no e2e since 2026-11-08) — accepted

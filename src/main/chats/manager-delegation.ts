@@ -10,11 +10,11 @@ import type { HeldChildResult } from './store';
 import { waitsForPeople, waitsForWork } from '../../shared/waiting';
 import type { TaskDeliveryPolicy } from '../../shared/agents';
 import { reportOf } from '../agents/run-report';
-import { RESULT_OUTPUT_MAX, checkResult, resultMessage, type DelegationLimitHit, type DelegationResult, type TaskSource } from '../../shared/delegation';
+import { MAX_CORRECTIONS, RESULT_OUTPUT_MAX, checkResult, resultMessage, type DelegationLimitHit, type DelegationResult, type TaskSource } from '../../shared/delegation';
 import { finishPlan, afterReport } from '../../shared/strategy';
 import { APP_EVENT_LABEL } from './orchestrator-wake';
 import type { SubmissionReceipt, TurnEndInfo, Rec } from './manager-types';
-import { clearTimeout, sameChildResult, uniqueChildResults, turnReply, turnErrors, lastAnswer, sysItem, ORCHESTRATOR_OUTPUT_MAX, CHILD_RESULTS_MS } from './manager-helpers';
+import { clearTimeout, sameChildResult, uniqueChildResults, turnReply, turnErrors, lastAnswer, sysItem, ORCHESTRATOR_OUTPUT_MAX, CHILD_RESULTS_MS, CHILD_RESULTS_CAP, supersededResult } from './manager-helpers';
 import { ManagerContinuity } from './manager-continuity';
 
 /** Delegation and reports: a child's agent_report to its parent, a root chat's to the Orchestrator, turn ends that settle them. */
@@ -55,15 +55,18 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     if (this.closedByUser(r)) throw new Error('agent_report: the user closed this chat and cancelled its work; nothing more is needed. Stop here.');
     this.checkReportVersion(r, result);
     if (r.s.plan && result.outcome !== 'blocked') r.s.plan = finishPlan(r.s.plan, Date.now());
-    if (d.result) throw new Error('agent_report: this delegation already has its result: the first report was saved and nothing else is needed. Stop here.');
+    // a correction (amends: true) replaces the result already given, up to MAX_CORRECTIONS; without amends a second
+    // report is refused as before, and amends on the first report is just the first report
+    const correction = this.correctionNumber(d.result ? d.result.corrections ?? 0 : null, result, 'delegation');
+    if (!correction) delete result.amends;
     const at = Date.now(), met = result.doneWhen.filter(x => x.met).length;
     // the user changed the child's goal in its chat: the card shows the user's goal, the contract's stays as originalGoal
     const goal = result.goalChangedByUser && result.newGoal ? { goal: result.newGoal, originalGoal: d.originalGoal ?? d.goal } : {};
-    r.s.delegation = { ...d, ...goal, result: { outcome: result.outcome, summary: result.summary, at, doneWhen: result.doneWhen.map(x => ({ criterion: x.criterion, met: x.met })) } };
+    r.s.delegation = { ...d, ...goal, result: { outcome: result.outcome, summary: result.summary, at, doneWhen: result.doneWhen.map(x => ({ criterion: x.criterion, met: x.met })), ...(correction ? { corrections: correction } : {}) } };
     const run = r.s.run;
     if (run) {
       run.delivery = { policy: 'synthesize', reportedAt: at, attempts: 0 };
-      run.report = { at, outcome: result.outcome, verified: met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', summary: cut(result.summary, 140), via: 'agent_report', canonical: { ...structuredClone(result), at, taskId: run.taskId ?? run.runId, runId: run.runId, taskVersion: run.taskVersion ?? 1 } };
+      run.report = { at, outcome: result.outcome, verified: met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', summary: cut(result.summary, 140), via: 'agent_report', ...(correction ? { corrections: correction } : {}), canonical: { ...structuredClone(result), at, taskId: run.taskId ?? run.runId, runId: run.runId, taskVersion: run.taskVersion ?? 1 } };
       this.runSave();
     }
     r.report = { text: result.summary, at, final: true, ...(result.outcome === 'blocked' ? { blocked: true } : {}) };
@@ -80,9 +83,9 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     }
     if (parent) {
       this.updated(parent); // its waiting on this child may be over
-      this.queueChildResult(parentId, r.s.title, `[task ${run?.runId ?? chatId}]\n${resultMessage(d.role, r.s.title, result)}`, run?.runId);
+      this.queueChildResult(parentId, chatId, r.s.title, `[task ${run?.runId ?? chatId}]\n${resultMessage(d.role, r.s.title, result, { correction })}`, run?.runId, correction);
     }
-    log.info('chats', 'delegation reported', { chat: chatId, data: { parent: parentId, outcome: result.outcome, met, criteria: result.doneWhen.length } });
+    log.info('chats', correction ? 'delegation result corrected' : 'delegation reported', { chat: chatId, data: { parent: parentId, outcome: result.outcome, met, criteria: result.doneWhen.length, ...(correction ? { correction } : {}) } });
     return { parentId, delivered: !!parent };
   }
 
@@ -140,25 +143,32 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     log.warn('chats', 'delegated chat ended without agent_report', { chat: r.s.id, cause: why === 'exit' ? 'its engine stopped with an error' : 'two turns ended without agent_report', hint: 'its last answer went to the parent as a blocked result', data: { parent: r.s.parentId } });
   }
 
-  /** A child's result for its parent: while siblings still owe theirs, it waits (at most CHILD_RESULTS_MS) so the parent
-   *  reads the batch in one turn instead of one turn per child, each re-reading its whole context. */
-  private queueChildResult(parentId: string, title: string, message: string, runId?: string): void {
+  /** A child's result for its parent: while siblings still owe theirs, the batch waits a short debounce (CHILD_RESULTS_MS,
+   *  restarted by each new result, at most CHILD_RESULTS_CAP times it from the first) so the parent reads it in one turn
+   *  instead of one turn per child; one entry per child, its newer result (a correction) replacing the one not sent yet. */
+  private queueChildResult(parentId: string, childId: string, title: string, message: string, runId?: string, correction = 0): void {
     const target = this.chats.get(parentId);
     // a parent the user closed gets no late result: it would reopen it (its record stays on the child: agent_children)
     if (target?.s.routineArchived || target && this.closedByUser(target)) return;
     const q = this.childResults.get(parentId) ?? { items: [], timer: null };
     if (q.items.some(item => item.title === title && item.message === message)) return;
-    const item: HeldChildResult = { id: runId ? `result-${runId}` : crypto.randomUUID(), ...(runId ? { runId } : {}), title, message };
-    q.items.push(item);
+    const item: HeldChildResult = { id: runId ? `result-${runId}${correction ? `-c${correction}` : ''}` : crypto.randomUUID(), ...(runId ? { runId } : {}), title, message, chatId: childId };
+    // only what is not sent yet is replaced: a batch already submitting keeps its own copy
+    const stale = q.items.filter(x => x.chatId === childId);
+    q.items = [...q.items.filter(x => x.chatId !== childId), item];
     const parent = this.chats.get(parentId);
     if (parent) {
-      const held = parent.heldResults ?? [];
+      const held = (parent.heldResults ?? []).filter(x => !stale.some(s => sameChildResult(s, x)));
       if (!held.some(item => item.title === title && item.message === message)) held.push(item);
       parent.heldResults = held; this.persist(true);
     }
     this.childResults.set(parentId, q);
     if (!this.delegatedBusy(parentId)) { this.flushChildResults(parentId); return; }
-    if (!q.timer) { q.timer = setTimeout(() => this.flushChildResults(parentId), this.opts.childResultsMs ?? CHILD_RESULTS_MS); q.timer.unref?.(); }
+    const now = Date.now(), ms = this.opts.childResultsMs ?? CHILD_RESULTS_MS;
+    q.first ??= now;
+    if (q.timer) clearTimeout(q.timer);
+    q.timer = setTimeout(() => this.flushChildResults(parentId), Math.max(0, Math.min(ms, q.first + ms * CHILD_RESULTS_CAP - now)));
+    q.timer.unref?.();
   }
 
   protected flushChildResults(parentId: string): void {
@@ -179,6 +189,9 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     const from = [...new Set(batch.map(x => x.title))].join(', ');
     this.persist(true);
     const batchId = crypto.randomUUID();
+    // each run's delivery as it is now: a correction reported while this batch submits replaces it, and this batch's
+    // acknowledgment must not mark the correction's delivery as submitted (a restart would drop the correction)
+    const deliveries = new Map(batch.map(item => [item.id, item.runId ? this.runs.get(item.runId)?.delivery : undefined]));
     let acknowledged = false, retrying = false;
     const failed = (e: unknown) => {
       if (acknowledged || retrying) return;
@@ -186,21 +199,24 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       const parent = this.chats.get(parentId);
       if (parent && !parent.s.routineArchived && !this.quitting) {
         const retry = this.childResults.get(parentId) ?? { items: [], timer: null };
-        for (const item of batch) if (!retry.items.some(x => x.id === item.id)) retry.items.push(item);
-        if (!retry.timer) { retry.timer = setTimeout(() => this.flushChildResults(parentId), this.opts.childResultsMs ?? CHILD_RESULTS_MS); retry.timer.unref?.(); }
-        this.childResults.set(parentId, retry);
+        // a result corrected meanwhile is not sent again after its correction
+        const old = batch.filter(item => supersededResult(item, item.runId ? this.runs.get(item.runId)?.report?.corrections : 0));
+        if (old.length) { parent.heldResults = parent.heldResults?.filter(x => !old.some(o => sameChildResult(o, x))); this.persist(true); }
+        for (const item of batch) if (!old.includes(item) && !retry.items.some(x => x.id === item.id)) retry.items.push(item);
+        if (retry.items.length && !retry.timer) { retry.timer = setTimeout(() => this.flushChildResults(parentId), this.opts.childResultsMs ?? CHILD_RESULTS_MS); retry.timer.unref?.(); }
+        if (retry.items.length) this.childResults.set(parentId, retry);
       }
       log.warn('chats', 'delegation result not delivered', { chat: parentId, cause: errText(e), hint: 'the durable outbox retries delivery' });
     };
     const receipt: SubmissionReceipt = {
       beforeSubmit: () => {
-        for (const item of batch) { const run = item.runId ? this.runs.get(item.runId) : undefined; if (run?.delivery) run.delivery.attempts++; }
+        for (const item of batch) { const delivery = deliveries.get(item.id); if (delivery) delivery.attempts++; }
         this.runSave();
       },
       submitted: () => {
         acknowledged = true;
         const at = Date.now();
-        for (const item of batch) { const run = item.runId ? this.runs.get(item.runId) : undefined; if (run?.delivery) Object.assign(run.delivery, { deliveredAt: at, synthesisSubmittedAt: at, synthesisBatchId: batchId }); }
+        for (const item of batch) { const delivery = deliveries.get(item.id); if (delivery) Object.assign(delivery, { deliveredAt: at, synthesisSubmittedAt: at, synthesisBatchId: batchId }); }
         this.runSave();
         const parent = this.chats.get(parentId);
         if (parent) { parent.heldResults = parent.heldResults?.filter(item => !batch.some(sent => sent.id === item.id)); this.persist(true); }
@@ -223,12 +239,16 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     if (review && (run.endedAt !== undefined || r.s.closedAt)) throw new Error('The review assignment has already ended.');
     this.checkReportVersion(r, result);
     if (r.s.plan && result.outcome !== 'blocked') r.s.plan = finishPlan(r.s.plan, Date.now());
-    if (run.report?.via === 'agent_report' || r.rootReportAt !== undefined && r.rootReportAt >= (r.s.work?.updatedAt ?? 0)) throw new Error('agent_report: this assignment already has its result: the first report was saved and nothing else is needed. Stop here.');
+    const reported = run.report?.via === 'agent_report' || r.rootReportAt !== undefined && r.rootReportAt >= (r.s.work?.updatedAt ?? 0);
+    // a correction goes the same way as the first result, with the same delivery policy: display and notify stay a
+    // notice (no Orchestrator turn of its own), synthesize asks for a synthesis again
+    const correction = this.correctionNumber(reported ? (run.report?.via === 'agent_report' ? run.report.corrections ?? 0 : 0) : null, result, 'assignment');
+    if (!correction) delete result.amends;
     const at = Date.now(), met = result.doneWhen.filter(x => x.met).length;
     {
       const policy = run.startedBy === 'orchestrator' ? this.deliveryPolicy(run.taskContract?.deliveryPolicy) : 'display';
       run.delivery = { policy, reportedAt: at, attempts: 0, ...(policy === 'synthesize' ? { synthesisRequestedAt: at, synthesisPending: true } : {}) };
-      run.report = { at, outcome: result.outcome, verified: review ? result.verified! : !result.doneWhen.length ? 'no' : met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', ...(review ? { verdict: result.verdict! } : {}), summary: cut(result.summary, 140), via: 'agent_report', canonical: { ...structuredClone(result), at, taskId: run.taskId ?? run.runId, runId: run.runId, taskVersion: run.taskVersion ?? 1 } };
+      run.report = { at, outcome: result.outcome, verified: review ? result.verified! : !result.doneWhen.length ? 'no' : met === result.doneWhen.length ? 'yes' : met ? 'partial' : 'no', ...(review ? { verdict: result.verdict! } : {}), summary: cut(result.summary, 140), via: 'agent_report', ...(correction ? { corrections: correction } : {}), canonical: { ...structuredClone(result), at, taskId: run.taskId ?? run.runId, runId: run.runId, taskVersion: run.taskVersion ?? 1 } };
       this.runSave();
     }
     r.report = { text: result.summary, at, final: true, ...(result.outcome === 'blocked' ? { blocked: true } : {}) };
@@ -252,12 +272,12 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     if (isWorkRole(role)) {
       // held until the chat's turn ends (#123): the report and the turn end are one news, and neither the Orchestrator nor
       // the notice says it while the chat still shows as running
-      r.heldResult = { ...(local ? { local: true } : {}), note: { chatId, title: r.s.title, role: ROLE_DEFAULTS[role].name, summary: result.summary, at }, quiet: run.delivery?.policy === 'notify', userWaits: waits,
-        message: resultMessage(role, r.s.title, result, { outputMax: ORCHESTRATOR_OUTPUT_MAX }) };
+      r.heldResult = { ...(local ? { local: true } : {}), note: { chatId, title: r.s.title, role: ROLE_DEFAULTS[role].name, summary: correction ? `Correzione ${correction}/${MAX_CORRECTIONS}: ${result.summary}` : result.summary, at }, quiet: run.delivery?.policy === 'notify', userWaits: waits,
+        message: resultMessage(role, r.s.title, result, { outputMax: ORCHESTRATOR_OUTPUT_MAX, correction }) };
       this.persist(true);
       if (!this.midTurn(r)) this.releaseResult(r);
     }
-    log.info('chats', 'root chat reported', { chat: chatId, data: { orchestrator: orchestrator?.s.id ?? null, outcome: result.outcome, met, criteria: result.doneWhen.length, userWaits: waits } });
+    log.info('chats', 'root chat reported', { chat: chatId, data: { orchestrator: orchestrator?.s.id ?? null, outcome: result.outcome, met, criteria: result.doneWhen.length, userWaits: waits, ...(correction ? { correction } : {}) } });
     return { orchestratorId: local ? null : orchestrator?.s.id ?? null, delivered: local || !!orchestrator };
   }
 
@@ -300,10 +320,12 @@ export abstract class ManagerDelegation extends ManagerContinuity {
         submitted = true; this.synthesizing.delete(runId);
         Object.assign(delivery, { synthesisPending: false, synthesisSubmittedAt: Date.now(), synthesisBatchId: `root-${runId}`, deliveredAt: Date.now() });
         this.runSave(); this.persist(true); this.updated(orchestrator); if (worker) this.updated(worker);
+        // a correction reported while this synthesis was submitting has its own pending delivery: ask for it now
+        if (run.delivery !== delivery && run.delivery?.synthesisPending) this.resumeRootSyntheses();
       },
       failed,
     };
-    const message = `[richiesta esplicita di sintesi · task ${result.taskId}, versione ${result.taskVersion}, run ${runId}]\nSintetizza il risultato per l'utente usando il risultato completo e le prove qui sotto.\n${resultMessage(role, worker?.s.title ?? run.goal, result)}`;
+    const message = `[richiesta esplicita di sintesi · task ${result.taskId}, versione ${result.taskVersion}, run ${runId}]\nSintetizza il risultato per l'utente usando il risultato completo e le prove qui sotto.\n${resultMessage(role, worker?.s.title ?? run.goal, result, { correction: run.report?.corrections ?? 0 })}`;
     try { await this.send(orchestrator.s.id, message, undefined, false, worker?.s.title ?? run.agentId, false, { kind: 'app' }, receipt); }
     catch (error) { failed(error); throw error; }
   }
@@ -322,6 +344,15 @@ export abstract class ManagerDelegation extends ManagerContinuity {
   protected deliveryPolicy(value: TaskDeliveryPolicy | undefined, child = false): TaskDeliveryPolicy {
     if (value !== undefined && !['display', 'notify', 'synthesize'].includes(value)) throw new Error('Unknown task delivery policy.');
     return value ?? (child ? 'synthesize' : 'display');
+  }
+
+  /** This report's correction number: 0 for the assignment's first result (prior null), 1..MAX_CORRECTIONS for an
+   *  amends: true after it; a second report without amends, or one correction too many, is refused. */
+  private correctionNumber(prior: number | null, result: DelegationResult, what: 'delegation' | 'assignment'): number {
+    if (prior === null) return 0;
+    if (!result.amends) throw new Error(`agent_report: this ${what} already has its result: the first report was saved and nothing else is needed. Stop here. Only to correct a wrong result, call agent_report again with amends: true (at most ${MAX_CORRECTIONS} corrections).`);
+    if (prior >= MAX_CORRECTIONS) throw new Error(`agent_report: this ${what} was already corrected ${MAX_CORRECTIONS} times, the most allowed: the last correction stands and nothing else is needed. Stop here.`);
+    return prior + 1;
   }
 
   private checkReportVersion(r: Rec, result: DelegationResult): void {

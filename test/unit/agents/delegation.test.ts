@@ -8,7 +8,7 @@
 // Orchestrator opened reports to it with agent_report (issue #93), quietly when the result is clean; a child's result
 // waits for its siblings' so the parent reads them in one turn. Pins agents/delegation.ts, agents/role-gate.ts and
 // the delegation part of chats/manager.ts.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -18,12 +18,13 @@ import type { HarnessSession, SessionOptions, SessionSink } from '../../../src/m
 import { delegationTools, stalledMin } from '../../../src/main/agents/delegation';
 import { gateRequest } from '../../../src/main/agents/role-gate';
 import { ROLE_DEFAULTS, ROLE_PREAMBLE, ROLE_IDS, WORK_ROLE_IDS, DELEGATION_DEFAULTS, isWorkRole, launchGap, type DelegationSettings, type RoleId } from '../../../src/shared/roles';
-import { checkContract, checkResult, delegationPrompt, depthOf, readDelegation, resultMessage } from '../../../src/shared/delegation';
+import { capText, checkContract, checkResult, delegationPrompt, depthOf, readDelegation, resultMessage } from '../../../src/shared/delegation';
 import { AGENT_LABEL, oneLine } from '../../../src/shared/agent-label';
 import type { AgentCatalog } from '../../../src/shared/agents';
 import type { NewChat } from '../../../src/shared/contract';
 import type { McpTool } from '../../../src/main/mcp/server';
 import { ChatMail } from '../../../src/main/chats/mail';
+import { CHILD_RESULTS_CAP, CHILD_RESULTS_MS, supersededResult } from '../../../src/main/chats/manager-helpers';
 import { ADR0083_DEFAULTS } from '../../../src/main/agents/role-migrate';
 import type { PermissionCeiling, ToolClass } from '../../../src/shared/agents';
 
@@ -34,6 +35,14 @@ const NARROW: Narrowed = ADR0083_DEFAULTS;
 const shape = (id: RoleId, n: Narrowed = {}) => { const r = ROLE_DEFAULTS[id]; return n[id] ?? { tools: r.tools, ceiling: r.ceiling, launches: r.launches }; };
 
 const roots: string[] = [], managers: ChatManager[] = [];
+/** Waits (up to 10 s) until a parent got more messages than `before`; returns when it saw them. */
+async function sentAfter(sent: Map<string, string[]>, id: string, before: number): Promise<number> {
+  for (const t0 = Date.now(); Date.now() - t0 < 10_000;) {
+    if ((sent.get(id)?.length ?? 0) > before) return Date.now();
+    await new Promise(res => setTimeout(res, 10));
+  }
+  throw new Error(`no new message for ${id}`);
+}
 /** the delegation tools' clock (the stall check); undefined = Date.now */
 let clock: (() => number) | undefined;
 afterEach(async () => { clock = undefined; for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
@@ -89,7 +98,7 @@ describe('agent_delegate', () => {
     const stored = f.m.list().find(c => c.id === child.id)!.run!.report!.canonical!;
     expect(stored.summary.length).toBeLessThanOrEqual(300);
     expect(stored.summary).toMatch(/word…$/);
-    expect(stored.output).toBe(report.output);
+    expect(stored.output).toBe(`${report.output}\n\nSintesi completa: ${report.summary}`);
     expect(stored.doneWhen[0]!.evidence).toBe('verified result');
   });
   it('a Strategist launches a Scout and a Sentinel at once: two children under it, each with its contract only, and their results come back', async () => {
@@ -140,6 +149,137 @@ describe('agent_delegate', () => {
     expect(f.sent.get(parent.id)!.at(-1)).toContain('Uno fatto');
   });
 
+  it('a child corrects its result with amends: true, marked for the parent; a third correction is refused', async () => {
+    const f = fixture();
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Fix · uno')] });
+    const kid = f.m.list().find(c => c.parentId === parent.id)!;
+    const rep = (summary: string, extra: Record<string, unknown> = {}) => f.call('agent_report', kid.id, { outcome: 'done', summary, output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], ...extra });
+    await rep('Prima versione');
+    await new Promise(res => setTimeout(res, 20));
+    expect(f.sent.get(parent.id)!.at(-1)).toContain('[risultato · Scout «Fix · uno»] Prima versione');
+    await expect(rep('di nuovo')).rejects.toThrow(/already has its result.*amends: true/);
+    await expect(rep('Seconda versione', { amends: true })).resolves.toMatchObject({ reported: true, parentId: parent.id });
+    await new Promise(res => setTimeout(res, 20));
+    const fixed = f.sent.get(parent.id)!.at(-1)!;
+    expect(fixed).toContain('[correzione 1/2 del risultato · Scout «Fix · uno»] (sostituisce il risultato precedente di questa chat) Seconda versione');
+    expect(f.m.list().find(c => c.id === kid.id)!.delegation!.result).toMatchObject({ summary: 'Seconda versione', corrections: 1 });
+    expect(f.m.runs.get(kid.run!.runId)!.report).toMatchObject({ corrections: 1, canonical: expect.objectContaining({ summary: 'Seconda versione', amends: true }) });
+    await rep('Terza versione', { amends: true });
+    await new Promise(res => setTimeout(res, 20));
+    expect(f.sent.get(parent.id)!.at(-1)).toContain('[correzione 2/2 del risultato');
+    await expect(rep('Quarta versione', { amends: true })).rejects.toThrow(/already corrected 2 times/);
+    expect(f.m.list().find(c => c.id === kid.id)!.delegation!.result).toMatchObject({ summary: 'Terza versione', corrections: 2 });
+    // the count survives a reload of the trace
+    expect(readDelegation(JSON.parse(JSON.stringify(f.m.list().find(c => c.id === kid.id)!.delegation)))!.result!.corrections).toBe(2);
+  });
+
+  it('a root chat corrects its result: a marked notice for the Orchestrator, still no turn for a display delivery', async () => {
+    const f = fixture();
+    const orchestrator = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const herald = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'herald', title: 'Issue · Bozza', prompt: 'prepara la issue' }, 'agent');
+    const rep = (summary: string, extra: Record<string, unknown> = {}) => f.call('agent_report', herald.id, { outcome: 'done', summary, output: 'issue.md', doneWhen: [{ criterion: 'bozza scritta', met: true }], ...extra });
+    await rep('Bozza pronta');
+    await new Promise(res => setTimeout(res, 20));
+    await expect(rep('di nuovo')).rejects.toThrow(/already has its result/);
+    await expect(rep('Bozza corretta', { amends: true })).resolves.toMatchObject({ reported: true, to: 'orchestrator', delivered: true });
+    await new Promise(res => setTimeout(res, 20));
+    const notices = f.m.items(orchestrator.id).filter(i => i.kind === 'system' && i.code === 'resultReady') as { params?: { summary?: string } }[];
+    expect(notices.map(n => n.params?.summary)).toEqual(['Bozza pronta', 'Correzione 1/2: Bozza corretta']);
+    expect(f.sent.get(orchestrator.id)?.length ?? 0).toBe(0);
+    expect(f.m.runs.get(herald.run!.runId)!.report).toMatchObject({ summary: 'Bozza corretta', corrections: 1 });
+    await rep('Bozza corretta ancora', { amends: true });
+    await expect(rep('Una di troppo', { amends: true })).rejects.toThrow(/already corrected 2 times/);
+  });
+
+  it('child results while siblings work: a short debounce, one entry per child, the newest wins', async () => {
+    expect(CHILD_RESULTS_MS).toBeGreaterThanOrEqual(2000);
+    expect(CHILD_RESULTS_MS * CHILD_RESULTS_CAP).toBeLessThanOrEqual(5000);
+    const f = fixture();
+    // a debounce long enough that a loaded machine finishes the three reports inside it
+    (f.m as unknown as { opts: { childResultsMs: number } }).opts.childResultsMs = 1000;
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'B · uno'), f.task('scout', 'B · due'), f.task('scout', 'B · tre')] });
+    const kids = f.m.list().filter(c => c.parentId === parent.id);
+    const before = f.sent.get(parent.id)!.length;
+    const rep = (i: number, summary: string, extra: Record<string, unknown> = {}) => f.call('agent_report', kids[i]!.id, { outcome: 'done', summary, output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], ...extra });
+    await rep(0, 'Uno vecchio');
+    await rep(0, 'Uno nuovo', { amends: true });
+    await rep(1, 'Due fatto');
+    expect(f.sent.get(parent.id)!.length).toBe(before); // the last result restarted the debounce
+    await sentAfter(f.sent, parent.id, before);
+    // the third sibling still works: the batch went anyway, one entry per child, only the newest of the first
+    const sent = f.sent.get(parent.id)!.slice(before);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toContain('Uno nuovo');
+    expect(sent[0]).not.toContain('Uno vecchio');
+    expect(sent[0]).toContain('Due fatto');
+    expect(f.m.list().find(c => c.id === kids[2]!.id)!.delegation!.result).toBeUndefined();
+  });
+
+  it('a result that keeps being followed by siblings\' still goes within the cap of the debounce', async () => {
+    const f = fixture();
+    const ms = 1000;
+    (f.m as unknown as { opts: { childResultsMs: number } }).opts.childResultsMs = ms;
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [1, 2, 3, 4].map(n => f.task('scout', `C · ${n}`)) });
+    const kids = f.m.list().filter(c => c.parentId === parent.id);
+    const before = f.sent.get(parent.id)!.length;
+    // time the flush itself: the delivery after it is asynchronous and slow on a loaded machine
+    const flushes: number[] = [], m = f.m as unknown as { flushChildResults(id: string): void };
+    const flush = m.flushChildResults.bind(f.m);
+    m.flushChildResults = (id: string) => { if (id === parent.id) flushes.push(Date.now()); flush(id); };
+    let firstBefore = 0, firstAfter = 0, lastBefore = 0;
+    // each result comes just before the debounce would end: without the cap it would be restarted every time
+    for (let i = 0; i < 3 && !flushes.length; i++) {
+      lastBefore = Date.now(); firstBefore ||= lastBefore;
+      await f.call('agent_report', kids[i]!.id, { outcome: 'done', summary: `Fatto ${i}`, output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }] });
+      firstAfter ||= Date.now();
+      if (i < 2) await new Promise(res => setTimeout(res, ms * 0.95));
+    }
+    await sentAfter(f.sent, parent.id, before);
+    expect(f.sent.get(parent.id)![before]).toContain('Fatto 0');
+    expect(flushes[0]! - firstBefore).toBeGreaterThanOrEqual(ms - 5);
+    // the cap is reached before the debounce restarted by the last result would end
+    if (firstAfter + ms * CHILD_RESULTS_CAP < lastBefore + ms) expect(flushes[0]!).toBeLessThan(lastBefore + ms);
+  });
+
+  it('an over-long summary and remember line are cut with the marker, not refused; the full summary stays in output', async () => {
+    const remembered: [string, string][] = [];
+    const f = fixture({}, undefined, undefined, undefined, {}, remembered);
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Lungo')] });
+    const kid = f.m.list().find(c => c.parentId === parent.id)!;
+    const summary = 'Il riepilogo continua ancora '.repeat(25).trim(), line = 'Run the unit tests of a module with vitest and its path before a commit '.repeat(6).trim();
+    expect(summary.length).toBeGreaterThan(600);
+    expect(line.length).toBeGreaterThan(300);
+    const r = await f.call('agent_report', kid.id, { outcome: 'done', summary, output: 'Il deliverable', doneWhen: [{ criterion: 'criterion A', met: true }], remember: [line] });
+    expect(r).toMatchObject({ reported: true, remembered: 1, warnings: [expect.stringContaining('remember line 1 cut'), expect.stringContaining('summary cut')] });
+    const stored = f.m.runs.get(kid.run!.runId)!.report!.canonical!;
+    expect(stored.summary.length).toBeLessThanOrEqual(300);
+    expect(stored.summary).toMatch(/…$/);
+    expect(stored.output).toContain('Il deliverable');
+    expect(stored.output).toContain(summary);
+    expect(remembered[0]![1].length).toBeLessThanOrEqual(300);
+    expect(remembered[0]![1]).toMatch(/…$/);
+  });
+
+  it('an output near its limit makes room for the full summary: its tail is cut with the marker, and the warning says so', async () => {
+    const f = fixture();
+    const parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Quasi pieno')] });
+    const kid = f.m.list().find(c => c.parentId === parent.id)!;
+    const summary = 'Sintesi lunga che continua '.repeat(15).trim(), output = 'deliverable '.repeat(992).trim();
+    expect(summary.length).toBeGreaterThan(300);
+    expect(output.length).toBeGreaterThan(11_900);
+    const r = await f.call('agent_report', kid.id, { outcome: 'done', summary, output, doneWhen: [{ criterion: 'criterion A', met: true }] });
+    expect(r.warnings).toEqual([expect.stringMatching(/full text is at the end of output, whose last \d+ characters were cut/)]);
+    const stored = f.m.runs.get(kid.run!.runId)!.report!.canonical!;
+    expect(stored.output.length).toBeLessThanOrEqual(12_000);
+    expect(stored.output.endsWith(`…\n\nSintesi completa: ${summary}`)).toBe(true);
+    expect(stored.output.startsWith('deliverable deliverable')).toBe(true);
+  });
+
   it('agent_report remember writes to the reporting role\'s memory, only once the report is accepted', async () => {
     const remembered: [string, string][] = [];
     const f = fixture({}, undefined, undefined, undefined, {}, remembered);
@@ -147,7 +287,8 @@ describe('agent_delegate', () => {
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log')] });
     const scout = f.m.list().find(c => c.parentId === parent.id)!;
     await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [], remember: ['Logs are in D:/logs'] })).rejects.toThrow(/criterion A/);
-    await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], remember: ['a\nb'] })).rejects.toThrow(/remember/);
+    await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], remember: ['a\nb'] })).rejects.toThrow(/single line, without line breaks/);
+    await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], remember: ['a', 'b', 'c', 'd'] })).rejects.toThrow(/a list of up to 3 lines/);
     // a case-specific line (ADR 0129) refuses the report with what to save instead
     await expect(f.call('agent_report', scout.id, { outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], remember: ['Logs are in D:/logs', 'Stats at https://localhost:44309/stats'] }))
       .rejects.toThrow(/remember line 2: This fact is tied to one case.*launch profile/);
@@ -678,6 +819,15 @@ describe('the pure parts', () => {
     expect(() => checkResult({ outcome: 'done', summary: 's', output: 'o', doneWhen: [{ criterion: 'a', met: false }] }, ['a'])).toThrow(/partial/);
     expect(checkResult({ outcome: 'partial', summary: 's', output: 'o', doneWhen: [{ criterion: 'a', met: false }] }, ['a']).outcome).toBe('partial');
   });
+  it('checkResult cuts an over-long summary with the marker and keeps amends; resultMessage marks a correction', () => {
+    const r = checkResult({ outcome: 'partial', summary: 'x'.repeat(500), output: 'o', doneWhen: [{ criterion: 'a', met: false }], amends: true }, ['a']);
+    expect(r.summary).toHaveLength(300);
+    expect(r.summary.endsWith('…')).toBe(true);
+    expect(r.amends).toBe(true);
+    expect(() => checkResult({ outcome: 'partial', summary: 's', output: 'o', doneWhen: [{ criterion: 'a', met: false }], amends: 'yes' }, ['a'])).toThrow(/amends/);
+    expect(resultMessage('scout', 'T', r, { correction: 2 })).toContain('[correzione 2/2 del risultato · Scout «T»] (sostituisce il risultato precedente di questa chat)');
+    expect(resultMessage('scout', 'T', r)).toContain('[risultato · Scout «T»]');
+  });
   it('the role frame names agent_report with its full MCP name and says it may be deferred (#144)', () => {
     expect(ROLE_PREAMBLE).toContain('mcp__second-brain__agent_report');
     expect(ROLE_PREAMBLE).toContain('ToolSearch');
@@ -685,14 +835,18 @@ describe('the pure parts', () => {
   it('agent_report shows the validator\'s limits in its schema and names doneWhen everywhere (#147)', () => {
     const f = fixture();
     const report = delegationTools({ chats: f.m, roles: () => catalog(), settings: () => DELEGATION_DEFAULTS, engineRefusal: () => null, label: '[agente]', runs: () => [] }).find(t => t.name === 'agent_report')!;
-    const props = (report.inputSchema as { properties: Record<string, { maxLength?: number; items?: { maxLength?: number; properties?: Record<string, { maxLength?: number }> } }> }).properties;
-    expect(props.summary!.maxLength).toBe(300);
-    expect(props.remember!.items!.maxLength).toBe(300);
+    const props = (report.inputSchema as { properties: Record<string, { maxLength?: number; description?: string; items?: { maxLength?: number; properties?: Record<string, { maxLength?: number }> } }> }).properties;
+    // summary and remember lines are cut, not refused (ADR 0224): the schema says the limit without enforcing it
+    expect(props.summary!.maxLength).toBeUndefined();
+    expect(props.summary!.description).toContain('300');
+    expect(props.remember!.items!.maxLength).toBeUndefined();
+    expect(props.remember!.description).toContain('300');
+    expect(props.amends).toMatchObject({ type: 'boolean' });
     expect(props.doneWhen!.items!.properties!.criterion!.maxLength).toBe(300);
     expect(props.doneWhen!.items!.properties!.evidence!.maxLength).toBe(1000);
     expect(ROLE_PREAMBLE).toContain('doneWhen');
     expect(delegationPrompt({ goal: 'G', output: 'O', doneWhen: ['D'] }, { role: 'scout', parentTitle: 'P', title: 'T', skills: [] })).toContain('doneWhen');
-    expect(() => checkResult({ outcome: 'done', summary: 'x'.repeat(301), output: 'o', doneWhen: [{ criterion: 'a', met: true }] }, ['a'])).toThrow(/300/);
+    expect(checkResult({ outcome: 'done', summary: 'x'.repeat(301), output: 'o', doneWhen: [{ criterion: 'a', met: true }] }, ['a']).summary).toHaveLength(300);
     expect(() => checkResult({ outcome: 'done', summary: 's', output: 'o', criteria: [{ criterion: 'a', met: true }] }, ['a'])).toThrow(/use doneWhen, not criteria/);
     expect(() => checkResult({ outcome: 'done', summary: 's', output: 'o', criteriaResults: [] }, ['a'])).toThrow(/use doneWhen, not criteriaResults/);
   });
@@ -831,7 +985,7 @@ describe('versioned task continuity and canonical results', () => {
     expect(f.m.list().find(row => row.id === c.id)?.run?.scope).toEqual({ brainRoot: path.resolve(brain), projectRoot: path.resolve(f.dir) });
   });
 
-  it('persists full ordered user instructions and refuses assignment against a stale read cursor', async () => {
+  it('persists full ordered user instructions; the next assignment needs no cursor and does not repeat them in the prompt', async () => {
     const f = fixture();
     const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'initial task' }, 'agent');
@@ -844,10 +998,19 @@ describe('versioned task continuity and canonical results', () => {
     expect(new Set(read.events.map(e => e.id)).size).toBe(2);
     expect(f.m.list().find(row => row.id === c.id)?.run?.taskVersion).toBe(1);
     await f.call('agent_report', c.id, result);
-    await expect(f.m.assignTask(c.id, 'follow up', { source: { kind: 'chat', chatId: o.id } })).rejects.toThrow(/Unread user/);
     f.m.userWrote(c.id, 'A newer constraint');
-    await expect(f.m.assignTask(c.id, 'follow up', { expectedEventSeq: read.latestSeq, source: { kind: 'chat', chatId: o.id } })).rejects.toThrow(/Unread user/);
-    await f.m.assignTask(c.id, 'follow up', { expectedEventSeq: 3, source: { kind: 'chat', chatId: o.id } });
+    await expect(f.m.assignTask(c.id, 'follow up', { expectedEventSeq: 4, source: { kind: 'chat', chatId: o.id } })).rejects.toThrow(/Invalid user event cursor/);
+    // the one refusal left: the child is working
+    f.sinks.get(c.id)!.changed({ state: 'running' });
+    await expect(f.m.assignTask(c.id, 'follow up', { source: { kind: 'chat', chatId: o.id } })).rejects.toThrow(/busy/);
+    f.sinks.get(c.id)!.changed({ state: 'idle' });
+    const sent = vi.spyOn(f.m, 'send');
+    // a stale cursor is no longer a refusal; the child already has the user's entries: its prompt is the assignment only
+    await f.m.assignTask(c.id, 'follow up', { expectedEventSeq: read.latestSeq, source: { kind: 'chat', chatId: o.id } });
+    const prompt = String(sent.mock.calls[0]?.[1]);
+    expect(prompt).toBe('follow up');
+    expect(prompt).not.toContain('A newer constraint');
+    expect(prompt).not.toContain('Second instruction');
     expect(f.m.userEvents(c.id).acknowledgedSeq).toBe(3);
     expect(f.m.list().find(row => row.id === c.id)?.run?.taskVersion).toBe(2);
     await f.m.shutdown();
@@ -898,6 +1061,24 @@ describe('versioned task continuity and canonical results', () => {
     expect(f.sent.get(o.id)).toHaveLength(1);
   });
 
+  it('a root correction reported while the first synthesis is submitting gets its own synthesis once that one went', async () => {
+    let correct: (() => void) | undefined;
+    const f = fixture({}, undefined, undefined, () => { const go = correct; correct = undefined; go?.(); });
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'synthesize', deliveryPolicy: 'synthesize' }, 'agent');
+    f.sinks.get(c.id)!.changed({ state: 'running' });
+    await f.call('agent_report', c.id, result);
+    // the correction lands inside the engine's submit of the first synthesis: before its acknowledgment
+    correct = () => { f.m.reportRoot(c.id, { ...result, summary: 'Sintesi corretta', amends: true } as never); };
+    f.sinks.get(c.id)!.changed({ state: 'idle' });
+    await sentAfter(f.sent, o.id, 1);
+    const sent = f.sent.get(o.id)!;
+    expect(sent).toHaveLength(2);
+    expect(sent[0]).not.toContain('correzione');
+    expect(sent[1]).toContain('correzione 1/2');
+    expect(sent[1]).toContain('Sintesi corretta');
+    expect(f.m.runs.get(c.run!.runId)!.delivery).toMatchObject({ synthesisPending: false });
+  });
   it('restored in-flight batch never acknowledges a concurrent child twice', async () => {
     const f = fixture();
     const p = await f.root('strategist');
@@ -908,6 +1089,69 @@ describe('versioned task continuity and canonical results', () => {
     await f.call('agent_report', kids[1].chatId, result);
     await new Promise(resolve => setTimeout(resolve, 10));
     expect(f.m.list().find(c => c.id === kids[1].chatId)!.run!.delivery!.attempts).toBe(1);
+  });
+  it('a restart never sends a result its correction replaced: only the newest of the child goes', async () => {
+    const f = fixture();
+    const p = await f.root('strategist');
+    const kids = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'One'), f.task('sentinel', 'Two')] })).children;
+    f.sinks.get(kids[1].chatId)!.changed({ state: 'running' });
+    const rep = (summary: string, extra: Record<string, unknown> = {}) => f.call('agent_report', kids[0].chatId, { ...result, summary, ...extra });
+    await rep('Uno vecchio');
+    const chats = (f.m as unknown as { chats: Map<string, { heldResults?: { id?: string }[] }> }).chats;
+    const original = { ...chats.get(p.id)!.heldResults![0]! };
+    await rep('Uno nuovo', { amends: true });
+    // the original survives as if its batch were still submitting when the app quit
+    chats.get(p.id)!.heldResults = [original, ...chats.get(p.id)!.heldResults!];
+    const before = f.sent.get(p.id)?.length ?? 0;
+    f.m.resumeInterrupted();
+    await sentAfter(f.sent, p.id, before);
+    const sent = f.sent.get(p.id)!.slice(before).join('\n');
+    expect(sent).toContain('Uno nuovo');
+    expect(sent).toContain('correzione 1/2');
+    expect(sent).not.toContain('Uno vecchio');
+  });
+  it('a correction reported while the first batch is inside its submit survives that batch\'s acknowledgment and a restart', async () => {
+    let correct: (() => void) | undefined, pid = '';
+    const f = fixture({}, undefined, undefined, (id: string) => { if (id !== pid) return; const go = correct; correct = undefined; go?.(); }, {}, [], { childResultsMs: 10 });
+    const p = await f.root('strategist');
+    pid = p.id;
+    const kids = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'One'), f.task('sentinel', 'Two')] })).children;
+    f.sinks.get(kids[1].chatId)!.changed({ state: 'running' });
+    const opts = (f.m as unknown as { opts: { childResultsMs: number } }).opts;
+    // inside the engine's submit of the first batch, before its acknowledgment: the correction waits (the sibling works)
+    correct = () => { opts.childResultsMs = 3_600_000; f.m.reportDelegation(kids[0].chatId, { ...result, summary: 'Uno nuovo', amends: true } as never); };
+    const before = f.sent.get(p.id)?.length ?? 0;
+    await f.call('agent_report', kids[0].chatId, { ...result, summary: 'Uno vecchio' });
+    await sentAfter(f.sent, p.id, before);
+    expect(f.sent.get(p.id)!.at(-1)).toContain('Uno vecchio');
+    // the app quits before the correction goes: the restart still sends it
+    const restart = f.sent.get(p.id)!.length;
+    f.m.resumeInterrupted();
+    await sentAfter(f.sent, p.id, restart);
+    expect(f.sent.get(p.id)!.at(-1)).toContain('correzione 1/2');
+    expect(f.sent.get(p.id)!.at(-1)).toContain('Uno nuovo');
+  });
+  it('a batch whose submit fails after its result was corrected is not sent again: only the correction goes', async () => {
+    let correct: (() => void) | undefined, pid = '';
+    const f = fixture({}, undefined, undefined, (id: string) => { if (id !== pid) return; const go = correct; correct = undefined; if (go) { go(); throw new Error('engine submission failed'); } }, {}, [], { childResultsMs: 10 });
+    const p = await f.root('strategist');
+    pid = p.id;
+    const kids = (await f.call('agent_delegate', p.id, { tasks: [f.task('scout', 'One'), f.task('sentinel', 'Two')] })).children;
+    f.sinks.get(kids[1].chatId)!.changed({ state: 'running' });
+    const opts = (f.m as unknown as { opts: { childResultsMs: number } }).opts;
+    correct = () => { opts.childResultsMs = 3_600_000; f.m.reportDelegation(kids[0].chatId, { ...result, summary: 'Uno nuovo', amends: true } as never); };
+    const before = f.sent.get(p.id)?.length ?? 0;
+    await f.call('agent_report', kids[0].chatId, { ...result, summary: 'Uno vecchio' });
+    await sentAfter(f.sent, p.id, before); // the failed submit of the original
+    await new Promise(res => setTimeout(res, 20));
+    // the sibling finishes: the batch goes at once, with the correction and without the failed original
+    const next = f.sent.get(p.id)!.length;
+    await f.call('agent_report', kids[1].chatId, { ...result, summary: 'Due fatto' });
+    await sentAfter(f.sent, p.id, next);
+    const last = f.sent.get(p.id)!.slice(next).join('\n');
+    expect(last).toContain('Uno nuovo');
+    expect(last).toContain('Due fatto');
+    expect(last).not.toContain('Uno vecchio');
   });
   it('quitting with a waiting sibling preserves each outbox id once', async () => {
     const f = fixture();
@@ -1112,5 +1356,20 @@ describe('two open chats with the same title (#187)', () => {
     const parent = await f.root('strategist');
     const out = await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Ordini · Log'), f.task('scout', 'Ordini · Log')] });
     expect(out.children.map((c: { title: string }) => c.title).sort()).toEqual(['Ordini · Log', 'Ordini · Log · 2']);
+  });
+});
+
+describe('corrections and caps, the pure parts', () => {
+  it('capText never splits an emoji; supersededResult knows an entry its run corrected since', () => {
+    const cut = capText('x'.repeat(298) + '😀😀', 300);
+    expect(cut.length).toBeLessThanOrEqual(300);
+    expect(cut.endsWith('…')).toBe(true);
+    expect(cut).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+    const item = (id: string) => ({ id, runId: 'r1', title: 't', message: 'm', chatId: 'c' });
+    expect(supersededResult(item('result-r1'), 1)).toBe(true);
+    expect(supersededResult(item('result-r1-c1'), 1)).toBe(false);
+    expect(supersededResult(item('result-r1-c1'), 2)).toBe(true);
+    expect(supersededResult(item('result-r1'), undefined)).toBe(false);
+    expect(supersededResult(item('a-random-uuid'), 2)).toBe(false);
   });
 });

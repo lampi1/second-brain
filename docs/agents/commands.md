@@ -51,7 +51,7 @@ row and its line here in the same change.
 | `app_ui` | Orchestrator, /mcp/app | Steer the UI without taking focus: open a page, maximize a chat, or read the screen outline. |
 | `app_create_chat` | Orchestrator, /mcp/app | Open a work chat that runs one role, started with a self-contained prompt. |
 | `app_assign_task` | Orchestrator, /mcp/app | Give a finished work chat a new measured task in the same role and project. |
-| `app_task_events` | Orchestrator, /mcp/app | The ordered user decisions of a root task, read before assigning it again. |
+| `app_task_events` | Orchestrator, /mcp/app | The ordered user decisions of a root task (optional: app_assign_task returns the unread ones). |
 | `app_send_to_chat` | Orchestrator, /mcp/app | Send a message to an active app chat, labelled as not the user's approval. |
 | `app_close_chat` | Orchestrator, /mcp/app | Close a chat for the user, like ✕: its engine, the tools it started and its delegation tree end; refused while it or an open descendant waits for the user. |
 | `app_reopen_chat` | Orchestrator, /mcp/app | Reopen a closed chat with its whole history. |
@@ -82,15 +82,17 @@ row and its line here in the same change.
 | `app_recordings` | Orchestrator only | The call recordings and their local transcripts, or the audio files found on the PC. |
 | `app_recording_import` | Orchestrator only | Import an audio or video file from the PC to be transcribed locally. |
 | `app_learn` | Orchestrator only | Start an Impara lesson the user asked for (an explanation or a quiz), or list the lessons. |
+| `app_child_output` | Orchestrator only | The latest report of a chat in its tree, delegates included: summary and criteria; full: the output, max 4,000 chars. |
 | `agent_metrics` | Orchestrator only | Success rate, cost, time and corrections per role and version (numbers only). |
 | `task_estimate` | Orchestrator only | Estimate a request: kind of work, size, role, time and cost. |
 | `agent_delegate` | work chats | Delegate independent parts of the task to other roles as visible child chats. |
 | `agent_children` | work chats | The chats you delegated: role, state, goal, result, open requests, cost. |
 | `agent_ask_parent` | work chats | Ask the chat that delegated you, before the user. |
 | `agent_answer_child` | work chats | Answer a question one of your delegated chats asked you. |
-| `agent_report` | work chats | Your one final result for the chat that started you. |
-| `agent_assign_task` | work chats | Continue your direct child with a separate task run. |
-| `agent_task_events` | work chats | The ordered user instructions for your direct child, read before reassigning it. |
+| `agent_report` | work chats | Your one final result for the chat that started you; `amends: true` corrects it (at most 2 corrections, ADR 0224). |
+| `agent_close_child` | work chats | Close one of your delegated chats and its tree, never while it waits for the user. |
+| `agent_assign_task` | work chats | Continue your direct child with a separate task run; the user's entries there you have not seen come back to you. |
+| `agent_task_events` | work chats | The ordered user instructions for your direct child (optional before reassigning it). |
 | `agent_integrate_child` | work chats | Stage one finished child's commits in a fresh detached worktree. |
 | `agent_integrate_children` | work chats | Combine several finished children's commits in one staging worktree. |
 | `agent_child_feedback` | work chats | Your verdict on a delegated child's run, with evidence. |
