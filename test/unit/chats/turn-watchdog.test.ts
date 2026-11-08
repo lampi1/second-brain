@@ -10,7 +10,7 @@ import { watchTurns } from '../../../src/main/chats/turn-watchdog';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import type { ChatItem } from '../../../src/shared/contract';
 import { log } from '../../../src/main/log';
-import { recSink, tmp, waitFor } from './helpers';
+import { recSink, tmp } from './helpers';
 
 const FIXTURES = path.resolve(import.meta.dirname, '..', '..', 'fixtures');
 const REPLAY = path.join(FIXTURES, 'replay-engine.mjs');
@@ -78,11 +78,15 @@ describe('watchTurns', () => {
     try {
       s.start();
       if (s.ready) await s.ready;
+      vi.useFakeTimers();
       s.send('ciao');
-      const warned = await waitFor(() => systems(sink).find(i => i.code === 'turnNoStart'), 'the watchdog warning', 60_000);
-      expect(warned.level).toBe('warn');
+      // Flush the asynchronous policy lookup before the deadline: local effort metadata is not a native reply.
+      await vi.advanceTimersByTimeAsync(0);
+      expect(sink.patch).toHaveProperty('effortSubmitted');
+      vi.advanceTimersByTime(1500);
+      expect(systems(sink).find(i => i.code === 'turnNoStart')?.level).toBe('warn');
       expect(sink.exited).toBeNull();
       expect(s.busy).toBe(true);
-    } finally { await s.close(500); }
+    } finally { vi.useRealTimers(); await s.close(500); }
   }, 120_000);
 });

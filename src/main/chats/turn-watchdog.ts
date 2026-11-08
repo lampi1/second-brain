@@ -5,7 +5,8 @@
 // and every turn logs its time to first event ("timing: turn start"). Why: a stalled engine looked like a busy one,
 // with no sign and no trace (cloudroom's watchdog idea, plan proposal 10). How: the session and its sink are wrapped;
 // anything the engine makes the adapter report (an item, a question, a patch, an exit) counts as its first event, except
-// what the adapter reports synchronously inside send() itself. Used by engines/sessions.ts sessionFor, for every kind.
+// what the adapter reports synchronously inside send() itself, or local effort-submission metadata after a policy await.
+// Used by engines/sessions.ts sessionFor, for every kind.
 import { sysEn } from '../../shared/sys';
 import type { ChatItem } from '../../shared/contract';
 import type { HarnessSession, SessionSink } from './session';
@@ -58,7 +59,9 @@ export function watchTurns<S extends HarnessSession>(make: (sink: SessionSink) =
       if (typeof v !== 'function') return v;
       return (...args: unknown[]) => {
         const own = prop === 'item' && (args[0] as ChatItem).id === warnId && warnId !== null;
-        const engineSide = !(prop === 'item' && (args[0] as ChatItem).kind === 'user');
+        const submitted = prop === 'changed' && Object.keys(args[0] as object).length === 1
+          && Object.hasOwn(args[0] as object, 'effortSubmitted');
+        const engineSide = !submitted && !(prop === 'item' && (args[0] as ChatItem).kind === 'user');
         if (prop === 'exit') disarm();
         else if (!own && engineSide) first();
         return (v as (...a: unknown[]) => unknown).apply(target, args);

@@ -1396,8 +1396,11 @@ export class AcpSession implements HarnessSession {
           const w = this.briefWaited.get(id);
           if (!w) return;
           w.timer = null;
-          if (!this.exited && !this.procExited) void this.onAgentRequest(id, method, p).catch(() => this.killNow());
-          this.briefWaited.delete(id);
+          if (this.exited || this.procExited) { this.briefWaited.delete(id); return; }
+          // The recheck must see that grace already elapsed, even when briefReady crosses the runtime broker.
+          void this.onAgentRequest(id, method, p).catch(() => this.killNow()).finally(() => {
+            if (this.briefWaited.get(id) === w) this.briefWaited.delete(id);
+          });
         }, BRIEF_GRACE_MS);
         timer.unref?.();
         this.briefWaited.set(id, { rpcId: id, timer });

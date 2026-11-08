@@ -153,6 +153,44 @@ No push, default activation, dependency installation, new independent review, sc
 performed by this recovery. All six gate failures, the two unidentified review findings, the new review and the
 stage-three permission-consumption integration remain explicit blockers.
 
+### Six-red classification and correction follow-up
+
+Base comparison: temporarily switched this clean tracked worktree to detached `origin/main` (`a66f452f`), ran each
+affected file alone using the existing dependencies, then switched back to `feat/app-owned-agent-runtime` at
+`a442135f`. No stash, installation, new worktree, junction change or push was needed. All four baseline commands
+returned **exit 0**: `guide-anchors.test.ts` 14/14, `chats/acp.test.ts` 53/53, `chats/claude.test.ts` 40/40 and
+`chats/turn-watchdog.test.ts` 3/3.
+
+| Previous red | Classification | Cause and correction |
+|---|---|---|
+| `guide-anchors.test.ts:102`, stale code anchor | Caused by stage two | The asynchronous `onControlRequest` change invalidated its stored hash. Re-read the permissions card: its description still matches the implementation. Regenerated the anchor. |
+| `guide-anchors.test.ts:112`, maintenance not empty | Caused by stage two | Same stale anchor, exposed by the maintenance view; the same regenerated hash fixes both checks. |
+| `chats/acp.test.ts:218`, missing-brief refusal | Caused by stage two | The retry deleted its grace marker before awaiting the asynchronous brief lookup, then scheduled grace again forever. Retain the marker until the retry settles. |
+| `chats/acp.test.ts:231`, third-ask fallback/cancellation | Caused by stage two | Same retry loop prevented the first refusal and later fallback. Keep the exact map entry through the recheck and remove it in `finally`. |
+| `chats/claude.test.ts:158`, missing-brief refusal | Caused by stage two | The Claude timer had the same premature marker deletion. Keep it through the asynchronous recheck and remove it in `finally`. |
+| `chats/turn-watchdog.test.ts:82`, missing watchdog warning | Caused by stage two | Codex's asynchronous policy lookup moved its local `effortSubmitted` patch outside synchronous `send`; the watchdog misclassified it as an engine response. Ignore patches containing only local effort-submission metadata. |
+
+Fresh red proof on the branch: the two unchanged guide checks and the real-adapter watchdog test failed (exit 1).
+The watchdog test now advances fake time after the real adapter is ready instead of polling for a real deadline;
+its first run still reproduced the missing warning. Four new fake-clock brief regressions (Claude/ACP, synchronous
+and asynchronous callback) then failed with zero replies instead of one (exit 1). An initial parse error in that new
+test fixture was corrected before this four-failure run and is not counted as a regression proof.
+
+Green after the corrections: those three files plus the complete original ACP and Claude files passed **114/114,
+exit 0**. The brief regressions also preserve two refusals followed by the third-ask panel, with no extra grace timer.
+The original ACP and Claude assertions were not weakened. A new foreground build returned **exit 0** (only the
+existing large-chunk warning).
+
+The single follow-up `npm run check:quick` ran in the foreground with a 600-second tool timeout and completed with
+**exit 1**. Typecheck and lint passed; all six original reds passed. Final unit results: **1,327 passed, 1 skipped,
+1 failed**, across 97 files (96 passed). The new failure is `agents/delegation.test.ts:244`, "a result that keeps being
+followed by siblings' still goes within the cap of the debounce": a wall-clock timestamp was 39 ms beyond the asserted
+bound. This follow-up did not rerun the gate or that test, remove it, or claim its cause is pre-existing/load-only.
+It remains an unclassified gate blocker, separate from the six stage-two regressions fixed above.
+
+The independent review, two unidentified historical review findings, and `answerConsumed` integration after stage
+three remain outstanding. No push or default activation is authorized by these partial verification results.
+
 ## Shared-file integration footprint
 
 - `src/main/index.ts`: a guarded dynamic runtime-host setup before services; test-only recorder wrapper imports the

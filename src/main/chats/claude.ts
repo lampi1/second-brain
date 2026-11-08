@@ -848,7 +848,11 @@ export class ClaudeSession implements HarnessSession {
     if (generation !== this.brokerGeneration || this.exited || this.procExited) return true;
     if (noBrief && !this.briefWaited.has(id) && this.yesNoRefused < YESNO_RETRIES) {
       this.briefWaited.add(id);
-      setTimeout(() => { if (!this.exited && !this.procExited && this.briefWaited.has(id)) void this.onControlRequest(m).catch(() => this.killNow()); this.briefWaited.delete(id); }, BRIEF_GRACE_MS).unref?.();
+      setTimeout(() => {
+        if (this.exited || this.procExited || !this.briefWaited.has(id)) { this.briefWaited.delete(id); return; }
+        // Keep the elapsed-grace marker while the broker's async recheck runs, or it schedules another grace forever.
+        void this.onControlRequest(m).catch(() => this.killNow()).finally(() => this.briefWaited.delete(id));
+      }, BRIEF_GRACE_MS).unref?.();
       return true;
     }
     if (yesNo && !noBrief) { this.yesNoRefused = 0; return false; }
