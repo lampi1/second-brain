@@ -57,7 +57,7 @@ Every module has unit tests; every user-visible feature has an e2e test with a s
 only the targeted tests (`npx vitest run <files>`; owner, 2026-11-07: "rifai i test mille volte"). A branch's gate
 before the merge, with no e2e (owner, 2026-11-08: "fai finire tutto, fanculo i test e2e"): `npm run check:quick` green
 on the branch's commit + a clean independent Sentinel review (rule 9) + the guard scan + a rebase on `main` right
-before the merge, then a plain `git push origin main` by the owner (rule 8; never a force push). A visible change is still looked at in the
+before the merge, then a plain `git push origin main` (rule 8; never a force push). A visible change is still looked at in the
 dev app. No e2e run and no machine lock gate a branch; `npm run check:branch` is no longer needed per branch. Never
 repeated suites, never Sentinels only to compare main and the branch. After a batch of merges one dedicated chat runs
 the non-e2e parts of `npm run check` once on main (typecheck, lint, all unit tests); whoever breaks main fixes it on
@@ -68,10 +68,24 @@ Load tests, stress tests, synthetic CPU/RAM load generators, benchmarks under lo
 machine run only at night, outside the owner's working hours; never during the day on their work PC (owner,
 2026-10-15).
 
-## 8. Commits: local only for agents
+## 8. Commits and merge to main
 
-Agents commit on their branch/worktree; pushing, adding remotes and opening pull requests are the human's steps.
-Conventional messages (`feat(chats): …`), English.
+Agents commit on their branch/worktree. Conventional messages (`feat(chats): …`), English. An agent of the app may
+merge its verified branch into `main` and push it, without asking the owner each time (owner, 2026-11-07; ADR 0231),
+only when all three hold on the exact commit that is pushed:
+
+1. rule 7's branch gate, green by its exit code: `npm run check:quick`, no e2e and no machine lock (owner,
+   2026-11-08); a visible change is also looked at in the dev app;
+2. the reviews of rule 9 (an independent Sentinel per touched dimension) have no open findings;
+3. `node tools/guard/scan.mjs . --allow .guardallow` passes, and the pre-push hook passes on every pushed commit.
+
+The method is local and fast-forward only: `git merge --ff-only` of the verified branch into `main`, then
+`git push origin main`. If `main` moved, rebase the branch on it and run 1-3 again, so what is pushed is what was
+checked. After a batch of merges, the non-e2e parts of `npm run check` run once on `main` (rule 7).
+Never a force push, a token, a pull request opened on the owner's behalf, a new remote or another remote. «Aggiorna»,
+`npm run promote`, publishing a release and restarting the app stay the owner's clicks. The app's own permission
+layer still asks before `git push` (ADR 0103); allowing it is the owner's setting. The rule covers only this
+repository: other repositories keep their own rules.
 
 ## 9. Review
 

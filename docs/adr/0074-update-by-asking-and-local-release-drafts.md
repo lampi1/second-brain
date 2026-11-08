@@ -26,6 +26,6 @@ by the manual "Windows release draft" workflow, but GitHub Actions are off on pu
 
 ## Consequences
 - "Aggiornati" in the Orchestrator brings a developer's checkout to the latest `main` with one sentence.
-- Agents still never promote, roll back, push or publish. Re-enabling "Aggiorna" for copies promoted from a checkout
+- Agents still never promote, roll back or publish (pushing `main` follows repo rule 8, ADR 0231). Re-enabling "Aggiorna" for copies promoted from a checkout
   is a separate decision for the owner (it was left off).
 - Every published release appears on the Releases page; the README links each version there.

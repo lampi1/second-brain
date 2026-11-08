@@ -49,7 +49,7 @@ Details, flags and ADR references of each: `docs/agents/commands.md`.
 ## Verify a change
 
 While working, only the targeted tests → the branch's gate, no e2e and no lock (owner, 2026-11-08: "fanculo i test
-e2e"): `npm run check:quick` green + a clean independent Sentinel + the guard, rebase on main, the owner's plain push (rule 8) → look at a
+e2e"): `npm run check:quick` green + a clean independent Sentinel + the guard, rebase on main, plain push (rule 8) → look at a
 visible change in the dev app → on a runtime failure `npm run logs -- --level warn --since 15m`, then `npm run
 doctor`. The non-e2e parts of `npm run check` run once on main after a batch of merges; whoever breaks main fixes it
 on main. Details: `docs/agents/rules.md` §7.
@@ -69,7 +69,9 @@ One line each; the full text, its exceptions and ADRs: the same number in `docs/
 7. **Tests**: unit tests for every module, an e2e with a screenshot for every visible feature; a branch's gate =
    `check:quick` green + clean Sentinel + guard, no e2e (2026-11-08) + looked at in the dev app; `check` without e2e
    once on main after a batch of merges; never repeated suites; load tests only at night.
-8. **Commits local only for agents**: conventional English messages; push and PRs are the human's.
+8. **Agents merge to `main` only when verified**: conventional English messages; fast-forward and `git push origin
+   main` only after rule 7's gate (no e2e, no lock), guard passing on every pushed commit; no force; «Aggiorna» is the
+   human's.
 9. **Review**: a fresh-context reviewer per touched dimension before a merge.
 10. **Every file starts with a header comment** (what, why, who uses it); decisions go to `docs/adr/`.
 11. **Parallel agents**: one worktree and one module each; shared files only by the integrator.

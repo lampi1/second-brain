@@ -229,3 +229,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0228](0228-parallel-checkpoint.md) The checkpoint runs while the message goes; the first write waits for it; a restart resumes only recent turns — accepted
 - [0229](0229-orchestrator-remote-control.md) «Controllo remoto»: Claude Code Remote Control of the Orchestrator (same engine, reattach, phone messages shown) — proposed
 - [0230](0230-impara-explain-mode.md) Impara: «Spiegazione», a lesson with pictures and no quiz — proposed
+- [0231](0231-agents-merge-verified-branches-to-main.md) Agents merge verified branches into main (check:quick + touched e2e per branch, check:branch on main after a batch) — accepted

@@ -72,7 +72,8 @@ clean. A change made on another PC would never come back: the export only goes o
 ## Consequences
 - The brain-domain push guard (ADR 0059) runs this same scanner, shipped with the app in `out/guard/scan.mjs`; only its
   private deny and allow lists stay in `%LOCALAPPDATA%/second-brain/publish`.
-- Agents still never push (repo rule 8): the owner pushes and pulls; the hook protects every push he makes.
+- Agents push only `main` of this repository, under repo rule 8's conditions (ADR 0231); the owner pulls; the hook
+  protects every push, his and the agents'.
 - The brain's own copies of the generic tools may drift from `brain-template/`; the owner's brain keeps working as
   today. Whether the brain later uses the product's tools as their source is a separate decision.
 - Work: clean the 7 files, bring the template and guard in, hook + identity in `setup`, one squashed commit onto

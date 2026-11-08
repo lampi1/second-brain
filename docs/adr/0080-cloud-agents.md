@@ -46,7 +46,8 @@ follow-up and stop only on its web page; Claude's CLI starts (`claude --cloud`) 
 
 ## Defaults for the open questions (owner, change at will)
 1. **Pushing**: a cloud agent pushes only its own vendor branch (`cursor/…`, `codex/…`, `claude/…`), never main; the
-   app itself never pushes (AGENTS.md rule 8): a branch that is not on the remote yet is refused ("fai tu il push").
+   app itself never pushes a branch for a cloud agent: a branch that is not on the remote yet is refused ("fai tu il
+   push"). Merging into main follows AGENTS.md rule 8 (ADR 0231).
    Cursor starts with `autoCreatePr: false`.
 2. **Repos**: v1 is for GitHub repos only. Azure DevOps (and any other host) is refused with a clear message: sending
    work code to a vendor's cloud is the owner's policy call.
