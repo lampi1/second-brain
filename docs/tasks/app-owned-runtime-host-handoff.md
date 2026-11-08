@@ -129,7 +129,29 @@ No complete four-finding review report was found in the worktree or the app evid
 findings remain open, and neither the earlier FAIL nor the missing review is treated as a clean verdict. A fresh
 independent review and stage-three `answerConsumed` integration remain required before any push/default activation.
 This recovery is limited to local commits/rebase, one foreground build, one foreground `check:quick`, and guard checks.
-Their actual results will be reported by the successor; the earlier interrupted/denied commands remain historical.
+The earlier interrupted/denied commands remain historical; the new foreground commands completed normally.
+
+### Recovery gate receipts
+
+- Implementation commit before rebase: `3c1212f5`; after rebase: `804f65a5`, based on `origin/main` at `a66f452f`.
+  Commit and rebase both captured exit 0. The inherited branch commits rebased to `4694233e` and `b28a89c0`.
+- `npm run build` in the foreground, with a 600-second tool timeout: **exit 0**, emitted `out/`. The only reported
+  build warning was a minified chunk exceeding 500 kB.
+- Exactly one `npm run check:quick` in the foreground, with a 600-second tool timeout: **exit 1**, failed at unit.
+  Typecheck and changed-file lint completed successfully. Unit results: **1,318 passed, 1 skipped, 6 failed** across
+  96 files (92 passed, 4 failed). No retry and no suite-wide timeout adjustment was made.
+- Open gate failures: `guide-anchors.test.ts:102,112` reports a stale `permissions` point 1 anchor for
+  `claude.ts#onControlRequest`; `chats/acp.test.ts:218,231` and `chats/claude.test.ts:158` timed out awaiting
+  the no-brief question scenarios; `chats/turn-watchdog.test.ts:82` timed out awaiting its watchdog warning.
+  The timeout causes remain undiagnosed; no claim that they are load-only or pre-existing is made.
+- Direct worktree guard: **exit 2**, finding worktree metadata in `.git` and the unscanned `node_modules` junction.
+  No allowlist or junction was changed. Exporting the entire versioned index with `git checkout-index --all` returned
+  **exit 0**; scanning that complete source snapshot with its own unchanged `.guardallow` returned **exit 0**.
+
+The code was built and checked at `804f65a5`; the following documentation-only receipt commit does not change it.
+No push, default activation, dependency installation, new independent review, screenshots or dev lifecycle run was
+performed by this recovery. All six gate failures, the two unidentified review findings, the new review and the
+stage-three permission-consumption integration remain explicit blockers.
 
 ## Shared-file integration footprint
 
