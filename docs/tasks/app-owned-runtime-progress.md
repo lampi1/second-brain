@@ -16,10 +16,24 @@ has actually run and informed the quantitative budgets.
   Commands: `npx vitest run test/unit/agent-runtime.test.ts -t "recomputes bytes"`;
   `npx vitest run test/unit/agent-runtime.test.ts test/unit/runtime-baseline-validation.test.ts -t "exact 262144|extra replay"`;
   `npx vitest run test/unit/agent-runtime.test.ts test/unit/runtime-baseline-validation.test.ts`.
-- Local checkpoint commit and rebase onto stage-one `b2c8aa0b` are next; one fresh quick gate and full-index guard
-  remain pending. The new independent review belongs to the Orchestrator. No push is planned.
+- Local checkpoint `476abc56` rebased cleanly onto stage-one `b2c8aa0b`, exit 0; resulting commit `c74b5adb`.
+- Exactly one fresh `npm run check:quick` was invoked with a 600-second tool timeout and an in-command exit capture.
+  The terminal returned `Unknown: ChildProcess.kill` without output or the exit marker. Its exit and failing tests
+  are unavailable; this is not a passing gate. No retry. The known base registry failure remains unverified here.
+- Full-index export guard exited 0; `node scripts/guard-commit.mjs` exited 0 (clean index after commit).
+  The new independent review belongs to the Orchestrator. No push was performed.
 - CoordinationStore is absent from the received base; stage-three wiring must be supplied as an integration patch,
   not implemented against an invented store. Runtime extraction itself remains unfinished.
+
+Stage-three integration: once its real store is available, add its actual import and change the closing line of
+the `new Workflows(...)` call in `src/main/wiring.ts` (following the approved-plan callback) from `});` to:
+
+```ts
+  }, { store: new CoordinationStore(app.db), chats: () => manager.list(), pending: () => manager.pending() });
+```
+
+The constructor and store import are intentionally not invented on this base. The integrator must bind `app.db`
+to the actual database owner in its combined tree (here `app` in wiring is Electron's app).
 
 ### Earlier execution evidence (historical)
 
@@ -146,4 +160,4 @@ manager-requests, digest and request/receipt modules. No coordination file was c
 | CLI/API adapters outside main, API keys in main | Not started | Existing execution unchanged |
 | Crash/stale/duplicate/barrier/shutdown deterministic tests green | Not started | Recorder tests written, not run |
 | Same after measurements with comparison | Not started | Migration not begun |
-| Quick gate, guard, dev verification, local commits | Blocked | Quick gate: 1,426 pass / 1 skip / 2 fail; hidden dev replay completed; see resumed checkpoint |
+| Quick gate, guard, dev verification, local commits | Blocked | Correction tests 23/23; local commit rebased; guard clean; fresh quick exit unavailable after terminal failure; independent review pending |
