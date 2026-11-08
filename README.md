@@ -2,6 +2,15 @@
 <p align="center"><img src="build/icon.png" width="96" alt="second-brain"></p>
 <h1 align="center">second-brain</h1>
 
+### One work conversation
+
+The Orchestrator presents worker questions, permissions, Strategist interviews and plan approvals. Worker histories
+remain inspectable; their input boxes no longer compete with the Orchestrator. Canonical outcomes appear here
+automatically, with corrections updating the same result. Ask for a recap conversationally; no “Fai il punto” or
+“Sintetizza” click is required. The Remote Control banner can be dismissed without disconnecting and reopened with
+the phone icon. Remote Control cannot yet answer a worker request with an exact host receipt: it stays pending in
+the Orchestrator desktop panel. Supported Telegram requests retain their original authenticated buttons.
+
 <p align="center">
   <b>A cockpit for your AI coding agents: Claude Code, Codex, Cursor and OpenCode on one screen, with a brain that gets better every week.</b>
 </p>

@@ -11,7 +11,8 @@
 // Used by bridge.ts; tests: test/unit/phone/buttons.test.ts.
 import crypto from 'node:crypto';
 import type { PhoneDecidable, PhonePort } from '../../shared/contract/phone';
-import { condense } from './condense';
+import { condense, CONDENSE_MAX } from './condense';
+import { filterOutgoing } from './filter';
 import type { Outbound } from './outbound';
 import type { InlineKeyboard, PhoneLog, TgCallbackQuery } from './types';
 
@@ -36,7 +37,7 @@ export function yesNoKeyboard(prefix: 'a' | 'b', shortId: string, recommended?: 
 
 export const refKey = (d: Pick<PhoneDecidable, 'chatId' | 'ref'>): string =>
   `${d.chatId}|${d.ref.kind === 'question' ? `q:${d.ref.requestId}` : `p:${d.ref.at}`}`;
-export const canUseButtons = (d: PhoneDecidable): boolean => d.simple === true && d.reserved !== true;
+export const canUseButtons = (d: PhoneDecidable): boolean => d.simple === true && d.reserved !== true && filterOutgoing(d.text).length <= CONDENSE_MAX;
 /** Role and neutral label only: never the chat title. */
 export const header = (d: Pick<PhoneDecidable, 'role' | 'neutralLabel'>): string => `${d.role} · ${d.neutralLabel}`;
 export const noticeText = (d: PhoneDecidable): string => `⚠️ ${header(d)}: serve il PC`;

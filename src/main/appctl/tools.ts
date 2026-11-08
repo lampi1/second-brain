@@ -376,7 +376,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     },
     {
       name: 'app_resolve_question',
-      description: 'Close a work chat\'s open question panel (type "question" in app_pending) with the answer the user gave YOU in the Orchestrator: the chat receives it marked "Risposto nell’Orchestrator dall\'utente: …" and the question leaves "Ti aspettano". Only for a decision he took in the Orchestrator after the question opened (the app checks that he wrote to you or answered your question since then); never your own choice, never a permission or a command (only his click answers those), never the Orchestrator\'s own questions. answers: one entry per question of the request, the exact question text as key, his answer as value (several options: one string, comma-separated). note: optional, his words or context, added to the first answer.',
+      description: 'Compatibility endpoint: agent-authored answers are refused. The host presents the original worker request in the Orchestrator and records the owner’s exact panel or paired Telegram button answer. Remote Control cannot yet resolve a worker request: it stays pending in the Orchestrator on desktop. Text, including quoted user consent, is never an authorization receipt.',
       inputSchema: obj({
         chatId: str('the work chat, from app_pending'), requestId: str('the question\'s id, from app_pending'),
         answers: { type: 'object', description: '{ "<question text>": "<his answer>" } for every question', additionalProperties: { type: 'string' } },
@@ -384,28 +384,14 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       }, ['chatId', 'requestId', 'answers']),
       run: async a => {
         const chatId = String(a.chatId ?? ''), requestId = String(a.requestId ?? '');
-        const target = need(chatId);
-        if (target.parentId) throw new Error('bloccato: la domanda è di una chat delegata: risponde l’utente nel suo pannello, o il genitore');
-        if (target.isOrchestrator) throw new Error('bloccato: le domande dell’Orchestrator le risponde solo l\'utente, nel loro pannello');
+        need(chatId);
         const req = d.chats.pending().find(p => p.chatId === chatId && p.id === requestId);
         if (!req) throw new Error('questa domanda non è più aperta (quelle aperte: app_pending)');
         if (req.type !== 'question' || !req.questions?.length) throw new Error('bloccato: solo le domande; permessi e comandi li risponde solo l\'utente con un clic');
         // MCP field values must reach the server verbatim and may include an explicit external confirmation.
         // This relay adds a narrative prefix, so these forms stay in the user's own question panel.
         if (req.tool.startsWith('mcp__')) throw new Error('bloccato: compila il modulo MCP nel pannello delle domande; le risposte non possono essere riscritte dall’Orchestrator');
-        const orchestrator = caller();
-        if (!orchestrator || !decidedSince(orchestrator.id, req.at)) throw new Error('bloccato: L\'utente non ha scritto né risposto nell’Orchestrator da quando la domanda si è aperta. Chiedigliela prima: una tua scelta non vale come sua');
-        const given = a.answers && typeof a.answers === 'object' && !Array.isArray(a.answers) ? a.answers as Record<string, unknown> : {};
-        const asked = req.questions.map(q => q.question);
-        const text = (v: unknown) => (Array.isArray(v) ? v.map(String).join(', ') : String(v ?? '')).trim();
-        if (Object.keys(given).some(k => !asked.includes(k)) || asked.some(q => !text(given[q]))) {
-          throw new Error(`answers deve avere una risposta per ogni domanda, con il testo esatto come chiave: ${asked.map(q => `«${q}»`).join(', ')}`);
-        }
-        const note = String(a.note ?? '').replace(/\s+/g, ' ').trim();
-        const answers = Object.fromEntries(asked.map((q, i) => [q, `${RESOLVED_LABEL} ${text(given[q])}${note && i === 0 ? ` (nota: ${note})` : ''}`]));
-        await d.chats.answer(chatId, requestId, { kind: 'question', answers }, 'relay');
-        log.info('appctl', 'question answered from the Orchestrator', { chat: chatId, data: { requestId, questions: asked.length } });
-        return { ok: true, chatId, requestId, answers };
+        throw new Error('bloccato: una risposta inoltrata da un agente non è una ricevuta dell’utente. La richiesta originale resta nel pannello dell’Orchestrator; risponde l’utente con il pulsante del PC o del telefono associato.');
       },
     },
     {

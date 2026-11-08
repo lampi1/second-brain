@@ -54,6 +54,18 @@ process did not know which chat is in Focus. Closing the window closes the app: 
 
 ## Consequences
 
+### Sole-conversation amendment (2026-11-08)
+
+Every worker request, including a descendant and a Strategist interview/plan, is presented as an Orchestrator
+request with the original worker attribution. Question context and option consequences are carried to the existing
+outbound filter. Existing button nonces still select the original chat/request; the coordination journal records
+the paired owner's answer before the correct engine resumes. Unsupported or reserved operations stay pending in
+the Orchestrator desktop panel. Agent prose, including quoted owner answers or a later unrelated owner message,
+cannot be used with `app_resolve_question` to manufacture consent.
+Canonical outcomes have a host callback independent of model turns. Corrections edit the same acknowledged
+Telegram message; uncertain sends remain uncertain. Live phone-network behavior still needs an owner-coordinated
+check; dev captures and fake transport tests do not claim a real Telegram validation.
+
 - The trade-off, accepted by the owner: Telegram bot chats are not end-to-end encrypted, the texts sit on Telegram's
   servers, and the bridge runs on a work PC. The filter reduces what leaves, it does not make it zero: a customer or
   patient name written in prose can pass, and a lock-screen preview would show it. Mitigations: «no customer data» in

@@ -8,21 +8,21 @@ import { setRemoteControl } from '../store/store';
 import { copyLink } from '../actions';
 import { t } from '../i18n';
 import { IconButton } from './ui';
-import { IconPhone } from './Icons';
+import { IconPhone, IconX } from './Icons';
 
 /** Remote Control is only for an Orchestrator on Claude Code. */
 function offered(chat: ChatSummary): boolean {
   return chat.isOrchestrator === true && chat.harness === 'claude' && !chat.closedAt;
 }
 
-export function RemoteButton({ chat }: { chat: ChatSummary }) {
+export function RemoteButton({ chat, reveal }: { chat: ChatSummary; reveal: () => void }) {
   if (!offered(chat)) return null;
   const on = chat.remoteControl?.on === true;
-  return <IconButton label={on ? t('remote.turnOff') : t('remote.turnOn')} aria-pressed={on} className={on ? 'remote-on' : ''}
-    onClick={() => void setRemoteControl(chat.id, !on)} testid="orchestrator-remote"><IconPhone size={14} /></IconButton>;
+  return <IconButton label={on ? t('remote.copy') : t('remote.turnOn')} aria-pressed={on} className={on ? 'remote-on' : ''}
+    onClick={() => { reveal(); if (!on) void setRemoteControl(chat.id, true); }} testid="orchestrator-remote"><IconPhone size={14} /></IconButton>;
 }
 
-export function RemoteLine({ chat }: { chat: ChatSummary }) {
+export function RemoteLine({ chat, dismiss }: { chat: ChatSummary; dismiss: () => void }) {
   const rc = chat.remoteControl;
   if (!offered(chat) || !rc || rc.status === 'off') return null;
   if (rc.status === 'failed') {
@@ -43,5 +43,6 @@ export function RemoteLine({ chat }: { chat: ChatSummary }) {
     </div>
     {url && <button type="button" className="btn btn-subtle btn-s" onClick={() => void copyLink(url)} data-testid="remote-copy">{t('remote.copy')}</button>}
     <button type="button" className="btn btn-subtle btn-s" onClick={() => void setRemoteControl(chat.id, false)} data-testid="remote-off">{t('remote.off')}</button>
+    <IconButton label={t('chat.tile.close')} onClick={dismiss} testid="remote-dismiss"><IconX size={14} /></IconButton>
   </div>;
 }

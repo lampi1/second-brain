@@ -51,6 +51,15 @@ a probe outside the app (a real session link came back):
 
 ## Consequences
 
+### Sole-conversation amendment (2026-11-08)
+
+The banner's X hides only the line, never disconnects the bridge. The phone icon reveals it again, including the
+link; `Spegni` remains an explicit separate action. Root final outcomes enter the Orchestrator automatically.
+Capability limit: this undocumented bridge has no host API for presenting and consuming an original worker
+request with an exact receipt. Worker requests therefore remain explicitly pending in the Orchestrator desktop
+panel (or the supported paired Telegram button), never answered by an LLM relay. Native prompts belonging to
+the Orchestrator's own Claude session retain the engine's behavior. Remote text is not a worker approval.
+
 - The Telegram bridge (ADR 0219) is untouched; this channel needs no new host from the main process (the engine talks
   to claude.ai as it already does).
 - The protocol is undocumented: a change in a later engine shows as drift in the logs and as an error on the button,

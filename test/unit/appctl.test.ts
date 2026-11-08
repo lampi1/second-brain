@@ -6,7 +6,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { AgentCatalogService } from '../../src/main/agents/catalog';
 import type { AgentModelChoice } from '../../src/shared/agents';
-import { AGENT_LABEL, CHAT_PROMPT_MAX, CHAT_TITLE_MAX, PULL_ASK_MIN, UNBLOCK_ASK_MIN, RESOLVED_LABEL, appControlTools, orchestratorEndpointAuth } from '../../src/main/appctl/tools';
+import { AGENT_LABEL, CHAT_PROMPT_MAX, CHAT_TITLE_MAX, PULL_ASK_MIN, UNBLOCK_ASK_MIN, appControlTools, orchestratorEndpointAuth } from '../../src/main/appctl/tools';
 import { EndpointTokens } from '../../src/main/mcp/tokens';
 import { log } from '../../src/main/log';
 import type { BrainService, BrowserService, ChatService } from '../../src/main/services';
@@ -123,17 +123,16 @@ describe('app control tools', () => {
     }
     const both = { 'Apro il bug?': 'Sì', 'Chi lo segue?': ['Paolo', 'Sara'] };
 
-    it('delivers every answer marked as the user\'s, given in the Orchestrator', async () => {
+    it('refuses agent-authored answers even after an unrelated user message', async () => {
       const { answered, run } = setup([{ kind: 'user', id: 'u', at: 150, text: 'sì aprilo, lo segue Paolo con me' }]);
-      await run({ chatId: 'w', requestId: 'q1', answers: both, note: 'priorità alta' });
-      expect(answered).toEqual([{ chatId: 'w', requestId: 'q1', answer: { kind: 'question', answers: {
-        'Apro il bug?': `${RESOLVED_LABEL} Sì (nota: priorità alta)`, 'Chi lo segue?': `${RESOLVED_LABEL} Paolo, Sara` } } }]);
+      await expect(run({ chatId: 'w', requestId: 'q1', answers: both, note: 'priorità alta' })).rejects.toThrow(/ricevuta/);
+      expect(answered).toEqual([]);
     });
 
     it('his answer to one of the Orchestrator\'s own questions counts too', async () => {
       const { answered, run } = setup([{ kind: 'tool', id: 't', at: 120, name: 'AskUserQuestion', summary: '', input: {}, status: 'ok' }]);
-      await run({ chatId: 'w', requestId: 'q1', answers: both });
-      expect(answered).toHaveLength(1);
+      await expect(run({ chatId: 'w', requestId: 'q1', answers: both })).rejects.toThrow(/ricevuta/);
+      expect(answered).toHaveLength(0);
     });
 
     it('blocked when the user said nothing in the Orchestrator since the question opened (old or app/agent messages only)', async () => {
@@ -143,7 +142,7 @@ describe('app control tools', () => {
         { kind: 'user', id: 'ag', at: 160, text: `${AGENT_LABEL}\n\nrispondi tu` },
         { kind: 'tool', id: 't', at: 170, name: 'AskUserQuestion', summary: '', input: {}, status: 'running' },
       ]);
-      await expect(run({ chatId: 'w', requestId: 'q1', answers: both })).rejects.toThrow(/L'utente non ha scritto/);
+      await expect(run({ chatId: 'w', requestId: 'q1', answers: both })).rejects.toThrow(/ricevuta/);
       expect(answered).toEqual([]);
     });
 
@@ -151,10 +150,10 @@ describe('app control tools', () => {
       const { answered, run } = setup([{ kind: 'user', id: 'u', at: 150, text: 'ok' }]);
       await expect(run({ chatId: 'w', requestId: 'p1', answers: {} })).rejects.toThrow(/solo le domande/);
       await expect(run({ chatId: 'w', requestId: 'form', answers: both })).rejects.toThrow(/modulo MCP/);
-      await expect(run({ chatId: 'orchestrator', requestId: 'rq', answers: both })).rejects.toThrow(/solo l'utente/);
+      await expect(run({ chatId: 'orchestrator', requestId: 'rq', answers: both })).rejects.toThrow(/ricevuta/);
       await expect(run({ chatId: 'w', requestId: 'nope', answers: both })).rejects.toThrow(/non è più aperta/);
-      await expect(run({ chatId: 'w', requestId: 'q1', answers: { 'Apro il bug?': 'Sì' } })).rejects.toThrow(/ogni domanda/);
-      await expect(run({ chatId: 'w', requestId: 'q1', answers: { ...both, Altro: 'x' } })).rejects.toThrow(/ogni domanda/);
+      await expect(run({ chatId: 'w', requestId: 'q1', answers: { 'Apro il bug?': 'Sì' } })).rejects.toThrow(/ricevuta/);
+      await expect(run({ chatId: 'w', requestId: 'q1', answers: { ...both, Altro: 'x' } })).rejects.toThrow(/ricevuta/);
       expect(answered).toEqual([]);
     });
   });

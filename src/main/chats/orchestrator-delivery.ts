@@ -115,7 +115,7 @@ export function wordsFrom(raw: unknown): OrchestratorWords {
  *  A plain turn end ('done') and a start are quiet (2026-11-07, cloudroom comms proposal 1): on 07/11, 50 of the 56
  *  Orchestrator turns opened by an app news ended with a bare 👍; they ride along with its next turn and app_digest. */
 export const newsClass = (kind: 'done' | 'error' | 'question' | 'permission' | 'command' | 'started', endsTurn?: boolean, result?: boolean): DeliveryClass =>
-  kind === 'error' ? 'now' : (kind === 'done' && result) || endsTurn ? 'group' : 'quiet';
+  kind === 'error' ? 'now' : (kind === 'done' && result) || ['question', 'permission', 'command'].includes(kind) || endsTurn ? 'group' : 'quiet';
 
 /** A classifier that follows the brain's `orchestratorMail` as it changes (rebuilt only when the lists change). */
 export function brainClassifier(read: () => unknown): () => MailClassifier {

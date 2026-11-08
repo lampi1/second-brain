@@ -23,6 +23,8 @@ export interface PhoneState {
   quietHours: { from: number; to: number } | null;
   counters: { dropped: number };
   recent: PhoneAction[];
+  /** Bounded delivery identities only, no report text. Null message id preserves an uncertain send across restart. */
+  outcomes?: { runId: string; revision: number; chatId: number; messageId: number | null }[];
 }
 
 export const defaultState = (): PhoneState => ({
@@ -58,6 +60,8 @@ export function sanitizeState(raw: unknown): PhoneState {
       .filter((a): a is PhoneAction => !!a && typeof a === 'object' && isInt((a as PhoneAction).at) && KINDS.has((a as PhoneAction).kind) && typeof (a as PhoneAction).label === 'string')
       .map(a => ({ at: a.at, kind: a.kind, label: a.label.slice(0, 60) }))
       .slice(-RECENT_MAX),
+    outcomes: Array.isArray(r.outcomes) ? r.outcomes.filter((v): v is NonNullable<PhoneState['outcomes']>[number] =>
+      !!v && typeof v === 'object' && typeof v.runId === 'string' && v.runId.length < 200 && isInt(v.revision) && isInt(v.chatId) && (v.messageId === null || isInt(v.messageId))).slice(-500) : [],
   };
 }
 
