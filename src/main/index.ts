@@ -18,6 +18,7 @@ import { journal } from './activity/journal';
 import { log } from './log';
 import { startHangWatch } from './hang-watch';
 import { startStallWatch } from './perf';
+import { runtimePerformance } from './runtime-performance';
 import { RendererErrors } from './renderer-errors';
 import { demoUseCounts, useCounts } from './use-counter';
 import { APP_ID, ensureShortcuts, taskbarDetails } from './shortcuts';
@@ -85,6 +86,13 @@ const rendererErrors = new RendererErrors();
 app.whenReady().then(async () => {
   log.init(app.getPath('userData'));
   startStallWatch(); // a frozen window (main thread blocked) is logged with its cause, scope perf
+  // Controlled replay only: no new IPC command or diagnostic handle in a normal/stable app.
+  if (!isStable && process.env.SB_TEST === '1' && process.env.SB_RUNTIME_PERF === '1') {
+    (globalThis as Record<string, unknown>).__sbRuntimePerformance = {
+      start: () => runtimePerformance.start(), snapshot: () => runtimePerformance.snapshot(), stop: () => runtimePerformance.stop(),
+    };
+    app.once('will-quit', () => runtimePerformance.stop());
+  }
   startHangWatch(); // a hang of seconds or more: a worker logs the main thread's JS stack (hang-watch.ts)
   ensureShortcuts(outDir);
   installAppMenu();

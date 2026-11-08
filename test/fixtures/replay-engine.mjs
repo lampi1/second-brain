@@ -48,6 +48,22 @@ const emit = () => {
 const rl = readline.createInterface({ input: process.stdin });
 rl.on('line', line => {
   if (!line.trim()) return;
+  // Full-app replay includes independent usage polling and Cursor's two startup preferences. These are explicit
+  // synthetic control replies, not skipped transcript entries: the next recorded turn must still match exactly.
+  const incoming = parse(line);
+  if (process.env.SB_RUNTIME_PERF === '1' && incoming?.type === 'control_request' && incoming.request?.subtype === 'get_usage') {
+    report({ auxiliary: 'get_usage' });
+    process.stdout.write(JSON.stringify({ type: 'control_response', response: { subtype: 'success', request_id: incoming.request_id, response: {} } }) + '\n');
+    return;
+  }
+  if (process.env.SB_RUNTIME_PERF === '1' && incoming?.method === 'session/set_config_option') {
+    const { configId, value } = incoming.params ?? {};
+    if ((configId === 'reasoning_effort' && value === 'medium') || (configId === 'fast' && value === 'false')) {
+      report({ auxiliary: 'session/set_config_option', configId, value });
+      process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: incoming.id, result: {} }) + '\n');
+      return;
+    }
+  }
   if (i >= entries.length) { report({ extra: shape(parse(line)) }); return; }
   const want = parse(entries[i].line), got = parse(line);
   if (shape(want) !== shape(got)) report({ diverged: i, want: shape(want), got: shape(got) });

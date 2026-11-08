@@ -50,6 +50,7 @@ import fs from 'node:fs';
 import { acpAppTool, APP_UI_TOOLS, cursorAppPermissions } from './app-tool-approval';
 import os from 'node:os';
 import path from 'node:path';
+import { runtimePerformance } from '../runtime-performance';
 import type { Answer, ChatItem, ChatState, CursorReasoning, Effort, ImageAttachment, PendingRequest, PermissionMode, Question } from '../../shared/contract';
 import { missFragment, sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { errText, log } from '../log';
@@ -1259,6 +1260,7 @@ export class AcpSession implements HarnessSession {
     const p = this.proc;
     if (!p || this.exited || !p.stdin.writable) throw new Error(NOT_ACTIVE);
     p.stdin.write(`${JSON.stringify(obj)}\n`);
+    if (obj.method === 'session/prompt') runtimePerformance.providerWrite(this.opts.chatId);
   }
 
   /** A request to the agent; timeoutMs 0 = none (a prompt turn may last as long as it needs). */

@@ -39,6 +39,7 @@ import { updateActivity } from '../update/activity';
 import { PLAIN_LAUNCH } from './warm';
 import { isAppChat } from '../brain/routing';
 import { engineOf, engineOrThrow } from '../engines/registry';
+import { runtimePerformance } from '../runtime-performance';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { plainOwner, type ResolvedRole } from '../agents/catalog';
 import { withinParent } from '../agents/worktrees';
@@ -611,6 +612,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     lap.checkpointMs = Date.now() - lapT;
     try {
       receipt?.beforeSubmit();
+      runtimePerformance.runtime(chatId, r.s.harness, hadEngine, hadEngine && r.session.busy);
       r.session.send(`${role}${warning}${body}${hint}${langHint}${voiceHint}${phoneHint}${awayHint}`, imgs);
       if (awayHint) { if (awayOn) r.awayTold = session; else delete r.awayTold; }
       receipt?.submitted();
