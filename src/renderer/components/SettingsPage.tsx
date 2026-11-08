@@ -5,7 +5,7 @@
 // of a section that does not match by itself, and highlights the words (CSS Custom Highlight API: no DOM rewrite). A change saves at once: a quiet «Salvato» in the page header with
 // «Annulla» when the change has an undo (settings history, settings:undo). Protected settings (an agent can only propose them) carry a shield.
 // Connettori: ConnectorsHub.tsx (accounts and MCP servers, ADR 0086; the catalog, ADR 0119; the paste-to-add flow, McpAddPanel.tsx, ADR 0207). Avanzate: the technical MCP form and
-// import (ConnectorsHub.tsx McpAdvanced). Ruoli e deleghe: DelegationSettings.tsx (ADR 0083). Aggiornamenti: AppUpdateSettings.tsx (ADR 0075; "impostazioni/update" opens on it).
+// import (ConnectorsHub.tsx McpAdvanced), the worktree pool (WorktreeSettings.tsx, ADR 0227). Ruoli e deleghe: DelegationSettings.tsx (ADR 0083). Aggiornamenti: AppUpdateSettings.tsx (ADR 0075; "impostazioni/update" opens on it).
 // Scrittura: SuggestSettings.tsx (ADR 0118). Voce: VoiceSettings.tsx (ADR 0152). Telefono: PhoneSettings.tsx (ADR 0219). Stored technical policies and engine denials are preserved, never enabled by rendering.
 // Account actions use existing typed login/secure-storage/trust boundaries; no provider routing matrix or policy wall.
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
@@ -14,6 +14,7 @@ import type { CliStatus, EngineInfo, SecretsStatus } from '@shared/contract';
 import { isLang, LANGS } from '@shared/contract';
 import { IconBell, IconBranch, IconEdit, IconFolder, IconLink, IconMic, IconMoon, IconPhone, IconRefresh, IconSearch, IconSettings, IconShield, IconTerminal, IconUser, IconX } from './Icons';
 import { DelegationSettings } from './DelegationSettings';
+import { WorktreeSettings } from './WorktreeSettings';
 import { useEngines } from '../lib/engines';
 import { hitRanges, matchesSettingsSearch } from '../lib/settings-page';
 import { SETTINGS_TONE, navGroups, settingsSections } from '../lib/settings-sections';
@@ -166,7 +167,7 @@ export function SettingsPage() {
       </Row>
       <TaskReadSettings />
     </> },
-    { ...meta.advanced, icon: <IconSettings size={16} />, body: <McpAdvanced /> },
+    { ...meta.advanced, icon: <IconSettings size={16} />, body: <><McpAdvanced /><WorktreeSettings /></> },
   ];
   // the page's order follows the navigation's groups
   const nav2 = navGroups(groups.map(g => g.id));

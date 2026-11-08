@@ -79,6 +79,16 @@ Tick **Plan** to have a Strategist turn the job into steps. The first answered i
 
 <p align="center"><img src="docs/screenshots/plan.webp" alt="The questions window: a Strategist's four-step plan to approve, each step with its role" width="560"></p>
 
+### Delegated work in reused worktrees
+
+A delegated chat that writes gets its own worktree of the repository, on a fresh branch at the parent's current HEAD.
+The app keeps a small pool of them per repository and reuses a free, clean one, build outputs included, instead of
+checking out the whole repository again. It deletes the clean ones over your limits by itself. A worktree with
+uncommitted changes or unpushed commits is never deleted: Settings → Advanced lists it, next to the limits
+and the disk space each repository takes.
+
+<p align="center"><img src="docs/screenshots/worktrees.webp" alt="Settings, Advanced: the worktree limits, the space per repository and two worktrees kept because they hold work" width="560"></p>
+
 ### Memory you swipe
 
 Everything the agents learn lands as a card: a fact, a skill, a rule, a setting. Swipe right to keep it, left to drop

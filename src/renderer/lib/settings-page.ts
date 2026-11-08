@@ -1,4 +1,4 @@
-// Pure helpers of the Settings page (components/SettingsPage.tsx), apart so the unit tests reach them without React:
+// Pure helpers of the Settings page (components/SettingsPage.tsx, WorktreeSettings.tsx), apart so the unit tests reach them without React:
 // the $ amount of a spending limit as the user types it, the port the MCP server really listens on, and the search
 // (which sections and rows match, where to highlight). Used by SettingsPage.tsx and test/unit/settings-ui.test.ts.
 
@@ -44,4 +44,12 @@ export function hitRanges(text: string, query: string): [number, number][] {
   const merged: [number, number][] = [];
   for (const r of found) { const last = merged[merged.length - 1]; if (last && r[0] <= last[1]) last[1] = Math.max(last[1], r[1]); else merged.push([...r]); }
   return merged;
+}
+
+/** Disk space as the worktree rows show it (WorktreeSettings.tsx): GB with one decimal from 1 GB, else MB; null = not
+ *  measured yet. */
+export function fmtSize(bytes: number | null): string {
+  if (bytes === null) return '—';
+  const gb = bytes / 1024 ** 3;
+  return gb >= 1 ? `${gb.toFixed(1)} GB` : `${Math.round(bytes / 1024 ** 2)} MB`;
 }

@@ -24,6 +24,9 @@ Appearance/theme/density and panel expansion use the existing sb.prefs.v1 namesp
 | loadQueue | technical | diagnostics-or-feature-context | yes |
 | loadQueueCpu | technical | diagnostics-or-feature-context | yes |
 | loadQueueRam | technical | diagnostics-or-feature-context | yes |
+| worktreePoolPerRepo | technical | settings-advanced | yes |
+| worktreePoolTotal | technical | settings-advanced | yes |
+| worktreeDiskCapGb | technical | settings-advanced | yes |
 | osToasts | essential | settings | yes |
 | dndUntil | technical | diagnostics-or-feature-context | yes |
 | dnd | technical | diagnostics-or-feature-context | yes |
@@ -60,4 +63,4 @@ Appearance/theme/density and panel expansion use the existing sb.prefs.v1 namesp
 | engineOn.anthropic | essential | tool-connection | yes |
 | engines.anthropic | derived | agent-capability-or-existing-policy | yes |
 
-Dynamic engineOn.<id> and engines.<id> keys follow the same inventory rule for later registered engines; no ID is automatically enabled. Private persisted settings are neither read into this document nor deleted. Technical development roots remain protected and are not promoted to a basic colleague-facing choice. Contextual technical editors are separate from the essential surface and must retain their action boundary.
+Dynamic engineOn.<id> and engines.<id> keys follow the same inventory rule for later registered engines; no ID is automatically enabled. Private persisted settings are neither read into this document nor deleted. Technical development roots remain protected and are not promoted to a basic colleague-facing choice. Contextual technical editors are separate from the essential surface and must retain their action boundary. settings-advanced = a separate block of Impostazioni → Avanzate (the worktree pool limits, ADR 0227), outside the essential groups.

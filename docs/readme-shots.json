@@ -119,6 +119,13 @@
         "src/renderer/styles/settings.css"
       ]
     },
+    "worktrees": {
+      "test": "README screenshot: worktree pool",
+      "sources": [
+        "src/renderer/components/WorktreeSettings.tsx",
+        "src/main/demo-worktrees.ts"
+      ]
+    },
     "settings": {
       "test": "README screenshot: Connettori",
       "sources": [
