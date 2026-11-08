@@ -54,14 +54,18 @@ read-only; an external session is resumed only as a fork (never two writers).
 ## 7. Tests
 
 Every module has unit tests; every user-visible feature has an e2e test with a screenshot. While working an agent runs
-only the targeted tests (`npx vitest run <files>`); "ready to try" = `npm run check:quick` green, then the owner can
-update and try it; "done" = `npm run check:branch` green on the branch's commit (no e2e), run ONCE, before the merge,
-+ the change looked at in the dev app (owner, 2026-11-07: "rifai i test mille volte"). A red by timeout: rerun that
-file alone, once; green alone = report "rosso di carico, verde da solo" and stop. Never repeated suites, never
-Sentinels only to compare main and the branch; whether to merge is the owner's call. The e2e specs and
-their screenshots run only on main, in `npm run check` after the merge (owner, 2026-10-15; ADR 0027). On main the e2e
-verdict is read against `test/e2e/known-red.json`: only «nuovi rossi» fail it; no test is ever skipped or quarantined
-(ADR 0198).
+only the targeted tests (`npx vitest run <files>`; owner, 2026-11-07: "rifai i test mille volte"). A branch's gate
+before the merge (owner, 2026-11-08): `npm run check:quick` green on the branch's commit + the e2e specs of the part it
+touches, the changed specs or the ones its contract names (`node scripts/e2e.mjs <specs>`) + the change looked at in the
+dev app + a clean fresh-context review (rule 9) + the guard. `npm run check:branch` is no longer needed per branch.
+The e2e runs one at a time on the machine, under a lock: take it before (`( set -o noclobber; echo "<chat> $(date
+-Iseconds)" > "$TEMP/sb-check-branch.lock" )`; a failure = busy, retry every 5 minutes; a lock older than 90 minutes is
+orphaned, delete it), remove it as soon as the run ends, red too; while another chat holds it, no vitest or e2e heavy
+runs. A red by timeout: rerun that file alone, once; green alone = report "rosso di carico, verde da solo" and stop.
+Never repeated suites, never Sentinels only to compare main and the branch. The full `npm run check` (all unit tests,
+all e2e) runs once on main after a batch of merges, from one dedicated chat; whoever breaks main fixes it on main
+(owner, 2026-11-08). On main the e2e verdict is read against `test/e2e/known-red.json`: only «nuovi rossi» fail it; no
+test is ever skipped or quarantined (ADR 0198).
 
 Load tests, stress tests, synthetic CPU/RAM load generators, benchmarks under load and e2e runs repeated to load the
 machine run only at night, outside the owner's working hours; never during the day on their work PC (owner,

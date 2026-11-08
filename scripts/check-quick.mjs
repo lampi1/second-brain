@@ -1,9 +1,10 @@
-// `npm run check:quick`, the "ready to try" check of a branch (owner, 2026-11-07: "rifai i test mille volte"):
+// `npm run check:quick`, a branch's gate before the merge (owner, 2026-11-07: "rifai i test mille volte"):
 // typecheck, lint of the changed files, only the tests that import a changed file directly, share its name or name it
 // as a string (no transitive graph, unlike `vitest --changed`), and the doc freshness tests when the change touches
 // what they read. Deleted and renamed files pick the tests of their old path; a changed source no test reaches turns
 // the closing line into "green WITHOUT tests" (owner, 2026-11-07: restyles touch mostly untested renderer files).
-// Records nothing: `npm run check:branch` stays the gate before a merge, run once. Used by package.json "check:quick";
+// Records nothing; with the e2e specs of the touched part it is all a branch needs before the merge (owner, 2026-11-08),
+// the full `npm run check` runs on main after a batch of merges. Used by package.json "check:quick";
 // test/unit/check-quick.test.ts checks how it picks the tests.
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -245,7 +246,7 @@ function main() {
 
 /** The closing line: plain green only when every changed source has a test; else green for typecheck and lint only. */
 export function verdict(uncovered, seconds) {
-  const merge = 'Before the merge, once: npm run check:branch';
+  const merge = 'Before the merge: the e2e specs of the touched part, under the e2e lock (docs/agents/rules.md rule 7)';
   if (!uncovered.length) return `check:quick green in ${seconds} s: ready to try. ${merge}`;
   const more = uncovered.length > 10 ? ` and ${uncovered.length - 10} more` : '';
   return `check:quick green WITHOUT tests: ${uncovered.slice(0, 10).join(', ')}${more} (typecheck and lint only), in ${seconds} s. ${merge}`;
