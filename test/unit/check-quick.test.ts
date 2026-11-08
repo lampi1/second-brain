@@ -78,7 +78,9 @@ describe('check:quick', () => {
     expect(pickTests([LOGS], Object.keys(files), f => files[f] ?? ''))
       .toEqual({ tests: ['test/unit/template.test.ts'], uncovered: [] });
     const self = fs.readFileSync(path.join(import.meta.dirname, 'check-quick.test.ts'), 'utf8');
-    expect(pickTests([LOGS], ['test/unit/check-quick.test.ts'], () => self).tests).toEqual([]);
+    // like fs, only the test file exists: its fixtures' re-exports must lead nowhere
+    const readSelf = (f: string) => { if (f !== 'test/unit/check-quick.test.ts') throw new Error('ENOENT'); return self; };
+    expect(pickTests([LOGS], ['test/unit/check-quick.test.ts'], readSelf).tests).toEqual([]);
   });
 
   it('picks the tests that import a file inside a program string run with node -e or String.raw', () => {
@@ -118,7 +120,7 @@ describe('check:quick', () => {
     expect(pickTests(['test/e2e/fake.spec.ts'], tests, f => files[f] ?? '', opts).uncovered).toEqual([]);
   });
 
-  it('follows an imported index one level of re-exports; a same-name test in another folder runs but covers nothing', () => {
+  it('follows the re-exports of an imported index; a same-name test in another folder runs but covers nothing', () => {
     const files: Record<string, string> = {
       'test/unit/fake-runtime/resolve.test.ts': "import { resolveFake } from '../../../packages/fake-runtime/src/index';",
       'packages/fake-runtime/src/index.ts': "export * from './fake-format';\nexport { resolveFake } from './fake-cmd';\nexport type { T } from './fake-types';",
@@ -131,6 +133,24 @@ describe('check:quick', () => {
       .toEqual({ tests: [tests[0]], uncovered: ['packages/fake-runtime/src/fake-cmd.ts'] });
     expect(pickTests(['packages/fake-runtime/src/fake-types.ts'], tests, read).uncovered).toEqual(['packages/fake-runtime/src/fake-types.ts']);
     expect(pickTests(['src/main/chats/fake-cmd.ts'], [tests[0]!], read)).toEqual({ tests: [tests[0]], uncovered: [] });
+  });
+
+  it('follows the re-exports of any imported module, through chains and cycles, never the type-only ones', () => {
+    const files: Record<string, string> = {
+      'test/unit/fake-images.test.ts': "import { MAX } from '../../src/shared/fake-contract';",
+      'src/shared/fake-contract.ts': "import type { A } from './fake-contract/app';\nexport * from './fake-contract/chats';\nexport { B } from './fake-contract/mid.js';\nexport type { T } from './fake-contract/types';",
+      'src/shared/fake-contract/chats.ts': 'export const MAX = 1;',
+      'src/shared/fake-contract/mid.ts': "export * from '../fake-contract';\nexport { B } from './deep';",
+      'src/shared/fake-contract/deep.ts': 'export const B = 2;',
+    };
+    const read = (f: string) => { if (!(f in files)) throw new Error('ENOENT'); return files[f]!; };
+    const tests = ['test/unit/fake-images.test.ts'];
+    for (const f of ['src/shared/fake-contract/chats.ts', 'src/shared/fake-contract/deep.ts', 'src/shared/fake-contract/mid.ts']) {
+      expect(pickTests([f], tests, read)).toEqual({ tests, uncovered: [] });
+    }
+    for (const f of ['src/shared/fake-contract/types.ts', 'src/shared/fake-contract/app.ts']) {
+      expect(pickTests([f], tests, read)).toEqual({ tests: [], uncovered: [f] });
+    }
   });
 
   it('picks a test that loads the ESLint config without naming it; other root configs say WITHOUT', () => {

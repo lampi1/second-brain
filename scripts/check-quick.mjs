@@ -101,9 +101,9 @@ const IMPLICIT = [{ file: /^eslint\.config\.[cm]?js$/, reader: /\bnew\s+ESLint\s
 const testFolder = t => { const d = path.posix.dirname(t); return d === 'test/unit' ? '' : d.startsWith('test/unit/') ? d.slice('test/unit/'.length) : d; };
 /** whether a same-name test counts as covering `f`: its folder is one of f's folders (test/unit/chats -> src/main/chats) */
 const nameCovers = (t, f) => { const r = testFolder(t); return r !== '' && `/${path.posix.dirname(f)}/`.includes(`/${r}/`); };
-/** `export … from './x'` (re-exports of an index file; type-only ones are erased at run time) */
+/** `export … from './x'` (re-exports of any module; type-only ones are erased at run time) */
 const REEXPORT = /\bexport\s+(?!type\b)(?:\*(?:\s+as\s+[\w$]+)?|\{[^}]*\})\s*from\s*['"]([^'"]+)['"]/g;
-const INDEX_EXT = ['ts', 'tsx', 'mts', 'mjs', 'js', 'cjs'];
+const MODULE_EXT = ['ts', 'tsx', 'mts', 'mjs', 'js', 'cjs'];
 const groupBy = (list, key) => list.reduce((m, f) => m.set(key(f), [...(m.get(key(f)) ?? []), f]), new Map());
 /** 'scripts/logs.mjs' for scripts/logs.mjs: the folder and the name, a bare 'check.mjs' is too loose */
 const relOf = f => { const dir = path.posix.basename(path.posix.dirname(f)); return dir === '.' ? path.posix.basename(f) : `${dir}/${path.posix.basename(f)}`; };
@@ -118,8 +118,8 @@ export const hookPaths = text => text.split('\n').filter(l => !l.trimStart().sta
 
 /**
  * The tests to run for `changed` (repo-relative paths): changed test files, tests importing a changed file directly
- * (or an index file re-exporting it), tests with the same name as a changed file (foo.ts -> foo.test.ts), tests naming
- * it in a code string by folder and name ('scripts/logs.mjs', path.join(ROOT, 'scripts', 'logs.mjs'), an import in a
+ * (or a module re-exporting it, through any chain of re-exports), tests with the same name as a changed file
+ * (foo.ts -> foo.test.ts), tests naming it in a code string by folder and name ('scripts/logs.mjs', path.join(ROOT, 'scripts', 'logs.mjs'), an import in a
  * program run with node -e), tests loading a root config implicitly (IMPLICIT). A test also reaches what the helpers it
  * imports reach (`helpers`: non-test files under test/, e.g. the fake CLI fixtures), and what a hook folder runs when
  * its code names that folder (`hooks`: '.githooks' -> the scripts its hooks exec). `uncovered`: the changed sources no
@@ -134,13 +134,36 @@ export function pickTests(changed, testFiles, read, { helpers = [], hooks = new 
     .map(f => ({ f, rel: relOf(f), key: path.posix.basename(stem(f)) }));
   const helperByStem = new Map(helpers.map(h => [stem(h), h]));
   const readOr = f => { try { return read(f); } catch { return null; } };
+  const texts = new Map();
+  /** the file and text of the module at `target` ('src/shared/contract' -> contract.ts, else contract/index.ts) */
+  const moduleAt = target => {
+    if (!texts.has(target)) {
+      const file = [...MODULE_EXT.map(e => `${target}.${e}`), ...MODULE_EXT.map(e => `${target}/index.${e}`)]
+        .find(f => readOr(f) !== null);
+      texts.set(target, file ? { file, text: readOr(file) } : null);
+    }
+    return texts.get(target);
+  };
   const reexports = new Map();
-  /** the changed sources an index file at `target` re-exports, one level ('…/src/index' -> './claude' -> claude.ts) */
+  /**
+   * the changed sources the module at `target` re-exports, through chains of re-exports of any module
+   * (contract.ts -> export * from './contract/chats' -> chats.ts); `seen` stops a re-export cycle
+   */
   const reexported = target => {
     if (!reexports.has(target)) {
-      const index = INDEX_EXT.map(e => `${target}/index.${e}`).find(f => readOr(f) !== null);
-      reexports.set(target, index ? [...readOr(index).matchAll(REEXPORT)]
-        .flatMap(m => byStem.get(resolveSpecifier(index, m[1])) ?? []) : []);
+      const hits = [], seen = new Set([target]), todo = [target];
+      while (todo.length) {
+        const mod = moduleAt(todo.pop());
+        if (!mod) continue;
+        for (const m of mod.text.matchAll(REEXPORT)) {
+          const next = resolveSpecifier(mod.file, m[1]);
+          if (next === null || seen.has(next)) continue;
+          seen.add(next);
+          hits.push(...(byStem.get(next) ?? []));
+          todo.push(next);
+        }
+      }
+      reexports.set(target, hits);
     }
     return reexports.get(target);
   };
@@ -148,7 +171,7 @@ export function pickTests(changed, testFiles, read, { helpers = [], hooks = new 
   const memo = new Map();
   let cut = false;
   /**
-   * the changed sources `file` reaches: its imports (and what an imported index re-exports), the paths in its code
+   * the changed sources `file` reaches: its imports (and what an imported module re-exports), the paths in its code
    * strings, its helpers' and hooks'. A result cut short by an import cycle is not cached.
    */
   const reach = (file, stack = new Set()) => {
