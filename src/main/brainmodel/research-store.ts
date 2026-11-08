@@ -44,6 +44,8 @@ export class ResearchStore {
   get(id: string): ResearchProposal | undefined { const p = this.data.proposals.find(x => x.id === id); return p ? structuredClone(p) : undefined; }
   add(p: Omit<ResearchProposal, 'id' | 'at' | 'state'>): ResearchProposal {
     const at = this.now(), card: ResearchProposal = { ...p, id: researchId(at), at, state: 'open' };
+    card.issue ??= { title: card.title, body: `## Context\n\n${card.why}\n\n## Proposal\n\n${card.adds}\n${card.removes}\n\n## Evidence\n\n${card.evidence.map(e => `- ${e}`).join('\n')}\n\n## Verification\n\n${card.expected}`, repo: null };
+    card.issue.dedup ??= { status: 'unverified', at, note: 'dedup da verificare: nessun inventario verificato per questa proposta', count: 0 };
     this.data.proposals.push(card);
     this.save();
     return structuredClone(card);

@@ -5,7 +5,7 @@
 // (components/brain-model/ProposalsDeck.tsx). Data only: main rechecks every decision and runs it through the source's
 // own path. Also why a card is still asked, the cards applied by themselves and each group's policy (ADR 0193). Used by
 // the contract (proposals:*), main/proposals, main/brainmodel/research-pack.ts and renderer/lib/proposals.ts.
-import type { ResearchKind, ResearchSource } from './maintenance-research';
+import type { ResearchIssue, ResearchKind, ResearchSource } from './maintenance-research';
 
 /** Where an item comes from: each source keeps its own decide path (main/proposals/sources.ts). */
 export const PROPOSAL_SOURCES = ['memory', 'candidate', 'change', 'setting', 'trial', 'tier', 'policy', 'research'] as const;
@@ -93,6 +93,9 @@ export interface ProposalProvenance {
 }
 
 export interface Proposal {
+  /** Ready drafts, not a side effect of approving a brain change. App issue approval remains a separate explicit action. */
+  issueDrafts?: ResearchIssue[];
+  rank?: number;
   /** stable: `<source>:<id in its source>` */
   id: string;
   source: ProposalSource;

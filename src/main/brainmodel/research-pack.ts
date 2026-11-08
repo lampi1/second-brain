@@ -14,7 +14,7 @@ import type { ResearchForget, ResearchProposal } from '../../shared/maintenance-
 import type { LogSections } from './research-pack-logs';
 import { PROPOSAL_GROUPS, PROPOSAL_SOURCES, type ProposalGroupPolicy } from '../../shared/proposals';
 
-export const PACK_SECTIONS = ['summary', 'runs', 'roles', 'skills', 'rules', 'memory', 'changes', 'logs', 'past', 'journal', 'perf', 'ui-errors', 'digest', 'decisions'] as const;
+export const PACK_SECTIONS = ['summary', 'runs', 'roles', 'skills', 'rules', 'memory', 'changes', 'logs', 'past', 'journal', 'perf', 'ui-errors', 'digest', 'decisions', 'conversations', 'context', 'issues'] as const;
 export type PackSection = (typeof PACK_SECTIONS)[number];
 export type Pack = Record<PackSection, string>;
 
@@ -138,6 +138,9 @@ export function buildPack(i: PackInput): Pack {
   ].join('\n');
 
   return {
+    conversations: 'Conversation evidence unavailable; never infer user advice from aggregate counters alone.',
+    context: 'Read me.md, ai-errors.md and the relevant brain rules before proposing; unavailable files are not evidence of absence.',
+    issues: 'dedup da verificare: no issue inventory supplied',
     summary,
     runs: cut([`Notable jobs (failed, partial, corrected, blocked or among the 10 costliest), newest first: ${notable.length} of ${ended.length}.`, ...notable.map(runLine)].join('\n')),
     roles: cut(['Each role in numbers (ended jobs of the period):', ...roleLines, ...i.roles.filter(p => !byRole.has(p.id)).map(p => `- ${p.name} (${p.id}): no job in the period`)].join('\n')),

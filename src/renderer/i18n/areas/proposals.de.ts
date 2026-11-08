@@ -2,6 +2,11 @@
 import type { proposalsIt } from './proposals.it';
 type N = { n: number };
 export const proposalsDe: typeof proposalsIt = {
+  'proposals.issueDraft': 'Issue-Entwurf · einzeln zu genehmigen',
+  'proposals.dedupUnknown': 'Duplikatprüfung nicht verifiziert',
+  'proposals.dedupChecked': 'Offene Issues gelesen; automatische Titelprüfung abgeschlossen',
+  'proposals.repoUnknown': 'Repository nicht verifiziert',
+  'proposals.rank': 'Priorität',
   'proposals.deckLabel': 'Stapel der Vorschläge',
   'proposals.filters': 'Vorschläge filtern',
   'proposals.filter.all': 'Alle',

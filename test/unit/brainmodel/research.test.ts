@@ -81,6 +81,34 @@ describe('scrub, issuesUrlOf, repoOf', () => {
 });
 
 describe('ResearchService', () => {
+  it('attaches a private issue draft to a brain card and does not publish it on approval', async () => {
+    const t = setup();
+    await t.svc.start(opts);
+    const p = t.svc.propose('c1', { kind: 'rule', title: 'Keep the chosen repository', adds: 'Preserve the repository in the handoff.', why: 'Three repeated requests.', evidence: ['chat1/u1, chat2/u2, chat3/u3: 3 corrections'], change: { text: 'Keep the selected repository in the handoff.' } });
+    expect(t.svc.store.get(p.id)?.issue).toMatchObject({ repo: null, dedup: { status: 'unverified' } });
+    expect(t.svc.store.get(p.id)?.issue?.body).toContain('chat1/u1');
+    await t.svc.approve(p.id);
+    expect(t.opened).toHaveLength(0);
+  });
+  it('rejects an already-open issue and checks again before publishing an approved card', async () => {
+    let issues: { number: number; title: string; body: string; url: string }[] = [];
+    const t = setup({ openIssues: async repo => ({ repo, at: NOW, status: 'checked', note: 'Read', issues }) });
+    await t.svc.start(opts);
+    const p = t.svc.propose('c1', idea);
+    issues = [{ number: 4, title: idea.issue.title, body: '', url: 'https://github.com/lampi1/second-brain/issues/4' }];
+    await expect(t.svc.approve(p.id)).rejects.toThrow(/già aperta/);
+    expect(t.opened).toHaveLength(0);
+    await t.svc.stop();
+    await t.svc.start(opts);
+    expect(() => t.svc.propose('c2', { ...idea, title: 'Different wording' })).toThrow(/Duplicate issue/);
+  });
+  it('limits the combined research families to seven ranked cards', async () => {
+    const t = setup(); await t.svc.start(opts);
+    for (let n = 0; n < 5; n++) t.svc.propose('c1', { kind: 'rule', title: `Unique ${n}`, adds: `Rule ${n}`, why: 'Evidence', change: { text: `Rule ${n}` } });
+    for (let n = 0; n < 2; n++) t.svc.propose('c1', { ...idea, title: `Issue ${n}`, issue: { title: `Issue ${n}`, body: 'Evidence' } });
+    expect(t.svc.cards().map(p => p.rank)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(() => t.svc.propose('c1', { ...idea, title: 'Eighth', issue: { title: 'Eighth', body: 'Evidence' } })).toThrow(/at most 7/);
+  });
   it('checks the choices and opens one research chat with the prompt and the frame', async () => {
     const t = setup();
     await expect(t.svc.start({ ...opts, capUsd: 100 })).rejects.toThrow(/Tetto/);
@@ -139,7 +167,7 @@ describe('ResearchService', () => {
     const card = t.svc.store.get(r.id)!;
     expect(card.issue!.body).toBe('Seen in ~/x by <email>');
     expect(() => t.svc.propose('c1', idea)).toThrow(/Duplicate/);
-    for (let i = 1; i < 5; i++) t.svc.propose('c1', { ...idea, title: `Idea ${i}` });
+    for (let i = 1; i < 5; i++) t.svc.propose('c1', { ...idea, title: `Idea ${i}`, issue: { ...idea.issue, title: `Issue ${i}` } });
     expect(() => t.svc.propose('c1', { ...idea, title: 'Idea 6' })).toThrow(/Limit/);
     expect(t.svc.cards().filter(isAppCard)).toHaveLength(5);
     expect(t.svc.cards().filter(c => !isAppCard(c))).toHaveLength(0);

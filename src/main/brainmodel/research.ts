@@ -23,7 +23,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { BrainModelState, LogScan, MaintenanceRun } from '../../shared/brain-model';
-import type { ChatSummary, Effort, Harness, Lang, NewChat } from '../../shared/contract';
+import type { ChatItem, ChatSummary, Effort, Harness, Lang, NewChat } from '../../shared/contract';
 import { CANDIDATE_PENDING, RESEARCH_TOOL_KINDS, type LintCheck, type LintFinding, type ResearchRevert, familyOf, isAppKind, RESEARCH_CAP_USD, type BrainCandidate, type BrainCandidateView, RESEARCH_CAPS, type MaintenanceDone, type MaintenanceStatus, type ResearchChange, type ResearchForget,
   type ResearchIssue, type ResearchKind, type ResearchOptions, type ResearchProposal, type ResearchRunInfo, type ResearchSource } from '../../shared/maintenance-research';
 import { isRoleId } from '../../shared/roles';
@@ -48,6 +48,8 @@ import { readMemoryRecords } from '../rules/memory-records';
 import { lintBrain } from './brain-lint';
 import { lintCard, revertCard } from './lint-cards';
 import { defaultSuccess, parseSuccess, successText } from './success-check';
+import { RESEARCH_TOTAL_CAP } from '../../shared/maintenance-research';
+import { brainEvidence, conversationEvidence, issueSnapshot, matchingIssue, sameFinding, type Conversation, type IssueSnapshot } from './research-deep';
 
 /** At most this many lint cards of each check per pass (the worst first), so a messy brain is not one wall of cards. */
 export const LINT_CAPS: Readonly<Record<LintCheck, number>> = { 'stale-fact': 5, 'stale-cite': 3, 'broken-link': 3, 'changed-fact': 3, concept: 3, orphan: 3 };
@@ -105,6 +107,12 @@ export interface ResearchDeps {
   /** the app's own repository when run from a clone (guide/anchors.ts repoRootOf): the Guida cards whose code changed
    *  and the German left to translate (ADR 0196), read as the pack section «guide»; absent or null = not offered */
   guideRepo?: () => string | null;
+  /** Bounded direct conversation samples from the host's history readers; no engine launch. */
+  conversations?: () => readonly Conversation[];
+  conversationList?: () => readonly { id: string; title: string }[];
+  conversationRead?: (id: string) => readonly ChatItem[];
+  /** Read-only host inventory. Absent means unverified, not an empty checked repository. */
+  openIssues?: (repo: string) => Promise<IssueSnapshot>;
 }
 
 /** The research's extra frame lines for the ADR 0195 steps (after the method and the fixed frame). */
@@ -198,6 +206,8 @@ export const repoOf = (url: string | null): string | null => /^https:\/\/github\
 export const isAppCard = (p: Pick<ResearchProposal, 'kind' | 'issue' | 'change'>): boolean => isAppKind(p.kind) || (p.kind === 'bold' && !!p.issue && !p.change);
 
 export class ResearchService {
+  private inventory: IssueSnapshot = { repo: null, status: 'unverified', at: 0, note: 'dedup da verificare', issues: [] };
+  private conversationIndex: readonly { id: string; title: string }[] = [];
   readonly store: ResearchStore;
   private run: (ResearchRunInfo & { sawWork: boolean; pack: Pack; timer: NodeJS.Timeout | null; saves: Promise<void>[]; reflect: ReflectPick | null; fence: Fence }) | null = null;
   /** the candidate brain (ADR 0195), when the app gives its ports */
@@ -222,6 +232,10 @@ export class ResearchService {
   /** Stops the hourly check (tests, shutdown). */
   dispose(): void { for (const t of this.outcomeTimers) { clearTimeout(t); clearInterval(t); } this.outcomeTimers = []; }
   private now(): number { return this.d.now?.() ?? Date.now(); }
+  private async refreshInventory(): Promise<void> {
+    const repo = this.repo();
+    this.inventory = repo && this.d.openIssues ? await this.d.openIssues(repo).catch(() => ({ repo, status: 'unverified' as const, at: this.now(), note: 'dedup da verificare: inventory unavailable', issues: [] })) : { ...await issueSnapshot(null, undefined, this.now()), repo };
+  }
   private privacy() {
     const base = this.d.privacy ?? { home: os.homedir(), user: (() => { try { return os.userInfo().username; } catch { return ''; } })() };
     const root = this.d.root(), appDir = this.d.appDir?.();
@@ -233,6 +247,10 @@ export class ResearchService {
   private passing = false;
   /** The free cleanup's cards of the click now running, added to the research's in the end notice. */
   private passCards = { bugs: 0, forget: 0, lint: 0, reverts: 0 };
+  private cleanupLeft: number | null = null;
+  private usedCards(chatId: string): number {
+    return this.store.all().filter(p => p.chatId === chatId).length + Object.values(this.passCards).reduce((a, b) => a + b, 0);
+  }
   private outcomeTimers: NodeJS.Timeout[] = [];
   status(): MaintenanceStatus {
     return { running: this.passing || this.starting || !!this.run, research: this.run ? this.info(this.run) : null, last: this.store.lastDone() ?? null, canResearch: this.d.engines().length > 0 };
@@ -259,7 +277,7 @@ export class ResearchService {
     this.store.setClickAt(this.now());
     this.d.changed();
     let pass: MaintenanceRun | null = null;
-    try { pass = (await this.d.brain.maintain()).lastRun; }
+    try { await this.refreshInventory(); pass = (await this.d.brain.maintain()).lastRun; }
     finally { this.passing = false; }
     this.passCards = { bugs: pass?.cards?.bugs ?? 0, forget: pass?.cards?.forget ?? 0, lint: pass?.cards?.lint ?? 0, reverts: pass?.cards?.reverts ?? 0 };
     const o = this.defaults();
@@ -313,6 +331,15 @@ export class ResearchService {
     // one nonce per research: the untrusted values of its pack go between markers no value can write (pack-fence.ts)
     const fence = makeFence(), state = this.d.brain.state(), logs = await this.logSections(state, fence);
     const pack = buildPack({ now: this.now(), runs: this.d.runs(), state, roles: this.d.roles(), past: this.store.all(), appVersion: this.d.appVersion(), ...(logs ? { logs } : {}), decisions: allPolicies(readLedger(this.d.userData)) });
+    await this.refreshInventory();
+    pack.issues = `${fence.note}\n${fence.wrap(JSON.stringify(this.inventory))}`;
+    pack.context = await brainEvidence(root, fence, t => scrub(t, this.privacy()));
+    if (this.d.conversations) {
+      try { pack.conversations = conversationEvidence(this.d.conversations().slice(0, 40).map(c => ({ ...c, title: scrub(c.title, this.privacy()), items: c.items.slice(-100).map(i => 'text' in i ? { ...i, text: scrub(i.text, this.privacy()) } : i) })), this.now() - 30 * 86_400_000, fence); }
+      catch { pack.conversations = 'Conversation evidence unavailable; do not infer advice from counters.'; }
+    }
+    this.conversationIndex = this.d.conversationList?.().slice(0, 40) ?? [];
+    if (this.d.conversationList) pack.conversations = `${fence.note}\nRead these recent chats individually with section=conversations, chat=<id>, offset=0; continue nextOffset. No history is loaded until requested. Inventory is a sample, not all chats.\n${fence.wrap(JSON.stringify(this.conversationIndex.map(c => ({ ...c, title: scrub(c.title, this.privacy()) }))))}`;
     const frame = researchFrame(lang, { web, capUsd: cap, brainRoot: root, issuesUrl: this.d.issuesUrl() });
     const reflect = this.d.roleTrial ? pickRole(this.d.runs(), this.d.roles(), this.now()) : null;
     const extra = [...(this.candidates ? [CANDIDATE_FRAME] : []), ...(this.d.roleTrial ? [REFLECT_FRAME] : [])];
@@ -375,8 +402,22 @@ export class ResearchService {
     if (!this.run || this.run.chatId !== chatId) throw new Error('This tool works only in the maintenance research chat while it runs.');
     return this.run;
   }
-  pack(chatId: string, section: unknown): string {
+  pack(chatId: string, section: unknown, offset: unknown = 0, chat: unknown = undefined): string {
     const r = this.mine(chatId), s = (section ?? 'summary') as PackSection;
+    if (section === 'conversations' && chat !== undefined) {
+      const selected = this.conversationIndex.find(c => c.id === chat);
+      if (!selected || !this.d.conversationRead) throw new Error('Chat not in this research inventory.');
+      const items = this.d.conversationRead(selected.id);
+      if (!Number.isSafeInteger(offset) || Number(offset) < 0 || Number(offset) > items.length) throw new Error('Invalid conversation page offset.');
+      const start = Number(offset), next = start + 20;
+      const part = items.slice(start, next).map(i => 'text' in i ? { ...i, text: scrub(i.text, this.privacy()) } : i);
+      return `Loaded history: ${items.length} items; nextOffset: ${next < items.length ? next : 'none'}. History readers may omit older or unavailable sessions.\n${conversationEvidence([{ ...selected, title: scrub(selected.title, this.privacy()), items: part }], this.now() - 30 * 86_400_000, r.fence)}`;
+    }
+    if (section === 'issues') {
+      if (!Number.isSafeInteger(offset) || Number(offset) < 0 || Number(offset) > this.inventory.issues.length) throw new Error('Invalid issue page offset.');
+      const start = Number(offset), next = start + 10;
+      return `${r.fence.note}\n${r.fence.wrap(JSON.stringify({ ...this.inventory, issues: this.inventory.issues.slice(start, next), total: this.inventory.issues.length, nextOffset: next < this.inventory.issues.length ? next : null }))}`;
+    }
     if (section === GUIDE_SECTION) { const repo = this.d.guideRepo?.() ?? null; return repo ? guideMaintenanceSection(repo) : 'Not offered: the app is not running from its repository.'; }
     if (section === ROLE_REFLECT_SECTION) return reflectSection(r.reflect, { clean: t => scrub(t, this.privacy()), budgetLeft: this.reflectBudget(r), fence: r.fence });
     if (!PACK_SECTIONS.includes(s)) throw new Error(`section: one of ${PACK_SECTIONS.join(', ')}.`);
@@ -389,9 +430,11 @@ export class ResearchService {
     if (!(RESEARCH_TOOL_KINDS as readonly string[]).includes(kind)) throw new Error(`kind: one of ${RESEARCH_TOOL_KINDS.join(', ')}.`);
     const card = this.card(kind, a, chatId);
     const fam = familyOf(kind), mine = this.store.all().filter(p => p.chatId === chatId);
+    if (this.usedCards(chatId) >= RESEARCH_TOTAL_CAP) throw new Error('Limit reached: at most 7 ranked proposals per research.');
+    card.rank = mine.length + 1;
     if (mine.filter(p => familyOf(p.kind) === fam).length >= RESEARCH_CAPS[fam]) throw new Error(`Limit reached: at most ${RESEARCH_CAPS[fam]} proposals of this family per research.`);
-    const same = (p: ResearchProposal) => p.kind === kind && p.title.trim().toLowerCase() === card.title.trim().toLowerCase();
-    if (this.store.all().some(p => same(p) && (p.state === 'open' || p.state === 'rejected'))) throw new Error('Duplicate: the same proposal is already open or was rejected.');
+    const same = (p: ResearchProposal) => sameFinding(p.title, card.title) || !!p.issue && !!card.issue && sameFinding(p.issue.title, card.issue.title);
+    if (this.store.all().some(p => same(p) && !(card.logKey && p.logKey === card.logKey && p.state === 'open' && p.chatId === null))) throw new Error('Duplicate: the same proposal was already proposed.');
     // a better version of the bug card the log step wrote from the same log group: that card is rewritten
     const was = card.logKey ? this.store.all().find(p => p.logKey === card.logKey && p.state === 'open' && p.chatId === null) : undefined;
     // a brain-file finding waits for the candidate brain, built when the research ends (ADR 0195)
@@ -439,6 +482,12 @@ export class ResearchService {
       else if (a.issue !== undefined) out.issue = this.issue(a.issue);
       else throw new Error('bold: give a change (for the brain) or an issue (for the app).');
     } else out.change = this.change(a.change, kind);
+    // Brain drafts have no guessed public destination and never publish when the brain change is approved.
+    if (!out.issue) out.issue = this.issue(a.issue ?? { title: base.title, body: `## Context\n\n${base.why}\n\n## Proposal\n\n${base.adds}\n${base.removes}\n\n## Evidence\n\n${base.evidence.map(e => `- ${e}`).join('\n')}\n\n## Verification\n\n${base.expected || 'Verify the cited cases before accepting the change.'}` });
+    const inventory = isAppCard(out) ? this.inventory : { repo: null, status: 'unverified' as const, at: this.now(), note: 'dedup da verificare: repository del brain non verificato', issues: [] };
+    const duplicate = matchingIssue(out.issue.title, inventory);
+    if (duplicate || out.issue.duplicateOf) throw new Error(`Duplicate issue: ${duplicate?.url ?? out.issue.duplicateOf!.url}. Do not propose another issue.`);
+    out.issue = { ...out.issue, repo: inventory.repo, dedup: { status: inventory.status, at: inventory.at, note: inventory.note, count: inventory.issues.length } };
     if (kind === 'app-bug' && typeof a.logKey === 'string' && a.logKey.trim()) out.logKey = str(a.logKey, 1000, 'logKey');
     // «riuscito se…» (ADR 0194): the research's criterion, else the default of a brain change; in the user's words
     const success = parseSuccess(a.success) ?? defaultSuccess(out.change);
@@ -480,12 +529,15 @@ export class ResearchService {
   afterPass(logs: LogScan): { bugs: number; forget: number; lint: number; reverts: number } {
     const all = this.store.all(), p = this.privacy(), w = CLEANUP_WORDS[this.d.lang() === 'it' ? 'it' : 'en'];
     let bugs = 0, forget = 0;
-    for (const g of logs.groups.filter(x => !x.known)) {
-      if (all.some(x => x.logKey === g.key) || bugs >= RESEARCH_CAPS.app) continue;
+    // Reserve five of the seven slots for deep findings when a research engine is available.
+    const budget = this.d.engines().length ? 2 : RESEARCH_TOTAL_CAP;
+    for (const g of logs.groups.filter(x => !x.known).sort((a, b) => Number(b.lvl === 'error') - Number(a.lvl === 'error') || b.count - a.count)) {
+      if (all.some(x => x.logKey === g.key) || bugs >= RESEARCH_CAPS.app || bugs >= budget) continue;
       const where = `${g.scope} · ${g.msg}`;
-      this.store.add({ chatId: null, kind: 'app-bug', title: scrub(where, p).slice(0, 120), adds: '', removes: scrub(w.bugRemoves(oneLine(g.msg), g.count), p),
+      if (matchingIssue(scrub(`${g.scope}: ${g.msg}`, p).slice(0, 120), this.inventory)) continue;
+      this.store.add({ chatId: null, rank: RESEARCH_TOTAL_CAP - budget + bugs + 1, kind: 'app-bug', title: scrub(where, p).slice(0, 120), adds: '', removes: scrub(w.bugRemoves(oneLine(g.msg), g.count), p),
         why: w.bugWhy(g.count, g.lvl), evidence: [], sources: [], expected: '', risk: '', logKey: g.key,
-        issue: { title: scrub(`${g.scope}: ${g.msg}`, p).slice(0, 120), labels: ['bug'], body: scrub([
+        issue: { repo: this.inventory.repo, dedup: { status: this.inventory.status, at: this.inventory.at, note: this.inventory.note, count: this.inventory.issues.length }, title: scrub(`${g.scope}: ${g.msg}`, p).slice(0, 120), labels: ['bug'], body: scrub([
           w.issueLead(g.lvl, g.count), '',
           `**${w.issueGroup}**`, '', `- scope: \`${oneLine(g.scope).replace(/`/g, "'")}\``, `- ${w.issueMessage}: ${oneLine(g.msg)}`, ...(g.cause ? [`- ${w.issueCause}: ${oneLine(g.cause)}`] : []), '',
           // a sample with backticks cannot close the fence
@@ -498,15 +550,17 @@ export class ResearchService {
     }
     const recent = (name: string) => all.some(x => x.kind === 'forget' && x.forget?.name === name && x.at >= this.now() - 90 * 86_400_000);
     for (const c of forgetCandidates(this.d.brain.state().skills, this.d.runs(), this.now())) {
-      if (forget >= RESEARCH_CAPS.forget || recent(c.name)) continue;
+      if (forget >= RESEARCH_CAPS.forget || bugs + forget >= budget || recent(c.name)) continue;
       const since = c.lastUsed ? new Date(c.lastUsed).toISOString().slice(0, 10) : null;
-      this.store.add({ chatId: null, kind: 'forget', title: w.forgetTitle(c.name), adds: '', removes: w.forgetRemoves(c.name, c.description.slice(0, 200), c.usedBy),
+      this.store.add({ chatId: null, rank: RESEARCH_TOTAL_CAP - budget + bugs + forget + 1, kind: 'forget', title: w.forgetTitle(c.name), adds: '', removes: w.forgetRemoves(c.name, c.description.slice(0, 200), c.usedBy),
         why: w.forgetWhy(since), evidence: [`skill ${c.name}: 0 / 60d`], sources: [], expected: w.forgetExpected, risk: w.forgetRisk,
         forget: { what: 'skill', name: c.name, lastUsed: c.lastUsed ?? null, uses: 0 } });
       forget++;
     }
+    this.cleanupLeft = budget - bugs - forget;
     const lint = this.lint();
     const reverts = this.outcomes();
+    this.cleanupLeft = null;
     if (bugs || forget || lint || reverts) this.d.changed();
     return { bugs, forget, lint, reverts };
   }
@@ -535,8 +589,9 @@ export class ResearchService {
     for (const check of LINT_ORDER) {
       let n = all.filter(x => x.kind === 'lint' && x.state === 'open' && x.lint?.check === check).length;
       for (const f of found.filter(x => x.check === check)) {
-        if (n >= LINT_CAPS[check] || seen.has(f.key)) continue;
-        this.store.add(lintCard(f, lang)); seen.add(f.key); n++; made++;
+        if (n >= LINT_CAPS[check] || seen.has(f.key) || this.cleanupLeft === 0) continue;
+        this.store.add({ ...lintCard(f, lang), ...(this.cleanupLeft !== null ? { rank: RESEARCH_TOTAL_CAP - this.cleanupLeft + 1 } : {}) }); seen.add(f.key); n++; made++;
+        if (this.cleanupLeft !== null) this.cleanupLeft--;
       }
     }
     log.info('brain', 'brain lint', { data: { found: found.length, cards: made, ...Object.fromEntries(LINT_ORDER.map(c => [c, found.filter(f => f.check === c).length])) } });
@@ -551,8 +606,9 @@ export class ResearchService {
     const all = this.store.all(), lang = this.d.lang();
     let made = 0;
     for (const r of worse) {
-      if (all.some(p => p.revert?.changeId === r.changeId)) continue;
-      this.store.add(revertCard(r, lang)); made++;
+      if (all.some(p => p.revert?.changeId === r.changeId) || this.cleanupLeft === 0) continue;
+      this.store.add({ ...revertCard(r, lang), ...(this.cleanupLeft !== null ? { rank: RESEARCH_TOTAL_CAP - this.cleanupLeft + 1 } : {}) }); made++;
+      if (this.cleanupLeft !== null) this.cleanupLeft--;
       log.info('brain', 'maintenance change did not help', { data: { change: r.changeId, metric: r.criterion.metric, before: r.check.before, after: r.check.after } });
     }
     return made;
@@ -560,11 +616,11 @@ export class ResearchService {
 
   // ── Proposte (the 'research' source) ─────────────────────────────────────────────────────────────────────────────
   /** Open findings, newest first: brain changes and what to forget, and the app cards that open an issue. */
-  cards(): ResearchProposal[] { return this.store.all().filter(p => p.state === 'open' && !p.candidateId).reverse(); }
+  cards(): ResearchProposal[] { return this.store.all().filter(p => p.state === 'open' && !p.candidateId).sort((a, b) => a.chatId === b.chatId && a.rank && b.rank ? a.rank - b.rank : b.at - a.at); }
   /** The open candidate brains (ADR 0195): one card each. */
   candidateCards(): BrainCandidateView[] {
     const all = new Map(this.store.all().map(p => [p.id, p]));
-    return (this.candidates?.open() ?? []).map(c => ({ ...c, items: c.proposalIds.flatMap(id => { const p = all.get(id); return p ? [{ kind: p.kind, title: p.title, ...(p.success?.text ? { success: p.success.text } : {}) }] : []; }) }));
+    return (this.candidates?.open() ?? []).map(c => ({ ...c, items: c.proposalIds.flatMap(id => { const p = all.get(id); return p ? [{ kind: p.kind, title: p.title, ...(p.issue ? { issue: p.issue } : {}), ...(p.success?.text ? { success: p.success.text } : {}) }] : []; }) }));
   }
   /** When the user last pressed «Manutenzione»: the other parts of the app's skill and rule proposals made after it
    *  wait for the next click (ADR 0153). null = never pressed. */
@@ -578,6 +634,13 @@ export class ResearchService {
     if (isAppCard(p)) {
       const repo = this.repo();
       if (!p.issue || !repo || !this.d.issues) throw new Error('Repository dell\'app sconosciuto: la issue non si può aprire.');
+      if (p.issue.repo && p.issue.repo !== repo) throw new Error('Il repository è cambiato: prepara una nuova proposta.');
+      if (p.issue.duplicateOf) throw new Error('Issue già aperta: non verrà creata una copia.');
+      if (this.d.openIssues) {
+        const current = await this.d.openIssues(repo);
+        if (matchingIssue(p.issue.title, current)) throw new Error('Issue già aperta: non verrà creata una copia.');
+        if (current.status !== 'checked') throw new Error('dedup da verificare: impossibile rileggere le issue aperte.');
+      }
       const opened = await this.d.issues.open(repo, p.issue);
       // a second click while gh was working finds the card decided already
       if (this.store.get(id)?.state !== 'open') return opened.url;
@@ -656,6 +719,7 @@ export class ResearchService {
    *  trial version (never a direct replacement). */
   proposeRoleTrial(chatId: string, a: Input): { id: string } {
     const r = this.mine(chatId);
+    if (this.usedCards(chatId) >= RESEARCH_TOTAL_CAP) throw new Error('Limit reached: at most 7 ranked proposals per research.');
     if (!this.d.roleTrial || !r.reflect) throw new Error('No role to reflect on in this research.');
     if (!this.reflectBudget(r)) throw new Error('Budget: the role step is skipped, the research has spent most of its cap.');
     const role = r.reflect.role;
