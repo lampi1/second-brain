@@ -20,10 +20,41 @@ it('rejects spoofed formats and oversized bytes before decode',async()=>{
   await expect(validateAvatarImage(new File([new Uint8Array(256001)],'large.png',{type:'image/png'}),decode)).rejects.toThrow();
   expect(decode).not.toHaveBeenCalled();
 });
-it('refuses extended WebP before decoding even if its canvas is small',async()=>{
-  const bytes=new Uint8Array(64);bytes.set([82,73,70,70],0);bytes.set([87,69,66,80],8);bytes.set([86,80,56,88],12);bytes[24]=31;bytes[27]=31;
+// WebP builders: a RIFF container of chunks (fourcc, LE size, payload, even padding), as libwebp writes them.
+const u24=(n:number)=>[n&255,(n>>8)&255,(n>>16)&255];
+function chunk(fourcc:string,payload:number[]){const size=payload.length;return [...fourcc].map(c=>c.charCodeAt(0)).concat([size&255,(size>>8)&255,(size>>16)&255,size>>>24],payload,size%2?[0]:[]);}
+function riff(chunks:number[][]){const body=[87,69,66,80,...chunks.flat()],size=body.length;return new Uint8Array([82,73,70,70,size&255,(size>>8)&255,(size>>16)&255,size>>>24,...body]);}
+const vp8=(w:number,h:number)=>chunk('VP8 ',[0,0,0,0x9d,1,0x2a,w&255,w>>8,h&255,h>>8]);
+const vp8l=(w:number,h:number)=>{const bits=(w-1)|((h-1)<<14);return chunk('VP8L',[0x2f,bits&255,(bits>>8)&255,(bits>>16)&255,bits>>>24]);};
+const vp8x=(w:number,h:number,flags=0)=>chunk('VP8X',[flags,0,0,0,...u24(w-1),...u24(h-1)]);
+const anmf=(x:number,y:number,w:number,h:number,frame:number[])=>chunk('ANMF',[...u24(x/2),...u24(y/2),...u24(w-1),...u24(h-1),...u24(100),0,...frame]);
+it('reads the canvas of an extended WebP with a lossy, lossless or alpha image',async()=>{
+  expect(avatarRasterSize(riff([vp8x(64,48),vp8(64,48)]),'image/webp')).toEqual({width:64,height:48});
+  expect(avatarRasterSize(riff([vp8x(300,200,0x10),chunk('ALPH',[0,1,2]),vp8(300,200)]),'image/webp')).toEqual({width:300,height:200});
+  expect(avatarRasterSize(riff([vp8x(40,40,0x30),chunk('ICCP',[1,2,3,4]),vp8l(40,40),chunk('EXIF',[9])]),'image/webp')).toEqual({width:40,height:40});
+  const close=vi.fn();
+  await validateAvatarImage(new File([riff([vp8x(64,48),vp8(64,48)])],'extended.webp',{type:'image/webp'}),async()=>({width:64,height:48,close}));
+  expect(close).toHaveBeenCalledOnce();
+});
+it('reads the canvas of an animated WebP whose frames all fit inside it',()=>{
+  const animated=riff([vp8x(100,80,0x12),chunk('ANIM',[0,0,0,0,0,0]),anmf(0,0,100,80,vp8(100,80)),anmf(20,10,50,40,[...chunk('ALPH',[0]),...vp8l(50,40)])]);
+  expect(avatarRasterSize(animated,'image/webp')).toEqual({width:100,height:80});
+});
+it('refuses an extended WebP whose image or frame does not match its small canvas, before decoding',async()=>{
   const decode=vi.fn();
-  await expect(validateAvatarImage(new File([bytes],'extended.webp',{type:'image/webp'}),decode)).rejects.toThrow('Dimensioni');
+  for(const bytes of [
+    riff([vp8x(32,32),vp8(20000,20000)]),
+    riff([vp8x(32,32),vp8l(64,32)]),
+    riff([vp8x(32,32,0x02),chunk('ANIM',[0,0,0,0,0,0]),anmf(0,0,32,32,vp8(32,32)),anmf(0,0,16000,16000,vp8(16000,16000))]),
+    riff([vp8x(32,32,0x02),anmf(20,0,32,32,vp8(32,32))]),
+    riff([vp8x(32,32,0x02),anmf(0,0,16,16,vp8(32,32))]),
+    riff([vp8x(32,32),chunk('EXIF',[1,2])]),
+    riff([vp8x(20000,20000),vp8(20000,20000)]),
+    riff([vp8x(32,32),vp8(32,32)]).subarray(0,40),
+  ]){
+    expect(avatarRasterSize(bytes,'image/webp')).toBeNull();
+    await expect(validateAvatarImage(new File([bytes],'extended.webp',{type:'image/webp'}),decode)).rejects.toThrow('Dimensioni');
+  }
   expect(decode).not.toHaveBeenCalled();
 });
 it('bounds JPEG SOF and simple WebP frame dimensions',()=>{
@@ -32,6 +63,8 @@ it('bounds JPEG SOF and simple WebP frame dimensions',()=>{
   jpeg[7]=0x7f;expect(avatarRasterSize(jpeg,'image/jpeg')).toBeNull();
   const webp=new Uint8Array(30);webp.set([82,73,70,70],0);webp.set([87,69,66,80,86,80,56,32],8);webp.set([157,1,42],23);webp[26]=64;webp[28]=32;
   expect(avatarRasterSize(webp,'image/webp')).toEqual({width:64,height:32});
+  expect(avatarRasterSize(riff([vp8(64,32)]),'image/webp')).toEqual({width:64,height:32});
+  expect(avatarRasterSize(riff([vp8l(64,32)]),'image/webp')).toEqual({width:64,height:32});
 });
 it('allows EXIF-style swapped bounded dimensions while still closing the bitmap',async()=>{
   const close=vi.fn();

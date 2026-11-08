@@ -3,18 +3,59 @@
 import {t} from '../i18n';
 export const AVATAR_BYTES=256_000;
 interface Size {width:number;height:number}
+interface Chunk {kind:string;at:number;size:number}
+// RIFF chunks between from and to (fourcc, LE size, payload padded to even); null when one overruns the bytes.
+function webpChunks(bytes:Uint8Array,view:DataView,from:number,to:number):Chunk[]|null{
+  const out:Chunk[]=[];
+  for(let at=from;at<to;){
+    if(at+8>to || out.length>=1024)return null;
+    const size=view.getUint32(at+4,true);
+    if(at+8+size>to)return null;
+    out.push({kind:String.fromCharCode(...bytes.subarray(at,at+4)),at:at+8,size});
+    at+=8+size+(size&1);
+  }
+  return out;
+}
+// The frame size a VP8 or VP8L bitstream declares; null for any other chunk or a truncated header.
+function bitstreamSize(c:Chunk,bytes:Uint8Array,view:DataView):Size|null{
+  if(c.kind==='VP8 ' && c.size>=10 && bytes[c.at+3]===0x9d && bytes[c.at+4]===1 && bytes[c.at+5]===0x2a)return {width:view.getUint16(c.at+6,true)&0x3fff,height:view.getUint16(c.at+8,true)&0x3fff};
+  if(c.kind==='VP8L' && c.size>=5 && bytes[c.at]===0x2f){const bits=view.getUint32(c.at+1,true);return {width:1+(bits&0x3fff),height:1+((bits>>>14)&0x3fff)};}
+  return null;
+}
+const u24=(bytes:Uint8Array,at:number)=>bytes[at]!|bytes[at+1]!<<8|bytes[at+2]!<<16;
+// Simple WebP: one VP8/VP8L chunk. Extended (VP8X): its canvas, but only when the still image equals it or every
+// animation frame lies inside it, so the canvas bounds what any decoder allocates for any frame.
+function webpSize(bytes:Uint8Array,view:DataView):Size|null{
+  if(bytes.length<20)return null;
+  // A simple file needs only its bitstream header here; the decoder validates the rest, as before.
+  if(String.fromCharCode(...bytes.subarray(12,16))!=='VP8X')return bitstreamSize({kind:String.fromCharCode(...bytes.subarray(12,16)),at:20,size:bytes.length-20},bytes,view);
+  const chunks=webpChunks(bytes,view,12,Math.min(bytes.length,8+view.getUint32(4,true)));
+  const first=chunks?.[0];
+  if(!first || first.size<10)return null;
+  const canvas={width:1+u24(bytes,first.at+4),height:1+u24(bytes,first.at+7)};
+  let images=0;
+  for(const c of chunks!.slice(1)){
+    let frame=bitstreamSize(c,bytes,view),x=0,y=0;
+    if(c.kind==='ANMF'){
+      if(c.size<16)return null;
+      x=2*u24(bytes,c.at);y=2*u24(bytes,c.at+3);
+      const declared={width:1+u24(bytes,c.at+6),height:1+u24(bytes,c.at+9)};
+      const inner=webpChunks(bytes,view,c.at+16,c.at+c.size)?.map(f=>bitstreamSize(f,bytes,view)).filter(s=>s!==null);
+      if(inner?.length!==1 || inner[0]!.width!==declared.width || inner[0]!.height!==declared.height)return null;
+      frame=declared;
+    }else if(frame && (frame.width!==canvas.width || frame.height!==canvas.height))return null;
+    if(!frame)continue;
+    if(x+frame.width>canvas.width || y+frame.height>canvas.height)return null;
+    images++;
+  }
+  return images?canvas:null;
+}
 export function avatarRasterSize(bytes:Uint8Array,mime:string,bounds={min:16,max:1024}):Size|null {
   const view=new DataView(bytes.buffer,bytes.byteOffset,bytes.byteLength);
   const ascii=(at:number,n:number)=>String.fromCharCode(...bytes.subarray(at,at+n));
   let size:Size|null=null;
   if(mime==='image/png' && bytes.length>=33 && [137,80,78,71,13,10,26,10].every((v,i)=>bytes[i]===v) && view.getUint32(8)===13 && ascii(12,4)==='IHDR')size={width:view.getUint32(16),height:view.getUint32(20)};
-  if(mime==='image/webp' && bytes.length>=30 && ascii(0,4)==='RIFF' && ascii(8,4)==='WEBP'){
-    const kind=ascii(12,4);
-    // Extended/animated WebP may contain differently sized image frames. Refuse before any decoder allocation.
-    if(kind==='VP8X')return null;
-    if(kind==='VP8 ' && bytes[23]===0x9d && bytes[24]===1 && bytes[25]===0x2a)size={width:view.getUint16(26,true)&0x3fff,height:view.getUint16(28,true)&0x3fff};
-    if(kind==='VP8L' && bytes[20]===0x2f){const bits=view.getUint32(21,true);size={width:1+(bits&0x3fff),height:1+((bits>>>14)&0x3fff)};}
-  }
+  if(mime==='image/webp' && ascii(0,4)==='RIFF' && ascii(8,4)==='WEBP')size=webpSize(bytes,view);
   if(mime==='image/jpeg' && bytes[0]===0xff && bytes[1]===0xd8){
     let at=2;
     for(let n=0;n<1024 && at+3<bytes.length;n++){
