@@ -57,7 +57,7 @@ Every module has unit tests; every user-visible feature has an e2e test with a s
 only the targeted tests (`npx vitest run <files>`; owner, 2026-11-07: "rifai i test mille volte"). A branch's gate
 before the merge, with no e2e (owner, 2026-11-08: "fai finire tutto, fanculo i test e2e"): `npm run check:quick` green
 on the branch's commit + a clean independent Sentinel review (rule 9) + the guard scan + a rebase on `main` right
-before the merge, then a plain `git push origin main` (never a force push). A visible change is still looked at in the
+before the merge, then a plain `git push origin main` by the owner (rule 8; never a force push). A visible change is still looked at in the
 dev app. No e2e run and no machine lock gate a branch; `npm run check:branch` is no longer needed per branch. Never
 repeated suites, never Sentinels only to compare main and the branch. After a batch of merges one dedicated chat runs
 the non-e2e parts of `npm run check` once on main (typecheck, lint, all unit tests); whoever breaks main fixes it on

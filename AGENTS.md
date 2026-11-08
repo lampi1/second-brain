@@ -49,7 +49,7 @@ Details, flags and ADR references of each: `docs/agents/commands.md`.
 ## Verify a change
 
 While working, only the targeted tests → the branch's gate, no e2e and no lock (owner, 2026-11-08: "fanculo i test
-e2e"): `npm run check:quick` green + a clean independent Sentinel + the guard, rebase on main, plain push → look at a
+e2e"): `npm run check:quick` green + a clean independent Sentinel + the guard, rebase on main, the owner's plain push (rule 8) → look at a
 visible change in the dev app → on a runtime failure `npm run logs -- --level warn --since 15m`, then `npm run
 doctor`. The non-e2e parts of `npm run check` run once on main after a batch of merges; whoever breaks main fixes it
 on main. Details: `docs/agents/rules.md` §7.

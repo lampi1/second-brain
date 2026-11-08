@@ -4,7 +4,7 @@
 // what they read. Deleted and renamed files pick the tests of their old path; a changed source no test reaches turns
 // the closing line into "green WITHOUT tests" (owner, 2026-11-07: restyles touch mostly untested renderer files).
 // Records nothing; with a clean independent review it is all a branch needs before the merge, no e2e (owner, 2026-11-08),
-// the full `npm run check` runs on main after a batch of merges. Used by package.json "check:quick";
+// the non-e2e parts of `npm run check` run on main after a batch of merges. Used by package.json "check:quick";
 // test/unit/check-quick.test.ts checks how it picks the tests.
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
