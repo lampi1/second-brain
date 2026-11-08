@@ -250,10 +250,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const loopRef: { current?: { ended(run: AgentRun): void; outcome(run: AgentRun): void } } = {};
   const runFeedbackRef: { current?: { runList(): readonly AgentRun[] } } = {};
   // the worktree pool (ADR 0227): writing children reuse a worktree of their repository; inUse = an open chat or a live
-  // engine works in it (an archived chat whose engine ended leaves it free)
+  // engine works in it (an archived chat whose engine ended leaves it free), or a warm engine waits there
   const worktreePool = new WorktreePool({ file: path.join(ctx.userData, 'worktree-pool.json'),
     limits: () => worktreeLimits(brain.settings()),
-    inUse: root => manager.list().some(c => within(root, c.cwd) && (!c.closedAt || c.state !== 'closed')),
+    inUse: root => manager.list().some(c => within(root, c.cwd) && (!c.closedAt || c.state !== 'closed')) || manager.warmCwds().some(c => within(root, c)),
     knownCwds: () => manager.list().map(c => c.cwd),
     allocated: () => delegateWorktrees.allocatedRoots() });
   const delegateWorktrees = new DelegateWorktrees(path.join(ctx.userData, 'delegation-worktrees.json'), () => brain.info().brainRoot, worktreePool);

@@ -19,7 +19,7 @@ import { GitSession, cleanRepository } from './worktrees';
 /** A reusable worktree of the pool: `usedAt` orders the reuse (most recent first) and the trim (least recent first). */
 export interface PoolSlot { root: string; common: string; createdAt: number; usedAt: number; branch: string }
 /** One `git worktree list --porcelain` entry. */
-export interface ListedWorktree { path: string; branch: string | null; prunable: boolean; locked: boolean }
+export interface ListedWorktree { path: string; head: string | null; branch: string | null; prunable: boolean; locked: boolean }
 
 /** The app's delegation branches: 12 hex since the pool (guard-safe, no GUID shape), a UUID before it. */
 export const POOL_BRANCH = /^sb\/delegate-(?:[a-f0-9]{12}|[a-f0-9-]{36})$/;
@@ -32,6 +32,8 @@ const SIZE_TTL_MS = 10 * 60_000;
 const RECENT_MS = 30 * 60_000;
 /** add/remove/checkout of a whole tree: 72 s measured for an add under load (2026-11-07) */
 const SLOW_MS = 10 * 60_000;
+/** commits a local branch other than the app's sb/ ones holds stay with that branch: removing the worktree loses none */
+const KEPT_ELSEWHERE = ['--exclude=sb/*', '--branches'];
 const win = process.platform === 'win32';
 const real = (p: string): string => { try { return fs.realpathSync.native(p); } catch { return path.resolve(p); } };
 const keyOf = (p: string): string => win ? real(p).toLowerCase() : real(p);
@@ -48,7 +50,8 @@ export function parseWorktrees(porcelain: string): ListedWorktree[] {
     const p = head?.slice(9).trim();
     if (!p || !path.isAbsolute(p)) continue;
     const b = lines.find(l => l.startsWith('branch '))?.slice(7).trim();
-    out.push({ path: path.resolve(p), branch: b ? b.replace(/^refs\/heads\//, '') : null,
+    const sha = lines.find(l => l.startsWith('HEAD '))?.slice(5).trim();
+    out.push({ path: path.resolve(p), head: sha && /^[0-9a-f]{40,64}$/.test(sha) ? sha : null, branch: b ? b.replace(/^refs\/heads\//, '') : null,
       prunable: lines.some(l => l === 'prunable' || l.startsWith('prunable ')), locked: lines.some(l => l === 'locked' || l.startsWith('locked ')) });
   }
   return out;
@@ -95,20 +98,34 @@ export async function folderBytes(dir: string): Promise<number> {
   return total;
 }
 
-/** Unlinks the links and junctions in the first two levels of a worktree (a `node_modules` junction to the parent's
- *  checkout), never what they point to, before `git worktree remove` deletes the folder. */
-function unlinkLinks(root: string): void {
+/** Unlinks the untracked links and junctions in the first two levels of a worktree (a `node_modules` junction to the
+ *  parent's checkout), never what they point to, before `git worktree remove` deletes the folder. A link the repository
+ *  tracks stays (removing it would be a change, and git would refuse the remove); git is asked only when links exist.
+ *  false = git could not tell which links it tracks: the caller does not remove the worktree (a junction left in place
+ *  could take its target's files with it). */
+async function unlinkLinks(root: string, session: GitSession): Promise<boolean> {
+  const links: string[] = [];
   const walk = (dir: string, depth: number): void => {
     let ents: fs.Dirent[];
     try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
     for (const e of ents) {
       if (e.name === '.git') continue;
       const p = path.join(dir, e.name);
-      if (e.isSymbolicLink()) { try { fs.unlinkSync(p); } catch { /* git refuses the remove if it stays */ } }
+      if (e.isSymbolicLink()) links.push(p);
       else if (e.isDirectory() && depth < 2) walk(p, depth + 1);
     }
   };
   walk(root, 1);
+  if (!links.length) return true;
+  // every tracked link (mode 120000), no pathspec: a pathspec through a junction makes git fail ("beyond a symbolic link")
+  const ls = await session.git(root, ['ls-files', '-s', '-z']);
+  if (ls.exit !== 0) return false;
+  const tracked = new Set(ls.out.split('\0').filter(l => l.startsWith('120000 ')).map(l => l.slice(l.indexOf('\t') + 1)));
+  for (const p of links) {
+    if (tracked.has(path.relative(root, p).split(path.sep).join('/'))) continue;
+    try { fs.unlinkSync(p); } catch { /* git refuses the remove if it stays */ }
+  }
+  return true;
 }
 
 async function limitedAll<T, R>(items: readonly T[], n: number, fn: (item: T) => Promise<R>): Promise<R[]> {
@@ -134,7 +151,7 @@ export interface WorktreePoolOptions {
 }
 
 type EntryState = 'inUse' | 'recent' | 'changes' | 'unpushed' | 'clean' | 'unknown';
-interface Entry { root: string; branch: string | null; slot: PoolSlot | undefined; state: EntryState; usedAt: number; bytes: number | null }
+interface Entry { root: string; head: string | null; branch: string | null; slot: PoolSlot | undefined; state: EntryState; usedAt: number; bytes: number | null }
 interface RepoScan { main: string; common: string; worktrees: number; entries: Entry[] }
 
 export class WorktreePool {
@@ -149,6 +166,8 @@ export class WorktreePool {
   /** when the user first pressed «Pulisci ora»: until then the timer only scans (the user's decision, ADR 0227) */
   private manualAt: number | null = null;
   private job: Promise<WorktreeUsage> | null = null;
+  /** the running job removes (a cleanup), not only scans */
+  private jobApply = false;
   private readonly now: () => number;
 
   constructor(private readonly o: WorktreePoolOptions) {
@@ -228,7 +247,8 @@ export class WorktreePool {
         this.leases.set(keyOf(slot.root), this.now() + LEASE_MS);
         try {
           if (await this.reset(slot.root, source, branch, session)) {
-            slot.usedAt = this.now(); slot.branch = branch; this.save();
+            // the lease runs from the hand-over, not from the start of a reset that may have taken minutes
+            slot.usedAt = this.now(); slot.branch = branch; this.leases.set(keyOf(slot.root), this.now() + LEASE_MS); this.save();
             return { root: real(slot.root), branch, reused: true };
           }
         } catch (e) { log.info('agents', 'pool slot not reusable', { data: { slot: path.basename(slot.root), cause: errText(e) } }); }
@@ -244,6 +264,7 @@ export class WorktreePool {
         if (keyOf(made.root) !== keyOf(root) || keyOf(made.common) !== keyOf(source.common) || made.head !== source.head) throw new Error('Isolated worktree verification failed; shared checkout was not used.');
       } catch (e) { this.release(root); throw e; }
       const t = this.now();
+      this.leases.set(keyOf(root), t + LEASE_MS);
       this.slots.push({ root: real(root), common: real(source.common), createdAt: t, usedAt: t, branch });
       this.save();
       const { perRepo, total } = this.o.limits();
@@ -280,16 +301,21 @@ export class WorktreePool {
    *  legacy ones as slots, prunes git's stale records; then reports. */
   cleanup(): Promise<WorktreeUsage> {
     if (this.manualAt === null) { this.manualAt = this.now(); this.save(); }
-    return this.job ?? this.start(true);
+    return this.start(true);
   }
   /** The timer's run: a cleanup once the user has pressed «Pulisci ora» at least once, a scan (removes nothing) before. */
-  autoCleanup(): Promise<WorktreeUsage> { return this.manualAt === null ? this.usage(true) : this.job ?? this.start(true); }
+  autoCleanup(): Promise<WorktreeUsage> { return this.manualAt === null ? this.usage(true) : this.start(true); }
   /** The last report without any work (null = none yet). */
   snapshot(): WorktreeUsage | null { return this.last ? { ...this.last, running: !!this.job } : null; }
 
+  /** One job at a time: a running cleanup answers any request, a running scan answers a scan; a cleanup asked during a
+   *  scan runs after it (returning the scan would tell the user nothing was removed). */
   private start(apply: boolean): Promise<WorktreeUsage> {
-    const job = this.run(apply).finally(() => { this.job = null; });
-    this.job = job;
+    const prev = this.job;
+    if (prev && (this.jobApply || !apply)) return prev;
+    const job: Promise<WorktreeUsage> = (prev ? prev.catch(() => null).then(() => this.run(apply)) : this.run(apply))
+      .finally(() => { if (this.job === job) { this.job = null; this.jobApply = false; } });
+    this.job = job; this.jobApply = apply;
     return job;
   }
 
@@ -337,12 +363,12 @@ export class WorktreePool {
     const entries = await limitedAll(owned, 4, async (w): Promise<Entry> => {
       const slot = this.slots.find(s => keyOf(s.root) === keyOf(w.path));
       const touched = touchedAt(w.path);
-      const e: Entry = { root: w.path, branch: w.branch, slot, state: 'unknown', usedAt: slot?.usedAt ?? touched, bytes: null };
+      const e: Entry = { root: w.path, head: w.head, branch: w.branch, slot, state: 'unknown', usedAt: slot?.usedAt ?? touched, bytes: null };
       if (this.o.inUse(w.path) || this.leased(w.path)) { e.state = 'inUse'; return e; }
       const st = await session.git(w.path, ['status', '--porcelain=v1', '--untracked-files=normal']);
       if (st.exit !== 0) return e;
       if (st.out.trim()) { e.state = 'changes'; return e; }
-      const n = await this.unique(w.path, base, session);
+      const n = await this.unique(w.path, base, session, KEPT_ELSEWHERE);
       if (n === null) return e;
       if (n > 0) { e.state = 'unpushed'; return e; }
       e.state = touched > this.now() - RECENT_MS ? 'recent' : 'clean';
@@ -389,13 +415,20 @@ export class WorktreePool {
   }
 
   private async removeEntry(r: RepoScan, e: Entry, session: GitSession): Promise<boolean> {
-    // checked again under the repository's lock: a take may have started meanwhile
-    if (this.o.inUse(e.root) || this.leased(e.root)) return false;
-    unlinkLinks(e.root);
+    // checked again under the repository's lock: a take may have started, or taken and released the slot, meanwhile
+    if (this.o.inUse(e.root) || this.leased(e.root) || (e.slot && e.slot.usedAt > e.usedAt) || !e.head) return false;
+    // the scan ran before the lock: the worktree must still be clean, at the scanned commit, with nothing of its own
+    const st = await session.git(e.root, ['status', '--porcelain=v1', '--untracked-files=normal']);
+    if (st.exit !== 0 || st.out.trim()) return false;
+    const head = await session.git(e.root, ['rev-parse', 'HEAD']);
+    if (head.exit !== 0 || head.out.trim() !== e.head) return false;
+    if (await this.unique(e.root, this.baseRefs.get(keyOf(r.common)) ?? null, session, KEPT_ELSEWHERE) !== 0) return false;
+    if (!await unlinkLinks(e.root, session)) return false;
     const rm = await session.git(r.main, ['worktree', 'remove', e.root], SLOW_MS);
     if (rm.exit !== 0) { log.warn('agents', 'app worktree not removed', { data: { path: e.root }, hint: 'git refused (a locked file or a change appeared); the next cleanup tries again' }); return false; }
-    // its branch had no commit of its own (checked by the scan): nothing is lost
-    if (e.branch && POOL_BRANCH.test(e.branch)) await session.git(r.main, ['branch', '-D', e.branch]);
+    // its branch had no commit of its own (checked just above); deleted only while still at that commit (update-ref
+    // with the old value): a branch moved since is left as it is
+    if (e.branch && POOL_BRANCH.test(e.branch)) await session.git(r.main, ['update-ref', '-d', `refs/heads/${e.branch}`, e.head]);
     this.slots = this.slots.filter(s => keyOf(s.root) !== keyOf(e.root));
     this.sizes.delete(keyOf(e.root));
     return true;
@@ -443,7 +476,8 @@ export class WorktreePool {
           }
         });
       }
-      if (removed) this.lastCleanup = { removed, at: this.now() };
+      // every cleanup, 0 removed too: the page's «rimossi» line and toast tell this run, not an older one
+      this.lastCleanup = { removed, at: this.now() };
     }
     if (apply || this.slots.length !== before) this.save();
     const repos: WorktreeRepoUsage[] = scans.map(r => {

@@ -102,6 +102,8 @@ export class ChatManager extends ManagerSink implements ChatService {
   pending(): PendingRequest[] {
     return [...this.chats.values()].flatMap(r => [...r.pending.values()]).sort((a, b) => a.at - b.at);
   }
+  /** The folders warm engines wait in (warm.ts): the worktree pool's cleanup never removes one (ADR 0227). */
+  warmCwds(): string[] { return this.warm.engines.map(e => e.cwd); }
 
   /** links = the run links an Orchestrator tool sets (A7): refused before anything starts when one names an unknown run. */
   /** by: who asks; 'app' = one of the app's own jobs (the sampled Sentinel reviews, agents/judge-sample.ts): like an agent, its run says startedBy 'app' */

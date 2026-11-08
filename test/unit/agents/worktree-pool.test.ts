@@ -18,7 +18,7 @@ const commit = (cwd: string, message: string) => { git(cwd, 'add', '.'); git(cwd
 const writer = { tools: { allow: ['edit' as const] }, ceiling: null };
 
 function fixture(limits: WorktreeLimits = { perRepo: 6, total: 20, diskGb: 40 }) {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-pool-'))); roots.push(root);
+  const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-pool-'))); roots.push(root);
   const repo = path.join(root, 'repo'); fs.mkdirSync(repo); git(repo, 'init', '-q', '-b', 'main');
   git(repo, 'config', 'core.autocrlf', 'false');
   fs.writeFileSync(path.join(repo, '.gitignore'), 'bin/\n'); fs.writeFileSync(path.join(repo, 'a.txt'), 'one\n'); commit(repo, 'initial');
@@ -32,9 +32,11 @@ function fixture(limits: WorktreeLimits = { perRepo: 6, total: 20, diskGb: 40 })
 
 describe('worktree pool', () => {
   it('parses git worktree list --porcelain, the main checkout first', () => {
-    const out = 'worktree C:/r\nHEAD 1\nbranch refs/heads/main\n\nworktree C:/w\nHEAD 2\ndetached\nlocked\n\nworktree C:/x\nHEAD 3\nbranch refs/heads/sb/delegate-abc\nprunable gitdir file points to non-existent location\n';
+    const out = 'worktree C:/r\nHEAD aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nbranch refs/heads/main\n\nworktree C:/w\nHEAD 2\ndetached\nlocked\n\nworktree C:/x\nHEAD 3\nbranch refs/heads/sb/delegate-abc\nprunable gitdir file points to non-existent location\n';
     const list = parseWorktrees(out);
     expect(list.map(w => [path.basename(w.path), w.branch, w.locked, w.prunable])).toEqual([['r', 'main', false, false], ['w', null, true, false], ['x', 'sb/delegate-abc', false, true]]);
+    // the commit a worktree is at, kept for the cleanup's conditional branch delete; anything but a full sha = unknown
+    expect(list.map(w => w.head)).toEqual(['aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', null, null]);
   });
 
   it('reuses a free slot on a fresh guard-safe branch at the new HEAD, keeping its ignored build outputs', async () => {
@@ -124,6 +126,48 @@ describe('worktree pool', () => {
     expect(report.repos[0]!.bytes).toBeGreaterThan(0);
     expect((await f.pool.cleanup()).auto).toBe(true);
     expect(JSON.parse(fs.readFileSync(path.join(f.root, 'pool.json'), 'utf8')).manualAt).toEqual(expect.any(Number));
+  });
+
+  it('a cleanup asked during a scan runs after it, and says what it removed (0 too)', async () => {
+    const f = fixture({ perRepo: 0, total: 0, diskGb: 1 });
+    const p = path.join(f.root, '.second-brain-delegate-gggggg');
+    git(f.repo, 'worktree', 'add', '-q', '-b', 'sb/delegate-aaaaaaaaaaaa', p, 'HEAD');
+    f.later(3600_000);
+    const scan = f.pool.usage(true), clean = f.pool.cleanup();
+    expect((await scan).lastCleanup).toBeNull();
+    expect((await clean).lastCleanup?.removed).toBe(1);
+    expect(fs.existsSync(p)).toBe(false);
+    expect((await f.pool.cleanup()).lastCleanup?.removed).toBe(0);
+  });
+
+  it('commits a local non-app branch holds are not "unpushed": the worktree goes, the commits stay on that branch', async () => {
+    const f = fixture({ perRepo: 0, total: 0, diskGb: 1 });
+    const p = path.join(f.root, '.second-brain-delegate-hhhhhh');
+    git(f.repo, 'worktree', 'add', '-q', '-b', 'sb/delegate-bbbbbbbbbbbb', p, 'HEAD');
+    fs.writeFileSync(path.join(p, 'a.txt'), 'kept\n'); commit(p, 'merged locally');
+    const work = git(p, 'rev-parse', 'HEAD');
+    git(f.repo, 'branch', 'feature/kept', work);
+    f.later(3600_000);
+    const report = await f.pool.cleanup();
+    expect(report.repos[0]!.reported).toEqual([]);
+    expect(fs.existsSync(p)).toBe(false);
+    expect(git(f.repo, 'branch', '--list', 'sb/delegate-bbbbbbbbbbbb')).toBe('');
+    expect(git(f.repo, 'rev-parse', 'feature/kept')).toBe(work);
+  });
+
+  it('a slot taken while a cleanup runs is not removed by it', async () => {
+    const f = fixture({ perRepo: 0, total: 0, diskGb: 1 });
+    const src = await f.source();
+    const slot = await f.pool.take(src, new GitSession()); f.pool.release(slot.root);
+    f.later(3600_000);
+    // the removal waits behind this take (one operation per repository) and finds the slot taken again
+    const clean = f.pool.cleanup();
+    const again = await f.pool.take(src, new GitSession());
+    expect(again.root).toBe(slot.root);
+    await clean;
+    f.pool.release(again.root);
+    expect(fs.existsSync(slot.root)).toBe(true);
+    expect(git(f.repo, 'branch', '--list', again.branch)).toContain(again.branch);
   });
 
   it('DelegateWorktrees takes pool slots; a reused slot blocks reopening its earlier child', async () => {

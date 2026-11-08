@@ -60,8 +60,13 @@ from the other blocks of that section), then automatic 5 minutes after start and
 - Removed: the app's clean orphans over the limits (per repository, in total, disk cap; least recently used first),
   with `git worktree remove` without `--force`, then their app branch if it holds nothing of its own; then
   `git worktree prune` and the deletion of `sb/` branches already merged into the base.
-- **Never removed, only reported**: a worktree with uncommitted changes, or with commits on neither a remote nor the
-  base branch; one in use by a chat; one touched in the last 30 minutes.
+- Under the repository's lock, just before removing, the worktree is checked again (clean, still at the scanned
+  commit, nothing of its own, not taken since the scan); its branch goes with `git update-ref -d <ref> <scanned sha>`,
+  so a branch moved meanwhile stays. Only untracked links (a `node_modules` junction) are unlinked first.
+- **Never removed, only reported**: a worktree with uncommitted changes, or with commits on no remote, not on the
+  base branch and on no local branch outside `sb/`; one in use by a chat or a warm engine; one touched in the last 30
+  minutes.
+- A «Pulisci ora» while a scan runs waits for it and then cleans; every cleanup reports what it removed, 0 too.
 - Limits are settings, protected from agents: `worktreePoolPerRepo` (default 6), `worktreePoolTotal` (20),
   `worktreeDiskCapGb` (40). Impostazioni shows them, the space of each repository and the reported worktrees.
 
