@@ -18,10 +18,10 @@ const dirs: string[] = [];
 const key: RequestKey = { originalRequestId: 'ask-1', jobId: 'job-1', chatId: 'chat-1', runId: 'run-1', taskVersion: 1, proposalRevision: 10, proposalHash: proposalHash({ question: 'Proceed?' }) };
 const actor = { kind: 'user', channel: 'phone' } as const;
 afterEach(() => { closeAppDbs(); for (const dir of dirs.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
-function fixture() {
+function fixture(withRequest = true) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-coordination-')); dirs.push(dir);
   const file = path.join(dir, 'app.db'), store = new CoordinationStore(file, () => 42);
-  store.register({ key, kind: 'question', at: 10, payload: { question: 'Proceed?' } });
+  if (withRequest) store.register({ key, kind: 'question', at: 10, payload: { question: 'Proceed?' } });
   return { store, file, dir };
 }
 
@@ -79,6 +79,16 @@ describe('coordination decision journal', () => {
     store.resolve(next, actor, false);
     expect(store.requests().map(r => r.state)).toEqual(['accepted', 'cancelled']);
   });
+  it('an explicit new assignment cancels old pending callbacks, retaining accepted decisions', () => {
+    const { store } = fixture();
+    const accepted = { ...key, originalRequestId: 'accepted-old' }, current = { ...key, originalRequestId: 'current', runId: 'run-new', taskVersion: 2 };
+    store.register({ key: accepted, kind: 'question', at: 11, payload: {} }); store.resolve(accepted, actor, true);
+    store.register({ key: current, kind: 'question', at: 12, payload: {} });
+    store.cancelOtherAssignments(key.chatId, current.runId!);
+    expect(() => store.resolve(key, actor, true)).toThrow(/stale/);
+    expect(store.original(key.chatId, 'accepted-old')!.state).toBe('accepted');
+    expect(store.original(key.chatId, 'current')!.state).toBe('pending');
+  });
   it('hashes proposal keys deterministically and does not archive raw permission inputs', () => {
     expect(proposalHash({ b: 2, a: 1 })).toBe(proposalHash({ a: 1, b: 2 }));
     const { store } = fixture();
@@ -93,8 +103,28 @@ describe('coordination decision journal', () => {
 });
 
 describe('authoritative work projection', () => {
+  it('recovers plain-chat questions and accepted-undelivered answers in the same list and digest', () => {
+    const { store, dir } = fixture();
+    const service = new Workflows(path.join(dir, 'work.json'));
+    expect(service.projection()[0]).toMatchObject({ id: key.jobId, coordination: { state: 'waiting-user', requests: [{ key }] } });
+    const decision = store.resolve(key, actor, true); store.close();
+    const restarted = new Workflows(path.join(dir, 'work.json'));
+    const works = restarted.projection();
+    expect(works[0]).toMatchObject({ coordination: { state: 'blocked', requests: [{ decision }] } });
+    expect(digest({ works, chats: [], pending: [], runs: [], tasks: null, now: 100, since: null, warnTokens: 1000 })).toContain('Consegna da verificare');
+  });
+  it('keeps an old pending request in the bounded projection despite newer completed policy traffic', () => {
+    const { store } = fixture();
+    for (let i = 0; i < 3; i++) {
+      const next = { ...key, originalRequestId: `policy-${i}` };
+      store.register({ key: next, kind: 'permission', at: 20 + i, payload: {} });
+      const receipt = store.resolve(next, { kind: 'policy', policy: 'auto-permit' }, true);
+      const delivery = store.beginDelivery(receipt.id); store.finishDelivery(delivery.id, 'delivered');
+    }
+    expect(store.projectionRequests(2).map(r => r.key.originalRequestId)).toContain(key.originalRequestId);
+  });
   it('keeps unlinked assignments after chat/run pruning, without equating closed with done', () => {
-    const { file, dir } = fixture(), db = openAppDb(file).db, runs = new RunsDb(db, file);
+    const { file, dir } = fixture(false), db = openAppDb(file).db, runs = new RunsDb(db, file);
     const run = { runId: 'run-orphan', taskId: 'task-orphan', taskVersion: 2, chatId: 'forgotten-chat', goal: 'Continue investigation', agentId: 'artisan', startedAt: 1, endedAt: 2 } as AgentRun;
     runs.write({ upsert: [{ id: run.runId, agentId: run.agentId, startedAt: 1, endedAt: 2, json: JSON.stringify(run) }], remove: [], meta: new Map() });
     runs.write({ upsert: [], remove: [run.runId], meta: new Map() });
@@ -105,7 +135,7 @@ describe('authoritative work projection', () => {
     expect(works[0]!.coordination.evidence[0]!.detail).toContain('without a completion verdict');
   });
   it('does not rewrite the semantic job projection for token/cost-only updates', () => {
-    const { file } = fixture(), db = openAppDb(file).db, runs = new RunsDb(db, file);
+    const { file } = fixture(false), db = openAppDb(file).db, runs = new RunsDb(db, file);
     const run = { runId: 'run-meter', chatId: 'chat-meter', goal: 'Observe', agentId: 'scout', startedAt: 1, costUsd: 1 } as AgentRun;
     const write = () => runs.write({ upsert: [{ id: run.runId, agentId: run.agentId, startedAt: 1, endedAt: null, json: JSON.stringify(run) }], remove: [], meta: new Map() });
     write();
@@ -114,7 +144,7 @@ describe('authoritative work projection', () => {
     expect((db.prepare('select total_changes() n').get() as { n: number }).n - before).toBe(1); // agent_runs only
   });
   it('preserves historical jobs and pending proposals on migration; chat closure is not completion', () => {
-    const { store, dir } = fixture();
+    const { store, dir } = fixture(false);
     const file = path.join(dir, 'legacy.json');
     const service = new Workflows(file, undefined, () => 100);
     const row = service.create({ title: 'Investigate', profile: 'investigation', priority: 'normal', chatIds: ['worker'] });
@@ -128,7 +158,7 @@ describe('authoritative work projection', () => {
     expect(projection.coordination.evidence).toContainEqual({ source: 'chat', id: 'worker', detail: 'Chat chiusa: non prova il completamento del lavoro.' });
   });
   it('digest renders the exact list state, next action and evidence instead of inventing completion from chat state', () => {
-    const { store, dir } = fixture();
+    const { store, dir } = fixture(false);
     const chats = [{ id: 'worker', title: 'Implementation', state: 'closed', closedAt: 11, updatedAt: 11, harness: 'claude' }] as ChatSummary[];
     const service = new Workflows(path.join(dir, 'work.json'), undefined, () => 100, undefined, { store, chats: () => chats, pending: () => [] });
     service.create({ title: 'Unfinished feature', profile: 'feature', priority: 'normal', chatIds: ['worker'] });
@@ -139,7 +169,7 @@ describe('authoritative work projection', () => {
     expect(text).toContain('Chat chiusa: non prova il completamento del lavoro.'); expect(text).not.toContain('da sola, finita');
   });
   it('atomically commits workflow consent and transition; losing CAS leaves no accepted decision', () => {
-    const { store, dir } = fixture();
+    const { store, dir } = fixture(false);
     const service = new Workflows(path.join(dir, 'work.json'), undefined, () => 100);
     const row = service.create({ title: 'Scope', profile: 'investigation', priority: 'normal', chatIds: [] });
     const proposed = service.report({ id: row.id, expectedVersion: row.version, action: 'propose', summary: 'Exact proposal' });

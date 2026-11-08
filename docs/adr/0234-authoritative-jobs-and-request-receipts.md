@@ -69,6 +69,12 @@ The sole-conversation stage must route the original request through the host-own
 user provenance; nearby Orchestrator messages cannot be converted into consent. Its tool description must be updated
 with that channel integration, not interpreted as a permission bypass.
 
+Until renderer IPC carries the whole binding, native chat/request-id pairs cannot be recycled for changed scope:
+otherwise an old button could address a new proposal. Such reuse is refused before exposure. Explicit reassignment
+cancels prior pending callbacks but retains accepted decisions and their delivery uncertainty. Plain chats and the
+Orchestrator have request-only jobs too, so their recovered questions remain visible without a role run. A separate
+open-request index prevents recent completed policy traffic from evicting old unanswered requests from the projection.
+
 ## Verification and remaining integration evidence
 
 Deterministic tests cover two SQLite connections racing for one decision, wrong job/chat/run/version/revision/hash,
@@ -82,3 +88,22 @@ Its wiring and the runtime-host move belong to the stage-2 integrator. Screensho
 review and comparable request/list/digest p95 plus event-loop p99 must be recorded on the integrated build. No speedup
 or end-to-end channel validation is claimed from unit tests alone. The current projection cap is 2000 jobs/requests;
 pagination/visibility of a larger pending queue must be completed before calling that workload supported.
+
+### Recorded development evidence
+
+On core commit `3a9ae5b8` against baseline `b2c8aa0b`, the hidden Electron dev renderer showed the real service outputs
+for the same one-job/closed-chat fixture at 1600×1000, with no renderer errors. This is a synthetic-fixture product
+inspection, not a live engine/phone channel test. Twenty-four sequential proposal/decision/list/digest cycles in
+Electron main, warm services and uncontrolled ordinary shared-machine activity, gave these diagnostic milliseconds:
+
+| Metric | Before | Core after |
+|---|---:|---:|
+| Request insert p95 | 6.826 | 3.610 |
+| Request resolve p95 | 6.544 | 3.424 |
+| Work-list p95 | 0.117 | 0.847 |
+| Digest p95 | 0.660 | 1.295 |
+| Main event-loop p99 | 15.434 | 13.255 |
+
+The richer read projection costs more in this sample; no general speedup is claimed. The later open-request index and
+request-only recovery additions need the integrated performance pass. A deterministic row-change test establishes that
+token/cost-only updates do not rewrite assignment snapshots. No wall-clock threshold is asserted by unit tests.

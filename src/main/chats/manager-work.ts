@@ -240,6 +240,7 @@ export abstract class ManagerWork extends ManagerLifecycle {
     next.taskContract = { ...(previous.taskContract?.reportExpected ? { reportExpected: true } : {}), deliveryPolicy: this.deliveryPolicy(options.deliveryPolicy ?? previous.taskContract?.deliveryPolicy, !!r.s.parentId), goal: prompt, doneWhen: options.doneWhen ?? (mode === 'new-task' ? [] : previous.taskContract?.doneWhen ?? r.s.delegation?.doneWhen ?? []) };
     if (mode === 'continue') next.continuedFrom = previous.runId;
     r.s.run = next;
+    this.coordination.cancelOtherAssignments(r.s.id, next.runId);
     if (newPlan) {
       r.s.plan = newPlan;
       if (options.intake) delete this.need(options.intake.chatId).intakeKey;

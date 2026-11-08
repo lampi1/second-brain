@@ -6,7 +6,7 @@ import { decisionFeedback } from '../../shared/decision-feedback';
 import { readLocal } from '../agents/local-store';
 import type { ChatSummary, PendingRequest } from '../../shared/contract';
 import { CoordinationStore, proposalHash } from '../coordination/store';
-import { projectAssignment, projectWork, type ProjectedWork } from '../coordination/projection';
+import { projectAssignment, projectRequestJob, projectWork, type ProjectedWork } from '../coordination/projection';
 import type { RequestKey, RequestRecord } from '../coordination/model';
 import { WORK_ROUTES, WORK_STAGES, WORK_PRIORITY, orderWork, type WorkCreate, type WorkDecision, type WorkReport, type WorkThread, type WorkEvent } from '../../shared/workflows';
 const gates = new Set(['mockup', 'plan', 'deploy']);
@@ -48,10 +48,15 @@ export class Workflows {
   priorityFor(chatId: string): number { return Math.min(2, ...this.records.filter(r => r.status !== 'done' && r.chatIds.includes(chatId)).map(r => WORK_PRIORITY[r.priority])); }
   list(): WorkThread[] { return this.projection(); }
   projection(): ProjectedWork[] {
-    const chats = this.live?.chats() ?? [], pending = this.live?.pending() ?? [], requests = this.coordination.requests(undefined, 2000);
+    const chats = this.live?.chats() ?? [], pending = this.live?.pending() ?? [], requests = this.coordination.projectionRequests();
     const linked = new Set(this.records.flatMap(row => row.chatIds));
     const assignments = this.coordination.assignments().filter(a => !a.parentRunId && !linked.has(a.chatId));
-    return [...this.records.map(row => projectWork(row, chats, pending, requests)), ...assignments.map(a => projectAssignment(a, chats, pending, requests))].sort(orderWork);
+    const jobs = [...this.records.map(row => projectWork(row, chats, pending, requests)), ...assignments.map(a => projectAssignment(a, chats, pending, requests))];
+    const known = new Set(jobs.map(j => j.id)), unlinked = new Map<string, RequestRecord[]>();
+    for (const request of requests) if (!known.has(request.key.jobId) && (request.state === 'pending' || (request.state === 'accepted' && request.delivery?.state !== 'delivered'))) {
+      const group = unlinked.get(request.key.jobId) ?? []; group.push(request); unlinked.set(request.key.jobId, group);
+    }
+    return [...jobs, ...[...unlinked.values()].map(rs => projectRequestJob(rs, chats, pending))].sort(orderWork);
   }
   private proposalRequest(row: WorkThread): Omit<RequestRecord, 'id' | 'state'> {
     const assignments = (this.live?.chats() ?? []).filter(c => row.chatIds.includes(c.id)).map(c => ({ chatId: c.id, runId: c.run?.runId ?? null, taskVersion: c.run?.taskVersion ?? 1 })).sort((a, b) => a.chatId.localeCompare(b.chatId));

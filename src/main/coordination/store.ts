@@ -18,6 +18,10 @@ export function proposalHash(value: unknown): string {
 }
 const identity = (key: RequestKey) => proposalHash(key);
 const parse = <T>(row: unknown): T | undefined => row ? JSON.parse((row as { json: string }).json) as T : undefined;
+type JoinedRequest = { request_json: string; decision_json: string | null; delivery_json: string | null };
+const decodeRequests = (rows: JoinedRequest[]): RequestRecord[] => rows.map(r => ({ ...JSON.parse(r.request_json) as RequestRecord,
+  ...(r.decision_json ? { decision: JSON.parse(r.decision_json) as DecisionReceipt } : {}),
+  ...(r.delivery_json ? { delivery: JSON.parse(r.delivery_json) as DeliveryReceipt } : {}) }));
 
 export class CoordinationStore {
   private handle: DatabaseSync;
@@ -90,6 +94,7 @@ export class CoordinationStore {
     const row: RequestRecord = { ...input, id, state: 'pending' };
     this.db.prepare('insert into coordination_requests(id,job_id,chat_id,original_id,state,at,json) values(?,?,?,?,?,?,?)')
       .run(id, k.jobId, k.chatId, k.originalRequestId, row.state, row.at, JSON.stringify(row));
+    this.db.prepare('insert into coordination_open_requests(request_id) values(?)').run(id);
     return row;
   }
   register(input: Omit<RequestRecord, 'id' | 'state'>): RequestRecord { return tx(this.db, () => this.insertRequest(input)); }
@@ -109,17 +114,34 @@ export class CoordinationStore {
     const sql = `select r.json request_json, d.json decision_json, l.json delivery_json from coordination_requests r
       left join coordination_decisions d on d.request_id = r.id left join coordination_deliveries l on l.decision_id = d.id
       ${jobId ? 'where r.job_id = ?' : ''} order by r.at desc limit ?`;
-    const rows = (jobId ? this.db.prepare(sql).all(jobId, cap) : this.db.prepare(sql).all(cap)) as { request_json: string; decision_json: string | null; delivery_json: string | null }[];
-    return rows.map(r => ({ ...JSON.parse(r.request_json) as RequestRecord,
-      ...(r.decision_json ? { decision: JSON.parse(r.decision_json) as DecisionReceipt } : {}),
-      ...(r.delivery_json ? { delivery: JSON.parse(r.delivery_json) as DeliveryReceipt } : {}) }));
+    return decodeRequests((jobId ? this.db.prepare(sql).all(jobId, cap) : this.db.prepare(sql).all(cap)) as JoinedRequest[]);
+  }
+  /** Pending and unconfirmed deliveries are never displaced by recent auto-permitted tool traffic. */
+  projectionRequests(limit = 2000): RequestRecord[] {
+    const cap = Math.max(1, Math.min(2000, limit));
+    const current = decodeRequests(this.db.prepare(`select r.json request_json, d.json decision_json, l.json delivery_json
+      from coordination_open_requests o join coordination_requests r on r.id=o.request_id
+      left join coordination_decisions d on d.request_id=r.id left join coordination_deliveries l on l.decision_id=d.id
+      order by r.at desc limit ?`).all(cap) as JoinedRequest[]);
+    const ids = new Set(current.map(r => r.id));
+    return [...current, ...this.requests(undefined, cap).filter(r => !ids.has(r.id)).slice(0, cap - current.length)];
   }
   cancelPending(chatId: string, originalId: string): void {
     const rows = this.db.prepare("select json from coordination_requests where chat_id = ? and original_id = ? and state = 'pending'").all(chatId, originalId) as { json: string }[];
     for (const { json } of rows) {
       const row = JSON.parse(json) as RequestRecord; row.state = 'cancelled';
       this.db.prepare("update coordination_requests set state = 'cancelled', json = ? where id = ? and state = 'pending'").run(JSON.stringify(row), row.id);
+      this.db.prepare('delete from coordination_open_requests where request_id = ?').run(row.id);
     }
+  }
+  cancelOtherAssignments(chatId: string, currentRunId: string): void {
+    tx(this.db, () => {
+      const stale = this.db.prepare("select json from coordination_requests where chat_id = ? and state = 'pending'").all(chatId) as { json: string }[];
+      for (const { json } of stale) {
+        const row = JSON.parse(json) as RequestRecord;
+        if (row.key.runId !== currentRunId) this.cancelPending(chatId, row.key.originalRequestId);
+      }
+    });
   }
   /** The caller supplies the CURRENT host binding, never a key invented by an engine. A single transaction wins. */
   resolve(key: RequestKey, actor: DecisionActor, answer: unknown, work?: { row: WorkThread; expected: number }): DecisionReceipt {
@@ -133,7 +155,7 @@ export class CoordinationStore {
       const changed = this.db.prepare("update coordination_requests set state = 'accepted', json = ? where id = ? and state = 'pending'").run(JSON.stringify(row), id);
       if (Number(changed.changes) !== 1) throw new Error('Request already answered.');
       this.db.prepare('insert into coordination_decisions(id,request_id,json) values(?,?,?)').run(decision.id, id, JSON.stringify(decision));
-      if (work) this.writeWork(work.row, work.expected);
+      if (work) { this.writeWork(work.row, work.expected); this.db.prepare('delete from coordination_open_requests where request_id = ?').run(id); }
       return decision;
     });
   }
@@ -153,6 +175,7 @@ export class CoordinationStore {
       if (!row || row.state !== 'dispatching') throw new Error('Delivery no longer dispatching.');
       const next = { ...row, state, at: this.now(), ...(detail ? { detail } : {}) };
       this.db.prepare('update coordination_deliveries set json = ? where id = ?').run(JSON.stringify(next), id);
+      if (state === 'delivered') this.db.prepare('delete from coordination_open_requests where request_id = (select request_id from coordination_decisions where id = ?)').run(row.decisionId);
       return next;
     });
   }
@@ -190,5 +213,12 @@ export function coordinationSchema(db: DatabaseSync): void {
     create table coordination_current_assignments(task_id text primary key, run_id text not null, version integer not null, started_at real not null);
     create index coordination_current_started on coordination_current_assignments(started_at);
     create index coordination_current_run on coordination_current_assignments(run_id);
+  `), connection => connection.exec(`
+    create table coordination_open_requests(request_id text primary key);
+    insert into coordination_open_requests(request_id)
+      select r.id from coordination_requests r left join coordination_decisions d on d.request_id=r.id
+      left join coordination_deliveries l on l.decision_id=d.id
+      where r.state='pending' or (r.state='accepted' and json_extract(r.json,'$.kind') != 'workflow'
+        and coalesce(json_extract(l.json,'$.state'),'') != 'delivered');
   `)]);
 }

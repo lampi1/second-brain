@@ -5,6 +5,16 @@ import type { RequestRecord, WorkProjection } from './model';
 import type { AssignmentProjection } from './assignments';
 
 export type ProjectedWork = WorkThread & { coordination: WorkProjection };
+/** Plain/Orchestrator chats have requests without role runs. Recovery still makes those requests visible as a job. */
+export function projectRequestJob(requests: RequestRecord[], chats: readonly ChatSummary[], pending: readonly PendingRequest[]): ProjectedWork {
+  const first = requests[0]!;
+  const title = (first.payload as { title?: string } | null)?.title || `Richiesta ${first.kind}`;
+  const row: WorkThread = { id: first.key.jobId, version: first.key.taskVersion, title, profile: 'investigation', priority: 'normal',
+    chatIds: [...new Set(requests.map(r => r.key.chatId))], stage: 'analysis', status: 'active', summary: 'Richieste e ricevute conservate dal sistema',
+    waitingOn: '', nextAction: 'Verificare la richiesta originale e la sua ricevuta prima di riprendere', evidence: first.id,
+    cycles: 0, createdAt: Math.min(...requests.map(r => r.at)), updatedAt: Math.max(...requests.map(r => r.decision?.at ?? r.at)), events: [] };
+  return projectWork(row, chats, pending, requests);
+}
 /** Unlinked root assignments are durable jobs too. This read model never creates a workflow or fabricates completion. */
 export function projectAssignment(a: AssignmentProjection, chats: readonly ChatSummary[], pending: readonly PendingRequest[], requests: readonly RequestRecord[]): ProjectedWork {
   const row: WorkThread = { id: a.taskId, version: a.taskVersion, title: a.title, profile: 'investigation', priority: 'normal', chatIds: [a.chatId],
@@ -35,13 +45,14 @@ export function projectWork(row: WorkThread, chats: readonly ChatSummary[], pend
   }
   const uncertain = durable.some(r => r.state === 'accepted' && r.kind !== 'workflow' && r.delivery?.state !== 'delivered');
   const allClosed = linked.length > 0 && linked.length === row.chatIds.length && linked.every(c => !!c.closedAt || c.state === 'closed');
-  const state: WorkProjection['state'] = row.status === 'done' ? 'done'
-    : waiting.length || row.status === 'approval' ? 'waiting-user'
+  const state: WorkProjection['state'] = waiting.length || row.status === 'approval' ? 'waiting-user'
+    : row.status === 'done' ? 'done'
     : row.status === 'blocked' || uncertain || allClosed || linked.some(c => c.state === 'error') ? 'blocked'
     : linked.length && linked.every(c => !!c.run?.report) ? 'reported' : 'active';
   const waitingOn = waiting.join(' · ') || row.waitingOn || (uncertain ? 'Consegna da verificare' : allClosed ? 'Nessuna chat attiva' : '');
-  return { ...structuredClone(row), coordination: {
-    state, waitingOn, nextAction: uncertain ? 'Verificare la ricevuta di consegna prima di riprendere' : allClosed && row.status !== 'done' ? 'Assegnare esplicitamente la continuazione del lavoro' : row.nextAction,
+  const nextAction = uncertain ? 'Verificare la ricevuta di consegna prima di riprendere' : allClosed && row.status !== 'done' ? 'Assegnare esplicitamente la continuazione del lavoro' : row.nextAction;
+  return { ...structuredClone(row), status: state === 'waiting-user' ? 'approval' : state === 'reported' ? 'active' : state, waitingOn, nextAction, coordination: {
+    state, waitingOn, nextAction,
     evidence, assignments: linked.map(c => ({ chatId: c.id, runId: c.run?.runId ?? null, taskVersion: c.run?.taskVersion ?? 1, closed: !!c.closedAt || c.state === 'closed' })),
     requests: durable.map(({ id, key, state, decision, delivery }) => ({ id, key, state, ...(decision ? { decision } : {}), ...(delivery ? { delivery } : {}) })),
   } };
