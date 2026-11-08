@@ -1,0 +1,33 @@
+second-brain
+Third-party notices for text adapted into this repository (no third-party code is bundled by these entries).
+
+------------------------------------------------------------------------------------------------------------------------
+HyperFrames (https://github.com/heygen-com/hyperframes), by HeyGen
+Licensed under the Apache License, Version 2.0 (http://www.apache.org/licenses/LICENSE-2.0).
+Used in: src/main/learn/explain-rules.ts (VISUAL_FIRST). Ideas of its explainer guidance
+(skills/hyperframes/references/types/explainer.md and skills/hyperframes/references/story.md: the voice comments what is
+on screen, each part appears when the voice names it, one idea and one picture that grows), at commit
+688229314fb219c4317351c25483ecc3c56a519b (the last one to change both files, 2026-10-21; read 2026-11-07). Modified:
+rewritten in our own words as prompt rules for Impara's lessons; no file of HyperFrames is copied or distributed.
+
+------------------------------------------------------------------------------------------------------------------------
+diagram-design v2.6 (https://github.com/cathrynlavery/diagram-design), by Cathryn Lavery
+MIT License. Copyright (c) 2025 Cathryn Lavery
+Used in: src/main/learn/explain-rules.ts (DIAGRAM_RULES, COMPARE_VISUAL). Its drawing rules (remove until nothing can be
+removed, density about 4/10, at most 9 nodes and 12 arrows, one or two accents, orthogonal connectors, «would a
+paragraph do?», the architecture-delta before/after) from skills/diagram-design/SKILL.md (version 2.6) and
+skills/diagram-design/references/type-architecture-delta.md, at commit e57eda6102a19444538ebd611d39534fad65b663
+(2026-11-06; read 2026-11-07), rewritten in our own words.
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated
+documentation files (the "Software"), to deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit
+persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the
+Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE
+WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR
+OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

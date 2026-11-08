@@ -7,9 +7,10 @@
 // becomes a review card (shown on the answer). Read aloud when «Voce dell'app» is on. Since ADR 0205 it is the «Tutor»
 // tab of the column beside the lesson (the «Studio» tab is the other; the column's head is ImparaPlayer's), and
 // «Mettimi alla prova» (a Studio tile) starts its quiz mode: it asks one question at a time and judges each answer
-// until «Basta così». Used by ImparaPlayer.tsx; styles impara.css (.ip-tutor*).
+// until «Basta così». In a «Spiegazione» lesson (ADR 0230) «Prima provo io» is off and hidden: the tutor answers.
+// Used by ImparaPlayer.tsx; styles impara.css (.ip-tutor*).
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
-import { isAskingMode, tutorShown, type Lesson, type LessonFact, type TutorMode, type TutorTurn } from '@shared/lesson';
+import { isAskingMode, modeOf, tutorShown, type Lesson, type LessonFact, type TutorMode, type TutorTurn } from '@shared/lesson';
 import { askTutor, imparaPrefs, setImparaPrefs, tutorLive, warmTutor } from '../../lib/impara';
 import { narrate } from '../../lib/voice';
 import { renderMarkdown } from '../../lib/markdown';
@@ -89,7 +90,8 @@ export function ImparaTutor({ lesson, at, seed, onSeed, onClose, challenge, onCh
    *  onChallenged clears it */
   challenge: AskingMode | null; onChallenged: () => void;
 }) {
-  const coach = imparaPrefs.use(p => p.coach);
+  const explain = modeOf(lesson) === 'explain';
+  const coach = imparaPrefs.use(p => p.coach) && !explain;
   const voiceOn = imparaPrefs.use(p => p.voice);
   const turns = lesson.tutor ?? [];
   const asking = turns.some(x => x.state === 'asking');
@@ -153,7 +155,7 @@ export function ImparaTutor({ lesson, at, seed, onSeed, onClose, challenge, onCh
               {session.mode === 'oral' ? <IconMic size={12} /> : session.mode === 'practice' ? <IconEdit size={12} /> : <IconTarget size={12} />}
               {session.mode === 'quiz' ? t('impara.tutor.quizzing') : t(`impara.tutor.${session.mode}Now`, { n: Math.min(session.n, session.mode === 'oral' ? 5 : 99) })}
               <button type="button" className="ip-link" onClick={() => send(stopText(session.mode), session.mode)} disabled={asking} data-testid="impara-tutor-quiz-stop">{t(session.mode === 'oral' ? 'impara.tutor.oralEnd' : 'impara.tutor.quizEnd')}</button></span>
-            : <span data-tip={t('impara.tutor.coachTip')}><ImparaSwitch on={coach} onChange={on => setImparaPrefs({ coach: on })} label={t('impara.tutor.coach')} testid="impara-tutor-coach" /></span>}
+            : explain ? null : <span data-tip={t('impara.tutor.coachTip')}><ImparaSwitch on={coach} onChange={on => setImparaPrefs({ coach: on })} label={t('impara.tutor.coach')} testid="impara-tutor-coach" /></span>}
           <span className="sp" />
           <Button variant="primary" size="s" type="submit" disabled={!q.trim() || asking} testid="impara-tutor-send">{t('impara.askSend')} <IconSend size={12} /></Button>
         </div>

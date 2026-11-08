@@ -19,14 +19,16 @@
 // Since ADR 0205: a quality gate (one cheap run) scores the plan's pieces and the rest's on a fixed checklist and
 // rewrites only the failing ones, once, before the learner sees them; the «Studio» tiles (`studio`) are one short run
 // each over the verified facts only, saved with the lesson (flashcards go into the review, the quiz plays as a review
-// session whose answers become cards); «Mettimi alla prova» is the tutor in quiz mode.
+// session whose answers become cards); «Mettimi alla prova» is the tutor in quiz mode. ADR 0230: a lesson in
+// «Spiegazione» (the default mode) asks nothing: no check, no final question, one clarification at most, no review
+// card, the tutor always answers (tell); its pieces are gated on having a picture.
 // Wired in wiring.ts / demo-wiring.ts, IPC impara:* in index.ts; tests: test/unit/learn-service.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import { errText, log } from '../log';
 import type { Effort, Lang } from '@shared/contract';
 import {
-  LESSON_DEPTHS, LESSON_EXTRAS, LESSON_LEVELS, TEACHER_EFFORTS, applyVerdicts, checkKey, diagramNodes, jsonIn, parseCheck, parseExtra, parseFacts, parseGrade, parsePlan, parseQuestions, parseStep, playlist, stepKey,
+  DEFAULT_LESSON_MODE, LESSON_DEPTHS, LESSON_EXTRAS, LESSON_LEVELS, LESSON_MODES, TEACHER_EFFORTS, endsHere, modeOf, toldRole, withoutAsking, type LessonMode, applyVerdicts, checkKey, diagramNodes, jsonIn, parseCheck, parseExtra, parseFacts, parseGrade, parsePlan, parseQuestions, parseStep, playlist, stepKey,
   type ImparaState, type Lesson, type LessonCheck, type LessonConfidence, type LessonExtraKind, type LessonFact, type LessonKind, type LessonPrep, type LessonStart, type LessonStep, type LessonTeacher,
   type PrepPhase, type TeacherOption, type TutorMode, type TutorTurn, isAskingMode, subjectOf, TUTOR_KEEP, TUTOR_Q_MAX, tutorCard, tutorModeOf, tutorShown,
   TOOLS_REFUSED,
@@ -191,11 +193,14 @@ export class LearnService {
   }
 
   private emit(l?: Lesson): void { try { this.d.changed(this.state(), l); } catch (e) { log.warn('learn', 'lesson change not sent', { cause: errText(e) }); } }
-  /** Reads the lesson now, changes it, writes it: no await in between, so two runs that end together never lose a change. */
-  private edit(id: string, fn: (l: Lesson) => Lesson | void): Lesson | null {
+  /** Reads the lesson now, changes it, writes it: no await in between, so two runs that end together never lose a change.
+   *  `moved` = the change can put the learner on the last item: a «Spiegazione» lesson standing there is finished
+   *  (endsHere, ADR 0230: the recap reached, an extra on it, a one-piece lesson). */
+  private edit(id: string, fn: (l: Lesson) => Lesson | void, moved = false): Lesson | null {
     const l = this.d.store.get(id);
     if (!l) return null;
-    const next = { ...(fn(l) ?? l), updatedAt: this.now() };
+    const changed = fn(l) ?? l;
+    const next = { ...changed, ...(moved && !changed.doneAt && endsHere(changed) ? { doneAt: this.now() } : {}), updatedAt: this.now() };
     this.d.store.save(next);
     // every check of a lesson the user can open is also a review card (at zero tokens)
     if (next.state !== 'preparing' && next.state !== 'failed') { try { this.review.fromChecks(next, subjectOf(next)); } catch (e) { log.warn('learn', 'review cards not written', { cause: errText(e) }); } }
@@ -220,6 +225,7 @@ export class LearnService {
       depth: LESSON_DEPTHS.includes(raw.depth) ? raw.depth : 'lesson', level: LESSON_LEVELS.includes(raw.level) ? raw.level : 'basics',
       ...(kind === 'pr' ? { prUrl: String(raw.prUrl ?? '').trim().slice(0, 500) } : {}),
       ...(kind === 'text' ? { text: String(raw.text ?? '') } : {}),
+      mode: LESSON_MODES.includes(raw.mode as LessonMode) ? raw.mode as LessonMode : DEFAULT_LESSON_MODE,
     };
     const teacher = this.teacherOf(raw.teacher);
     if (teacher) req.teacher = teacher;
@@ -232,13 +238,13 @@ export class LearnService {
     if (kind === 'text' && !req.text?.trim()) throw new Error('Incolla il testo da spiegare.');
     const now = this.now(), id = this.d.store.newId(now);
     const l: Lesson = {
-      id, title: kind === 'topic' ? ask.slice(0, 120) : kind === 'text' ? 'Testo incollato' : 'La tua PR', kind, ask: req.ask, depth: req.depth, level: req.level,
+      id, title: kind === 'topic' ? ask.slice(0, 120) : kind === 'text' ? 'Testo incollato' : 'La tua PR', kind, ask: req.ask, depth: req.depth, level: req.level, mode: req.mode,
       createdAt: now, updatedAt: now, state: 'preparing', diagram: '', outline: [], steps: [], checks: [], at: '', costUsd: null, engine: null, model: null, sources: [],
       ...(teacher ? { teacher } : {}), ...(subject ? { subject } : {}), prep: { phases: { gather: 'now' } },
     };
     this.d.store.save(l);
     this.d.store.writeFile(id, START_FILE, JSON.stringify(req));
-    log.info('learn', 'lesson started', { data: { id, kind, depth: req.depth, level: req.level } });
+    log.info('learn', 'lesson started', { data: { id, kind, depth: req.depth, level: req.level, mode: req.mode } });
     this.emit(l);
     void this.prepare(id, req);
     return l;
@@ -302,7 +308,7 @@ export class LearnService {
       const r = await this.run(req, { cwd: this.folder(set), prompt: planPrompt(this.d.lang(), req, m, this.d.store.dir(id), g, subjects), effort: this.effort(req), round: 'impara-plan', timeoutMs: 8 * MIN });
       if (!r.ok) { this.edit(id, l => ({ ...l, state: 'failed', error: `Il modello non ha preparato la lezione: ${r.error}`.slice(0, 300) })); return; }
       let plan: ReturnType<typeof parsePlan>;
-      try { plan = parsePlan(jsonIn(r.text), { now: this.now(), facts: facts.map(f => f.id) }); }
+      try { plan = withoutAsking(parsePlan(jsonIn(r.text), { now: this.now(), facts: facts.map(f => f.id) }), req); }
       catch (e) { this.edit(id, l => ({ ...l, state: 'failed', error: `La lezione scritta dal modello non era valida (${errText(e)}).`.slice(0, 300), ...this.cost(l, r) })); return; }
       // the quality gate (ADR 0205): the first pieces are checked and fixed before the learner sees them
       const lp = this.d.store.get(id);
@@ -318,7 +324,7 @@ export class LearnService {
         return { ...l, ...this.cost(paid, gated.run ?? r), degraded: degraded.length ? degraded : undefined, quality: gated.quality, title: plan.title || l.title, diagram: plan.diagram, outline, steps: plan.steps, checks: plan.checks, ...(plan.subject && !l.subject ? { subject: plan.subject } : {}),
           ...(plan.explainQ ? { explain: { q: plan.explainQ } } : {}), state: more ? 'more' : 'ready', at: stepKey(plan.steps[0]!.id), error: undefined,
           prep: { ...(l.prep ?? { phases: {} }), phases: { ...l.prep?.phases, plan: 'done' } } };
-      });
+      }, true);
       log.info('learn', 'lesson plan ready', { data: { id, steps: plan.steps.length, planned: done?.outline.length, facts: facts.length, costUsd: r.costUsd, degraded: done?.degraded ?? [] } });
       if (done?.degraded) log.warn('learn', 'lesson ready with a failed research', { cause: (done.degraded.map(k => `${k}: ${done.prep?.why?.[k] ?? ''}`).join(' · ')).slice(0, 400), hint: 'the lesson says so on its page; a refused tool means the engine denied the read-only run its tools: allow them for that engine and start the lesson again', data: { id, degraded: done.degraded } });
     } catch (e) {
@@ -372,7 +378,8 @@ export class LearnService {
     // with the web on, the files run was told to cite files only: a fact without one is left out
     if (web) f.facts = f.facts.filter(x => x.from === 'file');
     let qs: ReturnType<typeof parseQuestions> = [];
-    try { if (f.v) qs = parseQuestions(f.v); } catch { qs = []; }
+    // «Spiegazione» (ADR 0230, D6): one question at most, only when the files run found the ask ambiguous
+    try { if (f.v) qs = parseQuestions(f.v, modeOf(req) === 'explain' ? 1 : 2); } catch { qs = []; }
     this.edit(id, l => {
       let next = l;
       for (const [r, teacher] of [[rw, false], [rf, true]] as const) if (r?.ok) next = { ...next, ...this.cost(next, r, teacher) };
@@ -527,13 +534,13 @@ export class LearnService {
       const r = await this.run(req, { cwd: this.folder(l0), prompt: restPrompt(this.d.lang(), l0, req, this.material(id), this.d.store.dir(id)), effort: this.effort(req), round: 'impara-rest', timeoutMs: 10 * MIN });
       if (!r.ok) { this.edit(id, l => ({ ...l, error: `Il resto della lezione non è arrivato: ${r.error}`.slice(0, 300) })); return; }
       let part: ReturnType<typeof parsePlan>;
-      try { part = parsePlan(jsonIn(r.text), { now: this.now(), base: l0.diagram, facts: (l0.facts ?? []).map(f => f.id) }); }
+      try { part = withoutAsking(parsePlan(jsonIn(r.text), { now: this.now(), base: l0.diagram, facts: (l0.facts ?? []).map(f => f.id) }), l0); }
       catch (e) { this.edit(id, l => ({ ...l, ...this.cost(l, r), error: `Il resto della lezione non era valido (${errText(e)}).`.slice(0, 300) })); return; }
       const gated = await this.gate(req, l0, part.steps, part.checks);
       if (!this.d.store.get(id)) return;
       part = { ...part, steps: gated.steps, checks: gated.checks };
       this.edit(id, l => ({ ...l, ...this.cost(gated.run ? { ...l, ...this.cost(l, gated.run) } : l, r), quality: mergeQuality(l.quality, gated.quality), steps: [...l.steps, ...part.steps], checks: [...l.checks, ...part.checks],
-        outline: [...l.outline.slice(0, l.steps.filter(s => !s.extra).length), ...part.steps.map(s => s.title)], state: 'ready', error: undefined }));
+        outline: [...l.outline.slice(0, l.steps.filter(s => !s.extra).length), ...part.steps.map(s => s.title)], state: 'ready', error: undefined }), true);
       log.info('learn', 'lesson complete', { data: { id, steps: part.steps.length, costUsd: r.costUsd } });
     } catch (e) {
       this.edit(id, l => ({ ...l, error: errText(e).slice(0, 300) }));
@@ -547,8 +554,9 @@ export class LearnService {
   private async gate(req: Pick<LessonStart, 'teacher'>, l: Lesson, steps: LessonStep[], checks: LessonCheck[]): Promise<{ steps: LessonStep[]; checks: LessonCheck[]; quality: LessonQuality; run?: Extract<TeachResult, { ok: true }> }> {
     const factIds = (l.facts ?? []).map(f => f.id);
     const hasFacts = (l.facts ?? []).some(f => f.check !== 'unsure');
+    const explain = modeOf(l) === 'explain';
     const found: Record<string, QualityRule[]> = {};
-    steps.forEach((s, i) => { found[`s${i + 1}`] = pieceIssues(s, hasFacts); });
+    steps.forEach((s, i) => { found[`s${i + 1}`] = pieceIssues(s, hasFacts, explain); });
     checks.forEach((c, i) => { found[`c${i + 1}`] = checkIssues(c); });
     const fails: Partial<Record<QualityRule, number>> = {};
     const count = (rules: readonly QualityRule[]) => { for (const r of new Set(rules)) fails[r] = (fails[r] ?? 0) + 1; };
@@ -570,9 +578,10 @@ export class LearnService {
       if (!v?.fix) return s;
       try {
         const next = parseStep(v.fix, nodes, s.id, factIds);
-        if (pieceIssues(next, hasFacts).length > own.length) return s;
+        if (pieceIssues(next, hasFacts, explain).length > own.length) return s;
         fixed++;
-        return { ...next, ...(s.role && !next.role ? { role: s.role } : {}) };
+        const out = { ...next, ...(s.role && !next.role ? { role: s.role } : {}) };
+        return explain ? toldRole(out) : out;
       } catch { return s; }
     });
     const outChecks = checks.map((c, i) => {
@@ -596,7 +605,8 @@ export class LearnService {
   private async makeCards(id: string): Promise<void> {
     const l0 = this.d.store.get(id);
     const verified = (l0?.facts ?? []).filter(f => f.check !== 'unsure').map(f => f.id);
-    if (!l0 || l0.state !== 'ready' || !verified.length || l0.cards?.state === 'making' || l0.cards?.state === 'done' || this.cardJobs.has(id)) return;
+    // «Spiegazione» leaves no review card (ADR 0230, D8)
+    if (!l0 || l0.state !== 'ready' || modeOf(l0) === 'explain' || !verified.length || l0.cards?.state === 'making' || l0.cards?.state === 'done' || this.cardJobs.has(id)) return;
     this.cardJobs.add(id);
     try {
       this.edit(id, l => ({ ...l, cards: { state: 'making' } }));
@@ -729,7 +739,8 @@ export class LearnService {
   move(id: string, at: string): Lesson {
     const l = this.must(id);
     if (!playlist(l).some(p => p.key === at)) throw new Error('Pezzo non trovato.');
-    return this.edit(l.id, x => ({ ...x, at }))!;
+    // «Spiegazione» ends on its recap (ADR 0230): reaching it is finishing the lesson
+    return this.edit(l.id, x => ({ ...x, at }), true)!;
   }
 
   /** A check answered (zero tokens: its right answer came with it). The first answer stays; a later call only adds the
@@ -780,8 +791,9 @@ export class LearnService {
       let got: ReturnType<typeof parseExtra>;
       try { got = parseExtra(jsonIn(r.text), diagramNodes(l0.diagram), piece.id, kind, ask, this.now(), (l0.facts ?? []).map(f => f.id)); }
       catch (e) { this.edit(id, l => ({ ...l, ...this.cost(l, r), busy: undefined, busyError: `La risposta non era valida (${errText(e)}).`.slice(0, 300) })); return; }
-      this.edit(id, l => ({ ...l, ...this.cost(l, r), steps: [...l.steps, got.step], checks: got.check ? [...l.checks, { ...got.check, after: got.step.id }] : l.checks,
-        busy: undefined, at: stepKey(got.step.id) }));
+      const told = modeOf(l0) === 'explain';
+      this.edit(id, l => ({ ...l, ...this.cost(l, r), steps: [...l.steps, told ? toldRole(got.step) : got.step], checks: got.check && !told ? [...l.checks, { ...got.check, after: got.step.id }] : l.checks,
+        busy: undefined, at: stepKey(got.step.id) }), true);
       log.info('learn', 'extra piece ready', { data: { id, kind, costUsd: r.costUsd } });
     } catch (e) {
       this.edit(id, l => ({ ...l, busy: undefined, busyError: errText(e).slice(0, 300) }));
@@ -816,7 +828,9 @@ export class LearnService {
     const key = String(at ?? '');
     const piece = key === 'end' ? null : this.pieceAt(l, key);
     const now = this.now();
-    const turn: TutorTurn = { id: `t${now.toString(36)}${Math.random().toString(36).slice(2, 5)}`, q, at: key, mode: tutorModeOf(mode), a: '', state: 'asking', createdAt: now };
+    // «Spiegazione» asks nothing (ADR 0230): the tutor answers at once, never a question back
+    const asked = tutorModeOf(mode), use = modeOf(l) === 'explain' && asked === 'coach' ? 'tell' : asked;
+    const turn: TutorTurn = { id: `t${now.toString(36)}${Math.random().toString(36).slice(2, 5)}`, q, at: key, mode: use, a: '', state: 'asking', createdAt: now };
     const next = this.edit(l.id, x => ({ ...x, tutor: [...(x.tutor ?? []), turn].slice(-TUTOR_KEEP) }))!;
     void this.answerTutor(l.id, turn, piece);
     return next;
@@ -844,7 +858,7 @@ export class LearnService {
       if (!a) { set({ state: 'failed', error: 'nessuna risposta' }, r); return; }
       // a full explanation the verified facts support leaves a review card (cites checked as for every card)
       let card: string | undefined;
-      const raw = isAskingMode(turn.mode) ? null : tutorCard(r.text);
+      const raw = isAskingMode(turn.mode) || modeOf(l) === 'explain' ? null : tutorCard(r.text);
       if (raw && typeof raw === 'object') {
         const verified = (l.facts ?? []).filter(f => f.check !== 'unsure').map(f => f.id);
         const [draft] = parseCards({ cards: [{ ...(raw as object), kind: 'recall' }] }, [], verified);

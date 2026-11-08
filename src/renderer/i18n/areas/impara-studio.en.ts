@@ -20,6 +20,8 @@ export const imparaStudioEn: typeof imparaStudioIt = {
   'impara.role.recap': 'Recap',
   'impara.quality': ({ checked, fixed }: { checked: number; fixed: number }) => (fixed ? `Quality check: ${fixed} of ${checked} rewritten` : `Quality check: ${checked} of ${checked} ok`),
   'impara.quality.tip': 'Before you see the pieces, a short run checks them: one idea per piece, a concrete example, every sentence with its source, diagrams of at most 12 parts, questions that make you think. It rewrites only the ones that fail.',
+  // «Spiegazione» (ADR 0230): no question to check, a picture for every piece instead
+  'impara.quality.tipExplain': 'Before you see the pieces, a short run checks them: one idea per piece, a concrete example, every sentence with its source, diagrams of at most 12 parts, a picture for every piece. It rewrites only the ones that fail.',
   'impara.quality.none': 'Quality check failed: pieces as written',
   'impara.studio.lead': ({ n }: { n: number }) => (n === 1 ? 'From the lesson\'s one verified fact. No new research.' : `From the lesson's ${n} verified facts. No new research.`),
   'impara.studio.noFacts': 'The Studio works only on verified facts, and this lesson has none.',

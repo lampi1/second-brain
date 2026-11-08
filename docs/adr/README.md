@@ -227,3 +227,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0222](0222-cold-start-admission.md) Cold-start admission: cores/2 slots, CPU/RAM only an emergency brake, warm pool under load, cold first turn timed — accepted
 - [0228](0228-parallel-checkpoint.md) The checkpoint runs while the message goes; the first write waits for it; a restart resumes only recent turns — accepted
 - [0229](0229-orchestrator-remote-control.md) «Controllo remoto»: Claude Code Remote Control of the Orchestrator (same engine, reattach, phone messages shown) — proposed
+- [0230](0230-impara-explain-mode.md) Impara: «Spiegazione», a lesson with pictures and no quiz — proposed

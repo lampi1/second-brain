@@ -19,6 +19,8 @@ export const imparaStudioIt = {
   'impara.role.recap': 'Riepilogo',
   'impara.quality': ({ checked, fixed }: { checked: number; fixed: number }) => (fixed ? `Controllo qualità: ${fixed} su ${checked} riscritti` : `Controllo qualità: ${checked} su ${checked} ok`),
   'impara.quality.tip': 'Prima di mostrarti i pezzi, una run corta li controlla: un’idea per pezzo, un esempio concreto, ogni frase con la sua fonte, schemi di al massimo 12 parti, domande che fanno pensare. Riscrive solo quelli bocciati.',
+  // «Spiegazione» (ADR 0230): no question to check, a picture for every piece instead
+  'impara.quality.tipExplain': 'Prima di mostrarti i pezzi, una run corta li controlla: un’idea per pezzo, un esempio concreto, ogni frase con la sua fonte, schemi di al massimo 12 parti, un disegno per ogni pezzo. Riscrive solo quelli bocciati.',
   'impara.quality.none': 'Controllo qualità non riuscito: pezzi come scritti',
   'impara.studio.lead': ({ n }: { n: number }) => (n === 1 ? 'Dall’unico fatto verificato della lezione. Nessuna nuova ricerca.' : `Dai ${n} fatti verificati della lezione. Nessuna nuova ricerca.`),
   'impara.studio.noFacts': 'Lo Studio lavora solo sui fatti verificati, e questa lezione non ne ha.',

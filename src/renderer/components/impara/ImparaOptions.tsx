@@ -4,9 +4,10 @@
 // the engine, its model and its effort, from main's ImparaState.teachers; no choice = the app's: Claude's strongest
 // model at high effort; the web research is always Claude's, and picking another engine says so) and the two voices.
 // Every model the engine offers, searched by a field once the list is long (OpenCode lists hundreds, its free ones last).
+// First the kind of lesson (ADR 0230): «Spiegazione» (explains with pictures, asks nothing; the default) or «Quiz».
 // Remembered in Impara's prefs (lib/impara.ts). Used by ImparaStart.tsx; styles impara-quiz.css (.op-*).
 import { useRef, useState } from 'react';
-import { LESSON_DEPTHS, LESSON_LEVELS, type LessonTeacher, type TeacherOption } from '@shared/lesson';
+import { LESSON_DEPTHS, LESSON_LEVELS, LESSON_MODES, type LessonTeacher, type TeacherOption } from '@shared/lesson';
 import type { Effort, Harness } from '@shared/contract';
 import { imparaPrefs, setImparaPrefs } from '../../lib/impara';
 import { t } from '../../i18n';
@@ -52,7 +53,7 @@ export function ImparaOptions({ teachers }: { teachers: readonly TeacherOption[]
   const [query, setQuery] = useState('');
   const now = teacherNow(prefs.teacher, teachers);
   const voice = prefs.voice ? (prefs.mic ? t('impara.go.voiceBoth') : t('impara.go.voiceOn')) : t('impara.go.voiceOff');
-  const parts = [t(`impara.level.${prefs.level}`), t(`impara.depth.${prefs.depth}.short`), teacherLabel(now), voice].filter(Boolean);
+  const parts = [t(`impara.mode.${prefs.mode}`), t(`impara.level.${prefs.level}`), t(`impara.depth.${prefs.depth}.short`), teacherLabel(now), voice].filter(Boolean);
   const setTeacher = (patch: Partial<LessonTeacher>) => {
     if (!now.opt) return;
     setImparaPrefs({ teacher: { engine: now.opt.engine, model: now.model, effort: now.effort, ...patch } });
@@ -73,6 +74,12 @@ export function ImparaOptions({ teachers }: { teachers: readonly TeacherOption[]
       </button>
       <Popover anchor={anchor} open={open} onClose={() => setOpen(false)} testid="impara-options-pop" width={400} align="start" kind="dialog" label={t('impara.go.optionsLabel')}>
         <div className="op-panel">
+          <div className="op-row">
+            <div className="op-l" data-tip={t('impara.mode.tip')}>{t('impara.mode.label')}</div>
+            <span className="ip-seg" role="radiogroup" aria-label={t('impara.mode.label')}>
+              {LESSON_MODES.map(m => <button key={m} type="button" role="radio" aria-checked={prefs.mode === m} className={prefs.mode === m ? 'on' : ''} onClick={() => setImparaPrefs({ mode: m })} data-testid={`impara-mode-${m}`}>{t(`impara.mode.${m}`)}</button>)}
+            </span>
+          </div>
           <div className="op-row">
             <div className="op-l">{t('impara.levelLabel')}</div>
             <span className="ip-seg" role="radiogroup" aria-label={t('impara.levelLabel')}>

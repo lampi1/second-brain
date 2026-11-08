@@ -3,16 +3,19 @@
 // each piece went (its checks, the extras it needed) with «Rivedi» on the weak ones, and the checks as «2/3 domande
 // giuste» (a count, not a percentage: «0%» next to «quasi» read as a contradiction, ADR 0188). Skipping
 // the explanation ends the lesson without a grade. Then its review cards (ADR 0189): being written, ready in its subject
-// with «Ripassa la materia», or failed with «Riprova». Under the whole diagram. Used by ImparaPlayer.tsx.
-import { pieceScores, progressOf, stepKey, subjectOf, type Lesson } from '@shared/lesson';
+// with «Ripassa la materia», or failed with «Riprova». Under the whole diagram. In «Spiegazione» (ADR 0230) the end is
+// opened only by the learner's own «Spiegalo tu»: no checks, so no score, no pieces' bars and no review cards; skipping
+// goes back to the recap. Used by ImparaPlayer.tsx.
+import { modeOf, pieceScores, progressOf, stepKey, subjectOf, type Lesson } from '@shared/lesson';
 import { go } from '../../actions';
 import { retryLesson, reviewArg } from '../../lib/impara';
 import { t } from '../../i18n';
 import { Button } from '../ui';
 import { IconRefresh, IconSpinner } from '../Icons';
 
-export function ImparaEnd({ lesson, draft, setDraft, onSend, onReview }: { lesson: Lesson; draft: string; setDraft: (s: string) => void; onSend: (text: string) => void; onReview: (key: string) => void }) {
+export function ImparaEnd({ lesson, draft, setDraft, onSend, onReview, onSkip }: { lesson: Lesson; draft: string; setDraft: (s: string) => void; onSend: (text: string) => void; onReview: (key: string) => void; onSkip?: () => void }) {
   const ex = lesson.explain;
+  const explain = modeOf(lesson) === 'explain';
   const p = progressOf(lesson);
   const scores = pieceScores(lesson);
   const pct = p.answered ? Math.round((p.right / p.answered) * 100) : null;
@@ -23,12 +26,12 @@ export function ImparaEnd({ lesson, draft, setDraft, onSend, onReview }: { lesso
       <div className="ip-end-ask">
         <div className="ip-kicker">{t('impara.end.kicker')}</div>
         <h3>{ex?.q ?? t('impara.end.spokenAsk')}</h3>
-        {!ex?.answer && !lesson.doneAt
+        {!ex?.answer && (explain || !lesson.doneAt)
           ? <>
             <textarea value={draft} onChange={e => setDraft(e.target.value)} placeholder={t('impara.end.placeholder')} rows={4} maxLength={4000} data-testid="impara-explain-input" />
             <div className="ip-row">
               <Button variant="primary" onClick={() => onSend(draft)} disabled={!draft.trim()} testid="impara-explain-send">{t('impara.end.send')}</Button>
-              <Button variant="ghost" onClick={() => onSend('')} testid="impara-explain-skip">{t('impara.end.skip')}</Button>
+              <Button variant="ghost" onClick={() => (onSkip ? onSkip() : onSend(''))} testid="impara-explain-skip">{t('impara.end.skip')}</Button>
               <span className="sp" /><span className="ip-muted">{t('impara.end.micHint')}</span>
             </div>
           </>
@@ -48,20 +51,20 @@ export function ImparaEnd({ lesson, draft, setDraft, onSend, onReview }: { lesso
             )}
           </>}
       </div>
-      <div className="ip-end-sum">
-        <div className="ip-ring" style={{ ['--p' as string]: `${pct ?? 0}%` }} data-testid="impara-score" role="img" aria-label={t('impara.end.checks', { right: p.right, n: p.answered })}>
+      <div className={`ip-end-sum ${explain ? 'no-score' : ''}`}>
+        {!explain && <div className="ip-ring" style={{ ['--p' as string]: `${pct ?? 0}%` }} data-testid="impara-score" role="img" aria-label={t('impara.end.checks', { right: p.right, n: p.answered })}>
           <div><b>{pct === null ? '—' : `${p.right}/${p.answered}`}</b><span>{t('impara.end.checksLabel')}</span></div>
-        </div>
+        </div>}
         <div className="ip-pieces">
-          <div className="ip-label">{t('impara.end.byPiece')}</div>
-          {scores.map(s => (
+          {!explain && <div className="ip-label">{t('impara.end.byPiece')}</div>}
+          {!explain && scores.map(s => (
             <div key={s.id} className="ip-piece">
               <span className="ip-piece-t">{s.title}</span>
               <span className="ip-bar"><i style={{ width: `${Math.round((s.score ?? 1) * 100)}%` }} className={s.score === null ? 'none' : s.score < 0.6 ? 'weak' : ''} /></span>
               {s.score !== null && s.score < 0.6 ? <Button size="s" onClick={() => onReview(stepKey(s.id))} testid={`impara-review-${s.id}`}>{t('impara.end.review')}</Button> : <span className="ip-piece-pad" />}
             </div>
           ))}
-          <Cards lesson={lesson} />
+          {!explain && <Cards lesson={lesson} />}
           <div className="ip-row ip-end-acts">
             {first && <Button onClick={() => onReview(stepKey(first.id))} testid="impara-restart"><IconRefresh size={12} />{t('impara.end.restart')}</Button>}
             <Button variant="primary" onClick={() => go({ page: 'impara' })} testid="impara-new">{t('impara.end.new')}</Button>

@@ -1,10 +1,12 @@
 // Impara's shared rules (ADR 0185, src/shared/lesson.ts): the node ids a flowchart declares (labels and edge text left
 // out), the lit piece added by the app only on known ids, the play order (a piece, its extras, its checks, the end),
 // progress and how each piece went, the model's answers checked and capped, the spoken commands and choices; the
-// research (ADR 0188): facts with a source, the questions, the check's verdicts, a piece's beats and citations.
+// research (ADR 0188): facts with a source, the questions, the check's verdicts, a piece's beats and citations; the kind
+// of lesson (ADR 0230): explain by default for a new one, quiz for an old one, no checks and no graded end in explain.
 import { describe, expect, it } from 'vitest';
 import {
   applyVerdicts, beatsOf, diagramNodes, doneNodes, factLines, jsonIn, parseExtra, parseFacts, parseGrade, parseLessonCommand, parsePlan, parseQuestions, parseSpokenChoice, parseStep, pieceScores, playlist, progressOf, rootOf, summaryOf, withFocus,
+  DEFAULT_LESSON_MODE, LESSON_MODES, endsHere, heardIsExplainBack, modeOf, toldRole, withoutAsking,
   type FocusColors, type Lesson, type LessonCheck, type LessonFact, type LessonStep,
 } from '../../src/shared/lesson';
 
@@ -185,5 +187,68 @@ describe('what the user says', () => {
     expect(parseSpokenChoice('ultima', 3)).toBe(2);
     expect(parseSpokenChoice('d', 2)).toBeNull();
     expect(parseSpokenChoice('non lo so proprio davvero', 4)).toBeNull();
+  });
+});
+
+describe('the kind of lesson (ADR 0230)', () => {
+  it('a new lesson explains by default; one saved before the modes is a quiz', () => {
+    expect(DEFAULT_LESSON_MODE).toBe('explain');
+    expect(LESSON_MODES).toEqual(['explain', 'quiz']);
+    expect(modeOf({})).toBe('quiz');
+    expect(modeOf({ mode: 'explain' })).toBe('explain');
+    expect(modeOf({ mode: 'quiz' })).toBe('quiz');
+  });
+  it('an explanation drops the plan checks and its «Spiegalo tu»; a quiz keeps them', () => {
+    const p = { steps: [step('p1')], checks: [check('q1', 'p1')], explainQ: 'Explain it' };
+    expect(withoutAsking(p, { mode: 'explain' })).toMatchObject({ checks: [], explainQ: '' });
+    expect(withoutAsking(p, { mode: 'quiz' })).toBe(p);
+    expect(withoutAsking(p, {})).toBe(p);
+    // the rest has no explainQ: none is added
+    expect('explainQ' in withoutAsking({ checks: [check('q1', 'p1')] }, { mode: 'explain' })).toBe(false);
+  });
+  it('an explanation has no graded end until «Spiegalo tu» is opened; a quiz always has it', () => {
+    const l = lesson({ steps: [step('p1'), step('p2')], checks: [] });
+    expect(playlist({ ...l, mode: 'explain' }).map(p => p.key)).toEqual(['s:p1', 's:p2']);
+    expect(playlist({ ...l, mode: 'explain', explain: { q: '' } }).map(p => p.key).at(-1)).toBe('end');
+    expect(playlist({ ...l, mode: 'quiz' }).map(p => p.key).at(-1)).toBe('end');
+    expect(playlist(l).map(p => p.key).at(-1)).toBe('end');
+  });
+  it('an explanation tells a half-done or practice piece as a worked one, in the plan and in the rest; a quiz keeps them', () => {
+    const roles = (ss: LessonStep[] | undefined) => ss?.map(s => s.role);
+    const steps: LessonStep[] = [{ ...step('p1'), role: 'worked' }, { ...step('p2'), role: 'faded' }, { ...step('p3'), role: 'practice' }, step('p4')];
+    expect(roles(withoutAsking({ steps, checks: [], explainQ: 'Q' }, { mode: 'explain' }).steps)).toEqual(['worked', 'worked', 'worked', undefined]);
+    expect(roles(withoutAsking({ steps, checks: [] }, { mode: 'explain' }).steps)).toEqual(['worked', 'worked', 'worked', undefined]);
+    expect(roles(withoutAsking({ steps, checks: [] }, { mode: 'quiz' }).steps)).toEqual(['worked', 'faded', 'practice', undefined]);
+    expect(toldRole(steps[0]!)).toBe(steps[0]);
+    expect(toldRole(steps[1]!).role).toBe('worked');
+  });
+  it('an explanation ends on its last item: the recap, an extra asked on it, a one-piece lesson; a quiz never here', () => {
+    const l = lesson({ mode: 'explain', steps: [step('p1'), step('p2')], at: 's:p2' });
+    expect(endsHere(l)).toBe(true);
+    expect(endsHere({ ...l, at: 's:p1' })).toBe(false);
+    expect(endsHere({ ...l, state: 'preparing' })).toBe(false);
+    expect(endsHere({ ...l, mode: 'quiz' })).toBe(false);
+    expect(endsHere({ ...l, mode: undefined })).toBe(false);
+    // an extra asked on the recap is the new last item
+    const x = { ...l, steps: [...l.steps, step('x1', { kind: 'better', of: 'p2' })] };
+    expect(endsHere(x)).toBe(false);
+    expect(endsHere({ ...x, at: 's:x1' })).toBe(true);
+    // a one-piece lesson ends where it starts
+    expect(endsHere(lesson({ mode: 'explain', steps: [step('p1')], at: 's:p1' }))).toBe(true);
+    // «Spiegalo tu» opened: its end is the last item
+    expect(endsHere({ ...l, explain: { q: '' }, at: 'end' })).toBe(true);
+  });
+  it('a dictation goes into «Spiegalo tu» on the end or in the panel opened from the recap, until it is answered', () => {
+    expect(heardIsExplainBack(true, false, {})).toBe(true);
+    expect(heardIsExplainBack(false, true, {})).toBe(true);
+    expect(heardIsExplainBack(false, true, { explain: { q: '' } })).toBe(true);
+    expect(heardIsExplainBack(false, false, {})).toBe(false);
+    expect(heardIsExplainBack(false, true, { explain: { q: '', answer: 'detto' } })).toBe(false);
+    expect(heardIsExplainBack(true, false, { explain: { q: '', answer: 'detto' } })).toBe(false);
+  });
+  it('an explanation asks at most one question before it starts', () => {
+    const qs = { questions: [{ q: 'A?', options: ['x', 'y'] }, { q: 'B?', options: ['a', 'b'] }] };
+    expect(parseQuestions(qs, 1)).toEqual([{ q: 'A?', options: ['x', 'y'] }]);
+    expect(parseQuestions(qs)).toHaveLength(2);
   });
 });

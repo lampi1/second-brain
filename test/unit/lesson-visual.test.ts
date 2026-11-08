@@ -1,8 +1,10 @@
 // Impara's visuals (ADR 0205, src/shared/lesson-visual.ts): what the model declares is checked and capped (the right
 // mermaid header, no directive, link or styling, sizes), a mermaid visual grows one part per beat and still draws when
 // cut inside a block, a beat may point only at a known line, symbol or label; parseStep keeps the visual and the role.
+// The compare (ADR 0230): two diagrams of the same kind, «Dopo» from the second half of the beats, each side with its
+// own SVG id prefix.
 import { describe, expect, it } from 'vitest';
-import { beatMark, parseVisual, revealAt, revealMermaid, revealSteps, visualParts, type LessonVisual } from '../../src/shared/lesson-visual';
+import { beatMark, compareAfterShown, compareIds, compareLayout, parseVisual, revealAt, revealMermaid, revealSteps, visualParts, type LessonVisual } from '../../src/shared/lesson-visual';
 import { parseStep } from '../../src/shared/lesson';
 
 const SEQ = 'sequenceDiagram\n  participant A as Motore\n  participant B as Store\n  A->>B: pezzo\n  loop ogni fotogramma\n    B->>B: held\n    B-->>A: ok\n  end\n  B->>A: fine';
@@ -87,5 +89,50 @@ describe('beat marks and parseStep', () => {
     expect(f.visual).toBeUndefined();
     expect(f.role).toBeUndefined();
     expect(parseStep({ title: 'T', visual: { type: 'sequence', mermaid: 'nope' }, say: 'S.', focus: ['x'] }, ['x'], 'p3').visual).toBeUndefined();
+  });
+});
+
+describe('compare (ADR 0230)', () => {
+  const BEFORE = 'flowchart LR\n  a["Motore"] -->|"100 ms"| b["Store"]\n  b --> c["Schermo"]';
+  const AFTER = 'flowchart LR\n  a["Motore"] -->|"16 ms"| b["Store"]\n  b --> c["Schermo"]';
+  it('keeps two diagrams of the same kind that differ', () => {
+    expect(parseVisual({ type: 'compare', before: BEFORE, after: AFTER })).toEqual({ kind: 'compare', before: BEFORE, after: AFTER });
+    expect(visualParts({ kind: 'compare', before: BEFORE, after: AFTER })).toBe(2);
+    const seq = 'sequenceDiagram\n  A->>B: x';
+    expect(parseVisual({ kind: 'compare', before: seq, after: 'sequenceDiagram\n  A->>B: y' })?.kind).toBe('compare');
+  });
+  it('refuses two different kinds, the same picture twice, a missing side, a directive or a link', () => {
+    expect(parseVisual({ type: 'compare', before: BEFORE, after: 'sequenceDiagram\n  A->>B: x' })).toBeNull();
+    expect(parseVisual({ type: 'compare', before: BEFORE, after: BEFORE })).toBeNull();
+    expect(parseVisual({ type: 'compare', before: BEFORE })).toBeNull();
+    expect(parseVisual({ type: 'compare', before: BEFORE, after: `${AFTER}\n  click a "https://x.dev"` })).toBeNull();
+    expect(parseVisual({ type: 'compare', before: '%%{init: {}}%%\nflowchart LR\n a --> b', after: AFTER })).toBeNull();
+    expect(parseVisual({ type: 'compare', before: 'mindmap\n  root((A))\n    b', after: 'mindmap\n  root((A))\n    c' })).toBeNull();
+  });
+  it('«Dopo» joins in the second half of the beats; with one beat or the whole picture both at once', () => {
+    expect([0, 1, 2, 3].map(i => compareAfterShown(i, 4))).toEqual([false, false, true, true]);
+    expect([0, 1, 2].map(i => compareAfterShown(i, 3))).toEqual([false, false, true]);
+    expect(compareAfterShown(0, 1)).toBe(true);
+    expect(compareAfterShown(0, 4, true)).toBe(true);
+  });
+  it('each side has its own SVG id prefix, unique per piece, only safe characters', () => {
+    const a = compareIds('p3'), b = compareIds('p4');
+    expect(a).toEqual({ before: 'sb-cmp-p3-before', after: 'sb-cmp-p3-after' });
+    expect(a.before).not.toBe(a.after);
+    expect(new Set([a.before, a.after, b.before, b.after]).size).toBe(4);
+    expect(compareIds('x"><script>')).toEqual({ before: 'sb-cmp-xscript-before', after: 'sb-cmp-xscript-after' });
+    expect(compareIds('').before).toBe('sb-cmp-x-before');
+  });
+  it('wide sides stack, tall ones stand side by side', () => {
+    expect(compareLayout('flowchart LR\n  A --> B', 'flowchart LR\n  A --> C')).toBe('stack');
+    expect(compareLayout('graph RL\n  A --> B', 'graph TD\n  A --> B')).toBe('stack');
+    expect(compareLayout('stateDiagram-v2\n  direction LR\n  A --> B', 'stateDiagram-v2\n  A --> C')).toBe('stack');
+    expect(compareLayout('flowchart TD\n  A --> B', 'flowchart TB\n  A --> C')).toBe('side');
+    expect(compareLayout('sequenceDiagram\n  A->>B: x', 'sequenceDiagram\n  A->>B: y')).toBe('side');
+    expect(compareLayout('stateDiagram-v2\n  A --> B', 'stateDiagram-v2\n  A --> C')).toBe('side');
+  });
+  it('parseStep keeps a compare', () => {
+    const st = parseStep({ title: 'T', say: 'S.', visual: { type: 'compare', before: BEFORE, after: AFTER }, beats: [{ say: 'prima' }, { say: 'dopo' }] }, ['x'], 'p5');
+    expect(st.visual?.kind).toBe('compare');
   });
 });

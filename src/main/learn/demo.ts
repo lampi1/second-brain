@@ -7,7 +7,9 @@
 // start form's «Chi spiega» lists per engine, OpenCode's as long as a real one (its free models last). Since ADR 0205 the lessons show
 // every kind of visual (flow, code walkthrough, sequence, formula, chart, mind map), the pieces' roles, the quality gate
 // (it rewrites the one piece of the rest that cites nothing) and the «Studio» outputs (the lesson about Impara has most
-// of them made already). Deterministic under SB_DEMO_FREEZE. Used by demo-wiring.ts; e2e: test/e2e/impara.spec.ts.
+// of them made already). Since ADR 0230 a new lesson starts as «Spiegazione» (the service drops the checks below) and
+// «Fammi un esempio» answers with a before/after compare; the seeded lessons have no mode, so they stay quiz lessons.
+// Deterministic under SB_DEMO_FREEZE. Used by demo-wiring.ts; e2e: test/e2e/impara.spec.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Lesson } from '@shared/lesson';
@@ -211,6 +213,14 @@ const EXTRA: Record<string, unknown> = {
     why: 'ChatManager vive nel processo main; lo store vive nel renderer, cioè nella finestra.' } },
   example: { step: { title: 'Esempio: «Ciao, come stai?»', focus: ['engine', 'manager', 'store'],
     say: 'Il motore manda tre pezzi a pochi millisecondi l’uno dall’altro. Prima li vedevi comparire tutti insieme dopo circa duecento millisecondi; ora ognuno compare nel fotogramma dopo.',
+    // a before/after (ADR 0230): the two waits in a row, then the two frames
+    visual: { type: 'compare',
+      before: 'flowchart LR\n  e["Motore"] -->|"Ciao, come stai?"| m["ChatManager"]\n  m -->|"dopo 100 ms"| s["Store"]\n  s -->|"dopo 100 ms"| v["Schermo: tutto insieme"]',
+      after: 'flowchart LR\n  e["Motore"] -->|"Ciao,"| m["ChatManager"]\n  m -->|"dopo 16 ms"| s["Store"]\n  s -->|"dopo 16 ms"| v["Schermo: parola per parola"]' },
+    beats: [
+      { say: 'Prima: i tre pezzi aspettavano cento millisecondi in ChatManager e altri cento nello store.', note: 'Circa 200 ms, poi tutto insieme' },
+      { say: 'Dopo la PR: un fotogramma per freno, e ogni parola compare appena arriva.', note: 'Circa 32 ms per la prima parola' },
+    ],
     text: '- 0 ms: `Ciao,` · 6 ms: ` come` · 11 ms: ` stai?`\n- **Prima**: ChatManager aspetta fino a 100 ms, lo store altri 100 → tutto insieme a ~200 ms.\n- **Dopo**: 16 ms + 16 ms → la prima parola a ~32 ms, le altre subito dietro.' } },
   code: { step: { title: 'Il codice: due righe', focus: ['manager', 'store'],
     say: 'Il cambio vero sono due numeri: il timer di ChatManager e quello dello store, entrambi da cento a sedici. Il resto sono commenti e il caso della finestra nascosta.',

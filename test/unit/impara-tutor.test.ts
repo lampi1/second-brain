@@ -1,6 +1,7 @@
 // Impara's tutor and its entry points (ADR 0190): the answer streamed and then saved, the session started ahead and
 // the question sent into it, coach and «Dimmelo e basta», the review card only from verified facts, one question at a
-// time, a failed or cut answer, and app_learn starting and opening a lesson.
+// time, a failed or cut answer, and app_learn starting and opening a lesson (in «Spiegazione» unless asked a quiz,
+// ADR 0230).
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -98,6 +99,17 @@ describe('LearnService tutor', () => {
     expect(last(lesson()).mode).toBe('tell');
   });
 
+  it('in «Spiegazione» (ADR 0230) the tutor tells at once and leaves no review card', async () => {
+    const { svc, store, id, lesson } = make(() => ok(`Perché sì [f1].
+${CARD}`));
+    store.save({ ...lesson(), mode: 'explain' });
+    svc.tutor(id, 's:pc1', 'Perché due ricerche?');
+    expect(last(lesson()).mode).toBe('tell');
+    await until(() => last(lesson()).state === 'done');
+    expect(last(lesson()).a).toBe('Perché sì [f1].');
+    expect(last(lesson()).card).toBeUndefined();
+  });
+
   it('no card when the answer cites no verified fact; a failed answer says why; a dead warm session is retried cold', async () => {
     let n = 0;
     const { svc, runs, id, lesson } = make(() => {
@@ -138,7 +150,7 @@ describe('LearnService tutor', () => {
 
   it('a lesson started from another page keeps the subject it was given', () => {
     const { svc, store } = make(() => ok('x'));
-    const l = svc.start({ kind: 'topic', ask: 'Spiegami la regola X del mio brain', depth: 'quick', level: 'basics', subject: 'Il mio brain' });
+    const l = svc.start({ mode: 'quiz', kind: 'topic', ask: 'Spiegami la regola X del mio brain', depth: 'quick', level: 'basics', subject: 'Il mio brain' });
     expect(store.get(l.id)!.subject).toBe('Il mio brain');
   });
 });
@@ -153,15 +165,18 @@ describe('app_learn', () => {
     }, cmd => ui.push(cmd), () => turn);
     expect(tool!.name).toBe('app_learn');
     expect(tool!.run({ ask: 'come funziona il DNS', depth: 'quick' })).toMatchObject({ id: 'L1', page: 'impara/L1' });
-    expect(started[0]).toMatchObject({ kind: 'topic', ask: 'come funziona il DNS', depth: 'quick', level: 'basics' });
+    expect(started[0]).toMatchObject({ kind: 'topic', ask: 'come funziona il DNS', depth: 'quick', level: 'basics', mode: 'explain' }); // «Spiegazione» by default (ADR 0230)
     expect(ui).toEqual([{ action: 'page', value: 'impara/L1' }]);
     expect(() => tool!.run({ ask: 'e anche il TCP' })).toThrow(/già partita/);
     turn = null; // app news or an agent's mail woke the Orchestrator
     expect(() => tool!.run({ ask: 'come funziona il DNS' })).toThrow(/solo quando l’utente/);
     expect(tool!.run({})).toMatchObject({ reviewDue: 3 }); // reading what Impara holds needs no ask
     turn = { who: 'o1', at: 2 };
-    tool!.run({ prUrl: 'https://github.com/a/b/pull/1', depth: 'huge' });
-    expect(started[1]).toMatchObject({ kind: 'pr', prUrl: 'https://github.com/a/b/pull/1', depth: 'lesson' });
+    tool!.run({ prUrl: 'https://github.com/a/b/pull/1', depth: 'huge', mode: 'quiz' });
+    expect(started[1]).toMatchObject({ kind: 'pr', prUrl: 'https://github.com/a/b/pull/1', depth: 'lesson', mode: 'quiz' });
+    turn = { who: 'o1', at: 3 };
+    tool!.run({ ask: 'il TLS', mode: 'esame' });
+    expect(started[2]).toMatchObject({ mode: 'explain' }); // an unknown kind falls back to the default
     expect(tool!.run({})).toEqual({ lessons: [{ id: 'L0', title: 'Reti', subject: 'Reti', state: 'finita', page: 'impara/L0' }], reviewDue: 3, reviewNew: 1 });
   });
 

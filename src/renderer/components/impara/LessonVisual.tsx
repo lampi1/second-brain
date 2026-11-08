@@ -7,10 +7,12 @@
 // by DOMPurify's MathML profile) lights the legend row of the symbol the beat explains; a chart (Chart.js, the same
 // drawing as the chat's charts) shows the tooltip of the label the beat points at. «Tutto lo schema» shows it whole. The
 // model's text is untrusted throughout: plain text, a sanitized highlight, a sanitized MathML, a canvas. Motion is off
-// for reduced-motion users (impara.css). Used by ImparaPlayer.tsx; styles impara.css (.lv-*).
+// for reduced-motion users (impara.css). A compare (ADR 0230) shows before and after side by side, or stacked when the
+// diagrams are wide (compareLayout): «Prima» from the first beat, «Dopo» from the second half of the beats, each side
+// drawn with its own SVG id prefix (compareIds, keyed by the piece); its beat note sits under both, never over them. Used by ImparaPlayer.tsx; styles impara.css (.lv-*).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import DOMPurify from 'dompurify';
-import { revealAt, revealMermaid, revealSteps, type LessonVisual as Visual } from '@shared/lesson-visual';
+import { compareAfterShown, compareIds, compareLayout, revealAt, revealMermaid, revealSteps, type LessonVisual as Visual } from '@shared/lesson-visual';
 import type { LessonBeat } from '@shared/lesson';
 import { parseChartSpec } from '../../lib/chart-spec';
 import { highlightLines } from '../../brain/lib/file-format';
@@ -21,7 +23,11 @@ import { LessonDiagram } from './LessonDiagram';
 let purify: ReturnType<typeof DOMPurify> | null = null;
 const sanitize = (html: string, cfg: Parameters<ReturnType<typeof DOMPurify>['sanitize']>[1]): string => String((purify ??= DOMPurify(window)).sanitize(html, cfg));
 
-export function LessonVisual({ visual, beats, beat, whole, caption }: { visual: Exclude<Visual, { kind: 'flow' }>; beats: readonly LessonBeat[]; beat: number; whole: boolean; caption: string }) {
+export function LessonVisual({ visual, beats, beat, whole, caption, idKey }: {
+  visual: Exclude<Visual, { kind: 'flow' }>; beats: readonly LessonBeat[]; beat: number; whole: boolean; caption: string;
+  /** the piece's id: a compare's SVG id prefixes are made from it */
+  idKey?: string;
+}) {
   const cur = whole ? undefined : beats[Math.min(beat, beats.length - 1)];
   const note = cur?.note;
   return (
@@ -29,6 +35,7 @@ export function LessonVisual({ visual, beats, beat, whole, caption }: { visual: 
       {visual.kind === 'code' ? <CodeWalk file={visual.file} code={visual.code} lines={cur?.lines ?? null} />
         : visual.kind === 'formula' ? <Formula tex={visual.tex} where={visual.where} mark={cur?.mark ?? null} />
         : visual.kind === 'chart' ? <ChartView chart={visual.chart} mark={cur?.mark ?? null} caption={caption} />
+        : visual.kind === 'compare' ? <Compare before={visual.before} after={visual.after} idKey={idKey ?? caption} after2={compareAfterShown(beat, beats.length, whole)} whole={whole} caption={caption} />
         : <Grows kind={visual.kind} src={visual.src} beats={beats.length} beat={beat} whole={whole} caption={caption} note={note} />}
       {note && visual.kind !== 'sequence' && visual.kind !== 'state' && visual.kind !== 'timeline' && visual.kind !== 'mindmap' && (
         <div key={`${beat}/${note}`} className="ip-note" data-testid="impara-note"><b>{t('impara.here')}</b> {note}</div>
@@ -46,6 +53,24 @@ function Grows({ kind, src, beats, beat, whole, caption, note }: { kind: 'sequen
   return (
     <div className="lv-grows" data-parts={parts} data-shown={upto}>
       <LessonDiagram base="" own={shown} focus={[]} done={[]} whole={whole} note={note} caption={caption} zoom={zoom} onZoom={setZoom} />
+    </div>
+  );
+}
+
+/** Before and after side by side (ADR 0230): «Dopo» joins in the second half of the beats; the beat's note under both. */
+function Compare({ before, after, idKey, after2, whole, caption }: { before: string; after: string; idKey: string; after2: boolean; whole: boolean; caption: string }) {
+  const [zoom, setZoom] = useState<'before' | 'after' | null>(null);
+  const ids = compareIds(idKey);
+  return (
+    <div className="lv-compare" data-testid="impara-compare" data-after={after2 ? '1' : '0'} data-layout={compareLayout(before, after)}>
+      <figure className="lv-side" data-side="before">
+        <figcaption>{t('impara.visual.before')}</figcaption>
+        <LessonDiagram base="" own={before} focus={[]} done={[]} whole={whole} caption={`${caption} · ${t('impara.visual.before')}`} zoom={zoom === 'before'} onZoom={on => setZoom(on ? 'before' : null)} idPrefix={ids.before} />
+      </figure>
+      <figure className={`lv-side ${after2 ? 'in' : 'wait'}`} data-side="after">
+        <figcaption>{t('impara.visual.after')}</figcaption>
+        {after2 && <LessonDiagram base="" own={after} focus={[]} done={[]} whole={whole} caption={`${caption} · ${t('impara.visual.after')}`} zoom={zoom === 'after'} onZoom={on => setZoom(on ? 'after' : null)} idPrefix={ids.after} />}
+      </figure>
     </div>
   );
 }

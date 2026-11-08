@@ -18,7 +18,11 @@ const css = (name: string, fallback: string): string => getComputedStyle(documen
 const SCALE = ['--blue', '--violet', '--green', '--amber'];
 
 /** A bigger, tighter drawing (Impara's blackboard, ADR 0185): larger labels, less space between the nodes. */
-export interface DrawOptions { fontSize?: number; nodeSpacing?: number; rankSpacing?: number }
+export interface DrawOptions {
+  fontSize?: number; nodeSpacing?: number; rankSpacing?: number;
+  /** the SVG's id prefix (ADR 0230): a compare's two sides each their own, so their arrowheads never collide */
+  idPrefix?: string;
+}
 
 function configure(o: DrawOptions = {}): void {
   const vars = {
@@ -89,7 +93,7 @@ function toImage(svg: string): { src: string; width: number; height: number } {
 export function drawMermaid(code: string, opts?: DrawOptions): Promise<{ src: string; width: number; height: number }> {
   const run = queue.then(async () => {
     configure(opts);
-    const id = `sb-mermaid-${++seq}`;
+    const id = `${opts?.idPrefix ?? 'sb-mermaid'}-${++seq}`;
     try {
       const { svg } = await mermaid.render(id, code);
       return toImage(svg);
@@ -107,7 +111,7 @@ export function drawMermaid(code: string, opts?: DrawOptions): Promise<{ src: st
 export function layoutMermaid(code: string, opts?: DrawOptions): Promise<FlowLayout | null> {
   const run = queue.then(async () => {
     configure(opts);
-    const id = `sb-mermaid-${++seq}`;
+    const id = `${opts?.idPrefix ?? 'sb-mermaid'}-${++seq}`;
     try {
       const { svg } = await mermaid.render(id, code);
       return parseFlowLayout(svg, id);
