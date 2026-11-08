@@ -57,7 +57,7 @@ describe('Orchestrator tools on a delegated chat', () => {
     await expect(Promise.resolve().then(() => tool('app_chat_items').run({ chatId: 'k' }))).rejects.toThrow(/delegata/);
     expect(JSON.stringify(await tool('app_pending').run({}))).not.toMatch(/SECRET/);
     expect(JSON.stringify(await tool('app_feed').run({}))).not.toMatch(/SECRET/);
-    await expect(Promise.resolve().then(() => tool('app_resolve_question').run({ chatId: 'k', requestId: 'q', answers: {} }))).rejects.toThrow(/delegata/);
+    await expect(Promise.resolve().then(() => tool('app_resolve_question').run({ chatId: 'k', requestId: 'q', answers: {} }))).rejects.toThrow(/non è una ricevuta dell’utente/);
   });
 });
 

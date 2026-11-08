@@ -69,16 +69,18 @@ describe('OrchestratorWake.heldNews and the hub', () => {
     expect(emitted.at(-1)).toEqual({ items: [] });
   });
 
-  it('a quiet permission request is counted too, as riding along with the next news', async () => {
+  it('a permission waits for its group and disappears if answered before delivery', async () => {
     const { w, sent, hub, up } = make();
     up({ id: 'fb', state: 'running' });
     w.observe('pending:added', perm('fb'));
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(500);
     expect(sent).toEqual([]);
-    expect(hub.get().items).toEqual([expect.objectContaining({ chatId: 'fb', kind: 'permission', why: 'quiet' })]);
+    expect(hub.get().items).toEqual([expect.objectContaining({ chatId: 'fb', kind: 'permission', why: 'group' })]);
     // answered before it went: the chat's next state is told instead, still held until it goes
     w.observe('pending:resolved', { chatId: 'fb', requestId: 'p1' });
     expect(hub.get().items).toEqual([]);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(sent).toEqual([]);
   });
 
   it('the hub tells the page only when the list changed; streaming updates of other chats send nothing', async () => {

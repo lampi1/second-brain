@@ -136,17 +136,17 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un figlio che scrive lavora in una copia del repository (worktree) su un branch suo. L’app riusa le copie libere e pulite, con i file di build già fatti, e cancella quelle oltre i limiti di Impostazioni → Avanzate (copie per repository, in tutto, spazio massimo): la prima volta con il tuo «Pulisci ora», poi da sola ogni 6 ore. Una copia con modifiche o commit non pubblicati non si cancella mai: la vedi elencata lì.',
         'A child that writes works in a copy of the repository (worktree) on its own branch. The app reuses free, clean copies, their build outputs already there, and deletes the ones over the limits in Settings → Advanced (copies per repository, in total, disk cap): the first time with your "Clean up now", then by itself every 6 hours. A copy with changes or unpushed commits is never deleted: you see it listed there.'),
       // src/main/agents/delegation.ts agent_ask_parent, agent_answer_child; src/renderer/lib/child-requests.ts requestHost
-      b('Il figlio chiede al genitore i fatti mancanti. Se serve una tua scelta, te la chiede direttamente nel pannello, una domanda alla volta.',
-        'A child asks its parent for missing facts. When it needs your choice, it asks you directly in its panel, one question at a time.'),
+      b('Il figlio chiede al genitore i fatti mancanti. Le tue scelte arrivano nel pannello originale dell’Orchestrator, anche per interviste e piani; il testo di un agente non vale come consenso.',
+        'A child asks its parent for missing facts. Your choices use the original Orchestrator panel, including interviews and plans; agent text never counts as consent.'),
       // src/renderer/components/DelegationCard.tsx; src/renderer/lib/run-steps.ts
       b('Nella Grindhouse ogni figlio è una scheda sul filo del genitore: compito, personaggio, skill, modello, i passi veri (il piano del motore e le sue azioni), lo stato. Un clic la apre nella chat intera; «Vai alla chat» la mette a fuoco.',
         'In the Grindhouse each child is a card on its parent’s thread: task, character, skills, model, its real steps (the engine’s plan and its actions), its state. A click opens it into the whole chat; "Vai alla chat" puts it in focus.'),
       // src/main/chats/manager-work.ts userWrote; src/main/chats/orchestrator-wake.ts user-message
-      b('Puoi scrivere in qualunque figlio: l’Orchestrator e il genitore lo vengono a sapere con le tue parole, così nessuno disfa ciò che hai chiesto; se cambi l’obiettivo, il figlio lo dice nel suo risultato.',
-        'You can write in any child: the Orchestrator and the parent learn it in your words, so nobody undoes what you asked; if you change the goal, the child says so in its result.'),
+      b('Scrivi all’Orchestrator: le cronologie dei figli restano consultabili, senza un altro campo di conversazione. Le istruzioni storiche scritte nei figli restano conservate.',
+        'Write to the Orchestrator: child histories remain inspectable without another conversation input. Historical instructions written in children remain preserved.'),
       // src/main/chats/manager-delegation.ts reportDelegation; src/shared/delegation.ts resultMessage; src/main/appctl/child-output.ts
-      b('Il figlio chiude con un rapporto: il risultato arriva al genitore come messaggio (i risultati dei fratelli arrivati entro pochi secondi insieme); l’Orchestrator vede lo stato e, quando gli serve, legge l’ultimo rapporto di qualunque chat del suo albero (riepilogo e criteri; l’output solo se lo chiede, al massimo 4.000 caratteri) senza far lavorare quella chat. Un risultato sbagliato si corregge al massimo due volte, segnato «correzione». Una chat che l’Orchestrator ha aperto lui stesso gli riporta allo stesso modo.',
-        'The child closes with a report: the result reaches the parent as a message (siblings’ results arriving within a few seconds together); the Orchestrator sees the state and, when it needs to, reads the latest report of any chat in its tree (summary and criteria; the output only on request, at most 4,000 characters) without spending a turn of that chat. A wrong result can be corrected at most twice, marked "correction". A chat the Orchestrator opened itself reports to it the same way.'),
+      b('Il rapporto finale arriva al genitore per continuare il lavoro e compare automaticamente nell’Orchestrator. Una correzione aggiorna lo stesso risultato; non è un secondo lavoro completato e non autorizza nuove azioni.',
+        'The final report reaches the parent to continue the work and appears automatically in the Orchestrator. A correction updates the same result; it is not a second completed job and authorizes no new actions.'),
     ],
     analogy: b('Come un capo cantiere che affida i lavori ai suoi: ognuno ha la sua scheda di lavoro, nessuno ha chiavi che il capo non ha, e ciascuno chiede direttamente la decisione che gli serve.',
       'Like a site foreman handing jobs to his crew: each has a job sheet, nobody holds keys the foreman lacks, and each worker asks for the decision they need.'),
@@ -161,10 +161,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       0: ['src/shared/delegation.ts#delegationPrompt'],
       1: ['src/main/agents/worktrees.ts', 'src/main/agents/role-gate.ts#aboveParent'],
       2: ['src/shared/roles.ts#DELEGATION_DEFAULTS', 'src/main/chats/manager-delegation.ts#limitNotice'],
-      3: ['src/main/agents/delegation.ts#agent_ask_parent', 'src/main/agents/delegation.ts#agent_answer_child', 'src/renderer/lib/child-requests.ts#requestHost'],
-      4: ['src/renderer/components/DelegationCard.tsx', 'src/renderer/lib/run-steps.ts'],
-      5: ['src/main/chats/manager-work.ts#userWrote'],
-      6: ['src/main/chats/manager-delegation.ts#reportDelegation', 'src/shared/delegation.ts#resultMessage', 'src/main/appctl/child-output.ts#childOutputTool'],
+      3: ['src/main/agents/worktree-pool.ts', 'src/renderer/components/WorktreeSettings.tsx'],
+      4: ['src/main/agents/delegation.ts#agent_ask_parent', 'src/main/agents/delegation.ts#agent_answer_child', 'src/renderer/lib/child-requests.ts#requestHost'],
+      5: ['src/renderer/components/DelegationCard.tsx', 'src/renderer/lib/run-steps.ts'],
+      6: ['src/main/chats/manager-work.ts#userWrote', 'src/renderer/components/ChatTile.tsx'],
+      7: ['src/main/chats/manager-delegation.ts#reportDelegation', 'src/shared/delegation.ts#resultMessage', 'src/main/appctl/child-output.ts#childOutputTool'],
     },
     sources: ['src/main/agents/delegation.ts', 'src/shared/delegation.ts', 'src/main/agents/role-gate.ts', 'src/main/chats/manager.ts', 'src/main/chats/orchestrator-wake.ts', 'src/renderer/components/DelegationCard.tsx', 'src/renderer/components/SidebarTree.tsx', 'src/renderer/lib/run-steps.ts', 'src/renderer/lib/child-requests.ts', 'src/main/chats/manager-delegation.ts', 'src/main/chats/manager-work.ts', 'src/main/appctl/child-output.ts'],
   },
@@ -293,8 +294,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un tuo messaggio che inizia con «[nuova chat]» gli chiede di aprire una chat di lavoro nuova.',
         'A message of yours starting with "[nuova chat]" asks it to open a new work chat.'),
       // src/main/chats/orchestrator-delivery.ts
-      b('La posta delle chat gli arriva smistata: subito, raggruppata (30 s) o silenziosa.',
-        'Mail from the chats reaches it sorted: now, grouped (30 s) or quiet.'),
+      b('Errori subito; risultati e richieste originali raggruppati (30 s); semplici avvii e avanzamenti silenziosi. Le decisioni restano nei pannelli originali, mai nelle risposte di un agente.',
+        'Errors arrive immediately; results and original requests are grouped (30 s); plain starts and progress stay quiet. Decisions remain in original panels, never agent replies.'),
       // src/main/chats/held-news.ts, src/renderer/components/HeldNews.tsx (#88)
       b('Quello che l’app gli tiene da parte lo vedi sopra il suo campo: «N novità in attesa»; un clic elenca chat, tipo, da quando e perché aspetta. Guardarlo non gli costa un turno.',
         'What the app holds back for it shows above its input: "N novità in attesa"; a click lists chat, kind, since when and why it waits. Looking costs it no turn.'),
@@ -672,8 +673,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'The home page: one strip per working agent, with the browsers it drives beside the expanded chat.'),
     points: [
       // src/renderer/brain/pages/Home.tsx
-      b('La pagina mostra le strisce degli agenti; le richieste in attesa compaiono sulla striscia della chat interessata.',
-        'The page shows agent strips; pending requests appear on the strip of the relevant chat.'),
+      b('La pagina mostra le strisce degli agenti; le richieste in attesa sono raccolte nell’Orchestrator, mantenendo il collegamento al worker originale.',
+        'The page shows agent strips; pending requests are collected in the Orchestrator while keeping the link to the original worker.'),
       // src/renderer/lib/agent-order.ts
       b('Le strisce sono raggruppate per area, cioè l’ultima cartella del percorso di lavoro della chat.',
         'Strips are grouped by area, i.e. the last folder of the chat’s working path.'),
@@ -690,8 +691,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un agente conclude l’incarico con un report finale esplicito, non con una mail di avanzamento. Quando non lavora più si chiude dopo il tempo scelto in Impostazioni (lo ritrovi con Ctrl+K). Se aspetta te, un permesso, i colleghi, figli o task in background resta aperto. Un piano non concluso lo tiene aperto fino al report finale, che chiude il piano (i passi rimasti diventano parziali).',
         'An agent completes its assignment with an explicit final report, not progress mail. Once idle it closes after the delay set in Settings (Ctrl+K finds it). It stays open while waiting for you, a permission, colleagues, children or background tasks. An unfinished plan keeps it open until its final report, which closes the plan (steps left become partial).'),
       // src/renderer/components/ChatTile.tsx
-      b('Una striscia chiusa mostra agente, stato, modello e l’ultima risposta; un clic ovunque su di essa la apre, ogni volta, e mostra la conversazione e l’input. Lo sforzo lo decide il profilo dell’agente: la striscia non lo mostra.',
-        'A collapsed strip shows agent, state, model and the last answer; a click anywhere on it expands it, every time, showing the conversation and the input. The effort is the agent profile’s: the strip does not show it.'),
+      b('Una striscia chiusa mostra agente, stato, modello e ultima risposta; aprendola consulti la cronologia. Scrivi all’Orchestrator: solo Flash mantiene un input separato.',
+        'A collapsed strip shows agent, state, model and last answer; expand it to inspect the history. Write to the Orchestrator: only Flash keeps a separate input.'),
     ],
     analogy: b('Come il banco di orchestrator di uno studio: un fader per ogni canale, e il monitor di ciascuno sotto.',
       'Like a studio mixing desk: one fader per channel, and each one’s monitor below it.'),
@@ -1376,8 +1377,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un lavoro che finisce, fallisce, chiede qualcosa o scrive all’Orchestrator produce una notizia; l’app la consegna all’Orchestrator, ma non sempre subito.',
         'A job that finishes, fails, asks something or writes to the Orchestrator makes a piece of news; the app delivers it to the Orchestrator, but not always at once.'),
       // src/main/chats/orchestrator-delivery.ts ORCHESTRATOR_GROUP_MS
-      b('La trattiene mentre l’Orchestrator aspetta te, la raggruppa per 30 secondi con le altre in arrivo, o fa viaggiare le notizie tranquille con la prossima consegna: così l’Orchestrator non viene svegliato a ogni riga. Un lavoro che finisce o parte e basta è tranquillo: lo sveglia solo un errore o un risultato da smistare.',
-        'It holds it while the Orchestrator waits for you, groups it for 30 seconds with the others arriving, or lets quiet news ride along with the next delivery: so the Orchestrator is not woken at every line. A job that just finishes or starts is quiet: only a failure or a result to route wakes it.'),
+      b('Mentre l’Orchestrator aspetta te trattiene le notizie non urgenti. Richieste originali e risultati sono raggruppati per 30 secondi; semplici avvii e fine turno viaggiano con la prossima consegna.',
+        'While the Orchestrator waits for you it holds non-urgent news. Original requests and results are grouped for 30 seconds; plain starts and turn endings ride with the next delivery.'),
       // src/renderer/components/HeldNews.tsx
       b('Sulla colonna dell’Orchestrator vedi quante sono; un clic le elenca (chat, tipo, da quando, perché aspetta) e una riga apre la sua chat.',
         'On the Orchestrator’s column you see how many there are; a click lists them (chat, kind, since when, why it waits) and a row opens its chat.'),
@@ -1385,8 +1386,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Una riga che apri è letta: esce dall’elenco e non sveglia più l’Orchestrator, che la riceve solo insieme alla prossima consegna. Guardare l’elenco non spende nulla.',
         'A row you open is read: it leaves the list and no longer wakes the Orchestrator, which gets it only with the next delivery. Looking at the list spends nothing.'),
       // src/main/chats/manager-delegation.ts releaseResult; src/shared/sys.ts resultReady (#123)
-      b('Quando un ruolo che l’Orchestrator ha aperto per la tua domanda ha la risposta, nella chat dell’Orchestrator compare un avviso verde con il riassunto e «Apri»: nessun turno in più dell’Orchestrator.',
-        'When a role the Orchestrator opened for your question has the answer, a green notice with the summary and "Open" shows in the Orchestrator’s chat: no extra Orchestrator turn.'),
+      b('Il risultato completo compare automaticamente nell’Orchestrator, già aperto. Di base parte anche la sintesi per il canale di conversazione: non serve premere «Sintetizza». Le correzioni aggiornano lo stesso risultato.',
+        'The complete result appears automatically in the Orchestrator, already expanded. By default channel synthesis also starts: no Synthesize click is needed. Corrections update the same result.'),
     ],
     analogy: b('Come la posta che la segreteria tiene da parte mentre sei in riunione: non si perde, arriva tutta insieme quando esci.',
       'Like the mail the front desk keeps aside while you are in a meeting: nothing is lost, it all arrives together when you come out.'),
