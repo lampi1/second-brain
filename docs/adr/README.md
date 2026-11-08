@@ -138,7 +138,7 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0130](0130-run-receipts-before-reviews.md) Run receipts: deterministic checks before a Sentinel review — accepted
 - [0131](0131-levels-by-job-size-and-bayesian-performance.md) Levels by job size, a Bayesian performance, the Orchestrator's choices and Flash's answers — accepted
 - [0132](0132-maintenance-with-research-and-app-ideas.md) The maintenance with research, the «Idee dell'app» tab and the phrases of the day — accepted, partly superseded by 0153, 0173
-- [0133](0133-personal-browser.md) A personal browser for the user, apart from the agents' browsers — superseded by 0212
+- [0133](0133-personal-browser.md) A personal browser for the user, apart from the agents' browsers — accepted
 - [0134](0134-finished-chats-close-by-default.md) Finished chats close by default, reliably — accepted
 - [0135](0135-yes-no-questions-and-the-recap.md) Yes/no questions only, «Ci penso dopo», and a recap that unblocks everything — accepted
 - [0136](0136-persistent-developer-work-cockpit.md) Persistent developer work cockpit — accepted, partly superseded by 0141
@@ -218,8 +218,12 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0210](0210-remove-model-routing.md) Remove the model-routing classifier: every agent runs on its own card's model — accepted
 - [0211](0211-small-fixes-and-real-effort.md) Agent card picks model, effort and context; real effort names; owner's small fixes of 2026-10-31 — accepted
 - [0212](0212-remove-personal-browser.md) Remove the personal Browser page — accepted
-- [0216](0216-opencode-engine.md) OpenCode as a built-in ACP engine (model and mode through ACP config options) — accepted
-- [0217](0217-close-cancels-the-tree.md) Closing a chat with ✕ cancels its whole descendant tree; nothing late reopens it — accepted
-- [0218](0218-balanced-mode.md) «Balanced mode»: a delegation's engine, model and effort follow the credits left per provider — proposed
-- [0219](0219-phone-bridge-telegram.md) Phone bridge: the Orchestrator through a private Telegram bot (stable only, write-only token, yes/no only) — accepted
-- [0220](0220-role-skill-alignment.md) Scoped role skills and verified Plan intake
+- [0213](0213-impara-active-study.md) 0213. Impara: exercises and an oral exam — accepted
+- [0214](0214-audio-parakeet-speed-podcast.md) 0214. Audio: Parakeet transcription, voice speed, a two-voice podcast, English words — accepted
+- [0215](0215-faster-recording-transcription.md) 0215. Faster recording transcription: fewer, longer pieces for Whisper — accepted
+- [0216](0216-opencode-engine.md) 0216. OpenCode as a built-in ACP engine — accepted
+- [0217](0217-close-cancels-the-tree.md) 0217. Closing a chat with ✕ cancels its whole tree — accepted
+- [0218](0218-balanced-mode.md) 0218. «Balanced mode»: the engine, model and effort of a delegation follow the credits left — proposed
+- [0219](0219-phone-bridge-telegram.md) 0219. Phone bridge: the Orchestrator through a private Telegram bot — accepted
+- [0220](0220-role-skill-alignment.md) Scoped role skills and verified Plan intake — not stated
+- [0221](0221-agents-merge-verified-branches-to-main.md) 0221. Agents merge verified branches into main — accepted

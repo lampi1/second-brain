@@ -66,17 +66,21 @@ machine run only at night, outside the owner's working hours; never during the d
 ## 8. Commits and merge to main
 
 Agents commit on their branch/worktree. Conventional messages (`feat(chats): …`), English. An agent of the app may
-merge its verified branch into `main` and push it, without asking the owner each time (owner, 2026-11-07), only when
-all three hold:
+merge its verified branch into `main` and push it, without asking the owner each time (owner, 2026-11-07; ADR 0221),
+only when all three hold on the exact commit that is pushed:
 
-1. the repository checks are green by their exit code (`npm run check:branch` on the branch, see "Verify a change");
-2. an independent Sentinel review of the branch has no open findings;
+1. the change is done per rule 7: `npm run check:branch` green by its exit code, and a visible change looked at in
+   the dev app (see "Verify a change");
+2. the reviews of rule 9 (an independent Sentinel per touched dimension) have no open findings;
 3. `node tools/guard/scan.mjs . --allow .guardallow` passes, and the pre-push hook passes on every pushed commit.
 
-The method is local: `git merge` of the verified branch into `main`, then `git push origin main`. Never a force push,
-a token, a pull request opened on the owner's behalf or another remote. «Aggiorna», `npm run promote`, publishing a
-release and restarting the app stay the owner's clicks. The rule covers only this repository: other repositories keep
-their own rules.
+The method is local and fast-forward only: `git merge --ff-only` of the verified branch into `main`, then
+`git push origin main`. If `main` moved, rebase the branch on it and run 1-3 again, so what is pushed is what was
+checked. The full `npm run check` (e2e) stays the Orchestrator's, on `main` after the merge ("Verify a change").
+Never a force push, a token, a pull request opened on the owner's behalf, a new remote or another remote. «Aggiorna»,
+`npm run promote`, publishing a release and restarting the app stay the owner's clicks. The app's own permission
+layer still asks before `git push` (ADR 0103); allowing it is the owner's setting. The rule covers only this
+repository: other repositories keep their own rules.
 
 ## 9. Review
 
