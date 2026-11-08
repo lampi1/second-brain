@@ -2,6 +2,11 @@
 import type { proposalsIt } from './proposals.it';
 type N = { n: number };
 export const proposalsEn: typeof proposalsIt = {
+  'proposals.issueDraft': 'Issue draft · requires individual approval',
+  'proposals.dedupUnknown': 'Dedup not verified',
+  'proposals.dedupChecked': 'Open issues read; automatic title check completed',
+  'proposals.repoUnknown': 'Repository not verified',
+  'proposals.rank': 'Priority',
   'proposals.deckLabel': 'Deck of proposals',
   'proposals.filters': 'Filter the proposals',
   'proposals.filter.all': 'All',

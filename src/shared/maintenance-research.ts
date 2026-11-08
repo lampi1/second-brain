@@ -47,6 +47,10 @@ export interface ResearchForget {
 
 /** The GitHub issue an app idea or bug becomes, already written. */
 export interface ResearchIssue {
+  /** Exact destination; null means the brain/project has no verified issue repository. Never infer it from the app. */
+  repo?: string | null;
+  /** Host-computed inventory receipt, never accepted from model input. */
+  dedup?: { status: 'checked' | 'unverified'; at: number; note: string; count: number };
   title: string;
   /** Markdown, scrubbed of private data (home paths, user names, e-mails, MCP server names, tokens) */
   body: string;
@@ -119,6 +123,8 @@ export type ResearchState = 'open' | 'approved' | 'rejected' | 'issue-asked' | '
 
 /** One finding, as a card. Every text is plain words in the user's language. */
 export interface ResearchProposal {
+  /** Lower comes first within a maintenance run. */
+  rank?: number;
   /** `r-<time36>-<rand>` */
   id: string;
   /** the research chat that proposed it; null = the zero-token cleanup (forget cards, log bugs) */
@@ -237,6 +243,7 @@ export interface MaintenanceDone {
 
 /** Caps: what one research may propose, per family (the tool refuses more). */
 export const RESEARCH_CAPS = { brain: 5, forget: 5, app: 5, bold: 1 } as const;
+export const RESEARCH_TOTAL_CAP = 7;
 export const familyOf = (k: ResearchKind): keyof typeof RESEARCH_CAPS =>
   k === 'forget' || k === 'lint' ? 'forget' : k === 'bold' ? 'bold' : isAppKind(k) ? 'app' : 'brain';
 /** The default spending cap (owner, 2026-10-23). */
@@ -273,4 +280,4 @@ export interface BrainCandidate {
   changeId?: string;
 }
 /** A candidate as its card shows it: with the findings it gathers in words. */
-export interface BrainCandidateView extends BrainCandidate { items: { kind: ResearchKind; title: string; success?: string }[] }
+export interface BrainCandidateView extends BrainCandidate { items: { kind: ResearchKind; title: string; success?: string; issue?: ResearchIssue }[] }

@@ -166,6 +166,7 @@ export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalC
     <span className="pd-stamp pd-stamp-no" style={{ opacity: Math.max(0, -k) }} aria-hidden="true" data-testid={top ? 'pd-stamp-no' : undefined}>{l.noStamp}</span>
     <header className="pd-card-head">
       <span className="pd-kind">{kindLabel(c)}</span>
+      {c.rank && <span className="pd-kind">{t('proposals.rank')} {c.rank}</span>}
       {c.applied && <span className="pd-applied">{t('proposals.applied')}</span>}
       <time className="pd-when" dateTime={c.provenance.at}>{shortWhen(c.provenance.at)}</time>
     </header>
@@ -178,6 +179,13 @@ export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalC
       </figure>)}
       {c.ask.kind === 'research' && <ResearchBody a={c.ask} top={top} />}
       {c.ask.kind === 'candidate' && <CandidateBody a={c.ask} top={top} />}
+      {c.issueDrafts?.map((issue, index) => <details key={index} className="pd-rs" data-testid={top ? 'pd-issue-draft' : undefined}>
+        <summary>{t('proposals.issueDraft')}: {issue.title}</summary>
+        <p>{issue.repo || t('proposals.repoUnknown')}</p>
+        <p data-testid={top ? 'pd-issue-dedup' : undefined}>{issue.dedup?.status === 'checked' ? t('proposals.dedupChecked') : t('proposals.dedupUnknown')}
+          {issue.dedup?.status === 'checked' && <> · {issue.dedup.count} · {new Date(issue.dedup.at).toLocaleDateString(locale())}</>}</p>
+        <div className="md pd-md" dangerouslySetInnerHTML={{ __html: renderMarkdown(issue.body) }} />
+      </details>)}
       {top && c.diffs && c.diffs.length > 0 && <ProposalDiffs diffs={c.diffs} role={c.ask.kind === 'research' && !!c.ask.trial} />}
       {lead && <p className="pd-lead">{lead}</p>}
       {html && <div className={`pd-why${c.ask.kind === 'research' ? ' pd-exact' : ''}`}>{words.bodyLabel && <span className="pd-label">{words.bodyLabel}</span>}<div className="md pd-md" dangerouslySetInnerHTML={{ __html: html }} /></div>}

@@ -37,7 +37,7 @@ const RUNS_PER_CASE = 2;
 
 /** A finding that only writes brain files (no role, no issue): it goes into the candidate instead of its own card. */
 export function isCandidateFinding(p: Pick<ResearchProposal, 'chatId' | 'kind' | 'change' | 'forget' | 'issue' | 'roleTrial'>): boolean {
-  if (!p.chatId || p.roleTrial || p.issue) return false;
+  if (!p.chatId || p.roleTrial || p.kind === 'app-idea' || p.kind === 'app-bug' || (p.kind === 'bold' && !p.change)) return false;
   if (p.kind === 'forget') return !!p.forget && (p.forget.what === 'skill' || p.forget.what === 'rule');
   if (p.kind !== 'skill' && p.kind !== 'rule' && p.kind !== 'bold') return false;
   // a change for one role touches that role (its text, or a skill linked to it): its own card, applied as today
