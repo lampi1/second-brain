@@ -99,7 +99,33 @@ passed, 1 skipped, 3 failed. One failure was the new regression's initial real s
 deadline timers are now frozen before the first snapshot and its focused run passes. The other two failures,
 `correction-catch-hook.test.ts:79,86`, are outside this change: semantic/recall responses were missing. The production
 hook has real 200/300 ms HTTP deadlines while these tests expect localhost replies; cause still needs independent
-confirmation. They were not retried, skipped, weakened or fixed here. A final green branch gate is still required.
+confirmation. They were left intact in the checkpoint commit; the follow-up below addresses their nondeterminism.
+
+### Hook deadline follow-up
+
+The requested comparison ran only `correction-catch-hook.test.ts`: five runs on `5b6c5b69` all passed (30/30 test
+executions); five runs on `9214938f` gave four passing files and one failure (29/30 test executions). The intermittent
+failure was the semantic-positive assertion at line 50; the earlier combined gate had failed lines 79 and 86.
+CPU sampled immediately before each run through Windows `Win32_Processor.LoadPercentage`: base 78/90/81/79/55%,
+tip 93/68/80/71/69%. These are snapshots, not average load measurements or a synthetic load generator.
+
+Cause: the subprocess uses real `AbortSignal.timeout(200)` for detection and `(300)` for recall
+(`brain-template/.claude/hooks/correction-catch.mjs:34,47`). Tests asserting successful local HTTP replies were racing
+those deadlines against process scheduling and MCP service time. The timeout fallback correctly returns no semantic
+result/no recall, which contradicts those success assertions when scheduling is delayed.
+
+The test-only `hook-deadline-clock.mjs` preload now controls those AbortSignals via IPC in the real hook subprocess.
+Successful requests use the real HTTP/MCP server without advancing virtual time; timeout cases deliberately hold
+the response and advance the unchanged 200/300 ms budgets. All content/count assertions remain, and the harness
+also requires an actual expiry acknowledgement for timeout scenarios and rejects unexpected budgets/nonzero exits.
+No production hook, settings or permission behavior changed. The fixed file passed once, then ten requested runs
+all passed (60/60 test executions); CPU snapshots for the ten runs: 100/83/93/68/100/75/100/57/93/86%.
+
+The temporary recall-baseline worktree was left for owner cleanup after its removal was denied; no cleanup retry.
+The subsequent complete `check:quick` passed typecheck, lint, hook tests and checkpoint tests: 982 tests passed,
+1 skipped, but 2 other tests failed (`chats/claude.test.ts:368`, interrupt still running instead of idle;
+`chats/proctree.test.ts:80`, orphan reap count 0 instead of 1). Neither was retried, skipped or changed by this
+follow-up. The overall gate remains blocked pending those failures and the independent reviews of the final tip.
 
 Low residual risks of the same branch, explicitly unverified and carried into the runtime migration: trust by server name (a user-defined OpenCode MCP server named
 `second-brain` would be treated as the app's own); shell permissions without a `kind` fall into the Tool category;
