@@ -41,7 +41,7 @@ Set up the second-brain desktop app for me, from source, so I can use it and als
    through it myself. Then run `npm run doctor` and tell me in plain words what is still missing
    (for example: logging in to at least one of `claude`, `codex` or Cursor's `agent`, which I do myself).
 6. Leave the clone ready for issues and pull requests: `gh repo view` works, `main` tracks upstream, and tell me
-   the loop: a branch per change, `npm run check:quick` plus the touched e2e specs before the merge, Conventional Commits in English,
+   the loop: a branch per change, `npm run check:quick` and a review before the merge, Conventional Commits in English,
    never `--no-verify`, the PR template in .github/. Don't push or open anything without asking me.
 
 Finish with a three-line summary: where the code lives, how I start the app, and how I update it.

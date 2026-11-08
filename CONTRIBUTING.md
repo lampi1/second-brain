@@ -46,13 +46,13 @@ shows whether the hooks are on and the config is readable.
 1. Branch from `main` (`feat/<topic>`, `fix/<topic>`). Several people or agents at once: one git worktree each
    (`git worktree add ../second-brain-wt/<topic> -b feat/<topic>`).
 2. Make the change with its tests (below).
-3. `npm run check:quick` (typecheck, lint of the changed files, the unit tests reaching them) plus the e2e specs of
-   the part you touched (`node scripts/e2e.mjs <specs>`): this is what a branch needs. The whole e2e suite runs on
-   `main` after a batch of merges, in `npm run check`; whoever breaks `main` fixes it there.
+3. `npm run check:quick` (typecheck, lint of the changed files, the unit tests reaching them) plus a fresh-context
+   review and the guard: this is what a branch needs, no e2e. Typecheck, lint and all unit tests run on `main` after a
+   batch of merges; whoever breaks `main` fixes it there.
 4. Look at the change in the running app (`SB_HIDDEN=1 npm run dev`, a screenshot): a green check on a broken-looking
    screen is not done.
-5. Push your branch (the pre-push guard scans every new commit) and open a pull request with the template filled in. After a merge, `npm run check` (everything, including the whole e2e
-   suite) runs on `main`; its e2e fails only on tests not listed in `test/e2e/known-red.json`, the ones already red on
+5. Push your branch (the pre-push guard scans every new commit) and open a pull request with the template filled in. The e2e suite runs only when the
+   maintainer asks; its verdict fails only on tests not listed in `test/e2e/known-red.json`, the ones already red on
    `main` (ADR 0198). Run heavy suites one at a time: two e2e runs on one machine make each other flaky.
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org): `feat(chats): …`, `fix(browser): …`,
