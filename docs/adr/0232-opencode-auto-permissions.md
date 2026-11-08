@@ -28,10 +28,11 @@ local work: OpenCode's `external_directory` requests, paths outside the folder, 
    read, JSON, YAML and TOML escapes read; a word built around a placeholder takes every key with its start and end);
    otherwise the next free one; none free, the chat does not start. A config the app cannot read in full also stops
    the chat: a file over 64 MB, over 20 000 files, a read error, an agent file with JavaScript front matter (OpenCode
-   runs it), a config that reads `OPENCODE_CONFIG_CONTENT`. The task tool
+   runs it) or a YAML tag that builds a key the text does not show (`!!binary`, a verbatim `!<…>` tag, a `%TAG`
+   directive), a config that reads `OPENCODE_CONFIG_CONTENT`. The task tool
    starts only general and explore (a user's own agent carries rules the app cannot see); the chat starts on build
    whatever the user's `default_agent`; `OPENCODE_PERMISSION` (merged after every config) and
-   `OPENCODE_TEST_MANAGED_CONFIG_DIR` (moves the managed folder) are left out of the process environment. The user's other settings, and a `OPENCODE_CONFIG_CONTENT` of their own, are kept; on the
+   `OPENCODE_TEST_MANAGED_CONFIG_DIR` and `OPENCODE_TEST_HOME` (move the folders OpenCode reads) are left out of the process environment. The user's other settings, and a `OPENCODE_CONFIG_CONTENT` of their own, are kept; on the
    permissions the app sets (bash, read, edit, external_directory, web, task) the app's rules replace the user's
    OpenCode rules: Claude's settings are the one list of what is denied. Only an admin-managed OpenCode config (its
    managed folder, the remote config of an OpenCode organisation account, merged after this one) keeps the last word;

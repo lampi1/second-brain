@@ -274,10 +274,28 @@ describe('OpenCode permission config', () => {
     fs.symlinkSync(path.join(root, 'linked'), path.join(oc, 'agents'), 'junction');
     taken = keys();
     expect(['rEaD', 'eDiT', 'tAsK', 'wEbFeTcH'].map(taken)).toEqual([true, true, true, true]);
+    // an escaped line break of a lone CR, or followed by blank lines, joins the key too
+    expect(['? "bA\\\rsH"', '? "bA\\\n\n  \r\n sH"', '? "bA\\\r\n\tsH"'].map(t => keyIn(t, 'bAsH'))).toEqual([true, true, true]);
     // JavaScript front matter (OpenCode runs it) or a config that reads the app's own config: the chat does not start
     fs.writeFileSync(path.join(oc, 'agent', 'js.md'), '---js\n{ permission: { ["b" + "AsH"]: "allow" } }\n---\n');
     expect(() => keys()).toThrow(/front matter/);
     fs.rmSync(path.join(oc, 'agent', 'js.md'));
+    // a YAML tag that builds a key the text does not show (`!!binary YkFzSA==` is `bAsH`), or one a directive renames
+    for (const [file, body] of [['bin.md', '---\npermission:\n  ? !!binary YkFzSA==\n  : allow\n---\n'], ['tag.md', '---\n%TAG !b! tag:yaml.org,2002:bin\nx: 1\n---\n'],
+      ['verbatim.md', '---\n? !<tag:yaml.org,2002:binary> YkFzSA==\n: allow\n---\n']]) {
+      fs.writeFileSync(path.join(oc, 'agents', file!), body!);
+      expect(() => keys(), file).toThrow(/YAML tag/);
+      fs.rmSync(path.join(oc, 'agents', file!));
+    }
+    // the prompt below the front matter is not YAML: its `!` words do not stop the chat
+    fs.writeFileSync(path.join(oc, 'agents', 'prose.md'), '---\ndescription: x\n---\ntype !<history>\n!%d is printf\nNever commit !binary files.\n%TAG\n');
+    expect(() => keys()).not.toThrow();
+    fs.rmSync(path.join(oc, 'agents', 'prose.md'));
+    // nor does a local `!binary` (an unknown tag, never the binary type) named in the front matter's text
+    fs.writeFileSync(path.join(oc, 'agents', 'note.md'), '---\ndescription: "Avoid !binary files" # !binary\nprompt: |\n  skip !binary and !%d\n---\n');
+    expect(() => keys()).not.toThrow();
+    fs.rmSync(path.join(oc, 'agents', 'note.md'));
+    expect(keyIn('[permission.bAsH]\npermission.eDiT = "allow"', 'bAsH') && keyIn('permission.eDiT = 1', 'eDiT')).toBe(true); // TOML dotted keys
     fs.writeFileSync(path.join(oc, 'opencode.jsonc'), '{ "x": {env:OPENCODE_CONFIG_CONTENT} }');
     expect(() => keys()).toThrow(/OPENCODE_CONFIG_CONTENT/);
   });
@@ -295,7 +313,7 @@ describe('OpenCode permission config', () => {
     const cwd = path.join(tmp, 'repo');
     const files = claudeSettingsFiles(cwd, brain, { CLAUDE_CONFIG_DIR: path.join(home, '.claude') });
     expect(files).toEqual([userFile, brainFile, path.join(cwd, '.claude', 'settings.json'), path.join(cwd, '.claude', 'settings.local.json')].map(f => path.resolve(f)));
-    const env = openCodeEnv(artisan, cwd, brain, { CLAUDE_CONFIG_DIR: path.join(home, '.claude'), USERPROFILE: home, HOME: home, OPENCODE_TEST_MANAGED_CONFIG_DIR: 'x', OPENCODE_PERMISSION: '{"bash":"allow"}', opencode_permission: '{}', OPENCODE_CONFIG_CONTENT: '{"model":"m"}' });
+    const env = openCodeEnv(artisan, cwd, brain, { CLAUDE_CONFIG_DIR: path.join(home, '.claude'), USERPROFILE: home, HOME: home, OPENCODE_TEST_MANAGED_CONFIG_DIR: 'x', OPENCODE_TEST_HOME: 'y', OPENCODE_PERMISSION: '{"bash":"allow"}', opencode_permission: '{}', OPENCODE_CONFIG_CONTENT: '{"model":"m"}' });
     const cfg = JSON.parse(env.OPENCODE_CONFIG_CONTENT ?? '{}') as { model: string; permission: { bAsH: Record<string, string> } };
     expect(cfg.permission.bAsH['*brain-wipe*']).toBe('deny');
     expect(cfg.permission.bAsH[`*${SCRIPT}*`]).toBe('deny');
@@ -304,5 +322,6 @@ describe('OpenCode permission config', () => {
     expect(env).toHaveProperty('OPENCODE_PERMISSION', undefined);
     expect(env).toHaveProperty('opencode_permission', undefined);
     expect(env).toHaveProperty('OPENCODE_TEST_MANAGED_CONFIG_DIR', undefined); // it moves the folder read after the app's
+    expect(env).toHaveProperty('OPENCODE_TEST_HOME', undefined);
   });
 });

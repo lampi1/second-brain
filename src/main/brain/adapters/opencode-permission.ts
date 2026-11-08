@@ -288,7 +288,7 @@ export function openCodeConfigContent(role: OpenCodeRole, claude: ClaudeRules, e
   });
 }
 
-const KEY_CHAR = 'A-Za-z0-9_*?.\\-';
+const KEY_CHAR = 'A-Za-z0-9_*?\\-'; // no `.`: a TOML dotted key (`permission.bash`) is two keys
 const NOT_KEY = new RegExp(`[^${KEY_CHAR}]+`);
 const PLACEHOLDER = /\{(?:env|file):[^}]*\}/g;
 
@@ -299,7 +299,8 @@ function keyTest(texts: Iterable<string>): (key: string) => boolean {
   const words = new Set<string>();
   const around: Array<[string, string]> = [];
   for (const text of texts) {
-    const plain = text.replace(/\\\r?\n[ \t]*/g, '').replace(/\\U([0-9a-fA-F]{8})|\\u([0-9a-fA-F]{4})|\\x([0-9a-fA-F]{2})/g,
+    // an escaped line break (LF, CR or CRLF) drops every space and blank line after it, as js-yaml reads it
+    const plain = text.replace(/\\(?:\r\n?|\n)[ \t\r\n]*/g, '').replace(/\\U([0-9a-fA-F]{8})|\\u([0-9a-fA-F]{4})|\\x([0-9a-fA-F]{2})/g,
       (_, big: string | undefined, u: string | undefined, x: string | undefined) => {
         const n = parseInt(big ?? u ?? x ?? '0', 16);
         return n <= 0x10ffff ? String.fromCodePoint(n) : '';
@@ -393,27 +394,39 @@ export function openCodeConfigKeys(cwd: string, env: NodeJS.ProcessEnv = process
   for (const f of new Set(agents)) {
     const text = read(f);
     if (text === null) continue;
-    const lang = /^﻿?---([^\r\n-][^\r\n]*)?\r?\n/.exec(text)?.[1]?.trim().toLowerCase() ?? '';
+    // the front matter, as gray-matter cuts it: from a first line `---` (not `----`) to the next `\n---`, or the end
+    const body = text.replace(/^\p{Cf}/u, '');
+    const open = /^---(?!-)([^\r\n]*)\r?\n/.exec(body);
+    const close = open ? body.indexOf('\n---', open[0].length - 1) : -1;
+    const front = open ? body.slice(open[0].length, close < 0 ? body.length : close) : '';
+    const lang = open?.[1]?.trim().toLowerCase() ?? '';
     if (!['', 'yaml', 'yml', 'json'].includes(lang)) unreadable(`${f} has "${lang}" front matter`);
+    // a YAML tag can build a key the text does not show (`!!binary YmFzaA==` reads as `bash`); only the `!!` handle and
+    // a verbatim `!<…>` reach the binary type (a local `!binary` is an unknown tag, so ordinary text naming it loads)
+    const tag = [...front.matchAll(/(?:^|[\s[\]{},])(![^\s[\]{},]*)/g)].map(m => m[1]!)
+      .find(t => t.startsWith('!<') || (t.startsWith('!!') && (/binary/i.test(t) || t.includes('%'))));
+    if (tag || /^%TAG/m.test(front)) unreadable(`${f} has the YAML tag ${tag ?? '%TAG'}`);
     texts.push(text);
   }
   return keyTest(texts);
 }
 
 /** The environment one OpenCode chat starts with: its config, built from its role and the Claude rules of its folders.
- *  OPENCODE_PERMISSION (merged by OpenCode after every config) and OPENCODE_TEST_MANAGED_CONFIG_DIR (moves the managed
- *  folder, read after the app's config) are dropped from the app's own environment (undefined: the spawn leaves them
- *  out), in any spelling (Windows names have no case). */
+ *  OPENCODE_PERMISSION (merged by OpenCode after every config), OPENCODE_TEST_MANAGED_CONFIG_DIR (moves the managed
+ *  folder, read after the app's config) and OPENCODE_TEST_HOME (moves `~/.opencode` away from the folder read here) are
+ *  dropped from the app's own environment (undefined: the spawn leaves them out), in any spelling (Windows names have
+ *  no case). */
 export function openCodeEnv(role: OpenCodeRole, cwd: string, brainRoot: string | null, env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const claude = readClaudeRules(claudeSettingsFiles(cwd, brainRoot, env));
   const named = (n: string): string[] => Object.keys(env).filter(k => k.toUpperCase() === n);
   const own = named('OPENCODE_CONFIG_CONTENT').map(k => env[k]).find(v => v);
-  const dropped = ['OPENCODE_PERMISSION', 'OPENCODE_CONFIG_CONTENT', 'OPENCODE_TEST_MANAGED_CONFIG_DIR'];
+  const dropped = ['OPENCODE_PERMISSION', 'OPENCODE_CONFIG_CONTENT', 'OPENCODE_TEST_MANAGED_CONFIG_DIR', 'OPENCODE_TEST_HOME'];
   const childEnv = Object.fromEntries(Object.entries(env).filter(([k]) => !dropped.includes(k.toUpperCase())));
   return {
     ...Object.fromEntries(dropped.flatMap(named).map(k => [k, undefined])),
     OPENCODE_CONFIG_CONTENT: openCodeConfigContent(role, claude, own, openCodeConfigKeys(cwd, childEnv)),
     OPENCODE_PERMISSION: undefined,
     OPENCODE_TEST_MANAGED_CONFIG_DIR: undefined,
+    OPENCODE_TEST_HOME: undefined,
   };
 }
