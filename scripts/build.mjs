@@ -22,6 +22,8 @@ await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/index.ts')], 
   banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
 
 // Read-only page and estimate calculations, started lazily on the first request.
+await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/agent-runtime/entry.ts')], outfile: path.join(root, 'out/main/agent-runtime.js'), format: 'esm', external: ['electron'],
+  banner: { js: "import { createRequire as __cr } from 'node:module'; const require = __cr(import.meta.url);" } });
 await esbuild({ ...common, entryPoints: [path.join(root, 'src/main/read-worker.ts')], outfile: path.join(root, 'out/main/read-worker.js'), format: 'esm' });
 
 // the hybrid search's worker thread (src/main/search/hybrid/worker.ts), next to the main bundle

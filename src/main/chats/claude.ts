@@ -28,7 +28,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { runtimePerformance } from '../runtime-performance';
+import { providerWrite } from '../agent-runtime/transport-timing';
 import type { Answer, ChatItem, ChatState, Effort, ImageAttachment, PendingRequest, PermissionMode } from '../../shared/contract';
 import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { errText, log } from '../log';
@@ -245,6 +245,7 @@ export class ClaudeSession implements HarnessSession {
   private exitedRoot: Root | null = null;
   private killed = false;
   private exited = false;
+  private brokerGeneration = 0;
   private procExited = false;         // 'exit' came ('close' also waits for the pipes, which a leftover may hold)
   private job: number | null = null;  // its Job Object (jobguard.ts)
   private jobKilled = false;          // its tree was terminated through the job
@@ -466,6 +467,7 @@ export class ClaudeSession implements HarnessSession {
   }
 
   async interrupt(opts?: { keepQueued?: boolean; byUser?: boolean }): Promise<void> {
+    this.brokerGeneration++;
     if (this.exited || !this.proc) return;
     log.info('chats', 'interrupt', { chat: this.opts.chatId, data: { sendNow: !!opts?.keepQueued } });
     // only a turn in flight ends with a result: an interrupt on an idle CLI must not mark the next real failure
@@ -530,6 +532,7 @@ export class ClaudeSession implements HarnessSession {
   }
 
   close(graceMs = CLOSE_GRACE_MS, keepChildren = false): Promise<void> {
+    this.brokerGeneration++;
     if (this.exited || !this.proc) { this.markExited(); return this.exitPromise; }
     // a real close already asked wins over a later keeping one (a reopen after the turn while ✕ waits)
     this.keepChildren = this.closing ? this.keepChildren && keepChildren : keepChildren;
@@ -569,6 +572,7 @@ export class ClaudeSession implements HarnessSession {
 
   /** Kills the process tree without blocking; 'close' reports the exit. App quit uses ChatManager.killAll (sync). */
   killNow(): void {
+    this.brokerGeneration++;
     const p = this.proc;
     if (this.exited || !p || this.killed) return;
     this.closing = true;
@@ -590,7 +594,7 @@ export class ClaudeSession implements HarnessSession {
     const p = this.proc;
     if (!p || this.exited || !p.stdin.writable) throw new Error('La sessione non è attiva.');
     p.stdin.write(`${JSON.stringify(obj)}\n`);
-    if (obj.type === 'user') runtimePerformance.providerWrite(this.opts.chatId);
+    if (obj.type === 'user') providerWrite(this.opts.chatId);
   }
 
   /** A control request; resolves with the success payload (`response.response`). */
@@ -758,7 +762,7 @@ export class ClaudeSession implements HarnessSession {
 
   private onMessage(m: Obj): void {
     switch (m.type) {
-      case 'control_request': return this.onControlRequest(m);
+      case 'control_request': void this.onControlRequest(m).catch(() => this.killNow()); return;
       case 'control_response': return this.onControlResponse(o(m.response));
       case 'control_cancel_request': {
         const id = s(m.request_id);
@@ -788,7 +792,8 @@ export class ClaudeSession implements HarnessSession {
     drift('claude', this.cliVersion, kind, what, sample, this.opts.chatId);
   }
 
-  private onControlRequest(m: Obj): void {
+  private async onControlRequest(m: Obj): Promise<void> {
+    const generation = this.brokerGeneration;
     const id = s(m.request_id);
     const r = o(m.request);
     if (r.subtype === 'hook_callback' && s(r.callback_id) === WRITE_BARRIER_HOOK) return this.onWriteBarrier(id, o(r.input));
@@ -805,7 +810,8 @@ export class ClaudeSession implements HarnessSession {
     const tool = s(r.tool_name);
     const input = o(r.input);
     const question = tool === 'AskUserQuestion';
-    if (question && this.refuseNotYesNo(id, input, s(r.tool_use_id), m)) return;
+    if (question && await this.refuseNotYesNo(id, input, s(r.tool_use_id), m)) return;
+    if (this.exited || this.procExited || generation !== this.brokerGeneration) return;
     const noAlways = r.suppress_always_allow_rule === true;
     // a suggested mode above the agent's ceiling is never offered ("Sempre" would raise it before the manager could react)
     const suggestions = arr(r.permission_suggestions).filter(x => o(x).type !== 'setMode' || !suggestedAbove(o(x).mode, this.opts.ceiling ?? null));
@@ -830,17 +836,19 @@ export class ClaudeSession implements HarnessSession {
 
   /** A question that is not yes/no goes back to the agent with how to ask (ADR 0135), at most YESNO_RETRIES times in a
    *  row per chat: then it is shown as it is, so a chat that cannot comply never stays stuck. */
-  private refuseNotYesNo(id: string, input: Obj, toolUseId: string, m: Obj): boolean {
+  private async refuseNotYesNo(id: string, input: Obj, toolUseId: string, m: Obj): Promise<boolean> {
+    const generation = this.brokerGeneration;
     if (!(this.opts.yesNo ?? yesNoGateOn(process.env))) return false;
     const qs = questionsFrom(input);
     // nothing readable (the CLI's input changed shape): shown as it is, never refused for the app's own parse
     if (!qs.length) { this.yesNoRefused = 0; return false; }
     const yesNo = yesNoShape(qs);
     // a yes/no question without its brief (ADR 0150): a moment for a show_ui called in parallel, then sent back
-    const noBrief = yesNo && !this.briefOff && !!this.opts.briefReady && !this.opts.briefReady();
+    const noBrief = yesNo && !this.briefOff && !!this.opts.briefReady && !await this.opts.briefReady();
+    if (generation !== this.brokerGeneration || this.exited || this.procExited) return true;
     if (noBrief && !this.briefWaited.has(id) && this.yesNoRefused < YESNO_RETRIES) {
       this.briefWaited.add(id);
-      setTimeout(() => { if (!this.exited && !this.procExited && this.briefWaited.has(id)) this.onControlRequest(m); this.briefWaited.delete(id); }, BRIEF_GRACE_MS).unref?.();
+      setTimeout(() => { if (!this.exited && !this.procExited && this.briefWaited.has(id)) void this.onControlRequest(m).catch(() => this.killNow()); this.briefWaited.delete(id); }, BRIEF_GRACE_MS).unref?.();
       return true;
     }
     if (yesNo && !noBrief) { this.yesNoRefused = 0; return false; }
@@ -934,16 +942,21 @@ export class ClaudeSession implements HarnessSession {
     });
   }
 
-  private onPreToolUse(id: string, input: Obj): void {
+  private async onPreToolUse(id: string, input: Obj): Promise<void> {
+    const generation = this.brokerGeneration;
     let response: Obj = {};
     try {
       const tool = s(input.tool_name);
-      const v = input.hook_event_name === 'PreToolUse' && tool ? this.opts.preToolUse!.decide({ tool, input: input.tool_input, ...(s(input.agent_id) ? { agentId: s(input.agent_id) } : {}) }) : null;
+      const v = input.hook_event_name === 'PreToolUse' && tool ? await this.opts.preToolUse!.decide({ tool, input: input.tool_input, ...(s(input.agent_id) ? { agentId: s(input.agent_id) } : {}) }) : null;
+      if (generation !== this.brokerGeneration || this.exited || this.procExited) return;
       if (v) {
         response = { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: v.deny } };
         log.info('chats', 'pre-tool hook refused', { chat: this.opts.chatId, data: { tool } });
       }
-    } catch (e) { log.warn('chats', 'pre-tool hook failed: the call goes on', { chat: this.opts.chatId, cause: errText(e), hint: 'see agents/orchestrator-budget.ts' }); }
+    } catch (e) {
+      response = { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'Permission broker unavailable; the action was not authorized.' } };
+      log.warn('chats', 'pre-tool hook failed: call refused', { chat: this.opts.chatId, cause: errText(e), hint: 'see agents/orchestrator-budget.ts' });
+    }
     try { this.write({ type: 'control_response', response: { subtype: 'success', request_id: id, response } }); } catch { /* gone */ }
   }
 

@@ -13,7 +13,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { runtimePerformance } from '../runtime-performance';
+import { providerWrite } from '../agent-runtime/transport-timing';
 import type { Answer, ChatItem, ChatState, Effort, ImageAttachment, PermissionMode } from '../../shared/contract';
 import { errText, log } from '../log';
 import type { Root } from './proctree';
@@ -35,7 +35,9 @@ export interface ApiOptions extends SessionOptions {
   /** on resume, show the saved past (a chat restored after a restart has no items) */
   showReplay?: boolean;
   /** a model's list prices in USD per million tokens (the model may change between turns); null or absent = unknown */
-  pricesOf?: (model: string) => ListPrice | null;
+  pricesOf?: (model: string) => ListPrice | null | Promise<ListPrice | null>;
+  /** Utility host only: the main-owned broker pins endpoint/headers and never gives the host the key. */
+  authenticatedRequest?: (body: string, signal: AbortSignal) => Promise<Response>;
   /** the answer's token cap (Anthropic requires one) */
   maxTokens?: number;
   /** ms to wait for the response headers and then for the first event (tests shorten it) */
@@ -204,7 +206,7 @@ export class ApiSession implements HarnessSession {
     if (error) this.sysCode(error.code, error.params, 'error');
     else if (interrupted) this.sysCode(turn.sendNow ? 'stoppedByYouResend' : 'stoppedByYou', undefined, 'info');
     else if (turn.stop === 'app') this.sysCode('interrupted', undefined, 'info');
-    const cost = this.costOf(usage, model);
+    const cost = await this.costOf(usage, model);
     this.sink.item({ kind: 'result', id: nextId('r'), at: Date.now(), costUsd: cost ?? 0, durationMs: Date.now() - t0, turns: 1, isError: !!error || turn.stop === 'app', ...(interrupted ? { interrupted } : {}) }, false);
     const context = usage.input + usage.cacheRead + usage.cacheWrite + usage.output;
     const turnTokens = tokenUsage(usage.input, usage.cacheRead, usage.cacheWrite, usage.output);
@@ -219,7 +221,7 @@ export class ApiSession implements HarnessSession {
   private async request(turn: NonNullable<ApiSession['turn']>, model: string | null, onText: (t: string) => void, usage: Usage): Promise<void> {
     let key: string | null = null;
     try { key = this.opts.apiKey(); } catch (e) { log.warn('chats', 'api key not readable', { chat: this.opts.chatId, data: errText(e), cause: 'the key store failed to decrypt', hint: 'set the key again in Settings → Motori' }); }
-    if (!key) throw new ApiError('apiMissingKey');
+    if (!key && !this.opts.authenticatedRequest) throw new ApiError('apiMissingKey');
     if (!model) throw new ApiError('apiMissingModel');
     const anthropic = this.opts.protocol === 'anthropic';
     const base = this.url!.href.replace(/\/+$/, '');
@@ -229,23 +231,24 @@ export class ApiSession implements HarnessSession {
       ? { model, max_tokens: maxTokens, stream: true, messages }
       : { model, stream: true, stream_options: { include_usage: true }, messages, ...(this.opts.maxTokens ? { max_tokens: maxTokens } : {}) };
     const headers: Record<string, string> = { 'content-type': 'application/json', accept: 'text/event-stream' };
-    if (anthropic) { headers['x-api-key'] = key; headers['anthropic-version'] = '2023-06-01'; } else headers.authorization = `Bearer ${key}`;
+    if (anthropic) { headers['x-api-key'] = key ?? ''; headers['anthropic-version'] = '2023-06-01'; } else headers.authorization = `Bearer ${key}`;
     const ms = this.opts.firstByteMs ?? FIRST_BYTE_MS;
     let timer: NodeJS.Timeout | null = setTimeout(() => { turn.stop = 'timeout'; turn.ctrl.abort(); }, ms);
     const firstByte = () => { if (timer) { clearTimeout(timer); timer = null; } };
+    let reader: ReadableStreamDefaultReader<string> | null = null;
     try {
-      const response = (this.opts.fetchImpl ?? fetch)(`${base}${anthropic ? '/messages' : '/chat/completions'}`, {
+      const response = this.opts.authenticatedRequest ? this.opts.authenticatedRequest(JSON.stringify(body), turn.ctrl.signal) : (this.opts.fetchImpl ?? fetch)(`${base}${anthropic ? '/messages' : '/chat/completions'}`, {
         method: 'POST', headers, body: JSON.stringify(body), redirect: 'error', signal: turn.ctrl.signal,
       });
-      runtimePerformance.providerWrite(this.opts.chatId);
+      providerWrite(this.opts.chatId);
       const res = await response;
       if (!res.ok) throw new HttpError(res.status, await res.text().catch(() => ''));
       if (!res.body) throw new ApiError('apiNoBody', { host: this.host });
-      const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
+      reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
       // an abort does not always reject a read already waiting on the body: race it, and let go of the body
       const signal = turn.ctrl.signal;
       const aborted = new Promise<never>((_, reject) => {
-        const stop = () => { reader.cancel().catch(() => {}); reject(new Error('aborted')); };
+        const stop = () => { void reader?.cancel().catch(() => {}); reject(new Error('aborted')); };
         if (signal.aborted) stop(); else signal.addEventListener('abort', stop, { once: true });
       });
       aborted.catch(() => {});
@@ -262,7 +265,7 @@ export class ApiSession implements HarnessSession {
           if (anthropic ? this.anthropicEvent(ev, onText, usage) : this.openaiEvent(ev, onText, usage)) return;
         }
       }
-    } finally { firstByte(); }
+    } finally { firstByte(); void reader?.cancel().catch(() => {}); }
   }
 
   /** true = the stream is over */
@@ -303,8 +306,8 @@ export class ApiSession implements HarnessSession {
   }
 
   /** USD at list price (usageCost); null = no prices. */
-  private costOf(u: Usage, model: string | null): number | null {
-    const p = model ? this.opts.pricesOf?.(model) : null;
+  private async costOf(u: Usage, model: string | null): Promise<number | null> {
+    const p = model ? await this.opts.pricesOf?.(model) : null;
     return p ? usageCost(u, p) : null;
   }
 

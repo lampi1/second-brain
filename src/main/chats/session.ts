@@ -112,7 +112,7 @@ export function tokenUsage(input: unknown, cacheRead: unknown, cacheWrite: unkno
 /** Options common to every harness. */
 export interface SessionOptions {
   /** a brief (show_ui brief, next-ask) waits for this chat's next question (ADR 0150); absent = never asked for */
-  briefReady?: () => boolean;
+  briefReady?: () => boolean | Promise<boolean>;
   /** Main-generated immutable agent skill package, never supplied by the renderer. */
   agentAssets?: { pluginDir: string; skillRoot: string };
   chatId: string;
@@ -173,7 +173,7 @@ export interface PreToolCall { tool: string; input: unknown; agentId?: string }
 /** An in-process PreToolUse hook: decide() refuses a call with a message for the model (null = no say); turnEnded()
  *  runs when a turn's result arrives. */
 export interface PreToolHook {
-  decide(call: PreToolCall): { deny: string } | null;
+  decide(call: PreToolCall): { deny: string } | null | Promise<{ deny: string } | null>;
   turnEnded(): void;
 }
 

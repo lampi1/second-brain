@@ -50,7 +50,7 @@ import fs from 'node:fs';
 import { acpAppTool, APP_UI_TOOLS, cursorAppPermissions } from './app-tool-approval';
 import os from 'node:os';
 import path from 'node:path';
-import { runtimePerformance } from '../runtime-performance';
+import { providerWrite } from '../agent-runtime/transport-timing';
 import type { Answer, ChatItem, ChatState, CursorReasoning, Effort, ImageAttachment, PendingRequest, PermissionMode, Question } from '../../shared/contract';
 import { missFragment, sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { errText, log } from '../log';
@@ -519,6 +519,7 @@ export class AcpSession implements HarnessSession {
   private spawnedAt = 0;
   private killed = false;
   private exited = false;
+  private brokerGeneration = 0;
   private procExited = false;         // 'exit' came ('close' also waits for the pipes, which a leftover may hold)
   private job: number | null = null;  // its Job Object (jobguard.ts)
   private jobKilled = false;          // its tree was terminated through the job
@@ -1069,17 +1070,19 @@ export class AcpSession implements HarnessSession {
    *  the same brief gate as cursor/ask_question (ADR 0150: a moment for a show_ui sent in parallel, then sent back at
    *  most YESNO_RETRIES times in a row). null = shown; a string = refused, with how to ask. */
   async askUser(q: AppAsk): Promise<string | null> {
+    const generation = this.brokerGeneration;
     if (!this.opts.appAsk) return 'ask_user: this engine has its own question tool; use it.';
     // an engine being restarted (it ignored a stop) or closed asks nothing: its answer would go nowhere
-    const gone = () => this.exited || !this.proc || this.wedged || this.closing;
+    const gone = () => this.exited || !this.proc || this.wedged || this.closing || generation !== this.brokerGeneration;
     if (gone()) throw new Error(NOT_ACTIVE);
     const text = q.question.trim().slice(0, 1000);
     if (!text) return 'ask_user: write the question.';
     const gate = this.opts.yesNo ?? yesNoGateOn(process.env);
-    const briefMissing = () => gate && !this.briefOff && !!this.opts.briefReady && !this.opts.briefReady();
-    if (briefMissing() && this.yesNoRefused < YESNO_RETRIES) await new Promise(r => setTimeout(r, BRIEF_GRACE_MS));
+    const briefMissing = async () => gate && !this.briefOff && !!this.opts.briefReady && !await this.opts.briefReady();
+    if (await briefMissing() && this.yesNoRefused < YESNO_RETRIES) await new Promise(r => setTimeout(r, BRIEF_GRACE_MS));
     if (gone()) throw new Error(NOT_ACTIVE);
-    const noBrief = briefMissing();
+    const noBrief = await briefMissing();
+    if (gone()) throw new Error(NOT_ACTIVE);
     if (noBrief && this.yesNoRefused >= YESNO_RETRIES) this.briefOff = true;
     if (noBrief && this.yesNoRefused < YESNO_RETRIES) {
       this.yesNoRefused++;
@@ -1122,6 +1125,7 @@ export class AcpSession implements HarnessSession {
   /** Stop: session/cancel; every open panel is answered "cancelled" (ACP requires it) and queued messages are dropped,
    *  unless keepQueued ("Invia subito"): then they were already sent by the user and run next, as drain goes on. */
   async interrupt(opts?: { keepQueued?: boolean; byUser?: boolean }): Promise<void> {
+    this.brokerGeneration++;
     if (this.exited || !this.proc) return;
     log.info('chats', 'acp cancel', { chat: this.opts.chatId, data: { engine: this.engine, queued: this.queue.length, open: this.asks.size, keepQueued: !!opts?.keepQueued } });
     this.cancelRetry('netRetryCancelledStopped');
@@ -1202,6 +1206,7 @@ export class AcpSession implements HarnessSession {
   async usage(): Promise<unknown> { return null; }
 
   close(graceMs = CLOSE_GRACE_MS, keepChildren = false): Promise<void> {
+    this.brokerGeneration++;
     if (this.exited || !this.proc) { this.markExited(); return this.exitPromise; }
     // a real close already asked wins over a later keeping one (a reopen after the turn while ✕ waits)
     this.keepChildren = this.closing ? this.keepChildren && keepChildren : keepChildren;
@@ -1239,6 +1244,7 @@ export class AcpSession implements HarnessSession {
   }
 
   killNow(): void {
+    this.brokerGeneration++;
     const p = this.proc;
     if (this.exited || !p || this.killed) return;
     this.closing = true;
@@ -1260,7 +1266,7 @@ export class AcpSession implements HarnessSession {
     const p = this.proc;
     if (!p || this.exited || !p.stdin.writable) throw new Error(NOT_ACTIVE);
     p.stdin.write(`${JSON.stringify(obj)}\n`);
-    if (obj.method === 'session/prompt') runtimePerformance.providerWrite(this.opts.chatId);
+    if (obj.method === 'session/prompt') providerWrite(this.opts.chatId);
   }
 
   /** A request to the agent; timeoutMs 0 = none (a prompt turn may last as long as it needs). */
@@ -1333,11 +1339,12 @@ export class AcpSession implements HarnessSession {
       } else rpc.resolve(o(m.result));
       return;
     }
-    if (method && hasId) return this.onAgentRequest(m.id as number | string, method, o(m.params));
+    if (method && hasId) { void this.onAgentRequest(m.id as number | string, method, o(m.params)).catch(() => this.killNow()); return; }
     if (method) return this.onNotification(method, o(m.params));
   }
 
-  private onAgentRequest(id: number | string, method: string, p: Obj): void {
+  private async onAgentRequest(id: number | string, method: string, p: Obj): Promise<void> {
+    const generation = this.brokerGeneration;
     // an engine being restarted after an ignored stop asks nobody: its turn is already over on screen
     if (this.wedged) return this.respond(id, { outcome: { outcome: 'cancelled' } });
     const at = Date.now();
@@ -1382,13 +1389,14 @@ export class AcpSession implements HarnessSession {
       // skipped with how to ask, at most YESNO_RETRIES times in a row, then shown as it is
       const gate = (this.opts.yesNo ?? yesNoGateOn(process.env)) && questions.length > 0;
       const yesNo = yesNoShape(questions);
-      const noBrief = gate && yesNo && !this.briefOff && !!this.opts.briefReady && !this.opts.briefReady();
+      const noBrief = gate && yesNo && !this.briefOff && !!this.opts.briefReady && !await this.opts.briefReady();
+      if (generation !== this.brokerGeneration || this.exited || this.procExited) return;
       if (noBrief && !this.briefWaited.has(id) && this.yesNoRefused < YESNO_RETRIES) {
         const timer = setTimeout(() => {
           const w = this.briefWaited.get(id);
           if (!w) return;
           w.timer = null;
-          if (!this.exited && !this.procExited) this.onAgentRequest(id, method, p);
+          if (!this.exited && !this.procExited) void this.onAgentRequest(id, method, p).catch(() => this.killNow());
           this.briefWaited.delete(id);
         }, BRIEF_GRACE_MS);
         timer.unref?.();

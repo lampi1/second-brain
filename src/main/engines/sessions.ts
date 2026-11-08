@@ -7,6 +7,7 @@
 import path from 'node:path';
 import fs from 'node:fs';
 import { runtimePerformance } from '../runtime-performance';
+import { runtimeAdapter, type PreparedAdapter } from '../agent-runtime/adapter-contract';
 import type { CursorReasoning, ModelsSeen } from '../../shared/contract';
 import { AcpSession, type AcpOptions } from '../chats/acp';
 import { ApiSession } from '../chats/api';
@@ -69,14 +70,14 @@ function startSession(engine: EngineDef, opts: SessionOptions, sink: SessionSink
       // chat takes the brain without its skills and its launch's own plugin (only the skills it was given)
       const launch = opts.readOnly ? null : claudeLaunch(ctx.userData, opts.env?.SB_ROUTINE_PACKAGE || opts.env?.SB_ROUTINE_BROWSER ? { domains: [], on: false } : undefined, { skills: !opts.agentAssets });
       const brain = launch ? [...launch.args, ...(opts.agentAssets ? ['--plugin-dir', opts.agentAssets.pluginDir] : [])] : [];
-      return new ClaudeSession({ ...opts, ...(brain.length ? { extraArgs: [...brain, ...(opts.extraArgs ?? [])] } : {}), ...(launch?.productHooks ? { productHooks: launch.productHooks } : {}), ...(ctx.path ? { claudePath: ctx.path } : {}) }, sink);
+      return prepared({ kind: 'claude', options: { ...opts, ...(brain.length ? { extraArgs: [...brain, ...(opts.extraArgs ?? [])] } : {}), ...(launch?.productHooks ? { productHooks: launch.productHooks } : {}), ...(ctx.path ? { claudePath: ctx.path } : {}) } }, sink);
     }
     case 'codex': {
       const command = engine.command ?? engine.id;
       const key = engine.keyEnv ? boundKey() : null;
       const agentPolicy = opts.toolPolicy || opts.ceiling ? { tools: opts.toolPolicy ?? null, ceiling: opts.ceiling ?? null } : null;
       const launch = codexLaunch({ ...(opts.env?.SB_ROUTINE_PACKAGE ? { domains: [], brain: false } : {}), cwd: opts.cwd, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, extMcp: ctx.extMcp ?? [], readOnly: opts.readOnly, chatId: opts.chatId, agentPolicy });
-      return new CodexSession({
+      return prepared({ kind: 'codex', options: {
         ...opts, mcpConfig: null, engineId: engine.id, label: engine.label, command, args: engine.args ?? ['app-server'],
         configArgs: launch.configArgs, developerInstructions: launch.developerInstructions, skillRoots: opts.readOnly ? [] : opts.agentAssets ? [opts.agentAssets.skillRoot] : launch.skillRoots,
         approvalPolicy: launch.approvalPolicy, sandbox: launch.sandbox,
@@ -84,7 +85,7 @@ function startSession(engine: EngineDef, opts: SessionOptions, sink: SessionSink
         showReplay: ctx.showReplay, loginCommand: engine.login.length ? [command, ...engine.login].join(' ') : null,
         ...(key && engine.keyEnv ? { env: { ...opts.env, [engine.keyEnv]: key } } : {}),
         ...(ctx.path ? { pathOverride: ctx.path } : {}), ...(ctx.appVersion ? { appVersion: ctx.appVersion } : {}),
-      }, sink);
+      } }, sink);
     }
     case 'acp': {
       const command = engine.command ?? engine.id;
@@ -93,7 +94,7 @@ function startSession(engine: EngineDef, opts: SessionOptions, sink: SessionSink
         ? openCodeEnv({ tools: opts.toolPolicy ?? null, ceiling: opts.ceiling ?? null, readOnly: opts.readOnly }, opts.cwd, ctx.brainRoot ?? null, { ...process.env, ...opts.env })
         : null;
       const env = key && engine.keyEnv || perms ? { ...opts.env, ...perms, ...(key && engine.keyEnv ? { [engine.keyEnv]: key } : {}) } : null;
-      return new AcpSession({
+      return prepared({ kind: 'acp', options: {
         brainInstructions: opts.env?.SB_ROUTINE_PACKAGE ? null : acpRules(opts.readOnly),
         ...opts, mcpConfig: null, mcpUrl: ctx.mcpUrl, appMcpUrl: ctx.appMcpUrl, extMcp: opts.readOnly ? [] : ctx.extMcp ?? [], showReplay: ctx.showReplay,
         engineId: engine.id, label: engine.label, args: engine.args ?? [], acpCommand: command,
@@ -104,14 +105,25 @@ function startSession(engine: EngineDef, opts: SessionOptions, sink: SessionSink
         ...(env ? { env } : {}),
         ...(engine.cursorExtras ? cursorOptions(engine, ctx, opts.readOnly ? opts.chatId : null) : {}),
         ...(ctx.path ? { pathOverride: ctx.path } : {}), ...(ctx.appVersion ? { appVersion: ctx.appVersion } : {}),
-      }, sink);
+      } }, sink);
     }
     case 'api':
-      return new ApiSession({
+      return prepared({ kind: 'api', options: {
         ...opts, engineId: engine.id, protocol: engine.protocol ?? 'openai', baseUrl: engine.baseUrl ?? '', apiKey: boundKey,
         historyFile: path.join(ctx.userData, 'api-chats', `${opts.chatId}.json`), showReplay: ctx.showReplay,
         pricesOf: model => listPrice(priceEnginesOf(engine), model),
-      }, sink);
+      } }, sink);
+  }
+}
+
+function prepared(launch: PreparedAdapter, sink: SessionSink): HarnessSession {
+  const remote = runtimeAdapter(launch, sink);
+  if (remote) return remote;
+  switch (launch.kind) {
+    case 'claude': return new ClaudeSession(launch.options, sink);
+    case 'acp': return new AcpSession(launch.options, sink);
+    case 'codex': return new CodexSession(launch.options, sink);
+    case 'api': return new ApiSession(launch.options, sink);
   }
 }
 
