@@ -64,6 +64,12 @@ the non-e2e parts of `npm run check` once on main (typecheck, lint, all unit tes
 main. A unit test red only under machine load is not rerun: it is removed (owner, 2026-11-08). The e2e suite stays in
 the repo and runs only when the owner asks; its verdict is read against `test/e2e/known-red.json` (ADR 0198).
 
+No test depends on real time or machine load: no sleeps or `setTimeout` to wait, no tight step timeouts, no
+assertions on elapsed wall-clock time. Use fake timers or wait for an event (`waitFor` without its own deadline); a
+check that something does not happen waits for a later event or uses fake timers. A test that goes red under load is
+deleted or made deterministic, never rerun to see if it passes; older tests follow this when they are touched (owner,
+2026-11-08).
+
 Load tests, stress tests, synthetic CPU/RAM load generators, benchmarks under load and e2e runs repeated to load the
 machine run only at night, outside the owner's working hours; never during the day on their work PC (owner,
 2026-10-15).

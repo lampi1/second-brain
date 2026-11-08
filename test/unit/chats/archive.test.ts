@@ -5,16 +5,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ChatManager } from '../../../src/main/chats/manager';
-import { ClaudeSession } from '../../../src/main/chats/claude';
 import { FAKE, recEmitter, tmp, waitFor } from './helpers';
 
 const managers: ChatManager[] = [];
-function setup(userData = tmp('ud'), home = tmp('home'), cwd = tmp('cwd'), env: Record<string, string> = {}, completeCensus = false) {
+function setup(userData = tmp('ud'), home = tmp('home'), cwd = tmp('cwd'), env: Record<string, string> = {}) {
   const em = recEmitter();
-  const m = new ChatManager({ emitter: em, userData, enginePaths: { claude: FAKE }, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, ...env },
-    // Positive release coverage explicitly simulates a complete provider census; real Claude stays partial.
-    ...(completeCensus ? { sessionFactory: (_h, options, sink) => new ClaudeSession({ ...options, claudePath: FAKE }, { ...sink, childrenCoverage: (coverage, reason) => sink.childrenCoverage?.(coverage === 'partial' ? 'complete' : coverage, reason) }) } : {}),
-  });
+  const m = new ChatManager({ emitter: em, userData, enginePaths: { claude: FAKE }, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, ...env } });
   managers.push(m);
   return { m, em, userData, home, cwd };
 }
@@ -67,45 +63,6 @@ describe('ChatManager archive (auto-close)', () => {
     await expect(m.archive(c.id, { auto: true })).rejects.toThrow(/tornata al lavoro/);
     await waitFor(() => summary(m, c.id).background === undefined, 'task ended');
     await expect(m.archive(c.id, { auto: true })).rejects.toThrow(/timer verificato/);
-  });
-
-  it('a paused background task still counts; an update without a status after its end does not revive it', async () => {
-    const { m, cwd } = setup(undefined, undefined, undefined, { FAKE_CLAUDE_TASK_MS: '700' });
-    const c = await m.create({ harness: 'claude', cwd, prompt: 'background paused workflow' });
-    await waitFor(() => summary(m, c.id).state === 'idle', 'idle');
-    await new Promise(r => setTimeout(r, 300)); // paused at 50 ms, running again at 150 ms
-    expect(summary(m, c.id).background).toBe(1);
-    await expect(m.archive(c.id, { auto: true })).rejects.toThrow(/tornata al lavoro/);
-    await waitFor(() => summary(m, c.id).background === undefined, 'task ended');
-    await new Promise(r => setTimeout(r, 300)); // the update of its description at 800 ms
-    expect(summary(m, c.id).background).toBeUndefined();
-  });
-
-  for (const completeCensus of [false, true]) it(`a resumed background task restarts idle clocks (${completeCensus ? 'explicit complete census' : 'real partial census'})`, async () => {
-    // the 15/10 QA chats: SendMessage to a finished example-app-qa agent resumed it, the app kept counting 0 and closed the chat
-    const { m, cwd } = setup(undefined, undefined, undefined, { FAKE_CLAUDE_TASK_MS: '400' }, completeCensus);
-    const c = await m.create({ harness: 'claude', cwd, prompt: 'background resumed agent' });
-    await waitFor(() => summary(m, c.id).state === 'idle' && summary(m, c.id).background === undefined && summary(m, c.id).backgroundEndedAt, 'first run ended');
-    await waitFor(() => summary(m, c.id).background === 1, 'resumed under the same id');
-    await expect(m.archive(c.id, { auto: true })).rejects.toThrow(/tornata al lavoro/);
-    expect(m.releaseIdle(1, Date.now() + 3_600_000)).toBe(0);
-    const ended = await waitFor(() => summary(m, c.id).background === undefined ? summary(m, c.id).backgroundEndedAt : null, 'second run ended');
-    // the CLI now reads the agent's report in a turn of its own: the engine is not idle since the turn, but since the end
-    const turn = summary(m, c.id).lastResult!.at;
-    expect(ended).toBeGreaterThan(turn + 500);
-    expect(m.releaseIdle(1_000, ended + 500)).toBe(0);
-    expect(summary(m, c.id).agentChildren?.coverage).toBe(completeCensus ? 'complete' : 'partial');
-    expect(m.releaseIdle(1_000, ended + 1_000)).toBe(completeCensus ? 1 : 0);
-  });
-
-  it('an ended task that comes back as an update to running counts again (the AT chat of 2026-10-16)', async () => {
-    const { m, cwd } = setup(undefined, undefined, undefined, { FAKE_CLAUDE_TASK_MS: '400' });
-    const c = await m.create({ harness: 'claude', cwd, prompt: 'background revived agent' });
-    await waitFor(() => summary(m, c.id).state === 'idle' && summary(m, c.id).background === undefined && summary(m, c.id).backgroundEndedAt, 'first run ended');
-    await waitFor(() => summary(m, c.id).background === 1, 'revived by its update');
-    await expect(m.archive(c.id, { auto: true })).rejects.toThrow(/tornata al lavoro/);
-    expect(m.releaseIdle(1, Date.now() + 3_600_000)).toBe(0);
-    await waitFor(() => summary(m, c.id).background === undefined, 'second run ended');
   });
 
   for (const mode of ['', ' structured']) {

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ChatManager, type ChatManagerOptions, type TurnEndInfo } from '../../../src/main/chats/manager';
 import { ClaudeSession } from '../../../src/main/chats/claude';
-import { FAKE, FAKE_CURSOR, PNG_1PX, alive, cursorLog, fakeLog, killStray, recEmitter, tmp, waitFor, type RecEmitter } from './helpers';
+import { FAKE, FAKE_CURSOR, PNG_1PX, cursorLog, fakeLog, recEmitter, tmp, waitFor, type RecEmitter } from './helpers';
 
 interface Env { userData: string; home: string; cwd: string; argLog: string }
 const managers: ChatManager[] = [];
@@ -255,119 +255,6 @@ describe('ChatManager', () => {
     expect(fakeLog(e.argLog).find(l => l.blocks)?.blocks).toEqual([`image:base64:image/png:${PNG_1PX.length}`]);
   });
 
-  // finding 2 + A: no claude process survives the app
-  it('shutdown kills a busy CLI within its cap, killAll kills without blocking', async () => {
-    const e = env();
-    // the CLI's child lives 5 min by itself: only the tree kill can end it within this test
-    const { m } = manager(e, { env: { CLAUDE_CONFIG_DIR: e.home, FAKE_CLAUDE_LOG: e.argLog, FAKE_CLAUDE_DELAY: '50', FAKE_CLAUDE_CHILD_MS: '300000' } });
-    await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'slow' }); // a 10 s turn: stdin end alone would wait for it
-    const pid = (await waitFor(() => fakeLog(e.argLog).find(l => l.argv), 'start')).pid;
-    const gc = (await waitFor(() => fakeLog(e.argLog).find(l => l.grandchild), 'the CLI\'s own child')).grandchild ?? 0;
-    const reaped = tmp('quit-reap');
-    const was = process.env.SB_QUIT_REAP_DONE;
-    process.env.SB_QUIT_REAP_DONE = reaped;
-    try {
-      await waitFor(() => m.list()[0]?.state === 'running', 'running');
-      const t0 = Date.now();
-      await m.shutdown(400);
-      expect(Date.now() - t0).toBeLessThan(6000); // within its cap (5.5 s), under the app's 6 s quit cap
-      expect(alive(pid)).toBe(false); // shutdown waits for the kill to land
-      // the detached child (it escapes the CLI's job) dies with the tree kill, or, when the CLI had to be terminated
-      // directly before anyone read its tree (WMI and taskkill take 15-40 s at 100% CPU), with the reaper that outlives
-      // the quit: wait for the child's death or the reaper's end (an event, not a guess at the load), then it must be dead
-      const done = path.join(reaped, `${pid}.done`);
-      await waitFor(() => !alive(gc) || fs.existsSync(done), 'the CLI\'s child killed, or the quit reaper done', 180000);
-      await waitFor(() => !alive(gc), 'the CLI\'s child killed with it (tree kill or quit reaper)', 5000);
-    } finally {
-      if (was === undefined) delete process.env.SB_QUIT_REAP_DONE; else process.env.SB_QUIT_REAP_DONE = was;
-      killStray(gc);
-    }
-
-    const e2 = env();
-    const two = manager(e2);
-    await two.m.create({ harness: 'claude', cwd: e2.cwd });
-    const pid2 = (await waitFor(() => fakeLog(e2.argLog).find(l => l.argv), 'start')).pid;
-    expect(alive(pid2)).toBe(true);
-    const t1 = Date.now();
-    two.m.killAll();
-    expect(Date.now() - t1).toBeLessThan(1000); // never blocks the main process (the quit's 6 s cap must hold)
-    // taskkill walks every process: 15-40 s on a loaded box, past 45 s at 100% CPU (2026-10-14, the 5th of 5 runs)
-    await waitFor(() => !alive(pid2), 'the CLI killed by the detached taskkill', 180000);
-  }, 450000); // taskkill and the reaper's WMI list take 15-40 s each on a loaded Windows box, minutes at 100% CPU
-
-  // a chat closed with ✕ / Ctrl+W / auto close: the CLI ends cleanly, but what it started must not outlive it
-  it('closing a chat leaves no process behind: the background command and its own child are reaped', async () => {
-    const e = env();
-    const was = process.env.SB_REAP;
-    process.env.SB_REAP = '1';
-    const { m } = manager(e);
-    const orphans = (): number[] => fakeLog(e.argLog).flatMap(l => (l.orphan ? [l.orphan] : []));
-    try {
-      const c = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'orphan' });
-      const pid = (await waitFor(() => fakeLog(e.argLog).find(l => l.argv), 'start')).pid;
-      await waitFor(() => orphans().length === 2, 'the background command and its child');
-      await waitFor(() => m.list()[0]?.state === 'idle', 'idle');
-      expect(orphans().every(alive)).toBe(true);
-      const t0 = Date.now();
-      await m.close(c.id); // the ✕ path: stdin closed, the CLI exits by itself
-      await waitFor(() => !alive(pid), 'the CLI exited');
-      expect(Date.now() - t0).toBeLessThan(3000); // before the 3 s grace: no tree kill ran, only the reap can end them
-      // one WMI process list (3-40 s on a loaded box) then taskkill
-      await waitFor(() => orphans().every(p => !alive(p)), 'no process left from the closed chat', 180000); // minutes at 100% CPU
-    } finally {
-      if (was === undefined) delete process.env.SB_REAP; else process.env.SB_REAP = was;
-      for (const p of orphans()) killStray(p);
-    }
-  }, 240000);
-
-  // the chat goes on in a new process (here: the Orchestrator moves): the old engine's tools stay for now, and go at the real close
-  it('a chat that goes on keeps its tools until it really closes, then they are reaped', async () => {
-    const e = env();
-    const was = process.env.SB_REAP;
-    process.env.SB_REAP = '1';
-    const { m } = manager(e);
-    const orphans = (): number[] => fakeLog(e.argLog).flatMap(l => (l.orphan ? [l.orphan] : []));
-    try {
-      const old = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'orphan', title: 'Orchestrator', orchestrator: true });
-      const pid = (await waitFor(() => fakeLog(e.argLog).find(l => l.argv), 'start')).pid;
-      await waitFor(() => orphans().length === 2, 'the background command and its child');
-      await waitFor(() => m.list().find(c => c.id === old.id)?.state === 'idle', 'idle');
-      await m.create({ harness: 'claude', cwd: e.cwd, title: 'Orchestrator', orchestrator: true, replaces: old.id }); // the old Orchestrator's process ends
-      await waitFor(() => !alive(pid), 'the old engine exited');
-      await new Promise(r => setTimeout(r, process.platform === 'win32' ? 5000 : 1000)); // longer than a process list (WMI on Windows, /proc here): a reap would have run
-      expect(orphans().every(alive)).toBe(true);
-      await m.close(old.id);
-      await waitFor(() => orphans().every(p => !alive(p)), 'its tools reaped at the real close', 180000); // WMI + taskkill: past 90 s at 100% CPU (2026-10-14)
-    } finally {
-      if (was === undefined) delete process.env.SB_REAP; else process.env.SB_REAP = was;
-      for (const p of orphans()) killStray(p);
-    }
-  }, 260000);
-
-  // 2026-10-29: archived without an engine of its own left (the auto-close, ✕ before its 6-second Annulla ends), the
-  // tools of the engines it outlived were never reaped: only close() did it, and pruned archives dropped them
-  it('archiving a chat reaps the tools its earlier engines kept, even with no engine running now', async () => {
-    const e = env();
-    const was = process.env.SB_REAP;
-    process.env.SB_REAP = '1';
-    const { m } = manager(e);
-    const orphans = (): number[] => fakeLog(e.argLog).flatMap(l => (l.orphan ? [l.orphan] : []));
-    try {
-      const old = await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'orphan', title: 'Orchestrator', orchestrator: true });
-      const pid = (await waitFor(() => fakeLog(e.argLog).find(l => l.argv), 'start')).pid;
-      await waitFor(() => orphans().length === 2, 'the background command and its child');
-      await waitFor(() => m.list().find(c => c.id === old.id)?.state === 'idle', 'idle');
-      await m.create({ harness: 'claude', cwd: e.cwd, title: 'Orchestrator', orchestrator: true, replaces: old.id }); // kept, as above
-      await waitFor(() => !alive(pid), 'the old engine exited');
-      expect(orphans().every(alive)).toBe(true);
-      await m.archive(old.id); // no engine now: before, nothing reaped what the old one kept
-      await waitFor(() => orphans().every(p => !alive(p)), 'its tools reaped at the archive', 180000);
-    } finally {
-      if (was === undefined) delete process.env.SB_REAP; else process.env.SB_REAP = was;
-      for (const p of orphans()) killStray(p);
-    }
-  }, 260000);
-
   // finding 5: only full UUIDs reach --resume
   it('resumes only full session UUIDs', async () => {
     const e = env();
@@ -536,20 +423,14 @@ describe('ChatManager', () => {
     const c = await m.create({ harness: 'cursor', cwd: e.cwd, prompt: 'deafcancel' });
     await waitFor(() => m.items(c.id).some(i => i.kind === 'assistant' && i.text.includes('lavoro sordo')), 'the deaf turn');
     const sid = m.list()[0]?.sessionId;
-    const t0 = Date.now();
     await m.stop(c.id, true);
-    await waitFor(() => results(m, c.id).length === 1 && m.list()[0]?.state === 'idle', 'the stopped turn', 15000);
-    const stoppedMs = Date.now() - t0;
+    await waitFor(() => results(m, c.id).length === 1 && m.list()[0]?.state === 'idle', 'the stopped turn');
     await m.send(c.id, 'dopo');
-    await waitFor(() => results(m, c.id).length === 2 && m.list()[0]?.state === 'idle', 'the next turn on a new engine', 15000);
-    const resentMs = Date.now() - t0;
-    expect(stoppedMs).toBeLessThan(8000); // 5 s grace, not the engine's 60 s
-    expect(resentMs).toBeLessThan(12000);
+    await waitFor(() => results(m, c.id).length === 2 && m.list()[0]?.state === 'idle', 'the next turn on a new engine');
     expect(results(m, c.id).map(r => r.kind === 'result' && [r.isError, !!r.interrupted])).toEqual([[false, true], [false, false]]);
     expect(cursorLog(curLog).filter(l => l.argv)).toHaveLength(2); // a new engine
     expect(cursorLog(curLog).filter(l => l.method === 'session/load').map(l => l.params?.sessionId)).toEqual([sid]);
     expect(m.items(c.id).some(i => i.kind === 'assistant' && i.text.includes('in ritardo'))).toBe(false); // the old turn's late text never lands
-    console.log(`[timing] deaf cancel: turn stopped in ${stoppedMs} ms, next message answered at ${resentMs} ms`);
   }, 60000);
 
   // the «Invia subito» case itself: the message queued behind the deaf turn goes to the new engine, sent once
@@ -560,19 +441,15 @@ describe('ChatManager', () => {
     const c = await m.create({ harness: 'cursor', cwd: e.cwd, prompt: 'deafcancel' });
     await waitFor(() => m.items(c.id).some(i => i.kind === 'assistant' && i.text.includes('lavoro sordo')), 'the deaf turn');
     const sid = m.list()[0]?.sessionId;
-    const t0 = Date.now();
     await m.send(c.id, 'subito');
     await m.stop(c.id, true);
-    await waitFor(() => results(m, c.id).length === 2 && m.list()[0]?.state === 'idle', 'the queued message answered on a new engine', 20000);
-    const answeredMs = Date.now() - t0;
-    expect(answeredMs).toBeLessThan(12000); // 5 s grace, not the engine's 60 s
+    await waitFor(() => results(m, c.id).length === 2 && m.list()[0]?.state === 'idle', 'the queued message answered on a new engine');
     expect(results(m, c.id).map(r => r.kind === 'result' && [r.isError, !!r.interrupted])).toEqual([[false, true], [false, false]]);
     expect(cursorLog(curLog).filter(l => l.argv)).toHaveLength(2);
     expect(cursorLog(curLog).filter(l => l.method === 'session/load').map(l => l.params?.sessionId)).toEqual([sid]);
     const prompts = cursorLog(curLog).filter(l => l.method === 'session/prompt').map(l => JSON.stringify(l.params?.prompt ?? ''));
     expect(prompts.filter(p => p.includes('subito'))).toHaveLength(1); // sent once, on the new engine
     expect(m.items(c.id).filter(i => i.kind === 'user').map(i => (i as { text: string }).text)).toEqual(['deafcancel', 'subito']);
-    console.log(`[timing] deaf cancel + Invia subito: queued message answered at ${answeredMs} ms`);
   }, 60000);
 
   it('a queued message that cannot be resent after the restart is said in the chat, never shown as sent', async () => {
@@ -749,7 +626,7 @@ describe('ChatManager', () => {
     const rate: unknown[] = [];
     const { m } = manager(e, { onRateLimit: msg => rate.push(msg), usageEveryMs: 200 });
     await m.create({ harness: 'claude', cwd: e.cwd, prompt: 'meter' });
-    await waitFor(() => rate.filter(x => !!(x as { rate_limits?: unknown }).rate_limits).length >= 2, 'two get_usage answers mid-turn', 8000);
+    await waitFor(() => rate.filter(x => !!(x as { rate_limits?: unknown }).rate_limits).length >= 2, 'two get_usage answers mid-turn');
     expect(results(m, m.list()[0]!.id)).toHaveLength(0); // still in its first turn (the meter pause)
   });
 

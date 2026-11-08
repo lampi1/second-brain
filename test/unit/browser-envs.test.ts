@@ -24,11 +24,9 @@ describe('globMatch (no regex: no ReDoS on page-controlled URLs)', () => {
     expect(globMatch('aXbXc', '*b*', false)).toBe(true);
   });
 
-  it('stays fast on a hostile pattern and a long URL', () => {
+  it('ends on a hostile pattern and a long URL (no backtracking: a regex would hang past the test timeout)', () => {
     const url = `https://h/${'a/'.repeat(4000)}`;
-    const t0 = Date.now();
     for (let i = 0; i < 50; i++) globMatch(url, '*/*/*/*/*/*/*/*X', true);
-    expect(Date.now() - t0).toBeLessThan(500);
   });
 });
 
@@ -156,9 +154,7 @@ describe('redactBody', () => {
     expect(out).toContain('hello');
     expect(redactBody(b)).not.toContain('Secr3t!');                // detected without the content type too
     const big = `------x1\r\nContent-Disposition: form-data; name="a"\r\n\r\n${'x'.repeat(60000)}`;
-    const t0 = Date.now();
     redactBody(big, 'multipart/form-data');
-    expect(Date.now() - t0).toBeLessThan(200);
   });
 });
 

@@ -215,40 +215,40 @@ describe('AcpSession as Cursor', () => {
     expect(panel.questions).toHaveLength(1);
   });
 
-  it('cursor/ask_question yes/no without its brief: skipped after a moment with how to send one (ADR 0150)', async () => {
+  it('cursor/ask_question yes/no without its brief: skipped with how to send one (ADR 0150)', async () => {
     let ready = false;
     const { s, sink, logFile } = start({ yesNo: true, briefReady: () => ready });
     s.send('asksn');
-    await waitFor(() => results(sink).length === 1, 'turn 1', 6000);
+    await waitFor(() => results(sink).length === 1, 'turn 1');
     expect(sink.pendings).toHaveLength(0);
     expect(answerOf(logFile)).toMatchObject({ outcome: 'skipped', reason: expect.stringContaining('component "brief"') });
     ready = true;
     s.send('asksn');
-    const q = await waitFor(() => sink.pendings[0], 'shown with a brief', 4000);
+    const q = await waitFor(() => sink.pendings[0], 'shown with a brief');
     expect(q.questions?.[0]?.question).toBe('Lo pubblico?');
   });
 
   it('a chat that never sends a brief: shown on the third ask, then never held again; a stop during the wait cancels it', async () => {
     const { s, sink } = start({ yesNo: true, briefReady: () => false });
     s.send('asksn');
-    await waitFor(() => results(sink).length === 1, 'turn 1', 6000);
+    await waitFor(() => results(sink).length === 1, 'turn 1');
     s.send('asksn');
-    await waitFor(() => results(sink).length === 2, 'turn 2', 6000);
+    await waitFor(() => results(sink).length === 2, 'turn 2');
     s.send('asksn');
-    await waitFor(() => sink.pendings[0], 'third ask shown', 2000);
+    await waitFor(() => sink.pendings[0], 'third ask shown');
     s.answer(sink.pendings[0]!.id, { kind: 'permission', allow: false, message: 'dopo' });
-    await waitFor(() => results(sink).length === 3, 'turn 3', 4000);
+    await waitFor(() => results(sink).length === 3, 'turn 3');
     s.send('asksn');
-    await waitFor(() => sink.pendings[1], 'shown at once now', 1000);
+    await waitFor(() => sink.pendings[1], 'shown at once now');
     s.answer(sink.pendings[1]!.id, { kind: 'permission', allow: false, message: 'dopo' });
-    await waitFor(() => results(sink).length === 4, 'turn 4', 4000);
+    await waitFor(() => results(sink).length === 4, 'turn 4');
 
     let waiting = false;
     const b = start({ yesNo: true, briefReady: () => { waiting = true; return false; } });
     b.s.send('asksn');
-    await waitFor(() => waiting, 'brief wait started', 4000);
+    await waitFor(() => waiting, 'brief wait started');
     await b.s.interrupt();
-    await waitFor(() => answerOf(b.logFile)?.outcome === 'cancelled', 'cancelled', 4000);
+    await waitFor(() => answerOf(b.logFile)?.outcome === 'cancelled', 'cancelled');
     expect(b.sink.pendings).toHaveLength(0);
   });
 
