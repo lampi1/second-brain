@@ -60,10 +60,17 @@ export function changedPaths(nameStatus, untracked) {
 let tsLib;
 const ts = () => (tsLib ??= createRequire(import.meta.url)('typescript'));
 
+/** fs calls and the argument that is the path they create: a file a test writes into a temp dir is not one it uses */
+const DEST_ARG = new Map([
+  ...['writeFileSync', 'writeFile', 'appendFileSync', 'mkdirSync', 'mkdir'].map(f => [f, 0]),
+  ...['copyFileSync', 'copyFile', 'cpSync', 'cp', 'renameSync', 'rename', 'symlinkSync'].map(f => [f, 1]),
+]);
+
 /**
  * The string literals a test's code holds (comments and strings quoted inside strings, like fixtures, never count),
  * plus each call's consecutive string arguments joined by '/' (path.join(ROOT, 'scripts', 'logs.mjs') ->
- * 'scripts/logs.mjs'): the paths a test really passes to spawn, exec, readFile or import.
+ * 'scripts/logs.mjs'): the paths a test really passes to spawn, exec, readFile or import. The path an fs call creates
+ * (fs.writeFileSync(path.join(dir, 'ops', 'tools', 'x.mjs'), …)) is skipped: it names the test's own temp file.
  */
 export function codeStrings(text) {
   const t = ts();
@@ -72,18 +79,30 @@ export function codeStrings(text) {
   const visit = n => {
     if (isLit(n)) out.push(n.text);
     else if (t.isTemplateExpression(n)) out.push(n.head.text, ...n.templateSpans.map(s => s.literal.text));
-    const args = (t.isCallExpression(n) || t.isNewExpression(n)) ? [...(n.arguments ?? [])] : [];
+    const call = t.isCallExpression(n) || t.isNewExpression(n);
+    const args = call ? [...(n.arguments ?? [])] : [];
     for (let i = 0; i + 1 < args.length; i++) if (isLit(args[i]) && isLit(args[i + 1])) out.push(`${args[i].text}/${args[i + 1].text}`);
-    t.forEachChild(n, visit);
+    const callee = call && (t.isPropertyAccessExpression(n.expression) ? n.expression.name : n.expression);
+    const dest = callee && t.isIdentifier(callee) ? args[DEST_ARG.get(callee.text) ?? -1] : undefined;
+    t.forEachChild(n, c => { if (c !== dest) visit(c); });
   };
   visit(t.createSourceFile('test.ts', text, t.ScriptTarget.Latest, false, t.ScriptKind.TS));
   return out;
 }
 /**
- * A changed source a unit test must cover: not a root config file, not a declaration, not test code of another kind
- * (e2e, shots, live); unit test helpers and fixtures count, a test reaches them through its helpers.
+ * A changed source a unit test must cover: not a declaration, not test code of another kind (e2e, shots, live); unit
+ * test helpers, fixtures and root config files count (a config no unit test reads, like vitest.config.ts, says WITHOUT).
  */
-const needsCover = f => f.includes('/') && !/\.d\.[cm]?ts$/.test(f) && (!f.startsWith('test/') || /^test\/(unit|fixtures)\//.test(f));
+const needsCover = f => !/\.d\.[cm]?ts$/.test(f) && (!f.startsWith('test/') || /^test\/(unit|fixtures)\//.test(f));
+/** root configs a test reads without naming them: a test that builds an ESLint instance loads eslint.config.js */
+const IMPLICIT = [{ file: /^eslint\.config\.[cm]?js$/, reader: /\bnew\s+ESLint\s*\(/ }];
+/** a test's folder under test/unit ('chats' for test/unit/chats/x.test.ts, '' at the top), or its own folder in src/ */
+const testFolder = t => { const d = path.posix.dirname(t); return d === 'test/unit' ? '' : d.startsWith('test/unit/') ? d.slice('test/unit/'.length) : d; };
+/** whether a same-name test counts as covering `f`: its folder is one of f's folders (test/unit/chats -> src/main/chats) */
+const nameCovers = (t, f) => { const r = testFolder(t); return r !== '' && `/${path.posix.dirname(f)}/`.includes(`/${r}/`); };
+/** `export … from './x'` (re-exports of an index file; type-only ones are erased at run time) */
+const REEXPORT = /\bexport\s+(?!type\b)(?:\*(?:\s+as\s+[\w$]+)?|\{[^}]*\})\s*from\s*['"]([^'"]+)['"]/g;
+const INDEX_EXT = ['ts', 'tsx', 'mts', 'mjs', 'js', 'cjs'];
 const groupBy = (list, key) => list.reduce((m, f) => m.set(key(f), [...(m.get(key(f)) ?? []), f]), new Map());
 /** 'scripts/logs.mjs' for scripts/logs.mjs: the folder and the name, a bare 'check.mjs' is too loose */
 const relOf = f => { const dir = path.posix.basename(path.posix.dirname(f)); return dir === '.' ? path.posix.basename(f) : `${dir}/${path.posix.basename(f)}`; };
@@ -97,12 +116,14 @@ export const hookPaths = text => text.split('\n').filter(l => !l.trimStart().sta
   .flatMap(l => l.match(/(?:[\w.-]+\/)+[\w.-]+\.(?:mjs|cjs|js)\b/g) ?? []);
 
 /**
- * The tests to run for `changed` (repo-relative paths): changed test files, tests importing a changed file directly,
- * tests with the same name as a changed file (foo.ts -> foo.test.ts), tests naming it in a code string by folder and
- * name ('scripts/logs.mjs', path.join(ROOT, 'scripts', 'logs.mjs'), an import in a program run with node -e). A test
- * also reaches what the helpers it imports reach (`helpers`: non-test files under test/, e.g. the fake CLI fixtures),
- * and what a hook folder runs when its code names that folder (`hooks`: '.githooks' -> the scripts its hooks exec).
- * `uncovered`: the changed sources no test reaches that way. `read(file)` returns a file's text.
+ * The tests to run for `changed` (repo-relative paths): changed test files, tests importing a changed file directly
+ * (or an index file re-exporting it), tests with the same name as a changed file (foo.ts -> foo.test.ts), tests naming
+ * it in a code string by folder and name ('scripts/logs.mjs', path.join(ROOT, 'scripts', 'logs.mjs'), an import in a
+ * program run with node -e), tests loading a root config implicitly (IMPLICIT). A test also reaches what the helpers it
+ * imports reach (`helpers`: non-test files under test/, e.g. the fake CLI fixtures), and what a hook folder runs when
+ * its code names that folder (`hooks`: '.githooks' -> the scripts its hooks exec). `uncovered`: the changed sources no
+ * test reaches that way; a same-name test covers only from one of the source's folders (nameCovers). `read(file)`
+ * returns a file's text and may throw for a missing one.
  */
 export function pickTests(changed, testFiles, read, { helpers = [], hooks = new Map() } = {}) {
   const sources = changed.filter(f => SOURCE_EXT.test(f) && !TEST_FILE.test(f));
@@ -111,18 +132,38 @@ export function pickTests(changed, testFiles, read, { helpers = [], hooks = new 
   const named = sources.filter(f => !/^index\./.test(path.posix.basename(f)))
     .map(f => ({ f, rel: relOf(f), key: path.posix.basename(stem(f)) }));
   const helperByStem = new Map(helpers.map(h => [stem(h), h]));
+  const readOr = f => { try { return read(f); } catch { return null; } };
+  const reexports = new Map();
+  /** the changed sources an index file at `target` re-exports, one level ('…/src/index' -> './claude' -> claude.ts) */
+  const reexported = target => {
+    if (!reexports.has(target)) {
+      const index = INDEX_EXT.map(e => `${target}/index.${e}`).find(f => readOr(f) !== null);
+      reexports.set(target, index ? [...readOr(index).matchAll(REEXPORT)]
+        .flatMap(m => byStem.get(resolveSpecifier(index, m[1])) ?? []) : []);
+    }
+    return reexports.get(target);
+  };
+  const implicit = sources.filter(f => IMPLICIT.some(i => i.file.test(f)));
   const memo = new Map();
-  /** the changed sources `file` reaches: its imports, the paths in its code strings, its helpers' and hooks' */
-  const reach = (file, seen = new Set()) => {
+  let cut = false;
+  /**
+   * the changed sources `file` reaches: its imports (and what an imported index re-exports), the paths in its code
+   * strings, its helpers' and hooks'. A result cut short by an import cycle is not cached.
+   */
+  const reach = (file, stack = new Set()) => {
     if (memo.has(file)) return memo.get(file);
-    if (seen.has(file)) return [];
-    seen.add(file);
+    if (stack.has(file)) { cut = true; return []; }
+    stack.add(file);
+    const outer = cut;
+    cut = false;
     const text = read(file), hits = [];
     for (const s of specifiers(text)) {
       const target = resolveSpecifier(file, s);
-      hits.push(...(byStem.get(target) ?? []));
-      if (helperByStem.has(target)) hits.push(...reach(helperByStem.get(target), seen));
+      if (target === null) continue;
+      hits.push(...(byStem.get(target) ?? []), ...reexported(target));
+      if (helperByStem.has(target)) hits.push(...reach(helperByStem.get(target), stack));
     }
+    for (const f of implicit) if (IMPLICIT.some(i => i.file.test(f) && i.reader.test(text))) hits.push(f);
     const candidates = named.filter(n => text.includes(n.key));
     const dirs = [...hooks.keys()].filter(d => text.includes(d));
     if (candidates.length || dirs.length) {
@@ -136,16 +177,20 @@ export function pickTests(changed, testFiles, read, { helpers = [], hooks = new 
         for (const n of named) if (hooks.get(d).some(p => endsWith(p, n.rel))) hits.push(n.f);
       }
     }
-    memo.set(file, hits);
+    stack.delete(file);
+    if (!cut) memo.set(file, hits);
+    cut ||= outer;
     return hits;
   };
   const picked = new Set(changed.filter(f => TEST_FILE.test(f) && testFiles.includes(f)));
   const covered = new Set();
   for (const t of testFiles) {
-    const hits = [...(byName.get(path.posix.basename(t).replace(TEST_FILE, '')) ?? [])];
-    if (sources.length) hits.push(...reach(t));
-    if (hits.length) picked.add(t);
-    for (const f of hits) covered.add(f);
+    // a same-name test runs, but covers the source only from one of its folders (chats/claude.test.ts is not
+    // packages/routine-runtime/src/claude.ts's test)
+    const same = byName.get(path.posix.basename(t).replace(TEST_FILE, '')) ?? [];
+    const hits = sources.length ? reach(t) : [];
+    if (same.length || hits.length) picked.add(t);
+    for (const f of [...hits, ...same.filter(f => nameCovers(t, f))]) covered.add(f);
   }
   return { tests: [...picked].sort(), uncovered: sources.filter(f => needsCover(f) && !covered.has(f)) };
 }

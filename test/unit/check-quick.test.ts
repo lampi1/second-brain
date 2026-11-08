@@ -5,12 +5,13 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 // @ts-expect-error plain .mjs script without types
-import { changedPaths as changedPathsOf, hookPaths as hookPathsOf, needsDocTests as needsDocTestsOf, pickTests as pickTestsOf, relatedTests as relatedTestsOf, resolveSpecifier as resolveOf, specifiers as specifiersOf, verdict as verdictOf } from '../../scripts/check-quick.mjs';
+import { changedPaths as changedPathsOf, codeStrings as codeStringsOf, hookPaths as hookPathsOf, needsDocTests as needsDocTestsOf, pickTests as pickTestsOf, relatedTests as relatedTestsOf, resolveSpecifier as resolveOf, specifiers as specifiersOf, verdict as verdictOf } from '../../scripts/check-quick.mjs';
 
 const relatedTests = relatedTestsOf as (changed: string[], tests: string[], read: (f: string) => string) => string[];
 type Opts = { helpers?: string[]; hooks?: Map<string, string[]> };
 const pickTests = pickTestsOf as (changed: string[], tests: string[], read: (f: string) => string, opts?: Opts) => { tests: string[]; uncovered: string[] };
 const hookPaths = hookPathsOf as (text: string) => string[];
+const codeStrings = codeStringsOf as (text: string) => string[];
 const changedPaths = changedPathsOf as (nameStatus: string, untracked: string) => { all: string[]; present: string[] };
 const resolveSpecifier = resolveOf as (testFile: string, spec: string) => string | null;
 const specifiers = specifiersOf as (text: string) => string[];
@@ -60,7 +61,7 @@ describe('check:quick', () => {
     const changed = ['scripts/fake-hooks.mjs', 'scripts/fake-logs.mjs', 'scripts/untested.mjs', 'docs/x.md', 'eslint.config.mjs', 'src/shared/x.d.ts'];
     const { tests, uncovered } = pickTests(changed, Object.keys(files), f => files[f] ?? '');
     expect(tests).toEqual(['test/unit/hook.test.ts', 'test/unit/log.test.ts']);
-    expect(uncovered).toEqual(['scripts/untested.mjs']);
+    expect(uncovered).toEqual(['scripts/untested.mjs', 'eslint.config.mjs']);
     expect(pickTests(['docs/x.md', 'package.json'], Object.keys(files), f => files[f] ?? '').uncovered).toEqual([]);
   });
 
@@ -115,6 +116,44 @@ describe('check:quick', () => {
     expect(pickTests(['test/fixtures/fake-cli.mjs'], tests, f => files[f] ?? '', opts)).toEqual({ tests: ['test/unit/chats/claude.test.ts'], uncovered: [] });
     expect(pickTests(['test/fixtures/fake-orphan.mjs'], tests, f => files[f] ?? '', opts)).toEqual({ tests: [], uncovered: ['test/fixtures/fake-orphan.mjs'] });
     expect(pickTests(['test/e2e/fake.spec.ts'], tests, f => files[f] ?? '', opts).uncovered).toEqual([]);
+  });
+
+  it('follows an imported index one level of re-exports; a same-name test in another folder runs but covers nothing', () => {
+    const files: Record<string, string> = {
+      'test/unit/fake-runtime/resolve.test.ts': "import { resolveFake } from '../../../packages/fake-runtime/src/index';",
+      'packages/fake-runtime/src/index.ts': "export * from './fake-format';\nexport { resolveFake } from './fake-cmd';\nexport type { T } from './fake-types';",
+      'test/unit/chats/fake-cmd.test.ts': "import { x } from '../../../src/main/chats/fake-cmd';",
+    };
+    const read = (f: string) => { if (!(f in files)) throw new Error('ENOENT'); return files[f]!; };
+    const tests = ['test/unit/chats/fake-cmd.test.ts', 'test/unit/fake-runtime/resolve.test.ts'];
+    expect(pickTests(['packages/fake-runtime/src/fake-cmd.ts'], tests, read)).toEqual({ tests, uncovered: [] });
+    expect(pickTests(['packages/fake-runtime/src/fake-cmd.ts'], [tests[0]!], read))
+      .toEqual({ tests: [tests[0]], uncovered: ['packages/fake-runtime/src/fake-cmd.ts'] });
+    expect(pickTests(['packages/fake-runtime/src/fake-types.ts'], tests, read).uncovered).toEqual(['packages/fake-runtime/src/fake-types.ts']);
+    expect(pickTests(['src/main/chats/fake-cmd.ts'], [tests[0]!], read)).toEqual({ tests: [tests[0]], uncovered: [] });
+  });
+
+  it('picks a test that loads the ESLint config without naming it; other root configs say WITHOUT', () => {
+    const files: Record<string, string> = {
+      'test/unit/lint-rules.test.ts': 'const eslint = new ' + 'ESLint({ cwd });',
+      'test/unit/other.test.ts': "import { x } from '../../src/main/x';",
+    };
+    expect(pickTests(['eslint.config.cjs', 'fake.config.ts'], Object.keys(files), f => files[f] ?? ''))
+      .toEqual({ tests: ['test/unit/lint-rules.test.ts'], uncovered: ['fake.config.ts'] });
+  });
+
+  it('skips the paths fs calls create, and caches no reach cut short by an import cycle', () => {
+    expect(codeStrings("fs.writeFileSync(path.join(d, 'fake-dir', 'fake-chats.mjs'), 'x');\nfs.copyFileSync(path.join(FIX, 'a.mjs'), path.join(d, 'fake-site', 'fake-parse.mjs'));\nrun(path.join(ROOT, 'fake-tools', 'fake-run.mjs'));"))
+      .toEqual(['x', 'a.mjs', 'fake-tools/fake-run.mjs', 'fake-tools', 'fake-run.mjs']);
+    const files: Record<string, string> = {
+      'test/unit/a.test.ts': "import { h } from './fake-h1';",
+      'test/unit/b.test.ts': "import { h } from './fake-h2';",
+      'test/unit/fake-h1.ts': "import { h } from './fake-h2';\nimport { y } from '../../src/main/fake-y';",
+      'test/unit/fake-h2.ts': "import { h } from './fake-h1';",
+    };
+    const opts = { helpers: ['test/unit/fake-h1.ts', 'test/unit/fake-h2.ts'] };
+    expect(pickTests(['src/main/fake-y.ts'], ['test/unit/a.test.ts', 'test/unit/b.test.ts'], f => files[f] ?? '', opts).tests)
+      .toEqual(['test/unit/a.test.ts', 'test/unit/b.test.ts']);
   });
 
   it('says "green WITHOUT tests" for uncovered sources (exit 0), plain green only when every source has a test', () => {
