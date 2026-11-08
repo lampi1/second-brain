@@ -230,11 +230,15 @@ const FILES_RESEARCH = { facts: [
   { claim: 'Prima della PR due attese da 100 ms in fila (main e store) facevano arrivare le risposte a blocchi.', from: 'file', ref: 'materiale.md', quote: 'Two 100 ms holds (main coalescing + renderer store) made replies appear in chunks.' },
   { claim: 'Uno schermo a 60 Hz mostra un fotogramma nuovo circa ogni 16,7 ms.', from: 'known' },
 ], questions: [] as unknown[] };
-/** The check of the files side: each fact of the prompt ok, the wrong number fixed, the model's own knowledge unsure. */
+/** The check of the files side: each fact of the prompt ok, the wrong number fixed, the model's own knowledge unsure.
+ *  The source is read back from the prompt's JSON text, so it is decoded: a Windows path keeps single backslashes and
+ *  the fixed fact stays on the same file as its siblings. */
 function filesVerdicts(prompt: string): unknown {
-  const verdicts = [...prompt.matchAll(/^\{"id":"(f\d+)","claim":"([^"]*)","source":"([^"]*)"/gm)].map(([, id, claim, source]) =>
-    /da 100 a 10 ms/.test(claim!) ? { id, verdict: 'wrong', fix: 'STREAM_MS nello store del renderer passa da 100 a 16 ms.', ref: source }
-      : source === 'model knowledge' ? { id, verdict: 'unsure' } : { id, verdict: 'ok' });
+  const verdicts = [...prompt.matchAll(/^\{"id":"(f\d+)","claim":"([^"]*)","source":"([^"]*)"/gm)].map(([, id, claim, raw]) => {
+    const source = JSON.parse(`"${raw!}"`) as string;
+    return /da 100 a 10 ms/.test(claim!) ? { id, verdict: 'wrong', fix: 'STREAM_MS nello store del renderer passa da 100 a 16 ms.', ref: source }
+      : source === 'model knowledge' ? { id, verdict: 'unsure' } : { id, verdict: 'ok' };
+  });
   return { verdicts };
 }
 /** A topic lesson's research in the demo: two web facts, and one question (the ask can mean two things). */
