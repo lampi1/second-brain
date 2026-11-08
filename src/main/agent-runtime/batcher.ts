@@ -16,7 +16,8 @@ export class RuntimeBatcher {
   private closed = false;
 
   constructor(private readonly emit: (items: readonly RuntimeItem[]) => void,
-    private readonly bounds = { intervalMs: 16, maxItems: 64, maxBytes: 256 * 1024 }) {
+    private readonly bounds = { intervalMs: 16, maxItems: 64, maxBytes: 256 * 1024 },
+    private readonly maxItemBytes = bounds.maxBytes) {
     if (!Number.isFinite(bounds.intervalMs) || bounds.intervalMs < 0 || !Number.isSafeInteger(bounds.maxItems) || bounds.maxItems < 1
       || !Number.isSafeInteger(bounds.maxBytes) || bounds.maxBytes < 1) throw new Error('Invalid runtime batch bounds');
   }
@@ -26,7 +27,14 @@ export class RuntimeBatcher {
     // Snapshot now: adapters may mutate their item before the scheduled flush.
     const value: RuntimeItem = { item: structuredClone(item), replace };
     const bytes = Buffer.byteLength(JSON.stringify(value)) + 1;
-    if (bytes + 1 > this.bounds.maxBytes) throw new RuntimeBatchOverflow();
+    if (bytes + 1 > this.maxItemBytes) throw new RuntimeBatchOverflow();
+    if (bytes + 1 > this.bounds.maxBytes) {
+      this.boundary(); this.emit([value]);
+      this.first = item.kind === 'result';
+      if (item.kind === 'result') this.firstText = true;
+      else if (item.kind === 'assistant' && item.text) this.firstText = false;
+      return;
+    }
     if (item.kind === 'result') { this.boundary(); this.emit([value]); this.first = true; this.firstText = true; return; }
     const firstText = this.firstText && item.kind === 'assistant' && !!item.text;
     if (this.first || firstText) {

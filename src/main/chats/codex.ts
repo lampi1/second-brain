@@ -34,7 +34,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { runtimePerformance } from '../runtime-performance';
+import { providerWrite } from '../agent-runtime/transport-timing';
 import type { Answer, ChatItem, ChatState, Effort, FileDiff, ImageAttachment, PendingRequest, PermissionMode, Question } from '../../shared/contract';
 import { errText, log } from '../log';
 import { timedStep } from '../perf';
@@ -76,7 +76,7 @@ export interface CodexOptions extends SessionOptions {
   approvalPolicy?: CodexApproval;
   sandbox?: CodexSandbox;
   /** Re-read before each new turn; never answers an existing approval. */
-  executionPolicy?: () => CodexExecutionPolicy;
+  executionPolicy?: () => CodexExecutionPolicy | Promise<CodexExecutionPolicy>;
   /** the brain's rules for this thread (brain/adapters/codex.ts; UNVERIFIED how Codex composes it with AGENTS.md) */
   developerInstructions?: string | null;
   /** the brain's skill folders, given to this process with skills/extraRoots/set */
@@ -217,9 +217,9 @@ export class CodexSession implements HarnessSession {
   /** The command line after the CLI: the per-launch overrides, then the subcommand (`codex -c k=v … app-server`). */
   args(): string[] { return [...(this.opts.configArgs ?? []), ...(this.opts.extraArgs ?? []), ...this.opts.args]; }
 
-  private executionPolicy(): { approvalPolicy: CodexApproval; sandbox: CodexSandbox; writableRoots: string[] } {
+  private async executionPolicy(): Promise<{ approvalPolicy: CodexApproval; sandbox: CodexSandbox; writableRoots: string[] }> {
     if (this.opts.readOnly) return { approvalPolicy: 'on-request', sandbox: 'read-only', writableRoots: [] };
-    const policy = this.opts.executionPolicy?.();
+    const policy = await this.opts.executionPolicy?.();
     return policy ?? { approvalPolicy: this.opts.approvalPolicy ?? 'on-request', sandbox: this.opts.sandbox ?? 'workspace-write', writableRoots: [] };
   }
 
@@ -343,8 +343,8 @@ export class CodexSession implements HarnessSession {
     }
   }
 
-  private threadParams(): Obj {
-    const policy = this.executionPolicy();
+  private async threadParams(): Promise<Obj> {
+    const policy = await this.executionPolicy();
     return {
       cwd: this.opts.cwd, approvalPolicy: policy.approvalPolicy, sandbox: policy.sandbox,
       ...(this.model ? { model: this.model } : {}),
@@ -355,7 +355,7 @@ export class CodexSession implements HarnessSession {
   private async openThread(): Promise<void> {
     if (this.opts.resume && this.opts.sessionId) {
       try {
-        const r = await this.request('thread/resume', { threadId: this.opts.sessionId, ...this.threadParams() }, 120000);
+        const r = await this.request('thread/resume', { threadId: this.opts.sessionId, ...await this.threadParams() }, 120000);
         this.sessionId = this.opts.sessionId;
         this.readThread(r);
         for (const turn of arr(o(r.thread).turns).map(o)) for (const item of arr(turn.items)) this.observeChildren(item, 'replay');
@@ -369,7 +369,7 @@ export class CodexSession implements HarnessSession {
         this.sys(`${this.label} non ha ripreso la conversazione precedente (${cut(errText(e), 120)}): ne apro una nuova.`, 'warn');
       }
     }
-    const r = await this.request('thread/start', this.threadParams(), 120000);
+    const r = await this.request('thread/start', await this.threadParams(), 120000);
     const id = s(o(r.thread).id);
     if (!id) throw new Error('thread/start senza id');
     this.sessionId = id;
@@ -423,6 +423,10 @@ export class CodexSession implements HarnessSession {
   }
 
   private drain(): void {
+    void this.drainAsync().catch(error => this.turnDone('failed', errText(error), null));
+  }
+
+  private async drainAsync(): Promise<void> {
     if (!this.open || this.prompting || this.exited) return;
     const next = this.queue.shift();
     if (next === undefined) return;
@@ -440,7 +444,9 @@ export class CodexSession implements HarnessSession {
     this.planItemId = null;
     this.chars += next.text.length;
     this.setState(this.asks.size ? 'waiting' : 'running');
-    const policy = this.executionPolicy();
+    const policy = await this.executionPolicy();
+    if (this.exited || !this.prompting) return;
+    if (this.stopping) { this.turnDone('interrupted', null, null); return; }
     const sandboxPolicy = policy.sandbox === 'workspace-write'
       ? { type: 'workspaceWrite', writableRoots: policy.writableRoots.length ? policy.writableRoots : [this.opts.cwd], networkAccess: false,
         ...(policy.approvalPolicy === 'never' ? { excludeTmpdirEnvVar: true, excludeSlashTmp: true } : {}) }
@@ -639,7 +645,7 @@ export class CodexSession implements HarnessSession {
     const p = this.proc;
     if (!p || this.exited || !p.stdin.writable) throw new Error(NOT_ACTIVE);
     p.stdin.write(`${JSON.stringify(obj)}\n`);
-    if (obj.method === 'turn/start' || obj.method === 'turn/steer') runtimePerformance.providerWrite(this.opts.chatId);
+    if (obj.method === 'turn/start' || obj.method === 'turn/steer') providerWrite(this.opts.chatId);
   }
 
   private request(method: string, params: Obj, timeoutMs = 20000): Promise<Obj> {

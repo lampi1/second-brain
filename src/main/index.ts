@@ -84,12 +84,19 @@ let win: BrowserWindow | null = null;
 const rendererErrors = new RendererErrors();
 
 app.whenReady().then(async () => {
+  // Opt-in migration path: permission receipts must await the runtime consumption API before default activation.
+  if (!isStable && process.env.SB_AGENT_RUNTIME_HOST === '1') {
+    const { configureRuntimeHost } = await import('./agent-runtime/supervisor');
+    configureRuntimeHost();
+  }
   log.init(app.getPath('userData'));
   startStallWatch(); // a frozen window (main thread blocked) is logged with its cause, scope perf
   // Controlled replay only: no new IPC command or diagnostic handle in a normal/stable app.
   if (!isStable && process.env.SB_TEST === '1' && process.env.SB_RUNTIME_PERF === '1') {
+    const { resetHostTransportTimes, withHostTransportTimes } = await import('./agent-runtime/transport-timing');
     (globalThis as Record<string, unknown>).__sbRuntimePerformance = {
-      start: () => runtimePerformance.start(), snapshot: () => runtimePerformance.snapshot(), stop: () => runtimePerformance.stop(),
+      start: () => { resetHostTransportTimes(); runtimePerformance.start(); },
+      snapshot: () => withHostTransportTimes(runtimePerformance.snapshot()), stop: () => runtimePerformance.stop(),
     };
     app.once('will-quit', () => runtimePerformance.stop());
   }

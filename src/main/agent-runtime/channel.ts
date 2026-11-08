@@ -16,6 +16,7 @@ export class RuntimeOperationError extends Error {
 
 type Pending<O> = {
   sequence: number;
+  bytes: number;
   resolve(value: O): void;
   reject(error: RuntimeOperationError): void;
   timer: ReturnType<typeof setTimeout>;
@@ -25,10 +26,11 @@ export class RuntimeChannel<I, O> {
   private nextSequence = 0;
   private readonly pending = new Map<string, Pending<O>>();
   private closed = false;
+  private pendingBytes = 0;
 
   constructor(readonly identity: Readonly<RuntimeIdentity>, private readonly post: (frame: RuntimeFrame<I, O>) => void,
-    private readonly timeoutMs = 30_000, private readonly limit = 256) {
-    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || !Number.isSafeInteger(limit) || limit < 1)
+    private readonly timeoutMs = 30_000, private readonly limit = 256, private readonly maxBytes = 64 * 1024 * 1024) {
+    if (!Number.isFinite(timeoutMs) || timeoutMs <= 0 || !Number.isSafeInteger(limit) || limit < 1 || !Number.isSafeInteger(maxBytes) || maxBytes < 1)
       throw new Error('Invalid runtime channel bounds');
     this.identity = Object.freeze({ ...identity });
   }
@@ -39,18 +41,26 @@ export class RuntimeChannel<I, O> {
     const operationId = randomUUID();
     if (this.closed || this.pending.size >= this.limit)
       return Promise.reject(new RuntimeOperationError('not-dispatched', operationId, this.closed ? 'Runtime closed' : 'Runtime queue full'));
+    let bytes: number;
+    try { bytes = Buffer.byteLength(JSON.stringify({ value })) + 512; }
+    catch { return Promise.reject(new RuntimeOperationError('not-dispatched', operationId, 'Runtime request is not serializable')); }
+    if (bytes + this.pendingBytes > this.maxBytes)
+      return Promise.reject(new RuntimeOperationError('not-dispatched', operationId, 'Runtime byte budget exhausted'));
     const sequence = ++this.nextSequence;
     return new Promise<O>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pending.delete(operationId);
+        this.pendingBytes -= bytes;
         reject(new RuntimeOperationError('uncertain', operationId, 'Runtime reply deadline expired; not retried'));
       }, this.timeoutMs);
       timer.unref?.();
-      this.pending.set(operationId, { sequence, resolve, reject, timer });
+      this.pendingBytes += bytes;
+      this.pending.set(operationId, { sequence, bytes, resolve, reject, timer });
       // A throwing post may already have sent the frame. Conservatively uncertain, never a safe-to-retry claim.
       try { this.post({ ...this.identity, operationId, sequence, payload: { kind: 'request', value } }); }
       catch {
-        clearTimeout(timer); this.pending.delete(operationId);
+        clearTimeout(timer);
+        if (this.pending.delete(operationId)) this.pendingBytes -= bytes;
         reject(new RuntimeOperationError('uncertain', operationId, 'Runtime transport failed; not retried'));
       }
     });
@@ -64,6 +74,7 @@ export class RuntimeChannel<I, O> {
     if (!p || p.sequence !== f.sequence || typeof f.payload.ok !== 'boolean') return false;
     if (!f.payload.ok && (typeof f.payload.error !== 'string' || !['rejected', 'uncertain'].includes(f.payload.outcome))) return false;
     clearTimeout(p.timer); this.pending.delete(f.operationId);
+    this.pendingBytes -= p.bytes;
     if (f.payload.ok) p.resolve(f.payload.value);
     else p.reject(new RuntimeOperationError(f.payload.outcome, f.operationId, f.payload.error));
     return true;
@@ -77,6 +88,7 @@ export class RuntimeChannel<I, O> {
       p.reject(new RuntimeOperationError('uncertain', id, 'Runtime generation ended; not retried'));
     }
     this.pending.clear();
+    this.pendingBytes = 0;
   }
 }
 
