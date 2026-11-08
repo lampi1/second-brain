@@ -5,7 +5,7 @@ import { requestFocus, setChatExpanded } from '../store/ui';
 import { setDraft } from './ChatInput';
 import { t } from '../i18n';
 
-export function TaskContext({ chat, onContinue }: { chat: ChatSummary; onContinue(): void }) {
+export function TaskContext({ chat, onContinue }: { chat: ChatSummary; onContinue?(): void }) {
   const orchestratorId = useApp(s => Object.values(s.chats).find(c => c.isOrchestrator && !c.closedAt)?.id);
   const run = chat.run;
   if (!run || chat.isOrchestrator) return null;
@@ -16,7 +16,7 @@ export function TaskContext({ chat, onContinue }: { chat: ChatSummary; onContinu
     {!!run.taskContract?.doneWhen.length && <ul>{run.taskContract.doneWhen.map((criterion, i) => <li key={i}>{criterion}</li>)}</ul>}
     {run.report && <p>{t('chat.taskLastResult')}: {run.report.summary}</p>}
     <div className="task-context-actions">
-      <button type="button" onClick={onContinue}>{t('chat.taskContinue')}</button>
+      {onContinue && <button type="button" onClick={onContinue}>{t('chat.taskContinue')}</button>}
       {orchestratorId && <button type="button" onClick={() => {
         setDraft(orchestratorId, `${reference}\n${t('chat.taskAskDraft')}`);
         setChatExpanded(orchestratorId, true); requestFocus(orchestratorId);

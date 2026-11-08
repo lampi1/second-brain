@@ -5,11 +5,14 @@
 ### One work conversation
 
 The Orchestrator presents worker questions, permissions, Strategist interviews and plan approvals. Worker histories
-remain inspectable; their input boxes no longer compete with the Orchestrator. Canonical outcomes appear here
+remain inspectable; their input boxes no longer compete with the Orchestrator. The first-run guide and chats started
+by the user retain their reply field. Canonical outcomes appear here
 automatically, with corrections updating the same result. Ask for a recap conversationally; no “Fai il punto” or
 “Sintetizza” click is required. The Remote Control banner can be dismissed without disconnecting and reopened with
 the phone icon. Remote Control cannot yet answer a worker request with an exact host receipt: it stays pending in
-the Orchestrator desktop panel. Supported Telegram requests retain their original authenticated buttons.
+the Orchestrator desktop panel. Supported Telegram requests retain their original authenticated buttons. Outcome
+messages follow the same phone policy as Orchestrator replies, including night mode and quiet hours. Historic
+parent-only child reports are not replayed into the Orchestrator after upgrading.
 
 <p align="center">
   <b>A cockpit for your AI coding agents: Claude Code, Codex, Cursor and OpenCode on one screen, with a brain that gets better every week.</b>

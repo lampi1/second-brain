@@ -3,7 +3,7 @@
 // 6-digit code; foreign ids silent and counted; text to the Orchestrator and the condensed reply back; buttons from
 // the paired chat only; 409 → the conflict error; old messages asked back; /stop halts until re-enabled on the PC;
 // the offset survives a restart; urgent messages pass /pausa; the review fixes (S6, C1-C3, C5-C7).
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,6 +11,7 @@ import { createPhoneBridge, ERR_CONFLICT, PAIRED_TEXT, type PhoneBridge } from '
 import { loadState } from '../../../src/main/phone/state';
 import { PHONE_TOKEN_SHAPE } from '../../../src/main/phone/token-store';
 import type { PhoneBridgeDeps } from '../../../src/main/phone/types';
+import type { PhoneOutcome } from '../../../src/shared/contract/phone';
 import { callbackUpdate, capLog, fakePort, FX, ME, question, startFakeTelegram, textUpdate, TOKEN, waitFor, type CapLog, type FakePort, type FakeTelegram } from './fakes';
 
 let tg: FakeTelegram;
@@ -57,6 +58,45 @@ function rig(o: { paired?: boolean; enabled?: boolean; token?: string | null; is
 }
 
 describe('phone bridge', () => {
+  it.each([
+    { atPc: false, nightMode: true, focus: null },
+    { atPc: true, nightMode: false, focus: null },
+    { atPc: false, nightMode: false, focus: 'another-chat' },
+  ])('canonical outcomes respect policy: %j', async ({ atPc, nightMode, focus }) => {
+    const r = rig({ presence: { atPc, nightMode } });
+    const presence = vi.fn(r.deps.presence); r.deps.presence = presence;
+    let outcome!: (ev: PhoneOutcome) => void;
+    r.port.onOutcome = cb => { outcome = cb; return () => {}; };
+    await r.b.start(); r.b.setFocus(focus); presence.mockClear();
+    outcome({ runId: 'blocked-outcome', revision: 1, text: 'Should remain on the PC' });
+    // Wait for policy evaluation or a durable send attempt, never for an elapsed silence window.
+    await vi.waitFor(() => expect(presence.mock.calls.length > 0 || !!loadState(r.deps.statePath).outcomes?.length).toBe(true));
+    expect(loadState(r.deps.statePath).outcomes ?? []).toEqual([]);
+    expect(r.texts()).toEqual(['🟢 PC collegato']);
+  });
+
+  it('canonical outcomes in a phone conversation use quiet hours and edit corrections only when policy allows', async () => {
+    const presence = { atPc: false, nightMode: false }, r = rig({ presence });
+    let outcome!: (ev: PhoneOutcome) => void;
+    r.port.onOutcome = cb => { outcome = cb; return () => {}; };
+    await r.b.start(); r.b.update({ quietHours: null });
+    tg.push(textUpdate('Give me the result'));
+    await waitFor(() => r.port.texts.length === 1);
+    outcome({ runId: 'result', revision: 1, text: 'First result' });
+    await waitFor(() => r.texts().includes('First result'));
+    expect(tg.sent().find(s => s.body.text === 'First result')!.body.disable_notification).not.toBe(true);
+    await vi.waitFor(() => expect(loadState(r.deps.statePath).outcomes?.[0]?.messageId).toEqual(expect.any(Number)));
+    presence.nightMode = true;
+    const observed = vi.fn(r.deps.presence); r.deps.presence = observed;
+    outcome({ runId: 'result', revision: 2, text: 'Correction at night' });
+    await vi.waitFor(() => expect(observed.mock.calls.length > 0 || loadState(r.deps.statePath).outcomes?.[0]?.revision === 2).toBe(true));
+    expect(loadState(r.deps.statePath).outcomes?.[0]?.revision).toBe(1);
+    presence.nightMode = false;
+    outcome({ runId: 'result', revision: 2, text: 'Allowed correction' });
+    await waitFor(() => tg.calls.some(c => c.method === 'editMessageText' && c.body.text === 'Allowed correction'));
+    expect(r.texts().filter(t => t === 'First result')).toHaveLength(1);
+  });
+
   it('a dev build without a test base is dev-disabled and never calls fetch', async () => {
     const r = rig({ testApiBase: null });
     await r.b.start();

@@ -159,6 +159,7 @@ export function readRun(v: unknown): AgentRun | null {
     if (!delivery || !['display', 'notify', 'synthesize'].includes(delivery.policy) || !time(delivery.reportedAt) || !count(delivery.attempts)) return null;
     for (const stamp of [delivery.deliveredAt, delivery.displayedAt, delivery.synthesisSubmittedAt, delivery.synthesisRequestedAt]) if (stamp !== undefined && (!time(stamp) || stamp < delivery.reportedAt)) return null;
     if (delivery.synthesisPending !== undefined && typeof delivery.synthesisPending !== 'boolean') return null;
+    if (delivery.ownerNotice !== undefined && delivery.ownerNotice !== true) return null;
     if (delivery.synthesisBatchId !== undefined && !str(delivery.synthesisBatchId, 160)) return null;
     if (delivery.synthesisSubmittedAt !== undefined && !delivery.synthesisBatchId) return null;
     if (delivery.policy !== 'synthesize' && (delivery.synthesisSubmittedAt !== undefined || delivery.synthesisBatchId !== undefined)) return null;

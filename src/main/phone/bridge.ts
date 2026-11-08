@@ -104,7 +104,9 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
 
   // ── outgoing: Orchestrator replies, decidables, urgent ────────────────────────────────────────────────────────
   async function onOutcome(ev: PhoneOutcome): Promise<void> {
-    if (!s.paired || runState !== 'running' && runState !== 'paused' || s.paused) return;
+    if (!s.paired || runState !== 'running' && runState !== 'paused') return;
+    const d = decide({ kind: 'reply', fromPhone: false }, ctx());
+    if (!d.send) return;
     const records = s.outcomes ??= [];
     const old = records.find(x => x.runId === ev.runId && x.chatId === s.paired!.chatId);
     if (old && (old.revision >= ev.revision || old.messageId === null)) return;
@@ -120,7 +122,7 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
     if (records.length > 500) records.shift();
     // An unknown network result must not become a duplicate completion after a restart.
     persist();
-    record.messageId = await out.send(text, { silent: true });
+    record.messageId = await out.send(text, { silent: d.silent });
     persist();
   }
   async function offerIfAllowed(item: PhoneDecidable, since: number): Promise<void> {
