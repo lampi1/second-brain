@@ -28,7 +28,7 @@ export abstract class ManagerSink extends ManagerWork {
       item: (item, replace) => {
         if (!live()) return;
         // a replayed past (a resume) is no answer of the engine: its cold start goes on
-        if (item.kind !== 'user' && item.kind !== 'system' && !r.replaying) this.coldStarted(r);
+        if (item.kind !== 'user' && item.kind !== 'system' && r.replaying !== r.session) this.coldStarted(r);
         this.hook('analytics', () => this.analytics.item(r.s, item, replace));
         this.autoActivity(r);
         if (r.handoffTurn && item.kind === 'assistant') {
@@ -82,7 +82,8 @@ export abstract class ManagerSink extends ManagerWork {
       resolved: id => { if (this.chats.get(chatId) === r) this.dropPending(r, id); },
       changed: p => {
         if (!live()) return;
-        if (p.replaying !== undefined) { r.replaying = p.replaying || undefined; return; }
+        // kept as the replaying session: an engine that exits mid-replay leaves no flag on its successor
+        if (p.replaying !== undefined) { r.replaying = p.replaying ? r.session ?? undefined : undefined; return; }
         this.applyPatch(r, p);
       },
       exit: ({ error }) => {
@@ -92,6 +93,7 @@ export abstract class ManagerSink extends ManagerWork {
         if (!sess || this.chats.get(chatId) !== r || r.session !== sess) return;
         this.hook('analytics', () => this.analytics.end(r.s));
         r.session = null;
+        delete r.replaying; // its replay, if any, ended with it
         const verifiedEmpty = r.autoEnding && !error && r.children?.snapshot().coverage === 'complete' && r.children.snapshot().active === 0;
         if (engineOf(r.s.harness)?.kind !== 'api' && !verifiedEmpty) r.children?.end();
         if (r.children) r.s.agentChildren = r.children.snapshot();

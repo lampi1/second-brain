@@ -300,8 +300,9 @@ export interface Rec {
   opening?: Promise<void> | undefined;
   /** its cold start holds a slot of the admission queue (ADR 0222): called at the engine's first answer, a question, or its exit */
   coldDone?: (() => void) | undefined;
-  /** its engine is replaying the session's past (SessionPatch.replaying): those items do not end the cold start */
-  replaying?: boolean | undefined;
+  /** the session replaying its past (SessionPatch.replaying): its items do not end the cold start; a later session is
+   *  never held by it (one that exited mid-replay never sent replaying: false) */
+  replaying?: HarnessSession | undefined;
   /** an archive closing the session (a send waits for it, then reopens the chat on a new session) */
   archiving?: Promise<void> | undefined;
   /** the user's close (✕) of this chat or of an ancestor started: set before its first await, so a late report, mail

@@ -34,6 +34,8 @@
 // FAKE_CURSOR_DELAY (ms between chunks), FAKE_CURSOR_NO_IMAGE=1 (promptCapabilities.image false),
 // FAKE_CURSOR_NETERR_HANDOFF=1 (the hand-off turn ends with Cursor's network error), FAKE_CURSOR_MODES=agent (no
 // read-only mode offered), FAKE_CURSOR_SET_MODE_FAILS=1 (session/set_mode answers an error),
+// FAKE_CURSOR_DIE_ON_LOAD=<file> (the first engine, while that file does not exist yet, creates it and exits mid-replay;
+// the next engines offer no loadSession, so the chat goes on in a new session),
 // FAKE_ACP_OPENCODE=1 (OpenCode 1.19.5's shapes: session/new|load answer only configOptions, a model picker of category
 // model, a mode picker build|plan and an effort of category thought_level only on a model that has one; a load goes
 // back to the default model; session/set_mode is refused so the app must use the mode option).
@@ -382,7 +384,7 @@ function request(id, method, p) {
   switch (method) {
     case 'initialize':
       picker = p.clientCapabilities?._meta?.parameterizedModelPicker === true;
-      return out({ id, result: { protocolVersion: 1, agentCapabilities: { loadSession: process.env.FAKE_CURSOR_NO_LOAD !== '1', mcpCapabilities: { http: true, sse: true }, promptCapabilities: { audio: false, embeddedContext: false, image: process.env.FAKE_CURSOR_NO_IMAGE !== '1' }, sessionCapabilities: { list: {} } }, authMethods: [{ id: 'cursor_login', name: 'Cursor Login', description: "Authenticate using existing Cursor login credentials. Run 'agent login' first if not logged in." }] } });
+      return out({ id, result: { protocolVersion: 1, agentCapabilities: { loadSession: process.env.FAKE_CURSOR_NO_LOAD !== '1' && !(process.env.FAKE_CURSOR_DIE_ON_LOAD && fs.existsSync(process.env.FAKE_CURSOR_DIE_ON_LOAD)), mcpCapabilities: { http: true, sse: true }, promptCapabilities: { audio: false, embeddedContext: false, image: process.env.FAKE_CURSOR_NO_IMAGE !== '1' }, sessionCapabilities: { list: {} } }, authMethods: [{ id: 'cursor_login', name: 'Cursor Login', description: "Authenticate using existing Cursor login credentials. Run 'agent login' first if not logged in." }] } });
     case 'authenticate': return out({ id, error: { code: -32602, message: 'fake: authenticate must never be called by second-brain' } });
     case 'session/new': {
       if (process.env.FAKE_CURSOR_NO_AUTH === '1') return out({ id, error: { code: -32000, message: "Authentication required. Please run 'agent login' first, then call authenticate() with methodId 'cursor_login'." } });
@@ -399,6 +401,9 @@ function request(id, method, p) {
       // like the real agent: the past is replayed as updates before the answer
       update(p.sessionId, { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: 'vecchia domanda' } });
       update(p.sessionId, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'vecchia risposta' } });
+      // FAKE_CURSOR_DIE_ON_LOAD=<file>: the first engine (no such file yet) dies in the middle of the replay
+      const dieMark = process.env.FAKE_CURSOR_DIE_ON_LOAD;
+      if (dieMark && !fs.existsSync(dieMark)) { fs.writeFileSync(dieMark, ''); process.stdout.write('', () => process.exit(4)); return; }
       if (OPENCODE) { ocState.model = OC_DEFAULT; ocState.mode = 'build'; return out({ id, result: { configOptions: configOptions() } }); }
       return out({ id, result: { modes: modesState(), models: modelsState(), configOptions: configOptions() } });
     }

@@ -397,6 +397,46 @@ describe('ChatManager with the cold-start queue', () => {
     expect(aReadyWhenBAdmitted).toBe(true);
   });
 
+  // Use the agent reopen path: a user's send bypasses admission and cannot reproduce a leaked start slot.
+  it('cursor: an engine that died during session/load does not keep the next engine from freeing its slot', async () => {
+    const timings: { event: string; atMs: number; data?: unknown }[] = [];
+    const started = performance.now();
+    const info = log.info.bind(log);
+    vi.spyOn(log, 'info').mockImplementation((scope, msg, meta) => {
+      if (meta?.chat === 'c_a' && (msg.startsWith('timing:') || msg === 'cold start admitted')) {
+        timings.push({ event: msg, atMs: Math.round(performance.now() - started), data: meta.data });
+      }
+      return info(scope, msg, meta);
+    });
+    onTestFinished(() => {
+      vi.restoreAllMocks();
+      if (process.env.SB_STAGE1_MEASURE) console.info('stage1 replay diagnostics', JSON.stringify(timings));
+    });
+    const died = path.join(tmp('acp'), 'died');
+    const { m } = setup({ enginePaths: { cursor: FAKE_CURSOR }, env: { FAKE_CURSOR_DIE_ON_LOAD: died, CURSOR_CONFIG_DIR: tmp('cursor-user') } },
+      (ud, cwd) => fs.writeFileSync(path.join(ud, 'chats.json'), JSON.stringify({ version: 2, chats: [
+        { id: 'c_a', harness: 'cursor', cwd, sessionId: crypto.randomUUID(), title: 'c_a', model: null, effort: null, permissionMode: null, isOrchestrator: false, createdAt: 1, working: true },
+      ] })),
+      { cpu: 10, freeRam: 60, slots: 1 });
+    const q = (m as unknown as { admission: AdmissionQueue }).admission;
+    expect(m.resumeInterrupted()).toBe(1);
+    await waitFor(() => fs.existsSync(died) && m.list().find(x => x.id === 'c_a')?.state === 'error', 'the first engine died during its load');
+    expect(q.slots().starting).toBe(0);
+    timings.push({ event: 'crash released slot', atMs: Math.round(performance.now() - started) });
+    await m.archive('c_a');
+    const rec = (m as unknown as { chats: Map<string, { s: { closedBy?: string }; userClosing?: true }> }).chats.get('c_a')!;
+    rec.s.closedBy = 'auto'; delete rec.userClosing;
+    await m.send('c_a', 'ciao', undefined, false, 'Orchestrator');
+    expect(q.slots().starting).toBe(1);
+    // A real start-slot holder, plus a queued successor. The successor returns its slot immediately when admitted.
+    let successorAdmitted = false;
+    expect(q.request('successor', 'start', done => { successorAdmitted = true; done(); })?.kind).toBe('start');
+    await waitFor(() => m.items('c_a').some(i => i.kind === 'assistant' && /Ciao dal motore/.test(i.text)), 'the new engine answered');
+    timings.push({ event: 'first real response', atMs: Math.round(performance.now() - started), data: { starting: q.slots().starting, successorAdmitted } });
+    expect(q.slots().starting).toBe(0);
+    expect(successorAdmitted).toBe(true);
+  });
+
   it("an app chat's queued work goes after a work chat's that came later", async () => {
     const { m, f, cwd, users } = setup({}, undefined, { slots: 1 });
     const app = await m.create({ harness: 'claude', cwd, prompt: 'fix the app', title: 'App · coda' }, 'agent');
