@@ -36,7 +36,7 @@ export abstract class ManagerCheckpoints extends ManagerSessions {
     // one clock from now, the wait for the previous snapshot included: the barrier never stays shut past it
     const late = new Promise<'late'>(resolve => { timer = setTimeout(() => resolve('late'), limit); });
     const p: Promise<void> = (async () => {
-      if (prev && await Promise.race([prev.then(() => 'in' as const), late]) === 'late') return this.givenUp(r, limit, 'the previous turn’s snapshot is still running');
+      if (prev && await Promise.race([prev.then(() => 'in' as const), late]) === 'late') return this.givenUp(r, limit, 'the previous turn’s snapshot or end record is still running');
       await this.takeTurnCheckpoint(r, seq, late, limit);
     })().finally(() => { clearTimeout(timer); if (r.checkpointPending === p) r.checkpointPending = undefined; });
     r.checkpointPending = p;
