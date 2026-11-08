@@ -1,6 +1,7 @@
 // Header/decode ordering uses synthetic bytes and a fake decoder, never allocates a real raster.
 import {expect,it,vi} from 'vitest';
 import {avatarRasterSize,validateAvatarImage} from '../../src/renderer/lib/avatar-raster';
+import {CHROMIUM_WEBP} from '../fixtures/webp-chromium';
 function png(width:number,height:number){const bytes=new Uint8Array(33);bytes.set([137,80,78,71,13,10,26,10]);const v=new DataView(bytes.buffer);v.setUint32(8,13);bytes.set([73,72,68,82],12);v.setUint32(16,width);v.setUint32(20,height);return bytes;}
 it('refuses a small compressed file declaring a huge raster before any decode',async()=>{
   const decode=vi.fn();
@@ -35,6 +36,9 @@ it('reads the canvas of an extended WebP with a lossy, lossless or alpha image',
   const close=vi.fn();
   await validateAvatarImage(new File([riff([vp8x(64,48),vp8(64,48)])],'extended.webp',{type:'image/webp'}),async()=>({width:64,height:48,close}));
   expect(close).toHaveBeenCalledOnce();
+});
+it('reads the canvas of the extended WebP files Chromium itself writes',()=>{
+  for(const b64 of Object.values(CHROMIUM_WEBP))expect(avatarRasterSize(Uint8Array.from(atob(b64),c=>c.charCodeAt(0)),'image/webp')).toEqual({width:120,height:90});
 });
 it('reads the canvas of an animated WebP whose frames all fit inside it',()=>{
   const animated=riff([vp8x(100,80,0x12),chunk('ANIM',[0,0,0,0,0,0]),anmf(0,0,100,80,vp8(100,80)),anmf(20,10,50,40,[...chunk('ALPH',[0]),...vp8l(50,40)])]);
