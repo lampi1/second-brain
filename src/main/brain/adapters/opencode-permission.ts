@@ -264,7 +264,7 @@ function spellingsFor(names: Iterable<string>, taken: (key: string) => boolean):
 /** OPENCODE_CONFIG_CONTENT for one chat: the user's own value (an object) kept, the app's rules added after its own on
  *  the shared block and on every agent; the legacy `mode.build` / `mode.plan` (merged into the agent after `agent`) get
  *  them under the second spelling. The chat starts on build, whatever the user's default agent. `taken` says whether
- *  an OpenCode config the chat loads already has a key (openCodeKeyTaken). */
+ *  an OpenCode config the chat loads already has a key (openCodeConfigKeys). */
 export function openCodeConfigContent(role: OpenCodeRole, claude: ClaudeRules, existing?: string, taken: (key: string) => boolean = () => false): string {
   let base: Record<string, unknown> = {};
   try { if (existing) base = obj(JSON.parse(existing) as unknown); } catch { /* not JSON: the app's own config only */ }
@@ -289,67 +289,131 @@ export function openCodeConfigContent(role: OpenCodeRole, claude: ClaudeRules, e
 }
 
 const KEY_CHAR = 'A-Za-z0-9_*?.\\-';
-/** Whether a config text holds a key as a whole word (quoted JSON, bare or quoted YAML), its `\u`/`\x` escapes read:
- *  wider than a parse, never narrower. */
-export function keyIn(text: string, key: string): boolean {
-  if (!text) return false;
-  const plain = text.replace(/\\u([0-9a-fA-F]{4})|\\x([0-9a-fA-F]{2})/g, (_, u: string | undefined, x: string | undefined) => String.fromCharCode(parseInt(u ?? x ?? '0', 16)));
-  return new RegExp(`(^|[^${KEY_CHAR}])${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^${KEY_CHAR}])`).test(plain);
+const NOT_KEY = new RegExp(`[^${KEY_CHAR}]+`);
+const PLACEHOLDER = /\{(?:env|file):[^}]*\}/g;
+
+/** The keys config texts may hold once OpenCode reads them, as a test: every word as written and with its JSON, YAML or
+ *  TOML escapes read (`\u`, `\U`, `\x`, a backslash line break joining two lines); a word built around a `{env:…}` or
+ *  `{file:…}` takes every key with its start and end. Wider than a parse, never narrower; read once, tested by lookup. */
+function keyTest(texts: Iterable<string>): (key: string) => boolean {
+  const words = new Set<string>();
+  const around: Array<[string, string]> = [];
+  for (const text of texts) {
+    const plain = text.replace(/\\\r?\n[ \t]*/g, '').replace(/\\U([0-9a-fA-F]{8})|\\u([0-9a-fA-F]{4})|\\x([0-9a-fA-F]{2})/g,
+      (_, big: string | undefined, u: string | undefined, x: string | undefined) => {
+        const n = parseInt(big ?? u ?? x ?? '0', 16);
+        return n <= 0x10ffff ? String.fromCodePoint(n) : '';
+      });
+    for (const t of [text, plain]) for (const w of t.split(NOT_KEY)) if (w) words.add(w);
+    for (const m of text.matchAll(PLACEHOLDER)) {
+      const pre = new RegExp(`[${KEY_CHAR}]*$`).exec(text.slice(0, m.index))![0];
+      const suf = new RegExp(`^[${KEY_CHAR}]*`).exec(text.slice(m.index + m[0].length))![0];
+      if (pre || suf) around.push([pre, suf]);
+    }
+  }
+  return key => words.has(key) || around.some(([pre, suf]) => key.length >= pre.length + suf.length && key.startsWith(pre) && key.endsWith(suf));
 }
 
-/** The text of every OpenCode config a chat in `cwd` loads before the app's (1.19.5, read in its binary): the global
- *  folder (XDG config `opencode`), OPENCODE_CONFIG, `opencode.json(c)` and the `.opencode` folders (json, agent and mode
- *  files) from the chat folder up, `~/.opencode`, OPENCODE_CONFIG_DIR, and the files they pull in with `{file:…}`.
- *  More than OpenCode reads (up to the drive root, every json/md under those folders), never less. Read only. */
-export function openCodeConfigTexts(cwd: string, env: NodeJS.ProcessEnv = process.env, home: string = os.homedir()): string[] {
-  const files = new Set<string>();
-  const dir = (d: string, depth = 0): void => {
-    let entries: fs.Dirent[];
-    try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
-    for (const e of entries) {
-      if (files.size > 2000) return;
+/** Whether one config text holds a key (keyTest on that text alone). */
+export const keyIn = (text: string, key: string): boolean => keyTest([text])(key);
+
+const MAX_FILES = 20_000;
+const MAX_BYTES = 64 * 1024 * 1024;
+/** A config the app cannot read in full: the chat does not start (a skipped file could hold the app's spellings). */
+function unreadable(what: string): never {
+  throw new Error(`OpenCode: ${what}, so the app cannot check that its permission rules come last; the chat does not start`);
+}
+const missing = (e: unknown): boolean => ['ENOENT', 'ENOTDIR'].includes((e as NodeJS.ErrnoException).code ?? '');
+
+/** The keys of every OpenCode config a chat in `cwd` loads before the app's (1.19.5, read in its binary), as a test: the
+ *  global folder (XDG config `opencode`: `opencode.json(c)`, `config.json`, the legacy TOML `config`), OPENCODE_CONFIG,
+ *  `opencode.json(c)` and the `.opencode` folders from the chat folder up, `~/.opencode`, OPENCODE_CONFIG_DIR, each
+ *  folder's agent and mode files (`{agent,agents}/**`, `{mode,modes}/*`: every `.md` below them, links followed), the
+ *  config texts read as OpenCode reads them (`{env:…}` from the chat's environment, then `{file:…}`). More than OpenCode
+ *  reads (up to the drive root), never less: a file too big, too many files or one that cannot be read throws, and so
+ *  does an agent file whose front matter is not YAML or JSON (OpenCode runs JavaScript front matter). Read only. */
+export function openCodeConfigKeys(cwd: string, env: NodeJS.ProcessEnv = process.env, home: string = (process.platform === 'win32' ? env.USERPROFILE : env.HOME) || os.homedir()): (key: string) => boolean {
+  const configs: string[] = [], agents: string[] = [];
+  const read = (f: string): string | null => {
+    let st: fs.Stats;
+    try { st = fs.statSync(f); } catch (e) { if (missing(e)) return null; return unreadable(`${f} cannot be read (${(e as NodeJS.ErrnoException).code ?? e})`); }
+    if (!st.isFile()) return null;
+    if (st.size > MAX_BYTES) unreadable(`${f} is over 64 MB`);
+    try { return fs.readFileSync(f, 'utf8'); } catch (e) { return unreadable(`${f} cannot be read (${(e as NodeJS.ErrnoException).code ?? e})`); }
+  };
+  const entries = (d: string): fs.Dirent[] => {
+    try { return fs.readdirSync(d, { withFileTypes: true }); } catch (e) { if (missing(e)) return []; return unreadable(`${d} cannot be listed (${(e as NodeJS.ErrnoException).code ?? e})`); }
+  };
+  const seen = new Set<string>();
+  const below = (d: string): void => {
+    let real: string;
+    try { real = fs.realpathSync(d); } catch { return; }
+    if (seen.has(real)) return;
+    seen.add(real);
+    for (const e of entries(d)) {
       const p = path.join(d, e.name);
-      if (e.isDirectory() && depth < 3 && e.name !== 'node_modules' && e.name !== '.git') dir(p, depth + 1);
-      else if (e.isFile() && /\.(jsonc?|md)$/i.test(e.name)) files.add(p);
+      let kind: { isFile(): boolean; isDirectory(): boolean } = e;
+      if (e.isSymbolicLink()) { try { kind = fs.statSync(p); } catch { continue; } }
+      if (kind.isDirectory()) below(p);
+      else if (kind.isFile() && /\.md$/i.test(e.name)) agents.push(p);
+      if (configs.length + agents.length > MAX_FILES) unreadable(`over ${MAX_FILES} files in the OpenCode folders`);
     }
   };
-  const xdg = env.XDG_CONFIG_HOME || path.join(home, '.config');
-  dir(path.join(xdg, 'opencode'));
-  dir(path.join(home, '.opencode'));
-  if (env.OPENCODE_CONFIG) files.add(path.resolve(env.OPENCODE_CONFIG));
-  if (env.OPENCODE_CONFIG_DIR) dir(path.resolve(env.OPENCODE_CONFIG_DIR));
-  for (let d = path.resolve(cwd), up = ''; d !== up; up = d, d = path.dirname(d)) {
-    for (const f of ['opencode.json', 'opencode.jsonc']) files.add(path.join(d, f));
-    dir(path.join(d, '.opencode'));
-  }
-  const texts: string[] = [];
-  const queue = [...files], seen = new Set<string>();
-  while (queue.length && seen.size < 3000) {
-    const f = queue.shift()!;
-    if (seen.has(f)) continue;
-    seen.add(f);
-    let text: string;
-    try { if (fs.statSync(f).size > 2_000_000) continue; text = fs.readFileSync(f, 'utf8'); } catch { continue; }
-    texts.push(text);
-    for (const m of text.matchAll(/\{file:([^}]+)\}/g)) {
-      const ref = m[1]!.trim();
-      queue.push(ref.startsWith('~/') ? path.join(home, ref.slice(2)) : path.resolve(path.dirname(f), ref));
+  const folder = (d: string): void => {
+    for (const e of entries(d)) {
+      const n = e.name.toLowerCase();
+      if (/^(opencode\.jsonc?|config\.json|config)$/.test(n)) configs.push(path.join(d, e.name));
+      else if (/^(agents?|modes?)$/.test(n)) below(path.join(d, e.name));
     }
+  };
+  folder(path.join(env.XDG_CONFIG_HOME || path.join(home, '.config'), 'opencode'));
+  folder(path.join(home, '.opencode'));
+  if (env.OPENCODE_CONFIG) configs.push(path.resolve(env.OPENCODE_CONFIG));
+  if (env.OPENCODE_CONFIG_DIR) folder(path.resolve(env.OPENCODE_CONFIG_DIR));
+  for (let d = path.resolve(cwd), up = ''; d !== up; up = d, d = path.dirname(d)) {
+    for (const f of ['opencode.json', 'opencode.jsonc']) configs.push(path.join(d, f));
+    folder(path.join(d, '.opencode'));
   }
-  return texts;
+  const named = (n: string): string | undefined => env[n] ?? (process.platform === 'win32' ? Object.entries(env).find(([k]) => k.toUpperCase() === n.toUpperCase())?.[1] : undefined);
+  const texts: string[] = [];
+  for (const f of new Set(configs)) {
+    const text = read(f);
+    if (text === null) continue;
+    const withEnv = text.replace(/\{env:([^}]+)\}/g, (_, n: string) => {
+      if (n.toUpperCase() === 'OPENCODE_CONFIG_CONTENT') unreadable(`${f} reads OPENCODE_CONFIG_CONTENT, the app's own config`);
+      return named(n) || '';
+    });
+    const withFiles = withEnv.replace(/\{file:[^}]+\}/g, m => {
+      let ref = m.slice(6, -1);
+      if (ref.startsWith('~/')) ref = path.join(home, ref.slice(2));
+      return read(path.isAbsolute(ref) ? ref : path.resolve(path.dirname(f), ref))?.trim() ?? '';
+    });
+    texts.push(text, withEnv, withFiles);
+  }
+  for (const f of new Set(agents)) {
+    const text = read(f);
+    if (text === null) continue;
+    const lang = /^﻿?---([^\r\n-][^\r\n]*)?\r?\n/.exec(text)?.[1]?.trim().toLowerCase() ?? '';
+    if (!['', 'yaml', 'yml', 'json'].includes(lang)) unreadable(`${f} has "${lang}" front matter`);
+    texts.push(text);
+  }
+  return keyTest(texts);
 }
 
 /** The environment one OpenCode chat starts with: its config, built from its role and the Claude rules of its folders.
- *  OPENCODE_PERMISSION (merged by OpenCode after every config) is dropped from the app's own environment (undefined: the
- *  spawn leaves it out), in any spelling (Windows names have no case). */
+ *  OPENCODE_PERMISSION (merged by OpenCode after every config) and OPENCODE_TEST_MANAGED_CONFIG_DIR (moves the managed
+ *  folder, read after the app's config) are dropped from the app's own environment (undefined: the spawn leaves them
+ *  out), in any spelling (Windows names have no case). */
 export function openCodeEnv(role: OpenCodeRole, cwd: string, brainRoot: string | null, env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const claude = readClaudeRules(claudeSettingsFiles(cwd, brainRoot, env));
   const named = (n: string): string[] => Object.keys(env).filter(k => k.toUpperCase() === n);
   const own = named('OPENCODE_CONFIG_CONTENT').map(k => env[k]).find(v => v);
-  const texts = openCodeConfigTexts(cwd, env);
+  const dropped = ['OPENCODE_PERMISSION', 'OPENCODE_CONFIG_CONTENT', 'OPENCODE_TEST_MANAGED_CONFIG_DIR'];
+  const childEnv = Object.fromEntries(Object.entries(env).filter(([k]) => !dropped.includes(k.toUpperCase())));
   return {
-    ...Object.fromEntries([...named('OPENCODE_PERMISSION'), ...named('OPENCODE_CONFIG_CONTENT')].map(k => [k, undefined])),
-    OPENCODE_CONFIG_CONTENT: openCodeConfigContent(role, claude, own, key => texts.some(t => keyIn(t, key))),
+    ...Object.fromEntries(dropped.flatMap(named).map(k => [k, undefined])),
+    OPENCODE_CONFIG_CONTENT: openCodeConfigContent(role, claude, own, openCodeConfigKeys(cwd, childEnv)),
     OPENCODE_PERMISSION: undefined,
+    OPENCODE_TEST_MANAGED_CONFIG_DIR: undefined,
   };
 }

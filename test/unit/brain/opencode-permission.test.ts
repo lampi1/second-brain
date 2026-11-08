@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { agentEdit, claudeSettingsFiles, keyIn, NO_CLAUDE_RULES, openCodeConfigContent, openCodeConfigTexts, openCodeEnv, openCodePermission, readClaudeRules, type ClaudeRules, type OpenCodeRole } from '../../../src/main/brain/adapters/opencode-permission';
+import { agentEdit, claudeSettingsFiles, keyIn, NO_CLAUDE_RULES, openCodeConfigContent, openCodeConfigKeys, openCodeEnv, openCodePermission, readClaudeRules, type ClaudeRules, type OpenCodeRole } from '../../../src/main/brain/adapters/opencode-permission';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-ocperm-'));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -242,16 +242,44 @@ describe('OpenCode permission config', () => {
     fs.writeFileSync(path.join(cwd, '.opencode', 'agent', 'build.md'), '---\npermission:\n  BaSh: allow\n---\nx');
     fs.writeFileSync(path.join(xdg, 'opencode', 'opencode.json'), '{ "permission": { "eDiT": "allow" } }');
     fs.writeFileSync(path.join(xdg, 'opencode', 'node_modules', 'p', 'x.json'), '"rEaD"');
-    const texts = openCodeConfigTexts(cwd, { XDG_CONFIG_HOME: xdg }, path.join(root, 'home'));
-    const taken = (k: string): boolean => texts.some(t => keyIn(t, k));
+    const ocHome = path.join(root, 'home');
+    const taken = openCodeConfigKeys(cwd, { XDG_CONFIG_HOME: xdg }, ocHome);
     expect(['bAsH', 'BaSh', 'eDiT'].map(taken)).toEqual([true, true, true]);
     expect(taken('rEaD')).toBe(false); // node_modules is not config
     expect(keyIn('"bAsH *": 1', 'bAsH')).toBe(true); // wider, never narrower
     expect(keyIn('"bAsHx": 1', 'bAsH')).toBe(false);
-    const cfg = JSON.parse(openCodeEnv(artisan, cwd, null, { XDG_CONFIG_HOME: xdg, CLAUDE_CONFIG_DIR: path.join(root, 'none') }).OPENCODE_CONFIG_CONTENT ?? '{}') as { permission: Json; agent: { build: { permission: Json } } };
+    const cfg = JSON.parse(openCodeEnv(artisan, cwd, null, { XDG_CONFIG_HOME: xdg, CLAUDE_CONFIG_DIR: path.join(root, 'none'), USERPROFILE: ocHome, HOME: ocHome }).OPENCODE_CONFIG_CONTENT ?? '{}') as { permission: Json; agent: { build: { permission: Json } } };
     expect(Object.keys(cfg.agent.build.permission).filter(k => k.toLowerCase() === 'bash')).toEqual([expect.not.stringMatching(/^(bAsH|BaSh)$/)]);
     expect(Object.keys(cfg.agent.build.permission)).toContain('EdIt');
     expect(Object.keys(cfg.agent.build.permission)).not.toContain('eDiT');
+  });
+
+  it('reads a config as OpenCode reads it: placeholders, escapes, big files, links; what it cannot read stops the chat', () => {
+    const root = path.join(tmp, 'oc2');
+    const cwd = path.join(root, 'repo');
+    const oc = path.join(cwd, '.opencode');
+    const keys = (env: NodeJS.ProcessEnv = {}): ((k: string) => boolean) => openCodeConfigKeys(cwd, { XDG_CONFIG_HOME: path.join(root, 'xdg'), ...env }, path.join(root, 'home'));
+    fs.mkdirSync(path.join(oc, 'agent', 'a', 'b', 'c'), { recursive: true });
+    fs.mkdirSync(path.join(root, 'linked'), { recursive: true });
+    // a key built around a placeholder: an unset variable reads as '', a set one as its value, a file as its text
+    fs.writeFileSync(path.join(cwd, 'opencode.json'), '{ "agent": { "build": { "permission": { "bA{env:SB_NONE}sH": "allow", "{env:SB_KEY}": "allow", "Ex{file:./k.txt}": "allow" } } } }');
+    fs.writeFileSync(path.join(cwd, 'k.txt'), 'TeRnAl_DiReCtOrY\n');
+    let taken = keys({ SB_KEY: 'BaSh' });
+    expect(['bAsH', 'BaSh', 'bA', 'ExTeRnAl_DiReCtOrY'].map(taken)).toEqual([true, true, true, true]);
+    expect(taken('bAsh')).toBe(false);
+    // YAML front matter escapes, deep agent folders, a 3 MB file, a linked agent folder
+    fs.writeFileSync(path.join(oc, 'agent', 'a', 'b', 'c', 'build.md'), '---\npermission:\n  "r\\U00000045aD": allow\n  "eD\\\n    iT": allow\n---\nx');
+    fs.writeFileSync(path.join(oc, 'opencode.json'), `{ "permission": { "tAsK": "allow" } }${' '.repeat(3_000_000)}`);
+    fs.writeFileSync(path.join(root, 'linked', 'plan.md'), '---\npermission:\n  wEbFeTcH: allow\n---\n');
+    fs.symlinkSync(path.join(root, 'linked'), path.join(oc, 'agents'), 'junction');
+    taken = keys();
+    expect(['rEaD', 'eDiT', 'tAsK', 'wEbFeTcH'].map(taken)).toEqual([true, true, true, true]);
+    // JavaScript front matter (OpenCode runs it) or a config that reads the app's own config: the chat does not start
+    fs.writeFileSync(path.join(oc, 'agent', 'js.md'), '---js\n{ permission: { ["b" + "AsH"]: "allow" } }\n---\n');
+    expect(() => keys()).toThrow(/front matter/);
+    fs.rmSync(path.join(oc, 'agent', 'js.md'));
+    fs.writeFileSync(path.join(oc, 'opencode.jsonc'), '{ "x": {env:OPENCODE_CONFIG_CONTENT} }');
+    expect(() => keys()).toThrow(/OPENCODE_CONFIG_CONTENT/);
   });
 
   it('asks, never allows, an interpreter given code on the command line: a deny rule cannot see inside it', () => {
@@ -267,7 +295,7 @@ describe('OpenCode permission config', () => {
     const cwd = path.join(tmp, 'repo');
     const files = claudeSettingsFiles(cwd, brain, { CLAUDE_CONFIG_DIR: path.join(home, '.claude') });
     expect(files).toEqual([userFile, brainFile, path.join(cwd, '.claude', 'settings.json'), path.join(cwd, '.claude', 'settings.local.json')].map(f => path.resolve(f)));
-    const env = openCodeEnv(artisan, cwd, brain, { CLAUDE_CONFIG_DIR: path.join(home, '.claude'), OPENCODE_PERMISSION: '{"bash":"allow"}', opencode_permission: '{}', OPENCODE_CONFIG_CONTENT: '{"model":"m"}' });
+    const env = openCodeEnv(artisan, cwd, brain, { CLAUDE_CONFIG_DIR: path.join(home, '.claude'), USERPROFILE: home, HOME: home, OPENCODE_TEST_MANAGED_CONFIG_DIR: 'x', OPENCODE_PERMISSION: '{"bash":"allow"}', opencode_permission: '{}', OPENCODE_CONFIG_CONTENT: '{"model":"m"}' });
     const cfg = JSON.parse(env.OPENCODE_CONFIG_CONTENT ?? '{}') as { model: string; permission: { bAsH: Record<string, string> } };
     expect(cfg.permission.bAsH['*brain-wipe*']).toBe('deny');
     expect(cfg.permission.bAsH[`*${SCRIPT}*`]).toBe('deny');
@@ -275,5 +303,6 @@ describe('OpenCode permission config', () => {
     // OpenCode merges OPENCODE_PERMISSION after every config: the spawn leaves it out (undefined), in any spelling
     expect(env).toHaveProperty('OPENCODE_PERMISSION', undefined);
     expect(env).toHaveProperty('opencode_permission', undefined);
+    expect(env).toHaveProperty('OPENCODE_TEST_MANAGED_CONFIG_DIR', undefined); // it moves the folder read after the app's
   });
 });

@@ -22,15 +22,20 @@ local work: OpenCode's `external_directory` requests, paths outside the folder, 
    can run (build, plan, general, explore, the hidden ones), under permission names spelled as no config spells them
    (`bAsH`; `BaSh` on `mode`, merged into the agent later): OpenCode matches names without case, and a key new to the
    user's object is appended after the user's keys, so the app's rules are the last ones on every agent. A spelling is
-   used only when no OpenCode config the chat loads has it as a key (the app reads their text first: the global
-   folder, `OPENCODE_CONFIG`, every `opencode.json(c)` and `.opencode` folder from the chat folder up, the
-   `{file:…}` they include); otherwise the next free one; none free, the chat does not start. The task tool
+   used only when no OpenCode config the chat loads has it as a key (the app reads their text first, as OpenCode
+   does: the global folder with its legacy TOML `config`, `OPENCODE_CONFIG`, every `opencode.json(c)` and `.opencode`
+   folder from the chat folder up, every agent and mode file below them, links followed, `{env:…}` and `{file:…}`
+   read, JSON, YAML and TOML escapes read; a word built around a placeholder takes every key with its start and end);
+   otherwise the next free one; none free, the chat does not start. A config the app cannot read in full also stops
+   the chat: a file over 64 MB, over 20 000 files, a read error, an agent file with JavaScript front matter (OpenCode
+   runs it), a config that reads `OPENCODE_CONFIG_CONTENT`. The task tool
    starts only general and explore (a user's own agent carries rules the app cannot see); the chat starts on build
-   whatever the user's `default_agent`; `OPENCODE_PERMISSION` (merged after every config) is left out of the
-   process environment. The user's other settings, and a `OPENCODE_CONFIG_CONTENT` of their own, are kept; on the
+   whatever the user's `default_agent`; `OPENCODE_PERMISSION` (merged after every config) and
+   `OPENCODE_TEST_MANAGED_CONFIG_DIR` (moves the managed folder) are left out of the process environment. The user's other settings, and a `OPENCODE_CONFIG_CONTENT` of their own, are kept; on the
    permissions the app sets (bash, read, edit, external_directory, web, task) the app's rules replace the user's
    OpenCode rules: Claude's settings are the one list of what is denied. Only an admin-managed OpenCode config (its
-   managed folder, the remote config of an OpenCode organisation account, merged after this one) keeps the last word. No Claude, Cursor or
+   managed folder, the remote config of an OpenCode organisation account, merged after this one) keeps the last word;
+   a remote "wellknown" config (loaded first, from a provider the user signed in to) is not read by the app. No Claude, Cursor or
    OpenCode file is written (rule 6). It holds for every new start: a chat already open gets it when its engine
    restarts (app restart, model change).
 2. **The role's ceiling, never more.** A class the role lacks is `deny` (no `edit` and no `brain-write`: edits denied;
@@ -71,6 +76,11 @@ local work: OpenCode's `external_directory` requests, paths outside the folder, 
   (`*name*`) still see it in the command line. Running the project's own code without a panel is the app's normal
   work (`auto-permit.ts`, the same for every engine); on Claude the auto-mode classifier also judges each command,
   on OpenCode nothing does.
+- Known limit: an OpenCode plugin (`.opencode/plugin`, a `plugin` entry of a config) is code OpenCode runs in its
+  own process: no config rule holds against code running there. Plugins are the user's or the
+  project's own code, like the project scripts above.
+- Known limit: Scout and Sentinel on OpenCode answer the MCP tools of the user's OpenCode config without a panel
+  (OpenCode's default for a tool no rule names); a Claude `mcp__…` deny still holds.
 - OpenCode's pattern semantics (ordered, last match wins, `*` crosses folders, case-insensitive) and its config merge
   (a user's key keeps its place, agent rules after the shared ones, `mode` after `agent`) are re-implemented in the unit
   test to judge the generated config against a user config that opens everything; a change in a later OpenCode version
