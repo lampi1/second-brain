@@ -52,9 +52,10 @@ test('a card opens a panel with points, analogy, technical details and sources; 
   await expect(toggle).toBeFocused();
   await expect(page.getByTestId('guide-page')).toBeVisible(); // Esc closed the panel, not the page
 
-  await page.getByTestId('guide-filter').fill('instradamento');
-  await expect(page.getByTestId('guide-card-routing')).toBeVisible();
-  await expect(page.getByTestId('guide-card-dashboard')).toHaveCount(0);
+  // the routing card is gone (ADR 0210): «classificatori» keeps the classifiers card and drops the runs one
+  await page.getByTestId('guide-filter').fill('classificatori');
+  await expect(page.getByTestId('guide-card-classifiers')).toBeVisible();
+  await expect(page.getByTestId('guide-card-runs')).toHaveCount(0);
   await page.getByTestId('guide-filter').fill('');
 });
 

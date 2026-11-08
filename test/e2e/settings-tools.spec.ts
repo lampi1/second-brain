@@ -13,7 +13,9 @@ test('Settings shows three connectors and the supported engines with explicit Co
     await shot(page, 'settings-tools-connectors');
     await page.getByTestId('st-search').fill('Codex');
     const accounts = page.getByTestId('st-group-accounts');
-    await expect(accounts.locator('.st-tool')).toHaveCount(3);
+    // the built-in engines (engines/registry.ts engineInfos): Claude Code, Cursor, Codex, OpenCode
+    await expect(accounts.locator('.st-tool')).toHaveCount(4);
+    for (const id of ['claude', 'cursor', 'codex', 'opencode']) await expect(accounts.getByTestId(`st-tool-${id}`)).toHaveCount(1);
     await expect(accounts).not.toContainText('Kimi');
     await expect(page.getByTestId('codex-autonomy')).toContainText('Nessun repository autorizzato');
     await expect(page.getByRole('button', { name: 'Aggiungi cartella', exact: true })).toBeVisible();
