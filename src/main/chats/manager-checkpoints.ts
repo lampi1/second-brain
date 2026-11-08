@@ -28,7 +28,8 @@ export abstract class ManagerCheckpoints extends ManagerSessions {
    *  the message. Settles (never rejects) once the snapshot is in, failed or was given up (CHECKPOINT_DEADLINE_MS); a
    *  snapshot starts only after the previous one settled, so the list stays in turn order (ADR 0228). */
   protected checkpoint(r: Rec): Promise<void> {
-    const prev = r.checkpointPending;
+    // the previous snapshot, and the previous turn's end still being read: this turn's writes never reach that record
+    const prev = r.checkpointPending || r.afterPending ? Promise.all([r.checkpointPending, r.afterPending]) : undefined;
     const seq = r.checkpointSeq = (r.checkpointSeq ?? 0) + 1;
     const limit = this.opts.checkpointDeadlineMs ?? CHECKPOINT_DEADLINE_MS;
     let timer: NodeJS.Timeout | undefined;
@@ -58,7 +59,8 @@ export abstract class ManagerCheckpoints extends ManagerSessions {
       }
       if (!cp) { r.gitRoot = null; return; }
       r.gitRoot = cp.root;
-      // a newer turn's checkpoint already in (the next turn stopped waiting for this one): out of order, dropped
+      // a newer turn's checkpoint already in (the next turn stopped waiting for this one): out of order, dropped.
+      // Defensive: with one constant deadline a turn's snapshot always settles before the next turn's deadline.
       const newest = r.checkpoints?.at(-1);
       if (newest && (turnOf.get(newest) ?? 0) > seq) return;
       turnOf.set(cp, seq);
