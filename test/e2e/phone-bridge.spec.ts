@@ -10,7 +10,7 @@ import os from 'node:os';
 import path from 'node:path';
 import type { ChatItem, PendingRequest } from '../../src/shared/contract';
 import { callbackUpdate, startFakeTelegram, textUpdate, TOKEN, type FakeTelegram } from '../unit/phone/fakes';
-import { closeSetup, launch, setSize, shot } from './helpers';
+import { launch, setSize, shot } from './helpers';
 
 const FIX = path.resolve(import.meta.dirname, '..', 'fixtures');
 
@@ -23,7 +23,7 @@ test('the phone pairs, talks to the Orchestrator and answers a Sì/No question w
   // the Orchestrator runs in the brain folder: a temporary one (SB_BRAIN), never the user's
   const { app, page } = await launch({ SB_PHONE_TEST_API: tg.base, SB_CLAUDE_PATH: path.join(FIX, 'fake-claude.mjs'), CLAUDE_CONFIG_DIR: tmp('sb-e2e-claude-'), SB_BRAIN: tmp('sb-e2e-brain-') });
   await setSize(app, 1400, 900);
-  await closeSetup(page);
+  // a linked brain opens no first-run setup (usage.spec.ts)
   const orch = await page.evaluate(() => window.sb.invoke('orchestrator:ensure', { harness: 'claude' }));
   const texts = () => tg.sent().map(c => String(c.body.text ?? ''));
 
