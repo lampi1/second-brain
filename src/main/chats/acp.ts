@@ -67,6 +67,7 @@ import { PROBE_MODEL } from '../learn/accepted-models';
 import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, type AppAsk, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink } from './session';
 import { AgentChildrenReporter } from './agent-children';
 import type { ChildObservation } from '../../shared/agents';
+import { recordWire } from './wire-record';
 import { BRIEF_GRACE_MS, BRIEF_REFUSAL, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
 
 export interface AcpOptions extends SessionOptions {
@@ -598,6 +599,7 @@ export class AcpSession implements HarnessSession {
     log.info('chats', 'acp session start', { chat, data: { engine, pid: p.pid, kind: cmd.kind, command: cmd.display, cwd: this.opts.cwd, args: this.args() } });
     p.stdout.setEncoding('utf8');
     p.stdout.on('data', (d: string) => timedStep('engine acp output', () => this.onStdout(d)));
+    recordWire(p, { engine, chatId: chat }); // opt-in NDJSON record mode, redacted (wire-record.ts)
     p.stderr.setEncoding('utf8');
     // 16000: room for a whole model refusal (Cursor lists 190 ids, onClose refusal)
     p.stderr.on('data', (d: string) => { this.onStderr(d); log.debug('chats', 'acp stderr', { chat, data: { engine, text: cut(d, 500) } }); });

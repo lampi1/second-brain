@@ -47,6 +47,7 @@ import { closePipes, engineKills, jobGuard, killEngineTree, lowerEnginePriority 
 import { reapEnabled, reapEngine, type Root } from './proctree';
 import { AgentChildrenReporter } from './agent-children';
 import { codexChildren } from './codex-children';
+import { recordWire } from './wire-record';
 import { cut, lastLine, nextId, stripAnsi, tokenUsage, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink, type TokenUsage } from './session';
 
 export type CodexApproval = 'untrusted' | 'on-request' | 'never';
@@ -251,6 +252,7 @@ export class CodexSession implements HarnessSession {
     log.info('chats', 'codex session start', { chat, data: { engine, pid: p.pid, kind: cmd.kind, command: cmd.display, cwd: this.opts.cwd, args: redactArgs(this.args()), key: !!this.opts.env?.CODEX_API_KEY } });
     p.stdout.setEncoding('utf8');
     p.stdout.on('data', (d: string) => timedStep('engine codex output', () => this.onStdout(d)));
+    recordWire(p, { engine, chatId: chat }); // opt-in NDJSON record mode, redacted (wire-record.ts)
     p.stderr.setEncoding('utf8');
     p.stderr.on('data', (d: string) => { this.errTail = (this.errTail + d).slice(-4000); log.debug('chats', 'codex stderr', { chat, data: { engine, text: cut(d, 500) } }); });
     p.stdin.on('error', e => log.warn('chats', 'codex stdin error', { chat, data: { engine, error: errText(e) } }));

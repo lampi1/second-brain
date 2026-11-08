@@ -3,7 +3,7 @@
 // registry entry says how it starts, brain/adapters/ what the brain's rules add to this launch (ADR 0060).
 // The user's API key (engines/secrets.ts) goes only here, into its own engine: a CLI's environment variable
 // (keyEnv: ACP, Codex's CODEX_API_KEY) or an API session's request header. The chat manager calls sessionFor and never names an engine; tests pass
-// their own factory to the manager instead.
+// their own factory to the manager instead. Every session gets the turn-start watchdog (chats/turn-watchdog.ts).
 import path from 'node:path';
 import fs from 'node:fs';
 import type { CursorReasoning, ModelsSeen } from '../../shared/contract';
@@ -17,6 +17,7 @@ import { ClaudeSession } from '../chats/claude';
 import { CodexSession } from '../chats/codex';
 import { listPrice, registryModels } from '../chats/live-cost';
 import type { HarnessSession, SessionOptions, SessionSink } from '../chats/session';
+import { TURN_NO_START_MS, watchTurns } from '../chats/turn-watchdog';
 import { appAsks, engineOf, engines, fingerprint, priceEnginesOf, type EngineDef } from './registry';
 
 /** What the app gives a session beyond the chat's own options. */
@@ -38,7 +39,14 @@ export interface EngineContext {
   key: () => string | null;
 }
 
+/** The session of a chat on this engine, with the turn-start watchdog around it (chats/turn-watchdog.ts, ADR 0221):
+ *  a sent turn with no first event in SB_TURN_WATCHDOG_MS (default 120 s) is shown and logged, never restarted. */
 export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: SessionSink, ctx: EngineContext): HarnessSession {
+  const noStartMs = Number(process.env.SB_TURN_WATCHDOG_MS) > 0 ? Number(process.env.SB_TURN_WATCHDOG_MS) : TURN_NO_START_MS;
+  return watchTurns(watched => startSession(engine, opts, watched, ctx), sink, { chatId: opts.chatId, engine: engine.id, label: engine.label, noStartMs });
+}
+
+function startSession(engine: EngineDef, opts: SessionOptions, sink: SessionSink, ctx: EngineContext): HarnessSession {
   if (opts.agentAssets) {
     const { pluginDir, skillRoot } = opts.agentAssets, base = path.join(ctx.userData, 'agent-pack-runtime');
     if (!/^[a-f0-9]{64}$/.test(path.basename(pluginDir)) || path.resolve(path.dirname(pluginDir)) !== path.resolve(base)

@@ -48,6 +48,7 @@ import { claudeMcp, claudeTools, suggestedAbove } from '../agents/tool-policy';
 import { BRIEF_GRACE_MS, BRIEF_REFUSAL, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
 import { mcpForm, mcpFormAnswer, type McpForm } from '../../shared/mcp-form';
 import { WriteBarrier } from './write-barrier';
+import { recordWire } from './wire-record';
 
 /** our own messages' uuids kept for their echo: a few hundred turns at most are ever waiting */
 const SENT_UUIDS_MAX = 500;
@@ -366,6 +367,7 @@ export class ClaudeSession implements HarnessSession {
     log.info('chats', 'session start', { chat, data: { pid: p.pid, cli, cwd: this.opts.cwd, args } });
     p.stdout.setEncoding('utf8');
     p.stdout.on('data', (d: string) => timedStep('engine claude output', () => this.onStdout(d)));
+    recordWire(p, { engine: 'claude', chatId: chat }); // opt-in NDJSON record mode, redacted (wire-record.ts)
     p.stderr.setEncoding('utf8');
     p.stderr.on('data', (d: string) => {
       this.errTail = (this.errTail + d).slice(-4000);

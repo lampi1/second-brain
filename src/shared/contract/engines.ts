@@ -39,14 +39,26 @@ export interface EngineCaps {
 /** An engine as the renderer sees it: label = short ("Claude"), name = full ("Claude Code"). */
 export interface EngineInfo {
   id: Harness; label: string; name: string; kind: EngineKind; caps: EngineCaps;
-  /** app = built in or one of the app's presets; brain = an entry of the brain's harness/models.json */
-  source: 'app' | 'brain';
+  /** app = built in or one of the app's presets; brain = an entry of the brain's harness/models.json; catalog = a known
+   *  ACP CLI the app proposes (engines/acp-catalog, ADR 0221), off and untrusted until the user turns it on */
+  source: 'app' | 'brain' | 'catalog';
   /** whether it takes the user's API key: required (api), optional (a CLI that also has its own login), none */
   key: 'required' | 'optional' | 'none';
   /** how it starts, as Settings shows it ("agent acp", an endpoint URL) */
   runs: string;
   /** false: its start definition is not the one the user turned on (changed in the brain, or never on): it does not start */
   trusted: boolean;
+  /** a catalog entry: where the user installs it and how they sign in (the app does neither by itself) */
+  catalog?: EngineCatalogInfo;
+}
+/** What Settings shows of an ACP catalog entry (engines/acp-catalog/catalog.ts, ADR 0221). */
+export interface EngineCatalogInfo {
+  /** the CLI's own install page: the user installs it, never the app */
+  installUrl: string;
+  /** the sign-in the user runs («Accedi» opens it in a visible terminal only on their click); null = none known */
+  signIn: string | null;
+  /** the skill folders the CLI reads in a project, as its makers document them (informative) */
+  skillDirs: readonly string[];
 }
 /** The app's own engine for the Anthropic Messages API (engines/registry.ts, ADR 0052): the judge and the other text-only
  *  calls (engines/text.ts) and the writing rows «Sui crediti API» run on it, with the key saved in Settings. */

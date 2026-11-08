@@ -1,0 +1,37 @@
+{
+  "items": [
+    {
+      "kind": "system",
+      "text": "MCP broken: failed",
+      "level": "warn"
+    },
+    {
+      "kind": "assistant",
+      "text": "Ciao dal motore",
+      "streaming": false
+    },
+    {
+      "kind": "result",
+      "costUsd": 0.01,
+      "turns": 1,
+      "isError": false
+    },
+    {
+      "kind": "assistant",
+      "text": "parola0 parola1 parola2 parola3 parola4 parola5 parola6 parola7 parola8 parola9 parola10 parola11 parola12 parola13 parola14 parola15 parola16 parola17 parola18 parola19 parola20 parola21 parola22 parola23 ",
+      "streaming": false
+    },
+    {
+      "kind": "assistant",
+      "text": "Ciao dal motore",
+      "streaming": false
+    },
+    {
+      "kind": "result",
+      "costUsd": 0.01,
+      "turns": 1,
+      "isError": false
+    }
+  ],
+  "pendings": []
+}
