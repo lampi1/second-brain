@@ -143,6 +143,8 @@ export interface WorktreePoolOptions {
   limits: () => WorktreeLimits;
   /** an open chat (or a running engine) works inside `root` */
   inUse: (root: string) => boolean;
+  /** a warm engine waits inside `root`: the cleanup keeps it, take() and nextCwd() still pick it (the next child adopts that engine) */
+  warm?: (root: string) => boolean;
   /** the folders the app's chats work in: the repositories they belong to are the ones the cleanup looks at */
   knownCwds: () => Iterable<string>;
   /** the delegation allocations (delegation-worktrees.json): app-owned roots made before the pool */
@@ -364,7 +366,7 @@ export class WorktreePool {
       const slot = this.slots.find(s => keyOf(s.root) === keyOf(w.path));
       const touched = touchedAt(w.path);
       const e: Entry = { root: w.path, head: w.head, branch: w.branch, slot, state: 'unknown', usedAt: slot?.usedAt ?? touched, bytes: null };
-      if (this.o.inUse(w.path) || this.leased(w.path)) { e.state = 'inUse'; return e; }
+      if (this.o.inUse(w.path) || this.leased(w.path) || this.o.warm?.(w.path)) { e.state = 'inUse'; return e; }
       const st = await session.git(w.path, ['status', '--porcelain=v1', '--untracked-files=normal']);
       if (st.exit !== 0) return e;
       if (st.out.trim()) { e.state = 'changes'; return e; }
@@ -416,7 +418,7 @@ export class WorktreePool {
 
   private async removeEntry(r: RepoScan, e: Entry, session: GitSession): Promise<boolean> {
     // checked again under the repository's lock: a take may have started, or taken and released the slot, meanwhile
-    if (this.o.inUse(e.root) || this.leased(e.root) || (e.slot && e.slot.usedAt > e.usedAt) || !e.head) return false;
+    if (this.o.inUse(e.root) || this.leased(e.root) || this.o.warm?.(e.root) || (e.slot && e.slot.usedAt > e.usedAt) || !e.head) return false;
     // the scan ran before the lock: the worktree must still be clean, at the scanned commit, with nothing of its own
     const st = await session.git(e.root, ['status', '--porcelain=v1', '--untracked-files=normal']);
     if (st.exit !== 0 || st.out.trim()) return false;

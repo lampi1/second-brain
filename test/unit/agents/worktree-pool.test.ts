@@ -155,6 +155,20 @@ describe('worktree pool', () => {
     expect(git(f.repo, 'rev-parse', 'feature/kept')).toBe(work);
   });
 
+  it('a slot with a warm engine is taken by the next child but never removed by the cleanup', async () => {
+    const f = fixture({ perRepo: 0, total: 0, diskGb: 1 });
+    const src = await f.source();
+    const slot = await f.pool.take(src, new GitSession()); f.pool.release(slot.root);
+    const warm = new Set([slot.root]);
+    const pool = new WorktreePool({ file: path.join(f.root, 'pool.json'), limits: () => ({ perRepo: 0, total: 0, diskGb: 1 }), inUse: () => false,
+      warm: r => [...warm].some(w => w.toLowerCase() === r.toLowerCase()), knownCwds: () => [f.repo], now: () => Date.now() + 3600_000 });
+    await pool.cleanup();
+    expect(fs.existsSync(slot.root)).toBe(true);
+    const next = await pool.take(src, new GitSession());
+    expect(next).toMatchObject({ root: slot.root, reused: true });
+    pool.release(next.root);
+  });
+
   it('a slot taken while a cleanup runs is not removed by it', async () => {
     const f = fixture({ perRepo: 0, total: 0, diskGb: 1 });
     const src = await f.source();
