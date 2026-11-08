@@ -65,7 +65,7 @@ docs/screenshots/orchestrator.webp binary-media sha256:5cdefa44ef732e6d4c17ba05f
 docs/screenshots/brain-scripts.webp binary-media sha256:219292f3a95f9b1c37895edfb598342ee71e565241dd08981d61b1a531d7869e
 docs/screenshots/agent-avatars/dark.png binary-media sha256:179f08ef10ed1ef6940e5b4b4c73d55177f7f73e72362ab75f7d65fa769872f6
 docs/screenshots/agent-avatars/light.png binary-media sha256:a9d836f58877f6e6017a4f61b1ee8ab1ddd4fd0b40648338b06ea12174537386
-docs/screenshots/connectors.webp binary-media sha256:c8c97354da596f47219b9a8be3e5dfabacc2edac6a69ecdd9c5d2cc60ec264f5
+docs/screenshots/connectors.webp binary-media sha256:ca5e64447bee48ea5dbfc1da5cd5aa850b1bc522b38a487b085f15dca0d095c0
 # The Task page's own DevOps reader (ADR 0093): the public Azure DevOps profile/accounts API host (app.vssps), the
 # documented endpoint that lists the signed-in user's organizations; no customer host (checked 2026-10-20). Re-pinned 2026-10-29: only the PR's source branch added (ADR 0185).
 src/main/tasks/devops-me.mjs internal-host sha256:33ae30909b6e62ece6dc4ada9b65c7f3524b3d1a9dc108bc541ec987a6ffc8af
@@ -202,7 +202,7 @@ docs/screenshots/browser.webp binary-media sha256:38a04f70c5a5844bfb81c169cc8548
 docs/screenshots/costs.webp binary-media sha256:1ba3f6ebf22d7bd95edf6325f2ff9aef356500158e62822ca2587b9feb9b4a97
 docs/screenshots/plan.webp binary-media sha256:8ea7246d76bd61e319b9c58c168a3065e143867d317debf206d6f04a7a595d7f
 docs/screenshots/quality.webp binary-media sha256:165e620973a561e44277efe0023a72f40023a678065f8289176d642caee57efa
-docs/screenshots/settings.webp binary-media sha256:051f83ae302cb5ff61b3444114a8605646d74be38bc1281192fae072e91620f7
+docs/screenshots/settings.webp binary-media sha256:68b4dff50f89d640945652f5955f8aba57c140738bb1689fe64c4ca290ccd865
 docs/screenshots/trends.webp binary-media sha256:977fd7a015792356975118893d2306a784ef8f5ae7c51ed14ccbf3dc58ede4ad
 docs/screenshots/orchestrator.webp binary-media sha256:e24063bb4008af0ca80f0f764fc2c6c60f1dd28a18a2140f84072da04ec0754b
 docs/screenshots/browser.webp binary-media sha256:2f35624ec4e7928dfa421935af71894b2d816f3aa057e0770ba8e6057a061275
