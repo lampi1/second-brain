@@ -56,7 +56,7 @@ test('a resume after a restart waits while the machine is busy; "Avvia ora" star
   await expect(page.getByTestId('st-queue')).toBeVisible();
   await expect(page.getByTestId('st-queue-cpu-select')).toContainText('95%');
   await expect(page.getByTestId('st-queue-ram-select')).toContainText('10%');
-  await expect(page.getByTestId('st-queue-slots-select')).toContainText(/d/);
+  await expect(page.getByTestId('st-queue-slots-select')).toContainText(/Automatico \(\d+\)/);
   expect(await page.evaluate(async () => window.sb.invoke('settings:get', undefined))).toMatchObject({ loadQueue: true, loadQueueCpu: 95, loadQueueRam: 10 });
   await shot(page, 'admission-3-settings');
   await app.close();
