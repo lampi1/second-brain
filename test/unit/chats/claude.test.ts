@@ -155,26 +155,10 @@ describe('ClaudeSession', () => {
     expect(sink.last('tool')?.output).toContain('only yes/no questions');
   });
 
-  it('a yes/no question without its brief waits a moment, then goes back with how to send one (ADR 0150)', async () => {
-    let ready = false;
-    const { s, sink } = start({ yesNo: true, briefReady: () => ready });
-    s.send('asksn');
-    await waitFor(() => sink.trace.filter(t => t === 'result').length === 1, 'turn 1', 6000);
-    expect(sink.pendings).toHaveLength(0);
-    expect(sink.last('tool')?.output).toContain('show_ui with component "brief"');
-    // a brief that arrives during the wait (show_ui called in parallel): the question is shown
-    s.send('asksn');
-    await new Promise(r => setTimeout(r, 300));
-    expect(sink.pendings).toHaveLength(0);
-    ready = true;
-    const q = await waitFor(() => sink.pendings[0], 'shown once the brief is there', 4000);
-    expect(q.questions?.[0]?.question).toBe('Lo pubblico?');
-  });
-
-  it('a yes/no question with its brief is shown at once (ADR 0150)', async () => {
+  it('a yes/no question with its brief is shown (ADR 0150)', async () => {
     const { s, sink } = start({ yesNo: true, briefReady: () => true });
     s.send('asksn');
-    const q = await waitFor(() => sink.pendings[0], 'question', 1000);
+    const q = await waitFor(() => sink.pendings[0], 'question');
     expect(q.questions?.[0]?.options.map(o => o.label)).toEqual(['Sì (consigliato)', 'No']);
   });
 
@@ -577,9 +561,7 @@ describe('ClaudeSession', () => {
     const { s } = start({ env: { FAKE_CLAUDE_LOG: log, FAKE_CLAUDE_HOLD_PIPES: '60000' } });
     const holder = await waitFor(() => (fakeLog(log).find(l => 'holder' in l) as { holder?: number } | undefined)?.holder, 'holder pid');
     await waitFor(() => s.state === 'idle', 'idle');
-    const t0 = Date.now();
     await s.close(1500);
-    expect(Date.now() - t0).toBeLessThan(10000);
     expect(s.alive).toBe(false);
     expect(fakeLog(log).some(l => (l as { exit?: string }).exit === 'stdin closed')).toBe(true);
     killStray(holder);

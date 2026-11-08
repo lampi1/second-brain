@@ -63,7 +63,8 @@ One line each; the full text, its exceptions and ADRs: the same number in `docs/
 5. **No production from agents or routines**: no prod command, ever.
 6. **Coexistence**: never change Claude desktop / Cursor config, hooks or settings; external sessions only as a fork.
 7. **Tests**: unit tests for every module, an e2e with a screenshot for every visible feature; "done" =
-   `check:branch` green + looked at in the dev app; load tests only at night.
+   `check:branch` green + looked at in the dev app; load tests only at night; no test on real time or load (fake
+   timers or an event; a load-red test is deleted or made deterministic, never rerun).
 8. **Commits local only for agents**: conventional English messages; push and PRs are the human's.
 9. **Review**: a fresh-context reviewer per touched dimension before a merge.
 10. **Every file starts with a header comment** (what, why, who uses it); decisions go to `docs/adr/`.

@@ -334,7 +334,7 @@ describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
     const { s, sink, logFile } = start({ ...OPENCODE, streamErrorGraceMs: 2000, env: { FAKE_ACP_OPENCODE: '1' } });
     await waitFor(() => s.state === 'idle', 'ready');
     s.send('streamhiccup');
-    await waitFor(() => sink.trace.includes('result') && s.state === 'idle', 'the turn', 8000);
+    await waitFor(() => sink.trace.includes('result') && s.state === 'idle', 'the turn');
     expect(cursorLog(logFile).some(l => l.method === 'session/cancel')).toBe(false);
     expect([...sink.items.values()].filter(i => i.kind === 'result').map(i => (i as { isError: boolean }).isError)).toEqual([false]);
     expect([...sink.items.values()].filter(i => i.kind === 'system')).toHaveLength(0);
@@ -348,7 +348,7 @@ describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
     const { s, sink, logFile } = start({ ...OPENCODE, streamErrorGraceMs: 150, env: { FAKE_ACP_OPENCODE: '1', FAKE_ACP_STALL_MS: '400' } });
     await waitFor(() => s.state === 'idle', 'ready');
     s.send(word);
-    await waitFor(() => sink.trace.includes('result') && s.state === 'idle', 'the turn', 8000);
+    await waitFor(() => sink.trace.includes('result') && s.state === 'idle', 'the turn');
     expect(cursorLog(logFile).some(l => l.method === 'session/cancel')).toBe(false);
     expect(results(sink)).toEqual([false]);
     expect(sysCodes(sink)).toEqual([]);

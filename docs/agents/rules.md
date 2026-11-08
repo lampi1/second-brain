@@ -59,6 +59,10 @@ their screenshots run only on main, in `npm run check` after the merge (owner, 2
 verdict is read against `test/e2e/known-red.json`: only «nuovi rossi» fail it; no test is ever skipped or quarantined
 (ADR 0198).
 
+No test depends on real time or machine load: no sleeps or `setTimeout` to wait, no tight step timeouts, no
+assertions on elapsed wall-clock time. Use fake timers or wait for an event (`waitFor` without its own deadline). A
+test that goes red under load is deleted or made deterministic, never rerun to see if it passes (owner, 2026-11-08).
+
 Load tests, stress tests, synthetic CPU/RAM load generators, benchmarks under load and e2e runs repeated to load the
 machine run only at night, outside the owner's working hours; never during the day on their work PC (owner,
 2026-10-15).
