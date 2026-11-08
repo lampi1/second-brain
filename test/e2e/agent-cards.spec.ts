@@ -61,7 +61,8 @@ test('agent cards: big centred character, level and performance with their "?" f
     await expect(lv).toContainText('solo con lavori riusciti e verificati');
     // ADR 0125: every role levels up without the user's verdicts; the Sentinel's reviews are judged by what happened
     await expect(lv).toContainText('per un lavoro delegato, il lavoro del genitore riuscito verificato');
-    await expect(lv).toContainText('una seconda revisione indipendente (1 ogni 10)');
+    // ADR 0203: the nightly review is judged by the user's votes on the same runs or a promoted run later redone
+    await expect(lv).toContainText('il tuo voto sugli stessi lavori o un lavoro promosso e poi rifatto');
     await expect(artisan).toHaveAttribute('data-flipped', 'false'); // the "?" does not flip the card
     await shot(page, 'agent-cards-level-help-dark');
     await page.keyboard.press('Escape');

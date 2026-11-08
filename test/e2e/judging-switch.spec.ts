@@ -29,7 +29,7 @@ test('one switch with its daily cost turns the reviews on and off', async () => 
     const before = Date.now();
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-checked', 'true');
-    await expect(box).toContainText('ogni notte un Sentinel nascosto');
+    await expect(box).toContainText('una volta al giorno un Sentinel nascosto');
     const s = await page.evaluate(() => window.sb.invoke('settings:get', undefined));
     expect(s.judging).toBe(true);
     expect(s.judgingSince).toBeGreaterThanOrEqual(before - 60_000);

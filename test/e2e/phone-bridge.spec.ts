@@ -20,7 +20,8 @@ test.afterEach(async () => { await tg.close(); });
 
 test('the phone pairs, talks to the Orchestrator and answers a Sì/No question with its button', async () => {
   const tmp = (p: string) => fs.mkdtempSync(path.join(os.tmpdir(), p));
-  const { app, page } = await launch({ SB_PHONE_TEST_API: tg.base, SB_CLAUDE_PATH: path.join(FIX, 'fake-claude.mjs'), CLAUDE_CONFIG_DIR: tmp('sb-e2e-claude-') });
+  // the Orchestrator runs in the brain folder: a temporary one (SB_BRAIN), never the user's
+  const { app, page } = await launch({ SB_PHONE_TEST_API: tg.base, SB_CLAUDE_PATH: path.join(FIX, 'fake-claude.mjs'), CLAUDE_CONFIG_DIR: tmp('sb-e2e-claude-'), SB_BRAIN: tmp('sb-e2e-brain-') });
   await setSize(app, 1400, 900);
   await closeSetup(page);
   const orch = await page.evaluate(() => window.sb.invoke('orchestrator:ensure', { harness: 'claude' }));

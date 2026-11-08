@@ -1,5 +1,5 @@
 // End-to-end: the Max plan's API credits (ADR 0052) on the demo. Settings shows only the essential engines
-// (docs/settings-surface.md: «Account e strumenti» lists Claude Code, Cursor and Codex; no paid API credit panel is
+// (docs/settings-surface.md: «Account e strumenti» lists Claude Code, Cursor, Codex and OpenCode; no paid API credit panel is
 // loaded by opening Settings), so Anthropic API has no row and no spend panel there; it stays off unless turned on, and
 // this month's spend the app computed (seeded <userData>/api-spend.json) is still kept and served by engines:spend.
 // Screenshot: test-results/shots/api-credits-engines.png.
@@ -20,8 +20,8 @@ test('Settings: Anthropic API has no row and no spend panel; its switch stays of
     await page.getByTestId('settings-all').click();
     const accounts = page.getByTestId('settings-page').getByTestId('st-group-accounts');
     await accounts.scrollIntoViewIfNeeded();
-    await expect(accounts.locator('.st-tool')).toHaveCount(3);
-    for (const id of ['claude', 'cursor', 'codex']) await expect(accounts.getByTestId(`st-tool-${id}`)).toHaveCount(1);
+    await expect(accounts.locator('.st-tool')).toHaveCount(4);
+    for (const id of ['claude', 'cursor', 'codex', 'opencode']) await expect(accounts.getByTestId(`st-tool-${id}`)).toHaveCount(1);
     await expect(accounts.getByTestId('st-tool-anthropic')).toHaveCount(0);
     await expect(accounts).not.toContainText('Anthropic API');
     await expect(page.locator('[data-testid^="st-spend-"]')).toHaveCount(0);
