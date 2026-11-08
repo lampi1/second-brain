@@ -27,7 +27,8 @@ export abstract class ManagerSink extends ManagerWork {
     return {
       item: (item, replace) => {
         if (!live()) return;
-        if (item.kind !== 'user' && item.kind !== 'system') this.coldStarted(r);
+        // a replayed past (a resume) is no answer of the engine: its cold start goes on
+        if (item.kind !== 'user' && item.kind !== 'system' && !r.replaying) this.coldStarted(r);
         this.hook('analytics', () => this.analytics.item(r.s, item, replace));
         this.autoActivity(r);
         if (r.handoffTurn && item.kind === 'assistant') {
@@ -79,7 +80,11 @@ export abstract class ManagerSink extends ManagerWork {
         children.coverage(coverage); r.s.agentChildren = children.snapshot(); this.persist(); this.updated(r);
       },
       resolved: id => { if (this.chats.get(chatId) === r) this.dropPending(r, id); },
-      changed: p => { if (live()) this.applyPatch(r, p); },
+      changed: p => {
+        if (!live()) return;
+        if (p.replaying !== undefined) { r.replaying = p.replaying || undefined; return; }
+        this.applyPatch(r, p);
+      },
       exit: ({ error }) => {
         const sess = current();
         // only the current engine's exit ends its cold start: an old, replaced engine exiting late must not free the slot

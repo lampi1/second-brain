@@ -16,7 +16,8 @@ cloudroom bounds only its launches (`startups` semaphore, `available_parallelism
   agent's new chat, a closed or engine-freed chat reopened by an agent, the app's resume after a restart) takes one of
   `max(1, floor(cores / 2))` slots (7 on 14 cores). The slot is held from the spawn until the engine's first answer
   (any item but the user's or a system line, a pending question, the exit, a failed send; `manager-sink.ts`
-  `coldStarted`), and frees itself after 120 s at most, so a slot never leaks. A chat whose engine is up (`'turn'`)
+  `coldStarted`; the past a resume replays — ACP `session/load`, Codex `thread/resume`, an HTTP model's history — is
+  no answer: those items come inside `SessionPatch.replaying`), and frees itself after 120 s at most, so a slot never leaks. A chat whose engine is up (`'turn'`)
   never waits; neither do the user's messages nor messages between open chats (ADR 0064).
 - **CPU and RAM are only an emergency brake**: CPU over 95 % or free RAM under 10 % (the settings `loadQueueCpu` /
   `loadQueueRam`, still protected: the user's pick in Impostazioni → Avanzate «Coda e avvii», `QueueSettings.tsx`, or an approved

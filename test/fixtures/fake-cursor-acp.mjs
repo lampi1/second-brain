@@ -223,6 +223,21 @@ async function prompt(id, p) {
       options: [...(opaque ? [opt('once', 'Allow once', 'allow_once')] : []), opt('always', 'Always', 'allow_always')],
     }) });
   }
+  // appgate=<name>: the same OpenCode MCP permission for the tool OpenCode names <name> (its server and tool joined by
+  // "_", e.g. second-brain_agent_report); says "<name> eseguito" when allowed, "<name> rifiutato" otherwise
+  const appgate = /^appgate=(\S+)$/.exec(text)?.[1];
+  if (appgate) {
+    const tcId = 'call_app';
+    update(sid, { sessionUpdate: 'tool_call', toolCallId: tcId, title: appgate, kind: 'other', status: 'pending', rawInput: {} });
+    const r = await ask('session/request_permission', { sessionId: sid,
+      toolCall: { toolCallId: tcId, title: appgate, kind: 'other', status: 'pending', rawInput: {}, locations: [] },
+      options: [opt('once', 'Allow once', 'allow_once'), opt('always', 'Always allow', 'allow_always'), opt('reject', 'Reject', 'reject_once')],
+    });
+    log({ answer: r });
+    const allowed = r?.outcome?.outcome === 'selected' && r.outcome.optionId === 'once';
+    update(sid, { sessionUpdate: 'tool_call_update', toolCallId: tcId, status: allowed ? 'completed' : 'failed' });
+    final = `${appgate} ${allowed ? 'eseguito' : 'rifiutato'}`;
+  }
   if (text === 'mcpgate' || text === 'outsidegate') {
     // OpenCode 1.19.5 (acp/agent.ts): the tool_call carries the real input; the permission then sends kind "other",
     // the permission name as title, its (often empty) metadata as rawInput and the once/always/reject options.

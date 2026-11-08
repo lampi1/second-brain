@@ -7,7 +7,7 @@
 // order; ADR 0064: mail to an idle chat starved for hours), a queued chat closed by hand drops its work, no warm engine
 // starts while braking but one does while chats wait for a slot; a queued chat never looks busy, so the Orchestrator is
 // never told it "finished" a turn it did not run (2026-10-14).
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -17,7 +17,9 @@ import { OrchestratorWake } from '../../../src/main/chats/orchestrator-wake';
 import { ChatMail, inboxDir, sendMail, slug, unread } from '../../../src/main/chats/mail';
 import type { ChatSummary } from '../../../src/shared/contract';
 import { log } from '../../../src/main/log';
-import { FAKE, fakeLog, recEmitter, tmp, waitFor } from './helpers';
+import { FAKE, FAKE_CURSOR, fakeLog, recEmitter, tmp, waitFor } from './helpers';
+
+const FAKE_CODEX = path.resolve(import.meta.dirname, '..', '..', 'fixtures', 'fake-codex-app-server.mjs');
 
 /** default: over the emergency brake */
 function fakeLoad(cpu = 99, freeRam = 50) {
@@ -368,6 +370,31 @@ describe('ChatManager with the cold-start queue', () => {
     expect(m.queueState()?.waiting.map(w => [w.chatId, w.kind, w.position])).toEqual([['c_a', 'start', 1], ['c_b', 'start', 2]]);
     await new Promise(r => setTimeout(r, 300));
     expect(starts()).toBe(0);
+  });
+
+  // the past a resume replays (Codex thread/resume, ACP session/load, into a chat restored with no items) is no answer of
+  // the engine: the slot stays held until the engine is ready and answers its turn (harness parity, 2026-11-08)
+  it.each([
+    ['cursor', { cursor: FAKE_CURSOR }],
+    ['codex', { codex: FAKE_CODEX }],
+  ] as const)('%s: a resumed chat keeps its cold-start slot through the replayed past', async (harness, enginePaths) => {
+    const cut = (id: string, cwd: string) => ({ id, harness, cwd, sessionId: crypto.randomUUID(), title: id, model: null, effort: null, permissionMode: null, isOrchestrator: false, createdAt: 1, working: true });
+    const ready = new Set<string>();
+    let aReadyWhenBAdmitted: boolean | null = null;
+    const info = log.info.bind(log);
+    onTestFinished(() => { vi.restoreAllMocks(); });
+    vi.spyOn(log, 'info').mockImplementation((scope, msg, meta) => {
+      if (msg === 'timing: engine ready' && meta?.chat) ready.add(meta.chat);
+      if (msg === 'cold start admitted' && meta?.chat === 'c_b') aReadyWhenBAdmitted = ready.has('c_a');
+      return info(scope, msg, meta);
+    });
+    const { m } = setup({ enginePaths, env: { FAKE_CURSOR_LOG: path.join(tmp('acp'), 'log.jsonl'), CURSOR_CONFIG_DIR: tmp('cursor-user'), FAKE_CODEX_DELAY: '1' } },
+      (ud, cwd) => fs.writeFileSync(path.join(ud, 'chats.json'), JSON.stringify({ version: 2, chats: [cut('c_a', cwd), cut('c_b', cwd)] })),
+      { cpu: 10, freeRam: 60, slots: 1 });
+    expect(m.resumeInterrupted()).toBe(2);
+    await waitFor(() => m.items('c_a').some(i => i.kind === 'assistant' && /vecchia risposta|risposta di prima/.test(i.text)), 'a replayed its past');
+    await waitFor(() => aReadyWhenBAdmitted !== null, 'b admitted');
+    expect(aReadyWhenBAdmitted).toBe(true);
   });
 
   it("an app chat's queued work goes after a work chat's that came later", async () => {
