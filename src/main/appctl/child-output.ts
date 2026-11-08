@@ -10,6 +10,8 @@ import type { AgentRun } from '../../shared/agents';
 
 /** the most of a report's output app_child_output returns with full: true */
 export const CHILD_OUTPUT_MAX = 4_000;
+/** the first CHILD_OUTPUT_MAX code units, never half of an emoji (a lone high surrogate at the end) */
+const cutAt = (s: string) => { const c = s.charCodeAt(CHILD_OUTPUT_MAX - 1); return s.slice(0, c >= 0xd800 && c <= 0xdbff ? CHILD_OUTPUT_MAX - 1 : CHILD_OUTPUT_MAX); };
 export const truncMarker = (total: number) => `\n…[troncato: ${CHILD_OUTPUT_MAX} di ${total} caratteri]`;
 
 interface Tool { name: string; description: string; inputSchema: object; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; openWorldHint?: boolean }; run(a: Record<string, unknown>): object }
@@ -54,7 +56,7 @@ export function childOutputTool(d: ChildOutputDeps): Tool {
       if (a.full !== true) return { ...head, report };
       if (!canonical) return { ...head, report, output: null, note: 'output non conservato per questo rapporto' };
       const out = canonical.output, cut = out.length > CHILD_OUTPUT_MAX;
-      return { ...head, report, output: cut ? out.slice(0, CHILD_OUTPUT_MAX) + truncMarker(out.length) : out, ...(cut ? { truncated: true, outputChars: out.length } : {}) };
+      return { ...head, report, output: cut ? cutAt(out) + truncMarker(out.length) : out, ...(cut ? { truncated: true, outputChars: out.length } : {}) };
     },
   };
 }

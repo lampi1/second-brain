@@ -45,6 +45,14 @@ it('with full: true returns the output cut at 4,000 characters with a visible ma
   expect(short).not.toHaveProperty('truncated');
 });
 
+it('never cuts an emoji in half on the 4,000 boundary', () => {
+  const emoji = 'a'.repeat(CHILD_OUTPUT_MAX - 1) + '😀' + 'tail';
+  const runsE = [{ runId: 'e', chatId: 'kid', report: { at: 1, outcome: 'done', verified: 'yes', summary: 's', canonical: canonical(1, 's', emoji) } }] as unknown as AgentRun[];
+  const out = childOutputTool({ chats: () => chats, runs: () => runsE }).run({ chatId: 'kid', full: true }) as { output: string };
+  expect(out.output.isWellFormed()).toBe(true);
+  expect(out.output.startsWith('a'.repeat(CHILD_OUTPUT_MAX - 1) + '\n…[troncato:')).toBe(true);
+});
+
 it('falls back to the delegation result (no output) and says when there is no report', () => {
   expect(tool.run({ chatId: 'grand', full: true })).toMatchObject({ report: { outcome: 'partial', summary: 'only the result', doneWhen: [{ criterion: 'a', met: false }] }, output: null });
   expect(tool.run({ chatId: 'root' })).toMatchObject({ chatId: 'root', report: null });
