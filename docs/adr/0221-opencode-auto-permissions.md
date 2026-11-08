@@ -21,13 +21,16 @@ local work: OpenCode's `external_directory` requests, paths outside the folder, 
    `mode.build`) is applied after the shared one. So the app's rules go on the shared block and on every agent the chat
    can run (build, plan, general, explore, the hidden ones), under permission names spelled as no config spells them
    (`bAsH`; `BaSh` on `mode`, merged into the agent later): OpenCode matches names without case, and a key new to the
-   user's object is appended after the user's keys, so the app's rules are the last ones on every agent. The task tool
+   user's object is appended after the user's keys, so the app's rules are the last ones on every agent. A spelling is
+   used only when no OpenCode config the chat loads has it as a key (the app reads their text first: the global
+   folder, `OPENCODE_CONFIG`, every `opencode.json(c)` and `.opencode` folder from the chat folder up, the
+   `{file:…}` they include); otherwise the next free one; none free, the chat does not start. The task tool
    starts only general and explore (a user's own agent carries rules the app cannot see); the chat starts on build
    whatever the user's `default_agent`; `OPENCODE_PERMISSION` (merged after every config) is left out of the
    process environment. The user's other settings, and a `OPENCODE_CONFIG_CONTENT` of their own, are kept; on the
    permissions the app sets (bash, read, edit, external_directory, web, task) the app's rules replace the user's
    OpenCode rules: Claude's settings are the one list of what is denied. Only an admin-managed OpenCode config (its
-   managed folder, an organisation's console config, merged after this one) keeps the last word. No Claude, Cursor or
+   managed folder, the remote config of an OpenCode organisation account, merged after this one) keeps the last word. No Claude, Cursor or
    OpenCode file is written (rule 6). It holds for every new start: a chat already open gets it when its engine
    restarts (app restart, model change).
 2. **The role's ceiling, never more.** A class the role lacks is `deny` (no `edit` and no `brain-write`: edits denied;
@@ -40,8 +43,11 @@ local work: OpenCode's `external_directory` requests, paths outside the folder, 
    (`prefix:*` read as `prefix*`), `Read`/`Edit` paths on `read`/`edit` (`~/`, `//`, `/` and relative forms; a named
    file also as any file of that name and, for reads, as any command naming it). The folder holding a protected file
    asks on `external_directory` (a search there could read it). `autoMode.soft_deny` entries with a `Tool(pattern)`
-   prefix become `ask`. What OpenCode cannot express (`$defaults`, plain-language classifier rules, MCP tool names)
-   is not allowed by any extra rule; its operations keep OpenCode's default or the app's gates.
+   prefix become `ask`. `WebFetch` / `WebSearch` rules hold on `webfetch` / `websearch` and `codesearch` (a rule with a
+   domain or a query asks for the whole tool); an MCP rule `mcp__server__tool` holds on OpenCode's `server_tool`, a
+   whole server on `server_*` (the same server name in both). What OpenCode cannot express (`$defaults`,
+   plain-language classifier rules) is not allowed by any extra rule; its operations keep OpenCode's default or the
+   app's gates.
 4. **What the app's gates judge still asks.** Destructive, outward or opaque commands (`rm -r`, `git push`,
    `git reset --hard`, `curl`, `ssh`, a pipe into a shell, `*.sh`, `sudo`…), a shell or an interpreter given code on
    the command line (`bash -c`, `sh -c`, `pwsh -c`, `powershell -Command`, `cmd /c`, `python -c`, `env`, `xargs`: a
@@ -59,6 +65,12 @@ local work: OpenCode's `external_directory` requests, paths outside the folder, 
 - A shell or interpreter command with code inline reaches `auto-permit.ts`, which reads it as not local work: it shows
   the panel (no classifier judges it, as Claude's auto mode would). The safer side, by the owner's rule: a deny that
   cannot be expressed stays ask, never allow.
+- Known limit: a deny rule is text matched against the command line, and code is not inspected. `node -e` built to
+  hide a name (`'child_'+'process'`), a script file the agent wrote (`node x.js`, `python x.py`), a project script
+  (`npm run x`) or a shell glob (`cat ~/.name.e?v`) can run what a deny names; only deny patterns that match anywhere
+  (`*name*`) still see it in the command line. Running the project's own code without a panel is the app's normal
+  work (`auto-permit.ts`, the same for every engine); on Claude the auto-mode classifier also judges each command,
+  on OpenCode nothing does.
 - OpenCode's pattern semantics (ordered, last match wins, `*` crosses folders, case-insensitive) and its config merge
   (a user's key keeps its place, agent rules after the shared ones, `mode` after `agent`) are re-implemented in the unit
   test to judge the generated config against a user config that opens everything; a change in a later OpenCode version

@@ -7,9 +7,9 @@
 // `*` matches any text (slashes too), `?` one character, case-insensitive (names too), backslashes read as slashes, a
 // trailing " *" optional. `opencode acp` 1.19.5 merges this config after the user's global and project configs, but its
 // merge keeps a key the user already has in the user's place, and an agent's own `permission` comes after the shared
-// one: so the app's rules go on every agent the chat can run, under permission names spelled as no config spells them
-// (`bAsH`), new keys that land after the user's. Used by engines/sessions.ts for the engines whose registry entry says
-// permissionConfig: 'opencode'.
+// one: so the app's rules go on every agent the chat can run, under permission names spelled as no config of the chat
+// spells them (`bAsH`, checked against the configs OpenCode will load), new keys that land after the user's. Used by
+// engines/sessions.ts for the engines whose registry entry says permissionConfig: 'opencode'.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -26,10 +26,14 @@ export interface ClaudeRules {
   edit: { deny: string[]; ask: string[] };
   /** folders whose own files a rule protects: a tool pointed at the folder itself asks (a search there could read them) */
   guardedDirs: string[];
-  /** rules OpenCode cannot express (natural-language classifier rules, MCP, web domains): their tools keep asking */
+  /** whole tools by their OpenCode name: web fetch and search (a domain or query rule asks), MCP tools (`mcp__s__t` is
+   *  OpenCode's `s_t`, a whole server `s_*`) */
+  tools: Record<string, 'deny' | 'ask'>;
+  /** rules OpenCode cannot express (`$defaults`, natural-language classifier rules): nothing stands for them on
+   *  OpenCode (ADR 0221, the known limits) */
   unexpressed: string[];
 }
-export const NO_CLAUDE_RULES: ClaudeRules = { bash: { deny: [], ask: [] }, read: { deny: [], ask: [] }, edit: { deny: [], ask: [] }, guardedDirs: [], unexpressed: [] };
+export const NO_CLAUDE_RULES: ClaudeRules = { bash: { deny: [], ask: [] }, read: { deny: [], ask: [] }, edit: { deny: [], ask: [] }, guardedDirs: [], tools: {}, unexpressed: [] };
 
 /** Commands the app's own gates judge (auto-permit.ts refuses the destructive ones with a reason, lets plain local work
  *  through, asks the user the rest): ask, never allow. They mirror auto-permit's refusals plus what leaves the machine. */
@@ -82,9 +86,22 @@ const claudeCommand = (p: string): string => p.replace(/:\*$/, '*');
 
 /** One Claude rule (`Tool(pattern)` or a bare tool name) onto out, as deny or ask; anything else is unexpressed. */
 function addRule(out: ClaudeRules, rule: string, kind: 'deny' | 'ask', base: string, home: string): void {
+  // a deny is never weakened by a later ask on the same tool
+  const whole = (name: string, k: 'deny' | 'ask'): void => { if (out.tools[name] !== 'deny') out.tools[name] = k; };
+  // OpenCode names an MCP tool server_tool, each part with anything but [A-Za-z0-9_-] as `_`
+  const mcp = /^mcp__(.+?)(?:__(.+))?$/s.exec(rule.trim());
+  if (mcp) {
+    const safe = (s: string): string => s.replace(/[^a-zA-Z0-9_-]/g, '_');
+    whole(`${safe(mcp[1]!)}_${mcp[2] && mcp[2] !== '*' ? safe(mcp[2]) : '*'}`, kind);
+    return;
+  }
   const m = /^([A-Za-z]+)(?:\((.*)\))?$/s.exec(rule.trim());
   if (!m) { out.unexpressed.push(rule); return; }
   const tool = m[1]!, arg = m[2];
+  const every = arg === undefined || arg === '' || arg === '*';
+  // a domain or a query cannot be told apart in OpenCode's web rules: the whole tool asks
+  if (tool === 'WebFetch') { whole('webfetch', every ? kind : 'ask'); return; }
+  if (tool === 'WebSearch') { for (const t of ['websearch', 'codesearch']) whole(t, every ? kind : 'ask'); return; }
   if (tool === 'Bash' || tool === 'PowerShell') { out.bash[kind].push(arg === undefined || arg === '' || arg === '*' ? '*' : claudeCommand(arg)); return; }
   if (tool === 'Read' || tool === 'Edit' || tool === 'Write' || tool === 'MultiEdit' || tool === 'NotebookEdit') {
     const list = tool === 'Read' ? out.read : out.edit;
@@ -115,7 +132,7 @@ export function claudeSettingsFiles(cwd: string, brainRoot: string | null, env: 
 /** The deny rules and the auto-mode soft-deny rules of those files (read only; a missing or unreadable file adds
  *  nothing: OpenCode's own defaults and ASK_COMMANDS still hold). */
 export function readClaudeRules(files: readonly string[], home: string = os.homedir()): ClaudeRules {
-  const out: ClaudeRules = { bash: { deny: [], ask: [] }, read: { deny: [], ask: [] }, edit: { deny: [], ask: [] }, guardedDirs: [], unexpressed: [] };
+  const out: ClaudeRules = { bash: { deny: [], ask: [] }, read: { deny: [], ask: [] }, edit: { deny: [], ask: [] }, guardedDirs: [], tools: {}, unexpressed: [] };
   for (const file of files) {
     let j: Record<string, unknown>;
     try { j = obj(JSON.parse(fs.readFileSync(file, 'utf8')) as unknown); } catch { continue; }
@@ -137,6 +154,8 @@ const rules = (first: Action, ...layers: [readonly string[], Action][]): Rules =
   for (const [patterns, action] of layers) for (const p of patterns) { delete out[p]; out[p] = action; }
   return out;
 };
+
+const WEB_TOOLS: readonly string[] = ['webfetch', 'websearch', 'codesearch'];
 
 export interface OpenCodeRole {
   /** the role's tool classes (null = every class) */
@@ -161,9 +180,11 @@ export function openCodePermission(role: OpenCodeRole, claude: ClaudeRules): Ope
     read: rules('allow', [['*.env', '*.env.*'], 'ask'], [['*.env.example'], 'allow'], [claude.read.ask, 'ask'], [claude.read.deny, 'deny']),
     // a search or a listing reads too: the folders a read rule protects ask (external_directory above)
     bash: rules(shell, [shell === 'allow' ? [...ASK_COMMANDS, ...claude.bash.ask] : [], 'ask'], [claude.bash.deny, 'deny']),
-    webfetch: has('web') ? 'allow' : 'deny',
-    websearch: has('web') ? 'allow' : 'deny',
-    codesearch: has('web') ? 'allow' : 'deny',
+    webfetch: has('web') ? claude.tools.webfetch ?? 'allow' : 'deny',
+    websearch: has('web') ? claude.tools.websearch ?? 'allow' : 'deny',
+    codesearch: has('web') ? claude.tools.codesearch ?? 'allow' : 'deny',
+    // MCP tools Claude denies or holds back
+    ...Object.fromEntries(Object.entries(claude.tools).filter(([t]) => !WEB_TOOLS.includes(t))),
   };
   // edits: shared here only what never happens (plan mode keeps its own refusal of every edit); what the build agent
   // may do is agentEdit's
@@ -211,16 +232,48 @@ export function agentPermissions(role: OpenCodeRole, claude: ClaudeRules): Recor
 export const spelled = (name: string, second = false): string => /[a-z]/i.test(name)
   ? [...name].map((c, i) => (i % 2 === 1) !== second ? c.toUpperCase() : c.toLowerCase()).join('')
   : '*'.repeat(second ? 3 : 2);
-const spell = (perm: OpenCodePermission, second = false): OpenCodePermission =>
-  Object.fromEntries(Object.entries(perm).map(([k, v]) => [spelled(k, second), v]));
+
+/** The spellings a name may take, the usual two first: its letters in other cases (never all lower, the usual key), or
+ *  longer runs of `*`. */
+function spellings(name: string): string[] {
+  const letters = [...name].flatMap((c, i) => /[a-z]/i.test(c) ? [i] : []);
+  if (!letters.length) return Array.from({ length: 39 }, (_, k) => '*'.repeat(k + 2));
+  const out = new Set([spelled(name), spelled(name, true)]);
+  for (let m = 1; m < 2 ** Math.min(letters.length, 9) && out.size < 256; m++) {
+    const cs = [...name.toLowerCase()];
+    letters.forEach((at, j) => { if (j < 9 && m & (1 << j)) cs[at] = cs[at]!.toUpperCase(); });
+    out.add(cs.join(''));
+  }
+  return [...out].filter(s => s !== name.toLowerCase());
+}
+
+/** For every name the app sets, two spellings no OpenCode config of the chat uses as a key (`taken`): a key the user
+ *  has keeps the user's place in the merge, so a config holding the app's spelling with its own rules after it would
+ *  outrank the app. None free (a config holding all of them): the chat does not start. */
+function spellingsFor(names: Iterable<string>, taken: (key: string) => boolean): Map<string, [string, string]> {
+  const out = new Map<string, [string, string]>();
+  for (const name of names) {
+    if (out.has(name)) continue;
+    const free = spellings(name).filter(s => !taken(s));
+    if (free.length < 2) throw new Error(`OpenCode: every spelling of the permission "${name}" is already a key in an OpenCode config of this chat`);
+    out.set(name, [free[0]!, free[1]!]);
+  }
+  return out;
+}
 
 /** OPENCODE_CONFIG_CONTENT for one chat: the user's own value (an object) kept, the app's rules added after its own on
  *  the shared block and on every agent; the legacy `mode.build` / `mode.plan` (merged into the agent after `agent`) get
- *  them under the second spelling. The chat starts on build, whatever the user's default agent. */
-export function openCodeConfigContent(role: OpenCodeRole, claude: ClaudeRules, existing?: string): string {
+ *  them under the second spelling. The chat starts on build, whatever the user's default agent. `taken` says whether
+ *  an OpenCode config the chat loads already has a key (openCodeKeyTaken). */
+export function openCodeConfigContent(role: OpenCodeRole, claude: ClaudeRules, existing?: string, taken: (key: string) => boolean = () => false): string {
   let base: Record<string, unknown> = {};
   try { if (existing) base = obj(JSON.parse(existing) as unknown); } catch { /* not JSON: the app's own config only */ }
   const perms = agentPermissions(role, claude);
+  const shared = openCodePermission(role, claude);
+  const ownKeys = existing ?? '';
+  const names = spellingsFor([...Object.keys(shared), ...Object.values(perms).flatMap(p => Object.keys(p))], k => taken(k) || keyIn(ownKeys, k));
+  const spell = (perm: OpenCodePermission, second = false): OpenCodePermission =>
+    Object.fromEntries(Object.entries(perm).map(([k, v]) => [names.get(k)![second ? 1 : 0], v]));
   const add = (own: unknown, perm: OpenCodePermission, second = false): Record<string, unknown> =>
     ({ ...obj(own), permission: { ...obj(obj(own).permission), ...spell(perm, second) } });
   const agent: Record<string, unknown> = { ...obj(base.agent) }, mode: Record<string, unknown> = { ...obj(base.mode) };
@@ -229,10 +282,61 @@ export function openCodeConfigContent(role: OpenCodeRole, claude: ClaudeRules, e
   return JSON.stringify({
     ...base,
     default_agent: 'build',
-    permission: { ...obj(base.permission), ...spell(openCodePermission(role, claude)) },
+    permission: { ...obj(base.permission), ...spell(shared) },
     agent,
     mode,
   });
+}
+
+const KEY_CHAR = 'A-Za-z0-9_*?.\\-';
+/** Whether a config text holds a key as a whole word (quoted JSON, bare or quoted YAML), its `\u`/`\x` escapes read:
+ *  wider than a parse, never narrower. */
+export function keyIn(text: string, key: string): boolean {
+  if (!text) return false;
+  const plain = text.replace(/\\u([0-9a-fA-F]{4})|\\x([0-9a-fA-F]{2})/g, (_, u: string | undefined, x: string | undefined) => String.fromCharCode(parseInt(u ?? x ?? '0', 16)));
+  return new RegExp(`(^|[^${KEY_CHAR}])${key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^${KEY_CHAR}])`).test(plain);
+}
+
+/** The text of every OpenCode config a chat in `cwd` loads before the app's (1.19.5, read in its binary): the global
+ *  folder (XDG config `opencode`), OPENCODE_CONFIG, `opencode.json(c)` and the `.opencode` folders (json, agent and mode
+ *  files) from the chat folder up, `~/.opencode`, OPENCODE_CONFIG_DIR, and the files they pull in with `{file:…}`.
+ *  More than OpenCode reads (up to the drive root, every json/md under those folders), never less. Read only. */
+export function openCodeConfigTexts(cwd: string, env: NodeJS.ProcessEnv = process.env, home: string = os.homedir()): string[] {
+  const files = new Set<string>();
+  const dir = (d: string, depth = 0): void => {
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(d, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (files.size > 2000) return;
+      const p = path.join(d, e.name);
+      if (e.isDirectory() && depth < 3 && e.name !== 'node_modules' && e.name !== '.git') dir(p, depth + 1);
+      else if (e.isFile() && /\.(jsonc?|md)$/i.test(e.name)) files.add(p);
+    }
+  };
+  const xdg = env.XDG_CONFIG_HOME || path.join(home, '.config');
+  dir(path.join(xdg, 'opencode'));
+  dir(path.join(home, '.opencode'));
+  if (env.OPENCODE_CONFIG) files.add(path.resolve(env.OPENCODE_CONFIG));
+  if (env.OPENCODE_CONFIG_DIR) dir(path.resolve(env.OPENCODE_CONFIG_DIR));
+  for (let d = path.resolve(cwd), up = ''; d !== up; up = d, d = path.dirname(d)) {
+    for (const f of ['opencode.json', 'opencode.jsonc']) files.add(path.join(d, f));
+    dir(path.join(d, '.opencode'));
+  }
+  const texts: string[] = [];
+  const queue = [...files], seen = new Set<string>();
+  while (queue.length && seen.size < 3000) {
+    const f = queue.shift()!;
+    if (seen.has(f)) continue;
+    seen.add(f);
+    let text: string;
+    try { if (fs.statSync(f).size > 2_000_000) continue; text = fs.readFileSync(f, 'utf8'); } catch { continue; }
+    texts.push(text);
+    for (const m of text.matchAll(/\{file:([^}]+)\}/g)) {
+      const ref = m[1]!.trim();
+      queue.push(ref.startsWith('~/') ? path.join(home, ref.slice(2)) : path.resolve(path.dirname(f), ref));
+    }
+  }
+  return texts;
 }
 
 /** The environment one OpenCode chat starts with: its config, built from its role and the Claude rules of its folders.
@@ -242,9 +346,10 @@ export function openCodeEnv(role: OpenCodeRole, cwd: string, brainRoot: string |
   const claude = readClaudeRules(claudeSettingsFiles(cwd, brainRoot, env));
   const named = (n: string): string[] => Object.keys(env).filter(k => k.toUpperCase() === n);
   const own = named('OPENCODE_CONFIG_CONTENT').map(k => env[k]).find(v => v);
+  const texts = openCodeConfigTexts(cwd, env);
   return {
     ...Object.fromEntries([...named('OPENCODE_PERMISSION'), ...named('OPENCODE_CONFIG_CONTENT')].map(k => [k, undefined])),
-    OPENCODE_CONFIG_CONTENT: openCodeConfigContent(role, claude, own),
+    OPENCODE_CONFIG_CONTENT: openCodeConfigContent(role, claude, own, key => texts.some(t => keyIn(t, key))),
     OPENCODE_PERMISSION: undefined,
   };
 }

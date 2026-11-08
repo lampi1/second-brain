@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
-import { agentEdit, claudeSettingsFiles, NO_CLAUDE_RULES, openCodeConfigContent, openCodeEnv, openCodePermission, readClaudeRules, type ClaudeRules, type OpenCodeRole } from '../../../src/main/brain/adapters/opencode-permission';
+import { agentEdit, claudeSettingsFiles, keyIn, NO_CLAUDE_RULES, openCodeConfigContent, openCodeConfigTexts, openCodeEnv, openCodePermission, readClaudeRules, type ClaudeRules, type OpenCodeRole } from '../../../src/main/brain/adapters/opencode-permission';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-ocperm-'));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -75,7 +75,9 @@ const NATIVE: Record<string, Perm> = {
  *  own native rules, the shared `permission`, the agent's configured `permission` (the legacy `mode` merged into it);
  *  then the last matching rule decides (no rule: ask). */
 function judge(role: OpenCodeRole, permission: string, pattern: string, o: { rules?: ClaudeRules; agent?: string; user?: Json } = {}): Action {
-  const s = mergeDeep(o.user ?? {}, JSON.parse(openCodeConfigContent(role, o.rules ?? claude)) as unknown) as Json;
+  // the app reads the user's configs first (openCodeConfigTexts) and spells its names as they do not
+  const userText = JSON.stringify(o.user ?? {});
+  const s = mergeDeep(o.user ?? {}, JSON.parse(openCodeConfigContent(role, o.rules ?? claude, undefined, k => keyIn(userText, k))) as unknown) as Json;
   let agents = (s.agent ?? {}) as Json;
   for (const [k, v] of Object.entries((s.mode ?? {}) as Json)) agents = mergeDeep(agents, { [k]: { ...(v as Json), mode: 'primary' } }) as Json;
   const name = o.agent ?? 'build';
@@ -122,8 +124,26 @@ describe('OpenCode permission config', () => {
     expect(judge(artisan, 'bash', 'az group update -n x --set a=b')).toBe('ask'); // a soft_deny Tool(pattern) prefix
   });
 
-  it('lists what it cannot express: the classifier\'s defaults, plain-language rules, MCP tools', () => {
-    expect(claude.unexpressed).toEqual(['mcp__prod__run', '$defaults', 'Writes to the production database lists']);
+  it('lists what it cannot express: the classifier\'s defaults, plain-language rules', () => {
+    expect(claude.unexpressed).toEqual(['$defaults', 'Writes to the production database lists']);
+  });
+
+  it('holds Claude\'s rules on whole tools: MCP tools by OpenCode\'s name, web fetch and search', () => {
+    expect(claude.tools).toEqual({ prod_run: 'deny' });
+    expect(judge(artisan, 'prod_run', '*')).toBe('deny');
+    expect(judge(artisan, 'prod_other', '*')).toBe('allow');
+    const file = settings(path.join(tmp, 'web'), ['WebFetch(domain:example.com)', 'WebSearch', 'mcp__crm', 'mcp__db__*', 'mcp__my.srv__drop']);
+    const web = readClaudeRules([file], home);
+    expect(web.tools).toEqual({ webfetch: 'ask', websearch: 'deny', codesearch: 'deny', 'crm_*': 'deny', 'db_*': 'deny', my_srv_drop: 'deny' });
+    for (const agent of ['build', 'explore']) {
+      expect(judge(artisan, 'webfetch', 'https://example.com', { rules: web, agent })).toBe('ask');
+      expect(judge(artisan, 'websearch', 'x', { rules: web, agent })).toBe('deny');
+      expect(judge(artisan, 'crm_list', '*', { rules: web, agent })).toBe('deny');
+      expect(judge(artisan, 'my_srv_drop', '*', { rules: web, agent })).toBe('deny');
+    }
+    // a later ask never weakens a deny on the same tool
+    const both = readClaudeRules([settings(path.join(tmp, 'web2'), ['WebSearch', 'WebSearch(x)'])], home);
+    expect(both.tools.websearch).toBe('deny');
   });
 
   it('never gives a role more than it has: read-only roles do not edit, shell-read asks, a ceiling asks', () => {
@@ -193,6 +213,45 @@ describe('OpenCode permission config', () => {
     }
     // a user's deny on what the app allows is kept only where the app has no rule of its own: Claude's list is what holds
     expect(judge(artisan, 'bash', 'git status', { user: { permission: { bash: { 'git status': 'deny' } } } })).toBe('allow');
+  });
+
+  it('keeps its rules last over a config that holds the app\'s own spellings with its rules after them', () => {
+    // the app's patterns copied under its usual spellings, then the user's allow last: a key the user has keeps its place
+    const ours = (role: OpenCodeRole): Json => JSON.parse(openCodeConfigContent(role, claude)) as Json;
+    const hostile = (role: OpenCodeRole): Json => {
+      const a = ours(role) as { agent: Record<string, { permission: Record<string, unknown> }>; mode: Record<string, { permission: Record<string, unknown> }> };
+      const open = (p: Record<string, unknown>): Record<string, unknown> => Object.fromEntries(Object.entries(p).map(([k, v]) =>
+        [k, typeof v === 'object' ? { ...(v as Json), [`*sqlcmd*`]: 'allow', 'src/*': 'allow', 'rm *': 'allow' } : 'allow']));
+      return { agent: { build: { permission: open(a.agent.build!.permission) } }, mode: { build: { permission: open(a.mode.build!.permission) } } };
+    };
+    expect(judge(artisan, 'bash', `sqlcmd -S srv.${AZURE_SQL} -Q "select 1"`, { user: hostile(artisan) })).toBe('deny');
+    expect(judge(scout, 'edit', 'src/x.ts', { user: hostile(scout) })).toBe('deny');
+    expect(judge(scout, 'bash', 'rm -rf dist', { user: hostile(scout) })).toBe('ask');
+    // no spelling free: the chat does not start
+    expect(() => openCodeConfigContent(artisan, claude, undefined, () => true)).toThrow(/every spelling/);
+  });
+
+  it('reads the OpenCode configs a chat loads, the files they include too, and spells around them', () => {
+    const root = path.join(tmp, 'oc');
+    const cwd = path.join(root, 'repo', 'sub');
+    const xdg = path.join(root, 'xdg');
+    fs.mkdirSync(path.join(cwd, '.opencode', 'agent'), { recursive: true });
+    fs.mkdirSync(path.join(xdg, 'opencode', 'node_modules', 'p'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'repo', 'opencode.jsonc'), '// c\n{ "agent": { "build": { "permission": {file:./perm.json} } } }');
+    fs.writeFileSync(path.join(root, 'repo', 'perm.json'), '{ "b\\u0041sH": { "*": "allow" } }');
+    fs.writeFileSync(path.join(cwd, '.opencode', 'agent', 'build.md'), '---\npermission:\n  BaSh: allow\n---\nx');
+    fs.writeFileSync(path.join(xdg, 'opencode', 'opencode.json'), '{ "permission": { "eDiT": "allow" } }');
+    fs.writeFileSync(path.join(xdg, 'opencode', 'node_modules', 'p', 'x.json'), '"rEaD"');
+    const texts = openCodeConfigTexts(cwd, { XDG_CONFIG_HOME: xdg }, path.join(root, 'home'));
+    const taken = (k: string): boolean => texts.some(t => keyIn(t, k));
+    expect(['bAsH', 'BaSh', 'eDiT'].map(taken)).toEqual([true, true, true]);
+    expect(taken('rEaD')).toBe(false); // node_modules is not config
+    expect(keyIn('"bAsH *": 1', 'bAsH')).toBe(true); // wider, never narrower
+    expect(keyIn('"bAsHx": 1', 'bAsH')).toBe(false);
+    const cfg = JSON.parse(openCodeEnv(artisan, cwd, null, { XDG_CONFIG_HOME: xdg, CLAUDE_CONFIG_DIR: path.join(root, 'none') }).OPENCODE_CONFIG_CONTENT ?? '{}') as { permission: Json; agent: { build: { permission: Json } } };
+    expect(Object.keys(cfg.agent.build.permission).filter(k => k.toLowerCase() === 'bash')).toEqual([expect.not.stringMatching(/^(bAsH|BaSh)$/)]);
+    expect(Object.keys(cfg.agent.build.permission)).toContain('EdIt');
+    expect(Object.keys(cfg.agent.build.permission)).not.toContain('eDiT');
   });
 
   it('asks, never allows, an interpreter given code on the command line: a deny rule cannot see inside it', () => {
