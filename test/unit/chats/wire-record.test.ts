@@ -69,6 +69,11 @@ describe('wire record', () => {
     const resume = JSON.parse(out({ id: 2, result: { thread: { turns: [{ items: [{ type: 'userMessage', content: [{ type: 'text', text: 'il mio segreto' }] }, { type: 'agentMessage', text: 'ok' }] }] } } }, 'engine>app'));
     expect(resume.result.thread.turns[0].items[0].content[0].text).toBe('<prompt 14 chars>');
     expect(resume.result.thread.turns[0].items[1].text).toBe('ok');
+    // the Codex thread's preview is the user's first message; an empty one and an option's preview elsewhere stay
+    expect(JSON.parse(out({ id: 2, result: { thread: { preview: 'il mio segreto', turns: [] } } }, 'engine>app')).result.thread.preview).toBe('<prompt 14 chars>');
+    expect(JSON.parse(out({ id: 2, result: { thread: { preview: '', turns: [] } } }, 'engine>app')).result.thread.preview).toBe('');
+    expect(JSON.parse(out({ id: 2, result: { thread: { preview: 'ciao', turns: [] } } }, 'engine>app', true)).result.thread.preview).toBe('ciao');
+    expect(JSON.parse(out({ type: 'assistant', options: [{ label: 'A', preview: 'codice' }] }, 'engine>app')).options[0].preview).toBe('codice');
     expect(JSON.parse(out({ method: 'item/started', params: { item: { type: 'userMessage', content: [{ type: 'text', text: 'ciao' }] } } }, 'engine>app')).params.item.content[0].text).toBe('<prompt 4 chars>');
     expect(JSON.parse(out({ method: 'session/update', params: { update: { sessionUpdate: 'user_message_chunk', content: { type: 'text', text: 'ciao' } } } }, 'engine>app')).params.update.content.text).toBe('<prompt 4 chars>');
     expect(JSON.parse(out({ method: 'session/update', params: { update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'risposta' } } } }, 'engine>app')).params.update.content.text).toBe('risposta');

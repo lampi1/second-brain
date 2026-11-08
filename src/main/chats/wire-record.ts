@@ -58,6 +58,8 @@ export function redactValue(v: unknown, opts: { prompts: boolean; dir: WireDir }
   for (const [k, x] of Object.entries(o)) {
     if (SECRET_KEY.test(k) && typeof x === 'string' && x) out[k] = '<redacted>';
     else if (hidePrompt && typeof x === 'string' && ((k === 'text' && PROMPT_PARENTS.has(key)) || (k === 'content' && key === 'message'))) out[k] = `<prompt ${x.length} chars>`;
+    // Codex's Thread object (thread/start, thread/resume, thread/started) carries the user's first message as its preview
+    else if (!opts.prompts && k === 'preview' && key === 'thread' && typeof x === 'string' && x) out[k] = `<prompt ${x.length} chars>`;
     else out[k] = redactValue(x, opts, k, inUser);
   }
   return out;
