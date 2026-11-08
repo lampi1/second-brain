@@ -138,6 +138,39 @@ describe('parallel checkpoint and the write barrier (ADR 0228)', () => {
     expect(fs.readFileSync(path.join(cwd, 'src', 'a.ts'), 'utf8')).toBe('TARDI');
   });
 
+  it('Claude: two quiet turns ending while the first snapshot is held each record their end, so the undo leaves a later edit alone', async () => {
+    const { m, id, cwd } = await claudeChat();
+    const done = snapshotsDone.length;
+    const slow = gate();
+    await m.send(id, 'ciao di nuovo');
+    await waitFor(() => assistantTexts(m, id).filter(t => t === 'Ciao dal motore').length === 2 && m.list().find(x => x.id === id)?.state === 'idle', 'first quiet turn end');
+    await m.send(id, 'ciao ancora');                                 // its snapshot waits behind the held one
+    await waitFor(() => assistantTexts(m, id).filter(t => t === 'Ciao dal motore').length === 3 && m.list().find(x => x.id === id)?.state === 'idle', 'second quiet turn end');
+    slow.open();
+    await waitFor(() => snapshotsDone.length === done + 2, 'both snapshots in');
+    // both turn ends recorded after their snapshots (git reads the tree: slow under load)
+    await waitFor(() => (m as unknown as { chats: Map<string, { afterPending?: unknown }> }).chats.get(id)!.afterPending === undefined, 'turn ends recorded');
+    fs.writeFileSync(path.join(cwd, 'src', 'a.ts'), 'A MANO');       // the user's edit after the last turn ended
+    settleChildren(m, id);
+    await expect(m.undoTurn(id)).resolves.toEqual({ restored: 0, removed: 0 });
+    expect(fs.readFileSync(path.join(cwd, 'src', 'a.ts'), 'utf8')).toBe('A MANO');
+  });
+
+  it('Claude: the deadline counts from the send, the wait for a hung previous snapshot included', async () => {
+    const { m, id, cwd } = await claudeChat();
+    const opts = (m as unknown as { opts: { checkpointDeadlineMs?: number } }).opts;
+    opts.checkpointDeadlineMs = 60_000;
+    gates.push(new Promise<void>(() => {}));                         // the quiet turn's snapshot never lands
+    await m.send(id, 'ciao di nuovo');
+    await waitFor(() => assistantTexts(m, id).filter(t => t === 'Ciao dal motore').length === 2 && m.list().find(x => x.id === id)?.state === 'idle', 'quiet turn end');
+    opts.checkpointDeadlineMs = 2000;
+    const sent = Date.now();
+    await m.send(id, 'scrivifile src/a.ts SBLOCCATO');
+    await waitFor(() => assistantTexts(m, id).includes('Scritto.'), 'write released by its own deadline', 15000);
+    expect(Date.now() - sent).toBeLessThan(10_000);                  // not the previous turn's 60 s
+    expect(fs.readFileSync(path.join(cwd, 'src', 'a.ts'), 'utf8')).toBe('SBLOCCATO');
+  });
+
   it('an engine that cannot hold its tools (Codex, ACP) still gets the message only after the snapshot', async () => {
     const cwd = repo(), sent: number[] = [];
     const m = new ChatManager({ userData: tmp('cpb-ud'), emitter: { emit() {} }, coldEveryMs: 0, checkpoints: () => true, sessionFactory: (_h, _o, s: SessionSink) => ({

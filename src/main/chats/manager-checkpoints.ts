@@ -8,13 +8,18 @@ import { errText, log } from '../log';
 import type { AgentRun } from '../../shared/agents';
 import { afterTree, KEEP as CHECKPOINTS_KEPT, prune as pruneCheckpoints, restore as restoreCheckpoint, snapshot as takeCheckpoint, turnFiles } from './checkpoints';
 import { emptyReceipts, noteTool, noteTurnFiles, receiptVerdict, rowChanges, turnFilesWithoutGit } from '../agents/receipts';
+import type { Checkpoint } from './checkpoints';
 import type { Rec } from './manager-types';
 import { sysItem } from './manager-helpers';
 import { ManagerSessions } from './manager-sessions';
 
-/** ADR 0228: a snapshot still running after this is given up (that turn cannot be undone, as when git fails); below the
- *  write barrier's CLI hook timeout (claude.ts WRITE_BARRIER_TIMEOUT_S), so a held write never runs before it settles. */
+/** ADR 0228: a turn's checkpoint not in this long after it was asked for (waiting for the previous turn's included) is
+ *  given up (that turn cannot be undone, as when git fails); below the write barrier's CLI hook timeout (claude.ts
+ *  WRITE_BARRIER_TIMEOUT_S), so a held write never runs before the barrier opens. */
 export const CHECKPOINT_DEADLINE_MS = 45_000;
+
+/** the turn (Rec.checkpointSeq) each checkpoint belongs to: a turn's end and receipts read only their own */
+const turnOf = new WeakMap<Checkpoint, number>();
 
 /** ADR 0103 checkpoints before each turn and the run's receipts (ADR 0130); undo of the last turn. */
 export abstract class ManagerCheckpoints extends ManagerSessions {
@@ -25,28 +30,38 @@ export abstract class ManagerCheckpoints extends ManagerSessions {
   protected checkpoint(r: Rec): Promise<void> {
     const prev = r.checkpointPending;
     const seq = r.checkpointSeq = (r.checkpointSeq ?? 0) + 1;
-    const p: Promise<void> = (async () => { if (prev) await prev; await this.takeTurnCheckpoint(r, seq); })()
-      .finally(() => { if (r.checkpointPending === p) r.checkpointPending = undefined; });
+    const limit = this.opts.checkpointDeadlineMs ?? CHECKPOINT_DEADLINE_MS;
+    let timer: NodeJS.Timeout | undefined;
+    // one clock from now, the wait for the previous snapshot included: the barrier never stays shut past it
+    const late = new Promise<'late'>(resolve => { timer = setTimeout(() => resolve('late'), limit); });
+    const p: Promise<void> = (async () => {
+      if (prev && await Promise.race([prev.then(() => 'in' as const), late]) === 'late') return this.givenUp(r, limit, 'the previous turn’s snapshot is still running');
+      await this.takeTurnCheckpoint(r, seq, late, limit);
+    })().finally(() => { clearTimeout(timer); if (r.checkpointPending === p) r.checkpointPending = undefined; });
     r.checkpointPending = p;
     return p;
   }
 
-  private async takeTurnCheckpoint(r: Rec, seq: number): Promise<void> {
+  private givenUp(r: Rec, limit: number, why: string): void {
+    log.warn('chats', 'checkpoint before the turn given up: git too slow', { chat: r.s.id, cause: `no snapshot ${limit} ms after the turn asked for it: ${why}`, hint: 'this turn cannot be undone from the app; its held writes go on now' });
+  }
+
+  private async takeTurnCheckpoint(r: Rec, seq: number, late: Promise<'late'>, limit: number): Promise<void> {
     if (r.gitRoot === null) return;
     const t0 = Date.now();
-    let timer: NodeJS.Timeout | undefined;
     const snap = takeCheckpoint(r.s.cwd, `refs/sb/checkpoints/${r.s.id}/${Date.now()}`);
-    const limit = this.opts.checkpointDeadlineMs ?? CHECKPOINT_DEADLINE_MS;
-    const late = new Promise<'late'>(resolve => { timer = setTimeout(() => resolve('late'), limit); });
     try {
       const cp = await Promise.race([snap, late]);
       if (cp === 'late') {
         snap.catch(() => {}); // its ref, if it ever lands, is pruned with the others; it is never this turn's checkpoint
-        log.warn('chats', 'checkpoint before the turn given up: git too slow', { chat: r.s.id, cause: `no snapshot after ${limit} ms`, hint: 'this turn cannot be undone from the app; its held writes go on now' });
-        return;
+        return this.givenUp(r, limit, 'git did not finish');
       }
       if (!cp) { r.gitRoot = null; return; }
       r.gitRoot = cp.root;
+      // a newer turn's checkpoint already in (the next turn stopped waiting for this one): out of order, dropped
+      const newest = r.checkpoints?.at(-1);
+      if (newest && (turnOf.get(newest) ?? 0) > seq) return;
+      turnOf.set(cp, seq);
       // a snapshot that landed after a newer turn began is still its own turn's, never the newer turn's
       if (seq === r.checkpointSeq) r.turnCheckpoint = true;
       log.info('chats', 'timing: checkpoint', { chat: r.s.id, data: { ms: Date.now() - t0 } });
@@ -58,22 +73,26 @@ export abstract class ManagerCheckpoints extends ManagerSessions {
       void pruneCheckpoints(cp.root, `refs/sb/checkpoints/${r.s.id}/`).catch(() => {});
     } catch (e) {
       log.warn('chats', 'checkpoint before the turn not taken', { chat: r.s.id, cause: errText(e), hint: 'this turn cannot be undone from the app; git itself still has the committed work' });
-    } finally { clearTimeout(timer); }
+    }
   }
 
   /** «Annulla l'ultimo turno» (ADR 0103): the files back as they were before the chat's last turn. Never while it works. */
   /** The files when the turn ended (Checkpoint.after): the undo puts back only what this turn changed. */
   protected recordTurnEnd(r: Rec): void {
-    if (r.afterPending) return;
+    // bound to this turn's own checkpoint: a turn whose snapshot was given up records nothing on the one before
+    const seq = r.checkpointSeq;
     const record = (): Promise<void> | undefined => {
       const cp = r.checkpoints?.at(-1);
-      return cp && !cp.after ? afterTree(cp.root).then(tree => { if (tree) cp.after = tree; }) : undefined;
+      return cp && !cp.after && turnOf.get(cp) === seq ? afterTree(cp.root).then(tree => { if (tree) cp.after = tree; }) : undefined;
     };
-    // a turn that ended before its snapshot landed (no writing tool ran: they wait for it): its end is recorded after it
-    const pending = r.checkpointPending;
-    const p: Promise<void> | undefined = pending ? pending.then(record) : record();
-    if (!p) return;
-    const after: Promise<void> = p.finally(() => { if (r.afterPending === after) r.afterPending = undefined; });
+    // a turn that ended before its snapshot landed (no writing tool ran: they wait for it): its end is recorded after
+    // it; every turn end is recorded in order, none is dropped while an earlier one is still being read
+    const before = r.afterPending, pending = r.checkpointPending;
+    if (!before && !pending) { const p = record(); if (p) this.trackAfter(r, p); return; }
+    this.trackAfter(r, (async () => { await before; await pending; await record(); })());
+  }
+  private trackAfter(r: Rec, p: Promise<void>): void {
+    const after: Promise<void> = p.catch(() => {}).finally(() => { if (r.afterPending === after) r.afterPending = undefined; });
     r.afterPending = after;
   }
 
@@ -95,15 +114,20 @@ export abstract class ManagerCheckpoints extends ManagerSessions {
   }
   /** A turn of the run ended: the files it changed go into the receipts once git recorded its end (recordTurnEnd); a
    *  turn without its own checkpoint is a gap (files unknown). An ended run gets its verdict once they are in. */
-  protected receiptTurn(r: Rec, turnAt: number | undefined, end: number, seq?: number): void {
-    // its snapshot still running (ADR 0228): read once it settled; seq tells whether a newer turn began meanwhile
+  protected receiptTurn(r: Rec, turnAt: number | undefined, end: number, seq?: number, rows?: Rec['receiptTurn']): void {
+    // its snapshot still running (ADR 0228): read once it settled, with this turn's own rows (a newer turn fills its own)
     const pending = r.checkpointPending;
-    if (seq === undefined && pending) { const at = r.checkpointSeq ?? 0; void pending.then(() => this.receiptTurn(r, turnAt, end, at)); return; }
+    if (seq === undefined && pending) {
+      const at = r.checkpointSeq ?? 0, mine = r.receiptTurn ?? { files: [], mayWrite: false };
+      r.receiptTurn = undefined;
+      void pending.then(() => this.receiptTurn(r, turnAt, end, at, mine));
+      return;
+    }
     const run = r.s.run;
     if (!run || run.source === 'oneshot' || (run.endedAt !== undefined && (turnAt === undefined || run.endedAt < turnAt))) return;
-    const rc = run.receipts ??= emptyReceipts(), cp = r.checkpoints?.at(-1), turn = r.receiptTurn ?? { files: [], mayWrite: false };
-    r.receiptTurn = undefined;
-    const own = !!r.turnCheckpoint && (seq === undefined || seq === (r.checkpointSeq ?? 0));
+    const rc = run.receipts ??= emptyReceipts(), cp = r.checkpoints?.at(-1), turn = rows ?? r.receiptTurn ?? { files: [], mayWrite: false };
+    if (!rows) r.receiptTurn = undefined;
+    const own = seq === undefined ? !!r.turnCheckpoint : !!cp && turnOf.get(cp) === seq;
     if (!own || !cp || r.receiptCp === cp) { noteTurnFiles(rc, turnFilesWithoutGit(turn), turnAt ?? end, end); this.receiptsIn(r, run); return; }
     r.receiptCp = cp; r.receiptsBusy = true;
     void (async () => {
