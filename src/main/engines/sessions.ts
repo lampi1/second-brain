@@ -6,6 +6,7 @@
 // their own factory to the manager instead. Every session gets the turn-start watchdog (chats/turn-watchdog.ts).
 import path from 'node:path';
 import fs from 'node:fs';
+import { runtimePerformance } from '../runtime-performance';
 import type { CursorReasoning, ModelsSeen } from '../../shared/contract';
 import { AcpSession, type AcpOptions } from '../chats/acp';
 import { ApiSession } from '../chats/api';
@@ -45,6 +46,7 @@ export interface EngineContext {
 /** The session of a chat on this engine, with the turn-start watchdog around it (chats/turn-watchdog.ts, ADR 0221):
  *  a sent turn with no first event in SB_TURN_WATCHDOG_MS (default 120 s) is shown and logged, never restarted. */
 export function sessionFor(engine: EngineDef, opts: SessionOptions, sink: SessionSink, ctx: EngineContext): HarnessSession {
+  runtimePerformance.sessionCreated(opts.chatId);
   const noStartMs = Number(process.env.SB_TURN_WATCHDOG_MS) > 0 ? Number(process.env.SB_TURN_WATCHDOG_MS) : TURN_NO_START_MS;
   return watchTurns(watched => startSession(engine, opts, watched, ctx), sink, { chatId: opts.chatId, engine: engine.id, label: engine.label, noStartMs });
 }

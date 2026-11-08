@@ -13,6 +13,7 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { runtimePerformance } from '../runtime-performance';
 import type { Answer, ChatItem, ChatState, Effort, ImageAttachment, PermissionMode } from '../../shared/contract';
 import { errText, log } from '../log';
 import type { Root } from './proctree';
@@ -233,9 +234,11 @@ export class ApiSession implements HarnessSession {
     let timer: NodeJS.Timeout | null = setTimeout(() => { turn.stop = 'timeout'; turn.ctrl.abort(); }, ms);
     const firstByte = () => { if (timer) { clearTimeout(timer); timer = null; } };
     try {
-      const res = await (this.opts.fetchImpl ?? fetch)(`${base}${anthropic ? '/messages' : '/chat/completions'}`, {
+      const response = (this.opts.fetchImpl ?? fetch)(`${base}${anthropic ? '/messages' : '/chat/completions'}`, {
         method: 'POST', headers, body: JSON.stringify(body), redirect: 'error', signal: turn.ctrl.signal,
       });
+      runtimePerformance.providerWrite(this.opts.chatId);
+      const res = await response;
       if (!res.ok) throw new HttpError(res.status, await res.text().catch(() => ''));
       if (!res.body) throw new ApiError('apiNoBody', { host: this.host });
       const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();

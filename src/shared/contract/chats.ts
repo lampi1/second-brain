@@ -7,6 +7,7 @@ import type { AutoClosePresence, AutoCloseStatus } from '../auto-close';
 import type { ChatDelegation, DelegationLimitHit } from '../delegation';
 import type { ChatEffortStatus } from '../effort';
 import type { ModelTier } from '../roles';
+import type { RuntimeDiagnostic } from '../runtime-performance';
 import type { StrategyPlan } from '../strategy';
 import type { SysCode, SysParams } from '../sys';
 import type { Harness } from './engines';
@@ -399,7 +400,7 @@ export interface ChatsInvokeMap {
   'chat:createRouted': [RoutedNewChat, ChatSummary];
   /** text may be empty when images are attached */
   /** voice: said in the voice conversation: the engine is asked for a reply made to be heard (ADR 0152) */
-  'chat:send': [{ chatId: string; text: string; images?: ImageAttachment[]; voice?: boolean }, void];
+  'chat:send': [{ chatId: string; text: string; images?: ImageAttachment[]; voice?: boolean; diagnostic?: RuntimeDiagnostic }, void];
   'chat:answer': [{ chatId: string; requestId: string; answer: Answer }, void];
   /** a Strategist's proposed plan: «Approva e parti», or «Cambia qualcosa» with what to change (ADR 0108) */
   /** at = the proposal the user read (StrategyPlan.at): a newer one is refused, never approved unseen */

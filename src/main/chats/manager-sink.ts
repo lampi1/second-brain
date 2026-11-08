@@ -16,6 +16,7 @@ import type { Rec } from './manager-types';
 import { ManagerWork } from './manager-work';
 import { sysItem } from './manager-helpers';
 import { pausedState } from './remote-control';
+import { runtimePerformance } from '../runtime-performance';
 
 /** What a session reports (items, requests, state patches) turned into the chat record and contract events. */
 export abstract class ManagerSink extends ManagerWork {
@@ -27,6 +28,7 @@ export abstract class ManagerSink extends ManagerWork {
     return {
       item: (item, replace) => {
         if (!live()) return;
+        if (item.kind !== 'result') runtimePerformance.item(chatId, item.kind, item.kind === 'assistant' && !!item.text, r.replaying === r.session);
         // a replayed past (a resume) is no answer of the engine: its cold start goes on
         if (item.kind !== 'user' && item.kind !== 'system' && r.replaying !== r.session) this.coldStarted(r);
         this.hook('analytics', () => this.analytics.item(r.s, item, replace));
@@ -39,6 +41,7 @@ export abstract class ManagerSink extends ManagerWork {
         // a cold note's turn stays out of the tile (ADR 0031): only its result settles the turn
         if (r.handoffTurn?.quiet && item.kind !== 'system') { if (item.kind === 'result' && !replace) this.turnEnded(r, item); return; }
         this.addItem(r, item, replace);
+        if (item.kind === 'result') runtimePerformance.item(chatId, item.kind, false, r.replaying === r.session);
         // a skill Claude loaded while the run is open joins its tags (only Claude reports skills as a tool)
         if (item.kind === 'tool' && item.name === 'Skill' && r.s.harness === 'claude' && r.s.run) {
           const input = item.input as { skill?: unknown; command?: unknown } | null;
@@ -91,6 +94,7 @@ export abstract class ManagerSink extends ManagerWork {
         // only the current engine's exit ends its cold start: an old, replaced engine exiting late must not free the slot
         if (this.chats.get(chatId) === r && (!r.session || r.session === sess)) this.coldStarted(r);
         if (!sess || this.chats.get(chatId) !== r || r.session !== sess) return;
+        runtimePerformance.fail(chatId);
         this.hook('analytics', () => this.analytics.end(r.s));
         r.session = null;
         delete r.replaying; // its replay, if any, ended with it

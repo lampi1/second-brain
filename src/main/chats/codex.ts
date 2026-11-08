@@ -34,6 +34,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { runtimePerformance } from '../runtime-performance';
 import type { Answer, ChatItem, ChatState, Effort, FileDiff, ImageAttachment, PendingRequest, PermissionMode, Question } from '../../shared/contract';
 import { errText, log } from '../log';
 import { timedStep } from '../perf';
@@ -638,6 +639,7 @@ export class CodexSession implements HarnessSession {
     const p = this.proc;
     if (!p || this.exited || !p.stdin.writable) throw new Error(NOT_ACTIVE);
     p.stdin.write(`${JSON.stringify(obj)}\n`);
+    if (obj.method === 'turn/start' || obj.method === 'turn/steer') runtimePerformance.providerWrite(this.opts.chatId);
   }
 
   private request(method: string, params: Obj, timeoutMs = 20000): Promise<Obj> {

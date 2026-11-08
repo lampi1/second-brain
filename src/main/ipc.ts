@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { INVOKE_CHANNELS, type EventChannel, type EventMap, type InvokeArg, type InvokeChannel, type InvokeResult } from '../shared/contract';
 import { updateActivity } from './update/activity';
 import { timedStep } from './perf';
+import { runtimePerformance } from './runtime-performance';
 import { PHONE_IPC } from '../shared/contract/phone';
 import { PHONE_INVOKE_CHANNELS } from '../shared/contract/phone-ipc';
 import { phoneHandlers, phoneHub, type PhoneHandlers, type PhoneIpcHub } from './ipc-handlers/phone';
@@ -48,6 +49,7 @@ export function registerHandlers(handlers: Handlers, appContents: () => WebConte
     ipcMain.handle(ch, async (e, arg) => {
       const ok = isAppSender(e, appContents()) || (!!extra && extra.channels.includes(ch) && isAppSender(e, extra.contents()));
       if (!ok) throw new Error('forbidden sender');
+      if (ch === 'chat:send' && arg && typeof arg === 'object') runtimePerformance.begin(arg.chatId, arg.diagnostic);
       const invoke = () => (handlers[ch] as Handler<typeof ch>)(arg as never, e);
       // the handler's synchronous part is one main-process step (perf.ts): a frozen window names the channel
       return timedStep(`ipc ${ch}`, () => updateActivity.tracks(ch) ? updateActivity.run(invoke) : invoke());
@@ -83,6 +85,10 @@ export class Emitter {
     for (const fn of this.taps) try { fn(channel, payload); } catch { /* the log never breaks the app */ }
     if (channel === 'ui:command' && updateActivity.frozen) return;
     const wc = this.target();
-    if (wc && !wc.isDestroyed()) wc.send(channel, payload);
+    if (wc && !wc.isDestroyed()) {
+      wc.send(channel, payload);
+      const item = channel === 'chat:item' ? payload as EventMap['chat:item'] : undefined;
+      runtimePerformance.ipc(payload, item?.chatId, item?.item.kind === 'assistant' && !!item.item.text);
+    }
   }
 }

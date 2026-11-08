@@ -38,6 +38,8 @@ export * from './contract/agents';
 export * from './contract/media';
 export * from './contract/phone';
 export * from './contract/phone-ipc';
+// Internal identity only: exporting its data type adds no renderer channel or authority.
+export type { RuntimeIdentity, RuntimeOutcome } from './agent-runtime';
 
 /** renderer → main. Each entry: [argument, result]. One interface per area (src/shared/contract/*.ts). */
 export interface InvokeMap extends

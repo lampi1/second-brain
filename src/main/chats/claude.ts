@@ -28,6 +28,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { runtimePerformance } from '../runtime-performance';
 import type { Answer, ChatItem, ChatState, Effort, ImageAttachment, PendingRequest, PermissionMode } from '../../shared/contract';
 import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { errText, log } from '../log';
@@ -589,6 +590,7 @@ export class ClaudeSession implements HarnessSession {
     const p = this.proc;
     if (!p || this.exited || !p.stdin.writable) throw new Error('La sessione non è attiva.');
     p.stdin.write(`${JSON.stringify(obj)}\n`);
+    if (obj.type === 'user') runtimePerformance.providerWrite(this.opts.chatId);
   }
 
   /** A control request; resolves with the success payload (`response.response`). */
