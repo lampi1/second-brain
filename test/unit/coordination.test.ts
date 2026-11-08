@@ -130,6 +130,29 @@ describe('coordination decision journal', () => {
     expect(() => registerRequest(store, { ...chat, run: { ...chat.run!, taskVersion: 4 } }, req)).toThrow(/fresh request id/);
     expect(() => registerRequest(store, chat, { ...req, input: { command: 'a different command' } })).toThrow(/fresh request id/);
   });
+  it('pins only the original job through workflow linking, never a changed run, version or proposal scope', () => {
+    const { store, dir } = fixture(false);
+    const chat = { id: 'link-chat', run: { runId: 'run', taskId: 'task', taskVersion: 1 } } as ChatSummary;
+    const req = { id: 'before-link', type: 'permission', at: 10, tool: 'Bash', title: 'Read', detail: '', input: { command: 'git status' } } as PendingRequest;
+    registerRequest(store, chat, req);
+    const original = requestKey(store, chat, req);
+    const works = new Workflows(path.join(dir, 'work.json'));
+    const work = works.create({ title: 'Organize task', profile: 'investigation', priority: 'normal', chatIds: [chat.id] });
+    expect(requestKey(store, chat, req)).toEqual(original);
+    for (const run of [{ ...chat.run!, runId: 'new-run' }, { ...chat.run!, taskVersion: 2 }]) {
+      expect(() => store.resolve(requestKey(store, { ...chat, run }, req), actor, true)).toThrow(/stale/);
+    }
+    for (const changed of [{ ...req, at: 11 }, { ...req, input: { command: 'git reset --hard' } }]) {
+      expect(() => store.resolve(requestKey(store, chat, changed), actor, true)).toThrow(/stale/);
+    }
+    expect(() => store.resolve({ ...original, jobId: work.id }, actor, true)).toThrow(/stale/);
+    expect(store.original(chat.id, req.id)!.state).toBe('pending');
+    const next = { ...req, id: 'after-link', at: 12 };
+    registerRequest(store, chat, next);
+    expect(requestKey(store, chat, next).jobId).toBe(work.id);
+    store.resolve(requestKey(store, chat, req), actor, true);
+    expect(store.original(chat.id, req.id)!.decision!.key).toEqual(original);
+  });
 });
 
 describe('authoritative work projection', () => {

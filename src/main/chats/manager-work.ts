@@ -26,7 +26,10 @@ export abstract class ManagerWork extends ManagerLifecycle {
   }
 
   private planRequestKey(r: Rec, plan: StrategyPlan): RequestKey {
-    return { originalRequestId: `plan:${plan.at}`, jobId: this.coordination.jobFor(r.s.id) ?? r.s.run?.taskId ?? `chat:${r.s.id}`, chatId: r.s.id,
+    const originalRequestId = `plan:${plan.at}`;
+    // A later workflow link does not change the job on whose behalf this exact proposal was issued.
+    const jobId = this.coordination.original(r.s.id, originalRequestId)?.key.jobId ?? this.coordination.jobFor(r.s.id) ?? r.s.run?.taskId ?? `chat:${r.s.id}`;
+    return { originalRequestId, jobId, chatId: r.s.id,
       runId: r.s.run?.runId ?? null, taskVersion: r.s.run?.taskVersion ?? 1, proposalRevision: plan.at,
       proposalHash: proposalHash({ steps: plan.steps, clarified: plan.clarified, doneWhen: plan.doneWhen, pcOnly: plan.pcOnly }) };
   }

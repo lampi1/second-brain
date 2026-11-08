@@ -30,6 +30,11 @@ state before resolving it, rather than trusting a binding supplied by a model. A
 pending request to accepted. A transaction commits the decision (and a workflow transition when applicable) before
 any engine submission. Competing connections, duplicate clicks and changed bindings cannot consume a second answer.
 
+The job in an issued request is immutable. Linking its chat to a workflow later changes presentation membership,
+not the proposal's original authority. The host reads that original job from the journal while reconstructing the
+current run, task version, revision and scope hash; a changed assignment or payload still fails the exact CAS.
+New requests use the current workflow link. Existing decisions are never transferred to that workflow's job.
+
 Three receipts have different meanings:
 
 1. **Decision:** the host accepted an exact answer. Actor is explicitly user/channel or named policy. Phone remains
@@ -82,6 +87,14 @@ restart in pending/accepted/dispatching states, preserved phone origin, policy/r
 transition rollback, durable orphan assignments and no semantic rewrite on cost-only updates. Manager tests verify
 commit before panel exposure and before the engine receives the answer, invalid answers, duplicate replies and failed
 delivery without consent rollback. Workflow regression tests now inject SQLite write failure rather than JSON failure.
+
+The strategy regression comparison passed all 26 baseline tests on `origin/main` at `1b44fcfa`; the stage-3 tree
+initially failed three of its 29 tests. Their old expectations conflict with this ADR: relay answers now reject rather
+than silently bypassing interview accounting, and failed plan submission must preserve accepted consent instead of
+reopening the proposal. The updated cases assert rejection without engine delivery, distinct callback identities for
+new panels with repeated wording, and durable accepted/uncertain or accepted/dispatching receipts after restart.
+They also require list/digest recovery visibility, no execution evidence, and refusal of duplicate consent or dispatch.
+No production behavior was relaxed to make those expectations pass.
 
 The fifth Workflows constructor argument can bind the current chat/pending snapshot and existing CoordinationStore.
 Its wiring and the runtime-host move belong to the stage-2 integrator. Screenshots, the dev-product check, independent

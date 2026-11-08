@@ -4,7 +4,10 @@ import { proposalHash, type CoordinationStore } from './store';
 import type { RequestKey } from './model';
 
 export function requestKey(store: CoordinationStore, chat: ChatSummary, req: Omit<PendingRequest, 'chatId'>): RequestKey {
-  return { originalRequestId: req.id, jobId: store.jobFor(chat.id) ?? chat.run?.taskId ?? `chat:${chat.id}`, chatId: chat.id,
+  // Workflow membership is mutable presentation. An issued request retains its original job; all other scope
+  // fields are reconstructed below, so a changed assignment, revision or payload still fails the exact CAS.
+  const jobId = store.original(chat.id, req.id)?.key.jobId ?? store.jobFor(chat.id) ?? chat.run?.taskId ?? `chat:${chat.id}`;
+  return { originalRequestId: req.id, jobId, chatId: chat.id,
     runId: chat.run?.runId ?? null, taskVersion: chat.run?.taskVersion ?? 1, proposalRevision: req.at,
     proposalHash: proposalHash({ type: req.type, tool: req.tool, title: req.title, detail: req.detail, questions: req.questions, input: req.input, noAlways: req.noAlways }) };
 }

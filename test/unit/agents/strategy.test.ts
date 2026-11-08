@@ -8,6 +8,7 @@
 // Pins shared/strategy.ts, agents/strategy-tools.ts and the plan part of chats/manager.ts and agents/delegation.ts.
 import { withClarified } from '../../../src/main/chats/plan-interview';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -77,18 +78,57 @@ function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: str
 const STEPS3 = [{ title: 'Trovo dove si calcola lo sconto', role: 'scout' }, { title: 'Applico lo sconto', role: 'artisan' }, { title: 'Scrivo il riepilogo' }];
 /** An ordinary plan proposal. Tests of execution start after a real user stop or three answers. */
 const PLAN = { steps: STEPS3, doneWhen: 'I test passano' };
-const tick = () => new Promise(res => setTimeout(res, 20));
 const planOf = (f: ReturnType<typeof fixture>, id: string) => f.m.list().find(c => c.id === id)!.plan!;
 /** the user's click on the plan they see now */
 const decide = (f: ReturnType<typeof fixture>, id: string, d: 'approve' | 'change', text?: string) => f.m.planDecide(id, d, planOf(f, id).at, text);
 
 async function answerPanel(f: ReturnType<typeof fixture>, chatId: string, question: string, value: string, tool = 'AskUserQuestion', source: 'pc' | 'phone' | 'relay' = 'pc') {
   const q = { question, options: [{ label: 'Sì' }, { label: 'No' }], multiSelect: false };
-  f.sinks.get(chatId)!.pending({ id: question, type: 'question', tool, title: question, detail: '', input: {}, questions: [q], at: Date.now() });
-  await f.m.answer(chatId, question, { kind: 'question', answers: { [question]: value } }, source);
+  // Identical wording on a new panel is still a new request, never a recycled engine callback (ADR 0234).
+  const id = randomUUID();
+  f.sinks.get(chatId)!.pending({ id, type: 'question', tool, title: question, detail: '', input: {}, questions: [q], at: Date.now() });
+  await f.m.answer(chatId, id, { kind: 'question', answers: { [question]: value } }, source);
+}
+
+/** Accepted consent survives transport failure and restart; the work projection exposes recovery, not a new approval. */
+async function expectUnconfirmedPlan(f: ReturnType<typeof fixture>, chatId: string, proposal: StrategyPlan, delivery: 'uncertain' | 'dispatching') {
+  expect(planOf(f, chatId)).toMatchObject({ phase: 'running', steps: proposal.steps });
+  const sends = f.sent.get(chatId)?.length;
+  await expect(f.m.planDecide(chatId, 'approve', proposal.at)).rejects.toThrow(/non aspetta/);
+  expect(f.sent.get(chatId)).toHaveLength(sends!);
+  await f.m.shutdown();
+  const store = new CoordinationStore(path.join(f.dir, 'app.db'));
+  try {
+    const request = store.original(chatId, `plan:${proposal.at}`)!;
+    expect(request).toMatchObject({ state: 'accepted', payload: proposal,
+      decision: { actor: { kind: 'user', channel: 'pc' }, answer: { decision: 'approve' } }, delivery: { state: delivery } });
+    expect(store.execution(request.decision!.id)).toEqual([]);
+    const works = new Workflows(path.join(f.dir, 'work.json'), undefined, undefined, undefined, { store, chats: () => [], pending: () => [] }).projection();
+    expect(works.find(w => w.id === request.key.jobId)).toMatchObject({ status: 'blocked', waitingOn: 'Consegna da verificare' });
+    expect(digest({ works, chats: [], pending: [], runs: [], tasks: null, now: Date.now(), since: null, warnTokens: 1000 })).toContain('Consegna da verificare');
+    expect(() => store.resolve(request.key, { kind: 'user', channel: 'pc' }, { decision: 'approve' })).toThrow(/already answered/);
+    expect(() => store.beginDelivery(request.decision!.id)).toThrow(/already attempted/);
+  } finally { store.close(); }
 }
 
 describe('a Strategist\'s plan with the user', () => {
+  it('accepts the original plan after a workflow link while retaining its original job scope', async () => {
+    const f = fixture(), s = await f.root('strategist');
+    const plan = f.m.planPropose(s.id, [{ title: 'Existing scoped work', state: 'todo' }]);
+    const store = new CoordinationStore(path.join(f.dir, 'app.db'));
+    try {
+      const original = store.original(s.id, `plan:${plan.at}`)!;
+      const works = new Workflows(path.join(f.dir, 'work.json'), undefined, undefined, undefined,
+        { store, chats: () => f.m.list(), pending: () => f.m.pending() });
+      const work = works.create({ title: 'Organize existing work', profile: 'investigation', priority: 'normal', chatIds: [s.id] });
+      await f.m.planDecide(s.id, 'approve', plan.at);
+      expect(store.original(s.id, `plan:${plan.at}`)).toMatchObject({ key: original.key, state: 'accepted',
+        decision: { key: original.key, actor: { kind: 'user', channel: 'pc' } }, delivery: { state: 'delivered' } });
+      expect(store.requests(work.id)).toEqual([]);
+      expect(planOf(f, s.id).phase).toBe('running');
+      expect(f.sent.get(s.id)?.at(-1)).toBe(PLAN_APPROVED);
+    } finally { store.close(); }
+  });
   it('cancels superseded plan A after B approval and a database restart', async () => {
     const f = fixture(), s = await f.root('strategist');
     const a = f.m.planPropose(s.id, [{ title: 'Plan A', state: 'todo' }]);
@@ -173,7 +213,10 @@ describe('a Strategist\'s plan with the user', () => {
     await expect(start(o.id, first)).rejects.toThrow(/exact question/);
     await answerPanel(f, s.id, first, 'No');
     await answerPanel(f, s.id, 'Serve anche su mobile?', 'Sì');
-    await answerPanel(f, s.id, 'Posso proseguire?', ENOUGH_QUESTIONS, 'AskUserQuestion', 'relay');
+    const answered = f.answers.length;
+    await expect(answerPanel(f, s.id, 'Posso proseguire?', ENOUGH_QUESTIONS, 'AskUserQuestion', 'relay')).rejects.toThrow(/non è una decisione/);
+    expect(f.answers).toHaveLength(answered);
+    expect(planOf(f, s.id).enough).not.toBe(true);
     await expect(f.call('plan_propose', s.id, PLAN)).rejects.toThrow(/answered 2 of at least 3/);
     await answerPanel(f, s.id, 'Serve un controllo sui resi?', 'Sì');
     await f.call('plan_propose', s.id, PLAN);
@@ -186,7 +229,7 @@ describe('a Strategist\'s plan with the user', () => {
     await answerPanel(f, o.id, 'Campo connettore', 'dato privato', 'mcp__form');
     await expect(start(o.id, 'Campo connettore')).rejects.toThrow(/exact question/);
     await answerPanel(f, o.id, first, ENOUGH_QUESTIONS);
-    // Finishing an earlier asynchronous route cannot acquire the new answer, even for identical question text and id.
+    // Finishing an earlier asynchronous route cannot acquire the new answer, even for identical question text.
     await expect(f.m.create({ harness: 'claude', roleId: 'strategist', cwd: f.dir, prompt: 'Sconto' }, 'agent', undefined, {}, { intake: oldIntake })).rejects.toThrow(/exact question/);
     const stopped = await start(o.id, first);
     expect(stopped.plan).toMatchObject({ enough: true, clarified: [] });
@@ -301,7 +344,6 @@ describe('a Strategist\'s plan with the user', () => {
     const out = await f.call('plan_update', s.id, { step: 3, state: 'done' });
     expect(out).toMatchObject({ done: 3, of: 3, finished: true });
     expect(planOf(f, s.id).phase).toBe('done');
-    await tick();
   });
 
   it('a step whose sibling chat was closed without a result shows blocked, never stuck', async () => {
@@ -359,7 +401,7 @@ describe('a Strategist\'s plan with the user', () => {
     await expect(f.call('agent_delegate', s.id, { tasks: [f.task('scout', 'Dove')] })).rejects.toThrow(/not approved/);
   });
 
-  it('rolls back a typed approval when the engine rejects delivery', async () => {
+  it('keeps typed consent durable and exposes uncertain delivery when the engine rejects it', async () => {
     let fail = false;
     const f = fixture({}, undefined, undefined, () => { if (fail) throw new Error('engine offline'); });
     const s = await f.root('strategist');
@@ -368,20 +410,21 @@ describe('a Strategist\'s plan with the user', () => {
     const pending = planOf(f, s.id);
     fail = true;
     await expect(f.m.send(s.id, 'approvo parti')).rejects.toThrow(/engine offline/);
-    expect(planOf(f, s.id)).toEqual(pending);
     expect(f.m.list().find(c => c.id === s.id)!.run!.plan!.approvedAt).toBeUndefined();
+    await expectUnconfirmedPlan(f, s.id, pending, 'uncertain');
   });
 
-  it('a decision whose message does not reach the Strategist leaves the plan waiting', async () => {
+  it('keeps consent without an ACK and exposes dispatching recovery instead of asking again', async () => {
     const f = fixture();
     const s = await f.root('strategist');
     await answerPanel(f, s.id, 'Vuoi aggiungere vincoli?', ENOUGH_QUESTIONS);
     await f.call('plan_propose', s.id, PLAN);
+    const pending = planOf(f, s.id);
     const send = f.m.send.bind(f.m);
     f.m.send = async () => { throw new Error('motore spento'); };
     await expect(decide(f, s.id, 'approve')).rejects.toThrow(/motore spento/);
-    expect(planOf(f, s.id).phase).toBe('proposed');
     f.m.send = send;
+    await expectUnconfirmedPlan(f, s.id, pending, 'dispatching');
   });
 
   it('the plan survives a restart, and its gate with it', async () => {

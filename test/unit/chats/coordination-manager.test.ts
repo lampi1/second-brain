@@ -8,6 +8,7 @@ import type { SessionSink } from '../../../src/main/chats/session';
 import type { PendingRequest } from '../../../src/shared/contract';
 import { CoordinationStore } from '../../../src/main/coordination/store';
 import { closeAppDbs } from '../../../src/main/app-db';
+import { Workflows } from '../../../src/main/workflows/service';
 
 const roots: string[] = [], managers: ChatManager[] = [];
 afterEach(async () => { for (const m of managers.splice(0)) await m.shutdown(); closeAppDbs(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
@@ -39,6 +40,20 @@ async function fixture(options: { away?: boolean; failDelivery?: boolean } = {})
   return { m, store, chat, calls: () => calls };
 }
 describe('request receipts through ChatManager', () => {
+  it.each(['create', 'attach'] as const)('answers the original question after workflow %s without rebinding consent', async mode => {
+    const f = await fixture();
+    const original = f.store.original(f.chat.id, question.id)!;
+    const works = new Workflows(path.join(path.dirname(f.store.file), 'work.json'), undefined, undefined, undefined,
+      { store: f.store, chats: () => f.m.list(), pending: () => f.m.pending() });
+    const work = works.create({ title: 'Organize existing work', profile: 'investigation', priority: 'normal', chatIds: mode === 'create' ? [f.chat.id] : [] });
+    if (mode === 'attach') works.report({ id: work.id, expectedVersion: work.version, action: 'update', summary: 'Attach existing chat', chatIds: [f.chat.id] });
+    expect(f.store.jobFor(f.chat.id)).toBe(work.id);
+    await f.m.answer(f.chat.id, question.id, { kind: 'question', answers: { 'Proceed?': 'No' } }, 'phone');
+    expect(f.store.original(f.chat.id, question.id)).toMatchObject({ key: original.key, state: 'accepted',
+      decision: { key: original.key, actor: { kind: 'user', channel: 'phone' } }, delivery: { state: 'delivered' } });
+    expect(f.store.requests(work.id)).toEqual([]);
+    expect(f.calls()).toBe(1);
+  });
   it('commits phone consent before delivery and rejects a duplicate', async () => {
     const f = await fixture();
     const answer = { kind: 'question', answers: { 'Proceed?': 'No' } } as const;
