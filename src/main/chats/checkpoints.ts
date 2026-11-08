@@ -35,7 +35,11 @@ function git(cwd: string, args: string[], env: NodeJS.ProcessEnv = {}): Promise<
 
 /** commit: the files before the turn; after: the tree when the turn ended (afterTree), absent while it runs or when
  *  that record failed */
-export interface Checkpoint { commit: string; at: number; root: string; after?: string }
+export interface Checkpoint {
+  commit: string; at: number; root: string; after?: string;
+  /** A later turn was allowed to write before this end read finished: undo must preserve every current file. */
+  afterUncertain?: true;
+}
 
 /** The repository's top folder for cwd, or null (not a git work tree). */
 export async function repoRoot(cwd: string): Promise<string | null> {
@@ -111,6 +115,9 @@ export async function restore(cp: Checkpoint, backupRef: string): Promise<UndoRe
   const backup = (await git(cp.root, ['commit-tree', now, '-p', cp.commit, '-m', 'second-brain undo backup'], IDENTITY)).trim();
   await git(cp.root, ['update-ref', backupRef, backup]);
   const before = `${cp.commit}^{tree}`;
+  // A timed-out barrier let a later turn write during this checkpoint's end read. Neither the late tree nor the
+  // missing-end fallback can identify this turn's changes safely; retain the backup but never restore those files.
+  if (cp.afterUncertain) return { restored: [], removed: [], skipped: (await changes(cp.root, before, now)).map(c => c.file) };
   const turn = await changes(cp.root, before, cp.after ?? now);
   const since = cp.after ? new Set((await changes(cp.root, cp.after, now)).map(c => c.file)) : new Set<string>();
   const restored: string[] = [], removed: string[] = [], skipped: string[] = [];

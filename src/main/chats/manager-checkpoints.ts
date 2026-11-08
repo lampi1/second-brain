@@ -20,6 +20,8 @@ export const CHECKPOINT_DEADLINE_MS = 45_000;
 
 /** the turn (Rec.checkpointSeq) each checkpoint belongs to: a turn's end and receipts read only their own */
 const turnOf = new WeakMap<Checkpoint, number>();
+/** End reads still pending when a later turn's deadline opens its write barrier can contain that later turn's files. */
+const uncertainEndsThrough = new WeakMap<Rec, number>();
 
 /** ADR 0103 checkpoints before each turn and the run's receipts (ADR 0130); undo of the last turn. */
 export abstract class ManagerCheckpoints extends ManagerSessions {
@@ -44,6 +46,15 @@ export abstract class ManagerCheckpoints extends ManagerSessions {
   }
 
   private givenUp(r: Rec, limit: number, why: string): void {
+    if (r.afterPending) {
+      const through = (r.checkpointSeq ?? 0) - 1;
+      uncertainEndsThrough.set(r, Math.max(uncertainEndsThrough.get(r) ?? -1, through));
+      // Mark existing records now, including a failed end read. Queued records not created yet check the watermark
+      // when they finish below. Never erase a completed end tree or let a late read make an uncertain one safe again.
+      for (const cp of r.checkpoints ?? []) {
+        if (!cp.after && (turnOf.get(cp) ?? Infinity) <= through) cp.afterUncertain = true;
+      }
+    }
     log.warn('chats', 'checkpoint before the turn given up: git too slow', { chat: r.s.id, cause: `no snapshot ${limit} ms after the turn asked for it: ${why}`, hint: 'this turn cannot be undone from the app; its held writes go on now' });
   }
 
@@ -85,7 +96,13 @@ export abstract class ManagerCheckpoints extends ManagerSessions {
     const seq = r.checkpointSeq;
     const record = (): Promise<void> | undefined => {
       const cp = r.checkpoints?.at(-1);
-      return cp && !cp.after && turnOf.get(cp) === seq ? afterTree(cp.root).then(tree => { if (tree) cp.after = tree; }) : undefined;
+      if (!cp || cp.after || turnOf.get(cp) !== seq) return;
+      const uncertain = (): boolean => seq !== undefined && seq <= (uncertainEndsThrough.get(r) ?? -1);
+      if (uncertain()) { cp.afterUncertain = true; return; }
+      return afterTree(cp.root).then(tree => {
+        if (uncertain()) cp.afterUncertain = true;
+        else if (tree) cp.after = tree;
+      });
     };
     // a turn that ended before its snapshot landed (no writing tool ran: they wait for it): its end is recorded after
     // it; every turn end is recorded in order, none is dropped while an earlier one is still being read

@@ -69,11 +69,37 @@ The larger after total is in engine initialization (244 -> 466 ms), not a new lo
 sample is not statistical evidence of unchanged throughput; the queue invariant is proved independently of timing.
 The crashing load has no real answer, so its load-to-answer duration is not reported as zero.
 
-Branch gate attempt: typecheck and changed-file lint passed; 975 unit tests passed, 1 skipped, 4 failed. The frame
-budget and stale guide-anchor failures were corrected (48 focused tests then passed). The remaining failure is
-`checkpoint-barrier.test.ts:140`: undo restored the original file after a later turn's snapshot timed out, instead
-of preserving that later write. This is outside the stage-1 production diff; it remains a blocking failure awaiting
-separate diagnosis, not a passing or waived check. Full e2e and the non-e2e main batch check remain unrun here.
+Initial branch gate: typecheck and changed-file lint passed; 975 unit tests passed, 1 skipped, 4 failed. The frame
+budget and stale guide-anchor failures were corrected (48 focused tests then passed). The remaining failure,
+`checkpoint-barrier.test.ts:140`, triggered the checkpoint follow-up below. Full e2e and the non-e2e main batch check
+remain unrun here.
+
+### Checkpoint deadline follow-up
+
+The unchanged original test passed once on isolated `5b6c5b69`, then passed all five requested repetitions (5 green,
+0 red), and passed once on `19a37a84`. The initial gate failure is intermittent; those samples alone do not prove
+whether it predates the branch. The temporary base worktree was removed after the comparison.
+
+A separate deterministic regression (`checkpoint-deadline.test.ts`) holds the prior turn's end read across the next
+turn's deadline with a promise and fake timer, then writes `TARDI`, finishes the old read and undoes the old turn.
+Before the fix it fails with actual `ORIGINAL`, expected `TARDI`; after the fix it passes. The implicated production
+files were unchanged between `5b6c5b69` and `19a37a84`, proving the faulty ordering exists in the base code too.
+
+Cause: `ManagerCheckpoints.checkpoint` races the previous snapshot/end against the new deadline. On timeout it opens
+the write barrier while `recordTurnEnd` can still read the files. That late end tree includes the next turn's write;
+`restore` then attributes it to the earlier checkpoint (or, for a missing end tree, uses the entire current tree).
+
+Fix: mark unresolved older end records uncertain before releasing writes, including queued end records through a
+turn watermark. A late read cannot make them safe again. Undo still records a backup, but preserves all current
+files when the selected checkpoint's end is uncertain. Completed end trees keep their normal selective undo.
+The original `checkpoint-barrier.test.ts` is byte-for-byte unchanged; it and the new regression passed (7/7).
+
+The next full branch gate passed typecheck/lint and the original checkpoint test, but is still blocked: 981 tests
+passed, 1 skipped, 3 failed. One failure was the new regression's initial real snapshot deadline; all of its
+deadline timers are now frozen before the first snapshot and its focused run passes. The other two failures,
+`correction-catch-hook.test.ts:79,86`, are outside this change: semantic/recall responses were missing. The production
+hook has real 200/300 ms HTTP deadlines while these tests expect localhost replies; cause still needs independent
+confirmation. They were not retried, skipped, weakened or fixed here. A final green branch gate is still required.
 
 Low residual risks of the same branch, explicitly unverified and carried into the runtime migration: trust by server name (a user-defined OpenCode MCP server named
 `second-brain` would be treated as the app's own); shell permissions without a `kind` fall into the Tool category;
