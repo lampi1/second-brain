@@ -19,6 +19,7 @@ touches it.
 | Stable vs dev instance; how an agent verifies a change | `docs/agents/stable-dev.md` |
 | Vision · architecture · decisions | `docs/VISION.md` · `docs/architecture.md` · `docs/adr/` (index `docs/adr/README.md`) |
 | Human contributors | `CONTRIBUTING.md` |
+| Open risks after the fast merge of 2026-11-08: read them before working on those areas | `docs/agents/open-risks.md` |
 
 Key words: **Orchestrator** = the coordinating chat where work starts; **role** = Strategist, Scout, Artisan, Sentinel,
 Herald or the Orchestrator; **brain** = the user's folder of notes, rules and tools; **stable / dev** = the user's frozen
