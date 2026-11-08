@@ -177,11 +177,11 @@ describe('check:quick', () => {
   });
 
   it('says "green WITHOUT tests" for uncovered sources (exit 0), plain green only when every source has a test', () => {
-    expect(verdict([], 12)).toBe('check:quick green in 12 s: ready to try. Before the merge: the e2e specs of the touched part, under the e2e lock (docs/agents/rules.md rule 7)');
+    expect(verdict([], 12)).toBe('check:quick green in 12 s: ready to try. Before the merge: a clean independent Sentinel review and the guard, no e2e (docs/agents/rules.md rule 7)');
     const few = verdict(['src/renderer/a.tsx', 'scripts/b.mjs'], 12);
     expect(few).toMatch(/^check:quick green WITHOUT tests: src\/renderer\/a\.tsx, scripts\/b\.mjs \(typecheck and lint only\)/);
     expect(few).not.toContain('ready to try');
-    expect(few).toContain('the e2e specs of the touched part');
+    expect(few).toContain('a clean independent Sentinel review and the guard, no e2e');
     const many = verdict(Array.from({ length: 13 }, (_, i) => `src/renderer/f${i}.tsx`), 12);
     expect(many).toContain('src/renderer/f9.tsx and 3 more (typecheck and lint only)');
     expect(many).not.toContain('f10.tsx');
