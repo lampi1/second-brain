@@ -208,8 +208,9 @@ export interface Rec {
   /** the user's message being sent came from the paired phone (sendFromPhone): its text, so only that delivery is marked
    *  📱 and takes the phone reply line; voice = a transcribed voice note */
   phoneNext?: { text: string; voice: boolean };
-  /** the request being answered from the phone right now: its pending:resolved says by 'phone' */
-  answeringFromPhone?: string;
+  /** the requests being answered from the phone right now: their pending:resolved says by 'phone' (one per request:
+   *  a PC answer finishing first must not erase a phone one still in delivery) */
+  answeringFromPhone?: Set<string>;
   /** the app completed its assignment from that report: a new message from its Orchestrator assigns it again */
   autoCompleted?: boolean;
   agentInstructions?: string;
