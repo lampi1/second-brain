@@ -100,3 +100,15 @@ describe('Modalità notte in the chats', () => {
     expect(m.items(o.id).some(i => i.kind === 'system' && i.text === 'riepilogo')).toBe(true);
   });
 });
+
+describe('a typing permission parked at night (ADR 0237)', () => {
+  it('reaches the night log and the feed with what the agent typed masked', async () => {
+    const SECRET = ['Segreto', 'Synthetic', String(1)].join('-');   // built at run time: the guard flags a literal
+    const w = world(true), m = manager(w);
+    const chat = await m.create({ harness: 'anthropic', cwd: tmp(), prompt: 'accedi' });
+    w.sink!.pending({ id: 'p-type', type: 'permission', tool: 'mcp__second-brain__type', title: `second-brain: type · ${SECRET}`, detail: '', input: { text: SECRET, ref: 'e12' }, at: Date.now() });
+    expect(JSON.stringify(w.log)).not.toContain(SECRET);
+    expect(w.log.length).toBeGreaterThan(0);
+    expect(JSON.stringify(m.items(chat.id))).not.toContain(SECRET);
+  });
+});

@@ -55,8 +55,10 @@ export abstract class ManagerSink extends ManagerWork {
       pending: req => {
         if (!live()) return;
         this.coldStarted(r);
-        if (this.gated(r, req) || this.refusedCommand(r, req) || this.autoPermitted(r, req) || this.awayAnswered(r, req)) return;
-        req = maskTypedRequest(req);       // decided on the real input above; shown and kept masked (ADR 0237)
+        if (this.gated(r, req) || this.refusedCommand(r, req) || this.autoPermitted(r, req)) return;
+        // decided on the real input above; parked for night mode, shown and kept masked from here (ADR 0237)
+        req = maskTypedRequest(req);
+        if (this.awayAnswered(r, req)) return;
         this.hook('analytics', () => this.analytics.pending(r.s, req));
         this.autoActivity(r);
         const full: PendingRequest = { ...req, chatId };
