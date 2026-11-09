@@ -186,3 +186,15 @@ it('carries the exited engine root to main so a kept engine is reaped at the rea
   // The host's job handle has no meaning in main's job registry: main reaps by the process walk.
   expect(f.proxy.root).toEqual({ pid: 123, created: 10, exited: 20, job: null });
 });
+
+it('dispatches a send at once after an acknowledged hold, so a stop in the same tick cannot drop it silently', async () => {
+  const f = fixture();
+  f.proxy.start(); await flush(); await f.proxy.ready;
+  expect(f.proxy.holdWrites(Promise.resolve())).toBe(true);
+  await flush(); // hold acknowledged and released: the barrier is no longer pending
+  f.proxy.send('next turn');
+  const interrupted = f.proxy.interrupt();
+  await interrupted; await flush();
+  expect(f.writes).toHaveBeenCalledTimes(1);
+  f.proxy.hostDied();
+});

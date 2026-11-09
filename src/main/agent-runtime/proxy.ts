@@ -78,7 +78,10 @@ export class RuntimeSessionProxy implements HarnessSession, RuntimeAnswerConsume
     const token = randomUUID();
     const held = this.call({ method: 'hold', token });
     this.pendingHold = held;
-    void held.then(ok => { if (ok !== true) this.hostDied(); }, () => this.hostDied());
+    // Sends wait only while the hold is unacknowledged: afterwards they go at once, so a stop in the same tick can no
+    // longer drop a message the manager already recorded as submitted (review L3).
+    void held.then(ok => { if (ok !== true) this.hostDied(); }, () => this.hostDied())
+      .finally(() => { if (this.pendingHold === held) this.pendingHold = null; });
     // The hold command is posted before send; release cannot overtake its host acknowledgement.
     void Promise.all([held, until.catch(() => undefined)]).then(([ok]) => {
       if (ok === true && !this.ended) this.fire({ method: 'release', token });
