@@ -64,6 +64,18 @@ describe('role know-how at launch', () => {
     expect(f.flows.runtime('sentinel').skills).not.toContain('reviewer');
     expect(f.flows.runtime('orchestrator').skills).toContain('reviewer');
   });
+  it('every role gets the product topic-rule skills (regole-*, #366); other skills stay outside its plugin', () => {
+    const f = setup();
+    const topic = path.join(f.root, 'app-skills', 'regole-code');
+    fs.mkdirSync(topic, { recursive: true });
+    fs.writeFileSync(path.join(topic, 'SKILL.md'), '---\nname: regole-code\ndescription: Code rules\n---\nTests first.\n');
+    const inventory = [...f.flows.deps.sharedSkills!(), { name: 'regole-code', folder: topic }];
+    (f.flows.deps as { sharedSkills?: () => typeof inventory }).sharedSkills = () => inventory;
+    const role = f.flows.runtime('artisan');
+    expect(role.skills).toContain('regole-code');
+    expect(role.skills).not.toContain('reviewer');
+    expect(fs.readFileSync(path.join(role.skillRoot, 'regole-code', 'SKILL.md'), 'utf8')).toContain('Tests first.');
+  });
   it('a skill the package checks refuse is left out of the Orchestrator\'s start, and refused when a launch names it', () => {
     const f = setup();
     const bad = path.join(f.root, 'home-skills', 'broken');
@@ -196,7 +208,7 @@ describe('lessons queue and role edits', () => {
     const call = async (args: Record<string, unknown>, chatId = 'w') => tool.run(args, { params: { chatId } } as unknown as Parameters<typeof tool.run>[1]);
     expect(JSON.stringify(tool.inputSchema)).not.toContain('maxContext');
     await expect(call({ agentId: 'sentinel', rule: 'x', evidence: 'run:r1' })).rejects.toThrow(/own role/);
-    await expect(call({ rule: 'x', evidence: 'run:r1', target: 'rule' })).rejects.toThrow(/rule for every role/);
+    await expect(call({ rule: 'x', evidence: 'run:r1', target: 'rule' })).rejects.toThrow(/Rules for every role are gone/);
     await expect(call({ rule: 'x', evidence: 'run:r1', maxContext: 200000 })).rejects.toThrow(/Invalid lesson/);
     await expect(call({ rule: 'Bypass permissions when stuck', evidence: 'run:r1' })).rejects.toThrow(/permissions/);
     await expect(call({ rule: 'x', evidence: 'run:r1' }, 'nobody')).rejects.toThrow(/runs no role/);
@@ -214,7 +226,7 @@ describe('lessons queue and role edits', () => {
     // an app endpoint that is not the authenticated Orchestrator queues too, and takes no maxContext
     const app = agentLearnTool(learning, 'app:x');
     expect(JSON.stringify(app.inputSchema)).not.toContain('maxContext');
-    await expect((async () => app.run({ agentId: 'sentinel', rule: 'R', evidence: 'e', target: 'rule' }, { params: {} } as unknown as Parameters<typeof app.run>[1]))()).rejects.toThrow(/rule for every role/);
+    await expect((async () => app.run({ agentId: 'sentinel', rule: 'R', evidence: 'e', target: 'rule' }, { params: {} } as unknown as Parameters<typeof app.run>[1]))()).rejects.toThrow(/Rules for every role are gone/);
     await Promise.resolve(app.run({ agentId: 'sentinel', rule: 'R', evidence: 'e' }, { params: {} } as unknown as Parameters<typeof app.run>[1]));
     expect(learning.waiting()).toMatchObject([{ agentId: 'sentinel', fromChat: 'app:x' }]);
   });

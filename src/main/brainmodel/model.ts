@@ -12,7 +12,6 @@ import type { BrainRule, BrainSkill, MemoryFile, SkillHome } from '../../shared/
 import { field, parseMd } from '../../shared/skillmd';
 import { configOf } from '../rules/storage';
 import { fixedSize } from '../rules/guards';
-import { appBoot } from '../rules/instructions';
 import { portableId } from '../agents/pack/flows';
 
 const MAX_BYTES = 256 * 1024;
@@ -119,12 +118,13 @@ export function readRules(root: string | null): BrainRule[] {
   try { for (const f of fs.readdirSync(path.join(root, 'rules')).sort()) if (/\.md$/i.test(f)) files.add(`rules/${f}`); } catch { /* none */ }
   return [...files].flatMap(rel => rule(root, rel, fixed.includes(rel) ? 'always' : 'none') ?? []);
 }
-/** The fixed core's size against its budget (rules/instructions.ts productInstructions checks the same at launch). */
+/** The brain's fixed files against their budget, the measure the launch (rules/instructions.ts productInstructions) and
+ *  the write guard (guards.ts) check; the app's own fixed rules come on top and are not counted. */
 export function coreSize(root: string | null): { chars: number; budget: number; appRules: boolean } | undefined {
   if (!root) return undefined;
   try {
     const config = configOf(root);
-    return { chars: fixedSize({ root, state: '', config }) + (config.appRules ? appBoot(root).length : 0), budget: config.fixedBudget, appRules: !!config.appRules };
+    return { chars: fixedSize({ root, state: '', config }), budget: config.fixedBudget, appRules: !!config.appRules };
   } catch { return undefined; }
 }
 

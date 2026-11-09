@@ -56,8 +56,8 @@ export class AgentPackFlows {
     return [...new Set([...profile.skills, ...(profile.knowhow?.linked ?? [])])]
       .filter(name => !shared.has(name) && !own.has(`skills/${name}/SKILL.md`));
   }
-  /** The plugin a launch runs with: the role's own know-how, its default and linked skills and the skills this launch
-   *  asks for (`launch`, a delegation's or app_create_chat's), and nothing else: a skill outside it is not there to load
+  /** The plugin a launch runs with: the role's own know-how, its default and linked skills, the product's topic-rule
+   *  skills (regole-*) and the skills this launch asks for (`launch`, a delegation's or app_create_chat's), and nothing else: a skill outside it is not there to load
    *  (and the role gate refuses a call to it). A launch skill that does not exist refuses the start, by name. */
   runtime(id: string, launch: readonly string[] = [], _context: LaunchMemoryContext = {}): { pluginDir: string; skillRoot: string; instructions: string; memory: string; skills: string[]; context: AgentContextSnapshot } {
     const profile = this.profile(id), files = this.ownSkills(profile), all = this.deps.sharedSkills?.() ?? [];
@@ -65,7 +65,9 @@ export class AgentPackFlows {
     if (missing.length) throw new Error(`Skill non trovata: ${missing.join(', ')} (pagina Skill).`);
     const declared = [...profile.skills, ...(profile.knowhow?.linked ?? [])];
     // the Orchestrator can call every skill from its chat (owner 2026-11-09, #361): it picks the ones a request needs
-    const skills = [...new Set([...declared, ...launch, ...(id === 'orchestrator' ? all.map(s => s.name) : [])])];
+    // the product's topic rules are skills since #366 (regole-*, ADR 0243): every role has them, loaded when one fits
+    const topicRules = all.filter(s => s.name.startsWith('regole-')).map(s => s.name);
+    const skills = [...new Set([...declared, ...launch, ...topicRules, ...(id === 'orchestrator' ? all.map(s => s.name) : [])])];
     const loaded: string[] = [portableId(id)];
     for (const name of skills) {
       const shared = all.find(s => s.name === name);

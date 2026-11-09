@@ -24,9 +24,14 @@ and external actions. The rest becomes skills, which agents load when their desc
   there (`research.ts`, `service.ts applyResearch`, `research-candidate.ts`). `rules/lessons.md` is not written any
   more (closes #337).
 - **«Sempre caricato».** The Memoria tab (old «Regole», same `regole` id and G L key) shows the fixed files of
-  `brain.json` (`fixedFiles`, me.md included) as cards with the characters of the whole core against `fixedBudget`,
-  the app's boot text counted when `appRules` is on (`brainmodel/model.ts coreSize`). Every other rule file is listed
-  under «Non più caricate». «Regole imparate» is no longer shown; the self-improvement policies still reach Proposte.
+  `brain.json` (`fixedFiles`, me.md included) as cards with their characters against `fixedBudget`, the same measure
+  the launch and the write guard check (`brainmodel/model.ts coreSize`); the app's own fixed rules come on top. Every
+  other rule file is listed under «Non più caricate». «Regole imparate» is no longer shown; the self-improvement
+  policies still reach Proposte.
+- **Every engine reaches them.** Every role's plugin carries the `regole-*` skills (`agents/pack/flows.ts runtime`);
+  Codex gets the app's skills folder (`brain/adapters/codex.ts`); ACP, which has no skills, gets each topic skill's
+  description and path in its launch text (`rules/instructions.ts topicSkillIndex`).
+- **Lessons.** `agent_learn_propose` no longer offers the target `rule`: a lesson goes to the role or to a skill.
 
 ## Consequences
 - The brain's own topic files stay on disk but reach no chat; moving their procedures into skills is the migration's

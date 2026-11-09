@@ -37,5 +37,5 @@ export function guard(ctx: RuleContext, input: HookInput): string | undefined {
   }
   const total = fixedSize(ctx);
   const next = fixedSize(ctx, { file: rel, text: after.replace(/\r\n/g, '\n') });
-  if (next > total && next > ctx.config.fixedBudget) return `Fixed context ${total} → ${next}; budget ${ctx.config.fixedBudget}. Shorten or move rules to a topic file first.`;
+  if (next > total && next > ctx.config.fixedBudget) return `Fixed context ${total} → ${next}; budget ${ctx.config.fixedBudget}. Shorten it first, or move procedures into a skill.`;
 }

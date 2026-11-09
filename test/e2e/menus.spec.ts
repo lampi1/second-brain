@@ -49,7 +49,7 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     await shot(page, 'menus-chat');
     await page.keyboard.press('Escape');
 
-    // the sidebar: three groups, Andamento the last entry of Brain (owner, 2026-10-31; it holds Costi and Qualità, ADR 0101), Regole in Brain (its learned rules inside, ADR 0082), Task (once DevOps, ADR 0079) in Lavoro
+    // the sidebar: three groups, Andamento the last entry of Brain (owner, 2026-10-31; it holds Costi and Qualità, ADR 0101), «Sempre caricato» (the old Regole, #366) a Memoria tab, Task (once DevOps, ADR 0079) in Lavoro
     const nav = page.getByTestId('sidebar');
     await expect(page.getByTestId('nav-collapse')).toHaveCount(0); // always expanded: no toggle
     await expect(nav.locator('.nav-title')).toHaveCount(3);
@@ -58,7 +58,7 @@ test('menus: gear, "…", a chat\'s ⋯ and the sidebar groups', async () => {
     const ix = (id: string) => navOrder.indexOf(id);
     expect(ix('nav-home')).toBeLessThan(ix('nav-group-work'));
     expect(ix('nav-workspace')).toBe(-1); // SPEC 19: the agents live in the Grindhouse, no separate entry
-    // Memoria holds Skill, Regole, Script, Idee and Apprendimento as tabs, and the Dashboard is gone (ADR 0122)
+    // Memoria holds Skill, Sempre caricato, Script, Idee and Apprendimento as tabs, and the Dashboard is gone (ADR 0122)
     expect(ix('nav-group-brain')).toBeLessThan(ix('nav-memoria'));
     expect(ix('nav-group-trends')).toBe(-1);
     for (const gone of ['nav-dashboard', 'nav-skill', 'nav-regole', 'nav-script', 'nav-idee', 'nav-apprendimento']) expect(ix(gone)).toBe(-1);

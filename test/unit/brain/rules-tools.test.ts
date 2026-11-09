@@ -59,6 +59,17 @@ describe('product topic rules as app skills (#366, ADR 0243)', () => {
     expect(md).toContain("Anna D'Amico's rules for testing");
     expect(md).not.toContain('{{OWNER}}');
   });
+  it('an adapter without the app skills (ACP) is told where each topic skill is; a brain without app rules is not', async () => {
+    const { productInstructions } = await import('../../../src/main/rules/instructions');
+    const root = brain();
+    fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', template: { OWNER: 'Anna' }, rules: { topicFiles: [], appRules: true } }));
+    const tools = ensureTools(root);
+    const text = productInstructions(root, true, tools)!;
+    expect(text).toContain('- regole-qa: QA rules');
+    expect(text).toContain(`${appSkillsIn(tools).replace(/\\/g, '/')}/regole-qa/SKILL.md`);
+    fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', rules: { topicFiles: [] } }));
+    expect(productInstructions(root, true, tools)).not.toContain('regole-qa');
+  });
 });
 
 describe('template reference migration', () => {

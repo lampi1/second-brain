@@ -34,8 +34,9 @@ it('exposes unapproved lessons, binds their exact text and blocks unsupported ap
   expect(durableAsks([], [{ ...lesson, rule: 'Changed rule.' }])[0]!.id).not.toBe(ask.id);
   // The host waiting projection includes a previous approval whose evidence became insufficient.
   expect(durableAsks([], [{ ...lesson, userApproved: true }])).toHaveLength(1);
-  const global = renderToStaticMarkup(createElement(WorkApproval, { ask: durableAsks([], [{ ...lesson, target: 'rule' }])[0]!, onEscape: vi.fn() }));
-  expect(global).toContain('Regole del brain · tutti i ruoli');
+  // an old lesson queued for the rules lands in the role's text since #366: the card says so
+  const old = renderToStaticMarkup(createElement(WorkApproval, { ask: durableAsks([], [{ ...lesson, target: 'rule' }])[0]!, onEscape: vi.fn() }));
+  expect(old).toContain('Ruolo artisan');
   const skill = renderToStaticMarkup(createElement(WorkApproval, { ask: durableAsks([], [{ ...lesson, target: 'skill', skill: 'accessibility' }])[0]!, onEscape: vi.fn() }));
   expect(skill).toContain('Skill accessibility');
 });

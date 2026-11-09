@@ -37,7 +37,7 @@ export const brainModelIt = {
 
   // Skill page
   // Regole page
-  'bm.rules.lead': (p: { n: number; chars: number; budget: number; app: boolean }) => `Quello che ogni chat riceve all’avvio: ${p.n === 1 ? '1 file' : `${p.n} file`} del tuo brain${p.app ? ' più le regole fisse dell’app' : ''}, ${p.chars.toLocaleString('it-IT')} caratteri su ${p.budget.toLocaleString('it-IT')}. Tutto il resto sono skill, caricate quando servono.`,
+  'bm.rules.lead': (p: { n: number; chars: number; budget: number; app: boolean }) => `Quello che ogni chat riceve all’avvio: ${p.n === 1 ? '1 file' : `${p.n} file`} del tuo brain, ${p.chars.toLocaleString('it-IT')} caratteri su ${p.budget.toLocaleString('it-IT')}${p.app ? ', più le regole fisse dell’app' : ''}. Tutto il resto sono skill, caricate quando servono.`,
   'bm.rules.lead0': 'Quello che ogni chat riceve all’avvio. Tutto il resto sono skill, caricate quando servono.',
   'bm.rules.loaded.always': 'Sempre', 'bm.rules.loaded.topic': 'Quando serve', 'bm.rules.loaded.none': 'Non più caricata',
   'bm.rules.loadedHint.always': 'Entra in ogni chat dall’inizio.',

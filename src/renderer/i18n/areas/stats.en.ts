@@ -94,7 +94,7 @@ export const statsEn: typeof statsIt = {
   'stats.c.cmd.decides': 'Whether a command touches production or, for a read-only role, whether it only reads.',
   'stats.c.cmd.why': 'A production command asks for a second click and main checks it again: a mistake there leaves your PC.',
 
-  'stats.fact.kindOther': (p: { k: number; n: number }) => `${p.k} requests out of ${p.n} end in "altro": add a rule in the brain (Rules) for the kind of work that is missing.`,
+  'stats.fact.kindOther': (p: { k: number; n: number }) => `${p.k} requests out of ${p.n} end in "altro": add a rule in the brain (estimates.json) for the kind of work that is missing.`,
   'stats.fact.jobCost': (p: { hi: string; lo: string; x: string; nHi: number; nLo: number }) => `A "${p.hi}" costs on average ${p.x}× a "${p.lo}" (${p.nHi} and ${p.nLo} jobs): the first place to look for a saving, a lighter model or a skill.`,
   'stats.fact.taskLoose': (p: { k: number; n: number }) => `Only ${p.k} estimates out of ${p.n} stayed within ×2: read them as an order of magnitude, not a deadline.`,
 

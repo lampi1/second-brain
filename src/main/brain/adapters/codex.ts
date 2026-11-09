@@ -11,8 +11,11 @@ import { log } from '../../log';
 import { productInstructions } from '../../rules/instructions';
 import { assets } from '../../rules/delivery';
 import { memoryInstructions } from '../../rules/new-brain';
-import { isProduct, toolsRef } from '../../rules/tools';
+import { ensureTools, isProduct, toolsRef } from '../../rules/tools';
 import { instructionsOf, launchRules, skillDirs, type BrainDomain } from './domains';
+import { appSkillsIn } from '../../agents/pack/shared-skills';
+import { configOf } from '../../rules/storage';
+import fs from 'node:fs';
 import type { CodexApproval, CodexSandbox } from '../../chats/codex';
 import { codexPolicyFor } from './codex-policy';
 import type { AgentPolicy } from '../../agents/tool-policy';
@@ -93,7 +96,18 @@ export function codexLaunch(i: CodexLaunchInput): CodexLaunch {
     configArgs: c.flatMap(v => ['-c', v]),
     approvalPolicy: approval, sandbox,
     developerInstructions: brain ? codexInstructions(domains, i.readOnly === true) : null,
-    skillRoots: brain && !i.readOnly ? skillDirs(domains, ['.agents/skills', '.claude/skills']) : [],
+    // with the app's skills of each fresh brain (rules.appRules): the topic rules are skills there since #366
+    skillRoots: brain && !i.readOnly ? [...skillDirs(domains, ['.agents/skills', '.claude/skills']), ...appSkillRoots(domains)] : [],
   };
 }
 
+/** The app's skills folder of every fresh product brain (the copy rules/tools.ts renders), where the topic-rule skills
+ *  regole-* live (#366, ADR 0243); none where the copy cannot be made. */
+function appSkillRoots(domains: readonly BrainDomain[]): string[] {
+  const out: string[] = [];
+  for (const d of domains) {
+    try { if (isProduct(d.root) && configOf(d.root).appRules) { const dir = appSkillsIn(ensureTools(d.root)); if (fs.existsSync(dir) && !out.includes(dir)) out.push(dir); } }
+    catch { /* no copy: the brain's own skills only */ }
+  }
+  return out;
+}

@@ -94,7 +94,7 @@ export const statsDe: typeof statsIt = {
   'stats.c.cmd.decides': 'Ob ein Befehl die Produktion berührt oder, bei einer Nur-Lesen-Rolle, ob er nur liest.',
   'stats.c.cmd.why': 'Ein Produktionsbefehl verlangt einen zweiten Klick und main prüft ihn nochmal: Ein Fehler dort verlässt deinen PC.',
 
-  'stats.fact.kindOther': (p: { k: number; n: number }) => `${p.k} von ${p.n} Anfragen landen in "altro": Füg im Brain (Regeln) eine Regel für die fehlende Arbeitsart hinzu.`,
+  'stats.fact.kindOther': (p: { k: number; n: number }) => `${p.k} von ${p.n} Anfragen landen in "altro": Füg im Brain (estimates.json) eine Regel für die fehlende Arbeitsart hinzu.`,
   'stats.fact.jobCost': (p: { hi: string; lo: string; x: string; nHi: number; nLo: number }) => `Ein "${p.hi}" kostet im Schnitt ${p.x}× ein "${p.lo}" (${p.nHi} und ${p.nLo} Jobs): der erste Ort zum Sparen, ein leichteres Modell oder ein Skill.`,
   'stats.fact.taskLoose': (p: { k: number; n: number }) => `Nur ${p.k} von ${p.n} Schätzungen blieben innerhalb ×2: Lies sie als Größenordnung, nicht als Deadline.`,
 

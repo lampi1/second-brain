@@ -32,7 +32,7 @@ export const brainModelEn: typeof brainModelIt = {
   'bm.mig.lessons': (p: { lines: number; agents: number }) => `${p.lines} learned rules moved into the role of ${p.agents === 1 ? '1 agent' : `${p.agents} agents`}.`,
   'bm.mig.noAgent': 'no agent',
 
-  'bm.rules.lead': (p: { n: number; chars: number; budget: number; app: boolean }) => `What every chat gets when it starts: ${p.n === 1 ? '1 file' : `${p.n} files`} of your brain${p.app ? ' plus the app’s fixed rules' : ''}, ${p.chars.toLocaleString('en-US')} characters of ${p.budget.toLocaleString('en-US')}. Everything else is skills, loaded when needed.`,
+  'bm.rules.lead': (p: { n: number; chars: number; budget: number; app: boolean }) => `What every chat gets when it starts: ${p.n === 1 ? '1 file' : `${p.n} files`} of your brain, ${p.chars.toLocaleString('en-US')} characters of ${p.budget.toLocaleString('en-US')}${p.app ? ', plus the app’s fixed rules' : ''}. Everything else is skills, loaded when needed.`,
   'bm.rules.lead0': 'What every chat gets when it starts. Everything else is skills, loaded when needed.',
   'bm.rules.loaded.always': 'Always', 'bm.rules.loaded.topic': 'When relevant', 'bm.rules.loaded.none': 'No longer loaded',
   'bm.rules.loadedHint.always': 'Part of every chat from the start.',

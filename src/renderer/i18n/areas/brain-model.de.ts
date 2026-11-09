@@ -32,7 +32,7 @@ export const brainModelDe: typeof brainModelIt = {
   'bm.mig.lessons': (p: { lines: number; agents: number }) => `${p.lines} gelernte Regeln in die Rolle von ${p.agents === 1 ? '1 Agenten' : `${p.agents} Agenten`} verschoben.`,
   'bm.mig.noAgent': 'kein Agent',
 
-  'bm.rules.lead': (p: { n: number; chars: number; budget: number; app: boolean }) => `Was jeder Chat beim Start bekommt: ${p.n === 1 ? '1 Datei' : `${p.n} Dateien`} deines Brain${p.app ? ' plus die festen Regeln der App' : ''}, ${p.chars.toLocaleString('de-DE')} Zeichen von ${p.budget.toLocaleString('de-DE')}. Alles andere sind Skills, geladen bei Bedarf.`,
+  'bm.rules.lead': (p: { n: number; chars: number; budget: number; app: boolean }) => `Was jeder Chat beim Start bekommt: ${p.n === 1 ? '1 Datei' : `${p.n} Dateien`} deines Brain, ${p.chars.toLocaleString('de-DE')} Zeichen von ${p.budget.toLocaleString('de-DE')}${p.app ? ', plus die festen Regeln der App' : ''}. Alles andere sind Skills, geladen bei Bedarf.`,
   'bm.rules.lead0': 'Was jeder Chat beim Start bekommt. Alles andere sind Skills, geladen bei Bedarf.',
   'bm.rules.loaded.always': 'Immer', 'bm.rules.loaded.topic': 'Bei Bedarf', 'bm.rules.loaded.none': 'Nicht mehr geladen',
   'bm.rules.loadedHint.always': 'Von Anfang an Teil jedes Chats.',

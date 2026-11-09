@@ -1,4 +1,4 @@
-// ACP fallback: bounded topic text at launch, without global config writes or unsupported native hook claims.
+// ACP fallback: the fixed core at launch plus where each topic-rule skill (regole-*) is, without global config writes or unsupported native hook claims (#366).
 // Only product brains (ADR 0062) get it; a legacy brain, even one with an unreadable brain.json, gets nothing (isProduct
 // never throws). Used by engines/sessions.ts for every ACP engine.
 import { launchRules } from './domains';

@@ -98,7 +98,7 @@ export const statsIt = {
   'stats.c.cmd.why': 'Un comando di produzione chiede un secondo clic e il main lo ricontrolla: un errore lì esce dal tuo PC.',
 
   // ── curious facts
-  'stats.fact.kindOther': (p: { k: number; n: number }) => `${p.k} richieste su ${p.n} finiscono in «altro»: aggiungi una regola nel brain (Regole) per il tipo di lavoro che manca.`,
+  'stats.fact.kindOther': (p: { k: number; n: number }) => `${p.k} richieste su ${p.n} finiscono in «altro»: aggiungi una regola nel brain (estimates.json) per il tipo di lavoro che manca.`,
   'stats.fact.jobCost': (p: { hi: string; lo: string; x: string; nHi: number; nLo: number }) => `Una «${p.hi}» costa in media ${p.x}× una «${p.lo}» (${p.nHi} e ${p.nLo} lavori): è il primo posto dove cercare un risparmio, un modello più leggero o una skill.`,
   'stats.fact.taskLoose': (p: { k: number; n: number }) => `Solo ${p.k} stime su ${p.n} sono rimaste entro ×2: leggile come ordine di grandezza, non come scadenza.`,
 

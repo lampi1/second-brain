@@ -145,7 +145,6 @@ export const componentsIt = {
   "cmp.durable.queue.retry": "Proposte non disponibili · Riprova",
   "cmp.durable.approval.lesson": "Miglioramento da approvare",
   "cmp.durable.approval.scope": "Ambito:",
-  "cmp.durable.approval.rules": "Regole del brain · tutti i ruoli",
   "cmp.durable.approval.missingName": "(nome non disponibile)",
   "cmp.durable.approval.context": "Contesto e verifiche",
   "cmp.durable.approval.sources": "Fonti e verifiche",

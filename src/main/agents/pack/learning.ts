@@ -36,8 +36,7 @@ export class AgentPackLearning {
   propose(agentId: string, rule: string, evidence: string, target?: LessonTarget, skill?: string, fromChat?: string): LearnedRuleProposal {
     this.flows.profile(agentId);
     if (typeof rule !== 'string' || !rule.trim() || rule.length > 2000 || /[\r\n\0]/.test(rule) || typeof evidence !== 'string' || !evidence.trim() || evidence.length > 500 || /[\r\n\0]/.test(evidence)) throw new Error('A learned rule needs bounded text and evidence');
-    if (target !== undefined && !['role', 'skill', 'rule'].includes(target)) throw new Error('target is role, skill or rule');
-    if (fromChat !== undefined && target === 'rule') throw new Error('A work chat cannot add a rule for every role: send it to your parent.');
+    if (target !== undefined && !['role', 'skill'].includes(target)) throw new Error(target === 'rule' ? 'Rules for every role are gone (#366): a lesson goes to the role (target "role") or to a skill (target "skill").' : 'target is role or skill');
     checkPermissionText(rule);
     if (skill !== undefined && (typeof skill !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(skill) || skill.length > 64)) throw new Error('Invalid skill name');
     if (this.proposals.filter(p => p.status === 'pending').length >= 200) throw new Error('Too many lessons waiting: the maintenance applies them first');
@@ -99,11 +98,11 @@ export class AgentPackLearning {
 }
 
 /** The lessons tool on the app endpoints. With `queueAs` (an endpoint that is not the authenticated Orchestrator), the
- *  lesson waits like a work chat's (fromChat) and may not be a rule for every role. */
+ *  lesson waits like a work chat's (fromChat). Targets: the role's text or a skill (rules for every role are gone, #366). */
 export function agentLearnTool(service: AgentPackLearning, queueAs?: string): McpTool {
   return { name: 'agent_learn_propose', description: queueAs ? 'Record one lesson from the user\'s corrections, with explicit evidence (run:<id> for completed runs with independently verified outcomes). It waits for the Orchestrator and the user before it is applied: target "role" (default) for the role\'s text, "skill" for the named skill. Never for permissions, settings or hooks.'
-    : 'Record one lesson from the user\'s corrections, with explicit evidence (run:<id> for completed runs with independently verified outcomes). The app queues it for explicit user approval in the shared questions modal before applying it: target "role" (default) adds it to the role\'s text, "skill" to the named skill (how a job is done), "rule" to the brain\'s rules (applies to every role). Never for permissions, settings, limits or hooks: those change only in Brain → Agenti. Lessons proposed by work chats wait in agent_lessons_waiting.',
-    inputSchema: { type: 'object', properties: { agentId: { type: 'string', description: 'the role id (scout, artisan…)' }, rule: { type: 'string' }, evidence: { type: 'string' }, target: { type: 'string', enum: queueAs ? ['role', 'skill'] : ['role', 'skill', 'rule'] }, skill: { type: 'string' } }, required: ['agentId', 'rule', 'evidence'], additionalProperties: false },
+    : 'Record one lesson from the user\'s corrections, with explicit evidence (run:<id> for completed runs with independently verified outcomes). The app queues it for explicit user approval in the shared questions modal before applying it: target "role" (default) adds it to the role\'s text, "skill" to the named skill (how a job is done); something every role needs goes into a skill. Never for permissions, settings, limits or hooks: those change only in Brain → Agenti. Lessons proposed by work chats wait in agent_lessons_waiting.',
+    inputSchema: { type: 'object', properties: { agentId: { type: 'string', description: 'the role id (scout, artisan…)' }, rule: { type: 'string' }, evidence: { type: 'string' }, target: { type: 'string', enum: ['role', 'skill'] }, skill: { type: 'string' } }, required: ['agentId', 'rule', 'evidence'], additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: args => {
       const lesson = parseLesson(args);
@@ -119,10 +118,10 @@ function parseLesson(args: Record<string, unknown>): { agentId?: string; rule: s
 }
 
 /** agent_learn_propose on a work chat's own token endpoint (wiring.ts addChatTools): a lesson for the role of the
- *  caller's open run only (the chat the token names, never an argument), as role or skill, never a rule for every role,
+ *  caller's open run only (the chat the token names, never an argument), as role or skill,
  *  and queued: it waits until the authenticated Orchestrator accepts it with the user (agent_lessons_waiting). */
 export function chatLearnTool(service: AgentPackLearning, runs: () => readonly AgentRun[]): McpTool {
-  return { name: 'agent_learn_propose', description: 'Record one lesson from the user\'s corrections about YOUR role (the one your chat runs as), with explicit evidence (run:<id> for completed runs with independently verified outcomes). It waits for the Orchestrator and the user before it is applied: target "role" (default) for your role\'s text, "skill" for the named skill. Never for permissions, settings or hooks; a rule for every role goes to your parent with agent_report.',
+  return { name: 'agent_learn_propose', description: 'Record one lesson from the user\'s corrections about YOUR role (the one your chat runs as), with explicit evidence (run:<id> for completed runs with independently verified outcomes). It waits for the Orchestrator and the user before it is applied: target "role" (default) for your role\'s text, "skill" for the named skill. Never for permissions, settings or hooks; something every role needs goes into a skill.',
     inputSchema: { type: 'object', properties: { agentId: { type: 'string', description: 'optional: your own role id (default)' }, rule: { type: 'string' }, evidence: { type: 'string' }, target: { type: 'string', enum: ['role', 'skill'] }, skill: { type: 'string' } }, required: ['rule', 'evidence'], additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     run: (args, ctx) => {
@@ -132,7 +131,6 @@ export function chatLearnTool(service: AgentPackLearning, runs: () => readonly A
       if (!own) throw new Error('Your chat runs no role: tell the user instead.');
       const lesson = parseLesson(args);
       if (lesson.agentId !== undefined && lesson.agentId !== own.agentId) throw new Error('A work chat proposes lessons only for its own role: no work chat changes another role\'s text.');
-      if (lesson.target === 'rule') throw new Error('A work chat cannot add a rule for every role: report it to your parent.');
       return JSON.stringify(service.propose(own.agentId, lesson.rule, lesson.evidence, lesson.target, lesson.skill, chatId));
     } };
 }

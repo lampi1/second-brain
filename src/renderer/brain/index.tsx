@@ -74,7 +74,7 @@ export const isBrainPage = (s: string): s is BrainPageId => IDS.has(s);
 export const PAGE_ALIAS: Record<string, BrainPageId> = { fatto: 'log', diario: 'log', oggi: 'task', adesso: 'task', dafare: 'task', devops: 'task', esplora: 'file', procedure: 'skill', procedura: 'skill', miglioramento: 'regole', changelog: 'log', diagnostica: 'log', dashboard: 'memoria',
   // the four statistics pages merged into Andamento (ADR 0202); parseTarget and go() keep the tab they name
   costi: 'andamento', qualita: 'andamento', apprendimento: 'andamento', classificatori: 'andamento' };
-/** Their old go-to keys still work: G R (the old Regole imparate) opens Regole, where those rules live now (ADR 0082);
+/** Their old go-to keys still work: G R (the old Regole imparate, gone with #366) opens «Sempre caricato» (the old Regole);
  *  G D (the Dashboard, gone with ADR 0122: its parts live in Memoria, Andamento and Idee) opens Memoria; G Q, G J and G K
  *  (Qualità, Apprendimento, Classificatori) open their Andamento tab (ADR 0202: go() redirects the old id; G C = Andamento
  *  itself, which opens on Costi); G K opens Qualità, where the Classificatori section lives since ADR 0210. */

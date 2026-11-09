@@ -26,7 +26,8 @@ export interface BrainSkill {
   madeBy: BrainChange['job'] | null;
 }
 
-/** A rule of the brain: a topic file (brain.json rules.topicFiles, injected when it matches) or a file of `rules/`. */
+/** A rule file of the brain for «Sempre caricato» (#366): a fixed file (brain.json rules.fixedFiles), or a topic file or a
+ *  file of `rules/`, no longer loaded. */
 export interface BrainRule {
   /** brain-relative path */
   file: string;
@@ -208,7 +209,7 @@ export interface BrainModelState {
   changes: BrainChange[];
   migration: MigrationReport | null;
   lastRun: MaintenanceRun | null;
-  /** the fixed core loaded at every start (#366): its characters with the app's own boot text, and the budget */
+  /** the fixed core loaded at every start (#366): the brain's fixed files' characters against their budget (the app's own fixed rules come on top) */
   core?: { chars: number; budget: number; appRules: boolean };
   /** the Memoria page's statistics (brainmodel/memory-stats.ts); missing without a brain */
   memoryStats?: MemoryStats;

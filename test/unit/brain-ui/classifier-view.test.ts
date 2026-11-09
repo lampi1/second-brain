@@ -66,7 +66,7 @@ describe('classifier view', () => {
       decisions: 40, hit: { value: 0.7, n: 40 }, success: { value: 0.7, n: 10 },
       slices: [{ key: 'bug-fix', count: 28, known: 6, ok: 5, avgCostUsd: 2, top: { key: 'artisan', count: 20 } }, { key: 'altro', count: 12, known: 1, ok: 0, avgCostUsd: 1 }],
     }));
-    expect(facts(kind)).toEqual(['12 richieste su 40 finiscono in «altro»: aggiungi una regola nel brain (Regole) per il tipo di lavoro che manca.']);
+    expect(facts(kind)).toEqual(['12 richieste su 40 finiscono in «altro»: aggiungi una regola nel brain (estimates.json) per il tipo di lavoro che manca.']);
     expect(kOfN(kind.hit)).toBe('28/40');
     // few cases, or few «altro»: no advice (no "Lo sapevi?" curiosity either)
     expect(facts(fromMain(card({ decisions: 8, slices: [{ key: 'altro', count: 8, known: 0, ok: 0, avgCostUsd: null }] })))).toEqual([]);

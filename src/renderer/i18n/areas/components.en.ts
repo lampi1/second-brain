@@ -147,7 +147,6 @@ export const componentsEn: typeof componentsIt = {
   "cmp.durable.queue.retry": "Proposals unavailable · Retry",
   "cmp.durable.approval.lesson": "Improvement awaiting approval",
   "cmp.durable.approval.scope": "Scope:",
-  "cmp.durable.approval.rules": "Brain rules · all roles",
   "cmp.durable.approval.missingName": "(name unavailable)",
   "cmp.durable.approval.context": "Context and checks",
   "cmp.durable.approval.sources": "Sources and checks",

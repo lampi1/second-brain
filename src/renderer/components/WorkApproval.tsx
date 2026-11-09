@@ -43,7 +43,7 @@ export function WorkApproval({ ask, onEscape }: { ask: DurableAsk; onEscape: () 
     write={{ onSend: note => void decide(false, note), initial: decisionDraft(key) || undefined, onDraft: v => saveDecisionDraft(key, v), onClose: () => saveDecisionDraft(key, ''), disabled: !orchestratorReady,
       hint: orchestratorReady ? t('cmp.durable.approval.feedbackHint') : t('cmp.durable.approval.openOrchestrator') }}
     skip={{ onChoose: () => void decide(false), hint: t('genui.decision.skipDiscard') }}>
-    {lesson && <p className="dc-nobrief"><strong>{t('cmp.durable.approval.scope')}</strong> {lesson.target === 'rule' ? t('cmp.durable.approval.rules') : lesson.target === 'skill' ? t('cmp.durable.approval.skill', { name: lesson.skill ?? t('cmp.durable.approval.missingName') }) : t('cmp.durable.approval.role', { name: lesson.agentId })}</p>}
+    {lesson && <p className="dc-nobrief"><strong>{t('cmp.durable.approval.scope')}</strong> {lesson.target === 'skill' ? t('cmp.durable.approval.skill', { name: lesson.skill ?? t('cmp.durable.approval.missingName') }) : t('cmp.durable.approval.role', { name: lesson.agentId })}</p>}
     {work && (work.summary !== work.proposal?.text || work.evidence || work.nextAction) && <div className="dc-brief-k">{t('cmp.durable.approval.context')}</div>}
     {work && work.summary !== work.proposal?.text && <p className="dc-nobrief">{work.summary}</p>}
     {work?.evidence && <p className="dc-nobrief">{work.evidence}</p>}

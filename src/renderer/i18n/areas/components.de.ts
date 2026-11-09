@@ -147,7 +147,6 @@ export const componentsDe: typeof componentsIt = {
   "cmp.durable.queue.retry": "Vorschläge nicht verfügbar · Erneut versuchen",
   "cmp.durable.approval.lesson": "Verbesserung zur Freigabe",
   "cmp.durable.approval.scope": "Umfang:",
-  "cmp.durable.approval.rules": "Brain-Regeln · alle Rollen",
   "cmp.durable.approval.missingName": "(Name nicht verfügbar)",
   "cmp.durable.approval.context": "Kontext und Prüfungen",
   "cmp.durable.approval.sources": "Quellen und Prüfungen",

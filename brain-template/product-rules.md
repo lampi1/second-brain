@@ -5,8 +5,9 @@ The app creates new brains with `brain.json` containing `machinery: "product-v1"
 Identity, safety, topic rules and memory entries remain personal content. The app supplies hook executables per launch.
 Global Claude, Codex and Cursor settings are never changed by this path.
 
-The default fixed context allowance is 15,000 characters. Topic text has a separate 6,000-character allowance per
-turn in Claude. A topic uses JSON flow frontmatter, which is valid YAML:
+The default fixed context allowance is 15,000 characters. Topic files are no longer injected into chats: the
+product's own topic rules are skills named `regole-<topic>`, loaded when one fits like any skill. A topic file still
+uses JSON flow frontmatter, which is valid YAML (the brain lint maps it):
 
 ```yaml
 ---
@@ -22,8 +23,8 @@ fixed-context allowance and generates the topic map. `lease` acquires a lease an
 Optional local auto-commit is off by default. When enabled it requires a standalone brain with no remotes and an
 empty index, and commits only the validated now/error files. It never pushes.
 
-Codex and ACP receive bounded topic content in their launch context. These adapters do not claim native pre-tool
-enforcement. External chats keep their existing wiring until the owner deliberately migrates them.
+Codex gets the app's skills folder (the topic skills with it); ACP gets, in its launch context, where each topic skill
+is. These adapters do not claim native pre-tool enforcement. External chats keep their existing wiring until the owner deliberately migrates them.
 
 Template code (ops/tools, harness scripts, .claude/hooks) is not kept in a product brain. The app renders the
 release utilities for each brain into its own data folder; brain files reference them as `{tools}/…` and the launch
