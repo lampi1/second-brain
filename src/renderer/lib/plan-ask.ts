@@ -49,8 +49,9 @@ export function planCards<C extends Pick<ChatSummary, 'id' | 'plan' | 'closedAt'
     const phase = chat.plan?.phase;
     if (chat.closedAt || seen.has(chat.id) || !phase || !['asking', 'revising', 'proposed'].includes(phase)) return [];
     seen.add(chat.id);
-    const question = planQuestion(chat, reqs.filter(r => r.chatId === chat.id), false);
-    return phase === 'asking' && !question ? [] : [{ chat, ...(question ? { question } : {}) }];
+    const own = reqs.filter(r => r.chatId === chat.id), question = planQuestion(chat, own, false);
+    // asking: any open question of the engine counts (a group of questions too: the questions window answers it)
+    return phase === 'asking' && !own.some(isNativeQuestion) ? [] : [{ chat, ...(question ? { question } : {}) }];
   });
 }
 

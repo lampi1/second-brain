@@ -14,6 +14,9 @@ describe('chatView', () => {
     const delivery = user('d1', '[consegna automatica del risultato · task t1, versione 1, run r1]\nPresenta il risultato all\'utente in questa conversazione.', { from: 'App · Fix' });
     const v = chatView([user('u1', 'ciao'), delivery, said('a1', 'Ecco il risultato.')], { foldProcess: true });
     expect(v.map(r => r.kind === 'item' && r.item.id)).toEqual(['u1', 'a1']);
+    // a 👍 after the hidden delivery is not the user's reaction: it never sticks to u1
+    const r = chatView([user('u1', 'ciao'), delivery, said('a2', '👍')], { foldProcess: true });
+    expect(r.some(x => x.kind === 'item' && x.item.id === 'u1' && 'reaction' in x && x.reaction)).toBe(false);
   });
 
   it('sticks an emoji-only reply to the user message before it', () => {
@@ -122,11 +125,13 @@ describe('resultLine: the folded result card\'s one line (#351)', () => {
     expect(resultLine('\n\n- **Fatto**: `npm test` verde')).toBe('Fatto: npm test verde');
     expect(resultLine('```ts\nconst a = 1\n```')).toBe('const a = 1');
     expect(resultLine('| a | b |\n---\nTesto dopo la tabella')).toBe('Testo dopo la tabella');
+    expect(resultLine('Vedi [la PR](https://x/1) in manager_delegation.ts ![img](a.png)')).toBe('Vedi la PR in manager_delegation.ts');
     expect(resultLine('')).toBe('');
   });
   it('cuts a long line at 160 characters', () => {
     const l = resultLine('x'.repeat(300));
     expect(l).toHaveLength(160);
+    expect([...resultLine('😀'.repeat(200))]).toHaveLength(160); // never splits an emoji
     expect(l.endsWith('…')).toBe(true);
   });
 });

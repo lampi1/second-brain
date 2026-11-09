@@ -228,6 +228,8 @@ export function seed(E: number): Seed {
         params: { chatId: 'feedback', title: 'App · Feedback', role: 'Scout', summary: tr('3 errori 500 nel modulo feedback, tutti dallo stesso endpoint.') },
         result: { at: E - 9 * MIN - 30_000, taskId: 'feedback', runId: 'r_000000000004', taskVersion: 1, outcome: 'done', summary: tr('3 errori 500 nel modulo feedback, tutti dallo stesso endpoint.'),
           output: tr('Oggi 3 errori 500, tutti da POST /api/feedback quando il testo supera 2000 caratteri.'), doneWhen: [{ criterion: tr('Errori di oggi trovati'), met: true, evidence: tr('3 righe nel log delle 9:12, 9:40, 10:05') }] } },
+      // the app's delivery of that result: for the model only, never drawn (#351)
+      { kind: 'user', id: 'orchestrator-deliv1', at: E - 9 * MIN - 29_000, from: 'App · Feedback', text: '[consegna automatica del risultato · task feedback, versione 1, run r_000000000004]\nPresenta il risultato all\'utente in questa conversazione.' },
       { kind: 'user', id: 'orchestrator-u1', at: E - 9 * MIN, text: 'Che si fa adesso?' },
       { kind: 'assistant', id: 'orchestrator-a1', at: E - 9 * MIN, text: '**Prima la QA bloccata**: la QA dei rimborsi aspetta te (1 decisione). Poi la PR del totale ordine, poi il bug SMS.' },
     ],

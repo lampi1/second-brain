@@ -1,7 +1,7 @@
 // A Strategist's plan with the user on its strip (ADR 0108), in the demo: under way, its steps as a checklist Claude Code
 // style with the role of each; while it asks, its open question in the questions window (always on since 2026-10-22)
-// and the strip pointing to it, with what is already clear and «Basta domande», the answer reaching the chat and
-// joining the clear lines; the short plan to approve in the window too, with «Cambia qualcosa» (the change reaches it)
+// and the strip pointing to it, with what is already clear and «Basta domande», the answer reaching the chat and, between questions, no card (#351);
+// the answer joining the clear lines of the next one; the short plan to approve in the window too, with «Cambia qualcosa» (the change reaches it)
 // and «Approva e parti» (it starts), the strip keeping its steps. Hidden window (SB_HIDDEN).
 // Screenshots: test-results/shots/strategist-plan-*.png.
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test';
@@ -58,12 +58,13 @@ test('a Strategist asks, proposes a short plan to approve and shows its steps on
     await shot(page, 'strategist-plan-asking-dark');
     await page.getByTestId('qwin-card-opt-1').click();
     await expect.poll(() => demo<{ answer: { answers: Record<string, string> } }[]>(app, 'answers').then(a => a.at(-1)?.answer.answers[QUESTION])).toBe('No, solo a prezzo pieno (consigliato)');
-    await expect(page.getByTestId('plan-known')).toContainText('Lo sconto vale anche sui prodotti già in offerta?');
-    await expect(page.getByTestId(`plan-enough-${LEAD}`)).toHaveCount(0);
+    // answered: no question open, so no «Prima di partire» card until the next one (#351)
+    await expect(card).toHaveCount(0);
 
     // «Basta domande» on the strip answers the open question for the user (the window set aside first)
     await ask(app);
     await expect(page.getByTestId('qwin-card-q')).toHaveText(QUESTION);
+    await expect(page.getByTestId('plan-known')).toContainText('Lo sconto vale anche sui prodotti già in offerta?');
     await page.getByTestId('qwin-later').click();
     await page.getByTestId(`plan-enough-${LEAD}`).click();
     await expect.poll(() => demo<{ answer: { answers: Record<string, string> } }[]>(app, 'answers').then(a => a.at(-1)?.answer.answers[QUESTION])).toContain('Basta domande');

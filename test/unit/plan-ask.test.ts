@@ -60,6 +60,11 @@ describe('planCards: the Orchestrator\'s plan cards (#351)', () => {
     const [card] = planCards([c('s/1', { phase: 'asking' })], [native]);
     expect(card?.question).toBe(native);
     expect(planCards([c('s/1', { phase: 'asking' })], [{ ...native, chatId: 's/2' }])).toEqual([]);
+    // a group of questions is open too: the card stays (the questions window answers it)
+    const group = { ...native, questions: [{ question: 'A?' }, { question: 'B?' }] } as PendingRequest;
+    const [g] = planCards([c('s/1', { phase: 'asking' })], [group]);
+    expect(g?.chat.id).toBe('s/1');
+    expect(g?.question).toBeUndefined();
   });
   it('never twice for one chat, never for a closed chat, always for a plan to approve', () => {
     const a = c('s/1', { phase: 'asking' });

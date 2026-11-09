@@ -72,7 +72,8 @@ export function chatView(items: readonly ChatItem[], { foldProcess }: { foldProc
     }
     dropResult = false;
     // the app's automatic result delivery to the Orchestrator: for the model only, the result card shows it (#351)
-    if (item.kind === 'user' && isResultDelivery(item)) continue;
+    // (it still ends the user's own turn: a reaction after it never sticks to the message before it)
+    if (item.kind === 'user' && isResultDelivery(item)) { target = null; continue; }
     const row: Extract<ViewItem, { kind: 'item' }> = { kind: 'item', item };
     out.push(row);
     target = item.kind === 'user' && !item.from && !foreignOf(item) ? row : null;
@@ -83,6 +84,8 @@ export function chatView(items: readonly ChatItem[], { foldProcess }: { foldProc
 /** The first line of a result, as plain text (headings, emphasis and list marks dropped), for the folded row. */
 export function resultLine(output: string): string {
   const first = output.split('\n').filter(l => !/^\s*(?:```|\||-{3,}\s*$)/.test(l))
-    .map(l => l.replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|>\s*)/, '').replace(/[`*_]+/g, '').trim()).find(Boolean) ?? '';
-  return first.length > 160 ? `${first.slice(0, 159)}…` : first;
+    .map(l => l.replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|>\s*)/, '').replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/`+|\*{1,3}(?=\S)|(?<=\S)\*{1,3}|(?<![\w])_{1,3}(?=\S)|(?<=\S)_{1,3}(?![\w])/g, '').trim()).find(Boolean) ?? '';
+  const chars = [...first];
+  return chars.length > 160 ? `${chars.slice(0, 159).join('')}…` : first;
 }
