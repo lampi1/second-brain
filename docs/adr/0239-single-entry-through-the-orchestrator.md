@@ -23,7 +23,8 @@ and worker questions, permissions and commands already wake it as grouped news. 
   exact text to write. The user's **next own message** in the Orchestrator chat that is only «sì» or «no» (from the
   PC, the paired phone or Remote Control) answers it, through `ChatManager.answer` as the user's answer (`phone` when
   it came from a phone or Remote Control). An agent's mail or the app's news never count; any other message ends the
-  relay, so a later bare «no» meant for something else never answers it. One relayed question per Orchestrator at a
+  relay, so a later bare «no» meant for something else never answers it (one that follows such a message is told
+  to the Orchestrator, as the question may have crossed it). One relayed question per Orchestrator at a
   time; it lasts 30 minutes and drops when the question is answered elsewhere. The reserved check runs again when the
   answer comes (a brief can change). A «sì»/«no» that cannot land (expired, question changed, turned reserved,
   delivery failed) is told to the Orchestrator as an app line, never lost in silence. Permissions and commands are

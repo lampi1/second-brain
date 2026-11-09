@@ -38,9 +38,13 @@ it('any other reply ends the relay: a later bare «no» is not taken as the answ
   const w = world([yesNo('q1', 'dev')]);
   w.r.relay('orch', 'dev');
   expect(await w.r.userSaid('orch', 'aspetta, prima dimmi una cosa')).toBe(false);
+  expect(w.told).toEqual([]);
+  // the other message may have crossed the question: the bare «no» after it is not delivered, but it is told
   expect(await w.r.userSaid('orch', 'no')).toBe(false);
   expect(w.answered).toEqual([]);
-  expect(w.told).toEqual([]);
+  expect(w.told).toEqual([expect.stringContaining('chiuso l\'inoltro')]);
+  expect(await w.r.userSaid('orch', 'sì')).toBe(false);       // told once
+  expect(w.told).toHaveLength(1);
 });
 
 it('one relayed question at a time: a second one waits for the first answer', async () => {

@@ -35,6 +35,8 @@ interface Relay { orchestratorId: string; chatId: string; requestId: string; que
 
 export class QuestionRelay {
   private relays = new Map<string, Relay>();
+  /** a relay another message ended (the user may not have seen the question yet): a bare «sì»/«no» after it is told */
+  private ended = new Map<string, Relay>();
   constructor(private readonly d: RelayDeps) {}
   private now(): number { return this.d.now?.() ?? Date.now(); }
 
@@ -56,6 +58,7 @@ export class QuestionRelay {
     }
     if (phoneQuestionReserved(p, () => this.d.items(chatId))) throw new Error('This question touches something reserved to the user (production, a deploy, a push, a secret, a message to people) or is not the engine\'s own question: it stays in its panel on the PC. Tell the user it waits there.');
     this.relays.set(orchestratorId, { orchestratorId, chatId, requestId: p.id, question: q.question, at: this.now() });
+    this.ended.delete(orchestratorId);
     log.info('chats', 'question relayed through the Orchestrator', { chat: chatId, data: { request: p.id } });
     return { question: q.question, chat: c.title,
       write: `Write to the user, exactly: «${c.title} chiede: ${q.question} Rispondi sì o no.» and ask nothing else in that message. Their next message, if it is only «sì» or «no», answers it: the app delivers it, you do nothing more; any other reply ends the relay (relay again if needed). If it cannot be delivered the app tells you. Never answer it yourself.` };
@@ -63,13 +66,21 @@ export class QuestionRelay {
 
   /** A user's own message in the Orchestrator chat (wiring.ts taps chat:item). True = it answered a relayed question. */
   async userSaid(orchestratorId: string, text: string, via?: 'phone'): Promise<boolean> {
-    const r = this.relays.get(orchestratorId);
-    if (!r) return false;
-    this.relays.delete(orchestratorId);                  // the next own message: an answer or the end of the relay
     const said = yesNoOf(text);
+    const r = this.relays.get(orchestratorId);
+    if (!r) {
+      // a «sì»/«no» after a relay another message ended (it may have crossed the question): never lost in silence
+      const e = this.ended.get(orchestratorId);
+      this.ended.delete(orchestratorId);
+      if (e && said && this.now() - e.at <= RELAY_MS && this.d.pending().some(x => x.chatId === e.chatId && x.id === e.requestId)) {
+        this.lost(e, said, 'era arrivato prima un altro messaggio, che ha chiuso l\'inoltro');
+      }
+      return false;
+    }
+    this.relays.delete(orchestratorId);                  // the next own message: an answer or the end of the relay
     const p = this.d.pending().find(x => x.chatId === r.chatId && x.id === r.requestId);
     if (!p) return false;                                // answered elsewhere first: nothing waits for this word
-    if (!said) return false;                             // the user said something else: the Orchestrator reads it
+    if (!said) { this.ended.set(orchestratorId, r); return false; }   // something else: the Orchestrator reads it
     const option = p.questions?.[0]?.options.find(o => yesNoOf(o.label) === said);
     const why = this.now() - r.at > RELAY_MS ? 'l\'inoltro era scaduto (30 min)'
       : !option || p.questions?.[0]?.question !== r.question ? 'la domanda è cambiata'
