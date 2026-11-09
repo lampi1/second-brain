@@ -74,7 +74,9 @@ describe('autoPermit: the agents\' own settings and hooks (AGENTS.md rule 6)', (
       'git commit -m "fix: escape \\1 in echo docs"', "grep -v '^$' a.txt > b.txt", 'docker run -v $(pwd):/app node']) expect(run(c), c).toBe('allow');
     for (const c of ['cp evil $(echo .gi)"t/hooks/pre-commit"', "printf '\\56git/hooks/x' | xargs -I{} cp evil {}", "cp evil $'.git/hooks/pre-commit'",
       'Copy-Item evil .g`it/hooks/pre-commit', 'Copy-Item evil .c`laude/settings.json', `cp evil "$(echo -n -e '\\x2egit/hooks/x')"`, `cp evil "$(echo '\\056git/hooks/x')"`, 'cp evil $".git/hooks/x"',
-      "printf ';\\056git/hooks/x' | cut -c2- | xargs -I{} cp evil {}", `cp evil "$(printf '&\\056git/hooks/x' | cut -c2-)"`, "echo -e ';' '\\x2egit/hooks/x' | xargs -n1 | xargs -I{} cp evil {}"]) expect(run(c), c).toBe('ask');
+      "printf ';\\056git/hooks/x' | cut -c2- | xargs -I{} cp evil {}", `cp evil "$(printf '&\\056git/hooks/x' | cut -c2-)"`, "echo -e ';' '\\x2egit/hooks/x' | xargs -n1 | xargs -I{} cp evil {}",
+      'printf "a\\"b;\\056git/hooks/x" | cut -c5- | xargs -I{} cp e {}', "printf 'a'\\''b;\\056git/hooks/x' | cut -c5- | xargs -I{} cp e {}",
+      'printf a\\;\\\\056git/hooks/x | cut -c3- | xargs -I{} cp e {}', `echo -e 'a'\\''b;\\x2egit/hooks/x' | xargs -I{} cp e {}`]) expect(run(c), c).toBe('ask');
     expect(autoPermit(perm('Shell', { command: 'echo x > hooks/pre-commit', cwd: '.git' }), ctx()).kind).toBe('ask');
     for (const c of ['cat .claude/settings.json', 'ls .git', 'git status']) expect(run(c), c).toBe('allow');
   });

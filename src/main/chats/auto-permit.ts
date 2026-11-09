@@ -117,9 +117,15 @@ function touchesSettings(req: PermitRequest, command: boolean, cwd: string): boo
     const raw = line.replace(/\$(?=['"])/g, '').replace(/['"]/g, '');
     const plain = raw.replace(/`(?![0abefnrtuv])/g, '');
     if (/\$'[^']*\\/.test(line)) return true;
-    // the echo's own arguments end at a ; & | > or newline outside quotes
-    const sep = line.replace(/'[^']*'|"[^"]*"/g, q => q.replace(/[;&|>\n]/g, '_'));
-    if (/\b(printf|echo)\b[^;&|>\n]*\\(x[0-9a-f]|0?[0-7]{1,3}|u[0-9a-f]{4})/i.test(sep)) return true;
+    // printf: an escape anywhere in the line. echo (Windows paths often follow it): only in its own arguments, which end
+    // at a ; & | > or newline outside quotes; a line with an escaped quote or separator (`\"`, `'\''`, `\;`) is read
+    // whole, since the app does not parse it
+    const esc = /\\(x[0-9a-f]|0?[0-7]{1,3}|u[0-9a-f]{4})/i;
+    if (/\bprintf\b/i.test(line) && esc.test(line)) return true;
+    if (/\becho\b/i.test(line)) {
+      const sep = line.replace(/'[^']*'|"[^"]*"/g, q => q.replace(/[;&|>\n]/g, '_'));
+      if (/\\[;&|>"'\\]/.test(line) ? esc.test(line) : /\becho\b[^;&|>\n]*\\(x[0-9a-f]|0?[0-7]{1,3}|u[0-9a-f]{4})/i.test(sep)) return true;
+    }
     if (/[^\s=;&|(<>]\$\(|[^\s=;&|(<>]`[^`]*`|\$\([^)]*\)[^\s;&|)<>:]|`[^`]*`[^\s;&|)<>:]/.test(raw)) return true;
     if (SETTINGS_COMMAND.test(raw)) return true;
     const base = typeof o.cwd === 'string' && o.cwd ? path.resolve(cwd, o.cwd) : cwd;
