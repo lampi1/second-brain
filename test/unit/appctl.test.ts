@@ -223,6 +223,19 @@ describe('app control tools', () => {
     expect(made).toHaveLength(2);
   });
 
+  it('app_create_chat takes the structured contract: rendered once, its criteria and fields reach the new chat (#355)', async () => {
+    const made: Record<string, unknown>[] = [];
+    const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }], create: async (req: Record<string, unknown>) => { made.push(req); return { id: 'n1', title: req.title }; } } as unknown as ChatService;
+    const brain = { ...ROUTED, settings: () => ({ messaging: { crossHarness: true }, engineOn: { claude: true }, engines: { claude: true }, orchestratorChats: { harness: 'claude' } }), info: () => ({ brainRoot: 'C:/brain' }) } as unknown as BrainService;
+    const catalog = roleCatalog();
+    const t = appControlTools({ chats, browser: {} as BrowserService, brain, window: () => null, emitUi: () => {}, version: '0', agents: () => catalog.list(), resolveRole: req => catalog.resolve(req) }, 'r').find(x => x.name === 'app_create_chat')!;
+    const out = await t.run({ title: 'Ordini · Fix', roleId: 'artisan', contract: { goal: 'The total includes the discount.', doneWhen: ['a test passes'] } }) as { warnings?: string[] };
+    expect(String(made[0]!.prompt)).toContain('Goal: The total includes the discount.\nDone when:\n- a test passes');
+    expect(made[0]).toMatchObject({ doneWhen: ['a test passes'], contractFields: ['goal', 'doneWhen'] });
+    expect(out.warnings?.some(w => /why is missing/.test(w))).toBe(true);
+    await expect(Promise.resolve(t.run({ title: 'X', roleId: 'artisan', contract: { goal: 'G', doneWhen: ['d'] }, prompt: 'p' }))).rejects.toThrow(/not both/);
+  });
+
   it('app_create_chat keeps the explicit kind on the route; the role resolution never sees it (ADR 0210: no table row to meet)', async () => {
     const made: Record<string, unknown>[] = [], asked: NewChat[] = [];
     const chats = { list: () => [{ id: 'r', harness: 'claude', model: 'claude-opus-5-5', isOrchestrator: true, title: 'Orchestrator' }], create: async (req: Record<string, unknown>) => { made.push(req); return { id: 'n1', title: req.title }; } } as unknown as ChatService;

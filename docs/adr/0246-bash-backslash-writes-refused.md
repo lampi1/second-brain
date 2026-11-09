@@ -15,6 +15,10 @@ a `node -e` replacement applied only partly, a regex edit through a node heredoc
   interpreter, `sed -i`, `perl -i`. The reason tells the agent to use Write or Edit.
 - Commands that only read (`grep 'a\\b'`, `rg`, `sed -n`, `git`) and the same writes without a backslash pass.
   PowerShell is not Bash and is not checked.
+- **Read as a shell reads it.** Each line is checked on its own, with its quoted strings blanked, and a tool counts only
+  in command position: a heredoc line writes when it redirects into a file or pipes into `tee`, and an interpreter
+  heredoc, here-string or `-e` / `-c` program only with a write call (printing to stdout is not one). So a `gh` or
+  `git` body with a Windows path, a title that says "node", and a search for `sed -i` pass.
 
 ## Consequences
 - An agent that tries the old way gets one refusal and retries with Edit; no file is half-written.

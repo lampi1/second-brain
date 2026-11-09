@@ -198,7 +198,7 @@ export function checkTaskContract(v: unknown): Omit<DelegationContract, 'output'
 export function contractWarnings(c: Pick<DelegationContract, 'goal' | 'why'>): string[] {
   const out: string[] = [];
   if (!c.why) out.push('contract.why is missing: say what the result is for and who decides with it (the child works better knowing why).');
-  if ((c.goal.match(/(?:^|\n)\s*\d+[.)]\s/g) ?? []).length > STEPS_MAX) out.push(`contract.goal reads as more than ${STEPS_MAX} numbered steps: give one checkable outcome, and steps (max ${STEPS_MAX}) only where order matters.`);
+  if ((c.goal.match(/(?:^|\s)\d+[.)]\s/g) ?? []).length > STEPS_MAX) out.push(`contract.goal reads as more than ${STEPS_MAX} numbered steps: give one checkable outcome, and steps (max ${STEPS_MAX}) only where order matters.`);
   return out;
 }
 

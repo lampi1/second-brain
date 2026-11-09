@@ -18,11 +18,14 @@ taken must travel with the task).
   Goal, Why, Already decided, Context, In scope, Out of scope, Constraints, Steps, Done when, Output, Ask the parent if.
 - **Every delegation path takes it.** `agent_delegate`, `agent_assign_task` and the Orchestrator's `app_create_chat` /
   `app_assign_task` (`contract` field, `appctl/task-contract.ts`) accept the same fields; the free `prompt` stays as the
-  fallback of the two app tools, never together with a contract.
+  fallback of the two app tools, never together with a contract. The task estimate of `app_create_chat` reads the goal and why only: the
+  rendered criteria and steps are list lines it would count as parts of a tree. The schema carries each field's length
+  limit, and a rendered contract over 8000 characters is refused as the contract, not as a prompt.
 - **Warnings, not refusals.** A contract without `why`, or whose goal is more than 5 numbered steps, gets a warning in
   the tool's answer.
 - **English between agents.** Contracts between agents are written in English; replies to the user stay in the user's
-  language. The Orchestrator's contract line says so (`orchestrator-role.ts` RETIRED_LINES maps the old line).
+  language. The Orchestrator's default text has the new contract line (`shared/roles.ts`), and `orchestrator-role.ts`
+  RETIRED_LINES maps the old line to it.
 - **Hard rules are not contract text.** Safety, production, push, secrets and permissions stay in the role frame
   (`ROLE_PREAMBLE`, `AGENT_LABEL`, role gate): a parent can neither omit nor weaken them.
 - **Measured later.** Each run keeps which fields its contract had (`taskContract.fields`), so goal-only, hybrid and

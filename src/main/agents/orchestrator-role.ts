@@ -47,7 +47,7 @@ const ORCHESTRATOR_RULES = [
 /** Lines the shipped Orchestrator text had before 2026-10-20 that repeated the app's rules (the fast path) or the role
  *  list the frame already carries (roleCatalogBrief): a catalog still holding one word for word gets the current line,
  *  so the frame says it once (the owner, 2026-10-20: no text twice). A line the user edited never matches. */
-const [COORDINATE, DELEGATION] = ROLE_DEFAULTS.orchestrator.instructions.split('\n');
+const [COORDINATE, DELEGATION, CONTRACT] = ROLE_DEFAULTS.orchestrator.instructions.split('\n');
 // the ADR 0083 text too (a profile the 0085 migration left alone keeps it word for word), and the pre-0100 line that
 // named the Router (a user who edited another line keeps it)
 const [COORDINATE_0083, ROLES_0083] = (ADR0083_DEFAULTS.orchestrator.instructions ?? '').split('\n');
@@ -58,8 +58,8 @@ export const RETIRED_LINES: ReadonlyMap<string, string> = new Map([
   [DELEGATION_0100!, DELEGATION!],
   ['Coordinate the user’s work and stay available for conversation. Take the fast path when it fits (task_estimate): answer a short question yourself; give a quick single-part job to ONE role with app_create_chat (roleId, title, prompt = the contract) that does it alone; plan a tree only for work of several parts. Do only brief routing, status checks, decisions, short answers and synthesis yourself, never a worker’s long task and never a blocking wait.', COORDINATE!],
   // one standard contract format, in English (#355, ADR 0247): the old list of what a contract holds
-  ['Write each contract self-contained: goal, the context and sources it needs, scope and non-goals, done-criteria, the output you want back, and the cwd for repository work. The role does not see this conversation. Parallel chats only for independent parts with distinct owners.',
-    'Write each contract in the contract field (goal, why, decided, doneWhen; steps only if order matters) with the cwd for repository work, in English. The role does not see this conversation. Parallel chats only for independent parts with distinct owners.'],
+  ['Write each contract self-contained: goal, the context and sources it needs, scope and non-goals, done-criteria, the output you want back, and the cwd for repository work. The role does not see this conversation. Parallel chats only for independent parts with distinct owners.', CONTRACT!],
+  ['Write each contract in the contract field (goal, why, decided, doneWhen; steps only if order matters) with the cwd for repository work, in English. The role does not see this conversation. Parallel chats only for independent parts with distinct owners.', CONTRACT!],
   // the line that named skills_suggest, gone with the skill suggester (ADR 0186)
   ['A Strategist delegates the parts of its plan itself (agent_delegate); a ready contract in its report (a part it could not launch because the user narrowed its permissions) is yours to start as its own chat. skills_suggest names the brain skills that fit a task: pass the ones that apply as skills.', DELEGATION!],
   ['The roles: strategist (a goal that needs a plan and several parts), router (a batch of requests to sort), scout (find and verify facts), artisan (make a change), sentinel (verify with tests and checks), herald (messages for people and services), judge (an independent verdict), scribe (documents and brain notes). A Strategist or a Router delegates the parts of its plan itself (agent_delegate); a ready contract in its report (a part it could not launch because the user narrowed its permissions) is yours to start as its own chat. agent_catalog lists them; skills_suggest names the brain skills that fit a task: pass the ones that apply as skills.', DELEGATION!],

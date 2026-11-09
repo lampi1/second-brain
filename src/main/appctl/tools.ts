@@ -510,7 +510,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (a.orchestrator !== undefined && a.orchestrator !== false) throw new Error('app_create_chat crea solo chat di lavoro: l’Orchestrator lo sceglie l’utente (Nuova chat → «È l’Orchestrator» o «Cambia motore»)');
         const title = String(a.title ?? '').trim().slice(0, CHAT_TITLE_MAX), prompt = task.prompt;
         if (!title || !prompt) throw new Error(!title ? 'title: required' : 'contract (or prompt): required');
-        if (prompt.length > CHAT_PROMPT_MAX) throw new Error(`prompt: at most ${CHAT_PROMPT_MAX} characters (this one has ${prompt.length})`);
+        if (prompt.length > CHAT_PROMPT_MAX) throw new Error(`${task.what}: at most ${CHAT_PROMPT_MAX} characters (this one has ${prompt.length})`);
         // a former Orchestrator's title is the Orchestrator's mail box: a new chat may not take its mail
         if (title.trim().toLowerCase() === ORCHESTRATOR_TITLE.toLowerCase()) throw new Error(`The title «${title}» is reserved for the Orchestrator's mail: choose another.`);
         const s = d.brain.settings();
@@ -563,7 +563,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (warnings.length) log.info('appctl', 'chat started with a skill its role lacks tools for', { chat: chat.id, data: { role: roleId, warnings: warnings.length } });
         // the machine is busy: the chat exists, its first turn waits in the cold-start queue (ADR 0222)
         // the estimate from similar past tasks (ADR 0087): the same figure the strip shows, so the plan is checked with data
-        const estimate = d.runFeedback ? estimateTask(new SimilarIndex(d.runFeedback.runList()), { text: prompt, agentId: roleId }) : null;
+        const estimate = d.runFeedback ? estimateTask(new SimilarIndex(d.runFeedback.runList()), { text: task.estimate, agentId: roleId }) : null;
         return { chatId: chat.id, title: chat.title, harness, cwd, model: model || null, effort, ...(warnings.length ? { warnings } : {}), ...(chat.queued ? { status: queuedLine(chat.queued) } : {}),
           ...(estimate ? { estimate: { timeMs: estimate.timeMs, costUsd: estimate.costUsd, n: estimate.n, confidence: estimate.confidence, parts: estimate.parts, path: estimate.path } } : {}), route: { source: route.source, kind: route.kind, area: route.area, reason: route.reason, ...(route.agent ? { agent: route.agent } : {}), ...(route.balanced ? { balanced: route.balanced } : {}) },
           ...(choice?.suggestedRole ? { suggestedRole: choice.suggestedRole } : {}) };
@@ -601,7 +601,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || (a.expectedVersion !== undefined && (!Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1))) throw new ToolRefusal('Invalid assignment mode/version.');
         const task = taskPrompt(a, String(a.roleId ?? '')), prompt = task.prompt;
         if (!prompt) throw new Error('contract (or prompt): required');
-        if (prompt.length > CHAT_PROMPT_MAX) throw new Error(`prompt: at most ${CHAT_PROMPT_MAX} characters (this one has ${prompt.length})`);
+        if (prompt.length > CHAT_PROMPT_MAX) throw new Error(`${task.what}: at most ${CHAT_PROMPT_MAX} characters (this one has ${prompt.length})`);
         const doneWhen = task.doneWhen ?? (a.doneWhen === undefined ? undefined : Array.isArray(a.doneWhen) && a.doneWhen.length <= 12 && a.doneWhen.every(c => typeof c === 'string' && c.trim() && c.length <= 300) ? a.doneWhen as string[] : null);
         if (doneWhen === null) throw new Error('Invalid doneWhen criteria.');
         const refused = crossRefusal(d.brain.settings(), orchestrator.harness, target.harness);
