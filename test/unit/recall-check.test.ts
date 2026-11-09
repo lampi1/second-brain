@@ -50,7 +50,7 @@ describe('words vs words + meaning', () => {
     const goal = 'Modifica lo schema della banca dati';
     const ids = rankHybrid([db!], goal, toy(goal), r => toy(factText(r)));
     expect(ids).toEqual([db!.memoryId]);
-    const r = evaluateRecall([{ fact: db!, goal, runId: runId(1) }], new Map<string, MemoryRecord[]>([[JSON.stringify(['artisan', '', '', '', '']), [db!]]]), f => toy(factText(f)), c => toy(c.goal));
+    const r = evaluateRecall([{ fact: db!, goal, runId: runId(1) }], new Map<string, MemoryRecord[]>([[JSON.stringify(['artisan', null, null, null, null]), [db!]]]), f => toy(factText(f)), c => toy(c.goal));
     expect(r).toMatchObject({ n: 1, words: 0, hybrid: 1, onlyHybrid: 1, onlyWords: 0 });
     expect(r.missed[0]).toMatchObject({ goal, role: 'artisan' });
   });
@@ -68,7 +68,7 @@ describe('RecallCheck', () => {
     let calls = 0;
     const check = new RecallCheck({ root: () => w.root, runs: () => runs, ready: () => ready, pause: async () => {}, now: () => 1000,
       embed: async texts => { calls++; return texts.map(toy); } });
-    return { check, file, before, calls: () => calls };
+    return { check, file, before, calls: () => calls, root: w.root };
   };
   it('says too few under MIN_CASES cases', async () => {
     const { check } = setup(MIN_CASES - 1);
@@ -94,4 +94,21 @@ describe('RecallCheck', () => {
     expect(s.calls()).toBe(calls);
     expect(fs.readFileSync(s.file, 'utf8')).toBe(s.before);
   });
+  it('a failing model is kept as a words-only card, not retried on every ask', async () => {
+    const w = world(), runs: AgentRun[] = [];
+    for (let i = 1; i <= MIN_CASES; i++) { w.add(`Database step ${i} uses the migration runner.`, runId(i)); runs.push(run(runId(i), `database step ${i}`)); }
+    let calls = 0;
+    const check = new RecallCheck({ root: () => w.root, runs: () => runs, ready: () => true, pause: async () => {}, now: () => 1000, embed: async () => { calls++; return null; } });
+    expect(await check.state(true)).toMatchObject({ state: 'no-model', hybrid: null });
+    expect((await check.state()).state).toBe('no-model');
+    expect(calls).toBe(1);
+  });
+  it('a new fact in a tested scope makes a new card', async () => {
+    const s = setup(MIN_CASES);
+    expect((await s.check.state(true)).state).toBe('ready');
+    expect((await s.check.state()).state).toBe('ready');
+    proposeMemory(s.root, { scope: { roleId: 'artisan' }, subject: 'procedure', predicate: 'always', value: 'Back up the database before a migration.', sourceEventId: 'memory-proposal:x', sourceRunId: 'r_ffffffffffff' }, '2026-01-02T00:00:00Z');
+    expect((await s.check.state()).state).toBe('busy');
+  });
 });
+

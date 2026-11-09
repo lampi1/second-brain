@@ -33,7 +33,7 @@ export function RecallCheckCard() {
     if (!busy) return;
     const id = setTimeout(() => { void load(); }, 5000);
     return () => clearTimeout(id);
-  }, [busy, c, load]);
+  }, [busy, c?.at, load]);
   if (!c && !error) return null;
   const k = c?.k ?? 8;
   return <section className="bx-card mm-recall" data-testid="mm-recall" data-state={c?.state ?? 'error'}>

@@ -33,7 +33,8 @@ const CACHE_MAX = 6000;
 export interface RecallCase { fact: MemoryRecord; goal: string; runId: string }
 type Vec = Float32Array;
 
-const scopeKey = (r: MemoryRecord): string => JSON.stringify([r.scope.roleId, r.scope.userId ?? '', r.scope.project ?? '', r.scope.repository ?? '', r.scope.environment ?? '']);
+/** The launch's scope equality (memory-records.ts sameScope): an absent field and an empty one differ. */
+const scopeKey = (r: MemoryRecord): string => JSON.stringify([r.scope.roleId, r.scope.userId ?? null, r.scope.project ?? null, r.scope.repository ?? null, r.scope.environment ?? null]);
 export const factText = (r: Pick<MemoryRecord, 'subject' | 'predicate' | 'value'>): string => `${r.subject}: ${r.predicate}: ${r.value}`;
 
 /** The launchable facts of every scope, and one case per launchable fact written by a recorded run with a goal. */
@@ -129,13 +130,17 @@ export class RecallCheck {
     }
     const { cases } = input;
     if (cases.length < MIN_CASES) return empty('few', cases.length);
-    const key = `${root}:${cases.length}:${hash(cases.map(c => `${c.fact.memoryId}:${c.fact.status}:${c.goal.length}`).join('|'))}`;
+    // the cases and every fact of their pools: a fact added, retracted or edited in a tested scope changes the rankings
+    const pooled = [...new Set(cases.map(c => scopeKey(c.fact)))].flatMap(k => input.pools.get(k) ?? []);
+    const key = `${root}:${hash([...cases.map(c => `${c.fact.memoryId}:${hash(c.goal)}`), '#', ...pooled.map(r => `${r.memoryId}:${r.status}:${hash(factText(r))}`)].join('|'))}`;
     if (this.card && this.cardKey === key && this.now() - this.card.at < CARD_TTL_MS) return this.card;
     if (!this.d.ready()) return { ...empty('no-model', cases.length), ...this.wordsOnly(input) };
     if (!this.running) {
       this.running = this.compute(input, key).catch(e => {
-        log.warn('memory', 'recall check not computed', { cause: errText(e), hint: 'reopen Memoria → Statistiche to retry; the launch memory is unchanged' });
-        return { ...empty('no-model', cases.length), ...this.wordsOnly(input) };
+        log.warn('memory', 'recall check not computed', { cause: errText(e), hint: 'reopen Memoria → Statistiche later to retry; the launch memory is unchanged' });
+        // kept like a result (its TTL, its key), so the page stops asking instead of retrying the model every 5 s
+        this.card = { ...empty('no-model', cases.length), ...this.wordsOnly(input) }; this.cardKey = key;
+        return this.card;
       }).finally(() => { this.running = null; });
     }
     if (wait) return this.running;
@@ -159,9 +164,9 @@ export class RecallCheck {
 
   private async compute(input: ReturnType<typeof recallCases>, key: string): Promise<MemoryRecallCard> {
     const facts = [...new Set(input.cases.map(c => scopeKey(c.fact)))].flatMap(k => input.pools.get(k) ?? []);
+    if (this.vecs.size > CACHE_MAX) this.vecs.clear();
     await this.embedMissing(input.cases.map(c => c.goal), 'query');
     await this.embedMissing(facts.map(factText), 'passage');
-    if (this.vecs.size > CACHE_MAX) this.vecs.clear();
     const r = evaluateRecall(input.cases, input.pools, f => this.vecs.get(`passage:${hash(factText(f))}`) ?? null, c => this.vecs.get(`query:${hash(c.goal)}`) ?? null);
     this.card = { state: 'ready', at: this.now(), n: r.n, k: r.k, minCases: MIN_CASES, words: r.words, hybrid: r.hybrid, onlyHybrid: r.onlyHybrid, onlyWords: r.onlyWords, missed: r.missed };
     this.cardKey = key;
