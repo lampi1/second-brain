@@ -195,15 +195,16 @@ describe('agent_delegate', () => {
   it('child results while siblings work: a short debounce, one entry per child, the newest wins', async () => {
     expect(CHILD_RESULTS_MS).toBeGreaterThanOrEqual(2000);
     expect(CHILD_RESULTS_MS * CHILD_RESULTS_CAP).toBeLessThanOrEqual(5000);
-    let parentId: string | undefined, delivered!: () => void;
+    const target: { parentId?: string } = {};
+    let delivered!: () => void;
     const delivery = new Promise<void>(resolve => { delivered = resolve; });
-    const f = fixture({}, undefined, undefined, id => { if (id === parentId) delivered(); });
+    const f = fixture({}, undefined, undefined, id => { if (id === target.parentId) delivered(); });
     (f.m as unknown as { opts: { childResultsMs: number } }).opts.childResultsMs = 1000;
     const parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'B · uno'), f.task('scout', 'B · due'), f.task('scout', 'B · tre')] });
     const kids = f.m.list().filter(c => c.parentId === parent.id);
     const before = f.sent.get(parent.id)!.length;
-    parentId = parent.id;
+    target.parentId = parent.id;
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
     const rep = (i: number, summary: string, extra: Record<string, unknown> = {}) => f.call('agent_report', kids[i]!.id, { outcome: 'done', summary, output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], ...extra });
     await rep(0, 'Uno vecchio');
@@ -225,16 +226,17 @@ describe('agent_delegate', () => {
   });
 
   it('a result that keeps being followed by siblings\' still goes within the cap of the debounce', async () => {
-    let parentId: string | undefined, delivered!: () => void;
+    const target: { parentId?: string } = {};
+    let delivered!: () => void;
     const delivery = new Promise<void>(resolve => { delivered = resolve; });
-    const f = fixture({}, undefined, undefined, id => { if (id === parentId) delivered(); });
+    const f = fixture({}, undefined, undefined, id => { if (id === target.parentId) delivered(); });
     const ms = 1000;
     (f.m as unknown as { opts: { childResultsMs: number } }).opts.childResultsMs = ms;
     const parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [1, 2, 3, 4].map(n => f.task('scout', `C · ${n}`)) });
     const kids = f.m.list().filter(c => c.parentId === parent.id);
     const before = f.sent.get(parent.id)!.length;
-    parentId = parent.id;
+    target.parentId = parent.id;
     vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
     // Pin the scheduled deadline, not how soon the OS runs a timer on a busy machine.
     const flushes: number[] = [], m = f.m as unknown as { flushChildResults(id: string): void };

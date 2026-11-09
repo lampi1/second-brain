@@ -229,3 +229,12 @@ than guarded by a wall-clock-dependent `if`. Both deterministic tests pass (exit
 deadline, test timeout or gate exclusion was changed. The detached baseline remains for owner cleanup; no worktree
 or junction was removed. The existing junction points at the main checkout, whose matching lockfile dependencies
 were restored by the owner. This assignment installed nothing and does not push.
+
+### Single final gate receipt
+
+Implementation commit `97de9f40`: the single `npm run check:quick` returned **exit 1**. Typecheck passed; lint found
+two `prefer-const` errors in the new debounce test callback targets (plus the existing non-blocking `wiring.ts`
+length warning). Unit and documentation tests in that gate did not start. The callback targets now use a const
+holder; targeted lint of all five changed TypeScript files returns **exit 0**. The gate was not repeated, so the
+post-correction tip must not be presented as having a green branch gate. The earlier 24 manager/host and two
+debounce test passes remain targeted evidence only. Independent review and a complete passing gate remain open.
