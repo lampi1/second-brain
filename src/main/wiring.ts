@@ -110,7 +110,7 @@ import { releaseId } from './release';
 import { sharedDir } from './platform';
 import { HeadlessRunner } from './compare/headless';
 import { OneShotService } from './agents/oneshot';
-import { DelegateWorktrees, gitWorktrees, worktreeGit } from './agents/worktrees';
+import { DelegateWorktrees, GitSession, gitWorktrees, worktreeGit } from './agents/worktrees';
 import { WorktreeHold } from './chats/worktree-hold';
 import { WorktreePool } from './agents/worktree-pool';
 import { within } from './agents/tool-policy';
@@ -502,17 +502,18 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     return autoCloseMin.min * 60_000;
   };
   // a finished chat that left uncommitted or unpushed work in its repository is not closed by itself (#357)
-  const worktreeHold = new WorktreeHold({ git: (cwd, args) => worktreeGit(cwd, args) });
+  const worktreeHold: WorktreeHold = new WorktreeHold({ git: (cwd, args) => worktreeGit(cwd, args), brainRoot: () => brainRoot(),
+    session: () => { const s = new GitSession(); return (cwd, args) => s.git(cwd, args); } });
   const workChat = (id: string) => {
     const c = manager.summary(id);
     return c ? { id, cwd: c.cwd, stamp: `${c.lastResult?.at ?? 0}|${c.checkpointAt ?? 0}`, ...(c.checkpointAt !== undefined ? { checkpointAt: c.checkpointAt } : {}) } : null;
   };
-  const unsavedWork = (id: string): boolean => {
+  const unsavedWork = (id: string): false | 'unsaved' | 'gitcheck' => {
     const c = manager.summary(id);
     // only a chat that finished its turn: a running one is held anyway, and its files are still moving
     if (!c || c.closedAt || !c.lastResult || c.lastResult.isError || (c.state !== 'idle' && c.state !== 'closed')) return false;
-    const w = workChat(id)!;
-    return WorktreeHold.checked(w) && worktreeHold.state(w) !== 'clean';
+    const state = worktreeHold.state(workChat(id)!);
+    return state === 'unsaved' ? 'unsaved' : state === 'checking' || state === 'failed' ? 'gitcheck' : false;
   };
   const autoCloseService = new AutoCloseService({ now: autoCloseNow,
     delayMs: () => keptProblem ? 0 : autoCloseDelay(),
@@ -521,14 +522,15 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     candidates: () => manager.autoCloseCandidates(id => asks.pending().some(p => p.chatId === id) ? 'command'
       : browser.list().some(t => t.ownerChatId === id && (!!t.handoffId || !!t.dialog)) ? 'browser'
       : runner.list(id).some(r => r.state === 'running') || browser.list().some(t => t.ownerChatId === id && t.loading) ? 'work'
-      : mail.hasWork(id) ? 'mail' : unsavedWork(id) ? 'unsaved' : false),
+      : mail.hasWork(id) ? 'mail' : unsavedWork(id)),
     archive: async (id, _reservation, valid) => {
       // hasWork trusts a mailbox listing for BOX_TTL_MS: mail that came in since keeps the chat open
       if (mail.hasWork(id, true)) return false;
       // work left in its worktree during the warning keeps it open too (#357): checked again right before the close
       const c = workChat(id);
-      if (c && WorktreeHold.checked(c) && (await worktreeHold.check(c)).state !== 'clean') return false;
+      if (c && !['clean', 'none'].includes(await worktreeHold.recheck(c))) return false;
       const done = await manager.archiveAutomatic(id, valid);
+      if (done) worktreeHold.forget(id);
       if (done) for (const tab of browser.list()) if (tab.ownerChatId === id) browser.close(tab.id);
       return done;
     }, initialKeptOpen: kept,

@@ -283,7 +283,7 @@
     "src/shared/agents.ts#AgentRun": "ef150376055cb22b",
     "src/shared/agents.ts#PERMISSION_CEILINGS": "bd3600e025764e87",
     "src/shared/agents.ts#VERSIONED_CHANGES": "86e3f77aa1cb8c04",
-    "src/shared/auto-close.ts#AutoCloseWaiting": "c4d2f1a536f52335",
+    "src/shared/auto-close.ts#AutoCloseWaiting": "adec4e4cb7836efe",
     "src/shared/brain-layout.ts": "35400e97ac38db32",
     "src/shared/concept-guide.ts#orchestratorText": "4b6efac75db7dd30",
     "src/shared/context.ts#NEAR_COMPACTION": "af6cbcf8970ff64b",

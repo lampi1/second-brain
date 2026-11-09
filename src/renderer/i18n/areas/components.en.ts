@@ -115,6 +115,7 @@ export const componentsEn: typeof componentsIt = {
   "cmp.autoClose.waiting.mail": 'Waiting for mail',
   "cmp.autoClose.waiting.browser": 'Waiting for you in the browser',
   "cmp.autoClose.waiting.unsaved": 'Unsaved work',
+  "cmp.autoClose.waiting.gitcheck": 'Checking the repository',
   "cmp.autoClose.waitingTip": 'Stays open: it closes by itself once it waits for nothing',
   "cmp.work.title": "My work profile",
   "cmp.work.lead": "Dev, QA, PO or CTO: which brain pages the sidebar shows and which one is the reference page. Roles, chats and permissions stay as they are.",

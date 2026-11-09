@@ -115,6 +115,7 @@ export const componentsDe: typeof componentsIt = {
   "cmp.autoClose.waiting.mail": 'Wartet auf Post',
   "cmp.autoClose.waiting.browser": 'Wartet im Browser auf dich',
   "cmp.autoClose.waiting.unsaved": 'Ungesicherte Arbeit',
+  "cmp.autoClose.waiting.gitcheck": 'Repository wird geprüft',
   "cmp.autoClose.waitingTip": 'Bleibt offen: schließt sich selbst, sobald er auf nichts mehr wartet',
   "cmp.work.title": "Mein Arbeitsprofil",
   "cmp.work.lead": "Dev, QA, PO oder CTO: welche Brain-Seiten die Seitenleiste zeigt und welche die Referenzseite ist. Rollen, Chats und Berechtigungen bleiben, wie sie sind.",

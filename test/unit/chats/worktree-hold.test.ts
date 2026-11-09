@@ -4,11 +4,11 @@ import { describe, expect, it } from 'vitest';
 import { RECHECK_MS, WorktreeHold, type GitRun } from '../../../src/main/chats/worktree-hold';
 
 const ok = (out = ''): GitRun => ({ exit: 0, out });
-function repo(o: { status?: string; ahead?: string; remote?: string; fail?: boolean; notRepo?: boolean } = {}) {
+function repo(o: { status?: string; ahead?: string; remote?: string; fail?: boolean; notRepo?: boolean; top?: string } = {}) {
   const calls: string[][] = [];
   const git = async (_cwd: string, args: string[]): Promise<GitRun> => {
     calls.push(args);
-    if (args[0] === 'rev-parse') return o.notRepo ? { exit: 128, out: '' } : ok('/w');
+    if (args[0] === 'rev-parse') return o.notRepo ? { exit: 128, out: '' } : ok(o.top ?? '/w\n/w/.git\n');
     if (o.fail) return { exit: null, out: '', error: 'spawn git ENOENT' };
     if (args[0] === 'remote') return ok(o.remote ?? 'origin\n');
     if (args[0] === 'status') return ok(o.status ?? '');
@@ -44,14 +44,61 @@ describe('WorktreeHold', () => {
     expect((await new WorktreeHold({ git: repo({ notRepo: true }).git }).check(chat())).state).toBe('clean');
   });
 
-  it('fails closed when git fails', async () => {
+  it('fails closed when git fails, times out or is blocked (exit null), not only on a later command', async () => {
     expect((await new WorktreeHold({ git: repo({ fail: true }).git }).check(chat())).state).toBe('failed');
+    const blocked = async (): Promise<GitRun> => ({ exit: null, out: '', error: 'Repository configuration includes external or conditional files' });
+    expect((await new WorktreeHold({ git: blocked }).check(chat())).state).toBe('failed');
+    const noRevList = async (_c: string, args: string[]): Promise<GitRun> => args[0] === 'rev-list' ? { exit: null, out: '' } : args[0] === 'remote' ? ok('origin') : ok(args[0] === 'rev-parse' ? '/w\n/w/.git' : '');
+    expect((await new WorktreeHold({ git: noRevList }).check(chat())).state).toBe('failed');
+  });
+
+  it('never holds the brain: its folder, a folder inside it, or a worktree of its repository', async () => {
+    const r = repo({ status: ' M now.md\n', top: '/brain\n/brain/.git\n' });
+    const h = new WorktreeHold({ git: r.git, brainRoot: () => '/brain' });
+    expect(h.state({ id: 'b', cwd: '/brain', stamp: 's', checkpointAt: 1 })).toBe('none');
+    expect(h.state({ id: 'b', cwd: '/brain/notes', stamp: 's', checkpointAt: 1 })).toBe('none');
+    expect(r.calls).toEqual([]);
+    expect((await h.check(chat())).state).toBe('clean');
+    const wt = new WorktreeHold({ git: repo({ status: ' M a.md\n', top: '/repos/.second-brain-delegate-abc123\n/brain/.git\n' }).git, brainRoot: () => '/brain' });
+    expect((await wt.check(chat())).state).toBe('clean');
+  });
+
+  it('keeps the fresh check of the close, so a chat found unsaved there shows it', async () => {
+    const changed: string[] = [];
+    const h = new WorktreeHold({ git: repo({ status: ' M a.ts\n' }).git, changed: id => changed.push(id) });
+    expect(await h.recheck(chat())).toBe('unsaved');
+    expect(h.state(chat())).toBe('unsaved');
+    expect(changed).toEqual(['c1']);
+  });
+
+  it('runs one check at a time per chat: a tick while it runs does not queue it again', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>(r => { release = r; });
+    let statusCalls = 0;
+    const git = async (_c: string, args: string[]): Promise<GitRun> => {
+      if (args[0] === 'status') { statusCalls++; await gate; return ok(''); }
+      return args[0] === 'remote' ? ok('origin') : args[0] === 'rev-list' ? ok('0') : ok('/w\n/w/.git');
+    };
+    const h = new WorktreeHold({ git });
+    h.state(chat()); await settle();
+    h.state(chat()); h.state(chat()); await settle();
+    release(); await settle(); await settle();
+    expect(h.state(chat())).toBe('clean');
+    expect(statusCalls).toBe(1);
+  });
+
+  it('reads the repository once per check through a session when given one', async () => {
+    let sessions = 0;
+    const r = repo();
+    const h = new WorktreeHold({ git: async () => { throw new Error('not used'); }, session: () => { sessions++; return r.git; } });
+    expect((await h.check(chat())).state).toBe('clean');
+    expect(sessions).toBe(1);
   });
 
   it('releases a held chat once the work is committed and pushed elsewhere (checked again after RECHECK_MS)', async () => {
     let now = 0, status = ' M a.ts\n';
     const changed: string[] = [];
-    const h = new WorktreeHold({ now: () => now, changed: id => changed.push(id), git: async (_c, args) => args[0] === 'status' ? ok(status) : args[0] === 'remote' ? ok('origin') : args[0] === 'rev-list' ? ok('0') : ok('/w') });
+    const h = new WorktreeHold({ now: () => now, changed: id => changed.push(id), git: async (_c, args) => args[0] === 'status' ? ok(status) : args[0] === 'remote' ? ok('origin') : args[0] === 'rev-list' ? ok('0') : ok('/w\n/w/.git') });
     h.state(chat()); await settle();
     expect(h.state(chat())).toBe('unsaved');
     status = '';

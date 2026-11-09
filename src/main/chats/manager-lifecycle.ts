@@ -118,7 +118,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     if ((c.background ?? 0) > 0 || c.waitsOnWork || this.observedChildrenBusy(r) || (c.agentChildren?.active ?? 0) > 0 || external === 'work') return 'work';
     if (c.work?.status === 'waiting-mail' || external === 'mail') return 'mail';
     if (c.work?.status === 'assigned' && c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted) return 'report';
-    if (external === 'unsaved') return 'unsaved';
+    if (external === 'unsaved' || external === 'gitcheck') return external;
     return undefined;
   }
 

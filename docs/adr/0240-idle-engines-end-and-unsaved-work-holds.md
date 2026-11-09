@@ -22,7 +22,11 @@ on: ADR 0026 (engine housekeeping), ADR 0084 (auto-close and its waits), ADR 013
   repository has a remote and holds uncommitted changes (tracked or untracked) or commits on no remote branch, waits
   with the new reason `unsaved` («Lavoro non salvato»). Git runs asynchronously, one chat at a time, cached by the
   chat's last turn; a held chat is checked again every minute, and once more right before the close. A failing git
-  command keeps the chat open and logs one warning. Repositories without a remote (the brain) are not checked.
+  command (a timeout, a blocked repository policy) keeps the chat open as «Controllo del repository» and logs one
+  warning; only git's own "not a repository" counts as nothing to save. Repositories without a remote are not checked,
+  and neither is the brain (its folder, a folder inside it, or a worktree of its repository): its app-written notes change
+  at any moment, and a synced brain (ADR 0059) does not update the remote refs the check reads. The close's fresh check
+  becomes the chat's state, so a chat found unsaved there shows the label instead of counting down again.
 - Sidebar: only an archived chat (`closedAt`) is «chiusa» and it leaves the tree (as before); an open chat whose
   engine ended reads as done for now (a root) or as owing its result (a delegated chat).
 

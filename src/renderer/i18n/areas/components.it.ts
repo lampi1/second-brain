@@ -113,6 +113,7 @@ export const componentsIt = {
   "cmp.autoClose.waiting.mail": 'In attesa di posta',
   "cmp.autoClose.waiting.browser": 'In attesa di te nel browser',
   "cmp.autoClose.waiting.unsaved": 'Lavoro non salvato',
+  "cmp.autoClose.waiting.gitcheck": 'Controllo del repository',
   "cmp.autoClose.waitingTip": 'Resta aperta: si chiude da sola quando non aspetta più nulla',
   "cmp.work.title": "Il mio profilo di lavoro",
   "cmp.work.lead": "Dev, QA, PO o CTO: quali pagine del brain vedi nella barra e quale è quella di riferimento. Ruoli, chat e permessi restano come sono.",
