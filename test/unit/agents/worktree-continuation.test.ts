@@ -7,12 +7,13 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type * as ChildProcess from 'node:child_process';
 import type { ChatSummary, NewChat } from '../../../src/shared/contract';
 
 type Tree = { head: string; branch: string };
 const git = vi.hoisted(() => ({ trees: new Map<string, { head: string; branch: string }>(), parents: new Map<string, string>(), common: '' }));
 vi.mock('node:child_process', async original => ({
-  ...await original<typeof import('node:child_process')>(),
+  ...await original<typeof ChildProcess>(),
   execFile: (_file: string, args: string[], _options: unknown, done: (error: (Error & { code?: number }) | null, stdout: string) => void) => {
     const at = args.indexOf('-C'), cwd = args[at + 1]!;
     const rest = args.slice(at + 2); while (rest[0] === '-c') rest.splice(0, 2);
