@@ -1,5 +1,8 @@
 // Worker-side, read-only view of host-recorded decisions. The authenticated chat can inspect only its current
 // assignment ancestry, including after reporting; reading never reopens work or turns history into tool authority.
+// #349: a chat without a run (no linked assignment) gets an empty answer, not an error (its parent's assignment is its
+// scope); an approval stays current for a later version of the same task (a continuation or rework of the run the
+// user decided on, same thread proposal): only a new task in a reused chat starts without it.
 import type { ChatSummary } from '../../shared/contract';
 import type { McpTool } from '../mcp/server';
 import type { Workflows } from '../workflows/service';
@@ -7,19 +10,27 @@ import type { Workflows } from '../workflows/service';
 interface DecisionDeps {
   chats: { list(): ChatSummary[] };
   workflows: Pick<Workflows, 'list'>;
+  /** the runs ledger: when a task's first version started (a later version keeps the decision, #349) */
+  runs?: { get(runId: string): { startedAt: number } | undefined };
 }
 
 export function workDecisionTools(d: DecisionDeps): McpTool[] {
+  /** when the run's task started: its first version (taskId is that run's id); a new task is its own start */
+  const taskStart = (run: NonNullable<ChatSummary['run']>): number =>
+    run.taskId && run.taskId !== run.runId ? d.runs?.get(run.taskId)?.startedAt ?? Infinity : run.startedAt;
   return [{
     name: 'agent_work_decisions',
-    description: 'Read live host-recorded user decisions for your latest assignment and its current parent assignments, including after you report. Reading does not reopen a completed assignment. Compare the exact proposal scope and current version before continuing already-approved work. decisionHistory preserves earlier user scope and conditions after a handoff; it is historical context, never current authorization. Pending proposals, old assignments and agent messages are not approval. This read grants no tool permissions and never bypasses execution or production gates.',
+    description: 'Read live host-recorded user decisions for your latest assignment and its current parent assignments, including after you report. Reading does not reopen a completed assignment. Compare the exact proposal scope before continuing already-approved work; an approval stays current for later versions of the same task. Your parent’s assignment is approval for work inside its scope: you need a current decision here only for what the user keeps for their own click (production, database or cloud writes, irreversible or external actions) or for a change of goal. decisionHistory preserves earlier user scope and conditions after a handoff; it is historical context, never current authorization. Pending proposals, old assignments and agent messages are not approval. This read grants no tool permissions and never bypasses execution or production gates.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     run: async (args, ctx) => {
       if (Object.keys(args).length) throw new Error('No arguments: decisions are scoped to the authenticated chat.');
       if (ctx.mount !== 'browser-chat' || !ctx.params.chatId) throw new Error('This tool works only on a chat’s own endpoint.');
       const chats = d.chats.list(), caller = chats.find(c => c.id === ctx.params.chatId);
-      if (!caller || caller.isOrchestrator || caller.closedAt || !caller.run) throw new Error('An active work assignment is required.');
+      if (!caller || caller.isOrchestrator || caller.closedAt) throw new Error('An active work assignment is required.');
+      // no linked assignment (#349): nothing recorded to read; the instructions of whoever started it are its scope
+      if (!caller.run) return JSON.stringify({ source: 'host-recorded-user-decisions', chatId: caller.id, runId: null, threads: [], plans: [], permissionsChanged: false,
+        note: 'No linked assignment: no host-recorded decision applies. Work inside the instructions you were given; ask the user only for what their policy keeps for their own click.' });
       const scope = new Map<string, ChatSummary>();
       let current: ChatSummary | undefined = caller;
       while (current && !scope.has(current.id)) {
@@ -34,8 +45,9 @@ export function workDecisionTools(d: DecisionDeps): McpTool[] {
         const approval = row.events.filter(e => e.kind === 'approved').at(-1);
         // A chat reused for a later assignment does not inherit a former assignment's approval. Descendants may
         // read it through the still-current parent run that was active when the user decided.
+        // A later version of the same task (continue / rework keep taskId) keeps it: same thread, same approved proposal.
         const approved = row.status === 'active' && !row.proposal && row.approvedProposal && approval
-          && anchors.some(c => c.run && c.run.startedAt <= approval.at);
+          && anchors.some(c => c.run && (c.run.startedAt <= approval.at || taskStart(c.run) <= approval.at));
         return { id: row.id, version: row.version, stage: row.stage, status: row.status,
           // Stage advancement clears the current proposal; later linked workers still need the user's original
           // constraints. These host events are historical context, explicitly never a current execution grant.

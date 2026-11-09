@@ -632,7 +632,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools(strategyTools(manager, awayOn));
   // the yes/no question of a chat whose engine has no question tool of its own (OpenCode over ACP)
   addChatTools(askTools(manager));
-  addChatTools(workDecisionTools({ chats: manager, workflows }));
+  addChatTools(workDecisionTools({ chats: manager, workflows, runs: manager.runs }));
   // the independent reviews of finished runs (agents/judge-sample.ts, ADR 0203): a sample, reviewed once a night by one
   // hidden Sentinel run (no chat, no strip) under the daily cap; they spend tokens, so they run only in the user's own
   // app, never in tests or an agent's hidden run (judgeSamplingOn, issue #112), and only with the Agenti switch on

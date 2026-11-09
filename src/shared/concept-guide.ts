@@ -74,8 +74,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un ruolo al lavoro delega una parte a un altro ruolo che può avviare: il figlio è una chat visibile sotto il genitore, mai un sotto-agente nascosto, e non ha mai più permessi del genitore.',
         'A working role delegates a part to another role it may launch: the child is a visible chat under its parent, never a hidden sub-agent, and never gets more permissions than its parent.'),
       // src/main/agents/run-report.ts; src/shared/roles.ts ROLE_PREAMBLE
-      b('Ogni ruolo chiude il suo lavoro con un rapporto: esito, riassunto, risultato e i criteri del contratto con le prove. È un’autovalutazione, non una verifica indipendente.',
-        'Every role closes its job with a report: outcome, summary, output and the contract’s criteria with their evidence. It is a self-report, not an independent check.'),
+      b('Il compito affidato dal genitore vale come via libera per il lavoro dentro il suo perimetro: un ruolo chiede il tuo clic solo per produzione, scritture su database o cloud, azioni irreversibili o esterne e cambi di obiettivo. Ogni ruolo chiude il suo lavoro con un rapporto: esito, riassunto, risultato e i criteri del contratto con le prove. È un’autovalutazione, non una verifica indipendente.',
+        'The task its parent assigned is the go-ahead for the work inside its scope: a role asks for your click only for production, database or cloud writes, irreversible or external actions and changes of goal. Every role closes its job with a report: outcome, summary, output and the contract’s criteria with their evidence. It is a self-report, not an independent check.'),
       // src/main/chats/manager-persistence.ts startRun only when owner.source === 'catalog'
       b('Le chat dei ruoli di lavoro hanno una «run» con contatori e costo; l’Orchestrator e le chat avviate senza ruolo (con i tuoi permessi) no.',
         'Work-role chats have a "run" with counters and cost; the Orchestrator and chats started without a role (with your permissions) do not.'),
