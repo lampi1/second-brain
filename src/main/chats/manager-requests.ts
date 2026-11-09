@@ -92,14 +92,30 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const answering = this.answering.get(r) ?? new Set<string>();
     if (answering.has(requestId)) throw new Error('Request already answered; delivery is still pending.');
     this.answering.set(r, answering); answering.add(requestId);
-    if (by === 'phone') r.answeringFromPhone = requestId; // the engine resolves it now: pending:resolved carries by 'phone'
+    if (by === 'phone') (r.answeringFromPhone ??= new Set()).add(requestId); // the engine resolves it now: pending:resolved carries by 'phone'
+    const session = r.session;
+    // Same rule as the sink's resolved: the request leaves the chat it was asked in, whichever engine runs it now
+    const sameChat = (): boolean => this.chats.get(chatId) === r;
     let ok: boolean;
     try {
       ok = await this.deliverAnswer(r, req, answer, { kind: 'user', channel: by });
       // The RPC acknowledgement can precede the batched resolved event. Preserve phone provenance in either order.
-      if (ok) this.dropPending(r, requestId);
-    } finally { answering.delete(requestId); delete r.answeringFromPhone; }
-    if (!ok) { this.dropPending(r, requestId); return; }
+      if (ok && sameChat()) this.dropPending(r, requestId);
+    } finally {
+      answering.delete(requestId);
+      r.answeringFromPhone?.delete(requestId);
+      if (!r.answeringFromPhone?.size) delete r.answeringFromPhone;
+    }
+    if (!ok && sameChat()) this.dropPending(r, requestId);
+    // The chat or its engine changed during the delivery: the receipt journal holds the outcome. Nothing else here may
+    // touch the replacement (its next turn's decisions, the user's event, the plan's clarified answers).
+    if (!sameChat() || r.session !== session) {
+      log.warn('chats', 'answer delivered across an engine change: not recorded on the new session', {
+        chat: chatId, cause: 'the session was replaced while the answer was being delivered', hint: 'inspect the request receipt; the decision is never resent', data: { requestId, ok },
+      });
+      return;
+    }
+    if (!ok) return;
     // request/tool/asked bind the line to this question (appctl/tools.ts decidedSince): its tool item never counts as a PC answer
     if (by === 'phone') { this.addItem(r, sysItem('phoneDecided', { time: phoneTime(Date.now()), what: 'question', request: requestId, tool: req.toolUseId ? `t-${req.toolUseId}` : '', asked: req.at }, 'info'), false); this.updated(r); }
     // Full request scope stays private (ADR 0083); shared user events carry only the user's own choices/words.

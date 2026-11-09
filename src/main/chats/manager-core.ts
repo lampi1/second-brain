@@ -272,7 +272,7 @@ export abstract class ManagerCore {
     if (!r.pending.size && !r.commandsOpen?.size) this.idleAgain(r);
     this.hook('analytics', () => this.analytics.resolved(r.s, requestId));
     r.s.pending = r.pending.size;
-    this.opts.emitter.emit('pending:resolved', { chatId: r.s.id, requestId, ...(r.answeringFromPhone === requestId ? { by: 'phone' as const } : {}) });
+    this.opts.emitter.emit('pending:resolved', { chatId: r.s.id, requestId, ...(r.answeringFromPhone?.has(requestId) ? { by: 'phone' as const } : {}) });
     this.updated(r);
   }
 

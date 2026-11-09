@@ -14,12 +14,13 @@ const roots: string[] = [], managers: ChatManager[] = [];
 afterEach(async () => { for (const m of managers.splice(0)) await m.shutdown(); closeAppDbs(); for (const dir of roots.splice(0)) fs.rmSync(dir, { recursive: true, force: true }); });
 const question: Omit<PendingRequest, 'chatId'> = { id: 'exact-question', type: 'question', tool: 'AskUserQuestion', title: 'Proceed?', detail: '', input: {}, at: 100,
   questions: [{ question: 'Proceed?', header: 'Scope', multiSelect: false, options: [{ label: 'Sì (consigliato)', description: 'Continue' }, { label: 'No', description: 'Stop' }] }] };
-async function fixture(options: { away?: boolean; failDelivery?: boolean; acknowledgement?: Promise<boolean> } = {}) {
+async function fixture(options: { away?: boolean; failDelivery?: boolean; acknowledgement?: Promise<boolean>; acks?: Map<string, Promise<boolean>> } = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-coord-manager-')); roots.push(dir);
   const store = new CoordinationStore(path.join(dir, 'app.db'));
   let resolveExposed!: () => void, resolveAnswered!: () => void, calls = 0;
   const resolved: unknown[] = [], recaps: unknown[] = [];
   const exposed = new Promise<void>(r => { resolveExposed = r; });
+  let engineSink!: SessionSink;
   const answered = new Promise<void>(r => { resolveAnswered = r; });
   const m = new ChatManager({ userData: dir, coldEveryMs: 0, runEveryMs: 0, checkpoints: () => false, away: () => !!options.away,
     onAway: recap => { recaps.push(recap); },
@@ -27,7 +28,7 @@ async function fixture(options: { away?: boolean; failDelivery?: boolean; acknow
       if (channel === 'pending:resolved') resolved.push(event);
       if (channel === 'pending:added') { expect(store.requests()[0]!.state).toBe('pending'); resolveExposed(); }
     } },
-    sessionFactory: (_h, _o, sink: SessionSink) => ({ harness: 'claude', sessionId: 'session', pid: null, root: null, alive: true, busy: false,
+    sessionFactory: (_h, _o, sink: SessionSink) => (engineSink = sink, { harness: 'claude', sessionId: 'session', pid: null, root: null, alive: true, busy: false,
       start() { sink.changed({ state: 'idle' }); }, send() { sink.pending(question); },
       answer(id: string) {
         if (options.acknowledgement) throw new Error('Remote answers must await consumption');
@@ -37,6 +38,7 @@ async function fixture(options: { away?: boolean; failDelivery?: boolean; acknow
         if (options.failDelivery) throw new Error('Lost transport');
         sink.resolved(id); return true;
       },
+      ...(options.acks ? { answerConsumed(id: string) { calls++; return options.acks!.get(id)!; } } : {}),
       ...(options.acknowledgement ? { answerConsumed() {
         calls++;
         expect(store.requests()[0]).toMatchObject({ state: 'accepted', delivery: { state: 'dispatching' } });
@@ -49,7 +51,7 @@ async function fixture(options: { away?: boolean; failDelivery?: boolean; acknow
   managers.push(m);
   const chat = await m.create({ harness: 'claude', cwd: dir, prompt: 'Ask one scoped question', orchestrator: true });
   await (options.away ? answered : exposed);
-  return { m, store, chat, answered, resolved, recaps, calls: () => calls };
+  return { m, store, chat, answered, resolved, recaps, calls: () => calls, sink: () => engineSink };
 }
 function acknowledgement() {
   let resolve!: (value: boolean) => void, reject!: (error: Error) => void;
@@ -123,6 +125,31 @@ describe('request receipts through ChatManager', () => {
       decision: { key: original.key, actor: { kind: 'user', channel: 'phone' } }, delivery: { state: 'delivered' } });
     expect(f.store.requests(work.id)).toEqual([]);
     expect(f.calls()).toBe(1);
+  });
+  it('keeps phone provenance when a PC answer to another request finishes first', async () => {
+    const phoneAck = acknowledgement(), pcAck = acknowledgement();
+    const f = await fixture({ acks: new Map([[question.id, phoneAck.promise], ['second-question', pcAck.promise]]) });
+    f.sink().pending({ ...question, id: 'second-question', at: 101 });
+    const answer = { kind: 'question', answers: { 'Proceed?': 'No' } } as const;
+    const phone = f.m.answer(f.chat.id, question.id, answer, 'phone');
+    const pc = f.m.answer(f.chat.id, 'second-question', answer, 'pc');
+    pcAck.resolve(true); await pc;
+    phoneAck.resolve(true); await phone;
+    expect(f.resolved).toEqual([{ chatId: f.chat.id, requestId: 'second-question' }, { chatId: f.chat.id, requestId: question.id, by: 'phone' }]);
+  });
+  it('records nothing on a replacement engine when the session changes during a remote delivery', async () => {
+    const ack = acknowledgement(), f = await fixture({ acknowledgement: ack.promise });
+    const sending = f.m.answer(f.chat.id, question.id, { kind: 'question', answers: { 'Proceed?': 'No' } }, 'phone');
+    await f.answered;
+    type Internal = { chats: Map<string, { session: unknown; continuationDecisions?: string; items: { kind: string; text?: string }[] }> };
+    const rec = (f.m as unknown as Internal).chats.get(f.chat.id)!;
+    const items = rec.items.length;
+    rec.session = { ...(rec.session as object) }; // the engine was restarted while the host delivered the answer
+    ack.resolve(true); await sending;
+    expect(f.store.requests()[0]!.delivery!.state).toBe('delivered');
+    expect(f.m.pending()).toEqual([]); // the request leaves the chat, as the sink's resolved would do
+    expect(rec.continuationDecisions).toBeUndefined();
+    expect(rec.items.length).toBe(items); // no phoneDecided line written for the replacement
   });
   it('commits phone consent before delivery and rejects a duplicate', async () => {
     const f = await fixture();
