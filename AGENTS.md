@@ -69,8 +69,8 @@ One line each; the full text, its exceptions and ADRs: the same number in `docs/
 6. **Coexistence**: never change Claude desktop / Cursor config, hooks or settings; external sessions only as a fork.
 7. **Tests**: unit tests for every module, an e2e with a screenshot for every visible feature; a branch's gate =
    `check:quick` green + clean Sentinel + guard, no e2e (2026-11-08) + looked at in the dev app; `check` without e2e
-   once on main after a batch of merges; never repeated suites; load tests only at night; no test on real time or
-   load (fake timers or an event; a load-red test is deleted or made deterministic, never rerun).
+   once on main after a batch of merges; never repeated suites; load tests only at night; never write
+   load-sensitive tests (real deadlines, sleeps, elapsed time); existing ones are removed.
 8. **Agents merge to `main` only when verified**: conventional English messages; fast-forward and `git push origin
    main` only after rule 7's gate (no e2e, no lock), guard passing on every pushed commit; no force; «Aggiorna» is the
    human's.
