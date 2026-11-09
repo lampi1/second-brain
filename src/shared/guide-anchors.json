@@ -292,7 +292,7 @@
     "src/shared/concept-guide.ts#orchestratorText": "4b6efac75db7dd30",
     "src/shared/context.ts#NEAR_COMPACTION": "af6cbcf8970ff64b",
     "src/shared/contract/chats.ts#PermissionMode": "1cac51d4d239c9aa",
-    "src/shared/delegation.ts": "e809bc8ca3c45329",
+    "src/shared/delegation.ts": "9b65c39b8ff0b23e",
     "src/shared/delegation.ts#delegationPrompt": "d4d712ac80dbad77",
     "src/shared/delegation.ts#resultMessage": "adf17e3578c837d6",
     "src/shared/file-view.ts#FileReference": "fe6774d9696a5a20",

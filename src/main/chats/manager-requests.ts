@@ -82,10 +82,11 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
    *  never a permission or a command; chats/phone-port.ts checks the rest before it calls this) */
   async answer(chatId: string, requestId: string, answer: Answer, by: 'pc' | 'phone' | 'relay' = 'pc'): Promise<void> {
     const r = this.need(chatId);
-    if (!r.pending.has(requestId)) throw new Error('Questa richiesta non è più aperta.');
     if (by === 'relay') throw new Error('Una risposta inoltrata da un agente non è una decisione dell’utente.');
     // the app's own question (a run stopped on a step only the user can do, #358): answered here, never by an engine
-    if (this.answerUserAction(r, r.pending.get(requestId)!, answer)) return;
+    const ask = this.userAsks.get(requestId);
+    if (ask && ask.chatId === chatId) { this.answerUserAction(ask, answer); return; }
+    if (!r.pending.has(requestId)) throw new Error('Questa richiesta non è più aperta.');
     if (!r.session) { this.dropPending(r, requestId); throw new Error('La chat non è più attiva: la richiesta è scaduta.'); }
     const req = r.pending.get(requestId)!;
     if (by === 'phone' && (req.type !== 'question' || answer.kind !== 'question')) throw new Error('Dal telefono si risponde solo a una domanda Sì/No.');
@@ -343,6 +344,6 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   abstract userWrote(chatId: string, text: string): boolean;
   protected abstract decidePlan(chatId: string, decision: 'approve' | 'change', at: number, text?: string, message?: string, receipt?: SubmissionReceipt, byApp?: boolean, by?: 'pc' | 'phone'): Promise<void>;
   protected abstract openOrchestrator(): Rec | undefined;
-  /** true when the request is the app's own user-action question and it was answered (manager-delegation.ts, #358) */
-  protected abstract answerUserAction(r: Rec, req: PendingRequest, answer: Answer): boolean;
+  /** the user's answer to the app's own user-action question (manager-delegation.ts, #358) */
+  protected abstract answerUserAction(req: PendingRequest, answer: Answer): void;
 }

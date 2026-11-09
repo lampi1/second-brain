@@ -91,9 +91,9 @@ export interface DelegationResult {
 export const USER_ACTION_KINDS = ['vpn', 'login', 'command', 'permission', 'decision', 'other'] as const;
 export interface UserAction { kind: typeof USER_ACTION_KINDS[number]; text: string; command?: string }
 export const USER_ACTION_TEXT_MAX = 300, USER_ACTION_COMMAND_MAX = 2000;
-/** Words of a partial / blocked report that name a step only the user can do: such a report without userAction is sent
+/** Words of a partial / blocked report's summary that name a step only the user can do: such a report without userAction is sent
  *  back once (agents/delegation.ts), so the block never stays only in the report text (#358). */
-export const USER_ONLY_BLOCKER = /(?:^|[^\p{L}])(?:vpn|mfa|2fa|otp|log ?in|sign[- ]in|accedi|autentica\p{L}*|esegui|permission denied|permesso negato|access denied|accesso negato)(?![\p{L}])/iu;
+export const USER_ONLY_BLOCKER = /(?:^|[^\p{L}\d._/-])(?:vpn|mfa|2fa|sso|login|sign[- ]in|accedi|accesso negato|access denied|permission denied|permesso negato|autenticazione|authenticat\p{L}*|credenziali|credentials|password|sudo|esegui)(?![\p{L}\d_/-]|\.\p{L})/iu;
 /** What a child chat carries about its delegation (persisted with the chat; shown on its card and in the tree). */
 export interface ChatDelegation {
   role: WorkRoleId;

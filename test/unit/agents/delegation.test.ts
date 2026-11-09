@@ -110,11 +110,29 @@ describe('agent_delegate', () => {
     expect(q.options.map(x => x.label)).toEqual(['Sì', 'No']);
     // the reporting chat is held and tagged by it, never closed meanwhile
     expect(f.m.autoCloseCandidates(() => false).find(c => c.id === child.id)).toMatchObject({ eligible: false, waitingFor: 'answer' });
+    // outside the Orchestrator's own pending: its news, mail and input are not held while the user decides
+    expect(f.m.list().find(c => c.id === o.id)!.pending).toBe(0);
     const before = f.sent.get(parent.id)?.length ?? 0;
     await f.m.answer(o.id, asks[0]!.id, { kind: 'question', answers: { [q.question]: 'Sì' } });
     expect(f.m.pending().some(r => r.chatId === o.id && r.tool === 'app_user_action')).toBe(false);
     await vi.waitFor(() => expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).toContain('[azione dell’utente fatta · chat «Caso supporto»]'));
     expect(f.answers.some(a => a.id === asks[0]!.id)).toBe(false); // never reached an engine
+  });
+
+  it('Sì goes to the Orchestrator when the parent\'s assignment is over (#358)', async () => {
+    const f = fixture(), o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user'), parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Caso VPN')] });
+    const child = f.m.list().find(c => c.parentId === parent.id)!;
+    const blocked = { outcome: 'partial', summary: 'VPN off', output: 'Query pronte.', doneWhen: [{ criterion: 'criterion A', met: false }], userAction: { kind: 'vpn', text: 'Accendi la VPN' } };
+    await f.call('agent_report', child.id, blocked);
+    const ask = f.m.pending().find(r => r.chatId === o.id && r.tool === 'app_user_action')!;
+    // the parent reports and ends its assignment, but stays open: it may not reassign any more
+    await f.call('agent_report', parent.id, { outcome: 'partial', summary: 'Fermo: aspetta Caso', output: 'Vedi la sotto-chat.', doneWhen: [{ criterion: 'criterion A', met: false }] });
+    expect(f.m.list().find(c => c.id === parent.id)!.run?.report?.via).toBe('agent_report');
+    const toParent = f.sent.get(parent.id)?.length ?? 0, toOrchestrator = f.sent.get(o.id)?.length ?? 0;
+    await f.m.answer(o.id, ask.id, { kind: 'question', answers: { [ask.questions![0]!.question]: 'Sì' } });
+    await vi.waitFor(() => expect((f.sent.get(o.id) ?? []).slice(toOrchestrator).join('\n')).toContain('[azione dell’utente fatta · chat «Caso VPN»]'));
+    expect((f.sent.get(parent.id) ?? []).slice(toParent).join('\n')).not.toContain('azione dell’utente');
   });
 
   it('«No» to the app\'s question sends nothing and leaves the chat stopped (#358)', async () => {

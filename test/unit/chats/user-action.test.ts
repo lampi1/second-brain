@@ -25,7 +25,8 @@ describe('user-action', () => {
   });
   it('knows the words of a user-only block, and keeps userAction off a done report', () => {
     for (const s of ['VPN spenta', 'serve il login', 'MFA richiesto', 'premi Esegui', 'Permission denied (publickey)']) expect(USER_ONLY_BLOCKER.test(s), s).toBe(true);
-    for (const s of ['La vpnconfig è letta', 'Ho eseguito i test', 'tutto pronto']) expect(USER_ONLY_BLOCKER.test(s), s).toBe(false);
+    for (const s of ['La vpnconfig è letta', 'Ho eseguito i test', 'tutto pronto', 'the log in /tmp/x is long', 'fixed login.ts', 'route /login', 'login_page ok']) expect(USER_ONLY_BLOCKER.test(s), s).toBe(false);
+    for (const s of ['needs sudo', 'credentials missing', 'serve la password', 'SSO required']) expect(USER_ONLY_BLOCKER.test(s), s).toBe(true);
     const base = { outcome: 'partial', summary: 's', output: 'o', doneWhen: [] };
     expect(checkResult({ ...base, userAction: { kind: 'vpn', text: 'Accendi la VPN' } }, []).userAction).toEqual({ kind: 'vpn', text: 'Accendi la VPN' });
     expect(() => checkResult({ ...base, userAction: { kind: 'boh', text: 'x' } }, [])).toThrow(/userAction.kind/);

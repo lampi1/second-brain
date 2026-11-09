@@ -398,7 +398,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     // a block only the user can lift never stays only in the report text (#358): sent back once to name it in userAction
     const runKey = `${callerId}:${self?.run?.runId ?? ''}`;
     if ((a.outcome === 'partial' || a.outcome === 'blocked') && a.userAction === undefined && !askedUserAction.has(runKey)
-      && USER_ONLY_BLOCKER.test(`${typeof a.summary === 'string' ? a.summary : ''}\n${typeof a.output === 'string' ? a.output : ''}`)) {
+      && typeof a.summary === 'string' && USER_ONLY_BLOCKER.test(a.summary)) { // the summary's words, never code or logs in output
       askedUserAction.add(runKey);
       throw new Error(USER_ACTION_REFUSAL);
     }

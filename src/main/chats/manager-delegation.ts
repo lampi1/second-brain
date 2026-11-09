@@ -294,33 +294,39 @@ export abstract class ManagerDelegation extends ManagerContinuity {
   /** A partial / blocked report that names what only the user can do (#358): one yes/no question on the Orchestrator,
    *  asked by the app now, whatever the Orchestrator is doing; a newer one for the same chat replaces it. */
   private askUserAction(r: Rec, result: DelegationResult): void {
+    // any later report of the chat (a correction, done, a block without userAction) replaces its earlier question
+    this.dropUserAsks((_, worker) => worker === r.s.id);
     if (!result.userAction || result.outcome === 'done') return;
     const orchestrator = this.openOrchestrator();
     if (!orchestrator) { log.warn('chats', 'user action not asked: no Orchestrator open', { chat: r.s.id, hint: 'the report text still carries it' }); return; }
-    if (r.userActionAsk) this.dropPending(orchestrator, r.userActionAsk);
     const req: PendingRequest = { ...userActionRequest(Date.now(), { id: r.s.id, title: r.s.title, runId: r.s.run?.runId ?? null }, result.userAction), chatId: orchestrator.s.id };
     r.userActionAsk = req.id;
-    orchestrator.pending.set(req.id, req);
-    orchestrator.s.pending = orchestrator.pending.size;
+    this.userAsks.set(req.id, req);
     this.opts.emitter.emit('pending:added', req);
-    this.updated(orchestrator); this.updated(r);
+    // the same notice as an engine's question: the feed, the system notification
+    const on = this.opts.onWaiting;
+    if (on) this.hook('onWaiting', () => on(orchestrator.s.id, req));
+    this.updated(r);
     log.info('chats', 'user action asked in the Orchestrator', { chat: r.s.id, data: { kind: result.userAction.kind } });
   }
 
   /** The user's answer to the app's own question (#358): Sì (or their words) goes to whoever owns the work, its parent
    *  or the Orchestrator for a root chat, which resumes it; No leaves it stopped and visible. Never reaches an engine. */
-  protected override answerUserAction(orchestrator: Rec, req: PendingRequest, answer: Answer): boolean {
-    if (!isUserActionRequest(req)) return false;
+  protected override answerUserAction(req: PendingRequest, answer: Answer): void {
+    if (!isUserActionRequest(req)) throw new Error('Questa richiesta non è più aperta.');
     const reply = userActionAnswer(req, answer);
     if (!reply) throw new Error('Rispondi Sì o No alla domanda.');
     const input = req.input as UserActionInput, worker = this.chats.get(input.chatId);
-    this.dropPending(orchestrator, req.id);
-    if (worker?.userActionAsk === req.id) { delete worker.userActionAsk; this.updated(worker); }
-    if (!reply.yes && !reply.words) return true;
-    const parent = worker?.s.parentId ? this.chats.get(worker.s.parentId) : undefined, owner = parent && !parent.s.closedAt ? parent : orchestrator;
-    void this.send(owner.s.id, userActionMessage(input, reply, owner === orchestrator ? 'orchestrator' : 'parent'), undefined, false, 'App', false, { kind: 'app' })
+    this.dropUserAsks(q => q.id === req.id);
+    if (!reply.yes && !reply.words) return;
+    // the parent resumes it while its own assignment is still on (an ended one may not reassign: manager-work.ts);
+    // otherwise the Orchestrator does
+    const parent = worker?.s.parentId ? this.chats.get(worker.s.parentId) : undefined, run = parent?.s.run;
+    const orchestrator = this.openOrchestrator() ?? this.chats.get(req.chatId);
+    const owner = parent && !parent.s.closedAt && run && run.endedAt === undefined && run.report?.via !== 'agent_report' ? parent : orchestrator;
+    if (!owner || owner.s.closedAt) { log.warn('chats', 'user action reply not delivered: nobody to resume the work', { chat: input.chatId }); return; }
+    void this.send(owner.s.id, userActionMessage(input, reply, owner === parent ? 'parent' : 'orchestrator'), undefined, false, 'App', false, { kind: 'app' })
       .catch(e => log.warn('chats', 'user action reply not delivered', { chat: owner.s.id, cause: errText(e), hint: 'the user can write it in that chat' }));
-    return true;
   }
 
   /** Explicit user/Orchestrator request; child output remains private to its parent. Admission never acknowledges it. */

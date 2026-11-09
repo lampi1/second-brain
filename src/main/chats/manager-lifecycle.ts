@@ -90,7 +90,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
       const finished = (c.state === 'idle' || ended) && !c.lastError &&
         !r.unfinished && ((result => result ? !result.isError && !result.interrupted : ended && !r.session && r.lastTurnAt > 0)(c.lastResult ?? r.savedResult));
       const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !c.quick && !held && finished &&
-        !r.working && !r.session?.busy && r.pending.size === 0 && !r.userActionAsk && !workBehind(c) && !c.waitsOn && c.plan?.phase !== 'proposed' && !c.queued && !r.deliveryHolds &&
+        !r.working && !r.session?.busy && r.pending.size === 0 && !this.userAsks.has(r.userActionAsk ?? '') && !workBehind(c) && !c.waitsOn && c.plan?.phase !== 'proposed' && !c.queued && !r.deliveryHolds &&
         !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) && this.childrenDone(r);
       const waiting = eligible || c.isOrchestrator || c.quick ? undefined : this.waitingOf(r, held), waitingFor = waiting?.what;
       return { id: c.id, eligible: !!eligible, stamp: `${r.activityRevision ?? 0}:${r.lastTurnAt}:${c.lastResult?.at ?? 0}:${c.pending}:${c.model ?? ''}:${c.work?.status ?? ''}:${c.waitsOn ?? ''}`,
@@ -116,10 +116,11 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
   private waitingOf(r: Rec, external: boolean | AutoCloseWaiting): { what: AutoCloseWaiting; n?: number } | undefined {
     const c = r.s, pend = [...r.pending.values()];
     if (pend.some(p => p.type === 'permission')) return { what: 'permission' };
-    if (pend.some(p => p.type === 'question') || r.userActionAsk) return { what: 'answer' }; // #358: its question waits in the Orchestrator
+    if (pend.some(p => p.type === 'question')) return { what: 'answer' };
     if (c.plan?.phase === 'proposed') return { what: 'plan' }; // its plan waits for «Approva e parti» (ADR 0108)
     if (external === 'command' || external === 'browser') return { what: external };
     if (r.session?.busy || r.working || c.state === 'running' || c.state === 'starting') return undefined;
+    if (this.userAsks.has(r.userActionAsk ?? '')) return { what: 'answer' }; // #358: its question waits in the Orchestrator
     const children = this.busyChildren(r);
     if (children > 0) return { what: 'children', n: children };
     if ((c.background ?? 0) > 0) return { what: 'background', n: c.background! };
@@ -201,6 +202,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     if (sess) await sess.close();
     this.reapKept(r);
     for (const id of [...r.pending.keys()]) this.dropPending(r, id);
+    this.dropUserAsks((q, worker) => q.chatId === chatId || worker === chatId);
     this.flushItems(chatId);
     this.endRunOf(r, 'closed');
     this.chats.delete(chatId);
@@ -257,6 +259,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     if (sess) await sess.close();
     this.reapKept(r);
     for (const p of [...r.pending.keys()]) this.dropPending(r, p);
+    this.dropUserAsks((q, worker) => q.chatId === r.s.id || worker === r.s.id);
     if (r.s.closedBy !== 'user') { r.s.closedBy = 'user'; this.persist(); this.updated(r); }
   }
 
@@ -331,6 +334,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     // The user's ✕ leaves them to its final close (chat:close after the «Annulla» toast): an Annulla finds its dev server.
     if (!opts.undoable) this.reapKept(r);
     for (const id of [...r.pending.keys()]) this.dropPending(r, id);
+    this.dropUserAsks((q, worker) => q.chatId === chatId || worker === chatId);
     this.flushItems(chatId);
     r.s.closedAt = Date.now();
     r.s.closedBy = opts.auto ? 'auto' : 'user';

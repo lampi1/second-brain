@@ -120,7 +120,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
   /** The tool policy and ceiling this chat runs with (null = none: the engine's own gates); agent_delegate bounds a child by it. */
   agentPolicy(chatId: string): AgentPolicy | null { const p = this.chats.get(chatId)?.policy; return p ? structuredClone(p) : null; }
   pending(): PendingRequest[] {
-    return [...this.chats.values()].flatMap(r => [...r.pending.values()]).sort((a, b) => a.at - b.at);
+    return [...[...this.chats.values()].flatMap(r => [...r.pending.values()]), ...this.userAsks.values()].sort((a, b) => a.at - b.at);
   }
   /** The folders warm engines wait in (warm.ts): the worktree pool's cleanup never removes one (ADR 0227). */
   warmCwds(): string[] { return this.warm.engines.map(e => e.cwd); }

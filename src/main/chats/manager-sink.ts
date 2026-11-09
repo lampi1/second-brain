@@ -193,7 +193,11 @@ export abstract class ManagerSink extends ManagerWork {
       // a cold note's turn is invisible (ADR 0031): the tile stays as it was
       if (!(r.handoffTurn?.quiet && (p.state === 'running' || p.state === 'starting'))) r.s.state = p.state;
       // a hand-off turn is not the chat's work: never resumed after a restart
-      if ((p.state === 'running' || p.state === 'waiting') && !r.working && !r.handoffTurn) { r.working = true; save = true; }
+      if ((p.state === 'running' || p.state === 'waiting') && !r.working && !r.handoffTurn) {
+        r.working = true; save = true;
+        // it works again (the user wrote to it, it was reassigned): its question about the stopped step is old (#358)
+        if (r.userActionAsk) this.dropUserAsks(q => q.id === r.userActionAsk);
+      }
       // idle only once the CLI's queue is empty: a queued turn starts with no state change, so not cleared per result
       if (p.state === 'idle' && r.working) { r.working = false; save = true; }
       // the turn is over and nothing waits for the user: "done" (once per turn, never at boot)

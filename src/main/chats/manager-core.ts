@@ -3,7 +3,7 @@
 // chats, starts the timers), a chat's summary update and its items (streamed items coalesced per frame), the brain
 // hooks' guard. The methods of later layers it calls are declared abstract at its end.
 import fs from 'node:fs';
-import type { ChatItem, ChatSummary } from '../../shared/contract';
+import type { ChatItem, ChatSummary, PendingRequest } from '../../shared/contract';
 import { errText, log } from '../log';
 import { resolveClaude } from './cli';
 import { HandoffStore } from './handoff';
@@ -265,6 +265,21 @@ export abstract class ManagerCore {
     clearTimeout(b.timer);
     this.coalesce.delete(chatId);
     for (const item of b.items.values()) this.opts.emitter.emit('chat:item', { chatId, item, replace: true });
+  }
+
+  /** The app's own questions (#358, a run stopped on a step only the user can do), shown in the Orchestrator but kept
+   *  out of its engine's pending: they never hold its news, mail, hand-off, undo or input while they wait. */
+  protected readonly userAsks = new Map<string, PendingRequest>();
+  /** Drops the app's questions that match: the asking chat forgets it asked. */
+  protected dropUserAsks(match: (req: PendingRequest, worker: string) => boolean): void {
+    for (const [id, req] of [...this.userAsks]) {
+      const worker = String((req.input as { chatId?: unknown } | undefined)?.chatId ?? '');
+      if (!match(req, worker)) continue;
+      this.userAsks.delete(id);
+      const w = this.chats.get(worker);
+      if (w?.userActionAsk === id) { delete w.userActionAsk; this.updated(w); }
+      this.opts.emitter.emit('pending:resolved', { chatId: req.chatId, requestId: id });
+    }
   }
 
   protected dropPending(r: Rec, requestId: string): void {
