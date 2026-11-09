@@ -7,6 +7,9 @@ export default defineConfig({
   test: { include: ['test/unit/**/*.test.ts', 'src/**/*.test.ts', 'test/live/**/*.test.ts' /* skipped unless SB_LIVE=1 */], environment: 'node',
     // Git- and process-heavy tests take up to ~1 min on a Windows PC with real-time antivirus scanning (owner's work PC)
     testTimeout: 120000,
+    // hooks too: an afterEach that shuts down a ChatManager and its fake engines ran past the default 10 s only on a
+    // loaded machine (check:quick, 2026-11-09); no tight step deadlines (docs/agents/rules.md §7)
+    hookTimeout: 120000,
     // half the cores per run (default: all but one): parallel agent chats each ran 13 workers on 14 cores (2026-11-07)
     pool: 'forks', maxWorkers: '50%',
     // the fake CLIs' children left suspended by this run are ended at its end
