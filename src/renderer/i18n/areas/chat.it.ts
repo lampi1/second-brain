@@ -81,8 +81,6 @@ export const chatIt = {
   'chat.resultShow': 'Mostra il risultato',
   'chat.resultHide': 'Nascondi',
   'chat.resultSynthesize': 'Fallo riassumere all’Orchestrator',
-  'chat.resultDeliveryPending': 'Consegna in attesa',
-  'chat.resultSynthesizeCost': 'Avvia un turno IA e usa i token del tuo motore.',
   'chat.taskContext': 'Incarico corrente',
   'chat.taskLastResult': 'Ultimo risultato',
   'chat.taskContinue': 'Continua qui',

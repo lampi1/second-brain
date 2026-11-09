@@ -2,7 +2,6 @@
 // with the claude.ai link. The source: the other languages are typed by it.
 export const remoteIt = {
   'remote.turnOn': 'Controllo remoto: continua l’Orchestrator dal telefono (claude.ai)',
-  'remote.turnOff': 'Spegni il controllo remoto',
   'remote.starting': 'Controllo remoto: accensione…',
   'remote.ready': 'Controllo remoto acceso: apri il link sul telefono, nell’app Claude o su claude.ai.',
   'remote.connected': 'Controllo remoto collegato: apri il link sul telefono, nell’app Claude o su claude.ai.',

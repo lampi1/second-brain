@@ -83,8 +83,6 @@ export const chatDe: typeof chatIt = {
   'chat.resultShow': 'Ergebnis anzeigen',
   'chat.resultHide': 'Ausblenden',
   'chat.resultSynthesize': 'Mit dem Orchestrator zusammenfassen',
-  'chat.resultDeliveryPending': 'Zustellung ausständig',
-  'chat.resultSynthesizeCost': 'Startet einen KI-Turn mit den Tokens deiner Engine.',
   'chat.taskContext': 'Aktuelle Aufgabe',
   'chat.taskLastResult': 'Letztes Ergebnis',
   'chat.taskContinue': 'Hier weitermachen',

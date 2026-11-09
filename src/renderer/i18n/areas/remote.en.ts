@@ -3,7 +3,6 @@
 import type { remoteIt } from './remote.it';
 export const remoteEn: typeof remoteIt = {
   'remote.turnOn': 'Remote control: continue the Orchestrator from your phone (claude.ai)',
-  'remote.turnOff': 'Turn remote control off',
   'remote.starting': 'Remote control: turning on…',
   'remote.ready': 'Remote control on: open the link on your phone, in the Claude app or at claude.ai.',
   'remote.connected': 'Remote control connected: open the link on your phone, in the Claude app or at claude.ai.',

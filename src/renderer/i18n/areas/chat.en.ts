@@ -83,8 +83,6 @@ export const chatEn: typeof chatIt = {
   'chat.resultShow': 'Show the result',
   'chat.resultHide': 'Hide',
   'chat.resultSynthesize': 'Have the Orchestrator summarize it',
-  'chat.resultDeliveryPending': 'Delivery pending',
-  'chat.resultSynthesizeCost': 'Starts an AI turn using your engine’s tokens.',
   'chat.taskContext': 'Current assignment',
   'chat.taskLastResult': 'Latest result',
   'chat.taskContinue': 'Continue here',

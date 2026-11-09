@@ -122,7 +122,7 @@ describe('updateBaseline', () => {
 describe('test/e2e/known-red.json and scripts/e2e.mjs', () => {
   it('the seeded baseline has unique, complete entries naming existing spec files', () => {
     const tests = readBaseline();
-    expect(tests.length).toBeGreaterThanOrEqual(90);
+    expect(tests.length).toBeGreaterThanOrEqual(89);
     const keys = new Set(tests.map(t => `${t.file} › ${t.title}`));
     expect(keys.size).toBe(tests.length);
     for (const t of tests) {

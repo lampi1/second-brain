@@ -3,7 +3,6 @@
 import type { remoteIt } from './remote.it';
 export const remoteDe: typeof remoteIt = {
   'remote.turnOn': 'Fernsteuerung: den Orchestrator am Handy weiterführen (claude.ai)',
-  'remote.turnOff': 'Fernsteuerung ausschalten',
   'remote.starting': 'Fernsteuerung: wird eingeschaltet…',
   'remote.ready': 'Fernsteuerung an: öffne den Link am Handy, in der Claude-App oder auf claude.ai.',
   'remote.connected': 'Fernsteuerung verbunden: öffne den Link am Handy, in der Claude-App oder auf claude.ai.',
