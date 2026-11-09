@@ -4,7 +4,8 @@ import path from 'node:path';
 import fs from 'node:fs';
 import os from 'node:os';
 import {execFileSync} from 'node:child_process';
-import {gitWorktrees} from '../../../src/main/agents/worktrees';
+import {listedWorktrees} from '../../../src/main/agents/worktrees';
+import {within} from '../../../src/main/agents/tool-policy';
 import {delegationTools, type DelegationChats, type DelegationDeps} from '../../../src/main/agents/delegation';
 import type {ChatSummary} from '../../../src/shared/contract';
 import type {AgentCatalog, UserTaskEvents} from '../../../src/shared/agents';
@@ -128,7 +129,9 @@ describe('parent child task continuity',()=>{
       init(repo);init(foreign);fs.mkdirSync(loose);
       // the host allocates delegate worktrees as siblings of the checkout (agents/worktrees.ts createIsolatedWorktree)
       const wt=path.join(root,'.second-brain-delegate-x');git(repo,'worktree','add','-q','-b','sb/x',wt);
-      const f=fixture(gitWorktrees);f.parent.cwd=repo;
+      // the real list of the repository, read without gitWorktrees' 5 s git cap (red only on a loaded machine);
+      // gitWorktrees itself is pinned on real repositories by worktrees.test.ts
+      const f=fixture(async(parentCwd,target)=>listedWorktrees(git(parentCwd,'worktree','list','--porcelain')).filter(w=>target===undefined||within(w,target)));f.parent.cwd=repo;
       const at=(cwd:string)=>{f.child.cwd=cwd;return f.call('agent_assign_task',{...f.args(),cwd,expectedVersion:f.child.run!.taskVersion});};
       for(const cwd of [foreign,loose]) await expect(at(cwd)).rejects.toThrow(/Project mismatch/);
       expect(f.assign).not.toHaveBeenCalled();
