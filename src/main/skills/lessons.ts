@@ -86,6 +86,8 @@ export class SkillLessons {
     if (!role) throw new Error('A lesson needs the role that learned it.');
     const skill = (p.skill?.trim() || roleSkillName(role)).toLowerCase();
     if (!SKILL_NAME.test(skill) || skill.length > 64) throw new Error(`Skill name not valid: ${skill}`);
+    // another role's own skill is read at every start of that role: a role never proposes lessons for it
+    if (skill.startsWith('ruolo-') && skill !== roleSkillName(role)) throw new Error(`${skill} is another role's own skill: propose for yours (default) or for the task's skill.`);
     const text = String(p.text ?? '').replace(/\s+/g, ' ').trim();
     if (!text) throw new Error('A lesson needs its text.');
     const line = text.length > MAX_LINE ? `${text.slice(0, MAX_LINE - 1)}…` : text;
@@ -110,16 +112,18 @@ export class SkillLessons {
     if (approve) {
       const lib = this.d.library();
       if (!lib) throw new Error('Scegli prima la cartella del brain.');
-      let text: string;
+      let text: string, mtime: number | undefined;
       if (await lib.has(l.skill)) {
         const doc = await lib.read(l.skill, 'SKILL.md');
         if (doc.text === null) throw new Error(`SKILL.md di «${l.skill}» non è leggibile.`);
-        text = withLesson(doc.text, l.text);
+        // already there (a save that failed after the write): nothing to append again
+        text = doc.text.split(/\r?\n/).some(x => x.trim() === `- ${l.text}`) ? doc.text : withLesson(doc.text, l.text);
+        mtime = doc.mtime;
       } else if (l.skill === roleSkillName(l.role)) {
         const name = this.d.roleName?.(l.role) ?? l.role;
         text = withLesson(`---\nname: ${l.skill}\ndescription: ${JSON.stringify(`Cosa sa il ruolo ${name}: letta per intero a ogni suo avvio.`)}\n---\n\n# ${name}\n`, l.text);
       } else throw new Error(`La skill «${l.skill}» non c’è più: rifiuta la lezione o creala prima.`);
-      const r = await lib.write({ skill: l.skill, path: 'SKILL.md', text }, { who: 'tu, approvando una lezione', reason: `Lezione di ${l.role} approvata in Proposte: ${l.text}` });
+      const r = await lib.write({ skill: l.skill, path: 'SKILL.md', text, ...(mtime !== undefined ? { mtime } : {}) }, { who: 'tu, approvando una lezione', reason: `Lezione di ${l.role} approvata in Proposte: ${l.text}` });
       if (!r.ok) throw new Error(r.error);
       changeId = r.changeId;
     }

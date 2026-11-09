@@ -109,6 +109,8 @@ export function neverAuto(c: Proposal): ProposalNever | null {
   if (c.group === 'issue' || (c.ask.kind === 'research' && (c.ask.finding === 'app-idea' || c.ask.finding === 'app-bug'))) return 'external';
   if (c.group === 'setting' || c.source === 'setting' || c.ask.kind === 'setting') return 'setting';
   if (c.ask.kind === 'tier' || c.ask.kind === 'trial') return 'permissions';
+  // a role's lesson for a skill (#365, ADR 0242): the user decides each one, always
+  if (c.ask.kind === 'lesson') return 'role';
   if (c.group === 'role' || (c.ask.kind === 'applied' && c.ask.what === 'agent')) return 'role';
   // a «riuscito se» revert takes a change back: its Annulla could not put it back from here
   if (c.group === 'forget' || (c.ask.kind === 'research' && c.ask.finding === 'revert')) return 'forget';
@@ -128,6 +130,7 @@ export function reversible(c: Proposal): boolean {
     case 'candidate': return true;
     case 'research': return c.group !== 'issue' && !(c.ask.kind === 'research' && c.ask.finding === 'revert');
     case 'policy': return c.ask.kind === 'policy';
+    case 'memory': return true; // an approved lesson is one change in the skill's history, with its Undo
     default: return false;
   }
 }

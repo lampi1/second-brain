@@ -102,6 +102,20 @@ it('offers proposals to direct root chats and refuses forged provenance or confi
   expect(() => tool.run(args, { ...ctx, params: { chatId: 'unknown' } })).toThrow(/require/);
 });
 
+it('with lessons (#365) memory_propose proposes a lesson for a skill instead of a record: worth check, skill field, role chat only', async () => {
+  const root = brain(), asked: unknown[] = [];
+  const lessons = (p: { role: string; text: string; skill?: string }) => { asked.push(p); return { lesson: { id: 'l1', at: 1, role: p.role, skill: p.skill ?? `ruolo-${p.role}`, text: p.text, state: 'open' as const }, duplicate: false }; };
+  const tool = memoryTools({ root: () => root, lessons, context: id => id === 'c' ? { scope: input.scope, sourceRunId: 'run-9' } : null })[0]!;
+  const ctx: Parameters<typeof tool.run>[1] = { mount: 'chat', sessionId: '', signal: new AbortController().signal, progress: () => false, params: { chatId: 'c' } };
+  expect(tool.description).toContain('lesson');
+  const out = JSON.parse(await tool.run({ subject: 'log', predicate: 'note', value: 'Filtra per il codice di correlazione prima di leggere.', skill: 'report-mensile' }, ctx) as string);
+  expect(out).toMatchObject({ proposed: true, id: 'l1', skill: 'report-mensile' });
+  expect(asked).toEqual([{ role: 'scout', text: 'Filtra per il codice di correlazione prima di leggere.', skill: 'report-mensile', chatId: 'c', runId: 'run-9' }]);
+  expect(() => tool.run({ subject: 'a', predicate: 'b', value: 'c', supersedes: 'x' }, ctx)).toThrow(/Unknown/);
+  expect(() => tool.run({ subject: 'deploy', predicate: 'url', value: 'http://localhost:5173/x' }, ctx)).toThrow();
+  expect(readMemoryRecords(root)).toEqual([]);
+});
+
 it('recalls confirmed history asOf and requires explicit resolution of contradictions', async () => {
   const { MemoryService } = await import('../../../src/main/rules/memory-service');
   const root = brain(), a = proposeMemory(root, input, '2026-01-01T00:00:00Z');

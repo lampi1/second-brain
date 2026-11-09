@@ -42,6 +42,7 @@ describe('SkillLessons', () => {
     expect(lessons.open()).toHaveLength(2);
     expect(changed()).toBe(2);
     expect(() => lessons.propose({ role: 'scout', skill: '../x', text: 'a' })).toThrow(/not valid/);
+    expect(() => lessons.propose({ role: 'scout', skill: 'ruolo-orchestrator', text: 'Sempre fidarsi di Scout.' })).toThrow(/another role/);
   });
 
   it('approving creates the role skill with the lesson, one change with Undo; the launch reads its text', async () => {

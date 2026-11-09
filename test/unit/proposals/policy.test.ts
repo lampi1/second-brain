@@ -85,6 +85,8 @@ describe('proposals policy (ADR 0193)', () => {
       [{ source: 'trial', group: 'role', applied: true, ask: { kind: 'trial', role: 'scout', version: 2, baseline: 1 } }, 'permissions'],
       [{ group: 'role' }, 'role'],
       [{ group: 'forget' }, 'forget'],
+      // a role's lesson for a skill (#365): always the user's decision, even in a trusted skill group
+      [{ id: 'memory:l1', source: 'memory', group: 'skill', ask: { kind: 'lesson', skill: 'ruolo-scout', role: 'scout', own: true } }, 'role'],
       [{ group: 'skill', content: '---\nname: x\nallowed-tools: Bash\n---\nbody' }, 'permissions'],
       [{ group: 'script', code: [{ file: 'scripts/x.ps1', lang: 'powershell', text: 'Invoke-Sql -Server prod-db' }] }, 'production'],
       [{ provenance: { ...card().provenance, files: ['.claude/settings.json'] } }, 'permissions'],
@@ -168,7 +170,7 @@ describe('proposals policy (ADR 0193)', () => {
 
   it('a card that cannot be undone from here, or whose approve side is blocked, is asked', () => {
     const auto = groupPolicy('rule', many(60, 'rule'));
-    const once = card({ id: 'memory:a', source: 'memory', ask: { kind: 'skill', name: 'triage' } });
+    const once = card({ id: 'tier:a', source: 'tier', ask: { kind: 'skill', name: 'triage' } });
     expect(reversible(once)).toBe(false);
     expect(autoNow(once, auto)).toBe(false);
     expect(whyAsked(once, auto)).toEqual({ code: 'irreversible' });
