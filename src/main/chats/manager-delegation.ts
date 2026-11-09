@@ -336,10 +336,21 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     catch (error) { failed(error); throw error; }
   }
 
+  /** Runs the user started whose task already has a newer version (the user wrote a follow-up in that chat, where the
+   *  result was in front of them): history, never presented as the current result by an Orchestrator that opens later.
+   *  A child's earlier outcome still reaches its owner (a parent continuing it does not replace the owner's notice). */
+  private supersededRuns(): Set<string> {
+    const newest = new Map<string, number>();
+    for (const run of this.runs.list()) if (run.taskId) newest.set(run.taskId, Math.max(newest.get(run.taskId) ?? 0, run.taskVersion ?? 1));
+    return new Set(this.runs.list().filter(run => run.startedBy === 'user' && run.taskId && (run.taskVersion ?? 1) < (newest.get(run.taskId) ?? 0)).map(run => run.runId));
+  }
+
   protected resumeRootSyntheses(): void {
     const orchestrator = this.openOrchestrator();
     if (!orchestrator) return;
+    const superseded = this.supersededRuns();
     for (const run of this.runs.list()) {
+      if (superseded.has(run.runId)) continue;
       if (run.delivery?.policy !== 'synthesize' || run.delivery.synthesisSubmittedAt || !(run.startedBy === 'orchestrator' || run.startedBy === 'user' && run.delivery.synthesisRequestedAt !== undefined) || run.parentRunId) continue;
       const worker = this.chats.get(run.chatId);
       if (worker?.s.routineArchived || worker?.s.parentId || worker?.s.run?.runId === run.runId && (worker.working || this.midTurn(worker))) continue;
@@ -375,10 +386,10 @@ export abstract class ManagerDelegation extends ManagerContinuity {
    *  Orchestrator (owner, 2026-10-24: «ogni volta che riavvio l'app mi trovo tutte le box degli agenti»). A local result
    *  stays in its own chat. */
   protected restoreRootNotices(): void {
-    const orchestrator = this.openOrchestrator(), changed = new Set<Rec>();
+    const orchestrator = this.openOrchestrator(), changed = new Set<Rec>(), superseded = this.supersededRuns();
     for (const run of this.runs.list().slice().sort((a, b) => a.startedAt - b.startedAt)) {
       const result = run.report?.canonical, worker = this.chats.get(run.chatId);
-      if (worker?.s.routineArchived || !result || worker?.s.isOrchestrator) continue;
+      if (worker?.s.routineArchived || !result || worker?.s.isOrchestrator || superseded.has(run.runId)) continue;
       if (run.startedBy === 'parent' && !run.delivery?.ownerNotice) continue;
       const local = run.startedBy === 'user' || run.startedBy === 'app' && run.taskContract?.reportExpected;
       const target = run.startedBy === 'orchestrator' || run.startedBy === 'parent' || run.startedBy === 'user' ? orchestrator : local ? worker : undefined;

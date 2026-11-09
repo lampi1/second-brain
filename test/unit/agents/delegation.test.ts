@@ -745,6 +745,10 @@ describe('versioned task continuity and canonical results', () => {
     await f.m.send(c.id, 'actual user follow-up');
     expect(f.m.userEvents(c.id).events.map(e => e.text)).toEqual(['initial user request', 'actual user follow-up']);
     expect(f.m.list().find(row => row.id === c.id)?.run?.taskVersion).toBe(2);
+    // an Orchestrator opened later never presents the replaced first result as the current one
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    expect(f.m.items(o.id).filter(i => i.kind === 'system' && i.code === 'resultReady')).toEqual([]);
+    expect((f.sent.get(o.id) ?? []).filter(text => text.includes('consegna automatica del risultato'))).toEqual([]);
   });
 
   it('captures exact brain and project scope on each task launch', async () => {
