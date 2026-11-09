@@ -813,6 +813,7 @@ export class ClaudeSession implements HarnessSession {
       return;
     }
     if (this.calls.has(id)) return; // also listed in an initialize reply
+    if (this.checking.has(id)) return; // the same request again while the first copy is still checked: one panel
     this.checking.add(id);
     try { await this.onToolRequest(id, r, m, generation); } finally { this.checking.delete(id); this.withdrawn.delete(id); }
   }
@@ -866,6 +867,7 @@ export class ClaudeSession implements HarnessSession {
     // a yes/no question without its brief (ADR 0150): a moment for a show_ui called in parallel, then sent back
     const noBrief = yesNo && !this.briefOff && !!this.opts.briefReady && !await this.opts.briefReady();
     if (this.exited || this.procExited) return true;
+    if (this.withdrawn.has(id)) return true; // the CLI withdrew it during the check: no refusal, no later re-check
     if (generation !== this.brokerGeneration) { this.stoppedRefusal(id, toolUseId); return true; }
     if (noBrief && !this.briefWaited.has(id) && this.yesNoRefused < YESNO_RETRIES) {
       this.briefWaited.add(id);

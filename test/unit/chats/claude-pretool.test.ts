@@ -1,7 +1,7 @@
 // ClaudeSession's PreToolUse hook when the broker decides asynchronously (runtime host): a stop during the decision
 // still answers the CLI, with a refusal; a failing in-process hook lets the call go on; a question withdrawn while it is
 // still checked shows no panel. No CLI process: the stdin write is observed directly.
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { ClaudeSession } from '../../../src/main/chats/claude';
 import { recSink } from './helpers';
 
@@ -49,4 +49,43 @@ it('a question the CLI withdraws while it is still checked never shows a panel',
   brief(true);
   await asked;
   expect(sink.pendings).toEqual([]);
+});
+
+it('a question withdrawn while its brief was checked, with no brief, is neither refused nor re-checked later', async () => {
+  vi.useFakeTimers();
+  try {
+    let brief!: (v: boolean) => void;
+    const sink = recSink();
+    const s = new ClaudeSession({ chatId: 'c_q', cwd: '.', sessionId: 'abc12345', yesNo: true, briefReady: () => new Promise(r => { brief = r; }) }, sink);
+    const writes: unknown[] = [];
+    const raw = s as unknown as { write(obj: unknown): void; onMessage(m: Record<string, unknown>): void; onControlRequest(m: Record<string, unknown>): Promise<void> };
+    raw.write = obj => { writes.push(obj); };
+    const asked = raw.onControlRequest({ type: 'control_request', request_id: 'req-q', request: { subtype: 'can_use_tool', tool_name: 'AskUserQuestion', tool_use_id: 'tu-1',
+      input: { questions: [{ question: 'Apro la PR?', header: 'PR', options: [{ label: 'Sì' }, { label: 'No' }], multiSelect: false }] } } });
+    raw.onMessage({ type: 'control_cancel_request', request_id: 'req-q' });
+    brief(false);
+    await asked;
+    await vi.runAllTimersAsync(); // a grace re-check would ask for the brief again here
+    brief?.(false);
+    await vi.runAllTimersAsync();
+    expect(writes).toEqual([]);
+    expect(sink.pendings).toEqual([]);
+  } finally { vi.useRealTimers(); }
+});
+
+it('the same tool request arriving again while the first is still checked shows one panel', async () => {
+  let brief!: (v: boolean) => void;
+  const sink = recSink();
+  const s = new ClaudeSession({ chatId: 'c_q', cwd: '.', sessionId: 'abc12345', yesNo: true, briefReady: () => new Promise(r => { brief = r; }) }, sink);
+  const raw = s as unknown as { write(obj: unknown): void; onControlRequest(m: Record<string, unknown>): Promise<void> };
+  raw.write = () => {};
+  const m = { type: 'control_request', request_id: 'req-q', request: { subtype: 'can_use_tool', tool_name: 'AskUserQuestion', tool_use_id: 'tu-1',
+    input: { questions: [{ question: 'Apro la PR?', header: 'PR', options: [{ label: 'Sì' }, { label: 'No' }], multiSelect: false }] } } };
+  const first = raw.onControlRequest(m);
+  const firstBrief = brief;
+  const second = raw.onControlRequest(m);
+  firstBrief(true);
+  brief(true);
+  await Promise.all([first, second]);
+  expect(sink.pendings.map(p => p.id)).toEqual(['req-q']);
 });
