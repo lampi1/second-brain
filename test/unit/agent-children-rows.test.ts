@@ -45,7 +45,7 @@ describe('child strip selection', () => {
     odd.observe({ ...row('y', 'running', 10), agentType: 'a'.repeat(121) });
     expect(odd.snapshot().children.map(c => c.agentType)).toEqual([undefined, undefined]);
   });
-  it('a parent whose turn is over reads "in attesa" while a sub-agent works, "finito" once none does (#69)', () => {
+  it('a parent whose turn is over reads "aspetta sotto-agenti" while a sub-agent works, "finito" once none does (#69)', () => {
     const children = (states: ChildObservation['state'][], kind: ChildObservation['kind'] = 'agent') => {
       const r = new AgentChildrenReducer();
       states.forEach((s, i) => r.observe({ ...row(`c${i}`, s, 10), kind }));
@@ -53,8 +53,8 @@ describe('child strip selection', () => {
     };
     const idle = { state: 'idle' as const, pending: 0, isOrchestrator: false };
     expect(waitsOnChildren(children(['running', 'completed']))).toBe(true);
-    expect(stateInfo({ ...idle, agentChildren: children(['running']) })).toEqual({ label: 'in attesa', tone: 'run' });
-    expect(stateInfo({ ...idle, agentChildren: children(['waiting']) }).label).toBe('in attesa');
+    expect(stateInfo({ ...idle, agentChildren: children(['running']) })).toEqual({ label: 'aspetta sotto-agenti', tone: 'run' });
+    expect(stateInfo({ ...idle, agentChildren: children(['waiting']) }).label).toBe('aspetta sotto-agenti');
     expect(stateInfo({ ...idle, agentChildren: children(['completed', 'failed']) }).label).toBe('finito');
     expect(stateInfo({ ...idle, agentChildren: children(['running'], 'shell') }).label).toBe('finito'); // a command is not a sub-agent
     expect(stateInfo(idle).label).toBe('finito');

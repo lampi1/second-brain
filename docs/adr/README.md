@@ -255,3 +255,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0248](0248-prune-rule-and-note-statistics.md) The statistics of rules and notes leave with them — accepted
 - [0249](0249-subagent-rows-name-the-engine-type.md) A sub-agent row names the engine's real agent type — accepted
 - [0250](0250-orchestrator-chat-clean.md) The Orchestrator chat shows decisions, not delivery traffic — accepted
+- [0251](0251-chat-status-from-real-state.md) A chat tile has one short status, from real state only — accepted

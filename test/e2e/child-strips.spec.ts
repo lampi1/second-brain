@@ -33,14 +33,14 @@ test('child activity at work stays visible beneath each parent strip and the Orc
   } finally { await app.close(); }
 });
 
-test('a parent whose turn ended reads "in attesa" while its sub-agent works, "finito" once it ends (#69)', async () => {
+test('a parent whose turn ended reads "aspetta sotto-agenti" while its sub-agent works, "finito" once it ends (#69)', async () => {
   const { app, page } = await launchDemo({ width: 1600, height: 900 });
   try {
     const chat = await page.evaluate(async () => (await window.sb.invoke('chat:list', undefined)).find(c => c.id === 'fix'));
     expect(chat?.agentChildren?.children.some(c => c.kind === 'agent' && c.state === 'running')).toBe(true);
     const send = (patch: object) => app.evaluate(({ BrowserWindow }, next) => BrowserWindow.getAllWindows()[0]!.webContents.send('chat:updated', next), { ...chat!, ...patch });
     await send({ state: 'idle' });
-    await expect(page.getByTestId('chat-state-fix')).toHaveText('in attesa');
+    await expect(page.getByTestId('chat-state-fix')).toHaveText('aspetta sotto-agenti');
     await page.mouse.move(2, 2);
     await shot(page, 'child-strips-parent-waiting');
     await send({ state: 'idle', agentChildren: { ...chat!.agentChildren!, children: chat!.agentChildren!.children.map(c => ({ ...c, state: 'completed' })) } });

@@ -88,9 +88,9 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
       const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !c.quick && !held && finished &&
         !r.working && !r.session?.busy && r.pending.size === 0 && !workBehind(c) && !c.waitsOn && c.plan?.phase !== 'proposed' && !c.queued && !r.deliveryHolds &&
         !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) && this.childrenDone(r);
-      const waitingFor = eligible || c.isOrchestrator || c.quick ? undefined : this.waitingOf(r, held);
+      const waiting = eligible || c.isOrchestrator || c.quick ? undefined : this.waitingOf(r, held), waitingFor = waiting?.what;
       return { id: c.id, eligible: !!eligible, stamp: `${r.activityRevision ?? 0}:${r.lastTurnAt}:${c.lastResult?.at ?? 0}:${c.pending}:${c.model ?? ''}:${c.work?.status ?? ''}:${c.waitsOn ?? ''}`,
-        activityAt: r.autoActivityAt ??= autoCloseNow(), ...(waitingFor ? { waitingFor } : {}),
+        activityAt: r.autoActivityAt ??= autoCloseNow(), ...(waitingFor ? { waitingFor } : {}), ...(waiting?.n ? { waitingN: waiting.n } : {}),
         reason: waitingFor ? WAITING_REASON[waitingFor] : !this.childrenDone(r) ? 'Sottoagenti ancora al lavoro' : 'Attività o stato da verificare' };
     });
   }
@@ -105,21 +105,32 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     return !child.children.some(x => x.state === 'running' || x.state === 'waiting' || x.state === 'unknown');
   }
 
-  /** What a held work chat waits for, the most urgent first (#86): the user's answers before running work, running
-   *  work before a missing report. undefined = held for another reason (busy, starting, an error, ...). */
-  private waitingOf(r: Rec, external: boolean | AutoCloseWaiting): AutoCloseWaiting | undefined {
+  /** What a held work chat waits for, the most urgent first (#86, #359): the user's answers before running work, running
+   *  work before a missing report. Only real state: the words of its answer (waitsOn, waitsOnWork) still hold it open
+   *  (an auto-close never comes earlier), but they never name a wait on its tile. undefined = held for another reason
+   *  (busy, starting, an error, only a guess from its words, ...). */
+  private waitingOf(r: Rec, external: boolean | AutoCloseWaiting): { what: AutoCloseWaiting; n?: number } | undefined {
     const c = r.s, pend = [...r.pending.values()];
-    if (pend.some(p => p.type === 'permission')) return 'permission';
-    if (pend.some(p => p.type === 'question')) return 'answer';
-    if (c.plan?.phase === 'proposed') return 'answer'; // its plan waits for «Approva e parti» (ADR 0108)
-    if (external === 'command' || external === 'browser') return external;
-    if (c.waitsOn) return c.waitsOn;
+    if (pend.some(p => p.type === 'permission')) return { what: 'permission' };
+    if (pend.some(p => p.type === 'question')) return { what: 'answer' };
+    if (c.plan?.phase === 'proposed') return { what: 'plan' }; // its plan waits for «Approva e parti» (ADR 0108)
+    if (external === 'command' || external === 'browser') return { what: external };
     if (r.session?.busy || r.working || c.state === 'running' || c.state === 'starting') return undefined;
-    if ((c.background ?? 0) > 0 || c.waitsOnWork || this.observedChildrenBusy(r) || (c.agentChildren?.active ?? 0) > 0 || external === 'work') return 'work';
-    if (c.work?.status === 'waiting-mail' || external === 'mail') return 'mail';
-    if (c.work?.status === 'assigned' && c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted) return 'report';
-    if (external === 'unsaved' || external === 'gitcheck') return external;
+    const children = this.busyChildren(r);
+    if (children > 0) return { what: 'children', n: children };
+    if ((c.background ?? 0) > 0) return { what: 'background', n: c.background! };
+    if (external === 'work') return { what: 'work' };
+    if (c.work?.status === 'waiting-mail' || external === 'mail') return { what: 'mail' };
+    if (c.work?.status === 'assigned' && !r.report?.final && c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted) return { what: 'report' };
+    if (external === 'unsaved' || external === 'gitcheck') return { what: external };
     return undefined;
+  }
+  /** Its sub-chats that still owe it a result and its engine's sub-agents still at work (#359: «Aspetta 2 sotto-chat»). */
+  private busyChildren(r: Rec): number {
+    const engine = r.s.agentChildren, rows = engine?.children.filter(x => x.state === 'running' || x.state === 'waiting' || x.state === 'unknown').length ?? 0;
+    let delegated = 0;
+    for (const x of this.chats.values()) if (x.s.parentId === r.s.id && !x.s.closedAt && x.s.delegation && !x.s.delegation.result) delegated++;
+    return Math.max(rows, engine?.active ?? 0) + delegated;
   }
 
   /** No renderer flag can authorize this path. The scheduler supplies a current, main-owned reservation. */

@@ -1244,9 +1244,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/chats/auto-close.ts AUTO_CLOSE_WARNING_MS
       b('Prima di chiudere mostra un avviso di 2 minuti sulla striscia: «Resta aperto» la ferma.',
         'Before closing it shows a 2-minute notice on the strip: "Keep open" (Resta aperto) stops it.'),
-      // src/shared/auto-close.ts AutoCloseWaiting
-      b('Resta aperta, con «In attesa di…», una chat che aspetta una tua risposta o un permesso, i colleghi, un comando, un lavoro in background o il suo rapporto, e una che ha lasciato «Lavoro non salvato» nel repository (modifiche non committate o commit non pushati): si chiude quando è tutto salvato.',
-        'A chat waiting for your answer or a permission, colleagues, a command, background work or its own report stays open, with "Waiting for…", and so does one that left "Unsaved work" in its repository (uncommitted changes or unpushed commits): it closes once everything is saved.'),
+      // src/shared/auto-close.ts AutoCloseWaiting; src/renderer/lib/waiting-label.ts (#359)
+      b('Resta aperta una chat che aspetta qualcosa di vero, scritto in breve sulla striscia al posto dello stato: «Aspetta te: domanda», «Aspetta te: permesso», «Aspetta te: piano», «Aspetta Esegui», «Aspetta 2 sotto-chat», «In background: 1», «Aspetta posta», «Senza report» o «Non salvato» (modifiche non committate o commit non pushati). Non lo indovina mai dalle parole della risposta, e l’etichetta cambia appena cambia lo stato.',
+        'A chat that waits for something real stays open, said briefly on its strip in place of the state: «Needs you: question», «Needs you: permission», «Needs you: plan», «Awaits Run», «Awaits 2 sub-chats», «In background: 1», «Awaits mail», «No report» or «Not saved» (uncommitted changes or unpushed commits). It never guesses it from the words of the answer, and the label changes as soon as the state does.'),
       // src/main/chats/auto-close.ts: presence lease
       b('Chiude anche se non guardi l’avviso o la finestra è ridotta a icona, e dopo un riavvio dell’app; una bozza, una chat in primo piano o messaggi in coda la tengono aperta.',
         'It closes even if you do not look at the notice or the window is minimized, and after the app restarts; a draft, a chat in focus or queued messages keep it open.'),
@@ -1265,13 +1265,13 @@ export const CONCEPTS: readonly ConceptCard[] = [
     tech: [
       tech(LIMITS, 'Avviso AUTO_CLOSE_WARNING_MS = 120 s; presenza della finestra rinnovata ogni 15 s; tempo in Impostazioni (autoCloseMin, 0 = mai).',
         'Notice AUTO_CLOSE_WARNING_MS = 120 s; window presence renewed every 15 s; time in Settings (autoCloseMin, 0 = never).'),
-      tech(DATA, 'AutoCloseStatus { chatId, deadline, warningStartedAt, keptOpen, reason, waitingFor? }; waitingFor: answer | permission | command | user | colleagues | work | report | mail | browser.',
-        'AutoCloseStatus { chatId, deadline, warningStartedAt, keptOpen, reason, waitingFor? }; waitingFor: answer | permission | command | user | colleagues | work | report | mail | browser.'),
+      tech(DATA, 'AutoCloseStatus { chatId, deadline, warningStartedAt, keptOpen, reason, waitingFor?, waitingN? }; waitingFor: answer | permission | plan | command | browser | children | background | work | mail | report | unsaved | gitcheck.',
+        'AutoCloseStatus { chatId, deadline, warningStartedAt, keptOpen, reason, waitingFor?, waitingN? }; waitingFor: answer | permission | plan | command | browser | children | background | work | mail | report | unsaved | gitcheck.'),
     ],
     anchors: {
       0: ['src/main/chats/auto-close.ts'],
       1: ['src/main/chats/auto-close.ts#AUTO_CLOSE_WARNING_MS'],
-      2: ['src/shared/auto-close.ts#AutoCloseWaiting'],
+      2: ['src/shared/auto-close.ts#AutoCloseWaiting', 'src/renderer/lib/waiting-label.ts'],
       3: ['src/main/chats/auto-close.ts'],
       4: ['src/renderer/components/AutoCloseNotice.tsx'],
       5: ['src/main/chats/manager-lifecycle.ts#autoCloseCandidates'],

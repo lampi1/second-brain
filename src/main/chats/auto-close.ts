@@ -16,8 +16,9 @@ export interface AutoCloseCandidate {
   /** False for Orchestrator/app/coordinating agents, active delivery/mail/tools/children/pending/errors or uncertain telemetry. */
   eligible: boolean;
   reason?: string;
-  /** what a held chat waits for (ADR 0084): shown as "In attesa di…" on its tile */
+  /** what a held chat waits for (ADR 0084, #359): the one status on its tile; waitingN for children/background */
   waitingFor?: AutoCloseWaiting;
+  waitingN?: number;
   /** levels above it in its delegation tree (0 = a root): a tree due at once closes from its leaves up, so no child
    *  is left for a moment without its parent (it would jump out as a strip of its own) */
   depth?: number;
@@ -113,7 +114,10 @@ export class AutoCloseService {
       const held = this.hold(c, now);
       if (held) {
         this.cancel(e, held);
-        if (!c.eligible && c.waitingFor && !this.kept.has(c.id)) e.status.waitingFor = c.waitingFor; else delete e.status.waitingFor;
+        if (!c.eligible && c.waitingFor && !this.kept.has(c.id)) {
+          e.status.waitingFor = c.waitingFor;
+          if (c.waitingN) e.status.waitingN = c.waitingN; else delete e.status.waitingN;
+        } else { delete e.status.waitingFor; delete e.status.waitingN; }
         continue;
       }
       const p = this.presence.get(c.id)!;

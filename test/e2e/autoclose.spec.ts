@@ -28,11 +28,13 @@ test('a held work chat shows what it waits for on its strip', async () => {
     await expect(page.getByTestId('tile-chat-fix')).toBeVisible();
     await app.evaluate(({ BrowserWindow }) => {
       const now = performance.timeOrigin + performance.now();
-      BrowserWindow.getAllWindows()[0]!.webContents.send('chat:autoCloseStatus', [{ chatId: 'fix', deadline: null, warningStartedAt: null, clockAt: now, generation: 3, keptOpen: false, reason: 'In attesa dell’utente', waitingFor: 'user' }]);
+      BrowserWindow.getAllWindows()[0]!.webContents.send('chat:autoCloseStatus', [{ chatId: 'fix', deadline: null, warningStartedAt: null, clockAt: now, generation: 3, keptOpen: false, reason: 'Aspetta le sue sotto-chat', waitingFor: 'children', waitingN: 2 }]);
     });
     const label = page.getByTestId('autoclose-waiting-fix');
     await expect(label).toBeVisible();
-    await expect(label).toHaveText('In attesa dell’utente');
+    await expect(label).toHaveText('Aspetta 2 sotto-chat');
+    // one status per tile (#359): the state pill steps aside, never «finito» next to a wait
+    await expect(page.getByTestId('chat-state-fix')).toBeHidden();
     await expect(page.getByTestId('autoclose-warnings')).toHaveCount(0);
     await shot(page, 'autoclose-waiting-label');
   } finally { await app.close(); }

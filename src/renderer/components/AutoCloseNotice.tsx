@@ -1,23 +1,27 @@
 // Discreet countdown from the authoritative backend deadline, on the chat's own tile only (no global popup).
-// A held work chat shows instead what it waits for ("In attesa di…", #86, ADR 0084): main names it, never the renderer.
+// A held work chat shows instead what it waits for (#86, ADR 0084), in one short label from real state (#359,
+// lib/waiting-label.ts): main names it, never the renderer; a wait the tile's «Ti aspetta» button already says (hideUser)
+// is not repeated.
 // The clock runs only for a strip with a deadline (every second near it), not for every strip all day. Used by ChatTile.
 import { t as auditText } from '../i18n';
 import { useState } from 'react';
 import { useNow } from '../lib/clock';
 import { autoCloseRemaining, autoCloseState, keepAgentOpen } from '../store/auto-close';
 import type { AutoCloseStatus } from '@shared/auto-close';
+import { USER_WAITS, waitingLabel } from '../lib/waiting-label';
 import '../styles/auto-close.css';
 
 /** The countdown shows from SHOW_MS before the deadline; until SLOW_MS before it the clock ticks every 10 s, not every
  *  second (a strip far from its deadline re-renders 10 times less; the countdown still appears on time). */
 const SHOW_MS = 120_000, SLOW_MS = 140_000;
 
-export function AutoCloseNotice({ chatId }: { chatId: string }) {
+export function AutoCloseNotice({ chatId, hideUser = false }: { chatId: string; hideUser?: boolean }) {
   const row = autoCloseState.use(rows => rows.find(r => r.chatId === chatId));
   if (!row) return null;
   if (!row.keptOpen && row.deadline === null) {
-    return row.waitingFor ? <div className="agent-waiting" data-testid={`autoclose-waiting-${chatId}`} data-waiting={row.waitingFor} title={auditText('cmp.autoClose.waitingTip')}>
-      <span className="agent-waiting-dot" aria-hidden="true" /><span className="agent-waiting-text">{auditText(`cmp.autoClose.waiting.${row.waitingFor}`)}</span>
+    const label = waitingLabel(row);
+    return label && !(hideUser && USER_WAITS.has(row.waitingFor!)) ? <div className="agent-waiting" data-testid={`autoclose-waiting-${chatId}`} data-waiting={row.waitingFor} title={auditText('cmp.autoClose.waitingTip')}>
+      <span className="agent-waiting-dot" aria-hidden="true" /><span className="agent-waiting-text">{label}</span>
     </div> : null;
   }
   return <Countdown row={row} chatId={chatId} />;

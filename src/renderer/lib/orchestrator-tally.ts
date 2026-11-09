@@ -15,7 +15,7 @@ function stateOf(c: ChatSummary): ChildState {
   if (c.run?.report) return c.run.report.outcome === 'blocked' ? 'err' : 'done'; // blocked: it stopped, it needs something
   if (c.work?.status === 'completed') return 'done';
   if (c.closedAt || c.state === 'closed') return 'closed';
-  if (c.state === 'waiting' || c.pending > 0 || c.waitsOn) return 'wait';
+  if (c.state === 'waiting' || c.pending > 0) return 'wait'; // real state only, never the words of its answer (#359)
   if (c.state === 'error') return 'err';
   if (c.state === 'running') return 'run';
   if (c.state === 'starting') return 'start';

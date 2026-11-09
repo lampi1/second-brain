@@ -91,10 +91,14 @@ describe('backend automatic-close warning', () => {
   });
   it('names what a held chat waits for, and drops the label once it is eligible or kept open (ADR 0084)', () => {
     const f = fixture();
-    f.change({ eligible: false, waitingFor: 'user', reason: 'In attesa dell’utente' }); f.presence();
-    expect(f.service.state()[0]).toMatchObject({ deadline: null, waitingFor: 'user', reason: 'In attesa dell’utente' });
+    f.change({ eligible: false, waitingFor: 'children', waitingN: 2, reason: 'Aspetta le sue sotto-chat' }); f.presence();
+    expect(f.service.state()[0]).toMatchObject({ deadline: null, waitingFor: 'children', waitingN: 2, reason: 'Aspetta le sue sotto-chat' });
+    f.change({ eligible: false, waitingFor: 'children', waitingN: 1 }); f.presence();
+    expect(f.service.state()[0]).toMatchObject({ waitingFor: 'children', waitingN: 1 });
+    f.change({ eligible: false, waitingFor: 'answer', waitingN: undefined }); f.presence();
+    expect(f.service.state()[0]?.waitingN).toBeUndefined();
     f.service.keepOpen('agent'); expect(f.service.state()[0]?.waitingFor).toBeUndefined();
-    f.service.keepOpen('agent', false); expect(f.service.state()[0]?.waitingFor).toBe('user');
+    f.service.keepOpen('agent', false); expect(f.service.state()[0]?.waitingFor).toBe('answer');
     f.change({ eligible: true, waitingFor: undefined, stamp: 'turn-2' }); f.presence();
     expect(f.service.state()[0]?.waitingFor).toBeUndefined();
     expect(f.service.state()[0]?.deadline).not.toBeNull();

@@ -1,7 +1,8 @@
 // Finished workers close by themselves (#86, ADR 0084): a worker that submits agent_report (or ends
 // with a run-report block) and goes idle gets its assignment completed and its agent run ended "completed", then the
 // main scheduler archives it with closedBy "auto". A worker that waits for the user (question, permission, its report's
-// words), for colleagues or for background work stays open, and the scheduler names what it waits for ("In attesa di…").
+// words), for colleagues or for background work stays open; the scheduler names what it waits for only from real state
+// (#359): the words of a report or answer still hold it open, but never give it a «waits for you» tag.
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -150,25 +151,44 @@ describe('a worker that delivered its final report closes by itself (#86)', () =
     expect(f.chat(w.id).run?.endedAt).toBeUndefined();
   });
 
-  it('a report that waits for the user keeps it open with "In attesa dell’utente"', async () => {
+  it('mail that says it waits for the user keeps it open, tagged by its real state: no final report yet', async () => {
     const f = fixture(), r = await f.orchestrator();
     const w = await f.worker(r.id, { mail: 'Bozza pronta in docs/x.md. Aspetto il tuo ok, poi la pubblico.', answer: 'Report inviato.' });
     expect(f.chat(w.id)).toMatchObject({ waitsOn: 'user', work: { status: 'assigned' } });
     const s = await runScheduler(f.m, [w.id]);
     expect(f.chat(w.id).closedAt).toBeUndefined();
-    expect(s.state().find(x => x.chatId === w.id)).toMatchObject({ waitingFor: 'user', reason: 'In attesa dell’utente', deadline: null });
+    expect(s.state().find(x => x.chatId === w.id)).toMatchObject({ waitingFor: 'report', deadline: null });
   });
 
-  it('a report that waits for colleagues keeps it open with "In attesa dei colleghi"', async () => {
+  it('mail that says it waits for colleagues keeps it open, never with a colleagues tag', async () => {
     const f = fixture(), r = await f.orchestrator();
     const w = await f.worker(r.id, { mail: 'Parte mia fatta. Aspetto la risposta della chat Backend per chiudere.', answer: 'Inviato.' });
     expect(f.chat(w.id).waitsOn).toBe('colleagues');
     const s = await runScheduler(f.m, [w.id]);
     expect(f.chat(w.id).closedAt).toBeUndefined();
-    expect(s.state().find(x => x.chatId === w.id)?.waitingFor).toBe('colleagues');
+    expect(s.state().find(x => x.chatId === w.id)?.waitingFor).toBe('report');
   });
 
-  it('an open question keeps it open with "In attesa di una tua risposta", even after its report', async () => {
+  // #359 regression: the observed Artisan answer (a request for its parent, already handled), agent_report sent,
+  // nothing pending, no children, no background: no «waits for you» tag; the words still keep it open (never earlier)
+  it('a sent report whose answer asks its parent for an ok shows no wait (the tile reads done), and stays open', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const answer = 'La regola «modifiche all’app → issue su GitHub, le fa l’agente in cloud» invece non è applicata: serve un tuo ok diretto.\n\nIl filo «Telefono» va chiuso dall’Orchestrator con l’hash `330699fb`: io non ho lo strumento per chiuderlo.';
+    const w = await f.worker(r.id, { report: 'Parte fatta, il resto spetta all’Orchestrator.', outcome: 'done', answer });
+    expect(f.chat(w.id).waitsOn).toBe('user'); // the words' guess: it holds, it does not tag
+    const s = await runScheduler(f.m, [w.id]);
+    expect(f.chat(w.id).closedAt).toBeUndefined();
+    expect(s.state().find(x => x.chatId === w.id)?.waitingFor).toBeUndefined();
+  });
+
+  it('«Aspetto il tuo ok sul testo «nota.md».» with nothing pending gives no user or colleagues tag', async () => {
+    const f = fixture(), r = await f.orchestrator();
+    const w = await f.worker(r.id, { report: 'Testo pronto.', answer: 'Aspetto il tuo ok sul testo «nota.md».' });
+    const s = await runScheduler(f.m, [w.id]);
+    expect(s.state().find(x => x.chatId === w.id)?.waitingFor).toBeUndefined();
+  });
+
+  it('an open question keeps it open with «Aspetta te: domanda», even after its report', async () => {
     const f = fixture(), r = await f.orchestrator();
     const w = await f.worker(r.id, { mail: 'Report: fatto quasi tutto.', answer: 'Una domanda prima di chiudere.', question: true });
     expect(f.chat(w.id).work?.status).toBe('assigned');
@@ -177,17 +197,17 @@ describe('a worker that delivered its final report closes by itself (#86)', () =
     expect(s.state().find(x => x.chatId === w.id)?.waitingFor).toBe('answer');
   });
 
-  it('a background task still running keeps it open with "In attesa del lavoro in corso"', async () => {
+  it('a background task still running keeps it open with «In background: 1»', async () => {
     const f = fixture(), r = await f.orchestrator();
     const w = await f.worker(r.id, { mail: 'Report: analisi lanciata.', answer: 'Report inviato.', background: true });
     expect(f.chat(w.id).work?.status).toBe('assigned');
     const s = await runScheduler(f.m, [w.id]);
     expect(f.chat(w.id).closedAt).toBeUndefined();
-    expect(s.state().find(x => x.chatId === w.id)?.waitingFor).toBe('work');
+    expect(s.state().find(x => x.chatId === w.id)).toMatchObject({ waitingFor: 'background', waitingN: 1 });
   });
 
   // The guards below hold an explicit agent_report too, not only mail (which never completes on its own).
-  it('an explicit report that waits for the user keeps it assigned with "In attesa dell’utente"', async () => {
+  it('an explicit report that waits for the user keeps it assigned (its words hold it, #359 shows no tag for them)', async () => {
     const f = fixture(), r = await f.orchestrator();
     const w = await f.worker(r.id, { report: 'Bozza pronta in docs/x.md. Aspetto il tuo ok, poi la pubblico.', answer: 'Report inviato.' });
     expect(f.chat(w.id)).toMatchObject({ waitsOn: 'user', work: { status: 'assigned' } });
@@ -281,6 +301,8 @@ describe('a worker that delivered its final report closes by itself (#86)', () =
     const w = await f.worker(r.id, { report: 'Fatto.', answer: 'Fatto.' });
     expect(f.m.autoCloseCandidates(() => 'command').find(c => c.id === w.id)).toMatchObject({ eligible: false, waitingFor: 'command' });
     expect(f.m.autoCloseCandidates(() => 'browser').find(c => c.id === w.id)).toMatchObject({ eligible: false, waitingFor: 'browser' });
+    // the command run (or the hand-off over): the tag goes at once, without a new turn (#359)
+    expect(['command', 'browser']).not.toContain(f.m.autoCloseCandidates(() => false).find(c => c.id === w.id)?.waitingFor);
     expect(f.m.autoCloseCandidates(() => false).find(c => c.id === w.id)).toMatchObject({ eligible: true });
   });
 });

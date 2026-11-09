@@ -35,6 +35,8 @@ import { AgentIdentity } from './AgentIdentity';
 import { AgentAvatar } from './AgentAvatar';
 import { RunChips, RunOutcomeControl } from './RunSurface';
 import { AutoCloseNotice } from './AutoCloseNotice';
+import { autoCloseState } from '../store/auto-close';
+import { USER_WAITS, waitingLabel } from '../lib/waiting-label';
 import { ChatLinks, ContextMeter, ContextNotice, useWarnTokens } from './ContextBar';
 import { HelpTip } from './HelpTip';
 import { StripActivity } from './StripActivity';
@@ -80,6 +82,8 @@ export function useFlash(key: string): boolean {
 export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus, embedded }: { chatId: string; index?: number; maximized?: boolean; focus?: boolean; embedded?: boolean }) {
   const chat = useApp(s => s.chats[chatId]);
   const reqs = useApp(s => pendingOf(s.pending, chatId), sameList);
+  // its one status (#359): what main says it waits for, from real state, in place of the state pill
+  const waitRow = autoCloseState.use(rows => rows.find(r => r.chatId === chatId));
   // each request shows once (lib/child-requests.ts requestHost): here only when this view is the one that holds it
   const expandedAll = ui.use(s => s.prefs.chatExpanded), focusModeId = ui.use(s => s.focusMode), maxKey = ui.use(s => s.maximized);
   const treeCollapsed = ui.use(s => s.prefs.treeCollapsed);
@@ -141,6 +145,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
     else if (el.closest('.tile-head')) setChatExpanded(chatId, false);
   };
   const first = reqs[0] ? reqKey(reqs[0]) : null;
+  const waitText = waitingLabel(waitRow), userWait = !!waitRow?.waitingFor && USER_WAITS.has(waitRow.waitingFor);
   // a Strategist's open question: the strip points to the window, set aside too («Basta domande» stays reachable)
   const planAsk = planQuestion(chat, reqs, false);
   const ownReqs = activeOwn;
@@ -153,9 +158,9 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
           <AgentAvatar avatar={chat.agent?.avatar} name={chat.agent?.name||chat.title} size={24}/>
           <h3 className="th-title" title={(chat.agent?.purpose&&rolePurpose(chat.agent.id,chat.agent.purpose))||chat.title}>{chat.agent?.name||chat.title}</h3>
           {/* the pill takes the state's place; the state stays in the DOM (hidden) as the strip's data-state hook */}
-          {first ? <span hidden><StatePill chat={chat} testid={`chat-state-${chatId}`} /></span> : <StatePill chat={chat} testid={`chat-state-${chatId}`} />}
+          {first || waitText ? <span hidden><StatePill chat={chat} testid={`chat-state-${chatId}`} /></span> : <StatePill chat={chat} testid={`chat-state-${chatId}`} />}
           {first && <button type="button" className="strip-wait" onClick={() => openQueue(first)} aria-label={t('product.waitsYouOpen', { title: chat.agent?.name || chat.title })} data-testid={`chat-wait-${chatId}`} data-state={chat.state} {...(expanded ? {} : { 'data-waits-keys': reqs.map(reqKey).join(' ') })}>
-            <span className="strip-wait-dot" aria-hidden="true" />{t('product.waitsYou')}{reqs.length > 1 && <b>{reqs.length}</b>}
+            <span className="strip-wait-dot" aria-hidden="true" />{waitText && userWait ? waitText : t('product.waitsYou')}{reqs.length > 1 && <b>{reqs.length}</b>}
           </button>}
           {chat.resumedAt && (
             <span className="th-resumed" data-tip={auditText('audit.ChatTile.itsTurnWasInterruptedByThe')}
@@ -186,7 +191,7 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
         </div>
         {!compact && <ChatLinkChips chatId={chatId} />}
       </header>}
-      <AutoCloseNotice chatId={chatId} />
+      <AutoCloseNotice chatId={chatId} hideUser={!!first} />
       {!expanded&&<div className="chat-strip-line">{busy?<StripActivity chatId={chatId} testid={`typing-${chatId}`}/>:chat.work?.status==='waiting-mail'?t('product.workWaiting'):chat.plan?.phase==='proposed'?t('tree.plan.ready'):chat.lastText.slice(0,140)}</div>}
       {chat.plan && !['asking', 'revising', 'proposed'].includes(chat.plan.phase) && <StrategyPanel chat={chat} question={planAsk} />}
       <div className={`chat-work${expanded?' expanded':''}`} id={`chat-work-${chatId}`} inert={!expanded} aria-hidden={!expanded}><div className="chat-work-inner">

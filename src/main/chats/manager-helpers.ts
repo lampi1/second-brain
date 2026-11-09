@@ -74,9 +74,10 @@ export const storedResult = (x: { at: number; isError: boolean; interrupted?: bo
   x ? { lastResult: { at: x.at, isError: x.isError, ...(x.interrupted ? { interrupted: true as const } : {}) } } : {};
 
 export const WAITING_REASON: Record<AutoCloseWaiting, string> = {
-  answer: 'In attesa di una tua risposta', permission: 'In attesa di un tuo permesso', command: 'In attesa di un tuo comando',
-  user: 'In attesa dell’utente', colleagues: 'In attesa dei colleghi', work: 'In attesa del lavoro in corso',
-  report: 'In attesa del report finale', mail: 'In attesa di posta', browser: 'In attesa di te nel browser',
+  answer: 'Aspetta una tua risposta', permission: 'Aspetta un tuo permesso', plan: 'Aspetta che approvi il piano',
+  command: 'Aspetta che premi Esegui', browser: 'Aspetta te nel browser', children: 'Aspetta le sue sotto-chat',
+  background: 'Attività in background', work: 'Un suo comando o una pagina è ancora in corso',
+  report: 'Non ha ancora mandato il report finale', mail: 'Aspetta posta',
   unsaved: 'Lavoro non salvato nel repository (modifiche non committate o commit non pushati)',
   gitcheck: 'Controllo del repository in corso o non riuscito (git)',
 };

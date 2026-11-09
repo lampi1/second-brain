@@ -133,8 +133,13 @@ describe('main automatic archive reservations', () => {
     expect(f.m.list()[0]?.agentChildren?.coverage).toBe('unknown');
     expect(f.m.autoCloseCandidates(() => true)[0]?.eligible).toBe(false);
     f.sink().children?.({ key: 'agent:one', nativeId: 'one', toolCallId: null, parentNativeId: null, kind: 'agent', state: 'running', task: 'Sub', observedAt: Date.now(), source: 'live' });
-    expect(f.m.autoCloseCandidates(() => false)[0]).toMatchObject({ eligible: false, waitingFor: 'work' });
+    expect(f.m.autoCloseCandidates(() => false)[0]).toMatchObject({ eligible: false, waitingFor: 'children', waitingN: 1 });
     expect(await f.m.archiveAutomatic(c.id, () => true)).toBe(false);
+    // its tag counts them as they run and end, without a new turn (#359: «Aspetta 2 sotto-chat», then 1)
+    f.sink().children?.({ key: 'agent:two', nativeId: 'two', toolCallId: null, parentNativeId: null, kind: 'agent', state: 'running', task: 'Sub 2', observedAt: Date.now(), source: 'live' });
+    expect(f.m.autoCloseCandidates(() => false)[0]).toMatchObject({ waitingFor: 'children', waitingN: 2 });
+    f.sink().children?.({ key: 'agent:two', nativeId: 'two', toolCallId: null, parentNativeId: null, kind: 'agent', state: 'completed', task: 'Sub 2', observedAt: Date.now() + 1, source: 'live' });
+    expect(f.m.autoCloseCandidates(() => false)[0]).toMatchObject({ waitingFor: 'children', waitingN: 1 });
     f.sink().children?.({ key: 'agent:one', nativeId: 'one', toolCallId: null, parentNativeId: null, kind: 'agent', state: 'completed', task: 'Sub', observedAt: Date.now() + 1, source: 'live' });
     expect(f.m.autoCloseCandidates(() => false)[0]?.eligible).toBe(true);
     expect(await f.m.archiveAutomatic(c.id, () => true)).toBe(true);
@@ -159,7 +164,7 @@ describe('main automatic archive reservations', () => {
     const g2 = fixture('claude', { userData: g.dir });
     expect(g2.m.autoCloseCandidates(() => false).find(x => x.id === failed.id)?.eligible).toBe(false);
   });
-  it('keeps a chat open after a restart when its engine died mid-turn or its answer waits for the user', async () => {
+  it('keeps a chat open after a restart when its engine died mid-turn or its answer waits for the user (no tag: words are no state, #359)', async () => {
     const f = fixture('claude'), cut = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'First' });
     f.sink().changed({ state: 'running' }); f.sink().exit({ code: 0, error: null });
     expect(f.m.autoCloseCandidates(() => false).find(x => x.id === cut.id)?.eligible).toBe(false);
@@ -169,7 +174,8 @@ describe('main automatic archive reservations', () => {
     const r = fixture('claude', { userData: f.dir });
     const row = (id: string) => r.m.autoCloseCandidates(() => false).find(x => x.id === id);
     expect(row(cut.id)?.eligible).toBe(false);
-    expect(row(asks.id)).toMatchObject({ eligible: false, waitingFor: 'user' });
+    expect(row(asks.id)?.eligible).toBe(false);
+    expect(row(asks.id)?.waitingFor).toBeUndefined();
   });
   it('drops the sub-agents a previous engine never saw end when the chat resumes, so it can close again', async () => {
     const f = fixture('claude'), c = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'First' });
