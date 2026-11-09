@@ -1251,8 +1251,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Prima di chiudere mostra un avviso di 2 minuti sulla striscia: «Resta aperto» la ferma.',
         'Before closing it shows a 2-minute notice on the strip: "Keep open" (Resta aperto) stops it.'),
       // src/shared/auto-close.ts AutoCloseWaiting
-      b('Resta aperta, con «In attesa di…», una chat che aspetta una tua risposta o un permesso, i colleghi, un comando, un lavoro in background o il suo rapporto.',
-        'A chat waiting for your answer or a permission, colleagues, a command, background work or its own report stays open, with "Waiting for…".'),
+      b('Resta aperta, con «In attesa di…», una chat che aspetta una tua risposta o un permesso, i colleghi, un comando, un lavoro in background o il suo rapporto, e una che ha lasciato «Lavoro non salvato» nel repository (modifiche non committate o commit non pushati): si chiude quando è tutto salvato.',
+        'A chat waiting for your answer or a permission, colleagues, a command, background work or its own report stays open, with "Waiting for…", and so does one that left "Unsaved work" in its repository (uncommitted changes or unpushed commits): it closes once everything is saved.'),
       // src/main/chats/auto-close.ts: presence lease
       b('Chiude anche se non guardi l’avviso o la finestra è ridotta a icona, e dopo un riavvio dell’app; una bozza, una chat in primo piano o messaggi in coda la tengono aperta.',
         'It closes even if you do not look at the notice or the window is minimized, and after the app restarts; a draft, a chat in focus or queued messages keep it open.'),
@@ -1263,8 +1263,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un albero di deleghe si chiude tutto insieme: le chat che hanno finito aspettano le altre, e il tempo parte quando ha finito l’ultima.',
         'A delegation tree closes as one: the chats that finished wait for the others, and the time starts when the last one finished.'),
       // src/renderer/components/SidebarTree.tsx
-      b('Puoi chiudere una chat anche dalla barra laterale: passa sopra la sua riga e premi ✕ (6 secondi per Annulla). Chiudere con ✕ ferma la chat e tutte le sue figlie: lavoro, domande e processi finiscono e non ripartono da soli; Annulla riapre solo quella chat.',
-        'You can also close a chat from the sidebar: hover its row and press ✕ (6 seconds to undo). Closing with ✕ stops the chat and all its children: their work, questions and processes end and they do not restart by themselves; Undo brings back only that chat.'),
+      b('Nella barra laterale ci sono solo le chat aperte: una chiusa sparisce (la ritrovi con Ctrl+K) e torna al suo posto quando la riapri. Puoi chiudere una chat anche da lì: passa sopra la sua riga e premi ✕ (6 secondi per Annulla). Chiudere con ✕ ferma la chat e tutte le sue figlie: lavoro, domande e processi finiscono e non ripartono da soli; Annulla riapre solo quella chat.',
+        'The sidebar lists only open chats: a closed one leaves it (Ctrl+K finds it) and comes back to its place when reopened. You can also close a chat from there: hover its row and press ✕ (6 seconds to undo). Closing with ✕ stops the chat and all its children: their work, questions and processes end and they do not restart by themselves; Undo brings back only that chat.'),
     ],
     analogy: b('Come un collega che, consegnato il lavoro, sgombra la scrivania: ma se aspetta una tua firma resta lì, con il foglio in mano.',
       'Like a colleague who clears the desk after handing in the work: but when waiting for your signature, stays there, paper in hand.'),

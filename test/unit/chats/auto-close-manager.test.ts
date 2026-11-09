@@ -66,15 +66,25 @@ describe('main automatic archive reservations', () => {
     await f.m.set(c.id,{workStatus:'waiting-mail'});await f.m.send(c.id,'Read a new message');
     expect(f.close).not.toHaveBeenCalled();expect(f.m.list()[0]?.work?.status).toBe('waiting-mail');
   });
-  it('does not release an idle engine with an unknown child census or an in-flight delivery hold', async () => {
+  it('releases an idle CLI engine whose census is never complete once nothing it saw runs, but not during a delivery hold (#360)', async () => {
+    // a CLI engine never reports a complete census: an idle one with no sub-agent seen running is released anyway
     const unknown = fixture('codex'); await unknown.m.create({ harness: 'codex', cwd: unknown.dir, prompt: 'First' });
-    expect(unknown.m.releaseIdle(1, Date.now() + 60_000)).toBe(0);
-    expect(unknown.close).not.toHaveBeenCalled();
+    expect(unknown.m.releaseIdle(60_000, Date.now() + 30_000)).toBe(0);
+    expect(unknown.m.releaseIdle(1, Date.now() + 60_000)).toBe(1);
+    expect(unknown.close).toHaveBeenCalledTimes(1);
     const held = fixture(), c = await held.m.create({ harness: 'anthropic', cwd: held.dir, model: 'known', prompt: 'First' });
     const release = held.m.holdActivity(c.id);
     expect(held.m.releaseIdle(1, Date.now() + 60_000)).toBe(0);
     expect(held.close).not.toHaveBeenCalled(); release();
     expect(held.m.releaseIdle(1, Date.now() + 60_000)).toBe(1);
+  });
+  it('releases the engine of a work chat that delivered its result after five minutes, not the setting\'s half hour (#360)', async () => {
+    const f = fixture(), c = await f.m.create({ harness: 'anthropic', cwd: f.dir, model: 'known', prompt: 'Assigned work' }, 'agent');
+    expect(f.m.releaseIdle(30 * 60_000, Date.now() + 6 * 60_000)).toBe(0); // assigned, not delivered: work is behind
+    await f.m.set(c.id, { workStatus: 'completed' });
+    expect(f.m.releaseIdle(30 * 60_000, Date.now() + 4 * 60_000)).toBe(0);
+    expect(f.m.releaseIdle(30 * 60_000, Date.now() + 6 * 60_000)).toBe(1);
+    expect(f.close).toHaveBeenCalledTimes(1);
   });
   it('does not mistake a running observed shell for a verified empty agent census', async () => {
     const f = fixture(); await f.m.create({ harness: 'anthropic', cwd: f.dir, model: 'known', prompt: 'First' });

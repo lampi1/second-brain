@@ -29,7 +29,9 @@ const ENDED = new Set<ChildState>(['done', 'partial', 'blocked', 'noreport', 'cl
 /** A root chat's state reads like a child's: waiting, at work, failed, idle (its turn ended: done for now). */
 function rowState(c: ChatSummary): ChildState {
   if (c.delegation) return childState(c);
-  if (c.closedAt || c.state === 'closed') return 'closed';
+  // an engine that ended (released when idle, or not restarted after the app's restart) is not a closed chat: the chat
+  // is still open and reads as done for now; only an archived chat is closed, and that one leaves the tree (#354)
+  if (c.closedAt) return 'closed';
   if (c.state === 'waiting' || c.pending > 0) return 'wait';
   if (c.state === 'error') return 'err';
   if (c.state === 'starting') return 'start';

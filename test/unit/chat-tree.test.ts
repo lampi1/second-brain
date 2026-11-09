@@ -23,6 +23,8 @@ describe('chatTree', () => {
     expect(childState({ ...child, pending: 1 })).toBe('wait');
     expect(childState({ ...child, state: 'error' })).toBe('err');
     expect(childState({ ...child, closedAt: 10 })).toBe('closed');
+    // an engine that ended without a report is no closed chat (#354): the chat is open and still owes its result
+    expect(childState({ ...child, background: 0, state: 'closed' })).toBe('stall');
     expect(childState({ ...child, delegation: chats.s2!.delegation })).toBe('done');
   });
   it('puts each child after its parent, depth first, and counts who still works', () => {
@@ -75,3 +77,12 @@ describe('requestHost: each request renders once', () => {
   });
 
 });
+
+describe('closed chats and the sidebar (#354)', () => {
+  it('an archived chat leaves the tree, a reopened one comes back at its place', () => {
+    const all = { a: c('a'), b: c('b', { closedAt: 7 }), d: c('d') };
+    expect(chatTree(['a', 'b', 'd'], all).map(n => n.id)).toEqual(['a', 'd']);
+    expect(chatTree(['a', 'b', 'd'], { ...all, b: c('b') }).map(n => n.id)).toEqual(['a', 'b', 'd']);
+  });
+});
+

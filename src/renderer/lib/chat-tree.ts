@@ -63,7 +63,8 @@ export function childState(c: StateRow, refused = false): ChildState {
   // the app closed it: it ended without agent_report (#152)
   if (r?.noReport) return 'noreport';
   if (r) return r.outcome === 'done' ? 'done' : r.outcome;
-  if (c.closedAt || c.state === 'closed') return 'closed';
+  // only an archived chat is closed; an engine that ended without a report leaves the chat open and owing it (#354)
+  if (c.closedAt) return 'closed';
   if (c.state === 'waiting' || c.pending > 0) return 'wait';
   if (c.queued && c.state !== 'running' && c.state !== 'error') return 'queued';
   if (c.state === 'error') return 'err';

@@ -27,6 +27,9 @@ import { PREWARM_UNUSED_MS, workBehind, subagentGateFor } from './manager-helper
 import { ManagerPersistence } from './manager-persistence';
 import { FLASH_MCP_ROLE } from '../../shared/mcp-servers';
 
+/** A work chat that delivered its result releases its idle engine after this long (#360). */
+export const DELIVERED_RELEASE_MS = 5 * 60_000;
+
 /** Engine sessions: start, launch options, warm engines, the kill on quit, the per-chat MCP and tool visibility. */
 export abstract class ManagerSessions extends ManagerPersistence {
 
@@ -49,15 +52,21 @@ export abstract class ManagerSessions extends ManagerPersistence {
     let n = 0;
     for (const r of this.chats.values()) {
       const sess = r.session;
-      if (!sess?.alive || sess.busy || r.releasing || r.archiving || r.opening || r.switching || r.autoClosing || (r.deliveryHolds ?? 0) > 0 || this.unsettledChildren(r) || r.handoffTurn || r.s.closedAt || r.s.isOrchestrator || r.s.quick) continue;
+      // sub-agents as the auto-close counts them (childrenDone): the CLI engines never report a complete census, so
+      // asking for one (unsettledChildren) kept every Claude engine alive forever (#360: 34 idle claude processes, 7 GB)
+      if (!sess?.alive || sess.busy || r.releasing || r.archiving || r.opening || r.switching || r.autoClosing || (r.deliveryHolds ?? 0) > 0 || !this.childrenDone(r) || this.observedChildrenBusy(r) || r.handoffTurn || r.s.closedAt || r.s.isOrchestrator || r.s.quick) continue;
       if (r.s.state !== 'idle' || r.pending.size > 0 || workBehind(r.s)) continue;
-      if (now - Math.max(r.activeAt ?? 0, r.lastTurnAt) < idleMs) continue;
+      // a work chat that delivered its result has nothing left to do: its engine goes after a few minutes, not the
+      // setting's half hour (#360), even when something else keeps the chat itself open
+      const delivered = !!r.s.delegation?.result || r.s.work?.status === 'completed';
+      if (now - Math.max(r.activeAt ?? 0, r.lastTurnAt) < (delivered ? Math.min(idleMs, DELIVERED_RELEASE_MS) : idleMs)) continue;
       // a long chat waiting for its cold note keeps its engine: a resumed one would miss the cache (ADR 0031)
       if (this.coldOn() && coldArmed(this.coldView(r), now, this.ttl())) continue;
       n++;
-      log.info('chats', 'idle engine released', { chat: r.s.id, data: { idleMin: Math.round((now - Math.max(r.activeAt ?? 0, r.lastTurnAt)) / 60000), pid: sess.pid } });
-      // like a model change: a dev server or local stack it started stays until the chat really closes (reapKept)
-      r.releasing = this.closeKeeping(r, sess).finally(() => { r.releasing = undefined; });
+      log.info('chats', 'idle engine released', { chat: r.s.id, data: { idleMin: Math.round((now - Math.max(r.activeAt ?? 0, r.lastTurnAt)) / 60000), pid: sess.pid, delivered } });
+      // an idle engine ends like a close: the tools it started (test runners, shells, MCP servers) end with it, kept
+      // ones of earlier engines too (#350: test runners of idle chats ran for hours and kept the CPU at 100%)
+      r.releasing = sess.close().then(() => this.reapKept(r)).finally(() => { r.releasing = undefined; });
     }
     return n;
   }
@@ -450,6 +459,8 @@ export abstract class ManagerSessions extends ManagerPersistence {
 
   // ---- implemented in a later layer (ADR 0200: manager.ts and its manager-*.ts layers)
   protected abstract unsettledChildren(r: Rec): boolean;
+  protected abstract childrenDone(r: Rec): boolean;
+  protected abstract observedChildrenBusy(r: Rec): boolean;
   protected abstract coldOn(): boolean;
   protected abstract coldView(r: Rec): ColdView;
   protected abstract ttl(): number;

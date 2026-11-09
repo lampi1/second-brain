@@ -110,7 +110,8 @@ import { releaseId } from './release';
 import { sharedDir } from './platform';
 import { HeadlessRunner } from './compare/headless';
 import { OneShotService } from './agents/oneshot';
-import { DelegateWorktrees, gitWorktrees } from './agents/worktrees';
+import { DelegateWorktrees, gitWorktrees, worktreeGit } from './agents/worktrees';
+import { WorktreeHold } from './chats/worktree-hold';
 import { WorktreePool } from './agents/worktree-pool';
 import { within } from './agents/tool-policy';
 import { worktreeLimits } from './brain/settings-schema';
@@ -500,6 +501,19 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     if (now - autoCloseMin.at >= 1000) autoCloseMin = { at: now, min: brain.settings().autoCloseMin ?? 2 };
     return autoCloseMin.min * 60_000;
   };
+  // a finished chat that left uncommitted or unpushed work in its repository is not closed by itself (#357)
+  const worktreeHold = new WorktreeHold({ git: (cwd, args) => worktreeGit(cwd, args) });
+  const workChat = (id: string) => {
+    const c = manager.summary(id);
+    return c ? { id, cwd: c.cwd, stamp: `${c.lastResult?.at ?? 0}|${c.checkpointAt ?? 0}`, ...(c.checkpointAt !== undefined ? { checkpointAt: c.checkpointAt } : {}) } : null;
+  };
+  const unsavedWork = (id: string): boolean => {
+    const c = manager.summary(id);
+    // only a chat that finished its turn: a running one is held anyway, and its files are still moving
+    if (!c || c.closedAt || !c.lastResult || c.lastResult.isError || (c.state !== 'idle' && c.state !== 'closed')) return false;
+    const w = workChat(id)!;
+    return WorktreeHold.checked(w) && worktreeHold.state(w) !== 'clean';
+  };
   const autoCloseService = new AutoCloseService({ now: autoCloseNow,
     delayMs: () => keptProblem ? 0 : autoCloseDelay(),
     // what holds a chat open, named for its "In attesa di…" label (ADR 0084); an open tab alone no longer holds it (the
@@ -507,10 +521,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     candidates: () => manager.autoCloseCandidates(id => asks.pending().some(p => p.chatId === id) ? 'command'
       : browser.list().some(t => t.ownerChatId === id && (!!t.handoffId || !!t.dialog)) ? 'browser'
       : runner.list(id).some(r => r.state === 'running') || browser.list().some(t => t.ownerChatId === id && t.loading) ? 'work'
-      : mail.hasWork(id) ? 'mail' : false),
+      : mail.hasWork(id) ? 'mail' : unsavedWork(id) ? 'unsaved' : false),
     archive: async (id, _reservation, valid) => {
       // hasWork trusts a mailbox listing for BOX_TTL_MS: mail that came in since keeps the chat open
       if (mail.hasWork(id, true)) return false;
+      // work left in its worktree during the warning keeps it open too (#357): checked again right before the close
+      const c = workChat(id);
+      if (c && WorktreeHold.checked(c) && (await worktreeHold.check(c)).state !== 'clean') return false;
       const done = await manager.archiveAutomatic(id, valid);
       if (done) for (const tab of browser.list()) if (tab.ownerChatId === id) browser.close(tab.id);
       return done;

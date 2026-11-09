@@ -77,6 +77,7 @@ export const WAITING_REASON: Record<AutoCloseWaiting, string> = {
   answer: 'In attesa di una tua risposta', permission: 'In attesa di un tuo permesso', command: 'In attesa di un tuo comando',
   user: 'In attesa dell’utente', colleagues: 'In attesa dei colleghi', work: 'In attesa del lavoro in corso',
   report: 'In attesa del report finale', mail: 'In attesa di posta', browser: 'In attesa di te nel browser',
+  unsaved: 'Lavoro non salvato nel repository (modifiche non committate o commit non pushati)',
 };
 
 /** The final answer of the turn that just ended ('' when it wrote none). */

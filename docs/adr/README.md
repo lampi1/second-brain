@@ -218,25 +218,30 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0210](0210-remove-model-routing.md) Remove the model-routing classifier: every agent runs on its own card's model — accepted
 - [0211](0211-small-fixes-and-real-effort.md) Agent card picks model, effort and context; real effort names; owner's small fixes of 2026-10-31 — accepted
 - [0212](0212-remove-personal-browser.md) Remove the personal Browser page — accepted
-- [0216](0216-opencode-engine.md) OpenCode as a built-in ACP engine (model and mode through ACP config options) — accepted
-- [0217](0217-close-cancels-the-tree.md) Closing a chat with ✕ cancels its whole descendant tree; nothing late reopens it — accepted
-- [0218](0218-balanced-mode.md) «Balanced mode»: a delegation's engine, model and effort follow the credits left per provider — proposed
-- [0219](0219-phone-bridge-telegram.md) Phone bridge: the Orchestrator through a private Telegram bot (stable only, write-only token, yes/no only) — accepted
-- [0220](0220-role-skill-alignment.md) Scoped role skills and verified Plan intake
-- [0221](0221-acp-catalog-wire-replay.md) ACP agent catalog (proposals, off until the user turns one on), NDJSON record/replay of the engine wires, turn-start watchdog — accepted
-- [0222](0222-cold-start-admission.md) Cold-start admission: cores/2 slots, CPU/RAM only an emergency brake, warm pool under load, cold first turn timed — accepted
-- [0223](0223-quiet-turn-ends.md) Plain turn ends and starts are quiet news for the Orchestrator; `WAKE_RULE` drops the 👍 — accepted
-- [0224](0224-report-corrections-batching-caps.md) Report corrections (amends, max 2), a 2-5 s child-result debounce, caps instead of refusals — accepted
-- [0225](0225-delegates-talk-up-close-children-assign-without-handshake.md) Delegates write up their tree, parents close their children, assignments without a handshake — accepted
-- [0226](0226-orchestrator-reads-child-reports.md) The Orchestrator reads any report in its tree (app_child_output); amends ADR 0083 §6 — accepted
-- [0227](0227-worktree-pool.md) Reused worktree pool per repository (cleanup, disk cap) and warm engines in the most used folders — proposed
-- [0228](0228-parallel-checkpoint.md) The checkpoint runs while the message goes; the first write waits for it; a restart resumes only recent turns — accepted
-- [0229](0229-orchestrator-remote-control.md) «Controllo remoto»: Claude Code Remote Control of the Orchestrator (same engine, reattach, phone messages shown) — proposed
-- [0230](0230-impara-explain-mode.md) Impara: «Spiegazione», a lesson with pictures and no quiz — proposed
-- [0231](0231-agents-merge-verified-branches-to-main.md) Agents merge verified branches into main (check:quick, a clean Sentinel and the guard; no e2e since 2026-11-08) — accepted
-- [0232](0232-opencode-auto-permissions.md) OpenCode chats start with the app's permission rules (role ceiling, Claude's deny list) — accepted
-- [0235](0235-measure-launch-memory-recall.md) Measure how well the launch memory finds the right fact (words vs words + meaning, zero tokens) — accepted
-- [0236](0236-episodic-memory-past-run-examples.md) Episodic memory: a role starts with up to 2 examples of its own verified past successes in the same repository — accepted
+- [0213](0213-impara-active-study.md) 0213. Impara: exercises and an oral exam — accepted
+- [0214](0214-audio-parakeet-speed-podcast.md) 0214. Audio: Parakeet transcription, voice speed, a two-voice podcast, English words — accepted
+- [0215](0215-faster-recording-transcription.md) 0215. Faster recording transcription: fewer, longer pieces for Whisper — accepted
+- [0216](0216-opencode-engine.md) 0216. OpenCode as a built-in ACP engine — accepted
+- [0217](0217-close-cancels-the-tree.md) 0217. Closing a chat with ✕ cancels its whole tree — accepted
+- [0218](0218-balanced-mode.md) 0218. «Balanced mode»: the engine, model and effort of a delegation follow the credits left — proposed
+- [0219](0219-phone-bridge-telegram.md) 0219. Phone bridge: the Orchestrator through a private Telegram bot — accepted
+- [0220](0220-role-skill-alignment.md) Scoped role skills and verified Plan intake — not stated
+- [0221](0221-acp-catalog-wire-replay.md) 0221. An ACP agent catalog, a record/replay harness for the engine wires, a turn-start watchdog — accepted
+- [0222](0222-cold-start-admission.md) Cold-start admission: a slot semaphore, CPU/RAM only as an emergency brake — accepted
+- [0223](0223-quiet-turn-ends.md) Plain turn ends and starts are quiet news for the Orchestrator — not stated
+- [0224](0224-report-corrections-batching-caps.md) Report corrections, a short child-result debounce, caps instead of refusals — accepted
+- [0225](0225-delegates-talk-up-close-children-assign-without-handshake.md) 0225. Delegates write up their tree, parents close their children, assignments without a handshake — accepted
+- [0226](0226-orchestrator-reads-child-reports.md) The Orchestrator reads any report in its tree (app_child_output) — accepted
+- [0227](0227-worktree-pool.md) 0227. Reused worktree pool per repository, and warm engines in the most used folders — proposed
+- [0228](0228-parallel-checkpoint.md) The checkpoint runs while the message goes; the first write waits for it; a restart resumes only recent turns — not stated
+- [0229](0229-orchestrator-remote-control.md) 0229. «Controllo remoto»: Claude Code Remote Control of the Orchestrator — proposed
+- [0230](0230-impara-explain-mode.md) 0230. Impara: «Spiegazione», a lesson with pictures and no quiz — proposed
+- [0231](0231-agents-merge-verified-branches-to-main.md) Agents merge verified branches into main — accepted
+- [0232](0232-opencode-auto-permissions.md) 0232. OpenCode chats start with the app's permission rules — accepted
+- [0234](0234-authoritative-jobs-and-request-receipts.md) One job projection and exact request receipts — implemented
+- [0235](0235-measure-launch-memory-recall.md) Measure how well the launch memory finds the right fact — accepted
+- [0236](0236-episodic-memory-past-run-examples.md) Episodic memory: a role starts with examples of its own verified past successes — accepted
 - [0237](0237-agents-type-passwords-on-every-host.md) Agents type passwords on every host — accepted
-- [0238](0238-approved-work-continues-by-itself.md) Approved work goes on by itself: stalled-thread news, mail wakes a closed chat, one crash recovery, agent_wake_later, plain push allowed — accepted
-- [0239](0239-single-entry-through-the-orchestrator.md) Single entry: worker Sì/No questions through the Orchestrator (relay_question, Remote Control too), a command asked once and its result to every chat that asked it — accepted
+- [0238](0238-approved-work-continues-by-itself.md) Approved work goes on by itself: stalls, crashes, waits and pushes need no human nudge — accepted
+- [0239](0239-single-entry-through-the-orchestrator.md) Single entry: the user talks only with the Orchestrator, and a command is asked once — accepted
+- [0240](0240-idle-engines-end-and-unsaved-work-holds.md) Idle engines end with their tools; a chat with unsaved git work does not close by itself — accepted

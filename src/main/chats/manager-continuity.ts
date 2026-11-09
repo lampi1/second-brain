@@ -398,6 +398,4 @@ export abstract class ManagerContinuity extends ManagerRequests {
 
   // ---- implemented in a later layer (ADR 0200: manager.ts and its manager-*.ts layers)
   abstract create(req: NewChat, by?: 'user' | 'agent' | 'app', inherited?: { launchContext?: AgentContextSnapshot; tier?: ModelTier; routinePackage?: string; owner: AgentOwnerSnapshot; instructions: string; policy?: AgentPolicy | null; assets?: { pluginDir: string; skillRoot: string }; skills?: string[]; maxContext?: number }, links?: RunLinks, opts?: { routine?: ChatSummary['routine']; boundByOrchestrator?: boolean; intake?: IntakeSource; continuation?: boolean; continuationOf?: string }): Promise<ChatSummary>;
-  protected abstract childrenDone(r: Rec): boolean;
-  protected abstract observedChildrenBusy(r: Rec): boolean;
 }
