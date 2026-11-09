@@ -305,8 +305,8 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     this.policyAnswer(r, req, { kind: 'permission', allow: false, message: v.message }, 'auto-permit');
     // only Claude reads the refusal's message as the tool's result; Codex and the ACP engines (Cursor, OpenCode) get a
     // bare «declined» and may end the turn on it: the app tells them after the turn (manager-delegation.ts), once per
-    // rule and run, so the chat goes on
-    const key = `${v.rule.id}:${r.s.run?.runId ?? ''}`;
+    // rule and run (a chat with no run: once per rule until the user's own next message), so the chat goes on
+    const key = `${v.rule.id}:${r.s.run?.runId ?? 'chat'}`;
     if (engineOf(r.s.harness)?.kind !== 'claude' && !r.refusalTold?.has(key)) r.refusalNote = { rule: v.rule.id, message: v.message, at: Date.now(), key };
     log.info('chats', 'brain rule refused', { chat: r.s.id, data: { tool: req.tool, rule: v.rule.id, action: v.rule.action } });
     return true;

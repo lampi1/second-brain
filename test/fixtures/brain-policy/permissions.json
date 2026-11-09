@@ -65,7 +65,7 @@
         "*"
       ],
       "match": [
-        "(gmail|outlook|mail|teams|exchange)\\w*?[_.:-]+\\s*(send|reply|forward|post|draft|create_draft|chat_?message|message)",
+        "(?:^|\\s)[\\w-]*(gmail|outlook|mail|teams|exchange)[\\w-]*_{1,2}(send|reply|forward|post|create_draft|draft)",
         "\\b(send-mailmessage|send-mguser ?mail|new-mgchatmessage|new-mgteamchannelmessage)\\b"
       ]
     },

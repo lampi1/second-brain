@@ -378,6 +378,8 @@ export class ChatManager extends ManagerRemote implements ChatService {
       }
     }
     if (!(typeof text === 'string' && text.trim()) && !checkImages(images).length) throw new Error('Messaggio vuoto.');
+    // a chat with no run is told a brain rule's refusal once per rule until the user writes again (manager-requests.ts)
+    if (from === undefined && !resumed && ownerSource(source) && !r.s.run) r.refusalTold?.clear();
     this.autoActivity(r);
     this.needAgentMay(r, from);
     if (!resumed && !liveOnly && r.s.run?.report?.via === 'agent_report' && this.midTurn(r) && (from === undefined && ownerSource(source) || source?.kind === 'chat')) throw new Error('Il risultato è in fase di consegna: attendi la fine del turno e riprova.');

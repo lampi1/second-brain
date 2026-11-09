@@ -81,7 +81,8 @@ export function parsePolicy(text: string): BrainPolicy {
       const tools = raw.tools === undefined ? ['command'] : raw.tools;
       if (!Array.isArray(tools) || !tools.length || !tools.every(t => typeof t === 'string' && t.length > 0 && t.length <= 120)) throw new Error(`${where} (${id}): tools must be a list of tool classes or names`);
       // a class spelled wrong would be a rule that never fires: «commands», «Command»
-      const typo = (tools as string[]).find(t => !(POLICY_TOOL_CLASSES as readonly string[]).includes(t) && (POLICY_TOOL_CLASSES as readonly string[]).includes(t.toLowerCase().replace(/s$/, '')));
+      const classes = POLICY_TOOL_CLASSES as readonly string[];
+      const typo = (tools as string[]).find(t => !classes.includes(t.toLowerCase()) && classes.includes(t.toLowerCase().replace(/s$/, '')));
       if (typo) throw new Error(`${where} (${id}): «${typo}» is not a tool class (${POLICY_TOOL_CLASSES.join(', ')})`);
       const match = patterns(raw.match, `${where} (${id}) match`);
       if (!match.length) throw new Error(`${where} (${id}): match is required`);
@@ -123,11 +124,19 @@ export function loadPolicy(brainRoot: string | null | undefined): BrainPolicy {
  *  each top-level text value as `key: value` lines (a query that starts on a new line reads as written). */
 export function policySubject(tool: string, input: unknown, cls: string, title?: string): string {
   const o = isObj(input) ? input : {};
-  if (cls === 'command' && typeof o.command === 'string') return o.command.slice(0, MAX_SUBJECT);
+  if (cls === 'command' && typeof o.command === 'string') return o.command;
   let json = '';
   try { json = JSON.stringify(input ?? {}); } catch { /* circular: the name alone */ }
-  const values = Object.entries(o).filter(([, v]) => typeof v === 'string').map(([k, v]) => `${k}: ${v as string}`);
-  return [`${tool}${title && title !== tool ? ` ${title}` : ''} ${json}`, ...values].join('\n').slice(0, MAX_SUBJECT);
+  // text values first, one level down too (Codex's {server, tool, arguments}): a long JSON cannot push them out
+  const values = Object.entries(o).flatMap(([k, v]) => typeof v === 'string' ? [`${k}: ${v}`]
+    : isObj(v) ? Object.entries(v).filter(([, x]) => typeof x === 'string').map(([k2, x]) => `${k2}: ${x as string}`) : []);
+  return [`${tool}${title && title !== tool ? ` ${title}` : ''}`, ...values, json].join('\n');
+}
+
+/** The request is longer than the rules read: what they cannot see may be what they hold (the caller asks). */
+export function policyTooLong(tool: string, input: unknown, commandTools: readonly string[], title?: string): boolean {
+  const cls = toolClass(tool, commandTools);
+  return policySubject(tool, input, cls, cls === 'mcp' ? title?.trim() : undefined).length > MAX_SUBJECT;
 }
 
 const ruleSees = (rule: PolicyRule, cls: string, name: string, title: string): boolean => rule.tools.some(t => t === '*' || t === cls || t === name || (!!title && t === title));
@@ -136,7 +145,7 @@ const ruleSees = (rule: PolicyRule, cls: string, name: string, title: string): b
 export function policyHit(policy: BrainPolicy, tool: string, input: unknown, commandTools: readonly string[], title?: string): PolicyRule | null {
   if (policy.state !== 'ok') return null;
   const cls = toolClass(tool, commandTools), name = tool.toLowerCase(), t = (title ?? '').trim().toLowerCase();
-  const subject = policySubject(tool, input, cls, cls === 'mcp' ? title?.trim() : undefined);
+  const subject = policySubject(tool, input, cls, cls === 'mcp' ? title?.trim() : undefined).slice(0, MAX_SUBJECT);
   for (const rule of policy.rules) {
     if (!ruleSees(rule, cls, name, t)) continue;
     if (rule.match.some(re => re.test(subject)) && !rule.unless.some(re => re.test(subject))) return rule;

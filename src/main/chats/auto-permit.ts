@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { PermissionCeiling } from '../../shared/agents';
 import { COMMAND_TOOLS, readOnlyCommand, type ReadScripts } from '../agents/tool-policy';
-import { policyHit, type BrainPolicy, type PolicyRule } from './permit-policy';
+import { policyCovers, policyHit, policyTooLong, type BrainPolicy, type PolicyRule } from './permit-policy';
 
 /** title: the engine's one line; an ACP engine names an MCP tool only there (its tool is «Tool») */
 export interface PermitRequest { type: string; tool: string; input?: unknown; title?: string }
@@ -45,7 +45,7 @@ const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Delet
 const SETTINGS_DIRS = new Set(['.git', '.claude', '.cursor', '.codex', '.opencode', '.githooks', '.husky', '.vscode', '.idea']);
 const SETTINGS_FILE = /^(\.mcp\.json|\.claude\.json|\.guardallow|\.gitconfig|claude_desktop_config\.json|opencode\.jsonc?)$/i;
 /** commands that change the agents' or git's settings without naming the file */
-const SETTINGS_COMMAND = /\bgit\b[^;&|\n]*\bconfig\b[^;&|\n]*--(global|system)\b|\b(claude|codex|cursor-agent|opencode)(\.exe)?\s+(mcp|config|plugins?|hooks?)\b|core\.hookspath/i;
+const SETTINGS_COMMAND = /\bgit\b[^;&|\n]*\bconfig\b[^;&|\n]*--(global|system)\b|\b(claude|codex|cursor-agent|agent|opencode)(\.exe)?\s+(mcp|config|plugins?|hooks?)\b|core\.hookspath/i;
 /** an engine's cut (session.ts trimInput): a string ends with «… (+N)», a list stops at 200 entries */
 const CUT = /… \(\+\d+\)$/;
 /** what a tool writes or says, never where: its text may name a settings file without touching it */
@@ -88,23 +88,33 @@ function placesOf(input: unknown): string[] | null {
   const walk = (v: unknown, depth: number): boolean => {
     if (typeof v === 'string') {
       if (CUT.test(v)) return false;
-      if (v.length <= 1000 && !/[\r\n]/.test(v) && !v.includes('://')) out.push(v);
+      if (v.length <= 1000 && !/[\r\n]/.test(v) && !/^https?:\/\//i.test(v)) out.push(v.replace(/^file:\/\//i, ''));
       return true;
     }
-    if (Array.isArray(v)) return v.length < 200 && v.every(x => walk(x, depth));
-    if (v && typeof v === 'object' && depth < 3) return Object.entries(v).every(([k, x]) => CONTENT_KEYS.has(k) ? typeof x !== 'string' || !CUT.test(x) : walk(x, depth + 1));
+    if (depth > 20) return false;   // deeper than any engine's shape: not read whole
+    if (Array.isArray(v)) return v.length < 200 && v.every(x => walk(x, depth + 1));
+    if (v && typeof v === 'object') return Object.entries(v).every(([k, x]) => CONTENT_KEYS.has(k) ? cutFree(x, depth + 1) : walk(x, depth + 1));
     return true;
   };
+  /** content is not a place, but a cut in it still hides what runs */
+  const cutFree = (v: unknown, depth: number): boolean => typeof v === 'string' ? !CUT.test(v)
+    : depth > 20 ? false : Array.isArray(v) ? v.length < 200 && v.every(x => cutFree(x, depth + 1)) : v && typeof v === 'object' ? Object.values(v).every(x => cutFree(x, depth + 1)) : true;
   return walk(input, 0) ? out : null;
 }
+const pathLike = (p: string): boolean => /[\\/]/.test(p) || p.startsWith('.') || p.startsWith('~');
 
 /** A change that would touch the agents' settings or hooks (rule 6): a tool naming such a place, or a command naming
  *  one or changing them by itself. A command or tool that only reads may look. Null input shapes ask. */
 function touchesSettings(req: PermitRequest, command: boolean, cwd: string): boolean {
   const o = obj(req.input);
   if (command) {
-    // `.g''it` is `.git` to a shell; a glob can name a settings place by pattern (.gi?/hooks)
-    const raw = (typeof o.command === 'string' ? o.command : '').replace(/''|""/g, '');
+    // `.g''it` and `.g'i't` are `.git` to a shell; a glob can name a settings place by pattern (.gi?/hooks); `$'\x2e'`,
+    // an escape that printf or echo turns into a name, and a `$(…)` or backtick glued to a path build a name the app
+    // cannot read. `X=$(…) cmd` and `echo $(date)` stay free.
+    const line = typeof o.command === 'string' ? o.command : '';
+    if (/\$'|\\(x[0-9a-f]|[0-7]{3}|u[0-9a-f]{4})/i.test(line)) return true;
+    if (/[^\s=;&|(<>'"]\$\(|[^\s=;&|(<>'"]`|\$\([^)]*\)[^\s;&|)<>'"]|`[^`]*`[^\s;&|)<>'"]/.test(line)) return true;
+    const raw = line.replace(/['"]/g, '');
     if (SETTINGS_COMMAND.test(raw)) return true;
     const base = typeof o.cwd === 'string' && o.cwd ? path.resolve(cwd, o.cwd) : cwd;
     const words = raw.split(/[\s'"`;&|<>(){}=,]+/).filter(w => /[\\/]/.test(w) || w.startsWith('.') || w.startsWith('~'));
@@ -113,7 +123,7 @@ function touchesSettings(req: PermitRequest, command: boolean, cwd: string): boo
   }
   const places = placesOf(o);
   if (!places) return true;
-  return places.filter(p => /[\\/]/.test(p) || p.startsWith('.') || p.startsWith('~')).some(p => settingsPath(p, cwd));
+  return places.filter(pathLike).some(p => settingsPath(p, cwd));
 }
 
 /** An engine cut the request (session.ts trimInput): what runs is not what the rules would read. */
@@ -136,6 +146,8 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
   // the rules and rule 6 must read what will run: a command with no line, or one an engine cut, is the user's call
   if (command && (typeof raw !== 'string' || !raw.trim())) return ASK;
   if (cut(req.input)) return ASK;
+  // longer than the rules read, for a tool they could hold: what they cannot see may be what they hold
+  if (policyCovers(policy, req.tool, COMMAND_TOOLS, req.title) && policyTooLong(req.tool, req.input, COMMAND_TOOLS, req.title)) return ASK;
   const rule = policyHit(policy, req.tool, req.input, COMMAND_TOOLS, req.title);
   if (rule) {
     if (rule.action === 'ask-user') return { kind: 'ask', rule };
@@ -148,7 +160,7 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
   if (policy.state === 'broken') return ASK;
   // Codex's grantRoot is write access under a folder for the rest of the session: later writes never come back here
   if (obj(req.input).grantRoot !== undefined) return ASK;
-  if (EDIT_TOOLS.has(req.tool) && !placesOf(req.input)?.length) return ASK; // an edit that names no place
+  if (EDIT_TOOLS.has(req.tool) && !placesOf(req.input)?.some(pathLike) && !placesOf(req.input)?.some(p => /^[\w.-]+\.\w+$/.test(p))) return ASK; // an edit that names no file
   if (touchesSettings(req, command, ctx.cwd)) return ASK;
   return ALLOW;
 }

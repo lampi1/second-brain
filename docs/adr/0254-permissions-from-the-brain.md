@@ -36,25 +36,29 @@ everything else is free.
   «Accetta modifiche»: what is neither a read nor an edit), a plan to approve (ExitPlanMode), and a change of the
   agents' own settings or hooks (`.claude`, `.cursor`, `.codex`, `.git` with its hooks, `.githooks`, `.husky`,
   `.vscode`, `.idea`, `.mcp.json`, `.guardallow`, `.gitconfig`, `claude_desktop_config.json`, `opencode.json`,
-  `.opencode`, `.claude.json`, `core.hooksPath`, `git config --global|--system`, `claude|codex|cursor-agent|opencode
-  mcp|config|plugin|hooks`, in any tool's input shape, through links, Windows `.git.` / `::$` forms, shell globs and
-  quote splicing): AGENTS.md rule 6, not an opinion of the app. The role gate and the read-only role check stay (the
+  `.opencode`, `.claude.json`, `core.hooksPath`, `git config --global|--system`, `claude|codex|cursor-agent|agent|opencode
+  mcp|config|plugin|hooks`, in any tool's input shape at any depth, through links, Windows `.git.` / `::$` forms, shell
+  globs, quote splicing, `$'…'`, printf escapes and a `$(…)` or backtick glued to a path): AGENTS.md rule 6, not an opinion of the app. The role gate and the read-only role check stay (the
   user's settings).
-- **What the app cannot read whole is the user's call**: a request an engine cut (`session.ts trimInput`: «… (+N)», a
-  list of 200), a command with no command line, an edit that names no place, and Codex's `grantRoot` (write access under
+- **What the app cannot read whole is the user's call**: a request an engine cut (`session.ts trimInput`: «… (+N)» anywhere in the input,
+  content too, a list of 200), a request longer than the 20 000 characters the rules read (for a tool a rule covers;
+  text values come first, one level down too, so a long JSON never pushes them out), a command with no command line, an edit that names no place, and Codex's `grantRoot` (write access under
   a folder for the rest of the session, whose later writes never come back to the gate). The rules must judge what will
   run, not a part of it.
 - **No «always» where a rule could apply**: when a rule could hold requests of that tool (or the file is broken),
   whatever reaches the user for it is answered once: a remembered grant (Claude's `Bash(npm:*)`, Codex's session
   accept) would let a later request the rules hold run without coming back to the app.
 - **ACP MCP calls** arrive as «Tool», named only in their title: rules match the title too and treat them as `mcp`.
+  An empty `rawInput` falls back to the tool call's earlier input, so the rules read its arguments. A rule's tool
+  class is read in any case (`Command`, `MCP`); a near miss (`commands`) breaks the file.
 - **OpenCode** sends every command to the app's gate (`bash: ask`, which auto-permit answers at once) so the brain
   rules see it; the user's Claude deny rules still carry over as OpenCode denies (they are the user's too). The
   `.env` read ask and the destructive/outward ask list are gone; edits of the settings files above still ask.
 - **The chat goes on after a refusal.** Claude reads the refusal message as the tool result. Codex (`decline`) and
   Cursor and OpenCode (ACP «rejected») get no message and may end the turn: when nothing came after the refusal (by
   time, not item position), the app sends the rule's message after the turn («[rifiuto dell’app · regola «…»] …») and
-  the agent continues; once per rule and run (never a loop), never after a turn the user stopped or that failed, and
+  the agent continues; once per rule and run, or for a chat with no run once per
+  rule until the user's own next message (never a loop), never after a turn the user stopped or that failed, and
   never from an older turn. For a rule on a tool (not a command) the message asks the agent to tell the user what is
   needed, since Esegui runs only commands.
 - **Remote**: a permission held by an `ask-user` rule carries `heldBy { rule, why }` (set only by the app's gate; an

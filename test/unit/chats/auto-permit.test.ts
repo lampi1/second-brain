@@ -65,7 +65,11 @@ describe('autoPermit: the agents\' own settings and hooks (AGENTS.md rule 6)', (
 
   it('asks before a command that writes them; one that only reads them may look', () => {
     for (const c of ['echo x > .git/hooks/pre-commit', 'cp a ~/.claude/settings.json', 'git config core.hooksPath x', 'git -c core.hooksPath=x commit',
-      'cp evil .gi?/hooks/pre-commit', "cp evil .g''it/hooks/pre-commit", 'cp evil .\\git/hooks/pre-commit', 'git config --global core.editor x', 'claude mcp add x -- node evil.js']) expect(run(c), c).toBe('ask');
+      'cp evil .gi?/hooks/pre-commit', "cp evil .g''it/hooks/pre-commit", 'cp evil .\\git/hooks/pre-commit', 'git config --global core.editor x', 'claude mcp add x -- node evil.js',
+      "cp evil .g'i't/hooks/pre-commit", 'agent mcp add x', "cp evil $'\\x2egit'/hooks/x", 'printf "\\x2egit" | xargs -I{} cp evil {}/hooks/x',
+      'cp evil $(echo .gi)t/hooks/x', 'cp evil .g`echo i`t/hooks/x']) expect(run(c), c).toBe('ask');
+    // a substitution that builds no path stays free
+    for (const c of ['TOKEN=$(az account get-access-token) node run.js', 'echo "built at $(date)" > out.txt']) expect(run(c), c).toBe('allow');
     expect(autoPermit(perm('Shell', { command: 'echo x > hooks/pre-commit', cwd: '.git' }), ctx()).kind).toBe('ask');
     for (const c of ['cat .claude/settings.json', 'ls .git', 'git status']) expect(run(c), c).toBe('allow');
   });
@@ -78,6 +82,9 @@ describe('autoPermit: what it cannot read whole is the user\'s call', () => {
     expect(autoPermit(perm('Shell', {}), ctx()).kind).toBe('ask');
     expect(autoPermit(perm('Shell', { title: 'printenv' }), ctx()).kind).toBe('ask');
     expect(autoPermit(perm('Edit', { files: ['src/a.ts'], grantRoot: cwd }), ctx()).kind).toBe('ask');
+    // a cut deep in the input, in a place or in content, is still a cut
+    expect(autoPermit(perm('mcp__fs__write', { a: { b: { c: { path: `src/${'x'.repeat(10)}… (+9)` } } } }), ctx()).kind).toBe('ask');
+    expect(autoPermit(perm('Write', { file_path: 'src/a.ts', content: `x… (+9)` }), ctx()).kind).toBe('ask');
   });
 });
 

@@ -1372,7 +1372,8 @@ export class AcpSession implements HarnessSession {
         // Never grant opaque upstream patterns: even unrestricted roles still have app hard-deny gates.
         // An earlier tool update may have no rawInput (stored as {}): its empty input must not hide
         // the permission's locations from the path/role gates. Keep all locations even with raw input.
-        input: trimInput({ ...o(tc.rawInput ?? known?.input ?? tc), ...(tc.locations !== undefined ? { locations: tc.locations } : {}) }), at, noAlways: true,
+        // an empty rawInput (OpenCode's shape) falls back to the earlier tool call's input: the rules must read the arguments
+        input: trimInput({ ...o(tc.rawInput && Object.keys(o(tc.rawInput)).length ? tc.rawInput : known?.input ?? tc.rawInput ?? tc), ...(tc.locations !== undefined ? { locations: tc.locations } : {}) }), at, noAlways: true,
       });
       return;
     }

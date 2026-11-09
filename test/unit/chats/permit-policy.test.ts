@@ -39,6 +39,11 @@ describe('the owner\'s policy', () => {
     expect(cmd('sqlcmd -S localhost -E -C -Q "select 1"; sqlcmd -S prod -Q "delete from t"').kind).toBe('deny');
     expect(ruleOf(ask('mcp__mssql__execute_query', { query: 'UPDATE t SET a = 1' }))).toBe('db-write-tools');
     expect(ruleOf(ask('mcp__mssql__execute_query', { query: '\n  UPDATE t SET a = 1' }))).toBe('db-write-tools'); // formatted SQL
+    // Codex names the tool's arguments one level down; a long input never pushes them out of what the rules read
+    expect(ruleOf(ask('mcp__mssql__execute_query', { server: 'mssql', tool: 'mcp__mssql__execute_query', arguments: { query: 'DELETE FROM t' } }))).toBe('db-write-tools');
+    expect(ruleOf(ask('mcp__mssql__execute_query', { params: 'p'.repeat(9000), query: 'DROP TABLE t' }))).toBe('db-write-tools');
+    // longer than the rules read: the user's call
+    expect(ask('mcp__mssql__execute_query', { query: 'SELECT 1', params: 'p'.repeat(30000) }).kind).toBe('ask');
     expect(ask('mcp__mssql__execute_query', { query: 'SELECT 1' }).kind).toBe('allow');
   });
 
@@ -115,9 +120,11 @@ describe('the policy file', () => {
       { version: 2, rules: [rule] }, { version: 1 }, { version: 1, rules: [{ ...rule, action: 'deny' }] },
       { version: 1, rules: [{ ...rule, match: ['('] }] }, { version: 1, rules: [{ ...rule, match: [] }] }, { version: 1, rules: [rule, rule] },
       { version: 1, rules: [{ ...rule, why: '' }] }, { version: 1, rules: [{ ...rule, extra: 1 }] }, { version: 1, rules: [rule], other: 1 },
-      { version: 1, rules: [{ ...rule, tools: ['commands'] }] }, { version: 1, rules: [{ ...rule, tools: ['Command'] }] },
+      { version: 1, rules: [{ ...rule, tools: ['commands'] }] },
     ]) expect(parsePolicy(JSON.stringify(bad)).state, JSON.stringify(bad)).toBe('broken');
     expect(parsePolicy('not json').state).toBe('broken');
+    // a class written in capitals is that class
+    for (const tools of [['Command'], ['MCP']]) expect(parsePolicy(JSON.stringify({ version: 1, rules: [{ ...rule, tools }] })).state).toBe('ok');
   });
 
   it('is read again when it changes', () => {
