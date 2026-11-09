@@ -32,9 +32,7 @@ export const memoryIt = {
 
   // shared bits
   'mm.openFile': 'Apri il file', 'mm.openNamed': (p: { name: string }) => `Apri il file di ${p.name}`,
-  'mm.lines': 'Righe', 'mm.rule': 'Regola nata:', 
-  'mm.time': 'volta', 'mm.times': 'volte', 'mm.timesTitle': (p: N) => `Successo ${volte(p.n)}`,
-  'mm.again': (p: N) => `ricorrente ×${p.n}`,
+  'mm.lines': 'Righe',
   'mm.daysAgo': (p: N) => (p.n === 1 ? 'fermo da 1 giorno' : `fermo da ${p.n} giorni`),
   'mm.kind.agent': 'Memorie degli agenti', 'mm.kind.errors': 'Errori', 'mm.kind.journal': 'Diario', 'mm.kind.knowledge': 'Conoscenza',
   'mm.weekday.0': 'lunedì', 'mm.weekday.1': 'martedì', 'mm.weekday.2': 'mercoledì', 'mm.weekday.3': 'giovedì', 'mm.weekday.4': 'venerdì', 'mm.weekday.5': 'sabato', 'mm.weekday.6': 'domenica',

@@ -42,18 +42,7 @@ export const brainModelDe: typeof brainModelIt = {
   'bm.rules.empty': 'Keine festen Dateien im Brain: jeder Chat bekommt nur die festen Regeln der App.',
 
   'bm.mem.title': 'Gedächtnis',
-  'bm.mem.knowledge': 'Wissen', 'bm.mem.knowledgeLead': 'Kunden, Umgebungen, Personen und Referenzen.',
-  'bm.mem.happened': 'Was passiert ist', 'bm.mem.happenedLead': 'Offene Fäden, Tagebuch und erfasste Fehler.',
-  'bm.mem.agents': 'Gedächtnis der Agenten', 'bm.mem.agentsLead': 'Eines pro Agent. Was mehrere Agenten wussten, kommt einmal ins gemeinsame Gedächtnis.',
   'bm.mem.entries': (p: N) => (p.n === 1 ? '1 Eintrag' : `${p.n} Einträge`),
-  'bm.mem.empty.knowledge': 'Noch keine Wissensnotizen: ein Ordner für Kunden, Umgebungen oder Personen im Brain erscheint hier.',
-  'bm.mem.empty.happened': 'Noch keine offenen Fäden, kein Tagebuch, keine Fehler.',
-  'bm.mem.empty.agents': 'Noch kein Agentengedächtnis: jeder Agent schreibt sein eigenes, wenn er etwas lernt.',
-  'bm.mem.kind.threads': 'Offene Fäden', 'bm.mem.kind.journal': 'Tagebuch', 'bm.mem.kind.errors': 'Fehler', 'bm.mem.kind.shared': 'Gemeinsam', 'bm.mem.kind.agent': 'Agent',
-  'bm.mem.group.Clienti': 'Kunden', 'bm.mem.group.Ambienti': 'Umgebungen', 'bm.mem.group.Persone': 'Personen', 'bm.mem.group.Riferimenti': 'Referenzen',
-  'bm.mem.errors': 'Erfasste Fehler', 'bm.mem.errorsLead': 'Was wir gelernt haben: jede Korrektur mit der Regel, die daraus entstand (ai-errors.md).',
-  'bm.mem.errorsFilter': 'Nach Agent, Bereich oder Fehler filtern…', 'bm.mem.errorsFilterLabel': 'Fehler filtern',
-  'bm.mem.errorsNone': 'Kein Fehler passt zur Suche.', 'bm.mem.errorsEmpty': 'Das Fehlerlog ist leer.',
 
   'bm.cls.col.kind': 'Arbeit',
   'bm.cls.kinds': 'Ergebnisse nach Art der Arbeit',

@@ -30,9 +30,7 @@ export const memoryDe: typeof memoryIt = {
   'mm.done.open': 'Memoria öffnen',
 
   'mm.openFile': 'Datei öffnen', 'mm.openNamed': (p: { name: string }) => `Datei von ${p.name} öffnen`,
-  'mm.lines': 'Zeilen', 'mm.rule': 'Daraus entstandene Regel:', 
-  'mm.time': 'Mal', 'mm.times': 'Mal', 'mm.timesTitle': (p: N) => `${times(p.n)} passiert`,
-  'mm.again': (p: N) => `wiederkehrend ×${p.n}`,
+  'mm.lines': 'Zeilen',
   'mm.daysAgo': (p: N) => (p.n === 1 ? 'seit 1 Tag unverändert' : `seit ${p.n} Tagen unverändert`),
   'mm.kind.agent': 'Gedächtnis der Agenten', 'mm.kind.errors': 'Fehler', 'mm.kind.journal': 'Tagebuch', 'mm.kind.knowledge': 'Wissen',
   'mm.weekday.0': 'Montag', 'mm.weekday.1': 'Dienstag', 'mm.weekday.2': 'Mittwoch', 'mm.weekday.3': 'Donnerstag', 'mm.weekday.4': 'Freitag', 'mm.weekday.5': 'Samstag', 'mm.weekday.6': 'Sonntag',

@@ -30,9 +30,7 @@ export const memoryEn: typeof memoryIt = {
   'mm.done.open': 'Open Memoria',
 
   'mm.openFile': 'Open the file', 'mm.openNamed': (p: { name: string }) => `Open the file of ${p.name}`,
-  'mm.lines': 'Lines', 'mm.rule': 'Rule it produced:', 
-  'mm.time': 'time', 'mm.times': 'times', 'mm.timesTitle': (p: N) => `Happened ${times(p.n)}`,
-  'mm.again': (p: N) => `recurring ×${p.n}`,
+  'mm.lines': 'Lines',
   'mm.daysAgo': (p: N) => (p.n === 1 ? 'untouched for 1 day' : `untouched for ${p.n} days`),
   'mm.kind.agent': 'Agents\' memories', 'mm.kind.errors': 'Errors', 'mm.kind.journal': 'Journal', 'mm.kind.knowledge': 'Knowledge',
   'mm.weekday.0': 'Monday', 'mm.weekday.1': 'Tuesday', 'mm.weekday.2': 'Wednesday', 'mm.weekday.3': 'Thursday', 'mm.weekday.4': 'Friday', 'mm.weekday.5': 'Saturday', 'mm.weekday.6': 'Sunday',

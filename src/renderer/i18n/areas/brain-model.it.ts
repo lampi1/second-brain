@@ -48,18 +48,7 @@ export const brainModelIt = {
 
   // Memoria page
   'bm.mem.title': 'Memoria',
-  'bm.mem.knowledge': 'Conoscenza', 'bm.mem.knowledgeLead': 'Clienti, ambienti, persone e riferimenti.',
-  'bm.mem.happened': 'Cosa è successo', 'bm.mem.happenedLead': 'Fili aperti, diario ed errori registrati.',
-  'bm.mem.agents': 'Memorie degli agenti', 'bm.mem.agentsLead': 'Una per agente. Quello che più agenti sapevano va nella memoria condivisa, una volta sola.',
   'bm.mem.entries': (p: N) => (p.n === 1 ? '1 voce' : `${p.n} voci`),
-  'bm.mem.empty.knowledge': 'Nessuna nota di conoscenza ancora: una cartella clienti, ambienti o persone nel brain compare qui.',
-  'bm.mem.empty.happened': 'Nessun filo aperto, diario o errore ancora.',
-  'bm.mem.empty.agents': 'Nessuna memoria di agente ancora: ognuno scrive la sua quando impara qualcosa.',
-  'bm.mem.kind.threads': 'Fili aperti', 'bm.mem.kind.journal': 'Diario', 'bm.mem.kind.errors': 'Errori', 'bm.mem.kind.shared': 'Condivisa', 'bm.mem.kind.agent': 'Agente',
-  'bm.mem.group.Clienti': 'Clienti', 'bm.mem.group.Ambienti': 'Ambienti', 'bm.mem.group.Persone': 'Persone', 'bm.mem.group.Riferimenti': 'Riferimenti',
-  'bm.mem.errors': 'Errori registrati', 'bm.mem.errorsLead': 'Cosa abbiamo imparato: ogni correzione con la regola che ne è nata (ai-errors.md).',
-  'bm.mem.errorsFilter': 'Filtra per agente, area o errore…', 'bm.mem.errorsFilterLabel': 'Filtra gli errori',
-  'bm.mem.errorsNone': 'Nessun errore corrisponde alla ricerca.', 'bm.mem.errorsEmpty': 'Il registro degli errori è vuoto.',
 
   // Classificatori page
   'bm.cls.col.kind': 'Lavoro',

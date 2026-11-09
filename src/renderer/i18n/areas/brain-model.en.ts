@@ -42,18 +42,7 @@ export const brainModelEn: typeof brainModelIt = {
   'bm.rules.empty': 'No fixed files in the brain: every chat gets only the app’s fixed rules.',
 
   'bm.mem.title': 'Memory',
-  'bm.mem.knowledge': 'Knowledge', 'bm.mem.knowledgeLead': 'Customers, environments, people and references.',
-  'bm.mem.happened': 'What happened', 'bm.mem.happenedLead': 'Open threads, journal and logged errors.',
-  'bm.mem.agents': 'Agents’ memories', 'bm.mem.agentsLead': 'One per agent. What several agents knew goes to the shared memory, once.',
   'bm.mem.entries': (p: N) => (p.n === 1 ? '1 entry' : `${p.n} entries`),
-  'bm.mem.empty.knowledge': 'No knowledge notes yet: a customers, environments or people folder in the brain shows up here.',
-  'bm.mem.empty.happened': 'No open threads, journal or errors yet.',
-  'bm.mem.empty.agents': 'No agent memory yet: each agent writes its own when it learns something.',
-  'bm.mem.kind.threads': 'Open threads', 'bm.mem.kind.journal': 'Journal', 'bm.mem.kind.errors': 'Errors', 'bm.mem.kind.shared': 'Shared', 'bm.mem.kind.agent': 'Agent',
-  'bm.mem.group.Clienti': 'Customers', 'bm.mem.group.Ambienti': 'Environments', 'bm.mem.group.Persone': 'People', 'bm.mem.group.Riferimenti': 'References',
-  'bm.mem.errors': 'Logged errors', 'bm.mem.errorsLead': 'What we learned: each correction with the rule it produced (ai-errors.md).',
-  'bm.mem.errorsFilter': 'Filter by agent, area or error…', 'bm.mem.errorsFilterLabel': 'Filter errors',
-  'bm.mem.errorsNone': 'No error matches the search.', 'bm.mem.errorsEmpty': 'The error log is empty.',
 
   'bm.cls.col.kind': 'Work',
   'bm.cls.kinds': 'Outcomes per kind of work',
