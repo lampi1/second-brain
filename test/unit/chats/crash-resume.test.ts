@@ -72,3 +72,14 @@ it('never restarts a chat that crashed while idle', async () => {
   await Promise.resolve();
   expect(w.sent).toEqual([]);
 });
+
+it('a delegated child is not resumed: its parent already got a blocked result and decides', async () => {
+  const w = manager();
+  const chat = await w.m.create({ harness: 'anthropic', cwd: tmp(), prompt: 'lavora' });
+  (w.m as unknown as { chats: Map<string, { s: { delegation?: unknown } }> }).chats.get(chat.id)!.s.delegation = { role: 'artisan' };
+  w.crash();
+  await waitFor(() => w.m.list().find(c => c.id === chat.id)?.state === 'error', 'the error state');
+  await new Promise(r => setTimeout(r, 0));
+  expect(w.sent).not.toContain(CRASH_RESUME_TEXT);
+  expect(w.sinks).toHaveLength(1);
+});

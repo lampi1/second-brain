@@ -137,7 +137,8 @@ export abstract class ManagerSink extends ManagerWork {
    *  sent again. A second crash in the same turn, a chat the user closed, Flash and the maintenance research stay as
    *  they are (an error the user or the parent sees). */
   private recoverCrash(r: Rec): void {
-    if (r.crashResumed || r.s.quick || r.s.research || r.s.routineArchived || this.closedByUser(r)) return;
+    // a delegated child is not resumed: owedReport already gave its parent a blocked result, the parent decides (#152)
+    if (r.crashResumed || r.s.delegation || r.s.quick || r.s.research || r.s.routineArchived || this.closedByUser(r)) return;
     r.crashResumed = true;
     const chatId = r.s.id;
     setTimeout(() => {
