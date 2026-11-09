@@ -63,14 +63,16 @@ repeated suites, never Sentinels only to compare main and the branch. After a ba
 the non-e2e parts of `npm run check` once on main (typecheck, lint, all unit tests); whoever breaks main fixes it on
 main. The e2e suite stays in the repo and runs only when the owner asks; its verdict is read against `test/e2e/known-red.json` (ADR 0198).
 
-Never write load-sensitive tests; existing ones are removed (owner, 2026-11-09). A new test never depends on machine
-load: no real timeouts, no sleeps or `waitFor` with ms (`vi.waitFor` and `expect.poll` have a 1 s default), no bounded
-polling loops, no per-test or per-describe timeout under the suite's 120 s, no assertion on elapsed wall-clock time, no
-real processes, ports or network. Use fake timers, fakes in the same process, or wait for an event (`waitFor` from
-`test/unit/chats/helpers.ts` without its `ms`); a check that something does not happen waits for a later event or uses
-fake timers. Every existing test with a real deadline, a sleep that waits for work, or an elapsed-time assertion was
-removed on 2026-11-09 (`docs/tests/load-sensitive-removed.md`); an existing test that goes red under load is deleted,
-never rerun and never given a longer deadline.
+Never write load-sensitive tests; existing ones are removed (owner, 2026-11-09). A new unit test never depends on
+machine load: no real timeouts, no sleeps or `waitFor` with ms (`vi.waitFor` and `expect.poll` have a 1 s default), no
+bounded polling loops, no per-test or per-describe timeout under the suite's 120 s, no assertion on elapsed wall-clock
+time, and no real processes, git, ports or network. Use fake timers, fakes in the same process, or wait for an event
+(`waitFor` from `test/unit/chats/helpers.ts` without its `ms`); a check that something does not happen waits for a later
+event or uses fake timers. On 2026-11-09 every existing unit test with a real deadline, a sleep that waits for work or an
+elapsed-time assertion was removed, and then, by the owner's decision, every one that starts a real process, git, a
+port or the network (`docs/tests/load-sensitive-removed.md`). A few old tests keep a short sleep before checking that
+something did NOT happen: load cannot turn them red, and they are not a model. An existing test that goes red under load
+is deleted, never rerun and never given a longer deadline.
 
 Load tests, stress tests, synthetic CPU/RAM load generators, benchmarks under load and e2e runs repeated to load the
 machine run only at night, outside the owner's working hours; never during the day on their work PC (owner,
