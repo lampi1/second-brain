@@ -89,6 +89,31 @@ describe('SkillLibrary', () => {
     await expect(lib.setRoles('a', [])).rejects.toThrow('predefinita');
   });
 
+  it('review notes: home skills only from the page, binaries and other SKILL.md spellings refused, a delete that would lose files refused, roles checked before any change', async () => {
+    const home = tmp();
+    const { root, lib, links } = setup({ roles: [{ id: 'scout', name: 'Scout', skills: ['a'] }, { id: 'sentinel', name: 'Sentinel', skills: [], knowhow: { linked: [] } as never }] });
+    const withHome = new SkillLibrary({ root: () => null, home, appSkills: () => null, changes: () => new ChangeLog(tmp()), undo: () => {}, roles: () => [], link: () => {}, runs: () => [], unify: false, guard: async () => null });
+    expect(await withHome.write({ skill: 'mia', path: 'SKILL.md', text: md('mia') }, { who: 'Orchestrator' })).toMatchObject({ ok: false });
+    expect(await withHome.write({ skill: 'mia', path: 'SKILL.md', text: md('mia') }, { who: 'tu', page: true })).toMatchObject({ ok: true, skill: { origin: 'home' } });
+    expect(fs.existsSync(path.join(home, '.claude/skills/mia/SKILL.md'))).toBe(true);
+    expect(await withHome.write({ skill: 'mia', path: 'scripts/x.mjs', text: 'x' }, { who: 'Orchestrator' })).toMatchObject({ ok: false, error: expect.stringContaining('pagina Skill') });
+    expect((await withHome.remove('mia', { who: 'Orchestrator' })).ok).toBe(false);
+
+    put(root, '.agents/skills/a/SKILL.md', md('a'));
+    put(root, '.agents/skills/a/assets/logo.png', Buffer.from([0x89, 0x50, 0, 1, 2]));
+    expect(await lib.write({ skill: 'a', path: 'assets/logo.png', text: null }, { who: 't' })).toMatchObject({ ok: false, error: expect.stringContaining('binario') });
+    expect(await lib.write({ skill: 'a', path: 'assets/logo.png', text: 'x' }, { who: 't' })).toMatchObject({ ok: false, error: expect.stringContaining('binario') });
+    for (const p of ['skill.md', 'SKILL.md.', 'Skill.MD', 'scripts/x.']) expect((await lib.write({ skill: 'a', path: p, text: 'x' }, { who: 't' })).ok).toBe(false);
+    expect(await lib.remove('a', { who: 't' })).toMatchObject({ ok: false, error: expect.stringContaining('assets/logo.png') });
+    put(root, '.agents/skills/b/SKILL.md', md('b'));
+    put(root, '.agents/skills/b/.env', 'SECRET=1');
+    expect(await lib.remove('b', { who: 't' })).toMatchObject({ ok: false, error: expect.stringContaining('.env') });
+    expect(fs.existsSync(path.join(root, '.agents/skills/b/.env'))).toBe(true);
+
+    await expect(lib.setRoles('a', ['sentinel'])).rejects.toThrow('predefinita');
+    expect(links).toEqual([]);
+  });
+
   it('reads the area from the frontmatter', () => {
     expect(areaOf('---\nname: x\narea: dati\n---\n')).toBe('dati');
     expect(areaOf('---\nname: x\nmetadata:\n  area: "rilasci"\n---\n')).toBe('rilasci');

@@ -48,4 +48,14 @@ describe('unifySkillFolders', () => {
     expect(r.state).toBe('kept');
     expect(fs.readFileSync(path.join(other, '.agents/skills/y/SKILL.md'), 'utf8')).toBe('y');
   });
+  it('makes a dangling link again (the brain folder moved), relative outside Windows', async () => {
+    const root = tmp();
+    fs.mkdirSync(path.join(root, '.agents/skills/x'), { recursive: true });
+    fs.mkdirSync(path.join(root, '.claude'), { recursive: true });
+    fs.symlinkSync(path.join(root, 'gone'), path.join(root, '.claude/skills'), process.platform === 'win32' ? 'junction' : 'dir');
+    expect((await unifySkillFolders(root, { gitRm: async () => {} })).state).toBe('linked');
+    expect(fs.existsSync(path.join(root, '.claude/skills/x'))).toBe(true);
+    if (process.platform !== 'win32') expect(fs.readlinkSync(path.join(root, '.claude/skills'))).toBe(path.join('..', '.agents', 'skills'));
+    expect((await unifySkillFolders(root, { gitRm: async () => {} })).state).toBe('already');
+  });
 });

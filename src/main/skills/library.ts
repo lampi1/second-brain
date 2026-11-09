@@ -19,6 +19,9 @@ import { errText, log } from '../log';
 import { checkWrite, type GuardInput, type HookRefusal } from './guard';
 import { brainSkillsDir, claudeSkillsDir, unifySkillFolders } from './layout';
 
+/** Who writes: `page` = the user's own click on the Skill page (the only writer of skills outside the brain). */
+export interface SkillWriter { who: string; reason?: string; page?: boolean }
+
 export interface SkillLibraryDeps {
   root: () => string | null;
   /** the user's home (~/.agents/skills, ~/.claude/skills); null = none (demo, tests) */
@@ -72,6 +75,24 @@ export function packageFiles(folder: string): SkillFile[] {
   return out.sort((a, b) => (a.path === 'SKILL.md' ? -1 : b.path === 'SKILL.md' ? 1 : (a.path.includes('/') ? 1 : 0) - (b.path.includes('/') ? 1 : 0) || a.path.localeCompare(b.path)));
 }
 
+/** Every file under a folder, hidden, linked or deep ones too (bounded): what a delete would take away. */
+function everyFile(folder: string, max = 2000): string[] {
+  const out: string[] = [];
+  const walk = (dir: string, rel: string) => {
+    let items: fs.Dirent[];
+    try { items = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const e of items) {
+      if (out.length >= max) return;
+      const r = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory() && !e.isSymbolicLink()) walk(path.join(dir, e.name), r); else out.push(r);
+    }
+  };
+  walk(folder, '');
+  return out;
+}
+const isTextFile = (file: string): boolean => { try { const fd = fs.openSync(file, 'r'); try { const b = Buffer.alloc(8000); const n = fs.readSync(fd, b, 0, b.length, 0); return isText(b.subarray(0, n)); } finally { fs.closeSync(fd); } } catch { return true; } };
+const sameFile = (a: string, b: string): boolean => { try { return fs.readFileSync(a).equals(fs.readFileSync(b)); } catch { return false; } };
+
 /** The skill's area for the filter: frontmatter `area:` or `metadata:` → `area:`. */
 export function areaOf(text: string): string | null {
   const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text.replace(/^﻿/, ''))?.[1] ?? '';
@@ -103,6 +124,12 @@ export class SkillLibrary {
       ...(this.d.home ? [{ dir: path.join(this.d.home, '.agents', 'skills'), origin: 'home' as const }, { dir: path.join(this.d.home, '.claude', 'skills'), origin: 'home' as const }] : []),
       ...(app ? [{ dir: app, origin: 'app' as const }] : []),
     ];
+  }
+
+  /** The app's own folder of a skill, when the app ships one. */
+  private appFolder(name: string): string | null {
+    const app = this.d.appSkills(), dir = app ? path.join(app, name) : null;
+    return dir && fs.existsSync(path.join(dir, 'SKILL.md')) ? dir : null;
   }
 
   private found(root = this.root()): Found[] {
@@ -189,7 +216,10 @@ export class SkillLibrary {
 
   /** The absolute file of `rel` in `folder`: a plain path that stays inside, through no link. */
   private fileOf(folder: string, rel: string): string {
-    if (typeof rel !== 'string' || !SKILL_PATH.test(rel) || rel.split('/').some(s => s === '..' || s === '.')) throw new Error(`Percorso non valido: ${rel}`);
+    // no «..», no segment ending in a dot or a space (Windows drops them), and no other spelling of SKILL.md (a
+    // case-insensitive disk would reach SKILL.md past its checks)
+    if (typeof rel !== 'string' || !SKILL_PATH.test(rel) || rel.split('/').some(s => s === '..' || s === '.' || /[. ]$/.test(s))
+      || (rel !== 'SKILL.md' && rel.toLowerCase().replace(/[. ]+$/, '') === 'skill.md')) throw new Error(`Percorso non valido: ${rel}`);
     const file = path.join(folder, ...rel.split('/'));
     let at = folder;
     for (const part of rel.split('/')) { at = path.join(at, part); try { if (fs.lstatSync(at).isSymbolicLink()) throw new Error('Un collegamento non è un file della skill.'); } catch (e) { if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e; } }
@@ -199,7 +229,7 @@ export class SkillLibrary {
 
   /** Writes one file of a skill (null = removes it), as one undoable change. A new SKILL.md creates the skill in the
    *  brain; the first edit of an app skill copies its package into the brain. `by` names who asked, for the history. */
-  async write(req: SkillWrite, by: { who: string; reason?: string }): Promise<SkillWriteResult> {
+  async write(req: SkillWrite, by: SkillWriter): Promise<SkillWriteResult> {
     try {
       await this.ready();
       const name = String(req?.skill ?? ''), rel = String(req?.path ?? '');
@@ -212,7 +242,7 @@ export class SkillLibrary {
       if (creating) {
         if (rel !== 'SKILL.md' || req.text === null) return { ok: false, error: `Skill non trovata: ${name}. Per crearla scrivi prima il suo SKILL.md.` };
         // without a brain a new skill goes to the user's ~/.claude/skills, where Claude finds it in every chat
-        if (!root && !this.d.home) return { ok: false, error: 'Scegli prima la cartella del brain: le skill nuove vanno lì.' };
+        if (!root && (!this.d.home || !by.page)) return { ok: false, error: 'Scegli prima la cartella del brain: le skill nuove vanno lì.' };
         f = root ? { name, origin: 'brain', folder: path.join(brainSkillsDir(root), name), overridesApp: false }
           : { name, origin: 'home', folder: path.join(this.d.home!, '.claude', 'skills', name), overridesApp: false };
       }
@@ -223,6 +253,8 @@ export class SkillLibrary {
         const named = field(parseMd(req.text), 'name')?.trim();
         if (named && named !== name) return { ok: false, error: `Il name del frontmatter («${named}») deve essere il nome della cartella («${name}»).` };
       }
+      // the user's own skills (~/.claude, ~/.agents) load in every Claude session of the PC: only the user's click changes them
+      if (f!.origin === 'home' && !by.page) return { ok: false, error: 'Le skill della tua cartella utente si cambiano solo dalla pagina Skill.' };
       // an app skill is edited as a brain copy of its whole package
       const copy = f!.origin === 'app';
       if (copy && !root) return { ok: false, error: 'Scegli prima la cartella del brain: la copia modificabile di una skill dell’app va lì.' };
@@ -232,9 +264,13 @@ export class SkillLibrary {
       const sourceFile = this.fileOf(source.folder, rel);
       if (typeof req.mtime === 'number') { try { if (fs.statSync(sourceFile).mtimeMs > req.mtime + 1) return { ok: false, error: 'Il file è cambiato su disco dopo che l’hai aperto: ricaricalo, poi rifai la modifica.' }; } catch { /* a new file */ } }
       if (req.text === null && !fs.existsSync(sourceFile)) return { ok: false, error: 'Il file non c’è.' };
+      // a binary file has no text history: its Undo could not put it back, so it is changed in the skill's folder
+      if (fs.existsSync(sourceFile) && !isTextFile(sourceFile)) return { ok: false, error: 'È un file binario: si cambia o si toglie dalla cartella della skill.' };
       if (req.text !== null) {
         const refused = await this.guard({ home: this.d.home ?? '', root: root ?? null, filePath: file, content: req.text });
         if (refused) return { ok: false, error: refused.message };
+        // the hook may take a while: a change on disk meanwhile wins
+        if (typeof req.mtime === 'number') { try { if (fs.statSync(sourceFile).mtimeMs > req.mtime + 1) return { ok: false, error: 'Il file è cambiato su disco dopo che l’hai aperto: ricaricalo, poi rifai la modifica.' }; } catch { /* a new file */ } }
       }
       const writes: { file: string; text: string | null }[] = [];
       if (copy) {
@@ -245,9 +281,11 @@ export class SkillLibrary {
       }
       if (req.text === null && copy) { /* removing a file of an app skill: the copy simply leaves it out */ }
       else writes.push({ file, text: req.text });
+      if (writes.some(w => { try { return fs.statSync(w.file).size > MAX_TEXT; } catch { return false; } })) return { ok: false, error: 'Un file della skill supera 256 KB: la cronologia non potrebbe annullarlo, cambialo dalla cartella.' };
       const action = creating ? 'create' : req.text === null ? 'remove' : 'update';
       const what = creating ? `Skill «${name}» creata` : copy ? `Copia modificabile di «${name}» (skill dell’app): ${rel}` : `${rel} di «${name}» ${req.text === null ? 'tolto' : 'modificato'}`;
       const c = this.d.changes().apply({ job: 'user', kind: 'skill', action, target: name, summary: `${what} (${by.who})`, reason: by.reason?.slice(0, 500) || `Modifica dalla pagina Skill o dall’Orchestrator (${by.who}).`, evidence: [rel] }, writes);
+      if (!c && writes.length) return { ok: false, error: 'Niente salvato: un file è troppo grande per la cronologia.' };
       if (copy) for (const pf of packageFiles(source.folder)) {
         // binary assets come along as they are (they have no text history)
         if (pf.text) continue;
@@ -265,16 +303,22 @@ export class SkillLibrary {
 
   /** Removes a brain or home skill, or a brain copy of an app skill (its whole package's text, one undoable change:
    *  binary files have no history and go with the folder). The app's own skills are not removed. */
-  async remove(name: string, by: { who: string; reason?: string }): Promise<SkillWriteResult | { ok: true; changeId: string | null; skill: null }> {
+  async remove(name: string, by: SkillWriter): Promise<SkillWriteResult | { ok: true; changeId: string | null; skill: null }> {
     await this.ready();
     const f = this.find(String(name));
     if (!f) return { ok: false, error: `Skill non trovata: ${name}` };
     if (f.origin === 'app') return { ok: false, error: 'Una skill dell’app non si elimina: puoi toglierla ai ruoli.' };
+    if (f.origin === 'home' && !by.page) return { ok: false, error: 'Le skill della tua cartella utente si eliminano solo dalla pagina Skill.' };
     const files = packageFiles(f.folder);
     if (files.some(x => x.text && x.size > MAX_TEXT)) return { ok: false, error: 'Un file della skill è troppo grande per la cronologia: eliminala dalla cartella.' };
+    // the history keeps text only: a file it could not put back (binary, hidden, linked, too deep) stops the delete,
+    // unless it is the app's own copy of an override (the original stays in the app)
+    const app = f.overridesApp ? this.appFolder(f.name) : null;
+    const lost = everyFile(f.folder).filter(rel => !files.some(x => x.text && x.path === rel) && !(app && sameFile(path.join(f.folder, ...rel.split('/')), path.join(app, ...rel.split('/')))));
+    if (lost.length) return { ok: false, error: `La cronologia non potrebbe rimettere ${lost.length === 1 ? 'questo file' : 'questi file'}: ${lost.slice(0, 5).join(', ')}${lost.length > 5 ? '…' : ''}. Toglili dalla cartella della skill, poi eliminala.` };
     const c = this.d.changes().apply({ job: 'user', kind: 'skill', action: 'remove', target: f.name, summary: f.overridesApp ? `Ripristinata la skill dell’app «${f.name}» (tolta la copia del brain) (${by.who})` : `Skill «${f.name}» eliminata (${by.who})`, reason: by.reason?.slice(0, 500) || 'Scelta tua sulla pagina Skill.', evidence: [] },
       files.filter(x => x.text).map(x => ({ file: path.join(f.folder, ...x.path.split('/')), text: null })));
-    for (const x of files.filter(x => !x.text)) fs.rmSync(path.join(f.folder, ...x.path.split('/')), { force: true });
+    // what is left: the override's copies of the app's binaries (checked above) and empty folders
     try { fs.rmSync(f.folder, { recursive: true, force: true }); } catch { /* left over: empty folders only */ }
     log.info('skills', 'skill removed', { data: { skill: f.name, by: by.who, change: c?.id ?? null } });
     this.d.changed?.();
@@ -311,13 +355,14 @@ export class SkillLibrary {
     const s = await this.skill(name);
     const known = new Set(this.d.roles().filter(r => r.scope === 'role').map(r => r.id));
     const want = new Set(roles.filter(r => known.has(r)));
-    const profiles = this.d.roles();
-    for (const id of known) {
-      const p = profiles.find(x => x.id === id)!;
+    const profiles = this.d.roles().filter(r => known.has(r.id));
+    // checked first, then applied: a refused request changes no role
+    const kept = profiles.find(p => !want.has(p.id) && p.skills.includes(s.name));
+    if (kept) throw new Error(`«${s.name}» è una skill predefinita di ${kept.name}: si toglie dal ruolo (Agenti → ${kept.name}).`);
+    for (const p of profiles) {
       const linked = !!p.knowhow?.linked.includes(s.name), byDefault = p.skills.includes(s.name);
-      if (want.has(id) && !linked && !byDefault) this.d.link(s.name, id, true);
-      else if (!want.has(id) && linked) this.d.link(s.name, id, false);
-      else if (!want.has(id) && byDefault) throw new Error(`«${s.name}» è una skill predefinita di ${p.name}: si toglie dal ruolo (Agenti → ${p.name}).`);
+      if (want.has(p.id) && !linked && !byDefault) this.d.link(s.name, p.id, true);
+      else if (!want.has(p.id) && linked) this.d.link(s.name, p.id, false);
     }
     this.d.changed?.();
     return this.skill(name);

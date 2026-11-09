@@ -23,15 +23,20 @@ call every skill by writing to the Orchestrator, and to see and edit the app's o
   two-pane page: list with search and filters (origin, usage, role, area), and the skill on the right with tabs Leggi,
   File (tree + editor, Ctrl+S), Ruoli and Cronologia, plus «Prova» (writes `/name` in the Orchestrator).
 - **App skills are visible and editable.** Editing one copies its whole package into the brain, which then replaces it
-  («sostituisce quella dell'app»); «Ripristina originale» removes the copy. Skills in the user's home folders are
-  edited and deleted in place; without a brain a new skill goes to `~/.claude/skills`.
+  («sostituisce quella dell'app»); «Ripristina originale» removes the copy. Skills in the user's home folders
+  (`~/.claude/skills`, `~/.agents/skills`, loaded by every Claude session of the PC) are changed only by the user's own
+  click on the page, never by the Orchestrator; without a brain a new skill from the page goes to `~/.claude/skills`.
 - **History (#363).** Every write (page, Orchestrator, maintenance) goes through the ChangeLog with job `user` or the
   writer's job: who, when, before/after per file, Undo while the files still match. The page shows it per skill.
 - **Roles (#364).** The Ruoli tab switches the skill on and off for each role (the existing `link`), shows the role's
   defaults (removed only from the role's page) and the usage per role. The Orchestrator loads every skill.
 - **Orchestrator tools.** `app_skills`, `app_skill_write`, `app_skill_roles` and `app_skill_undo` give it the same
   powers as the page, without approval (ADR 0077: skill changes apply with log and Undo). Every write is checked
-  (name, `SKILL.md` frontmatter, paths inside the folder, no symlinks, a stale edit is refused).
+  (name, `SKILL.md` frontmatter, paths inside the folder, no other spelling of `SKILL.md`, no symlinks, a stale edit is
+  refused). The history keeps text only, so a binary file is changed in the skill's folder, and a delete that would
+  lose a file the history cannot put back (binary, hidden, linked) is refused with its list.
+- **Launch safety.** A skill the package checks refuse (a link, a big or binary file outside the allowed asset types,
+  an executable) is left out of a start with a warning in the Log; only a launch that names it fails.
 
 ## Consequences
 - The brain layout itself is unchanged (no upgrade card); the move to `.agents/skills` happens on first use.

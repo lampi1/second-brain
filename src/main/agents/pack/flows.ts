@@ -70,7 +70,18 @@ export class AgentPackFlows {
       // a declared skill that is gone (undone, merged, deleted by hand) never blocks the role's start
       if (!shared && files.has(`skills/${name}/SKILL.md`)) { loaded.push(name); continue; }
       if (!shared) { log.warn('agents', 'Declared skill missing at start', { data: { agent: id, skill: name }, cause: 'The skill folder is gone', hint: 'Run the maintenance on the Skill page: it relinks or drops missing skills' }); continue; }
-      for (const [file, data] of readPackSource(shared.folder)) files.set(`skills/${name}/${file}`, data);
+      // one skill the package checks refuse (a link, a big or binary file, an .exe) is left out with a warning: it never
+      // stops the role's start, unless the launch asked for it by name
+      let one: PackFiles;
+      try {
+        one = new Map([...readPackSource(shared.folder)].map(([file, data]) => [`skills/${name}/${file}`, data]));
+        inspectPack(new Map([...one, ['plugin.json', Buffer.from('{"name":"probe"}')]]));
+      } catch (e) {
+        if (launch.includes(name)) throw e;
+        log.warn('agents', 'Skill left out at start', { data: { agent: id, skill: name }, cause: e instanceof Error ? e.message : String(e), hint: 'Open the skill on the Skill page and remove the file the check refuses' });
+        continue;
+      }
+      for (const [file, data] of one) files.set(file, data);
       loaded.push(name);
     }
     for (const key of files.keys()) { const name = key.split('/')[1]; if (name && !loaded.includes(name)) loaded.push(name); }

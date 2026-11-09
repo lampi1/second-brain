@@ -57,7 +57,11 @@ const gitRmCached: GitRm = root => new Promise(resolve => {
 /** Moves the brain's `.claude/skills` into `.agents/skills` and links it back; safe to call at every start. */
 export async function unifySkillFolders(root: string, o: { gitRm?: GitRm; link?: (target: string, at: string) => void } = {}): Promise<UnifyResult> {
   const agents = brainSkillsDir(root), claude = claudeSkillsDir(root);
-  if (isLink(claude)) return { state: 'already', moved: [], conflicts: [] };
+  if (isLink(claude)) {
+    // a link that still leads somewhere stays; a dangling one (the brain folder moved) is made again below
+    if (fs.existsSync(claude)) return { state: 'already', moved: [], conflicts: [] };
+    try { fs.unlinkSync(claude); } catch (e) { log.warn('skills', 'dangling skills link not removed', { cause: errText(e) }); return { state: 'already', moved: [], conflicts: [] }; }
+  }
   const moved: string[] = [], conflicts: string[] = [];
   try {
     fs.mkdirSync(agents, { recursive: true });
@@ -75,7 +79,8 @@ export async function unifySkillFolders(root: string, o: { gitRm?: GitRm; link?:
       fs.rmdirSync(claude);
     }
     fs.mkdirSync(path.dirname(claude), { recursive: true });
-    (o.link ?? ((target, at) => fs.symlinkSync(target, at, process.platform === 'win32' ? 'junction' : 'dir')))(agents, claude);
+    // relative on macOS and Linux (it survives a move of the brain folder); a Windows junction needs the full path
+    (o.link ?? ((target, at) => fs.symlinkSync(process.platform === 'win32' ? target : path.relative(path.dirname(at), target), at, process.platform === 'win32' ? 'junction' : 'dir')))(agents, claude);
     ignoreLink(root);
     if (moved.length) await (o.gitRm ?? gitRmCached)(root);
     log.info('skills', 'brain skills unified in .agents/skills', { data: { moved: moved.length } });

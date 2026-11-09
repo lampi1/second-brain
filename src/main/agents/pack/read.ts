@@ -27,6 +27,8 @@ const textOf = (data: Buffer): string => {
   return text;
 };
 const isUtf8Text = (data: Buffer): boolean => { try { textOf(data); return true; } catch { return false; } };
+/** The binary files a skill package may carry in assets/ or references/: documents, images, fonts, media, data. */
+const binaryAsset = (name: string): boolean => /\.(png|jpe?g|gif|webp|bmp|ico|tiff?|pdf|docx?|xlsx?|pptx?|od[tsp]|rtf|woff2?|ttf|otf|mp3|wav|ogg|m4a|mp4|webm|parquet|sqlite|db)$/i.test(name);
 const executable = (name: string): boolean => /\.(exe|dll|com|so|dylib)$/i.test(name);
 const script = (name: string): boolean => name.split('/').includes('scripts') || /\.(sh|ps1|py|js|mjs|cjs|cmd|bat)$/i.test(name);
 
@@ -88,8 +90,8 @@ export function inspectPack(input: PackFiles): PackInspection {
     if (/^skills\/[^/]+\//.test(name)) {
       const skillName = name.split('/')[1]!;
       // a skill is a package (#361): its SKILL.md and scripts are text, its assets/ and references/ may be binary
-      // (an image, a PDF, a template), copied as they are
-      if (!(name === `skills/${skillName}/SKILL.md` || script(name)) && /^skills\/[^/]+\/(?:assets|references)\//.test(name) && !isUtf8Text(data)) {
+      // of a known document, image, font, media or data type (an image, a PDF, a template), copied as they are
+      if (!(name === `skills/${skillName}/SKILL.md` || script(name)) && /^skills\/[^/]+\/(?:assets|references)\//.test(name) && binaryAsset(name) && !isUtf8Text(data)) {
         if (!packName(skillName)) throw new Error('Invalid skill folder');
         result.files.set(name, Buffer.from(data)); continue;
       }

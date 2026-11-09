@@ -65,6 +65,18 @@ describe('role know-how at launch', () => {
     expect(f.flows.runtime('sentinel').skills).not.toContain('reviewer');
     expect(f.flows.runtime('orchestrator').skills).toContain('reviewer');
   });
+  it('a skill the package checks refuse is left out of the Orchestrator\'s start, and refused when a launch names it', () => {
+    const f = setup();
+    const bad = path.join(f.root, 'home-skills', 'broken');
+    fs.mkdirSync(bad, { recursive: true });
+    fs.writeFileSync(path.join(bad, 'SKILL.md'), '---\nname: broken\ndescription: x\n---\nx\n');
+    fs.writeFileSync(path.join(bad, '.DS_Store'), Buffer.from([0, 1, 2, 0, 255]));
+    const inventory = [...f.flows.deps.sharedSkills!(), { name: 'broken', folder: bad }];
+    (f.flows.deps as { sharedSkills?: () => typeof inventory }).sharedSkills = () => inventory;
+    const orc = f.flows.runtime('orchestrator');
+    expect(orc.skills).toContain('reviewer'); expect(orc.skills).not.toContain('broken');
+    expect(() => f.flows.runtime('sentinel', ['broken'])).toThrow();
+  });
   it('builds a hook-free native skill package with the requested skills and names their files', () => {
     const f = setup();
     expect(() => f.flows.runtime('sentinel', ['missing-skill'])).toThrow(/missing-skill/);
