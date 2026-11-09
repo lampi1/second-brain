@@ -96,7 +96,7 @@
     "src/main/brainmodel/model.ts#readSkills": "85ddc0846e9b855d",
     "src/main/brainmodel/procedure-sources.ts": "d81d19a86890b402",
     "src/main/brainmodel/research-candidate.ts": "bfc44dfaf7d259e6",
-    "src/main/brainmodel/research-deep.ts": "2be7ae64693bb7bd",
+    "src/main/brainmodel/research-deep.ts": "91f399ea3d1babc3",
     "src/main/brainmodel/research-prompt.ts#researchFrame": "43461d912d007bdc",
     "src/main/brainmodel/service.ts#link": "e648e822d8c83765",
     "src/main/brainmodel/service.ts#start": "cb130d0a267d642f",
