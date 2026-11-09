@@ -66,3 +66,17 @@ it('tells the agent it may sign in itself on a remote sign-in page', async () =>
   expect(notice).toContain('handoff_to_user');
   expect(notice).not.toMatch(/never type/i);
 });
+
+it('a screenshot hides the password fields first (a revealed one too) and shows them again after', async () => {
+  const { actions, tab } = remotePage();
+  const order: string[] = [];
+  vi.mocked(actions.evalIn).mockImplementation(async (_tab, _frame, script: string) => {
+    if (script.includes('shotMask')) order.push(script.trimEnd().endsWith('(true)') ? 'hide' : 'show');
+    return 1 as never;
+  });
+  const img = { isEmpty: () => false, getSize: () => ({ width: 800, height: 600 }), toPNG: () => Buffer.from('png'), resize: () => img };
+  Object.assign(tab.wc, { capturePage: async () => { order.push('capture'); return img; } });
+  Object.assign((actions as unknown as { tabs: object }).tabs, { viewport: () => ({ width: 800, height: 600 }) });
+  await actions.screenshot(tab, {});
+  expect(order).toEqual(['hide', 'capture', 'show']);
+});

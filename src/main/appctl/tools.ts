@@ -29,6 +29,7 @@ import { engineLabel, engineOf } from '../engines/registry';
 import { agentsMayOpen, crossRefusal, openRefusal } from '../engines/policy';
 import type { BrainService, BrowserService, ChatService } from '../services';
 import { log, redact } from '../log';
+import { withPasswordsHidden } from '../browser/shot-mask';
 import { fmtFactor, previewOf } from '../browser/preview';
 import { healthSnapshot } from '../health';
 import { timerSnapshot } from '../timers';
@@ -416,6 +417,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
         const win = d.window();
         if (!win) return 'no window';
         const images: { data: string; mimeType: string; caption: string }[] = [];
+        const left: string[] = [];
         const ui = await win.webContents.capturePage();
         const p = previewOf(ui);
         images.push({ data: p.data, mimeType: p.mimeType, caption: `app UI ${ui.getSize().width}x${ui.getSize().height}, image ${p.width}x${p.height} (UI px = image px × ${fmtFactor(p.factor)})` });
@@ -423,14 +425,16 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
           const wc = (v as { webContents?: Electron.WebContents }).webContents;
           if (!wc) continue;
           const b = v.getBounds();
-          let img = await wc.capturePage();
+          // an agent tab may show a password ("show password"): hidden for the capture, or the tab is left out
+          let img = await withPasswordsHidden(wc.mainFrame?.framesInSubtree ?? [], frameRun, () => wc.capturePage()).catch(() => null);
+          if (!img) { left.push(`browser tab ${redact(wc.getURL())} not captured: its password fields could not be hidden`); continue; }
           // an agent tab drawn scaled (browser/tabs.ts emulate) captures a desktop-size surface with the view in its corner
           const k = ui.getSize().width / Math.max(1, win.getContentSize()[0]!), s = img.getSize();
           if (s.width > Math.round(b.width * k) + 1) img = img.crop({ x: 0, y: 0, width: Math.min(s.width, Math.round(b.width * k)), height: Math.min(s.height, Math.round(b.height * k)) });
           const t = previewOf(img);
           images.push({ data: t.data, mimeType: t.mimeType, caption: `browser tab ${redact(wc.getURL())} at x=${b.x} y=${b.y} ${b.width}x${b.height}, image ${t.width}x${t.height} (capture px = image px × ${fmtFactor(t.factor)})` });
         }
-        return { text: `${images.length} images`, images };
+        return { text: [`${images.length} images`, ...left].join('; '), images };
       },
     },
     {
@@ -776,4 +780,11 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     if (refused) throw new Error(`bloccato: un agente non può ${verb} una chat ${engineLabel(c.harness)}: ${refused}`);
     return ['running', 'waiting', 'idle'].includes(c.state);
   }
+}
+
+/** A frame script for the screenshot's password mask, with a deadline (a page blocked by a dialog never answers). */
+function frameRun(frame: Electron.WebFrameMain, script: string): Promise<unknown> {
+  let timer: NodeJS.Timeout | undefined;
+  return Promise.race([frame.executeJavaScript(script) as Promise<unknown>,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('the page did not answer')), 3000); })]).finally(() => clearTimeout(timer));
 }

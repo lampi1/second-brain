@@ -371,6 +371,30 @@ export function inputInfo(ref: string): InputInfo | { error: string } {
   };
 }
 
+/** For the length of a screenshot (browser/shot-mask.ts): on hides the value of every field ever seen as a password
+ *  field, one a "show password" toggle turned into type=text included (-webkit-text-security: disc, inline and
+ *  important); off puts each field's own style back. Returns how many fields it touched. */
+export function shotMask(on: boolean): number {
+  const W = window as unknown as { __sbPw: PwKit; __sbShot?: Map<HTMLElement, [string, string]> };
+  const P = '-webkit-text-security';
+  if (on) {
+    const kept = W.__sbShot ?? new Map<HTMLElement, [string, string]>();
+    for (const el of W.__sbPw.scan(document)) {
+      const h = el as HTMLElement;
+      if (!kept.has(h)) kept.set(h, [h.style.getPropertyValue(P), h.style.getPropertyPriority(P)]);
+      h.style.setProperty(P, 'disc', 'important');
+    }
+    Object.defineProperty(window, '__sbShot', { value: kept, enumerable: false, configurable: true, writable: true });
+    void document.documentElement.offsetHeight;   // style applied before the capture's frame
+    return kept.size;
+  }
+  const kept = W.__sbShot;
+  if (!kept) return 0;
+  for (const [h, [value, priority]] of kept) { if (value) h.style.setProperty(P, value, priority); else h.style.removeProperty(P); }
+  delete W.__sbShot;
+  return kept.size;
+}
+
 /** Does this frame hold a password field? Pierces open shadow roots; hidden fields count unless visibleOnly (the
  *  sign-in page detection of the session status wants only what the user sees). */
 export function hasPasswordField(visibleOnly: boolean): boolean {

@@ -24,6 +24,7 @@ import { globMatch } from './glob';
 import { hostOf, isLocalHost, urlCredentials } from './guard';
 import { isLoginUrl } from './envs';
 import { localScriptOrigin } from './script-policy';
+import { withPasswordsHidden } from './shot-mask';
 
 const sleep = (ms: number) => new Promise<void>(r => setTimeout(r, ms));
 /** A call whose tab went away while it ran: who closed it, so the agent knows not to reopen it blindly. */
@@ -546,8 +547,13 @@ export class BrowserActions {
 
   // ---------- seeing ----------
 
+  /** A screenshot of the tab with every password field's value hidden (shot-mask.ts), a revealed one included. */
   async screenshot(tab: Tab, o: { region?: unknown; full_page?: unknown }): Promise<Shot> {
     if (tab.wc.isDestroyed()) throw new Error(goneText(tab));
+    return await withPasswordsHidden(this.tabs.frames(tab), (f, script) => this.evalIn(tab, f, script, 3000), () => this.capture(tab, o));
+  }
+
+  private async capture(tab: Tab, o: { region?: unknown; full_page?: unknown }): Promise<Shot> {
     const b = this.tabs.viewport(tab);
     if (o.full_page === true) {
       const cdp = this.cdp(tab);
