@@ -15,6 +15,9 @@ const request: Request = url => fetch(url, { redirect: 'error', signal: AbortSig
 export async function issueSnapshot(repo: string | null, get: Request = request, now = Date.now()): Promise<IssueSnapshot> {
   const result: IssueSnapshot = { repo, status: 'unverified', at: now, note: 'dedup da verificare: repository non disponibile', issues: [] };
   if (!repo || !/^[\w.-]+\/[\w.-]+$/.test(repo) || repo.split('/').some(x => x === '.' || x === '..')) return result;
+  // an agent's hidden run and the e2e (SB_HIDDEN, main/window.ts hiddenRun) never reach GitHub: their checks must not
+  // depend on the live issues of the real repository
+  if (process.env.SB_HIDDEN === '1') return { ...result, note: 'dedup da verificare: run nascosto, GitHub non letto' };
   try {
     for (let page = 1; page <= 10; page++) {
       const response = await get(`https://api.github.com/repos/${repo}/issues?state=open&per_page=100&page=${page}`);
