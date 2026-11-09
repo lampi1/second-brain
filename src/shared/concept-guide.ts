@@ -833,6 +833,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
     summary: b('Una cartella di note, nuova e vuota alla prima configurazione (o un brain che hai già): gli agenti la leggono e la scrivono, l’app la mostra dal vivo.',
       'A folder of notes, new and empty at the first setup (or a brain you already have): agents read and write it, the app shows it live.'),
     points: [
+      // src/main/agents/run-examples.ts, src/renderer/components/AgentContextInspector.tsx (ADR 0236)
+      b('Quando un ruolo parte riceve fino a 2 esempi brevi di sue run passate riuscite e verificate (da te, da una review o dai controlli, mai dalla sola parola dell’agente) su compiti simili nello stesso repository: compito, risultato, controlli passati. Il Contesto della run dice quali ha ricevuto.',
+        'When a role starts it gets up to 2 short examples of its own past runs that succeeded and were verified (by you, a review or the checks, never by the agent’s word alone) on similar tasks in the same repository: task, result, checks passed. The run’s Context says which it got.'),
       // src/main/brain/detect.ts isBrainFolder
       b('Si riconosce da brain.json (un brain nuovo) oppure da AGENTS.md più ops/tools/brain-site.mjs (un brain di prima); il percorso è salvato in config.json (brainRoot).',
         'It is recognised by brain.json (a new brain) or by AGENTS.md plus ops/tools/brain-site.mjs (an older brain); the path is saved in config.json (brainRoot).'),

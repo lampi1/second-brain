@@ -1,4 +1,4 @@
-// Frozen launch metadata shown on request; estimates and selection provenance are distinct from live token usage.
+// Frozen launch metadata shown on request (the memory, the past-run examples of ADR 0236, the skills); estimates and selection provenance are distinct from live token usage.
 import type { ChatSummary } from '@shared/contract';
 import { t } from '../i18n';
 import { Modal } from './ui';
@@ -14,6 +14,12 @@ export function AgentContextInspector({ chat, onClose }: { chat: ChatSummary; on
         <dl><dt>{t('rt.context.ineligible')}</dt><dd>{context.memory.omitted.ineligible}</dd><dt>{t('rt.context.unmatched')}</dt><dd>{context.memory.omitted.unmatched}</dd><dt>{t('rt.context.budget')}</dt><dd>{context.memory.omitted.budget}</dd></dl>
         {context.memory.records.map(r => <details key={r.id}><summary>{r.id} · {r.status} · ≈ {r.estimatedTokens} token</summary><p>{t('rt.context.source')}: {r.sourceRunId ?? r.sourceEventId ?? '—'}</p><p>{t('rt.context.score')}: {r.score.toFixed(3)}</p></details>)}
       </> : <p>{t('rt.context.unavailable')}</p>}
+      <h3>{t('rt.context.examples')}</h3>
+      {!context.examples ? <p className="rt-muted">{t('rt.context.examplesUnknown')}</p>
+        : context.examples.skipped ? <p className="rt-muted">{t('rt.context.examplesSkipped')}</p>
+        : context.examples.examples.length ? <><p data-testid="agent-context-examples">{t('rt.context.examplesGiven', { n: context.examples.examples.length, of: context.examples.candidates })}</p>
+          {context.examples.examples.map(e => <p key={e.runId}><code>{e.runId}</code> · ≈ {e.estimatedTokens} token</p>)}</>
+        : <p className="rt-muted">{t('rt.context.examplesNone')}</p>}
       <h3>{t('rt.context.skills')}</h3>{context.skills.map(s => <p key={s.name}><strong>{s.name}</strong> · <code>{s.sha256.slice(0, 12)}</code></p>)}
       <details><summary>{t('rt.context.manifest')}</summary><pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{JSON.stringify(context, null, 2)}</pre></details>
     </>}

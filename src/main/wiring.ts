@@ -40,6 +40,7 @@ import { askTools } from './chats/ask-tool';
 import { portableId } from './agents/pack/flows';
 import { memoryTools } from './rules/memory-tool';
 import { RecallCheck } from './rules/recall-check';
+import { launchExamples } from './agents/run-examples';
 import { MemoryService } from './rules/memory-service';
 import { writeAgentMemory } from './rules/memory';
 import type { AgentRun } from '../shared/agents';
@@ -294,11 +295,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
       // only the skills this launch gives exist in its plugin (the role gate refuses the others)
       const runtime = agentPacks.packs.runtime(roleId, req.skills ?? [], { query: req.goal ?? req.prompt ?? '', project: req.cwd });
       const resolvedHarness = resolved.request.harness;
-      return { ...resolved, launchContext: runtime.context, skills: runtime.skills, assets: { pluginDir: runtime.pluginDir, skillRoot: runtime.skillRoot },
+      // episodic memory (ADR 0236): verified past successes of this role on similar tasks in this repository
+      const ex = roleId === 'orchestrator' ? null : launchExamples(manager.runs.list(), { roleId, project: req.cwd ?? null, query: req.goal ?? req.prompt ?? '' });
+      return { ...resolved, launchContext: ex ? { ...runtime.context, examples: ex.selection } : runtime.context, skills: runtime.skills, assets: { pluginDir: runtime.pluginDir, skillRoot: runtime.skillRoot },
         // Claude loads the plugin itself: its instructions only need the skills' qualified names (issue #101)
-        instructions: engineOf(resolvedHarness)?.kind !== 'claude' ? `${resolved.instructions}\n\n${runtime.instructions}`
+        instructions: engineOf(resolvedHarness)?.kind !== 'claude' ? [resolved.instructions, runtime.instructions, ex?.text].filter(Boolean).join('\n\n')
           // and its memory: the plugin carries the skills, not the memory (before, a Claude role never saw it nor its id)
-          : [resolved.instructions, qualifiedSkillsLine(runtimePluginName(runtime.pluginDir), runtime.skills), runtime.memory].filter(Boolean).join('\n\n') };
+          : [resolved.instructions, qualifiedSkillsLine(runtimePluginName(runtime.pluginDir), runtime.skills), runtime.memory, ex?.text].filter(Boolean).join('\n\n') };
     },
     onRunEnded: run => loopRef.current?.ended(run),
     onRunOutcome: run => { routingVerdict(run); loopRef.current?.outcome(run); },
