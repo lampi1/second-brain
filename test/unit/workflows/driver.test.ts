@@ -61,9 +61,11 @@ it('leaves alone work that is moving, waits for the user, is blocked, has no dec
     [thread({ status: 'blocked', events: [...thread().events, { at: T0, stage: 'develop', kind: 'blocked', text: 'b' }, { at: T0, stage: 'develop', kind: 'updated', text: 'u' }] }), [chat()]],
     [thread(), [{ ...chat(), waitsOn: 'user' }]],                                    // asked the user in plain text
     [thread(), [{ ...chat(), background: 1 }]],                                      // a background task still runs
-    [thread(), [{ ...chat(), waitsOnWork: true }]],                                  // waits on a build, CI, an agent
   ];
   for (const [row, chats] of cases) expect(world([row], chats).driver.tick(late)).toBe(0);
+  // a wait on a colleague or on CI may never end (a crashed reviewer, no agent_wake_later): the Orchestrator hears it
+  expect(world([thread()], [{ ...chat(), waitsOn: 'colleagues' }]).driver.tick(late)).toBe(1);
+  expect(world([thread()], [{ ...chat(), waitsOnWork: true }]).driver.tick(late)).toBe(1);
   // an accepted request with no delivery receipt yet: uncertain, never re-executed (projection.ts needsDeliveryReview)
   const key = { jobId: 'w1', chatId: 'c1', taskVersion: 3, originalRequestId: 'r1' } as RequestRecord['key'];
   const accepted: RequestRecord = { id: 'q1', key, kind: 'permission', at: T0, payload: null, state: 'accepted' };

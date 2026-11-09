@@ -19,8 +19,8 @@ child turn end, a message to a sleeping session wakes it, a session can schedule
   last approval, even with an update after it, or 3 failed review cycles: those need a new proposal) and has no
   accepted request without a delivered or applied receipt (ADR 0234; workflow approvals never get one).
 - **Stalled work is news for the Orchestrator** (`workflows/driver.ts WorkDriver`, ticked every minute by
-  `wiring.ts`). When no linked chat is running, waiting, starting, pending, queued, running background tasks,
-  waiting on work (CI, a build) or waiting for a person in plain text, and nothing moved for 15 min, the Orchestrator
+  `wiring.ts`). When no linked chat is running, waiting, starting, pending, queued, running background tasks
+  or waiting for the user in plain text (a wait on a colleague or on CI may never end, so it does not count), and nothing moved for 15 min, the Orchestrator
   gets grouped news (`OrchestratorWake.stalledWork`, kind `stalled`, class `group`) with the stage, the next action
   and why nothing moves. Again after 30 and 60 min while nothing moves, then it stops; any move resets the count and
   withdraws news not delivered yet (`unstalled`). It is not kept in the outbox: after a restart the driver tells it
