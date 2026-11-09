@@ -180,7 +180,7 @@ export const ProposalCard = forwardRef<CardHandle, CardProps>(function ProposalC
       {c.ask.kind === 'research' && <ResearchBody a={c.ask} top={top} />}
       {c.ask.kind === 'candidate' && <CandidateBody a={c.ask} top={top} />}
       {c.issueDrafts?.map((issue, index) => <details key={index} className="pd-rs" data-testid={top ? 'pd-issue-draft' : undefined}>
-        <summary>{t('proposals.issueDraft')}: {issue.title}</summary>
+        <summary>{t(issue.opens ? 'proposals.issueOpens' : 'proposals.issueDraft')}: {issue.title}</summary>
         <p>{issue.repo || t('proposals.repoUnknown')}</p>
         <p data-testid={top ? 'pd-issue-dedup' : undefined}>{issue.dedup?.status === 'checked' ? t('proposals.dedupChecked') : t('proposals.dedupUnknown')}
           {issue.dedup?.status === 'checked' && <> · {issue.dedup.count} · {new Date(issue.dedup.at).toLocaleDateString(locale())}</>}</p>

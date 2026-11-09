@@ -40,11 +40,12 @@ const urlOf = (out: string, repo: string): string | null => {
   return m ? m[0] : null;
 };
 
-export async function openIssue(repo: string, issue: ResearchIssue, ports: IssueOpenPorts): Promise<IssueOpened> {
+/** review: skip gh, so the user checks the open issues on GitHub before pressing «Submit» (duplicates not verified). */
+export async function openIssue(repo: string, issue: ResearchIssue, ports: IssueOpenPorts, o: { review?: boolean } = {}): Promise<IssueOpened> {
   if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) throw new Error('Repository dell\'app sconosciuto: la issue non si può aprire.');
   const base = ['issue', 'create', '--repo', repo, '--title', issue.title, '--body-file', '-'];
   const labels = (issue.labels ?? []).flatMap(l => ['--label', l]);
-  for (const args of labels.length ? [[...base, ...labels], base] : [base]) {
+  for (const args of o.review ? [] : labels.length ? [[...base, ...labels], base] : [base]) {
     try {
       const url = urlOf(await ports.run(args, issue.body), repo);
       if (url) return { url, via: 'gh' };

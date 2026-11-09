@@ -2,7 +2,8 @@
 // ADR 0123): Italian labels, the source; English in proposals.en.ts, German in proposals.de.ts. Used through t().
 type N = { n: number };
 export const proposalsIt = {
-  'proposals.issueDraft': 'Bozza issue · da approvare separatamente',
+  'proposals.issueDraft': 'Bozza issue · solo testo, approvare non la pubblica',
+  'proposals.issueOpens': 'Issue · si apre approvando',
   'proposals.dedupUnknown': 'dedup da verificare',
   'proposals.dedupChecked': 'Issue aperte lette; controllo automatico dei titoli eseguito',
   'proposals.repoUnknown': 'Repository da verificare',

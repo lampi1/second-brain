@@ -2,7 +2,8 @@
 import type { proposalsIt } from './proposals.it';
 type N = { n: number };
 export const proposalsEn: typeof proposalsIt = {
-  'proposals.issueDraft': 'Issue draft · requires individual approval',
+  'proposals.issueDraft': 'Issue draft · text only, approving does not publish it',
+  'proposals.issueOpens': 'Issue · approving opens it',
   'proposals.dedupUnknown': 'Dedup not verified',
   'proposals.dedupChecked': 'Open issues read; automatic title check completed',
   'proposals.repoUnknown': 'Repository not verified',
