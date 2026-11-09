@@ -74,9 +74,10 @@ they touch are listed there as removed. Bringing them over would add back what r
   complete. The items it left open are done: sort order and duplicate scope (maintenance fix above), the memory
   screenshot retake (`55478782`) and the Guida text.
 
-## 5. Remote branches deleted
+## 5. Remote branches to delete
 
-Each was checked against `main` before deletion (non-equivalent patches found on `main` in rebased form or dropped as
+Not deleted yet: the agent's delete was blocked by its own permission guard, so the owner deletes them (one
+`git push origin --delete <name>` each). Each was checked against `main` (non-equivalent patches found on `main` in rebased form or dropped as
 in point 3). Tips recorded here so any of them can be restored with `git push origin <sha>:refs/heads/<name>`:
 
 | Branch | Tip | Check |
