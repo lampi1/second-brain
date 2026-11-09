@@ -205,6 +205,8 @@ describe('OrchestratorWake', () => {
     expect(sent).toHaveLength(2);
     expect(sent[1]!.text).toContain('Richiesta originale cmd-b-0');
     expect(sent[0]!.text).toContain('Richiesta originale cmd-a-0');
+    expect(sent[0]!.text).toContain('npm run check'); // the command itself, not only «Comando da eseguire»
+    expect(sent[1]!.text).toContain('npm ci');
     expect(sent[1]!.text).not.toContain('Richiesta originale q1');
     expect(sent[1]!.text).toContain('«qa» (Claude): ha finito il turno. Ultima riga: «Bug aperto.»');
     turn();
