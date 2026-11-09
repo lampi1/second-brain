@@ -239,3 +239,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0236](0236-episodic-memory-past-run-examples.md) Episodic memory: a role starts with up to 2 examples of its own verified past successes in the same repository — accepted
 - [0237](0237-agents-type-passwords-on-every-host.md) Agents type passwords on every host — accepted
 - [0238](0238-approved-work-continues-by-itself.md) Approved work goes on by itself: stalled-thread news, mail wakes a closed chat, one crash recovery, agent_wake_later, plain push allowed — accepted
+- [0239](0239-single-entry-through-the-orchestrator.md) Single entry: worker Sì/No questions through the Orchestrator (relay_question, Remote Control too), a command asked once and its result to every chat that asked it — accepted
