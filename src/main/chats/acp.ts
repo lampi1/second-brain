@@ -1390,8 +1390,11 @@ export class AcpSession implements HarnessSession {
       // skipped with how to ask, at most YESNO_RETRIES times in a row, then shown as it is
       const gate = (this.opts.yesNo ?? yesNoGateOn(process.env)) && questions.length > 0;
       const yesNo = yesNoShape(questions);
+      const waited = this.briefWaited.get(id); // set when this is the re-check after the grace
       const noBrief = gate && yesNo && !this.briefOff && !!this.opts.briefReady && !await this.opts.briefReady();
       if (this.exited || this.procExited) return;
+      // a stop during the re-check already answered it cancelled with the grace marker: never a second answer
+      if (waited && this.briefWaited.get(id) !== waited) return;
       // stopped while briefReady crossed the broker: the stop's own cancel round missed it, and ACP needs an answer
       if (generation !== this.brokerGeneration) return this.respond(id, { outcome: { outcome: 'cancelled' } });
       if (noBrief && !this.briefWaited.has(id) && this.yesNoRefused < YESNO_RETRIES) {

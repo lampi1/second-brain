@@ -2,7 +2,7 @@
 // stop's own round of cancels never saw it, so the adapter answers it itself (review of the app-owned runtime,
 // finding 3). ACP requires an answer to every request; Claude's CLI waits for its control_response. No engine
 // process: the writes to stdin are observed directly.
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AcpSession } from '../../../src/main/chats/acp';
 import { ClaudeSession } from '../../../src/main/chats/claude';
 import { recSink } from './helpers';
@@ -35,5 +35,29 @@ describe('a question cut by a stop is answered, never left waiting', () => {
     brief.done(true);
     await asked;
     expect(answers).toEqual([{ id: 7, result: { outcome: { outcome: 'cancelled' } } }]);
+  });
+});
+
+describe('a question re-checked after its brief grace and then stopped is answered once', () => {
+  it('ACP: the stop answers it cancelled and the late re-check stays silent', async () => {
+    vi.useFakeTimers();
+    try {
+      const briefs: ((v: boolean) => void)[] = [];
+      const s = new AcpSession({ chatId: 'c_q', cwd: '.', yesNo: true, briefReady: () => new Promise<boolean>(r => { briefs.push(r); }) } as ConstructorParameters<typeof AcpSession>[0], recSink());
+      const answers: unknown[] = [];
+      const raw = s as unknown as { respond(id: number | string, result: unknown): void; onAgentRequest(id: number | string, method: string, p: Record<string, unknown>): Promise<void> };
+      raw.respond = (id, result) => { answers.push({ id, result }); };
+      // a live engine for the stop's own cancel round (no real process: its notify is a no-op)
+      Object.assign(raw, { proc: {}, notify: () => {} });
+      const asked = raw.onAgentRequest(7, 'cursor/ask_question', { questions: [{ id: 'q1', prompt: 'Apro la PR?', options: [{ id: 'y', label: 'Sì' }, { id: 'n', label: 'No' }] }] });
+      briefs[0]!(false); // no brief yet: a grace, then a re-check
+      await asked;
+      await vi.runAllTimersAsync(); // the re-check now waits for its brief
+      expect(briefs).toHaveLength(2);
+      await s.interrupt();
+      briefs[1]!(true);
+      await vi.runAllTimersAsync();
+      expect(answers).toEqual([{ id: 7, result: { outcome: { outcome: 'cancelled' } } }]);
+    } finally { vi.useRealTimers(); }
   });
 });
