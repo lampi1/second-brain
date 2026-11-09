@@ -43,7 +43,7 @@ test.describe.serial('browser environments and the password guard', () => {
   test('the agent signs in by itself on a local stack, in environment "local" (the only one for local stacks, ADR 0063)', async () => {
     const opened = await agent.ok('tabs_create', { url: `${sites.a}/login` });
     expect(opened).toContain('env local');
-    expect(opened).toContain('Sign-in page on a local stack (127.0.0.1): you may sign in');
+    expect(opened).toContain('Sign-in page in environment local (127.0.0.1): sign in yourself');
     const form = await agent.ok('read_page', { filter: 'interactive' });
     // 127.0.0.1 is a local stack: a password may be filled (test accounts)
     const filled = await agent.ok('fill_form', { fields: [{ ref: refOf(form, /textbox "Utente"/), value: 'mario' }, { ref: refOf(form, /type=password/), value: 'test-only' }] });
@@ -147,6 +147,9 @@ test.describe.serial('browser environments and the password guard', () => {
     const filled = await agent.ok('fill_form', { fields: [{ ref: user, value: 'mario' }, { ref: pass, value: 'test-only' }] });
     expect(filled).toContain('•••');
     expect(filled).not.toContain('test-only');                  // a password value comes back masked
+    // a screenshot hides every password field first (browser/shot-mask.ts) and still works on a real page
+    const shot = await agent.call('screenshot', {});
+    expect(shot.isError, shot.text).toBe(false);
     form = await agent.ok('read_page', { filter: 'interactive', full: true }); // the whole tree, not the changes since the last read
     expect(form).toMatch(/textbox "Utente" value="mario"/);
     expect(form).not.toContain('test-only');
