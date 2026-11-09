@@ -19,8 +19,12 @@ type Pending<O> = {
   bytes: number;
   resolve(value: O): void;
   reject(error: RuntimeOperationError): void;
-  timer: ReturnType<typeof setTimeout>;
+  detach(): void;
 };
+
+/** Per-request bounds. timeoutMs null = no reply deadline (a long-lived stream read): the request still ends with
+ *  its generation (close) or its signal, both as uncertainty. Undefined = the channel's default deadline. */
+export interface RuntimeRequestOptions { timeoutMs?: number | null; signal?: AbortSignal }
 
 export class RuntimeChannel<I, O> {
   private nextSequence = 0;
@@ -37,8 +41,12 @@ export class RuntimeChannel<I, O> {
 
   get outstanding(): number { return this.pending.size; }
 
-  request(value: I): Promise<O> {
+  request(value: I, options: RuntimeRequestOptions = {}): Promise<O> {
     const operationId = randomUUID();
+    const timeoutMs = options.timeoutMs === undefined ? this.timeoutMs : options.timeoutMs;
+    if (timeoutMs !== null && (!Number.isFinite(timeoutMs) || timeoutMs <= 0))
+      return Promise.reject(new RuntimeOperationError('not-dispatched', operationId, 'Invalid runtime request deadline'));
+    if (options.signal?.aborted) return Promise.reject(new RuntimeOperationError('not-dispatched', operationId, 'Runtime request cancelled'));
     if (this.closed || this.pending.size >= this.limit)
       return Promise.reject(new RuntimeOperationError('not-dispatched', operationId, this.closed ? 'Runtime closed' : 'Runtime queue full'));
     let bytes: number;
@@ -48,21 +56,23 @@ export class RuntimeChannel<I, O> {
       return Promise.reject(new RuntimeOperationError('not-dispatched', operationId, 'Runtime byte budget exhausted'));
     const sequence = ++this.nextSequence;
     return new Promise<O>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(operationId);
-        this.pendingBytes -= bytes;
-        reject(new RuntimeOperationError('uncertain', operationId, 'Runtime reply deadline expired; not retried'));
-      }, this.timeoutMs);
-      timer.unref?.();
+      // Local abandonment only: a late reply is dropped as unknown, and the command is never sent again.
+      const abandon = (message: string): void => {
+        const p = this.pending.get(operationId);
+        if (!p) return;
+        p.detach(); this.pending.delete(operationId); this.pendingBytes -= bytes;
+        reject(new RuntimeOperationError('uncertain', operationId, message));
+      };
+      const onAbort = (): void => abandon('Runtime request cancelled; not retried');
+      const timer = timeoutMs === null ? undefined : setTimeout(() => abandon('Runtime reply deadline expired; not retried'), timeoutMs);
+      timer?.unref?.();
+      const detach = (): void => { clearTimeout(timer); options.signal?.removeEventListener('abort', onAbort); };
       this.pendingBytes += bytes;
-      this.pending.set(operationId, { sequence, bytes, resolve, reject, timer });
+      this.pending.set(operationId, { sequence, bytes, resolve, reject, detach });
+      options.signal?.addEventListener('abort', onAbort, { once: true });
       // A throwing post may already have sent the frame. Conservatively uncertain, never a safe-to-retry claim.
       try { this.post({ ...this.identity, operationId, sequence, payload: { kind: 'request', value } }); }
-      catch {
-        clearTimeout(timer);
-        if (this.pending.delete(operationId)) this.pendingBytes -= bytes;
-        reject(new RuntimeOperationError('uncertain', operationId, 'Runtime transport failed; not retried'));
-      }
+      catch { abandon('Runtime transport failed; not retried'); }
     });
   }
 
@@ -73,7 +83,7 @@ export class RuntimeChannel<I, O> {
     const p = this.pending.get(f.operationId);
     if (!p || p.sequence !== f.sequence || typeof f.payload.ok !== 'boolean') return false;
     if (!f.payload.ok && (typeof f.payload.error !== 'string' || !['rejected', 'uncertain'].includes(f.payload.outcome))) return false;
-    clearTimeout(p.timer); this.pending.delete(f.operationId);
+    p.detach(); this.pending.delete(f.operationId);
     this.pendingBytes -= p.bytes;
     if (f.payload.ok) p.resolve(f.payload.value);
     else p.reject(new RuntimeOperationError(f.payload.outcome, f.operationId, f.payload.error));
@@ -84,7 +94,7 @@ export class RuntimeChannel<I, O> {
     if (this.closed) return;
     this.closed = true;
     for (const [id, p] of this.pending) {
-      clearTimeout(p.timer);
+      p.detach();
       p.reject(new RuntimeOperationError('uncertain', id, 'Runtime generation ended; not retried'));
     }
     this.pending.clear();
