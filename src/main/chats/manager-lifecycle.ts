@@ -126,7 +126,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     if (external === 'work') return { what: 'work' };
     if (c.work?.status === 'waiting-mail' || external === 'mail') return { what: 'mail' };
     // no final report: neither this session's (r.report) nor a saved one (its run's agent_report, a delegation result)
-    const reported = !!r.report?.final || c.run?.report?.via === 'agent_report' || !!c.delegation?.result;
+    const reported = !!r.report?.final || !!c.run?.report || !!c.delegation?.result;
     if (c.work?.status === 'assigned' && !reported && c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted) return { what: 'report' };
     if (external === 'unsaved' || external === 'gitcheck') return { what: external };
     return undefined;
@@ -137,8 +137,9 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     const engine = r.s.agentChildren, live = engine?.children.filter(x => x.state === 'running' || x.state === 'waiting' || x.state === 'unknown') ?? [];
     const shells = live.filter(x => x.kind === 'shell').length, agents = live.length - shells;
     let delegated = 0;
-    for (const x of this.chats.values()) if (x.s.parentId === r.s.id && !x.s.closedAt && x.s.delegation && !x.s.delegation.result) delegated++;
-    return Math.max(agents, (engine?.active ?? 0) - shells) + delegated;
+    // only a sub-chat still at work (one that ended with an error or a Stop holds nothing)
+    for (const x of this.chats.values()) if (x.s.parentId === r.s.id && !x.s.closedAt && x.s.delegation && !x.s.delegation.result && this.atWork(x.s.id)) delegated++;
+    return Math.max(agents, engine?.active ?? 0) + delegated;
   }
 
   /** No renderer flag can authorize this path. The scheduler supplies a current, main-owned reservation. */

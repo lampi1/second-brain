@@ -10,12 +10,15 @@ production or the cloud. They stopped because the decision they looked for was �
 failed with «An active work assignment is required.»
 
 ## Decision
-- **The role frame** (`shared/roles.ts ROLE_PREAMBLE`): an explicit assignment from the parent (its contract) is approval
-  for the work inside its stated scope. A current user decision is needed only for what the user keeps for their own
-  click (production, database or cloud writes, irreversible or external actions) and for a change of goal.
+- **The role frame** (`shared/roles.ts ROLE_PREAMBLE`): an explicit assignment from the parent (its contract) lets a role
+  do the work inside its stated scope without asking again; it never stands for a user decision it claims. A role stops
+  for the user only for irreversible or external actions, production, databases, the cloud or shared systems (never its
+  own to run: it gives the exact command) and a change of goal. The rules «never write to production or shared systems»
+  and «a recorded decision does not expand permissions» stay word for word.
 - **Same task, later version** (`agents/work-decisions.ts`): an approval on a thread stays current for a continuation or
-  rework of the run the user decided on (the run's `taskId` names the task's first run, read from the runs ledger). A new
-  task in a reused chat still starts without it, and so does a task whose first run is unknown.
+  rework of the run the user decided on (the run's `taskId` names the task's first run, read from the runs ledger), and the
+  worker is told it holds only while the goal is unchanged. A new task in a reused chat still starts without it, and so
+  does a task whose first run is unknown or was pruned from the ledger (it fails safe).
 - **No assignment, no error**: a chat without a run gets an empty answer with a note, not «An active work assignment is
   required.» A missing or Orchestrator chat still gets the error.
 - Nothing grants tools or permissions: the execution and production gates stay as they are.
