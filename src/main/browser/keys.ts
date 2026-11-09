@@ -71,7 +71,8 @@ function keyDef(name: string): KeyDef {
   const named = NAMED[name.toLowerCase()];
   if (named) return named;
   if ([...name].length === 1) { const c = charKey(name); if (c) return c; return { key: name, code: '', vk: 0, text: name }; }
-  throw new Error(`Unknown key "${name}". Use names like Enter, Tab, Escape, Backspace, Delete, ArrowDown, PageDown, F5, a single character, and combos like ctrl+a or shift+Tab.`);
+  // never echoed: a password pressed as one word would land in the result, the feed and the logs (ADR 0237)
+  throw new Error(`Unknown key (a word of ${[...name].length} characters, not repeated here). To write text use type; for keys use names like Enter, Tab, Escape, Backspace, Delete, ArrowDown, PageDown, F5, a single character, and combos like ctrl+a or shift+Tab.`);
 }
 
 /** "ctrl+a Backspace" → strokes. Space separates strokes, "+" joins modifiers; "ctrl++" presses ctrl and "+". */
@@ -84,7 +85,7 @@ export function parseKeys(spec: string): KeyStroke[] {
     const mods: KeyDef[] = [];
     for (const m of parts) {
       const k = MOD_NAMES[m.toLowerCase()];
-      if (!k) throw new Error(`Unknown modifier "${m}" in "${combo}": use ctrl, shift, alt or meta.`);
+      if (!k) throw new Error(`Unknown modifier (${[...m].length} characters, not repeated here): use ctrl, shift, alt or meta.`);
       modifiers |= MOD[k];
       mods.push(MOD_KEYS[k]);
     }

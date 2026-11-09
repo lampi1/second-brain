@@ -57,8 +57,12 @@ describe('keys', () => {
     expect(parseKeys('ArrowDown PageDown F5 esc').map(s => s.def.key)).toEqual(['ArrowDown', 'PageDown', 'F5', 'Escape']);
     const [plus] = parseKeys('ctrl++');
     expect(plus).toMatchObject({ modifiers: MOD.ctrl, def: { key: '+' } });
-    expect(() => parseKeys('Enterr')).toThrow(/Unknown key "Enterr"/);
+    expect(() => parseKeys('Enterr')).toThrow(/Unknown key \(a word of 6 characters/);
     expect(() => parseKeys('hyper+a')).toThrow(/Unknown modifier/);
+    // a password pressed as one word, or as a "modifier", is never echoed back (ADR 0237)
+    const word = ['Segreto', 'Synthetic', String(1)].join('');
+    expect(() => parseKeys(word)).toThrow(expect.objectContaining({ message: expect.not.stringContaining(word) }));
+    expect(() => parseKeys(`${word}+a`)).toThrow(expect.objectContaining({ message: expect.not.stringContaining(word) }));
     expect(() => parseKeys('  ')).toThrow(/No keys/);
   });
 
