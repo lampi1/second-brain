@@ -198,3 +198,25 @@ it('dispatches a send at once after an acknowledged hold, so a stop in the same 
   expect(f.writes).toHaveBeenCalledTimes(1);
   f.proxy.hostDied();
 });
+
+it('close and interrupt on a session whose host already died resolve, like the in-process adapters (finding 4)', async () => {
+  const f = fixture();
+  f.proxy.hostDied();
+  await expect(f.proxy.close()).resolves.toBeUndefined();
+  await expect(f.proxy.interrupt()).resolves.toBeUndefined();
+});
+
+it('setRemoteControl waits as long as Claude allows the CLI (60 s), not the default 30 s', async () => {
+  const f = fixture();
+  const request = vi.spyOn((f.proxy as unknown as { commands: { request: (...a: unknown[]) => Promise<unknown> } }).commands, 'request');
+  await f.proxy.setRemoteControl(false).catch(() => null);
+  expect(request.mock.calls[0]![1]).toMatchObject({ timeoutMs: expect.any(Number) });
+  expect((request.mock.calls[0]![1] as { timeoutMs: number }).timeoutMs).toBeGreaterThanOrEqual(65_000);
+});
+
+it('a close in flight when the host dies resolves instead of an unhandled rejection', async () => {
+  const f = fixture({ dropAck: true });
+  const closing = f.proxy.close();
+  f.proxy.hostDied();
+  await expect(closing).resolves.toBeUndefined();
+});

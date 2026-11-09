@@ -6,10 +6,13 @@ import type { RuntimeIdentity } from '../../shared/agent-runtime';
 import type { AnswerPatch, AppAsk, ContextUsage, HarnessSession, SessionSink } from '../chats/session';
 import type { RemoteControlReply } from '../chats/remote-control';
 import type { RuntimeAnswerConsumer } from './adapter-contract';
-import { RuntimeChannel, RuntimeReceiver, type RuntimeFrame } from './channel';
+import { RuntimeChannel, RuntimeReceiver, type RuntimeFrame, type RuntimeRequestOptions } from './channel';
 import type { AdapterCommand, AdapterEvent, AdapterResult, AdapterSnapshot, HostUpdate, HostUpdateFrame } from './host-session';
 import { SemanticReceiver } from './semantic-transport';
 import { receiveHostTextTime, receiveHostTransportTime } from './transport-timing';
+
+/** past the 60 s claude.ts gives the CLI to enable Remote Control, plus the host's own margin */
+const REMOTE_CONTROL_MS = 65_000;
 
 export class RuntimeSessionProxy implements HarnessSession, RuntimeAnswerConsumer {
   private view: AdapterSnapshot = { state: 'starting', sessionId: null, pid: null, busy: true, alive: false, gone: false, startedAt: 0, canHold: false, ready: false, root: null };
@@ -90,6 +93,7 @@ export class RuntimeSessionProxy implements HarnessSession, RuntimeAnswerConsume
   }
   async interrupt(opts?: { keepQueued?: boolean; byUser?: boolean }): Promise<void> {
     if (!opts?.keepQueued) this.sendEpoch++;
+    if (this.ended) return; // nothing left to stop, as an in-process adapter whose engine exited
     await this.call({ method: 'interrupt', args: [opts] });
   }
   noRetry(): void { this.fire({ method: 'noRetry', args: [] }); }
@@ -99,14 +103,18 @@ export class RuntimeSessionProxy implements HarnessSession, RuntimeAnswerConsume
   async setEffort(effort: Effort | null): Promise<void> { await this.call({ method: 'setEffort', args: [effort] }); }
   async rename(title: string): Promise<void> { await this.call({ method: 'rename', args: [title] }); }
   async setRemoteControl(enabled: boolean, opts?: { name?: string; reattach?: string | null }): Promise<RemoteControlReply | null> {
-    return await this.call({ method: 'setRemoteControl', args: [enabled, opts] }) as RemoteControlReply | null;
+    // Claude gives the CLI up to 60 s to enable Remote Control (claude.ts): wait past that, never "uncertain" earlier
+    return await this.call({ method: 'setRemoteControl', args: [enabled, opts] }, { timeoutMs: REMOTE_CONTROL_MS }) as RemoteControlReply | null;
   }
   async contextUsage(): Promise<ContextUsage | null> { return await this.call({ method: 'contextUsage', args: [] }) as ContextUsage | null; }
   async usage(): Promise<unknown> { return this.call({ method: 'usage', args: [] }); }
   async close(graceMs?: number, keepChildren?: boolean): Promise<void> {
+    if (this.ended) return; // already exited or its host died: closed, as an in-process adapter resolves
     this.closing = true;
     this.sendEpoch++;
     try { await this.call({ method: 'close', args: [graceMs, keepChildren] }); }
+    // the host died or a new session replaced this one while it closed (manager-sessions: `void sess.close()`): closed
+    catch (e) { if (!this.ended) throw e; }
     finally { this.dispose(); }
   }
   killNow(): void { this.sendEpoch++; this.fire({ method: 'killNow', args: [] }); }
@@ -119,7 +127,7 @@ export class RuntimeSessionProxy implements HarnessSession, RuntimeAnswerConsume
     if (!this.exitSeen) this.sink.exit({ code: null, error: 'Host di esecuzione terminato: esito delle operazioni incerte, nessuna azione ripetuta.' });
   }
 
-  private call(command: AdapterCommand): Promise<AdapterResult> { return this.commands.request(command); }
+  private call(command: AdapterCommand, options?: RuntimeRequestOptions): Promise<AdapterResult> { return this.commands.request(command, options); }
   private fire(command: AdapterCommand): void { void this.call(command).catch(() => this.hostDied()); }
   private dispose(): void {
     if (this.ended) return;
