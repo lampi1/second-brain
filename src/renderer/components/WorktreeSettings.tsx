@@ -13,9 +13,9 @@ import { t } from '../i18n';
 import { fmtSize } from '../lib/settings-page';
 
 const LIMITS = [
-  { key: 'worktreePoolPerRepo', label: 'worktrees.perRepo', min: 1, max: 50 },
-  { key: 'worktreePoolTotal', label: 'worktrees.total', min: 1, max: 200 },
-  { key: 'worktreeDiskCapGb', label: 'worktrees.diskGb', min: 1, max: 2000 },
+  { key: 'worktreePoolPerRepo', label: 'worktrees.perRepo', hint: 'worktrees.perRepo.hint', min: 1, max: 50 },
+  { key: 'worktreePoolTotal', label: 'worktrees.total', hint: 'worktrees.total.hint', min: 1, max: 200 },
+  { key: 'worktreeDiskCapGb', label: 'worktrees.diskGb', hint: 'worktrees.diskGb.hint', min: 1, max: 2000 },
 ] as const;
 type LimitKey = typeof LIMITS[number]['key'];
 const LIMIT_FIELD = { worktreePoolPerRepo: 'perRepo', worktreePoolTotal: 'total', worktreeDiskCapGb: 'diskGb' } as const satisfies Record<LimitKey, keyof WorktreeUsage['limits']>;
@@ -67,7 +67,7 @@ export function WorktreeSettings() {
         <ul className="st-desc">{reported.map(r => <li key={r.path}><code>{r.path}</code> · {t(`worktrees.why.${r.why}`)}</li>)}</ul>
       </div>}
     </div>
-    {LIMITS.map(l => <LimitRow key={l.key} id={l.key} label={t(l.label)} hint={t(`${l.label}.hint`)} min={l.min} max={l.max} value={settings[l.key] ?? usage?.limits[LIMIT_FIELD[l.key]] ?? l.min} />)}
+    {LIMITS.map(l => <LimitRow key={l.key} id={l.key} label={t(l.label)} hint={t(l.hint)} min={l.min} max={l.max} value={settings[l.key] ?? usage?.limits[LIMIT_FIELD[l.key]] ?? l.min} />)}
   </>;
 }
 
