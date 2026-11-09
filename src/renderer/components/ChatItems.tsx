@@ -38,7 +38,7 @@ import { titlesKeyOf } from '../lib/chat-derived';
 import { splitMode } from '@shared/newchat';
 import { isRoleId, ROLE_DEFAULTS, ROLE_IDS } from '@shared/roles';
 import { isReaction } from '@shared/reaction';
-import { chatView, TAIL_ITEMS, tailStart } from '../lib/chat-view';
+import { chatView, TAIL_ITEMS, tailStart, resultLine } from '../lib/chat-view';
 import { AgentAvatar } from './AgentAvatar';
 import { NamedChatRefs, ToolChatRef } from './ChatRefChips';
 import { openHandoff } from '../store/ui';
@@ -53,12 +53,13 @@ import { guideChatId, visibleGuideItems } from '../../modules/ai-first/presentat
 
 type Tool = Extract<ChatItem, { kind: 'tool' }>;
 
-/** One compact row: who has the result, «Agente →» to its chat, and a tab under the row that unfolds the exact result
- *  here (owner, 2026-10-21: «una linguetta per espanderla e il pulsante "Vai ad agente"»). */
+/** One compact row: who has the result, its first line, «Agente →» to its chat, and a tab under the row that unfolds the
+ *  exact result here (owner, 2026-10-21: «una linguetta per espanderla e il pulsante "Vai ad agente"»). Folded by default
+ *  (#351: «l'Orchestrator lo voglio pulito ed essenziale»): output, questions and criteria are one click away. */
 function ResultReady({ item }: { item: Extract<ChatItem, { kind: 'system' }> }) {
   const sourceId = typeof item.params?.chatId === 'string' ? item.params.chatId : undefined;
   const source = useApp(s => sourceId ? s.chats[sourceId] : undefined);
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const name = source?.title ?? String(item.params?.title ?? item.params?.role ?? 'Chat');
   const role = source?.agent?.name ?? String(item.params?.role ?? '');
   const recordedRole = String(item.params?.role ?? '').trim().toLowerCase();
@@ -66,9 +67,11 @@ function ResultReady({ item }: { item: Extract<ChatItem, { kind: 'system' }> }) 
     : ROLE_IDS.find(id => id === recordedRole || ROLE_DEFAULTS[id].name.toLowerCase() === recordedRole);
   const avatar = source?.agent?.avatar ?? (roleId ? { kind: 'character' as const, value: roleId } : undefined);
   const legacyOutput = typeof item.params?.summary === 'string' && item.params.summary.trim() ? item.params.summary : sysText(item);
+  const line = resultLine(item.result?.output ?? legacyOutput);
   return <div className={`notice result-ready${open ? ' is-open' : ''}`} data-testid="result-ready">
     <AgentAvatar avatar={avatar} name={role} size={24} />
-    <span className="result-ready-text" role="status"><span className="result-ready-name" title={name}>{name}</span><small>{role ? t('chat.resultFrom', { role }) : t('chat.resultReady')}</small></span>
+    <span className="result-ready-text" role="status"><span className="result-ready-name" title={name}>{name}</span><small>{role ? t('chat.resultFrom', { role }) : t('chat.resultReady')}</small>
+      {!open && line && <span className="result-ready-line" data-testid="result-ready-line" title={line}>{line}</span>}</span>
     <span className="result-ready-actions">
     {sourceId && <button type="button" className="result-ready-go" data-testid="chatref-open" data-chat-id={sourceId}
       aria-label={t('chat.chatref.ariaOpen', { verb: t('chat.resultGoAgent'), name })} title={t('chat.resultGoAgentTip')} onClick={() => openChatRef(sourceId)}>

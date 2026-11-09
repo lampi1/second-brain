@@ -5,11 +5,12 @@
 // che non dice niente»): with it go the app news or mail it answered, the folded work of that turn and its "Turno
 // finito" line, so a turn that had nothing for the user leaves no trace. A long transcript draws only its tail
 // (tailStart: the last TAIL_ITEMS items, from a turn's start; «Mostra precedenti» reveals more), so a chat open all day
-// does not lay out and re-render up to 600 rows on every streamed word. Pure, so the layout is unit tested. Used by
-// ChatItems.tsx (ItemListFor).
+// does not lay out and re-render up to 600 rows on every streamed word. The app's automatic result delivery to the
+// Orchestrator is never drawn: the result card above it already shows the result (#351). Pure, so the layout is unit tested. Used by
+// ChatItems.tsx (ItemListFor); resultLine gives the folded result card its one line.
 import type { ChatItem } from '@shared/contract';
 import { isReaction } from '@shared/reaction';
-import { foreignOf } from './foreign';
+import { foreignOf, isResultDelivery } from './foreign';
 import { toolChatRef } from './chatrefs';
 
 /** The items a transcript draws by default, counted from its end. */
@@ -70,9 +71,18 @@ export function chatView(items: readonly ChatItem[], { foldProcess }: { foldProc
       continue;
     }
     dropResult = false;
+    // the app's automatic result delivery to the Orchestrator: for the model only, the result card shows it (#351)
+    if (item.kind === 'user' && isResultDelivery(item)) continue;
     const row: Extract<ViewItem, { kind: 'item' }> = { kind: 'item', item };
     out.push(row);
     target = item.kind === 'user' && !item.from && !foreignOf(item) ? row : null;
   }
   return out;
+}
+
+/** The first line of a result, as plain text (headings, emphasis and list marks dropped), for the folded row. */
+export function resultLine(output: string): string {
+  const first = output.split('\n').filter(l => !/^\s*(?:```|\||-{3,}\s*$)/.test(l))
+    .map(l => l.replace(/^\s*(?:#{1,6}\s+|[-*+]\s+|\d+[.)]\s+|>\s*)/, '').replace(/[`*_]+/g, '').trim()).find(Boolean) ?? '';
+  return first.length > 160 ? `${first.slice(0, 159)}…` : first;
 }

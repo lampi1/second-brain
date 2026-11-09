@@ -40,6 +40,20 @@ export function withPlans<T extends { type: string; at: number }>(reqs: readonly
   return out;
 }
 
+/** The Strategist plan cards the Orchestrator shows, each with its open question (#351: «pulito ed essenziale»): a plan
+ *  still asking only while its interview question is open (no «Prima di partire» card with nothing to answer, one per
+ *  chat), a revision or a plan to approve as before; never for a closed chat. */
+export function planCards<C extends Pick<ChatSummary, 'id' | 'plan' | 'closedAt'>>(chats: readonly C[], reqs: readonly PendingRequest[]): { chat: C; question?: PendingRequest }[] {
+  const seen = new Set<string>();
+  return chats.flatMap(chat => {
+    const phase = chat.plan?.phase;
+    if (chat.closedAt || seen.has(chat.id) || !phase || !['asking', 'revising', 'proposed'].includes(phase)) return [];
+    seen.add(chat.id);
+    const question = planQuestion(chat, reqs.filter(r => r.chatId === chat.id), false);
+    return phase === 'asking' && !question ? [] : [{ chat, ...(question ? { question } : {}) }];
+  });
+}
+
 /** The open question of a Strategist still asking (its plan card answers it, or points to the questions window). */
 export function planQuestion(chat: Pick<ChatSummary, 'plan'>, reqs: readonly PendingRequest[], queued: boolean): PendingRequest | undefined {
   const p = chat.plan?.phase;

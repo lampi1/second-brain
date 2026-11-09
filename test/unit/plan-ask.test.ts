@@ -12,7 +12,7 @@ vi.mock('../../src/renderer/actions', () => ({ claimFocus: () => false }));
 let chats: Record<string, Partial<ChatSummary>> = {};
 vi.mock('../../src/renderer/store/store', () => ({ useApp: <T,>(pick: (s: { chats: typeof chats }) => T) => pick({ chats }), planDecide: async () => true }));
 import { renderToStaticMarkup } from 'react-dom/server';
-import { planQuestion, planAskKey, planAskKeys, planAskOf, planWaits, withPlans } from '../../src/renderer/lib/plan-ask';
+import { planCards, planQuestion, planAskKey, planAskKeys, planAskOf, planWaits, withPlans } from '../../src/renderer/lib/plan-ask';
 import { PlanApproval } from '../../src/renderer/components/PlanApproval';
 import { setLang } from '../../src/renderer/i18n';
 
@@ -49,6 +49,24 @@ describe('lib/plan-ask.ts', () => {
     expect(withPlans([r('a', 30), r('b', 10), r('c', 50)], [p(40), p(60)]).map(x => x.id)).toEqual(['a', 'b', 'plan@40', 'c', 'plan@60']);
     expect(withPlans([r('a', 30)], [p(5)]).map(x => x.id)).toEqual(['plan@5', 'a']);
     expect(withPlans([], [])).toEqual([]);
+  });
+});
+
+describe('planCards: the Orchestrator\'s plan cards (#351)', () => {
+  const native = { type: 'question', tool: 'AskUserQuestion', chatId: 's/1', questions: [{ question: 'Offerte?' }] } as PendingRequest;
+  const c = (id: string, p: Partial<StrategyPlan>, extra: Partial<ChatSummary> = {}) => ({ id, plan: plan(p), ...extra }) as ChatSummary;
+  it('shows «Prima di partire» only while an interview question is open', () => {
+    expect(planCards([c('s/1', { phase: 'asking' })], [])).toEqual([]);
+    const [card] = planCards([c('s/1', { phase: 'asking' })], [native]);
+    expect(card?.question).toBe(native);
+    expect(planCards([c('s/1', { phase: 'asking' })], [{ ...native, chatId: 's/2' }])).toEqual([]);
+  });
+  it('never twice for one chat, never for a closed chat, always for a plan to approve', () => {
+    const a = c('s/1', { phase: 'asking' });
+    expect(planCards([a, a], [native])).toHaveLength(1);
+    expect(planCards([c('s/1', { phase: 'asking' }, { closedAt: 5 })], [native])).toEqual([]);
+    expect(planCards([c('s/1', { phase: 'proposed' })], [])).toHaveLength(1);
+    expect(planCards([c('s/1', { phase: 'running' })], [native])).toEqual([]);
   });
 });
 

@@ -686,6 +686,8 @@ describe('versioned task continuity and canonical results', () => {
     await f.m.synthesizeResult(local.run!.runId, { kind: 'chat', chatId: o.id });
     await f.m.synthesizeResult(local.run!.runId, { kind: 'user' });
     expect(f.sent.get(o.id)).toHaveLength(1);
+    // the model still gets the delivery line (#351 only stops the transcript from drawing it: lib/chat-view.ts)
+    expect(f.sent.get(o.id)![0]).toMatch(/\[consegna automatica del risultato · task \S+, versione \d+, run \S+\]\nPresenta il risultato all'utente/);
   });
 
   it('does not redeliver an automatically synthesized user result and keeps app replay output local on restart', async () => {

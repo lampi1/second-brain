@@ -2,7 +2,7 @@
 // own message (WhatsApp style) and stands alone anywhere else; a long transcript draws only its tail, from a turn's start.
 import { describe, expect, it } from 'vitest';
 import type { ChatItem } from '../../src/shared/contract';
-import { chatView, tailStart, TAIL_ITEMS } from '../../src/renderer/lib/chat-view';
+import { chatView, resultLine, tailStart, TAIL_ITEMS } from '../../src/renderer/lib/chat-view';
 
 const user = (id: string, text: string, extra: object = {}) => ({ kind: 'user', id, text, ...extra }) as ChatItem;
 const said = (id: string, text: string, streaming = false) => ({ kind: 'assistant', id, text, streaming }) as ChatItem;
@@ -10,6 +10,12 @@ const think = (id: string) => ({ kind: 'thinking', id, text: 'hmm' }) as ChatIte
 const tool = (id: string) => ({ kind: 'tool', id, name: 'Read', input: {}, status: 'done' }) as unknown as ChatItem;
 
 describe('chatView', () => {
+  it('does not draw the app\'s automatic result delivery to the Orchestrator; the result card shows it (#351)', () => {
+    const delivery = user('d1', '[consegna automatica del risultato · task t1, versione 1, run r1]\nPresenta il risultato all\'utente in questa conversazione.', { from: 'App · Fix' });
+    const v = chatView([user('u1', 'ciao'), delivery, said('a1', 'Ecco il risultato.')], { foldProcess: true });
+    expect(v.map(r => r.kind === 'item' && r.item.id)).toEqual(['u1', 'a1']);
+  });
+
   it('sticks an emoji-only reply to the user message before it', () => {
     const v = chatView([user('u1', 'grazie'), said('a1', '👍')], { foldProcess: false });
     expect(v).toEqual([{ kind: 'item', item: user('u1', 'grazie'), reaction: '👍' }]);
@@ -107,5 +113,20 @@ describe('tailStart: only the tail of a long transcript is drawn', () => {
     expect(at).toBeGreaterThanOrEqual(600 - TAIL_ITEMS);
     expect(at).toBeLessThan(600 - TAIL_ITEMS + 7);
     expect(items[at]!.kind).toBe('user');
+  });
+});
+
+describe('resultLine: the folded result card\'s one line (#351)', () => {
+  it('takes the first real line as plain text', () => {
+    expect(resultLine('## Prossimo passo (contratti pronti)\n1. uno\n2. due')).toBe('Prossimo passo (contratti pronti)');
+    expect(resultLine('\n\n- **Fatto**: `npm test` verde')).toBe('Fatto: npm test verde');
+    expect(resultLine('```ts\nconst a = 1\n```')).toBe('const a = 1');
+    expect(resultLine('| a | b |\n---\nTesto dopo la tabella')).toBe('Testo dopo la tabella');
+    expect(resultLine('')).toBe('');
+  });
+  it('cuts a long line at 160 characters', () => {
+    const l = resultLine('x'.repeat(300));
+    expect(l).toHaveLength(160);
+    expect(l.endsWith('…')).toBe(true);
   });
 });

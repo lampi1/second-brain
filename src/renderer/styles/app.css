@@ -506,6 +506,7 @@ button.lc-row:focus-visible { outline: 2px solid var(--focus); outline-offset: 1
 .result-ready-text { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
 .result-ready-text small { color: var(--text-3); font-size: 11px; }
 .result-ready-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+.result-ready-line { min-width: 0; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); font-size: 12px; }
 /* two round icons on the row (owner, 2026-10-31: icons, not words): ✦ the Orchestrator summarizes it, → its agent's chat */
 .result-ready-actions { display: inline-flex; align-items: center; gap: 6px; }
 .result-ready-actions .result-synth-btn { width: 28px; height: 28px; padding: 0; justify-content: center; }

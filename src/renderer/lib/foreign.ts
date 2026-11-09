@@ -36,6 +36,10 @@ export function runOutcome(how: string): string {
 }
 const RESUME = /^\[second-brain\][^\n]*/;
 const HOOK = /^(?:<user-prompt-submit-hook>|UserPromptSubmit hook additional context:)/;
+/** the app's automatic delivery of a result to the Orchestrator (chats/manager-delegation.ts): the model needs it, the
+ *  user already has the result card above it (#351), so the transcript does not draw it */
+const DELIVERY = /^\[consegna automatica del risultato\b/;
+export const isResultDelivery = (item: UserItem): boolean => DELIVERY.test(item.text.trimStart());
 
 const oneLine = (s: string, n = 120): string => {
   const t = s.replace(/[`*_#>]+/g, '').replace(/\s+/g, ' ').trim();

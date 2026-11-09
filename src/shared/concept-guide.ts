@@ -1380,9 +1380,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/chats/held-news.ts seen; src/main/chats/orchestrator-wake.ts seen (#123)
       b('Una riga che apri è letta: esce dall’elenco e non sveglia più l’Orchestrator, che la riceve solo insieme alla prossima consegna. Guardare l’elenco non spende nulla.',
         'A row you open is read: it leaves the list and no longer wakes the Orchestrator, which gets it only with the next delivery. Looking at the list spends nothing.'),
-      // src/main/chats/manager-delegation.ts releaseResult; src/shared/sys.ts resultReady (#123)
-      b('Il risultato completo compare automaticamente nell’Orchestrator, già aperto. Di base parte anche la sintesi per il canale di conversazione: non serve premere «Sintetizza». Le correzioni aggiornano lo stesso risultato.',
-        'The complete result appears automatically in the Orchestrator, already expanded. By default channel synthesis also starts: no Synthesize click is needed. Corrections update the same result.'),
+      // src/main/chats/manager-delegation.ts releaseResult; src/shared/sys.ts resultReady (#123); folded and no delivery line (#351)
+      b('Il risultato compare automaticamente nell’Orchestrator, chiuso: nome, ruolo e la sua prima riga; «Mostra il risultato» lo apre tutto. Il messaggio di consegna che l’app manda all’Orchestrator non è disegnato in chat. Di base parte anche la sintesi per il canale di conversazione: non serve premere «Sintetizza». Le correzioni aggiornano lo stesso risultato.',
+        'The result appears automatically in the Orchestrator, folded: name, role and its first line; «Mostra il risultato» opens it in full. The delivery message the app sends the Orchestrator is not drawn in the chat. By default channel synthesis also starts: no Synthesize click is needed. Corrections update the same result.'),
     ],
     analogy: b('Come la posta che la segreteria tiene da parte mentre sei in riunione: non si perde, arriva tutta insieme quando esci.',
       'Like the mail the front desk keeps aside while you are in a meeting: nothing is lost, it all arrives together when you come out.'),
