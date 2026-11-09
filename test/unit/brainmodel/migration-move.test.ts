@@ -1,6 +1,7 @@
 // Migration v2 (#367, ADR 0244): a section that becomes a skill leaves its file for a pointer, the scripts and queries
 // only it names move into the skill's scripts/ with their paths rewritten, records never become skills, a forgotten
-// skill never comes back (#311), and one Undo puts everything back. Temp folders only.
+// skill never comes back (#311), one Undo puts a whole file back and is remembered beyond the change log, and nothing
+// moves when an Undo could not give the bytes back. Temp folders only.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,17 +10,18 @@ import { migrate, type JobContext } from '../../../src/main/brainmodel/jobs';
 import { ChangeLog } from '../../../src/main/brainmodel/changes';
 import { readSkills } from '../../../src/main/brainmodel/model';
 import { withoutSection } from '../../../src/main/brainmodel/migration-move';
+import type { AgentProfile } from '../../../src/shared/agents';
 
 const roots: string[] = [];
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 const put = (root: string, rel: string, text: string) => { fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true }); fs.writeFileSync(path.join(root, rel), text); };
 const get = (root: string, rel: string) => fs.readFileSync(path.join(root, rel), 'utf8');
-function world(): JobContext {
+function world(roles: string[] = []): JobContext {
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'brain-move-'))); roots.push(root);
   const skillDir = path.join(root, '.agents/skills');
   let at = 0;
   return { root, skillDir, skills: () => readSkills([{ dir: skillDir, home: 'brain' }], root, []),
-    profiles: () => [], runs: () => [], lessons: { pending: () => [], settle: () => {} }, agents: { update: () => null },
+    profiles: () => roles.map(instructions => ({ instructions }) as AgentProfile), runs: () => [], lessons: { pending: () => [], settle: () => {} }, agents: { update: () => null },
     log: new ChangeLog(path.join(root, '..', `${path.basename(root)}-data`), () => ++at), now: () => Date.parse('2026-11-09T10:00:00Z') };
 }
 
@@ -37,8 +39,8 @@ describe('migration v2: move, not copy', () => {
     const item = r.report!.items.find(i => i.title === 'Pulire le sessioni')!;
     expect(item).toMatchObject({ status: 'moved', skill: 'pulire-le-sessioni', note: '2 script spostati con lei' });
     const skill = get(w.root, '.agents/skills/pulire-le-sessioni/SKILL.md');
-    expect(skill).toContain('`node scripts/pulisci.mjs`');
-    expect(skill).toContain('`scripts/conta.sql`');
+    expect(skill).toContain('`node ${CLAUDE_SKILL_DIR}/scripts/pulisci.mjs`');
+    expect(skill).toContain('`${CLAUDE_SKILL_DIR}/scripts/conta.sql`');
     expect(skill).toContain('`node ops/tools/brain-lint.mjs`'); // app machinery: never moved
     expect(skill).toContain('`scripts/backup.ps1`'); // the brain's managed scripts: they stay on their page
     expect(skill).toContain('`runbook/sql/comune.sql`'); // named in another note: it stays
@@ -51,11 +53,18 @@ describe('migration v2: move, not copy', () => {
     expect(migrate(w).changes).toBe(0);
     // one Undo puts the section and the scripts back, and removes the skill
     const change = w.log.all().find(c => c.target === 'pulire-le-sessioni')!;
-    w.log.rollback(change.id, { activeVersion: () => null, restore: () => {} });
+    const agents = { activeVersion: () => null, restore: () => {} };
+    expect(w.log.canRollback(change, agents)).toBe(true);
+    w.log.rollback(change.id, agents);
     expect(get(w.root, 'runbook/db.md')).toContain('1. Esegui `node runbook/sql/pulisci.mjs`.');
     expect(get(w.root, 'runbook/sql/pulisci.mjs')).toBe('console.log("pulisci")\n');
     expect(fs.existsSync(path.join(w.root, '.agents/skills/pulire-le-sessioni/SKILL.md'))).toBe(false);
     // the Undo is the decision: the next pass does not move it again
+    migrate(w);
+    expect(fs.existsSync(path.join(w.root, '.agents/skills/pulire-le-sessioni/SKILL.md'))).toBe(false);
+    expect(get(w.root, 'runbook/db.md')).toContain('1. Esegui');
+    // remembered in the brain: a change log that forgot the Undo does not bring the move back
+    w.log = new ChangeLog(path.join(w.root, '..', `${path.basename(w.root)}-data2`), () => 1);
     migrate(w);
     expect(fs.existsSync(path.join(w.root, '.agents/skills/pulire-le-sessioni/SKILL.md'))).toBe(false);
     expect(get(w.root, 'runbook/db.md')).toContain('1. Esegui');
@@ -84,10 +93,52 @@ describe('migration v2: move, not copy', () => {
     expect(r.report!.items.map(i => i.status)).toEqual(['moved', 'moved']);
     expect(get(w.root, '.agents/skills/in-produzione/SKILL.md')).toContain('Promuovi la build');
     expect(get(w.root, 'runbook/rilasci.md')).toBe('# Rilasci\n\n## In test\n\n→ Spostata nella skill `in-test` il 2026-11-09.\n\n## In produzione\n\n→ Spostata nella skill `in-produzione` il 2026-11-09.\n');
+    // one change for the file: one Undo puts it back whole and removes both skills
+    expect(r.changes).toBe(1);
+    w.log.rollback(w.log.all()[0]!.id, { activeVersion: () => null, restore: () => {} });
+    expect(get(w.root, 'runbook/rilasci.md')).toContain('2. Promuovi la build.');
+    expect(fs.existsSync(path.join(w.skillDir, 'in-test'))).toBe(false);
+  });
+  it('a file that is not plain UTF-8 is copied, never moved: an Undo could not give its bytes back', () => {
+    const w = world();
+    const bytes = Buffer.concat([Buffer.from('# Caff'), Buffer.from([0xe8]), Buffer.from('\n\n## Preparare\n\n1. Macina.\n2. Versa.\n')]);
+    put(w.root, 'runbook/bar.md', ''); fs.writeFileSync(path.join(w.root, 'runbook/bar.md'), bytes);
+    const item = migrate(w).report!.items[0]!;
+    expect(item.note).toMatch(/UTF-8/);
+    expect(fs.readFileSync(path.join(w.root, 'runbook/bar.md')).equals(bytes)).toBe(true);
+  });
+  it('a copy the user edited after the first migration keeps its section in the file', () => {
+    const w = world();
+    put(w.root, 'routines.md', '# Routine\n\n## Chiusura\n\n1. Salva il lavoro.\n2. Scrivi il diario.\n');
+    const name = migrate({ ...w, auto: true }).report!.items[0]!.skill!;
+    expect(get(w.root, 'routines.md')).toContain('1. Salva il lavoro.'); // the app's own pass only copies
+    const file = path.join(w.skillDir, name, 'SKILL.md');
+    fs.writeFileSync(file, get(w.root, `.agents/skills/${name}/SKILL.md`).replace('1. Salva il lavoro.', '1. Salva tutto, anche le bozze.'));
+    const item = migrate(w).report!.items[0]!;
+    expect(item).toMatchObject({ status: 'existing', note: expect.stringMatching(/skill è cambiata/) });
+    expect(get(w.root, 'routines.md')).toContain('1. Salva il lavoro.');
+  });
+  it('scripts that find files next to themselves, or that a role names, stay; a numbered file with no title keeps its frontmatter', () => {
+    const w = world(['Usa sempre `runbook/ruolo.sh` prima di partire.']);
+    put(w.root, 'runbook/svc.md', '# Servizio\n\n## Riavvio\n\n1. Esegui `runbook/vicino.ps1`.\n2. Poi `runbook/ruolo.sh`.\n');
+    put(w.root, 'runbook/vicino.ps1', '. "$PSScriptRoot\\common.ps1"\n');
+    put(w.root, 'runbook/ruolo.sh', 'echo ok\n');
+    put(w.root, 'runbook/passi.md', '---\ntitle: Passi\n---\n\n## 1. Primo\n\nApri il pannello e controlla.\n\n## 2. Secondo\n\nChiudi il pannello e annota.\n');
+    const r = migrate(w);
+    expect(r.report!.items.find(i => i.title === 'Riavvio')).toMatchObject({ status: 'moved' });
+    expect(fs.existsSync(path.join(w.root, 'runbook/vicino.ps1'))).toBe(true);
+    expect(fs.existsSync(path.join(w.root, 'runbook/ruolo.sh'))).toBe(true);
+    expect(get(w.root, '.agents/skills/riavvio/SKILL.md')).toContain('`runbook/vicino.ps1`');
+    const passi = r.report!.items.find(i => i.source.startsWith('runbook/passi.md'));
+    expect(passi).toMatchObject({ status: 'moved', note: expect.stringMatching(/titolo/) });
+    expect(get(w.root, 'runbook/passi.md')).toMatch(/^---\ntitle: Passi\n---\n/);
   });
   it('withoutSection keeps CRLF and returns null for a section that is gone', () => {
     const text = '# A\r\n\r\n## Passi\r\n\r\n1. Uno.\r\n2. Due.\r\n';
     expect(withoutSection('runbook/a.md', text, 'runbook/a.md#passi', 'X')).toBe('# A\r\n\r\n## Passi\r\n\r\nX\r\n');
     expect(withoutSection('runbook/a.md', text, 'runbook/a.md#altro', 'X')).toBeNull();
+    // only the section's lines change: elsewhere blank runs and mixed line endings keep their bytes
+    const mixed = '# A\n\n\n\nIntro.\r\n\n## Passi\n\n1. Uno.\n2. Due.\n\n\n\n## Dopo\r\nFine.';
+    expect(withoutSection('runbook/a.md', mixed, 'runbook/a.md#passi', 'X')).toBe('# A\n\n\n\nIntro.\r\n\n## Passi\n\nX\n\n## Dopo\r\nFine.');
   });
 });

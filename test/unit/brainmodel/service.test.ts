@@ -103,13 +103,18 @@ describe('one-time migration', () => {
     expect(after['runbook/database.md']).toContain('Query in sola lettura su produzione');
     // no role is changed: a role loads a skill when its launch gives it (the Orchestrator passes them)
     expect(w.catalog.list().profiles.every(p => p.lastEditedBy === 'default')).toBe(true);
-    // one change per skill (each one undoable once the newer changes to the same file are undone, below)
-    expect(state.changes.filter(c => c.job === 'migration')).toHaveLength(report.items.length);
+    // one change per file the sections left (one Undo puts that file back), one per section that stayed whole
+    const left = new Set(report.items.filter(i => !i.note).map(i => i.source.split('#')[0]));
+    expect(state.changes.filter(c => c.job === 'migration')).toHaveLength(left.size + report.items.filter(i => i.note).length);
     expect(state.changes.every(c => c.kind === 'skill')).toBe(true);
     expect(state.skills.find(s => s.name === release.skill)).toMatchObject({ usedBy: [], madeBy: 'migration', home: 'brain' });
     // every Undo, newest first, puts the brain back exactly as it was: nothing was lost on the way
     for (const c of w.service.log.all().reverse()) w.service.rollback(c.id);
-    expect(snapshot(w.brain)).toEqual(before);
+    const back = snapshot(w.brain), kept = Object.keys(back).filter(k => k.startsWith('ops/state/migration-kept/'));
+    // each undone move is remembered in the brain, so the next pass leaves it where it is
+    expect(kept).toHaveLength(report.items.filter(i => !i.note).length);
+    for (const k of kept) delete back[k];
+    expect(back).toEqual(before);
   });
   it('is idempotent and never redoes a skill the user undid', async () => {
     const w = world({ demo: true });

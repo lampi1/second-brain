@@ -16,6 +16,7 @@ import { classifiersState, readJobs } from './classifiers';
 import { seal, type IntervalCache } from './evidence';
 import { appendUnder, corrections, migrate, repeatedTask, skillText, type AgentWriter, type JobContext, type JobResult } from './jobs';
 import { ignoreWrite, sourceOfSkill } from './migration-ignore';
+import { rememberUndoneMoves } from './migration-move';
 import { procedureSections, type ProcedureSection } from './procedure-sources';
 import type { UpgradeAsk } from './upgrade';
 import { readBrainView, type BrainViewInput } from './view';
@@ -88,6 +89,8 @@ export class BrainModelService {
     this.reportFile = path.join(d.userData, 'brain-migration.json');
     this.runFile = path.join(d.userData, 'brain-maintenance.json');
     this.noiseFile = path.join(d.userData, 'maintenance-noise.json');
+    // an Undo of a migration move is remembered in the brain at once: the bounded log may drop it before the next pass (#367)
+    this.log.onRolledBack(() => { const root = this.root(); if (root) try { rememberUndoneMoves(root, this.log); } catch { /* the next migration retries */ } });
     d.learning.onProposed = () => { void this.maintain('corrections', { auto: true }).catch(() => { /* logged inside */ }); };
   }
   private now(): number { return this.d.now?.() ?? Date.now(); }
@@ -241,7 +244,7 @@ export class BrainModelService {
     const run = (async () => {
       const root = this.root();
       if (!root) throw new Error('Scegli prima la cartella del brain.');
-      const ctx = this.context(root), done: JobResult[] = [];
+      const ctx: JobContext = { ...this.context(root), auto: !!opts.auto }, done: JobResult[] = [];
       const before = new Set(this.log.all().map(c => c.id));
       for (const id of job ? [job] : MAINTENANCE_JOBS) {
         try {

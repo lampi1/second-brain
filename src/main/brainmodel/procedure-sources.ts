@@ -236,6 +236,8 @@ export function procedureSections(root: string): ProcedureSection[] {
  *  exported; such a section stays whole in its file too: the migration moves only unmasked sections, #367). */
 export function sectionText(root: string, s: ProcedureSection): { text: string; masked: number } | null {
   const t = readText(root, s.file);
-  if (!t) return null;
-  return maskSecrets(t.text.split(/\r?\n/).slice(s.start, s.end).join('\n').trim());
+  return t ? sectionBody(t.text, s) : null;
 }
+/** The same, from a file's text already read (the migration's pending text of a file, #367). */
+export const sectionBody = (text: string, s: ProcedureSection): { text: string; masked: number } =>
+  maskSecrets(text.split(/\r?\n/).slice(s.start, s.end).join('\n').trim());

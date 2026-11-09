@@ -25,7 +25,7 @@ import type { BrainSkill, MaintenanceJobId, MigrationItem, MigrationReport } fro
 import { conceptOf } from '../../shared/work-concepts';
 import { NAME_RE, parseMd, setBody, yamlValue } from '../../shared/skillmd';
 import type { AgentSnapshot, ChangeLog } from './changes';
-import { procedureSections, sectionText } from './procedure-sources';
+import { procedureSections, sectionBody, sectionText } from './procedure-sources';
 import { readSmall } from './model';
 import { checkPermissionText } from '../agents/tool-policy';
 import { checkMemoryWorth } from '../rules/memory-worth';
@@ -36,7 +36,7 @@ import { maskSecrets } from '../brain/mask';
 import { backfillForgotten, migrationIgnored } from './migration-ignore';
 import { generatedUnchanged, legacyMarker, migrationReceipt, sealMigration, sourceHash, sourceId } from './migration-source';
 import { declareRemoved, DeltaRefused, WHOLE_FILE } from './item-delta';
-import { locate, movedLine, planScripts, withoutSection } from './migration-move';
+import { brainCorpus, exactText, locate, migrationKept, movedLine, planScripts, rememberUndoneMoves, withoutSection, type Corpus } from './migration-move';
 
 /** The role side of a job: only the role text and the declared skills. */
 export interface AgentWriter {
@@ -53,6 +53,8 @@ export interface JobContext {
   agents: AgentWriter;
   log: ChangeLog;
   now(): number;
+  /** the app started this pass by itself: the migration copies, it never moves a section out of its file (#367) */
+  auto?: boolean;
   /** a one-shot question to an engine with no tools (the upgrade job's): the memory tidy-up generalizes with it */
   ask?: UpgradeAsk;
 }
@@ -116,13 +118,22 @@ const undone = (log: ChangeLog, job: MaintenanceJobId, target: string): boolean 
 const brainRel = (root: string, file: string) => path.relative(root, file).split(path.sep).join('/');
 
 // ── migration ───────────────────────────────────────────────────────────────────────────────────────────────────────
+/** One section leaving its file in this pass (v2, #367): its skill write (none when the skill already holds it), the
+ *  scripts that go with it, and what its change says when it is the only move out of its file. */
+interface Move { item: MigrationItem; name: string; action: 'create' | 'update'; summary: string; reason: string; evidence: string[]; writes: { file: string; text: string | null; removed?: ReturnType<typeof declareRemoved> }[] }
 export function migrate(ctx: JobContext): JobResult {
   const sections = procedureSections(ctx.root);
   backfillForgotten(ctx.root, sections, ctx.log);
+  rememberUndoneMoves(ctx.root, ctx.log);
   const existing = ctx.skills();
   const taken = new Set(existing.map(s => s.name));
   const items: MigrationItem[] = [];
   let changes = 0;
+  const today = day(ctx.now());
+  // every move out of one file is one change: its pending text here, so one Undo puts the whole file back (v2, #367)
+  const pending = new Map<string, { file: string; before: string; text: string; moves: Move[] }>();
+  let corpus: Corpus | null | undefined; // what the brain and the roles say, read once, for the scripts that may move
+  const corpusOf = (): Corpus | null => corpus !== undefined ? corpus : (corpus = (() => { try { return brainCorpus(ctx.root, ctx.profiles().map(p => p.instructions)); } catch { return null; } })());
   for (const s of sections) {
     const source = sourceId(s);
     if (migrationIgnored(ctx.root, source)) {
@@ -141,68 +152,92 @@ export function migrate(ctx: JobContext): JobResult {
       items.push({ source, title: s.title, skill: null, status: 'skipped', note: 'fonte precedente ambigua tra gruppi: serve associare la skill alla sezione corretta' }); continue;
     }
     const already = existing.filter(k => k.home === 'brain').sort((a, b) => a.name.localeCompare(b.name)).find(k => matches(readSmall(k.file) ?? ''));
-    // read where the section is now: an earlier move in this pass may have shifted the file's lines (v2, #367)
+    // read where the section is now: an earlier move in this pass may have changed the file's text (v2, #367)
     const sourceFile = path.join(ctx.root, ...s.file.split('/'));
-    const current = readSmall(sourceFile), here = current === null ? s : locate(s.file, current, source);
-    const body = here ? sectionText(ctx.root, here) : null;
+    const group = pending.get(s.file), exact = group ? group.text : exactText(sourceFile);
+    const current = exact ?? readSmall(sourceFile), here = current === null ? null : locate(s.file, current, source);
+    const body = current === null ? sectionText(ctx.root, s) : here ? sectionBody(current, here) : null;
     if (!body || !body.text.trim()) { items.push({ source, title: s.title, skill: null, status: 'skipped', note: 'sezione vuota o file non leggibile' }); continue; }
     const prior = already ? readSmall(already.file) ?? '' : '', receipt = migrationReceipt(prior);
     const bodyHash = sourceHash(body.text);
-    // v2 (#367): the section leaves its file for a pointer to the skill, in the same change (one Undo puts both back);
-    // never when credentials were hidden in the skill (the file keeps the only full text) or after the user undid a move
-    const moveUndone = ctx.log.all().some(c => c.job === 'migration' && !!c.rolledBackAt && c.evidence.includes(`move:${source}`));
-    const moveOut = (skill: string): { file: string; text: string; removed: ReturnType<typeof declareRemoved> } | null => {
-      if (body.masked || moveUndone) return null;
-      const before = readSmall(sourceFile);
-      const after = before === null ? null : withoutSection(s.file, before, source, movedLine(skill, day(ctx.now())));
-      return before === null || after === null ? null : { file: sourceFile, text: after, removed: declareRemoved(before, after, `sezione «${s.title}» spostata nella skill ${skill}`) };
+    // v2: the section leaves its file for a pointer to the skill, in the same change (one Undo puts both back). It stays
+    // when credentials were hidden in the skill (the file keeps the only full text), after the user undid a move, in a
+    // pass the app started by itself, when the file is not plain UTF-8, or when the section has no heading of its own.
+    const kept = migrationKept(ctx.root, source) || ctx.log.all().some(c => c.job === 'migration' && !!c.rolledBackAt && c.evidence.includes(`move:${source}`));
+    const stays = body.masked ? `${body.masked} righe nascoste (credenziali): la sezione resta anche nel file`
+      : kept ? 'hai annullato lo spostamento: la sezione resta anche nel file'
+      : ctx.auto ? 'copiata: lascia il file quando avvii tu la migrazione'
+      : exact === null ? 'il file non è in UTF-8 semplice: la sezione resta anche nel file'
+      : !here || here.start < 1 ? 'la sezione non ha un titolo suo: resta anche nel file' : null;
+    const pointer = (skill: string): string | null => stays || exact === null ? null : withoutSection(s.file, exact, source, movedLine(skill, today));
+    const queue = (after: string, move: Move): void => {
+      const g = pending.get(s.file) ?? { file: sourceFile, before: exact!, text: exact!, moves: [] };
+      g.text = after; g.moves.push(move); pending.set(s.file, g); items.push(move.item);
     };
     if (already && (!receipt || receipt.bodyHash === bodyHash)) {
-      // a copy made by the first migration: the skill already holds this text, so the section only leaves its file
-      const holds = !!receipt || prior.includes(body.text);
-      const out = holds ? moveOut(already.name) : null;
-      if (out) {
-        try {
-          const c = ctx.log.apply({ job: 'migration', kind: 'skill', action: 'update', target: already.name, summary: `${s.file}: sezione «${s.title}» tolta, è già nella skill ${already.name}`, reason: 'Una procedura sta in un posto solo: la skill. Nel file resta una riga che dice dov’è.', evidence: [source, `move:${source}`] }, [out]);
-          if (c) { changes++; items.push({ source, title: s.title, skill: already.name, status: 'moved', note: 'tolta dal file: era già nella skill' }); continue; }
-        } catch (e) { if (!(e instanceof DeltaRefused)) throw e; }
+      // a copy made by the first migration: when the skill still holds this text, the section only leaves its file
+      const holds = prior.includes(body.text);
+      const after = holds ? pointer(already.name) : null;
+      if (after !== null) {
+        queue(after, { item: { source, title: s.title, skill: already.name, status: 'moved', note: 'tolta dal file: era già nella skill' }, name: already.name, action: 'update',
+          summary: `${s.file}: sezione «${s.title}» tolta, è già nella skill ${already.name}`, reason: 'Una procedura sta in un posto solo: la skill. Nel file resta una riga che dice dov’è.', evidence: [source, `move:${source}`], writes: [] });
+        continue;
       }
       items.push({ source, title: s.title, skill: already.name, status: 'existing',
-        ...(!holds ? { note: 'fonte modificata: rivedi la skill esistente, non creo una copia' } : moveUndone ? { note: 'hai annullato lo spostamento: la sezione resta anche nel file' } : body.masked ? { note: 'resta anche nel file: ha righe con credenziali nascoste nella skill' } : {}) }); continue;
+        ...(!holds ? { note: receipt ? 'la skill è cambiata da allora: la sezione resta anche nel file' : 'fonte modificata: rivedi la skill esistente, non creo una copia' } : stays ? { note: stays } : {}) }); continue;
     }
     if (already && receipt && !generatedUnchanged(prior, receipt)) {
       items.push({ source, title: s.title, skill: already.name, status: 'existing', note: 'fonte e skill modificate: aggiornamento da rivedere, testo personale conservato' }); continue;
     }
     const name = already?.name ?? skillName(s.title, taken);
-    const declined = ctx.log.all().some(c => c.job === 'migration' && c.rolledBackAt && c.files.some(f => {
+    const declined = kept && !already || ctx.log.all().some(c => c.job === 'migration' && c.rolledBackAt && c.files.some(f => {
       if (!f.after || !matches(f.after)) return false;
       return c.action === 'create' || migrationReceipt(f.after)?.bodyHash === bodyHash;
     }));
     if (declined || undone(ctx.log, 'migration', name) && !already) { items.push({ source, title: s.title, skill: already?.name ?? null, status: 'skipped', note: 'annullata da te: non la rifaccio' }); continue; }
     taken.add(name);
     const file = already?.file ?? path.join(ctx.skillDir, name, 'SKILL.md');
-    const out = moveOut(name);
+    const after = pointer(name);
     // the scripts and queries only this section names go with it, into the skill's scripts/ (only when the section moves)
-    const plan = out && here && !already ? planScripts(ctx.root, here, body.text, path.dirname(file)) : { body: body.text, files: [] };
+    const plan = after !== null && !already ? planScripts(ctx.root, s, body.text, path.dirname(file), corpusOf()) : { body: body.text, files: [] };
     const description = `${s.purpose || s.title}${s.area && s.area !== s.title ? ` (${s.area})` : ''}`;
     const text = sealMigration(skillText(name, description, [`# ${s.title}`, '', plan.body, '',
-      `${marker} il ${day(ctx.now())}.${body.masked ? ` ${body.masked} righe con possibili credenziali sono nascoste qui: il testo intero resta nel file originale.` : ''}${plan.files.length ? ` Script spostati nella cartella scripts/ della skill: ${plan.files.map(f => f.rel).join(', ')}.` : ''}`].join('\n')), source, body.text, receipt?.createdAt ?? ctx.now());
+      `${marker} il ${today}.${body.masked ? ` ${body.masked} righe con possibili credenziali sono nascoste qui: il testo intero resta nel file originale.` : ''}${plan.files.length ? ` Script spostati nella cartella scripts/ della skill: ${plan.files.map(f => f.rel).join(', ')}.` : ''}`].join('\n')), source, body.text, receipt?.createdAt ?? ctx.now());
     // a regenerated skill (its text untouched since it was generated) lists every line it drops: the source changed them
     const removed = already ? declareRemoved(prior, text, `la sezione «${s.title}» di ${s.file} è cambiata: la riga generata da lì non c'è più`) : [];
     const writes = [{ file, text, removed },
-      ...plan.files.flatMap(f => [{ file: f.to, text: f.text }, { file: f.from, text: null, removed: [{ item: WHOLE_FILE, reason: `spostato nella skill ${name} (scripts/)` }] }]),
-      ...(out ? [out] : [])];
+      ...plan.files.flatMap(f => [{ file: f.to, text: f.text }, { file: f.from, text: null, removed: [{ item: WHOLE_FILE, reason: `spostato nella skill ${name} (scripts/)` }] }])];
+    const change = { action: already ? 'update' as const : 'create' as const, summary: already ? `${name}: aggiornata dalla stessa sezione sorgente` : changeText().newSkill({ name, file: s.file, title: s.title }),
+      reason: 'Le procedure diventano skill: il contenuto è lo stesso, ora un ruolo la carica quando il compito la chiede.' };
+    const notes = [stays ?? '', plan.files.length ? `${plan.files.length} script spostati con lei` : ''].filter(s => s && !s.startsWith('copiata'));
+    const item: MigrationItem = { source, title: s.title, skill: name, status: 'moved', ...(notes.length ? { note: notes.join('; ') } : {}) };
+    if (after !== null) { queue(after, { item, name, ...change, evidence: [source, `sha256:${bodyHash}`, `move:${source}`], writes }); continue; }
     let c: ReturnType<ChangeLog['apply']>;
     try {
-      c = ctx.log.apply({ job: 'migration', kind: 'skill', action: already ? 'update' : 'create', target: name, summary: already ? `${name}: aggiornata dalla stessa sezione sorgente` : changeText().newSkill({ name, file: s.file, title: s.title }), reason: 'Le procedure diventano skill: il contenuto è lo stesso, ora un ruolo la carica quando il compito la chiede.', evidence: [source, `sha256:${bodyHash}`, ...(out ? [`move:${source}`] : [])] }, writes);
+      c = ctx.log.apply({ job: 'migration', kind: 'skill', ...change, target: name, evidence: [source, `sha256:${bodyHash}`] }, writes);
     } catch (e) {
       if (!(e instanceof DeltaRefused)) throw e;
       items.push({ source, title: s.title, skill: already?.name ?? null, status: 'skipped', note: 'la modifica avrebbe tolto righe senza dirlo: la skill resta com\'è' }); continue;
     }
     if (!c) { items.push({ source, title: s.title, skill: already?.name ?? null, status: 'skipped', note: 'contenuto troppo grande per una modifica annullabile' }); continue; }
     changes++;
-    const notes = [body.masked ? `${body.masked} righe nascoste (credenziali): la sezione resta anche nel file` : '', plan.files.length ? `${plan.files.length} script spostati con lei` : ''].filter(Boolean);
-    items.push({ source, title: s.title, skill: name, status: 'moved', ...(notes.length ? { note: notes.join('; ') } : {}) });
+    items.push(item);
+  }
+  // each file's moves: its skills, their scripts and the file with its pointers, all or nothing
+  for (const [rel, g] of pending) {
+    const one = g.moves.length === 1 ? g.moves[0]! : null, names = g.moves.map(m => m.name);
+    const writes = [...g.moves.flatMap(m => m.writes),
+      { file: g.file, text: g.text, removed: declareRemoved(g.before, g.text, `${g.moves.length > 1 ? 'sezioni spostate nelle skill' : 'sezione spostata nella skill'} ${names.join(', ')}`) }];
+    const change = one ? { action: one.action, target: one.name, summary: one.summary, reason: one.reason, evidence: one.evidence }
+      : { action: g.moves.some(m => m.action === 'create') ? 'create' as const : 'update' as const, target: rel,
+        summary: `${rel}: ${g.moves.length} sezioni spostate nelle skill ${names.join(', ')}`,
+        reason: 'Le procedure diventano skill e stanno in un posto solo; nel file resta una riga che dice dove sono. Un solo Annulla rimette il file com’era.',
+        evidence: g.moves.flatMap(m => m.evidence) };
+    let c: ReturnType<ChangeLog['apply']> = null, why = 'contenuto troppo grande per una modifica annullabile';
+    try { c = ctx.log.apply({ job: 'migration', kind: 'skill', ...change }, writes); }
+    catch (e) { if (!(e instanceof DeltaRefused)) throw e; why = 'la modifica avrebbe tolto righe senza dirlo: file e skill restano come sono'; }
+    if (c) { changes++; continue; }
+    for (const m of g.moves) Object.assign(m.item, { status: 'skipped', note: why, skill: m.writes.length ? null : m.name });
   }
   return { job: 'migration', changes, report: { at: ctx.now(), items } };
 }

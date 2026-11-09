@@ -21,7 +21,7 @@ describe('compatibility skill merges', () => {
   it('protects migrated source identities from the legacy semantic merge helper', () => {
     const w = world(); fs.mkdirSync(path.join(w.root, 'runbooks'));
     fs.writeFileSync(path.join(w.root, 'runbooks/deploy.md'), `# Procedures\n\n## Alpha deployment\n${body}\n## Beta deployment\n${body}`);
-    expect(migrate(w).changes).toBe(2);
+    expect(migrate(w).changes).toBe(1); // both sections leave one file: one change, one Undo (#367)
     expect(mergeSkills(w).changes).toBe(0);
     expect(migrate(w).changes).toBe(0);
     expect(w.skills()).toHaveLength(2);
