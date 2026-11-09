@@ -143,6 +143,7 @@ export const dialogsDe: typeof dialogsIt = {
   'dialogs.orchestrator.heldKind.mail': 'Nachricht',
   'dialogs.orchestrator.heldKind.started': 'Gestartet',
   'dialogs.orchestrator.heldKind.userMessage': 'Du hast geschrieben',
+  'dialogs.orchestrator.heldKind.stalled': 'Freigegebene Arbeit steht',
   'dialogs.orchestrator.heldWhy.user': 'wartet auf deine Antwort an den Orchestrator',
   'dialogs.orchestrator.heldWhy.busy': 'der Orchestrator ist beschäftigt: geht raus, sobald er frei ist',
   'dialogs.orchestrator.heldWhy.group': 'geht in ein paar Sekunden raus, mit den anderen',

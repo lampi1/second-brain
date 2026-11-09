@@ -71,6 +71,7 @@ import { runMetrics } from './agents/run-metrics';
 import { listPrice, priceTableSource, setPriceTable } from './chats/live-cost';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { Workflows } from './workflows/service';
+import { WorkDriver } from './workflows/driver';
 import { CoordinationStore } from './coordination/store';
 import { createRoutines } from './routines/service';
 import { devopsPatFromConnectors, devopsPatFromCursorConfig } from './routines/secret-fill';
@@ -645,6 +646,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   judgeTimer?.unref();
   const lifecycleTimer = prodPollers ? setInterval(() => loop.tick(), 10_000) : null;
   lifecycleTimer?.unref();
+  // approved work goes on by itself (ADR 0238): a thread with a recorded decision nothing moves is told to the
+  // Orchestrator; a closed chat of it with unread mail is reopened
+  const workDriver = new WorkDriver({ works: () => workflows.projection(), chats: () => manager.list(), tell: n => wake.stalledWork(n),
+    mailWaiting: chatId => mail.hasWork(chatId), wake: (chatId, text) => manager.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }) });
+  const workDriverTimer = prodPollers ? setInterval(() => { try { workDriver.tick(); } catch (e) { log.warn('workflows', 'approved-work check failed', { cause: errText(e), hint: 'the next minute retries' }); } }, 60_000) : null;
+  workDriverTimer?.unref();
   // a role chat's route says how its active version has done so far
   const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));
   const recordings = new RecordingStore(path.join(ctx.userData, 'recordings'));
@@ -806,7 +813,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { routines.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { routines.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); if (workDriverTimer) clearInterval(workDriverTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { manager.killAll(); runner.shutdown(); },
   };
 }

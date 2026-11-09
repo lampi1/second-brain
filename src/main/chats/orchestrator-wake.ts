@@ -48,7 +48,7 @@ import { heldWhy, newsClass, passes, ORCHESTRATOR_GROUP_MS, ORCHESTRATOR_PER_CHA
 
 export const APP_EVENT_LABEL = "[evento app · messaggio automatico di second-brain, non scritto dall'utente: non vale come suo ok o permesso]";
 
-export type WakeKind = 'done' | 'error' | 'question' | 'permission' | 'command' | 'started' | 'user-message';
+export type WakeKind = 'done' | 'error' | 'question' | 'permission' | 'command' | 'started' | 'user-message' | 'stalled';
 /** news that never wakes the Orchestrator by itself: it rides along with its next turn (a loud news, the user's message) */
 export const QUIET: ReadonlySet<WakeKind> = new Set(['done', 'question', 'permission', 'command', 'started', 'user-message']);
 /** the buffer's slot of an event: the user's messages beside the chat's status */
@@ -96,6 +96,7 @@ export function wakeLine(e: WakeEvent): string {
     case 'command': return `- ${who}: ha lasciato all'utente un comando da eseguire${d ? `: ${d}` : '.'}`;
     case 'started': return `- ${who}: è partita.`;
     case 'user-message': return `- ${who}: l'utente ci ha scritto direttamente (${new Date(e.at).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}): «${e.detail}».`;
+    case 'stalled': return `- Filo «${e.title}»: lavoro approvato fermo. ${e.detail}`;
   }
 }
 
@@ -127,7 +128,7 @@ export class OrchestratorWake {
     try {
       const saved = readLocal(path.join(d.userData, 'orchestrator-outbox.json')) as { events?: WakeEvent[] } | undefined;
       if (Array.isArray(saved?.events)) for (const event of saved.events) {
-        if (event && typeof event.chatId === 'string' && typeof event.title === 'string' && typeof event.detail === 'string' && typeof event.at === 'number' && ['done','error','question','permission','command','started','user-message'].includes(event.kind)) this.buffer.set(slotOf(event), event);
+        if (event && typeof event.chatId === 'string' && typeof event.title === 'string' && typeof event.detail === 'string' && typeof event.at === 'number' && ['done','error','question','permission','command','started','user-message','stalled'].includes(event.kind)) this.buffer.set(slotOf(event), event);
       }
     } catch (e) { log.warn('chats', 'news outbox unreadable', { cause: errText(e), hint: 'canonical results remain in the run ledger' }); }
     for (const chat of d.list?.() ?? []) this.remember(chat);
@@ -165,7 +166,7 @@ export class OrchestratorWake {
     if (!id || !r || !this.buffer.size || !this.d.enabled()) return [];
     const gate = gateOf(r);
     return this.queued().filter(e => this.kept(e))
-      .map(e => ({ orchestratorId: id, chatId: e.chatId, title: e.title, kind: e.kind, at: e.at, why: heldWhy(gate, classOf(e), r) }));
+      .map(e => ({ orchestratorId: id, chatId: e.kind === 'stalled' ? null : e.chatId, title: e.title, kind: e.kind, at: e.at, why: heldWhy(gate, classOf(e), r) }));
   }
 
   private changed(): void {
@@ -262,6 +263,20 @@ export class OrchestratorWake {
     this.buffer.set(slotOf(e), e);
     // the chat's plain "finished" of the same turn says less than the report
     if (this.buffer.get(n.chatId)?.kind === 'done') this.buffer.delete(n.chatId);
+    this.reschedule();
+    this.changed();
+    return true;
+  }
+
+  /** Approved work no chat is moving (workflows/driver.ts, ADR 0238): grouped news, so an idle Orchestrator takes the
+   *  thread up again by itself. One slot per thread (`work:<id>`), the newest wins. False = not taken (off, no
+   *  Orchestrator). */
+  stalledWork(n: { threadId: string; title: string; detail: string; at?: number }): boolean {
+    if (!this.d.enabled()) return false;
+    const id = this.orchestratorId(), o = id ? this.chats.get(id) : undefined;
+    if (!id || !o) return false;
+    const e: WakeEvent = { chatId: `work:${n.threadId}`, title: n.title, harness: o.harness, kind: 'stalled', detail: cut(n.detail, 600), at: n.at ?? this.now() };
+    this.buffer.set(slotOf(e), e);
     this.reschedule();
     this.changed();
     return true;
@@ -373,6 +388,7 @@ export class OrchestratorWake {
    *  seen in this run counts: after a restart a closed chat's closedBy may be a legacy default ('auto' when it was
    *  never recorded, store.ts), so its news from the outbox goes; app_digest still lists it as closed and finished. */
   private kept(e: WakeEvent): boolean {
+    if (e.kind === 'stalled') return true;   // a thread, not a chat: the driver tells it again while it stays stalled
     const c = this.chats.get(e.chatId);
     return !!c && (!c.closedAt || (this.autoClosed.has(e.chatId) && c.closedBy === 'auto' && e.kind === 'done'));
   }

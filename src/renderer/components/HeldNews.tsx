@@ -31,11 +31,12 @@ export function useHeldNews(): HeldNewsState {
   return state;
 }
 
-const TONE: Record<HeldNewsKind, string> = { done: 'green', error: 'red', question: 'amber', permission: 'amber', command: 'amber', started: 'blue', 'user-message': 'blue', mail: 'violet' };
+const TONE: Record<HeldNewsKind, string> = { done: 'green', error: 'red', question: 'amber', permission: 'amber', command: 'amber', started: 'blue', 'user-message': 'blue', mail: 'violet', stalled: 'amber' };
 
 const KIND: Record<HeldNewsKind, TextKey> = {
   done: 'dialogs.orchestrator.heldKind.done', error: 'dialogs.orchestrator.heldKind.error', question: 'dialogs.orchestrator.heldKind.question',
   permission: 'dialogs.orchestrator.heldKind.permission', command: 'dialogs.orchestrator.heldKind.command', started: 'dialogs.orchestrator.heldKind.started', 'user-message': 'dialogs.orchestrator.heldKind.userMessage', mail: 'dialogs.orchestrator.heldKind.mail',
+  stalled: 'dialogs.orchestrator.heldKind.stalled',
 };
 const WHY: Record<HeldNewsWhy, TextKey> = { user: 'dialogs.orchestrator.heldWhy.user', busy: 'dialogs.orchestrator.heldWhy.busy', group: 'dialogs.orchestrator.heldWhy.group', quiet: 'dialogs.orchestrator.heldWhy.quiet' };
 

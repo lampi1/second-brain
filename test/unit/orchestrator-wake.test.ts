@@ -366,6 +366,18 @@ describe('OrchestratorWake', () => {
     expect(sent).toEqual(['orchestrator']);
   });
 
+  it('approved work no chat moves wakes an idle Orchestrator with the thread, grouped, and shows in the held news (ADR 0238)', async () => {
+    const { w, sent } = make();
+    expect(w.stalledWork({ threadId: 'w1', title: 'Esportazione CSV', detail: 'Fase Sviluppo, nulla si muove da 15 min.' })).toBe(true);
+    expect(w.heldNews()).toEqual([expect.objectContaining({ chatId: null, kind: 'stalled', title: 'Esportazione CSV' })]);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain('- Filo «Esportazione CSV»: lavoro approvato fermo. Fase Sviluppo');
+    expect(w.queued()).toEqual([]);
+    const off = make({ enabled: false });
+    expect(off.w.stalledWork({ threadId: 'w1', title: 't', detail: 'd' })).toBe(false);
+  });
+
   it('a turn the user stopped himself is not told', async () => {
     const { sent, finish } = make();
     finish('qa', 'interrotto', { lastResult: { at: 7, isError: false, interrupted: true } });
