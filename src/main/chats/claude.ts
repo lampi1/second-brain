@@ -30,6 +30,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { providerWrite } from '../agent-runtime/transport-timing';
 import { requestFailed } from '../agent-runtime/request-failure';
+import { RuntimeOperationError } from '../agent-runtime/channel';
 import type { Answer, ChatItem, ChatState, Effort, ImageAttachment, PendingRequest, PermissionMode } from '../../shared/contract';
 import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { errText, log } from '../log';
@@ -247,6 +248,9 @@ export class ClaudeSession implements HarnessSession {
   private killed = false;
   private exited = false;
   private brokerGeneration = 0;
+  /** can_use_tool requests still being checked (an await before their panel), and those the CLI withdrew meanwhile */
+  private readonly checking = new Set<string>();
+  private readonly withdrawn = new Set<string>();
   private procExited = false;         // 'exit' came ('close' also waits for the pipes, which a leftover may hold)
   private job: number | null = null;  // its Job Object (jobguard.ts)
   private jobKilled = false;          // its tree was terminated through the job
@@ -768,6 +772,7 @@ export class ClaudeSession implements HarnessSession {
       case 'control_cancel_request': {
         const id = s(m.request_id);
         this.briefWaited.delete(id); // withdrawn while it waited for its brief: never shown afterwards
+        if (this.checking.has(id)) this.withdrawn.add(id); // withdrawn while still checked (an await): never shown either
         if (this.calls.delete(id)) {
           log.info('chats', 'permission withdrawn by CLI', { chat: this.opts.chatId, data: { requestId: id } });
           this.sink.resolved(id);
@@ -808,6 +813,12 @@ export class ClaudeSession implements HarnessSession {
       return;
     }
     if (this.calls.has(id)) return; // also listed in an initialize reply
+    this.checking.add(id);
+    try { await this.onToolRequest(id, r, m, generation); } finally { this.checking.delete(id); this.withdrawn.delete(id); }
+  }
+
+  /** A can_use_tool request: checked (yes/no gate, brief) and then shown; a cancel that came during the checks wins. */
+  private async onToolRequest(id: string, r: Obj, m: Obj, generation: number): Promise<void> {
     const tool = s(r.tool_name);
     const input = o(r.input);
     const question = tool === 'AskUserQuestion';
@@ -818,6 +829,7 @@ export class ClaudeSession implements HarnessSession {
     // a suggested mode above the agent's ceiling is never offered ("Sempre" would raise it before the manager could react)
     const suggestions = arr(r.permission_suggestions).filter(x => o(x).type !== 'setMode' || !suggestedAbove(o(x).mode, this.opts.ceiling ?? null));
     const call: Call = { requestId: id, tool, input, toolUseId: s(r.tool_use_id), suggestions, question, noAlways };
+    if (this.withdrawn.has(id)) return; // the CLI withdrew it while it was checked
     this.calls.set(id, call);
     const sub = s(r.agent_id) ? '(subagente) ' : '';
     if (s(r.agent_id)) this.childTask({ task_id: r.agent_id, task_type: 'local_agent' }, 'waiting');
@@ -969,8 +981,12 @@ export class ClaudeSession implements HarnessSession {
         log.info('chats', 'pre-tool hook refused', { chat: this.opts.chatId, data: { tool } });
       }
     } catch (e) {
-      response = { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'Permission broker unavailable; the action was not authorized.' } };
-      log.warn('chats', 'pre-tool hook failed: call refused', { chat: this.opts.chatId, cause: errText(e), hint: 'see agents/orchestrator-budget.ts' });
+      // only an unreachable runtime broker refuses (its decision is unknown); a failing in-process hook never blocks a
+      // call, as before the runtime host
+      if (e instanceof RuntimeOperationError) {
+        response = { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'Permission broker unavailable; the action was not authorized.' } };
+        log.warn('chats', 'pre-tool hook failed: call refused', { chat: this.opts.chatId, cause: errText(e), hint: 'see agent-runtime/broker.ts' });
+      } else log.warn('chats', 'pre-tool hook failed: the call goes on', { chat: this.opts.chatId, cause: errText(e), hint: 'see agents/orchestrator-budget.ts' });
     }
     try { this.write({ type: 'control_response', response: { subtype: 'success', request_id: id, response } }); } catch { /* gone */ }
   }
