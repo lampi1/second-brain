@@ -123,13 +123,21 @@ describe('runtime receiver', () => {
     host.close();
   });
 
-  it('never evicts deduplication identities within a generation', async () => {
+  it('a long generation keeps admitting new operations; a replayed frame is refused by its sequence alone', async () => {
     const execute = vi.fn(async () => 'ok'), post = vi.fn();
-    const host = new RuntimeReceiver(identity, execute, post, 256, 1);
-    host.receive(request()); await vi.runAllTimersAsync();
-    host.receive(request(2)); await vi.runAllTimersAsync();
-    expect(execute).toHaveBeenCalledTimes(1);
-    expect(host.receive(request(3))).toBe(false);
+    const host = new RuntimeReceiver(identity, execute, post);
+    // a streaming session sends one update per 16 ms flush: 65,536 of them is about 18 minutes, never a limit
+    for (let s = 1; s <= 65_537; s++) {
+      expect(host.receive(request(s))).toBe(true);
+      if (s % 200 === 0) await vi.runAllTimersAsync(); // under the in-flight limit of 256
+    }
+    await vi.runAllTimersAsync();
+    expect(execute).toHaveBeenCalledTimes(65_537);
+    expect(post.mock.calls.every(([f]) => f.payload.ok === true)).toBe(true);
+    // a replay of any earlier frame carries its old sequence: refused, never run again
+    expect(host.receive(request(1))).toBe(false);
+    expect(host.receive(request(65_537))).toBe(false);
+    expect(execute).toHaveBeenCalledTimes(65_537);
   });
 
   it('does not execute queued callbacks after shutdown or deliver late old-generation replies', async () => {

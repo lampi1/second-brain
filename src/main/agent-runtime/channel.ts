@@ -102,6 +102,8 @@ export class RuntimeChannel<I, O> {
   }
 }
 
+const RECENT_IDS = 1024;
+
 /** Receiver-side monotonic admission: identities and sequence are checked before execute. No result cache or
  *  automatic replay: a duplicate, a gap or a backwards sequence is rejected even when its earlier reply was lost.
  *  Concurrent commands may finish out of order (interrupt must not wait behind a blocked permission call). */
@@ -109,11 +111,11 @@ export class RuntimeReceiver<I, O> {
   private sequence = 0;
   private inFlight = 0;
   private closed = false;
-  private readonly ids = new Set<string>();
+  /** the last RECENT_IDS operation ids, to refuse an id a buggy sender reuses with a fresh sequence */
+  private readonly recent = new Set<string>();
 
   constructor(readonly identity: Readonly<RuntimeIdentity>, private readonly execute: (input: I) => Promise<O>,
-    private readonly post: (frame: RuntimeFrame<I, O>) => void, private readonly limit = 256,
-    private readonly operationLimit = 65_536) {
+    private readonly post: (frame: RuntimeFrame<I, O>) => void, private readonly limit = 256) {
     this.identity = Object.freeze({ ...identity });
   }
 
@@ -122,11 +124,12 @@ export class RuntimeReceiver<I, O> {
     const f = frame as RuntimeFrame<I, O>;
     if (typeof f.operationId !== 'string' || !/^[a-zA-Z0-9_-]{1,100}$/.test(f.operationId)
       || !Number.isSafeInteger(f.sequence) || f.sequence !== this.sequence + 1
-      || !f.payload || f.payload.kind !== 'request' || this.ids.has(f.operationId)) return false;
+      || !f.payload || f.payload.kind !== 'request' || this.recent.has(f.operationId)) return false;
+    // the strict next sequence is what stops replays: a replayed or late frame carries an old one and never runs again.
+    // So ids are kept only in a window, never a per-generation cap (a session streams for hours: one update per 16 ms).
     this.sequence = f.sequence;
-    // Never evict deduplication identities within a generation: eviction would make old effects replayable.
-    if (this.ids.size >= this.operationLimit) { this.reply(f, { kind: 'reply', ok: false, outcome: 'rejected', error: 'Runtime generation operation limit reached' }); this.close(); return true; }
-    this.ids.add(f.operationId);
+    this.recent.add(f.operationId);
+    if (this.recent.size > RECENT_IDS) this.recent.delete(this.recent.values().next().value!);
     if (this.inFlight >= this.limit) { this.reply(f, { kind: 'reply', ok: false, outcome: 'rejected', error: 'Runtime queue full' }); return true; }
     this.inFlight++;
     // Capture synchronous adapter failures as rejections too, without leaking provider payloads or keys.
