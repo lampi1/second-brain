@@ -659,7 +659,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // single entry (ADR 0239): a work chat's Sì/No question goes to the user through the Orchestrator's conversation, and
   // the user's own «sì» / «no» there (PC, phone, Remote Control) answers it
   const relay = new QuestionRelay({ chats: () => manager.list(), pending: () => manager.pending(), items: id => manager.items(id),
-    answer: (chatId, requestId, a, by) => manager.answer(chatId, requestId, a, by) });
+    answer: (chatId, requestId, a, by) => manager.answer(chatId, requestId, a, by),
+    notify: (orchestratorId, text) => { void manager.send(orchestratorId, text, undefined, false, 'App', false, { kind: 'app' }).catch(() => {}); } });
   addChatTools([relay.tool()]);
   ctx.emitter.tap((channel, payload) => {
     if (channel !== 'chat:item') return;
