@@ -294,8 +294,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un tuo messaggio che inizia con «[nuova chat]» gli chiede di aprire una chat di lavoro nuova.',
         'A message of yours starting with "[nuova chat]" asks it to open a new work chat.'),
       // src/main/chats/orchestrator-delivery.ts
-      b('Errori subito; risultati, richieste originali e lavori approvati fermi da 15 min raggruppati (30 s); semplici avvii e avanzamenti silenziosi. Le decisioni restano nei pannelli originali, mai nelle risposte di un agente.',
-        'Errors arrive immediately; results, original requests and approved work stalled for 15 min are grouped (30 s); plain starts and progress stay quiet. Decisions remain in original panels, never agent replies.'),
+      b('Errori subito; risultati, richieste originali e lavori approvati fermi da 15 min raggruppati (30 s); semplici avvii e avanzamenti silenziosi. Le decisioni restano nei pannelli originali, mai nelle risposte di un agente; fuori dal PC (Controllo remoto, telefono) ti porta lui la domanda Sì/No di un lavoro e rispondi «sì» o «no».',
+        'Errors arrive immediately; results, original requests and approved work stalled for 15 min are grouped (30 s); plain starts and progress stay quiet. Decisions remain in original panels, never agent replies; away from the PC (Remote Control, phone) it brings you a job\'s yes/no question and you answer «sì» or «no».'),
       // src/main/chats/held-news.ts, src/renderer/components/HeldNews.tsx (#88)
       b('Quello che l’app gli tiene da parte lo vedi sopra il suo campo: «N novità in attesa»; un clic elenca chat, tipo, da quando e perché aspetta. Guardarlo non gli costa un turno.',
         'What the app holds back for it shows above its input: "N novità in attesa"; a click lists chat, kind, since when and why it waits. Looking costs it no turn.'),
