@@ -157,7 +157,7 @@ describe('one-time migration', () => {
     expect(state.lastRun!.jobs.map(j => j.job)).toEqual(['migration', 'upgrade', 'corrections', 'repeated-task', 'merge-skills', 'merge-memory']);
     expect(w.emitted()).toBe(1);
   });
-  it('moves a section out for a pointer; written back unchanged it only moves again, changed it updates the unedited skill', async () => {
+  it('moves a section out for a pointer; written back unchanged it only moves again, changed it never overwrites the skill', async () => {
     const w = world(), source = '# Operations\n\n## Deploy test\n\n1. Build the test fixture.\n2. Verify the output.\n';
     put(w.brain, 'runbooks/deploy.md', source);
     const first = await w.service.maintain('migration'), name = first.skills[0]!.name;
@@ -172,18 +172,14 @@ describe('one-time migration', () => {
     expect(fs.readFileSync(skill, 'utf8')).toBe(original);
     expect(fs.readFileSync(file, 'utf8')).toContain('→ Spostata nella skill');
     expect(again.migration!.items).toHaveLength(1);
-    // changed: the generated, unedited skill follows the source
+    // changed: the skill holds the only text of the moved procedure, so it is never regenerated; the new text stays
+    // in the file, for the user to review (#367 review)
     put(w.brain, 'runbooks/deploy.md', source.replace('Verify the output', 'Verify both outputs'));
     const updated = await w.service.maintain('migration');
     expect(updated.skills.map(s => s.name)).toEqual([name]);
-    expect(fs.readFileSync(skill, 'utf8')).toContain('Verify both outputs');
-    expect(fs.readFileSync(file, 'utf8')).not.toContain('Verify both outputs');
-    const change = updated.changes.find(c => c.job === 'migration' && c.action === 'update' && c.summary.includes('aggiornata'))!;
-    w.service.rollback(change.id);
-    expect(fs.readFileSync(file, 'utf8')).toContain('Verify both outputs');
-    await w.service.maintain('migration');
     expect(fs.readFileSync(skill, 'utf8')).toBe(original);
-    expect(fs.readFileSync(file, 'utf8')).toContain('Verify both outputs'); // the user's Undo is the decision
+    expect(fs.readFileSync(file, 'utf8')).toContain('Verify both outputs');
+    expect(updated.migration!.items[0]!.note).toMatch(/rivedilo/); // the merged report keeps «moved»
   });
   it('recognizes old line-based provenance and preserves later user edits on source conflicts', async () => {
     const w = world();

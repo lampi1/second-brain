@@ -133,6 +133,40 @@ describe('migration v2: move, not copy', () => {
     expect(passi).toMatchObject({ status: 'moved', note: expect.stringMatching(/titolo/) });
     expect(get(w.root, 'runbook/passi.md')).toMatch(/^---\ntitle: Passi\n---\n/);
   });
+  it('a script moves only when nothing could break: no exec bit, no sibling import, no caller in any file, no stale path', () => {
+    const w = world();
+    put(w.root, 'runbook/ops.md', '# Ops\n\n## Giro\n\n1. Lancia `runbook/x/run.sh`.\n2. Poi `runbook/x/calc.py`.\n3. Poi `runbook/x/chiamata.ps1`.\n4. Poi `runbook/x/win.ps1` (o C:\\brain\\runbook\\x\\win.ps1).\n5. Infine `runbook/x/ok.sql`.\n');
+    put(w.root, 'runbook/x/run.sh', 'echo hi\n'); fs.chmodSync(path.join(w.root, 'runbook/x/run.sh'), 0o755);
+    put(w.root, 'runbook/x/calc.py', 'import helpers\nprint(helpers.go())\n');
+    put(w.root, 'runbook/x/helpers.py', 'def go(): return 1\n');
+    put(w.root, 'runbook/x/chiamata.ps1', 'Write-Host ok\n');
+    fs.writeFileSync(path.join(w.root, 'Makefile'), 'all:\n\tpwsh runbook/x/chiamata.ps1\n');
+    put(w.root, 'runbook/x/win.ps1', 'Write-Host win\n');
+    put(w.root, 'runbook/x/ok.sql', 'SELECT 1;\n');
+    const item = migrate(w).report!.items[0]!;
+    expect(item.note).toBe('1 script spostati con lei');
+    for (const f of ['run.sh', 'calc.py', 'chiamata.ps1', 'win.ps1']) expect(fs.existsSync(path.join(w.root, 'runbook/x', f))).toBe(process.platform === 'win32' && f === 'run.sh' ? false : true);
+    expect(fs.existsSync(path.join(w.root, 'runbook/x/ok.sql'))).toBe(false);
+  });
+  it('a script a UTF-16 file names stays', () => {
+    const w = world();
+    put(w.root, 'runbook/a.md', '# A\n\n## Passo\n\n1. Esegui `runbook/s/uno.ps1`.\n2. Controlla.\n');
+    put(w.root, 'runbook/s/uno.ps1', 'Write-Host 1\n');
+    fs.writeFileSync(path.join(w.root, 'avvio.ps1'), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('& .\\runbook\\s\\uno.ps1\r\n', 'utf16le')]));
+    migrate(w);
+    expect(fs.existsSync(path.join(w.root, 'runbook/s/uno.ps1'))).toBe(true);
+  });
+  it('a moved skill is never regenerated from a new section with the same title', () => {
+    const w = world();
+    put(w.root, 'runbook/d.md', '# D\n\n## Deploy\n\n1. Vecchio passo uno.\n2. Vecchio passo due.\n');
+    migrate(w);
+    const skill = get(w.root, '.agents/skills/deploy/SKILL.md');
+    put(w.root, 'runbook/d.md', '# D\n\n## Deploy\n\n1. Nuovo passo uno.\n2. Nuovo passo due.\n');
+    const item = migrate(w).report!.items[0]!;
+    expect(item).toMatchObject({ status: 'existing', note: expect.stringMatching(/rivedilo/) });
+    expect(get(w.root, '.agents/skills/deploy/SKILL.md')).toBe(skill);
+    expect(get(w.root, 'runbook/d.md')).toContain('Nuovo passo uno');
+  });
   it('withoutSection keeps CRLF and returns null for a section that is gone', () => {
     const text = '# A\r\n\r\n## Passi\r\n\r\n1. Uno.\r\n2. Due.\r\n';
     expect(withoutSection('runbook/a.md', text, 'runbook/a.md#passi', 'X')).toBe('# A\r\n\r\n## Passi\r\n\r\nX\r\n');

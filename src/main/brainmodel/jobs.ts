@@ -25,7 +25,7 @@ import type { BrainSkill, MaintenanceJobId, MigrationItem, MigrationReport } fro
 import { conceptOf } from '../../shared/work-concepts';
 import { NAME_RE, parseMd, setBody, yamlValue } from '../../shared/skillmd';
 import type { AgentSnapshot, ChangeLog } from './changes';
-import { procedureSections, sectionBody, sectionText } from './procedure-sources';
+import { MOVED_PREFIX, procedureSections, sectionBody, sectionText } from './procedure-sources';
 import { readSmall } from './model';
 import { checkPermissionText } from '../agents/tool-policy';
 import { checkMemoryWorth } from '../rules/memory-worth';
@@ -186,6 +186,12 @@ export function migrate(ctx: JobContext): JobResult {
       items.push({ source, title: s.title, skill: already.name, status: 'existing',
         ...(!holds ? { note: receipt ? 'la skill è cambiata da allora: la sezione resta anche nel file' : 'fonte modificata: rivedi la skill esistente, non creo una copia' } : stays ? { note: stays } : {}) }); continue;
     }
+    // a skill whose section already left its file holds the only full text: a new section with the same title (or the
+    // pointer replaced by new steps) never regenerates it; the new text stays in the file for the user to review
+    if (already && receipt && (current?.includes(`${MOVED_PREFIX} \`${already.name}\``)
+      || ctx.log.all().some(c => c.job === 'migration' && !c.rolledBackAt && c.evidence.includes(`move:${source}`)))) {
+      items.push({ source, title: s.title, skill: already.name, status: 'existing', note: `la skill ${already.name} ha già la sezione spostata prima: questo nuovo testo con lo stesso titolo resta nel file, rivedilo` }); continue;
+    }
     if (already && receipt && !generatedUnchanged(prior, receipt)) {
       items.push({ source, title: s.title, skill: already.name, status: 'existing', note: 'fonte e skill modificate: aggiornamento da rivedere, testo personale conservato' }); continue;
     }
@@ -235,7 +241,7 @@ export function migrate(ctx: JobContext): JobResult {
         evidence: g.moves.flatMap(m => m.evidence) };
     let c: ReturnType<ChangeLog['apply']> = null, why = 'contenuto troppo grande per una modifica annullabile';
     try { c = ctx.log.apply({ job: 'migration', kind: 'skill', ...change }, writes); }
-    catch (e) { if (!(e instanceof DeltaRefused)) throw e; why = 'la modifica avrebbe tolto righe senza dirlo: file e skill restano come sono'; }
+    catch (e) { why = e instanceof DeltaRefused ? 'la modifica avrebbe tolto righe senza dirlo: file e skill restano come sono' : `non riuscita, file e skill restano come sono: ${oneLine((e as Error).message, 160)}`; }
     if (c) { changes++; continue; }
     for (const m of g.moves) Object.assign(m.item, { status: 'skipped', note: why, skill: m.writes.length ? null : m.name });
   }

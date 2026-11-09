@@ -21,14 +21,19 @@ example of the agent standard.
 - **Scripts and queries.** A file of the brain the section names (`.mjs`, `.ps1`, `.sh`, `.py`, `.sql`, `.kql`, …)
   moves into the skill's `scripts/` and the skill names it as `${CLAUDE_SKILL_DIR}/scripts/<name>` (ADR 0241), only
   when no other text of the brain and no role's text names it. Never moved: the brain's managed `scripts/` and
-  `queries/` (their own pages), `ops/`, dot folders, skill folders, binary or non-UTF-8 files, files over 256 KB, a
-  script that finds files next to itself (`./`, `$PSScriptRoot`, `__dirname`, `import.meta`, `%~dp0`, …), and any
-  script when the brain is too big to read whole (4000 text files).
+  `queries/` (their own pages), `ops/`, dot folders, skill folders, binary or non-UTF-8 files, files over 256 KB,
+  executable files (the bit would not come with it), a script that finds files next to itself (`./`, `$PSScriptRoot`,
+  `__dirname`, `__file__`, `import.meta`, `%~dp0`, …) or imports a Python module beside it, a script the section also
+  names in a way the rewrite does not change (a Windows path), and any script when the brain is too big to read whole
+  (4000 files). "Named elsewhere" reads every file of the brain whatever its extension (a Makefile, a scheduled task's
+  XML), UTF-16 ones by their byte-order mark.
 - **Stays whole.** A section stays in its file, the skill being a copy: when it has lines that look like credentials
   (the skill has them hidden, so the file keeps the only full text); when its file is not plain UTF-8 (an Undo could not
   give the same bytes back); when it has no heading of its own (a numbered file with no title: its frontmatter); when
   the user edited the skill since the first migration; and in a pass the app started by itself (only a pass the user
   starts moves files).
+- **A moved skill is never regenerated.** Its skill holds the only text of the procedure: a new section with the same
+  title in the file (or the pointer replaced by new steps) stays there, reported «rivedilo».
 - **An Undo is a decision.** Undoing a move writes `ops/state/migration-kept/<hash>.json` in the brain at once; the next
   passes neither move that section nor recreate its skill, also after the bounded change log dropped the change.
   Deleting the marker allows it again.
@@ -41,4 +46,6 @@ example of the agent standard.
 - #311 cannot happen again for a moved section: there is nothing left to find. The forget markers (ADR 0180) still
   cover sections kept whole.
 - A forgotten skill's text then lives only in the change history (its Undo).
+- Editing one of the skills a file's grouped change made blocks that change's Undo, as for any change whose file
+  changed after it.
 - Role notes (ADR 0242) are not moved by this job: they stay on disk and in `memory_recall`.

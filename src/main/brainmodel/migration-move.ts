@@ -7,8 +7,10 @@
 // every move out of one file as one change with its Undo, and an Undo is remembered in ops/state/migration-kept/ (the
 // change log is bounded). Never moved: a file that is not plain UTF-8 (an Undo could not give its bytes back), a file
 // with no heading above the section (its frontmatter), the brain's managed scripts/ and queries/ (their own pages), ops/
-// (app machinery), dot folders, skill folders, files over 256 KB, binary files, scripts that find files next to
-// themselves, and files any other text of the brain or of a role names. Tests: test/unit/brainmodel/migration-move.test.ts.
+// (app machinery), dot folders, skill folders, files over 256 KB, binary files, executable files, scripts that find
+// files next to themselves (a Python import of a module beside it too), a script the section also names in a way the
+// rewrite does not change (a Windows path), and files any other file of the brain (any extension, UTF-16 too) or a role
+// names. Tests: test/unit/brainmodel/migration-move.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import { brainPath } from '../agents/pack/flows';
@@ -18,11 +20,14 @@ import { sourceHash, sourceId } from './migration-source';
 
 const MAX_BYTES = 256 * 1024;
 const SCAN_FILES = 4000;
+/** a text file too big to read whole stops every script move (it might name one); a big binary file does not */
 const TEXT_EXT = /\.(md|markdown|txt|json|jsonc|ya?ml|mjs|cjs|js|ts|ps1|psm1|sh|bash|py|sql|kql|cmd|bat|toml|ini|csv)$/i;
 const RUNNABLE = /(?:^|[\s`'"(\[])((?:\.{1,2}\/)?[\w@.+-]+(?:\/[\w@.+-]+)*\.(?:mjs|cjs|js|ps1|psm1|sh|py|sql|kql|cmd|bat))(?=$|[\s`'")\],;:])/gm;
 const NEVER = /^(?:\.|scripts\/|queries\/|ops\/|node_modules\/)|\/\./;
 /** a script that finds files next to itself: moved, it would look in the skill's folder */
-const SELF_RELATIVE = /(?:^|[\s'"`(=])\.{1,2}[\\/]|\$PSScriptRoot|\$MyInvocation|__dirname|__filename|import\.meta|%~dp0|BASH_SOURCE|\$\(dirname|\$0\b|sys\.argv\[0\]/;
+const SELF_RELATIVE = /(?:^|[\s'"`(=])\.{1,2}[\\/]|\$PSScriptRoot|\$PSCommandPath|\$MyInvocation|__dirname|__filename|__file__|import\.meta|%~[a-z]*[dpf]+[a-z]*0|BASH_SOURCE|\$\(dirname|\$\{?0\b|sys\.argv\[0\]|sys\.path/i;
+/** a Python import of a module that sits beside the script (it would not be found from the skill's folder) */
+const PY_IMPORT = /^\s*(?:from\s+([\w.]+)\s+import|import\s+([\w.,\s]+))/gm;
 
 /** The pointer line a moved section keeps in its file. */
 export const movedLine = (skill: string, day: string): string => `${MOVED_PREFIX} \`${skill}\` il ${day}.`;
@@ -66,6 +71,12 @@ function inside(root: string, abs: string): boolean {
 
 /** What the brain says, for "is this script named anywhere else": every text file (bounded) and the roles' texts. */
 export interface Corpus { texts: Map<string, string>; extra: string[]; truncated: boolean }
+/** A file's text for the search: UTF-16 by its byte-order mark, else UTF-8; null for a binary file (images, archives). */
+function decoded(buf: Buffer): string | null {
+  if (buf[0] === 0xff && buf[1] === 0xfe) return buf.subarray(2).toString('utf16le');
+  if (buf[0] === 0xfe && buf[1] === 0xff) { const b = Buffer.from(buf.subarray(2)); b.swap16(); return b.toString('utf16le'); }
+  return buf.subarray(0, 8000).includes(0) ? null : buf.toString('utf8');
+}
 export function brainCorpus(root: string, extra: string[]): Corpus {
   const base = fs.realpathSync(root), texts = new Map<string, string>();
   let truncated = false;
@@ -76,14 +87,31 @@ export function brainCorpus(root: string, extra: string[]): Corpus {
       if (texts.size >= SCAN_FILES) { truncated = true; return; }
       const rel = dir ? `${dir}/${e.name}` : e.name;
       if (e.isDirectory()) { if (/^(node_modules|\.git)$/.test(e.name)) continue; if (depth < 8) visit(rel, depth + 1); else truncated = true; }
-      else if (e.isFile() && TEXT_EXT.test(e.name)) {
-        try { const st = fs.statSync(path.join(base, rel)); if (st.size > 512 * 1024) { truncated = true; continue; } texts.set(rel, fs.readFileSync(path.join(base, rel), 'utf8')); }
-        catch { truncated = true; }
+      else if (e.isFile()) {
+        try {
+          const st = fs.statSync(path.join(base, rel));
+          if (st.size > 512 * 1024) { if (TEXT_EXT.test(e.name)) truncated = true; continue; }
+          const text = decoded(fs.readFileSync(path.join(base, rel)));
+          if (text !== null) texts.set(rel, text);
+        } catch { truncated = true; }
       }
     }
   };
   visit('', 0);
   return { texts, extra, truncated };
+}
+
+const count = (text: string, part: string): number => { let n = 0; for (let i = text.indexOf(part); i >= 0; i = text.indexOf(part, i + part.length)) n++; return n; };
+/** A Python script that imports a module kept beside it. */
+function besideImports(file: string, text: string): boolean {
+  if (!/\.py$/i.test(file)) return false;
+  const dir = path.dirname(file);
+  for (const m of text.matchAll(PY_IMPORT)) {
+    for (const mod of (m[1] ?? m[2] ?? '').split(',').map(x => x.trim().split(/\s+/)[0]!.split('.')[0]!).filter(Boolean)) {
+      if (fs.existsSync(path.join(dir, `${mod}.py`)) || fs.existsSync(path.join(dir, mod, '__init__.py'))) return true;
+    }
+  }
+  return false;
 }
 
 export interface PlannedFile { from: string; rel: string; to: string; text: string }
@@ -124,7 +152,12 @@ export function planScripts(root: string, section: ProcedureSection, body: strin
     const name = path.posix.basename(rel);
     if (others.some(t => t.includes(name))) continue;
     const text = exactText(path.join(base, rel));
-    if (text === null || text.includes('\0') || SELF_RELATIVE.test(text)) continue;
+    if (text === null || text.includes('\0') || SELF_RELATIVE.test(text) || besideImports(path.join(base, rel), text)) continue;
+    // an executable bit would not come with it (the change log writes text), and a run of it from a scheduler would break
+    if (process.platform !== 'win32' && (fs.statSync(path.join(base, rel)).mode & 0o111)) continue;
+    // every mention in the section must be one the rewrite changes (a Windows path, a bare name would be left dead)
+    const rewritten = [...found].filter(([, r]) => r === rel).reduce((n, [token]) => n + count(body, token), 0);
+    if (count(body, name) > rewritten) continue;
     const n = names.get(name.toLowerCase()) ?? 0; names.set(name.toLowerCase(), n + 1);
     const target = n ? `${path.posix.basename(name, path.posix.extname(name))}-${n + 1}${path.posix.extname(name)}` : name;
     const to = path.join(skillDir, 'scripts', target);
