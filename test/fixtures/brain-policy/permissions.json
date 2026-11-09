@@ -1,0 +1,91 @@
+{
+  "$comment": "Example: the owner's Safety policy (brain me.md, 2026-11-09) as <brain>/permissions.json (ADR 0254). Everything else is free.",
+  "version": 1,
+  "rules": [
+    {
+      "id": "db-write",
+      "action": "esegui",
+      "why": "writes on any database (test and prod) wait for your Esegui",
+      "tools": [
+        "command"
+      ],
+      "match": [
+        "\\b(sqlcmd|invoke-sqlcmd|osql|bcp|psql|mysql|sqlite3|mongosh)\\b[\\s\\S]*\\b(insert\\s+into|update\\s+[\\w.\\[\\]]+\\s+set|delete\\s+from|merge\\s+into|truncate\\s+table|(create|alter|drop)\\s+(table|view|proc|procedure|function|index|schema|database|trigger|type|user|login|role)|exec(ute)?\\s+sp_|grant\\s|revoke\\s)",
+        "\\bsqlcmd\\b[^;&|\\n]*\\s-i\\s",
+        "\\bdotnet\\s+ef\\s+database\\s+update\\b"
+      ],
+      "unless": [
+        "^[^;&|\\n]*\\bsqlcmd\\b[^;&|\\n]*\\s-S\\s+(localhost|127\\.0\\.0\\.1)(,\\d+)?\\s[^;&|\\n]*$"
+      ]
+    },
+    {
+      "id": "db-write-tools",
+      "action": "esegui",
+      "why": "writes on any database (test and prod) wait for your Esegui",
+      "tools": [
+        "mcp"
+      ],
+      "match": [
+        "\"(query|sql|statement|command)\"\\s*:\\s*\"\\s*(insert|update|delete|merge|truncate|create|alter|drop|grant|revoke|exec)\\b"
+      ]
+    },
+    {
+      "id": "prod-deploy",
+      "action": "esegui",
+      "why": "releases and deploys on production nodes wait for your Esegui",
+      "tools": [
+        "command"
+      ],
+      "match": [
+        "\\b(deploy|release|publish|rollout|swap)\\b[^;&|\\n]*\\b(prod|production|prd)\\b",
+        "\\b(prod|production|prd)\\b[^;&|\\n]*\\b(deploy|release|publish|rollout|swap)\\b"
+      ]
+    },
+    {
+      "id": "azure-write",
+      "action": "esegui",
+      "why": "Azure writes (create, change, delete, restart, deploy) wait for your Esegui",
+      "tools": [
+        "command"
+      ],
+      "match": [
+        "\\baz\\s+(?:[a-z][\\w-]*\\s+){0,4}?(create|update|delete|set|add|remove|restart|start|stop|deploy|import|purge|swap|assign|reset|upload|scale|apply|invoke|run-command|config-zip)(?=\\s|$)",
+        "\\baz\\s+rest\\b[^;&|\\n]*--method\\s+['\"]?(put|post|patch|delete)\\b",
+        "\\b(new|set|remove|update|restart|start|stop|publish|reset|invoke)-az\\w+"
+      ],
+      "unless": [
+        "^\\s*az\\s+account\\s+set\\b[^;&|\\n]*$"
+      ]
+    },
+    {
+      "id": "mail-teams",
+      "action": "ask-user",
+      "why": "mail and Teams messages wait for your ok",
+      "tools": [
+        "*"
+      ],
+      "match": [
+        "^mcp__[\\w-]*(mail|outlook|teams|exchange)[\\w-]*__\\w*(send|reply|forward|post|draft|message)",
+        "\\b(send-mailmessage|send-mguser ?mail|new-mgchatmessage|new-mgteamchannelmessage)\\b"
+      ]
+    },
+    {
+      "id": "secrets-never-print",
+      "action": "never-print",
+      "why": "secrets may be read but never printed",
+      "tools": [
+        "command"
+      ],
+      "match": [
+        "\\b(cat|type|more|less|head|tail|bat|get-content|gc)\\b[^;&|\\n]*(\\.env\\b|\\.pfx\\b|\\.pem\\b|\\.key\\b|id_rsa|id_ed25519|secrets?\\.json|\\.npmrc|\\.netrc|\\.pgpass)",
+        "^\\s*(printenv|env|set|gci\\s+env:|get-childitem\\s+env:)\\s*$",
+        "\\b(echo|write-host|write-output|printf)\\b[^;&|\\n]*[$%]\\{?(env:)?\\w*(token|secret|password|passwd|pwd|apikey|api_key|connectionstring|conn_str)",
+        "\\baz\\s+keyvault\\s+secret\\s+(show|download)\\b"
+      ],
+      "unless": [
+        "\\.env\\.example\\b",
+        "=\\s*\\$\\(\\s*az\\s+keyvault\\s+secret\\s+show\\b"
+      ]
+    }
+  ]
+}

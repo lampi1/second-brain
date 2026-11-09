@@ -258,3 +258,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0251](0251-chat-status-from-real-state.md) A chat tile has one short status, from real state only — accepted
 - [0252](0252-parent-assignment-is-approval.md) A parent's assignment is approval inside its scope — accepted
 - [0253](0253-user-only-blocks-ask-the-user.md) A run stopped on a step only the user can do asks the user at once — accepted
+- [0254](0254-permissions-from-the-brain.md) Permissions v3: everything is allowed, the only blocks are the user's brain rules — accepted

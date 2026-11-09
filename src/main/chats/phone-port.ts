@@ -1,8 +1,9 @@
 // The chats side of the phone bridge (shared/contract/phone.ts PhonePort): what the Telegram bridge (src/main/phone)
 // may see and decide. Why: the phone is the owner away from the PC, but a weaker channel (design §5.5): its free text
 // only informs the Orchestrator (source {kind:'phone'}, never an ok), and its buttons decide only a simple Sì/No question
-// or a proposed Strategist plan that touches nothing reserved (shared/away.ts reservedText). Permissions, commands and
-// anything else stay for the PC («Serve il PC»). Every decision is checked again against the live chat when it arrives.
+// or a proposed Strategist plan that touches nothing reserved (shared/away.ts reservedText), and a permission one of the
+// user's own brain rules sent to them (ADR 0254: Sì allows it once). Other permissions, commands and anything else stay
+// for the PC («Serve il PC»). Every decision is checked again against the live chat when it arrives.
 // Built by the integrator in main's wiring with the ChatManager and the main Emitter; tests: test/unit/chats/phone.test.ts.
 import type { Answer, ChatItem, ChatSummary, EventChannel, EventMap, PendingRequest } from '../../shared/contract';
 import type { PhoneDecidable, PhoneDecideResult, PhonePort, PhoneOutcome } from '../../shared/contract/phone';
@@ -79,6 +80,11 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePo
   function ofRequest(p: PendingRequest, c: ChatSummary): PhoneDecidable {
     const qs = p.questions ?? [];
     const q = qs[0];
+    // a permission one of the user's brain rules sent to them (ADR 0254): Sì allows it once, No refuses it
+    if (p.type === 'permission' && p.heldBy) {
+      return { chatId: c.id, ref: { kind: 'question', requestId: p.id }, role: role(c), neutralLabel: neutral(c),
+        text: [`Permesso (regola «${p.heldBy.rule}»: ${p.heldBy.why})`, p.title, p.detail, 'Sì\nNo'].filter(Boolean).join('\n'), simple: true, reserved: false, orchestrator: true };
+    }
     const simple = p.type === 'question' && NATIVE_QUESTIONS.has(p.tool) && qs.length === 1 && !!q && isYesNo(q);
     const reserved = phoneQuestionReserved(p, () => chats.items(p.chatId));
     const pick = simple ? q!.options.find(o => MARK.test(o.label)) : undefined;
@@ -155,11 +161,14 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePo
     if (!c || closed(c)) return 'gone';
     // the same rules as the list, on the request as it is now
     const d = ofRequest(p, c), q = p.questions?.[0];
-    if (!d.simple || d.reserved || !q) return 'gone';
-    const option = q.options.find(o => yesNoOf(o.label) === (yes ? 'yes' : 'no'));
-    if (!option) return 'gone';
+    if (!d.simple || d.reserved) return 'gone';
+    const held = p.type === 'permission' && !!p.heldBy;
+    const option = held ? undefined : q?.options.find(o => yesNoOf(o.label) === (yes ? 'yes' : 'no'));
+    if (!held && (!q || !option)) return 'gone';
     try {
-      await chats.answer(chatId, requestId, { kind: 'question', answers: { [q.question]: option.label } }, 'phone');
+      await chats.answer(chatId, requestId, held
+        ? { kind: 'permission', allow: yes, ...(yes ? {} : { message: 'The user said no from the phone. Go on with the rest of the work without it.' }) }
+        : { kind: 'question', answers: { [q!.question]: option!.label } }, 'phone');
       return 'ok';
     } catch (e) {
       // answered on the PC in the meantime (or the chat ended with it)

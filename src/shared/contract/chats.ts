@@ -276,6 +276,7 @@ export interface PendingRequest {
   noAlways?: boolean;         // permission: do not offer "always allow" (the CLI forbids a rule for this ask, or has none)
   alwaysRules?: string[];     // permission: what "always allow" grants, for this session only ("Bash(git push:*)", "modalità: accetta modifiche")
   command?: CommandAsk;       // type = command
+  heldBy?: { rule: string; why: string }; // permission: sent to the user by a rule of their brain (ADR 0254): the phone may answer it
 }
 
 /** The block a command request is about: the assistant message it is in, its code (as Esegui runs it) and language;

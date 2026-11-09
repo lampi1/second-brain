@@ -133,7 +133,7 @@ describe('protected continuation', () => {
   });
   it('keeps a permission denial with no message as a scoped private decision', async () => {
     const f = fixture(), c = await f.create();
-    f.engines[0]!.sink.pending({ id: 'permit', type: 'permission', tool: 'UnknownExternalAction', title: 'PRIVATE_PERMISSION_TARGET', detail: 'Specific target', input: {}, at: Date.now() });
+    f.engines[0]!.sink.pending({ id: 'permit', type: 'permission', tool: 'Write', title: 'PRIVATE_PERMISSION_TARGET', detail: 'Specific target', input: { file_path: '.claude/settings.json' }, at: Date.now() });
     await f.m.answer(c.id, 'permit', { kind: 'permission', allow: false });
     expect(JSON.stringify(f.m.userEvents(c.id))).not.toContain('PRIVATE_PERMISSION_TARGET');
     f.advance(); await f.m.send(c.id, 'Continue'); expect(f.sent.at(-1)).toContain('PRIVATE_PERMISSION_TARGET'); expect(f.sent.at(-1)).toContain('non autorizza nuove azioni');

@@ -2,7 +2,7 @@
 
 Date: 2026-10-20 · Status: accepted (owner, 2026-10-20: «di default hanno tutti i permessi perché se no i popup compaiono
 ogni 2 secondi») · Builds on: ADR 0085 · Refined by: ADR 0228 (the snapshot runs while the message goes; the first
-write waits for it)
+write waits for it) · Superseded in part by: ADR 0254 (its refusal and ask lists: the user's brain rules decide)
 
 ## Context
 Every role has every permission by default (ADR 0085), but nothing could put a chat's files back after a bad turn:

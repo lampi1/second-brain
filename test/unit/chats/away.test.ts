@@ -21,8 +21,8 @@ afterEach(async () => {
 const tmp = (): string => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-away-')); roots.push(d); return d; };
 
 interface World { sent: string[]; answers: { id: string; answer: Answer }[]; away: { on: boolean }; log: Omit<AwayEntry, 'at'>[]; sink?: SessionSink }
-function manager(w: World): ChatManager {
-  const m = new ChatManager({ userData: tmp(), emitter: { emit() {} }, coldEveryMs: 0, away: () => w.away.on, onAway: e => w.log.push(e),
+function manager(w: World, brainRoot?: string): ChatManager {
+  const m = new ChatManager({ userData: tmp(), emitter: { emit() {} }, coldEveryMs: 0, away: () => w.away.on, onAway: e => w.log.push(e), ...(brainRoot ? { brainRoot: () => brainRoot } : {}),
     sessionFactory: (_h, o: { sessionId?: string | null }, s: SessionSink) => {
       w.sink = s;
       return {
@@ -40,7 +40,8 @@ function manager(w: World): ChatManager {
 const world = (on: boolean): World => ({ sent: [], answers: [], away: { on }, log: [] });
 const question = (id: string): Omit<PendingRequest, 'chatId'> => ({ id, type: 'question', tool: 'AskUserQuestion', title: 'Domanda', detail: '', input: {}, at: Date.now(),
   questions: [{ question: 'Apro la PR?', multiSelect: false, options: [{ label: 'No' }, { label: 'Sì (consigliato)' }] }] });
-const permission = (id: string): Omit<PendingRequest, 'chatId'> => ({ id, type: 'permission', tool: 'WebFetch', title: 'WebFetch', detail: 'https://example.com', input: { url: 'https://example.com' }, at: Date.now() });
+// a permission that still reaches the user (an edit of the agents' settings, AGENTS.md rule 6: ADR 0254)
+const permission = (id: string): Omit<PendingRequest, 'chatId'> => ({ id, type: 'permission', tool: 'Write', title: 'Write · settings', detail: '.claude/settings.json', input: { file_path: '.claude/settings.json' }, at: Date.now() });
 
 describe('Modalità notte in the chats', () => {
   it('tells every new context once, then once that the user is back', async () => {
@@ -104,7 +105,10 @@ describe('Modalità notte in the chats', () => {
 describe('a typing permission parked at night (ADR 0237)', () => {
   it('reaches the night log and the feed with what the agent typed masked', async () => {
     const SECRET = ['Segreto', 'Synthetic', String(1)].join('-');   // built at run time: the guard flags a literal
-    const w = world(true), m = manager(w);
+    // typing in the browser is free unless the user's brain holds it (ADR 0254): here a rule sends it to the user
+    const brain = tmp();
+    fs.writeFileSync(path.join(brain, 'permissions.json'), JSON.stringify({ version: 1, rules: [{ id: 'browser-typing', action: 'ask-user', why: 'typing in the browser', tools: ['mcp'], match: ['^mcp__second-brain__type '] }] }));
+    const w = world(true), m = manager(w, brain);
     const chat = await m.create({ harness: 'anthropic', cwd: tmp(), prompt: 'accedi' });
     w.sink!.pending({ id: 'p-type', type: 'permission', tool: 'mcp__second-brain__type', title: `second-brain: type · ${SECRET}`, detail: '', input: { text: SECRET, ref: 'e12' }, at: Date.now() });
     expect(JSON.stringify(w.log)).not.toContain(SECRET);

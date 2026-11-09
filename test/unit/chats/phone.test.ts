@@ -26,13 +26,13 @@ const roots: string[] = [], managers: ChatManager[] = [];
 afterEach(async () => { for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 type Tap = <K extends EventChannel>(channel: K, payload: EventMap[K]) => void;
-function fixture() {
+function fixture(brainRoot?: string) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-phone-'));
   roots.push(dir);
   const taps: Tap[] = [], events: { ch: EventChannel; p: unknown }[] = [];
   const bus = { emit<K extends EventChannel>(ch: K, p: EventMap[K]) { events.push({ ch, p }); for (const t of taps) t(ch, p); }, tap(fn: Tap) { taps.push(fn); } };
   const sinks = new Map<string, SessionSink>(), sent = new Map<string, string[]>(), answers: { chat: string; id: string; answer: Answer }[] = [];
-  const m = new ChatManager({ userData: dir, emitter: bus, coldEveryMs: 0, runEveryMs: 0,
+  const m = new ChatManager({ userData: dir, emitter: bus, coldEveryMs: 0, runEveryMs: 0, ...(brainRoot ? { brainRoot: () => brainRoot } : {}),
     resolveAgent: (req: NewChat) => {
       const id = req.roleId as RoleId | undefined;
       if (!id || !isWorkRole(id)) return { request: req, owner: { id: 'plain', name: 'Chat', purpose: '', engine: req.harness, model: null, revision: 0, source: 'plain' as const }, instructions: '', policy: null, skills: [], launches: [] };
@@ -71,7 +71,8 @@ function fixture() {
 const PLAN = { steps: [{ title: 'Trovo dove si calcola lo sconto', role: 'scout' }, { title: 'Applico lo sconto', role: 'artisan' }], doneWhen: 'I test passano' };
 const yesNo = (id: string, question = 'Apro la PR?', extra: Partial<PendingRequest> = {}): Omit<PendingRequest, 'chatId'> => ({ id, type: 'question', tool: 'AskUserQuestion', title: question, detail: '', input: {}, at: Date.now(),
   questions: [{ question, multiSelect: false, options: [{ label: 'Sì (consigliato)' }, { label: 'No' }] }], ...extra });
-const permission = (id: string): Omit<PendingRequest, 'chatId'> => ({ id, type: 'permission', tool: 'Bash', title: 'Bash · ls', detail: 'ls', input: {}, at: Date.now() });
+// a permission that still reaches the user (an edit of the agents' settings, AGENTS.md rule 6: ADR 0254)
+const permission = (id: string): Omit<PendingRequest, 'chatId'> => ({ id, type: 'permission', tool: 'Write', title: 'Write · settings', detail: '.claude/settings.json', input: { file_path: '.claude/settings.json' }, at: Date.now() });
 const tick = () => new Promise(res => setTimeout(res, 20));
 const userItems = (list: ChatItem[]) => list.filter((i): i is Extract<ChatItem, { kind: 'user' }> => i.kind === 'user');
 
@@ -177,6 +178,26 @@ describe('the actor phone on answers and plans', () => {
     const lines = f.items(c.id).filter(i => i.kind === 'system' && i.code === 'phoneDecided');
     expect(lines).toHaveLength(1);
     expect(lines[0]).toMatchObject({ params: { what: 'question', request: 'q1', time: expect.stringMatching(/^\d\d:\d\d$/) } });
+  });
+
+  it('a permission one of the user\'s brain rules sent to them is answered from the phone, once, never «always» (ADR 0254)', async () => {
+    const f = fixture(path.join(__dirname, '..', '..', 'fixtures', 'brain-policy'));
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, title: 'Mail' });
+    const mail = (id: string) => f.sinks.get(c.id)!.pending({ id, type: 'permission', tool: 'mcp__Gmail__send_message', title: 'Gmail: send', detail: 'a@b.c', input: { to: 'a@b.c' }, at: Date.now() });
+    mail('m1');
+    const d = f.port.listDecidable().find(x => x.ref.kind === 'question' && x.ref.requestId === 'm1')!;
+    expect(d).toMatchObject({ simple: true, reserved: false });
+    expect(d.text).toContain('regola «mail-teams»');
+    await expect(f.m.answer(c.id, 'm1', { kind: 'permission', allow: true, always: true }, 'phone')).rejects.toThrow(/Sì\/No/);
+    expect(await f.port.answerFromPhone(c.id, 'm1', true)).toBe('ok');
+    expect(f.answers.at(-1)).toMatchObject({ id: 'm1', answer: { kind: 'permission', allow: true } });
+    mail('m2');
+    expect(await f.port.answerFromPhone(c.id, 'm2', false)).toBe('ok');
+    expect(f.answers.at(-1)).toMatchObject({ id: 'm2', answer: { kind: 'permission', allow: false, message: expect.stringMatching(/Go on/) } });
+    // an engine cannot mark its own request as held by a rule
+    f.sinks.get(c.id)!.pending({ ...{ id: 'w1', type: 'permission', tool: 'Write', title: 'settings', detail: '', input: { file_path: '.claude/settings.json' }, at: Date.now() }, heldBy: { rule: 'x', why: 'y' } });
+    expect(f.m.pending().find(p => p.id === 'w1')?.heldBy).toBeUndefined();
+    expect(await f.port.answerFromPhone(c.id, 'w1', true)).toBe('gone');
   });
 
   it('a permission is never answered from the phone, even called directly', async () => {

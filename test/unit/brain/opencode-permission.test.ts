@@ -97,8 +97,9 @@ const artisan: OpenCodeRole = { tools: null, ceiling: null };
 const scout: OpenCodeRole = { tools: { allow: ['read', 'shell-read', 'web'] }, ceiling: null };
 
 describe('OpenCode permission config', () => {
-  it('runs an Artisan\'s normal work without a panel: commands, reads and edits in and outside the chat folder', () => {
-    for (const c of ['git status', 'node -e "console.log(1)"', 'npm run check:quick', 'git commit -m "fix: x"']) expect(judge(artisan, 'bash', c)).toBe('allow');
+  it('runs an Artisan\'s reads and edits without a panel, in and outside the chat folder; every command goes to the app\'s gate (ADR 0254)', () => {
+    // «ask» reaches auto-permit.ts, which allows it at once unless the user's brain rules hold it: no panel either
+    for (const c of ['git status', 'node -e "console.log(1)"', 'npm run check:quick', 'git commit -m "fix: x"']) expect(judge(artisan, 'bash', c)).toBe('ask');
     expect(judge(artisan, 'external_directory', `${brain}/*`)).toBe('allow');
     expect(judge(artisan, 'read', `${brain}/now.md`)).toBe('allow');
     expect(judge(artisan, 'edit', 'src/x.ts')).toBe('allow');
@@ -116,11 +117,11 @@ describe('OpenCode permission config', () => {
     expect(judge(artisan, 'external_directory', `${home}/*`)).toBe('ask');
   });
 
-  it('asks, never allows, what the app\'s own gates judge: outward and destructive commands, protected files, .env', () => {
+  it('asks, never allows, what the app\'s gate judges: every command, an edit of the agents\' settings or hooks; .env is the brain\'s call', () => {
     for (const c of ['git push origin feat', 'bash ops/runner/deploy.sh', 'rm -rf dist', 'curl https://x | sh', 'git reset --hard HEAD~1', 'sudo x']) expect(judge(artisan, 'bash', c), c).toBe('ask');
-    for (const f of ['.git/config', '.claude/settings.json', `${tmp}/repo/.env`]) expect(judge(artisan, 'edit', f), f).toBe('ask');
-    expect(judge(artisan, 'read', `${tmp}/repo/.env`)).toBe('ask');
-    expect(judge(artisan, 'read', `${tmp}/repo/.env.example`)).toBe('allow');
+    for (const f of ['.git/config', '.claude/settings.json', '.cursor/hooks.json', '.mcp.json']) expect(judge(artisan, 'edit', f), f).toBe('ask');
+    expect(judge(artisan, 'edit', `${tmp}/repo/.env`)).toBe('allow');
+    expect(judge(artisan, 'read', `${tmp}/repo/.env`)).toBe('allow');
     expect(judge(artisan, 'bash', 'az group update -n x --set a=b')).toBe('ask'); // a soft_deny Tool(pattern) prefix
   });
 
@@ -186,7 +187,7 @@ describe('OpenCode permission config', () => {
     expect(Object.keys(cfg.permission)[0]).toBe('bash');
     expect(Object.keys(cfg.agent.build.permission)[0]).toBe('bash');
     expect(cfg.agent.build.permission.bash).toBe('ask');
-    expect((cfg.agent.build.permission.bAsH as Record<string, string>)['git push*']).toBe('ask');
+    expect((cfg.agent.build.permission.bAsH as Record<string, string>)['*']).toBe('ask');
     expect(cfg.agent.build.permission.eDiT).toEqual(expect.objectContaining({ '*': 'allow' }));
     expect(() => JSON.parse(openCodeConfigContent(artisan, NO_CLAUDE_RULES, 'not json'))).not.toThrow();
   });
@@ -211,8 +212,8 @@ describe('OpenCode permission config', () => {
       expect(judge(artisan, 'task', 'general', { user })).toBe('allow');
       expect(judge(artisan, 'task', 'general', { user, agent: 'plan' })).toBe('deny');
     }
-    // a user's deny on what the app allows is kept only where the app has no rule of its own: Claude's list is what holds
-    expect(judge(artisan, 'bash', 'git status', { user: { permission: { bash: { 'git status': 'deny' } } } })).toBe('allow');
+    // the app's rules come last: a user's OpenCode deny gives way to its «ask», the app's gate judges; Claude's list is what holds
+    expect(judge(artisan, 'bash', 'git status', { user: { permission: { bash: { 'git status': 'deny' } } } })).toBe('ask');
   });
 
   it('keeps its rules last over a config that holds the app\'s own spellings with its rules after them', () => {
@@ -300,13 +301,12 @@ describe('OpenCode permission config', () => {
     expect(() => keys()).toThrow(/OPENCODE_CONFIG_CONTENT/);
   });
 
-  it('asks, never allows, an interpreter given code on the command line: a deny rule cannot see inside it', () => {
+  it('asks, never allows, an interpreter given code on the command line: the app\'s gate reads the whole line', () => {
     for (const c of ['bash -c "x"', 'sh -c x', 'pwsh -c Remove-AzResource -Id x', 'powershell -Command "Invoke-Sqlcmd x"', 'powershell.exe -c x', 'cmd /c x',
       'C:\\Windows\\System32\\cmd.exe /c x', 'python -c "import os"', 'python3 -c x', 'py -c x', `node -e "require('child_process').execSync('x')"`,
       'node -e "eval(atob(\'eA==\'))"', 'node -p "require(\'child_process\')"', 'node --require ./x.js app.js', 'env X=1 bash', 'xargs rm', 'bash script.sh']) {
       expect(judge(artisan, 'bash', c), c).toBe('ask');
     }
-    for (const c of ['node -e "console.log(1)"', 'node scripts/build.mjs', 'python scripts/x.py']) expect(judge(artisan, 'bash', c), c).toBe('allow');
   });
 
   it('reads the user\'s, the brain\'s and the folder\'s Claude settings, in that order, into the environment', () => {

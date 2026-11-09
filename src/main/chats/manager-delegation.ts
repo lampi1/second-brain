@@ -529,6 +529,22 @@ export abstract class ManagerDelegation extends ManagerContinuity {
   }
 
   /** A result arrived: the job ledger gets the turn; the plan windows are refreshed now and then. */
+  /** A brain rule refused an ACP engine's request (ADR 0254): Cursor and OpenCode read only «rejected» and can end the
+   *  turn on it. When nothing came after the refusal (no tool, no words), the app gives it the reason and lets it go on
+   *  with the rest; a turn the user stopped stays stopped. */
+  private goOnAfterRefusal(r: Rec, item: Extract<ChatItem, { kind: 'result' }>): void {
+    const note = r.refusalNote;
+    if (!note) return;
+    delete r.refusalNote;
+    if (item.interrupted || r.s.closedAt) return;
+    const after = r.items.slice(note.after).some(i => i.kind === 'tool' || (i.kind === 'assistant' && i.text.trim()));
+    if (after) return;
+    const text = `[rifiuto dell’app · regola «${note.rule}»] ${note.message}`;
+    void this.send(r.s.id, text, undefined, false, 'App', false, { kind: 'app' })
+      .catch(e => log.warn('chats', 'refusal note not delivered', { chat: r.s.id, cause: errText(e) }));
+    log.info('chats', 'refusal told after the turn: the chat goes on', { chat: r.s.id, data: { rule: note.rule } });
+  }
+
   protected turnEnded(r: Rec, item: Extract<ChatItem, { kind: 'result' }>): void {
     const handoffTurn = r.handoffTurn;
     const accounting = r.turnAccounting ??= { seen: new Set(), pending: [] };
@@ -546,6 +562,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     }
     r.turnSinceDone = true; r.lastTurnAt = item.at;
     r.ctxSince ??= item.at;
+    this.goOnAfterRefusal(r, item);
     this.recordTurnEnd(r);
     r.s.lastResult = { at: item.at, isError: item.isError, ...(item.interrupted ? { interrupted: true } : {}) };
     r.unfinished = false;

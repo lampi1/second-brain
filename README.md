@@ -242,9 +242,11 @@ the Orchestrator to explain it your way.
 
 - **Answer with one key.** Questions and permissions show up as cards in one window, with an estimate before and a
   verdict after. OpenCode and Cursor stay once-only: remembered upstream grants could skip later app permission
-  checks. OpenCode starts with the app's permission rules instead: what the role may already do runs without a card,
-  what your Claude settings deny stays denied whatever OpenCode's own config says, pushes, deletions and code handed to
-  a shell still ask. No global CLI settings are changed.
+  checks. OpenCode starts with the app's permission rules instead: what your Claude settings deny stays denied whatever
+  OpenCode's own config says, and every command goes through the app's check. No global CLI settings are changed.
+- **Your rules, not the app's.** Agents may do everything by default. What stops them is a `permissions.json` file in
+  your brain: a rule holds a command for your Esegui click, asks you (from the phone too), or forbids printing a secret.
+  After a refusal the agent goes on with the rest. No file: everything is free (ADR 0254).
 - **Settings that find themselves.** One page with a section list, search that highlights the matching row, instant
   save with Undo.
 - **Connectors in one paste.** Paste a README's JSON, a command line or a URL and the MCP server is ready; switch it on
@@ -253,8 +255,8 @@ the Orchestrator to explain it your way.
   Kilo Code, Cline and more), all off. Install one and sign in yourself, then "Turn on" makes it an engine like the
   others; the app never installs or signs in.
 - **The Orchestrator on your phone.** Settings → Phone links a private Telegram bot of yours: write or send a voice
-  note from the phone and answer simple yes/no questions with a button. Permissions and commands still wait for the
-  PC, and the bot token is encrypted and never shown again.
+  note from the phone and answer simple yes/no questions with a button, and the permissions your brain's rules send
+  you. Other permissions and commands still wait for the PC, and the bot token is encrypted and never shown again.
 - **Continue the Orchestrator at claude.ai.** The phone icon on the Orchestrator turns on Claude Code Remote Control:
   open the link it shows in the Claude app or a browser and keep going from there. What you type on the phone shows in
   the app marked «dal telefono», and the link survives an app restart.

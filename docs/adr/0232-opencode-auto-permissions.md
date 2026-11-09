@@ -1,6 +1,6 @@
 # 0232. OpenCode chats start with the app's permission rules
 
-Date: 2026-11-07. Status: accepted (asked by the owner, 2026-11-07). Amends ADR [0216](0216-opencode-engine.md).
+Date: 2026-11-07. Status: accepted (asked by the owner, 2026-11-07). Amends ADR [0216](0216-opencode-engine.md). Superseded in part by ADR [0254](0254-permissions-from-the-brain.md): every command asks the app's gate, the ask list is gone.
 
 ## Context
 

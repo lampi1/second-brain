@@ -199,6 +199,10 @@ export interface Rec {
   rootReportAt?: number;
   /** its report's userAction is asked in the Orchestrator (#358): that request's id, until the user answers */
   userActionAsk?: string;
+  /** the brain's permissions.json error already shown in this chat (ADR 0254): once per error */
+  policyWarned?: string;
+  /** a brain rule refused a request of an ACP engine in this turn (ADR 0254): told after the turn if it stopped there */
+  refusalNote?: { rule: string; message: string; after: number };
   /** a root chat's result held until its turn ends (reportRoot, #123): the report and the turn end are one news */
   userTaskEvents?: UserTaskEvents;
   heldResult?: { local?: boolean; note: CleanReportNote; message: string; quiet: boolean; userWaits: boolean };

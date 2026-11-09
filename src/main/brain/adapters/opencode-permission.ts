@@ -1,8 +1,8 @@
 // OpenCode's permissions for one app chat (ADR 0232): its own config, passed at every start as OPENCODE_CONFIG_CONTENT,
 // never a file. Normal work within the role's limits runs without a panel, the way a Claude chat in auto mode does; what
 // Claude is denied stays denied (the user's and the brain's Claude deny rules, read here, never written: AGENTS.md rule
-// 6); what the app's own gates must judge (destructive, outward or opaque commands, edits of a narrowed role) still
-// asks, and its request goes through role-gate.ts and auto-permit.ts as before. Never more than the role: a class the
+// 6); every command and an edit of the agents' settings or of a narrowed role asks, and its request goes through
+// role-gate.ts and auto-permit.ts, where the user's brain rules decide (ADR 0254). Never more than the role: a class the
 // role lacks is denied, a narrowed ceiling asks. OpenCode's rules: an ordered list per permission, the last match wins;
 // `*` matches any text (slashes too), `?` one character, case-insensitive (names too), backslashes read as slashes, a
 // trailing " *" optional. `opencode acp` 1.19.5 merges this config after the user's global and project configs, but its
@@ -35,35 +35,11 @@ export interface ClaudeRules {
 }
 export const NO_CLAUDE_RULES: ClaudeRules = { bash: { deny: [], ask: [] }, read: { deny: [], ask: [] }, edit: { deny: [], ask: [] }, guardedDirs: [], tools: {}, unexpressed: [] };
 
-/** Commands the app's own gates judge (auto-permit.ts refuses the destructive ones with a reason, lets plain local work
- *  through, asks the user the rest): ask, never allow. They mirror auto-permit's refusals plus what leaves the machine. */
-export const ASK_COMMANDS: readonly string[] = [
-  'rm -r*', 'rm -f*', 'rm * -r*', 'rm * -f*', 'rmdir *', 'rd *', 'del *', 'erase *', 'rimraf *', 'Remove-Item *', 'ri *', 'trash *',
-  'git push*', 'git * push*', 'git reset --hard*', 'git * reset --hard*', 'git clean *', 'git * clean *', 'git branch -D*', 'git branch * -D*',
-  'git branch -d* -f*', 'git stash drop*', 'git stash clear*', 'git reflog *', 'git filter-branch*', 'git filter-repo*', 'git update-ref -d*',
-  'git gc --prune*', 'git config *', 'git remote *',
-  'mkfs*', 'format *', 'diskpart*', 'fdisk *', 'shutdown*', 'reboot*', 'halt*', 'poweroff*', 'Stop-Computer*', 'Restart-Computer*', 'Clear-Disk*',
-  'Format-Volume*', 'dd *',
-  '*drop database*', '*drop schema*', '*drop table*', '*truncate table*',
-  '* publish*', '* unpublish*',
-  'curl *', 'wget *', 'iwr *', 'irm *', 'Invoke-WebRequest*', 'Invoke-RestMethod*', 'scp *', 'sftp *', 'ssh *', 'rsync *', 'ftp *',
-  // a shell, or a script it reads from a pipe (`curl … | sh`): what it runs is a string no deny rule sees (`bash -c`,
-  // `pwsh -c Remove-Az…`); the app reads the whole command line and asks or refuses
-  ...['sh', 'bash', 'zsh', 'dash', 'ksh', 'fish', 'pwsh', 'powershell', 'cmd'].flatMap(n => [`${n} *`, `${n}.exe *`, `*/${n} *`, `*/${n}.exe *`]),
-  'iex *', 'Invoke-Expression*', 'Invoke-Command*', 'Invoke-Sqlcmd*', 'Start-Process*', '*| sh*', '*| bash*', '*|sh*', '*|bash*', '*| iex*',
-  // an interpreter given code on the command line; node -e stays normal work unless it can start a program or hide what
-  // it runs
-  ...['python', 'python3', 'py', 'perl', 'ruby', 'php'].flatMap(n => [`${n} -*`, `${n}.exe -*`, `*/${n} -*`, `*/${n}.exe -*`]),
-  ...['child_process', 'spawn', 'exec', 'fork(', 'process.binding', 'process.dlopen', 'worker_threads', 'fromCharCode', 'base64', 'eval(', 'Function(',
-    'import(', '--require', ' -r ', '--import', '--loader'].map(m => `*node* *${m}*`),
-  'deno *', 'bun -e*', 'bun --eval*', 'env *', 'xargs *', 'nohup *', 'exec *', 'eval *', 'source *',
-  // a shell script runs code the app does not read
-  '*.sh', '*.sh *', 'sudo *', 'doas *',
-];
-/** Files whose change is the user's call (auto-permit.ts PROTECTED_*): settings, hooks, credentials, the repository.
- *  Each in both forms: OpenCode names an edit by its path relative to the worktree (`.git/config`), or absolute. */
-const ASK_EDITS: readonly string[] = ['.git/*', '.claude/*', '.cursor/*', '.codex/*', '.githooks/*', '.husky/*', '.vscode/*', '.opencode/*',
-  '.env', '.env.*', '.envrc', '.npmrc', '.netrc', '.gitconfig', '.mcp.json', '.gitmodules', '.guardallow', 'opencode.json*']
+/** The agents' own settings and hooks (auto-permit.ts SETTINGS_*, AGENTS.md rule 6) and the repository's internals:
+ *  an edit there asks, so the app's gate sees it. Each in both forms: OpenCode names an edit by its path relative to the
+ *  worktree (`.git/config`), or absolute. */
+const ASK_EDITS: readonly string[] = ['.git/*', '.claude/*', '.cursor/*', '.codex/*', '.githooks/*', '.husky/*', '.vscode/*', '.idea/*', '.opencode/*',
+  '.gitconfig', '.mcp.json', '.guardallow', 'opencode.json*', 'claude_desktop_config.json']
   .flatMap(p => [p, `*/${p}`]);
 
 const obj = (v: unknown): Record<string, unknown> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
@@ -177,9 +153,10 @@ export function openCodePermission(role: OpenCodeRole, claude: ClaudeRules): Ope
     // reads and commands outside the chat's folder (the brain, a sibling repo): what the role may do there is judged
     // by the read, edit and bash rules below; a folder whose own files are protected asks; «Chiede conferma» asks all
     external_directory: rules(role.ceiling === 'default' ? 'ask' : 'allow', [guarded, 'ask']),
-    read: rules('allow', [['*.env', '*.env.*'], 'ask'], [['*.env.example'], 'allow'], [claude.read.ask, 'ask'], [claude.read.deny, 'deny']),
-    // a search or a listing reads too: the folders a read rule protects ask (external_directory above)
-    bash: rules(shell, [shell === 'allow' ? [...ASK_COMMANDS, ...claude.bash.ask] : [], 'ask'], [claude.bash.deny, 'deny']),
+    read: rules('allow', [claude.read.ask, 'ask'], [claude.read.deny, 'deny']),
+    // every command asks, so the app's gate judges it with the user's brain rules (auto-permit.ts, ADR 0254: it allows
+    // all the rest at once); what the user's Claude rules deny stays denied
+    bash: rules(shell === 'allow' ? 'ask' : shell, [claude.bash.deny, 'deny']),
     webfetch: has('web') ? claude.tools.webfetch ?? 'allow' : 'deny',
     websearch: has('web') ? claude.tools.websearch ?? 'allow' : 'deny',
     codesearch: has('web') ? claude.tools.codesearch ?? 'allow' : 'deny',

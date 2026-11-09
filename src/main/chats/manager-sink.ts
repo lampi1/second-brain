@@ -55,6 +55,8 @@ export abstract class ManagerSink extends ManagerWork {
       pending: req => {
         if (!live()) return;
         this.coldStarted(r);
+        // only the app's gate says a brain rule holds a request (it may then be answered from the phone): never an engine
+        if ('heldBy' in req) { req = { ...req }; delete req.heldBy; }
         if (this.gated(r, req) || this.refusedCommand(r, req) || this.autoPermitted(r, req)) return;
         // decided on the real input above; parked for night mode, shown and kept masked from here (ADR 0237)
         req = maskTypedRequest(req);

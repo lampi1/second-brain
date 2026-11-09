@@ -1,6 +1,6 @@
 // An agent's tool policy and ceiling on its chats (A2): frozen at start, passed to the engine, clamping the mode, refused
 // above the ceiling, kept across restarts and continues, failing closed when the stored copy is damaged.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -17,18 +17,18 @@ function fixture(extra: Partial<ChatManagerOptions> = {}) {
   const dir = extra.userData ?? fs.mkdtempSync(path.join(os.tmpdir(), 'sb-agent-policy-'));
   if (!extra.userData) roots.push(dir);
   const home = path.join(dir, 'home');
-  const starts: SessionOptions[] = [], modes: PermissionMode[] = [], answers: { id: string; answer: unknown }[] = [];
+  const starts: SessionOptions[] = [], modes: PermissionMode[] = [], answers: { id: string; answer: unknown }[] = [], sent: string[] = [];
   let sink!: SessionSink;
   const m = new ChatManager({ userData: dir, emitter: { emit() {} }, coldEveryMs: 0, env: { CLAUDE_CONFIG_DIR: home }, ...extra, sessionFactory: (_h, o, s) => {
     sink = s; starts.push(o);
     return { harness: 'claude', sessionId: null, pid: null, root: null, alive: true, busy: false,
-      start() { sink.changed({ state: 'idle' }); }, send() {},
+      start() { sink.changed({ state: 'idle' }); }, send(text: string) { sent.push(text); },
       close: async () => { sink.changed({ state: 'closed' }); sink.exit({ code: 0, error: null }); }, killNow() {}, interrupt: async () => {}, answer: (id: string, answer: unknown) => { answers.push({ id, answer }); return true; },
       rename: async () => {}, setModel: async () => {}, setEffort: async () => {}, setPermissionMode: async (pm: PermissionMode) => { modes.push(pm); }, contextUsage: async () => null, usage: async () => null,
     } as unknown as HarnessSession;
   } });
   managers.push(m);
-  return { m, dir, home, starts, modes, answers, sink: () => sink };
+  return { m, dir, home, starts, modes, answers, sent, sink: () => sink };
 }
 const agent = (policy: AgentPolicy) => ({ owner: plainOwner('claude', null), instructions: 'Sei un revisore.', policy });
 const reviewer: AgentPolicy = { tools: { allow: ['read'] }, ceiling: 'default' };
@@ -74,20 +74,63 @@ describe('agent policy on chats', () => {
     expect(f.m.pending().find(p => p.id === 'p2')?.alwaysRules).toBeUndefined();
   });
 
-  it('the app answers itself (ADR 0103): reads pass, destructive commands are refused visibly, a push reaches the user', async () => {
-    const f = fixture();
+  it('the app answers itself (ADR 0254): all passes but what the brain\'s rules hold, refused visibly or sent to the user without «always»', async () => {
+    const f = fixture({ brainRoot: () => path.join(__dirname, '..', '..', 'fixtures', 'brain-policy') });
     const c = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' });
-    const ask = (id: string, command: string) => f.sink().pending({ id, type: 'permission', tool: 'Bash', title: `Bash: ${command}`, detail: command, input: { command }, at: 1 });
+    const ask = (id: string, command: string, tool = 'Bash') => f.sink().pending({ id, type: 'permission', tool, title: `${tool}: ${command}`, detail: command, input: { command }, at: 1, alwaysRules: ['Bash(x:*)'] });
     ask('a1', 'git status');
     ask('a2', 'git push --force');
-    ask('a3', 'git push');
-    ask('a4', 'npm test'); // no checkpoint outside git: the user decides
+    ask('a3', 'npm test');
+    ask('a4', 'az webapp restart -n app -g rg');
+    ask('a5', 'x', 'mcp__Gmail__send_message');
     expect(f.answers).toEqual([
       { id: 'a1', answer: { kind: 'permission', allow: true } },
-      { id: 'a2', answer: expect.objectContaining({ kind: 'permission', allow: false, message: expect.stringMatching(/^Refused by the app/) }) },
+      { id: 'a2', answer: { kind: 'permission', allow: true } },
+      { id: 'a3', answer: { kind: 'permission', allow: true } },
+      { id: 'a4', answer: expect.objectContaining({ kind: 'permission', allow: false, message: expect.stringMatching(/^Held by the user's rule "azure-write".*Esegui/) }) },
     ]);
-    expect(f.m.items(c.id).some(i => i.kind === 'system' && i.code === 'commandDestructive')).toBe(true);
-    expect(f.m.pending().filter(p => p.chatId === c.id).map(p => p.id)).toEqual(['a3', 'a4']);
+    expect(f.m.items(c.id).some(i => i.kind === 'system' && i.code === 'policyEsegui')).toBe(true);
+    expect(f.m.pending().filter(p => p.chatId === c.id)).toEqual([expect.objectContaining({ id: 'a5', noAlways: true })]);
+    expect(f.m.pending().find(p => p.id === 'a5')?.alwaysRules).toBeUndefined();
+  });
+
+  it('after a brain rule refuses a Cursor or OpenCode request, a turn that stopped there is told why and goes on (ADR 0254)', async () => {
+    for (const harness of ['cursor', 'opencode']) {
+      const f = fixture({ brainRoot: () => path.join(__dirname, '..', '..', 'fixtures', 'brain-policy'), engineOn: () => true });
+      await f.m.create({ harness, cwd: f.dir, prompt: 'x' });
+      const result = (id: string, interrupted = false) => f.sink().item({ kind: 'result', id, at: Date.now(), costUsd: 0, durationMs: 1, turns: 1, isError: false, ...(interrupted ? { interrupted } : {}) }, false);
+      f.sink().changed({ state: 'running' });
+      f.sink().pending({ id: 'z1', type: 'permission', tool: 'Bash', title: 'Bash', detail: '', input: { command: 'az group delete -n rg' }, at: 1 });
+      expect(f.answers.at(-1)).toMatchObject({ id: 'z1', answer: { allow: false } });
+      result('r1');
+      await vi.waitFor(() => expect(f.sent.join('\n'), harness).toContain('[rifiuto dell’app · regola «azure-write»] Held by the user\'s rule'));
+      // the agent said something after the refusal: it went on by itself, nothing more is sent
+      const before = f.sent.length;
+      f.sink().changed({ state: 'running' });
+      f.sink().pending({ id: 'z2', type: 'permission', tool: 'Bash', title: 'Bash', detail: '', input: { command: 'az group delete -n rg' }, at: 1 });
+      f.sink().item({ kind: 'assistant', id: 'a1', text: 'Ti lascio il comando da lanciare con Esegui.', streaming: false } as never, false);
+      result('r2');
+      // the user's Stop stays a stop
+      f.sink().pending({ id: 'z3', type: 'permission', tool: 'Bash', title: 'Bash', detail: '', input: { command: 'az group delete -n rg' }, at: 1 });
+      result('r3', true);
+      await new Promise(resolve => setImmediate(resolve));
+      expect(f.sent.slice(before).join('\n')).not.toContain('rifiuto dell’app');
+    }
+  });
+
+  it('a brain permissions.json that cannot be read: one notice, then the user decides all but reads (ADR 0254)', async () => {
+    const brain = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-agent-policy-brain-'));
+    roots.push(brain);
+    fs.writeFileSync(path.join(brain, 'permissions.json'), '{ broken');
+    const f = fixture({ brainRoot: () => brain });
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' });
+    const ask = (id: string, command: string) => f.sink().pending({ id, type: 'permission', tool: 'Bash', title: `Bash: ${command}`, detail: command, input: { command }, at: 1 });
+    ask('b1', 'git status');
+    ask('b2', 'npm test');
+    ask('b3', 'npm run build');
+    expect(f.answers).toEqual([{ id: 'b1', answer: { kind: 'permission', allow: true } }]);
+    expect(f.m.items(c.id).filter(i => i.kind === 'system' && i.code === 'policyBroken')).toHaveLength(1);
+    expect(f.m.pending().filter(p => p.chatId === c.id).map(p => p.id)).toEqual(['b2', 'b3']);
   });
 
   it('the app never answers for a tool class the role was not given (ADR 0103)', async () => {

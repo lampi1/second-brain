@@ -12,6 +12,7 @@ import { allowsClass, COMMAND_TOOLS, commandsReadOnly, readOnlyCommand, toolClas
 import { readOnlyTools } from '../agents/read-tools';
 import { gateRequest, runtimePluginName } from '../agents/role-gate';
 import { autoPermit } from './auto-permit';
+import { loadPolicy } from './permit-policy';
 import { AWAY_PARKED, AWAY_PLAN_NOTE, recommendedAnswers } from '../../shared/away';
 import { askingPlan, PLAN_APPROVED, type IntakeSource, type PlanIntake } from '../../shared/strategy';
 import type { SubmissionReceipt, Rec } from './manager-types';
@@ -89,7 +90,9 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     if (!r.pending.has(requestId)) throw new Error('Questa richiesta non è più aperta.');
     if (!r.session) { this.dropPending(r, requestId); throw new Error('La chat non è più attiva: la richiesta è scaduta.'); }
     const req = r.pending.get(requestId)!;
-    if (by === 'phone' && (req.type !== 'question' || answer.kind !== 'question')) throw new Error('Dal telefono si risponde solo a una domanda Sì/No.');
+    // from the phone: a Sì/No question, or a permission one of the user's brain rules sent to them (ADR 0254), once
+    const phoneOk = req.type === 'question' ? answer.kind === 'question' : req.type === 'permission' && !!req.heldBy && answer.kind === 'permission' && !answer.always;
+    if (by === 'phone' && !phoneOk) throw new Error('Dal telefono si risponde solo a una domanda Sì/No.');
     const interview = (r.s.plan || r.s.isOrchestrator) && isNativeQuestion(req) && answer.kind === 'question';
     const pcOnly = interview ? phoneQuestionReserved(req, () => { this.ensureHistory(r); return r.items; }) : false;
     const answering = this.answering.get(r) ?? new Set<string>();
@@ -265,8 +268,9 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     return true;
   }
 
-  /** ADR 0103: the app answers a permission request itself (chats/auto-permit.ts): normal work inside the chat's folder
-   *  passes, a destructive command is refused visibly with its reason, anything else reaches the user. True = answered. */
+  /** ADR 0103, 0254: the app answers a permission request itself (chats/auto-permit.ts): everything passes but what the
+   *  user's brain rules hold (permissions.json: refused visibly with the rule's reason, or sent to the user) and what
+   *  the user's own role limits keep for them. True = answered. */
   protected autoPermitted(r: Rec, req: Omit<PendingRequest, 'chatId'>): boolean {
     // a class the role was not given, or a writing command of a role that may only read commands, stays the user's call
     // (Cursor and Codex do not enforce the role's tools themselves)
@@ -274,16 +278,29 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const command = (req.input as { command?: unknown } | null)?.command;
     if (r.policy?.tools && c && !allowsClass(r.policy, c)) return false;
     if (COMMAND_TOOLS.includes(req.tool) && commandsReadOnly(r.policy) && !readOnlyCommand(command, this.readScripts(r))) return false;
-    const v = autoPermit(req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, undoable: !!r.turnCheckpoint, readScripts: this.readScripts(r) });
-    if (v.kind === 'ask') return false;
+    const policy = loadPolicy(this.opts.brainRoot?.() ?? null);
+    if (policy.state === 'broken' && r.policyWarned !== policy.error) {
+      r.policyWarned = policy.error;
+      this.addItem(r, sysItem('policyBroken', { error: policy.error.slice(0, 160) }, 'warn'), false);
+      log.warn('chats', 'brain permissions.json unreadable: asking the user', { chat: r.s.id, cause: policy.error, hint: 'fix permissions.json in the brain' });
+    }
+    const v = autoPermit(req, { cwd: r.s.cwd, ceiling: r.policy?.ceiling ?? null, readScripts: this.readScripts(r), policy });
+    if (v.kind === 'ask') {
+      // held by the user's rule: no «always» (a saved rule would let the next ones through unasked)
+      if (v.rule) { req.noAlways = true; delete req.alwaysRules; req.heldBy = { rule: v.rule.id, why: v.rule.why }; log.info('chats', 'brain rule asks the user', { chat: r.s.id, data: { tool: req.tool, rule: v.rule.id } }); }
+      return false;
+    }
     if (v.kind === 'allow') {
       this.policyAnswer(r, req, { kind: 'permission', allow: true }, 'auto-permit');
       log.info('chats', 'auto-permit allowed', { chat: r.s.id, data: { tool: req.tool } });
       return true;
     }
-    this.addItem(r, sysItem('commandDestructive', { command: v.shown, reason: v.reason }, 'warn'), false);
+    this.addItem(r, sysItem(v.rule.action === 'esegui' ? 'policyEsegui' : 'policyNeverPrint', { command: v.shown, rule: v.rule.id, why: v.rule.why.slice(0, 160) }, 'warn'), false);
     this.policyAnswer(r, req, { kind: 'permission', allow: false, message: v.message }, 'auto-permit');
-    log.info('chats', 'auto-permit refused', { chat: r.s.id, data: { tool: req.tool } });
+    // an ACP engine (Cursor, OpenCode) gets only «rejected», without the message, and may end its turn on it: the app
+    // tells it after the turn (manager-delegation.ts turnEnded), so the chat goes on
+    if (engineOf(r.s.harness)?.kind === 'acp') r.refusalNote = { rule: v.rule.id, message: v.message, after: r.items.length };
+    log.info('chats', 'brain rule refused', { chat: r.s.id, data: { tool: req.tool, rule: v.rule.id, action: v.rule.action } });
     return true;
   }
 

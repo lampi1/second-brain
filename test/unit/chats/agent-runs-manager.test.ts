@@ -235,7 +235,7 @@ describe('agent runs on chats', () => {
   it('counts each request once by id, commands included', async () => {
     const f = fixture();
     const c = await f.create();
-    const q = { id: 'p1', type: 'permission' as const, tool: 'Bash', title: 'ls', detail: 'ls', input: {}, at: Date.now() };
+    const q = { id: 'p1', type: 'permission' as const, tool: 'Write', title: 'settings', detail: 'settings', input: { file_path: '.claude/settings.json' }, at: Date.now() };
     f.sink(c.id).pending(q);
     f.sink(c.id).pending(q);
     f.sink(c.id).resolved('p1');
