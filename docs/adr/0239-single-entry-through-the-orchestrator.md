@@ -22,8 +22,11 @@ and worker questions, permissions and commands already wake it as grouped news. 
   nothing reserved (`phoneQuestionReserved`: production, deploys, pushes, secrets, messages to people), returns its
   exact text to write. The user's **next own message** in the Orchestrator chat that is only «sì» or «no» (from the
   PC, the paired phone or Remote Control) answers it, through `ChatManager.answer` as the user's answer (`phone` when
-  it came from a phone or Remote Control). An agent's mail or the app's news never count; anything else leaves the
-  relay open; it lasts 30 minutes and drops when the question is answered elsewhere. Permissions and commands are
+  it came from a phone or Remote Control). An agent's mail or the app's news never count; any other message ends the
+  relay, so a later bare «no» meant for something else never answers it. One relayed question per Orchestrator at a
+  time; it lasts 30 minutes and drops when the question is answered elsewhere. The reserved check runs again when the
+  answer comes (a brief can change). A «sì»/«no» that cannot land (expired, question changed, turned reserved,
+  delivery failed) is told to the Orchestrator as an app line, never lost in silence. Permissions and commands are
   never relayed: they stay the user's click on the PC (the three «Esegui» categories).
 - **A command is asked once** (`run/asks.ts`). A block with the same code (line ends and trailing spaces aside) in the
   same folder as another chat's open request is not asked again: that chat follows it. A run of any chat's block
@@ -31,7 +34,7 @@ and worker questions, permissions and commands already wake it as grouped news. 
   (`run/results.ts`, with a line saying the user ran it once for all). When an open request leaves without a run
   («Non serve», its chat went on), its first follower is asked instead. A block that ran with success in the same
   folder in the last hour is not asked: the chat gets that run's result, once per chat and code; proposed again, it is
-  asked as usual (and always when run results are off).
+  asked as usual (and always when run results are off). A run that could not start answers only its own block.
 - **The Esegui result goes to the chat that needed it**, already true for the proposing chat (ADR 0017), now also for
   every chat that asked the same block.
 - **Rules**: the Orchestrator's `WAKE_RULE` says to use `relay_question` when the user is away and that the rest waits
