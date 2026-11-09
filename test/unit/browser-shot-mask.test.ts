@@ -52,8 +52,14 @@ it('the page side hides a revealed password field and puts its own style back', 
   expect(shotMask(true)).toBe(2);
   expect(revealed.style.props.get('-webkit-text-security')).toEqual(['disc', 'important']);
   expect(styled.style.props.get('-webkit-text-security')).toEqual(['disc', 'important']);
-  expect(shotMask(false)).toBe(2);
+  expect(shotMask(false)).toBe(0);
   expect(revealed.style.props.has('-webkit-text-security')).toBe(false);
   expect(styled.style.props.get('-webkit-text-security')).toEqual(['circle', '']);
   expect(shotMask(false)).toBe(0);
+  // two captures overlap: the first one's end does not uncover the second
+  shotMask(true); shotMask(true);
+  shotMask(false);
+  expect(revealed.style.props.get('-webkit-text-security')).toEqual(['disc', 'important']);
+  shotMask(false);
+  expect(revealed.style.props.has('-webkit-text-security')).toBe(false);
 });
