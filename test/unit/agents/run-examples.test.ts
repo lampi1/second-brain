@@ -64,22 +64,33 @@ describe('episodic memory at launch', () => {
     expect(out.selection.examples.length).toBe(EXAMPLES_MAX);
     expect(out.text.split('\n').slice(1).join('\n').length).toBeLessThanOrEqual(EXAMPLES_CHARS + EXAMPLES_MAX);
   });
-  it('a linked worktree counts as its repository', () => {
-    const p = repo(), wt = fs.mkdtempSync(path.join(os.tmpdir(), 'run-examples-wt-')); dirs.push(wt);
+  it('a delegate worktree counts as its repository: a past one through its parent run (even once deleted), the launch one through its .git file', () => {
+    const p = repo(), gone = path.join(path.dirname(p), '.second-brain-delegate-gone1');
+    const parent = run(p, 'Plan the invoices work', { report: undefined });
+    const child = run(gone, 'Add a date column to the invoices report', { parentRunId: parent.runId });
+    expect(selectRunExamples([parent, child], { roleId: 'artisan', project: p, query: 'date column invoices report' }).selection.examples.map(e => e.runId)).toEqual([child.runId]);
+    const wt = fs.mkdtempSync(path.join(path.dirname(p), '.second-brain-delegate-')); dirs.push(wt);
     fs.writeFileSync(path.join(wt, '.git'), `gitdir: ${path.join(p, '.git', 'worktrees', 'slot1')}\n`);
     expect(repoOf(wt)).toBe(path.resolve(p));
-    const runs = [run(wt, 'Add a date column to the invoices report')];
-    expect(selectRunExamples(runs, { roleId: 'artisan', project: p, query: 'date column invoices report' }).selection.examples).toHaveLength(1);
+    expect(selectRunExamples([parent, child], { roleId: 'artisan', project: wt, query: 'date column invoices report' }).selection.examples).toHaveLength(1);
+    const orphan = run(gone, 'Add a date column to the invoices report');
+    expect(selectRunExamples([orphan], { roleId: 'artisan', project: p, query: 'date column invoices report' }).selection.candidates).toBe(0);
+  });
+  it('counts the candidates even when the goal has no content word', () => {
+    const p = repo();
+    expect(selectRunExamples([run(p, 'Add a date column to the invoices report')], { roleId: 'artisan', project: p, query: 'ok' }).selection).toEqual({ examples: [], candidates: 1 });
   });
   it('the snapshot keeps the examples through readAgentContext, and a broken one drops the snapshot', () => {
     const base = { schema: 1, at: 1, mode: 'scoped', memory: { available: true, records: [], omitted: { ineligible: 0, unmatched: 0, budget: 0 }, estimatedTokens: 0, budgetTokens: 1200 },
       skills: [], instructions: { sha256: 'a'.repeat(64), characters: 1, estimatedTokens: 1 } };
     const examples = { candidates: 3, examples: [{ runId: 'r_0123456789ab', score: 1.5, estimatedTokens: 90 }] };
     expect(readAgentContext({ ...base, examples })?.examples).toEqual(examples);
-    expect(readAgentContext({ ...base, examples: { candidates: 1, examples: [{ runId: 'bad', score: 1, estimatedTokens: 1 }] } })).toBeUndefined();
+    const broken = readAgentContext({ ...base, examples: { candidates: 1, examples: [{ runId: 'bad', score: 1, estimatedTokens: 1 }] } });
+    expect(broken?.examples).toBeUndefined(); expect(broken?.memory.budgetTokens).toBe(1200);
+    expect(readAgentContext({ ...base, examples: { candidates: 0, examples: [], skipped: true } })?.examples?.skipped).toBe(true);
     expect(readAgentContext(base)?.examples).toBeUndefined();
   });
-  it('never throws at launch', () => {
-    expect(launchExamples(null as unknown as AgentRun[], { roleId: 'artisan', project: '/x', query: 'invoices report date' })).toBeNull();
+  it('never throws at launch: a failure is marked skipped', () => {
+    expect(launchExamples(null as unknown as AgentRun[], { roleId: 'artisan', project: '/x', query: 'invoices report date' }).selection).toEqual({ examples: [], candidates: 0, skipped: true });
   });
 });

@@ -23,6 +23,7 @@ export const routineIt = {
   'rt.context.examplesNone': 'Nessun run passato riuscito e verificato su un compito simile in questo repository.',
   'rt.context.examplesGiven': (p: { n: number; of: number }) => `${p.n} esempi dati, scelti tra ${p.of} run riusciti e verificati di questo ruolo in questo repository`,
   'rt.context.examplesUnknown': 'Prima di questa funzione: nessun esempio registrato.',
+  'rt.context.examplesSkipped': 'La scelta degli esempi non è riuscita (vedi il Log): questa run è partita senza.',
   'rt.context.skills': "Skill disponibili su richiesta",
   'rt.context.manifest': "Manifesto esatto",
   'rt.voice.diagnostics': "Diagnostica locale",

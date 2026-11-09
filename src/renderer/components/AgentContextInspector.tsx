@@ -16,6 +16,7 @@ export function AgentContextInspector({ chat, onClose }: { chat: ChatSummary; on
       </> : <p>{t('rt.context.unavailable')}</p>}
       <h3>{t('rt.context.examples')}</h3>
       {!context.examples ? <p className="rt-muted">{t('rt.context.examplesUnknown')}</p>
+        : context.examples.skipped ? <p className="rt-muted">{t('rt.context.examplesSkipped')}</p>
         : context.examples.examples.length ? <><p data-testid="agent-context-examples">{t('rt.context.examplesGiven', { n: context.examples.examples.length, of: context.examples.candidates })}</p>
           {context.examples.examples.map(e => <p key={e.runId}><code>{e.runId}</code> · ≈ {e.estimatedTokens} token</p>)}</>
         : <p className="rt-muted">{t('rt.context.examplesNone')}</p>}

@@ -20,5 +20,6 @@ describe('AgentContextInspector examples', () => {
   it('says none, or unknown for an older launch', () => {
     expect(html({ ...base, examples: { candidates: 0, examples: [] } })).not.toContain('agent-context-examples');
     expect(html(base)).not.toContain('agent-context-examples');
+    expect(html({ ...base, examples: { candidates: 0, examples: [], skipped: true } })).not.toContain('agent-context-examples');
   });
 });

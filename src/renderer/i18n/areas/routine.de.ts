@@ -23,6 +23,7 @@ export const routineDe = {
   'rt.context.examplesNone': 'Kein früherer Run war bei einer ähnlichen Aufgabe in diesem Repository erfolgreich und geprüft.',
   'rt.context.examplesGiven': (p: { n: number; of: number }) => `${p.n} Beispiele gegeben, ausgewählt aus ${p.of} geprüften Erfolgen dieser Rolle in diesem Repository`,
   'rt.context.examplesUnknown': 'Vor dieser Funktion: keine Beispiele erfasst.',
+  'rt.context.examplesSkipped': 'Die Auswahl der Beispiele ist fehlgeschlagen (siehe Log): dieser Run startete ohne.',
   'rt.context.skills': "Skills auf Anfrage verfügbar",
   'rt.context.manifest': "Exaktes Manifest",
   'rt.voice.diagnostics': "Lokale Diagnose",

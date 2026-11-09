@@ -23,6 +23,7 @@ export const routineEn = {
   'rt.context.examplesNone': 'No past run succeeded and was verified on a similar task in this repository.',
   'rt.context.examplesGiven': (p: { n: number; of: number }) => `${p.n} examples given, chosen among ${p.of} verified successes of this role in this repository`,
   'rt.context.examplesUnknown': 'Before this feature: no examples recorded.',
+  'rt.context.examplesSkipped': 'Choosing the examples failed (see the Log): this run started without them.',
   'rt.context.skills': "Skills available on demand",
   'rt.context.manifest': "Exact manifest",
   'rt.voice.diagnostics': "Local diagnostics",

@@ -16,15 +16,18 @@ report and a verified verdict.
   the Orchestrator, Claude and other engines alike). A candidate is a run of the same role, ended `completed`, with a
   report summary, whose earned verdict (`standing.ts earnedVerdict`) is a success: the user's, a review's, the
   receipts', a verified parent's; never the agent's own report. Reviews, one-shots and the Orchestrator are left out.
-- **Same repository only.** The run's folder and the launch's folder must belong to the same git repository; a linked
-  worktree counts as its main repository (its `.git` file names it). An unknown folder gives no example.
+- **Same repository only, no file access for the past.** A past run's repository is its folder, or for a delegate
+  worktree (`.second-brain-delegate-…`, often deleted since) its parent run's, followed up the chain; the launch's
+  folder, when it is such a worktree, is resolved once through its `.git` file. Paths compare resolved and, on Windows,
+  case-insensitive. An unknown folder gives no example.
 - **Similar by words**, as the launch's facts: shared content words weighted by rarity, at least 2 in common, the newest
   first on a tie; the newest 2000 runs are looked at.
 - **Bounded, quoted data.** Each example is one JSON line: run id, task (≤ 280 characters), result summary (≤ 600),
   how it was verified, checks passed, files changed; at most 1200 characters in all (~400 tokens), under a header that
   says it is quoted data with no instruction or permission authority.
 - **Visible and measurable.** The launch's context snapshot keeps the chosen run ids, scores and sizes plus how many
-  candidates there were (`AgentContextSnapshot.examples`, never their text); the run's «Contesto» shows them. Runs with
+  candidates there were (`AgentContextSnapshot.examples`, never their text; `skipped` when the selection failed); the
+  run's «Contesto» shows them. Runs with
   and without examples can then be compared on outcome, cost and time.
 - **On by default** (the owner's choice). A clean install has no runs, so no example.
 

@@ -4,7 +4,8 @@
 // similar job went», the one kind of memory the app lacked; the facts (rules/launch-memory.ts) say what is true, not
 // how a past job was done. Verified = standing.ts earnedVerdict success (the user, a review, the receipts, a verified
 // parent), never the agent's own report. Left out: the Orchestrator, reviews, one-shots, runs without a report summary,
-// the run's own chat, runs of another repository (worktrees count as their repository). Ranked by shared words weighted
+// runs of another repository (a delegate worktree counts as its repository: a past run's through its parent run, with
+// no file access since the worktree may be gone; the launch's own through its `.git` file, which exists then). Ranked by shared words weighted
 // by rarity, like the launch's facts, with at least MIN_SHARED content words in common; the text is quoted data with
 // no instruction or permission authority, at most EXAMPLES_CHARS characters (~400 tokens). Zero tokens, nothing
 // written. Used by wiring.ts resolveAgent (the role launch), recorded in the launch's context snapshot (examples) and
@@ -30,9 +31,15 @@ const STOP = new Set('the and for with from this that then into your task please
 const words = (s: string): Set<string> => new Set([...memoryWords(s)].filter(w => !STOP.has(w)));
 const cut = (s: string, n: number): string => { const t = s.replace(/\s+/g, ' ').trim(); return t.length > n ? `${t.slice(0, n - 1)}…` : t; };
 
+const WORKTREE = /^\.second-brain-(?:delegate|integration)-/;
+/** A path as compared here: resolved, and case-insensitive on Windows. */
+const norm = (p: string): string => { const r = path.resolve(p); return process.platform === 'win32' ? r.toLowerCase() : r; };
+const isWorktree = (p: string): boolean => WORKTREE.test(path.basename(p));
+
 const repos = new Map<string, string>();
 /** The repository a folder belongs to: a linked worktree's main repository (its `.git` file names it), else the nearest
- *  folder with a `.git`, else the folder itself. Cached; never throws. */
+ *  folder with a `.git`, else the folder itself. Cached (oldest out first); never throws. Only the launch's folder is
+ *  looked up, once per new folder. */
 export function repoOf(dir: string): string {
   const start = path.resolve(dir), hit = repos.get(start);
   if (hit) return hit;
@@ -54,9 +61,20 @@ export function repoOf(dir: string): string {
       d = up;
     }
   } catch { out = start; }
-  if (repos.size > 500) repos.clear();
+  if (repos.size >= 200) repos.delete(repos.keys().next().value!);
   repos.set(start, out);
   return out;
+}
+
+/** A past run's repository, without touching the disk: its folder, or for a delegate worktree its parent run's
+ *  (followed up to 16 steps); null when unknown. */
+function runRepo(r: AgentRun, byId: ReadonlyMap<string, AgentRun>): string | null {
+  for (let cur: AgentRun | undefined = r, i = 0; cur && i < 16; cur = cur.parentRunId ? byId.get(cur.parentRunId) : undefined, i++) {
+    const root = cur.scope?.projectRoot;
+    if (!root) return null;
+    if (!isWorktree(root)) return norm(root);
+  }
+  return null;
 }
 
 export interface RunExamplesInput {
@@ -64,18 +82,19 @@ export interface RunExamplesInput {
   /** the launch's folder; null = unknown, then no example (a repository is never guessed) */
   project: string | null;
   query: string;
-  /** the launching chat, whose own runs are not examples of itself */
-  chatId?: string;
 }
 export interface RunExamples { text: string; selection: RunExampleSelection }
 
-/** A verified success of this role in this repository, with a summary, that can stand as an example. */
+/** Verified successes of this role in this repository, with a summary, that can stand as examples. The cheap checks
+ *  come first; the verdict and the repository last. */
 export function exampleCandidates(runs: readonly AgentRun[], input: RunExamplesInput, ix = earnIndex(runs)): AgentRun[] {
   if (!input.project) return [];
-  const repo = repoOf(input.project), recent = runs.length > SCAN_MAX ? [...runs].sort((a, b) => b.startedAt - a.startedAt).slice(0, SCAN_MAX) : runs;
-  return recent.filter(r => r.agentId === input.roleId && r.agentId !== 'orchestrator' && counts(r) && r.endReason === 'completed'
-    && !r.reviewOf && !r.oneshot && r.source !== 'oneshot' && r.chatId !== input.chatId && !!r.report?.summary?.trim()
-    && !!r.scope?.projectRoot && repoOf(r.scope.projectRoot) === repo && earnedVerdict(r, ix)?.verdict === 'success');
+  const repo = norm(isWorktree(input.project) ? repoOf(input.project) : input.project);
+  const recent = runs.length > SCAN_MAX ? [...runs].sort((a, b) => b.startedAt - a.startedAt).slice(0, SCAN_MAX) : runs;
+  const byId = new Map(runs.map(r => [r.runId, r]));
+  return recent.filter(r => r.agentId === input.roleId && r.agentId !== 'orchestrator' && r.endReason === 'completed' && counts(r)
+    && !r.reviewOf && !r.oneshot && r.source !== 'oneshot' && !!r.report?.summary?.trim()
+    && earnedVerdict(r, ix)?.verdict === 'success' && runRepo(r, byId) === repo);
 }
 
 const checksPassed = (r: AgentRun): number => (r.receipts?.commands ?? []).filter(c => c.check && !c.masked && c.exit === 0).length;
@@ -84,12 +103,10 @@ const filesChanged = (r: AgentRun): number => (r.receipts?.files?.length ?? 0) +
 /** At most EXAMPLES_MAX examples by shared words with the launch's goal (rarer words weigh more), the newest first on a
  *  tie; nothing when the goal shares fewer than MIN_SHARED content words with every candidate. */
 export function selectRunExamples(runs: readonly AgentRun[], input: RunExamplesInput): RunExamples {
-  const none: RunExamples = { text: '', selection: { examples: [], candidates: 0 } };
-  const q = words(requestText(input.query).slice(0, 16000));
-  if (!q.size) return none;
   const ix = earnIndex(runs);
   const pool = exampleCandidates(runs, input, ix).map(r => ({ r, words: words(requestText(r.goal)) }));
-  if (!pool.length) return none;
+  const q = words(requestText(input.query).slice(0, 16000));
+  if (!pool.length || !q.size) return { text: '', selection: { examples: [], candidates: pool.length } };
   const df = new Map([...q].map(w => [w, pool.filter(p => p.words.has(w)).length]));
   const ranked = pool.map(p => {
     const shared = [...q].filter(w => p.words.has(w));
@@ -110,14 +127,14 @@ export function selectRunExamples(runs: readonly AgentRun[], input: RunExamplesI
     selection: { examples, candidates: pool.length } };
 }
 
-/** The launch's examples: never blocks a start (an error gives none, with a warning). */
-export function launchExamples(runs: readonly AgentRun[], input: RunExamplesInput): RunExamples | null {
+/** The launch's examples: never blocks a start (an error gives none, marked skipped, with a warning). */
+export function launchExamples(runs: readonly AgentRun[], input: RunExamplesInput): RunExamples {
   try {
     const out = selectRunExamples(runs, input);
     log.info('agents', 'Selected launch examples', { data: { role: input.roleId, selected: out.selection.examples.length, candidates: out.selection.candidates } });
     return out;
   } catch (e) {
     log.warn('agents', 'Launch examples skipped', { cause: errText(e), hint: 'the role starts without past-run examples; its facts and skills are unchanged' });
-    return null;
+    return { text: '', selection: { examples: [], candidates: 0, skipped: true } };
   }
 }
