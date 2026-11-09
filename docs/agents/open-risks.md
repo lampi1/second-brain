@@ -114,7 +114,8 @@ Cause: the subprocess uses real `AbortSignal.timeout(200)` for detection and `(3
 those deadlines against process scheduling and MCP service time. The timeout fallback correctly returns no semantic
 result/no recall, which contradicts those success assertions when scheduling is delayed.
 
-The test-only `hook-deadline-clock.mjs` preload now controls those AbortSignals via IPC in the real hook subprocess.
+The test-only `hook-deadline-clock.mjs` preload controlled those AbortSignals via IPC in the real hook subprocess (2026-11-09:
+that test and the preload were removed with the other real-process tests, `docs/tests/load-sensitive-removed.md`).
 Successful requests use the real HTTP/MCP server without advancing virtual time; timeout cases deliberately hold
 the response and advance the unchanged 200/300 ms budgets. All content/count assertions remain, and the harness
 also requires an actual expiry acknowledgement for timeout scenarios and rejects unexpected budgets/nonzero exits.

@@ -15,7 +15,7 @@ import { stageUpdate,RELEASE_WRITER_PROTOCOL } from '../../scripts/update.mjs';
 const roots: string[] = [];
 const sha = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex');
 afterEach(() => { vi.restoreAllMocks(); for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
-function fixture(native = false,writerProtocol=RELEASE_WRITER_PROTOCOL) {
+function fixture(writerProtocol=RELEASE_WRITER_PROTOCOL) {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-acquire-'))); roots.push(root);
   const cacheRoot = path.join(root, 'cache'), id = '1.2.3-aaaaaaa', version = '1.2.3', source = 'a'.repeat(40);
   const rel = { id, version,writerProtocol, electron: '1.0.0', claudeEngine: 'engines/claude/1.0.0/claude.exe' };
@@ -52,7 +52,7 @@ function fixture(native = false,writerProtocol=RELEASE_WRITER_PROTOCOL) {
       const file = path.join(destination, name!); fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, text!);
     }
   });
-  const acquirer = new UpdateAcquirer({ cacheRoot, fetch: fakeFetch, ...(native ? {} : { extract }) });
+  const acquirer = new UpdateAcquirer({ cacheRoot, fetch: fakeFetch, extract });
   return { root, cacheRoot, id, version, source, payload, payloadText, files, archive, archiveName, wrapperName, wrapper, metadata, seal, fakeFetch, overrides, extract, acquirer,
     wrapperUrl: `https://github.com/lampi1/second-brain/releases/download/v${version}/${wrapperName}`,
     archiveUrl: `https://github.com/lampi1/second-brain/releases/download/v${version}/${archiveName}` };
@@ -83,7 +83,7 @@ describe('published update acquisition', () => {
     f.acquirer.discard(candidate!);
   });
   it('still refuses a verified payload with an incompatible writer protocol before staging assets',async()=>{
-    const f=fixture(false,RELEASE_WRITER_PROTOCOL+1),candidate=await f.acquirer.prepareLatest('1.2.2'),active=path.join(f.root,'stable');
+    const f=fixture(RELEASE_WRITER_PROTOCOL+1),candidate=await f.acquirer.prepareLatest('1.2.2'),active=path.join(f.root,'stable');
     expect(()=>stageUpdate(active,candidate!.payloadDir,candidate!.manifestSha256)).toThrow('incompatible release writer protocol');
     expect(fs.readdirSync(active)).toEqual([]);f.acquirer.discard(candidate!);
   });

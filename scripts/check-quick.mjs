@@ -254,7 +254,7 @@ function main() {
     .split('\n').filter(f => TEST_FILE.test(f) && fs.existsSync(f));
   const helpers = git('ls-files', '--cached', '--others', '--exclude-standard', '--', 'test/unit', 'test/fixtures')
     .split('\n').filter(f => SOURCE_EXT.test(f) && !TEST_FILE.test(f) && fs.existsSync(f));
-  // git hooks are the one place tests run scripts from a non-JS file (guard-commit-hook.test.ts commits through them)
+  // git hooks are the one place tests run scripts from a non-JS file (the guard's hook tests committed through them; removed on 2026-11-09, the rule stays for any new one)
   const hookDir = '.githooks';
   const hooks = new Map(fs.existsSync(hookDir)
     ? [[hookDir, fs.readdirSync(hookDir).flatMap(f => hookPaths(fs.readFileSync(path.join(hookDir, f), 'utf8')))]] : []);

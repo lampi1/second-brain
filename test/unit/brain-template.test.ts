@@ -1,7 +1,7 @@
 // brain-template/ (ADR 0061): the empty brain a new user starts from, edited in this repo. Its scripts run in the user's
 // brain, not in the app, so the app's lint rules do not apply to them (eslint.config.js ignores the folder); this test
 // keeps the check the old export did on them: every script still parses (`node --check`), and the installer and the
-// README a new user opens are there. Personal data in the template is the publish guard's job (publish-guard.test.ts).
+// README a new user opens are there. Personal data in the template is the publish guard's job (scripts/publish-guard.mjs).
 // Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
 // removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 

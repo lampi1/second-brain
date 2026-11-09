@@ -43,7 +43,7 @@ clean. A change made on another PC would never come back: the export only goes o
   owner sets it once. On this PC it is the full list (`%LOCALAPPDATA%/second-brain/publish/deny.txt`: work terms and
   the owner's personal names, owner 16/10), so a work or personal name blocks the push; once set, a missing or
   unreadable list blocks, it never skips. The deny list never enters the repo: it is made of the names it keeps out.
-  `test/unit/publish-guard.test.ts` uses the same command.
+  `scripts/publish-guard.mjs` uses the same command (it was `test/unit/publish-guard.test.ts` until 2026-11-09).
 - **This PC commits and pushes any time, safely** (owner, 16/10: "possa sempre committare e pushare da questo pc senza
   però info … gestito bene professionalmente"). Three nets, each enough alone for its scope:
   - `pre-commit`: a fast scan of the staged changes only (seconds), so a bad line is caught where it is written;
