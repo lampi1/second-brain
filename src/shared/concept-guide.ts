@@ -294,8 +294,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Un tuo messaggio che inizia con «[nuova chat]» gli chiede di aprire una chat di lavoro nuova.',
         'A message of yours starting with "[nuova chat]" asks it to open a new work chat.'),
       // src/main/chats/orchestrator-delivery.ts
-      b('Errori subito; risultati e richieste originali raggruppati (30 s); semplici avvii e avanzamenti silenziosi. Le decisioni restano nei pannelli originali, mai nelle risposte di un agente.',
-        'Errors arrive immediately; results and original requests are grouped (30 s); plain starts and progress stay quiet. Decisions remain in original panels, never agent replies.'),
+      b('Errori subito; risultati, richieste originali e lavori approvati fermi da 15 min raggruppati (30 s); semplici avvii e avanzamenti silenziosi. Le decisioni restano nei pannelli originali, mai nelle risposte di un agente.',
+        'Errors arrive immediately; results, original requests and approved work stalled for 15 min are grouped (30 s); plain starts and progress stay quiet. Decisions remain in original panels, never agent replies.'),
       // src/main/chats/held-news.ts, src/renderer/components/HeldNews.tsx (#88)
       b('Quello che l’app gli tiene da parte lo vedi sopra il suo campo: «N novità in attesa»; un clic elenca chat, tipo, da quando e perché aspetta. Guardarlo non gli costa un turno.',
         'What the app holds back for it shows above its input: "N novità in attesa"; a click lists chat, kind, since when and why it waits. Looking costs it no turn.'),
@@ -1375,8 +1375,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       '"N news waiting": news from the jobs the app has not passed to the Orchestrator yet, and why.'),
     points: [
       // src/main/chats/orchestrator-delivery.ts
-      b('Un lavoro che finisce, fallisce, chiede qualcosa o scrive all’Orchestrator produce una notizia; l’app la consegna all’Orchestrator, ma non sempre subito.',
-        'A job that finishes, fails, asks something or writes to the Orchestrator makes a piece of news; the app delivers it to the Orchestrator, but not always at once.'),
+      b('Un lavoro che finisce, fallisce, chiede qualcosa o scrive all’Orchestrator produce una notizia, e così un lavoro approvato che nessuno muove da 15 minuti; l’app la consegna all’Orchestrator, ma non sempre subito.',
+        'A job that finishes, fails, asks something or writes to the Orchestrator makes a piece of news, and so does approved work nothing has moved for 15 minutes; the app delivers it to the Orchestrator, but not always at once.'),
       // src/main/chats/orchestrator-delivery.ts ORCHESTRATOR_GROUP_MS
       b('Mentre l’Orchestrator aspetta te trattiene le notizie non urgenti. Richieste originali e risultati sono raggruppati per 30 secondi; semplici avvii e fine turno viaggiano con la prossima consegna.',
         'While the Orchestrator waits for you it holds non-urgent news. Original requests and results are grouped for 30 seconds; plain starts and turn endings ride with the next delivery.'),
