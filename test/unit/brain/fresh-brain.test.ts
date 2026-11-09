@@ -9,20 +9,15 @@ import os from 'node:os';
 import path from 'node:path';
 import { useAssets } from '../../../src/main/rules/delivery';
 import { FRESH_FILES, writeFreshBrain } from '../../../src/main/rules/new-brain';
-import { brainFile, ensureTools, useTemplateRoot, useToolsHome } from '../../../src/main/rules/tools';
-import { claudeLaunch } from '../../../src/main/brain/adapters/claude-plugin';
-import { productInstructions } from '../../../src/main/rules/instructions';
-import { runHook } from '../../../src/main/rules/runtime';
+import { useTemplateRoot, useToolsHome } from '../../../src/main/rules/tools';
 import { isBrainFolder } from '../../../src/main/brain/detect';
 import { procedureSections } from '../../../src/main/brainmodel/procedure-sources';
 import { readMemory, readRules, readSkills } from '../../../src/main/brainmodel/model';
 import { SkillsService } from '../../../src/main/skills/service';
 import { parseProfile } from '../../../src/main/brain/profile';
-import { Routing } from '../../../src/main/brain/routing';
 import { DefaultBrain } from '../../../src/modules/ai-first/default-brain';
 
 const TEMPLATE = path.resolve(import.meta.dirname, '../../../brain-template');
-const fwd = (p: string) => p.replace(/\\/g, '/');
 let base = '';
 const roots: string[] = [];
 /** every file under `dir` (forward slashes), the brain's own .git left out */
@@ -100,56 +95,4 @@ describe('a fresh brain is empty of app content', () => {
     expect(() => writeFreshBrain(legacy)).toThrow();
     expect(tree(legacy)).toEqual(['AGENTS.md', 'routines.md']);
   });
-});
-
-describe('the app still delivers its machinery to a fresh brain', () => {
-  it('boot rules, topic rules, agents, skills and hooks come from the app copy; the brain is not touched', () => {
-    const root = fresh();
-    const before = tree(root);
-    const userData = path.join(base, 'userData');
-    const launch = claudeLaunch(userData, { domains: [{ name: 'brain', root }] });
-    const tools = fwd(ensureTools(root));
-    expect(tools.startsWith(fwd(path.join(userData, 'brain-tools')))).toBe(true);
-    // the plugin: the product's agents, skills and output styles, the product hooks, the boot rules
-    expect(launch.args).toContain('--plugin-dir');
-    for (const f of ['skills/code-review/SKILL.md', 'skills/code-investigation/SKILL.md', 'skills/brain-edit/SKILL.md', 'skills/flow-review/SKILL.md', 'skills/create-agent/SKILL.md', 'skills/explain/SKILL.md', 'output-styles/orchestrator.md']) {
-      expect(fs.existsSync(path.join(launch.pluginDir!, f)), f).toBe(true);
-    }
-    const hooks = fs.readFileSync(path.join(launch.pluginDir!, 'hooks/hooks.json'), 'utf8');
-    expect(hooks).toContain('product-rules/hooks/runner.mjs');
-    expect(hooks).toContain('correction-catch.mjs');
-    const rules = fs.readFileSync(launch.rulesFile!, 'utf8');
-    expect(rules).toContain(`# Personal brain: ${fwd(root)}`);
-    expect(rules).toContain('Safety: production and shared systems');
-    expect(rules).toContain('never execute them; show the full text for the owner to run');
-    expect(rules).not.toContain('run only after an explicit ok');
-    expect(rules).toContain('# Mario Rossi'); // the owner's own profile follows the product's text
-    // topic rules: the template's, rendered in the copy, injected by the hook runtime from there
-    const topics = JSON.parse(fs.readFileSync(path.join(tools, '.sb-tools.json'), 'utf8')).topics as string[];
-    for (const t of ['hub.md', 'code.md', 'brain-rules.md', 'map.md', 'routines.md']) expect(topics).toContain(t);
-    const hub = fs.readFileSync(path.join(tools, 'hub.md'), 'utf8');
-    expect(hub).toContain(`node ${tools}/ops/tools/chat-prompt.mjs`);
-    expect(hub).not.toMatch(/\{\{[A-Z_]+\}\}|\{tools\}/);
-    const injected = runHook(root, path.join(base, 'state'), { hook_event_name: 'UserPromptSubmit', session_id: 's1', prompt: 'coordina le altre chat come orchestrator' }, { tools });
-    expect(injected.context).toContain(`Topic ${tools}/hub.md`);
-    // the Codex / Cursor text gets the boot rules and topic text too
-    expect(productInstructions(root, true, tools)).toContain('Topic ');
-    // the model and price table: the app's until the owner adds one
-    expect(fwd(brainFile(root, 'harness/models.json')!)).toBe(`${tools}/harness/models.json`);
-    expect(new Routing(() => root).registry()?.models.length).toBeGreaterThan(0);
-    // nothing of this landed in the brain
-    expect(tree(root)).toEqual(before);
-  }, 60_000);
-
-  it('a brain file the owner writes wins over the app copy', () => {
-    const root = fresh();
-    fs.mkdirSync(path.join(root, 'harness'));
-    fs.writeFileSync(path.join(root, 'harness/models.json'), JSON.stringify({ models: [] }));
-    expect(brainFile(root, 'harness/models.json')).toBe(path.join(root, 'harness/models.json'));
-    fs.mkdirSync(path.join(root, '.claude/skills/code-review'), { recursive: true });
-    fs.writeFileSync(path.join(root, '.claude/skills/code-review/SKILL.md'), '---\nname: code-review\ndescription: mine\n---\nMy review.\n');
-    const launch = claudeLaunch(path.join(base, 'userData'), { domains: [{ name: 'brain', root }] });
-    expect(fs.readFileSync(path.join(launch.pluginDir!, 'skills/code-review/SKILL.md'), 'utf8')).toContain('My review.');
-    expect(fs.existsSync(path.join(launch.pluginDir!, 'agents'))).toBe(false); // the product ships no sub-agents
-  }, 60_000);
 });

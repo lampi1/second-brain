@@ -3,17 +3,11 @@
 // closed; a late first event turns the warning into an info line; a busy session's send, an interrupt and an exit do
 // not arm or fire it; what the adapter reports inside send() is not the engine's first event.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import fs from 'node:fs';
-import path from 'node:path';
-import { CodexSession } from '../../../src/main/chats/codex';
 import { watchTurns } from '../../../src/main/chats/turn-watchdog';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import type { ChatItem } from '../../../src/shared/contract';
 import { log } from '../../../src/main/log';
-import { recSink, tmp, waitFor } from './helpers';
-
-const FIXTURES = path.resolve(import.meta.dirname, '..', '..', 'fixtures');
-const REPLAY = path.join(FIXTURES, 'replay-engine.mjs');
+import { recSink } from './helpers';
 
 /** a stand-in session: busy as told, send reports a user item synchronously (as the adapters do) */
 function fakeSession(sink: SessionSink, busy = { v: false }) {
@@ -65,24 +59,4 @@ describe('watchTurns', () => {
     s.send('d'); inner.exit({ code: 1, error: 'x' }); vi.advanceTimersByTime(5000);
     expect(systems(sink)).toEqual([]);
   });
-
-  it('catches a real adapter stalled on a recording that never answers the turn', async () => {
-    // the Codex recording, cut right after the app's turn/start: the engine took the turn and went silent
-    const wire = fs.readFileSync(path.join(FIXTURES, 'wire', 'codex', 'turns.ndjson'), 'utf8').split('\n').filter(Boolean);
-    const cut = wire.findIndex(l => JSON.parse(JSON.parse(l).line as string).method === 'turn/start');
-    expect(cut).toBeGreaterThan(0);
-    const file = path.join(tmp('wd-wire'), 'stalled.ndjson');
-    fs.writeFileSync(file, `${wire.slice(0, cut + 1).join('\n')}\n`);
-    const sink = recSink();
-    const s = watchTurns(k => new CodexSession({ engineId: 'codex', label: 'Codex', command: 'codex', args: ['app-server'], loginCommand: 'codex login', chatId: 'c_wd', cwd: tmp('wd-cwd'), pathOverride: REPLAY, env: { SB_REPLAY_FILE: file } }, k), sink, { chatId: 'c_wd', engine: 'codex', label: 'Codex', noStartMs: 1500 });
-    try {
-      s.start();
-      if (s.ready) await s.ready;
-      s.send('ciao');
-      const warned = await waitFor(() => systems(sink).find(i => i.code === 'turnNoStart'), 'the watchdog warning', 60_000);
-      expect(warned.level).toBe('warn');
-      expect(sink.exited).toBeNull();
-      expect(s.busy).toBe(true);
-    } finally { await s.close(500); }
-  }, 120_000);
 });

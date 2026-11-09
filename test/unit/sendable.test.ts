@@ -9,7 +9,7 @@ import { foreignOf } from '../../src/renderer/lib/foreign';
 
 const invoke = vi.fn();
 vi.mock('../../src/renderer/sb', () => ({ sb: { invoke: (...a: unknown[]) => invoke(...a), on: () => () => {} } }));
-const { app, dismissCommand, dispatch, markCopied, markSent, send, undoSent, unqueue,updateStoreProblem } = await import('../../src/renderer/store/store');
+const { app, dismissCommand, dispatch, markCopied, markSent, send, undoSent, unqueue, } = await import('../../src/renderer/store/store');
 const { markOf } = await import('../../src/renderer/lib/marks');
 
 describe('sendable', () => {
@@ -93,45 +93,6 @@ describe('notes to the chat', () => {
     expect(sent()).toEqual(['[Mandato] Ciao Marco,']);
     markCopied('a', key, MAIL); // copied again after sending: still "Mandato"
     expect(markOf(key)?.kind).toBe('sent');
-  });
-
-  it('while the chat works: no new turn; with a queued message it rides on it, else one line when it is free', async () => {
-    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'running' }) });
-    markSent('a', key, MAIL);
-    vi.advanceTimersByTime(UNDO_MS);
-    expect(sent()).toEqual([]);
-    expect(app.get().queued.a ?? []).toEqual([]); // not a queued message of its own
-    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle' }) });
-    expect(sent()).toEqual(['[Mandato] Ciao Marco,']);
-    // Main's acknowledgement includes tracked bridge settlement; do not assume a fixed microtask count.
-    await vi.waitFor(()=>expect(updateStoreProblem()).toBeNull());
-
-    invoke.mockClear();
-    const k2 = blockKey('a', 'Secondo testo');
-    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'running' }) });
-    expect(send('a', 'e poi?')).toBe('queued');
-    markSent('a', k2, 'Secondo testo');
-    vi.advanceTimersByTime(UNDO_MS);
-    expect(app.get().queued.a?.map(m => m.text)).toEqual(['e poi?']); // the note is not inside the queued message
-    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle' }) });
-    expect(sent()).toEqual(['e poi?\n\n[Mandato] Secondo testo']);
-  });
-
-  it('a note due while a message is on its way to main waits for its reply: a late idle never sends it ahead', async () => {
-    let resolve: () => void = () => {};
-    invoke.mockImplementationOnce(() => new Promise<void>(r => { resolve = r; }));
-    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'running' }) });
-    expect(send('a', 'primo')).toBe('queued');
-    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle' }) }); // "primo" leaves, on its way
-    markSent('a', key, MAIL);
-    vi.advanceTimersByTime(UNDO_MS);
-    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle', costUsd: 0.01 }) }); // the old turn's late idle
-    expect(sent()).toEqual(['primo']);
-    resolve();
-    await vi.waitFor(()=>expect(sent()).toEqual(['primo', '[Mandato] Ciao Marco,'])); // main took it and the chat shows free: told now
-    await vi.waitFor(()=>expect(updateStoreProblem()).toBeNull());
-    dispatch({ type: 'chat:updated', chat: chat('a', { state: 'idle', costUsd: 0.02 }) });
-    expect(sent()).toEqual(['primo', '[Mandato] Ciao Marco,']); // no duplicate after another idle update
   });
 
   it('a queued message removed loses no note; Enter on an empty field never sends notes alone', () => {

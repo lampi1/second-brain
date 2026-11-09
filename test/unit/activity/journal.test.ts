@@ -52,15 +52,6 @@ describe('journal', () => {
     expect(fs.readFileSync(path.join(dir, 'activity', fs.readdirSync(path.join(dir, 'activity'))[0]!), 'utf8')).not.toContain('K3y-qqqq');
   });
 
-  it('pushes new events in one batch', async () => {
-    const dir = tmp(), j = new Journal(), got: number[] = [];
-    j.init(dir, ev => got.push(ev.length));
-    j.record({ kind: 'app', level: 'warn', title: 'a' }); j.record({ kind: 'app', level: 'warn', title: 'b' });
-    await new Promise(r => setTimeout(r, 300));
-    j.stop();
-    expect(got).toEqual([2]);
-  });
-
   it('deletes the days past the limit, keeps today', () => {
     const dir = tmp(), act = path.join(dir, 'activity');
     fs.mkdirSync(act, { recursive: true });

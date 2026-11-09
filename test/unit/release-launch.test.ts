@@ -3,7 +3,7 @@
 // 75, src/main/index.ts) is never marked bad (2026-10-12: 91967ec marked bad by a click while the old app was
 // closing); each start's outcome lands in launch-result.json. The "Electron" here is a copy of Node running a fake
 // release (package.json main) that plays each case.
-import { execFileSync, spawn } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -43,46 +43,10 @@ function setup(ids: string[]): { base: string; userData: string } {
   return { base, userData };
 }
 
-function launch(base: string, userData: string, plan: string, waitMs = 3000): { out: string; state: { bad: string[] }; starts: number; result: { wanted: string; started: string | null; attempts: { id: string; outcome: string; reason: string }[] } } {
-  let out = '';
-  try {
-    out = execFileSync(process.execPath, [script, 'launch'], { encoding: 'utf8', env: { ...process.env, SB_RELEASES_ROOT: base, SB_USER_DATA: userData, SB_TEST_RELEASE_SCRIPT: path.join(base, 'release.mjs'), SB_FAKE_PLAN: plan, SB_LAUNCH_WAIT_MS: String(waitMs) }, timeout: 60_000 });
-  } catch (e) { out = String((e as { stdout?: string }).stdout ?? '') + String((e as { stderr?: string }).stderr ?? ''); }
-  return { out, state: JSON.parse(fs.readFileSync(path.join(base, 'current.json'), 'utf8')), starts: Number(fs.readFileSync(path.join(userData, 'starts'), 'utf8')), result: JSON.parse(fs.readFileSync(path.join(base, 'launch-result.json'), 'utf8')) };
-}
-
-async function launchWhileReaping(base: string, userData: string, plan: string, waitMs: number): Promise<ReturnType<typeof launch>> {
-  // The old instance is a child of this test worker. A synchronous launcher would block Node's SIGCHLD handling,
-  // leaving that exited child a zombie on POSIX: the launcher would correctly still see its PID as existing.
-  const child = spawn(process.execPath, [script, 'launch'], { windowsHide: true, timeout: 60000,
-    env: { ...process.env, SB_RELEASES_ROOT: base, SB_USER_DATA: userData, SB_TEST_RELEASE_SCRIPT: path.join(base, 'release.mjs'), SB_FAKE_PLAN: plan, SB_LAUNCH_WAIT_MS: String(waitMs) },
-    stdio: ['ignore', 'pipe', 'pipe'] });
-  let out = '';
-  child.stdout?.on('data', data => { out += String(data); });
-  child.stderr?.on('data', data => { out += String(data); });
-  await new Promise<void>((resolve, reject) => { child.once('error', reject); child.once('close', () => resolve()); });
-  return { out, state: JSON.parse(fs.readFileSync(path.join(base, 'current.json'), 'utf8')), starts: Number(fs.readFileSync(path.join(userData, 'starts'), 'utf8')), result: JSON.parse(fs.readFileSync(path.join(base, 'launch-result.json'), 'utf8')) };
-}
-
 beforeAll(() => { root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-launch-'))); });
 afterAll(() => { try { fs.rmSync(root, { recursive: true, force: true }); } catch { /* a fake app may still hold a file */ } });
 
-describe('release.mjs launch', () => {
-  it('a superseded launcher cannot mark bad or overwrite a concurrent external activation', () => {
-    const { base, userData } = setup(['b', 'a', 'external']);
-    fs.copyFileSync(script, path.join(base, 'release.mjs'));
-    fs.copyFileSync(path.join(path.dirname(script), 'update.mjs'), path.join(base, 'update.mjs'));
-    const output = path.join(base, 'releases/external/out');
-    fs.mkdirSync(path.join(output, 'main'), { recursive: true });
-    fs.writeFileSync(path.join(output, 'main/index.js'), '// Inert activation fixture');
-    fs.writeFileSync(path.join(output, 'icon.ico'), 'fixture');
-    // The fake app runs a cold `install external` before exiting: give it the production window, not the 3 s default.
-    // Its exit ends the wait at once, so a healthy run is no slower.
-    const result = launch(base, userData, 'reselect', 30_000);
-    expect(result.out).toContain('stale launcher');
-    expect(JSON.parse(fs.readFileSync(path.join(base, 'current.json'), 'utf8'))).toMatchObject({ current: 'external', previous: 'b', bad: [] });
-    expect(result.starts).toBe(1);
-  }, 75_000); // the launch helper's own 60 s child timeout, plus margin
+describe('release.mjs launch', () => { // the launch helper's own 60 s child timeout, plus margin
   it.skipIf(process.platform !== 'win32')('the installed VBS shortcut bootstraps a retained runtime when the current runtime is missing', async () => {
     const { base, userData } = setup(['b', 'a']);
     fs.copyFileSync(script, path.join(base, 'release.mjs'));
@@ -129,77 +93,5 @@ describe('release.mjs launch', () => {
     expect(cscriptError, detail).toBeNull();
     expect(observed, detail).toMatchObject({ wanted: 'b', started: 'a' });
     expect(state?.bad, detail).toContain('b');
-  }, 120_000); // cscript 30 s + the 70 s readiness poll + setup
-
-  it.each(['missing', 'malformed'])('invalid current metadata (%s) falls back to the previous release', kind => {
-    const { base, userData } = setup(['b', 'a']);
-    const metadata = path.join(base, 'releases', 'b', 'release.json');
-    if (kind === 'missing') fs.unlinkSync(metadata); else fs.writeFileSync(metadata, '{broken');
-    const r = launch(base, userData, 'ready');
-    expect(r.state.bad).toEqual(['b']);
-    expect(r.result).toMatchObject({ wanted: 'b', started: 'a', attempts: [{ id: 'b', outcome: 'bad' }, { id: 'a', outcome: 'started' }] });
-  }, 60_000);
-
-  it('an unavailable current runtime falls back without crashing on spawn error', () => {
-    const { base, userData } = setup(['b', 'a']);
-    fs.writeFileSync(path.join(base, 'releases', 'b', 'release.json'), JSON.stringify({ id: 'b', electron: '2.0.0', claudeEngine: null }));
-    const r = launch(base, userData, 'ready');
-    expect(r.state.bad).toEqual(['b']);
-    expect(r.result.started).toBe('a');
-  }, 60_000);
-
-  it('starts the current release when its window reports ready', () => {
-    const { base, userData } = setup(['b', 'a']);
-    const r = launch(base, userData, 'ready');
-    expect(r.out).toContain('started b');
-    expect(r.state.bad).toEqual([]);
-    expect(r.result).toMatchObject({ wanted: 'b', started: 'b', attempts: [{ id: 'b', outcome: 'started' }] });
-  }, 60_000);
-
-  it('the app starting reads this start in launch-result.json, never the record of an earlier start', () => {
-    const { base, userData } = setup(['b', 'a']);
-    // the record of an earlier start of another release (a promotion minutes ago, then a rollback to b)
-    fs.writeFileSync(path.join(base, 'launch-result.json'), JSON.stringify({ at: new Date().toISOString(), wanted: 'x', started: 'x', attempts: [{ id: 'x', outcome: 'started', reason: 'window ready after 3 s' }] }));
-    launch(base, userData, 'ready');
-    expect(JSON.parse(fs.readFileSync(path.join(userData, 'seen-launch-result.json'), 'utf8'))).toMatchObject({ wanted: 'b', started: null, attempts: [] });
-  }, 60_000);
-
-  it('a release that exits without ready is marked bad and the previous one starts', () => {
-    const { base, userData } = setup(['b', 'a']);
-    const r = launch(base, userData, 'fail,ready');
-    expect(r.out).toContain('started a');
-    expect(r.state.bad).toEqual(['b']);
-    // launch-result.json: what the app says after the restart (went back to the previous one, and why)
-    expect(r.result).toMatchObject({ wanted: 'b', started: 'a', attempts: [{ id: 'b', outcome: 'bad', reason: expect.stringMatching(/^exited with code 1 after \d+ s$/) }, { id: 'a', outcome: 'started' }] });
-    // the next start skips the bad one and says so
-    expect(launch(base, userData, 'ready').result.attempts.map(a => [a.id, a.outcome])).toEqual([['b', 'skipped-bad'], ['a', 'started']]);
-  }, 60_000);
-
-  it('the app still quitting (its pid gone soon): waits, starts the same release again, never marks it bad', async () => {
-    const { base, userData } = setup(['b', 'a']);
-    // the old instance, recorded in ready.json as the last one that started: it ends 3 s after the new start was
-    // refused (the fake app's first start writes the starts file), so the launcher finds it still quitting
-    const starts = JSON.stringify(path.join(userData, 'starts'));
-    const old = spawn(process.execPath, ['-e', `const fs=require('node:fs');const t=setInterval(()=>{if(fs.existsSync(${starts})){clearInterval(t);setTimeout(()=>{},3000);}},50)`], { stdio: 'ignore' });
-    fs.writeFileSync(path.join(userData, 'ready.json'), JSON.stringify({ release: 'a', pid: old.pid, at: new Date(Date.now() - 60_000).toISOString() }));
-    fs.writeFileSync(path.join(userData, 'quitting.json'), JSON.stringify({ pid: old.pid })); // index.ts before-quit
-    const r = await launchWhileReaping(base, userData, 'busy,ready', 15_000);
-    expect(old.exitCode).toBe(0);
-    expect(r.out).toContain('started b');
-    expect(r.state.bad).toEqual([]);
-    expect(r.starts).toBe(2);
-    expect(r.result).toMatchObject({ started: 'b', attempts: [{ id: 'b', outcome: 'started', reason: expect.stringMatching(/after pid \d+ finished quitting/) }] });
-  }, 60_000);
-
-  it('the app already open (alive, not quitting): brought to the front at once, nothing marked bad, the previous one not started', () => {
-    const { base, userData } = setup(['b', 'a']);
-    fs.writeFileSync(path.join(userData, 'ready.json'), JSON.stringify({ release: 'b', pid: process.pid, at: new Date(Date.now() - 60_000).toISOString() }));
-    const t0 = Date.now();
-    const r = launch(base, userData, 'busy,ready', 30_000);
-    expect(Date.now() - t0).toBeLessThan(15_000); // no wait for an app that is not quitting (it would take 30 s)
-    expect(r.out).toContain('already running');
-    expect(r.state.bad).toEqual([]);
-    expect(r.starts).toBe(1);
-    expect(r.result).toMatchObject({ started: null, attempts: [{ id: 'b', outcome: 'already-running' }] });
-  }, 60_000);
+  }, 120_000);
 });

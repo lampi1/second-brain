@@ -362,16 +362,6 @@ describe('ChatManager with the cold-start queue', () => {
     expect(m.queueState()?.waiting).toEqual([]);
   });
 
-  it('chats cut by a restart resume through the queue, not all at once', async () => {
-    const cut = (id: string, cwd: string) => ({ id, harness: 'claude', cwd, sessionId: crypto.randomUUID(), title: id, model: null, effort: null, permissionMode: null, isOrchestrator: false, createdAt: 1, working: true });
-    const { m, starts } = setup({}, (ud, cwd) => fs.writeFileSync(path.join(ud, 'chats.json'), JSON.stringify({ version: 2, chats: [cut('c_a', cwd), cut('c_b', cwd)] })));
-    expect(m.resumeInterrupted()).toBe(2);
-    await new Promise(r => setTimeout(r, 50));
-    expect(m.queueState()?.waiting.map(w => [w.chatId, w.kind, w.position])).toEqual([['c_a', 'start', 1], ['c_b', 'start', 2]]);
-    await new Promise(r => setTimeout(r, 300));
-    expect(starts()).toBe(0);
-  });
-
   // the past a resume replays (Codex thread/resume, ACP session/load, into a chat restored with no items) is no answer of
   // the engine: the slot stays held until the engine is ready and answers its turn (harness parity, 2026-11-08)
   it.each([

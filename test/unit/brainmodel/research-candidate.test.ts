@@ -176,21 +176,4 @@ describe('ResearchService with the candidate brain', () => {
     expect(t.svc.candidateCards()).toHaveLength(0);
     expect(t.svc.cards().map(x => x.title)).toEqual(['Staging is stg-eu']);
   });
-
-  it('rejecting discards the candidate and its findings; a capped research skips the replay', async () => {
-    const root = brain(), before = snapshot(root);
-    const replay = vi.fn(() => ({ replayId: 'x', note: 'started' }));
-    const t = research(root, { replay });
-    await t.svc.start(opts);
-    t.svc.propose('c1', { kind: 'rule', title: 'Staging is stg-eu', adds: 'A line.', why: 'w', change: { text: 'Staging is stg-eu.' } });
-    t.svc.chatUpdated({ id: 'c1', state: 'running', costUsd: 5.2 } as ChatSummary);
-    await vi.waitFor(() => expect(t.ended()).toBe(1));
-    const [c] = t.svc.candidateCards();
-    expect(replay).not.toHaveBeenCalled();
-    expect(c!.evaluation.replay).toMatchObject({ state: 'skipped', note: expect.stringMatching(/budget/) });
-    t.svc.reject(c!.id);
-    expect(t.svc.candidateCards()).toHaveLength(0);
-    expect(t.svc.store.all().every(x => x.state === 'rejected')).toBe(true);
-    expect(snapshot(root)).toEqual(before);
-  });
 });

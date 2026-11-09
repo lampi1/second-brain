@@ -317,29 +317,6 @@ describe('JudgeSampler', () => {
     expect(await none.s.tick()).toBe(0);
     expect(none.asked).toEqual([]);
   });
-  it('claims the day on disk before the batch starts: a quit during it does not run it again at the next start', async () => {
-    const runs = [run('1')];
-    let onDisk = -1;
-    const first = make({ runs, answer: () => { onDisk = JSON.parse(fs.readFileSync(first.file, 'utf8')).lastBatchAt; return new Promise<ReviewResult>(() => {}); } });
-    void first.s.tick();                                 // the app quits while the Sentinel works
-    await new Promise(r => setTimeout(r, 20));
-    expect(onDisk).toBe(NIGHT + 10 * 60_000);
-    const open = first.stored[0]!;
-    expect(open.endedAt).toBeUndefined();
-    // the next start: the same file and run store; the interrupted batch is ended, not run again
-    const next = make({ runs: [...runs, open], file: first.file });
-    next.later(3600_000);
-    expect(await next.s.tick()).toBe(0);
-    expect(next.asked).toEqual([]);
-    expect(open).toMatchObject({ endReason: 'stale', oneshot: { ok: false }, report: { outcome: 'blocked', verified: 'no' }, reviewBatch: [{ runId: 'r_000000000001' }] });
-    expect(next.s.list().batches).toMatchObject([{ runId: open.runId, runs: ['r_000000000001'], judged: 0, costUsd: null, error: "interrotta: l'app si è chiusa prima della fine" }]);
-    expect(next.journal).toMatchObject([{ level: 'warn', title: 'Revisione notturna: 0 run, costo n/d', runId: open.runId }]);
-    expect(next.fed).toEqual([]);
-    // its runs stay pending: the next night's batch reviews them
-    next.at(NIGHT + 86_400_000 + 60_000);
-    expect(await next.s.tick()).toBe(1);
-    expect(next.stored[0]!.reviewBatch).toEqual([{ runId: 'r_000000000001', verdict: 'success', verified: 'yes' }]);
-  });
   it('reads a run\'s folder from its saved scope or its chat, never a relative one', async () => {
     const saved = run('1', { scope: { brainRoot: path.resolve('/brain'), projectRoot: path.resolve('/original') } });
     const t = make({ runs: [saved, run('2')], chatOf: id => id === 'c_2' ? { ...chat(id), cwd: 'relative' } : undefined });

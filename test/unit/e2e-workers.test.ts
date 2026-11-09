@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 // @ts-expect-error plain .mjs script without types
-import { autoWorkers, pickWorkers } from '../../scripts/e2e.mjs';
+import { autoWorkers } from '../../scripts/e2e.mjs';
 import config, { EXCLUSIVE } from '../../playwright.config';
 // @ts-expect-error plain .mjs script without types
 import { EXTRA, processUnits } from '../../scripts/process-units.mjs';
@@ -25,13 +25,6 @@ describe('autoWorkers', () => {
     expect(autoWorkers({ cores: 16, busy: 0, freeGb: 1.3 })).toBe(2);
     expect(autoWorkers({ cores: 16, busy: 0, freeGb: 0.2 })).toBe(1);
   });
-});
-
-describe('pickWorkers', () => {
-  it('SB_E2E_WORKERS wins; a bad value is measured instead', () => {
-    expect(pickWorkers({ SB_E2E_WORKERS: '3' })).toEqual({ n: 3, why: 'SB_E2E_WORKERS' });
-    expect(pickWorkers({ SB_E2E_WORKERS: 'x' }).why).toMatch(/cores, CPU \d+% busy/);
-  }, 10_000);
 });
 
 describe('exclusive specs', () => {

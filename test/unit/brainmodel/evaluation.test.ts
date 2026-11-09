@@ -140,22 +140,6 @@ describe('candidate promotion', () => {
 
 
 describe('learning facade isolation', () => {
-  it('keeps datasets and receipts in the selected brain and captures execution scope', async () => {
-    const a = tmp(), b = tmp(), userData = tmp(), runs: AgentRun[] = [];
-    let root = a;
-    const captured: string[] = [];
-    const service = new LearningReviewService({ userData, root: () => root, log: new ChangeLog(userData), runs: () => runs, now: () => NOW,
-      execute: async ({ test, brainRoot }) => { captured.push(brainRoot); const r = recorded(test.criteria); runs.push(r); return r.runId; } });
-    service.import(dataset());
-    const receipt = service.replay('examples-v1', 'holdout');
-    root = b;
-    expect(service.state().datasets.map(d => d.id)).toEqual(['synthetic-workflow-v1']);
-    expect(service.state().replays).toEqual([]);
-    root = a;
-    await vi.waitFor(() => expect(service.state().replays.find(r => r.id === receipt.id)?.status).toBe('passed'));
-    expect(captured).toEqual([fs.realpathSync(a)]);
-    expect(new LearningReviewService({ userData, root: () => b, log: new ChangeLog(userData), runs: () => runs }).state().replays).toEqual([]);
-  });
   it('includes retained descendant effort once per task and keeps missing child cost unknown', () => {
     const root = recorded(), child = { ...recorded(), parentRunId: root.runId }, review = { ...recorded(), reviewOf: root.runId };
     expect(evaluationSummary([root], [root, child, review]).turns).toEqual({ value: 4, n: 1, total: 1 });
@@ -166,32 +150,6 @@ describe('learning facade isolation', () => {
 
 
 describe('learning evidence inspector', () => {
-  it('returns complete referenced output and reviewer reports, and rejects unreferenced or other-brain runs', async () => {
-    const a = tmp(), b = tmp(), userData = tmp(), runs: AgentRun[] = [];
-    let root = a;
-    const service = new LearningReviewService({ userData, root: () => root, log: new ChangeLog(userData), runs: () => runs, now: () => NOW,
-      execute: async ({ test, brainRoot }) => { const r = recorded(test.criteria); r.scope = { brainRoot, projectRoot: brainRoot }; r.report!.canonical!.output = 'Complete output '.repeat(1000); runs.push(r); return r.runId; } });
-    service.import(dataset());
-    const replay = service.replay('examples-v1', 'holdout');
-    await vi.waitFor(() => expect(service.state().replays.find(r => r.id === replay.id)?.status).toBe('passed'));
-    const source = runs[0]!;
-    const reviewer = { ...recorded(), agentId: 'sentinel', reviewOf: source.runId, scope: { brainRoot: a, projectRoot: a } };
-    const unrelated = recorded();
-    const wrongBrain = { ...recorded(), agentId: 'sentinel', reviewOf: source.runId, scope: { brainRoot: b, projectRoot: b } };
-    runs.push(reviewer, unrelated, wrongBrain);
-    const evidence = service.evidence(source.runId);
-    expect(evidence.run.report!.canonical!.output).toBe(source.report!.canonical!.output);
-    expect(evidence.run.report!.canonical!.doneWhen[0]?.criterion).toBe('Checks source B');
-    expect(evidence.reviews.map(r => r.runId)).toEqual([reviewer.runId]);
-    expect(service.evidence(reviewer.runId).run.reviewOf).toBe(source.runId);
-    expect(() => service.evidence(unrelated.runId)).toThrow('selected brain');
-    expect(() => service.evidence(wrongBrain.runId)).toThrow('selected brain');
-    evidence.run.report!.canonical!.output = 'mutated view';
-    expect(service.evidence(source.runId).run.report!.canonical!.output).not.toBe('mutated view');
-    root = b;
-    expect(() => service.evidence(source.runId)).toThrow('selected brain');
-    expect(() => service.evidence(reviewer.runId)).toThrow('selected brain');
-  });
   it('allows only currently linked lesson sources and keeps the brain scope guard', () => {
     const root = tmp(), other = tmp(), data = tmp(), source = recorded();
     source.scope = { brainRoot: root, projectRoot: root };

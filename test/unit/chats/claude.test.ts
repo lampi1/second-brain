@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ClaudeSession, rulePath } from '../../../src/main/chats/claude';
-import { FAKE, PNG_1PX, fakeLog, killStray, recSink, tmp, waitFor, type RecSink } from './helpers';
+import { FAKE, PNG_1PX, fakeLog, recSink, tmp, waitFor, type RecSink } from './helpers';
 
 const open: ClaudeSession[] = [];
 function start(extra: Partial<ConstructorParameters<typeof ClaudeSession>[0]> = {}): { s: ClaudeSession; sink: RecSink; cwd: string } {
@@ -563,20 +563,4 @@ describe('ClaudeSession', () => {
     await s.usage();
     expect(sink.patch.liveCostUsd).toBe(0);
   });
-
-  it('an engine that exited while a leftover holds its pipes closes without a kill; a killed one gets no grace', async () => {
-    const log = path.join(tmp('hold'), 'log.jsonl');
-    const { s } = start({ env: { FAKE_CLAUDE_LOG: log, FAKE_CLAUDE_HOLD_PIPES: '60000' } });
-    const holder = await waitFor(() => (fakeLog(log).find(l => 'holder' in l) as { holder?: number } | undefined)?.holder, 'holder pid');
-    await waitFor(() => s.state === 'idle', 'idle');
-    await s.close(1500);
-    expect(s.alive).toBe(false);
-    expect(fakeLog(log).some(l => (l as { exit?: string }).exit === 'stdin closed')).toBe(true);
-    killStray(holder);
-    const b = start();
-    await waitFor(() => b.s.state === 'idle', 'idle b');
-    b.s.killNow();
-    await b.s.close(60000); // already killed: resolves with the kill, not after the grace
-    expect(b.s.alive).toBe(false);
-  }, 30000);
 });

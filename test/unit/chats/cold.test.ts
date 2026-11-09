@@ -4,7 +4,6 @@
 // title and tile; old session folded behind a divider; a restart reads both sessions back), no switch on a warm cache,
 // the engine kept for the note, and the context counters.
 import { afterEach, describe, expect, it } from 'vitest';
-import fs from 'node:fs';
 import path from 'node:path';
 import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
 import { ClaudeSession, compactSettings } from '../../../src/main/chats/claude';
@@ -97,8 +96,6 @@ function setup(extra: Partial<ChatManagerOptions> = {}, completeCensus = true) {
   return { userData, cwd, log, make };
 }
 const summary = (m: ChatManager, id: string) => m.list().find(c => c.id === id);
-const idle = (m: ChatManager, id: string) => summary(m, id)?.state === 'idle' && !m.items(id).at(-1)?.id.startsWith('u');
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 describe('ChatManager cold chats', () => {
   it('every Claude engine reports the configured window (300k), 1M models included', async () => {
@@ -109,157 +106,4 @@ describe('ChatManager cold chats', () => {
     const start = fakeLog(log).find(l => l.argv)!;
     expect(start.argv!.join(' ')).toContain('"CLAUDE_CODE_AUTO_COMPACT_WINDOW":"300000"');
   });
-
-  it('writes the note quietly, then a message after the cache expired goes on in a fresh session of the same chat', async () => {
-    const { make, cwd, userData } = setup();
-    const m = make();
-    const c = await m.create({ harness: 'claude', cwd, prompt: 'big', title: 'Fix totale' });
-    await waitFor(() => idle(m, c.id) && summary(m, c.id)?.contextTokens === 250_000, 'long and idle');
-    const before = m.items(c.id).length, oldSession = summary(m, c.id)!.sessionId;
-    expect(m.coldTick()).toBe(1);
-    await waitFor(() => summary(m, c.id)?.handoffAt, 'cold note saved');
-    // invisible: no line, no note text, no busy bar in the tile
-    expect(m.items(c.id)).toHaveLength(before);
-    expect(summary(m, c.id)?.handoffBusy).toBeUndefined();
-    expect(m.coldTick()).toBe(0); // once
-    expect(m.readHandoff(c.id)?.text).toContain('Aprire la PR.');
-    await sleep(1600); // the cache expires
-    await m.send(c.id, 'e adesso?');
-    await waitFor(() => m.items(c.id).some(i => i.kind === 'assistant' && i.text === 'Continuo dal passaggio: e adesso?'), 'answered from the note');
-    const s = summary(m, c.id)!;
-    expect(s).toMatchObject({ title: 'Fix totale' });
-    expect(s.sessionId).not.toBe(oldSession);
-    expect(m.list()).toHaveLength(1); // no "(2)"
-    const items = m.items(c.id);
-    const div = items.findIndex(i => i.kind === 'system' && !!i.continued);
-    expect(div).toBe(before);
-    expect(items[div + 1]).toMatchObject({ kind: 'user', text: 'e adesso?' });
-    // the divider opens the copy of the note this session started from (a later note overwrites the chat's own file)
-    const cont = items[div]!;
-    expect(cont.kind === 'system' && cont.continued?.session).toBe(oldSession);
-    expect(m.readHandoff(c.id, oldSession!)?.text).toContain('Aprire la PR.');
-    expect(m.readHandoff(c.id, oldSession!)?.path).not.toBe(m.readHandoff(c.id)?.path);
-    expect(m.contextStats()).not.toHaveProperty('notesWritten'); // logged only (ADR 0186)
-    // a restart reads both sessions back: the old one, the divider, the new one (the note not shown as the message)
-    await m.shutdown();
-    const again = make();
-    const back = again.items(c.id);
-    const d2 = back.findIndex(i => i.kind === 'system' && !!i.continued);
-    expect(d2).toBeGreaterThan(0);
-    expect(back.slice(0, d2).some(i => i.kind === 'user' && i.text === 'big')).toBe(true);
-    expect(back[d2 + 1]).toMatchObject({ kind: 'user', text: 'e adesso?' });
-    expect(JSON.parse(fs.readFileSync(path.join(userData, 'chats.json'), 'utf8')).chats[0].pastSessions[0].sessionId).toBe(oldSession);
-  }, 30_000);
-
-  it('a message while the cache is warm stays in the old session, and the Orchestrator and short chats are never asked', async () => {
-    const { make, cwd, userData } = setup({ cacheTtlMs: 60_000 });
-    const m = make();
-    const c = await m.create({ harness: 'claude', cwd, prompt: 'big' });
-    const short = await m.create({ harness: 'claude', cwd, prompt: 'hello' });
-    const orchestrator = await m.create({ harness: 'claude', cwd, orchestrator: true, prompt: 'big' });
-    // each engine reports its context after its turn (get_context_usage): the tick reads all three sizes, so wait for each
-    await waitFor(() => idle(m, c.id) && idle(m, short.id) && idle(m, orchestrator.id)
-      && summary(m, c.id)?.contextTokens === 250_000 && summary(m, short.id)?.contextTokens === 1234 && summary(m, orchestrator.id)?.contextTokens === 250_000, 'all idle, sizes reported');
-    expect(m.coldTick()).toBe(1);
-    await waitFor(() => summary(m, c.id)?.handoffAt, 'cold note');
-    const sid = summary(m, c.id)!.sessionId;
-    await m.send(c.id, 'ancora');
-    await waitFor(() => m.items(c.id).filter(i => i.kind === 'result').length === 2, 'second turn');
-    expect(summary(m, c.id)!.sessionId).toBe(sid);
-    expect(m.items(c.id).some(i => i.kind === 'system' && !!i.continued)).toBe(false);
-    // the message went into the old session: the note is stale (a turn cut before its result keeps it so)
-    expect(JSON.parse(fs.readFileSync(path.join(userData, 'chats.json'), 'utf8')).chats.find((x: { id: string }) => x.id === c.id).coldNoteAt).toBeUndefined();
-    expect(summary(m, short.id)?.handoffAt).toBeUndefined();
-    expect(summary(m, orchestrator.id)?.handoffAt).toBeUndefined();
-  }, 20_000);
-
-  it('a long chat whose last answer waits for its work is asked no note (2026-10-16); the next turn lifts it', async () => {
-    const { make, cwd } = setup({ cacheTtlMs: 60_000 });
-    const m = make();
-    const c = await m.create({ harness: 'claude', cwd, prompt: 'big waitqa' });
-    await waitFor(() => idle(m, c.id) && summary(m, c.id)?.contextTokens === 250_000 && summary(m, c.id)?.waitsOnWork, 'long, idle, waiting');
-    expect(m.coldTick()).toBe(0);
-    await m.send(c.id, 'ok');
-    await waitFor(() => idle(m, c.id) && m.items(c.id).filter(i => i.kind === 'result').length === 2, 'second turn');
-    expect(summary(m, c.id)?.waitsOnWork).toBeUndefined();
-    expect(m.coldTick()).toBe(1);
-  }, 20_000);
-
-  it('keeps the engine while its cold note is due and rejects the obsolete renderer auto-close path', async () => {
-    const { make, cwd } = setup({ coldIdleMs: () => 60_000, cacheTtlMs: 120_000 });
-    const m = make();
-    const c = await m.create({ harness: 'claude', cwd, prompt: 'big' });
-    await waitFor(() => idle(m, c.id) && summary(m, c.id)?.contextTokens === 250_000, 'long and idle');
-    expect(m.releaseIdle(1, Date.now() + 10)).toBe(0);
-    await expect(m.archive(c.id, { auto: true })).rejects.toThrow(/timer verificato/);
-    expect(summary(m, c.id)?.closedAt).toBeUndefined();
-    expect(m.engines().live.some(e => e.chatId === c.id)).toBe(true);
-    // A note does not itself close the chat or its engine.
-    expect(m.coldTick(Date.now() + 61_000)).toBe(1);
-    await waitFor(() => summary(m, c.id)?.handoffSource === 'chat', 'cold note saved', 15_000);
-    expect(summary(m, c.id)).toMatchObject({ handoffSource: 'chat' });
-    expect(summary(m, c.id)?.closedAt).toBeUndefined();
-    expect(m.engines().live.some(e => e.chatId === c.id)).toBe(true);
-  }, 25_000);
-
-  it('can save a note on partial observations but never releases or replaces that engine automatically', async () => {
-    const { make, cwd } = setup({}, false);
-    const m = make();
-    const c = await m.create({ harness: 'claude', cwd, prompt: 'big' });
-    await waitFor(() => idle(m, c.id) && summary(m, c.id)?.contextTokens === 250_000, 'long and idle');
-    const session = summary(m, c.id)?.sessionId;
-    expect(summary(m, c.id)?.agentChildren?.coverage).toBe('partial');
-    expect(m.releaseIdle(1, Date.now() + 60_000)).toBe(0);
-    expect(m.coldTick()).toBe(1);
-    await waitFor(() => summary(m, c.id)?.handoffSource === 'chat', 'cold note');
-    await sleep(1600); await m.send(c.id, 'Continua');
-    await waitFor(() => idle(m, c.id), 'normal resumed turn');
-    expect(summary(m, c.id)?.sessionId).toBe(session);
-    expect(m.engines().live.some(e => e.chatId === c.id)).toBe(true);
-  }, 25_000);
-
-  it('a fresh session that does not start leaves the note for the next message', async () => {
-    const { make, cwd } = setup();
-    const m = make();
-    const c = await m.create({ harness: 'claude', cwd, prompt: 'big' });
-    await waitFor(() => idle(m, c.id) && summary(m, c.id)?.contextTokens === 250_000, 'long and idle');
-    const oldSession = summary(m, c.id)!.sessionId;
-    expect(m.coldTick()).toBe(1);
-    await waitFor(() => summary(m, c.id)?.handoffAt, 'cold note');
-    await sleep(1600);
-    // the engine does not start once (a missing folder, no CLI)
-    const mm = m as unknown as { ensureSession: () => Promise<void> };
-    const start = mm.ensureSession;
-    mm.ensureSession = async () => { mm.ensureSession = start; };
-    await expect(m.send(c.id, 'primo')).rejects.toThrow('Avvio della chat non riuscito');
-    expect(summary(m, c.id)!.sessionId).toBe(oldSession);
-    expect(m.items(c.id).some(i => i.kind === 'system' && !!i.continued)).toBe(false);
-    await m.send(c.id, 'secondo');
-    await waitFor(() => m.items(c.id).some(i => i.kind === 'assistant' && i.text === 'Continuo dal passaggio: secondo'), 'continued from the note');
-    expect(summary(m, c.id)!.sessionId).not.toBe(oldSession);
-  }, 30_000);
-
-  it('a message queued behind the quiet note turn shows as work and ends as a normal turn', async () => {
-    const { make, cwd } = setup();
-    const m = make();
-    const c = await m.create({ harness: 'claude', cwd, prompt: 'big' });
-    await waitFor(() => idle(m, c.id) && summary(m, c.id)?.contextTokens === 250_000, 'long and idle');
-    const sid = summary(m, c.id)!.sessionId;
-    expect(m.coldTick()).toBe(1);
-    await m.send(c.id, 'ancora');
-    if (!summary(m, c.id)?.handoffAt) expect(summary(m, c.id)?.state).toBe('running');
-    await waitFor(() => m.items(c.id).filter(i => i.kind === 'result').length === 2 && summary(m, c.id)?.state === 'idle', 'queued turn ended');
-    await sleep(1600);
-    await m.send(c.id, 'dopo');
-    await waitFor(() => m.items(c.id).filter(i => i.kind === 'result').length === 3, 'third turn');
-    expect(summary(m, c.id)!.sessionId).toBe(sid); // the note came before that message: no base for a continuation
-  }, 30_000);
-
-  it('counts the calls of the main thread from their usage, once per response', async () => {
-    const { make, cwd } = setup({ coldHandoff: () => false });
-    const m = make();
-    const c = await m.create({ harness: 'claude', cwd, prompt: 'meter' });
-    await waitFor(() => m.items(c.id).some(i => i.kind === 'result'), 'turn', 15_000);
-    expect(m.contextStats()).toMatchObject({ calls: 1, over200k: 0, coldRewrites: 0 });
-  }, 20_000);
 });

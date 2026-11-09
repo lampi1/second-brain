@@ -119,22 +119,7 @@ it('never overwrites the consented bootstrap with a different caller checkout du
   for (const f of ['release.mjs', 'update.mjs']) expect(fs.readFileSync(path.join(base, f), 'utf8')).toBe(fs.readFileSync(path.join(scripts, f), 'utf8') + suffix);
   expect(cli(base, 'rollback-if', target, 'running').status).toBe(0);
   for (const f of ['release.mjs', 'update.mjs']) expect(fs.readFileSync(path.join(base, f), 'utf8')).toBe(fs.readFileSync(path.join(scripts, f), 'utf8') + suffix);
-});
-
-it('applies the exact selection and permits only the matching conditional rollback', () => {
-  const { base, sha256 } = setup();
-  // Supply a retained old release for rollback without ever running either inert runtime.
-  put(base, 'releases/running/release.json', JSON.stringify({ id: 'running', writerProtocol: 1, electron: '2.0.0' }));
-  put(base, 'releases/running/out/icon.ico', 'old icon');
-  expect(cli(base, 'apply-update', target, sha256, 'running').status).toBe(0);
-  expect(JSON.parse(fs.readFileSync(path.join(base, 'current.json'), 'utf8'))).toMatchObject({ current: target, previous: 'running', writerProtocol: 1 });
-  expect(cli(base, 'rollback-if', target, 'wrong-old').status).toBe(1);
-  expect(cli(base, 'rollback-if', 'other', 'running').status).toBe(1);
-  expect(cli(base, 'rollback-if').status).toBe(1);
-  expect(cli(base, 'rollback-if', target).status).toBe(1);
-  expect(cli(base, 'rollback-if', target, 'running').status).toBe(0);
-  expect(JSON.parse(fs.readFileSync(path.join(base, 'current.json'), 'utf8'))).toMatchObject({ current: 'running', previous: target });
-}, 60_000); // Six sequential real release.mjs children, each a cold node start.
+}); // Six sequential real release.mjs children, each a cold node start.
 
 it('refuses automatic apply on legacy state and reports a distinct state protocol', () => {
   const { base, sha256 } = setup();

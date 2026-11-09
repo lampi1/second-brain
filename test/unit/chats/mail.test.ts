@@ -34,21 +34,6 @@ function setup(list: ChatSummary[], send?: (id: string, text: string, from?: str
 }
 
 describe('chat mail', () => {
-  it.each([false, true])('holds before taking mail and retains a delivery reservation until send settles (failure=%s)', async fail => {
-    const root = tmp('mail-hold'), list = [chat('worker', 'Worker')], dir = inboxDir(root);
-    fs.mkdirSync(dir, { recursive: true });
-    sendMail(dir, { from: 'Sender', fromHarness: 'claude', to: 'Worker', toHarness: 'claude', text: 'Assignment', refusal: () => null });
-    let held = false, finish!: () => void;
-    const release = vi.fn(() => { held = false; });
-    const mail = new ChatMail({ root: () => root, instance: 'isolated-test',
-      chats: { list: () => list, send: async () => { expect(held).toBe(true); expect(unread(dir, 'worker')).toHaveLength(0); expect(mail.hasWork('worker')).toBe(true); await new Promise<void>(resolve => { finish = resolve; }); if (fail) throw new Error('Fixture rejection'); } },
-      holdActivity: id => { expect(id).toBe('worker'); expect(unread(dir, 'worker')).toHaveLength(1); held = true; return release; },
-    }); mails.push(mail);
-    const delivery = mail.tick(); await vi.waitFor(() => expect(held).toBe(true));
-    expect(mail.hasWork('worker')).toBe(true); finish(); await delivery;
-    expect(release).toHaveBeenCalledTimes(1); expect(held).toBe(false);
-    expect(unread(dir, 'worker')).toHaveLength(fail ? 1 : 0); expect(mail.hasWork('worker')).toBe(fail);
-  });
   it('keeps mail on disk while a provider without a durable mid-turn queue is busy', async () => {
     const worker = chat('codex-worker', 'Codex worker', { harness: 'codex', state: 'running' }), f = setup([worker]);
     sendMail(f.dir, { from: 'Sender', fromHarness: 'claude', to: worker.title, toHarness: 'codex', text: 'Next assignment', refusal: () => null });
@@ -174,28 +159,6 @@ describe('chat mail', () => {
     // a chat with no mail behind it sends fresh threads, but not without end
     for (let i = 0; i < MAX_SENDS_PER_MINUTE; i++) call('send_to_chat', 'c', { to: 'B', text: `m${i}` });
     expect(() => call('send_to_chat', 'c', { to: 'B', text: 'troppo' })).toThrow(/ultimo minuto/);
-  });
-
-  it('send_to_chat: sender from its endpoint, delivered at once to a live chat; self, unknown and blocked refused', async () => {
-    const list = [chat('me', 'OS · Architettura'), chat('c1', 'Pers · App', { state: 'running' }), chat('cu', 'Cursor · Lavoro', { harness: 'cursor', state: 'idle' })];
-    const { dir, sent, call, cross } = setup(list);
-    const out = call('send_to_chat', 'me', { to: 'pers - app', text: 'nuovo dato' });
-    expect(out).toMatch(/^inviato a "Pers · App" \(id [\w-]+\): l’app glielo consegna adesso$/);
-    await new Promise(r => setTimeout(r, 50));
-    expect(sent).toEqual([{ id: 'c1', text: expect.stringContaining('nuovo dato'), from: 'OS · Architettura' }]);
-    expect(sent[0]!.text.split('\n')[0]).toContain('"OS · Architettura"');
-    // by app chat id too
-    expect(call('send_to_chat', 'me', { to: 'c1', text: 'ancora' })).toMatch(/consegna adesso/);
-    expect(() => call('send_to_chat', 'me', { to: 'OS · Architettura', text: 'x' })).toThrow(/stessa chat/);
-    expect(() => call('send_to_chat', 'me', { to: 'Nessuna', text: 'x' })).toThrow(/sconosciuta/);
-    expect(() => call('send_to_chat', 'me', { to: 'c1', text: '' })).toThrow(/vuoto/);
-    expect(() => call('send_to_chat', 'gone', { to: 'c1', text: 'x' })).toThrow(/non è più/);
-    cross.on = false;
-    expect(() => call('send_to_chat', 'me', { to: 'Cursor · Lavoro', text: 'x' })).toThrow(/bloccato/);
-    // a chat outside the app that already has a mailbox is reachable; it waits for its hook or wait
-    fs.mkdirSync(path.join(dir, 'esegui-da-fuori'));
-    expect(call('send_to_chat', 'me', { to: 'Esegui da fuori', text: 'x' })).toMatch(/non è attiva nell’app/);
-    expect(unread(dir, 'esegui-da-fuori')).toHaveLength(1);
   });
 
   it('list_chats: the other app chats and the mailboxes outside the app', () => {

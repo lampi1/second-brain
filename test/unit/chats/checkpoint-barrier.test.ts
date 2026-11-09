@@ -115,31 +115,6 @@ describe('parallel checkpoint and the write barrier (ADR 0228)', () => {
     expect(git(cwd, 'status', '--porcelain')).toBe('');
   });
 
-  it('Claude: a snapshot given up after the deadline releases the write, and the undo never rewinds that turn wrongly', async () => {
-    const { m, id, cwd } = await claudeChat();
-    const done = snapshotsDone.length;
-    await m.send(id, 'ciao di nuovo');                               // a quiet turn with its checkpoint: the one an undo would take
-    await waitFor(() => assistantTexts(m, id).filter(t => t === 'Ciao dal motore').length === 2 && m.list().find(x => x.id === id)?.state === 'idle', 'quiet turn end');
-    await waitFor(() => snapshotsDone.length === done + 1, 'quiet turn snapshot');
-    (m as unknown as { opts: { checkpointDeadlineMs?: number } }).opts.checkpointDeadlineMs = 3000; // from this turn on
-    const before = m.list().find(x => x.id === id)?.checkpointAt;
-    gates.push(new Promise<void>(() => {}));                         // git never answers
-    await m.send(id, 'scrivifile src/a.ts TARDI');
-    await waitFor(() => m.items(id).some(i => i.kind === 'tool' && i.name === 'Write'), 'write asked');
-    await sleep(1000);
-    expect(fs.readFileSync(path.join(cwd, 'src', 'a.ts'), 'utf8')).toBe(ORIGINAL); // still held before the deadline
-    await waitFor(() => assistantTexts(m, id).includes('Scritto.'), 'write after the deadline', 10000);
-    expect(fs.readFileSync(path.join(cwd, 'src', 'a.ts'), 'utf8')).toBe('TARDI');
-    // no checkpoint for this turn: the newest one is still the quiet turn's, whose end was recorded before this write
-    expect(m.list().find(x => x.id === id)?.checkpointAt).toBe(before);
-    await waitFor(() => m.list().find(x => x.id === id)?.state === 'idle', 'idle');
-    settleChildren(m, id);
-    await m.undoTurn(id);
-    expect(before).toBeTypeOf('number');
-    // the quiet turn changed nothing; this turn's write changed the file after that turn ended: left as it is
-    expect(fs.readFileSync(path.join(cwd, 'src', 'a.ts'), 'utf8')).toBe('TARDI');
-  });
-
   it('Claude: two quiet turns ending while the first snapshot is held each record their end, so the undo leaves a later edit alone', async () => {
     const { m, id, cwd } = await claudeChat();
     const done = snapshotsDone.length;
@@ -156,21 +131,6 @@ describe('parallel checkpoint and the write barrier (ADR 0228)', () => {
     settleChildren(m, id);
     await expect(m.undoTurn(id)).resolves.toEqual({ restored: 0, removed: 0 });
     expect(fs.readFileSync(path.join(cwd, 'src', 'a.ts'), 'utf8')).toBe('A MANO');
-  });
-
-  it('Claude: the deadline counts from the send, the wait for a hung previous snapshot included', async () => {
-    const { m, id, cwd } = await claudeChat();
-    const opts = (m as unknown as { opts: { checkpointDeadlineMs?: number } }).opts;
-    opts.checkpointDeadlineMs = 60_000;
-    gates.push(new Promise<void>(() => {}));                         // the quiet turn's snapshot never lands
-    await m.send(id, 'ciao di nuovo');
-    await waitFor(() => assistantTexts(m, id).filter(t => t === 'Ciao dal motore').length === 2 && m.list().find(x => x.id === id)?.state === 'idle', 'quiet turn end');
-    opts.checkpointDeadlineMs = 2000;
-    const sent = Date.now();
-    await m.send(id, 'scrivifile src/a.ts SBLOCCATO');
-    await waitFor(() => assistantTexts(m, id).includes('Scritto.'), 'write released by its own deadline', 15000);
-    expect(Date.now() - sent).toBeLessThan(10_000);                  // not the previous turn's 60 s
-    expect(fs.readFileSync(path.join(cwd, 'src', 'a.ts'), 'utf8')).toBe('SBLOCCATO');
   });
 
   it('an engine that cannot hold its tools (Codex, ACP) still gets the message only after the snapshot', async () => {

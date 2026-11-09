@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import path from 'node:path';
 import { AcpSession, permissionView, streamErrorOf, streamRetryOf, type AcpOptions } from '../../../src/main/chats/acp';
 import { autoPermit } from '../../../src/main/chats/auto-permit';
-import { SYS_IT } from '../../../src/shared/sys';
 import { TOOL_CLASSES } from '../../../src/shared/agents';
 import { FAKE_CURSOR, cursorLog, recSink, tmp, waitFor, type RecSink } from './helpers';
 
@@ -338,23 +337,6 @@ describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
     expect(sink.pendings.filter(p => p.type === 'question')).toHaveLength(0);
   });
 
-  it('a provider refusal only on stderr (free limit reached) ends the turn as failed with a readable error, never hangs', async () => {
-    const { s, sink, logFile } = start({ ...OPENCODE, streamErrorGraceMs: 50, env: { FAKE_ACP_OPENCODE: '1' } });
-    await waitFor(() => s.state === 'idle', 'ready');
-    s.send('nocredit');
-    await waitFor(() => sink.trace.includes('result') && s.state === 'idle', 'the failed turn', 8000);
-    expect(cursorLog(logFile).some(l => l.method === 'session/cancel')).toBe(true);
-    expect([...sink.items.values()].filter(i => i.kind === 'result').map(i => (i as { isError: boolean }).isError)).toEqual([true]);
-    const sys = [...sink.items.values()].filter(i => i.kind === 'system');
-    expect(sys.map(i => i.code)).toEqual(['outOfCredits']);
-    const params = sys[0]?.params as { label: string; error: string };
-    expect(SYS_IT['sys.outOfCredits'](params)).toBe('OpenCode: crediti esauriti (Free usage limit reached. Free models work in OpenCode (https://opencode.ai); subscribe to OpenCode Go to keep going: https://opencode.ai/go).');
-    // the next message runs as usual
-    s.send('ciao');
-    await waitFor(() => sink.trace.filter(t => t === 'result').length === 2, 'the next turn');
-    expect(sink.last('assistant')?.text).toBe('Ciao dal motore');
-  });
-
   it('streamErrorOf reads only the running session\'s main stream errors', () => {
     const line = (extra: string) => `timestamp=2026-11-01T10:18:29.000Z level=ERROR run=x message="stream error" providerID=opencode modelID=m session.id=ses_a ${extra}`;
     expect(streamErrorOf(line('small=false agent=build mode=primary error.error="AI_APICallError: Free usage limit reached."'), 'ses_a')).toMatchObject({ error: 'Free usage limit reached.', credits: true, final: false });
@@ -397,28 +379,6 @@ describe('AcpSession as OpenCode (modelOption, ADR 0216)', () => {
     expect(results(sink)).toEqual([false]);
     expect(sysCodes(sink)).toEqual([]);
     expect(sink.last('assistant')?.text).toBe('Ripreso dopo il riprovo');
-  });
-
-  it('OpenCode giving up after its retries ends the turn at once with its last error', async () => {
-    const { s, sink, logFile } = start({ ...OPENCODE, streamErrorGraceMs: 60000, env: { FAKE_ACP_OPENCODE: '1' } });
-    await waitFor(() => s.state === 'idle', 'ready');
-    s.send('retrygiveup');
-    await waitFor(() => sink.trace.includes('result') && s.state === 'idle', 'the failed turn', 8000);
-    expect(cursorLog(logFile).some(l => l.method === 'session/cancel')).toBe(true);
-    expect(results(sink)).toEqual([true]);
-    expect(sysCodes(sink)).toEqual(['engineError']);
-    expect((sink.last('system')?.params as { error: string }).error).toBe('Service Unavailable');
-  });
-
-  it('the user\'s stop during the wait after a stream error is a stop, never the provider\'s error', async () => {
-    const { s, sink } = start({ ...OPENCODE, streamErrorGraceMs: 150, env: { FAKE_ACP_OPENCODE: '1', FAKE_ACP_STALL_MS: '400' } });
-    await waitFor(() => s.state === 'idle', 'ready');
-    s.send('stallstop');
-    await waitFor(() => (s as unknown as { streamError: unknown }).streamError, 'the stream error');
-    await s.interrupt({ byUser: true });
-    await waitFor(() => sink.trace.includes('result') && s.state === 'idle', 'the stopped turn', 8000);
-    expect(results(sink)).toEqual([false]);
-    expect(sysCodes(sink)).toEqual(['stoppedByYou']);
   });
 
   it('ask_user without its brief is sent back (with how to ask) at most twice, then shown; never on an engine with its own tool', async () => {

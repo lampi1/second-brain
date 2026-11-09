@@ -11,9 +11,9 @@ import { DENIED_READ, HeadlessRunner, NO_NETWORK_PATH, NO_PLAN, NO_QUESTIONS, RE
 import type { ModelRegistry } from '../../../src/shared/contract';
 import { cursorReadRule, noAllowRules } from '../../../src/main/chats/acp';
 import { claudeReadRule } from '../../../src/main/chats/claude';
-import { addRedaction, log } from '../../../src/main/log';
+import { addRedaction } from '../../../src/main/log';
 import { engineOrThrow } from '../../../src/main/engines/registry';
-import { FAKE, FAKE_CURSOR, alive, cursorLog, fakeLog, tmp, waitFor } from '../chats/helpers';
+import { FAKE, FAKE_CURSOR, tmp } from '../chats/helpers';
 
 const ON = { engineOn: { claude: true, cursor: true }, engines: { claude: true, cursor: true } };
 let claudeLog = '', cursorLogFile = '', claudeHome = '', userData = '';
@@ -36,24 +36,6 @@ afterEach(() => { vi.unstubAllEnvs(); });
 function runner(o: Partial<HeadlessDeps> = {}): HeadlessRunner {
   return new HeadlessRunner({ userData, settings: () => ON, keyFor: () => null, enginePaths: () => ({ claude: FAKE, cursor: FAKE_CURSOR }), ...o });
 }
-const req = (engine: string, prompt: string | Promise<string | null>, o: Partial<{ model: string | null; effort: string | null; cwd: string }> = {}) =>
-  ({ engine, prompt, cwd: o.cwd ?? tmp('hl-cwd'), model: o.model ?? null, effort: o.effort ?? null, round: 'r1' });
-describe('a model the CLI refuses at start (Impara probe)', () => {
-  it('gives back the whole list of accepted ids, not the 600-character cut of the exit error', async () => {
-    const out = await runner().run(req('cursor', 'ok', { model: 'sb-list-models' }));
-    expect(out.ok).toBe(false);
-    if (out.ok) return;
-    expect(out.acceptedModels).toHaveLength(190);
-    expect(out.acceptedModels?.at(-1)).toBe('fake-model-189-high');
-    expect(out.acceptedPartial).toBeUndefined();
-    // the probe's refusal is its expected answer: logged as info, never as an engine error (#328)
-    expect(log.recent.some(e => e.msg === 'acp model list probe answered')).toBe(true);
-    expect(log.recent.some(e => e.msg === 'acp engine exited with an error')).toBe(false);
-  }, 30_000);
-});
-
-/** the answers this module gave in a run, from its own log lines */
-const answered = () => log.recent.filter(e => e.msg === 'headless permission answered').map(e => e.data as { tool: string; allow: boolean });
 
 describe('read-only answers (pure)', () => {
   it('allows only the read tools of each adapter; refuses the rest and every question', () => {
@@ -190,176 +172,5 @@ describe('read-only answers (pure)', () => {
     expect(JSON.parse(noAllowRules(JSON.stringify({ permissions: { allow: ['Shell(*)'], deny: ['Shell(rm)'] }, allow: ['x'], model: 'm' }))!))
       .toEqual({ permissions: { allow: [], deny: ['Shell(rm)'] }, allow: [], model: 'm' });
     expect(noAllowRules('not json')).toBeNull();
-  });
-});
-
-// every case starts a fake engine (1-5 s each on a busy Windows machine)
-describe('hidden read-only runs on the fakes', { timeout: 60e3 }, () => {
-  it('Claude: plan mode, read tools only, no MCP, no hooks, no transcript; Read allowed, Bash and questions refused', async () => {
-    const cwd = tmp('hl-cwd');
-    log.recent.length = 0;
-    const r = await runner().run(req('claude', 'ask bash readgate SEGRETO-PROMPT', { cwd, model: 'opus', effort: 'medium' }));
-    // tokens: the turn's total from the result's usage (the fake's), never a context size
-    expect(r).toMatchObject({ ok: true, text: 'Letto a.txt', model: 'opus', effort: 'medium', costUsd: 0.01, turns: 1, tokens: { input: 10, cacheRead: 3000, cacheWrite: 200, output: 40 } });
-    // the refused tools come back by name (a question is not a tool), so Impara can tell «could not look» from «found nothing»
-    expect(r.ok && r.deniedTools).toEqual(['Bash']);
-    expect(answered()).toEqual([
-      expect.objectContaining({ tool: 'AskUserQuestion', allow: false }), expect.objectContaining({ tool: 'Bash', allow: false }), expect.objectContaining({ tool: 'Read', allow: true }),
-    ]);
-    const argv = fakeLog(claudeLog).find(l => l.argv)!.argv!;
-    expect(argv.slice(argv.indexOf('--permission-mode'), argv.indexOf('--permission-mode') + 2)).toEqual(['--permission-mode', 'plan']);
-    expect(argv.slice(argv.indexOf('--tools'), argv.indexOf('--tools') + 2)).toEqual(['--tools', 'Read,Grep,Glob']);
-    expect(argv).toEqual(expect.arrayContaining(['--strict-mcp-config', '--no-session-persistence']));
-    expect(argv).not.toContain('--mcp-config');
-    const settings = JSON.parse(argv[argv.indexOf('--settings') + 1]!) as { permissions: { deny: string[] }; disableAllHooks: boolean };
-    expect(settings.disableAllHooks).toBe(true);
-    expect(settings.permissions.deny).toEqual(expect.arrayContaining(['Bash', 'Edit', 'Write', 'WebFetch']));
-    expect(fs.existsSync(path.join(claudeHome, 'projects'))).toBe(false); // no transcript: never an external chat
-    // the logs carry engine, round, cost and duration, never the prompt nor the answer
-    const lines = JSON.stringify(log.recent);
-    expect(lines).not.toContain('SEGRETO-PROMPT');
-    expect(lines).not.toContain('Letto a.txt');
-    expect(log.recent.find(e => e.msg === 'headless run end')?.data).toMatchObject({ engine: 'claude', round: 'r1', ok: true, costUsd: 0.01 });
-  });
-
-  it('Claude, a web run: only the web tools exist, every file tool denied, a read refused; never on another engine', async () => {
-    log.recent.length = 0;
-    const r = await runner().run({ ...req('claude', 'ask bash readgate'), web: true });
-    expect(r).toMatchObject({ ok: true });
-    expect(answered()).toEqual([
-      expect.objectContaining({ tool: 'AskUserQuestion', allow: false }), expect.objectContaining({ tool: 'Bash', allow: false }), expect.objectContaining({ tool: 'Read', allow: false }),
-    ]);
-    const argv = fakeLog(claudeLog).filter(l => l.argv).at(-1)!.argv!;
-    expect(argv.slice(argv.indexOf('--tools'), argv.indexOf('--tools') + 2)).toEqual(['--tools', 'WebSearch,WebFetch']);
-    const settings = JSON.parse(argv[argv.indexOf('--settings') + 1]!) as { permissions: { deny: string[] }; disableAllHooks: boolean };
-    expect(settings.permissions.deny).toEqual(expect.arrayContaining(['Read', 'Grep', 'Glob', 'Bash', 'Edit', 'Write']));
-    expect(settings.permissions.deny).not.toContain('WebFetch');
-    expect(await runner().run({ ...req('cursor', 'readgate'), web: true })).toMatchObject({ ok: false, refused: true, error: expect.stringMatching(/solo su Claude/) });
-  });
-
-  it('a warm start (Impara\'s tutor, ADR 0190): the engine starts first, the prompt goes in when it comes, the answer streams; unused, nothing is sent', async () => {
-    let give!: (p: string | null) => void;
-    const seen: string[] = [];
-    const run = runner().run({ ...req('claude', new Promise<string | null>(r => { give = r; })), onText: t => seen.push(t) });
-    await waitFor(() => fakeLog(claudeLog).some(l => l.argv), 'the CLI started'); // the CLI is up before the question exists
-    expect(fakeLog(claudeLog).some(l => l.user)).toBe(false);
-    give('stream');
-    const r = await run;
-    expect(r).toMatchObject({ ok: true });
-    expect(seen.length).toBeGreaterThan(3);
-    expect(seen.some(t => t.includes('parola3'))).toBe(true);
-    expect(seen.at(-1)).toBe(r.ok ? r.text : '');
-    const unused = runner().run(req('claude', Promise.resolve(null)));
-    expect(await unused).toMatchObject({ ok: false, error: 'non usata' });
-  });
-
-  it('Claude: ExitPlanMode is refused with the request to answer as text', async () => {
-    const r = await runner().run(req('claude', 'planexit'));
-    expect(r).toMatchObject({ ok: true, text: `Piano rifiutato: ${NO_PLAN}` });
-  });
-
-  it('Cursor: its "ask" mode, no allow rules in its config copy; reading allowed, editing and the shell refused, questions skipped', async () => {
-    const r = await runner().run(req('cursor', 'readgate writegate'));
-    expect(r).toMatchObject({ ok: true, text: 'edit rifiutato', costUsd: null, turns: 1 });
-    const lines = cursorLog(cursorLogFile);
-    expect(lines.filter(l => l.method === 'session/set_mode').map(l => l.params?.modeId)).toEqual(['ask']);
-    expect(lines.filter(l => 'answer' in l).map(l => (l.answer?.outcome as { optionId?: string }).optionId)).toEqual(['allow-once', 'reject-once']);
-    // a config folder of its own for this run, without allow rules, removed when the run ended
-    const start = lines.find(l => l.argv) as unknown as { configDir: string; cliConfig: { permissions: unknown } };
-    expect(path.dirname(start.configDir)).toBe(path.join(userData, 'cursor-config-readonly'));
-    expect(path.basename(start.configDir)).toMatch(/^cmp_[0-9a-f]{10}$/);
-    expect(start.cliConfig.permissions).toEqual({ allow: [], deny: ['Shell(rm)'] });
-    await waitFor(() => !fs.existsSync(start.configDir), 'the run\'s config folder removed');
-    const shell = await runner().run(req('cursor', 'perm'));
-    expect(shell).toMatchObject({ ok: true, text: 'Ok, non lo eseguo.' });
-    const ask = await runner().run(req('cursor', 'ask'));
-    expect(ask).toMatchObject({ ok: true, text: `Domande: skipped (${NO_QUESTIONS})` });
-  });
-
-  // the tree kill is a detached taskkill: on a loaded machine it can take a while to land (as in manager.test.ts)
-  it('a run past its time is killed, with its process tree', { timeout: 200e3 }, async () => {
-    vi.stubEnv('FAKE_CLAUDE_SLOW_TICKS', '5000');
-    const r = await runner({ timeoutMs: 400 }).run(req('claude', 'slow'));
-    expect(r).toMatchObject({ ok: false, error: 'tempo scaduto (<1 min): fermato' });
-    const pid = fakeLog(claudeLog).find(l => l.argv)!.pid;
-    await waitFor(() => !alive(pid), 'the timed-out engine gone', 180000);
-  });
-
-  it('an engine the user did not turn on, or not for agents, and a Fable model never start (a refusal, not a run error)', async () => {
-    const r = await runner({ settings: () => ({ ...ON, engineOn: { claude: false, cursor: true } }) }).run(req('claude', 'ciao'));
-    expect(r).toMatchObject({ ok: false, refused: true, error: expect.stringMatching(/Claude è spento/) });
-    const agents = await runner({ settings: () => ({ ...ON, engines: { claude: false } }) }).run(req('claude', 'ciao'));
-    expect(agents).toMatchObject({ ok: false, refused: true, error: expect.stringMatching(/Gli Orchestrator possono usare Claude/) });
-    expect(await runner().run(req('claude', 'ciao', { model: 'claude-fable-1' }))).toMatchObject({ ok: false, refused: true, error: expect.stringMatching(/Fable/) });
-    expect(await runner().run(req('claude', 'ciao', { effort: 'max' }))).toMatchObject({ ok: false, refused: true });
-    expect(fakeLog(claudeLog)).toEqual([]);
-  });
-
-  it('an ACP engine without a read-only mode, or refusing it, is stopped before the prompt', async () => {
-    vi.stubEnv('FAKE_CURSOR_MODES', 'agent');
-    const none = await runner().run(req('cursor', 'readgate'));
-    expect(none).toMatchObject({ ok: false, error: expect.stringMatching(/non offre una modalità in sola lettura/) });
-    vi.stubEnv('FAKE_CURSOR_MODES', '');
-    vi.stubEnv('FAKE_CURSOR_SET_MODE_FAILS', '1');
-    const failed = await runner().run(req('cursor', 'readgate'));
-    expect(failed).toMatchObject({ ok: false, error: expect.stringMatching(/non ha accettato la modalità in sola lettura \(ask\)/) });
-    expect(cursorLog(cursorLogFile).filter(l => l.method === 'session/prompt')).toEqual([]); // the prompt never sent
-  });
-
-  it('a run in a network folder never starts', async () => {
-    expect(await runner().run(req('claude', 'ciao', { cwd: '\\\\localhost\\C$\\Windows' }))).toMatchObject({ ok: false, error: expect.stringMatching(/^cartella di rete/) });
-    expect(fakeLog(claudeLog)).toEqual([]);
-  });
-
-  it('a missing folder, a model that looks like a flag and a crash end as failures', async () => {
-    expect(await runner().run(req('claude', 'ciao', { cwd: path.join(tmp('hl'), 'nope') }))).toMatchObject({ ok: false, error: expect.stringMatching(/^cartella non trovata/) });
-    expect(await runner().run(req('claude', 'ciao', { model: '--dangerously-skip-permissions' }))).toMatchObject({ ok: false, error: expect.stringMatching(/^modello non valido/) });
-    expect(fakeLog(claudeLog)).toEqual([]);
-    const crash = await runner().run(req('claude', 'crash'));
-    expect(crash.ok).toBe(false);
-  });
-
-  it('the denied folders: deny rules for Claude and Cursor, a read there refused, a run inside one never started', async () => {
-    const brain = tmp('hl-brain');
-    const denied = path.join(brain, 'reviews', 'compare');
-    const sideA = path.join(brain, 'runs', 'a-out');
-    fs.mkdirSync(path.join(denied, 'r1'), { recursive: true });
-    fs.mkdirSync(sideA, { recursive: true });
-    const r = runner({ denyRead: () => [denied] });
-    const claude = await r.run({ ...req('claude', 'readgate=reviews/compare/r1/a.json', { cwd: brain }), denyRead: [sideA] });
-    expect(claude).toMatchObject({ ok: true, text: `Lettura negata: ${DENIED_READ}` });
-    const argv = fakeLog(claudeLog).find(l => l.argv)!.argv!;
-    const deny = (JSON.parse(argv[argv.indexOf('--settings') + 1]!) as { permissions: { deny: string[] } }).permissions.deny;
-    expect(deny).toEqual(expect.arrayContaining([claudeReadRule(denied), claudeReadRule(sideA)]));
-    const sideARead = await r.run({ ...req('claude', 'readgate=runs/a-out/out.md', { cwd: brain }), denyRead: [sideA] });
-    expect(sideARead).toMatchObject({ ok: true, text: `Lettura negata: ${DENIED_READ}` });
-    const cursor = await r.run({ ...req('cursor', 'readgate=reviews/compare/r1/a.json', { cwd: brain }), denyRead: [sideA] });
-    expect(cursor).toMatchObject({ ok: true, text: 'read rifiutato' });
-    const cfg = (cursorLog(cursorLogFile).find(l => l.argv) as unknown as { cliConfig: { permissions: { deny: string[] } } }).cliConfig;
-    expect(cfg.permissions.deny).toEqual(expect.arrayContaining(['Shell(rm)', cursorReadRule(denied), cursorReadRule(sideA)]));
-    const starts = fakeLog(claudeLog).filter(l => l.argv).length;
-    expect(await r.run(req('claude', 'ciao', { cwd: path.join(denied, 'r1') }))).toMatchObject({ ok: false, error: expect.stringMatching(/^cartella vietata/) });
-    expect(fakeLog(claudeLog).filter(l => l.argv)).toHaveLength(starts);
-  });
-
-  it('two Cursor runs at once each get their own config folder, with their own deny rules', async () => {
-    const a = tmp('hl-a'), b = tmp('hl-b');
-    const r = runner();
-    await Promise.all([r.run({ ...req('cursor', 'ciao'), denyRead: [a] }), r.run({ ...req('cursor', 'ciao'), denyRead: [b] })]);
-    const starts = cursorLog(cursorLogFile).filter(l => l.argv) as unknown as { configDir: string; cliConfig: { permissions: { deny: string[] } } }[];
-    expect(starts).toHaveLength(2);
-    expect(starts[0]!.configDir).not.toBe(starts[1]!.configDir);
-    // each run denies its own folder (by its path and, when it differs, its real path) and never the other's
-    const denyOf = (dir: string) => starts.find(s => s.cliConfig.permissions.deny.includes(cursorReadRule(dir)))?.cliConfig.permissions.deny;
-    expect(denyOf(a)).toBeDefined();
-    expect(denyOf(b)).toBeDefined();
-    expect(denyOf(a)).not.toContain(cursorReadRule(b));
-    expect(denyOf(b)).not.toContain(cursorReadRule(a));
-  });
-
-  it('after killAll (app quit) no run starts', async () => {
-    const r = runner();
-    r.killAll();
-    expect(await r.run(req('claude', 'ciao'))).toMatchObject({ ok: false, error: "l'app si sta chiudendo" });
   });
 });

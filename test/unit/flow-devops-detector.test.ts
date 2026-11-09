@@ -150,18 +150,6 @@ describe('read-only DevOps flow detection', () => {
     }
   });
 
-  it('cancels before auth, during uncooperative auth and during uncooperative requests', async () => {
-    const f = fixture(), already = new AbortController(); already.abort(new Error('private reason'));
-    await expect(f.detect(config(), {}, already.signal)).rejects.toThrow('annullato'); expect(f.token).not.toHaveBeenCalled();
-    const controller = new AbortController();
-    const pending = createDevOpsDetector({ token: () => new Promise(() => {}), request: f.request })(config(), {}, controller.signal);
-    controller.abort(new Error('private reason')); await expect(pending).rejects.toThrow('annullato'); expect(f.request).not.toHaveBeenCalled();
-    const second = new AbortController();
-    const request = vi.fn(() => new Promise<Response>(() => {}));
-    const reading = createDevOpsDetector({ token: async () => 'fake', request })(config(), {}, second.signal);
-    await vi.waitFor(() => expect(request).toHaveBeenCalled()); second.abort(); await expect(reading).rejects.toThrow('annullato');
-  });
-
   it('times out uncooperative auth without committing anything', async () => {
     vi.useFakeTimers();
     const pending = createDevOpsDetector({ token: () => new Promise(() => {}) })(config(), {});

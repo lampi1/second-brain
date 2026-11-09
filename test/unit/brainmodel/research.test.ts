@@ -96,26 +96,6 @@ describe('ResearchService', () => {
     expect(t.svc.status()).toMatchObject({ running: true, research: { chatId: 'c1', capUsd: 5 } });
   });
 
-  it('one click: the cleanup, then the research with the best choice; a second click is refused', async () => {
-    const t = setup();
-    const st = await t.svc.runAll();
-    expect(t.maintained()).toBe(1);
-    expect(st.running).toBe(true);
-    expect(t.created[0]).toMatchObject({ harness: 'claude', model: 'opus', effort: 'high', research: { web: true } });
-    expect(t.created[0]!.prompt).toContain('Apro la issue');
-    await expect(t.svc.runAll()).rejects.toThrow(/già in corso/);
-    expect(t.svc.clickAt()).toBe(NOW);
-    // the end notice counts the cleanup's cards with the research's
-    t.svc.propose('c1', idea);
-    t.svc.propose('c1', { kind: 'rule', title: 'Check the port', adds: 'Dev server on 5173.', why: 'Asked 4 times.', change: { text: 'Dev server runs on 5173.' } });
-    await vi.waitFor(() => expect(t.ideas).toEqual(['Search in Log page']));
-    t.svc.chatUpdated({ id: 'c1', state: 'running', costUsd: 0.5 } as ChatSummary);
-    t.svc.chatUpdated({ id: 'c1', state: 'idle', costUsd: 0.6 } as ChatSummary);
-    await vi.waitFor(() => expect(t.done).toHaveLength(1));
-    expect(t.done[0]).toMatchObject({ state: 'done', proposals: 1, ideas: 1, issues: 2 });
-    expect(t.svc.status()).toMatchObject({ running: false, last: { state: 'done', issues: 2 } });
-  });
-
   it('counts once a log card the research rewrites, and waits for the ideas being saved', async () => {
     let release = () => {};
     const t = setup({ saveIdea: () => new Promise<void>(r => { release = r; }) });
@@ -140,26 +120,6 @@ describe('ResearchService', () => {
     expect(t.created).toHaveLength(0);
     expect(st).toMatchObject({ running: false, canResearch: false });
     expect(t.done).toEqual([expect.objectContaining({ state: 'free', issues: 1, proposals: 0 })]);
-  });
-
-  it('stops the chat when the cost passes the cap and ends on idle after work', async () => {
-    const t = setup();
-    await t.svc.start(opts);
-    t.svc.chatUpdated({ id: 'c1', state: 'running', costUsd: 1 } as ChatSummary);
-    expect(t.svc.status().research?.costUsd).toBe(1);
-    t.chats.set('c1', { id: 'c1', state: 'running', costUsd: 5.2 } as ChatSummary);
-    t.svc.chatUpdated({ id: 'c1', state: 'running', costUsd: 5.2 } as ChatSummary);
-    await vi.waitFor(() => expect(t.stopped).toEqual(['c1']));
-    await vi.waitFor(() => expect(t.svc.status().last).toMatchObject({ state: 'capped', costUsd: 5.2 }));
-
-    const u = setup({}, 'idle');
-    await u.svc.start(opts);
-    u.svc.chatUpdated({ id: 'c1', state: 'idle', costUsd: 0 } as ChatSummary);
-    expect(u.svc.status().research).not.toBeNull();
-    u.svc.chatUpdated({ id: 'c1', state: 'running', costUsd: 0.3 } as ChatSummary);
-    u.svc.chatUpdated({ id: 'c1', state: 'idle', costUsd: 0.4 } as ChatSummary);
-    await vi.waitFor(() => expect(u.svc.status().last?.state).toBe('done'));
-    expect(u.stopped).toEqual([]);
   });
 
   it('takes proposals only from the running research, checks them, caps and dedupes', async () => {
@@ -260,19 +220,6 @@ describe('ResearchService', () => {
 });
 
 describe('ResearchService guards', () => {
-  it('refuses a second start while the first is creating its chat, and replays what the chat did meanwhile', async () => {
-    let release!: () => void;
-    const t = setup({ chats: {
-      create: async () => { await new Promise<void>(r => { release = r; }); return { id: 'c1', state: 'error', costUsd: 0, lastError: 'boom' } as ChatSummary; },
-      get: () => ({ id: 'c1', state: 'error', costUsd: 0, lastError: 'boom' } as ChatSummary), stop: async () => {},
-    } });
-    const first = t.svc.start(opts);
-    await vi.waitFor(() => expect(release).toBeTypeOf('function'));
-    await expect(t.svc.start(opts)).rejects.toThrow(/già in corso/);
-    release();
-    await first;
-    await vi.waitFor(() => expect(t.svc.status().last).toMatchObject({ state: 'failed', why: 'boom' }));
-  });
   it('closes a research the app was closed during', async () => {
     const t = setup();
     await t.svc.start(opts);

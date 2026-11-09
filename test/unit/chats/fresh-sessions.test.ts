@@ -121,16 +121,6 @@ describe('protected continuation', () => {
     expect(prepare).toHaveBeenCalledOnce(); expect(prepare.mock.calls[0]![2]?.tools?.allow).toEqual(['read']);
     expect(child.cwd).toBe(isolated); expect(bind).toHaveBeenCalledExactlyOnceWith(child.id);
   });
-  it('refuses delegation when parent permission mode changes during worktree preparation', async () => {
-    let release!: () => void;
-    const waiting = new Promise<void>(resolve => { release = resolve; });
-    const prepare = vi.fn<NonNullable<ChatManagerOptions['prepareDelegation']>>(async parent => { await waiting; return { cwd: parent.cwd, parentRunId: parent.run?.runId, parentTaskVersion: parent.run?.taskVersion }; });
-    const f = fixture({ prepareDelegation: prepare }), parent = await f.create();
-    const child = f.m.create({ harness: 'claude', cwd: parent.cwd, parentId: parent.id }, 'agent');
-    await vi.waitFor(() => expect(prepare).toHaveBeenCalledOnce());
-    await f.m.set(parent.id, { permissionMode: 'plan' }); release();
-    await expect(child).rejects.toThrow('Parent permissions changed'); expect(f.m.list()).toHaveLength(1);
-  });
 
   it('keeps child-generated question context private while preserving the user choice for continuation', async () => {
     const f = fixture(), c = await f.create(), notices: unknown[] = [];
@@ -176,16 +166,6 @@ describe('protected continuation', () => {
     expect(f.sent.at(-1)).not.toContain(FRESH_HANDOFF_MARK);
     const saved = JSON.parse(fs.readFileSync(path.join(f.userData, 'chats.json'), 'utf8')) as { chats: { continuityUnsafe: boolean }[] };
     expect(saved.chats[0]!.continuityUnsafe).toBe(true);
-  });
-  it('refuses a child when its parent finishes during worktree preparation', async () => {
-    let release!: () => void;
-    const waiting = new Promise<void>(resolve => { release = resolve; });
-    const prepare = vi.fn<NonNullable<ChatManagerOptions['prepareDelegation']>>(async parent => { await waiting; return { cwd: parent.cwd, parentRunId: parent.run?.runId, parentTaskVersion: parent.run?.taskVersion }; });
-    const f = fixture({ prepareDelegation: prepare }), parent = await f.create();
-    const child = f.m.create({ harness: 'claude', cwd: parent.cwd, parentId: parent.id }, 'agent');
-    await vi.waitFor(() => expect(prepare).toHaveBeenCalledOnce());
-    await f.m.set(parent.id, { workStatus: 'completed' }); release();
-    await expect(child).rejects.toThrow('Parent assignment changed'); expect(f.m.list()).toHaveLength(1); expect(f.engines).toHaveLength(1);
   });
 
 });

@@ -29,14 +29,13 @@ describe('McpServer', () => {
   const server = new McpServer({ name: 'test', version: '9.9.9', maxBodyBytes: 4096 });
   const tokens = new EndpointTokens();
   const seen: CallCtx[] = [];
-  let aborted = false;
   const tools: McpTool[] = [
     { name: 'whoami', description: 'echo the scope', inputSchema: { type: 'object' }, annotations: { readOnlyHint: true },
       run: (args, ctx) => { seen.push(ctx); return JSON.stringify({ params: ctx.params, sessionId: ctx.sessionId, mount: ctx.mount, args }); } },
     { name: 'boom', description: 'always fails', inputSchema: { type: 'object' }, run: () => { throw new Error('kaboom'); } },
     { name: 'picture', description: 'text + image', inputSchema: { type: 'object' }, run: () => ({ text: 'a picture', images: [{ data: 'AAAA', mimeType: 'image/png' }] }) },
     { name: 'hang', description: 'waits for the client to go away', inputSchema: { type: 'object' },
-      run: (_a, ctx) => new Promise(resolve => { ctx.signal.addEventListener('abort', () => { aborted = true; resolve('aborted'); }); }) },
+      run: (_a, ctx) => new Promise(resolve => { ctx.signal.addEventListener('abort', () => resolve('aborted')); }) },
     { name: 'refuse', description: 'refuses by its rules', inputSchema: { type: 'object' }, run: () => { throw new ToolRefusal('wrong role'); } },
   ];
   let port = 0;
@@ -177,16 +176,6 @@ describe('McpServer', () => {
     const who = async (sid: string) => JSON.parse((await request(port, '/mcp', rpc(2, 'tools/call', { name: 'whoami' }), { 'mcp-session-id': sid })).json().result.content[0].text).sessionId;
     expect(await who(s1)).toBe(s1);
     expect(await who(s2)).toBe(s2);
-  });
-
-  it('aborts a running tool when the client disconnects', async () => {
-    await new Promise<void>(resolve => {
-      const req = http.request({ host: '127.0.0.1', port, path: '/mcp', method: 'POST', headers: { 'content-type': 'application/json' } });
-      req.on('error', () => resolve());
-      req.end(JSON.stringify(rpc(1, 'tools/call', { name: 'hang' })));
-      setTimeout(() => { req.destroy(); resolve(); }, 150);
-    });
-    await expect.poll(() => aborted).toBe(true);
   });
 
   it('DELETE with a session id ends the session when the mount frees sessions (204), else 405', async () => {

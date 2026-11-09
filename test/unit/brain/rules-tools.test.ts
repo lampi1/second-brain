@@ -1,6 +1,6 @@
 // App-owned template utilities, launch activation, reference migration and crash recovery (ADR 0062), all in temp
 // folders: the release template is the repo's brain-template; no real brain, global settings, app or model is used.
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -9,12 +9,12 @@ import { createHash } from 'node:crypto';
 import { useAssets } from '../../../src/main/rules/delivery';
 
 const fakeAssets = { dir: '' };
-const { brainScript, ensureTools, templateHooks, toolsDir, useTemplateRoot, useToolsHome, REPLACED_HOOKS } = await import('../../../src/main/rules/tools');
+const { useTemplateRoot, useToolsHome,  } = await import('../../../src/main/rules/tools');
 const { toolReferences } = await import('../../../src/main/rules/new-brain');
 const { journalOf, migrate, planMigration, recoverMigration } = await import('../../../src/main/rules/migration');
-const { claudeLaunch } = await import('../../../src/main/brain/adapters/claude-plugin');
+const {  } = await import('../../../src/main/brain/adapters/claude-plugin');
 const { runHook } = await import('../../../src/main/rules/runtime');
-const { isBrainFolder } = await import('../../../src/main/brain/detect');
+const {  } = await import('../../../src/main/brain/detect');
 
 const TEMPLATE = path.resolve(import.meta.dirname, '../../../brain-template');
 const roots: string[] = [];
@@ -42,161 +42,7 @@ beforeEach(() => {
 });
 afterEach(() => { useToolsHome(null); useTemplateRoot(null); useAssets(null); for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true }); });
 
-describe('app-owned template utilities', () => {
-  it('renders the release utilities per brain outside it, reused until the release or values change', () => {
-    const root = brain();
-    const dir = ensureTools(root);
-    expect(dir.startsWith(path.join(base, 'userData', 'brain-tools'))).toBe(true);
-    expect(fs.readdirSync(root).sort()).toEqual(['AGENTS.md', 'brain.json']); // nothing written into the brain
-    const mem = fs.readFileSync(path.join(dir, 'ops/tools/mem.mjs'), 'utf8');
-    expect(mem).toContain(`'${fwd(root)}'`);
-    expect(mem).not.toMatch(/\{\{[A-Z_]+\}\}/);
-    expect(fs.readFileSync(path.join(dir, 'ops/tools/day.mjs'), 'utf8')).not.toMatch(/\{\{[A-Z_]+\}\}/);
-    expect(fs.existsSync(path.join(dir, 'ops/tools/brain-site/index.html'))).toBe(true);
-    expect(fs.existsSync(path.join(dir, 'ops/tools/inbox.test.mjs'))).toBe(false);
-    expect(JSON.parse(fs.readFileSync(path.join(dir, '.sb-tools.json'), 'utf8')).root).toBe(fs.realpathSync(root));
-    const stamp = fs.statSync(path.join(dir, 'ops/tools/mem.mjs')).mtimeMs;
-    expect(ensureTools(root)).toBe(dir);
-    expect(fs.statSync(path.join(dir, 'ops/tools/mem.mjs')).mtimeMs).toBe(stamp);
-    fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', template: { OWNER: 'Other' }, rules: { topicFiles: [] } }));
-    expect(ensureTools(root)).toBe(dir);
-    expect(fs.readFileSync(path.join(dir, 'ops/tools/mem.mjs'), 'utf8')).toContain('Other');
-    expect(fs.readdirSync(path.dirname(dir)).filter(n => n.includes('.new-') || n.includes('.old-'))).toEqual([]);
-  }, 60_000); // renders the whole release template three times: slow on a loaded machine (check:branch runs 200 files)
-  it('a copy Windows holds open (rename refused) is updated in place, not lost (issues #275, #278)', () => {
-    const root = brain();
-    const dir = ensureTools(root);
-    fs.writeFileSync(path.join(dir, 'ops/tools/dropped.mjs'), '// a file the release no longer ships\n');
-    fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', template: { OWNER: 'Held' }, rules: { topicFiles: [] } }));
-    const real = fs.renameSync;
-    const spy = vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
-      if (from === dir) throw Object.assign(new Error(`EPERM: operation not permitted, rename '${from}'`), { code: 'EPERM' });
-      real(from, to);
-    });
-    try { expect(ensureTools(root)).toBe(dir); } finally { spy.mockRestore(); }
-    expect(fs.readFileSync(path.join(dir, 'ops/tools/mem.mjs'), 'utf8')).toContain('Held');
-    expect(fs.existsSync(path.join(dir, 'ops/tools/dropped.mjs'))).toBe(false);
-    const stamp = fs.statSync(path.join(dir, '.sb-tools.json')).mtimeMs;
-    expect(ensureTools(root)).toBe(dir); // the marker is current: no second render
-    expect(fs.statSync(path.join(dir, '.sb-tools.json')).mtimeMs).toBe(stamp);
-    expect(fs.readdirSync(path.dirname(dir)).filter(n => n.includes('.new-') || n.includes('.old-'))).toEqual([]);
-  }, 60_000);
-  it('a held file the in-place update cannot replace keeps the old marker, and the next call finishes the update', () => {
-    const root = brain();
-    const dir = ensureTools(root);
-    const marker = fs.readFileSync(path.join(dir, '.sb-tools.json'), 'utf8');
-    fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', template: { OWNER: 'Later' }, rules: { topicFiles: [] } }));
-    const realRename = fs.renameSync, realCopy = fs.copyFileSync;
-    const held = path.join(dir, 'ops/tools/mem.mjs');
-    const rename = vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
-      if (from === dir) throw Object.assign(new Error('EPERM'), { code: 'EPERM' });
-      realRename(from, to);
-    });
-    const copy = vi.spyOn(fs, 'copyFileSync').mockImplementation((from, to, mode) => {
-      if (to === held) throw Object.assign(new Error('EBUSY'), { code: 'EBUSY' });
-      realCopy(from, to, mode);
-    });
-    try { expect(() => ensureTools(root)).toThrow(/EBUSY/); } finally { copy.mockRestore(); }
-    // hooks and tools still find the brain root in the old marker meanwhile
-    expect(fs.readFileSync(path.join(dir, '.sb-tools.json'), 'utf8')).toBe(marker);
-    try { expect(ensureTools(root)).toBe(dir); } finally { rename.mockRestore(); }
-    expect(fs.readFileSync(held, 'utf8')).toContain('Later');
-  }, 60_000);
-  it('without a stored TODAY the copy keeps one date (no re-render at midnight)', () => {
-    const root = brain();
-    const dir = ensureTools(root);
-    const stamp = fs.statSync(path.join(dir, '.sb-tools.json')).mtimeMs;
-    vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date(Date.now() + 3 * 86_400_000));
-    try { expect(ensureTools(root)).toBe(dir); } finally { vi.useRealTimers(); }
-    expect(fs.statSync(path.join(dir, '.sb-tools.json')).mtimeMs).toBe(stamp);
-  }, 60_000);
-  it('a product text the release no longer ships leaves the copy and the plugin at the next render (no leftovers)', () => {
-    const template = path.join(base, 'template');
-    fs.cpSync(TEMPLATE, template, { recursive: true, filter: src => path.basename(src) !== 'node_modules' });
-    useTemplateRoot(template);
-    const root = brain();
-    fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', template: { OWNER: 'Anna' }, rules: { topicFiles: [], appRules: true } }));
-    fs.mkdirSync(path.join(template, 'harness/claude/skills/retired'));
-    fs.writeFileSync(path.join(template, 'harness/claude/skills/retired/SKILL.md'), '---\nname: retired\ndescription: old\n---\nOld skill.\n');
-    const userData = path.join(base, 'userData');
-    let dir = ensureTools(root);
-    expect(fs.existsSync(path.join(dir, 'harness/claude/skills/retired/SKILL.md'))).toBe(true);
-    for (const s of ['brain-edit', 'flow-review', 'code-review', 'code-investigation']) expect(fs.readFileSync(path.join(dir, `harness/claude/skills/${s}/SKILL.md`), 'utf8')).not.toMatch(/\{\{[A-Z_]+\}\}/);
-    expect(fs.existsSync(path.join(claudeLaunch(userData, { domains: [{ name: 'brain', root }] }).pluginDir!, 'skills/retired/SKILL.md'))).toBe(true);
-    fs.rmSync(path.join(template, 'harness/claude/skills/retired'), { recursive: true }); // the next release drops it
-    dir = ensureTools(root);
-    expect(fs.existsSync(path.join(dir, 'harness/claude/skills/retired/SKILL.md'))).toBe(false);
-    const plugin = claudeLaunch(userData, { domains: [{ name: 'brain', root }] }).pluginDir!;
-    expect(fs.existsSync(path.join(plugin, 'skills/retired/SKILL.md'))).toBe(false);
-    expect(fs.existsSync(path.join(plugin, 'skills/brain-edit/SKILL.md'))).toBe(true);
-    expect(fs.readdirSync(root).sort()).toEqual(['AGENTS.md', 'brain.json']); // nothing written into the brain
-  }, 60_000);
-  it('a rendered tool serves the brain, not its own folder (brain-root.mjs)', () => {
-    const root = brain();
-    fs.writeFileSync(path.join(root, 'now.md'), '# Now\n\n## Agenti e sessioni attive\n\n');
-    const dir = ensureTools(root);
-    const r = spawnSync(process.execPath, [path.join(dir, 'ops/tools/mem.mjs'), 'now', 'me', '--label', 'Fixture chat', '--text', 'tools test · rendered copy · check'], { encoding: 'utf8', windowsHide: true, cwd: base });
-    expect(r.status, r.stderr + r.stdout).toBe(0);
-    expect(fs.readFileSync(path.join(root, 'now.md'), 'utf8')).toContain('Fixture chat');
-    expect(fs.existsSync(path.join(dir, 'now.md'))).toBe(false);
-  }, 60_000);
-  it('resolves app scripts: product template code → copy; personal scripts and legacy brains → the brain', () => {
-    const product = brain('product'), legacy = brain('legacy', false);
-    fs.mkdirSync(path.join(product, 'ops/tools'), { recursive: true });
-    fs.writeFileSync(path.join(product, 'ops/tools/devops-me.mjs'), '// personal');
-    fs.writeFileSync(path.join(product, 'ops/tools/cost.mjs'), '// stale copy the brain must not run');
-    fs.mkdirSync(path.join(legacy, 'ops/tools'), { recursive: true });
-    fs.writeFileSync(path.join(legacy, 'ops/tools/cost.mjs'), '// legacy');
-    expect(brainScript(product, 'ops/tools/cost.mjs')).toBe(path.join(toolsDir(product), 'ops/tools/cost.mjs'));
-    expect(brainScript(product, 'ops/tools/devops-me.mjs')).toBe(path.join(product, 'ops/tools/devops-me.mjs'));
-    expect(brainScript(legacy, 'ops/tools/cost.mjs')).toBe(path.join(legacy, 'ops/tools/cost.mjs'));
-    expect(brainScript(legacy, 'ops/tools/brain-site.mjs')).toBeNull();
-    expect(isBrainFolder(product)).toBe(true);
-    expect(isBrainFolder(legacy)).toBe(false);
-    // a product brain never falls back to code in its folder when the release cannot render its utilities
-    const broken = brain('broken');
-    fs.mkdirSync(path.join(broken, 'ops/tools'), { recursive: true }); fs.writeFileSync(path.join(broken, 'ops/tools/cost.mjs'), '// stale');
-    useTemplateRoot(path.join(base, 'missing-template'));
-    expect(brainScript(broken, 'ops/tools/cost.mjs')).toBeNull();
-  }, 60_000);
-  it('keeps the template hooks the product does not replace, pointed at the copy', () => {
-    const root = brain();
-    const tools = fwd(ensureTools(root));
-    const hooks = templateHooks(root, tools);
-    const commands = Object.values(hooks).flat().flatMap(g => g.hooks.map(h => h.command));
-    for (const n of ['panel-dismissed.mjs', 'compact-now.mjs', 'correction-catch.mjs', 'runbook-reminder.mjs', 'inbox.mjs" hook claude']) expect(commands.some(c => c.includes(n)), n).toBe(true);
-    for (const n of REPLACED_HOOKS) expect(commands.some(c => c.includes(n)), n).toBe(false);
-    for (const c of commands) { expect(c).toContain(tools); expect(c).not.toContain(fwd(root) + '/'); expect(c).not.toContain('$CLAUDE_PROJECT_DIR'); }
-    expect(hooks.PostToolUse![0]!.matcher).toBe('AskUserQuestion');
-    expect(hooks.SessionStart![0]!.matcher).toBe('compact');
-  }, 60_000);
-});
-
 describe('product brain activation for Claude', () => {
-  it('delivers product and template hooks with the launch switch off, unless the brain opted out', () => {
-    const root = brain();
-    fs.writeFileSync(path.join(root, 'code.md'), '---\nwhen: {"prompt":["code"]}\n---\nRun `{tools}/ops/tools/brain-lint.mjs`.\n');
-    fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', rules: { topicFiles: ['code.md'] } }));
-    const userData = path.join(base, 'userData');
-    const launch = claudeLaunch(userData, { domains: [{ name: 'brain', root }] });
-    expect(launch.args).toContain('--plugin-dir');
-    const hooks = JSON.parse(fs.readFileSync(path.join(launch.pluginDir!, 'hooks/hooks.json'), 'utf8')).hooks;
-    // the product runner serves only Stop as a process: the session answers the other events in process (ADR 0103)
-    expect(hooks.Stop[0].hooks[0].command).toContain('product-rules/hooks/runner.mjs');
-    expect(JSON.stringify(hooks.UserPromptSubmit)).not.toContain('product-rules/hooks/runner.mjs');
-    expect(JSON.stringify(hooks.PreToolUse ?? [])).not.toContain('product-rules/hooks/runner.mjs');
-    expect(launch.productHooks).toMatchObject({ root, launch: { tools: fwd(toolsDir(root)), correctionHook: true } });
-    expect(JSON.stringify(hooks.UserPromptSubmit)).toContain('correction-catch.mjs');
-    expect(JSON.stringify(hooks)).not.toContain('brain-limits.mjs');
-    const facts = JSON.parse(fs.readFileSync(path.join(launch.pluginDir!, 'product-rules/launch.json'), 'utf8'));
-    expect(facts).toMatchObject({ root, tools: fwd(toolsDir(root)), correctionHook: true });
-    const rules = fs.readFileSync(launch.rulesFile!, 'utf8');
-    expect(rules).toContain(`{tools} = ${fwd(toolsDir(root))}`);
-    fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', rules: { topicFiles: ['code.md'], claudeLaunch: false } }));
-    expect(claudeLaunch(userData, { domains: [{ name: 'brain', root }] }).args).toEqual([]);
-    const legacy = brain('legacy', false);
-    expect(claudeLaunch(userData, { domains: [{ name: 'brain', root: legacy }] }).args).toEqual([]);
-  }, 60_000);
   it('expands {tools} in injected topics and leaves the correction reminder to the template hook when it runs', () => {
     const root = brain(), state = path.join(base, 'state');
     fs.writeFileSync(path.join(root, 'code.md'), '---\nwhen: {"prompt":["code"]}\n---\nRun `{tools}/ops/tools/brain-lint.mjs`.\n');

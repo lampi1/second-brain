@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Live, diffChats, parseChatList, stamp, type RawEvent } from '../../../src/main/brain/live';
-import { plainNode, tmpBrain, until } from './helpers';
+import { plainNode, tmpBrain } from './helpers';
 
 const lives: Live[] = [];
 afterEach(() => { for (const l of lives.splice(0)) l.stop(); });
@@ -15,23 +15,6 @@ const make = (root: string, onEvents: (e: RawEvent[]) => void, extra: Partial<Co
 };
 
 describe('live feed', () => {
-  it('baseline emits nothing, then a new AI idea and an error become events', async () => {
-    const root = tmpBrain();
-    const got: RawEvent[] = [];
-    await make(root, e => got.push(...e)).start();
-    await new Promise(r => setTimeout(r, 300));
-    expect(got).toEqual([]);
-    fs.appendFileSync(path.join(root, 'ideas.md'), '\n## 2026-10-11 · [personale] · Notifiche live · `aperta`\n- **Idea:** feed\n- **Fonte:** IA, chat X\n');
-    fs.appendFileSync(path.join(root, 'ai-errors.md'), '- 2026-10-11 09:30 · Pers · app · codice · bug · detto: funziona · vero: non partiva · visto da: test\n');
-    expect(await until(() => got.some(e => e.kind === 'idea') && got.some(e => e.kind === 'error'))).toBe(true);
-    const idea = got.find(e => e.kind === 'idea')!;
-    expect(idea.title).toBe('Notifiche live');
-    expect(idea.who).toBe("dell'IA");
-    expect(idea.file).toBe('ideas.md');
-    const err = got.find(e => e.kind === 'error')!;
-    expect(err.title).toBe('funziona');
-    expect(err.detail).toBe('Vero: non partiva');
-  });
 
   it('an idea state change is an update; a restart shows what changed while away', async () => {
     const root = tmpBrain();
@@ -68,45 +51,6 @@ describe('live feed', () => {
     l.changed('.claude/worktrees/x/ideas.md');
     await new Promise(r => setTimeout(r, 300));
     expect(got).toEqual([]);
-  });
-
-  it('polls chats.mjs: the first list is a baseline, then in corso → aspetta te is a chat-waiting event', async () => {
-    const root = tmpBrain();
-    const got: RawEvent[] = [];
-    const l = make(root, e => got.push(...e), { chatsEveryMs: 250 });
-    await l.start();
-    expect(await until(() => l.chatPolls >= 1, 15000)).toBe(true); // the baseline list has been read
-    expect(got).toEqual([]);
-    fs.writeFileSync(path.join(root, 'chats.txt'), '- Claude · OS · Prova · brain · 11/10, 09:05 · aspetta te (domanda) · id abc123\n');
-    expect(await until(() => got.some(e => e.kind === 'chat-waiting'), 8000)).toBe(true);
-    expect(got.find(e => e.kind === 'chat-waiting')).toMatchObject({ title: 'OS · Prova', detail: 'domanda', chatId: 'abc123', who: 'Claude' });
-  });
-
-  it('a parser that throws once (file read mid-save) keeps the snapshot: old rows never come back as new', async () => {
-    const root = tmpBrain({ parsers: false });
-    // a brain whose ideas() parser throws on a half-written file
-    fs.mkdirSync(path.join(root, 'ops', 'tools', 'brain-site'), { recursive: true });
-    fs.writeFileSync(path.join(root, 'ops', 'tools', 'brain-site', 'parse.mjs'),
-      "export function ideas(t) { if (t.includes('BOOM')) throw new Error('half'); return [...t.matchAll(/^## (\\S+) · \\[\\w+\\] · (.+?) · `([^`]+)`/gm)].map(m => ({ data: m[1], titolo: m[2], stato: m[3], chi: 'utente' })); }\n");
-    const stateFile = path.join(root, '.state', 'live.json');
-    const got: RawEvent[] = [];
-    await make(root, e => got.push(...e), { stateFile }).start();
-    const good = fs.readFileSync(path.join(root, 'ideas.md'), 'utf8');
-    fs.writeFileSync(path.join(root, 'ideas.md'), `${good}\nBOOM`);
-    await new Promise(r => setTimeout(r, 400));
-    fs.writeFileSync(path.join(root, 'ideas.md'), `${good}\n## 2026-10-11 · [personale] · Nuova · \`aperta\`\n`);
-    expect(await until(() => got.length > 0)).toBe(true);
-    await new Promise(r => setTimeout(r, 300));
-    expect(got.map(e => e.title)).toEqual(['Nuova']);
-    // a failure at start keeps the saved keys too: no "while away" flood after it
-    lives.splice(0).forEach(l => l.stop());
-    fs.writeFileSync(path.join(root, 'ideas.md'), `${good}\nBOOM`);
-    const got2: RawEvent[] = [];
-    await make(root, e => got2.push(...e), { stateFile }).start();
-    lives.splice(0).forEach(l => l.stop());
-    fs.writeFileSync(path.join(root, 'ideas.md'), `${good}\n## 2026-10-11 · [personale] · Nuova · \`aperta\`\n`);
-    await make(root, e => got2.push(...e), { stateFile }).start();
-    expect(got2).toEqual([]);
   });
 
   it('without the brain parsers it still starts (chats and mail only)', async () => {

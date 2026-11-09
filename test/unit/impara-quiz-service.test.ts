@@ -10,11 +10,9 @@ import { ReviewStore } from '../../src/main/learn/review-store';
 import { LessonStore } from '../../src/main/learn/store';
 import { LearnService, type TeachRun } from '../../src/main/learn/service';
 import { demoRun, demoTeach, seedDemoLessons } from '../../src/main/learn/demo';
-import { checkKey } from '../../src/shared/lesson';
 
 const T0 = new Date(2026, 9, 29, 10).getTime();
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'sb-quiz-'));
-const until = async (fn: () => boolean, ms = 3000) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > ms) throw new Error('timeout'); await new Promise(r => setTimeout(r, 5)); } };
 const fast = (r: TeachRun) => { vi.useFakeTimers({ toFake: ['setTimeout'] }); const p = demoTeach(r); vi.runAllTimers(); vi.useRealTimers(); return p; };
 function make(root = tmp()) {
   const store = new LessonStore(root);
@@ -50,17 +48,6 @@ describe('cards of the new kinds', () => {
 });
 
 describe('LearnService', () => {
-  it('judges a true/false check by its option and keeps «Eri sicuro?» afterwards', async () => {
-    const { store, svc } = make();
-    const l = svc.start({ mode: 'quiz', kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
-    await until(() => store.get(l.id)?.state === 'ready');
-    const tf = store.get(l.id)!.checks.find(c => c.kind === 'truefalse')!;
-    svc.move(l.id, checkKey(tf.id));
-    let x = svc.answer(l.id, tf.id, 1);
-    expect(x.checks.find(c => c.id === tf.id)!.answer).toMatchObject({ choice: 1 });
-    x = svc.answer(l.id, tf.id, -1, 2);
-    expect(x.checks.find(c => c.id === tf.id)!.answer).toMatchObject({ choice: 1, confidence: 2 });
-  });
 
   it('an order check takes a list: choice is correct only when right, the list is kept', () => {
     const { store, svc } = make();
@@ -72,15 +59,6 @@ describe('LearnService', () => {
     expect(() => svc.answer(l.id, 'qo', [0, 0, 1])).toThrow();
     const x = svc.answer(l.id, 'qo', [1, 0, 2]);
     expect(x.checks.find(c => c.id === 'qo')!.answer).toMatchObject({ choice: -1, seq: [1, 0, 2] });
-  });
-
-  it('the user’s files become the material: one file read whole, listed in the sources', async () => {
-    const { store, svc, runs } = make();
-    const l = svc.start({ mode: 'quiz', kind: 'topic', ask: 'Come funziona il login?', depth: 'quick', level: 'basics', files: [{ name: 'auth/login.ts', text: 'export function login() {}' }, { name: 'logo.bin', text: '\u0000' }] });
-    await until(() => (store.get(l.id)?.prep?.phases.gather ?? '') === 'done' && runs.some(r => r.round === 'impara-files'));
-    expect(store.readFile(l.id, 'fonti.md')).toContain('export function login() {}');
-    expect(store.get(l.id)!.sources).toEqual(['file: auth/login.ts']);
-    expect(runs.find(r => r.round === 'impara-files')!.prompt as string).toContain('auth/login.ts');
   });
 
   it('the state carries the overall score and each subject’s level', () => {

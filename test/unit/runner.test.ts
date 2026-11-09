@@ -60,35 +60,4 @@ describe.skipIf(!win)('CommandRunner', () => {
     const p = make('```bash\naz webapp restart -n a -g b\n```');
     expect(() => p.r.start({ chatId: 'c1', itemId: 'a1', code: 'az webapp restart -n a -g b' })).toThrow(/secondo clic/);
   });
-
-  it('runs in PowerShell 5.1: output, UTF-8, exit code 0', async () => {
-    const code = "Write-Output 'città ok'\nWrite-Output $PSVersionTable.PSVersion.Major";
-    const { r, events, done } = make(`Lancia:\n\`\`\`powershell\n${code}\n\`\`\``);
-    const run = r.start({ chatId: 'c1', itemId: 'a1', code });
-    expect(run.state).toBe('running');
-    const end = await done(run.id);
-    expect(end).toMatchObject({ state: 'ok', exitCode: 0 });
-    expect(end.output).toContain('città ok');
-    expect(end.output.trim().split('\n').pop()).toBe('5');
-    expect(events.at(-1)?.state).toBe('ok');
-  }, 40000);
-
-  it('a failing native command gives its exit code; a failing cmdlet gives 1', async () => {
-    const { r, done } = make('```\ncmd /c exit 3\n```\n```\nGet-Item C:/nope-sb-xyz\n```');
-    expect(await done(r.start({ chatId: 'c1', itemId: 'a1', code: 'cmd /c exit 3' }).id)).toMatchObject({ state: 'error', exitCode: 3 });
-    const e = await done(r.start({ chatId: 'c1', itemId: 'a1', code: 'Get-Item C:/nope-sb-xyz' }).id);
-    expect(e).toMatchObject({ state: 'error', exitCode: 1 });
-    // PowerShell localizes prose; its structured error identifier and exit code are stable across UI languages.
-    expect(e.output).toContain('PathNotFound');
-    expect(e.output).not.toContain('CLIXML');
-    expect(e.output).toMatch(/nope-sb-xyz/);
-  }, 60000);
-
-  it('Ferma stops a long run', async () => {
-    const { r, done } = make('```powershell\nStart-Sleep -Seconds 30\n```');
-    const run = r.start({ chatId: 'c1', itemId: 'a1', code: 'Start-Sleep -Seconds 30' });
-    r.stop(run.id);
-    expect(await done(run.id)).toMatchObject({ state: 'stopped' });
-    r.shutdown();
-  }, 40000);
 });

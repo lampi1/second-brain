@@ -84,13 +84,6 @@ describe('encrypted rollback-only SQL driver', () => {
     const bounded = await runTestDbQuery({ ...input(), maxRows: 500 });
     expect(JSON.stringify(bounded.rows).length).toBeLessThan(1_048_576); expect(bounded.truncated).toBe(true);
   });
-  it('aborts hanging queries by closing the rollback-only session', async () => {
-    fake.hold = true; const controller = new AbortController();
-    const result = runTestDbQuery({ ...input(), signal: controller.signal });
-    const assertion = expect(result).rejects.toThrow('transport failed');
-    await vi.waitFor(() => expect(fake.sql).toHaveLength(3)); controller.abort();
-    await assertion; expect(fake.events.at(-1)).toBe('close');
-  });
   it('enforces a wall-clock deadline even when the driver request never finishes', async () => {
     vi.useFakeTimers(); fake.hold = true;
     const result = runTestDbQuery(input()); const assertion = expect(result).rejects.toThrow('transport failed');

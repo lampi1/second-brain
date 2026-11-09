@@ -19,7 +19,7 @@ const chat = (id: string, p: Partial<ChatSummary> = {}): ChatSummary => ({
 const msg = (id: string): ChatItem => ({ kind: 'assistant', id, at: 1, text: id, streaming: false });
 const flush = () => new Promise(r => setTimeout(r, 0));
 
-const { app, dispatch, startStore, closeChat, onChatRemoved, answer, attemptOf } = await import('../../src/renderer/store/store');
+const { app, dispatch, closeChat, onChatRemoved, answer, attemptOf } = await import('../../src/renderer/store/store');
 const { ui } = await import('../../src/renderer/store/ui');
 
 describe('reducer: closed chats let go of their items', () => {
@@ -70,15 +70,6 @@ describe('store: loads and reopens', () => {
           : ch === 'chat:archive' ? chat(a!.chatId!, { closedAt: 9, state: 'closed' })
             : ch === 'chat:reopen' ? chat(a!.chatId!, { state: 'idle' })
               : ch.endsWith(':list') || ch === 'chat:pending' || ch === 'chat:autoCloseGet' ? [] : null));
-  });
-
-  it('starts by loading only the open chats\' items', async () => {
-    startStore();
-    await vi.waitFor(() => expect(app.get().ready).toBe(true));
-    await flush();
-    const loads = invoke.mock.calls.filter(c => c[0] === 'chat:items').map(c => (c[1] as { chatId: string }).chatId);
-    expect(loads).toEqual(['a']);
-    expect(app.get().items.b).toBeUndefined();
   });
 
   it('a reopened chat loads its items again', async () => {

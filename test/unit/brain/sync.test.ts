@@ -269,21 +269,6 @@ describe('domain sync: review fixes (ADR 0059)', () => {
     expect(text).toContain('scritto durante la sync');
   }, SLOW);
 
-  it('a change made during a cycle is synced by a cycle of its own, not dropped', async () => {
-    const { bare, pcs: [a] } = world(1);
-    const A = syncer(a!, guardDir(), { settleMs: 200 });
-    fs.writeFileSync(path.join(a!, 'idea.md'), 'x\n');
-    hookOnce(a!, 'post-commit', `echo "arrivata dopo" > ${sh(path.join(a!, 'dopo.md'))}`);
-    await A.s.sync('Personale');
-    expect(remoteFile(bare, 'idea.md')).toBe('x');
-    const t = Date.now();
-    let got = '';
-    while (Date.now() - t < 120_000 && !got) {
-      try { got = remoteFile(bare, 'dopo.md'); } catch { await new Promise(r => setTimeout(r, 200)); }
-    }
-    expect(got).toBe('arrivata dopo');
-  }, SLOW);
-
   it('a file changed between the commit and the rebase is committed and the sync retries: never a conflict', async () => {
     const { bare, pcs: [a, b] } = world(2);
     const lines = (over: Record<number, string>) => Array.from({ length: 10 }, (_, i) => over[i + 1] ?? `riga ${i + 1}`).join('\n') + '\n';

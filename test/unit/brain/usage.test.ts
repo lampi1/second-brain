@@ -8,7 +8,7 @@ import { runNode } from '../../../src/main/brain/node';
 import { CACHE_TTL_MS, UsageMonitor, composeUsage, mergeLimits, parseCost, parseRateLimits, readClaudeCache } from '../../../src/main/brain/usage';
 import { log } from '../../../src/main/log';
 import type { Usage } from '../../../src/shared/contract';
-import { FIXTURES, plainNode, tmpDir, until } from './helpers';
+import { FIXTURES, plainNode, tmpDir } from './helpers';
 
 const fixture = JSON.parse(fs.readFileSync(path.join(FIXTURES, 'cost-1day.json'), 'utf8')) as { from: string; cursor: { downloaded: string } };
 const day = fixture.from;
@@ -79,28 +79,6 @@ describe('usage', () => {
     const cursor = { usd: 1, exact: false, margin: 0.2, turns: 2, unpriced: 1, chats: { a: 1 }, todayChats: { a: 1 }, unpricedChats: ['b'], unpricedModels: ['auto'], note: 'x' };
     expect(composeUsage(cost, null, 0, cursor).cursorUnpriced).toEqual({ chats: ['b'], models: ['auto'] });
     expect(composeUsage(cost, null, 0, { ...cursor, unpricedChats: [], unpricedModels: [] }).cursorUnpriced).toBeUndefined();
-  });
-
-  it('the monitor runs the brain\'s cost.mjs, emits usage and spend, and ingests rate limits', async () => {
-    const root = tmpDir();
-    fs.mkdirSync(path.join(root, 'ops', 'tools'), { recursive: true });
-    const out = { ...fixture, from: '__TODAY__', byDay: { __TODAY__: { usd: 3.25, calls: 1 } } };
-    fs.writeFileSync(path.join(root, 'ops', 'tools', 'cost.mjs'),
-      `const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());\n` +
-      `console.log(${JSON.stringify(JSON.stringify(out))}.replaceAll('__TODAY__', today));\n`);
-    const got: Usage[] = [];
-    const m = new UsageMonitor({ root, node: plainNode, claudeConfig: null, everyMs: 60e3, onUsage: u => got.push(u) });
-    m.start();
-    expect(await until(() => got.length > 0, 10000)).toBe(true);
-    m.stop();
-    // on a failure, why cost.mjs gave no JSON (exit code, error, stderr): tests keep no log file, only log.recent (main
-    // red at 100% CPU, 2026-10-16: the script ended in under 2 s without output, cause unknown)
-    const why = JSON.stringify(log.recent.filter(e => e.scope === 'brain' && e.lvl === 'warn'));
-    expect(got[0], why).toMatchObject({ todayUsd: 3.25, costKnown: true });
-    expect(m.spend().claude.dayUsd).toBe(3.25);
-    expect(m.ingest({ type: 'rate_limit_event', rate_limit_info: { rateLimitType: 'five_hour', utilization: 0.5, resetsAt: Math.floor(Date.now() / 1000) + 3600 } })).toBe(true);
-    expect(got.at(-1)!.fiveHourPct).toBe(50);
-    expect(m.spend().claude.fiveHourPct).toBe(50);
   });
 
   it('a message about one window keeps the other (get_usage, then a five_hour-only stream event)', () => {

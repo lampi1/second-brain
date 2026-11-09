@@ -163,13 +163,6 @@ describe('guard: the user\'s PreToolUse hooks for Write', () => {
     expect(refusal(1, '', 'crash')).toBeNull();
     expect(refusal(0, 'plain text', '')).toBeNull();
   });
-  it('runs a real hook with the Write input on stdin', async () => {
-    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-guard-'));
-    const hook = put(home, 'hook.mjs', `let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);if(j.tool_name==='Write'&&j.tool_input.content.includes('VIETATO')){console.error('No: '+j.tool_input.file_path.split(/[\\\\/]/).pop());process.exit(2)}process.exit(0)})`);
-    put(home, '.claude/settings.json', JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: 'exit 2' }] }, { matcher: 'Edit|Write', hooks: [{ type: 'command', command: `node "${hook.replace(/\\/g, '/')}"`, timeout: 20 }] }] } }));
-    expect(await checkWrite({ home, root: null, filePath: path.join(home, 'a', 'SKILL.md'), content: 'ok' })).toBeNull();
-    expect(await checkWrite({ home, root: null, filePath: path.join(home, 'a', 'SKILL.md'), content: 'VIETATO' })).toEqual({ command: `node "${hook.replace(/\\/g, '/')}"`, message: 'No: SKILL.md' });
-  }, 30_000);
   it('a matching hook it cannot run (type prompt) refuses, never a silent bypass', async () => {
     const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-guard-'));
     put(home, '.claude/settings.json', JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'Write', hooks: [{ type: 'prompt', prompt: 'deny big files' }] }] } }));

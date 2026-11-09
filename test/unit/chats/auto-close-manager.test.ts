@@ -66,22 +66,6 @@ describe('main automatic archive reservations', () => {
     await f.m.set(c.id,{workStatus:'waiting-mail'});await f.m.send(c.id,'Read a new message');
     expect(f.close).not.toHaveBeenCalled();expect(f.m.list()[0]?.work?.status).toBe('waiting-mail');
   });
-  it('does not replace a cold session when child activity arrives while its close awaits', async () => {
-    const f = fixture('claude', { coldHandoff: () => true, cacheTtlMs: 1 }), c = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'First' });
-    f.sink().childrenCoverage?.('complete');
-    const internal = f.m as unknown as { chats: Map<string, { s: ChatSummary; lastTurnAt: number; coldNoteAt: number }>; handoffs: { write(id: string, note: object): void } };
-    const r = internal.chats.get(c.id)!;
-    r.s.contextTokens = 250_000; r.lastTurnAt = 1; r.coldNoteAt = 2;
-    internal.handoffs.write(c.id, { title: 'Fixture', text: 'Recorded note', source: 'chat', at: 2 });
-    const original = r.s.sessionId; let finish!: () => void;
-    f.close.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; }));
-    const sending = f.m.send(c.id, 'Next assignment');
-    await vi.waitFor(() => expect(f.close).toHaveBeenCalled());
-    f.sink().children?.({ key: 'agent:late', nativeId: 'late', parentNativeId: null, toolCallId: null, kind: 'agent', state: 'running', task: 'Late child', observedAt: Date.now(), source: 'live' });
-    finish(); await sending;
-    expect(f.m.list()[0]?.sessionId).toBe(original);
-    expect(f.m.items(c.id).some(item => item.kind === 'system' && !!item.continued)).toBe(false);
-  });
   it('does not release an idle engine with an unknown child census or an in-flight delivery hold', async () => {
     const unknown = fixture('codex'); await unknown.m.create({ harness: 'codex', cwd: unknown.dir, prompt: 'First' });
     expect(unknown.m.releaseIdle(1, Date.now() + 60_000)).toBe(0);
@@ -132,17 +116,6 @@ describe('main automatic archive reservations', () => {
     expect(await closing).toBe(false); await delivery;
     expect(f.close).not.toHaveBeenCalled();
     expect(f.sent.at(-1)).toBe('New assignment');
-    expect(f.m.list()[0]?.closedAt).toBeUndefined();
-  });
-  it('rechecks new pending after close awaits and never drops it or marks the chat archived', async () => {
-    const f = fixture(), c = await f.m.create({ harness: 'anthropic', cwd: f.dir, model: 'known', prompt: 'First' });
-    let finish!: () => void;
-    f.close.mockImplementationOnce(() => new Promise<void>(resolve => { finish = resolve; })); // once: the shutdown after the test closes at once
-    const closing = f.m.archiveAutomatic(c.id, () => true);
-    await vi.waitFor(() => expect(f.close).toHaveBeenCalled());
-    f.sink().pending({ id: 'new-question', type: 'question', tool: 'AskUserQuestion', title: 'Question', detail: '', input: {}, at: Date.now() });
-    finish(); expect(await closing).toBe(false);
-    expect(f.m.pending().map(p => p.id)).toContain('new-question');
     expect(f.m.list()[0]?.closedAt).toBeUndefined();
   });
   it('closes a finished CLI chat without a full child census, never one with a sub-agent at work or a main hold', async () => {

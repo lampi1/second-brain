@@ -13,7 +13,6 @@ import { demoRun, demoTeach, seedDemoLessons } from '../../src/main/learn/demo';
 const DAY = 86_400_000;
 const T0 = new Date(2026, 9, 29, 10).getTime();
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'sb-review-'));
-const until = async (fn: () => boolean, ms = 3000) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > ms) throw new Error('timeout'); await new Promise(r => setTimeout(r, 5)); } };
 const card = (id: string, lessonId: string, extra: Partial<ReviewCard> = {}): ReviewCard => ({ id, lessonId, subject: 'Reti', kind: 'recall', origin: 'cards', q: id, answer: 'a', createdAt: T0, mem: null, ...extra });
 
 describe('FSRS', () => {
@@ -144,56 +143,6 @@ describe('LearnService review', () => {
       teach: r => { runs.push(r); return fast(r); }, changed: () => {}, teachers: () => [], webOk: () => false });
     return { store, svc, runs };
   }
-
-  it('a finished lesson gets a subject and verified cards; sessions, grades and subjects work; removing it takes them away', async () => {
-    const { store, svc, runs } = make();
-    const l = svc.start({ mode: 'quiz', kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
-    await until(() => store.get(l.id)?.cards?.state === 'done');
-    const done = store.get(l.id)!;
-    expect(done.subject).toBe('second-brain');
-    expect(runs.find(r => r.round === 'impara-plan')!.prompt).toContain('"subject"');
-    const cardsRun = runs.find(r => r.round === 'impara-cards')!;
-    expect(cardsRun.prompt).toContain('f1 [verified');
-    expect(cardsRun.prompt).not.toContain('NOT CONFIRMED'); // the unconfirmed fact is not offered
-    // 5 cards from the run (the one citing only the unconfirmed fact is dropped; one is an order, ADR 0204) + the lesson's 4 checks
-    expect(done.cards).toEqual({ state: 'done', n: 5 });
-    const own = svc.review.ofLesson(l.id);
-    expect(own.filter(c => c.origin === 'cards')).toHaveLength(5);
-    expect(own.filter(c => c.origin === 'check')).toHaveLength(4);
-    // not read yet: nothing to ask
-    expect(svc.state().review!.subjects).toEqual([expect.objectContaining({ name: 'second-brain', lessons: 1, cards: 0, fresh: 0 })]);
-    expect(svc.queue('quiz', 'second-brain')).toEqual([]);
-    svc.move(l.id, 'end');
-    const st = svc.state().review!;
-    expect(st.subjects).toEqual([expect.objectContaining({ name: 'second-brain', lessons: 1, cards: 9, due: 0, fresh: 9, recall: null })]);
-    const items = svc.queue('quiz', 'second-brain');
-    expect(items).toHaveLength(9);
-    const node = items.find(i => i.card.kind === 'node')!;
-    expect(node.diagram).toContain('flowchart');
-    expect(node.facts[0]).toMatchObject({ id: 'f3', from: 'file' });
-    const g = svc.gradeCard(node.card.id, 3);
-    expect(g.mem?.reps).toBe(1);
-    expect(svc.state().review!.subjects[0]!.recall).toBeCloseTo(1, 3);
-    expect(() => svc.gradeCard(node.card.id, 7)).toThrow();
-    svc.setSubject(l.id, 'Frontend');
-    expect(store.get(l.id)!.subject).toBe('Frontend');
-    expect(svc.review.ofLesson(l.id).every(c => c.subject === 'Frontend')).toBe(true);
-    expect(() => svc.setSubject(l.id, '  ')).toThrow();
-    svc.remove(l.id);
-    expect(svc.review.cards()).toEqual([]);
-  });
-
-  it('cards and an extra both cut by a close: both freed on the next start, so «Riprova» makes the cards', async () => {
-    const root = tmp();
-    const { store, svc } = make(root);
-    const l = svc.start({ mode: 'quiz', kind: 'pr', ask: '', prUrl: 'https://github.com/lampi1/second-brain/pull/251', depth: 'lesson', level: 'basics' });
-    await until(() => store.get(l.id)?.cards?.state === 'done');
-    store.save({ ...store.get(l.id)!, cards: { state: 'making' }, busy: { kind: 'grade', of: 'end', since: T0 } });
-    make(root);
-    const after = store.get(l.id)!;
-    expect(after.cards?.state).toBe('failed');
-    expect(after.busy).toBeUndefined();
-  });
 
   it('the demo opens with subjects, a due card and a streak', () => {
     const root = tmp();

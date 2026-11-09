@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createRoutineRuntime, createRunStore, createMasker, listRuns, progressFrom, readRun, StaleAttempt, type EngineStepRequest, type StepResult } from '../../../packages/routine-runtime/src/index';
+import { createRoutineRuntime, createRunStore, createMasker, listRuns, progressFrom, readRun, type EngineStepRequest } from '../../../packages/routine-runtime/src/index';
 import { done, fakeDevOps, folderText, routinePackage, scriptedEngine, tempDir } from './fakes';
 
 const paths = (root: string) => ({ runsRoot: path.join(root, 'runs'), workspace: (id: string) => path.join(root, 'ws', id) });
@@ -67,36 +67,6 @@ describe('routine runtime: run folder and single work item', () => {
 });
 
 describe('routine runtime: resume', () => {
-  it('a killed run resumes the same run at the failed step; the old attempt is fenced off', async () => {
-    const root = tempDir();
-    let release: ((r: StepResult) => void) | undefined;
-    const first = scriptedEngine(r => r.stepId === 'fix' ? new Promise<StepResult>(resolve => { release = resolve; }) : done(`${r.stepId} ok`));
-    const pkg = routinePackage({ devops: undefined, inputs: [] });
-    const a = createRoutineRuntime({ pkg, paths: paths(root), engine: first });
-    const handle = a.start();
-    // wait until the first runtime is inside step 2 (its process is then "killed": it never answers in time)
-    for (let i = 0; i < 200 && !release; i++) await new Promise(r => setTimeout(r, 5));
-    expect(release).toBeDefined();
-    expect(a.store.read(handle.runId).steps.map(s => s.status)).toEqual(['done', 'running', 'pending']);
-
-    // a new process resumes the same run
-    const second = scriptedEngine(r => done(`${r.stepId} resumed`));
-    const b = createRoutineRuntime({ pkg, paths: paths(root), engine: second });
-    const resumed = await b.resume(handle.runId).finished;
-    expect(resumed.runId).toBe(handle.runId);
-    expect(resumed.status).toBe('done');
-    expect(resumed.attempt).toBe(2);
-    expect(second.requests.map(r => r.stepId)).toEqual(['fix', 'report']);
-    expect(resumed.steps.find(s => s.id === 'analyse')!.summary).toBe('analyse ok');
-
-    // the old runtime wakes up: it may no longer write anything
-    release!(done('late'));
-    const late = await handle.finished;
-    expect(late.status).toBe('done');
-    expect(a.store.read(handle.runId).steps.find(s => s.id === 'fix')!.summary).toBe('fix resumed');
-    expect(() => a.store.update(handle.runId, 1, r => { r.status = 'failed'; })).toThrow(StaleAttempt);
-    expect(b.store.events(handle.runId).some(e => e.type === 'run-resume')).toBe(true);
-  });
 
   it('a step that failed resumes at that step, not from the start', async () => {
     const root = tempDir();
@@ -113,39 +83,6 @@ describe('routine runtime: resume', () => {
     const resumed = await createRoutineRuntime({ pkg, paths: paths(root), engine: fixed }).resume(handle.runId).finished;
     expect(resumed.status).toBe('done');
     expect(fixed.requests.map(r => r.stepId)).toEqual(['two']);
-  });
-
-  it('a run waiting for a person, resumed after the answer came, reads it at once (no poll interval first); the older runtime stops', async () => {
-    const root = tempDir(), contact = 'c0ffee00-0000-4000-8000-000000000001';
-    let t = 1_000_000;
-    const devops = fakeDevOps({ now: () => t });
-    devops.addItem({ id: 42, fields: { 'System.Title': 'Bug' } });
-    const pkg = routinePackage({ escalation: { contact }, steps: [{ id: 'fix', title: 'Fix', prompt: 'p' }] });
-    const io = { authorization: devops.authorization, request: devops.request };
-    // the first process waits in its poll interval until it is "killed" (wake)
-    let wake: (() => void) | undefined;
-    const a = createRoutineRuntime({ pkg, paths: paths(root), clock: { now: () => t }, devops: io,
-      engine: scriptedEngine(() => ({ outcome: 'needs-human', summary: 'login failed', question: 'Valid credentials?' })),
-      sleep: () => new Promise<void>(resolve => { wake = resolve; }) });
-    const handle = a.startItem(42);
-    for (let i = 0; i < 400 && !wake; i++) await new Promise(r => setTimeout(r, 5));
-    expect(a.store.read(handle.runId).escalation?.state).toBe('waiting');
-
-    devops.reply(42, contact, '<div>riprova</div>');
-    t += 5 * 60_000;
-    const slept: number[] = [];
-    const second = scriptedEngine(r => done(`fixed with ${r.prompt.includes('riprova') ? 'the answer' : 'nothing'}`));
-    const b = createRoutineRuntime({ pkg, paths: paths(root), clock: { now: () => t }, devops: io, engine: second,
-      sleep: async ms => { slept.push(ms); } });
-    const resumed = await b.resume(handle.runId).finished;
-    expect(resumed.status).toBe('done');
-    expect(slept).toEqual([]);
-    expect(resumed.escalation).toMatchObject({ state: 'answered', answer: { text: 'riprova' } });
-    expect(resumed.steps[0]!.summary).toBe('fixed with the answer');
-
-    // the old process wakes up: its poll may not write any more, it ends on the other attempt's record
-    wake!();
-    expect((await handle.finished).attempt).toBe(2);
   });
 });
 

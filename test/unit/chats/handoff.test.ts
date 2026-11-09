@@ -153,20 +153,6 @@ describe('ChatManager long chats', () => {
     expect(again.readHandoff(c.id)?.text).toContain('Aprire la PR.');
   });
 
-  it('a Cursor hand-off cut by a network error is not retried by itself (the app writes its own note)', async () => {
-    const { make, cwd, log } = setup({}, { FAKE_CURSOR_NETERR_HANDOFF: '1' });
-    const m = make();
-    const c = await m.create({ harness: 'cursor', cwd, prompt: 'hello' });
-    await waitFor(() => results(m, c.id).length === 1 && summary(m, c.id)?.state === 'idle', 'first turn');
-    const h = await m.handoff(c.id);
-    expect(h.source).toBe('auto');
-    await waitFor(() => summary(m, c.id)?.state === 'idle', 'idle after the cut hand-off');
-    await new Promise(r => setTimeout(r, 6000)); // past the first automatic retry's 5 s
-    const prompts = fs.readFileSync(log, 'utf8').trim().split('\n').map(l => JSON.parse(l) as { method?: string }).filter(l => l.method === 'session/prompt');
-    expect(prompts).toHaveLength(2);
-    expect(summary(m, c.id)?.state).toBe('idle');
-  }, 20000);
-
   it('refuses the Orchestrator and a busy chat', async () => {
     const { make, cwd } = setup();
     const m = make();

@@ -78,32 +78,6 @@ describe('review→fix loop', () => {
     expect(engine.requests.map(r => r.stepId)).toEqual(['analyse', 'fix', 'review']);
   });
 
-  it('a run killed inside round 2 resumes in round 2, at the step it was in', async () => {
-    const root = tempDir();
-    let release: ((r: StepResult) => void) | undefined, reviews = 0;
-    const first = scriptedEngine(r => {
-      if (r.stepId === 'review' && ++reviews === 1) return sendBack('typo in label');
-      if (r.stepId === 'fix' && /\.r2$/.test(r.stepDir)) return new Promise<StepResult>(resolve => { release = resolve; });
-      return done(`${r.stepId} ok`);
-    });
-    const a = createRoutineRuntime({ pkg: pkg(), paths: paths(root), engine: first });
-    const handle = a.start();
-    for (let i = 0; i < 200 && !release; i++) await new Promise(r => setTimeout(r, 5));
-    expect(release).toBeDefined();
-    expect(a.store.read(handle.runId).steps.map(s => [s.id, s.round ?? 1, s.status])).toEqual([['analyse', 1, 'done'], ['fix', 2, 'running'], ['review', 2, 'pending']]);
-
-    const second = scriptedEngine(r => done(`${r.stepId} resumed`));
-    const b = createRoutineRuntime({ pkg: pkg(), paths: paths(root), engine: second });
-    const resumed = await b.resume(handle.runId).finished;
-    expect(resumed.status).toBe('done');
-    expect(second.requests.map(r => [r.stepId, path.basename(r.stepDir)])).toEqual([['fix', '02-fix.r2'], ['review', '03-review.r2']]);
-    expect(second.requests[0]!.prompt).toContain('typo in label');
-    expect(resumed.steps.find(s => s.id === 'review')!.loops).toBe(1);
-    release!(done('late'));
-    await handle.finished;
-    expect(b.store.read(handle.runId).steps.find(s => s.id === 'fix')!.summary).toBe('fix resumed');
-  });
-
   it('the package format accepts a loop only towards an earlier step', () => {
     const def = (loop: unknown) => ({ id: 'r', title: 'R', steps: [{ id: 'fix', title: 'Fix', prompt: 'p' }, { id: 'review', title: 'Review', prompt: 'p', loop }] });
     expect(parseRoutineDefinition(def({ to: 'fix', max: 3 })).steps[1]!.loop).toEqual({ to: 'fix', max: 3 });

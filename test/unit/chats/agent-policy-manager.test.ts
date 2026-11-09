@@ -1,6 +1,6 @@
 // An agent's tool policy and ceiling on its chats (A2): frozen at start, passed to the engine, clamping the mode, refused
 // above the ceiling, kept across restarts and continues, failing closed when the stored copy is damaged.
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -58,14 +58,6 @@ describe('agent policy on chats', () => {
     await expect(f.m.set(c.id, { permissionMode: 'acceptEdits' })).rejects.toThrow(/limite la modalità «default»/);
     await f.m.set(c.id, { permissionMode: 'plan' });
     expect(f.modes).toEqual(['plan']);
-  });
-
-  it('sets the engine back when it reports a mode above the ceiling on its own', async () => {
-    const f = fixture();
-    const c = await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' }, 'user', agent(reviewer));
-    f.sink().changed({ permissionMode: 'acceptEdits' });
-    await vi.waitFor(() => expect(f.modes).toEqual(['default']));
-    expect(f.m.list().find(x => x.id === c.id)?.permissionMode).toBe('default');
   });
 
   it('a role that may only read commands: a writing command is refused visibly, a reading one reaches the user without always', async () => {

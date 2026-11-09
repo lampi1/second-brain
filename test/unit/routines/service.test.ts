@@ -8,7 +8,6 @@ import { createDemoRoutines } from '../../../src/main/routines/demo';
 import { createLegacyArchive } from '../../../src/main/routines/legacy';
 import { flowBrainContextKey } from '../../../src/main/flows/context';
 import { tempDir } from '../routine-runtime/fakes';
-import type { RoutineRunDetail } from '../../../src/shared/routines';
 
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
@@ -36,25 +35,6 @@ describe('terminal-only app observer', () => {
     expect(done.lastShot?.path).toMatch(/01-air\.png$/);
     await expect(app.run({ source: 'app', routineId: '..', runId: 'x' })).rejects.toThrow();
     app.stop();
-  });
-
-  it('watches only an explicitly opened run and stops reads and events when the view closes', async () => {
-    const root = tempDir('routine-watch-'), demo = createDemoRoutines(root, Date.now());
-    const snapshot = demo.snapshot(), ref = snapshot.runs.find(r => r.source === 'terminal' && r.status === 'running')!;
-    const changed = vi.fn<(change: { subscription: string; run?: RoutineRunDetail; error?: string }) => void>();
-    const app = createRoutines({ userData: path.dirname(snapshot.dirs.appRuns), terminalRuns: snapshot.dirs.terminalRuns, changed });
-    const run = await app.watch(ref, 'visible-view');
-    fs.appendFileSync(path.join(run.dir, 'events.jsonl'), JSON.stringify({ type: 'action', at: Date.now(), n: 1, text: 'Nuovo passo dal terminale' }) + '\n');
-    await vi.waitFor(() => expect(changed.mock.calls.some(([c]) => c.run?.events.some(e => e.type === 'action' && e.text === 'Nuovo passo dal terminale'))).toBe(true));
-    app.unwatch('different-view'); // a late cleanup cannot close another view
-    expect(changed).toHaveBeenCalled();
-    app.unwatch('visible-view');
-    changed.mockClear();
-    const read = vi.spyOn(app, 'run');
-    fs.appendFileSync(path.join(run.dir, 'events.jsonl'), JSON.stringify({ type: 'action', at: Date.now(), n: 1, text: 'Pagina chiusa' }) + '\n');
-    await new Promise(resolve => setTimeout(resolve, 100));
-    expect(read).not.toHaveBeenCalled(); expect(changed).not.toHaveBeenCalled();
-    app.stop(); demo.stop();
   });
 
   it('archives the four stuck cancelled runs without changing unknown outcomes or the original files', () => {

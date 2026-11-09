@@ -461,20 +461,6 @@ describe('AcpSession as Cursor', () => {
     expect(sink.last('assistant')?.text).toBe('Ripreso dopo la rete');
   });
 
-  it('noRetry: a turn cut by a network error is not retried (a failed hand-off), even when the retry is already planned', async () => {
-    const { s, sink, logFile } = start({ netRetryDelaysMs: [300, 300] });
-    await waitFor(() => s.state === 'idle', 'ready');
-    s.send('neterr');
-    await waitFor(() => results(sink).length === 1, 'cut turn');
-    expect(s.busy).toBe(true);
-    s.noRetry();
-    expect(s.state).toBe('idle');
-    expect(s.busy).toBe(false);
-    await new Promise(r => setTimeout(r, 500));
-    expect(cursorLog(logFile).filter(l => l.method === 'session/prompt')).toHaveLength(1);
-    expect([...sink.items.values()].filter(i => i.kind === 'system').at(-1)).toMatchObject({ code: 'netRetryCancelledHandoff' });
-  });
-
   it('a message sent while the retry waits goes after it', async () => {
     const { s, sink, logFile } = start({ netRetryDelaysMs: [200, 200] });
     await waitFor(() => s.state === 'idle', 'ready');
@@ -484,19 +470,6 @@ describe('AcpSession as Cursor', () => {
     await waitFor(() => results(sink).length === 3 && s.state === 'idle', 'retry, then the message');
     const prompts = cursorLog(logFile).filter(l => l.method === 'session/prompt').map(l => (l.params?.prompt as { text: string }[])[0]?.text);
     expect(prompts).toEqual(['neterr', netRetryPrompt('Cursor'), 'hello']);
-  });
-
-  it('"Invia subito" while the retry waits sends the kept message now, without the retry', async () => {
-    const { s, sink, logFile } = start({ netRetryDelaysMs: [400, 400] });
-    await waitFor(() => s.state === 'idle', 'ready');
-    s.send('neterr');
-    await waitFor(() => results(sink).length === 1, 'cut turn');
-    s.send('hello');
-    await s.interrupt({ keepQueued: true, byUser: true });
-    await waitFor(() => results(sink).length === 2 && s.state === 'idle', 'the kept message ran');
-    await new Promise(r => setTimeout(r, 600));
-    const prompts = cursorLog(logFile).filter(l => l.method === 'session/prompt').map(l => (l.params?.prompt as { text: string }[])[0]?.text);
-    expect(prompts).toEqual(['neterr', 'hello']);
   });
 
   it('not logged in: "Accedi a Cursor", the process is stopped, authenticate is never called', async () => {

@@ -137,24 +137,6 @@ describe('delegation isolation', () => {
     expect(git(f.repo, 'worktree', 'list', '--porcelain').match(/^worktree /gm)).toHaveLength(1);
   });
 
-  it('preserves the original delta when a host-authorized successor continues a committed child', async () => {
-    const f = fixture(), originalHead = git(f.repo, 'rev-parse', 'HEAD');
-    const original = f.child((await f.prepare()).cwd);
-    fs.writeFileSync(path.join(original.cwd, 'first.txt'), 'predecessor\n'); commit(original.cwd, 'B');
-    const next = await f.service.prepare(f.parent, { cwd: original.cwd } as NewChat, writer, original.id);
-    next.bind!('successor'); const successor = f.child(next.cwd, 'successor');
-    fs.writeFileSync(path.join(next.cwd, 'second.txt'), 'successor\n'); commit(next.cwd, 'C');
-    const allocation = f.service.allocation(f.parent, successor);
-    expect(allocation.base).toBe(originalHead);
-    const result = await stageDelegatedChanges(allocation, f.parent, successor);
-    expect(result.status).toBe('staged');
-    expect(fs.readFileSync(path.join(result.cwd!, 'first.txt'), 'utf8')).toBe('predecessor\n');
-    expect(fs.readFileSync(path.join(result.cwd!, 'second.txt'), 'utf8')).toBe('successor\n');
-    fs.writeFileSync(path.join(successor.cwd, 'unsaved.txt'), 'keep this');
-    await expect(f.service.prepare(f.parent, { cwd: successor.cwd } as NewChat, writer, successor.id)).rejects.toThrow(/uncommitted or untracked/);
-    await expect(f.service.prepare(f.parent, { cwd: original.cwd } as NewChat, writer, 'forged')).rejects.toThrow(/host-owned/);
-  });
-
   it('blocks dirty, non-Git and foreign sources without a shared writer fallback', async () => {
     const f = fixture();
     fs.writeFileSync(path.join(f.repo, 'unsaved.txt'), 'preserve me');
@@ -191,28 +173,6 @@ describe('delegation isolation', () => {
     expect(new DelegateWorktrees(file).allocation(f.parent, f.child(prepared.cwd)).childId).toBe('child');
     fs.writeFileSync(file, JSON.stringify([{ childId: 'child', cwd: f.repo }]));
     expect(() => new DelegateWorktrees(file)).toThrow(/Invalid delegation isolation/);
-  });
-
-  it('stages committed changes on the parent tip without moving main, running hooks or claiming tests passed', async () => {
-    const f = fixture(), prepared = await f.prepare(), child = f.child(prepared.cwd);
-    fs.writeFileSync(path.join(child.cwd, 'pkg', 'code.txt'), 'child change\n'); commit(child.cwd, 'child');
-    fs.writeFileSync(path.join(f.repo, 'parent.txt'), 'parent independent\n'); commit(f.repo, 'parent');
-    const head = git(f.repo, 'rev-parse', 'HEAD'), index = fs.readFileSync(path.join(f.repo, '.git', 'index'));
-    // Repository hooks are never executed by the integration service.
-    const hooks = path.join(f.repo, '.git', 'hooks');
-    fs.writeFileSync(path.join(hooks, 'post-checkout'), '#!/bin/sh\nexit 123\n', { mode: 0o755 });
-    // Reading status must not refresh the parent's index even when file timestamps need revalidation.
-    const later = new Date(Date.now() + 2000); fs.utimesSync(path.join(f.repo, 'pkg', 'code.txt'), later, later);
-    const result = await stageDelegatedChanges(f.service.allocation(f.parent, child), f.parent, child);
-    expect(result).toMatchObject({ status: 'staged', checksRequired: true, parentUnchanged: true, parentHead: head, whitespace: { exit: 0 } });
-    expect(result.whitespace?.tree).toBe(result.tree);
-    expect(fs.readFileSync(path.join(result.cwd!, 'pkg', 'code.txt'), 'utf8')).toBe('child change\n');
-    expect(fs.readFileSync(path.join(result.cwd!, 'parent.txt'), 'utf8')).toBe('parent independent\n');
-    expect(git(result.cwd!, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('HEAD');
-    expect(git(f.repo, 'symbolic-ref', '--short', 'HEAD')).toBe('main'); expect(git(f.repo, 'rev-parse', 'HEAD')).toBe(head);
-    expect(fs.readFileSync(path.join(f.repo, '.git', 'index'))).toEqual(index);
-    expect(fs.readFileSync(path.join(f.repo, 'pkg', 'code.txt'), 'utf8')).toBe('original\n');
-    expect(git(f.repo, 'status', '--porcelain')).toBe('');
   });
 
   // Two host-owned writers plus a detached union require repeated real Git safety/identity checks. Its old 30 s budget

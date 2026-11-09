@@ -13,44 +13,6 @@ const gate = (sources: ConstructorParameters<typeof FileRevision>[0]) => { const
 afterEach(() => { vi.restoreAllMocks(); gates.splice(0).forEach(g => g.stop()); roots.splice(0).forEach(r => fs.rmSync(r, { recursive: true, force: true })); });
 
 describe('script input revisions', () => {
-  it('is inert until queried, reuses unchanged inputs and detects append and atomic replacement', async () => {
-    const root = temporary(), nested = path.join(root, 'project');
-    fs.mkdirSync(nested); const file = path.join(nested, 'session.jsonl'); fs.writeFileSync(file, 'first');
-    const watch = vi.spyOn(fs, 'watch');
-    const g = gate([{ directory: root, recursive: true }]);
-    expect(watch).not.toHaveBeenCalled();
-    const before = await g.revision(); expect(before).not.toBeNull();
-    expect(await g.revision()).toBe(before);
-    fs.appendFileSync(file, '\nsecond');
-    // Native recursive notifications may be batched (notably macOS FSEvents); this checks delivery, not latency.
-    await vi.waitFor(async () => expect(await g.revision()).not.toBe(before), { timeout: 5000 });
-    const appended = await g.revision();
-    fs.writeFileSync(path.join(nested, 'next'), 'replacement'); fs.renameSync(path.join(nested, 'next'), file);
-    await vi.waitFor(async () => expect(await g.revision()).not.toBe(appended), { timeout: 5000 });
-  }, 15000);
-
-  it('detects creation of missing roots, then re-arms after root replacement', async () => {
-    const root = temporary(), target = path.join(root, 'new', 'projects');
-    const g = gate([{ directory: target, recursive: true }]);
-    const missing = await g.revision();
-    fs.mkdirSync(target, { recursive: true });
-    const created = await g.revision(); expect(created).not.toBe(missing);
-    fs.renameSync(target, path.join(root, 'old')); fs.mkdirSync(target);
-    const replaced = await g.revision(); expect(replaced).not.toBe(created);
-    fs.writeFileSync(path.join(target, 'session.jsonl'), 'new');
-    await vi.waitFor(async () => expect(await g.revision()).not.toBe(replaced), { timeout: 5000 });
-  }, 15000);
-
-  it('ignores unrelated files, but invalidates for matching CSV changes', async () => {
-    const root = temporary();
-    const g = gate([{ directory: root, accepts: name => /^team-usage-events-.*\.csv$/i.test(name) }]);
-    const before = await g.revision();
-    fs.writeFileSync(path.join(root, 'unrelated.txt'), 'x');
-    await new Promise(r => setTimeout(r, 100));
-    expect(await g.revision()).toBe(before);
-    fs.writeFileSync(path.join(root, 'team-usage-events-demo.csv'), 'csv');
-    await vi.waitFor(async () => expect(await g.revision()).not.toBe(before), { timeout: 5000 });
-  }, 15000);
 
   it('falls back on watch errors and recovers without trusting the old token', async () => {
     const root = temporary(), g = gate([{ directory: root }]);

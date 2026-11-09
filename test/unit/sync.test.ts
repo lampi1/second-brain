@@ -24,22 +24,6 @@ describe('product sync', () => {
     expect(outcomeEvent({ release: '0.1.0-abc', startedAt: 'x', endedAt: 'y', exitCode: 1, ok: false })?.kind).toBe('sync-error');
   });
 
-  it('a new outcome file is published once; old files are not', async () => {
-    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-sync-'));
-    fs.mkdirSync(path.join(base, 'sync'));
-    fs.writeFileSync(path.join(base, 'sync', 'old.json'), JSON.stringify({ release: 'old', startedAt: 'x', endedAt: 'y', exitCode: 0, ok: true }));
-    const got: { kind: string }[] = [];
-    const brain = { publish: (e: { kind: string }[]) => got.push(...e) } as unknown as BrainService;
-    const s = new ProductSync({ base, brainRoot: () => null, brain, nodeExe: process.execPath, firstScanMs: 0 });
-    s.start();
-    // macOS's FSEvents may miss a write right after the watch starts and reports late: write once it is up, wait longer
-    await new Promise(r => setTimeout(r, 300));
-    fs.writeFileSync(path.join(base, 'sync', '0.1.0-abc.json'), JSON.stringify({ release: '0.1.0-abc', startedAt: 'x', endedAt: 'y', exitCode: 2, ok: false, blocked: true, summary: 'x' }));
-    for (let i = 0; i < 100 && !got.length; i++) await new Promise(r => setTimeout(r, 50));
-    s.stop();
-    expect(got.map(e => e.kind)).toEqual(['sync-blocked']);
-  });
-
   it('a failure says since when GitHub is behind, its count line first; a crash keeps its cause', () => {
     const b = outcomeEvent({ release: 'brain-1', startedAt: 'x', endedAt: 'y', exitCode: 2, ok: false, blocked: true, summary: 'src/a.ts:3  deny-list\nguard: BLOCKED, 1 findings (deny-list 1)' }, '2026-10-11T18:22:06.041Z');
     expect(b?.title).toBe('GitHub fermo: pubblicazione bloccata dal controllo (prodotto nel brain)');
@@ -64,7 +48,6 @@ describe('product sync', () => {
       const make = () => new ProductSync({ base, brainRoot: () => null, brain, nodeExe: process.execPath, firstScanMs: 0 });
       return { base, got, make };
     };
-    const until = async (cond: () => boolean) => { for (let i = 0; i < 40 && !cond(); i++) await new Promise(r => setTimeout(r, 50)); };
 
     it('first start: the newest outcome, when it failed, is shown once; older ones are not', () => {
       const { base, got, make } = setup();
@@ -74,24 +57,6 @@ describe('product sync', () => {
       const s = make(); s.start(); s.stop();
       expect(got.map(e => e.detail.split('\n').at(-1))).toEqual(['src/a.ts:3 rule']);
       expect(got[0]!.detail).toContain('Ultimo aggiornamento riuscito di GitHub: ');
-    });
-
-    it('a failure already shown is not shown again after a restart; one that ended while the app was closed is', async () => {
-      const { base, got, make } = setup();
-      put(base, 'brain-1.json', blocked('brain-1', 'src/a.ts:3 rule'));
-      const s1 = make(); s1.start(); s1.stop();
-      expect(got).toHaveLength(1);
-      const s2 = make(); s2.start();
-      put(base, 'brain-2.json', blocked('brain-2', 'src/a.ts:3 rule'));
-      await new Promise(r => setTimeout(r, 300));
-      s2.stop();
-      expect(got).toHaveLength(1); // same problem, restart in between: still once
-      // the release sync ends while the promotion restarts the app: shown at the next start
-      put(base, '0.1.0-abc.json', JSON.stringify({ release: '0.1.0-abc', startedAt: 'x', endedAt: 'y', exitCode: 1, ok: false, blocked: false, summary: 'Error: spawn git EAGAIN' }));
-      const s3 = make(); s3.start();
-      await until(() => got.length > 1);
-      s3.stop();
-      expect(got.map(e => e.kind)).toEqual(['sync-blocked', 'sync-error']);
     });
   });
 

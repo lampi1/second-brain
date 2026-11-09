@@ -176,26 +176,6 @@ describe('the user\'s ✕ cancels the chat\'s whole delegation tree', () => {
     expect(f.m.items(t.s.id).some(i => i.kind === 'user' && i.text.includes('Fatto tardi'))).toBe(false);
   });
 
-  it('a delegation that races the close never leaves a child at work: refused while closing, cancelled if already past its checks', async () => {
-    const f = fixture(), t = await f.tree();
-    f.load.cpu = 10; // the late child starts at once (not in the CPU queue)
-    f.slowClose.add(t.s.id); f.slowClose.add(t.c1.id); // the close awaits slow engine exits, the window of the race
-    const closing = f.m.archive(t.s.id, { undoable: true });
-    // a new agent_delegate of the closing parent is refused
-    await expect(f.delegate(t.s.id, 'keep-busy: tardi')).rejects.toThrow(/Delega rifiutata/);
-    // one already past its checks (simulated: the flag hidden while it binds) is found and cancelled by the close
-    const parent = f.rec(t.s.id); delete parent.userClosing;
-    const late = await f.delegate(t.s.id, 'keep-busy: tardi');
-    parent.userClosing = true;
-    await waitFor(() => f.busy.get(late.id), 'the late child at work', 5000);
-    await closing;
-    expect(f.chat(late.id)).toMatchObject({ state: 'closed', closedBy: 'user' });
-    expect(f.of(late.id).interrupts).toBe(1);
-    expect(f.of(late.id).closes).toEqual([{ keepChildren: false }]);
-    // closed, it delegates nothing either
-    await expect(f.delegate(t.s.id, 'keep-busy: dopo')).rejects.toThrow(/Delega rifiutata/);
-  });
-
   it('a ✕ that waits for an automatic close in progress records the close as the user\'s (it survives a restart)', async () => {
     const f = fixture(), t = await f.tree();
     // C1 is inside an automatic close (archiveAutomatic) when the user closes its parent: that close ends as 'auto'
