@@ -70,7 +70,7 @@ describe('autoPermit: the agents\' own settings and hooks (AGENTS.md rule 6)', (
       'cp evil $(echo .gi)t/hooks/x', 'cp evil .g`echo i`t/hooks/x']) expect(run(c), c).toBe('ask');
     // a substitution that builds no path stays free
     for (const c of ['TOKEN=$(az account get-access-token) node run.js', 'echo "built at $(date)" > out.txt', 'Copy-Item C:\\work\\2026\\a.csv .\\out\\',
-      'Write-Output "a`tb" > out.txt', 'echo start; Copy-Item C:\\work\\2026\\a.csv .\\out\\', 'echo hi > C:\\xampp\\htdocs\\x.txt', "echo abc | sed -E 's/(a)(b)/\\2\\1/'",
+      'Write-Output "a`tb" > out.txt', 'echo start; Copy-Item C:\\work\\2026\\a.csv .\\out\\', 'echo hi > C:\\xampp\\htdocs\\x.txt', 'echo hi > C:\\work\\2026\\out.txt', 'echo "build ok" >> C:\\logs\\1.log', "echo abc | sed -E 's/(a)(b)/\\2\\1/'",
       'git commit -m "fix: escape \\1 in echo docs"', "grep -v '^$' a.txt > b.txt", 'docker run -v $(pwd):/app node']) expect(run(c), c).toBe('allow');
     for (const c of ['cp evil $(echo .gi)"t/hooks/pre-commit"', "printf '\\56git/hooks/x' | xargs -I{} cp evil {}", "cp evil $'.git/hooks/pre-commit'",
       'Copy-Item evil .g`it/hooks/pre-commit', 'Copy-Item evil .c`laude/settings.json', `cp evil "$(echo -n -e '\\x2egit/hooks/x')"`, `cp evil "$(echo '\\056git/hooks/x')"`, 'cp evil $".git/hooks/x"',

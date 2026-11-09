@@ -123,7 +123,8 @@ function touchesSettings(req: PermitRequest, command: boolean, cwd: string): boo
     const esc = /\\(x[0-9a-f]{2}|0?[0-7]{1,3}|u[0-9a-f]{4})/i;
     if (/\bprintf\b/i.test(line) && esc.test(line)) return true;
     if (/\becho\b/i.test(line)) {
-      const sep = line.replace(/'[^']*'|"[^"]*"/g, q => q.replace(/[;&|\n]/g, '_'));
+      // a redirect's target (> C:\work\2026\out.txt) is a file name, not an argument
+      const sep = line.replace(/'[^']*'|"[^"]*"/g, q => q.replace(/[;&|\n]/g, '_')).replace(/\d*>>?\s*[^\s;&|'"]+/g, ' ');
       if (/\\[;&|>"'\\]/.test(line) ? esc.test(line) : /\becho\b[^;&|\n]*\\(x[0-9a-f]{2}|0?[0-7]{1,3}|u[0-9a-f]{4})/i.test(sep)) return true;
     }
     if (/[^\s=;&|(<>]\$\(|[^\s=;&|(<>]`[^`]*`|\$\([^)]*\)[^\s;&|)<>:]|`[^`]*`[^\s;&|)<>:]/.test(raw)) return true;
