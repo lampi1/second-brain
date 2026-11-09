@@ -18,7 +18,7 @@ describe('check:branch', () => {
   });
 
   it('runs typecheck, lint, the related unit tests and the publish guard, then records a light check', () => {
-    for (const step of ["'typecheck'", "'lint'", "'--changed'", 'publish-guard.test.ts']) expect(code).toContain(step);
+    for (const step of ["'typecheck'", "'lint'", "'--changed'", 'publish-guard.mjs']) expect(code).toContain(step);
     expect(code).toMatch(/check-pass\.mjs', '--kind', 'light'/);
   });
 

@@ -58,6 +58,8 @@ async function main() {
     ['typecheck', [bin('typescript7', 'bin/tsc'), '-p', 'tsconfig.json', '--noEmit']],
     ['lint', [bin('eslint', 'bin/eslint.js'), '.']],
     ['unit', [vitest, 'run', ...units.flatMap(f => ['--exclude', f])]],
+    // the repo is public product (ADR 0061): every tracked file through the guard (a script: unit tests start no git)
+    ['publish guard', ['scripts/publish-guard.mjs']],
   ]) note(label, await held(label, args));
   note('e2e (parallel)', await e2eDone);
 

@@ -1,6 +1,6 @@
 // `npm run check:branch`, the light check of a branch (ADR 0027): typecheck, lint of the changed files, the unit tests
 // related to the changes (vitest --changed against the merge base with main) and the publish guard on the changed
-// files (test/unit/publish-guard.test.ts with SB_GUARD_FILES). No e2e: since 2026-10-15 the e2e runs only on main, in
+// files (scripts/publish-guard.mjs with SB_GUARD_FILES). No e2e: since 2026-10-15 the e2e runs only on main, in
 // the full `npm run check` (the test lease queued branches for hours behind e2e runs). Green on a clean tree, it
 // records the tip as "tested (light)" through scripts/check-pass.mjs --kind light. The full `npm run check` stays the
 // gate of main and of `npm run promote`: a branch needs only this one to be merged. Used by package.json
@@ -64,11 +64,11 @@ function main() {
   run('readme', 'node', ['scripts/readme-check.mjs', '--base', base]);
   run('doc freshness', 'npx', ['vitest', 'run', ...DOC_TESTS]);
   // the repo is public product (ADR 0061): the guard on the changed files (seconds, same scanner and deny list as the
-  // hooks), so a private name blocks the branch, not main after the merge (2026-10-14); the full scan is in `npm run check`
+  // hooks), so a private name blocks the branch, not main after the merge (2026-10-14); the full scan is in `npm run check` (same script, every file)
   const present = changed.filter(f => fs.existsSync(f));
   if (present.length) {
     process.env.SB_GUARD_FILES = present.join('\n');
-    run('publish guard', 'npx', ['vitest', 'run', 'test/unit/publish-guard.test.ts']);
+    run('publish guard', 'node', ['scripts/publish-guard.mjs']);
   }
   run('record', 'node', ['scripts/check-pass.mjs', '--kind', 'light']);
 }
