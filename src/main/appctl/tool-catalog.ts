@@ -75,6 +75,7 @@ export const TOOL_CATALOG: Readonly<Record<string, ToolInfo>> = {
   agent_report: t('chat', 'Your one final result for the chat that started you.'),
   agent_close_child: t('chat', 'Close one of your delegated chats and its tree, never while it waits for the user.'),
   agent_wake_later: t('chat', 'Schedule your own next turn in 1-1440 minutes (CI, a deploy, a slow job), kept across restarts; minutes 0 cancels.'),
+  relay_question: t('chat', 'Orchestrator only: bring a work chat\'s Sì/No question to the user in its own conversation (Remote Control, phone, PC); the user\'s «sì» / «no» there answers it.'),
   agent_assign_task: t('chat', 'Continue your direct child with a separate task run; the user\'s entries there you have not seen come back to you.'),
   agent_task_events: t('chat', 'The ordered user instructions for your direct child (optional before reassigning it).'),
   agent_integrate_child: t('chat', 'Stage one finished child\'s commits in a fresh detached worktree.'),

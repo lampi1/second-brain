@@ -104,6 +104,7 @@ row and its line here in the same change.
 | `agent_report` | work chats | Your one final result for the chat that started you; `amends: true` corrects it (at most 2 corrections, ADR 0224). |
 | `agent_close_child` | work chats | Close one of your delegated chats and its tree, never while it waits for the user. |
 | `agent_wake_later` | work chats | Schedule your own next turn in 1-1440 minutes (CI, a deploy, a slow job), kept across restarts; minutes 0 cancels. |
+| `relay_question` | Orchestrator | Bring a work chat's Sì/No question to the user in its own conversation (Remote Control, phone, PC); the user's «sì» / «no» there answers it. |
 | `agent_assign_task` | work chats | Continue your direct child with a separate task run; the user's entries there you have not seen come back to you. |
 | `agent_task_events` | work chats | The ordered user instructions for your direct child (optional before reassigning it). |
 | `agent_integrate_child` | work chats | Stage one finished child's commits in a fresh detached worktree. |

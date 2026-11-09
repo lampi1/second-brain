@@ -23,6 +23,9 @@ const LAMPO_HIDDEN: ReadonlySet<string> = new Set([...APP_CHAT_TOOLS, 'brain_scr
 /** the maintenance research's tools (ADR 0132, 0195, brainmodel/research-tools.ts) */
 const RESEARCH_TOOLS: ReadonlySet<string> = new Set(['maintenance_pack', 'maintenance_propose', 'maintenance_role_trial']);
 
+/** chat-endpoint tools only the Orchestrator uses (single entry, ADR 0239: chats/relay.ts) */
+const ORCHESTRATOR_ONLY: ReadonlySet<string> = new Set(['relay_question']);
+
 /** the app's yes/no question (chats/ask-tool.ts): only for a chat whose engine has no question tool of its own */
 const ASK_TOOL = 'ask_user';
 
@@ -31,7 +34,7 @@ export const toolShownToUnknown = (tool: string): boolean => !RESEARCH_TOOLS.has
 
 /** A waiting engine launched for a role: what that role's root chat would see (it lists tools once, at start). */
 export function toolShownToWarm(warm: NonNullable<WarmLaunch['view']>, tool: string): boolean {
-  return !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && (tool !== 'agent_ask_parent' || !!warm.child) && !PLAN_TOOLS.has(tool) && !RESEARCH_TOOLS.has(tool) && tool !== ASK_TOOL;
+  return !ORCHESTRATOR_ONLY.has(tool) && !(DELEGATING_ONLY.has(tool) && warm.launches?.length === 0) && (tool !== 'agent_ask_parent' || !!warm.child) && !PLAN_TOOLS.has(tool) && !RESEARCH_TOOLS.has(tool) && tool !== ASK_TOOL;
 }
 
 /** A chat of the app: `launches` = the roles it may launch (undefined = unknown); `appAsks` = its engine has no
@@ -42,6 +45,7 @@ export function toolShownToChat(s: Pick<ChatSummary, 'research' | 'isOrchestrato
   if (s.research) return RESEARCH_TOOLS.has(tool) || (!LAMPO_HIDDEN.has(tool) && !tool.startsWith('agent_'));
   if (RESEARCH_TOOLS.has(tool)) return false;
   if (s.isOrchestrator) return !ORCHESTRATOR_HIDDEN.has(tool);
+  if (ORCHESTRATOR_ONLY.has(tool)) return false;
   // Flash starts no work (ADR 0105): no mail to other chats, no delegation, no report, no saved script
   if (s.quick) return !LAMPO_HIDDEN.has(tool) && !tool.startsWith('agent_');
   if (tool === 'agent_ask_parent' && !s.parentId) return false;

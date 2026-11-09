@@ -7,7 +7,7 @@ import { app, powerMonitor, powerSaveBlocker, safeStorage, shell } from 'electro
 import os from 'node:os';
 import { LearningReviewService } from './brainmodel/learning-review';
 import { replayExecutor } from './brainmodel/replay-executor';
-import type { ChatSummary, CliStatus, Harness } from '../shared/contract';
+import type { ChatSummary, CliStatus, EventMap, Harness } from '../shared/contract';
 import { engineStatuses } from './cli';
 import { engineReadiness } from './engines/readiness';
 import { engineInfos, engineOf, enginePathsFromEnv, priceEnginesOf } from './engines/registry';
@@ -73,6 +73,7 @@ import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { Workflows } from './workflows/service';
 import { WorkDriver } from './workflows/driver';
 import { WakeLater } from './chats/wake-later';
+import { QuestionRelay } from './chats/relay';
 import { CoordinationStore } from './coordination/store';
 import { createRoutines } from './routines/service';
 import { devopsPatFromConnectors, devopsPatFromCursorConfig } from './routines/secret-fill';
@@ -655,6 +656,17 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const wakeLater = new WakeLater({ file: path.join(ctx.userData, 'wake-later.json'), chats: () => manager.list(),
     send: (chatId, text) => manager.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }) });
   addChatTools([wakeLater.tool()]);
+  // single entry (ADR 0239): a work chat's Sì/No question goes to the user through the Orchestrator's conversation, and
+  // the user's own «sì» / «no» there (PC, phone, Remote Control) answers it
+  const relay = new QuestionRelay({ chats: () => manager.list(), pending: () => manager.pending(), items: id => manager.items(id),
+    answer: (chatId, requestId, a, by) => manager.answer(chatId, requestId, a, by) });
+  addChatTools([relay.tool()]);
+  ctx.emitter.tap((channel, payload) => {
+    if (channel !== 'chat:item') return;
+    const { chatId, item, replace } = payload as EventMap['chat:item'];
+    if (replace || item.kind !== 'user' || item.from || !manager.list().find(c => c.id === chatId)?.isOrchestrator) return;
+    void relay.userSaid(chatId, item.text, item.via === 'phone' ? 'phone' : undefined);
+  });
   const workDriverTimer = prodPollers ? setInterval(() => {
     try { wakeLater.tick(); workDriver.tick(); } catch (e) { log.warn('workflows', 'approved-work check failed', { cause: errText(e), hint: 'the next minute retries' }); }
   }, 60_000) : null;
