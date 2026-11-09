@@ -107,5 +107,17 @@ export const memoryIt = {
   'mm.clean.errors': 'Gli errori ricorrenti', 'mm.clean.errorsText': 'Quando correggi un agente l’errore viene registrato; quelli che si ripetono diventano regole.',
   'mm.clean.skills': 'Le skill utili e inutili', 'mm.clean.skillsText': 'Per ogni skill: quante volte è servita, quanto bene e quando l’ultima volta.',
   'mm.clean.facts': 'Le curiosità', 'mm.clean.factsText': 'Il ricordo più usato, il giorno con più errori, la skill dimenticata.',
+  // how well the launch memory finds the right fact (ADR 0235, RecallCheckCard in MemoryInsights.tsx)
+  'mm.recall': 'Quanto ritrova la memoria',
+  'mm.recallLead': (p: { k: number }) => `Quando parte un ruolo riceve al massimo ${p.k} fatti scelti per il suo compito. Qui: quante volte il fatto giusto c’è.`,
+  'mm.recallHelp': (p: { k: number }) => `Per ogni fatto scritto da un run, il compito di quel run fa da domanda: il fatto è ritrovato se è tra i primi ${p.k} del suo ruolo e progetto. «Solo parole» è come sceglie oggi l’avvio; «Parole + significato» aggiunge il modello locale e5, come fa memory_recall. Zero token, niente scritto, l’avvio non cambia. I casi favoriscono le parole: un fatto è spesso scritto con le parole del suo compito.`,
+  'mm.recallWords': 'Solo parole (oggi)', 'mm.recallHybrid': 'Parole + significato',
+  'mm.recallOf': (p: { n: number; of: number }) => `${p.n} su ${p.of}`,
+  'mm.recallFind': (p: { only: number; back: number }) => p.only ? `Il significato ritrova ${p.only} fatti che le parole perdono${p.back ? `, e ne perde ${p.back} che le parole trovano` : ''}.` : `Il significato non ritrova niente in più delle parole${p.back ? ` e ne perde ${p.back}` : ''}.`,
+  'mm.recallMissed': 'Persi dalle parole, trovati dal significato',
+  'mm.recallGoal': 'Compito', 'mm.recallFact': 'Fatto',
+  'mm.recallFew': (p: { n: number; min: number }) => `Servono almeno ${p.min} fatti scritti da un run per misurare: ora ${p.n}.`,
+  'mm.recallBusy': 'Calcolo il significato con il modello locale…',
+  'mm.recallNoModel': 'Il modello locale non è pronto: per ora solo le parole.',
   // the one-click maintenance (ADR 0132, 0153)
 };

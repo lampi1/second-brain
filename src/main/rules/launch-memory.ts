@@ -23,22 +23,32 @@ function quoteLaunchMemory(r: MemoryRecord): string {
     ...(r.verification ? { verification: { sourceEventId: r.verification.sourceEventId, sourceRunId: r.verification.sourceRunId, evidence: r.verification.evidence } } : {}) });
 }
 
+/** The facts a launch may load (ADR 0150): confirmed ones, and proposed ones not tied to one case that contradict,
+ *  replace or repeat no confirmed one and were not taken back by the user's Annulla. Shared with recall-check.ts. */
+export function launchCandidates(rows: readonly MemoryRecord[]): MemoryRecord[] {
+  const confirmed = rows.filter(r => r.status === 'confirmed');
+  const waiting = (r: MemoryRecord) => r.status === 'proposed' && !memoryWorth(r.subject, r.predicate, r.value).specific && !memoryConflicts(rows, r).length
+    && !r.transitions?.at(-1)?.reason?.endsWith(':undone') && !confirmed.some(c => c.memoryId === r.supersedes || sameMemoryFact(c, r));
+  return rows.filter(r => r.status === 'confirmed' || waiting(r));
+}
+
+/** The launch's ranking: shared words weighted by rarity (IDF), confirmed first on ties; facts sharing no word are left
+ *  out. The order selectLaunchMemory fills its budget in, and the "words" side of recall-check.ts (ADR 0235). */
+export function rankByWords(candidates: readonly MemoryRecord[], query: string): { r: MemoryRecord; score: number }[] {
+  const q = words(query.slice(0, 16000));
+  const rows = candidates.map(r => ({ r, words: words(`${r.subject} ${r.predicate} ${r.value}`) }));
+  const frequencies = new Map([...q].map(word => [word, rows.filter(row => row.words.has(word)).length]));
+  return rows.map(row => ({ r: row.r, score: [...q].reduce((sum, word) => sum + (row.words.has(word)
+    ? Math.log(1 + rows.length / (frequencies.get(word) ?? 1)) : 0), 0) }))
+    .filter(row => row.score > 0).sort((a, b) => b.score - a.score || Number(b.r.status === 'confirmed') - Number(a.r.status === 'confirmed') || b.r.observedAt.localeCompare(a.r.observedAt) || a.r.memoryId.localeCompare(b.r.memoryId));
+}
+
 /** No model calls or fallback to the entire archive. Missing task context loads no facts; recall stays available.
  *  Scope and current confirmation are filtered before scoring. Every fact, including confirmed/security-related
  *  ones, shares the same hard budget. Actual policy is supplied by the host's rules and role instructions. */
 export function selectLaunchMemory(root: string, scope: MemoryScope, query = '', budgetTokens = LAUNCH_MEMORY_TOKENS): LaunchMemory {
-  const rows = scopedMemory(root, scope), q = words(query.slice(0, 16000));
-  // facts need no approval (ADR 0150): a proposed one that is not tied to one case, contradicts, replaces or repeats no
-  // confirmed one and was not taken back by the user's Annulla counts too, until maintenance saves it
-  const confirmed = rows.filter(r => r.status === 'confirmed');
-  const waiting = (r: MemoryRecord) => r.status === 'proposed' && !memoryWorth(r.subject, r.predicate, r.value).specific && !memoryConflicts(rows, r).length
-    && !r.transitions?.at(-1)?.reason?.endsWith(':undone') && !confirmed.some(c => c.memoryId === r.supersedes || sameMemoryFact(c, r));
-  const candidates = rows.filter(r => r.status === 'confirmed' || waiting(r))
-    .map(r => ({ r, words: words(`${r.subject} ${r.predicate} ${r.value}`) }));
-  const frequencies = new Map([...q].map(word => [word, candidates.filter(row => row.words.has(word)).length]));
-  const ranked = candidates.map(row => ({ r: row.r, score: [...q].reduce((sum, word) => sum + (row.words.has(word)
-    ? Math.log(1 + candidates.length / (frequencies.get(word) ?? 1)) : 0), 0) }))
-    .filter(row => row.score > 0).sort((a, b) => b.score - a.score || Number(b.r.status === 'confirmed') - Number(a.r.status === 'confirmed') || b.r.observedAt.localeCompare(a.r.observedAt) || a.r.memoryId.localeCompare(b.r.memoryId));
+  const rows = scopedMemory(root, scope);
+  const candidates = launchCandidates(rows), ranked = rankByWords(candidates, query);
   // Character-based token estimate, consistent with scoped recall. Non-finite budgets fail closed, never unbounded.
   let left = Number.isFinite(budgetTokens) ? Math.max(0, Math.min(Math.floor(budgetTokens), LAUNCH_MEMORY_TOKENS)) * 3 : 0;
   const chosen: string[] = [];

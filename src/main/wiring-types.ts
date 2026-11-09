@@ -13,6 +13,7 @@ import type { WorktreePool } from './agents/worktree-pool';
 import type { LifecycleApi } from './agents/lifecycle-api';
 import type { MorningService } from './morning/service';
 import type { MemoryService } from './rules/memory-service';
+import type { RecallCheck } from './rules/recall-check';
 import type { EnginesApi } from './engines/service';
 import type { RecordingStore } from './recordings/store';
 import type { LearnService } from './learn/service';
@@ -50,6 +51,8 @@ export interface Wired {
   /** what «Abilita controllo livello e performance» costs a day and when its last nightly batch ran (ADR 0203) */
   judging?: { estimate: (now: number) => JudgingEstimate };
   memoryReview?: MemoryService;
+  /** how well the launch memory finds the right fact (ADR 0235), Memoria → Statistiche; a fixed card in the demo */
+  recallCheck?: Pick<RecallCheck, 'state'>;
   learningReview?: LearningReviewService;
   /** the brain's saved queries (ADR 0124): Memoria → Script & Query, queries:* IPC */
   queries?: BrainQueries;
