@@ -13,7 +13,6 @@ export const homeEn: typeof homeIt = {
   
   
   'home.works': 'What works', 
-  'home.rulesReading': (p: { days: number; pending: number }) => `Rules whose error did not recur within ${p.days} observed days; ${p.pending} cannot yet be assessed. This does not establish causal success.`,
   
   
   

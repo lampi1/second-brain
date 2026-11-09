@@ -1,10 +1,7 @@
-// German (de-AT) UI texts of the Memoria statistics and the "Manutenzione" button: the same keys as memory.it.ts (typed by
+// German (de-AT) UI texts of the "Manutenzione" button: the same keys as memory.it.ts (typed by
 // it), spread into de.ts.
 import type { memoryIt } from './memory.it';
 type N = { n: number };
-type FP = Record<string, string | number>;
-const runs = (n: number | string | undefined) => (Number(n) === 1 ? '1 Run' : `${n} Runs`);
-const times = (n: number | string | undefined) => (Number(n) === 1 ? 'einmal' : `${n}-mal`);
 export const memoryDe: typeof memoryIt = {
   'mm.maint.button': 'Wartung', 'mm.maint.running': 'Wartung läuft…',
   'mm.maint.helpTitle': 'Was die Wartung macht',
@@ -29,11 +26,16 @@ export const memoryDe: typeof memoryIt = {
   'mm.done.label': 'Wartung fertig', 'mm.done.title': 'Dein Brain ist in Ordnung',
   'mm.done.open': 'Memoria öffnen',
 
-  'mm.openFile': 'Datei öffnen', 'mm.openNamed': (p: { name: string }) => `Datei von ${p.name} öffnen`,
-  'mm.lines': 'Zeilen',
-  'mm.daysAgo': (p: N) => (p.n === 1 ? 'seit 1 Tag unverändert' : `seit ${p.n} Tagen unverändert`),
-  'mm.kind.agent': 'Gedächtnis der Agenten', 'mm.kind.errors': 'Fehler', 'mm.kind.journal': 'Tagebuch', 'mm.kind.knowledge': 'Wissen',
-  'mm.weekday.0': 'Montag', 'mm.weekday.1': 'Dienstag', 'mm.weekday.2': 'Mittwoch', 'mm.weekday.3': 'Donnerstag', 'mm.weekday.4': 'Freitag', 'mm.weekday.5': 'Samstag', 'mm.weekday.6': 'Sonntag',
+  
+  
+  
+
+  
+  
+  
+  
+  
+  
 
   
   
@@ -41,75 +43,29 @@ export const memoryDe: typeof memoryIt = {
   
   
   
-
-  'mm.facts': 'Schon gewusst?', 'mm.factsLead': 'Die kuriosesten Dinge, die die Zahlen deines Gedächtnisses verraten.',
-  'mm.factsHelp': 'Jetzt aus den Brain-Dateien und den erfassten Runs berechnet, ohne Modelle oder Tokens. Sie erscheinen nur, wenn die Zahlen etwas aussagen (zum Beispiel ein mindestens zweimal wiederholter Fehler).',
-  'mm.fact.how': 'Woher weiß ich das?',
-  'mm.fact.repeat.k': 'Wiederkehrender Fehler', 'mm.fact.repeat': (p: FP) => `„${p.label}“ ist **${times(p.n)}** passiert (${p.agents}). Erster Kandidat für eine Regel.`,
-  'mm.fact.repeat.help': 'Die größte Gruppe in ai-errors.md: Zeilen mit gleichem Typ und Bereich oder mit mindestens 3 wichtigen gemeinsamen Wörtern.',
-  'mm.fact.longest.k': 'Das längste Gedächtnis', 'mm.fact.longest': (p: FP) => `**${p.name}** merkt sich **${p.n} Dinge**: mehr als jeder andere Agent.`,
-  'mm.fact.longest.help': 'Die Listenzeilen von agents/<role>/memory.md, pro Rolle.',
-  'mm.fact.oldest.k': 'Die älteste Erinnerung', 'mm.fact.oldest': (p: FP) => `Seit **${p.date}** merkt sich ${p.owner}: „${p.text}“.`,
-  'mm.fact.oldest.help': 'Die Zeile mit dem ältesten Datum im Gedächtnis der Agenten und im gemeinsamen.',
-  'mm.fact.unusedSkills.k': 'Vergessene Skills', 'mm.fact.unusedSkills': (p: FP) => `**${p.n} von ${p.total} Skills** haben nie einem Run gedient: ${p.names}.`,
-  'mm.fact.unusedSkills.help': 'Skills, die mindestens 14 Tage alt sind und die kein Run hatte. Vielleicht sagen Name oder Beschreibung nicht, wann man sie nutzt, oder sie werden nicht mehr gebraucht.',
-  'mm.fact.bestSkill.k': 'Der nützlichste Skill', 'mm.fact.bestSkill': (p: FP) => `**${p.name}**: ${runs(p.n)}, erfolgreich in **${p.pct} %** der geprüften.`,
-  'mm.fact.bestSkill.help': 'Unter den „nützlichen“ Skills (mindestens 2 bekannte Ergebnisse und 70 % erfolgreich) der mit den meisten Runs.',
-  'mm.fact.weekday.k': 'Der schwarze Tag', 'mm.fact.weekday': (p: FP) => `**${p.day}** ist der Tag mit den meisten Fehlern: **${p.n}**.`,
-  'mm.fact.weekday.help': 'Fehler aus ai-errors.md, gezählt nach dem Wochentag ihres Datums. Nur angezeigt bei mindestens 4 Fehlern und einem Tag vor den anderen.',
-  'mm.fact.topWord.k': 'Das Wort der Fehler', 'mm.fact.topWord': (p: FP) => `„**${p.word}**“ kommt in den erfassten Fehlern **${times(p.n)}** vor.`,
-  'mm.fact.topWord.help': 'Das häufigste Wort mit mindestens 4 Buchstaben im Text der Fehler, gängige Wörter ausgenommen.',
-  'mm.fact.errorsTrend.k': 'Wie es läuft', 'mm.fact.errorsTrend': (p: FP) => (Number(p.now) < Number(p.before) ? `Die Fehler sinken: **${p.now}** in den letzten 30 Tagen, ${p.before} in den 30 davor.` : Number(p.now) > Number(p.before) ? `Die Fehler steigen: **${p.now}** in den letzten 30 Tagen, ${p.before} in den 30 davor.` : `Die Fehler sind stabil: **${p.now}** in den letzten 30 Tagen, wie in den 30 davor.`),
-  'mm.fact.errorsTrend.help': 'Datierte Fehler der letzten 30 Tage gegenüber denen der 30 Tage davor.',
-  'mm.fact.duplicates.k': 'Duplikate', 'mm.fact.duplicates': (p: FP) => (Number(p.n) === 1 ? '**1 Erinnerung** steht gleich bei mehreren Agenten: „Duplikate zusammenführen“ legt sie einmal ins gemeinsame Gedächtnis.' : `**${p.n} Erinnerungen** stehen gleich bei mehreren Agenten: „Duplikate zusammenführen“ legt sie einmal ins gemeinsame Gedächtnis.`),
-  'mm.fact.duplicates.help': 'Gleiche Zeilen (ohne Datum, Groß-/Kleinschreibung und Satzzeichen) im Gedächtnis von zwei oder mehr Agenten.',
-  'mm.fact.silent.k': 'Agenten ohne Erinnerungen', 'mm.fact.silent': (p: FP) => (Number(p.n) === 1 ? `**1** Agent hat noch nichts geschrieben: ${p.names}.` : `**${p.n}** Agenten haben noch nichts geschrieben: ${p.names}.`),
-  'mm.fact.silent.help': 'Rollen ohne agents/<role>/memory.md. Kein Problem: sie schreiben es, wenn sie etwas lernen.',
-  'mm.fact.busiestDay.k': 'Der reichste Tag', 'mm.fact.busiestDay': (p: FP) => `Am **${p.date}** ist das Gedächtnis um **${p.n} Zeilen** gewachsen: Rekord.`,
-  'mm.fact.busiestDay.help': 'Der Tag mit den meisten neuen Zeilen in allen Gedächtnisdateien, Fehler und Tagebuch inklusive. Eine Zeile ohne Datum zählt am Tag, an dem sich ihre Datei geändert hat.',
-
-  'mm.growth': 'Wie das Gedächtnis wächst',
-  'mm.growthHelp': 'Neue Zeilen pro Woche (ab Montag), nach Art, in den letzten 12 Wochen. Das Datum ist das am Zeilenanfang; eine Zeile ohne Datum zählt in der Woche, in der ihre Datei zuletzt geändert wurde. Das Tagebuch zählt jede Zeile jedes Tages.',
-  'mm.growthFind': (p: { n: number; weeks: number }) => `${p.n} neue Zeilen in den letzten ${p.weeks} Wochen.`,
-  'mm.growthNone': 'Keine neue Zeile in den letzten 12 Wochen.',
-  'mm.perAgent': 'Zeilen pro Agent',
-  'mm.perAgentHelp': 'Die Listenzeilen im Gedächtnis jedes Agenten (agents/<role>/memory.md). Agenten ohne die Datei werden nicht angezeigt.',
-  'mm.perAgentFind': (p: { name: string; n: number; silent: number }) => `${p.name} merkt sich am meisten (${p.n} Zeilen)${p.silent ? `; ${p.silent} Agenten haben noch kein Gedächtnis` : ''}.`,
-  'mm.perAgentEmpty': 'Noch kein Agent hat sein Gedächtnis geschrieben.',
   
-  'mm.skills': 'Nützliche und nutzlose Skills',
-  'mm.skillsLead': (p: { useful: number; weak: number; unused: number; total: number }) => `Von ${p.total} Skills: ${p.useful} nützlich, ${p.weak} zu überprüfen, ${p.unused} nie genutzt.`,
-  'mm.skillsEmpty': 'Noch kein Skill im Brain.',
-  'mm.skillsHelp': 'Für jeden Brain-Skill die erfassten Runs, die ihn hatten (beim Start oder von der Engine geladen), und wie sie ausgingen. Ein Ergebnis zählt nur, wenn es bekannt ist: Erfolg, teilweise oder Fehlschlag, entschieden von dir oder einem Review.',
-  'mm.col.skill': 'Skill', 'mm.col.skillHelp': 'Der Name des Skills: Ein Klick öffnet seine SKILL.md.',
-  'mm.col.verdict': 'Urteil', 'mm.col.verdictHelp': 'Nützlich: mindestens 5 geprüfte Ergebnisse und 70 % erfolgreich (ein Teilerfolg zählt halb). Zu überprüfen: mindestens 5 geprüfte und unter 50 %. Unklar: dazwischen. Wenig Daten: weniger als 5 geprüfte Ergebnisse. Nie genutzt: kein Run seit mindestens 14 Tagen. Neu: jünger als 14 Tage.',
-  'mm.col.uses': 'Runs', 'mm.col.usesHelp': 'Wie viele Runs den Skill hatten.',
-  'mm.col.success': 'Erfolgreich', 'mm.col.successHelp': 'Erfolgreiche Runs von den Runs mit bekanntem Ergebnis (Erfolg, teilweise oder Fehlschlag).',
-  'mm.col.last': 'Zuletzt genutzt', 'mm.col.lastHelp': 'Der Start des letzten Runs, der ihn hatte.',
-  'mm.col.agents': 'Agenten', 'mm.col.agentsHelp': 'Wie viele Agenten ihn angeben: Sie bekommen ihn in jedem Run.',
-  'mm.verdict.useful': 'Nützlich', 'mm.verdict.mixed': 'Unklar', 'mm.verdict.weak': 'Zu überprüfen', 'mm.verdict.few': 'Wenig Daten', 'mm.verdict.unused': 'Nie genutzt', 'mm.verdict.new': 'Neu',
-  'mm.successTitle': (p: { ok: number; n: number }) => `${p.ok} erfolgreich von ${p.n} mit bekanntem Ergebnis`,
-  'mm.stale': 'Veraltete Dateien', 'mm.staleLead': (p: { days: number }) => `Gedächtnisdateien, seit ${p.days} Tagen oder länger unverändert: noch wahr?`,
-  'mm.staleHelp': (p: { days: number }) => `Gedächtnisdateien (ohne Tagebuch: vergangene Tage veralten nicht), zuletzt vor ${p.days} Tagen oder länger geändert, älteste zuerst.`,
-  'mm.staleEmpty': (p: { days: number }) => `Keine Datei seit ${p.days} Tagen unverändert: das Gedächtnis ist frisch.`,
+  
+  
+  
+  
+  
 
-  'mm.clean.title': 'Das Gedächtnis ist noch leer',
-  'mm.clean.lead': 'Das Brain ist neu: diese Seite füllt sich, während die Agenten arbeiten. Das wird hier erscheinen.',
-  'mm.clean.lines': 'Das Gedächtnis der Agenten', 'mm.clean.linesText': 'Jeder Agent schreibt eine Zeile, wenn er etwas lernt: du siehst es Woche für Woche wachsen.',
-  'mm.clean.errors': 'Wiederkehrende Fehler', 'mm.clean.errorsText': 'Wenn du einen Agenten korrigierst, wird der Fehler erfasst; die, die sich wiederholen, werden zu Regeln.',
-  'mm.clean.skills': 'Nützliche und nutzlose Skills', 'mm.clean.skillsText': 'Für jeden Skill: wie oft er gedient hat, wie gut und wann zuletzt.',
-  'mm.clean.facts': 'Kuriose Fakten', 'mm.clean.factsText': 'Die meistgenutzte Erinnerung, der Tag mit den meisten Fehlern, der vergessene Skill.',
+  
+  
+  
+  
+  
+  
+  
+  
+  
+
+  
+  
+  
+  
   // how well the launch memory finds the right fact (ADR 0235, RecallCheckCard in MemoryInsights.tsx)
-  'mm.recall': 'Wie gut das Gedächtnis findet',
-  'mm.recallLead': (p: { k: number }) => `Beim Start bekommt eine Rolle höchstens ${p.k} Fakten für ihre Aufgabe. Hier: wie oft der richtige Fakt dabei ist.`,
-  'mm.recallHelp': (p: { k: number }) => `Für jeden Fakt, den ein Run geschrieben hat, ist die Aufgabe dieses Runs die Frage: Der Fakt gilt als gefunden, wenn er unter den ersten ${p.k} seiner Rolle und seines Projekts ist. «Nur Wörter» ist die heutige Auswahl beim Start; «Wörter + Bedeutung» nimmt das lokale e5-Modell dazu, wie memory_recall. Null Tokens, nichts geschrieben, der Start bleibt gleich. Die Fälle begünstigen Wörter: Ein Fakt steht oft in den Wörtern seiner Aufgabe.`,
-  'mm.recallWords': 'Nur Wörter (heute)', 'mm.recallHybrid': 'Wörter + Bedeutung',
-  'mm.recallOf': (p: { n: number; of: number }) => `${p.n} von ${p.of}`,
-  'mm.recallFind': (p: { only: number; back: number }) => p.only ? `Die Bedeutung findet ${p.only} Fakten, die Wörter verfehlen${p.back ? `, und verfehlt ${p.back}, die Wörter finden` : ''}.` : `Die Bedeutung findet nicht mehr als Wörter${p.back ? ` und verfehlt ${p.back}` : ''}.`,
-  'mm.recallMissed': 'Von Wörtern verfehlt, von der Bedeutung gefunden',
-  'mm.recallGoal': 'Aufgabe', 'mm.recallFact': 'Fakt',
-  'mm.recallFew': (p: { n: number; min: number }) => `Zum Messen braucht es mindestens ${p.min} von Runs geschriebene Fakten: jetzt ${p.n}.`,
-  'mm.recallBusy': 'Berechne die Bedeutung mit dem lokalen Modell…',
-  'mm.recallNoModel': 'Das lokale Modell ist nicht bereit: vorerst nur Wörter.',
+  
+  
   // the one-click maintenance (ADR 0132, 0153)
 };

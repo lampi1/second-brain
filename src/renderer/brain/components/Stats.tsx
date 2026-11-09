@@ -1,8 +1,7 @@
 // The pieces that make a number or an error useful (ADR 0037): Reading, the one-line plain-Italian reading of a number
 // against its previous period (arrow + words, the tone only as a hint: the words say it); Help, a "?" that opens a
 // detailed explanation (the app's HelpTip, wide); ErrorPatterns, the recurring AI errors of ai-errors.md grouped by pattern, each with
-// count, last seen, areas, the chats it came from ("Apri" when the chat is in the app), the rule born from it and its
-// outcome, the last 7 days against the 7 before, and the discussion bar. Lines whose type cannot be read are one group,
+// count, last seen, areas, the chats it came from ("Apri" when the chat is in the app; no rule line since ADR 0248), the last 7 days against the 7 before, and the discussion bar. Lines whose type cannot be read are one group,
 // "Formato non riconosciuto", with the raw lines visible (never a bare dash); patterns seen once and patterns quiet for
 // 30 days are one line each: nothing to act on there. Used by pages/Qualita.tsx and pages/Costi.tsx.
 import { useContext, type ReactNode } from 'react';
@@ -15,9 +14,9 @@ import { trend, typeLabel, type ErrorGroup, type ErrorPatterns as Patterns, type
 import type { Quote } from '../lib/discuss';
 import { DiscussBar, DiscussContext } from './Discuss';
 import { useAppChats } from '../lib/app-chats';
-import { Pill, type Navigate, type Tone } from './ui';
+import { Pill, type Navigate } from './ui';
 import { HelpTip } from '../../components/HelpTip';
-import { t as tr, type TextKey } from '../../i18n';
+import { t as tr } from '../../i18n';
 
 const ARROW = { su: '↑', giu: '↓', uguale: '→' } as const;
 /** "↓ in calo: 3 errori questa settimana contro 7" */
@@ -44,11 +43,6 @@ export function chatFor(name: string, chats: ChatSummary[] | null): ChatSummary 
   return chats.find(c => norm(c.title) === n || norm(chatName(c)) === n) ?? (n === 'orchestrator' ? chats.find(c => c.isOrchestrator) ?? null : null);
 }
 
-const STATUS: Record<string, { label: TextKey; tone: Tone }> = {
-  tornato: { label: 'brainText.stats.status.tornato', tone: 'bad' }, 'non-tornato': { label: 'brainText.stats.status.nonTornato', tone: 'good' },
-  'troppo-presto': { label: 'brainText.stats.status.presto', tone: '' }, 'senza-tipo': { label: 'brainText.stats.status.senzaTipo', tone: 'warn' },
-};
-const statusLabel = (s: string) => { const k = STATUS[s]?.label; return k ? tr(k) : undefined; };
 const when = (g: ErrorGroup) => `${fmt.day(g.last)}${g.lastTime ? ` ${g.lastTime}` : ''}`;
 const list = (xs: [string, number][]) => xs.slice(0, 4).map(([a, n]) => `${a} (${n})`).join(', ');
 const quiet = (g: ErrorGroup) => g.week === 0 && g.prevWeek === 0;
@@ -58,7 +52,6 @@ const weekTrend = (g: ErrorGroup): Trend => (quiet(g)
 
 /** The quote a pattern's discussion starts from: every number the card shows. */
 export function patternQuote(g: ErrorGroup): Quote {
-  const r = g.rules[0];
   return {
     id: `err|${g.type}`, what: 'errore', title: typeLabel(g.type), source: 'ai-errors.md',
     facts: [
@@ -67,14 +60,12 @@ export function patternQuote(g: ErrorGroup): Quote {
       g.areas.length ? tr('brainText.stats.fact.areas', { list: list(g.areas) }) : '',
       g.chats.length ? tr('brainText.stats.fact.chats', { list: list(g.chats) }) : '',
       g.latest.detto || g.latest.vero ? tr('brainText.stats.fact.latestClaim', { when: when(g), said: g.latest.detto, real: g.latest.vero }) : tr('brainText.stats.fact.latestRaw', { when: when(g), line: g.latest.riga ?? '' }),
-      r ? tr('brainText.stats.fact.rule', { rule: r.rule, status: r.status ? String(statusLabel(r.status)) : '' }) : tr('brainText.stats.fact.noRule'),
     ],
   };
 }
 
 function Pattern({ g, chats }: { g: ErrorGroup; chats: ChatSummary[] | null }) {
   const bridge = useContext(DiscussContext);
-  const r = g.rules[0];
   return (
     <li className="bx-card bx-pattern" data-testid="bx-q-pattern" data-type={g.type}>
       <div className="bx-pattern-head">
@@ -104,9 +95,6 @@ function Pattern({ g, chats }: { g: ErrorGroup; chats: ChatSummary[] | null }) {
             })}
             {g.chats.length > 3 && <span className="muted">{tr('brainText.stats.more', { n: g.chats.length - 3 })}</span>}
           </dd></>}
-        <dt>{tr('brainText.stats.rule')}</dt>
-        <dd>{r ? <>{r.status && <Pill tone={STATUS[r.status]?.tone}>{statusLabel(r.status)}</Pill>} <span title={r.rule}>{short(r.rule, 110)}</span></>
-          : <span className="muted">{tr('brainText.stats.noRuleYet')}</span>}</dd>
         {g.byOwner > 0 && <><dt>{tr('brainText.stats.byYou')}</dt><dd>{tr('brainText.common.ofCount', { n: g.byOwner, of: g.count })}</dd></>}
       </dl>
       <DiscussBar topic={{ kind: 'quote', quote: patternQuote(g) }} testId="bx-q-pattern-discuss" />
@@ -123,7 +111,6 @@ export function PatternsHelp() {
       <p><b>{tr('brainText.stats.help.areaB')}</b>{tr('brainText.stats.help.area')}</p>
       <p><b>{tr('brainText.stats.help.byYouB')}</b>{tr('brainText.stats.help.byYou')}</p>
       <p><b>{tr('brainText.stats.help.compareB')}</b>{tr('brainText.stats.help.compare')}</p>
-      <p><b>{tr('brainText.stats.help.ruleB')}</b>{tr('brainText.stats.help.rule')}</p>
       <p><b>{tr('brainText.stats.help.doB')}</b>{tr('brainText.stats.help.do')}</p>
     </Help>
   );

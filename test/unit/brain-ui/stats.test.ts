@@ -1,8 +1,7 @@
 // Unit tests of lib/stats.ts (ADR 0037): the plain-Italian reading of a number against its previous period, the AI
-// errors grouped by pattern (count, weeks, areas, chats, owner, rules from rows and from recurrence.mjs, recurring vs
-// once vs quiet) and the spend of the period before from a 2×days cost answer; plus the quote topic of lib/discuss.ts.
+// errors grouped by pattern (count, weeks, areas, chats, owner, recurring vs once vs quiet; no rules since ADR 0248) and the spend of the period before from a 2×days cost answer; plus the quote topic of lib/discuss.ts.
 import { describe, expect, it } from 'vitest';
-import type { ErrorRow, QRule } from '../../../src/renderer/brain/types';
+import type { ErrorRow } from '../../../src/renderer/brain/types';
 import { errorPatterns, normType, previousSpend, rowType, trend } from '../../../src/renderer/brain/lib/stats';
 import { discussText, ERROR_QUESTION, topicKey, type Topic } from '../../../src/renderer/brain/lib/discuss';
 import { caughtWeeks, type Caught } from '../../../src/renderer/brain/lib/quality';
@@ -35,8 +34,7 @@ describe('errorPatterns', () => {
     row({ data: '2026-10-09', tipo: 'gergo strano' }),
     row({ data: '2026-10-09', tipo: '' }),
   ];
-  const q: QRule[] = [{ date: '2026-09-20', type: 'fatto-non-verificato', area: 'QA', rule: 'rules/qa.md "verifica"', status: 'tornato', ageDays: 23, again: [] }];
-  const p = errorPatterns(rows, q, '2026-10-13', 'Alex');
+  const p = errorPatterns(rows, '2026-10-13', 'Alex');
 
   it('groups by normalized type, busiest week first, with weeks, areas, chats and the owner count', () => {
     expect(p.recurring.map(g => g.type)).toEqual(['fatto-non-verificato', 'regola-ignorata']);
@@ -46,12 +44,7 @@ describe('errorPatterns', () => {
     expect(g.chats[0]).toEqual(['Orchestrator', 2]);
     expect(g.latest.detto).toBe('passato');
   });
-  it('joins the rules of recurrence.mjs (with outcome) and of the rows, newest first', () => {
-    expect(p.recurring[0]!.rules).toEqual([
-      { rule: 'rules/qa.md "screenshot"', status: null, date: '2026-10-03' },
-      { rule: 'rules/qa.md "verifica"', status: 'tornato', date: '2026-09-20' },
-    ]);
-  });
+  it('carries no rule born from a pattern (rules are gone, ADR 0248)', () => expect(p.recurring[0]).not.toHaveProperty('rules'));
   it('folds patterns seen once, quiet for 30 days and rows without a type', () => {
     expect(p.once).toBe(2); // non-capito, gergo-strano
     expect(p.quiet.map(g => g.type)).toEqual(['fuori-ruolo']);
@@ -107,7 +100,7 @@ describe('rowType on off-format lines', () => {
   it('has no type when the line has none: the page groups it as "Formato non riconosciuto" with the line', () => {
     const r = off('2026-10-11 · Orchestrator · app · detto: per la revisione la chat chiede al proprietario di lanciarla · vero: la chat ha i suoi reviewer · visto da: il proprietario');
     expect(rowType(r)).toBe('');
-    const p = errorPatterns([r], [], '2026-10-13', 'proprietario');
+    const p = errorPatterns([r], '2026-10-13', 'proprietario');
     expect(p.unknown).toEqual([r]);
     expect(p.recurring).toEqual([]);
   });
@@ -124,12 +117,3 @@ describe('rowType: more real shapes', () => {
     expect(rowType(off('2026-10-11 · Orchestrator · second-brain app · detto: v1 pronta · vero: no'))).toBe(''));
 });
 
-describe('errorPatterns: a rule written on an alias row', () => {
-  it('goes to the group that wrote it, with the outcome of recurrence.mjs', () => {
-    const rows = [row({ tipo: 'fatto-presunto', regola: 'X' }), row({ tipo: 'fatto-presunto', data: '2026-10-12' }), row({}), row({ data: '2026-10-12' })];
-    const q: QRule[] = [{ date: '2026-10-13', type: 'fatto-non-verificato', area: 'QA', rule: 'X', status: 'troppo-presto', ageDays: 0, again: [] }];
-    const p = errorPatterns(rows, q, '2026-10-13', 'Alex');
-    expect(p.recurring.find(g => g.type === 'fatto-presunto')!.rules).toEqual([{ rule: 'X', status: 'troppo-presto', date: '2026-10-13' }]);
-    expect(p.recurring.find(g => g.type === 'fatto-non-verificato')!.rules).toEqual([]);
-  });
-});

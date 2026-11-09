@@ -27,7 +27,7 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => { await app?.close(); });
 
-test('Qualità: four true metrics with source and dates, out-of-count rows visible, proposals in one row', async () => {
+test('Qualità: three true metrics with source and dates, no rules card (ADR 0248), proposals in one row', async () => {
   await goPage(page, 'qualita');
   const p = page.getByTestId('an-panel-qualita');
   await expect(p.getByTestId('bx-q-trovati')).toBeVisible({ timeout: 30000 });
@@ -39,13 +39,9 @@ test('Qualità: four true metrics with source and dates, out-of-count rows visib
   await expect(caught).toContainText(/Fonte: le tue correzioni.*ai-errors\.md.*dal .* al /);
   await expect(caught).toContainText(/correzioni tue su .* turni: .*«Correggi il pensiero»/);
   await expect(caught.getByTestId('bx-q-trovati-how')).toContainText('Come lo conto');
-  // 2) rules: judged ones only, young ones "troppo presto", rows out of the count said
-  const rules = p.getByTestId('bx-q-tornati');
-  await expect(rules).toContainText('2 su 4');
-  await expect(rules).toContainText('2 regole troppo recenti');
-  await expect(rules.getByTestId('bx-q-fuori')).toContainText('3 illeggibili');
-  await expect(rules.getByTestId('bx-q-regole').locator('li').first()).toContainText('tornato');
-  // 3) PRs held, with why; 4) reopened bugs with who and when
+  // the rules whose error came back left with the rules (ADR 0248)
+  await expect(p.getByTestId('bx-q-tornati')).toHaveCount(0);
+  // 2) PRs held, with why; 3) reopened bugs with who and when
   await expect(p.getByTestId('bx-q-pr')).toContainText('2');
   await expect(p.getByTestId('bx-q-pr-list')).toContainText('test case fallito: Sconto in fattura saldo');
   await expect(p.getByTestId('bx-q-riaperti')).toContainText('su 38 risolti da te (8%)');
@@ -58,8 +54,6 @@ test('Qualità: four true metrics with source and dates, out-of-count rows visib
 
   await caught.getByText('Giorno per giorno').click();
   await expect(caught.getByTestId('bx-q-trovati-days').locator('li').first()).toBeVisible();
-  await rules.getByText('Quali righe').click();
-  await expect(rules).toContainText('«bug-introdotto»');
   await shot(page, 'qualita-dettagli');
 
   await p.getByTestId('bx-q-proposte').getByRole('button', { name: 'Decidi in Memoria' }).click();

@@ -120,13 +120,12 @@ test('Costi: KPIs, savings, charts by day / kind / model / area, chats table; pe
   await expect(p.getByTestId('bx-lead')).toContainText('in 30 giorni');
 });
 
-test('Qualità: four metrics with their source (errors caught, rules, PRs, reopened bugs) and proposals in one row', async () => {
+test('Qualità: three metrics with their source (errors caught, PRs, reopened bugs) and proposals in one row', async () => {
   await open('qualita');
   const p = page.getByTestId('brain-page-andamento');
   await settled();
-  for (const id of ['trovati', 'tornati', 'pr', 'riaperti']) await expect(p.getByTestId(`bx-q-${id}`)).toContainText('Fonte:');
-  await expect(p.getByTestId('bx-q-tornati')).toContainText('2 su 4');
-  await expect(p.getByTestId('bx-q-fuori')).toContainText('7 righe su 49 fuori dal conteggio: 3 illeggibili');
+  for (const id of ['trovati', 'pr', 'riaperti']) await expect(p.getByTestId(`bx-q-${id}`)).toContainText('Fonte:');
+  await expect(p.getByTestId('bx-q-tornati')).toHaveCount(0); // the rules left (ADR 0248)
   // no DevOps in this run: the PRs card says so, the reopened bugs one says the read is off
   await expect(p.getByTestId('bx-q-riaperti')).toContainText('lettura DevOps spenta');
   await expect(p.getByTestId('bx-q-proposte')).toContainText('Proposte di miglioramento: 34');
@@ -138,7 +137,7 @@ test('an old Confronto link opens Andamento on Qualità (the page went, ADR 0201
   await open('confronto');
   const p = page.getByTestId('brain-page-andamento');
   await settled();
-  await expect(p.getByTestId('bx-q-tornati')).toBeVisible();
+  await expect(p.getByTestId('bx-q-trovati')).toBeVisible();
   await expect(page.getByTestId('brain-page-confronto')).toHaveCount(0);
 });
 

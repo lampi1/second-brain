@@ -252,3 +252,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0245](0245-memory-browser.md) Memoria shows the memory outside skills as one searchable shelf — accepted
 - [0246](0246-bash-backslash-writes-refused.md) A Bash command that writes text with backslashes is refused — accepted
 - [0247](0247-standard-delegation-contract.md) One standard delegation contract, in English — accepted
+- [0248](0248-prune-rule-and-note-statistics.md) The statistics of rules and notes leave with them — accepted

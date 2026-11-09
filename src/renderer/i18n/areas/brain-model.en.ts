@@ -42,7 +42,6 @@ export const brainModelEn: typeof brainModelIt = {
   'bm.rules.empty': 'No fixed files in the brain: every chat gets only the app’s fixed rules.',
 
   'bm.mem.title': 'Memory',
-  'bm.mem.entries': (p: N) => (p.n === 1 ? '1 entry' : `${p.n} entries`),
 
   'bm.cls.col.kind': 'Work',
   'bm.cls.kinds': 'Outcomes per kind of work',
@@ -65,7 +64,7 @@ export const brainModelEn: typeof brainModelIt = {
   'bm.card.flip': (p: { name: string }) => `Flip ${p.name}'s card: details and skills`,
   'bm.card.flipBack': (p: { name: string }) => `Back to the front of ${p.name}'s card`,
   'bm.card.skills': 'Skills', 'bm.card.noSkills': 'No declared skills: it works from its role.',
-  'bm.card.memory': 'Memory', 'bm.card.memoryNone': 'empty so far',
+  
   'bm.card.back': 'Back',
   'bm.studio.manage': 'Manage skills',
 };

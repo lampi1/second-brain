@@ -2,7 +2,7 @@
 // it is for, engine and model tier («Modello: alto»), a live status, its level (from the XP of its verified successful runs, ADR 0131,
 // shown beside it: «Lv 7 Praticante · 124 XP», ADR 0100; for a work role, when the nightly review last updated it, ADR 0203) and performance % (a Bayesian estimate of the verdicts weighted by trust and
 // recency, with its ±, the agent's own word excluded, with the verdicts it rests on; main/agents/standing.ts), each with a "?" giving the formula, and four compact run metrics (the success rate among them: verified verdicts only, shared/success.ts, ADR 0186); a click anywhere on the card flips it in 3D (#81)
-// to the back: the model, effort and context window pickers (AgentCardModel.tsx, ADR 0211), the role's instructions, the skills it loads at every launch, its memory, its permissions («Tutto consentito» or how
+// to the back: the model, effort and context window pickers (AgentCardModel.tsx, ADR 0211), the role's instructions, the skills it loads at every launch, its permissions («Tutto consentito» or how
 // far the user narrowed it, with "Modifica permessi" to its permissions card, where its MCP servers are too, ADR 0085,
 // 0086), the run facts, its costs (median per run, per verified success, over how many runs: the only per-agent costs in
 // the app since Costi dropped its per-agent blocks, #125) and "Apri". A second click, or Esc, flips it back; the hidden face is inert, so
@@ -15,7 +15,6 @@ import { completedRuns, type AgentMetrics, type AgentProfile, type AgentStanding
 import { characterOf } from '@shared/characters';
 import { MIN_SUCCESS_SAMPLE, enoughVerdicts } from '@shared/success';
 import { characterTone } from '../lib/character-art';
-import type { MemoryFile } from '@shared/brain-model';
 import { locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentCardModel } from './AgentCardModel';
@@ -124,11 +123,10 @@ function Standing({ id, standing: s, reviewedAt = null }: { id: string; standing
   </div>;
 }
 
-export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, onOpen, onSkill, index = 0, memory = null, reviewedAt = null }: {
+export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, onOpen, onSkill, index = 0, reviewedAt = null }: {
   profile: AgentProfile; metrics?: AgentMetrics; loaded: boolean; engine: string; lastStart: number | null; onOpen: () => void;
   /** when the nightly review last updated its verdicts (ADR 0203); null = not shown */ reviewedAt?: number | null;
   index?: number;
-  /** its own memory file, when it has one */ memory?: MemoryFile | null;
   /** a skill chip on the back: go to that skill */ onSkill?: (name: string) => void;
 }) {
   const [flipped, setFlipped] = useState(false);
@@ -226,7 +224,6 @@ export function AgentCatalogCard({ profile, metrics, loaded, engine, lastStart, 
         <dl>
           {profile.scope === 'role' && <div data-testid={`catalog-perms-${profile.id}`}><dt>{t('perm.card')}</dt><dd><span className="catalog-perms" data-full={perms.full}>{perms.text}</span>
             <button type="button" className="link-btn" onClick={() => go({ page: 'agenti', arg: profile.id, element: PERMISSIONS_ELEMENT })} data-testid={`catalog-perms-edit-${profile.id}`}>{t('perm.card.edit')}</button></dd></div>}
-          <div><dt>{t('bm.card.memory')}</dt><dd>{memory?.entries ? t('bm.mem.entries', { n: memory.entries }) : t('bm.card.memoryNone')}</dd></div>
           <div><dt>{t('catalog.engine')}</dt><dd data-testid={`catalog-engine-${profile.id}`}>{engineModel}</dd></div>
           <div><dt>{t('agentDetail.version')}</dt><dd>{origin} · v{profile.activeVersion}</dd></div>
           <div><dt>{t('catalog.last')}</dt><dd>{last}</dd></div>

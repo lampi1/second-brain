@@ -1,10 +1,10 @@
-// The four numbers of the Qualità page, computed from the brain's ai-errors.md (tables.quality) and the app's own half
-// (/api/quality): corrections the user had to make per 100 turns (ADR 0197), rules whose error came back, PRs held by QA or a build,
-// bugs sent back after his fix. Each result carries the range it covers, so the page can say "dal … al …". Pure (no
+// The three numbers of the Qualità page, computed from the brain's ai-errors.md (tables.quality) and the app's own half
+// (/api/quality): corrections the user had to make per 100 turns (ADR 0197), PRs held by QA or a build, bugs sent back
+// after his fix (the rules whose error came back left with the rules, ADR 0248). Each result carries the range it covers, so the page can say "dal … al …". Pure (no
 // DOM), unit-tested in test/unit/brain-ui/quality.test.ts.
 import { locale } from '../../i18n';
 import type { AppQuality, UserCorrections } from '@shared/contract';
-import type { ErrorRow, ErrQuality, QRule, RuleStatus, SeenDay } from '../types';
+import type { ErrorRow, SeenDay } from '../types';
 import { shiftDay } from './format';
 
 export interface CaughtDay {
@@ -94,22 +94,6 @@ export function caughtPer100(seen: SeenDay[], turns: AppQuality['turns'], corr?:
 
 /** "2,4" per 100 on one day (— when no turns). */
 export const rate = (caught: number, turns: number): string => (turns ? (Math.round((caught / turns) * 1000) / 10).toLocaleString(locale()) : '—');
-
-export interface RuleStats { tornato: number; nonTornato: number; presto: number; senzaTipo: number; judged: number; rules: QRule[] }
-const ORDER: Record<RuleStatus, number> = { tornato: 0, 'non-tornato': 1, 'troppo-presto': 2, 'senza-tipo': 3 };
-/** Rules by outcome; judged = old enough to say (came back, or 14 days passed without). Came back first, newest first. */
-export function ruleStats(q: ErrQuality): RuleStats {
-  const c = (s: RuleStatus) => q.rules.filter(r => r.status === s).length;
-  const rules = [...q.rules].sort((a, b) => ORDER[a.status] - ORDER[b.status] || b.date.localeCompare(a.date));
-  return { tornato: c('tornato'), nonTornato: c('non-tornato'), presto: c('troppo-presto'), senzaTipo: c('senza-tipo'), judged: c('tornato') + c('non-tornato'), rules };
-}
-
-/** Rows of ai-errors.md left out of the type-based counts: unreadable + no valid type, by written label. */
-export function outOfCount(q: ErrQuality): { total: number; unparsed: number; invalid: number; labels: [string, number][] } {
-  const m = new Map<string, number>();
-  for (const r of q.invalid) m.set(r.type, (m.get(r.type) ?? 0) + 1);
-  return { total: q.unparsed.length + q.invalid.length, unparsed: q.unparsed.length, invalid: q.invalid.length, labels: [...m].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])) };
-}
 
 /** Share of his resolutions that came back, as a whole percentage (null when he resolved none). */
 export function reopenShare(r: AppQuality['reopen']): number | null {

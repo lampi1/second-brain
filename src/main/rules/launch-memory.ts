@@ -24,7 +24,7 @@ function quoteLaunchMemory(r: MemoryRecord): string {
 }
 
 /** The facts a launch may load (ADR 0150): confirmed ones, and proposed ones not tied to one case that contradict,
- *  replace or repeat no confirmed one and were not taken back by the user's Annulla. Shared with recall-check.ts. */
+ *  replace or repeat no confirmed one and were not taken back by the user's Annulla. */
 export function launchCandidates(rows: readonly MemoryRecord[]): MemoryRecord[] {
   const confirmed = rows.filter(r => r.status === 'confirmed');
   const waiting = (r: MemoryRecord) => r.status === 'proposed' && !memoryWorth(r.subject, r.predicate, r.value).specific && !memoryConflicts(rows, r).length
@@ -33,7 +33,7 @@ export function launchCandidates(rows: readonly MemoryRecord[]): MemoryRecord[] 
 }
 
 /** The launch's ranking: shared words weighted by rarity (IDF), confirmed first on ties; facts sharing no word are left
- *  out. The order selectLaunchMemory fills its budget in, and the "words" side of recall-check.ts (ADR 0235). */
+ *  out. The order selectLaunchMemory fills its budget in. */
 export function rankByWords(candidates: readonly MemoryRecord[], query: string): { r: MemoryRecord; score: number }[] {
   const q = words(query.slice(0, 16000));
   const rows = candidates.map(r => ({ r, words: words(`${r.subject} ${r.predicate} ${r.value}`) }));

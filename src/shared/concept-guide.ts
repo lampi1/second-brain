@@ -246,8 +246,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Le sezioni dei runbook e delle routine del brain diventano skill e lasciano il file (resta una riga che dice in quale skill sono), con gli script che solo loro nominano, quando avvii tu la migrazione (quella che parte da sola copia soltanto); diari, tabelle di incidenti ed esempi di formato non diventano skill. Un «Annulla» rimette il file com’era, e la sezione non viene più spostata: il resoconto è nella scheda Skill di Memoria.',
         'The brain’s runbook and routines sections become skills and leave their file (a line says which skill holds them), with the scripts only they name, when you start the migration (the one that starts by itself only copies); diary entries, incident tables and format examples never become skills. One \"Undo\" puts the file back as it was, and the section is not moved again: the report is in Memoria’s Skills tab.'),
       // src/renderer/components/brain-model/RulesPage.tsx, src/main/rules/tools.ts topicSkills, src/main/rules/runtime.ts (#366, ADR 0243)
-      b('«Sempre caricato» mostra il nucleo fisso che ogni chat riceve all’avvio (me.md, AGENTS.md, lo stile e le regole fisse dell’app) con i caratteri sul budget; le vecchie regole per argomento non entrano più nelle chat: sono skill (regole-<argomento>). Memoria tiene conoscenza, quello che è successo e una memoria per ruolo, con i numeri (righe per ruolo, crescita per settimana, ricordi più richiamati, file fermi, errori ricorrenti, skill utili o mai usate, curiosità; ogni «?» dice come è calcolato) e ogni file si apre nel visore; Mappa mostra ruolo → skill → regole → memoria.',
-        '"Always loaded" shows the fixed core every chat gets at its start (me.md, AGENTS.md, the style and the app’s fixed rules) with its characters against the budget; the old topic rules no longer enter chats: they are skills (regole-<topic>). Memory holds knowledge, what happened and one memory per role, with the numbers (lines per role, weekly growth, most recalled memories, stale files, recurring errors, useful or never used skills, curious facts; each "?" says how it is computed) and every file opens in the viewer; Map shows role → skills → rules → memory.'),
+      b('«Sempre caricato» mostra il nucleo fisso che ogni chat riceve all’avvio (me.md, AGENTS.md, lo stile e le regole fisse dell’app) con i caratteri sul budget; le vecchie regole per argomento non entrano più nelle chat: sono skill (regole-<argomento>). Memoria → Diario e note tiene Adesso, il diario, le idee, gli errori dell’AI e le note (le statistiche su regole e note non ci sono più) e ogni file si apre nel visore; Mappa mostra ruolo → skill → regole → memoria.',
+        '"Always loaded" shows the fixed core every chat gets at its start (me.md, AGENTS.md, the style and the app’s fixed rules) with its characters against the budget; the old topic rules no longer enter chats: they are skills (regole-<topic>). Memoria → Journal & notes holds Now, the journal, the ideas, the AI’s errors and the notes (the statistics on rules and notes are gone) and every file opens in the viewer; Map shows role → skills → rules → memory.'),
       // src/main/brainmodel/classifiers.ts
       b('Classificatori (una scheda di Andamento), in sola lettura: una scheda per classificatore (tipo di lavoro, modello, stima dai task simili, tipo nel registro dei costi) con cosa decide, i suoi numeri, l’andamento per settimana, quanto ha imparato e una curiosità; un clic apre il dettaglio con la storia e le tabelle (la tabella del modello).',
         'Classifiers (a Trends tab), read only: one card per classifier (kind of work, model, similar-task estimate, cost-ledger kind) with what it decides, its numbers, the weekly trend, how much it has learned and a curious fact; a click opens the detail with the history and the tables (the model table).'),
@@ -447,15 +447,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/lib/correction.ts, src/renderer/components/CorrectThought.tsx (ADR 0058)
       b('«Correggi» su un pezzo di ragionamento manda all’agente la citazione e la tua correzione; è bloccato se c’è una domanda aperta.',
         '"Correct" on a piece of reasoning sends the agent the quote and your fix; it is blocked while a question is open.'),
-      // src/renderer/i18n/areas/home.it.ts home.rulesReading
-      b('Una regola conta come «tenuta» se il suo errore non ricompare nei giorni osservati: non è una prova di causa.',
-        'A rule counts as "holding" if its error does not reappear in the observed days: it is not proof of cause.'),
       // src/main/chats/manager.ts; src/main/agents/run-metrics.ts (ADR 0186: no ai-errors column)
       b('Le run contano correzioni esplicite e riaperture dell’utente dopo un report valido. Le righe di ai-errors.md non entrano nelle metriche delle run: il comando error dell’app non scrive la run.',
         'Runs count explicit corrections and user reopenings after a valid report. ai-errors.md lines are not part of the run metrics: the app’s error command does not write the run.'),
     ],
-    analogy: b('Come il registro degli incidenti di un reparto: si annota, si raggruppa, si scrive una regola e si guarda se l’incidente torna.',
-      'Like a department’s incident log: write it down, group it, write a rule, and watch whether the incident comes back.'),
+    analogy: b('Come il registro degli incidenti di un reparto: si annota, si raggruppa e si guarda se l’incidente torna.',
+      'Like a department’s incident log: write it down, group it, and watch whether the incident comes back.'),
     diagram: { kind: 'cycle', steps: [b('Correzione', 'Correction'), b('ai-errors.md', 'ai-errors.md'), b('Raggruppa', 'Group'), b('Regola', 'Rule'), b('Ricompare?', 'Comes back?')] },
     tech: [
       tech(FILES, 'Nel brain: ai-errors.md (scritto da ops/tools/mem.mjs), politiche lette da /api/improve.', 'In the brain: ai-errors.md (written by ops/tools/mem.mjs), policies read from /api/improve.'),
@@ -712,12 +709,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'memory-hub',
     title: b('La Memoria, un posto solo', 'Memoria, one place'),
-    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Sempre caricato, Script & Query, Idee, Diario e note e Statistiche.',
-      'Memoria is the one place for everything the brain holds: its top is alive (live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Always loaded, Scripts & Queries, Ideas, Journal & notes and Statistics.'),
+    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Sempre caricato, Script & Query, Idee e Diario e note.',
+      'Memoria is the one place for everything the brain holds: its top is alive (live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Always loaded, Scripts & Queries, Ideas and Journal & notes.'),
     points: [
       // src/renderer/lib/memory-hub.ts, src/renderer/actions.ts, src/renderer/components/Sidebar.tsx
-      b('Skill, Regole, Script e Idee non sono più pagine a sé nella barra: sono schede di Memoria (Apprendimento è passato in Andamento); i vecchi link, gli id e i tasti G (G S, G L, G T, G I) aprono la scheda giusta, e «memoria/<scheda>» apre una scheda da un link.',
-        'Skills, Rules, Scripts and Ideas are no longer pages of their own in the rail: they are Memoria tabs (Learning moved to Trends); old links, ids and G keys (G S, G L, G T, G I) open the right tab, and \"memoria/<tab>\" opens a tab from a link.'),
+      b('Skill, Regole, Script e Idee non sono più pagine a sé nella barra: sono schede di Memoria (Apprendimento è passato in Andamento); i vecchi link, gli id e i tasti G (G S, G L, G T, G I) aprono la scheda giusta, e «memoria/<scheda>» apre una scheda da un link. Statistiche non c’è più (contava regole e note): «memoria/statistiche» apre Skill, dove c’è l’uso di ogni skill.',
+        'Skills, Rules, Scripts and Ideas are no longer pages of their own in the rail: they are Memoria tabs (Learning moved to Trends); old links, ids and G keys (G S, G L, G T, G I) open the right tab, and \"memoria/<tab>\" opens a tab from a link. Statistics is gone (it counted rules and notes): \"memoria/statistiche\" opens Skills, where each skill’s use is.'),
       b('La voce Memoria nella barra porta il numero delle proposte che aspettano te; la scheda Proposte le mostra una alla volta.',
         'The Memoria entry in the rail carries the number of proposals waiting for you; the Proposals tab shows them one at a time.'),
       // src/renderer/components/brain-model/ApprovedTab.tsx, src/main/brainmodel/service.ts
@@ -731,9 +728,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
         '\"Journal & notes\" shows the memory outside skills: Now (now.md), the journal days newest first, the ideas, the AI’s errors and the knowledge notes, on shelves. The search finds the documents holding every word (accents and case ignored), says how many lines match and highlights them in the text; \"Open in the viewer\" opens the file. Read-only, lines with credentials stay hidden.'),
       b('La Dashboard non c’è più: i contatori sono in cima a Memoria, il contesto delle chat in Costi, gli errori dell’app e i temi degli errori in Qualità, gli spunti dell’AI in Idee; il resto erano doppioni.',
         'The Dashboard is gone: the counters are at the top of Memoria, the chats’ context in Costi, the app’s errors and the errors’ themes in Quality, the AI’s tips in Ideas; the rest were duplicates.'),
-      // src/renderer/components/brain-model/RecallCheckCard.tsx, src/main/rules/recall-check.ts (ADR 0235)
-      b('In Statistiche, «Quanto ritrova la memoria» dice quante volte il fatto giusto è tra quelli che un ruolo riceve all’avvio: con le sole parole (come oggi) e con parole + significato (il modello locale), più alcuni fatti che le parole perdono. Zero token, non cambia niente.',
-        'In Statistics, \"How well memory finds things\" says how often the right fact is among those a role gets at launch: by words only (as today) and by words + meaning (the local model), plus a few facts the words miss. Zero tokens, it changes nothing.'),
       b('Ogni numero ha un «?» che dice come è calcolato; ogni pannello ha «Discuti», che prepara una bozza all’Orchestrator senza mai inviarla.',
         'Every number has a \"?\" saying how it is computed; every panel has \"Discuss\", which drafts for the Orchestrator and never sends.'),
     ],
@@ -1447,16 +1441,13 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'quality',
     title: b('La pagina Qualità', 'The Quality page'),
-    summary: b('Quattro numeri su come lavora l’IA, ciascuno con la sua fonte, i giorni che copre e il prossimo passo.',
-      'Four numbers on how the AI works, each with its source, the days it covers and the next step.'),
+    summary: b('Tre numeri su come lavora l’IA, ciascuno con la sua fonte, i giorni che copre e il prossimo passo.',
+      'Three numbers on how the AI works, each with its source, the days it covers and the next step.'),
     points: [
       // src/renderer/brain/pages/Qualita.tsx 1); src/main/brain/user-corrections.ts (ADR 0197)
       b('Correzioni che hai dovuto fare tu ogni 100 turni: i tuoi messaggi alle chat dell’app riconosciuti come correzione quando li mandi («Correggi il pensiero», una correzione dopo il report, il rilevatore del brain; mai il testo salvato), più le righe di ai-errors.md viste da te oltre quelle; diviso per i turni finiti negli stessi giorni. «Come lo conto» lo spiega; senza dati dice «nessun dato», mai zero.',
         'Corrections you had to make per 100 turns: your messages to the app’s chats recognised as a correction when sent («Correggi il pensiero», a correction after the report, the brain’s detector; the text is never saved), plus the ai-errors.md rows seen by you beyond those; divided by the turns finished on the same days. «Come lo conto» explains it; with no data it says «no data», never zero.'),
-      // Qualita.tsx 2); ADR 0024
-      b('Regole che hanno funzionato: per ogni regola nata da un errore, se lo stesso tipo di errore è tornato entro 14 giorni. Una regola giovane è «troppo presto».',
-        'Rules that worked: for each rule born from an error, whether the same kind of error came back within 14 days. A young rule is "too early".'),
-      // Qualita.tsx 3) 4); src/main/brain/quality.ts
+      // Qualita.tsx 2) 3); src/main/brain/quality.ts
       b('PR ferme per una build o un QA fallito, e bug risolti che sono tornati aperti (da Azure DevOps, in sola lettura).',
         'PRs held by a failed build or QA, and resolved bugs sent back to open (from Azure DevOps, read only).'),
       // Qualita.tsx: patterns (ADR 0037)

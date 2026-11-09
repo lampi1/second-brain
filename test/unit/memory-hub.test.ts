@@ -4,7 +4,7 @@ import { DEFAULT_TAB, HUB_PAGES, HUB_TABS, hubArg, hubRedirect, parseHubArg, pic
 
 describe('the Memoria hub tabs', () => {
   it('keeps the tabs in the agreed order', () => {
-    expect(HUB_TABS).toEqual(['proposte', 'approvate', 'skill', 'regole', 'script', 'idee', 'file', 'statistiche']);
+    expect(HUB_TABS).toEqual(['proposte', 'approvate', 'skill', 'regole', 'script', 'idee', 'file']);
     expect(DEFAULT_TAB).toBe('proposte');
   });
 
@@ -14,6 +14,7 @@ describe('the Memoria hub tabs', () => {
     expect(parseHubArg('Regole')).toEqual({ tab: 'regole', rest: null });
     expect(parseHubArg('queries')).toEqual({ tab: 'script', rest: null });
     expect(parseHubArg('script/a/b')).toEqual({ tab: 'script', rest: 'a/b' });
+    expect(parseHubArg('statistiche')).toEqual({ tab: 'skill', rest: null }); // gone (ADR 0248): skill use is in Skill
   });
 
   it('falls back to the default tab', () => {

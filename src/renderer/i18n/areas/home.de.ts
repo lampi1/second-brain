@@ -13,7 +13,6 @@ export const homeDe: typeof homeIt = {
   
   
   'home.works': 'Was funktioniert', 
-  'home.rulesReading': (p: { days: number; pending: number }) => `Regeln, deren Fehler innerhalb von ${p.days} beobachteten Tagen nicht wiederkam; ${p.pending} sind noch nicht bewertbar. Das belegt keinen ursächlichen Erfolg.`,
   
   
   

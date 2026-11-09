@@ -42,7 +42,6 @@ export const brainModelDe: typeof brainModelIt = {
   'bm.rules.empty': 'Keine festen Dateien im Brain: jeder Chat bekommt nur die festen Regeln der App.',
 
   'bm.mem.title': 'Gedächtnis',
-  'bm.mem.entries': (p: N) => (p.n === 1 ? '1 Eintrag' : `${p.n} Einträge`),
 
   'bm.cls.col.kind': 'Arbeit',
   'bm.cls.kinds': 'Ergebnisse nach Art der Arbeit',
@@ -65,7 +64,7 @@ export const brainModelDe: typeof brainModelIt = {
   'bm.card.flip': (p: { name: string }) => `Karte von ${p.name} umdrehen: Details und Skills`,
   'bm.card.flipBack': (p: { name: string }) => `Zurück zur Vorderseite der Karte von ${p.name}`,
   'bm.card.skills': 'Skills', 'bm.card.noSkills': 'Keine angegebenen Skills: arbeitet mit seiner Rolle.',
-  'bm.card.memory': 'Gedächtnis', 'bm.card.memoryNone': 'noch leer',
+  
   'bm.card.back': 'Zurück',
   'bm.studio.manage': 'Skills verwalten',
 };

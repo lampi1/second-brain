@@ -1,11 +1,11 @@
 // What makes a number or an error useful (the user, 2026-10-13: "vorrei che gli errori fossero più utili, le stats in
 // generale"; ADR 0037): the AI errors of ai-errors.md grouped by pattern (the official type, written labels normalized
-// as recurrence.mjs does) with count, last seen, areas, chats, the rule born from them and the last 7 days against the
-// 7 before; and the plain-Italian reading of any number against its previous period ("in calo: 3 contro 7"). Computed
+// as recurrence.mjs does) with count, last seen, areas, chats and the last 7 days against the
+// 7 before (no rule born from them: rules are gone, ADR 0248); and the plain-Italian reading of any number against its previous period ("in calo: 3 contro 7"). Computed
 // locally from the brain's tables, zero tokens. Pure (no DOM), unit-tested in test/unit/brain-ui/stats.test.ts; used by
 // pages/Qualita.tsx and pages/Costi.tsx.
 import { t, locale } from '../../i18n';
-import type { ErrorRow, QRule, RuleStatus } from '../types';
+import type { ErrorRow } from '../types';
 import { shiftDay } from './format';
 
 /** The 11 official types of ai-errors.md (its header; recurrence.mjs TYPES). */
@@ -48,8 +48,6 @@ export interface ErrorGroup {
   byOwner: number;
   /** the newest row: what was said and what was true */
   latest: ErrorRow;
-  /** the rules born from this pattern: from the rows ("regola: …") and from recurrence.mjs (with their outcome) */
-  rules: { rule: string; status: RuleStatus | null; date: string }[];
 }
 export interface ErrorPatterns {
   /** patterns seen at least twice, the busiest of the last 7 days first, then the most recent */
@@ -87,7 +85,7 @@ export function rowType(r: ErrorRow): string {
 const stamp = (r: ErrorRow) => `${r.data} ${r.ora && r.ora !== '--:--' ? r.ora : '00:00'}`;
 
 /** ai-errors.md rows grouped by pattern; `today` is the brain's day (YYYY-MM-DD), `owner` the owner's name. */
-export function errorPatterns(rows: ErrorRow[], qRules: QRule[], today: string, owner: string): ErrorPatterns {
+export function errorPatterns(rows: ErrorRow[], today: string, owner: string): ErrorPatterns {
   const wk = shiftDay(today, -6), pwk = shiftDay(today, -13), month = shiftDay(today, -29);
   const byType = new Map<string, ErrorRow[]>();
   const unknown: ErrorRow[] = [];
@@ -97,18 +95,10 @@ export function errorPatterns(rows: ErrorRow[], qRules: QRule[], today: string, 
     if (!t) { unknown.push(r); continue; }
     byType.set(t, [...(byType.get(t) ?? []), r]);
   }
-  const written = new Set(rows.map(r => r.regola.trim()).filter(Boolean));
   const ownerRe = owner ? new RegExp(`^["'«]?${owner.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![a-z])`, 'i') : null;
   const groups: ErrorGroup[] = [...byType].map(([type, rs]) => {
     const sorted = [...rs].sort((a, b) => stamp(a).localeCompare(stamp(b)));
     const latest = sorted.at(-1)!;
-    const fromRows = sorted.filter(r => r.regola.trim()).map(r => ({ rule: r.regola.trim(), status: null as RuleStatus | null, date: r.data }));
-    // recurrence.mjs maps aliases to the official type: a rule goes to the group whose rows wrote it, by type only
-    // when no row names it
-    const fromQ = qRules.filter(q => (rs.some(r => r.regola.trim() === q.rule.trim()) || (!written.has(q.rule.trim()) && normType(q.type) === type))).map(q => ({ rule: q.rule.trim(), status: q.status, date: q.date }));
-    const rules = [...fromQ, ...fromRows.filter(x => !fromQ.some(q => q.rule === x.rule))]
-      .filter((x, i, a) => a.findIndex(y => y.rule === x.rule) === i)
-      .sort((a, b) => b.date.localeCompare(a.date));
     return {
       type, official: (ERROR_TYPES as readonly string[]).includes(type), count: rs.length,
       first: sorted[0]!.data, last: latest.data, lastTime: latest.ora && latest.ora !== '--:--' ? latest.ora : '',
@@ -116,7 +106,7 @@ export function errorPatterns(rows: ErrorRow[], qRules: QRule[], today: string, 
       prevWeek: rs.filter(r => r.data >= pwk && r.data < wk).length,
       areas: tally(rs.map(r => r.area)), chats: tally(rs.map(r => r.chi)),
       byOwner: ownerRe ? rs.filter(r => ownerRe.test(r.visto.trim())).length : 0,
-      latest, rules,
+      latest,
     };
   });
   const many = groups.filter(g => g.count >= 2)

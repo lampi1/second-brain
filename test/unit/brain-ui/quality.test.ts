@@ -1,12 +1,8 @@
 // The Qualità page's numbers (src/renderer/brain/lib/quality.ts) and their normalizers (types.ts): errors caught by the
-// user per 100 turns over the days both sources cover, rules by outcome, rows out of the count, reopened share.
+// user per 100 turns over the days both sources cover, reopened share (rules by outcome left with the rules, ADR 0248).
 import { describe, expect, it } from 'vitest';
-import { caughtPer100, outOfCount, rate, reopenShare, ruleStats, sameChat } from '../../../src/renderer/brain/lib/quality';
-import { normAppQuality, normErrQuality, normTables, type ErrQuality } from '../../../src/renderer/brain/types';
-
-const q = (over: Partial<ErrQuality> = {}): ErrQuality => ({
-  today: '2026-10-13', windowDays: 14, from: '2026-09-30', to: '2026-10-13', lines: 10, typed: 7, unparsed: [], invalid: [], seenByDay: [], totals: [], rules: [], ...over,
-});
+import { caughtPer100, rate, reopenShare, sameChat } from '../../../src/renderer/brain/lib/quality';
+import { normAppQuality, normErrQuality, normTables } from '../../../src/renderer/brain/types';
 
 describe('caughtPer100', () => {
   const seen = [
@@ -73,22 +69,6 @@ describe('caughtPer100', () => {
     expect(rate(3, 70)).toBe('4,3');
     expect(rate(0, 10)).toBe('0');
     expect(rate(2, 0)).toBe('—');
-  });
-});
-
-describe('ruleStats', () => {
-  it('counts by outcome; judged = came back + did not; came back first, newest first', () => {
-    const rule = (date: string, status: ErrQuality['rules'][number]['status']) => ({ date, type: 't', area: 'a', rule: `${status}@${date}`, status, ageDays: 1, again: [] });
-    const s = ruleStats(q({ rules: [rule('2026-10-01', 'non-tornato'), rule('2026-10-02', 'tornato'), rule('2026-10-10', 'troppo-presto'), rule('2026-10-05', 'tornato'), rule('2026-10-11', 'senza-tipo')] }));
-    expect(s).toMatchObject({ tornato: 2, nonTornato: 1, presto: 1, senzaTipo: 1, judged: 3 });
-    expect(s.rules.map(r => r.rule)).toEqual(['tornato@2026-10-05', 'tornato@2026-10-02', 'non-tornato@2026-10-01', 'troppo-presto@2026-10-10', 'senza-tipo@2026-10-11']);
-  });
-});
-
-describe('outOfCount', () => {
-  it('unreadable + no valid type, labels by count', () => {
-    const o = outOfCount(q({ unparsed: [{ date: 'd', line: 'l' }], invalid: [{ date: 'd', type: 'shell', line: '' }, { date: 'd', type: 'bug-introdotto', line: '' }, { date: 'd', type: 'bug-introdotto', line: '' }] }));
-    expect(o).toEqual({ total: 4, unparsed: 1, invalid: 3, labels: [['bug-introdotto', 2], ['shell', 1]] });
   });
 });
 

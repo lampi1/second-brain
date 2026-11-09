@@ -1,12 +1,12 @@
-// Qualità: four numbers about how well the AI works, each with its source and the dates it covers, and the next step
+// Qualità: three numbers about how well the AI works, each with its source and the dates it covers, and the next step
 // (the user, 2026-10-13: "la sezione qualità sia veramente utile e veritiera"; few, true, actionable). 1) corrections he
 // had to make per 100 turns (his messages the app recognised as corrections, «Correggi il pensiero», after-report
-// corrections, ai-errors.md rows he saw: ADR 0197, with «Come lo conto»; ÷ the app's finished turns, same days only); 2) rules whose
-// error came back within 14 days (11 official types, near-duplicates mapped, rows out of the count shown, young rules
-// "troppo presto"); 3) his active PRs held by a failed build or QA; 4) his resolved bugs sent back to an open state.
+// corrections, ai-errors.md rows he saw: ADR 0197, with «Come lo conto»; ÷ the app's finished turns, same days only); 2) his
+// active PRs held by a failed build or QA; 3) his resolved bugs sent back to an open state. The rules whose error came
+// back left with the rules (ADR 0248).
 // The improvement proposals are one row. Praise, notebooks and measures are gone until they have real data. Below the
-// numbers, the errors that repeat, grouped by pattern (ADR 0037: count, last seen, chats, rule, this week against the
-// one before). Every number and every pattern has its reading and the discussion bar ("Discuti", to the Orchestrator).
+// numbers, the errors that repeat, grouped by pattern (ADR 0037: count, last seen, chats, this week against the
+// one before; no rule line since ADR 0248). Every number and every pattern has its reading and the discussion bar ("Discuti", to the Orchestrator).
 // Data: /api/tables (the brain: tables.errors, tables.quality, proposals) and /api/quality (main: turns, PRs, reopened
 // bugs); computations in lib/quality.ts and lib/stats.ts. Since the Dashboard left (ADR 0122), below the patterns: the
 // app's and the tools' own errors of this session (dashboard/AppErrors.tsx) and the errors grouped by meaning
@@ -20,26 +20,21 @@ import { FeedbackOrigins } from '../components/FeedbackOrigins';
 import { useBrain } from '../api';
 import { fmt } from '../lib/format';
 import { ownerOf, short } from '../lib/text';
-import { caughtPer100, caughtWeeks, outOfCount, rate, reopenShare, ruleStats, type Caught } from '../lib/quality';
+import { caughtPer100, caughtWeeks, rate, reopenShare, type Caught } from '../lib/quality';
 import { errorPatterns, trend, type Trend } from '../lib/stats';
 import type { Quote } from '../lib/discuss';
 import { Async, Explain, PageHead } from '../components/States';
 import { HelpTip } from '../../components/HelpTip';
 import { DiscussBar } from '../components/Discuss';
 import { ErrorPatterns, PatternsHelp, Reading } from '../components/Stats';
-import { ExtLink, Pill, Section, type Navigate, type Tone } from '../components/ui';
-import { locale, t as tr, type TextKey } from '../../i18n';
+import { ExtLink, Section, type Navigate } from '../components/ui';
+import { locale, t as tr } from '../../i18n';
 import '../../styles/memory-hub.css';
 // app-side parts (they read the app's live store and actions): loaded when shown, so the brain pages stay importable alone
 const AppErrors = lazy(() => import('../../dashboard/AppErrors').then(m => ({ default: m.AppErrors })));
 const ThemesPanel = lazy(() => import('../../dashboard/Themes').then(m => ({ default: m.ThemesPanel })));
 const ClassifiersSection = lazy(() => import('../../components/brain-model/ClassifiersSection').then(m => ({ default: m.ClassifiersSection })));
 
-const STATUS: Record<string, { label: TextKey; tone: Tone }> = {
-  tornato: { label: 'brainText.qualita.status.tornato', tone: 'bad' }, 'non-tornato': { label: 'brainText.qualita.status.nonTornato', tone: 'good' },
-  'troppo-presto': { label: 'brainText.qualita.status.presto', tone: '' }, 'senza-tipo': { label: 'brainText.qualita.status.senzaTipo', tone: 'warn' },
-};
-const statusLabel = (s: string) => { const k = STATUS[s]?.label; return k ? tr(k) : undefined; };
 const range = (from: string | null | undefined, to: string | null | undefined) => (from && to ? (from === to ? tr('brainText.qualita.rangeOne', { day: fmt.day(from) }) : tr('brainText.qualita.rangeSpan', { from: fmt.day(from), to: fmt.day(to) })) : tr('brainText.qualita.noData'));
 const num = (n: number) => n.toLocaleString(locale());
 
@@ -86,13 +81,11 @@ export function Qualita({ nav, embedded = false }: { arg?: string; nav: Navigate
   const reload = () => { t.reload(); a.reload(true); }; // fresh: main reads DevOps again now (brain/quality.ts)
 
   const caught = q && app ? caughtPer100(q.seenByDay, app.turns, app.corrections, d?.errors ?? []) : null;
-  const rules = q ? ruleStats(q) : null;
-  const out = q ? outOfCount(q) : null;
   const share = app ? reopenShare(app.reopen) : null;
   const weeks = caught ? caughtWeeks(caught) : null;
   const caughtReading = weeks && weeks.cur !== null
     ? trend(weeks.cur, weeks.prev, { what: tr('brainText.qualita.per100'), now: tr('brainText.common.last7'), before: tr('brainText.common.prev7') }) : null;
-  const patterns = d ? errorPatterns(d.errors, q?.rules ?? [], d.today, ownerOf(d.ideas)) : null;
+  const patterns = d ? errorPatterns(d.errors, d.today, ownerOf(d.ideas)) : null;
   const errReading = patterns && patterns.to ? trend(patterns.week, patterns.prevWeek, { what: tr('brainText.qualita.errLogged', { n: patterns.week }), now: tr('brainText.common.last7'), before: tr('brainText.common.prev7') }) : null;
   const applied = d?.proposals.filter(p => p.stato === 'applicata').length ?? 0;
   const measured = d?.proposals.filter(p => /confermata|inutile|peggiorata/.test(p.stato)).length ?? 0;
@@ -100,9 +93,8 @@ export function Qualita({ nav, embedded = false }: { arg?: string; nav: Navigate
   return (
     <>
       <PageHead title={embedded ? undefined : tr('brainText.qualita.title')} at={t.at} onRefresh={reload} refreshing={app?.reopen.refreshing}
-        lead={caught && rules && app ? <>
-          {caught.per100 !== null ? <><b>{tr('brainText.qualita.leadCaught', { n: num(caught.per100) })}</b>{tr('brainText.qualita.leadCaughtRest')}</> : <>{tr('brainText.qualita.leadNotMeasured')}</>};{' '}
-          <b>{tr('brainText.qualita.leadRules', { n: rules.tornato, of: rules.judged })}</b>{tr('brainText.qualita.leadRulesRest')}; {app.prs.at ? <><b>{tr('brainText.qualita.leadPrs', { n: app.prs.blocked.length })}</b></> : <>{tr('brainText.qualita.leadPrsUnread')}</>}; {app.reopen.at ? <><b>{tr('brainText.qualita.leadBugs', { n: app.reopen.bugs.length })}</b>{tr('brainText.qualita.leadBugsRest', { days: app.reopen.days })}</> : <>{tr('brainText.qualita.leadBugsUnread')}</>}.
+        lead={caught && app ? <>
+          {caught.per100 !== null ? <><b>{tr('brainText.qualita.leadCaught', { n: num(caught.per100) })}</b>{tr('brainText.qualita.leadCaughtRest')}</> : <>{tr('brainText.qualita.leadNotMeasured')}</>}; {app.prs.at ? <><b>{tr('brainText.qualita.leadPrs', { n: app.prs.blocked.length })}</b></> : <>{tr('brainText.qualita.leadPrsUnread')}</>}; {app.reopen.at ? <><b>{tr('brainText.qualita.leadBugs', { n: app.reopen.bugs.length })}</b>{tr('brainText.qualita.leadBugsRest', { days: app.reopen.days })}</> : <>{tr('brainText.qualita.leadBugsUnread')}</>}.
         </> : undefined}
         what={tr('brainText.qualita.what')} guide="quality" />
       <Async loading={t.loading && !d} error={d ? null : t.error} onRetry={reload} lines={6} block>
@@ -132,42 +124,6 @@ export function Qualita({ nav, embedded = false }: { arg?: string; nav: Navigate
                       {caught.days.map(x => <li key={x.date}><span className="meta">{fmt.day(x.date)}</span><span className="t">{tr('brainText.qualita.caught.dayRow', { caught: x.caught, turns: fmt.int(x.turns) })}</span><span className="meta">{rate(x.caught, x.turns)} / 100</span></li>)}
                     </ul>
                   </details>
-                )}
-              </Metric>}
-
-              {q && rules && out && <Metric id="tornati" title={tr('brainText.qualita.rules.title')}
-                help={tr('brainText.qualita.rules.help')}
-                value={rules.judged ? tr('brainText.common.ofCount', { n: rules.tornato, of: rules.judged }) : '—'} unit={tr('brainText.qualita.rules.unit', { days: q.windowDays })} tone={rules.tornato ? 'bad' : undefined}
-                quote={rules.judged ? { id: 'q|tornati', what: 'numero', title: tr('brainText.qualita.rules.quoteTitle'), source: tr('brainText.qualita.rules.quoteSource'),
-                  facts: [tr('brainText.qualita.rules.fact', { n: rules.tornato, of: rules.judged, days: q.windowDays, range: range(q.from, q.to) }),
-                    ...rules.rules.filter(r => r.status === 'tornato').slice(0, 4).map(r => tr('brainText.qualita.rules.factFailed', { rule: r.rule, type: r.type, area: r.area, dates: r.again.map(x => fmt.day(x.date)).join(', ') })),
-                    tr('brainText.qualita.rules.factYoung', { n: rules.presto })],
-                  question: tr('brainText.qualita.rules.question') } : undefined}
-                find={<><b>{tr('brainText.qualita.rules.find', { n: rules.presto })}</b>{tr('brainText.qualita.rules.findRest', { days: q.windowDays })}{rules.senzaTipo ? <>{tr('brainText.qualita.rules.findNoType', { n: rules.senzaTipo })}</> : null}.</>}
-                next={rules.tornato ? <>{tr('brainText.qualita.rules.nextRewrite')}</> : out.total ? <>{tr('brainText.qualita.rules.nextFix')}</> : undefined}
-                source={<>{tr('brainText.qualita.rules.source', { range: range(q.from, q.to), days: q.windowDays })}</>}>
-                {out.total > 0 && <p className="bx-warnline" role="note" data-testid="bx-q-fuori">{tr('brainText.qualita.rules.outside', { total: out.total, lines: q.lines, unparsed: out.unparsed, invalid: out.invalid })}</p>}
-                {out.total > 0 && (
-                  <details className="bx-q-more"><summary>{tr('brainText.qualita.rules.whichRows')}</summary>
-                    <ul className="bx-list compact">
-                      {out.labels.map(([l, c]) => <li key={l}><span className="t">«{short(l, 70)}»</span><span className="meta">{tr('brainText.qualita.rules.rowCount', { n: c })}</span></li>)}
-                      {q.unparsed.map((u, i) => <li key={`u${i}`}><span className="meta">{fmt.day(u.date)}</span><span className="t">{short(u.line.replace(/^- \S+ (\S+ )?· /, ''), 110)}</span><span className="meta">{tr('brainText.qualita.rules.unreadable')}</span></li>)}
-                    </ul>
-                  </details>
-                )}
-                {rules.rules.length > 0 && (
-                  <ul className="bx-list" data-testid="bx-q-regole">
-                    {rules.rules.slice(0, 6).map((r, i) => (
-                      <li key={i}><Pill tone={STATUS[r.status]?.tone}>{statusLabel(r.status)}</Pill><span className="t" title={r.rule}>{short(r.rule, 90)}</span><span className="meta">{r.type} · {fmt.day(r.date)}{r.again.length ? tr('brainText.qualita.rules.backOn', { dates: r.again.map(x => fmt.day(x.date)).join(', ') }) : ''}</span></li>
-                    ))}
-                    {rules.rules.length > 6 && (
-                      <li><details className="bx-q-more"><summary>{rules.rules.length === 7 ? tr('brainText.qualita.rules.oneMore') : tr('brainText.qualita.rules.more', { n: rules.rules.length - 6 })}</summary>
-                        <ul className="bx-list compact">
-                          {rules.rules.slice(6).map((r, i) => <li key={i}><Pill tone={STATUS[r.status]?.tone}>{statusLabel(r.status)}</Pill><span className="t" title={r.rule}>{short(r.rule, 90)}</span><span className="meta">{r.type} · {fmt.day(r.date)}</span></li>)}
-                        </ul>
-                      </details></li>
-                    )}
-                  </ul>
                 )}
               </Metric>}
 

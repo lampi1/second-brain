@@ -1,21 +1,20 @@
 // "Memoria" (G Y, ADR 0077, 0122): the one hub of what the brain holds. On top, alive: the live counters (proposals waiting, agents at work, agents waiting for you, changes of the
-// last 24 hours, lines in memory; each eases to its new value) and the latest changes as they happen, then the one
+// last 24 hours; each eases to its new value) and the latest changes as they happen, then the one
 // «Manutenzione» button. Below, a tab bar (pills with a count each, arrows / Home / End, the page arg "memoria/<tab>"
 // so a link opens a tab: lib/memory-hub.ts): Proposte (ProposalsDeck.tsx), Approvate (ApprovedTab.tsx: everything in
 // the brain now, deleted in one click with Annulla), Skill (SkillsPage.tsx), Regole (RulesPage.tsx), Script & Query
 // (brain/pages/Script.tsx + QueriesTab.tsx), Idee (brain/pages/Idee.tsx: yours and the AI's, «Rispolvera»), File (the
-// memory cards below: knowledge, what happened with the error log, the agents' memories) and Statistiche
-// (MemoryInsights.tsx); Apprendimento moved to Andamento (ADR 0202). The old Skill, Regole, Script, Idee and Dashboard
+// «Diario e note»: MemoryBrowser.tsx, ADR 0245); Apprendimento moved to Andamento (ADR 0202); Statistiche is gone (ADR
+// 0248: it counted rules and notes; skill use is in the Skill tab). The old Skill, Regole, Script, Idee and Dashboard
 // pages land here (actions.ts go()). Memory never travels with an exported agent. Rendered by App.tsx
 // PageFrame for 'memoria'. Styles: styles/memory-hub.css (mh-*), memory.css (mm-*).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
 import type { BrainChange } from '@shared/brain-model';
-import { brainBridge, go, goTarget, openFileViewer } from '../../actions';
+import { brainBridge, go, goTarget } from '../../actions';
 import { locale, t, type TextKey } from '../../i18n';
 import { useBrainModel } from '../../store/brain-model';
 import { useApp } from '../../store/store';
 import { ui } from '../../store/ui';
-import { brainFile, memoryEmpty } from '../../lib/memory-view';
 import { HUB_TABS, hubArg, parseHubArg, type HubTab } from '../../lib/memory-hub';
 import { useProposalCount } from '../../lib/proposals';
 import { now as clockNow } from '../../lib/clock';
@@ -27,11 +26,10 @@ import { Idee } from '../../brain/pages/Idee';
 import { ThemesPanel } from '../../dashboard/Themes';
 import { Script } from '../../brain/pages/Script';
 import { useCountUp } from '../../dashboard/parts';
-import { IconBolt, IconCheck, IconChart, IconFile, IconLightbulb, IconShield, IconSparkle, IconTerminal } from '../Icons';
+import { IconBolt, IconCheck, IconFile, IconLightbulb, IconShield, IconSparkle, IconTerminal } from '../Icons';
 import { SkillsPage } from '../SkillsPage';
 import { MaintenancePanel } from './MaintenancePanel';
 import { MaintenanceButton } from './MaintenanceButton';
-import { MemoryInsights, OpenFile } from './MemoryInsights';
 import { RulesPage } from './RulesPage';
 import { ApprovedTab, useApprovedCount } from './ApprovedTab';
 import { ProposalsDeck } from './ProposalsDeck';
@@ -44,15 +42,6 @@ import '../../styles/memory-hub.css';
 
 const num = (n: number) => Math.round(n).toLocaleString(locale());
 const DAY = 24 * 3600e3;
-
-/** A brain with nothing written yet: what the Statistiche tab will show, so it never looks broken. */
-function CleanStart() {
-  return <section className="mm-clean" data-testid="mm-clean">
-    <h2>{t('mm.clean.title')}</h2>
-    <p>{t('mm.clean.lead')}</p>
-    <ul>{(['lines', 'errors', 'skills', 'facts'] as const).map(k => <li key={k}><b>{t(`mm.clean.${k}`)}</b><span>{t(`mm.clean.${k}Text`)}</span></li>)}</ul>
-  </section>;
-}
 
 // ── alive: the live counters and the latest changes ──────────────────────────────────────────────────────────────────
 function Pulse({ k, n, tone, onClick, testId, help }: { k: TextKey; n: number | undefined; tone?: 'amber' | 'green' | 'blue' | 'violet'; onClick?: () => void; testId: string; help: TextKey }) {
@@ -102,7 +91,6 @@ function Hero({ onTab }: { onTab: (tab: HubTab) => void }) {
   const waiting = Object.values(chats).filter(c => !c.closedAt && c.state === 'waiting').length;
   const changes = state?.changes ?? [];
   const today = changes.filter(c => !c.rolledBackAt && nowMs - c.at < DAY).length;
-  const lines = state?.memoryStats?.totals.entries;
   return <header className="mh-hero" data-testid="mh-hero">
     <div className="mh-hero-glow" aria-hidden="true" />
     <div className="mh-hero-top">
@@ -119,7 +107,6 @@ function Hero({ onTab }: { onTab: (tab: HubTab) => void }) {
         <Pulse k="mh.pulse.working" help="mh.pulse.workingHelp" n={working} tone="green" testId="mh-pulse-working" />
         <Pulse k="mh.pulse.waiting" help="mh.pulse.waitingHelp" n={waiting} tone="violet" testId="mh-pulse-waiting" />
         <Pulse k="mh.pulse.changes" help="mh.pulse.changesHelp" n={state ? today : undefined} tone="blue" onClick={() => go({ page: 'andamento', arg: 'apprendimento' })} testId="mh-pulse-changes" />
-        <Pulse k="mh.pulse.lines" help="mh.pulse.linesHelp" n={lines} onClick={() => onTab('file')} testId="mh-pulse-lines" />
       </div>
       <Activity changes={changes} nowMs={nowMs} />
     </div>
@@ -129,7 +116,7 @@ function Hero({ onTab }: { onTab: (tab: HubTab) => void }) {
 // ── the tab bar ─────────────────────────────────────────────────────────────────────────────────────────────────────
 const ICON: Record<HubTab, ReactNode> = {
   proposte: <IconBolt />, approvate: <IconCheck />, skill: <IconSparkle />, regole: <IconShield />, script: <IconTerminal />,
-  idee: <IconLightbulb />, file: <IconFile />, statistiche: <IconChart />,
+  idee: <IconLightbulb />, file: <IconFile />,
 };
 
 function useCounts(): Partial<Record<HubTab, number>> {
@@ -197,8 +184,6 @@ function IdeasTab({ rest }: { rest: string | null }) {
 }
 
 function TabContent({ tab, rest }: { tab: HubTab; rest: string | null }) {
-  const { state } = useBrainModel();
-  const stats = state?.memoryStats;
   switch (tab) {
     case 'proposte': return <div className="mh-deck"><ProposalsDeck /></div>;
     case 'approvate': return <ApprovedTab />;
@@ -207,7 +192,6 @@ function TabContent({ tab, rest }: { tab: HubTab; rest: string | null }) {
     case 'script': return <><Script arg={rest ?? undefined} /><QueriesTab /></>;
     case 'idee': return <IdeasTab rest={rest} />;
     case 'file': return <><MemoryBrowser /><MaintenancePanel kinds={['memory']} testId="bm-maint-memory" /></>;
-    case 'statistiche': return stats ? (memoryEmpty(stats) ? <CleanStart /> : <MemoryInsights s={stats} />) : <p className="bm-empty">{t('bm.loading')}</p>;
   }
 }
 
@@ -218,7 +202,6 @@ export function MemoryPage() {
   const { state, error } = useBrainModel();
   const arg = ui.use(s => s.pageArg);
   const { tab, rest } = useMemo(() => parseHubArg(arg), [arg]);
-  const root = state?.root ?? null;
   // a tab change is a place of its own (back / forward, links); within a tab, its own arg stays as it is
   const onTab = (next: HubTab) => { if (next !== tab) go({ page: 'memoria', arg: hubArg(next) }); };
   // scrolled down (the tab bar stuck on top), a new tab starts from its own top, right under the bar
@@ -234,12 +217,12 @@ export function MemoryPage() {
     const gap = el.getBoundingClientRect().top - bar.getBoundingClientRect().bottom;
     if (gap < 1) frame.scrollTop += gap; // only the hub's own frame scrolls, never the window
   }, [tab]);
-  return <OpenFile.Provider value={rel => openFileViewer(brainFile(root, rel))}><div className="bm-page agent-overview mm-page mh-page" data-testid="bm-memory-page" data-tab={tab}>
+  return <div className="bm-page agent-overview mm-page mh-page" data-testid="bm-memory-page" data-tab={tab}>
     <Hero onTab={onTab} />
     {error && <p role="alert">{error}</p>}
     <TabBar tab={tab} onTab={onTab} />
     <section ref={panel} className="mh-panel" role="tabpanel" id="mh-panel" aria-labelledby={`mh-tab-${tab}`} key={tab} data-testid={`mh-panel-${tab}`}>
       {state && !state.root && !NO_BRAIN_OK.has(tab) ? <p className="bm-empty">{t('bm.noBrain')}</p> : <TabContent tab={tab} rest={rest} />}
     </section>
-  </div></OpenFile.Provider>;
+  </div>;
 }

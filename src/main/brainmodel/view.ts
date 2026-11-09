@@ -7,7 +7,6 @@ import type { BrainModelState, LessonStub, MigrationReport, MaintenanceRun } fro
 import { ChangeLog } from './changes';
 import { claimOf, learningState, measurable, seal, type IntervalCache } from './evidence';
 import { coreSize, readMemory, readRules, readSkills, type SkillDir } from './model';
-import { memoryStats } from './memory-stats';
 import { canUndoMemoryTidy } from '../rules/memory-records';
 import { portableId } from '../agents/pack/flows';
 import { readLocal } from '../agents/local-store';
@@ -31,9 +30,6 @@ export function readBrainView(i: BrainViewInput, changes = new ChangeLog(i.userD
     try { return { ...c, claim: claimOf(c, changes.seedOf(c.id) ?? seal(c, roles), measurableRuns, intervals) }; }
     catch { return c; } // malformed historical evidence must not hide the rest of Memoria
   });
-  let stats: BrainModelState['memoryStats'];
-  if (root) try { stats = memoryStats({ root, memory, profiles: roles, runs, skills, now: i.now }); }
-  catch (e) { log.warn('brain', 'memory statistics failed', { cause: errText(e), hint: 'the Memoria page shows the files without the charts' }); }
   let learning: BrainModelState['learning'];
   try { learning = learningState(claims, roles, runs, i.now, i.lessons); }
   catch (e) { log.warn('brain', 'learning page failed', { cause: errText(e), hint: 'the Apprendimento page shows no curves' }); }
@@ -43,5 +39,5 @@ export function readBrainView(i: BrainViewInput, changes = new ChangeLog(i.userD
     skills, rules: readRules(root), memory, changes: claims, ...(core ? { core } : {}),
     migration: optionalReport<MigrationReport>(path.join(i.userData, 'brain-migration.json')),
     lastRun: optionalReport<MaintenanceRun>(path.join(i.userData, 'brain-maintenance.json')),
-    ...(stats ? { memoryStats: stats } : {}), ...(learning ? { learning } : {}) };
+    ...(learning ? { learning } : {}) };
 }

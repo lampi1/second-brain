@@ -18,7 +18,7 @@ function fixtureBrain(): string {
   return d;
 }
 
-const TABS = ['proposte', 'approvate', 'skill', 'regole', 'script', 'idee', 'file', 'statistiche'] as const;
+const TABS = ['proposte', 'approvate', 'skill', 'regole', 'script', 'idee', 'file'] as const;
 
 async function theme(page: Page, scheme: 'dark' | 'light') {
   await page.evaluate(t => window.sb.invoke('settings:set', { theme: t }), scheme);
@@ -56,7 +56,8 @@ test('Memoria hub: live top, tabs with keys and deep links, old G-keys, trash wi
     // the live top
     const hero = mem.getByTestId('mh-hero');
     await expect(hero.getByTestId('dash-headline')).toHaveCount(0); // the day's sentence went with the Battito (ADR 0201)
-    for (const p of ['proposals', 'working', 'waiting', 'changes', 'lines']) await expect(hero.getByTestId(`mh-pulse-${p}`)).toBeVisible();
+    for (const p of ['proposals', 'working', 'waiting', 'changes']) await expect(hero.getByTestId(`mh-pulse-${p}`)).toBeVisible();
+    await expect(hero.getByTestId('mh-pulse-lines')).toHaveCount(0); // lines in memory went with the notes (ADR 0248)
     await expect(page.getByTestId('bm-maint-now-run')).toHaveCount(1); // «Manutenzione» once, in the head
 
     // the tabs, in order, with arrow keys
@@ -69,13 +70,13 @@ test('Memoria hub: live top, tabs with keys and deep links, old G-keys, trash wi
     await expect(mem).toHaveAttribute('data-tab', 'approvate');
     await expect(page.getByTestId('mh-tab-approvate')).toBeFocused();
     await page.keyboard.press('End');
-    await expect(mem).toHaveAttribute('data-tab', 'statistiche');
-    await expect(page.getByTestId('mh-tab-statistiche')).toBeFocused();
+    await expect(mem).toHaveAttribute('data-tab', 'file');
+    await expect(page.getByTestId('mh-tab-file')).toBeFocused();
     await page.keyboard.press('Home');
     await expect(mem).toHaveAttribute('data-tab', 'proposte');
     await expect(page.getByTestId('mh-tab-proposte')).toBeFocused();
     await page.keyboard.press('ArrowLeft');
-    await expect(mem).toHaveAttribute('data-tab', 'statistiche');
+    await expect(mem).toHaveAttribute('data-tab', 'file');
 
     // the old G-keys land on their tab
     const keys: [Parameters<typeof goPage>[1], string][] = [['skill', 'skill'], ['regole', 'regole'], ['script', 'script'], ['idee', 'idee'], ['dashboard', 'proposte']];
@@ -155,8 +156,8 @@ test('Memoria keeps all tabs and long approved entries readable in a narrow pane
     await row.evaluate(el => { (el.querySelector('code') ?? el).textContent = 'Una regola con un nome molto lungo che deve restare leggibile '.repeat(3); });
     await expect.poll(() => row.evaluate(el => el.scrollWidth <= el.clientWidth + 1 && el.scrollHeight <= el.clientHeight + 1)).toBe(true);
     await shot(page, 'hub-narrow-approved-unclipped');
-    await page.getByTestId('mh-tab-statistiche').click();
-    await expect(mem).toHaveAttribute('data-tab', 'statistiche');
+    await page.getByTestId('mh-tab-file').click();
+    await expect(mem).toHaveAttribute('data-tab', 'file');
     await shot(page, 'hub-narrow-unclipped');
   } finally { await app.close(); }
 });

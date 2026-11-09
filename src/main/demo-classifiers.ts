@@ -7,7 +7,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentRun } from '../shared/agents';
-import type { KindModelCard, MemoryRecallCard } from '../shared/brain-model';
+import type { KindModelCard } from '../shared/brain-model';
 
 const DAY = 86400e3;
 /** a small deterministic generator (LCG): the same sequence every run */
@@ -104,10 +104,3 @@ export function demoKindModel(now: number): KindModelCard {
     altroProposed: { n: 2, of: 4 } };
 }
 
-/** Memoria → Statistiche «Quanto ritrova la memoria» in the demo (ADR 0235): a fixed, plausible card. */
-export function demoRecallCheck(now: number): MemoryRecallCard {
-  return { state: 'ready', at: now, n: 42, k: 8, minCases: 5, words: 29, hybrid: 37, onlyHybrid: 9, onlyWords: 1, missed: [
-    { role: 'artisan', goal: 'Aggiungi la colonna data al report delle fatture', fact: 'invoices: export: always through the accounting workbook, never by hand' },
-    { role: 'scout', goal: 'Trova perché la build si rompe dopo il rilascio', fact: 'release: check: run the packaging smoke test before tagging' },
-  ] };
-}

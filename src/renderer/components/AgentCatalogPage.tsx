@@ -19,14 +19,12 @@ import { AgentCatalogCard } from './AgentCatalogCard';
 import { JudgingSwitch, useJudgingEstimate } from './JudgingSwitch';
 import { HelpTip } from './HelpTip';
 import { AgentStudio, EDIT_ELEMENT } from './AgentStudio';
-import { useBrainModel } from '../store/brain-model';
 import '../styles/agent-catalog.css';
 
 export function AgentCatalogPage() {
   const { catalog, error } = useAgents();
   const arg = ui.use(s => s.pageArg);
   const chats = useApp(s => s.chats);
-  const { state: model } = useBrainModel();
   const [metrics, setMetrics] = useState<AgentMetrics[] | null>(null), [metricsError, setMetricsError] = useState(false);
   const estimate = useJudgingEstimate(), judging = useApp(s => s.settings?.judging === true);
   useEffect(() => {
@@ -67,7 +65,6 @@ export function AgentCatalogPage() {
       const starts = Object.values(chats).filter(c => c.run?.agentId === p.id).map(c => c.run!.startedAt);
       return <AgentCatalogCard key={p.id} profile={p} index={index} engine={catalog?.models.find(m => m.engine === p.engine)?.label ?? p.engine}
         metrics={metrics?.find(m => m.agentId === p.id)} loaded={metrics !== null} lastStart={starts.length ? Math.max(...starts) : null} onOpen={() => go({ page: 'agenti', arg: p.id, element: EDIT_ELEMENT })}
-        memory={model?.memory.find(m => m.kind === 'agent' && m.agentId === p.id) ?? null}
         reviewedAt={judging && isWorkRole(p.id) ? estimate?.lastBatch?.at ?? null : null} onSkill={name => go({ page: 'skill', arg: name })} />;
     })}</div>
   </section>;

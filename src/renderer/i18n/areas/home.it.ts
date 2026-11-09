@@ -12,7 +12,6 @@ export const homeIt = {
   
   
   'home.works': 'Cosa funziona', 
-  'home.rulesReading': (p: { days: number; pending: number }) => `Regole il cui errore non è ricomparso entro ${p.days} giorni osservati; ${p.pending} non valutabili. Non dimostra un successo causale.`,
   
   
   

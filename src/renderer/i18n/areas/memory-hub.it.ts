@@ -12,13 +12,13 @@ export const memoryHubIt = {
   'mh.pulse.working': 'Agenti al lavoro', 'mh.pulse.workingHelp': 'Le chat di lavoro aperte che stanno girando adesso (l’Orchestrator escluso).',
   'mh.pulse.waiting': 'Ti aspettano', 'mh.pulse.waitingHelp': 'Le chat ferme su una tua risposta: domanda o permesso.',
   'mh.pulse.changes': 'Modifiche in 24 ore', 'mh.pulse.changesHelp': 'Quello che il brain ha cambiato nelle ultime 24 ore (skill, regole, memoria, ruoli, script), annullate escluse: i dettagli in Andamento → Apprendimento.',
-  'mh.pulse.lines': 'Righe in memoria', 'mh.pulse.linesHelp': 'Le righe di elenco dei file di memoria: conoscenza, cose successe e memorie degli agenti. Si aprono in Diario e note.',
+  
   'mh.activity': 'Ultime modifiche',
   'mh.activityEmpty': 'Ancora nessuna modifica: appariranno qui appena la manutenzione o tu cambiate qualcosa.',
   'mh.ago.now': 'adesso', 'mh.ago.min': (p: N) => `${p.n} min fa`, 'mh.ago.hours': (p: N) => (p.n === 1 ? '1 ora fa' : `${p.n} ore fa`), 'mh.ago.days': (p: N) => (p.n === 1 ? 'ieri' : `${p.n} giorni fa`),
   'mh.tabsLabel': 'Sezioni della memoria',
   'mh.tab.proposte': 'Proposte', 'mh.tab.approvate': 'Approvate', 'mh.tab.skill': 'Skill', 'mh.tab.regole': 'Sempre caricato', 'mh.tab.script': 'Script & Query',
-  'mh.tab.idee': 'Idee', 'mh.tab.file': 'Diario e note', 'mh.tab.statistiche': 'Statistiche',
+  'mh.tab.idee': 'Idee', 'mh.tab.file': 'Diario e note', 
   'mh.badge': (p: N) => (p.n === 1 ? '1 proposta da decidere' : `${p.n} proposte da decidere`),
   // Diario e note (#368): components/brain-model/MemoryBrowser.tsx
   'mb.lead': (p: N) => `${p.n === 1 ? 'Un documento' : `${p.n} documenti`} della memoria fuori dalle skill: cosa stai facendo adesso, il diario giorno per giorno, le idee, gli errori dell’AI e le note. Cerca in tutto, apri quello che ti serve.`,

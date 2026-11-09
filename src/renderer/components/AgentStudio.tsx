@@ -25,7 +25,7 @@ import { characterTone } from '../lib/character-art';
 import { agentDraftOf, forgetAgentEditor, readAgentEditor, rememberAgentEditor } from '../lib/agent-drafts';
 import { RolePermissions, permissionSummary } from './RolePermissions';
 import { holdUpdate } from '../lib/update-barrier';
-import { back, go, goTarget } from '../actions';
+import { back, go } from '../actions';
 import { locale, t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
 import { useWorkingChats } from './AgentCatalogCard';
@@ -282,8 +282,6 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
     { label: t('catalog.last'), value: last },
   ];
   const instructions = profile.instructions.trim();
-  const { state: brain } = useBrainModel();
-  const memory = brain?.memory.find(m => m.kind === 'agent' && m.agentId === profile.id) ?? null;
   const background = profile.scope === 'background';
   const config: [string, string][] = [
     [t('catalog.engine'), engine],
@@ -345,7 +343,6 @@ function RoleDetail({ profile, busy, editorOpen, resetting, status, editor, onEd
             <header className="ad-card-head"><h3 id={`ad-skills-${profile.id}`}>{t('studio.skills')}</h3></header>
             <p>{t('studio.skillsHint')}</p>
             {profile.skills.length ? <div className="bm-chips">{profile.skills.map(s => <button key={s} type="button" className="bm-chip" onClick={() => go({ page: 'skill', arg: s })}>{s}</button>)}</div> : <p>{t('studio.skillsNone')}</p>}
-            <p>{t('bm.card.memory')}: {memory?.entries ? <button type="button" className="link-btn" onClick={() => goTarget(`file/${memory.file}`)}>{t('bm.mem.entries', { n: memory.entries })}</button> : t('bm.card.memoryNone')}</p>
             <button type="button" className="link-btn" onClick={() => go({ page: 'skill' })}>{t('bm.studio.manage')}</button>
           </section>
           <Versions profile={profile} metrics={metrics} />

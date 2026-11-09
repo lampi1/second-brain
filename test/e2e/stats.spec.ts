@@ -1,6 +1,6 @@
 // End-to-end: errors and numbers that are useful (ADR 0037), in the frozen demo (SB_DEMO=1 SB_DEMO_FREEZE=1) pointed
 // at the synthetic brain of test/fixtures/brain-ui (SB_BRAIN). Qualità: the AI errors grouped by pattern (count, last
-// seen, this week against the one before, areas, chats with "Apri", the rule), the patterns seen once in one line, a
+// seen, this week against the one before, areas, chats with "Apri"; no rule line since ADR 0248), the patterns seen once in one line, a
 // reading on the caught-per-100 metric; "Discuti" on a pattern docks the Orchestrator with a draft that quotes ai-errors.md
 // and its numbers and ends with the question, not sent. Costi: the period against the one before, Discuti on the
 // total and on every chart. Screenshots: test-results/shots/stats-*.png.
@@ -31,7 +31,7 @@ test.afterAll(async () => { await app?.close(); });
 
 const settled = async () => { await expect(page.getByTestId('bx-loading')).toHaveCount(0, { timeout: 30000 }); await page.waitForTimeout(250); };
 
-test('Qualità: errors grouped by pattern with count, week comparison, chats and rule; Discuti drafts into the Orchestrator', async () => {
+test('Qualità: errors grouped by pattern with count, week comparison and chats; Discuti drafts into the Orchestrator', async () => {
   await goPage(page, 'qualita');
   const p = page.getByTestId('an-panel-qualita');
   await expect(p.getByTestId('bx-q-trovati')).toBeVisible({ timeout: 30000 });
@@ -40,7 +40,6 @@ test('Qualità: errors grouped by pattern with count, week comparison, chats and
   // every metric with numbers has its reading and its bar
   await expect(p.getByTestId('bx-q-trovati-reading')).toContainText(/(in calo|in aumento|stabile): .* ogni 100 turni negli ultimi 7 giorni contro .* nei 7 prima/);
   await expect(p.getByTestId('bx-q-trovati-discuss-orchestrator')).toBeVisible();
-  await expect(p.getByTestId('bx-q-tornati-discuss-orchestrator')).toBeVisible();
 
   const sec = p.getByTestId('bx-q-errori');
   await expect(sec.getByTestId('bx-q-errori-reading')).toContainText(/errori registrati negli ultimi 7 giorni/);
@@ -52,11 +51,10 @@ test('Qualità: errors grouped by pattern with count, week comparison, chats and
   await expect(first).toContainText(/negli ultimi 7 giorni/);
   await expect(first).toContainText('Aree');
   await expect(first).toContainText('Chat');
-  await expect(first).toContainText('Regola');
-  // fatto-non-verificato carries the rule that came back (recurrence.mjs: tornato)
+  // no rule line: the rules left (ADR 0248)
   const fnv = sec.locator('[data-testid="bx-q-pattern"][data-type="fatto-non-verificato"]');
-  await expect(fnv).toContainText('la regola non è bastata');
-  await expect(fnv).toContainText('rules/qa.md "verifica sempre lo screenshot"');
+  await expect(fnv).not.toContainText('la regola non è bastata');
+  await expect(fnv).not.toContainText('rules/qa.md "verifica sempre lo screenshot"');
   // the chats in the app are openable
   await expect(sec.getByTestId('bx-q-pattern-open').first()).toBeVisible();
   await expect(sec.getByTestId('bx-q-patterns-rest')).toContainText('Apri ai-errors.md');
@@ -79,7 +77,7 @@ test('Qualità: errors grouped by pattern with count, week comparison, chats and
   await expect(input).toBeFocused();
   await expect(input).toHaveValue(/^Let's discuss the recurring error «fatto non verificato» \(source: ai-errors\.md\)\./);
   await expect(input).toHaveValue(/- \d+ volte dal .* al .*; ultimi 7 giorni \d+, i 7 prima \d+/);
-  await expect(input).toHaveValue(/regola nata: rules\/qa\.md "verifica sempre lo screenshot" \(la regola non è bastata\)/);
+  await expect(input).not.toHaveValue(/regola nata/);
   await expect(input).toHaveValue(/Why does it happen and how do we prevent it\?/);
   await expect(page.getByTestId('an-panel-qualita')).toBeVisible(); // the page stays
   await shot(page, 'stats-qualita-discutine');

@@ -48,7 +48,6 @@ export const brainModelIt = {
 
   // Memoria page
   'bm.mem.title': 'Memoria',
-  'bm.mem.entries': (p: N) => (p.n === 1 ? '1 voce' : `${p.n} voci`),
 
   // Classificatori page
   'bm.cls.col.kind': 'Lavoro',
@@ -74,7 +73,7 @@ export const brainModelIt = {
   'bm.card.flip': (p: { name: string }) => `Gira la scheda di ${p.name}: dettagli e skill`,
   'bm.card.flipBack': (p: { name: string }) => `Torna al fronte della scheda di ${p.name}`,
   'bm.card.skills': 'Skill', 'bm.card.noSkills': 'Nessuna skill dichiarata: lavora con il suo ruolo.',
-  'bm.card.memory': 'Memoria', 'bm.card.memoryNone': 'ancora vuota',
+  
   'bm.card.back': 'Torna',
   'bm.studio.manage': 'Gestisci le skill',
 };

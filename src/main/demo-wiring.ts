@@ -27,7 +27,7 @@ import { BrainModelService } from './brainmodel/service';
 import { ResearchService } from './brainmodel/research';
 import { DEMO_LIVE, writeDemoResearch } from './brainmodel/research-demo';
 import { writeDemoLogs } from './brainmodel/log-scan';
-import { demoKindModel, demoRecallCheck, writeDemoClassifiers, type DemoClassifierData } from './demo-classifiers';
+import { demoKindModel, writeDemoClassifiers, type DemoClassifierData } from './demo-classifiers';
 import { demoDevopsRun } from './tasks/demo';
 import { TaskService } from './tasks/service';
 import { writeDemoScripts } from './brain/scripts-demo';
@@ -319,7 +319,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   return {
     morning,
     chats, browser, recordings, learn, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, engines, later: createLater(ctx),
-    agents, runFeedback, agentLifecycle, agentPacks, brainModel, research, queries, memoryReview, recallCheck: { state: async () => demoRecallCheck(now()) }, learningReview,
+    agents, runFeedback, agentLifecycle, agentPacks, brainModel, research, queries, memoryReview, learningReview,
     setup: new SetupService(ctx.userData, true, now),
     worktreePool: demoWorktreePool(),
     autoClose: new AutoCloseService({ now: autoCloseNow, delayMs: () => 0, candidates: () => [], archive: async () => false, emit: states => ctx.emitter.emit('chat:autoCloseStatus', states) }),
