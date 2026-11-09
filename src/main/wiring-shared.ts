@@ -88,6 +88,8 @@ export function attachCommandAsks(ctx: Pick<Ctx, 'emitter'>, runner: CommandRunn
       if (ch === 'pending:resolved') { const x = p as { chatId: string; requestId: string }; chats?.commandDone?.(x.chatId, x.requestId); }
     },
     ran: (chatId, itemId, code) => runner.list(chatId).some(r => r.itemId === itemId && r.code === code),
+    // asked once (ADR 0239): the same block in the same folder is asked of the user one time
+    cwdOf: chatId => runner.cwdOf(chatId), runs: () => runner.list(),
     ...(now ? { now } : {}),
     onAsk: (req, title) => {
       chats?.commandAsked?.(req.chatId, req.id);
@@ -111,9 +113,11 @@ export function attachOrchestratorWake(ctx: Pick<Ctx, 'emitter'> & Partial<Pick<
 
 /** "Esito alla chat" (run/results.ts): a run's end goes back to the chat that proposed the block. on = the setting
  *  runResults and, in tests, an explicit SB_RUN_RESULTS=1 (a test's chats never get surprise messages). */
-export function attachRunResults(ctx: Pick<Ctx, 'emitter'>, chats: Pick<ChatService, 'send' | 'list' | 'submissionReceipts'>, on: () => boolean): RunResults {
+export function attachRunResults(ctx: Pick<Ctx, 'emitter'>, chats: Pick<ChatService, 'send' | 'list' | 'submissionReceipts'>, on: () => boolean, asks?: CommandAsks): RunResults {
   const groupMs = Number(process.env.SB_RUN_RESULTS_MS) || undefined;
-  const results = new RunResults({ send: (chatId, text) => chats.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }), enabled: on, list: () => chats.list(), ...(groupMs ? { groupMs } : {}) });
+  const results = new RunResults({ send: (chatId, text) => chats.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }), enabled: on, list: () => chats.list(), ...(groupMs ? { groupMs } : {}),
+    ...(asks ? { followers: run => asks.followersOf(run) } : {}) });
+  asks?.useResults((chatId, run) => results.tell(chatId, run));
   const send = ctx.emitter.emit.bind(ctx.emitter);
   ctx.emitter.emit = (ch, p) => { send(ch, p); results.observe(ch, p); };
   return results;

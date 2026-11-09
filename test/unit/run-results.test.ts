@@ -3,7 +3,7 @@
 // together go in one message; off with the setting; a stopped run says so; long code and output are cut.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatSummary, RunInfo } from '../../src/shared/contract';
-import { RUN_RESULT_LABEL, RunResults, runResultText } from '../../src/main/run/results';
+import { FOLLOWER_NOTE, RECENT_NOTE, RUN_RESULT_LABEL, RunResults, runResultText } from '../../src/main/run/results';
 
 const chat = (p: Partial<ChatSummary> & { id: string }): ChatSummary => ({
   harness: 'claude', origin: 'app', title: p.id, cwd: 'C:/x', sessionId: null, model: null, effort: null, permissionMode: null,
@@ -13,10 +13,10 @@ const run = (p: Partial<RunInfo> & { id: string }): RunInfo => ({
   chatId: 'c1', itemId: 'a1', code: 'npm run check', cwd: 'C:/repo', state: 'ok', exitCode: 0, output: 'tutto verde\n', startedAt: 1000, endedAt: 13_000, ...p,
 });
 
-function make(opts: { enabled?: boolean; list?: ChatSummary[] } = {}) {
+function make(opts: { enabled?: boolean; list?: ChatSummary[]; followers?: (r: RunInfo) => string[] } = {}) {
   const sent: { chatId: string; text: string }[] = [];
   let on = opts.enabled ?? true;
-  const s = new RunResults({ send: async (chatId, text) => { sent.push({ chatId, text }); }, enabled: () => on, groupMs: 100, ...(opts.list ? { list: () => opts.list! } : {}) });
+  const s = new RunResults({ send: async (chatId, text) => { sent.push({ chatId, text }); }, enabled: () => on, groupMs: 100, ...(opts.list ? { list: () => opts.list! } : {}), ...(opts.followers ? { followers: opts.followers } : {}) });
   return { s, sent, setOn: (v: boolean) => { on = v; } };
 }
 
@@ -90,5 +90,28 @@ describe('RunResults', () => {
     expect(t).toContain('FINE');
     expect(t.length).toBeLessThan(3600);
     expect(t).toContain('comando di produzione, confermato dall\'utente');
+  });
+
+  it('asked once (ADR 0239): the chats that asked the same block get its result, with why', async () => {
+    const { s, sent } = make({ followers: r => (r.id === 'r1' ? ['c2', 'c1'] : []) });
+    s.observe('chat:updated', chat({ id: 'c1' }));
+    s.observe('chat:updated', chat({ id: 'c2' }));
+    s.observe('run:updated', run({ id: 'r1' }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(sent.map(m => m.chatId).sort()).toEqual(['c1', 'c2']);
+    expect(sent.find(m => m.chatId === 'c2')!.text).toContain(FOLLOWER_NOTE);
+    expect(sent.find(m => m.chatId === 'c1')!.text).not.toContain(FOLLOWER_NOTE);
+  });
+
+  it('a block not asked again gets the earlier result; nothing when results are off', async () => {
+    const { s, sent, setOn } = make();
+    s.observe('chat:updated', chat({ id: 'c3' }));
+    expect(s.tell('c3', run({ id: 'r9' }))).toBe(true);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]!.text).toContain(RECENT_NOTE);
+    expect(sent[0]!.text).toContain('npm run check');
+    setOn(false);
+    expect(s.tell('c3', run({ id: 'r10' }))).toBe(false);
   });
 });

@@ -3,9 +3,9 @@
 // run) and the service that turns them into requests (main/run/asks.ts: opened when the turn ends, gone when the
 // block runs, on "Non serve", when the chat goes on, is archived or removed).
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ChatItem, ChatSummary, EventMap, PendingRequest } from '../../src/shared/contract';
+import type { ChatItem, ChatSummary, EventMap, PendingRequest, RunInfo } from '../../src/shared/contract';
 import { askedBlocks } from '../../src/shared/command-ask';
-import { CommandAsks } from '../../src/main/run/asks';
+import { CommandAsks, RECENT_OK_MS } from '../../src/main/run/asks';
 import { APP_EVENT_LABEL } from '../../src/main/chats/orchestrator-wake';
 
 const fence = (lang: string, code: string) => '```' + lang + '\n' + code + '\n```';
@@ -228,5 +228,95 @@ ${fence('powershell', 'Get-Date')}`)]);
     ev('chat:item', { chatId: 'c1', item: asst('a1', `Ora lancia:\n${fence('powershell', 'Get-Date')}`) });
     vi.advanceTimersByTime(20);
     expect(s.pending().map(p => p.detail)).toEqual(['Get-Date']);
+  });
+});
+
+describe('CommandAsks: a command is asked of the user once (ADR 0239)', () => {
+  afterEach(() => { vi.useRealTimers(); });
+  const block = (code: string) => `Ora lancia:\n${fence('powershell', code)}`;
+
+  function world(o: { cwd?: Record<string, string>; runs?: RunInfo[]; tell?: boolean } = {}) {
+    const events: { ch: string; p: unknown }[] = [], told: { chatId: string; run: string }[] = [];
+    const s = new CommandAsks({
+      emit: (ch, p) => { events.push({ ch, p }); }, ran: () => false, settleMs: 10, now: () => 10_000_000,
+      cwdOf: id => o.cwd?.[id] ?? 'C:/repo', runs: () => o.runs ?? [],
+      alreadyRan: (chatId, run) => { if (o.tell === false) return false; told.push({ chatId, run: run.id }); return true; },
+    });
+    const ev = <K extends keyof EventMap>(ch: K, p: EventMap[K]) => s.observe(ch, p);
+    const turn = (id: string, items: ChatItem[]) => {
+      ev('chat:updated', chat({ id, state: 'running' }));
+      for (const it of items) ev('chat:item', { chatId: id, item: it });
+      ev('chat:updated', chat({ id, state: 'idle' }));
+      vi.advanceTimersByTime(20);
+    };
+    return { s, events, told, ev, turn };
+  }
+
+  it('the same block in the same folder from two chats is one request; its run answers both', () => {
+    vi.useFakeTimers();
+    const w = world();
+    w.turn('c1', [asst('a1', block('npm run db:migrate'))]);
+    w.turn('c2', [asst('b1', block('npm run db:migrate\r\n'))]);
+    expect(w.s.pending().map(p => p.chatId)).toEqual(['c1']);
+    w.s.ran('c1', 'a1', 'npm run db:migrate');
+    expect(w.s.pending()).toEqual([]);
+    expect(w.s.followersOf({ chatId: 'c1', itemId: 'a1', code: 'npm run db:migrate' })).toEqual(['c2']);
+    expect(w.s.followersOf({ chatId: 'c1', itemId: 'a1', code: 'npm run db:migrate' })).toEqual([]);   // read once
+  });
+
+  it('another folder is another command: asked twice', () => {
+    vi.useFakeTimers();
+    const w = world({ cwd: { c1: 'C:/a', c2: 'C:/b' } });
+    w.turn('c1', [asst('a1', block('npm run db:migrate'))]);
+    w.turn('c2', [asst('b1', block('npm run db:migrate'))]);
+    expect(w.s.pending().map(p => p.chatId)).toEqual(['c1', 'c2']);
+  });
+
+  it('Esegui on the same block in the Orchestrator answers the work chat\'s request and tells it the result', () => {
+    vi.useFakeTimers();
+    const w = world();
+    w.turn('c1', [asst('a1', block('az deployment group create -g rg'))]);
+    w.s.ran('orch', 'o1', 'az deployment group create -g rg');
+    expect(w.s.pending()).toEqual([]);
+    expect(w.s.followersOf({ chatId: 'orch', itemId: 'o1', code: 'az deployment group create -g rg' })).toEqual(['c1']);
+  });
+
+  it('a request that leaves without a run ("Non serve") hands the question to the chat that followed it', () => {
+    vi.useFakeTimers();
+    const w = world();
+    w.turn('c1', [asst('a1', block('npm run db:seed'))]);
+    w.turn('c2', [asst('b1', block('npm run db:seed'))]);
+    w.s.dismiss('c1', w.s.pending()[0]!.id);
+    expect(w.s.pending().map(p => [p.chatId, p.detail])).toEqual([['c2', 'npm run db:seed']]);
+  });
+
+  it('a follower that went on is not asked in its place', () => {
+    vi.useFakeTimers();
+    const w = world();
+    w.turn('c1', [asst('a1', block('npm run db:seed'))]);
+    w.turn('c2', [asst('b1', block('npm run db:seed'))]);
+    w.ev('chat:item', { chatId: 'c2', item: { kind: 'user', id: 'u2', at: 2, text: 'lascia stare' } });
+    w.s.dismiss('c1', w.s.pending()[0]!.id);
+    expect(w.s.pending()).toEqual([]);
+  });
+
+  it('a block that ran with success recently in the same folder is told, not asked; proposed again, it is asked', () => {
+    vi.useFakeTimers();
+    const ok: RunInfo = { id: 'r1', chatId: 'c9', itemId: 'z', code: 'npm run db:migrate', cwd: 'C:/repo', state: 'ok', exitCode: 0, output: '', startedAt: 9_000_000, endedAt: 9_500_000 };
+    const w = world({ runs: [ok] });
+    w.turn('c1', [asst('a1', block('npm run db:migrate'))]);
+    expect(w.s.pending()).toEqual([]);
+    expect(w.told).toEqual([{ chatId: 'c1', run: 'r1' }]);
+    w.turn('c1', [asst('a2', block('npm run db:migrate'))]);
+    expect(w.s.pending().map(p => p.chatId)).toEqual(['c1']);
+    // a failed run, an old one, another folder, or results off: asked as usual
+    for (const run of [{ ...ok, state: 'error' as const, exitCode: 1 }, { ...ok, endedAt: 10_000_000 - RECENT_OK_MS - 1 }, { ...ok, cwd: 'C:/other' }]) {
+      const x = world({ runs: [run] });
+      x.turn('c1', [asst('a1', block('npm run db:migrate'))]);
+      expect(x.s.pending()).toHaveLength(1);
+    }
+    const off = world({ runs: [ok], tell: false });
+    off.turn('c1', [asst('a1', block('npm run db:migrate'))]);
+    expect(off.s.pending()).toHaveLength(1);
   });
 });

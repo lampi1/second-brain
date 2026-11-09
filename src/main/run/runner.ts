@@ -64,6 +64,12 @@ export class CommandRunner {
 
   constructor(private readonly d: RunnerDeps) {}
 
+  /** the folder a block of this chat runs in (as start does): its own, or the home folder when it is gone */
+  cwdOf(chatId: string): string {
+    const cwd = this.d.cwdOf(chatId);
+    return cwd && fs.existsSync(cwd) ? cwd : os.homedir();
+  }
+
   list(chatId?: string): RunInfo[] {
     return [...this.runs.values()].filter(r => !chatId || r.chatId === chatId).sort((a, b) => a.startedAt - b.startedAt);
   }
@@ -83,8 +89,7 @@ export class CommandRunner {
     if ([...this.runs.values()].some(r => r.chatId === req.chatId && r.itemId === req.itemId && r.code === code && r.state === 'running')) {
       throw new Error('Questo comando è già in esecuzione.');
     }
-    const cwd = this.d.cwdOf(req.chatId);
-    const dir = cwd && fs.existsSync(cwd) ? cwd : os.homedir();
+    const dir = this.cwdOf(req.chatId);
     const env: NodeJS.ProcessEnv = {};
     for (const [k, v] of Object.entries(process.env)) if (!/^(SB_|ELECTRON_)/i.test(k)) env[k] = v;
     const id = `run-${Date.now().toString(36)}-${++this.seq}`;

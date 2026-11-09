@@ -194,7 +194,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   // the demo's scripted Orchestrator answers every message: only an e2e test that asks for it gets the news
   const wake = attachOrchestratorWake(ctx, chats, () => brain.settings().orchestratorEvents !== false && process.env.SB_ORCHESTRATOR_EVENTS === '1');
   // same for a run's result: only an e2e test that asks for it
-  const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && process.env.SB_RUN_RESULTS === '1');
+  const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && process.env.SB_RUN_RESULTS === '1', asks);
   // "N novità in attesa" (#88): the demo has no mail, only the news
   const heldNews = attachHeldNews(ctx.emitter, wake);
   const source = createAppSource(ctx, () => brain.settings().appRepo ?? null);

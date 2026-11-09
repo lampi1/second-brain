@@ -566,7 +566,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   manager.onCleanReport(n => wake.cleanReport({ ...n, workflow: awayOn() || workflows.list().some(r => r.status === 'active' && r.chatIds.includes(n.chatId)) }));
   attachAway({ on: awayOn, log: awayLog, chats: manager, onSettingChange: f => brain.onSettingChange(f), blocker: powerSaveBlocker });
 
-  const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'));
+  const results = attachRunResults(ctx, chats, () => brain.settings().runResults !== false && (!process.env.SB_TEST || process.env.SB_RUN_RESULTS === '1'), asks);
   const heldNews = attachHeldNews(ctx.emitter, wake, mail);
   const source = createAppSource(ctx, () => brain.settings().appRepo ?? null);
   // a chat id passed as a runId: the chat (any state, its run mirror) names the run to use (unknownRunError)

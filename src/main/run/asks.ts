@@ -11,8 +11,14 @@
 // chats/orchestrator-wake.ts, and a run's result, run/results.ts, are not the chat going on). It never blocks the chat:
 // ChatSummary.pending does not count it, so messages are never queued behind it. Nothing is persisted: after a
 // restart the chats are closed and their blocks keep their Esegui in the chat.
+// Asked once (ADR 0239, single entry): a block with the same code, in the same folder, as one another chat already left
+// open is not asked again: that chat follows the open one, and the one run answers both (followersOf, run/results.ts
+// sends the result to each). A run started on any chat's block answers every open ask of the same code and folder. A
+// block that already ran with success in the same folder within RECENT_OK_MS is not asked either, once per chat and
+// code: that chat gets the earlier result instead (alreadyRan); proposed again after that, it is asked as usual.
+// When an open ask leaves without a run ("Non serve", its chat went on), its first follower is asked in its place.
 // Used by wiring.ts (attachCommandAsks, for the real app and the demo) and index.ts (chat:pending, run:*).
-import type { ChatItem, ChatState, ChatSummary, EventMap, PendingRequest } from '../../shared/contract';
+import type { ChatItem, ChatState, ChatSummary, EventMap, PendingRequest, RunInfo } from '../../shared/contract';
 import { askedBlocks } from '../../shared/command-ask';
 import { prodRisk } from '../../shared/runnable';
 import { log } from '../log';
@@ -29,7 +35,19 @@ export interface CommandAsksDeps {
   /** how long after the turn's end the last message is read (late streaming updates land first) */
   settleMs?: number;
   now?(): number;
+  /** the folder a chat's block runs in (CommandRunner.cwdOf): the same code in another folder is another command */
+  cwdOf?(chatId: string): string | undefined;
+  /** the runs so far (CommandRunner.list): a block that ran with success recently is not asked again */
+  runs?(): RunInfo[];
+  /** a block not asked because it ran with success recently: that run's result goes to the chat (RunResults.tell);
+   *  false = it could not be told (results off): the block is asked as usual */
+  alreadyRan?(chatId: string, run: RunInfo): boolean;
 }
+
+/** a block that ran with success within this time is not asked again (once per chat and code) */
+export const RECENT_OK_MS = 60 * 60_000;
+/** the code as Esegui runs it (runner.ts start): line ends and trailing space do not make another command */
+export const sameCode = (code: string): string => code.replace(/\r\n/g, '\n').trimEnd();
 
 interface Turn { last: { id: string; text: string } | null; ids: Set<string> }
 
@@ -47,8 +65,20 @@ export class CommandAsks {
   private handoff = new Set<string>();
   /** How many turn ends were read, with or without a command in them (tests, diagnostics) */
   reads = 0;
+  /** open ask (chatId#requestId) → the same block left by other chats, not asked again (asked once, ADR 0239) */
+  private followers = new Map<string, PendingRequest[]>();
+  /** a run (chatId|itemId|code) → the other chats whose open ask of the same code it answered */
+  private runFollowers = new Map<string, Set<string>>();
+  /** chatId|code already told about a recent success: proposed again, it is asked */
+  private toldRecent = new Set<string>();
+
+  /** the run results (RunResults.tell), linked once both exist (wiring-shared.ts attachRunResults) */
+  private teller?: (chatId: string, run: RunInfo) => boolean;
 
   constructor(private readonly d: CommandAsksDeps) {}
+
+  /** RunResults is built after this: from then on a block that ran with success recently is told, not asked. */
+  useResults(tell: (chatId: string, run: RunInfo) => boolean): void { this.teller = tell; }
 
   /** Every event main sends to the page passes here (wiring.ts taps the emitter). */
   observe(channel: string, payload: unknown): void {
@@ -70,11 +100,29 @@ export class CommandAsks {
     this.drop(chatId, requestId);
   }
 
-  /** A run started (Esegui on the card or under the block): its request is answered. */
+  /** A run started (Esegui on the card or under the block): its request is answered, and so is every open ask of the
+   *  same code in the same folder in other chats (asked once): those chats get the run's result too (followersOf). */
   ran(chatId: string, itemId: string, code: string): void {
-    const m = this.asks.get(chatId);
-    if (!m) return;
-    for (const r of [...m.values()]) if (r.command?.itemId === itemId && r.command.code === code) this.drop(chatId, r.id);
+    const key = runKey(chatId, itemId, code), cwd = this.d.cwdOf?.(chatId), want = sameCode(code);
+    for (const [cid, m] of [...this.asks]) for (const r of [...m.values()]) {
+      if (!r.command) continue;
+      const own = cid === chatId && r.command.itemId === itemId && r.command.code === code;
+      const twin = cid !== chatId && sameCode(r.command.code) === want && this.d.cwdOf?.(cid) === cwd;
+      if (!own && !twin) continue;
+      const told = this.runFollowers.get(key) ?? new Set<string>();
+      if (twin) told.add(cid);
+      for (const f of this.followers.get(reqKey(r)) ?? []) if (f.chatId !== chatId) told.add(f.chatId);
+      if (told.size) this.runFollowers.set(key, told);
+      this.followers.delete(reqKey(r));
+      this.drop(cid, r.id, true);
+    }
+  }
+
+  /** The chats besides the run's own whose ask this run answered (asked once): each gets its result. Read once. */
+  followersOf(run: Pick<RunInfo, 'chatId' | 'itemId' | 'code'>): string[] {
+    const key = runKey(run.chatId, run.itemId, run.code), told = this.runFollowers.get(key);
+    this.runFollowers.delete(key);
+    return told ? [...told] : [];
   }
 
   stop(): void { for (const t of this.timers.values()) clearTimeout(t); this.timers.clear(); }
@@ -137,33 +185,71 @@ export class CommandAsks {
     this.appTurn.delete(chatId);
     if (!c || c.closedAt || !last || (!force && (c.state !== 'idle' || c.handoffBusy))) return;
     const m = this.asks.get(chatId) ?? new Map<string, PendingRequest>();
+    const cwd = this.d.cwdOf?.(chatId), now = this.d.now?.() ?? Date.now();
     for (const b of askedBlocks(last.text)) {
       const id = `cmd-${last.id}-${b.index}`;
       if (m.has(id) || this.d.ran(chatId, last.id, b.code)) continue;
+      const code = sameCode(b.code), toldKey = `${chatId}|${code}`;
+      const recent = cwd === undefined || this.toldRecent.has(toldKey) ? undefined : this.d.runs?.().filter(r => r.state === 'ok' && r.cwd === cwd && sameCode(r.code) === code && (r.endedAt ?? 0) >= now - RECENT_OK_MS).at(-1);
+      if (recent && (this.d.alreadyRan ?? this.teller)?.(chatId, recent)) {
+        this.toldRecent.add(toldKey);
+        log.info('run', 'command not asked again: it ran with success recently', { chat: chatId, data: { id, run: recent.id } });
+        continue;
+      }
       const prod = prodRisk(b.code);
       const req: PendingRequest = {
         id, chatId, type: 'command', tool: 'Esegui', title: 'Comando da eseguire', detail: b.code,
         input: { itemId: last.id, code: b.code, lang: b.lang }, at: this.d.now?.() ?? Date.now(),
         command: { itemId: last.id, code: b.code, lang: b.lang, ...(prod ? { prod } : {}), ...(b.lead ? { lead: b.lead } : {}) },
       };
-      m.set(id, req);
-      this.asks.set(chatId, m);
-      log.info('run', 'command request', { chat: chatId, data: { id, chars: b.code.length, prod: prod ?? null } });
-      this.d.emit('pending:added', req);
-      this.d.onAsk?.(req, c.title);
+      const open = cwd === undefined ? undefined : this.pending().find(r => r.chatId !== chatId && r.command && sameCode(r.command.code) === code && this.d.cwdOf?.(r.chatId) === cwd);
+      if (open) {
+        // asked once: this chat follows the open ask, and gets the result of its run
+        const list = this.followers.get(reqKey(open)) ?? [];
+        if (!list.some(f => f.chatId === chatId)) list.push(req);
+        this.followers.set(reqKey(open), list);
+        log.info('run', 'command not asked twice: another chat asks the same', { chat: chatId, data: { id, follows: open.chatId } });
+        continue;
+      }
+      this.open(req, c.title);
     }
   }
 
-  private drop(chatId: string, requestId: string): void {
+  private open(req: PendingRequest, title: string): void {
+    const m = this.asks.get(req.chatId) ?? new Map<string, PendingRequest>();
+    m.set(req.id, req);
+    this.asks.set(req.chatId, m);
+    log.info('run', 'command request', { chat: req.chatId, data: { id: req.id, chars: req.detail.length, prod: req.command?.prod ?? null } });
+    this.d.emit('pending:added', req);
+    this.d.onAsk?.(req, title);
+  }
+
+  /** ran = it left because it ran: its followers got their result; otherwise the first follower is asked instead */
+  private drop(chatId: string, requestId: string, ran = false): void {
     const m = this.asks.get(chatId);
-    if (!m?.delete(requestId)) return;
+    const req = m?.get(requestId);
+    if (!m || !req) return;
+    m.delete(requestId);
     if (!m.size) this.asks.delete(chatId);
     this.d.emit('pending:resolved', { chatId, requestId });
+    const waiting = this.followers.get(reqKey(req));
+    this.followers.delete(reqKey(req));
+    if (ran || !waiting?.length) return;
+    const [next, ...rest] = waiting.filter(f => { const c = this.chats.get(f.chatId); return !!c && !c.closedAt; });
+    if (!next) return;
+    if (rest.length) this.followers.set(reqKey(next), rest);
+    this.open({ ...next, at: this.d.now?.() ?? Date.now() }, this.chats.get(next.chatId)?.title ?? '');
   }
 
   private clear(chatId: string, why: string): void {
     const t = this.timers.get(chatId);
     if (t) { clearTimeout(t); this.timers.delete(chatId); }
+    // this chat went on: it follows no other chat's ask any more
+    for (const [k, list] of [...this.followers]) {
+      const keep = list.filter(f => f.chatId !== chatId);
+      if (keep.length === list.length) continue;
+      if (keep.length) this.followers.set(k, keep); else this.followers.delete(k);
+    }
     const m = this.asks.get(chatId);
     if (!m) return;
     log.debug('run', 'command requests cleared', { chat: chatId, data: { why, n: m.size } });
@@ -172,8 +258,12 @@ export class CommandAsks {
 
   private forget(chatId: string): void {
     this.clear(chatId, 'removed');
+    for (const k of [...this.toldRecent]) if (k.startsWith(`${chatId}|`)) this.toldRecent.delete(k);
     this.turns.delete(chatId);
     this.chats.delete(chatId);
     this.handoff.delete(chatId);
   }
 }
+
+const reqKey = (r: Pick<PendingRequest, 'chatId' | 'id'>): string => `${r.chatId}#${r.id}`;
+const runKey = (chatId: string, itemId: string, code: string): string => `${chatId}|${itemId}|${sameCode(code)}`;
