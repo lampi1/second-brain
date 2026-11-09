@@ -42,6 +42,15 @@ describe('typed text in the feed', () => {
     expect(scrub('a · abcdefgh…', ['abcdefghijkl'])).toBe('a · •••');
   });
 
+  it('masks a password pressed key by key, keeping the keys that only move or submit', () => {
+    const keys = `${[...SECRET].join(' ')} Tab shift+A Enter ctrl+a`;
+    const item = maskTypedItem(tool('mcp__second-brain__key', { keys, repeat: 1 })) as ToolItem;
+    expect(item.input).toEqual({ keys: '••• Tab ••• Enter ctrl+a', repeat: 1 });
+    expect(item.summary).not.toContain([...SECRET.slice(0, 4)].join(' '));
+    const nav = tool('mcp__second-brain__key', { keys: 'Tab Enter' });
+    expect(maskTypedItem(nav)).toEqual(nav);
+  });
+
   it('leaves other tools and other servers alone', () => {
     const nav = tool('mcp__second-brain__navigate', { url: 'https://app.example.com' });
     expect(maskTypedItem(nav)).toBe(nav);
