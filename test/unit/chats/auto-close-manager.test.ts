@@ -140,6 +140,10 @@ describe('main automatic archive reservations', () => {
     expect(f.m.autoCloseCandidates(() => false)[0]).toMatchObject({ waitingFor: 'children', waitingN: 2 });
     f.sink().children?.({ key: 'agent:two', nativeId: 'two', toolCallId: null, parentNativeId: null, kind: 'agent', state: 'completed', task: 'Sub 2', observedAt: Date.now() + 1, source: 'live' });
     expect(f.m.autoCloseCandidates(() => false)[0]).toMatchObject({ waitingFor: 'children', waitingN: 1 });
+    // a background shell is no sub-chat: it never adds to the count
+    f.sink().children?.({ key: 'shell:b', nativeId: 'b', toolCallId: null, parentNativeId: null, kind: 'shell', state: 'running', task: 'npm test', observedAt: Date.now(), source: 'live' });
+    expect(f.m.autoCloseCandidates(() => false)[0]).toMatchObject({ waitingFor: 'children', waitingN: 1 });
+    f.sink().children?.({ key: 'shell:b', nativeId: 'b', toolCallId: null, parentNativeId: null, kind: 'shell', state: 'completed', task: 'npm test', observedAt: Date.now() + 1, source: 'live' });
     f.sink().children?.({ key: 'agent:one', nativeId: 'one', toolCallId: null, parentNativeId: null, kind: 'agent', state: 'completed', task: 'Sub', observedAt: Date.now() + 1, source: 'live' });
     expect(f.m.autoCloseCandidates(() => false)[0]?.eligible).toBe(true);
     expect(await f.m.archiveAutomatic(c.id, () => true)).toBe(true);

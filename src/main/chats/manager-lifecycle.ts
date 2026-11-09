@@ -57,7 +57,11 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
       const c = { ...lone, depth: depthOf(lone.id), tree: root };
       // only a member still at work holds the tree: one that ended with an error, a Stop or no result never closes by
       // itself and must not keep its tree open forever
-      if (c.eligible && tree.some(x => !x.eligible && this.atWork(x.id))) return { ...c, eligible: false, reason: 'Si chiude insieme al resto dell’albero, quando hanno finito tutti' };
+      if (c.eligible && tree.some(x => !x.eligible && this.atWork(x.id))) {
+        // its own sub-chats still owe it a result: its tag counts them (#359), the hold is the tree's as before
+        const r = this.chats.get(c.id), n = r ? this.busyChildren(r) : 0;
+        return { ...c, eligible: false, reason: 'Si chiude insieme al resto dell’albero, quando hanno finito tutti', ...(n > 0 ? { waitingFor: 'children' as const, waitingN: n } : {}) };
+      }
       // the tree's last activity only grows: a member closing first never restarts the others' clock (its own closing
       // touches are left out, so a closing member never pushes its siblings' deadline)
       const at = Math.max(this.treeActivity.get(root) ?? 0, ...tree.filter(x => { const r = this.chats.get(x.id); return !r?.autoClosing && !r?.autoEnding; }).map(x => x.activityAt));
@@ -121,16 +125,20 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
     if ((c.background ?? 0) > 0) return { what: 'background', n: c.background! };
     if (external === 'work') return { what: 'work' };
     if (c.work?.status === 'waiting-mail' || external === 'mail') return { what: 'mail' };
-    if (c.work?.status === 'assigned' && !r.report?.final && c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted) return { what: 'report' };
+    // no final report: neither this session's (r.report) nor a saved one (its run's agent_report, a delegation result)
+    const reported = !!r.report?.final || c.run?.report?.via === 'agent_report' || !!c.delegation?.result;
+    if (c.work?.status === 'assigned' && !reported && c.lastResult && !c.lastResult.isError && !c.lastResult.interrupted) return { what: 'report' };
     if (external === 'unsaved' || external === 'gitcheck') return { what: external };
     return undefined;
   }
-  /** Its sub-chats that still owe it a result and its engine's sub-agents still at work (#359: «Aspetta 2 sotto-chat»). */
+  /** Its sub-chats that still owe it a result and its engine's sub-agents still at work (#359: «Aspetta 2 sotto-chat»).
+   *  A background shell is no sub-agent (as lib/agent-children.ts waitsOnChildren reads it): it counts as background. */
   private busyChildren(r: Rec): number {
-    const engine = r.s.agentChildren, rows = engine?.children.filter(x => x.state === 'running' || x.state === 'waiting' || x.state === 'unknown').length ?? 0;
+    const engine = r.s.agentChildren, live = engine?.children.filter(x => x.state === 'running' || x.state === 'waiting' || x.state === 'unknown') ?? [];
+    const shells = live.filter(x => x.kind === 'shell').length, agents = live.length - shells;
     let delegated = 0;
     for (const x of this.chats.values()) if (x.s.parentId === r.s.id && !x.s.closedAt && x.s.delegation && !x.s.delegation.result) delegated++;
-    return Math.max(rows, engine?.active ?? 0) + delegated;
+    return Math.max(agents, (engine?.active ?? 0) - shells) + delegated;
   }
 
   /** No renderer flag can authorize this path. The scheduler supplies a current, main-owned reservation. */

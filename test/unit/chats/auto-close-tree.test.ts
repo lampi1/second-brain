@@ -58,6 +58,18 @@ describe('auto-close of a delegation tree', () => {
     expect(own(parent.id)).toMatchObject({ eligible: true, activityAt: t + 9_000 });
   });
 
+  it('a parent its tree holds for its own delegated sub-chats says how many (#359)', async () => {
+    const f = fixture();
+    const parent = await f.m.create({ harness: 'anthropic', cwd: f.dir, model: 'known', prompt: 'Lavoro' });
+    const kids = [await f.m.create({ harness: 'anthropic', cwd: f.dir, model: 'known', prompt: 'A' }), await f.m.create({ harness: 'anthropic', cwd: f.dir, model: 'known', prompt: 'B' })];
+    const internal = f.m as unknown as Internal;
+    for (const k of kids) Object.assign(internal.chats.get(k.id)!.s, { parentId: parent.id, delegation: { goal: 'x', doneWhen: [], at: 1 }, waitsOn: 'colleagues' });
+    const own = (id: string) => f.m.autoCloseCandidates(() => false).find(c => c.id === id)!;
+    expect(own(parent.id)).toMatchObject({ eligible: false, waitingFor: 'children', waitingN: 2 });
+    internal.chats.get(kids[0]!.id)!.s.delegation!.result = {} as never;
+    expect(own(parent.id)).toMatchObject({ eligible: false, waitingFor: 'children', waitingN: 1 });
+  });
+
   it('does not let a member that ended with an error keep the rest of its tree open', async () => {
     const f = fixture();
     const parent = await f.m.create({ harness: 'anthropic', cwd: f.dir, model: 'known', prompt: 'Lavoro' });

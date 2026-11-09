@@ -21,7 +21,7 @@ function unavailable():void{
   reportAutoClosePresence(lastHolds);
 }
 function accept(states: AutoCloseStatus[]): void {
-  if(!Array.isArray(states)||states.some(row=>!row||typeof row.chatId!=='string'||typeof row.keptOpen!=='boolean'||!Number.isFinite(row.clockAt)||!Number.isFinite(row.generation)||row.deadline!==null&&!Number.isFinite(row.deadline)||row.warningStartedAt!==null&&!Number.isFinite(row.warningStartedAt)||row.waitingFor!==undefined&&!AUTO_CLOSE_WAITING.includes(row.waitingFor))){unavailable();return;}
+  if(!Array.isArray(states)||states.some(row=>!row||typeof row.chatId!=='string'||typeof row.keptOpen!=='boolean'||!Number.isFinite(row.clockAt)||!Number.isFinite(row.generation)||row.deadline!==null&&!Number.isFinite(row.deadline)||row.warningStartedAt!==null&&!Number.isFinite(row.warningStartedAt)||row.waitingFor!==undefined&&!AUTO_CLOSE_WAITING.includes(row.waitingFor)||row.waitingN!==undefined&&!(Number.isSafeInteger(row.waitingN)&&row.waitingN>0))){unavailable();return;}
   healthy=true;autoCloseProblem.set(null);
   const at = performance.now(); for (const state of states) received.set(state, at); autoCloseState.set(states);
 }

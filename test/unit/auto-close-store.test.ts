@@ -39,6 +39,9 @@ it('accepts a known waiting label and refuses an unknown one (ADR 0084)', async 
   await Promise.resolve(); await Promise.resolve();
   const row: AutoCloseStatus = { chatId: 'a', deadline: null, clockAt: 1, warningStartedAt: null, generation: 1, keptOpen: false, reason: 'Aspetta posta', waitingFor: 'mail' };
   event([row]); expect(autoCloseState.get()[0]?.waitingFor).toBe('mail'); expect(autoCloseProblem.get()).toBeNull();
+  event([{ ...row, waitingFor: 'children', waitingN: 2 }]); expect(autoCloseState.get()[0]?.waitingN).toBe(2); expect(autoCloseProblem.get()).toBeNull();
+  event([{ ...row, waitingFor: 'children', waitingN: 'due' as never }]); expect(autoCloseProblem.get()).toContain('sospesa');
+  event([row]); expect(autoCloseProblem.get()).toBeNull();
   event([{ ...row, waitingFor: 'nonsense' as never }]); expect(autoCloseProblem.get()).toContain('sospesa');
   off();
 });
