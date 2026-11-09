@@ -237,17 +237,17 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Memoria → Skill mostra ogni skill, anche quelle dell’app: la leggi, ne modifichi ogni file (una skill dell’app diventa una tua copia, «Ripristina originale» la riporta), la dai ai ruoli dalla scheda Ruoli e in Cronologia vedi ogni modifica con le differenze e «Annulla». L’Orchestrator fa lo stesso se glielo scrivi.',
         'Memoria → Skill shows every skill, the app’s too: you read it, edit any of its files (an app skill becomes your copy, "Restore original" brings it back), give it to roles from the Roles tab, and History shows every change with its differences and "Undo". The Orchestrator does the same when you ask it.'),
       // src/main/brainmodel/jobs.ts
-      b('La manutenzione parte solo quando premi «Manutenzione» (in alto, sulla testa dell’Orchestrator o in Memoria): un clic, poi lavora da sola in background. Mette in ordine skill, regole e memoria e un agente invisibile propone skill e regole nuove, cosa dimenticare e le issue per l’app, tutto come carte in Memoria → Proposte. Una lezione proposta da una chat di lavoro aspetta che l’Orchestrator te la chieda.',
-        'Maintenance starts only when you press "Manutenzione" (top bar, the Orchestrator’s head or Memoria): one click, then it works by itself in the background. It tidies skills, rules and memory, and an invisible agent proposes new skills and rules, what to forget and issues for the app, all as cards in Memoria → Proposte. A lesson a work chat proposes waits until the Orchestrator asks you.'),
+      b('La manutenzione parte solo quando premi «Manutenzione» (in alto, sulla testa dell’Orchestrator o in Memoria): un clic, poi lavora da sola in background. Mette in ordine skill e memoria e un agente invisibile propone skill nuove, cosa dimenticare e le issue per l’app, tutto come carte in Memoria → Proposte. Una lezione proposta da una chat di lavoro aspetta che l’Orchestrator te la chieda.',
+        'Maintenance starts only when you press "Manutenzione" (top bar, the Orchestrator’s head or Memoria): one click, then it works by itself in the background. It tidies skills and memory, and an invisible agent proposes new skills, what to forget and issues for the app, all as cards in Memoria → Proposte. A lesson a work chat proposes waits until the Orchestrator asks you.'),
       // src/main/brainmodel/changes.ts; src/main/agents/catalog.ts maintain (ADR 0083)
       b('Ogni modifica è registrata con cosa, perché e le prove, e «Annulla» la riporta com’era. L’app cambia da sola solo il testo di un ruolo e le sue skill; il tuo sì resta per produzione, strumenti, tetto, motore e livello di un ruolo, impostazioni e testi per altri.',
         'Every change is logged with what, why and the evidence, and "Undo" puts it back. The app changes by itself only a role’s text and its skills; your yes stays for production, a role’s tools, ceiling, engine and tier, settings and texts for others.'),
       // src/main/brainmodel/procedure-sources.ts
       b('Le sezioni dei runbook e delle routine del brain diventano skill, senza perdere testo e senza ripetersi: il resoconto è nella scheda Skill di Memoria.',
         'The brain’s runbook and routines sections become skills, losing no text and never twice: the report is in Memoria’s Skills tab.'),
-      // src/renderer/components/brain-model/
-      b('Regole valgono per tutti i ruoli; Memoria tiene conoscenza, quello che è successo e una memoria per ruolo, con i numeri (righe per ruolo, crescita per settimana, ricordi più richiamati, file fermi, errori ricorrenti, skill utili o mai usate, curiosità; ogni «?» dice come è calcolato) e ogni file si apre nel visore; Mappa mostra ruolo → skill → regole → memoria.',
-        'Rules apply to every role; Memory holds knowledge, what happened and one memory per role, with the numbers (lines per role, weekly growth, most recalled memories, stale files, recurring errors, useful or never used skills, curious facts; each "?" says how it is computed) and every file opens in the viewer; Map shows role → skills → rules → memory.'),
+      // src/renderer/components/brain-model/RulesPage.tsx, src/main/rules/tools.ts topicSkills, src/main/rules/runtime.ts (#366, ADR 0243)
+      b('«Sempre caricato» mostra il nucleo fisso che ogni chat riceve all’avvio (me.md, AGENTS.md, lo stile e le regole fisse dell’app) con i caratteri sul budget; le vecchie regole per argomento non entrano più nelle chat: sono skill (regole-<argomento>). Memoria tiene conoscenza, quello che è successo e una memoria per ruolo, con i numeri (righe per ruolo, crescita per settimana, ricordi più richiamati, file fermi, errori ricorrenti, skill utili o mai usate, curiosità; ogni «?» dice come è calcolato) e ogni file si apre nel visore; Mappa mostra ruolo → skill → regole → memoria.',
+        '"Always loaded" shows the fixed core every chat gets at its start (me.md, AGENTS.md, the style and the app’s fixed rules) with its characters against the budget; the old topic rules no longer enter chats: they are skills (regole-<topic>). Memory holds knowledge, what happened and one memory per role, with the numbers (lines per role, weekly growth, most recalled memories, stale files, recurring errors, useful or never used skills, curious facts; each "?" says how it is computed) and every file opens in the viewer; Map shows role → skills → rules → memory.'),
       // src/main/brainmodel/classifiers.ts
       b('Classificatori (una scheda di Andamento), in sola lettura: una scheda per classificatore (tipo di lavoro, modello, stima dai task simili, tipo nel registro dei costi) con cosa decide, i suoi numeri, l’andamento per settimana, quanto ha imparato e una curiosità; un clic apre il dettaglio con la storia e le tabelle (la tabella del modello).',
         'Classifiers (a Trends tab), read only: one card per classifier (kind of work, model, similar-task estimate, cost-ledger kind) with what it decides, its numbers, the weekly trend, how much it has learned and a curious fact; a click opens the detail with the history and the tables (the model table).'),
@@ -265,9 +265,10 @@ export const CONCEPTS: readonly ConceptCard[] = [
       1: ['src/renderer/components/SkillsPage.tsx', 'src/main/skills/library.ts', 'src/main/brainmodel/service.ts#link'],
       3: ['src/main/brainmodel/changes.ts', 'src/main/agents/catalog.ts#maintain'],
       4: ['src/main/brainmodel/procedure-sources.ts'],
+      5: ['src/renderer/components/brain-model/RulesPage.tsx', 'src/main/rules/tools.ts#topicSkills', 'src/main/rules/runtime.ts'],
       6: ['src/main/brainmodel/classifiers.ts'],
     },
-    sources: ['src/main/brainmodel/service.ts', 'src/main/brainmodel/jobs.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/model.ts', 'src/main/brainmodel/procedure-sources.ts', 'src/main/brainmodel/classifiers.ts', 'src/main/agents/pack/rules.ts', 'src/renderer/components/SkillsPage.tsx', 'src/main/skills/library.ts', 'docs/adr/0077-agents-and-skills-only.md', 'docs/adr/0241-skill-packages-and-skill-library.md'],
+    sources: ['src/main/brainmodel/service.ts', 'src/main/brainmodel/jobs.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/model.ts', 'src/main/brainmodel/procedure-sources.ts', 'src/main/brainmodel/classifiers.ts', 'src/main/agents/pack/rules.ts', 'src/renderer/components/SkillsPage.tsx', 'src/main/skills/library.ts', 'src/main/rules/tools.ts', 'src/renderer/components/brain-model/RulesPage.tsx', 'docs/adr/0077-agents-and-skills-only.md', 'docs/adr/0241-skill-packages-and-skill-library.md', 'docs/adr/0243-fixed-core-instead-of-rules.md'],
   },
   {
     id: 'orchestrator',
@@ -433,7 +434,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
   },
   {
     id: 'errors-rules',
-    title: b('Errori, correzioni e «Regole imparate»', 'Errors, corrections and "Learned rules"'),
+    title: b('Errori e correzioni', 'Errors and corrections'),
     summary: b('Gli errori degli agenti finiscono nel brain; l’app li raggruppa, e tu puoi correggere un ragionamento mentre avviene.',
       'Agents’ errors land in the brain; the app groups them, and you can correct a line of reasoning while it happens.'),
     points: [
@@ -446,9 +447,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/lib/correction.ts, src/renderer/components/CorrectThought.tsx (ADR 0058)
       b('«Correggi» su un pezzo di ragionamento manda all’agente la citazione e la tua correzione; è bloccato se c’è una domanda aperta.',
         '"Correct" on a piece of reasoning sends the agent the quote and your fix; it is blocked while a question is open.'),
-      // src/renderer/brain/pages/LearnedRules.tsx, src/renderer/components/brain-model/RulesPage.tsx, src/renderer/brain/lib/learn.ts (ADR 0082)
-      b('«Regole imparate», in fondo alla scheda Regole di Memoria, mostra le politiche di auto-miglioramento del brain (stime, scelta del modello, soglie) con Ripristina; una proposta in attesa si decide in Memoria → Proposte. Compare solo quando il brain ne ha.',
-        '"Learned rules", at the bottom of Memoria’s Rules tab, shows the brain’s self-improvement policies (estimates, model choice, thresholds) with Restore; a waiting proposal is decided in Memory → Proposals. It appears only when the brain has some.'),
       // src/renderer/i18n/areas/home.it.ts home.rulesReading
       b('Una regola conta come «tenuta» se il suo errore non ricompare nei giorni osservati: non è una prova di causa.',
         'A rule counts as "holding" if its error does not reappear in the observed days: it is not proof of cause.'),
@@ -470,10 +468,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       [-1]: ['src/renderer/lib/correction.ts#QUOTE_MAX', 'src/renderer/brain/lib/learn.ts#MIN_N'],
       0: ['src/renderer/brain/lib/stats.ts'],
       3: ['src/renderer/lib/correction.ts', 'src/renderer/components/CorrectThought.tsx'],
-      4: ['src/renderer/brain/pages/LearnedRules.tsx', 'src/renderer/components/brain-model/RulesPage.tsx', 'src/renderer/brain/lib/learn.ts'],
-      5: ['src/renderer/i18n/areas/home.it.ts'],
+      4: ['src/renderer/i18n/areas/home.it.ts'],
     },
-    sources: ['src/main/chats/manager.ts', 'src/main/agents/run-metrics.ts', 'src/renderer/brain/lib/stats.ts', 'src/renderer/lib/correction.ts', 'src/renderer/components/CorrectThought.tsx', 'src/renderer/brain/pages/LearnedRules.tsx', 'src/renderer/components/brain-model/RulesPage.tsx', 'src/renderer/brain/lib/learn.ts', 'docs/adr/0037-useful-errors-and-stats.md', 'docs/adr/0058-correct-the-thought.md'],
+    sources: ['src/main/chats/manager.ts', 'src/main/agents/run-metrics.ts', 'src/renderer/brain/lib/stats.ts', 'src/renderer/lib/correction.ts', 'src/renderer/components/CorrectThought.tsx', 'src/renderer/brain/lib/learn.ts', 'docs/adr/0037-useful-errors-and-stats.md', 'docs/adr/0058-correct-the-thought.md'],
   },
   {
     id: 'brain-scripts',
@@ -715,8 +712,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'memory-hub',
     title: b('La Memoria, un posto solo', 'Memoria, one place'),
-    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Regole, Script & Query, Idee, File e Statistiche.',
-      'Memoria is the one place for everything the brain holds: its top is alive (live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Rules, Scripts & Queries, Ideas, Files and Statistics.'),
+    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Sempre caricato, Script & Query, Idee, File e Statistiche.',
+      'Memoria is the one place for everything the brain holds: its top is alive (live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Always loaded, Scripts & Queries, Ideas, Files and Statistics.'),
     points: [
       // src/renderer/lib/memory-hub.ts, src/renderer/actions.ts, src/renderer/components/Sidebar.tsx
       b('Skill, Regole, Script e Idee non sono più pagine a sé nella barra: sono schede di Memoria (Apprendimento è passato in Andamento); i vecchi link, gli id e i tasti G (G S, G L, G T, G I) aprono la scheda giusta, e «memoria/<scheda>» apre una scheda da un link.',
@@ -1107,18 +1104,18 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'maintenance',
     title: b('La manutenzione del brain', 'Brain maintenance'),
-    summary: b('Solo quando premi «Manutenzione»: un clic, l’app riordina skill, regole e memoria e un agente invisibile propone miglioramenti come carte; ogni cambio ha un perché e un «Annulla».',
-      'Only when you press "Manutenzione": one click, the app tidies skills, rules and memory and an invisible agent proposes improvements as cards; every change has a reason and an "Undo".'),
+    summary: b('Solo quando premi «Manutenzione»: un clic, l’app riordina skill e memoria e un agente invisibile propone miglioramenti come carte; ogni cambio ha un perché e un «Annulla».',
+      'Only when you press "Manutenzione": one click, the app tidies skills and memory and an invisible agent proposes improvements as cards; every change has a reason and an "Undo".'),
     points: [
       // src/main/brainmodel/service.ts start(), brainmodel/research.ts runAll (ADR 0153)
       b('Parte solo dal tuo clic, mai da sola: la pulizia non spende token (lavoro sul testo fatto sul tuo PC), poi la ricerca usa il modello più forte con un tetto di 5 $ e ti avvisa quando finisce. Le idee sull’app vanno in Idee (lato IA) e ogni idea o bug diventa una carta «Apro la issue?» che, con il tuo sì, apre la issue su GitHub.',
         'It starts only from your click, never by itself: the cleanup spends no tokens (text work on your PC), then the research uses the strongest model with a 5 $ cap and gives you a notice when it ends. Ideas about the app go to Ideas (the AI’s side) and every idea or bug becomes a card "Open the issue?" that, with your yes, opens it on GitHub.'),
       // src/main/brainmodel/research-candidate.ts, role-reflect.ts (ADR 0195)
-      b('Le modifiche ai file del brain proposte da una ricerca (skill, regole per tutti i ruoli, cosa dimenticare) non arrivano una per una: diventano una «versione candidata del brain», una copia dei file toccati tenuta fuori dal brain, con una carta sola che mostra prima e dopo di ogni file, il «riuscito se…» di ogni proposta (una settimana dopo li controlla tutti), i controlli (senza token) e il replay sui casi registrati quando il budget rimasto basta. Con il tuo sì entra tutto insieme, con un solo «Annulla»; se nel frattempo hai cambiato uno di quei file, non la applica. Se resta budget, la ricerca guarda anche il ruolo con più lavori falliti o corretti negli ultimi 30 giorni (uno per clic) e può proporre un testo migliore per quel ruolo: con il tuo sì parte una prova contro la versione di ora, che poi tieni o annulli dalla sua carta. I ruoli restano gli stessi.',
-        'The brain-file changes a research proposes (skills, rules for every role, what to forget) do not arrive one by one: they become a "candidate brain", a copy of the touched files kept outside the brain, with one card showing each file before and after, the «worked if…» of every proposal (a week later it checks them all), the checks (no tokens) and the replay on recorded cases when the budget left covers it. With your yes it all goes in together, with one "Undo"; if you changed one of those files in the meantime, it is not applied. When budget is left, the research also looks at the role with the most failed or corrected jobs in the last 30 days (one per click) and may propose a better text for it: with your yes a trial starts against the current version, which you then keep or roll back from its card. The roles stay the same.'),
+      b('Le modifiche ai file del brain proposte da una ricerca (skill, cosa dimenticare) non arrivano una per una: diventano una «versione candidata del brain», una copia dei file toccati tenuta fuori dal brain, con una carta sola che mostra prima e dopo di ogni file, il «riuscito se…» di ogni proposta (una settimana dopo li controlla tutti), i controlli (senza token) e il replay sui casi registrati quando il budget rimasto basta. Con il tuo sì entra tutto insieme, con un solo «Annulla»; se nel frattempo hai cambiato uno di quei file, non la applica. Se resta budget, la ricerca guarda anche il ruolo con più lavori falliti o corretti negli ultimi 30 giorni (uno per clic) e può proporre un testo migliore per quel ruolo: con il tuo sì parte una prova contro la versione di ora, che poi tieni o annulli dalla sua carta. I ruoli restano gli stessi.',
+        'The brain-file changes a research proposes (skills, what to forget) do not arrive one by one: they become a "candidate brain", a copy of the touched files kept outside the brain, with one card showing each file before and after, the «worked if…» of every proposal (a week later it checks them all), the checks (no tokens) and the replay on recorded cases when the budget left covers it. With your yes it all goes in together, with one "Undo"; if you changed one of those files in the meantime, it is not applied. When budget is left, the research also looks at the role with the most failed or corrected jobs in the last 30 days (one per click) and may propose a better text for it: with your yes a trial starts against the current version, which you then keep or roll back from its card. The roles stay the same.'),
       // src/main/brainmodel/jobs.ts repeated-task, merge-skills, corrections, merge-memory
-      b('Se tre o più lavori finiti chiedono la stessa cosa e nessuna skill la copre, scrive una skill nuova; due skill quasi uguali diventano una. Le lezioni imparate dalle tue correzioni vanno nel testo del ruolo, in una skill o nelle regole del brain.',
-        'When three or more finished jobs ask the same thing and no skill covers it, it writes a new skill; two near-identical skills become one. Lessons learnt from your corrections go to the role’s text, a skill or the brain’s rules.'),
+      b('Se tre o più lavori finiti chiedono la stessa cosa e nessuna skill la copre, scrive una skill nuova; due skill quasi uguali diventano una. Le lezioni imparate dalle tue correzioni vanno nel testo del ruolo o in una skill.',
+        'When three or more finished jobs ask the same thing and no skill covers it, it writes a new skill; two near-identical skills become one. Lessons learnt from your corrections go to the role’s text or a skill.'),
       // src/main/agents/pack/lesson-evidence.ts (causal: false), brainmodel/evidence.ts lessonCounts (ADR 0186)
       b('Le prove di una lezione citano run con esito verificato, ma non misurano se la lezione ha aiutato: non sono mai causali. Andamento → Apprendimento dice quante lezioni sono state proposte nelle ultime 12 settimane e come sono finite, oppure «Nessun dato».',
         'A lesson’s evidence cites runs with a verified outcome, but does not measure whether the lesson helped: it is never causal. Trends → Learning says how many lessons were proposed in the last 12 weeks and how they ended, or "No data".'),

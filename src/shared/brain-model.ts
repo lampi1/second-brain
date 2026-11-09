@@ -35,9 +35,12 @@ export interface BrainRule {
   summary: string;
   /** when it is injected; null = no frontmatter (read when an agent opens it) */
   when: { prompt: string[]; tools: string[]; paths: string[] } | null;
-  /** how agents get it: always (an always-loaded file), topic (injected when it matches), none (on disk, not listed) */
+  /** how agents get it: always (the fixed core, loaded at every start), none (on disk, no longer loaded: topic files are
+   *  not injected since #366, the migration moves their procedures into skills); 'topic' is no longer produced */
   loaded: 'always' | 'topic' | 'none';
   lines: number;
+  /** characters, for the fixed core's budget */
+  chars?: number;
   changedAt: number | null;
 }
 
@@ -205,6 +208,8 @@ export interface BrainModelState {
   changes: BrainChange[];
   migration: MigrationReport | null;
   lastRun: MaintenanceRun | null;
+  /** the fixed core loaded at every start (#366): its characters with the app's own boot text, and the budget */
+  core?: { chars: number; budget: number; appRules: boolean };
   /** the Memoria page's statistics (brainmodel/memory-stats.ts); missing without a brain */
   memoryStats?: MemoryStats;
   /** the Apprendimento page (brainmodel/evidence.ts, ADR 0109); missing where the runs could not be read */

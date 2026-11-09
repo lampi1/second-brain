@@ -28,12 +28,13 @@ it('merges product hooks before personal hooks, with root paths in JSON instead 
   expect(JSON.parse(fs.readFileSync(path.join(plugin, 'product-rules/launch.json'), 'utf8')).root).toBe(root);
   expect(fs.existsSync(path.join(root, '.claude'))).toBe(false);
 });
-it('fallback includes bounded topic text and rejects oversized fixed context without truncating safety', () => {
+it('fallback carries only the fixed core (no topic text since #366) and rejects oversized fixed context without truncating safety', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-rule-fallback-')); roots.push(root);
   fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', rules: { topicFiles: ['code.md'], turnBudget: 300 } }));
   fs.writeFileSync(path.join(root, 'AGENTS.md'), 'Core safety');
   fs.writeFileSync(path.join(root, 'code.md'), '---\nwhen: {"prompt":["code"]}\n---\n' + 'Topic body. '.repeat(100));
-  expect(productInstructions(root, true)).toContain('Topic body');
+  expect(productInstructions(root, true)).toContain('Core safety');
+  expect(productInstructions(root, true)).not.toContain('Topic body');
   expect(productInstructions(root, true)).toContain('hooks are not available');
   expect(productInstructions(root, true)!.length).toBeLessThan(500);
   fs.writeFileSync(path.join(root, 'AGENTS.md'), 'x'.repeat(15_001));

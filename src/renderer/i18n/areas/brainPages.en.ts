@@ -18,7 +18,7 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.nav.agenti': 'Agents',
   'brainPages.nav.skill': 'Skills',
   'brainPages.nav.impostazioni': 'Settings',
-  'brainPages.nav.regole': 'Rules',
+  'brainPages.nav.regole': 'Always loaded',
   'brainPages.nav.memoria': 'Memory',
   'brainPages.nav.collegamenti': 'Map',
 
@@ -100,27 +100,6 @@ export const brainPagesEn: typeof brainPagesIt = {
   'brainPages.idee.whatAI': "The AI's ideas to improve the brain, your way of working and itself, each with its reasoning. Click a row to read it and discuss it with the Orchestrator.",
   'brainPages.idee.whatDefault': "Your ideas and the AI's, from ideas.md. Filter by status, area and who had it; click a row to read it in full and discuss it with the Orchestrator.",
 
-  // LearnedRules.tsx (once the Miglioramento page)
-  'brainPages.miglioramento.pageTitle': 'Learned rules',
-  'brainPages.miglioramento.helpQuestion': 'What does this mean?',
-  'brainPages.miglioramento.noData': 'no data',
-  'brainPages.miglioramento.driftWarning': 'data changed: recalibrate?',
-  'brainPages.miglioramento.noVersion': 'No version yet',
-  'brainPages.miglioramento.appliedAt': (p: { when: string; by?: string }) => `in force since ${p.when}${p.by ? `, by ${p.by}` : ""}`,
-  'brainPages.miglioramento.typicalSuffix': (p: { n: number }) => ` typical error in the last ${p.n}`,
-  'brainPages.miglioramento.sparklineLabel': (p: { n: number }) => `Error in the last ${p.n}, one bar per case: higher = farther from reality`,
-  'brainPages.miglioramento.nameQuote': (p: { name: string }) => `"${p.name}" · `,
-  'brainPages.miglioramento.outsidePrefix': 'Out of count: ',
-  'brainPages.miglioramento.outsideUnknown': (p: { n: number }) => `${p.n} with unknown outcome`,
-  'brainPages.miglioramento.outsideNoPrediction': (p: { n: number }) => `${p.n} with no estimate (too little history before)`,
-  'brainPages.miglioramento.actionFailed': (p: { error: string }) => `failed: ${p.error}`,
-  'brainPages.miglioramento.proposalRestore': 'Restore proposed',
-  'brainPages.miglioramento.proposal': 'Proposal',
-  'brainPages.miglioramento.checkTitle': 'Check after the last change',
-  'brainPages.miglioramento.restoreBtn': (p: { v: number }) => `Restore v${p.v}`,
-  'brainPages.miglioramento.lead': (p: { count: number }) => `${p.count} ${p.count === 1 ? "policy" : "policies"} learning from results; `,
-  'brainPages.miglioramento.leadPending': (p: { pending: number }) => `${p.pending} ${p.pending === 1 ? "proposal" : "proposals"} to decide`,
-  'brainPages.miglioramento.leadNoPending': 'no proposals to decide',
 
   // RecordDiscussButton.tsx
   'brainPages.recordDiscuss.title': 'Opens the Orchestrator next to the page with a ready message about this record: if work is needed, it opens the chat',

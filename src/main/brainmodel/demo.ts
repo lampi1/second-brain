@@ -1,5 +1,5 @@
 // The demo brain (SB_DEMO=1): a small made-up brain folder in the demo's userData (the same folder the demo's agent
-// packs use), so the Brain pages (Skill, Regole, Memoria, Mappa) and the one-time migration of the former runbook and
+// packs use), so the Brain pages (Skill, Sempre caricato, Memoria, Mappa) and the one-time migration of the former runbook and
 // routines sections into skills (ADR 0077) run for real without the user's brain. Generic content only (no real
 // customers, hosts or products). One line holds a fake connection string with a password, to show (and test) that it is
 // masked in the skill made from it; one file named like credentials, to show it is never read. File dates are relative
@@ -234,10 +234,12 @@ description: Riporta l'ambiente di test allo stato iniziale dopo una prova lunga
 1. Ferma i servizi di prova.
 2. Ripristina i dati della notte.
 `, 45],
-  'rules/stile.md': [`---
-when: {"prompt":["scrivi","bozza","mail"],"tools":[],"paths":[]}
----
-# Stile dei testi
+  'AGENTS.md': [`# Regole fisse
+
+- Mai toccare la produzione senza il sì di chi usa il brain.
+- Mai scrivere password o chiavi nei file del brain.
+`, 30],
+  'rules/stile.md': [`# Stile dei testi
 
 Frasi brevi, italiano semplice, niente gergo.
 `, 6],
@@ -246,7 +248,7 @@ Frasi brevi, italiano semplice, niente gergo.
 /** Writes the demo brain into `dir` (its own files written again, the rest of the folder kept) and returns it. */
 export function writeDemoBrain(dir: string, now: number): string {
   fs.mkdirSync(dir, { recursive: true });
-  if (!fs.existsSync(path.join(dir, 'brain.json'))) fs.writeFileSync(path.join(dir, 'brain.json'), `${JSON.stringify({ machinery: 'product-v1', template: {}, rules: { topicFiles: ['rules/stile.md'], appRules: true } }, null, 2)}\n`);
+  if (!fs.existsSync(path.join(dir, 'brain.json'))) fs.writeFileSync(path.join(dir, 'brain.json'), `${JSON.stringify({ machinery: 'product-v1', template: {}, rules: { fixedFiles: ['AGENTS.md', 'rules/stile.md'], topicFiles: [], appRules: true } }, null, 2)}\n`);
   const dated = (t: string) => t.replace(/\{d:(\d+)\}/g, (_m, n: string) => new Date(now - Number(n) * DAY).toISOString().slice(0, 10));
   // in the UI language (demo-text.ts): Italian as written, English through its table (paths, headings and lines)
   for (const [rel, [text, days]] of Object.entries(FILES)) {

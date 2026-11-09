@@ -61,7 +61,7 @@ describe('isCandidateFinding / planCandidate', () => {
     expect(isCandidateFinding(p('h', { chatId: null, kind: 'forget', forget: { what: 'skill', name: 'x' } }))).toBe(false);
   });
 
-  it('plans every finding on a virtual copy: two rules in one file, a skill section, a forgotten rule; the brain is not written', () => {
+  it('plans every finding on a virtual copy: a skill section, a new skill, a forgotten rule; rules for every role are skipped (#366); the brain is not written', () => {
     const root = brain(), before = snapshot(root);
     const input = { root, skills: readSkills([{ dir: path.join(root, '.claude', 'skills'), home: 'brain' }], root, []), rules: readRules(root), now: NOW };
     const plan = planCandidate(input, [
@@ -72,18 +72,17 @@ describe('isCandidateFinding / planCandidate', () => {
       p('f1', { kind: 'forget', forget: { what: 'rule', name: 'rules/old-proxy.md' } }),
       p('bad', { kind: 'forget', forget: { what: 'rule', name: 'rules/missing.md' } }),
     ]);
-    expect(plan.used).toEqual(['r1', 'r2', 's1', 's2', 'f1']);
-    expect(plan.skipped.map(x => x.id)).toEqual(['bad']);
+    expect(plan.used).toEqual(['s1', 's2', 'f1']);
+    expect(plan.skipped.map(x => x.id)).toEqual(['r1', 'r2', 'bad']);
+    expect(plan.skipped[0]!.why).toMatch(/non ci sono più/);
     const byRel = Object.fromEntries(plan.files.map(f => [f.rel, f]));
-    expect(byRel['rules/lessons.md']!.after).toContain('Staging is stg-eu.');
-    expect(byRel['rules/lessons.md']!.after).toContain('Run the tests before reporting done.');
+    expect(byRel['rules/lessons.md']).toBeUndefined();
     expect(byRel['.claude/skills/deploy-notes/SKILL.md']!.after).toContain('## Dalla manutenzione');
     expect(byRel['.agents/skills/release-checklist/SKILL.md']!.before).toBeNull();
     expect(byRel['rules/old-proxy.md']!.after).toBeNull();
     expect(snapshot(root)).toEqual(before);
     const checks = candidateChecks(plan.files, input.rules, 'it');
-    // brain.json lists the lessons file as a topic, as a single approval does
-    expect(checks[0]).toMatch(/^5 file: 2 nuovi, 1 tolti/);
+    expect(checks[0]).toMatch(/^3 file: 1 nuovi, 1 tolti/);
     expect(checks.join(' ')).toMatch(/nome e descrizione validi/);
   });
 
@@ -121,7 +120,6 @@ describe('ResearchService with the candidate brain', () => {
     const replay = vi.fn(() => ({ note: 'Replay saltato: nessun set.' }));
     const t = research(root, { replay });
     await t.svc.start(opts);
-    t.svc.propose('c1', { kind: 'rule', title: 'Staging is stg-eu', adds: 'A line.', why: 'Scout looked for staging-1 3 times.', change: { text: 'Staging is stg-eu.' } });
     t.svc.propose('c1', { kind: 'skill', title: 'Deploy notes by area', adds: 'A section.', why: '3 corrections.', change: { name: 'deploy-notes', text: 'Never name branches.' } });
     t.svc.propose('c1', { kind: 'forget', title: 'Forget the old proxy rule', removes: 'rules/old-proxy.md', why: 'Unused.', forget: { what: 'rule', name: 'rules/old-proxy.md' } });
     t.svc.propose('c1', { kind: 'role', title: 'Artisan tests first', adds: 'A line.', why: '4 corrections.', change: { role: 'artisan', text: 'Run the tests.' } });
@@ -131,15 +129,15 @@ describe('ResearchService with the candidate brain', () => {
     await end(t, 1.5);
     const [c] = t.svc.candidateCards();
     expect(c).toBeDefined();
-    expect(c!.items.map(x => x.title)).toEqual(['Staging is stg-eu', 'Deploy notes by area', 'Forget the old proxy rule']);
-    expect(c!.files.map(f => f.rel).sort()).toEqual(['.claude/skills/deploy-notes/SKILL.md', 'brain.json', 'rules/lessons.md', 'rules/old-proxy.md']);
+    expect(c!.items.map(x => x.title)).toEqual(['Deploy notes by area', 'Forget the old proxy rule']);
+    expect(c!.files.map(f => f.rel).sort()).toEqual(['.claude/skills/deploy-notes/SKILL.md', 'rules/old-proxy.md']);
     // the replay is asked with what is left of the cap, and its note is on the card
     expect(replay).toHaveBeenCalledWith(expect.objectContaining({ name: c!.id, budgetUsd: 3.5 }));
     expect(c!.evaluation.replay).toMatchObject({ state: 'skipped', note: 'Replay saltato: nessun set.' });
     // the input is untouched; the candidate is a copy under userData
     expect(snapshot(root)).toEqual(before);
-    const copy = path.join(t.userData, 'brain-candidates', c!.id, 'files', 'rules', 'lessons.md');
-    expect(fs.readFileSync(copy, 'utf8')).toContain('Staging is stg-eu.');
+    const copy = path.join(t.userData, 'brain-candidates', c!.id, 'files', '.claude', 'skills', 'deploy-notes', 'SKILL.md');
+    expect(fs.readFileSync(copy, 'utf8')).toContain('Never name branches.');
     expect(fs.existsSync(path.join(t.userData, 'brain-candidates', c!.id, 'files', 'rules', 'old-proxy.md'))).toBe(false);
 
     // the Proposte card: one, with a diff per file
@@ -148,15 +146,15 @@ describe('ResearchService with the candidate brain', () => {
       research: { list: () => t.svc.cards(), approve: (id: string) => t.svc.approve(id), reject: (id: string) => t.svc.reject(id), repo: () => t.svc.repo(), candidates: () => t.svc.candidateCards() } } as ProposalPorts;
     const deck = await src.list(portsP);
     const card = deck.find(x => x.group === 'brain')!;
-    expect(card.ask).toMatchObject({ kind: 'candidate', files: 4, items: [{ finding: 'rule' }, { finding: 'skill' }, { finding: 'forget' }] });
-    expect(card.diffs).toHaveLength(4);
+    expect(card.ask).toMatchObject({ kind: 'candidate', files: 2, items: [{ finding: 'skill' }, { finding: 'forget' }] });
+    expect(card.diffs).toHaveLength(2);
     expect(deck.filter(x => x.group === 'brain')).toHaveLength(1);
 
     const changeId = await t.svc.approve(c!.id);
-    expect(fs.readFileSync(path.join(root, 'rules', 'lessons.md'), 'utf8')).toContain('Staging is stg-eu.');
+    expect(fs.readFileSync(path.join(root, '.claude', 'skills', 'deploy-notes', 'SKILL.md'), 'utf8')).toContain('Never name branches.');
     expect(fs.existsSync(path.join(root, 'rules', 'old-proxy.md'))).toBe(false);
     expect(t.cp.log.all()).toHaveLength(1);
-    expect(t.cp.log.all()[0]!.files).toHaveLength(4);
+    expect(t.cp.log.all()[0]!.files).toHaveLength(2);
     expect(t.svc.store.all().filter(x => x.candidateId === c!.id).every(x => x.state === 'approved' && x.changeId === changeId)).toBe(true);
     expect(t.svc.candidateCards()).toHaveLength(0);
     // one undo restores every file
@@ -168,12 +166,13 @@ describe('ResearchService with the candidate brain', () => {
     const root = brain();
     const t = research(root);
     await t.svc.start(opts);
-    t.svc.propose('c1', { kind: 'rule', title: 'Staging is stg-eu', adds: 'A line.', why: 'w', change: { text: 'Staging is stg-eu.' } });
+    t.svc.propose('c1', { kind: 'skill', title: 'Staging is stg-eu', adds: 'A section.', why: 'w', change: { name: 'deploy-notes', text: 'Staging is stg-eu.' } });
     await end(t);
     const [c] = t.svc.candidateCards();
-    fs.appendFileSync(path.join(root, 'rules', 'lessons.md'), '- my own line\n');
+    const skill = path.join(root, '.claude', 'skills', 'deploy-notes', 'SKILL.md');
+    fs.appendFileSync(skill, '- my own line\n');
     await expect(t.svc.approve(c!.id)).rejects.toThrow(/cambiato/);
-    expect(fs.readFileSync(path.join(root, 'rules', 'lessons.md'), 'utf8')).not.toContain('stg-eu');
+    expect(fs.readFileSync(skill, 'utf8')).not.toContain('stg-eu');
     expect(t.svc.candidateCards()).toHaveLength(0);
     expect(t.svc.cards().map(x => x.title)).toEqual(['Staging is stg-eu']);
   });

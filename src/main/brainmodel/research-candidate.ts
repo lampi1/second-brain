@@ -1,7 +1,7 @@
 // The candidate brain (ADR 0195), after Anthropic's «dreaming» for managed agents: a job reads the sessions and a memory
 // store and writes a NEW store (duplicates merged, superseded values replaced, new insights), never touching its input;
 // the user compares and keeps it or throws it away. Here: the brain-file findings one maintenance research proposes (a
-// skill written or extended, a line for every role in rules/lessons.md, a skill or a rules/ file to forget) are not
+// skill written or extended, a skill or a rules/ file to forget) are not
 // separate cards any more; when the research ends they are planned together on a virtual copy of the brain, the
 // affected files are copied under userData/brain-candidates/<id>/files (the brain is never written), zero-token checks
 // run, the recorded-task replay (evaluation.ts) is started only when an anonymized holdout set exists and the research's
@@ -22,7 +22,7 @@ import { NAME_RE, parseMd, setBody } from '../../shared/skillmd';
 import { readLocal, writeLocal } from '../agents/local-store';
 import { checkPermissionText } from '../agents/tool-policy';
 import { errText, log } from '../log';
-import { appendUnder, brainJsonWithTopic, LESSONS_RULE, LESSONS_WHEN, skillText } from './jobs';
+import { appendUnder, skillText } from './jobs';
 import { ignoreWrite, sourceOfSkill } from './migration-ignore';
 import { landsInsideBrain, readSmall } from './model';
 import type { ProcedureSection } from './procedure-sources';
@@ -89,7 +89,7 @@ function filesUnder(dir: string): string[] | null {
  *  later finding writes) is skipped with the reason. The texts are the ones approving a single card writes (service.ts
  *  applyResearch), so the candidate never says something else than a card would. */
 export function planCandidate(input: PlanInput, proposals: readonly ResearchProposal[]): CandidatePlan {
-  const root = input.root, stamp = `(${new Date(input.now).toISOString().slice(0, 10)}; manutenzione)`;
+  const root = input.root;
   const files = new Map<string, PlannedFile>();
   const used: string[] = [], skipped: CandidatePlan['skipped'] = [], forgetSkills: string[] = [];
   const now = (file: string): string | null => (files.has(file) ? files.get(file)!.after : readSmall(file));
@@ -140,13 +140,7 @@ export function planCandidate(input: PlanInput, proposals: readonly ResearchProp
           const before = read(file);
           if (have && before === null) throw new Error(writes.has(file) || files.has(file) ? 'la skill è tolta da un\'altra proposta' : 'skill non leggibile');
           put(file, before !== null ? setBody(before, appendUnder(parseMd(before).body, 'Dalla manutenzione', text)) : skillText(name, oneLine(p.title, 300), text));
-        } else {
-          const file = path.join(root, LESSONS_RULE), had = read(file);
-          if (had === null && fs.existsSync(file) && !files.has(file)) throw new Error(`${LESSONS_RULE} non leggibile`);
-          put(file, appendUnder(had ?? LESSONS_WHEN, 'Dalla manutenzione', `- ${oneLine(text, 600)} ${stamp}`));
-          const cfg = files.has(path.join(root, 'brain.json')) ? null : brainJsonWithTopic(root, LESSONS_RULE);
-          if (cfg) put(cfg.file, cfg.text);
-        }
+        } else throw new Error('regole per tutti i ruoli: non ci sono più (#366), va proposta una skill');
       }
     } catch (e) { skipped.push({ id: p.id, why: errText(e).slice(0, 200) }); continue; }
     if (![...writes].some(([file, text]) => text !== now(file))) { skipped.push({ id: p.id, why: 'niente da cambiare' }); continue; }

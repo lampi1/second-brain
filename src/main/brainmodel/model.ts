@@ -11,6 +11,8 @@ import type { AgentProfile } from '../../shared/agents';
 import type { BrainRule, BrainSkill, MemoryFile, SkillHome } from '../../shared/brain-model';
 import { field, parseMd } from '../../shared/skillmd';
 import { configOf } from '../rules/storage';
+import { fixedSize } from '../rules/guards';
+import { appBoot } from '../rules/instructions';
 import { portableId } from '../agents/pack/flows';
 
 const MAX_BYTES = 256 * 1024;
@@ -105,16 +107,25 @@ function rule(root: string, rel: string, loaded: BrainRule['loaded']): BrainRule
   if (m) { try { const w = JSON.parse(m[1]!) as Partial<NonNullable<BrainRule['when']>>; when = { prompt: w.prompt ?? [], tools: w.tools ?? [], paths: w.paths ?? [] }; } catch { when = null; } }
   const body = m ? text.replace(/\r\n/g, '\n').slice(m[0].length) : text;
   const title = /^#\s+(.+)$/m.exec(body)?.[1]?.trim() ?? path.posix.basename(rel, '.md');
-  return { file: rel, title: plain(title), summary: firstProse(body), when, loaded, lines: text.split(/\r?\n/).length, changedAt: mtime(path.join(root, rel)) };
+  return { file: rel, title: plain(title), summary: firstProse(body), when, loaded, lines: text.split(/\r?\n/).length, chars: text.length, changedAt: mtime(path.join(root, rel)) };
 }
-/** The brain's rules: its always-loaded files (not me.md: the profile has its own page), its topic files and rules/. */
+/** The brain's rule files for «Sempre caricato» (#366): the fixed core (me.md first, loaded at every start), then the
+ *  topic files and rules/ that are no longer loaded (topic rules are not injected any more: they become skills). */
 export function readRules(root: string | null): BrainRule[] {
   if (!root) return [];
   let fixed: string[] = [], topics: string[] = [];
-  try { const c = configOf(root); fixed = c.fixedFiles.filter(f => f !== 'me.md'); topics = c.topicFiles; } catch { /* an unreadable brain.json: only rules/ */ }
+  try { const c = configOf(root); fixed = [...new Set(c.fixedFiles)]; topics = c.topicFiles; } catch { /* an unreadable brain.json: only rules/ */ }
   const files = new Set<string>([...fixed, ...topics]);
   try { for (const f of fs.readdirSync(path.join(root, 'rules')).sort()) if (/\.md$/i.test(f)) files.add(`rules/${f}`); } catch { /* none */ }
-  return [...files].flatMap(rel => rule(root, rel, fixed.includes(rel) ? 'always' : topics.includes(rel) ? 'topic' : 'none') ?? []);
+  return [...files].flatMap(rel => rule(root, rel, fixed.includes(rel) ? 'always' : 'none') ?? []);
+}
+/** The fixed core's size against its budget (rules/instructions.ts productInstructions checks the same at launch). */
+export function coreSize(root: string | null): { chars: number; budget: number; appRules: boolean } | undefined {
+  if (!root) return undefined;
+  try {
+    const config = configOf(root);
+    return { chars: fixedSize({ root, state: '', config }) + (config.appRules ? appBoot(root).length : 0), budget: config.fixedBudget, appRules: !!config.appRules };
+  } catch { return undefined; }
 }
 
 /** Folder names that hold knowledge notes, and the group the page shows them under. */

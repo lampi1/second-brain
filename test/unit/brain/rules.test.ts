@@ -60,19 +60,12 @@ describe('product brain rules', () => {
     expect(() => lease(b.state, 'test', 'owner')).toThrow('held');
     expect(lease(b.state, 'test', 'owner', token)).toBe('');
   });
-  it('injects text once until changed, matches tools and paths, and bounds the whole turn', () => {
+  it('injects no topic text: topic rules are skills since #366', () => {
     const b = setup();
-    fs.writeFileSync(path.join(b.root, 'brain.json'), JSON.stringify({ rules: { topicFiles: ['code.md', 'second.md'], turnBudget: 300 } }));
-    const topic = '---\nwhen: {"prompt":["code"],"tools":["Read"],"paths":["**/src/*.ts"]}\n---\n';
-    fs.writeFileSync(path.join(b.root, 'code.md'), topic + 'Rule text. '.repeat(100));
-    fs.writeFileSync(path.join(b.root, 'second.md'), topic + 'Second rule.');
-    const first = b.run(prompt as HookInput).context!;
-    expect(first).toContain('Rule text'); expect(first).toContain('Read the rest'); expect(first.length).toBeLessThanOrEqual(300);
-    expect(b.run({ hook_event_name: 'PreToolUse', session_id: prompt.session_id, tool_name: 'Read' }).context).toBeUndefined();
-    expect(b.run(prompt as HookInput).context).toContain('Second rule');
-    fs.writeFileSync(path.join(b.root, 'code.md'), topic + 'Changed rule');
-    expect(b.run({ hook_event_name: 'PreToolUse', session_id: prompt.session_id, tool_name: 'Read' }).context).toContain('Changed rule');
-    expect(b.run({ hook_event_name: 'PreToolUse', session_id: 'path-chat', tool_name: 'Other', tool_input: { file_path: '/work/src/a.ts' } }).context).toContain('Changed rule');
+    fs.writeFileSync(path.join(b.root, 'brain.json'), JSON.stringify({ rules: { topicFiles: ['code.md'], turnBudget: 300 } }));
+    fs.writeFileSync(path.join(b.root, 'code.md'), '---\nwhen: {"prompt":["code"],"tools":["Read"],"paths":["**/src/*.ts"]}\n---\nRule text.');
+    expect(b.run(prompt as HookInput).context).toBeUndefined();
+    expect(b.run({ hook_event_name: 'PreToolUse', session_id: prompt.session_id, tool_name: 'Read', tool_input: { file_path: '/work/src/a.ts' } }).context).toBeUndefined();
   });
   it('keeps feed metadata free of prompts and filters agent correction messages', () => {
     const b = setup();

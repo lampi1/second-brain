@@ -6,7 +6,7 @@ import type { AgentProfile, AgentRun } from '../../shared/agents';
 import type { BrainModelState, LessonStub, MigrationReport, MaintenanceRun } from '../../shared/brain-model';
 import { ChangeLog } from './changes';
 import { claimOf, learningState, measurable, seal, type IntervalCache } from './evidence';
-import { readMemory, readRules, readSkills, type SkillDir } from './model';
+import { coreSize, readMemory, readRules, readSkills, type SkillDir } from './model';
 import { memoryStats } from './memory-stats';
 import { canUndoMemoryTidy } from '../rules/memory-records';
 import { portableId } from '../agents/pack/flows';
@@ -37,9 +37,10 @@ export function readBrainView(i: BrainViewInput, changes = new ChangeLog(i.userD
   let learning: BrainModelState['learning'];
   try { learning = learningState(claims, roles, runs, i.now, i.lessons); }
   catch (e) { log.warn('brain', 'learning page failed', { cause: errText(e), hint: 'the Apprendimento page shows no curves' }); }
+  const core = coreSize(root);
   return { root, agents: roles.map(p => ({ id: p.id, name: p.name, role: p.purpose,
     skills: [...new Set([...p.skills, ...(p.knowhow?.linked ?? [])])], memory: root ? `agents/${portableId(p.id)}/memory.md` : null })),
-    skills, rules: readRules(root), memory, changes: claims,
+    skills, rules: readRules(root), memory, changes: claims, ...(core ? { core } : {}),
     migration: optionalReport<MigrationReport>(path.join(i.userData, 'brain-migration.json')),
     lastRun: optionalReport<MaintenanceRun>(path.join(i.userData, 'brain-maintenance.json')),
     ...(stats ? { memoryStats: stats } : {}), ...(learning ? { learning } : {}) };

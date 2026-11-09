@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { firstProse, readMemory, readRules, readSkills, skillTools, touchesBrainModel } from '../../../src/main/brainmodel/model';
+import { coreSize, firstProse, readMemory, readRules, readSkills, skillTools, touchesBrainModel } from '../../../src/main/brainmodel/model';
 import type { AgentProfile } from '../../../src/shared/agents';
 
 const dirs: string[] = [];
@@ -31,18 +31,21 @@ describe('readSkills', () => {
 });
 
 describe('readRules', () => {
-  it('says how each rule reaches the agents; never the profile', () => {
+  it('lists the fixed core first (me.md too) and every other rule file as no longer loaded (#366); the core size', () => {
     const root = tmp();
-    put(root, 'brain.json', JSON.stringify({ rules: { fixedFiles: ['me.md', 'AGENTS.md'], topicFiles: ['rules/stile.md'] } }));
-    put(root, 'me.md', '# Io\n'); put(root, 'AGENTS.md', '# Regole del brain\nSempre in italiano.\n');
+    put(root, 'brain.json', JSON.stringify({ rules: { fixedFiles: ['me.md', 'AGENTS.md'], topicFiles: ['rules/stile.md'], fixedBudget: 9000 } }));
+    put(root, 'me.md', '# Io\nDavide.\n'); put(root, 'AGENTS.md', '# Regole del brain\nSempre in italiano.\n');
     put(root, 'rules/stile.md', '---\nwhen: {"prompt":["mail"],"tools":[],"paths":[]}\n---\n# Stile\nFrasi brevi.\n');
     put(root, 'rules/bozza.md', '# Bozza\nDa decidere.\n');
-    expect(readRules(root).map(r => [r.file, r.loaded, r.title, r.summary, r.when?.prompt ?? null])).toEqual([
-      ['AGENTS.md', 'always', 'Regole del brain', 'Sempre in italiano.', null],
-      ['rules/stile.md', 'topic', 'Stile', 'Frasi brevi.', ['mail']],
-      ['rules/bozza.md', 'none', 'Bozza', 'Da decidere.', null],
+    expect(readRules(root).map(r => [r.file, r.loaded, r.title, r.summary])).toEqual([
+      ['me.md', 'always', 'Io', 'Davide.'],
+      ['AGENTS.md', 'always', 'Regole del brain', 'Sempre in italiano.'],
+      ['rules/stile.md', 'none', 'Stile', 'Frasi brevi.'],
+      ['rules/bozza.md', 'none', 'Bozza', 'Da decidere.'],
     ]);
+    expect(coreSize(root)).toEqual({ chars: '# Io\nDavide.\n\n\n# Regole del brain\nSempre in italiano.\n'.length, budget: 9000, appRules: false });
     expect(readRules(null)).toEqual([]);
+    expect(coreSize(null)).toBeUndefined();
   });
 });
 

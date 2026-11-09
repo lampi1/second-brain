@@ -502,6 +502,8 @@ export class ResearchService {
     const role = typeof o.role === 'string' && o.role ? o.role : undefined;
     if (role !== undefined && !isRoleId(role)) throw new Error('change.role: a role id.');
     if (target === 'role' && !role) throw new Error('change.role: required for a change to a role.');
+    // rules for every role are gone (#366, ADR 0243): what all roles should know is a skill
+    if (target === 'rule' && !role) throw new Error('change.role: a rule is for one role now (rules for every role are gone): for everyone, propose a skill.');
     const name = typeof o.name === 'string' && o.name.trim() ? str(o.name, 64, 'change.name') : undefined;
     if (target === 'skill' && (!name || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name))) throw new Error('change.name: the skill\'s kebab-case name.');
     const text = str(o.text, target === 'skill' ? 8000 : 800, 'change.text');

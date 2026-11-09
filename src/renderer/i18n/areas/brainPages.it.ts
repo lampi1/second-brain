@@ -16,7 +16,7 @@ export const brainPagesIt = {
   'brainPages.nav.agenti': 'Agenti',
   'brainPages.nav.skill': 'Skill',
   'brainPages.nav.impostazioni': 'Impostazioni',
-  'brainPages.nav.regole': 'Regole',
+  'brainPages.nav.regole': 'Sempre caricato',
   'brainPages.nav.memoria': 'Memoria',
   'brainPages.nav.collegamenti': 'Mappa',
 
@@ -98,27 +98,6 @@ export const brainPagesIt = {
   'brainPages.idee.whatAI': "Gli spunti dell'IA per migliorare il brain, il tuo modo di lavorare e se stessa, ognuno con il suo ragionamento. Clic su una riga per leggerlo e discuterne con l’Orchestrator.",
   'brainPages.idee.whatDefault': "Le idee tue e dell'IA, da ideas.md. Filtra per stato, area e chi l'ha avuta; clic su una riga per leggerla tutta e discuterne con l’Orchestrator.",
 
-  // LearnedRules.tsx (once the Miglioramento page)
-  'brainPages.miglioramento.pageTitle': 'Regole imparate',
-  'brainPages.miglioramento.helpQuestion': 'Cosa vuol dire?',
-  'brainPages.miglioramento.noData': 'senza dati',
-  'brainPages.miglioramento.driftWarning': 'dati cambiati: ricalibrare?',
-  'brainPages.miglioramento.noVersion': 'Nessuna versione ancora',
-  'brainPages.miglioramento.appliedAt': (p: { when: string; by?: string }) => `in vigore dal ${p.when}${p.by ? `, da ${p.by}` : ""}`,
-  'brainPages.miglioramento.typicalSuffix': (p: { n: number }) => ` errore tipico sulle ultime ${p.n}`,
-  'brainPages.miglioramento.sparklineLabel': (p: { n: number }) => `Errore delle ultime ${p.n}, una barra per caso: più alta = più lontana dal reale`,
-  'brainPages.miglioramento.nameQuote': (p: { name: string }) => `«${p.name}» · `,
-  'brainPages.miglioramento.outsidePrefix': 'Fuori dal conto: ',
-  'brainPages.miglioramento.outsideUnknown': (p: { n: number }) => `${p.n} con esito sconosciuto`,
-  'brainPages.miglioramento.outsideNoPrediction': (p: { n: number }) => `${p.n} senza stima (troppo poca storia prima)`,
-  'brainPages.miglioramento.actionFailed': (p: { error: string }) => `non fatto: ${p.error}`,
-  'brainPages.miglioramento.proposalRestore': 'Ripristino proposto',
-  'brainPages.miglioramento.proposal': 'Proposta',
-  'brainPages.miglioramento.checkTitle': "Verifica dopo l'ultimo cambio",
-  'brainPages.miglioramento.restoreBtn': (p: { v: number }) => `Ripristina v${p.v}`,
-  'brainPages.miglioramento.lead': (p: { count: number }) => `${p.count} ${p.count === 1 ? "politica" : "politiche"} che imparano dai risultati; `,
-  'brainPages.miglioramento.leadPending': (p: { pending: number }) => `${p.pending} ${p.pending === 1 ? "proposta" : "proposte"} da decidere`,
-  'brainPages.miglioramento.leadNoPending': 'nessuna proposta da decidere',
 
   // RecordDiscussButton.tsx
   'brainPages.recordDiscuss.title': "Apre l’Orchestrator qui accanto con un messaggio già pronto su questo record: se serve lavoro, è lui ad aprire la chat",

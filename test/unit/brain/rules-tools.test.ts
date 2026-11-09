@@ -7,7 +7,8 @@ import path from 'node:path';
 import { useAssets } from '../../../src/main/rules/delivery';
 
 const fakeAssets = { dir: '' };
-const { useTemplateRoot, useToolsHome,  } = await import('../../../src/main/rules/tools');
+const { useTemplateRoot, useToolsHome, ensureTools, topicSkillName } = await import('../../../src/main/rules/tools');
+const { appSkillsIn } = await import('../../../src/main/agents/pack/shared-skills');
 const { toolReferences } = await import('../../../src/main/rules/new-brain');
 const { journalOf, migrate, recoverMigration } = await import('../../../src/main/rules/migration');
 const {  } = await import('../../../src/main/brain/adapters/claude-plugin');
@@ -35,15 +36,28 @@ beforeEach(() => {
 afterEach(() => { useToolsHome(null); useTemplateRoot(null); useAssets(null); for (const r of roots.splice(0)) fs.rmSync(r, { recursive: true, force: true }); });
 
 describe('product brain activation for Claude', () => {
-  it('expands {tools} in injected topics and leaves the correction reminder to the template hook when it runs', () => {
+  it('injects no topic text (#366: topics are skills) and leaves the correction reminder to the template hook when it runs', () => {
     const root = brain(), state = path.join(base, 'state');
     fs.writeFileSync(path.join(root, 'code.md'), '---\nwhen: {"prompt":["code"]}\n---\nRun `{tools}/ops/tools/brain-lint.mjs`.\n');
     fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', rules: { topicFiles: ['code.md'] } }));
     const input = { hook_event_name: 'UserPromptSubmit' as const, session_id: 's1', prompt: 'code: this is wrong' };
     const withHook = runHook(root, state, input, { tools: 'C:/app/tools', correctionHook: true });
-    expect(withHook.context).toContain('C:/app/tools/ops/tools/brain-lint.mjs');
-    expect(withHook.context).not.toContain('correction');
+    expect(withHook.context).toBeUndefined();
     expect(runHook(root, state, { ...input, session_id: 's2' }).context).toContain('correction');
+  });
+});
+
+describe('product topic rules as app skills (#366, ADR 0243)', () => {
+  it('renders each topic rule of the copy as an app skill, rendered for this brain, with no when: frontmatter', () => {
+    const tools = ensureTools(brain());
+    const topics = (JSON.parse(fs.readFileSync(path.join(tools, '.sb-tools.json'), 'utf8')) as { topics: string[] }).topics;
+    expect(topics).toContain('rules/qa.md');
+    expect(topicSkillName('rules/qa.md')).toBe('regole-qa');
+    const md = fs.readFileSync(path.join(appSkillsIn(tools), 'regole-qa', 'SKILL.md'), 'utf8');
+    expect(md).toMatch(/^---\nname: regole-qa\ndescription: "QA rules: product rules, read when a QA chat, a test case, verifying a fix\. Words that call it: qa, test case/);
+    expect(md).not.toContain('when: {');
+    expect(md).toContain("Anna D'Amico's rules for testing");
+    expect(md).not.toContain('{{OWNER}}');
   });
 });
 

@@ -32,6 +32,7 @@ const state: BrainModelState = {
     { name: 'deploy-check', description: 'Check a deploy', file: '/b/.claude/skills/deploy-check/SKILL.md', rel: '.claude/skills/deploy-check/SKILL.md', home: 'brain', usedBy: [], tools: [], lines: 4, changedAt: null, madeBy: null },
   ],
   rules: [
+    { file: 'AGENTS.md', title: 'Regole fisse', summary: 'Mai in produzione.', when: null, loaded: 'always', lines: 3, changedAt: null },
     { file: 'code.md', title: 'Codice', summary: 'Small diffs.', when: { prompt: ['diff'], tools: [], paths: [] }, loaded: 'topic', lines: 5, changedAt: null },
     { file: 'rules/old.md', title: 'Vecchia', summary: '', when: null, loaded: 'none', lines: 2, changedAt: null },
   ],
@@ -92,16 +93,18 @@ describe('pages', () => {
     brainModel.set(() => ({ state, error: null, busy: false }));
     setLang('it');
     const rules = renderToStaticMarkup(createElement(RulesPage));
-    expect(rules).toContain('Quando serve');
-    expect(rules).toContain('Non caricata');
+    // «Sempre caricato» (#366): the fixed core first, the old topic and rule files below as no longer loaded
+    expect(rules).toContain('Regole fisse');
+    expect(rules.indexOf('Regole fisse')).toBeLessThan(rules.indexOf('Non più caricate'));
     expect(rules).toContain('Vecchia');
+    expect(rules).not.toContain('Quando serve');
     tab('file');
     const mem = renderToStaticMarkup(createElement(MemoryPage));
     expect(mem).toContain('Clienti');
     expect(mem).toContain('Memoria: Revisione');
     expect(mem).toContain('Merged one line');
     setLang('en');
-    expect(renderToStaticMarkup(createElement(RulesPage))).toContain('When relevant');
+    expect(renderToStaticMarkup(createElement(RulesPage))).toContain('No longer loaded');
     expect(renderToStaticMarkup(createElement(MemoryPage))).toContain('Customers');
   });
   it('renders the Memoria statistics with their explanations, and a clean brain says what will appear', () => {

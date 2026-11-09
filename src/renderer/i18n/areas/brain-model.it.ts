@@ -17,7 +17,7 @@ export const brainModelIt = {
 
   // maintenance panel
   'bm.maint.title': 'Manutenzione',
-  'bm.maint.lead': 'Parte solo quando premi «Manutenzione»: pulisce la memoria e propone come card in Memoria → Proposte le nuove skill e regole, le idee e le issue da aprire. Niente cambia skill o regole prima del tuo sì. Ogni modifica fatta è qui, con il motivo e «Annulla».',
+  'bm.maint.lead': 'Parte solo quando premi «Manutenzione»: pulisce la memoria e propone come card in Memoria → Proposte le nuove skill, le idee e le issue da aprire. Niente cambia le skill prima del tuo sì. Ogni modifica fatta è qui, con il motivo e «Annulla».',
   'bm.maint.approvalNote': 'Ti chiede conferma anche per le azioni in produzione, i permessi (strumenti e permessi massimi di un agente), le impostazioni e gli hook (compreso il motore di un agente), e i testi per colleghi o sistemi esterni.',
   'bm.maint.last': (p: { at: string }) => `Ultimo passaggio: ${p.at}`,
   'bm.maint.never': 'Nessun passaggio ancora: parte quando premi «Manutenzione».',
@@ -37,14 +37,14 @@ export const brainModelIt = {
 
   // Skill page
   // Regole page
-  'bm.rules.title': 'Regole',
-  'bm.rules.lead': (p: N) => `${p.n === 1 ? '1 regola' : `${p.n} regole`} del tuo brain: valgono per ogni agente. Le regole dell’app arrivano a ogni chat in più, senza stare qui.`,
-  'bm.rules.loaded.always': 'Sempre', 'bm.rules.loaded.topic': 'Quando serve', 'bm.rules.loaded.none': 'Non caricata',
+  'bm.rules.lead': (p: { n: number; chars: number; budget: number; app: boolean }) => `Quello che ogni chat riceve all’avvio: ${p.n === 1 ? '1 file' : `${p.n} file`} del tuo brain${p.app ? ' più le regole fisse dell’app' : ''}, ${p.chars.toLocaleString('it-IT')} caratteri su ${p.budget.toLocaleString('it-IT')}. Tutto il resto sono skill, caricate quando servono.`,
+  'bm.rules.lead0': 'Quello che ogni chat riceve all’avvio. Tutto il resto sono skill, caricate quando servono.',
+  'bm.rules.loaded.always': 'Sempre', 'bm.rules.loaded.topic': 'Quando serve', 'bm.rules.loaded.none': 'Non più caricata',
   'bm.rules.loadedHint.always': 'Entra in ogni chat dall’inizio.',
   'bm.rules.loadedHint.topic': 'Entra nella chat quando la richiesta, uno strumento o un file la riguardano.',
-  'bm.rules.loadedHint.none': 'Il file è nel brain ma brain.json non lo elenca: gli agenti lo leggono solo se lo aprono.',
-  'bm.rules.whenPrompt': 'parole', 'bm.rules.whenTools': 'strumenti', 'bm.rules.whenPaths': 'file',
-  'bm.rules.empty': 'Nessuna regola nel brain. Nascono dalle tue correzioni: quando ne dici una che vale per tutti, arriva qui.',
+  'bm.rules.loadedHint.none': 'Non entra più nelle chat: le regole per argomento sono diventate skill. La migrazione porta le sue procedure nelle skill.',
+  'bm.rules.oldTitle': 'Non più caricate',
+  'bm.rules.empty': 'Nessun file fisso nel brain: ogni chat riceve solo le regole fisse dell’app.',
 
   // Memoria page
   'bm.mem.title': 'Memoria',

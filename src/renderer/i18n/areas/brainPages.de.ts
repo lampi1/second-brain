@@ -18,7 +18,7 @@ export const brainPagesDe: typeof brainPagesIt = {
   'brainPages.nav.agenti': 'Agenten',
   'brainPages.nav.skill': 'Skills',
   'brainPages.nav.impostazioni': 'Einstellungen',
-  'brainPages.nav.regole': 'Regeln',
+  'brainPages.nav.regole': 'Immer geladen',
   'brainPages.nav.memoria': 'Gedächtnis',
   'brainPages.nav.collegamenti': 'Karte',
 
@@ -100,27 +100,6 @@ export const brainPagesDe: typeof brainPagesIt = {
   'brainPages.idee.whatAI': 'Die Ideen der KI, um das Brain, deine Arbeitsweise und sich selbst zu verbessern, jede mit ihrer Begründung. Klick auf eine Zeile, um sie zu lesen und mit dem Orchestrator zu besprechen.',
   'brainPages.idee.whatDefault': 'Deine Ideen und die der KI, aus ideas.md. Filter nach Status, Bereich und wer sie hatte; klick auf eine Zeile, um sie ganz zu lesen und mit dem Orchestrator zu besprechen.',
 
-  // LearnedRules.tsx (once the Miglioramento page)
-  'brainPages.miglioramento.pageTitle': 'Gelernte Regeln',
-  'brainPages.miglioramento.helpQuestion': 'Was heißt das?',
-  'brainPages.miglioramento.noData': 'keine Daten',
-  'brainPages.miglioramento.driftWarning': 'Daten geändert: neu kalibrieren?',
-  'brainPages.miglioramento.noVersion': 'Noch keine Version',
-  'brainPages.miglioramento.appliedAt': (p: { when: string; by?: string }) => `gültig seit ${p.when}${p.by ? `, von ${p.by}` : ""}`,
-  'brainPages.miglioramento.typicalSuffix': (p: { n: number }) => ` typischer Fehler in den letzten ${p.n}`,
-  'brainPages.miglioramento.sparklineLabel': (p: { n: number }) => `Fehler in den letzten ${p.n}, ein Balken pro Fall: höher = weiter weg von der Realität`,
-  'brainPages.miglioramento.nameQuote': (p: { name: string }) => `„${p.name}“ · `,
-  'brainPages.miglioramento.outsidePrefix': 'Nicht mitgezählt: ',
-  'brainPages.miglioramento.outsideUnknown': (p: { n: number }) => `${p.n} mit unbekanntem Ergebnis`,
-  'brainPages.miglioramento.outsideNoPrediction': (p: { n: number }) => `${p.n} ohne Schätzung (zu wenig Verlauf davor)`,
-  'brainPages.miglioramento.actionFailed': (p: { error: string }) => `fehlgeschlagen: ${p.error}`,
-  'brainPages.miglioramento.proposalRestore': 'Wiederherstellung vorgeschlagen',
-  'brainPages.miglioramento.proposal': 'Vorschlag',
-  'brainPages.miglioramento.checkTitle': 'Prüfung nach der letzten Änderung',
-  'brainPages.miglioramento.restoreBtn': (p: { v: number }) => `v${p.v} wiederherstellen`,
-  'brainPages.miglioramento.lead': (p: { count: number }) => `${p.count} ${p.count === 1 ? "Richtlinie lernt" : "Richtlinien lernen"} aus Ergebnissen; `,
-  'brainPages.miglioramento.leadPending': (p: { pending: number }) => `${p.pending} ${p.pending === 1 ? "Vorschlag" : "Vorschläge"} zu entscheiden`,
-  'brainPages.miglioramento.leadNoPending': 'keine Vorschläge zu entscheiden',
 
   // RecordDiscussButton.tsx
   'brainPages.recordDiscuss.title': 'Öffnet den Orchestrator neben der Seite mit einer fertigen Nachricht zu diesem Eintrag: wenn Arbeit nötig ist, öffnet er den Chat',

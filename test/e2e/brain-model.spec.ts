@@ -1,6 +1,6 @@
 // E2E of the Brain section (ADR 0077, #84, #81) on the frozen demo, whose made-up brain has the former runbook and
 // routines sections already migrated into skills: the Skill page (list, migration report, a role switched on from the
-// skill's Ruoli tab and off again), Regole, Memoria, Classificatori (read-only cards; each detail holds its tables, "nessun dato ancora" where there is none)
+// skill's Ruoli tab and off again), Sempre caricato, Memoria, Classificatori (read-only cards; each detail holds its tables, "nessun dato ancora" where there is none)
 // and Mappa (agent → skills → rules → memory, plus the notes view), then the agent card's 3D flip (click, Esc back) and
 // its fade under reduced motion. Screenshots dark and light in test-results/shots/brain-*.png.
 import { expect, test, type Page } from '@playwright/test';
@@ -39,11 +39,12 @@ test('Brain pages: skills with links and undo, rules, memory, classifiers, map; 
     await box.uncheck();
     await expect(box).not.toBeChecked();
 
-    // ── Regole
+    // ── Sempre caricato (the old Regole tab, #366): the fixed core as cards, the characters against the budget
     await goPage(page, 'regole');
     const rules = page.getByTestId('bm-rules-page');
-    await expect(rules.locator('article.catalog-card').first()).toBeVisible();
-    await expect(rules.getByTestId('bm-rule-loaded').first()).toBeVisible();
+    await expect(rules.getByTestId('bm-rules-core').locator('article.catalog-card').first()).toBeVisible();
+    await expect(rules.getByTestId('bm-rules-core').getByTestId('bm-rule-loaded').first()).toHaveText('Sempre');
+    await expect(rules).toContainText('caratteri su');
     await shot(page, 'brain-rules-dark');
 
     // ── Memoria: knowledge, what happened, the agents' memories; "Unisci i doppioni"

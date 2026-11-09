@@ -247,3 +247,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0240](0240-idle-engines-end-and-unsaved-work-holds.md) Idle engines end with their tools; a chat with unsaved git work does not close by itself — accepted
 - [0241](0241-skill-packages-and-skill-library.md) A skill is a package in .agents/skills, with its own page, history and roles — accepted
 - [0242](0242-role-skill-instead-of-role-notes.md) A role's know-how is its role skill; what it learns is a lesson the user approves — accepted
+- [0243](0243-fixed-core-instead-of-rules.md) Rules are gone: a fixed core is always loaded, everything else is a skill — accepted

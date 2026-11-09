@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import { createHash } from 'node:crypto';
 import { atomicWrite, configOf, locked, read } from './storage';
 import { guard } from './guards';
-import { inject, type TopicState } from './topics';
+import type { TopicState } from './topics';
 import { autoCommit } from './maintenance';
 import type { HookInput, HookResult, LaunchFacts, RuleContext } from './types';
 export { writeNow, writeError } from './memory';
@@ -25,7 +25,8 @@ export function runHook(root: string, state: string, input: HookInput, launch: L
       const saved = read(state, file);
       const current: TopicState = saved ? JSON.parse(saved) as TopicState : { seen: {}, used: 0 };
       let context = '';
-      if (input.hook_event_name === 'UserPromptSubmit' || input.hook_event_name === 'PreToolUse') context = inject(ctx, input, current);
+      // topic rules are no longer injected (#366, ADR 0243): they are skills now; only the fixed core is always loaded
+      if (input.hook_event_name === 'UserPromptSubmit') current.used = 0;
       if (input.hook_event_name === 'UserPromptSubmit' && typeof input.prompt === 'string' && launch.correctionHook !== true &&
           !/^\s*<|\[Messaggio di un agente|Another Claude session/.test(input.prompt) &&
           /\b(non (?:così|funziona|devi)|sbagliat|ti ho detto|wrong|incorrect|not what I asked)/i.test(input.prompt)) {

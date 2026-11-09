@@ -39,7 +39,7 @@ export function researchTools(research: Pick<ResearchService, 'pack' | 'propose'
       expected: s('what should change afterwards and how it is measured'), risk: s('what could go wrong and how to go back'),
       change: { type: 'object', additionalProperties: false, required: ['text'], properties: {
         target: { type: 'string', enum: ['skill', 'rule', 'role'], description: 'only for bold: what it changes' },
-        role: s('the role id it is for (needed for role; a rule without role is for every role)'),
+        role: s('the role id it is for (needed for role and rule: rules for every role are gone, propose a skill instead)'),
         name: s('a skill\'s kebab-case name (new or existing in the brain)'),
         text: s('the text to add: a skill\'s body in Markdown, a rule line, a line for the role\'s text'),
       } },

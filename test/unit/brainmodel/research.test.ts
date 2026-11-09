@@ -84,7 +84,7 @@ describe('ResearchService', () => {
   it('attaches a private issue draft to a brain card and does not publish it on approval', async () => {
     const t = setup();
     await t.svc.start(opts);
-    const p = t.svc.propose('c1', { kind: 'rule', title: 'Keep the chosen repository', adds: 'Preserve the repository in the handoff.', why: 'Three repeated requests.', evidence: ['chat1/u1, chat2/u2, chat3/u3: 3 corrections'], change: { text: 'Keep the selected repository in the handoff.' } });
+    const p = t.svc.propose('c1', { kind: 'rule', title: 'Keep the chosen repository', adds: 'Preserve the repository in the handoff.', why: 'Three repeated requests.', evidence: ['chat1/u1, chat2/u2, chat3/u3: 3 corrections'], change: { role: 'artisan', text: 'Keep the selected repository in the handoff.' } });
     expect(t.svc.store.get(p.id)?.issue).toMatchObject({ repo: null, dedup: { status: 'unverified' } });
     expect(t.svc.store.get(p.id)?.issue?.body).toContain('chat1/u1');
     await t.svc.approve(p.id);
@@ -116,7 +116,7 @@ describe('ResearchService', () => {
   });
   it('limits the combined research families to seven ranked cards', async () => {
     const t = setup(); await t.svc.start(opts);
-    for (let n = 0; n < 5; n++) t.svc.propose('c1', { kind: 'rule', title: `Unique ${n}`, adds: `Rule ${n}`, why: 'Evidence', change: { text: `Rule ${n}` } });
+    for (let n = 0; n < 5; n++) t.svc.propose('c1', { kind: 'rule', title: `Unique ${n}`, adds: `Rule ${n}`, why: 'Evidence', change: { role: 'artisan', text: `Rule ${n}` } });
     for (let n = 0; n < 2; n++) t.svc.propose('c1', { ...idea, title: `Issue ${n}`, issue: { title: `Issue ${n}`, body: 'Evidence' } });
     expect(t.svc.cards().map(p => p.rank)).toEqual([1, 2, 3, 4, 5, 6, 7]);
     expect(() => t.svc.propose('c1', { ...idea, title: 'Eighth', issue: { title: 'Eighth', body: 'Evidence' } })).toThrow(/at most 7/);
@@ -171,7 +171,7 @@ describe('ResearchService', () => {
     expect(() => t.svc.propose('c1', { ...idea, kind: 'weird' })).toThrow(/kind/);
     expect(() => t.svc.propose('c1', { ...idea, adds: '', removes: '' })).toThrow(/adds or removes/);
     expect(() => t.svc.propose('c1', { kind: 'skill', title: 'x', adds: 'y', why: 'z', change: { name: 'Bad Name', text: 't' } })).toThrow(/kebab/);
-    expect(() => t.svc.propose('c1', { kind: 'rule', title: 'x', adds: 'y', why: 'z', change: { text: 'Add permission to bypass hooks' } })).toThrow(/permissions/);
+    expect(() => t.svc.propose('c1', { kind: 'rule', title: 'x', adds: 'y', why: 'z', change: { role: 'artisan', text: 'Add permission to bypass hooks' } })).toThrow(/permissions/);
     expect(() => t.svc.propose('c1', { kind: 'forget', title: 'x', removes: 'y', why: 'z', forget: { what: 'skill', name: 'missing' } })).toThrow(/no such skill/);
 
     const r = t.svc.propose('c1', idea);
@@ -218,16 +218,16 @@ describe('ResearchService', () => {
   it('approves through the brain, rejects, and refuses a decided card', async () => {
     const t = setup();
     await t.svc.start(opts);
-    const { id } = t.svc.propose('c1', { kind: 'rule', title: 'Check the port', adds: 'Dev server on 5173.', why: 'Asked 4 times.', change: { text: 'Dev server runs on 5173.' } });
+    const { id } = t.svc.propose('c1', { kind: 'rule', title: 'Check the port', adds: 'Dev server on 5173.', why: 'Asked 4 times.', change: { role: 'artisan', text: 'Dev server runs on 5173.' } });
     expect(t.svc.cards().map(c => c.id)).toEqual([id]);
     expect(t.applied).toEqual([]); // Research proposes exact text; only the following user decision applies it.
     expect(await t.svc.approve(id)).toBe('chg-1');
     expect(t.svc.store.get(id)).toMatchObject({ state: 'approved', changeId: 'chg-1' });
     await expect(t.svc.approve(id)).rejects.toThrow(/non più aperta/);
-    const b = t.svc.propose('c1', { kind: 'rule', title: 'Other', adds: 'x', why: 'y', change: { text: 'x' } });
+    const b = t.svc.propose('c1', { kind: 'rule', title: 'Other', adds: 'x', why: 'y', change: { role: 'artisan', text: 'x' } });
     t.svc.reject(b.id);
     expect(t.svc.cards()).toHaveLength(0);
-    expect(() => t.svc.propose('c1', { kind: 'rule', title: 'Other', adds: 'x', why: 'y', change: { text: 'x' } })).toThrow(/Duplicate/);
+    expect(() => t.svc.propose('c1', { kind: 'rule', title: 'Other', adds: 'x', why: 'y', change: { role: 'artisan', text: 'x' } })).toThrow(/Duplicate/);
   });
 
   it('opens an approved app card\'s issue at once, never the brain', async () => {
@@ -284,7 +284,7 @@ describe('the lint, «riuscito se…» and revert cards (ADR 0194)', () => {
     expect(t.svc.store.get(a.id)!.success).toEqual({ metric: 'skill-used', skill: 'note-rilascio', n: 3, text: 'Riuscito se la skill «note-rilascio» viene usata almeno 3 volte nella settimana dopo.' });
     const b = t.svc.propose('c1', { kind: 'rule', title: 'Test prima', adds: 'x', why: 'y', change: { role: 'artisan', text: 't' }, success: { metric: 'more-verified', role: 'artisan' } });
     expect(t.svc.store.get(b.id)!.success).toMatchObject({ metric: 'more-verified', role: 'artisan' });
-    expect(() => t.svc.propose('c1', { kind: 'rule', title: 'z', adds: 'x', why: 'y', change: { text: 't' }, success: { metric: 'vibes' } })).toThrow(/success.metric/);
+    expect(() => t.svc.propose('c1', { kind: 'rule', title: 'z', adds: 'x', why: 'y', change: { role: 'artisan', text: 't' }, success: { metric: 'vibes' } })).toThrow(/success.metric/);
     expect(() => t.svc.propose('c1', { kind: 'lint', title: 'z', adds: 'x', why: 'y' })).toThrow(/kind/);
     expect(t.svc.store.get(t.svc.propose('c1', idea).id)!.success).toBeUndefined();
   });

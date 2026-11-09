@@ -1,10 +1,9 @@
-// "Regole" (G L, ADR 0077; a tab of Memoria since ADR 0122): the brain's rules as cards. A rule applies to every agent; the card says how agents get it
-// (always, when relevant: the topic file's `when` words, tools and files, or not loaded: on disk but not in brain.json)
-// and opens the file in the viewer. Lessons that apply to everyone land here by themselves (the corrections job), so
-// the maintenance panel below lists the rule changes with "Annulla". Below the cards, "Regole imparate": the brain's own
-// self-improvement policies (estimates, model choice, thresholds; brain/pages/LearnedRules.tsx), a page of their own
-// until ADR 0082, shown only when the brain has some. Rendered by MemoryPage.tsx for the «Regole» tab ('regole' and old
-// 'miglioramento' links land there).
+// "Sempre caricato" (#366, ADR 0243; once «Regole», ADR 0077, a tab of Memoria since ADR 0122): the fixed core every chat
+// receives at its start, as cards: the brain's fixed files (brain.json fixedFiles: me.md, AGENTS.md, the style) with the
+// characters against the brain's budget, plus the app's own fixed rules when the brain uses them. Every other rule file
+// is no longer loaded (topic injection is gone: the topic files are skills now) and is listed below as «Non più
+// caricate», each opening in the viewer. The maintenance panel lists the role-text changes with "Annulla". Rendered by
+// MemoryPage.tsx for the «Sempre caricato» tab ('regole' and old 'miglioramento' links land there).
 import type { CSSProperties } from 'react';
 import type { BrainRule } from '@shared/brain-model';
 import { goTarget } from '../../actions';
@@ -12,22 +11,19 @@ import { t } from '../../i18n';
 import { useBrainModel } from '../../store/brain-model';
 import { MaintenancePanel, when } from './MaintenancePanel';
 import { HubIntro } from './HubIntro';
-import { LearnedRules } from '../../brain/pages/LearnedRules';
 import '../../styles/agent-catalog.css';
 import '../../styles/brain-model.css';
 
-const TONE = { always: 'green', topic: 'blue', none: 'muted' } as const;
+const TONE = { always: 'green', topic: 'muted', none: 'muted' } as const;
 
 function RuleCard({ rule, index }: { rule: BrainRule; index: number }) {
-  const w = rule.when;
-  const parts = w ? ([['whenPrompt', w.prompt], ['whenTools', w.tools], ['whenPaths', w.paths]] as const).filter(([, v]) => v.length) : [];
-  return <article className="catalog-card" data-kind="rule" data-testid={`bm-rule-${rule.file}`} style={{ '--row-index': Math.min(index, 8) } as CSSProperties}>
+  const loaded = rule.loaded === 'always' ? 'always' : 'none';
+  return <article className="catalog-card" data-kind="rule" data-loaded={loaded} data-testid={`bm-rule-${rule.file}`} style={{ '--row-index': Math.min(index, 8) } as CSSProperties}>
     <header className="bm-card-head">
       <div><h3>{rule.title}</h3><p className="bm-card-sub" title={rule.file}>{rule.file}</p></div>
-      <span className="bm-badges"><span className="bm-badge" data-tone={TONE[rule.loaded]} title={t(`bm.rules.loadedHint.${rule.loaded}`)} data-testid="bm-rule-loaded">{t(`bm.rules.loaded.${rule.loaded}`)}</span></span>
+      <span className="bm-badges"><span className="bm-badge" data-tone={TONE[loaded]} title={t(`bm.rules.loadedHint.${loaded}`)} data-testid="bm-rule-loaded">{t(`bm.rules.loaded.${loaded}`)}</span></span>
     </header>
     {rule.summary && <p className="bm-desc">{rule.summary}</p>}
-    {parts.map(([k, v]) => <dl key={k} className="bm-row"><dt>{t(`bm.rules.${k}`)}</dt><dd className="bm-chips">{v.slice(0, 8).map(x => <span key={x} className="bm-chip" data-kind="tool">{x}</span>)}</dd></dl>)}
     <footer className="bm-card-foot">
       <span>{t('bm.lines', { n: rule.lines })}{rule.changedAt ? ` · ${t('bm.changed', { at: when(rule.changedAt) })}` : ''}</span>
       <span className="sp" />
@@ -38,15 +34,20 @@ function RuleCard({ rule, index }: { rule: BrainRule; index: number }) {
 
 export function RulesPage() {
   const { state, error } = useBrainModel();
-  const order = { always: 0, topic: 1, none: 2 };
-  const rules = [...(state?.rules ?? [])].sort((a, b) => order[a.loaded] - order[b.loaded] || a.file.localeCompare(b.file));
+  const rules = [...(state?.rules ?? [])].sort((a, b) => a.file.localeCompare(b.file));
+  const always = rules.filter(r => r.loaded === 'always'), old = rules.filter(r => r.loaded !== 'always');
+  const core = state?.core;
+  const lead = !state ? t('bm.loading') : core ? t('bm.rules.lead', { n: always.length, chars: core.chars, budget: core.budget, app: core.appRules }) : t('bm.rules.lead0');
   return <div className="bm-page agent-overview" data-testid="bm-rules-page">
-    <HubIntro lead={state ? t('bm.rules.lead', { n: rules.length }) : t('bm.loading')} />
+    <HubIntro lead={lead} />
     {error && <p role="alert">{error}</p>}
     {state && !state.root ? <p className="bm-empty">{t('bm.noBrain')}</p>
-      : state && !rules.length ? <p className="bm-empty" data-testid="bm-rules-empty">{t('bm.rules.empty')}</p>
-        : <div className="catalog-grid">{rules.map((r, i) => <RuleCard key={r.file} rule={r} index={i} />)}</div>}
-    <LearnedRules />
+      : state && !always.length ? <p className="bm-empty" data-testid="bm-rules-empty">{t('bm.rules.empty')}</p>
+        : <div className="catalog-grid" data-testid="bm-rules-core">{always.map((r, i) => <RuleCard key={r.file} rule={r} index={i} />)}</div>}
+    {old.length > 0 && <section className="bm-section" data-testid="bm-rules-old">
+      <header><div><h3>{t('bm.rules.oldTitle')}</h3><p>{t('bm.rules.loadedHint.none')}</p></div></header>
+      <div className="catalog-grid">{old.map((r, i) => <RuleCard key={r.file} rule={r} index={i} />)}</div>
+    </section>}
     <MaintenancePanel kinds={['rule']} testId="bm-maint-rules" />
   </div>;
 }

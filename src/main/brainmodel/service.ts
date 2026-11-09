@@ -14,7 +14,7 @@ import { errText, log } from '../log';
 import { ChangeLog, type AgentRestorer, type AgentSnapshot } from './changes';
 import { classifiersState, readJobs } from './classifiers';
 import { seal, type IntervalCache } from './evidence';
-import { appendUnder, brainJsonWithTopic, corrections, LESSONS_RULE, LESSONS_WHEN, migrate, repeatedTask, skillText, type AgentWriter, type JobContext, type JobResult } from './jobs';
+import { appendUnder, corrections, migrate, repeatedTask, skillText, type AgentWriter, type JobContext, type JobResult } from './jobs';
 import { ignoreWrite, sourceOfSkill } from './migration-ignore';
 import { procedureSections, type ProcedureSection } from './procedure-sources';
 import type { UpgradeAsk } from './upgrade';
@@ -362,8 +362,8 @@ export class BrainModelService {
     return { state: this.state(), changeId: c.id };
   }
   /** A maintenance finding the user approved in Proposte (ADR 0132), through the change log (its «Annulla» puts the brain
-   *  back): a skill (new, or a section added to one of the brain's), a rule (a role's text, or rules/lessons.md for
-   *  every role), a memory line (a role's memory or the shared one), a line in a role's text, or what to forget (a brain
+   *  back): a skill (new, or a section added to one of the brain's), a rule for one role (its text; rules for every
+   *  role are gone since #366), a memory line (a role's memory or the shared one), a line in a role's text, or what to forget (a brain
    *  skill, a rules/ file, one memory line). Returns the change's id. Never grants permissions (checkPermissionText). */
   applyResearch(p: ResearchProposal): string {
     const root = this.root();
@@ -414,17 +414,8 @@ export class BrainModelService {
       if (!c) throw new Error('Niente da cambiare.');
       return this.done(c.id);
     }
-    if (ch.target === 'rule' && !role) {
-      const file = path.join(root, LESSONS_RULE), had = readSmall(file);
-      // a lessons file that is there but not readable here (a link, too big) is never replaced by a new one
-      if (had === null && fs.existsSync(file)) throw new Error(`${LESSONS_RULE} non si può leggere qui: la manutenzione non lo riscrive.`);
-      const writes = [{ file, text: appendUnder(had ?? LESSONS_WHEN, 'Dalla manutenzione', `- ${oneLine(text, 600)} ${stamp}`) }];
-      const cfg = brainJsonWithTopic(root, LESSONS_RULE);
-      if (cfg) writes.push(cfg);
-      const c = this.log.apply({ job: 'research', kind: 'rule', action: 'update', target: LESSONS_RULE, summary: `Regola: ${oneLine(text, 120)}`, reason: why, evidence, ...success }, writes);
-      if (!c) throw new Error('Niente da cambiare.');
-      return this.done(c.id);
-    }
+    // rules for every role are gone (#366, ADR 0243): an old card of that kind is refused, nothing is written
+    if (ch.target === 'rule' && !role) throw new Error('Le regole per tutti i ruoli non ci sono più (#366): proponi una skill o una riga per un ruolo.');
     // a rule for one role, or a line of its text: in the role's own text (a new version, like the corrections job)
     if (!role) throw new Error('Manca il ruolo a cui va la modifica.');
     const instructions = appendUnder(role.instructions, 'Dalla manutenzione', `- ${oneLine(text, 800)} ${stamp}`);

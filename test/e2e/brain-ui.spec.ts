@@ -187,9 +187,9 @@ test('Mappa: direct exploration, optional filters, keyboard and accessible fallb
   await shot(page,'brain-map-flat');await page.getByTestId('bx-map-close').click();
 });
 
-test('Regole imparate: a brain without ops/improve/improve.mjs shows Regole without that section, never an error or a stack', async () => {
-  // this fixture brain has no improve CLI (like a new user's): main answers /api/improve itself (brain/learn.ts), and the
-  // learned rules, a section of Regole since ADR 0082, stay hidden (a fresh brain, ADR 0072)
+test('Sempre caricato: a brain without ops/improve/improve.mjs shows the tab, never an error or a stack', async () => {
+  // this fixture brain has no improve CLI (like a new user's): main answers /api/improve itself (brain/learn.ts); the tab
+  // («Regole» until #366, ADR 0243) no longer shows the learned rules at all
   await page.evaluate(() => { location.hash = ''; location.reload(); });
   await page.waitForLoadState('domcontentloaded');
   await expect(page.getByTestId('app')).toBeVisible();

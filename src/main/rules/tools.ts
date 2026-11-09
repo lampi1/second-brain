@@ -166,7 +166,7 @@ export function ensureTools(root: string): string {
   // every midnight under running chats (issue #278)
   let storedToday = false;
   try { storedToday = typeof (JSON.parse(read(real, 'brain.json') || '{}') as { template?: TemplateValues }).template?.TODAY === 'string'; } catch { /* values() already refused it */ }
-  const digest = createHash('sha256').update('render-v3').update(JSON.stringify(storedToday ? V : { ...V, TODAY: '' })).update(hash).digest('hex');
+  const digest = createHash('sha256').update('render-v4').update(JSON.stringify(storedToday ? V : { ...V, TODAY: '' })).update(hash).digest('hex');
   const target = toolsDir(root);
   const marker = path.join(target, '.sb-tools.json');
   const current = () => { try { return (JSON.parse(fs.readFileSync(marker, 'utf8')) as { sig?: string }).sig === digest; } catch { return false; } };
@@ -183,7 +183,10 @@ export function ensureTools(root: string): string {
       else if (own.has(rel)) fs.writeFileSync(out, appText(render(buf.toString('utf8'), V, false), V.BRAIN!, target, own));
       else fs.writeFileSync(out, render(buf.toString('utf8'), V, /\.(m?js|cjs)$/.test(rel)));
     }
-    // topics: the product's topic rules in this copy, read by the hook runtime (rules/topics.ts) for appRules brains
+    // the product's topic rules are no longer injected (#366, ADR 0243): each one is also an app skill (regole-<name>),
+    // visible and editable on the Skill page and loaded when its description fits, like every other skill
+    topicSkills(stage, app.topics);
+    // topics: the product's topic rules in this copy (kept as files: other product text links them)
     fs.writeFileSync(path.join(stage, '.sb-tools.json'), JSON.stringify({ root: fs.realpathSync(root), sig: digest, topics: app.topics }));
     const old = `${target}.old-${process.pid}-${Date.now()}`;
     if (fs.existsSync(target)) {
@@ -201,6 +204,24 @@ export function ensureTools(root: string): string {
     fs.rmSync(old, { recursive: true, force: true });
   } finally { fs.rmSync(stage, { recursive: true, force: true }); }
   return target;
+}
+/** The skill name of a product topic rule: hub.md → regole-hub, rules/qa.md → regole-qa. */
+export const topicSkillName = (rel: string): string => `regole-${path.posix.basename(rel, '.md').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')}`;
+/** Writes one app skill per rendered topic rule into the copy's skills folder (a shipped skill of the same name wins). */
+function topicSkills(stage: string, topics: readonly string[]): void {
+  const skills = path.join(stage, APP_PLUGIN_PARTS.find(p => p.to === 'skills')!.from);
+  for (const rel of topics) {
+    const text = fs.readFileSync(path.join(stage, rel), 'utf8'), m = /^---\r?\nwhen: (\{[^\n]+\})\r?\n---\r?\n([\s\S]*)$/.exec(text);
+    if (!m) continue;
+    const name = topicSkillName(rel), dir = path.join(skills, name);
+    if (fs.existsSync(dir)) continue;
+    let prompts: string[] = [];
+    try { const w = JSON.parse(m[1]!) as { prompt?: unknown }; prompts = Array.isArray(w.prompt) ? w.prompt.filter((x): x is string => typeof x === 'string').slice(0, 8) : []; } catch { /* no keywords */ }
+    const body = m[2]!, title = /^#\s+(.+)$/m.exec(body)?.[1]?.trim() ?? name, when = /Read when:\s*(.+?)\.(?:\s|$)/.exec(body.replace(/\s+/g, ' '))?.[1]?.trim();
+    const description = `${title}: product rules${when ? `, read when ${when}` : ''}.${prompts.length ? ` Words that call it: ${prompts.join(', ')}.` : ''}`.replace(/\s+/g, ' ').slice(0, 900);
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'SKILL.md'), `---\nname: ${name}\ndescription: ${JSON.stringify(description)}\n---\n<!-- The app's rules for this topic (was ${rel}, injected by keyword until #366). -->\n\n${body.trim()}\n`);
+  }
 }
 const LOCKED = new Set(['EPERM', 'EBUSY', 'EACCES']);
 /** In-place update of a held copy: every staged file over its old one, files the release dropped removed (best effort:

@@ -191,7 +191,7 @@ function lessonEvidence(w: ReturnType<typeof world>, ids: string[]): void {
 }
 
 describe('corrections', () => {
-  it('applies role, skill and rule lessons only after explicit user approval', async () => {
+  it('applies role and skill lessons only after explicit user approval; a rule lesson goes to the role (#366)', async () => {
     const w = world();
     put(w.brain, '.claude/skills/fatture/SKILL.md', '---\nname: fatture\ndescription: Esportare le fatture\n---\n\n1. Esporta.\n');
     lessonEvidence(w, ['r_000000000001', 'r_000000000002', 'r_000000000003']);
@@ -207,15 +207,11 @@ describe('corrections', () => {
     expect(w.agent(DEV).instructions).toMatch(/## Lezioni dalle correzioni\n\n- Cita sempre il file e la riga/);
     expect(w.agent(DEV).trial).toBeUndefined();
     expect(fs.readFileSync(path.join(w.brain, '.claude/skills/fatture/SKILL.md'), 'utf8')).toMatch(/## Lezioni\n\n- Controlla il totale prima di esportare/);
-    expect(fs.readFileSync(path.join(w.brain, 'rules/lessons.md'), 'utf8')).toMatch(/^---\nwhen: /);
-    expect(JSON.parse(fs.readFileSync(path.join(w.brain, 'brain.json'), 'utf8')).rules.topicFiles).toContain('rules/lessons.md');
-    expect(state.rules.map(r => [r.file, r.loaded])).toEqual([['rules/lessons.md', 'topic']]);
-    expect(w.learning.pending()).toEqual([]);
-    expect(state.changes.filter(c => c.job === 'corrections').map(c => c.kind).sort()).toEqual(['agent', 'rule', 'skill']);
-    // the rule change undone: the file and brain.json go back
-    w.service.rollback(state.changes.find(c => c.kind === 'rule')!.id);
+    // a lesson aimed at the rules goes to the role's text: rules for every role are gone (#366), nothing in rules/
+    expect(w.agent(DEV).instructions).toContain('- Mai comandi distruttivi senza conferma');
     expect(fs.existsSync(path.join(w.brain, 'rules/lessons.md'))).toBe(false);
-    expect(JSON.parse(fs.readFileSync(path.join(w.brain, 'brain.json'), 'utf8')).rules.topicFiles).toEqual([]);
+    expect(w.learning.pending()).toEqual([]);
+    expect(state.changes.filter(c => c.job === 'corrections').map(c => c.kind).sort()).toEqual(['agent', 'agent', 'skill']);
   });
 });
 
@@ -577,15 +573,10 @@ describe('applyResearch (ADR 0132)', () => {
     expect(fs.existsSync(file)).toBe(false);
     expect(w.agent(DEV).knowhow?.linked ?? []).not.toContain('note-rilascio');
   });
-  it('a rule for every role goes to the lessons; a lessons file that cannot be read is never replaced', () => {
+  it('a rule for every role is refused (#366): nothing is written in rules/', () => {
     const w = world();
-    w.service.applyResearch(card({ kind: 'rule', change: { target: 'rule', text: 'Lancia i test prima di dire fatto.' } }));
-    expect(fs.readFileSync(path.join(w.brain, 'rules/lessons.md'), 'utf8')).toContain('Lancia i test prima di dire fatto.');
-    const v = world();
-    const real = path.join(v.base, 'elsewhere.md'); fs.writeFileSync(real, '# mine\n');
-    fs.mkdirSync(path.join(v.brain, 'rules'), { recursive: true }); fs.symlinkSync(real, path.join(v.brain, 'rules/lessons.md'));
-    expect(() => v.service.applyResearch(card({ kind: 'rule', change: { target: 'rule', text: 'x' } }))).toThrow(/non si può leggere/);
-    expect(fs.readFileSync(real, 'utf8')).toBe('# mine\n');
+    expect(() => w.service.applyResearch(card({ kind: 'rule', change: { target: 'rule', text: 'Lancia i test prima di dire fatto.' } }))).toThrow(/non ci sono più/);
+    expect(fs.existsSync(path.join(w.brain, 'rules/lessons.md'))).toBe(false);
   });
   it('a new skill is never written through a .agents/skills linked outside the brain', () => {
     const w = world();
@@ -635,14 +626,14 @@ describe('lint and revert cards, «riuscito se…» (ADR 0194)', () => {
     const runs: AgentRun[] = [];
     const w = world({ runs });
     (w.service as unknown as { d: { now: () => number } }).d.now = () => now;
-    const id = w.service.applyResearch(card({ kind: 'rule', change: { target: 'rule', text: 'Lancia i test prima di dire fatto.' }, success: { metric: 'fewer-corrections', text: 'Riuscito se…' } }));
+    const id = w.service.applyResearch(card({ kind: 'rule', change: { target: 'rule', role: DEV, text: 'Lancia i test prima di dire fatto.' }, success: { metric: 'fewer-corrections', text: 'Riuscito se…' } }));
     expect(w.service.changes().find(c => c.id === id)).toMatchObject({ success: { metric: 'fewer-corrections' } });
     const r = (end: number, k: number): AgentRun => ({ runId: `r${end}`, chatId: 'c', agentId: DEV, goal: 'g', startedAt: end - 1000, endedAt: end, corrections: { tagged: k, afterReport: 0 } } as AgentRun);
     runs.push(r(NOW - DAY, 0), r(NOW - 2 * DAY, 0), r(NOW - 3 * DAY, 1), r(NOW + DAY, 2), r(NOW + 2 * DAY, 3), r(NOW + 3 * DAY, 2));
     expect(w.service.checkOutcomes()).toEqual([]); // the week after is not over
     now = NOW + 8 * DAY;
     const worse = w.service.checkOutcomes();
-    expect(worse).toEqual([expect.objectContaining({ changeId: id, kind: 'rule', check: expect.objectContaining({ verdict: 'worse', nBefore: 3, nAfter: 3 }) })]);
+    expect(worse).toEqual([expect.objectContaining({ changeId: id, kind: 'agent', check: expect.objectContaining({ verdict: 'worse', nBefore: 3, nAfter: 3 }) })]);
     expect(w.service.checkOutcomes()).toEqual([]); // checked once
     // the revert card's approval is the change log's Annulla
     w.service.applyResearch(card({ kind: 'revert', revert: worse[0]! }));

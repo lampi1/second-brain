@@ -5,8 +5,8 @@
 // is itemized (item-delta.ts, ADR 0194): a line it loses is listed as removed with its reason, else ChangeLog refuses it.
 //   migration      re-runnable, idempotent: every runbook / routines section of the brain becomes a skill in
 //                  <brain>/.agents/skills (a role loads it when its launch gives it). Writes a report.
-//   corrections    the lessons queue (agent_learn_propose): each lesson goes to the role's text (default), to a skill,
-//                  or to the brain's rules (rules/lessons.md, a topic file listed in brain.json), only after explicit
+//   corrections    the lessons queue (agent_learn_propose): each lesson goes to the role's text (default, also for a
+//                  lesson aimed at the rules: those are gone since #366) or to a skill, only after explicit
 //                  approval of the evidence-backed proposal. Recurring error text is not applied on its own.
 //   repeated-task  three or more ended runs with the same kind of goal and no skill covering it → a new skill with the
 //                  requests seen and what the runs reported, stored outside loadable skills pending verification.
@@ -178,8 +178,6 @@ export function migrate(ctx: JobContext): JobResult {
 }
 
 // ── corrections ─────────────────────────────────────────────────────────────────────────────────────────────────────
-export const LESSONS_RULE = 'rules/lessons.md';
-export const LESSONS_WHEN = '---\nwhen: {"prompt":[],"tools":["Edit","Write","MultiEdit","Bash","PowerShell"],"paths":[]}\n---\n# Lezioni dalle correzioni\n\nRegole emerse dalle correzioni dell’utente, per ogni ruolo.\n';
 export function corrections(ctx: JobContext): JobResult {
   let changes = 0;
   for (const l of ctx.lessons.pending()) {
@@ -198,35 +196,16 @@ export function corrections(ctx: JobContext): JobResult {
         const next = setBody(text, appendUnder(p2.body, 'Lezioni', line));
         if (ctx.log.apply({ job: 'corrections', kind: 'skill', action: 'update', target: skill.name, summary: changeText().lesson({ skill: skill.name, rule: oneLine(l.rule, 120) }), reason: `Correzione dell’utente (${p.name}).`, evidence: [l.evidence] }, [{ file: skill.file, text: next }])) changes++;
         ctx.lessons.settle(l.id, 'approved', `skill ${skill.name}`);
-      } else if (l.target === 'rule') {
-        const file = path.join(ctx.root, LESSONS_RULE);
-        const current = readSmall(file) ?? LESSONS_WHEN;
-        const writes = [{ file, text: appendUnder(current, p.name, line) }];
-        const cfg = brainJsonWithTopic(ctx.root, LESSONS_RULE);
-        if (cfg) writes.push(cfg);
-        if (ctx.log.apply({ job: 'corrections', kind: 'rule', action: 'update', target: LESSONS_RULE, summary: changeText().newRule({ rule: oneLine(l.rule, 120) }), reason: `Correzione dell’utente (${p.name}); vale per ogni ruolo.`, evidence: [l.evidence] }, writes)) changes++;
-        ctx.lessons.settle(l.id, 'approved', `regola in ${LESSONS_RULE}`);
       } else {
         const instructions = appendUnder(p.instructions, 'Lezioni dalle correzioni', line);
         if (instructions.length > 8000) { ctx.lessons.settle(l.id, 'discarded', 'il ruolo è al limite di 8000 caratteri: unisci le lezioni'); continue; }
         const snap = ctx.agents.update(p.id, { instructions }, `Manutenzione: lezione dalle correzioni (${oneLine(l.evidence, 100)})`);
         if (snap) { changes++; ctx.log.record({ job: 'corrections', kind: 'agent', action: 'update', target: p.id, summary: `${p.name}: ${oneLine(l.rule, 140)}`, reason: 'Correzione dell’utente: la lezione va nel testo del ruolo.', evidence: [l.evidence] }, [], snap); }
-        ctx.lessons.settle(l.id, 'approved', l.target === 'skill' ? 'skill non trovata: nel ruolo' : 'ruolo');
+        ctx.lessons.settle(l.id, 'approved', l.target === 'skill' ? 'skill non trovata: nel ruolo' : l.target === 'rule' ? 'nel ruolo (le regole per tutti non ci sono più)' : 'ruolo');
       }
     } catch (e) { if (!/trial|prova/i.test((e as Error).message)) ctx.lessons.settle(l.id, 'discarded', oneLine((e as Error).message, 200)); }
   }
   return { job: 'corrections', changes };
-}
-/** brain.json with `rel` added to rules.topicFiles (null when it is there already or brain.json is not readable). */
-export function brainJsonWithTopic(root: string, rel: string): { file: string; text: string } | null {
-  const file = path.join(root, 'brain.json');
-  try {
-    const raw = readSmall(file);
-    const cfg = raw ? JSON.parse(raw) as { rules?: { topicFiles?: string[] } } : {};
-    const rules = cfg.rules ?? {}, list = Array.isArray(rules.topicFiles) ? rules.topicFiles : [];
-    if (list.includes(rel)) return null;
-    return { file, text: `${JSON.stringify({ ...cfg, rules: { ...rules, topicFiles: [...list, rel] } }, null, 2)}\n` };
-  } catch { return null; }
 }
 
 // ── repeated task → new skill ───────────────────────────────────────────────────────────────────────────────────────

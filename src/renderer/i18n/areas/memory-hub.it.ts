@@ -17,7 +17,7 @@ export const memoryHubIt = {
   'mh.activityEmpty': 'Ancora nessuna modifica: appariranno qui appena la manutenzione o tu cambiate qualcosa.',
   'mh.ago.now': 'adesso', 'mh.ago.min': (p: N) => `${p.n} min fa`, 'mh.ago.hours': (p: N) => (p.n === 1 ? '1 ora fa' : `${p.n} ore fa`), 'mh.ago.days': (p: N) => (p.n === 1 ? 'ieri' : `${p.n} giorni fa`),
   'mh.tabsLabel': 'Sezioni della memoria',
-  'mh.tab.proposte': 'Proposte', 'mh.tab.approvate': 'Approvate', 'mh.tab.skill': 'Skill', 'mh.tab.regole': 'Regole', 'mh.tab.script': 'Script & Query',
+  'mh.tab.proposte': 'Proposte', 'mh.tab.approvate': 'Approvate', 'mh.tab.skill': 'Skill', 'mh.tab.regole': 'Sempre caricato', 'mh.tab.script': 'Script & Query',
   'mh.tab.idee': 'Idee', 'mh.tab.file': 'File', 'mh.tab.statistiche': 'Statistiche',
   'mh.badge': (p: N) => (p.n === 1 ? '1 proposta da decidere' : `${p.n} proposte da decidere`),
   // Approvate

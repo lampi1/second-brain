@@ -9,7 +9,7 @@ export const memoryEn: typeof memoryIt = {
   'mm.maint.button': 'Maintenance', 'mm.maint.running': 'Maintenance running…',
   'mm.maint.helpTitle': 'What maintenance does',
   'mm.maint.help1': 'One click and that is all: the app tidies skills, rules and memory, reads its logs and an invisible agent studies your history to propose improvements. It works in the background: you can keep doing other things.',
-  'mm.maint.help2': 'Everything arrives as cards in Memoria → Proposte: new skills and rules, what to forget, and the issues to open on GitHub (your yes opens them at once). Ideas about the app also land in Ideas, on the AI\'s side. Nothing changes without your yes.',
+  'mm.maint.help2': 'Everything arrives as cards in Memoria → Proposte: new skills, what to forget, and the issues to open on GitHub (your yes opens them at once). Ideas about the app also land in Ideas, on the AI\'s side. Nothing changes without your yes.',
   'mm.maint.help3': 'It happens only when you press it: ideas, proposals and the memory cleanup never start by themselves. The research uses tokens, 5 $ at most each time; you get a notice when it ends.',
   'mm.one.tip': 'Maintenance: one click, then it works by itself in the background',
   'mm.one.tipCleanup': 'Tidying skills, rules and memory…',
