@@ -102,6 +102,25 @@ export function isPasteStroke(stroke: KeyStroke): boolean {
 export function isPasteKey(key:string,modifiers:number):boolean {
   return /^v$/i.test(key) && (modifiers & (MOD.ctrl | MOD.meta)) !== 0 || key === 'Insert' && (modifiers & MOD.shift) !== 0;
 }
+/** A key spec as it may be shown (feed, results, the tab's last action, recordings; ADR 0237): each run of strokes
+ *  that could write text is replaced by "•••" (a character with shift at most, or any word that is not a known key
+ *  name, since a password pressed as one word or a bad combo must not show either); named keys and real shortcuts
+ *  (ctrl/alt/meta + a key) stay, so "s e c r e t Tab ctrl+a Enter" → "••• Tab ctrl+a Enter". */
+export function maskKeys(spec: string): string {
+  const out: string[] = [];
+  for (const combo of String(spec ?? '').trim().split(/\s+/).filter(Boolean)) {
+    const parts = combo === '+' ? ['+'] : combo.endsWith('++') ? [...combo.slice(0, -2).split('+'), '+'] : combo.split('+');
+    const name = parts.pop() ?? '';
+    const mods = parts.map(m => MOD_NAMES[m.toLowerCase()]);
+    const known = mods.every(Boolean);
+    const shortcut = known && mods.some(m => m !== 'shift') && [...name].length === 1;
+    const kept = known && (!!NAMED[name.toLowerCase()] || shortcut);
+    if (kept) out.push(combo);
+    else if (out[out.length - 1] !== '•••') out.push('•••');
+  }
+  return out.join(' ');
+}
+
 export function containsPaste(spec: string): boolean { return parseKeys(spec).some(isPasteStroke); }
 
 /** "ctrl+shift" → CDP modifier bits (also accepts an array of names). */

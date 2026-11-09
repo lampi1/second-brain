@@ -9,7 +9,7 @@ import type { BrowserTabs, Tab } from './tabs';
 import { normalizeUrl, type BrowserActions, type Shot } from './actions';
 import { envForUrl, envSlug } from './envs';
 import { envRefusal, loginRefusal } from './rules';
-import { containsPaste } from './keys';
+import { containsPaste, maskKeys } from './keys';
 import { fmtFactor } from './preview';
 import { snapshotDelta } from './delta';
 
@@ -227,7 +227,7 @@ PNG ${shot.width}x${shot.height}` : ''}${dialog}`, images: [{ data: img.data, mi
       name: 'key', annotations: WRITE,
       description: 'Press keys, space-separated, combos with "+": "Enter", "Escape", "Tab", "ctrl+a Backspace", "shift+Tab", "ArrowDown". repeat presses the sequence N times.',
       inputSchema: schema({ keys: { type: 'string' }, repeat: { type: 'number' } }, ['keys']),
-      run: write(a => `key ${String(a.keys ?? '')}`, (tab, a) => {
+      run: write(a => `key ${maskKeys(String(a.keys ?? ''))}`, (tab, a) => {
         const keys = str(a.keys, 'keys');
         // a password the user just copied for a login hand-off sits on the clipboard: pasting it into any field would
         // let the agent read it back (read_page shows field values)

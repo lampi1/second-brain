@@ -15,7 +15,7 @@ import type { BrowserTabs, Tab } from './tabs';
 import { pageCall, walkPage, locateRef, frameBox, inputInfo, focusSelect, selectOptions, pageText, probe, angularStable, hasPasswordField,
   type WalkMode, type WalkResult, type PointResult, type InputInfo, type FrameMarker } from './page';
 import { parseRef, parseFrame, refPrefix } from './refs';
-import { charKey, isPasteKey, isPasteStroke, parseKeys, parseModifiers, strokeEvents } from './keys';
+import { charKey, isPasteKey, isPasteStroke, maskKeys, parseKeys, parseModifiers, strokeEvents } from './keys';
 import { evidencePath, stampName } from './evidence';
 import { previewOf, type Preview } from './preview';
 import { formatDetail, formatEntry, redactBody } from './netlog';
@@ -410,7 +410,7 @@ export class BrowserActions {
           if (isPasteStroke(s) && this.tabs.credentials.pasteBlocked()) throw new Error('Refused: pasting is blocked while a login password is on the clipboard.');
         const steps = strokeEvents(s).map((ev): Step => ['Input.dispatchKeyEvent', ev as unknown as Record<string, unknown>]);
           try {
-            if (await this.input(tab, steps) === 'dialog') return `Pressed part of ${keys}: a dialog opened`;
+            if (await this.input(tab, steps) === 'dialog') return `Pressed part of ${maskKeys(keys)}: a dialog opened`;
           } catch (error) {
             // A late clipboard refusal may occur after modifiers went down. Release synthetic keys before returning.
             await this.input(tab, steps.filter(([, params]) => params.type === 'keyUp')).catch(() => {});
@@ -419,7 +419,7 @@ export class BrowserActions {
         if (MOVES.has(s.def.key)) await sleep(30);
       }
     }
-    return `Pressed ${keys}${n > 1 ? ` x${n}` : ''}`;
+    return `Pressed ${maskKeys(keys)}${n > 1 ? ` x${n}` : ''}`;   // never the text it wrote (ADR 0237)
   }
 
   async scroll(tab: Tab, a: { ref?: unknown; coordinate?: unknown; direction?: unknown; amount?: unknown }): Promise<string> {

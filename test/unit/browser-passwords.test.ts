@@ -55,7 +55,8 @@ it('fills a remote password field with fill_form, its value masked in the result
 
 it('presses character keys into a focused remote password field', async () => {
   const { actions, tab, sent } = remotePage();
-  await expect(actions.key(tab, 'a')).resolves.toBe('Pressed a');
+  await expect(actions.key(tab, 'a')).resolves.toBe('Pressed •••');   // what it wrote never comes back (ADR 0237)
+  await expect(actions.key(tab, 's e c r e t Enter')).resolves.toBe('Pressed ••• Enter');
   expect(sent.some(([, p]) => p.key === 'a')).toBe(true);
 });
 

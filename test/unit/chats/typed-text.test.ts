@@ -51,6 +51,27 @@ describe('typed text in the feed', () => {
     expect(maskTypedItem(nav)).toEqual(nav);
   });
 
+  it('masks the key result read back and a single word pressed as one key', () => {
+    const keys = `${[...SECRET].join(' ')} Enter`;
+    const item = maskTypedItem({ ...tool('mcp__second-brain__key', { keys }), output: `Pressed ${keys}` }) as ToolItem;
+    expect(JSON.stringify(item)).not.toContain([...SECRET.slice(0, 4)].join(' '));
+    const word = SECRET.replace(/-/g, '');
+    expect(JSON.stringify(maskTypedItem(tool('mcp__second-brain__key', { keys: word })))).not.toContain(word);
+  });
+
+  it('masks a Codex panel: the wrapped arguments, the shown parameters and the JSON, even with the tool unknown', () => {
+    const quoted = `${SECRET}"\\x`;   // a value JSON escapes
+    for (const name of ['mcp__second-brain__type', 'mcp__second-brain']) {
+      const args = { text: quoted, ref: 'e12' };
+      const req: Omit<PendingRequest, 'chatId'> = { id: 'r1', type: 'permission', tool: name, title: 'Allow the second-brain MCP server to run tool "type"?',
+        detail: ['Server: second-brain', `text: ${quoted}`, `Parametri:\n${JSON.stringify(args, null, 2)}`].join('\n'),
+        input: { server: 'second-brain', ...(name.endsWith('type') ? { tool: name } : {}), arguments: args }, noAlways: true, at: 1 };
+      expect(JSON.stringify(maskTypedRequest(req))).not.toContain(SECRET);
+    }
+    const app = { id: 'r2', type: 'permission' as const, tool: 'mcp__second-brain__app_send', title: 't', detail: 'kept', input: { text: 'kept' }, at: 1 };
+    expect(maskTypedRequest(app)).toBe(app);
+  });
+
   it('leaves other tools and other servers alone', () => {
     const nav = tool('mcp__second-brain__navigate', { url: 'https://app.example.com' });
     expect(maskTypedItem(nav)).toBe(nav);

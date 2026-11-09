@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import path from 'node:path';
 import vm from 'node:vm';
 import { parseRef, parseFrame, refPrefix } from '../../src/main/browser/refs';
-import { charKey, parseKeys, parseModifiers, strokeEvents, MOD } from '../../src/main/browser/keys';
+import { charKey, maskKeys, parseKeys, parseModifiers, strokeEvents, MOD } from '../../src/main/browser/keys';
 import { NetLog, formatEntry, formatDetail, redactHeaders } from '../../src/main/browser/netlog';
 import { evidencePath, groupFolder, stampName } from '../../src/main/browser/evidence';
 import { Handoffs } from '../../src/main/browser/handoffs';
@@ -64,6 +64,14 @@ describe('keys', () => {
     expect(() => parseKeys(word)).toThrow(expect.objectContaining({ message: expect.not.stringContaining(word) }));
     expect(() => parseKeys(`${word}+a`)).toThrow(expect.objectContaining({ message: expect.not.stringContaining(word) }));
     expect(() => parseKeys('  ')).toThrow(/No keys/);
+  });
+
+  it('masks every stroke that can write text, a whole word or a bad combo too, and keeps named keys and shortcuts', () => {
+    expect(maskKeys('s e c r e t Tab shift+A Enter ctrl+a')).toBe('••• Tab ••• Enter ctrl+a');
+    expect(maskKeys('hunter2')).toBe('•••');
+    expect(maskKeys('a+b Enter')).toBe('••• Enter');
+    expect(maskKeys('shift+Tab ArrowDown ctrl++ meta+v')).toBe('shift+Tab ArrowDown ctrl++ meta+v');
+    expect(maskKeys('  ')).toBe('');
   });
 
   it('maps characters to keys (null when there is no key: insertText)', () => {
