@@ -83,7 +83,17 @@ export interface DelegationResult {
   newGoal?: string;
   /** a correction of the result this assignment already reported (at most MAX_CORRECTIONS): it replaces the previous one */
   amends?: true;
+  /** partial / blocked on a step only the user can do (#358): the app asks it in the Orchestrator at once */
+  userAction?: UserAction;
 }
+/** What only the user can do for a stopped run (#358): turn on the VPN, a login with MFA, an Esegui command, a
+ *  permission, a decision. text = what to do (at most USER_ACTION_TEXT_MAX), command = the exact command, if any. */
+export const USER_ACTION_KINDS = ['vpn', 'login', 'command', 'permission', 'decision', 'other'] as const;
+export interface UserAction { kind: typeof USER_ACTION_KINDS[number]; text: string; command?: string }
+export const USER_ACTION_TEXT_MAX = 300, USER_ACTION_COMMAND_MAX = 2000;
+/** Words of a partial / blocked report that name a step only the user can do: such a report without userAction is sent
+ *  back once (agents/delegation.ts), so the block never stays only in the report text (#358). */
+export const USER_ONLY_BLOCKER = /(?:^|[^\p{L}])(?:vpn|mfa|2fa|otp|log ?in|sign[- ]in|accedi|autentica\p{L}*|esegui|permission denied|permesso negato|access denied|accesso negato)(?![\p{L}])/iu;
 /** What a child chat carries about its delegation (persisted with the chat; shown on its card and in the tree). */
 export interface ChatDelegation {
   role: WorkRoleId;
@@ -229,7 +239,7 @@ export function checkResult(v: unknown, doneWhen: readonly string[]): Delegation
   // the names agents invent for doneWhen (app logs 2026-10-20/21, #147): the error says which field to use
   const misnamed = ['criteria', 'criteriaResults'].find(k => k in o);
   if (misnamed && !('doneWhen' in o)) throw new Error(`agent_report: use doneWhen, not ${misnamed}: one { criterion, met, evidence } per criterion of your contract.`);
-  only(o, ['outcome', 'summary', 'output', 'doneWhen', 'questions', 'goalChangedByUser', 'newGoal', 'taskVersion', 'verdict', 'verified', 'browserWrite', 'amends'], 'agent_report');
+  only(o, ['outcome', 'summary', 'output', 'doneWhen', 'questions', 'goalChangedByUser', 'newGoal', 'taskVersion', 'verdict', 'verified', 'browserWrite', 'amends', 'userAction'], 'agent_report');
   if (o.amends !== undefined && typeof o.amends !== 'boolean') throw new Error('amends: true or false.');
   if ((o.verdict !== undefined) !== (o.verified !== undefined)) throw new Error('Review verdict and verified must be supplied together.');
   if (o.verdict !== undefined && !['success', 'partial', 'fail'].includes(o.verdict as string)) throw new Error('Invalid review verdict.');
@@ -255,9 +265,19 @@ export function checkResult(v: unknown, doneWhen: readonly string[]): Delegation
   const questions = o.questions === undefined ? undefined : Array.isArray(o.questions) && o.questions.length <= 8 ? o.questions.map((q, i) => text(q, 500, `questions[${i}]`)) : null;
   if (questions === null) throw new Error('questions: up to 8.');
   const browserWrite = o.browserWrite === undefined ? undefined : browserWriteResult(o.browserWrite);
+  const userAction = o.userAction === undefined ? undefined : userActionOf(o.userAction);
+  if (userAction && o.outcome === 'done') throw new Error('userAction goes only with outcome "partial" or "blocked": a done run needs nothing from the user.');
   // a summary over SUMMARY_MAX is cut with the marker, never refused (agents/delegation.ts keeps the full text in output)
   if (browserWrite && ((o.outcome === 'done') !== (browserWrite.outcome === 'done'))) throw new Error('browserWrite outcome must agree with agent_report outcome');
-  return { ...(browserWrite ? { browserWrite } : {}), ...(o.verdict !== undefined ? { verdict: o.verdict as DelegationResult['verdict'], verified: o.verified as DelegationResult['verified'] } : {}), ...(o.taskVersion !== undefined ? { taskVersion: o.taskVersion as number } : {}), outcome: o.outcome as DelegationOutcome, summary: capText(text(o.summary, Number.MAX_SAFE_INTEGER, 'summary'), SUMMARY_MAX), output: text(o.output, RESULT_OUTPUT_MAX, 'output'), doneWhen: answers, ...(questions?.length ? { questions } : {}), ...(newGoal ? { goalChangedByUser: true as const, newGoal } : {}), ...(o.amends === true ? { amends: true as const } : {}) };
+  return { ...(browserWrite ? { browserWrite } : {}), ...(o.verdict !== undefined ? { verdict: o.verdict as DelegationResult['verdict'], verified: o.verified as DelegationResult['verified'] } : {}), ...(o.taskVersion !== undefined ? { taskVersion: o.taskVersion as number } : {}), outcome: o.outcome as DelegationOutcome, summary: capText(text(o.summary, Number.MAX_SAFE_INTEGER, 'summary'), SUMMARY_MAX), output: text(o.output, RESULT_OUTPUT_MAX, 'output'), doneWhen: answers, ...(questions?.length ? { questions } : {}), ...(newGoal ? { goalChangedByUser: true as const, newGoal } : {}), ...(o.amends === true ? { amends: true as const } : {}), ...(userAction ? { userAction } : {}) };
+}
+
+function userActionOf(v: unknown): UserAction {
+  const u = object(v, 'userAction');
+  only(u, ['kind', 'text', 'command'], 'userAction');
+  if (!(USER_ACTION_KINDS as readonly unknown[]).includes(u.kind)) throw new Error(`userAction.kind: ${USER_ACTION_KINDS.join(' | ')}.`);
+  return { kind: u.kind as UserAction['kind'], text: text(u.text, USER_ACTION_TEXT_MAX, 'userAction.text (what the user must do)'),
+    ...(u.command !== undefined ? { command: text(u.command, USER_ACTION_COMMAND_MAX, 'userAction.command') } : {}) };
 }
 
 /** The child's first message: who delegates and the contract (the rules on reporting and asking are its role frame's,

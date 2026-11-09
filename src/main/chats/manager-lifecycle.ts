@@ -90,7 +90,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
       const finished = (c.state === 'idle' || ended) && !c.lastError &&
         !r.unfinished && ((result => result ? !result.isError && !result.interrupted : ended && !r.session && r.lastTurnAt > 0)(c.lastResult ?? r.savedResult));
       const eligible = !this.quitting && !updateActivity.frozen && !c.isOrchestrator && !c.quick && !held && finished &&
-        !r.working && !r.session?.busy && r.pending.size === 0 && !workBehind(c) && !c.waitsOn && c.plan?.phase !== 'proposed' && !c.queued && !r.deliveryHolds &&
+        !r.working && !r.session?.busy && r.pending.size === 0 && !r.userActionAsk && !workBehind(c) && !c.waitsOn && c.plan?.phase !== 'proposed' && !c.queued && !r.deliveryHolds &&
         !r.opening && !r.releasing && !r.switching && !r.handoffTurn && (!r.archiving || r.autoClosing) && this.childrenDone(r);
       const waiting = eligible || c.isOrchestrator || c.quick ? undefined : this.waitingOf(r, held), waitingFor = waiting?.what;
       return { id: c.id, eligible: !!eligible, stamp: `${r.activityRevision ?? 0}:${r.lastTurnAt}:${c.lastResult?.at ?? 0}:${c.pending}:${c.model ?? ''}:${c.work?.status ?? ''}:${c.waitsOn ?? ''}`,
@@ -116,7 +116,7 @@ export abstract class ManagerLifecycle extends ManagerDelegation {
   private waitingOf(r: Rec, external: boolean | AutoCloseWaiting): { what: AutoCloseWaiting; n?: number } | undefined {
     const c = r.s, pend = [...r.pending.values()];
     if (pend.some(p => p.type === 'permission')) return { what: 'permission' };
-    if (pend.some(p => p.type === 'question')) return { what: 'answer' };
+    if (pend.some(p => p.type === 'question') || r.userActionAsk) return { what: 'answer' }; // #358: its question waits in the Orchestrator
     if (c.plan?.phase === 'proposed') return { what: 'plan' }; // its plan waits for «Approva e parti» (ADR 0108)
     if (external === 'command' || external === 'browser') return { what: external };
     if (r.session?.busy || r.working || c.state === 'running' || c.state === 'starting') return undefined;

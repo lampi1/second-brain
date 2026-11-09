@@ -93,6 +93,43 @@ describe('agent_delegate', () => {
     expect(stored.doneWhen[0]!.evidence).toBe('verified result');
   });
 
+  it('a block only the user can lift becomes the app\'s own Sì/No question in the Orchestrator; Sì tells the parent to resume (#358)', async () => {
+    const f = fixture(), o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user'), parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Caso supporto')] });
+    const child = f.m.list().find(c => c.parentId === parent.id)!;
+    const base = { outcome: 'partial', summary: 'VPN off, queries ready', output: 'Le query sono pronte in docs/q.sql.', doneWhen: [{ criterion: 'criterion A', met: false }] };
+    // named only in the text: sent back once, naming userAction; the same report goes through the second time
+    await expect(f.call('agent_report', child.id, base)).rejects.toThrow(/userAction/);
+    await expect(f.call('agent_report', child.id, { ...base, outcome: 'done', doneWhen: [{ criterion: 'criterion A', met: true }], userAction: { kind: 'vpn', text: 'Accendi la VPN' } })).rejects.toThrow(/partial.*blocked/);
+    await f.call('agent_report', child.id, { ...base, userAction: { kind: 'vpn', text: 'Accendi la VPN', command: 'vpn up' } });
+    const asks = f.m.pending().filter(r => r.chatId === o.id && r.tool === 'app_user_action');
+    expect(asks).toHaveLength(1);
+    const q = asks[0]!.questions![0]!;
+    expect(q.question).toContain('«Caso supporto» è fermo: Accendi la VPN. Fatto?');
+    expect(q.question).toContain('vpn up');
+    expect(q.options.map(x => x.label)).toEqual(['Sì', 'No']);
+    // the reporting chat is held and tagged by it, never closed meanwhile
+    expect(f.m.autoCloseCandidates(() => false).find(c => c.id === child.id)).toMatchObject({ eligible: false, waitingFor: 'answer' });
+    const before = f.sent.get(parent.id)?.length ?? 0;
+    await f.m.answer(o.id, asks[0]!.id, { kind: 'question', answers: { [q.question]: 'Sì' } });
+    expect(f.m.pending().some(r => r.chatId === o.id && r.tool === 'app_user_action')).toBe(false);
+    await vi.waitFor(() => expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).toContain('[azione dell’utente fatta · chat «Caso supporto»]'));
+    expect(f.answers.some(a => a.id === asks[0]!.id)).toBe(false); // never reached an engine
+  });
+
+  it('«No» to the app\'s question sends nothing and leaves the chat stopped (#358)', async () => {
+    const f = fixture(), o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user'), parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Login')] });
+    const child = f.m.list().find(c => c.parentId === parent.id)!;
+    await f.call('agent_report', child.id, { outcome: 'blocked', summary: 'Serve il login con MFA', output: 'Fermo al login.', doneWhen: [{ criterion: 'criterion A', met: false }], userAction: { kind: 'login', text: 'Fai il login con MFA' } });
+    const ask = f.m.pending().find(r => r.chatId === o.id && r.tool === 'app_user_action')!;
+    const before = f.sent.get(parent.id)?.length ?? 0;
+    await f.m.answer(o.id, ask.id, { kind: 'question', answers: { [ask.questions![0]!.question]: 'No' } });
+    expect(f.m.pending().filter(r => r.chatId === o.id)).toHaveLength(0);
+    expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).not.toContain('azione dell’utente');
+    expect(f.m.list().find(c => c.id === child.id)!.delegation!.result!.outcome).toBe('blocked');
+  });
+
   it('an over-long summary and remember line are cut with the marker, not refused; the full summary stays in output', async () => {
     const remembered: [string, string][] = [];
     const f = fixture({}, undefined, undefined, undefined, {}, remembered);

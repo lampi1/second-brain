@@ -16,6 +16,8 @@ import { APP_EVENT_LABEL } from './orchestrator-wake';
 import type { SubmissionReceipt, TurnEndInfo, Rec } from './manager-types';
 import { clearTimeout, sameChildResult, uniqueChildResults, turnReply, turnErrors, lastAnswer, sysItem, ORCHESTRATOR_OUTPUT_MAX, CHILD_RESULTS_MS, CHILD_RESULTS_CAP, supersededResult } from './manager-helpers';
 import { ManagerContinuity } from './manager-continuity';
+import { isUserActionRequest, userActionAnswer, userActionMessage, userActionRequest, type UserActionInput } from './user-action';
+import type { Answer, PendingRequest } from '../../shared/contract';
 
 /** Delegation and reports: a child's agent_report to its parent, a root chat's to the Orchestrator, turn ends that settle them. */
 export abstract class ManagerDelegation extends ManagerContinuity {
@@ -91,6 +93,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       message: resultMessage(d.role, r.s.title, result, { correction }) };
     this.persist(true);
     if (!this.midTurn(r)) this.releaseResult(r);
+    this.askUserAction(r, result);
     log.info('chats', correction ? 'delegation result corrected' : 'delegation reported', { chat: chatId, data: { parent: parentId, outcome: result.outcome, met, criteria: result.doneWhen.length, ...(correction ? { correction } : {}) } });
     return { parentId, delivered: !!parent };
   }
@@ -283,8 +286,41 @@ export abstract class ManagerDelegation extends ManagerContinuity {
       this.persist(true);
       if (!this.midTurn(r)) this.releaseResult(r);
     }
+    this.askUserAction(r, result);
     log.info('chats', 'root chat reported', { chat: chatId, data: { orchestrator: orchestrator?.s.id ?? null, outcome: result.outcome, met, criteria: result.doneWhen.length, userWaits: waits, ...(correction ? { correction } : {}) } });
     return { orchestratorId: local ? null : orchestrator?.s.id ?? null, delivered: local || !!orchestrator };
+  }
+
+  /** A partial / blocked report that names what only the user can do (#358): one yes/no question on the Orchestrator,
+   *  asked by the app now, whatever the Orchestrator is doing; a newer one for the same chat replaces it. */
+  private askUserAction(r: Rec, result: DelegationResult): void {
+    if (!result.userAction || result.outcome === 'done') return;
+    const orchestrator = this.openOrchestrator();
+    if (!orchestrator) { log.warn('chats', 'user action not asked: no Orchestrator open', { chat: r.s.id, hint: 'the report text still carries it' }); return; }
+    if (r.userActionAsk) this.dropPending(orchestrator, r.userActionAsk);
+    const req: PendingRequest = { ...userActionRequest(Date.now(), { id: r.s.id, title: r.s.title, runId: r.s.run?.runId ?? null }, result.userAction), chatId: orchestrator.s.id };
+    r.userActionAsk = req.id;
+    orchestrator.pending.set(req.id, req);
+    orchestrator.s.pending = orchestrator.pending.size;
+    this.opts.emitter.emit('pending:added', req);
+    this.updated(orchestrator); this.updated(r);
+    log.info('chats', 'user action asked in the Orchestrator', { chat: r.s.id, data: { kind: result.userAction.kind } });
+  }
+
+  /** The user's answer to the app's own question (#358): Sì (or their words) goes to whoever owns the work, its parent
+   *  or the Orchestrator for a root chat, which resumes it; No leaves it stopped and visible. Never reaches an engine. */
+  protected override answerUserAction(orchestrator: Rec, req: PendingRequest, answer: Answer): boolean {
+    if (!isUserActionRequest(req)) return false;
+    const reply = userActionAnswer(req, answer);
+    if (!reply) throw new Error('Rispondi Sì o No alla domanda.');
+    const input = req.input as UserActionInput, worker = this.chats.get(input.chatId);
+    this.dropPending(orchestrator, req.id);
+    if (worker?.userActionAsk === req.id) { delete worker.userActionAsk; this.updated(worker); }
+    if (!reply.yes && !reply.words) return true;
+    const parent = worker?.s.parentId ? this.chats.get(worker.s.parentId) : undefined, owner = parent && !parent.s.closedAt ? parent : orchestrator;
+    void this.send(owner.s.id, userActionMessage(input, reply, owner === orchestrator ? 'orchestrator' : 'parent'), undefined, false, 'App', false, { kind: 'app' })
+      .catch(e => log.warn('chats', 'user action reply not delivered', { chat: owner.s.id, cause: errText(e), hint: 'the user can write it in that chat' }));
+    return true;
   }
 
   /** Explicit user/Orchestrator request; child output remains private to its parent. Admission never acknowledges it. */

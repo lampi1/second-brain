@@ -83,9 +83,11 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   async answer(chatId: string, requestId: string, answer: Answer, by: 'pc' | 'phone' | 'relay' = 'pc'): Promise<void> {
     const r = this.need(chatId);
     if (!r.pending.has(requestId)) throw new Error('Questa richiesta non è più aperta.');
+    if (by === 'relay') throw new Error('Una risposta inoltrata da un agente non è una decisione dell’utente.');
+    // the app's own question (a run stopped on a step only the user can do, #358): answered here, never by an engine
+    if (this.answerUserAction(r, r.pending.get(requestId)!, answer)) return;
     if (!r.session) { this.dropPending(r, requestId); throw new Error('La chat non è più attiva: la richiesta è scaduta.'); }
     const req = r.pending.get(requestId)!;
-    if (by === 'relay') throw new Error('Una risposta inoltrata da un agente non è una decisione dell’utente.');
     if (by === 'phone' && (req.type !== 'question' || answer.kind !== 'question')) throw new Error('Dal telefono si risponde solo a una domanda Sì/No.');
     const interview = (r.s.plan || r.s.isOrchestrator) && isNativeQuestion(req) && answer.kind === 'question';
     const pcOnly = interview ? phoneQuestionReserved(req, () => { this.ensureHistory(r); return r.items; }) : false;
@@ -341,4 +343,6 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
   abstract userWrote(chatId: string, text: string): boolean;
   protected abstract decidePlan(chatId: string, decision: 'approve' | 'change', at: number, text?: string, message?: string, receipt?: SubmissionReceipt, byApp?: boolean, by?: 'pc' | 'phone'): Promise<void>;
   protected abstract openOrchestrator(): Rec | undefined;
+  /** true when the request is the app's own user-action question and it was answered (manager-delegation.ts, #358) */
+  protected abstract answerUserAction(r: Rec, req: PendingRequest, answer: Answer): boolean;
 }

@@ -197,6 +197,8 @@ export interface Rec {
   criteriaTold?: string;
   /** a root chat's agent_report for its current assignment (reportRoot): one per assignment */
   rootReportAt?: number;
+  /** its report's userAction is asked in the Orchestrator (#358): that request's id, until the user answers */
+  userActionAsk?: string;
   /** a root chat's result held until its turn ends (reportRoot, #123): the report and the turn end are one news */
   userTaskEvents?: UserTaskEvents;
   heldResult?: { local?: boolean; note: CleanReportNote; message: string; quiet: boolean; userWaits: boolean };

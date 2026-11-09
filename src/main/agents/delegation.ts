@@ -16,7 +16,7 @@ import type { ChatSummary, Harness, NewChat } from '../../shared/contract';
 import type { AgentCatalog, AgentRun, UserTaskEvents } from '../../shared/agents';
 import { canLaunch, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
 import { oneLine } from '../../shared/agent-label';
-import { CRITERION_MAX, EVIDENCE_MAX, MAX_CORRECTIONS, RESULT_OUTPUT_MAX, SUMMARY_MAX, capText, checkContract, checkResult, contractFields, contractWarnings, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult, type DelegationIntegration, type TaskAssignmentOptions } from '../../shared/delegation';
+import { CRITERION_MAX, EVIDENCE_MAX, MAX_CORRECTIONS, RESULT_OUTPUT_MAX, SUMMARY_MAX, USER_ACTION_COMMAND_MAX, USER_ACTION_KINDS, USER_ACTION_TEXT_MAX, USER_ONLY_BLOCKER, capText, checkContract, checkResult, contractFields, contractWarnings, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult, type DelegationIntegration, type TaskAssignmentOptions } from '../../shared/delegation';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { delegationGate, stepIndex, type StrategyPlan } from '../../shared/strategy';
 import type { McpTool } from '../mcp/server';
@@ -109,7 +109,12 @@ export function stalledMin(c: ChatSummary, lastEventAt: number, now: number, sta
   return quiet >= stallMin * 60_000 ? Math.floor(quiet / 60_000) : null;
 }
 
+/** What a partial / blocked report naming a user-only step without userAction gets back, once per run (#358). */
+export const USER_ACTION_REFUSAL = 'agent_report not sent yet: it names a step only the user can do (VPN, login or MFA, an Esegui command, a permission). Add userAction { kind: vpn | login | command | permission | decision | other, text: what the user must do, command?: the exact command } so the app asks the user at once in the Orchestrator, then send the same report again. Without userAction it is accepted the next time.';
+
 export function delegationTools(d: DelegationDeps): McpTool[] {
+  /** the runs already sent back once for a missing userAction (#358): the second identical call goes through */
+  const askedUserAction = new Set<string>();
   // slots taken by agent_delegate calls still creating their chats, per parent (checked and taken synchronously)
   const reserved = new Map<string, number>();
   const chat = (id: string) => d.chats.list().find(c => c.id === id);
@@ -390,6 +395,13 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     // Agents commonly attach top-level evidence. It is not canonical verification; explicitly discard it, never
     // merge it into doneWhen or a review verdict. Other unknown keys still report likely misspellings.
     if (Object.hasOwn(a, 'evidence')) { delete a.evidence; warnings.push('Ignored top-level evidence; put evidence in doneWhen entries or output.'); }
+    // a block only the user can lift never stays only in the report text (#358): sent back once to name it in userAction
+    const runKey = `${callerId}:${self?.run?.runId ?? ''}`;
+    if ((a.outcome === 'partial' || a.outcome === 'blocked') && a.userAction === undefined && !askedUserAction.has(runKey)
+      && USER_ONLY_BLOCKER.test(`${typeof a.summary === 'string' ? a.summary : ''}\n${typeof a.output === 'string' ? a.output : ''}`)) {
+      askedUserAction.add(runKey);
+      throw new Error(USER_ACTION_REFUSAL);
+    }
     const review = independentReview(self);
     if ((a.verdict !== undefined || a.verified !== undefined) && review && (self?.closedAt || self?.run?.endedAt !== undefined)) throw new Error('Review fields require an active app-owned independent reviewer run.');
     // any other chat never had the fields in its schema (reportSchema); one sent anyway (an engine that listed tools
@@ -495,6 +507,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       taskVersion: { type: 'integer', minimum: 1, description: 'Current task version supplied with the assignment; required after a follow-up. Stale reports are refused.' },
       doneWhen: { type: 'array', description: 'one entry per criterion of your contract, written exactly as in the contract (the field is doneWhen, never criteria)', items: { type: 'object', required: ['criterion', 'met'], additionalProperties: false, properties: { criterion: { ...str, maxLength: CRITERION_MAX }, met: { type: 'boolean' }, evidence: { ...str, maxLength: EVIDENCE_MAX } } } },
       questions: { type: 'array', items: { ...str, maxLength: 500 }, maxItems: 8 },
+      userAction: { type: 'object', required: ['kind', 'text'], additionalProperties: false, description: 'only with outcome partial or blocked, when the next step is one only the user can do (turn on the VPN, a login with MFA, an Esegui command, a permission, a decision): the app asks the user at once in the Orchestrator and, on Sì, tells your parent to resume. Never leave such a block only in the report text.',
+        properties: { kind: { type: 'string', enum: [...USER_ACTION_KINDS] }, text: { ...str, maxLength: USER_ACTION_TEXT_MAX, description: 'what the user must do, in the user\'s language' }, command: { ...str, maxLength: USER_ACTION_COMMAND_MAX, description: 'the exact command to run, if any' } } },
       goalChangedByUser: { type: 'boolean', description: 'true when the user wrote to you directly and changed your goal (you followed the user)' },
       newGoal: { ...str, description: 'with goalChangedByUser: the goal the user gave you' },
       remember: { type: 'array', items: str, maxItems: REMEMBER_MAX, description: 'optional, up to 3 short lines (at most 300 characters each, a longer one is cut with …) proposed as lessons for YOUR role skill (read in full at every start of your role; the user approves each one in Proposte): general, reusable knowledge a future run would otherwise rediscover or ask again (a procedure, a convention, a how-to, where things are kept). Generalize a specific finding first (no URLs with ports, ticket / PR / commit ids, user paths, dates, branch names): a case-specific line refuses the report. Never the task result' },
@@ -566,7 +580,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     run: (a, ctx) => JSON.stringify(taskEvents(a, callerOf(ctx.params))),
   }, {
     name: 'agent_report',
-    description: 'Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened): outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions, optional remember (lines for your role\'s memory). It reaches your parent at once; call it once, at the end; to correct a result already given, call it again with amends: true (at most 2 corrections). The app shows output in your chat as your answer: do not write it in the chat too.',
+    description: 'Your one result for the chat that started you (your parent, or the Orchestrator for a chat it opened): outcome (done | partial | blocked), summary (one or two sentences), output (the deliverable), doneWhen (every criterion of your contract, exactly as written, with met and evidence), optional questions, optional userAction (outcome partial or blocked because only the user can act: VPN, login/MFA, an Esegui command, a permission, a decision; never only in the text), optional remember (lines for your role\'s memory). It reaches your parent at once; call it once, at the end; to correct a result already given, call it again with amends: true (at most 2 corrections). The app shows output in your chat as your answer: do not write it in the chat too.',
     inputSchema: reportSchema,
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     // verdict / verified only where the report check accepts them: an app-owned independent review (#183); an engine
