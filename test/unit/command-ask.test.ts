@@ -264,6 +264,16 @@ describe('CommandAsks: a command is asked of the user once (ADR 0239)', () => {
     expect(w.s.followersOf({ chatId: 'c1', itemId: 'a1', code: 'npm run db:migrate' })).toEqual([]);   // read once
   });
 
+  it('a run that could not start answers only its own block: the follower is asked in its place', () => {
+    vi.useFakeTimers();
+    const w = world();
+    w.turn('c1', [asst('a1', block('npm run db:migrate'))]);
+    w.turn('c2', [asst('b1', block('npm run db:migrate'))]);
+    w.s.ran('c1', 'a1', 'npm run db:migrate', true);
+    expect(w.s.pending().map(p => p.chatId)).toEqual(['c2']);
+    expect(w.s.followersOf({ chatId: 'c1', itemId: 'a1', code: 'npm run db:migrate' })).toEqual([]);
+  });
+
   it('another folder is another command: asked twice', () => {
     vi.useFakeTimers();
     const w = world({ cwd: { c1: 'C:/a', c2: 'C:/b' } });

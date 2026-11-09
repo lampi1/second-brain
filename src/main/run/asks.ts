@@ -101,13 +101,17 @@ export class CommandAsks {
   }
 
   /** A run started (Esegui on the card or under the block): its request is answered, and so is every open ask of the
-   *  same code in the same folder in other chats (asked once): those chats get the run's result too (followersOf). */
-  ran(chatId: string, itemId: string, code: string): void {
+   *  same code in the same folder in other chats (asked once): those chats get the run's result too (followersOf).
+   *  ended = the run was already over when start returned (it could not start): only its own request leaves, and a
+   *  chat that followed it is asked in its place. */
+  ran(chatId: string, itemId: string, code: string, ended = false): void {
     const key = runKey(chatId, itemId, code), cwd = this.d.cwdOf?.(chatId), want = sameCode(code);
     for (const [cid, m] of [...this.asks]) for (const r of [...m.values()]) {
       if (!r.command) continue;
       const own = cid === chatId && r.command.itemId === itemId && r.command.code === code;
       const twin = cid !== chatId && sameCode(r.command.code) === want && this.d.cwdOf?.(cid) === cwd;
+      // a run that ended as it started (the shell could not start): it answered its own block, and no other chat
+      if (ended) { if (own) this.drop(cid, r.id); continue; }
       if (!own && !twin) continue;
       const told = this.runFollowers.get(key) ?? new Set<string>();
       if (twin) told.add(cid);

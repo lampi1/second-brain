@@ -97,9 +97,10 @@ export class RunResults {
   private run(r: RunInfo): void {
     if (r.state === 'running' || this.told.has(r.id)) return;
     this.told.add(r.id);
+    const followers = this.d.followers?.(r) ?? [];   // read even when off: a later run of the same block must not inherit them
     if (!this.d.enabled()) return;
     this.enqueue(r.chatId, r);
-    for (const chatId of this.d.followers?.(r) ?? []) if (chatId !== r.chatId) this.enqueue(chatId, { ...r, note: FOLLOWER_NOTE });
+    for (const chatId of followers) if (chatId !== r.chatId) this.enqueue(chatId, { ...r, note: FOLLOWER_NOTE });
   }
 
   private enqueue(chatId: string, r: Told): void {

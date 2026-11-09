@@ -65,7 +65,7 @@ export function chatsHandlers({ s, activity, orchestrator, clip }: HandlerContex
       return (s.branches ?? gitBranches)(cwds);
     },
     // a run answers the "Comando da eseguire" request of that block (Esegui on the card or under the block)
-    'run:start': a => { if (s.chats.list().some(c => c.id === a.chatId && c.routineArchived)) throw new Error('Archived routine chats are read-only.'); const run = s.runner.start(a); s.asks.ran(run.chatId, run.itemId, run.code); return run; },
+    'run:start': a => { if (s.chats.list().some(c => c.id === a.chatId && c.routineArchived)) throw new Error('Archived routine chats are read-only.'); const run = s.runner.start(a); s.asks.ran(run.chatId, run.itemId, run.code, run.state !== 'running'); return run; },
     'run:dismiss': a => s.asks.dismiss(a.chatId, a.requestId),
     'run:stop': a => s.runner.stop(a.runId),
     'run:list': a => s.runner.list(a?.chatId),

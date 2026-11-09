@@ -103,6 +103,15 @@ describe('RunResults', () => {
     expect(sent.find(m => m.chatId === 'c1')!.text).not.toContain(FOLLOWER_NOTE);
   });
 
+  it('with results off the followers are still read, so a later run of the same block does not inherit them', async () => {
+    let read = 0;
+    const { s, sent } = make({ enabled: false, followers: () => { read++; return ['c2']; } });
+    s.observe('run:updated', run({ id: 'r1' }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(read).toBe(1);
+    expect(sent).toEqual([]);
+  });
+
   it('a block not asked again gets the earlier result; nothing when results are off', async () => {
     const { s, sent, setOn } = make();
     s.observe('chat:updated', chat({ id: 'c3' }));
