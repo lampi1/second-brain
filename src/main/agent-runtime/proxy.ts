@@ -12,7 +12,7 @@ import { SemanticReceiver } from './semantic-transport';
 import { receiveHostTextTime, receiveHostTransportTime } from './transport-timing';
 
 export class RuntimeSessionProxy implements HarnessSession, RuntimeAnswerConsumer {
-  private view: AdapterSnapshot = { state: 'starting', sessionId: null, pid: null, busy: true, alive: false, gone: false, startedAt: 0, canHold: false, ready: false };
+  private view: AdapterSnapshot = { state: 'starting', sessionId: null, pid: null, busy: true, alive: false, gone: false, startedAt: 0, canHold: false, ready: false, root: null };
   private readonly commands: RuntimeChannel<AdapterCommand, AdapterResult>;
   private readonly updates: RuntimeReceiver<HostUpdateFrame, void>;
   private readonly semantic: SemanticReceiver<HostUpdate>;
@@ -25,7 +25,6 @@ export class RuntimeSessionProxy implements HarnessSession, RuntimeAnswerConsume
   private sendEpoch = 0;
   private readyResolve!: () => void;
   readonly ready = new Promise<void>(resolve => { this.readyResolve = resolve; });
-  readonly root = null;
   readonly jobHandle = null;
 
   constructor(readonly harness: string, identity: RuntimeIdentity, private readonly sink: SessionSink,
@@ -51,6 +50,7 @@ export class RuntimeSessionProxy implements HarnessSession, RuntimeAnswerConsume
   get alive() { return this.view.alive; }
   get gone() { return this.ended || this.view.gone; }
   get startedAt() { return this.view.startedAt; }
+  get root() { return this.view.root; }
   receiveReply(frame: unknown): boolean { return this.commands.receive(frame); }
   receiveUpdate(frame: unknown): boolean { return this.updates.receive(frame); }
 
