@@ -4,7 +4,8 @@
 // Every approved mutation is logged with undo; permissions, settings and tools remain outside these helpers. Every write
 // is itemized (item-delta.ts, ADR 0194): a line it loses is listed as removed with its reason, else ChangeLog refuses it.
 //   migration      re-runnable, idempotent: every runbook / routines section of the brain becomes a skill in
-//                  <brain>/.agents/skills (a role loads it when its launch gives it). Writes a report.
+//                  <brain>/.agents/skills (a role loads it when its launch gives it) and leaves its file for a pointer
+//                  line, with the scripts only it names (v2, #367, ADR 0244; migration-move.ts). Writes a report.
 //   corrections    the lessons queue (agent_learn_propose): each lesson goes to the role's text (default, also for a
 //                  lesson aimed at the rules: those are gone since #366) or to a skill, only after explicit
 //                  approval of the evidence-backed proposal. Recurring error text is not applied on its own.
@@ -35,6 +36,7 @@ import { maskSecrets } from '../brain/mask';
 import { backfillForgotten, migrationIgnored } from './migration-ignore';
 import { generatedUnchanged, legacyMarker, migrationReceipt, sealMigration, sourceHash, sourceId } from './migration-source';
 import { declareRemoved, DeltaRefused, WHOLE_FILE } from './item-delta';
+import { locate, movedLine, planScripts, withoutSection } from './migration-move';
 
 /** The role side of a job: only the role text and the declared skills. */
 export interface AgentWriter {
@@ -139,13 +141,34 @@ export function migrate(ctx: JobContext): JobResult {
       items.push({ source, title: s.title, skill: null, status: 'skipped', note: 'fonte precedente ambigua tra gruppi: serve associare la skill alla sezione corretta' }); continue;
     }
     const already = existing.filter(k => k.home === 'brain').sort((a, b) => a.name.localeCompare(b.name)).find(k => matches(readSmall(k.file) ?? ''));
-    const body = sectionText(ctx.root, s);
+    // read where the section is now: an earlier move in this pass may have shifted the file's lines (v2, #367)
+    const sourceFile = path.join(ctx.root, ...s.file.split('/'));
+    const current = readSmall(sourceFile), here = current === null ? s : locate(s.file, current, source);
+    const body = here ? sectionText(ctx.root, here) : null;
     if (!body || !body.text.trim()) { items.push({ source, title: s.title, skill: null, status: 'skipped', note: 'sezione vuota o file non leggibile' }); continue; }
     const prior = already ? readSmall(already.file) ?? '' : '', receipt = migrationReceipt(prior);
     const bodyHash = sourceHash(body.text);
+    // v2 (#367): the section leaves its file for a pointer to the skill, in the same change (one Undo puts both back);
+    // never when credentials were hidden in the skill (the file keeps the only full text) or after the user undid a move
+    const moveUndone = ctx.log.all().some(c => c.job === 'migration' && !!c.rolledBackAt && c.evidence.includes(`move:${source}`));
+    const moveOut = (skill: string): { file: string; text: string; removed: ReturnType<typeof declareRemoved> } | null => {
+      if (body.masked || moveUndone) return null;
+      const before = readSmall(sourceFile);
+      const after = before === null ? null : withoutSection(s.file, before, source, movedLine(skill, day(ctx.now())));
+      return before === null || after === null ? null : { file: sourceFile, text: after, removed: declareRemoved(before, after, `sezione «${s.title}» spostata nella skill ${skill}`) };
+    };
     if (already && (!receipt || receipt.bodyHash === bodyHash)) {
+      // a copy made by the first migration: the skill already holds this text, so the section only leaves its file
+      const holds = !!receipt || prior.includes(body.text);
+      const out = holds ? moveOut(already.name) : null;
+      if (out) {
+        try {
+          const c = ctx.log.apply({ job: 'migration', kind: 'skill', action: 'update', target: already.name, summary: `${s.file}: sezione «${s.title}» tolta, è già nella skill ${already.name}`, reason: 'Una procedura sta in un posto solo: la skill. Nel file resta una riga che dice dov’è.', evidence: [source, `move:${source}`] }, [out]);
+          if (c) { changes++; items.push({ source, title: s.title, skill: already.name, status: 'moved', note: 'tolta dal file: era già nella skill' }); continue; }
+        } catch (e) { if (!(e instanceof DeltaRefused)) throw e; }
+      }
       items.push({ source, title: s.title, skill: already.name, status: 'existing',
-        ...(!receipt && !prior.includes(body.text) ? { note: 'fonte modificata: rivedi la skill esistente, non creo una copia' } : {}) }); continue;
+        ...(!holds ? { note: 'fonte modificata: rivedi la skill esistente, non creo una copia' } : moveUndone ? { note: 'hai annullato lo spostamento: la sezione resta anche nel file' } : body.masked ? { note: 'resta anche nel file: ha righe con credenziali nascoste nella skill' } : {}) }); continue;
     }
     if (already && receipt && !generatedUnchanged(prior, receipt)) {
       items.push({ source, title: s.title, skill: already.name, status: 'existing', note: 'fonte e skill modificate: aggiornamento da rivedere, testo personale conservato' }); continue;
@@ -157,22 +180,29 @@ export function migrate(ctx: JobContext): JobResult {
     }));
     if (declined || undone(ctx.log, 'migration', name) && !already) { items.push({ source, title: s.title, skill: already?.name ?? null, status: 'skipped', note: 'annullata da te: non la rifaccio' }); continue; }
     taken.add(name);
-    const description = `${s.purpose || s.title}${s.area && s.area !== s.title ? ` (${s.area})` : ''}`;
-    const text = sealMigration(skillText(name, description, [`# ${s.title}`, '', body.text, '',
-      `${marker} il ${day(ctx.now())}.${body.masked ? ` ${body.masked} righe con possibili credenziali sono nascoste qui: il testo intero resta nel file originale.` : ''}`].join('\n')), source, body.text, receipt?.createdAt ?? ctx.now());
     const file = already?.file ?? path.join(ctx.skillDir, name, 'SKILL.md');
+    const out = moveOut(name);
+    // the scripts and queries only this section names go with it, into the skill's scripts/ (only when the section moves)
+    const plan = out && here && !already ? planScripts(ctx.root, here, body.text, path.dirname(file)) : { body: body.text, files: [] };
+    const description = `${s.purpose || s.title}${s.area && s.area !== s.title ? ` (${s.area})` : ''}`;
+    const text = sealMigration(skillText(name, description, [`# ${s.title}`, '', plan.body, '',
+      `${marker} il ${day(ctx.now())}.${body.masked ? ` ${body.masked} righe con possibili credenziali sono nascoste qui: il testo intero resta nel file originale.` : ''}${plan.files.length ? ` Script spostati nella cartella scripts/ della skill: ${plan.files.map(f => f.rel).join(', ')}.` : ''}`].join('\n')), source, body.text, receipt?.createdAt ?? ctx.now());
     // a regenerated skill (its text untouched since it was generated) lists every line it drops: the source changed them
     const removed = already ? declareRemoved(prior, text, `la sezione «${s.title}» di ${s.file} è cambiata: la riga generata da lì non c'è più`) : [];
+    const writes = [{ file, text, removed },
+      ...plan.files.flatMap(f => [{ file: f.to, text: f.text }, { file: f.from, text: null, removed: [{ item: WHOLE_FILE, reason: `spostato nella skill ${name} (scripts/)` }] }]),
+      ...(out ? [out] : [])];
     let c: ReturnType<ChangeLog['apply']>;
     try {
-      c = ctx.log.apply({ job: 'migration', kind: 'skill', action: already ? 'update' : 'create', target: name, summary: already ? `${name}: aggiornata dalla stessa sezione sorgente` : changeText().newSkill({ name, file: s.file, title: s.title }), reason: 'Le procedure diventano skill: il contenuto è lo stesso, ora un ruolo la carica quando il compito la chiede.', evidence: [source, `sha256:${bodyHash}`] }, [{ file, text, removed }]);
+      c = ctx.log.apply({ job: 'migration', kind: 'skill', action: already ? 'update' : 'create', target: name, summary: already ? `${name}: aggiornata dalla stessa sezione sorgente` : changeText().newSkill({ name, file: s.file, title: s.title }), reason: 'Le procedure diventano skill: il contenuto è lo stesso, ora un ruolo la carica quando il compito la chiede.', evidence: [source, `sha256:${bodyHash}`, ...(out ? [`move:${source}`] : [])] }, writes);
     } catch (e) {
       if (!(e instanceof DeltaRefused)) throw e;
       items.push({ source, title: s.title, skill: already?.name ?? null, status: 'skipped', note: 'la modifica avrebbe tolto righe senza dirlo: la skill resta com\'è' }); continue;
     }
     if (!c) { items.push({ source, title: s.title, skill: already?.name ?? null, status: 'skipped', note: 'contenuto troppo grande per una modifica annullabile' }); continue; }
     changes++;
-    items.push({ source, title: s.title, skill: name, status: 'moved', ...(body.masked ? { note: `${body.masked} righe nascoste (credenziali)` } : {}) });
+    const notes = [body.masked ? `${body.masked} righe nascoste (credenziali): la sezione resta anche nel file` : '', plan.files.length ? `${plan.files.length} script spostati con lei` : ''].filter(Boolean);
+    items.push({ source, title: s.title, skill: name, status: 'moved', ...(notes.length ? { note: notes.join('; ') } : {}) });
   }
   return { job: 'migration', changes, report: { at: ctx.now(), items } };
 }

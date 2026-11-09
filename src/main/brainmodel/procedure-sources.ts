@@ -3,9 +3,10 @@
 // skills only; brainmodel/jobs.ts). Found by structure, never by a list of names: markdown files in a folder named like
 // runbook / procedure / how-to / playbook / rules, files named like routines / runbook / procedures, and the files a
 // runbook index links to. Each leaf section (## or ###) is one item; a file whose sections are numbered steps
-// ("## 1. …") is one item. Rules and playbooks count only where a section has real steps (a numbered list or a code
-// block). Files whose name says credentials / secrets / passwords / tokens / .env are never read; agents' own folders
-// and the skill folders are left out. Nothing here runs anything or writes. Tests: test/unit/brainmodel/legacy.test.ts.
+// ("## 1. …") is one item. Rules and playbooks count only where a section has real steps (a numbered list, or a code
+// block that runs something: a format example is not a step). Records are never procedures (#367): a dated heading (a
+// diary entry, an incident) or a body that is mostly a table. Files whose name says credentials / secrets / passwords / tokens / .env are never read; agents' own folders
+// and the skill folders are left out, and so is a section already moved (its pointer line, MOVED_PREFIX). Nothing here runs anything or writes. Tests: test/unit/brainmodel/legacy.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import { MASK, maskSecrets } from '../brain/mask';
@@ -98,11 +99,23 @@ export function tagsOf(body: string): string[] {
   return t;
 }
 
-/** Does a body look like something to do (steps, a command, a query, a file to run), not just a note? */
+// a fence that runs something (shell, a query): an example of a file format (yaml, markdown, json) is not a step (#367)
+const COMMAND_FENCE = /^\s{0,3}(?:`{3,}|~{3,})\s*(?:bash|sh|shell|zsh|pwsh|powershell|ps1|cmd|bat|console|sql|tsql|kql|kusto)\b/im;
+const COMMAND_LINE = /^\s{0,3}(?:`{3,}|~{3,})[^\n]*\n\s*(?:\$\s*)?(?:node|npm|npx|pnpm|git|az|gh|pwsh|powershell|curl|sqlcmd|dotnet|docker|kubectl|python3?|bash|sh)\s/im;
+/** A dated heading (a diary entry, an incident of a log: "2026-10-27", "27/10/2026 – …") is a record, not a procedure. */
+export const datedHeading = (title: string): boolean => /^\W*(?:\d{4}-\d{2}-\d{2}|\d{1,2}[/.]\d{1,2}[/.]\d{2,4})\b/.test(plain(title));
+/** Mostly a table (an incident log, a register): a record, not a procedure. */
+const mostlyTable = (text: string): boolean => {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  return lines.length > 0 && lines.filter(l => l.startsWith('|')).length * 2 >= lines.length;
+};
+/** The line a section moved into a skill keeps in its file (migration-move.ts): never a section again. */
+export const MOVED_PREFIX = '→ Spostata nella skill';
+/** Does a body look like something to do (steps, a command, a query, a file to run), not just a note or a record? */
 const hasSteps = (body: string, kind: Kind): boolean => {
   const text = body.replace(/^\s*\(?(nessuno|nessuna|none|vuoto)\)?\s*$/gim, '').trim();
-  if (text.length < 12) return false;
-  if (kind === 'soft') return FENCE.test(text) || (text.match(/^\s{0,3}\d+[.)]\s+\S/gm)?.length ?? 0) >= 2;
+  if (text.length < 12 || mostlyTable(text) || text.startsWith(MOVED_PREFIX)) return false;
+  if (kind === 'soft') return COMMAND_FENCE.test(text) || COMMAND_LINE.test(text) || (text.match(/^\s{0,3}\d+[.)]\s+\S/gm)?.length ?? 0) >= 2;
   return true;
 };
 
@@ -137,7 +150,7 @@ export function parseSections(rel: string, text: string, src: { kind: Kind; labe
       // the group heading above (a ## with ### children)
       const group = h.level === 3 ? [...subs.slice(0, i)].reverse().find(x => x.level === 2) : undefined;
       const body = lines.slice(h.line + 1, end).join('\n');
-      if (hasSteps(body, src.kind)) out.push(make(plain(h.text), h.line, h.line + 1, end, group ? plain(group.text) : null));
+      if (!datedHeading(h.text) && hasSteps(body, src.kind)) out.push(make(plain(h.text), h.line, h.line + 1, end, group ? plain(group.text) : null));
     });
   }
   // unique ids: "Deploy", "Deploy" and "Deploy 2" → #deploy, #deploy-3, #deploy-2 (a suffix never takes a real slug)
@@ -220,7 +233,7 @@ export function procedureSections(root: string): ProcedureSection[] {
 }
 
 /** The body of one section as on disk, credential lines masked (a skill is loaded into an agent's context and may be
- *  exported; the original file keeps the full text and is never changed). */
+ *  exported; such a section stays whole in its file too: the migration moves only unmasked sections, #367). */
 export function sectionText(root: string, s: ProcedureSection): { text: string; masked: number } | null {
   const t = readText(root, s.file);
   if (!t) return null;

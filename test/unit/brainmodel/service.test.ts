@@ -96,13 +96,20 @@ describe('one-time migration', () => {
     const query = report.items.find(i => i.title === 'Query in sola lettura su produzione')!;
     expect(fs.readFileSync(path.join(w.brain, '.agents/skills', query.skill!, 'SKILL.md'), 'utf8')).not.toMatch(/demo-non-reale/);
     expect(query.note).toMatch(/nascost/);
-    expect(snapshot(w.brain)).toEqual(before); // originals untouched
+    // v2 (#367): each section left its file for a pointer to its skill; the one with a hidden credential stays whole
+    const after = snapshot(w.brain);
+    for (const item of report.items.filter(i => !i.note)) expect(after[item.source.split('#')[0]!]).toContain(`→ Spostata nella skill \`${item.skill}\``);
+    expect(after['runbook/database.md']).toMatch(/demo-non-reale/);
+    expect(after['runbook/database.md']).toContain('Query in sola lettura su produzione');
     // no role is changed: a role loads a skill when its launch gives it (the Orchestrator passes them)
     expect(w.catalog.list().profiles.every(p => p.lastEditedBy === 'default')).toBe(true);
-    // one change per skill, all undoable
+    // one change per skill (each one undoable once the newer changes to the same file are undone, below)
     expect(state.changes.filter(c => c.job === 'migration')).toHaveLength(report.items.length);
-    expect(state.changes.every(c => c.kind === 'skill' && c.canRollback)).toBe(true);
+    expect(state.changes.every(c => c.kind === 'skill')).toBe(true);
     expect(state.skills.find(s => s.name === release.skill)).toMatchObject({ usedBy: [], madeBy: 'migration', home: 'brain' });
+    // every Undo, newest first, puts the brain back exactly as it was: nothing was lost on the way
+    for (const c of w.service.log.all().reverse()) w.service.rollback(c.id);
+    expect(snapshot(w.brain)).toEqual(before);
   });
   it('is idempotent and never redoes a skill the user undid', async () => {
     const w = world({ demo: true });
@@ -145,33 +152,48 @@ describe('one-time migration', () => {
     expect(state.lastRun!.jobs.map(j => j.job)).toEqual(['migration', 'upgrade', 'corrections', 'repeated-task', 'merge-skills', 'merge-memory']);
     expect(w.emitted()).toBe(1);
   });
-  it('keeps source identity across line shifts and updates the same unedited generated skill', async () => {
+  it('moves a section out for a pointer; written back unchanged it only moves again, changed it updates the unedited skill', async () => {
     const w = world(), source = '# Operations\n\n## Deploy test\n\n1. Build the test fixture.\n2. Verify the output.\n';
     put(w.brain, 'runbooks/deploy.md', source);
     const first = await w.service.maintain('migration'), name = first.skills[0]!.name;
     const skill = first.skills[0]!.file, original = fs.readFileSync(skill, 'utf8');
+    const file = path.join(w.brain, 'runbooks/deploy.md');
+    expect(fs.readFileSync(file, 'utf8')).toBe(`# Operations\n\n## Deploy test\n\n→ Spostata nella skill \`${name}\` il 2026-10-19.\n`);
+    expect(original).toContain('Build the test fixture');
+    // the same section written back (two lines lower): no copy, it only leaves the file again
     put(w.brain, 'runbooks/deploy.md', `\n\n${source}`);
-    const moved = await w.service.maintain('migration');
-    expect(moved.skills.map(s => s.name)).toEqual([name]);
-    expect(moved.changes).toHaveLength(first.changes.length);
-    expect(moved.migration!.items).toHaveLength(1);
+    const again = await w.service.maintain('migration');
+    expect(again.skills.map(s => s.name)).toEqual([name]);
     expect(fs.readFileSync(skill, 'utf8')).toBe(original);
+    expect(fs.readFileSync(file, 'utf8')).toContain('→ Spostata nella skill');
+    expect(again.migration!.items).toHaveLength(1);
+    // changed: the generated, unedited skill follows the source
     put(w.brain, 'runbooks/deploy.md', source.replace('Verify the output', 'Verify both outputs'));
     const updated = await w.service.maintain('migration');
     expect(updated.skills.map(s => s.name)).toEqual([name]);
     expect(fs.readFileSync(skill, 'utf8')).toContain('Verify both outputs');
-    const change = updated.changes.find(c => c.job === 'migration' && c.action === 'update')!;
-    expect(change).toBeDefined();
+    expect(fs.readFileSync(file, 'utf8')).not.toContain('Verify both outputs');
+    const change = updated.changes.find(c => c.job === 'migration' && c.action === 'update' && c.summary.includes('aggiornata'))!;
     w.service.rollback(change.id);
+    expect(fs.readFileSync(file, 'utf8')).toContain('Verify both outputs');
     await w.service.maintain('migration');
     expect(fs.readFileSync(skill, 'utf8')).toBe(original);
+    expect(fs.readFileSync(file, 'utf8')).toContain('Verify both outputs'); // the user's Undo is the decision
   });
   it('recognizes old line-based provenance and preserves later user edits on source conflicts', async () => {
     const w = world();
     put(w.brain, 'runbooks/check.md', '# Ops\n\n\n## Check source\n\n1. Read the fixture.\n2. Check the output.\n');
     put(w.brain, '.claude/skills/check-source/SKILL.md', '---\nname: check-source\ndescription: Check\n---\n\n# Check source\n\n1. Read the fixture.\n2. Check the output.\n\nSpostata qui da `runbooks/check.md` (sezione «Check source», riga 3) il 2026-10-01.\n');
+    const skillBefore = fs.readFileSync(path.join(w.brain, '.claude/skills/check-source/SKILL.md'), 'utf8');
     const legacy = await w.service.maintain('migration');
-    expect(legacy.skills).toHaveLength(1); expect(legacy.changes).toHaveLength(0);
+    // a copy made by the first migration: the skill is kept as it is, the section only leaves its file
+    expect(legacy.skills).toHaveLength(1); expect(legacy.changes).toHaveLength(1);
+    expect(fs.readFileSync(path.join(w.brain, 'runbooks/check.md'), 'utf8')).toContain('→ Spostata nella skill `check-source`');
+    expect(fs.readFileSync(path.join(w.brain, '.claude/skills/check-source/SKILL.md'), 'utf8')).toBe(skillBefore);
+    w.service.rollback(legacy.changes[0]!.id);
+    const kept = await w.service.maintain('migration');
+    expect(kept.migration!.items.find(i => i.skill === 'check-source')!.note).toMatch(/annullato lo spostamento/);
+    expect(fs.readFileSync(path.join(w.brain, 'runbooks/check.md'), 'utf8')).toContain('1. Read the fixture.');
     put(w.brain, 'runbooks/fresh.md', '# Ops\n\n## New check\n1. Read a fixture.\n2. Check a result.\n');
     const made = await w.service.maintain('migration'), generated = made.skills.find(s => s.name === 'new-check')!;
     fs.appendFileSync(generated.file, '\nMy additional condition.\n');
@@ -675,9 +697,10 @@ describe('durable approved skill forgets (#264, #266)', () => {
     w.service.remove('skill', skill.name);
     for (let i = 0; i < 401; i++) w.service.log.record({ job: 'user', kind: 'rule', action: 'update', target: 'fixture', summary: 'Fixture', reason: 'History rollover', evidence: [] }, []);
     expect((await w.service.maintain('migration')).skills.map(s => s.name)).not.toContain(skill.name);
-    // A retained marker is independently removable after history rollover.
+    // the section left its file at the first pass (v2, #367): even without the marker nothing can bring it back
     fs.unlinkSync(ignoreFile(w.brain, receipt.source));
-    expect((await w.service.maintain('migration')).skills.map(s => s.name)).toContain(skill.name);
+    expect((await w.service.maintain('migration')).skills.map(s => s.name)).not.toContain(skill.name);
+    expect(fs.readFileSync(path.join(w.brain, 'runbooks/fixture.md'), 'utf8')).toContain('→ Spostata nella skill `deploy-fixture`');
   });
   it('backfills old research removals, repairs untouched re-creations, and keeps the original Undo', async () => {
     const w = world(); put(w.brain, 'runbooks/fixture.md', source);

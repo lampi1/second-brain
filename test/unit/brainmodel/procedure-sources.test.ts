@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
 import { MASK, maskSecrets } from '../../../src/main/brain/mask';
-import { procedureSections, linkedFrom, parseSections, plain, purposeOf, sectionText, sourceOf, tagsOf } from '../../../src/main/brainmodel/procedure-sources';
+import { datedHeading, procedureSections, linkedFrom, parseSections, plain, purposeOf, sectionText, sourceOf, tagsOf } from '../../../src/main/brainmodel/procedure-sources';
 import { touchesBrainModel } from '../../../src/main/brainmodel/model';
 import { writeDemoBrain } from '../../../src/main/brainmodel/demo';
 
@@ -112,6 +112,16 @@ describe('parsing', () => {
     const t = ['# Regole', '## Provare un test case', '1. Prendi l\'ambiente.', '2. Segui i passi.', '## Tono', 'Commenti brevi e gentili, in inglese semplice, sempre.', '## Punti', '(nessuno)'].join('\n');
     expect(parseSections('rules/qa.md', t, { kind: 'soft', label: 'Regole' }).map(p => p.title)).toEqual(['Provare un test case']);
     expect(parseSections('routines.md', t, { kind: 'strong', label: 'Routine' }).map(p => p.title)).toEqual(['Provare un test case', 'Tono']);
+  });
+  it('records and format examples are never procedures: dated headings, mostly-table bodies, a yaml example in a rules file (#367, #311)', () => {
+    const t = ['# Runbook', '## 2026-10-27 · deploy saltato', '1. Il nodo era giù.', '2. Riprovato alle 10.', '## 27/10/2026 incidente', 'Rollback fatto a mano dopo il blocco.',
+      '## Incidenti', '| data | cosa |', '|---|---|', '| 10-01 | lento |', '| 10-02 | giù |', '## Riavvio del nodo', '1. Ferma il servizio.', '2. Riavvialo.'].join('\n');
+    expect(parseSections('runbook.md', t, { kind: 'strong', label: 'Runbook' }).map(p => p.title)).toEqual(['Riavvio del nodo']);
+    const std = ['# Standard degli agenti', '## Frontmatter', '```yaml', 'name: x', 'description: y', '```', '## Controllo', '```bash', 'node ops/tools/brain-lint.mjs', '```',
+      '## Avvio', '```', 'npm run dev', '```'].join('\n');
+    expect(parseSections('rules/agenti.md', std, { kind: 'soft', label: 'Regole' }).map(p => p.title)).toEqual(['Controllo', 'Avvio']);
+    expect(datedHeading('**2026-10-31** – note')).toBe(true);
+    expect(datedHeading('Deploy 2026')).toBe(false);
   });
   it('helpers: plain text, purpose, tags, index links', () => {
     expect(plain('**Dove:** API `POST /x` e [doc](a.md)')).toBe('Dove: API POST /x e doc');

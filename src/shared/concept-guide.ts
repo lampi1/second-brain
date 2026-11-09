@@ -243,8 +243,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Ogni modifica è registrata con cosa, perché e le prove, e «Annulla» la riporta com’era. L’app cambia da sola solo il testo di un ruolo e le sue skill; il tuo sì resta per produzione, strumenti, tetto, motore e livello di un ruolo, impostazioni e testi per altri.',
         'Every change is logged with what, why and the evidence, and "Undo" puts it back. The app changes by itself only a role’s text and its skills; your yes stays for production, a role’s tools, ceiling, engine and tier, settings and texts for others.'),
       // src/main/brainmodel/procedure-sources.ts
-      b('Le sezioni dei runbook e delle routine del brain diventano skill, senza perdere testo e senza ripetersi: il resoconto è nella scheda Skill di Memoria.',
-        'The brain’s runbook and routines sections become skills, losing no text and never twice: the report is in Memoria’s Skills tab.'),
+      b('Le sezioni dei runbook e delle routine del brain diventano skill e lasciano il file (resta una riga che dice in quale skill sono), con gli script che solo loro nominano; diari, tabelle di incidenti ed esempi di formato non diventano skill. Un «Annulla» rimette tutto: il resoconto è nella scheda Skill di Memoria.',
+        'The brain’s runbook and routines sections become skills and leave their file (a line says which skill holds them), with the scripts only they name; diary entries, incident tables and format examples never become skills. One \"Undo\" puts everything back: the report is in Memoria’s Skills tab.'),
       // src/renderer/components/brain-model/RulesPage.tsx, src/main/rules/tools.ts topicSkills, src/main/rules/runtime.ts (#366, ADR 0243)
       b('«Sempre caricato» mostra il nucleo fisso che ogni chat riceve all’avvio (me.md, AGENTS.md, lo stile e le regole fisse dell’app) con i caratteri sul budget; le vecchie regole per argomento non entrano più nelle chat: sono skill (regole-<argomento>). Memoria tiene conoscenza, quello che è successo e una memoria per ruolo, con i numeri (righe per ruolo, crescita per settimana, ricordi più richiamati, file fermi, errori ricorrenti, skill utili o mai usate, curiosità; ogni «?» dice come è calcolato) e ogni file si apre nel visore; Mappa mostra ruolo → skill → regole → memoria.',
         '"Always loaded" shows the fixed core every chat gets at its start (me.md, AGENTS.md, the style and the app’s fixed rules) with its characters against the budget; the old topic rules no longer enter chats: they are skills (regole-<topic>). Memory holds knowledge, what happened and one memory per role, with the numbers (lines per role, weekly growth, most recalled memories, stale files, recurring errors, useful or never used skills, curious facts; each "?" says how it is computed) and every file opens in the viewer; Map shows role → skills → rules → memory.'),
@@ -264,11 +264,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       0: ['src/main/brainmodel/model.ts#readSkills', 'src/main/agents/pack/flows.ts#runtime'],
       1: ['src/renderer/components/SkillsPage.tsx', 'src/main/skills/library.ts', 'src/main/brainmodel/service.ts#link'],
       3: ['src/main/brainmodel/changes.ts', 'src/main/agents/catalog.ts#maintain'],
-      4: ['src/main/brainmodel/procedure-sources.ts'],
+      4: ['src/main/brainmodel/procedure-sources.ts', 'src/main/brainmodel/migration-move.ts'],
       5: ['src/renderer/components/brain-model/RulesPage.tsx', 'src/main/rules/tools.ts#topicSkills', 'src/main/rules/runtime.ts'],
       6: ['src/main/brainmodel/classifiers.ts'],
     },
-    sources: ['src/main/brainmodel/service.ts', 'src/main/brainmodel/jobs.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/model.ts', 'src/main/brainmodel/procedure-sources.ts', 'src/main/brainmodel/classifiers.ts', 'src/main/agents/pack/rules.ts', 'src/renderer/components/SkillsPage.tsx', 'src/main/skills/library.ts', 'src/main/rules/tools.ts', 'src/renderer/components/brain-model/RulesPage.tsx', 'docs/adr/0077-agents-and-skills-only.md', 'docs/adr/0241-skill-packages-and-skill-library.md', 'docs/adr/0243-fixed-core-instead-of-rules.md'],
+    sources: ['src/main/brainmodel/service.ts', 'src/main/brainmodel/jobs.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/model.ts', 'src/main/brainmodel/procedure-sources.ts', 'src/main/brainmodel/migration-move.ts', 'src/main/brainmodel/classifiers.ts', 'src/main/agents/pack/rules.ts', 'src/renderer/components/SkillsPage.tsx', 'src/main/skills/library.ts', 'src/main/rules/tools.ts', 'src/renderer/components/brain-model/RulesPage.tsx', 'docs/adr/0077-agents-and-skills-only.md', 'docs/adr/0241-skill-packages-and-skill-library.md', 'docs/adr/0243-fixed-core-instead-of-rules.md', 'docs/adr/0244-migration-moves-sections-into-skills.md'],
   },
   {
     id: 'orchestrator',
@@ -847,8 +847,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Il feed dal vivo osserva la cartella e mostra le novità (idee, errori, decisioni…); «mentre eri via» segna quelle arrivate a app chiusa.',
         'The live feed watches the folder and shows what changed (ideas, errors, decisions…); "while you were away" marks those that came while the app was closed.'),
       // src/main/brainmodel/procedure-sources.ts (ADR 0077)
-      b('Runbook e routine di un brain di prima diventano skill una volta sola; i file originali restano dove sono, le righe che sembrano credenziali non passano mai.',
-        'Runbooks and routines of an older brain become skills once; the original files stay where they are, lines that look like credentials never pass.'),
+      b('Runbook e routine di un brain di prima diventano skill una volta sola e lasciano il file per una riga che rimanda alla skill; una sezione con righe che sembrano credenziali resta anche nel file, perché quelle righe non passano mai nella skill.',
+        'Runbooks and routines of an older brain become skills once and leave their file for a line pointing to the skill; a section with lines that look like credentials stays in the file too, because those lines never pass into the skill.'),
       // src/main/brain/domains.ts, src/main/brain/sync.ts
       b('Più domini e sincronizzazione tra PC sono opzionali (domain.json); prima di ogni push passa il controllo di pubblicazione.',
         'Several domains and sync between PCs are optional (domain.json); every push goes through the publish guard first.'),
