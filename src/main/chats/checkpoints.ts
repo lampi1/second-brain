@@ -7,7 +7,7 @@
 // node_modules) and nested repositories stay as they are. Before it touches a file, the undo records the tree as it is
 // under refs/sb/undo/<chat>/<time>, so an undo itself can be reverted with git. Why: agents run with the full default permissions (ADR 0085), and an undo is the safety net that needs no
 // popup. Used by ChatManager (deliverNow before a turn, undoTurn, and turnFiles for a run's receipts, ADR 0130); pinned
-// by test/unit/chats/checkpoints.test.ts.
+// by the e2e only since its real-git unit tests were removed (docs/tests/load-sensitive-removed.md).
 import { execFile } from 'node:child_process';
 import crypto from 'node:crypto';
 import fs from 'node:fs';

@@ -3,7 +3,7 @@
 // rule, never the matched value, and says how to fix it. Fail-closed: a config that cannot be read, a deny list that is
 // set but missing, a scanner error all block. No dependencies.
 // Used by scripts/guard-commit.mjs (pre-commit), scripts/guard-push.mjs (pre-push), scripts/setup-hooks.mjs
-// (`npm run setup`), scripts/doctor.mjs and scripts/setup-pc.mjs (guardStatus); tested in test/unit/guard-commit-hook.test.ts and guard-push-hook.test.ts.
+// (`npm run setup`), scripts/doctor.mjs and scripts/setup-pc.mjs (guardStatus); tested in test/unit/guard-commit-hook.test.ts.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';

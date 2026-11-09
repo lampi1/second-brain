@@ -2,7 +2,7 @@
 // (filter.ts) here, so no caller can send an unfiltered text (design §9: one filter on every outgoing text). It also
 // fixes the destination to the paired chat (no other chat id can be passed) and turns API failures into a logged
 // warning, so a failed send never breaks the polling loop. answerCallbackQuery texts are fixed short strings, filtered too.
-// Used by bridge.ts, buttons.ts, backlog.ts, voice.ts, commands.ts; tests: test/unit/phone/bridge.test.ts.
+// Used by bridge.ts, buttons.ts, backlog.ts, voice.ts, commands.ts; no unit test since bridge.test.ts (a port) was removed.
 import type { TelegramClient } from './client';
 import { filterOutgoing } from './filter';
 import type { InlineKeyboard, PhoneLog } from './types';

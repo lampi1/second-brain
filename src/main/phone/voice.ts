@@ -5,7 +5,8 @@
 // message and comes back as an echo "🎙️ Ho capito: «…»" (filtered), so a wrong transcription shows at once. No voice
 // models → "Attiva la voce nell'app, scrivimi in testo".
 // Leftovers of a crash or a kill are removed at the bridge start (clearVoiceTemp).
-// Used by bridge.ts; tests: test/unit/phone/client-voice.test.ts (temp file deleted on success and on error).
+// Used by bridge.ts; its unit tests (a local port) were removed
+// (docs/tests/load-sensitive-removed.md).
 import crypto from 'node:crypto';
 import fsSync from 'node:fs';
 import fs from 'node:fs/promises';

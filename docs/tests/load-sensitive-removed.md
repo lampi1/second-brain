@@ -18,7 +18,7 @@ Second pass, same day, by the owner's decision («Sì, toglili tutti»): every u
 (fake engine CLIs included), git, a port, a socket or the network, with or without a clock of its own. They were found
 by running the whole unit suite with a probe that records every `child_process` call, `listen` and `connect` per test,
 plus the Windows-only tests (skipped on Linux, so the probe could not see them) and the suites that start a server or a
-build in `beforeAll`: 464 tests in 83 files. Their list is under «Second pass» at the end.
+build in `beforeAll`: 465 tests in 84 files. Their list is under «Second pass» at the end.
 
 ## Unique coverage lost
 
@@ -58,11 +58,12 @@ No other unit test covers these any more (checked by area, not line by line):
   - git work: worktree pool and worktrees (11), delegation isolation and reuse (12), review pack (1), brain sync (18),
     live and fresh brain (8), brain API (4), file diff and the file-diff review (10), pull (4);
   - the guard on real commits and pushes (pre-commit 9, pre-push 10, scanner 7), the correction-catch hook (6),
-    publish and improve guards (2), agent-pack guard (3), check lock (3);
+    publish and improve guards (2; the repo-wide publish scan now runs as `scripts/publish-guard.mjs` in `npm run check` and
+    `check:branch`, outside the unit suite), agent-pack guard (3), check lock (3);
   - HTTP and sockets: the MCP server protocol (22), the API engine streams (15), MCP gateway and client (12), phone
     bridge and voice (18);
   - scripts run as children: release writer, launcher, gates and env (12), update restart (2), template first run (4),
-    routine CLI build (1), setup-pc (2), doctor (1), ZIP extraction in PowerShell (6), the read worker built with
+    routine CLI build (1), setup-pc (2), doctor (1), ZIP extraction in PowerShell (6) and the update download's real extraction (1), the read worker built with
     esbuild (6), the coordination journal across two workers (1);
   - smaller ones: default brain (4), app connector entry (3), event origin (3), mem-run (2), CLI status (2), search
     gitignore fallback and missing root (4), and single tests in log, log digest, search recall, readme check,
@@ -957,6 +958,10 @@ Files left without tests and deleted: `test/unit/chats/orchestrator-cursor.test.
 ### `test/unit/doctor.test.ts` (1)
 
 - a default doctor run reports config and paths without starting any candidate
+
+### `test/unit/download.test.ts` (1)
+
+- runs real native extraction for a fake published archive and can stage its exact bytes
 
 ### `test/unit/engines/text.test.ts` (1)
 

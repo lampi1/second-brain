@@ -7,7 +7,7 @@
 // missing → blocked). When `guard.email` is set, every new commit's author and committer and every pushed tag's tagger
 // e-mail must be that one. Fail-closed: any error blocks the push. Never skippable from the app or by agents (no --no-verify).
 // Exit 0 → the push goes on; 1 → blocked, with file:line or commit + rule (never the value) and the fix.
-// Run by .githooks/pre-push (args: remote name, url; stdin: one line per ref); tested in test/unit/guard-push-hook.test.ts.
+// Run by .githooks/pre-push (args: remote name, url; stdin: one line per ref); its parser is tested in test/unit/guard-commit-hook.test.ts.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';

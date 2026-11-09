@@ -1,7 +1,7 @@
 // E2E of a second start of the app on the same profile (the desktop icon clicked while the app is open, or still
 // quitting): it leaves at once with exit code 75, which the stable launcher (scripts/release.mjs) reads as "already
 // open", never as a broken release (2026-10-12: 91967ec marked bad that way); a quitting app writes quitting.json, so
-// the launcher waits for it instead of leaving it in front. The launcher side: test/unit/release-launch.test.ts.
+// the launcher waits for it instead of leaving it in front. The launcher side had unit tests, removed (real processes).
 import { expect, test } from '@playwright/test';
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';

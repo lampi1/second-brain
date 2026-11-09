@@ -9,7 +9,7 @@
 //   transport at all (a partial clone's missing object would otherwise run the repository's ssh command), core.fsmonitor
 //   off, no replace objects, no optional locks: nothing runs, nothing is written.
 // Each side at most DIFF_BYTES, text only; the renderer computes the diff. Used by index.ts (app:readFileDiff); pinned by
-// test/unit/file-diff.test.ts.
+// the e2e only since its real-git unit tests were removed (docs/tests/load-sensitive-removed.md).
 import{execFile}from'node:child_process';import fs from'node:fs';import path from'node:path';
 import{DIFF_BYTES,gitRefOk,type DiffAgainst,type FileDiffReason,type FileDiffResult}from'../shared/file-diff';
 import{localFile}from'./file-view';

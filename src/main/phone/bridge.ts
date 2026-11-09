@@ -7,7 +7,8 @@
 // outbound.ts (the one filter). Phone text goes to the Orchestrator through PhonePort.sendFromPhone and never approves
 // anything; only button presses checked by buttons.ts answer simple questions and plans. Notifications follow policy.ts
 // (questions, the Orchestrator's replies, failed chats from PhonePort.onChatFailed, urgent notices from main).
-// Used by main (wiring.ts, by the integrator); tests: test/unit/phone/bridge.test.ts against a fake Telegram server.
+// Used by main (wiring.ts, by the integrator); its tests against a fake Telegram
+// server were removed with the other port tests (docs/tests/load-sensitive-removed.md).
 import type { PhoneController, PhoneDecidable, PhoneSettingsPatch, PhoneStatus, PhoneBridgeState } from '../../shared/contract/phone';
 import { createBacklog, isBacklog, START_NOTICE, STOP_NOTICE, type BacklogPayload } from './backlog';
 import { createButtons, refKey } from './buttons';

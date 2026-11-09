@@ -1,6 +1,6 @@
 // E2E of the resume after a restart (frozen demo): a chat the app resumed by itself shows "ripresa dopo il riavvio" on
-// its tile until the user writes to it. The resume itself (saved turn, automatic message, --resume) is covered by
-// test/unit/chats/resume.test.ts against the fake CLI. Screenshot: test-results/shots/resume-1-mark.
+// its tile until the user writes to it. The resume itself (saved turn, automatic message, --resume) had unit tests against
+// the fake CLI, removed on 2026-11-09 (docs/tests/load-sensitive-removed.md). Screenshot: test-results/shots/resume-1-mark.
 import { expect, test } from '@playwright/test';
 import { expandChats, launchDemo, shot } from './helpers';
 
