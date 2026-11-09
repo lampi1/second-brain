@@ -250,3 +250,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0243](0243-fixed-core-instead-of-rules.md) Rules are gone: a fixed core is always loaded, everything else is a skill — accepted
 - [0244](0244-migration-moves-sections-into-skills.md) The migration moves a section into its skill, it no longer copies it — accepted
 - [0245](0245-memory-browser.md) Memoria shows the memory outside skills as one searchable shelf — accepted
+- [0246](0246-bash-backslash-writes-refused.md) A Bash command that writes text with backslashes is refused — accepted

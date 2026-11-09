@@ -1,7 +1,9 @@
-// Enforce the fixed-context allowance and validated memory writers before Claude file tools execute.
+// Enforce the fixed-context allowance and validated memory writers before Claude file tools execute; a Bash command
+// that writes text with backslashes is refused (bash-backslash.ts, #342).
 import path from 'node:path';
 import { read, confined } from './storage';
 import { check } from './vendor.mjs';
+import { backslashWrite } from './bash-backslash';
 import type { HookInput, RuleContext } from './types';
 
 export function fixedSize(ctx: RuleContext, replacement?: { file: string; text: string }): number {
@@ -11,7 +13,7 @@ export function fixedSize(ctx: RuleContext, replacement?: { file: string; text: 
 }
 export function guard(ctx: RuleContext, input: HookInput): string | undefined {
   const ti = input.tool_input ?? {};
-  if (['Bash', 'PowerShell'].includes(input.tool_name ?? '')) return check(ti.command ?? '', 'claude') ?? undefined;
+  if (['Bash', 'PowerShell'].includes(input.tool_name ?? '')) return check(ti.command ?? '', 'claude') ?? (input.tool_name === 'Bash' ? backslashWrite(ti.command ?? '') : null) ?? undefined;
   if (!['Write', 'Edit', 'MultiEdit'].includes(input.tool_name ?? '')) return;
   if (typeof ti.file_path !== 'string') throw new Error('File tool is missing its path.');
   const file = path.resolve(input.cwd ?? ctx.root, ti.file_path);
