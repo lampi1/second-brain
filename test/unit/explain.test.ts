@@ -24,6 +24,9 @@ describe('explainTool', () => {
     expect(explainTool('Glob', { pattern: '**/*.tsx' }).line).toBe('Cerca i file **/*.tsx');
     expect(explainTool('WebFetch', { url: 'https://example.com/a?b=1' }).line).toBe('Apre example.com');
     expect(explainTool('Agent', { description: 'review the diff', prompt: 'long' }).line).toBe('Affida a un agente: review the diff');
+    // the engine's agent type (#356): Explore is the read-only search, another type is named
+    expect(explainTool('Agent', { description: 'map skills', prompt: 'p', subagent_type: 'Explore' }).line).toBe('Ricerca in sola lettura (Explore): map skills');
+    expect(explainTool('Task', { description: 'fix it', prompt: 'p', subagent_type: 'general-purpose' }).line).toBe('Affida a un agente (general-purpose): fix it');
   });
 
   it('Cursor kinds: the title when the input says little, the command from rawInput', () => {

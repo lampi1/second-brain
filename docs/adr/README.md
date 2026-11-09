@@ -253,3 +253,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0246](0246-bash-backslash-writes-refused.md) A Bash command that writes text with backslashes is refused — accepted
 - [0247](0247-standard-delegation-contract.md) One standard delegation contract, in English — accepted
 - [0248](0248-prune-rule-and-note-statistics.md) The statistics of rules and notes leave with them — accepted
+- [0249](0249-subagent-rows-name-the-engine-type.md) A sub-agent row names the engine's real agent type — accepted

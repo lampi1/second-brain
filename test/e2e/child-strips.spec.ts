@@ -1,5 +1,5 @@
 // Main-only visual gate for provider children under collapsed/expanded parents and the Orchestrator: each sub-agent names
-// the role it runs as (or "nessun agente"), and a parent whose turn ended reads "in attesa" while one works (#69).
+// the role it runs as (or the engine's type, «Explore · sola lettura», #356), and a parent whose turn ended reads "in attesa" while one works (#69).
 // Uses frozen demo telemetry; the unit suites separately exercise provider event parsing and lifecycle updates.
 import { expect, test } from '@playwright/test';
 import { launchDemo, shot } from './helpers';
@@ -16,7 +16,7 @@ test('child activity at work stays visible beneath each parent strip and the Orc
     // the role each sub-agent runs as; a command names none
     await expect(work.locator('[data-child-kind="agent"]').getByTestId('child-agent')).toHaveText('Scout');
     await expect(work.locator('[data-child-kind="shell"]').getByTestId('child-agent')).toHaveCount(0);
-    await expect(page.getByTestId('child-strips-orchestrator').locator('[data-child-key="claude:task:a1"]').getByTestId('child-agent')).toHaveText('nessun agente');
+    await expect(page.getByTestId('child-strips-orchestrator').locator('[data-child-key="claude:task:a1"]').getByTestId('child-agent')).toHaveText('Explore · sola lettura'); // the engine type (#356)
     const parentBox = (await page.getByTestId('tile-chat-fix').boundingBox())!;
     const childBox = (await work.boundingBox())!;
     expect(childBox.x).toBeGreaterThan(parentBox.x);

@@ -167,7 +167,7 @@ export function seed(E: number): Seed {
     state: 'idle', costUsd: 0, pending: 0, isOrchestrator: false, lastText: '', updatedAt: E, browserTabIds: [], ...c,
   });
   // the sub-agents the engines report (ChildStrips.tsx shows them under their chat): what each does, the app agent it
-  // runs as (agentType: a catalog id, or an engine type the app does not know → "nessun agente"), its state, its start
+  // runs as (agentType: a catalog id, or the engine's own type, e.g. Explore → «Explore · sola lettura», #356), its state, its start
   const child = (c: Partial<ChildObservation> & Pick<ChildObservation, 'key' | 'task' | 'state' | 'startedAt'>): ChildObservation =>
     ({ nativeId: c.key, toolCallId: null, parentNativeId: null, kind: 'agent', observedAt: c.startedAt ?? E, source: 'live', ...c });
   const children = (...list: ChildObservation[]): AgentChildren => {
@@ -177,7 +177,7 @@ export function seed(E: number): Seed {
   const chats: ChatSummary[] = [
     chat({ id: 'orchestrator', title: 'Orchestrator', isOrchestrator: true, availableResultIds: ['r_000000000004'], state: 'waiting', pending: 1, costUsd: 4.12, contextTokens: 64_000, contextMaxTokens: 1_000_000, updatedAt: E - 8 * MIN, lastText: 'Prima la QA bloccata: la QA dei rimborsi aspetta te.',
       agentChildren: children(
-        child({ key: 'claude:task:a1', task: 'Rileggi la PR del fix totale ordine', agentType: 'general-purpose', state: 'running', startedAt: E - 6 * MIN }),
+        child({ key: 'claude:task:a1', task: 'Rileggi la PR del fix totale ordine', agentType: 'Explore', state: 'running', startedAt: E - 6 * MIN }),
         child({ key: 'claude:task:a2', task: 'Cerca nel journal i bug simili ai rimborsi', agentType: 'scout', state: 'running', startedAt: E - 3 * MIN }),
         child({ key: 'claude:task:a0', task: 'Riassumi lo stato delle chat aperte', state: 'completed', startedAt: E - 12 * MIN, observedAt: E - 9 * MIN })) }),
     chat({ id: 'qa', title: 'QA · Rimborsi', state: 'waiting', pending: 1, costUsd: 1.84, contextTokens: 118_000, contextMaxTokens: 1_000_000, cwd: 'C:\\progetti\\alfa-e2e', updatedAt: E - 4 * MIN, browserTabIds: ['tab-qa'],

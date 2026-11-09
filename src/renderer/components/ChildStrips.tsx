@@ -42,9 +42,13 @@ export function ChildStrips({ chatId }: { chatId: string }) {
   </div>;
 }
 
-/** The app agent a sub-agent runs as, with its face; "nessun agente" when its engine type names no catalog agent. */
+/** The app agent a sub-agent runs as, with its face; else the engine's own type (#356): «Explore · sola lettura» for the
+ *  read-only search ADR 0083 allows, any other type by its name, «nessun agente» only when the engine named none. */
 function ChildAgent({ agentType, profiles }: { agentType: string | null; profiles: readonly AgentProfile[] | undefined }) {
   const agent = childAgent(agentType, profiles);
-  if (!agent) return <span className="child-strip-agent is-none" data-testid="child-agent" data-agent-type={agentType ?? undefined}>{t('product.childNoAgent')}</span>;
+  if (!agent) {
+    const type = agentType?.trim() ?? '';
+    return <span className="child-strip-agent is-none" data-testid="child-agent" data-agent-type={type || undefined}>{type === 'Explore' ? t('product.childExplore') : type || t('product.childNoAgent')}</span>;
+  }
   return <span className="child-strip-agent" data-testid="child-agent" data-agent-id={agent.id}><AgentAvatar avatar={agent.avatar} name={agent.name} size={16} />{agent.name}</span>;
 }

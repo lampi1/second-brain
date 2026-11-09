@@ -12,6 +12,7 @@ describe('claude-map', () => {
     expect(toolSummary('Read', { file_path: path.resolve('/elsewhere/b.ts') }, cwd)).toMatch(/elsewhere\/b\.ts$/);
     expect(toolSummary('Grep', { pattern: 'foo', path: path.join(cwd, 'src') }, cwd)).toBe('Grep: foo in src');
     expect(toolSummary('Agent', { description: 'review the diff' })).toBe('Agent: review the diff');
+    expect(toolSummary('Agent', { description: 'map skills', subagent_type: 'Explore' })).toBe('Agent (Explore): map skills'); // the engine type (#356)
     expect(toolSummary('TodoWrite', { todos: [1, 2, 3] })).toBe('TodoWrite: 3 attività');
     expect(toolSummary('AskUserQuestion', { questions: [{ question: 'Che colore?' }] })).toBe('Domanda: Che colore?');
     expect(toolSummary('mcp__second-brain__navigate', { url: 'https://x.test' })).toBe('second-brain: navigate · https://x.test');

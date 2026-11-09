@@ -45,7 +45,7 @@ export function toolSummary(name: string, input: unknown, cwd?: string): string 
     case 'Glob': return `Glob: ${cut(str(i.pattern), 80)}`;
     case 'WebFetch': return `WebFetch: ${cut(str(i.url), 90)}`;
     case 'WebSearch': return `WebSearch: ${cut(str(i.query), 90)}`;
-    case 'Task': case 'Agent': return `Agent: ${cut(str(i.description) || str(i.prompt), 90)}`;
+    case 'Task': case 'Agent': return `Agent${str(i.subagent_type).trim() ? ` (${cut(str(i.subagent_type).trim(), 40)})` : ''}: ${cut(str(i.description) || str(i.prompt), 90)}`;
     case 'TodoWrite': return `TodoWrite: ${Array.isArray(i.todos) ? i.todos.length : 0} attività`;
     case 'AskUserQuestion': return `Domanda: ${cut(str(obj(Array.isArray(i.questions) ? i.questions[0] : null).question), 90)}`;
     case 'ExitPlanMode': return 'Piano pronto';

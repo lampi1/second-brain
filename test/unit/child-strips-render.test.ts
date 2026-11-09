@@ -32,15 +32,17 @@ describe('child strips', () => {
     setLang('en');
     expect(render([row('running')])).toContain('Subagents of Parent');
   });
-  it('names the app agent each sub-agent runs as, or "nessun agente" (#69); a command names none', () => {
-    const html = render([{ ...row('running'), key: 'a', agentType: 'indagine' }, { ...row('running'), key: 'b', agentType: 'general-purpose' }, { ...row('running'), key: 'c' }, { ...row('running'), key: 'd', kind: 'shell' }]);
+  it('names the app agent each sub-agent runs as, else the engine type (#356: Explore is the read-only search); a command names none', () => {
+    const html = render([{ ...row('running'), key: 'a', agentType: 'indagine' }, { ...row('running'), key: 'b', agentType: 'general-purpose' }, { ...row('running'), key: 'c' }, { ...row('running'), key: 'd', kind: 'shell' }, { ...row('running'), key: 'e', agentType: 'Explore' }]);
     expect(html).toContain('data-agent-id="indagine"');
     expect(html).toContain('Indagine');
-    expect(html.match(/nessun agente/g)).toHaveLength(2);
-    expect(html).toContain('data-agent-type="general-purpose"');
-    expect(html.match(/data-testid="child-agent"/g)).toHaveLength(3);
+    expect(html.match(/nessun agente/g)).toHaveLength(1); // only the child whose engine named no type
+    expect(html).toContain('data-agent-type="general-purpose">general-purpose</span>');
+    expect(html).toContain('data-agent-type="Explore">Explore · sola lettura</span>');
+    expect(html.match(/data-testid="child-agent"/g)).toHaveLength(4);
     setLang('en');
     expect(render([{ ...row('running'), key: 'b' }])).toContain('no agent');
+    expect(render([{ ...row('running'), key: 'e', agentType: 'Explore' }])).toContain('Explore · read-only');
   });
   it('renders no empty group, also when every child has ended', () => {
     expect(render()).toBe('');

@@ -48,7 +48,7 @@ export const productEn:typeof productIt={
  'product.observed':'Observed activity','product.replayed':'restored observation','product.parent':'Parent','product.notReported':'Not reported','product.parentMissing':'Not present in observations',
  'product.running':'Working','product.waiting':'Waiting','product.completed':'Completed','product.failed':'Error','product.stopped':'Stopped','product.unknown':'Status not reported',
  'product.teamExplain':'Internal collaborators observed by the engine. Missing data does not mean zero activity.','product.teamEmpty':'No internal activity observed.','product.teamIncomplete':'The engine does not provide a complete list.',
- 'product.child.agent':'subagent','product.childNoAgent':'no agent','product.child.shell':'command','product.child.unknown':'activity','product.childrenOf':p=>`Subagents of ${p.title}`,'product.childStarted':p=>`started at ${p.time}`,'product.childFor':p=>`for ${p.d}`,
+ 'product.child.agent':'subagent','product.childNoAgent':'no agent','product.childExplore':'Explore · read-only','product.child.shell':'command','product.child.unknown':'activity','product.childrenOf':p=>`Subagents of ${p.title}`,'product.childStarted':p=>`started at ${p.time}`,'product.childFor':p=>`for ${p.d}`,
  'product.restoreLayout':'Back to the column','product.noArea':'No project',
  'product.advanced':'Advanced details',
  'product.agents':'Your agents','product.agentsPurpose':'A clear role for each job.','product.setup':'Set up your work',

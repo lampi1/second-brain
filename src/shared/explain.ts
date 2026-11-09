@@ -133,7 +133,12 @@ export function explainTool(name: string, input: unknown, title = ''): Explained
     case 'Search': return { line: cleanTitle ? cap(cleanTitle) : `Cerca «${cut(str(i.query) || str(i.pattern), 50)}»`, raw: str(i.query) || str(i.pattern) };
     case 'WebFetch': case 'Fetch': return { line: str(i.url) ? `Apre ${host(str(i.url))}` : cleanTitle ? cap(cleanTitle) : 'Apre una pagina web', raw: str(i.url) };
     case 'WebSearch': return { line: `Cerca sul web «${cut(str(i.query), 60)}»`, raw: str(i.query) };
-    case 'Task': case 'Agent': return { line: `Affida a un agente: ${cut(first(desc || str(i.prompt)), 100)}`, raw: str(i.prompt) };
+    case 'Task': case 'Agent': {
+      // the engine's agent type (#356), read as role-gate.ts reads it: Explore (exactly) is the read-only search ADR 0083
+      // allows; another type is named as it is (a role chat refuses it: the row ends in error with the gate's reason)
+      const type = (str(i.subagent_type) || str(i.agent_type) || str(i.type)).trim(), what = cut(first(desc || str(i.prompt)), 100);
+      return { line: type === 'Explore' ? `Ricerca in sola lettura (Explore): ${what}` : type ? `Affida a un agente (${cut(type, 40)}): ${what}` : `Affida a un agente: ${what}`, raw: str(i.prompt) };
+    }
     case 'TodoWrite': return { line: 'Aggiorna la lista delle attività', raw: '' };
     case 'AskUserQuestion': case 'AskQuestion': return { line: 'Ti fa una domanda', raw: '' };
     case 'ExitPlanMode': case 'CreatePlan': return { line: 'Ti propone il piano', raw: '' };
