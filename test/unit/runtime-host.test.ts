@@ -220,3 +220,10 @@ it('a close in flight when the host dies resolves instead of an unhandled reject
   f.proxy.hostDied();
   await expect(closing).resolves.toBeUndefined();
 });
+
+it('an interrupt in flight when the host dies resolves, as one sent after it died', async () => {
+  const f = fixture({ dropAck: true });
+  const stopping = f.proxy.interrupt();
+  f.proxy.hostDied();
+  await expect(stopping).resolves.toBeUndefined();
+});

@@ -94,7 +94,8 @@ export class RuntimeSessionProxy implements HarnessSession, RuntimeAnswerConsume
   async interrupt(opts?: { keepQueued?: boolean; byUser?: boolean }): Promise<void> {
     if (!opts?.keepQueued) this.sendEpoch++;
     if (this.ended) return; // nothing left to stop, as an in-process adapter whose engine exited
-    await this.call({ method: 'interrupt', args: [opts] });
+    try { await this.call({ method: 'interrupt', args: [opts] }); }
+    catch (e) { if (!this.ended) throw e; } // the host died during the stop: stopped, as one sent after it died
   }
   noRetry(): void { this.fire({ method: 'noRetry', args: [] }); }
   async askUser(q: AppAsk): Promise<string | null> { return await this.call({ method: 'askUser', args: [q] }) as string | null; }
