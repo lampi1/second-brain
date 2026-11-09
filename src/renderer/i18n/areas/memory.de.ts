@@ -101,5 +101,17 @@ export const memoryDe: typeof memoryIt = {
   'mm.clean.errors': 'Wiederkehrende Fehler', 'mm.clean.errorsText': 'Wenn du einen Agenten korrigierst, wird der Fehler erfasst; die, die sich wiederholen, werden zu Regeln.',
   'mm.clean.skills': 'Nützliche und nutzlose Skills', 'mm.clean.skillsText': 'Für jeden Skill: wie oft er gedient hat, wie gut und wann zuletzt.',
   'mm.clean.facts': 'Kuriose Fakten', 'mm.clean.factsText': 'Die meistgenutzte Erinnerung, der Tag mit den meisten Fehlern, der vergessene Skill.',
+  // how well the launch memory finds the right fact (ADR 0235, RecallCheckCard in MemoryInsights.tsx)
+  'mm.recall': 'Wie gut das Gedächtnis findet',
+  'mm.recallLead': (p: { k: number }) => `Beim Start bekommt eine Rolle höchstens ${p.k} Fakten für ihre Aufgabe. Hier: wie oft der richtige Fakt dabei ist.`,
+  'mm.recallHelp': (p: { k: number }) => `Für jeden Fakt, den ein Run geschrieben hat, ist die Aufgabe dieses Runs die Frage: Der Fakt gilt als gefunden, wenn er unter den ersten ${p.k} seiner Rolle und seines Projekts ist. «Nur Wörter» ist die heutige Auswahl beim Start; «Wörter + Bedeutung» nimmt das lokale e5-Modell dazu, wie memory_recall. Null Tokens, nichts geschrieben, der Start bleibt gleich. Die Fälle begünstigen Wörter: Ein Fakt steht oft in den Wörtern seiner Aufgabe.`,
+  'mm.recallWords': 'Nur Wörter (heute)', 'mm.recallHybrid': 'Wörter + Bedeutung',
+  'mm.recallOf': (p: { n: number; of: number }) => `${p.n} von ${p.of}`,
+  'mm.recallFind': (p: { only: number; back: number }) => p.only ? `Die Bedeutung findet ${p.only} Fakten, die Wörter verfehlen${p.back ? `, und verfehlt ${p.back}, die Wörter finden` : ''}.` : `Die Bedeutung findet nicht mehr als Wörter${p.back ? ` und verfehlt ${p.back}` : ''}.`,
+  'mm.recallMissed': 'Von Wörtern verfehlt, von der Bedeutung gefunden',
+  'mm.recallGoal': 'Aufgabe', 'mm.recallFact': 'Fakt',
+  'mm.recallFew': (p: { n: number; min: number }) => `Zum Messen braucht es mindestens ${p.min} von Runs geschriebene Fakten: jetzt ${p.n}.`,
+  'mm.recallBusy': 'Berechne die Bedeutung mit dem lokalen Modell…',
+  'mm.recallNoModel': 'Das lokale Modell ist nicht bereit: vorerst nur Wörter.',
   // the one-click maintenance (ADR 0132, 0153)
 };

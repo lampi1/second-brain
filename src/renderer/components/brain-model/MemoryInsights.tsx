@@ -1,6 +1,6 @@
 // The statistics of Memoria (its «Statistiche» tab, ADR 0122; owner, 2026-10-19: "estremamente interessante e ricca di
 // statistiche e grafici, tipo errore ricorrente, skill utile inutile", "cose curiose"): "Lo sapevi?" (curious facts
-// picked from the data), how the memory grew week by week, lines per agent, the skills the runs used or never used
+// picked from the data), how well the launch memory finds the right fact (RecallCheckCard, ADR 0235), how the memory grew week by week, lines per agent, the skills the runs used or never used
 // (uses, success, last use) and the files gone stale. Gone as duplicates (ADR 0122): the key-number row (lines: the
 // hub's live counter; errors: Qualità; unused skills: the table) and the recurring errors block (Qualità's patterns and
 // the File tab's error log). Every number carries a "?" that says how it is computed. Data: BrainModelState.memoryStats
@@ -14,6 +14,7 @@ import { renderMarkdown } from '../../brain/components/Markdown';
 import { memoryFacts, shortDay, total, verdictTone, type Fact } from '../../lib/memory-view';
 import { HelpTip } from '../HelpTip';
 import { when } from './MaintenancePanel';
+import { RecallCheckCard } from './RecallCheckCard';
 
 /** Opens a brain-relative file in the file viewer (MemoryPage provides it with the brain root). */
 export const OpenFile = createContext<(rel: string) => void>(() => {});
@@ -122,6 +123,7 @@ function Stale({ s }: { s: MemoryStats }) {
 export function MemoryInsights({ s }: { s: MemoryStats }) {
   return <div className="mm-insights" data-testid="mm-insights">
     <Facts s={s} />
+    <RecallCheckCard />
     <div className="mm-grid-2"><Growth s={s} /><PerAgent s={s} /></div>
     <Skills s={s} />
     {/* no "richiami": a line counted once per run started after it, even past the ~4000 characters a run really gets;

@@ -9,6 +9,7 @@ export function brainHandlers({ s, emitter, research, requireReviewRoot, search,
     // the Brain pages (ADR 0077): read, the maintenance button, an undo, a skill toggle; Classificatori read-only
     'brainmodel:state': () => s.brainModel.stateAsync(),
     'memory:reviewList': a => s.memoryReview?.list(undefined, a?.asOf) ?? [],
+    'memory:recallCheck': () => { if (!s.recallCheck) throw new Error('Recall check unavailable.'); return s.recallCheck.state(); },
     'memory:retract': async a => { requireReviewRoot(a.expectedRoot); if (!s.memoryReview) throw new Error('Memory review unavailable.'); try { return await s.memoryReview.retract(a.id, a.reason); } finally { await search.invalidateBrain(); } },
     'memory:delete': async a => { requireReviewRoot(a.expectedRoot); if (!s.memoryReview) throw new Error('Memory review unavailable.'); try { return await s.memoryReview.delete(a.id); } finally { await search.invalidateBrain(); } },
     'learning:state': () => s.learningReview?.state() ?? { datasets: [], replays: [], candidates: [], replayAvailable: false },

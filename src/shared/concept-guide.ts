@@ -730,6 +730,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
         '\"Ideas\" splits yours from the AI’s (the \"Chi\" column of ideas.md: \"IA\" is the AI) and \"Dust one off\" brings back an old idea still open at random; below, the ideas’ themes.'),
       b('La Dashboard non c’è più: i contatori sono in cima a Memoria, il contesto delle chat in Costi, gli errori dell’app e i temi degli errori in Qualità, gli spunti dell’AI in Idee; il resto erano doppioni.',
         'The Dashboard is gone: the counters are at the top of Memoria, the chats’ context in Costi, the app’s errors and the errors’ themes in Quality, the AI’s tips in Ideas; the rest were duplicates.'),
+      // src/renderer/components/brain-model/RecallCheckCard.tsx, src/main/rules/recall-check.ts (ADR 0235)
+      b('In Statistiche, «Quanto ritrova la memoria» dice quante volte il fatto giusto è tra quelli che un ruolo riceve all’avvio: con le sole parole (come oggi) e con parole + significato (il modello locale), più alcuni fatti che le parole perdono. Zero token, non cambia niente.',
+        'In Statistics, \"How well memory finds things\" says how often the right fact is among those a role gets at launch: by words only (as today) and by words + meaning (the local model), plus a few facts the words miss. Zero tokens, it changes nothing.'),
       b('Ogni numero ha un «?» che dice come è calcolato; ogni pannello ha «Discuti», che prepara una bozza all’Orchestrator senza mai inviarla.',
         'Every number has a \"?\" saying how it is computed; every panel has \"Discuss\", which drafts for the Orchestrator and never sends.'),
     ],

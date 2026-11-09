@@ -303,6 +303,22 @@ export interface MemoryStats {
   skills: SkillUse[];
 }
 
+/** How well the launch memory finds the right fact (ADR 0235, main/rules/recall-check.ts), Memoria → Statistiche. A case
+ *  = a launchable fact written by a recorded run; its run's goal is the question; found = among the first `k` facts of
+ *  its scope. words = the launch's ranking today; hybrid = words fused with the local e5 meaning (as memory_recall).
+ *  state: ready; busy = embedding now (words already known); no-model = the local model is not ready (words only);
+ *  few = under minCases cases. Zero tokens, nothing written. */
+export interface MemoryRecallCard {
+  state: 'ready' | 'busy' | 'no-model' | 'few';
+  at: number;
+  n: number; k: number; minCases: number;
+  /** cases found by each ranking; null = not computed */
+  words: number | null; hybrid: number | null;
+  onlyHybrid: number; onlyWords: number;
+  /** up to 3 facts found only with the meaning: the fact, the goal it answers, the role */
+  missed: { fact: string; goal: string; role: string }[];
+}
+
 // ── Classificatori (read-only, a section of Qualità since ADR 0210): the small sorters that decide at zero tokens ───
 export interface ClassifiersState {
   /** per kind of work: the app's chats in the ledger, how many have a known outcome and how many succeeded */

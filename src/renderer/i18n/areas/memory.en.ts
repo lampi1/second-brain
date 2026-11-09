@@ -101,5 +101,17 @@ export const memoryEn: typeof memoryIt = {
   'mm.clean.errors': 'Recurring errors', 'mm.clean.errorsText': 'When you correct an agent the error is logged; those that repeat become rules.',
   'mm.clean.skills': 'Useful and useless skills', 'mm.clean.skillsText': 'For each skill: how often it served, how well and when last.',
   'mm.clean.facts': 'Curious facts', 'mm.clean.factsText': 'The most used memory, the day with the most errors, the forgotten skill.',
+  // how well the launch memory finds the right fact (ADR 0235, RecallCheckCard in MemoryInsights.tsx)
+  'mm.recall': 'How well memory finds things',
+  'mm.recallLead': (p: { k: number }) => `When a role starts it gets at most ${p.k} facts picked for its task. Here: how often the right fact is there.`,
+  'mm.recallHelp': (p: { k: number }) => `For every fact a run wrote, that run's task is the question: the fact is found when it is among the first ${p.k} of its role and project. «Words only» is how the launch picks today; «Words + meaning» adds the local e5 model, as memory_recall does. Zero tokens, nothing written, the launch is unchanged. The cases favour words: a fact is often written with the words of its own task.`,
+  'mm.recallWords': 'Words only (today)', 'mm.recallHybrid': 'Words + meaning',
+  'mm.recallOf': (p: { n: number; of: number }) => `${p.n} of ${p.of}`,
+  'mm.recallFind': (p: { only: number; back: number }) => p.only ? `Meaning finds ${p.only} facts that words miss${p.back ? `, and misses ${p.back} that words find` : ''}.` : `Meaning finds nothing more than words${p.back ? ` and misses ${p.back}` : ''}.`,
+  'mm.recallMissed': 'Missed by words, found by meaning',
+  'mm.recallGoal': 'Task', 'mm.recallFact': 'Fact',
+  'mm.recallFew': (p: { n: number; min: number }) => `At least ${p.min} facts written by a run are needed to measure: now ${p.n}.`,
+  'mm.recallBusy': 'Computing the meaning with the local model…',
+  'mm.recallNoModel': 'The local model is not ready: words only for now.',
   // the one-click maintenance (ADR 0132, 0153)
 };

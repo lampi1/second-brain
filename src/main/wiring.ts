@@ -39,6 +39,7 @@ import { strategyTools } from './agents/strategy-tools';
 import { askTools } from './chats/ask-tool';
 import { portableId } from './agents/pack/flows';
 import { memoryTools } from './rules/memory-tool';
+import { RecallCheck } from './rules/recall-check';
 import { MemoryService } from './rules/memory-service';
 import { writeAgentMemory } from './rules/memory';
 import type { AgentRun } from '../shared/agents';
@@ -717,6 +718,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // the Brain pages (ADR 0077): skills and their agents, rules, memory; maintenance jobs with a change log and undo
   // the kind of work by examples (ADR 0197): trained on the local embeddings only when Classificatori asks
+  // how well the launch memory finds the right fact (ADR 0235): computed only when Memoria → Statistiche asks
+  const recallCheck = new RecallCheck({ root: () => { try { return agentPacks.packs.root(); } catch { return null; } }, runs: () => manager.runs.list(), embed: (texts, mode) => hybrid.embed(texts, mode), ready: () => hybrid.status().model.state === 'ready' });
   const kindModel = new KindModel({ runs: () => manager.runs.list(), embed: texts => hybrid.embed(texts, 'query'), ready: () => hybrid.status().model.state === 'ready' });
   const brainModel = new BrainModelService({ userData: ctx.userData, root: () => brain.info().brainRoot, home: process.env.SB_SKILLS_HOME || os.homedir(), kindModel: () => kindModel.state(),
     catalog: agents, packs: agentPacks.packs, learning: agentPacks.learning, runs: () => manager.runs.list(), runsRevision: () => manager.runs.revision,
@@ -782,7 +785,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     stallMin: () => checkedDelegation(brain.settings().delegation).stallMin, lastEventAt: id => manager.lastEventAt(id) });
 
   return {
-    workflows, routineArchive, routines, brainModel, research, memoryReview, learningReview, queries: brainQueries,
+    workflows, routineArchive, routines, brainModel, research, memoryReview, recallCheck, learningReview, queries: brainQueries,
     morning,
     mcpServers,
     judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
