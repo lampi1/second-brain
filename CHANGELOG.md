@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- Memoria → Statistiche «Quanto ritrova la memoria»: how often the right fact is among those a role gets at launch,
+  by words only (today) and by words + meaning (local e5); zero tokens, read-only (ADR 0235).
 - A freeze of the window records a CPU profile of the main process by itself (`<logs>/profiles`, at most 3 per run;
   `node scripts/profile-top.mjs` lists what ran; `SB_PROFILE_ON_STALL=0` turns it off).
 - OpenCode as an engine (`opencode acp`, off until turned on in Settings → Motori): any provider set up in
