@@ -69,8 +69,9 @@ describe('phone bridge', () => {
     r.port.onOutcome = cb => { outcome = cb; return () => {}; };
     await r.b.start(); r.b.setFocus(focus); presence.mockClear();
     outcome({ runId: 'blocked-outcome', revision: 1, text: 'Should remain on the PC' });
-    // Wait for policy evaluation or a durable send attempt, never for an elapsed silence window.
-    await vi.waitFor(() => expect(presence.mock.calls.length > 0 || !!loadState(r.deps.statePath).outcomes?.length).toBe(true));
+    // The second queued event reaches policy only after the first outcome's send has settled.
+    outcome({ runId: 'blocked-outcome', revision: 1, text: 'Should remain on the PC' });
+    await vi.waitFor(() => expect(presence).toHaveBeenCalledTimes(2));
     expect(loadState(r.deps.statePath).outcomes ?? []).toEqual([]);
     expect(r.texts()).toEqual(['🟢 PC collegato']);
   });
