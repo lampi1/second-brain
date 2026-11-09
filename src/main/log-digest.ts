@@ -97,7 +97,8 @@ export async function digestDay(logDir: string, journalDir: string | null, day: 
     }
     if (lvl === 'debug') return;
     const key = groupKey(scope, msg, cause), g = groups.get(key);
-    if (g) { g.count++; if (lvl === 'error' || (lvl === 'warn' && g.lvl === 'info')) g.lvl = lvl; return; }
+    // a group that turns warn/error takes that line's cause (one stall group holds short info stalls and long warn ones)
+    if (g) { g.count++; if (lvl === 'error' || (lvl === 'warn' && g.lvl === 'info')) { if (g.lvl === 'info') g.cause = cause.slice(0, 300); g.lvl = lvl; } return; }
     groups.set(key, { key, lvl, scope, msg: msg.slice(0, 200), cause: cause.slice(0, 300), count: 1 });
   });
   let journal: DigestDay['journal'] = null;

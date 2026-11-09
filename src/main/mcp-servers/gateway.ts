@@ -127,6 +127,8 @@ export class McpGateway {
 
   /** A server's definition or token changed, or it was removed: its open connections close (the next call reopens). */
   reset(server?: string): void {
+    // a changed definition gets its own first warning again
+    if (server) this.warned.delete(server); else this.warned.clear();
     for (const [key, c] of this.conns) if (!server || key.endsWith(`|${server}`)) { c.up.close(); this.conns.delete(key); }
   }
 

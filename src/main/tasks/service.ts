@@ -85,7 +85,7 @@ export interface TaskDeps {
 /** The read failed because the PC could not reach the service (offline, VPN off, DNS, a proxy): the page says so with
  *  its hint and reads again later; it is the network, not a bug, so it is logged at info (#310, #333). */
 export const OFFLINE = /fetch failed|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH|Max retries exceeded|Failed to establish a new connection|getaddrinfo|socket hang up|network is unreachable/i;
-const offline = (r: RunResult): boolean => OFFLINE.test(`${r.stderr ?? ''}\n${r.stdout ?? ''}`);
+const offline = (r: RunResult): boolean => OFFLINE.test(r.stderr ?? '');
 
 export class TaskService {
   private saved: Saved;
