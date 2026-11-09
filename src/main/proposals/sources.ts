@@ -277,8 +277,9 @@ function researchGroup(x: ResearchProposal): ProposalGroup | null {
   return null;
 }
 /** The text the card is about, as it is: what a change adds, what forgetting removes, or the issue as it will be opened. */
-function researchContent(x: ResearchProposal): string {
-  if (x.issue && !x.change) return x.issue.body;
+function researchContent(x: ResearchProposal, opensIssue: boolean): string {
+  // every card carries an issue draft now: only a card that opens it shows it (forget, lint and revert show their own)
+  if (opensIssue && x.issue) return x.issue.body;
   if (x.change) return x.change.target === 'skill' ? x.change.text : `> ${x.change.text.replace(/\n/g, '\n> ')}`;
   if (x.forget) return `\`${x.forget.what === 'rule' ? x.forget.name : `.claude/skills/${x.forget.name}/`}\``;
   // a lint card: the line or the fact it is about, as it is
@@ -325,7 +326,7 @@ const research: Source = {
       const repo = issue ? p.research!.repo?.() ?? null : null;
       return card('research', x.id, {
         ...(x.issue ? { issueDrafts: [{ ...x.issue, opens: issue }] } : {}), ...(x.rank ? { rank: x.rank } : {}),
-        group: issue ? 'issue' : researchGroup(x) ?? (x.kind === 'bold' ? RESEARCH_GROUP[x.change?.target ?? 'rule'] ?? 'rule' : RESEARCH_GROUP[x.kind] ?? 'rule'), applied: false, title: issue ? x.issue!.title : x.title, content: researchContent(x),
+        group: issue ? 'issue' : researchGroup(x) ?? (x.kind === 'bold' ? RESEARCH_GROUP[x.change?.target ?? 'rule'] ?? 'rule' : RESEARCH_GROUP[x.kind] ?? 'rule'), applied: false, title: issue ? x.issue!.title : x.title, content: researchContent(x, issue),
         // «riuscito se…» (ADR 0194) is said with what to expect
         ask: { kind: 'research', finding: x.kind, adds: x.adds, removes: x.removes, why: x.why, expected: [x.expected, x.success?.text ?? ''].filter(Boolean).join(' '), risk: x.risk, evidence: x.evidence, sources: x.sources, ...(x.roleTrial ? { trial: true } : {}) },
         // a revised role text (ADR 0195): its before and after

@@ -203,6 +203,9 @@ describe('ProposalsService', () => {
     const items = (await new ProposalsService({ ports: p, userData: tmp() }).list()).items;
     expect(items.find(c => c.id === 'research:i1')!.issueDrafts).toMatchObject([{ title: 'Log: search box', opens: true }]);
     expect(items.find(c => c.id === 'research:i2')!.issueDrafts).toMatchObject([{ title: 'Dimenticare la skill x', opens: false }]);
+    // a forget card shows what it removes, never the issue draft every card now carries
+    expect(items.find(c => c.id === 'research:i2')!.content).toBe('`.claude/skills/x/`');
+    expect(items.find(c => c.id === 'research:i1')!.content).toBe('b');
     // a text-only draft has no separate approval: its label must not promise one
     for (const words of [proposalsIt, proposalsEn]) expect(words['proposals.issueDraft']).not.toMatch(/separat/i);
   });
