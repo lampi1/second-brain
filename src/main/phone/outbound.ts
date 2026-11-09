@@ -40,14 +40,19 @@ export function createOutbound(client: () => TelegramClient | null, chatId: () =
       if (!c || to === null || !body) return 'refused';
       try { return (await c.sendMessage(to, body, { silent: opts.silent })).message_id; } catch (e) {
         warn('sendMessage', e);
-        return e instanceof TelegramError && typeof e.code === 'number' ? 'refused' : null;
+        // Telegram answered 4xx: certainly not sent; 5xx or a proxy's error page: it may have arrived (unknown)
+        return e instanceof TelegramError && typeof e.code === 'number' && e.code >= 400 && e.code < 500 ? 'refused' : null;
       }
     },
     async edit(messageId, text, keyboard) {
       const c = client(), to = chatId();
       const body = filterOutgoing(text);
       if (!c || to === null || !body) return false;
-      try { await c.editMessageText(to, messageId, body, keyboard ? filterKeyboard(keyboard) : undefined); return true; } catch (e) { warn('editMessageText', e); return false; }
+      try { await c.editMessageText(to, messageId, body, keyboard ? filterKeyboard(keyboard) : undefined); return true; } catch (e) {
+        // the phone already shows this text (a correction past the condensed length): nothing to change, so done
+        if (e instanceof TelegramError && e.code === 400 && /message is not modified/i.test(e.message)) return true;
+        warn('editMessageText', e); return false;
+      }
     },
     async answerCallback(callbackId, text) {
       const c = client();

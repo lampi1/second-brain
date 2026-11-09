@@ -14,6 +14,7 @@ describe('phone outbound results', () => {
     expect(await createOutbound(() => client({}), () => ME, capLog()).edit(1, 'v2')).toBe(true);
     expect(await createOutbound(() => client({ edit: async () => { throw new TelegramError('editMessageText', 'network', 'down'); } }), () => ME, capLog()).edit(1, 'v2')).toBe(false);
     expect(await createOutbound(() => null, () => ME, capLog()).edit(1, 'v2')).toBe(false);
+    expect(await createOutbound(() => client({ edit: async () => { throw new TelegramError('editMessageText', 400, 'Bad Request: message is not modified'); } }), () => ME, capLog()).edit(1, 'v2')).toBe(true);
   });
 
   it('sendOutcome: the id when sent, refused when certainly not sent, null only when the network left it unknown', async () => {
@@ -22,5 +23,6 @@ describe('phone outbound results', () => {
     expect(await createOutbound(() => client({}), () => null, capLog()).sendOutcome('done')).toBe('refused');
     expect(await createOutbound(() => client({ send: async () => { throw new TelegramError('sendMessage', 400, 'bad request'); } }), () => ME, capLog()).sendOutcome('done')).toBe('refused');
     expect(await createOutbound(() => client({ send: async () => { throw new TelegramError('sendMessage', 'network', 'reset'); } }), () => ME, capLog()).sendOutcome('done')).toBeNull();
+    expect(await createOutbound(() => client({ send: async () => { throw new TelegramError('sendMessage', 502, 'bad gateway'); } }), () => ME, capLog()).sendOutcome('done')).toBeNull();
   });
 });
