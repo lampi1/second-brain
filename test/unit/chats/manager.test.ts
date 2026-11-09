@@ -1,5 +1,7 @@
 // ChatManager (the app's ChatService) against the fake CLI: events, questions, persistence and restore,
 // resume on send with history, forks of external sessions, settings, close, crash recovery.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';

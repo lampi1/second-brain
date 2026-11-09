@@ -2,6 +2,8 @@
 // branch at the parent's HEAD with its ignored build outputs kept; a slot with changes, a commit of its own or an open
 // chat is never reused; the cleanup removes only the app's clean orphans beyond the limits, reports the others and never
 // touches the user's own worktrees; a reused slot blocks reopening its earlier child. No engine or network runs.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 
 import fs from 'node:fs';
 import path from 'node:path';

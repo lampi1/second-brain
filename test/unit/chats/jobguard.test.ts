@@ -3,6 +3,8 @@
 // kills it, lets it go on release, and kills what is left when the helper ends (the app quit or crashed). Plus the
 // reap's filter over job members: only tools, never what a user program started. And the quit: the jobs die, the
 // helper ends, and the booster it started raises a target's below-normal threads, then lowers them at its cap.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { JobGuard, parseMembers, type JobMember } from '../../../src/main/chats/jobguard';
 import { jobTools } from '../../../src/main/chats/proctree';

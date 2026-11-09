@@ -1,6 +1,8 @@
 // Unit tests of main/run/runner.ts and shared/runnable.ts: "Esegui" runs only a block of that chat's own message, asks
 // a second click for production, runs in PowerShell 5.1 with the real exit code, streams output, stops, and the
 // outcome message for the chat. Real powershell.exe (Windows only), harmless commands.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import os from 'node:os';
 import { describe, expect, it } from 'vitest';
 import type { RunInfo } from '../../src/shared/contract';
@@ -12,12 +14,7 @@ const win = process.platform === 'win32';
 function make(text: string) {
   const events: RunInfo[] = [];
   const r = new CommandRunner({ itemText: (c, i) => (c === 'c1' && i === 'a1' ? text : null), cwdOf: () => os.tmpdir(), emit: e => events.push(e) });
-  const done = (id: string) => new Promise<RunInfo>((res, rej) => {
-    const t0 = Date.now();
-    const tick = () => { const x = r.list().find(y => y.id === id); if (x && x.state !== 'running') res(x); else if (Date.now() - t0 > 30000) rej(new Error('timeout')); else setTimeout(tick, 50); };
-    tick();
-  });
-  return { r, events, done };
+  return { r, events };
 }
 
 describe('runnable', () => {

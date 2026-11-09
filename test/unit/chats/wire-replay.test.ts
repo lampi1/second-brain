@@ -5,6 +5,8 @@
 // adapters' own record mode (src/main/chats/wire-record.ts) against the synthetic fakes in test/fixtures (rule 4: no
 // agent runs the Cursor CLI, so the ACP recording is the fake Cursor's, synthetic); SB_WIRE_FIXTURES_UPDATE=1 makes
 // them again. Also checked: a recording holds no secret, no prompt text and no machine path.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';

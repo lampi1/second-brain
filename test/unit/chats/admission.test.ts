@@ -7,6 +7,8 @@
 // order; ADR 0064: mail to an idle chat starved for hours), a queued chat closed by hand drops its work, no warm engine
 // starts while braking but one does while chats wait for a slot; a queued chat never looks busy, so the Orchestrator is
 // never told it "finished" a turn it did not run (2026-10-14).
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import { describe, expect, it } from 'vitest';
 import { AdmissionQueue, coldStartSlots, forcedSampler, type AdmissionLimits, type LoadSample } from '../../../src/main/chats/admission';
 import { waitFor } from './helpers';

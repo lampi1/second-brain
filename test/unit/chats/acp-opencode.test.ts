@@ -1,6 +1,8 @@
 // AcpSession as OpenCode (`opencode acp`, ADR 0216) against the fake ACP agent in its OpenCode shape
 // (test/fixtures/fake-cursor-acp.mjs, FAKE_ACP_OPENCODE=1): the model and the mode are config options, set on the session
 // after every open; without modelOption the same answers give no model choice. No real engine ever runs here.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import { afterEach, describe, expect, it } from 'vitest';
 import type { AcpSession } from '../../../src/main/chats/acp';
 import { permissionView, streamErrorOf, streamRetryOf } from '../../../src/main/chats/acp';

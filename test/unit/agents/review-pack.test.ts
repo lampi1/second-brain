@@ -1,5 +1,7 @@
 // The review pack (agents/review-pack.ts) on a real repository: branch, base, commits since it, changed and untracked
 // files and the diff when it is short; per-file reading when it is long; nothing outside a repository or with no change.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';

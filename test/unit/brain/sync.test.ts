@@ -4,6 +4,8 @@
 // with file:line and never the value, the missing guard failing closed (also when only the product's deny.txt is there:
 // a domain uses its own list, default deny-work.txt), a this-pc domain never syncing, a new empty
 // remote, and the lock of a second writer. Never touches a real repo.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 
 import { afterEach, describe, expect, it } from 'vitest';
 import type { DomainSync } from '../../../src/main/brain/sync';

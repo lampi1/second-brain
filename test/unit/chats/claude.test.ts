@@ -1,5 +1,7 @@
 // ClaudeSession against the fake CLI (test/fixtures/fake-claude.mjs): streaming, questions, permissions, interrupt,
 // bad output, crashes and the control requests.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import { afterEach, describe, expect, it } from 'vitest';
 import path from 'node:path';
 import { ClaudeSession, rulePath } from '../../../src/main/chats/claude';

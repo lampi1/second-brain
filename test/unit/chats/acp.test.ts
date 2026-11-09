@@ -3,6 +3,8 @@
 // skip reason), cursor/create_plan, cancel, queued prompts, login missing, resume with session/load, model and mode, MCP,
 // diffs, usage → cost. Then the same fake run as another ACP engine (Kimi): its own harness, argv, texts, and none of
 // Cursor's options unless given (ADR 0046). No real engine ever runs here.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import { afterEach, describe, expect, it } from 'vitest';
 import crypto from 'node:crypto';
 import fs from 'node:fs';

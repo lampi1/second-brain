@@ -3,6 +3,8 @@
 // private in the publish folder; anything missing = null (the push is blocked). Then the real scanner on real commits:
 // a deny-list word blocks with file:line + rule and never the value, a domain's own .guardallow cannot silence it, a
 // top-level out/ folder is scanned too, two paths differing only in case block. Temp folders only; never the user's publish folder.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';

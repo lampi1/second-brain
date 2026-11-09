@@ -2,6 +2,8 @@
 // context begun on an earlier Rome day, once a day) and the ChatManager flow on the fake Claude engine: one quiet
 // `/compact` turn, the engine's «Contesto compattato» line in the tile, same chat and session, nothing else shown; never
 // twice a day, never a work chat, never with the setting off; a restart keeps when the context began.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ChatManager } from '../../../src/main/chats/manager';
 import { CACHE_TTL_MS, continuityStep, ORCHESTRATOR_COMPACT, ORCHESTRATOR_DAY_IDLE_MS, ORCHESTRATOR_DAY_MIN, ORCHESTRATOR_PAUSE_COMPACT, ORCHESTRATOR_WARM_MIN, orchestratorDayDue, orchestratorWarmDue, romeDay, type ColdView, type OrchestratorDayView } from '../../../src/main/chats/continuity';

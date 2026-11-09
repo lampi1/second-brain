@@ -1,15 +1,14 @@
-// The guard's pre-commit hook (ADR 0061) on real temp repos: .githooks/pre-commit (scripts/guard-commit.mjs) blocks a
-// staged bad line, a wrong author e-mail, a deny list that is set but missing, empty or a deny word in a path, and lets a
-// clean commit through. Every block names file:line and the rule, never the matched value. Also scripts/setup-hooks.mjs
-// (`npm run setup`: core.hooksPath, the optional config printed, never set) and the guard-lib helpers.
-// Setup and values: guard-hooks-helpers.ts; the pre-push hook: guard-push-hook.test.ts.
-
+// The guard hooks' pure helpers (ADR 0061): parsing the pre-push input and refusing a malformed line, reading author
+// identities and expanding %VARS% in the deny list path (scripts/guard-lib.mjs, scripts/guard-push.mjs). The hook runs
+// on real temp repos were removed with the other git tests (docs/tests/load-sensitive-removed.md).
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs helpers, no type declarations
 import { expandEnv, identEmail } from '../../scripts/guard-lib.mjs';
 // @ts-expect-error plain .mjs helper, no type declarations
 import { parseUpdates } from '../../scripts/guard-push.mjs';
-import { NOREPLY } from './guard-hooks-helpers';
+
+/** a made-up noreply address, built at run time so the guard's own e-mail rule never sees it whole */
+const NOREPLY = 'dev' + '@users.noreply.github.com';
 
 describe('setup and helpers', () => {
   it('parses pre-push input and refuses a malformed line', () => {

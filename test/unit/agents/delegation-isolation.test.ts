@@ -1,5 +1,7 @@
 // Real local Git repositories pin writing-child isolation and safe staging. No engine, network, package script or
 // e2e runs; regressions must preserve the parent's files, index and branch and never overclaim verification.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 
 import fs from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';

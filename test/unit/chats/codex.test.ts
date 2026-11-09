@@ -3,6 +3,8 @@
 // reasoning and answer, tokens and context, approvals (accept / acceptForSession / decline / cancel on Stop), questions,
 // steer mid-turn, interrupt, failed and unauthorized turns, a crash, drift on unknown shapes, the API key only in the
 // engine's env, the read-only refusal, the test guard, and the helpers. No real Codex ever runs here (ADR 0060).
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import { afterEach, describe, expect, it } from 'vitest';
 import { CodexSession, codexAuthHelp, codexEffort, codexKey, diffCounts, redactArgs, type CodexOptions } from '../../../src/main/chats/codex';
 import { recSink, tmp } from './helpers';

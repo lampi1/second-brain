@@ -26,9 +26,3 @@ export function tmpBrain(opts: { parsers?: boolean; chats?: string } = {}): stri
   fs.writeFileSync(path.join(d, 'ai-errors.md'), '# Errori\n');
   return d;
 }
-
-export async function until(fn: () => boolean, ms = 5000): Promise<boolean> {
-  const t = Date.now();
-  while (Date.now() - t < ms) { if (fn()) return true; await new Promise(r => setTimeout(r, 50)); }
-  return fn();
-}

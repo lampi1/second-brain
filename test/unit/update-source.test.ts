@@ -3,6 +3,8 @@
 // steps and clean environment, and AppSourceService (src/main/update/source.ts) end to end on a real temp git repo with
 // fake scripts/pull.mjs and scripts/release.mjs: main's tip as the candidate, "Aggiorna" on a dev build (pull, relaunch)
 // and on a stable copy (pull, promote-now, restart), the Orchestrator's pull, the start notice and its marker's rename.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import { describe, expect, it } from 'vitest';
 import { launchOutcome, nextSeen, promoteStep, reasonText, shaOfRelease } from '../../src/main/update/launch';
 import { cleanEnv } from '../../src/main/update/source';

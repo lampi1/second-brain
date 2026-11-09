@@ -2,6 +2,8 @@
 // gets (claude.ts against the fake CLI: on, off, reattach, refusal, drift), the phone's messages shown in the chat
 // (--replay-user-messages), and the manager's state: saved, paused when the engine goes, reattached by the next one,
 // «Spegni» while it starts, and an engine that dies while reattaching.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';

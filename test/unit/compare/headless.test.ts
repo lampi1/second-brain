@@ -4,6 +4,8 @@
 // mode with a config copy without allow rules, the answer and its cost collected, a run past its time killed, an engine
 // the user did not turn on refused, the prompt and the answer never in the logs, the denied folders (the other side's
 // answers, the verdicts) never read: as deny rules for each engine and as refusals. Plus the pure helpers.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';

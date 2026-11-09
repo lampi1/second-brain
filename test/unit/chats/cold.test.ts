@@ -3,6 +3,8 @@
 // window, and the ChatManager flows on the fake Claude engine: the quiet note, the invisible continuation (same chat,
 // title and tile; old session folded behind a divider; a restart reads both sessions back), no switch on a warm cache,
 // the engine kept for the note, and the context counters.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ChatManager } from '../../../src/main/chats/manager';
 import { ClaudeSession, compactSettings } from '../../../src/main/chats/claude';

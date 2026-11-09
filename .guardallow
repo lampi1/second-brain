@@ -268,3 +268,5 @@ docs/screenshots/memory.webp binary-media sha256:9729674b75f23ee900a040151d58e4a
 docs/screenshots/recordings.webp binary-media sha256:78ce822901ee69147556607fc00bdda7bc72afab7e42499c2d42ea6509430013
 # Same synthetic redaction fixtures; tests that spawned a real process removed (2026-11-09).
 test/unit/log.test.ts assigned-secret sha256:a1a3e8c4470edaaf8b683fb5e89a8fe08eb78ee05d9499b33c08d0456e05205d
+# runner.test.ts again: an unused 30 s polling helper removed (2026-11-09).
+test/unit/runner.test.ts internal-host sha256:df848e1333e97c486cc6dfc50b3fa84541606fdc62344278b0d3d0884db5e714

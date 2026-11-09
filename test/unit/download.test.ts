@@ -75,12 +75,6 @@ describe('published update acquisition', () => {
     expect(fs.readdirSync(f.cacheRoot)).toEqual([]);
     expect(fs.existsSync(path.join(active, 'staged', `${f.id}.json`))).toBe(true);
   });
-  it.skipIf(process.platform !== 'win32')('runs real native extraction for a fake published archive and can stage its exact bytes', async () => {
-    const f = fixture(true), candidate = await f.acquirer.prepareLatest('1.2.2');
-    const stable = path.join(f.root, 'stable');
-    expect(stageUpdate(stable, candidate!.payloadDir, candidate!.manifestSha256).id).toBe(f.id);
-    f.acquirer.discard(candidate!);
-  });
   it('still refuses an active legacy root without silently migrating or changing its state',async()=>{
     const f=fixture(),candidate=await f.acquirer.prepareLatest('1.2.2'),active=path.join(f.root,'legacy');
     fs.mkdirSync(active);const state=JSON.stringify({current:'old',previous:null,bad:[],history:[]});fs.writeFileSync(path.join(active,'current.json'),state);

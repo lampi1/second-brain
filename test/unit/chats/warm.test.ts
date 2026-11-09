@@ -2,6 +2,8 @@
 // launched the same way (plain, or a role's tools) adopts one (its id and session id, choices sent as control requests,
 // no new spawn), other folders start cold and then keep their own (the most used ones, ADR 0227), special chats start cold, the open Orchestrator resumes ahead after a restart, the
 // waiting engines die with the app (live engines for the orphan sweep), BufferedSink replays in order.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import { afterEach, describe, expect, it } from 'vitest';
 import path from 'node:path';
 import type { ChatManager } from '../../../src/main/chats/manager';

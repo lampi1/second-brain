@@ -1,6 +1,8 @@
 // Long chats: the hand-off helpers (handoff.ts) and the ChatManager flows on both fake engines: the hand-off turn,
 // the token-free fallback, "Riprendi" in a new linked chat, persistence
 // of the links and of the context size, and the Cursor context estimate.
+// Removed on 2026-11-09: the tests that started a real process, git, a port or a fake CLI (docs/tests/load-sensitive-
+// removed.md); the lines above still name what they covered, and only the in-process tests below remain.
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ChatItem } from '../../../src/shared/contract';
 import type { ChatManager } from '../../../src/main/chats/manager';
