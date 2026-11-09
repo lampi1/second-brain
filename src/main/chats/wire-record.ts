@@ -50,11 +50,26 @@ const isUserEcho = (o: Record<string, unknown>): boolean =>
  *  ACP's rawInput, Codex's mcpToolCall arguments */
 const TOOL_INPUTS = ['input', 'rawInput', 'arguments', 'tool_input'] as const;
 const str = (x: unknown): string => (typeof x === 'string' ? x : '');
+const rec = (x: unknown): Record<string, unknown> => (x && typeof x === 'object' && !Array.isArray(x) ? x as Record<string, unknown> : {});
 
 /** A tool call of the app's browser that types into a page (type, fill_form, key) with what it types masked
  *  (chats/typed-text.ts): a password typed by an agent never lands in a recording. ACP's later tool_call_update may
  *  carry only the call id, so the kinds of the typing calls seen in this recording are kept in `typing` by id. */
 function maskTyping(o: Record<string, unknown>, typing?: Map<string, Typing>): Record<string, unknown> {
+  // Claude streams a tool's input in nameless input_json_delta fragments: never kept (claude.ts ignores them anyway)
+  if (typeof o.partial_json === 'string' && o.partial_json) return { ...o, partial_json: '' };
+  // Claude's can_use_tool names the call; the app's answer carries only its request_id, with the input as updatedInput
+  const rid = str(o.request_id), request = rec(o.request), response = rec(o.response);
+  if (rid && request.subtype === 'can_use_tool') { const k = typingTool(str(request.tool_name)); if (k) typing?.set(`request:${rid}`, k); }
+  const answered = rid ? typing?.get(`request:${rid}`) : undefined;
+  if (answered && response.updatedInput && typeof response.updatedInput === 'object') return { ...o, response: { ...response, updatedInput: maskArgs(answered, response.updatedInput) } };
+  // Codex's MCP elicitation (codex.ts) shows the call's parameters in _meta: all masked for the app's browser server
+  const meta = rec(o._meta);
+  if (str(o.serverName) && typingTool(`mcp__${str(o.serverName)}`) && (meta.tool_params || meta.tool_params_display)) {
+    return { ...o, _meta: { ...meta,
+      ...(meta.tool_params && typeof meta.tool_params === 'object' ? { tool_params: maskArgs('any', meta.tool_params) } : {}),
+      ...(Array.isArray(meta.tool_params_display) ? { tool_params_display: meta.tool_params_display.map(d => ({ ...rec(d), value: '•••' })) } : {}) } };
+  }
   const name = str(o.name) || str(o.tool_name) || (str(o.server) && str(o.tool) ? `mcp__${str(o.server)}__${str(o.tool)}` : '');
   const id = str(o.toolCallId);
   const kind = typingTool(name, str(o.title)) || (id ? typing?.get(id) : undefined);

@@ -113,5 +113,15 @@ describe('wire record', () => {
     const update = { method: 'session/update', params: { update: { sessionUpdate: 'tool_call_update', toolCallId: 't2', rawInput: { ref: 'e12', text: SECRET } } } };
     redactLine(JSON.stringify(first), { prompts: true, dir: 'engine>app', typing });
     expect(redactLine(JSON.stringify(update), { prompts: true, dir: 'engine>app', typing })).not.toContain(SECRET);
+    // nameless shapes: Claude's streamed input, the app's allow answer, Codex's elicitation parameters
+    const delta = { type: 'stream_event', event: { type: 'content_block_delta', index: 1, delta: { type: 'input_json_delta', partial_json: `{"text":"${SECRET}` } } };
+    expect(redactLine(JSON.stringify(delta), { prompts: true, dir: 'engine>app', typing })).not.toContain(SECRET);
+    const ask = { type: 'control_request', request_id: 'q9', request: { subtype: 'can_use_tool', tool_name: 'mcp__second-brain__fill_form', input: { fields: [{ ref: 'e12', value: SECRET }] } } };
+    const allow = { type: 'control_response', response: { subtype: 'success', request_id: 'q9', response: { behavior: 'allow', updatedInput: { fields: [{ ref: 'e12', value: SECRET }] } } } };
+    expect(redactLine(JSON.stringify(ask), { prompts: true, dir: 'engine>app', typing })).not.toContain(SECRET);
+    expect(redactLine(JSON.stringify(allow), { prompts: true, dir: 'app>engine', typing })).not.toContain(SECRET);
+    const elicit = { id: 3, method: 'mcpServer/elicitation/request', params: { threadId: 't', serverName: 'second-brain', mode: 'form', message: 'Allow?',
+      _meta: { tool_params: { text: SECRET }, tool_params_display: [{ name: 'text', value: SECRET }] } } };
+    expect(redactLine(JSON.stringify(elicit), { prompts: true, dir: 'engine>app', typing })).not.toContain(SECRET);
   });
 });
