@@ -43,7 +43,8 @@ export function toolClass(tool: string, commandTools: readonly string[]): string
   if (EDIT.has(t)) return 'edit';
   if (READ.has(t)) return 'read';
   if (WEB.has(t)) return 'web';
-  if (t.startsWith('mcp__') || t.startsWith('mcp_') || t.includes('__')) return 'mcp';
+  // an ACP engine's MCP call is a «Tool» named only by its title (OpenCode <server>_<tool>, Cursor's own form)
+  if (t.startsWith('mcp__') || t.startsWith('mcp_') || t.includes('__') || t === 'tool') return 'mcp';
   return 'other';
 }
 
@@ -79,6 +80,9 @@ export function parsePolicy(text: string): BrainPolicy {
       if (typeof raw.why !== 'string' || !raw.why.trim() || raw.why.length > 300) throw new Error(`${where} (${id}): why (1-300 characters) is expected`);
       const tools = raw.tools === undefined ? ['command'] : raw.tools;
       if (!Array.isArray(tools) || !tools.length || !tools.every(t => typeof t === 'string' && t.length > 0 && t.length <= 120)) throw new Error(`${where} (${id}): tools must be a list of tool classes or names`);
+      // a class spelled wrong would be a rule that never fires: «commands», «Command»
+      const typo = (tools as string[]).find(t => !(POLICY_TOOL_CLASSES as readonly string[]).includes(t) && (POLICY_TOOL_CLASSES as readonly string[]).includes(t.toLowerCase().replace(/s$/, '')));
+      if (typo) throw new Error(`${where} (${id}): «${typo}» is not a tool class (${POLICY_TOOL_CLASSES.join(', ')})`);
       const match = patterns(raw.match, `${where} (${id}) match`);
       if (!match.length) throw new Error(`${where} (${id}): match is required`);
       for (const k of Object.keys(raw)) if (!['id', 'action', 'why', 'tools', 'match', 'unless'].includes(k)) throw new Error(`${where} (${id}): unknown field «${k}»`);
@@ -91,7 +95,7 @@ export function parsePolicy(text: string): BrainPolicy {
   }
 }
 
-let cache: { file: string; mtimeMs: number; size: number; policy: BrainPolicy } | null = null;
+let cache: { file: string; mtimeMs: number; ctimeMs: number; size: number; policy: BrainPolicy } | null = null;
 
 /** The policy of the brain at brainRoot (null: no brain chosen yet = no rule). */
 export function loadPolicy(brainRoot: string | null | undefined): BrainPolicy {
@@ -99,35 +103,52 @@ export function loadPolicy(brainRoot: string | null | undefined): BrainPolicy {
   const file = path.join(brainRoot, POLICY_FILE);
   let st: fs.Stats;
   try { st = fs.statSync(file); } catch (e) {
-    return (e as NodeJS.ErrnoException).code === 'ENOENT' ? { state: 'none' } : { state: 'broken', error: `cannot be read: ${(e as NodeJS.ErrnoException).code ?? 'error'}` };
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') return { state: 'broken', error: `cannot be read: ${(e as NodeJS.ErrnoException).code ?? 'error'}` };
+    // no file in a brain that is there: no rule. A brain that is not there (an unplugged disk, an offline cloud
+    // folder) may hold rules the app cannot see
+    try { return fs.statSync(brainRoot).isDirectory() ? { state: 'none' } : { state: 'broken', error: 'the brain folder is not a folder' }; }
+    catch { return { state: 'broken', error: 'the brain folder cannot be reached' }; }
   }
   if (!st.isFile()) return { state: 'broken', error: 'not a file' };
   if (st.size > MAX_FILE) return { state: 'broken', error: `larger than ${MAX_FILE / 1024} KB` };
-  if (cache && cache.file === file && cache.mtimeMs === st.mtimeMs && cache.size === st.size) return cache.policy;
+  if (cache && cache.file === file && cache.mtimeMs === st.mtimeMs && cache.ctimeMs === st.ctimeMs && cache.size === st.size) return cache.policy;
   let text: string;
   try { text = fs.readFileSync(file, 'utf8'); } catch (e) { return { state: 'broken', error: `cannot be read: ${(e as NodeJS.ErrnoException).code ?? 'error'}` }; }
   const policy = parsePolicy(text.replace(/^﻿/, ''));
-  cache = { file, mtimeMs: st.mtimeMs, size: st.size, policy };
+  cache = { file, mtimeMs: st.mtimeMs, ctimeMs: st.ctimeMs, size: st.size, policy };
   return policy;
 }
 
-/** What a rule is matched against: a command's own line, any other tool's name and input. */
-export function policySubject(tool: string, input: unknown, cls: string): string {
+/** What a rule is matched against: a command's own line; any other tool's name (and title), its input as JSON, then
+ *  each top-level text value as `key: value` lines (a query that starts on a new line reads as written). */
+export function policySubject(tool: string, input: unknown, cls: string, title?: string): string {
   const o = isObj(input) ? input : {};
   if (cls === 'command' && typeof o.command === 'string') return o.command.slice(0, MAX_SUBJECT);
   let json = '';
   try { json = JSON.stringify(input ?? {}); } catch { /* circular: the name alone */ }
-  return `${tool} ${json}`.slice(0, MAX_SUBJECT);
+  const values = Object.entries(o).filter(([, v]) => typeof v === 'string').map(([k, v]) => `${k}: ${v as string}`);
+  return [`${tool}${title && title !== tool ? ` ${title}` : ''} ${json}`, ...values].join('\n').slice(0, MAX_SUBJECT);
 }
 
-/** The first rule that holds this request, or null. */
-export function policyHit(policy: BrainPolicy, tool: string, input: unknown, commandTools: readonly string[]): PolicyRule | null {
+const ruleSees = (rule: PolicyRule, cls: string, name: string, title: string): boolean => rule.tools.some(t => t === '*' || t === cls || t === name || (!!title && t === title));
+
+/** The first rule that holds this request, or null. title: the engine's line, an ACP MCP tool's only name. */
+export function policyHit(policy: BrainPolicy, tool: string, input: unknown, commandTools: readonly string[], title?: string): PolicyRule | null {
   if (policy.state !== 'ok') return null;
-  const cls = toolClass(tool, commandTools), name = tool.toLowerCase();
-  const subject = policySubject(tool, input, cls);
+  const cls = toolClass(tool, commandTools), name = tool.toLowerCase(), t = (title ?? '').trim().toLowerCase();
+  const subject = policySubject(tool, input, cls, cls === 'mcp' ? title?.trim() : undefined);
   for (const rule of policy.rules) {
-    if (!rule.tools.some(t => t === '*' || t === cls || t === name)) continue;
+    if (!ruleSees(rule, cls, name, t)) continue;
     if (rule.match.some(re => re.test(subject)) && !rule.unless.some(re => re.test(subject))) return rule;
   }
   return null;
+}
+
+/** Some rule could hold a request of this tool, or the policy cannot be read: no «always» on what the user grants for
+ *  it (a remembered grant would let a later one the rules hold through without coming back to the app). */
+export function policyCovers(policy: BrainPolicy, tool: string, commandTools: readonly string[], title?: string): boolean {
+  if (policy.state === 'broken') return true;
+  if (policy.state !== 'ok') return false;
+  const cls = toolClass(tool, commandTools), name = tool.toLowerCase(), t = (title ?? '').trim().toLowerCase();
+  return policy.rules.some(rule => ruleSees(rule, cls, name, t));
 }

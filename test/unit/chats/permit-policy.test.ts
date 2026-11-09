@@ -38,6 +38,7 @@ describe('the owner\'s policy', () => {
     // a local call chained to a remote write is not the local dev DB
     expect(cmd('sqlcmd -S localhost -E -C -Q "select 1"; sqlcmd -S prod -Q "delete from t"').kind).toBe('deny');
     expect(ruleOf(ask('mcp__mssql__execute_query', { query: 'UPDATE t SET a = 1' }))).toBe('db-write-tools');
+    expect(ruleOf(ask('mcp__mssql__execute_query', { query: '\n  UPDATE t SET a = 1' }))).toBe('db-write-tools'); // formatted SQL
     expect(ask('mcp__mssql__execute_query', { query: 'SELECT 1' }).kind).toBe('allow');
   });
 
@@ -55,6 +56,9 @@ describe('the owner\'s policy', () => {
     expect(v).toMatchObject({ kind: 'ask', rule: { id: 'mail-teams' } });
     expect(ruleOf(ask('mcp__teams__post_message', { text: 'x' }))).toBe('mail-teams');
     expect(ruleOf(cmd('Send-MailMessage -To a@b.c -Subject x'))).toBe('mail-teams');
+    // Cursor and OpenCode name an MCP call only in its title (the tool is «Tool»)
+    const acp = autoPermit({ type: 'permission', tool: 'Tool', title: 'gmail_send_message', input: { to: 'a@b.c' } }, { cwd: tmp, ceiling: null, policy: owner });
+    expect(ruleOf(acp)).toBe('mail-teams');
     expect(ask('mcp__Gmail__search_threads', { q: 'x' }).kind).toBe('allow');
   });
 
@@ -76,15 +80,18 @@ describe('the owner\'s policy', () => {
   it('tells the agent what to do instead, so the chat goes on', () => {
     const v = cmd('az webapp restart -n app -g rg');
     expect(v.kind === 'deny' && v.message).toMatch(/Esegui.*fenced code block.*go on/s);
+    const tool = ask('mcp__mssql__execute_query', { query: 'DELETE FROM t' });
+    expect(tool.kind === 'deny' && tool.message).toMatch(/Only the user does this.*Tell the user exactly what is needed/s); // not a command for Esegui
     const s = cmd('cat .env');
     expect(s.kind === 'deny' && s.message).toMatch(/never print.*go on/s);
   });
 });
 
 describe('the policy file', () => {
-  it('missing: no rule, everything is free', () => {
-    const none = loadPolicy(path.join(tmp, 'no-brain'));
+  it('missing: no rule, everything is free; a brain folder that cannot be reached is not «no rule»', () => {
+    const none = loadPolicy(tmp);
     expect(none.state).toBe('none');
+    expect(loadPolicy(path.join(tmp, 'unplugged-brain'))).toMatchObject({ state: 'broken', error: expect.stringMatching(/reached/) });
     expect(cmd('sqlcmd -S prod -Q "delete from t"', none).kind).toBe('allow');
     expect(loadPolicy(null).state).toBe('none');
   });
@@ -108,6 +115,7 @@ describe('the policy file', () => {
       { version: 2, rules: [rule] }, { version: 1 }, { version: 1, rules: [{ ...rule, action: 'deny' }] },
       { version: 1, rules: [{ ...rule, match: ['('] }] }, { version: 1, rules: [{ ...rule, match: [] }] }, { version: 1, rules: [rule, rule] },
       { version: 1, rules: [{ ...rule, why: '' }] }, { version: 1, rules: [{ ...rule, extra: 1 }] }, { version: 1, rules: [rule], other: 1 },
+      { version: 1, rules: [{ ...rule, tools: ['commands'] }] }, { version: 1, rules: [{ ...rule, tools: ['Command'] }] },
     ]) expect(parsePolicy(JSON.stringify(bad)).state, JSON.stringify(bad)).toBe('broken');
     expect(parsePolicy('not json').state).toBe('broken');
   });

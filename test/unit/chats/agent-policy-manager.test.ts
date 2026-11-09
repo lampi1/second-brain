@@ -94,28 +94,39 @@ describe('agent policy on chats', () => {
     expect(f.m.pending().find(p => p.id === 'a5')?.alwaysRules).toBeUndefined();
   });
 
-  it('after a brain rule refuses a Cursor or OpenCode request, a turn that stopped there is told why and goes on (ADR 0254)', async () => {
-    for (const harness of ['cursor', 'opencode']) {
+  it('after a brain rule refuses a Codex, Cursor or OpenCode request, a turn that stopped there is told why once and goes on (ADR 0254)', async () => {
+    // a clock that moves on every read: each item comes strictly after the one before
+    let clock = Date.now();
+    const now = vi.spyOn(Date, 'now').mockImplementation(() => (clock += 10));
+    try { for (const harness of ['codex', 'cursor', 'opencode']) {
       const f = fixture({ brainRoot: () => path.join(__dirname, '..', '..', 'fixtures', 'brain-policy'), engineOn: () => true });
       await f.m.create({ harness, cwd: f.dir, prompt: 'x' });
-      const result = (id: string, interrupted = false) => f.sink().item({ kind: 'result', id, at: Date.now(), costUsd: 0, durationMs: 1, turns: 1, isError: false, ...(interrupted ? { interrupted } : {}) }, false);
+      const result = (id: string, extra: object = {}) => f.sink().item({ kind: 'result', id, at: Date.now(), costUsd: 0, durationMs: 1, turns: 1, isError: false, ...extra }, false);
+      const refuse = (id: string, command: string) => f.sink().pending({ id, type: 'permission', tool: 'Bash', title: 'Bash', detail: '', input: { command }, at: 1 });
+      const notes = () => f.sent.filter(t => t.startsWith('[rifiuto dell’app'));
       f.sink().changed({ state: 'running' });
-      f.sink().pending({ id: 'z1', type: 'permission', tool: 'Bash', title: 'Bash', detail: '', input: { command: 'az group delete -n rg' }, at: 1 });
+      refuse('z1', 'az group delete -n rg');
       expect(f.answers.at(-1)).toMatchObject({ id: 'z1', answer: { allow: false } });
       result('r1');
-      await vi.waitFor(() => expect(f.sent.join('\n'), harness).toContain('[rifiuto dell’app · regola «azure-write»] Held by the user\'s rule'));
-      // the agent said something after the refusal: it went on by itself, nothing more is sent
-      const before = f.sent.length;
-      f.sink().changed({ state: 'running' });
-      f.sink().pending({ id: 'z2', type: 'permission', tool: 'Bash', title: 'Bash', detail: '', input: { command: 'az group delete -n rg' }, at: 1 });
-      f.sink().item({ kind: 'assistant', id: 'a1', text: 'Ti lascio il comando da lanciare con Esegui.', streaming: false } as never, false);
-      result('r2');
-      // the user's Stop stays a stop
-      f.sink().pending({ id: 'z3', type: 'permission', tool: 'Bash', title: 'Bash', detail: '', input: { command: 'az group delete -n rg' }, at: 1 });
-      result('r3', true);
-      await new Promise(resolve => setImmediate(resolve));
-      expect(f.sent.slice(before).join('\n')).not.toContain('rifiuto dell’app');
-    }
+      await vi.waitFor(() => expect(notes(), harness).toEqual([expect.stringContaining('[rifiuto dell’app · regola «azure-write»] Held by the user\'s rule')]));
+      // the same rule again in this run: never a loop; the agent said something after a refusal; the user's Stop; a failed turn
+      refuse('z2', 'az group delete -n rg'); result('r2');
+      refuse('z3', 'cat .env'); f.sink().item({ kind: 'assistant', id: 'a1', at: Date.now(), text: 'Ti lascio il comando da lanciare con Esegui.', streaming: false }, false); result('r3');
+      refuse('z4', 'cat .env'); result('r4', { interrupted: true });
+      refuse('z5', 'cat .env'); result('r5', { isError: true });
+      // a later refusal that stopped the turn is told: the ones above would have arrived before it
+      refuse('z6', 'printenv'); result('r6');
+      await vi.waitFor(() => expect(notes()).toHaveLength(2));
+      expect(notes()[1]).toContain('regola «secrets-never-print»');
+    } } finally { now.mockRestore(); }
+  });
+
+  it('under brain rules, nothing the user grants for a tool they could hold is «always» (ADR 0254)', async () => {
+    const f = fixture({ brainRoot: () => path.join(__dirname, '..', '..', 'fixtures', 'brain-policy') });
+    await f.m.create({ harness: 'claude', cwd: f.dir, prompt: 'x' });
+    f.sink().pending({ id: 's1', type: 'permission', tool: 'Bash', title: 'Bash', detail: '', input: { command: 'cp a .git/hooks/pre-commit' }, at: 1, alwaysRules: ['Bash(cp:*)'] });
+    expect(f.m.pending().find(p => p.id === 's1')).toMatchObject({ noAlways: true });
+    expect(f.m.pending().find(p => p.id === 's1')?.alwaysRules).toBeUndefined();
   });
 
   it('a brain permissions.json that cannot be read: one notice, then the user decides all but reads (ADR 0254)', async () => {

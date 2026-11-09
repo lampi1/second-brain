@@ -30,7 +30,6 @@ describe('autoPermit: allow by default', () => {
     expect(autoPermit(perm('Read', { file_path: path.join(root, 'elsewhere', 'b') }), ctx()).kind).toBe('allow');
     expect(autoPermit(perm('Read', { file_path: '~/.ssh/id_rsa' }), ctx()).kind).toBe('allow');
     expect(autoPermit(perm('Write', { file_path: path.join(root, 'elsewhere', 'x') }), ctx()).kind).toBe('allow');
-    expect(autoPermit(perm('Edit', { files: ['src/a.ts'], grantRoot: cwd }), ctx()).kind).toBe('allow');
     for (const f of ['.env', '.npmrc', '.gitmodules']) expect(autoPermit(perm('Write', { file_path: path.join(cwd, f) }), ctx()).kind, f).toBe('allow');
     const link = path.join(cwd, 'out');
     try { fs.symlinkSync(path.join(root, 'elsewhere'), link, 'dir'); } catch { return; } // no links on this machine
@@ -51,17 +50,34 @@ describe('autoPermit: the agents\' own settings and hooks (AGENTS.md rule 6)', (
     }
     expect(autoPermit(perm('Edit', { file_path: path.join(os.homedir(), '.claude', 'settings.json') }), ctx()).kind).toBe('ask');
     expect(autoPermit(perm('Write', { file_path: 'C:\\Users\\d\\AppData\\Roaming\\Claude\\claude_desktop_config.json' }), ctx()).kind).toBe('ask');
-    expect(autoPermit(perm('Edit', { files: 'x' }), ctx()).kind).toBe('ask'); // a path list it cannot read
-    const hooks = path.join(cwd, 'hooks-link');
+    expect(autoPermit(perm('Edit', { files: [] }), ctx()).kind).toBe('ask'); // an edit that names no place
+    for (const input of [{ filePath: path.join(cwd, '.git', 'hooks', 'pre-commit') }, { target_file: '.git/hooks/pre-commit' }, { args: { path: '.claude/settings.json' } }]) {
+      expect(autoPermit(perm('Edit', input), ctx()).kind, JSON.stringify(input)).toBe('ask'); // any engine's shape
+    }
+    for (const f of ['.git.', '.git::$INDEX_ALLOCATION', '.opencode/plugin/x.ts', '.claude.json']) expect(autoPermit(perm('Write', { file_path: path.join(cwd, f) }), ctx()).kind, f).toBe('ask');
+    expect(autoPermit(perm('mcp__fs__write_file', { path: path.join(os.homedir(), '.claude', 'settings.json'), content: 'x' }), ctx()).kind).toBe('ask');
+    // its content may name a settings file without touching it
+    expect(autoPermit(perm('Write', { file_path: path.join(cwd, 'README.md'), content: 'see .claude/settings.json' }), ctx()).kind).toBe('allow');    const hooks = path.join(cwd, 'hooks-link');
     fs.mkdirSync(path.join(root, '.claude'), { recursive: true });
     try { fs.symlinkSync(path.join(root, '.claude'), hooks, 'dir'); } catch { return; }
     expect(autoPermit(perm('Write', { file_path: path.join(hooks, 'settings.json') }), ctx()).kind).toBe('ask');
   });
 
   it('asks before a command that writes them; one that only reads them may look', () => {
-    for (const c of ['echo x > .git/hooks/pre-commit', 'cp a ~/.claude/settings.json', 'git config core.hooksPath x', 'git -c core.hooksPath=x commit']) expect(run(c), c).toBe('ask');
+    for (const c of ['echo x > .git/hooks/pre-commit', 'cp a ~/.claude/settings.json', 'git config core.hooksPath x', 'git -c core.hooksPath=x commit',
+      'cp evil .gi?/hooks/pre-commit', "cp evil .g''it/hooks/pre-commit", 'cp evil .\\git/hooks/pre-commit', 'git config --global core.editor x', 'claude mcp add x -- node evil.js']) expect(run(c), c).toBe('ask');
     expect(autoPermit(perm('Shell', { command: 'echo x > hooks/pre-commit', cwd: '.git' }), ctx()).kind).toBe('ask');
     for (const c of ['cat .claude/settings.json', 'ls .git', 'git status']) expect(run(c), c).toBe('allow');
+  });
+});
+
+describe('autoPermit: what it cannot read whole is the user\'s call', () => {
+  it('asks for a request an engine cut, a command with no line, and Codex\'s session-long grantRoot', () => {
+    expect(run(`echo ${'x'.repeat(3990)}… (+42)`)).toBe('ask');
+    expect(autoPermit(perm('Edit', { files: [...Array.from({ length: 200 }, (_, i) => `src/f${i}.ts`)] }), ctx()).kind).toBe('ask');
+    expect(autoPermit(perm('Shell', {}), ctx()).kind).toBe('ask');
+    expect(autoPermit(perm('Shell', { title: 'printenv' }), ctx()).kind).toBe('ask');
+    expect(autoPermit(perm('Edit', { files: ['src/a.ts'], grantRoot: cwd }), ctx()).kind).toBe('ask');
   });
 });
 

@@ -17,7 +17,8 @@ import type { PermissionCeiling } from '../../shared/agents';
 import { COMMAND_TOOLS, readOnlyCommand, type ReadScripts } from '../agents/tool-policy';
 import { policyHit, type BrainPolicy, type PolicyRule } from './permit-policy';
 
-export interface PermitRequest { type: string; tool: string; input?: unknown }
+/** title: the engine's one line; an ACP engine names an MCP tool only there (its tool is «Tool») */
+export interface PermitRequest { type: string; tool: string; input?: unknown; title?: string }
 export interface PermitContext {
   /** the chat's folder: relative paths are read from here */
   cwd: string;
@@ -41,8 +42,14 @@ const ALLOW: PermitVerdict = { kind: 'allow' };
 const READ_TOOLS = new Set(['Read', 'Glob', 'Grep', 'LS', 'NotebookRead', 'Search', 'TodoWrite', 'Think', 'WebSearch']);
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'Delete', 'Move']);
 /** the agents' own settings and hooks (AGENTS.md rule 6) and the repository's internals, where hooks live */
-const SETTINGS_DIRS = new Set(['.git', '.claude', '.cursor', '.codex', '.githooks', '.husky', '.vscode', '.idea']);
-const SETTINGS_FILE = /^(\.mcp\.json|\.guardallow|\.gitconfig|claude_desktop_config\.json|opencode\.jsonc?)$/i;
+const SETTINGS_DIRS = new Set(['.git', '.claude', '.cursor', '.codex', '.opencode', '.githooks', '.husky', '.vscode', '.idea']);
+const SETTINGS_FILE = /^(\.mcp\.json|\.claude\.json|\.guardallow|\.gitconfig|claude_desktop_config\.json|opencode\.jsonc?)$/i;
+/** commands that change the agents' or git's settings without naming the file */
+const SETTINGS_COMMAND = /\bgit\b[^;&|\n]*\bconfig\b[^;&|\n]*--(global|system)\b|\b(claude|codex|cursor-agent|opencode)(\.exe)?\s+(mcp|config|plugins?|hooks?)\b|core\.hookspath/i;
+/** an engine's cut (session.ts trimInput): a string ends with «… (+N)», a list stops at 200 entries */
+const CUT = /… \(\+\d+\)$/;
+/** what a tool writes or says, never where: its text may name a settings file without touching it */
+const CONTENT_KEYS = new Set(['content', 'old_string', 'new_string', 'old_str', 'new_str', 'oldText', 'newText', 'text', 'description', 'title', 'explanation', 'instructions', 'code_edit', 'prompt', 'body', 'message', 'query', 'command']);
 
 const obj = (v: unknown): Record<string, unknown> => v && typeof v === 'object' && !Array.isArray(v) ? v as Record<string, unknown> : {};
 
@@ -61,54 +68,61 @@ function realish(p: string): string {
 }
 
 const settingsSegments = (p: string): boolean => {
-  const parts = p.toLowerCase().split(/[\\/]+/).filter(Boolean);
+  // Windows reads `.git.`, `.git ` and `.git::$INDEX_ALLOCATION` as `.git`
+  const parts = p.toLowerCase().split(/[\\/]+/).filter(Boolean).map(seg => seg.replace(/(?<=.):.*$/, '').replace(/[. ]+$/, '') || seg);
   return parts.some(seg => SETTINGS_DIRS.has(seg)) || SETTINGS_FILE.test(parts[parts.length - 1] ?? '');
 };
 /** p names a settings or hooks place, as written or once links are resolved (a link in the folder to ~/.claude). */
 function settingsPath(p: string, cwd: string): boolean {
   if (!p || p.includes('\0')) return true;
-  if (settingsSegments(p)) return true;
+  if (settingsSegments(p) || settingsSegments(p.replace(/\\/g, ''))) return true;
   if (!path.isAbsolute(cwd) || p.startsWith('~')) return false;
   try { return settingsSegments(realish(path.resolve(cwd, p))); } catch { return false; }
 }
 
-/** The paths a file tool names (Claude, Cursor ACP, Codex shapes); null = one is not a plain string. */
-function pathsOf(input: unknown): string[] | null {
-  const o = obj(input);
+/** The places a tool names: every short one-line string value that is not its content (any engine's shape: file_path,
+ *  filePath, target_file, Codex files, ACP locations), one level down too. null = it cannot be read whole (an engine cut
+ *  it, or a list too long to be all there). */
+function placesOf(input: unknown): string[] | null {
   const out: string[] = [];
-  for (const k of ['file_path', 'notebook_path', 'path', 'directory', 'source', 'destination', 'target', 'cwd']) {
-    if (o[k] === undefined) continue;
-    if (typeof o[k] !== 'string') return null;
-    out.push(o[k] as string);
-  }
-  if (o.locations !== undefined) {
-    if (!Array.isArray(o.locations) || !o.locations.every(l => typeof obj(l).path === 'string')) return null;
-    out.push(...o.locations.map(l => obj(l).path as string));
-  }
-  if (o.files !== undefined) {
-    if (!Array.isArray(o.files) || !o.files.every(f => typeof f === 'string')) return null;
-    out.push(...o.files as string[]);
-  }
-  return out;
+  const walk = (v: unknown, depth: number): boolean => {
+    if (typeof v === 'string') {
+      if (CUT.test(v)) return false;
+      if (v.length <= 1000 && !/[\r\n]/.test(v) && !v.includes('://')) out.push(v);
+      return true;
+    }
+    if (Array.isArray(v)) return v.length < 200 && v.every(x => walk(x, depth));
+    if (v && typeof v === 'object' && depth < 3) return Object.entries(v).every(([k, x]) => CONTENT_KEYS.has(k) ? typeof x !== 'string' || !CUT.test(x) : walk(x, depth + 1));
+    return true;
+  };
+  return walk(input, 0) ? out : null;
 }
 
-/** A change that would touch the agents' settings or hooks (rule 6): an edit there, or a command naming such a place or
- *  git's hooks path. A command that only reads may look. */
+/** A change that would touch the agents' settings or hooks (rule 6): a tool naming such a place, or a command naming
+ *  one or changing them by itself. A command or tool that only reads may look. Null input shapes ask. */
 function touchesSettings(req: PermitRequest, command: boolean, cwd: string): boolean {
   const o = obj(req.input);
   if (command) {
-    const raw = typeof o.command === 'string' ? o.command : '';
-    if (/core\.hookspath/i.test(raw)) return true;
+    // `.g''it` is `.git` to a shell; a glob can name a settings place by pattern (.gi?/hooks)
+    const raw = (typeof o.command === 'string' ? o.command : '').replace(/''|""/g, '');
+    if (SETTINGS_COMMAND.test(raw)) return true;
+    const base = typeof o.cwd === 'string' && o.cwd ? path.resolve(cwd, o.cwd) : cwd;
     const words = raw.split(/[\s'"`;&|<>(){}=,]+/).filter(w => /[\\/]/.test(w) || w.startsWith('.') || w.startsWith('~'));
-    return words.some(w => settingsPath(w, cwd)) || (typeof o.cwd === 'string' && settingsPath(o.cwd, cwd));
+    if (words.some(w => /[*?[]/.test(w) && /(^|[\\/])\.[^\\/]*[*?[]|[*?[][^\\/]*[\\/]/.test(w))) return true;
+    return words.some(w => settingsPath(w, base)) || (typeof o.cwd === 'string' && settingsPath(o.cwd, cwd));
   }
-  const paths = pathsOf(o);
-  if (!paths) return EDIT_TOOLS.has(req.tool);
-  return paths.some(p => settingsPath(p, cwd));
+  const places = placesOf(o);
+  if (!places) return true;
+  return places.filter(p => /[\\/]/.test(p) || p.startsWith('.') || p.startsWith('~')).some(p => settingsPath(p, cwd));
 }
 
-function refusal(rule: PolicyRule, shown: string): PermitVerdict {
-  const message = rule.action === 'esegui'
+/** An engine cut the request (session.ts trimInput): what runs is not what the rules would read. */
+const cut = (input: unknown): boolean => placesOf(input) === null || Object.values(obj(input)).some(v => typeof v === 'string' && CUT.test(v));
+
+function refusal(rule: PolicyRule, shown: string, command: boolean): PermitVerdict {
+  const message = rule.action === 'esegui' && !command
+    ? `Held by the user's rule "${rule.id}": ${rule.why}. Only the user does this: do not retry it or a variant of it. Tell the user exactly what is needed (the tool and its input) in your reply (a delegated chat reports it as userAction), then go on with the rest of the work.`
+    : rule.action === 'esegui'
     ? `Held by the user's rule "${rule.id}": ${rule.why}. Only the user runs this, by pressing Esegui: do not run it or a variant of it. Write the exact command in a fenced code block in your reply and say what it does (a delegated chat reports it as userAction { kind: 'command', command }), then go on with the rest of the work.`
     : `Refused by the user's rule "${rule.id}": ${rule.why}. You may read and use a secret, but never print it: do not echo, cat or log its value. Pass it on without showing it (an environment variable, a file the program reads), then go on with the rest of the work.`;
   return { kind: 'deny', shown: shown.slice(0, 120), rule, message };
@@ -118,17 +132,23 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
   if (req.type !== 'permission' || req.tool === 'ExitPlanMode') return ASK;
   const policy = ctx.policy ?? { state: 'none' };
   const command = COMMAND_TOOLS.includes(req.tool);
-  const rule = policyHit(policy, req.tool, req.input, COMMAND_TOOLS);
+  const raw = obj(req.input).command;
+  // the rules and rule 6 must read what will run: a command with no line, or one an engine cut, is the user's call
+  if (command && (typeof raw !== 'string' || !raw.trim())) return ASK;
+  if (cut(req.input)) return ASK;
+  const rule = policyHit(policy, req.tool, req.input, COMMAND_TOOLS, req.title);
   if (rule) {
     if (rule.action === 'ask-user') return { kind: 'ask', rule };
-    const raw = obj(req.input).command;
-    return refusal(rule, typeof raw === 'string' && raw.trim() ? raw.trim() : req.tool);
+    return refusal(rule, typeof raw === 'string' ? raw.trim() : req.title?.trim() || req.tool, command);
   }
   if (ctx.ceiling === 'plan' || ctx.ceiling === 'default') return ASK;
-  const reads = command ? readOnlyCommand(obj(req.input).command, ctx.readScripts) : READ_TOOLS.has(req.tool);
+  const reads = command ? readOnlyCommand(raw, ctx.readScripts) : READ_TOOLS.has(req.tool);
   if (reads) return ALLOW;
   if (ctx.ceiling === 'acceptEdits' && !EDIT_TOOLS.has(req.tool)) return ASK;
   if (policy.state === 'broken') return ASK;
-  if ((command || EDIT_TOOLS.has(req.tool)) && touchesSettings(req, command, ctx.cwd)) return ASK;
+  // Codex's grantRoot is write access under a folder for the rest of the session: later writes never come back here
+  if (obj(req.input).grantRoot !== undefined) return ASK;
+  if (EDIT_TOOLS.has(req.tool) && !placesOf(req.input)?.length) return ASK; // an edit that names no place
+  if (touchesSettings(req, command, ctx.cwd)) return ASK;
   return ALLOW;
 }

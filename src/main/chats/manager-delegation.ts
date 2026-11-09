@@ -536,9 +536,11 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     const note = r.refusalNote;
     if (!note) return;
     delete r.refusalNote;
-    if (item.interrupted || r.s.closedAt) return;
-    const after = r.items.slice(note.after).some(i => i.kind === 'tool' || (i.kind === 'assistant' && i.text.trim()));
-    if (after) return;
+    // a turn the user stopped, a failed one, or a note left from a turn that never ended (an engine restart)
+    if (item.interrupted || item.isError || r.s.closedAt || (r.turnAt !== undefined && note.at < r.turnAt)) return;
+    // by time, not by position: the item list is trimmed at the front and older history is put before it
+    if (r.items.some(i => i.at > note.at && (i.kind === 'tool' || (i.kind === 'assistant' && i.text.trim())))) return;
+    (r.refusalTold ??= new Set()).add(note.key);
     const text = `[rifiuto dell’app · regola «${note.rule}»] ${note.message}`;
     void this.send(r.s.id, text, undefined, false, 'App', false, { kind: 'app' })
       .catch(e => log.warn('chats', 'refusal note not delivered', { chat: r.s.id, cause: errText(e) }));

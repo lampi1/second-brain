@@ -26,7 +26,7 @@
         "mcp"
       ],
       "match": [
-        "\"(query|sql|statement|command)\"\\s*:\\s*\"\\s*(insert|update|delete|merge|truncate|create|alter|drop|grant|revoke|exec)\\b"
+        "(?:^|\\n|\")(query|sql|statement|command)\"?\\s*:\\s*\"?\\s*(insert|update|delete|merge|truncate|create|alter|drop|grant|revoke|exec)\\b"
       ]
     },
     {
@@ -65,7 +65,7 @@
         "*"
       ],
       "match": [
-        "^mcp__[\\w-]*(mail|outlook|teams|exchange)[\\w-]*__\\w*(send|reply|forward|post|draft|message)",
+        "(gmail|outlook|mail|teams|exchange)\\w*?[_.:-]+\\s*(send|reply|forward|post|draft|create_draft|chat_?message|message)",
         "\\b(send-mailmessage|send-mguser ?mail|new-mgchatmessage|new-mgteamchannelmessage)\\b"
       ]
     },
