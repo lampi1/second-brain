@@ -72,6 +72,7 @@ import { listPrice, priceTableSource, setPriceTable } from './chats/live-cost';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { Workflows } from './workflows/service';
 import { WorkDriver } from './workflows/driver';
+import { WakeLater } from './chats/wake-later';
 import { CoordinationStore } from './coordination/store';
 import { createRoutines } from './routines/service';
 import { devopsPatFromConnectors, devopsPatFromCursorConfig } from './routines/secret-fill';
@@ -650,7 +651,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // Orchestrator; a closed chat of it with unread mail is reopened
   const workDriver = new WorkDriver({ works: () => workflows.projection(), chats: () => manager.list(), tell: n => wake.stalledWork(n),
     mailWaiting: chatId => mail.hasWork(chatId), wake: (chatId, text) => manager.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }) });
-  const workDriverTimer = prodPollers ? setInterval(() => { try { workDriver.tick(); } catch (e) { log.warn('workflows', 'approved-work check failed', { cause: errText(e), hint: 'the next minute retries' }); } }, 60_000) : null;
+  // a chat's own next turn (agent_wake_later, ADR 0238): kept across restarts, sent by the same minute tick
+  const wakeLater = new WakeLater({ file: path.join(ctx.userData, 'wake-later.json'), chats: () => manager.list(),
+    send: (chatId, text) => manager.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }) });
+  addChatTools([wakeLater.tool()]);
+  const workDriverTimer = prodPollers ? setInterval(() => {
+    try { wakeLater.tick(); workDriver.tick(); } catch (e) { log.warn('workflows', 'approved-work check failed', { cause: errText(e), hint: 'the next minute retries' }); }
+  }, 60_000) : null;
   workDriverTimer?.unref();
   // a role chat's route says how its active version has done so far
   const agentStats = (agentId: string, version: number) => agentStatsLine(runMetrics(manager.runs.list(), { rollups: manager.runs.rolledUp() }).find(m => m.agentId === agentId)?.versions.find(v => v.version === version));

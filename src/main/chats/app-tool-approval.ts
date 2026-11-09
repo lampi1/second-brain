@@ -13,7 +13,7 @@ export function appEndpoint(raw: string | null | undefined): boolean {
   } catch { return false; }
 }
 
-export const APP_CHAT_TOOLS = ['send_to_chat', 'list_chats', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_work_decisions', 'agent_integrate_child', 'agent_integrate_children', 'agent_report', 'agent_children', 'agent_ask_parent', 'agent_answer_child', 'agent_close_child', 'plan_propose', 'plan_update', 'maintenance_pack', 'maintenance_propose', 'maintenance_role_trial'] as const;
+export const APP_CHAT_TOOLS = ['send_to_chat', 'list_chats', 'agent_delegate', 'agent_assign_task', 'agent_task_events', 'agent_work_decisions', 'agent_integrate_child', 'agent_integrate_children', 'agent_report', 'agent_children', 'agent_ask_parent', 'agent_answer_child', 'agent_close_child', 'agent_wake_later', 'plan_propose', 'plan_update', 'maintenance_pack', 'maintenance_propose', 'maintenance_role_trial'] as const;
 
 /** The app's own question surfaces: they only show a card or a question to the user and write nothing, so a native
  *  permission prompt before them is noise (Cursor asked twice before every real question). Kept apart from
