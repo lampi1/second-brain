@@ -132,7 +132,9 @@ export function readHistory(file: string, opts: { cwd?: string; maxItems?: numbe
           const prev = t ? items[t.idx] : undefined;
           if (!t || prev?.kind !== 'tool') continue;
           const diff = diffFromResult(prev.name, t.input, m.toolUseResult, opts.cwd);
-          items[t.idx] = { ...prev, status: b.is_error === true ? 'error' : 'ok', output: resultText(b.content, 2000), ...(diff ? { diff } : {}) };
+          // masked again from the real input: a typing call's output can carry what it typed (ADR 0237)
+          items[t.idx] = maskTypedItem({ ...prev, input: trimInput(t.input, 2000), summary: toolSummary(prev.name, t.input, opts.cwd),
+            status: b.is_error === true ? 'error' : 'ok', output: resultText(b.content, 2000), ...(diff ? { diff } : {}) });
           tools.delete(s(b.tool_use_id));
         }
       }

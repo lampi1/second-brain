@@ -94,6 +94,16 @@ describe('typed text in the feed', () => {
     const h = readHistory(file);
     expect(h.items.some(i => i.kind === 'tool')).toBe(true);
     expect(JSON.stringify(h.items)).not.toContain(SECRET);
+    // its output too, once the result comes (a field page.ts never saw as a password field echoes the value)
+    const keys = `${[...SECRET].join(' ')} Enter`;
+    const call = { type: 'assistant', uuid: 'u2', timestamp: '2026-11-09T10:00:01Z', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'x2', name: 'mcp__second-brain__fill_form', input: { fields: [{ ref: 'e9', value: SECRET }] } }, { type: 'tool_use', id: 'x3', name: 'mcp__second-brain__key', input: { keys } }] } };
+    const result = { type: 'user', uuid: 'u3', timestamp: '2026-11-09T10:00:02Z', message: { role: 'user', content: [
+      { type: 'tool_result', tool_use_id: 'x2', content: `e9 input "pin" = "${SECRET}"` }, { type: 'tool_result', tool_use_id: 'x3', content: `Pressed ${keys}` }] } };
+    fs.appendFileSync(file, `${JSON.stringify(call)}\n${JSON.stringify(result)}\n`);
+    const again = readHistory(file);
+    expect(again.items.filter(i => i.kind === 'tool' && ['t-x2', 't-x3'].includes(i.id) && i.output)).toHaveLength(2);
+    expect(JSON.stringify(again.items)).not.toContain(SECRET);
+    expect(JSON.stringify(again.items)).not.toContain([...SECRET.slice(0, 4)].join(' '));
     fs.rmSync(dir, { recursive: true, force: true });
   });
 });
