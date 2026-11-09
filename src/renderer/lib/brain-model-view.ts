@@ -3,7 +3,7 @@
 // skill editor sees), filters, the links graph agent → skills → rules → memory, the "same / different" of an agent
 // choice and the number formats where a missing value is "no data yet", never zero. No React, no IPC: unit-tested in
 // test/unit/brain-ui/brain-model-view.test.ts.
-import type { BrainChange, BrainModelState, BrainSkill, MemoryFile } from '@shared/brain-model';
+import type { BrainChange, BrainModelState, BrainSkill } from '@shared/brain-model';
 import type { SkillCatalog, SkillEntry } from '@shared/contract';
 import { formatCost } from './format';
 import { locale } from '../i18n';
@@ -45,15 +45,6 @@ export function filterSkills(rows: SkillRow[], query: string, filter: SkillFilte
 
 /** Changes about given kinds (the Skill page shows skills and the agents' links; Regole its rules; Memoria memories). */
 export const changesOf = (changes: BrainChange[], kinds: BrainChange['kind'][]): BrainChange[] => changes.filter(c => kinds.includes(c.kind));
-
-/** Memory files in the page's three sections. */
-export function memorySections(memory: MemoryFile[]): { knowledge: MemoryFile[]; happened: MemoryFile[]; agents: MemoryFile[] } {
-  return {
-    knowledge: memory.filter(m => m.kind === 'knowledge'),
-    happened: memory.filter(m => m.kind === 'threads' || m.kind === 'journal' || m.kind === 'errors'),
-    agents: memory.filter(m => m.kind === 'agent' || m.kind === 'shared'),
-  };
-}
 
 export interface LinkNode { id: string; label: string; detail: string; kind: 'agent' | 'skill' | 'rule' | 'memory' }
 export interface LinkEdge { from: string; to: string }

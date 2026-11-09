@@ -2,7 +2,7 @@
 // date chip of a memory line, short week labels, skill verdict tones, the clean-install check and brain file paths.
 import { describe, expect, it } from 'vitest';
 import type { MemoryStats } from '../../../src/shared/brain-model';
-import { brainFile, lineParts, memoryEmpty, memoryFacts, shortDay, total, verdictTone } from '../../../src/renderer/lib/memory-view';
+import { brainFile, memoryEmpty, memoryFacts, shortDay, total, verdictTone } from '../../../src/renderer/lib/memory-view';
 
 const empty = (): MemoryStats => ({
   at: 0, weeks: ['2026-10-12', '2026-10-19'], totals: { files: 0, entries: 0, agents: 2, agentsWithMemory: 0, shared: 0, runs: 0 },
@@ -36,10 +36,6 @@ describe('memoryFacts', () => {
 });
 
 describe('small helpers', () => {
-  it('splits the date chip from a memory line', () => {
-    expect(lineParts('2026-10-07 · Il nodo scrive in **UTC**')).toEqual({ date: '2026-10-07', text: 'Il nodo scrive in **UTC**' });
-    expect(lineParts('Senza data')).toEqual({ date: null, text: 'Senza data' });
-  });
   it('formats weeks, tones, sums and brain paths', () => {
     expect(shortDay('2026-10-05', 'it-IT')).toBe('5 ott');
     expect(verdictTone('useful')).toBe('good');

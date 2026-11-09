@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { BrainModelState } from '../../../src/shared/brain-model';
 import type { SkillCatalog, SkillEntry } from '../../../src/shared/contract';
 vi.mock('../../../src/renderer/sb', () => ({ sb: { invoke: vi.fn(() => new Promise(() => {})), on: () => () => {} } }));
-import { changesOf, filterSkills, linkGraph, memorySections, noData, pct, skillRows, usd } from '../../../src/renderer/lib/brain-model-view';
+import { changesOf, filterSkills, linkGraph, noData, pct, skillRows, usd } from '../../../src/renderer/lib/brain-model-view';
 // the store's hook (useSyncExternalStore) has no server snapshot: the pages read a fixed state instead
 const store = vi.hoisted(() => ({ value: { state: null as unknown, error: null, busy: false } }));
 vi.mock('../../../src/renderer/store/brain-model', () => ({
@@ -76,8 +76,6 @@ describe('links and sections', () => {
     expect(g.edges).toContainEqual({ from: 'agent:a2', to: 'memory:memory/shared.md' });
     expect(g.edges).toContainEqual({ from: 'agent:a2', to: 'rule:code.md' });
     expect(linkGraph(null)).toEqual({ nodes: [], edges: [] });
-    const s = memorySections(state.memory);
-    expect([s.knowledge.length, s.happened.length, s.agents.length]).toEqual([1, 1, 2]);
     expect(changesOf(state.changes, ['skill']).map(c => c.id)).toEqual(['c2']);
   });
   it('says no data instead of zero', () => {

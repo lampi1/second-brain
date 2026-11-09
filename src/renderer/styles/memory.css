@@ -139,17 +139,10 @@ div.bm-page.agent-overview{display:block;min-width:0;padding:28px 32px 48px;font
 .mm-emptycard{display:grid;gap:10px}
 .mm-emptycard h3{margin:0;font-size:var(--fs-l)}
 
-/* ── memory cards: rendered lines, date chips, a visible "Apri il file" ── */
-.mm-card-title{all:unset;cursor:pointer;border-radius:4px}
-.mm-card-title:hover{color:var(--accent);text-decoration:underline;text-underline-offset:3px}
-.mm-card-title:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
-.mm-lines{margin:0;padding:8px 10px;list-style:none;display:grid;gap:6px;border:1px solid var(--border);border-left:2px solid var(--tone);border-radius:var(--r-s);background:color-mix(in srgb,var(--bg) 45%,transparent);font-size:var(--fs-s);line-height:1.5;color:var(--text-2)}
-.mm-lines li{display:flex;align-items:baseline;gap:8px;min-width:0;overflow-wrap:anywhere}
-.mm-lines time{flex:none;font-size:10.5px;font-weight:600;color:var(--text-3);padding:0 6px;border-radius:10px;background:var(--surface-3);border:1px solid var(--border);font-variant-numeric:tabular-nums}
+/* ── «Apri il file» and the recall chip ── */
 .mm-recall-chip{display:inline-flex;align-items:center;gap:4px;color:var(--violet);font-weight:600}
 .mm-open{display:inline-flex;align-items:center;gap:6px}
 .mm-open svg{width:13px;height:13px}
-.mm-again{margin-left:6px;font-size:10px;font-weight:700;color:var(--red);padding:0 6px;border-radius:10px;background:color-mix(in srgb,var(--red) 12%,transparent)}
 
 /* ── clean install ── */
 .mm-clean{margin:18px 0 0;padding:22px 24px;border:1px dashed var(--border-2);border-radius:var(--r-l);background:linear-gradient(160deg,var(--surface-2),var(--surface) 70%)}

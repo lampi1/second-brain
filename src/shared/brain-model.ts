@@ -79,7 +79,12 @@ export interface MemoryDoc {
   /** the file was longer: only its first part is here (the viewer opens it whole) */
   truncated?: boolean;
 }
-export interface MemoryDocs { root: string | null; docs: MemoryDoc[] }
+export interface MemoryDocs {
+  root: string | null;
+  docs: MemoryDoc[];
+  /** journal days left out (the oldest) when the 4 MB budget ran out */
+  omitted?: number;
+}
 
 export type MaintenanceJobId = 'repeated-task' | 'merge-skills' | 'corrections' | 'merge-memory' | 'migration' | 'upgrade';
 /** 'upgrade' (ADR 0116): the brain brought in line with this app version's layout (brainmodel/upgrade.ts) */

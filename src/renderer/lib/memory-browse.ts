@@ -24,14 +24,23 @@ export interface Hit { doc: MemoryDoc; lines: number; snippet: string }
 
 /** The documents on a shelf that hold every word of the query, each with its matching lines and a snippet (the first
  *  matching line, or the first line of text when there is no query). */
+/** Each document's lines and folded text, computed once per document (a keystroke must not fold 4 MB again). */
+const prepared = new WeakMap<MemoryDoc, { lines: string[]; all: string }>();
+function prepare(doc: MemoryDoc): { lines: string[]; all: string } {
+  let p = prepared.get(doc);
+  if (!p) {
+    p = { lines: doc.text.split(/\r?\n/).filter(l => l.trim() && !/^\s*(---|\|?\s*:?-{3,})/.test(l)), all: fold(`${doc.title} ${doc.group} ${doc.text}`) };
+    prepared.set(doc, p);
+  }
+  return p;
+}
 export function search(docs: readonly MemoryDoc[], shelf: Shelf, q: string): Hit[] {
   const ws = words(q);
   const out: Hit[] = [];
   for (const doc of docs) {
     if (shelf !== 'all' && shelfOf(doc.kind) !== shelf) continue;
-    const lines = doc.text.split(/\r?\n/).filter(l => l.trim() && !/^\s*(---|\|?\s*:?-{3,})/.test(l));
+    const { lines, all } = prepare(doc);
     if (!ws.length) { out.push({ doc, lines: 0, snippet: plainLine(lines.find(l => !/^#\s/.test(l)) ?? lines[0] ?? '').slice(0, 180) }); continue; }
-    const all = fold(`${doc.title} ${doc.group} ${doc.text}`);
     if (!ws.every(w => all.includes(w))) continue;
     const hits = lines.filter(l => ws.some(w => fold(l).includes(w)));
     const first = hits[0] ?? lines[0] ?? '';

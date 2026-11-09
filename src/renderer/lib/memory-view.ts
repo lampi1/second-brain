@@ -1,5 +1,5 @@
 // Pure view helpers of the Memoria page (MemoryStats from main, brainmodel/memory-stats.ts): the curious facts ("Lo
-// sapevi?") picked from the numbers, the date chip split from a memory line, the short week labels of the charts, the
+// sapevi?") picked from the numbers, the short week labels of the charts, the
 // tone of a skill verdict and the "is there anything at all" check behind the clean-install empty state. No React, no
 // IPC, no texts (the page turns each fact id into Italian with i18n): unit-tested in test/unit/brain-ui/memory-view.test.ts.
 import type { MemoryStats, SkillVerdict } from '@shared/brain-model';
@@ -30,12 +30,6 @@ export function memoryFacts(s: MemoryStats, max = 6): Fact[] {
   if (silent.length && silent.length < s.perAgent.length) out.push({ id: 'silent', params: { n: silent.length, names: silent.slice(0, 3).map(a => a.name).join(', ') } });
   if (s.busiestDay && s.busiestDay.n >= 3) out.push({ id: 'busiestDay', params: { date: s.busiestDay.date, n: s.busiestDay.n } });
   return out.slice(0, max);
-}
-
-/** A memory line as written ("2026-10-07 · text"): its date chip and the text after it. */
-export function lineParts(line: string): { date: string | null; text: string } {
-  const m = /^(\d{4}-\d{2}-\d{2})(?:[ T]\d{2}:\d{2})?\s*(?:[·|:–-]\s*)?/.exec(line);
-  return m ? { date: m[1]!, text: line.slice(m[0].length).trim() } : { date: null, text: line.trim() };
 }
 
 /** "2026-10-05" → "5 ott" (the locale's short day and month). */
