@@ -1,4 +1,11 @@
 # Known false positives of tools/guard/scan.mjs: `<path glob> <rule> [sha256:<hex>]`. A hash pins the exact content.
+# Stage 4 README captures: inspected frozen synthetic demo, central decisions and expanded outcomes.
+docs/screenshots/grindhouse.webp binary-media sha256:4ad892e4179ee03cba11888a10dcc6d2a89422431762ccb075338420f955f504
+docs/screenshots/orchestrator.webp binary-media sha256:5a7c75c9a5eb9212b36e9d5b1bf7e95929498e011c65dbccda200f6b57eee5b2
+docs/screenshots/browser.webp binary-media sha256:4682d65ed0f66c07898da84c9a02f182f5bf16a4d2651ad16c02af4a683b172f
+docs/screenshots/orchestrator-flash.webp binary-media sha256:65bfa9c7aa9de76aff6f95f64b35c9ef6dff433bf834982631963e34a497a7ed
+docs/screenshots/reactions.webp binary-media sha256:027c0eb59928e14354bd3cf9602f261e8f9ad44ff38004876ceff88830f6c402
+docs/screenshots/voice-talk.webp binary-media sha256:82b6736780d37d3a97f2c5b116b1a952b76a9c874b6871f7d95ad5ae6758d8d4
 # Installer's public application identifier and Windows API DLL import (not an address), reviewed in this exact file.
 build/windows.iss guid sha256:e8749175ed1c50de2478aa6e805a9c8398dd99e74039a1b9879f5ae728b32ff3
 build/windows.iss email sha256:e8749175ed1c50de2478aa6e805a9c8398dd99e74039a1b9879f5ae728b32ff3
