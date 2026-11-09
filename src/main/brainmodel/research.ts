@@ -559,9 +559,9 @@ export class ResearchService {
       forget++;
     }
     this.cleanupLeft = budget - bugs - forget;
-    const lint = this.lint();
-    const reverts = this.outcomes();
-    this.cleanupLeft = null;
+    let lint: number, reverts: number;
+    // the budget belongs to this pass only: a throw must not leave it for the hourly outcome check
+    try { lint = this.lint(); reverts = this.outcomes(); } finally { this.cleanupLeft = null; }
     if (bugs || forget || lint || reverts) this.d.changed();
     return { bugs, forget, lint, reverts };
   }

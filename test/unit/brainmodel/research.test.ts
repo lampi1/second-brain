@@ -322,6 +322,16 @@ describe('the lint, «riuscito se…» and revert cards (ADR 0194)', () => {
     await t.svc.approve(c.id);
     expect(t.applied).toEqual([c.id]);
   });
+  it('a pass that throws in its outcome check leaves no cleanup budget behind for the hourly check', () => {
+    const worse = (id: string) => ({ changeId: id, kind: 'rule' as const, summary: `Regola ${id}`, criterion: { metric: 'fewer-corrections' as const }, check: { at: NOW, before: 0.5, after: 1.5, nBefore: 4, nAfter: 5, verdict: 'worse' as const } });
+    const t = setup();
+    t.deps.brain.outcomes = () => { throw new Error('brain unreadable'); };
+    expect(() => t.svc.afterPass({ since: null, files: [], groups: [] })).toThrow('brain unreadable');
+    // the hourly check outside a pass is not ranked against a budget left over from the failed pass
+    t.deps.brain.outcomes = () => [worse('a'), worse('b')];
+    expect(t.svc.outcomes()).toBe(2);
+    expect(t.svc.cards().filter(c => c.kind === 'revert').every(c => c.rank === undefined)).toBe(true);
+  });
 });
 
 describe('ResearchStore', () => {
