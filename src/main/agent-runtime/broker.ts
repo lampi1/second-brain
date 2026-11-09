@@ -5,6 +5,7 @@ import type { PreToolCall } from '../chats/session';
 import type { CodexExecutionPolicy } from '../brain/adapters/codex-policy';
 import type { ListPrice } from '../chats/api';
 import { checkBaseUrl } from '../chats/api';
+import { errText, log } from '../log';
 
 export interface BrokerCalls {
   brief: { input: undefined; output: boolean };
@@ -44,8 +45,14 @@ export class RuntimeBroker {
     if (this.closed) throw new Error('Broker generation closed');
     const launch = this.launch;
     switch (request.method) {
-      case 'brief': return await launch.options.briefReady?.() ?? false;
-      case 'decide': return await launch.options.preToolUse?.decide(request.input) ?? null;
+      // A failing check on main is not a lost host: answered here, so the host never reads it as an uncertain broker
+      // (which stops the session). Same outcome as with no check: the question is shown, the call goes on (claude.ts).
+      case 'brief':
+        try { return await launch.options.briefReady?.() ?? false; }
+        catch (e) { log.error('chats', 'brief check failed; the question is shown', { chat: launch.options.chatId, cause: errText(e), hint: 'see briefReady in chats/manager-sessions.ts' }); return true; }
+      case 'decide':
+        try { return await launch.options.preToolUse?.decide(request.input) ?? null; }
+        catch (e) { log.error('chats', 'pre-tool check failed; the call goes on', { chat: launch.options.chatId, cause: errText(e), hint: 'see preToolUse.decide in chats/' }); return null; }
       case 'turnEnded': launch.options.preToolUse?.turnEnded(); return;
       case 'policy': return launch.kind === 'codex' ? await launch.options.executionPolicy?.() ?? null : null;
       case 'price': return launch.kind === 'api' ? await launch.options.pricesOf?.(request.input) ?? null : null;

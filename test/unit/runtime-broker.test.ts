@@ -48,3 +48,12 @@ it('refuses callbacks after the generation is closed', async () => {
   await expect(f.broker.call({ method: 'open', input: { id: 'r', body: '{}' } })).rejects.toThrow('closed');
   expect(f.fetchImpl).not.toHaveBeenCalled();
 });
+
+it('a brief or pre-tool check that throws on main is answered by the broker, never a failed broker call', async () => {
+  const launch = { kind: 'claude', options: { chatId: 'chat', cwd: '.', sessionId: 'abc12345',
+    briefReady: async () => { throw new Error('brief store unreadable'); },
+    preToolUse: { decide: async () => { throw new Error('budget file unreadable'); }, turnEnded: () => {} } } } as unknown as PreparedAdapter;
+  const broker = new RuntimeBroker(launch);
+  await expect(broker.call({ method: 'brief', input: undefined })).resolves.toBe(true); // shown, as with no brief check
+  await expect(broker.call({ method: 'decide', input: { tool: 'Bash', input: {} } })).resolves.toBeNull(); // goes on, as in-process
+});
