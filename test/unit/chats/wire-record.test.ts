@@ -93,4 +93,25 @@ describe('wire record', () => {
     expect(text).not.toContain(KEY);
     expect(text).not.toContain('parola');
   });
+
+  it('masks what an agent types into a page through the browser tools, in every engine\'s shape', () => {
+    const SECRET = ['Segreto', 'Synthetic', String(1)].join('-');   // built at run time: the guard flags a literal
+    const lines = [
+      { type: 'assistant', message: { role: 'assistant', content: [{ type: 'tool_use', id: 'x1', name: 'mcp__second-brain__type', input: { ref: 'e12', text: SECRET } }] } },
+      { jsonrpc: '2.0', method: 'session/update', params: { update: { sessionUpdate: 'tool_call', toolCallId: 't1', title: 'second-brain: fill_form', rawInput: { fields: [{ ref: 'e12', value: SECRET }] } } } },
+      { method: 'item/started', params: { item: { type: 'mcpToolCall', id: 'i1', server: 'second-brain', tool: 'key', arguments: { keys: [...SECRET].join(' ') } } } },
+    ];
+    for (const l of lines) {
+      const out = redactLine(JSON.stringify(l), { prompts: true, dir: 'engine>app' });
+      expect(out).not.toContain(SECRET);
+      expect(out).not.toContain([...SECRET.slice(0, 4)].join(' '));
+      expect(out).toContain('•••');
+    }
+    // ACP's later update names only the call: the recording remembers it was a typing call
+    const typing = new Map();
+    const first = { method: 'session/update', params: { update: { sessionUpdate: 'tool_call', toolCallId: 't2', title: 'second-brain: type', rawInput: {} } } };
+    const update = { method: 'session/update', params: { update: { sessionUpdate: 'tool_call_update', toolCallId: 't2', rawInput: { ref: 'e12', text: SECRET } } } };
+    redactLine(JSON.stringify(first), { prompts: true, dir: 'engine>app', typing });
+    expect(redactLine(JSON.stringify(update), { prompts: true, dir: 'engine>app', typing })).not.toContain(SECRET);
+  });
 });

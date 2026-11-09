@@ -13,6 +13,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { log } from '../log';
+import { maskArgs, typingTool, type Typing } from './typed-text';
 
 export type WireDir = 'app>engine' | 'engine>app';
 export interface WireEntry { ts: number; run: string; seq: number; dir: WireDir; line: string }
@@ -45,13 +46,31 @@ export function redactText(s: string): string {
 const isUserEcho = (o: Record<string, unknown>): boolean =>
   o.type === 'userMessage' || o.sessionUpdate === 'user_message_chunk' || o.role === 'user' || o.type === 'user';
 
+/** where each engine puts a tool call's arguments: Claude's tool_use input, can_use_tool input and hook tool_input,
+ *  ACP's rawInput, Codex's mcpToolCall arguments */
+const TOOL_INPUTS = ['input', 'rawInput', 'arguments', 'tool_input'] as const;
+const str = (x: unknown): string => (typeof x === 'string' ? x : '');
+
+/** A tool call of the app's browser that types into a page (type, fill_form, key) with what it types masked
+ *  (chats/typed-text.ts): a password typed by an agent never lands in a recording. ACP's later tool_call_update may
+ *  carry only the call id, so the kinds of the typing calls seen in this recording are kept in `typing` by id. */
+function maskTyping(o: Record<string, unknown>, typing?: Map<string, Typing>): Record<string, unknown> {
+  const name = str(o.name) || str(o.tool_name) || (str(o.server) && str(o.tool) ? `mcp__${str(o.server)}__${str(o.tool)}` : '');
+  const id = str(o.toolCallId);
+  const kind = typingTool(name, str(o.title)) || (id ? typing?.get(id) : undefined);
+  const inputKey = TOOL_INPUTS.find(k => o[k] && typeof o[k] === 'object');
+  if (!kind) return o;
+  if (id) typing?.set(id, kind);
+  return inputKey ? { ...o, [inputKey]: maskArgs(kind, o[inputKey]) } : o;
+}
+
 /** A parsed wire message, redacted: secret keys and values; prompt text unless kept, in every app>engine line and in
- *  what the engine echoes of the user's words. */
-export function redactValue(v: unknown, opts: { prompts: boolean; dir: WireDir }, key = '', user = false): unknown {
+ *  what the engine echoes of the user's words; what an agent types into a page through the browser tools. */
+export function redactValue(v: unknown, opts: { prompts: boolean; dir: WireDir; typing?: Map<string, Typing> }, key = '', user = false): unknown {
   if (typeof v === 'string') return redactText(v);
   if (Array.isArray(v)) return v.map(x => redactValue(x, opts, key, user)); // an array's items keep the array's key
   if (!v || typeof v !== 'object') return v;
-  const o = v as Record<string, unknown>;
+  const o = maskTyping(v as Record<string, unknown>, opts.typing);
   const inUser = o.type === 'tool_result' ? false : user || isUserEcho(o);
   const hidePrompt = !opts.prompts && (opts.dir === 'app>engine' || inUser);
   const out: Record<string, unknown> = {};
@@ -66,7 +85,7 @@ export function redactValue(v: unknown, opts: { prompts: boolean; dir: WireDir }
 }
 
 /** One line as it is written: JSON is parsed, redacted and written again; anything else is redacted as text. */
-export function redactLine(line: string, opts: { prompts: boolean; dir: WireDir }): string {
+export function redactLine(line: string, opts: { prompts: boolean; dir: WireDir; typing?: Map<string, Typing> }): string {
   try { return JSON.stringify(redactValue(JSON.parse(line), opts)); } catch { return redactText(line); }
 }
 
@@ -90,10 +109,11 @@ export function recordWire(p: Pick<ChildProcessWithoutNullStreams, 'stdin' | 'st
     return null;
   }
   const prompts = env.SB_WIRE_RECORD_PROMPTS === '1';
+  const typing = new Map<string, Typing>();   // ACP typing tool calls by id, for their later updates (maskTyping)
   let seq = 0;
   const put = (dirn: WireDir, line: string) => {
     if (!line.trim()) return;
-    const e: WireEntry = { ts: Date.now(), run, seq: seq++, dir: dirn, line: redactLine(line, { prompts, dir: dirn }) };
+    const e: WireEntry = { ts: Date.now(), run, seq: seq++, dir: dirn, line: redactLine(line, { prompts, dir: dirn, typing }) };
     try { fs.appendFileSync(file, `${JSON.stringify(e)}\n`); } catch { /* a full disk loses the recording, never the session */ }
   };
   const lines = (dirn: WireDir) => {
