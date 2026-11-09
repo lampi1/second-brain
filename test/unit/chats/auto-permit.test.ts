@@ -60,6 +60,12 @@ describe('autoPermit: file tools', () => {
 });
 
 describe('autoPermit: commands', () => {
+  it('lets a plain push to a named remote through (the owner, 2026-11-09, ADR 0238), never a forced or deleting one', () => {
+    for (const c of ['git push', 'git push origin main', 'git push -u origin feat/x', 'git push origin HEAD:main', 'git push --follow-tags origin v1.2']) expect(run(c), c).toBe('allow');
+    for (const c of ['git push --force origin main', 'git push origin +main', 'git push origin :old', 'git push --delete origin x']) expect(run(c), c).toBe('deny');
+    expect(run('git push origin main', { ceiling: 'plan' })).not.toBe('allow');
+  });
+
   it('lets local work through while the turn can be undone', () => {
     for (const c of ['npm test', 'npm run build', 'git add -A', 'git commit -m "fix: x"', 'mkdir dist && touch dist/a', 'rm src/a.ts', 'rm -rf build', 'git checkout -b feat/x', 'npx vitest run', 'npm run test:unit', 'npm install', 'npm i -D vitest @types/node']) {
       expect(run(c), c).toBe('allow');
@@ -90,7 +96,8 @@ describe('autoPermit: commands', () => {
   });
 
   it('asks for what leaves the machine, changes settings, or cannot be read', () => {
-    const cases = ['git push', 'git push origin main', 'gh pr create', 'az boards query', 'ssh host ls', 'curl https://example.com', 'npm publish',
+    const cases = ['git push https://x.example/r.git main', 'git push git@host:r main', 'git push origin main --no-verify', 'git push --receive-pack=x origin',
+      'git push --all origin', 'git push ../other main', 'git push origin main:@{-1}', 'gh pr create', 'az boards query', 'ssh host ls', 'curl https://example.com', 'npm publish',
       'docker push img', 'psql -h db', 'git config core.hooksPath x', 'git remote add up https://x', 'bash -c "rm x"', 'eval "$X"', 'echo $(whoami)',
       'node -e "1"', 'xargs rm', 'find . -delete', 'kill -9 1234', `cp src/a.ts ${path.join(root, 'elsewhere')}`, 'cat ~/.ssh/id_rsa', 'echo x > ../out',
       `echo x > ${path.join(root, 'elsewhere', 'f')}`, 'cp x .git/hooks/pre-commit', 'echo "unclosed', 'rm $DIR', '',

@@ -1,6 +1,6 @@
 // The app answers a chat's permission requests itself (ADR 0103, owner's explicit OK 2026-10-21): normal work passes
-// without a popup, destructive commands are refused with their reason, and only what leaves the machine, changes
-// settings or hooks, or cannot be read with confidence still reaches the user. "Normal work" = reading inside the chat's
+// without a popup, destructive commands are refused with their reason, and only what leaves the machine (except a plain
+// git push to a named remote, ADR 0238), changes settings or hooks, or cannot be read with confidence still reaches the user. "Normal work" = reading inside the chat's
 // folder, and, while the turn has a checkpoint («Annulla l'ultimo turno» can put the files back), editing files and
 // running local commands inside it. A role the user narrowed to «Chiede conferma» or «Solo piano» is always asked (only
 // the refusals apply); «Accetta modifiche» lets reads and edits through, commands only when they read.
@@ -218,12 +218,14 @@ const NPM_LOCAL = ['test', 't', 'run', 'run-script', 'install', 'i', 'ci', 'add'
 const SUBCOMMANDS: Record<string, ReadonlySet<string>> = {
   npm: new Set(NPM_LOCAL), pnpm: new Set(NPM_LOCAL), yarn: new Set(NPM_LOCAL), bun: new Set(NPM_LOCAL),
   git: new Set(['add', 'commit', 'checkout', 'switch', 'restore', 'stash', 'merge', 'rebase', 'cherry-pick', 'revert', 'fetch', 'pull', 'tag', 'branch',
-    'mv', 'rm', 'init', 'reset', 'status', 'log', 'diff', 'show', 'rev-parse', 'ls-files', 'blame', 'describe', 'shortlog', 'grep', 'worktree', 'apply']),
+    'mv', 'rm', 'init', 'reset', 'status', 'log', 'diff', 'show', 'rev-parse', 'ls-files', 'blame', 'describe', 'shortlog', 'grep', 'worktree', 'apply', 'push']),
   cargo: new Set(['build', 'test', 'check', 'fmt', 'clippy', 'run', 'doc', 'clean']),
   go: new Set(['build', 'test', 'vet', 'fmt', 'run']),
   dotnet: new Set(['build', 'test', 'restore', 'format', 'run', 'clean']),
 };
 /** git options that run a program or change git's config for one call (`-c alias.x=!cmd`, `--upload-pack`, rebase `-x`). */
+/** the options of a plain push the app lets through by itself (localWork) */
+const PUSH_OPTIONS: ReadonlySet<string> = new Set(['-u', '--set-upstream', '--follow-tags', '--tags', '-q', '--quiet', '-v', '--verbose', '--porcelain', '-n', '--dry-run']);
 const GIT_RUNS = /^(-c|--config-env|--exec-path|--upload-pack|--receive-pack|--exec|--git-dir|--work-tree)/;
 /** short options that take a program, also joined to it (`-xtouch x`): rebase -x, fetch/pull/clone -u */
 const GIT_RUNS_SHORT: Record<string, RegExp> = { rebase: /^-[a-z]*x/i, fetch: /^-[a-z]*u/i, pull: /^-[a-z]*u/i, clone: /^-[a-z]*u/i };
@@ -244,7 +246,14 @@ function localWork(name: string, args: Word[], keys: string[], cwd: string): boo
     if (!subs!.has(sub) || keys.some(k => GIT_RUNS.test(k) || k.includes('ext::') || (short && !k.startsWith('--') && short.test(k)))) return false;
     // fetch/pull only from a named remote: a host:path or a URL is another source
     if ((sub === 'fetch' || sub === 'pull') && keys.slice(i + 1).some(k => !k.startsWith('-') && /[:@]/.test(k))) return false;
-    // a stash or a branch that is only listed, created or switched to; `git remote`, `git config`, `git push` are not here
+    // a plain push to a named remote (the owner, 2026-11-09, ADR 0238: «Sì, push normale libero»): no URL or host:path,
+    // no refspec that deletes or forces (refused above), no hook skipping; only these options
+    if (sub === 'push') {
+      const rest = keys.slice(i + 1), words = rest.filter(k => !k.startsWith('-'));
+      return rest.every(k => !k.startsWith('-') || PUSH_OPTIONS.has(k)) && (!words.length || /^[\w.-]+$/.test(words[0]!) && !/^\.\.?$/.test(words[0]!))
+        && words.slice(1).every(k => /^[\w./-]+(:[\w./-]+)?$/.test(k) && !k.includes('..'));   // branch or src:dst refspecs
+    }
+    // a stash or a branch that is only listed, created or switched to; `git remote`, `git config` are not here
     return true;
   }
   if (subs && PKG.has(name) && ['npm', 'pnpm', 'yarn', 'bun'].includes(name)) {
