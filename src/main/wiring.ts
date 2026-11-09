@@ -54,6 +54,9 @@ import { EngineSweeper } from './chats/sweep';
 import { ChatManager, workBehind } from './chats/manager';
 import type { BrainService, ChatService } from './services';
 import { SkillsService } from './skills/service';
+import { SkillLibrary } from './skills/library';
+import { ensureTools, isProduct } from './rules/tools';
+import { appSkillsIn } from './agents/pack/shared-skills';
 import { BrainModelService } from './brainmodel/service';
 import { issuesUrlOf, ResearchService } from './brainmodel/research';
 import { issueSnapshot } from './brainmodel/research-deep';
@@ -788,6 +791,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // its cached state (ADR 0186) is read again after whatever the Brain pages refresh on
   ctx.emitter.tap(ch => { if (ch === 'brainmodel:changed' || ch === 'agents:changed') brainModel.invalidate(); });
   brainModelRef.current = brainModel;
+  // the skill library (ADR 0241): the Memoria «Skill» tab and the Orchestrator's skill tools; the app's skills are the
+  // rendered copy a brain the app made loads at launch (agents/pack/wiring.ts sharedSkills)
+  const skillLibrary = new SkillLibrary({ root: () => brain.info().brainRoot, home: process.env.SB_SKILLS_HOME || os.homedir(),
+    appSkills: () => { const r = brain.info().brainRoot; if (!r || !isProduct(r)) return null; try { return appSkillsIn(ensureTools(r)); } catch { return null; } },
+    changes: () => brainModel.log, undo: id => { brainModel.rollback(id); }, roles: () => agents.list().profiles, link: (s, r, on) => { brainModel.link(s, r, on); },
+    runs: () => manager.runs.list(), changed: () => ctx.emitter.emit('brainmodel:changed', undefined), unify: !process.env.SB_TEST });
+  appDeps.skillLibrary = skillLibrary;
   // the one-click maintenance (ADR 0132, 0153): the free cleanup, the invisible research chat, its cards in Proposte
   const issuesUrl = issuesUrlOf(app.getAppPath()), appIssuesUrl = () => issuesUrl;
   const research = new ResearchService({ guideRepo: () => repoRootOf(path.dirname(fileURLToPath(import.meta.url))), userData: ctx.userData, lang: uiLang, root: () => brain.info().brainRoot, appVersion: () => app.getVersion(), issuesUrl: appIssuesUrl, appDir: () => app.getAppPath(),
@@ -844,7 +854,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
     phonePort: createPhonePort(manager, ctx.emitter),
     worktreePool,
-    chats, browser, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
+    chats, browser, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, skillLibrary, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

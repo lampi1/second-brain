@@ -1,15 +1,15 @@
-// E2E of the Skill page (ADR 0018, ADR 0077) on the real app with a fixture home (SB_SKILLS_HOME: two Claude skills,
-// CLI agents that the page no longer lists, and a settings.json whose PreToolUse hook for Write refuses any content
-// with "VIETATO"): skill cards only, with "Non usata", search and the used/unused filter; a new skill from the form,
-// saved to disk; the markdown view checked live; the hook's refusal shown with its own message; an unsaved edit kept
-// across pages; delete after a confirmation. Then the "/" list of a chat input (fake Claude CLI reporting its
+// E2E of the Skill page (ADR 0018, ADR 0077, ADR 0241) on the real app with a fixture home (SB_SKILLS_HOME: two
+// Claude skills, CLI agents that the page does not list, and a settings.json whose PreToolUse hook for Write refuses any
+// content with "VIETATO"): the skill list with "mai usata", search and the usage filter; a new skill from the form,
+// saved to ~/.claude/skills (no brain); the file editor refusing a broken SKILL.md and showing the hook's own message;
+// the skill's history; delete after a confirmation. Then the "/" list of a chat input (fake Claude CLI reporting its
 // commands): filtered, Tab completes. Screenshots dark and light.
 import { expect, test } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { ChatSummary } from '../../src/shared/contract';
-import { closeSetup, expandChats, goPage, launch, setSize, shot } from './helpers';
+import { choose, closeSetup, expandChats, goPage, launch, setSize, shot } from './helpers';
 
 const FAKE = path.resolve(import.meta.dirname, '..', 'fixtures', 'fake-claude.mjs');
 const md = (name: string, desc: string, body = 'Istruzioni.') => `---\nname: ${name}\ndescription: ${desc}\n---\n\n${body}\n`;
@@ -31,7 +31,7 @@ function fixtureHome(): string {
   return home;
 }
 
-test('Skill: skill cards only, create from the form, live check, hook refusal, unsaved edit kept, delete; "/" in a chat input', async () => {
+test('Skill: list and filters, create from the form, editor checks and hook refusal, history, delete; "/" in a chat input', async () => {
   test.setTimeout(120_000); // one long journey: two app pages and a chat
   const home = fixtureHome();
   const cfg = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-e2e-claude-'));
@@ -44,68 +44,55 @@ test('Skill: skill cards only, create from the form, live check, hook refusal, u
     await goPage(page, 'skill'); // Memoria → Skill (ADR 0122)
     const pg = page.getByTestId('skills-page');
     await expect(pg.getByTestId('bm-skill-spiega')).toContainText('Spiega un argomento');
-    await expect(pg.getByTestId('bm-skill-spiega').getByTestId('bm-unused')).toHaveText('Non usata');
+    await expect(pg.getByTestId('bm-skill-spiega')).toHaveAttribute('data-unused', 'true');
+    await expect(pg.getByTestId('bm-skill-spiega')).toContainText('mai usata');
     await expect(pg.getByTestId('bm-skill-rivedi-pr')).toBeVisible();
     // two concepts only: the CLI agents are not skills, they are not listed here
     await expect(pg.getByTestId('bm-skill-tester')).toHaveCount(0);
     await expect(pg.getByTestId('bm-skill-revisore')).toHaveCount(0);
-    await expect(pg.getByTestId('sk-new-agent')).toHaveCount(0);
     // filters and search
-    await pg.getByRole('group', { name: 'Mostra' }).getByRole('button', { name: 'Usate', exact: true }).click();
+    await choose(pg.getByTestId('sl-usage'), 'used');
     await expect(pg.getByTestId('bm-skill-spiega')).toHaveCount(0);
     await expect(pg.getByTestId('sk-empty')).toBeVisible();
-    await pg.getByRole('group', { name: 'Mostra' }).getByRole('button', { name: 'Tutte' }).click();
+    await choose(pg.getByTestId('sl-usage'), 'all');
     await pg.getByTestId('sk-search').fill('pull request');
     await expect(pg.locator('[data-testid^="bm-skill-"]:not([data-testid="bm-skill-grid"])')).toHaveCount(1);
     await pg.getByTestId('sk-search').fill('');
 
-    // a new skill from the form: errors until name and description are there, then "Crea" writes it
+    // a new skill from the form: "Crea skill" waits for a name and a description, then writes SKILL.md
     await pg.getByTestId('sk-new-skill').click();
-    await expect(pg.getByTestId('sk-issues')).toContainText('Manca il nome');
-    await expect(pg.getByTestId('sk-save')).toBeDisabled();
-    await pg.getByTestId('sk-name').fill('Riassunto Giornata');
-    await expect(pg.getByTestId('sk-issues')).toContainText('solo lettere minuscole');
-    await pg.getByTestId('sk-name').fill('riassunto-giornata');
-    await pg.getByTestId('sk-desc').fill('Riassume la giornata in cinque righe: fatto, aperto, bloccato.');
-    await pg.getByTestId('sk-body').fill('Leggi le chat di oggi e scrivi cinque righe.');
-    await expect(pg.getByTestId('sk-issues-ok')).toBeVisible();
+    await expect(pg.getByTestId('sl-create-go')).toBeDisabled();
+    await pg.getByTestId('sl-create-name').fill('Riassunto Giornata');
+    await pg.getByTestId('sl-create-desc').fill('Riassume la giornata in cinque righe: fatto, aperto, bloccato.');
+    await expect(pg.getByTestId('sl-create-go')).toBeEnabled();
     await shot(page, 'skills-new-dark');
-    await pg.getByTestId('sk-save').click();
+    await pg.getByTestId('sl-create-go').click();
     const file = path.join(home, '.claude', 'skills', 'riassunto-giornata', 'SKILL.md');
     // each save runs the fixture's Write hook first (a shell, then node): about 2 s on a quiet box, past 5 s at 100% CPU
     // (main red, 2026-10-16); the product waits up to the hook's own timeout, 20 s here
     await expect.poll(() => fs.existsSync(file), { timeout: 30_000 }).toBe(true);
-    expect(fs.readFileSync(file, 'utf8')).toBe('---\nname: riassunto-giornata\ndescription: "Riassume la giornata in cinque righe: fatto, aperto, bloccato."\n---\n\nLeggi le chat di oggi e scrivi cinque righe.');
+    expect(fs.readFileSync(file, 'utf8')).toContain('---\nname: riassunto-giornata\ndescription: "Riassume la giornata in cinque righe: fatto, aperto, bloccato."\n---\n');
     await expect(pg.getByTestId('bm-skill-riassunto-giornata')).toBeVisible();
-    await expect(pg.getByTestId('sk-path')).toContainText('riassunto-giornata');
+    await expect(pg.getByTestId('sk-ed-name')).toContainText('riassunto-giornata');
 
-    // markdown view: the same text, checked live
-    await pg.getByRole('group', { name: 'Vista dell’editor' }).getByRole('button', { name: 'Markdown' }).click();
+    // the file editor (the new skill opens on its files): a broken SKILL.md is refused with the reason
     const raw = pg.getByTestId('sk-md');
     await expect(raw).toHaveValue(/name: riassunto-giornata/);
     await raw.fill('---\nname: riassunto-giornata\n');
-    await expect(pg.getByTestId('sk-issues')).toContainText('non è chiusa');
-    await expect(pg.getByTestId('sk-save')).toBeDisabled();
+    await pg.getByTestId('sk-save').click();
+    await expect(pg.getByTestId('sk-refused')).toContainText('SKILL.md ha errori');
     // the user's hook refuses: its own message is shown, the file stays as it was
     await raw.fill(md('riassunto-giornata', 'Riassume la giornata. VIETATO dal test.'));
     await pg.getByTestId('sk-save').click();
-    await expect(pg.getByTestId('sk-refused')).toContainText('Rifiutato dall’hook', { timeout: 30_000 }); // the hook runs first
-    await expect(pg.getByTestId('sk-refused')).toContainText('Contesto fisso oltre il budget');
+    await expect(pg.getByTestId('sk-refused')).toContainText('Contesto fisso oltre il budget', { timeout: 30_000 }); // the hook runs first
     expect(fs.readFileSync(file, 'utf8')).not.toContain('VIETATO');
     await shot(page, 'skills-hook-refused-dark');
     await pg.getByTestId('sk-revert').click();
-    await expect(pg.getByTestId('sk-refused')).toHaveCount(0);
+    await expect(raw).toHaveValue(/Riassume la giornata in cinque righe/);
 
-    // "Modifica" on a card opens it; leaving the page (Esc) and coming back keeps the unsaved edit
-    await pg.getByTestId('bm-edit-spiega').click();
-    await pg.getByRole('group', { name: 'Vista dell’editor' }).getByRole('button', { name: 'Modulo' }).click();
-    await expect(pg.getByTestId('sk-name')).toHaveValue('spiega');
-    await pg.getByTestId('sk-desc').fill('Bozza non salvata.');
-    await page.keyboard.press('Escape');
-    await expect(page.getByTestId('skills-page')).toHaveCount(0);
-    await goPage(page, 'skill'); // Memoria → Skill (ADR 0122)
-    await expect(pg.getByTestId('sk-desc')).toHaveValue('Bozza non salvata.');
-    await pg.getByTestId('sk-revert').click();
+    // its history: the creation, with who and what
+    await pg.getByTestId('sl-tab-history').click();
+    await expect(pg.getByTestId('sl-history').locator('[data-testid^="sl-version-"]').first()).toContainText('creata');
 
     // light theme
     await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
@@ -116,7 +103,6 @@ test('Skill: skill cards only, create from the form, live check, hook refusal, u
     await page.emulateMedia({ colorScheme: 'dark' });
 
     // delete after a confirmation
-    await pg.getByTestId('bm-edit-riassunto-giornata').click();
     await pg.getByTestId('sk-delete').click();
     await page.getByTestId('confirm-ok').click();
     await expect(pg.getByTestId('bm-skill-riassunto-giornata')).toHaveCount(0);

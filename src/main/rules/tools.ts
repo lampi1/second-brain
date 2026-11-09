@@ -15,10 +15,11 @@ import { read } from './storage';
 /** Template code the app owns for a product brain; everything else in the template is personal content. */
 export const isTemplateCode = (rel: string): boolean =>
   /^(?:ops\/tools\/brain-site\/|ops\/tools\/[^/]+\.m?js$|harness\/(?:claude|cursor|compare)\/[^/]+\.m?js$|\.claude\/hooks\/[^/]+\.mjs$)/.test(rel);
-/** Template text a fresh brain gets from this copy, never in its folder: the shipped skills (the `{{BRAIN_NAME}}`
+/** Template text a fresh brain gets from this copy, never in its folder: the shipped skills, each a whole package
+ * (SKILL.md, scripts/, references/, assets/: #361; the `{{BRAIN_NAME}}`
  * skill is only the entry from ~/.claude, which the app never wires), output styles, the model and price table. The
  * template ships no sub-agents: the know-how is skills, loaded by the roles (issue #89). Topic rules (any template .md with `when:` frontmatter) are found by content (appFiles). */
-const APP_TEXT = /^(?:harness\/claude\/skills\/(?!\{\{)[^/]+\/SKILL\.md|harness\/claude\/output-styles\/[^/]+\.md|harness\/models\.json)$/;
+const APP_TEXT = /^(?:harness\/claude\/skills\/(?!\{\{)[a-z0-9-]+\/(?:SKILL\.md|(?:scripts|references|assets)\/[\w./-]+)|harness\/claude\/output-styles\/[^/]+\.md|harness\/models\.json)$/;
 const TOPIC = /^---\r?\nwhen: /;
 /** Where the Claude plugin finds the app's own parts inside the copy (claude-plugin.ts), as plugin folders. */
 export const APP_PLUGIN_PARTS: readonly { from: string; to: string }[] = [

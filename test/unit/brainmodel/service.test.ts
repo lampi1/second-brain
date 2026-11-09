@@ -40,7 +40,7 @@ function world(opts: { demo?: boolean; upgradeAsk?: UpgradeAsk; scripts?: { file
   const shipped = [...new Set(catalog.list().profiles.flatMap(p => p.skills))].map(name => ({ name, folder: path.join(base, 'app-skills', name) }));
   for (const s of shipped) put(s.folder, 'SKILL.md', `---\nname: ${s.name}\ndescription: Fixture skill.\n---\nRead the fixture.\n`);
   const flows = new AgentPackFlows({ catalog, brainRoot: () => brain, tempRoot: base, runtimeRoot: path.join(base, 'runtime'),
-    sharedSkills: () => { const dir = path.join(brain, '.claude', 'skills'); try { return [...fs.readdirSync(dir).filter(name => fs.existsSync(path.join(dir, name, 'SKILL.md'))).map(name => ({ name, folder: path.join(dir, name) })), ...shipped]; } catch { return shipped; } } });
+    sharedSkills: () => { const dirs = [path.join(brain, '.agents', 'skills'), path.join(brain, '.claude', 'skills')]; try { return [...dirs.flatMap(dir => { try { return fs.readdirSync(dir).filter(name => fs.existsSync(path.join(dir, name, 'SKILL.md'))).map(name => ({ name, folder: path.join(dir, name) })); } catch { return []; } }), ...shipped]; } catch { return shipped; } } });
   catalog.onKnowhowChange((p, previous) => flows.publishCurrent(p, previous));
   const learning = new AgentPackLearning(flows, data);
   let emitted = 0;
@@ -50,7 +50,7 @@ function world(opts: { demo?: boolean; upgradeAsk?: UpgradeAsk; scripts?: { file
   const agent = (id: string) => catalog.list().profiles.find(p => p.id === id)!;
   return { base, brain, data, catalog, flows, learning, service, agent, emitted: () => emitted };
 }
-const snapshot = (root: string) => { const out: Record<string, string> = {}; const walk = (d: string) => { for (const e of fs.readdirSync(path.join(root, d), { withFileTypes: true })) { const rel = d ? `${d}/${e.name}` : e.name; if (e.isDirectory()) { if (!rel.startsWith('.claude') && !rel.startsWith('agents')) walk(rel); } else if (rel !== 'brain.json') out[rel] = fs.readFileSync(path.join(root, rel), 'utf8'); } }; walk(''); return out; };
+const snapshot = (root: string) => { const out: Record<string, string> = {}; const walk = (d: string) => { for (const e of fs.readdirSync(path.join(root, d), { withFileTypes: true })) { const rel = d ? `${d}/${e.name}` : e.name; if (e.isDirectory()) { if (!rel.startsWith('.claude') && !rel.startsWith('.agents') && !rel.startsWith('agents')) walk(rel); } else if (rel !== 'brain.json') out[rel] = fs.readFileSync(path.join(root, rel), 'utf8'); } }; walk(''); return out; };
 
 describe('the pages\' state cache (ADR 0186)', () => {
   it('two reads without a change compute once; a change, a new run or a verdict computes again; a failure is not kept', async () => {
@@ -89,12 +89,12 @@ describe('one-time migration', () => {
     expect(report.items.every(i => i.status === 'moved')).toBe(true);
     // the content is kept, with where it came from
     const release = report.items.find(i => i.title === 'Pubblicare una versione in test')!;
-    const text = fs.readFileSync(path.join(w.brain, '.claude/skills', release.skill!, 'SKILL.md'), 'utf8');
+    const text = fs.readFileSync(path.join(w.brain, '.agents/skills', release.skill!, 'SKILL.md'), 'utf8');
     expect(text).toMatch(/^---\nname: pubblicare-una-versione-in-test\ndescription: /);
     expect(text).toContain('Spostata qui da `');
     // the fake credential stays only in the original
     const query = report.items.find(i => i.title === 'Query in sola lettura su produzione')!;
-    expect(fs.readFileSync(path.join(w.brain, '.claude/skills', query.skill!, 'SKILL.md'), 'utf8')).not.toMatch(/demo-non-reale/);
+    expect(fs.readFileSync(path.join(w.brain, '.agents/skills', query.skill!, 'SKILL.md'), 'utf8')).not.toMatch(/demo-non-reale/);
     expect(query.note).toMatch(/nascost/);
     expect(snapshot(w.brain)).toEqual(before); // originals untouched
     // no role is changed: a role loads a skill when its launch gives it (the Orchestrator passes them)
@@ -112,11 +112,11 @@ describe('one-time migration', () => {
     expect(again.migration!.items.every(i => i.status === 'moved')).toBe(true); // the merged report keeps "moved"
     const skillChange = again.changes.find(c => c.job === 'migration' && c.kind === 'skill')!;
     const undone = w.service.rollback(skillChange.id);
-    expect(fs.existsSync(path.join(w.brain, '.claude/skills', skillChange.target, 'SKILL.md'))).toBe(false);
+    expect(fs.existsSync(path.join(w.brain, '.agents/skills', skillChange.target, 'SKILL.md'))).toBe(false);
     expect(undone.changes.find(c => c.id === skillChange.id)).toMatchObject({ canRollback: false });
     expect(() => w.service.rollback(skillChange.id)).toThrow(/non si può più annullare/);
     await w.service.maintain('migration');
-    expect(fs.existsSync(path.join(w.brain, '.claude/skills', skillChange.target, 'SKILL.md'))).toBe(false);
+    expect(fs.existsSync(path.join(w.brain, '.agents/skills', skillChange.target, 'SKILL.md'))).toBe(false);
   });
   it('keeps equally named sections in different groups separate, and refuses ambiguous legacy associations', async () => {
     const w = world();
@@ -570,7 +570,7 @@ describe('applyResearch (ADR 0132)', () => {
   it('a skill for a role is one change: «Annulla» takes back the skill and the link together', () => {
     const w = world();
     const id = w.service.applyResearch(card({ change: { target: 'skill', role: DEV, name: 'note-rilascio', text: 'Titoli per area.' } }));
-    const file = path.join(w.brain, '.claude/skills/note-rilascio/SKILL.md');
+    const file = path.join(w.brain, '.agents/skills/note-rilascio/SKILL.md');
     expect(fs.readFileSync(file, 'utf8')).toContain('Titoli per area.');
     expect(w.agent(DEV).knowhow?.linked).toContain('note-rilascio');
     w.service.rollback(id);
@@ -587,11 +587,11 @@ describe('applyResearch (ADR 0132)', () => {
     expect(() => v.service.applyResearch(card({ kind: 'rule', change: { target: 'rule', text: 'x' } }))).toThrow(/non si può leggere/);
     expect(fs.readFileSync(real, 'utf8')).toBe('# mine\n');
   });
-  it('a new skill is never written through a .claude/skills linked outside the brain', () => {
+  it('a new skill is never written through a .agents/skills linked outside the brain', () => {
     const w = world();
     const outside = path.join(w.base, 'other-skills'); fs.mkdirSync(outside, { recursive: true });
-    fs.mkdirSync(path.join(w.brain, '.claude'), { recursive: true });
-    fs.symlinkSync(outside, path.join(w.brain, '.claude/skills'), 'dir');
+    fs.mkdirSync(path.join(w.brain, '.agents'), { recursive: true });
+    fs.symlinkSync(outside, path.join(w.brain, '.agents/skills'), 'dir');
     expect(() => w.service.applyResearch(card({ change: { target: 'skill', name: 'fuori', text: 'passi' } }))).toThrow(/collegamento fuori dal brain/);
     expect(fs.readdirSync(outside)).toEqual([]);
   });

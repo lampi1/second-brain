@@ -27,6 +27,8 @@ export const PLUGIN_NAME = 'second-brain';
 const HOOKS_LAYOUT = 'hooks:in-process-v1';
 /** what is copied from each domain's .claude folder into the plugin, and as which plugin folder */
 const PARTS: readonly { from: string; to: string }[] = [
+  // the brain's one copy of its skills (#361, skills/layout.ts); .claude/skills links to it, or is an older brain's
+  { from: '.agents/skills', to: 'skills' },
   { from: '.claude/skills', to: 'skills' },
   { from: '.claude/agents', to: 'agents' },
   { from: '.claude/output-styles', to: 'output-styles' },

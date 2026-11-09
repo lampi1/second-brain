@@ -78,7 +78,7 @@ describe('isCandidateFinding / planCandidate', () => {
     expect(byRel['rules/lessons.md']!.after).toContain('Staging is stg-eu.');
     expect(byRel['rules/lessons.md']!.after).toContain('Run the tests before reporting done.');
     expect(byRel['.claude/skills/deploy-notes/SKILL.md']!.after).toContain('## Dalla manutenzione');
-    expect(byRel['.claude/skills/release-checklist/SKILL.md']!.before).toBeNull();
+    expect(byRel['.agents/skills/release-checklist/SKILL.md']!.before).toBeNull();
     expect(byRel['rules/old-proxy.md']!.after).toBeNull();
     expect(snapshot(root)).toEqual(before);
     const checks = candidateChecks(plan.files, input.rules, 'it');

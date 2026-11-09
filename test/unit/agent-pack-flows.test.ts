@@ -44,7 +44,8 @@ it('packages the shipped defaults for all six real profiles, with no unrelated d
   const packs = new AgentPackFlows({ catalog, brainRoot: () => brain, tempRoot: root, sharedSkills: () => inventory });
   for (const id of ROLE_IDS) {
     const pack = packs.runtime(id);
-    expect(pack.skills).toEqual([id, ...ROLE_DEFAULTS[id].skills]);
+    // the Orchestrator can call every skill from its chat (#361): its defaults first, then all the others
+    expect(pack.skills).toEqual(id === 'orchestrator' ? [...new Set([id, ...ROLE_DEFAULTS[id].skills, ...inventory.map(s => s.name)])] : [id, ...ROLE_DEFAULTS[id].skills]);
     for (const skill of ROLE_DEFAULTS[id].skills) {
       expect(fs.readFileSync(path.join(pack.skillRoot, skill, 'SKILL.md'), 'utf8')).toContain('name: ' + skill);
     }
@@ -53,6 +54,17 @@ it('packages the shipped defaults for all six real profiles, with no unrelated d
 });
 
 describe('role know-how at launch', () => {
+  it('a skill is a whole package: its binary assets come along; the Orchestrator gets every skill (#361)', () => {
+    const f = setup();
+    const shared = path.join(path.dirname(f.flows.deps.sharedSkills!()[0]!.folder), 'reviewer');
+    fs.mkdirSync(path.join(shared, 'assets'), { recursive: true });
+    fs.writeFileSync(path.join(shared, 'assets', 'logo.png'), Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0xff, 0xfe]));
+    const role = f.flows.runtime('sentinel', ['reviewer']);
+    expect(fs.readFileSync(path.join(role.skillRoot, 'reviewer/assets/logo.png'))).toEqual(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0, 0xff, 0xfe]));
+    expect(role.instructions).toContain('${CLAUDE_SKILL_DIR}');
+    expect(f.flows.runtime('sentinel').skills).not.toContain('reviewer');
+    expect(f.flows.runtime('orchestrator').skills).toContain('reviewer');
+  });
   it('builds a hook-free native skill package with the requested skills and names their files', () => {
     const f = setup();
     expect(() => f.flows.runtime('sentinel', ['missing-skill'])).toThrow(/missing-skill/);

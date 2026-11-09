@@ -91,7 +91,8 @@ describe('claude plugin', () => {
     expect(fs.existsSync(path.join(dir, 'skills', 'deploy', 'SKILL.md'))).toBe(true);
     expect(fs.existsSync(path.join(dir, 'agents', 'scout.md'))).toBe(true);
     expect(fs.existsSync(path.join(dir, 'output-styles', 'breve.md'))).toBe(true);
-    expect(fs.existsSync(path.join(dir, 'skills', 'solo-codex'))).toBe(false);
+    // .agents/skills is the brain's one copy of its skills (#361): Claude gets them too
+    expect(fs.existsSync(path.join(dir, 'skills', 'solo-codex'))).toBe(true);
     expect(JSON.parse(fs.readFileSync(path.join(dir, 'hooks', 'hooks.json'), 'utf8')).hooks.Stop[0].hooks[0].command).toBe(`node ${fwd(b.personal)}/hook.mjs`);
     expect(fs.readFileSync(r.rulesFile!, 'utf8')).toContain('Regole del lavoro');
   });

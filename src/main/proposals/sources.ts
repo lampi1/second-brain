@@ -281,7 +281,7 @@ function researchContent(x: ResearchProposal, opensIssue: boolean): string {
   // every card carries an issue draft now: only a card that opens it shows it (forget, lint and revert show their own)
   if (opensIssue && x.issue) return x.issue.body;
   if (x.change) return x.change.target === 'skill' ? x.change.text : `> ${x.change.text.replace(/\n/g, '\n> ')}`;
-  if (x.forget) return `\`${x.forget.what === 'rule' ? x.forget.name : `.claude/skills/${x.forget.name}/`}\``;
+  if (x.forget) return `\`${x.forget.what === 'rule' ? x.forget.name : `.agents/skills/${x.forget.name}/`}\``;
   // a lint card: the line or the fact it is about, as it is
   if (x.lint) return x.lint.line ? `> ${x.lint.line.trim()}` : x.lint.about && (x.lint.check === 'stale-fact' || x.lint.check === 'changed-fact') ? `> ${x.lint.about}` : '';
   return '';

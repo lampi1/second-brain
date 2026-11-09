@@ -12,7 +12,6 @@ export const brainModelEn: typeof brainModelIt = {
 
   'bm.job.upgrade': 'Brain upgrade', 'bm.job.migration': 'Migration', 'bm.job.corrections': 'Corrections', 'bm.job.repeated-task': 'Repeated task',
   'bm.job.merge-skills': 'Duplicate skills', 'bm.job.merge-memory': 'Duplicate memories', 'bm.job.user': 'You', 'bm.job.research': 'Maintenance, approved by you', 'bm.job.orchestrator': 'Orchestrator',
-  'bm.madeBy': (p: { job: string }) => `By: ${p.job}`,
   'bm.kind.skill': 'Skill', 'bm.kind.agent': 'Agent', 'bm.kind.rule': 'Rule', 'bm.kind.memory': 'Memory', 'bm.kind.script': 'Script',
 
   'bm.maint.title': 'Maintenance',
@@ -32,20 +31,6 @@ export const brainModelEn: typeof brainModelIt = {
   'bm.mig.moved': 'Moved', 'bm.mig.existing': 'Already there', 'bm.mig.skipped': 'Skipped',
   'bm.mig.lessons': (p: { lines: number; agents: number }) => `${p.lines} learned rules moved into the role of ${p.agents === 1 ? '1 agent' : `${p.agents} agents`}.`,
   'bm.mig.noAgent': 'no agent',
-
-  'bm.skills.lead': (p: { n: number; used: number }) => `${p.n === 1 ? '1 skill' : `${p.n} skills`}, ${p.used} used by at least one agent. A skill is how a job is done: the agent that declares it loads it when it starts.`,
-  'bm.skills.new': 'New skill',
-  'bm.skills.search': 'Find a skill…', 'bm.skills.searchLabel': 'Search skills',
-  'bm.skills.filterLabel': 'Show', 'bm.skills.filter.all': 'All', 'bm.skills.filter.used': 'Used', 'bm.skills.filter.unused': 'Unused',
-  'bm.skills.unused': 'Unused', 'bm.skills.usedBy': 'Used by', 'bm.skills.tools': 'Calls',
-  'bm.skills.home.brain': 'Brain', 'bm.skills.home.user': 'Yours', 'bm.skills.home.cursor': 'Cursor',
-  'bm.skills.agents': 'Agents', 'bm.skills.agentsLabel': (p: { name: string }) => `Agents that use ${p.name}`,
-  'bm.skills.edit': 'Edit', 'bm.skills.close': 'Close the editor',
-  'bm.skills.empty': 'No skills yet. They appear by themselves from the work you repeat, or create one with "New skill".',
-  'bm.skills.emptySearch': 'No skill matches these filters.',
-  'bm.skills.linked': (p: { skill: string; agent: string }) => `${p.agent} now uses ${p.skill}.`,
-  'bm.skills.unlinked': (p: { skill: string; agent: string }) => `${p.agent} no longer uses ${p.skill}.`,
-  'bm.skills.cursorOnly': 'A Cursor skill: used in Cursor chats.',
 
   'bm.rules.title': 'Rules',
   'bm.rules.lead': (p: N) => `${p.n === 1 ? '1 rule' : `${p.n} rules`} of your brain: they apply to every agent. The app's own rules reach every chat as well, without living here.`,

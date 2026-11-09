@@ -1,5 +1,5 @@
 // A role's know-how in the brain (ADR 0077, 0083): the plugin a role's launch runs with (its own skill, its default,
-// linked and requested skills, its memory), the immutable know-how snapshots of its versions and the editable copy.
+// linked and requested skills, every skill for the Orchestrator (#361), its memory), the immutable know-how snapshots of its versions and the editable copy.
 // Agent pack import/export is gone (ADR 0125: the roles are fixed); the shareable brain zip (pack/brain-share.ts, ADR
 // 0088) reuses ownSkills, portableId and writePackFiles. Used by pack/wiring.ts, pack/learning.ts and wiring.ts.
 import fs from 'node:fs';
@@ -25,6 +25,9 @@ export interface PackFlowDeps {
 const tokenId = (): string => randomBytes(16).toString('hex');
 /** When and what a role chat writes to its own memory: the `remember` field of agent_report, at the end of a job. */
 export const REMEMBER_HINT = 'Save only reusable knowledge future runs would need to rediscover: use memory_propose or the `remember` field of agent_report (up to 3 short lines). Generalize procedures, conventions or dead ends; omit task results and one-off URLs, identifiers, local paths, dates or branches. Facts are saved without asking the user (maintenance merges them and keeps the most recent 40 per role). Save nothing when there is no new reusable knowledge.';
+/** A skill is a package (#361): what `${CLAUDE_SKILL_DIR}` means to an engine that does not expand it (Codex, Cursor,
+ *  OpenCode): Claude Code replaces it with the skill's folder itself. */
+export const SKILL_DIR_HINT = 'A skill is a folder: its SKILL.md, scripts/, references/ (read only when needed) and assets/. In a skill\'s text, ${CLAUDE_SKILL_DIR} (or a relative path such as scripts/x) means that skill\'s own folder: run its scripts from there, whatever your working folder is.';
 export const portableId = (id: string): string => /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id) && id.length <= 64 && !/[a-f0-9]{8}-[a-f0-9]{4}-/.test(id) ? id : `agent-${createHash('sha256').update(id).digest('hex').slice(0, 16)}`;
 
 /** All paths beneath the brain are main-derived; reject symlink parents before reading/writing through them. */
@@ -59,7 +62,8 @@ export class AgentPackFlows {
     const missing = launch.filter(name => !all.some(s => s.name === name) && !files.has(`skills/${name}/SKILL.md`));
     if (missing.length) throw new Error(`Skill non trovata: ${missing.join(', ')} (pagina Skill).`);
     const declared = [...profile.skills, ...(profile.knowhow?.linked ?? [])];
-    const skills = [...new Set([...declared, ...launch])];
+    // the Orchestrator can call every skill from its chat (owner 2026-11-09, #361): it picks the ones a request needs
+    const skills = [...new Set([...declared, ...launch, ...(id === 'orchestrator' ? all.map(s => s.name) : [])])];
     const loaded: string[] = [portableId(id)];
     for (const name of skills) {
       const shared = all.find(s => s.name === name);
@@ -101,7 +105,7 @@ export class AgentPackFlows {
     const contextSnapshot: AgentContextSnapshot = { schema: 1, at: Date.now(), mode: 'scoped', memory: selection, skills: loaded.slice(0, 50).map(name => ({ name, sha256: hashFiles(new Map([...files].filter(([p]) => p.startsWith(`skills/${name}/`)))) })), instructions: { sha256: createHash('sha256').update(instructions).digest('hex'), characters: instructions.length, estimatedTokens: Math.ceil(instructions.length / 3) } };
     return { context: contextSnapshot, pluginDir, skills: loaded, skillRoot: path.join(pluginDir, 'skills'), memory: memoryText, instructions: [instructions, // these lines reach only an engine without the plugin loader (Cursor: no Skill tool), so they name the files to read;
       // Claude gets the qualified names instead (wiring.ts qualifiedSkillsLine)
-      linked.length ? `Your skills (load the one that fits the job: read ${path.join(pluginDir, 'skills')}/<name>/SKILL.md): ${linked.join(', ')}.` : '',
+      linked.length ? `Your skills (load the one that fits the job: read ${path.join(pluginDir, 'skills')}/<name>/SKILL.md): ${linked.join(', ')}. ${SKILL_DIR_HINT}` : '',
       memoryText, `Skill files: ${path.join(pluginDir, 'skills')}`].filter(Boolean).join('\n\n') };
   }
   ownSkills(profile: AgentProfile, editable = false): PackFiles {

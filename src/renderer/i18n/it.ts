@@ -60,6 +60,7 @@ import { queueSettingsIt } from './areas/queue-settings.it';
 import { remoteIt } from './areas/remote.it';
 import { learningIt } from './areas/learning.it';
 import { andamentoIt } from './areas/andamento.it';
+import { skillLibraryIt } from './areas/skill-library.it';
 import { suggestIt } from './areas/suggest.it';
 import { estimateIt } from './areas/estimate.it';
 import { logIt } from './areas/log.it';
@@ -93,6 +94,7 @@ export const it = {
   ...remoteIt,
   ...learningIt,
   ...andamentoIt,
+  ...skillLibraryIt,
   ...suggestIt,
   ...estimateIt,
   ...logIt,

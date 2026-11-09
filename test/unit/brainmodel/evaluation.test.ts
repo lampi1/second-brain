@@ -116,7 +116,7 @@ describe('candidate promotion', () => {
     const real = store.startReplay('examples-v1', 'holdout', service.replayCandidate(view.name)); await finish(store, real.id);
     expect(service.inspect(view.name).eligibleReplayIds).toEqual([real.id]);
     expect(service.promote(view.name, view.digest, real.id, source.runId).promoted).toBe(true);
-    expect(fs.readFileSync(path.join(root, '.claude/skills/check-source/SKILL.md'), 'utf8')).toBe(draft);
+    expect(fs.readFileSync(path.join(root, '.agents/skills/check-source/SKILL.md'), 'utf8')).toBe(draft);
     expect(() => service.promote(view.name, view.digest, real.id, source.runId)).toThrow('already-promoted');
   });
   it('invalidates replay eligibility on edits or revoked independent evidence and rejects path escapes', async () => {
@@ -134,7 +134,7 @@ describe('candidate promotion', () => {
   });
   it('refuses a symlinked target before promotion can write outside the brain', () => {
     const { root, service } = candidates(), outside = tmp();
-    fs.symlinkSync(outside, path.join(root, '.claude'), 'dir');
+    fs.symlinkSync(outside, path.join(root, '.agents'), 'dir');
     expect(() => service.inspect('check-source')).toThrow('Linked');
   });
 });

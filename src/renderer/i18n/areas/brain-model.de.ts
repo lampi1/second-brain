@@ -12,7 +12,6 @@ export const brainModelDe: typeof brainModelIt = {
 
   'bm.job.upgrade': 'Brain-Aktualisierung', 'bm.job.migration': 'Migration', 'bm.job.corrections': 'Korrekturen', 'bm.job.repeated-task': 'Wiederholte Arbeit',
   'bm.job.merge-skills': 'Doppelte Skills', 'bm.job.merge-memory': 'Doppelte Erinnerungen', 'bm.job.user': 'Du', 'bm.job.research': 'Wartung, von dir bestätigt', 'bm.job.orchestrator': 'Orchestrator',
-  'bm.madeBy': (p: { job: string }) => `Von: ${p.job}`,
   'bm.kind.skill': 'Skill', 'bm.kind.agent': 'Agent', 'bm.kind.rule': 'Regel', 'bm.kind.memory': 'Gedächtnis', 'bm.kind.script': 'Skript',
 
   'bm.maint.title': 'Wartung',
@@ -32,20 +31,6 @@ export const brainModelDe: typeof brainModelIt = {
   'bm.mig.moved': 'Verschoben', 'bm.mig.existing': 'Schon vorhanden', 'bm.mig.skipped': 'Übersprungen',
   'bm.mig.lessons': (p: { lines: number; agents: number }) => `${p.lines} gelernte Regeln in die Rolle von ${p.agents === 1 ? '1 Agenten' : `${p.agents} Agenten`} verschoben.`,
   'bm.mig.noAgent': 'kein Agent',
-
-  'bm.skills.lead': (p: { n: number; used: number }) => `${p.n === 1 ? '1 Skill' : `${p.n} Skills`}, ${p.used} von mindestens einem Agenten genutzt. Ein Skill beschreibt, wie eine Arbeit gemacht wird: Der Agent, der ihn angibt, lädt ihn beim Start.`,
-  'bm.skills.new': 'Neuer Skill',
-  'bm.skills.search': 'Skill suchen…', 'bm.skills.searchLabel': 'Skills durchsuchen',
-  'bm.skills.filterLabel': 'Anzeigen', 'bm.skills.filter.all': 'Alle', 'bm.skills.filter.used': 'Genutzt', 'bm.skills.filter.unused': 'Ungenutzt',
-  'bm.skills.unused': 'Ungenutzt', 'bm.skills.usedBy': 'Genutzt von', 'bm.skills.tools': 'Ruft auf',
-  'bm.skills.home.brain': 'Brain', 'bm.skills.home.user': 'Deine', 'bm.skills.home.cursor': 'Cursor',
-  'bm.skills.agents': 'Agenten', 'bm.skills.agentsLabel': (p: { name: string }) => `Agenten, die ${p.name} nutzen`,
-  'bm.skills.edit': 'Bearbeiten', 'bm.skills.close': 'Editor schließen',
-  'bm.skills.empty': 'Noch keine Skills. Sie entstehen von selbst aus wiederholter Arbeit, oder du legst einen mit „Neuer Skill“ an.',
-  'bm.skills.emptySearch': 'Kein Skill passt zu diesen Filtern.',
-  'bm.skills.linked': (p: { skill: string; agent: string }) => `${p.agent} nutzt jetzt ${p.skill}.`,
-  'bm.skills.unlinked': (p: { skill: string; agent: string }) => `${p.agent} nutzt ${p.skill} nicht mehr.`,
-  'bm.skills.cursorOnly': 'Ein Cursor-Skill: wird in Cursor-Chats genutzt.',
 
   'bm.rules.title': 'Regeln',
   'bm.rules.lead': (p: N) => `${p.n === 1 ? '1 Regel' : `${p.n} Regeln`} deines Brain: sie gelten für jeden Agenten. Die eigenen Regeln der App erreichen ebenfalls jeden Chat, ohne hier zu stehen.`,

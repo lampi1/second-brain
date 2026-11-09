@@ -78,6 +78,10 @@ row and its line here in the same change.
 | `app_update_code` | Orchestrator only | Update the app's code from GitHub, only when the user asked in his own words. |
 | `app_voice_diagnostics` | Orchestrator only | Content-free voice timing diagnostics (recognition, synthesis, failures). |
 | `app_config` | Orchestrator only | Read and change any configuration as the user's own click would, with Undo: settings, view, role cards, MCP connectors (add, edit, test, remove, per role; never a token), profile. |
+| `app_skills` | Orchestrator only | Every skill (brain, the user's folders, the app's) with files, roles and usage; one skill's files, file text or history. |
+| `app_skill_write` | Orchestrator only | Create, change or delete a skill or one of its files (SKILL.md, scripts/, references/, assets/), logged with Undo; an app skill becomes a brain copy. |
+| `app_skill_roles` | Orchestrator only | Give a skill to roles or take it away (a role's default skills stay on its own page). |
+| `app_skill_undo` | Orchestrator only | Undo one change from a skill's history. |
 | `app_routine_export` | Orchestrator only | Export a routine package for the terminal `routine` CLI, secrets filled in the zip. |
 | `app_routine_status` | Orchestrator only | Routine packages and run history, read only, when the user asks. |
 | `app_routine_capabilities` | Orchestrator only | What a routine package is and can do: read before writing one. |

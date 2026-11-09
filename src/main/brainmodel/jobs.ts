@@ -4,7 +4,7 @@
 // Every approved mutation is logged with undo; permissions, settings and tools remain outside these helpers. Every write
 // is itemized (item-delta.ts, ADR 0194): a line it loses is listed as removed with its reason, else ChangeLog refuses it.
 //   migration      re-runnable, idempotent: every runbook / routines section of the brain becomes a skill in
-//                  <brain>/.claude/skills (a role loads it when its launch gives it). Writes a report.
+//                  <brain>/.agents/skills (a role loads it when its launch gives it). Writes a report.
 //   corrections    the lessons queue (agent_learn_propose): each lesson goes to the role's text (default), to a skill,
 //                  or to the brain's rules (rules/lessons.md, a topic file listed in brain.json), only after explicit
 //                  approval of the evidence-backed proposal. Recurring error text is not applied on its own.
@@ -42,7 +42,7 @@ export interface AgentWriter {
 }
 export interface JobContext {
   root: string;
-  /** where new skills go: <brain>/.claude/skills */
+  /** where new skills go: <brain>/.agents/skills (the one copy, #361) */
   skillDir: string;
   skills(): BrainSkill[];
   profiles(): AgentProfile[];

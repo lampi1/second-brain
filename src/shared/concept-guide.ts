@@ -231,11 +231,11 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Two concepts only: the role is who works, the skill is how a job is done. They keep themselves up to date, and every change is undone with one click.'),
     points: [
       // src/main/brainmodel/model.ts readSkills; src/main/agents/pack/flows.ts runtime
-      b('Una skill è un file SKILL.md nel brain (.claude/skills) o nelle tue cartelle. Un ruolo usa le sue skill di serie e quelle che il suo avvio gli dà; una skill che non ha gli viene rifiutata.',
-        'A skill is a SKILL.md file in the brain (.claude/skills) or in your folders. A role uses its default skills and the ones its launch gives it; a skill it does not have is refused.'),
-      // src/renderer/components/SkillsPage.tsx; src/main/brainmodel/service.ts link
-      b('La scheda Skill di Memoria mostra quale ruolo usa ogni skill e quali strumenti chiama; «Ruoli» su una scheda la collega o la toglie subito, senza approvazione.',
-        'The Skills tab of Memoria shows which role uses each skill and which tools it calls; "Roles" on a card links or drops it at once, with no approval.'),
+      b('Una skill è un pacchetto nel brain (.agents/skills; .claude/skills è un collegamento): SKILL.md più scripts/, references/ e assets/. Ci sono anche quelle dell’app e quelle delle tue cartelle. Un ruolo usa le sue skill di serie e quelle che il suo avvio gli dà; l’Orchestrator le ha tutte e sceglie da solo.',
+        'A skill is a package in the brain (.agents/skills; .claude/skills is a link): SKILL.md plus scripts/, references/ and assets/. The app’s skills and those in your folders count too. A role uses its default skills and the ones its launch gives it; the Orchestrator has them all and picks by itself.'),
+      // src/renderer/components/SkillsPage.tsx; src/main/skills/library.ts; src/main/brainmodel/service.ts link
+      b('Memoria → Skill mostra ogni skill, anche quelle dell’app: la leggi, ne modifichi ogni file (una skill dell’app diventa una tua copia, «Ripristina originale» la riporta), la dai ai ruoli dalla scheda Ruoli e in Cronologia vedi ogni modifica con le differenze e «Annulla». L’Orchestrator fa lo stesso se glielo scrivi.',
+        'Memoria → Skill shows every skill, the app’s too: you read it, edit any of its files (an app skill becomes your copy, "Restore original" brings it back), give it to roles from the Roles tab, and History shows every change with its differences and "Undo". The Orchestrator does the same when you ask it.'),
       // src/main/brainmodel/jobs.ts
       b('La manutenzione parte solo quando premi «Manutenzione» (in alto, sulla testa dell’Orchestrator o in Memoria): un clic, poi lavora da sola in background. Mette in ordine skill, regole e memoria e un agente invisibile propone skill e regole nuove, cosa dimenticare e le issue per l’app, tutto come carte in Memoria → Proposte. Una lezione proposta da una chat di lavoro aspetta che l’Orchestrator te la chieda.',
         'Maintenance starts only when you press "Manutenzione" (top bar, the Orchestrator’s head or Memoria): one click, then it works by itself in the background. It tidies skills, rules and memory, and an invisible agent proposes new skills and rules, what to forget and issues for the app, all as cards in Memoria → Proposte. A lesson a work chat proposes waits until the Orchestrator asks you.'),
@@ -262,12 +262,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
     ],
     anchors: {
       0: ['src/main/brainmodel/model.ts#readSkills', 'src/main/agents/pack/flows.ts#runtime'],
-      1: ['src/renderer/components/SkillsPage.tsx', 'src/main/brainmodel/service.ts#link'],
+      1: ['src/renderer/components/SkillsPage.tsx', 'src/main/skills/library.ts', 'src/main/brainmodel/service.ts#link'],
       3: ['src/main/brainmodel/changes.ts', 'src/main/agents/catalog.ts#maintain'],
       4: ['src/main/brainmodel/procedure-sources.ts'],
       6: ['src/main/brainmodel/classifiers.ts'],
     },
-    sources: ['src/main/brainmodel/service.ts', 'src/main/brainmodel/jobs.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/model.ts', 'src/main/brainmodel/procedure-sources.ts', 'src/main/brainmodel/classifiers.ts', 'src/main/agents/pack/rules.ts', 'src/renderer/components/SkillsPage.tsx', 'docs/adr/0077-agents-and-skills-only.md'],
+    sources: ['src/main/brainmodel/service.ts', 'src/main/brainmodel/jobs.ts', 'src/main/brainmodel/changes.ts', 'src/main/brainmodel/model.ts', 'src/main/brainmodel/procedure-sources.ts', 'src/main/brainmodel/classifiers.ts', 'src/main/agents/pack/rules.ts', 'src/renderer/components/SkillsPage.tsx', 'src/main/skills/library.ts', 'docs/adr/0077-agents-and-skills-only.md', 'docs/adr/0241-skill-packages-and-skill-library.md'],
   },
   {
     id: 'orchestrator',

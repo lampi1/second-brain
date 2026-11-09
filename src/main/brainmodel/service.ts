@@ -96,7 +96,8 @@ export class BrainModelService {
   private roles(): AgentProfile[] { return this.profiles().filter(p => p.scope === 'role'); }
   private skillDirs(root: string | null): SkillDir[] {
     const dirs: SkillDir[] = [];
-    if (root) dirs.push({ dir: path.join(root, '.claude', 'skills'), home: 'brain' }, { dir: path.join(root, '.agents', 'skills'), home: 'brain' });
+    // the brain's one copy first (#361, skills/layout.ts); .claude/skills is its link, or an older brain's folder
+    if (root) dirs.push({ dir: path.join(root, '.agents', 'skills'), home: 'brain' }, { dir: path.join(root, '.claude', 'skills'), home: 'brain' });
     if (this.d.home) dirs.push({ dir: path.join(this.d.home, '.claude', 'skills'), home: 'user' }, { dir: path.join(this.d.home, '.agents', 'skills'), home: 'user' });
     return dirs;
   }
@@ -147,7 +148,7 @@ export class BrainModelService {
   }
   private context(root: string): JobContext {
     return {
-      root, skillDir: path.join(root, '.claude', 'skills'),
+      root, skillDir: path.join(root, '.agents', 'skills'),
       skills: () => readSkills(this.skillDirs(root), root, this.profiles()),
       profiles: () => this.profiles().filter(p => p.scope === 'role'),
       runs: () => { try { return this.d.runs(); } catch { return []; } },
@@ -309,7 +310,8 @@ export class BrainModelService {
   link(skill: string, agentId: string, on: boolean): BrainModelState {
     const root = this.root();
     if (!root) throw new Error('Scegli prima la cartella del brain.');
-    if (on && !readSkills(this.skillDirs(root), root, []).some(s => s.name === skill)) throw new Error('Skill non trovata.');
+    // the app's shipped skills can be given to a role too (#364): the launch inventory has them
+    if (on && !readSkills(this.skillDirs(root), root, []).some(s => s.name === skill) && !(this.d.packs.deps.sharedSkills?.() ?? []).some(s => s.name === skill)) throw new Error('Skill non trovata.');
     const p = this.d.packs.profile(agentId), linked = new Set(p.knowhow?.linked ?? []);
     if (on) linked.add(skill); else linked.delete(skill);
     const snap = this.writer().update(agentId, { linked: [...linked] }, `${on ? 'Skill aggiunta' : 'Skill tolta'} dalla pagina Skill: ${skill}`);
@@ -399,7 +401,7 @@ export class BrainModelService {
       if (!NAME_RE.test(name) || name.length > 64) throw new Error('Nome della skill non valido.');
       const have = readSkills(this.skillDirs(root), root, []).find(s => s.name === name);
       if (have && have.home !== 'brain') throw new Error('Questa skill è tua (fuori dal brain): la manutenzione non la cambia.');
-      const file = have?.file ?? path.join(root, '.claude', 'skills', name, 'SKILL.md');
+      const file = have?.file ?? path.join(root, '.agents', 'skills', name, 'SKILL.md');
       // a new skill's folder resolved through links stays in the brain (a symlinked .claude/skills points elsewhere)
       if (!have && !landsInsideBrain(root, file)) throw new Error('La cartella delle skill del brain è un collegamento fuori dal brain: la manutenzione non ci scrive.');
       const before = have ? readSmall(file) : null;

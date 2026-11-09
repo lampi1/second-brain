@@ -40,7 +40,7 @@ function draftText(name: string, text: string): void {
 export class SkillCandidateService {
   constructor(private readonly deps: SkillCandidateDeps) {}
   private file(name: string): string { return safeFile(this.deps.root, ['memory', 'skill-candidates', `${candidateName(name)}.md`]); }
-  private target(name: string): string { return safeFile(this.deps.root, ['.claude', 'skills', candidateName(name), 'SKILL.md']); }
+  private target(name: string): string { return safeFile(this.deps.root, ['.agents', 'skills', candidateName(name), 'SKILL.md']); }
   private read(name: string): string {
     const file = this.file(name), stat = fs.statSync(file);
     if (!stat.isFile() || stat.size > MAX_TEXT * 4) throw new Error('Candidate file too large or invalid.');

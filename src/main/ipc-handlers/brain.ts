@@ -47,5 +47,13 @@ export function brainHandlers({ s, emitter, research, requireReviewRoot, search,
     'skills:read': a => s.skills.read(String(a?.id ?? '')),
     'skills:save': a => s.skills.save(a),
     'skills:delete': a => s.skills.remove(String(a?.id ?? '')),
+    // the skill library (ADR 0241): the Memoria «Skill» tab; every write is a change-log entry with its Undo
+    'skills:library': () => s.skillLibrary.state(),
+    'skills:file': a => s.skillLibrary.read(String(a?.skill ?? ''), String(a?.path ?? 'SKILL.md')),
+    'skills:write': a => s.skillLibrary.write(a, { who: 'tu, dalla pagina Skill' }),
+    'skills:remove': async a => { const r = await s.skillLibrary.remove(String(a?.skill ?? ''), { who: 'tu, dalla pagina Skill' }); return r.ok ? { ok: true, changeId: r.changeId } : { ok: false, error: r.error }; },
+    'skills:history': a => s.skillLibrary.history(String(a?.skill ?? '')),
+    'skills:undo': a => s.skillLibrary.undo(String(a?.skill ?? ''), String(a?.changeId ?? '')),
+    'skills:roles': a => s.skillLibrary.setRoles(String(a?.skill ?? ''), Array.isArray(a?.roles) ? a.roles.filter((r): r is string => typeof r === 'string') : []),
   };
 }

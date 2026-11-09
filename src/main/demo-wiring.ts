@@ -45,6 +45,8 @@ import { attachArtifacts, attachCommandAsks, attachOrchestratorWake, attachRunRe
 import type { Ctx, Wired } from './wiring-types';
 import { attachHeldNews } from './chats/held-news';
 import { SkillsService } from './skills/service';
+import { SkillLibrary } from './skills/library';
+import { templateRoot } from './rules/tools';
 import { demoSkillsHome } from './skills/demo';
 import { createEngines } from './engines/service';
 import { safeStorageCipher } from './engines/secrets';
@@ -280,6 +282,25 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   // "Skill e agenti" on a fictional home under userData (never the user's ~/.claude); deletes for real there
   const skills = new SkillsService({ home: demoSkillsHome(ctx.userData), roots: () => [], trash: p => fs.promises.rm(p, { recursive: true, force: true }) });
 
+  // the skill library (ADR 0241) over the demo brain and the release's own shipped skills, rendered once for a made-up
+  // owner as a product brain's copy is (rules/tools.ts ensureTools), so no {{OWNER}} shows on the page
+  const demoAppSkills = (() => {
+    try {
+      const from = path.join(templateRoot(), 'harness', 'claude', 'skills'), to = path.join(ctx.userData, 'demo-app-skills');
+      fs.rmSync(to, { recursive: true, force: true });
+      fs.cpSync(from, to, { recursive: true, filter: src => !path.basename(src).startsWith('{{') });
+      const walk = (d: string): void => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const f = path.join(d, e.name); if (e.isDirectory()) walk(f); else if (/\.md$/.test(e.name)) fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/\{\{OWNER\}\}/g, 'Alex').replace(/\{\{BRAIN_NAME\}\}/g, 'brain')); } };
+      walk(to);
+      return to;
+    } catch { return null; }
+  })();
+  // the skill library (ADR 0241) over the demo brain and the release's own shipped skills (read-only there)
+  const skillLibrary = new SkillLibrary({ root: () => demoBrainRoot, home: null,
+    appSkills: () => demoAppSkills,
+    changes: () => brainModel.log, undo: id => { brainModel.rollback(id); }, roles: () => agents.list().profiles, link: (s, r, on) => { brainModel.link(s, r, on); },
+    runs: () => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...demoAgentRuns(now())], changed: () => ctx.emitter.emit('brainmodel:changed', undefined), unify: false,
+    guard: async () => null });
+
   // the morning block (ADR 0102) over the demo's made-up history
   const morning = new MorningService({ file: path.join(ctx.userData, 'morning.json'), now, chats: () => chats.list(), runs: () => demoAgentRuns(now()),
     pending: () => chats.pending().length + asks.pending().length,
@@ -289,7 +310,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
 
   return {
     morning,
-    chats, browser, recordings, learn, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, source, engines, later: createLater(ctx),
+    chats, browser, recordings, learn, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, skillLibrary, source, engines, later: createLater(ctx),
     agents, runFeedback, agentLifecycle, agentPacks, brainModel, research, queries, memoryReview, recallCheck: { state: async () => demoRecallCheck(now()) }, learningReview,
     setup: new SetupService(ctx.userData, true, now),
     worktreePool: demoWorktreePool(),

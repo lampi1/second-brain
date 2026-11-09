@@ -26,6 +26,7 @@ const textOf = (data: Buffer): string => {
   if (text.includes('\0')) throw new Error('Binary files cannot be imported');
   return text;
 };
+const isUtf8Text = (data: Buffer): boolean => { try { textOf(data); return true; } catch { return false; } };
 const executable = (name: string): boolean => /\.(exe|dll|com|so|dylib)$/i.test(name);
 const script = (name: string): boolean => name.split('/').includes('scripts') || /\.(sh|ps1|py|js|mjs|cjs|cmd|bat)$/i.test(name);
 
@@ -85,7 +86,14 @@ export function inspectPack(input: PackFiles): PackInspection {
     if (/(^|\/)(hooks|bin|commands|\.git)(\/|$)/i.test(name) || /(^|\/)(\.?mcp\.json|settings\.json)$/i.test(name) || /\.mdc$/i.test(name)) { result.ignored.push(original); continue; }
     if (manifest && name === `codex/agents/${manifest.agent.id}.toml`) { result.warnings.push('Generated Codex agent is regenerated from the source agent'); continue; }
     if (/^skills\/[^/]+\//.test(name)) {
-      const content = textOf(data), skillName = name.split('/')[1]!;
+      const skillName = name.split('/')[1]!;
+      // a skill is a package (#361): its SKILL.md and scripts are text, its assets/ and references/ may be binary
+      // (an image, a PDF, a template), copied as they are
+      if (!(name === `skills/${skillName}/SKILL.md` || script(name)) && /^skills\/[^/]+\/(?:assets|references)\//.test(name) && !isUtf8Text(data)) {
+        if (!packName(skillName)) throw new Error('Invalid skill folder');
+        result.files.set(name, Buffer.from(data)); continue;
+      }
+      const content = textOf(data);
       if (!packName(skillName)) throw new Error('Invalid skill folder');
       if (name === `skills/${skillName}/SKILL.md`) {
         const extras = validateSkill(skillName, content, true);

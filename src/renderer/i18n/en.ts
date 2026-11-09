@@ -59,6 +59,7 @@ import { queueSettingsEn } from './areas/queue-settings.en';
 import { remoteEn } from './areas/remote.en';
 import { learningEn } from './areas/learning.en';
 import { andamentoEn } from './areas/andamento.en';
+import { skillLibraryEn } from './areas/skill-library.en';
 import { suggestEn } from './areas/suggest.en';
 import { estimateEn } from './areas/estimate.en';
 import { logEn } from './areas/log.en';
@@ -92,6 +93,7 @@ export const en: Dict = {
   ...remoteEn,
   ...learningEn,
   ...andamentoEn,
+  ...skillLibraryEn,
   ...suggestEn,
   ...estimateEn,
   ...logEn,

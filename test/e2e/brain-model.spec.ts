@@ -1,6 +1,6 @@
 // E2E of the Brain section (ADR 0077, #84, #81) on the frozen demo, whose made-up brain has the former runbook and
-// routines sections already migrated into skills: the Skill page (cards, migration report, a link toggle logged in the
-// maintenance panel and undone), Regole, Memoria, Classificatori (read-only cards; each detail holds its tables, "nessun dato ancora" where there is none)
+// routines sections already migrated into skills: the Skill page (list, migration report, a role switched on from the
+// skill's Ruoli tab and off again), Regole, Memoria, Classificatori (read-only cards; each detail holds its tables, "nessun dato ancora" where there is none)
 // and Mappa (agent → skills → rules → memory, plus the notes view), then the agent card's 3D flip (click, Esc back) and
 // its fade under reduced motion. Screenshots dark and light in test-results/shots/brain-*.png.
 import { expect, test, type Page } from '@playwright/test';
@@ -16,35 +16,28 @@ test('Brain pages: skills with links and undo, rules, memory, classifiers, map; 
   test.setTimeout(150_000);
   const { app, page } = await launchDemo();
   try {
-    // ── Skill: the migrated skills as cards, the report, a link logged and undone
+    // ── Skill: the migrated skills in the list, the report, a role link switched on from the skill and off again
     await goPage(page, 'skill');
     const skills = page.getByTestId('skills-page');
     await expect(skills.getByTestId('bm-migration')).toBeVisible();
     await expect(skills.getByTestId('bm-migration')).toContainText('Spostata');
-    const cards = skills.getByTestId('bm-skill-grid').locator('article.catalog-card');
-    await expect(cards.first()).toBeVisible();
+    const rows = skills.getByTestId('bm-skill-grid').locator('[data-testid^="bm-skill-"]');
+    await expect(rows.first()).toBeVisible();
     await expect(page.getByText('Procedure', { exact: true })).toHaveCount(0);
     await shot(page, 'brain-skills-dark');
 
-    const unused = skills.locator('article.catalog-card[data-unused=true]').first();
+    const unused = skills.locator('[data-testid^="bm-skill-"][data-unused=true][data-origin=brain]').first();
     await expect(unused).toBeVisible();
     const name = (await unused.getAttribute('data-testid'))!.replace(/^bm-skill-/, '');
-    const target = page.getByTestId(`bm-skill-${name}`);
-    await target.getByTestId(`bm-toggles-${name}`).locator('summary').click();
-    const box = target.getByTestId(`bm-toggles-${name}`).locator('input[type=checkbox]').first();
-    const agentName = (await target.getByTestId(`bm-toggles-${name}`).locator('label').first().innerText()).trim();
+    await unused.click();
+    await skills.getByTestId('sl-tab-roles').click();
+    const box = skills.getByTestId('sl-roles').locator(`input[data-testid^="bm-link-${name}-"]:not([disabled])`).first();
+    await expect(box).not.toBeChecked();
     await box.check();
-    await expect(page.getByTestId(`bm-skill-${name}`)).toHaveAttribute('data-unused', 'false');
-    await expect(page.getByTestId(`bm-skill-${name}`)).toContainText(agentName);
-    const maint = skills.getByTestId('bm-maintenance');
-    await expect(maint.getByTestId('bm-change').first()).toContainText(name);
-    await expect(maint).toContainText('Parte solo quando premi «Manutenzione»');
-    await target.getByTestId(`bm-toggles-${name}`).locator('summary').click(); // folds the popover
-    await maint.scrollIntoViewIfNeeded();
+    await expect(box).toBeChecked();
     await shot(page, 'brain-skills-linked-dark');
-    await maint.getByTestId('bm-undo').first().click();
-    await expect(maint.getByTestId('bm-change').first()).toContainText('Annullata');
-    await expect(page.getByTestId(`bm-skill-${name}`)).toHaveAttribute('data-unused', 'true');
+    await box.uncheck();
+    await expect(box).not.toBeChecked();
 
     // ── Regole
     await goPage(page, 'regole');

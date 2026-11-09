@@ -60,6 +60,7 @@ import { queueSettingsDe } from './areas/queue-settings.de';
 import { remoteDe } from './areas/remote.de';
 import { learningDe } from './areas/learning.de';
 import { andamentoDe } from './areas/andamento.de';
+import { skillLibraryDe } from './areas/skill-library.de';
 import { estimateDe } from './areas/estimate.de';
 import { logDe } from './areas/log.de';
 import { reviewedContextDe } from './areas/reviewed-context.de';
@@ -92,6 +93,7 @@ export const de: Dict = {
   ...remoteDe,
   ...learningDe,
   ...andamentoDe,
+  ...skillLibraryDe,
   ...estimateDe,
   ...logDe,
   ...genuiRequestDe,

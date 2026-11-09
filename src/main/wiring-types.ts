@@ -1,6 +1,7 @@
 // What wiring.ts (and the demo's demo-wiring.ts) is given and returns: Ctx, the start's window, emitter and userData,
 // and Wired, every service the app runs on, read by index.ts and its IPC handler groups (src/main/ipc-handlers).
 import type { BrowserWindow } from 'electron';
+import type { SkillLibrary } from './skills/library';
 import type { LearningReviewService } from './brainmodel/learning-review';
 import type { CliStatus, Harness } from '../shared/contract';
 import type { JudgingEstimate } from '../shared/agents';
@@ -88,6 +89,8 @@ export interface Wired {
   branches?: (cwds: unknown) => Record<string, string | null>;
   /** "Skill e agenti" (ADR 0018) */
   skills: SkillsApi;
+  /** the skill library (ADR 0241): the Memoria «Skill» tab and the Orchestrator's skill tools */
+  skillLibrary: SkillLibrary;
   /** The local MCP server: browser routes, /mcp/app (app control). */
   mcp: McpServer;
   /** the MCP servers the user added in Settings → Connettori, given to each chat by role (ADR 0086) */

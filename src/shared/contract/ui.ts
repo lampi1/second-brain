@@ -1,6 +1,7 @@
 // Shell UI: held news, the global layer (overlay), skills and agents on disk, search, brain sync and the page's own diagnostics.
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
+import type { LibSkill, SkillFileText, SkillLibraryState, SkillVersion, SkillWrite, SkillWriteResult } from '../skill-library';
 import type { LogList } from '../activity-log';
 import type { Harness } from './engines';
 import type { Lang, ThemeMode } from './settings';
@@ -182,6 +183,16 @@ export interface UiInvokeMap {
   'skills:save': [SkillSave, SkillSaveResult];
   /** to the Windows Recycle Bin: a skill's folder, an agent's file */
   'skills:delete': [{ id: string }, { ok: boolean; error?: string }];
+  /** the skill library (ADR 0241): every skill as a package, its roles, usage and history; writes are undoable changes */
+  'skills:library': [void, SkillLibraryState];
+  'skills:file': [{ skill: string; path: string }, SkillFileText];
+  'skills:write': [SkillWrite, SkillWriteResult];
+  /** a brain skill, or the brain copy of an app skill (restores the app's original) */
+  'skills:remove': [{ skill: string }, { ok: boolean; error?: string; changeId?: string | null }];
+  'skills:history': [{ skill: string }, SkillVersion[]];
+  'skills:undo': [{ skill: string; changeId: string }, SkillVersion[]];
+  /** the full list of roles that load the skill */
+  'skills:roles': [{ skill: string; roles: string[] }, LibSkill];
   /** a chat input's Ctrl+V carried no image and no text: main reads the clipboard's image (seen = the paste's types, logged) */
   'clipboard:image': [{ seen: string[] }, ClipboardImage | null];
   /** Ctrl+K: full-text search over chats (last 30 days), branches and the brain's markdown (read-only) */

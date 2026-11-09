@@ -13,7 +13,6 @@ export const brainModelIt = {
   // who made a change
   'bm.job.upgrade': 'Aggiornamento del brain', 'bm.job.migration': 'Migrazione', 'bm.job.corrections': 'Correzioni', 'bm.job.repeated-task': 'Lavoro ripetuto',
   'bm.job.merge-skills': 'Skill doppie', 'bm.job.merge-memory': 'Memorie doppie', 'bm.job.user': 'Tu', 'bm.job.research': 'Manutenzione approvata da te', 'bm.job.orchestrator': 'Orchestrator',
-  'bm.madeBy': (p: { job: string }) => `Da: ${p.job}`,
   'bm.kind.skill': 'Skill', 'bm.kind.agent': 'Agente', 'bm.kind.rule': 'Regola', 'bm.kind.memory': 'Memoria', 'bm.kind.script': 'Script',
 
   // maintenance panel
@@ -37,20 +36,6 @@ export const brainModelIt = {
   'bm.mig.noAgent': 'nessun agente',
 
   // Skill page
-  'bm.skills.lead': (p: { n: number; used: number }) => `${p.n === 1 ? '1 skill' : `${p.n} skill`}, ${p.used} usate da almeno un agente. Una skill è come si fa un lavoro: l’agente che la dichiara la carica quando parte.`,
-  'bm.skills.new': 'Nuova skill',
-  'bm.skills.search': 'Cerca una skill…', 'bm.skills.searchLabel': 'Cerca nelle skill',
-  'bm.skills.filterLabel': 'Mostra', 'bm.skills.filter.all': 'Tutte', 'bm.skills.filter.used': 'Usate', 'bm.skills.filter.unused': 'Non usate',
-  'bm.skills.unused': 'Non usata', 'bm.skills.usedBy': 'Usata da', 'bm.skills.tools': 'Chiama',
-  'bm.skills.home.brain': 'Brain', 'bm.skills.home.user': 'Tua', 'bm.skills.home.cursor': 'Cursor',
-  'bm.skills.agents': 'Agenti', 'bm.skills.agentsLabel': (p: { name: string }) => `Agenti che usano ${p.name}`,
-  'bm.skills.edit': 'Modifica', 'bm.skills.close': 'Chiudi l’editor',
-  'bm.skills.empty': 'Nessuna skill ancora. Nascono da sole dai lavori che ripeti, oppure creane una con «Nuova skill».',
-  'bm.skills.emptySearch': 'Nessuna skill con questi filtri.',
-  'bm.skills.linked': (p: { skill: string; agent: string }) => `${p.agent} ora usa ${p.skill}.`,
-  'bm.skills.unlinked': (p: { skill: string; agent: string }) => `${p.agent} non usa più ${p.skill}.`,
-  'bm.skills.cursorOnly': 'Skill di Cursor: si usa nelle chat di Cursor.',
-
   // Regole page
   'bm.rules.title': 'Regole',
   'bm.rules.lead': (p: N) => `${p.n === 1 ? '1 regola' : `${p.n} regole`} del tuo brain: valgono per ogni agente. Le regole dell’app arrivano a ogni chat in più, senza stare qui.`,
