@@ -73,10 +73,12 @@ describe('send_to_chat from a delegated chat', () => {
     const { dir, call } = setup(list);
     let replyTo: string | undefined;
     for (let i = 0; i < Math.max(MAX_HOPS, MAX_SENDS_PER_MINUTE) + 2; i++) {
-      expect(call('c', { to: target, text: `verified result ${i}`, ...(replyTo ? { reply_to: replyTo } : {}) })).toMatch(/^inviato/);
-      replyTo = unread(dir, target === 'p' ? 'app-padre' : 'orchestrator').at(-1)!.msg.id;
+      const sent = call('c', { to: target, text: `verified result ${i}`, ...(replyTo ? { reply_to: replyTo } : {}) });
+      expect(sent).toMatch(/^inviato/);
+      // the id from the answer: two mails in the same millisecond sort by their random suffix in the inbox
+      replyTo = /\(id ([^,)]+)/.exec(sent)![1];
     }
-    expect(unread(dir, target === 'p' ? 'app-padre' : 'orchestrator').at(-1)!.msg.hop).toBeGreaterThan(MAX_HOPS);
+    expect(unread(dir, target === 'p' ? 'app-padre' : 'orchestrator').find(m => m.msg.id === replyTo)!.msg.hop).toBeGreaterThan(MAX_HOPS);
   });
   it('keeps the per-minute limit for unrelated root-chat traffic', () => {
     const { call } = setup(tree());
