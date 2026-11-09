@@ -53,7 +53,8 @@ export type ListPrice = { inputPerMTok: number; outputPerMTok: number };
 type Stop = 'user' | 'app' | 'close' | 'timeout';
 
 const DEFAULT_MAX_TOKENS = 8192;
-const FIRST_BYTE_MS = 60_000;
+/** exported for the runtime host: its API open RPC must outlive this deadline (agent-runtime/entry.ts) */
+export const FIRST_BYTE_MS = 60_000;
 const LOCAL_HOSTS = new Set(['127.0.0.1', '[::1]', 'localhost']);
 
 /** The endpoint's URL, or why it is refused: https only, plain http only towards this computer; no credentials in it. */
