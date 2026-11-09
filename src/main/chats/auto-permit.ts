@@ -110,24 +110,17 @@ function touchesSettings(req: PermitRequest, command: boolean, cwd: string): boo
   if (command) {
     // `.g''it` and `.g'i't` are `.git` to a shell; a glob can name a settings place by pattern (.gi?/hooks); `$'\x2e'`,
     // an escape that printf or echo (zsh and dash need no -e) turns into a name, and a `$(…)` or a `…` pair glued to a
-    // path build a name the app cannot read. `X=$(…) cmd`, `echo $(date)`, `-v $(pwd):/app`, `grep '^$'`, a Windows `C:\work\2026` path and
-    // PowerShell's single `t escape stay free.
+    // path build a name the app cannot read. `X=$(…) cmd`, `echo $(date)`, `-v $(pwd):/app`, `grep '^$'`, a Windows
+    // `C:\work\2026` path and PowerShell's single `t escape stay free.
     const line = typeof o.command === 'string' ? o.command : '';
     // `$'.git'` and `$".git"` are `.git`; PowerShell drops a backtick before a letter that is no escape (.g`it is .git)
     const raw = line.replace(/\$(?=['"])/g, '').replace(/['"]/g, '');
     const plain = raw.replace(/`(?![0abefnrtuv])/g, '');
     if (/\$'[^']*\\/.test(line)) return true;
-    // printf: an escape anywhere in the line. echo (Windows paths often follow it): only in its own arguments, which end
-    // at a ; & | or newline outside quotes (a > redirect does not end them); a line with an escaped quote or separator (`\"`, `'\''`, `\;`) is read
-    // whole, since the app does not parse it
+    // printf or echo with an escape anywhere in the line (the app does not parse where an echo's arguments end:
+    // redirects, substitutions and escaped quotes all move it); a Windows path (C:\work\2026) is not an escape
     const esc = /\\(x[0-9a-f]{2}|0?[0-7]{1,3}|u[0-9a-f]{4})/i;
-    if (/\bprintf\b/i.test(line) && esc.test(line)) return true;
-    if (/\becho\b/i.test(line)) {
-      // a redirect's target (> C:\work\2026\out.txt) is a file name, not an argument
-      const sep = line.replace(/'[^']*'|"[^"]*"/g, q => q.replace(/[;&|\n]/g, '_'))
-        .replace(/\d*[<>]&\d*-?/g, ' ').replace(/(?:&>>?|\d*>>?\|?)\s*[^\s;&|'"]+/g, ' ');
-      if (/\\[;&|>"'\\]/.test(line) ? esc.test(line) : /\becho\b[^;&|\n]*\\(x[0-9a-f]{2}|0?[0-7]{1,3}|u[0-9a-f]{4})/i.test(sep)) return true;
-    }
+    if (/\b(printf|echo)\b/i.test(line) && esc.test(line.replace(/(?<![\w$])[a-z]:\\[^\s;&|'"`]*/gi, ' '))) return true;
     if (/[^\s=;&|(<>]\$\(|[^\s=;&|(<>]`[^`]*`|\$\([^)]*\)[^\s;&|)<>:]|`[^`]*`[^\s;&|)<>:]/.test(raw)) return true;
     if (SETTINGS_COMMAND.test(raw)) return true;
     const base = typeof o.cwd === 'string' && o.cwd ? path.resolve(cwd, o.cwd) : cwd;
