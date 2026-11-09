@@ -37,6 +37,7 @@ import { MorningLine } from './MorningBlock';
 import { MaintenanceButton } from './brain-model/MaintenanceButton';
 import { useFlash } from './ChatTile';
 import { StrategyPanel } from './StrategyPanel';
+import { planQuestion } from '../lib/plan-ask';
 import { InWindowLine } from './QuestionsWindow';
 import { HarnessMark, IconEraser, IconList, IconMore, IconStop } from './Icons';
 import { IconButton, StatePill } from './ui';
@@ -158,7 +159,7 @@ export const OrchestratorTile = memo(function OrchestratorTile({ chatId: id }: {
       <ChildStrips chatId={chat.id} />
       {/* "Mentre eri via" in one line while strips (or another page) take the Grindhouse's place (ADR 0102) */}
       <MorningLine />
-      {plans.map(c => c && <StrategyPanel key={c.id} chat={c} question={reqs.find(p => p.chatId === c.id && p.type === 'question')} />)}
+      {plans.map(c => c && <StrategyPanel key={c.id} chat={c} question={planQuestion(c, reqs.filter(p => p.chatId === c.id), false)} />)}
       <ItemList chatId={chat.id} items={items ?? []} empty={t('dialogs.orchestrator.emptyPrompt')} footer={isBusy(chat) ? <Typing what={turnActivity(items)} testid="typing-orchestrator" items={items} /> : null} />
       {postponed.length > 0 && <InWindowLine reqs={postponed} queued testid="orchestrator-queued" />}
       {open.length > 0 && <InWindowLine reqs={open} testid="orchestrator-in-window" />}
