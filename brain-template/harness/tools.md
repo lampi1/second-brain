@@ -19,8 +19,10 @@ consapevole che sto usando le chat dal second brain"):
   its own chat, never via the Orchestrator (`hub.md` "Worker questions and commands are the worker's"); in the app every shell
   block has Copia and Esegui (PowerShell 5.1 in the chat's folder, `src/renderer/components/CodeBlock.tsx`).
 - **His terminal**: no `read_terminal`; after Esegui read the outcome with `app_command_runs`.
-- **Browser**: the app's own (`mcp__second-brain__*`), shown beside its chat's strip when the strip's globe is on; a remote
-  sign-in → `handoff_to_user` kind "login", and the chat gives him URL, account and password (`rules/devops-qa.md`).
+- **Browser**: the app's own (`mcp__second-brain__*`), shown beside its chat's strip when the strip's globe is on; a sign-in
+  page, any host → the chat signs in itself with `type` / `fill_form` and the test account (password values come back
+  masked); MFA, CAPTCHA or no password → `handoff_to_user` kind "login", and the chat gives him URL, account and
+  password (`rules/devops-qa.md`).
 - **His PC clock flips to UTC-3** (`tzautoupdate`): give him `Set-TimeZone -Id "W. Europe Standard Time"` (2026-10-06).
 - **Claude Desktop-only tools** (chip `spawn_task`, `ccd_*` sidebar, PushNotification, `read_terminal`): only if they
   are in your tool list; in the app chats are created and messaged with `app_create_chat` and `app_send_to_chat`.

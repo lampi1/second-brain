@@ -9,7 +9,7 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 
 - [0001](0001-stack.md) Stack: Electron + TypeScript + React + Vite, tests with Vitest and Playwright — accepted
 - [0002](0002-cli-harness.md) Chats run through the official CLIs, spoken to directly (no SDK runtime dependency) — accepted, partly superseded by 0010
-- [0003](0003-browser-mcp.md) Internal browsers exposed to agents as a hand-written local MCP server — accepted
+- [0003](0003-browser-mcp.md) Internal browsers exposed to agents as a hand-written local MCP server — accepted, partly superseded by 0237
 - [0004](0004-brain-and-product.md) The brain is a folder the app points to; the product never contains personal data — accepted
 - [0005](0005-ui.md) UI: two workspace views (Mosaico, Corsie), always-on Regia tile, needs-you first — superseded by 0068
 - [0006](0006-ai-driven.md) The app is AI-driven: self-test, logs, doctor, and an app-control MCP — accepted
@@ -42,7 +42,7 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0033](0033-generative-ui-catalog.md) Generative UI, step 1: a catalog of trusted components (show_ui) — accepted
 - [0034](0034-regia-new-chat-and-open-anywhere.md) "Nuova chat" from the Regia's input, "Apri" on the chats she opens — accepted
 - [0035](0035-one-question-popup-not-in-the-regia.md) One request popup at a time, never in the Regia; "Rispondi dopo" and the "Da rispondere" queue — accepted, partly superseded by 0044
-- [0036](0036-cpu-aware-admission.md) CPU-aware admission of agents' chats and turns — superseded by 0222, partly by 0071
+- [0036](0036-cpu-aware-admission.md) CPU-aware admission of agents' chats and turns — superseded by 0222
 - [0037](0037-useful-errors-and-stats.md) Useful errors and stats: patterns, the period before, a discussion bar on every number — accepted
 - [0038](0038-mandato-and-done-notes.md) "Mandato" on texts to send, and the chat learns by itself when the user is done — accepted
 - [0039](0039-fluid-brain-map.md) Fluid brain map: one rAF loop that stops, neurons and axons drawn by shaders — accepted
@@ -138,7 +138,7 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0130](0130-run-receipts-before-reviews.md) Run receipts: deterministic checks before a Sentinel review — accepted
 - [0131](0131-levels-by-job-size-and-bayesian-performance.md) Levels by job size, a Bayesian performance, the Orchestrator's choices and Flash's answers — accepted
 - [0132](0132-maintenance-with-research-and-app-ideas.md) The maintenance with research, the «Idee dell'app» tab and the phrases of the day — accepted, partly superseded by 0153, 0173
-- [0133](0133-personal-browser.md) A personal browser for the user, apart from the agents' browsers — superseded by 0212
+- [0133](0133-personal-browser.md) A personal browser for the user, apart from the agents' browsers — accepted
 - [0134](0134-finished-chats-close-by-default.md) Finished chats close by default, reliably — accepted
 - [0135](0135-yes-no-questions-and-the-recap.md) Yes/no questions only, «Ci penso dopo», and a recap that unblocks everything — accepted
 - [0136](0136-persistent-developer-work-cockpit.md) Persistent developer work cockpit — accepted, partly superseded by 0141
@@ -237,3 +237,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0232](0232-opencode-auto-permissions.md) OpenCode chats start with the app's permission rules (role ceiling, Claude's deny list) — accepted
 - [0235](0235-measure-launch-memory-recall.md) Measure how well the launch memory finds the right fact (words vs words + meaning, zero tokens) — accepted
 - [0236](0236-episodic-memory-past-run-examples.md) Episodic memory: a role starts with up to 2 examples of its own verified past successes in the same repository — accepted
+- [0237](0237-agents-type-passwords-on-every-host.md) Agents type passwords on every host — accepted

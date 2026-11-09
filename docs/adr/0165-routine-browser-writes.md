@@ -47,7 +47,8 @@ keychain means no plaintext fallback. Removing an approved origin leaves an unus
 POST form in an isolated world, and returns only status. Host login requires one standalone tab: pre-existing
 same-origin openers could inspect a filled form. Close other tabs first, or use the user handoff. New tabs/popups
 are blocked until the protected document is gone; an open login handoff blocks agent access to the whole group. Ambiguous forms/accounts, MFA, CAPTCHA, SSO or absent
-credentials use `handoff_to_user` with `kind: "login"`. Agents never type passwords. Effective submitter method,
+credentials use `handoff_to_user` with `kind: "login"`. Routine scripts never type passwords (the app's own browser
+tools let agents do it since ADR 0237). Effective submitter method,
 action and target are rechecked after input events; cross-origin and popup submissions are refused. During credential
 fill, even another approved origin is blocked. The approved site itself receives its login credential by design.
 

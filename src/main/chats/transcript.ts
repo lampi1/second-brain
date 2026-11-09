@@ -12,6 +12,7 @@ import { diffFor, diffFromResult, resultText, toolSummary } from './claude-map';
 import { lastLine, trimInput } from './session';
 import { coldUserText } from './handoff';
 import { withoutEstimateLine } from '../../shared/task-estimate';
+import { maskTypedItem } from './typed-text';
 
 type Obj = Record<string, unknown>;
 const o = (v: unknown): Obj => (v && typeof v === 'object' && !Array.isArray(v) ? (v as Obj) : {});
@@ -152,7 +153,7 @@ export function readHistory(file: string, opts: { cwd?: string; maxItems?: numbe
         const diff = diffFor(name, b.input, opts.cwd);
         const item: ToolItem = { kind: 'tool', id: `t-${s(b.id) || id}`, at, name, summary: toolSummary(name, b.input, opts.cwd), input: trimInput(b.input, 2000), status: 'running', ...(diff ? { diff } : {}) };
         tools.set(s(b.id), { idx: items.length, input: b.input });
-        items.push(item);
+        items.push(maskTypedItem(item));
       }
     }
   }

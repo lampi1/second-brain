@@ -79,13 +79,6 @@
       "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; TimeoutError: locator.getAttribute: Timeout 30000ms exceeded."
     },
     {
-      "file": "browser-envs.spec.ts",
-      "title": "browser environments and the password guard › HARD LIMIT: type, fill_form and key never put a password into a remote field",
-      "since": "2026-10-21",
-      "group": "group-C",
-      "reason": "Grindhouse tiles, browsers beside chats, streams and timed or clipboard specs; Error: no line matches /button \"Mostra\"/ in:"
-    },
-    {
       "file": "browser-local-javascript.spec.ts",
       "title": "remote browser inspection works while caller JavaScript is limited to the verified local page",
       "since": "2026-10-21",

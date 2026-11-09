@@ -45,7 +45,7 @@ export function browseNote(phrase: string): string {
     APP_NOTE_LABEL,
     `Your reply asked the user to open the browser or sign in manually («${phrase}»). App rule: open and drive the browser yourself.`,
     '- Open the page with tabs_create or navigate (localhost, 127.0.0.1 and *.localhost always use the "local" environment).',
-    '- Remote login: use handoff_to_user kind "login" with the account (the banner shows URL, account and Copy password); on a local stack, sign in yourself with the test account.',
+    '- Login: sign in yourself with type / fill_form and the test account, on any host; with no password for it, or for MFA / CAPTCHA, use handoff_to_user kind "login" with the account (the banner shows URL, account and Copy password).',
     'Do it now, then tell the user what you opened in one line, in their language.',
   ].join('\n');
 }

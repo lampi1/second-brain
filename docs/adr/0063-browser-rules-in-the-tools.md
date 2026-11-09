@@ -15,7 +15,7 @@ Three generic rules, enforced by the app; a violation is **refused with the reas
 choice: no silent correction, the model calls again the right way).
 - **Local stacks live in "local"** (`browser/rules.ts` `envRefusal`, in `tabs_create` and `navigate`): a URL on
   localhost, 127.0.0.1, ::1 or *.localhost loads only in environment "local"; "local" holds only local stacks
-  (*.test stays allowed in it: it is a local stack for the password rule too). Other environment names stay the
+  (*.test stays allowed in it). Other environment names stay the
   caller's choice. A navigate without env is checked against the environment the URL would really load in.
 - **Login hand-offs done right** (`loginRefusal`, in `handoff_to_user` kind "login"): the tab must hold a page; on a
   local stack whose test accounts are in the user's credentials file (ADR 0012) the hand-off is refused (the agent

@@ -5,23 +5,23 @@
 // frame and its point is translated up through each parent iframe to top-level viewport CSS pixels. Every write action
 // returns a short result (what changed: URL, dialog, console errors, failed requests, new tabs, downloads) so the agent
 // rarely needs an extra read. Nothing here waits forever: page scripts and input race a timeout and dialog opening.
-// HARD LIMIT (guard.ts): never type a password on a remote host; agents get an error pointing to handoff_to_user.
+// Agents may type passwords on every host (ADR 0237): a password field's value comes back only masked ("•••").
 // Used by browser/tools.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { NativeImage, WebFrameMain } from 'electron';
 import { log, errText, redact } from '../log';
 import type { BrowserTabs, Tab } from './tabs';
-import { pageCall, walkPage, locateRef, frameBox, inputInfo, focusSelect, selectOptions, pageText, probe, angularStable, fieldFacts, hasPasswordField,
+import { pageCall, walkPage, locateRef, frameBox, inputInfo, focusSelect, selectOptions, pageText, probe, angularStable, hasPasswordField,
   type WalkMode, type WalkResult, type PointResult, type InputInfo, type FrameMarker } from './page';
 import { parseRef, parseFrame, refPrefix } from './refs';
-import { charKey, isPasteKey, isPasteStroke, parseKeys, parseModifiers, strokeEvents, MOD } from './keys';
+import { charKey, isPasteKey, isPasteStroke, parseKeys, parseModifiers, strokeEvents } from './keys';
 import { evidencePath, stampName } from './evidence';
 import { previewOf, type Preview } from './preview';
 import { formatDetail, formatEntry, redactBody } from './netlog';
 import { consoleLine } from './console-line';
 import { globMatch } from './glob';
-import { hostOf, isLocalHost, passwordRefusal, urlCredentials } from './guard';
+import { hostOf, isLocalHost, urlCredentials } from './guard';
 import { isLoginUrl } from './envs';
 import { localScriptOrigin } from './script-policy';
 
@@ -185,7 +185,8 @@ export class BrowserActions {
     return lines.join('\n');
   }
 
-  /** When the tab shows a sign-in page: what the agent may do (local stack: sign in itself; remote: hand off to the user). */
+  /** When the tab shows a sign-in page: the agent signs in itself with type / fill_form (any host, ADR 0237); the
+   *  hand-off stays for MFA, CAPTCHA or an account it has no password for. */
   async loginNotice(tab: Tab): Promise<string> {
     if (tab.wc.isDestroyed()) return '';
     const url = tab.wc.getURL();
@@ -193,28 +194,9 @@ export class BrowserActions {
     const form = await this.evalIn<boolean>(tab, tab.wc.mainFrame, pageCall(hasPasswordField, true), 1500).catch(() => false);
     if (!form && !isLoginUrl(url)) return '';
     const host = hostOf(url);
-    return isLocalHost(host)
-      ? `Sign-in page on a local stack (${host}): you may sign in with the project's test accounts.`
-      : `Sign-in page in environment ${tab.env} (${host}). You never type passwords on remote hosts: call handoff_to_user with kind "login"; the user signs in once and environment ${tab.env} keeps the session.`;
-  }
-
-  /** HARD LIMIT: refuses when the target (a ref, or the focused element of any frame) is a password field on a remote
-   *  host. Checked before typing anything. */
-  async guardPassword(tab: Tab, ref: unknown, what: string): Promise<void> {
-    const check = async (frame: WebFrameMain, r: string | null) => {
-      const host = frameHost(frame);
-      if (isLocalHost(host)) return;
-      const facts = await this.evalIn<{ password: boolean; focused: boolean; desc: string; hasFocus: boolean }>(tab, frame, pageCall(fieldFacts, r), 3000).catch(() => null);
-      // fail closed: a remote frame we cannot read might hold a password field
-      if (!facts) throw new Error(`Refused: could not verify that ${what} is not a password field on ${host || 'a remote page'} (the page did not answer). Try again, or use handoff_to_user.`);
-      if (facts.password) throw passwordRefusal(`${what} (${facts.desc || 'password field'})`, host, tab.env);
-    };
-    if (ref !== undefined && ref !== null && ref !== '') {
-      const { frame, ref: r } = parseRef(ref);
-      await check(this.tabs.frameByNo(tab, frame), r);
-      return;
-    }
-    for (const f of this.tabs.frames(tab)) await check(f, null);
+    return `Sign-in page in environment ${tab.env} (${host}): sign in yourself with type / fill_form and the account you were given ` +
+      `(password values come back masked). For MFA, CAPTCHA or an account without a password, call handoff_to_user with kind "login"; ` +
+      `environment ${tab.env} keeps the session.`;
   }
 
   /** Runs a write action with its before/after summary. */
@@ -384,7 +366,7 @@ export class BrowserActions {
   }
 
   /** Types text as key presses (insertText for long runs or characters without a key). Tab and Enter ("\t", "\n")
-   *  move the focus, so the text is typed in segments and the password limit is checked again before each one. */
+   *  move the focus, so the text is typed in segments with a short pause after each of them. */
   async typeText(tab: Tab, text: string): Promise<'ok' | 'dialog'> {
     for (const part of text.replace(/\r\n?/g, '\n').split(/([\t\n])/)) {
       if (!part) continue;
@@ -394,7 +376,6 @@ export class BrowserActions {
         await sleep(30);                                   // let the focus move before the next check
         continue;
       }
-      await this.guardPassword(tab, undefined, 'the focused field');
       if (part.length > 300) { if (await this.input(tab, [['Input.insertText', { text: part }]]) === 'dialog') return 'dialog'; continue; }
       const steps: Step[] = [];
       for (const ch of part) {
@@ -410,28 +391,22 @@ export class BrowserActions {
   async type(tab: Tab, text: string, ref?: unknown): Promise<string> {
     let where = 'into the focused element';
     if (ref !== undefined && ref !== null && ref !== '') {
-      await this.guardPassword(tab, ref, String(ref));
       await this.click(tab, { ref });
       if (tab.dialog) return `Clicked ${String(ref)}, but a dialog opened: nothing typed`;
       where = `into ${String(ref)}`;
     }
-    const r = await this.typeText(tab, text);                // checks the focused field before every segment
+    const r = await this.typeText(tab, text);
     return `Typed ${[...text].length} characters ${where}${r === 'dialog' ? ' (a dialog opened: typing stopped)' : ''}`;
   }
 
   async key(tab: Tab, keys: string, repeat = 1): Promise<string> {
     const strokes = parseKeys(keys);
     const n = Math.max(1, Math.min(100, Math.floor(repeat) || 1));
-    // characters and paste (ctrl/meta+v, shift+Insert) put text into a field: the password limit applies, checked again
-    // after every key that can move the focus
-    const writes = (s: (typeof strokes)[number]) => (s.def.text !== undefined && s.def.key !== 'Enter' && (s.modifiers & ~MOD.shift) === 0)
-      || (/^v$/i.test(s.def.key) && (s.modifiers & (MOD.ctrl | MOD.meta)) !== 0) || (s.def.key === 'Insert' && (s.modifiers & MOD.shift) !== 0);
+    // a key that can move the focus gets a short pause, so the next key lands where the page put it
     const MOVES = new Set(['Tab', 'Enter', 'Escape', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'PageUp', 'PageDown', 'Home', 'End', 'F6']);
-    let checked = false;
     for (let i = 0; i < n; i++) {
       for (const s of strokes) {
           if (isPasteStroke(s) && this.tabs.credentials.pasteBlocked()) throw new Error('Refused: pasting is blocked while a login password is on the clipboard.');
-        if (writes(s) && !checked) { await this.guardPassword(tab, undefined, 'the focused field'); checked = true; }
         const steps = strokeEvents(s).map((ev): Step => ['Input.dispatchKeyEvent', ev as unknown as Record<string, unknown>]);
           try {
             if (await this.input(tab, steps) === 'dialog') return `Pressed part of ${keys}: a dialog opened`;
@@ -440,7 +415,7 @@ export class BrowserActions {
             await this.input(tab, steps.filter(([, params]) => params.type === 'keyUp')).catch(() => {});
             throw error;
           }
-        if (MOVES.has(s.def.key)) { checked = false; await sleep(30); }
+        if (MOVES.has(s.def.key)) await sleep(30);
       }
     }
     return `Pressed ${keys}${n > 1 ? ` x${n}` : ''}`;
@@ -470,17 +445,6 @@ export class BrowserActions {
    *  only when their state differs; selects set by value or label. One result line per field. */
   async fill(tab: Tab, fields: Array<{ ref?: unknown; value?: unknown }>): Promise<string> {
     if (!Array.isArray(fields) || !fields.length) throw new Error('fields must be a non-empty array of { ref, value }');
-    // HARD LIMIT first, for every field: nothing is filled when one of them is a password field on a remote host
-    for (const f of fields.slice(0, 50)) {
-      let parsed;
-      try { parsed = parseRef(f?.ref); } catch { continue; }
-      const frame = this.tabs.frameByNo(tab, parsed.frame);
-      const host = frameHost(frame);
-      if (isLocalHost(host)) continue;
-      const info = await this.evalIn<InputInfo | { error: string }>(tab, frame, pageCall(inputInfo, parsed.ref)).catch(() => null);
-      if (!info) throw new Error(`Refused: could not verify that ${parsed.ref} is not a password field on ${host || 'a remote page'}. Try again, or use handoff_to_user.`);
-      if (!('error' in info) && info.password) throw passwordRefusal(`${parsed.ref} (${info.desc})`, host, tab.env);
-    }
     const lines: string[] = [];
     for (const f of fields.slice(0, 50)) {
       let label = String(f?.ref ?? '?');
@@ -497,9 +461,6 @@ export class BrowserActions {
           let focused = await this.evalIn<boolean>(tab, frame, pageCall(focusSelect, ref, true));
           if (!focused) { await this.click(tab, { ref: f.ref }); focused = await this.evalIn<boolean>(tab, frame, pageCall(focusSelect, ref, true)); }
           if (!focused) throw new Error(`could not focus ${info.desc}`);
-          // a field can turn into a password field on focus, or focus can land elsewhere: check again right before typing
-          await this.guardPassword(tab, f.ref, ref);
-          await this.guardPassword(tab, undefined, 'the focused field');
           const text = String(v ?? '');
           if (text) { if (await this.input(tab, [['Input.insertText', { text }]]) === 'dialog') break; }
           else await this.key(tab, 'Delete');
@@ -519,7 +480,7 @@ export class BrowserActions {
         lines.push('error' in after ? `${ref}: done` : `${ref} ${after.desc} = ${after.kind === 'checkbox' || after.kind === 'radio' ? (after.checked ? 'checked' : 'unchecked') : `"${after.value}"`}`);
       } catch (e) {
         if (tab.dialog) { lines.push(`${label}: a dialog opened (the page waits: handle_dialog, then fill the rest)`); break; }
-        if (/^Refused:/.test(errText(e))) throw e;            // the password limit fails the whole call, never one line
+        if (/^Refused:/.test(errText(e))) throw e;            // a refusal fails the whole call, never one line
         lines.push(`${label}: FAILED (${errText(e)})`);
       }
     }
@@ -542,7 +503,7 @@ export class BrowserActions {
       if (where === 'reload') { wc.reload(); await this.waitLoad(tab, 30_000); return 'Reloaded'; }
       const target = normalizeUrl(url);
       if (urlCredentials(target) && !isLocalHost(hostOf(target))) {
-        throw new Error('Refused: the URL carries credentials (user:password@) for a remote host. Agents never send passwords to remote hosts: open the plain URL and call handoff_to_user with kind "login".');
+        throw new Error('Refused: the URL carries credentials (user:password@) for a remote host; they would stay in the history, the tab list and the logs. Open the plain URL and sign in on its page with type / fill_form.');
       }
       const d = this.tabs.dialogOpened(tab);
       let timer: NodeJS.Timeout | undefined;

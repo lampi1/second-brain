@@ -5,9 +5,9 @@
 // The walker gives agents an accessibility-style tree (role "name" state [ref]); refs live in a per-frame WeakRef map
 // (window.__sbAgent, non-enumerable) so the same element keeps its ref across reads. Frames are walked one by one and
 // spliced by browser/actions.ts at the iframe markers.
-// Password fields (the HARD LIMIT of guard.ts): pwKit runs before every call and keeps window.__sbPw, the set of
-// elements EVER seen as a password field in this document (a "show password" toggle that turns it into type=text
-// does not make it typeable), with a test that also uses autocomplete and id/name/label hints, and a scan that pierces
+// Password fields (their values are masked, ADR 0237): pwKit runs before every call and keeps window.__sbPw, the set
+// of elements EVER seen as a password field in this document (a "show password" toggle that turns it into type=text
+// keeps its value masked), with a test that also uses autocomplete and id/name/label hints, and a scan that pierces
 // open shadow roots and counts hidden fields. Residual risk: this runs in the page's main world, so a page written to
 // defeat it could; the target sites are the user's own environments. Used by browser/actions.ts and browser/tabs.ts.
 
@@ -58,7 +58,7 @@ export interface WalkResult {
 export interface PointResult { x: number; y: number; w: number; h: number; covered: string | null; desc: string }
 export interface InputInfo {
   kind: 'text' | 'select' | 'checkbox' | 'radio' | 'editable' | 'file' | 'other';
-  password: boolean;          // type=password or autocomplete current-password / new-password (guard.ts)
+  password: boolean;          // type=password or autocomplete current-password / new-password: value masked
   tag: string; type: string; checked: boolean; disabled: boolean; readonly: boolean; multiple: boolean; value: string; desc: string;
 }
 
@@ -369,21 +369,6 @@ export function inputInfo(ref: string): InputInfo | { error: string } {
     kind, password: pw, tag: tag.toLowerCase(), type, checked, disabled: !!i.disabled || el.getAttribute('aria-disabled') === 'true',
     readonly: !!i.readOnly, multiple: tag === 'SELECT' && (el as HTMLSelectElement).multiple, value, desc: `${tag.toLowerCase()}${name ? ` "${name}"` : ''}`,
   };
-}
-
-/** The guard's view of a field: the ref's element, or the focused element of this frame (deep, through shadow roots).
- *  password: true when ever seen as a password field in this document (pwKit). Scans the frame first so that every password
- *  field present now is remembered even if a "show password" toggle changes its type later. */
-export function fieldFacts(ref: string | null): { password: boolean; focused: boolean; desc: string; hasFocus: boolean } {
-  const kit = (window as unknown as { __sbPw: PwKit }).__sbPw;
-  kit.scan(document);
-  let el: Element | null | undefined = null;
-  if (ref) el = (window as unknown as Record<string, { refs: Map<string, WeakRef<Element>> } | undefined>).__sbAgent?.refs.get(ref)?.deref();
-  else { el = document.activeElement; while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement; }
-  if (!el) return { password: false, focused: false, desc: '', hasFocus: document.hasFocus() };
-  const i = el as HTMLInputElement;
-  const name = (el.getAttribute('aria-label') || (i.labels && i.labels[0] ? i.labels[0].innerText : '') || i.placeholder || i.name || '').replace(/\s+/g, ' ').trim().slice(0, 60);
-  return { password: kit.is(el), focused: el !== document.body, desc: `${el.tagName.toLowerCase()}${name ? ` "${name}"` : ''}`, hasFocus: document.hasFocus() };
 }
 
 /** Does this frame hold a password field? Pierces open shadow roots; hidden fields count unless visibleOnly (the
