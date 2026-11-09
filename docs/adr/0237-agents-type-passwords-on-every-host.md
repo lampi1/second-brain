@@ -19,12 +19,17 @@ owner wants chats to sign in by themselves.
   no password it knows. The tool descriptions, the MCP instructions and the reply rule say the same.
 - A typed password never shows in clear where the app shows, keeps or logs things:
   - the page side, unchanged: `read_page` and an action's result show a password field's value as "•••"
-    (`browser/page.ts`); `type` returns only a character count; the MCP server logs argument keys only; screenshots
-    render password fields as bullets;
+    (`browser/page.ts`); `type` returns only a character count, `key` and the tab's last action show the keys with
+    every run that writes text as "•••" (`browser/keys.ts maskKeys`; an unknown key name is never echoed); the MCP
+    server logs argument keys only; every screenshot of an agent tab (the `screenshot` tool, `app_screenshot`) first
+    hides every field ever seen as a password field, one a "show password" toggle revealed included, in every frame,
+    and refuses the capture when a frame cannot be masked (`browser/shot-mask.ts`, `page.ts shotMask`);
   - the chat side, new: the feed item, its summary, a permission panel and the history read back from the transcript
-    show every value typed with `type` or `fill_form` as "•••" (`chats/typed-text.ts`, used by `chats/manager-sink.ts`
-    and `chats/transcript.ts`). Auto-permit and refusal rules still decide on the real input; only what is shown and
-    kept is masked.
+    show every value typed with `type`, `fill_form` or `key` as "•••" (`chats/typed-text.ts`, used by
+    `chats/manager-sink.ts`, before the night-mode log too, and `chats/transcript.ts`), Codex's wrapped panel
+    included. Auto-permit and refusal rules still decide on the real input; only what is shown and kept is masked;
+  - the engine wire recordings (`chats/wire-record.ts`, off unless SB_WIRE_RECORD_DIR is set) mask the same values,
+    in every engine's shape, and drop Claude's streamed tool-input fragments.
 - Kept, because they protect the same values: URLs with credentials (user:pass@) are still refused on remote hosts
   (they would stay in the history, the tab list and the logs); `javascript` stays refused in a tab where a remote frame
   holds a password field and, on remote hosts, for scripts that change an input's type; pasting stays blocked while
@@ -35,6 +40,7 @@ owner wants chats to sign in by themselves.
 - Agents need the password: they read it where the user keeps test accounts (the brain's credentials file or rules),
   never ask the user for it and never write it in chat.
 - Outside the app's control: the engine's own transcript (Claude Code's jsonl) keeps the tool input as the model sent
-  it. Characters typed one by one with `key`, and a screenshot taken after a "show password" toggle, are not masked.
-- Tests: `test/unit/browser-passwords.test.ts` (typing on a remote host), `test/unit/chats/typed-text.test.ts` (the
-  feed, panels and history masked).
+  it. A page that shows a password as plain text outside an input (not a field) is not masked in a screenshot.
+- Tests: `test/unit/browser-passwords.test.ts` (typing on a remote host, the screenshot order),
+  `test/unit/chats/typed-text.test.ts` (the feed, panels and history), `test/unit/browser-shot-mask.test.ts`,
+  `test/unit/chats/wire-record.test.ts`, `test/unit/chats/away.test.ts` (night mode), `test/e2e/browser-envs.spec.ts`.
