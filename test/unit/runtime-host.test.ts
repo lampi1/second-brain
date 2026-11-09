@@ -13,6 +13,7 @@ const flush = () => vi.advanceTimersByTimeAsync(0);
 
 function fixture(options: { holdAccepted?: boolean; dropAck?: boolean; dropUpdates?: boolean; constructorEvent?: boolean; ready?: Promise<void> } = {}) {
   let engineSink!: SessionSink;
+  let root: HarnessSession['root'] = null;
   let writeBarrier: Promise<unknown> = Promise.resolve();
   const writes = vi.fn();
   const killed = vi.fn();
@@ -25,13 +26,14 @@ function fixture(options: { holdAccepted?: boolean; dropAck?: boolean; dropUpdat
     engineSink = target;
     if (options.constructorEvent) target.changed({ state: 'starting' });
     return {
-      harness: 'claude', state: 'idle', sessionId: 'native', pid: 123, root: null, busy: false, alive: true,
+      harness: 'claude', state: 'idle', sessionId: 'native', pid: 123, get root() { return root; }, busy: false, alive: true,
       ready: options.ready,
       start() {}, send() { void writeBarrier.then(() => { if (!killed.mock.calls.length) writes(); }); },
       holdWrites(until) { writeBarrier = until; return options.holdAccepted ?? true; },
       answer, interrupt: async () => {}, setModel: async () => {}, setPermissionMode: async () => {},
       setEffort: async () => {}, rename: async () => {}, contextUsage: async () => null,
-      usage: async () => null, close: async () => {}, killNow: killed,
+      usage: async () => null, killNow: killed,
+      close: async () => { root = { pid: 123, created: 10, exited: 20, job: 7 }; target.exit({ code: 0, error: null }); },
     } satisfies HarnessSession;
   }, frame => { replies.push(frame); if (!options.dropAck) proxy.receiveReply(frame); },
   frame => { updates.push(frame); if (!options.dropUpdates) proxy.receiveUpdate(frame); }, () => proxy.hostDied());
@@ -175,4 +177,12 @@ it('refuses queued command bytes before dispatch and recovers credit after ackno
   expect(frames).toHaveLength(2);
   channel.receive({ ...frames[1], payload: { kind: 'reply', ok: true, value: true } });
   await next; channel.close();
+});
+
+it('carries the exited engine root to main so a kept engine is reaped at the real close', async () => {
+  const f = fixture();
+  expect(f.proxy.root).toBeNull();
+  await f.proxy.close(undefined, true);
+  // The host's job handle has no meaning in main's job registry: main reaps by the process walk.
+  expect(f.proxy.root).toEqual({ pid: 123, created: 10, exited: 20, job: null });
 });

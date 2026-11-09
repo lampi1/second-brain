@@ -1,6 +1,7 @@
 // Generation-scoped execution owner used by the utility entry and deterministic transport tests.
 // Adapter calls happen exactly once; lost replies are uncertainty, never automatic resubmission.
 import type { HarnessSession, SessionSink } from '../chats/session';
+import type { Root } from '../chats/proctree';
 import { RuntimeBatcher } from './batcher';
 import { RuntimeChannel, RuntimeReceiver, type RuntimeFrame } from './channel';
 import type { RuntimeIdentity } from '../../shared/agent-runtime';
@@ -15,6 +16,8 @@ export type AdapterEvent = { [K in keyof SessionSink]-?: { method: K; args: Para
 export interface AdapterSnapshot {
   state: HarnessSession['state']; sessionId: string | null; pid: number | null;
   busy: boolean; alive: boolean; gone: boolean; startedAt: number; canHold: boolean; ready: boolean;
+  /** the exited process, so main reaps a kept engine's tools at the real close (manager-lifecycle.ts reapKept) */
+  root: Root | null;
 }
 export interface HostUpdate { events: AdapterEvent[]; snapshot: AdapterSnapshot; providerWriteAt?: number; textAt?: number }
 export type HostUpdateFrame = SemanticFrame<HostUpdate>;
@@ -68,8 +71,11 @@ export class HostSession {
 
   snapshot(): AdapterSnapshot {
     const a = this.adapter;
+    // A job handle belongs to this process's job registry; in main it could name another engine's job. Main reaps
+    // by the process walk (pid + creation time) instead.
+    const root = a.root ? { pid: a.root.pid, created: a.root.created, exited: a.root.exited, job: null } : null;
     return { state: a.state, sessionId: a.sessionId, pid: a.pid, busy: a.busy, alive: a.alive,
-      gone: a.gone ?? false, startedAt: a.startedAt ?? 0, canHold: this.ready && this.supportsWrites && !!a.holdWrites, ready: this.ready };
+      gone: a.gone ?? false, startedAt: a.startedAt ?? 0, canHold: this.ready && this.supportsWrites && !!a.holdWrites, ready: this.ready, root };
   }
 
   /** Called on parent disconnect, replacement or shutdown; never releases a blocked write into a live adapter. */
