@@ -113,11 +113,11 @@ function touchesSettings(req: PermitRequest, command: boolean, cwd: string): boo
     // path build a name the app cannot read. `X=$(…) cmd`, `echo $(date)`, `-v $(pwd):/app`, `grep '^$'`, a Windows `C:\work\2026` path and
     // PowerShell's single `t escape stay free.
     const line = typeof o.command === 'string' ? o.command : '';
-    // `$'.git'` is `.git`; PowerShell drops a backtick before a letter that is no escape (.g`it is .git)
-    const raw = line.replace(/\$'/g, "'").replace(/['"]/g, '');
+    // `$'.git'` and `$".git"` are `.git`; PowerShell drops a backtick before a letter that is no escape (.g`it is .git)
+    const raw = line.replace(/\$(?=['"])/g, '').replace(/['"]/g, '');
     const plain = raw.replace(/`(?![0abefnrtuv])/g, '');
     if (/\$'[^']*\\/.test(line)) return true;
-    if (/\b(printf|echo)\b/i.test(line) && /\\(x[0-9a-f]|0?[0-7]{1,3}|u[0-9a-f]{4})/i.test(line)) return true;
+    if (/\b(printf|echo)\b[^;&|>\n]*\\(x[0-9a-f]|0?[0-7]{1,3}|u[0-9a-f]{4})/i.test(line)) return true;
     if (/[^\s=;&|(<>]\$\(|[^\s=;&|(<>]`[^`]*`|\$\([^)]*\)[^\s;&|)<>:]|`[^`]*`[^\s;&|)<>:]/.test(raw)) return true;
     if (SETTINGS_COMMAND.test(raw)) return true;
     const base = typeof o.cwd === 'string' && o.cwd ? path.resolve(cwd, o.cwd) : cwd;
