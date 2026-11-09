@@ -1,5 +1,5 @@
-// A continued writing child (manager-continuity.ts → ChatManager.create → DelegateWorktrees.prepare with continuationOf)
-// keeps its predecessor's pinned base, so the delta it integrates is the whole chain's, and is refused once the source
+// A continued writing child (manager-continuity.ts → ChatManager.create → DelegateWorktrees.prepare with continuationOf;
+// only prepare is driven here) keeps its predecessor's pinned base, so the delta it integrates is the whole chain's, and is refused once the source
 // worktree left its branch or rewrote away the base (src/main/agents/worktrees.ts). Git is a scripted fake: no process,
 // no checkout, no clock, so the pinning is checked in milliseconds whatever the machine's load (the real-Git version
 // took 122 s on a busy PC, docs/agents/rules.md §7).

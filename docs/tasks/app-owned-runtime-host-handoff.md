@@ -232,6 +232,8 @@ were restored by the owner. This assignment installed nothing and does not push.
 
 ### Single final gate receipt
 
+**State on 2026-11-09 (issue #353):** merged on `main`; non-e2e gate run on main's tip and independent review done, both recorded in [`post-merge-review-353.md`](post-merge-review-353.md). The «red», «pending» and «not merge-ready» lines below are the history of the branch before the merge.
+
 Implementation commit `97de9f40`: the single `npm run check:quick` returned **exit 1**. Typecheck passed; lint found
 two `prefer-const` errors in the new debounce test callback targets (plus the existing non-blocking `wiring.ts`
 length warning). Unit and documentation tests in that gate did not start. The callback targets now use a const

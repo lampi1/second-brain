@@ -70,6 +70,7 @@ to the actual database owner in its combined tree (here `app` in wiring is Elect
 - Full index exported with `git checkout-index --all --prefix=<temporary-export>/`, then
   `node tools/guard/scan.mjs <temporary-export> --allow <temporary-export>/.guardallow`: exit 0, clean.
   `node scripts/guard-commit.mjs`: exit 0. No allowlist changes and no scan of the worktree's `.git` pointer/junction.
+- **State on 2026-11-09 (issue #353):** merged on `main`; non-e2e gate run on main's tip and independent review done, both recorded in [`post-merge-review-353.md`](post-merge-review-353.md). The «red», «pending» and «not merge-ready» lines below are the history of the branch before the merge.
 - Local checkpoint only; no push. Review pending and quick gate red, so this branch is not merge-ready. There is no
   visible product change and no before/after UI claim; the baseline runs the real hidden dev renderer.
 
@@ -160,4 +161,4 @@ manager-requests, digest and request/receipt modules. No coordination file was c
 | CLI/API adapters outside main, API keys in main | Not started | Existing execution unchanged |
 | Crash/stale/duplicate/barrier/shutdown deterministic tests green | Not started | Recorder tests written, not run |
 | Same after measurements with comparison | Not started | Migration not begun |
-| Quick gate, guard, dev verification, local commits | Blocked | Correction tests 23/23; local commit rebased; guard clean; fresh quick exit unavailable after terminal failure; independent review pending |
+| Quick gate, guard, dev verification, local commits | Done (2026-11-09) | Merged on `main`; non-e2e gate on main's tip and independent review recorded in `post-merge-review-353.md` (before: correction tests 23/23, guard clean, quick gate red, review pending) |
