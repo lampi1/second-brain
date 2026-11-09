@@ -234,7 +234,7 @@
     "src/renderer/components/UsageBar.tsx": "ffc948b936c77540",
     "src/renderer/components/viewer/ViewerOverlay.tsx": "847e222249b7f26a",
     "src/renderer/components/VoiceSettings.tsx": "efce435bf543ea2c",
-    "src/renderer/components/WorktreeSettings.tsx": "16dff642da19e444",
+    "src/renderer/components/WorktreeSettings.tsx": "c1438258effbb6f7",
     "src/renderer/dashboard/BrainNotesMap.tsx#BrainNotesMap": "f1d995a4a3f523c5",
     "src/renderer/i18n/areas/home.it.ts": "db717e63b9fddfff",
     "src/renderer/i18n/areas/lampo.it.ts": "a27d05163aa9a9ca",
