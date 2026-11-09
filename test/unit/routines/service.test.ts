@@ -8,6 +8,7 @@ import { createDemoRoutines } from '../../../src/main/routines/demo';
 import { createLegacyArchive } from '../../../src/main/routines/legacy';
 import { flowBrainContextKey } from '../../../src/main/flows/context';
 import { tempDir } from '../routine-runtime/fakes';
+import type { RoutineRunDetail } from '../../../src/shared/routines';
 
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); });
 
