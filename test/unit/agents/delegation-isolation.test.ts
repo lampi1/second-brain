@@ -137,24 +137,6 @@ describe('delegation isolation', () => {
     expect(git(f.repo, 'worktree', 'list', '--porcelain').match(/^worktree /gm)).toHaveLength(1);
   });
 
-  it('preserves the original delta when a host-authorized successor continues a committed child', async () => {
-    const f = fixture(), originalHead = git(f.repo, 'rev-parse', 'HEAD');
-    const original = f.child((await f.prepare()).cwd);
-    fs.writeFileSync(path.join(original.cwd, 'first.txt'), 'predecessor\n'); commit(original.cwd, 'B');
-    const next = await f.service.prepare(f.parent, { cwd: original.cwd } as NewChat, writer, original.id);
-    next.bind!('successor'); const successor = f.child(next.cwd, 'successor');
-    fs.writeFileSync(path.join(next.cwd, 'second.txt'), 'successor\n'); commit(next.cwd, 'C');
-    const allocation = f.service.allocation(f.parent, successor);
-    expect(allocation.base).toBe(originalHead);
-    const result = await stageDelegatedChanges(allocation, f.parent, successor);
-    expect(result.status).toBe('staged');
-    expect(fs.readFileSync(path.join(result.cwd!, 'first.txt'), 'utf8')).toBe('predecessor\n');
-    expect(fs.readFileSync(path.join(result.cwd!, 'second.txt'), 'utf8')).toBe('successor\n');
-    fs.writeFileSync(path.join(successor.cwd, 'unsaved.txt'), 'keep this');
-    await expect(f.service.prepare(f.parent, { cwd: successor.cwd } as NewChat, writer, successor.id)).rejects.toThrow(/uncommitted or untracked/);
-    await expect(f.service.prepare(f.parent, { cwd: original.cwd } as NewChat, writer, 'forged')).rejects.toThrow(/host-owned/);
-  });
-
   it('blocks dirty, non-Git and foreign sources without a shared writer fallback', async () => {
     const f = fixture();
     fs.writeFileSync(path.join(f.repo, 'unsaved.txt'), 'preserve me');
@@ -174,6 +156,8 @@ describe('delegation isolation', () => {
     expect(() => new DelegateWorktrees().allocation(f.parent, child)).toThrow(/host-owned/);
     expect(() => f.service.allocation(f.parent, { ...child, id: 'different-child' })).toThrow(/host-owned/);
     expect(() => f.service.allocation({ ...f.parent, id: 'other' }, { ...child, parentId: 'other' })).toThrow(/host-owned/);
+    // a successor continues only a predecessor the host allocated to that chat
+    await expect(f.service.prepare(f.parent, { cwd: child.cwd } as NewChat, writer, 'forged')).rejects.toThrow(/host-owned/);
     // reuse looks up only the allocated worktree; a sibling worktree the host never allocated owns nothing
     const trees = await gitWorktrees(f.parent.cwd, child.cwd);
     expect(trees).toHaveLength(1); expect(withinParent(f.parent.cwd, child.cwd, trees)).toBe(true);
@@ -193,41 +177,33 @@ describe('delegation isolation', () => {
     expect(() => new DelegateWorktrees(file)).toThrow(/Invalid delegation isolation/);
   });
 
-  it('stages committed changes on the parent tip without moving main, running hooks or claiming tests passed', async () => {
-    const f = fixture(), prepared = await f.prepare(), child = f.child(prepared.cwd);
-    fs.writeFileSync(path.join(child.cwd, 'pkg', 'code.txt'), 'child change\n'); commit(child.cwd, 'child');
-    fs.writeFileSync(path.join(f.repo, 'parent.txt'), 'parent independent\n'); commit(f.repo, 'parent');
-    const head = git(f.repo, 'rev-parse', 'HEAD'), index = fs.readFileSync(path.join(f.repo, '.git', 'index'));
-    // Repository hooks are never executed by the integration service.
-    const hooks = path.join(f.repo, '.git', 'hooks');
-    fs.writeFileSync(path.join(hooks, 'post-checkout'), '#!/bin/sh\nexit 123\n', { mode: 0o755 });
-    // Reading status must not refresh the parent's index even when file timestamps need revalidation.
-    const later = new Date(Date.now() + 2000); fs.utimesSync(path.join(f.repo, 'pkg', 'code.txt'), later, later);
-    const result = await stageDelegatedChanges(f.service.allocation(f.parent, child), f.parent, child);
-    expect(result).toMatchObject({ status: 'staged', checksRequired: true, parentUnchanged: true, parentHead: head, whitespace: { exit: 0 } });
-    expect(result.whitespace?.tree).toBe(result.tree);
-    expect(fs.readFileSync(path.join(result.cwd!, 'pkg', 'code.txt'), 'utf8')).toBe('child change\n');
-    expect(fs.readFileSync(path.join(result.cwd!, 'parent.txt'), 'utf8')).toBe('parent independent\n');
-    expect(git(result.cwd!, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('HEAD');
-    expect(git(f.repo, 'symbolic-ref', '--short', 'HEAD')).toBe('main'); expect(git(f.repo, 'rev-parse', 'HEAD')).toBe(head);
-    expect(fs.readFileSync(path.join(f.repo, '.git', 'index'))).toEqual(index);
-    expect(fs.readFileSync(path.join(f.repo, 'pkg', 'code.txt'), 'utf8')).toBe('original\n');
-    expect(git(f.repo, 'status', '--porcelain')).toBe('');
-  });
-
   // Two host-owned writers plus a detached union require repeated real Git safety/identity checks. Its old 30 s budget
   // predates the suite-wide 120 s one and became the lowest: its twin below (same two writers) needs ~40 s here.
-  it('combines parallel siblings in one union stage and keeps both pinned sources', async () => {
+  // It also carries the single-child staging guarantees (stageDelegatedChanges is this union of one): the stage sits on
+  // the parent's moved tip, never moves main, runs no hook, leaves the parent's index bytes alone and claims no tests.
+  it('combines parallel siblings in one union stage on the parent tip, without moving main, running hooks or claiming tests passed', async () => {
     const f = fixture();
     const a = f.child((await f.prepare(f.repo, 'a')).cwd, 'a'), b = f.child((await f.prepare(f.repo, 'b')).cwd, 'b');
     fs.writeFileSync(path.join(a.cwd, 'a.txt'), 'first child\n'); commit(a.cwd, 'first');
     fs.writeFileSync(path.join(b.cwd, 'b.txt'), 'second child\n'); commit(b.cwd, 'second');
+    fs.writeFileSync(path.join(f.repo, 'parent.txt'), 'parent independent\n'); commit(f.repo, 'parent');
+    const head = git(f.repo, 'rev-parse', 'HEAD'), index = fs.readFileSync(path.join(f.repo, '.git', 'index'));
+    // Repository hooks are never executed by the integration service.
+    fs.writeFileSync(path.join(f.repo, '.git', 'hooks', 'post-checkout'), '#!/bin/sh\nexit 123\n', { mode: 0o755 });
+    // Reading status must not refresh the parent's index even when file timestamps need revalidation.
+    const later = new Date(Date.now() + 2000); fs.utimesSync(path.join(f.repo, 'pkg', 'code.txt'), later, later);
     const requested = [b, a].map(child => ({ owned: f.service.allocation(f.parent, child), child }));
     const result = await stageDelegatedChangesMany(requested, f.parent);
-    expect(result.status).toBe('staged'); expect(result.sources?.map(x => x.chatId)).toEqual(['a', 'b']);
+    expect(result).toMatchObject({ status: 'staged', checksRequired: true, parentUnchanged: true, parentHead: head, whitespace: { exit: 0 } });
+    expect(result.whitespace?.tree).toBe(result.tree);
+    expect(result.sources?.map(x => x.chatId)).toEqual(['a', 'b']);
     expect(fs.readFileSync(path.join(result.cwd!, 'a.txt'), 'utf8')).toBe('first child\n');
     expect(fs.readFileSync(path.join(result.cwd!, 'b.txt'), 'utf8')).toBe('second child\n');
+    expect(fs.readFileSync(path.join(result.cwd!, 'parent.txt'), 'utf8')).toBe('parent independent\n');
     expect(git(result.cwd!, 'write-tree')).toBe(result.tree);
+    expect(git(result.cwd!, 'rev-parse', '--abbrev-ref', 'HEAD')).toBe('HEAD');
+    expect(git(f.repo, 'symbolic-ref', '--short', 'HEAD')).toBe('main'); expect(git(f.repo, 'rev-parse', 'HEAD')).toBe(head);
+    expect(fs.readFileSync(path.join(f.repo, '.git', 'index'))).toEqual(index);
     expect(git(f.repo, 'status', '--porcelain')).toBe('');
     expect(await stageDelegatedChangesMany([requested[0]!, requested[0]!], f.parent)).toMatchObject({ status: 'blocked' });
   });

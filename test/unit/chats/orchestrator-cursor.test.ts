@@ -51,7 +51,7 @@ describe('an Orchestrator on Cursor', () => {
   it('gets the app tools and delegates role chats on both engines, each on its role\'s engine', async () => {
     const { m, cwd, claudeLog, curLog } = await setup();
     const orchestrator = await m.create({ harness: 'cursor', cwd, title: 'Orchestrator', orchestrator: true, prompt: [call('scout', 'Prova · Claude'), call('artisan', 'Prova · Cursor')].join('\n') });
-    await waitFor(() => m.list().length === 3 && m.items(orchestrator.id).filter(i => i.kind === 'tool' && i.status !== 'running').length === 2, 'two chats created by the Orchestrator', 20000);
+    await waitFor(() => m.list().length === 3 && m.items(orchestrator.id).filter(i => i.kind === 'tool' && i.status !== 'running').length === 2, 'two chats created by the Orchestrator');
 
     const made = m.list().filter(c => c.id !== orchestrator.id);
     expect(made.map(c => [c.title, c.harness, c.isOrchestrator])).toEqual([['Prova · Claude', 'claude', false], ['Prova · Cursor', 'cursor', false]]);
@@ -64,14 +64,14 @@ describe('an Orchestrator on Cursor', () => {
     // only the Orchestrator's Cursor session got the app server
     const news = cursorLog(curLog).filter(l => l.method === 'session/new').map(l => (l.params?.mcpServers as { name: string }[]).map(s => s.name));
     expect(news).toEqual([['second-brain-app'], []]);
-  }, 40000);
+  });
 
   it('with cross-engine messaging off, role chats still start on both enabled engines', async () => {
     const { m, cwd } = await setup(false);
     const orchestrator = await m.create({ harness: 'cursor', cwd, title: 'Orchestrator', orchestrator: true, prompt: [call('scout', 'No · Claude'), call('artisan', 'Si · Cursor')].join('\n') });
-    await waitFor(() => m.items(orchestrator.id).filter(i => i.kind === 'tool' && i.status !== 'running').length === 2, 'both calls answered', 20000);
+    await waitFor(() => m.items(orchestrator.id).filter(i => i.kind === 'tool' && i.status !== 'running').length === 2, 'both calls answered');
     expect(m.list().filter(c => c.id !== orchestrator.id).map(c => [c.title, c.harness])).toEqual([['No · Claude', 'claude'], ['Si · Cursor', 'cursor']]);
     const tools = m.items(orchestrator.id).filter(i => i.kind === 'tool');
     expect(tools.map(i => (i.kind === 'tool' ? i.status : ''))).toEqual(['ok', 'ok']);
-  }, 40000);
+  });
 });
