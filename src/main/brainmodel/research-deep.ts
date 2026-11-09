@@ -6,18 +6,20 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 
 export interface Conversation { id: string; title: string; items: readonly ChatItem[] }
-export interface OpenIssue { number: number; title: string; body: string; url: string }
+/** No body: an issue's text is written by anyone on a public repository and must never sit beside the user's private
+ *  history in a research chat that can reach the web (#353 review). Titles are enough for the dedup. */
+export interface OpenIssue { number: number; title: string; url: string }
 export interface IssueSnapshot { repo: string | null; status: 'checked' | 'unverified'; at: number; note: string; issues: OpenIssue[] }
 type Request = (url: string) => Promise<{ status: number; json(): Promise<unknown> }>;
 const request: Request = url => fetch(url, { redirect: 'error', signal: AbortSignal.timeout(8000), headers: { Accept: 'application/vnd.github+json' } });
 
-/** A complete inventory is necessary for a checked receipt. PRs count towards pagination, never towards issues. */
-export async function issueSnapshot(repo: string | null, get: Request = request, now = Date.now()): Promise<IssueSnapshot> {
+/** A complete inventory is necessary for a checked receipt. PRs count towards pagination, never towards issues.
+ *  hidden: an agent's hidden run and the e2e (main/window.ts hiddenRun, passed by wiring) never reach GitHub: their
+ *  checks must not depend on the live issues of the real repository. */
+export async function issueSnapshot(repo: string | null, get: Request = request, now = Date.now(), hidden = false): Promise<IssueSnapshot> {
   const result: IssueSnapshot = { repo, status: 'unverified', at: now, note: 'dedup da verificare: repository non disponibile', issues: [] };
   if (!repo || !/^[\w.-]+\/[\w.-]+$/.test(repo) || repo.split('/').some(x => x === '.' || x === '..')) return result;
-  // an agent's hidden run and the e2e (SB_HIDDEN, main/window.ts hiddenRun) never reach GitHub: their checks must not
-  // depend on the live issues of the real repository
-  if (process.env.SB_HIDDEN === '1') return { ...result, note: 'dedup da verificare: run nascosto, GitHub non letto' };
+  if (hidden) return { ...result, note: 'dedup da verificare: run nascosto, GitHub non letto' };
   try {
     for (let page = 1; page <= 10; page++) {
       const response = await get(`https://api.github.com/repos/${repo}/issues?state=open&per_page=100&page=${page}`);
@@ -30,9 +32,9 @@ export async function issueSnapshot(repo: string | null, get: Request = request,
         if (issue.pull_request) continue;
         if (!Number.isSafeInteger(issue.number) || Number(issue.number) < 1 || typeof issue.title !== 'string' ||
             (issue.body !== null && typeof issue.body !== 'string') || issue.html_url !== `https://github.com/${repo}/issues/${issue.number}`) throw new Error('Invalid issue');
-        result.issues.push({ number: Number(issue.number), title: issue.title, body: String(issue.body ?? '').slice(0, 8000), url: String(issue.html_url) });
+        result.issues.push({ number: Number(issue.number), title: issue.title, url: String(issue.html_url) });
       }
-      if (data.length < 100) return { ...result, status: 'checked', note: 'Open issue inventory read completely; compare meaning as well as titles.' };
+      if (data.length < 100) return { ...result, status: 'checked', note: 'Open issue inventory read completely (titles only); compare meaning as well as words.' };
     }
     throw new Error('Issue inventory exceeds 1000 entries');
   } catch (error) {

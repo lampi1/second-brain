@@ -179,9 +179,17 @@ describe('ResearchService', () => {
     const card = t.svc.store.get(r.id)!;
     expect(card.issue!.body).toBe('Seen in ~/x by <email>');
     expect(() => t.svc.propose('c1', idea)).toThrow(/Duplicate/);
-    for (let i = 1; i < 5; i++) t.svc.propose('c1', { ...idea, title: `Idea ${i}`, issue: { ...idea.issue, title: `Issue ${i}` } });
+    // an approved (or undone) card no longer blocks the same finding: a bug can come back after its fix; a rejected one does
+    t.svc.store.update(r.id, { state: 'approved' });
+    const again = t.svc.propose('c1', idea);
+    t.svc.store.update(again.id, { state: 'rejected' });
+    expect(() => t.svc.propose('c1', idea)).toThrow(/Duplicate/);
+    t.svc.store.update(again.id, { state: 'open' });
+    t.svc.store.update(r.id, { state: 'open' });
+    for (let i = 1; i < 4; i++) t.svc.propose('c1', { ...idea, title: `Idea ${i}`, issue: { ...idea.issue, title: `Issue ${i}` } });
     expect(() => t.svc.propose('c1', { ...idea, title: 'Idea 6' })).toThrow(/Limit/);
     expect(t.svc.cards().filter(isAppCard)).toHaveLength(5);
+    expect(t.svc.cards().map(c => c.rank)).toEqual([...t.svc.cards().map(c => c.rank)].sort((a, b) => (a ?? 0) - (b ?? 0))); // one research: by rank
     expect(t.svc.cards().filter(c => !isAppCard(c))).toHaveLength(0);
   });
 

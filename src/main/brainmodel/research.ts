@@ -435,7 +435,10 @@ export class ResearchService {
     card.rank = mine.length + 1;
     if (mine.filter(p => familyOf(p.kind) === fam).length >= RESEARCH_CAPS[fam]) throw new Error(`Limit reached: at most ${RESEARCH_CAPS[fam]} proposals of this family per research.`);
     const same = (p: ResearchProposal) => sameFinding(p.title, card.title) || !!p.issue && !!card.issue && sameFinding(p.issue.title, card.issue.title);
-    if (this.store.all().some(p => same(p) && !(card.logKey && p.logKey === card.logKey && p.state === 'open' && p.chatId === null))) throw new Error('Duplicate: the same proposal was already proposed.');
+    // only a card still open or one the user said no to, of the same family: an approved, undone or reverted one may
+    // come back (a bug that returned after its fix) (#353 review)
+    const alive = (p: ResearchProposal) => (p.state === 'open' || p.state === 'rejected') && familyOf(p.kind) === fam;
+    if (this.store.all().some(p => alive(p) && same(p) && !(card.logKey && p.logKey === card.logKey && p.state === 'open' && p.chatId === null))) throw new Error('Duplicate: the same proposal was already proposed.');
     // a better version of the bug card the log step wrote from the same log group: that card is rewritten
     const was = card.logKey ? this.store.all().find(p => p.logKey === card.logKey && p.state === 'open' && p.chatId === null) : undefined;
     // a brain-file finding waits for the candidate brain, built when the research ends (ADR 0195)
@@ -619,7 +622,14 @@ export class ResearchService {
 
   // ── Proposte (the 'research' source) ─────────────────────────────────────────────────────────────────────────────
   /** Open findings, newest first: brain changes and what to forget, and the app cards that open an issue. */
-  cards(): ResearchProposal[] { return this.store.all().filter(p => p.state === 'open' && !p.candidateId).sort((a, b) => a.chatId === b.chatId && a.rank && b.rank ? a.rank - b.rank : b.at - a.at); }
+  cards(): ResearchProposal[] {
+    // one total order (#353 review): a research's cards together, the newest research first, by its rank inside; a
+    // cleanup card (no chat) stands on its own time
+    const open = this.store.all().filter(p => p.state === 'open' && !p.candidateId), latest = new Map<string, number>();
+    for (const p of open) if (p.chatId) latest.set(p.chatId, Math.max(latest.get(p.chatId) ?? 0, p.at));
+    const group = (p: ResearchProposal): number => (p.chatId ? latest.get(p.chatId)! : p.at);
+    return open.sort((a, b) => group(b) - group(a) || (a.chatId && a.chatId === b.chatId ? (a.rank ?? Infinity) - (b.rank ?? Infinity) : 0) || b.at - a.at || a.id.localeCompare(b.id));
+  }
   /** The open candidate brains (ADR 0195): one card each. */
   candidateCards(): BrainCandidateView[] {
     const all = new Map(this.store.all().map(p => [p.id, p]));

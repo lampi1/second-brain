@@ -808,7 +808,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     // the Claude CLI's «opus» is its strongest model, whatever its version; the others start on their CLI's default
     bestModel: h => (engineOf(h)?.kind === 'claude' ? 'opus' : null),
     runs: () => manager.runs.list(), roles: () => agents.list().profiles.filter(p => p.scope === 'role'),
-    openIssues: repo => issueSnapshot(repo),
+    openIssues: repo => issueSnapshot(repo, undefined, undefined, hiddenRun()),
     conversationList: () => manager.list().filter(c => !c.research && c.updatedAt >= Date.now() - 30 * 86_400_000).sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 40).map(c => ({ id: c.id, title: c.title })),
     conversationRead: id => manager.items(id),
     brain: { state: () => brainModel.state(), apply: p => brainModel.applyResearch(p), noise: (key, known) => { brainModel.noise(key, known); }, maintain: () => brainModel.maintain(), outcomes: () => brainModel.checkOutcomes() },
