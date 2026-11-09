@@ -1,10 +1,10 @@
-// Pure parts of environments, the password guard, body redaction, glob matching and the Electron fuse reader.
+// Pure parts of environments, local-stack and URL-credential checks, body redaction, glob matching and the Electron fuse reader.
 import { describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { globMatch } from '../../src/main/browser/glob';
-import { isLocalHost, hostOf, passwordRefusal, changesInputType, urlCredentials } from '../../src/main/browser/guard';
+import { isLocalHost, hostOf, changesInputType, urlCredentials } from '../../src/main/browser/guard';
 import { redact } from '../../src/main/log';
 import { EnvStore, computeSession, envColor, envForUrl, envSlug, envPartition, isAuthCookie, isLoginUrl } from '../../src/main/browser/envs';
 import { redactBody } from '../../src/main/browser/netlog';
@@ -30,19 +30,12 @@ describe('globMatch (no regex: no ReDoS on page-controlled URLs)', () => {
   });
 });
 
-describe('password guard', () => {
-  it('knows the local stacks where agents may type passwords', () => {
+describe('host checks', () => {
+  it('knows the local stacks', () => {
     for (const h of ['localhost', '127.0.0.1', '[::1]', '::1', 'app.localhost', 'app.example.test', 'http://localhost:4200/x', 'LOCALHOST']) expect(isLocalHost(h), h).toBe(true);
     for (const h of ['127.0.0.2', 'test-3.example.com', 'login.microsoftonline.com', 'localhost.evil.com', 'test.com', 'https://app.test.evil.com/', '']) expect(isLocalHost(h), h).toBe(false);
     expect(hostOf('https://Test-3.Example.com:8443/a')).toBe('test-3.example.com');
     expect(hostOf('about:blank')).toBe('');
-  });
-
-  it('refuses with an actionable message', () => {
-    const e = passwordRefusal('e12 (input "Password")', 'test-3.example.com', 'example-test-3');
-    expect(e.message).toMatch(/^Refused: e12 .* password field on test-3\.example\.com/);
-    expect(e.message).toContain('handoff_to_user with kind "login"');
-    expect(e.message).toContain('"example-test-3"');
   });
 
   it('spots scripts that change an input type (password → text)', () => {

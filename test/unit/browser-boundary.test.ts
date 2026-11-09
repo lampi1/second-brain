@@ -28,7 +28,6 @@ it('rechecks clipboard protection after a modifier event awaited CDP, before dis
   const cancel=vi.fn();
   const tabs={credentials:{pasteBlocked:()=>copied},cssScale:()=>1,dialogOpened:()=>({promise:new Promise(()=>{}),cancel})} as unknown as BrowserTabs;
   const actions=new BrowserActions(tabs);
-  vi.spyOn(actions,'guardPassword').mockResolvedValue();
   const tab={agentInput:0,dialog:null,cdp:{send:async (_method:string,params:Record<string,unknown>)=>{sent.push(params);if(params.key==='Control')copied=true;}}} as unknown as Tab;
   await expect(actions.key(tab,'ctrl+v')).rejects.toThrow('pasting is blocked');
   expect(sent.some(p=>p.key==='v' && p.type!=='keyUp')).toBe(false);

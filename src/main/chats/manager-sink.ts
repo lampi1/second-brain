@@ -16,6 +16,7 @@ import type { Rec } from './manager-types';
 import { ManagerWork } from './manager-work';
 import { sysItem } from './manager-helpers';
 import { pausedState } from './remote-control';
+import { maskTypedItem, maskTypedRequest } from './typed-text';
 
 /** What a session reports (items, requests, state patches) turned into the chat record and contract events. */
 export abstract class ManagerSink extends ManagerWork {
@@ -27,6 +28,7 @@ export abstract class ManagerSink extends ManagerWork {
     return {
       item: (item, replace) => {
         if (!live()) return;
+        item = maskTypedItem(item);      // what an agent typed into a page (a password, ADR 0235) never reaches the feed
         // a replayed past (a resume) is no answer of the engine: its cold start goes on
         if (item.kind !== 'user' && item.kind !== 'system' && r.replaying !== r.session) this.coldStarted(r);
         this.hook('analytics', () => this.analytics.item(r.s, item, replace));
@@ -51,6 +53,7 @@ export abstract class ManagerSink extends ManagerWork {
         if (!live()) return;
         this.coldStarted(r);
         if (this.gated(r, req) || this.refusedCommand(r, req) || this.autoPermitted(r, req) || this.awayAnswered(r, req)) return;
+        req = maskTypedRequest(req);       // decided on the real input above; shown and kept masked (ADR 0235)
         this.hook('analytics', () => this.analytics.pending(r.s, req));
         this.autoActivity(r);
         const full: PendingRequest = { ...req, chatId };

@@ -1,6 +1,6 @@
 # ADR 0003 · Internal browsers exposed to agents as a hand-written local MCP server
 
-Date: 2026-10-11 · Status: accepted
+Date: 2026-10-11 · Status: accepted; partly superseded by ADR 0235 (agents type passwords on every host)
 
 ## Context
 Claude in Chrome is blocked by corporate policy; agents need a browser for QA (Angular SPA with iframes and logins).
@@ -57,18 +57,15 @@ Research (the browser-memory note, kept outside the repo since ADR 0061): access
   page is a sign-in page, or the auth cookie that was there is gone) / unknown. Heuristics: cookie names (ASP.NET,
   Entra, OIDC, JWT, session ids), login URLs and visible password fields; "last sign-in" = a sign-in page left, a new
   auth cookie, or a login hand-off done. Apps that keep tokens only in localStorage get valid/expired from pages only.
-- **HARD LIMIT: an agent never types a password on a remote host.** `type`, `fill_form`, `key` (characters, paste)
-  into `input[type=password]` or `autocomplete=current-password|new-password` are refused unless the frame's host is
-  localhost, 127.0.0.1, [::1], *.localhost or *.test (local stacks: test accounts allowed). It fails closed when a
-  remote frame cannot be checked. A field counts as a password field if it is one now (type, autocomplete, id/name/
-  label hints) or was ever seen as one in that document (a "show password" toggle does not make it typeable); fill_form
-  re-checks after focusing; `type` and `key` re-check after every focus-moving key (Tab, Enter, arrows), so
-  "user\tsecret" cannot slip a password into the next field. Reading counts too: `javascript` is refused while the user
+- **Passwords (since ADR 0235, 2026-11-09): agents sign in themselves on every host.** `type`, `fill_form` and `key`
+  type into password fields anywhere; a password field's value comes back only as "•••", and the chat feed masks what
+  `type` and `fill_form` typed. (Until then a HARD LIMIT refused password fields on remote hosts.) Reading still
+  counts: `javascript` is refused while the user
   works in the tab (an open hand-off) and in any tab where a remote frame holds a password field (hidden fields and
   open shadow roots included), and on remote hosts any script that changes an input's type. URLs with credentials
   (user:pass@) are refused on remote hosts and redacted in logs and results. The checks run in the page's main world:
-  a page written to defeat them could; the target sites are the user's own environments. The agent calls
-  `handoff_to_user kind:"login"`: the user gets a banner + an urgent feed item "Rifai l'accesso a <env>", signs in once,
+  a page written to defeat them could; the target sites are the user's own environments. For MFA, a CAPTCHA or an
+  account with no password it knows, the agent calls `handoff_to_user kind:"login"`: the user gets a banner + an urgent feed item "Rifai l'accesso a <env>", signs in once,
   and the partition keeps the session for later runs. No password is ever stored by the app. The `environments` tool
   shows an agent only its own tab ids, and no hosts of environments used only by the user's own tabs.
 - **Cookies at rest (verified 2026-10-11 on Electron 44.4.5):** Electron ships with its `EnableCookieEncryption` fuse

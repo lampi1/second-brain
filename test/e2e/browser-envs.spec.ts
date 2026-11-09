@@ -2,10 +2,10 @@
 // - two environments open together on the same remote host keep their sessions apart (a login cookie set in one is
 //   absent in the other); a local stack loads only in "local" (ADR 0063); session status valid / expiring / expired;
 //   last sign-in time;
-// - HARD LIMIT: on a remote host (127.0.0.2 is not a local stack) nothing puts a password into a field or reads one:
-//   type / fill_form / key (also after Tab), a "show password" toggle, a field that becomes a password on focus,
-//   javascript (reading, during a hand-off, shadow roots, hidden fields, type changes), credentials in URLs; on
-//   127.0.0.1 the agent signs in by itself with a test account;
+// - on a remote host (127.0.0.2 is not a local stack) the agent signs in by itself with type / fill_form / key and
+//   the password value comes back masked (ADR 0235); javascript still cannot read a password field (reading, during
+//   a hand-off, shadow roots, hidden fields, type changes) and credentials in URLs are refused; on 127.0.0.1 the
+//   agent signs in by itself with a test account;
 // - a login hand-off reaches the feed as "Rifai l'accesso a <env>"; DELETE of an MCP session closes its tabs.
 import { test, expect, type ElectronApplication, type Page } from '@playwright/test';
 import { launch } from './helpers';
@@ -67,7 +67,7 @@ test.describe.serial('browser environments and the password guard', () => {
     test.skip(!sites.remote, '127.0.0.2 cannot be bound on this machine');
     const opened = await agent.ok('tabs_create', { url: `${sites.remote}/login`, env: 'remote-a' });
     expect(opened).toContain('env remote-a');
-    // the user signs in on the page (on a remote host an agent never types a password)
+    // the user signs in on the page
     await app.evaluate(({ webContents }, u) => webContents.getAllWebContents().find(w => w.getURL().startsWith(`${u}/login`))!.executeJavaScript(
       'user.value = "mario"; pass.value = "test-only"; document.getElementById("f").requestSubmit();'), sites.remote!);
     expect(await agent.ok('wait_for', { text: 'Benvenuto mario' })).toContain('Done');
@@ -130,43 +130,29 @@ test.describe.serial('browser environments and the password guard', () => {
     expect(ids(mine).some(id => ids(theirs).includes(id))).toBe(false);
   });
 
-  test('HARD LIMIT: type, fill_form and key never put a password into a remote field', async () => {
+  test('an agent signs in by itself on a remote host, the password value masked', async () => {
     test.skip(!sites.remote, '127.0.0.2 cannot be bound on this machine');
     const nav = await agent.ok('tabs_create', { url: `${sites.remote}/login` });
     expect(nav).toContain('env ip-127-0-0-2');
-    expect(nav).toContain('Sign-in page in environment ip-127-0-0-2 (127.0.0.2)');
-    expect(nav).toContain('handoff_to_user with kind "login"');
+    expect(nav).toContain('Sign-in page in environment ip-127-0-0-2 (127.0.0.2): sign in yourself');
+    expect(nav).toContain('handoff_to_user with kind "login"');   // still offered, for MFA or CAPTCHA
     let form = await agent.ok('read_page', { filter: 'interactive' });
-    const user = refOf(form, /textbox "Utente"/), pass = refOf(form, /textbox "Password"/), pin = refOf(form, /textbox "Codice di sblocco"/);
+    const user = refOf(form, /textbox "Utente"/), pass = refOf(form, /textbox "Password"/);
 
-    await refused('fill_form', { fields: [{ ref: user, value: 'mario' }, { ref: pass, value: 'x' }] }, 'handoff_to_user');
-    expect(await agent.ok('read_page', { filter: 'interactive' })).not.toMatch(/textbox "Utente" value=/);   // nothing filled at all
-    await refused('type', { ref: pass, text: 'segreto' }, 'password field on 127.0.0.2');
+    // key and type reach a password field too (ADR 0235); fill_form then replaces what they typed
     await agent.ok('click', { ref: pass });
-    await refused('key', { keys: 's e g r e t o' });
-    await refused('key', { keys: 'ctrl+v' });
-    expect((await agent.call('key', { keys: 'shift+Tab' })).isError).toBe(false);   // moving focus is fine
+    expect((await agent.call('key', { keys: 'x' })).isError).toBe(false);
+    expect(await agent.ok('type', { ref: pass, text: 'x' })).toContain('Typed 1 characters');
 
-    // focus-moving keys inside one call: the check runs again before every segment
-    await refused('type', { ref: user, text: 'mario\tSegreto1' }, 'password field');
+    const filled = await agent.ok('fill_form', { fields: [{ ref: user, value: 'mario' }, { ref: pass, value: 'test-only' }] });
+    expect(filled).toContain('•••');
+    expect(filled).not.toContain('test-only');                  // a password value comes back masked
     form = await agent.ok('read_page', { filter: 'interactive', full: true }); // the whole tree, not the changes since the last read
     expect(form).toMatch(/textbox "Utente" value="mario"/);
-    expect(form).not.toMatch(/type=password value=/);           // the password field stayed empty
-    await agent.ok('click', { ref: user });
-    await refused('key', { keys: 'Tab S e g r e t o' });
-    expect(await agent.ok('read_page', { filter: 'interactive' })).not.toMatch(/type=password value=/);
-
-    // a "show password" toggle turns it into type=text: still a password field (seen as one before)
-    await agent.ok('click', { ref: refOf(form, /button "Mostra"/) });
-    expect(await agent.ok('read_page', { filter: 'interactive' })).toMatch(/textbox "Password" password \[/);
-    await refused('type', { ref: pass, text: 'segreto' });
-    await refused('fill_form', { fields: [{ ref: pass, value: 'segreto' }] });
-    // a field that becomes a password only on focus: fill_form checks again after focusing
-    await refused('fill_form', { fields: [{ ref: pin, value: '1234' }] });
-    expect(await agent.ok('read_page', { filter: 'interactive' })).not.toMatch(/Codice di sblocco" .*value=/);
-
-    // a non-password field on the same remote page is fine
-    expect(await agent.ok('type', { ref: user, text: '!' })).toContain('Typed 1 characters');
+    expect(form).not.toContain('test-only');
+    await agent.ok('click', { ref: refOf(form, /button "Entra"/) });
+    expect(await agent.ok('wait_for', { text: 'Benvenuto mario' })).toContain('Done');
+    expect(await cookiesIn('ip-127-0-0-2')).toBe(1);
   });
 
   test('HARD LIMIT: javascript cannot read or change password fields on remote hosts', async () => {
