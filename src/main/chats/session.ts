@@ -206,6 +206,9 @@ export interface HarnessSession {
   holdWrites?(until: Promise<unknown>): boolean;
   /** false when the request is unknown (already answered or withdrawn). Throws on an answer of the wrong kind. */
   answer(requestId: string, answer: Answer, patch?: AnswerPatch): boolean;
+  /** Remote adapters acknowledge consumption asynchronously; callers must prefer this over answer when present.
+   *  A rejected acknowledgement is uncertain, never permission to retry the same decision. */
+  answerConsumed?(requestId: string, answer: Answer, patch?: AnswerPatch): Promise<boolean>;
   /** keepQueued: only the running turn stops; messages the session already queued still go after it; byUser: the
    *  user's Stop / "Invia subito" (the turn ends as "Interrotto da te", not an error), never the app's own interrupt */
   interrupt(opts?: { keepQueued?: boolean; byUser?: boolean }): Promise<void>;

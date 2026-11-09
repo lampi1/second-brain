@@ -45,7 +45,7 @@ async function sentAfter(sent: Map<string, string[]>, id: string, before: number
 }
 /** the delegation tools' clock (the stall check); undefined = Date.now */
 let clock: (() => number) | undefined;
-afterEach(async () => { clock = undefined; for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+afterEach(async () => { clock = undefined; vi.useRealTimers(); for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 const catalog = (n: Narrowed = {}): AgentCatalog => ({ problem: null, archived: [], models: [], profiles: ROLE_IDS.map(id => {
   const r = ROLE_DEFAULTS[id], x = shape(id, n);
@@ -195,19 +195,26 @@ describe('agent_delegate', () => {
   it('child results while siblings work: a short debounce, one entry per child, the newest wins', async () => {
     expect(CHILD_RESULTS_MS).toBeGreaterThanOrEqual(2000);
     expect(CHILD_RESULTS_MS * CHILD_RESULTS_CAP).toBeLessThanOrEqual(5000);
-    const f = fixture();
-    // a debounce long enough that a loaded machine finishes the three reports inside it
+    let parentId: string | undefined, delivered!: () => void;
+    const delivery = new Promise<void>(resolve => { delivered = resolve; });
+    const f = fixture({}, undefined, undefined, id => { if (id === parentId) delivered(); });
     (f.m as unknown as { opts: { childResultsMs: number } }).opts.childResultsMs = 1000;
     const parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'B · uno'), f.task('scout', 'B · due'), f.task('scout', 'B · tre')] });
     const kids = f.m.list().filter(c => c.parentId === parent.id);
     const before = f.sent.get(parent.id)!.length;
+    parentId = parent.id;
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
     const rep = (i: number, summary: string, extra: Record<string, unknown> = {}) => f.call('agent_report', kids[i]!.id, { outcome: 'done', summary, output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }], ...extra });
     await rep(0, 'Uno vecchio');
+    await vi.advanceTimersByTimeAsync(500);
     await rep(0, 'Uno nuovo', { amends: true });
+    await vi.advanceTimersByTimeAsync(500);
     await rep(1, 'Due fatto');
+    await vi.advanceTimersByTimeAsync(999);
     expect(f.sent.get(parent.id)!.length).toBe(before); // the last result restarted the debounce
-    await sentAfter(f.sent, parent.id, before);
+    await vi.advanceTimersByTimeAsync(1);
+    await delivery;
     // the third sibling still works: the batch went anyway, one entry per child, only the newest of the first
     const sent = f.sent.get(parent.id)!.slice(before);
     expect(sent).toHaveLength(1);
@@ -218,30 +225,37 @@ describe('agent_delegate', () => {
   });
 
   it('a result that keeps being followed by siblings\' still goes within the cap of the debounce', async () => {
-    const f = fixture();
+    let parentId: string | undefined, delivered!: () => void;
+    const delivery = new Promise<void>(resolve => { delivered = resolve; });
+    const f = fixture({}, undefined, undefined, id => { if (id === parentId) delivered(); });
     const ms = 1000;
     (f.m as unknown as { opts: { childResultsMs: number } }).opts.childResultsMs = ms;
     const parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [1, 2, 3, 4].map(n => f.task('scout', `C · ${n}`)) });
     const kids = f.m.list().filter(c => c.parentId === parent.id);
     const before = f.sent.get(parent.id)!.length;
-    // time the flush itself: the delivery after it is asynchronous and slow on a loaded machine
+    parentId = parent.id;
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] });
+    // Pin the scheduled deadline, not how soon the OS runs a timer on a busy machine.
     const flushes: number[] = [], m = f.m as unknown as { flushChildResults(id: string): void };
     const flush = m.flushChildResults.bind(f.m);
     m.flushChildResults = (id: string) => { if (id === parent.id) flushes.push(Date.now()); flush(id); };
-    let firstBefore = 0, firstAfter = 0, lastBefore = 0;
+    const first = Date.now();
     // each result comes just before the debounce would end: without the cap it would be restarted every time
-    for (let i = 0; i < 3 && !flushes.length; i++) {
-      lastBefore = Date.now(); firstBefore ||= lastBefore;
+    for (let i = 0; i < 3; i++) {
       await f.call('agent_report', kids[i]!.id, { outcome: 'done', summary: `Fatto ${i}`, output: 'o', doneWhen: [{ criterion: 'criterion A', met: true }] });
-      firstAfter ||= Date.now();
-      if (i < 2) await new Promise(res => setTimeout(res, ms * 0.95));
+      if (i < 2) await vi.advanceTimersByTimeAsync(ms * 0.95);
     }
-    await sentAfter(f.sent, parent.id, before);
-    expect(f.sent.get(parent.id)![before]).toContain('Fatto 0');
-    expect(flushes[0]! - firstBefore).toBeGreaterThanOrEqual(ms - 5);
-    // the cap is reached before the debounce restarted by the last result would end
-    if (firstAfter + ms * CHILD_RESULTS_CAP < lastBefore + ms) expect(flushes[0]!).toBeLessThan(lastBefore + ms);
+    await vi.advanceTimersByTimeAsync(ms * CHILD_RESULTS_CAP - (Date.now() - first) - 1);
+    expect(flushes).toEqual([]);
+    expect(f.sent.get(parent.id)!.length).toBe(before);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(flushes).toEqual([first + ms * CHILD_RESULTS_CAP]);
+    await delivery;
+    const sent = f.sent.get(parent.id)!.slice(before);
+    expect(sent).toHaveLength(1);
+    for (let i = 0; i < 3; i++) expect(sent[0]).toContain(`Fatto ${i}`);
+    expect(f.m.list().find(c => c.id === kids[3]!.id)!.delegation!.result).toBeUndefined();
   });
 
   it('an over-long summary and remember line are cut with the marker, not refused; the full summary stays in output', async () => {

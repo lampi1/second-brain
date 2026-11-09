@@ -27,6 +27,7 @@ import { CoordinationStore } from '../coordination/store';
 /** Questions and permissions: the user's answer, the role gate, auto-permit, «Modalità notte», counted requests. */
 export abstract class ManagerRequests extends ManagerCheckpoints {
   private coordinationStore?: CoordinationStore;
+  private readonly answering = new WeakMap<Rec, Set<string>>();
   /** Same SQLite journal as Workflows, opened lazily. No function-valued or Electron dependency crosses the boundary. */
   protected get coordination(): CoordinationStore {
     return this.coordinationStore ??= new CoordinationStore(path.join(this.opts.userData, 'app.db'));
@@ -38,7 +39,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     registerRequest(this.coordination, r.s, req);
   }
 
-  private deliverAnswer(r: Rec, req: Omit<PendingRequest, 'chatId'>, answer: Answer, actor: DecisionActor, patch?: AnswerPatch): boolean {
+  private deliverAnswer(r: Rec, req: Omit<PendingRequest, 'chatId'>, answer: Answer, actor: DecisionActor, patch?: AnswerPatch): boolean | Promise<boolean> {
     if (answer.kind !== req.type || (answer.kind === 'permission' && (typeof answer.allow !== 'boolean' || (req.noAlways && answer.always)))) throw new Error('Risposta non valida per questa richiesta.');
     if (answer.kind === 'question') {
       const asked = req.questions?.map(q => q.question) ?? [];
@@ -49,19 +50,32 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const store = this.coordination;
     const decision = store.resolve(requestKey(store, r.s, req), actor, answer);
     const delivery = store.beginDelivery(decision.id);
+    const delivered = (ok: boolean): boolean => { store.finishDelivery(delivery.id, ok ? 'delivered' : 'failed'); return ok; };
+    const uncertain = (e: unknown): never => { store.finishDelivery(delivery.id, 'uncertain'); throw e; };
     try {
-      const ok = r.session?.answer(req.id, answer, patch) ?? false;
-      store.finishDelivery(delivery.id, ok ? 'delivered' : 'failed');
-      return ok;
+      const session = r.session;
+      if (session?.answerConsumed) return session.answerConsumed(req.id, answer, patch).then(delivered, uncertain);
+      return delivered(session?.answer(req.id, answer, patch) ?? false);
     } catch (e) {
-      store.finishDelivery(delivery.id, 'uncertain');
-      throw e;
+      return uncertain(e);
     }
   }
 
-  private policyAnswer(r: Rec, req: Omit<PendingRequest, 'chatId'>, answer: Answer, policy: string, patch?: AnswerPatch): boolean {
+  /** True claims this request for policy handling; a remote delivery is still dispatching until its acknowledgement.
+   *  Recaps and pending removal must wait too. Failure stays journaled and is never retried as user consent. */
+  private policyAnswer(r: Rec, req: Omit<PendingRequest, 'chatId'>, answer: Answer, policy: string, patch?: AnswerPatch, consumed?: () => void): boolean {
     this.registerRequest(r, req);
-    return this.deliverAnswer(r, req, answer, { kind: 'policy', policy }, patch);
+    const session = r.session;
+    const finish = (ok: boolean): boolean => {
+      if (ok && this.chats.get(r.s.id) === r && r.session === session) { this.dropPending(r, req.id); consumed?.(); }
+      return ok;
+    };
+    const result = this.deliverAnswer(r, req, answer, { kind: 'policy', policy }, patch);
+    if (typeof result === 'boolean') return finish(result);
+    void result.then(finish).catch(e => log.warn('chats', 'policy answer delivery uncertain', {
+      chat: r.s.id, cause: errText(e), hint: 'inspect the request receipt; do not retry the accepted decision', data: { policy },
+    }));
+    return true;
   }
 
   /** The user's answer. by = where they gave it: the PC (the panel) or the paired phone (phone bridge: only a question,
@@ -75,9 +89,16 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     if (by === 'phone' && (req.type !== 'question' || answer.kind !== 'question')) throw new Error('Dal telefono si risponde solo a una domanda Sì/No.');
     const interview = (r.s.plan || r.s.isOrchestrator) && isNativeQuestion(req) && answer.kind === 'question';
     const pcOnly = interview ? phoneQuestionReserved(req, () => { this.ensureHistory(r); return r.items; }) : false;
+    const answering = this.answering.get(r) ?? new Set<string>();
+    if (answering.has(requestId)) throw new Error('Request already answered; delivery is still pending.');
+    this.answering.set(r, answering); answering.add(requestId);
     if (by === 'phone') r.answeringFromPhone = requestId; // the engine resolves it now: pending:resolved carries by 'phone'
     let ok: boolean;
-    try { ok = this.deliverAnswer(r, req, answer, { kind: 'user', channel: by }); } finally { delete r.answeringFromPhone; }
+    try {
+      ok = await this.deliverAnswer(r, req, answer, { kind: 'user', channel: by });
+      // The RPC acknowledgement can precede the batched resolved event. Preserve phone provenance in either order.
+      if (ok) this.dropPending(r, requestId);
+    } finally { answering.delete(requestId); delete r.answeringFromPhone; }
     if (!ok) { this.dropPending(r, requestId); return; }
     // request/tool/asked bind the line to this question (appctl/tools.ts decidedSince): its tool item never counts as a PC answer
     if (by === 'phone') { this.addItem(r, sysItem('phoneDecided', { time: phoneTime(Date.now()), what: 'question', request: requestId, tool: req.toolUseId ? `t-${req.toolUseId}` : '', asked: req.at }, 'info'), false); this.updated(r); }
@@ -134,7 +155,11 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     let n = 0;
     for (const r of this.chats.values()) {
       if (r.s.closedAt) continue;
-      for (const req of [...r.pending.values()]) if (this.awayAnswered(r, req)) { this.dropPending(r, req.id); n++; }
+      for (const req of [...r.pending.values()]) {
+        // A previous async answer may still be in flight (or uncertain). Its accepted decision is never sent twice.
+        if (this.coordination.original(r.s.id, req.id)?.state === 'accepted') continue;
+        if (this.awayAnswered(r, req)) n++;
+      }
       const plan = r.s.plan;
       if (plan?.phase === 'proposed') {
         n++;
@@ -255,26 +280,26 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       const answers = plan ?? recommendedAnswers(req.questions ?? []);
       if (!answers) return false;
       const choice = Object.values(answers).flat().join(', ');
-      if (!this.policyAnswer(r, req, { kind: 'question', answers }, 'away')) return false;
-      this.addItem(r, sysItem('awayPicked', { choice }, 'info'), false);
-      this.hook('onAway', () => this.opts.onAway?.({ kind: 'picked', chatId: r.s.id, title, text: `${req.questions?.[0]?.question ?? req.title} → ${choice}` }));
-      log.info('chats', 'away: recommended answer', { chat: r.s.id, data: { questions: req.questions?.length ?? 0 } });
-      return true;
+      return this.policyAnswer(r, req, { kind: 'question', answers }, 'away', undefined, () => {
+        this.addItem(r, sysItem('awayPicked', { choice }, 'info'), false);
+        this.hook('onAway', () => this.opts.onAway?.({ kind: 'picked', chatId: r.s.id, title, text: `${req.questions?.[0]?.question ?? req.title} → ${choice}` }));
+        log.info('chats', 'away: recommended answer', { chat: r.s.id, data: { questions: req.questions?.length ?? 0 } });
+      });
     }
     // a plan mode's «plan ready» is a plan to approve, not a permission: it starts like a Strategist's plan, and every
     // permission the work then asks for still goes through the checks above or is parked here
     if (req.tool === 'ExitPlanMode') {
-      if (!this.policyAnswer(r, req, { kind: 'permission', allow: true }, 'away-plan')) return false;
-      this.addItem(r, sysItem('awayPicked', { choice: 'Approva il piano' }, 'info'), false);
-      this.hook('onAway', () => this.opts.onAway?.({ kind: 'plan', chatId: r.s.id, title, text: req.title || 'piano' }));
-      return true;
+      return this.policyAnswer(r, req, { kind: 'permission', allow: true }, 'away-plan', undefined, () => {
+        this.addItem(r, sysItem('awayPicked', { choice: 'Approva il piano' }, 'info'), false);
+        this.hook('onAway', () => this.opts.onAway?.({ kind: 'plan', chatId: r.s.id, title, text: req.title || 'piano' }));
+      });
     }
-    if (!this.policyAnswer(r, req, { kind: 'permission', allow: false, message: AWAY_PARKED }, 'away-parked')) return false;
-    const what = `${req.tool}${req.detail ? `: ${req.detail}` : req.title ? `: ${req.title}` : ''}`;
-    this.addItem(r, sysItem('awayParked', { what: what.slice(0, 160) }, 'warn'), false);
-    this.hook('onAway', () => this.opts.onAway?.({ kind: 'parked', chatId: r.s.id, title, text: `permesso non concesso, ${what}` }));
-    log.info('chats', 'away: permission parked', { chat: r.s.id, data: { tool: req.tool } });
-    return true;
+    return this.policyAnswer(r, req, { kind: 'permission', allow: false, message: AWAY_PARKED }, 'away-parked', undefined, () => {
+      const what = `${req.tool}${req.detail ? `: ${req.detail}` : req.title ? `: ${req.title}` : ''}`;
+      this.addItem(r, sysItem('awayParked', { what: what.slice(0, 160) }, 'warn'), false);
+      this.hook('onAway', () => this.opts.onAway?.({ kind: 'parked', chatId: r.s.id, title, text: `permesso non concesso, ${what}` }));
+      log.info('chats', 'away: permission parked', { chat: r.s.id, data: { tool: req.tool } });
+    });
   }
 
   /** The brain's declared read-only tools (read-only-tools.md), resolved from the chat's folder (issue #93). */

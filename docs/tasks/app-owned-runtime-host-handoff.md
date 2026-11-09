@@ -198,3 +198,34 @@ three remain outstanding. No push or default activation is authorized by these p
 - `src/main/wiring.ts`, `src/shared/contract.ts`, all workflows and `manager-requests.ts`: unchanged by this assignment.
 - `test/unit/agents/delegation.test.ts`: three existing hook assertions now await the widened callback result;
   their expected values are unchanged.
+
+## Stage-three integration follow-up
+
+Rebased the five stage-two commits onto `origin/main` at `acd84ba7` without conflicts. The request journal now prefers
+the session's optional `answerConsumed` API: remote delivery stays `dispatching` until the host acknowledgement,
+then becomes `delivered` or `failed`; a rejected acknowledgement becomes `uncertain`, with no automatic retry.
+The synchronous adapters keep their existing path. Duplicate user submissions are refused while the acknowledgement
+is pending; phone attribution survives a resolved event arriving after the RPC acknowledgement. Policy recaps and
+pending removal also wait for consumption, and repeated away settlement cannot resend an accepted decision.
+
+The focused manager and host-boundary tests pass (24 tests, exit 0), covering delayed success, duplicate submission,
+false consumption, lost acknowledgement, policy success/failure and repeated away settlement during delivery.
+A standalone typecheck also passes (exit 0). Full gate and guard
+receipts are reported by the completing assignment; these targeted checks alone do not constitute that gate.
+
+### Debounce classification
+
+The old assertion at `delegation.test.ts:244` compared the actual callback's wall-clock timestamp with the deadline
+of another timer. A timer deadline does not guarantee when the event loop runs the callback. Both this assertion
+and the production debounce/cap implementation are unchanged in `acd84ba7`: stage two only changed three unrelated
+hook assertions in that test file. The requested detached-main comparison passed both original debounce tests
+(exit 0); it did not reproduce the historical 39 ms overrun, so it cannot establish a machine-load cause or a
+stage-two regression. No such claim is made.
+
+The two debounce tests now control Date and timeout scheduling explicitly, and await the actual delivery event.
+They assert no early delivery, restart after a correction, a single latest-only batch, and a flush exactly at the
+cap even with repeated sibling results. All result-content checks remain; the cap check is unconditional rather
+than guarded by a wall-clock-dependent `if`. Both deterministic tests pass (exit 0). No production debounce code,
+deadline, test timeout or gate exclusion was changed. The detached baseline remains for owner cleanup; no worktree
+or junction was removed. The existing junction points at the main checkout, whose matching lockfile dependencies
+were restored by the owner. This assignment installed nothing and does not push.

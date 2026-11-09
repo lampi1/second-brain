@@ -1,5 +1,5 @@
 // Main-side session projection. Commands are generation-bound RPCs; permission consumption has a separate async API.
-// The old synchronous answer deliberately refuses this opt-in path until the manager awaits answerConsumed.
+// The synchronous answer refuses this path: the manager journals delivery only after answerConsumed acknowledges it.
 import { randomUUID } from 'node:crypto';
 import type { Answer, Effort, ImageAttachment, PermissionMode } from '../../shared/contract';
 import type { RuntimeIdentity } from '../../shared/agent-runtime';
