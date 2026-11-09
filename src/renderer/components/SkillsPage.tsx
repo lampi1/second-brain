@@ -181,7 +181,7 @@ export function SkillsPage() {
         </aside>
         <section className="sl-main">
           {creating ? <CreateForm onCancel={() => setCreating(false)} taken={n => skills.some(s => s.name === n)} onCreated={name => { void load().then(() => { setPick(name); setTab('files'); setCreating(false); }); }} />
-            : current ? <SkillDetail key={current.name} skill={current} roles={lib?.roles ?? []} hasBrain={!!lib?.root} tab={tab} onTab={next => guard(() => setTab(next))}
+            : current ? <SkillDetail key={current.name} skill={current} roles={lib?.roles ?? []} hasBrain={!!lib?.root} tab={tab} onTab={next => { if (next !== tab) guard(() => setTab(next)); }}
               onDirty={d => { dirtyRef.current = d; }} onChanged={() => void load()} onGone={() => { setPick(null); void load(); }} />
               : <p className="sl-empty">{t('sl.pick')}</p>}
         </section>

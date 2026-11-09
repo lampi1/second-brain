@@ -285,7 +285,7 @@ export class SkillLibrary {
       const action = creating ? 'create' : req.text === null ? 'remove' : 'update';
       const what = creating ? `Skill «${name}» creata` : copy ? `Copia modificabile di «${name}» (skill dell’app): ${rel}` : `${rel} di «${name}» ${req.text === null ? 'tolto' : 'modificato'}`;
       const c = this.d.changes().apply({ job: 'user', kind: 'skill', action, target: name, summary: `${what} (${by.who})`, reason: by.reason?.slice(0, 500) || `Modifica dalla pagina Skill o dall’Orchestrator (${by.who}).`, evidence: [rel] }, writes);
-      if (!c && writes.length) return { ok: false, error: 'Niente salvato: un file è troppo grande per la cronologia.' };
+      // no change (the same text): ok, with nothing in the history (too big files were refused above)
       if (copy) for (const pf of packageFiles(source.folder)) {
         // binary assets come along as they are (they have no text history)
         if (pf.text) continue;

@@ -48,11 +48,17 @@ describe('unifySkillFolders', () => {
     expect(r.state).toBe('kept');
     expect(fs.readFileSync(path.join(other, '.agents/skills/y/SKILL.md'), 'utf8')).toBe('y');
   });
-  it('makes a dangling link again (the brain folder moved), relative outside Windows', async () => {
+  it('makes its own dangling link again (the brain folder moved), relative outside Windows; a user\'s link stays', async () => {
     const root = tmp();
     fs.mkdirSync(path.join(root, '.agents/skills/x'), { recursive: true });
     fs.mkdirSync(path.join(root, '.claude'), { recursive: true });
-    fs.symlinkSync(path.join(root, 'gone'), path.join(root, '.claude/skills'), process.platform === 'win32' ? 'junction' : 'dir');
+    // a link of the user's own to somewhere offline stays as it is
+    fs.symlinkSync(path.join(root, 'offline-drive'), path.join(root, '.claude/skills'), process.platform === 'win32' ? 'junction' : 'dir');
+    expect((await unifySkillFolders(root, { gitRm: async () => {} })).state).toBe('already');
+    expect(fs.readlinkSync(path.join(root, '.claude/skills')).replace(/[\\/]+$/, '')).toBe(path.join(root, 'offline-drive'));
+    fs.unlinkSync(path.join(root, '.claude/skills'));
+    // the app's own link from where the brain was before
+    fs.symlinkSync(path.join(root, 'moved-away', '.agents', 'skills'), path.join(root, '.claude/skills'), process.platform === 'win32' ? 'junction' : 'dir');
     expect((await unifySkillFolders(root, { gitRm: async () => {} })).state).toBe('linked');
     expect(fs.existsSync(path.join(root, '.claude/skills/x'))).toBe(true);
     if (process.platform !== 'win32') expect(fs.readlinkSync(path.join(root, '.claude/skills'))).toBe(path.join('..', '.agents', 'skills'));

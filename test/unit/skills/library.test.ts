@@ -110,6 +110,8 @@ describe('SkillLibrary', () => {
     expect(await lib.remove('b', { who: 't' })).toMatchObject({ ok: false, error: expect.stringContaining('.env') });
     expect(fs.existsSync(path.join(root, '.agents/skills/b/.env'))).toBe(true);
 
+    // the same text again: ok, nothing in the history
+    expect(await lib.write({ skill: 'a', path: 'SKILL.md', text: md('a') }, { who: 't' })).toMatchObject({ ok: true, changeId: null });
     await expect(lib.setRoles('a', ['sentinel'])).rejects.toThrow('predefinita');
     expect(links).toEqual([]);
   });

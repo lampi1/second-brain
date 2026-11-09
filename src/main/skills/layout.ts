@@ -58,8 +58,11 @@ const gitRmCached: GitRm = root => new Promise(resolve => {
 export async function unifySkillFolders(root: string, o: { gitRm?: GitRm; link?: (target: string, at: string) => void } = {}): Promise<UnifyResult> {
   const agents = brainSkillsDir(root), claude = claudeSkillsDir(root);
   if (isLink(claude)) {
-    // a link that still leads somewhere stays; a dangling one (the brain folder moved) is made again below
-    if (fs.existsSync(claude)) return { state: 'already', moved: [], conflicts: [] };
+    // a link that still leads somewhere stays, and so does a link of the user's own (to a drive offline now); only the
+    // app's own link to .agents/skills, dangling because the brain folder moved, is made again below
+    let target = '';
+    try { target = fs.readlinkSync(claude).replace(/[\\/]+$/, ''); } catch { /* not readable: kept */ }
+    if (fs.existsSync(claude) || !/(^|[\\/])\.agents[\\/]skills$/.test(target)) return { state: 'already', moved: [], conflicts: [] };
     try { fs.unlinkSync(claude); } catch (e) { log.warn('skills', 'dangling skills link not removed', { cause: errText(e) }); return { state: 'already', moved: [], conflicts: [] }; }
   }
   const moved: string[] = [], conflicts: string[] = [];
