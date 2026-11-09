@@ -36,7 +36,7 @@ const shape = (id: RoleId, n: Narrowed = {}) => { const r = ROLE_DEFAULTS[id]; r
 const roots: string[] = [], managers: ChatManager[] = [];
 /** the delegation tools' clock (the stall check); undefined = Date.now */
 let clock: (() => number) | undefined;
-afterEach(async () => { clock = undefined; for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+afterEach(async () => { clock = undefined; vi.useRealTimers(); for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
 
 const catalog = (n: Narrowed = {}): AgentCatalog => ({ problem: null, archived: [], models: [], profiles: ROLE_IDS.map(id => {
   const r = ROLE_DEFAULTS[id], x = shape(id, n);
