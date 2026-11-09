@@ -118,10 +118,14 @@ function touchesSettings(req: PermitRequest, command: boolean, cwd: string): boo
     const plain = raw.replace(/`(?![0abefnrtuv])/g, '');
     if (/\$'[^']*\\/.test(line)) return true;
     // printf or echo with an escape anywhere in the line (the app does not parse where an echo's arguments end:
-    // redirects, substitutions and escaped quotes all move it). A Windows folder of digits (\2026\, \1.log, \0\) is
-    // not an octal escape: its digits run on, or end at a \, a space, a .ext or the line's end
-    const esc = /\\(x[0-9a-f]{2}|0?[0-7]{1,3}(?![\d\\\s]|\.\w|$)|u[0-9a-f]{4})/i;
-    if (/\b(printf|echo)\b/i.test(line) && esc.test(line)) return true;
+    // redirects, substitutions and escaped quotes all move it). Only a quoted or doubled backslash reaches the program:
+    // the shell drops an unquoted one, so an unquoted Windows path (> C:\work\2026\out.txt) is no escape. A line with
+    // an escaped quote ('\'' or \"), a heredoc or several lines is read whole, since the app does not parse it.
+    const esc = /\\(x[0-9a-f]{2}|0?[0-7]{1,3}|u[0-9a-f]{4})/i;
+    if (/\b(printf|echo)\b/i.test(line)) {
+      const quoted = /\\['"]|<<|\n/.test(line) ? line : (line.match(/'[^']*'|"(?:[^"\\]|\\.)*"/g) ?? []).join(' ');
+      if (esc.test(quoted) || /\\\\(x[0-9a-f]{2}|0?[0-7]{1,3}|u[0-9a-f]{4})/i.test(line)) return true;
+    }
     if (/[^\s=;&|(<>]\$\(|[^\s=;&|(<>]`[^`]*`|\$\([^)]*\)[^\s;&|)<>:]|`[^`]*`[^\s;&|)<>:]/.test(raw)) return true;
     if (SETTINGS_COMMAND.test(raw)) return true;
     const base = typeof o.cwd === 'string' && o.cwd ? path.resolve(cwd, o.cwd) : cwd;

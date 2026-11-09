@@ -79,7 +79,9 @@ describe('autoPermit: the agents\' own settings and hooks (AGENTS.md rule 6)', (
       "echo -e >n '\\x2egit/hooks/x'; xargs -a n -I{} cp evil {}", "echo -e 2>/dev/null '\\056git/hooks/x' | xargs -I{} cp evil {}",
       "echo -e 2>&1 '\\x2egit/hooks/x' | xargs -I{} cp e {}", "echo -e &>n '\\x2egit/hooks/x'; xargs -a n -I{} cp e {}", "echo -e >| n '\\x2egit/hooks/x'; xargs -a n -I{} cp e {}",
       "echo -e $(true|true) '\\x2egit/hooks/x' | xargs -I{} cp e {}",
-      "printf 'C:\\056git/hooks/x' | cut -c3- | xargs -I{} cp e {}", "echo -e 'C:\\x2egit/hooks/x' | cut -c3- | xargs -I{} cp e {}"]) expect(run(c), c).toBe('ask');
+      "printf '\\56\\ngit/hooks/x' | paste -sd '' | xargs -I{} cp e {}", "printf '\\56 git/hooks/x' | tr -d ' ' | xargs -I{} cp e {}",
+      "printf 'x\\56.git/hooks/y' | cut -c3- | xargs -I{} cp e {}", "echo -e '\\56 git/hooks/x' | tr -d ' ' | xargs -I{} cp e {}",
+      "xargs -0 printf <<EOF | xargs -I{} cp e {}\n\\056git/hooks/x\nEOF", "printf 'C:\\056git/hooks/x' | cut -c3- | xargs -I{} cp e {}", "echo -e 'C:\\x2egit/hooks/x' | cut -c3- | xargs -I{} cp e {}"]) expect(run(c), c).toBe('ask');
     expect(autoPermit(perm('Shell', { command: 'echo x > hooks/pre-commit', cwd: '.git' }), ctx()).kind).toBe('ask');
     for (const c of ['cat .claude/settings.json', 'ls .git', 'git status']) expect(run(c), c).toBe('allow');
   });
