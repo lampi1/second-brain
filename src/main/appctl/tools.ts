@@ -343,7 +343,9 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
       run: async a => {
         const id = String(a.chatId ?? '');
         const c = d.chats.list().find(x => x.id === id);
-        if (!c || !mine(c)) throw new Error(`chat non trovata: ${id} (vedi app_chats)`);
+        // already closed (its tree's close took it, or the auto-close) or never the caller's: a stale id of the agent,
+        // answered to it and logged at info (#306, #307)
+        if (!c || !mine(c)) throw new ToolRefusal(`chat non trovata o già chiusa: ${id} (vedi app_chats)`);
         // the close cancels the whole tree (ADR 0217): a descendant's open question would be withdrawn unanswered
         const refused = closeRefusal(c, d.chats.list());
         if (refused) throw new Error(refused);

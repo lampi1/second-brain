@@ -1,6 +1,6 @@
 // The app's own SQLite database, userData/app.db (ADR 0199), on node:sqlite (DatabaseSync, the Node that Electron bundles;
 // the hybrid search index uses it too, search/hybrid/store.ts). Opened with WAL, synchronous=normal and a busy timeout, its
-// pages checked (quick_check) at every open. A file SQLite reports as corrupt is renamed aside (never deleted) with its
+// pages checked (quick_check) at its first open in this process. A file SQLite reports as corrupt is renamed aside (never deleted) with its
 // -wal/-shm and a new one is created; any other failure (a lock, a runtime without node:sqlite) throws, so the caller keeps
 // its JSON file instead. Each area (first: the agent runs, agents/runs-db.ts) has its own schema version in
 // `schema_version` and forward migrations, each in one transaction. Used by agents/runs-db.ts and the levels CLI.
@@ -61,14 +61,22 @@ export function reopenAppDb(file: string): DatabaseSync {
   return track(db);
 }
 
+/** The files whose pages this process already checked: quick_check reads the whole file, and a second owner opening the
+ *  same app.db later (the use counter after the agent runs) froze the window for 5.3 s on a big one (#336). */
+const checked = new Set<string>();
+
 function openChecked(file: string): DatabaseSync {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const db = new (sqlite().DatabaseSync)(file);
   try {
     db.exec(`pragma busy_timeout = ${BUSY_MS}`); // first: a writer elsewhere is waited for, not taken for damage
     db.exec('pragma journal_mode = wal; pragma synchronous = normal;');
-    const check = (db.prepare('pragma quick_check').all() as { quick_check?: unknown }[]).map(r => String(r.quick_check));
-    if (check.join() !== 'ok') throw Object.assign(new Error(`quick_check: ${check.slice(0, 3).join('; ')}`), { corrupt: true });
+    const key = path.resolve(file);
+    if (!checked.has(key)) {
+      const check = (db.prepare('pragma quick_check').all() as { quick_check?: unknown }[]).map(r => String(r.quick_check));
+      if (check.join() !== 'ok') throw Object.assign(new Error(`quick_check: ${check.slice(0, 3).join('; ')}`), { corrupt: true });
+      checked.add(key);
+    }
     db.exec('create table if not exists schema_version(area text primary key, version integer not null, at integer not null)');
   } catch (e) {
     // closed, or Windows keeps the file locked and it cannot be moved aside
@@ -80,6 +88,7 @@ function openChecked(file: string): DatabaseSync {
 
 /** Renames a database and its -wal/-shm to <name>.corrupt-<stamp>[-wal|-shm]; returns the new main file's path. */
 function moveAside(file: string): string {
+  checked.delete(path.resolve(file));
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   let aside = `${file}.corrupt-${stamp}`;
   for (let i = 2; fs.existsSync(aside); i++) aside = `${file}.corrupt-${stamp}-${i}`;

@@ -49,6 +49,7 @@ async function save(dir: string, profile: object): Promise<void> {
     await fs.promises.writeFile(file, JSON.stringify(profile));
     const old = (await fs.promises.readdir(dir)).filter(f => f.endsWith('.cpuprofile')).sort().slice(0, -KEEP);
     for (const f of old) await fs.promises.rm(path.join(dir, f), { force: true });
-    log.warn('perf', 'cpu profile of a freeze saved', { data: { file }, hint: 'node scripts/profile-top.mjs <file> lists the functions that used the main thread; or open it in Chrome DevTools' });
+    // a notice that the file exists, not a problem of its own: the stall itself is the warning (#335)
+    log.info('perf', 'cpu profile of a freeze saved', { data: { file }, hint: 'node scripts/profile-top.mjs <file> lists the functions that used the main thread; or open it in Chrome DevTools' });
   } catch (e) { log.warn('perf', 'cpu profile not saved', { cause: errText(e) }); }
 }

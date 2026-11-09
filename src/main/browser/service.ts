@@ -12,7 +12,7 @@ import type { BrowserService } from '../services';
 import type { Emitter } from '../ipc';
 import { log, errText } from '../log';
 import { recordMcpPort } from '../health';
-import { McpServer, type CallCtx, type McpTool } from '../mcp/server';
+import { McpServer, listenWithRetry, type CallCtx, type McpTool } from '../mcp/server';
 import { EndpointTokens } from '../mcp/tokens';
 import { BrowserTabs } from './tabs';
 import { BrowserActions, normalizeUrl } from './actions';
@@ -105,10 +105,11 @@ ${SCREENSHOT_HINT}`;
   });
 
   try {
-    recordMcpPort(o.port, await mcp.listen(o.port));
+    // a restart («Aggiorna», a quick reopen) can start while the old instance still releases the port: waited for (#348)
+    recordMcpPort(o.port, await listenWithRetry(p => mcp.listen(p), o.port));
   } catch (e) {
     if (o.port === 0) throw e;
-    log.error('mcp', `port ${o.port} unavailable, using a random port`, {
+    log.warn('mcp', `port ${o.port} unavailable, using a random port`, {
       cause: errText(e),
       hint: `another second-brain (or the prototype) may hold ${o.port}: close it, or set SB_MCP_PORT. App chats still work; external clients configured on ${o.port} will not connect this run`,
     });

@@ -20,11 +20,11 @@ it.each(['ECONNRESET', 'UND_ERR_CONNECT_TIMEOUT'])('recovers from %s with backof
   const pending = s.service.refresh(); await vi.advanceTimersByTimeAsync(999); expect(s.run).toHaveBeenCalledTimes(1); expect(s.service.get().error).toBeNull();
   await vi.advanceTimersByTimeAsync(1); expect((await pending).error).toBeNull(); expect(s.run).toHaveBeenCalledTimes(3); expect(s.warning).not.toHaveBeenCalled(); expect(s.feed).not.toHaveBeenCalled(); s.service.shutdown();
 });
-it('fails only after three attempts with increasing backoff and one warning', async () => {
+it('fails only after three attempts with increasing backoff, logged at info: the PC was offline, not a bug (#333)', async () => {
   const s = setup(); s.run.mockResolvedValue({ stdout: '', stderr: 'ECONNRESET', code: 1 }); const pending = s.service.refresh();
   await vi.advanceTimersByTimeAsync(1000); expect(s.run).toHaveBeenCalledTimes(2); expect(s.service.get().error).toBeNull();
   await vi.advanceTimersByTimeAsync(2999); expect(s.run).toHaveBeenCalledTimes(2);
-  await vi.advanceTimersByTimeAsync(1); expect((await pending).error?.message).toContain('Lettura delle novità'); expect(s.run).toHaveBeenCalledTimes(3); expect(s.warning).toHaveBeenCalledTimes(1); s.service.shutdown();
+  await vi.advanceTimersByTimeAsync(1); expect((await pending).error?.message).toContain('Lettura delle novità'); expect(s.run).toHaveBeenCalledTimes(3); expect(s.warning).not.toHaveBeenCalled(); s.service.shutdown();
 });
 it.each(['AADSTS700082', 'HTTP 403', 'Malformed JSON'])('does not retry a permanent failure: %s', async stderr => {
   const s = setup(); s.run.mockResolvedValue({ stdout: '', stderr, code: 1 }); await s.service.refresh(); expect(s.run).toHaveBeenCalledTimes(1); expect(s.warning).toHaveBeenCalledTimes(1); s.service.shutdown();

@@ -7,7 +7,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { causeOf, errorOf, feedFor, scriptStderr, mergeNews, newsLine, parseNewsRun, parsePrsRun, windowDays, type StoredNews } from '../../src/main/tasks/model';
-import { TaskService, type TaskDeps } from '../../src/main/tasks/service';
+import { OFFLINE, TaskService, type TaskDeps } from '../../src/main/tasks/service';
 import { demoDevopsRun } from '../../src/main/tasks/demo';
 import type { RunResult } from '../../src/main/brain/node';
 import type { TasksState } from '../../src/shared/contract';
@@ -267,3 +267,12 @@ describe('TaskService', () => {
     t.svc.shutdown();
   });
 });
+
+describe('a read that failed because the PC is offline (#310, #333)', () => {
+  it('is told apart from a script error', () => {
+    expect(OFFLINE.test('TypeError: fetch failed')).toBe(true);
+    expect(OFFLINE.test("HTTPSConnectionPool(host='login.microsoftonline.com', port=443): Max retries exceeded with url")).toBe(true);
+    expect(OFFLINE.test('ReferenceError: x is not defined')).toBe(false);
+  });
+});
+

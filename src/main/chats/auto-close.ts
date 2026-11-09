@@ -103,8 +103,8 @@ export class AutoCloseService {
     e.status.deadline = null; e.status.warningStartedAt = null; e.status.reason = reason; e.fingerprint = null;
     e.status.keptOpen = this.kept.has(e.status.chatId);
   }
-  refresh(): void {
-    const now = this.d.now(), candidates = this.d.candidates();
+  refresh(candidates: AutoCloseCandidate[] = this.d.candidates()): void {
+    const now = this.d.now();
     const ids = new Set(candidates.map(c => c.id));
     for (const id of this.entries.keys()) if (!ids.has(id) && !this.inFlight.has(id)) { this.entries.delete(id); this.presence.delete(id); }
     for (const c of candidates) {
@@ -130,20 +130,23 @@ export class AutoCloseService {
 
   /** Call on lifecycle changes and an inexpensive main timer. A late/stalled timer never shortens the warning. */
   async tick(): Promise<void> {
-    this.refresh();
+    // one candidate list for the whole synchronous scan: it walks every open chat and its tree, and was built up to five
+    // times a second (#336: the auto-close timer froze the window for 3.6 s); after an await it is built again (valid)
+    let list = this.d.candidates();
+    this.refresh(list);
     const now = this.d.now();
-    const depth = new Map(this.d.candidates().map(c => [c.id, c.depth ?? 0]));
+    const depth = new Map(list.map(c => [c.id, c.depth ?? 0]));
     const leavesFirst = [...this.entries.values()].sort((a, b) => (depth.get(b.status.chatId) ?? 0) - (depth.get(a.status.chatId) ?? 0));
     for (const e of leavesFirst) {
       const s = e.status;
       if (this.inFlight.has(s.chatId) || s.deadline === null || now < s.deadline) continue;
       // a deeper member of its tree still open (touched later, kept open, or still closing in another pass): this one
       // waits a new warning, so a child is never left on screen without its parent
-      const open = this.d.candidates(), self = open.find(c => c.id === s.chatId);
+      const open = list, self = open.find(c => c.id === s.chatId);
       if (self?.tree !== undefined && open.some(c => c.tree === self.tree && (c.depth ?? 0) > (self.depth ?? 0))) {
         s.deadline = now + AUTO_CLOSE_WARNING_MS; s.warningStartedAt = null; s.generation = this.nextGeneration++; this.emit(); continue;
       }
-      const candidate = this.d.candidates().find(c => c.id === s.chatId);
+      const candidate = list.find(c => c.id === s.chatId);
       if (!candidate || this.hold(candidate, now)) continue;
       const expected: AutoCloseReservation = { generation: s.generation, deadline: s.deadline, stamp: candidate.stamp };
       const expectedTouch = this.presence.get(s.chatId)!.touchedAt;
@@ -155,7 +158,7 @@ export class AutoCloseService {
       };
       this.inFlight.add(s.chatId);
       try { if (valid()) await this.d.archive(s.chatId, expected, valid); }
-      finally { this.inFlight.delete(s.chatId); this.cancel(e, 'Scadenza conclusa: rilettura dello stato'); this.emit(); }
+      finally { this.inFlight.delete(s.chatId); this.cancel(e, 'Scadenza conclusa: rilettura dello stato'); this.emit(); list = this.d.candidates(); }
     }
   }
 }

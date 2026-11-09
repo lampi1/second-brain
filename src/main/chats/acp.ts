@@ -1216,10 +1216,12 @@ export class AcpSession implements HarnessSession {
     try { this.proc.stdin.end(); } catch { /* gone */ }
     if (this.killed) return this.exitPromise; // already being killed (app quit): no grace, no false "did not exit"
     const pid = this.proc.pid, t0 = Date.now();
+    // a turn or a tool still running when the close came: its kill is expected, not a problem to file (#308)
+    const wasBusy = this.busy;
     const t = setTimeout(() => {
       if (this.exited) return;
       if (this.procExited) return this.releasePipes();
-      log.warn('chats', 'acp session did not exit, killing', { chat: this.opts.chatId, data: { engine: this.engine, pid, waitedMs: Date.now() - t0 }, cause: 'no exit within the grace after its stdin closed', hint: 'a turn or a tool still running at close; npm run logs -- --chat <id> shows what it was doing' });
+      log[wasBusy ? 'info' : 'warn']('chats', 'acp session did not exit, killing', { chat: this.opts.chatId, data: { engine: this.engine, pid, waitedMs: Date.now() - t0 }, cause: 'no exit within the grace after its stdin closed', hint: 'a turn or a tool still running at close; npm run logs -- --chat <id> shows what it was doing' });
       this.killAfterGrace();
     }, graceMs);
     t.unref();

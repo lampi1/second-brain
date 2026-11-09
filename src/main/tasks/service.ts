@@ -82,6 +82,11 @@ export interface TaskDeps {
   repoDir?: (repo: string) => string | null;
 }
 
+/** The read failed because the PC could not reach the service (offline, VPN off, DNS, a proxy): the page says so with
+ *  its hint and reads again later; it is the network, not a bug, so it is logged at info (#310, #333). */
+export const OFFLINE = /fetch failed|ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT|ENETUNREACH|EHOSTUNREACH|Max retries exceeded|Failed to establish a new connection|getaddrinfo|socket hang up|network is unreachable/i;
+const offline = (r: RunResult): boolean => OFFLINE.test(`${r.stderr ?? ''}\n${r.stdout ?? ''}`);
+
 export class TaskService {
   private saved: Saved;
   private running: Promise<TasksState> | null = null;
@@ -240,7 +245,7 @@ export class TaskService {
     try { if (r.code === 0) qa = parseQaRun(r.stdout); } catch (e) { bad = { ...r, code: 1, stderr: errText(e) }; }
     if (!qa) {
       this.qaError = errorOf(bad, 'Lettura dei test').message;
-      log.warn('task', 'QA read failed', { cause: causeOf(bad), hint: `run node ${QA_SCRIPT} --mine in the brain folder to see the error`, data: { code: r.code } });
+      log[offline(bad) ? 'info' : 'warn']('task', 'QA read failed', { cause: causeOf(bad), hint: `run node ${QA_SCRIPT} --mine in the brain folder to see the error`, data: { code: r.code } });
       return;
     }
     this.qaError = null;
@@ -253,7 +258,7 @@ export class TaskService {
     this.error = errorOf(r, what);
     // an expired login says so in the feed once (also when the page is closed), not at every automatic read
     if (this.error.kind === 'login' && was !== 'login') this.d.feed([{ kind: 'task', title: 'DevOps: accesso scaduto', detail: 'Lancia «az login» in un terminale, poi «Aggiorna ora» nella pagina Task' }]);
-    log.warn('task', `${what} failed`, { cause: causeOf(r), hint: this.error.kind === 'login' ? 'run `az login` in a terminal, then Aggiorna ora' : `run node ${SCRIPT} --json in the brain folder to see the error`, data: { code: r.code } });
+    log[offline(r) ? 'info' : 'warn']('task', `${what} failed`, { cause: causeOf(r), hint: this.error.kind === 'login' ? 'run `az login` in a terminal, then Aggiorna ora' : `run node ${SCRIPT} --json in the brain folder to see the error`, data: { code: r.code } });
     return this.get();
   }
 

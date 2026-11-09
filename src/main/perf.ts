@@ -40,6 +40,10 @@ export function logInputLag(a: unknown): void {
 export const SLOW_STEP_MS = 20;
 /** the main thread late by this much (ms) is a freeze the user sees */
 export const STALL_MS = 100;
+/** a stall this long (ms) or longer is a warning (Manutenzione files it); a shorter one is logged at info: still in
+ *  `npm run logs -- --scope perf` and counted in the daily digest, but a 100-500 ms hiccup, mostly with the PC's CPU
+ *  taken by the agents' processes, is no app bug to file each time (#303-#341, 2026-11-09) */
+export const STALL_WARN_MS = 500;
 const TICK_MS = 100;
 type Tally = Map<string, { ms: number; n: number }>;
 /** every labelled step since the last tick (label → total ms, count); outer = time inside outermost steps only */
@@ -124,7 +128,8 @@ export function startStallWatch(now: () => number = () => performance.now(), usa
       return;
     }
     const top = topOf(minute, 8);
-    log.warn('perf', 'main process blocked', { data: { ...stall, ...(missed ? { sinceLast: missed, worstSinceLast: worst, ...(top.length ? { topSinceLast: top } : {}) } : {}) },
+    const level = Math.max(stall.ms, missed ? worst : 0) >= STALL_WARN_MS ? 'warn' : 'info';
+    log[level]('perf', 'main process blocked', { data: { ...stall, ...(missed ? { sinceLast: missed, worstSinceLast: worst, ...(top.length ? { topSinceLast: top } : {}) } : {}) },
       cause: stallCause(stall),
       hint: 'a synchronous step on the main process blocks input and frames; see the steps named here (topSinceLast: the stalls of the last minute)' });
     lastLog = t; missed = 0; worst = 0; minute = new Map();

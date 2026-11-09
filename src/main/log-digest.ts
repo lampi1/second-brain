@@ -26,8 +26,11 @@ const GROUPS_ISSUES = 60, GROUPS_INFO = 15, UI_GROUPS = 20;
 export const DIGEST_LINE_MAX = 32_000;
 
 const fold = (s: string): string => s.replace(/\d+/g, 'N').replace(/\s+/g, ' ').trim().slice(0, 200);
+/** Lines whose cause changes every time (the steps of a stall, a hung stack): one group each, not one per cause, so
+ *  Manutenzione files one issue and not one per episode (#303-#341 were 15 copies of «perf: main process blocked»). */
+const ONE_GROUP = new Set(['perf | main process blocked', 'perf | main process hung']);
 /** The key of a log group: scope | msg | cause with the numbers folded (a pid, an id, a count), so one problem is one group. */
-export const groupKey = (scope: string, msg: string, cause: string): string => `${scope} | ${fold(msg)} | ${fold(cause)}`;
+export const groupKey = (scope: string, msg: string, cause: string): string => `${scope} | ${fold(msg)} | ${ONE_GROUP.has(`${scope} | ${msg}`) ? '' : fold(cause)}`;
 
 type Lvl = 'debug' | 'info' | 'warn' | 'error';
 export interface DigestGroup { key: string; lvl: Lvl; scope: string; msg: string; cause: string; count: number }

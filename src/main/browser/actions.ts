@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { NativeImage, WebFrameMain } from 'electron';
 import { log, errText, redact } from '../log';
+import { ToolRefusal } from '../mcp/refusal';
 import type { BrowserTabs, Tab } from './tabs';
 import { pageCall, walkPage, locateRef, frameBox, inputInfo, focusSelect, selectOptions, pageText, probe, angularStable, hasPasswordField,
   type WalkMode, type WalkResult, type PointResult, type InputInfo, type FrameMarker } from './page';
@@ -326,7 +327,8 @@ export class BrowserActions {
       if (x < 0 || y < 0 || x >= b.width || y >= b.height) throw new Error(`coordinate (${x}, ${y}) is outside the viewport (${b.width}x${b.height} CSS px).`);
       return { x, y, what: `(${x}, ${y})` };
     }
-    throw new Error('Pass ref (from read_page/find) or coordinate [x, y] (CSS px of the last screenshot).');
+    // the agent's own input mistake: an error to it, info in the log (ToolRefusal, #338)
+    throw new ToolRefusal('Pass ref (from read_page/find) or coordinate [x, y] (CSS px of the last screenshot).');
   }
 
   // ---------- acting ----------

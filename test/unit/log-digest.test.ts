@@ -114,3 +114,12 @@ describe('logger correlation and housekeeping', () => {
     expect(fs.existsSync(ancient)).toBe(false);
   });
 });
+
+describe('groupKey', () => {
+  it('folds every stall into one group, whatever steps its cause names (#303-#341)', () => {
+    expect(groupKey('perf', 'main process blocked', 'the window froze 116 ms while mcp agent_report 126 ms'))
+      .toBe(groupKey('perf', 'main process blocked', 'the window froze 352 ms while chats.json checkpoint 216 ms (3×)'));
+    expect(groupKey('mcp', 'tool x failed', 'a')).not.toBe(groupKey('mcp', 'tool x failed', 'b'));
+  });
+});
+

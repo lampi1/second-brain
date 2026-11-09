@@ -10,6 +10,7 @@
 // the first request, closed after 10 idle minutes, on a definition change and at shutdown. Used by service.ts.
 import type { McpServer, McpTool } from '../mcp/server';
 import { EndpointTokens } from '../mcp/tokens';
+import { UpstreamError } from '../mcp/refusal';
 import { log, errText } from '../log';
 import type { McpServerDef, RoleMcpAccess } from '../../shared/mcp-servers';
 import { serversFor, toolFor, type ChatMcpContext } from './access';
@@ -30,10 +31,13 @@ export interface GatewayDeps {
 
 interface Conn { up: Upstream; tools: Promise<UpstreamTool[]> | null; toolsAt: number; used: number; def: string }
 const TOOLS_TTL = 5 * 60_000;
+/** one warning per server this often when it does not list its tools */
+const WARN_EVERY_MS = 3600_000;
 
 export class McpGateway {
   private readonly tokens = new EndpointTokens();
   private readonly conns = new Map<string, Conn>();
+  private readonly warned = new Map<string, number>();
   private readonly timer: NodeJS.Timeout;
 
   constructor(private readonly deps: GatewayDeps) {
@@ -101,8 +105,12 @@ export class McpGateway {
     try { list = await c.tools; }
     catch (e) {
       this.drop(chatId, server, c);
-      log.warn('mcp-servers', 'MCP server tools not listed', { chat: chatId, cause: errText(e), data: { server }, hint: 'test the server in Impostazioni → Connettori' });
-      throw e;
+      // the user's server is slow or down: once an hour per server a warning, the rest at info (#347: 42 warnings, one
+      // per chat that started, for one server that did not answer); the chat gets an upstream error, never «crashed» (#329)
+      const now = Date.now(), last = this.warned.get(server) ?? -Infinity;
+      if (now - last >= WARN_EVERY_MS) this.warned.set(server, now);
+      log[now - last >= WARN_EVERY_MS ? 'warn' : 'info']('mcp-servers', 'MCP server tools not listed', { chat: chatId, cause: errText(e), data: { server }, hint: 'test the server in Impostazioni → Connettori' });
+      throw new UpstreamError(`MCP server ${server} did not list its tools: ${errText(e)}`);
     }
     return list.filter(t => toolFor(ctx, this.deps.roleAccess, server, t)).map(t => ({
       name: t.name, description: t.description, inputSchema: t.inputSchema,

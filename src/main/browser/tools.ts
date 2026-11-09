@@ -12,6 +12,7 @@ import { envRefusal, loginRefusal } from './rules';
 import { containsPaste, maskKeys } from './keys';
 import { fmtFactor } from './preview';
 import { snapshotDelta } from './delta';
+import { ToolRefusal } from '../mcp/refusal';
 
 export interface Scope { group: string; owner: string | null; chatId: string | null }
 
@@ -22,7 +23,8 @@ export const PASTE_KEYS = { test(keys: string): boolean { try { return containsP
 
 type Args = Record<string, unknown>;
 const str = (v: unknown, name: string): string => {
-  if (typeof v !== 'string' || !v.trim()) throw new Error(`${name} is required (a non-empty string)`);
+  // the agent's own input mistake: answered to it as an error, logged at info (ToolRefusal, #340)
+  if (typeof v !== 'string' || !v.trim()) throw new ToolRefusal(`${name} is required (a non-empty string)`);
   return v;
 };
 const bool = (v: unknown): boolean => v === true || v === 'true';

@@ -1,7 +1,7 @@
 // MCP helpers: content blocks, the port from the environment and the per-chat endpoint tokens. The protocol tests over a
 // real HTTP port were removed with the other port tests (docs/tests/load-sensitive-removed.md).
 import { describe, expect, it } from 'vitest';
-import { mcpPortFromEnv, toContent } from '../../src/main/mcp/server';
+import { listenWithRetry, mcpPortFromEnv, toContent } from '../../src/main/mcp/server';
 import { EndpointTokens } from '../../src/main/mcp/tokens';
 
 describe('MCP helpers', () => {
@@ -30,5 +30,26 @@ describe('MCP helpers', () => {
     expect(t.check('zzz', a)).toBe(false);
     t.revoke('a');
     expect(t.check('a', a)).toBe(false);
+  });
+});
+
+describe('listenWithRetry (#348: the restarted app waits for the old instance to free 4319)', () => {
+  const inUse = () => Object.assign(new Error('listen EADDRINUSE'), { code: 'EADDRINUSE' });
+  it('retries a port in use, then binds it', async () => {
+    let calls = 0; const waits: number[] = [];
+    const port = await listenWithRetry(async p => { if (++calls < 3) throw inUse(); return p; }, 4319, 6, 500, async ms => { waits.push(ms); });
+    expect(port).toBe(4319);
+    expect(waits).toEqual([500, 500]);
+  });
+  it('gives up after the last try, and never retries another error or port 0', async () => {
+    let calls = 0;
+    await expect(listenWithRetry(async () => { calls++; throw inUse(); }, 4319, 3, 1, async () => {})).rejects.toThrow('EADDRINUSE');
+    expect(calls).toBe(3);
+    calls = 0;
+    await expect(listenWithRetry(async () => { calls++; throw new Error('EACCES'); }, 4319, 3, 1, async () => {})).rejects.toThrow('EACCES');
+    expect(calls).toBe(1);
+    calls = 0;
+    await expect(listenWithRetry(async () => { calls++; throw inUse(); }, 0, 3, 1, async () => {})).rejects.toThrow();
+    expect(calls).toBe(1);
   });
 });

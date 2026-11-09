@@ -15,7 +15,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { log, errText } from '../log';
-import { ToolRefusal } from './refusal';
+import { ToolRefusal, UpstreamError } from './refusal';
 import { timedStep } from '../perf';
 import { updateActivity } from '../update/activity';
 
@@ -28,6 +28,19 @@ export function mcpPortFromEnv(env: NodeJS.ProcessEnv = process.env): number {
   if (raw === undefined || raw === '') return DEFAULT_MCP_PORT;
   const n = Number(raw);
   return Number.isInteger(n) && n >= 0 && n < 65536 ? n : DEFAULT_MCP_PORT;
+}
+
+/** Binds `port`, waiting for it while another process is releasing it (#348: the app restarted by «Aggiorna» or a
+ *  quick reopen starts while the previous instance still holds 4319): EADDRINUSE is retried `tries` times, `waitMs`
+ *  apart; any other error, or the port still taken after the last try, rejects. `sleep` is injected by the tests. */
+export async function listenWithRetry(listen: (port: number) => Promise<number>, port: number, tries = 6, waitMs = 500,
+  sleep: (ms: number) => Promise<void> = ms => new Promise(r => setTimeout(r, ms))): Promise<number> {
+  for (let i = 0; ; i++) {
+    try { return await listen(port); } catch (e) {
+      if ((e as NodeJS.ErrnoException)?.code !== 'EADDRINUSE' || port === 0 || i >= tries - 1) throw e;
+      await sleep(waitMs);
+    }
+  }
 }
 
 export interface ToolImage { data: string; mimeType: string }
@@ -278,6 +291,8 @@ export class McpServer {
           return fail(id, -32601, `Method not found: ${method}`);
       }
     } catch (e) {
+      // a user's MCP server behind the gateway failed: already logged there, not a bug of this server (#329)
+      if (e instanceof UpstreamError) return fail(id, -32603, errText(e));
       log.error('mcp', `method ${method} crashed`, { cause: errText(e), hint: 'a bug in the MCP server: see the stack in the logs and fix mcp/server.ts' });
       return fail(id, -32603, `Internal error: ${errText(e)}`);
     }
