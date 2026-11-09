@@ -24,7 +24,7 @@
     "src/main/agents/loop.ts": "fe15f50b68ed3851",
     "src/main/agents/model-tier.ts#tierModel": "ccdf6258b00724c4",
     "src/main/agents/orchestrator-role.ts": "9ed8b0fb3acdedb3",
-    "src/main/agents/pack/flows.ts#runtime": "47f65a807ae0e541",
+    "src/main/agents/pack/flows.ts#runtime": "c5e8440d0c3552cb",
     "src/main/agents/pack/lesson-evidence.ts": "d413e90460ff78a3",
     "src/main/agents/receipts.ts": "d6a9f1c2064bc435",
     "src/main/agents/role-gate.ts#aboveParent": "4fa4a91f8909e4ac",

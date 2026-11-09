@@ -64,8 +64,9 @@ describe('role know-how at launch', () => {
     expect(f.flows.runtime('sentinel').skills).not.toContain('reviewer');
     expect(f.flows.runtime('orchestrator').skills).toContain('reviewer');
   });
-  it('every role gets the product topic-rule skills (regole-*, #366); other skills stay outside its plugin', () => {
+  it('every role of a fresh brain gets the product topic-rule skills (regole-*, #366); other skills stay outside its plugin', () => {
     const f = setup();
+    fs.writeFileSync(path.join(f.brain, 'brain.json'), JSON.stringify({ machinery: 'product-v1', rules: { appRules: true } }));
     const topic = path.join(f.root, 'app-skills', 'regole-code');
     fs.mkdirSync(topic, { recursive: true });
     fs.writeFileSync(path.join(topic, 'SKILL.md'), '---\nname: regole-code\ndescription: Code rules\n---\nTests first.\n');
@@ -75,6 +76,9 @@ describe('role know-how at launch', () => {
     expect(role.skills).toContain('regole-code');
     expect(role.skills).not.toContain('reviewer');
     expect(fs.readFileSync(path.join(role.skillRoot, 'regole-code', 'SKILL.md'), 'utf8')).toContain('Tests first.');
+    // an older product brain keeps its own topic files: no release topic skills for its roles
+    fs.writeFileSync(path.join(f.brain, 'brain.json'), JSON.stringify({ machinery: 'product-v1', rules: {} }));
+    expect(f.flows.runtime('artisan').skills).not.toContain('regole-code');
   });
   it('a skill the package checks refuse is left out of the Orchestrator\'s start, and refused when a launch names it', () => {
     const f = setup();

@@ -12,6 +12,7 @@ import type { AgentCatalogService } from '../catalog';
 import type { LaunchMemoryContext } from '../../rules/launch-memory';
 import { roleSkillName, roleSkillText } from '../../skills/lessons';
 import { brainSkillsDir } from '../../skills/layout';
+import { configOf } from '../../rules/storage';
 import { log } from '../../log';
 import { runtimePluginName } from '../role-gate';
 import { approvedFiles, inspectPack, readPackSource } from './read';
@@ -66,7 +67,9 @@ export class AgentPackFlows {
     const declared = [...profile.skills, ...(profile.knowhow?.linked ?? [])];
     // the Orchestrator can call every skill from its chat (owner 2026-11-09, #361): it picks the ones a request needs
     // the product's topic rules are skills since #366 (regole-*, ADR 0243): every role has them, loaded when one fits
-    const topicRules = all.filter(s => s.name.startsWith('regole-')).map(s => s.name);
+    // (a fresh brain's only: an older product brain keeps its own topic files; never a home skill that happens to share the prefix)
+    const home = path.join(os.homedir(), '.claude', 'skills') + path.sep;
+    const topicRules = appRules(this.deps.brainRoot()) ? all.filter(s => s.name.startsWith('regole-') && !path.resolve(s.folder).startsWith(home)).map(s => s.name) : [];
     const skills = [...new Set([...declared, ...launch, ...topicRules, ...(id === 'orchestrator' ? all.map(s => s.name) : [])])];
     const loaded: string[] = [portableId(id)];
     for (const name of skills) {
@@ -171,4 +174,9 @@ export class AgentPackFlows {
     }
     } catch { log.warn('agents', 'Could not access editable agent files', { cause: 'Brain folder unavailable', hint: 'The committed snapshot is preserved; reconnect the brain folder' }); }
   }
+}
+
+/** Does the brain take the app's own rules (a fresh brain, rules.appRules, ADR 0072)? false without one or unreadable. */
+function appRules(root: string | null | undefined): boolean {
+  try { return !!root && !!configOf(root).appRules; } catch { return false; }
 }

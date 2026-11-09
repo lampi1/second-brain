@@ -72,7 +72,8 @@ function codexInstructions(domains: readonly BrainDomain[], readOnly: boolean): 
     if (!isProduct(d.root)) return instructionsOf([d]);
     if (readOnly) return productInstructions(d.root, true);
     const tools = toolsRef(d.root);
-    return `${productInstructions(d.root, true, tools)}\n\n${memoryInstructions(assets(), d.root, tools)}`;
+    // no topic-skill index: Codex gets the skills folders themselves (skillRoots)
+    return `${productInstructions(d.root, true, tools, false)}\n\n${memoryInstructions(assets(), d.root, tools)}`;
   }).filter(Boolean).join('\n\n') || null;
 }
 

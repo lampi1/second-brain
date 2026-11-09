@@ -67,6 +67,11 @@ describe('product topic rules as app skills (#366, ADR 0243)', () => {
     const text = productInstructions(root, true, tools)!;
     expect(text).toContain('- regole-qa: QA rules');
     expect(text).toContain(`${appSkillsIn(tools).replace(/\\/g, '/')}/regole-qa/SKILL.md`);
+    expect(productInstructions(root, true, tools, false)).not.toContain('regole-qa'); // Codex: it has the folders
+    // the brain's own copy, edited on the Skill page, wins
+    fs.mkdirSync(path.join(root, '.agents/skills/regole-qa'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.agents/skills/regole-qa/SKILL.md'), '---\nname: regole-qa\ndescription: My QA rules.\n---\nMine.\n');
+    expect(productInstructions(root, true, tools)).toContain(`- regole-qa: My QA rules. Read ${root.replace(/\\/g, '/')}/.agents/skills/regole-qa/SKILL.md`);
     fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', rules: { topicFiles: [] } }));
     expect(productInstructions(root, true, tools)).not.toContain('regole-qa');
   });

@@ -117,7 +117,7 @@ export interface ResearchDeps {
 }
 
 /** The research's extra frame lines for the ADR 0195 steps (after the method and the fixed frame). */
-const CANDIDATE_FRAME = 'Brain changes that only write brain files (skills without a role, rules for every role, what to forget) are gathered by the app into ONE candidate version of the brain when you end: the user sees one card with a before/after per file and keeps or discards all of it.';
+const CANDIDATE_FRAME = 'Brain changes that only write brain files (skills without a role, what to forget) are gathered by the app into ONE candidate version of the brain when you end: the user sees one card with a before/after per file and keeps or discards all of it.';
 const REFLECT_FRAME = `Role text: read maintenance_pack section "${ROLE_REFLECT_SECTION}" once; when it names a role, you may propose ONE revised full text for it with maintenance_role_trial (a trial version the user approves, measured against the current one).`;
 
 type Input = Record<string, unknown>;

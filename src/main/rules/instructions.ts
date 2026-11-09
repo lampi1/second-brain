@@ -13,15 +13,17 @@ import { parseMd, field } from '../../shared/skillmd';
 
 /** The app's topic-rule skills (regole-*) in the tools copy, as lines naming each SKILL.md: an adapter without the app's
  *  skills (ACP) reads them from there (#366). Bounded; [] without a copy. */
-export function topicSkillIndex(tools: string): string[] {
+export function topicSkillIndex(tools: string, root?: string): string[] {
   const dir = path.join(tools, APP_PLUGIN_PARTS.find(p => p.to === 'skills')!.from);
   let names: string[] = [];
   try { names = fs.readdirSync(dir).filter(n => n.startsWith('regole-')).sort().slice(0, 30); } catch { return []; }
   return names.flatMap(n => {
-    const file = path.join(dir, n, 'SKILL.md');
+    // the brain's own copy (edited on the Skill page) wins over the app's, as for every other engine
+    const own = root ? ['.agents/skills', '.claude/skills'].map(sub => path.join(root, sub, n, 'SKILL.md')).find(f => fs.existsSync(f)) : undefined;
+    const file = own ?? path.join(dir, n, 'SKILL.md');
     try {
       const desc = field(parseMd(fs.readFileSync(file, 'utf8')), 'description') ?? '';
-      return [`- ${n}: ${desc.replace(/\s+/g, ' ').slice(0, 220)} Read ${file.replace(/\\/g, '/')}`];
+      return [`- ${n}: ${desc.replace(/\s+/g, ' ').slice(0, 160)} Read ${file.replace(/\\/g, '/')}`];
     } catch { return []; }
   });
 }
@@ -47,7 +49,7 @@ export function appBoot(root: string, tools?: string): string {
   ].join('\n'), tools);
 }
 
-export function productInstructions(root: string, fallback: boolean, tools?: string): string | null {
+export function productInstructions(root: string, fallback: boolean, tools?: string, index = true): string | null {
   if (!enabled(root)) return null;
   const config = configOf(root);
   const own = [...new Set(config.fixedFiles)].map(file => expandTools(read(root, file), tools)).filter(Boolean);
@@ -56,7 +58,7 @@ export function productInstructions(root: string, fallback: boolean, tools?: str
   if (!fallback) return fixed;
   // topic rules are no longer injected (#366, ADR 0243): they are skills; an adapter without the app's skills gets
   // where each one is, to read the one that fits
-  const index = config.appRules && tools ? topicSkillIndex(tools) : [];
+  const list = config.appRules && tools && index ? topicSkillIndex(tools, root) : [];
   return [fixed, 'Product pre-tool hooks are not available in this adapter.',
-    ...(index.length ? [`The product rules of each topic, as skills: read the SKILL.md that fits the task before you start it.\n${index.join('\n')}`] : [])].join('\n\n');
+    ...(list.length ? [`The product rules of each topic, as skills: read the SKILL.md that fits the task before you start it.\n${list.join('\n')}`] : [])].join('\n\n');
 }
