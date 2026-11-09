@@ -952,8 +952,10 @@ export class ClaudeSession implements HarnessSession {
     try {
       const tool = s(input.tool_name);
       const v = input.hook_event_name === 'PreToolUse' && tool ? await this.opts.preToolUse!.decide({ tool, input: input.tool_input, ...(s(input.agent_id) ? { agentId: s(input.agent_id) } : {}) }) : null;
-      if (generation !== this.brokerGeneration || this.exited || this.procExited) return;
-      if (v) {
+      // A stop or close while the (remote) broker decided: the hook still gets its answer, a refusal, never silence
+      if (generation !== this.brokerGeneration || this.exited || this.procExited) {
+        response = { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: 'The session was stopped while the permission check ran; the action was not authorized.' } };
+      } else if (v) {
         response = { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: v.deny } };
         log.info('chats', 'pre-tool hook refused', { chat: this.opts.chatId, data: { tool } });
       }
