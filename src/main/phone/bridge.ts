@@ -114,7 +114,8 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
     const text = condense(ev.text);
     if (!text) return;
     if (old) {
-      await out.edit(old.messageId!, text);
+      // only a confirmed edit counts: a failed one leaves the older revision, so the next emit tries again
+      if (!await out.edit(old.messageId!, text)) return;
       old.revision = ev.revision; persist();
       return;
     }
@@ -123,7 +124,10 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
     if (records.length > 500) records.shift();
     // An unknown network result must not become a duplicate completion after a restart.
     persist();
-    record.messageId = await out.send(text, { silent: d.silent });
+    const sent = await out.sendOutcome(text, { silent: d.silent });
+    // a certain refusal is forgotten, so a later emit sends it; only an unknown result stays as null (never resent)
+    if (sent === 'refused') records.splice(records.indexOf(record), 1);
+    else record.messageId = sent;
     persist();
   }
   async function offerIfAllowed(item: PhoneDecidable, since: number): Promise<void> {

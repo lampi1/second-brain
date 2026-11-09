@@ -15,7 +15,8 @@ function fakeOut() {
   let next = 1;
   const out: Outbound = {
     async send(text, o = {}) { const id = next++; sent.push({ id, text, keyboard: o.keyboard, silent: o.silent }); return id; },
-    async edit(id, text) { edits.push({ id, text }); },
+    async sendOutcome(text, o = {}) { const id = next++; sent.push({ id, text, silent: o.silent }); return id; },
+    async edit(id, text) { edits.push({ id, text }); return true; },
     async answerCallback(id, text) { answers.push({ id, text }); },
   };
   return { out, sent, edits, answers };

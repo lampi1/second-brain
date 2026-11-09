@@ -2,16 +2,19 @@
 // (filter.ts) here, so no caller can send an unfiltered text (design §9: one filter on every outgoing text). It also
 // fixes the destination to the paired chat (no other chat id can be passed) and turns API failures into a logged
 // warning, so a failed send never breaks the polling loop. answerCallbackQuery texts are fixed short strings, filtered too.
-// Used by bridge.ts, buttons.ts, backlog.ts, voice.ts, commands.ts; no unit test since bridge.test.ts (a port) was removed.
-import type { TelegramClient } from './client';
+// Used by bridge.ts, buttons.ts, backlog.ts, voice.ts, commands.ts; tests: test/unit/phone/outbound.test.ts.
+import { TelegramError, type TelegramClient } from './client';
 import { filterOutgoing } from './filter';
 import type { InlineKeyboard, PhoneLog } from './types';
 
 export interface Outbound {
   /** sends to the paired chat; returns the Telegram message_id, or null when not paired or the send failed */
   send(text: string, opts?: { silent?: boolean; keyboard?: InlineKeyboard }): Promise<number | null>;
-  /** replaces a sent message's text and buttons (none = buttons removed) */
-  edit(messageId: number, text: string, keyboard?: InlineKeyboard): Promise<void>;
+  /** like send, but says whether a failure is certain: 'refused' = not sent (not paired, nothing to send, or Telegram
+   *  answered with an error); null = unknown (the network failed, the message may have arrived) */
+  sendOutcome(text: string, opts?: { silent?: boolean }): Promise<number | 'refused' | null>;
+  /** replaces a sent message's text and buttons (none = buttons removed); true only when Telegram confirmed it */
+  edit(messageId: number, text: string, keyboard?: InlineKeyboard): Promise<boolean>;
   answerCallback(callbackId: string, text?: string): Promise<void>;
 }
 
@@ -31,11 +34,20 @@ export function createOutbound(client: () => TelegramClient | null, chatId: () =
         return m.message_id;
       } catch (e) { warn('sendMessage', e); return null; }
     },
+    async sendOutcome(text, opts = {}) {
+      const c = client(), to = chatId();
+      const body = filterOutgoing(text);
+      if (!c || to === null || !body) return 'refused';
+      try { return (await c.sendMessage(to, body, { silent: opts.silent })).message_id; } catch (e) {
+        warn('sendMessage', e);
+        return e instanceof TelegramError && typeof e.code === 'number' ? 'refused' : null;
+      }
+    },
     async edit(messageId, text, keyboard) {
       const c = client(), to = chatId();
       const body = filterOutgoing(text);
-      if (!c || to === null || !body) return;
-      try { await c.editMessageText(to, messageId, body, keyboard ? filterKeyboard(keyboard) : undefined); } catch (e) { warn('editMessageText', e); }
+      if (!c || to === null || !body) return false;
+      try { await c.editMessageText(to, messageId, body, keyboard ? filterKeyboard(keyboard) : undefined); return true; } catch (e) { warn('editMessageText', e); return false; }
     },
     async answerCallback(callbackId, text) {
       const c = client();
