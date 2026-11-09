@@ -58,6 +58,6 @@ export function projectWork(row: WorkThread, chats: readonly ChatSummary[], pend
   return { ...structuredClone(row), status: state === 'waiting-user' ? 'approval' : state === 'reported' ? 'active' : state, waitingOn, nextAction, coordination: {
     state, waitingOn, nextAction,
     evidence, assignments: linked.map(c => ({ chatId: c.id, runId: c.run?.runId ?? null, taskVersion: c.run?.taskVersion ?? 1, closed: !!c.closedAt || c.state === 'closed' })),
-    requests: durable.map(({ id, key, state, decision, delivery }) => ({ id, key, state, ...(decision ? { decision } : {}), ...(delivery ? { delivery } : {}) })),
+    requests: durable.map(({ id, key, kind, state, decision, delivery }) => ({ id, key, kind, state, ...(decision ? { decision } : {}), ...(delivery ? { delivery } : {}) })),
   } };
 }

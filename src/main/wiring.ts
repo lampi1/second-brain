@@ -649,7 +649,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   lifecycleTimer?.unref();
   // approved work goes on by itself (ADR 0238): a thread with a recorded decision nothing moves is told to the
   // Orchestrator; a closed chat of it with unread mail is reopened
-  const workDriver = new WorkDriver({ works: () => workflows.projection(), chats: () => manager.list(), tell: n => wake.stalledWork(n),
+  const workDriver = new WorkDriver({ works: () => workflows.projection(), chats: () => manager.list(), tell: n => wake.stalledWork(n), withdraw: id => wake.unstalled(id),
     mailWaiting: chatId => mail.hasWork(chatId), wake: (chatId, text) => manager.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }) });
   // a chat's own next turn (agent_wake_later, ADR 0238): kept across restarts, sent by the same minute tick
   const wakeLater = new WakeLater({ file: path.join(ctx.userData, 'wake-later.json'), chats: () => manager.list(),

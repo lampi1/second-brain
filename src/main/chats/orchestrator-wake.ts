@@ -128,7 +128,7 @@ export class OrchestratorWake {
     try {
       const saved = readLocal(path.join(d.userData, 'orchestrator-outbox.json')) as { events?: WakeEvent[] } | undefined;
       if (Array.isArray(saved?.events)) for (const event of saved.events) {
-        if (event && typeof event.chatId === 'string' && typeof event.title === 'string' && typeof event.detail === 'string' && typeof event.at === 'number' && ['done','error','question','permission','command','started','user-message','stalled'].includes(event.kind)) this.buffer.set(slotOf(event), event);
+        if (event && typeof event.chatId === 'string' && typeof event.title === 'string' && typeof event.detail === 'string' && typeof event.at === 'number' && ['done','error','question','permission','command','started','user-message'].includes(event.kind)) this.buffer.set(slotOf(event), event);
       }
     } catch (e) { log.warn('chats', 'news outbox unreadable', { cause: errText(e), hint: 'canonical results remain in the run ledger' }); }
     for (const chat of d.list?.() ?? []) this.remember(chat);
@@ -137,7 +137,7 @@ export class OrchestratorWake {
 
   private persist(): void {
     if (!this.d.userData) return;
-    try { writeLocal(path.join(this.d.userData, 'orchestrator-outbox.json'), { events: this.queued() }); }
+    try { writeLocal(path.join(this.d.userData, 'orchestrator-outbox.json'), { events: this.queued().filter(e => e.kind !== 'stalled') }); }
     catch (e) { log.warn('chats', 'news outbox not saved', { cause: errText(e), hint: 'the next update retries' }); }
   }
 
@@ -280,6 +280,13 @@ export class OrchestratorWake {
     this.reschedule();
     this.changed();
     return true;
+  }
+
+  /** The thread moved again (workflows/driver.ts): its stalled news, if still waiting, would restart work already going. */
+  unstalled(threadId: string): void {
+    if (!this.buffer.delete(slotOf({ chatId: `work:${threadId}`, kind: 'stalled', at: 0 }))) return;
+    this.reschedule();
+    this.changed();
   }
 
   /** The user opened this chat from "N novità in attesa" and read it (#123): its queued news only rides along, quiet, and

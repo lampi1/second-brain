@@ -15,19 +15,23 @@ child turn end, a message to a sleeping session wakes it, a session can schedule
 
 ## Decision
 - **Approved = a recorded decision.** A work thread with an `approved` event is approved work. It is driven only
-  while it is not waiting for the user, not done, not blocked on purpose (last event `blocked` or `rejected`, or 3
-  failed review cycles: those need a new proposal) and has no accepted request with an uncertain delivery (ADR 0234).
+  while it is not waiting for the user, not done, not blocked on purpose (a `blocked` or `rejected` event after the
+  last approval, even with an update after it, or 3 failed review cycles: those need a new proposal) and has no
+  accepted request without a delivered or applied receipt (ADR 0234; workflow approvals never get one).
 - **Stalled work is news for the Orchestrator** (`workflows/driver.ts WorkDriver`, ticked every minute by
-  `wiring.ts`). When no linked chat is running, waiting, starting, pending or queued, and nothing moved for 15 min,
-  the Orchestrator gets grouped news (`OrchestratorWake.stalledWork`, kind `stalled`, class `group`, kept in the
-  outbox) with the stage, the next action and why nothing moves. Again after 30 and 60 min while nothing moves, then
-  it stops; any move resets the count. The Orchestrator's rule says to dispatch the next action, never only to
+  `wiring.ts`). When no linked chat is running, waiting, starting, pending, queued, running background tasks,
+  waiting on work (CI, a build) or waiting for a person in plain text, and nothing moved for 15 min, the Orchestrator
+  gets grouped news (`OrchestratorWake.stalledWork`, kind `stalled`, class `group`) with the stage, the next action
+  and why nothing moves. Again after 30 and 60 min while nothing moves, then it stops; any move resets the count and
+  withdraws news not delivered yet (`unstalled`). It is not kept in the outbox: after a restart the driver tells it
+  again if the thread still stalls. The Orchestrator's rule says to dispatch the next action, never only to
   acknowledge.
 - **Mail wakes a closed chat** (cloudroom: a message to a sleeping session wakes it). When a linked chat closed by the
   app (not by the user) has unread mail, the driver reopens it with one app line instead of telling the Orchestrator.
 - **One recovery after a crash.** An engine that exits mid-turn gets one automatic «resume» line
-  (`manager-sink.ts recoverCrash`), once per turn; a result clears the flag. Never for quick or research chats,
-  archived routine chats, or chats the user closed.
+  (`manager-sink.ts recoverCrash`), once per turn; a result clears the flag. Never for delegated children (their
+  parent already got a blocked result and decides), quick or research chats, archived routine chats, or chats the
+  user closed.
 - **A chat can schedule its own next turn** (`chats/wake-later.ts`, tool `agent_wake_later`, pre-approved like the
   other app chat tools): in 1–1440 minutes the app writes «[sveglia app] <reason>», reopening a closed chat. One per
   chat, kept in `userData/wake-later.json` across restarts, minutes 0 cancels, dropped for chats the user closed.

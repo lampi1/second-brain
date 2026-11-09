@@ -22,6 +22,8 @@ export interface WorkDriverDeps {
   chats(): ChatSummary[];
   /** grouped news to the Orchestrator; false = not taken (no Orchestrator, news off) */
   tell(n: { threadId: string; title: string; detail: string }): boolean;
+  /** the thread moved again: drop its stalled news if it was not delivered yet */
+  withdraw?(threadId: string): void;
   /** unread mail waits for this chat (mail.ts hasWork) */
   mailWaiting?(chatId: string): boolean;
   /** an app line to a chat: reopens a closed one (ChatManager.send) */
@@ -48,12 +50,16 @@ export class WorkDriver {
     for (const w of this.d.works()) {
       if (!w.events.some(e => e.kind === 'approved')) continue;            // no recorded decision: not approved work
       if (w.coordination.state === 'waiting-user' || w.coordination.state === 'done') continue;
-      // blocked on purpose (agent_report block, a rejected proposal, 3 failed review cycles): it needs a new proposal
-      const last = w.events.at(-1)?.kind;
-      if (last === 'blocked' || last === 'rejected' || w.cycles >= 3) continue;
-      if (w.coordination.requests.some(r => r.state === 'accepted' && r.delivery && !['delivered', 'applied'].includes(r.delivery.state))) continue;
+      // blocked on purpose (agent_report block, a rejected proposal, 3 failed review cycles): it needs a new proposal.
+      // Any block or rejection after the last approval counts, even with an update after it (the status stays blocked);
+      // the projection's own 'blocked' (every chat closed, a chat in error) is what the driver is for
+      const lastApproved = w.events.findLastIndex(e => e.kind === 'approved');
+      if (w.events.slice(lastApproved + 1).some(e => e.kind === 'blocked' || e.kind === 'rejected') || w.cycles >= 3) continue;
+      // an accepted request with no receipt of delivery, or an uncertain one (projection.ts needsDeliveryReview): never re-executed
+      if (w.coordination.requests.some(r => r.state === 'accepted' && r.kind !== 'workflow' && r.delivery?.state !== 'delivered' && r.delivery?.state !== 'applied')) continue;
       const linked = chats.filter(c => w.chatIds.includes(c.id));
-      if (linked.some(c => !c.closedAt && (BUSY.has(c.state) || c.pending > 0 || !!c.queued))) continue;
+      // a chat that works (a turn, background tasks, a build it waits on) or waits for a person in plain text is not stalled
+      if (linked.some(c => !c.closedAt && (BUSY.has(c.state) || c.pending > 0 || !!c.queued || (c.background ?? 0) > 0 || !!c.waitsOnWork || !!c.waitsOn))) continue;
       const movedAt = Math.max(w.updatedAt, ...linked.map(c => c.updatedAt ?? 0));
       if (now - movedAt < this.stallMs) continue;
       out.push({ work: w, movedAt, linked });
@@ -80,7 +86,8 @@ export class WorkDriver {
       this.told.set(work.id, { version: work.version, movedAt, count: count + 1 });
       n++;
     }
-    for (const id of [...this.told.keys()]) if (!live.has(id)) this.told.delete(id);   // it moved: a later stall is new
+    // it moved, finished or got blocked: a later stall is new, and news still waiting for the Orchestrator is withdrawn
+    for (const id of [...this.told.keys()]) if (!live.has(id)) { this.told.delete(id); this.d.withdraw?.(id); }
     return n;
   }
 

@@ -30,5 +30,5 @@ export interface WorkProjection {
   waitingOn: string; nextAction: string;
   evidence: { source: 'workflow' | 'request' | 'run' | 'chat'; id: string; detail: string }[];
   assignments: { chatId: string; runId: string | null; taskVersion: number; closed: boolean }[];
-  requests: { id: string; key: RequestKey; state: RequestRecord['state']; decision?: DecisionReceipt; delivery?: DeliveryReceipt }[];
+  requests: { id: string; key: RequestKey; kind?: RequestRecord['kind']; state: RequestRecord['state']; decision?: DecisionReceipt; delivery?: DeliveryReceipt }[];
 }

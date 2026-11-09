@@ -335,6 +335,21 @@ describe('OrchestratorWake', () => {
     } finally { fs.rmSync(userData, { recursive: true, force: true }); }
   });
 
+  it('stalled news is not kept across a restart: the driver tells it again if the thread is still stalled', () => {
+    const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-wake-'));
+    try {
+      const orch = chat({ id: 'orchestrator', isOrchestrator: true, title: 'Orchestrator', state: 'waiting' });
+      const first = new OrchestratorWake({ send: async () => {}, enabled: () => true, groupMs: 1000, perChatMs: 0, userData, list: () => [orch] });
+      first.observe('chat:updated', orch);
+      first.stalledWork({ threadId: 'w1', title: 'Esportazione CSV', detail: 'fermo' });
+      expect(first.queued().map(e => e.kind)).toEqual(['stalled']);
+      first.stop();
+      const next = new OrchestratorWake({ send: async () => {}, enabled: () => true, groupMs: 1000, perChatMs: 0, userData, list: () => [orch] });
+      expect(next.queued()).toEqual([]);
+      next.stop();
+    } finally { fs.rmSync(userData, { recursive: true, force: true }); }
+  });
+
   it('nothing when off, without an Orchestrator, for the Orchestrator itself, a hand-off turn or an archived chat', async () => {
     const off = make({ enabled: false });
     off.finish('qa', 'fatto');
@@ -376,6 +391,15 @@ describe('OrchestratorWake', () => {
     expect(w.queued()).toEqual([]);
     const off = make({ enabled: false });
     expect(off.w.stalledWork({ threadId: 'w1', title: 't', detail: 'd' })).toBe(false);
+  });
+
+  it('stalled news the thread outgrew is withdrawn before it goes (ADR 0238)', async () => {
+    const { w, sent } = make();
+    w.stalledWork({ threadId: 'w1', title: 'Esportazione CSV', detail: 'fermo' });
+    w.unstalled('w1');
+    expect(w.queued()).toEqual([]);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(sent).toEqual([]);
   });
 
   it('a turn the user stopped himself is not told', async () => {
