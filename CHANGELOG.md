@@ -6,6 +6,8 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 ## [Unreleased]
 
 ### Added
+- Episodic memory: a role starts with up to 2 short examples of its own verified past successes on similar tasks in
+  the same repository, listed in the run's Contesto (ADR 0236).
 - Memoria → Statistiche «Quanto ritrova la memoria»: how often the right fact is among those a role gets at launch,
   by words only (today) and by words + meaning (local e5); zero tokens, read-only (ADR 0235).
 - A freeze of the window records a CPU profile of the main process by itself (`<logs>/profiles`, at most 3 per run;

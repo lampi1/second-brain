@@ -236,3 +236,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0231](0231-agents-merge-verified-branches-to-main.md) Agents merge verified branches into main (check:quick, a clean Sentinel and the guard; no e2e since 2026-11-08) — accepted
 - [0232](0232-opencode-auto-permissions.md) OpenCode chats start with the app's permission rules (role ceiling, Claude's deny list) — accepted
 - [0235](0235-measure-launch-memory-recall.md) Measure how well the launch memory finds the right fact (words vs words + meaning, zero tokens) — accepted
+- [0236](0236-episodic-memory-past-run-examples.md) Episodic memory: a role starts with up to 2 examples of its own verified past successes in the same repository — accepted
