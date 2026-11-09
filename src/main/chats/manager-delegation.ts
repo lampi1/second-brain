@@ -410,9 +410,11 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     if (!held) return;
     const orchestrator = held.local ? r : this.openOrchestrator();
     if (!orchestrator) {
-      // Child outcomes also live in the run ledger, independently of this chat's next assignment. Releasing the
-      // per-chat hold lets its parent continue it; restoreRootNotices delivers the retained run when an owner opens.
-      if (r.s.parentId && r.s.run?.delivery?.ownerNotice && r.s.run.report?.canonical) {
+      // Child outcomes, and those of a chat the user started, also live in the run ledger, independently of this chat's
+      // next assignment. Releasing the per-chat hold lets its parent (or the user) continue it; restoreRootNotices and
+      // resumeRootSyntheses deliver the retained run when an Orchestrator opens.
+      const ledgered = r.s.parentId ? !!r.s.run?.delivery?.ownerNotice : r.s.run?.startedBy === 'user';
+      if (ledgered && r.s.run?.report?.canonical) {
         delete r.heldResult; delete r.userWaits;
         this.persist(true);
       }
