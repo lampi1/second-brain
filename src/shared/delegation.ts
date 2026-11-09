@@ -26,6 +26,8 @@ export interface TaskAssignmentOptions {
   doneWhen?: string[];
   /** Parent plan step, zero-based; mapped before the reused child can produce a result. */
   planStep?: number;
+  /** the fields the assignment's contract carried (#355), stored on the run */
+  contractFields?: string[];
 }
 
 export interface DelegationContract {
@@ -43,7 +45,24 @@ export interface DelegationContract {
   context?: string;
   /** a model tier above the role's own, up to its tierMax */
   tier?: ModelTier;
+  // the hybrid contract (#355, ADR 0247): what travels with the task besides the goal and the criteria
+  /** what it is for, who asks, what they will decide with the result */
+  why?: string;
+  /** choices already taken with the user, not to reopen */
+  alreadyDecided?: string;
+  inScope?: string;
+  outOfScope?: string;
+  /** task-only constraints: repo, branch, time, cost (the hard rules are the role frame's, never contract text) */
+  constraints?: string;
+  /** only when order matters, at most 5 */
+  steps?: string[];
+  /** the ambiguous reading that would change the work: ask the parent */
+  askIf?: string;
 }
+/** The text fields of a contract, in the template's order (the renderer's and the storage's). */
+export const CONTRACT_FIELDS = ['goal', 'why', 'alreadyDecided', 'context', 'inScope', 'outOfScope', 'constraints', 'steps', 'doneWhen', 'output', 'askIf'] as const;
+export type ContractField = (typeof CONTRACT_FIELDS)[number];
+export const STEPS_MAX = 5, WHY_MAX = 1500, NOTE_MAX = 2000;
 export const RESULT_OUTCOMES = ['done', 'partial', 'blocked'] as const;
 export type DelegationOutcome = (typeof RESULT_OUTCOMES)[number];
 export interface DelegationResult {
@@ -127,7 +146,7 @@ const only = (o: Record<string, unknown>, keys: readonly string[], what: string)
 /** A contract as the tool received it, checked strictly; `role` gives the default output. */
 export function checkContract(v: unknown, role: WorkRoleId): DelegationContract {
   const o = object(v, 'contract');
-  only(o, ['goal', 'output', 'doneWhen', 'tools', 'skills', 'context', 'tier'], 'contract');
+  only(o, ['goal', 'output', 'doneWhen', 'tools', 'skills', 'context', 'tier', 'why', 'alreadyDecided', 'inScope', 'outOfScope', 'constraints', 'steps', 'askIf'], 'contract');
   const doneWhen = o.doneWhen;
   if (!Array.isArray(doneWhen) || !doneWhen.length || doneWhen.length > CRITERIA_MAX) throw new Error(`contract.doneWhen: 1 to ${CRITERIA_MAX} criteria.`);
   const tools = o.tools === undefined ? undefined : Array.isArray(o.tools) && o.tools.every(c => (TOOL_CLASSES as readonly unknown[]).includes(c)) ? [...new Set(o.tools as ToolClass[])] : null;
@@ -142,7 +161,66 @@ export function checkContract(v: unknown, role: WorkRoleId): DelegationContract 
     ...(tools ? { tools } : {}), ...(skills?.length ? { skills } : {}),
     ...(o.context !== undefined ? { context: text(o.context, CONTEXT_MAX, 'contract.context') } : {}),
     ...(o.tier !== undefined ? { tier: o.tier as ModelTier } : {}),
+    ...contractNotes(o, 'contract'),
   };
+}
+
+/** The optional hybrid fields of a contract (#355), checked; shared by agent_delegate, agent_assign_task and the
+ *  Orchestrator's app_create_chat / app_assign_task. */
+export function contractNotes(o: Record<string, unknown>, what: string): Pick<DelegationContract, 'why' | 'alreadyDecided' | 'inScope' | 'outOfScope' | 'constraints' | 'steps' | 'askIf'> {
+  const out: Pick<DelegationContract, 'why' | 'alreadyDecided' | 'inScope' | 'outOfScope' | 'constraints' | 'steps' | 'askIf'> = {};
+  for (const k of ['why', 'alreadyDecided', 'inScope', 'outOfScope', 'constraints', 'askIf'] as const)
+    if (o[k] !== undefined) out[k] = text(o[k], k === 'why' ? WHY_MAX : NOTE_MAX, `${what}.${k}`);
+  if (o.steps !== undefined) {
+    if (!Array.isArray(o.steps) || !o.steps.length || o.steps.length > STEPS_MAX) throw new Error(`${what}.steps: 1 to ${STEPS_MAX} steps, only when their order matters.`);
+    out.steps = o.steps.map((x, i) => text(x, CRITERION_MAX, `${what}.steps[${i}]`));
+  }
+  return out;
+}
+
+/** The structured contract the Orchestrator passes to app_create_chat / app_assign_task (#355): the text fields only
+ *  (tools, skills and tier are the tool's own arguments there), checked like a delegation's. */
+export function checkTaskContract(v: unknown): Omit<DelegationContract, 'output' | 'tools' | 'skills' | 'tier'> & { output?: string } {
+  const o = object(v, 'contract');
+  only(o, CONTRACT_FIELDS, 'contract');
+  const doneWhen = o.doneWhen;
+  if (!Array.isArray(doneWhen) || !doneWhen.length || doneWhen.length > CRITERIA_MAX) throw new Error(`contract.doneWhen: 1 to ${CRITERIA_MAX} criteria.`);
+  return {
+    goal: text(o.goal, GOAL_MAX, 'contract.goal'),
+    doneWhen: doneWhen.map((c, i) => text(c, CRITERION_MAX, `contract.doneWhen[${i}]`)),
+    ...(o.output !== undefined ? { output: text(o.output, OUTPUT_MAX, 'contract.output') } : {}),
+    ...(o.context !== undefined ? { context: text(o.context, CONTEXT_MAX, 'contract.context') } : {}),
+    ...contractNotes(o, 'contract'),
+  };
+}
+
+/** What a contract lacks of the hybrid format, as warnings (never a refusal): the why, and a goal that is a list of steps. */
+export function contractWarnings(c: Pick<DelegationContract, 'goal' | 'why'>): string[] {
+  const out: string[] = [];
+  if (!c.why) out.push('contract.why is missing: say what the result is for and who decides with it (the child works better knowing why).');
+  if ((c.goal.match(/(?:^|\n)\s*\d+[.)]\s/g) ?? []).length > STEPS_MAX) out.push(`contract.goal reads as more than ${STEPS_MAX} numbered steps: give one checkable outcome, and steps (max ${STEPS_MAX}) only where order matters.`);
+  return out;
+}
+
+/** The fields a contract carried, in template order: stored on the run (taskContract.fields) so goal-only, hybrid and
+ *  steps-only contracts can be counted later. */
+export const contractFields = (c: Partial<Record<ContractField, unknown>>): ContractField[] =>
+  CONTRACT_FIELDS.filter(k => { const v = c[k]; return Array.isArray(v) ? v.length > 0 : typeof v === 'string' && !!v.trim(); });
+
+/** The contract's own lines in the template's order (#355): Goal, Why, Already decided, Context, In scope, Out of scope,
+ *  Constraints, Steps, Done when, Output, Ask the parent if; empty fields are skipped. `defaultOutput`: an output equal
+ *  to it is not written (the role's frame already says it). */
+export function contractText(c: Partial<DelegationContract> & { goal: string }, defaultOutput?: string): string[] {
+  const line = (label: string, v: string | undefined): string[] => (v && v.trim() ? [`${label}: ${v.trim()}`] : []);
+  return [
+    `Goal: ${c.goal}`,
+    ...line('Why', c.why), ...line('Already decided', c.alreadyDecided), ...line('Context', c.context),
+    ...line('In scope', c.inScope), ...line('Out of scope', c.outOfScope), ...line('Constraints', c.constraints),
+    ...(c.steps?.length ? ['Steps (in this order):', ...c.steps.map((x, i) => `${i + 1}. ${x}`)] : []),
+    ...(c.doneWhen?.length ? ['Done when:', ...c.doneWhen.map(d => `- ${d}`)] : []),
+    ...(c.output && c.output !== defaultOutput ? line('Output', c.output) : []),
+    ...line('Ask the parent if', c.askIf),
+  ];
 }
 
 /** A child's agent_report, checked strictly: every criterion of its contract answered once, in any order. */
@@ -187,11 +265,9 @@ export function checkResult(v: unknown, doneWhen: readonly string[]): Delegation
 export function delegationPrompt(c: DelegationContract, at: { role: WorkRoleId; parentTitle: string; title: string; skills: readonly string[] }): string {
   return [
     `Delegated by «${at.parentTitle}» to you as ${ROLE_DEFAULTS[at.role].name}: «${at.title}».`,
-    `Goal: ${c.goal}`,
-    ...(c.context ? [`Context: ${c.context}`] : []),
-    // the role's own default output is already in its frame (catalog.ts resolve): only a contract's own is written
-    ...(c.output !== ROLE_DEFAULTS[at.role].output ? [`Output: ${c.output}`] : []),
-    'Done when:', ...c.doneWhen.map(d => `- ${d}`),
+    // the single renderer of a contract (#355); the role's own default output is already in its frame (catalog.ts
+    // resolve): only a contract's own is written
+    ...contractText(c, ROLE_DEFAULTS[at.role].output),
     ...(at.skills.length ? [`Your skills: ${at.skills.join(', ')} (load the one that fits the job the way your role's skill list says).`] : []),
     // how to report and whom to ask are in the role's frame (ROLE_PREAMBLE), sent with this message: not repeated here
     'When the output is ready, or something blocks you: agent_report as your rules say, with doneWhen: one { criterion, met, evidence } per done-criterion above, written exactly as above. Your parent does not read this chat.',

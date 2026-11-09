@@ -42,7 +42,7 @@ describe('parent child task continuity',()=>{
   it('reads full user decisions and reassigns the same child with explicit provenance and cursors',async()=>{
     const f=fixture();
     expect(await f.call('agent_task_events',{chatId:'child'})).toEqual(f.ledger);
-    expect(await f.call('agent_assign_task',f.args())).toEqual({chatId:'child',taskId:'task',taskVersion:2,runId:'new',userInstructions:[{seq:1,text:'Keep the user requirement'}],note:expect.stringContaining('not repeated in its prompt')});
+    expect(await f.call('agent_assign_task',f.args())).toEqual({chatId:'child',taskId:'task',taskVersion:2,runId:'new',userInstructions:[{seq:1,text:'Keep the user requirement'}],note:expect.stringContaining('not repeated in its prompt'),warnings:[expect.stringContaining('contract.why is missing')]});
     expect(f.assign).toHaveBeenCalledWith('child',expect.stringContaining('Context: User constraints'),expect.objectContaining({mode:'continue',expectedVersion:1,expectedEventSeq:1,doneWhen:['New criterion'],source:{kind:'chat',chatId:'parent'}}));
     expect(f.create).not.toHaveBeenCalled();
   });

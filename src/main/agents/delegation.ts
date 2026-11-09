@@ -16,7 +16,7 @@ import type { ChatSummary, Harness, NewChat } from '../../shared/contract';
 import type { AgentCatalog, AgentRun, UserTaskEvents } from '../../shared/agents';
 import { canLaunch, isWorkRole, launchGap, ROLE_DEFAULTS, WORK_ROLE_IDS, type DelegationSettings } from '../../shared/roles';
 import { oneLine } from '../../shared/agent-label';
-import { CRITERION_MAX, EVIDENCE_MAX, MAX_CORRECTIONS, RESULT_OUTPUT_MAX, SUMMARY_MAX, capText, checkContract, checkResult, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult, type DelegationIntegration, type TaskAssignmentOptions } from '../../shared/delegation';
+import { CRITERION_MAX, EVIDENCE_MAX, MAX_CORRECTIONS, RESULT_OUTPUT_MAX, SUMMARY_MAX, capText, checkContract, checkResult, contractFields, contractWarnings, delegationPrompt, depthOf, type DelegationLimitHit, type DelegationResult, type DelegationIntegration, type TaskAssignmentOptions } from '../../shared/delegation';
 import { ORCHESTRATOR_TITLE } from '../../shared/orchestrator';
 import { delegationGate, stepIndex, type StrategyPlan } from '../../shared/strategy';
 import type { McpTool } from '../mcp/server';
@@ -216,12 +216,13 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
         ...(choices[i] ? { route: balancedDecision(choices[i]!, { roleId: p.role, version: p.profile.activeVersion, ...(p.contract.tier ? { tier: p.contract.tier } : {}), title: p.title, prompt: p.contract.goal, now: at }) } : {}),
         ...(p.contract.tier ? { tier: p.contract.tier } : {}), ...(p.contract.skills ? { skills: p.contract.skills } : {}),
         delegation: { role: p.role, goal: p.contract.goal, doneWhen: p.contract.doneWhen, at, ...(p.contract.tools ? { tools: p.contract.tools } : {}) },
+        contractFields: contractFields(p.contract),
         prompt: `${d.label}\n\n${delegationPrompt(p.contract, { role: p.role, parentTitle: parent.title, title: p.title, skills: p.contract.skills ?? [] })}`,
       }, 'agent')));
       const known = d.skillTools ? new Map(d.skillTools().map(x => [x.name, x.tools])) : null;
       // a skill whose tools the child lacks (its own policy, already narrowed by yours)
       const warnings = (i: number, chatId: string): { warnings?: string[] } => {
-        const p = plans[i]!, lines = known ? gapLines(p.profile.name, skillGaps([...new Set([...p.profile.skills, ...(p.contract.skills ?? [])])], n => known.get(n), d.chats.agentPolicy(chatId))) : [];
+        const p = plans[i]!, lines = [...(known ? gapLines(p.profile.name, skillGaps([...new Set([...p.profile.skills, ...(p.contract.skills ?? [])])], n => known.get(n), d.chats.agentPolicy(chatId))) : []), ...contractWarnings(p.contract)];
         return lines.length ? { warnings: lines } : {};
       };
       settled.forEach((s, i) => { if (s.status === 'fulfilled') d.balancedMode?.record(choices[i] ?? null); });
@@ -269,7 +270,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     if (!['continue', 'new-task', 'rework'].includes(String(a.mode)) || (a.expectedVersion !== undefined && (!Number.isSafeInteger(a.expectedVersion) || Number(a.expectedVersion) < 1))) throw new Error('Invalid assignment mode/version.');
     if (a.expectedEventSeq !== undefined && (!Number.isSafeInteger(a.expectedEventSeq) || Number(a.expectedEventSeq) < 0)) throw new Error('Invalid user event cursor.');
     const contractRaw = a.contract;
-    if (!contractRaw || typeof contractRaw !== 'object' || Array.isArray(contractRaw) || Object.keys(contractRaw).some(k => !['goal', 'output', 'context', 'doneWhen'].includes(k))) throw new Error('Reuse contract allows only goal, output, context and doneWhen; tools, skills and tier require a fresh chat.');
+    if (!contractRaw || typeof contractRaw !== 'object' || Array.isArray(contractRaw) || Object.keys(contractRaw).some(k => !['goal', 'output', 'context', 'doneWhen', 'why', 'alreadyDecided', 'inScope', 'outOfScope', 'constraints', 'steps', 'askIf'].includes(k))) throw new Error('Reuse contract allows only goal, output, context, doneWhen and the hybrid fields (why, alreadyDecided, inScope, outOfScope, constraints, steps, askIf); tools, skills and tier require a fresh chat.');
     const contract = checkContract(contractRaw, a.roleId);
     const parentPolicy = d.chats.agentPolicy(parent.id), childPolicy = d.chats.agentPolicy(child.id);
     if (launchGap(profile.tools?.allow ?? [], parentPolicy?.tools?.allow ?? null).length) throw new Error('Child role needs permissions your current policy does not allow.');
@@ -300,9 +301,10 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     reserved.set(parent.id, (reserved.get(parent.id) ?? 0) + 1); assigning.add(child.id);
     try {
       const prompt = `${d.label}\n\n${delegationPrompt(contract, { role: a.roleId, parentTitle: parent.title, title: child.title, skills: [] })}`;
-      await d.chats.assignTask(child.id, prompt, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: version, ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), doneWhen: contract.doneWhen, ...(step !== null ? { planStep: step } : {}), source: { kind: 'chat', chatId: parent.id } });
+      await d.chats.assignTask(child.id, prompt, { mode: a.mode as 'continue' | 'new-task' | 'rework', expectedVersion: version, ...(a.expectedEventSeq !== undefined ? { expectedEventSeq: Number(a.expectedEventSeq) } : {}), doneWhen: contract.doneWhen, contractFields: contractFields(contract), ...(step !== null ? { planStep: step } : {}), source: { kind: 'chat', chatId: parent.id } });
       const assigned = chat(child.id);
-      return { chatId: child.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions, note: USER_INSTRUCTIONS_NOTE } : {}) };
+      const warned = contractWarnings(contract);
+      return { chatId: child.id, taskId: assigned?.run?.taskId, taskVersion: assigned?.run?.taskVersion, runId: assigned?.run?.runId, ...(userInstructions.length ? { userInstructions, note: USER_INSTRUCTIONS_NOTE } : {}), ...(warned.length ? { warnings: warned } : {}) };
     } finally {
       assigning.delete(child.id);
       const left = (reserved.get(parent.id) ?? 0) - 1;
@@ -507,8 +509,14 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
         step: { type: 'integer', minimum: 1, description: 'with a plan approved by the user (plan_propose): the step number this part does' },
         balanced: BALANCED_ASK_SCHEMA,
         contract: { type: 'object', required: ['goal', 'doneWhen'], additionalProperties: false, properties: {
-          goal: str, output: { ...str, description: 'what to give back; default: the role\'s output' },
-          doneWhen: { type: 'array', items: str, minItems: 1, maxItems: 12, description: 'checkable criteria' },
+          goal: { ...str, description: 'the wanted outcome, one checkable sentence' }, output: { ...str, description: 'what to give back; default: the role\'s output' },
+          doneWhen: { type: 'array', items: str, minItems: 1, maxItems: 12, description: 'checkable criteria, each with the expected evidence' },
+          why: { ...str, description: 'what the result is for, who asks, what they will decide with it' },
+          alreadyDecided: { ...str, description: 'choices already taken with the user: not to reopen' },
+          inScope: str, outOfScope: { ...str, description: 'explicit non-goals' },
+          constraints: { ...str, description: 'task-only constraints: repo, branch, time, cost' },
+          steps: { type: 'array', items: str, minItems: 1, maxItems: 5, description: 'only when order matters' },
+          askIf: { ...str, description: 'the ambiguous reading that would change the work: ask the parent' },
           context: { ...str, description: 'facts, sources and constraints the child needs' },
           tools: { type: 'array', items: str, description: 'optional: narrows the role\'s tool classes' },
           skills: { type: 'array', items: str, description: 'brain skills it may use (their SKILL.md names)' },
@@ -528,6 +536,12 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       step: { type: 'integer', minimum: 1 },
       contract: { type: 'object', required: ['goal', 'doneWhen'], additionalProperties: false, properties: {
         goal: str, output: str, context: str, doneWhen: { type: 'array', items: str, minItems: 1, maxItems: 12 },
+        why: { ...str, description: 'what the result is for, who asks, what they will decide with it' },
+        alreadyDecided: { ...str, description: 'choices already taken with the user: not to reopen' },
+        inScope: str, outOfScope: { ...str, description: 'explicit non-goals' },
+        constraints: { ...str, description: 'task-only constraints: repo, branch, time, cost' },
+        steps: { type: 'array', items: str, minItems: 1, maxItems: 5, description: 'only when order matters' },
+        askIf: { ...str, description: 'the ambiguous reading that would change the work: ask the parent' },
       } },
     } },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },

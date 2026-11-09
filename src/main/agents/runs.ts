@@ -170,7 +170,7 @@ export function readRun(v: unknown): AgentRun | null {
   if (scope !== undefined && (!scope || typeof scope.brainRoot !== 'string' || !path.isAbsolute(scope.brainRoot) || typeof scope.projectRoot !== 'string' || !path.isAbsolute(scope.projectRoot) || scope.brainRoot.length > 4000 || scope.projectRoot.length > 4000)) return null;
   const contract = r.taskContract as AgentRun['taskContract'];
   if (contract?.reportExpected !== undefined && typeof contract.reportExpected !== 'boolean') return null;
-  if (contract?.deliveryPolicy !== undefined && !['display', 'notify', 'synthesize'].includes(contract.deliveryPolicy)) return null;
+  if (contract?.deliveryPolicy !== undefined && !['display', 'notify', 'synthesize'].includes(contract.deliveryPolicy) || contract?.fields !== undefined && !(Array.isArray(contract.fields) && contract.fields.length <= 16 && contract.fields.every(f => typeof f === 'string' && f.length <= 40))) return null;
   const snapshot = r.skillSuggestions as AgentRun['skillSuggestions'];
   if (snapshot !== undefined && (!snapshot || !time(snapshot.at) || !skillList(snapshot.suggested) || !skillList(snapshot.used))) return null;
   if (r.taskId !== undefined && !str(r.taskId, 80) || r.taskVersion !== undefined && (!count(r.taskVersion) || r.taskVersion < 1)) return null;

@@ -319,6 +319,8 @@ export interface BalancedAsk { engine: Harness; model: string; effort?: Effort; 
 export interface NewChat {
   deliveryPolicy?: TaskDeliveryPolicy;
   doneWhen?: string[];
+  /** the fields the chat's contract carried (#355), stored on its run */
+  contractFields?: string[];
   /** Expected role version and run links; validated before a new engine starts. */
   roleVersion?: number;
   parentRunId?: string;

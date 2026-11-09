@@ -251,7 +251,7 @@ export interface AgentRun {
   turns?: number;
   delivery?: AgentRunDelivery;
   taskId?: string; taskVersion?: number;
-  taskContract?: { goal: string; doneWhen: string[]; deliveryPolicy?: TaskDeliveryPolicy; reportExpected?: boolean };
+  taskContract?: { goal: string; doneWhen: string[]; deliveryPolicy?: TaskDeliveryPolicy; reportExpected?: boolean; /** the contract's fields (#355: goal-only vs hybrid vs steps, counted later) */ fields?: string[] };
   /** Snapshot captured before launch; missing means historical suggestions are unknown. */
   skillSuggestions?: { at: number; suggested: string[]; used: string[] };
   source?: 'chat' | 'oneshot';
