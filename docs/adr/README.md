@@ -238,3 +238,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0235](0235-measure-launch-memory-recall.md) Measure how well the launch memory finds the right fact (words vs words + meaning, zero tokens) — accepted
 - [0236](0236-episodic-memory-past-run-examples.md) Episodic memory: a role starts with up to 2 examples of its own verified past successes in the same repository — accepted
 - [0237](0237-agents-type-passwords-on-every-host.md) Agents type passwords on every host — accepted
+- [0238](0238-approved-work-continues-by-itself.md) Approved work goes on by itself: stalled-thread news, mail wakes a closed chat, one crash recovery, agent_wake_later, plain push allowed — accepted
