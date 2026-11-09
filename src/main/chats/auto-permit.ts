@@ -109,17 +109,19 @@ function touchesSettings(req: PermitRequest, command: boolean, cwd: string): boo
   const o = obj(req.input);
   if (command) {
     // `.g''it` and `.g'i't` are `.git` to a shell; a glob can name a settings place by pattern (.gi?/hooks); `$'\x2e'`,
-    // an escape that printf or echo -e turns into a name, and a `$(…)` or a `…` pair glued to a path build a name the
-    // app cannot read. `X=$(…) cmd`, `echo $(date)`, `-v $(pwd):/app`, `grep '^$'`, a Windows `C:\work\2026` path and
+    // an escape that printf or echo (zsh and dash need no -e) turns into a name, and a `$(…)` or a `…` pair glued to a
+    // path build a name the app cannot read. `X=$(…) cmd`, `echo $(date)`, `-v $(pwd):/app`, `grep '^$'`, a Windows `C:\work\2026` path and
     // PowerShell's single `t escape stay free.
     const line = typeof o.command === 'string' ? o.command : '';
-    const raw = line.replace(/['"]/g, '');
+    // `$'.git'` is `.git`; PowerShell drops a backtick before a letter that is no escape (.g`it is .git)
+    const raw = line.replace(/\$'/g, "'").replace(/['"]/g, '');
+    const plain = raw.replace(/`(?![0abefnrtuv])/g, '');
     if (/\$'[^']*\\/.test(line)) return true;
-    if (/\b(printf|echo\s+-\w*e)\b/i.test(line) && /\\(x[0-9a-f]|0?[0-7]{1,3}|u[0-9a-f]{4})/i.test(line)) return true;
+    if (/\b(printf|echo)\b/i.test(line) && /\\(x[0-9a-f]|0?[0-7]{1,3}|u[0-9a-f]{4})/i.test(line)) return true;
     if (/[^\s=;&|(<>]\$\(|[^\s=;&|(<>]`[^`]*`|\$\([^)]*\)[^\s;&|)<>:]|`[^`]*`[^\s;&|)<>:]/.test(raw)) return true;
     if (SETTINGS_COMMAND.test(raw)) return true;
     const base = typeof o.cwd === 'string' && o.cwd ? path.resolve(cwd, o.cwd) : cwd;
-    const words = raw.split(/[\s'"`;&|<>(){}=,]+/).filter(w => /[\\/]/.test(w) || w.startsWith('.') || w.startsWith('~'));
+    const words = [...raw.split(/[\s'"`;&|<>(){}=,]+/), ...plain.split(/[\s'"`;&|<>(){}=,]+/)].filter(w => /[\\/]/.test(w) || w.startsWith('.') || w.startsWith('~'));
     if (words.some(w => /[*?[]/.test(w) && /(^|[\\/])\.[^\\/]*[*?[]|[*?[][^\\/]*[\\/]/.test(w))) return true;
     return words.some(w => settingsPath(w, base)) || (typeof o.cwd === 'string' && settingsPath(o.cwd, cwd));
   }

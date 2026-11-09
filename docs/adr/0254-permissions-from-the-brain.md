@@ -39,7 +39,8 @@ everything else is free.
   `.vscode`, `.idea`, `.mcp.json`, `.guardallow`, `.gitconfig`, `claude_desktop_config.json`, `opencode.json`,
   `.opencode`, `.claude.json`, `core.hooksPath`, `git config --global|--system`, `claude|codex|cursor-agent|agent|opencode
   mcp|config|plugin|hooks`, in any tool's input shape at any depth, through links, Windows `.git.` / `::$` forms, shell
-  globs, quote splicing, `$'\…'`, printf / `echo -e` escapes and a `$(…)` or backtick pair glued to a path;
+  globs, quote splicing, `$'\…'`, `$'.git'`, printf / echo escapes, PowerShell's dropped backtick (`` .g`it ``) and a `$(…)` or backtick pair glued
+  to a path;
   best effort: a shell variable or a nested substitution still builds a name the app cannot see): AGENTS.md rule 6, not an opinion of the app. The role gate and the read-only role check stay (the
   user's settings).
 - **What the app cannot read whole is the user's call**: a request an engine cut (`session.ts trimInput`: «… (+N)» anywhere in the input,
