@@ -18,7 +18,6 @@ so many unit reds seen on the branches were timeouts, not verified failures.
 
 | Branch (merge on main) | Skipped or open | Known risk | Look at |
 |---|---|---|---|
-| `feat/orchestrator-remote-control` (307d86a7) | README shots `orchestrator.webp`, `orchestrator-flash.webp` and their `.guardallow` pins not retaken on the merged tree | `readme-check` may fail on the shots | `docs/screenshots/`, `.guardallow`, `src/renderer/components/RemoteControl.tsx` |
 | `feat/parallel-checkpoint` (on main before, 76ef2dcc) | none open: Sentinel clean, barrier tests 6/6 and 5/5 green on a lighter load | — | `src/main/chats/write-barrier.ts` |
 | `feat/acp-catalog-replay` (9e7cb916 + 27875258 + 5ef1509b) | the fix of the Sentinel's first finding (the Codex thread preview, the user's first message, was written in clear in the wire recordings) was cherry-picked, not re-reviewed on the merged tree | a wire recording could still hold user text | `src/main/chats/wire-record.ts`, `test/unit/chats/wire-record.test.ts` |
 | `impara/land` (36796d6d) | e2e «a topic» red on Windows (the frozen demo's `filesVerdicts` path escape; already red on main before) | — | `src/main/learn/demo.ts`, `test/e2e/impara.spec.ts` |
