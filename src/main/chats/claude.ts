@@ -29,6 +29,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { providerWrite } from '../agent-runtime/transport-timing';
+import { requestFailed } from '../agent-runtime/request-failure';
 import type { Answer, ChatItem, ChatState, Effort, ImageAttachment, PendingRequest, PermissionMode } from '../../shared/contract';
 import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { errText, log } from '../log';
@@ -762,7 +763,7 @@ export class ClaudeSession implements HarnessSession {
 
   private onMessage(m: Obj): void {
     switch (m.type) {
-      case 'control_request': void this.onControlRequest(m).catch(() => this.killNow()); return;
+      case 'control_request': void this.onControlRequest(m).catch(e => requestFailed(e, { chatId: this.opts.chatId, what: 'control_request', kill: () => this.killNow() })); return;
       case 'control_response': return this.onControlResponse(o(m.response));
       case 'control_cancel_request': {
         const id = s(m.request_id);
@@ -851,7 +852,7 @@ export class ClaudeSession implements HarnessSession {
       setTimeout(() => {
         if (this.exited || this.procExited || !this.briefWaited.has(id)) { this.briefWaited.delete(id); return; }
         // Keep the elapsed-grace marker while the broker's async recheck runs, or it schedules another grace forever.
-        void this.onControlRequest(m).catch(() => this.killNow()).finally(() => this.briefWaited.delete(id));
+        void this.onControlRequest(m).catch(e => requestFailed(e, { chatId: this.opts.chatId, what: 'control_request', kill: () => this.killNow() })).finally(() => this.briefWaited.delete(id));
       }, BRIEF_GRACE_MS).unref?.();
       return true;
     }

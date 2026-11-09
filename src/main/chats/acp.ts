@@ -51,6 +51,7 @@ import { acpAppTool, APP_UI_TOOLS, cursorAppPermissions } from './app-tool-appro
 import os from 'node:os';
 import path from 'node:path';
 import { providerWrite } from '../agent-runtime/transport-timing';
+import { requestFailed } from '../agent-runtime/request-failure';
 import type { Answer, ChatItem, ChatState, CursorReasoning, Effort, ImageAttachment, PendingRequest, PermissionMode, Question } from '../../shared/contract';
 import { missFragment, sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { errText, log } from '../log';
@@ -1339,7 +1340,7 @@ export class AcpSession implements HarnessSession {
       } else rpc.resolve(o(m.result));
       return;
     }
-    if (method && hasId) { void this.onAgentRequest(m.id as number | string, method, o(m.params)).catch(() => this.killNow()); return; }
+    if (method && hasId) { void this.onAgentRequest(m.id as number | string, method, o(m.params)).catch(e => requestFailed(e, { chatId: this.opts.chatId, what: method, kill: () => this.killNow() })); return; }
     if (method) return this.onNotification(method, o(m.params));
   }
 
@@ -1398,7 +1399,7 @@ export class AcpSession implements HarnessSession {
           w.timer = null;
           if (this.exited || this.procExited) { this.briefWaited.delete(id); return; }
           // The recheck must see that grace already elapsed, even when briefReady crosses the runtime broker.
-          void this.onAgentRequest(id, method, p).catch(() => this.killNow()).finally(() => {
+          void this.onAgentRequest(id, method, p).catch(e => requestFailed(e, { chatId: this.opts.chatId, what: method, kill: () => this.killNow() })).finally(() => {
             if (this.briefWaited.get(id) === w) this.briefWaited.delete(id);
           });
         }, BRIEF_GRACE_MS);
