@@ -101,7 +101,7 @@ export function Qualita({ nav, embedded = false }: { arg?: string; nav: Navigate
         {() => d && (
           <div className="bx-section" data-testid="bx-quality">
             {!q && <p className="bx-warnline" role="note">{tr('brainText.qualita.noQuality')}</p>}
-            <div className="bx-grid-2">
+            <div className="bx-grid-2 bx-q-grid">
               {q && <Metric id="trovati" title={tr('brainText.qualita.caught.title')}
                 help={tr('brainText.qualita.caught.help')}
                 value={caught?.per100 != null ? num(caught.per100) : '—'} unit={tr('brainText.qualita.per100')} tone={caught?.per100 ? 'warn' : undefined}

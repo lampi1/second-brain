@@ -10,7 +10,7 @@ export const memoryHubEn: typeof memoryHubIt = {
   'mh.pulse.working': 'Agents at work', 'mh.pulse.workingHelp': 'The open work chats running right now (the Orchestrator left out).',
   'mh.pulse.waiting': 'Waiting for you', 'mh.pulse.waitingHelp': 'The chats stopped on an answer of yours: a question or a permission.',
   'mh.pulse.changes': 'Changes in 24 hours', 'mh.pulse.changesHelp': 'What the brain changed in the last 24 hours (skills, rules, memory, roles, scripts), undone ones left out: the details are in Trends → Learning.',
-  
+
   'mh.activity': 'Latest changes',
   'mh.activityEmpty': 'No change yet: they show up here as soon as the maintenance or you change something.',
   'mh.ago.now': 'now', 'mh.ago.min': (p: N) => `${p.n} min ago`, 'mh.ago.hours': (p: N) => (p.n === 1 ? '1 hour ago' : `${p.n} hours ago`), 'mh.ago.days': (p: N) => (p.n === 1 ? 'yesterday' : `${p.n} days ago`),

@@ -121,6 +121,8 @@
 .bx-card.flush { padding: 0; overflow: hidden; }
 .bx-card.accent-violet { border-color: color-mix(in srgb, var(--bx-violet) 40%, transparent); background: linear-gradient(var(--bx-violet-bg), var(--bx-violet-bg)), var(--bx-surface); }
 .bx-grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+/* Qualità with an odd number of cards (three since ADR 0248): the first, the corrections, takes the whole row */
+.bx-q-grid > .bx-q:first-child:nth-last-child(odd) { grid-column: 1 / -1; }
 .bx-grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .bx-grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .bx-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }

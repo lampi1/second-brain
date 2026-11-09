@@ -64,7 +64,7 @@ export const brainModelDe: typeof brainModelIt = {
   'bm.card.flip': (p: { name: string }) => `Karte von ${p.name} umdrehen: Details und Skills`,
   'bm.card.flipBack': (p: { name: string }) => `Zurück zur Vorderseite der Karte von ${p.name}`,
   'bm.card.skills': 'Skills', 'bm.card.noSkills': 'Keine angegebenen Skills: arbeitet mit seiner Rolle.',
-  
+
   'bm.card.back': 'Zurück',
   'bm.studio.manage': 'Skills verwalten',
 };

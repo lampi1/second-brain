@@ -1,7 +1,6 @@
 // Home dashboard strings; no model-generated text is needed to explain its measurements.
 export const homeIt = {
-  
-  
+
   'home.emptyAgents': 'Racconta all’Orchestrator cosa vuoi fare, oppure crea il tuo primo agente.',
   'home.startHere': 'Il tuo punto di partenza',
   'home.orchestratorWidth': 'Larghezza Orchestrator', 'home.orchestratorStart': 'Da dove partiamo?',
@@ -9,12 +8,6 @@ export const homeIt = {
   'home.orchestrator': 'Orchestrator',
   'home.agents': 'Agenti', 'home.manageAgents': 'Gestisci agenti', 'home.back': 'Torna alla Grindhouse', 'home.workspace': 'Gli agenti al lavoro e l’Orchestrator',
   'home.chooseEngine': 'Scegli il motore per l’Orchestrator', 
-  
-  
+
   'home.works': 'Cosa funziona', 
-  
-  
-  
-  
-  
 };

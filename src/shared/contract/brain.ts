@@ -90,7 +90,6 @@ export interface BrainInvokeMap {
   /** the Brain pages (ADR 0077, src/main/brainmodel): agents, skills and their links, rules, memory, the change log */
   'brainmodel:state': [void, BrainModelState];
   'memory:reviewList': [{ asOf?: string } | undefined, MemoryReviewRecord[]];
-  /** how well the launch memory finds the right fact, words vs words + meaning (ADR 0235); read-only, zero tokens */
   /** Memoria → Diario e note (#368): now.md, the journal, ideas.md, ai-errors.md and the notes, masked and bounded */
   'memory:docs': [void, MemoryDocs];
   /** keep: the user's answer when confirmed facts say something else (new = replace them, both = keep them too), on the

@@ -30,3 +30,6 @@ no run reads.
 - Skill success rates (useful / weak / unused) are no longer shown as a table; the Skill tab shows uses per role. If a
   success column is wanted again, it belongs on the skill's own card.
 - The map's rule nodes and the Approvate tab's rule files stay until the rules folder itself is retired.
+- The «N righe fuori dal conteggio» warning lived in the rules card and went with it; unreadable ai-errors.md rows still
+  show as «Formato non riconosciuto» among the patterns. The Guida's error cycle now ends in «Skill o controllo», not
+  «Regola».

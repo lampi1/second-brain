@@ -19,14 +19,13 @@ export interface Proposal { id: string; data: string; proposta: string; tipo: st
 export interface BugRow { data: string; area: string; bug: string; pattern: string; fonte: string; rif: string }
 export interface Measure { date: string; metric: string; value: number; breakdown?: Record<string, number>; human?: number; model?: string; brain?: string }
 export interface RuleRow { date: string; type: string; area: string; rule: string; again: number }
-/** recurrence.mjs quality(): ai-errors.md as the Qualità page needs it (canonical types, unreadable lines, who saw them). */
-export type RuleStatus = 'tornato' | 'non-tornato' | 'troppo-presto' | 'senza-tipo';
-export interface QRule { date: string; type: string; area: string; rule: string; status: RuleStatus; ageDays: number | null; again: { date: string; line: string }[] }
+/** recurrence.mjs quality(): ai-errors.md as the Qualità page needs it (canonical types, unreadable lines, who saw them;
+ *  its per-rule outcomes are not read since the rules left, ADR 0248). */
 export interface SeenDay { date: string; owner: number; other: number; unknown: number }
 export interface ErrQuality {
   today: string; windowDays: number; from: string; to: string; lines: number; typed: number;
   unparsed: { date: string; line: string }[]; invalid: { date: string; type: string; line: string }[];
-  seenByDay: SeenDay[]; totals: [string, number][]; rules: QRule[];
+  seenByDay: SeenDay[]; totals: [string, number][];
 }
 export interface Tables {
   today: string;
@@ -116,7 +115,6 @@ export function normTables(v: unknown): Tables {
   };
 }
 
-const STATUSES: readonly RuleStatus[] = ['tornato', 'non-tornato', 'troppo-presto', 'senza-tipo'];
 export function normErrQuality(v: unknown): ErrQuality | null {
   if (!isObj(v)) return null;
   const lines = (x: unknown) => arr(x).filter(isObj).map(l => ({ date: str(l.date), line: str(l.line) }));
@@ -125,8 +123,6 @@ export function normErrQuality(v: unknown): ErrQuality | null {
     unparsed: lines(v.unparsed), invalid: arr(v.invalid).filter(isObj).map(l => ({ date: str(l.date), type: str(l.type), line: str(l.line) })),
     seenByDay: arr(v.seenByDay).filter(isObj).map(d => ({ date: str(d.date), owner: num(d.owner), other: num(d.other), unknown: num(d.unknown) })),
     totals: arr(v.totals).filter(Array.isArray).map(t => [str((t as unknown[])[0]), num((t as unknown[])[1])] as [string, number]),
-    rules: arr(v.rules).filter(isObj).map(r => ({ date: str(r.date), type: str(r.type), area: str(r.area), rule: str(r.rule),
-      status: STATUSES.includes(r.status as RuleStatus) ? r.status as RuleStatus : 'senza-tipo', ageDays: r.ageDays == null ? null : num(r.ageDays), again: lines(r.again) })),
   };
 }
 

@@ -64,7 +64,7 @@ export const brainModelEn: typeof brainModelIt = {
   'bm.card.flip': (p: { name: string }) => `Flip ${p.name}'s card: details and skills`,
   'bm.card.flipBack': (p: { name: string }) => `Back to the front of ${p.name}'s card`,
   'bm.card.skills': 'Skills', 'bm.card.noSkills': 'No declared skills: it works from its role.',
-  
+
   'bm.card.back': 'Back',
   'bm.studio.manage': 'Manage skills',
 };

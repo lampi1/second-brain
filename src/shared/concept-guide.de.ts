@@ -146,7 +146,7 @@ export const GUIDE_DE: Readonly<Record<string, string>> = {
   "Correction": "Korrektur",
   "ai-errors.md": "ai-errors.md",
   "Group": "Gruppe",
-  "Rule": "Regel",
+  "Skill or check": "Skill oder Check",
   "Comes back?": "Kommt es wieder?",
   "In the brain: ai-errors.md (written by ops/tools/mem.mjs), policies read from /api/improve.": "Im Brain: ai-errors.md (geschrieben von ops/tools/mem.mjs), Richtlinien gelesen aus /api/improve.",
   "Correction quote ≤ 400 chars; a policy is judged from 20 outcomes (MIN_N).": "Korrekturzitat ≤ 400 Zeichen; eine Richtlinie wird nach 20 Ergebnissen beurteilt (MIN_N).",

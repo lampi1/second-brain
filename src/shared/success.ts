@@ -1,9 +1,9 @@
 // The one definition of "success" every figure of the app uses (ADR 0186): only verified verdicts count (the user's
 // or a verified independent review's, run-verdict.ts VERIFIED_BASES; never the agent's own word, the Orchestrator's
 // opinion or the silence proxy), a partial counts half, and below MIN_SUCCESS_SAMPLE verdicts there is no share, only
-// the count ("troppo pochi"). Before, the Skill statistics took any verdict and wanted 10 (memory-stats.ts
-// MIN_VERDICT), the run metrics weighed a partial 0.5 with no minimum, and the routing's per-kind counts took the
-// brain's proxy too. Used by agents/run-metrics.ts, brainmodel/memory-stats.ts, brain/routing.ts agentStatsLine and
+// the count ("troppo pochi"). Before, the Skill statistics took any verdict and wanted 10 (the old memory-stats.ts,
+// gone with ADR 0248), the run metrics weighed a partial 0.5 with no minimum, and the routing's per-kind counts took the
+// brain's proxy too. Used by agents/run-metrics.ts, brain/routing.ts agentStatsLine and
 // the Agenti card and the role's versions (renderer AgentCatalogCard.tsx, AgentStudio.tsx). Pure: pinned by test/unit/shared/success.test.ts.
 import type { AgentRun, AgentRunOutcome } from './agents';
 import { verifiedVerdict } from './run-verdict';

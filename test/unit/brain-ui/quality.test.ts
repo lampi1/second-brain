@@ -86,7 +86,7 @@ describe('normalizers', () => {
     expect(normTables({}).quality).toBeNull();
     const n = normErrQuality({ lines: '3', rules: [{ status: 'boh', again: [{ date: 'd' }] }], seenByDay: [{ date: 'd', owner: 1 }], totals: [['a', 2]] })!;
     expect(n).toMatchObject({ windowDays: 14, lines: 3, unparsed: [], invalid: [], totals: [['a', 2]] });
-    expect(n.rules[0]).toMatchObject({ status: 'senza-tipo', ageDays: null, again: [{ date: 'd', line: '' }] });
+    expect(n).not.toHaveProperty('rules'); // the rules' outcomes left with the rules (ADR 0248)
     expect(n.seenByDay[0]).toEqual({ date: 'd', owner: 1, other: 0, unknown: 0 });
   });
 

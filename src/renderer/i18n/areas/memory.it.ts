@@ -28,50 +28,14 @@ export const memoryIt = {
   'mm.done.open': 'Apri Memoria',
 
   // shared bits
-  
-  
-  
 
   // key numbers
-  
-  
-  
-  
-  
-  
 
   // Lo sapevi?
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
 
   // charts
-  
-  
-  
-  
-  
-  
-  
-  
-  
 
   // cards and page
-  
-  
-  
-  
-  // how well the launch memory finds the right fact (ADR 0235, RecallCheckCard in MemoryInsights.tsx)
-  
-  
+
   // the one-click maintenance (ADR 0132, 0153)
 };

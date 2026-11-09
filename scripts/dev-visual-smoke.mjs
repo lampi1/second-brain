@@ -139,8 +139,8 @@ try {
   });
   await page.getByTestId('nav-memoria').click();
   await page.getByTestId('bm-memory-page').waitFor();
-  await page.getByTestId('mh-tab-statistiche').click();
-  await page.getByTestId('mm-insights').waitFor();
+  await page.getByTestId('mh-tab-file').click();
+  await page.getByTestId('mb-page').waitFor();
   await capture('memory');
   // The Routine page on the package model (ADR 0175, 0176): the demo's packages and runs, no run is started.
   await page.getByTestId('nav-flussi').click();

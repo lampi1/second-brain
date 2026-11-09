@@ -26,46 +26,5 @@ export const memoryEn: typeof memoryIt = {
   'mm.done.label': 'Maintenance done', 'mm.done.title': 'Your brain is in order',
   'mm.done.open': 'Open Memoria',
 
-  
-  
-  
-
-  
-  
-  
-  
-  
-  
-
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-  
-
-  
-  
-  
-  
-  
-  
-  
-  
-  
-
-  
-  
-  
-  
-  // how well the launch memory finds the right fact (ADR 0235, RecallCheckCard in MemoryInsights.tsx)
-  
-  
   // the one-click maintenance (ADR 0132, 0153)
 };

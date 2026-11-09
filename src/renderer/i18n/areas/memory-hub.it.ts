@@ -12,7 +12,7 @@ export const memoryHubIt = {
   'mh.pulse.working': 'Agenti al lavoro', 'mh.pulse.workingHelp': 'Le chat di lavoro aperte che stanno girando adesso (l’Orchestrator escluso).',
   'mh.pulse.waiting': 'Ti aspettano', 'mh.pulse.waitingHelp': 'Le chat ferme su una tua risposta: domanda o permesso.',
   'mh.pulse.changes': 'Modifiche in 24 ore', 'mh.pulse.changesHelp': 'Quello che il brain ha cambiato nelle ultime 24 ore (skill, regole, memoria, ruoli, script), annullate escluse: i dettagli in Andamento → Apprendimento.',
-  
+
   'mh.activity': 'Ultime modifiche',
   'mh.activityEmpty': 'Ancora nessuna modifica: appariranno qui appena la manutenzione o tu cambiate qualcosa.',
   'mh.ago.now': 'adesso', 'mh.ago.min': (p: N) => `${p.n} min fa`, 'mh.ago.hours': (p: N) => (p.n === 1 ? '1 ora fa' : `${p.n} ore fa`), 'mh.ago.days': (p: N) => (p.n === 1 ? 'ieri' : `${p.n} giorni fa`),

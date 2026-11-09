@@ -52,7 +52,6 @@ export interface Wired {
   /** what «Abilita controllo livello e performance» costs a day and when its last nightly batch ran (ADR 0203) */
   judging?: { estimate: (now: number) => JudgingEstimate };
   memoryReview?: MemoryService;
-  /** how well the launch memory finds the right fact (ADR 0235), Memoria → Statistiche; a fixed card in the demo */
   learningReview?: LearningReviewService;
   /** the brain's saved queries (ADR 0124): Memoria → Script & Query, queries:* IPC */
   queries?: BrainQueries;

@@ -453,7 +453,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
     ],
     analogy: b('Come il registro degli incidenti di un reparto: si annota, si raggruppa e si guarda se l’incidente torna.',
       'Like a department’s incident log: write it down, group it, and watch whether the incident comes back.'),
-    diagram: { kind: 'cycle', steps: [b('Correzione', 'Correction'), b('ai-errors.md', 'ai-errors.md'), b('Raggruppa', 'Group'), b('Regola', 'Rule'), b('Ricompare?', 'Comes back?')] },
+    diagram: { kind: 'cycle', steps: [b('Correzione', 'Correction'), b('ai-errors.md', 'ai-errors.md'), b('Raggruppa', 'Group'), b('Skill o controllo', 'Skill or check'), b('Ricompare?', 'Comes back?')] },
     tech: [
       tech(FILES, 'Nel brain: ai-errors.md (scritto da ops/tools/mem.mjs), politiche lette da /api/improve.', 'In the brain: ai-errors.md (written by ops/tools/mem.mjs), policies read from /api/improve.'),
       // src/renderer/lib/correction.ts QUOTE_MAX; src/renderer/brain/lib/learn.ts MIN_N
@@ -465,7 +465,6 @@ export const CONCEPTS: readonly ConceptCard[] = [
       [-1]: ['src/renderer/lib/correction.ts#QUOTE_MAX', 'src/renderer/brain/lib/learn.ts#MIN_N'],
       0: ['src/renderer/brain/lib/stats.ts'],
       3: ['src/renderer/lib/correction.ts', 'src/renderer/components/CorrectThought.tsx'],
-      4: ['src/renderer/i18n/areas/home.it.ts'],
     },
     sources: ['src/main/chats/manager.ts', 'src/main/agents/run-metrics.ts', 'src/renderer/brain/lib/stats.ts', 'src/renderer/lib/correction.ts', 'src/renderer/components/CorrectThought.tsx', 'src/renderer/brain/lib/learn.ts', 'docs/adr/0037-useful-errors-and-stats.md', 'docs/adr/0058-correct-the-thought.md'],
   },
@@ -1465,7 +1464,7 @@ export const CONCEPTS: readonly ConceptCard[] = [
     ],
     anchors: {
       0: ['src/renderer/brain/pages/Qualita.tsx', 'src/main/brain/user-corrections.ts'],
-      2: ['src/main/brain/quality.ts'],
+      1: ['src/main/brain/quality.ts'],
     },
     sources: ['src/renderer/brain/pages/Qualita.tsx', 'src/main/brain/quality.ts', 'src/renderer/brain/lib/quality.ts', 'src/main/brain/user-corrections.ts', 'docs/adr/0197-corrections-kind-examples-and-ppi.md'],
   },
