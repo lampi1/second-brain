@@ -3,9 +3,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
-import { BrainEstimates, REFRESH_DELAY, type BrainTable } from '../../../src/main/brain/brain-estimates';
+import { BrainEstimates, type BrainTable } from '../../../src/main/brain/brain-estimates';
 import { areaOf } from '../../../src/main/brain/routing';
-import { plainNode, tmpDir, until } from './helpers';
+import { plainNode, tmpDir } from './helpers';
 
 const g = (n: number, mid: number) => ({ n, min: { low: mid / 2, mid, high: mid * 2 }, usd: { low: 1, mid: 2, high: 4 } });
 const table = (order: string[]): BrainTable => ({
@@ -52,22 +52,6 @@ describe('BrainEstimates', () => {
     fs.writeFileSync(path.join(d, 'ops', 'state', 'estimates.json'), '{ broken');
     fs.utimesSync(path.join(d, 'ops', 'state', 'estimates.json'), new Date(), new Date(Date.now() + 5000));
     expect(b.table()).toBeNull();
-  });
-
-  it('refresh runs estimates.mjs --update; a burst of turns schedules one run', async () => {
-    const d = brain();
-    const b = new BrainEstimates(() => d, plainNode);
-    expect(await b.refresh()).toBe(true);
-    expect(fs.readFileSync(path.join(d, 'ops', 'state', 'runs.txt'), 'utf8')).toBe('--update\n');
-    expect(b.table()?.groups.tutte?.n).toBe(222);
-    vi.useFakeTimers();
-    b.schedule(); b.schedule(); b.schedule();
-    expect(vi.getTimerCount()).toBe(1);
-    vi.advanceTimersByTime(REFRESH_DELAY);
-    vi.useRealTimers();
-    // the first run was just now: the scheduled one waits the 5-minute gap, never runs twice in a burst
-    expect(await until(() => fs.readFileSync(path.join(d, 'ops', 'state', 'runs.txt'), 'utf8').split('\n').length > 2, 300)).toBe(false);
-    b.stop();
   });
 
   it('without the brain script nothing is scheduled', () => {

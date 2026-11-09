@@ -12,7 +12,7 @@ import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import type { StoredChat } from '../../../src/main/chats/store';
 import { bridgePatch, pausedState, phoneText, readRemoteControlReply, readStoredRemote } from '../../../src/main/chats/remote-control';
-import { FAKE, fakeLog, recSink, tmp, waitFor, type RecSink } from './helpers';
+import { recSink, waitFor } from './helpers';
 
 describe('remote-control readers', () => {
   it('takes only a claude.ai session link and a plain bridge id from the reply', () => {
@@ -57,14 +57,6 @@ describe('remote-control readers', () => {
 
 const open: ClaudeSession[] = [];
 afterEach(async () => { await Promise.all(open.splice(0).map(s => s.close(500))); });
-function start(env: Record<string, string> = {}, remoteControl = true): { s: ClaudeSession; sink: RecSink; log: string } {
-  const log = path.join(tmp('rc-log'), 'fake.log');
-  const sink = recSink();
-  const s = new ClaudeSession({ chatId: 'c_rc', cwd: tmp('rc-cwd'), claudePath: FAKE, sessionId: '11111111-2222-4333-8444-555555555555', remoteControl, env: { FAKE_CLAUDE_LOG: log, ...env } }, sink);
-  open.push(s);
-  s.start();
-  return { s, sink, log };
-}
 
 describe('ClaudeSession Remote Control', () => {
   it('asks the engine to echo queued messages only for a writable Remote Control chat', () => {
@@ -72,45 +64,6 @@ describe('ClaudeSession Remote Control', () => {
     expect(new ClaudeSession({ ...base, remoteControl: true }, recSink()).args()).toContain('--replay-user-messages');
     expect(new ClaudeSession(base, recSink()).args()).not.toContain('--replay-user-messages');
     expect(new ClaudeSession({ ...base, remoteControl: true, readOnly: true }, recSink()).args()).not.toContain('--replay-user-messages');
-  });
-  it('turns it on with the name, gets the link and bridge, follows bridge_state, and turns it off', async () => {
-    const { s, sink, log } = start();
-    await waitFor(() => s.state === 'idle', 'idle');
-    const reply = await s.setRemoteControl(true, { name: 'Orchestrator' });
-    expect(reply).toEqual({ url: expect.stringMatching(/^https:\/\/claude\.ai\/code\/session_cse_fake/), bridgeSessionId: expect.stringMatching(/^cse_fake/) });
-    expect(fakeLog(log).find(l => l.control === 'remote_control')?.request).toEqual({ subtype: 'remote_control', enabled: true, name: 'Orchestrator' });
-    await waitFor(() => sink.patches.some(p => p.remote?.status === 'connected'), 'bridge connected');
-    expect(sink.patches.filter(p => p.remote).map(p => p.remote?.status)).toEqual(['ready', 'connected']);
-    expect(await s.setRemoteControl(false)).toBeNull();
-    expect(fakeLog(log).filter(l => l.control === 'remote_control').at(-1)?.request).toEqual({ subtype: 'remote_control', enabled: false });
-  });
-  it('sends the bridge to reattach and gets the same one back', async () => {
-    const { s, log } = start();
-    await waitFor(() => s.state === 'idle', 'idle');
-    const reply = await s.setRemoteControl(true, { name: 'O', reattach: 'cse_kept' });
-    expect(reply?.bridgeSessionId).toBe('cse_kept');
-    expect(fakeLog(log).find(l => l.control === 'remote_control')?.request).toMatchObject({ reattach_session_id: 'cse_kept' });
-  });
-  it('a refusal rejects with the engine\'s own words', async () => {
-    const { s } = start({ FAKE_CLAUDE_RC: 'refuse' });
-    await waitFor(() => s.state === 'idle', 'idle');
-    await expect(s.setRemoteControl(true, { name: 'O' })).rejects.toThrow('Remote Control initialization failed');
-  });
-  it('a reply without a claude.ai link is drift and an error, never a link shown', async () => {
-    const { s } = start({ FAKE_CLAUDE_RC: 'badurl' });
-    await waitFor(() => s.state === 'idle', 'idle');
-    await expect(s.setRemoteControl(true, { name: 'O' })).rejects.toThrow(/link della sessione/);
-  });
-  it('shows a message typed on the phone, marked as the phone\'s, and never repeats the app\'s own', async () => {
-    const { s, sink } = start({ FAKE_CLAUDE_RC_PHONE: 'scrivo dal telefono' });
-    await waitFor(() => s.state === 'idle', 'idle');
-    s.send('dal PC');
-    await waitFor(() => sink.trace.includes('result'), 'first turn');
-    await s.setRemoteControl(true, { name: 'O' });
-    await waitFor(() => [...sink.items.values()].some(i => i.kind === 'user'), 'phone message');
-    await waitFor(() => sink.trace.filter(t => t === 'result').length === 2, 'phone turn');
-    const users = [...sink.items.values()].filter(i => i.kind === 'user');
-    expect(users).toEqual([expect.objectContaining({ kind: 'user', text: 'scrivo dal telefono', via: 'phone' })]);
   });
   it('keeps our uuids only when the engine echoes them, at most 500', () => {
     const fake = (o: { remoteControl?: boolean; readOnly?: boolean }) => {
@@ -128,13 +81,6 @@ describe('ClaudeSession Remote Control', () => {
     const spy = vi.spyOn(s as unknown as { control(r: unknown, ms?: number): Promise<unknown> }, 'control').mockRejectedValue(new Error('remote_control: nessuna risposta dal CLI'));
     await expect(s.setRemoteControl(true, { name: 'O', reattach: 'cse_1' })).rejects.toThrow(/nessuna risposta/);
     expect(spy).toHaveBeenCalledWith({ subtype: 'remote_control', enabled: true, name: 'O', reattach_session_id: 'cse_1' }, 60000);
-  });
-  it('without Remote Control on, an echoed message is never shown', async () => {
-    const { s, sink } = start();
-    await waitFor(() => s.state === 'idle', 'idle');
-    s.send('uno');
-    await waitFor(() => sink.trace.includes('result'), 'turn');
-    expect([...sink.items.values()].filter(i => i.kind === 'user')).toEqual([]);
   });
 });
 

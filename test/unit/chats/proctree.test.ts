@@ -59,7 +59,7 @@ describe('proctree', () => {
 
   it('a list that could not be read is never acted on', async () => {
     expect(await reapTree(root, { chatId: 'c', what: 't' }, { list: async () => null })).toBe(0);
-  }); // PowerShell start + WMI list, 3-40 s on a loaded box, more at 100% CPU
+  });
 
   it('the quit reaper takes many engines in one script, far under the 32 767-character command line', () => {
     const roots = Array.from({ length: 20 }, (_, i) => ({ pid: 1000 + i, created: T + i, exited: T + 60000 }));

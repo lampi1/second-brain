@@ -266,3 +266,5 @@ docs/screenshots/log.webp binary-media sha256:3dd48ced6db57bb8321da8ba2c64151f41
 docs/screenshots/maintenance.webp binary-media sha256:66a65875bab0d49175b0b7ce5eb45ee4cada1c1b8981b4e7371f892a7dfba3b8
 docs/screenshots/memory.webp binary-media sha256:9729674b75f23ee900a040151d58e4a02c5708b87253b8360faf0547e7dd0600
 docs/screenshots/recordings.webp binary-media sha256:78ce822901ee69147556607fc00bdda7bc72afab7e42499c2d42ea6509430013
+# Same synthetic redaction fixtures; tests that spawned a real process removed (2026-11-09).
+test/unit/log.test.ts assigned-secret sha256:a1a3e8c4470edaaf8b683fb5e89a8fe08eb78ee05d9499b33c08d0456e05205d

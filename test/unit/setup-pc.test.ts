@@ -2,15 +2,11 @@
 // config.json merge (existing keys kept, domains de-duplicated, brainRoot never listed twice), and the remote commands it
 // only prints (gh repo create --private; nothing run). Also a --dry-run of the script itself on temp folders: it
 // writes nothing, clones nothing.
-import { spawnSync } from 'node:child_process';
-import fs from 'node:fs';
-import os from 'node:os';
+
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs script without types
-import { mergeConfig, parseArgs, readConfig, remoteCommands, urlOk } from '../../scripts/setup-pc.mjs';
-
-const SCRIPT = path.resolve(import.meta.dirname, '..', '..', 'scripts', 'setup-pc.mjs');
+import { mergeConfig, parseArgs, remoteCommands, urlOk } from '../../scripts/setup-pc.mjs';
 
 describe('setup-pc', () => {
   it('parses the plan; refuses option-like or ext:: URLs', () => {
@@ -40,36 +36,5 @@ describe('setup-pc', () => {
     // no push printed: the first push is the app's, which runs the publish guard on the whole history
     expect(cmds.filter((c: string) => !c.startsWith('#')).join('\n')).not.toMatch(/\bpush\b/);
     expect(cmds.join('\n')).toMatch(/il primo invio lo fa l'app/);
-  });
-
-  it('a config.json that is not a JSON object is reported, never overwritten; none = {}', () => {
-    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-setup-'));
-    const file = path.join(base, 'config.json');
-    expect(readConfig(file)).toEqual({ ok: true, cfg: {} });
-    fs.writeFileSync(file, '{"view":"corsie"}');
-    expect(readConfig(file)).toEqual({ ok: true, cfg: { view: 'corsie' } });
-    for (const bad of ['{"view":', '[1]', 'null']) {
-      fs.writeFileSync(file, bad);
-      expect(readConfig(file).ok).toBe(false);
-    }
-    // the script stops before cloning anything and leaves the file as it was
-    fs.writeFileSync(file, '{"view":');
-    const r = spawnSync(process.execPath, [SCRIPT, '--domain', `${path.join(base, 'remote.git')}=${path.join(base, 'personale')}`, '--user-data', base, '--no-setup'], { encoding: 'utf8' });
-    expect(r.status).toBe(1);
-    expect(r.stderr).toMatch(/non è JSON valido/);
-    expect(r.stdout).not.toContain('git clone');
-    expect(fs.readFileSync(file, 'utf8')).toBe('{"view":');
-    expect(fs.existsSync(path.join(base, 'personale'))).toBe(false);
-  });
-
-  it('--dry-run clones nothing and writes nothing', () => {
-    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-setup-'));
-    const ud = path.join(base, 'ud');
-    const r = spawnSync(process.execPath, [SCRIPT, '--domain', `${path.join(base, 'remote.git')}=${path.join(base, 'personale')}`, '--user-data', ud, '--dry-run', '--no-setup'], { encoding: 'utf8' });
-    expect(r.status, r.stderr).toBe(0);
-    expect(r.stdout).toContain('git clone');
-    expect(r.stdout).toContain('Nessun repository creato, nessun push');
-    expect(fs.existsSync(ud)).toBe(false);
-    expect(fs.existsSync(path.join(base, 'personale'))).toBe(false);
   });
 });

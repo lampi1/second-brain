@@ -19,7 +19,7 @@ import { demoRun, demoTeach } from '../../src/main/learn/demo';
 import { type Lesson } from '../../src/shared/lesson';
 
 const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'sb-learn-'));
-const until = async (fn: () => boolean, ms = 3000) => { const t0 = Date.now(); while (!fn()) { if (Date.now() - t0 > ms) throw new Error('timeout'); await new Promise(r => setTimeout(r, 5)); } };
+const until = async (fn: () => boolean) => { while (!fn()) await new Promise(r => setTimeout(r, 5)); }; // no deadline: the suite's own (rules.md §7)
 
 const TEACHERS = [{ engine: 'claude', label: 'Claude', models: [{ id: 'opus', name: 'Opus' }, { id: 'sonnet', name: 'Sonnet' }], efforts: ['low', 'medium', 'high', 'xhigh'] as const, web: true },
   { engine: 'codex', label: 'Codex', models: [], efforts: [] as const, web: false }].map(t => ({ ...t, efforts: [...t.efforts] }));

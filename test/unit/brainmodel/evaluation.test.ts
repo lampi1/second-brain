@@ -1,6 +1,7 @@
 // Offline evaluation acceptance: imports cannot forge outcomes, holdout remains separate, measurements retain
 // missing-data coverage, and replay/promotion receipts come from fresh recorded runs rather than model claims.
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { waitFor } from '../chats/helpers';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -28,7 +29,7 @@ function recorded(criteria = ['Checks source B']): AgentRun {
     report: { at: NOW + 10, outcome: 'done', verified: 'yes', summary: 'Checked', canonical: { runId, taskId: runId, taskVersion: 1, at: NOW + 10, outcome: 'done', summary: 'Checked', output: 'Full answer', doneWhen: criteria.map(criterion => ({ criterion, met: true, evidence: 'Synthetic source provided in case' })) } },
   };
 }
-async function finish(store: EvaluationStore, id: string) { await vi.waitFor(() => expect(store.replay(id)?.status).not.toBe('running')); }
+async function finish(store: EvaluationStore, id: string) { await waitFor(() => store.replay(id)?.status !== 'running', 'the replay to end'); }
 function world(verified = true) {
   const root = tmp(), runs: AgentRun[] = [];
   const store = new EvaluationStore({ file: path.join(root, 'evaluations.json'), runs: () => runs, now: () => NOW, execute: async ({ test }) => {
@@ -138,7 +139,6 @@ describe('candidate promotion', () => {
   });
 });
 
-
 describe('learning facade isolation', () => {
   it('includes retained descendant effort once per task and keeps missing child cost unknown', () => {
     const root = recorded(), child = { ...recorded(), parentRunId: root.runId }, review = { ...recorded(), reviewOf: root.runId };
@@ -147,7 +147,6 @@ describe('learning facade isolation', () => {
     expect(evaluationSummary([root], [root, child, review]).costUsd).toEqual({ value: null, n: 0, total: 1 });
   });
 });
-
 
 describe('learning evidence inspector', () => {
   it('allows only currently linked lesson sources and keeps the brain scope guard', () => {

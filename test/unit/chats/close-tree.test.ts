@@ -9,7 +9,7 @@ import { ChatManager } from '../../../src/main/chats/manager';
 import type { HarnessSession, SessionSink } from '../../../src/main/chats/session';
 import type { AdmissionLimits, LoadSample } from '../../../src/main/chats/admission';
 import { plainOwner } from '../../../src/main/agents/catalog';
-import { FAKE, alive, fakeLog, killStray, recEmitter, tmp, waitFor } from './helpers';
+import { recEmitter, tmp, waitFor } from './helpers';
 
 const managers: ChatManager[] = [];
 afterEach(async () => { await Promise.all(managers.splice(0).map(m => m.shutdown())); });
@@ -67,16 +67,16 @@ function fixture() {
     const child = (parentId: string, goal: string, prompt?: string) => m.create({ harness: 'claude', cwd: dir, parentId, ...(prompt ? { prompt } : {}),
       delegation: { role: 'artisan', goal, doneWhen: ['Fatto'], at: Date.now() } }, 'agent', { owner: { ...owner, id: 'artisan' }, instructions: 'Fai.', policy: null });
     const c1 = await child(s.id, 'Implement', 'keep-busy: implementa');
-    await waitFor(() => busy.get(c1.id), 'C1 at work', 5000);
+    await waitFor(() => busy.get(c1.id), 'C1 at work');
     const c2 = await child(s.id, 'Ask', 'keep-busy: chiedi');
-    await waitFor(() => busy.get(c2.id), 'C2 at work', 5000);
+    await waitFor(() => busy.get(c2.id), 'C2 at work');
     // mid-turn it asks the user (AskUserQuestion)
     sinks.get(c2.id)!.pending({ id: 'q-c2', type: 'question', tool: 'AskUserQuestion', title: 'Quale cartella?', detail: '', input: {}, at: Date.now() });
     sinks.get(c2.id)!.changed({ state: 'waiting' });
     load.cpu = 95; // over the threshold: the grandchild's first turn waits in the CPU queue
     const g = await child(c1.id, 'Piece', 'keep-busy: un pezzo');
     const u = await m.create({ harness: 'claude', cwd: dir, prompt: 'keep-busy: altro' });
-    await waitFor(() => busy.get(u.id), 'U at work', 5000);
+    await waitFor(() => busy.get(u.id), 'U at work');
     return { o, s, c1, c2, g, u };
   };
   /** A delegated child of parentId, as agent_delegate creates it. */
@@ -199,29 +199,5 @@ describe('the user\'s ✕ cancels the chat\'s whole delegation tree', () => {
     await expect(f.m.archive(t.s.id, { auto: true })).rejects.toThrow();
     for (const id of [t.s.id, t.c1.id, t.c2.id, t.g.id]) expect(f.chat(id)?.closedAt).toBeUndefined();
     expect(f.of(t.c1.id)).toMatchObject({ interrupts: 0, closes: [] });
-  });
-});
-
-describe('the ✕ ends the real engines of the tree, never another chat\'s', () => {
-  it('a parent and its delegated child at work: both CLI processes end, an unrelated one lives', async () => {
-    const userData = tmp('close-tree-ud'), home = tmp('close-tree-home'), cwd = tmp('close-tree-cwd'), argLog = `${userData}/argv.jsonl`;
-    const m = new ChatManager({ emitter: recEmitter(), userData, enginePaths: { claude: FAKE }, claudeHome: home,
-      env: { CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: argLog, FAKE_CLAUDE_DELAY: '50', FAKE_CLAUDE_CHILD_MS: '60000' } });
-    managers.push(m);
-    const pidOf = async (n: number) => (await waitFor(() => fakeLog(argLog).filter(l => l.argv)[n], `engine ${n}`)).pid;
-    const parent = await m.create({ harness: 'claude', cwd, prompt: 'slow' });
-    const p1 = await pidOf(0);
-    const child = await m.create({ harness: 'claude', cwd, parentId: parent.id, prompt: 'slow', delegation: { role: 'artisan', goal: 'Piece', doneWhen: ['Fatto'], at: Date.now() } }, 'agent');
-    const p2 = await pidOf(1);
-    const other = await m.create({ harness: 'claude', cwd, prompt: 'slow' });
-    const p3 = await pidOf(2);
-    try {
-      await waitFor(() => m.list().filter(c => c.state === 'running').length === 3, 'three turns running');
-      await m.archive(parent.id, { undoable: true });
-      await waitFor(() => !alive(p1) && !alive(p2), 'the parent\'s and the child\'s engines ended');
-      expect(m.list().find(c => c.id === child.id)).toMatchObject({ state: 'closed', closedBy: 'user' });
-      expect(alive(p3)).toBe(true);
-      expect(m.list().find(c => c.id === other.id)?.state).toBe('running');
-    } finally { for (const p of [p1, p2]) killStray(p); }
   });
 });

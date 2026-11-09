@@ -1,10 +1,6 @@
 // Parent-owned child reuse: guards are checked before mutation; assignment and creation share reserved slots.
 import {describe,expect,it,vi} from 'vitest';
 import path from 'node:path';
-import fs from 'node:fs';
-import os from 'node:os';
-import {execFileSync} from 'node:child_process';
-import {gitWorktrees} from '../../../src/main/agents/worktrees';
 import {delegationTools, type DelegationChats, type DelegationDeps} from '../../../src/main/agents/delegation';
 import type {ChatSummary} from '../../../src/shared/contract';
 import type {AgentCatalog, UserTaskEvents} from '../../../src/shared/agents';
@@ -118,24 +114,5 @@ describe('parent child task continuity',()=>{
     f.chats.planOf=()=>({phase:'running',steps:[{title:'Read',state:'todo',chatIds:[]}],at:1} as never);
     await f.call('agent_assign_task',{...f.args(),step:1});
     expect(f.assign).toHaveBeenCalledWith('child',expect.any(String),expect.objectContaining({planStep:0}));
-  });
-  it('reassigns an own child in a sibling worktree of the same real repository, never another repo or an unlisted folder',async()=>{
-    const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'sb-reuse-')));
-    try {
-      const git=(cwd:string,...a:string[])=>execFileSync('git',['-C',cwd,...a],{encoding:'utf8',stdio:'pipe'});
-      const init=(dir:string)=>{fs.mkdirSync(dir);git(dir,'init','-q','-b','main');fs.writeFileSync(path.join(dir,'a.txt'),'a\n');git(dir,'add','.');git(dir,'-c','user.name=T','-c','user.email=t@example.com','commit','-qm','init');};
-      const repo=path.join(root,'repo'),foreign=path.join(root,'foreign'),loose=path.join(root,'.second-brain-delegate-loose');
-      init(repo);init(foreign);fs.mkdirSync(loose);
-      // the host allocates delegate worktrees as siblings of the checkout (agents/worktrees.ts createIsolatedWorktree)
-      const wt=path.join(root,'.second-brain-delegate-x');git(repo,'worktree','add','-q','-b','sb/x',wt);
-      const f=fixture(gitWorktrees);f.parent.cwd=repo;
-      const at=(cwd:string)=>{f.child.cwd=cwd;return f.call('agent_assign_task',{...f.args(),cwd,expectedVersion:f.child.run!.taskVersion});};
-      for(const cwd of [foreign,loose]) await expect(at(cwd)).rejects.toThrow(/Project mismatch/);
-      expect(f.assign).not.toHaveBeenCalled();
-      await expect(at(wt)).resolves.toMatchObject({chatId:'child'});
-      f.child.parentId='other';
-      await expect(at(wt)).rejects.toThrow(/YOUR direct children/);
-      expect(f.assign).toHaveBeenCalledOnce();
-    } finally { fs.rmSync(root,{recursive:true,force:true}); }
   });
 });

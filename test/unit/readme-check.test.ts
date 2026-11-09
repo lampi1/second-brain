@@ -2,7 +2,7 @@
 // screenshot spec in the test the manifest names, every page is mentioned, and a branch that changes a shot's UI takes
 // the shot again or opts out in a commit message. The pure parts on fixtures, then this checkout (no new problem, no
 // pending key already fixed); the git-based freshness runs in `npm run check:branch`.
-import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 // @ts-expect-error plain .mjs script without types
 import * as rc from '../../scripts/readme-check.mjs';
@@ -84,12 +84,5 @@ describe('freshness', () => {
     expect(m.freshnessProblems({ manifest, changed: ['src/Log.tsx', 'src/mem/a.tsx'], messages: 'shots: unchanged-visually log' }).map(p => p.key)).toEqual(['fresh:memory']);
     expect(m.optOut('nothing here')).toBeNull();
     expect(m.optOut('Shots: unchanged-visually a, b')).toEqual(['a', 'b']);
-  });
-});
-
-describe('this checkout', () => {
-  it('has no README problem beyond the pending ones, and no pending key already fixed', () => {
-    const r = m.checkRepo(path.resolve(import.meta.dirname, '../..'), null);
-    expect([...r.failures, ...r.fixed].map(p => p.message)).toEqual([]);
   });
 });

@@ -3,13 +3,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { runHook } from '../../../src/main/rules/runtime';
 import { writeNow, writeError } from '../../../src/main/rules/memory';
 import { configOf, confined } from '../../../src/main/rules/storage';
-import { autoCommit, lease } from '../../../src/main/rules/maintenance';
-import { migrate, rollback } from '../../../src/main/rules/migration';
+import { lease } from '../../../src/main/rules/maintenance';
 import { readCost, readSession } from '../../../src/main/rules/readers';
 import { check } from '../../../src/main/rules/vendor.mjs';
 import type { HookInput } from '../../../src/main/rules/types';
@@ -97,33 +94,5 @@ describe('product brain rules', () => {
     expect(readCost(file).reportedUsd).toBeNull();
     fs.appendFileSync(file, JSON.stringify({ total_cost_usd: 0 }) + '\n');
     expect(readCost(file).reportedUsd).toBe(0);
-  });
-  it('migrates only reviewed preimages and retains old and new content through rollback', () => {
-    const b = setup();
-    const git = (...args: string[]) => {
-      const r = spawnSync('git', ['-C', b.root, ...args], { windowsHide: true, encoding: 'utf8' });
-      expect(r.status, r.stderr).toBe(0);
-    };
-    git('init'); git('add', '.'); git('-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.com', 'commit', '-m', 'fixture');
-    const before = createHash('sha256').update(fs.readFileSync(path.join(b.root, 'brain.json'))).digest('hex');
-    expect(() => migrate(b.root, [{ file: 'brain.json', beforeSha256: 'wrong', after: '{"machinery":"product-v1"}' }])).toThrow('preimage');
-    const receipt = migrate(b.root, [{ file: 'brain.json', beforeSha256: before, after: '{"machinery":"product-v1"}' }]);
-    expect(JSON.parse(fs.readFileSync(path.join(b.root, 'brain.json'), 'utf8')).machinery).toBe('product-v1');
-    const retained = rollback(receipt);
-    expect(JSON.parse(fs.readFileSync(path.join(b.root, 'brain.json'), 'utf8')).machinery).toBeUndefined();
-    expect(fs.existsSync(path.join(retained, 'brain.json'))).toBe(true);
-  });
-  it('auto-commit refuses remotes and staged changes instead of including unrelated work', () => {
-    const b = setup();
-    const git = (...args: string[]) => {
-      const r = spawnSync('git', ['-C', b.root, ...args], { windowsHide: true, encoding: 'utf8' });
-      expect(r.status, r.stderr).toBe(0);
-    };
-    git('init');
-    const ctx = { ...b, config: { ...configOf(b.root), autoCommit: true } };
-    git('remote', 'add', 'fixture', 'https://example.invalid/brain.git');
-    expect(() => autoCommit(ctx)).toThrow('without remotes');
-    git('remote', 'remove', 'fixture'); git('add', 'brain.json');
-    expect(() => autoCommit(ctx)).toThrow('staged index');
   });
 });

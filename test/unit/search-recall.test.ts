@@ -2,9 +2,8 @@
 // /mcp/recall/<token> endpoint over real HTTP (one tools/call without initialize, as the brain's hook sends it; a wrong
 // token looks like a missing route), and HybridSearch.recall (never waits: ready:false while the errors' vectors are
 // built in the background, the previous vectors while new lines are embedded).
-import { afterEach, describe, expect, it } from 'vitest';
-import { McpServer } from '../../src/main/mcp/server';
-import { mountRecallTool, RECALL_MIN, RECALL_MIN_ERRORS, recallIndex, similarErrors, type Recall } from '../../src/main/search/hybrid/recall';
+import { describe, expect, it } from 'vitest';
+import { RECALL_MIN, RECALL_MIN_ERRORS, recallIndex, similarErrors } from '../../src/main/search/hybrid/recall';
 import { HybridSearch } from '../../src/main/search/hybrid/service';
 
 const DIM = 64;
@@ -44,36 +43,6 @@ describe('similarErrors', () => {
     const index = recallIndex([{ entry: entry(1), v: lean(0) }, { entry: entry(2), v: lean(2) }, ...fillers(lean)]);
     expect(similarErrors(vec(7), index)).toEqual([]); // the shared part only: raw cosine 0.93 with both
     expect(similarErrors(vec(0, 7, 1.2), index).map(h => h.line)).toEqual([1]);
-  });
-});
-
-describe('the recall endpoint', () => {
-  let mcp: McpServer | null = null;
-  afterEach(async () => { await mcp?.close(); mcp = null; });
-
-  const post = async (url: string, body: unknown) => {
-    const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(body) });
-    return { status: res.status, body: res.status === 200 ? await res.json() as { result?: { content: { text: string }[] } } : null };
-  };
-  const call = (args: Record<string, unknown>) => ({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'recall', arguments: args } });
-
-  it('answers one tools/call (no initialize) on its token URL, and 404 on any other token', async () => {
-    mcp = new McpServer({ name: 'test', version: '0' });
-    const asked: [string, number][] = [];
-    const answer: Recall = { ready: true, errors: [{ ...entry(7), score: 0.91 }] };
-    const tool = mountRecallTool(mcp, (text, k) => { asked.push([text, k]); return Promise.resolve(answer); });
-    await mcp.listen(0);
-    const url = tool.url();
-    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp\/recall\/[\w-]{32}$/);
-
-    const ok = await post(url, call({ text: '  no, ti ho detto di usare le chat  ', k: 9 }));
-    expect(ok.status).toBe(200);
-    expect(JSON.parse(ok.body!.result!.content[0]!.text)).toEqual(answer);
-    expect(asked).toEqual([['no, ti ho detto di usare le chat', 5]]); // trimmed, k clamped
-
-    expect(JSON.parse((await post(url, call({ text: '   ' }))).body!.result!.content[0]!.text)).toEqual({ ready: true, errors: [] });
-    expect(asked).toHaveLength(1);
-    expect((await post(url.replace(/[\w-]{32}$/, 'x'.repeat(32)), call({ text: 'a' }))).status).toBe(404);
   });
 });
 

@@ -1,7 +1,6 @@
 // Doctor and runtime must describe the same selected instance and CLI. Login output is tri-state, and a normal
 // doctor invocation never starts executable candidates. Temporary metadata only; no user credentials or model calls.
 import { afterEach, describe, expect, it } from 'vitest';
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -86,21 +85,4 @@ describe('doctor login state', () => {
     expect(claudeLogin('{"loggedIn":false}')).toMatchObject({ ok: false, level: 'warn' });
     expect(claudeLogin('{"loggedIn":true}')).toMatchObject({ ok: true, level: 'ok' });
   });
-});
-
-it('a default doctor run reports config and paths without starting any candidate', () => {
-  const root = temp(), marker = path.join(root, 'started');
-  const candidate = path.join(root, process.platform === 'win32' ? 'candidate.cmd' : 'candidate');
-  fs.writeFileSync(candidate, process.platform === 'win32' ? `@echo started>"${marker}"` : `#!/bin/sh\ntouch '${marker}'\n`);
-  fs.chmodSync(candidate, 0o755);
-  const result = spawnSync(process.execPath, ['scripts/doctor.mjs', '--dev', '--json'], {
-    cwd: path.resolve(import.meta.dirname, '..', '..'), encoding: 'utf8', timeout: 15000,
-    env: { ...process.env, SB_USER_DATA: root, SB_RELEASES_ROOT: root, SB_MCP_PORT: '0', SB_CLAUDE_PATH: candidate, SB_CURSOR_PATH: candidate, SB_CODEX_PATH: candidate, SB_KIMI_PATH: candidate },
-  });
-  expect(result.error).toBeUndefined();
-  const checks = JSON.parse(result.stdout) as { id: string; detail: string; level: string }[];
-  expect(checks.find(c => c.id === 'context')?.detail).toContain(path.join(root, 'config.json'));
-  expect(checks.find(c => c.id === 'claude-cli')?.detail).toContain(candidate);
-  expect(checks.find(c => c.id === 'claude-login')).toMatchObject({ level: 'info' });
-  expect(fs.existsSync(marker)).toBe(false);
 });

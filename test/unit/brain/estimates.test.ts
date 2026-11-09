@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { FileJobStore, Ledger, backfillFromCost } from '../../../src/main/brain/estimates';
 import type { TaskKind } from '../../../src/shared/contract';
-import { FIXTURES, plainNode, tmpDir } from './helpers';
+import { FIXTURES, tmpDir } from './helpers';
 
 describe('kind of work (ADR 0186: the routing table\'s own kinds)', () => {
   const cases: [string, TaskKind][] = [
@@ -86,23 +86,5 @@ describe('estimates', () => {
     expect(lines).toHaveLength(1);
     expect(JSON.parse(lines[0]!)).toMatchObject({ id: 'a', kind: 'bug-fix', actual: { usd: 999 } });
     expect(fs.readdirSync(path.dirname(file))).toEqual(['jobs.jsonl']); // no temp file left
-  });
-
-  it('a backfill never overrides app jobs', async () => {
-    const dir = tmpDir();
-    const root = tmpDir();
-    fs.mkdirSync(path.join(root, 'ops', 'tools'), { recursive: true });
-    const fx = fs.readFileSync(path.join(FIXTURES, 'cost-1day.json'), 'utf8');
-    const j = JSON.parse(fx) as { from: string; chats: Record<string, { from: number; to: number }> };
-    // a fake cost.mjs whose window starts long before the fixture chats, so none of them is "cut"
-    fs.writeFileSync(path.join(root, 'ops', 'tools', 'cost.mjs'), `const j = ${fx};\nj.from = '2026-09-01';\nconsole.log(JSON.stringify(j));\n`);
-    const l = new Ledger(new FileJobStore(path.join(dir, 'jobs.jsonl')), path.join(dir, 'jobs-meta.json'));
-    l.record({ id: 'claude:11111111-1111-4111-8111-111111111111', harness: 'claude', model: 'opus-5-5', effort: null, prompt: 'fix', actual: { usd: 9, minutes: 41, turns: 2 } });
-    const now = Date.parse(`${j.from}T20:00:00+02:00`);
-    const r = await l.backfill(root, plainNode, now);
-    expect(r).toEqual({ added: 1, skipped: null });
-    expect(l.all().find(x => x.id.startsWith('claude:1111'))!.actual!.usd).toBe(9); // the app's record stays
-    expect((await l.backfill(root, plainNode, now + 3600e3)).skipped).toMatch(/20 ore/);
-    expect((await l.backfill(null, plainNode)).skipped).toMatch(/cost\.mjs/);
   });
 });

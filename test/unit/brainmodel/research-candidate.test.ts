@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { waitFor } from '../chats/helpers';
 import type { BrainModelState } from '../../../src/shared/brain-model';
 import type { ChatSummary } from '../../../src/shared/contract';
 import type { ResearchProposal } from '../../../src/shared/maintenance-research';
@@ -111,7 +112,7 @@ const opts = { harness: 'claude' as const, model: 'opus', effort: 'high' as cons
 const end = async (t: ReturnType<typeof research>, cost = 1) => {
   t.svc.chatUpdated({ id: 'c1', state: 'running', costUsd: cost } as ChatSummary);
   t.svc.chatUpdated({ id: 'c1', state: 'idle', costUsd: cost } as ChatSummary);
-  await vi.waitFor(() => expect(t.ended()).toBe(1));
+  await waitFor(() => t.ended() === 1, 'the run to end');
 };
 
 describe('ResearchService with the candidate brain', () => {

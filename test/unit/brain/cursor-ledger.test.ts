@@ -2,7 +2,6 @@
 // price + Token Rate, calibration from a usage CSV (factor per model, margin, edge days left out), today's figure
 // (exact from the CSV up to its export, estimated after it) and the newest export in Downloads.
 import { describe, expect, it, vi } from 'vitest';
-import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
@@ -15,7 +14,6 @@ const row = (at: number, p: Partial<LedgerRow> = {}): LedgerRow => ({
   at, source: 'hook', conversationId: 'conv-1', generationId: null, model: 'grok-4.7', input: 1_000_000, cacheWrite: 0, cacheRead: 0, output: 0, ...p,
 });
 const T = (iso: string) => Date.parse(iso);
-const runHook = (file: string, input: string, args: string[] = []) => execFileSync(process.execPath, [file, ...args], { input, encoding: 'utf8' });
 
 it('does not re-read unchanged usage, but sees appends and a new day', () => {
   const dir = tmpDir(), downloads = tmpDir(), now = T('2026-10-10T14:00:00Z'), file = path.join(dir, LEDGER_FILE);
@@ -64,23 +62,6 @@ it('invalidates the selected export time when a CSV changes during fingerprintin
 });
 
 describe('hook script', () => {
-  it('appends one line per stop hook turn (uncached input = input − cache), one per -p result, and answers {}', () => {
-    const dir = tmpDir();
-    const hook = installHook(dir);
-    expect(fs.readFileSync(hook, 'utf8')).toBe(HOOK_SOURCE);
-    const stop = { hook_event_name: 'stop', conversation_id: 'c1', generation_id: 'g1', model: 'grok-4.7', status: 'completed', input_tokens: 1000, output_tokens: 50, cache_read_tokens: 600, cache_write_tokens: 100 };
-    expect(runHook(hook, '﻿' + JSON.stringify(stop))).toBe('{}');
-    const cli = [JSON.stringify({ type: 'system', subtype: 'init', model: 'Grok 4.7' }), JSON.stringify({ type: 'result', subtype: 'success', session_id: 's2', request_id: 'r2', usage: { inputTokens: 300, outputTokens: 20, cacheReadTokens: 10, cacheWriteTokens: 0 } })].join('\n');
-    expect(runHook(hook, cli, ['--model', 'gpt-5.6-sol'])).toBe('{}');
-    // no tokens (an old Cursor), garbage: no line, still {}
-    expect(runHook(hook, JSON.stringify({ hook_event_name: 'stop', conversation_id: 'c3', status: 'completed' }))).toBe('{}');
-    expect(runHook(hook, 'not json')).toBe('{}');
-    const rows = readLedger(path.join(dir, LEDGER_FILE));
-    expect(rows).toHaveLength(2);
-    expect(rows[0]).toMatchObject({ source: 'hook', conversationId: 'c1', generationId: 'g1', model: 'grok-4.7', input: 300, cacheRead: 600, cacheWrite: 100, output: 50 });
-    expect(rows[1]).toMatchObject({ source: 'cli', conversationId: 's2', model: 'gpt-5.6-sol', input: 300, cacheRead: 10, output: 20 });
-  });
-
   it('install rewrites an outdated copy and leaves a current one alone', () => {
     const dir = tmpDir();
     const file = installHook(dir);

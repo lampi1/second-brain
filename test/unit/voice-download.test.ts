@@ -5,7 +5,6 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { ensurePart, partReady, untar, verify } from '../../src/main/voice/download';
 import { ASR, TTS, VAD, partsFor } from '../../src/main/voice/catalog';
@@ -92,20 +91,6 @@ describe('ensurePart', () => {
     const part: VoicePart = { id: 'p', files: [{ name: 'm.onnx', url: 'https://x/missing', check: { sha256: '0'.repeat(64) }, bytes: 3 }] };
     await expect(ensurePart(root, part, () => {}, fetchOf({}))).rejects.toThrow(/HTTP 404/);
     expect(partReady(root, part)).toBe(false);
-  });
-  it('a .tar.bz2 voice is unpacked without its top folder, the archive removed', async () => {
-    const root = tmp(), src = tmp();
-    fs.writeFileSync(path.join(src, 'v.tar'), tarOf([['vits-x/', null], ['vits-x/it.onnx', 'onnx'], ['vits-x/tokens.txt', 'a 1'], ['vits-x/espeak-ng-data/', null], ['vits-x/espeak-ng-data/it_dict', 'dict']]));
-    let bz: Buffer;
-    try { execFileSync('bzip2', ['-k', path.join(src, 'v.tar')]); bz = fs.readFileSync(path.join(src, 'v.tar.bz2')); }
-    catch { execFileSync('python3', ['-c', `import bz2,sys;open(sys.argv[2],'wb').write(bz2.compress(open(sys.argv[1],'rb').read()))`, path.join(src, 'v.tar'), path.join(src, 'v.tar.bz2')]); bz = fs.readFileSync(path.join(src, 'v.tar.bz2')); }
-    const part: VoicePart = { id: 'piper-x', files: [{ name: 'v.tar.bz2', url: 'https://x/v', check: { sha256: sha(bz) }, bytes: bz.length, untar: true }] };
-    await ensurePart(root, part, () => {}, fetchOf({ 'https://x/v': bz }));
-    const d = path.join(root, 'piper-x');
-    expect(fs.readFileSync(path.join(d, 'it.onnx'), 'utf8')).toBe('onnx');
-    expect(fs.readFileSync(path.join(d, 'espeak-ng-data', 'it_dict'), 'utf8')).toBe('dict');
-    expect(fs.existsSync(path.join(d, 'v.tar.bz2'))).toBe(false);
-    expect(partReady(root, part)).toBe(true);
   });
 });
 

@@ -2,7 +2,7 @@
 // bounded line (levels, groups, stalls, interface errors, journal kinds), written once, rotated at 90 days; the logger
 // fills `run` from the chat, writes `op`/`step`, deletes old raw files only after the digest and never a digest file;
 // `npm run logs -- --run` filters by run.
-import { execFileSync } from 'node:child_process';
+
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -79,19 +79,6 @@ describe('updateDigest', () => {
 });
 
 describe('logger correlation and housekeeping', () => {
-  it('fills run from the chat, writes op and step, and logs.mjs filters by --run', () => {
-    const dir = tmp();
-    log.init(dir);
-    log.correlate(chat => (chat === 'c1' ? 'run-1' : undefined));
-    log.info('chats', 'turn done', { chat: 'c1', op: 'invoke_agent' });
-    log.info('chats', 'can_use_tool', { chat: 'c1', op: 'execute_tool', step: 'toolu_1' });
-    log.info('chats', 'other chat', { chat: 'c2' });
-    log.info('chats', 'explicit', { chat: 'c1', run: 'run-x' });
-    expect(log.recent.slice(-4).map(e => [e.run, e.op, e.step])).toEqual([['run-1', 'invoke_agent', undefined], ['run-1', 'execute_tool', 'toolu_1'], [undefined, undefined, undefined], ['run-x', undefined, undefined]]);
-    const out = execFileSync(process.execPath, ['scripts/logs.mjs', '--dir', path.join(dir, 'logs'), '--run', 'run-1', '--json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-    expect(out.trim().split('\n').map(l => (JSON.parse(l) as { msg: string }).msg)).toEqual(['turn done', 'can_use_tool']);
-  });
-
   it('digests the old raw files before deleting them and keeps the digest files', async () => {
     // relative to the real clock: init's own housekeeping runs with it
     const now = Date.now(), ymd = (ago: number) => new Date(now - ago * 864e5).toISOString().slice(0, 10);

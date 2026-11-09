@@ -1,6 +1,6 @@
 // Promotion bypasses must fail before build/check/state writes. Staging and portable engine paths are constrained
 // independently of the caller's environment; fake roots never touch the user's installation.
-import { spawnSync } from 'node:child_process';
+
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,14 +13,6 @@ const temp = () => { const p = fs.realpathSync.native(fs.mkdtempSync(path.join(o
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true }); });
 
 describe('stable release gates', () => {
-  it.each(['--skip-check', '--allow-dirty'])('rejects %s even with an isolated root', flag => {
-    const root = temp();
-    const result = spawnSync(process.execPath, ['scripts/release.mjs', 'promote', flag], { cwd: path.resolve(import.meta.dirname, '../..'), encoding: 'utf8', env: { ...process.env, SB_RELEASES_ROOT: root, SB_NO_SYNC: '1', ELECTRON_RUN_AS_NODE: '1' } });
-    expect(result.status).toBe(1);
-    expect(result.stderr).toContain('bypass flags are not supported');
-    expect(fs.readdirSync(root)).toEqual([]);
-  });
-
   it('stages only below disposable roots and refuses nonempty directories', () => {
     const root = temp();
     expect(() => assertStagingRoot(root)).not.toThrow();

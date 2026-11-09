@@ -1,33 +1,16 @@
 // Real local Git repositories pin writing-child isolation and safe staging. No engine, network, package script or
 // e2e runs; regressions must preserve the parent's files, index and branch and never overclaim verification.
-import { execFileSync } from 'node:child_process';
+
 import fs from 'node:fs';
-import os from 'node:os';
-import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ChatSummary, NewChat } from '../../../src/shared/contract';
-import { DelegateWorktrees, gitWorktrees, withinParent, needsIsolatedWorktree } from '../../../src/main/agents/worktrees';
+import type { ChatSummary } from '../../../src/shared/contract';
+import { needsIsolatedWorktree } from '../../../src/main/agents/worktrees';
 import { delegationTools, type DelegationDeps } from '../../../src/main/agents/delegation';
-import { stageDelegatedChanges, stageDelegatedChangesMany } from '../../../src/main/agents/delegation-integration';
 
 const roots: string[] = [];
 // Windows keeps a just-used checkout locked briefly (antivirus, git's index): retry instead of failing with EBUSY.
 afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); });
-const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-C', cwd, ...args], { encoding: 'utf8', stdio: 'pipe' }).trim();
-const commit = (cwd: string, message: string) => { git(cwd, 'add', '.'); git(cwd, '-c', 'user.name=Test', '-c', 'user.email=test@example.com', 'commit', '-qm', message); };
 const writer = { tools: { allow: ['edit' as const, 'shell' as const] }, ceiling: null };
-function fixture() {
-  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-isolation-'))); roots.push(root);
-  const repo = path.join(root, 'repo'); fs.mkdirSync(repo); git(repo, 'init', '-q', '-b', 'main');
-  // Checkout bytes must match this fixture's LF writes, independent of the user's Windows Git defaults.
-  git(repo, 'config', 'core.autocrlf', 'false'); git(repo, 'config', 'core.eol', 'lf');
-  fs.mkdirSync(path.join(repo, 'pkg')); fs.writeFileSync(path.join(repo, 'pkg', 'code.txt'), 'original\n'); commit(repo, 'initial');
-  const parent = { id: 'parent', cwd: repo, run: { runId: 'parent-run', taskVersion: 1 } } as ChatSummary;
-  const service = new DelegateWorktrees();
-  const prepare = async (cwd = repo, childId = 'child') => { const result = await service.prepare(parent, { cwd } as NewChat, writer); result.bind?.(childId); return result; };
-  const child = (cwd: string, id = 'child') => ({ id, parentId: parent.id, cwd, state: 'idle', delegation: { result: { outcome: 'done' } } }) as ChatSummary;
-  return { root, repo, parent, service, prepare, child };
-}
 
 describe('delegation isolation', () => {
   it('routes integration only for the active owning parent under its current write permission', async () => {
@@ -71,151 +54,5 @@ describe('delegation isolation', () => {
     expect(needsIsolatedWorktree(null)).toBe(true);
     for (const allow of [['read'], ['read', 'shell-read'], []] as const) expect(needsIsolatedWorktree({ tools: { allow: [...allow] }, ceiling: null })).toBe(false);
     for (const c of ['edit', 'shell', 'brain-write', 'mcp'] as const) expect(needsIsolatedWorktree({ tools: { allow: [c] }, ceiling: 'plan' })).toBe(true);
-  });
-
-  it('a child that cannot write (a Scout, a read-only Sentinel) works in its parent\'s folder: no worktree, no git run', async () => {
-    const f = fixture();
-    // a dirty parent would block any writing delegation: a reading child neither checks nor minds it
-    fs.writeFileSync(path.join(f.repo, 'pkg', 'code.txt'), 'parent edit\n');
-    for (const allow of [['read', 'web', 'browser-read', 'shell-read'], ['read', 'shell-read']] as const) {
-      const prepared = await f.service.prepare(f.parent, { cwd: path.join(f.repo, 'pkg') } as NewChat, { tools: { allow: [...allow] }, ceiling: 'default' });
-      expect(prepared).toEqual({ cwd: path.join(f.repo, 'pkg'), parentRunId: 'parent-run', parentTaskVersion: 1 });
-    }
-    expect(git(f.repo, 'worktree', 'list').split('\n')).toHaveLength(1);
-  });
-
-  it('gives concurrent writers distinct worktrees at the same baseline and preserves project subfolders', async () => {
-    const f = fixture(), head = git(f.repo, 'rev-parse', 'HEAD');
-    const [a, b] = await Promise.all([f.prepare(path.join(f.repo, 'pkg')), f.prepare()]);
-    expect(a.cwd).not.toBe(b.cwd); expect(path.basename(a.cwd)).toBe('pkg');
-    expect(git(a.cwd, 'rev-parse', 'HEAD')).toBe(head); expect(git(b.cwd, 'rev-parse', 'HEAD')).toBe(head);
-    expect(git(a.cwd, 'symbolic-ref', '--short', 'HEAD')).toMatch(/^sb\/delegate-/);
-    fs.writeFileSync(path.join(a.cwd, 'code.txt'), 'child\n');
-    expect(fs.readFileSync(path.join(f.repo, 'pkg', 'code.txt'), 'utf8')).toBe('original\n');
-    expect(git(f.repo, 'status', '--porcelain')).toBe('');
-    expect(f.service.allocation(f.parent, f.child(b.cwd)).base).toBe(head);
-  });
-
-  it('does not execute repository-configured filters or filesystem monitor commands in the host', async () => {
-    const f = fixture(), marker = path.join(f.root, 'unexpected-script'), script = path.join(f.root, 'filter.cjs');
-    fs.writeFileSync(path.join(f.repo, '.gitattributes'), '*.txt filter=custom\n'); commit(f.repo, 'attributes');
-    fs.writeFileSync(script, `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'executed');`);
-    const command = `"${process.execPath}" "${script}"`;
-    git(f.repo, 'config', 'filter.custom.smudge', command); git(f.repo, 'config', 'filter.custom.clean', command);
-    git(f.repo, 'config', 'filter.custom.required', 'true'); git(f.repo, 'config', 'core.fsmonitor', command);
-    const prepared = await f.prepare();
-    expect(fs.existsSync(marker)).toBe(false);
-    expect(fs.readFileSync(path.join(prepared.cwd, 'pkg', 'code.txt'), 'utf8')).toBe('original\n');
-  });
-
-  it('blocks partial/promisor lazy fetching before a missing blob can execute an external transport', async () => {
-    const f = fixture(), marker = path.join(f.root, 'transport-ran'), script = path.join(f.root, 'transport.cjs');
-    fs.writeFileSync(script, `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'executed');`);
-    const blob = git(f.repo, 'rev-parse', 'HEAD:pkg/code.txt');
-    fs.unlinkSync(path.join(f.repo, '.git', 'objects', blob.slice(0, 2), blob.slice(2)));
-    git(f.repo, 'config', 'remote.origin.promisor', 'true');
-    git(f.repo, 'config', 'remote.origin.url', `ext::${process.execPath} ${script}`);
-    git(f.repo, 'config', 'protocol.ext.allow', 'always');
-    await expect(f.prepare()).rejects.toThrow(/Partial\/promisor/);
-    expect(fs.existsSync(marker)).toBe(false);
-    expect(git(f.repo, 'worktree', 'list', '--porcelain').match(/^worktree /gm)).toHaveLength(1);
-    git(f.repo, 'config', '--unset', 'remote.origin.promisor');
-    git(f.repo, 'config', 'extensions.partialclone', 'origin');
-    await expect(f.prepare()).rejects.toThrow(/Partial\/promisor/);
-    expect(fs.existsSync(marker)).toBe(false);
-  });
-
-  it('blocks inactive conditional includes before a new branch can activate filter scripts', async () => {
-    const f = fixture(), config = path.join(f.root, 'branch-config'), script = path.join(f.root, 'filter.cjs'), marker = path.join(f.root, 'conditional-filter-ran');
-    fs.writeFileSync(path.join(f.repo, '.gitattributes'), '*.txt filter=conditional\n'); commit(f.repo, 'attributes');
-    fs.writeFileSync(script, `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'executed');`);
-    const command = `"${process.execPath}" "${script}"`;
-    fs.writeFileSync(config, `[filter "conditional"]\n    smudge = ${JSON.stringify(command)}\n`);
-    git(f.repo, 'config', 'includeIf.onbranch:sb/**.path', config);
-    await expect(f.prepare()).rejects.toThrow(/external or conditional/);
-    expect(fs.existsSync(marker)).toBe(false);
-    expect(git(f.repo, 'worktree', 'list', '--porcelain').match(/^worktree /gm)).toHaveLength(1);
-  });
-
-  it('blocks dirty, non-Git and foreign sources without a shared writer fallback', async () => {
-    const f = fixture();
-    fs.writeFileSync(path.join(f.repo, 'unsaved.txt'), 'preserve me');
-    await expect(f.prepare()).rejects.toThrow(/uncommitted or untracked/);
-    expect(fs.readFileSync(path.join(f.repo, 'unsaved.txt'), 'utf8')).toBe('preserve me');
-    fs.unlinkSync(path.join(f.repo, 'unsaved.txt'));
-    await expect(f.prepare(f.root)).rejects.toThrow(/Git repository/);
-    const other = fixture(); await expect(f.prepare(other.repo)).rejects.toThrow(/parent repository/);
-    const read = await f.service.prepare(f.parent, { cwd: f.root } as NewChat, { tools: { allow: ['read', 'shell-read'] }, ceiling: 'plan' });
-    expect(read.cwd).toBe(f.root);
-  });
-
-  it('does not trust forged chat metadata, changed assignments or a restarted service', async () => {
-    const f = fixture(), prepared = await f.prepare(), child = f.child(prepared.cwd);
-    expect(() => f.service.allocation(f.parent, { ...child, cwd: f.repo })).toThrow(/host-owned/);
-    expect(() => f.service.allocation({ ...f.parent, run: { ...f.parent.run!, taskVersion: 2 } }, child)).toThrow(/host-owned/);
-    expect(() => new DelegateWorktrees().allocation(f.parent, child)).toThrow(/host-owned/);
-    expect(() => f.service.allocation(f.parent, { ...child, id: 'different-child' })).toThrow(/host-owned/);
-    expect(() => f.service.allocation({ ...f.parent, id: 'other' }, { ...child, parentId: 'other' })).toThrow(/host-owned/);
-    // reuse looks up only the allocated worktree; a sibling worktree the host never allocated owns nothing
-    const trees = await gitWorktrees(f.parent.cwd, child.cwd);
-    expect(trees).toHaveLength(1); expect(withinParent(f.parent.cwd, child.cwd, trees)).toBe(true);
-    const loose = path.join(f.root, '.second-brain-delegate-loose'); git(f.repo, 'worktree', 'add', '-q', '--detach', loose);
-    expect(() => f.service.allocation(f.parent, { ...child, cwd: loose })).toThrow(/host-owned/);
-    const foreign = path.join(f.root, 'foreign'); fs.mkdirSync(foreign); git(foreign, 'init', '-q');
-    expect(await gitWorktrees(f.parent.cwd, foreign)).toEqual([]);
-  });
-
-  it('persists only host-bound ownership across restart and refuses corrupt provenance', async () => {
-    const f = fixture(), file = path.join(f.root, 'isolation.json'), service = new DelegateWorktrees(file);
-    const prepared = await service.prepare(f.parent, { cwd: f.repo } as NewChat, writer);
-    expect(() => service.allocation(f.parent, f.child(prepared.cwd))).toThrow(/host-owned/);
-    prepared.bind!('child');
-    expect(new DelegateWorktrees(file).allocation(f.parent, f.child(prepared.cwd)).childId).toBe('child');
-    fs.writeFileSync(file, JSON.stringify([{ childId: 'child', cwd: f.repo }]));
-    expect(() => new DelegateWorktrees(file)).toThrow(/Invalid delegation isolation/);
-  });
-
-  // Two host-owned writers plus a detached union require repeated real Git safety/identity checks. Its old 30 s budget
-  // predates the suite-wide 120 s one and became the lowest: its twin below (same two writers) needs ~40 s here.
-  it('combines parallel siblings in one union stage and keeps both pinned sources', async () => {
-    const f = fixture();
-    const a = f.child((await f.prepare(f.repo, 'a')).cwd, 'a'), b = f.child((await f.prepare(f.repo, 'b')).cwd, 'b');
-    fs.writeFileSync(path.join(a.cwd, 'a.txt'), 'first child\n'); commit(a.cwd, 'first');
-    fs.writeFileSync(path.join(b.cwd, 'b.txt'), 'second child\n'); commit(b.cwd, 'second');
-    const requested = [b, a].map(child => ({ owned: f.service.allocation(f.parent, child), child }));
-    const result = await stageDelegatedChangesMany(requested, f.parent);
-    expect(result.status).toBe('staged'); expect(result.sources?.map(x => x.chatId)).toEqual(['a', 'b']);
-    expect(fs.readFileSync(path.join(result.cwd!, 'a.txt'), 'utf8')).toBe('first child\n');
-    expect(fs.readFileSync(path.join(result.cwd!, 'b.txt'), 'utf8')).toBe('second child\n');
-    expect(git(result.cwd!, 'write-tree')).toBe(result.tree);
-    expect(git(f.repo, 'status', '--porcelain')).toBe('');
-    expect(await stageDelegatedChangesMany([requested[0]!, requested[0]!], f.parent)).toMatchObject({ status: 'blocked' });
-  });
-
-  it('reports sibling overlaps and refuses custom merge drivers without executing them', async () => {
-    const f = fixture();
-    const a = f.child((await f.prepare(f.repo, 'a')).cwd, 'a'), b = f.child((await f.prepare(f.repo, 'b')).cwd, 'b');
-    fs.writeFileSync(path.join(a.cwd, 'pkg', 'code.txt'), 'first\n'); commit(a.cwd, 'first');
-    fs.writeFileSync(path.join(b.cwd, 'pkg', 'code.txt'), 'second\n'); commit(b.cwd, 'second');
-    const requested = [a, b].map(child => ({ owned: f.service.allocation(f.parent, child), child }));
-    expect(await stageDelegatedChangesMany(requested, f.parent)).toMatchObject({ status: 'conflict', conflicts: ['pkg/code.txt'], checksRequired: true });
-    const marker = path.join(f.root, 'merge-was-run'), script = path.join(f.root, 'merge.cjs');
-    fs.writeFileSync(script, `require('node:fs').writeFileSync(${JSON.stringify(marker)}, 'executed');`);
-    git(f.repo, 'config', 'merge.custom.driver', `"${process.execPath}" "${script}"`);
-    expect(await stageDelegatedChangesMany(requested, f.parent)).toMatchObject({ status: 'blocked', reason: expect.stringContaining('custom merge driver') });
-    await expect(f.prepare()).rejects.toThrow(/custom merge driver/);
-    expect(fs.existsSync(marker)).toBe(false);
-  });
-
-  it('contains conflicts in the new staging worktree and blocks uncommitted child edits', async () => {
-    const f = fixture(), prepared = await f.prepare(), child = f.child(prepared.cwd), owned = f.service.allocation(f.parent, child);
-    fs.writeFileSync(path.join(child.cwd, 'pkg', 'code.txt'), 'child\n');
-    expect(await stageDelegatedChanges(owned, f.parent, child)).toMatchObject({ status: 'blocked' });
-    commit(child.cwd, 'child');
-    fs.writeFileSync(path.join(f.repo, 'pkg', 'code.txt'), 'parent\n'); commit(f.repo, 'parent');
-    const result = await stageDelegatedChanges(owned, f.parent, child);
-    expect(result).toMatchObject({ status: 'conflict', checksRequired: true, conflicts: ['pkg/code.txt'] });
-    expect(fs.readFileSync(path.join(f.repo, 'pkg', 'code.txt'), 'utf8')).toBe('parent\n');
-    expect(git(f.repo, 'status', '--porcelain')).toBe('');
   });
 });

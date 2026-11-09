@@ -23,7 +23,7 @@ const { app, startStore, STREAM_MS } = await import('../../src/renderer/store/st
 
 beforeEach(async () => {
   startStore();
-  await vi.waitFor(() => expect(app.get().ready).toBe(true));
+  while (!app.get().ready) await new Promise(r => setTimeout(r, 1)); // no deadline: the suite's own (rules.md §7)
   vi.useFakeTimers();
 });
 afterEach(() => { vi.useRealTimers(); });

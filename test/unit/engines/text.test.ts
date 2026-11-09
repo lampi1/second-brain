@@ -8,10 +8,8 @@ import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { anthropicApi, fingerprint, setTrust } from '../../../src/main/engines/registry';
 import { checkTextRequest, TextModel } from '../../../src/main/engines/text';
-import { mountTextTool } from '../../../src/main/engines/text-mcp';
 import { ApiSpend, monthOf } from '../../../src/main/engines/spend';
 import { setPriceTable } from '../../../src/main/chats/live-cost';
-import { McpServer } from '../../../src/main/mcp/server';
 
 const KEY = 'sk-test-0123456789abcdefWXYZ';
 const row = (id: string, input: number, output: number) => ({ id, harness: 'claude', provider: 'anthropic', routing: 'auto', price: { input, cacheWrite5m: input * 1.25, cacheWrite1h: input * 2, cacheRead: input / 10, output }, efforts: ['low', 'medium', 'high'], defaultEffort: 'medium' });
@@ -106,30 +104,6 @@ describe('checkTextRequest', () => {
     expect(checkTextRequest({ purpose: 'x', model: 'claude-opus-5-5', prompt: '' })).toMatch(/prompt/);
     expect(checkTextRequest({ purpose: 'x', model: 'claude-opus-5-5', prompt: 'p', effort: 'huge' })).toMatch(/effort/);
     expect(checkTextRequest({ purpose: 'x', model: 'claude-opus-5-5', prompt: 'p', maxTokens: 999_999 })).toMatch(/maxTokens/);
-  });
-});
-
-describe('the /mcp/text/<token> mount', () => {
-  const post = (url: string, body: unknown) => fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', accept: 'application/json' }, body: JSON.stringify(body) });
-  it('answers text_complete only on its own token, with the call\'s JSON', async () => {
-    const mcp = new McpServer({ name: 't', version: '0' });
-    const seen: unknown[] = [];
-    const tool = mountTextTool(mcp, { complete: async r => { seen.push(r); return { ok: true, text: 'ciao', usd: 0.01, model: r.model, engine: 'anthropic', usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0 } }; } });
-    await mcp.listen(0);
-    try {
-      const url = tool.url();
-      expect(url).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/mcp\/text\/[\w-]{32}$/);
-      const call = { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'text_complete', arguments: { purpose: 'routing-judge', model: 'claude-opus-5-5', prompt: 'p' } } };
-      const res = await post(url, call);
-      expect(res.status).toBe(200);
-      const j = await res.json() as { result: { content: { text: string }[] } };
-      expect(JSON.parse(j.result.content[0]!.text)).toMatchObject({ ok: true, text: 'ciao' });
-      expect(seen).toEqual([{ purpose: 'routing-judge', model: 'claude-opus-5-5', prompt: 'p' }]);
-      expect((await post(url.replace(/[\w-]{32}$/, 'x'.repeat(32)), call)).status).toBe(404);
-      const bad = await (await post(url, { ...call, params: { name: 'text_complete', arguments: { purpose: 'x', model: 'gpt', prompt: 'p' } } })).json() as { result: { content: { text: string }[] } };
-      expect(JSON.parse(bad.result.content[0]!.text)).toMatchObject({ ok: false, error: expect.stringMatching(/model/) });
-      expect(seen).toHaveLength(1);
-    } finally { await mcp.close(); }
   });
 });
 

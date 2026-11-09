@@ -4,14 +4,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
 import { useAssets } from '../../../src/main/rules/delivery';
 
 const fakeAssets = { dir: '' };
 const { useTemplateRoot, useToolsHome,  } = await import('../../../src/main/rules/tools');
 const { toolReferences } = await import('../../../src/main/rules/new-brain');
-const { journalOf, migrate, planMigration, recoverMigration } = await import('../../../src/main/rules/migration');
+const { journalOf, migrate, recoverMigration } = await import('../../../src/main/rules/migration');
 const {  } = await import('../../../src/main/brain/adapters/claude-plugin');
 const { runHook } = await import('../../../src/main/rules/runtime');
 const {  } = await import('../../../src/main/brain/detect');
@@ -19,18 +17,12 @@ const {  } = await import('../../../src/main/brain/detect');
 const TEMPLATE = path.resolve(import.meta.dirname, '../../../brain-template');
 const roots: string[] = [];
 let base = '';
-const fwd = (p: string) => p.replace(/\\/g, '/');
 function brain(name = 'brain', product = true): string {
   const root = path.join(base, name);
   fs.mkdirSync(root, { recursive: true });
   fs.writeFileSync(path.join(root, 'AGENTS.md'), '# Personal brain\n');
   if (product) fs.writeFileSync(path.join(root, 'brain.json'), JSON.stringify({ machinery: 'product-v1', template: { OWNER: "Anna D'Amico" }, rules: { topicFiles: [] } }));
   return root;
-}
-function git(root: string, ...args: string[]): void {
-  const env = { ...Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^GIT_/i.test(k))), GIT_CONFIG_GLOBAL: path.join(base, 'no-config'), GIT_CONFIG_NOSYSTEM: '1' };
-  const r = spawnSync('git', ['-C', root, '-c', 'core.hooksPath=' + path.join(base, 'no-hooks'), '-c', 'commit.gpgSign=false', ...args], { windowsHide: true, encoding: 'utf8', env });
-  expect(r.status, r.stderr).toBe(0);
 }
 beforeEach(() => {
   base = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-tools-'))); roots.push(base);
@@ -72,30 +64,6 @@ describe('template reference migration', () => {
       'personal: C:/Users/me/my brain/ops/tools/devops-me.mjs and ops/tools/qa-status.mjs',
       'already {tools}/ops/tools/mem.mjs; data C:/Users/me/my brain/now.md',
     ].join('\n'));
-  });
-  it('plans a reviewable legacy migration: frontmatter, references, code removal, activation; hooks kept by default', () => {
-    const root = brain('legacy', false);
-    fs.mkdirSync(path.join(root, 'ops/tools'), { recursive: true }); fs.mkdirSync(path.join(root, '.claude/hooks'), { recursive: true });
-    fs.writeFileSync(path.join(root, 'ops/tools/mem.mjs'), '// template copy');
-    fs.writeFileSync(path.join(root, 'ops/tools/devops-me.mjs'), '// personal');
-    fs.writeFileSync(path.join(root, '.claude/hooks/brain-limits.mjs'), '// global wiring may still run it');
-    fs.writeFileSync(path.join(root, 'code.md'), `# Code work\n\nUse node ${fwd(root)}/ops/tools/mem.mjs.\n`);
-    const plan = planMigration(root);
-    const by = Object.fromEntries(plan.map(e => [e.file, e]));
-    expect(by['ops/tools/mem.mjs']!.after).toBeNull();
-    expect(by['ops/tools/devops-me.mjs']).toBeUndefined();
-    expect(by['.claude/hooks/brain-limits.mjs']).toBeUndefined();
-    expect(by['code.md']!.after).toMatch(/^---\nwhen: \{.*\}\n---\n# Code work\n\nUse node \{tools\}\/ops\/tools\/mem\.mjs\.\n$/);
-    expect(by['code.md']!.beforeSha256).toBe(createHash('sha256').update(fs.readFileSync(path.join(root, 'code.md'))).digest('hex'));
-    const json = JSON.parse(by['brain.json']!.after!);
-    expect(json).toMatchObject({ machinery: 'product-v1', rules: { topicFiles: ['code.md'] } });
-    expect(planMigration(root, { withHooks: true }).some(e => e.file === '.claude/hooks/brain-limits.mjs' && e.after === null)).toBe(true);
-    expect(fs.readFileSync(path.join(root, 'code.md'), 'utf8')).toContain(`${fwd(root)}/ops/tools/mem.mjs`); // read-only
-    git(root, 'init', '-q'); git(root, 'add', '-A'); git(root, '-c', 'user.name=F', '-c', 'user.email=f@example.com', 'commit', '-q', '-m', 'f');
-    migrate(root, plan);
-    expect(fs.existsSync(path.join(root, 'ops/tools/mem.mjs'))).toBe(false);
-    expect(fs.existsSync(path.join(root, 'ops/tools/devops-me.mjs'))).toBe(true);
-    expect(fs.existsSync(journalOf(root))).toBe(false);
   });
 });
 

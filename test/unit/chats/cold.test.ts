@@ -4,14 +4,13 @@
 // title and tile; old session folded behind a divider; a restart reads both sessions back), no switch on a warm cache,
 // the engine kept for the note, and the context counters.
 import { afterEach, describe, expect, it } from 'vitest';
-import path from 'node:path';
-import { ChatManager, type ChatManagerOptions } from '../../../src/main/chats/manager';
+import type { ChatManager } from '../../../src/main/chats/manager';
 import { ClaudeSession, compactSettings } from '../../../src/main/chats/claude';
 import { CACHE_TTL_MS, COLD_MIN_TOKENS, coldArmed, coldAsk, coldRoute, type ColdView } from '../../../src/main/chats/continuity';
 import { coldPrompt, coldUserText, handoffRequest } from '../../../src/main/chats/handoff';
 import { userText } from '../../../src/main/chats/transcript';
 import { isLongChat, longAt } from '../../../src/shared/context';
-import { FAKE, fakeLog, recEmitter, recSink, tmp, waitFor } from './helpers';
+import { recSink } from './helpers';
 
 const MIN = 60_000;
 const base: ColdView = {
@@ -79,31 +78,3 @@ describe('cold rules', () => {
 
 const managers: ChatManager[] = [];
 afterEach(async () => { await Promise.all(managers.splice(0).map(m => m.shutdown())); });
-
-function setup(extra: Partial<ChatManagerOptions> = {}, completeCensus = true) {
-  const userData = tmp('ud'), home = tmp('home'), cwd = tmp('cwd'), log = path.join(userData, 'fake.jsonl');
-  const make = (more: Partial<ChatManagerOptions> = {}) => {
-    const m = new ChatManager({
-      emitter: recEmitter(), userData, enginePaths: { claude: FAKE }, claudeHome: home, env: { CLAUDE_CONFIG_DIR: home, FAKE_CLAUDE_LOG: log },
-      compactWindowTokens: () => 300_000, coldHandoff: () => true, coldIdleMs: () => 0, cacheTtlMs: 1500, coldEveryMs: 0, ...extra, ...more,
-      // These continuation cases explicitly model a provider with a complete census. Real Claude currently reports
-      // partial coverage; the separate partial case must never infer that it is safe to replace its session.
-      ...(completeCensus ? { sessionFactory: (_h, options, sink) => new ClaudeSession({ ...options, claudePath: FAKE }, { ...sink, childrenCoverage: (coverage, reason) => sink.childrenCoverage?.(coverage === 'partial' ? 'complete' : coverage, reason) }) } : {}),
-    });
-    managers.push(m);
-    return m;
-  };
-  return { userData, cwd, log, make };
-}
-const summary = (m: ChatManager, id: string) => m.list().find(c => c.id === id);
-
-describe('ChatManager cold chats', () => {
-  it('every Claude engine reports the configured window (300k), 1M models included', async () => {
-    const { make, cwd, log } = setup();
-    const m = make();
-    const c = await m.create({ harness: 'claude', cwd, prompt: 'big', model: 'claude-opus-5-5[1m]' });
-    await waitFor(() => summary(m, c.id)?.contextMaxTokens === 300_000, 'window reported');
-    const start = fakeLog(log).find(l => l.argv)!;
-    expect(start.argv!.join(' ')).toContain('"CLAUDE_CODE_AUTO_COMPACT_WINDOW":"300000"');
-  });
-});

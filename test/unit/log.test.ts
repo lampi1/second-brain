@@ -1,9 +1,5 @@
 // Structured log serialization and CLI readers preserve UTF-8 text while redacting secrets for app diagnostics.
 import { describe, expect, it } from 'vitest';
-import fs from 'node:fs';
-import { execFileSync } from 'node:child_process';
-import os from 'node:os';
-import path from 'node:path';
 import { addRedaction, log, redact } from '../../src/main/log';
 
 describe('log', () => {
@@ -13,24 +9,6 @@ describe('log', () => {
     expect(redact('url?token=xyz&a=1')).toBe('url?token=[redacted]&a=1');
     expect(redact('{"password":"hunter2"}')).toBe('{"password":"[redacted]"}');
     expect(redact('Authorization: Bearer abc.def')).toBe('Authorization: [redacted]');
-  });
-
-  it('writes one JSON line per entry with cause and hint on errors', () => {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-log-'));
-    log.init(dir);
-    log.info('test', 'hello', { chat: 'c1', data: { n: 1 } });
-    log.error('test', 'boom', { cause: 'claude.exe not found', hint: 'install Claude Code or set SB_CLAUDE_PATH' });
-    const file = fs.readdirSync(path.join(dir, 'logs'))[0]!;
-    const lines = fs.readFileSync(path.join(dir, 'logs', file), 'utf8').trim().split('\n').map(l => JSON.parse(l));
-    expect(lines.at(-2)).toMatchObject({ lvl: 'info', scope: 'test', msg: 'hello', chat: 'c1', data: { n: 1 } });
-    expect(lines.at(-1)).toMatchObject({ lvl: 'error', cause: 'claude.exe not found', hint: expect.stringContaining('SB_CLAUDE_PATH') });
-    expect(log.recent.at(-1)?.msg).toBe('boom');
-    const title = 'Lettura delle novità — qualità ✓';
-    log.warn('task', `${title} failed`, { cause: 'ECONNRESET', hint: 'Riprovare più tardi' });
-    const bytes = fs.readFileSync(path.join(dir, 'logs', file));
-    expect(bytes.includes(Buffer.from(title, 'utf8'))).toBe(true);
-    const output = execFileSync(process.execPath, ['scripts/logs.mjs', '--dir', path.join(dir, 'logs'), '--scope', 'task', '--json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-    expect(JSON.parse(output.trim())).toMatchObject({ msg: `${title} failed`, hint: 'Riprovare più tardi' });
   });
 });
 

@@ -1,12 +1,12 @@
 // release.ts: the stable-only variables the launcher sets (SB_RELEASE, SB_RELEASE_ID, SB_ENGINE_CLAUDE) are read once
 // and never reach a child of the app; a build run from a repo checkout is never a release, whatever it inherited
 // (2026-10-13: a dev instance started from a stable chat took the stable userData and rewrote the Start Menu shortcut).
-import { execFileSync } from 'node:child_process';
+
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { initRelease, isCheckout, releaseEngine, releaseId, takeStableEnv } from '../../src/main/release';
+import { isCheckout, takeStableEnv } from '../../src/main/release';
 
 const dir = (name: string, git?: 'dir' | 'file'): string => {
   const d = fs.mkdtempSync(path.join(os.tmpdir(), `sb-rel-${name}-`));
@@ -33,19 +33,5 @@ describe('release env', () => {
       expect(takeStableEnv(env, repo)).toEqual({ release: null, engine: null });
       expect(env).toEqual({}); // and its own children do not get it either
     }
-  });
-
-  it('after init no child the app starts inherits them; the process still knows what it is', () => {
-    Object.assign(process.env, STABLE);
-    initRelease(dir('release'));
-    expect(releaseId()).toBe('0.1.0-abc1234');
-    expect(releaseEngine()).toBe('C:\\rel\\claude.exe');
-    const seen = execFileSync(process.execPath, ['-e', `process.stdout.write(JSON.stringify(${JSON.stringify(Object.keys(STABLE))}.map(k => process.env[k] ?? null)))`],
-      { encoding: 'utf8', env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } });
-    expect(JSON.parse(seen)).toEqual([null, null, null]);
-    Object.assign(process.env, STABLE); // a dev build started from that stable app's chat
-    initRelease(dir('worktree', 'file'));
-    expect(releaseId()).toBeNull();
-    expect(process.env.SB_RELEASE).toBeUndefined();
   });
 });

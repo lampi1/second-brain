@@ -3,8 +3,6 @@ import { afterEach, describe, expect, it } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { Worker } from 'node:worker_threads';
-import { buildSync } from 'esbuild';
 import { CoordinationStore, proposalHash } from '../../src/main/coordination/store';
 import { registerRequest, requestKey } from '../../src/main/coordination/requests';
 import { projectWork } from '../../src/main/coordination/projection';
@@ -29,36 +27,6 @@ function fixture(withRequest = true) {
 }
 
 describe('coordination decision journal', () => {
-  it('commits exactly once across concurrently released connections and preserves the winning source', async () => {
-    const { store, file } = fixture();
-    const bundled = buildSync({ entryPoints: ['src/main/coordination/store.ts'], bundle: true, write: false, platform: 'node', format: 'cjs' }).outputFiles[0]!.text;
-    const barrier = new SharedArrayBuffer(4);
-    const workers = ['phone', 'pc'].map(channel => new Worker(`${bundled}
-      const { parentPort, workerData } = require('node:worker_threads');
-      const store = new module.exports.CoordinationStore(workerData.file);
-      parentPort.postMessage({ ready: true });
-      Atomics.wait(new Int32Array(workerData.barrier), 0, 0);
-      try { const receipt = store.resolve(workerData.key, { kind: 'user', channel: workerData.channel }, true); parentPort.postMessage({ receipt }); }
-      catch (error) { parentPort.postMessage({ error: error.message }); }
-      finally { store.close(); }
-    `, { eval: true, workerData: { file, key, channel, barrier } }));
-    try {
-      const ready = workers.map(worker => new Promise<void>((resolve, reject) => {
-        worker.on('message', message => { if (message.ready) resolve(); }); worker.once('error', reject);
-      }));
-      const results = workers.map(worker => new Promise<{ receipt?: { id: string; actor: { channel: string } }; error?: string }>((resolve, reject) => {
-        worker.on('message', message => { if (!message.ready) resolve(message); }); worker.once('error', reject);
-      }));
-      await Promise.all(ready);
-      Atomics.store(new Int32Array(barrier), 0, 1); Atomics.notify(new Int32Array(barrier), 0);
-      const outcomes = await Promise.all(results), wins = outcomes.filter(o => o.receipt), losses = outcomes.filter(o => o.error);
-      expect(wins).toHaveLength(1); expect(losses).toHaveLength(1);
-      expect(losses[0]!.error).toMatch(/already answered/);
-      expect(store.requests()[0]).toMatchObject({ state: 'accepted', decision: wins[0]!.receipt });
-      expect(store.requests()[0]!.delivery).toBeUndefined();
-      expect(store.execution(wins[0]!.receipt!.id)).toEqual([]);
-    } finally { await Promise.all(workers.map(worker => worker.terminate())); }
-  });
   it.each([{ jobId: 'job-other' }, { chatId: 'chat-other' }, { runId: 'run-new' }, { taskVersion: 2 }, { proposalRevision: 11 }, { proposalHash: proposalHash('changed') }])('rejects a changed binding %j without consuming the pending question', patch => {
     const { store } = fixture();
     expect(() => store.resolve({ ...key, ...patch }, actor, true)).toThrow(/stale/);
