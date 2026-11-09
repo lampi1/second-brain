@@ -86,6 +86,21 @@ describe('typed text in the feed', () => {
     expect(JSON.stringify(maskTypedRequest(req))).not.toContain(SECRET);
   });
 
+  it('masks OpenCode\'s <server>_<tool> names and an ACP call whose arguments are not in its input (#353 review)', () => {
+    // OpenCode: the item is «Tool» named only in its summary
+    const oc = { kind: 'tool', id: 't1', at: 1, name: 'Tool', summary: 'Tool: second-brain_type', input: { ref: 'e5', text: SECRET }, status: 'ok' } as ChatItem;
+    expect(JSON.stringify(maskTypedItem(oc))).not.toContain(SECRET);
+    expect(JSON.stringify(maskTypedItem({ ...oc, summary: 'Tool: second-brain_key', input: { keys: 7 } } as ChatItem))).not.toContain('"keys":7'); // a number is masked too
+    // the panel shows what the engine's earlier call or content carried; the stored input is empty
+    const req: Omit<PendingRequest, 'chatId'> = { id: 'r1', type: 'permission', tool: 'Tool', title: `Strumento second-brain_type: ${SECRET}`, detail: `ref: e5\ntext: ${SECRET}`, input: {}, at: 1 };
+    expect(JSON.stringify(maskTypedRequest(req))).not.toContain(SECRET);
+    expect(maskTypedRequest(req).title).toBe('Strumento second-brain_type');
+    const cursor = { ...oc, summary: `second-brain: type`, input: {}, output: `typed ${SECRET}` } as ChatItem;
+    expect(JSON.stringify(maskTypedItem(cursor))).not.toContain(SECRET);
+    // another tool of the browser server is left as it is
+    expect(maskTypedItem({ ...oc, summary: 'Tool: second-brain_navigate', input: { url: 'https://x' } } as ChatItem)).toMatchObject({ input: { url: 'https://x' } });
+  });
+
   it('masks typing calls in the history read back from the transcript', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-typed-'));
     const file = path.join(dir, 's.jsonl');

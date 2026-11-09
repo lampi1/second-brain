@@ -10,6 +10,7 @@ import { RuntimeChannel, RuntimeReceiver, type RuntimeFrame, type RuntimeRequest
 import type { AdapterCommand, AdapterEvent, AdapterResult, AdapterSnapshot, HostUpdate, HostUpdateFrame } from './host-session';
 import { SemanticReceiver } from './semantic-transport';
 import { receiveHostTextTime, receiveHostTransportTime } from './transport-timing';
+import { errText, log } from '../log';
 
 /** past the 60 s claude.ts gives the CLI to enable Remote Control, plus the host's own margin */
 const REMOTE_CONTROL_MS = 65_000;
@@ -41,7 +42,12 @@ export class RuntimeSessionProxy implements HarnessSession, RuntimeAnswerConsume
       if (update.textAt !== undefined) receiveHostTextTime(identity.chatId, update.textAt);
       this.view = update.snapshot;
       if (this.view.ready) this.readyResolve();
-      for (const event of update.events) { if (this.ended) break; this.event(event); }
+      for (const event of update.events) {
+        if (this.ended) break;
+        // main's own failure on one event (a busy database) is main's: logged, the engine and the rest of the batch go
+        // on, as in-process (chats/request-failure.ts); only a transport or validation error fails the update (#353 review)
+        try { this.event(event); } catch (e) { log.error('runtime', 'engine event failed in main', { chat: identity.chatId, cause: errText(e), data: { event: event.method }, hint: 'the engine keeps running; this event is lost' }); }
+      }
     });
     this.updates = new RuntimeReceiver(identity, async frame => this.semantic.receive(frame), postUpdateAck);
   }
@@ -113,9 +119,11 @@ export class RuntimeSessionProxy implements HarnessSession, RuntimeAnswerConsume
     if (this.ended) return; // already exited or its host died: closed, as an in-process adapter resolves
     this.closing = true;
     this.sendEpoch++;
-    try { await this.call({ method: 'close', args: [graceMs, keepChildren] }); }
+    // no deadline of its own: a close is a grace plus a tree kill (taskkill can take tens of seconds under load), and the
+    // generation's end already bounds it (#353 review)
+    try { await this.call({ method: 'close', args: [graceMs, keepChildren] }, { timeoutMs: null }); }
     // the host died or a new session replaced this one while it closed (manager-sessions: `void sess.close()`): closed
-    catch (e) { if (!this.ended) throw e; }
+    catch (e) { if (!this.ended) { if (!this.exitSeen) this.hostDied(); throw e; } }
     finally { this.dispose(); }
   }
   killNow(): void { this.sendEpoch++; this.fire({ method: 'killNow', args: [] }); }

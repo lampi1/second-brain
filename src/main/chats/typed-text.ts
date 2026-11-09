@@ -16,8 +16,10 @@ const obj = (v: unknown): Obj => (v && typeof v === 'object' && !Array.isArray(v
 /** The app's browser server under any engine's naming: mcp__second-brain__type (Claude, Codex), a plugin prefix, the
  *  demo's sb-browser, an optional browser_ tool prefix. */
 const TYPING_TOOL = /^mcp__[\w-]*?(?:second-brain|sb-browser)[\w-]*?__(?:browser_)?(type|fill_form|key)$/i;
-/** Cursor (ACP) names a tool by its kind and puts "<server>: <tool>" in the title. */
-const TYPING_TITLE = /\b(?:second-brain|sb-browser)\b\W+(?:browser_)?(type|fill_form|key)\b/i;
+/** Cursor (ACP) names a tool by its kind and puts "<server>: <tool>" in the title; OpenCode writes "<server>_<tool>". */
+const TYPING_TITLE = /(?:^|[^\w-])(?:second-brain|sb-browser)(?:__|_|\W+)(?:browser_)?(type|fill_form|key)\b/i;
+/** A typing call's title or summary up to its tool's name: what comes after can be what it types. */
+const upToTool = (text: string): string => text.replace(/^(.*?(?:second-brain|sb-browser)(?:__|_|\W+)(?:browser_)?(?:type|fill_form|key)\b).*$/is, '$1');
 
 /** The app's browser server named without its tool: Codex's panel when two of its calls run at once (codex.ts). */
 const BROWSER_SERVER = /^mcp__(?:(?!__)[\w-])*(?:second-brain|sb-browser)(?:(?!__)[\w-])*$/i;   // no "__<tool>" after it
@@ -71,8 +73,9 @@ export function maskArgs(kind: Typing, input: unknown): unknown {
     return { ...i, arguments: maskArgs(inner, i.arguments) };
   }
   if (kind === 'any') return (['type', 'fill_form', 'key'] as const).reduce<unknown>((x, k) => maskArgs(k, x), input);
-  if (kind === 'type') return typeof i.text === 'string' ? { ...i, text: MASK } : input;
-  if (kind === 'key') return typeof i.keys === 'string' && maskKeys(i.keys) !== i.keys.trim() ? { ...i, keys: maskKeys(i.keys) } : input;
+  // a value that is not text (a PIN as a number) is masked too
+  if (kind === 'type') return i.text !== undefined && i.text !== '' ? { ...i, text: MASK } : input;
+  if (kind === 'key') return typeof i.keys === 'string' ? (maskKeys(i.keys) !== i.keys.trim() ? { ...i, keys: maskKeys(i.keys) } : input) : i.keys !== undefined ? { ...i, keys: MASK } : input;
   if (!Array.isArray(i.fields)) return input;
   return { ...i, fields: i.fields.map(f => (f && typeof f === 'object' && 'value' in f ? { ...(f as Obj), value: MASK } : f)) };
 }
@@ -84,12 +87,25 @@ function valuesOf(kind: Typing, input: unknown): string[] {
   return typedValues(kind, input);
 }
 
+/** A typing call whose input does not carry what it types (type without text, fill_form without fields, key without
+ *  keys, or a value that is not text): the text is somewhere the masking cannot read, or not as a string. */
+function unread(kind: Typing, input: unknown): boolean {
+  const i = obj(obj(input).arguments && typeof obj(input).server === 'string' ? obj(input).arguments : input);
+  if (kind === 'key') return typeof i.keys !== 'string';
+  if (kind === 'type') return typeof i.text !== 'string';
+  if (kind === 'fill_form') return !Array.isArray(i.fields) || i.fields.some(f => obj(f).value !== undefined && typeof obj(f).value !== 'string');
+  return typeof i.text !== 'string' && typeof i.keys !== 'string' && !Array.isArray(i.fields);
+}
+
 /** A feed item with what a typing call wrote masked in its input, summary and output; any other item as it is. */
 export function maskTypedItem(item: ChatItem): ChatItem {
   if (item.kind !== 'tool') return item;
   const kind = typingTool(item.name, item.summary);
   if (!kind) return item;
   const values = valuesOf(kind, item.input);
+  // the arguments are not in the input (an ACP engine's empty rawInput, Cursor's args only as content text): what was
+  // typed cannot be told apart, so its summary stops at the tool and its output is not kept
+  if (!values.length && unread(kind, item.input)) return { ...item, input: maskArgs(kind, item.input), summary: upToTool(item.summary), ...(typeof item.output === 'string' ? { output: MASK } : {}) };
   if (!values.length) return item;   // nothing typed (only named keys, or another tool of the browser server)
   return { ...item, input: maskArgs(kind, item.input), summary: scrub(item.summary, values),
     ...(typeof item.output === 'string' ? { output: scrub(item.output, values) } : {}) };
@@ -100,6 +116,7 @@ export function maskTypedRequest<T extends Omit<PendingRequest, 'chatId'>>(req: 
   const kind = typingTool(req.tool, req.title);
   if (!kind) return req;
   const values = valuesOf(kind, req.input);
+  if (!values.length && unread(kind, req.input)) return { ...req, input: maskArgs(kind, req.input), title: upToTool(req.title), detail: MASK };
   if (!values.length) return req;
   return { ...req, input: maskArgs(kind, req.input), title: scrub(req.title, values), detail: scrub(req.detail, values) };
 }

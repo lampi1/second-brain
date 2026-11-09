@@ -227,3 +227,16 @@ it('an interrupt in flight when the host dies resolves, as one sent after it die
   f.proxy.hostDied();
   await expect(stopping).resolves.toBeUndefined();
 });
+
+it('a failure of main on one engine event is logged, never kills the engine; the batch goes on (#353 review)', async () => {
+  const f = fixture();
+  vi.mocked(f.sink.pending).mockImplementationOnce(() => { throw new Error('database is locked'); });
+  f.engineSink.pending({ id: 'p1', type: 'permission', tool: 'Bash', title: 'Bash', detail: '', input: {}, at: 1 });
+  f.engineSink.item({ kind: 'assistant', id: 'a1', at: 1, text: 'ok' }, false);
+  await vi.advanceTimersByTimeAsync(50);
+  expect(f.sink.pending).toHaveBeenCalledTimes(1);
+  expect(f.sink.item).toHaveBeenCalledTimes(1);
+  expect(f.killed).not.toHaveBeenCalled();
+  expect(f.sink.exit).not.toHaveBeenCalled();
+  f.proxy.hostDied();
+});
