@@ -43,16 +43,29 @@ describe('terminal-only app observer', () => {
     const snapshot = demo.snapshot(), ref = snapshot.runs.find(r => r.source === 'terminal' && r.status === 'running')!;
     const changed = vi.fn<(change: { subscription: string; run?: RoutineRunDetail; error?: string }) => void>();
     const app = createRoutines({ userData: path.dirname(snapshot.dirs.appRuns), terminalRuns: snapshot.dirs.terminalRuns, changed });
+    // The OS change notification is driven by hand: its delivery time depends on the machine's load (rules.md §7).
+    const watchSpy = vi.spyOn(fs, 'watch');
     const run = await app.watch(ref, 'visible-view');
+    expect(watchSpy).toHaveBeenCalledTimes(1);
+    expect(watchSpy.mock.calls[0]![0]).toBe(run.dir); // only the run's own folder, never a workspace
+    const notify = watchSpy.mock.calls[0]!.at(-1) as (kind: string, filename: string | null) => void;
+    const watcher = watchSpy.mock.results[0]!.value as fs.FSWatcher, closeSpy = vi.spyOn(watcher, 'close');
     fs.appendFileSync(path.join(run.dir, 'events.jsonl'), JSON.stringify({ type: 'action', at: Date.now(), n: 1, text: 'Nuovo passo dal terminale' }) + '\n');
-    await vi.waitFor(() => expect(changed.mock.calls.some(([c]) => c.run?.events.some(e => e.type === 'action' && e.text === 'Nuovo passo dal terminale'))).toBe(true));
+    notify('change', 'events.jsonl');
+    const seen = () => changed.mock.calls.some(([c]) => c.run?.events.some(e => e.type === 'action' && e.text === 'Nuovo passo dal terminale'));
+    while (!seen()) await new Promise(resolve => setImmediate(resolve)); // the test's own timeout bounds it
     app.unwatch('different-view'); // a late cleanup cannot close another view
-    expect(changed).toHaveBeenCalled();
+    expect(closeSpy).not.toHaveBeenCalled();
     app.unwatch('visible-view');
+    expect(closeSpy).toHaveBeenCalledTimes(1);
     changed.mockClear();
     const read = vi.spyOn(app, 'run');
     fs.appendFileSync(path.join(run.dir, 'events.jsonl'), JSON.stringify({ type: 'action', at: Date.now(), n: 1, text: 'Pagina chiusa' }) + '\n');
-    await new Promise(resolve => setTimeout(resolve, 100));
+    const queue = vi.spyOn(globalThis, 'setImmediate');
+    notify('change', 'events.jsonl'); // a notification already in flight when the view closed
+    expect(queue).not.toHaveBeenCalled(); // a refresh is queued synchronously: none was
+    queue.mockRestore();
+    await new Promise(resolve => setImmediate(resolve));
     expect(read).not.toHaveBeenCalled(); expect(changed).not.toHaveBeenCalled();
     app.stop(); demo.stop();
   });

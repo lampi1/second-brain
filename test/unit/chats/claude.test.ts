@@ -1,6 +1,7 @@
 // ClaudeSession against the fake CLI (test/fixtures/fake-claude.mjs): streaming, questions, permissions, interrupt,
 // bad output, crashes and the control requests.
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import type { ChildProcess } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { ClaudeSession, rulePath } from '../../../src/main/chats/claude';
@@ -565,18 +566,28 @@ describe('ClaudeSession', () => {
   });
 
   it('an engine that exited while a leftover holds its pipes closes without a kill; a killed one gets no grace', async () => {
+    // No wall clock (rules.md §7): the close grace is a fake timer, run only once the CLI really exited, so a slow
+    // machine can neither kill it early nor make it miss the grace; the leftover outlives the test.
     const log = path.join(tmp('hold'), 'log.jsonl');
-    const { s } = start({ env: { FAKE_CLAUDE_LOG: log, FAKE_CLAUDE_HOLD_PIPES: '60000' } });
+    const { s } = start({ env: { FAKE_CLAUDE_LOG: log, FAKE_CLAUDE_HOLD_PIPES: '600000' } });
     const holder = await waitFor(() => (fakeLog(log).find(l => 'holder' in l) as { holder?: number } | undefined)?.holder, 'holder pid');
+    onTestFinished(() => { vi.useRealTimers(); killStray(holder); });
     await waitFor(() => s.state === 'idle', 'idle');
-    await s.close(1500);
+    const exited = new Promise(resolve => (s as unknown as { proc: ChildProcess }).proc.once('exit', resolve));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const closed = s.close(1500);
+    await exited;                       // the CLI ended on stdin's end; its leftover still holds the pipes
+    expect(s.alive).toBe(true);         // 'close' has not come
+    vi.advanceTimersByTime(1500);       // the grace: the pipes are let go, nothing is killed
+    await closed;
     expect(s.alive).toBe(false);
     expect(fakeLog(log).some(l => (l as { exit?: string }).exit === 'stdin closed')).toBe(true);
-    killStray(holder);
+    vi.useRealTimers();
     const b = start();
     await waitFor(() => b.s.state === 'idle', 'idle b');
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     b.s.killNow();
-    await b.s.close(60000); // already killed: resolves with the kill, not after the grace
+    await b.s.close(60000); // already killed: resolves with the kill; the grace never runs (fake time stands still)
     expect(b.s.alive).toBe(false);
-  }, 30000);
+  });
 });
