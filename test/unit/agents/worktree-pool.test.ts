@@ -13,7 +13,8 @@ afterEach(() => { for (const root of roots.splice(0)) fs.rmSync(root, { recursiv
 
 describe('worktree pool', () => {
   it('parses git worktree list --porcelain, the main checkout first', () => {
-    const out = 'worktree C:/r\nHEAD aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nbranch refs/heads/main\n\nworktree C:/w\nHEAD 2\ndetached\nlocked\n\nworktree C:/x\nHEAD 3\nbranch refs/heads/sb/delegate-abc\nprunable gitdir file points to non-existent location\n';
+    const at = process.platform === 'win32' ? 'C:/' : '/'; // an absolute path on this OS
+    const out = `worktree ${at}r\nHEAD aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\nbranch refs/heads/main\n\nworktree ${at}w\nHEAD 2\ndetached\nlocked\n\nworktree ${at}x\nHEAD 3\nbranch refs/heads/sb/delegate-abc\nprunable gitdir file points to non-existent location\n`;
     const list = parseWorktrees(out);
     expect(list.map(w => [path.basename(w.path), w.branch, w.locked, w.prunable])).toEqual([['r', 'main', false, false], ['w', null, true, false], ['x', 'sb/delegate-abc', false, true]]);
     // the commit a worktree is at, kept for the cleanup's conditional branch delete; anything but a full sha = unknown

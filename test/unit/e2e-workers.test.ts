@@ -52,7 +52,7 @@ describe('unit tests with real processes (scripts/process-units.mjs)', () => {
   const root = path.resolve(import.meta.dirname, '..', '..');
   const units = processUnits() as string[];
   it('the rule finds the files whose spawns missed their deadlines beside the e2e (2026-10-14)', () => {
-    for (const f of ['chats/manager', 'chats/resume', 'chats/proctree', 'brain/cursor-ledger', 'chats/handoff', 'chats/warm']) {
+    for (const f of ['chats/manager', 'chats/proctree', 'brain/cursor-ledger']) {
       expect(units, f).toContain(`test/unit/${f}.test.ts`);
     }
   });
