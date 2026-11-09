@@ -109,12 +109,14 @@ function touchesSettings(req: PermitRequest, command: boolean, cwd: string): boo
   const o = obj(req.input);
   if (command) {
     // `.g''it` and `.g'i't` are `.git` to a shell; a glob can name a settings place by pattern (.gi?/hooks); `$'\x2e'`,
-    // an escape that printf or echo turns into a name, and a `$(…)` or backtick glued to a path build a name the app
-    // cannot read. `X=$(…) cmd` and `echo $(date)` stay free.
+    // an escape that printf or echo -e turns into a name, and a `$(…)` or a `…` pair glued to a path build a name the
+    // app cannot read. `X=$(…) cmd`, `echo $(date)`, `-v $(pwd):/app`, `grep '^$'`, a Windows `C:\work\2026` path and
+    // PowerShell's single `t escape stay free.
     const line = typeof o.command === 'string' ? o.command : '';
-    if (/\$'|\\(x[0-9a-f]|[0-7]{3}|u[0-9a-f]{4})/i.test(line)) return true;
-    if (/[^\s=;&|(<>'"]\$\(|[^\s=;&|(<>'"]`|\$\([^)]*\)[^\s;&|)<>'"]|`[^`]*`[^\s;&|)<>'"]/.test(line)) return true;
     const raw = line.replace(/['"]/g, '');
+    if (/\$'[^']*\\/.test(line)) return true;
+    if (/\b(printf|echo\s+-\w*e)\b/i.test(line) && /\\(x[0-9a-f]|0?[0-7]{1,3}|u[0-9a-f]{4})/i.test(line)) return true;
+    if (/[^\s=;&|(<>]\$\(|[^\s=;&|(<>]`[^`]*`|\$\([^)]*\)[^\s;&|)<>:]|`[^`]*`[^\s;&|)<>:]/.test(raw)) return true;
     if (SETTINGS_COMMAND.test(raw)) return true;
     const base = typeof o.cwd === 'string' && o.cwd ? path.resolve(cwd, o.cwd) : cwd;
     const words = raw.split(/[\s'"`;&|<>(){}=,]+/).filter(w => /[\\/]/.test(w) || w.startsWith('.') || w.startsWith('~'));
@@ -146,13 +148,13 @@ export function autoPermit(req: PermitRequest, ctx: PermitContext): PermitVerdic
   // the rules and rule 6 must read what will run: a command with no line, or one an engine cut, is the user's call
   if (command && (typeof raw !== 'string' || !raw.trim())) return ASK;
   if (cut(req.input)) return ASK;
-  // longer than the rules read, for a tool they could hold: what they cannot see may be what they hold
-  if (policyCovers(policy, req.tool, COMMAND_TOOLS, req.title) && policyTooLong(req.tool, req.input, COMMAND_TOOLS, req.title)) return ASK;
   const rule = policyHit(policy, req.tool, req.input, COMMAND_TOOLS, req.title);
   if (rule) {
     if (rule.action === 'ask-user') return { kind: 'ask', rule };
     return refusal(rule, typeof raw === 'string' ? raw.trim() : req.title?.trim() || req.tool, command);
   }
+  // no rule in what they read, but longer than that, for a tool they could hold: what they cannot see may be what they hold
+  if (policyCovers(policy, req.tool, COMMAND_TOOLS, req.title) && policyTooLong(req.tool, req.input, COMMAND_TOOLS, req.title)) return ASK;
   if (ctx.ceiling === 'plan' || ctx.ceiling === 'default') return ASK;
   const reads = command ? readOnlyCommand(raw, ctx.readScripts) : READ_TOOLS.has(req.tool);
   if (reads) return ALLOW;

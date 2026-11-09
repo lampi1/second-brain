@@ -130,7 +130,9 @@ export function policySubject(tool: string, input: unknown, cls: string, title?:
   // text values first, one level down too (Codex's {server, tool, arguments}): a long JSON cannot push them out
   const values = Object.entries(o).flatMap(([k, v]) => typeof v === 'string' ? [`${k}: ${v}`]
     : isObj(v) ? Object.entries(v).filter(([, x]) => typeof x === 'string').map(([k2, x]) => `${k2}: ${x as string}`) : []);
-  return [`${tool}${title && title !== tool ? ` ${title}` : ''}`, ...values, json].join('\n');
+  // first line: the name; last line: the name and the JSON on one line, as a rule on `tool + JSON input` reads it
+  const head = `${tool}${title && title !== tool ? ` ${title}` : ''}`;
+  return [head, ...values, `${head} ${json}`].join('\n');
 }
 
 /** The request is longer than the rules read: what they cannot see may be what they hold (the caller asks). */

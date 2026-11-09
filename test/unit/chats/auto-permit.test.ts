@@ -69,7 +69,9 @@ describe('autoPermit: the agents\' own settings and hooks (AGENTS.md rule 6)', (
       "cp evil .g'i't/hooks/pre-commit", 'agent mcp add x', "cp evil $'\\x2egit'/hooks/x", 'printf "\\x2egit" | xargs -I{} cp evil {}/hooks/x',
       'cp evil $(echo .gi)t/hooks/x', 'cp evil .g`echo i`t/hooks/x']) expect(run(c), c).toBe('ask');
     // a substitution that builds no path stays free
-    for (const c of ['TOKEN=$(az account get-access-token) node run.js', 'echo "built at $(date)" > out.txt']) expect(run(c), c).toBe('allow');
+    for (const c of ['TOKEN=$(az account get-access-token) node run.js', 'echo "built at $(date)" > out.txt', 'Copy-Item C:\\work\\2026\\a.csv .\\out\\',
+      'Write-Output "a`tb" > out.txt', "grep -v '^$' a.txt > b.txt", 'docker run -v $(pwd):/app node']) expect(run(c), c).toBe('allow');
+    for (const c of ['cp evil $(echo .gi)"t/hooks/pre-commit"', "printf '\\56git/hooks/x' | xargs -I{} cp evil {}"]) expect(run(c), c).toBe('ask');
     expect(autoPermit(perm('Shell', { command: 'echo x > hooks/pre-commit', cwd: '.git' }), ctx()).kind).toBe('ask');
     for (const c of ['cat .claude/settings.json', 'ls .git', 'git status']) expect(run(c), c).toBe('allow');
   });

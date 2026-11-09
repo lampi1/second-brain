@@ -42,6 +42,13 @@ describe('the owner\'s policy', () => {
     // Codex names the tool's arguments one level down; a long input never pushes them out of what the rules read
     expect(ruleOf(ask('mcp__mssql__execute_query', { server: 'mssql', tool: 'mcp__mssql__execute_query', arguments: { query: 'DELETE FROM t' } }))).toBe('db-write-tools');
     expect(ruleOf(ask('mcp__mssql__execute_query', { params: 'p'.repeat(9000), query: 'DROP TABLE t' }))).toBe('db-write-tools');
+    // a rule held in what they read wins over the length: a padded write is refused, not asked
+    const pad = 'p'.repeat(3990);
+    expect(ruleOf(ask('mcp__mssql__execute_query', { query: 'DROP TABLE t', a: pad, b: pad, c: pad }))).toBe('db-write-tools');
+    expect(ask('mcp__mssql__execute_query', { query: 'DROP TABLE t', a: pad, b: pad, c: pad }).kind).toBe('deny');
+    // a rule written on «tool + JSON» on one line still reads it
+    const json = parsePolicy(JSON.stringify({ version: 1, rules: [{ id: 'j', action: 'esegui', why: 'w', tools: ['mcp'], match: ['execute_query \\{"query":"\\s*drop'] }] }));
+    expect(ruleOf(ask('mcp__mssql__execute_query', { query: 'DROP TABLE t' }, json))).toBe('j');
     // longer than the rules read: the user's call
     expect(ask('mcp__mssql__execute_query', { query: 'SELECT 1', params: 'p'.repeat(30000) }).kind).toBe('ask');
     expect(ask('mcp__mssql__execute_query', { query: 'SELECT 1' }).kind).toBe('allow');

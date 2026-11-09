@@ -21,8 +21,9 @@ everything else is free.
     reports `userAction { kind: 'command' }`), `ask-user` (sent to the user, without «always»), `never-print` (refused:
     use the secret without showing it).
   - `tools`: classes `command` (default), `edit`, `read`, `web`, `mcp`, `*`, or exact tool names.
-  - `match` / `unless`: case-insensitive regular expressions on the command line (commands) or on `tool + JSON input`
-    (any other tool). A rule holds a request when a `match` hits and no `unless` does; the first rule wins.
+  - `match` / `unless`: case-insensitive regular expressions on the command line (commands) or, for other tools, on a
+    subject of lines: the tool's name (and an ACP title), each text value as `key: value` (one level down too), and last
+    `tool + JSON input` on one line. A rule holds a request when a `match` hits and no `unless` does; the first rule wins.
   - A file that is not exactly this format (bad JSON, an unknown field, a bad pattern, a duplicate id) is broken as a
     whole: half a policy would silently free what the missing rules held. It is read again when it changes.
   - The owner's policy in this format is `test/fixtures/brain-policy/permissions.json`. It is an example and a test
@@ -38,10 +39,11 @@ everything else is free.
   `.vscode`, `.idea`, `.mcp.json`, `.guardallow`, `.gitconfig`, `claude_desktop_config.json`, `opencode.json`,
   `.opencode`, `.claude.json`, `core.hooksPath`, `git config --global|--system`, `claude|codex|cursor-agent|agent|opencode
   mcp|config|plugin|hooks`, in any tool's input shape at any depth, through links, Windows `.git.` / `::$` forms, shell
-  globs, quote splicing, `$'…'`, printf escapes and a `$(…)` or backtick glued to a path): AGENTS.md rule 6, not an opinion of the app. The role gate and the read-only role check stay (the
+  globs, quote splicing, `$'\…'`, printf / `echo -e` escapes and a `$(…)` or backtick pair glued to a path;
+  best effort: a shell variable or a nested substitution still builds a name the app cannot see): AGENTS.md rule 6, not an opinion of the app. The role gate and the read-only role check stay (the
   user's settings).
 - **What the app cannot read whole is the user's call**: a request an engine cut (`session.ts trimInput`: «… (+N)» anywhere in the input,
-  content too, a list of 200), a request longer than the 20 000 characters the rules read (for a tool a rule covers;
+  content too, a list of 200), a request longer than the 20 000 characters the rules read, when no rule held it (for a tool a rule covers;
   text values come first, one level down too, so a long JSON never pushes them out), a command with no command line, an edit that names no place, and Codex's `grantRoot` (write access under
   a folder for the rest of the session, whose later writes never come back to the gate). The rules must judge what will
   run, not a part of it.
