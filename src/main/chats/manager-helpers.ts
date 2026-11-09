@@ -20,6 +20,9 @@ export const { setInterval, clearInterval, clearTimeout } = timersFor('chats/man
 /** The app's own message to a chat whose turn a restart cut (resumeInterrupted). */
 export const RESUME_TEXT = "[second-brain] L'app è stata riavviata mentre lavoravi e il tuo turno si è interrotto. Riprendi da dove eri: prima rileggi lo stato (file, worktree, comandi che avevi lanciato), poi continua.";
 
+/** The app's own message to a chat whose engine crashed mid-turn, once per turn (ADR 0238, manager-sink.ts exit). */
+export const CRASH_RESUME_TEXT = "[second-brain] Il motore si è chiuso per un errore mentre lavoravi e l'app l'ha riavviato. Riprendi da dove eri: prima rileggi lo stato (file, worktree, comandi che avevi lanciato: non rifare a occhi chiusi ciò che potrebbe essere già avvenuto), poi continua.";
+
 /** Legacy entries have no ID: match their content until the first submission assigns one. */
 export function sameChildResult(a: HeldChildResult, b: HeldChildResult): boolean {
   return a.id && b.id ? a.id === b.id : a.title === b.title && a.message === b.message;

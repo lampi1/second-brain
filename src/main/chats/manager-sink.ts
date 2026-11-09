@@ -14,7 +14,7 @@ import { AgentChildrenReducer } from './agent-children';
 import { effortValue, initialEffort, observeEffort, submitEffort } from './effort';
 import type { Rec } from './manager-types';
 import { ManagerWork } from './manager-work';
-import { sysItem } from './manager-helpers';
+import { CRASH_RESUME_TEXT, sysItem } from './manager-helpers';
 import { pausedState } from './remote-control';
 import { runtimePerformance } from '../runtime-performance';
 import { maskTypedItem, maskTypedRequest } from './typed-text';
@@ -50,7 +50,7 @@ export abstract class ManagerSink extends ManagerWork {
           if (addSkill(r.s.run, input?.skill ?? input?.command)) this.runSaveSoon();
         }
         if (item.kind === 'tool' && r.s.run) this.noteReceipt(r, item);
-        if (item.kind === 'result' && !replace) this.turnEnded(r, item);
+        if (item.kind === 'result' && !replace) { delete r.crashResumed; this.turnEnded(r, item); }
       },
       pending: req => {
         if (!live()) return;
@@ -127,8 +127,29 @@ export abstract class ManagerSink extends ManagerWork {
         if (error) this.owedReport(r, 'exit'); // a delegated child that died owes nothing more: its parent is told (#152)
         const onCrash = this.opts.onCrash;
         if (crashed && error && onCrash) this.hook('onCrash', () => onCrash(chatId, error));
+        if (crashed) this.recoverCrash(r);
       },
     };
+  }
+
+  /** One recovery after an engine crashed mid-turn (ADR 0238; cloudroom: one recovery attempt after cleanup): the
+   *  chat restarts on its own session with CRASH_RESUME_TEXT and re-reads its state; nothing of the crashed turn is
+   *  sent again. A second crash in the same turn, a chat the user closed, Flash and the maintenance research stay as
+   *  they are (an error the user or the parent sees). */
+  private recoverCrash(r: Rec): void {
+    if (r.crashResumed || r.s.quick || r.s.research || r.s.routineArchived || this.closedByUser(r)) return;
+    r.crashResumed = true;
+    const chatId = r.s.id;
+    setTimeout(() => {
+      if (this.quitting || this.chats.get(chatId) !== r || r.s.closedAt || r.working) return;
+      r.s.resumedAt = Date.now();
+      this.updated(r);
+      log.info('chats', 'resuming a chat after its engine crashed', { chat: chatId });
+      this.send(chatId, CRASH_RESUME_TEXT, undefined, true, undefined, false, { kind: 'app' }).catch(e => {
+        log.warn('chats', 'resume after a crash failed', { chat: chatId, cause: errText(e), hint: 'the chat stays in error: a message resumes it' });
+        if (r.s.resumedAt) { delete r.s.resumedAt; this.updated(r); }
+      });
+    }, 0);
   }
 
   /** An engine that ignored the user's stop (SessionPatch.restart): it ends now, the next message (the user's «Invia

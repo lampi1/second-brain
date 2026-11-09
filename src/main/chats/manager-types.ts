@@ -318,6 +318,9 @@ export interface Rec {
   working?: boolean;
   /** its engine ended with an error or mid-turn (persisted): not finished, never closed by itself; cleared by a result */
   unfinished?: boolean;
+  /** its engine already crashed once in this turn and was restarted by the app (ADR 0238): a second crash stays an
+   *  error for the user or its parent; cleared by a result */
+  crashResumed?: boolean;
   /** the last result saved before a restart (ADR 0134): read by the auto-close only, the summary starts without one */
   savedResult?: { at: number; isError: boolean; interrupted?: boolean };
   /** close the session when this turn ends, so the next message reopens it (Cursor: the new --model; a former Orchestrator:
