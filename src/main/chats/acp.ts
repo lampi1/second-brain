@@ -1391,7 +1391,9 @@ export class AcpSession implements HarnessSession {
       const gate = (this.opts.yesNo ?? yesNoGateOn(process.env)) && questions.length > 0;
       const yesNo = yesNoShape(questions);
       const noBrief = gate && yesNo && !this.briefOff && !!this.opts.briefReady && !await this.opts.briefReady();
-      if (generation !== this.brokerGeneration || this.exited || this.procExited) return;
+      if (this.exited || this.procExited) return;
+      // stopped while briefReady crossed the broker: the stop's own cancel round missed it, and ACP needs an answer
+      if (generation !== this.brokerGeneration) return this.respond(id, { outcome: { outcome: 'cancelled' } });
       if (noBrief && !this.briefWaited.has(id) && this.yesNoRefused < YESNO_RETRIES) {
         const timer = setTimeout(() => {
           const w = this.briefWaited.get(id);

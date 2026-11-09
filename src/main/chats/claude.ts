@@ -812,7 +812,8 @@ export class ClaudeSession implements HarnessSession {
     const input = o(r.input);
     const question = tool === 'AskUserQuestion';
     if (question && await this.refuseNotYesNo(id, input, s(r.tool_use_id), m)) return;
-    if (this.exited || this.procExited || generation !== this.brokerGeneration) return;
+    if (this.exited || this.procExited) return;
+    if (generation !== this.brokerGeneration) return this.stoppedRefusal(id, s(r.tool_use_id));
     const noAlways = r.suppress_always_allow_rule === true;
     // a suggested mode above the agent's ceiling is never offered ("Sempre" would raise it before the manager could react)
     const suggestions = arr(r.permission_suggestions).filter(x => o(x).type !== 'setMode' || !suggestedAbove(o(x).mode, this.opts.ceiling ?? null));
@@ -835,6 +836,12 @@ export class ClaudeSession implements HarnessSession {
     this.sink.pending(req);
   }
 
+  /** A tool call (a question too) that arrived before a stop and was still being checked across the broker when the stop
+   *  came: the stop's own round never saw it, and the CLI waits for an answer, so it gets a refusal, never silence. */
+  private stoppedRefusal(id: string, toolUseId: string): void {
+    try { this.write({ type: 'control_response', response: { subtype: 'success', request_id: id, response: { behavior: 'deny', message: 'The session was stopped; the call was not run.', toolUseID: toolUseId } } }); } catch { /* gone */ }
+  }
+
   /** A question that is not yes/no goes back to the agent with how to ask (ADR 0135), at most YESNO_RETRIES times in a
    *  row per chat: then it is shown as it is, so a chat that cannot comply never stays stuck. */
   private async refuseNotYesNo(id: string, input: Obj, toolUseId: string, m: Obj): Promise<boolean> {
@@ -846,7 +853,8 @@ export class ClaudeSession implements HarnessSession {
     const yesNo = yesNoShape(qs);
     // a yes/no question without its brief (ADR 0150): a moment for a show_ui called in parallel, then sent back
     const noBrief = yesNo && !this.briefOff && !!this.opts.briefReady && !await this.opts.briefReady();
-    if (generation !== this.brokerGeneration || this.exited || this.procExited) return true;
+    if (this.exited || this.procExited) return true;
+    if (generation !== this.brokerGeneration) { this.stoppedRefusal(id, toolUseId); return true; }
     if (noBrief && !this.briefWaited.has(id) && this.yesNoRefused < YESNO_RETRIES) {
       this.briefWaited.add(id);
       setTimeout(() => {
