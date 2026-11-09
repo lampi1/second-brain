@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
-import type { BrainChange, BrainModelState, BrainRule, BrainSkill, ClassifiersState, LogScan, MaintenanceJobId, MaintenanceRun, LessonStub, MigrationReport, KindModelCard } from '../../shared/brain-model';
+import type { BrainChange, BrainModelState, BrainRule, BrainSkill, ClassifiersState, LogScan, MaintenanceJobId, MaintenanceRun, LessonStub, MigrationReport, KindModelCard, MemoryDocs } from '../../shared/brain-model';
 import { changeCriteria, MAINTENANCE_JOBS } from '../../shared/brain-model';
 import type { AgentCatalogService } from '../agents/catalog';
 import type { AgentPackFlows } from '../agents/pack/flows';
@@ -16,6 +16,7 @@ import { classifiersState, readJobs } from './classifiers';
 import { seal, type IntervalCache } from './evidence';
 import { appendUnder, corrections, migrate, repeatedTask, skillText, type AgentWriter, type JobContext, type JobResult } from './jobs';
 import { ignoreWrite, sourceOfSkill } from './migration-ignore';
+import { memoryDocs } from './memory-docs';
 import { rememberUndoneMoves } from './migration-move';
 import { procedureSections, type ProcedureSection } from './procedure-sources';
 import type { UpgradeAsk } from './upgrade';
@@ -95,6 +96,8 @@ export class BrainModelService {
   }
   private now(): number { return this.d.now?.() ?? Date.now(); }
   private root(): string | null { const r = this.d.root(); try { return r && fs.statSync(r).isDirectory() ? fs.realpathSync(r) : null; } catch { return null; } }
+  /** Memoria → Diario e note (#368): the memory documents of the brain, read-only. */
+  memoryDocs(): MemoryDocs { return memoryDocs(this.root(), this.roles()); }
   private profiles(): AgentProfile[] { try { return this.d.catalog.list().profiles; } catch { return []; } }
   private roles(): AgentProfile[] { return this.profiles().filter(p => p.scope === 'role'); }
   private skillDirs(root: string | null): SkillDir[] {

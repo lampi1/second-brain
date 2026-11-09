@@ -2,7 +2,7 @@
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
 import type { PackFinding } from '../agent-pack';
-import type { BrainModelState, ClassifiersState, MaintenanceJobId, MemoryRecallCard } from '../brain-model';
+import type { BrainModelState, ClassifiersState, MaintenanceJobId, MemoryDocs, MemoryRecallCard } from '../brain-model';
 import type { LearningEvidence, LearningReviewState, MemoryReviewRecord, ReplayComparison, ReplayRecord, SkillCandidateView } from '../learning-review';
 import type { MaintenanceStatus } from '../maintenance-research';
 import type { MorningOp, MorningState } from '../morning';
@@ -92,6 +92,8 @@ export interface BrainInvokeMap {
   'memory:reviewList': [{ asOf?: string } | undefined, MemoryReviewRecord[]];
   /** how well the launch memory finds the right fact, words vs words + meaning (ADR 0235); read-only, zero tokens */
   'memory:recallCheck': [void, MemoryRecallCard];
+  /** Memoria → Diario e note (#368): now.md, the journal, ideas.md, ai-errors.md and the notes, masked and bounded */
+  'memory:docs': [void, MemoryDocs];
   /** keep: the user's answer when confirmed facts say something else (new = replace them, both = keep them too), on the
    *  fact ids they saw (memory-records.ts confirmMemory) */
   'memory:retract': [{ expectedRoot: string; id: string; reason: string }, MemoryReviewRecord];

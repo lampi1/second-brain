@@ -278,3 +278,6 @@ docs/screenshots/recordings.webp binary-media sha256:78ce822901ee69147556607fc00
 test/unit/log.test.ts assigned-secret sha256:a1a3e8c4470edaaf8b683fb5e89a8fe08eb78ee05d9499b33c08d0456e05205d
 # runner.test.ts again: an unused 30 s polling helper removed (2026-11-09).
 test/unit/runner.test.ts internal-host sha256:df848e1333e97c486cc6dfc50b3fa84541606fdc62344278b0d3d0884db5e714
+docs/screenshots/memory.webp binary-media sha256:965ede68b03b7af852ab146fbef9b0c0babc8ecade1f768c09323b98510871ff
+docs/screenshots/brain-scripts.webp binary-media sha256:9291948818c2ffecc86e044c0a644c63441faa1515fccd627bb7dfea9f503da5
+docs/screenshots/maintenance.webp binary-media sha256:c72672504fda2586138d85bde21728c2a1670b3361cabfa5e5dea8710d9f5083

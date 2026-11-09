@@ -64,6 +64,23 @@ export interface MemoryFile {
   changedAt: number | null;
 }
 
+/** One readable document of the brain's memory for Memoria → Diario e note (#368): now.md, a journal day, ideas.md,
+ *  ai-errors.md, a knowledge note, the shared or a role's old memory. Text masked (credential lines hidden), bounded. */
+export interface MemoryDoc {
+  id: string;
+  kind: 'now' | 'journal' | 'ideas' | 'errors' | 'knowledge' | 'shared' | 'agent';
+  title: string;
+  /** knowledge: its group (Clienti, Ambienti…); agent: the role's name; journal: the day */
+  group: string;
+  /** brain-relative path */
+  file: string;
+  text: string;
+  changedAt: number | null;
+  /** the file was longer: only its first part is here (the viewer opens it whole) */
+  truncated?: boolean;
+}
+export interface MemoryDocs { root: string | null; docs: MemoryDoc[] }
+
 export type MaintenanceJobId = 'repeated-task' | 'merge-skills' | 'corrections' | 'merge-memory' | 'migration' | 'upgrade';
 /** 'upgrade' (ADR 0116): the brain brought in line with this app version's layout (brainmodel/upgrade.ts) */
 export const MAINTENANCE_JOBS: readonly MaintenanceJobId[] = ['migration', 'upgrade', 'corrections', 'repeated-task', 'merge-skills', 'merge-memory'];

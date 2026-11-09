@@ -180,7 +180,7 @@ export function migrate(ctx: JobContext): JobResult {
       const after = holds ? pointer(already.name) : null;
       if (after !== null) {
         queue(after, { item: { source, title: s.title, skill: already.name, status: 'moved', note: 'tolta dal file: era già nella skill' }, name: already.name, action: 'update',
-          summary: `${s.file}: sezione «${s.title}» tolta, è già nella skill ${already.name}`, reason: 'Una procedura sta in un posto solo: la skill. Nel file resta una riga che dice dov’è.', evidence: [source, `move:${source}`], writes: [] });
+          summary: changeText().alreadyIn({ file: s.file, title: s.title, skill: already.name }), reason: 'Una procedura sta in un posto solo: la skill. Nel file resta una riga che dice dov’è.', evidence: [source, `move:${source}`], writes: [] });
         continue;
       }
       items.push({ source, title: s.title, skill: already.name, status: 'existing',
@@ -236,7 +236,7 @@ export function migrate(ctx: JobContext): JobResult {
       { file: g.file, text: g.text, removed: declareRemoved(g.before, g.text, `${g.moves.length > 1 ? 'sezioni spostate nelle skill' : 'sezione spostata nella skill'} ${names.join(', ')}`) }];
     const change = one ? { action: one.action, target: one.name, summary: one.summary, reason: one.reason, evidence: one.evidence }
       : { action: g.moves.some(m => m.action === 'create') ? 'create' as const : 'update' as const, target: rel,
-        summary: `${rel}: ${g.moves.length} sezioni spostate nelle skill ${names.join(', ')}`,
+        summary: changeText().movedOut({ file: rel, skills: names }),
         reason: 'Le procedure diventano skill e stanno in un posto solo; nel file resta una riga che dice dove sono. Un solo Annulla rimette il file com’era.',
         evidence: g.moves.flatMap(m => m.evidence) };
     let c: ReturnType<ChangeLog['apply']> = null, why = 'contenuto troppo grande per una modifica annullabile';

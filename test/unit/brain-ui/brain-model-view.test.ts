@@ -100,12 +100,12 @@ describe('pages', () => {
     expect(rules).not.toContain('Quando serve');
     tab('file');
     const mem = renderToStaticMarkup(createElement(MemoryPage));
-    expect(mem).toContain('Clienti');
-    expect(mem).toContain('Memoria: Revisione');
+    expect(mem).toContain('data-testid="mb-page"'); // «Diario e note» (#368): the documents come from memory:docs
+    expect(mem).toContain('Diario e note');
     expect(mem).toContain('Merged one line');
     setLang('en');
     expect(renderToStaticMarkup(createElement(RulesPage))).toContain('No longer loaded');
-    expect(renderToStaticMarkup(createElement(MemoryPage))).toContain('Customers');
+    expect(renderToStaticMarkup(createElement(MemoryPage))).toContain('Journal &amp; notes');
   });
   it('renders the Memoria statistics with their explanations, and a clean brain says what will appear', () => {
     const stats: NonNullable<BrainModelState['memoryStats']> = {
@@ -126,8 +126,6 @@ describe('pages', () => {
     for (const s of ['Manutenzione', 'Lo sapevi?', 'Come cresce la memoria', 'Skill utili e inutili', 'Mai usata', 'File fermi']) expect(it).toContain(s);
     // the duplicates left (ADR 0122): no key-number row, no recurring-errors block (Qualità and the File tab have them)
     for (const s of ['mm-kpis', 'data-testid="mm-errors"']) expect(it).not.toContain(s);
-    tab('file');
-    expect(renderToStaticMarkup(createElement(MemoryPage))).toContain('ricorrente ×2');
     tab('statistiche');
     // no "richiami" (ADR 0101): a line counted once per run started after it is not a use
     for (const s of ['I ricordi più richiamati', 'Memoria richiamata', 'mm-card-recalls']) expect(it).not.toContain(s);

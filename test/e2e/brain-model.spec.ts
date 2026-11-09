@@ -2,7 +2,7 @@
 // routines sections already migrated into skills: the Skill page (list, migration report, a role switched on from the
 // skill's Ruoli tab and off again), Sempre caricato, Memoria, Classificatori (read-only cards; each detail holds its tables, "nessun dato ancora" where there is none)
 // and Mappa (agent → skills → rules → memory, plus the notes view), then the agent card's 3D flip (click, Esc back) and
-// its fade under reduced motion. Screenshots dark and light in test-results/shots/brain-*.png.
+// its fade under reduced motion; Memoria's «Diario e note» searches the journal. Screenshots dark and light in test-results/shots/brain-*.png.
 import { expect, test, type Page } from '@playwright/test';
 import { goPage, launchDemo, shot } from './helpers';
 
@@ -47,14 +47,25 @@ test('Brain pages: skills with links and undo, rules, memory, classifiers, map; 
     await expect(rules).toContainText('caratteri su');
     await shot(page, 'brain-rules-dark');
 
-    // ── Memoria: knowledge, what happened, the agents' memories; "Unisci i doppioni"
+    // ── Memoria → Diario e note (#368, ADR 0245): now.md, the journal, ideas, errors and notes, searchable
     await goPage(page, 'memoria');
     const memory = page.getByTestId('bm-memory-page');
-    await memory.getByTestId('mh-tab-file').click(); // the files are Memoria's File tab (ADR 0122)
-    for (const s of ['knowledge', 'happened', 'agents']) await expect(memory.getByTestId(`bm-mem-section-${s}`)).toBeVisible();
-    await expect(memory.getByTestId('bm-mem-section-agents').locator('article.catalog-card').first()).toBeVisible();
+    await memory.getByTestId('mh-tab-file').click();
+    const browser = memory.getByTestId('mb-page');
+    await expect(browser.getByTestId('mb-row-now.md')).toBeVisible();
+    await expect(browser.getByTestId('mb-detail')).toContainText('Rimborsi parziali');
+    await browser.getByTestId('mb-search').fill('rimborsi');
+    await expect(browser.getByTestId('mb-list').locator('li')).toHaveCount(2); // now.md and one journal day
+    await browser.getByTestId('mb-list').locator('li').nth(1).locator('button').first().click();
+    await expect(browser.getByTestId('mb-text')).toContainText('scritto il primo test e2e');
+    await browser.getByTestId('mb-search').fill('');
+    await browser.getByTestId('mb-shelf-errors').click();
+    await expect(browser.getByTestId('mb-row-ai-errors.md')).toBeVisible();
     await expect(memory.getByTestId('bm-maint-memory').getByTestId('bm-run')).toHaveCount(0);
     await expect(page.getByTestId('topbar-maint')).toBeVisible();
+    await browser.getByTestId('mb-shelf-all').click();
+    await browser.getByTestId('mb-search').fill('rilascio test');
+    await expect(browser.getByTestId('mb-text')).toBeVisible();
     await shot(page, 'brain-memory-dark');
 
     // ── Classificatori (a section of Qualità since ADR 0210): read only

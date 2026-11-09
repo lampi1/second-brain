@@ -712,8 +712,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'memory-hub',
     title: b('La Memoria, un posto solo', 'Memoria, one place'),
-    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Sempre caricato, Script & Query, Idee, File e Statistiche.',
-      'Memoria is the one place for everything the brain holds: its top is alive (live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Always loaded, Scripts & Queries, Ideas, Files and Statistics.'),
+    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Sempre caricato, Script & Query, Idee, Diario e note e Statistiche.',
+      'Memoria is the one place for everything the brain holds: its top is alive (live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Always loaded, Scripts & Queries, Ideas, Journal & notes and Statistics.'),
     points: [
       // src/renderer/lib/memory-hub.ts, src/renderer/actions.ts, src/renderer/components/Sidebar.tsx
       b('Skill, Regole, Script e Idee non sono più pagine a sé nella barra: sono schede di Memoria (Apprendimento è passato in Andamento); i vecchi link, gli id e i tasti G (G S, G L, G T, G I) aprono la scheda giusta, e «memoria/<scheda>» apre una scheda da un link.',
@@ -726,6 +726,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/brain/pages/Idee.tsx
       b('«Idee» divide le tue da quelle dell’IA (la colonna «Chi» di ideas.md: «IA» è l’IA) e «Rispolvera» ti ripropone a caso un’idea vecchia ancora aperta; sotto, i temi delle idee.',
         '\"Ideas\" splits yours from the AI’s (the \"Chi\" column of ideas.md: \"IA\" is the AI) and \"Dust one off\" brings back an old idea still open at random; below, the ideas’ themes.'),
+      // src/renderer/components/brain-model/MemoryBrowser.tsx, src/main/brainmodel/memory-docs.ts (ADR 0245)
+      b('«Diario e note» mostra la memoria fuori dalle skill: Adesso (now.md), i giorni del diario dal più recente, le idee, gli errori dell’AI e le note di conoscenza, divisi in scaffali. La ricerca trova i documenti che hanno tutte le parole (senza badare ad accenti e maiuscole), dice quante righe corrispondono e le evidenzia nel testo; «Apri nel visore» apre il file. Sola lettura, le righe con credenziali restano nascoste.',
+        '\"Journal & notes\" shows the memory outside skills: Now (now.md), the journal days newest first, the ideas, the AI’s errors and the knowledge notes, on shelves. The search finds the documents holding every word (accents and case ignored), says how many lines match and highlights them in the text; \"Open in the viewer\" opens the file. Read-only, lines with credentials stay hidden.'),
       b('La Dashboard non c’è più: i contatori sono in cima a Memoria, il contesto delle chat in Costi, gli errori dell’app e i temi degli errori in Qualità, gli spunti dell’AI in Idee; il resto erano doppioni.',
         'The Dashboard is gone: the counters are at the top of Memoria, the chats’ context in Costi, the app’s errors and the errors’ themes in Quality, the AI’s tips in Ideas; the rest were duplicates.'),
       // src/renderer/components/brain-model/RecallCheckCard.tsx, src/main/rules/recall-check.ts (ADR 0235)
@@ -746,8 +749,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       0: ['src/renderer/lib/memory-hub.ts', 'src/renderer/components/Sidebar.tsx'],
       2: ['src/renderer/components/brain-model/ApprovedTab.tsx'],
       3: ['src/renderer/brain/pages/Idee.tsx'],
+      4: ['src/renderer/components/brain-model/MemoryBrowser.tsx', 'src/main/brainmodel/memory-docs.ts'],
     },
-    sources: ['src/renderer/components/brain-model/MemoryPage.tsx', 'src/renderer/components/brain-model/ApprovedTab.tsx', 'src/renderer/lib/memory-hub.ts', 'src/renderer/brain/pages/Idee.tsx', 'src/renderer/components/ContextNow.tsx', 'src/renderer/dashboard/AppErrors.tsx', 'src/main/brainmodel/service.ts'],
+    sources: ['src/renderer/components/brain-model/MemoryPage.tsx', 'src/renderer/components/brain-model/MemoryBrowser.tsx', 'src/main/brainmodel/memory-docs.ts', 'docs/adr/0245-memory-browser.md', 'src/renderer/components/brain-model/ApprovedTab.tsx', 'src/renderer/lib/memory-hub.ts', 'src/renderer/brain/pages/Idee.tsx', 'src/renderer/components/ContextNow.tsx', 'src/renderer/dashboard/AppErrors.tsx', 'src/main/brainmodel/service.ts'],
   },
   {
     id: 'tasks',

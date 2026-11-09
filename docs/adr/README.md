@@ -249,3 +249,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0242](0242-role-skill-instead-of-role-notes.md) A role's know-how is its role skill; what it learns is a lesson the user approves — accepted
 - [0243](0243-fixed-core-instead-of-rules.md) Rules are gone: a fixed core is always loaded, everything else is a skill — accepted
 - [0244](0244-migration-moves-sections-into-skills.md) The migration moves a section into its skill, it no longer copies it — accepted
+- [0245](0245-memory-browser.md) Memoria shows the memory outside skills as one searchable shelf — accepted

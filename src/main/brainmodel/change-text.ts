@@ -7,6 +7,8 @@ import { uiLang } from '../locale';
 
 interface ChangeText {
   newSkill(p: { name: string; file: string; title: string }): string;
+  movedOut(p: { file: string; skills: string[] }): string;
+  alreadyIn(p: { file: string; title: string; skill: string }): string;
   lesson(p: { skill: string; rule: string }): string;
   newRule(p: { rule: string }): string;
   candidate(p: { name: string; n: number }): string;
@@ -18,6 +20,8 @@ interface ChangeText {
 const TEXT: Readonly<Record<Lang, ChangeText>> = {
   it: {
     newSkill: p => `Nuova skill «${p.name}» da ${p.file} (${p.title})`,
+    movedOut: p => `${p.file}: ${p.skills.length} sezioni spostate nelle skill ${p.skills.join(', ')}`,
+    alreadyIn: p => `${p.file}: sezione «${p.title}» tolta, è già nella skill ${p.skill}`,
     lesson: p => `Lezione aggiunta alla skill «${p.skill}»: ${p.rule}`,
     newRule: p => `Nuova regola: ${p.rule}`,
     candidate: p => `Skill candidata «${p.name}» da ${p.n} richieste`,
@@ -27,6 +31,8 @@ const TEXT: Readonly<Record<Lang, ChangeText>> = {
   },
   en: {
     newSkill: p => `New skill «${p.name}» from ${p.file} (${p.title})`,
+    movedOut: p => `${p.file}: ${p.skills.length} sections moved into the skills ${p.skills.join(', ')}`,
+    alreadyIn: p => `${p.file}: section «${p.title}» taken out, it is already in the skill ${p.skill}`,
     lesson: p => `Lesson added to the skill «${p.skill}»: ${p.rule}`,
     newRule: p => `New rule: ${p.rule}`,
     candidate: p => `Candidate skill «${p.name}» from ${p.n} requests`,
@@ -36,6 +42,8 @@ const TEXT: Readonly<Record<Lang, ChangeText>> = {
   },
   de: {
     newSkill: p => `Neuer Skill «${p.name}» aus ${p.file} (${p.title})`,
+    movedOut: p => `${p.file}: ${p.skills.length} Abschnitte in die Skills ${p.skills.join(', ')} verschoben`,
+    alreadyIn: p => `${p.file}: Abschnitt «${p.title}» entfernt, er ist schon im Skill ${p.skill}`,
     lesson: p => `Lektion zum Skill «${p.skill}» hinzugefügt: ${p.rule}`,
     newRule: p => `Neue Regel: ${p.rule}`,
     candidate: p => `Skill-Kandidat «${p.name}» aus ${p.n} Anfragen`,

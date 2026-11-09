@@ -143,7 +143,7 @@ export const INVOKE_CHANNELS = [
   'update:get', 'update:apply', 'update:checkpointAnswer', 'update:recovery', 'update:recoveryAck',
   'app:createBrain', 'app:projectsFolder', 'app:pickProjects', 'worktrees:usage', 'worktrees:cleanup',
   'chat:autoCloseGet', 'chat:autoClosePresence', 'chat:autoCloseKeep',
-  'chat:synthesize', 'memory:reviewList', 'memory:recallCheck', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare', 'proposals:list', 'proposals:count', 'proposals:decide',
+  'chat:synthesize', 'memory:reviewList', 'memory:recallCheck', 'memory:docs', 'memory:retract', 'memory:delete', 'learning:evidence', 'learning:state', 'learning:import', 'learning:replay', 'learning:saveCandidate', 'learning:promote', 'learning:compare', 'proposals:list', 'proposals:count', 'proposals:decide',
   'maintenance:run', 'maintenance:status', 'maintenance:stop',
   'agents:list', 'agents:undo', 'agents:save', 'agents:reset', 'agents:history', 'agents:metrics', 'agents:estimates', 'agents:judgingEstimate', 'run:outcome', 'agents:restoreVersion', 'avatars:get', 'avatars:set', 'avatars:reset', 'setup:get', 'setup:save', 'profile:get', 'profile:save',
   'app:info', 'app:usage', 'cli:status', 'cli:login', 'app:pickBrain', 'app:pickRepo', 'app:showInFolder', 'app:copyFile', 'app:readFile', 'app:readFileDiff', 'app:askImage', 'chat:list', 'chat:items', 'chat:pending', 'chat:create', 'chat:createRouted', 'chat:send', 'chat:answer', 'chat:plan', 'chat:stop',
