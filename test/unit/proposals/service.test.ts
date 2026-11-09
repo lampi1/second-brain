@@ -11,6 +11,8 @@ import { ProposalsService } from '../../../src/main/proposals/service';
 import { CHANGE_WINDOW_MS, SOURCES, type ProposalPorts } from '../../../src/main/proposals/sources';
 import type { SkillCandidateView } from '../../../src/shared/learning-review';
 import type { ResearchProposal } from '../../../src/shared/maintenance-research';
+import { proposalsEn } from '../../../src/renderer/i18n/areas/proposals.en';
+import { proposalsIt } from '../../../src/renderer/i18n/areas/proposals.it';
 import type { BrainChange } from '../../../src/shared/brain-model';
 
 const NOW = Date.parse('2026-10-20T10:00:00Z');
@@ -189,5 +191,19 @@ describe('ProposalsService', () => {
     expect(items.find(c => c.id === 'research:f1')).toMatchObject({ group: 'skill', never: 'role', why: { code: 'never', what: 'role' } });
     expect(items.find(c => c.id === 'research:f2')).toMatchObject({ never: 'forget', why: { code: 'never', what: 'forget' } });
     expect(items.find(c => c.id === 'research:f3')!.never).toBeUndefined();
+  });
+
+  it('says which issue drafts approving opens and which stay text only', async () => {
+    const base = { chatId: null, adds: '', removes: '', why: 'w', evidence: [], sources: [], expected: '', risk: '', at: NOW - H, state: 'open' };
+    const research = { list: () => [
+      { ...base, id: 'i1', kind: 'app-idea', title: 'Ricerca nel Log', issue: { title: 'Log: search box', body: 'b', repo: 'lampi1/second-brain' } },
+      { ...base, id: 'i2', kind: 'forget', title: 'Dimenticare la skill x', forget: { what: 'skill', name: 'x', lastUsed: null, uses: 0 }, issue: { title: 'Dimenticare la skill x', body: 'b', repo: null } },
+    ] as never, approve: () => '', reject: () => {}, repo: () => 'lampi1/second-brain' };
+    const { p } = ports({ research });
+    const items = (await new ProposalsService({ ports: p, userData: tmp() }).list()).items;
+    expect(items.find(c => c.id === 'research:i1')!.issueDrafts).toMatchObject([{ title: 'Log: search box', opens: true }]);
+    expect(items.find(c => c.id === 'research:i2')!.issueDrafts).toMatchObject([{ title: 'Dimenticare la skill x', opens: false }]);
+    // a text-only draft has no separate approval: its label must not promise one
+    for (const words of [proposalsIt, proposalsEn]) expect(words['proposals.issueDraft']).not.toMatch(/separat/i);
   });
 });

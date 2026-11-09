@@ -82,8 +82,9 @@ export interface ResearchDeps {
     /** the «riuscito se…» check (BrainModelService.checkOutcomes, ADR 0194): the changes that got worse; absent = none */
     outcomes?(): ResearchRevert[] };
   chats: { create(req: NewChat): Promise<ChatSummary>; get(id: string): ChatSummary | undefined; stop(id: string): Promise<void> };
-  /** opens an approved app card's issue on GitHub (issue-open.ts); absent = app cards cannot be approved */
-  issues?: { open(repo: string, issue: ResearchIssue): Promise<IssueOpened> };
+  /** opens an approved app card's issue on GitHub (issue-open.ts); absent = app cards cannot be approved; review = only
+   *  the pre-filled page, the user submits it */
+  issues?: { open(repo: string, issue: ResearchIssue, o?: { review?: boolean }): Promise<IssueOpened> };
   /** writes an app idea to the brain's Idee, on the AI's side (brain/save-idea.ts); absent = not written */
   saveIdea?: (idea: { title: string; body: string; why: string }) => Promise<void>;
   /** the button and the Proposte deck read again */
@@ -636,12 +637,15 @@ export class ResearchService {
       if (!p.issue || !repo || !this.d.issues) throw new Error('Repository dell\'app sconosciuto: la issue non si può aprire.');
       if (p.issue.repo && p.issue.repo !== repo) throw new Error('Il repository è cambiato: prepara una nuova proposta.');
       if (p.issue.duplicateOf) throw new Error('Issue già aperta: non verrà creata una copia.');
+      let review = false;
       if (this.d.openIssues) {
         const current = await this.d.openIssues(repo);
         if (matchingIssue(p.issue.title, current)) throw new Error('Issue già aperta: non verrà creata una copia.');
-        if (current.status !== 'checked') throw new Error('dedup da verificare: impossibile rileggere le issue aperte.');
+        // the open issues could not be read again (offline, private repository, GitHub's hourly limit): never created
+        // blindly, the pre-filled page lets the user look for a copy before submitting
+        review = current.status !== 'checked';
       }
-      const opened = await this.d.issues.open(repo, p.issue);
+      const opened = await this.d.issues.open(repo, p.issue, review ? { review } : undefined);
       // a second click while gh was working finds the card decided already
       if (this.store.get(id)?.state !== 'open') return opened.url;
       this.store.update(id, { state: 'approved', decidedAt: this.now(), issueUrl: opened.url });

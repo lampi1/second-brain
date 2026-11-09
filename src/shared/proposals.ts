@@ -93,8 +93,9 @@ export interface ProposalProvenance {
 }
 
 export interface Proposal {
-  /** Ready drafts, not a side effect of approving a brain change. App issue approval remains a separate explicit action. */
-  issueDrafts?: ResearchIssue[];
+  /** Ready issue texts. opens: approving this card opens it (an app card); false = text only, approving never
+   *  publishes it and nothing else does. */
+  issueDrafts?: (ResearchIssue & { opens: boolean })[];
   rank?: number;
   /** stable: `<source>:<id in its source>` */
   id: string;

@@ -2,7 +2,8 @@
 import type { proposalsIt } from './proposals.it';
 type N = { n: number };
 export const proposalsDe: typeof proposalsIt = {
-  'proposals.issueDraft': 'Issue-Entwurf · einzeln zu genehmigen',
+  'proposals.issueDraft': 'Issue-Entwurf · nur Text, die Genehmigung veröffentlicht ihn nicht',
+  'proposals.issueOpens': 'Issue · wird beim Genehmigen geöffnet',
   'proposals.dedupUnknown': 'Duplikatprüfung nicht verifiziert',
   'proposals.dedupChecked': 'Offene Issues gelesen; automatische Titelprüfung abgeschlossen',
   'proposals.repoUnknown': 'Repository nicht verifiziert',

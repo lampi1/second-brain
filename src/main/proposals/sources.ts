@@ -299,7 +299,7 @@ function candidateCard(p: ProposalPorts, c: BrainCandidateView): Proposal {
   const items = c.items.map(x => ({ finding: x.kind, title: x.title, ...(x.success ? { success: x.success } : {}) }));
   const chat = p.chats().find(x => x.id === c.chatId);
   return card('research', c.id, {
-    issueDrafts: c.items.flatMap(x => x.issue ? [x.issue] : []),
+    issueDrafts: c.items.flatMap(x => x.issue ? [{ ...x.issue, opens: false }] : []),
     group: 'brain', applied: false, title: items.map(x => x.title).join(' · ').slice(0, 300) || c.id,
     // the card's content is what the user decides on: the findings it gathers (main refuses a card that changed since)
     content: items.map(x => `- ${x.title}`).join('\n'),
@@ -324,7 +324,7 @@ const research: Source = {
       const issue = !!x.issue && !x.change && (x.kind === 'app-idea' || x.kind === 'app-bug' || x.kind === 'bold');
       const repo = issue ? p.research!.repo?.() ?? null : null;
       return card('research', x.id, {
-        ...(x.issue ? { issueDrafts: [x.issue] } : {}), ...(x.rank ? { rank: x.rank } : {}),
+        ...(x.issue ? { issueDrafts: [{ ...x.issue, opens: issue }] } : {}), ...(x.rank ? { rank: x.rank } : {}),
         group: issue ? 'issue' : researchGroup(x) ?? (x.kind === 'bold' ? RESEARCH_GROUP[x.change?.target ?? 'rule'] ?? 'rule' : RESEARCH_GROUP[x.kind] ?? 'rule'), applied: false, title: issue ? x.issue!.title : x.title, content: researchContent(x),
         // «riuscito se…» (ADR 0194) is said with what to expect
         ask: { kind: 'research', finding: x.kind, adds: x.adds, removes: x.removes, why: x.why, expected: [x.expected, x.success?.text ?? ''].filter(Boolean).join(' '), risk: x.risk, evidence: x.evidence, sources: x.sources, ...(x.roleTrial ? { trial: true } : {}) },

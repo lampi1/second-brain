@@ -102,6 +102,18 @@ describe('ResearchService', () => {
     await t.svc.start(opts);
     expect(() => t.svc.propose('c2', { ...idea, title: 'Different wording' })).toThrow(/Duplicate issue/);
   });
+  it('falls back to the pre-filled browser page when the open issues cannot be read again', async () => {
+    const reviews: (boolean | undefined)[] = [];
+    const t = setup({
+      openIssues: async repo => ({ repo, at: NOW, status: 'unverified', note: 'dedup da verificare: GitHub HTTP 403', issues: [] }),
+      issues: { open: async (repo, _issue, o) => { reviews.push(o?.review); return { url: `https://github.com/${repo}/issues/new?title=x`, via: 'browser' }; } },
+    });
+    await t.svc.start(opts);
+    const p = t.svc.propose('c1', idea);
+    expect(await t.svc.approve(p.id)).toBe('https://github.com/lampi1/second-brain/issues/new?title=x');
+    expect(reviews).toEqual([true]);
+    expect(t.svc.store.get(p.id)).toMatchObject({ state: 'approved' });
+  });
   it('limits the combined research families to seven ranked cards', async () => {
     const t = setup(); await t.svc.start(opts);
     for (let n = 0; n < 5; n++) t.svc.propose('c1', { kind: 'rule', title: `Unique ${n}`, adds: `Rule ${n}`, why: 'Evidence', change: { text: `Rule ${n}` } });

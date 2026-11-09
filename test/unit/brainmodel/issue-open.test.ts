@@ -34,6 +34,13 @@ describe('openIssue', () => {
     expect(u.searchParams.get('body')).toBe('Context\n\nSteps');
     expect(u.searchParams.get('labels')).toBe('enhancement');
   });
+  it('skips gh and leaves the final submit to the user when asked for a review in the browser', async () => {
+    const calls: string[][] = [], opened: string[] = [];
+    const r = await openIssue('lampi1/second-brain', issue, { run: async args => { calls.push(args); return 'https://github.com/lampi1/second-brain/issues/9'; }, openUrl: async u => { opened.push(u); } }, { review: true });
+    expect(r.via).toBe('browser');
+    expect(calls).toEqual([]);
+    expect(opened).toEqual([r.url]);
+  });
   it('refuses a strange repository and cuts a long body to fit the link', async () => {
     await expect(openIssue('a b/c', issue, { run: async () => '', openUrl: async () => {} })).rejects.toThrow(/Repository/);
     const url = newIssueUrl('lampi1/second-brain', { title: 't', body: 'x'.repeat(20_000) });

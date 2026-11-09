@@ -758,9 +758,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     chats: { create: req => manager.create(req, 'app'), get: id => manager.list().find(c => c.id === id), stop: id => manager.stop(id) },
     // an approved «Apri issue» card: gh with the user's own login, else GitHub's new-issue page already filled in; an
     // agent's hidden run never reaches GitHub (it records the page like any link it would open)
-    issues: { open: (repo, issue) => openIssue(repo, issue, hiddenRun()
+    issues: { open: (repo, issue, o) => openIssue(repo, issue, hiddenRun()
       ? { run: () => Promise.reject(new Error('hidden run')), openUrl: async url => { hiddenOpened.push(`external ${url}`); } }
-      : { run: ghRun, openUrl: url => shell.openExternal(url) }) },
+      : { run: ghRun, openUrl: url => shell.openExternal(url) }, o) },
     saveIdea: idea => saveAiIdea({ root: brain.info().brainRoot, userData: ctx.userData, ...idea, source: 'Manutenzione' }),
     changed: () => ctx.emitter.emit('maintenance:changed', undefined),
     done: d => ctx.emitter.emit('maintenance:done', d),
