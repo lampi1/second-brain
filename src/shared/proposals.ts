@@ -44,6 +44,8 @@ export type ProposalAsk =
     many?: number }
   /** a skill draft to add to the brain */
   | { kind: 'skill'; name: string }
+  /** a lesson a role learned, for a skill (#365): its own skill (ruolo-<id>, read at every start) or the task's */
+  | { kind: 'lesson'; skill: string; role: string; own: boolean }
   /** something the app already changed by itself: what, how, on which item (a role id for a role or its memory) */
   | { kind: 'applied'; what: 'skill' | 'agent' | 'rule' | 'memory' | 'script' | 'query'; action: 'create' | 'update' | 'merge' | 'link' | 'unlink' | 'remove'; name: string; role?: string }
   /** an agent asks to change a protected setting */

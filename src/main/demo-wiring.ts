@@ -46,6 +46,7 @@ import type { Ctx, Wired } from './wiring-types';
 import { attachHeldNews } from './chats/held-news';
 import { SkillsService } from './skills/service';
 import { SkillLibrary } from './skills/library';
+import { SkillLessons } from './skills/lessons';
 import { templateRoot } from './rules/tools';
 import { demoSkillsHome } from './skills/demo';
 import { createEngines } from './engines/service';
@@ -300,6 +301,13 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     changes: () => brainModel.log, undo: id => { brainModel.rollback(id); }, roles: () => agents.list().profiles, link: (s, r, on) => { brainModel.link(s, r, on); },
     runs: () => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...demoAgentRuns(now())], changed: () => ctx.emitter.emit('brainmodel:changed', undefined), unify: false,
     guard: async () => null });
+  // two lessons waiting in Proposte (#365): one for a role's own skill, one for a task skill
+  const skillLessons = new SkillLessons({ file: path.join(ctx.userData, 'skill-lessons.json'), library: () => skillLibrary, now,
+    roleName: id => agents.list().profiles.find(p => p.id === id)?.name ?? id, changed: () => ctx.emitter.emit('brainmodel:changed', undefined) });
+  if (!skillLessons.all().length) {
+    skillLessons.propose({ role: 'scout', text: 'Nei log del servizio la riga utile è quella con il codice di correlazione: filtra per quello prima di leggere il resto.' });
+    skillLessons.propose({ role: 'artisan', skill: 'cercare-un-cliente-con-lookup', text: 'Se il cliente ha più licenze, chiedi quale prima di cercare nel database.' });
+  }
 
   // the morning block (ADR 0102) over the demo's made-up history
   const morning = new MorningService({ file: path.join(ctx.userData, 'morning.json'), now, chats: () => chats.list(), runs: () => demoAgentRuns(now()),
@@ -310,7 +318,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
 
   return {
     morning,
-    chats, browser, recordings, learn, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, skillLibrary, source, engines, later: createLater(ctx),
+    chats, browser, recordings, learn, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, engines, later: createLater(ctx),
     agents, runFeedback, agentLifecycle, agentPacks, brainModel, research, queries, memoryReview, recallCheck: { state: async () => demoRecallCheck(now()) }, learningReview,
     setup: new SetupService(ctx.userData, true, now),
     worktreePool: demoWorktreePool(),

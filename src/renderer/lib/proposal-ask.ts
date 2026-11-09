@@ -56,6 +56,12 @@ export function cardWords(c: Pick<Proposal, 'ask' | 'title' | 'content' | 'appli
     }
     case 'skill':
       return { question: t('proposals.ask.skill', { name: a.name }), yes: t('proposals.yes.skill'), no: t('proposals.no.skill'), lead: '' };
+    case 'lesson': {
+      // a role's lesson (#365): the line is the card's body; its own skill is read at every start, a task skill when it fits
+      const name = who(a.role);
+      return { question: a.own ? t('proposals.ask.lessonOwn', { who: name }) : t('proposals.ask.lesson', { who: name, skill: a.skill }), who: name,
+        yes: a.own ? t('proposals.yes.lessonOwn', { who: name }) : t('proposals.yes.lesson', { skill: a.skill }), no: t('proposals.no.lesson'), lead: '', bodyLabel: t('proposals.lesson.body') };
+    }
     case 'applied':
       return { question: t('proposals.ask.applied', { what: a.what, action: a.action, name: a.name, ...(a.role ? { role: who(a.role) } : {}) }),
         yes: t('proposals.yes.applied'), no: t('proposals.no.applied'), lead: c.title, bodyLabel: t('proposals.why') };

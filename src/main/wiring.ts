@@ -42,7 +42,6 @@ import { memoryTools } from './rules/memory-tool';
 import { RecallCheck } from './rules/recall-check';
 import { launchExamples } from './agents/run-examples';
 import { MemoryService } from './rules/memory-service';
-import { writeAgentMemory } from './rules/memory';
 import type { AgentRun } from '../shared/agents';
 import { mountTextTool, TEXT_ENV } from './engines/text-mcp';
 import { agentsMayOpen, crossRefusal, engineOn, openRefusal } from './engines/policy';
@@ -55,6 +54,7 @@ import { ChatManager, workBehind } from './chats/manager';
 import type { BrainService, ChatService } from './services';
 import { SkillsService } from './skills/service';
 import { SkillLibrary } from './skills/library';
+import { SkillLessons } from './skills/lessons';
 import { ensureTools, isProduct } from './rules/tools';
 import { appSkillsIn } from './agents/pack/shared-skills';
 import { BrainModelService } from './brainmodel/service';
@@ -233,7 +233,11 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // agent_learn_propose on a work chat's endpoint: only its own role's lessons, queued for the Orchestrator and the user
   const skillTools = () => brainModelRef.current?.skillTools() ?? [];
   addChatTools([agentCatalogTool(() => agents.list(), skillTools), chatLearnTool(agentPacks.learning, () => manager.runs.list()), brainSearchTool(async (q, o) => { await memoryReview.retryInvalidations(); return hybrid.query(q, o); }), brainScriptsTool(brainScripts), brainQueriesTool(brainQueries)]);
-  addChatTools(memoryTools({ root: () => agentPacks.packs.root(), recall: (scope, query, options) => memoryReview.recall(scope, query, options), context: chatId => {
+  // what a role learns becomes a lesson for a skill, decided in Proposte (#365, ADR 0242); the library comes later
+  const lessonLib: { current: SkillLibrary | null } = { current: null };
+  const skillLessons = new SkillLessons({ file: path.join(ctx.userData, 'skill-lessons.json'), library: () => lessonLib.current,
+    roleName: id => agents.list().profiles.find(p => portableId(p.id) === id)?.name ?? id, changed: () => ctx.emitter.emit('brainmodel:changed', undefined) });
+  addChatTools(memoryTools({ root: () => agentPacks.packs.root(), lessons: p => skillLessons.propose(p), recall: (scope, query, options) => memoryReview.recall(scope, query, options), context: chatId => {
     const chat = manager.list().find(c => c.id === chatId);
     if (!chat || chat.agent?.source !== 'catalog' || chat.isOrchestrator || !chat.run) return null;
     return { scope: { roleId: portableId(chat.agent.id), project: chat.cwd }, sourceRunId: chat.run.runId };
@@ -624,7 +628,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     integrate: async (parent, child) => stageDelegatedChanges(delegateWorktrees.allocation(parent, child), parent, child, brain.info().brainRoot),
     integrateMany: async (parent, children) => stageDelegatedChangesMany(children.map(child => ({ owned: delegateWorktrees.allocation(parent, child), child })), parent, brain.info().brainRoot), chats: manager, roles: () => agents.list(), settings: () => checkedDelegation(brain.settings().delegation),
     engineRefusal: (from, to) => openRefusal(brain.settings(), from, to), balancedMode, label: AGENT_LABEL, runs: () => manager.runs.list(), worktrees: gitWorktrees, skillTools,
-    remember: (roleId, line, chat) => writeAgentMemory(agentPacks.packs.root(), portableId(roleId), line, { scope: { roleId: portableId(roleId), project: chat.cwd }, sourceRunId: chat.run?.runId ?? `chat:${chat.id}`, sourceEventId: `report:${chat.run?.runId ?? chat.id}` }) }));
+    remember: (roleId, line, chat) => { skillLessons.propose({ role: portableId(roleId), text: line, chatId: chat.id, ...(chat.run?.runId ? { runId: chat.run.runId } : {}) }); } }));
   // a Strategist's plan with the user (ADR 0108): proposed on its strip, approved by the user's click, its steps' progress
   addChatTools(strategyTools(manager, awayOn));
   // the yes/no question of a chat whose engine has no question tool of its own (OpenCode over ACP)
@@ -797,7 +801,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     appSkills: () => { const r = brain.info().brainRoot; if (!r || !isProduct(r)) return null; try { return appSkillsIn(ensureTools(r)); } catch { return null; } },
     changes: () => brainModel.log, undo: id => { brainModel.rollback(id); }, roles: () => agents.list().profiles, link: (s, r, on) => { brainModel.link(s, r, on); },
     runs: () => manager.runs.list(), changed: () => ctx.emitter.emit('brainmodel:changed', undefined), unify: !process.env.SB_TEST });
-  appDeps.skillLibrary = skillLibrary;
+  appDeps.skillLibrary = skillLibrary; lessonLib.current = skillLibrary;
   // the one-click maintenance (ADR 0132, 0153): the free cleanup, the invisible research chat, its cards in Proposte
   const issuesUrl = issuesUrlOf(app.getAppPath()), appIssuesUrl = () => issuesUrl;
   const research = new ResearchService({ guideRepo: () => repoRootOf(path.dirname(fileURLToPath(import.meta.url))), userData: ctx.userData, lang: uiLang, root: () => brain.info().brainRoot, appVersion: () => app.getVersion(), issuesUrl: appIssuesUrl, appDir: () => app.getAppPath(),
@@ -854,7 +858,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
     phonePort: createPhonePort(manager, ctx.emitter),
     worktreePool,
-    chats, browser, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, skillLibrary, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
+    chats, browser, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : null),
       checkpoint: () => manager.checkpointForUpdate(),

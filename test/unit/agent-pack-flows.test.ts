@@ -8,7 +8,6 @@ import { AgentCatalogService } from '../../src/main/agents/catalog';
 import { ROLE_DEFAULTS, ROLE_IDS } from '../../src/shared/roles';
 import { skillsIn } from '../../src/main/agents/pack/shared-skills';
 import { AgentPackFlows } from '../../src/main/agents/pack/flows';
-import { log } from '../../src/main/log';
 import { confirmMemory, proposeMemory } from '../../src/main/rules/memory-records';
 import { AgentPackLearning, agentLearnTool, chatLearnTool, lessonReviewTool } from '../../src/main/agents/pack/learning';
 import { type AgentDraft, type AgentModelChoice, type AgentProfile, type AgentRun } from '../../src/shared/agents';
@@ -92,40 +91,33 @@ describe('role know-how at launch', () => {
     expect(runtime.instructions).not.toContain('Skill tool');
     expect(runtime.instructions).not.toContain('learned-rules');
   });
-  it('uses the launch task to select confirmed memory and advertises searchable omitted records', () => {
-    const f = setup(), info = vi.spyOn(log, 'info');
-    for (const value of ['Database migrations use the migration runner.', 'Invoices use the accounting workbook.']) {
-      const record = proposeMemory(f.brain, { scope: { roleId: 'sentinel', project: f.brain }, subject: 'setup', predicate: 'note', value,
-        sourceEventId: 'memory-proposal:runtime', sourceRunId: 'run-runtime' });
-      confirmMemory(f.brain, record.memoryId, { sourceEventId: 'human:review', sourceRunId: 'human:review', evidence: 'Checked the repository guide' });
-    }
-    const runtime = f.flows.runtime('sentinel', [], { query: 'Review database migrations', project: f.brain });
-    expect(runtime.memory).toContain('Database migrations'); expect(runtime.memory).not.toContain('Invoices');
-    expect(runtime.memory).toContain('Use memory_recall for scoped history'); expect(runtime.memory).toContain('1 record was not loaded.');
-    expect(runtime.instructions).toContain(runtime.memory);
-    expect(info).toHaveBeenCalledWith('agents', 'Selected launch memory', { data: { selected: 1, omitted: 1, estimatedTokens: expect.any(Number), budgetTokens: 1200 } });
-    const selection = info.mock.calls.find(call => call[1] === 'Selected launch memory');
-    expect(JSON.stringify(selection)).not.toContain(f.brain); expect(JSON.stringify(selection)).not.toContain('database');
-  });
-  it('passes only the host-provided exact memory scope through to launch selection', () => {
-    const f = setup(), scope = { roleId: 'sentinel', project: f.brain, repository: 'repo-a', environment: 'development', userId: 'owner' };
-    const record = proposeMemory(f.brain, { scope, subject: 'database', predicate: 'migration', value: 'Use the local fixture.', sourceEventId: 'proposal', sourceRunId: 'run' });
-    confirmMemory(f.brain, record.memoryId, { sourceEventId: 'human:review', sourceRunId: 'human:review', evidence: 'Checked the repository guide' });
-    expect(f.flows.runtime('sentinel', [], { query: 'database', project: f.brain }).memory).not.toContain('local fixture');
-    const { roleId: _role, ...context } = scope;
-    expect(f.flows.runtime('sentinel', [], { ...context, query: 'database' }).memory).toContain('local fixture');
-    expect(f.flows.runtime('sentinel', [], { ...context, environment: 'production', query: 'database' }).memory).not.toContain('local fixture');
-  });
-  it('gives every engine on-demand recall and memory proposal guidance without autoloading legacy text', () => {
+  it('injects no role notes at launch (#365): confirmed memory records stay on demand through memory_recall', () => {
     const f = setup();
-    expect(f.flows.runtime('sentinel').memory).toContain('no confirmed task matches loaded.');
+    const record = proposeMemory(f.brain, { scope: { roleId: 'sentinel', project: f.brain }, subject: 'setup', predicate: 'note', value: 'Database migrations use the migration runner.',
+      sourceEventId: 'memory-proposal:runtime', sourceRunId: 'run-runtime' });
+    confirmMemory(f.brain, record.memoryId, { sourceEventId: 'human:review', sourceRunId: 'human:review', evidence: 'Checked the repository guide' });
     fs.mkdirSync(path.join(f.brain, 'agents/sentinel'), { recursive: true });
     fs.writeFileSync(path.join(f.brain, 'agents/sentinel/memory.md'), '# Memoria\n\n- 2026-10-20 · Test logs live in out/test\n');
-    const runtime = f.flows.runtime('sentinel');
-    expect(runtime.memory).not.toContain('Test logs live in out/test');
+    const runtime = f.flows.runtime('sentinel', [], { query: 'Review database migrations', project: f.brain });
+    expect(runtime.memory).not.toContain('Database migrations'); expect(runtime.memory).not.toContain('Test logs live in out/test');
+    expect(runtime.context.memory).toMatchObject({ available: false, records: [] });
     expect(runtime.memory).toContain('Use memory_recall for scoped history');
     expect(runtime.memory).toContain('`remember` field of agent_report');
+    expect(runtime.memory).toContain('the user approves');
     expect(runtime.instructions).toContain(runtime.memory);
+  });
+  it('reads the role skill (ruolo-<id>) in full at every start, the Orchestrator\'s too', () => {
+    const f = setup();
+    expect(f.flows.runtime('sentinel').memory).not.toContain('Your role skill');
+    for (const id of ['sentinel', 'orchestrator']) {
+      fs.mkdirSync(path.join(f.brain, `.agents/skills/ruolo-${id}`), { recursive: true });
+      fs.writeFileSync(path.join(f.brain, `.agents/skills/ruolo-${id}/SKILL.md`), `---\nname: ruolo-${id}\ndescription: x\n---\n\n# ${id}\n\n## Lezioni\n\n- Lesson of ${id}.\n`);
+    }
+    const sentinel = f.flows.runtime('sentinel');
+    expect(sentinel.memory).toContain('Your role skill (ruolo-sentinel');
+    expect(sentinel.memory).toContain('- Lesson of sentinel.'); expect(sentinel.memory).not.toContain('name: ruolo-sentinel');
+    expect(sentinel.instructions).toContain('- Lesson of sentinel.');
+    expect(f.flows.runtime('orchestrator').memory).toContain('- Lesson of orchestrator.');
   });
 });
 

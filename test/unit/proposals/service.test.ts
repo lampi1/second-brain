@@ -8,7 +8,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 vi.mock('../../../src/main/log', () => ({ log: { info: vi.fn(), warn: vi.fn() }, errText: (e: unknown) => String(e instanceof Error ? e.message : e) }));
 import { ProposalsService } from '../../../src/main/proposals/service';
-import { CHANGE_WINDOW_MS, SOURCES, type ProposalPorts } from '../../../src/main/proposals/sources';
+import { CHANGE_WINDOW_MS, type ProposalPorts } from '../../../src/main/proposals/sources';
 import type { SkillCandidateView } from '../../../src/shared/learning-review';
 import type { ResearchProposal } from '../../../src/shared/maintenance-research';
 import { proposalsEn } from '../../../src/renderer/i18n/areas/proposals.en';
@@ -59,11 +59,23 @@ describe('ProposalsService', () => {
     expect(more.find(c => c.id === 'candidate:due')!.provenance).toMatchObject({ who: { kind: 'role', id: 'sentinel' }, chat: { id: 'x' } });
   });
 
-  it('memory facts are no cards any more (ADR 0150): no memory source, even with facts waiting', async () => {
-    expect(SOURCES.map(x => x.id)).not.toContain('memory');
-    const { items } = await new ProposalsService({ ports: ports().p, userData: tmp() }).list();
-    expect(items.filter(c => c.source === 'memory')).toEqual([]);
-    expect(await new ProposalsService({ ports: ports().p, userData: tmp() }).decide({ id: 'memory:a', decision: 'approve' })).toMatchObject({ ok: false, error: 'Fonte della proposta non disponibile.' });
+  it('a role\'s lesson is a skill card (#365): its own skill or the task\'s, decided through the lessons', async () => {
+    const decided: [string, boolean][] = [];
+    const lessons = { open: () => [
+      { id: 'l1', at: NOW - H, role: 'scout', skill: 'ruolo-scout', text: 'Filtra per il codice di correlazione.', state: 'open' as const, chatId: 'orc' },
+      { id: 'l2', at: NOW - H, role: 'artisan', skill: 'report-mensile', text: 'Parte dal primo del mese.', state: 'open' as const },
+    ], decide: async (id: string, ok: boolean) => { decided.push([id, ok]); return ok ? 'chg-1' : null; } };
+    const s = new ProposalsService({ ports: ports({ lessons }).p, userData: tmp() });
+    const cards = (await s.list()).items.filter(c => c.source === 'memory');
+    expect(cards.map(c => [c.id, c.group, c.title, c.content])).toEqual([['memory:l1', 'skill', 'ruolo-scout', 'Filtra per il codice di correlazione.'], ['memory:l2', 'skill', 'report-mensile', 'Parte dal primo del mese.']]);
+    expect(cards[0]!.ask).toEqual({ kind: 'lesson', skill: 'ruolo-scout', role: 'scout', own: true });
+    expect(cards[1]!.ask).toMatchObject({ own: false });
+    expect(cards[0]!.provenance.who).toEqual({ kind: 'role', id: 'scout' });
+    expect((await s.decide({ id: 'memory:l1', decision: 'approve' })).ok).toBe(true);
+    expect((await s.decide({ id: 'memory:l2', decision: 'reject' })).ok).toBe(true);
+    expect(decided).toEqual([['l1', true], ['l2', false]]);
+    // without the lessons port there is no memory source
+    expect((await new ProposalsService({ ports: ports().p, userData: tmp() }).list()).items.filter(c => c.source === 'memory')).toEqual([]);
   });
 
   it('decides each card through its source', async () => {

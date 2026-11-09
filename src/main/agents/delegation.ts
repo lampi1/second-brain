@@ -73,8 +73,8 @@ export interface DelegationDeps {
   runs: () => readonly AgentRun[];
   /** the brain's skills with their tools: a part whose skill needs tools its role lacks is said in the answer (#93) */
   skillTools?: SkillToolsSource;
-  /** adds one line to a role's own memory (agents/<id>/memory.md, rules/memory.ts writeAgentMemory): agent_report's
-   *  `remember`; absent = the field is refused */
+  /** proposes one line as a lesson for the role's own skill (skills/lessons.ts, #365): agent_report's `remember`;
+   *  absent = the field is refused */
   remember?: (roleId: string, line: string, chat: ChatSummary) => void;
   /** «Balanced mode» (agents/balanced-mode.ts, ADR 0218): each child's engine from the credits left; absent or off = the card */
   balancedMode?: Pick<BalancedMode, 'enabled' | 'choose' | 'record' | 'status'>;
@@ -358,8 +358,8 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
     return () => {
       let written = 0;
       try { for (const line of lines) { d.remember!(roleId, line, self!); written++; } }
-      catch (e) { log.warn('agents', 'role memory not written', { chat: self!.id, data: { role: roleId, written }, cause: e instanceof Error ? e.message : String(e), hint: 'Check that a brain folder is chosen and writable' }); return written; }
-      log.info('agents', 'role memory written', { chat: self!.id, data: { role: roleId, lines: written } });
+      catch (e) { log.warn('agents', 'role lessons not proposed', { chat: self!.id, data: { role: roleId, written }, cause: e instanceof Error ? e.message : String(e), hint: 'Check that a brain folder is chosen and writable' }); return written; }
+      log.info('agents', 'role lessons proposed', { chat: self!.id, data: { role: roleId, lines: written } });
       return written;
     };
   }
@@ -495,7 +495,7 @@ export function delegationTools(d: DelegationDeps): McpTool[] {
       questions: { type: 'array', items: { ...str, maxLength: 500 }, maxItems: 8 },
       goalChangedByUser: { type: 'boolean', description: 'true when the user wrote to you directly and changed your goal (you followed the user)' },
       newGoal: { ...str, description: 'with goalChangedByUser: the goal the user gave you' },
-      remember: { type: 'array', items: str, maxItems: REMEMBER_MAX, description: 'optional, up to 3 short lines (at most 300 characters each, a longer one is cut with …) for YOUR role\'s memory (read at every launch of your role): general, reusable knowledge a future run would otherwise rediscover or ask again (a procedure, a convention, a how-to, where things are kept). Generalize a specific finding first (no URLs with ports, ticket / PR / commit ids, user paths, dates, branch names): a case-specific line refuses the report. Never the task result' },
+      remember: { type: 'array', items: str, maxItems: REMEMBER_MAX, description: 'optional, up to 3 short lines (at most 300 characters each, a longer one is cut with …) proposed as lessons for YOUR role skill (read in full at every start of your role; the user approves each one in Proposte): general, reusable knowledge a future run would otherwise rediscover or ask again (a procedure, a convention, a how-to, where things are kept). Generalize a specific finding first (no URLs with ports, ticket / PR / commit ids, user paths, dates, branch names): a case-specific line refuses the report. Never the task result' },
     } };
   return [{
     name: 'agent_delegate',

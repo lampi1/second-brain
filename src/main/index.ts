@@ -257,6 +257,7 @@ app.whenReady().then(async () => {
       roles: { list: () => s.agents.list().profiles, resolveTrial: (id: string, decision: 'keep' | 'rollback') => call('agents:trialDecide', { id, decision }) },
       ...(s.agentLifecycle ? { lifecycle: { read: () => s.agentLifecycle!.read({}), decide: (key: string, decision: 'approve' | 'dismiss') => call('agents:lifecycleDecide', { key, decision }) } } : {}),
       policies: { status: async () => { const r = await call('brain:api', { path: '/api/improve' }); return r.ok ? r.data : null; }, act: a => call('learn:act', a) },
+      lessons: { open: () => s.skillLessons.open(), decide: (id: string, approve: boolean) => s.skillLessons.decide(id, approve) },
       ...(s.research ? { research: { list: () => s.research!.cards(), approve: (id: string) => s.research!.approve(id), reject: (id: string) => s.research!.reject(id), repo: () => s.research!.repo(), candidates: () => s.research!.candidateCards() } } : {}),
     },
     ...(s.research ? { clickAt: () => s.research!.clickAt() } : {}),

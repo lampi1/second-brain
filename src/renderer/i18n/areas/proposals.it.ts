@@ -171,6 +171,12 @@ export const proposalsIt = {
   'proposals.ask.skill': ({ name }: { name: string }) => `Aggiungo la skill «${name}» al tuo brain?`,
   'proposals.yes.skill': 'Diventa una skill vera: gli agenti la usano quando serve.',
   'proposals.no.skill': 'La bozza viene cancellata.',
+  'proposals.ask.lessonOwn': ({ who }: { who: string }) => `${who} ha imparato qualcosa: lo aggiungo alla sua skill di ruolo?`,
+  'proposals.ask.lesson': ({ who, skill }: { who: string; skill: string }) => `${who} propone una lezione per la skill «${skill}»: la aggiungo?`,
+  'proposals.yes.lessonOwn': ({ who }: { who: string }) => `Va nelle «Lezioni» della skill di ${who}, letta a ogni suo avvio. Si annulla dalla Cronologia della skill.`,
+  'proposals.yes.lesson': ({ skill }: { skill: string }) => `Va nelle «Lezioni» di «${skill}»: chi la usa la legge. Si annulla dalla Cronologia della skill.`,
+  'proposals.no.lesson': 'La lezione viene scartata e non la ripropone.',
+  'proposals.lesson.body': 'La lezione',
   'proposals.ask.applied': (p: { what: string; action: string; name: string; role?: string }): string => {
     const item = p.what === 'memory' ? (p.role ? `la memoria di ${p.role}` : `la memoria «${p.name}»`) : p.what === 'agent' ? `il ruolo ${p.role ?? p.name}`
       : p.what === 'script' ? `lo script «${p.name}»` : p.what === 'query' ? `la query «${p.name}»` : p.what === 'skill' ? `la skill «${p.name}»` : `la regola «${p.name}»`;

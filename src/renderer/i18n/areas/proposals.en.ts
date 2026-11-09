@@ -171,6 +171,12 @@ export const proposalsEn: typeof proposalsIt = {
   'proposals.ask.skill': ({ name }: { name: string }) => `Add the skill «${name}» to your brain?`,
   'proposals.yes.skill': 'It becomes a real skill: agents use it when needed.',
   'proposals.no.skill': 'The draft is deleted.',
+  'proposals.ask.lessonOwn': ({ who }: { who: string }) => `${who} learned something: add it to its role skill?`,
+  'proposals.ask.lesson': ({ who, skill }: { who: string; skill: string }) => `${who} proposes a lesson for the skill «${skill}»: add it?`,
+  'proposals.yes.lessonOwn': ({ who }: { who: string }) => `It goes to the «Lezioni» of ${who}'s skill, read at every start. Undo it from the skill's History.`,
+  'proposals.yes.lesson': ({ skill }: { skill: string }) => `It goes to the «Lezioni» of «${skill}»: whoever uses it reads it. Undo it from the skill's History.`,
+  'proposals.no.lesson': 'The lesson is dropped and not proposed again.',
+  'proposals.lesson.body': 'The lesson',
   'proposals.ask.applied': (p: { what: string; action: string; name: string; role?: string }): string => {
     const item = p.what === 'memory' ? (p.role ? `${p.role}'s memory` : `the memory «${p.name}»`) : p.what === 'agent' ? `the role ${p.role ?? p.name}`
       : p.what === 'script' ? `the script «${p.name}»` : p.what === 'query' ? `the query «${p.name}»` : p.what === 'skill' ? `the skill «${p.name}»` : `the rule «${p.name}»`;

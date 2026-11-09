@@ -195,6 +195,9 @@ export class SkillLibrary {
   }
   private safe<T>(fn: () => T, fallback: T): T { try { return fn(); } catch { return fallback; } }
 
+  /** Whether a skill of this name exists anywhere (brain, home, app). */
+  async has(name: string): Promise<boolean> { await this.ready(); return !!this.find(String(name)); }
+
   async skill(name: string): Promise<LibSkill> {
     await this.ready();
     const f = this.find(String(name));

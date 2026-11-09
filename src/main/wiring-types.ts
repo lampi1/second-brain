@@ -2,6 +2,7 @@
 // and Wired, every service the app runs on, read by index.ts and its IPC handler groups (src/main/ipc-handlers).
 import type { BrowserWindow } from 'electron';
 import type { SkillLibrary } from './skills/library';
+import type { SkillLessons } from './skills/lessons';
 import type { LearningReviewService } from './brainmodel/learning-review';
 import type { CliStatus, Harness } from '../shared/contract';
 import type { JudgingEstimate } from '../shared/agents';
@@ -91,6 +92,8 @@ export interface Wired {
   skills: SkillsApi;
   /** the skill library (ADR 0241): the Memoria «Skill» tab and the Orchestrator's skill tools */
   skillLibrary: SkillLibrary;
+  /** what roles learn, as lessons for skills decided in Proposte (#365) */
+  skillLessons: SkillLessons;
   /** The local MCP server: browser routes, /mcp/app (app control). */
   mcp: McpServer;
   /** the MCP servers the user added in Settings → Connettori, given to each chat by role (ADR 0086) */
