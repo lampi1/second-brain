@@ -68,6 +68,8 @@ import { AutoCloseService, autoCloseNow } from './chats/auto-close';
 import { AgentLifecycle } from './agents/lifecycle';
 import { createLifecycleApi, mountLifecycleApi } from './agents/lifecycle-api';
 import { MorningService } from './morning/service';
+import { NewsService } from './news/service';
+import { demoNewsAi, demoNewsFetch } from './news/demo';
 import { demoWorktreePool } from './demo-worktrees';
 import { demoAgentRuns } from './demo-agent-runs';
 
@@ -321,8 +323,13 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     tasks: () => tasks.get(), changes: () => brainModel.changes(), api: p => brain.api(p),
     stallMin: () => brain.settings().delegation?.stallMin ?? 10 });
 
+  // Impara «News» (ADR 0264): the real pipeline over a few real stories served offline (news/demo.ts), a fake AI pass
+  const news = new NewsService({ dir: path.join(ctx.userData, 'news'), fetch: demoNewsFetch(now), ai: demoNewsAi(uiLang), noAi: () => null, lang: uiLang, now,
+    changed: state => ctx.emitter.emit('news:changed', state) });
+  if (!news.state().items.length) void news.refresh();
+
   return {
-    morning,
+    morning, news,
     chats, browser, recordings, learn, brain, mcp, mcpServers, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, engines, later: createLater(ctx),
     agents, runFeedback, agentLifecycle, agentPacks, brainModel, research, queries, memoryReview, learningReview,
     setup: new SetupService(ctx.userData, true, now),
@@ -331,7 +338,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     // the demo folders do not exist: made-up branches, so the "Stato" view shows one per chat
     branches: cwds => gitBranches(cwds, c => DEMO_BRANCHES[c.split(/[\\/]/).pop() ?? ''] ?? null),
     cli: () => ({ claude: demoCli('2.3.0 (demo)', 'demo@example.com'), cursor: demoCli('2026.10.01 (demo)', 'demo@example.com') }),
-    shutdown: async () => { engines.stop(); artifacts.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), Promise.resolve(tasks.shutdown()), brain.shutdown(), mcp.close()]); },
+    shutdown: async () => { news.dispose(); engines.stop(); artifacts.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), Promise.resolve(tasks.shutdown()), brain.shutdown(), mcp.close()]); },
     killNow: () => {
       void chats.shutdown(); runner.shutdown(); // the demo starts no processes: stopping its timers is enough
       // SB_DEMO_QUIT_MS: a quit as slow as the real one's blocking taskkill of the CLIs (15-40 s on a loaded PC), so the

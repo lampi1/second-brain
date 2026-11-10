@@ -67,7 +67,7 @@ export function ImparaEnd({ lesson, draft, setDraft, onSend, onReview, onSkip }:
           {!explain && <Cards lesson={lesson} />}
           <div className="ip-row ip-end-acts">
             {first && <Button onClick={() => onReview(stepKey(first.id))} testid="impara-restart"><IconRefresh size={12} />{t('impara.end.restart')}</Button>}
-            <Button variant="primary" onClick={() => go({ page: 'impara' })} testid="impara-new">{t('impara.end.new')}</Button>
+            <Button variant="primary" onClick={() => go({ page: 'impara', arg: 'lezioni' })} testid="impara-new">{t('impara.end.new')}</Button>
           </div>
         </div>
       </div>

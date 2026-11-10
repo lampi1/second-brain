@@ -16,7 +16,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { expect, test } from '@playwright/test';
-import { choose, goPage, launchDemo, shot } from './helpers';
+import { choose, goPage, launchDemo, shot, goImpara } from './helpers';
 
 const PR = 'https://github.com/lampi1/second-brain/pull/251';
 
@@ -24,7 +24,7 @@ test('learn a PR on the blackboard: pieces, check, better explanation, explain i
   test.setTimeout(120_000);
   const { app, page } = await launchDemo();
   try {
-    await goPage(page, 'impara');
+    await goImpara(page);
     await expect(page.getByTestId('impara-start')).toBeVisible();
     await expect(page.getByTestId('impara-lessons').locator('.ip-card')).toHaveCount(3);
     // each card shows its diagram (drawn once mermaid has loaded)
@@ -128,7 +128,7 @@ test('a saved lesson reopens where it was, light theme, rail with numbers beside
   try {
     await page.evaluate(() => window.sb.invoke('settings:set', { theme: 'light' }));
     await page.emulateMedia({ colorScheme: 'light' });
-    await goPage(page, 'impara');
+    await goImpara(page);
     const card = page.getByTestId('impara-lessons').locator('.ip-card', { hasText: 'PR #249' });
     await card.locator('.ip-card-open').click();
     await expect(page.getByTestId('impara-piece-label')).toHaveText('Pezzo 2 di 3');
@@ -164,7 +164,7 @@ test('a topic: who explains in the options line, the web and the files researche
   test.setTimeout(90_000);
   const { app, page } = await launchDemo();
   try {
-    await goPage(page, 'impara');
+    await goImpara(page);
     // who explains: the app's choice, or an engine, its model and effort (remembered), summed up in one line
     const summary = page.getByTestId('impara-options-summary');
     await expect(summary).toContainText('Claude Opus alto');
@@ -226,7 +226,7 @@ test('the review: score, subjects and levels, today’s cards (recall, choice, c
   test.setTimeout(90_000);
   const { app, page } = await launchDemo();
   try {
-    await goPage(page, 'impara');
+    await goImpara(page);
     const home = page.getByTestId('impara-review-home');
     await expect(home).toBeVisible();
     await expect(page.getByTestId('impara-review-due')).toHaveText('2 carte da ripassare oggi');
@@ -317,7 +317,7 @@ test('the tutor beside a lesson (ADR 0190): coach first, «Dimmelo e basta», ci
   test.setTimeout(120_000);
   const { app, page } = await launchDemo();
   try {
-    await goPage(page, 'impara');
+    await goImpara(page);
     await page.getByTestId('impara-lessons').locator('.ip-card', { hasText: 'Come nasce una lezione' }).locator('.ip-card-open').click();
     await expect(page.getByTestId('impara-diagram')).toHaveAttribute('data-nodes', '9');
     await page.getByTestId('impara-unclear').click();
@@ -388,7 +388,7 @@ test('the «Studio» beside a lesson (ADR 0205): saved outputs reopen, a new til
   test.setTimeout(90_000);
   const { app, page } = await launchDemo();
   try {
-    await goPage(page, 'impara');
+    await goImpara(page);
     await page.getByTestId('impara-lessons').locator('.ip-card', { hasText: 'Come nasce una lezione' }).locator('.ip-card-open').click();
     await expect(page.getByTestId('impara-player')).toBeVisible();
     await page.getByTestId('impara-side-studio').click();
@@ -420,7 +420,7 @@ test('the «do something» tiles (ADR 0213): «Esercitati» gives an exercise an
   test.setTimeout(90_000);
   const { app, page } = await launchDemo();
   try {
-    await goPage(page, 'impara');
+    await goImpara(page);
     await page.getByTestId('impara-lessons').locator('.ip-card', { hasText: 'Come nasce una lezione' }).locator('.ip-card-open').click();
     await expect(page.getByTestId('impara-player')).toBeVisible();
     await page.getByTestId('impara-side-studio').click();
@@ -452,7 +452,7 @@ test('the podcast (ADR 0214): two voices, a speed chip that sets the voice speed
   test.setTimeout(90_000);
   const { app, page } = await launchDemo();
   try {
-    await goPage(page, 'impara');
+    await goImpara(page);
     await page.getByTestId('impara-lessons').locator('.ip-card', { hasText: 'Come nasce una lezione' }).locator('.ip-card-open').click();
     await page.getByTestId('impara-side-studio').click();
     await page.getByTestId('impara-studio-podcast').locator('.sd-tile-main').click();

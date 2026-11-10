@@ -2,7 +2,7 @@
 // scripts/demo-brain.mjs) so they always show the current UI with fictional data only: English UI (SB_LANG=en), dark
 // theme, 1600x1000, saved as WebP (< 300 KB each) in docs/screenshots/: the whole window, one part of it, or two parts
 // side by side. The showcase (memory, agent-levels, brain-map, orchestrator-flash, reactions, plan), the app's own pages
-// (voice, log, recordings, classifiers, quality, learn, costs, maintenance) and the rest. Not part
+// (voice, log, recordings, classifiers, quality, learn, news, costs, maintenance) and the rest. Not part
 // of `npm run check`: run by `npm run shots` (its own Playwright config, playwright.shots.config.ts). The app runs hidden
 // (SB_HIDDEN, set by launch()). The 3D map needs WebGL: on a machine without a GPU set
 // SB_E2E_ELECTRON_ARGS="--use-angle=swiftshader --enable-unsafe-swiftshader" (and xvfb-run on Linux).
@@ -12,7 +12,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { StrategyPlan } from '../../src/shared/strategy';
-import { keepQuestionsAside, launch, setQuestionsAside, openOrchestrator, openNotesMap, setSize, waitThumbs, goPage } from '../e2e/helpers';
+import { keepQuestionsAside, launch, setQuestionsAside, openOrchestrator, openNotesMap, setSize, waitThumbs, goPage, goImpara } from '../e2e/helpers';
 // @ts-expect-error plain ESM helper without types
 import { demoBrain } from '../../scripts/demo-brain.mjs';
 
@@ -296,7 +296,7 @@ test('README showcase: the Strategist\'s plan to approve in the questions window
   await save('plan', page.getByTestId('qwin'));
 });
 
-test('README showcase: voice, Log, recordings, classifiers, quality, learn, costs, trends, the maintenance notice', async () => {
+test('README showcase: voice, Log, recordings, classifiers, quality, learn, news, costs, trends, the maintenance notice', async () => {
   test.setTimeout(180_000);
   // the plan's questions window is done: every request from here on is set aside, as a user busy elsewhere would
   await keepQuestionsAside(page);
@@ -354,7 +354,7 @@ test('README showcase: voice, Log, recordings, classifiers, quality, learn, cost
   await save('quality', await frameOf(page.getByTestId('an-panel-qualita').getByTestId('bx-q-trovati')));
 
   // Learn: a saved lesson about a PR on the blackboard, its diagram growing piece by piece
-  await goPage(page, 'impara');
+  await goImpara(page);
   await expect(page.getByTestId('impara-lessons').locator('.ip-card').first()).toBeVisible({ timeout: 30_000 });
   await page.getByTestId('impara-lessons').locator('.ip-card').first().locator('.ip-card-open').click();
   await expect(page.getByTestId('impara-player')).toBeVisible({ timeout: 15_000 });
@@ -362,6 +362,12 @@ test('README showcase: voice, Log, recordings, classifiers, quality, learn, cost
   // the player as it is laid out now (the board, the piece and the Studio beside it), not the Log's column
   const pb = (await page.getByTestId('impara-player').boundingBox())!;
   await save('learn', { x: Math.round(pb.x), y: Math.round(pb.y), width: Math.round(pb.width), height: Math.round(Math.min(pb.height, H - pb.y)) });
+
+  // News: Impara's «Giornale», the AI news in three columns (sections, stories, the open one with why it matters)
+  await page.keyboard.press('Escape');
+  await goImpara(page, 'giornale');
+  await expect(page.getByTestId('news-reader')).toBeVisible({ timeout: 30_000 });
+  await save('news');
 
   // Costs: where the money goes, from the recorded chats, no tokens spent to know it
   await goPage(page, 'costi');

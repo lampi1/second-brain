@@ -225,9 +225,10 @@ app.whenReady().then(async () => {
     await connectors.ready;
     const research = () => { if (!s.research) throw new Error('Manutenzione con ricerca non disponibile.'); return s.research; };
     const learn = () => { if (!s.learn) throw new Error('Impara non è disponibile.'); return s.learn; };
+    const news = () => { if (!s.news) throw new Error('Le News non sono disponibili.'); return s.news; };
   const ctx: HandlerContext = {
     s, win: () => win, emitter, demo, outDir, activity, overlay, profile, agentImages, defaultBrain, updates, workflows, orchestrator,
-    voice, recordings, mcpServers, connectors, research, learn, routinesOf, requireReviewRoot, search, clip, hiddenShell,
+    voice, recordings, mcpServers, connectors, research, learn, news, routinesOf, requireReviewRoot, search, clip, hiddenShell,
     proposals: () => proposals, bumpBrainChoice: () => { brainChoiceRevision++; }, rendererErrors,
   };
   const handlers: Handlers = {

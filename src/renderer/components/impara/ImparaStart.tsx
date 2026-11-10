@@ -5,8 +5,9 @@
 // small chip says which and lets the user pick another); files and folders dropped on it or added with «Aggiungi
 // fonte» are the lesson's sources (lib/impara-files.ts, read here; main/learn/user-files.ts); the options in one line
 // (ImparaOptions.tsx) and one primary button. Under it the review (ImparaReviewHome.tsx, ADR 0189: what is due today,
-// the subjects with their level and quiz), the user's PRs with how far each was studied, and the saved lessons (their
-// diagram as a thumbnail, how far they got, their subject, filtered by subject), each reopening where it was left.
+// the subjects with their level and quiz) and the saved lessons (their diagram as a thumbnail, how far they got, their
+// subject, filtered by subject), each reopening where it was left. The user's PRs have their own tab since ADR 0264
+// (ImparaPrTab.tsx). This is the «Lezioni» tab of Impara (ImparaTabs.tsx).
 // Another page can send the user here with the field filled in (ADR 0190: «Capiscila» from Task, «Spiegamelo» from
 // Memoria, «Imparalo» from the Guide; lib/impara.ts learnAbout), with the subject it belongs to; the user starts it.
 // Used by ImparaPage.tsx.
@@ -15,7 +16,6 @@ import type { LessonFile, LessonKind, LessonStart, LessonSummary } from '@shared
 import { detectKind, startOf } from '@shared/impara-start';
 import { impara, imparaDraft, imparaPrefs, removeLesson, startLesson } from '../../lib/impara';
 import { dragHasFiles, mergeFiles, readDropped, readPicked } from '../../lib/impara-files';
-import { useTasks } from '../../store/tasks';
 import { go } from '../../actions';
 import { askConfirm, toast } from '../../store/ui';
 import { locale, t } from '../../i18n';
@@ -24,6 +24,7 @@ import { IconBook, IconBranch, IconChevronDown, IconEdit, IconFile, IconFolder, 
 import { ImparaReviewHome, SubjectChip } from './ImparaReviewHome';
 import { ImparaOptions } from './ImparaOptions';
 import { ImparaScoreBand } from './ImparaScore';
+import { lessonState as stateChip } from './lesson-state';
 
 const KIND_ICON: Record<LessonKind, ReactNode> = { pr: <IconBranch size={12} />, topic: <IconLightbulb size={12} />, text: <IconEdit size={12} /> };
 
@@ -48,12 +49,6 @@ function Thumb({ code }: { code: string }) {
   return <div className="ip-thumb" aria-hidden="true">{src ? <img src={src} alt="" draggable={false} /> : <span className="ip-thumb-empty"><IconSparkle size={16} /></span>}</div>;
 }
 
-function stateChip(s: LessonSummary) {
-  if (s.state === 'preparing') return <span className="ip-tag blue"><IconSpinner size={10} />{t('impara.state.preparing')}</span>;
-  if (s.state === 'failed') return <span className="ip-tag red">{t('impara.state.failed')}</span>;
-  if (s.done) return <span className="ip-tag green">{t('impara.state.done')}</span>;
-  return s.seen ? <span className="ip-tag amber">{t('impara.state.half')}</span> : <span className="ip-tag">{t('impara.state.new')}</span>;
-}
 
 function LessonCard({ s, subjects }: { s: LessonSummary; subjects: readonly string[] }) {
   const pct = s.planned ? Math.round((s.seen / s.planned) * 100) : 0;
@@ -121,7 +116,6 @@ const nameOf = (p: string) => p.split('/').pop() || p;
 export function ImparaStart() {
   const state = impara.use(s => s.state);
   const prefs = imparaPrefs.use(s => s);
-  const prs = useTasks(s => s?.prs ?? []);
   const [field, setField] = useState('');
   const [force, setForce] = useState<LessonKind | null>(null);
   const [pasted, setPasted] = useState<{ text: string; from: string } | null>(null);
@@ -152,7 +146,6 @@ export function ImparaStart() {
   const lessons = state?.lessons ?? [];
   const subjects = [...new Set(lessons.map(l => l.subject))].sort((a, b) => a.localeCompare(b));
   const shown = only && subjects.includes(only) ? lessons.filter(l => l.subject === only) : lessons;
-  const byPr = new Map(lessons.filter(l => l.pr).map(l => [l.pr!.url, l]));
   const can = state?.canTeach !== false;
   const req = startOf(field, force, { ...(pasted ? { pasted: pasted.text } : {}), hasFiles: files.length > 0, filesAsk: t('impara.go.filesAsk') });
   const ready = !!req;
@@ -221,24 +214,6 @@ export function ImparaStart() {
       {state?.review && <ImparaReviewHome review={state.review} />}
 
       <div className="ip-cols">
-        {prs.length > 0 && (
-          <section className="ip-col-prs">
-            <h3>{t('impara.yourPrs')}</h3>
-            <div className="ip-prs" data-testid="impara-prs">
-              {prs.slice(0, 8).map(p => {
-                const l = byPr.get(p.url);
-                return (
-                  <div key={p.url} className="ip-pr">
-                    <span className="ip-pr-n">!{p.id}</span>
-                    <span className="ip-pr-in"><b>{p.title}</b><span className="ip-muted">{p.repo} · {p.source ?? '?'} → {p.target}</span></span>
-                    {l ? stateChip(l) : <span className="ip-tag amber">{t('impara.state.notStudied')}</span>}
-                    <Button size="s" disabled={!can || busy} onClick={() => (l ? go({ page: 'impara', arg: l.id }) : void begin({ kind: 'pr', prUrl: p.url, ask: '' }))} testid={`impara-pr-${p.id}`}>{l ? t('impara.resume') : t('impara.learn')}</Button>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
         <section className="ip-col-lessons">
           <h3>{t('impara.yourLessons')} <span className="ip-muted">· {t('impara.savedHint')}</span></h3>
           {subjects.length > 1 && (

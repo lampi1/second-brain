@@ -1363,6 +1363,52 @@ export const CONCEPTS: readonly ConceptCard[] = [
     sources: ['src/shared/lesson.ts', 'src/main/learn/service.ts', 'src/main/learn/prompt.ts', 'src/main/compare/headless.ts', 'src/renderer/components/impara/LessonStage.tsx', 'src/renderer/components/impara/ImparaSources.tsx', 'src/renderer/components/impara/ImparaPlayer.tsx', 'docs/adr/0185-impara-lessons.md', 'docs/adr/0188-impara-research-and-animated-board.md', 'src/shared/review.ts', 'docs/adr/0189-impara-subjects-and-spaced-review.md', 'src/renderer/components/impara/ImparaTutor.tsx', 'src/main/appctl/impara.ts', 'docs/adr/0190-impara-tutor-and-entry-points.md', 'src/renderer/components/impara/ImparaStart.tsx', 'src/main/learn/user-files.ts', 'src/shared/quiz.ts', 'src/renderer/components/impara/ImparaQuiz.tsx', 'src/shared/mastery.ts', 'src/renderer/components/impara/ImparaScore.tsx', 'docs/adr/0204-impara-one-field-quiz-kinds-and-score.md', 'src/shared/web-topics.ts', 'docs/adr/0206-impara-file-driven-web-research.md', 'src/shared/lesson-visual.ts', 'src/shared/lesson-studio.ts', 'src/renderer/components/impara/ImparaStudio.tsx', 'docs/adr/0205-impara-studio-visuals-and-quality.md', 'src/main/learn/explain-rules.ts', 'docs/adr/0230-impara-explain-mode.md'],
   },
   {
+    id: 'impara-news',
+    title: b('Impara: il Giornale dell’AI', 'Learn: the AI News'),
+    summary: b('Un giornale breve dell’AI per chi costruisce agenti: fonti scelte lette senza token, la stessa notizia unita, in ordine per te, poi un riassunto con «Perché conta per te» e il costo in token.',
+      'A short AI newspaper for people who build agents: chosen sources read at zero tokens, the same story merged, ranked for you, then a summary with «Why it matters to you» and the cost in tokens.'),
+    points: [
+      // src/renderer/components/impara/ImparaTabs.tsx
+      b('Impara ha tre schede: «Giornale», «Pull Request» e «Lezioni»; G X apre l’ultima usata, la prima volta il Giornale.',
+        'Learn has three tabs: «News», «Pull requests» and «Lessons»; G X opens the one used last, the News the first time.'),
+      // src/main/news/service.ts#refresh, src/main/news/sources.ts
+      b('«Aggiorna» (R) legge circa 28 fonti scelte, senza token: blog e note di rilascio dei laboratori, Claude Code, Codex, Cursor e gli altri harness, le specifiche MCP e Agent Skills, alcune newsletter, Hacker News e Hugging Face Papers per ciò che manca. Perché ciascuna: ADR 0264.',
+        '«Refresh» (R) reads about 28 chosen sources at zero tokens: lab blogs and release notes, Claude Code, Codex, Cursor and the other harnesses, the MCP and Agent Skills specs, a few newsletters, Hacker News and Hugging Face Papers for what is missing. Why each one: ADR 0264.'),
+      // src/main/news/dedup.ts, src/main/news/rank.ts
+      b('La stessa notizia data da più fonti diventa una sola, con la fonte primaria in testa e le altre come link. L’ordine somma novità, peso della fonte, attinenza al tuo lavoro ed eco; sotto ogni notizia «perché è qui» mostra le quattro parti.',
+        'The same story told by several sources becomes one, the primary source first and the others as links. The order adds up recency, the source’s weight, relevance to your work and echo; under each story «why it is here» shows the four parts.'),
+      // src/main/news/summarize.ts
+      b('Poi una sola passata AI (Claude, nessuno strumento) scrive riassunto, «Perché conta per te» e quanto conta per le 30 notizie migliori che non ce l’hanno. In alto quanti token e dollari è costato l’ultimo aggiornamento; con Claude spento le notizie arrivano senza riassunto.',
+        'Then one AI pass (Claude, no tool) writes the summary, «Why it matters to you» and how much it matters for the 30 best stories that lack one. At the top, how many tokens and dollars the last refresh cost; with Claude off the stories arrive without a summary.'),
+      // src/renderer/components/impara/news/NewsPage.tsx
+      b('Tre colonne: sezioni (Prima pagina, Modelli e benchmark, Harness e tool, Skill e agenti, Ricerca, Salvate) con le non lette, le notizie, la notizia aperta con data, fonte e link. J/K si muove, S salva, U letta o da leggere, E «Impara», O apre la fonte; una notizia aperta per un attimo diventa letta.',
+        'Three columns: sections (Front page, Models and benchmarks, Harness and tools, Skills and agents, Research, Saved) with the unread ones, the stories, the open story with date, source and links. J/K moves, S saves, U read or unread, E «Learn», O opens the source; a story open for a moment becomes read.'),
+      // src/renderer/components/impara/news/NewsSources.tsx
+      b('«Fonti» (,) elenca ogni fonte con come la leggo e la sua ultima lettura o l’errore: mettila in pausa, toglila o aggiungine una incollando il link (GitHub, feed o pagina); «Ripristina» riporta l’elenco di base. L’aggiornamento giornaliero è spento finché non lo accendi, con la stima del costo.',
+        '«Sources» (,) lists every source with how it is read and its last reading or the error: pause it, remove it or add one by pasting its link (GitHub, feed or page); «Reset» brings back the default list. The daily refresh is off until you turn it on, with its estimated cost.'),
+      // src/renderer/components/impara/ImparaPrTab.tsx, src/renderer/lib/news.ts#explainStory
+      b('«Impara» su una notizia o su una PR (scheda «Pull Request»: stesse tre colonne, filtri da studiare, a metà, studiate) crea la solita lezione; la notizia ricorda la sua.',
+        '«Learn» on a story or a PR («Pull requests» tab: the same three columns, filters to study, half studied, studied) makes the usual lesson; the story remembers its own.'),
+    ],
+    analogy: b('Come una rassegna stampa preparata ogni mattina da un collega che legge le fonti giuste e ti segna cosa conta per il tuo lavoro.',
+      'Like a press review a colleague prepares each morning from the right sources, marking what matters for your work.'),
+    tech: [
+      tech(FILES, 'userData/news/state.json: fonti, ultima lettura di ciascuna, al massimo 400 notizie per 30 giorni (le salvate sempre), ultimi 20 aggiornamenti; solo titoli, riassunti brevi e link.', 'userData/news/state.json: sources, each one’s last reading, at most 400 stories for 30 days (saved ones always), the last 20 refreshes; only titles, short summaries and links.'),
+      tech(WHERE, 'Pagina G X, scheda Giornale; IPC news:state, news:refresh, news:mark, news:sources, news:schedule, evento news:changed; le letture partono dal processo principale (6 alla volta, 20 s, 4 MB al massimo).', 'Page G X, News tab; IPC news:state, news:refresh, news:mark, news:sources, news:schedule, event news:changed; the readings run in the main process (6 at a time, 20 s, 4 MB at most).'),
+      tech(LIMITS, 'Riassunti per al massimo 30 notizie degli ultimi 14 giorni per aggiornamento; novità dimezzata ogni 36 ore; Hacker News da 150 punti, Hugging Face Papers da 25 voti.', 'Summaries for at most 30 stories of the last 14 days per refresh; recency halves every 36 hours; Hacker News from 150 points, Hugging Face Papers from 25 votes.'),
+    ],
+    anchors: {
+      0: ['src/renderer/components/impara/ImparaTabs.tsx'],
+      1: ['src/main/news/sources.ts'],
+      2: ['src/main/news/dedup.ts', 'src/main/news/rank.ts'],
+      3: ['src/main/news/summarize.ts'],
+      4: ['src/renderer/components/impara/news/NewsPage.tsx'],
+      5: ['src/renderer/components/impara/news/NewsSources.tsx'],
+      6: ['src/renderer/components/impara/ImparaPrTab.tsx'],
+    },
+    sources: ['src/shared/news.ts', 'src/main/news/service.ts', 'src/main/news/parse.ts', 'src/main/news/sources.ts', 'src/main/news/dedup.ts', 'src/main/news/rank.ts', 'src/main/news/summarize.ts', 'src/renderer/components/impara/news/NewsPage.tsx', 'src/renderer/components/impara/news/NewsReader.tsx', 'src/renderer/components/impara/news/NewsSources.tsx', 'src/renderer/components/impara/ImparaPrTab.tsx', 'src/renderer/components/impara/ImparaTabs.tsx', 'docs/adr/0264-impara-ai-newspaper.md'],
+  },
+  {
     id: 'held-news',
     title: b('Le novità trattenute', 'Held news'),
     summary: b('«N novità in attesa»: notizie dei lavori che l’app non ha ancora passato all’Orchestrator, e perché.',
