@@ -9,12 +9,13 @@
 // briefly highlighted (focusChat); the ✕ on hover closes the chat like its strip's ✕ (6 s Annulla; owner, 2026-10-21). Hidden while no agent is open. Mounted by Sidebar.tsx.
 import { memo, type CSSProperties } from 'react';
 import type { ChatSummary } from '@shared/contract';
-import { childState, kidCounts, visibleTree, type ChildState, type TreeNode } from '../lib/chat-tree';
+import { busyState, childState, kidCounts, visibleTree, type ChildState, type TreeNode } from '../lib/chat-tree';
 import { sameTree, sidebarTree } from '../lib/chat-derived';
 import { sameList } from '../store/state';
 import { useApp } from '../store/store';
 import { setTreeCollapsed, ui } from '../store/ui';
 import { focusChat } from '../actions';
+import { useRunningRun } from '../lib/runs';
 import { closeChat } from '../store/store';
 import { t } from '../i18n';
 import { AgentAvatar } from './AgentAvatar';
@@ -58,12 +59,13 @@ export function SidebarTree() {
 const Row = memo(function Row({ node, folded, on }: { node: TreeNode; folded: boolean; on: boolean }) {
   const chat = useApp(s => s.chats[node.id]);
   const kids = useApp(s => node.children.map(id => s.chats[id]).filter((c): c is ChatSummary => !!c), sameList);
+  const runningRun = useRunningRun(node.id);
   if (!chat) return null;
-  const state = rowState(chat);
+  const running = kidCounts(kids.map(k => childState(k))).run;
+  const state = busyState(rowState(chat), chat, runningRun, running);
   const right = state === 'wait' ? <span className="tn-w">{t('tree.state.wait')}</span>
     : kids.length ? <span className="tn-x">{t('tree.kids', { n: kids.length })}</span>
     : node.depth > 0 || state !== 'done' ? <span className="tn-x">{t(`tree.state.${state}`)}</span> : null;
-  const running = kidCounts(kids.map(k => childState(k))).run;
   const level = node.depth;
   return <li className={`tn${on ? ' on' : ''}${ENDED.has(state) ? ' ended' : ''}`} style={{ '--d': level } as CSSProperties} data-testid={`nav-tree-${node.id}`} data-depth={node.depth}>
     {Array.from({ length: level }, (_, k) => <i key={k} className="tn-guide" style={{ '--g': k } as CSSProperties} aria-hidden="true" />)}

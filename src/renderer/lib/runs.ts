@@ -1,6 +1,6 @@
 // The runs of "Esegui" as the renderer knows them: every run:updated event from main, kept by id, readable by the code
 // block that started it (same chat, message and code). Subscribed once when the bundle loads, so no update is lost.
-// Used by components/CodeBlock.tsx and components/AutoCloser.tsx.
+// Used by components/CodeBlock.tsx, components/AutoCloser.tsx and components/SidebarTree.tsx.
 import { useSyncExternalStore } from 'react';
 import type { RunInfo } from '@shared/contract';
 import { sb } from '../sb';
@@ -24,6 +24,11 @@ export function hasRunningRun(chatId: string): boolean {
 }
 
 const subscribe = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; };
+
+/** Live: whether one of the chat's Esegui runs is still going (the sidebar tree's dot: components/SidebarTree.tsx). */
+export function useRunningRun(chatId: string): boolean {
+  return useSyncExternalStore(subscribe, () => hasRunningRun(chatId));
+}
 
 /** The newest run of this exact block (chat, message, code), or null. */
 export function lastRunOf(chatId: string, itemId: string, code: string): RunInfo | null {

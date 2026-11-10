@@ -233,7 +233,7 @@
     "src/renderer/components/SetupFolders.tsx": "104749055179e320",
     "src/renderer/components/SetupLanguage.tsx": "ae5d6982548667b0",
     "src/renderer/components/Sidebar.tsx": "fd135f7dff791a09",
-    "src/renderer/components/SidebarTree.tsx": "20eb1f9a05c26439",
+    "src/renderer/components/SidebarTree.tsx": "08de725297574118",
     "src/renderer/components/skills/SkillParts.tsx": "a7336a370b94781d",
     "src/renderer/components/skills/UnassignedPanel.tsx": "f508dacdf2924c0f",
     "src/renderer/components/SkillsPage.tsx": "e246fc2962b63b5c",

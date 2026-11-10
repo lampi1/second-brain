@@ -72,6 +72,15 @@ export function childState(c: StateRow, refused = false): ChildState {
   if (c.state === 'running' || (c.background ?? 0) > 0 || (c.agentChildren?.active ?? c.agentChildren?.observedActive ?? 0) > 0) return 'run';
   return refused ? 'refused' : 'stall';
 }
+/** Still busy after its turn ended: a command it started with Esegui, a background task of the engine (an agent, a
+ *  shell command), the engine's own subagents or a chat it delegated, still running (the owner, 2026-11-10: the dot is
+ *  the busy one, not green). */
+export function busyState(state: ChildState, c: Pick<ChatSummary, 'background' | 'agentChildren' | 'delegation'>, runningRun: boolean, kidsRunning: number): ChildState {
+  if ((state !== 'done' && state !== 'stall') || c.delegation?.result) return state;
+  const busy = runningRun || kidsRunning > 0 || (c.background ?? 0) > 0 || (c.agentChildren?.active ?? c.agentChildren?.observedActive ?? 0) > 0;
+  return busy ? 'run' : state;
+}
+
 /** Still on the delegated work (a full thread card); the others fold into a compact row. */
 export const activeState = (s: ChildState): boolean => s !== 'done' && s !== 'partial' && s !== 'blocked' && s !== 'noreport' && s !== 'closed';
 /** A parent's children counted by state, one source for every counter (KidsBar, the sidebar tree, #152): working,

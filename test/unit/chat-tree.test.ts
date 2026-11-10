@@ -2,7 +2,7 @@
 // their parent, a folded parent hides its whole subtree, closed chats leave; the fold is kept in the prefs across a
 // restart (store/ui.ts loadPrefs); a child's open request shows in its ancestors' chat (lib/child-requests.ts).
 import { describe, expect, it } from 'vitest';
-import { chatTree, childState, kidCounts, visibleTree } from '../../src/renderer/lib/chat-tree';
+import { busyState, chatTree, childState, kidCounts, visibleTree } from '../../src/renderer/lib/chat-tree';
 import { childRequestsFor, requestHost } from '../../src/renderer/lib/child-requests';
 import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
 
@@ -86,3 +86,18 @@ describe('closed chats and the sidebar (#354)', () => {
   });
 });
 
+
+describe('the sidebar dot of an idle chat still busy (the owner, 2026-11-10)', () => {
+  it('is the busy one while an Esegui command, a background task, a subagent or a delegated chat runs', () => {
+    expect(busyState('done', c('a'), false, 0)).toBe('done');
+    expect(busyState('done', c('a'), true, 0)).toBe('run');
+    expect(busyState('done', c('a'), false, 1)).toBe('run');
+    expect(busyState('done', c('a', { background: 1 }), false, 0)).toBe('run');
+    expect(busyState('done', c('a', { agentChildren: { coverage: 'partial', active: null, total: null, observedActive: 2, observedTotal: 2, observedAt: 1, children: [] } }), false, 0)).toBe('run');
+    expect(busyState('stall', c('a', { delegation: { role: 'scout', goal: 'g', doneWhen: ['x'], at: 1 } }), true, 0)).toBe('run');
+    // waiting for the user, an error and a delegated chat that reported keep their own dot
+    expect(busyState('wait', c('a'), true, 1)).toBe('wait');
+    expect(busyState('err', c('a'), true, 0)).toBe('err');
+    expect(busyState('done', c('a', { delegation: { role: 'scout', goal: 'g', doneWhen: ['x'], at: 1, result: { outcome: 'done', summary: 's', at: 2 } } }), true, 0)).toBe('done');
+  });
+});
