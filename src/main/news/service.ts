@@ -24,7 +24,7 @@ import { DEFAULT_SOURCES, sourceFromUrl } from './sources';
 
 export interface NewsResponse { status: number; contentType: string; text: string }
 /** One GET: the status, the content type and the body (already capped). */
-export type NewsFetch = (url: string) => Promise<NewsResponse>;
+export type NewsFetch = (url: string, opts?: { follow?: boolean }) => Promise<NewsResponse>;
 export type NewsAi = (prompt: string) => Promise<{ ok: true; text: string; tokens: number | null; costUsd: number | null } | { ok: false; error: string }>;
 
 export interface NewsDeps {
@@ -70,8 +70,9 @@ const CHECK_MS = 15 * 60_000;
 const SEEN_MAX = 5000;
 
 /** The app's GET: a deadline, redirects followed, the body capped, a plain client name (never the user's). */
-export const netFetch: NewsFetch = async url => {
-  const r = await fetch(url, { redirect: 'follow', signal: AbortSignal.timeout(20_000), headers: { 'User-Agent': 'second-brain-news/1.0 (+https://github.com/lampi1/second-brain)', Accept: 'application/rss+xml, application/atom+xml, application/xml, application/json, text/markdown, text/html;q=0.9, */*;q=0.5' } });
+export const netFetch: NewsFetch = async (url, opts) => {
+  // an article looked up for its date is fetched without following redirects (a public link could point to the LAN)
+  const r = await fetch(url, { redirect: opts?.follow === false ? 'manual' : 'follow', signal: AbortSignal.timeout(20_000), headers: { 'User-Agent': 'second-brain-news/1.0 (+https://github.com/lampi1/second-brain)', Accept: 'application/rss+xml, application/atom+xml, application/xml, application/json, text/markdown, text/html;q=0.9, */*;q=0.5' } });
   const len = Number(r.headers.get('content-length') ?? 0);
   if (len > MAX_BODY) throw new Error('pagina troppo grande');
   const text = await r.text();
@@ -183,7 +184,7 @@ export class NewsService {
     for (const s of out) {
       if (s.at !== null || known.has(idOf(s.url)) || !publicHttps(s.url) || lookups >= (firstRead ? FIRST_LOOKUPS : DATE_LOOKUPS)) continue;
       lookups++;
-      try { const a = await this.d.fetch(s.url); if (a.status >= 200 && a.status < 300) s.at = articleDate(a.text); } catch { /* stays undated */ }
+      try { const a = await this.d.fetch(s.url, { follow: false }); if (a.status >= 200 && a.status < 300) s.at = articleDate(a.text); } catch { /* stays undated */ }
     }
     // on a source's first reading a story still without a date is most likely old (pages list their archive too):
     // it is left out rather than shown as new; later, a link that was not there before is new, dated when first seen
@@ -294,9 +295,12 @@ export class NewsService {
     }
     // what the user did while this refresh ran (read, saved, a lesson) is on the current stories: carry it over
     const now2 = new Map(this.s.items.map(i => [i.id, i]));
+    // (also from a story this refresh merged into another one: its link is now one of the «also» links)
     items = items.map(i => {
-      const c = now2.get(i.id);
-      return c ? { ...i, read: c.read, saved: c.saved, ...(c.lesson ? { lesson: c.lesson } : {}) } : i;
+      const cs = [i.id, ...i.also.map(a => idOf(a.url))].map(id => now2.get(id)).filter((c): c is NewsItem => !!c);
+      if (!cs.length) return i;
+      const lesson = cs.find(c => c.id === i.id)?.lesson ?? cs.find(c => c.lesson)?.lesson;
+      return { ...i, read: cs.some(c => c.read) || undefined, saved: cs.some(c => c.saved) || undefined, ...(lesson ? { lesson } : {}) };
     });
     const final = this.trim(items);
     // a story that leaves the paper (aged out, trimmed) and a first reading's undated archive stay known
