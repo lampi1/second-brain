@@ -4,7 +4,8 @@
 // but cannot be picked there); the Orchestrator's chip has «Solo questa chat» and «Predefinito dell'Orchestrator» as two
 // actions; the search says when nothing matches; the back of a role card saves the role's default. The role cards of
 // one row end at the same height with their numbers on the same bottom line. Screenshots:
-// test-results/shots/model-picker-*.png and agent-cards-symmetry.png.
+// test-results/shots/model-picker-*.png and agent-cards-symmetry.png. The picker's «Aggiorna elenco» and each model's
+// price come from the live lists (ADR 0256).
 import { expect, test, type Page } from '@playwright/test';
 import { goPage, launchDemo, openOrchestrator, shot } from './helpers';
 
@@ -38,6 +39,11 @@ test('one picker for strip, Orchestrator and role card; chat-only vs default act
     await expect(page.getByTestId('chat-picker-qa-row-cursor-default')).toBeDisabled();
     await expect(page.getByTestId('chat-picker-qa-apply-default')).toHaveCount(0);
     await shot(page, 'model-picker-strip');
+    // the live lists (ADR 0256): each model says its price (or that it is unknown); «Aggiorna elenco» asks the engines now
+    await expect(page.getByTestId('chat-picker-qa-row-claude-claude-opus-5-5')).toContainText('$ per Mtok');
+    await page.getByTestId('chat-picker-qa-refresh').click();
+    await expect(page.getByTestId('chat-picker-qa-refresh-note')).toBeVisible();
+    await shot(page, 'model-picker-refresh');
     // ↓ moves between the rows like a list
     await page.getByTestId('chat-picker-qa-row-claude-default').focus();
     await page.keyboard.press('ArrowDown');
