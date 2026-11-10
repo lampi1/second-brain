@@ -308,9 +308,10 @@ export abstract class ManagerSessions extends ManagerPersistence {
       ...(r.policy ? { toolPolicy: r.policy.tools, ceiling: r.policy.ceiling } : {}),
       ...(r.agentAssets ? { agentAssets: r.agentAssets } : {}),
       // the Orchestrator's turn stays short: a few workspace calls, then it delegates (ADR 0090, issue #98)
-      // a role chat with the sub-agent tool: only the Explore search, since Claude asks no permission to start one
+      // a role chat with the sub-agent tool: only the Explore search (and an AI-DLC project's own aidlc-* agents), since
+      // Claude asks no permission to start one
       ...(engine.kind !== 'claude' ? {} : r.s.isOrchestrator ? { preToolUse: new TurnToolBudget() }
-        : subagentGateFor(r.policy?.tools)),
+        : subagentGateFor(r.policy?.tools, r.s.cwd)),
       sessionId, resume, fork, worktree: r.worktree && !resume, mcpConfig: this.mcpConfig(chatId), costBaseUsd: r.costTotalUsd,
       compactWindowTokens: r.maxContext ?? this.compactWindow(),
       // Native subagents inherit this environment: a per-chat model cannot prove a memory event's producer.
@@ -391,7 +392,7 @@ export abstract class ManagerSessions extends ManagerPersistence {
     const opts: SessionOptions = {
       chatId, cwd, model: null, effort: null, permissionMode: null, title: null, sessionId, resume: false, fork: false, worktree: false,
       ...(launch.toolPolicy !== undefined || launch.ceiling !== undefined ? { toolPolicy: launch.toolPolicy ?? null, ceiling: launch.ceiling ?? null } : {}),
-      ...(launch.agentAssets ? { agentAssets: launch.agentAssets } : {}), ...subagentGateFor(launch.toolPolicy),
+      ...(launch.agentAssets ? { agentAssets: launch.agentAssets } : {}), ...subagentGateFor(launch.toolPolicy, cwd),
       mcpConfig: this.mcpConfig(chatId), costBaseUsd: 0, compactWindowTokens: launch.compactWindowTokens ?? this.compactWindow(),
       env: { ...this.opts.env, SB_EVENT_CONTEXT: '' }, ...(extraArgs ? { extraArgs } : {}),
     };

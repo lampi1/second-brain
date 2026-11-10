@@ -90,3 +90,12 @@ text. Permissions of a sub-agent were narrowed against the Orchestrator, not aga
 - Tests: `test/unit/agents/delegation.test.ts`, `role-gate.test.ts`, `judge-sample.test.ts`, `test/unit/chat-tree.test.ts`,
   `run-steps.test.ts`, `orchestrator-wake.test.ts`, `no-leftovers.test.ts`; e2e `delegation-tree.spec.ts` with real
   MCP calls from the fake Claude.
+
+## Amendment (2026-11-10, owner: the AI-DLC flow runs in the app as in Cursor)
+- §3's sub-agent rule has one exemption: in a role chat whose folder is a project with the AI-DLC harness installed
+  (`.claude/skills/aidlc` is a folder), the project's own `aidlc-*` agents (a plain name, `.claude/agents/<name>.md` a
+  file there) are allowed, as Claude runs them in a plain session: the AI-DLC conductor dispatches its reviewer and
+  developer agents itself, and refusing them stopped the flow at its first unit build. Every other type stays refused
+  there (a project's `reviewer` too), and an `aidlc-*` name outside such a project, undefined by it or shaped like a
+  path is refused. The same check runs in the PreToolUse hook and the permission gate (`agents/role-gate.ts`
+  `aidlcSubagent`); tests `test/unit/agents/role-gate-aidlc.test.ts`.

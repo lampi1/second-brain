@@ -236,7 +236,7 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     if (owner?.source !== 'catalog' || (r.s.isOrchestrator && req.tool !== 'Skill')) return false;
     const verdict = gateRequest(req, { role: { id: owner.id, name: owner.name }, skills: r.skills ?? [],
       rewrite: engineOf(r.s.harness)?.kind === 'claude',
-      policy: r.policy ?? null, brainRoot: this.opts.brainRoot?.() ?? null, readScripts: this.readScripts(r),
+      policy: r.policy ?? null, brainRoot: this.opts.brainRoot?.() ?? null, readScripts: this.readScripts(r), cwd: r.s.cwd,
       ...(r.agentAssets ? { plugin: runtimePluginName(r.agentAssets.pluginDir) } : {}),
       ...(r.s.parentId ? { parent: { policy: parent ? parent.policy ?? null : r.policy ?? null, title: parent?.s.title ?? r.s.parentId } } : {}) });
     if (verdict.kind === 'pass') return false;

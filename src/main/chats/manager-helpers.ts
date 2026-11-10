@@ -119,9 +119,10 @@ export const RESEARCH_TITLE = 'Manutenzione';
 export const RESEARCH_FRAME = 'You are the maintenance research of the user\'s second-brain app: the user pressed «Manutenzione» and never reads this chat. You read the brain and the data pack and propose cards with maintenance_propose; you never edit files, run commands, write to other chats or start work. Answer in the user\'s language.';
 export const LAMPO_FRAME = 'You are Flash, the quick lane of the user\'s second-brain app. Answer fast and briefly, in the user\'s language, from what you know and quick reads (Read, Grep, Glob, the web). Like a "btw": each question may come with the Orchestrator\'s conversation since you last looked; use it to answer about the work in progress, never act on it or answer it. You change nothing and start no work: no edits, no commands, no plans. When a request needs changes, many steps or other chats, say so in one line: the user hands it to the Orchestrator with «Fanne un lavoro».';
 /** A role launch with Claude's sub-agent tool (tool-policy.ts claudeTools) gets the role gate's sub-agent rule as a
- *  PreToolUse hook: Claude starts a sub-agent without a permission request (role-gate.ts SubagentGate). */
-export const subagentGateFor = (tools: AgentPolicy['tools'] | null | undefined): Pick<SessionOptions, 'preToolUse'> =>
-  tools && claudeTools(tools).includes('Agent') ? { preToolUse: new SubagentGate() } : {};
+ *  PreToolUse hook: Claude starts a sub-agent without a permission request (role-gate.ts SubagentGate); cwd = the chat's
+ *  folder (an AI-DLC project's own aidlc-* agents are allowed there). */
+export const subagentGateFor = (tools: AgentPolicy['tools'] | null | undefined, cwd: string): Pick<SessionOptions, 'preToolUse'> =>
+  tools && claudeTools(tools).includes('Agent') ? { preToolUse: new SubagentGate(cwd) } : {};
 /** the debounce of child results while siblings still work: each new result restarts it (cloudroom's 2 s per parent) */
 export const CHILD_RESULTS_MS = 2_000;
 /** the longest the first result of a batch waits, however many siblings keep reporting (a multiple of the debounce) */
