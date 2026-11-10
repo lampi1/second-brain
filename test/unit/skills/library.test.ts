@@ -132,6 +132,13 @@ describe('SkillLibrary', () => {
     expect(links).toEqual([]);
   });
 
+  it('lists the package warnings of a skill (#373)', async () => {
+    const { lib } = setup();
+    await lib.write({ skill: 'vago', path: 'SKILL.md', text: '---\nname: vago\ndescription: Helps with things.\n---\nRun scripts/x.sh.\n' }, { who: 'Orchestrator' });
+    const k = (await lib.state()).skills.find(x => x.name === 'vago')!;
+    expect(k.warnings.map(w => w.code)).toEqual(['no-when', 'missing-file']);
+  });
+
   it('reads the area from the frontmatter', () => {
     expect(areaOf('---\nname: x\narea: dati\n---\n')).toBe('dati');
     expect(areaOf('---\nname: x\nmetadata:\n  area: "rilasci"\n---\n')).toBe('rilasci');

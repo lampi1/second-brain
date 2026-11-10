@@ -24,7 +24,7 @@ import { MigrationReportPanel } from './brain-model/MaintenancePanel';
 import { Select } from './Select';
 import { HelpTip } from './HelpTip';
 import { IconPlus, IconSearch, IconX } from './Icons';
-import { SkillDetail, type DetailTab } from './skills/SkillDetail';
+import { lintLabel, SkillDetail, type DetailTab } from './skills/SkillDetail';
 import { UnassignedPanel } from './skills/UnassignedPanel';
 import { SORTS, sortSkills, type SortBy } from '../lib/skill-sort';
 import '../styles/skill-library.css';
@@ -83,6 +83,7 @@ function Row({ s, active, roleName, onPick }: { s: LibSkill; active: boolean; ro
         <span className="sl-row-name">{s.name}</span>
         <span className="sl-origin" data-origin={s.origin} title={t(`sl.originTip.${s.origin}`)}>{t(`sl.origin.${s.origin}`)}</span>
         {s.errors > 0 && <span className="sl-flag" data-tone="red">{t('sl.errors', { n: s.errors })}</span>}
+        {!s.errors && s.warnings.length > 0 && <span className="sl-flag" data-tone="amber" title={s.warnings.map(lintLabel).join('\n')} data-testid={`sl-warn-${s.name}`}>{t('sl.warnings', { n: s.warnings.length })}</span>}
       </span>
       <span className="sl-row-desc">{s.description || t('sl.noDescription')}</span>
       <span className="sl-row-meta">

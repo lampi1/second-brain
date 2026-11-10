@@ -7,6 +7,7 @@
 // DiffView, before → after) and «Annulla». Every write is skills:write / skills:remove (main/skills/library.ts: the
 // user's hooks first, then one change-log entry). Used by SkillsPage.tsx; styles/skill-library.css.
 import { useCallback, useEffect, useMemo, useState, type KeyboardEvent } from 'react';
+import type { SkillLint } from '@shared/skill-lint';
 import type { LibSkill, SkillFileText, SkillRole, SkillVersion } from '@shared/skill-library';
 import { SKILL_PATH } from '@shared/skill-library';
 import { parseMd } from '@shared/skillmd';
@@ -25,12 +26,27 @@ const TABS: DetailTab[] = ['read', 'files', 'roles', 'history'];
 const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${Math.round(n / 102.4) / 10} KB` : `${Math.round(n / 1024 / 102.4) / 10} MB`);
 const whoOf = (job: string) => (job === 'user' ? t('sl.who.user') : job === 'migration' ? t('sl.who.migration') : job === 'research' ? t('sl.who.research') : t('sl.who.job'));
 
+/** A package warning in words (#373, shared/skill-lint.ts). */
+export function lintLabel(w: SkillLint): string {
+  const detail = w.detail ?? '';
+  switch (w.code) {
+    case 'name-folder': return t('sl.lint.name-folder', { detail });
+    case 'no-when': return t('sl.lint.no-when');
+    case 'long': return t('sl.lint.long', { detail });
+    case 'missing-file': return t('sl.lint.missing-file', { detail });
+  }
+}
+
 function ReadTab({ skill, onOpen }: { skill: LibSkill; onOpen: (path: string) => void }) {
   const [doc, setDoc] = useState<SkillFileText | null>(null);
   useEffect(() => { let live = true; void window.sb.invoke('skills:file', { skill: skill.name, path: 'SKILL.md' }).then(d => { if (live) setDoc(d); }, () => {}); return () => { live = false; }; }, [skill.name, skill.changedAt]);
   const body = useMemo(() => (doc?.text ? parseMd(doc.text).body.replace(/^\s+/, '') : ''), [doc]);
   return <div className="sl-read" data-testid="sl-read">
     {skill.origin === 'app' && <p className="sl-note">{t('sl.appNote')}</p>}
+    {skill.warnings.length > 0 && <div className="sl-lint" role="note" data-testid="sl-lint">
+      <p className="sl-lint-head">{t('sl.lint.head')}</p>
+      <ul>{skill.warnings.map((w, i) => <li key={i} data-code={w.code}>{lintLabel(w)}</li>)}</ul>
+    </div>}
     <SkillParts skill={skill} onOpen={onOpen} />
     {doc ? <div className="sl-prose"><Markdown text={body || '—'} copyBlocks testId="sl-md" /></div> : <p className="sl-muted">…</p>}
   </div>;

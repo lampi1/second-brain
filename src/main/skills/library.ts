@@ -14,6 +14,7 @@ import path from 'node:path';
 import type { AgentProfile, AgentRun } from '../../shared/agents';
 import { SKILL_NAME, SKILL_PATH, type LibSkill, type SkillFile, type SkillFileText, type SkillLibraryState, type SkillOrigin, type SkillVersion, type SkillWrite, type SkillWriteResult } from '../../shared/skill-library';
 import { checkMd, field, parseMd } from '../../shared/skillmd';
+import { lintSkill } from '../../shared/skill-lint';
 import type { ChangeLog, StoredChange } from '../brainmodel/changes';
 import { errText, log } from '../log';
 import { checkWrite, type GuardInput, type HookRefusal } from './guard';
@@ -227,6 +228,7 @@ export class SkillLibrary {
       totalUses: mine.length, lastUse: mine.length ? Math.max(...mine.map(r => r.startedAt)) : null,
       changedAt: latest?.at ?? changedAt, madeBy: latest?.job ?? null,
       errors: checkMd('skill', text).filter(i => i.level === 'error').length,
+      warnings: lintSkill(f.name, text, files),
     };
   }
 
