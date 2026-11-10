@@ -59,6 +59,8 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
   let starts = 0;
   let timer: ReturnType<typeof setInterval> | null = null;
   let unsubs: (() => void)[] = [];
+  /** the bot's last message id when the user last wrote something that was not an answer (buttons.ts textAnswer) */
+  let wroteAfter: number | null = null;
   let startedAt = 0;
   let lastPhoneMessageAt: number | null = null;
   let focus: string | null = null;
@@ -194,12 +196,15 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
       await out.send(runCommand(cmd.name, commandCtx), { silent: cmd.name === 'pausa' });
       return;
     }
-    if (m.voice ?? m.audio) { runVoice((m.voice ?? m.audio)!); return; }
+    if (m.voice ?? m.audio) { wroteAfter = out.lastSent(); runVoice((m.voice ?? m.audio)!); return; }
     if (typeof m.text === 'string' && m.text.trim()) {
       // a bare «sì» / «no» to an offered question answers it, like its button (#370); anything else is for the Orchestrator
       const replyTo = typeof m.reply_to_message?.message_id === 'number' ? m.reply_to_message.message_id : undefined;
-      const r = await buttons.textAnswer({ text: m.text, ...(replyTo !== undefined ? { replyTo } : {}) }, out.lastSent());
+      // after the user's own other message, a bare word without a reply may be about that message: not an answer
+      const last = out.lastSent(), sinceQuestion = last !== null && last !== wroteAfter ? last : null;
+      const r = await buttons.textAnswer({ text: m.text, ...(replyTo !== undefined ? { replyTo } : {}) }, sinceQuestion);
       if (r !== null) { lastPhoneMessageAt = deps.now(); act('answer', 'risposta scritta'); return; }
+      wroteAfter = last;
       await sendText(m.text, 'messaggio');
       return;
     }

@@ -10,7 +10,8 @@
 // whose full text (with the options' descriptions) does not fit is sent in its short form (the question alone, with the
 // fixed Sì / No buttons; #370). Everything else gets a no-button notice "⚠️ <role · label>: serve il PC".
 // A typed «sì» / «no» also answers (#370, textAnswer): as a Telegram reply to the question's message, or right after it
-// when it is the only open question and nothing else was sent since; any other text goes to the Orchestrator.
+// when it is the only open question and nothing else was sent or written since (the bridge passes lastSent = null after
+// the user's own other message); any other text goes to the Orchestrator. A plan is approved only with its button.
 // Permissions reach this module only when one of the user's brain rules sent them to him (phone-port.ts, ADR 0254).
 // Used by bridge.ts; tests: test/unit/phone/buttons.test.ts.
 import crypto from 'node:crypto';
@@ -139,7 +140,8 @@ export function createButtons(o: { now: () => number; port: PhonePort; out: Outb
     async textAnswer(m, lastSent) {
       const said = yesNoOf(m.text);
       if (!said) return null;
-      const open = [...byId.values()].filter(x => !x.used && x.messageId !== null);
+      // questions only (a brain-rule permission too, as its button); a plan is approved only with its button
+      const open = [...byId.values()].filter(x => !x.used && x.messageId !== null && x.item.ref.kind === 'question');
       // a reply names its message; without one, only the single open question that is the last thing sent
       const e = m.replyTo !== undefined ? open.find(x => x.messageId === m.replyTo)
         : open.length === 1 && open[0]!.messageId === lastSent ? open[0] : undefined;

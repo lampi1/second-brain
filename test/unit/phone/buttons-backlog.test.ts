@@ -208,6 +208,15 @@ describe('phone answers to worker Sì/No questions (#370)', () => {
     expect(port.answers).toEqual([{ chatId: 'c1', id: 'r1', yes: true }]);
   });
 
+  it('a typed «sì» never approves a plan: only its button does', async () => {
+    const { port, sent, b } = setup();
+    const plan = question({ ref: { kind: 'plan', at: '7' }, text: '1. Trovo il bug' }); port.open = [plan];
+    await b.offer(plan);
+    expect(await b.textAnswer({ text: 'sì', replyTo: sent[0]!.id }, sent[0]!.id)).toBeNull();
+    expect(await b.textAnswer({ text: 'sì' }, sent[0]!.id)).toBeNull();
+    expect(port.answers).toEqual([]);
+  });
+
   it('a typed answer to a question answered on the PC meanwhile, or stale, does not answer', async () => {
     const { port, sent, b, advance } = setup();
     const q = question(); port.open = [q];

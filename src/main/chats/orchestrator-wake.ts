@@ -112,7 +112,7 @@ export function wakeMessage(events: WakeEvent[]): string {
 export function awayNote(p: Pick<PendingRequest, 'type' | 'tool' | 'questions' | 'chatId'>): string {
   const q = p.questions?.[0];
   if (isNativeQuestion(p) && p.questions?.length === 1 && q && isYesNo(q)) {
-    return `Il pannello è nell’Orchestrator sul PC; su Telegram, se collegato, ha i pulsanti Sì/No. Se l’utente è lontano dal PC (Remote Control, telefono), portagliela con relay_question {"chatId":"${p.chatId}"} e scrivi esattamente il testo che restituisce; se relay_question la rifiuta, resta per il PC. Non rispondere tu.`;
+    return `Il pannello è nell’Orchestrator sul PC; Telegram, se collegato, mostra i pulsanti Sì/No quando la domanda non è riservata. Se l’utente è lontano dal PC (Remote Control, telefono), portagliela con relay_question {"chatId":"${p.chatId}"} e scrivi esattamente il testo che restituisce (una domanda alla volta, la più vecchia della chat); se relay_question la rifiuta, resta per il PC. Non rispondere tu.`;
   }
   return 'Il pannello è nell’Orchestrator sul PC: questa richiesta si decide solo lì (o con i pulsanti Telegram, se li mostra). Resta in attesa, non chiedere una copia e non rispondere via testo agente.';
 }

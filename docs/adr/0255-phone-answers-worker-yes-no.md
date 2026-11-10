@@ -19,7 +19,8 @@ did not use `relay_question` even though it exists for exactly this. The worker 
   check still reads the full text with descriptions and brief.
 - **Typed answer on Telegram** (`buttons.ts textAnswer`): a bare «sì» / «no» (`shared/yes-no.ts yesNoOf`) answers an
   offered question when it is a Telegram reply to that question's message, or, without a reply, when it is the only
-  open question and the last message the bot sent (`outbound.ts lastSent`). Any other text, two open questions, a reply
+  open question, the last message the bot sent (`outbound.ts lastSent`) and the user wrote nothing else since. A plan
+  is approved only with its button; a brain-rule permission (ADR 0254) can be answered like its button. Any other text, two open questions, a reply
   to another message, or a question already answered goes to the Orchestrator as before: free text is a clarification,
   never a Yes. The answer goes through the same checks as a button (live request, still simple, not reserved, once).
 - **Remote Control** (`chats/orchestrator-wake.ts awayNote`): for a single Sì/No question of an engine's own tool the
