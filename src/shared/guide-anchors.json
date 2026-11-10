@@ -116,7 +116,7 @@
     "src/main/chats/lampo-context.ts": "25b249201f50be73",
     "src/main/chats/live-cost.ts#priceUsage": "8004c601c7b9ccd6",
     "src/main/chats/manager-delegation.ts#limitNotice": "e130da703faee694",
-    "src/main/chats/manager-delegation.ts#releaseResult": "fe74199c959b3b02",
+    "src/main/chats/manager-delegation.ts#releaseResult": "3d5280227fa6cf18",
     "src/main/chats/manager-delegation.ts#reportDelegation": "468733e432e08385",
     "src/main/chats/manager-delegation.ts#settleReport": "9bec499d7f4f1b64",
     "src/main/chats/manager-lifecycle.ts#autoCloseCandidates": "cab847730607f414",

@@ -835,6 +835,17 @@ describe('versioned task continuity and canonical results', () => {
     expect((f.sent.get(o.id) ?? []).filter(text => text.includes('consegna automatica del risultato'))).toEqual([]);
   });
 
+  it('a chat the Orchestrator started takes the user\'s follow-up after its report with no Orchestrator open, and keeps its result', async () => {
+    const f = fixture();
+    const c = await f.m.create({ harness: 'claude', cwd: f.dir, roleId: 'scout', prompt: 'orchestrator task' }, 'agent');
+    f.m.reportRoot(c.id, checkResult(result, []));
+    await f.m.send(c.id, 'user follow-up');
+    expect(f.m.list().find(row => row.id === c.id)?.run?.taskVersion).toBe(2);
+    // the result the Orchestrator asked for still reaches it when one opens
+    const o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user');
+    expect(f.m.items(o.id).filter(i => i.kind === 'system' && i.code === 'resultReady')).toHaveLength(1);
+  });
+
   it('captures exact brain and project scope on each task launch', async () => {
     let brain = '/task-brain-a';
     const f = fixture({}, undefined, undefined, undefined, {}, [], { brainRoot: () => brain });
