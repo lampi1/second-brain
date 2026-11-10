@@ -1,4 +1,5 @@
-// Render the real tile's composition boundary: onboarding and user chats can reply; worker inspection cannot compose.
+// Render the real tile's input: every chat can be written to, delegated workers too (the owner, 2026-11-10: «permettimi
+// anche di scrivere ad ogni agente»); the Orchestrator stays the usual way.
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
@@ -44,9 +45,9 @@ describe('chat tile input', () => {
     expect(html).toContain('data-testid="chat-input-guide"');
     expect(html).toContain('>Continue here</button>');
   });
-  it.each(['orchestrator', 'parent', 'app'] as const)('a %s worker has no input or dead Continue action', startedBy => {
+  it.each(['orchestrator', 'parent', 'app'] as const)('a %s worker keeps its input and Continue action', startedBy => {
     const html = render(startedBy);
-    expect(html).not.toContain('data-testid="chat-input-guide"');
-    expect(html).not.toContain('>Continue here</button>');
+    expect(html).toContain('data-testid="chat-input-guide"');
+    expect(html).toContain('>Continue here</button>');
   });
 });

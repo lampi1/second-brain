@@ -5,8 +5,8 @@
 ### One work conversation
 
 The Orchestrator presents worker questions, permissions, Strategist interviews and plan approvals. Worker histories
-remain inspectable; their input boxes no longer compete with the Orchestrator. The first-run guide and chats started
-by the user retain their reply field. Canonical outcomes appear here
+remain inspectable, and every chat keeps its own reply field: you usually talk to the Orchestrator, but you can still
+write to any agent directly. Canonical outcomes appear here
 automatically, with corrections updating the same result. Ask for a recap conversationally; no “Fai il punto” or
 “Sintetizza” click is required. The Remote Control banner can be dismissed without disconnecting and reopened with
 the phone icon. Remote Control cannot yet answer a worker request with an exact host receipt: it stays pending in

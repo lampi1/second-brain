@@ -125,7 +125,6 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
     ref.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [focusReq]);
   if (!chat) return null;
-  const canCompose = !!chat.quick || !chat.run || chat.run.startedBy === 'user';
   const compact = !expanded || !maximized && !focus && !embedded && size.height > 0 && size.height < COMPACT_TILE_H;
   const busy = isBusy(chat);
   const st = stateInfo(chat);
@@ -198,10 +197,12 @@ export const ChatTile = memo(function ChatTile({ chatId, index, maximized, focus
       {chat.plan && !['asking', 'revising', 'proposed'].includes(chat.plan.phase) && <StrategyPanel chat={chat} question={planAsk} />}
       <div className={`chat-work${expanded?' expanded':''}`} id={`chat-work-${chatId}`} inert={!expanded} aria-hidden={!expanded}><div className="chat-work-inner">
       {!compact && <ChatLinks chat={chat} />}
-      {expanded && <TaskContext chat={chat} onContinue={canCompose ? () => reveal(true) : undefined} />}
+      {expanded && <TaskContext chat={chat} onContinue={() => reveal(true)} />}
       {!compact && chat.handoffBusy && <ContextNotice chat={chat} />}
       <ChatTranscript key={chatId} chatId={chatId} busy={busy} expanded={expanded} />
-      {canCompose && <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />}
+      {/* every chat keeps its input (the owner, 2026-11-10: «permettimi anche di scrivere ad ogni agente … voglio
+          comunque avere la possibilità»); the Orchestrator stays the usual way to talk to delegated work */}
+      <ChatInput ref={input} chat={chat} testid={`chat-input-${chatId}`} />
       {expanded && chat.run && <RunOutcomeControl key={`${chat.run.runId}:${chat.run.counters.reopened}`} run={chat.run} disabled={busy || reqs.length > 0 || chat.state === 'waiting' || !!chat.queued} />}
       </div></div>
       {expanded && hostsOwn && postponedOwn.length > 0 && <InWindowLine reqs={postponedOwn} queued testid={`chat-queued-${chatId}`} />}
