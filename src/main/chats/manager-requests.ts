@@ -6,6 +6,7 @@ import { withClarified } from './plan-interview';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { Answer, PendingRequest } from '../../shared/contract';
+import { backedAnswer } from './ran-check';
 import { errText, log } from '../log';
 import { engineOf } from '../engines/registry';
 import { allowsClass, COMMAND_TOOLS, commandsReadOnly, readOnlyCommand, toolClassOf, type ReadScripts } from '../agents/tool-policy';
@@ -104,7 +105,10 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
     const sameChat = (): boolean => this.chats.get(chatId) === r;
     let ok: boolean;
     try {
-      ok = await this.deliverAnswer(r, req, answer, { kind: 'user', channel: by });
+      // a Yes on «hai eseguito il comando?» that no run of this chat backs reaches it with the app's note (#372)
+      const told = this.opts.runs ? backedAnswer(req, answer, this.opts.runs(chatId)) : answer;
+      if (told !== answer) log.info('chats', 'a Yes on «did you run it?» with no run behind it: told to the chat', { chat: chatId, data: { requestId } });
+      ok = await this.deliverAnswer(r, req, told, { kind: 'user', channel: by });
       // The RPC acknowledgement can precede the batched resolved event. Preserve phone provenance in either order.
       if (ok && sameChat()) this.dropPending(r, requestId);
     } finally {

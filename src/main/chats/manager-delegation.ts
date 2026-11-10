@@ -3,7 +3,7 @@
 // synthesis, the turn end that records the job and settles the final report (assignment completed), delegation limits.
 import crypto from 'node:crypto';
 import { isWorkRole, ROLE_DEFAULTS } from '../../shared/roles';
-import type { ChatItem, ChatSummary } from '../../shared/contract';
+import type { ChatItem, ChatSummary, RunInfo } from '../../shared/contract';
 import { errText, log } from '../log';
 import { cut } from './session';
 import type { HeldChildResult } from './store';
@@ -16,7 +16,8 @@ import { APP_EVENT_LABEL } from './orchestrator-wake';
 import type { SubmissionReceipt, TurnEndInfo, Rec } from './manager-types';
 import { clearTimeout, sameChildResult, uniqueChildResults, turnReply, turnErrors, lastAnswer, sysItem, ORCHESTRATOR_OUTPUT_MAX, CHILD_RESULTS_MS, CHILD_RESULTS_CAP, supersededResult } from './manager-helpers';
 import { ManagerContinuity } from './manager-continuity';
-import { isUserActionRequest, userActionAnswer, userActionMessage, userActionRequest, type UserActionInput } from './user-action';
+import { isUserActionRequest, sameCommand, userActionAnswer, userActionMessage, userActionRequest, type UserActionInput } from './user-action';
+import { runResultText } from '../run/results';
 import type { Answer, PendingRequest } from '../../shared/contract';
 
 /** Delegation and reports: a child's agent_report to its parent, a root chat's to the Orchestrator, turn ends that settle them. */
@@ -294,8 +295,10 @@ export abstract class ManagerDelegation extends ManagerContinuity {
   /** A partial / blocked report that names what only the user can do (#358): one yes/no question on the Orchestrator,
    *  asked by the app now, whatever the Orchestrator is doing; a newer one for the same chat replaces it. */
   private askUserAction(r: Rec, result: DelegationResult): void {
-    // any later report of the chat (a correction, done, a block without userAction) replaces its earlier question
+    // any later report of the chat (a correction, done, a block without userAction) replaces its earlier question, and
+    // a Sì still waiting for that chat's command run
     this.dropUserAsks((_, worker) => worker === r.s.id);
+    for (const [id, w] of this.awaitingRun) if (w.input.chatId === r.s.id) this.awaitingRun.delete(id);
     if (!result.userAction || result.outcome === 'done') return;
     const orchestrator = this.openOrchestrator();
     if (!orchestrator) { log.warn('chats', 'user action not asked: no Orchestrator open', { chat: r.s.id, hint: 'the report text still carries it' }); return; }
@@ -316,16 +319,44 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     if (!isUserActionRequest(req)) throw new Error('Questa richiesta non è più aperta.');
     const reply = userActionAnswer(req, answer);
     if (!reply) throw new Error('Rispondi Sì o No alla domanda.');
-    const input = req.input as UserActionInput, worker = this.chats.get(input.chatId);
+    const input = req.input as UserActionInput;
     this.dropUserAsks(q => q.id === req.id);
     if (!reply.yes && !reply.words) return;
-    // the parent resumes it while its own assignment is still on (an ended one may not reassign: manager-work.ts);
-    // otherwise the Orchestrator does
+    // a step with a command resumes the work on its run only (#371): one already done since the question, else the
+    // next one that ends (runEnded); the user's Sì alone is not a run
+    if (reply.yes && input.command) {
+      const ran = this.endedRunOf(input.command, req.at);
+      if (ran) { this.resumeUserAction(input, reply, req.chatId, ran); return; }
+      this.awaitingRun.set(req.id, { input, at: req.at, orchestratorId: req.chatId });
+      log.info('chats', 'user action waits for its command run', { chat: input.chatId, data: { request: req.id } });
+      return;
+    }
+    this.resumeUserAction(input, reply, req.chatId);
+  }
+
+  /** Sì to a user step with a command, waiting for that command's run with Esegui (#371): request id → the step. */
+  private readonly awaitingRun = new Map<string, { input: UserActionInput; at: number; orchestratorId: string }>();
+  private endedRunOf(command: string, since: number): RunInfo | undefined {
+    return (this.opts.runs?.() ?? []).filter(x => x.state !== 'running' && x.startedAt >= since && sameCommand(x.code, command)).sort((a, b) => b.startedAt - a.startedAt)[0];
+  }
+  /** A run of Esegui ended (wiring taps run:updated): the user steps whose command it is resume their work with it. */
+  runEnded(run: RunInfo): void {
+    if (run.state === 'running') return;
+    for (const [id, w] of [...this.awaitingRun]) {
+      if (!w.input.command || run.startedAt < w.at || !sameCommand(run.code, w.input.command)) continue;
+      this.awaitingRun.delete(id);
+      this.resumeUserAction(w.input, { yes: true }, w.orchestratorId, run);
+    }
+  }
+  /** Whoever owns the work reads the user's reply (and the run that backs it): its parent while the parent's own
+   *  assignment is still on (an ended one may not reassign: manager-work.ts), otherwise the Orchestrator. */
+  private resumeUserAction(input: UserActionInput, reply: { yes: boolean; words?: string }, orchestratorChat: string, ran?: RunInfo): void {
+    const worker = this.chats.get(input.chatId);
     const parent = worker?.s.parentId ? this.chats.get(worker.s.parentId) : undefined, run = parent?.s.run;
-    const orchestrator = this.openOrchestrator() ?? this.chats.get(req.chatId);
+    const orchestrator = this.openOrchestrator() ?? this.chats.get(orchestratorChat);
     const owner = parent && !parent.s.closedAt && run && run.endedAt === undefined && run.report?.via !== 'agent_report' ? parent : orchestrator;
     if (!owner || owner.s.closedAt) { log.warn('chats', 'user action reply not delivered: nobody to resume the work', { chat: input.chatId }); return; }
-    void this.send(owner.s.id, userActionMessage(input, reply, owner === parent ? 'parent' : 'orchestrator'), undefined, false, 'App', false, { kind: 'app' })
+    void this.send(owner.s.id, userActionMessage(input, reply, owner === parent ? 'parent' : 'orchestrator', ran ? runResultText(ran) : undefined), undefined, false, 'App', false, { kind: 'app' })
       .catch(e => log.warn('chats', 'user action reply not delivered', { chat: owner.s.id, cause: errText(e), hint: 'the user can write it in that chat' }));
   }
 

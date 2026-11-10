@@ -1,6 +1,6 @@
 // Yes/no questions only (shared/yes-no.ts, ADR 0135): the shape check the question gates use and when the gate is on.
 import { describe, expect, it } from 'vitest';
-import { QUESTION_RULE, YESNO_REFUSAL, isYesNo, yesNoGateOn, yesNoOf, yesNoShape } from '../../src/shared/yes-no';
+import { QUESTION_RULE, YESNO_REFUSAL, isYesNo, ranCommandQuestion, yesNoGateOn, yesNoOf, yesNoShape } from '../../src/shared/yes-no';
 
 const q = (...labels: string[]) => ({ options: labels.map(label => ({ label })), multiSelect: false });
 
@@ -33,6 +33,14 @@ describe('yes/no questions', () => {
     for (const v of ['Fatto?', 'Hai fatto?', 'Ok?', 'Procedo?', 'Tutto ok?', 'L\'hai eseguito?']) expect(yesNoShape([{ ...q('Sì', 'No'), question: v }])).toBe(false);
     for (const v of ['Pubblico?', 'Deploy ora?', 'Faccio il merge?']) expect(yesNoShape([{ ...q('Sì', 'No'), question: v }])).toBe(true);
     for (const c of ['Faccio il commit del fix?', 'Hai fatto il login su Azure DevOps?', 'Procedo con il deploy in test?']) expect(yesNoShape([{ ...q('Sì', 'No'), question: c }])).toBe(true);
+  });
+  it('a question on whether the user ran a command goes back: a Yes to it is not a run (#372)', () => {
+    for (const v of ['Hai eseguito il comando sopra?', 'L\'hai già lanciato?', 'Il comando è stato eseguito?', 'Did you run the command above?', 'Have you executed the script?'])
+      expect(ranCommandQuestion(v), v).toBe(true);
+    for (const v of ['Eseguo il comando sul tuo PC?', 'Lancio i test adesso?', 'Hai preferenze sul nome del ramo?', 'Should I run the tests?'])
+      expect(ranCommandQuestion(v), v).toBe(false);
+    expect(yesNoShape([{ ...q('Sì', 'No'), question: 'Hai eseguito il comando sopra?' }])).toBe(false);
+    expect(YESNO_REFUSAL).toContain('never whether the user ran a command');
   });
   it('a question too long or with code goes back: its context belongs in the brief (ADR 0259)', () => {
     expect(yesNoShape([{ ...q('Sì', 'No'), question: 'Faccio il commit del fix?' }])).toBe(true);

@@ -1,6 +1,6 @@
 # ADR 0253 · A run stopped on a step only the user can do asks the user at once
 
-Date: 2026-11-09 · Status: accepted (owner, issue #358, «risolvi tutte le issue aperte») · Builds on: ADR 0083 (reports),
+Date: 2026-11-09 · Status: accepted (owner, issue #358, «risolvi tutte le issue aperte»), partly superseded by ADR 0262 (the question and its Sì) · Builds on: ADR 0083 (reports),
 ADR 0135 (yes/no questions), #123 (clean reports kept quiet)
 
 ## Context

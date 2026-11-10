@@ -107,7 +107,7 @@ describe('agent_delegate', () => {
     const asks = f.m.pending().filter(r => r.chatId === o.id && r.tool === 'app_user_action');
     expect(asks).toHaveLength(1);
     const q = asks[0]!.questions![0]!;
-    expect(q.question).toContain('«Caso supporto» è fermo: Accendi la VPN. Fatto?');
+    expect(q.question).toContain('«Caso supporto» è fermo: Accendi la VPN. Lo riprendo quando il comando ha girato?');
     expect(q.question).toContain('vpn up');
     expect(q.options.map(x => x.label)).toEqual(['Sì', 'No']);
     // the reporting chat is held and tagged by it, never closed meanwhile
@@ -117,7 +117,13 @@ describe('agent_delegate', () => {
     const before = f.sent.get(parent.id)?.length ?? 0;
     await f.m.answer(o.id, asks[0]!.id, { kind: 'question', answers: { [q.question]: 'Sì' } });
     expect(f.m.pending().some(r => r.chatId === o.id && r.tool === 'app_user_action')).toBe(false);
-    await vi.waitFor(() => expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).toContain('[azione dell’utente fatta · chat «Caso supporto»]'));
+    // #371: the Sì alone is not the run: nothing resumes the work until «vpn up» runs with Esegui
+    await Promise.resolve();
+    expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).not.toContain('chat «Caso supporto»]');
+    f.m.runEnded({ id: 'x', chatId: child.id, itemId: 'i', code: 'other', cwd: f.dir, state: 'ok', exitCode: 0, output: '', startedAt: Date.now() + 1, endedAt: Date.now() + 2 });
+    f.m.runEnded({ id: 'r', chatId: child.id, itemId: 'i', code: 'vpn up\n', cwd: f.dir, state: 'ok', exitCode: 0, output: 'connected', startedAt: Date.now() + 1, endedAt: Date.now() + 2 });
+    await vi.waitFor(() => expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).toContain('[comando dell’utente eseguito · chat «Caso supporto»]'));
+    expect((f.sent.get(parent.id) ?? []).slice(before).join('\n')).toContain('connected');
     expect(f.answers.some(a => a.id === asks[0]!.id)).toBe(false); // never reached an engine
   });
 
@@ -133,8 +139,8 @@ describe('agent_delegate', () => {
     expect(f.m.list().find(c => c.id === parent.id)!.run?.report?.via).toBe('agent_report');
     const toParent = f.sent.get(parent.id)?.length ?? 0, toOrchestrator = f.sent.get(o.id)?.length ?? 0;
     await f.m.answer(o.id, ask.id, { kind: 'question', answers: { [ask.questions![0]!.question]: 'Sì' } });
-    await vi.waitFor(() => expect((f.sent.get(o.id) ?? []).slice(toOrchestrator).join('\n')).toContain('[azione dell’utente fatta · chat «Caso VPN»]'));
-    expect((f.sent.get(parent.id) ?? []).slice(toParent).join('\n')).not.toContain('azione dell’utente');
+    await vi.waitFor(() => expect((f.sent.get(o.id) ?? []).slice(toOrchestrator).join('\n')).toContain('[l’utente dice di aver fatto il passo · chat «Caso VPN»]'));
+    expect((f.sent.get(parent.id) ?? []).slice(toParent).join('\n')).not.toContain('Caso VPN»]');
   });
 
   it('«No» to the app\'s question sends nothing and leaves the chat stopped (#358)', async () => {

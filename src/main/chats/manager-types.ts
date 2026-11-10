@@ -1,6 +1,6 @@
 // The shapes behind ChatManager (manager.ts): its options, the per-chat record (Rec) and the small records its layers
 // pass around. Split out of manager.ts (ADR 0200); only the chat manager's files import Rec.
-import type { ChatCommand, ChatItem, ChatSummary, CursorReasoning, Effort, HandoffInfo, Harness, Lang, NewChat, PendingRequest, PermissionMode, SeenModel } from '../../shared/contract';
+import type { ChatCommand, ChatItem, ChatSummary, CursorReasoning, Effort, HandoffInfo, Harness, Lang, NewChat, PendingRequest, PermissionMode, RunInfo, SeenModel } from '../../shared/contract';
 import type { Emitter } from '../ipc';
 import type { HarnessSession, SessionOptions, SessionSink } from './session';
 import type { HeldChildResult, PastSession } from './store';
@@ -102,6 +102,9 @@ export interface ChatManagerOptions {
   onRunOutcome?: (run: AgentRun) => void;
   /** a question or permission opened in an app chat (→ feed "chat waiting") */
   onWaiting?: (chatId: string, pending: PendingRequest) => void;
+  /** the runs of Esegui (run/runner.ts list): a Yes on «hai eseguito?» and a user step with a command are read against
+   *  them (#371, #372); absent = no run is ever seen */
+  runs?: (chatId?: string) => readonly RunInfo[];
   /** a turn ended with nothing pending: the chat is idle again (→ feed "chat done") */
   onDone?: (chatId: string) => void;
   /** the CLI died in the middle of a turn, with an error and no result (→ feed "chat finita con errore") */

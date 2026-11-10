@@ -143,6 +143,7 @@ import { guideIndex } from './appctl/guide';
 const { setInterval, clearInterval } = timersFor('wiring/auto-close');
 
 import { attachAppTools, createLater, commandRunner, attachCommandAsks, attachOrchestratorWake, attachRunResults, attachArtifacts, createAppSource, createAgentCatalog } from './wiring-shared';
+import type { CommandRunner } from './run/runner';
 import type { Ctx, Wired } from './wiring-types';
 import { buildLearn } from './wiring-builders';
 import { createPhonePort, type PhoneCommands } from './chats/phone-port';
@@ -295,7 +296,10 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     engines: () => agents.list().models, tierModel: (e, t) => tierModel(e, t, brain.modelRegistry(), brain.settings().modelTiers),
     tierModels: (e, t) => tierCandidates(e, t, brain.modelRegistry(), brain.settings().modelTiers),
     runs: () => manager.runs.list() });
+  // the runs of Esegui, built after the manager (#371, #372): a Yes and a user step are read against them
+  const runsRef: { current: CommandRunner | null } = { current: null };
   const manager = new ChatManager({
+    runs: chatId => runsRef.current?.list(chatId) ?? [],
     writeDelayMs: 250, // chats.json and agent-runs.json: one asynchronous write per burst (the main-process freezes, 2026-10-27)
     briefReady: chatId => briefRef.current?.hasBrief(chatId) ?? true,
     prepareDelegation: delegateWorktrees.prepare,
@@ -493,7 +497,8 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
 
   // a reusable command that ran fine with "Esegui" becomes a brain script by itself (issue #111, ADR 0096)
   const autoScripts = new AutoScripts({ scripts: brainScripts, root: () => brain.info().brainRoot, chatTitle: id => chats.list().find(c => c.id === id)?.title ?? null });
-  const runner = commandRunner(ctx, chats, run => { autoScripts.onRun(run); });
+  const runner = commandRunner(ctx, chats, run => { autoScripts.onRun(run); manager.runEnded(run); });
+  runsRef.current = runner;
   // brain_script_add on every chat's own endpoint: a work chat saves the script it ran with success itself
   addChatTools([chatScriptAddTool(brainScripts, id => chats.list().find(c => c.id === id)?.title ?? null)]);
   // brain_query_add the same way: a query that ran and someone reruns goes to queries/ (ADR 0124)

@@ -257,7 +257,7 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0250](0250-orchestrator-chat-clean.md) The Orchestrator chat shows decisions, not delivery traffic — accepted
 - [0251](0251-chat-status-from-real-state.md) A chat tile has one short status, from real state only — accepted
 - [0252](0252-parent-assignment-is-approval.md) A parent's assignment is approval inside its scope — accepted
-- [0253](0253-user-only-blocks-ask-the-user.md) A run stopped on a step only the user can do asks the user at once — accepted
+- [0253](0253-user-only-blocks-ask-the-user.md) A run stopped on a step only the user can do asks the user at once — accepted, partly superseded by 0262
 - [0254](0254-permissions-from-the-brain.md) Permissions v3: everything is allowed, the only blocks are the user's brain rules — accepted
 - [0255](0255-phone-answers-worker-yes-no.md) Worker Sì/No questions answered from the phone (Telegram and Remote Control) — accepted
 - [0256](0256-live-model-lists.md) Live model lists: every engine lists its own models; models.json only overrides — accepted
@@ -266,3 +266,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0259](0259-question-card-redesign.md) The question card, redesigned: still while open, «Bivio», Esegui as a question — accepted
 - [0260](0260-agents-recap.md) The recap is a short list per agent (app_agents_recap) — accepted
 - [0261](0261-agent-message-envelope.md) What the user did not type reaches a Claude engine in an `<agent-message>` envelope — accepted
+- [0262](0262-a-yes-is-not-a-run.md) A Yes is not a run: user steps resume on evidence, «hai eseguito?» never passes as a run — accepted

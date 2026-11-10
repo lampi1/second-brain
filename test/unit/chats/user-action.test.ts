@@ -1,7 +1,7 @@
 // The app's own question for a run stopped on a step only the user can do (#358, chats/user-action.ts): what it says,
 // how a Sì, a No or the user's words are read, what the owner of the work is told; which report words name such a step.
 import { describe, expect, it } from 'vitest';
-import { isUserActionRequest, userActionAnswer, userActionMessage, userActionRequest } from '../../../src/main/chats/user-action';
+import { isUserActionRequest, sameCommand, userActionAnswer, userActionMessage, userActionRequest } from '../../../src/main/chats/user-action';
 import { USER_ONLY_BLOCKER, checkResult } from '../../../src/shared/delegation';
 
 describe('user-action', () => {
@@ -10,7 +10,9 @@ describe('user-action', () => {
   it('names the chat, the step and the command, as a Sì/No question of the app', () => {
     expect(isUserActionRequest(req)).toBe(true);
     expect(req.id).toBe('user-action-r1-5');
-    expect(q).toBe('«Supporto» è fermo: Premi Esegui sul comando. Fatto?\n\n```\naz login\n```');
+    expect(q).toBe('«Supporto» è fermo: Premi Esegui sul comando. Lo riprendo quando il comando ha girato?\n\n```\naz login\n```');
+    // without a command: the user's own step, asked plainly (#371)
+    expect(userActionRequest(5, { id: 'c1', title: 'Supporto', runId: null }, { kind: 'vpn', text: 'Accendi la VPN' }).questions![0]!.question).toBe('«Supporto» è fermo: Accendi la VPN. L’hai fatto tu?');
     expect(req.questions![0]!.options.map(o => o.label)).toEqual(['Sì', 'No']);
   });
   it('reads Sì, No and the user\'s own words', () => {
@@ -20,8 +22,14 @@ describe('user-action', () => {
     expect(userActionAnswer(req, { kind: 'question', answers: {} })).toBeNull();
   });
   it('tells the owner to reassign the chat', () => {
-    expect(userActionMessage({ title: 'Supporto', text: 'Accendi la VPN' }, { yes: true }, 'parent')).toMatch(/^\[azione dell’utente fatta · chat «Supporto»\]\n.*agent_assign_task/);
+    // a Sì alone is the user's word, never a fact the app checked; with a run it carries the run's result (#371)
+    expect(userActionMessage({ title: 'Supporto', text: 'Accendi la VPN' }, { yes: true }, 'parent')).toMatch(/^\[l’utente dice di aver fatto il passo · chat «Supporto»\]\n.*non l’ha verificato.*agent_assign_task/s);
+    expect(userActionMessage({ title: 'Supporto', text: 'Login', command: 'az login' }, { yes: true }, 'orchestrator', 'Esito: riuscito (exit code 0)')).toMatch(/^\[comando dell’utente eseguito · chat «Supporto»\]\n[\s\S]*Esito: riuscito[\s\S]*app_assign_task/);
     expect(userActionMessage({ title: 'Supporto', text: 'Accendi la VPN' }, { yes: false, words: 'domani' }, 'orchestrator')).toContain('«domani»');
+  });
+  it('compares commands without their surrounding space or line ends', () => {
+    expect(sameCommand('az login\r\n', '  az login')).toBe(true);
+    expect(sameCommand('az login', 'az logout')).toBe(false);
   });
   it('knows the words of a user-only block, and keeps userAction off a done report', () => {
     for (const s of ['VPN spenta', 'serve il login', 'MFA richiesto', 'premi Esegui', 'Permission denied (publickey)']) expect(USER_ONLY_BLOCKER.test(s), s).toBe(true);
