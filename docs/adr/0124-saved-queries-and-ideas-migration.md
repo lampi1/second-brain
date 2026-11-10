@@ -1,6 +1,6 @@
 # ADR 0124 · Saved queries next to scripts, and the ideas scattered in the notes move to ideas.md
 
-Date: 2026-10-22 · Status: accepted (owner: Memoria becomes the hub, «Script & Query» one of its tabs; ideas "sue e
+Date: 2026-10-22 · Status: partly superseded by ADR 0263 (queries in their skill's assets/queries/); accepted (owner: Memoria becomes the hub, «Script & Query» one of its tabs; ideas "sue e
 dell'IA" in one place) · Builds on: ADR 0076 (scripts), ADR 0077 (ChangeLog and Annulla), ADR 0116 (the generic upgrade)
 
 ## Context

@@ -8,8 +8,9 @@
 // few steps. A command that may hold a credential (or any credential flag or variable) is skipped, never stored or
 // redacted into a broken script, and so is a production command (the user's alone). The file name carries only the
 // command's name and a hash, never an argument. Dedupe by the command itself (the file name carries its hash; an
-// existing script with the same body counts too), and a script the user deleted (scripts/.deleted/) is not added again. Every save is a changelog line ("app"), undone by deleting
-// the script (a copy stays in scripts/.deleted/).
+// existing script with the same body counts too), and a script the user deleted is not added again. Since ADR 0263 it
+// goes in the chat's role skill (ruolo-<id>/scripts/), and is not kept when the role has none in the brain. Every save
+// is a changelog line ("app") and a change of the skill's history (Annulla).
 // Used by wiring.ts and demo-wiring.ts (the "Esegui" runner's end of run). Unit tests: test/unit/brain/auto-scripts.test.ts.
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -17,7 +18,7 @@ import path from 'node:path';
 import type { RunInfo } from '../../shared/contract';
 import { prodRisk } from '../../shared/runnable';
 import { maskSecrets } from './mask';
-import { SCRIPTS_DIR, secretLine, stripHeader, type BrainScripts, type ScriptMeta } from './scripts';
+import { SKILL_SCRIPTS, secretLine, stripHeader, type BrainScripts, type ScriptMeta } from './scripts';
 import { errText, log } from '../log';
 
 /** Commands that only look around or move: a block made of these alone is not a script worth keeping. */
@@ -83,6 +84,8 @@ export interface AutoScriptsDeps {
   scripts: BrainScripts;
   /** the brain root (to look for a script the user deleted) */
   root: () => string | null;
+  /** the chat's role's own skill (ruolo-<id>) when the brain has it: where the script goes (ADR 0263); none = not saved */
+  roleSkill?: (chatId: string) => string | null;
   /** the chat's title, for the description and the changelog summary */
   chatTitle?: (chatId: string) => string | null;
   platform?: NodeJS.Platform;
@@ -109,10 +112,14 @@ export class AutoScripts {
     if (why) { log.debug('brain', 'auto script skipped', { chat: run.chatId, data: { id: run.id, why } }); return null; }
     const root = this.d.root();
     if (!root) return null;
+    // a script belongs to a skill (ADR 0263): the role's own one, else it is not kept (the run stays in app_command_runs)
+    const skill = this.d.roleSkill?.(run.chatId) ?? null;
+    if (!skill) { log.debug('brain', 'auto script skipped', { chat: run.chatId, data: { id: run.id, why: 'no role skill' } }); return null; }
     const platform = this.d.platform ?? process.platform;
     const name = scriptNameOf(run.code, platform);
-    const dir = path.join(root, SCRIPTS_DIR);
-    if (fs.existsSync(path.join(dir, name)) || this.deletedByUser(dir, name) || this.sameBody(run.code)) return null;
+    const listed = this.d.scripts.list().scripts;
+    if (listed.some(s => s.skill === skill && path.basename(s.path).toLowerCase() === name.toLowerCase()) || this.d.scripts.wasDeleted(name) || this.sameBody(run.code)) return null;
+    const rel = `.agents/skills/${skill}/${SKILL_SCRIPTS}/${name}`;
     const chat = this.d.chatTitle?.(run.chatId)?.trim() || 'una chat';
     const first = steps(run.code).find(l => !trivial(l)) ?? '';
     const at = new Date(run.endedAt ?? Date.now()).toISOString().slice(0, 10);
@@ -120,21 +127,16 @@ export class AutoScripts {
     const meta: ScriptMeta = {
       title: first.length > 70 ? `${first.slice(0, 69)}…` : first,
       description: `Comando eseguito con successo con Esegui in «${chat}» (cartella ${run.cwd}), salvato in automatico dall'app. Controlla percorsi e parametri prima di riusarlo.`,
-      usage: platform === 'win32' ? `powershell -NoProfile -File ${SCRIPTS_DIR}/${name}` : `sh ${SCRIPTS_DIR}/${name}`,
+      usage: platform === 'win32' ? `powershell -NoProfile -File ${rel}` : `sh ${rel}`,
       tags: ['auto', 'esegui'],
       tested: { ok: true, at, note: `exit 0${ms !== null ? ` in ${Math.max(1, Math.round(ms / 1000))} s` : ''}` },
     };
     const r = this.d.scripts.save({
-      name, code: `${run.code.replace(/\r\n/g, '\n').trimEnd()}\n`, meta, by: 'app', create: true,
-      summary: `Salvato in automatico dopo un Esegui riuscito in «${chat}». Per annullare elimina lo script (ne resta una copia in ${SCRIPTS_DIR}/.deleted/).`,
+      skill, name, code: `${run.code.replace(/\r\n/g, '\n').trimEnd()}\n`, meta, by: 'app', create: true,
+      summary: `Salvato in automatico dopo un Esegui riuscito in «${chat}» (skill «${skill}»). Per annullare usa Annulla nella cronologia della skill.`,
     });
     log.info('brain', 'auto script saved', { chat: run.chatId, data: { file: r.file } });
     return r.file;
-  }
-
-  /** A script the user (or the Orchestrator) deleted is a "no": it is not added back. */
-  private deletedByUser(dir: string, name: string): boolean {
-    try { return fs.readdirSync(path.join(dir, '.deleted')).some(f => f.endsWith(`-${name}`)); } catch { return false; }
   }
 
   /** An existing script whose code is this very command (saved by hand under another name). */
@@ -142,8 +144,7 @@ export class AutoScripts {
     const want = flatCommand(code);
     for (const s of this.d.scripts.list().scripts) {
       try {
-        const full = path.join(this.d.root() ?? '', s.file);
-        if (flatCommand(stripHeader(fs.readFileSync(full, 'utf8'))) === want) return true;
+        if (flatCommand(stripHeader(fs.readFileSync(s.path, 'utf8'))) === want) return true;
       } catch { /* unreadable: not the same */ }
     }
     return false;

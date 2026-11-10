@@ -1,6 +1,6 @@
 // Pure helpers of the brain's Script page (ADR 0076) and the Log page (ADR 0111): the scripts' search and
 // the day labels. Kept apart from the pages (which import the app's bridge) so unit tests load them without a window.
-// Used by brain/pages/Script.tsx and components/LogPage.tsx; tests: test/unit/brain/scripts.test.ts.
+// The Script page is gone (ADR 0263); used by components/LogPage.tsx; tests: test/unit/brain/scripts.test.ts.
 import type { BrainScriptSummary } from '@shared/contract';
 import { locale, t } from '../../i18n';
 

@@ -18,6 +18,9 @@ import type { ChangeLog, StoredChange } from '../brainmodel/changes';
 import { errText, log } from '../log';
 import { checkWrite, type GuardInput, type HookRefusal } from './guard';
 import { brainSkillsDir, claudeSkillsDir, unifySkillFolders } from './layout';
+import { assignAsset, migrateAssets, skillParts, unassignedAssets } from './assets';
+import type { SkillPlace } from '../brain/scripts';
+import type { AssetAssign, AssetAssignResult } from '../../shared/skill-library';
 
 /** Who writes: `page` = the user's own click on the Skill page (the only writer of skills outside the brain). */
 export interface SkillWriter { who: string; reason?: string; page?: boolean }
@@ -42,6 +45,9 @@ export interface SkillLibraryDeps {
   changed?: () => void;
   /** move `.claude/skills` into `.agents/skills` once per brain (false in tests that pin the folders) */
   unify?: boolean;
+  /** the old brain-level scripts/ and queries/ move into their skills once per brain (ADR 0263); the copies go here
+   *  (<userData>/backups/scripts-queries); absent = no automatic move */
+  assetsBackup?: string | null;
 }
 
 const MAX_TEXT = 256 * 1024, MAX_FILES = 400, MAX_DEPTH = 5;
@@ -110,10 +116,32 @@ export class SkillLibrary {
   /** The one-copy layout, once per brain per process (the first read waits for it). */
   ready(): Promise<unknown> {
     const root = this.root();
-    if (!root || this.d.unify === false) return Promise.resolve();
+    if (!root || (this.d.unify === false && this.d.assetsBackup === undefined)) return Promise.resolve();
     let p = this.unified.get(root);
-    if (!p) { p = unifySkillFolders(root).catch(e => log.warn('skills', 'skill folders not unified', { cause: errText(e) })); this.unified.set(root, p); }
+    if (!p) {
+      p = (this.d.unify === false ? Promise.resolve() : unifySkillFolders(root)).catch(e => log.warn('skills', 'skill folders not unified', { cause: errText(e) }))
+        // then the old scripts/ and queries/ into their skills (ADR 0263), once per brain per launch
+        .then(() => {
+          if (this.d.assetsBackup === undefined) return;
+          try { if (migrateAssets({ root, skills: this.found(root), log: this.d.changes(), backupDir: this.d.assetsBackup }).moved.length) this.d.changed?.(); }
+          catch (e) { log.warn('skills', 'scripts and queries not moved into their skills', { cause: errText(e), hint: 'they stay in scripts/ and queries/; the Skill page lists them' }); }
+        });
+      this.unified.set(root, p);
+    }
     return p;
+  }
+
+  /** Every skill folder found now, in launch order (the script and query stores look in their scripts/ and assets/). */
+  located(): SkillPlace[] { return this.found().map(f => ({ name: f.name, origin: f.origin, folder: f.folder })); }
+
+  /** The user's pick for a script or query still in the brain's old folders (Skill page «Da assegnare», ADR 0263). */
+  async assign(req: AssetAssign): Promise<AssetAssignResult> {
+    await this.ready();
+    const root = this.root();
+    if (!root) return { ok: false, error: 'Scegli prima la cartella del brain.' };
+    const r = assignAsset({ root, skills: this.found(root), log: this.d.changes(), backupDir: this.d.assetsBackup ?? null }, req);
+    if (r.ok) { log.info('skills', 'script or query assigned to a skill', { data: { kind: req.kind, skill: req.skill, change: r.changeId } }); this.d.changed?.(); }
+    return r;
   }
 
   /** The folders to look in, in launch order, with their origin. */
@@ -181,6 +209,7 @@ export class SkillLibrary {
 
   private info(f: Found, latestBy: Map<string, StoredChange>, bySkill: Map<string, AgentRun[]>, roles: AgentProfile[]): LibSkill {
     const skillMd = path.join(f.folder, 'SKILL.md');
+    const files = packageFiles(f.folder);
     let text = '';
     try { text = fs.readFileSync(skillMd, 'utf8').slice(0, MAX_TEXT); } catch { /* listed with no description */ }
     const p = parseMd(text);
@@ -192,7 +221,7 @@ export class SkillLibrary {
     try { changedAt = fs.statSync(skillMd).mtimeMs; } catch { /* gone */ }
     return {
       name: f.name, description: (field(p, 'description') ?? '').trim(), origin: f.origin, overridesApp: f.overridesApp, folder: f.folder,
-      files: packageFiles(f.folder), area: areaOf(text),
+      files, parts: skillParts(f.folder, files), area: areaOf(text),
       roles: roles.filter(r => r.skills.includes(f.name) || !!r.knowhow?.linked.includes(f.name)).map(r => r.id),
       uses: [...byRole].map(([role, u]) => ({ role, ...u })).sort((a, b) => b.uses - a.uses),
       totalUses: mine.length, lastUse: mine.length ? Math.max(...mine.map(r => r.startedAt)) : null,
@@ -216,7 +245,8 @@ export class SkillLibrary {
     await this.ready();
     const root = this.root(), history = this.d.changes().all(), runs = this.safe(() => this.d.runs(), []), roles = this.safe(() => this.d.roles(), []).filter(r => r.scope === 'role');
     const found = this.found(root), latestBy = this.latestByFolder(history, new Set(found.flatMap(f => this.folders(f)))), bySkill = SkillLibrary.runsBySkill(runs);
-    return { root, skills: found.map(f => this.info(f, latestBy, bySkill, roles)).sort((a, b) => a.name.localeCompare(b.name)), roles: roles.map(r => ({ id: r.id, name: r.name })) };
+    return { root, skills: found.map(f => this.info(f, latestBy, bySkill, roles)).sort((a, b) => a.name.localeCompare(b.name)), roles: roles.map(r => ({ id: r.id, name: r.name })),
+      unassigned: root ? this.safe(() => unassignedAssets(root, found), []) : [] };
   }
   private safe<T>(fn: () => T, fallback: T): T { try { return fn(); } catch { return fallback; } }
 

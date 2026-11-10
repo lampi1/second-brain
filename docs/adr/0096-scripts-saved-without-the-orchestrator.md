@@ -1,7 +1,7 @@
 <!-- Decision record: reusable commands that worked become brain scripts without a manual Orchestrator step (issue #111). -->
 # ADR 0096: Scripts are saved where the command ran, not by the Orchestrator alone
 
-Date: 2026-10-20 · Status: accepted (issue #111; owner rule: brain changes apply by themselves, with a log line and a way
+Date: 2026-10-20 · Status: partly superseded by ADR 0263 (the script goes in the role's skill); accepted (issue #111; owner rule: brain changes apply by themselves, with a log line and a way
 back, no approval) · Amends: ADR 0076 point 3
 
 ## Context

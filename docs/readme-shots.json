@@ -65,17 +65,6 @@
         "src/renderer/brain/lib/map-motion.ts"
       ]
     },
-    "brain-scripts": {
-      "test": "README screenshots",
-      "sources": [
-        "src/renderer/brain/pages/Script.tsx",
-        "src/renderer/components/brain-model/MemoryPage.tsx",
-        "src/renderer/components/brain-model/HubIntro.tsx",
-        "src/renderer/components/Sidebar.tsx",
-        "src/renderer/components/TopBar.tsx",
-        "src/renderer/styles/shell.css"
-      ]
-    },
     "memory": {
       "test": "README showcase: Memoria, agent levels, Orchestrator and Flash, reactions",
       "sources": [

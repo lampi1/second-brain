@@ -88,21 +88,29 @@ describe('the chat tools', () => {
   it('brain_query_add adds a new query note (add only, no credentials, logged); brain_queries finds it', async () => {
     const added: string[] = [];
     const changelog = { add: (e: { target: string }) => { added.push(e.target); return e; } } as never;
-    const qs = new BrainQueries(() => root, () => log, changelog);
-    const add = chatQueryAddTool(qs, () => 'Scout · report');
+    write('.agents/skills/report-ordini/SKILL.md', '---\nname: report-ordini\ndescription: d\n---\n');
+    const skills = [{ name: 'report-ordini', origin: 'brain' as const, folder: path.join(root, '.agents', 'skills', 'report-ordini') }];
+    const qs = new BrainQueries(() => root, () => log, changelog, () => skills);
+    expect(() => chatQueryAddTool(qs, () => 'x').run({ name: 'a', language: 'sql', title: 'A', description: 'a', code: 'SELECT 1' }, toolCtx)).toThrow(/skill: required/);
+    const add = chatQueryAddTool(qs, () => 'Scout · report', () => 'report-ordini');
     const args = { name: 'ordini-aperti', language: 'sql', title: 'Ordini aperti', description: 'Gli ordini ancora aperti.', runsOn: 'Postgres ordini', tags: ['ordini'], code: 'SELECT id FROM ordini\nWHERE stato = \'aperto\';' };
     const r = JSON.parse(await add.run(args, toolCtx) as string) as { file: string };
-    expect(r.file).toBe('queries/ordini-aperti.md');
-    expect(added).toEqual(['queries/ordini-aperti.md']);
-    const saved = qs.get('ordini-aperti.md');
+    // in the skill's assets/queries/ (ADR 0263), one change of its history
+    expect(r.file).toBe('report-ordini/assets/queries/ordini-aperti.md');
+    expect(added).toEqual(['report-ordini/assets/queries/ordini-aperti.md']);
+    expect(fs.existsSync(path.join(root, '.agents', 'skills', 'report-ordini', 'assets', 'queries', 'ordini-aperti.md'))).toBe(true);
+    expect(log.all().at(-1)).toMatchObject({ target: 'report-ordini', action: 'create' });
+    const saved = qs.get('report-ordini/ordini-aperti.md');
+    expect(qs.get('ordini-aperti.md').id).toBe('report-ordini/ordini-aperti.md');
     expect(saved).toMatchObject({ title: 'Ordini aperti', source: 'Postgres ordini', code: args.code });
     expect(saved.from).toContain('Scout · report');
     expect(() => add.run(args, toolCtx)).toThrow(/exists already/);
     const fake = ['gh', 'p_', 'c'.repeat(36)].join('');
     expect(() => add.run({ ...args, name: 'x', code: `SELECT '${fake}';` }, toolCtx)).toThrow(/credential/);
-    const found = JSON.parse(await brainQueriesTool(qs).run({ q: 'ordini postgres' }, toolCtx) as string) as { total: number; queries: { title: string; runsOn: string }[] };
+    const found = JSON.parse(await brainQueriesTool(qs).run({ q: 'ordini postgres' }, toolCtx) as string) as { total: number; queries: { title: string; runsOn: string; skill: string; path: string }[] };
     expect(found.total).toBe(1);
-    expect(found.queries[0]).toMatchObject({ title: 'Ordini aperti', runsOn: 'Postgres ordini' });
+    expect(found.queries[0]).toMatchObject({ title: 'Ordini aperti', runsOn: 'Postgres ordini', skill: 'report-ordini' });
+    expect(found.queries[0]!.path).toContain(path.join('assets', 'queries', 'ordini-aperti.md'));
     expect(findQueries(qs.list().queries, 'kusto')).toEqual([]);
   });
 });

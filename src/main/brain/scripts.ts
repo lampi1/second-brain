@@ -1,23 +1,28 @@
-// The brain's scripts (ADR 0076; the owner, 2026-10-19: "una sezione dedicata agli script, tutti gli script creati e
+// The reusable scripts (ADR 0076; the owner, 2026-10-19: "una sezione dedicata agli script, tutti gli script creati e
 // riutilizzabili provati che funzionano, piena libertà all'orchestratore per modificarli, aggiungerne, correggerli o
-// eliminarli"). They live in the brain's `scripts/` folder, flat, one file each; what a script is for comes from its
-// header comment, `@key value` lines the app writes and reads in the language's own comment syntax:
+// eliminarli"). Since ADR 0263 they live in the skill that uses them, in its scripts/ folder (the Agent Skills format):
+// the list reads every skill's scripts/ (brain, the user's, the app's) and what is still in the brain's old scripts/
+// (skill null, waiting for the move of skills/assets.ts or the user's pick). What a script is for comes from its header
+// comment, `@key value` lines the app writes and reads in the language's own comment syntax:
 //   // @title Backup delle note          # @usage python scripts/x.py <dir>
 //   // @description Zip of the notes…    # @tags backup, git
 //   // @tested 2026-10-19 ok: ran on 120 files
 // A hand-written script without a header still shows (its file name as title, its first comment line as description).
-// Reads mask every line that may hold a credential (mask.ts maskSecrets); a save that
-// holds one is refused (no secrets in files, AGENTS.md rule 2). A delete moves the file to `scripts/.deleted/`, never
-// destroys it. Every save and delete adds a changelog line (changelog.ts). Nothing here runs a script: the tools only
-// write files; the Orchestrator's workers run them with their own permissions. Created on first save (ADR 0072).
-// Used by scripts-tools.ts, wiring.ts, demo-wiring.ts. Unit tests: test/unit/brain/scripts.test.ts.
+// Reads mask every line that may hold a credential (mask.ts maskSecrets); a save that holds one is refused (no secrets in
+// files, AGENTS.md rule 2). A save or delete in a skill is one change of the brain's change log (the skill's history,
+// Annulla); one still in the old folder is edited in place or moved to scripts/.deleted/. Every save and delete also adds
+// a changelog line (changelog.ts). Nothing here runs a script. Used by scripts-tools.ts, auto-scripts.ts,
+// skills/assets.ts, wiring.ts, demo-wiring.ts. Unit tests: test/unit/brain/scripts.test.ts.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { BrainScript, BrainScriptSummary } from '../../shared/contract';
 import { maskSecrets } from './mask';
 import type { BrainChangelog } from './changelog';
+import type { ChangeLog } from '../brainmodel/changes';
 
 export const SCRIPTS_DIR = 'scripts';
+/** a skill's own scripts folder (Agent Skills format) */
+export const SKILL_SCRIPTS = 'scripts';
 const DELETED_DIR = '.deleted';
 /** extension → [language label, line comment] */
 const LANGS: Record<string, [string, string]> = {
@@ -116,14 +121,39 @@ export function findScripts(list: BrainScriptSummary[], q: string): BrainScriptS
   return scored.filter(x => x.hit === words.length).sort((a, b) => b.strong - a.strong).map(x => x.s);
 }
 
+/** A skill folder the stores look in (skills/library.ts located()): its name, where it comes from, its folder. */
+export interface SkillPlace { name: string; origin: 'brain' | 'app' | 'home'; folder: string }
+
+/** Where a script lives: a skill's scripts/ folder, or the brain's old scripts/ (not yet in a skill, ADR 0263). */
+interface Spot { dir: string; name: string; skill: string | null; origin: SkillPlace['origin'] | null }
+
+/** A script id: `<skill>/<file>`, or the bare file name of one still in the brain's scripts/. */
+export const scriptId = (skill: string | null, name: string): string => (skill ? `${skill}/${name}` : name);
+
 export class BrainScripts {
   private cache: { root: string | null; list: BrainScriptSummary[] } | null = null;
-  constructor(private readonly root: () => string | null, private readonly changelog?: BrainChangelog) {}
+  /** `skills`: the skill folders to look in (brain, the user's, the app's); `log`: the brain's change log, through which a
+   *  skill's script is written and removed (its Skill page history, with Annulla). */
+  constructor(private readonly root: () => string | null, private readonly changelog?: BrainChangelog,
+    private readonly skills: () => readonly SkillPlace[] = () => [], private readonly log: () => ChangeLog | null = () => null) {}
 
   private dir(): string | null { const r = this.root(); return r ? path.join(r, SCRIPTS_DIR) : null; }
   invalidate(): void { this.cache = null; }
 
-  private summary(dir: string, name: string): BrainScriptSummary | null {
+  private spots(): Spot[] {
+    const out: Spot[] = [];
+    const add = (dir: string, skill: string | null, origin: Spot['origin']) => {
+      try { for (const n of fs.readdirSync(dir)) if (!n.startsWith('.')) out.push({ dir, name: n, skill, origin }); } catch { /* none */ }
+    };
+    const legacy = this.dir();
+    if (legacy) add(legacy, null, null);
+    for (const s of this.safeSkills()) add(path.join(s.folder, SKILL_SCRIPTS), s.name, s.origin);
+    return out;
+  }
+  private safeSkills(): readonly SkillPlace[] { try { return this.skills(); } catch { return []; } }
+
+  private summary(spot: Spot): BrainScriptSummary | null {
+    const { dir, name, skill } = spot;
     const lang = langOf(name);
     if (!lang || !NAME.test(name)) return null;
     const full = path.join(dir, name);
@@ -134,35 +164,42 @@ export class BrainScripts {
     try { text = fs.readFileSync(full, 'utf8'); } catch { return null; }
     const h = parseHeader(text);
     return {
-      id: name, file: `${SCRIPTS_DIR}/${name}`, title: h.title || name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '),
+      id: scriptId(skill, name), skill, path: full, file: skill ? `${skill}/${SKILL_SCRIPTS}/${name}` : `${SCRIPTS_DIR}/${name}`,
+      title: h.title || name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' '),
       description: maskSecrets(h.description || h.firstComment).text, usage: maskSecrets(h.usage).text, language: lang[0], tags: h.tags,
       tested: h.tested, changedAt: st.mtime.toISOString(), bytes: st.size,
     };
   }
 
-  /** /api/scripts: every script of the brain, newest change first; none on a brain without a scripts/ folder. */
+  /** /api/scripts: every script of the skills (and the few still in the brain's scripts/), newest change first. */
   list(): { root: string | null; dir: string; scripts: BrainScriptSummary[] } {
-    const dir = this.dir();
     const root = this.root();
     if (!this.cache || this.cache.root !== root) {
-      let names: string[] = [];
-      try { if (dir) names = fs.readdirSync(dir).filter(n => !n.startsWith('.')); } catch { /* no scripts yet */ }
-      const list = names.map(n => this.summary(dir!, n)).filter((s): s is BrainScriptSummary => !!s)
+      const list = this.spots().map(s => this.summary(s)).filter((s): s is BrainScriptSummary => !!s)
         .sort((a, b) => (b.changedAt ?? '').localeCompare(a.changedAt ?? '') || a.id.localeCompare(b.id));
       this.cache = { root, list };
     }
     return { root, dir: SCRIPTS_DIR, scripts: this.cache.list };
   }
 
+  /** One listed script by its id (`skill/file`, or a bare file name: the one script of that name). */
+  private find(id: string): BrainScriptSummary | null {
+    const raw = String(id ?? '').trim().replace(/\\/g, '/').replace(/^scripts\//, '');
+    const all = this.list().scripts;
+    const exact = all.find(s => s.id === raw);
+    if (exact) return exact;
+    if (raw.includes('/')) return null;
+    const named = all.filter(s => path.basename(s.path) === raw);
+    if (named.length > 1) throw new Error(`${raw}: more than one skill has a script of this name (${named.map(s => s.skill ?? 'scripts/').join(', ')}): pass «skill/${raw}»`);
+    return named[0] ?? null;
+  }
+
   /** /api/script?id=…: one script with its code, credentials masked. */
   get(id: string): BrainScript {
-    const dir = this.dir();
-    const name = this.checkName(id);
-    const s = dir ? this.summary(dir, name) : null;
-    if (!dir || !s) throw new Error(`script non trovato: ${id}`);
-    const full = path.join(dir, name);
-    const masked = maskSecrets(fs.readFileSync(full, 'utf8'));
-    return { ...s, path: full, code: masked.text, masked: masked.masked };
+    const s = this.find(id);
+    if (!s) throw new Error(`script non trovato: ${id}`);
+    const masked = maskSecrets(fs.readFileSync(s.path, 'utf8'));
+    return { ...s, code: masked.text, masked: masked.masked };
   }
 
   private checkName(name: string): string {
@@ -172,14 +209,31 @@ export class BrainScripts {
     return n;
   }
 
-  /** Add or replace a script (the Orchestrator's brain_script_save). The body is written under a fresh header; a body
-   *  with something that looks like a credential is refused. `fix` = the change repairs a script that failed.
-   *  `create` = add only (brain_script_add, the auto-save): a file with the same name in any case, listed or not (an
-   *  oversized one is not), is refused, and the write itself fails if the file appeared meanwhile. */
-  save(input: { name: string; code: string; meta: ScriptMeta; by: string; summary?: string; fix?: boolean; create?: boolean }): { file: string; path: string; action: 'added' | 'edited' | 'fixed' } {
-    const dir = this.dir();
-    if (!dir) throw new Error('nessuna cartella brain configurata');
+  /** The brain skill a script goes in: it must exist and be the brain's own (an app skill or one of the user's own is not
+   *  written here). */
+  brainSkill(name: string): SkillPlace {
+    const n = String(name ?? '').trim();
+    const s = this.safeSkills().find(x => x.name === n);
+    if (!s) throw new Error(`skill: «${n}» not found. Pass the folder name of a brain skill (the Skill page lists them); a new skill is created first with its SKILL.md`);
+    if (s.origin !== 'brain') throw new Error(`skill: «${n}» is ${s.origin === 'app' ? 'one of the app\'s skills (its first edit on the Skill page makes the brain copy scripts go in)' : 'one of the user\'s own skills (changed only from the Skill page)'}`);
+    return s;
+  }
+
+  /** Add or replace a script in a skill's scripts/ folder (brain_script_save, brain_script_add, the auto-save; ADR
+   *  0263). The body is written under a fresh header; a body with something that looks like a credential is refused.
+   *  `fix` = the change repairs a script that failed. `create` = add only: a file with the same name in any case is
+   *  refused. Without `skill`, only a script still in the brain's scripts/ is edited in place. */
+  save(input: { skill?: string | null; name: string; code: string; meta: ScriptMeta; by: string; summary?: string; fix?: boolean; create?: boolean }): { file: string; path: string; skill: string | null; action: 'added' | 'edited' | 'fixed' } {
     const name = this.checkName(input.name);
+    const skillName = String(input.skill ?? '').trim();
+    let dir: string, skill: string | null = null;
+    if (skillName) { dir = path.join(this.brainSkill(skillName).folder, SKILL_SCRIPTS); skill = skillName; }
+    else {
+      const legacy = this.dir();
+      if (!legacy) throw new Error('nessuna cartella brain configurata');
+      if (input.create || !fs.existsSync(path.join(legacy, name))) throw new Error('skill: required, the skill this script belongs to (its folder name): the script is saved in that skill\'s scripts/ folder');
+      dir = legacy;
+    }
     if (!input.meta.title.trim()) throw new Error('title: required');
     if (!input.meta.description.trim()) throw new Error('description: required (what it does, when to reuse it)');
     const text = withHeader(name, String(input.code ?? ''), input.meta);
@@ -190,12 +244,15 @@ export class BrainScripts {
     const full = path.join(dir, name);
     const existed = fs.existsSync(full);
     if (input.create && (existed || this.taken(dir, name))) throw new Error(`${name} exists already: add only creates a new script`);
-    fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(full, text, { encoding: 'utf8', flag: input.create ? 'wx' : 'w' });
+    const file = skill ? `${skill}/${SKILL_SCRIPTS}/${name}` : `${SCRIPTS_DIR}/${name}`;
+    const what = input.summary?.trim() || input.meta.title;
+    const log = skill ? this.log() : null;
+    if (log) log.apply({ job: 'user', kind: 'script', action: existed ? 'update' : 'create', target: skill!, summary: `Script ${SKILL_SCRIPTS}/${name} ${existed ? 'modificato' : 'aggiunto'} (${input.by})`, reason: what.slice(0, 500), evidence: [`${SKILL_SCRIPTS}/${name}`] }, [{ file: full, text }]);
+    else { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(full, text, { encoding: 'utf8', flag: input.create ? 'wx' : 'w' }); }
     this.invalidate();
     const action = !existed ? 'added' : input.fix ? 'fixed' : 'edited';
-    this.changelog?.add({ kind: 'script', action, target: `${SCRIPTS_DIR}/${name}`, by: input.by, summary: input.summary?.trim() || input.meta.title });
-    return { file: `${SCRIPTS_DIR}/${name}`, path: full, action };
+    this.changelog?.add({ kind: 'script', action, target: file, by: input.by, summary: what });
+    return { file, path: full, skill, action };
   }
 
   /** A file in the scripts folder with this name in another case (a case-insensitive file system would overwrite it). */
@@ -204,21 +261,41 @@ export class BrainScripts {
     try { return fs.readdirSync(dir).some(f => f.toLowerCase() === want); } catch { return false; }
   }
 
-  /** Remove a script (the Orchestrator's brain_script_delete): moved to scripts/.deleted/, never destroyed. */
+  /** Remove a script (brain_script_delete): a skill's goes through the change log (Annulla on the Skill page puts it
+   *  back); one still in the brain's scripts/ moves to scripts/.deleted/, never destroyed. */
   delete(input: { name: string; by: string; reason: string }): { file: string; keptAt: string } {
-    const dir = this.dir();
-    if (!dir) throw new Error('nessuna cartella brain configurata');
-    const name = this.checkName(input.name);
-    const full = path.join(dir, name);
-    if (!fs.existsSync(full)) throw new Error(`script non trovato: ${name}`);
+    const s = this.find(input.name);
+    if (!s) throw new Error(`script non trovato: ${input.name}`);
+    const why = input.reason.trim() || 'eliminato';
+    if (s.skill) {
+      const log = this.log();
+      if (!log) throw new Error('nessuna cronologia del brain: elimina lo script dalla pagina Skill');
+      const c = log.apply({ job: 'user', kind: 'script', action: 'remove', target: s.skill, summary: `Script ${SKILL_SCRIPTS}/${path.basename(s.path)} tolto (${input.by})`, reason: why.slice(0, 500), evidence: [`${SKILL_SCRIPTS}/${path.basename(s.path)}`] }, [{ file: s.path, text: null }]);
+      if (!c) throw new Error('lo script non si può togliere con Annulla: toglilo dalla cartella della skill');
+      this.invalidate();
+      this.changelog?.add({ kind: 'script', action: 'deleted', target: s.file, by: input.by, summary: `${why} (Annulla nella cronologia della skill)` });
+      return { file: s.file, keptAt: `history:${c.id}` };
+    }
+    const dir = path.dirname(s.path), name = path.basename(s.path);
     const stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..*$/, '').replace('T', '-');
     const kept = path.join(dir, DELETED_DIR, `${stamp}-${name}`);
     fs.mkdirSync(path.dirname(kept), { recursive: true });
-    fs.renameSync(full, kept);
+    fs.renameSync(s.path, kept);
     this.invalidate();
     const rel = `${SCRIPTS_DIR}/${DELETED_DIR}/${path.basename(kept)}`;
-    this.changelog?.add({ kind: 'script', action: 'deleted', target: `${SCRIPTS_DIR}/${name}`, by: input.by, summary: `${input.reason.trim() || 'eliminato'} (copia in ${rel})` });
-    return { file: `${SCRIPTS_DIR}/${name}`, keptAt: rel };
+    this.changelog?.add({ kind: 'script', action: 'deleted', target: s.file, by: input.by, summary: `${why} (copia in ${rel})` });
+    return { file: s.file, keptAt: rel };
+  }
+
+  /** Whether a script of this file name was deleted and not put back (the auto-save does not add it again): one moved to
+   *  the brain's scripts/.deleted/, or a skill's removed through the change log. */
+  wasDeleted(name: string): boolean {
+    const legacy = this.dir();
+    try { if (legacy && fs.readdirSync(path.join(legacy, DELETED_DIR)).some(f => f.endsWith(`-${name}`))) return true; } catch { /* none */ }
+    const log = this.log();
+    if (!log) return false;
+    const tail = `${path.sep}${SKILL_SCRIPTS}${path.sep}${name}`;
+    return log.all().some(c => !c.rolledBackAt && c.files.some(f => f.after === null && f.before !== null && f.file.endsWith(tail)));
   }
 }
 
@@ -226,5 +303,5 @@ export class BrainScripts {
  *  extension may be the scripts folder itself, moved or deleted. */
 export const touchesScripts = (rel: string): boolean => {
   const p = rel.replace(/\\/g, '/');
-  return p === 'changelog.md' || p === SCRIPTS_DIR || p.startsWith(`${SCRIPTS_DIR}/`);
+  return p === 'changelog.md' || p === SCRIPTS_DIR || p.startsWith(`${SCRIPTS_DIR}/`) || /^\.(?:agents|claude)\/skills(?:\/|$)/.test(p);
 };

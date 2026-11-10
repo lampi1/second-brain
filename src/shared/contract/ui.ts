@@ -1,7 +1,7 @@
 // Shell UI: held news, the global layer (overlay), skills and agents on disk, search, brain sync and the page's own diagnostics.
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
-import type { LibSkill, SkillFileText, SkillLibraryState, SkillVersion, SkillWrite, SkillWriteResult } from '../skill-library';
+import type { AssetAssign, AssetAssignResult, LibSkill, SkillFileText, SkillLibraryState, SkillVersion, SkillWrite, SkillWriteResult } from '../skill-library';
 import type { LogList } from '../activity-log';
 import type { Harness } from './engines';
 import type { Lang, ThemeMode } from './settings';
@@ -193,6 +193,7 @@ export interface UiInvokeMap {
   'skills:undo': [{ skill: string; changeId: string }, SkillVersion[]];
   /** the full list of roles that load the skill */
   'skills:roles': [{ skill: string; roles: string[] }, LibSkill];
+  'skills:assign': [AssetAssign, AssetAssignResult];
   /** a chat input's Ctrl+V carried no image and no text: main reads the clipboard's image (seen = the paste's types, logged) */
   'clipboard:image': [{ seen: string[] }, ClipboardImage | null];
   /** Ctrl+K: full-text search over chats (last 30 days), branches and the brain's markdown (read-only) */

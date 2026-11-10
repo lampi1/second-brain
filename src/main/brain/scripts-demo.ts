@@ -66,15 +66,22 @@ const LOG: [number, string, string, string, string, string, string][] = [
   [6, '08:55', 'note', 'edited', 'now.md', 'Orchestrator', 'Aggiornate le priorità della settimana'],
 ];
 
-/** Write the demo folder (scripts/ and changelog.md) under `dir`; returns `dir`, the demo's brain root for these pages. */
-export function writeDemoScripts(dir: string, now: number): string {
+/** Which demo skill holds each script (ADR 0263: scripts live in skills); one stays in the brain's old scripts/, waiting
+ *  for the user to place it (the Skill page's «Da assegnare»). */
+const SKILL_OF: Record<string, string> = { 'export-ticket.py': 'note-di-rilascio', 'pulisci-branch.ps1': 'pulizia-ambiente', 'conta-righe-log.sh': 'pulizia-ambiente' };
+
+/** Write the demo changelog.md under `dir` and the demo scripts into the demo brain at `brainRoot` (its skills'
+ *  scripts/, one in scripts/); returns `dir`, the changelog's root. */
+export function writeDemoScripts(dir: string, now: number, brainRoot: string): string {
   base = now;
-  const scripts = path.join(dir, 'scripts');
   fs.rmSync(dir, { recursive: true, force: true });
-  fs.mkdirSync(scripts, { recursive: true });
+  fs.mkdirSync(dir, { recursive: true });
   // the texts call day() at module load with Date.now(): rebuild them for this `now`
   for (const [name, [, age]] of Object.entries(SCRIPTS)) {
     const text = SCRIPTS[name]![0].replace(/@tested \d{4}-\d\d-\d\d/, `@tested ${day(age)}`);
+    const skill = SKILL_OF[name], skillDir = skill ? path.join(brainRoot, '.claude', 'skills', skill) : null;
+    const scripts = skillDir && fs.existsSync(skillDir) ? path.join(skillDir, 'scripts') : path.join(brainRoot, 'scripts');
+    fs.mkdirSync(scripts, { recursive: true });
     const f = path.join(scripts, name);
     fs.writeFileSync(f, text, 'utf8');
     const t = new Date(now - age * DAY - 3600e3);

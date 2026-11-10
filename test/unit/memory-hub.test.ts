@@ -4,7 +4,7 @@ import { DEFAULT_TAB, HUB_PAGES, HUB_TABS, hubArg, hubRedirect, parseHubArg, pic
 
 describe('the Memoria hub tabs', () => {
   it('keeps the tabs in the agreed order', () => {
-    expect(HUB_TABS).toEqual(['proposte', 'approvate', 'skill', 'regole', 'script', 'idee', 'file']);
+    expect(HUB_TABS).toEqual(['proposte', 'approvate', 'skill', 'regole', 'idee', 'file']);
     expect(DEFAULT_TAB).toBe('proposte');
   });
 
@@ -12,8 +12,11 @@ describe('the Memoria hub tabs', () => {
     expect(parseHubArg('skill/note-di-rilascio')).toEqual({ tab: 'skill', rest: 'note-di-rilascio' });
     expect(parseHubArg('idee/ia')).toEqual({ tab: 'idee', rest: 'ia' });
     expect(parseHubArg('Regole')).toEqual({ tab: 'regole', rest: null });
-    expect(parseHubArg('queries')).toEqual({ tab: 'script', rest: null });
-    expect(parseHubArg('script/a/b')).toEqual({ tab: 'script', rest: 'a/b' });
+    // Script & Query is gone (ADR 0263): its links open the script's skill
+    expect(parseHubArg('queries')).toEqual({ tab: 'skill', rest: null });
+    expect(parseHubArg('script/deploy%2Fa.ps1')).toEqual({ tab: 'skill', rest: 'deploy' });
+    expect(parseHubArg('script/deploy/a.ps1')).toEqual({ tab: 'skill', rest: 'deploy' });
+    expect(parseHubArg('script/vecchio.ps1')).toEqual({ tab: 'skill', rest: null });
     expect(parseHubArg('statistiche')).toEqual({ tab: 'skill', rest: null }); // gone (ADR 0248): skill use is in Skill
   });
 
@@ -32,6 +35,7 @@ describe('the Memoria hub tabs', () => {
     for (const [page, tab] of Object.entries(HUB_PAGES)) expect(hubRedirect(page, null)).toEqual({ page: 'memoria', arg: tab });
     expect(hubRedirect('skill', 'note')).toEqual({ page: 'memoria', arg: 'skill/note' });
     expect(hubRedirect('idee', 'ia')).toEqual({ page: 'memoria', arg: 'idee/ia' });
+    expect(hubRedirect('script', 'deploy/a.ps1')).toEqual({ page: 'memoria', arg: 'skill/deploy' });
     expect(hubRedirect('memoria', 'file')).toBeNull();
     expect(hubRedirect('costi', null)).toBeNull();
   });

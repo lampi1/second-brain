@@ -1,5 +1,5 @@
 // The app rail groups work, the Brain (ADR 0077: Agenti, Memoria and the Mappa of their links; Memoria is the one hub of
-// the brain's content since ADR 0122, with Skill, Regole, Script & Query and Idee as its tabs, and carries the count of
+// the brain's content since ADR 0122, with Skill, Regole and Idee as its tabs, and carries the count of
 // proposals waiting for the user), Andamento (one page since ADR 0202: Costi, Qualità, Apprendimento, Classificatori, Uso) and app
 // tools (Log = everything the app did, live, ADR 0111, Guida; the Dashboard is gone, ADR 0122). Role-specific pages
 // exclude destinations already supplied by the shell. Under the Grindhouse entry, the open agents as a delegation

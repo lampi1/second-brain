@@ -14,6 +14,35 @@ export interface SkillFile {
   text: boolean;
 }
 
+/** One file of a skill's package as its group shows it (ADR 0263): a script with its header, a saved query, a reference
+ *  or an asset. `path` is inside the skill's folder (`scripts/x.py`, `assets/queries/y.md`). */
+export interface SkillPart {
+  path: string;
+  title: string;
+  description: string;
+  /** the language label (Python, KQL…); '' for a reference or an asset */
+  language: string;
+  /** a script's last test (its @tested header line); absent for the other groups */
+  tested?: 'ok' | 'failed' | 'untested';
+}
+/** The package by the Agent Skills folders (agentskills.io/specification): scripts/, references/, assets/ (the app keeps a
+ *  skill's saved queries in assets/queries/). */
+export interface SkillParts { scripts: SkillPart[]; queries: SkillPart[]; references: SkillPart[]; assets: SkillPart[] }
+
+/** A brain-level script or query not yet in a skill (ADR 0263): the migration could not tell which skill uses it.
+ *  `candidates` = the skills that name it (none or several); `reason` says why it stayed. */
+export interface UnassignedAsset {
+  kind: 'script' | 'query';
+  /** the file name in the brain's scripts/ or queries/ */
+  name: string;
+  title: string;
+  description: string;
+  candidates: string[];
+  reason: 'none' | 'many' | 'conflict' | 'too-big';
+}
+export interface AssetAssign { kind: 'script' | 'query'; name: string; skill: string }
+export type AssetAssignResult = { ok: true; changeId: string | null; file: string } | { ok: false; error: string };
+
 export interface SkillRoleUse { role: string; uses: number; lastAt: number }
 
 export interface LibSkill {
@@ -25,6 +54,8 @@ export interface LibSkill {
   /** absolute folder */
   folder: string;
   files: SkillFile[];
+  /** the package's scripts, queries, references and assets with their titles (ADR 0263) */
+  parts: SkillParts;
   /** frontmatter `metadata.area` (or `area`), for the filter; null = none */
   area: string | null;
   /** the roles that load it at start (their default skills and the ones linked to them) */
@@ -47,6 +78,8 @@ export interface SkillLibraryState {
   root: string | null;
   skills: LibSkill[];
   roles: SkillRole[];
+  /** brain-level scripts and queries waiting for a skill (ADR 0263) */
+  unassigned: UnassignedAsset[];
 }
 
 export interface SkillFileText { skill: string; path: string; text: string | null; size: number; mtime: number; origin: SkillOrigin }

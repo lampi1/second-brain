@@ -182,4 +182,36 @@ textarea.sl-input{height:auto;padding:8px 10px;resize:vertical;line-height:1.5}
 .sl-field em{font-style:normal;font-weight:400;color:var(--text-3);margin-inline-start:6px}
 .sl-create-actions{display:flex;justify-content:flex-end;gap:8px}
 
-@media (prefers-reduced-motion:reduce){.sl-detail,.sl-create{animation:none}.sl-tabs [role=tab]::after,.sl-bar span,.sl-role input::after{transition:none}}
+/* ── what the package holds (ADR 0263): Script, Query, Riferimenti, Asset, each row opens its file ── */
+.sl-parts{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px;margin:0 0 18px}
+.sl-part-group{min-width:0;border:1px solid var(--border);border-radius:var(--r-m);background:var(--surface);overflow:hidden}
+.sl-part-group h3{display:flex;align-items:center;gap:7px;margin:0;padding:9px 12px;border-bottom:1px solid var(--border);font-size:var(--fs-s);font-weight:600;color:var(--text)}
+.sl-part-group h3 svg{color:var(--accent)}
+.sl-part-folder{margin-inline-start:auto;font-size:var(--fs-xs);font-weight:400;color:var(--text-3)}
+.sl-part-group ul{list-style:none;margin:0;padding:4px}
+.sl-part{display:flex;flex-direction:column;gap:5px;width:100%;min-width:0;padding:8px 9px;border:0;border-radius:6px;background:none;color:var(--text-2);text-align:start;cursor:pointer;
+  transition:background-color var(--dur-fast) var(--ease)}
+.sl-part:hover{background:var(--surface-2)}
+.sl-part:focus-visible{outline:2px solid var(--focus);outline-offset:-2px}
+.sl-part-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sl-part-title{color:var(--text);font-size:var(--fs-s);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sl-part-desc{color:var(--text-3);font-size:var(--fs-xs);line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.sl-part-meta{display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
+.sl-part-path{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-3);font-size:10.5px}
+.sl-part-tested{display:inline-flex;align-items:center;height:18px;padding:0 7px;border-radius:99px;font-size:10.5px;font-weight:500;color:var(--text-3);border:1px solid var(--border-2)}
+.sl-part-tested[data-state=ok]{color:var(--green);background:var(--green-bg);border-color:transparent}
+.sl-part-tested[data-state=failed]{color:var(--red);border-color:color-mix(in srgb,var(--red) 40%,transparent)}
+
+/* ── «Da assegnare»: scripts and queries the move could not place ── */
+.sl-un{margin:0 0 10px;border:1px solid var(--amber-line);border-radius:var(--r-m);background:var(--amber-bg)}
+.sl-un-head{display:flex;align-items:center;gap:10px;padding:8px 8px 8px 12px}
+.sl-un-title{flex:1;min-width:0;font-size:var(--fs-s);font-weight:500;color:var(--text)}
+.sl-un-lead{margin:0;padding:0 12px 8px;color:var(--text-2);max-width:90ch}
+.sl-un ul{list-style:none;margin:0;padding:0 6px 6px;display:flex;flex-direction:column;gap:4px}
+.sl-un-line{display:grid;grid-template-columns:auto minmax(0,1fr) minmax(140px,220px) auto;align-items:center;gap:10px;padding:8px;border-radius:6px;background:var(--surface)}
+.sl-un-icon{color:var(--text-3);display:inline-flex}
+.sl-un-main{display:flex;flex-direction:column;gap:2px;min-width:0}
+.sl-un-line .st-select{height:28px;font-size:var(--fs-s);min-width:0}
+@media (max-width:720px){.sl-un-line{grid-template-columns:auto minmax(0,1fr)}.sl-un-line .st-select,.sl-un-line .btn{grid-column:2}}
+
+@media (prefers-reduced-motion:reduce){.sl-detail,.sl-create{animation:none}.sl-tabs [role=tab]::after,.sl-bar span,.sl-role input::after,.sl-part{transition:none}}

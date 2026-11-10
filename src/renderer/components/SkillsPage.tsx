@@ -25,6 +25,7 @@ import { Select } from './Select';
 import { HelpTip } from './HelpTip';
 import { IconPlus, IconSearch, IconX } from './Icons';
 import { SkillDetail, type DetailTab } from './skills/SkillDetail';
+import { UnassignedPanel } from './skills/UnassignedPanel';
 import { SORTS, sortSkills, type SortBy } from '../lib/skill-sort';
 import '../styles/skill-library.css';
 
@@ -132,6 +133,8 @@ export function SkillsPage() {
   const top = useMemo(() => sortSkills(skills.filter(s => s.totalUses > 0), 'uses').slice(0, 5), [skills]);
   const filtered = origin !== 'all' || usage !== 'all' || !!role || !!area || !!q;
   const current = skills.find(s => s.name === pick) ?? null;
+  // a link to one skill (a script's or query's old link, ADR 0263) opens it
+  useEffect(() => { if (arg && skills.some(s => s.name === arg)) setPick(arg); }, [arg, skills]);
   // the first skill is open from the start: the right side is never an empty frame
   useEffect(() => { if (lib && !creating && (!pick || !current) && sorted[0]) setPick(sorted[0].name); }, [lib, pick, current, sorted, creating]);
   const roleName = useCallback((id: string) => lib?.roles.find(r => r.id === id)?.name ?? id, [lib]);
@@ -168,6 +171,7 @@ export function SkillsPage() {
           return <button key={s.name} type="button" className="sl-top-chip" aria-current={s.name === pick ? 'true' : undefined} title={t('sl.topTip', { name: s.name, n: s.totalUses, who })} onClick={() => choose(s.name)} data-testid={`sl-top-${s.name}`}>
             <span className="mono">{s.name}</span><span className="sl-n">{s.totalUses}</span></button>; })}
       </div>}
+      {!!lib?.unassigned.length && <UnassignedPanel items={lib.unassigned} skills={skills} onMoved={name => { void load().then(() => setPick(name)); }} />}
       <div className="sl-shell sl-fit">
         <aside className="sl-rail" aria-label={t('sl.searchLabel')}>
           <div className="sl-search">

@@ -11,6 +11,8 @@ import { AutoScripts, scriptNameOf, skipReason } from '../../../src/main/brain/a
 import { BrainScripts, parseHeader } from '../../../src/main/brain/scripts';
 import { BrainChangelog } from '../../../src/main/brain/changelog';
 import { chatScriptAddTool } from '../../../src/main/brain/scripts-tools';
+import { ChangeLog } from '../../../src/main/brainmodel/changes';
+import type { SkillPlace } from '../../../src/main/brain/scripts';
 import type { CallCtx } from '../../../src/main/mcp/server';
 
 let root: string;
@@ -36,10 +38,19 @@ const run = (code: string, over: Partial<RunInfo> = {}): RunInfo => ({
   id: `run-${++seq}`, chatId: 'c1', itemId: 'i1', code, cwd: 'C:\\repo', state: 'ok', exitCode: 0, output: 'done',
   startedAt: 1_000, endedAt: 4_000, ...over,
 });
+/** The chat's role skill (ADR 0263: an auto-saved script goes in its scripts/) and the brain's change log. */
+const SKILL = 'ruolo-scout';
+const skillDir = () => path.join(root, '.agents', 'skills', SKILL);
+const places = (): SkillPlace[] => {
+  fs.mkdirSync(skillDir(), { recursive: true });
+  fs.writeFileSync(path.join(skillDir(), 'SKILL.md'), `---\nname: ${SKILL}\ndescription: d\n---\n`);
+  return [{ name: SKILL, origin: 'brain', folder: skillDir() }];
+};
+const history = () => { const ud = path.join(root, 'ud'); fs.mkdirSync(ud, { recursive: true }); return new ChangeLog(ud); };
 const setup = () => {
-  const changelog = new BrainChangelog(() => root);
-  const scripts = new BrainScripts(() => root, changelog);
-  const auto = new AutoScripts({ scripts, root: () => root, chatTitle: () => 'Deploy ExampleApp', platform: 'win32' });
+  const changelog = new BrainChangelog(() => root), skills = places(), log = history();
+  const scripts = new BrainScripts(() => root, changelog, () => skills, () => log);
+  const auto = new AutoScripts({ scripts, root: () => root, roleSkill: () => SKILL, chatTitle: () => 'Deploy ExampleApp', platform: 'win32' });
   return { changelog, scripts, auto };
 };
 
@@ -77,17 +88,24 @@ describe('AutoScripts', () => {
   it('saves a successful reusable run as a tested script with a changelog line', () => {
     const { auto, scripts, changelog } = setup();
     const file = auto.onRun(run(DEPLOY));
-    expect(file).toBe(`scripts/${scriptNameOf(DEPLOY, 'win32')}`);
-    expect(file).toMatch(/^scripts\/cmd-npm-[0-9a-f]{8}\.ps1$/);
+    expect(file).toBe(`${SKILL}/scripts/${scriptNameOf(DEPLOY, 'win32')}`);
+    expect(file).toMatch(/^ruolo-scout\/scripts\/cmd-npm-[0-9a-f]{8}\.ps1$/);
     const [s] = scripts.list().scripts;
     expect(s).toMatchObject({ title: DEPLOY.slice(0, 69) + '…', tags: ['auto', 'esegui'], tested: { state: 'ok' } });
     expect(s!.description).toContain('Deploy ExampleApp');
-    const text = fs.readFileSync(path.join(root, file!), 'utf8');
+    const text = fs.readFileSync(path.join(skillDir(), 'scripts', path.basename(file!)), 'utf8');
     expect(text).toContain(DEPLOY);
-    expect(parseHeader(text).usage).toContain('powershell -NoProfile -File scripts/');
+    expect(parseHeader(text).usage).toContain('powershell -NoProfile -File .agents/skills/ruolo-scout/scripts/');
     const [e] = changelog.list().entries;
     expect(e).toMatchObject({ kind: 'script', action: 'added', by: 'app', target: file });
-    expect(e!.summary).toContain('.deleted');
+    expect(e!.summary).toContain('Annulla');
+  });
+
+  it('keeps nothing for a chat whose role has no skill of its own (a script belongs to a skill, ADR 0263)', () => {
+    const scripts = new BrainScripts(() => root, undefined, () => places());
+    const auto = new AutoScripts({ scripts, root: () => root, roleSkill: () => null, platform: 'win32' });
+    expect(auto.onRun(run(DEPLOY))).toBeNull();
+    expect(fs.existsSync(path.join(skillDir(), 'scripts'))).toBe(false);
   });
 
   it('ignores failed, stopped and running runs, and the same run twice', () => {
@@ -105,7 +123,7 @@ describe('AutoScripts', () => {
     expect(auto.onRun(run(DEPLOY))).not.toBeNull();
     expect(auto.onRun(run(`  ${DEPLOY}  \n`))).toBeNull();
     const cmd = 'dotnet run --project Populator -- --migrate all';
-    scripts.save({ name: 'migra-test.ps1', code: cmd, by: 'Orchestrator', meta: { title: 'Migra', description: 'Migra i DB di test', tested: { ok: true, note: 'ok' } } });
+    scripts.save({ skill: SKILL, name: 'migra-test.ps1', code: cmd, by: 'Orchestrator', meta: { title: 'Migra', description: 'Migra i DB di test', tested: { ok: true, note: 'ok' } } });
     expect(auto.onRun(run(cmd))).toBeNull();
     expect(scripts.list().scripts).toHaveLength(2);
   });
@@ -113,7 +131,7 @@ describe('AutoScripts', () => {
   it('does not add back a script the user deleted (the rollback holds)', () => {
     const { auto, scripts } = setup();
     const file = auto.onRun(run(DEPLOY))!;
-    scripts.delete({ name: path.basename(file), by: 'utente', reason: 'non serve' });
+    scripts.delete({ name: file.replace('/scripts/', '/'), by: 'utente', reason: 'non serve' });
     expect(auto.onRun(run(DEPLOY))).toBeNull();
     expect(scripts.list().scripts).toEqual([]);
   });
@@ -122,7 +140,7 @@ describe('AutoScripts', () => {
     const { auto } = setup();
     expect(auto.onRun(run('git status'))).toBeNull();
     expect(auto.onRun(run(`$env:X = "x"; sqlcmd -S db.local -U sa -P ${'Sup3r'}${'Secret!42'} -Q "select 1"`))).toBeNull();
-    expect(fs.existsSync(path.join(root, 'scripts'))).toBe(false);
+    expect(fs.existsSync(path.join(skillDir(), 'scripts'))).toBe(false);
     const none = new AutoScripts({ scripts: new BrainScripts(() => null), root: () => null });
     expect(none.onRun(run(DEPLOY))).toBeNull();
   });
@@ -131,7 +149,7 @@ describe('AutoScripts', () => {
     const { auto } = setup();
     expect(auto.onRun(run(PROD))).toBeNull();
     expect(auto.onRun(run('npm run release -- --env staging --verbose', { prod: 'lancia uno script di produzione' }))).toBeNull();
-    expect(fs.existsSync(path.join(root, 'scripts'))).toBe(false);
+    expect(fs.existsSync(path.join(skillDir(), 'scripts'))).toBe(false);
   });
 
   it('writes a shell script off Windows, named after the command only (never its arguments)', () => {
@@ -148,11 +166,12 @@ describe('brain_script_add (work chats)', () => {
   const args = { name: 'deploy-example-app.ps1', title: 'Deploy ExampleApp test', description: 'Zip su web app di test', code: DEPLOY, note: 'deploy ok' };
 
   it('adds a new script logged under the chat title, and refuses to overwrite one', async () => {
-    const changelog = new BrainChangelog(() => root);
-    const scripts = new BrainScripts(() => root, changelog);
-    const tool = chatScriptAddTool(scripts, id => (id === 'c7' ? 'Lavoro ExampleApp' : null));
+    const changelog = new BrainChangelog(() => root), skills = places();
+    const scripts = new BrainScripts(() => root, changelog, () => skills);
+    expect(() => chatScriptAddTool(scripts, () => 'x').run(args, ctx)).toThrow(/skill: required/);
+    const tool = chatScriptAddTool(scripts, id => (id === 'c7' ? 'Lavoro ExampleApp' : null), () => SKILL);
     const out = JSON.parse(await tool.run(args, ctx) as string);
-    expect(out).toMatchObject({ ok: true, action: 'added', file: 'scripts/deploy-example-app.ps1' });
+    expect(out).toMatchObject({ ok: true, action: 'added', file: 'ruolo-scout/scripts/deploy-example-app.ps1', skill: SKILL });
     expect(scripts.list().scripts[0]!.tested.state).toBe('ok');
     expect(changelog.list().entries[0]).toMatchObject({ by: 'Lavoro ExampleApp', action: 'added' });
     await expect(async () => tool.run({ ...args, code: 'echo 2' }, ctx)).rejects.toThrow(/exists already/);
@@ -161,18 +180,20 @@ describe('brain_script_add (work chats)', () => {
   });
 
   it('never overwrites a file the list leaves out (an oversized script)', async () => {
-    fs.mkdirSync(path.join(root, 'scripts'));
-    const big = path.join(root, 'scripts', 'big.ps1');
+    const skills = places();
+    fs.mkdirSync(path.join(skillDir(), 'scripts'));
+    const big = path.join(skillDir(), 'scripts', 'big.ps1');
     fs.writeFileSync(big, `# ${'x'.repeat(300_000)}\n`);
-    const scripts = new BrainScripts(() => root);
-    const tool = chatScriptAddTool(scripts, () => 'x');
+    const scripts = new BrainScripts(() => root, undefined, () => skills);
+    const tool = chatScriptAddTool(scripts, () => 'x', () => SKILL);
     await expect(async () => tool.run({ ...args, name: 'big.ps1' }, ctx)).rejects.toThrow(/exists already/);
     await expect(async () => tool.run({ ...args, name: 'BIG.ps1' }, ctx)).rejects.toThrow(/exists already/);
     expect(fs.statSync(big).size).toBeGreaterThan(300_000);
   });
 
   it('refuses a credential', async () => {
-    const tool = chatScriptAddTool(new BrainScripts(() => root), () => 'x');
+    const skills = places();
+    const tool = chatScriptAddTool(new BrainScripts(() => root, undefined, () => skills), () => 'x', () => SKILL);
     await expect(async () => tool.run({ ...args, name: 'b.ps1', code: `$${'pass'}${'word'} = "${'demo-non-reale-42'}"` }, ctx)).rejects.toThrow(/credential/);
     for (const code of CREDENTIAL_COMMANDS) await expect(async () => tool.run({ ...args, name: 'c.ps1', code }, ctx), code).rejects.toThrow(/credential/);
   });

@@ -55,7 +55,7 @@ import { ChatManager, workBehind } from './chats/manager';
 import type { BrainService, ChatService } from './services';
 import { SkillsService } from './skills/service';
 import { SkillLibrary } from './skills/library';
-import { SkillLessons } from './skills/lessons';
+import { roleSkillName, SkillLessons } from './skills/lessons';
 import { ensureTools, isProduct } from './rules/tools';
 import { appSkillsIn } from './agents/pack/shared-skills';
 import { BrainModelService } from './brainmodel/service';
@@ -171,10 +171,19 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the brain's scripts and changelog (ADR 0076), read from the brain folder once it is known (created first: the
   // brain's watcher reports their files)
   const brainChangelog = new BrainChangelog(() => brain.info().brainRoot);
-  const brainScripts = new BrainScripts(() => brain.info().brainRoot, brainChangelog);
+  // they live in the skills' scripts/ and assets/queries/ (ADR 0263): the skill library (made below) says where the skills are
+  const skillLibraryRef: { current: SkillLibrary | null } = { current: null };
+  const skillPlaces = () => skillLibraryRef.current?.located() ?? [];
+  const brainScripts = new BrainScripts(() => brain.info().brainRoot, brainChangelog, skillPlaces, () => brainModelRef.current?.log ?? null);
   let scriptsTimer: NodeJS.Timeout | null = null;
   // the saved queries (ADR 0124): their delete goes through the brain model's ChangeLog (created below)
-  const brainQueries = new BrainQueries(() => brain.info().brainRoot, () => brainModelRef.current?.log ?? null, brainChangelog);
+  const brainQueries = new BrainQueries(() => brain.info().brainRoot, () => brainModelRef.current?.log ?? null, brainChangelog, skillPlaces);
+  // a chat's own role skill (ruolo-<id>) when the brain has it: where its new scripts and queries go by default
+  const roleSkillOf = (chatId: string): string | null => {
+    const id = chats.list().find(c => c.id === chatId)?.agent?.id;
+    const name = id ? roleSkillName(id) : null;
+    return name && skillPlaces().some(p => p.name === name && p.origin === 'brain') ? name : null;
+  };
   let queriesTimer: NodeJS.Timeout | null = null;
   const onScriptFile = (f: string) => {
     if (touchesQueries(f)) {
@@ -496,13 +505,13 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   addChatTools([showUiTool(artifacts)]);
 
   // a reusable command that ran fine with "Esegui" becomes a brain script by itself (issue #111, ADR 0096)
-  const autoScripts = new AutoScripts({ scripts: brainScripts, root: () => brain.info().brainRoot, chatTitle: id => chats.list().find(c => c.id === id)?.title ?? null });
+  const autoScripts = new AutoScripts({ scripts: brainScripts, root: () => brain.info().brainRoot, roleSkill: roleSkillOf, chatTitle: id => chats.list().find(c => c.id === id)?.title ?? null });
   const runner = commandRunner(ctx, chats, run => { autoScripts.onRun(run); manager.runEnded(run); });
   runsRef.current = runner;
   // brain_script_add on every chat's own endpoint: a work chat saves the script it ran with success itself
-  addChatTools([chatScriptAddTool(brainScripts, id => chats.list().find(c => c.id === id)?.title ?? null)]);
-  // brain_query_add the same way: a query that ran and someone reruns goes to queries/ (ADR 0124)
-  addChatTools([chatQueryAddTool(brainQueries, id => chats.list().find(c => c.id === id)?.title ?? null)]);
+  addChatTools([chatScriptAddTool(brainScripts, id => chats.list().find(c => c.id === id)?.title ?? null, roleSkillOf)]);
+  // brain_query_add the same way: a query that ran and someone reruns goes to its skill's assets/queries/ (ADR 0124, 0263)
+  addChatTools([chatQueryAddTool(brainQueries, id => chats.list().find(c => c.id === id)?.title ?? null, roleSkillOf)]);
   const asks = attachCommandAsks(ctx, runner, brain, undefined, chats);
   const keptFile = path.join(ctx.userData, 'auto-close-kept.json');
   let kept: string[] = [], keptProblem = false;
@@ -823,8 +832,12 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   const skillLibrary = new SkillLibrary({ root: () => brain.info().brainRoot, home: process.env.SB_SKILLS_HOME || os.homedir(),
     appSkills: () => { const r = brain.info().brainRoot; if (!r || !isProduct(r)) return null; try { return appSkillsIn(ensureTools(r)); } catch { return null; } },
     changes: () => brainModel.log, undo: id => { brainModel.rollback(id); }, roles: () => agents.list().profiles, link: (s, r, on) => { brainModel.link(s, r, on); },
-    runs: () => manager.runs.list(), changed: () => ctx.emitter.emit('brainmodel:changed', undefined), unify: !process.env.SB_TEST });
+    runs: () => manager.runs.list(), unify: !process.env.SB_TEST, assetsBackup: path.join(ctx.userData, 'backups', 'scripts-queries'),
+    changed: () => { brainScripts.invalidate(); ctx.emitter.emit('brainmodel:changed', undefined); ctx.emitter.emit('scripts:changed', undefined); ctx.emitter.emit('queries:changed', undefined); } });
+  skillLibraryRef.current = skillLibrary;
   appDeps.skillLibrary = skillLibrary;
+  // the old scripts/ and queries/ move into their skills at launch (ADR 0263), not only when the Skill page opens
+  void skillLibrary.ready().then(() => brainScripts.invalidate());
   // the one-click maintenance (ADR 0132, 0153): the free cleanup, the invisible research chat, its cards in Proposte
   const issuesUrl = issuesUrlOf(app.getAppPath()), appIssuesUrl = () => issuesUrl;
   const research = new ResearchService({ guideRepo: () => repoRootOf(path.dirname(fileURLToPath(import.meta.url))), userData: ctx.userData, lang: uiLang, root: () => brain.info().brainRoot, appVersion: () => app.getVersion(), issuesUrl: appIssuesUrl, appDir: () => app.getAppPath(),

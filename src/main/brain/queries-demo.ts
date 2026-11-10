@@ -1,11 +1,11 @@
-// Demo saved queries (SB_DEMO=1, ADR 0124): a few made-up queries in the demo brain's queries/ folder, one per common
-// language, read by the real BrainQueries, so Memoria → Script & Query and its e2e screenshots work without the user's
+// Demo saved queries (SB_DEMO=1, ADR 0124, 0263): a few made-up queries in the demo skills' assets/queries/ (and the old
+// queries/ folder), one per common language, read by the real BrainQueries, so the Skill page and its e2e screenshots work without the user's
 // brain. Generic content only (example.com hosts). File dates are relative to `now` (frozen demo: the same every run);
 // an existing file is not rewritten, so a delete in the demo stays deleted until the demo's userData is reset.
 // Used by demo-wiring.ts.
 import fs from 'node:fs';
 import path from 'node:path';
-import { queryNote, QUERIES_DIR } from './queries';
+import { queryNote, QUERIES_DIR, SKILL_QUERIES } from './queries';
 
 const DAY = 24 * 3600e3;
 /** name → [language, title, description, runs on, tags, from, code, age in days] */
@@ -27,11 +27,17 @@ const QUERIES: [string, string, string, string, string, string[], string, string
     'index=auth action=failure earliest=-1h\n| stats count AS falliti BY user, src_ip\n| where falliti > 5\n| sort - falliti', 10],
 ];
 
+/** Which demo skill holds each query (ADR 0263: in its assets/queries/); the others stay in the brain's old queries/,
+ *  waiting for the user to place them. */
+const SKILL_OF: Record<string, string> = { 'issue-aperte-repo': 'note-di-rilascio', 'errori-5xx-per-servizio': 'pulizia-ambiente' };
+
 export function writeDemoQueries(root: string, now: number): string {
   const dir = path.join(root, QUERIES_DIR);
-  fs.mkdirSync(dir, { recursive: true });
   for (const [name, lang, title, description, source, tags, from, code, age] of QUERIES) {
-    const file = path.join(dir, `${name}.md`);
+    const skill = SKILL_OF[name], skillDir = skill ? path.join(root, '.claude', 'skills', skill) : null;
+    const into = skillDir && fs.existsSync(skillDir) ? path.join(skillDir, ...SKILL_QUERIES.split('/')) : dir;
+    fs.mkdirSync(into, { recursive: true });
+    const file = path.join(into, `${name}.md`);
     if (fs.existsSync(file)) continue;
     fs.writeFileSync(file, queryNote(lang, code, { title, description, source, tags, from }), 'utf8');
     const at = new Date(now - age * DAY);

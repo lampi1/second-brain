@@ -1,5 +1,6 @@
 // One skill of the library (ADR 0241, #362-#364): its head (name, origin, what it is for, «Prova», delete or restore the
-// app's original) and four tabs. Leggi: SKILL.md rendered, without its frontmatter. File: the package's tree (SKILL.md,
+// app's original) and four tabs. Leggi: what the package holds by group (SkillParts.tsx: scripts, queries, references,
+// assets, ADR 0263; a row opens its file in File), then SKILL.md rendered, without its frontmatter. File: the package's tree (SKILL.md,
 // scripts/, references/, assets/) and an editor for every text file, with Ctrl+S, «Nuovo file» and «Togli file»; a
 // binary file is listed, never edited. Ruoli: which roles load it at start, each with its own usage; a role's default
 // skill is marked and changed from the role. Cronologia: every change with who and when, its diff (brain/pages/FileDiff
@@ -17,18 +18,20 @@ import { ago } from '../../lib/format';
 import { Markdown } from '../../brain/components/Markdown';
 import { DiffView } from '../../brain/pages/FileDiff';
 import { IconFile, IconFolder, IconHistory, IconPlay, IconPlus, IconTrash } from '../Icons';
+import { SkillParts } from './SkillParts';
 
 export type DetailTab = 'read' | 'files' | 'roles' | 'history';
 const TABS: DetailTab[] = ['read', 'files', 'roles', 'history'];
 const size = (n: number) => (n < 1024 ? `${n} B` : n < 1024 ** 2 ? `${Math.round(n / 102.4) / 10} KB` : `${Math.round(n / 1024 / 102.4) / 10} MB`);
 const whoOf = (job: string) => (job === 'user' ? t('sl.who.user') : job === 'migration' ? t('sl.who.migration') : job === 'research' ? t('sl.who.research') : t('sl.who.job'));
 
-function ReadTab({ skill }: { skill: LibSkill }) {
+function ReadTab({ skill, onOpen }: { skill: LibSkill; onOpen: (path: string) => void }) {
   const [doc, setDoc] = useState<SkillFileText | null>(null);
   useEffect(() => { let live = true; void window.sb.invoke('skills:file', { skill: skill.name, path: 'SKILL.md' }).then(d => { if (live) setDoc(d); }, () => {}); return () => { live = false; }; }, [skill.name, skill.changedAt]);
   const body = useMemo(() => (doc?.text ? parseMd(doc.text).body.replace(/^\s+/, '') : ''), [doc]);
   return <div className="sl-read" data-testid="sl-read">
     {skill.origin === 'app' && <p className="sl-note">{t('sl.appNote')}</p>}
+    <SkillParts skill={skill} onOpen={onOpen} />
     {doc ? <div className="sl-prose"><Markdown text={body || '—'} copyBlocks testId="sl-md" /></div> : <p className="sl-muted">…</p>}
   </div>;
 }
@@ -50,8 +53,8 @@ function Tree({ skill, path, onPick, adding, onAdd }: { skill: LibSkill; path: s
   </nav>;
 }
 
-function FilesTab({ skill, onDirty, onChanged }: { skill: LibSkill; onDirty: (d: boolean) => void; onChanged: () => void }) {
-  const [path, setPath] = useState('SKILL.md');
+function FilesTab({ skill, start, onDirty, onChanged }: { skill: LibSkill; start: string; onDirty: (d: boolean) => void; onChanged: () => void }) {
+  const [path, setPath] = useState(start);
   const [doc, setDoc] = useState<SkillFileText | null>(null);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -67,7 +70,7 @@ function FilesTab({ skill, onDirty, onChanged }: { skill: LibSkill; onDirty: (d:
     if (!skill.files.some(f => f.path === p)) { setDoc(null); setText(''); return; }
     void window.sb.invoke('skills:file', { skill: skill.name, path: p }).then(d => { setDoc(d); setText(d.text ?? ''); }, e => setError(errText(e)));
   }, [skill.name, skill.files]);
-  useEffect(() => { open('SKILL.md'); }, [skill.name]); // only when another skill opens
+  useEffect(() => { open(skill.files.some(f => f.path === start) ? start : 'SKILL.md'); }, [skill.name, start]); // only when another skill or file opens
   const pick = (p: string) => {
     if (!dirty) { open(p); return; }
     askConfirm({ title: t('sl.files.unsavedTitle'), body: t('sl.files.unsavedBody'), confirmLabel: t('sl.files.leave'), danger: true, onConfirm: () => open(p) });
@@ -206,6 +209,9 @@ export function SkillDetail({ skill, roles, hasBrain, tab, onTab, onDirty, onCha
       if (skill.overridesApp) onChanged(); else onGone();
     }, e => toast(errText(e), 'err')); },
   });
+  // a row of «Nel pacchetto» opens its file in the File tab
+  const [fileAt, setFileAt] = useState('SKILL.md');
+  const openFile = (p: string) => { setFileAt(p); onTab('files'); };
   const now = Date.now();
   const tryIt = () => { if (!brainBridge.draftToOrchestrator(`/${skill.name} `, () => {})) toast(t('sl.noOrchestrator'), 'warn'); };
   return <article className="sl-detail" data-testid="sk-editor" data-origin={skill.origin}>
@@ -233,8 +239,8 @@ export function SkillDetail({ skill, roles, hasBrain, tab, onTab, onDirty, onCha
       </span>
     </div>
     <div className="sl-panel" role="tabpanel">
-      {tab === 'read' && <ReadTab skill={skill} />}
-      {tab === 'files' && <FilesTab skill={skill} onDirty={onDirty} onChanged={onChanged} />}
+      {tab === 'read' && <ReadTab skill={skill} onOpen={openFile} />}
+      {tab === 'files' && <FilesTab skill={skill} start={fileAt} onDirty={onDirty} onChanged={onChanged} />}
       {tab === 'roles' && <RolesTab skill={skill} roles={roles} hasBrain={hasBrain} onChanged={onChanged} />}
       {tab === 'history' && <HistoryTab skill={skill} onChanged={onChanged} />}
     </div>

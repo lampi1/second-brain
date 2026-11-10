@@ -105,8 +105,9 @@ and the disk space each repository takes.
 
 Everything the agents learn lands as a card: a fact, a skill, a rule, a setting. Swipe right to keep it, left to drop
 it (or ✓ / ✕, or the arrow keys, with Z to undo), and every card says who proposed it, in which chat and when. Behind
-the deck, one hub with tabs (Approved, Skills, Rules, Scripts & Queries, Ideas, Files, Statistics) under a
-header whose counters move while the agents work.
+the deck, one hub with tabs (Approved, Skills, Rules, Ideas, Files, Statistics) under a header whose counters move
+while the agents work. Scripts and saved queries belong to the skill that uses them: each skill shows its scripts,
+queries, references and assets, as the Agent Skills format lays them out.
 
 <p align="center"><img src="docs/screenshots/memory.webp" alt="Memory: the live header with its counters, the tabs, and a proposal card swiped toward APPROVE" width="560"></p>
 

@@ -81,7 +81,7 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0073](0073-agent-loop-under-approval.md) The agents' improvement loop runs under the user's approval — accepted, partly superseded by 0077
 - [0074](0074-update-by-asking-and-local-release-drafts.md) A developer updates by asking the app; release drafts without GitHub Actions — accepted
 - [0075](0075-update-button-without-tests.md) "Aggiorna" in Settings: the latest version at once, without the test suite — accepted
-- [0076](0076-brain-scripts-and-changelog.md) The brain's scripts and its changelog, two sections under Brain — accepted, partly superseded by 0096
+- [0076](0076-brain-scripts-and-changelog.md) The brain's scripts and its changelog, two sections under Brain — accepted, partly superseded by 0096, 0263
 - [0077](0077-agents-and-skills-only.md) Agents and skills only: a self-maintaining Brain section — accepted, partly superseded by 0125, 0153
 - [0078](0078-agent-first-routing.md) Agent first: the profile decides, the table only fills a missing model — accepted
 - [0079](0079-remove-improve-section-and-rename-devops-to-task.md) "Migliora l'app" removed; DevOps renamed Task; Fatto becomes a log — accepted
@@ -101,7 +101,7 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0093](0093-task-reader-in-the-app-and-remembered-connectors.md) The Task page's DevOps reader ships with the app; connector verification is remembered — accepted
 - [0094](0094-hybrid-brain-search.md) Hybrid brain search: BM25 + a local multilingual embedding model — accepted
 - [0095](0095-classifier-outcomes-from-the-ledger.md) Classifier outcomes come from the ledger too; verified and unverified stay apart — accepted
-- [0096](0096-scripts-saved-without-the-orchestrator.md) Scripts are saved where the command ran, not by the Orchestrator alone — accepted
+- [0096](0096-scripts-saved-without-the-orchestrator.md) Scripts are saved where the command ran, not by the Orchestrator alone — accepted, partly superseded by 0263
 - [0097](0097-judge-router-in-use-and-orchestrator-standing.md) The Judge's samples run in the user's own app; the Orchestrator points to Router and Judge and levels up by its decisions — accepted
 - [0098](0098-role-memory-through-agent-report.md) Role memory reaches Claude chats and is written through agent_report — accepted
 - [0099](0099-tokens-and-speed-of-the-orchestration.md) Tokens and speed of the orchestration: fewer model round trips, warm engines, quiet results — accepted
@@ -127,9 +127,9 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0119](0119-simple-onboarding.md) Simple onboarding: the language first, six steps, tool tiles — accepted
 - [0120](0120-one-language-for-ui-and-ai.md) One language for the UI and the AI, switched from the top bar — accepted
 - [0121](0121-strategist-really-asks.md) The Strategist really asks: a question before the plan, the plan's approval in the questions window — accepted
-- [0122](0122-memoria-hub.md) Memoria is the hub: one page with tabs, no Dashboard — accepted
+- [0122](0122-memoria-hub.md) Memoria is the hub: one page with tabs, no Dashboard — accepted, partly superseded by 0263
 - [0123](0123-proposals-deck.md) Memoria → Proposte: every proposal is one card in one deck — accepted
-- [0124](0124-saved-queries-and-ideas-migration.md) Saved queries next to scripts, and the ideas scattered in the notes move to ideas.md — accepted
+- [0124](0124-saved-queries-and-ideas-migration.md) Saved queries next to scripts, and the ideas scattered in the notes move to ideas.md — accepted, partly superseded by 0263
 - [0125](0125-every-role-levels-up-from-outcomes.md) Every role levels up from outcomes; no copy-link bar button, no agent packs — accepted
 - [0126](0126-proposal-cards-in-plain-words.md) Proposal cards ask a plain question; a contradicted fact asks replace or keep both — accepted
 - [0127](0127-reply-latency.md) Reply latency: the engine starts while the user types, the user's request skips the CPU queue — accepted
@@ -267,3 +267,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0260](0260-agents-recap.md) The recap is a short list per agent (app_agents_recap) — accepted
 - [0261](0261-agent-message-envelope.md) What the user did not type reaches a Claude engine in an `<agent-message>` envelope — accepted
 - [0262](0262-a-yes-is-not-a-run.md) A Yes is not a run: user steps resume on evidence, «hai eseguito?» never passes as a run — accepted
+- [0263](0263-scripts-and-queries-live-in-skills.md) Scripts and queries live in their skills; the old folders move there by themselves — accepted

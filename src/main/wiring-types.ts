@@ -54,7 +54,7 @@ export interface Wired {
   judging?: { estimate: (now: number) => JudgingEstimate };
   memoryReview?: MemoryService;
   learningReview?: LearningReviewService;
-  /** the brain's saved queries (ADR 0124): Memoria → Script & Query, queries:* IPC */
+  /** the brain's saved queries (ADR 0124; in their skill's assets/queries/ since ADR 0263), queries:* IPC */
   queries?: BrainQueries;
   /** the hybrid brain search (SPEC 23); absent in the demo (Ctrl+K then uses its own index) */
   hybrid?: HybridSearch;

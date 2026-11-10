@@ -177,16 +177,19 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
   const learningReview = new LearningReviewService({ userData: ctx.userData, root: () => demoBrainRoot, log: brainModel.log, runs: () => chats.list().flatMap(c => (c.run ? [c.run] : [])), now });
   requestDemoSetting(brain);
   // the Script and Changelog pages (ADR 0076): made-up scripts and changelog read by the real readers
-  const scriptsDir = writeDemoScripts(path.join(ctx.userData, 'demo-scripts'), now());
+  const scriptsDir = writeDemoScripts(path.join(ctx.userData, 'demo-scripts'), now(), demoBrainRoot);
   const demoChangelog = new BrainChangelog(() => scriptsDir);
-  const demoScripts = new BrainScripts(() => scriptsDir, demoChangelog);
+  // in the demo skills' scripts/ (ADR 0263): the skill library is made below
+  const demoSkillsRef: { current: SkillLibrary | null } = { current: null };
+  const demoSkillPlaces = () => demoSkillsRef.current?.located() ?? [];
+  const demoScripts = new BrainScripts(() => demoBrainRoot, demoChangelog, demoSkillPlaces, () => brainModel.log);
   brain.serveApi('/api/scripts', () => demoScripts.list());
   brain.serveApi('/api/script', q => demoScripts.get(q.get('id') ?? ''));
   brain.serveApi('/api/changelog', () => demoChangelog.list());
   brain.serveApi('/api/improve', () => brain.learnApi());
   // the saved queries (ADR 0124): a few made-up ones in the demo brain, deleted through the brain model's ChangeLog
   writeDemoQueries(demoBrainRoot, now());
-  const queries = new BrainQueries(() => demoBrainRoot, () => brainModel.log);
+  const queries = new BrainQueries(() => demoBrainRoot, () => brainModel.log, undefined, demoSkillPlaces);
 
   const mcp = new McpServer({ name: 'second-brain-demo', version: app.getVersion() });
   // made-up MCP servers for Settings → Connettori and the agent cards (ADR 0086): no process, no network
@@ -303,6 +306,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     changes: () => brainModel.log, undo: id => { brainModel.rollback(id); }, roles: () => agents.list().profiles, link: (s, r, on) => { brainModel.link(s, r, on); },
     runs: () => [...demoBrainRuns(now(), brainModel.skillList().map(s => s.name)), ...demoAgentRuns(now())], changed: () => ctx.emitter.emit('brainmodel:changed', undefined), unify: false,
     guard: async () => null });
+  demoSkillsRef.current = skillLibrary;
   // two lessons noted for the next Maintenance (#365, ADR 0257): one for a role's own skill, one for a task skill
   const skillLessons = new SkillLessons({ file: path.join(ctx.userData, 'skill-lessons.json'), now, changed: () => ctx.emitter.emit('brainmodel:changed', undefined) });
   if (!skillLessons.all().length) {

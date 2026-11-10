@@ -1,6 +1,6 @@
 # ADR 0122 · Memoria is the hub: one page with tabs, no Dashboard
 
-Date: 2026-10-22 · Status: accepted (owner, 2026-10-22: «io quasi toglierei la dashboard e terrei solo la memoria con
+Date: 2026-10-22 · Status: partly superseded by ADR 0263 (no «Script & Query» tab); accepted (owner, 2026-10-22: «io quasi toglierei la dashboard e terrei solo la memoria con
 anche la frase in cima… la memoria deve proprio sembrare viva, con UI figa. Tutte le parti dashboard toglile e mergiale
 senza ridondanza») · Builds on: ADR 0077 (brain pages), ADR 0101 (Andamento), ADR 0123 (the Proposte deck)
 

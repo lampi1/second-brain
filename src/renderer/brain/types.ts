@@ -157,7 +157,7 @@ const TESTED = new Set(['ok', 'failed', 'untested']);
 const scriptOf = (s: Obj): BrainScriptSummary => {
   const t = obj(s.tested);
   return {
-    id: str(s.id), file: str(s.file), title: str(s.title), description: str(s.description), usage: str(s.usage), language: str(s.language),
+    id: str(s.id), skill: s.skill ? str(s.skill) : null, file: str(s.file), path: str(s.path), title: str(s.title), description: str(s.description), usage: str(s.usage), language: str(s.language),
     tags: arr(s.tags).filter((x): x is string => typeof x === 'string'),
     tested: { state: TESTED.has(str(t.state)) ? str(t.state) as BrainScriptSummary['tested']['state'] : 'untested', at: t.at ? str(t.at) : null, note: str(t.note) },
     changedAt: s.changedAt ? str(s.changedAt) : null, bytes: num(s.bytes),
@@ -166,7 +166,7 @@ const scriptOf = (s: Obj): BrainScriptSummary => {
 /** /api/script?id=…: one script with its code (credentials already masked by main). */
 export function normScript(v: unknown): BrainScript {
   const o = obj(v);
-  return { ...scriptOf(o), path: str(o.path), code: str(o.code), masked: num(o.masked) };
+  return { ...scriptOf(o), code: str(o.code), masked: num(o.masked) };
 }
 const KINDS = new Set<string>(['script', 'rule', 'procedure', 'note', 'agent', 'skill', 'other']);
 const ACTIONS = new Set<string>(['added', 'edited', 'fixed', 'deleted', 'restored']);

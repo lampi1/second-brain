@@ -1,4 +1,4 @@
-// The MCP tools over the brain's scripts and changelog (ADR 0076). Two faces:
+// The MCP tools over the scripts of the skills (ADR 0076, 0263: each in its skill's scripts/) and the brain's changelog:
 // - brain_scripts, on every chat's own endpoint (read only): find a tested script before writing a new one. It matches
 //   words over each script's title, description, usage and tags (scripts.ts findScripts), no classifier: the list is
 //   short and each script describes itself, so the agent reads the few hits and picks (ADR 0076 says when to revisit).
@@ -9,6 +9,7 @@
 //   success itself (add only; fixes and deletes stay the Orchestrator's). The app also saves reusable "Esegui" runs by
 //   itself (auto-scripts.ts).
 // Used by wiring.ts (brain_scripts, brain_script_add) and appctl/tools.ts (the write tools).
+import path from 'node:path';
 import type { McpTool } from '../mcp/server';
 import type { ChangelogAction, ChangelogKind } from '../../shared/contract';
 import { CHANGELOG_ACTIONS, CHANGELOG_KINDS, type BrainChangelog } from './changelog';
@@ -25,15 +26,15 @@ const text = (v: unknown, key: string, required = true): string => {
 export function brainScriptsTool(scripts: BrainScripts): McpTool {
   return {
     name: 'brain_scripts',
-    description: `The brain's reusable scripts (its scripts/ folder): tested scripts the user's agents wrote, each with what it does, how to run it (usage) and its last test. Call it BEFORE writing a new script for a task: reuse or adapt a fitting one instead of starting over. q: what you need, in plain words (all words must match title, description, usage or tags); empty = all. Read the file at its path for the code. Once a reusable script or command you wrote or ran WORKED, save it yourself with brain_script_add (a new script only); to fix or replace an existing one, tell the Orchestrator in your report.`,
+    description: `The reusable scripts of the user's skills (each skill's scripts/ folder, on its Skill page; a few may still wait in the brain's scripts/ for a skill): tested scripts the user's agents wrote, each with what it does, how to run it (usage) and its last test. Call it BEFORE writing a new script for a task: reuse or adapt a fitting one instead of starting over. q: what you need, in plain words (all words must match title, description, usage or tags); empty = all. Read the file at its path for the code. Once a reusable script or command you wrote or ran WORKED, save it yourself with brain_script_add (a new script only); to fix or replace an existing one, tell the Orchestrator in your report.`,
     inputSchema: { type: 'object', properties: { q: { type: 'string', description: 'What the script should do (e.g. "backup note zip"). Optional.' } }, additionalProperties: false },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     run: args => {
       const all = scripts.list();
       const list = findScripts(all.scripts, typeof args.q === 'string' ? args.q : '').slice(0, 30);
       return JSON.stringify({
-        folder: all.root ? `${all.root}/${all.dir}` : null, total: all.scripts.length,
-        scripts: list.map(s => ({ path: all.root ? `${all.root}/${s.file}` : s.file, title: s.title, description: s.description, usage: s.usage, language: s.language, tags: s.tags, tested: s.tested })),
+        total: all.scripts.length,
+        scripts: list.map(s => ({ path: s.path, skill: s.skill, title: s.title, description: s.description, usage: s.usage, language: s.language, tags: s.tags, tested: s.tested })),
       });
     },
   };
@@ -43,14 +44,15 @@ export function brainScriptsTool(scripts: BrainScripts): McpTool {
  *  with success itself, instead of hoping the Orchestrator (which never sees its content) does it. Add only: an existing
  *  name is refused (fixes and deletes stay the Orchestrator's), the same credential refusal and changelog line as
  *  brain_script_save, `by` = the chat's title. */
-export function chatScriptAddTool(scripts: BrainScripts, titleOf: (chatId: string) => string | null): McpTool {
+export function chatScriptAddTool(scripts: BrainScripts, titleOf: (chatId: string) => string | null, roleSkill: (chatId: string) => string | null = () => null): McpTool {
   return {
     name: 'brain_script_add',
-    description: `Save a NEW reusable script in the user's brain (scripts/<name>, the Script page) right after you ran it and it worked: a deploy, a migration, a local server start, an export, any command or script the user or an agent will run again. Not for one-off look-arounds (ls, git status), and not for a saved query (SQL, KQL, GraphQL, PromQL, SPL: brain_query_add). Call brain_scripts first: if a fitting script exists, do not add a near-duplicate (report the fix to the Orchestrator). No secrets: read them from an environment variable or the user's credentials file at run time (a line that looks like a credential is refused). The app writes the header; pass the code without it. Logged in the brain's changelog. Languages by extension: ${SCRIPT_EXTS.join(' ')}.`,
+    description: `Save a NEW reusable script in one of the user's skills (<skill>/scripts/<name>, on its Skill page) right after you ran it and it worked: a deploy, a migration, a local server start, an export, any command or script the user or an agent will run again. Not for one-off look-arounds (ls, git status), and not for a saved query (SQL, KQL, GraphQL, PromQL, SPL: brain_query_add). Call brain_scripts first: if a fitting script exists, do not add a near-duplicate (report the fix to the Orchestrator). No secrets: read them from an environment variable or the user's credentials file at run time (a line that looks like a credential is refused). The app writes the header; pass the code without it. Logged in the brain's changelog. Languages by extension: ${SCRIPT_EXTS.join(' ')}.`,
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     inputSchema: {
       type: 'object',
       properties: {
+        skill: { type: 'string', description: 'The brain skill the script belongs to (its folder name, e.g. "deploy-app"): the one whose task runs it. Default: your role\'s own skill.' },
         name: { type: 'string', description: 'New file name with extension, e.g. "deploy-example-app-test.ps1" (letters, digits, . _ -).' },
         title: { type: 'string', description: 'Short human title, in the user’s language.' },
         description: { type: 'string', description: 'What it does and when to reuse it, one or two sentences, in the user’s language.' },
@@ -63,13 +65,15 @@ export function chatScriptAddTool(scripts: BrainScripts, titleOf: (chatId: strin
     },
     run: (a, ctx) => {
       const name = text(a.name, 'name');
+      const skill = (typeof a.skill === 'string' && a.skill.trim()) || (ctx.params.chatId ? roleSkill(ctx.params.chatId) : null);
+      if (!skill) throw new Error('skill: required, the brain skill this script belongs to (its folder name); your role has no skill of its own in this brain');
       const want = name.trim().replace(/^scripts[\\/]/, '').toLowerCase();
-      if (scripts.list().scripts.some(s => s.id.toLowerCase() === want)) {
+      if (scripts.list().scripts.some(s => s.skill === skill && path.basename(s.path).toLowerCase() === want)) {
         throw new Error(`${name} exists already: to fix or replace it, tell the Orchestrator in your report (brain_script_save)`);
       }
       const by = (ctx.params.chatId ? titleOf(ctx.params.chatId) : null)?.trim() || 'chat';
       const r = scripts.save({
-        name, code: text(a.code, 'code'), by, create: true,
+        skill, name, code: text(a.code, 'code'), by, create: true,
         meta: { title: text(a.title, 'title'), description: text(a.description, 'description'), usage: text(a.usage, 'usage', false),
           tags: Array.isArray(a.tags) ? a.tags.filter((t): t is string => typeof t === 'string').slice(0, 12) : [],
           tested: { ok: true, note: text(a.note, 'note').slice(0, 300) } },
@@ -84,12 +88,13 @@ export function scriptWriteTools(scripts: BrainScripts, changelog: BrainChangelo
   return [
     {
       name: 'brain_script_save',
-      description: `Add, edit or fix a reusable script in the user's brain (scripts/<name>), shown on the brain's Script page. Save only a script that was RUN and worked (tested.ok true, with what was run and the result in tested.note); a script that failed stays out, or is saved with ok false only to keep a fix in progress visible. Before adding, call brain_scripts: fix or extend an existing one instead of a near-duplicate. One self-contained file, no secrets (read them from an environment variable or the user's credentials file at run time: a line that looks like a credential is refused). The app writes the header (title, description, usage, tags, tested) in the language's comment syntax; pass the code without it. Every save is logged in the brain's changelog. Languages by extension: ${SCRIPT_EXTS.join(' ')}.`,
+      description: `Add, edit or fix a reusable script in one of the user's brain skills (<skill>/scripts/<name>), shown on that skill's page. Save only a script that was RUN and worked (tested.ok true, with what was run and the result in tested.note); a script that failed stays out, or is saved with ok false only to keep a fix in progress visible. Before adding, call brain_scripts: fix or extend an existing one instead of a near-duplicate. One self-contained file, no secrets (read them from an environment variable or the user's credentials file at run time: a line that looks like a credential is refused). The app writes the header (title, description, usage, tags, tested) in the language's comment syntax; pass the code without it. Every save is logged in the brain's changelog. Languages by extension: ${SCRIPT_EXTS.join(' ')}.`,
       annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
       inputSchema: {
         type: 'object',
         properties: {
-          name: { type: 'string', description: 'File name with extension, e.g. "export-tickets.py" (letters, digits, . _ -). An existing name replaces that script.' },
+          skill: { type: 'string', description: 'The brain skill the script belongs to (its folder name). Required for a new script; leave it out only to fix one brain_scripts lists with skill null.' },
+          name: { type: 'string', description: 'File name with extension, e.g. "export-tickets.py" (letters, digits, . _ -). An existing name in that skill replaces that script.' },
           title: { type: 'string', description: 'Short human title, in the user’s language.' },
           description: { type: 'string', description: 'What it does and when to reuse it, one or two sentences, in the user’s language.' },
           usage: { type: 'string', description: 'How to run it: the command line(s) with placeholders, one per line.' },
@@ -105,7 +110,7 @@ export function scriptWriteTools(scripts: BrainScripts, changelog: BrainChangelo
         const tested = a.tested && typeof a.tested === 'object' ? a.tested as { ok?: unknown; note?: unknown } : null;
         if (!tested || typeof tested.ok !== 'boolean') throw new Error('tested: { ok: boolean, note: string } required: save a script after running it');
         const r = scripts.save({
-          name: text(a.name, 'name'), code: text(a.code, 'code'), by: by(), fix: a.fix === true, ...(typeof a.summary === 'string' ? { summary: a.summary } : {}),
+          skill: typeof a.skill === 'string' ? a.skill : null, name: text(a.name, 'name'), code: text(a.code, 'code'), by: by(), fix: a.fix === true, ...(typeof a.summary === 'string' ? { summary: a.summary } : {}),
           meta: { title: text(a.title, 'title'), description: text(a.description, 'description'), usage: text(a.usage, 'usage', false),
             tags: Array.isArray(a.tags) ? a.tags.filter((t): t is string => typeof t === 'string').slice(0, 12) : [],
             tested: { ok: tested.ok, note: typeof tested.note === 'string' ? tested.note.slice(0, 300) : '' } },
@@ -115,9 +120,9 @@ export function scriptWriteTools(scripts: BrainScripts, changelog: BrainChangelo
     },
     {
       name: 'brain_script_delete',
-      description: 'Remove a script from the user\'s brain (wrong, obsolete or replaced by another). The file moves to scripts/.deleted/ (kept, restorable by saving it again) and the change is logged in the brain\'s changelog with your reason.',
+      description: 'Remove a script from the user\'s skills (wrong, obsolete or replaced by another). A skill\'s script is removed with Annulla in the skill\'s history; one still in the brain\'s scripts/ moves to scripts/.deleted/. Logged in the brain\'s changelog with your reason.',
       annotations: { readOnlyHint: false, destructiveHint: true, openWorldHint: false },
-      inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'The script\'s file name, as brain_scripts lists it.' }, reason: { type: 'string', description: 'Why, one line, in the user’s language.' } }, required: ['name', 'reason'], additionalProperties: false },
+      inputSchema: { type: 'object', properties: { name: { type: 'string', description: 'The script as «skill/file» (or its file name when only one skill has it), as brain_scripts lists it.' }, reason: { type: 'string', description: 'Why, one line, in the user’s language.' } }, required: ['name', 'reason'], additionalProperties: false },
       run: a => ({ ok: true, ...scripts.delete({ name: text(a.name, 'name'), reason: text(a.reason, 'reason'), by: by() }) }),
     },
     {

@@ -54,6 +54,7 @@ export function brainHandlers({ s, emitter, research, requireReviewRoot, search,
     'skills:remove': async a => { const r = await s.skillLibrary.remove(String(a?.skill ?? ''), { who: 'tu, dalla pagina Skill', page: true }); return r.ok ? { ok: true, changeId: r.changeId } : { ok: false, error: r.error }; },
     'skills:history': a => s.skillLibrary.history(String(a?.skill ?? '')),
     'skills:undo': a => s.skillLibrary.undo(String(a?.skill ?? ''), String(a?.changeId ?? '')),
+    'skills:assign': a => s.skillLibrary.assign({ kind: a?.kind === 'query' ? 'query' : 'script', name: String(a?.name ?? ''), skill: String(a?.skill ?? '') }),
     'skills:roles': a => s.skillLibrary.setRoles(String(a?.skill ?? ''), Array.isArray(a?.roles) ? a.roles.filter((r): r is string => typeof r === 'string') : []),
   };
 }

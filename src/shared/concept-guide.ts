@@ -475,41 +475,41 @@ export const CONCEPTS: readonly ConceptCard[] = [
       'Your agents’ tested scripts live in the brain, ready to reuse; every change to the brain lands in the changelog, which you read in the Log.'),
     points: [
       // src/main/brain/scripts.ts
-      b('Gli script stanno nella cartella scripts/ del brain; l’intestazione dice titolo, cosa fa, come si usa, tag e l’ultimo test.',
-        'Scripts live in the brain’s scripts/ folder; their header says title, what it does, how to run it, tags and the last test.'),
+      b('Gli script stanno nella skill che li usa, nella sua cartella scripts/ (le query salvate in assets/queries/), come nel formato Agent Skills; l’intestazione dice titolo, cosa fa, come si usa, tag e l’ultimo test.',
+        'Scripts live in the skill that uses them, in its scripts/ folder (saved queries in assets/queries/), as in the Agent Skills format; their header says title, what it does, how to run it, tags and the last test.'),
       // src/main/brain/scripts-tools.ts brain_scripts
       b('Ogni chat può cercarli prima di scrivere uno script nuovo, per riusarne uno che funziona.',
         'Every chat can look them up before writing a new script, to reuse one that works.'),
       // src/main/brain/scripts-tools.ts brain_script_save, brain_script_delete, brain_script_add; src/main/brain/auto-scripts.ts
-      b('Senza chiederti l’ok: una chat aggiunge lo script che ha provato, l’app salva da sola un comando riutilizzabile riuscito con Esegui, l’Orchestrator corregge o elimina. Le credenziali sono rifiutate, un eliminato va in scripts/.deleted/ e non torna.',
-        'Without asking you: a chat adds the script it ran, the app saves a reusable command that worked with Esegui by itself, the Orchestrator fixes or deletes. Credentials are refused, a deleted one goes to scripts/.deleted/ and does not come back.'),
+      b('Senza chiederti l’ok: una chat aggiunge lo script che ha provato alla skill del compito (di base quella del suo ruolo), l’app salva da sola nella skill del ruolo un comando riutilizzabile riuscito con Esegui, l’Orchestrator corregge o elimina. Le credenziali sono rifiutate; un eliminato torna solo con Annulla nella cronologia della skill.',
+        'Without asking you: a chat adds the script it ran to the task’s skill (by default its role’s own), the app saves a reusable command that worked with Esegui in the role’s skill by itself, the Orchestrator fixes or deletes. Credentials are refused; a deleted one comes back only with Undo in the skill’s history.'),
       // src/main/brain/changelog.ts
       b('Ogni cambiamento è una riga in changelog.md: quando, cosa, quale file, chi e perché. L’Orchestrator vi annota anche regole, skill e note che cambia.',
         'Every change is a line in changelog.md: when, what, which file, who and why. The Orchestrator also logs the rules, skills and notes it changes.'),
-      // src/renderer/brain/pages/Script.tsx; src/renderer/components/LogPage.tsx (ADR 0111)
-      b('La scheda Script & Query di Memoria mostra gli script a schede; nessun bottone esegue uno script. Le righe del changelog stanno nel Log, tipo «Brain».',
-        'Memoria’s Scripts & Queries tab shows the scripts as cards; no button runs a script. The changelog lines are on the Log page, kind "Brain".'),
+      // src/renderer/components/skills/SkillParts.tsx, UnassignedPanel.tsx; src/main/skills/assets.ts (ADR 0263); src/renderer/components/LogPage.tsx (ADR 0111)
+      b('Ogni skill mostra sopra le istruzioni i suoi script, query, riferimenti e asset; un clic apre il file, nessun bottone esegue uno script. Gli script e le query delle vecchie cartelle scripts/ e queries/ passano da soli nella skill che li nomina, con una copia di sicurezza e Annulla; quelli che nessuna skill sola nomina li assegni tu dalla pagina Skill. Le righe del changelog stanno nel Log, tipo «Brain».',
+        'Each skill shows its scripts, queries, references and assets above its instructions; a click opens the file, no button runs a script. The scripts and queries of the old scripts/ and queries/ folders move by themselves into the skill that names them, with a backup copy and Undo; the ones no single skill names you assign on the Skills page. The changelog lines are on the Log page, kind "Brain".'),
       // docs/adr/0076-brain-scripts-and-changelog.md
       b('Nessun classificatore sceglie gli script: con pochi script che si descrivono da soli basta la ricerca per parole.',
         'No classifier picks scripts: with a few self-describing scripts a word search is enough.'),
     ],
     analogy: b('Come la cassetta degli attrezzi di un’officina con il registro accanto: ogni attrezzo ha l’etichetta, e chi lo cambia lo scrive.',
       'Like a workshop toolbox with a logbook beside it: every tool is labelled, and whoever changes one writes it down.'),
-    diagram: { kind: 'flow', steps: [b('Script provato', 'Tested script'), b('Orchestrator salva', 'Orchestrator saves'), b('scripts/', 'scripts/'), b('changelog.md', 'changelog.md'), b('Riuso', 'Reuse')] },
+    diagram: { kind: 'flow', steps: [b('Script provato', 'Tested script'), b('Orchestrator salva', 'Orchestrator saves'), b('skill/scripts/', 'skill/scripts/'), b('changelog.md', 'changelog.md'), b('Riuso', 'Reuse')] },
     tech: [
       tech(TOOLS, 'brain_scripts (cerca), brain_script_add (aggiunge), brain_script_save e brain_script_delete (l’Orchestrator).', 'brain_scripts (search), brain_script_add (add), brain_script_save and brain_script_delete (the Orchestrator).'),
-      tech(FILES, 'Nel brain: scripts/<nome>, scripts/.deleted/, changelog.md; creati al primo salvataggio.', 'In the brain: scripts/<name>, scripts/.deleted/, changelog.md; created on the first save.'),
+      tech(FILES, 'In ogni skill: scripts/<nome> e assets/queries/<nome>; nel brain: changelog.md; la copia della migrazione in <userData>/backups/scripts-queries/.', 'In each skill: scripts/<name> and assets/queries/<name>; in the brain: changelog.md; the move’s copy in <userData>/backups/scripts-queries/.'),
       tech(WHERE, 'Pagine: /api/scripts, /api/script?id=…, /api/changelog; evento scripts:changed.', 'Pages: /api/scripts, /api/script?id=…, /api/changelog; event scripts:changed.'),
       tech(LIMITS, 'Uno script ≤ 200 KB; la pagina legge le ultime 500 righe del changelog.', 'A script ≤ 200 KB; the page reads the latest 500 changelog lines.'),
     ],
     anchors: {
-      0: ['src/main/brain/scripts.ts'],
+      0: ['src/main/brain/scripts.ts', 'src/main/brain/queries.ts'],
       1: ['src/main/brain/scripts-tools.ts#brain_scripts'],
       2: ['src/main/brain/scripts-tools.ts#brain_script_save', 'src/main/brain/scripts-tools.ts#brain_script_delete', 'src/main/brain/scripts-tools.ts#brain_script_add', 'src/main/brain/auto-scripts.ts'],
       3: ['src/main/brain/changelog.ts'],
-      4: ['src/renderer/brain/pages/Script.tsx', 'src/renderer/components/LogPage.tsx'],
+      4: ['src/renderer/components/skills/SkillParts.tsx', 'src/renderer/components/skills/UnassignedPanel.tsx', 'src/main/skills/assets.ts', 'src/renderer/components/LogPage.tsx'],
     },
-    sources: ['src/main/brain/scripts.ts', 'src/main/brain/scripts-tools.ts', 'src/main/brain/changelog.ts', 'src/renderer/brain/pages/Script.tsx', 'src/renderer/components/LogPage.tsx', 'docs/adr/0076-brain-scripts-and-changelog.md'],
+    sources: ['src/main/brain/scripts.ts', 'src/main/brain/queries.ts', 'src/main/brain/scripts-tools.ts', 'src/main/brain/changelog.ts', 'src/main/skills/assets.ts', 'src/renderer/components/skills/SkillParts.tsx', 'src/renderer/components/LogPage.tsx', 'docs/adr/0076-brain-scripts-and-changelog.md', 'docs/adr/0263-scripts-and-queries-live-in-skills.md'],
   },
   {
     id: 'classifiers',
@@ -708,12 +708,12 @@ export const CONCEPTS: readonly ConceptCard[] = [
   {
     id: 'memory-hub',
     title: b('La Memoria, un posto solo', 'Memoria, one place'),
-    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Sempre caricato, Script & Query, Idee e Diario e note.',
-      'Memoria is the one place for everything the brain holds: its top is alive (live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Always loaded, Scripts & Queries, Ideas and Journal & notes.'),
+    summary: b('Memoria è il posto unico di tutto quello che il brain contiene: in cima è viva (i contatori dal vivo, le ultime modifiche, «Manutenzione»), sotto le schede Proposte, Approvate, Skill, Sempre caricato, Idee e Diario e note.',
+      'Memoria is the one place for everything the brain holds: its top is alive (live counters, the latest changes, \"Maintenance\"), below it the tabs Proposals, Approved, Skills, Always loaded, Ideas and Journal & notes.'),
     points: [
       // src/renderer/lib/memory-hub.ts, src/renderer/actions.ts, src/renderer/components/Sidebar.tsx
-      b('Skill, Regole, Script e Idee non sono più pagine a sé nella barra: sono schede di Memoria (Apprendimento è passato in Andamento); i vecchi link, gli id e i tasti G (G S, G L, G T, G I) aprono la scheda giusta, e «memoria/<scheda>» apre una scheda da un link. Statistiche non c’è più (contava regole e note): «memoria/statistiche» apre Skill, dove c’è l’uso di ogni skill.',
-        'Skills, Rules, Scripts and Ideas are no longer pages of their own in the rail: they are Memoria tabs (Learning moved to Trends); old links, ids and G keys (G S, G L, G T, G I) open the right tab, and \"memoria/<tab>\" opens a tab from a link. Statistics is gone (it counted rules and notes): \"memoria/statistiche\" opens Skills, where each skill’s use is.'),
+      b('Skill, Regole e Idee non sono più pagine a sé nella barra: sono schede di Memoria (Apprendimento è passato in Andamento); i vecchi link, gli id e i tasti G (G S, G L, G I) aprono la scheda giusta, quelli di Script (G T) aprono Skill sulla skill dello script, e «memoria/<scheda>» apre una scheda da un link. Statistiche non c’è più (contava regole e note): «memoria/statistiche» apre Skill, dove c’è l’uso di ogni skill.',
+        'Skills, Rules and Ideas are no longer pages of their own in the rail: they are Memoria tabs (Learning moved to Trends); old links, ids and G keys (G S, G L, G I) open the right tab, the Script ones (G T) open Skills on the script’s skill, and \"memoria/<tab>\" opens a tab from a link. Statistics is gone (it counted rules and notes): \"memoria/statistiche\" opens Skills, where each skill’s use is.'),
       b('La voce Memoria nella barra porta il numero delle proposte che aspettano te; la scheda Proposte le mostra una alla volta.',
         'The Memoria entry in the rail carries the number of proposals waiting for you; the Proposals tab shows them one at a time.'),
       // src/renderer/components/brain-model/ApprovedTab.tsx, src/main/brainmodel/service.ts
@@ -1117,8 +1117,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Le prove di una lezione citano run con esito verificato, ma non misurano se la lezione ha aiutato: non sono mai causali. Andamento → Apprendimento dice quante lezioni sono state proposte nelle ultime 12 settimane e come sono finite, oppure «Nessun dato».',
         'A lesson’s evidence cites runs with a verified outcome, but does not measure whether the lesson helped: it is never causal. Trends → Learning says how many lessons were proposed in the last 12 weeks and how they ended, or "No data".'),
       // src/main/brainmodel/jobs.ts migration, src/main/brainmodel/upgrade.ts, src/shared/brain-layout.ts
-      b('Una volta sola, i vecchi runbook e le sezioni «routines» del brain diventano skill, con un resoconto. Con una nuova versione, il brain si mette in pari da solo: l’app descrive dove tiene ogni tipo di contenuto e ciò che nelle note ora ha un suo posto ci viene spostato, con un rimando dove stava: uno script in scripts/, una query SQL o KQL in queries/ (Memoria → Script & Query), un’idea («Idea:», «💡», le voci sotto «## Idee») in ideas.md con la nota da cui viene, la data e se era tua o dell’IA. Un agente senza strumenti decide solo quando c’è qualcosa da spostare.',
-        'Once, the brain’s old runbooks and "routines" sections become skills, with a report. With a new version the brain catches up by itself: the app describes where it keeps each kind of content, and what in the notes now has a place of its own moves there, with a pointer where it was: a script to scripts/, an SQL or KQL query to queries/ (Memory → Script & Query), an idea ("Idea:", "💡", the items under "## Ideas") to ideas.md with the note it came from, the date and whether it was yours or the AI’s. An agent with no tools decides only when there is something to move.'),
+      b('Una volta sola, i vecchi runbook e le sezioni «routines» del brain diventano skill, con un resoconto. Con una nuova versione, il brain si mette in pari da solo: l’app descrive dove tiene ogni tipo di contenuto e ciò che nelle note ora ha un suo posto ci viene spostato, con un rimando dove stava: uno script in scripts/, una query SQL o KQL in queries/ (da lì script e query passano nella skill che li usa), un’idea («Idea:», «💡», le voci sotto «## Idee») in ideas.md con la nota da cui viene, la data e se era tua o dell’IA. Un agente senza strumenti decide solo quando c’è qualcosa da spostare.',
+        'Once, the brain’s old runbooks and "routines" sections become skills, with a report. With a new version the brain catches up by itself: the app describes where it keeps each kind of content, and what in the notes now has a place of its own moves there, with a pointer where it was: a script to scripts/, an SQL or KQL query to queries/ (from there scripts and queries move into the skill that uses them), an idea ("Idea:", "💡", the items under "## Ideas") to ideas.md with the note it came from, the date and whether it was yours or the AI’s. An agent with no tools decides only when there is something to move.'),
       // src/main/brainmodel/brain-lint.ts, lint-cards.ts, rules/launch-memory.ts (ADR 0194)
       b('Al clic controlla anche il brain senza spendere token: note che nessuna nota collega, link che non portano a niente, parole citate in tre note senza una nota loro, fatti e skill che citano file che non ci sono più («Il file citato non c’è più: tolgo il fatto?»). Un fatto così non viene più dato agli agenti.',
         'On the click it also checks the brain without spending tokens: notes no note links to, links that lead nowhere, words cited in three notes with no note of their own, facts and skills citing files that are gone ("The cited file is gone: remove the fact?"). Such a fact is no longer given to the agents.'),

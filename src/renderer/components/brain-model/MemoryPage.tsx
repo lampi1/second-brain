@@ -2,10 +2,10 @@
 // last 24 hours; each eases to its new value) and the latest changes as they happen, then the one
 // «Manutenzione» button. Below, a tab bar (pills with a count each, arrows / Home / End, the page arg "memoria/<tab>"
 // so a link opens a tab: lib/memory-hub.ts): Proposte (ProposalsDeck.tsx), Approvate (ApprovedTab.tsx: everything in
-// the brain now, deleted in one click with Annulla), Skill (SkillsPage.tsx), Regole (RulesPage.tsx), Script & Query
-// (brain/pages/Script.tsx + QueriesTab.tsx), Idee (brain/pages/Idee.tsx: yours and the AI's, «Rispolvera»), File (the
+// the brain now, deleted in one click with Annulla), Skill (SkillsPage.tsx), Regole (RulesPage.tsx), Idee (brain/pages/Idee.tsx: yours and the AI's, «Rispolvera»), File (the
 // «Diario e note»: MemoryBrowser.tsx, ADR 0245); Apprendimento moved to Andamento (ADR 0202); Statistiche is gone (ADR
-// 0248: it counted rules and notes; skill use is in the Skill tab). The old Skill, Regole, Script, Idee and Dashboard
+// 0248: it counted rules and notes; skill use is in the Skill tab); Script & Query is gone (ADR 0263: scripts and queries
+// are files of their skill, shown in its «Leggi»). The old Skill, Regole, Script, Idee and Dashboard
 // pages land here (actions.ts go()). Memory never travels with an exported agent. Rendered by App.tsx
 // PageFrame for 'memoria'. Styles: styles/memory-hub.css (mh-*), memory.css (mm-*).
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode } from 'react';
@@ -19,21 +19,19 @@ import { HUB_TABS, hubArg, parseHubArg, type HubTab } from '../../lib/memory-hub
 import { useProposalCount } from '../../lib/proposals';
 import { now as clockNow } from '../../lib/clock';
 import { useBrain } from '../../brain/api';
-import { normScripts, normTables } from '../../brain/types';
+import { normTables } from '../../brain/types';
 import { Toaster } from '../../brain/components/ui';
 import { DiscussContext } from '../../brain/components/Discuss';
 import { Idee } from '../../brain/pages/Idee';
 import { ThemesPanel } from '../../dashboard/Themes';
-import { Script } from '../../brain/pages/Script';
 import { useCountUp } from '../../dashboard/parts';
-import { IconBolt, IconCheck, IconFile, IconLightbulb, IconShield, IconSparkle, IconTerminal } from '../Icons';
+import { IconBolt, IconCheck, IconFile, IconLightbulb, IconShield, IconSparkle } from '../Icons';
 import { SkillsPage } from '../SkillsPage';
 import { MaintenancePanel } from './MaintenancePanel';
 import { MaintenanceButton } from './MaintenanceButton';
 import { RulesPage } from './RulesPage';
 import { ApprovedTab, useApprovedCount } from './ApprovedTab';
 import { ProposalsDeck } from './ProposalsDeck';
-import { QueriesTab } from './QueriesTab';
 import { MemoryBrowser } from './MemoryBrowser';
 import '../../styles/agent-catalog.css';
 import '../../styles/brain-model.css';
@@ -63,7 +61,7 @@ const ago = (ms: number, nowMs: number): string => {
 /** where a change is shown: its Memoria tab; a role's change (what it proved) in Andamento → Apprendimento (ADR 0202) */
 const PLACE_OF_KIND: Record<BrainChange['kind'], { page: 'memoria' | 'andamento'; arg: string }> = {
   skill: { page: 'memoria', arg: hubArg('skill') }, rule: { page: 'memoria', arg: hubArg('regole') }, memory: { page: 'memoria', arg: hubArg('file') },
-  agent: { page: 'andamento', arg: 'apprendimento' }, script: { page: 'memoria', arg: hubArg('script') },
+  agent: { page: 'andamento', arg: 'apprendimento' }, script: { page: 'memoria', arg: hubArg('skill') },
 };
 
 function Activity({ changes, nowMs }: { changes: BrainChange[]; nowMs: number }) {
@@ -115,7 +113,7 @@ function Hero({ onTab }: { onTab: (tab: HubTab) => void }) {
 
 // ── the tab bar ─────────────────────────────────────────────────────────────────────────────────────────────────────
 const ICON: Record<HubTab, ReactNode> = {
-  proposte: <IconBolt />, approvate: <IconCheck />, skill: <IconSparkle />, regole: <IconShield />, script: <IconTerminal />,
+  proposte: <IconBolt />, approvate: <IconCheck />, skill: <IconSparkle />, regole: <IconShield />,
   idee: <IconLightbulb />, file: <IconFile />,
 };
 
@@ -123,11 +121,10 @@ function useCounts(): Partial<Record<HubTab, number>> {
   const { state } = useBrainModel();
   const proposals = useProposalCount();
   const approved = useApprovedCount();
-  const scripts = useBrain('/api/scripts', normScripts);
   const tables = useBrain('/api/tables', normTables);
   return {
     proposte: proposals, approvate: approved,
-    skill: state?.skills.length, regole: state?.rules.length, script: scripts.data?.scripts.filter(s => s.tested.state === 'ok').length, // only working scripts show (Script.tsx)
+    skill: state?.skills.length, regole: state?.rules.length,
     idee: tables.data?.ideas.length,
   };
 }
@@ -150,7 +147,7 @@ function TabBar({ tab, onTab }: { tab: HubTab; onTab: (tab: HubTab) => void }) {
       bar.current.querySelectorAll('button').forEach(button => ro?.observe(button));
     }
     return () => ro?.disconnect();
-  }, [tab, counts.skill, counts.idee, counts.script, counts.approvate]);
+  }, [tab, counts.skill, counts.idee, counts.approvate]);
   const key = (e: KeyboardEvent, i: number) => {
     const n = HUB_TABS.length;
     const next = e.key === 'ArrowRight' ? (i + 1) % n : e.key === 'ArrowLeft' ? (i + n - 1) % n : e.key === 'Home' ? 0 : e.key === 'End' ? n - 1 : null;
@@ -189,14 +186,13 @@ function TabContent({ tab, rest }: { tab: HubTab; rest: string | null }) {
     case 'approvate': return <ApprovedTab />;
     case 'skill': return <SkillsPage />;
     case 'regole': return <RulesPage />;
-    case 'script': return <><Script arg={rest ?? undefined} /><QueriesTab /></>;
     case 'idee': return <IdeasTab rest={rest} />;
     case 'file': return <><MemoryBrowser /><MaintenancePanel kinds={['memory']} testId="bm-maint-memory" /></>;
   }
 }
 
 /** Tabs that work with no brain folder chosen: the deck, the brain's server pages and the skills in ~/.claude/skills. */
-const NO_BRAIN_OK: ReadonlySet<HubTab> = new Set(['proposte', 'skill', 'script', 'idee']);
+const NO_BRAIN_OK: ReadonlySet<HubTab> = new Set(['proposte', 'skill', 'idee']);
 
 export function MemoryPage() {
   const { state, error } = useBrainModel();

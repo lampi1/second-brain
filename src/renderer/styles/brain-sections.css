@@ -1,6 +1,6 @@
 /* The brain's Script page (ADR 0076), layered on the Dashboard's look (dashboard.css: header, numbers, search, panels):
    script cards in a grid that open in place full width; its toolbar and chips also serve the Log page (ADR 0111).
-   Used by brain/pages/Script.tsx and components/LogPage.tsx. Motion off for reduced-motion users. */
+   The Script page is gone (ADR 0263); used by components/LogPage.tsx. Motion off for reduced-motion users. */
 .bs-page{display:flex;flex-direction:column;gap:18px}
 .bs-page .bs-header{height:auto;min-height:118px;align-items:flex-end;margin:0 0 4px}
 .bs-header>div>p{white-space:normal!important;max-width:74ch}

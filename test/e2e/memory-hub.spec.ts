@@ -18,7 +18,7 @@ function fixtureBrain(): string {
   return d;
 }
 
-const TABS = ['proposte', 'approvate', 'skill', 'regole', 'script', 'idee', 'file'] as const;
+const TABS = ['proposte', 'approvate', 'skill', 'regole', 'idee', 'file'] as const;
 
 async function theme(page: Page, scheme: 'dark' | 'light') {
   await page.evaluate(t => window.sb.invoke('settings:set', { theme: t }), scheme);
@@ -64,7 +64,7 @@ test('Memoria hub: live top, tabs with keys and deep links, old G-keys, trash wi
     const tabs = mem.getByTestId('mh-tabs').getByRole('tab');
     await expect(tabs).toHaveCount(TABS.length);
     for (const [i, id] of TABS.entries()) await expect(tabs.nth(i)).toHaveAttribute('data-testid', `mh-tab-${id}`);
-    await expect(page.getByRole('tab', { name: /Script/ })).toHaveCount(1);
+    await expect(page.getByRole('tab', { name: /Script/ })).toHaveCount(0); // scripts and queries are in their skills (ADR 0263)
     await page.getByTestId('mh-tab-proposte').focus();
     await page.keyboard.press('ArrowRight');
     await expect(mem).toHaveAttribute('data-tab', 'approvate');
@@ -79,7 +79,7 @@ test('Memoria hub: live top, tabs with keys and deep links, old G-keys, trash wi
     await expect(mem).toHaveAttribute('data-tab', 'file');
 
     // the old G-keys land on their tab
-    const keys: [Parameters<typeof goPage>[1], string][] = [['skill', 'skill'], ['regole', 'regole'], ['script', 'script'], ['idee', 'idee'], ['dashboard', 'proposte']];
+    const keys: [Parameters<typeof goPage>[1], string][] = [['skill', 'skill'], ['regole', 'regole'], ['script', 'skill'], ['idee', 'idee'], ['dashboard', 'proposte']];
     for (const [key, tab] of keys) {
       await goPage(page, key);
       await expect(page.getByTestId('page-memoria')).toBeVisible();

@@ -153,10 +153,6 @@ test('README screenshots', async () => {
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('brain-map')).toHaveCount(0);
 
-  // 7. Script: the brain's tested, reusable scripts as cards (ADR 0076)
-  await goPage(page, 'script'); // a tab of Memoria now (ADR 0122)
-  await expect(page.getByTestId('bs-script-card').first()).toBeVisible({ timeout: 30_000 });
-  await save('brain-scripts');
 });
 
 /** The visible part of the scrolling frame around this element (the page's own column, without the rail and the

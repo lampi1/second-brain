@@ -53,17 +53,26 @@ export type LearnResult = { ok: true; message: string } | { ok: false; error: st
  *  brain's `scripts/` folder (ADR 0076). Its description comes from the `@title` / `@description` / `@usage` / `@tags` /
  *  `@tested` lines of its header comment; `tested` = the last run the Orchestrator recorded (`untested` when none). */
 export interface BrainScriptSummary {
-  id: string; file: string; title: string; description: string; usage: string; language: string; tags: string[];
+  /** `<skill>/<file>`, or the bare file name of a script still in the brain's scripts/ (ADR 0263) */
+  id: string;
+  /** the skill whose scripts/ holds it; null = still in the brain's scripts/, waiting for a skill */
+  skill: string | null;
+  /** `<skill>/scripts/<file>` or `scripts/<file>`, for display; `path` is the absolute file */
+  file: string; path: string; title: string; description: string; usage: string; language: string; tags: string[];
   tested: { state: 'ok' | 'failed' | 'untested'; at: string | null; note: string };
   changedAt: string | null; bytes: number;
 }
 /** /api/script?id=…: the script's code with every line that may hold a credential replaced (`masked` lines). */
-export interface BrainScript extends BrainScriptSummary { path: string; code: string; masked: number }
+export interface BrainScript extends BrainScriptSummary { code: string; masked: number }
 /** A saved query of the brain (ADR 0124; main brain/queries.ts): one file in queries/, a Markdown note with its header
  *  (title, what it does, where it runs, tags, the note it came from) and the query in one fenced block, or a native
  *  .sql/.kql/… file with an @-comment header. `lang` = the fence or file language as written, `language` its label. */
 export interface BrainQuerySummary {
-  id: string; file: string; title: string; description: string; language: string; lang: string;
+  /** `<skill>/<file>`, or the bare file name of a query still in the brain's queries/ (ADR 0263) */
+  id: string;
+  /** the skill whose assets/queries/ holds it; null = still in the brain's queries/, waiting for a skill */
+  skill: string | null;
+  file: string; title: string; description: string; language: string; lang: string;
   /** where it runs: the data source, cluster, database or tool, as written ('' = not said) */
   source: string; tags: string[];
   /** the note it was moved from by the brain upgrade, or who saved it ('' = not said) */

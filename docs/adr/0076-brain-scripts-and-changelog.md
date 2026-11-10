@@ -1,7 +1,7 @@
 <!-- Decision record for the brain's Script and Changelog sections: where scripts live, who changes them, how changes are logged, and why no classifier picks them. -->
 # ADR 0076: The brain's scripts and its changelog, two sections under Brain
 
-Date: 2026-10-19 · Status: partly superseded by ADR 0096 (point 3); accepted (owner, 19/10: "una sezione dedicata agli script, tutti gli script creati e
+Date: 2026-10-19 · Status: partly superseded by ADR 0096 (point 3) and ADR 0263 (scripts live in their skills); accepted (owner, 19/10: "una sezione dedicata agli script, tutti gli script creati e
 riutilizzabili provati che funzionano, piena libertà all'orchestratore per modificarli, aggiungerne, correggerli o
 eliminarli … i cambiamenti finiscono nel changelog del brain che farei una sezione a parte … voglio rendere il brain più
 visibile in assoluto all'utente") · Builds on: ADR 0072 (a fresh brain starts empty), ADR 0094 (hybrid brain search)
