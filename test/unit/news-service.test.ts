@@ -216,7 +216,7 @@ describe('review fixes (ADR 0265)', () => {
 
   it('looks up a date only on a public https host', () => {
     expect(publicHttps('https://example.com/a')).toBe(true);
-    for (const u of ['http://example.com/a', 'https://127.0.0.1/x', 'https://localhost:3000/', 'https://192.168.1.4/', 'https://10.0.0.2/', 'https://172.20.0.1/', 'https://169.254.169.254/', 'https://[::1]/', 'https://intranet/']) expect(publicHttps(u)).toBe(false);
+    for (const u of ['http://example.com/a', 'https://127.0.0.1/x', 'https://localhost:3000/', 'https://192.168.1.4/', 'https://10.0.0.2/', 'https://172.20.0.1/', 'https://169.254.169.254/', 'https://[::1]/', 'https://intranet/', 'https://localhost./', 'https://printer.local./']) expect(publicHttps(u)).toBe(false);
   });
 
   it('forgets a source removed while it was being read', async () => {

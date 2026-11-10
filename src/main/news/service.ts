@@ -84,7 +84,7 @@ export function publicHttps(url: string): boolean {
   try {
     const u = new URL(url);
     if (u.protocol !== 'https:') return false;
-    const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, '').replace(/\.+$/, ''); // «localhost.» is localhost
     if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal') || !h.includes('.') && !h.includes(':')) return false;
     if (/^(127\.|10\.|0\.|169\.254\.|192\.168\.)/.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h)) return false;
     if (h.includes(':') && (h === '::1' || h === '::' || /^(fc|fd|fe80)/.test(h) || h.startsWith('::ffff:'))) return false;
@@ -302,6 +302,9 @@ export class NewsService {
       const lesson = cs.find(c => c.id === i.id)?.lesson ?? cs.find(c => c.lesson)?.lesson;
       return { ...i, read: cs.some(c => c.read) || undefined, saved: cs.some(c => c.saved) || undefined, ...(lesson ? { lesson } : {}) };
     });
+    // a story saved (or given a lesson) while the AI pass ran stays, even past the days the paper keeps
+    const ids2 = new Set(items.map(i => i.id));
+    for (const c of now2.values()) if ((c.saved || c.lesson) && !ids2.has(c.id)) items.push(c);
     const final = this.trim(items);
     // a story that leaves the paper (aged out, trimmed) and a first reading's undated archive stay known
     const keptIds = new Set(final.flatMap(i => [i.id, ...i.also.map(a => idOf(a.url))]));
