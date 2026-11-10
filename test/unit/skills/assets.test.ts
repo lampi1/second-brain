@@ -114,6 +114,9 @@ describe('what the move never does', () => {
     expect(again.moved).toEqual([]);
     expect(again.unassigned.map(u => [u.name, u.reason])).toEqual([['a.sh', 'undone'], ['win.ps1', 'not-utf8']]);
     expect(unassignedAssets(root, [deploy], log).map(u => u.reason)).toEqual(['undone', 'not-utf8']);
+    // the undo outlives the change log (a marker in the brain's ops/state/migration-kept/)
+    const fresh = new ChangeLog(fs.mkdtempSync(path.join(os.tmpdir(), 'sb-assets-ud2-')));
+    expect(migrateAssets({ ...deps([deploy]), log: fresh }).unassigned.map(u => u.reason)).toEqual(['undone', 'not-utf8']);
     // the user can still place it
     expect(assignAsset(deps([deploy]), { kind: 'script', name: 'a.sh', skill: 'deploy' })).toMatchObject({ ok: true });
     expect(assignAsset(deps([deploy]), { kind: 'script', name: 'win.ps1', skill: 'deploy' })).toMatchObject({ ok: false });
@@ -127,6 +130,33 @@ describe('what the move never does', () => {
     const r = migrateAssets(deps([a, b]));
     expect(r.moved).toEqual(['scripts/x.sh → b']);
     expect(read('.agents/skills/b/SKILL.md')).toContain('${CLAUDE_SKILL_DIR}/scripts/x.sh');
+  });
+});
+
+describe('Windows paths and links', () => {
+  it('a reference written with a backslash moves and is rewritten', () => {
+    const deploy = skill('deploy', 'powershell -File scripts\\backup.ps1');
+    write('scripts/backup.ps1', 'Write-Output ok\n');
+    expect(migrateAssets(deps([deploy])).moved).toEqual(['scripts/backup.ps1 → deploy']);
+    expect(read('.agents/skills/deploy/SKILL.md')).toContain('powershell -File ${CLAUDE_SKILL_DIR}/scripts/backup.ps1');
+  });
+
+  it('a path elsewhere that ends with the name is not a reference', () => {
+    const deploy = skill('deploy', 'Vedi C:\\tools\\backup.ps1');
+    write('scripts/backup.ps1', 'Write-Output ok\n');
+    expect(migrateAssets(deps([deploy])).unassigned.map(u => u.reason)).toEqual(['none']);
+  });
+
+  it.skipIf(process.platform === 'win32')('never moves through a skill folder that links outside the skill', () => {
+    const deploy = skill('deploy', 'Lancia scripts/x.sh.');
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-assets-out-'));
+    fs.symlinkSync(out, path.join(deploy.folder, 'scripts'));
+    write('scripts/x.sh', 'echo x\n');
+    const r = migrateAssets(deps([deploy]));
+    expect(r.moved).toEqual([]);
+    expect(fs.readdirSync(out)).toEqual([]);
+    expect(has('scripts/x.sh')).toBe(true);
+    fs.rmSync(out, { recursive: true, force: true });
   });
 });
 

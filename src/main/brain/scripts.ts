@@ -242,6 +242,7 @@ export class BrainScripts {
     const bad = secretLine(text);
     if (bad) throw new Error(`refused: line ${bad} looks like a credential. Read secrets from an environment variable or the user's credentials file at run time, never write them in a script`);
     const full = path.join(dir, name);
+    if (skill && !insideReal(this.brainSkill(skill).folder, full)) throw new Error(`skill: «${skill}»'s ${SKILL_SCRIPTS}/ is a link out of the skill: refused`);
     const existed = fs.existsSync(full);
     if (input.create && (existed || this.taken(dir, name))) throw new Error(`${name} exists already: add only creates a new script`);
     const file = skill ? `${skill}/${SKILL_SCRIPTS}/${name}` : `${SCRIPTS_DIR}/${name}`;
@@ -268,7 +269,7 @@ export class BrainScripts {
     if (!s) throw new Error(`script non trovato: ${input.name}`);
     const why = input.reason.trim() || 'eliminato';
     if (s.skill) {
-      if (!this.safeSkills().some(x => x.origin === 'brain' && s.path.startsWith(x.folder + path.sep))) throw new Error(`«${s.skill}» is not a brain skill: an app skill's or the user's own scripts are changed only from the Skill page`);
+      if (!this.safeSkills().some(x => x.origin === 'brain' && s.path.startsWith(x.folder + path.sep) && insideReal(x.folder, s.path))) throw new Error(`«${s.skill}» is not a brain skill: an app skill's or the user's own scripts are changed only from the Skill page`);
       const log = this.log();
       if (!log) throw new Error('nessuna cronologia del brain: elimina lo script dalla pagina Skill');
       const c = log.apply({ job: 'user', kind: 'script', action: 'remove', target: s.skill, summary: `Script ${SKILL_SCRIPTS}/${path.basename(s.path)} tolto (${input.by})`, reason: why.slice(0, 500), evidence: [`${SKILL_SCRIPTS}/${path.basename(s.path)}`] }, [{ file: s.path, text: null }]);
@@ -295,11 +296,36 @@ export class BrainScripts {
     try { if (legacy && fs.readdirSync(path.join(legacy, DELETED_DIR)).some(f => f.endsWith(`-${name}`))) return true; } catch { /* none */ }
     const log = this.log();
     if (!log) return false;
-    // a removal from a skill's scripts/ (in that skill when one is named); the move out of the old scripts/ is no delete
-    const folders = this.safeSkills().filter(s => s.origin === 'brain' && (!skill || s.name === skill)).map(s => path.resolve(s.folder, SKILL_SCRIPTS, name));
-    return log.all().some(c => !c.rolledBackAt && c.action === 'remove' && c.files.some(f => f.after === null && f.before !== null && folders.includes(path.resolve(f.file))));
+    // a removal from a skill's scripts/ (in that skill when one is named), or an add the user undid; the move out of the
+    // old scripts/ is no delete
+    const folders = this.safeSkills().filter(s => s.origin === 'brain' && (!skill || s.name === skill)).map(s => foldPath(path.resolve(s.folder, SKILL_SCRIPTS, name)));
+    const here = (file: string) => folders.includes(foldPath(path.resolve(file)));
+    return log.all().some(c => c.files.some(f => here(f.file) && (c.rolledBackAt
+      ? f.before === null && f.after !== null
+      : c.action === 'remove' && f.after === null && f.before !== null)));
   }
 }
+
+/** Is this file (existing or not yet) really inside the folder, links followed? A skill's scripts/ or assets/ that is a
+ *  link out of it (to another skill, to a folder outside the brain) is never written or deleted through (ADR 0263). */
+export function insideReal(folder: string, file: string): boolean {
+  try {
+    const base = fs.realpathSync(folder);
+    let p = path.resolve(file);
+    const rest: string[] = [];
+    for (;;) {
+      try { fs.lstatSync(p); break; } catch { /* not there yet: its parent decides */ }
+      const up = path.dirname(p);
+      if (up === p) return false;
+      rest.unshift(path.basename(p)); p = up;
+    }
+    const real = path.join(fs.realpathSync(p), ...rest);
+    return real.startsWith(base + path.sep);
+  } catch { return false; }
+}
+
+/** Windows and macOS folders ignore case: a path compares folded there. */
+export const foldPath = (p: string): string => (process.platform === 'linux' ? p : p.toLowerCase());
 
 /** Can a change to this brain path change the Script or Changelog pages? (the brain watcher asks). A path without an
  *  extension may be the scripts folder itself, moved or deleted. */

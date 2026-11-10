@@ -109,6 +109,21 @@ describe('BrainScripts', () => {
     s.delete({ name: 'deploy/run.sh', by: 'Orchestrator', reason: 'x' });
     expect(s.wasDeleted('run.sh', 'deploy')).toBe(true);
     expect(s.wasDeleted('run.sh', 'altro')).toBe(false);
+    // an add the user undid is not added back either
+    s.save({ skill: 'altro', name: 'nuovo.sh', code: 'echo n', meta, by: 'app' });
+    const add = history.all().at(-1)!;
+    history.rollback(add.id, NO_AGENT);
+    expect(s.wasDeleted('nuovo.sh', 'altro')).toBe(true);
+    // a scripts/ that links out of the skill is never written through
+    if (process.platform !== 'win32') {
+      const out = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-scripts-out-'));
+      const linked = skillOf('linkata');
+      fs.symlinkSync(out, path.join(linked[0]!.folder, 'scripts'));
+      const s2 = new BrainScripts(() => root, undefined, () => linked, () => history);
+      expect(() => s2.save({ skill: 'linkata', name: 'x.sh', code: 'echo', meta, by: 'Orchestrator' })).toThrow(/link/);
+      expect(fs.readdirSync(out)).toEqual([]);
+      fs.rmSync(out, { recursive: true, force: true });
+    }
   });
 
   it('a script still in the brain\'s old scripts/ is listed without a skill, edited in place, deleted to scripts/.deleted/', () => {

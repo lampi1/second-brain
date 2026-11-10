@@ -19,7 +19,8 @@ import type { AssetAssign, AssetAssignResult, SkillFile, SkillParts, UnassignedA
 import type { ChangeLog } from '../brainmodel/changes';
 import { declareRemoved, WHOLE_FILE } from '../brainmodel/item-delta';
 import { QUERIES_DIR, QUERY_EXTS, languageLabel, readQueryText, SKILL_QUERIES } from '../brain/queries';
-import { langOf, parseHeader, SCRIPTS_DIR, SKILL_SCRIPTS, type SkillPlace } from '../brain/scripts';
+import { insideReal, langOf, parseHeader, SCRIPTS_DIR, SKILL_SCRIPTS, type SkillPlace } from '../brain/scripts';
+import { migrationKept, rememberUndoneMoves } from '../brainmodel/migration-move';
 import { maskSecrets } from '../brain/mask';
 import { errText, log } from '../log';
 
@@ -111,8 +112,10 @@ function skillTexts(folder: string): { file: string; text: string }[] {
 /** «scripts/x.py» or the bare «x.py» (not a longer name, not already under another folder or ${CLAUDE_SKILL_DIR}; a
  *  full stop after it ends the sentence). */
 const END = '(?![\\w-]|\\.\\w)';
-const pathRef = (kind: Kind, name: string) => new RegExp(`(?<![\\w.\\-/$}])${esc(OLD_DIR[kind])}/${esc(name)}${END}`, 'g');
-const bareRef = (name: string) => new RegExp(`(?<![\\w.\\-/$}])${esc(name)}${END}`);
+// «scripts\x.ps1» too (Windows); names compare without case where the file system ignores it
+const FLAGS = process.platform === 'linux' ? '' : 'i';
+const pathRef = (kind: Kind, name: string) => new RegExp(`(?<![\\w.\\-/\\\\$}])${esc(OLD_DIR[kind])}[\\\\/]${esc(name)}${END}`, `g${FLAGS}`);
+const bareRef = (name: string) => new RegExp(`(?<![\\w.\\-/\\\\$}])${esc(name)}${END}`, FLAGS);
 const names = (texts: readonly { text: string }[], kind: Kind, name: string) => texts.some(t => pathRef(kind, name).test(t.text) || bareRef(name).test(t.text));
 
 const sameBytes = (a: string, b: string) => { try { return fs.readFileSync(a).equals(fs.readFileSync(b)); } catch { return false; } };
@@ -128,16 +131,23 @@ const titleOf = (l: Legacy): { title: string; description: string } => {
 const plainText = (file: string) => { try { const raw = fs.readFileSync(file); return Buffer.from(raw.toString('utf8'), 'utf8').equals(raw); } catch { return false; } };
 
 /** The old files whose automatic move the user undid (Annulla on a `migration` change): never moved again by itself,
- *  they wait on the Skill page. */
-export const undoneMoves = (log: ChangeLog | null | undefined): Set<string> => {
-  try { return new Set((log?.all() ?? []).filter(c => c.job === 'migration' && c.rolledBackAt).flatMap(c => c.evidence ?? [])); } catch { return new Set(); }
-};
+ *  they wait on the Skill page. The undo is also kept as a marker in ops/state/migration-kept/ (migration-move.ts
+ *  rememberUndoneMoves, after every Annulla), so it outlives the change log's last 400 entries. */
+const keptId = (rel: string) => `asset:${rel}`;
+function undoneMoves(root: string, log: ChangeLog | null | undefined): (rel: string) => boolean {
+  let fromLog = new Set<string>();
+  try {
+    if (log) rememberUndoneMoves(root, log);
+    fromLog = new Set((log?.all() ?? []).filter(c => c.job === 'migration' && c.rolledBackAt).flatMap(c => c.evidence ?? []));
+  } catch { /* the markers still say it */ }
+  return rel => fromLog.has(rel) || migrationKept(root, keptId(rel));
+}
 
 /** Where one old file goes: its skill, or why it stays. */
-function place(l: Legacy, skills: readonly SkillPlace[], texts: Map<string, { file: string; text: string }[]>, undone: ReadonlySet<string>): { skill: SkillPlace; done: boolean } | { reason: UnassignedAsset['reason']; candidates: string[] } {
+function place(l: Legacy, skills: readonly SkillPlace[], texts: Map<string, { file: string; text: string }[]>, undone: (rel: string) => boolean): { skill: SkillPlace; done: boolean } | { reason: UnassignedAsset['reason']; candidates: string[] } {
   const target = (s: SkillPlace) => path.join(s.folder, ...NEW_DIR[l.kind].split('/'), l.name);
   const candidates = skills.filter(s => names(texts.get(s.name) ?? [], l.kind, l.name)).map(s => s.name);
-  if (undone.has(`${OLD_DIR[l.kind]}/${l.name}`)) return { reason: 'undone', candidates };
+  if (undone(`${OLD_DIR[l.kind]}/${l.name}`)) return { reason: 'undone', candidates };
   if (l.size > 200 * 1024) return { reason: 'too-big', candidates };
   if (!plainText(l.file)) return { reason: 'not-utf8', candidates };
   // already moved by hand (or a copy): the same bytes in the skill that names it (or in one, when none does), only the
@@ -156,6 +166,7 @@ class NotKept extends Error {}
 /** Moves one old file into a skill as one change (Annulla puts it back where it was). */
 function move(d: AssetsDeps, l: Legacy, skill: SkillPlace, job: 'migration' | 'user', alreadyThere: boolean, stamp: string): string {
   const to = path.join(skill.folder, ...NEW_DIR[l.kind].split('/'), l.name);
+  if (!insideReal(skill.folder, to)) throw new Error(`la cartella ${NEW_DIR[l.kind]}/ della skill «${skill.name}» è un collegamento fuori dalla skill`);
   const text = fs.readFileSync(l.file, 'utf8');
   const mode = fs.statSync(l.file).mode & 0o777;
   // the copy first: nothing moves without it
@@ -173,7 +184,7 @@ function move(d: AssetsDeps, l: Legacy, skill: SkillPlace, job: 'migration' | 'u
     ...rewrites.map(t => ({ file: t.file, text: t.after, removed: declareRemoved(t.text, t.after, reason) })),
   ];
   const c = d.log.apply({ job, kind: l.kind === 'script' ? 'script' : 'skill', action: 'update', target: skill.name,
-    summary: `${l.kind === 'script' ? 'Script' : 'Query'} ${OLD_DIR[l.kind]}/${l.name} → ${skill.name}/${NEW_DIR[l.kind]}/${l.name}`, reason, evidence: [`${OLD_DIR[l.kind]}/${l.name}`] }, writes);
+    summary: `${l.kind === 'script' ? 'Script' : 'Query'} ${OLD_DIR[l.kind]}/${l.name} → ${skill.name}/${NEW_DIR[l.kind]}/${l.name}`, reason, evidence: [`${OLD_DIR[l.kind]}/${l.name}`, `move:${keptId(`${OLD_DIR[l.kind]}/${l.name}`)}`] }, writes);
   if (!c) throw new NotKept('troppo grande per la cronologia: nulla è stato spostato');
   // a script keeps its permissions (the executable bit of a .sh)
   if (!alreadyThere) { try { fs.chmodSync(to, mode); } catch { /* a file system without modes */ } }
@@ -187,7 +198,7 @@ export function migrateAssets(d: AssetsDeps): { moved: string[]; unassigned: Una
   const brain = d.skills.filter(s => s.origin === 'brain');
   const texts = new Map(brain.map(s => [s.name, skillTexts(s.folder)]));
   const stamp = stampOf(d.now?.() ?? new Date());
-  const undone = undoneMoves(d.log);
+  const undone = undoneMoves(d.root, d.log);
   const moved: string[] = [], unassigned: UnassignedAsset[] = [];
   for (const l of legacyFiles(d.root)) {
     const p = place(l, brain, texts, undone);
@@ -206,7 +217,7 @@ export function migrateAssets(d: AssetsDeps): { moved: string[]; unassigned: Una
 export function unassignedAssets(root: string, skills: readonly SkillPlace[], log?: ChangeLog | null): UnassignedAsset[] {
   const brain = skills.filter(s => s.origin === 'brain');
   const texts = new Map(brain.map(s => [s.name, skillTexts(s.folder)]));
-  const undone = undoneMoves(log);
+  const undone = undoneMoves(root, log);
   return legacyFiles(root).map(l => {
     const p = place(l, brain, texts, undone);
     return { kind: l.kind, name: l.name, ...titleOf(l), candidates: 'reason' in p ? p.candidates : [p.skill.name], reason: 'reason' in p ? p.reason : 'none' };

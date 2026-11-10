@@ -26,7 +26,7 @@ import type { BrainQuery, BrainQueryList, BrainQuerySummary } from '../../shared
 import type { ChangeLog } from '../brainmodel/changes';
 import type { BrainChangelog } from './changelog';
 import { maskSecrets } from './mask';
-import { secretLine, type SkillPlace } from './scripts';
+import { insideReal, secretLine, type SkillPlace } from './scripts';
 
 export const QUERIES_DIR = 'queries';
 /** a skill's saved queries: assets/ of the Agent Skills format (ADR 0263) */
@@ -230,6 +230,7 @@ export class BrainQueries {
     try { existing = fs.readdirSync(dir).map(f => f.toLowerCase()); } catch { /* not there yet */ }
     if (existing.includes(name.toLowerCase())) throw new Error(`${name} exists already: add only creates a new query`);
     const full = path.join(dir, name);
+    if (!insideReal(place.folder, full)) throw new Error(`skill: «${skillName}»'s ${SKILL_QUERIES}/ is a link out of the skill: refused`);
     const log = this.log();
     if (log) log.apply({ job: 'user', kind: 'skill', action: 'create', target: skillName, summary: `Query ${SKILL_QUERIES}/${name} aggiunta (${input.by})`, reason: one(input.meta.title).slice(0, 500), evidence: [`${SKILL_QUERIES}/${name}`] }, [{ file: full, text }]);
     else { fs.mkdirSync(dir, { recursive: true }); fs.writeFileSync(full, text, { encoding: 'utf8', flag: 'wx' }); }
@@ -244,7 +245,7 @@ export class BrainQueries {
     if (!this.dir() || !log) throw new Error('nessuna cartella brain configurata');
     const q = this.find(id);
     if (!q) throw new Error(`query non trovata: ${id}`);
-    if (q.skill && !this.safeSkills().some(s => s.origin === 'brain' && q.path.startsWith(s.folder + path.sep))) throw new Error(`«${q.skill}» is not a brain skill: an app skill's or the user's own queries are changed only from the Skill page`);
+    if (q.skill && !this.safeSkills().some(s => s.origin === 'brain' && q.path.startsWith(s.folder + path.sep) && insideReal(s.folder, q.path))) throw new Error(`«${q.skill}» is not a brain skill: an app skill's or the user's own queries are changed only from the Skill page`);
     if (fs.lstatSync(path.dirname(q.path)).isSymbolicLink()) throw new Error('the queries folder is a link: refused');
     const c = log.apply({ job: 'user', kind: q.skill ? 'skill' : 'memory', action: 'remove', target: q.skill ?? q.file, summary: `Query eliminata: ${q.title}`,
       reason: 'Eliminata dalla pagina Skill.', evidence: [q.file] }, [{ file: q.path, text: null }]);

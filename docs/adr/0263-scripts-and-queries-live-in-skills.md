@@ -30,8 +30,12 @@ unmatched ones for the user to assign, and keep a backup») · Changes: ADR 0076
   in that skill only leave the old folder (when no other skill names the file). No skill, several skills, another file
   of that name in the skill, a file over the history's limit or not UTF-8 text (a UTF-16 script would come out garbled):
   it stays and is listed. A script keeps its file mode. Idempotent: a moved file is no longer in the old folder, and a
-  move the user undid is never done again by itself (listed, «hai annullato lo spostamento»). Deletes from the tools
-  touch only brain skills; an auto-save is skipped only for a script removed from that same skill.
+  move the user undid is never done again by itself (listed, «hai annullato lo spostamento»; a marker in
+  `ops/state/migration-kept/` keeps it past the change log's last 400 entries). References written `scripts\x.ps1`
+  are found and rewritten too; names compare without case off Linux. Writes and deletes touch only brain skills, never
+  through a `scripts/` or `assets/` that links out of the skill; an auto-save is skipped for a script removed from that
+  same skill, or whose add the user undid. Known limits: Annulla puts a script back without its executable bit, and
+  several moves into one skill are undone newest first (each rewrites its SKILL.md).
 - **UI**: the «Script & Query» tab is gone; its links (`memoria/script/<skill>/<file>`, G T) open the Skill tab on the
   skill. A skill's «Leggi» shows «Nel pacchetto» by group (Script with title, description, language and last test;
   Query with language; Riferimenti; Asset); a row opens the file in «File». The Skill page lists what the move left
