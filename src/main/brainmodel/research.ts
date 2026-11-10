@@ -1,6 +1,6 @@
 // The maintenance with research (ADR 0132; one click and invisible since ADR 0153). The «Manutenzione» button runs the
 // free cleanup (the brain jobs and the log step, BrainModelService.maintain) and then this research, with the app's best
-// choice (the strongest model of an engine that is on, a 5 $ cap, the web when the engine has it): one app chat
+// choice (the strongest model of an engine that is on, a 20 $ cap, extra-high effort, the web when the engine has it): one app chat
 // («Manutenzione», no role, ChatManager `research`) the user never sees (the renderer keeps it out of every list),
 // reading the brain and the zero-token data pack (research-pack.ts) through maintenance_pack and proposing through
 // maintenance_propose (research-tools.ts). The chat is stopped when its live cost passes the cap. Every finding is a
@@ -63,7 +63,7 @@ export const OUTCOMES_FIRST_MS = 90_000, OUTCOMES_EVERY_MS = 60 * 60_000;
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 const MODEL_ID = /^[\w.:@/[\]][\w.:@/=[\],-]{0,119}$/;
 /** A research that never ends its turn is stopped after this long. */
-export const RESEARCH_MAX_MS = 60 * 60_000;
+export const RESEARCH_MAX_MS = 2 * 60 * 60_000;
 export const RESEARCH_TITLE = 'Manutenzione';
 export const CAP_RANGE = { min: 0.5, max: 50 } as const;
 
@@ -273,12 +273,12 @@ export class ResearchService {
   status(): MaintenanceStatus {
     return { running: this.passing || this.starting || !!this.run, research: this.run ? this.info(this.run) : null, last: this.store.lastDone() ?? null, canResearch: this.d.engines().length > 0 };
   }
-  /** The app's best choice for a research: Claude when it is on (else the first engine), its strongest model, high
+  /** The app's best choice for a research: Claude when it is on (else the first engine), its strongest model, extra-high
    *  effort where the engine has it, the web when it has it, the default cap, the shipped method. */
   defaults(): ResearchOptions | null {
     const engines = this.d.engines(), eng = engines.find(e => e.harness === 'claude') ?? engines[0];
     if (!eng) return null;
-    return { harness: eng.harness, model: this.d.bestModel(eng.harness), effort: eng.effort ? 'high' : null, web: eng.web, capUsd: RESEARCH_CAP_USD, prompt: defaultPrompt(this.d.lang()) };
+    return { harness: eng.harness, model: this.d.bestModel(eng.harness), effort: eng.effort ? 'xhigh' : null, web: eng.web, capUsd: RESEARCH_CAP_USD, prompt: defaultPrompt(this.d.lang()) };
   }
   private info(r: ResearchRunInfo): ResearchRunInfo {
     const { chatId, startedAt, endedAt, harness, model, effort, capUsd, costUsd, state, proposals, why } = r;
@@ -375,7 +375,7 @@ export class ResearchService {
     const startedAt = this.now();
     this.run = { chatId: chat.id, startedAt, harness, model, effort, capUsd: cap, costUsd: 0, state: 'running', proposals: 0, sawWork: false, pack, timer: null, saves: [], reflect, fence,
       lessons: { text: lessonsSection(noted, fence, t => scrub(t, this.privacy())), shown: noted.map(l => ({ id: l.id, seen: l.seen ?? 1 })), read: false } };
-    const timer = setTimeout(() => { void this.finish('stopped', 'più di un\'ora senza finire').catch(() => { /* logged */ }); }, RESEARCH_MAX_MS);
+    const timer = setTimeout(() => { void this.finish('stopped', 'più di due ore senza finire').catch(() => { /* logged */ }); }, RESEARCH_MAX_MS);
     timer.unref?.();
     this.run.timer = timer;
     this.store.saveRun(this.info(this.run));

@@ -99,7 +99,7 @@
     "src/main/brainmodel/procedure-sources.ts": "7a6c6efa317e09a7",
     "src/main/brainmodel/research-candidate.ts": "ef2a08d9b2ad8179",
     "src/main/brainmodel/research-deep.ts": "da791b95a6f1b990",
-    "src/main/brainmodel/research-prompt.ts#researchFrame": "43461d912d007bdc",
+    "src/main/brainmodel/research-prompt.ts#researchFrame": "7f0ba1fef3e2d063",
     "src/main/brainmodel/service.ts#link": "37c54d2674076076",
     "src/main/brainmodel/service.ts#start": "cb130d0a267d642f",
     "src/main/chats/admission.ts": "5ff45b4ca752b4fe",

@@ -7,7 +7,7 @@ export const memoryDe: typeof memoryIt = {
   'mm.maint.helpTitle': 'Was die Wartung macht',
   'mm.maint.help1': 'Ein Klick und fertig: Die App räumt Skills, Regeln und Gedächtnis auf, liest ihre Logs, und ein unsichtbarer Agent studiert deinen Verlauf, um Verbesserungen vorzuschlagen. Er arbeitet im Hintergrund: Du kannst weiterarbeiten.',
   'mm.maint.help2': 'Alles kommt als Karten in Memoria → Proposte: neue Skills, was vergessen werden kann, und die Issues für GitHub (mit deinem Ja werden sie sofort angelegt). Ideen zur App landen auch in Ideen, auf der Seite der KI. Ohne dein Ja ändert sich nichts.',
-  'mm.maint.help3': 'Das passiert nur, wenn du drückst: Ideen, Vorschläge und das Aufräumen des Gedächtnisses starten nie von selbst. Die Recherche verbraucht Tokens, höchstens 5 $ pro Mal; wenn sie fertig ist, sagt die App Bescheid.',
+  'mm.maint.help3': 'Das passiert nur, wenn du drückst: Ideen, Vorschläge und das Aufräumen des Gedächtnisses starten nie von selbst. Die Recherche verbraucht Tokens, höchstens 20 $ pro Mal; wenn sie fertig ist, sagt die App Bescheid.',
   'mm.one.tip': 'Wartung: ein Klick, dann arbeitet sie allein im Hintergrund',
   'mm.one.tipCleanup': 'Skills, Regeln und Gedächtnis werden aufgeräumt…',
   'mm.one.tipResearch': (p: { cost: string; cap: string }) => `Ein Agent sucht nach Verbesserungen: ${p.cost} von ${p.cap} ausgegeben. Du bekommst Bescheid, wenn er fertig ist.`,

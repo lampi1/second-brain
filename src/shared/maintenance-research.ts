@@ -246,8 +246,9 @@ export const RESEARCH_CAPS = { brain: 5, forget: 5, app: 5, bold: 1 } as const;
 export const RESEARCH_TOTAL_CAP = 7;
 export const familyOf = (k: ResearchKind): keyof typeof RESEARCH_CAPS =>
   k === 'forget' || k === 'lint' ? 'forget' : k === 'bold' ? 'bold' : isAppKind(k) ? 'app' : 'brain';
-/** The default spending cap (owner, 2026-10-23). */
-export const RESEARCH_CAP_USD = 5;
+/** The default spending cap (owner, 2026-10-23: 5 $; 2026-11-10: «aumenta il tetto della manutenzione, deve essere
+ *  proprio efficace e proporre card veramente utili»). */
+export const RESEARCH_CAP_USD = 20;
 
 // ── The candidate brain (ADR 0195, after Anthropic's «dreaming»): the research's brain-file findings of one click are
 // gathered into one copy of the affected files under userData, never written to the brain until the user approves the

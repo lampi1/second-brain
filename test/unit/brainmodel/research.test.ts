@@ -153,6 +153,9 @@ describe('ResearchService', () => {
       return { ...state([]), lastRun: { at: NOW, jobs: [], cards: { bugs: 1, forget: 0 } } };
     };
     await t.svc.runAll();
+    // the click's research: extra-high effort and the 20 $ cap (ADR 0258)
+    expect(t.created[0]).toMatchObject({ effort: 'xhigh' });
+    expect(t.svc.status().research).toMatchObject({ capUsd: 20, effort: 'xhigh' });
     t.svc.propose('c1', { kind: 'app-bug', title: 'Boom on save', removes: 'The crash.', why: 'Seen twice.', logKey: 'k1', issue: { title: 'Save crashes', body: 'Steps…' } });
     t.svc.propose('c1', idea);
     const stopping = t.svc.stop();

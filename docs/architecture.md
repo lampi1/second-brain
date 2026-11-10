@@ -104,7 +104,7 @@ layer classes in `chats/manager-*.ts` under `chats/manager.ts` (layout: `docs/ag
   behavioural role change as a trial version (`agents:trialDecide`). A role's tools and permissions change only from
   its Permessi card (ADR 0085). The "Manutenzione" button (top bar, Orchestrator head, Memoria) is one click (`maintenance:run`, ADR 0153): the free
   cleanup runs every job (`brainmodel:maintain`) and the log step, then one invisible app chat (no strip, no notice)
-  researches with the app's best choice (strongest model, 5 $ cap, a data pack; `brainmodel/research.ts`, ADR 0132).
+  researches with the app's best choice (strongest model, extra-high effort, 20 $ cap and two hours (ADR 0258), a data pack; `brainmodel/research.ts`, ADR 0132).
   Its findings are cards in Memoria → Proposte: brain changes and what to forget, applied through the change log on
   approval; app ideas and bugs as «Apri issue» cards that open the issue on GitHub when approved (gh, else the
   pre-filled new-issue page; `brainmodel/issue-open.ts`); app ideas also land in Idee on the AI's side. Brain-file

@@ -137,7 +137,7 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0129](0129-memory-keeps-reusable-knowledge.md) Memory keeps reusable knowledge: a worth gate, fewer cards, a maintenance that generalizes — accepted
 - [0130](0130-run-receipts-before-reviews.md) Run receipts: deterministic checks before a Sentinel review — accepted
 - [0131](0131-levels-by-job-size-and-bayesian-performance.md) Levels by job size, a Bayesian performance, the Orchestrator's choices and Flash's answers — accepted
-- [0132](0132-maintenance-with-research-and-app-ideas.md) The maintenance with research, the «Idee dell'app» tab and the phrases of the day — accepted, partly superseded by 0153, 0173
+- [0132](0132-maintenance-with-research-and-app-ideas.md) The maintenance with research, the «Idee dell'app» tab and the phrases of the day — accepted, partly superseded by 0153, 0173, 0258
 - [0133](0133-personal-browser.md) A personal browser for the user, apart from the agents' browsers — accepted
 - [0134](0134-finished-chats-close-by-default.md) Finished chats close by default, reliably — accepted
 - [0135](0135-yes-no-questions-and-the-recap.md) Yes/no questions only, «Ci penso dopo», and a recap that unblocks everything — accepted
@@ -158,7 +158,7 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0150](0150-decision-card-and-automatic-facts.md) One decision card with the chat's brief; memory facts need no approval — accepted
 - [0151](0151-one-notice-card-and-sounds.md) One notice card, one sound per kind — not stated
 - [0152](0152-voice-mode.md) Voice mode: talk to the Orchestrator and Flash, hear the answers — not stated
-- [0153](0153-one-click-maintenance.md) One-click «Manutenzione»: proposals only on the user's click, issues opened from a card — accepted
+- [0153](0153-one-click-maintenance.md) One-click «Manutenzione»: proposals only on the user's click, issues opened from a card — accepted, partly superseded by 0258
 - [0154](0154-call-recordings.md) Call recordings: PC audio + microphone, transcribed on the PC, known to the Orchestrator — not stated
 - [0155](0155-app-owned-routine-runner.md) The app runs routines; the Orchestrator observes — accepted, partly superseded by 0179
 - [0156](0156-routine-package.md) A routine travels as one package: steps, cited files, rules, skills, roles, scripts and memory — accepted, partly superseded by 0179
@@ -262,3 +262,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0255](0255-phone-answers-worker-yes-no.md) Worker Sì/No questions answered from the phone (Telegram and Remote Control) — accepted
 - [0256](0256-live-model-lists.md) Live model lists: every engine lists its own models; models.json only overrides — accepted
 - [0257](0257-skill-changes-only-from-maintenance.md) Skill changes come only from Maintenance, never one card per run — accepted
+- [0258](0258-maintenance-research-goes-deeper.md) The maintenance research goes deeper: 20 $ cap, extra-high effort, a quality bar for every card — accepted

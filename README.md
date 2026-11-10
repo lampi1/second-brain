@@ -117,7 +117,7 @@ that actually stopped their error (or didn't, within 14 days), PRs held by a fai
 Every number says where it comes from and how many cases it covers, and "Discuss" hands it to the Orchestrator.
 
 Then press **Maintenance** and walk away. The free part merges duplicate skills, files lessons from your corrections and
-moves scripts and ideas where they belong; then an invisible agent (the strongest model, capped at $5) reads every
+moves scripts and ideas where they belong; then an invisible agent (the strongest model, capped at $20) reads every
 chat and work thread since the last Maintenance and proposes skill changes or new skills only where they are really
 needed, plus improvements and app bugs. Roles never ask you about a skill change after each job. When it found something you get a little party, and every change has a reason and an Undo.
 

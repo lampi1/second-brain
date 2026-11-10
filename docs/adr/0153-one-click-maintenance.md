@@ -1,6 +1,6 @@
 # ADR 0153 · One-click «Manutenzione»: proposals only on the user's click, issues opened from a card
 
-Date: 2026-10-24 · Status: accepted (owner asked for it in the project thread) · Supersedes: the dialog of ADR 0132 (§1),
+Date: 2026-10-24 · Status: accepted (owner asked for it in the project thread), partly superseded by ADR 0258 (high effort and the 5 $ cap) · Supersedes: the dialog of ADR 0132 (§1),
 «Idee dell'app» and «Apri issue» through the Orchestrator (ADR 0132 §5), the six-hourly cleanup (ADR 0132 Consequences,
 ADR 0077/0137 timers) and, for skills and rules, the owner's 2026-10-19 rule that their changes apply by themselves
 (ADR 0077) · Builds on: ADR 0123 (the Proposte deck), 0137 (exact proposals before any semantic edit), 0151 (notices)

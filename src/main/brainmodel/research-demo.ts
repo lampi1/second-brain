@@ -50,7 +50,7 @@ export const DEMO_RESEARCH: readonly Card[] = [
 export function writeDemoResearch(store: ResearchStore, now: number): void {
   if (store.all().length || store.runs().length) return;
   for (const c of DEMO_RESEARCH) store.add(c);
-  store.saveRun({ chatId: PAST, startedAt: now - 3 * 86_400_000, endedAt: now - 3 * 86_400_000 + 14 * 60_000, harness: 'claude', model: 'opus', effort: 'high', capUsd: 5, costUsd: 2.4, state: 'done', proposals: DEMO_RESEARCH.length });
+  store.saveRun({ chatId: PAST, startedAt: now - 3 * 86_400_000, endedAt: now - 3 * 86_400_000 + 14 * 60_000, harness: 'claude', model: 'opus', effort: 'xhigh', capUsd: 20, costUsd: 2.4, state: 'done', proposals: DEMO_RESEARCH.length });
 }
 
 /** What a research started in the demo proposes while its chat answers. */

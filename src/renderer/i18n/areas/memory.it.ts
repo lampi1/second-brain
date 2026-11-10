@@ -8,7 +8,7 @@ export const memoryIt = {
   'mm.maint.helpTitle': 'Cosa fa la manutenzione',
   'mm.maint.help1': 'Un clic e basta: l’app mette in ordine skill, regole e memoria, legge i suoi log e un agente invisibile studia la tua storia per proporre miglioramenti. Lavora in background: puoi continuare a fare altro.',
   'mm.maint.help2': 'Tutto arriva come card in Memoria → Proposte: skill nuove, cosa dimenticare, e le issue da aprire su GitHub (con il tuo sì si aprono subito). Le idee sull’app finiscono anche in Idee, dal lato IA. Niente cambia senza il tuo sì.',
-  'mm.maint.help3': 'Succede solo quando la premi tu: idee, proposte e pulizia della memoria non partono mai da sole. La ricerca usa token, al massimo 5 $ per volta; quando finisce ti avviso.',
+  'mm.maint.help3': 'Succede solo quando la premi tu: idee, proposte e pulizia della memoria non partono mai da sole. La ricerca usa token, al massimo 20 $ per volta; quando finisce ti avviso.',
   'mm.one.tip': 'Manutenzione: un clic, poi lavora da sola in background',
   'mm.one.tipCleanup': 'Sto mettendo in ordine skill, regole e memoria…',
   'mm.one.tipResearch': (p: { cost: string; cap: string }) => `Un agente sta cercando miglioramenti: speso ${p.cost} su ${p.cap}. Ti avviso quando finisce.`,
