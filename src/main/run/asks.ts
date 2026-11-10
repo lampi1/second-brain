@@ -17,6 +17,10 @@
 // block that already ran with success in the same folder within RECENT_OK_MS is not asked either, once per chat and
 // code: that chat gets the earlier result instead (alreadyRan); proposed again after that, it is asked as usual.
 // When an open ask leaves without a run ("Non serve", its chat went on), its first follower is asked in its place.
+// A block followed by a question in the same turn (ADR 0259, the owner 2026-11-10: «mi chiede se ho eseguito un comando
+// prima della modale esegui»): a question or a visual (AskUserQuestion, ask_user, show_ui) is not work, so the block stays
+// the turn's last message, and it is asked as soon as the chat waits on that question, not only once the turn ends; a
+// block put aside with «Non serve» is not asked again in the same turn.
 // Used by wiring.ts (attachCommandAsks, for the real app and the demo) and index.ts (chat:pending, run:*).
 import type { ChatItem, ChatState, ChatSummary, EventMap, PendingRequest, RunInfo } from '../../shared/contract';
 import { askedBlocks } from '../../shared/command-ask';
@@ -51,6 +55,10 @@ export const sameCode = (code: string): string => code.replace(/\r\n/g, '\n').tr
 
 interface Turn { last: { id: string; text: string } | null; ids: Set<string> }
 
+/** Tools that ask or show something to the user without doing any work: the turn's last message stays the one before
+ *  them, so a block followed by a question is still the command the user is asked to run (ADR 0259). */
+const TRANSPARENT_TOOL = /(?:^|__)(?:AskUserQuestion|AskQuestion|ask_user|show_ui)$/;
+
 /** a turn ran: 'starting' alone is an engine booting (a reopen, a queued chat), its idle has no new message to read */
 const IN_TURN: ReadonlySet<ChatState> = new Set(['running', 'waiting']);
 
@@ -69,6 +77,11 @@ export class CommandAsks {
   private followers = new Map<string, PendingRequest[]>();
   /** a run (chatId|itemId|code) → the other chats whose open ask of the same code it answered */
   private runFollowers = new Map<string, Set<string>>();
+  /** chatId#requestId the user put aside with «Non serve» in this turn: a later read of the same message (the question
+   *  that followed it answered, the turn over) never asks it again */
+  private dismissed = new Set<string>();
+  /** chat → the message read when the chat stopped on a question (askedAtQuestion) */
+  private atQuestion = new Map<string, string>();
   /** chatId|code already told about a recent success: proposed again, it is asked */
   private toldRecent = new Set<string>();
 
@@ -93,10 +106,16 @@ export class CommandAsks {
 
   has(chatId: string, requestId: string): boolean { return !!this.asks.get(chatId)?.has(requestId); }
 
+  /** Whether this message belongs to the chat's current turn (a run's result may answer that turn's question). */
+  /** The message whose blocks were asked when the chat stopped on its question (ADR 0259), until the turn goes on: a run
+   *  of one of them may answer that question; a block from earlier in the turn, or a later question, never. */
+  askedAtQuestion(chatId: string, itemId: string): boolean { return this.atQuestion.get(chatId) === itemId; }
+
   /** "Non serve": off the list, the block stays in the chat with its Esegui. */
   dismiss(chatId: string, requestId: string): void {
     if (!this.has(chatId, requestId)) throw new Error('Questa richiesta non è più aperta.');
     log.info('run', 'command request dismissed', { chat: chatId, data: { id: requestId } });
+    this.dismissed.add(`${chatId}#${requestId}`);
     this.drop(chatId, requestId);
   }
 
@@ -138,6 +157,7 @@ export class CommandAsks {
       if (item.text.startsWith(APP_EVENT_LABEL) || item.text.startsWith(RUN_RESULT_LABEL) || isNotesOnly(item.text)) this.appTurn.add(chatId);
       else { this.appTurn.delete(chatId); this.clear(chatId, 'new message'); }
       this.turns.set(chatId, { last: null, ids: new Set([item.id]) });
+      for (const k of [...this.dismissed]) if (k.startsWith(`${chatId}#`)) this.dismissed.delete(k);
       return;
     }
     if (this.handoff.has(chatId)) return; // the hand-off note: never the turn's last message
@@ -150,7 +170,8 @@ export class CommandAsks {
       if (!seen || t.last?.id === item.id) t.last = { id: item.id, text: item.text };
       // a late update of the turn's last message after the turn ended: read it again
       if (t.last?.id === item.id && this.chats.get(chatId)?.state === 'idle' && this.timers.has(chatId)) this.schedule(chatId);
-    } else if (!seen && (item.kind === 'tool' || item.kind === 'thinking')) t.last = null; // the agent went on after it
+    } else if (!seen && item.kind === 'tool' && TRANSPARENT_TOOL.test(item.name)) { /* a question or a visual: not work */ }
+    else if (!seen && (item.kind === 'tool' || item.kind === 'thinking')) t.last = null; // the agent went on after it
   }
 
   private updated(c: ChatSummary): void {
@@ -168,9 +189,14 @@ export class CommandAsks {
       if (c.state === 'idle' && !c.handoffBusy) this.handoff.delete(c.id);
       return;
     }
-    if (c.state === 'running' && was !== 'running' && !this.appTurn.has(c.id)) this.clear(c.id, 'new turn');
+    if (c.state === 'running' && was !== 'running') this.atQuestion.delete(c.id);
+    // waiting → running is the same turn going on after an answer: the commands asked at its question stay
+    if (c.state === 'running' && was !== 'running' && was !== 'waiting' && !this.appTurn.has(c.id)) this.clear(c.id, 'new turn');
     // the turn is over: read its last message once the last streaming updates have landed
     if (c.state === 'idle' && was && IN_TURN.has(was) && !c.handoffBusy) this.schedule(c.id);
+    // the turn stops on a question right after a block (ADR 0259): the command is asked now, next to the question, not
+    // only after the user answered it
+    else if (c.state === 'waiting' && was === 'running' && !c.handoffBusy) this.schedule(c.id);
   }
 
   private schedule(chatId: string): void {
@@ -187,12 +213,13 @@ export class CommandAsks {
     const last = this.turns.get(chatId)?.last;
     this.reads++;
     this.appTurn.delete(chatId);
-    if (!c || c.closedAt || !last || (!force && (c.state !== 'idle' || c.handoffBusy))) return;
+    if (!c || c.closedAt || !last || (!force && ((c.state !== 'idle' && c.state !== 'waiting') || c.handoffBusy))) return;
+    if (c.state === 'waiting') this.atQuestion.set(chatId, last.id);
     const m = this.asks.get(chatId) ?? new Map<string, PendingRequest>();
     const cwd = this.d.cwdOf?.(chatId), now = this.d.now?.() ?? Date.now();
     for (const b of askedBlocks(last.text)) {
       const id = `cmd-${last.id}-${b.index}`;
-      if (m.has(id) || this.d.ran(chatId, last.id, b.code)) continue;
+      if (m.has(id) || this.dismissed.has(`${chatId}#${id}`) || this.d.ran(chatId, last.id, b.code)) continue;
       const code = sameCode(b.code), toldKey = `${chatId}|${code}`;
       const recent = cwd === undefined || this.toldRecent.has(toldKey) ? undefined : this.d.runs?.().filter(r => r.state === 'ok' && r.cwd === cwd && sameCode(r.code) === code && (r.endedAt ?? 0) >= now - RECENT_OK_MS).at(-1);
       if (recent && (this.d.alreadyRan ?? this.teller)?.(chatId, recent)) {
@@ -262,6 +289,8 @@ export class CommandAsks {
 
   private forget(chatId: string): void {
     this.clear(chatId, 'removed');
+    this.atQuestion.delete(chatId);
+    for (const k of [...this.dismissed]) if (k.startsWith(`${chatId}#`)) this.dismissed.delete(k);
     for (const k of [...this.toldRecent]) if (k.startsWith(`${chatId}|`)) this.toldRecent.delete(k);
     this.turns.delete(chatId);
     this.chats.delete(chatId);

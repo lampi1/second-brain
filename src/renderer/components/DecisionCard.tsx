@@ -40,6 +40,8 @@ export interface DecisionProps {
   yesSteps?: readonly string[]; noSteps?: readonly string[];
   /** a measurable before → after, large above the evidence */
   change?: { what?: string; before: string; after: string };
+  /** what the user must do himself before answering, in steps (the owner: «deve fare il meno possibile», so rare) */
+  todo?: readonly string[];
   yes: DecisionChoice; no: DecisionChoice;
   /** the free-text answer; absent = no box */
   write?: { onSend: (text: string, viaKey?: boolean) => void; onClose?: () => void; disabled?: boolean; hint?: string; initial?: string; onDraft?: (text: string) => void; testids?: { open?: string; input?: string; send?: string } };
@@ -84,7 +86,7 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
   // voice mode (ADR 0152): the card is read aloud and a spoken answer is the click (sì / no / «non voglio rispondere»,
   // anything longer is the written answer)
   const auto = useRef(`dc-${++cards}`).current;
-  useVoiceQuestion(busy ? null : p.voiceId ?? auto, { question: [p.question, p.why ?? p.lead].filter(Boolean).join(' '), done: p.speakDone, ifYes: p.ifYes, ifNo: p.ifNo, from: p.speakFrom }, a => {
+  useVoiceQuestion(busy ? null : p.voiceId ?? auto, { question: [p.question, p.why ?? p.lead, ...(p.todo ?? [])].filter(Boolean).join(' '), done: p.speakDone, ifYes: p.ifYes, ifNo: p.ifNo, from: p.speakFrom }, a => {
     if (a.kind === 'yes') choose(p.yes);
     else if (a.kind === 'no') choose(p.no);
     else if (a.kind === 'skip') { if (p.skip && !busy) p.skip.onChoose(); else p.onLater?.(); }
@@ -146,6 +148,12 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
           <span className="dc-change-v before"><small>{t('genui.decision.before')}</small><s>{p.change.before}</s></span>
           <span className="dc-change-arrow" aria-hidden="true">→</span>
           <span className="dc-change-v after"><small>{t('genui.decision.after')}</small><b>{p.change.after}</b></span>
+        </div>
+      )}
+      {!!p.todo?.length && (
+        <div className="dc-todo" data-testid={`${p.testBase}-todo`}>
+          <div className="dc-brief-k">{t('genui.decision.todo')}</div>
+          <ol className="dc-steps">{p.todo.map((s, i) => <li key={i}><span className="dc-step-n" aria-hidden="true">{i + 1}</span><span>{s}</span></li>)}</ol>
         </div>
       )}
       {p.children && <div className="dc-evidence" data-testid={`${p.testBase}-evidence`}>{p.children}</div>}

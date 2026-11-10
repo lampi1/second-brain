@@ -34,5 +34,21 @@ it («Sì, tutto»), the Esegui commands too, from Telegram and Remote Control (
   `MAX_QUESTION_CHARS` (160) or with a code fence, like a non yes/no one (same retry limit: after two it is shown as
   it is).
 
+### 3. Esegui is the question; the user never has to say «Fatto»
+- A command the chat left (`main/run/asks.ts`) is a «Bivio» card: «Eseguo questo comando sul tuo PC?» (or the chat's
+  own lead when it is a short question), the chat's reason under it, the command whole with its folder and Copia, and
+  the roads «Sì, eseguilo» (runs here, the result goes to the chat by itself) / «Non serve» (the chat goes on without).
+- The turn's last message is read when the chat stops on a question too (`waiting`), not only when the turn ends; a
+  question or a visual (`AskUserQuestion`, `show_ui`) is not work, so it does not hide the block before it. The command
+  card comes before that chat's question in the window. A dismissed command is not asked again in the same turn.
+- When the run ends while its chat waits on a single plain yes/no question from the same turn (the old «Hai lanciato
+  il comando?»), the result answers that question (`run/results.ts answerWaiting`) with a note that it was not a reply.
+- After Sì the card leaves at once; a small strip at the bottom (`components/RunWatch.tsx`) shows the run: running with
+  its last line, «Fatto: esito mandato a …» (gone after 4 s) or the error with Riprova.
+- The rule asks agents never to ask whether the user ran something, and to list any step only the user can do in the
+  brief's `todo` («Tocca a te», shown above the evidence). The gate sends back vague questions («Fatto?», «Ok?»,
+  «Procedo?»: `vagueQuestion` in `shared/yes-no.ts`).
+
 ## Consequences
 - A card can show a turn a few seconds old; the notice says so and one click updates it.
+- A plain yes/no question can be answered by a run's result; the note in the answer says so, and the chat can ask again.

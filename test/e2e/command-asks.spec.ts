@@ -53,7 +53,7 @@ test('a command left by a chat waits in the questions window and runs from there
   await expect(card).toHaveAttribute('data-kind', 'command');
   await expect(page.getByTestId('qwin-chat')).toHaveText('App · Mappa 3D');
   // the chat's explanation right before the block is the card's title; the command whole under it
-  await expect(page.getByTestId('qwin-card-lead')).toHaveText(LEAD);
+  await expect(page.getByTestId('qwin-card-ctx-lead')).toHaveText(LEAD);
   await expect(page.getByTestId('qwin-card-code')).toHaveText(CMD);
   await expect(page.getByTestId('qwin-card-gist')).toHaveText('Stampa testo');
   await expect(page.locator('[data-kind="command"]')).toHaveCount(1); // only there
@@ -96,7 +96,7 @@ test('a work chat\'s command never shows in the Orchestrator: it waits in the qu
   const orchestrator = page.getByTestId('tile-orchestrator');
   await turn(app, 'mappa', ASK);
   await expect(page.getByTestId('qwin-card')).toHaveAttribute('data-kind', 'command');
-  await expect(page.getByTestId('qwin-card-lead')).toHaveText(LEAD);
+  await expect(page.getByTestId('qwin-card-ctx-lead')).toHaveText(LEAD);
   await expect(page.getByTestId('qwin-card-code')).toHaveText(CMD);
   await expect(orchestrator.locator('[data-request-key^="mappa/"]')).toHaveCount(0); // the Orchestrator never hosts it
   await expect(page.locator('[data-kind="command"]')).toHaveCount(1);
@@ -123,7 +123,7 @@ test('on a page the command shows in the questions window and Esegui there runs 
   await expect(card).toHaveAttribute('data-kind', 'command');
   await expect(page.getByTestId('qwin-chat')).toHaveText('App · Mappa 3D');
   await expect(page.getByTestId('qwin-card-code')).toHaveText(CMD);
-  await expect(page.getByTestId('qwin-card-lead')).toHaveText(LEAD);
+  await expect(page.getByTestId('qwin-card-ctx-lead')).toHaveText(LEAD);
   await expect(page.getByTestId('qwin-open-chat')).toBeVisible(); // the chat is not on screen: one click away
   await page.mouse.move(2, 2);
   await shot(page, 'command-ask-page');
@@ -138,7 +138,7 @@ test('when a run of Esegui ends, the chat that proposed it gets the exit code an
   await expandChats(page, 'mappa'); // the transcript: the strips start collapsed
   await turn(app, 'mappa', ASK);
   await expect(page.getByTestId('qwin-card')).toHaveAttribute('data-kind', 'command');
-  await expect(page.getByTestId('qwin-card-lead')).toHaveText(LEAD);
+  await expect(page.getByTestId('qwin-card-ctx-lead')).toHaveText(LEAD);
   await page.getByTestId('qwin-card-run').click();
   const result = async () => (await page.evaluate(() => window.sb.invoke('chat:items', { chatId: 'mappa' })))
     .filter(i => i.kind === 'user' && i.text.startsWith('[esito di Esegui'));

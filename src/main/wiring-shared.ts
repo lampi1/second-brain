@@ -3,6 +3,7 @@
 // show_ui visuals), «Aggiorna» from GitHub and the role catalog. Each takes what it needs; none keeps state here.
 import { app } from 'electron';
 import type { CliStatus, Harness, ModelRegistry, RunInfo, SeenModel } from '../shared/contract';
+import { isNativeQuestion, isYesNo } from '../shared/yes-no';
 import type { AgentModelChoice } from '../shared/agents';
 import { modelRow } from './brain/routing';
 import { templateRoot } from './rules/tools';
@@ -113,10 +114,22 @@ export function attachOrchestratorWake(ctx: Pick<Ctx, 'emitter'> & Partial<Pick<
 
 /** "Esito alla chat" (run/results.ts): a run's end goes back to the chat that proposed the block. on = the setting
  *  runResults and, in tests, an explicit SB_RUN_RESULTS=1 (a test's chats never get surprise messages). */
-export function attachRunResults(ctx: Pick<Ctx, 'emitter'>, chats: Pick<ChatService, 'send' | 'list' | 'submissionReceipts'>, on: () => boolean, asks?: CommandAsks): RunResults {
+export function attachRunResults(ctx: Pick<Ctx, 'emitter'>, chats: Pick<ChatService, 'send' | 'list' | 'submissionReceipts' | 'pending' | 'answer'>, on: () => boolean, asks?: CommandAsks): RunResults {
   const groupMs = Number(process.env.SB_RUN_RESULTS_MS) || undefined;
+  // ADR 0259: a run of a block the chat left in this turn answers the one yes/no question it then stopped on («l'hai
+  // eseguito?»), so the user never answers it by hand; any other open request leaves the result waiting as before
+  const answerWaiting = async (chatId: string, runs: readonly RunInfo[], text: string): Promise<boolean> => {
+    // only a block from the message right before the question, and only when no other command of the chat is still open
+    // (answering moves the chat on: the user still has to see those)
+    if (!asks || !runs.every(r => asks.askedAtQuestion(chatId, r.itemId)) || asks.pending().some(p => p.chatId === chatId)) return false;
+    const open = chats.pending().filter(p => p.chatId === chatId);
+    const q = open[0];
+    if (open.length !== 1 || !q || !isNativeQuestion(q) || q.questions?.length !== 1 || !isYesNo(q.questions[0]!)) return false;
+    await chats.answer(chatId, q.id, { kind: 'question', answers: { [q.questions[0]!.question]: text } });
+    return true;
+  };
   const results = new RunResults({ send: (chatId, text) => chats.send(chatId, text, undefined, false, 'App', false, { kind: 'app' }), enabled: on, list: () => chats.list(), ...(groupMs ? { groupMs } : {}),
-    ...(asks ? { followers: run => asks.followersOf(run) } : {}) });
+    ...(asks ? { followers: run => asks.followersOf(run), answerWaiting } : {}) });
   asks?.useResults((chatId, run) => results.tell(chatId, run));
   const send = ctx.emitter.emit.bind(ctx.emitter);
   ctx.emitter.emit = (ch, p) => { send(ch, p); results.observe(ch, p); };

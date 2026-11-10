@@ -247,6 +247,8 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     answers: () => chats.answered,
     /** the chat stops by itself: its open requests leave without an answer (e2e: a popup must go at once) */
     stop: (chatId: string) => chats.stop(chatId),
+    /** the chat starts working, as an engine does before it writes (e2e: a block then a question in the same turn) */
+    working: (chatId: string) => { chats.patch(chatId, { state: 'running' }); },
     /** a whole turn of a chat: it works, writes this message, ends idle (e2e: a command left for the user) */
     turn: (chatId: string, text: string) => {
       chats.patch(chatId, { state: 'running' });

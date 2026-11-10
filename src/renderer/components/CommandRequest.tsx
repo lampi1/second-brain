@@ -11,6 +11,9 @@
 // later). In the questions window (`window`, ADR 0049) two words say what the command does (Gist.tsx), the chat's
 // explanation is the large title, the whole command a readable block under it and the context open under that (never
 // folded, the owner 2026-10-22). Used by RequestPanel.tsx (it hands over every request of type 'command').
+// In the questions window it is a «Bivio» decision card (ADR 0259, WindowCommand): «Eseguo questo comando sul tuo PC?»,
+// the chat's reason, the command with its folder, Sì = run it (the result goes to the chat by itself, and answers the
+// question the chat stopped on right after the block) and «Non serve»; the run then shows in RunWatch.tsx.
 import { t as auditText } from '../i18n';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { Harness, PendingRequest } from '@shared/contract';
@@ -18,11 +21,13 @@ import { copyText } from '../brain/components/ui';
 import { ago } from '../lib/format';
 import { useNow } from '../lib/clock';
 import { claimFocus, reqKey } from '../actions';
-import { dismissCommand, runCommand } from '../store/store';
+import { dismissCommand, runCommand, useApp } from '../store/store';
 import { AskContext } from './AskContext';
 import { HarnessMark, IconAlert, IconArrowRight, IconCheck, IconCopy, IconPlay, IconTerminal } from './Icons';
 import { Kbd } from './ui';
 import { Gist } from './Gist';
+import { DecisionCard } from './DecisionCard';
+import { watchRun } from '../lib/run-watch';
 import { t } from '../i18n';
 
 export type CommandVariant = 'lane' | 'tile' | 'orchestrator' | 'compact' | 'window';
@@ -80,6 +85,7 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
     if (viaKey) focusNext();
     const ok = await (onRun ? onRun(!!prod) : runCommand(req, !!prod));
     if (!ok) setBusy(false); // started: the card leaves by itself (main resolves the request)
+    else if (variant === 'window') watchRun(req); // its run shows in the strip at the bottom (RunWatch.tsx)
   };
   const dismiss = () => { setBusy(true); if (onDismiss) onDismiss(); else void dismissCommand(req); };
   const copy = () => { void copyText(code).then(ok => setCopied(ok)); };
@@ -105,36 +111,9 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
   const prodBadge = <span className="cb-prod" data-testid={`${testBase}-prod`} title={t('chat.codeblock.productionWarning', { warning: prod ?? '' })}><IconAlert size={11} /> {t('chat.codeblock.productionBadge')}</span>;
   const cls = variant === 'orchestrator' ? 'decision cmd-ask' : small ? 'need-card cmd-ask cmd-small' : 'ask cmd-ask';
 
-  if (variant === 'window') {
-    return (
-      <div ref={ref} tabIndex={0} onKeyDown={onKey} className={`wq cmd-ask ${busy ? 'sent' : ''}`} role="group" data-request-key={reqKey(req)} data-testid={testBase} data-kind="command"
-        aria-busy={busy} aria-label={t('chat.command.windowAskLabel', { chatTitle: chatTitle ?? auditText('cmp.commandRequest.aChat'), command: lines[0] ?? '' })}>
-        <div className="wq-kicker">
-          <Gist tool="command" input={null} command={code} testid={`${testBase}-gist`} />
-          <span className="wq-kind"><IconTerminal size={12} /><span>{t('chat.command.title')}</span></span>{prod && prodBadge}
-        </div>
-        <h2 className="wq-q" data-testid={`${testBase}-lead`}>{cmd?.lead || t('chat.command.defaultLead')}</h2>
-        {/* the whole command, never folded: it is what the user runs */}
-        <div className="ask-raw wq-code">
-          <pre className="ask-cmd cmd-code" data-testid={`${testBase}-code`}>{code}</pre>
-        </div>
-        {withContext && <AskContext req={req} defaultOpen testBase={testBase} layout="window" />}
-        {replyField(true)}
-        <div className="wq-perm">
-          <button type="button" className={`btn btn-primary btn-l ${armed ? 'armed' : ''}`} onClick={() => { void run(); }} disabled={busy} data-testid={`${testBase}-run`}
-            data-tip={armed ? undefined : t('chat.command.helpWindow')}>
-            {armed ? <><IconAlert size={13} /> {t('chat.command.execConfirm', { warning: prod ?? '' })}</> : <><IconPlay size={12} /> {t('chat.command.execWithKey')} <Kbd>{auditText('audit.CommandRequest.enter')}</Kbd></>}
-          </button>
-          <button type="button" className="btn btn-ghost btn-l" onClick={copy} data-testid={`${testBase}-copy`}>
-            {copied ? <><IconCheck size={13} /> {t('chat.codeblock.copied')}</> : <><IconCopy size={13} /> {t('chat.command.copy')}</>}
-          </button>
-          <span className="sp" />
-          <button type="button" className="btn btn-ghost btn-l cmd-dismiss" onClick={dismiss} disabled={busy} data-testid={`${testBase}-dismiss`}
-            data-tip={t('chat.command.dismissTip')}>{t('chat.command.dismiss')}</button>
-        </div>
-      </div>
-    );
-  }
+  if (variant === 'window') return <WindowCommand req={req} chatTitle={chatTitle} testBase={testBase} withContext={!!withContext} prod={prod} armed={armed} busy={busy}
+    cardRef={ref} onRun={viaKey => { void run(!!viaKey); }} onDismiss={dismiss} onCopy={copy} copied={copied} onEscape={() => { if (armed) setArmed(false); else onEscape?.(); }}
+    onReply={text => { if (busy) return; setBusy(true); if (onReply) onReply(text); else void dismissCommand(req, text); }} />;
 
   return (
     <div ref={ref} tabIndex={0} onKeyDown={onKey} className={`${cls} ${busy ? 'sent' : ''}`} role="group" data-request-key={reqKey(req)} data-testid={testBase} data-kind="command"
@@ -184,5 +163,52 @@ export function CommandRequest({ req, variant, chatTitle, harness = 'claude', te
           data-tip={t('chat.command.dismissTip')}>{t('chat.command.dismiss')}</button>
       </div>
     </div>
+  );
+}
+
+/** The questions window's command card (ADR 0259, «Bivio»): «Eseguo questo comando sul tuo PC?», the chat's reason as
+ *  the context, the command whole with its folder and Copia, then the two roads: Sì runs it here and the result goes to
+ *  the chat by itself; «Non serve» lets the chat go on without it. A production command asks a second, read
+ *  confirmation on the same button. The run then shows in the strip at the bottom of the window (RunWatch.tsx). */
+function WindowCommand({ req, chatTitle, testBase, withContext, prod, armed, busy, cardRef, onRun, onDismiss, onCopy, copied, onEscape, onReply }: {
+  req: PendingRequest; chatTitle?: string; testBase: string; withContext: boolean; prod: string | null; armed: boolean; busy: boolean;
+  cardRef: React.RefObject<HTMLDivElement | null>; onRun: (viaKey?: boolean) => void; onDismiss: () => void; onCopy: () => void; copied: boolean;
+  onEscape: () => void; onReply: (text: string) => void;
+}) {
+  const cmd = req.command;
+  const code = cmd?.code ?? req.detail;
+  const who = useApp(s => { const c = s.chats[req.chatId]; return c?.isOrchestrator ? 'Orchestrator' : c?.agent?.name ?? chatTitle ?? c?.title ?? 'chat'; });
+  const cwd = useApp(s => s.chats[req.chatId]?.cwd ?? '');
+  const lead = (cmd?.lead ?? '').trim();
+  // the chat wrote its own question right before the block («Lo lanci?»): it stays the question
+  const own = /\?$/.test(lead) && lead.length <= 160;
+  const head = (
+    <>
+      <Gist tool="command" input={null} command={code} testid={`${testBase}-gist`} />
+      <span className="wq-kind"><IconTerminal size={12} /><span>{t('chat.command.title')}</span></span>
+      {prod && <span className="cb-prod" data-testid={`${testBase}-prod`} title={t('chat.codeblock.productionWarning', { warning: prod })}><IconAlert size={11} /> {t('chat.codeblock.productionBadge')}</span>}
+    </>
+  );
+  return (
+    <DecisionCard ref={cardRef} testBase={testBase} head={head} question={own ? lead : t('chat.command.askQ')} why={own ? undefined : lead || undefined}
+      className={`wq cmd-ask ${armed ? 'armed' : ''}`} busy={busy}
+      rootProps={{ 'data-request-key': reqKey(req), 'data-kind': 'command', 'aria-label': t('chat.command.windowAskLabel', { chatTitle: chatTitle ?? auditText('cmp.commandRequest.aChat'), command: code.split('\n')[0] ?? '' }) }}
+      yesSteps={[t('chat.command.stepRun'), t('chat.command.stepResult', { who })]} noSteps={[t('chat.command.stepSkip'), t('chat.command.stepOn', { who })]}
+      yes={{ onChoose: onRun, recommended: true, testid: `${testBase}-run`, label: armed ? t('chat.command.execConfirm', { warning: prod ?? '' }) : t('chat.command.yesLabel') }}
+      no={{ onChoose: onDismiss, testid: `${testBase}-dismiss`, label: t('chat.command.dismiss') }}
+      write={{ onSend: text => onReply(text), hint: t('chat.command.replyHint'), testids: { input: `${testBase}-reply`, send: `${testBase}-reply-send` } }}
+      onLater={onEscape} laterButton={false} speakFrom={who}>
+      <div className="cmd-box" data-testid={`${testBase}-box`}>
+        <div className="cmd-box-h">
+          <span>{t('chat.command.where', { cwd })}</span>
+          <span className="sp" />
+          <button type="button" className="btn btn-ghost btn-s" onClick={onCopy} data-testid={`${testBase}-copy`}>
+            {copied ? <><IconCheck size={12} /> {t('chat.codeblock.copied')}</> : <><IconCopy size={12} /> {t('chat.command.copy')}</>}
+          </button>
+        </div>
+        <pre className="ask-cmd cmd-code" data-testid={`${testBase}-code`}>{code}</pre>
+      </div>
+      {withContext && <AskContext req={req} defaultOpen={false} testBase={testBase} noVisuals label={t('genui.decision.chatText')} />}
+    </DecisionCard>
   );
 }

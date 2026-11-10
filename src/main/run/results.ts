@@ -24,11 +24,16 @@ export interface RunResultsDeps {
   groupMs?: number;
   /** the other chats whose same block this run answered (CommandAsks.followersOf) */
   followers?(run: RunInfo): string[];
+  /** The chat waits on a question it asked right after the block (ADR 0259): answer that question with the result
+   *  (wiring checks it is the turn's single yes/no question); false = not answered, the result waits for the chat */
+  answerWaiting?(chatId: string, runs: readonly RunInfo[], text: string): Promise<boolean>;
 }
 
 /** a run as one chat reads it: note = why it reaches a chat that did not run it itself */
 type Told = RunInfo & { note?: string };
 export const FOLLOWER_NOTE = 'Era lo stesso comando che avevi lasciato tu: l\'utente l\'ha lanciato una volta sola, per tutte le chat che lo chiedevano.';
+/** What answers a question the chat asked right after leaving a command, once the user ran it (ADR 0259). */
+export const ANSWERED_BY_RUN_NOTE = 'Non ho risposto alla tua domanda: ho lanciato con Esegui il comando che avevi lasciato, ecco l\'esito. Se la domanda serve ancora, rifalla.';
 export const RECENT_NOTE = 'Questo comando era già stato eseguito con successo di recente nella stessa cartella: non te lo chiedo di nuovo. Se va rieseguito, riproponilo spiegando perché.';
 
 type Seen = Pick<ChatSummary, 'state' | 'pending' | 'handoffBusy' | 'closedAt'>;
@@ -36,6 +41,8 @@ const MAX_CODE_LINES = 15;
 const MAX_OUTPUT = 3000;
 
 const free = (c: Seen) => (c.state === 'idle' || c.state === 'closed') && !c.pending && !c.handoffBusy;
+/** it waits on a question: the result may answer it (answerWaiting) */
+const asking = (c: Seen) => c.state === 'waiting' && !!c.pending && !c.handoffBusy && !c.closedAt;
 
 /** One run as the chat reads it, in Italian (the chats speak Italian with the user). */
 export function runResultText(r: Told): string {
@@ -74,7 +81,7 @@ export class RunResults {
     else if (channel === 'chat:updated') {
       const c = payload as ChatSummary;
       this.chats.set(c.id, { state: c.state, pending: c.pending, handoffBusy: c.handoffBusy, closedAt: c.closedAt });
-      if (this.queue.has(c.id) && free(c)) this.schedule(c.id);
+      if (this.queue.has(c.id) && (free(c) || (asking(c) && this.d.answerWaiting))) this.schedule(c.id);
     } else if (channel === 'chat:removed') {
       const { chatId } = payload as EventMap['chat:removed'];
       this.chats.delete(chatId); this.queue.delete(chatId);
@@ -108,7 +115,7 @@ export class RunResults {
     q.push(r);
     this.queue.set(chatId, q);
     const c = this.seen(chatId);
-    if (c && free(c)) this.schedule(chatId);
+    if (c && (free(c) || (asking(c) && this.d.answerWaiting))) this.schedule(chatId);
   }
 
   private seen(chatId: string): Seen | undefined {
@@ -130,8 +137,23 @@ export class RunResults {
     const runs = this.queue.get(chatId);
     const c = this.chats.get(chatId);
     if (!runs?.length || !c || this.sending.has(chatId)) return;
-    if (!free(c)) return; // it works or waits for the user: sent when it is free again (observe)
     if (!this.d.enabled()) { this.queue.delete(chatId); return; }
+    if (!free(c)) {
+      // it waits on the question it asked right after the command: the result is its answer
+      if (asking(c) && this.d.answerWaiting) {
+        this.queue.delete(chatId);
+        this.sending.add(chatId);
+        const text = [ANSWERED_BY_RUN_NOTE, runResultMessage(runs)].join('\n\n');
+        void this.d.answerWaiting(chatId, runs, text).then(done => {
+          if (done) log.info('run', 'run result answered the question the chat was waiting on', { chat: chatId, data: { runs: runs.map(r => r.id) } });
+          else this.queue.set(chatId, [...runs, ...(this.queue.get(chatId) ?? [])]); // waits for the chat to be free
+        }, err => {
+          log.warn('run', 'run result could not answer the open question', { chat: chatId, cause: errText(err), hint: 'the result is sent once the chat is free' });
+          this.queue.set(chatId, [...runs, ...(this.queue.get(chatId) ?? [])]);
+        }).finally(() => this.sending.delete(chatId));
+      }
+      return; // it works or waits for the user: sent when it is free again (observe)
+    }
     this.queue.delete(chatId);
     this.sending.add(chatId);
     log.info('run', 'run result sent to the chat', { chat: chatId, data: { runs: runs.map(r => ({ id: r.id, state: r.state, exitCode: r.exitCode })) } });

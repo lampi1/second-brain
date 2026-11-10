@@ -497,7 +497,7 @@ const AskDecision = forwardRef<HTMLDivElement, {
   return (
     <DecisionCard ref={ref} testBase={p.testBase} head={head} question={b?.why ? withoutImages(p.q.question) : split?.ask ?? withoutImages(p.q.question)} lead={b?.why ? undefined : split?.lead} compact={p.compact} busy={p.sent}
       rootProps={{ 'data-request-key': p.keyAttr, 'data-kind': 'question', 'data-brief': b ? '' : undefined, 'aria-label': t('genui.decision.label', { chat: who }) }}
-      ifYes={b?.ifYes ?? desc('yes')} ifNo={b?.ifNo ?? desc('no')} why={b?.why} yesSteps={b?.yesSteps} noSteps={b?.noSteps} change={b?.change}
+      ifYes={b?.ifYes ?? desc('yes')} ifNo={b?.ifNo ?? desc('no')} why={b?.why} yesSteps={b?.yesSteps} noSteps={b?.noSteps} change={b?.change} todo={b?.todo}
       yes={{ onChoose: p.onYes, recommended: p.recommended === 'yes', testid: p.yesTestid, label: b?.yesLabel }}
       no={{ onChoose: p.onNo, recommended: p.recommended === 'no', testid: p.noTestid, label: b?.noLabel }}
       write={{ onSend: p.onWrite, initial: p.otherInitial, onDraft: p.onOtherDraft, onClose: p.onOtherClose }}

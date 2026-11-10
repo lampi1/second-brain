@@ -97,6 +97,7 @@ export const genuiRequestIt = {
   'genui.decision.done': 'Cosa ho fatto',
   'genui.decision.before': 'Prima',
   'genui.decision.after': 'Dopo',
+  'genui.decision.todo': 'Tocca a te',
   'genui.decision.ifYes': 'Se Sì',
   'genui.decision.ifNo': 'Se No',
   'genui.decision.yes': 'Sì',

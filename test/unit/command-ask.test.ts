@@ -330,3 +330,49 @@ describe('CommandAsks: a command is asked of the user once (ADR 0239)', () => {
     expect(off.s.pending()).toHaveLength(1);
   });
 });
+
+describe('CommandAsks: a block followed by a question in the same turn (ADR 0259)', () => {
+  afterEach(() => { vi.useRealTimers(); });
+  const ask = (id: string, name = 'AskUserQuestion'): ChatItem => ({ kind: 'tool', id, at: 1, name, summary: '', input: {}, status: 'running' } as ChatItem);
+
+  it('is asked as soon as the chat waits on the question, and once only', () => {
+    vi.useFakeTimers();
+    const { s, ev } = make();
+    ev('chat:updated', chat({ id: 'c1', state: 'running' }));
+    ev('chat:item', { chatId: 'c1', item: asst('a1', `Lancia questo:\n${fence('powershell', 'npm run check')}`) });
+    ev('chat:item', { chatId: 'c1', item: ask('t1', 'mcp__second-brain__show_ui') });
+    ev('chat:item', { chatId: 'c1', item: ask('t2') });
+    ev('chat:updated', chat({ id: 'c1', state: 'waiting', pending: 1 }));
+    vi.advanceTimersByTime(20);
+    expect(s.pending().map(p => p.command?.code)).toEqual(['npm run check']);
+    expect(s.askedAtQuestion('c1', 'a1')).toBe(true);
+    // the user answers the question: the same turn goes on, the command card stays; the next question is not this one's
+    ev('chat:updated', chat({ id: 'c1', state: 'running', pending: 1 }));
+    expect(s.pending()).toHaveLength(1);
+    expect(s.askedAtQuestion('c1', 'a1')).toBe(false);
+    ev('chat:updated', chat({ id: 'c1', state: 'idle' }));
+    vi.advanceTimersByTime(20);
+    expect(s.pending()).toHaveLength(1);
+  });
+
+  it('a block put aside with «Non serve» is not asked again when the turn ends', () => {
+    vi.useFakeTimers();
+    const { s, ev } = make();
+    ev('chat:updated', chat({ id: 'c1', state: 'running' }));
+    ev('chat:item', { chatId: 'c1', item: asst('a1', `Lancia questo:\n${fence('powershell', 'npm run check')}`) });
+    ev('chat:item', { chatId: 'c1', item: ask('t2') });
+    ev('chat:updated', chat({ id: 'c1', state: 'waiting', pending: 1 }));
+    vi.advanceTimersByTime(20);
+    s.dismiss('c1', s.pending()[0]!.id);
+    ev('chat:updated', chat({ id: 'c1', state: 'idle' }));
+    vi.advanceTimersByTime(20);
+    expect(s.pending()).toEqual([]);
+  });
+
+  it('real work after the block still means the block was not for the user', () => {
+    vi.useFakeTimers();
+    const { s, turn } = make();
+    turn('c1', [asst('a1', `Lancia questo:\n${fence('powershell', 'npm run check')}`), ask('t1', 'Bash')]);
+    expect(s.pending()).toEqual([]);
+  });
+});

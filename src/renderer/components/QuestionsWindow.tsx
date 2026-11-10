@@ -39,6 +39,19 @@ import { useWorkflows } from '../store/workflows';
 import { WorkApproval } from './WorkApproval';
 import { AskItemsProvider, useFrozenItems } from '../lib/askItems';
 
+/** A command a chat left right before the question it stopped on comes first (ADR 0259): run it, and its result
+ *  answers that question by itself (run/results.ts), so the user never answers «l'hai eseguito?». */
+function commandsFirst<T extends { type: string; chatId: string }>(asks: readonly T[]): T[] {
+  const out = [...asks];
+  for (let i = 0; i < out.length; i++) {
+    const c = out[i]!;
+    if (c.type !== 'command') continue;
+    const q = out.findIndex(x => x.chatId === c.chatId && x.type !== 'command');
+    if (q >= 0 && q < i) { out.splice(i, 1); out.splice(q, 0, c); }
+  }
+  return out;
+}
+
 /** what the window shows: an open request, or a Strategist's plan to approve */
 type Ask = PendingRequest | PlanAsk | DurableAsk;
 const isHost = (ask: Ask): ask is DurableAsk => isDurable(ask);
@@ -56,7 +69,7 @@ export function QuestionsWindow() {
   const { rows, lessons } = useWorkflows();
   const decisions = useMemo(() => durableAsks(rows, lessons), [rows, lessons]);
   const pending: readonly Ask[] = [...withDurableAsks(withPlans(allPending, plans), decisions)].filter(p => (isHost(p) || !hidden.includes(p.chatId)) && !requestPostponed(reqKey(p)));
-  const queue = [...pending];
+  const queue = commandsFirst(pending);
   if (q.first) { const i = queue.findIndex(p => reqKey(p) === q.first); if (i > 0) queue.unshift(...queue.splice(i, 1)); }
   const cur = queue[0];
   // the typing guard: shown once the user stops typing, or at once when they call it (Ctrl+J, "Apri")
@@ -131,7 +144,7 @@ export function QuestionsWindow() {
     );
   }
   if (!openedAt.current) openedAt.current = performance.now();
-  return <Window cur={cur} all={pending} boxRef={box} hidden={dialog} openedAt={openedAt} />;
+  return <Window cur={cur} all={queue} boxRef={box} hidden={dialog} openedAt={openedAt} />;
 }
 
 function Window({ cur, all, boxRef, hidden, openedAt }: { cur: Ask; all: readonly Ask[]; boxRef: React.RefObject<HTMLDivElement | null>; hidden: boolean; openedAt: React.RefObject<number> }) {
@@ -148,7 +161,9 @@ function Window({ cur, all, boxRef, hidden, openedAt }: { cur: Ask; all: readonl
   // the card reads the chat as it was when it opened: what the chat writes later is one notice away (lib/askItems.tsx)
   const frozen = useFrozenItems(cur.chatId, reqKey(cur));
   const items = cur.type === 'question' ? frozen.items : undefined;
-  const cmds = useMemo(() => commandsOfTurn(items), [items]);
+  // the chat's command is already its own card (before this one): not repeated under the question
+  const ownCard = useApp(s => s.pending.some(p => p.chatId === cur.chatId && p.type === 'command'));
+  const cmds = useMemo(() => (ownCard ? [] : commandsOfTurn(items)), [items, ownCard]);
   const commands = cmds.length ? (
     <div className="decision-cmds" data-testid="qwin-card-cmds">
       {cmds.map((c, i) => <CodeBlock key={`${c.itemId}.${i}`} chatId={cur.chatId} itemId={c.itemId} lang={c.lang} code={c.code} />)}

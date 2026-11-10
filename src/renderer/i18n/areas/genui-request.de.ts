@@ -98,6 +98,7 @@ export const genuiRequestDe: typeof genuiRequestIt = {
   'genui.decision.done': 'Was ich getan habe',
   'genui.decision.before': 'Vorher',
   'genui.decision.after': 'Nachher',
+  'genui.decision.todo': 'Du bist dran',
   'genui.decision.ifYes': 'Bei Ja',
   'genui.decision.ifNo': 'Bei Nein',
   'genui.decision.yes': 'Ja',

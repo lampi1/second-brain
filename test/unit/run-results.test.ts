@@ -3,7 +3,7 @@
 // together go in one message; off with the setting; a stopped run says so; long code and output are cut.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatSummary, RunInfo } from '../../src/shared/contract';
-import { FOLLOWER_NOTE, RECENT_NOTE, RUN_RESULT_LABEL, RunResults, runResultText } from '../../src/main/run/results';
+import { ANSWERED_BY_RUN_NOTE, FOLLOWER_NOTE, RECENT_NOTE, RUN_RESULT_LABEL, RunResults, runResultText } from '../../src/main/run/results';
 
 const chat = (p: Partial<ChatSummary> & { id: string }): ChatSummary => ({
   harness: 'claude', origin: 'app', title: p.id, cwd: 'C:/x', sessionId: null, model: null, effort: null, permissionMode: null,
@@ -122,5 +122,38 @@ describe('RunResults', () => {
     expect(sent[0]!.text).toContain('npm run check');
     setOn(false);
     expect(s.tell('c3', run({ id: 'r10' }))).toBe(false);
+  });
+});
+
+describe('RunResults answers the question the chat stopped on (ADR 0259)', () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('a chat waiting on its question right after the block gets the result as the answer, not a message later', async () => {
+    const sent: string[] = [], answered: { chatId: string; text: string }[] = [];
+    const s = new RunResults({ send: async (_c, t) => { sent.push(t); }, enabled: () => true, groupMs: 100,
+      answerWaiting: async (chatId, _runs, text) => { answered.push({ chatId, text }); return true; } });
+    s.observe('chat:updated', chat({ id: 'c1', state: 'waiting', pending: 1 }));
+    s.observe('run:updated', run({ id: 'r1' }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(answered).toHaveLength(1);
+    expect(answered[0]!.text.startsWith(ANSWERED_BY_RUN_NOTE)).toBe(true);
+    expect(answered[0]!.text).toContain('npm run check');
+    s.observe('chat:updated', chat({ id: 'c1', state: 'idle' }));
+    await vi.advanceTimersByTimeAsync(500);
+    expect(sent).toEqual([]); // told once
+  });
+
+  it('when the open request is not that question the result waits for the chat to be free', async () => {
+    const sent: string[] = [];
+    const s = new RunResults({ send: async (_c, t) => { sent.push(t); }, enabled: () => true, groupMs: 100, answerWaiting: async () => false });
+    s.observe('chat:updated', chat({ id: 'c1', state: 'waiting', pending: 1 }));
+    s.observe('run:updated', run({ id: 'r1' }));
+    await vi.advanceTimersByTimeAsync(300);
+    expect(sent).toEqual([]);
+    s.observe('chat:updated', chat({ id: 'c1', state: 'idle' }));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toContain('npm run check');
   });
 });

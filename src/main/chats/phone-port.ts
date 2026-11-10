@@ -51,7 +51,7 @@ export function phoneQuestionReserved(p: PendingRequest, readItems: () => ChatIt
   const brief = items.flatMap(i => {
     if (i.kind !== 'artifact' || i.askId !== p.id || i.ui.component !== 'brief') return [];
     const b = i.ui.props;
-    return [i.title, i.summary, ...b.done, b.ifYes, b.ifNo, b.why ?? '', b.yesLabel ?? '', b.noLabel ?? '', ...(b.yesSteps ?? []), ...(b.noSteps ?? []),
+    return [i.title, i.summary, ...b.done, b.ifYes, b.ifNo, b.why ?? '', ...(b.todo ?? []), b.yesLabel ?? '', b.noLabel ?? '', ...(b.yesSteps ?? []), ...(b.noSteps ?? []),
       ...(b.change ? [b.change.what ?? '', b.change.before, b.change.after] : []), ...(b.checks ?? []).flatMap(c => [c.label, c.detail ?? '']),
       ...(b.files ?? []).flatMap(x => [x.path, x.why ?? '']), ...(b.images ?? []).map(x => x.caption ?? '')];
   });

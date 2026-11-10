@@ -414,7 +414,7 @@ export async function planDecide(chatId: string, decision: 'approve' | 'change',
 /** "Comando da eseguire" → Esegui: the block runs in the chat that proposed it (main checks it is a block of that
  *  message; confirmProd = the second click on a production one). main resolves the request when the run starts; the
  *  output stays under the block in that chat. Resolves true when it started. */
-export async function runCommand(req: PendingRequest, confirmProd = false): Promise<boolean> {
+export async function runCommand(req: PendingRequest, confirmProd = false, restore = true): Promise<boolean> {
   const c = req.command;
   if (!c) return false;
   try {
@@ -426,7 +426,8 @@ export async function runCommand(req: PendingRequest, confirmProd = false): Prom
     // the card comes back usable everywhere (the layer re-mounts it: its key carries the attempt)
     const key = `${req.chatId}/${req.id}`;
     attempts.set(key, attemptOf(key) + 1);
-    dispatch({ type: 'pending:added', req });
+    // a retry from the run strip (RunWatch): main resolved that request long ago, it does not come back
+    if (restore) dispatch({ type: 'pending:added', req });
     fail(t('appText.store.commandNotStarted'))(e);
     return false;
   }

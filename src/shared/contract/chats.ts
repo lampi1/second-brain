@@ -245,6 +245,8 @@ export interface UiBrief {
   yesLabel?: string; noLabel?: string;
   yesSteps?: string[]; noSteps?: string[];
   change?: { what?: string; before: string; after: string };
+  /** what the user must do himself before answering, step by step (only when the agent cannot do it) */
+  todo?: string[];
   checks?: { label: string; status: UiStatus; detail?: string }[];
   images?: { path: string; caption?: string }[];
   files?: { path: string; why?: string; added?: number; removed?: number; href?: string }[];

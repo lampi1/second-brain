@@ -16,12 +16,12 @@ function fixture(engine: 'claude' | 'acp', briefReady: () => boolean | Promise<b
     const wire = new ClaudeSession({ chatId: 'brief', cwd: '.', yesNo: true, briefReady }, sink) as unknown as ClaudeWire;
     return { sink, reply: vi.spyOn(wire, 'write').mockImplementation(() => {}),
       receive: (id: string) => wire.onControlRequest({ request_id: id, request: { subtype: 'can_use_tool',
-        tool_name: 'AskUserQuestion', input: { questions: [{ question: 'Procedo?', options: [{ label: 'Sì (consigliato)' }, { label: 'No' }] }] } } }) };
+        tool_name: 'AskUserQuestion', input: { questions: [{ question: 'Applico il fix del totale al modulo Ordini?', options: [{ label: 'Sì (consigliato)' }, { label: 'No' }] }] } } }) };
   }
   const wire = new AcpSession({ chatId: 'brief', cwd: '.', engineId: 'cursor', label: 'Cursor', args: ['acp'], yesNo: true, briefReady }, sink) as unknown as AcpWire;
   return { sink, reply: vi.spyOn(wire, 'write').mockImplementation(() => {}),
     receive: (id: string) => wire.onAgentRequest(id, 'cursor/ask_question', {
-      questions: [{ id: 'q', prompt: 'Procedo?', options: [{ id: 'yes', label: 'Sì (consigliato)' }, { id: 'no', label: 'No' }] }],
+      questions: [{ id: 'q', prompt: 'Applico il fix del totale al modulo Ordini?', options: [{ id: 'yes', label: 'Sì (consigliato)' }, { id: 'no', label: 'No' }] }],
     }) };
 }
 

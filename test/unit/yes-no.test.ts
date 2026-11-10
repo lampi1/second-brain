@@ -29,6 +29,11 @@ describe('yes/no questions', () => {
     expect(yesNoShape([q('Sì', 'No'), q('A', 'B')])).toBe(false);
     expect(yesNoShape([])).toBe(false);
   });
+  it('a vague question goes back: «Fatto?» does not say what it asks (ADR 0259)', () => {
+    for (const v of ['Fatto?', 'Hai fatto?', 'Ok?', 'Procedo?', 'Tutto ok?', 'L\'hai eseguito?']) expect(yesNoShape([{ ...q('Sì', 'No'), question: v }])).toBe(false);
+    for (const v of ['Pubblico?', 'Deploy ora?', 'Faccio il merge?']) expect(yesNoShape([{ ...q('Sì', 'No'), question: v }])).toBe(true);
+    for (const c of ['Faccio il commit del fix?', 'Hai fatto il login su Azure DevOps?', 'Procedo con il deploy in test?']) expect(yesNoShape([{ ...q('Sì', 'No'), question: c }])).toBe(true);
+  });
   it('a question too long or with code goes back: its context belongs in the brief (ADR 0259)', () => {
     expect(yesNoShape([{ ...q('Sì', 'No'), question: 'Faccio il commit del fix?' }])).toBe(true);
     expect(yesNoShape([{ ...q('Sì', 'No'), question: 'Ho trovato il bug. '.repeat(10) + 'Procedo?' }])).toBe(false);
