@@ -242,7 +242,7 @@ export function showUiTool(store: Artifacts): McpTool {
     name: 'show_ui',
     description: [
       `Brief example: ${BRIEF_EXAMPLE}`,
-      'brief requires title and summary plus props.done (1–5 strings, or one string; each ≤200 chars), ifYes and ifNo (each ≤200 chars). Use target next-ask, then ask the question. All shape errors are returned together.',
+      'brief requires title and summary plus props.done (1–5 strings, or one string; each ≤200 chars), ifYes and ifNo (each ≤200 chars); optional why (one plain sentence ≤240), yesLabel / noLabel (the buttons, ≤32), yesSteps / noSteps (what happens next, ≤4 strings of ≤90), change {what ≤60, before ≤24, after ≤24}. Use target next-ask, then ask the question. All shape errors are returned together.',
       'Show the user a visual instead of a wall of text: a trusted component of the app\'s catalog, drawn by the app (never HTML). Prefer it for tables, options to choose from, boards (QA test cases, chat status), changed-file lists, charts. Keep it short.',
       'summary = the same content in one or two plain sentences (shown when the visual cannot be drawn). target: chat (default: a card in this chat) · orchestrator (in your Orchestrator\'s panel) · next-ask (attached to your next AskUserQuestion; with no question within 60 s it becomes a card here). The same id again replaces that visual (a board you update). It never answers a question or a permission: still ask with AskUserQuestion.',
       'props per component:',

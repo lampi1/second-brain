@@ -55,7 +55,11 @@ export function isYesNo(q: { options: readonly { label: string }[]; multiSelect?
 /** The longest question the card shows as its title: the context goes in the brief (ADR 0259). */
 export const MAX_QUESTION_CHARS = 160;
 /** A question short enough to read at a glance: no code fence, not a paragraph. */
-export const shortQuestion = (q: string): boolean => q.trim().length <= MAX_QUESTION_CHARS && !q.includes('```');
+export const shortQuestion = (q: string): boolean => {
+  // a screenshot the question names is drawn as a thumbnail, never read as text: it does not count
+  const text = q.replace(/!\[[^\]]*\]\([^)]*\)/g, '').replace(/(?:file:\/\/\/?|[a-z]:[\\/]|\/)[^\s"'<>]*\.(?:png|jpe?g|webp|gif)\b/gi, '');
+  return text.trim().length <= MAX_QUESTION_CHARS && !q.includes('```');
+};
 
 /** Exactly one answerable, short yes/no question per panel. */
 export const yesNoShape = (qs: readonly { question?: string; options: readonly { label: string }[]; multiSelect?: boolean }[]): boolean =>

@@ -33,6 +33,7 @@ describe('yes/no questions', () => {
     expect(yesNoShape([{ ...q('Sì', 'No'), question: 'Faccio il commit del fix?' }])).toBe(true);
     expect(yesNoShape([{ ...q('Sì', 'No'), question: 'Ho trovato il bug. '.repeat(10) + 'Procedo?' }])).toBe(false);
     expect(yesNoShape([{ ...q('Sì', 'No'), question: 'Lancio ```npm test```?' }])).toBe(false);
+    expect(yesNoShape([{ ...q('Sì', 'No'), question: `Il carrello ora è giusto (C:\\evidence\\${'x'.repeat(150)}.png). Faccio il commit?` }])).toBe(true);
   });
   it('the gate is on in a real profile, off in the test suites unless asked, SB_YESNO=0 turns it off', () => {
     expect(yesNoGateOn({})).toBe(true);

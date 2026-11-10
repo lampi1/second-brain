@@ -108,7 +108,7 @@ export const genuiRequestDe: typeof genuiRequestIt = {
   'genui.decision.skipDiscard': 'Der Vorschlag wird verworfen, ohne Kommentar',
   'genui.decision.skipAnswer': 'Der Benutzer möchte diese Frage nicht beantworten. Stelle sie nicht erneut: wähle den vorsichtigsten Weg und mach weiter, oder halte an, wenn es ohne Antwort nicht geht.',
   'genui.decision.chatText': 'Chat-Nachricht',
-  'genui.decision.noBrief': 'Der Agent hat keine Zusammenfassung geschickt: darunter steht, was er vor der Frage geschrieben hat.',
+  'genui.decision.noBrief': 'Der Agent hat keine Zusammenfassung geschickt: was er vor der Frage geschrieben hat, steht zugeklappt darunter.',
   'genui.decision.keys': 'J ja · N nein · T schreiben · Esc später',
   'genui.decision.send': 'Senden',
   'genui.decision.cancel': 'Abbrechen',
