@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { NewsState } from '@shared/news';
-import { NewsService, type NewsAi, type NewsFetch } from '../../src/main/news/service';
+import { NewsService, publicHttps, type NewsAi, type NewsFetch } from '../../src/main/news/service';
 import { demoNewsAi, demoNewsFetch } from '../../src/main/news/demo';
 import { summaryPrompt, parseSummaries } from '../../src/main/news/summarize';
 
@@ -176,5 +176,56 @@ describe('summaries', () => {
     expect(out[0]?.id).toBe('abc123abc123');
     expect(out[0]?.section).toBeUndefined();
     expect(() => parseSummaries('no json here', ['a'])).toThrow();
+  });
+});
+
+describe('review fixes (ADR 0265)', () => {
+  it('keeps a mark made while the AI pass runs', async () => {
+    let release: () => void = () => {};
+    const gate = new Promise<void>(r => { release = r; });
+    const ai = demoNewsAi(() => 'it');
+    let calls = 0;
+    const base = demoNewsFetch(() => NOW);
+    let extra = false;
+    const fetch: NewsFetch = async url => (extra && url.includes('mistral') ? { status: 200, contentType: 'application/rss+xml', text: '<rss><channel><item><title>Mistral agents SDK</title><link>https://mistral.ai/news/agents-sdk</link><pubDate>Mon, 10 Nov 2026 07:00:00 GMT</pubDate></item></channel></rss>' } : base(url));
+    const { svc } = make({ fetch, ai: async p => { calls++; if (calls === 2) await gate; return ai(p); } });
+    await svc.refresh();
+    const id = svc.state().items[0]!.id;
+    // a second refresh with something to summarize: a new story arrives
+    extra = true;
+    const run = svc.refresh();
+    for (let i = 0; i < 50 && svc.state().progress?.phase !== 'summarize'; i++) await new Promise(r => setImmediate(r));
+    expect(svc.state().progress?.phase).toBe('summarize');
+    svc.mark({ id, saved: true, read: true, lesson: 'les-9' });
+    release();
+    await run;
+    expect(svc.state().items.find(i => i.id === id)).toMatchObject({ saved: true, read: true, lesson: 'les-9' });
+  });
+
+  it('does not take a page\'s undated archive for new on the second reading', async () => {
+    const links = Array.from({ length: 30 }, (_, i) => `<a href="/blog/post-${i}"><h3>Agent post number ${i} about skills</h3></a>`).join('');
+    const page = `<html><body>${links}</body></html>`;
+    const { svc } = make({ fetch: async url => (url === 'https://example.org/blog' ? { status: 200, contentType: 'text/html', text: page } : { status: 404, contentType: 'text/html', text: '' }) });
+    for (const s of svc.state().sources) svc.editSources({ op: 'toggle', id: s.id, on: false });
+    svc.editSources({ op: 'add', url: 'https://example.org/blog' });
+    const r1 = await svc.refresh();
+    expect(r1.fresh).toBe(0);
+    const r2 = await svc.refresh();
+    expect(r2.fresh).toBe(0);
+  });
+
+  it('looks up a date only on a public https host', () => {
+    expect(publicHttps('https://example.com/a')).toBe(true);
+    for (const u of ['http://example.com/a', 'https://127.0.0.1/x', 'https://localhost:3000/', 'https://192.168.1.4/', 'https://10.0.0.2/', 'https://172.20.0.1/', 'https://169.254.169.254/', 'https://[::1]/', 'https://intranet/', 'https://localhost./', 'https://printer.local./']) expect(publicHttps(u)).toBe(false);
+  });
+
+  it('forgets a source removed while it was being read', async () => {
+    let svcRef: NewsService | null = null;
+    const base = demoNewsFetch(() => NOW);
+    const { svc } = make({ fetch: async url => { if (url.includes('deepmind')) svcRef!.editSources({ op: 'remove', id: 'deepmind' }); return base(url); } });
+    svcRef = svc;
+    await svc.refresh();
+    expect(svc.state().sources.some(s => s.id === 'deepmind')).toBe(false);
+    expect(svc.state().items.some(i => i.source === 'deepmind')).toBe(false);
   });
 });

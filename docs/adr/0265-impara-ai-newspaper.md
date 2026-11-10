@@ -140,6 +140,12 @@ default list; «Ripristina» brings the defaults back and keeps the user's own.
    With Claude off the paper still fills, without summaries, and says why.
 5. **Keep**: `userData/news/state.json` (written atomically): sources, each one's last reading, at most 400 stories
    for 30 days (saved ones always), the last 20 refreshes. Titles, short summaries and links only, never an article.
+   A link that leaves the paper (aged out, trimmed) or a first reading's undated archive is remembered as seen (at
+   most 5,000), so it never comes back as new. What the user does while a refresh runs (read, saved, a lesson) is
+   carried onto the refreshed paper; a source removed meanwhile leaves no trace. An article is fetched for its date
+   only on a public https host (never loopback, the LAN or link-local). A public name that resolves into the LAN
+   (sslip.io-style) is not caught: that would need a DNS check, a known residual risk (the request is blind, only a
+   date is read).
 
 ### Cost
 
