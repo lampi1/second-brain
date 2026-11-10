@@ -66,17 +66,19 @@ export function stepsOf(items: ChatItem[]): Steps {
   return { done: said.slice(-STEPS_MAX) };
 }
 
-type Mark = 'wait' | 'error' | 'run' | 'queue' | 'done' | 'idle';
-const ICON: Record<Mark, string> = { wait: '🙋', error: '🔴', run: '🟢', queue: '⏳', done: '✅', idle: '💤' };
-const LABEL: Record<Mark, string> = { wait: 'aspetta te', error: 'ferma su un errore', run: 'al lavoro', queue: 'in coda', done: 'ha finito', idle: 'ferma' };
-const ORDER: Mark[] = ['wait', 'error', 'run', 'queue', 'done', 'idle'];
+type Mark = 'wait' | 'error' | 'run' | 'queue' | 'done' | 'stopped' | 'idle';
+const ICON: Record<Mark, string> = { wait: '🙋', error: '🔴', run: '🟢', queue: '⏳', done: '✅', stopped: '✋', idle: '💤' };
+const LABEL: Record<Mark, string> = { wait: 'aspetta te', error: 'ferma su un errore', run: 'al lavoro', queue: 'in coda', done: 'ha finito', stopped: 'fermata', idle: 'ferma' };
+const ORDER: Mark[] = ['wait', 'error', 'run', 'queue', 'done', 'stopped', 'idle'];
 
-/** True when a text is the agents recap (the phone gives it more room, phone/condense.ts): its first line is an agent's
- *  head, and every line is a head, a step, a sub-agent or the closed line. */
+/** True when a text is the agents recap (the phone gives it more room, phone/condense.ts): an agent's head in its first
+ *  two lines, and at most two lines that are not a head, a step, a sub-agent or the closed line (an intro or a closing
+ *  sentence the model added). */
 export function isAgentsRecap(text: string): boolean {
   const lines = text.trim().split('\n').filter(l => l.trim());
   const head = (l: string) => Object.values(ICON).some(i => l.startsWith(`${i} `)) && l.includes(' — ');
-  return !!lines.length && head(lines[0]!) && lines.every(l => head(l) || /^ {0,2}- /.test(l) || l.startsWith('Chiuse nelle ultime 6 ore: '));
+  const other = lines.filter(l => !head(l) && !/^ {0,2}- /.test(l) && !l.startsWith('Chiuse nelle ultime 6 ore: '));
+  return lines.slice(0, 2).some(head) && other.length <= 2 && other.length < lines.length / 2;
 }
 
 function markOf(c: ChatSummary, asks: PendingRequest[]): Mark {
@@ -84,7 +86,7 @@ function markOf(c: ChatSummary, asks: PendingRequest[]): Mark {
   if (c.state === 'error') return 'error';
   if (c.queued) return 'queue';
   if (c.state === 'running' || c.state === 'starting') return 'run';
-  return c.lastResult ? (c.lastResult.isError ? 'error' : 'done') : 'idle';
+  return c.lastResult ? (c.lastResult.interrupted ? 'stopped' : c.lastResult.isError ? 'error' : 'done') : 'idle';
 }
 
 /** The latest report summary of a chat: its run's canonical result, else its delegation result. */
@@ -118,8 +120,10 @@ export function agentsRecap(d: AgentsRecapDeps): string {
     // a delegated chat: state and report only (ADR 0083, 0226)
     const s: Steps = c.parentId ? { done: [] } : stepsOf(d.items(c.id));
     const rows = s.done.map(x => `- ✓ ${x}`);
-    if (m === 'wait') rows.push(`- 🙋 ${rs.length ? one(askLine(rs[0]!), 160) : 'una richiesta per te'}`);
-    else if (m === 'error') rows.push(`- ❗ ${one(c.lastError ?? report ?? c.lastText, 140) || 'errore'}`);
+    // a delegated chat's question and error text are its parent's (ADR 0083: app_digest mutes them too)
+    if (m === 'wait') rows.push(`- 🙋 ${rs.length && !c.parentId ? one(askLine(rs[0]!), 160) : 'una richiesta per te'}`);
+    else if (m === 'error') rows.push(`- ❗ ${(c.parentId ? report : one(c.lastError ?? report ?? c.lastText, 140)) || 'errore'}`);
+    else if (m === 'stopped') rows.push('- ✋ l’hai fermata tu');
     else if (m === 'queue') rows.push(`- ⏳ posizione ${c.queued!.position}`);
     else if (m === 'run' && s.now) rows.push(`- ▸ ora: ${s.now}`);
     else if (m === 'done' && report) rows.push(`- 📄 ${report}`);

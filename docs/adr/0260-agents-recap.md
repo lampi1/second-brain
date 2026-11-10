@@ -19,18 +19,22 @@ one status sentence. The owner wants the opposite: from the phone too, a short, 
      Cursor/ACP todos and plan), else the first sentence of each message since the user's last one.
    - One line on where it stands: the request waiting for the user, the error, the queue position, the current step,
      the last report or the next step.
-   - Delegated chats sit under their parent with their state only (ADR 0083; their messages stay the parent's).
+   - Delegated chats sit under their parent with their state only (ADR 0083; their messages stay the parent's); one
+     whose parent is closed stands on its own, still without its question, error or message text.
+   - A turn the user stopped reads «fermata», not «ha finito».
    - The ones waiting for the user first; a last line names the chats closed in the last 6 hours.
 2. The Orchestrator's rule: on a recap it reads `app_agents_recap` (with app_work_list, app_digest and
    agent_lessons_waiting as before) and replies with its text as it is: no intro, no closing, no table. Decisions
    still go only through the existing panels and app_unblock.
 3. Plain text, no bold: Telegram gets no parse_mode. On the phone a reply that is the recap (`isAgentsRecap`) gets up to
-   2,400 characters instead of 600 (`phone/condense.ts condenseReply`); it still passes the one outgoing filter.
+   2,400 characters instead of 600 (`phone/condense.ts condenseReply`), also with an intro or closing line the model
+   added; it still passes the one outgoing filter.
 
 ## Consequences
 
 - One tool call, the same format every time, readable on the PC and on the phone.
 - A chat without a todo list and with long messages shows only their first sentences; good enough for «a che punto è»,
   the full result stays in the chat.
-- Chat titles reach the phone inside the recap, as they already could inside any Orchestrator reply (the filter's known
-  limit, phone design §9).
+- Chat titles and the agents' last steps reach the phone in every recap, on purpose: the owner asked to know from the
+  phone what every agent does. Until now a title reached the phone only when the model wrote one (the phone design
+  sends role + neutral label elsewhere); a customer name in a title passes the filter (its known limit, design §9).

@@ -62,6 +62,21 @@ it('writes one block per agent, the waiting ones first, delegates under their pa
   expect(isAgentsRecap(text)).toBe(true);
 });
 
+it('never shows a delegate\'s question or error text, also when its parent is closed; a stopped turn is not «ha finito»', () => {
+  const chats = [
+    chat('p', { closedAt: 1, state: 'closed' }),
+    chat('k', { ...role('Sentinel'), title: 'Verifica', parentId: 'p', state: 'error', lastError: 'secret error', lastText: 'secret line' }),
+    chat('q', { ...role('Scout'), title: 'Cerca', parentId: 'p', state: 'waiting' }),
+    chat('s', { title: 'Ferma', lastResult: { at: 1, isError: false, interrupted: true } }),
+  ];
+  const pending = [{ chatId: 'q', type: 'question', title: 'secret question', questions: [{ question: 'secret question' }], at: 1 }] as unknown as PendingRequest[];
+  const text = agentsRecap({ chats: () => chats, items: id => id === 's' ? [] : [said('secret said')], pending: () => pending, runs: () => [], now: () => 1 });
+  expect(text).not.toContain('secret');
+  expect(text).toContain('🙋 Scout · Cerca — aspetta te\n- 🙋 una richiesta per te');
+  expect(text).toContain('🔴 Sentinel · Verifica — ferma su un errore\n- ❗ errore');
+  expect(text).toContain('✋ Ferma — fermata');
+});
+
 it('says so when no agent is open, and the tool is read-only', () => {
   const tool = agentsRecapTool({ chats: () => [chat('orch', { isOrchestrator: true })], items: () => [], pending: () => [], runs: () => [] });
   expect(tool.run({})).toBe('Nessun agente al lavoro.');
@@ -71,5 +86,6 @@ it('says so when no agent is open, and the tool is read-only', () => {
 it('tells a recap from an ordinary reply', () => {
   expect(isAgentsRecap('🟢 Artisan · X — al lavoro\n- ✓ a')).toBe(true);
   expect(isAgentsRecap('Ho finito. 🟢 tutto ok')).toBe(false);
-  expect(isAgentsRecap('🟢 Artisan · X — al lavoro\nPoi ho scritto un romanzo.')).toBe(false);
+  expect(isAgentsRecap('Ecco il punto:\n🟢 Artisan · X — al lavoro\n- ✓ a\n- ▸ ora: b')).toBe(true);
+  expect(isAgentsRecap('🟢 Artisan · X — al lavoro\nPoi ho scritto un romanzo.\nE poi un altro.\nE un terzo.')).toBe(false);
 });
