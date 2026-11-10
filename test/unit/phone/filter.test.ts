@@ -4,7 +4,7 @@
 // names, zero-width and full-width tricks; plus the condenser (sentence cut, "Continua sul PC", never inside a
 // placeholder) and idempotency.
 import { describe, expect, it } from 'vitest';
-import { condense, CONDENSE_MAX, MORE } from '../../../src/main/phone/condense';
+import { condense, condenseReply, CONDENSE_MAX, MORE, RECAP_MAX } from '../../../src/main/phone/condense';
 import { CODE_PLACEHOLDER, filterOutgoing, ROWS_PLACEHOLDER, TABLE_PLACEHOLDER } from '../../../src/main/phone/filter';
 import { FX, TOKEN } from './fakes';
 
@@ -180,5 +180,13 @@ describe('condense', () => {
   it('filters before cutting: a secret past the cut never shows, one before it is masked', () => {
     const out = condense(`${FX.pw('Abcd1234!')} ${'z. '.repeat(400)}`);
     expect(out).not.toContain('Abcd1234');
+  });
+
+  it('gives the agents recap (ADR 0260) more room than an ordinary reply', () => {
+    const recap = Array.from({ length: 8 }, (_, i) => `🟢 Artisan · Lavoro ${i} — al lavoro\n- ✓ ${'passo fatto '.repeat(5).trim()}\n- ▸ ora: test`).join('\n\n');
+    expect(recap.length).toBeGreaterThan(CONDENSE_MAX);
+    expect(condenseReply(recap)).toBe(recap);
+    expect(condenseReply(`${'Frase. '.repeat(200)}`).endsWith(MORE)).toBe(true);
+    expect(condenseReply(`🟢 X — al lavoro\n- ✓ ${'a '.repeat(RECAP_MAX)}`).endsWith(MORE)).toBe(true);
   });
 });

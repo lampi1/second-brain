@@ -20,7 +20,7 @@
 //   for him (app_unblock, ADR 0135); it never answers any of it.
 // - The user's call recordings and their local transcripts (app_recordings, ADR 0154): the Orchestrator's mount only.
 // - A lesson in Impara when the user asks to understand something (app_learn, ADR 0190): the Orchestrator's mount only.
-// - The latest report of any chat in its tree, delegates included, without a turn of theirs (app_child_output, ADR 0226).
+// - The latest report of any chat in its tree, delegates included (app_child_output, ADR 0226); the recap (app_agents_recap, 0260).
 // - The skill library (app_skills, app_skill_write, app_skill_roles, app_skill_undo, ADR 0241): the Orchestrator's mount only.
 import path from 'node:path';
 import type { BrowserWindow } from 'electron';
@@ -69,6 +69,7 @@ import { lastAnswered, lastTyped, userAsked } from './user-words';
 import { recordingTools, type RecordingsRead } from './recordings';
 import { imparaTools, type ImparaControl } from './impara';
 import { childOutputTool } from './child-output';
+import { agentsRecapTool } from './agents-recap';
 import { skillTools } from './skills';
 import type { SkillLibrary } from '../skills/library';
 import type { RoutineTerminalExport, RoutineRunRef } from '../../shared/routines';
@@ -260,7 +261,7 @@ export function appControlTools(d: AppCtlDeps, callerId?: string): ToolDef[] {
     ...(d.recordings && authed() ? recordingTools(d.recordings, d.emitUi) : []),
     ...(d.impara && authed() ? imparaTools(d.impara, d.emitUi, () => imparaAsked(callerId!)) : []),
     ...(d.skillLibrary && authed() ? skillTools(d.skillLibrary, () => caller()?.title || 'Orchestrator') : []),
-    ...(authed() ? [childOutputTool({ chats: () => d.chats.list().filter(mine), runs: () => d.runFeedback?.runList() ?? [] })] : []),
+    ...(authed() ? [childOutputTool({ chats: () => d.chats.list().filter(mine), runs: () => d.runFeedback?.runList() ?? [] }), agentsRecapTool({ chats: () => d.chats.list().filter(mine), items: id => d.chats.items(id), pending: () => [...d.chats.pending(), ...(d.commandAsks?.() ?? [])], runs: () => d.runFeedback?.runList() ?? [] })] : []),
     ...(d.runFeedback && authed() ? [metricsTool(d.runFeedback)] : []),
     ...(d.runFeedback && authed() ? [estimateTool(() => d.runFeedback!.runList())] : []),
     {

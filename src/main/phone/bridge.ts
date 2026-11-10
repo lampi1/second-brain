@@ -15,7 +15,7 @@ import { createBacklog, isBacklog, START_NOTICE, STOP_NOTICE, type BacklogPayloa
 import { createButtons, refKey } from './buttons';
 import { backoff, createTelegramClient, resolveApiBase, TelegramError, type TelegramClient } from './client';
 import { parseCommand, runCommand, HELP_TEXT } from './commands';
-import { condense } from './condense';
+import { condense, condenseReply } from './condense';
 import { createGuard } from './guard';
 import { createOutbound } from './outbound';
 import { createPairing } from './pairing';
@@ -114,7 +114,7 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
     const records = s.outcomes ??= [];
     const old = records.find(x => x.runId === ev.runId && x.chatId === s.paired!.chatId);
     if (old && (old.revision >= ev.revision || old.messageId === null)) return;
-    const text = condense(ev.text);
+    const text = condenseReply(ev.text);
     if (!text) return;
     if (old) {
       // only a confirmed edit counts: a failed one leaves the older revision, so the next emit tries again
@@ -148,7 +148,7 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
     const e: PolicyEvent = ev.failed && !ev.fromPhone ? { kind: 'failed', chatId: 'orchestrator', orchestrator: true } : { kind: 'reply', fromPhone: ev.fromPhone };
     const d = decide(e, ctx());
     if (!d.send) return;
-    const text = ev.failed ? '⚠️ L\'Orchestrator non ha finito il turno: guarda sul PC.' : condense(ev.reply);
+    const text = ev.failed ? '⚠️ L\'Orchestrator non ha finito il turno: guarda sul PC.' : condenseReply(ev.reply);
     if (text) await out.send(text, { silent: d.silent });
   }
 
