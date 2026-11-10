@@ -124,11 +124,14 @@ describe('each harness: live, cached, fallback', () => {
     // the live source: a Cursor chat's session/new, recorded by the chat manager (wiring.ts onModels)
     a.store.record('cursor', acpModels({ sessionId: 's1', models: { availableModels: [{ modelId: 'grok-5', name: 'Grok 5' }, { modelId: 'composer-3', name: 'Composer 3' }] } }));
     expect(ids(withApiModels(a.store.get()).cursor?.ids)).toEqual(['grok-5', 'composer-3']);
-    const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
-    expect(await a.m.refresh()).toMatchObject([{ engine: 'cursor', ok: false, count: 2, using: 'cache' }]);
+    const warn = vi.spyOn(log, 'warn');
+    expect(await a.m.refresh()).toEqual([]); // not asked: no failure to report
     expect(open).not.toHaveBeenCalled(); // rule 4: `agent` only for Cursor chats
-    const fresh = lists({ engines: () => [engineOf('cursor')!] });
-    expect(await fresh.m.refresh()).toMatchObject([{ engine: 'cursor', ok: false, count: 1, using: 'registry' }]);
+    expect(warn).not.toHaveBeenCalled();
+    expect(ids(withApiModels(a.store.get()).cursor?.ids)).toEqual(['grok-5', 'composer-3']); // the cached list stays
+    // no chat yet: models.json
+    setPriceTable(() => TEST_REGISTRY);
+    try { expect(ids(withApiModels({}).cursor?.ids)).toEqual(['grok-4.7']); } finally { setPriceTable(() => null); }
     warn.mockRestore();
   });
 

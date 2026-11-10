@@ -40,6 +40,6 @@ file. The demo registry (`brain/routing-demo.ts`) and the template repeated mode
 - A new model returned by any engine's source appears in every picker and routing accepts it, with no file edit.
 - The live cost of a model with no price row is still estimated at the table's `defaultModel` price (as `prices.mjs`
   does, flagged unpriced in the brain's cost report); the picker shows that its price is unknown.
-- Cursor and OpenCode refresh only when one of their chats opens; «Aggiorna elenco» says they were not asked.
+- Cursor and OpenCode refresh only when one of their chats opens; «Aggiorna elenco» does not ask them (no failure shown).
 - Not verified on real CLIs from this container: the Codex answer is the shape its chats already parse; the Claude
   Code shape was read from the bundled CLI (2026-11-10).

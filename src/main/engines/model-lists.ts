@@ -167,7 +167,8 @@ export class ModelLists {
   }
 
   private async run(only?: Harness): Promise<ModelRefreshOutcome[]> {
-    const targets = this.d.engines().filter(e => !only || e.id === only);
+    // ACP engines are not asked (their chats list them): no outcome, no warning, nothing counted as a failure
+    const targets = this.d.engines().filter(e => e.kind !== 'acp' && (!only || e.id === only));
     const before = JSON.stringify(this.d.store.get());
     const out = await Promise.all(targets.map(async (e): Promise<ModelRefreshOutcome> => {
       try {
