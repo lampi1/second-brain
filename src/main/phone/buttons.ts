@@ -6,11 +6,16 @@
 // and still simple and not reserved (read again from the PhonePort). The nonce is spent before the port is called, so a
 // double tap or a replayed callback never answers twice. Every press gets answerCallbackQuery. After a phone answer the
 // message becomes "✅ Sì · dal telefono HH:MM" (or ❌ No) without buttons; answered on the PC → "Risposta sul PC".
-// Buttons only for simple && !reserved items; everything else gets a no-button notice "⚠️ <role · label>: serve il PC".
-// Permissions never reach this module (PhonePort.listDecidable carries only questions and plans).
+// Buttons only for simple && !reserved items whose whole text fits (a decision is never taken on a cut text); a question
+// whose full text (with the options' descriptions) does not fit is sent in its short form (the question alone, with the
+// fixed Sì / No buttons; #370). Everything else gets a no-button notice "⚠️ <role · label>: serve il PC".
+// A typed «sì» / «no» also answers (#370, textAnswer): as a Telegram reply to the question's message, or right after it
+// when it is the only open question and nothing else was sent since; any other text goes to the Orchestrator.
+// Permissions reach this module only when one of the user's brain rules sent them to him (phone-port.ts, ADR 0254).
 // Used by bridge.ts; tests: test/unit/phone/buttons.test.ts.
 import crypto from 'node:crypto';
 import type { PhoneDecidable, PhonePort } from '../../shared/contract/phone';
+import { yesNoOf } from '../../shared/yes-no';
 import { condense, CONDENSE_MAX } from './condense';
 import { filterOutgoing } from './filter';
 import type { Outbound } from './outbound';
@@ -37,11 +42,14 @@ export function yesNoKeyboard(prefix: 'a' | 'b', shortId: string, recommended?: 
 
 export const refKey = (d: Pick<PhoneDecidable, 'chatId' | 'ref'>): string =>
   `${d.chatId}|${d.ref.kind === 'question' ? `q:${d.ref.requestId}` : `p:${d.ref.at}`}`;
-export const canUseButtons = (d: PhoneDecidable): boolean => d.simple === true && d.reserved !== true && filterOutgoing(d.text).length <= CONDENSE_MAX;
+const fits = (t: string): boolean => filterOutgoing(t).length <= CONDENSE_MAX;
+/** The text the phone shows with buttons: the whole text, else the short form; null when neither fits uncut. */
+export const buttonText = (d: Pick<PhoneDecidable, 'text' | 'short'>): string | null => fits(d.text) ? d.text : d.short && fits(d.short) ? d.short : null;
+export const canUseButtons = (d: PhoneDecidable): boolean => d.simple === true && d.reserved !== true && buttonText(d) !== null;
 /** Role and neutral label only: never the chat title. */
 export const header = (d: Pick<PhoneDecidable, 'role' | 'neutralLabel'>): string => `${d.role} · ${d.neutralLabel}`;
 export const noticeText = (d: PhoneDecidable): string => `⚠️ ${header(d)}: serve il PC`;
-export const decidableText = (d: PhoneDecidable): string => `${d.ref.kind === 'plan' ? '📋 Piano' : '❓'} ${header(d)}\n${condense(d.text)}`;
+export const decidableText = (d: PhoneDecidable): string => `${d.ref.kind === 'plan' ? '📋 Piano' : '❓'} ${header(d)}\n${condense(buttonText(d) ?? d.text)}`;
 
 interface Entry { shortId: string; key: string; item: PhoneDecidable; messageId: number | null; used: boolean; createdAt: number }
 
@@ -52,6 +60,8 @@ export interface Buttons {
   offer(item: PhoneDecidable, opts?: { silent?: boolean }): Promise<'buttons' | 'notice' | 'skip'>;
   /** a button press (already through the guard); always answers the callback */
   press(cb: TgCallbackQuery, pairedId: number): Promise<PressOutcome>;
+  /** a typed message: a bare «sì» / «no» that answers an offered question (see the header); null = not an answer */
+  textAnswer(m: { text: string; replyTo?: number }, lastSent: number | null): Promise<PressOutcome | null>;
   /** the request was answered elsewhere (or by the phone, already shown) */
   resolved(item: Pick<PhoneDecidable, 'chatId' | 'ref'>, by?: 'phone' | 'pc'): Promise<void>;
   isOffered(item: Pick<PhoneDecidable, 'chatId' | 'ref'>): boolean;
@@ -63,6 +73,36 @@ export function createButtons(o: { now: () => number; port: PhonePort; out: Outb
   const byId = new Map<string, Entry>();
   const byKey = new Map<string, Entry>();
   const forget = (e: Entry) => { byId.delete(e.shortId); if (byKey.get(e.key) === e) byKey.delete(e.key); };
+
+  /** the decision of one spent entry (a press or a typed «sì»/«no»), checked again on the live request */
+  async function decideEntry(e: Entry, yes: boolean, answer: (text: string) => Promise<void>): Promise<PressOutcome> {
+    const head = header(e.item);
+    const messageId = e.messageId!;
+    const current = o.port.listDecidable().find(d => refKey(d) === e.key);
+    if (!current) { forget(e); await answer('Scaduta'); await o.out.edit(messageId, `${head}\nScaduta`); return 'gone'; }
+    if (!canUseButtons(current)) { forget(e); await answer('Serve il PC'); await o.out.edit(messageId, `⚠️ ${head}: serve il PC`); return 'needs-pc'; }
+    let result: 'ok' | 'already' | 'gone';
+    try {
+      result = current.ref.kind === 'question'
+        ? await o.port.answerFromPhone(current.chatId, current.ref.requestId, yes)
+        : await o.port.decidePlanFromPhone(current.chatId, current.ref.at, yes);
+    } catch (err) {
+      o.log.warn('phone', 'phone answer failed', { data: { kind: current.ref.kind, error: err instanceof Error ? err.name : 'error' } });
+      forget(e);
+      await answer('Errore: rispondi dal PC');
+      return 'error';
+    }
+    forget(e);
+    if (result === 'ok') {
+      await answer(yes ? 'Sì' : 'No');
+      await o.out.edit(messageId, `${head}\n${yes ? '✅ Sì' : '❌ No'} · dal telefono ${hhmm(o.now())}`);
+      return 'ok';
+    }
+    if (result === 'already') { await answer('Già risposta'); await o.out.edit(messageId, `${head}\nRisposta sul PC`); return 'already'; }
+    await answer('Scaduta');
+    await o.out.edit(messageId, `${head}\nScaduta`);
+    return 'gone';
+  }
 
   return {
     isOffered: item => byKey.has(refKey(item)),
@@ -94,31 +134,20 @@ export function createButtons(o: { now: () => number; port: PhonePort; out: Outb
       if (e.used) { await answer('Già risposta'); return 'duplicate'; }
       if (o.now() - e.createdAt > ttl) { e.used = true; forget(e); await answer('Scaduta'); return 'stale'; }
       e.used = true; // spent before anything else: a second press, even concurrent, is a duplicate
-      const head = header(e.item);
-      const current = o.port.listDecidable().find(d => refKey(d) === e.key);
-      if (!current) { forget(e); await answer('Scaduta'); await o.out.edit(e.messageId, `${head}\nScaduta`); return 'gone'; }
-      if (!canUseButtons(current)) { forget(e); await answer('Serve il PC'); await o.out.edit(e.messageId, `⚠️ ${head}: serve il PC`); return 'needs-pc'; }
-      let result: 'ok' | 'already' | 'gone';
-      try {
-        result = current.ref.kind === 'question'
-          ? await o.port.answerFromPhone(current.chatId, current.ref.requestId, p.yes)
-          : await o.port.decidePlanFromPhone(current.chatId, current.ref.at, p.yes);
-      } catch (err) {
-        o.log.warn('phone', 'phone answer failed', { data: { kind: current.ref.kind, error: err instanceof Error ? err.name : 'error' } });
-        forget(e);
-        await answer('Errore: rispondi dal PC');
-        return 'error';
-      }
-      forget(e);
-      if (result === 'ok') {
-        await answer(p.yes ? 'Sì' : 'No');
-        await o.out.edit(e.messageId, `${head}\n${p.yes ? '✅ Sì' : '❌ No'} · dal telefono ${hhmm(o.now())}`);
-        return 'ok';
-      }
-      if (result === 'already') { await answer('Già risposta'); await o.out.edit(e.messageId, `${head}\nRisposta sul PC`); return 'already'; }
-      await answer('Scaduta');
-      await o.out.edit(e.messageId, `${head}\nScaduta`);
-      return 'gone';
+      return decideEntry(e, p.yes, answer);
+    },
+    async textAnswer(m, lastSent) {
+      const said = yesNoOf(m.text);
+      if (!said) return null;
+      const open = [...byId.values()].filter(x => !x.used && x.messageId !== null);
+      // a reply names its message; without one, only the single open question that is the last thing sent
+      const e = m.replyTo !== undefined ? open.find(x => x.messageId === m.replyTo)
+        : open.length === 1 && open[0]!.messageId === lastSent ? open[0] : undefined;
+      if (!e) return null;
+      if (o.now() - e.createdAt > ttl) { e.used = true; forget(e); return null; }
+      e.used = true;
+      // no callback to answer: the question's message is edited; only a failure gets a short line of its own
+      return decideEntry(e, said === 'yes', async t => { if (t !== 'Sì' && t !== 'No') await o.out.send(t, { silent: true }); });
     },
     async resolved(item, by) {
       const e = byKey.get(refKey(item));

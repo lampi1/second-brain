@@ -89,8 +89,11 @@ export function createPhonePort(chats: PhoneChats, events: PhoneEvents): PhonePo
     const reserved = phoneQuestionReserved(p, () => chats.items(p.chatId));
     const pick = simple ? q!.options.find(o => MARK.test(o.label)) : undefined;
     const recommended = pick ? yesNoOf(pick.label) ?? undefined : undefined;
+    // the engines put the question in the title and the detail too: each line once, so it fits the phone (#370)
+    const lines = [p.title, p.detail, ...qs.flatMap(q => [q.question, ...q.options.map(o => `${o.label}${o.description ? `: ${o.description}` : ''}`)])];
+    const text = [...new Set(lines.flatMap(l => (l ?? '').split('\n')).map(l => l.trim()).filter(Boolean))].join('\n');
     return { chatId: c.id, ref: { kind: 'question', requestId: p.id }, role: role(c), neutralLabel: neutral(c),
-      text: [p.title, p.detail, ...qs.map(q => [q.question, ...q.options.map(o => `${o.label}${o.description ? `: ${o.description}` : ''}`)].join('\n'))].filter(Boolean).join('\n'), ...(recommended ? { recommended } : {}), simple, reserved, orchestrator: true };
+      text, ...(simple ? { short: q!.question } : {}), ...(recommended ? { recommended } : {}), simple, reserved, orchestrator: true };
   }
 
   function ofPlan(c: ChatSummary): PhoneDecidable | null {

@@ -16,6 +16,8 @@ export interface TgMessage {
   chat: TgChat;
   from?: TgUser;
   text?: string;
+  /** the message this one replies to (only its id is read: buttons.ts textAnswer) */
+  reply_to_message?: { message_id: number };
   voice?: TgVoice;
   audio?: TgVoice;
 }

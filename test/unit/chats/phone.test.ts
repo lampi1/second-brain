@@ -269,7 +269,7 @@ describe('the phone port', () => {
     const s = await f.strategist();
     const list = f.port.listDecidable();
     const by = (id: string) => list.find(d => d.ref.kind === 'question' && d.ref.requestId === id)!;
-    expect(by('simple')).toMatchObject({ simple: true, reserved: false, recommended: 'yes', role: 'Artisan', neutralLabel: 'lavoro 1', orchestrator: true, text: 'Apro la PR?\nApro la PR?\nSì (consigliato)\nNo' });
+    expect(by('simple')).toMatchObject({ simple: true, reserved: false, recommended: 'yes', role: 'Artisan', neutralLabel: 'lavoro 1', orchestrator: true, text: 'Apro la PR?\nSì (consigliato)\nNo', short: 'Apro la PR?' });
     expect(JSON.stringify(list)).not.toContain('Titolo segreto');
     for (const id of ['multi', 'two', 'notyn']) expect(by(id).simple).toBe(false);
     expect(by('reserved')).toMatchObject({ simple: true, reserved: true });

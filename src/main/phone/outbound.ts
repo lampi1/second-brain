@@ -16,6 +16,8 @@ export interface Outbound {
   /** replaces a sent message's text and buttons (none = buttons removed); true only when Telegram confirmed it */
   edit(messageId: number, text: string, keyboard?: InlineKeyboard): Promise<boolean>;
   answerCallback(callbackId: string, text?: string): Promise<void>;
+  /** the message_id of the last message sent, or null (buttons.ts: a typed «sì» right after a question answers it) */
+  lastSent(): number | null;
 }
 
 const filterKeyboard = (k: InlineKeyboard): InlineKeyboard => ({
@@ -23,6 +25,7 @@ const filterKeyboard = (k: InlineKeyboard): InlineKeyboard => ({
 });
 
 export function createOutbound(client: () => TelegramClient | null, chatId: () => number | null, log: PhoneLog): Outbound {
+  let last: number | null = null;
   const warn = (method: string, e: unknown) => log.warn('phone', 'telegram send failed', { data: { method, code: (e as { code?: unknown }).code ?? 'error' } });
   return {
     async send(text, opts = {}) {
@@ -31,15 +34,17 @@ export function createOutbound(client: () => TelegramClient | null, chatId: () =
       if (!c || to === null || !body) return null;
       try {
         const m = await c.sendMessage(to, body, { silent: opts.silent, replyMarkup: opts.keyboard ? filterKeyboard(opts.keyboard) : undefined });
+        last = m.message_id;
         return m.message_id;
-      } catch (e) { warn('sendMessage', e); return null; }
+      } catch (e) { last = null; warn('sendMessage', e); return null; }
     },
     async sendOutcome(text, opts = {}) {
       const c = client(), to = chatId();
       const body = filterOutgoing(text);
       if (!c || to === null || !body) return 'refused';
-      try { return (await c.sendMessage(to, body, { silent: opts.silent })).message_id; } catch (e) {
+      try { last = (await c.sendMessage(to, body, { silent: opts.silent })).message_id; return last; } catch (e) {
         warn('sendMessage', e);
+        last = null; // it may have arrived: what was last on the phone is not known
         // Telegram answered 4xx: certainly not sent; 5xx or a proxy's error page: it may have arrived (unknown)
         return e instanceof TelegramError && typeof e.code === 'number' && e.code >= 400 && e.code < 500 ? 'refused' : null;
       }
@@ -54,6 +59,7 @@ export function createOutbound(client: () => TelegramClient | null, chatId: () =
         warn('editMessageText', e); return false;
       }
     },
+    lastSent: () => last,
     async answerCallback(callbackId, text) {
       const c = client();
       if (!c) return;

@@ -5,7 +5,8 @@
 // is never run twice). Every update passes the guard (guard.ts); pairing, commands, text, voice, button presses and the
 // backlog of messages older than the start are handled here; replies, questions and notices leave only through
 // outbound.ts (the one filter). Phone text goes to the Orchestrator through PhonePort.sendFromPhone and never approves
-// anything; only button presses checked by buttons.ts answer simple questions and plans. Notifications follow policy.ts
+// anything; only button presses checked by buttons.ts (and a bare «sì» / «no» to the question, #370) answer simple
+// questions and plans. Notifications follow policy.ts
 // (questions, the Orchestrator's replies, failed chats from PhonePort.onChatFailed, urgent notices from main).
 // Used by main (wiring.ts, by the integrator); its tests against a fake Telegram
 // server were removed with the other port tests (docs/tests/load-sensitive-removed.md).
@@ -194,7 +195,14 @@ export function createPhoneBridge(deps: PhoneBridgeDeps): PhoneBridge {
       return;
     }
     if (m.voice ?? m.audio) { runVoice((m.voice ?? m.audio)!); return; }
-    if (typeof m.text === 'string' && m.text.trim()) { await sendText(m.text, 'messaggio'); return; }
+    if (typeof m.text === 'string' && m.text.trim()) {
+      // a bare «sì» / «no» to an offered question answers it, like its button (#370); anything else is for the Orchestrator
+      const replyTo = typeof m.reply_to_message?.message_id === 'number' ? m.reply_to_message.message_id : undefined;
+      const r = await buttons.textAnswer({ text: m.text, ...(replyTo !== undefined ? { replyTo } : {}) }, out.lastSent());
+      if (r !== null) { lastPhoneMessageAt = deps.now(); act('answer', 'risposta scritta'); return; }
+      await sendText(m.text, 'messaggio');
+      return;
+    }
     await out.send(`Qui leggo solo testo e vocali. ${HELP_TEXT}`);
   }
 

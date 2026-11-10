@@ -89,6 +89,8 @@ export interface PhoneDecidable {
   neutralLabel: string;
   /** question or plan text, unfiltered: the bridge filters every outgoing text */
   text: string;
+  /** a simple question's short form (the question alone, fixed Sì / No): sent when `text` is too long to show uncut (#370) */
+  short?: string;
   recommended?: 'yes' | 'no';
   /** true only for a type:'question' request with one question and two options, or a Strategist plan */
   simple: boolean;

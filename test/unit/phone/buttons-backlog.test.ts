@@ -18,6 +18,7 @@ function fakeOut() {
     async sendOutcome(text, o = {}) { const id = next++; sent.push({ id, text, silent: o.silent }); return id; },
     async edit(id, text) { edits.push({ id, text }); return true; },
     async answerCallback(id, text) { answers.push({ id, text }); },
+    lastSent: () => sent.at(-1)?.id ?? null,
   };
   return { out, sent, edits, answers };
 }
@@ -143,6 +144,84 @@ describe('buttons', () => {
     expect(parseCallbackData('c:AAAAAAAAAAAAAAAA:s')).toBeNull();
     expect(parseCallbackData(`a:${'A'.repeat(70)}:s`)).toBeNull();
     expect(parseCallbackData(undefined)).toBeNull();
+  });
+});
+
+describe('phone answers to worker Sì/No questions (#370)', () => {
+  const long = (o = {}) => question({ text: `Faccio il commit sul branch?\nSì (consigliato): ${'tutti i file cambiati vanno nel commit locale. '.repeat(15)}\nNo: lascio i file come sono.`, short: 'Faccio il commit sul branch?', ...o });
+
+  it('a question too long for the phone gets its short form with fixed Sì / No buttons, never a cut text', async () => {
+    const { port, sent, b } = setup();
+    const q = long(); port.open = [q];
+    expect(await b.offer(q)).toBe('buttons');
+    expect(sent[0]!.text).toBe('❓ Artisan · lavoro 3\nFaccio il commit sul branch?');
+    expect(sent[0]!.keyboard!.inline_keyboard[0]!.map(x => x.text)).toEqual(['Sì ⭐', 'No']);
+    expect(await b.press(cb(dataOf(sent[0]!), sent[0]!.id), ME)).toBe('ok');
+    expect(port.answers).toEqual([{ chatId: 'c1', id: 'r1', yes: true }]);
+  });
+
+  it('a long question without a short form still needs the PC', async () => {
+    const { port, sent, b } = setup();
+    const q = long({ short: undefined }); port.open = [q];
+    expect(await b.offer(q)).toBe('notice');
+    expect(sent[0]!.keyboard).toBeUndefined();
+  });
+
+  it('a typed «sì» in reply to the question answers that request id, once', async () => {
+    const { port, sent, edits, b } = setup();
+    const q = question(); port.open = [q];
+    await b.offer(q);
+    const id = sent[0]!.id;
+    expect(await b.textAnswer({ text: 'Sì', replyTo: id }, 99)).toBe('ok');
+    expect(port.answers).toEqual([{ chatId: 'c1', id: 'r1', yes: true }]);
+    expect(edits[0]!.text).toMatch(/✅ Sì · dal telefono/);
+    // a second answer, typed or pressed, is ignored
+    expect(await b.textAnswer({ text: 'no', replyTo: id }, 99)).toBeNull();
+    expect(await b.press(cb(dataOf(sent[0]!, false), id), ME)).toBe('stale');
+    expect(port.answers).toHaveLength(1);
+  });
+
+  it('a bare «no» right after the only open question answers it; otherwise it is not an answer', async () => {
+    const { port, sent, b } = setup();
+    const q = question(); port.open = [q];
+    await b.offer(q);
+    const id = sent[0]!.id;
+    // something else was sent after the question: «no» may be about that
+    expect(await b.textAnswer({ text: 'no' }, id + 1)).toBeNull();
+    expect(await b.textAnswer({ text: 'no.' }, id)).toBe('ok');
+    expect(port.answers).toEqual([{ chatId: 'c1', id: 'r1', yes: false }]);
+  });
+
+  it('ambiguous text is never an answer: other words, two open questions, a reply to another message', async () => {
+    const { port, sent, b } = setup();
+    const q1 = question(), q2 = question({ ref: { kind: 'question', requestId: 'r2' }, text: 'Aggiungo i test?' });
+    port.open = [q1, q2];
+    await b.offer(q1); await b.offer(q2);
+    const last = sent[1]!.id;
+    expect(await b.textAnswer({ text: 'sì, ma prima spiegami' }, last)).toBeNull();
+    expect(await b.textAnswer({ text: 'ok' }, last)).toBeNull();
+    expect(await b.textAnswer({ text: 'sì' }, last)).toBeNull();
+    expect(await b.textAnswer({ text: 'sì', replyTo: 12345 }, last)).toBeNull();
+    expect(port.answers).toEqual([]);
+    // a reply names its question even with two open
+    expect(await b.textAnswer({ text: 'sì', replyTo: sent[0]!.id }, last)).toBe('ok');
+    expect(port.answers).toEqual([{ chatId: 'c1', id: 'r1', yes: true }]);
+  });
+
+  it('a typed answer to a question answered on the PC meanwhile, or stale, does not answer', async () => {
+    const { port, sent, b, advance } = setup();
+    const q = question(); port.open = [q];
+    await b.offer(q);
+    await b.resolved(q, 'pc');
+    expect(await b.textAnswer({ text: 'sì', replyTo: sent[0]!.id }, sent[0]!.id)).toBeNull();
+    const q2 = question({ ref: { kind: 'question', requestId: 'r2' } }); port.open = [q2];
+    await b.offer(q2);
+    port.result = 'already';
+    expect(await b.textAnswer({ text: 'sì', replyTo: sent.at(-1)!.id }, null)).toBe('already');
+    const q3 = question({ ref: { kind: 'question', requestId: 'r3' } }); port.open = [q3];
+    await b.offer(q3);
+    advance(25 * 3600_000);
+    expect(await b.textAnswer({ text: 'sì', replyTo: sent.at(-1)!.id }, null)).toBeNull();
   });
 });
 

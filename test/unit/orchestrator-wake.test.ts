@@ -8,7 +8,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChatSummary, PendingRequest } from '../../src/shared/contract';
-import { APP_EVENT_LABEL, OrchestratorWake, wakeLine, type WakeSubmissionReceipt } from '../../src/main/chats/orchestrator-wake';
+import { APP_EVENT_LABEL, awayNote, OrchestratorWake, wakeLine, type WakeSubmissionReceipt } from '../../src/main/chats/orchestrator-wake';
 
 const chat = (p: Partial<ChatSummary> & { id: string }): ChatSummary => ({
   harness: 'claude', origin: 'app', title: p.id, cwd: 'C:/x', sessionId: null, model: null, effort: null, permissionMode: null,
@@ -157,7 +157,9 @@ describe('OrchestratorWake', () => {
     // Requests have their own identity and cannot replace another event from the same worker.
     expect(t).toContain('«map» (Claude): ha lasciato all\'utente un comando da eseguire:');
     expect(t).toContain('Richiesta originale cmd-a-0');
-    expect(t).toContain('Remote Control non supporta questa ricevuta');
+    expect(t).not.toContain('Remote Control non supporta');
+    // a command waits for the PC (#370)
+    expect(t).toContain('si decide solo lì');
   });
 
   it('original requests wake the Orchestrator in one group without needing another failure', async () => {
@@ -631,4 +633,13 @@ describe('workflow completion wake', () => {
       expect(sent).toHaveLength(1); expect(sent[0]!.text).toContain('Ready for review'); w.stop();
     } finally { vi.useRealTimers(); }
   });
+});
+
+it('a worker Sì/No question tells the Orchestrator to relay it away from the PC; the rest waits for the PC (#370)', () => {
+  const yn: Pick<PendingRequest, 'type' | 'tool' | 'chatId' | 'questions'> = { type: 'question', tool: 'AskUserQuestion', chatId: 'qa', questions: [{ question: 'Apro il bug?', multiSelect: false, options: [{ label: 'Sì (consigliato)', description: 'lo apro' }, { label: 'No' }] }] };
+  expect(awayNote(yn)).toContain('relay_question {"chatId":"qa"}');
+  expect(awayNote(yn)).toContain('pulsanti Sì/No');
+  expect(awayNote({ ...yn, questions: [{ question: 'Quale?', multiSelect: false, options: [{ label: 'A' }, { label: 'B' }] }] })).not.toContain('relay_question');
+  expect(awayNote({ ...yn, tool: 'mcp__x__ask' })).not.toContain('relay_question');
+  expect(awayNote({ type: 'permission', tool: 'Bash', chatId: 'fb' })).toContain('si decide solo lì');
 });
