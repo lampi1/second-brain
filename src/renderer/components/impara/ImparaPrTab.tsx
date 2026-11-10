@@ -3,7 +3,7 @@
 // filters (to study, half studied, studied, all) with their counts; in the middle the user's PRs (the Task page's,
 // live); on the right the open PR: repository, branches, author and date, reviewers and build, its work items, the
 // link, and its lesson (how far it got, «Studiala» or «Riprendi», which starts or opens it: the click is the ask).
-// With no PR yet, «Leggi le PR ora» reads them (the Task page's refresh). Keys: J/K move, Invio or E studies, O opens the PR. Used by ImparaPage.tsx; styles news.css (.nw-*).
+// With no PR yet, «Leggi le PR ora» reads them (the Task page's refresh). Keys: J/K move, E studies, O opens the PR. Used by ImparaPage.tsx; styles news.css (.nw-*).
 import { useEffect, useMemo, useState } from 'react';
 import type { DevopsPr } from '@shared/contract';
 import type { LessonStart, LessonSummary } from '@shared/lesson';
@@ -92,7 +92,8 @@ export function ImparaPrTab() {
       const k = e.key.toLowerCase();
       if (k === 'j' || k === 'arrowdown') { e.preventDefault(); setSel(i => Math.min(list.length - 1, i + 1)); }
       else if (k === 'k' || k === 'arrowup') { e.preventDefault(); setSel(i => Math.max(0, i - 1)); }
-      else if ((k === 'e' || k === 'enter') && pr) { e.preventDefault(); document.querySelector<HTMLButtonElement>(`[data-testid="impara-pr-${pr.id}"]`)?.click(); }
+      // E only: Enter belongs to the focused control (a filter, a tab, a link), a row handles its own
+      else if (k === 'e' && pr) { e.preventDefault(); document.querySelector<HTMLButtonElement>(`[data-testid="impara-pr-${pr.id}"]`)?.click(); }
       else if (k === 'o' && pr) { e.preventDefault(); document.querySelector<HTMLAnchorElement>('[data-testid="impara-pr-open"]')?.click(); }
       else if (/^[1-4]$/.test(k)) { e.preventDefault(); setFilter(FILTERS[Number(k) - 1]!); setSel(0); }
     };

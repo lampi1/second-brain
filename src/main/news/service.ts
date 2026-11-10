@@ -53,6 +53,10 @@ interface Saved {
   autoDay?: string;
   /** default sources the user removed: a newer default list does not bring them back */
   removed?: string[];
+  /** links seen but not kept (a first reading's undated archive, stories aged out or trimmed): never new again */
+  seen?: string[];
+  /** sources read successfully at least once: a later failure does not make the next reading a «first» one */
+  everRead?: string[];
 }
 
 const MAX_BODY = 4_000_000;
@@ -63,6 +67,7 @@ const PARALLEL = 6;
 const SUMMARY_DAYS = 14;
 const DAY = 86_400_000;
 const CHECK_MS = 15 * 60_000;
+const SEEN_MAX = 5000;
 
 /** The app's GET: a deadline, redirects followed, the body capped, a plain client name (never the user's). */
 export const netFetch: NewsFetch = async url => {
@@ -73,6 +78,18 @@ export const netFetch: NewsFetch = async url => {
   return { status: r.status, contentType: r.headers.get('content-type') ?? '', text: text.length > MAX_BODY ? text.slice(0, MAX_BODY) : text };
 };
 
+/** Whether a link may be fetched for its date: https on a public host (never loopback, the LAN or link-local). */
+export function publicHttps(url: string): boolean {
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'https:') return false;
+    const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+    if (h === 'localhost' || h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal') || !h.includes('.') && !h.includes(':')) return false;
+    if (/^(127\.|10\.|0\.|169\.254\.|192\.168\.)/.test(h) || /^172\.(1[6-9]|2\d|3[01])\./.test(h)) return false;
+    if (h.includes(':') && (h === '::1' || h === '::' || /^(fc|fd|fe80)/.test(h) || h.startsWith('::ffff:'))) return false;
+    return true;
+  } catch { return false; }
+}
 const idOf = (url: string) => createHash('sha1').update(canonicalUrl(url)).digest('hex').slice(0, 12);
 const localDay = (t: number) => { const d = new Date(t); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 /** A short, user-facing reason for a failed reading (never a stack). */
@@ -140,7 +157,7 @@ export class NewsService {
   }
 
   /** One source's stories now (no AI). */
-  private async read(src: NewsSource, known: ReadonlySet<string>, firstRead: boolean): Promise<RawStory[]> {
+  private async read(src: NewsSource, known: ReadonlySet<string>, firstRead: boolean): Promise<{ stories: RawStory[]; dropped: string[] }> {
     const r = await this.d.fetch(src.url);
     if (r.status === 429) throw new Error('HTTP 429: troppe richieste, riprovo al prossimo aggiornamento');
     if (r.status < 200 || r.status >= 300) throw new Error(`HTTP ${r.status}`);
@@ -164,13 +181,15 @@ export class NewsService {
     // a page that lists no dates: its NEW stories are dated from their own article (zero tokens, a few requests)
     let lookups = 0;
     for (const s of out) {
-      if (s.at !== null || known.has(idOf(s.url)) || lookups >= (firstRead ? FIRST_LOOKUPS : DATE_LOOKUPS)) continue;
+      if (s.at !== null || known.has(idOf(s.url)) || !publicHttps(s.url) || lookups >= (firstRead ? FIRST_LOOKUPS : DATE_LOOKUPS)) continue;
       lookups++;
       try { const a = await this.d.fetch(s.url); if (a.status >= 200 && a.status < 300) s.at = articleDate(a.text); } catch { /* stays undated */ }
     }
     // on a source's first reading a story still without a date is most likely old (pages list their archive too):
     // it is left out rather than shown as new; later, a link that was not there before is new, dated when first seen
-    return out.filter(s => !firstRead || s.at !== null).map(s => ({ ...s, title: titled(s.title, src) }));
+    // (remembered as seen, so the next reading does not take that archive for new)
+    const dropped = out.filter(s => firstRead && s.at === null).map(s => idOf(s.url));
+    return { stories: out.filter(s => !firstRead || s.at !== null).map(s => ({ ...s, title: titled(s.title, src) })), dropped };
   }
 
   /** «Aggiorna»: read, merge, rank, summarize. One at a time: a second click joins the running one. */
@@ -182,7 +201,9 @@ export class NewsService {
   private async doRefresh(): Promise<NewsRefresh> {
     const t0 = this.now();
     const on = this.s.sources.filter(s => s.on);
-    const known = new Set(this.s.items.flatMap(i => [i.id, ...i.also.map(a => idOf(a.url))]));
+    const known = new Set([...this.s.items.flatMap(i => [i.id, ...i.also.map(a => idOf(a.url))]), ...(this.s.seen ?? [])]);
+    const dropped: string[] = [];
+    const stillThere = (id: string) => this.s.sources.some(x => x.id === id);
     this.progress = { phase: 'fetch', done: 0, total: on.length };
     this.emit();
     const got: { src: NewsSource; stories: RawStory[] }[] = [];
@@ -192,17 +213,23 @@ export class NewsService {
       for (let src = queue.shift(); src; src = queue.shift()) {
         const at = this.now();
         try {
-          const stories = await this.read(src, known, !this.s.status[src.id]?.ok);
+          const r = await this.read(src, known, !this.s.status[src.id]?.ok && !(this.s.everRead ?? []).includes(src.id));
+          // a source removed while it was being read leaves no trace
+          if (!stillThere(src.id)) continue;
+          const stories = r.stories;
+          dropped.push(...r.dropped);
+          if (!(this.s.everRead ?? []).includes(src.id)) this.s.everRead = [...(this.s.everRead ?? []), src.id];
           const fresh = stories.filter(x => !known.has(idOf(x.url))).length;
           this.s.status[src.id] = { at, ok: true, found: stories.length, fresh };
           got.push({ src, stories });
           found += stories.length;
         } catch (e) {
           failed++;
-          this.s.status[src.id] = { at, ok: false, error: why(e), found: 0, fresh: 0 };
+          if (stillThere(src.id)) this.s.status[src.id] = { at, ok: false, error: why(e), found: 0, fresh: 0 };
+        } finally {
+          this.progress = { phase: 'fetch', done: (this.progress?.done ?? 0) + 1, total: on.length };
+          this.emit();
         }
-        this.progress = { phase: 'fetch', done: (this.progress?.done ?? 0) + 1, total: on.length };
-        this.emit();
       }
     };
     await Promise.all(Array.from({ length: Math.min(PARALLEL, on.length) }, worker));
@@ -265,7 +292,18 @@ export class NewsService {
         }
       } catch (e) { aiError = why(e); }
     }
-    this.s.items = this.trim(items);
+    // what the user did while this refresh ran (read, saved, a lesson) is on the current stories: carry it over
+    const now2 = new Map(this.s.items.map(i => [i.id, i]));
+    items = items.map(i => {
+      const c = now2.get(i.id);
+      return c ? { ...i, read: c.read, saved: c.saved, ...(c.lesson ? { lesson: c.lesson } : {}) } : i;
+    });
+    const final = this.trim(items);
+    // a story that leaves the paper (aged out, trimmed) and a first reading's undated archive stay known
+    const keptIds = new Set(final.flatMap(i => [i.id, ...i.also.map(a => idOf(a.url))]));
+    const gone = [...this.s.items, ...items].flatMap(i => [i.id, ...i.also.map(a => idOf(a.url))]).filter(id => !keptIds.has(id));
+    this.s.seen = [...new Set([...(this.s.seen ?? []), ...dropped, ...gone])].filter(id => !keptIds.has(id)).slice(-SEEN_MAX);
+    this.s.items = final;
     const done: NewsRefresh = { at: t0, durationMs: this.now() - t0, sources: on.length, failed, found, fresh: fresh.length, merged: mergedN, summarized, tokens, costUsd, ...(aiError ? { aiError } : {}) };
     this.s.history = [...this.s.history, done].slice(-20);
     this.save();
