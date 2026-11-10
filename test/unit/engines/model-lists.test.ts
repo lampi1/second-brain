@@ -1,5 +1,5 @@
 // The live model lists (src/main/engines/model-lists.ts, ADR 0256): for every engine kind (Claude Code, Codex, an ACP
-// CLI such as Cursor, an HTTP engine) the live path (its own source answers), the cached path (the source fails after
+// CLI such as Cursor, whose live list is its chats', an HTTP engine) the live path (its own source answers), the cached path (the source fails after
 // a list was saved: the list stays) and the fallback path (no list yet: the brain's models.json rows); the parsers of
 // each source; the read side (withApiModels) that falls back to models.json and adds the Models API's new Claude
 // models; and routing taking a model models.json does not know. Fake channels only: no process, no network.
@@ -56,7 +56,7 @@ function lists(over: Partial<ModelListDeps> & { open?: ModelListDeps['open'] }) 
   const deps: ModelListDeps = {
     engines: () => ['claude', 'codex', 'cursor', 'anthropic'].map(id => engineOf(id)!).filter(Boolean),
     open: () => ({ error: 'non installata' }), fetchJson: () => Promise.reject(new Error('offline')), key: () => null,
-    store, registry: e => TEST_REGISTRY.models.filter(m => m.harness === e.id), cwd: tmpDir(), appVersion: '0.1.0', changed, ...over,
+    store, registry: e => TEST_REGISTRY.models.filter(m => m.harness === e.id), appVersion: '0.1.0', changed, ...over,
   };
   return { m: new ModelLists(deps), store, changed };
 }
@@ -118,18 +118,31 @@ describe('each harness: live, cached, fallback', () => {
     warn.mockRestore();
   });
 
-  it('Cursor (ACP): live from session/new in the probe folder; cached; fallback to its models.json rows', async () => {
-    const cwd = tmpDir();
-    const ch = acpCli({ sessionId: 's1', models: { availableModels: [{ modelId: 'grok-5', name: 'Grok 5' }, { modelId: 'composer-3', name: 'Composer 3' }] } });
-    const a = lists({ engines: () => [engineOf('cursor')!], open: () => ch, cwd });
-    expect(await a.m.refresh()).toEqual([{ engine: 'cursor', ok: true, count: 2 }]);
-    expect(ch.sent.find(m => m.method === 'session/new')).toMatchObject({ params: { cwd, mcpServers: [] } });
+  it('Cursor (ACP): live from its chat\'s session/new (never started only to ask); cached; fallback to models.json', async () => {
+    const open = vi.fn(() => acpCli({}));
+    const a = lists({ engines: () => [engineOf('cursor')!], open });
+    // the live source: a Cursor chat's session/new, recorded by the chat manager (wiring.ts onModels)
+    a.store.record('cursor', acpModels({ sessionId: 's1', models: { availableModels: [{ modelId: 'grok-5', name: 'Grok 5' }, { modelId: 'composer-3', name: 'Composer 3' }] } }));
+    expect(ids(withApiModels(a.store.get()).cursor?.ids)).toEqual(['grok-5', 'composer-3']);
     const warn = vi.spyOn(log, 'warn').mockImplementation(() => {});
-    const failing = new ModelLists({ ...(a.m as unknown as { d: ModelListDeps }).d, open: () => ({ error: 'Cursor CLI non trovata' }) });
-    expect(await failing.refresh()).toMatchObject([{ engine: 'cursor', ok: false, count: 2, using: 'cache', error: 'Cursor CLI non trovata' }]);
+    expect(await a.m.refresh()).toMatchObject([{ engine: 'cursor', ok: false, count: 2, using: 'cache' }]);
+    expect(open).not.toHaveBeenCalled(); // rule 4: `agent` only for Cursor chats
     const fresh = lists({ engines: () => [engineOf('cursor')!] });
     expect(await fresh.m.refresh()).toMatchObject([{ engine: 'cursor', ok: false, count: 1, using: 'registry' }]);
     warn.mockRestore();
+  });
+
+  it('closes a CLI still answering when the app quits', async () => {
+    const ch = fakeCli(() => undefined);
+    let release: (m: Obj) => void = () => {};
+    ch.reply = () => new Promise(r => { release = r; });
+    const a = lists({ engines: () => [engineOf('claude')!], open: () => ch });
+    const run = a.m.refresh();
+    await Promise.resolve();
+    a.m.stop();
+    expect(ch.closed).toBe(true);
+    release({});
+    await run;
   });
 
   it('an HTTP engine: live from the Models API with its own key only; cached; no key = not asked', async () => {

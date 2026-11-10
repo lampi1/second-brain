@@ -1,22 +1,24 @@
 // Starts an engine's CLI only to ask for its models (ADR 0256), for engines/model-lists.ts: the same binary and the
 // same resolution the chats use (chats/cli.ts), no prompt ever sent (no token spent), killed as soon as the answer
-// came. Claude Code runs with no MCP server and no saved session; Cursor reads the app's own copy of its config folder
-// (the one its chats use: rule 6, the user's own Cursor config is never the one started), so it is asked only after
-// its first chat in the app made that copy. Tests never start a real CLI (engineAllowed); the unit tests pass fake
-// channels to ModelLists instead of this file.
+// came or the app quits (ModelLists.stop). Claude Code runs with no MCP server, no claude.ai connector, no hook and no
+// saved session; Codex's app-server opens no thread. ACP CLIs are never started here (rule 4: `agent` only for Cursor
+// chats; their lists come from their chats). Tests never start a real CLI (engineAllowed); the channel is tested with
+// an injected spawn (test/unit/engines/model-probe.test.ts).
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
-import path from 'node:path';
 import { cliArgv, commandFor, engineAllowed, killTrees, resolveAcp, resolveClaude } from '../chats/cli';
 import { ownProcessGroup } from '../platform';
 import type { LineChannel, OpenProbe } from './model-lists';
 import type { EngineDef } from './registry';
 
 type Obj = Record<string, unknown>;
-const CLAUDE_ARGS = ['-p', '--output-format', 'stream-json', '--verbose', '--input-format', 'stream-json', '--strict-mcp-config', '--no-session-persistence'];
+const CLAUDE_ARGS = ['-p', '--output-format', 'stream-json', '--verbose', '--input-format', 'stream-json', '--strict-mcp-config', '--no-session-persistence',
+  '--settings', JSON.stringify({ disableAllHooks: true })];
 
-/** The probe opener of the app: userData holds the Cursor config copy; cwd is an empty folder the CLI starts in. */
-export function cliProbe(userData: string, cwd: string): OpenProbe {
+type Spawn = typeof spawn;
+
+/** The probe opener of the app: cwd is an empty folder the CLI starts in. */
+export function cliProbe(cwd: string, spawnFn: Spawn = spawn): OpenProbe {
   return (e: EngineDef) => {
     try { fs.mkdirSync(cwd, { recursive: true }); } catch { /* spawn reports it */ }
     let start: { command: string; args: string[]; env: NodeJS.ProcessEnv; verbatim: boolean };
@@ -25,25 +27,22 @@ export function cliProbe(userData: string, cwd: string): OpenProbe {
       if (!cli || !fs.existsSync(cli)) return { error: 'motore Claude non trovato' };
       if ((process.env.SB_TEST || process.env.VITEST) && !/\.mjs$/i.test(cli)) return { error: 'nei test il motore reale non parte' };
       start = { ...commandFor(cli, CLAUDE_ARGS, process.env), verbatim: false };
-    } else {
+      start.env = { ...start.env, ENABLE_CLAUDEAI_MCP_SERVERS: '0' };
+    } else if (e.kind === 'codex') {
       const cmd = resolveAcp(e.id, e.command ?? e.id);
       if (!cmd) return { error: `${e.label} CLI non trovata` };
       if (!engineAllowed(cmd)) return { error: 'nei test il motore reale non parte' };
-      try { start = cliArgv(cmd, e.args ?? (e.kind === 'codex' ? ['app-server'] : [])); } catch (err) { return { error: String(err) }; }
-      if (e.cursorExtras) {
-        const dir = path.join(userData, `${e.id}-config`);
-        if (!fs.existsSync(dir)) return { error: `${e.label}: l'elenco arriva alla prima chat nell'app` };
-        start.env = { ...start.env, CURSOR_CONFIG_DIR: dir };
-      }
-    }
-    return channel(start, cwd);
+      try { start = cliArgv(cmd, e.args ?? ['app-server']); } catch (err) { return { error: String(err) }; }
+    } else return { error: `${e.label}: non parte solo per chiedere i modelli` };
+    return channel(start, cwd, spawnFn);
   };
 }
 
-function channel(c: { command: string; args: string[]; env: NodeJS.ProcessEnv; verbatim: boolean }, cwd: string): LineChannel | { error: string } {
+/** A JSON-lines channel on a started CLI (exported for its unit test). */
+export function channel(c: { command: string; args: string[]; env: NodeJS.ProcessEnv; verbatim: boolean }, cwd: string, spawnFn: Spawn = spawn): LineChannel | { error: string } {
   let proc: ReturnType<typeof spawn>;
   try {
-    proc = spawn(c.command, c.args, { cwd, env: c.env, windowsHide: true, detached: ownProcessGroup(), stdio: ['pipe', 'pipe', 'ignore'], windowsVerbatimArguments: c.verbatim });
+    proc = spawnFn(c.command, c.args, { cwd, env: c.env, windowsHide: true, detached: ownProcessGroup(), stdio: ['pipe', 'pipe', 'ignore'], windowsVerbatimArguments: c.verbatim });
   } catch (err) { return { error: String(err) }; }
   const seen: Obj[] = [];
   const waiters = new Set<{ match: (m: Obj) => boolean; ok: (m: Obj) => void; ko: (e: Error) => void }>();
@@ -75,7 +74,7 @@ function channel(c: { command: string; args: string[]; env: NodeJS.ProcessEnv; v
         waiters.add(w);
       });
     },
-    close: () => { try { proc.stdin?.end(); } catch { /* gone */ } killTrees([proc.pid], { fallback: () => proc.kill() }); },
+    close: () => { try { proc.stdin?.end(); } catch { /* gone */ } if (proc.pid) killTrees([proc.pid], { fallback: () => proc.kill() }); else proc.kill(); },
   };
 }
 

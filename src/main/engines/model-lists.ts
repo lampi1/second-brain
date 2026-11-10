@@ -5,8 +5,9 @@
 //   claude  Claude Code's own `initialize` reply (stream-json control_request): `models` [{value, resolvedModel,
 //           displayName, supportedEffortLevels}], what the user's login can run; no prompt is ever sent
 //   codex   `codex app-server`: initialize, then model/list {data:[{model|id, displayName, hidden}]}
-//   acp     any ACP CLI (Cursor, OpenCode, a catalog engine): initialize, then session/new's models.availableModels or
-//           (OpenCode) its configOptions of category model
+//   acp     any ACP CLI (Cursor, OpenCode, a catalog engine): only what its chats' session/new listed (acpModels
+//           parses the same shape). It is never started only to ask: rule 4 (`agent` only for Cursor chats) and a
+//           session/new would leave an empty session in the user's own history
 //   api     the endpoint's own listing with the engine's own key (ADR 0046: the key goes only to its engine's header):
 //           OpenAI-compatible GET <baseUrl>/models, Anthropic GET <baseUrl>/models (the Models API)
 // The result goes to the ModelsSeenStore (brain/models-seen.ts), which is the cache. Fallback when a source fails: the
@@ -102,10 +103,6 @@ async function codexList(ch: LineChannel, appVersion: string): Promise<SeenModel
   return codexModels(await call(ch, 2, 'model/list', {}, false));
 }
 
-async function acpList(ch: LineChannel, appVersion: string, cwd: string): Promise<SeenModel[]> {
-  await call(ch, 1, 'initialize', { protocolVersion: 1, clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false }, clientInfo: { name: 'second-brain', version: appVersion } }, true);
-  return acpModels(await call(ch, 2, 'session/new', { cwd, mcpServers: [] }, true));
-}
 
 async function apiList(e: EngineDef, key: string, fetchJson: FetchJson): Promise<SeenModel[]> {
   const base = (e.baseUrl ?? '').replace(/\/+$/, '');
@@ -127,8 +124,6 @@ export interface ModelListDeps {
   store: { get(): ModelsSeen; record(engine: Harness, list: SeenModel[]): void };
   /** the brain's models.json rows of an engine (the last fallback), to say what the picker shows after a failure */
   registry: (engine: EngineDef) => readonly { id: string }[];
-  /** an empty folder for an ACP session/new */
-  cwd: string;
   appVersion: string;
   /** after a refresh that changed a list: the pickers re-read (agent catalog refresh) */
   changed?: () => void;
@@ -144,8 +139,11 @@ export class ModelLists {
   private timers: ReturnType<typeof setTimeout>[] = [];
   constructor(private readonly d: ModelListDeps) {}
 
+  private open = new Set<LineChannel>();
+
   /** One engine's models from its live source now; throws why not. */
   async live(e: EngineDef): Promise<SeenModel[]> {
+    if (e.kind === 'acp') throw new Error('elenco dalle sue chat (la CLI non parte solo per chiedere)');
     if (e.kind === 'api') {
       const key = this.d.key(e.id);
       if (!key) throw new Error('nessuna chiave API');
@@ -153,9 +151,10 @@ export class ModelLists {
     }
     const ch = this.d.open(e);
     if ('error' in ch) throw new Error(ch.error);
+    this.open.add(ch);
     try {
-      return e.kind === 'claude' ? await claudeList(ch) : e.kind === 'codex' ? await codexList(ch, this.d.appVersion) : await acpList(ch, this.d.appVersion, this.d.cwd);
-    } finally { ch.close(); }
+      return e.kind === 'claude' ? await claudeList(ch) : await codexList(ch, this.d.appVersion);
+    } finally { this.open.delete(ch); ch.close(); }
   }
 
   /** Ask each engine (or the one named) now. A list read replaces the cached one; a failure keeps it and is logged.
@@ -197,8 +196,11 @@ export class ModelLists {
     this.timers = [a, b];
   }
 
+  /** The timers off and every CLI still answering closed (the app quits). */
   stop(): void {
     for (const t of this.timers) { clearTimeout(t); clearInterval(t); }
     this.timers = [];
+    for (const ch of this.open) ch.close();
+    this.open.clear();
   }
 }

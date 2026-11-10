@@ -36,8 +36,9 @@ large tree.
 
 ## 4. Each harness spends only its own tokens
 
-The app starts `claude` only for Claude chats and `agent` only for Cursor chats and for the token-free login check
-(`agent status`), with the user's own login. An agent working on this repo inside Claude Code never runs
+The app starts `claude` only for Claude chats and for the token-free model list (its `initialize` reply, no prompt,
+ADR 0256), and `agent` only for Cursor chats and for the token-free login check (`agent status`), with the user's own
+login. An agent working on this repo inside Claude Code never runs
 the Cursor CLI.
 
 ## 5. No production from agents or routines

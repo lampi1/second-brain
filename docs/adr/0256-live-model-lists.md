@@ -13,11 +13,14 @@ file. The demo registry (`brain/routing-demo.ts`) and the template repeated mode
 ## Decision
 - **One live source per engine kind** (`engines/model-lists.ts`), none of which spends a token:
   Claude Code's own `initialize` reply (`models`: each alias under the id it resolves to, with its effort levels; a
-  chat's initialize reports it too, `chats/claude.ts`), Codex's `model/list`, an ACP CLI's `session/new` (models or
-  OpenCode's configOptions), an HTTP engine's `GET <baseUrl>/models` with its own key (Anthropic Models API, OpenAI
-  compatible). The CLI is started only to ask (`engines/model-probe.ts`): no MCP server, no saved session, no prompt;
-  Cursor reads the app's own copy of its config folder, so it is asked only once its first app chat made that copy.
-- **Refresh**: soon after the start, every 6 h, and on demand («Aggiorna elenco» in the model picker,
+  chat's initialize reports it too, `chats/claude.ts`), Codex's `model/list`, an HTTP engine's `GET <baseUrl>/models`
+  with its own key (Anthropic Models API, OpenAI compatible). Claude Code and Codex are started only to ask
+  (`engines/model-probe.ts`): no prompt, no MCP server, no claude.ai connector, no hook, no saved session or thread;
+  closed when the app quits. Rule 4 now names this token-free listing. ACP CLIs (Cursor, OpenCode, catalog engines)
+  are never started only to ask: rule 4 keeps `agent` to Cursor chats, and an ACP `session/new` would leave an empty
+  session in the user's own history; their list is the one their last chat's `session/new` gave (cached), else
+  models.json.
+- **Refresh** (Claude, Codex, HTTP engines): soon after the start, every 6 h, and on demand («Aggiorna elenco» in the model picker,
   `models:refresh`). Only engines turned on are asked; a refresh already running is joined.
 - **Cache and fallback**: the list goes to the ModelsSeenStore (userData `cursor-models.json`). A failed source is
   logged (`model list not refreshed`, with what the picker shows instead) and the last list stays; an engine that never
@@ -37,5 +40,6 @@ file. The demo registry (`brain/routing-demo.ts`) and the template repeated mode
 - A new model returned by any engine's source appears in every picker and routing accepts it, with no file edit.
 - The live cost of a model with no price row is still estimated at the table's `defaultModel` price (as `prices.mjs`
   does, flagged unpriced in the brain's cost report); the picker shows that its price is unknown.
-- Not verified on real CLIs from this container: Codex, Cursor and OpenCode answers are the shapes their chats already
-  parse; the Claude Code shape was read from the bundled CLI (2026-11-10).
+- Cursor and OpenCode refresh only when one of their chats opens; «Aggiorna elenco» says they were not asked.
+- Not verified on real CLIs from this container: the Codex answer is the shape its chats already parse; the Claude
+  Code shape was read from the bundled CLI (2026-11-10).

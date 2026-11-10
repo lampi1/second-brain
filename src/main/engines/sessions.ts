@@ -143,7 +143,8 @@ export function withApiModels(seen: ModelsSeen): ModelsSeen {
     const extra = e.kind === 'claude' && api ? (seen[api.id]?.ids ?? []).filter(m => /^claude-/.test(m.id)) : [];
     const have = new Set((out[e.id]?.ids ?? []).map(m => m.id.replace(/-\d{8}$/, '')));
     const add = extra.filter(m => !have.has(m.id.replace(/-\d{8}$/, '')));
-    if (add.length) out[e.id] = { ids: [...(out[e.id]?.ids ?? []), ...add], at: out[e.id]?.at || seen[api!.id]!.at };
+    // a registry fallback (at 0) stays labelled so: only the ids are added
+    if (add.length) out[e.id] = { ids: [...(out[e.id]?.ids ?? []), ...add], at: out[e.id] ? out[e.id]!.at : seen[api!.id]!.at };
   }
   return out;
 }

@@ -228,9 +228,9 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // the engines' live model lists (ADR 0256): asked soon after the start, then every 6 h and on «Aggiorna elenco»;
   // only the engines turned on; a failure keeps the cached list (brain.recordModels' file), then models.json
   const modelLists = new ModelLists({
-    engines: () => engineList().filter(e => engineOn(brain.settings(), e.id)), open: cliProbe(ctx.userData, path.join(ctx.userData, 'model-probe')), fetchJson,
+    engines: () => engineList().filter(e => engineOn(brain.settings(), e.id)), open: cliProbe(path.join(ctx.userData, 'model-probe')), fetchJson,
     key: h => engines.keyFor(h), store: { get: () => brain.modelsSeen(), record: (h, list) => brain.recordModels(h, list) },
-    registry: e => registryModels(priceEnginesOf(e)), cwd: path.join(ctx.userData, 'model-probe'), appVersion: app.getVersion(), changed: () => agents.refresh(),
+    registry: e => registryModels(priceEnginesOf(e)), appVersion: app.getVersion(), changed: () => agents.refresh(),
   });
   if (!process.env.SB_TEST && !process.env.SB_DEMO) modelLists.start();
   brain.onSettingChange(c => { if (c.key === 'brainRoot' || c.key.startsWith('engineOn.') || c.key === 'orchestratorChats.harness' || c.key.startsWith('modelTiers.')) agents.refresh(); });

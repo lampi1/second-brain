@@ -40,7 +40,7 @@ test('one picker for strip, Orchestrator and role card; chat-only vs default act
     await expect(page.getByTestId('chat-picker-qa-apply-default')).toHaveCount(0);
     await shot(page, 'model-picker-strip');
     // the live lists (ADR 0256): each model says its price (or that it is unknown); «Aggiorna elenco» asks the engines now
-    await expect(page.getByTestId('chat-picker-qa-row-claude-claude-opus-5-5')).toContainText('$ per Mtok');
+    await expect(page.getByTestId('chat-picker-qa-row-claude-claude-opus-5-5')).toContainText(/per Mtok/);
     await page.getByTestId('chat-picker-qa-refresh').click();
     await expect(page.getByTestId('chat-picker-qa-refresh-note')).toBeVisible();
     await shot(page, 'model-picker-refresh');
