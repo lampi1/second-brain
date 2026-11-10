@@ -1,5 +1,6 @@
 // The shapes behind ChatManager (manager.ts): its options, the per-chat record (Rec) and the small records its layers
 // pass around. Split out of manager.ts (ADR 0200); only the chat manager's files import Rec.
+import type { OptionMap } from '../../shared/yes-no';
 import type { ChatCommand, ChatItem, ChatSummary, CursorReasoning, Effort, HandoffInfo, Harness, Lang, NewChat, PendingRequest, PermissionMode, RunInfo, SeenModel } from '../../shared/contract';
 import type { Emitter } from '../ipc';
 import type { HarnessSession, SessionOptions, SessionSink } from './session';
@@ -28,6 +29,8 @@ export interface ChatManagerOptions {
   writeRetryMs?: number;
   /** a brief waits for this chat's next question (genui/artifacts.ts hasBrief, ADR 0150); absent = none asked for */
   briefReady?: (chatId: string) => boolean;
+  /** the engine's own Sì / No labels this chat's waiting brief declares (genui/artifacts.ts briefOptions, #378) */
+  briefOptions?: (chatId: string) => OptionMap | null;
   /** the roles in a few lines, for the Orchestrator's first message of a session (agents/discovery.ts roleCatalogBrief) */
   roleCatalogBrief?: () => string;
   /** the language the user wants replies in (ADR 0120: locale.ts uiLang, the setting or Windows'); absent = not named */

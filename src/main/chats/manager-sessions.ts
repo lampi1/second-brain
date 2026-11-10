@@ -363,6 +363,8 @@ export abstract class ManagerSessions extends ManagerPersistence {
   private newSession(harness: Harness, opts: SessionOptions, sink: SessionSink, r: Rec | undefined): HarnessSession {
     const brief = this.opts.briefReady;
     if (brief) opts = { ...opts, briefReady: () => brief(opts.chatId) };
+    const options = this.opts.briefOptions;
+    if (options) opts = { ...opts, briefOptions: () => options(opts.chatId) };
     if (this.opts.sessionFactory) return this.opts.sessionFactory(harness, opts, sink);
     const override = this.opts.enginePaths?.[harness];
     return sessionFor(engineOrThrow(harness), opts, sink, {

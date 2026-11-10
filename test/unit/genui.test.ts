@@ -141,6 +141,17 @@ describe('Artifacts: the store behind show_ui', () => {
     store.stop();
   });
 
+  it('a brief can map the engine\'s own option labels to Sì / No for its question (#378)', () => {
+    const { store } = setup([chat('w')]);
+    store.show('w', args({ id: 'b', component: 'brief', props: brief, target: 'next-ask' }));
+    expect(store.briefOptions('w')).toBeNull();
+    store.show('w', args({ id: 'b', component: 'brief', props: { ...brief, yesOption: 'Approve Plan', noOption: 'Request Changes' }, target: 'next-ask' }));
+    expect(store.briefOptions('w')).toEqual({ yes: 'Approve Plan', no: 'Request Changes' });
+    store.observe('pending:added', question('w', 'q1'));
+    expect(store.briefOptions('w')).toBeNull(); // used by that question
+    store.stop();
+  });
+
   it('a brief screenshot the card could not show is sent back at once, naming the evidence folder', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-genui-'));
     const store = new Artifacts({ dir, chats: () => [chat('w')], emit: () => {}, askWaitMs: 60_000, evidenceDir: 'C:\\sb\\evidence',

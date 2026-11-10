@@ -627,6 +627,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/renderer/components/QuestionsWindow.tsx
       b('Nella finestra puoi rispondere in qualsiasi ordine dalla colonna a sinistra; Esc vuol dire «Ci penso dopo», non «rifiuta». La scheda aperta non cambia mentre la leggi: se l’agente scrive altro compare un avviso, e «Mostra» lo aggiunge. Un comando lasciato dalla chat viene prima della sua domanda: «Sì, eseguilo» lo lancia qui e l’esito risponde da solo.',
         'In the window you can answer in any order from the left rail; Esc means "Think about it later", not "deny". The open card does not change while you read it: if the agent writes more a notice appears, and "Show" adds it. A command the chat left comes before its question: "Yes, run it" runs it here and the result answers by itself.'),
+      // src/shared/yes-no.ts mappedYesNo; src/main/chats/claude.ts refuseNotYesNo; src/main/chats/acp.ts (#378)
+      b('Se uno strumento dell’agente accetta solo le sue etichette (per esempio «Approve Plan» e «Request Changes»), la scheda ti mostra comunque Sì e No e la tua risposta gli arriva come quell’etichetta, la stessa che avresti scelto tu nella sua chat.',
+        'When a tool of the agent accepts only its own labels (for example «Approve Plan» and «Request Changes»), the card still shows you Sì and No and your answer reaches it as that label, the same one you would have picked in its chat.'),
       // src/renderer/lib/questions.ts TYPING_IDLE_MS
       b('Se stai scrivendo, una domanda nuova aspetta come pillola e compare 2 secondi dopo che smetti.',
         'If you are typing, a new question waits as a pill and appears 2 seconds after you stop.'),

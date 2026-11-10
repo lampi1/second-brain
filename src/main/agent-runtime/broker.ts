@@ -6,9 +6,11 @@ import type { CodexExecutionPolicy } from '../brain/adapters/codex-policy';
 import type { ListPrice } from '../chats/api';
 import { checkBaseUrl } from '../chats/api';
 import { errText, log } from '../log';
+import type { OptionMap } from '../../shared/yes-no';
 
 export interface BrokerCalls {
   brief: { input: undefined; output: boolean };
+  briefOptions: { input: undefined; output: OptionMap | null };
   decide: { input: PreToolCall; output: { deny: string } | null };
   turnEnded: { input: undefined; output: undefined };
   policy: { input: undefined; output: CodexExecutionPolicy | null };
@@ -19,16 +21,16 @@ export interface BrokerCalls {
 }
 export type BrokerRequest = { [K in keyof BrokerCalls]: { method: K; input: BrokerCalls[K]['input'] } }[keyof BrokerCalls];
 export type BrokerReply = BrokerCalls[keyof BrokerCalls]['output'];
-type Plain<T> = Omit<T, 'briefReady' | 'preToolUse' | 'apiKey' | 'pricesOf' | 'fetchImpl' | 'authenticatedRequest' | 'executionPolicy'>;
+type Plain<T> = Omit<T, 'briefReady' | 'briefOptions' | 'preToolUse' | 'apiKey' | 'pricesOf' | 'fetchImpl' | 'authenticatedRequest' | 'executionPolicy'>;
 export type WireAdapter = PreparedAdapter extends infer P ? P extends PreparedAdapter
-  ? { kind: P['kind']; options: Plain<P['options']>; callbacks: { brief: boolean; preTool: boolean } } : never : never;
+  ? { kind: P['kind']; options: Plain<P['options']>; callbacks: { brief: boolean; briefOptions?: boolean; preTool: boolean } } : never : never;
 
 export function wireAdapter(launch: PreparedAdapter): WireAdapter {
-  const { briefReady, preToolUse, ...rest } = launch.options;
+  const { briefReady, briefOptions, preToolUse, ...rest } = launch.options;
   const data = { ...rest } as Record<string, unknown>;
   for (const name of ['apiKey', 'pricesOf', 'fetchImpl', 'authenticatedRequest', 'executionPolicy']) delete data[name];
   // Reject new function-valued options rather than silently dropping an authorization hook.
-  return structuredClone({ kind: launch.kind, options: data, callbacks: { brief: !!briefReady, preTool: !!preToolUse } }) as WireAdapter;
+  return structuredClone({ kind: launch.kind, options: data, callbacks: { brief: !!briefReady, ...(briefOptions ? { briefOptions: true } : {}), preTool: !!preToolUse } }) as WireAdapter;
 }
 
 interface Stream {
@@ -50,6 +52,10 @@ export class RuntimeBroker {
       case 'brief':
         try { return await launch.options.briefReady?.() ?? false; }
         catch (e) { log.error('chats', 'brief check failed; the question is shown', { chat: launch.options.chatId, cause: errText(e), hint: 'see briefReady in chats/manager-sessions.ts' }); return true; }
+      // the brief's own option labels (#378): a failure only means no mapping, the question goes through the usual gate
+      case 'briefOptions':
+        try { return await launch.options.briefOptions?.() ?? null; }
+        catch (e) { log.error('chats', 'brief options check failed; the question keeps its labels', { chat: launch.options.chatId, cause: errText(e), hint: 'see briefOptions in chats/manager-sessions.ts' }); return null; }
       case 'decide':
         try { return await launch.options.preToolUse?.decide(request.input) ?? null; }
         catch (e) { log.error('chats', 'pre-tool check failed; the call goes on', { chat: launch.options.chatId, cause: errText(e), hint: 'see preToolUse.decide in chats/' }); return null; }

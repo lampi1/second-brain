@@ -7,6 +7,7 @@
 // ARTIFACT_MAX_PER_CHAT per chat), so they survive a transcript reload and a restart; chat:items merges them in by time.
 // It watches the events main sends to the page (pending:added links, chat:removed forgets), like run/asks.ts.
 // Used by wiring.ts and demo-wiring.ts.
+import type { OptionMap } from '../../shared/yes-no';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { ArtifactTarget, ChatItem, ChatSummary, EventMap } from '../../shared/contract';
@@ -107,6 +108,13 @@ export class Artifacts {
   /** A brief (ADR 0150) waits for this chat's next question: the question gates ask for one before a yes/no question. */
   hasBrief(chatId: string): boolean {
     return this.items(chatId).some(i => i.waiting && i.ui.component === 'brief');
+  }
+
+  /** The engine's own Sì / No option labels the waiting brief declares (yesOption / noOption, #378); null = none. */
+  briefOptions(chatId: string): OptionMap | null {
+    const b = this.items(chatId).filter(i => i.waiting && i.ui.component === 'brief').sort((x, y) => y.at - x.at)[0];
+    const p = b?.ui.props as { yesOption?: string; noOption?: string } | undefined;
+    return p?.yesOption && p.noOption ? { yes: p.yesOption, no: p.noOption } : null;
   }
 
   /** A chat's items with its visuals put in by time (the chat's own order is kept as it is). */
@@ -242,7 +250,7 @@ export function showUiTool(store: Artifacts): McpTool {
     name: 'show_ui',
     description: [
       `Brief example: ${BRIEF_EXAMPLE}`,
-      'brief requires title and summary plus props.done (1–5 strings, or one string; each ≤200 chars), ifYes and ifNo (each ≤200 chars); optional why (one plain sentence ≤240), yesLabel / noLabel (the buttons, ≤32), yesSteps / noSteps (what happens next, ≤4 strings of ≤90), change {what ≤60, before ≤24, after ≤24}, todo (what the user must do himself, only when you cannot: ≤5 exact steps of ≤120). Use target next-ask, then ask the question. All shape errors are returned together.',
+      'brief requires title and summary plus props.done (1–5 strings, or one string; each ≤200 chars), ifYes and ifNo (each ≤200 chars); optional why (one plain sentence ≤240), yesLabel / noLabel (the buttons, ≤32), yesOption / noOption (≤60, only when a tool of yours accepts just its own option labels, e.g. "Approve Plan": ask with exactly those two and you get your label back), yesSteps / noSteps (what happens next, ≤4 strings of ≤90), change {what ≤60, before ≤24, after ≤24}, todo (what the user must do himself, only when you cannot: ≤5 exact steps of ≤120). Use target next-ask, then ask the question. All shape errors are returned together.',
       'Show the user a visual instead of a wall of text: a trusted component of the app\'s catalog, drawn by the app (never HTML). Prefer it for tables, options to choose from, boards (QA test cases, chat status), changed-file lists, charts. Keep it short.',
       'summary = the same content in one or two plain sentences (shown when the visual cannot be drawn). target: chat (default: a card in this chat) · orchestrator (in your Orchestrator\'s panel) · next-ask (attached to your next AskUserQuestion; with no question within 60 s it becomes a card here). The same id again replaces that visual (a board you update). It never answers a question or a permission: still ask with AskUserQuestion.',
       'props per component:',

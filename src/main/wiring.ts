@@ -312,6 +312,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     runs: chatId => runsRef.current?.list(chatId) ?? [],
     writeDelayMs: 250, // chats.json and agent-runs.json: one asynchronous write per burst (the main-process freezes, 2026-10-27)
     briefReady: chatId => briefRef.current?.hasBrief(chatId) ?? true,
+    briefOptions: chatId => briefRef.current?.briefOptions(chatId) ?? null,
     prepareDelegation: delegateWorktrees.prepare,
     reopenBlocked: delegateWorktrees.reopenBlocked,
     nextDelegationCwd: cwd => worktreePool.nextCwd(cwd),

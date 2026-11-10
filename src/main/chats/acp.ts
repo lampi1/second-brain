@@ -71,7 +71,7 @@ import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, ty
 import { AgentChildrenReporter } from './agent-children';
 import type { ChildObservation } from '../../shared/agents';
 import { recordWire } from './wire-record';
-import { BRIEF_GRACE_MS, BRIEF_REFUSAL, NOT_RAN_NOTE, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
+import { asYesNo, BRIEF_GRACE_MS, BRIEF_REFUSAL, mappedYesNo, NOT_RAN_NOTE, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
 
 export interface AcpOptions extends SessionOptions {
   /** send a question that is not yes/no back to the agent (shared/yes-no.ts, ADR 0135); default: yesNoGateOn(env) */
@@ -1395,6 +1395,13 @@ export class AcpSession implements HarnessSession {
       // not yes/no (ADR 0135), or yes/no without its brief (ADR 0150, after a moment for a show_ui sent in parallel):
       // skipped with how to ask, at most YESNO_RETRIES times in a row, then shown as it is
       const gate = (this.opts.yesNo ?? yesNoGateOn(process.env)) && questions.length > 0;
+      // the engine's own labels mapped to Sì / No by the brief (#378): the user answers Sì / No, the engine gets its option
+      const map = gate && !yesNoShape(questions) ? mappedYesNo(questions, await this.opts.briefOptions?.()) : null;
+      if (map && acp[0]) {
+        const byLabel = acp[0].byLabel;
+        acp[0].byLabel = new Map([['Sì', byLabel.get(map.yes) ?? ''], ['No', byLabel.get(map.no) ?? '']]);
+        questions[0] = asYesNo(questions[0]!, map);
+      }
       const yesNo = yesNoShape(questions);
       const waited = this.briefWaited.get(id); // set when this is the re-check after the grace
       const noBrief = gate && yesNo && !this.briefOff && !!this.opts.briefReady && !await this.opts.briefReady();

@@ -48,6 +48,7 @@ function launch(packet: Extract<RuntimePacket, { kind: 'launch' }>): boolean {
   const host = new HostSession(identity, sink => {
     const common = {
       ...(spec.callbacks.brief ? { briefReady: () => call('brief', undefined) } : {}),
+      ...(spec.callbacks.briefOptions ? { briefOptions: () => call('briefOptions', undefined) } : {}),
       ...(spec.callbacks.preTool ? { preToolUse: {
         decide: (input: BrokerCalls['decide']['input']) => call('decide', input),
         turnEnded: () => { void call('turnEnded', undefined).catch(fail); },

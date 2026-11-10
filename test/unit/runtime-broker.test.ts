@@ -57,3 +57,13 @@ it('a brief or pre-tool check that throws on main is answered by the broker, nev
   await expect(broker.call({ method: 'brief', input: undefined })).resolves.toBe(true); // shown, as with no brief check
   await expect(broker.call({ method: 'decide', input: { tool: 'Bash', input: {} } })).resolves.toBeNull(); // goes on, as in-process
 });
+
+it('carries the brief\'s option map across the broker (#378); a failing lookup only means no map', async () => {
+  const map = { yes: 'Approve Plan', no: 'Request Changes' };
+  const launch: PreparedAdapter = { kind: 'claude', options: { chatId: 'chat', cwd: '.', briefOptions: () => map } };
+  expect(wireAdapter(launch).callbacks).toMatchObject({ briefOptions: true });
+  expect(wireAdapter(launch).options).not.toHaveProperty('briefOptions');
+  await expect(new RuntimeBroker(launch).call({ method: 'briefOptions', input: undefined })).resolves.toEqual(map);
+  const failing: PreparedAdapter = { kind: 'claude', options: { chatId: 'chat', cwd: '.', briefOptions: () => { throw new Error('store gone'); } } };
+  await expect(new RuntimeBroker(failing).call({ method: 'briefOptions', input: undefined })).resolves.toBeNull();
+});

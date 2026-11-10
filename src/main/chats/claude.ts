@@ -51,7 +51,7 @@ import { AgentChildrenReporter } from './agent-children';
 import { bridgePatch, phoneText, readRemoteControlReply, type RemoteControlReply } from './remote-control';
 import type { ChildObservation } from '../../shared/agents';
 import { claudeMcp, claudeTools, suggestedAbove } from '../agents/tool-policy';
-import { BRIEF_GRACE_MS, BRIEF_REFUSAL, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
+import { asYesNo, BRIEF_GRACE_MS, BRIEF_REFUSAL, engineLabel, mappedYesNo, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape, type OptionMap } from '../../shared/yes-no';
 import { mcpForm, mcpFormAnswer, type McpForm } from '../../shared/mcp-form';
 import { WriteBarrier } from './write-barrier';
 import { recordWire } from './wire-record';
@@ -176,7 +176,7 @@ const WRITE_BARRIER_TIMEOUT_S = 120;
 const PERMISSION_MODES: readonly PermissionMode[] = ['default', 'acceptEdits', 'auto', 'plan', 'bypassPermissions'];
 const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 
-interface Call { requestId: string; tool: string; input: Obj; toolUseId: string; suggestions: unknown[]; question: boolean; noAlways: boolean; elicitation?: true; form?: McpForm }
+interface Call { requestId: string; tool: string; input: Obj; toolUseId: string; suggestions: unknown[]; question: boolean; noAlways: boolean; elicitation?: true; form?: McpForm; options?: OptionMap }
 interface Control { resolve(v: Obj): void; reject(e: Error): void; timer: NodeJS.Timeout; subtype: string }
 interface Stream { key: string; item: Extract<ChatItem, { kind: 'assistant' | 'thinking' }>; emitted: boolean; done: boolean }
 type ToolItem = Extract<ChatItem, { kind: 'tool' }>;
@@ -231,6 +231,8 @@ export class ClaudeSession implements HarnessSession {
   private elicitationLogged = false;
   /** questions sent back in a row for not being yes/no (ADR 0135): after YESNO_RETRIES the next one is shown as it is */
   private yesNoRefused = 0;
+  /** questions asked with the engine's own labels the brief maps to Sì / No (#378), by request id, until shown */
+  private readonly optionMaps = new Map<string, OptionMap>();
   /** questions already given BRIEF_GRACE_MS for their brief (show_ui may run in parallel with the question) */
   private briefWaited = new Set<string>();
   /** this chat sent no brief twice in a row: it is not asked for again in this session (ADR 0150) */
@@ -467,7 +469,9 @@ export class ClaudeSession implements HarnessSession {
         response = { action: 'accept', content: {} };
       }
     } else if (call.question) {
-      if (answer.kind === 'question') response = { behavior: 'allow', updatedInput: { ...call.input, answers: flattenAnswers(answer.answers) }, toolUseID: call.toolUseId };
+      // a question asked with the engine's own labels gets them back for the user's Sì / No (#378)
+      const answers = call.options ? Object.fromEntries(Object.entries(flattenAnswers(answer.kind === 'question' ? answer.answers : {})).map(([q, a]) => [q, engineLabel(a, call.options!)])) : null;
+      if (answer.kind === 'question') response = { behavior: 'allow', updatedInput: { ...call.input, answers: answers ?? flattenAnswers(answer.answers) }, toolUseID: call.toolUseId };
       else if (!answer.allow) response = { behavior: 'deny', message: answer.message?.trim() || 'Nessuna risposta dall’utente.', toolUseID: call.toolUseId };
       else throw new Error('Questa è una domanda: rispondi scegliendo le opzioni.');
     } else {
@@ -850,14 +854,16 @@ export class ClaudeSession implements HarnessSession {
     const noAlways = r.suppress_always_allow_rule === true;
     // a suggested mode above the agent's ceiling is never offered ("Sempre" would raise it before the manager could react)
     const suggestions = arr(r.permission_suggestions).filter(x => o(x).type !== 'setMode' || !suggestedAbove(o(x).mode, this.opts.ceiling ?? null));
-    const call: Call = { requestId: id, tool, input, toolUseId: s(r.tool_use_id), suggestions, question, noAlways };
+    const options = question ? this.optionMaps.get(id) : undefined;
+    this.optionMaps.delete(id);
+    const call: Call = { requestId: id, tool, input, toolUseId: s(r.tool_use_id), suggestions, question, noAlways, ...(options ? { options } : {}) };
     if (this.withdrawn.has(id)) return; // the CLI withdrew it while it was checked
     this.calls.set(id, call);
     const sub = s(r.agent_id) ? '(subagente) ' : '';
     if (s(r.agent_id)) this.childTask({ task_id: r.agent_id, task_type: 'local_agent' }, 'waiting');
     let req: Omit<PendingRequest, 'chatId'>;
     if (question) {
-      const questions = questionsFrom(input);
+      const questions = questionsFrom(input).map(q => (options ? asYesNo(q, options) : q));
       req = { id, type: 'question', tool, title: sub + cut(questions[0]?.question ?? 'Domanda', 140), detail: questions.map(q => q.question).join('\n'), input: trimInput(input), questions, at: Date.now() };
     } else {
       const t = permissionText(tool, input, { title: s(r.title), description: s(r.description), reason: s(r.decision_reason), blockedPath: s(r.blocked_path), cwd: this.opts.cwd });
@@ -884,7 +890,10 @@ export class ClaudeSession implements HarnessSession {
     const qs = questionsFrom(input);
     // nothing readable (the CLI's input changed shape): shown as it is, never refused for the app's own parse
     if (!qs.length) { this.yesNoRefused = 0; return false; }
-    const yesNo = yesNoShape(qs);
+    // the engine's own labels mapped to Sì / No by the brief (#378): a yes/no question for the user
+    const map = yesNoShape(qs) ? null : mappedYesNo(qs, await this.opts.briefOptions?.());
+    if (map) this.optionMaps.set(id, map); else this.optionMaps.delete(id);
+    const yesNo = yesNoShape(qs) || !!map;
     // a yes/no question without its brief (ADR 0150): a moment for a show_ui called in parallel, then sent back
     const noBrief = yesNo && !this.briefOff && !!this.opts.briefReady && !await this.opts.briefReady();
     if (this.exited || this.procExited) return true;

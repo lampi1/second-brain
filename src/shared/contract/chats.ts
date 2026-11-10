@@ -243,6 +243,9 @@ export interface UiBrief {
   done: string[]; ifYes: string; ifNo: string;
   why?: string;
   yesLabel?: string; noLabel?: string;
+  /** the engine's own option labels for Sì / No when a tool accepts only those («Approve Plan», #378): the question asks
+   *  with them, the user sees Sì / No, the answer goes back as the label */
+  yesOption?: string; noOption?: string;
   yesSteps?: string[]; noSteps?: string[];
   change?: { what?: string; before: string; after: string };
   /** what the user must do himself before answering, step by step (only when the agent cannot do it) */

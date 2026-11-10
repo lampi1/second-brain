@@ -1,6 +1,7 @@
 // The harness-neutral contract between ChatManager and one running CLI process (one chat = at most one session).
 // Why: the manager must not know which engine a chat runs on (Claude Code: claude.ts, stream-json control protocol; an
 // ACP engine: acp.ts, JSON-RPC); each adapter implements HarnessSession and reports through a SessionSink. Used by manager.ts (creates sessions, owns items/pending/persistence) and by every harness module.
+import type { OptionMap } from '../../shared/yes-no';
 import type { Root } from './proctree';
 import type { RemoteControlReply } from './remote-control';
 import { RESULT_OUTPUT_MAX } from '../../shared/delegation';
@@ -114,6 +115,8 @@ export function tokenUsage(input: unknown, cacheRead: unknown, cacheWrite: unkno
 export interface SessionOptions {
   /** a brief (show_ui brief, next-ask) waits for this chat's next question (ADR 0150); absent = never asked for */
   briefReady?: () => boolean | Promise<boolean>;
+  /** the engine's own Sì / No labels the waiting brief declares (yesOption / noOption, #378); null = none */
+  briefOptions?: () => OptionMap | null | Promise<OptionMap | null>;
   /** Main-generated immutable agent skill package, never supplied by the renderer. */
   agentAssets?: { pluginDir: string; skillRoot: string };
   chatId: string;

@@ -24,7 +24,7 @@ export const isNativeQuestion = (req: Pick<PendingRequest, 'type' | 'tool'>): bo
 export const QUESTION_RULE = 'Ask only genuine yes/no decisions with AskUserQuestion (or your engine\'s question tool, else ask_user): one short question (≤120 chars, no code or paths), exactly two options "Sì" and "No", the recommended one marked "(consigliato)" (the one that moves the task forward; stopping needs a concrete reason). Never ask whether the user ran a command: the app runs it with Esegui and sends you the result. Act yourself; if the user must act, list the steps in todo. Before asking, show_ui component "brief" target "next-ask": why, done, ifYes, ifNo, yesLabel/noLabel, yesSteps/noSteps, change, todo, evidence. The user reads only this card, often on the phone: plain words, self-contained.';
 
 /** What a question gate answers when a question is not yes/no (the agent re-asks in the right shape). */
-export const YESNO_REFUSAL = 'Not asked: the user answers only short, clear yes/no questions (second-brain). Ask again with one question that says what it decides (at most 120 characters, no code or paths, never just "Fatto?" or "Procedo?", never whether the user ran a command (leave it in a code block: the app asks to run it with Esegui and sends you the result): the context goes in the brief\'s why; what the user must do himself goes in its todo, step by step) whose two options are exactly "Sì" and "No" (mark the one you recommend "(consigliato)"); before it call show_ui component "brief" target "next-ask" with what you did, its evidence and what Sì / No do. A choice between options becomes a yes/no question on the one you recommend. He can still type his own answer or postpone it. Recommend the option that moves the task forward; recommend stopping only with a concrete reason in the card.';
+export const YESNO_REFUSAL = 'Not asked: the user answers only short, clear yes/no questions (second-brain). Ask again with one question that says what it decides (at most 120 characters, no code or paths, never just "Fatto?" or "Procedo?", never whether the user ran a command (leave it in a code block: the app asks to run it with Esegui and sends you the result): the context goes in the brief\'s why; what the user must do himself goes in its todo, step by step) whose two options are exactly "Sì" and "No" (mark the one you recommend "(consigliato)"); before it call show_ui component "brief" target "next-ask" with what you did, its evidence and what Sì / No do. A choice between options becomes a yes/no question on the one you recommend. If a tool of yours accepts only its own option labels (e.g. "Approve Plan" / "Request Changes"), put them in the brief\'s yesOption / noOption and ask with exactly those two labels: the user sees Sì / No and you get your label back. He can still type his own answer or postpone it. Recommend the option that moves the task forward; recommend stopping only with a concrete reason in the card.';
 
 /** What the gate answers when a yes/no question comes without its brief (ADR 0150). */
 export const BRIEF_REFUSAL = 'Not asked yet: the user reads only the question card, never your chat, so it must carry its context. First call show_ui with component "brief" and target "next-ask" (props: why = one plain sentence of context; done = 1-3 short lines on what you did; ifYes; ifNo; yesLabel / noLabel for the buttons; yesSteps / noSteps = what happens next on each road; change {what, before, after} for a measurable result; and the evidence you have: images [{path, caption}] for screenshots, checks [{label, status}] for tests or commands, files [{path, why}]), then ask the same yes/no question again, short and without "come sopra".';
@@ -92,6 +92,32 @@ export function vagueQuestion(q: string): boolean {
 /** Exactly one answerable, short yes/no question per panel. */
 export const yesNoShape = (qs: readonly { question?: string; options: readonly { label: string }[]; multiSelect?: boolean }[]): boolean =>
   qs.length === 1 && isYesNo(qs[0]!) && shortQuestion(qs[0]!.question ?? '');
+
+/** The engine's own labels for Sì and No, declared in the question's brief (yesOption / noOption, #378): a tool that
+ *  records approval only from its own picker labels («Approve Plan» / «Request Changes») gets them back, while the user
+ *  still answers a Sì / No card. */
+export interface OptionMap { yes: string; no: string }
+
+/** The map, when the one short single-choice question has exactly the two labels the brief declared; else null. */
+export function mappedYesNo(qs: readonly { question?: string; options: readonly { label: string }[]; multiSelect?: boolean }[], map: OptionMap | null | undefined): OptionMap | null {
+  if (!map || qs.length !== 1) return null;
+  const q = qs[0]!, labels = q.options.map(o => o.label.trim());
+  if (q.multiSelect || labels.length !== 2 || map.yes.trim() === map.no.trim() || !shortQuestion(q.question ?? '')) return null;
+  return labels.includes(map.yes.trim()) && labels.includes(map.no.trim()) ? { yes: map.yes.trim(), no: map.no.trim() } : null;
+}
+
+/** The question as the user sees it: the mapped options become Sì and No (descriptions kept, Sì first). */
+export function asYesNo<Q extends { options: readonly { label: string; description?: string }[] }>(q: Q, map: OptionMap): Q {
+  const of = (label: string) => q.options.find(o => o.label.trim() === label);
+  const yes = of(map.yes), no = of(map.no);
+  return { ...q, options: [{ ...yes, label: 'Sì' }, { ...no, label: 'No' }] };
+}
+
+/** The user's answer for the engine: Sì / No (any mark) become the engine's labels; a typed answer stays as it is. */
+export function engineLabel(answer: string, map: OptionMap): string {
+  const kind = yesNoOf(answer);
+  return kind === 'yes' ? map.yes : kind === 'no' ? map.no : answer;
+}
 
 /** The gate is on in a real profile; off in the test suites (their fake CLIs ask with free options) unless SB_YESNO=1;
  *  SB_YESNO=0 turns it off anywhere. */
