@@ -328,7 +328,10 @@ export abstract class ManagerRequests extends ManagerCheckpoints {
       const answers = plan ?? recommendedAnswers(req.questions ?? []);
       if (!answers) return false;
       const choice = Object.values(answers).flat().join(', ');
-      return this.policyAnswer(r, req, { kind: 'question', answers }, 'away', undefined, () => {
+      // nobody saw a run either: a recommended Sì to «hai eseguito?» carries the app's note (#372)
+      const picked: Answer = { kind: 'question', answers };
+      const told = this.opts.runs ? backedAnswer(req, picked, this.opts.runs(r.s.id)) : picked;
+      return this.policyAnswer(r, req, told, 'away', undefined, () => {
         this.addItem(r, sysItem('awayPicked', { choice }, 'info'), false);
         this.hook('onAway', () => this.opts.onAway?.({ kind: 'picked', chatId: r.s.id, title, text: `${req.questions?.[0]?.question ?? req.title} → ${choice}` }));
         log.info('chats', 'away: recommended answer', { chat: r.s.id, data: { questions: req.questions?.length ?? 0 } });

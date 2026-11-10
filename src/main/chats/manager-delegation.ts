@@ -18,6 +18,9 @@ import { clearTimeout, sameChildResult, uniqueChildResults, turnReply, turnError
 import { ManagerContinuity } from './manager-continuity';
 import { isUserActionRequest, sameCommand, userActionAnswer, userActionMessage, userActionRequest, type UserActionInput } from './user-action';
 import { runResultText } from '../run/results';
+
+/** a Sì still waits for its command's run this long at most (#371) */
+const AWAIT_RUN_MAX_MS = 12 * 60 * 60_000;
 import type { Answer, PendingRequest } from '../../shared/contract';
 
 /** Delegation and reports: a child's agent_report to its parent, a root chat's to the Orchestrator, turn ends that settle them. */
@@ -298,7 +301,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     // any later report of the chat (a correction, done, a block without userAction) replaces its earlier question, and
     // a Sì still waiting for that chat's command run
     this.dropUserAsks((_, worker) => worker === r.s.id);
-    for (const [id, w] of this.awaitingRun) if (w.input.chatId === r.s.id) this.awaitingRun.delete(id);
+    this.dropAwaitingRun(r.s.id);
     if (!result.userAction || result.outcome === 'done') return;
     const orchestrator = this.openOrchestrator();
     if (!orchestrator) { log.warn('chats', 'user action not asked: no Orchestrator open', { chat: r.s.id, hint: 'the report text still carries it' }); return; }
@@ -327,23 +330,34 @@ export abstract class ManagerDelegation extends ManagerContinuity {
     if (reply.yes && input.command) {
       const ran = this.endedRunOf(input.command, req.at);
       if (ran) { this.resumeUserAction(input, reply, req.chatId, ran); return; }
-      this.awaitingRun.set(req.id, { input, at: req.at, orchestratorId: req.chatId });
+      this.awaitingRun.set(req.id, { input, at: req.at, orchestratorId: req.chatId, runId: this.chats.get(input.chatId)?.s.run?.runId ?? null });
       log.info('chats', 'user action waits for its command run', { chat: input.chatId, data: { request: req.id } });
       return;
     }
     this.resumeUserAction(input, reply, req.chatId);
   }
 
-  /** Sì to a user step with a command, waiting for that command's run with Esegui (#371): request id → the step. */
-  private readonly awaitingRun = new Map<string, { input: UserActionInput; at: number; orchestratorId: string }>();
+  /** Sì to a user step with a command, waiting for that command's run with Esegui (#371): request id → the step, and
+   *  the worker's run then (another run of it, a close or new work of the worker ends the wait). In memory only. */
+  private readonly awaitingRun = new Map<string, { input: UserActionInput; at: number; orchestratorId: string; runId: string | null }>();
   private endedRunOf(command: string, since: number): RunInfo | undefined {
-    return (this.opts.runs?.() ?? []).filter(x => x.state !== 'running' && x.startedAt >= since && sameCommand(x.code, command)).sort((a, b) => b.startedAt - a.startedAt)[0];
+    // a run that ended after the question (a run of the same command that failed before it is why the step stopped)
+    return (this.opts.runs?.() ?? []).filter(x => x.state !== 'running' && (x.endedAt ?? 0) >= since && sameCommand(x.code, command)).sort((a, b) => b.startedAt - a.startedAt)[0];
+  }
+  /** A Sì of this chat waits for its command's run (#371): the chat is held, never auto-closed meanwhile. */
+  protected awaitsRun(chatId: string): boolean { return [...this.awaitingRun.values()].some(w => w.input.chatId === chatId); }
+  /** The worker works again (the user wrote to it, it was reassigned) or is closed: its step no longer waits for a run. */
+  protected dropAwaitingRun(chatId: string): void {
+    for (const [id, w] of this.awaitingRun) if (w.input.chatId === chatId) this.awaitingRun.delete(id);
   }
   /** A run of Esegui ended (wiring taps run:updated): the user steps whose command it is resume their work with it. */
   runEnded(run: RunInfo): void {
     if (run.state === 'running') return;
     for (const [id, w] of [...this.awaitingRun]) {
-      if (!w.input.command || run.startedAt < w.at || !sameCommand(run.code, w.input.command)) continue;
+      const worker = this.chats.get(w.input.chatId);
+      // a stale wait (the worker closed, or on another run since) ends here without waking anyone
+      if (!worker || worker.s.closedAt || (worker.s.run?.runId ?? null) !== w.runId || Date.now() - w.at > AWAIT_RUN_MAX_MS) { this.awaitingRun.delete(id); continue; }
+      if (!w.input.command || (run.endedAt ?? Date.now()) < w.at || !sameCommand(run.code, w.input.command)) continue;
       this.awaitingRun.delete(id);
       this.resumeUserAction(w.input, { yes: true }, w.orchestratorId, run);
     }

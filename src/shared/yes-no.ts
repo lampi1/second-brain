@@ -66,11 +66,17 @@ export const shortQuestion = (q: string): boolean => {
  *  agent went on as if a command had run, and nothing had). The gate sends it back like a vague one; a Yes that still
  *  reaches a chat gets the app's note when no run of that chat backs it (chats/manager-requests.ts). */
 export function ranCommandQuestion(q: string): boolean {
-  const t = q.toLowerCase();
-  return /\b(?:l['’]?)?(?:hai|ha|avete|abbiamo)\s+(?:già\s+|gia\s+|poi\s+)?(?:eseguito|lanciato|fatto girare|runnato|avviato)\b/u.test(t)
-    || /(?:^|\s)(?:è|e'|sono)\s+(?:stato|stati|stata)\s+(?:eseguit|lanciat)/u.test(t)
-    || /\b(?:did|have|has)\s+(?:you|it)\s+(?:already\s+)?(?:run|ran|execute[d]?|launch(?:ed)?)\b/u.test(t)
-    || /\b(?:ran|executed)\s+(?:the|this|that)\s+(?:command|script)\b/u.test(t);
+  const t = q.toLowerCase().trim();
+  // the user is the subject (hai, avete, you): «L'agente ha eseguito i test: apro la PR?» is the agent's own status
+  return /(?:^|[^\p{L}])(?:l['’]\s*)?(?:hai|avete)\s+(?:già\s+|gia\s+|poi\s+|tu\s+)?(?:provato\s+a\s+)?(?:eseguito|eseguita|lanciato|lanciata|eseguire|lanciare|fatto\s+(?:girare|partire)|runnato|girato|incollato|avviato)(?![\p{L}])/u.test(t)
+    // a bare participle at the start: «Comando eseguito?», «Lanciato?», «Eseguito il comando sopra?»
+    || /^(?:il\s+)?(?:comando\s+|script\s+)?(?:eseguit|lanciat)[oaie](?:\s+(?:il|lo|la)\s+(?:comando|script)(?:\s+sopra)?)?\s*\?\s*$/u.test(t)
+    // the passive only as the whole question, on a command: «Il comando è stato eseguito?» (not «I test sono stati
+    // eseguiti con successo: procedo al merge?», the agent's own status)
+    || /^(?:il\s+|lo\s+)?(?:comando|script)(?:\s+sopra)?\s+(?:è|e')\s+stato\s+(?:eseguit|lanciat)o(?:\s+[^.:;!?]{0,30})?\?\s*$/u.test(t)
+    || /\b(?:did|have)\s+you\s+(?:already\s+)?(?:run(?!\s+into)|ran|execute[d]?|launch(?:ed)?|tried\s+running|get\s+a\s+chance\s+to\s+run)\b/u.test(t)
+    || /\bdid\s+(?:the|this|that)\s+(?:command|script)\s+run\b/u.test(t)
+    || /^ran\s+it\s*\?/u.test(t);
 }
 /** What a chat reads after the user's Yes to such a question when no run of it backs that Yes (#372). */
 export const NOT_RAN_NOTE = 'Sì — nota dell\'app: l\'utente ha risposto Sì, ma con Esegui non è partito nessun comando di questa chat. Non darlo per eseguito: ricontrolla il risultato (rileggi il file o il valore) prima di andare avanti, e se serve lascia il comando in un blocco: l\'app lo propone con Esegui e ti manda l\'esito.';

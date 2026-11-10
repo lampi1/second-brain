@@ -37,7 +37,15 @@ describe('yes/no questions', () => {
   it('a question on whether the user ran a command goes back: a Yes to it is not a run (#372)', () => {
     for (const v of ['Hai eseguito il comando sopra?', 'L\'hai già lanciato?', 'Il comando è stato eseguito?', 'Did you run the command above?', 'Have you executed the script?'])
       expect(ranCommandQuestion(v), v).toBe(true);
-    for (const v of ['Eseguo il comando sul tuo PC?', 'Lancio i test adesso?', 'Hai preferenze sul nome del ramo?', 'Should I run the tests?'])
+    for (const v of ['Hai provato a lanciare il comando?', 'Hai fatto partire lo script?', 'Hai incollato il comando nel terminale?', 'Comando eseguito?',
+      'Lanciato?', 'Eseguito il comando sopra?', 'Did the command run?', 'Have you tried running it?', 'Ran it?', 'Hai eseguito i test con successo, procedo al merge?'])
+      expect(ranCommandQuestion(v), v).toBe(true);
+    // the agent's own status before its real question is not one (the user is not the subject)
+    for (const v of ['Eseguo il comando sul tuo PC?', 'Lancio i test adesso?', 'Hai preferenze sul nome del ramo?', 'Should I run the tests?',
+      'I test sono stati eseguiti con successo: procedo al merge?', 'La migrazione è stata eseguita in staging: la applico in produzione?',
+      'L\'agente ha eseguito i test: apro la PR?', 'CI ha lanciato il job notturno: lo disattivo?', 'Abbiamo eseguito la migrazione: aggiorno il README?',
+      'I ran the command and tests pass. Merge the PR?', 'Has it run in CI before? Should I re-run it?', 'Lo riprendo quando il comando ha girato?', 'Ho eseguito i test, procedo al merge?',
+      'Eseguiti i test, procedo con il merge?', 'Lanciata la build, apro la PR?', 'Eseguito il deploy, faccio il merge?', 'Did you run into any issues?'])
       expect(ranCommandQuestion(v), v).toBe(false);
     expect(yesNoShape([{ ...q('Sì', 'No'), question: 'Hai eseguito il comando sopra?' }])).toBe(false);
     expect(YESNO_REFUSAL).toContain('never whether the user ran a command');

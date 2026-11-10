@@ -362,6 +362,9 @@ export class ChatManager extends ManagerRemote implements ChatService {
     updateActivity.assertOpen();
     const r = this.need(chatId);
     if (r.s.routineArchived || r.s.routine || r.s.routinePackage) throw new Error('Archived routine chat: use the terminal routine CLI.');
+    // the user (or the owner of its work) writes to it: a Sì that waited for its command's run is over, the worker goes
+    // on with this message (#371); the app's own deliveries (a run's result) leave the wait
+    if (!appText && !resumed && source?.kind !== 'app') this.dropAwaitingRun(chatId);
     // the user's ✕ cancelled it (or its tree): only the user's own message reopens it, never an agent, mail or the app
     if (this.closedByUser(r) && (resumed || from !== undefined || !ownerSource(source))) throw new Error(CLOSED_BY_USER);
     // the paired phone (phone bridge) is the owner too, but its text only informs: it never approves (below)

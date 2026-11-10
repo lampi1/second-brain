@@ -127,6 +127,20 @@ describe('agent_delegate', () => {
     expect(f.answers.some(a => a.id === asks[0]!.id)).toBe(false); // never reached an engine
   });
 
+  it('a Sì waiting for its command ends with the worker: a later run of the same command wakes nobody (#371)', async () => {
+    const f = fixture(), o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user'), parent = await f.root('strategist');
+    await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Caso login')] });
+    const child = f.m.list().find(c => c.parentId === parent.id)!;
+    await f.call('agent_report', child.id, { outcome: 'blocked', summary: 'Serve il login', output: 'Fermo.', doneWhen: [{ criterion: 'criterion A', met: false }], userAction: { kind: 'login', text: 'Fai il login', command: 'npm login' } });
+    const ask = f.m.pending().find(r => r.chatId === o.id && r.tool === 'app_user_action')!;
+    await f.m.answer(o.id, ask.id, { kind: 'question', answers: { [ask.questions![0]!.question]: 'Sì' } });
+    await f.m.close(child.id);
+    const before = [...f.sent.values()].flat().length;
+    f.m.runEnded({ id: 'r', chatId: 'other', itemId: 'i', code: 'npm login', cwd: f.dir, state: 'ok', exitCode: 0, output: 'ok', startedAt: Date.now() + 1, endedAt: Date.now() + 2 });
+    await Promise.resolve();
+    expect([...f.sent.values()].flat().slice(before).join('\n')).not.toContain('chat «Caso login»]');
+  });
+
   it('Sì goes to the Orchestrator when the parent\'s assignment is over (#358)', async () => {
     const f = fixture(), o = await f.m.create({ harness: 'claude', cwd: f.dir, orchestrator: true }, 'user'), parent = await f.root('strategist');
     await f.call('agent_delegate', parent.id, { tasks: [f.task('scout', 'Caso VPN')] });

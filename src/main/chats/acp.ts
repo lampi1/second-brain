@@ -71,7 +71,7 @@ import { cut, lastLine, nextId, stripAnsi, tokenUsage, toCommands, trimInput, ty
 import { AgentChildrenReporter } from './agent-children';
 import type { ChildObservation } from '../../shared/agents';
 import { recordWire } from './wire-record';
-import { BRIEF_GRACE_MS, BRIEF_REFUSAL, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
+import { BRIEF_GRACE_MS, BRIEF_REFUSAL, NOT_RAN_NOTE, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateOn, yesNoShape } from '../../shared/yes-no';
 
 export interface AcpOptions extends SessionOptions {
   /** send a question that is not yes/no back to the agent (shared/yes-no.ts, ADR 0135); default: yesNoGateOn(env) */
@@ -1048,7 +1048,10 @@ export class AcpSession implements HarnessSession {
         const free = picked.some(p => p.labels.some(l => !p.q.byLabel.has(l)));
         // "Altro…": ACP's answered outcome carries only option ids (the CLI drops anything else), so a free-text
         // answer travels as a skip whose reason the model reads ("rejected: <reason>")
-        if (free) result = { outcome: { outcome: 'skipped', reason: freeTextReason(picked.map(p => ({ question: p.q.text, answers: p.labels }))) } };
+        // the app's note on a Yes no run backs (#372) is the app's words, not the user's: it travels as the reason itself
+        const note = picked.some(p => p.labels.includes(NOT_RAN_NOTE));
+        if (note) result = { outcome: { outcome: 'skipped', reason: NOT_RAN_NOTE } };
+        else if (free) result = { outcome: { outcome: 'skipped', reason: freeTextReason(picked.map(p => ({ question: p.q.text, answers: p.labels }))) } };
         else result = { outcome: { outcome: 'answered', answers: picked.map(p => ({ questionId: p.q.id, selectedOptionIds: p.ids })).filter(a => a.selectedOptionIds.length) } };
       } else if (!answer.allow) result = { outcome: { outcome: 'skipped', reason: answer.message?.trim() || 'L’utente ha saltato la domanda.' } };
       else throw new Error('Questa è una domanda: rispondi scegliendo le opzioni.');
