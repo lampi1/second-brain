@@ -1,17 +1,19 @@
-// The models each engine's CLI itself offered, kept in userData by engine id (cursor-models.json: the name is the one
-// of when only Cursor reported, so the list it already holds stays): an ACP answer to session/new and session/load
-// carries models.availableModels ({modelId, name}), the exact ids `--model` accepts. The Settings
-// page offers these for "Chat aperte dall'Orchestrator" instead of a list typed by hand (the Orchestrator, 2026-10-11: "l'elenco
-// vero dei modelli della CLI ... mai inventato"). The app never starts a CLI only to ask: the list is the one of the
-// engine's last chat that opened. Written by wiring.ts (ChatManager onModels), read by 'models:seen'.
+// The models each engine's live source listed, kept in userData by engine id (cursor-models.json: the name is the one
+// of when only Cursor reported, so the list it already holds stays). Two writers: a chat's own session (an ACP
+// session/new's availableModels, Codex's model/list, Claude Code's initialize) and the scheduled or on-demand refresh
+// of engines/model-lists.ts (ADR 0256), which asks each engine without opening a chat. The file is the cache: when a
+// live source fails the last list stays, and only an engine with no list at all falls back to the brain's
+// harness/models.json (engines/sessions.ts withApiModels). The Settings page and every model picker offer these (the
+// Orchestrator, 2026-10-11: "l'elenco vero dei modelli della CLI ... mai inventato"). Read by 'models:seen'.
 import fs from 'node:fs';
-import type { Harness, ModelsSeen } from '../../shared/contract';
+import type { Effort, Harness, ModelsSeen, SeenModel } from '../../shared/contract';
 import { log } from '../log';
 
-type Model = { id: string; name: string };
+type Model = SeenModel;
+const EFFORTS: readonly Effort[] = ['low', 'medium', 'high', 'xhigh', 'max'];
 const ID = /^[\w.:@/=[\],-]{1,120}$/;
 
-/** Clean list: valid ids only, one each, names short and never empty, at most 300. */
+/** Clean list: valid ids only, one each, names short and never empty, known effort names only, at most 300. */
 export function cleanModels(list: unknown): Model[] {
   if (!Array.isArray(list)) return [];
   const seen = new Set<string>(), out: Model[] = [];
@@ -20,7 +22,9 @@ export function cleanModels(list: unknown): Model[] {
     if (!ID.test(id) || seen.has(id)) continue;
     seen.add(id);
     const name = typeof m.name === 'string' && m.name.trim() ? m.name.trim().slice(0, 80) : id;
-    out.push({ id, name });
+    const efforts = Array.isArray(m.efforts) ? EFFORTS.filter(e => (m.efforts as unknown[]).includes(e)) : null;
+    const window = Number.isSafeInteger(m.contextWindow) && m.contextWindow > 0 ? m.contextWindow as number : null;
+    out.push({ id, name, ...(efforts ? { efforts } : {}), ...(window ? { contextWindow: window } : {}) });
     if (out.length >= 300) break;
   }
   return out;

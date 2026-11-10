@@ -326,8 +326,10 @@ export interface AgentModelChoice {
   /** the engine honours a role's maxContext ("Contesto massimo"); absent = no */
   maxContext?: boolean;
   /** efforts = the effort levels the model takes, by their real names (the registry's; empty = none, absent = unknown);
-   *  defaultEffort = what the engine uses when the card names none; contextWindow = the model's window in tokens */
-  models: { id: string; name: string; efforts?: Effort[]; defaultEffort?: Effort | null; contextWindow?: number }[];
+   *  defaultEffort = what the engine uses when the card names none; contextWindow = the model's window in tokens;
+   *  price = list USD per million input and output tokens (the brain's models.json), null = not known («prezzo
+   *  sconosciuto»: the model is offered all the same, ADR 0256) */
+  models: { id: string; name: string; efforts?: Effort[]; defaultEffort?: Effort | null; contextWindow?: number; price?: { input: number; output: number } | null }[];
   source: 'observed' | 'registry' | 'unknown';
   /** Model discovery does not prove installation or login. */
   installed: boolean | null; authenticated: boolean | null;

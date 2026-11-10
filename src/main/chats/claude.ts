@@ -52,6 +52,7 @@ import { BRIEF_GRACE_MS, BRIEF_REFUSAL, YESNO_REFUSAL, YESNO_RETRIES, yesNoGateO
 import { mcpForm, mcpFormAnswer, type McpForm } from '../../shared/mcp-form';
 import { WriteBarrier } from './write-barrier';
 import { recordWire } from './wire-record';
+import { claudeModels } from '../engines/model-lists';
 
 /** our own messages' uuids kept for their echo: a few hundred turns at most are ever waiting */
 const SENT_UUIDS_MAX = 500;
@@ -404,6 +405,9 @@ export class ClaudeSession implements HarnessSession {
       const v = s(r.claude_code_version);
       if (v) { this.cliVersion = v; this.sink.changed({ version: v }); }
       if (Array.isArray(r.commands)) { this.cmdList = r.commands; this.reportCommands(); }
+      // the models this login can run (ADR 0256): the live list of the Claude pickers
+      const models = claudeModels(r.models);
+      if (models.length) this.sink.models?.(models);
       // prompts inherited by a resume ride on the control_response envelope, next to `response` (sdk.d.ts ControlResponse)
       for (const req of [...arr(env.pending_permission_requests), ...arr(r.pending_permission_requests)]) this.onMessage(o(req));
       if (this.state === 'starting') this.setState(this.turnOpen ? 'running' : 'idle');

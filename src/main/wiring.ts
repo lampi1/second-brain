@@ -10,7 +10,9 @@ import { replayExecutor } from './brainmodel/replay-executor';
 import type { ChatSummary, CliStatus, EventMap, Harness } from '../shared/contract';
 import { engineStatuses } from './cli';
 import { engineReadiness } from './engines/readiness';
-import { engineInfos, engineOf, enginePathsFromEnv, priceEnginesOf } from './engines/registry';
+import { engineInfos, engineOf, enginePathsFromEnv, engines as engineList, priceEnginesOf } from './engines/registry';
+import { ModelLists } from './engines/model-lists';
+import { cliProbe, fetchJson } from './engines/model-probe';
 import { RunFeedback } from './agents/run-feedback';
 import { qualifiedSkillsLine, runtimePluginName } from './agents/role-gate';
 import { createAgentPacks } from './agents/pack/wiring';
@@ -70,7 +72,7 @@ import { doneEvent } from './brain/live';
 import { syncBeforeCreate } from './brain/sync';
 import { agentStatsLine, knownOutcome, predictionLine } from './brain/routing';
 import { runMetrics } from './agents/run-metrics';
-import { listPrice, priceTableSource, setPriceTable } from './chats/live-cost';
+import { listPrice, priceTableSource, registryModels, setPriceTable } from './chats/live-cost';
 import { createBrowserModule, mcpPortFromEnv } from './browser/service';
 import { Workflows } from './workflows/service';
 import { WorkDriver } from './workflows/driver';
@@ -223,6 +225,14 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
   // Probe only after registry/trust initialization; reconcile untouched seeds when readiness arrives and tell the
   // renderer (issue #96: the role editor showed the startup snapshot). Tests never run installed vendors.
   if (!process.env.SB_TEST) void engineStatuses().then(all => { cliCache = all; agents.refresh(); ctx.emitter.emit('cli:ready', all); });
+  // the engines' live model lists (ADR 0256): asked soon after the start, then every 6 h and on «Aggiorna elenco»;
+  // only the engines turned on; a failure keeps the cached list (brain.recordModels' file), then models.json
+  const modelLists = new ModelLists({
+    engines: () => engineList().filter(e => engineOn(brain.settings(), e.id)), open: cliProbe(ctx.userData, path.join(ctx.userData, 'model-probe')), fetchJson,
+    key: h => engines.keyFor(h), store: { get: () => brain.modelsSeen(), record: (h, list) => brain.recordModels(h, list) },
+    registry: e => registryModels(priceEnginesOf(e)), cwd: path.join(ctx.userData, 'model-probe'), appVersion: app.getVersion(), changed: () => agents.refresh(),
+  });
+  if (!process.env.SB_TEST && !process.env.SB_DEMO) modelLists.start();
   brain.onSettingChange(c => { if (c.key === 'brainRoot' || c.key.startsWith('engineOn.') || c.key === 'orchestratorChats.harness' || c.key.startsWith('modelTiers.')) agents.refresh(); });
   // the Brain pages' reader, set once they are built (the skills a role's tools need)
   const brainModelRef: { current?: BrainModelService } = {};
@@ -855,7 +865,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     judging: { estimate: now => judgingEstimate(manager.runs.list(), now, { shares: judgeShares(), capUsd: Number(brain.settings().judgingCapUsd) || DEFAULT_CAP_USD, lastBatch: judgeSampler.lastBatch() }) },
     phonePort: createPhonePort(manager, ctx.emitter),
     worktreePool,
-    chats, browser, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
+    chats, browser, recordings, learn, brain, mcp, runner, asks, wake, heldNews, tasks, skills, skillLibrary, skillLessons, source, later, engines, modelLists, agents, runFeedback, agentLifecycle: lifecycleApi, agentPacks, oneShot, agentRuns: manager.runs, autoClose: autoCloseService, hybrid, guide, userCorrections,
     updateChats: {
       problem: () => manager.updateReadiness() ?? (runner.list().some(r => r.state === 'running') ? 'Un comando è ancora in esecuzione.' : asks.pending().length ? 'Ci sono comandi da verificare prima di aggiornare.' : null),
       checkpoint: () => manager.checkpointForUpdate(),
@@ -863,7 +873,7 @@ export async function createServices(ctx: Ctx): Promise<Wired> {
     setup: new SetupService(ctx.userData, chats.list().length > 0 || !!brain.settings().brainRoot),
     // computed once in the background at start (spawning the CLIs takes seconds); cli:status gives a fresh one
     cli: () => cliCache ? { ...cliCache, ...engineReadiness() } : Object.keys(engineReadiness()).length ? engineReadiness() : null,
-    shutdown: async () => { routines.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); if (workDriverTimer) clearInterval(workDriverTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
+    shutdown: async () => { routines.stop(); mcpServers.stop(); brainModel.stop(); clearInterval(autoCloseTimer); if (worktreeFirst) clearTimeout(worktreeFirst); if (worktreeTimer) clearInterval(worktreeTimer); if (lifecycleTimer) clearInterval(lifecycleTimer); if (workDriverTimer) clearInterval(workDriverTimer); hybrid.stop(); userCorrections.flush(); engines.stop(); modelLists.stop(); sweeper.stop(); stopHealth(); artifacts.stop(); sync?.stop(); mail.stop(); asks.stop(); wake.stop(); results.stop(); runner.shutdown(); tasks.shutdown(); await Promise.allSettled([chats.shutdown(), browser.shutdown(), brain.shutdown()]); },
     killNow: () => { manager.killAll(); runner.shutdown(); },
   };
 }

@@ -7,7 +7,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { modelRow, predictionLine, resolve, routeChat, Routing, taskOf, validRoute, type RouteDefaults } from '../../../src/main/brain/routing';
-import { DEMO_REGISTRY as REG } from '../../../src/main/brain/routing-demo';
+import { TEST_REGISTRY as REG } from '../../fixtures/model-registry';
 
 const DEF: RouteDefaults = { harness: 'claude', models: { claude: null, cursor: 'grok-4.7' }, effort: 'high' };
 const TASKS: [string, string, string][] = [['triage', String.raw`\b(triage|smista\w*|novita)\b`, 'i'], ['bug-fix', String.raw`\b(fix|bug)\b`, 'i'], ['nope', '(', '']];
@@ -49,7 +49,8 @@ describe('routing: resolve on the user\'s defaults', () => {
   it('holds the hard rules for what is named', () => {
     expect(resolve({ harness: 'cursor', model: 'claude-opus-5-5' }, DEF, REG)).toEqual({ error: expect.stringMatching(/solo su claude/) });
     expect(resolve({ harness: 'cursor', model: 'opus-x' }, DEF, REG)).toEqual({ error: expect.stringMatching(/Claude gira solo/) });
-    expect(resolve({ harness: 'claude', model: 'claude-mistero' }, DEF, REG)).toEqual({ error: expect.stringMatching(/models\.json/) });
+    // models.json is never an allow-list (ADR 0256): an id it does not know is taken; the CLI judges it
+    expect(resolve({ harness: 'claude', model: 'claude-mistero' }, DEF, REG)).toMatchObject({ harness: 'claude', model: 'claude-mistero' });
     // Cursor takes an effort too (its model's thought_level option, issue #97) where models.json lists it; an API engine takes none
     expect(resolve({ harness: 'cursor', effort: 'low', reason: 'r' }, DEF, REG)).toEqual({ error: expect.stringMatching(/grok-4\.7 non ha lo sforzo/) });
     expect(resolve({ harness: 'anthropic', effort: 'low' }, DEF, REG)).toEqual({ error: expect.stringMatching(/non vale per Anthropic API/) });

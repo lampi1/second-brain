@@ -93,7 +93,7 @@ export function listPrice(engine: string | readonly string[], model: string, reg
  *  engine with rows wins. */
 export function registryModels(engine: string | readonly string[], reg: ModelRegistry | null = table()): { id: string; name: string }[] {
   for (const h of typeof engine === 'string' ? [engine] : engine) {
-    const rows = (reg?.models ?? []).filter(m => m.harness === h).map(m => ({ id: m.id, name: m.id }));
+    const rows = (reg?.models ?? []).filter(m => m.harness === h).map(m => ({ id: m.id, name: m.label || m.id }));
     if (rows.length) return rows;
   }
   return [];

@@ -1,5 +1,5 @@
 {
-  "about": "Model registry and the ONE price table: every $ figure of the brain (ops/tools/prices.mjs → cost.mjs, estimates.mjs) and of the second-brain app (live cost, routing) reads it. Harness-agnostic: claude (Claude Code, the user's subscription), cursor (Cursor CLI), api (later: private or OpenAI-compatible endpoints, Chinese models included). routing 'auto' = the routing table (harness/routing.json) may pick the model by itself; 'manual' = only when an agent or the user names it. Prices in USD per million tokens. Update when a pricing page changes: the date beside each source says when it was read.",
+  "about": "Optional overrides of the live model lists (ADR 0256): each engine lists its own models (Claude Code, Codex, an ACP CLI, an API endpoint's /models) and the app takes any model a source lists, with its price unknown when no row here names it. A row here only adds or corrects what a source does not say: list prices (USD per million tokens), tier, label, aliases, efforts, context window. It is never an allow-list: removing a row hides nothing. The same rows are the ONE price table of the brain (ops/tools/prices.mjs → cost.mjs, estimates.mjs) and of the app's live cost; defaultModel is only the price used for a model that has no row. Update a price when a pricing page changes: the date beside each source says when it was read.",
   "sources": {
     "claude": { "url": "https://platform.claude.com/docs/en/about-claude/pricing", "readOn": "2026-10-13" },
     "claudeEffort": { "url": "https://platform.claude.com/docs/en/build-with-claude/effort", "readOn": "2026-10-13" },
@@ -12,7 +12,6 @@
     "api": { "routing": "manual", "note": "future: private or OpenAI-compatible endpoints; a row needs endpoint and prices" }
   },
   "defaultModel": "claude-opus-5-5",
-  "appChats": { "model": "claude-opus-5-5", "effort": "medium", "note": "the only model and effort a routing row for the app's chats may name ({{OWNER}} 2026-10-14, \"i lavori sull' app sempre in opus medio\"); other Claude models reach them only through exploration" },
   "models": [
     { "id": "claude-fable-5-1", "harness": "claude", "provider": "anthropic", "aliases": ["fable"], "routing": "manual", "routingNote": "never from the table nor exploration: too costly ({{OWNER}} 2026-10-14)", "tier": "top",
       "price": { "input": 10, "cacheWrite5m": 12.5, "cacheWrite1h": 20, "cacheRead": 0.25, "output": 50 },

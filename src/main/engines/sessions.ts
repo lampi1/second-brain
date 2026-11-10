@@ -21,7 +21,7 @@ import { CodexSession } from '../chats/codex';
 import { listPrice, registryModels } from '../chats/live-cost';
 import type { HarnessSession, SessionOptions, SessionSink } from '../chats/session';
 import { TURN_NO_START_MS, watchTurns } from '../chats/turn-watchdog';
-import { appAsks, engineOf, engines, fingerprint, priceEnginesOf, type EngineDef } from './registry';
+import { anthropicApi, appAsks, engineOf, engines, fingerprint, priceEnginesOf, type EngineDef } from './registry';
 
 /** What the app gives a session beyond the chat's own options. */
 export interface EngineContext {
@@ -127,15 +127,23 @@ function prepared(launch: PreparedAdapter, sink: SessionSink): HarnessSession {
   }
 }
 
-/** The models each engine offers (models:seen): what its CLI listed, and for an HTTP engine, which lists none, its
- *  rows in the brain's table (the user picks one: an API chat has no default model). Claude Code never reports its
- *  models, so it gets its table rows too: without them a profile with an explicit Claude model could not start (#60). */
+/** The models each engine offers (models:seen, ADR 0256): its live list (engines/model-lists.ts, or a chat's session),
+ *  the cached one when the source failed (the store keeps the last), and only for an engine that never listed any its
+ *  rows in the brain's harness/models.json (at 0: the last fallback). A Claude engine also gets the claude-* models the
+ *  Anthropic Models API listed on the user's Anthropic API key, so a model out today shows up even when the bundled
+ *  Claude Code does not name it yet (the key itself never leaves its own engine). */
 export function withApiModels(seen: ModelsSeen): ModelsSeen {
   const out: ModelsSeen = { ...seen };
   for (const e of engines()) {
-    if (e.kind !== 'api' && e.kind !== 'claude' || out[e.id]?.ids.length) continue;
-    const ids = registryModels(priceEnginesOf(e));
-    if (ids.length) out[e.id] = { ids, at: 0 };
+    if (!out[e.id]?.ids.length) {
+      const ids = registryModels(priceEnginesOf(e));
+      if (ids.length) out[e.id] = { ids, at: 0 };
+    }
+    const api = anthropicApi();
+    const extra = e.kind === 'claude' && api ? (seen[api.id]?.ids ?? []).filter(m => /^claude-/.test(m.id)) : [];
+    const have = new Set((out[e.id]?.ids ?? []).map(m => m.id.replace(/-\d{8}$/, '')));
+    const add = extra.filter(m => !have.has(m.id.replace(/-\d{8}$/, '')));
+    if (add.length) out[e.id] = { ids: [...(out[e.id]?.ids ?? []), ...add], at: out[e.id]?.at || seen[api!.id]!.at };
   }
   return out;
 }

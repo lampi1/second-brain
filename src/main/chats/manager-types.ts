@@ -1,6 +1,6 @@
 // The shapes behind ChatManager (manager.ts): its options, the per-chat record (Rec) and the small records its layers
 // pass around. Split out of manager.ts (ADR 0200); only the chat manager's files import Rec.
-import type { ChatCommand, ChatItem, ChatSummary, CursorReasoning, Effort, HandoffInfo, Harness, Lang, NewChat, PendingRequest, PermissionMode } from '../../shared/contract';
+import type { ChatCommand, ChatItem, ChatSummary, CursorReasoning, Effort, HandoffInfo, Harness, Lang, NewChat, PendingRequest, PermissionMode, SeenModel } from '../../shared/contract';
 import type { Emitter } from '../ipc';
 import type { HarnessSession, SessionOptions, SessionSink } from './session';
 import type { HeldChildResult, PastSession } from './store';
@@ -93,7 +93,7 @@ export interface ChatManagerOptions {
   /** every stream-json `rate_limit_event` and every get_usage answer (→ BrainService.ingestRateLimits) */
   onRateLimit?: (msg: unknown) => void;
   /** the models a CLI session offers (→ BrainService.recordModels, for the Settings page) */
-  onModels?: (harness: Harness, list: { id: string; name: string }[]) => void;
+  onModels?: (harness: Harness, list: SeenModel[]) => void;
   /** a turn ended (→ the job ledger: real cost and time) */
   onTurnEnd?: (info: TurnEndInfo) => void;
   /** Once per actual run end (not per turn): the improvement loop evaluates the role's trial again. */

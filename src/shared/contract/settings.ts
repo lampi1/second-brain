@@ -224,6 +224,8 @@ import type { TaskKind } from '../work-concepts';
 /** One row of the brain's model registry and price table (harness/models.json): USD per million tokens. */
 export interface RegistryModel {
   id: string; harness: Harness; provider: string; aliases?: string[];
+  /** the name the pickers show instead of the live source's (an override, ADR 0256); absent = the source's name */
+  label?: string;
   /** auto = an everyday model (listed first for the tiers); manual = only when named */
   routing: 'auto' | 'manual'; tier?: string;
   price: { input: number; cacheWrite5m: number; cacheWrite1h: number; cacheRead: number; output: number };

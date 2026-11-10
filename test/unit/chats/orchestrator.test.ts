@@ -15,7 +15,7 @@ import { ORCHESTRATOR_AGENT_ID } from '../../../src/shared/agents';
 import { OrchestratorWake } from '../../../src/main/chats/orchestrator-wake';
 import { appControlTools } from '../../../src/main/appctl/tools';
 import { routeChat, type RouteRequest } from '../../../src/main/brain/routing';
-import { DEMO_REGISTRY } from '../../../src/main/brain/routing-demo';
+import { TEST_REGISTRY as DEMO_REGISTRY } from '../../fixtures/model-registry';
 import type { BrainService, BrowserService, ChatService } from '../../../src/main/services';
 import type { ChatSummary } from '../../../src/shared/contract';
 

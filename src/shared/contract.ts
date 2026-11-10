@@ -152,7 +152,7 @@ export const INVOKE_CHANNELS = [
   'browser:close', 'views:layout', 'feed:list', 'settings:get', 'settings:set', 'settings:schema', 'settings:history',
   'settings:undo', 'settings:propose', 'settings:pending', 'settings:confirm', 'estimate:record', 'brain:api',
   'tasks:get', 'tasks:refresh', 'tasks:markRead', 'chat:branches',
-  'learn:act', 'models:seen',
+  'learn:act', 'models:seen', 'models:refresh',
   'browser:handoffs', 'browser:handoffResolve', 'browser:handoffCopy', 'browser:envList',
   'credentials:list', 'credentials:copy', 'overlay:model', 'overlay:size', 'overlay:action', 'overlay:focus',
   'run:start', 'run:stop', 'run:list', 'run:dismiss', 'app:inputLag', 'skills:list', 'skills:read', 'skills:save', 'skills:delete', 'skills:library', 'skills:file', 'skills:write', 'skills:remove', 'skills:history', 'skills:undo', 'skills:roles', 'chat:commands', 'source:get', 'source:dismissLaunch', 'source:check', 'source:updateNow',

@@ -7,6 +7,7 @@ import type { LearningEvidence, LearningReviewState, MemoryReviewRecord, ReplayC
 import type { MaintenanceStatus } from '../maintenance-research';
 import type { MorningOp, MorningState } from '../morning';
 import type { ProposalDecide, ProposalDecideResult, ProposalsState } from '../proposals';
+import type { Effort } from './chats';
 import type { Harness } from './engines';
 
 /** What the shareable brain zip holds (counts), or why it was not written: guard findings, or no brain / no guard. */
@@ -77,9 +78,15 @@ export interface BrainQueryList { root: string | null; dir: string; queries: Bra
 export type ChangelogKind = 'script' | 'rule' | 'procedure' | 'note' | 'agent' | 'skill' | 'other';
 export type ChangelogAction = 'added' | 'edited' | 'fixed' | 'deleted' | 'restored';
 export interface ChangelogEntry { at: string; kind: ChangelogKind; action: ChangelogAction; target: string; by: string; summary: string }
-/** Per engine, the models its CLI offered at its last session (ACP's availableModels), kept in userData; absent = none
- *  seen yet (the UI falls back to its own list). The app never starts a CLI just to ask. */
-export type ModelsSeen = Partial<Record<Harness, { ids: { id: string; name: string }[]; at: number }>>;
+/** One model an engine's live source listed (ADR 0256): its id as `--model` takes it, its name, and what the source
+ *  says about it (effort levels, context window); absent = the source did not say. */
+export interface SeenModel { id: string; name: string; efforts?: Effort[]; contextWindow?: number }
+/** Per engine, the models its live source listed last (engines/model-lists.ts: Claude Code's initialize, Codex's
+ *  model/list, an ACP session/new, an HTTP engine's /models; or a chat's session), kept in userData: the cache when the
+ *  source fails. at = when it was listed (0 = the brain's harness/models.json, the last fallback). Absent = none yet. */
+export type ModelsSeen = Partial<Record<Harness, { ids: SeenModel[]; at: number }>>;
+/** models:refresh, per engine: listed now (ok, with how many), or why not and what the app shows instead. */
+export interface ModelRefreshOutcome { engine: Harness; ok: boolean; count: number; error?: string; using?: 'cache' | 'registry' | 'none' }
 
 // ── "Rispondi dopo" (the user, 2026-10-13: "a volte sono concentrato e non ho tempo per rispondere"; ADR 0035) ──
 

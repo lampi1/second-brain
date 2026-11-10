@@ -2,7 +2,7 @@
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
 import type { CliStatus } from './app';
-import type { ModelsSeen } from './brain';
+import type { ModelRefreshOutcome, ModelsSeen } from './brain';
 
 /** An engine id from the engine registry (src/main/engines/registry.ts, ADR 0046): 'claude', 'cursor', … */
 export type Harness = string;
@@ -91,4 +91,6 @@ export interface EnginesInvokeMap {
   /** this month's API spend per engine, computed by the app (engines/spend.ts) */
   'engines:spend': [void, ApiSpendInfo];
   'models:seen': [void, ModelsSeen];
+  /** ask each engine's live source for its models now (one engine, or every one turned on) */
+  'models:refresh': [{ engine?: Harness } | void, ModelRefreshOutcome[]];
 }

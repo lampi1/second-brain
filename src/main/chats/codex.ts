@@ -48,6 +48,7 @@ import { closePipes, engineKills, jobGuard, killEngineTree, lowerEnginePriority 
 import { reapEnabled, reapEngine, type Root } from './proctree';
 import { AgentChildrenReporter } from './agent-children';
 import { codexChildren } from './codex-children';
+import { codexModels } from '../engines/model-lists';
 import { recordWire } from './wire-record';
 import { cut, lastLine, nextId, stripAnsi, tokenUsage, trimInput, type ContextUsage, type HarnessSession, type SessionOptions, type SessionSink, type TokenUsage } from './session';
 
@@ -326,7 +327,7 @@ export class CodexSession implements HarnessSession {
   private async listModels(): Promise<void> {
     try {
       const r = await this.request('model/list', {}, 20000);
-      const list = arr(r.data).map(o).filter(m => m.hidden !== true && (s(m.model) || s(m.id))).map(m => ({ id: s(m.model) || s(m.id), name: s(m.displayName) || s(m.model) || s(m.id) }));
+      const list = codexModels(r);
       if (list.length) this.sink.models?.(list);
     } catch (e) { log.debug('chats', 'codex model/list not answered', { chat: this.opts.chatId, data: { engine: this.engine, error: errText(e) } }); }
   }

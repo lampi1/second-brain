@@ -1,6 +1,7 @@
 // Typed local catalog/setup bridge: the role catalog, the user's edits and "Ripristina predefinito", and the first-run
-// setup state. Role edits affect future chats; the owner/model snapshots of running chats stay in main.
+// setup state, the engines' model lists refreshed on demand. Role edits affect future chats; the owner/model snapshots of running chats stay in main.
 import type { AgentCatalog, AgentDraft, SetupDraft, SetupState } from '@shared/agents';
+import type { ModelRefreshOutcome } from '@shared/contract';
 import { useEffect } from 'react';
 import { sb } from '../sb';
 import { createStore } from './createStore';
@@ -12,6 +13,12 @@ export async function refreshAgents(): Promise<void> {
   const revision = ++catalogRevision;
   try { const catalog = await sb.invoke('agents:list', undefined); if (revision === catalogRevision) agents.set(s => ({ ...s, catalog, error: null })); }
   catch { if(revision === catalogRevision) agents.set(s => ({ ...s, error: t('appText.agents.catalogUnavailable') })); }
+}
+/** «Aggiorna elenco» (ADR 0256): every engine on is asked for its models now, then the catalog is read again. */
+export async function refreshModelLists(): Promise<ModelRefreshOutcome[]> {
+  const out = await sb.invoke('models:refresh', undefined);
+  await refreshAgents();
+  return out;
 }
 export async function refreshSetup(): Promise<void> {
   const revision = ++setupRevision;

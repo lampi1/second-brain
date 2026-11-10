@@ -2,7 +2,7 @@
 // tools, «Rispondi dopo», the «Esegui» runner and its requests, the emitter taps (Orchestrator wake, run results,
 // show_ui visuals), «Aggiorna» from GitHub and the role catalog. Each takes what it needs; none keeps state here.
 import { app } from 'electron';
-import type { CliStatus, Harness, ModelRegistry, RunInfo } from '../shared/contract';
+import type { CliStatus, Harness, ModelRegistry, RunInfo, SeenModel } from '../shared/contract';
 import type { AgentModelChoice } from '../shared/agents';
 import { modelRow } from './brain/routing';
 import { templateRoot } from './rules/tools';
@@ -187,14 +187,15 @@ export function createAppSource(ctx: Pick<Ctx, 'emitter' | 'userData'>, appRepo:
   });
 }
 
-/** A model of the catalog with what its registry row knows (the card's back offers only these, ADR 0211): the efforts
- *  it takes by their real names, its default effort and its context window. */
-function withModelFacts(m: { id: string; name: string }, reg: ModelRegistry | null): AgentModelChoice['models'][number] {
+/** A model of the catalog with what is known of it (the card's back offers only these, ADR 0211): the efforts it takes
+ *  by their real names, its default effort, its context window and list price. The registry row overrides the live
+ *  source (ADR 0256); a model with no row keeps what its source said, and its price is unknown (null). */
+function withModelFacts(m: SeenModel, reg: ModelRegistry | null): AgentModelChoice['models'][number] {
   const row = modelRow(m.id, reg);
-  if (!row) return m;
+  if (!row) return { ...m, price: null };
   // a brain made before the registry knew context windows: the release template's row says it
-  const window = row.contextWindow ?? modelRow(m.id, templateRegistry())?.contextWindow;
-  return { ...m, efforts: [...row.efforts], defaultEffort: row.defaultEffort, ...(window ? { contextWindow: window } : {}) };
+  const window = row.contextWindow ?? modelRow(m.id, templateRegistry())?.contextWindow ?? m.contextWindow;
+  return { ...m, ...(row.label ? { name: row.label } : {}), efforts: [...row.efforts], defaultEffort: row.defaultEffort, ...(window ? { contextWindow: window } : {}), price: { input: row.price.input, output: row.price.output } };
 }
 let template: ModelRegistry | null | undefined;
 /** The release template's harness/models.json, read once. */

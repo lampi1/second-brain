@@ -9,6 +9,9 @@
 .mp-error { display: flex; align-items: center; gap: 8px; justify-content: space-between; color: var(--red); }
 .mp-retry, .mp-btn, .mp-chip { font: inherit; cursor: pointer; border-radius: 6px; border: 1px solid var(--border-2); background: var(--surface-2); color: var(--text); }
 .mp-retry { padding: 3px 10px; font-size: 12px; flex: none; }
+.mp-searchbar { display: flex; gap: 6px; align-items: stretch; }
+.mp-searchbar .mp-search { flex: 1 1 auto; min-width: 0; }
+.mp-lists-note { margin-left: 4px; }
 .mp-list { display: flex; flex-direction: column; gap: 6px; overflow: auto; min-height: 0; flex: 1 1 auto; }
 .mp-group { display: flex; flex-direction: column; gap: 1px; }
 .mp-group-head { display: flex; align-items: center; gap: 6px; padding: 4px 4px 2px; font-size: 12px; color: var(--text); position: sticky; top: 0;

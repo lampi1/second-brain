@@ -1,7 +1,7 @@
 // Service interfaces of the main process. index.ts wires them to the IPC handlers; each module implements one.
 // Keeping them here lets the modules be built and tested apart (chats, browser + MCP, brain + feed).
 import type {
-  Answer, AppInfo, ChatCommand, BrainApiResult, CredentialEntry, BrowserEnv, BrowserHandoff, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, ContextStats, LearnResult, Effort, FeedAction, FeedEvent, HandoffInfo, Harness, ImageAttachment, JobRecordInput, ModelRegistry, ModelsSeen,
+  Answer, AppInfo, ChatCommand, BrainApiResult, CredentialEntry, BrowserEnv, BrowserHandoff, BrowserTab, BudgetAlert, ChangeBy, ChatItem, ChatSummary, ContextStats, LearnResult, Effort, FeedAction, FeedEvent, HandoffInfo, Harness, ImageAttachment, JobRecordInput, ModelRegistry, ModelsSeen, SeenModel,
   NewChat, PendingRequest, PermissionMode, SettingChange, SettingDef, SettingProposal, SettingRequestResult, Settings, SettingsPatch, SyncChoice, SyncState, Usage, ViewLayout, TasksState, SkillCatalog, SkillDoc, SkillSave, SkillSaveResult,
 } from '../shared/contract';
 import type { AgentMetrics, AgentRunOutcome, UserTaskEvents } from '../shared/agents';
@@ -154,7 +154,7 @@ export interface BrainService {
   /** A click of the Miglioramento page: improve.mjs apply|reject|rollback in the brain (brain/learn.ts). */
   learnAct(a: unknown): Promise<LearnResult>;
   /** The models a CLI session offered (brain/models-seen.ts): recorded by the chat manager, read by the Settings page. */
-  recordModels(harness: Harness, list: { id: string; name: string }[]): void;
+  recordModels(harness: Harness, list: SeenModel[]): void;
   modelsSeen(): ModelsSeen;
   /** Other modules push events into the same feed + notifications (e.g. the chat manager: an app chat waits for the user). */
   publish(events: FeedInput[]): void;

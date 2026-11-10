@@ -5,7 +5,7 @@ import type { Root } from './proctree';
 import type { RemoteControlReply } from './remote-control';
 import { RESULT_OUTPUT_MAX } from '../../shared/delegation';
 import type { AgentChildren, AgentToolPolicy, ChildObservation, PermissionCeiling } from '../../shared/agents';
-import type { Answer, ChatCommand, ChatItem, ChatState, Effort, Harness, ImageAttachment, PendingRequest, PermissionMode } from '../../shared/contract';
+import type { Answer, ChatCommand, ChatItem, ChatState, Effort, Harness, ImageAttachment, PendingRequest, PermissionMode, SeenModel } from '../../shared/contract';
 
 /** What a harness tells its owner. The owner (ChatManager) turns these into contract events. */
 export interface SessionSink {
@@ -23,8 +23,9 @@ export interface SessionSink {
   exit(info: { code: number | null; error: string | null; refusal?: string }): void;
   /** Plan rate-limit info as the CLI sent it (Claude: a stream-json `rate_limit_event`), for the brain's usage meter. */
   rateLimit?(msg: unknown): void;
-  /** The models the CLI offers (Cursor: models.availableModels of session/new or session/load), for the Settings page. */
-  models?(list: { id: string; name: string }[]): void;
+  /** The models the CLI offers (ACP: models.availableModels of session/new or session/load; Codex: model/list; Claude
+   *  Code: initialize), the live list of the model pickers (ADR 0256). */
+  models?(list: SeenModel[]): void;
   /** The commands "/<name>" the engine offers in this chat (skills, its own commands), for the input's "/" list. */
   commands?(list: ChatCommand[]): void;
   /** Provider observations only: an absent callback or event is not a zero child census. */

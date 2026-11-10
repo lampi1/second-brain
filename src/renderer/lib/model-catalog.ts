@@ -18,6 +18,8 @@ export interface CatalogRow {
   efforts?: Effort[];
   defaultEffort?: Effort | null;
   contextWindow?: number;
+  /** list USD per million input / output tokens; null = not known («prezzo sconosciuto», ADR 0256); absent = not said */
+  price?: { input: number; output: number } | null;
   /** the chosen id is not in the engine's list any more: kept so it still reads, marked as such */
   missing?: boolean;
 }
@@ -47,7 +49,7 @@ export function catalogGroups(choices: readonly AgentModelChoice[], current: Cat
   const groups = choices.map((c): EngineGroup => {
     const models: CatalogRow[] = c.models.map(m => ({ engine: c.engine, id: m.id, name: m.name || m.id,
       ...(m.efforts ? { efforts: m.efforts } : {}), ...(m.defaultEffort !== undefined ? { defaultEffort: m.defaultEffort } : {}),
-      ...(m.contextWindow ? { contextWindow: m.contextWindow } : {}) }));
+      ...(m.contextWindow ? { contextWindow: m.contextWindow } : {}), ...(m.price !== undefined ? { price: m.price } : {}) }));
     if (c.engine === current.engine && current.model && !models.some(m => m.id === current.model))
       models.push({ engine: c.engine, id: current.model, name: current.model, missing: true });
     const block: GroupBlock = !c.enabled ? 'off' : !c.trusted ? 'untrusted' : !c.modelSelectable ? 'not-selectable' : null;
@@ -79,6 +81,9 @@ export function rowEfforts(row: CatalogRow | undefined, all: readonly Effort[]):
 export function realEffort(asked: Effort | null, row: CatalogRow | undefined): Effort | null {
   return effortOn(asked, row?.efforts);
 }
+
+/** A price per million tokens, short: 4 → "4", 0.125 → "0.13". */
+export const usd = (n: number): string => (n >= 1 || n === 0 ? String(+n.toFixed(2)) : String(+n.toPrecision(2)));
 
 /** Tokens as a short size: 200000 → "200k", 1000000 → "1M". */
 export const kTokens = (n: number): string => n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 1000)}k`;

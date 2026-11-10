@@ -6,7 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import { createRoutedChat } from '../../src/main/chats/routed';
 import { routeChat, type RouteRequest } from '../../src/main/brain/routing';
-import { DEMO_REGISTRY } from '../../src/main/brain/routing-demo';
+import { TEST_REGISTRY as DEMO_REGISTRY } from '../fixtures/model-registry';
 import type { ChatSummary, NewChat, RoutedNewChat } from '../../src/shared/contract';
 
 const rules = { tasks: [['review', String.raw`\breview\b`, 'i'], ['qa-run', String.raw`\b(test ?case|qa)\b`, 'i'], ['bug-fix', String.raw`\b(fix|bug)\b`, 'i']] as [string, string, string][] };

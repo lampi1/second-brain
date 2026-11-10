@@ -6,7 +6,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { agentStatsLine, foldOutcome, knownOutcome, predictionLine, routeChat, Routing, validRoute, type AgentChoice, type LedgerOutcome, type RouteRequest } from '../../../src/main/brain/routing';
-import { DEMO_REGISTRY as REG } from '../../../src/main/brain/routing-demo';
+import { TEST_REGISTRY as REG } from '../../fixtures/model-registry';
 const base: RouteRequest = { title: 'Ordini · Fix totale', prompt: 'fix the bug', kind: 'bug-fix', ask: {}, defaults: { harness: 'claude', models: { claude: null, cursor: null }, effort: 'high' } };
 const agent = (p: Partial<AgentChoice> = {}): AgentChoice => ({ id: 'artisan', name: 'Artisan', version: 3, harness: 'claude', model: 'claude-sonnet-5-5', effort: 'low', chosenBy: 'orchestrator', ...p });
 

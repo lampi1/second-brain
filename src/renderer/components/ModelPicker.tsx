@@ -10,6 +10,7 @@
 // - a role (the back of an Agenti card): «Salva nel ruolo», the default of the role's new chats.
 // The default row says which default it is: «Predefinito della CLI» on a chat (the engine picks), «Modello del livello»
 // on a role (resolved at launch from the tier). Loading, error (with «Riprova»), no engine and no match are always said.
+// «Aggiorna elenco» asks every engine on for its models now (ADR 0256); a model with no known price says so.
 // On the Orchestrator's chip the top row is «Balanced mode»'s main switch (ADR 0218): every role then follows the
 // delegating agent's pick from the credits left, until it goes off.
 // Used by ModelChip, ChatMenu (through ChatTile) and AgentCardModel. Styles: styles/model-picker.css.
@@ -20,8 +21,8 @@ import { FLASH_ID, ORCHESTRATOR_ROLE_ID } from '@shared/roles';
 import { EFFORTS } from '../lib/format';
 import { engineName } from '../lib/engines';
 import { agentDraftOf } from '../lib/agent-drafts';
-import { catalogGroups, findRow, kTokens, realEffort, rowEfforts, searchGroups, type CatalogRow, type EngineGroup } from '../lib/model-catalog';
-import { refreshAgents, saveAgent, useAgents } from '../store/agents';
+import { catalogGroups, findRow, kTokens, realEffort, rowEfforts, searchGroups, usd, type CatalogRow, type EngineGroup } from '../lib/model-catalog';
+import { refreshAgents, refreshModelLists, saveAgent, useAgents } from '../store/agents';
 import { setChat, setSetting, useApp } from '../store/store';
 import { HarnessMark } from './Icons';
 import { Popover } from './ui';
@@ -51,8 +52,18 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
   const [pick, setPick] = useState<Pick>(() => startOf(scope));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // «Aggiorna elenco» (ADR 0256): null = not asked; else what it said
+  const [lists, setLists] = useState<{ busy: boolean; note: string | null }>({ busy: false, note: null });
   // every opening starts from what runs now, with an empty search
-  useEffect(() => { if (open) { setPick(startOf(scope)); setQuery(''); setError(null); } }, [open]);
+  useEffect(() => { if (open) { setPick(startOf(scope)); setQuery(''); setError(null); setLists({ busy: false, note: null }); } }, [open]);
+  const refreshLists = async () => {
+    setLists({ busy: true, note: null });
+    try {
+      const out = await refreshModelLists();
+      const failed = out.filter(o => !o.ok).map(o => engineName(o.engine));
+      setLists({ busy: false, note: failed.length ? t('mp.refreshFailed', { engines: failed.join(', ') }) : t('mp.refreshed') });
+    } catch (e) { setLists({ busy: false, note: t('mp.refreshFailed', { engines: e instanceof Error ? e.message : String(e) }) }); }
+  };
 
   const card = scope.kind === 'chat' ? scope.card ?? null : null;
   const flash = card?.id === FLASH_ID;
@@ -116,7 +127,7 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
   // ↓ from the search goes into the list
   const intoList = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== 'ArrowDown') return;
-    const first = e.currentTarget.parentElement?.querySelector<HTMLElement>('.mp-list [role="radio"][tabindex="0"]');
+    const first = e.currentTarget.closest('.mp')?.querySelector<HTMLElement>('.mp-list [role="radio"][tabindex="0"]');
     if (first) { e.preventDefault(); first.focus(); }
   };
 
@@ -131,8 +142,13 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
           onClick={() => void setSetting({ balancedMode: !balanced })} data-testid={`${testid}-balanced`}><span aria-hidden="true" /></button>
       </div>}
       <p className="mp-scope" data-testid={`${testid}-scope`}>{title}</p>
-      <input className="mp-search" type="search" value={query} placeholder={t('mp.search')} aria-label={t('mp.search')}
-        onChange={e => setQuery(e.target.value)} onKeyDown={intoList} data-testid={`${testid}-search`} />
+      <div className="mp-searchbar">
+        <input className="mp-search" type="search" value={query} placeholder={t('mp.search')} aria-label={t('mp.search')}
+          onChange={e => setQuery(e.target.value)} onKeyDown={intoList} data-testid={`${testid}-search`} />
+        <button type="button" className="mp-retry" disabled={lists.busy} title={t('mp.refreshTip')} onClick={() => void refreshLists()}
+          data-testid={`${testid}-refresh`}>{lists.busy ? t('mp.refreshing') : t('mp.refresh')}</button>
+      </div>
+      {lists.note && <p className="mp-note mp-lists-note" role="status" data-testid={`${testid}-refresh-note`}>{lists.note}</p>}
       {loadError && <div className="mp-state mp-error" role="alert" data-testid={`${testid}-load-error`}>
         <span>{t('mp.error', { error: loadError })}</span>
         <button type="button" className="mp-retry" onClick={() => void refreshAgents()} data-testid={`${testid}-retry`}>{t('mp.retry')}</button>
@@ -155,6 +171,7 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
             const meta = r.id === null ? (scope.kind === 'role' || flash ? t('mp.tierDefaultMeta') : t('mp.cliDefaultMeta'))
               : [r.contextWindow ? t('mp.context', { size: kTokens(r.contextWindow) }) : '',
                  r.efforts ? (r.efforts.length ? t('mp.efforts', { list: r.efforts.join(' · ') }) : t('mp.noEffort')) : '',
+                 r.price === null ? t('mp.priceUnknown') : r.price ? t('mp.price', { input: usd(r.price.input), output: usd(r.price.output) }) : '',
                  r.missing ? t('mp.missing') : ''].filter(Boolean).join(' · ');
             return <button key={r.id ?? ''} type="button" role="radio" aria-checked={on} tabIndex={stop && stop.engine === g.engine && stop.id === r.id ? 0 : -1}
               className={`mp-row${on ? ' on' : ''}${r.missing ? ' missing' : ''}`} disabled={busy || rowBlocked(g, r)}

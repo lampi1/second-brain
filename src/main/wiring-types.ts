@@ -16,6 +16,7 @@ import type { LifecycleApi } from './agents/lifecycle-api';
 import type { MorningService } from './morning/service';
 import type { MemoryService } from './rules/memory-service';
 import type { EnginesApi } from './engines/service';
+import type { ModelLists } from './engines/model-lists';
 import type { RecordingStore } from './recordings/store';
 import type { LearnService } from './learn/service';
 import type { Emitter } from './ipc';
@@ -83,6 +84,8 @@ export interface Wired {
   learn?: LearnService;
   /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */
   engines: EnginesApi;
+  /** the engines' live model lists (ADR 0256, engines/model-lists.ts); absent (demo) = 'models:refresh' answers nothing */
+  modelLists?: Pick<ModelLists, 'refresh'>;
   /** the chat folders' git branches ('chat:branches'); absent = read from disk (chats/branch.ts) */
   branches?: (cwds: unknown) => Record<string, string | null>;
   /** "Skill e agenti" (ADR 0018) */

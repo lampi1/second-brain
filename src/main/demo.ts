@@ -21,7 +21,7 @@ import type { BrainService, ChatService, FeedInput } from './services';
 import type { ConfigStore } from './brain/config';
 import { BrainApi, checkApiPath, type LocalApi } from './brain/api';
 import { KINDS } from './brain/live';
-import { DEMO_REGISTRY } from './brain/routing-demo';
+import { demoRegistry } from './brain/routing-demo';
 import { routeChat } from './brain/routing';
 import type { RouteRequest, RouteResult } from './brain/routing';
 import { electronNode } from './brain/node';
@@ -990,8 +990,8 @@ export class DemoBrain implements BrainService {
   // ---- brain data, plan windows, budget: honest "no data" in the demo
   recordJob(): { id: string } { return { id: `job-${++this.n}` }; }
   // ---- model choice: the real resolution on the demo's registry (brain/routing-demo.ts)
-  modelRegistry(): ModelRegistry { return DEMO_REGISTRY; }
-  route(req: RouteRequest): RouteResult { return routeChat(req, DEMO_REGISTRY, null, this.chats.now()); }
+  modelRegistry(): ModelRegistry { return demoRegistry(); }
+  route(req: RouteRequest): RouteResult { return routeChat(req, demoRegistry(), null, this.chats.now()); }
   observeRouting(): void { /* the demo keeps no ledger */ }
   lastRoutingActual(): null { return null; }
   observeRoutingOutcome(): void { /* the demo keeps no ledger */ }
@@ -1030,7 +1030,7 @@ export class DemoBrain implements BrainService {
   recordModels(): void { /* the demo's Cursor list is fixed */ }
   modelsSeen(): ModelsSeen {
     // Claude: the demo registry's rows, so a card's back lists real models with their efforts and window (ADR 0211)
-    return { claude: { at: 0, ids: DEMO_REGISTRY.models.filter(m => m.harness === 'claude').map(m => ({ id: m.id, name: m.id })) }, cursor: { at: this.chats.now(), ids: [
+    return { claude: { at: 0, ids: demoRegistry().models.filter(m => m.harness === 'claude').map(m => ({ id: m.id, name: m.label || m.id })) }, cursor: { at: this.chats.now(), ids: [
       { id: 'auto', name: 'Auto' }, { id: 'gpt-5', name: 'GPT-5' }, { id: 'grok-4.7', name: 'Grok 4.7' }, { id: 'grok-4.7-fast', name: 'Grok 4.7 Fast' }, { id: 'sonnet-4.5', name: 'Sonnet 4.5' },
     ] } };
   }

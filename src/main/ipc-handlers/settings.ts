@@ -1,5 +1,5 @@
 // IPC handlers, Settings and engines: settings and proposals, API keys, engine trust and spend, the job ledger, the
-// models seen, brain sync. Registered by src/main/index.ts with every other group (Handlers in ipc.ts
+// models seen and their refresh, brain sync. Registered by src/main/index.ts with every other group (Handlers in ipc.ts
 // keeps the set complete); each channel's shape is in src/shared/contract/*.ts.
 import { errText, log } from '../log';
 import { uiLang } from '../locale';
@@ -30,6 +30,7 @@ export function settingsHandlers({ s, profile }: HandlerContext): HandlersOf<'se
     'settings:confirm': a => s.brain.confirmSetting(a?.proposalId, a?.accept),
     'estimate:record': a => s.brain.recordJob(a),
     'models:seen': () => withApiModels(s.brain.modelsSeen()),
+    'models:refresh': async a => (s.modelLists ? s.modelLists.refresh(a && typeof a.engine === 'string' ? a.engine : undefined) : []),
     'sync:get': () => s.brain.syncState(),
     'sync:now': a => s.brain.syncNow(a?.domain),
     'sync:resolve': a => s.brain.syncResolve(a?.domain, a?.choice),

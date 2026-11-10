@@ -11,6 +11,9 @@ describe('models seen', () => {
     expect(cleanModels([{ id: 'grok-4.7', name: 'Grok 4.7' }, { id: 'grok-4.7', name: 'dup' }, { id: 'bad id', name: 'x' }, { id: 'auto', name: '' }, null, 'x']))
       .toEqual([{ id: 'grok-4.7', name: 'Grok 4.7' }, { id: 'auto', name: 'auto' }]);
     expect(cleanModels('nope')).toEqual([]);
+    // what a live source says of a model stays (ADR 0256): known effort names only, a positive context window
+    expect(cleanModels([{ id: 'claude-fable-5-2', name: 'Fable 5.2', efforts: ['low', 'turbo', 'max'], contextWindow: 1_000_000 }, { id: 'h', name: 'H', efforts: 'x', contextWindow: -1 }]))
+      .toEqual([{ id: 'claude-fable-5-2', name: 'Fable 5.2', efforts: ['low', 'max'], contextWindow: 1_000_000 }, { id: 'h', name: 'H' }]);
   });
 
   it('keeps each engine\'s last list across restarts, writes only on a change', () => {

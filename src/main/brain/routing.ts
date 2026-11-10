@@ -2,7 +2,7 @@
 // gets. A role chat takes its card's engine, model (its tier's when the card names none) and effort (routeAgent); any
 // other chat ("Nuova chat", a new Orchestrator) takes the user's "Chat aperte dall'Orchestrator" defaults, or what the
 // user named (an override). Owner, 2026-10-30 (decision «Toglierlo»): no table picks a model per kind of work any more.
-// The brain still owns the model registry and price table (harness/models.json, read here: registry()). Each routed chat
+// The brain's harness/models.json only overrides what a model costs and which tier it is (ADR 0256): never an allow-list. Each routed chat
 // still carries its kind and area (the one taxonomy of shared/work-concepts.ts) and appends its prediction and measured
 // actuals to the improvement loop's shared ledger (ops/state/improve/outcomes.jsonl, append-only, same id = later line
 // wins), which the Qualità tab's «Tipo di lavoro» card and the verified outcomes read. Old files of the table
@@ -84,7 +84,8 @@ export function resolve(ask: RouteAsk, defaults: RouteDefaults, reg: ModelRegist
   if (!ask.effort && effort && m && !(m.efforts ?? []).includes(effort)) effort = null;
   if (model && m && m.harness !== harness) return { error: `${m.id} gira solo su ${m.harness}, non su ${harness}` };
   if (harness !== 'claude' && looksClaude(model)) return { error: 'un modello Claude gira solo sull’harness claude' };
-  if (ask.model && harness === 'claude' && reg && !m) return { error: `modello «${ask.model}» non è in harness/models.json del brain` };
+  // a model the registry does not know is taken as it is (ADR 0256: models.json only overrides prices, tiers and labels,
+  // never an allow-list): the engine's live list offers it, and the CLI itself refuses an id it cannot run
   if (ask.effort && !takesEffort(harness)) return { error: `lo sforzo non vale per ${engineLabel(harness)}: scegli il modello` };
   if (effort && !EFFORTS.includes(effort)) return { error: `sforzo «${String(effort)}»: ${EFFORTS.join(' | ')}` };
   if (effort && m && !(m.efforts ?? []).includes(effort)) return { error: `${m.id} non ha lo sforzo «${effort}»` };
