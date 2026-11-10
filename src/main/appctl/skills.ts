@@ -56,7 +56,7 @@ export function skillTools(lib: SkillLibrary, who: () => string): ToolDef[] {
       const r = await lib.write({ skill: name, path: str(a.file, 300) || 'SKILL.md', text }, { who: who(), reason });
       if (!r.ok) throw new Error(r.error);
       const warnings = r.skill.warnings.map(lintText);
-      return { ok: true, skill: r.skill.name, origin: r.skill.origin, files: r.skill.files.map(f => f.path), changeId: r.changeId, ...(warnings.length ? { warnings, fix: 'Fix these and write again (the app\'s skill-authoring skill says how).' } : {}), note: r.changeId ? 'Saved, with an Undo in the skill\'s history (Memoria → Skill).' : 'Nothing changed: the file already had this text.' };
+      return { ok: true, skill: r.skill.name, origin: r.skill.origin, files: r.skill.files.map(f => f.path), changeId: r.changeId, ...(warnings.length ? { warnings, fix: 'Fix these (a file SKILL.md names may simply not be written yet: write it next); the app\'s skill-authoring skill says how.' } : {}), note: r.changeId ? 'Saved, with an Undo in the skill\'s history (Memoria → Skill).' : 'Nothing changed: the file already had this text.' };
     },
   }, {
     name: 'app_skill_roles',

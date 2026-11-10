@@ -13,20 +13,22 @@ export interface SkillLint { code: SkillLintCode; detail?: string }
 export const LONG_LINES = 500;
 
 /** «Use when», «Usala quando», «Wenn»…: the part of a description that tells a model when to load the skill. */
-const WHEN = /\b(?:use|used|usa(?:la|lo|re)?|verwende|nutze)\b[^.;\n]{0,60}\b(?:when|whenever|if|for|to|before|after|on|quando|se|per|prima|dopo|wenn|bei|für|vor|nach)\b|\bwhen(?:ever)?\b|\bquando\b|\bwenn\b|\bsobald\b/i;
+const WHEN = /\b(?:use|used|usa(?:la|lo|re)?|verwende|nutze)\b[^.;\n]{0,60}\b(?:when|whenever|if|for|to|before|after|on|quando|se|per|prima|dopo|wenn|bei|für|vor|nach)\b|\bwhen(?:ever)?\b|\btrigger(?:s|ed)?\b|\binvoke\b|\bquando\b|\bwenn\b|\bsobald\b/i;
 
-/** Package paths SKILL.md names: `${CLAUDE_SKILL_DIR}/x`, `scripts/x`, `references/x`, `assets/x`, and relative
- *  Markdown links. A path with a placeholder (<x>, *, {x}) is an example, not a file. */
-function referenced(body: string): string[] {
+/** Package paths SKILL.md names: `${CLAUDE_SKILL_DIR}/x`, relative Markdown links, and a bare `scripts/x`,
+ *  `references/x` or `assets/x` when the package has that folder (else it is a path in the repo the skill works on,
+ *  like `node scripts/release.mjs`). A path with a placeholder (<x>, *, {x}) is an example, not a file. */
+function referenced(body: string, folders: ReadonlySet<string>): string[] {
   const out = new Set<string>();
   const add = (p: string) => {
-    const clean = p.replace(/[)>\]`'".,;:!?]+$/, '').replace(/^\.\//, '');
+    let clean = p.replace(/[)>\]`'".,;:!?»”’—–]+$/u, '').replace(/^\.\//, '');
+    try { clean = decodeURIComponent(clean); } catch { /* as written */ }
     if (!clean || /[<>*{}$|]/.test(clean) || clean.endsWith('/') || clean.includes('..')) return;
     out.add(clean);
   };
-  for (const m of body.matchAll(/\$\{CLAUDE_SKILL_DIR\}\/([^\s`'"()<>]+)/g)) add(m[1]!);
-  for (const m of body.matchAll(/(?<![\w./$}-])(?:\.\/)?((?:scripts|references|assets)\/[^\s`'"()<>]+)/g)) add(m[1]!);
-  for (const m of body.matchAll(/\]\(([^)\s#]+)(?:#[^)]*)?\)/g)) if (!/^[a-z][\w+.-]*:|^\/|^~/i.test(m[1]!)) add(m[1]!);
+  for (const m of body.matchAll(/\$\{CLAUDE_SKILL_DIR\}\/([^\s`'"()<>«»“”]+)/g)) add(m[1]!);
+  for (const m of body.matchAll(/(?<![\w./$}<-])(?:\.\/)?((scripts|references|assets)\/[^\s`'"()<>«»“”]+)/g)) if (folders.has(m[2]!)) add(m[1]!);
+  for (const m of body.matchAll(/\]\(\s*(?:<([^>]+)>|([^)\s#]+))(?:#[^)]*)?\)/g)) { const t = (m[1] ?? m[2])!; if (!/^[a-z][\w+.-]*:|^\/|^~/i.test(t)) add(t); }
   return [...out];
 }
 
@@ -38,10 +40,11 @@ export function lintSkill(folderName: string, text: string, files: readonly { pa
   if (name && name !== folderName) out.push({ code: 'name-folder', detail: name });
   const desc = field(p, 'description')?.trim();
   if (desc && !WHEN.test(desc)) out.push({ code: 'no-when' });
-  const lines = p.body.split(/\r?\n/).length;
+  const lines = p.body.replace(/\r?\n$/, '').split(/\r?\n/).length;
   if (lines > LONG_LINES) out.push({ code: 'long', detail: String(lines) });
-  const have = new Set(files.map(f => f.path.toLowerCase()));
-  for (const ref of referenced(p.body)) if (!have.has(ref.toLowerCase())) out.push({ code: 'missing-file', detail: ref });
+  const have = new Set(files.map(f => f.path));
+  const folders = new Set(files.map(f => f.path.split('/')[0]!).filter(d => d !== 'SKILL.md'));
+  for (const ref of referenced(p.body, folders)) if (!have.has(ref)) out.push({ code: 'missing-file', detail: ref });
   return out;
 }
 
@@ -51,6 +54,6 @@ export function lintText(w: SkillLint): string {
     case 'name-folder': return `frontmatter name «${w.detail}» differs from the folder name: make them equal`;
     case 'no-when': return 'the description does not say when to use the skill: add "Use when …" with the words the user asks with';
     case 'long': return `SKILL.md has ${w.detail} lines: keep it under ${LONG_LINES}, move long text to references/`;
-    case 'missing-file': return `SKILL.md points to ${w.detail}, which is not in the package`;
+    case 'missing-file': return `SKILL.md points to ${w.detail}, which is not in the package: add the file, or correct the path`;
   }
 }

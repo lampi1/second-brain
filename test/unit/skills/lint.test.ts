@@ -15,7 +15,7 @@ describe('the package checks', () => {
     expect(codes('export', md('export', 'Helps with exports.'))).toEqual(['no-when']);
     expect(codes('export', md('export', 'Esportazioni. Usala quando un export va in timeout.'))).toEqual([]);
     expect(codes('export', md('export', 'Exporte. Nutze ihn, wenn ein Export hängt.'))).toEqual([]);
-    expect(codes('export', md('export', 'Use when exporting.', 'x\n'.repeat(520)))).toEqual(['long:521']);
+    expect(codes('export', md('export', 'Use when exporting.', 'x\n'.repeat(520)))).toEqual(['long:520']);
   });
 
   it('checks the package paths SKILL.md names; placeholders, URLs and other folders are not files', () => {
@@ -26,6 +26,10 @@ describe('the package checks', () => {
     ].join('\n');
     expect(codes('r', md('r', 'Use when r.', body), ['SKILL.md', 'scripts/run.ps1', 'references/guide.md', 'assets/report.md'])).toEqual(['missing-file:scripts/gone.sh']);
     expect(lintText({ code: 'missing-file', detail: 'scripts/gone.sh' })).toContain('scripts/gone.sh');
+    // a package without scripts/: «node scripts/release.mjs» is the repo's own; quotes and links in their forms
+    expect(codes('r', md('r', 'Use when r.', 'In the repo run `node scripts/release.mjs`.'))).toEqual([]);
+    expect(codes('r', md('r', 'Use when r.', 'Read «references/a.md», then [b](<references/my doc.md>) and [c](references/c%20d.md)—done.'), ['SKILL.md', 'references/a.md', 'references/my doc.md', 'references/c d.md'])).toEqual([]);
+    expect(codes('r', md('r', 'Use when r.', 'x\n'.repeat(499)))).toEqual([]);
   });
 
   it('every skill the app ships passes them', () => {

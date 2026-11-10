@@ -134,7 +134,7 @@ describe('SkillLibrary', () => {
 
   it('lists the package warnings of a skill (#373)', async () => {
     const { lib } = setup();
-    await lib.write({ skill: 'vago', path: 'SKILL.md', text: '---\nname: vago\ndescription: Helps with things.\n---\nRun scripts/x.sh.\n' }, { who: 'Orchestrator' });
+    await lib.write({ skill: 'vago', path: 'SKILL.md', text: '---\nname: vago\ndescription: Helps with things.\n---\nRun ${CLAUDE_SKILL_DIR}/scripts/x.sh.\n' }, { who: 'Orchestrator' });
     const k = (await lib.state()).skills.find(x => x.name === 'vago')!;
     expect(k.warnings.map(w => w.code)).toEqual(['no-when', 'missing-file']);
   });

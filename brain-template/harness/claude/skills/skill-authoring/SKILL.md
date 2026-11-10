@@ -18,8 +18,8 @@ come out right.
    («exports: timeouts, missing rows, wrong format»).
 
 ## The frontmatter
-- `name`: the folder name, lowercase letters, digits and single hyphens, at most 64 characters, never `claude` or
-  `anthropic`. Brain skills keep only `name`, `description` and, if needed, `metadata` (other engines ignore
+- `name`: the folder name, lowercase letters, digits and single hyphens, at most 64 characters, never containing
+  `claude` or `anthropic`. Brain skills keep only `name`, `description` and, if needed, `metadata` (other engines ignore
   Claude-only keys).
 - `description` (at most 1024 characters, third person) is how a model decides to load the skill. Write: what it
   does, `Use when` with the words {{OWNER}} really asks with (Italian and English, the area's related questions too),
