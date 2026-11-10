@@ -284,3 +284,6 @@ docs/screenshots/maintenance.webp binary-media sha256:c72672504fda2586138d85bde2
 docs/screenshots/memory.webp binary-media sha256:d51550ba279e32002ac02357150729295c08e82f7aa0719be900470a4c9289f5
 docs/screenshots/plan.webp binary-media sha256:8e886403966dc526be0a2032137f8db0435396783928db92bc209fd6210e8228
 docs/screenshots/plan.webp binary-media sha256:ad85834de866b0516a3bdbf011ddf6ef6b860930c81d37908b0ed58d285d8784
+# The README shots of the AI News (ADR 0264): the News tab, and Learn retaken with the Impara tabs.
+docs/screenshots/learn.webp binary-media sha256:ad46b388f5cf9056d7eed8a4dd7ac1446936e0353de3404d2c3c175a27c1799f
+docs/screenshots/news.webp binary-media sha256:30729ff776c39b084b34619d2b47f91b14c7c12325b9c30e0f0ae7bf7242a06e
