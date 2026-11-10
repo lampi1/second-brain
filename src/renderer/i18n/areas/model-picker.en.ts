@@ -25,6 +25,7 @@ export const modelPickerEn: typeof modelPickerIt = {
   'mp.cliDefaultMeta': 'the model the engine picks itself',
   'mp.tierDefault': (p: { tier: string }) => `Tier model (${p.tier})`,
   'mp.tierDefaultMeta': 'picked at launch from the role\'s tier',
+  'mp.registry': 'from the registry',
   'mp.missing': 'no longer in the engine\'s list',
   'mp.context': (p: { size: string }) => `context ${p.size}`,
   'mp.efforts': (p: { list: string }) => `effort ${p.list}`,

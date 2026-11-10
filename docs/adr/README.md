@@ -271,3 +271,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0264](0264-skill-authoring-guide-and-package-checks.md) The app ships how to write a skill, and checks every package — accepted
 - [0265](0265-impara-ai-newspaper.md) Impara becomes an AI newspaper: chosen sources, how each is read — accepted
 - [0266](0266-the-app-writes-the-journal-fatto-line.md) The app writes the journal's «fatto» line of every result — accepted
+- [0267](0267-installed-claude-code-and-registry-models.md) The installed Claude Code runs by default; every menu adds the registry's models — accepted

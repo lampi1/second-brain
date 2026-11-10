@@ -8,7 +8,7 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { runtimePerformance } from '../runtime-performance';
 import { runtimeAdapter, type PreparedAdapter } from '../agent-runtime/adapter-contract';
-import type { CursorReasoning, ModelsSeen } from '../../shared/contract';
+import type { CursorReasoning, ModelsSeen, SeenModel } from '../../shared/contract';
 import { AcpSession, type AcpOptions } from '../chats/acp';
 import { ApiSession } from '../chats/api';
 import { claudeLaunch } from '../brain/adapters/claude-plugin';
@@ -127,24 +127,25 @@ function prepared(launch: PreparedAdapter, sink: SessionSink): HarnessSession {
   }
 }
 
-/** The models each engine offers (models:seen, ADR 0256): its live list (engines/model-lists.ts, or a chat's session),
- *  the cached one when the source failed (the store keeps the last), and only for an engine that never listed any its
- *  rows in the brain's harness/models.json (at 0: the last fallback). A Claude engine also gets the claude-* models the
- *  Anthropic Models API listed on the user's Anthropic API key, so a model out today shows up even when the bundled
- *  Claude Code does not name it yet (the key itself never leaves its own engine). */
+/** The models each engine offers (models:seen, ADR 0256 amended by ADR 0266): its live list (engines/model-lists.ts,
+ *  or a chat's session), the cached one when the source failed (the store keeps the last), plus the rows of the brain's
+ *  harness/models.json for that engine the live list does not name (registry: true, «dal registro»: a model out today
+ *  can be picked before the CLI lists it); an engine that never listed any gets only those rows (at 0). A Claude engine
+ *  also gets the claude-* models the Anthropic Models API listed on the user's Anthropic API key (the key itself never
+ *  leaves its own engine). The live row wins a duplicate; ids are compared without a date suffix (-20261001). */
 export function withApiModels(seen: ModelsSeen): ModelsSeen {
   const out: ModelsSeen = { ...seen };
+  const bare = (id: string) => id.toLowerCase().trim().replace(/\[.*\]$/, '').replace(/-\d{8}$/, ''); // as live-cost.ts
   for (const e of engines()) {
-    if (!out[e.id]?.ids.length) {
-      const ids = registryModels(priceEnginesOf(e));
-      if (ids.length) out[e.id] = { ids, at: 0 };
-    }
     const api = anthropicApi();
     const extra = e.kind === 'claude' && api ? (seen[api.id]?.ids ?? []).filter(m => /^claude-/.test(m.id)) : [];
-    const have = new Set((out[e.id]?.ids ?? []).map(m => m.id.replace(/-\d{8}$/, '')));
-    const add = extra.filter(m => !have.has(m.id.replace(/-\d{8}$/, '')));
-    // a registry fallback (at 0) stays labelled so: only the ids are added
-    if (add.length) out[e.id] = { ids: [...(out[e.id]?.ids ?? []), ...add], at: out[e.id] ? out[e.id]!.at : seen[api!.id]!.at };
+    const registry = registryModels(priceEnginesOf(e)).map((m): SeenModel => ({ ...m, registry: true }));
+    const live = seen[e.id]?.ids ?? [], have = new Set(live.map(m => bare(m.id)));
+    const add = [...extra, ...registry].filter(m => { const k = bare(m.id); if (have.has(k)) return false; have.add(k); return true; });
+    if (!add.length) continue;
+    // a list made only of models.json rows stays labelled so (at 0); the Models API's own time otherwise
+    const at = live.length ? seen[e.id]!.at : add.some(m => m.registry) ? 0 : seen[api!.id]!.at;
+    out[e.id] = { ids: [...live, ...add], at };
   }
   return out;
 }

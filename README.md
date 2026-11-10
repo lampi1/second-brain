@@ -135,7 +135,9 @@ performance %. Reviews are cheap: free signals first, then a sample of finished 
 session on the first idle moment of the night (or after you turn the PC back on), never shown on the Grindhouse.
 Engine, model and effort come from one picker, the same on the back of a card, on the Orchestrator's model chip and in
 a strip's menu: search the four engines, see each model's context and effort, then say what changes: just this chat,
-or the default for new chats.
+or the default for new chats. A model out today shows up the day your Claude Code knows it: the app runs the Claude
+Code installed on your PC (its own copy only when there is none, with a notice in Settings), and each menu adds the
+models of your brain's models.json the live list does not name yet, marked «from the registry».
 
 <p align="center"><img src="docs/screenshots/agent-levels.webp" alt="Agent cards for the Orchestrator, the Artisan and the Sentinel, each with its level, verified successes and performance percentage" width="720"></p>
 

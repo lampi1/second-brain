@@ -26,6 +26,7 @@ export const modelPickerIt = {
   'mp.cliDefaultMeta': 'il modello che il motore sceglie da sé',
   'mp.tierDefault': (p: { tier: string }) => `Modello del livello (${p.tier})`,
   'mp.tierDefaultMeta': 'scelto all’avvio dal livello del ruolo',
+  'mp.registry': 'dal registro',
   'mp.missing': 'non più nell’elenco del motore',
   'mp.context': (p: { size: string }) => `contesto ${p.size}`,
   'mp.efforts': (p: { list: string }) => `effort ${p.list}`,

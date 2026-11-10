@@ -1,4 +1,4 @@
-// The engines the app drives (ADR 0010: Claude embedded; ADR 0046: any ACP CLI or HTTP model of the registry): where
+// The engines the app drives (ADR 0267: the installed Claude Code, the app's copy only as a fallback; ADR 0046: any ACP CLI or HTTP model of the registry): where
 // they are, which version, whether the user is logged in, and opening the OFFICIAL login in a visible terminal. The app
 // never sees, stores or types a login: the engine's own login flow runs in a console window the user works in (API keys
 // are the one exception, typed in Settings: engines/secrets.ts). Built-in CLI status commands check login without
@@ -11,12 +11,13 @@ import { launchPosixLogin } from '../modules/ai-first/login-terminal';
 import fs from 'node:fs';
 import path from 'node:path';
 import type { CliStatus, Harness } from '../shared/contract';
-import { commandFor, engineAllowed, findCli, resolveAcp, resolveClaude, resolveCursor } from './chats/cli';
+import { commandFor, engineAllowed, findCli, isClaudePackageScript, resolveAcp, resolveClaude, resolveCursor } from './chats/cli';
 import { engineOrThrow, engines, type EngineDef } from './engines/registry';
 import { log } from './log';
 import { recordReadiness } from './engines/readiness';
 
-/** The same Claude engine the chats run (embedded binary, ADR 0010), so status and login match what chats use. */
+/** The same Claude engine the chats and the model probe run (the installed Claude Code, else the app's copy: ADR 0267),
+ *  so status and login match what chats use. */
 export const claudePath = (): string | null => resolveClaude()?.path ?? null;
 /** Cursor's own launcher for status and the visible login window (chats start its node.exe directly). */
 export const cursorPath = (): string | null => {
@@ -42,7 +43,7 @@ function runFixed(exe: string, args: string[], timeout = 20000): Promise<{ stdou
 const version = (out: string) => out.match(/\d+\.\d+\.\d+[\w.+-]*/)?.[0] ?? (out.trim() || null);
 
 async function claudeStatus(checkLogin: boolean): Promise<CliStatus> {
-  const p = claudePath();
+  const c = resolveClaude(), p = c?.path ?? null;
   if (!p) return { found: false, path: null, version: null, loggedIn: null };
   const v = await runFixed(p, ['--version']);
   let loggedIn: boolean | null = null, account: string | null = null;
@@ -50,7 +51,7 @@ async function claudeStatus(checkLogin: boolean): Promise<CliStatus> {
     const a = await runFixed(p, ['auth', 'status']);
     try { const s = JSON.parse(a.stdout) as { loggedIn?: boolean; email?: string; authMethod?: string } | null; loggedIn = typeof s?.loggedIn === 'boolean' ? s.loggedIn : null; account = s?.email ? `${s.authMethod ?? ''} ${s.email}`.trim() : null; } catch { /* old or fake CLI: unknown */ }
   }
-  return { found: true, path: p, version: version(v.stdout), loggedIn, account };
+  return { found: true, path: p, version: version(v.stdout), loggedIn, account, ...(c?.fallback ? { fallback: true as const } : {}) };
 }
 
 /** An ACP engine's command for status and login: Cursor's launcher, else its CLI as chats resolve it. */
@@ -116,6 +117,8 @@ export function openLogin(harness: Harness): void | Promise<void> {
   const args = e.login.join(' ');
   const title = `Accesso ${e.label}`;
   // `start "<title>" cmd /k ""<exe>" <args>"`: a new window that stays open after the login
-  spawn(process.env.ComSpec ?? 'cmd.exe', ['/d', '/c', `start "${title}" cmd /k ""${p}" ${args}"`], { detached: true, stdio: 'ignore', windowsHide: false, windowsVerbatimArguments: true }).unref();
+  // an npm Claude Code's cli.js runs with the user's node, never through the .js file association (ADR 0267)
+  const exe = isClaudePackageScript(p) ? `"${commandFor(p, [], process.env).command}" "${p}"` : `"${p}"`;
+  spawn(process.env.ComSpec ?? 'cmd.exe', ['/d', '/c', `start "${title}" cmd /k "${exe} ${args}"`], { detached: true, stdio: 'ignore', windowsHide: false, windowsVerbatimArguments: true }).unref();
   log.info('cli', 'official login opened in a terminal', { data: { harness } });
 }

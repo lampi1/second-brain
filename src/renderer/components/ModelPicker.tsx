@@ -172,7 +172,7 @@ export function ModelPicker({ scope, anchor, open, onClose, testid }: {
               : [r.contextWindow ? t('mp.context', { size: kTokens(r.contextWindow) }) : '',
                  r.efforts ? (r.efforts.length ? t('mp.efforts', { list: r.efforts.join(' · ') }) : t('mp.noEffort')) : '',
                  r.price === null ? t('mp.priceUnknown') : r.price ? t('mp.price', { input: usd(r.price.input), output: usd(r.price.output) }) : '',
-                 r.missing ? t('mp.missing') : ''].filter(Boolean).join(' · ');
+                 r.registry ? t('mp.registry') : '', r.missing ? t('mp.missing') : ''].filter(Boolean).join(' · ');
             return <button key={r.id ?? ''} type="button" role="radio" aria-checked={on} tabIndex={stop && stop.engine === g.engine && stop.id === r.id ? 0 : -1}
               className={`mp-row${on ? ' on' : ''}${r.missing ? ' missing' : ''}`} disabled={busy || rowBlocked(g, r)}
               onClick={() => choose(g, r)} data-testid={`${testid}-row-${g.engine}-${r.id ?? 'default'}`}>

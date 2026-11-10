@@ -44,6 +44,10 @@ describe('catalogGroups', () => {
     expect(groups.find(g => g.engine === 'cursor')!.rows.some(r => r.id === 'claude-old-1')).toBe(false);
     expect(catalogGroups(CHOICES, { engine: 'claude', model: 'claude-opus-5-5' }, 'x')[0]!.rows.filter(r => r.missing)).toEqual([]);
   });
+  it('marks a model that only the brain\'s models.json names, «dal registro» (ADR 0267)', () => {
+    const groups = catalogGroups([choice('codex', { source: 'observed', models: [{ id: 'gpt-5.5', name: 'GPT-5.5' }, { id: 'gpt-6', name: 'GPT-6', registry: true }] })], { engine: 'codex', model: null }, 'x');
+    expect(groups[0]!.models.map(m => [m.id, m.registry ?? false])).toEqual([['gpt-5.5', false], ['gpt-6', true]]);
+  });
   it('an empty catalog gives no group (the picker says so)', () => {
     expect(catalogGroups([], { engine: 'claude', model: null }, 'x')).toEqual([]);
   });

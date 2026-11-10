@@ -89,7 +89,8 @@ export type ChangelogAction = 'added' | 'edited' | 'fixed' | 'deleted' | 'restor
 export interface ChangelogEntry { at: string; kind: ChangelogKind; action: ChangelogAction; target: string; by: string; summary: string }
 /** One model an engine's live source listed (ADR 0256): its id as `--model` takes it, its name, and what the source
  *  says about it (effort levels, context window); absent = the source did not say. */
-export interface SeenModel { id: string; name: string; efforts?: Effort[]; contextWindow?: number }
+/** registry: from the brain's harness/models.json, not named by the engine's live list («dal registro», ADR 0266). */
+export interface SeenModel { id: string; name: string; efforts?: Effort[]; contextWindow?: number; registry?: true }
 /** Per engine, the models its live source listed last (engines/model-lists.ts: Claude Code's initialize, Codex's
  *  model/list, an ACP session/new, an HTTP engine's /models; or a chat's session), kept in userData: the cache when the
  *  source fails. at = when it was listed (0 = the brain's harness/models.json, the last fallback). Absent = none yet. */

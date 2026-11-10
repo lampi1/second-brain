@@ -193,9 +193,35 @@ describe('what the pickers and routing read', () => {
       const none = withApiModels({});
       expect(none.claude?.at).toBe(0);
       expect(ids(none.cursor?.ids)).toEqual(['grok-4.7']);
-      // a live Claude list wins whole; the Models API's claude-* models the CLI does not name are added
+      // a live Claude list comes first; the Models API's claude-* models the CLI does not name are added, then the
+      // models.json rows neither names (ADR 0266)
       const seen: ModelsSeen = { claude: { ids: [{ id: 'claude-opus-5-5', name: 'Opus 5.5' }], at: 5 }, anthropic: { ids: [{ id: 'claude-fable-5-2', name: 'Claude Fable 5.2' }, { id: 'claude-opus-5-5-20261001', name: 'x' }], at: 9 } };
-      expect(ids(withApiModels(seen).claude?.ids)).toEqual(['claude-opus-5-5', 'claude-fable-5-2']);
+      expect(ids(withApiModels(seen).claude?.ids)).toEqual(['claude-opus-5-5', 'claude-fable-5-2', 'claude-fable-5-1', 'claude-sonnet-5-5', 'claude-haiku-5-5', 'claude-sonnet-4-6']);
+    } finally { setPriceTable(() => null); }
+  });
+
+  it('every engine kind shows its live list plus the models.json rows it does not name, «dal registro» (ADR 0266)', () => {
+    const row = (id: string, harness: string) => ({ ...TEST_REGISTRY.models[0]!, id, harness, aliases: [], label: undefined });
+    const reg = { ...TEST_REGISTRY, models: [...TEST_REGISTRY.models,
+      row('gpt-6-codex', 'codex'), row('gpt-5.5', 'codex'), row('claude-fable-5-2', 'claude')] };
+    setPriceTable(() => reg);
+    try {
+      const seen: ModelsSeen = {
+        claude: { ids: [{ id: 'claude-opus-5-5-20261001', name: 'Opus 5.5' }], at: 5 },
+        codex: { ids: [{ id: 'gpt-5.5', name: 'GPT-5.5' }], at: 6 },
+        cursor: { ids: [{ id: 'composer-3', name: 'Composer 3' }, { id: 'grok-4.7[reasoning=high]', name: 'Grok 4.7 High' }], at: 7 },
+        anthropic: { ids: [{ id: 'claude-fable-5-2', name: 'Claude Fable 5.2' }], at: 8 },
+      };
+      const out = withApiModels(seen);
+      const rows = (h: keyof ModelsSeen) => out[h]!.ids.map(m => `${m.id}${m.registry ? ' (registro)' : ''}`);
+      // claude: live first; the Models API's new model once (not again from models.json); opus once (date suffix)
+      expect(rows('claude')).toEqual(['claude-opus-5-5-20261001', 'claude-fable-5-2', 'claude-fable-5-1 (registro)', 'claude-sonnet-5-5 (registro)', 'claude-haiku-5-5 (registro)', 'claude-sonnet-4-6 (registro)']);
+      expect(rows('codex')).toEqual(['gpt-5.5', 'gpt-6-codex (registro)']); // the live row wins the duplicate
+      expect(rows('cursor')).toEqual(['composer-3', 'grok-4.7[reasoning=high]']); // an ACP engine: a [parameters] id names its row too
+      expect(rows('anthropic')).toEqual(['claude-fable-5-2', 'claude-fable-5-1 (registro)', 'claude-opus-5-5 (registro)', 'claude-sonnet-5-5 (registro)', 'claude-haiku-5-5 (registro)', 'claude-sonnet-4-6 (registro)']); // an HTTP engine
+      // a live list keeps its time (the menu says «visto»), registry rows or not
+      expect([out.claude!.at, out.codex!.at, out.cursor!.at]).toEqual([5, 6, 7]);
+      expect(withApiModels({}).codex).toMatchObject({ at: 0, ids: [{ id: 'gpt-6-codex', registry: true }, { id: 'gpt-5.5', registry: true }] });
     } finally { setPriceTable(() => null); }
   });
 

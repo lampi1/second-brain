@@ -25,6 +25,7 @@ export const modelPickerDe: typeof modelPickerIt = {
   'mp.cliDefaultMeta': 'das Modell, das die Engine selbst wählt',
   'mp.tierDefault': (p: { tier: string }) => `Modell der Stufe (${p.tier})`,
   'mp.tierDefaultMeta': 'beim Start aus der Stufe der Rolle gewählt',
+  'mp.registry': 'aus dem Register',
   'mp.missing': 'nicht mehr in der Liste der Engine',
   'mp.context': (p: { size: string }) => `Kontext ${p.size}`,
   'mp.efforts': (p: { list: string }) => `Effort ${p.list}`,

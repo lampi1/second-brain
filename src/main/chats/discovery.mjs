@@ -87,16 +87,54 @@ function findUp(start, relative) {
   }
 }
 
-/** Shared Claude precedence. The caller supplies the release engine only in a stable context; a dev doctor ignores
- * inherited stable variables just like initRelease. Overrides keep the runtime's existing explicit-path semantics. */
+/** Shared Claude precedence (ADR 0267): an explicit override (SB_CLAUDE_PATH, or the caller's), then the Claude Code the
+ * user installed (PATH, then ~/.local/bin and the other known folders: findCli), so a model out today works the day its
+ * CLI knows it; only when none is installed the copy shipped with the app (a release's SB_ENGINE_CLAUDE, else the
+ * embedded SDK binary), marked fallback: it can be older and not know the newest models. The caller supplies the
+ * release engine only in a stable context; a dev doctor ignores inherited stable variables just like initRelease.
+ * Overrides keep the runtime's existing explicit-path semantics. */
 export function discoverClaude({ override, release = null, starts = [process.cwd()], env = process.env, platform = process.platform, arch = process.arch } = {}) {
   const o = override ?? env.SB_CLAUDE_PATH;
   if (o) return { path: o, source: 'override' };
+  const installed = installedClaude(env, platform);
+  if (installed) return { path: installed, source: 'path' };
+  const shipped = bundledClaude({ release, starts, platform, arch });
+  return shipped ? { ...shipped, fallback: true } : null;
+}
+
+/** The installed Claude Code the app can start without a shell. On Windows a claude.exe (native installer, WinGet);
+ * an npm install's claude.cmd shim cannot be spawned without a shell (Node refuses .cmd since CVE-2024-27980, and the
+ * chat arguments are not shell-safe), so its package's cli.js runs instead with the user's node (claudeScriptCommand; as
+ * packages/routine-runtime resolveClaudeCommand); a shim without cli.js or node counts as not installed. */
+function installedClaude(env, platform) {
+  if (platform !== 'win32') return findCli('claude', env, platform);
+  const exe = findCli('claude.exe', env, platform);
+  if (exe) return exe;
+  const shim = findCli('claude', env, platform);
+  if (!shim || !/\.(cmd|bat)$/i.test(shim)) return null;
+  const cli = path.join(path.dirname(shim), 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js');
+  return file(cli) && findCli('node.exe', env, platform) ? cli : null;
+}
+
+/** An npm Claude Code's cli.js (Windows, installedClaude): a real engine, started with the user's own node. */
+export const isClaudePackageScript = p => /[\\/]@anthropic-ai[\\/]claude-code[\\/]cli\.js$/i.test(p);
+
+/** How to start such a cli.js: the user's node (npm needs one), never Electron as Node, whose ELECTRON_RUN_AS_NODE
+ * would reach every child of Claude Code (an `npx electron .` in a chat would open no window). null = no node. */
+export function claudeScriptCommand(cli, env = process.env, platform = process.platform) {
+  const node = findCli(platform === 'win32' ? 'node.exe' : 'node', env, platform);
+  if (!node) return null;
+  const clean = { ...env };
+  for (const k of Object.keys(clean)) if (k.toUpperCase() === 'ELECTRON_RUN_AS_NODE') delete clean[k];
+  return { command: node, args: [cli], env: clean };
+}
+
+/** The Claude Code shipped with the app: a release's copy, else the SDK's binary for this OS and CPU; null = none. */
+export function bundledClaude({ release = null, starts = [process.cwd()], platform = process.platform, arch = process.arch } = {}) {
   if (release && file(release)) return { path: release, source: 'release' };
   if (['win32', 'darwin', 'linux'].includes(platform) && ['x64', 'arm64'].includes(arch)) {
     const rel = path.join('node_modules', '@anthropic-ai', `claude-agent-sdk-${platform}-${arch}`, platform === 'win32' ? 'claude.exe' : 'claude');
     for (const start of starts) { const p = findUp(start, rel); if (p) return { path: p, source: 'embedded' }; }
   }
-  const p = findCli('claude', env, platform);
-  return p ? { path: p, source: 'path' } : null;
+  return null;
 }

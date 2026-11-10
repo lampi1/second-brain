@@ -35,7 +35,10 @@ import type { Answer, ChatItem, ChatState, Effort, ImageAttachment, PendingReque
 import { sysEn, type SysCode, type SysParams } from '../../shared/sys';
 import { errText, log } from '../log';
 import { timedStep } from '../perf';
-import { CLOSE_GRACE_MS, commandFor, findCli, killTrees, resolveClaude } from './cli';
+import { claudeFailedToStart, CLOSE_GRACE_MS, commandFor, findCli, isClaudePackageScript, killTrees, resolveClaude } from './cli';
+
+/** Chats already told, in this app run, that the app's Claude copy runs (ADR 0267). */
+const fallbackSaid = new Set<string>();
 import { closePipes, engineKills, jobGuard, killEngineTree, lowerEnginePriority } from './jobguard';
 import { reapEnabled, reapEngine, type Root } from './proctree';
 import { LiveCost, priceUsage } from './live-cost';
@@ -265,6 +268,7 @@ export class ClaudeSession implements HarnessSession {
   private badLines = 0;
   private cliVersion: string | null = null; // what the CLI says it is (initialize, system/init): drift reports name it
   private recording = false;          // a real CLI (not a test's .mjs fake): its message shapes go to drift.ts record
+  private fallbackEngine = false;     // no Claude Code installed: the app's own copy runs (ADR 0267)
   private readonly sentUuids = new Set<string>(); // our own messages' uuids: their replay is not the phone's
   private remoteOn = false;           // Remote Control is on in this process: a replayed message not ours is the phone's
   private tasks = new Set<string>();  // background tasks started and not yet ended (task_started / task_notification)
@@ -351,11 +355,14 @@ export class ClaudeSession implements HarnessSession {
   start(): void {
     this.childTelemetry.coverage('partial');
     const chat = this.opts.chatId;
-    // embedded engine by default (ADR 0010); an explicit path (tests, SB_CLAUDE_PATH) wins
-    const cli = this.opts.claudePath ? findCli(this.opts.claudePath) : resolveClaude()?.path ?? null;
-    if (!cli || !fs.existsSync(cli)) return this.fail(`Motore Claude non trovato${cli ? `: ${cli}` : ''}. Reinstalla l’app (il motore è incluso) o imposta SB_CLAUDE_PATH.`, `claude engine not found (${cli ?? 'embedded/PATH'})`, 'run npm ci (embedded engine in node_modules/@anthropic-ai/claude-agent-sdk-<os>-<cpu>) or set SB_ENGINE_CLAUDE / SB_CLAUDE_PATH');
+    // the Claude Code installed on the PC by default, the app's copy as the fallback (ADR 0267); an explicit path (tests,
+    // SB_CLAUDE_PATH) wins
+    const found = this.opts.claudePath ? null : resolveClaude();
+    const cli = this.opts.claudePath ? findCli(this.opts.claudePath) : found?.path ?? null;
+    this.fallbackEngine = !!found?.fallback;
+    if (!cli || !fs.existsSync(cli)) return this.fail(`Motore Claude non trovato${cli ? `: ${cli}` : ''}. Installa Claude Code o reinstalla l’app (una copia è inclusa), oppure imposta SB_CLAUDE_PATH.`, `claude engine not found (${cli ?? 'PATH/embedded'})`, 'install Claude Code, or run npm ci (embedded engine in node_modules/@anthropic-ai/claude-agent-sdk-<os>-<cpu>), or set SB_ENGINE_CLAUDE / SB_CLAUDE_PATH');
     if (!fs.existsSync(this.opts.cwd)) return this.fail(`Cartella non trovata: ${this.opts.cwd}`, `cwd missing: ${this.opts.cwd}`, 'pick an existing folder for the chat');
-    this.recording = !/\.m?js$/i.test(cli);
+    this.recording = !/\.m?js$/i.test(cli) || isClaudePackageScript(cli); // a test's fake is not recorded; npm's cli.js is real
     const env = { ...process.env, ...this.opts.env };
     env.MCP_TOOL_TIMEOUT = env.MCP_TOOL_TIMEOUT ?? '600000'; // browser tools may wait on a page
     env.CLAUDE_CODE_EMIT_SESSION_STATE_EVENTS = '1';         // session_state_changed: the authoritative running/idle
@@ -367,7 +374,9 @@ export class ClaudeSession implements HarnessSession {
     try {
       this.proc = spawn(c.command, c.args, { cwd: this.opts.cwd, env: c.env, windowsHide: true, detached: ownProcessGroup(), stdio: ['pipe', 'pipe', 'pipe'] });
     } catch (e) {
-      return this.fail(`Avvio di Claude non riuscito: ${errText(e)}`, errText(e), 'check the claude path and the folder');
+      // a spawn that throws (EINVAL, EACCES) is a start failure too: the next start takes the app's copy (ADR 0267)
+      const next = !this.opts.claudePath && claudeFailedToStart(cli);
+      return this.fail(`Avvio di Claude non riuscito: ${errText(e)}${next ? '. Riprova: userò la versione inclusa nell’app.' : ''}`, errText(e), next ? 'the installed Claude Code did not start; the next start uses the app copy' : 'check the claude path and the folder');
     }
     const spawnMs = Date.now();
     const p = this.proc;
@@ -382,7 +391,11 @@ export class ClaudeSession implements HarnessSession {
       log.debug('chats', 'stderr', { chat, data: cut(d, 500) });
     });
     p.stdin.on('error', e => log.warn('chats', 'stdin error', { chat, data: errText(e) }));
-    p.on('error', e => this.fail(`Avvio di Claude non riuscito: ${errText(e)}`, errText(e), 'check that the claude binary runs from a terminal'));
+    p.on('error', e => {
+      // an installed Claude Code that cannot start: the next start of any chat takes the app's copy (ADR 0267)
+      const next = !this.opts.claudePath && claudeFailedToStart(cli);
+      this.fail(`Avvio di Claude non riuscito: ${errText(e)}${next ? '. Riprova: userò la versione inclusa nell’app.' : ''}`, errText(e), next ? 'the installed Claude Code did not start; the next start uses the app copy' : 'check that the claude binary runs from a terminal');
+    });
     p.on('close', (code: number | null) => this.onClose(code));
     // a clean exit leaves its MCP servers, hooks and shells running: kill what still descends from it ('exit', not 'close': a leftover
     // holding the inherited stdout would delay 'close' until it ends by itself)
@@ -404,6 +417,8 @@ export class ClaudeSession implements HarnessSession {
       log.info('chats', 'timing: engine ready', { chat, data: { readyMs: this.readyAt - startedAt, spawnMs: spawnMs - startedAt } });
       const v = s(r.claude_code_version);
       if (v) { this.cliVersion = v; this.sink.changed({ version: v }); }
+      // the app's own copy stands in for a missing Claude Code: said once per chat and app run (ADR 0267)
+      if (this.fallbackEngine && !fallbackSaid.has(chat)) { fallbackSaid.add(chat); this.sysCode('claudeFallback', { version: v ?? '?' }, 'warn'); }
       if (Array.isArray(r.commands)) { this.cmdList = r.commands; this.reportCommands(); }
       // the models this login can run (ADR 0256): the live list of the Claude pickers
       const models = claudeModels(r.models);

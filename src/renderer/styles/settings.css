@@ -91,6 +91,8 @@
 .st-title-line { display: flex; align-items: center; min-width: 0; } /* a title and its "?" (HelpTip) on one line */
 .st-desc { margin: 0; color: var(--text-3); font-size: var(--fs-s); line-height: 1.5; }
 .st-desc b { color: var(--text-2); font-weight: 600; }
+.st-desc.st-warn { color: var(--text-2); background: var(--amber-bg); border: 1px solid var(--amber-line); border-radius: 6px; padding: 6px 8px; } /* the app's own Claude copy stands in (ADR 0267) */
+.st-desc[data-testid^="st-version-"] { overflow-wrap: anywhere; }
 .st-meta { color: var(--text-4); font-size: var(--fs-xs); margin-top: 4px; font-variant-numeric: tabular-nums; }
 .st-ctl { flex: 0 1 auto; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; min-width: 0; max-width: 100%; }
 .st-tool > .st-row, .st-catalog-row > .st-row { flex-wrap: nowrap; }

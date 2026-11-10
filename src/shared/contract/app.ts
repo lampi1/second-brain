@@ -125,7 +125,9 @@ export interface WorktreeUsage {
 }
 
 export interface ProjectsFolderInfo { saved: string | null; detected: { path: string; repos: number; source: 'cli' | 'common' } | null; newMemoryIn: string }
-export interface CliStatus { found: boolean; path: string | null; version: string | null; loggedIn: boolean | null; account?: string | null }
+/** fallback (Claude): no Claude Code installed on the PC, the app's own copy runs (path and version are that copy's;
+ *  it can be older and not know the newest models, ADR 0267). */
+export interface CliStatus { found: boolean; path: string | null; version: string | null; loggedIn: boolean | null; account?: string | null; fallback?: true }
 
 /** Top-bar usage. todayUsd = Claude at API list price (on a subscription an "equivalent" cost, not a bill), from the
  *  brain's cost.mjs; the plan windows (5 h / 7 d, 0-100) are null when no source has them (see limitsNote). */

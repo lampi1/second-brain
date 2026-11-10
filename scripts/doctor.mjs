@@ -13,7 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { testedVersions } from './cli-fixtures.mjs';
 import { guardStatus, statusLines } from './guard-lib.mjs';
-import { cursorInstall, discoverClaude, findCli } from '../src/main/chats/discovery.mjs';
+import { claudeScriptCommand, cursorInstall, discoverClaude, findCli, isClaudePackageScript } from '../src/main/chats/discovery.mjs';
 import { claudeLogin, doctorContext, packageVersion } from './doctor-lib.mjs';
 import { readTimers, timerCheck } from './doctor-timers.mjs';
 
@@ -24,7 +24,9 @@ const probeClaude = process.argv.includes('--probe-claude');
 const checks = [];
 const add = (id, ok, detail, hint = '', level = ok ? 'ok' : 'fail') => checks.push({ id, ok, level, detail, hint });
 // .cmd/.bat shims (the Cursor CLI on Windows) need cmd.exe; our arguments are fixed flags, never user text
-const run = (cmd, args, timeout = 20000) => /\.(cmd|bat)$/i.test(cmd)
+const run = (cmd, args, timeout = 20000) => isClaudePackageScript(cmd)
+  ? (c => c ? spawnSync(c.command, [...c.args, ...args], { encoding: 'utf8', timeout, windowsHide: true, env: c.env }) : { status: 1, stdout: '', stderr: 'node not found' })(claudeScriptCommand(cmd))
+  : /\.(cmd|bat)$/i.test(cmd)
   ? spawnSync(process.env.ComSpec ?? 'cmd.exe', ['/d', '/s', '/c', `""${cmd}" ${args.join(' ')}"`], { encoding: 'utf8', timeout, windowsHide: true, windowsVerbatimArguments: true })
   : spawnSync(cmd, args, { encoding: 'utf8', timeout, windowsHide: true });
 add('context', true, `${context.mode} · userData=${userData} (${context.userDataSource}) · config=${context.configPath} (${context.configState}) · brain=${context.brainSource} · MCP=${port} (${context.portSource})${context.savedPort !== null ? ` · saved MCP setting=${context.savedPort}` : ''} · app=${context.appRoot}${context.release ? ` · release=${context.release}` : context.mode === 'stable' ? ' (release metadata unavailable; checking repo build/engine)' : ''}`, '', 'info');
@@ -43,8 +45,9 @@ if (!claude || !fs.existsSync(claude)) add('claude-cli', false, claude ? `${clau
 else {
   // The embedded SDK package (and the release folder named after it) has a different version from the CLI binary.
   // Only a CLI package's metadata or an explicit version probe can establish the CLI contract version.
-  claudeVersion = packageVersion(claude, '@anthropic-ai/claude-code');
-  add('claude-cli', true, `${claude} (${selectedClaude.source})${claudeVersion ? ` · ${claudeVersion}` : ' · version not verified'}`);
+  claudeVersion = isClaudePackageScript(claude) ? (() => { try { return JSON.parse(fs.readFileSync(path.join(path.dirname(claude), 'package.json'), 'utf8')).version ?? null; } catch { return null; } })() // npm's cli.js: its own package
+    : packageVersion(claude, '@anthropic-ai/claude-code');
+  add('claude-cli', true, `${claude} (${selectedClaude.source}${selectedClaude.fallback ? ': Claude Code not installed, the app\'s own copy runs and may not know the newest models' : ''})${claudeVersion ? ` · ${claudeVersion}` : ' · version not verified'}`);
   if (probeClaude) {
     const v = run(claude, ['--version']);
     claudeVersion = v.status === 0 ? (v.stdout ?? '').match(/\d+\.\d+\.\d+[\w.+-]*/)?.[0] ?? null : null;
@@ -75,7 +78,7 @@ else {
 }
 
 
-// 3b. CLI contracts (ADR 0055): the version the chats really run (Claude: the embedded engine; Cursor: its newest
+// 3b. CLI contracts (ADR 0055): the version the chats really run (Claude: the installed Claude Code, else the app's copy; Cursor: its newest
 // version folder, no process started) against the versions recorded in test/fixtures/cli; format drift seen today
 const tested = testedVersions();
 const contract = (id, cli, version) => {

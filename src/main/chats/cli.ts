@@ -1,6 +1,6 @@
 // Finding and starting the engines (ADR 0010, ADR 0046) without a shell, so arguments are never re-parsed and nothing
-// is injected: Claude = the official binary embedded in the app (the dependency for this OS and CPU, platform.ts; a
-// release passes its copy in SB_ENGINE_CLAUDE), Cursor = the user's installed CLI started as its own `node.exe
+// is injected: Claude = the Claude Code the user installed, else the official binary embedded in the app (ADR 0267;
+// the dependency for this OS and CPU, platform.ts; a release passes its copy in SB_ENGINE_CLAUDE), Cursor = the user's installed CLI started as its own `node.exe
 // index.js` (no PowerShell launcher), other CLIs = their command on PATH, with Codex's Windows app install as a
 // fallback (resolveAcp). A .mjs/.js path runs with Electron as Node: that is how tests swap in the fake engines, and
 // under tests a real engine is refused (never spend the user's credits). Also: kill whole process trees on app exit
@@ -9,19 +9,38 @@ import { execFile, spawn } from 'node:child_process';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { log } from '../log';
 import { releaseEngine } from '../release';
-import { cursorInstall, discoverClaude, findCli } from './discovery.mjs';
-export { findCli, newestCursorVersion } from './discovery.mjs';
+import { bundledClaude, claudeScriptCommand, cursorInstall, discoverClaude, findCli, isClaudePackageScript } from './discovery.mjs';
+export { findCli, isClaudePackageScript, newestCursorVersion } from './discovery.mjs';
 export type { ClaudeSource } from './discovery.mjs';
 
 const isScript = (p: string): boolean => /\.(m?js|cjs)$/i.test(p);
 
-/** The Claude engine: SB_CLAUDE_PATH (tests) → SB_ENGINE_CLAUDE (a release's copy) → the embedded dependency next to
- *  the app (dev) → `claude` on PATH (last fallback). null = none. */
+/** The Claude engine (ADR 0267): SB_CLAUDE_PATH (tests) or the caller's override → the Claude Code the user installed
+ *  (PATH, ~/.local/bin) → the app's own copy as a fallback (a release's SB_ENGINE_CLAUDE, else the embedded dependency),
+ *  logged once as a warning: it can be older and not know the newest models; also when the installed one failed to
+ *  start in this run (claudeFailedToStart). null = none. */
+let warnedFallback: string | null = null;
+/** Installed Claude Code paths that failed to start in this app run (claude.ts): the next start takes the app's copy. */
+const brokenInstalls = new Set<string>();
+export function claudeFailedToStart(p: string): boolean {
+  const installed = resolveClaude()?.source === 'path' && resolveClaude()?.path === p;
+  if (installed) brokenInstalls.add(p);
+  return installed;
+}
 export function resolveClaude(override?: string | null): ReturnType<typeof discoverClaude> {
   let here = process.cwd();
   try { here = path.dirname(fileURLToPath(import.meta.url)); } catch { /* not a file URL */ }
-  return discoverClaude({ override, release: releaseEngine(), starts: [here, process.cwd()] });
+  const starts = [here, process.cwd()];
+  let found = discoverClaude({ override, release: releaseEngine(), starts });
+  if (found?.source === 'path' && brokenInstalls.has(found.path)) { const b = bundledClaude({ release: releaseEngine(), starts }); found = b ? { ...b, fallback: true } : found; }
+  if (found?.fallback && warnedFallback !== found.path) {
+    warnedFallback = found.path;
+    const setAside = [...brokenInstalls].join(', ');
+    log.warn('chats', setAside ? 'installed Claude Code did not start: the app runs its own copy' : 'Claude Code not installed: the app runs its own copy', { cause: `${setAside ? `${setAside} failed to start` : 'no claude on PATH or in ~/.local/bin'}; using ${found.source}: ${found.path}`, hint: 'install or repair Claude Code (https://code.claude.com) so new models work the day they are out' });
+  }
+  return found;
 }
 
 /** How to start a CLI engine. kind fake = a .mjs test double (Electron as Node), node = the CLI's own node.exe
@@ -90,6 +109,9 @@ export function engineAllowed(c: CliCommand, env: NodeJS.ProcessEnv = process.en
 
 /** Command + args to start a CLI. Scripts (.mjs/.cjs/.js) run with this process's runtime as Node. */
 export function commandFor(cliPath: string, args: string[], env: NodeJS.ProcessEnv): { command: string; args: string[]; env: NodeJS.ProcessEnv } {
+  // an npm Claude Code's cli.js (Windows): the user's node, without Electron's Node switch (ADR 0267)
+  const script = isClaudePackageScript(cliPath) ? claudeScriptCommand(cliPath, env) : null;
+  if (script) return { ...script, args: [...script.args, ...args] };
   if (/\.(m?js|cjs)$/i.test(cliPath)) return { command: process.execPath, args: [cliPath, ...args], env: { ...env, ELECTRON_RUN_AS_NODE: '1' } };
   const clean = { ...env };
   delete clean.ELECTRON_RUN_AS_NODE; // never leak the Node switch into the real CLI's own children

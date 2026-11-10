@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { findCli, resolveAcp } from '../../../src/main/chats/cli';
-import { codexAppInstall, cursorInstall, discoverClaude, findCli as discover, newestCursorVersion } from '../../../src/main/chats/discovery.mjs';
+import { claudeScriptCommand, codexAppInstall, cursorInstall, discoverClaude, findCli as discover, isClaudePackageScript, newestCursorVersion } from '../../../src/main/chats/discovery.mjs';
 
 const roots: string[] = [];
 const temp = () => { const p = fs.mkdtempSync(path.join(os.tmpdir(), 'sb-discovery-')); roots.push(p); return p; };
@@ -104,19 +104,42 @@ describe('shared filesystem discovery', () => {
     expect(cursorInstall(env, 'win32', root)).toBe(path.join(versions, '2026.10.1-00-00-01-bbbbbb'));
   });
 
-  it('uses Claude override, release, embedded dependency, then the supplied PATH', () => {
+  it('uses the Claude override, then the installed Claude Code (PATH, ~/.local/bin), then the app\'s copy marked fallback (ADR 0267)', () => {
     const root = temp(), env = envFor(root), opts = { env, platform: 'win32' as const, arch: 'x64', starts: [root] };
     const onPath = file(path.join(root, 'bin', 'claude.exe'));
+    const local = file(path.join(root, '.local', 'bin', 'claude.exe'));
     env.PATH = path.dirname(onPath);
     const embedded = file(path.join(root, 'node_modules', '@anthropic-ai', 'claude-agent-sdk-win32-x64', 'claude.exe'));
     const release = file(path.join(root, 'release', 'claude.exe'));
     expect(discoverClaude({ ...opts, release, override: 'explicit.mjs' })).toEqual({ path: 'explicit.mjs', source: 'override' });
-    expect(discoverClaude({ ...opts, release })).toEqual({ path: release, source: 'release' });
+    expect(discoverClaude({ ...opts, release })).toEqual({ path: onPath, source: 'path' }); // installed beats the bundled copies
+    env.PATH = '';
+    expect(discoverClaude({ ...opts, release })).toEqual({ path: local, source: 'path' }); // the native installer's folder
+    fs.unlinkSync(local);
+    expect(discoverClaude({ ...opts, release })).toEqual({ path: release, source: 'release', fallback: true });
     fs.unlinkSync(release);
-    expect(discoverClaude({ ...opts, release })).toEqual({ path: embedded, source: 'embedded' });
+    expect(discoverClaude({ ...opts, release })).toEqual({ path: embedded, source: 'embedded', fallback: true });
     fs.unlinkSync(embedded);
-    expect(discoverClaude(opts)).toEqual({ path: onPath, source: 'path' });
-    env.PATH = ''; expect(discoverClaude(opts)).toBeNull();
+    expect(discoverClaude(opts)).toBeNull();
+  });
+
+  it('Windows: claude.exe wins over an npm shim; a shim runs its package\'s cli.js (a .cmd cannot be spawned), or else counts as missing', () => {
+    const root = temp(), env = envFor(root), opts = { env, platform: 'win32' as const, arch: 'x64', starts: [root] };
+    const npm = path.join(root, 'roaming', 'npm'), shim = file(path.join(npm, 'claude.cmd'));
+    expect(shim).toBeTruthy();
+    const embedded = file(path.join(root, 'node_modules', '@anthropic-ai', 'claude-agent-sdk-win32-x64', 'claude.exe'));
+    expect(discoverClaude(opts)).toEqual({ path: embedded, source: 'embedded', fallback: true }); // a shim alone: not startable
+    const cli = file(path.join(npm, 'node_modules', '@anthropic-ai', 'claude-code', 'cli.js'));
+    expect(discoverClaude(opts)?.source).toBe('embedded'); // no node to run it with: still the app's copy
+    const node = file(path.join(root, 'nodejs', 'node.exe'));
+    env.PATH = path.dirname(node);
+    expect(discoverClaude(opts)).toEqual({ path: cli, source: 'path' });
+    // it runs with that node, never Electron as Node (its switch would reach every child of Claude Code)
+    expect(claudeScriptCommand(cli, { ...env, ELECTRON_RUN_AS_NODE: '1', A: 'b' }, 'win32')).toEqual({ command: node, args: [cli], env: { ...env, A: 'b' } });
+    expect(isClaudePackageScript(cli)).toBe(true);
+    expect(isClaudePackageScript(path.join(root, 'fake-claude.mjs'))).toBe(false);
+    const exe = file(path.join(root, '.local', 'bin', 'claude.exe'));
+    expect(discoverClaude(opts)).toEqual({ path: exe, source: 'path' });
   });
 
   it('keeps explicit fake overrides and their environment; installed commands remove Electron Node mode', () => {

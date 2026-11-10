@@ -11,6 +11,7 @@
 export const SYS_IT = {
   // ---- stopped / interrupted (claude.ts, acp.ts, api.ts, transcript.ts, demo.ts) ----
   'sys.stoppedByYou': 'Interrotto da te.',
+  'sys.claudeFallback': (p: { version: string }) => `Claude Code non trovato sul PC (o non si avvia): uso la versione inclusa nell’app (${p.version}), che può non conoscere i modelli nuovi.`,
   'sys.stoppedByYouResend': 'Interrotto da te: riparto col tuo messaggio.',
   'sys.interrupted': 'Interrotto.',
   'sys.queueCancelled': (p: { n: number }) => `Messaggi in coda annullati: ${p.n}.`,
@@ -167,6 +168,7 @@ function laterEn(joined: string): string {
 
 export const SYS_EN: typeof SYS_IT = {
   'sys.stoppedByYou': 'Stopped by you.',
+  'sys.claudeFallback': (p: { version: string }) => `Claude Code not found on this PC (or it does not start): using the copy included in the app (${p.version}), which may not know the newest models.`,
   'sys.stoppedByYouResend': 'Stopped by you: restarting with your message.',
   'sys.interrupted': 'Interrupted.',
   'sys.queueCancelled': (p: { n: number }) => `Queued messages cancelled: ${p.n}.`,
@@ -285,6 +287,7 @@ function laterDe(joined: string): string {
 
 export const SYS_DE: typeof SYS_IT = {
   'sys.stoppedByYou': 'Von dir gestoppt.',
+  'sys.claudeFallback': (p: { version: string }) => `Claude Code auf diesem PC nicht gefunden (oder startet nicht): Ich nutze die in der App enthaltene Version (${p.version}), die die neuesten Modelle vielleicht nicht kennt.`,
   'sys.stoppedByYouResend': 'Von dir gestoppt: startet mit deiner Nachricht neu.',
   'sys.interrupted': 'Unterbrochen.',
   'sys.queueCancelled': (p: { n: number }) => `Nachrichten in der Warteschlange verworfen: ${p.n}.`,

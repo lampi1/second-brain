@@ -331,7 +331,7 @@ export interface AgentModelChoice {
    *  defaultEffort = what the engine uses when the card names none; contextWindow = the model's window in tokens;
    *  price = list USD per million input and output tokens (the brain's models.json), null = not known («prezzo
    *  sconosciuto»: the model is offered all the same, ADR 0256) */
-  models: { id: string; name: string; efforts?: Effort[]; defaultEffort?: Effort | null; contextWindow?: number; price?: { input: number; output: number } | null }[];
+  models: { id: string; name: string; efforts?: Effort[]; defaultEffort?: Effort | null; contextWindow?: number; price?: { input: number; output: number } | null; registry?: true }[];
   source: 'observed' | 'registry' | 'unknown';
   /** Model discovery does not prove installation or login. */
   installed: boolean | null; authenticated: boolean | null;

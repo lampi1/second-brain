@@ -78,9 +78,17 @@ function Row({ title, children, description, help, guarded }: { title: string; c
   </div>;
 }
 
+/** Which program an engine runs and its version (ADR 0267). */
+function CliVersion({status,testid}:{status:CliStatus|null;testid:string}){
+ if(!status?.found||!status.path)return null;
+ return <>
+  <p className="st-desc" data-testid={testid}>{status.version?t('essential.version',{version:status.version,path:status.path}):t('essential.versionUnknown',{path:status.path})}</p>
+ </>;
+}
+
 function ToolConnection({engine}:{engine:EngineInfo}){
  const roots=useApp(s=>s.settings?.codexAutonomyRoots??[]);
- const enabled=useApp(s=>s.settings?.engineOn[engine.id]===true),policy=useApp(s=>s.settings?.engines[engine.id]===true);
+ const enabled=useApp(s=>s.settings?.engineOn[engine.id]===true),policy=useApp(s=>s.settings?.engines[engine.id]===true),ready=useApp(s=>s.info?.cli?.[engine.id]??null);
  const[open,setOpen]=useState(false),[busy,setBusy]=useState(false),[login,setLogin]=useState<CliStatus|null>(null),[keys,setKeys]=useState<SecretsStatus|null>(null),[key,setKey]=useState('');
  useEffect(()=>key?holdUpdate(t('essential.key')):undefined,[key]);
  const run=async(action:()=>Promise<unknown>)=>{if(busy)return;setBusy(true);try{await action();}catch{toast(t('essential.error'),'err');}finally{setBusy(false);}};
@@ -92,8 +100,10 @@ function ToolConnection({engine}:{engine:EngineInfo}){
    {!policy&&<p className="st-desc">{t('essential.policy')}</p>}
    {!engine.trusted?<><p>{t('essential.trustNeeded')}</p><code>{engine.runs}</code><button type="button" className="btn btn-primary btn-m" disabled={busy} onClick={()=>void run(()=>window.sb.invoke('engines:trust',{engine:engine.id}))}>{t('essential.trust')}</button></>:<button type="button" className={`btn btn-m ${enabled?'btn-ghost':'btn-primary'}`} disabled={busy} onClick={()=>void setSetting({engineOn:{[engine.id]:!enabled}})}>{t(enabled?'essential.disable':'essential.enable')}</button>}
    {engine.kind!=='api'&&<div className="st-inline"><button type="button" className="btn btn-ghost btn-m" disabled={busy||!enabled||!engine.trusted} onClick={()=>void check()}>{t('essential.check')}</button><button type="button" className="btn btn-ghost btn-m" disabled={busy||!enabled||!engine.trusted} onClick={()=>void run(()=>window.sb.invoke('cli:login',{harness:engine.id}))}>{t('essential.signIn')}</button>{login&&<span role="status" className="st-desc">{!login.found?t('essential.notInstalled'):login.loggedIn===true?t('essential.signedIn'):login.loggedIn===false?t('essential.signInNeeded'):t('essential.unknown')}</span>}</div>}
+   {engine.kind!=='api'&&<CliVersion status={login??ready} testid={`st-version-${engine.id}`}/>}
    {engine.key!=='none'&&<div className="st-key"><label>{t('essential.key')}<input className="st-input" type="password" autoComplete="off" spellCheck={false} value={key} disabled={!keys?.available||busy} onChange={event=>setKey(event.target.value)}/></label><button type="button" className="btn btn-primary btn-m" disabled={!keys?.available||busy||!key.trim()} onClick={()=>{const value=key.trim();setKey('');void run(async()=>{setKeys(await window.sb.invoke('secrets:set',{engine:engine.id,key:value}));});}}>{t('common.save')}</button>{keys?.keys[engine.id]&&<><small className="st-desc">{t('essential.keySaved')}</small><button type="button" className="btn btn-danger btn-m" disabled={busy} onClick={()=>void run(async()=>{setKeys(await window.sb.invoke('secrets:delete',{engine:engine.id}));})}>{t('essential.deleteKey')}</button></>}{keys&&!keys.available&&<p role="status" className="st-desc">{t('essential.keyUnavailable')}</p>}</div>}
   </div>}
+  {(login??ready)?.fallback&&<p className="st-desc st-warn" role="note" data-testid={`st-version-${engine.id}-fallback`}>{t('essential.claudeFallback',{version:(login??ready)?.version??'?'})}</p>}
   {engine.id==='codex'&&<CodexAutonomy roots={roots}/>}
  </article>;
 }

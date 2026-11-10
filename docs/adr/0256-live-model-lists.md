@@ -2,7 +2,8 @@
 
 Date: 2026-11-10 · Status: accepted (owner, 2026-11-10: «make model lists dynamic … so a new model appears without an
 app update or a manual edit») · Builds on: ADR 0046 (engines, API keys), ADR 0211 (the card's back offers only listed
-models) · Changes: the allow-list check of ADR 0032's `resolve()`
+models) · Changes: the allow-list check of ADR 0032's `resolve()` · Amended by: ADR 0267 (models.json rows are
+added to a live list, not only a fallback; the installed Claude Code runs by default)
 
 ## Context
 The Claude model list came only from the brain's `harness/models.json` (through `withApiModels`), and `resolve()`

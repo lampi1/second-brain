@@ -20,6 +20,8 @@ export interface CatalogRow {
   contextWindow?: number;
   /** list USD per million input / output tokens; null = not known («prezzo sconosciuto», ADR 0256); absent = not said */
   price?: { input: number; output: number } | null;
+  /** from the brain's models.json, not (yet) in the engine's live list: «dal registro» (ADR 0266) */
+  registry?: true;
   /** the chosen id is not in the engine's list any more: kept so it still reads, marked as such */
   missing?: boolean;
 }
@@ -49,7 +51,7 @@ export function catalogGroups(choices: readonly AgentModelChoice[], current: Cat
   const groups = choices.map((c): EngineGroup => {
     const models: CatalogRow[] = c.models.map(m => ({ engine: c.engine, id: m.id, name: m.name || m.id,
       ...(m.efforts ? { efforts: m.efforts } : {}), ...(m.defaultEffort !== undefined ? { defaultEffort: m.defaultEffort } : {}),
-      ...(m.contextWindow ? { contextWindow: m.contextWindow } : {}), ...(m.price !== undefined ? { price: m.price } : {}) }));
+      ...(m.contextWindow ? { contextWindow: m.contextWindow } : {}), ...(m.price !== undefined ? { price: m.price } : {}), ...(m.registry ? { registry: true as const } : {}) }));
     if (c.engine === current.engine && current.model && !models.some(m => m.id === current.model))
       models.push({ engine: c.engine, id: current.model, name: current.model, missing: true });
     const block: GroupBlock = !c.enabled ? 'off' : !c.trusted ? 'untrusted' : !c.modelSelectable ? 'not-selectable' : null;
