@@ -38,6 +38,7 @@ import { answer, app, useApp } from '../store/store';
 import { claimFocus, focusChat, reqKey } from '../actions';
 import { CommandRequest, type CommandHandlers } from './CommandRequest';
 import { AskContext } from './AskContext';
+import { useAskItems } from '../lib/askItems';
 import { qwinStats } from '../lib/questions';
 import { withoutImages } from '../lib/askImages';
 import { splitAsk } from '../lib/askSplit';
@@ -471,7 +472,7 @@ const AskDecision = forwardRef<HTMLDivElement, {
   onWrite: (text: string, viaKey?: boolean) => void; onSkip: (viaKey?: boolean) => void;
   onLater?: () => void; commands?: ReactNode; inWindow: boolean; keysTo?: HTMLElement | null;
 }>(function AskDecision(p, ref) {
-  const items = useApp(s => s.items[p.req.chatId]);
+  const items = useAskItems(p.req.chatId);
   const chat = useApp(s => s.chats[p.req.chatId]);
   const brief = useMemo(() => (items ?? []).filter((i): i is Art => i.kind === 'artifact' && i.askId === p.req.id && i.ui.component === 'brief').pop(), [items, p.req.id]);
   const b = brief?.ui.component === 'brief' ? brief.ui.props as UiBrief : null;

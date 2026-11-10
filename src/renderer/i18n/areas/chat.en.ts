@@ -230,6 +230,8 @@ export const chatEn: typeof chatIt = {
   'chat.questions.note2': 'to answer.',
   'chat.questions.openChat': 'Open chat',
   'chat.questions.later': 'Think about it later',
+  'chat.questions.news': 'The agent added something while you were reading',
+  'chat.questions.newsShow': 'Show',
   'chat.questions.laterTip': 'Waits in "To answer": the Orchestrator brings it back when you ask for a recap',
   'chat.questions.request': (p: { chatTitle: string }) => `Request from ${p.chatTitle}`,
   'chat.questions.permission': 'Permission',

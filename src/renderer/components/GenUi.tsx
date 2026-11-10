@@ -19,6 +19,7 @@ import { BriefEvidence } from './DecisionCard';
 import { copyText } from '../brain/components/ui';
 import { t } from '../i18n';
 import { openFileViewer } from '../actions';
+import { useAskItems } from '../lib/askItems';
 
 type Art = Extract<ChatItem, { kind: 'artifact' }>;
 const FileChat=createContext<string|undefined>(undefined);
@@ -265,7 +266,7 @@ export const ArtifactCard = memo(function ArtifactCard({ item, cwd, attached,cha
 /** The visuals a chat attached to this question (show_ui target next-ask), always in sight above its context
  *  (`noBrief`: without its brief, which the decision card draws on its own). */
 export function AskArtifacts({ req, testBase, noBrief }: { req: PendingRequest; testBase: string; noBrief?: boolean }) {
-  const arts = useApp(s => s.items[req.chatId]);
+  const arts = useAskItems(req.chatId);
   const cwd = useApp(s => s.chats[req.chatId]?.cwd);
   const mine = useMemo(() => (arts ?? []).filter((i): i is Art => i.kind === 'artifact' && i.askId === req.id && !(noBrief && i.ui.component === 'brief')), [arts, req.id, noBrief]);
   if (!mine.length) return null;

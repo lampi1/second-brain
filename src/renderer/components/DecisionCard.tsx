@@ -119,6 +119,8 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
           {p.ifNo && <div className="dc-effect no"><dt><IconX size={12} />{t('genui.decision.ifNo')}</dt><dd>{p.ifNo}</dd></div>}
         </dl>
       )}
+      {/* the answers stay in sight at the bottom of the questions window while the evidence above scrolls */}
+      <div className="dc-act" data-testid={`${p.testBase}-act`}>
       <div className="dc-answers">
         {answer(p.yes, 'yes', t('genui.decision.yesKey'))}
         {answer(p.no, 'no', t('genui.decision.noKey'))}
@@ -159,6 +161,7 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
           )}
         </div>
       )}
+      </div>
       {p.footer}
     </div>
   );

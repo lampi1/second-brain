@@ -48,6 +48,10 @@
 .qwin-age { flex: none; font-size: var(--fs-m); color: var(--text-2); }
 .qwin-age::before { content: "·"; margin-right: 8px; }
 .qwin-note { flex: none; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 8px 24px 0; padding: 7px 12px; border-radius: var(--r-s); font-size: var(--fs-m); color: var(--amber); background: var(--amber-bg); }
+.qwin-news { flex: none; display: flex; align-items: center; gap: 8px; margin: 8px 24px 0; padding: 7px 12px; border: 0; border-radius: var(--r-s); font: inherit; font-size: var(--fs-m); text-align: left; color: var(--amber); background: var(--amber-bg); cursor: pointer; }
+.qwin-news b { margin-left: auto; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+/* the answers pinned to the bottom of the scrolling body (the body's bottom padding is 22px) */
+.qwin-body .dc-act { position: sticky; bottom: -22px; z-index: 2; margin: 0 -24px; padding: 12px 24px 14px; display: grid; gap: 10px; background: var(--surface); border-top: 1px solid var(--border); }
 .qwin-note.gone { visibility: hidden; } /* the note's place, kept for its card: the options never move under a click */
 .qwin-body { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 24px 22px; scrollbar-width: thin; scrollbar-gutter: stable; }
 .qwin-foot {

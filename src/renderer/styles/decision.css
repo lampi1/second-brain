@@ -54,6 +54,7 @@ span.dc-file { color: var(--text); cursor: default; }
 .dc-effect.yes dt svg { color: var(--green); }
 .dc-effect.no dt svg { color: var(--red); }
 .dc-effect dd { margin: 2px 0 0; line-height: 1.4; color: var(--text); }
+.dc-act { display: flex; flex-direction: column; gap: 12px; }
 .dc-answers { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .dc-answer { --yn: var(--green); --yn-bg: var(--green-bg); position: relative; display: flex; align-items: center; justify-content: center; gap: 8px;
   min-height: 52px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--border-2); background: var(--surface); color: var(--text);

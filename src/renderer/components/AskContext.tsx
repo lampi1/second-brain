@@ -12,6 +12,7 @@
 // text to approve standing on its own as a document, the links as chips. Used by RequestPanel.tsx and CommandRequest.tsx.
 import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { PendingRequest } from '@shared/contract';
+import { useAskItems } from '../lib/askItems';
 import { askContext, withoutCommand, type ContextLink } from '../lib/askContext';
 import { markdownParts, renderMarkdown } from '../lib/markdown';
 import { isSendable } from '../lib/sendable';
@@ -101,7 +102,7 @@ export const AskContext = memo(function AskContext({ req, defaultOpen, testBase,
  *  the question is fixed at mount: what loads later goes under it, so the question never moves. Without `question` (a
  *  command card) only the context block. */
 function WindowContext({ req, testBase, question, lead }: { req: PendingRequest; testBase: string; question?: ReactNode; lead?: string }) {
-  const items = useApp(s => s.items[req.chatId]);
+  const items = useAskItems(req.chatId);
   const closed = useApp(s => !!s.chats[req.chatId]?.closedAt); // a closed chat's request is stale: no disk read for it
   useEffect(() => { if (items === undefined && !closed) void loadItems(req.chatId); }, [items, closed, req.chatId]);
   const ctx = useMemo(() => {
@@ -159,7 +160,7 @@ function WindowContext({ req, testBase, question, lead }: { req: PendingRequest;
 }
 
 const PanelContext = memo(function PanelContext({ req, defaultOpen, testBase, onToggle, noVisuals, label }: { req: PendingRequest; defaultOpen: boolean; testBase: string; onToggle?: () => void; noVisuals?: boolean; label?: string }) {
-  const items = useApp(s => s.items[req.chatId]);
+  const items = useAskItems(req.chatId);
   const closed = useApp(s => !!s.chats[req.chatId]?.closedAt);
   useEffect(() => { if (items === undefined && !closed) void loadItems(req.chatId); }, [items, closed, req.chatId]);
   const ctx = useMemo(() => askContext(items, req), [items, req]);

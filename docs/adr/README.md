@@ -263,3 +263,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0256](0256-live-model-lists.md) Live model lists: every engine lists its own models; models.json only overrides — accepted
 - [0257](0257-skill-changes-only-from-maintenance.md) Skill changes come only from Maintenance, never one card per run — accepted
 - [0258](0258-maintenance-research-goes-deeper.md) The maintenance research goes deeper: 20 $ cap, extra-high effort, a quality bar for every card — accepted
+- [0259](0259-question-card-redesign.md) The question card, redesigned: still while open, «Bivio», Esegui as a question — accepted

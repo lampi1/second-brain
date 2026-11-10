@@ -37,6 +37,7 @@ import { t } from '../i18n';
 import { durableAsks, withDurableAsks, type DurableAsk } from '../lib/work-ask';
 import { useWorkflows } from '../store/workflows';
 import { WorkApproval } from './WorkApproval';
+import { AskItemsProvider, useFrozenItems } from '../lib/askItems';
 
 /** what the window shows: an open request, or a Strategist's plan to approve */
 type Ask = PendingRequest | PlanAsk | DurableAsk;
@@ -144,7 +145,9 @@ function Window({ cur, all, boxRef, hidden, openedAt }: { cur: Ask; all: readonl
   const harnesses = useApp(s => all.map(p => `${s.chats[p.chatId]?.harness ?? 'claude'}${isHost(p) || s.chats[p.chatId]?.isOrchestrator ? ':r' : ''}`), sameList);
   const now = useNow(30_000);
   // a question brings the commands its chat gave in the same turn; a permission's command is the agent's own (never run twice)
-  const items = useApp(s => (cur.type === 'question' ? s.items[cur.chatId] : undefined));
+  // the card reads the chat as it was when it opened: what the chat writes later is one notice away (lib/askItems.tsx)
+  const frozen = useFrozenItems(cur.chatId, reqKey(cur));
+  const items = cur.type === 'question' ? frozen.items : undefined;
   const cmds = useMemo(() => commandsOfTurn(items), [items]);
   const commands = cmds.length ? (
     <div className="decision-cmds" data-testid="qwin-card-cmds">
@@ -225,12 +228,19 @@ function Window({ cur, all, boxRef, hidden, openedAt }: { cur: Ask; all: readonl
           {elsewhere && (
             <div className="qwin-note" role="status" data-testid="qwin-elsewhere">{t('chat.questions.note')} <Keys combo="Ctrl+J" /> {t('chat.questions.note2')}</div>
           )}
+          {frozen.changed && !isHost(cur) && cur.type !== 'plan' && (
+            <button type="button" className="qwin-news" onClick={frozen.refresh} data-testid="qwin-news">
+              <span>{t('chat.questions.news')}</span><b>{t('chat.questions.newsShow')}</b>
+            </button>
+          )}
           <div className="qwin-body">
+            <AskItemsProvider chatId={cur.chatId} items={frozen.items}>
             {isDurable(cur)
               ? <WorkApproval key={curKey} ask={cur} onEscape={later} />
               : cur.type === 'plan'
               ? <PlanApproval key={curKey} ask={cur} chatTitle={name} onEscape={later} keysTo={keysEl} testid="qwin-plan" />
               : <RequestPanel key={curKey} req={cur} variant="window" chatTitle={name} harness={harness} commands={commands} onEscape={later} keysTo={keysEl} testid="qwin-card" />}
+            </AskItemsProvider>
           </div>
           <div className="qwin-foot">
             {/* a question's keys, written by the card for the step it shows (a permission's and a command's are on their buttons) */}

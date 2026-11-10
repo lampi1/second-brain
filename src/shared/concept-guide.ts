@@ -625,8 +625,8 @@ export const CONCEPTS: readonly ConceptCard[] = [
       b('Si aprono sempre una alla volta in una finestra centrale: non c’è un interruttore per spegnerla.',
         'They always open one at a time in a central window: there is no switch to turn it off.'),
       // src/renderer/components/QuestionsWindow.tsx
-      b('Nella finestra puoi rispondere in qualsiasi ordine dalla colonna a sinistra; Esc vuol dire «Rispondi dopo», non «rifiuta».',
-        'In the window you can answer in any order from the left rail; Esc means "Answer later", not "deny".'),
+      b('Nella finestra puoi rispondere in qualsiasi ordine dalla colonna a sinistra; Esc vuol dire «Ci penso dopo», non «rifiuta». La scheda aperta non cambia mentre la leggi: se l’agente scrive altro compare un avviso, e «Mostra» lo aggiunge.',
+        'In the window you can answer in any order from the left rail; Esc means "Think about it later", not "deny". The open card does not change while you read it: if the agent writes more a notice appears, and "Show" adds it.'),
       // src/renderer/lib/questions.ts TYPING_IDLE_MS
       b('Se stai scrivendo, una domanda nuova aspetta come pillola e compare 2 secondi dopo che smetti.',
         'If you are typing, a new question waits as a pill and appears 2 seconds after you stop.'),
