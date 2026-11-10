@@ -15,11 +15,11 @@ resume, wake-ups and notices were therefore recorded as the owner's typed turns,
 
 1. `ChatManager.send` marks a message as relayed when it is a resume, has a sender (`from`), or its source is not the
    owner (`ownerSource`: the PC or the paired phone). A chat's first prompt is relayed when an agent or the app
-   created the chat.
+   created the chat, and when it is a «Continua» note (`continueChat`), written by the app even on the user's click.
 2. `deliverNow` sends a relayed message to a Claude engine wholly inside
    `<agent-message from="second-brain">\n…\n</agent-message>` (`chats/agent-message.ts`): the role text, app notes and
-   hints included, because the hook matches the prompt end to end. The app's own quiet turns (hand-off, day
-   compaction) get it too.
+   hints included, because the hook matches the prompt end to end. The app's own quiet turns (hand-off notes) get it
+   too. A slash command never does (the Orchestrator's `/compact`): Claude Code runs it only at the prompt's start.
 3. The owner's typed text goes as before, untouched; other engines get no envelope.
 4. The history read back from a Claude transcript shows the message without the envelope.
 

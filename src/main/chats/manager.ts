@@ -318,7 +318,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     if (prompt) {
       // a delegated chat's contract says who sent it (the parent's title), like mail between chats
       const from = delegator?.s.title;
-      try { await (viaQueue ? this.gate(r, () => this.deliver(id, prompt, undefined, false, from, false, undefined, this.taskHint(r, prompt, { kind: 'app' }), undefined, true)) : this.send(id, prompt, undefined, false, from, false, { kind: by === 'user' ? 'user' : 'app' })); } catch (e) {
+      try { await (viaQueue ? this.gate(r, () => this.deliver(id, prompt, undefined, false, from, false, undefined, this.taskHint(r, prompt, { kind: 'app' }), undefined, true)) : this.send(id, prompt, undefined, false, from, false, { kind: by === 'user' ? 'user' : 'app' }, undefined, opts.continuationOf !== undefined)); } catch (e) {
         if (!r.s.lastError) r.s.lastError = errText(e);
         this.updated(r);
       }
@@ -356,8 +356,9 @@ export class ChatManager extends ManagerRemote implements ChatService {
   /** A message, optionally with images (pasted screenshots; checked here: images.ts). Text may be empty with images.
    *  resumed = the app's own "riprendi" after a restart (keeps the tile's mark; any other message clears it);
    *  from = not the user's: the sender shown above the bubble (another chat's title, the Orchestrator);
-   *  liveOnly = mail (chats/mail.ts): never into a chat that has no engine or is closing, never reopens one */
-  override async send(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, source?: TaskSource, receipt?: SubmissionReceipt): Promise<void> {
+   *  liveOnly = mail (chats/mail.ts): never into a chat that has no engine or is closing, never reopens one;
+   *  appText = the app wrote the text for the user (a «Continua» note): the user's turn, the app's words (ADR 0261) */
+  override async send(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, source?: TaskSource, receipt?: SubmissionReceipt, appText = false): Promise<void> {
     updateActivity.assertOpen();
     const r = this.need(chatId);
     if (r.s.routineArchived || r.s.routine || r.s.routinePackage) throw new Error('Archived routine chat: use the terminal routine CLI.');
@@ -370,14 +371,14 @@ export class ChatManager extends ManagerRemote implements ChatService {
     const phoneVia = phone ? { voice: r.phoneNext?.text === text && !!r.phoneNext.voice } : undefined;
     if (phone) r.phoneNext = undefined;
     // not the user's own words (an agent, the app, its resume): a Claude engine gets it in the app's envelope (ADR 0261)
-    const relayed = resumed || from !== undefined || !ownerSource(source);
+    const relayed = appText || resumed || from !== undefined || !ownerSource(source);
     // Flash follows its card (ADR 0107): the user's question goes to a Flash on the card's engine and model
     if (r.s.quick && from === undefined && !resumed && ownerSource(source)) {
       const next = await this.flashFollow(r);
       if (next !== chatId) {
         if (r.voiceText === text) { this.spokenNext(next, text); r.voiceText = undefined; } // the spoken message moves with it
         if (phoneVia) this.need(next).phoneNext = { text, voice: phoneVia.voice };
-        return this.send(next, text, images, resumed, from, liveOnly, source, receipt);
+        return this.send(next, text, images, resumed, from, liveOnly, source, receipt, appText);
       }
     }
     if (!(typeof text === 'string' && text.trim()) && !checkImages(images).length) throw new Error('Messaggio vuoto.');

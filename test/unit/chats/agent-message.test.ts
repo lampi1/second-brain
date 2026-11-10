@@ -1,7 +1,8 @@
 // The app's envelope for what the user did not type (ADR 0261, chats/agent-message.ts and ChatManager.deliverNow): a
-// Claude engine gets an agent's mail, the app's notices and its resume wholly inside <agent-message from="second-brain">,
-// so AI-DLC's record-human-turn hook classifies them as the host's; the user's typed text (PC or phone) and every other
-// engine's messages go as they are, and the history shows the message without the envelope.
+// Claude engine gets an agent's mail, the app's notices, its resume and a «Continua» note wholly inside
+// <agent-message from="second-brain">, so AI-DLC's record-human-turn hook classifies them as the host's; the user's
+// typed text (PC or phone), slash commands (/compact) and every other engine's messages go as they are, and the history
+// shows the message without the envelope.
 import { afterEach, describe, expect, it } from 'vitest';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -12,6 +13,7 @@ import type { HarnessSession, SessionSink } from '../../../src/main/chats/sessio
 import { agentMessage, forEngine, withoutAgentMessage } from '../../../src/main/chats/agent-message';
 import { userText } from '../../../src/main/chats/transcript';
 import { AGENT_LABEL } from '../../../src/shared/agent-label';
+import { ORCHESTRATOR_COMPACT, ORCHESTRATOR_PAUSE_COMPACT } from '../../../src/main/chats/continuity';
 
 // AI-DLC's own template (.claude/tools/aidlc-lib.ts, CLAUDE_HOST_TEMPLATES "claude agent message"), on the trimmed prompt
 const AIDLC_HOST = /^<agent-message from="[^"\r\n]*">\r?\n[\s\S]*\r?\n<\/agent-message>$/;
@@ -78,6 +80,16 @@ describe('the envelope at the send boundary', () => {
     expect(sent.at(-1)).not.toContain('<agent-message');
   });
 
+  it('wraps a «Continua» note, the app\'s words even on the user\'s click', async () => {
+    const sent: string[] = [], m = manager(sent);
+    const chat = await m.create({ harness: 'claude', cwd: tmp(), prompt: 'Primo compito' });
+    await m.ensureHandoff(chat.id, { ask: false }); // the token-free note: the fake session writes none
+    const before = sent.length;
+    await m.continueChat(chat.id);
+    expect(sent.length).toBeGreaterThan(before);
+    expect(host(sent.at(-1))).toBe(true);
+  });
+
   it('never wraps for an engine that is not Claude', async () => {
     const sent: string[] = [], m = manager(sent);
     const chat = await m.create({ harness: 'codex', cwd: tmp() });
@@ -93,6 +105,11 @@ describe('agent-message helpers', () => {
     expect(forEngine('x', { claude: true, relayed: false })).toBe('x');
     expect(forEngine('x', { claude: false, relayed: true })).toBe('x');
     expect(host(forEngine('x', { claude: true, relayed: true }))).toBe(true);
+  });
+
+  it('never wraps a slash command: the Orchestrator\'s /compact must start the prompt', () => {
+    for (const cmd of [ORCHESTRATOR_COMPACT, ORCHESTRATOR_PAUSE_COMPACT, '/compact', '  /compact x'])
+      expect(forEngine(cmd, { claude: true, relayed: true })).toBe(cmd);
   });
 
   it('shows the message without the envelope in the history, any other text as it is', () => {

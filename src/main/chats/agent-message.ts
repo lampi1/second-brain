@@ -14,9 +14,10 @@ export function agentMessage(text: string): string {
   return `${OPEN}\n${text.trim()}\n${CLOSE}`;
 }
 
-/** What goes to the engine: wrapped only for a Claude engine and a message that is not the user's own. */
+/** What goes to the engine: wrapped only for a Claude engine and a message that is not the user's own. A slash command
+ *  (the Orchestrator's /compact) stays as it is: Claude Code runs it only when the prompt starts with "/". */
 export function forEngine(text: string, opts: { claude: boolean; relayed: boolean }): string {
-  return opts.claude && opts.relayed ? agentMessage(text) : text;
+  return opts.claude && opts.relayed && !text.trimStart().startsWith('/') ? agentMessage(text) : text;
 }
 
 /** A transcript row as the app sent it, without the app's envelope (any other text unchanged). */

@@ -607,7 +607,7 @@ export abstract class ManagerDelegation extends ManagerContinuity {
   }
 
   // ---- implemented in a later layer (ADR 0200: manager.ts and its manager-*.ts layers)
-  abstract send(chatId: string, text: string, images?: unknown, resumed?: boolean, from?: string, liveOnly?: boolean, source?: TaskSource, receipt?: SubmissionReceipt): Promise<void>;
+  abstract send(chatId: string, text: string, images?: unknown, resumed?: boolean, from?: string, liveOnly?: boolean, source?: TaskSource, receipt?: SubmissionReceipt, appText?: boolean): Promise<void>;
   abstract list(): ChatSummary[];
   protected abstract autoActivity(r: Rec): void;
 }
