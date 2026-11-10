@@ -132,6 +132,8 @@ export const skillLibraryIt = {
   'sl.un.reason.many': (p: { list: string }) => `lo nominano più skill: ${p.list}`,
   'sl.un.reason.conflict': 'la skill ha già un file con questo nome',
   'sl.un.reason.too-big': 'troppo grande per la cronologia',
+  'sl.un.reason.undone': 'hai annullato lo spostamento automatico',
+  'sl.un.reason.not-utf8': 'non è testo UTF-8: va spostato a mano',
   'sl.un.pick': 'Scegli la skill…',
   'sl.un.move': 'Sposta',
   'sl.un.moved': (p: { file: string }) => `Spostato in ${p.file}`,

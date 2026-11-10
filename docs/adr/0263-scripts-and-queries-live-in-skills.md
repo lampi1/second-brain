@@ -27,8 +27,11 @@ unmatched ones for the user to assign, and keep a backup») · Changes: ADR 0076
   name it (`scripts/<file>`, `queries/<file>` or the bare file name), with those paths rewritten to
   `${CLAUDE_SKILL_DIR}/scripts/<file>` or `${CLAUDE_SKILL_DIR}/assets/queries/<file>`, as one change (job `migration`,
   Annulla puts everything back), after a copy in `<userData>/backups/scripts-queries/<stamp>/`. The same bytes already
-  in that skill only leave the old folder. No skill, several skills, another file of that name in the skill, or a file
-  over the history's limit: it stays and is listed. Idempotent: a moved file is no longer in the old folder.
+  in that skill only leave the old folder (when no other skill names the file). No skill, several skills, another file
+  of that name in the skill, a file over the history's limit or not UTF-8 text (a UTF-16 script would come out garbled):
+  it stays and is listed. A script keeps its file mode. Idempotent: a moved file is no longer in the old folder, and a
+  move the user undid is never done again by itself (listed, «hai annullato lo spostamento»). Deletes from the tools
+  touch only brain skills; an auto-save is skipped only for a script removed from that same skill.
 - **UI**: the «Script & Query» tab is gone; its links (`memoria/script/<skill>/<file>`, G T) open the Skill tab on the
   skill. A skill's «Leggi» shows «Nel pacchetto» by group (Script with title, description, language and last test;
   Query with language; Riferimenti; Asset); a row opens the file in «File». The Skill page lists what the move left

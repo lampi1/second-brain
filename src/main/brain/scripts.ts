@@ -268,6 +268,7 @@ export class BrainScripts {
     if (!s) throw new Error(`script non trovato: ${input.name}`);
     const why = input.reason.trim() || 'eliminato';
     if (s.skill) {
+      if (!this.safeSkills().some(x => x.origin === 'brain' && s.path.startsWith(x.folder + path.sep))) throw new Error(`«${s.skill}» is not a brain skill: an app skill's or the user's own scripts are changed only from the Skill page`);
       const log = this.log();
       if (!log) throw new Error('nessuna cronologia del brain: elimina lo script dalla pagina Skill');
       const c = log.apply({ job: 'user', kind: 'script', action: 'remove', target: s.skill, summary: `Script ${SKILL_SCRIPTS}/${path.basename(s.path)} tolto (${input.by})`, reason: why.slice(0, 500), evidence: [`${SKILL_SCRIPTS}/${path.basename(s.path)}`] }, [{ file: s.path, text: null }]);
@@ -289,13 +290,14 @@ export class BrainScripts {
 
   /** Whether a script of this file name was deleted and not put back (the auto-save does not add it again): one moved to
    *  the brain's scripts/.deleted/, or a skill's removed through the change log. */
-  wasDeleted(name: string): boolean {
+  wasDeleted(name: string, skill?: string): boolean {
     const legacy = this.dir();
     try { if (legacy && fs.readdirSync(path.join(legacy, DELETED_DIR)).some(f => f.endsWith(`-${name}`))) return true; } catch { /* none */ }
     const log = this.log();
     if (!log) return false;
-    const tail = `${path.sep}${SKILL_SCRIPTS}${path.sep}${name}`;
-    return log.all().some(c => !c.rolledBackAt && c.files.some(f => f.after === null && f.before !== null && f.file.endsWith(tail)));
+    // a removal from a skill's scripts/ (in that skill when one is named); the move out of the old scripts/ is no delete
+    const folders = this.safeSkills().filter(s => s.origin === 'brain' && (!skill || s.name === skill)).map(s => path.resolve(s.folder, SKILL_SCRIPTS, name));
+    return log.all().some(c => !c.rolledBackAt && c.action === 'remove' && c.files.some(f => f.after === null && f.before !== null && folders.includes(path.resolve(f.file))));
   }
 }
 

@@ -38,7 +38,7 @@ export interface UnassignedAsset {
   title: string;
   description: string;
   candidates: string[];
-  reason: 'none' | 'many' | 'conflict' | 'too-big';
+  reason: 'none' | 'many' | 'conflict' | 'too-big' | 'undone' | 'not-utf8';
 }
 export interface AssetAssign { kind: 'script' | 'query'; name: string; skill: string }
 export type AssetAssignResult = { ok: true; changeId: string | null; file: string } | { ok: false; error: string };

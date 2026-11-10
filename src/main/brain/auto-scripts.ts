@@ -118,7 +118,7 @@ export class AutoScripts {
     const platform = this.d.platform ?? process.platform;
     const name = scriptNameOf(run.code, platform);
     const listed = this.d.scripts.list().scripts;
-    if (listed.some(s => s.skill === skill && path.basename(s.path).toLowerCase() === name.toLowerCase()) || this.d.scripts.wasDeleted(name) || this.sameBody(run.code)) return null;
+    if (listed.some(s => s.skill === skill && path.basename(s.path).toLowerCase() === name.toLowerCase()) || this.d.scripts.wasDeleted(name, skill) || this.sameBody(run.code)) return null;
     const rel = `.agents/skills/${skill}/${SKILL_SCRIPTS}/${name}`;
     const chat = this.d.chatTitle?.(run.chatId)?.trim() || 'una chat';
     const first = steps(run.code).find(l => !trivial(l)) ?? '';

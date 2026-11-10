@@ -123,24 +123,41 @@ const titleOf = (l: Legacy): { title: string; description: string } => {
   return { title: maskSecrets(q?.title || pretty(l.name)).text, description: maskSecrets(q?.description ?? '').text };
 };
 
+/** Text the history can keep as is: UTF-8 that reads back to the same bytes (a UTF-16 or cp1252 script would come out
+ *  garbled, and Annulla would put the garbled text back). */
+const plainText = (file: string) => { try { const raw = fs.readFileSync(file); return Buffer.from(raw.toString('utf8'), 'utf8').equals(raw); } catch { return false; } };
+
+/** The old files whose automatic move the user undid (Annulla on a `migration` change): never moved again by itself,
+ *  they wait on the Skill page. */
+export const undoneMoves = (log: ChangeLog | null | undefined): Set<string> => {
+  try { return new Set((log?.all() ?? []).filter(c => c.job === 'migration' && c.rolledBackAt).flatMap(c => c.evidence ?? [])); } catch { return new Set(); }
+};
+
 /** Where one old file goes: its skill, or why it stays. */
-function place(l: Legacy, skills: readonly SkillPlace[], texts: Map<string, { file: string; text: string }[]>): { skill: SkillPlace; done: boolean } | { reason: UnassignedAsset['reason']; candidates: string[] } {
+function place(l: Legacy, skills: readonly SkillPlace[], texts: Map<string, { file: string; text: string }[]>, undone: ReadonlySet<string>): { skill: SkillPlace; done: boolean } | { reason: UnassignedAsset['reason']; candidates: string[] } {
   const target = (s: SkillPlace) => path.join(s.folder, ...NEW_DIR[l.kind].split('/'), l.name);
-  // already moved by hand (or a copy): the same bytes in a skill, only the old copy goes
-  const same = skills.find(s => fs.existsSync(target(s)) && sameBytes(target(s), l.file));
-  if (same) return { skill: same, done: true };
   const candidates = skills.filter(s => names(texts.get(s.name) ?? [], l.kind, l.name)).map(s => s.name);
+  if (undone.has(`${OLD_DIR[l.kind]}/${l.name}`)) return { reason: 'undone', candidates };
   if (l.size > 200 * 1024) return { reason: 'too-big', candidates };
+  if (!plainText(l.file)) return { reason: 'not-utf8', candidates };
+  // already moved by hand (or a copy): the same bytes in the skill that names it (or in one, when none does), only the
+  // old copy goes; other skills that name it would be left pointing at a file that is gone
+  const same = skills.find(s => fs.existsSync(target(s)) && sameBytes(target(s), l.file));
+  if (same && (!candidates.length || (candidates.length === 1 && candidates[0] === same.name))) return { skill: same, done: true };
   if (candidates.length !== 1) return { reason: candidates.length ? 'many' : 'none', candidates };
   const skill = skills.find(s => s.name === candidates[0])!;
   if (fs.existsSync(target(skill))) return { reason: 'conflict', candidates };
   return { skill, done: false };
 }
 
+/** The history kept nothing (a text over its limit): nothing was written. */
+class NotKept extends Error {}
+
 /** Moves one old file into a skill as one change (Annulla puts it back where it was). */
-function move(d: AssetsDeps, l: Legacy, skill: SkillPlace, job: 'migration' | 'user', alreadyThere: boolean, stamp: string): string | null {
+function move(d: AssetsDeps, l: Legacy, skill: SkillPlace, job: 'migration' | 'user', alreadyThere: boolean, stamp: string): string {
   const to = path.join(skill.folder, ...NEW_DIR[l.kind].split('/'), l.name);
   const text = fs.readFileSync(l.file, 'utf8');
+  const mode = fs.statSync(l.file).mode & 0o777;
   // the copy first: nothing moves without it
   if (d.backupDir) {
     const keep = path.join(d.backupDir, stamp, OLD_DIR[l.kind], l.name);
@@ -157,7 +174,10 @@ function move(d: AssetsDeps, l: Legacy, skill: SkillPlace, job: 'migration' | 'u
   ];
   const c = d.log.apply({ job, kind: l.kind === 'script' ? 'script' : 'skill', action: 'update', target: skill.name,
     summary: `${l.kind === 'script' ? 'Script' : 'Query'} ${OLD_DIR[l.kind]}/${l.name} → ${skill.name}/${NEW_DIR[l.kind]}/${l.name}`, reason, evidence: [`${OLD_DIR[l.kind]}/${l.name}`] }, writes);
-  return c?.id ?? null;
+  if (!c) throw new NotKept('troppo grande per la cronologia: nulla è stato spostato');
+  // a script keeps its permissions (the executable bit of a .sh)
+  if (!alreadyThere) { try { fs.chmodSync(to, mode); } catch { /* a file system without modes */ } }
+  return c.id;
 }
 
 const stampOf = (now: Date) => now.toISOString().replace(/[-:]/g, '').replace(/\..*$/, '').replace('T', '-');
@@ -167,14 +187,15 @@ export function migrateAssets(d: AssetsDeps): { moved: string[]; unassigned: Una
   const brain = d.skills.filter(s => s.origin === 'brain');
   const texts = new Map(brain.map(s => [s.name, skillTexts(s.folder)]));
   const stamp = stampOf(d.now?.() ?? new Date());
+  const undone = undoneMoves(d.log);
   const moved: string[] = [], unassigned: UnassignedAsset[] = [];
   for (const l of legacyFiles(d.root)) {
-    const p = place(l, brain, texts);
+    const p = place(l, brain, texts, undone);
     if ('reason' in p) { unassigned.push({ kind: l.kind, name: l.name, ...titleOf(l), candidates: p.candidates, reason: p.reason }); continue; }
     try { move(d, l, p.skill, 'migration', p.done, stamp); moved.push(`${OLD_DIR[l.kind]}/${l.name} → ${p.skill.name}`); }
     catch (e) {
       log.warn('skills', 'script or query not moved into its skill', { cause: errText(e), data: { file: `${OLD_DIR[l.kind]}/${l.name}`, skill: p.skill.name }, hint: 'it stays in the old folder and is listed on the Skill page to assign' });
-      unassigned.push({ kind: l.kind, name: l.name, ...titleOf(l), candidates: [p.skill.name], reason: 'conflict' });
+      unassigned.push({ kind: l.kind, name: l.name, ...titleOf(l), candidates: [p.skill.name], reason: e instanceof NotKept ? 'too-big' : 'conflict' });
     }
   }
   if (moved.length) log.info('skills', 'scripts and queries moved into their skills', { data: { moved: moved.length, left: unassigned.length } });
@@ -182,11 +203,12 @@ export function migrateAssets(d: AssetsDeps): { moved: string[]; unassigned: Una
 }
 
 /** What is still in the old folders, without moving anything (the Skill page's list). */
-export function unassignedAssets(root: string, skills: readonly SkillPlace[]): UnassignedAsset[] {
+export function unassignedAssets(root: string, skills: readonly SkillPlace[], log?: ChangeLog | null): UnassignedAsset[] {
   const brain = skills.filter(s => s.origin === 'brain');
   const texts = new Map(brain.map(s => [s.name, skillTexts(s.folder)]));
+  const undone = undoneMoves(log);
   return legacyFiles(root).map(l => {
-    const p = place(l, brain, texts);
+    const p = place(l, brain, texts, undone);
     return { kind: l.kind, name: l.name, ...titleOf(l), candidates: 'reason' in p ? p.candidates : [p.skill.name], reason: 'reason' in p ? p.reason : 'none' };
   });
 }
@@ -199,6 +221,7 @@ export function assignAsset(d: AssetsDeps, req: AssetAssign): AssetAssignResult 
   const skill = d.skills.find(s => s.origin === 'brain' && s.name === String(req?.skill ?? ''));
   if (!skill) return { ok: false, error: 'Scegli una skill del brain.' };
   if (l.size > SNAP) return { ok: false, error: 'File troppo grande per la cronologia: spostalo a mano nella cartella della skill.' };
+  if (!plainText(l.file)) return { ok: false, error: 'Il file non è testo UTF-8 (per esempio UTF-16): salvalo in UTF-8 o spostalo a mano nella cartella della skill.' };
   const to = path.join(skill.folder, ...NEW_DIR[kind].split('/'), l.name);
   const there = fs.existsSync(to);
   if (there && !sameBytes(to, l.file)) return { ok: false, error: `La skill «${skill.name}» ha già un file ${NEW_DIR[kind]}/${l.name} diverso: rinominane uno, poi riprova.` };

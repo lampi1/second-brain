@@ -244,6 +244,7 @@ export class BrainQueries {
     if (!this.dir() || !log) throw new Error('nessuna cartella brain configurata');
     const q = this.find(id);
     if (!q) throw new Error(`query non trovata: ${id}`);
+    if (q.skill && !this.safeSkills().some(s => s.origin === 'brain' && q.path.startsWith(s.folder + path.sep))) throw new Error(`«${q.skill}» is not a brain skill: an app skill's or the user's own queries are changed only from the Skill page`);
     if (fs.lstatSync(path.dirname(q.path)).isSymbolicLink()) throw new Error('the queries folder is a link: refused');
     const c = log.apply({ job: 'user', kind: q.skill ? 'skill' : 'memory', action: 'remove', target: q.skill ?? q.file, summary: `Query eliminata: ${q.title}`,
       reason: 'Eliminata dalla pagina Skill.', evidence: [q.file] }, [{ file: q.path, text: null }]);

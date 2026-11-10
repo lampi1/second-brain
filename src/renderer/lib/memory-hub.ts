@@ -23,7 +23,9 @@ export function parseHubArg(arg: string | null | undefined): { tab: HubTab; rest
   const [head = '', ...more] = String(arg ?? '').split('/');
   const key = head.trim().toLowerCase();
   if (SCRIPT_TABS.has(key)) {
-    const id = decodeURIComponent(more.join('/'));
+    const raw = more.join('/');
+    let id = raw;
+    try { id = decodeURIComponent(raw); } catch { /* a malformed link: as written */ }
     return { tab: 'skill', rest: id.includes('/') ? id.slice(0, id.indexOf('/')) : null };
   }
   const tab = isTab(key) ? key : TAB_ALIAS[key];

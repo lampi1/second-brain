@@ -89,6 +89,28 @@ describe('BrainScripts', () => {
     expect(entries[1]).toMatchObject({ at: '2026-10-19 10:52', kind: 'script', target: 'deploy/scripts/backup.mjs', by: 'Orchestrator', summary: 'gestisce i percorsi con spazi' });
   });
 
+  it('never deletes from an app skill or the user\'s own; a delete counts in its skill, the move out of scripts/ is none', () => {
+    const skills = [...skillOf(), ...skillOf('altro')], history = changes();
+    const app = path.join(root, 'app', 'pdf');
+    fs.mkdirSync(path.join(app, 'scripts'), { recursive: true });
+    fs.writeFileSync(path.join(app, 'scripts', 'fill.py'), 'print(1)\n');
+    const all: SkillPlace[] = [...skills, { name: 'pdf', origin: 'app', folder: app }];
+    const s = new BrainScripts(() => root, undefined, () => all, () => history);
+    expect(() => s.delete({ name: 'pdf/fill.py', by: 'Orchestrator', reason: 'x' })).toThrow(/not a brain skill/);
+    expect(fs.existsSync(path.join(app, 'scripts', 'fill.py'))).toBe(true);
+    // the migration's removal of the old copy is no delete by the user
+    const old = path.join(root, 'scripts', 'run.sh');
+    fs.mkdirSync(path.dirname(old), { recursive: true });
+    fs.writeFileSync(old, 'echo\n');
+    history.apply({ job: 'migration', kind: 'script', action: 'update', target: 'deploy', summary: 's', reason: 'r', evidence: ['scripts/run.sh'] },
+      [{ file: path.join(skills[0]!.folder, 'scripts', 'run.sh'), text: 'echo\n' }, { file: old, text: null }]);
+    expect(s.wasDeleted('run.sh')).toBe(false);
+    s.invalidate();
+    s.delete({ name: 'deploy/run.sh', by: 'Orchestrator', reason: 'x' });
+    expect(s.wasDeleted('run.sh', 'deploy')).toBe(true);
+    expect(s.wasDeleted('run.sh', 'altro')).toBe(false);
+  });
+
   it('a script still in the brain\'s old scripts/ is listed without a skill, edited in place, deleted to scripts/.deleted/', () => {
     const log = new BrainChangelog(() => root);
     fs.mkdirSync(path.join(root, 'scripts'));

@@ -17,6 +17,7 @@ describe('the Memoria hub tabs', () => {
     expect(parseHubArg('script/deploy%2Fa.ps1')).toEqual({ tab: 'skill', rest: 'deploy' });
     expect(parseHubArg('script/deploy/a.ps1')).toEqual({ tab: 'skill', rest: 'deploy' });
     expect(parseHubArg('script/vecchio.ps1')).toEqual({ tab: 'skill', rest: null });
+    expect(parseHubArg('script/50%')).toEqual({ tab: 'skill', rest: null }); // a malformed link does not throw
     expect(parseHubArg('statistiche')).toEqual({ tab: 'skill', rest: null }); // gone (ADR 0248): skill use is in Skill
   });
 

@@ -132,6 +132,8 @@ export const skillLibraryDe: typeof skillLibraryIt = {
   'sl.un.reason.many': (p: { list: string }) => `mehrere Skills nennen es: ${p.list}`,
   'sl.un.reason.conflict': 'der Skill hat schon eine Datei mit diesem Namen',
   'sl.un.reason.too-big': 'zu groß für den Verlauf',
+  'sl.un.reason.undone': 'du hast das automatische Verschieben rückgängig gemacht',
+  'sl.un.reason.not-utf8': 'kein UTF-8-Text: von Hand verschieben',
   'sl.un.pick': 'Skill wählen…',
   'sl.un.move': 'Verschieben',
   'sl.un.moved': (p: { file: string }) => `Verschoben nach ${p.file}`,

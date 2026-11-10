@@ -96,6 +96,40 @@ describe('the move of the old scripts/ and queries/ into their skills', () => {
   });
 });
 
+describe('what the move never does', () => {
+  it('an undone move is not done again; a file that is not UTF-8 stays; a script keeps its mode', () => {
+    const deploy = skill('deploy', 'Lancia scripts/a.sh e scripts/win.ps1.');
+    write('scripts/a.sh', 'echo a\n');
+    fs.chmodSync(path.join(root, 'scripts/a.sh'), 0o755);
+    fs.writeFileSync(path.join(root, 'scripts/win.ps1'), Buffer.from('\ufeffWrite-Output è', 'utf16le'));
+    const r = migrateAssets(deps([deploy]));
+    expect(r.moved).toEqual(['scripts/a.sh → deploy']);
+    if (process.platform !== 'win32') expect(fs.statSync(path.join(root, '.agents/skills/deploy/scripts/a.sh')).mode & 0o777).toBe(0o755);
+    expect(r.unassigned.map(u => [u.name, u.reason])).toEqual([['win.ps1', 'not-utf8']]);
+    expect(has('scripts/win.ps1')).toBe(true);
+    // Annulla sticks: the next launch lists it instead of moving it again
+    log.rollback(log.all().find(c => c.job === 'migration')!.id, NO_AGENT);
+    expect(has('scripts/a.sh')).toBe(true);
+    const again = migrateAssets(deps([deploy]));
+    expect(again.moved).toEqual([]);
+    expect(again.unassigned.map(u => [u.name, u.reason])).toEqual([['a.sh', 'undone'], ['win.ps1', 'not-utf8']]);
+    expect(unassignedAssets(root, [deploy], log).map(u => u.reason)).toEqual(['undone', 'not-utf8']);
+    // the user can still place it
+    expect(assignAsset(deps([deploy]), { kind: 'script', name: 'a.sh', skill: 'deploy' })).toMatchObject({ ok: true });
+    expect(assignAsset(deps([deploy]), { kind: 'script', name: 'win.ps1', skill: 'deploy' })).toMatchObject({ ok: false });
+  });
+
+  it('a copy in a skill that does not name it, while another skill does, is no reason to drop the old file', () => {
+    const a = skill('a', 'Niente.');
+    const b = skill('b', 'Lancia scripts/x.sh.');
+    write('scripts/x.sh', 'echo x\n');
+    write('.agents/skills/a/scripts/x.sh', 'echo x\n');
+    const r = migrateAssets(deps([a, b]));
+    expect(r.moved).toEqual(['scripts/x.sh → b']);
+    expect(read('.agents/skills/b/SKILL.md')).toContain('${CLAUDE_SKILL_DIR}/scripts/x.sh');
+  });
+});
+
 describe('the package by its groups', () => {
   it('shows scripts with their header, queries with their language, references and assets', () => {
     const s = skill('deploy', 'x');

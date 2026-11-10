@@ -246,7 +246,7 @@ export class SkillLibrary {
     const root = this.root(), history = this.d.changes().all(), runs = this.safe(() => this.d.runs(), []), roles = this.safe(() => this.d.roles(), []).filter(r => r.scope === 'role');
     const found = this.found(root), latestBy = this.latestByFolder(history, new Set(found.flatMap(f => this.folders(f)))), bySkill = SkillLibrary.runsBySkill(runs);
     return { root, skills: found.map(f => this.info(f, latestBy, bySkill, roles)).sort((a, b) => a.name.localeCompare(b.name)), roles: roles.map(r => ({ id: r.id, name: r.name })),
-      unassigned: root ? this.safe(() => unassignedAssets(root, found), []) : [] };
+      unassigned: root ? this.safe(() => unassignedAssets(root, found, this.d.changes()), []) : [] };
   }
   private safe<T>(fn: () => T, fallback: T): T { try { return fn(); } catch { return fallback; } }
 

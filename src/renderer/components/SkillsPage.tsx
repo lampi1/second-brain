@@ -133,8 +133,9 @@ export function SkillsPage() {
   const top = useMemo(() => sortSkills(skills.filter(s => s.totalUses > 0), 'uses').slice(0, 5), [skills]);
   const filtered = origin !== 'all' || usage !== 'all' || !!role || !!area || !!q;
   const current = skills.find(s => s.name === pick) ?? null;
-  // a link to one skill (a script's or query's old link, ADR 0263) opens it
-  useEffect(() => { if (arg && skills.some(s => s.name === arg)) setPick(arg); }, [arg, skills]);
+  // a link to one skill (a script's or query's old link, ADR 0263) opens it, once: a reload of the list keeps the pick
+  const argOpened = useRef<string | null>(null);
+  useEffect(() => { if (arg && arg !== argOpened.current && skills.some(s => s.name === arg)) { argOpened.current = arg; setPick(arg); } }, [arg, skills]);
   // the first skill is open from the start: the right side is never an empty frame
   useEffect(() => { if (lib && !creating && (!pick || !current) && sorted[0]) setPick(sorted[0].name); }, [lib, pick, current, sorted, creating]);
   const roleName = useCallback((id: string) => lib?.roles.find(r => r.id === id)?.name ?? id, [lib]);
