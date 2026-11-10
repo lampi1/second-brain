@@ -62,7 +62,7 @@ const Row = memo(function Row({ node, folded, on }: { node: TreeNode; folded: bo
   const runningRun = useRunningRun(node.id);
   if (!chat) return null;
   const running = kidCounts(kids.map(k => childState(k))).run;
-  const state = busyState(rowState(chat), chat, runningRun, running);
+  const state = busyState(rowState(chat), chat, runningRun, Math.max(running, node.working));
   const right = state === 'wait' ? <span className="tn-w">{t('tree.state.wait')}</span>
     : kids.length ? <span className="tn-x">{t('tree.kids', { n: kids.length })}</span>
     : node.depth > 0 || state !== 'done' ? <span className="tn-x">{t(`tree.state.${state}`)}</span> : null;
