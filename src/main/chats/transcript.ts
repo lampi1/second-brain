@@ -10,6 +10,7 @@ import type { ChatItem } from '../../shared/contract';
 import { sysEn, type SysCode } from '../../shared/sys';
 import { diffFor, diffFromResult, resultText, toolSummary } from './claude-map';
 import { lastLine, trimInput } from './session';
+import { withoutAgentMessage } from './agent-message';
 import { coldUserText } from './handoff';
 import { withoutEstimateLine } from '../../shared/task-estimate';
 import { maskTypedItem } from './typed-text';
@@ -76,7 +77,8 @@ const REMINDER = /<system-reminder>[\s\S]*?<\/system-reminder>/g;
  *  system text when it is the command's own output (passthrough). */
 export function userText(raw: string): { text: string; system?: string; sysCode?: SysCode } | null {
   // a cold continuation's first message (ADR 0031): only the user's part, the note stays behind the divider
-  const t = withoutEstimateLine(coldUserText(raw.replace(REMINDER, '').trim())).trim();
+  // a message the app wrapped for the engine (ADR 0261) shows without the envelope
+  const t = withoutEstimateLine(coldUserText(withoutAgentMessage(raw.replace(REMINDER, '').trim()))).trim();
   if (!t) return null;
   if (/^\[Request interrupted/.test(t)) return { text: '', sysCode: 'interrupted' };
   const cmd = t.match(/<command-name>([\s\S]*?)<\/command-name>/);

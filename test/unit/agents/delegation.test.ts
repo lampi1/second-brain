@@ -24,6 +24,8 @@ import type { NewChat } from '../../../src/shared/contract';
 import type { McpTool } from '../../../src/main/mcp/server';
 import { ChatMail } from '../../../src/main/chats/mail';
 import { supersededResult } from '../../../src/main/chats/manager-helpers';
+// the text inside the app's envelope (ADR 0261, pinned by chats/agent-message.test.ts)
+import { withoutAgentMessage } from '../../../src/main/chats/agent-message';
 import { ADR0083_DEFAULTS } from '../../../src/main/agents/role-migrate';
 import type { PermissionCeiling, ToolClass } from '../../../src/shared/agents';
 
@@ -36,7 +38,7 @@ const shape = (id: RoleId, n: Narrowed = {}) => { const r = ROLE_DEFAULTS[id]; r
 const roots: string[] = [], managers: ChatManager[] = [];
 /** the delegation tools' clock (the stall check); undefined = Date.now */
 let clock: (() => number) | undefined;
-afterEach(async () => { clock = undefined; vi.useRealTimers(); for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true }); });
+afterEach(async () => { clock = undefined; vi.useRealTimers(); for (const m of managers.splice(0)) await m.shutdown(); for (const d of roots.splice(0)) fs.rmSync(d, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 }); });
 
 const catalog = (n: Narrowed = {}): AgentCatalog => ({ problem: null, archived: [], models: [], profiles: ROLE_IDS.map(id => {
   const r = ROLE_DEFAULTS[id], x = shape(id, n);
@@ -60,7 +62,7 @@ function fixture(limits: Partial<DelegationSettings> = {}, worktrees?: (cwd: str
     sessionFactory: (_h, o, s) => {
       starts.set(o.chatId, o); sinks.set(o.chatId, s);
       return { harness: 'claude', sessionId: null, pid: null, root: null, alive: true, busy: false,
-        start() { s.changed({ state: 'idle' }); }, send(text: string) { sent.set(o.chatId, [...(sent.get(o.chatId) ?? []), text]); onSend?.(o.chatId); },
+        start() { s.changed({ state: 'idle' }); }, send(text: string) { sent.set(o.chatId, [...(sent.get(o.chatId) ?? []), withoutAgentMessage(text)]); onSend?.(o.chatId); },
         close: async () => { s.changed({ state: 'closed' }); s.exit({ code: 0, error: null }); }, killNow() {}, interrupt: async () => {},
         answer: (id: string, answer: { allow?: boolean; message?: string }, patch?: Record<string, string>) => { answers.push({ chat: o.chatId, id, answer, ...(patch ? { patch } : {}) }); return true; },
         rename: async () => {}, setModel: async () => {}, setEffort: async () => {}, setPermissionMode: async () => {}, contextUsage: async () => null, usage: async () => null,

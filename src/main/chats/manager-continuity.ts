@@ -11,6 +11,8 @@ import { errText, log } from '../log';
 import { AFTER_CALLS, CACHE_TTL_MS, coldArmed, coldRoute, continuityStep, type ColdView, ORCHESTRATOR_COMPACT, ORCHESTRATOR_PAUSE_COMPACT, romeDay } from './continuity';
 import { autoHandoff, contextBudgetDue, continuePrompt, FRESH_HANDOFF_MARK, FRESH_IDLE_MS, protectedHandoff, extractHandoff, handoffRequest, nextTitle } from './handoff';
 import { isUuid, nextId, type HarnessSession } from './session';
+import { forEngine } from './agent-message';
+import { engineOf } from '../engines/registry';
 import { updateActivity } from '../update/activity';
 import { plainOwner } from '../agents/catalog';
 import type { AgentPolicy } from '../agents/tool-policy';
@@ -389,7 +391,8 @@ export abstract class ManagerContinuity extends ManagerRequests {
       r.handoffTurn = { texts: new Map(), done: finish, ...(quiet ? { quiet } : {}) };
     });
     before?.();
-    try { sess.send(text); } catch (e) { r.handoffTurn?.done(null); return Promise.reject(e); }
+    // the app's own turn, never the user's: a Claude engine gets it in the app's envelope (ADR 0261)
+    try { sess.send(forEngine(text, { claude: engineOf(r.s.harness)?.kind === 'claude', relayed: true })); } catch (e) { r.handoffTurn?.done(null); return Promise.reject(e); }
     return answer;
   }
 

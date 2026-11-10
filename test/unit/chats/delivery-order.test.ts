@@ -33,7 +33,7 @@ describe('delivery order', () => {
     expect(sent).toEqual([]); // the second waits behind the first, it does not overtake it
     open();
     await Promise.all([first, second]);
-    expect(sent).toEqual(['dal tuo messaggio', 'posta del figlio']);
+    expect(sent).toEqual(['dal tuo messaggio', '<agent-message from="second-brain">\nposta del figlio\n</agent-message>']); // mail in the app's envelope (ADR 0261)
     expect(m.items(c.id).filter(i => i.kind === 'user').map(i => (i as { text: string }).text)).toEqual(['dal tuo messaggio', 'posta del figlio']);
   });
 });

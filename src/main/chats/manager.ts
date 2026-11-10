@@ -50,6 +50,7 @@ import { newRequest } from '../agents/task-estimate';
 import { AWAY_BACK, AWAY_RULE } from '../../shared/away';
 import { ownerSource, type TaskSource } from '../../shared/delegation';
 import { PHONE_REPLY_HINT } from './phone-reply';
+import { forEngine } from './agent-message';
 import { isPlanApproval, stopsQuestions, askingPlan, strategyPrompt, type IntakeSource } from '../../shared/strategy';
 import { isCorrection } from '../../shared/correction';
 import { initialEffort, selectEffort } from './effort';
@@ -317,7 +318,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     if (prompt) {
       // a delegated chat's contract says who sent it (the parent's title), like mail between chats
       const from = delegator?.s.title;
-      try { await (viaQueue ? this.gate(r, () => this.deliver(id, prompt, undefined, false, from, false, undefined, this.taskHint(r, prompt, { kind: 'app' }))) : this.send(id, prompt, undefined, false, from, false, { kind: by === 'user' ? 'user' : 'app' })); } catch (e) {
+      try { await (viaQueue ? this.gate(r, () => this.deliver(id, prompt, undefined, false, from, false, undefined, this.taskHint(r, prompt, { kind: 'app' }), undefined, true)) : this.send(id, prompt, undefined, false, from, false, { kind: by === 'user' ? 'user' : 'app' })); } catch (e) {
         if (!r.s.lastError) r.s.lastError = errText(e);
         this.updated(r);
       }
@@ -368,6 +369,8 @@ export class ChatManager extends ManagerRemote implements ChatService {
     // or lose their mark (a phone message without it would count as typed on the PC)
     const phoneVia = phone ? { voice: r.phoneNext?.text === text && !!r.phoneNext.voice } : undefined;
     if (phone) r.phoneNext = undefined;
+    // not the user's own words (an agent, the app, its resume): a Claude engine gets it in the app's envelope (ADR 0261)
+    const relayed = resumed || from !== undefined || !ownerSource(source);
     // Flash follows its card (ADR 0107): the user's question goes to a Flash on the card's engine and model
     if (r.s.quick && from === undefined && !resumed && ownerSource(source)) {
       const next = await this.flashFollow(r);
@@ -413,11 +416,11 @@ export class ChatManager extends ManagerRemote implements ChatService {
     const hint = !resumed && !liveOnly ? this.taskHint(r, text, source) : '';
     // a new assignment from the Orchestrator: whether the user waits for it is decided again (#123)
     if (from !== undefined && !r.s.parentId && !r.s.isOrchestrator && r.s.run?.startedBy === 'orchestrator' && source?.kind === 'chat' && source.chatId === this.openOrchestrator()?.s.id) r.userWaits = this.orchestratorAnswering();
-    if (!this.admission) return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia);
+    if (!this.admission) return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia, relayed);
     // the user's own message never waits (ADR 0036): what waited for this chat goes first, now, then this one
     if (!resumed && from === undefined) {
       this.admission.admitNow(chatId);
-      return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia);
+      return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia, relayed);
     }
     // an agent's message (another chat, the Orchestrator, the app's own resume): checked now
     if (liveOnly && ((!r.session && r.s.state !== 'idle') || r.archiving || r.s.closedAt)) throw new Error('La chat non è attiva: la posta resta da leggere.');
@@ -427,11 +430,11 @@ export class ChatManager extends ManagerRemote implements ChatService {
     // hours, and reached the chat only when the user wrote): what waited for this chat goes first, then this one
     if (!resumed && !r.s.closedAt) {
       this.admission.admitNow(chatId);
-      return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia);
+      return this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia, relayed);
     }
     // the app's own resume, or an agent reopening a closed chat (a new engine): it may wait for the load
     if (r.s.closedAt && !r.archiving) this.unarchive(r); // back on the grid now: its tile shows that it waits
-    return this.gate(r, () => this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia));
+    return this.gate(r, () => this.deliver(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia, relayed));
   }
 
   /** Agent work through the cold-start queue (ADR 0222): runs now (the promise is the delivery's) or waits, and then
@@ -502,8 +505,8 @@ export class ChatManager extends ManagerRemote implements ChatService {
     return lines.length ? `\n\n[${lines.join('\n')}]` : '';
   }
 
-  private deliver(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, receipt?: SubmissionReceipt, hint = '', phoneVia?: { voice: boolean }): Promise<void> {
-    const run = () => this.deliverNow(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia).catch(error => { receipt?.failed(error); throw error; });
+  private deliver(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, receipt?: SubmissionReceipt, hint = '', phoneVia?: { voice: boolean }, relayed = resumed || from !== undefined): Promise<void> {
+    const run = () => this.deliverNow(chatId, text, images, resumed, from, liveOnly, receipt, hint, phoneVia, relayed).catch(error => { receipt?.failed(error); throw error; });
     const previous = this.deliveries.get(chatId);
     const delivery = previous ? previous.catch(() => {}).then(run) : run();
     this.deliveries.set(chatId, delivery);
@@ -512,7 +515,7 @@ export class ChatManager extends ManagerRemote implements ChatService {
     return delivery;
   }
 
-  private async deliverNow(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, receipt?: SubmissionReceipt, hint = '', phoneVia?: { voice: boolean }): Promise<void> {
+  private async deliverNow(chatId: string, text: string, images?: unknown, resumed = false, from?: string, liveOnly = false, receipt?: SubmissionReceipt, hint = '', phoneVia?: { voice: boolean }, relayed = resumed || from !== undefined): Promise<void> {
     updateActivity.assertOpen();
     const r = this.need(chatId);
     const releaseDelivery = this.holdActivity(chatId);
@@ -615,7 +618,10 @@ export class ChatManager extends ManagerRemote implements ChatService {
     try {
       receipt?.beforeSubmit();
       runtimePerformance.runtime(chatId, r.s.harness, hadEngine, hadEngine && r.session.busy);
-      r.session.send(`${role}${warning}${body}${hint}${langHint}${voiceHint}${phoneHint}${awayHint}`, imgs);
+      // what the user did not type goes in the app's envelope to a Claude engine (ADR 0261): a project's prompt hooks
+      // (AI-DLC's human-turn record) never take it for the user's turn; the user's own text goes as it is
+      const composed = `${role}${warning}${body}${hint}${langHint}${voiceHint}${phoneHint}${awayHint}`;
+      r.session.send(forEngine(composed, { claude: engineOf(r.s.harness)?.kind === 'claude', relayed }), imgs);
       if (awayHint) { if (awayOn) r.awayTold = session; else delete r.awayTold; }
       receipt?.submitted();
       if (r.continuationPending) { r.continuationPending = undefined; this.persist(true); }

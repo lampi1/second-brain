@@ -265,3 +265,4 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0258](0258-maintenance-research-goes-deeper.md) The maintenance research goes deeper: 20 $ cap, extra-high effort, a quality bar for every card — accepted
 - [0259](0259-question-card-redesign.md) The question card, redesigned: still while open, «Bivio», Esegui as a question — accepted
 - [0260](0260-agents-recap.md) The recap is a short list per agent (app_agents_recap) — accepted
+- [0261](0261-agent-message-envelope.md) What the user did not type reaches a Claude engine in an `<agent-message>` envelope — accepted
