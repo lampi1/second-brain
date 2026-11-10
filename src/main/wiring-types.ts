@@ -19,6 +19,7 @@ import type { EnginesApi } from './engines/service';
 import type { ModelLists } from './engines/model-lists';
 import type { RecordingStore } from './recordings/store';
 import type { LearnService } from './learn/service';
+import type { NewsService } from './news/service';
 import type { Emitter } from './ipc';
 import type { BrainService, BrowserService, ChatService, SkillsApi, TasksApi } from './services';
 import type { BrainModelService } from './brainmodel/service';
@@ -82,6 +83,8 @@ export interface Wired {
   recordings: RecordingStore;
   /** Impara (ADR 0185, learn/service.ts): the user's lessons; absent = the impara:* channels say it is not available */
   learn?: LearnService;
+  /** Impara «News» (ADR 0265, news/service.ts): the AI newspaper; absent = the news:* channels say it is not available */
+  news?: NewsService;
   /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */
   engines: EnginesApi;
   /** the engines' live model lists (ADR 0256, engines/model-lists.ts); absent (demo) = 'models:refresh' answers nothing */

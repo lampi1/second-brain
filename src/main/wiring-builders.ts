@@ -1,10 +1,13 @@
 // A self-contained step of createServices (wiring.ts), building one service from what is already wired and called at
-// the same point of the start as before: Impara (ADR 0185, 0188; the personal Browser page left with ADR 0212). Kept apart so wiring.ts stays readable; the construction order is wiring.ts's.
+// the same point of the start as before: Impara (ADR 0185, 0188; the personal Browser page left with ADR 0212) and its
+// «News» (ADR 0265). Kept apart so wiring.ts stays readable; the construction order is wiring.ts's.
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
 import { LessonStore } from './learn/store';
 import { LearnService, type TeachRun } from './learn/service';
+import { NewsService, netFetch, type NewsFetch } from './news/service';
+import { timersFor } from './timers';
 import { runRead } from './learn/material';
 import { appGuide, teacherOption } from './learn/sources';
 import { AcceptedModels, parseModelRefusal, probeAccepted } from './learn/accepted-models';
@@ -74,4 +77,30 @@ export function buildLearn(ctx: Ctx, brain: BrainService, tasks: TaskService, he
     tutorText: (lesson, turn, text) => ctx.emitter.emit('impara:tutor', { lesson, turn, text }),
   });
   return learn;
+}
+
+/** Impara «News» (ADR 0265): the sources read with the app's own requests (none in the tests), one AI pass per refresh
+ *  on Claude (a hidden run with no tool, Sonnet at low effort: summaries, not research), its tokens as Claude reports
+ *  them. The daily refresh runs on the app's timers. */
+export function buildNews(ctx: Ctx, brain: BrainService, headless: HeadlessRunner): NewsService {
+  const claude = () => engineInfos().find(e => e.kind === 'claude' && engineOn(brain.settings(), e.id)) ?? null;
+  const offline: NewsFetch = async () => { throw new Error('rete spenta nei test'); };
+  const t = timersFor('news');
+  const dir = path.join(ctx.userData, 'news');
+  return new NewsService({
+    dir, fetch: process.env.SB_TEST === '1' ? offline : netFetch, lang: uiLang,
+    noAi: () => (claude() ? null : 'Per i riassunti serve Claude acceso (Impostazioni → Motori). Le notizie arrivano lo stesso, senza riassunto.'),
+    ai: async prompt => {
+      const e = claude();
+      if (!e) return { ok: false, error: 'Claude è spento' };
+      const cwd = path.join(dir, 'run');
+      fs.mkdirSync(cwd, { recursive: true });
+      const out = await headless.run({ engine: e.id, model: 'sonnet', effort: e.caps.effort ? 'low' : null, cwd, prompt, round: 'news-summary', timeoutMs: 6 * 60_000, noTools: true });
+      if (!out.ok) return { ok: false, error: out.error };
+      const tk = out.tokens;
+      return { ok: true, text: out.text, tokens: tk ? tk.input + tk.cacheRead + tk.cacheWrite + tk.output : null, costUsd: out.costUsd };
+    },
+    changed: state => ctx.emitter.emit('news:changed', state),
+    setInterval: (fn, ms) => t.setInterval(fn, ms), clearInterval: h => t.clearInterval(h as NodeJS.Timeout),
+  });
 }

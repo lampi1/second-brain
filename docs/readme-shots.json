@@ -132,7 +132,7 @@
       ]
     },
     "voice": {
-      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, trends, the maintenance notice",
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, news, costs, trends, the maintenance notice",
       "sources": [
         "src/renderer/components/VoiceSettings.tsx",
         "src/renderer/components/SettingsPage.tsx",
@@ -140,7 +140,7 @@
       ]
     },
     "voice-talk": {
-      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, trends, the maintenance notice",
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, news, costs, trends, the maintenance notice",
       "sources": [
         "src/renderer/components/OrchestratorOverlay.tsx",
         "src/renderer/components/OrchestratorTile.tsx",
@@ -149,21 +149,21 @@
       ]
     },
     "log": {
-      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, trends, the maintenance notice",
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, news, costs, trends, the maintenance notice",
       "sources": [
         "src/renderer/components/LogPage.tsx",
         "src/renderer/styles/log.css"
       ]
     },
     "recordings": {
-      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, trends, the maintenance notice",
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, news, costs, trends, the maintenance notice",
       "sources": [
         "src/renderer/components/RecordingsPage.tsx",
         "src/renderer/styles/recordings.css"
       ]
     },
     "classifiers": {
-      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, trends, the maintenance notice",
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, news, costs, trends, the maintenance notice",
       "sources": [
         "src/renderer/components/brain-model/ClassifiersSection.tsx",
         "src/renderer/components/brain-model/ClassifierParts.tsx",
@@ -173,21 +173,21 @@
       ]
     },
     "quality": {
-      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, trends, the maintenance notice",
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, news, costs, trends, the maintenance notice",
       "sources": [
         "src/renderer/brain/pages/Qualita.tsx",
         "src/renderer/brain/lib/quality.ts"
       ]
     },
     "learn": {
-      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, trends, the maintenance notice",
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, news, costs, trends, the maintenance notice",
       "sources": [
         "src/renderer/components/impara/",
         "src/renderer/styles/impara.css"
       ]
     },
     "costs": {
-      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, trends, the maintenance notice",
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, news, costs, trends, the maintenance notice",
       "sources": [
         "src/renderer/brain/pages/Costi.tsx",
         "src/renderer/components/LiveCosts.tsx",
@@ -196,19 +196,28 @@
       ]
     },
     "trends": {
-      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, trends, the maintenance notice",
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, news, costs, trends, the maintenance notice",
       "sources": [
         "src/renderer/components/andamento/",
         "src/renderer/styles/andamento.css"
       ]
     },
     "maintenance": {
-      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, costs, trends, the maintenance notice",
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, news, costs, trends, the maintenance notice",
       "sources": [
         "src/renderer/components/brain-model/MaintenanceButton.tsx",
         "src/renderer/components/brain-model/MaintenancePanel.tsx",
         "src/renderer/components/brain-model/MemoryPage.tsx",
         "src/renderer/styles/notif.css"
+      ]
+    },
+    "news": {
+      "test": "README showcase: voice, Log, recordings, classifiers, quality, learn, news, costs, trends, the maintenance notice",
+      "sources": [
+        "src/renderer/components/impara/news/",
+        "src/renderer/components/impara/ImparaTabs.tsx",
+        "src/renderer/styles/news.css",
+        "src/main/news/demo.ts"
       ]
     }
   },

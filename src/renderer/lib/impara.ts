@@ -176,5 +176,5 @@ export const imparaDraft = createStore<ImparaDraft | null>(null);
 export function learnAbout(d: ImparaDraft): void {
   imparaDraft.set(() => d);
   // actions.ts imports half the renderer (this file among them): loaded on use, never at start
-  void import('../actions').then(a => a.go({ page: 'impara' }));
+  void import('../actions').then(a => a.go({ page: 'impara', arg: 'lezioni' }));
 }

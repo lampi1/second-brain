@@ -218,6 +218,21 @@ pieces before you see them, and every lesson is saved and reopens where you left
 
 <p align="center"><img src="docs/screenshots/learn.webp" alt="A Learn lesson about a PR: the blackboard diagram, piece 2 of 3, and the buttons Got it, Explain it better, Give me an example, Show me the code" width="640"></p>
 
+### Stay current with the AI news
+
+**Learn** opens on the **News** tab: a short AI newspaper made for someone who builds agents. One click on **Refresh**
+reads about 28 chosen sources (lab blogs and release notes, model and benchmark trackers, Claude Code, Codex, Cursor
+and other harness changelogs, the MCP and Agent Skills specs, a few researchers' newsletters, Hacker News and Hugging
+Face Papers for what the list misses) at zero tokens, merges the same story told by several sources, ranks the paper
+by recency, source, relevance to your work and echo, and then one AI pass writes a short summary and "why it matters
+to you" for the best 30. Every story keeps its links; the head shows what that refresh cost in tokens. Three columns
+(sections, stories, the open story) with keys (J/K, S save, U read, E learn it, O open the source); **Learn** on a
+story or on one of your PRs (the **Pull requests** tab, same layout) starts the usual lesson. **Sources** lets you
+pause, remove or add one by pasting its link, with each source's last reading or error; a daily refresh is there, off
+by default, with its estimated cost. The sources and why each was picked: `docs/adr/0265-impara-ai-newspaper.md`.
+
+<p align="center"><img src="docs/screenshots/news.webp" alt="The News tab: sections with unread counts, the ranked stories, and the open story with why it matters, its summary and links" width="640"></p>
+
 ### Nothing happens off the record
 
 The **Log** shows everything the app did, live: who chose whom, what it cost, which answer was a duplicate. **Costs**

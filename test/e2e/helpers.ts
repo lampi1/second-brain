@@ -194,6 +194,13 @@ export async function goPage(page: Page, id: keyof typeof GO_KEY): Promise<void>
   await page.keyboard.press(GO_KEY[id]);
 }
 
+/** Opens Impara (G I) on one of its tabs (ADR 0265: «Giornale», «Pull Request», «Lezioni»; plain Impara opens the one used
+ *  last, the Giornale on a fresh start). */
+export async function goImpara(page: Page, tab: 'giornale' | 'pr' | 'lezioni' = 'lezioni'): Promise<void> {
+  await goPage(page, 'impara');
+  await page.getByTestId(`impara-tab-${tab}`).click();
+}
+
 /** Opens the roles overview with its shortcut G A: the Grindhouse shows only the strips (ADR 0068) and the sidebar shows
  *  "Agenti" only when the chosen profile lists it; Ctrl+K reaches it too. */
 export async function openAgentOverview(page: Page): Promise<void> {

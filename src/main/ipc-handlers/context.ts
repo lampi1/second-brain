@@ -48,6 +48,7 @@ export interface HandlerContext {
   connectors: ReturnType<typeof createAppConnectors>;
   research: () => NonNullable<Wired['research']>;
   learn: () => NonNullable<Wired['learn']>;
+  news: () => NonNullable<Wired['news']>;
   routinesOf: () => Routines;
   /** throws when the brain changed since the review page read it */
   requireReviewRoot: (expected: unknown) => void;

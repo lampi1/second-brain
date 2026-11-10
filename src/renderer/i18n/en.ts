@@ -25,6 +25,7 @@ import { recEn } from './areas/rec.en';
 import { imparaEn } from './areas/impara.en';
 import { imparaStudioEn } from './areas/impara-studio.en';
 import { imparaV3En } from './areas/impara-v3.en';
+import { newsEn } from './areas/news.en';
 import {studioEn}from'./areas/studio.en';
 import { permissionsEn } from './areas/permissions.en';
 import { langSwitchEn } from './areas/lang-switch.en';
@@ -102,6 +103,7 @@ export const en: Dict = {
   ...imparaEn,
   ...imparaStudioEn,
   ...imparaV3En,
+  ...newsEn,
   'genui.request.question': 'Question',
   'genui.request.permission': 'Permission',
   'genui.request.from': ({ kind, chat, title }) => `${kind} from ${chat ?? 'a chat'}: ${title}`,

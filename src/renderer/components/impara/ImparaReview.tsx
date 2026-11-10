@@ -97,7 +97,7 @@ export function ImparaReview({ subject, lesson }: { subject?: string; lesson?: s
   return (
     <div className={`ip-player rv ${full ? 'ip-full' : ''}`} data-testid="impara-review" data-full={full ? 'true' : 'false'}>
       <header className="ip-head">
-        <Button variant="ghost" size="s" onClick={() => go({ page: 'impara' })} testid="impara-back" tip={t('impara.backList')} aria-label={t('impara.backList')}><IconArrowLeft size={13} /></Button>
+        <Button variant="ghost" size="s" onClick={() => go({ page: 'impara', arg: 'lezioni' })} testid="impara-back" tip={t('impara.backList')} aria-label={t('impara.backList')}><IconArrowLeft size={13} /></Button>
         <div className="ip-head-title">
           <div className="ip-kicker">{practice ? t('impara.q.practiceKicker') : t('impara.rv.kicker')}</div>
           <h2 data-testid="impara-review-title">{title}</h2>
@@ -248,7 +248,7 @@ function End({ results, empty, ms, practice, onRedo, onAgain }: { results: Resul
     return (
       <div className="rv-end" data-testid="impara-review-end">
         <div className="rv-end-ic"><IconCheck size={22} /></div><h3>{t('impara.rv.nothing')}</h3><p className="ip-muted">{t('impara.rv.nothingHint')}</p>
-        <div className="ip-row"><Button variant="primary" onClick={() => go({ page: 'impara' })} testid="impara-review-done">{t('impara.rv.backHome')}</Button></div>
+        <div className="ip-row"><Button variant="primary" onClick={() => go({ page: 'impara', arg: 'lezioni' })} testid="impara-review-done">{t('impara.rv.backHome')}</Button></div>
       </div>
     );
   }
@@ -264,7 +264,7 @@ function End({ results, empty, ms, practice, onRedo, onAgain }: { results: Resul
       </div>
       <div className="ip-row rv-end-acts">
         {wrong > 0 && <Button variant="primary" onClick={onRedo} testid="impara-review-redo"><IconRefresh size={12} />{t('impara.q.redo', { n: wrong })}</Button>}
-        <Button variant={wrong > 0 ? 'ghost' : 'primary'} onClick={() => go({ page: 'impara' })} testid="impara-review-done">{t('impara.rv.backHome')}</Button>
+        <Button variant={wrong > 0 ? 'ghost' : 'primary'} onClick={() => go({ page: 'impara', arg: 'lezioni' })} testid="impara-review-done">{t('impara.rv.backHome')}</Button>
         {onAgain && !practice && <Button variant="ghost" onClick={onAgain} testid="impara-review-more">{t('impara.rv.again')}</Button>}
       </div>
     </div>

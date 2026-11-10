@@ -1,13 +1,25 @@
-// IPC handlers, Voice mode (ADR 0152), call recordings (ADR 0154) and Impara lessons (ADR 0185). Registered by
+// IPC handlers, Voice mode (ADR 0152), call recordings (ADR 0154), Impara lessons (ADR 0185) and Impara «News» (ADR 0265). Registered by
 // src/main/index.ts with every other group (Handlers in ipc.ts keeps the set complete); each channel's shape is in
 // src/shared/contract/*.ts.
 import { armLoopback } from '../window';
 import { shell } from 'electron';
 import { tutorModeOf } from '@shared/lesson';
 import { VOICE_NAMES, type VoiceName } from '@shared/voice';
+import type { NewsSourceEdit } from '@shared/news';
 import type { HandlerContext, HandlersOf } from './context';
 
-export function mediaHandlers({ s, voice, recordings, learn }: HandlerContext): HandlersOf<'voice' | 'rec' | 'impara'> {
+/** A «Fonti» edit from the renderer, checked field by field. */
+function newsEdit(a: unknown): NewsSourceEdit {
+  const o = a && typeof a === 'object' ? a as Record<string, unknown> : {};
+  const id = String(o.id ?? '').slice(0, 80);
+  if (o.op === 'add') return { op: 'add', url: String(o.url ?? '').slice(0, 2000), ...(typeof o.name === 'string' ? { name: o.name.slice(0, 60) } : {}) };
+  if (o.op === 'remove') return { op: 'remove', id };
+  if (o.op === 'toggle') return { op: 'toggle', id, on: o.on === true };
+  if (o.op === 'reset') return { op: 'reset' };
+  throw new Error('modifica delle fonti non valida');
+}
+
+export function mediaHandlers({ s, voice, recordings, learn, news }: HandlerContext): HandlersOf<'voice' | 'rec' | 'impara' | 'news'> {
   return {
     'voice:state': () => voice.state(),
     'voice:prepare': a => voice.prepare(a && VOICE_NAMES.includes(a.voice as VoiceName) ? a.voice : undefined),
@@ -52,5 +64,10 @@ export function mediaHandlers({ s, voice, recordings, learn }: HandlerContext): 
     'impara:tutor': a => learn().tutor(String(a?.id ?? ''), String(a?.at ?? ''), String(a?.q ?? ''), tutorModeOf(a?.mode)),
     'impara:tutorWarm': a => learn().tutorWarm(String(a?.id ?? '')),
     'impara:studio': a => learn().studio(String(a?.id ?? ''), a?.kind),
+    'news:state': () => news().state(),
+    'news:refresh': () => news().refresh(),
+    'news:mark': a => news().mark({ id: String(a?.id ?? ''), ...(typeof a?.read === 'boolean' ? { read: a.read } : {}), ...(typeof a?.saved === 'boolean' ? { saved: a.saved } : {}), ...(typeof a?.lesson === 'string' ? { lesson: a.lesson } : {}) }),
+    'news:sources': a => news().editSources(newsEdit(a)),
+    'news:schedule': a => news().setSchedule({ ...(typeof a?.on === 'boolean' ? { on: a.on } : {}), ...(typeof a?.hour === 'number' ? { hour: a.hour } : {}) }),
   };
 }

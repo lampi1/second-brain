@@ -5,7 +5,7 @@
 // second beat, each side drawn on its own; the last piece offers «Spiegalo tu», never opened by itself, with no score,
 // no «Eri sicuro?» and no review cards. impara.spec.ts keeps the quiz lessons. Screenshots dark.
 import { expect, test } from '@playwright/test';
-import { goPage, launchDemo, shot } from './helpers';
+import { launchDemo, shot, goImpara } from './helpers';
 
 const PR = 'https://github.com/lampi1/second-brain/pull/251';
 
@@ -13,7 +13,7 @@ test('an explanation lesson (ADR 0230): the default, no checks, a before/after c
   test.setTimeout(120_000);
   const { app, page } = await launchDemo();
   try {
-    await goPage(page, 'impara');
+    await goImpara(page);
     await expect(page.getByTestId('impara-start')).toBeVisible();
     // the default kind of lesson, first in the options line and in the options
     await expect(page.getByTestId('impara-options-summary')).toContainText('Spiegazione');
