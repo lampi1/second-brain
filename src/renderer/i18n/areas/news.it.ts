@@ -1,4 +1,4 @@
-// Impara «News» (ADR 0264): the «Giornale» and «Pull Request» tabs, the sources panel, the refresh and its cost.
+// Impara «News» (ADR 0265): the «Giornale» and «Pull Request» tabs, the sources panel, the refresh and its cost.
 export const newsIt = {
   'impara.tab.giornale': 'Giornale',
   'impara.tab.pr': 'Pull Request',
@@ -75,7 +75,7 @@ export const newsIt = {
   'news.how.page': 'Pagina',
 
   'news.src.title': 'Fonti del giornale',
-  'news.src.lead': 'Le fonti scelte e motivate nell\'ADR 0264. Mettine in pausa una, toglila o aggiungine una incollando il suo link: riconosco da solo GitHub, un feed o una pagina.',
+  'news.src.lead': 'Le fonti scelte e motivate nell\'ADR 0265. Mettine in pausa una, toglila o aggiungine una incollando il suo link: riconosco da solo GitHub, un feed o una pagina.',
   'news.src.addPh': 'Link di un blog, di un feed o di un repository GitHub',
   'news.src.addLabel': 'Link della nuova fonte',
   'news.src.add': 'Aggiungi',

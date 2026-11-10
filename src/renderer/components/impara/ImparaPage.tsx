@@ -4,7 +4,7 @@
 // voices; the saved lessons) or, with the page's argument, one lesson (ImparaPlayer.tsx). Mounted by App.tsx's
 // PageFrame; the address is impara/<lesson id>, so back and forward move between the list and a lesson; impara/ripasso
 // (today's review) and impara/ripasso:<subject> (a subject's quiz) open a review session (ImparaReview.tsx, ADR 0189);
-// impara/quiz:<lesson id> plays that lesson's «Studio» quiz the same way (ADR 0205). Since ADR 0264 the list has three
+// impara/quiz:<lesson id> plays that lesson's «Studio» quiz the same way (ADR 0205). Since ADR 0265 the list has three
 // tabs (ImparaTabs.tsx): impara/giornale (the AI news), impara/pr (the user's PRs), impara/lezioni (the start above);
 // plain impara opens the one used last.
 import { ui } from '../../store/ui';

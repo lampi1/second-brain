@@ -1,4 +1,4 @@
-// One story of the News, read in place (ADR 0264): its section, title, source and date, «Perché conta per te», the AI
+// One story of the News, read in place (ADR 0265): its section, title, source and date, «Perché conta per te», the AI
 // summary (or the source's own few words until the next refresh writes it), the actions (Spiegamelo, Salva, letta /
 // da leggere, Apri la fonte) and every link to it: the primary first, then the other sources that carried it. A line
 // at the bottom says why it is where it is (the four parts of its score). Used by NewsPage.tsx; styles news.css.

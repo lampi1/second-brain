@@ -1,4 +1,4 @@
-// E2E of Impara's «Giornale» and «Pull Request» tabs (ADR 0264) on the frozen demo, whose News reads a few real stories
+// E2E of Impara's «Giornale» and «Pull Request» tabs (ADR 0265) on the frozen demo, whose News reads a few real stories
 // served offline (src/main/news/demo.ts) and summarizes them with a fake AI: the three columns, the sections with their
 // unread counts, a story read in place (why it matters, summary, links), J/K and S, the sources panel with each
 // source's last reading, the daily refresh off by default, and the PR tab with its filters and «Impara».

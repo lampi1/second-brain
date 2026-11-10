@@ -6,6 +6,7 @@
 // No approval (ADR 0077: skill changes apply on their own, logged and undoable). Only on the Orchestrator's own endpoint.
 import type { SkillLibrary } from '../skills/library';
 import type { ToolDef } from './tools';
+import { lintText } from '../../shared/skill-lint';
 
 const str = (v: unknown, max: number): string => (typeof v === 'string' ? v.slice(0, max) : '');
 
@@ -33,7 +34,7 @@ export function skillTools(lib: SkillLibrary, who: () => string): ToolDef[] {
     },
   }, {
     name: 'app_skill_write',
-    description: 'Create a skill or change one file of its package, for the user (no approval needed: the change is logged with an Undo on the Skill page). Create = write its SKILL.md (frontmatter `name` = the folder name in kebab-case, a `description` saying when to use it, then the procedure). Change = the whole new text of one file (read it first with app_skills); `remove: true` removes that file; `deleteSkill: true` deletes a brain skill (or the brain copy of an app skill, which restores the app\'s original). Scripts go in scripts/, long docs read only when needed in references/, templates, data and SQL queries in assets/; in SKILL.md refer to them as ${CLAUDE_SKILL_DIR}/scripts/x so they work from any folder. Say in `reason` why, in the user\'s words when he asked. Only brain and app skills: the user\'s own folder (origin home) and binary files are changed by the user himself.',
+    description: 'Create a skill or change one file of its package, for the user (no approval needed: the change is logged with an Undo on the Skill page). Before writing a SKILL.md read the app\'s skill-authoring skill (app_skills skill: "skill-authoring"); the answer lists `warnings` to fix. Create = write its SKILL.md (frontmatter `name` = the folder name in kebab-case, a `description` saying when to use it, then the procedure). Change = the whole new text of one file (read it first with app_skills); `remove: true` removes that file; `deleteSkill: true` deletes a brain skill (or the brain copy of an app skill, which restores the app\'s original). Scripts go in scripts/, long docs read only when needed in references/, templates, data and SQL queries in assets/; in SKILL.md refer to them as ${CLAUDE_SKILL_DIR}/scripts/x so they work from any folder. Say in `reason` why, in the user\'s words when he asked. Only brain and app skills: the user\'s own folder (origin home) and binary files are changed by the user himself.',
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: false },
     inputSchema: { type: 'object', properties: {
       skill: { type: 'string', description: 'the skill\'s name (kebab-case)' },
@@ -54,7 +55,8 @@ export function skillTools(lib: SkillLibrary, who: () => string): ToolDef[] {
       if (text === undefined) throw new Error('Give `text` (the whole new file) or `remove: true`.');
       const r = await lib.write({ skill: name, path: str(a.file, 300) || 'SKILL.md', text }, { who: who(), reason });
       if (!r.ok) throw new Error(r.error);
-      return { ok: true, skill: r.skill.name, origin: r.skill.origin, files: r.skill.files.map(f => f.path), changeId: r.changeId, note: r.changeId ? 'Saved, with an Undo in the skill\'s history (Memoria → Skill).' : 'Nothing changed: the file already had this text.' };
+      const warnings = r.skill.warnings.map(lintText);
+      return { ok: true, skill: r.skill.name, origin: r.skill.origin, files: r.skill.files.map(f => f.path), changeId: r.changeId, ...(warnings.length ? { warnings, fix: 'Fix these (a file SKILL.md names may simply not be written yet: write it next); the app\'s skill-authoring skill says how.' } : {}), note: r.changeId ? 'Saved, with an Undo in the skill\'s history (Memoria → Skill).' : 'Nothing changed: the file already had this text.' };
     },
   }, {
     name: 'app_skill_roles',

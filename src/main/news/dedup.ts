@@ -1,4 +1,4 @@
-// Impara «News» (ADR 0264): the same story from several sources becomes one. Two stories are the same when their links
+// Impara «News» (ADR 0265): the same story from several sources becomes one. Two stories are the same when their links
 // are the same once tracking parts are dropped (utm_*, ref, www., a trailing slash), when one's link is the other's
 // (an aggregator that links the primary: Hacker News, a newsletter's own link), or when their titles say the same
 // thing within a few days (enough shared words, or the same product and version, e.g. «Claude Code 2.1.322»). The story

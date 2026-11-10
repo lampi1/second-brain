@@ -1,4 +1,4 @@
-# ADR 0264 · Impara becomes an AI newspaper: chosen sources, how each is read
+# ADR 0265 · Impara becomes an AI newspaper: chosen sources, how each is read
 
 Date: 2026-11-10 · Status: accepted (owner, 2026-11-10: «turn the "Impara" section … into an AI newspaper that keeps
 the user up to date … source selection is the core of the work»; «mi rendo sempre conto che le altre persone hanno fonti

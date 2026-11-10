@@ -1,4 +1,4 @@
-// Impara's three tabs (ADR 0264; owner 2026-11-10: «tab separate "Giornale" "Pull Request"»): «Giornale» (the AI news,
+// Impara's three tabs (ADR 0265; owner 2026-11-10: «tab separate "Giornale" "Pull Request"»): «Giornale» (the AI news,
 // news/NewsPage.tsx), «Pull Request» (the user's PRs to study, ImparaPrTab.tsx) and «Lezioni» (a lesson on anything,
 // the saved lessons and the review, ImparaStart.tsx). The address is impara/giornale, impara/pr, impara/lezioni; plain
 // impara opens the tab used last (localStorage, a convenience). Used by ImparaPage.tsx; styles news.css (.ip-tabs).

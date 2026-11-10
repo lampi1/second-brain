@@ -1,4 +1,4 @@
-/* Impara's «Giornale» and «Pull Request» tabs (ADR 0264; owner 2026-11-10 picked the «Rassegna a 3 colonne», «un po'
+/* Impara's «Giornale» and «Pull Request» tabs (ADR 0265; owner 2026-11-10 picked the «Rassegna a 3 colonne», «un po'
    più margine e padding»): the tabs on top (.ip-tabs), the head with title, date, cost and buttons (.nw-head), the
    progress line, then three columns (.nw-cols): the sections or filters (sticky), the list of stories or PRs, and the
    open one (sticky, scrolls on its own). The sources panel is .nws-* inside a side Modal. Shared tokens, both themes;

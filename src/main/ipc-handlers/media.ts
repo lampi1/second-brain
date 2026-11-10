@@ -1,4 +1,4 @@
-// IPC handlers, Voice mode (ADR 0152), call recordings (ADR 0154), Impara lessons (ADR 0185) and Impara «News» (ADR 0264). Registered by
+// IPC handlers, Voice mode (ADR 0152), call recordings (ADR 0154), Impara lessons (ADR 0185) and Impara «News» (ADR 0265). Registered by
 // src/main/index.ts with every other group (Handlers in ipc.ts keeps the set complete); each channel's shape is in
 // src/shared/contract/*.ts.
 import { armLoopback } from '../window';

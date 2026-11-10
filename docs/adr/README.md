@@ -268,4 +268,5 @@ and 0070 (Battito) were kept outside this repo: references to ADR 0069 have no f
 - [0261](0261-agent-message-envelope.md) What the user did not type reaches a Claude engine in an `<agent-message>` envelope — accepted
 - [0262](0262-a-yes-is-not-a-run.md) A Yes is not a run: user steps resume on evidence, «hai eseguito?» never passes as a run — accepted
 - [0263](0263-scripts-and-queries-live-in-skills.md) Scripts and queries live in their skills; the old folders move there by themselves — accepted
-- [0264](0264-impara-ai-newspaper.md) Impara becomes an AI newspaper: chosen sources, merge, rank, one AI pass, three columns — accepted
+- [0264](0264-skill-authoring-guide-and-package-checks.md) The app ships how to write a skill, and checks every package — accepted
+- [0265](0265-impara-ai-newspaper.md) Impara becomes an AI newspaper: chosen sources, merge, rank, one AI pass, three columns — accepted

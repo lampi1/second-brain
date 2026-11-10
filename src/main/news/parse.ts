@@ -1,4 +1,4 @@
-// Impara «News» (ADR 0264): turns what a source sends into raw stories, at zero tokens and with no dependency (a small
+// Impara «News» (ADR 0265): turns what a source sends into raw stories, at zero tokens and with no dependency (a small
 // tag reader, not an XML library: feeds are read for a title, a link, a date and a few words). Readers: RSS 2.0 and
 // Atom (feeds and GitHub's releases.atom, whose prereleases are dropped), Hugging Face Daily Papers (JSON, by votes),
 // Hacker News through Algolia (JSON, by points, only stories that link out and speak of AI), a page (its links and the

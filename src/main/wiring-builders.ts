@@ -1,6 +1,6 @@
 // A self-contained step of createServices (wiring.ts), building one service from what is already wired and called at
 // the same point of the start as before: Impara (ADR 0185, 0188; the personal Browser page left with ADR 0212) and its
-// «News» (ADR 0264). Kept apart so wiring.ts stays readable; the construction order is wiring.ts's.
+// «News» (ADR 0265). Kept apart so wiring.ts stays readable; the construction order is wiring.ts's.
 import fs from 'node:fs';
 import path from 'node:path';
 import { app } from 'electron';
@@ -79,7 +79,7 @@ export function buildLearn(ctx: Ctx, brain: BrainService, tasks: TaskService, he
   return learn;
 }
 
-/** Impara «News» (ADR 0264): the sources read with the app's own requests (none in the tests), one AI pass per refresh
+/** Impara «News» (ADR 0265): the sources read with the app's own requests (none in the tests), one AI pass per refresh
  *  on Claude (a hidden run with no tool, Sonnet at low effort: summaries, not research), its tokens as Claude reports
  *  them. The daily refresh runs on the app's timers. */
 export function buildNews(ctx: Ctx, brain: BrainService, headless: HeadlessRunner): NewsService {

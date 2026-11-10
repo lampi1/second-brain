@@ -1,4 +1,4 @@
-// Impara «News» (ADR 0264) in English: the same keys as news.it.ts.
+// Impara «News» (ADR 0265) in English: the same keys as news.it.ts.
 export const newsEn = {
   'impara.tab.giornale': 'News',
   'impara.tab.pr': 'Pull requests',
@@ -75,7 +75,7 @@ export const newsEn = {
   'news.how.page': 'Page',
 
   'news.src.title': 'News sources',
-  'news.src.lead': 'The sources chosen and justified in ADR 0264. Pause one, remove it, or add one by pasting its link: I recognise GitHub, a feed or a page by myself.',
+  'news.src.lead': 'The sources chosen and justified in ADR 0265. Pause one, remove it, or add one by pasting its link: I recognise GitHub, a feed or a page by myself.',
   'news.src.addPh': 'Link of a blog, a feed or a GitHub repository',
   'news.src.addLabel': 'Link of the new source',
   'news.src.add': 'Add',

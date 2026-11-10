@@ -1,4 +1,4 @@
-// Impara «News» (ADR 0264): the order of the paper and each story's section, at zero tokens. A story's score is a sum
+// Impara «News» (ADR 0265): the order of the paper and each story's section, at zero tokens. A story's score is a sum
 // of four parts, each 0..1 and shown to the user as «perché è qui»: recency (half life 36 hours), its source's weight,
 // relevance to this user (a developer who builds agents, skills and harnesses: words of that work in the title and
 // snippet, and the AI pass's own 0-3 judgement once it ran) and echo (how many other sources carry it, Hacker News points, paper votes). The section comes from the

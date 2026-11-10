@@ -1,4 +1,4 @@
-// Impara «News» in the renderer (ADR 0264): main's paper (news:changed keeps it current), its actions (each a news:*
+// Impara «News» in the renderer (ADR 0265): main's paper (news:changed keeps it current), its actions (each a news:*
 // call, a failure said in a toast) and «Spiegamelo», which starts an Impara lesson on a story (a topic lesson whose
 // ask holds the title, the summary and the primary link: its web research reads the source) and remembers it on the
 // story. Which section and story are open is the page's own state; the last section is remembered (localStorage, a

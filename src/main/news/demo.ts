@@ -1,4 +1,4 @@
-// The demo's News (ADR 0264): no network and no engine. A few real stories (titles, links and the sources' own first
+// The demo's News (ADR 0265): no network and no engine. A few real stories (titles, links and the sources' own first
 // words, as read live on 2026-11-10; dates moved to be relative to the demo's clock) are served as the sources' own
 // formats (RSS, a news page, the Hacker News and Hugging Face Papers APIs), so «Aggiorna» runs the real pipeline
 // (parse, dedup, rank); every other source answers with an empty list. The AI pass is a fake that returns the

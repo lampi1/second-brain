@@ -1,6 +1,7 @@
 // The skill library (#361-#364, ADR 0241): every skill a chat can load, as a package (SKILL.md plus scripts/,
 // references/, assets/), with its files, the roles that get it, its usage per role and its own history with Undo.
 // Shapes shared by main (skills/library.ts, appctl/skills.ts) and the Memoria «Skill» tab (SkillsPage.tsx).
+import type { SkillLint } from './skill-lint';
 
 /** brain = the brain's `.agents/skills` (the one copy, `.claude/skills` links to it); app = shipped with the app
  *  (read-only: an edit makes a brain copy that replaces it); home = the user's own ~/.claude or ~/.agents skills */
@@ -69,6 +70,8 @@ export interface LibSkill {
   madeBy: string | null;
   /** SKILL.md problems (missing name or description…) */
   errors: number;
+  /** what the package should fix (#373: name ≠ folder, no «when to use», over 500 lines, a link to a missing file) */
+  warnings: SkillLint[];
 }
 
 export interface SkillRole { id: string; name: string; emoji?: string }

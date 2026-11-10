@@ -1,4 +1,4 @@
-// The News' «Fonti» panel (ADR 0264): every source with how it is read (RSS/Atom, GitHub, API, page), its last reading
+// The News' «Fonti» panel (ADR 0265): every source with how it is read (RSS/Atom, GitHub, API, page), its last reading
 // (ok with how many stories and how many new, or the error), a switch to pause it and «Togli»; a field to add one by
 // pasting its link (the app recognises a GitHub repository, a feed or a page); «Ripristina» brings back the default
 // list. Below, the daily refresh (off by default because it costs tokens) with its hour and the estimated cost: the

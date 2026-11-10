@@ -1,4 +1,4 @@
-// Voice mode (ADR 0152), call recordings (ADR 0154), Impara lessons (ADR 0185) and Impara «News» (ADR 0264).
+// Voice mode (ADR 0152), call recordings (ADR 0154), Impara lessons (ADR 0185) and Impara «News» (ADR 0265).
 // One area of the IPC contract: src/shared/contract.ts re-exports it and assembles the channel maps (change a shape
 // here first, then both sides).
 import type { NewsMark, NewsRefresh, NewsSchedule, NewsSourceEdit, NewsState } from '../news';
@@ -64,7 +64,7 @@ export interface MediaInvokeMap {
   'impara:tutorWarm': [{ id: string }, void];
   /** a «Studio» tile (ADR 0205): one short run over the lesson's verified facts; the output lands on the lesson */
   'impara:studio': [{ id: string; kind: StudioKind }, Lesson];
-  /** Impara «News» (ADR 0264, main/news/): the paper, «Aggiorna» (reads every source, one AI pass; 'news:changed'
+  /** Impara «News» (ADR 0265, main/news/): the paper, «Aggiorna» (reads every source, one AI pass; 'news:changed'
    *  brings the progress), read / saved / the lesson of a story, the sources («Fonti»), the daily refresh */
   'news:state': [void, NewsState];
   'news:refresh': [void, NewsRefresh];

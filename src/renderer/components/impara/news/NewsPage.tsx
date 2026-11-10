@@ -1,4 +1,4 @@
-// Impara's «Giornale» tab (ADR 0264; owner 2026-11-10 picked the «Rassegna a 3 colonne» of the proposals): the AI news
+// Impara's «Giornale» tab (ADR 0265; owner 2026-11-10 picked the «Rassegna a 3 colonne» of the proposals): the AI news
 // in three columns. Left the sections (Prima pagina = the best of all, then Modelli e benchmark, Harness e tool, Skill e
 // agenti, Ricerca, and Salvate) with how many stories are unread; in the middle the stories, most important first,
 // each with its source, when, and how many other sources carried it; on the right the open story (NewsReader.tsx).

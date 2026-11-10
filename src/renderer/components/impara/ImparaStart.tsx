@@ -6,7 +6,7 @@
 // fonte» are the lesson's sources (lib/impara-files.ts, read here; main/learn/user-files.ts); the options in one line
 // (ImparaOptions.tsx) and one primary button. Under it the review (ImparaReviewHome.tsx, ADR 0189: what is due today,
 // the subjects with their level and quiz) and the saved lessons (their diagram as a thumbnail, how far they got, their
-// subject, filtered by subject), each reopening where it was left. The user's PRs have their own tab since ADR 0264
+// subject, filtered by subject), each reopening where it was left. The user's PRs have their own tab since ADR 0265
 // (ImparaPrTab.tsx). This is the «Lezioni» tab of Impara (ImparaTabs.tsx).
 // Another page can send the user here with the field filled in (ADR 0190: «Capiscila» from Task, «Spiegamelo» from
 // Memoria, «Imparalo» from the Guide; lib/impara.ts learnAbout), with the subject it belongs to; the user starts it.

@@ -14,8 +14,9 @@ changes how the brain must be edited.
 2. **The right place.** Only the fixed core reaches every chat: how {{OWNER}} wants every chat to talk or work, and
    the hard limits (production, secrets, external actions) → `me.md`, one line each. Everything else is a skill: a
    procedure, how a kind of work is done (code, production, a recurring routine) → its `SKILL.md` (a role's know-how
-   is its role skill `ruolo-<id>`); topic files are no longer loaded by any chat. A new kind of knowledge → propose a
-   new file with a `map.md` row.
+   is its role skill `ruolo-<id>`); topic files are no longer loaded by any chat. How a skill is written
+   (description, package, size): the app's `skill-authoring` skill; this file keeps only {{OWNER}}'s own choices
+   about skills. A new kind of knowledge → propose a new file with a `map.md` row.
 3. **Remove before adding.** If the request makes an existing line obsolete, delete it; the shorter text wins. **The
    fixed context never grows**: a change that adds to it removes, shortens or moves at least as much in the same edit.
    The hook `.claude/hooks/brain-limits.mjs` refuses writes that grow it past the budget.

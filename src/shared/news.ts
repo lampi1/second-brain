@@ -1,4 +1,4 @@
-// Impara «News» (ADR 0264): the AI newspaper's shapes, shared by main (main/news/: fetch, parse, dedup, rank, the AI
+// Impara «News» (ADR 0265): the AI newspaper's shapes, shared by main (main/news/: fetch, parse, dedup, rank, the AI
 // pass, the store) and the renderer (components/impara/news/). A source is read without tokens (a feed, a public API,
 // GitHub releases or a page); the stories are deduplicated across sources, ranked by recency, source, relevance to the
 // user and how many others picked them up, and the new ones get a short summary and «perché conta per te» from one AI
@@ -29,7 +29,7 @@ export interface NewsSource {
   /** a primary source (the lab, the project, the researcher), not an aggregator: wins the deduplication */
   primary: boolean;
   on: boolean;
-  /** shipped with the app (ADR 0264's list) rather than added by the user */
+  /** shipped with the app (ADR 0265's list) rather than added by the user */
   builtin: boolean;
   /** page: a regular expression a link's path must match (default: any link under the page's own path) */
   match?: string;

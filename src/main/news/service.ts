@@ -1,4 +1,4 @@
-// Impara «News» in main (ADR 0264): keeps the AI newspaper. A refresh («Aggiorna», or the optional daily one) reads every
+// Impara «News» in main (ADR 0265): keeps the AI newspaper. A refresh («Aggiorna», or the optional daily one) reads every
 // source that is on, at zero tokens and at most 6 at a time (fetch with a deadline and a size cap, through the app's
 // own network like every other main-process request), parses it (parse.ts), dates a page's new stories from their own
 // article when the page lists none, merges the same story across sources (dedup.ts), ranks the paper (rank.ts), then

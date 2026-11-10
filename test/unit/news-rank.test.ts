@@ -1,4 +1,4 @@
-// The News' ranking (src/main/news/rank.ts, ADR 0264): recency halves in 36 hours, the user's work words count, the
+// The News' ranking (src/main/news/rank.ts, ADR 0265): recency halves in 36 hours, the user's work words count, the
 // AI's fit weighs more once it exists, echo from other sources and points, a read story sinks, an undated one is not
 // new, and the section comes from the words unless the source is a harness or research one.
 import { describe, expect, it } from 'vitest';

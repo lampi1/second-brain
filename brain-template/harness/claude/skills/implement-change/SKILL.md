@@ -1,6 +1,6 @@
 ---
 name: implement-change
-description: Implement and refactor a scoped change, including tests, UI and project documentation.
+description: Implements and refactors a scoped change, including tests, UI and project documentation. Use when a step asks to fix a bug, add or change a feature, refactor code or update a repo's docs. Not for root-cause hunts (code-investigation) or reviewing a diff (code-review).
 ---
 
 Start from one externally observable example and trace the normal entry point. For a bug, reproduce the failure first. Capture a failing behavioral test when feasible, make it pass, then simplify. Choose unit tests for a rule, integration tests for a boundary and a browser test for a user interaction. Preserve existing callers, data, retry behavior and the repository's test policy.

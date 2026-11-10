@@ -1,4 +1,4 @@
-// Impara «News» (ADR 0264) auf Deutsch (Österreich): dieselben Schlüssel wie news.it.ts.
+// Impara «News» (ADR 0265) auf Deutsch (Österreich): dieselben Schlüssel wie news.it.ts.
 export const newsDe = {
   'impara.tab.giornale': 'News',
   'impara.tab.pr': 'Pull Requests',
@@ -75,7 +75,7 @@ export const newsDe = {
   'news.how.page': 'Seite',
 
   'news.src.title': 'Quellen der Zeitung',
-  'news.src.lead': 'Die in ADR 0264 ausgewählten und begründeten Quellen. Pausier eine, entfern sie oder füg eine hinzu, indem du ihren Link einfügst: GitHub, ein Feed oder eine Seite wird selbst erkannt.',
+  'news.src.lead': 'Die in ADR 0265 ausgewählten und begründeten Quellen. Pausier eine, entfern sie oder füg eine hinzu, indem du ihren Link einfügst: GitHub, ein Feed oder eine Seite wird selbst erkannt.',
   'news.src.addPh': 'Link zu einem Blog, einem Feed oder einem GitHub-Repository',
   'news.src.addLabel': 'Link der neuen Quelle',
   'news.src.add': 'Hinzufügen',

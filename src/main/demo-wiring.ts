@@ -323,7 +323,7 @@ export async function createDemoServices(ctx: Ctx): Promise<Wired> {
     tasks: () => tasks.get(), changes: () => brainModel.changes(), api: p => brain.api(p),
     stallMin: () => brain.settings().delegation?.stallMin ?? 10 });
 
-  // Impara «News» (ADR 0264): the real pipeline over a few real stories served offline (news/demo.ts), a fake AI pass
+  // Impara «News» (ADR 0265): the real pipeline over a few real stories served offline (news/demo.ts), a fake AI pass
   const news = new NewsService({ dir: path.join(ctx.userData, 'news'), fetch: demoNewsFetch(now), ai: demoNewsAi(uiLang), noAi: () => null, lang: uiLang, now,
     changed: state => ctx.emitter.emit('news:changed', state) });
   if (!news.state().items.length) void news.refresh();

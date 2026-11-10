@@ -7,7 +7,7 @@ and the project uses [Semantic Versioning](https://semver.org) once it reaches 1
 
 ### Added
 - Impara «News»: an AI newspaper from 28 chosen sources (merged, ranked, one AI summary pass with its token cost), in
-  three columns beside a «Pull Request» tab with the same layout; sources editable in the app (ADR 0264).
+  three columns beside a «Pull Request» tab with the same layout; sources editable in the app (ADR 0265).
 - Episodic memory: a role starts with up to 2 short examples of its own verified past successes on similar tasks in
   the same repository, listed in the run's Contesto (ADR 0236).
 - Memoria → Statistiche «Quanto ritrova la memoria»: how often the right fact is among those a role gets at launch,

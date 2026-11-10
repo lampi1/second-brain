@@ -1,4 +1,4 @@
-// Impara «News» (ADR 0264): the default sources, chosen and justified in the ADR (each opened on 2026-11-10), and how a
+// Impara «News» (ADR 0265): the default sources, chosen and justified in the ADR (each opened on 2026-11-10), and how a
 // source the user adds is recognised. The list is data: the user pauses, removes or adds sources from the «Fonti»
 // panel (service.ts keeps their edits; «Ripristina» brings this list back). weight: how much a story from it counts;
 // primary: the lab, the project or the researcher who did the work (wins the deduplication over a newsletter or a

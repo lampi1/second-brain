@@ -229,7 +229,7 @@ to you" for the best 30. Every story keeps its links; the head shows what that r
 (sections, stories, the open story) with keys (J/K, S save, U read, E learn it, O open the source); **Learn** on a
 story or on one of your PRs (the **Pull requests** tab, same layout) starts the usual lesson. **Sources** lets you
 pause, remove or add one by pasting its link, with each source's last reading or error; a daily refresh is there, off
-by default, with its estimated cost. The sources and why each was picked: `docs/adr/0264-impara-ai-newspaper.md`.
+by default, with its estimated cost. The sources and why each was picked: `docs/adr/0265-impara-ai-newspaper.md`.
 
 <p align="center"><img src="docs/screenshots/news.webp" alt="The News tab: sections with unread counts, the ranked stories, and the open story with why it matters, its summary and links" width="640"></p>
 

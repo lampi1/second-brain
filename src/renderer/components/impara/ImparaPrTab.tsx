@@ -1,4 +1,4 @@
-// Impara's «Pull Request» tab (ADR 0264; the learn-from-my-PRs flow of ADR 0185, owner 2026-11-10: «le notizie e le
+// Impara's «Pull Request» tab (ADR 0265; the learn-from-my-PRs flow of ADR 0185, owner 2026-11-10: «le notizie e le
 // PR … circa la stessa UI ma su tab separate»): the same three columns as the «Giornale» (news/NewsPage.tsx). Left the
 // filters (to study, half studied, studied, all) with their counts; in the middle the user's PRs (the Task page's,
 // live); on the right the open PR: repository, branches, author and date, reviewers and build, its work items, the

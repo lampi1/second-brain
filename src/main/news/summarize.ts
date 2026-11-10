@@ -1,4 +1,4 @@
-// Impara «News» (ADR 0264): the one AI pass of a refresh. The new stories (at most NEWS_SUMMARY_MAX, the best ranked)
+// Impara «News» (ADR 0265): the one AI pass of a refresh. The new stories (at most NEWS_SUMMARY_MAX, the best ranked)
 // go to a model in one prompt, with no tool and no file: for each it writes two or three sentences of summary, one on
 // why it matters to this user (a developer who builds agents, skills and harnesses, on Claude Code, Cursor, Codex and
 // OpenCode), and its section. The stories' text is the web's: it sits inside a fence and the prompt says it is data,

@@ -1,4 +1,4 @@
-// The News readers (src/main/news/parse.ts, ADR 0264): RSS and Atom (escaped HTML in the text, CDATA), GitHub
+// The News readers (src/main/news/parse.ts, ADR 0265): RSS and Atom (escaped HTML in the text, CDATA), GitHub
 // releases without prereleases, the Hugging Face Papers and Hacker News APIs with their thresholds, a news page with
 // its links and dates, a dated Markdown changelog, an article's own date and the format sniffing. Small inline
 // fixtures shaped like the real ones read on 2026-11-10.

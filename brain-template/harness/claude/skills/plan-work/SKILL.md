@@ -1,6 +1,6 @@
 ---
 name: plan-work
-description: Turn an idea into a short, verifiable plan and assign each step to its owner.
+description: Turns an idea into a short, verifiable plan and assigns each step to its owner. Use when a request needs more than one step or role, or when scope, cost or acceptance must be agreed before the work starts.
 ---
 
 Read the relevant code and decisions. Compare feasible approaches when the choice affects scope, cost or acceptance. Name the trade-off that justifies your recommendation. Reuse the intake answer and ask the remaining questions individually in the panel. Count three answered questions in Plan, including the intake when supplied. Respect «Basta domande» and the app’s night setting.

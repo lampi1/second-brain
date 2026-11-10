@@ -83,7 +83,7 @@ export interface Wired {
   recordings: RecordingStore;
   /** Impara (ADR 0185, learn/service.ts): the user's lessons; absent = the impara:* channels say it is not available */
   learn?: LearnService;
-  /** Impara «News» (ADR 0264, news/service.ts): the AI newspaper; absent = the news:* channels say it is not available */
+  /** Impara «News» (ADR 0265, news/service.ts): the AI newspaper; absent = the news:* channels say it is not available */
   news?: NewsService;
   /** the engines of the brain, which definitions the user turned on, the API keys (ADR 0046) */
   engines: EnginesApi;

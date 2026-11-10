@@ -1,4 +1,4 @@
-// The News' deduplication (src/main/news/dedup.ts, ADR 0264): one link with or without tracking and www., the same
+// The News' deduplication (src/main/news/dedup.ts, ADR 0265): one link with or without tracking and www., the same
 // release under two spellings, the same launch told by a lab, a blog and Hacker News, and what must stay apart (two
 // versions, two stories that only share a word).
 import { describe, expect, it } from 'vitest';

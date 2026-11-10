@@ -126,7 +126,7 @@ export interface EventMap {
   'impara:changed': { state: ImparaState; lesson?: Lesson };
   /** a tutor answer so far, as it streams (ADR 0190); the lesson brings the whole answer when it ends */
   'impara:tutor': { lesson: string; turn: string; text: string };
-  /** Impara «News» (ADR 0264): the paper changed (a refresh's progress, a story marked, a source edited) */
+  /** Impara «News» (ADR 0265): the paper changed (a refresh's progress, a story marked, a source edited) */
   'news:changed': NewsState;
 }
 

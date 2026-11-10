@@ -1,4 +1,4 @@
-// The News service (src/main/news/service.ts, ADR 0264) over the demo's offline sources and fake AI (news/demo.ts): a
+// The News service (src/main/news/service.ts, ADR 0265) over the demo's offline sources and fake AI (news/demo.ts): a
 // refresh fills the paper, merges the same launch across sources, summarizes and measures the tokens; a failing source
 // shows its error without stopping the others; marks, source edits and the daily refresh (fake clock, off by default)
 // are kept in the state file. No network, no engine, no real timer.
