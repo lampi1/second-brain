@@ -288,9 +288,9 @@ export const CONCEPTS: readonly ConceptCard[] = [
       // src/main/agents/task-estimate.ts estimateTool; src/main/agents/orchestrator-role.ts (ADR 0087)
       b('Prima di partire stima la richiesta sui lavori simili già finiti (tempo, costo, su quanti lavori, affidabilità, quante parti) e prende la via rapida: una domanda breve la risponde lui, un lavoro veloce in una parte va a un solo agente senza sotto-chat; un albero di deleghe solo per il lavoro in più parti, che costa più token. Con un contratto strutturato la stima legge obiettivo e perché, non i criteri. La stima di ogni agente è sulla sua striscia nella Grindhouse, e il verdetto di ogni lavoro dice se è rimasta entro ×2.',
         'Before starting it estimates the request on similar finished jobs (time, cost, how many jobs, confidence, how many parts) and takes the fast path: a short question it answers itself, a quick one-part job goes to a single agent with no sub-chats; a delegation tree only for work in several parts, which costs more tokens. With a structured contract the estimate reads the goal and why, not the criteria. Each agent’s estimate is on its strip in the Grindhouse, and each job’s verdict says whether it stayed within ×2.'),
-      // src/main/agents/run-feedback.ts metricsTool; src/main/agents/discovery.ts
-      b('Dei figli vede solo lo stato e i numeri: mai il loro testo. Il risultato gli arriva quando il figlio chiude con il suo rapporto.',
-        'Of its children it sees only state and numbers: never their text. The result reaches it when the child closes with its report.'),
+      // src/main/agents/run-feedback.ts metricsTool; src/main/agents/discovery.ts; src/main/appctl/agents-recap.ts agentsRecap (ADR 0260)
+      b('Dei figli vede solo lo stato e i numeri: mai il loro testo. Il risultato gli arriva quando il figlio chiude con il suo rapporto. Se gli chiedi «fai il punto» risponde con un elenco breve per agente (stato, ultimi passi fatti, a che punto è), prima quelli che aspettano te; anche sul telefono.',
+        'Of its children it sees only state and numbers: never their text. The result reaches it when the child closes with its report. Ask it «fai il punto» and it answers with a short list per agent (state, last steps done, where it stands), the ones waiting for you first; on the phone too.'),
       // src/shared/newchat.ts
       b('Un tuo messaggio che inizia con «[nuova chat]» gli chiede di aprire una chat di lavoro nuova.',
         'A message of yours starting with "[nuova chat]" asks it to open a new work chat.'),
