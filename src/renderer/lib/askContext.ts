@@ -34,7 +34,7 @@ export function turnItems(items: readonly ChatItem[] | undefined): readonly Chat
 /** What a reader sees (lib/askItems.tsx: the questions window's "the agent added something") of the current turn: its messages' and reasoning's text and the visuals attached, in order. */
 export function turnSignature(items: readonly ChatItem[] | undefined): string {
   return turnItems(items).map(i => {
-    if (i.kind === 'assistant') return `a:${i.id}:${i.streaming ? 's' : ''}${i.text.length}`;
+    if (i.kind === 'assistant') return `a:${i.id}:${i.text.length}`;
     if (i.kind === 'thinking') return `t:${i.id}:${i.text.length}`;
     if (i.kind === 'artifact') return `v:${i.id}:${i.at}:${i.askId ?? ''}`;
     return '';

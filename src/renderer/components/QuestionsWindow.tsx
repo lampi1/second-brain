@@ -228,12 +228,15 @@ function Window({ cur, all, boxRef, hidden, openedAt }: { cur: Ask; all: readonl
           {elsewhere && (
             <div className="qwin-note" role="status" data-testid="qwin-elsewhere">{t('chat.questions.note')} <Keys combo="Ctrl+J" /> {t('chat.questions.note2')}</div>
           )}
-          {frozen.changed && !isHost(cur) && cur.type !== 'plan' && (
-            <button type="button" className="qwin-news" onClick={frozen.refresh} data-testid="qwin-news">
-              <span>{t('chat.questions.news')}</span><b>{t('chat.questions.newsShow')}</b>
-            </button>
-          )}
           <div className="qwin-body">
+            {/* floats over the top of the card (a zero-height sticky slot): its arrival moves nothing under the pointer */}
+            {frozen.changed && !isHost(cur) && cur.type !== 'plan' && (
+              <div className="qwin-news-slot">
+                <button type="button" className="qwin-news" onClick={() => { frozen.refresh(); requestAnimationFrame(() => card()?.focus({ preventScroll: true })); }} data-testid="qwin-news">
+                  <span>{t('chat.questions.news')}</span><b>{t('chat.questions.newsShow')}</b>
+                </button>
+              </div>
+            )}
             <AskItemsProvider chatId={cur.chatId} items={frozen.items}>
             {isDurable(cur)
               ? <WorkApproval key={curKey} ask={cur} onEscape={later} />

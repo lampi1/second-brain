@@ -29,10 +29,13 @@ export function useFrozenItems(chatId: string, reqKey: string): { items: readonl
   // a new request, or the items were not loaded yet when the card opened: take the live ones
   const stale = held.key !== reqKey || (held.items === undefined && live !== undefined);
   useEffect(() => { if (stale) setHeld({ key: reqKey, items: live }); }, [stale, reqKey, live]);
-  const items = stale ? live : held.items;
   const liveSig = useMemo(() => turnSignature(live), [live]);
-  const heldSig = useMemo(() => turnSignature(items), [items]);
-  return { items, changed: !stale && liveSig !== heldSig, refresh: () => setHeld({ key: reqKey, items: live }) };
+  const heldSig = useMemo(() => turnSignature(held.items), [held.items]);
+  const changed = !stale && liveSig !== heldSig;
+  // nothing a reader sees changed (a tool's status, a message that stopped streaming): the live items, so a command
+  // block that finished streaming still shows
+  const items = stale || !changed ? live : held.items;
+  return { items, changed, refresh: () => setHeld({ key: reqKey, items: live }) };
 }
 
 export function AskItemsProvider({ chatId, items, children }: { chatId: string; items: readonly ChatItem[] | undefined; children: ReactNode }) {

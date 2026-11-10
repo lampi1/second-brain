@@ -120,7 +120,7 @@ export const DecisionCard = forwardRef<HTMLDivElement, DecisionProps>(function D
         </dl>
       )}
       {/* the answers stay in sight at the bottom of the questions window while the evidence above scrolls */}
-      <div className="dc-act" data-testid={`${p.testBase}-act`}>
+      <div className="dc-actions" data-testid={`${p.testBase}-actions`}>
       <div className="dc-answers">
         {answer(p.yes, 'yes', t('genui.decision.yesKey'))}
         {answer(p.no, 'no', t('genui.decision.noKey'))}
